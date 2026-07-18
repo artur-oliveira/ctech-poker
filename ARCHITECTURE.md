@@ -75,15 +75,32 @@ pointed at if the `currency_mode` boundary (OVERVIEW.md § 5) is respected from 
 - `Seat { table_id, seat_number, player_id, stack, state }`
 - `ActionLogEntry { table_id, hand_id, seq, seat, action_type, amount, action_id, occurred_at }`
 - `HoldOrSandboxTxn { id, currency_mode, player_id, amount_cents, table_id, status }`
+- `Achievement { key, metric, tiers: [{stars, threshold}] }` — static catalog (OVERVIEW.md § 9.2).
+- `AchievementProgress { player_id, achievement_key, counter, stars_unlocked }`
+- `SandboxRouletteSpin { id, player_id, awarded_cents, spun_at }` — one row per spin, `spun_at`
+  enforces the 24h cooldown (OVERVIEW.md § 9.3).
+- `LeaderboardStat { player_id, hands_played, hands_won, vpip, achievement_points }` — aggregated,
+  non-monetary (OVERVIEW.md § 9.1).
 
-## 6. Observability
+## 6. Gamification compute
+
+- **Hand equity** (OVERVIEW.md § 9.4): computed server-side per active player, per street, via
+  Monte Carlo sampling of the remaining deck against each still-active opponent's random range.
+  Cheap to fold into the state push already going to that player over their own socket channel;
+  never computed or sent client-side (would require exposing the remaining-deck composition,
+  which leaks information about other players' hole cards by elimination).
+- **Achievements**: counters updated as part of the same durable write that appends the
+  `ActionLogEntry`/hand-completion event (§ 3) — an unlocked star is derived state, not a
+  separate source of truth, so it can always be recomputed from the action log if needed.
+
+## 7. Observability
 
 - Per-table metrics: hands/hour, average action latency, disconnect rate, lease-failover
   count. A spike in lease-failover count is the earliest signal of an instance going bad.
 - Structured audit log of every hand's full action sequence (also doubles as the hand-history
   feature suggested in OVERVIEW.md § 8.2).
 
-## 7. Security
+## 8. Security
 
 - Server-authoritative everything (OVERVIEW.md § 4) — the client is never trusted with hidden
   information (opponents' hole cards) until showdown reveal; the server must not even *send*

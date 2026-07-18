@@ -30,16 +30,19 @@
   connection, and killing the server process mid-hand and restarting it resumes correctly.
 
 ## Phase 3 — Sandbox mode end to end
-- Room creation/joining (public/private), lobby.
+- Room creation/joining (public/private), lobby, ready system (OVERVIEW.md § 2).
+- Blind escalation config on private rooms (OVERVIEW.md § 2).
 - Sandbox buy-in/cash-out against `ctech-wallet`'s existing sandbox credit/debit endpoints.
 - `currency_mode` boundary enforced (OVERVIEW.md § 5).
 - Deliverable: a fully playable sandbox-money multi-table product — this is the MVP's
   actual ship target; real-money mode is explicitly Phase 5+, not part of getting to a usable
   product.
 
-## Phase 4 — Frontend polish
+## Phase 4 — Frontend polish & gamification
 - Card animations (deal, flip, flop reveal, chip movement, pot award) using the provided SVGs.
 - Lobby UX, table UX, buy-in/cash-out flow, basic chat (+ moderation, OVERVIEW.md § 8.4).
+- Hand equity display, achievements (star-tier catalog), leaderboard, sandbox credit roulette
+  (OVERVIEW.md § 9).
 - Deliverable: the gamified experience the brief asks for, on top of an already-correct engine
   — deliberately sequenced after correctness, not before.
 
@@ -49,7 +52,7 @@
 - Prerequisite B: `ctech-wallet`'s DynamoDB throughput cap is fixed (confirmed as a hard 5
   RCU/WCU cap as of the current wallet audit — would throttle under real table load).
 - Prerequisite C: a legal opinion on real-money poker's regulatory status in Brazil
-  (OVERVIEW.md § 10) — a business decision, tracked here because it gates engineering start,
+  (OVERVIEW.md § 11) — a business decision, tracked here because it gates engineering start,
   not because engineering can resolve it.
 - Hold/capture wallet integration (ARCHITECTURE.md § 4).
 - Rake mechanism, if the monetization question (OVERVIEW.md § 8.1) is resolved in favor of one.
