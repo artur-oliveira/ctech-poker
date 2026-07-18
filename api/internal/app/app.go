@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -34,7 +35,7 @@ func registerRoutes(app *fiber.App) {
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config) {
 	lc.Append(fx.Hook{
 		OnStart: func(context.Context) error {
-			addr := ":" + itoa(cfg.Port)
+			addr := ":" + strconv.Itoa(cfg.Port)
 			go func() {
 				if err := app.Listen(addr); err != nil {
 					slog.Error("server stopped", "err", err)
@@ -48,26 +49,4 @@ func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config) {
 			return app.ShutdownWithContext(stopCtx)
 		},
 	})
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	var b [20]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	if neg {
-		i--
-		b[i] = '-'
-	}
-	return string(b[i:])
 }
