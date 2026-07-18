@@ -5,7 +5,9 @@ go 1.26.5
 require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/gofiber/fiber/v3 v3.4.0
+	github.com/valkey-io/valkey-go v1.0.76
 	go.uber.org/fx v1.24.0
+	gopkg.aoctech.app/api-commons v1.1.0
 )
 
 require (
