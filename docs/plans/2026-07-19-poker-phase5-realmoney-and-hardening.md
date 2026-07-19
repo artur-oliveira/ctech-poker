@@ -1438,7 +1438,7 @@ import (
 
 func TestDrainAndReleaseFreesEveryLocallyOwnedTable(t *testing.T) {
 	backend := cache.NewMemoryBackend(16)
-	m := NewManager(tablelease.NewService(backend), tableowner.NewRegistry(backend, tablelease.DefaultLeaseTTL), nil, "10.0.0.1:8010", nil, nil)
+	m := NewManager(tablelease.NewService(backend), tableowner.NewRegistry(backend, tablelease.DefaultLeaseTTL), nil, "10.0.0.1:8003", nil, nil)
 	ctx := context.Background()
 	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
 
@@ -1451,7 +1451,7 @@ func TestDrainAndReleaseFreesEveryLocallyOwnedTable(t *testing.T) {
 
 	m.DrainAndRelease(ctx)
 
-	m2 := NewManager(tablelease.NewService(backend), tableowner.NewRegistry(backend, tablelease.DefaultLeaseTTL), nil, "10.0.0.2:8010", nil, nil)
+	m2 := NewManager(tablelease.NewService(backend), tableowner.NewRegistry(backend, tablelease.DefaultLeaseTTL), nil, "10.0.0.2:8003", nil, nil)
 	if _, err := m2.Acquire(ctx, "table-1", seed); err != nil {
 		t.Fatalf("expected a different instance to acquire table-1 after drain, got %v", err)
 	}

@@ -1776,7 +1776,7 @@ import type {NextConfig} from "next";
 import path from "path";
 
 const isProduction = process.env.NODE_ENV === 'production';
-const DEV_API_ORIGIN = process.env.DEV_API_ORIGIN || 'http://localhost:8010';
+const DEV_API_ORIGIN = process.env.DEV_API_ORIGIN || 'http://localhost:8003';
 
 const nextConfig: NextConfig = {
   turbopack: {root: path.join(__dirname)},
@@ -2120,7 +2120,7 @@ export default function LobbyPage() {
 
 - [ ] **Step 5: Manual verification**
 
-Run: `cd ui && npm run dev` (with the Go API running locally on :8010), open `/lobby`, confirm the room list
+Run: `cd ui && npm run dev` (with the Go API running locally on :8003), open `/lobby`, confirm the room list
 loads and a created room navigates to `/table/:id`.
 
 - [ ] **Step 6: Commit**

@@ -1,6 +1,7 @@
 # Phase 3 — Sandbox Mode End-to-End Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:
+> executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A fully playable sandbox-money product: room creation/joining (public/private), the ready system, blind
 escalation, sandbox buy-in/cash-out against `ctech-wallet`'s existing sandbox credit/debit endpoints, and the
@@ -33,7 +34,8 @@ outbound M2M call to `ctech-wallet`.
   the next hand, or they keep waiting undealt (OVERVIEW.md §2 — the "post to play" rule).
 - Wallet sandbox integration targets the *current, confirmed-live* `ctech-wallet` contract:
   `POST /v1.0/internal/wallet/sandbox/credit` and `/debit`, scopes `internal:wallet:credit`/`internal:wallet:debit`,
-  body `{user_id, amount, idempotency_key, reason}` (all confirmed against `ctech-wallet/api/internal/api/v1/{router,internal,dto}.go`).
+  body `{user_id, amount, idempotency_key, reason}` (all confirmed against
+  `ctech-wallet/api/internal/api/v1/{router,internal,dto}.go`).
 - **External prerequisite, not built by this plan:** `ctech-account` must seed an M2M `client_credentials` client
   for poker (`POKER_CLIENT_ID`/`POKER_CLIENT_SECRET`) with `allowed_scopes: ["internal:wallet:credit",
   "internal:wallet:debit"]`, the same way `ctech-wallet`'s own M2M client was seeded for its KYC scope. Flag this
@@ -44,11 +46,13 @@ outbound M2M call to `ctech-wallet`.
 ### Task 1: Room directory persistence
 
 **Files:**
+
 - Create: `api/internal/roomstore/room.go`
 - Create: `api/internal/roomstore/dynamo.go`
 - Test: `api/internal/roomstore/dynamo_test.go` (build tag `integration`)
 
 **Interfaces:**
+
 - Consumes: `gopkg.aoctech.app/api-commons/dynamo` (existing shared package, same as Phase 2's `tablestore`).
 - Produces: `type Room struct{...}`, `type BlindEscalation struct{...}`, `func NewStore(db *dynamodb.Client, env
   string) *Store`, `func (s *Store) Create(ctx, Room) error`, `func (s *Store) Get(ctx, roomID string) (*Room,
@@ -65,20 +69,20 @@ package roomstore
 // Room is the lobby directory entry — metadata only. Live seat/stack state
 // during play lives in Phase 2's table.Actor + snapshot/action-log, not here.
 type Room struct {
-	ID                    string          `dynamodbav:"room_id"`
-	Visibility            string          `dynamodbav:"visibility"` // "public" | "private"
-	CurrencyMode          string          `dynamodbav:"currency_mode"` // "sandbox" only, this plan
-	SmallBlind            int64           `dynamodbav:"small_blind"`
-	BigBlind              int64           `dynamodbav:"big_blind"`
-	MaxSeats              int             `dynamodbav:"max_seats"` // 2-9
-	BuyInMin              int64           `dynamodbav:"buy_in_min"`
-	BuyInMax              int64           `dynamodbav:"buy_in_max"`
-	ShareCode             string          `dynamodbav:"share_code,omitempty"` // private rooms only
-	BlindEscalation       *BlindEscalation `dynamodbav:"blind_escalation,omitempty"` // private rooms only
-	EquityDisplayEnabled  bool            `dynamodbav:"equity_display_enabled"`
-	Status                string          `dynamodbav:"status"` // "waiting" | "active"
-	CreatedBy             string          `dynamodbav:"created_by"`
-	CreatedAt             string          `dynamodbav:"created_at"` // RFC3339Nano, see dynamo.NowStr()
+	ID                   string           `dynamodbav:"room_id"`
+	Visibility           string           `dynamodbav:"visibility"`    // "public" | "private"
+	CurrencyMode         string           `dynamodbav:"currency_mode"` // "sandbox" only, this plan
+	SmallBlind           int64            `dynamodbav:"small_blind"`
+	BigBlind             int64            `dynamodbav:"big_blind"`
+	MaxSeats             int              `dynamodbav:"max_seats"` // 2-9
+	BuyInMin             int64            `dynamodbav:"buy_in_min"`
+	BuyInMax             int64            `dynamodbav:"buy_in_max"`
+	ShareCode            string           `dynamodbav:"share_code,omitempty"`       // private rooms only
+	BlindEscalation      *BlindEscalation `dynamodbav:"blind_escalation,omitempty"` // private rooms only
+	EquityDisplayEnabled bool             `dynamodbav:"equity_display_enabled"`
+	Status               string           `dynamodbav:"status"` // "waiting" | "active"
+	CreatedBy            string           `dynamodbav:"created_by"`
+	CreatedAt            string           `dynamodbav:"created_at"` // RFC3339Nano, see dynamo.NowStr()
 }
 
 type BlindEscalation struct {
@@ -277,11 +281,13 @@ git commit -m "feat(roomstore): DynamoDB-backed room directory with public-lobby
 ### Task 2: Wallet sandbox credit/debit client
 
 **Files:**
+
 - Create: `api/internal/walletclient/client.go`
 - Test: `api/internal/walletclient/client_test.go`
 - Modify: `api/internal/config/config.go`
 
 **Interfaces:**
+
 - Consumes: `gopkg.aoctech.app/api-commons/oauth2client.New`/`TokenManager` (existing shared package, same one
   `ctech-wallet`'s `kycclient` already uses).
 - Produces: `type Client struct{...}`, `func New(cfg *config.Config) *Client`, `func (c *Client) Credit(ctx,
@@ -292,12 +298,12 @@ git commit -m "feat(roomstore): DynamoDB-backed room directory with public-lobby
 
 ```go
 // api/internal/config/config.go — add to the Config struct
-	// ctech-wallet M2M client (sandbox credit/debit — see internal/walletclient).
-	// See this plan's Global Constraints: ctech-account must seed this client
-	// with scopes internal:wallet:credit and internal:wallet:debit.
-	WalletURL         string `env:"WALLET_URL"`
-	PokerClientID     string `env:"POKER_CLIENT_ID"`
-	PokerClientSecret string `env:"POKER_CLIENT_SECRET"`
+// ctech-wallet M2M client (sandbox credit/debit — see internal/walletclient).
+// See this plan's Global Constraints: ctech-account must seed this client
+// with scopes internal:wallet:credit and internal:wallet:debit.
+WalletURL         string `env:"WALLET_URL"`
+PokerClientID     string `env:"POKER_CLIENT_ID"`
+PokerClientSecret string `env:"POKER_CLIENT_SECRET"`
 ```
 
 - [ ] **Step 2: Write the failing test**
@@ -403,7 +409,7 @@ import (
 )
 
 const (
-	pathToken        = "/v1.0/token"
+	pathToken         = "/v1.0/token"
 	pathSandboxCredit = "/v1.0/internal/wallet/sandbox/credit"
 	pathSandboxDebit  = "/v1.0/internal/wallet/sandbox/debit"
 
@@ -497,10 +503,12 @@ git commit -m "feat(walletclient): sandbox credit/debit client against ctech-wal
 ### Task 3: Buy-in / cash-out orchestration
 
 **Files:**
+
 - Create: `api/internal/buyin/service.go`
 - Test: `api/internal/buyin/service_test.go`
 
 **Interfaces:**
+
 - Consumes: `walletclient.Client` (Task 2), `tablemanager.Manager.Acquire` (Phase 2), `table.Actor.Dispatch`
   (Phase 2 — needs a new `JoinCmd`/`LeaveCmd` this task adds), `roomstore.Store` (Task 1).
 - Produces: `type Service struct{...}`, `func NewService(wallet *walletclient.Client, manager
@@ -519,21 +527,21 @@ attempt — reverses it immediately.
 ```go
 // api/internal/table/commands.go — add
 type JoinCmd struct {
-	PlayerID string
-	Stack    int64
-	// MidHand marks the join as OVERVIEW.md §2's PENDING_ENTRY path (a hand
-	// is already in progress) — false means the table is between hands and
-	// the player can be seated as a normal not-yet-ready participant.
-	MidHand bool
-	Reply   chan error
+PlayerID string
+Stack    int64
+// MidHand marks the join as OVERVIEW.md §2's PENDING_ENTRY path (a hand
+// is already in progress) — false means the table is between hands and
+// the player can be seated as a normal not-yet-ready participant.
+MidHand bool
+Reply   chan error
 }
 
 func (c JoinCmd) reply() chan error { return c.Reply }
 
 type LeaveCmd struct {
-	PlayerID string
-	Stack    chan int64 // receives the player's final stack before they're removed
-	Reply    chan error
+PlayerID string
+Stack    chan int64 // receives the player's final stack before they're removed
+Reply    chan error
 }
 
 func (c LeaveCmd) reply() chan error { return c.Reply }
@@ -541,35 +549,35 @@ func (c LeaveCmd) reply() chan error { return c.Reply }
 
 ```go
 // api/internal/table/actor.go — handle's switch, add two cases
-	case JoinCmd:
-		return a.handleJoin(c)
-	case LeaveCmd:
-		return a.handleLeave(c)
+case JoinCmd:
+return a.handleJoin(c)
+case LeaveCmd:
+return a.handleLeave(c)
 ```
 
 ```go
 // api/internal/table/actor.go — add
 func (a *Actor) handleJoin(c JoinCmd) error {
-	p := &hand.Player{ID: c.PlayerID, Stack: c.Stack}
-	if c.MidHand {
-		a.table.AddMidHandJoiner(p)
-	} else {
-		a.table.AddWaitingPlayer(p)
-	}
-	a.broadcastAll()
-	return nil
+p := &hand.Player{ID: c.PlayerID, Stack: c.Stack}
+if c.MidHand {
+a.table.AddMidHandJoiner(p)
+} else {
+a.table.AddWaitingPlayer(p)
+}
+a.broadcastAll()
+return nil
 }
 
 func (a *Actor) handleLeave(c LeaveCmd) error {
-	stack, err := a.table.RemovePlayerForActor(c.PlayerID)
-	if err != nil {
-		return err
-	}
-	if c.Stack != nil {
-		c.Stack <- stack
-	}
-	a.broadcastAll()
-	return nil
+stack, err := a.table.RemovePlayerForActor(c.PlayerID)
+if err != nil {
+return err
+}
+if c.Stack != nil {
+c.Stack <- stack
+}
+a.broadcastAll()
+return nil
 }
 ```
 
@@ -585,11 +593,11 @@ front" in every test so far, since Phase 0/1 never needed a runtime add-before-f
 // otherwise be silently excluded from is already in progress — that path is
 // AddMidHandJoiner's job instead.
 func (t *Table) AddWaitingPlayer(p *Player) error {
-	if t.stage != WaitingForPlayers && t.stage != Complete {
-		return fmt.Errorf("hand: cannot add a waiting player while a hand is in progress, use AddMidHandJoiner")
-	}
-	t.players = append(t.players, p)
-	return nil
+if t.stage != WaitingForPlayers && t.stage != Complete {
+return fmt.Errorf("hand: cannot add a waiting player while a hand is in progress, use AddMidHandJoiner")
+}
+t.players = append(t.players, p)
+return nil
 }
 
 // RemovePlayerForActor removes playerID from the table and returns their
@@ -598,18 +606,18 @@ func (t *Table) AddWaitingPlayer(p *Player) error {
 // seat can't be pulled out from under a hand it's dealt into; the caller
 // must wait for HAND_COMPLETE (or the player must fold first).
 func (t *Table) RemovePlayerForActor(playerID string) (int64, error) {
-	for i, p := range t.players {
-		if p.ID != playerID {
-			continue
-		}
-		if p.State == Active || p.State == AllIn {
-			return 0, fmt.Errorf("hand: cannot remove player %s mid-hand while still dealt in", playerID)
-		}
-		stack := p.Stack
-		t.players = append(t.players[:i], t.players[i+1:]...)
-		return stack, nil
-	}
-	return 0, fmt.Errorf("hand: player %s not found", playerID)
+for i, p := range t.players {
+if p.ID != playerID {
+continue
+}
+if p.State == Active || p.State == AllIn {
+return 0, fmt.Errorf("hand: cannot remove player %s mid-hand while still dealt in", playerID)
+}
+stack := p.Stack
+t.players = append(t.players[:i], t.players[i+1:]...)
+return stack, nil
+}
+return 0, fmt.Errorf("hand: player %s not found", playerID)
 }
 ```
 
@@ -617,11 +625,11 @@ func (t *Table) RemovePlayerForActor(playerID string) (int64, error) {
 
 ```go
 // api/internal/table/actor.go — handleJoin, replace the non-mid-hand branch
-	} else {
-		if err := a.table.AddWaitingPlayer(p); err != nil {
-			return err
-		}
-	}
+} else {
+if err := a.table.AddWaitingPlayer(p); err != nil {
+return err
+}
+}
 ```
 
 - [ ] **Step 2: Write the failing test**
@@ -664,7 +672,7 @@ func (f *fakeWallet) Debit(_ context.Context, userID string, amount int64, key, 
 
 func testManager(rooms *roomstore.Store) *tablemanager.Manager {
 	backend := cache.NewMemoryBackend(16)
-	return tablemanager.NewManager(tablelease.NewService(backend), tableowner.NewRegistry(backend, tablelease.DefaultLeaseTTL), nil, "10.0.0.1:8010", nil)
+	return tablemanager.NewManager(tablelease.NewService(backend), tableowner.NewRegistry(backend, tablelease.DefaultLeaseTTL), nil, "10.0.0.1:8003", nil)
 }
 
 func TestBuyInDebitsThenSeats(t *testing.T) {
@@ -842,6 +850,7 @@ git commit -m "feat(buyin): sandbox buy-in/cash-out orchestration with debit-the
 ### Task 4: Room HTTP routes
 
 **Files:**
+
 - Create: `api/internal/api/v1/rooms.go`
 - Create: `api/internal/api/v1/roomdto.go`
 - Modify: `api/internal/api/v1/router.go`
@@ -849,6 +858,7 @@ git commit -m "feat(buyin): sandbox buy-in/cash-out orchestration with debit-the
 - Test: `api/internal/api/v1/rooms_test.go`
 
 **Interfaces:**
+
 - Consumes: `roomstore.Store` (Task 1), `buyin.Service` (Task 3), `jwtverify.Verifier.Middleware()`-equivalent
   (Phase 2 introduced `jwtverify.Verifier` but no reusable Fiber middleware wrapper yet — this task adds one,
   mirroring `ctech-wallet`'s `middleware.Verifier.Middleware()`).
@@ -901,13 +911,13 @@ package v1
 import "gopkg.aoctech.app/poker/api/internal/roomstore"
 
 type CreateRoomRequest struct {
-	Visibility           string                    `json:"visibility"` // "public" | "private"
-	SmallBlind           int64                     `json:"small_blind"`
-	BigBlind             int64                     `json:"big_blind"`
-	MaxSeats             int                       `json:"max_seats"`
-	BuyInMin             int64                     `json:"buy_in_min"`
-	BuyInMax             int64                     `json:"buy_in_max"`
-	EquityDisplayEnabled *bool                     `json:"equity_display_enabled,omitempty"`
+	Visibility           string                     `json:"visibility"` // "public" | "private"
+	SmallBlind           int64                      `json:"small_blind"`
+	BigBlind             int64                      `json:"big_blind"`
+	MaxSeats             int                        `json:"max_seats"`
+	BuyInMin             int64                      `json:"buy_in_min"`
+	BuyInMax             int64                      `json:"buy_in_max"`
+	EquityDisplayEnabled *bool                      `json:"equity_display_enabled,omitempty"`
 	BlindEscalation      *roomstore.BlindEscalation `json:"blind_escalation,omitempty"`
 }
 
@@ -1120,21 +1130,21 @@ func newShareCode() string {
 
 ```go
 // api/internal/api/v1/router.go — Register, add
-	RegisterRooms(router, authMiddleware(verifier), roomStore, buyinSvc)
+RegisterRooms(router, authMiddleware(verifier), roomStore, buyinSvc)
 ```
 
 ```go
 // api/internal/app/app.go — add providers
 func newRoomStore(db *dynamodb.Client, cfg *config.Config) *roomstore.Store {
-	return roomstore.NewStore(db, cfg.Env)
+return roomstore.NewStore(db, cfg.Env)
 }
 
 func newWalletClient(cfg *config.Config) *walletclient.Client {
-	return walletclient.New(cfg)
+return walletclient.New(cfg)
 }
 
 func newBuyinService(wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store) *buyin.Service {
-	return buyin.NewService(wallet, manager, rooms)
+return buyin.NewService(wallet, manager, rooms)
 }
 ```
 
@@ -1162,36 +1172,38 @@ git commit -m "feat(api): room creation/listing/join/leave HTTP routes"
 ### Task 5: Wire the room-backed seed into the table WebSocket gateway
 
 **Files:**
+
 - Modify: `api/internal/app/app.go`
 
 **Interfaces:**
+
 - Replaces Phase 2's `defaultSeed` placeholder with a real one built from `roomstore.Room`.
 
 - [ ] **Step 1: Replace the placeholder seed**
 
 ```go
 // api/internal/app/app.go — replace defaultSeed
-func roomBackedSeed(rooms *roomstore.Store) func(tableID string) func() *hand.Table {
-	return func(tableID string) func() *hand.Table {
-		return func() *hand.Table {
-			room, err := rooms.Get(context.Background(), tableID)
-			if err != nil || room == nil {
-				// A table with no matching room row can't be constructed
-				// meaningfully — the gateway's own "not_found" error path
-				// (tablews.go) covers a missing room; this only fires if a
-				// client somehow reaches Acquire for an ID rooms.Create never
-				// wrote, which callers should treat as a bug, not steady state.
-				return hand.NewTable(nil, 10, 20)
-			}
-			return hand.NewTable(nil, room.SmallBlind, room.BigBlind)
-		}
-	}
+func roomBackedSeed(rooms *roomstore.Store) func (tableID string) func () *hand.Table {
+return func (tableID string) func () *hand.Table {
+return func () *hand.Table {
+room, err := rooms.Get(context.Background(), tableID)
+if err != nil || room == nil {
+// A table with no matching room row can't be constructed
+// meaningfully — the gateway's own "not_found" error path
+// (tablews.go) covers a missing room; this only fires if a
+// client somehow reaches Acquire for an ID rooms.Create never
+// wrote, which callers should treat as a bug, not steady state.
+return hand.NewTable(nil, 10, 20)
+}
+return hand.NewTable(nil, room.SmallBlind, room.BigBlind)
+}
+}
 }
 ```
 
 ```go
 // api/internal/app/app.go — registerRoutes, replace the seed argument
-	v1.Register(app, cfg, verifier, manager, reg, roomBackedSeed(roomStore))
+v1.Register(app, cfg, verifier, manager, reg, roomBackedSeed(roomStore))
 ```
 
 The seeded `hand.NewTable(nil, ...)` starts with zero players — every player arrives via `buyin.Service.BuyIn`'s
@@ -1215,10 +1227,12 @@ git commit -m "feat(api): seed live tables from room configuration instead of a 
 ### Task 6: Ready system, auto-start, and CSPRNG initial dealer draw
 
 **Files:**
+
 - Modify: `api/internal/engine/hand/hand.go`
 - Test: `api/internal/engine/hand/dealer_test.go`
 
 **Interfaces:**
+
 - Modifies `StartHand` so the very first hand's dealer button is drawn via CSPRNG among ready players
   (OVERVIEW.md §2), replacing the existing "defaults to seat 0" behavior documented in `StartHand`'s own comment.
 
@@ -1262,24 +1276,24 @@ Expected: FAIL — the current implementation always starts at seat 0.
 
 ```go
 // api/internal/engine/hand/hand.go — Table, add a field
-	dealerDrawn bool // true once the first hand's dealer has been CSPRNG-drawn; every later hand only rotates
+dealerDrawn bool // true once the first hand's dealer has been CSPRNG-drawn; every later hand only rotates
 ```
 
 ```go
 // api/internal/engine/hand/hand.go — StartHand, right before `sbSeat, bbSeat := t.blindSeats(active)`
-	if !t.dealerDrawn {
-		seat, err := randomSeatAmong(active)
-		if err != nil {
-			return fmt.Errorf("hand: draw initial dealer: %w", err)
-		}
-		for i, p := range t.players {
-			if p == active[seat] {
-				t.dealerSeat = i
-				break
-			}
-		}
-		t.dealerDrawn = true
-	}
+if !t.dealerDrawn {
+seat, err := randomSeatAmong(active)
+if err != nil {
+return fmt.Errorf("hand: draw initial dealer: %w", err)
+}
+for i, p := range t.players {
+if p == active[seat] {
+t.dealerSeat = i
+break
+}
+}
+t.dealerDrawn = true
+}
 ```
 
 ```go
@@ -1289,12 +1303,12 @@ Expected: FAIL — the current implementation always starts at seat 0.
 // dealer button's very first assignment must not be predictable or
 // operator-influenced any more than the deck is.
 func randomSeatAmong(active []*Player) (int, error) {
-	var b [8]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return 0, err
-	}
-	v := binary.BigEndian.Uint64(b[:])
-	return int(v % uint64(len(active))), nil
+var b [8]byte
+if _, err := rand.Read(b[:]); err != nil {
+return 0, err
+}
+v := binary.BigEndian.Uint64(b[:])
+return int(v % uint64(len(active))), nil
 }
 ```
 
@@ -1317,12 +1331,14 @@ git commit -m "feat(hand): draw the first hand's dealer button via CSPRNG among 
 ### Task 7: Mid-hand join "post to play" enforcement
 
 **Files:**
+
 - Modify: `api/internal/engine/hand/hand.go`
 - Modify: `api/internal/table/commands.go`
 - Modify: `api/internal/table/actor.go`
 - Test: `api/internal/engine/hand/pendingentry_test.go`
 
 **Interfaces:**
+
 - Produces: `type PostBigBlindCmd struct{...}` (table package), `func (t *Table) MarkReadyToPost(playerID string)`
   (engine package) — `StartHand` only deals in a `PendingEntry` player once they've opted to post.
 
@@ -1392,7 +1408,7 @@ Expected: FAIL with "undefined: MarkReadyToPost".
 
 ```go
 // api/internal/engine/hand/hand.go — Table, add a field
-	readyToPost map[string]bool // set of PendingEntry player IDs opted to post the big blind next hand
+readyToPost map[string]bool // set of PendingEntry player IDs opted to post the big blind next hand
 ```
 
 ```go
@@ -1401,28 +1417,28 @@ Expected: FAIL with "undefined: MarkReadyToPost".
 // hand by posting the big blind (OVERVIEW.md §2's "post to play" rule). A
 // no-op for a player who isn't currently PendingEntry.
 func (t *Table) MarkReadyToPost(playerID string) {
-	if t.readyToPost == nil {
-		t.readyToPost = make(map[string]bool)
-	}
-	t.readyToPost[playerID] = true
+if t.readyToPost == nil {
+t.readyToPost = make(map[string]bool)
+}
+t.readyToPost[playerID] = true
 }
 ```
 
 ```go
 // api/internal/engine/hand/hand.go — StartHand, replace the `active` build loop
-	active := make([]*Player, 0, len(t.players))
-	for _, p := range t.players {
-		if p.State == PendingEntry {
-			if !t.readyToPost[p.ID] {
-				continue // stays PendingEntry, undealt, per OVERVIEW.md §2
-			}
-			delete(t.readyToPost, p.ID)
-		}
-		p.State = Active
-		p.Contributed = 0
-		p.HoleCards = [2]deck.Card{t.dealCard(), t.dealCard()}
-		active = append(active, p)
-	}
+active := make([]*Player, 0, len(t.players))
+for _, p := range t.players {
+if p.State == PendingEntry {
+if !t.readyToPost[p.ID] {
+continue // stays PendingEntry, undealt, per OVERVIEW.md §2
+}
+delete(t.readyToPost, p.ID)
+}
+p.State = Active
+p.Contributed = 0
+p.HoleCards = [2]deck.Card{t.dealCard(), t.dealCard()}
+active = append(active, p)
+}
 ```
 
 A player who opts in is dealt Active like anyone else — `blindSeats`' existing logic already determines who posts
@@ -1439,8 +1455,8 @@ silently assumed equivalent).
 ```go
 // api/internal/table/commands.go — add
 type PostBigBlindCmd struct {
-	PlayerID string
-	Reply    chan error
+PlayerID string
+Reply    chan error
 }
 
 func (c PostBigBlindCmd) reply() chan error { return c.Reply }
@@ -1448,17 +1464,17 @@ func (c PostBigBlindCmd) reply() chan error { return c.Reply }
 
 ```go
 // api/internal/table/actor.go — handle's switch, add
-	case PostBigBlindCmd:
-		a.table.MarkReadyToPost(c.PlayerID)
-		a.broadcastAll()
-		return nil
+case PostBigBlindCmd:
+a.table.MarkReadyToPost(c.PlayerID)
+a.broadcastAll()
+return nil
 ```
 
 ```go
 // api/internal/api/v1/tablews.go — the message-type switch, add
-				case "post_big_blind":
-					r := make(chan error, 1)
-					_ = actor.Dispatch(table.PostBigBlindCmd{PlayerID: playerID, Reply: r})
+case "post_big_blind":
+r := make(chan error, 1)
+_ = actor.Dispatch(table.PostBigBlindCmd{PlayerID: playerID, Reply: r})
 ```
 
 (Mirror the same addition in `tableproxy.go`'s message loop from Phase 2 Task 8, for the proxied path.)
@@ -1480,11 +1496,13 @@ git commit -m "feat(hand): enforce post-to-play for mid-hand joiners before they
 ### Task 8: Blind escalation
 
 **Files:**
+
 - Create: `api/internal/table/escalation.go`
 - Modify: `api/internal/table/actor.go`
 - Test: `api/internal/table/escalation_test.go`
 
 **Interfaces:**
+
 - Consumes: `roomstore.BlindEscalation` (Task 1).
 - Produces: `func (a *Actor) StartEscalation(cfg roomstore.BlindEscalation)` — called once, right after a private
   room's Actor is created (wired in Task 9).
@@ -1572,16 +1590,16 @@ func (a *Actor) StartEscalation(cfg roomstore.BlindEscalation) {
 
 ```go
 // api/internal/table/actor.go — Actor struct, add fields
-	escalationInterval time.Duration // test override; zero means "use escalationCfg.IntervalMinutes"
-	escalationCfg      roomstore.BlindEscalation
+escalationInterval time.Duration // test override; zero means "use escalationCfg.IntervalMinutes"
+escalationCfg      roomstore.BlindEscalation
 ```
 
 ```go
 // api/internal/table/actor.go — handle's switch, add
-	case escalateCmd:
-		a.table.EscalateBlindsForActor(a.escalationCfg.Multiplier, a.escalationCfg.Max)
-		a.broadcastAll()
-		return nil
+case escalateCmd:
+a.table.EscalateBlindsForActor(a.escalationCfg.Multiplier, a.escalationCfg.Max)
+a.broadcastAll()
+return nil
 ```
 
 ```go
@@ -1590,14 +1608,14 @@ func (a *Actor) StartEscalation(cfg roomstore.BlindEscalation) {
 // (whole-number percent, e.g. 150 = ×1.5), capped at maxBigBlind. A no-op
 // once bigBlind already reached the cap.
 func (t *Table) EscalateBlindsForActor(multiplierPct int, maxBigBlind int64) {
-	if t.bigBlind >= maxBigBlind {
-		return
-	}
-	t.smallBlind = t.smallBlind * int64(multiplierPct) / 100
-	t.bigBlind = t.bigBlind * int64(multiplierPct) / 100
-	if t.bigBlind > maxBigBlind {
-		t.bigBlind = maxBigBlind
-	}
+if t.bigBlind >= maxBigBlind {
+return
+}
+t.smallBlind = t.smallBlind * int64(multiplierPct) / 100
+t.bigBlind = t.bigBlind * int64(multiplierPct) / 100
+if t.bigBlind > maxBigBlind {
+t.bigBlind = maxBigBlind
+}
 }
 
 // BigBlindForTest exposes the current big blind for Phase 3's escalation
@@ -1623,11 +1641,13 @@ git commit -m "feat(table): private-room blind escalation on a timer"
 ### Task 9: Wire escalation + `currency_mode` enforcement into room creation and table acquisition
 
 **Files:**
+
 - Modify: `api/internal/api/v1/rooms.go`
 - Modify: `api/internal/tablemanager/manager.go`
 - Test: `api/internal/api/v1/rooms_test.go`
 
 **Interfaces:**
+
 - `tablemanager.Manager.Acquire` gains an optional post-creation hook so `rooms.go` can call `StartEscalation` on
   a freshly created private-room Actor without `tablemanager` importing `roomstore` (keeping the layering: engine
   ← table ← tablemanager ← api/v1, never the reverse).
@@ -1636,14 +1656,14 @@ git commit -m "feat(table): private-room blind escalation on a timer"
 
 ```go
 // api/internal/tablemanager/manager.go — Acquire's signature
-func (m *Manager) Acquire(ctx context.Context, tableID string, seed func() *hand.Table, onCreated ...func(*Actor)) (*Actor, error) {
+func (m *Manager) Acquire(ctx context.Context, tableID string, seed func () *hand.Table, onCreated ...func (*Actor)) (*Actor, error) {
 ```
 
 ```go
 // api/internal/tablemanager/manager.go — Acquire, right before the final `return actor, nil`
-	for _, hook := range onCreated {
-		hook(actor)
-	}
+for _, hook := range onCreated {
+hook(actor)
+}
 ```
 
 Every existing call site (Phase 2 Task 7's `RegisterTableWS`, Task 8's `RegisterTableProxy`, Task 3's
@@ -1654,11 +1674,11 @@ no-op.
 
 ```go
 // api/internal/api/v1/rooms.go — createRoom, right after the BlindEscalation/public-room check
-	// currency_mode is sandbox-only for this plan (real mode is Phase 5,
-	// gated on ctech-wallet prerequisites not yet met — OVERVIEW.md §5/§11).
-	// There is currently no client-supplied field for this at all (the
-	// request DTO has none), which is the strongest form of the boundary:
-	// a code path that doesn't exist can't be misused.
+// currency_mode is sandbox-only for this plan (real mode is Phase 5,
+// gated on ctech-wallet prerequisites not yet met — OVERVIEW.md §5/§11).
+// There is currently no client-supplied field for this at all (the
+// request DTO has none), which is the strongest form of the boundary:
+// a code path that doesn't exist can't be misused.
 ```
 
 No code change is actually needed beyond the comment above — `createRoom` (Task 4) already hardcodes
@@ -1669,20 +1689,20 @@ exists to make that enforcement decision explicit and reviewable, not to add new
 
 ```go
 // api/internal/api/v1/rooms.go — createRoom, replace the h.rooms.Create block
-	if h.rooms != nil {
-		if err := h.rooms.Create(c.Context(), room); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create room"})
-		}
-	}
-	if room.BlindEscalation != nil {
-		cfg := *room.BlindEscalation
-		_, _ = h.manager.Acquire(c.Context(), room.ID, func() *hand.Table {
-			return hand.NewTable(nil, room.SmallBlind, room.BigBlind)
-		}, func(a *table.Actor) {
-			a.StartEscalation(cfg)
-		})
-	}
-	return c.Status(fiber.StatusCreated).JSON(room)
+if h.rooms != nil {
+if err := h.rooms.Create(c.Context(), room); err != nil {
+return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create room"})
+}
+}
+if room.BlindEscalation != nil {
+cfg := *room.BlindEscalation
+_, _ = h.manager.Acquire(c.Context(), room.ID, func () *hand.Table {
+return hand.NewTable(nil, room.SmallBlind, room.BigBlind)
+}, func (a *table.Actor) {
+a.StartEscalation(cfg)
+})
+}
+return c.Status(fiber.StatusCreated).JSON(room)
 ```
 
 Add `manager *tablemanager.Manager` to `roomHandlers` and `RegisterRooms`'s parameters, threading it through from
@@ -1694,11 +1714,11 @@ and `"gopkg.aoctech.app/poker/api/internal/table"` imports to `rooms.go`.
 ```go
 // api/internal/api/v1/rooms_test.go — add
 func TestCreatePrivateRoomWithEscalationStartsActor(t *testing.T) {
-	// This documents the wiring contract (createRoom calls manager.Acquire +
-	// StartEscalation for a private room with BlindEscalation set) rather
-	// than re-testing escalation's own tick behavior, already covered by
-	// Task 8's escalation_test.go.
-	t.Skip("wiring covered by integration test in Task 10 of this plan; escalation tick behavior covered by table/escalation_test.go")
+// This documents the wiring contract (createRoom calls manager.Acquire +
+// StartEscalation for a private room with BlindEscalation set) rather
+// than re-testing escalation's own tick behavior, already covered by
+// Task 8's escalation_test.go.
+t.Skip("wiring covered by integration test in Task 10 of this plan; escalation tick behavior covered by table/escalation_test.go")
 }
 ```
 
@@ -1719,12 +1739,14 @@ git commit -m "feat(api): start blind escalation for private rooms at creation t
 ### Task 10: CDK — rooms table + wallet M2M secrets
 
 **Files:**
+
 - Modify: `cdk/lib/dynamodb-stack.ts`
 - Modify: `cdk/lib/api-stack.ts`
 - Modify: `cdk/lib/constants.ts`
 - Test: `cdk/test/dynamodb-stack.test.ts`
 
 **Interfaces:**
+
 - Extends Phase 2's `DynamoDBStack` with a `poker_rooms` table (two GSIs) and wires `WALLET_URL`/
   `POKER_CLIENT_ID`/`POKER_CLIENT_SECRET` into the API instance's userdata.
 
@@ -1733,16 +1755,16 @@ git commit -m "feat(api): start blind escalation for private rooms at creation t
 ```typescript
 // cdk/test/dynamodb-stack.test.ts — add
 test('creates poker_rooms table with public and share-code GSIs', () => {
-  const app = new App();
-  const stack = new DynamoDBStack(app, 'TestDynamoDBStack2', {environment: 'dev'});
-  const template = Template.fromStack(stack);
-  template.hasResourceProperties('AWS::DynamoDB::Table', {
-    TableName: 'dev_poker_rooms',
-    GlobalSecondaryIndexes: Match.arrayWith([
-      Match.objectLike({IndexName: 'gsi_public'}),
-      Match.objectLike({IndexName: 'gsi_share_code'}),
-    ]),
-  });
+    const app = new App();
+    const stack = new DynamoDBStack(app, 'TestDynamoDBStack2', {environment: 'dev'});
+    const template = Template.fromStack(stack);
+    template.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'dev_poker_rooms',
+        GlobalSecondaryIndexes: Match.arrayWith([
+            Match.objectLike({IndexName: 'gsi_public'}),
+            Match.objectLike({IndexName: 'gsi_share_code'}),
+        ]),
+    });
 });
 ```
 
@@ -1762,17 +1784,17 @@ export type TableName = 'poker_hand_snapshots' | 'poker_action_log' | 'poker_roo
 
 ```typescript
 // cdk/lib/dynamodb-stack.ts — constructor, after the existing two table() calls
-    const rooms = table('poker_rooms');
-    rooms.addGlobalSecondaryIndex({
-      indexName: 'gsi_public',
-      partitionKey: {name: 'gsi_public', type: dynamodb.AttributeType.STRING},
-      projectionType: dynamodb.ProjectionType.ALL,
-    });
-    rooms.addGlobalSecondaryIndex({
-      indexName: 'gsi_share_code',
-      partitionKey: {name: 'gsi_share_code', type: dynamodb.AttributeType.STRING},
-      projectionType: dynamodb.ProjectionType.ALL,
-    });
+const rooms = table('poker_rooms');
+rooms.addGlobalSecondaryIndex({
+    indexName: 'gsi_public',
+    partitionKey: {name: 'gsi_public', type: dynamodb.AttributeType.STRING},
+    projectionType: dynamodb.ProjectionType.ALL,
+});
+rooms.addGlobalSecondaryIndex({
+    indexName: 'gsi_share_code',
+    partitionKey: {name: 'gsi_share_code', type: dynamodb.AttributeType.STRING},
+    projectionType: dynamodb.ProjectionType.ALL,
+});
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -1784,25 +1806,25 @@ Expected: PASS.
 
 ```typescript
 // cdk/lib/api-stack.ts — ApiStackProps, add
-  roomsTableArn: string;
-  walletUrlParam: string; // SSM path, e.g. /ctech/{env}/poker/wallet-url
-  pokerClientIdParam: string;
-  pokerClientSecretParam: string; // SecureString
+roomsTableArn: string;
+walletUrlParam: string; // SSM path, e.g. /ctech/{env}/poker/wallet-url
+pokerClientIdParam: string;
+pokerClientSecretParam: string; // SecureString
 ```
 
 ```typescript
 // cdk/lib/api-stack.ts — instance role grant, extend the existing dynamodb PolicyStatement's resources array
-      resources: [handSnapshotsTableArn, actionLogTableArn, roomsTableArn],
+resources: [handSnapshotsTableArn, actionLogTableArn, roomsTableArn],
 ```
 
 ```typescript
 // cdk/lib/api-stack.ts — start.sh heredoc, alongside the existing VALKEY_URL resolution
-      `WALLET_URL=$(aws ssm get-parameter --name "${walletUrlParam}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
-      `export WALLET_URL`,
-      `POKER_CLIENT_ID=$(aws ssm get-parameter --name "${pokerClientIdParam}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
-      `export POKER_CLIENT_ID`,
-      `POKER_CLIENT_SECRET=$(aws ssm get-parameter --name "${pokerClientSecretParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
-      `export POKER_CLIENT_SECRET`,
+`WALLET_URL=$(aws ssm get-parameter --name "${walletUrlParam}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+    `export WALLET_URL`,
+    `POKER_CLIENT_ID=$(aws ssm get-parameter --name "${pokerClientIdParam}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+    `export POKER_CLIENT_ID`,
+    `POKER_CLIENT_SECRET=$(aws ssm get-parameter --name "${pokerClientSecretParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+    `export POKER_CLIENT_SECRET`,
 ```
 
 `service.instanceRole` needs `ssm:GetParameter` on these three paths, in addition to the `valkeyUrl` grant
@@ -1810,24 +1832,30 @@ presumably already present from the foundations plan — add (or extend) the SSM
 
 ```typescript
 // cdk/lib/api-stack.ts — instance role grants
-    service.instanceRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['ssm:GetParameter'],
-      resources: [
+service.instanceRole.addToPolicy(new iam.PolicyStatement({
+    actions: ['ssm:GetParameter'],
+    resources: [
         `arn:aws:ssm:${this.region}:${this.account}:parameter${walletUrlParam}`,
         `arn:aws:ssm:${this.region}:${this.account}:parameter${pokerClientIdParam}`,
         `arn:aws:ssm:${this.region}:${this.account}:parameter${pokerClientSecretParam}`,
-      ],
-    }));
+    ],
+}));
 ```
 
 - [ ] **Step 6: Wire `bin/poker.ts`**
 
 ```typescript
 // cdk/bin/poker.ts — pass into PokerApiStack's props
-  roomsTableArn: dynamoStack.tables.get('poker_rooms')!.tableArn,
-  walletUrlParam: `/ctech/${environment}/poker/wallet-url`,
-  pokerClientIdParam: `/ctech/${environment}/poker/poker-client-id`,
-  pokerClientSecretParam: `/ctech/${environment}/poker/poker-client-secret`,
+roomsTableArn: dynamoStack.tables.get('poker_rooms')!.tableArn,
+    walletUrlParam
+:
+`/ctech/${environment}/poker/wallet-url`,
+    pokerClientIdParam
+:
+`/ctech/${environment}/poker/poker-client-id`,
+    pokerClientSecretParam
+:
+`/ctech/${environment}/poker/poker-client-secret`,
 ```
 
 These three SSM parameters are **not created by this CDK stack** — they must be written manually (or by a
@@ -1919,11 +1947,11 @@ func (p *PlayerProfile) TermsAccepted() bool {
 }
 ```
 
-  `store.go`: `GetOrCreate(ctx, userID)` — conditional `Put` with `attribute_not_exists(pk)`, swallow the
-  condition-failure and re-`Get` (same idempotent-create shape `rooms`' store already uses in Task 1). `AcceptTerms(ctx,
+`store.go`: `GetOrCreate(ctx, userID)` — conditional `Put` with `attribute_not_exists(pk)`, swallow the
+condition-failure and re-`Get` (same idempotent-create shape `rooms`' store already uses in Task 1). `AcceptTerms(ctx,
   userID)` — `UpdateItem` setting `poker_terms_version`/`poker_terms_accepted_at`/`updated_at` only (never a
-  whole-row `Put` — mirrors wallet's own "partial update, never whole-row Put" comment, since a future second
-  consent field on this row must not be silently revocable by an unrelated writer).
+whole-row `Put` — mirrors wallet's own "partial update, never whole-row Put" comment, since a future second
+consent field on this row must not be silently revocable by an unrelated writer).
 
 - [ ] **Step 4: Implement the service, HTTP routes, and the `BuyIn` gate.** `player.Service.RequireAccepted(ctx,
   userID) error` — `GetOrCreate` then check `TermsAccepted()`, return `ErrTermsNotAccepted` if not. Wire it as the

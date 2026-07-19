@@ -93,7 +93,7 @@ import (
 // Config holds the 12-Factor environment configuration for the poker API.
 type Config struct {
 	AppVersion string `env:"APP_VERSION" envDefault:"0.0.1"`
-	Port       int    `env:"PORT" envDefault:"8010"`
+	Port       int    `env:"PORT" envDefault:"8003"`
 	Env        string `env:"ENVIRONMENT" envDefault:"dev"`
 
 	ReadTimeout  int64 `env:"READ_TIMEOUT" envDefault:"10"`
@@ -147,8 +147,8 @@ func TestLoadDefaultsToDevWithoutValkeyURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected Load to succeed in dev without VALKEY_URL, got %v", err)
 	}
-	if cfg.Port != 8010 {
-		t.Fatalf("expected default port 8010, got %d", cfg.Port)
+	if cfg.Port != 8003 {
+		t.Fatalf("expected default port 8003, got %d", cfg.Port)
 	}
 }
 ```
@@ -310,7 +310,7 @@ FROM gcr.io/distroless/static-debian12
 
 COPY --from=builder /app-bin /app
 
-EXPOSE 8010
+EXPOSE 8003
 
 ENTRYPOINT ["/app"]
 ```

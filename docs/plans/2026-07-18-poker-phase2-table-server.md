@@ -932,13 +932,13 @@ func TestAdvertiseThenLookup(t *testing.T) {
 		t.Fatalf("expected no owner yet, got ok=%v err=%v", ok, err)
 	}
 
-	if err := r.Advertise(ctx, "table-1", "10.0.1.23:8010"); err != nil {
+	if err := r.Advertise(ctx, "table-1", "10.0.1.23:8003"); err != nil {
 		t.Fatalf("advertise: %v", err)
 	}
 
 	addr, ok, err := r.Lookup(ctx, "table-1")
-	if err != nil || !ok || addr != "10.0.1.23:8010" {
-		t.Fatalf("expected owner 10.0.1.23:8010, got addr=%q ok=%v err=%v", addr, ok, err)
+	if err != nil || !ok || addr != "10.0.1.23:8003" {
+		t.Fatalf("expected owner 10.0.1.23:8003, got addr=%q ok=%v err=%v", addr, ok, err)
 	}
 }
 ```
@@ -1062,7 +1062,7 @@ import (
 
 func TestAcquireCreatesActorOnFirstCall(t *testing.T) {
 	backend := cache.NewMemoryBackend(16)
-	m := NewManager(tablelease.NewService(backend), tableowner.NewRegistry(backend, tablelease.DefaultLeaseTTL), nil, "10.0.0.5:8010", nil)
+	m := NewManager(tablelease.NewService(backend), tableowner.NewRegistry(backend, tablelease.DefaultLeaseTTL), nil, "10.0.0.5:8003", nil)
 	ctx := context.Background()
 
 	seed := func() *hand.Table {
@@ -1092,14 +1092,14 @@ func TestLocateReturnsRemoteOwnerWhenNotHeldLocally(t *testing.T) {
 		t.Fatalf("seed acquire: ok=%v err=%v", ok, err)
 	}
 	defer release()
-	if err := owners.Advertise(ctx, "table-2", "10.0.0.9:8010"); err != nil {
+	if err := owners.Advertise(ctx, "table-2", "10.0.0.9:8003"); err != nil {
 		t.Fatalf("advertise: %v", err)
 	}
 
-	m := NewManager(leases, owners, nil, "10.0.0.5:8010", nil)
+	m := NewManager(leases, owners, nil, "10.0.0.5:8003", nil)
 	local, remote, err := m.Locate(ctx, "table-2")
-	if err != nil || local != nil || remote != "10.0.0.9:8010" {
-		t.Fatalf("expected remote owner 10.0.0.9:8010, got local=%v remote=%q err=%v", local, remote, err)
+	if err != nil || local != nil || remote != "10.0.0.9:8003" {
+		t.Fatalf("expected remote owner 10.0.0.9:8003, got local=%v remote=%q err=%v", local, remote, err)
 	}
 }
 ```
@@ -2502,7 +2502,7 @@ func TestTableSurvivesInstanceRestartMidHand(t *testing.T) {
 
 	// "Instance A": acquires the table, plays one action, then is torn down
 	// mid-hand without a clean shutdown — simulating a crash.
-	mgrA := tablemanager.NewManager(tablelease.NewService(backend), tableowner.NewRegistry(backend, tablelease.DefaultLeaseTTL), store, "10.0.0.1:8010", nil)
+	mgrA := tablemanager.NewManager(tablelease.NewService(backend), tableowner.NewRegistry(backend, tablelease.DefaultLeaseTTL), store, "10.0.0.1:8003", nil)
 	actorA, err := mgrA.Acquire(context.Background(), "table-crash", seed)
 	if err != nil {
 		t.Fatalf("acquire on instance A: %v", err)
@@ -2521,7 +2521,7 @@ func TestTableSurvivesInstanceRestartMidHand(t *testing.T) {
 
 	// "Instance B": a fresh manager over the SAME backend, simulating a
 	// second EC2 instance picking the table back up after A's lease lapses.
-	mgrB := tablemanager.NewManager(tablelease.NewService(backend), tableowner.NewRegistry(backend, tablelease.DefaultLeaseTTL), store, "10.0.0.2:8010", nil)
+	mgrB := tablemanager.NewManager(tablelease.NewService(backend), tableowner.NewRegistry(backend, tablelease.DefaultLeaseTTL), store, "10.0.0.2:8003", nil)
 	actorB, err := mgrB.Acquire(context.Background(), "table-crash", seed)
 	if err != nil {
 		t.Fatalf("acquire on instance B: %v", err)
