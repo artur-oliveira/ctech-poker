@@ -102,6 +102,20 @@ func (t *Table) Payouts() map[string]int64 { return t.payouts }
 // nothing in this package previously needed to write it from outside).
 func (t *Table) PlayersForActor() []*Player { return t.players }
 
+// CurrentPlayerCanActForActor exposes currentPlayerCanAct to Phase 2's
+// table.Actor (auto-fold deadline arming needs to know whose turn it is
+// without duplicating the round-state check outside this package).
+func (t *Table) CurrentPlayerCanActForActor(playerID string) bool { return t.currentPlayerCanAct(playerID) }
+
+// SitOutForActor marks a player SittingOut — used by Phase 2's disconnect
+// grace-window handling once a disconnected player exceeds the grace period
+// or enough consecutive disconnected hands (OVERVIEW.md § 4).
+func (t *Table) SitOutForActor(playerID string) {
+	if p := t.playerByID(playerID); p != nil {
+		p.State = SittingOut
+	}
+}
+
 func (t *Table) playerByID(id string) *Player {
 	for _, p := range t.players {
 		if p.ID == id {

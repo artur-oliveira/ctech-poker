@@ -38,3 +38,10 @@ type ReconnectCmd struct {
 }
 
 func (c ReconnectCmd) reply() chan error { return c.Reply }
+
+type SitOutCmd struct {
+	PlayerID string
+	Reply    chan error
+}
+
+func (c SitOutCmd) reply() chan error { return c.Reply }

@@ -28,6 +28,12 @@ type Actor struct {
 	cached  *hand.Table // nil until first loaded; never trusted when !trustCache
 	version int
 	handID  string
+
+	actionDeadline               time.Duration
+	disconnectGrace              time.Duration
+	disconnectedSince            map[string]time.Time
+	consecutiveDisconnectedHands map[string]int
+	deadlineTimer                *time.Timer
 }
 
 // New returns an Actor for tableID. trustCache should be true only when the
@@ -37,7 +43,13 @@ type Actor struct {
 // latency, not correctness — a stale cache is always caught by
 // CommitAction's version check regardless of trustCache).
 func New(id string, store *tablestore.Store, trustCache bool, broadcast func(string, hand.Snapshot)) *Actor {
-	return &Actor{id: id, store: store, trustCache: trustCache, broadcast: broadcast, cmds: make(chan Command, 64)}
+	return &Actor{
+		id: id, store: store, trustCache: trustCache, broadcast: broadcast, cmds: make(chan Command, 64),
+		actionDeadline:               30 * time.Second,
+		disconnectGrace:              45 * time.Second,
+		disconnectedSince:            make(map[string]time.Time),
+		consecutiveDisconnectedHands: make(map[string]int),
+	}
 }
 
 func (a *Actor) Dispatch(cmd Command) error {
@@ -67,6 +79,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleDisconnect(c)
 	case ReconnectCmd:
 		return a.handleReconnect(c)
+	case SitOutCmd:
+		return a.handleSitOut(ctx, c)
 	default:
 		return nil
 	}
@@ -149,6 +163,7 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 	if err != nil && !errors.Is(err, tablestore.ErrDuplicateAction) {
 		return err
 	}
+	a.armActionDeadlineForCurrentTurn()
 	a.broadcastAll()
 	return nil
 }
@@ -183,8 +198,71 @@ func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.A
 	return nil
 }
 
-func (a *Actor) handleDisconnect(c DisconnectCmd) error { return nil }
-func (a *Actor) handleReconnect(c ReconnectCmd) error   { return nil }
+func (a *Actor) handleDisconnect(c DisconnectCmd) error {
+	a.disconnectedSince[c.PlayerID] = timeNowFunc()
+	a.armActionDeadlineIfTheirTurn(c.PlayerID)
+	a.broadcastAll()
+	return nil
+}
+
+func (a *Actor) handleReconnect(c ReconnectCmd) error {
+	delete(a.disconnectedSince, c.PlayerID)
+	if a.deadlineTimer != nil {
+		a.deadlineTimer.Stop()
+	}
+	a.broadcastAll()
+	return nil
+}
+
+func (a *Actor) handleSitOut(ctx context.Context, c SitOutCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	a.cached.SitOutForActor(c.PlayerID)
+	if err := a.commit(ctx, "", nil); err != nil && !errors.Is(err, tablestore.ErrVersionConflict) {
+		return err
+	}
+	a.broadcastAll()
+	return nil
+}
+
+// armActionDeadlineIfTheirTurn starts (or restarts) the auto-fold timer when
+// the just-disconnected player is the one currently on the clock. A
+// disconnect that happens on someone else's turn arms nothing yet —
+// armActionDeadlineForCurrentTurn (called from handleAct) picks it up once
+// it actually becomes their turn.
+func (a *Actor) armActionDeadlineIfTheirTurn(playerID string) {
+	if a.cached == nil || !a.cached.CurrentPlayerCanActForActor(playerID) {
+		return
+	}
+	if a.deadlineTimer != nil {
+		a.deadlineTimer.Stop()
+	}
+	a.deadlineTimer = time.AfterFunc(a.actionDeadline, func() {
+		reply := make(chan error, 1)
+		_ = a.Dispatch(ActCmd{PlayerID: playerID, ActionID: "auto-fold-" + playerID, Action: "fold", Reply: reply})
+		a.consecutiveDisconnectedHands[playerID]++
+		if timeNowFunc().Sub(a.disconnectedSince[playerID]) >= a.disconnectGrace || a.consecutiveDisconnectedHands[playerID] >= 3 {
+			reply2 := make(chan error, 1)
+			_ = a.Dispatch(SitOutCmd{PlayerID: playerID, Reply: reply2})
+		}
+	})
+}
+
+// armActionDeadlineForCurrentTurn re-arms the auto-fold timer for whichever
+// disconnected player's turn it now is, called after every committed action
+// so a turn change picks up the right player's deadline.
+func (a *Actor) armActionDeadlineForCurrentTurn() {
+	if a.deadlineTimer != nil {
+		a.deadlineTimer.Stop()
+	}
+	for id := range a.disconnectedSince {
+		if a.cached.CurrentPlayerCanActForActor(id) {
+			a.armActionDeadlineIfTheirTurn(id)
+			return
+		}
+	}
+}
 
 func (a *Actor) broadcastAll() {
 	if a.broadcast == nil || a.cached == nil {
