@@ -67,7 +67,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: arn:aws:iam::868899309401:role/ctech-wallet-gha-infra
+          role-to-assume: arn:aws:iam::868899309401:role/ctech-poker-gha-infra
           aws-region: us-east-1
 
       - name: Read ctech shared infrastructure values
@@ -154,7 +154,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: arn:aws:iam::868899309401:role/ctech-wallet-gha-infra
+          role-to-assume: arn:aws:iam::868899309401:role/ctech-poker-gha-infra
           aws-region: us-east-1
 
       - name: Read ctech shared infrastructure values

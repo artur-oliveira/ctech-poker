@@ -13,15 +13,18 @@ import {
   AWS_ACCOUNT,
   AWS_REGION,
   CERT_ARN,
+  GITHUB_REPO_DEFAULT,
+
   domainForEnv,
   instanceProfileName,
   SSM_POKER,
 } from '../lib/constants';
+import {OidcStack} from "../lib/oidc-stack";
 
 const app = new cdk.App();
 
 const ENVIRONMENT = (process.env.ENVIRONMENT || 'dev') as Environment;
-
+const GITHUB_REPO = (process.env.GITHUB_REPO || GITHUB_REPO_DEFAULT);
 // VPC is managed by ctech-cdk (shared across every CTech service in this
 // account — same default used by ctech-wallet/ctech-dfe/ctech-account). The ID
 // must be a concrete string (not a token) because ec2.Vpc.fromLookup resolves
@@ -38,8 +41,14 @@ const env = {account: AWS_ACCOUNT, region: AWS_REGION};
 const pokerParameters = SSM_POKER(ENVIRONMENT);
 
 const id = (name: string) =>
-    `CtechPoker-${ENVIRONMENT.charAt(0).toUpperCase() + ENVIRONMENT.slice(1)}-${name}`;
+  `CtechPoker-${ENVIRONMENT.charAt(0).toUpperCase() + ENVIRONMENT.slice(1)}-${name}`;
 
+new OidcStack(app, 'CtechPoker-Global-OIDC', {
+  env,
+  githubRepo: GITHUB_REPO,
+  deploymentsBucket: CTECH_DEPLOYMENTS_BUCKET,
+  description: 'CTech Poker GitHub Actions deployment roles (global)',
+});
 // =====================
 // DynamoDB (table state, action log + archival)
 // =====================

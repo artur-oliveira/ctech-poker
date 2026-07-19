@@ -15,7 +15,7 @@ export const AWS_REGION = 'us-east-1';
 
 // Wildcard *.aoctech.app cert — owned by ctech-cdk, same one every service uses.
 export const CERT_ARN =
-    'arn:aws:acm:us-east-1:868899309401:certificate/29678869-bfc3-4688-b81b-55aa5b1d7443';
+  'arn:aws:acm:us-east-1:868899309401:certificate/29678869-bfc3-4688-b81b-55aa5b1d7443';
 
 export const GITHUB_REPO_DEFAULT = 'artur-oliveira/ctech-poker';
 
@@ -69,6 +69,7 @@ export const instanceRoleName = (env: Environment) => `${env}-${SERVICE}-api-rol
 
 // ── GitHub Actions role names (global, not per-env) ─────────────────────────
 export const GHA_API_ROLE = `${SERVICE}-gha-api`;
+export const GHA_FRONTEND_ROLE = `${SERVICE}-gha-frontend`;
 export const GHA_INFRA_ROLE = `${SERVICE}-gha-infra`;
 
 // ── SSM parameter paths ─────────────────────────────────────────────────────
@@ -79,18 +80,18 @@ export const GHA_INFRA_ROLE = `${SERVICE}-gha-infra`;
  * confirmed against ctech-cdk/lib/alb-stack.ts and ctech-cdk/lib/valkey-stack.ts.
  */
 export const SSM_SHARED = (env: Environment) => ({
-    vpcId: `/ctech/${env}/network/vpc-id`,
-    albSgId: `/ctech/${env}/network/alb-sg-id`,
-    httpsListenerArn: `/ctech/${env}/alb/https-listener-arn`,
-    // Base URL with no DB number. Unlike ctech-wallet (which appends its own
-    // /2 for keyspace isolation), ctech-dfe and ctech-account both pass this
-    // straight through as VALKEY_URL with no suffix — that's the precedent
-    // followed here, and it matches api/internal/config/config.go, which reads
-    // VALKEY_URL as a single opaque string. tablelease keys are already
-    // namespaced by prefix (`table:{id}`), so no DB-level isolation is needed.
-    valkeyUrl: `/ctech/${env}/valkey/url`,
-    deploymentsBucket: `/ctech/${env}/s3/deployments-bucket`,
-    logsBucket: `/ctech/${env}/s3/logs-bucket`,
+  vpcId: `/ctech/${env}/network/vpc-id`,
+  albSgId: `/ctech/${env}/network/alb-sg-id`,
+  httpsListenerArn: `/ctech/${env}/alb/https-listener-arn`,
+  // Base URL with no DB number. Unlike ctech-wallet (which appends its own
+  // /2 for keyspace isolation), ctech-dfe and ctech-account both pass this
+  // straight through as VALKEY_URL with no suffix — that's the precedent
+  // followed here, and it matches api/internal/config/config.go, which reads
+  // VALKEY_URL as a single opaque string. tablelease keys are already
+  // namespaced by prefix (`table:{id}`), so no DB-level isolation is needed.
+  valkeyUrl: `/ctech/${env}/valkey/url`,
+  deploymentsBucket: `/ctech/${env}/s3/deployments-bucket`,
+  logsBucket: `/ctech/${env}/s3/logs-bucket`,
 });
 
 /**
@@ -99,18 +100,18 @@ export const SSM_SHARED = (env: Environment) => ({
  * only exist after ctech-account seeds poker's M2M client.
  */
 export const SSM_POKER = (env: Environment) => ({
-    walletUrl: `/ctech/${env}/poker/wallet-url`,
-    clientId: `/ctech/${env}/poker/poker-client-id`,
-    clientSecret: `/ctech/${env}/poker/poker-client-secret`,
+  walletUrl: `/ctech/${env}/poker/wallet-url`,
+  clientId: `/ctech/${env}/poker/poker-client-id`,
+  clientSecret: `/ctech/${env}/poker/poker-client-secret`,
 });
 
 // ── Domain helper (identical to ctech-wallet's / ctech-dfe's) ───────────────
 export const domainForEnv = (environment: Environment, prefix: string) => {
-    switch (environment) {
-        case 'prod':
-            return `${prefix}.${BASE_DOMAIN}`;
-        case 'dev':
-        case 'stage':
-            return `${prefix}-${environment}.${BASE_DOMAIN}`;
-    }
+  switch (environment) {
+    case 'prod':
+      return `${prefix}.${BASE_DOMAIN}`;
+    case 'dev':
+    case 'stage':
+      return `${prefix}-${environment}.${BASE_DOMAIN}`;
+  }
 };

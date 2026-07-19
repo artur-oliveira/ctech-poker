@@ -62,7 +62,7 @@ export class PokerApiStack extends cdk.Stack {
     const {
       environment, vpcId, domainName, appDomainName, authDomainName, instanceProfileName, deploymentsBucketName, logsBucketName,
       tableStateArn, actionLogArn, actionGuardsArn,
-      roomsTableArn, playerProfilesTableArn, walletUrlParam, pokerClientIdParam, pokerClientSecretParam,
+      roomsTableArn, playerProfilesTableArn, walletUrlParam,  pokerClientIdParam, pokerClientSecretParam,
       achievementProgressTableArn, leaderboardStatsTableArn, rouletteSpinsTableArn,
     } = props;
 
