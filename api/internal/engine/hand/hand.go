@@ -105,7 +105,9 @@ func (t *Table) PlayersForActor() []*Player { return t.players }
 // CurrentPlayerCanActForActor exposes currentPlayerCanAct to Phase 2's
 // table.Actor (auto-fold deadline arming needs to know whose turn it is
 // without duplicating the round-state check outside this package).
-func (t *Table) CurrentPlayerCanActForActor(playerID string) bool { return t.currentPlayerCanAct(playerID) }
+func (t *Table) CurrentPlayerCanActForActor(playerID string) bool {
+	return t.currentPlayerCanAct(playerID)
+}
 
 // SitOutForActor marks a player SittingOut — used by Phase 2's disconnect
 // grace-window handling once a disconnected player exceeds the grace period
