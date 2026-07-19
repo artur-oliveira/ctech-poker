@@ -125,3 +125,35 @@ func TestThreeOfAKindBrokenByTripRank(t *testing.T) {
 		t.Fatal("higher trip rank must win even though the losing hand has much higher kickers")
 	}
 }
+
+// Regression: full house vs full house with the same trip rank, distinguished
+// only by the pair rank. Added from task review — this exact boundary wasn't
+// covered by any existing test and is exactly the kind of case a future
+// refactor could silently regress.
+func TestFullHouseBrokenByPairRankWhenTripRankTies(t *testing.T) {
+	kingsFullOfQueens := [7]deck.Card{
+		c(deck.King, deck.Clubs), c(deck.King, deck.Diamonds), c(deck.King, deck.Hearts),
+		c(deck.Queen, deck.Spades), c(deck.Queen, deck.Clubs), c(deck.Two, deck.Diamonds), c(deck.Three, deck.Hearts),
+	}
+	kingsFullOfJacks := [7]deck.Card{
+		c(deck.King, deck.Clubs), c(deck.King, deck.Diamonds), c(deck.King, deck.Hearts),
+		c(deck.Jack, deck.Spades), c(deck.Jack, deck.Clubs), c(deck.Two, deck.Diamonds), c(deck.Three, deck.Hearts),
+	}
+	if Best7(kingsFullOfQueens) <= Best7(kingsFullOfJacks) {
+		t.Fatal("same trip rank must be broken by the higher pair rank")
+	}
+}
+
+// Regression: A-2-3-4-6 contains an Ace and four low cards but is NOT the
+// wheel (A-2-3-4-5) — must not be misdetected as a straight. Added from task
+// review — the wheel special case is the most common wrong-way-round bug in
+// amateur straight detection.
+func TestAceLowNonWheelIsNotMisdetectedAsStraight(t *testing.T) {
+	notAWheel := [7]deck.Card{
+		c(deck.Ace, deck.Clubs), c(deck.Two, deck.Diamonds), c(deck.Three, deck.Hearts),
+		c(deck.Four, deck.Spades), c(deck.Six, deck.Clubs), c(deck.Nine, deck.Diamonds), c(deck.Jack, deck.Hearts),
+	}
+	if Best7(notAWheel) >= makeScore(Straight, deck.Five) {
+		t.Fatal("A-2-3-4-6 must not be scored as a straight — it is not the wheel (A-2-3-4-5)")
+	}
+}
