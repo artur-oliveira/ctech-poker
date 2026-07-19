@@ -41,23 +41,25 @@ type clientMessage struct {
 var tableChatFilter = chatfilter.New([]string{"idiota", "burro"})
 
 // readAuthToken reads the first WebSocket frame after the upgrade and
-// extracts the bearer JWT. The client sends it as {"token":"..."} (or a raw
-// token) once; a missing or unreadable frame fails closed so no connection
-// hangs open. Mirrors ctech-wallet's internal/api/v1/ws.go exactly.
-func readAuthToken(conn *fws.Conn) (string, bool) {
+// extracts the bearer JWT plus an optional private-room share code. The
+// client sends {"token":"...","share_code":"..."} (or a raw token) once; a
+// missing or unreadable frame fails closed so no connection hangs open.
+// Mirrors ctech-wallet's internal/api/v1/ws.go.
+func readAuthToken(conn *fws.Conn) (token, shareCode string, ok bool) {
 	_ = conn.SetReadDeadline(time.Now().Add(wsAuthTimeout))
 	defer conn.SetReadDeadline(time.Time{})
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
-		return "", false
+		return "", "", false
 	}
 	var p struct {
-		Token string `json:"token"`
+		Token     string `json:"token"`
+		ShareCode string `json:"share_code"`
 	}
 	if json.Unmarshal(msg, &p) == nil && p.Token != "" {
-		return p.Token, true
+		return p.Token, p.ShareCode, true
 	}
-	return strings.TrimSpace(string(msg)), true
+	return strings.TrimSpace(string(msg)), "", true
 }
 
 // wsAllowedOrigin mirrors the HTTP CORS policy for the WebSocket upgrade:
@@ -131,7 +133,7 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 				_ = conn.WriteMessage(fws.TextMessage, data)
 			}
 
-			token, ok := readAuthToken(conn)
+			token, shareCode, ok := readAuthToken(conn)
 			if !ok {
 				send(map[string]any{"type": "error", "code": "unauthorized"})
 				_ = conn.Close()
@@ -145,16 +147,30 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 			}
 			playerID := claims.Sub
 
+			// Private rooms are invite-only end to end: the WS gate mirrors
+			// the HTTP join gate, so knowing a table ID never grants access.
+			var room *roomstore.Room
+			if rooms != nil {
+				if room, err = rooms.Get(ctx, tableID); err != nil {
+					send(map[string]any{"type": "error", "code": "unavailable"})
+					_ = conn.Close()
+					return
+				}
+			}
+			if room != nil && !privateRoomAccessAllowed(room, playerID, shareCode) {
+				send(map[string]any{"type": "error", "code": "forbidden"})
+				_ = conn.Close()
+				return
+			}
+
 			actor, err := manager.GetOrCreateActor(ctx, tableID, seed(tableID))
 			if err != nil {
 				send(map[string]any{"type": "error", "code": "unavailable"})
 				_ = conn.Close()
 				return
 			}
-			if rooms != nil {
-				if room, roomErr := rooms.Get(ctx, tableID); roomErr == nil && room != nil {
-					actor.SetEquityEnabledForActor(room.EquityDisplayEnabled)
-				}
+			if room != nil {
+				actor.SetEquityEnabledForActor(room.EquityDisplayEnabled)
 			}
 
 			connKey := tableID + "#" + playerID
@@ -186,7 +202,7 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 				if json.Unmarshal(msg, &m) != nil {
 					continue
 				}
-				if m.Type == "act" && !limiter.Allow(playerID) {
+				if (m.Type == "act" || m.Type == "chat") && !limiter.Allow(playerID) {
 					send(map[string]any{"type": "error", "code": "rate_limited"})
 					continue
 				}

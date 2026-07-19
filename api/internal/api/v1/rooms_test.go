@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/poker/api/internal/roomstore"
 )
 
 func TestCreatePublicRoomRejectsBlindEscalation(t *testing.T) {
@@ -49,5 +50,37 @@ func TestPublicSandboxStakesAreCurated(t *testing.T) {
 	}
 	if isAllowedPublicStake("real", 10000, 25000) {
 		t.Fatal("sandbox-only high stake leaked into the real-money catalog")
+	}
+}
+
+func TestSanitizeRoomHidesShareCodeFromNonCreators(t *testing.T) {
+	room := &roomstore.Room{ID: "r1", Visibility: "private", ShareCode: "ABCD1234", CreatedBy: "owner"}
+	if got := sanitizeRoom(room, "someone-else"); got.ShareCode != "" {
+		t.Fatalf("share code leaked to non-creator: %q", got.ShareCode)
+	}
+	if got := sanitizeRoom(room, "owner"); got.ShareCode != "ABCD1234" {
+		t.Fatal("creator should still see the share code")
+	}
+	if room.ShareCode != "ABCD1234" {
+		t.Fatal("sanitize must not mutate the stored room")
+	}
+}
+
+func TestPrivateRoomAccessRequiresShareCode(t *testing.T) {
+	room := &roomstore.Room{ID: "r1", Visibility: "private", ShareCode: "ABCD1234", CreatedBy: "owner"}
+	if privateRoomAccessAllowed(room, "guest", "") {
+		t.Fatal("guest without share code must be rejected")
+	}
+	if privateRoomAccessAllowed(room, "guest", "WRONG000") {
+		t.Fatal("wrong share code must be rejected")
+	}
+	if !privateRoomAccessAllowed(room, "guest", "ABCD1234") {
+		t.Fatal("correct share code must be accepted")
+	}
+	if !privateRoomAccessAllowed(room, "owner", "") {
+		t.Fatal("creator must always be allowed")
+	}
+	if !privateRoomAccessAllowed(&roomstore.Room{Visibility: "public"}, "guest", "") {
+		t.Fatal("public rooms are always allowed")
 	}
 }

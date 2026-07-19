@@ -14,5 +14,6 @@ type CreateRoomRequest struct {
 }
 
 type JoinRoomRequest struct {
-	Amount int64 `json:"amount"`
+	Amount    int64  `json:"amount"`
+	ShareCode string `json:"share_code,omitempty"` // required to join a private room (unless creator)
 }

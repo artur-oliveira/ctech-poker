@@ -2,6 +2,7 @@ package v1
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -27,6 +28,7 @@ func RegisterRooms(router fiber.Router, auth fiber.Handler, rooms *roomstore.Sto
 	g.Post("/", h.createRoom)
 	g.Get("/", h.listPublic)
 	g.Get("/stakes", h.listStakes)
+	g.Get("/code/:code", h.getByShareCode)
 	g.Get("/:id", h.getRoom)
 	g.Post("/:id/join", h.join)
 	g.Post("/:id/leave", h.leave)
@@ -117,7 +119,42 @@ func (h *roomHandlers) getRoom(c fiber.Ctx) error {
 	if room == nil {
 		return problem.NotFound("room not found").Send(c)
 	}
+	userID, _ := c.Locals(localsUserID).(string)
+	return c.JSON(sanitizeRoom(room, userID))
+}
+
+// getByShareCode is how an invitee resolves a private room: they were handed
+// the code out of band, so echoing it back leaks nothing.
+func (h *roomHandlers) getByShareCode(c fiber.Ctx) error {
+	room, err := h.rooms.GetByShareCode(c.Context(), c.Params("code"))
+	if err != nil {
+		return problem.InternalServer("failed to get room").Send(c)
+	}
+	if room == nil {
+		return problem.NotFound("room not found").Send(c)
+	}
 	return c.JSON(room)
+}
+
+// sanitizeRoom strips the share code from any viewer other than the room's
+// creator — knowing a private room's ID must not reveal its invite code.
+func sanitizeRoom(room *roomstore.Room, viewerID string) roomstore.Room {
+	out := *room
+	if room.CreatedBy != viewerID {
+		out.ShareCode = ""
+	}
+	return out
+}
+
+// privateRoomAccessAllowed gates joining a private room: the creator is always
+// allowed; anyone else must present the share code (constant-time compare).
+// Public rooms are always allowed.
+func privateRoomAccessAllowed(room *roomstore.Room, viewerID, shareCode string) bool {
+	if room.Visibility != "private" || room.CreatedBy == viewerID {
+		return true
+	}
+	return room.ShareCode != "" &&
+		subtle.ConstantTimeCompare([]byte(room.ShareCode), []byte(shareCode)) == 1
 }
 
 func (h *roomHandlers) join(c fiber.Ctx) error {
@@ -139,6 +176,9 @@ func (h *roomHandlers) join(c fiber.Ctx) error {
 		return problem.BadRequest("amount must be within range and a multiple of big_blind").Send(c)
 	}
 	userID, _ := c.Locals(localsUserID).(string)
+	if !privateRoomAccessAllowed(room, userID, req.ShareCode) {
+		return problem.Forbidden("share code required to join a private room").Send(c)
+	}
 	if err := h.buyin.BuyIn(c.Context(), room.ID, userID, req.Amount, room.Status == "active"); err != nil {
 		if errors.Is(err, buyin.ErrTermsNotAccepted) {
 			return problem.Forbidden(err.Error()).Send(c)
@@ -162,4 +202,6 @@ func (h *roomHandlers) ready(c fiber.Ctx) error {
 }
 
 func newRoomID() string    { var b [16]byte; _, _ = rand.Read(b[:]); return hex.EncodeToString(b[:]) }
-func newShareCode() string { var b [4]byte; _, _ = rand.Read(b[:]); return fmt.Sprintf("%X", b) }
+// 6 random bytes = 12 hex chars: still typeable, but too sparse to brute-force
+// online against GET /rooms/code/:code.
+func newShareCode() string { var b [6]byte; _, _ = rand.Read(b[:]); return fmt.Sprintf("%X", b) }
