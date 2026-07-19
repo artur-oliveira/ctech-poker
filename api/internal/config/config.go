@@ -19,6 +19,18 @@ type Config struct {
 	// Cache / table-lease (see Task 4). Optional in dev — falls back to an
 	// in-memory backend that is NOT shared across replicas.
 	RedisURL string `env:"VALKEY_URL"`
+
+	// InstancePrivateIP is this instance's own address, advertised via
+	// tableowner.Registry so sibling instances can proxy WebSocket traffic
+	// for tables this instance owns (see internal/tablemanager/manager.go).
+	InstancePrivateIP string `env:"INSTANCE_PRIVATE_IP" envDefault:"127.0.0.1"`
+
+	// ctech-account auth (see internal/api/v1/tablews.go) — poker's first
+	// user-facing auth surface; mirrors ctech-wallet's config fields exactly.
+	CtechURL           string   `env:"CTECH_URL"`
+	CtechJWKSURL       string   `env:"CTECH_JWKS_URL"`
+	ServiceAudience    string   `env:"SERVICE_AUDIENCE" envDefault:"poker"`
+	CorsAllowedOrigins []string `env:"CORS_ALLOWED_ORIGINS" envSeparator:","`
 }
 
 // Load reads config from environment variables.
