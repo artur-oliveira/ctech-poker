@@ -6,3 +6,8 @@ node_modules/
 cdk.out/
 *.log
 .DS_Store
+api/dist/
+.env
+.env.local
+.idea/
+.superpowers/

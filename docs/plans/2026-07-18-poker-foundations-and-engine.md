@@ -1,23 +1,38 @@
 # ctech-poker Foundations & Game Engine Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:
+> executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stand up the `ctech-poker` API repo skeleton (matching company convention), its CDK stack and CI pipeline, the table-lease service, and a fully correct, independently-testable Texas Hold'em rules engine (deck/shuffle, hand evaluator, side pots, betting rounds, hand lifecycle) exposed via a CLI harness — no networking, no wallet integration yet.
+**Goal:** Stand up the `ctech-poker` API repo skeleton (matching company convention), its CDK stack and CI pipeline, the
+table-lease service, and a fully correct, independently-testable Texas Hold'em rules engine (deck/shuffle, hand
+evaluator, side pots, betting rounds, hand lifecycle) exposed via a CLI harness — no networking, no wallet integration
+yet.
 
-**Architecture:** Go service using the same `cmd/` + `internal/` layout, Fiber v3 + `go.uber.org/fx` DI, `slog` JSON logging, and `caarlos0/env/v11` config as every other CTech Go API (`ctech-wallet/api` is the reference implementation copied from throughout this plan). The rules engine is a pure-logic package tree (`internal/engine/...`) with zero dependency on HTTP/WebSocket/DB — it takes actions in, returns state out — so it can be built and correctness-tested in complete isolation before Phase 2 wires it to a live table server.
+**Architecture:** Go service using the same `cmd/` + `internal/` layout, Fiber v3 + `go.uber.org/fx` DI, `slog` JSON
+logging, and `caarlos0/env/v11` config as every other CTech Go API (`ctech-wallet/api` is the reference implementation
+copied from throughout this plan). The rules engine is a pure-logic package tree (`internal/engine/...`) with zero
+dependency on HTTP/WebSocket/DB — it takes actions in, returns state out — so it can be built and correctness-tested in
+complete isolation before Phase 2 wires it to a live table server.
 
-**Tech Stack:** Go 1.26, Fiber v3, `go.uber.org/fx`, `gopkg.aoctech.app/api-commons` (`cache`, `ws`), `github.com/valkey-io/valkey-go`, AWS CDK (TypeScript) importing `@aoctech/cdk`, GitHub Actions.
+**Tech Stack:** Go 1.26, Fiber v3, `go.uber.org/fx`, `gopkg.aoctech.app/api-commons` (`cache`, `ws`),
+`github.com/valkey-io/valkey-go`, AWS CDK (TypeScript) importing `@aoctech/cdk`, GitHub Actions.
 
 ## Global Constraints
 
 - Go module path: `gopkg.aoctech.app/poker/api` (matches `wallet/api`, `dfe/api`, `account/api` naming).
 - Go version: `1.26` (matches `golang:1.26-alpine` builder image used company-wide).
-- Deployed binary **must be named `app`** — CDK userdata on the shared `PrivateIpv4Ec2Service` construct hardcodes `/opt/app/current/app`.
-- Server framework: Fiber v3 (`github.com/gofiber/fiber/v3`), DI: `go.uber.org/fx`, logging: `log/slog` with `slog.NewJSONHandler`, config: `github.com/caarlos0/env/v11`.
-- Never hand-roll what `gopkg.aoctech.app/api-commons` already provides (`cache.Backend`/`cache.RedisBackend`/`cache.NewMemoryBackend`, `ws` registry) — import it, don't reimplement.
-- CSPRNG only for anything shuffle/fairness/roulette-adjacent: `crypto/rand`, never `math/rand` unseeded/seeded predictably.
-- No new third-party dependency where the standard library already does the job (YAGNI) — the hand evaluator and shuffle are built on `crypto/rand`, `crypto/sha256`, `crypto/hmac` only.
-- Every pure-logic package under `internal/engine/` must have zero imports of `net/http`, `fiber`, database, or Valkey clients — networking/persistence is Phase 2+, not this plan.
+- Deployed binary **must be named `app`** — CDK userdata on the shared `PrivateIpv4Ec2Service` construct hardcodes
+  `/opt/app/current/app`.
+- Server framework: Fiber v3 (`github.com/gofiber/fiber/v3`), DI: `go.uber.org/fx`, logging: `log/slog` with
+  `slog.NewJSONHandler`, config: `github.com/caarlos0/env/v11`.
+- Never hand-roll what `gopkg.aoctech.app/api-commons` already provides (`cache.Backend`/`cache.RedisBackend`/
+  `cache.NewMemoryBackend`, `ws` registry) — import it, don't reimplement.
+- CSPRNG only for anything shuffle/fairness/roulette-adjacent: `crypto/rand`, never `math/rand` unseeded/seeded
+  predictably.
+- No new third-party dependency where the standard library already does the job (YAGNI) — the hand evaluator and shuffle
+  are built on `crypto/rand`, `crypto/sha256`, `crypto/hmac` only.
+- Every pure-logic package under `internal/engine/` must have zero imports of `net/http`, `fiber`, database, or Valkey
+  clients — networking/persistence is Phase 2+, not this plan.
 
 ---
 
@@ -26,6 +41,7 @@
 ### Task 1: Repo skeleton — Go module, Dockerfile, Makefile, Fx app with health check
 
 **Files:**
+
 - Create: `api/go.mod`
 - Create: `api/Dockerfile`
 - Create: `api/Makefile`
@@ -36,7 +52,9 @@
 - Test: `api/internal/app/app_test.go`
 
 **Interfaces:**
-- Produces: `config.Config` struct + `config.Load() (*config.Config, error)`; `app.Module` (an `fx.Option`) that later tasks (lock/lease, engine wiring in Phase 2) will extend via `fx.Provide`.
+
+- Produces: `config.Config` struct + `config.Load() (*config.Config, error)`; `app.Module` (an `fx.Option`) that later
+  tasks (lock/lease, engine wiring in Phase 2) will extend via `fx.Provide`.
 
 - [ ] **Step 1: Create the Go module**
 
@@ -345,15 +363,24 @@ git commit -m "feat: repo skeleton — Fx app with health check, Dockerfile, Mak
 
 ### Task 2: Table-lease service (Valkey-backed, TTL-renewed)
 
-The table-authority model (ARCHITECTURE.md § 2) needs a lease that's held for a table's *entire* process lifetime, renewed on a heartbeat — unlike `ctech-wallet`'s per-operation advisory lock (`ctech-wallet/api/internal/lock/lock.go`, fire-and-forget acquire/release with no renewal). This task ports that package's acquire/release/CAS-delete plumbing and adds a `Renew` method plus a heartbeat loop.
+The table-authority model (ARCHITECTURE.md § 2) needs a lease that's held for a table's *entire* process lifetime,
+renewed on a heartbeat — unlike `ctech-wallet`'s per-operation advisory lock (`ctech-wallet/api/internal/lock/lock.go`,
+fire-and-forget acquire/release with no renewal). This task ports that package's acquire/release/CAS-delete plumbing and
+adds a `Renew` method plus a heartbeat loop.
 
 **Files:**
+
 - Create: `api/internal/tablelease/lease.go`
 - Test: `api/internal/tablelease/lease_test.go`
 
 **Interfaces:**
-- Consumes: `cache.Backend`, `cache.RedisBackend` from `gopkg.aoctech.app/api-commons/cache` (already a dependency, Step 2 of Task 1).
-- Produces: `tablelease.NewService(c cache.Backend) *tablelease.Service`, `(*Service).Acquire(ctx, tableID string) (release func(), ok bool, err error)`, `(*Service).StartHeartbeat(ctx, tableID string, release func()) (stop func())` — Phase 2's table server wires this to know when it's lost the lease and must stop processing.
+
+- Consumes: `cache.Backend`, `cache.RedisBackend` from `gopkg.aoctech.app/api-commons/cache` (already a dependency, Step
+  2 of Task 1).
+- Produces: `tablelease.NewService(c cache.Backend) *tablelease.Service`,
+  `(*Service).Acquire(ctx, tableID string) (release func(), ok bool, err error)`,
+  `(*Service).StartHeartbeat(ctx, tableID string, release func()) (stop func())` — Phase 2's table server wires this to
+  know when it's lost the lease and must stop processing.
 
 - [ ] **Step 1: Write the failing test for basic acquire/release semantics**
 
@@ -700,9 +727,12 @@ git commit -m "feat: table-lease service with TTL renewal, ported from wallet's 
 
 ### Task 3: CDK stack skeleton
 
-Mirrors `ctech-wallet/cdk` — imports `PrivateIpv4Ec2Service` (ASG+EC2 stateful service) and `ValkeyStack` SSM lookup from `@aoctech/cdk`, adds an `ApplicationListenerRule` against the shared ALB for `poker-api.aoctech.app`, and a CloudFront + Route53 frontend stack for `poker.aoctech.app` (mirroring `ctech-wallet/cdk/lib/frontend-stack.ts`).
+Mirrors `ctech-wallet/cdk` — imports `PrivateIpv4Ec2Service` (ASG+EC2 stateful service) and `ValkeyStack` SSM lookup
+from `@aoctech/cdk`, adds an `ApplicationListenerRule` against the shared ALB for `poker-api.aoctech.app`, and a
+CloudFront + Route53 frontend stack for `poker.aoctech.app` (mirroring `ctech-wallet/cdk/lib/frontend-stack.ts`).
 
 **Files:**
+
 - Create: `cdk/package.json`
 - Create: `cdk/tsconfig.json`
 - Create: `cdk/cdk.json`
@@ -711,14 +741,20 @@ Mirrors `ctech-wallet/cdk` — imports `PrivateIpv4Ec2Service` (ASG+EC2 stateful
 - Test: `cdk/test/api-stack.test.ts`
 
 **Interfaces:**
-- Consumes: `PrivateIpv4Ec2Service`, `AlbStack` (SSM export lookups), `ValkeyStack` (SSM export lookup) from `@aoctech/cdk` — exact constructor signatures must be confirmed against `ctech-cdk/lib/private-ipv4-ec2-service.ts` and `ctech-wallet/cdk/lib/api-stack.ts` at implementation time (this task's Step 1).
+
+- Consumes: `PrivateIpv4Ec2Service`, `AlbStack` (SSM export lookups), `ValkeyStack` (SSM export lookup) from
+  `@aoctech/cdk` — exact constructor signatures must be confirmed against `ctech-cdk/lib/private-ipv4-ec2-service.ts`
+  and `ctech-wallet/cdk/lib/api-stack.ts` at implementation time (this task's Step 1).
 - Produces: `PokerApiStack` (CDK stack class), synthesizable via `cdk synth`.
 
 - [ ] **Step 1: Read the reference implementation before writing any CDK code**
 
-Run: `cat /home/artur/Documents/Projects/Ctech/ctech-wallet/cdk/lib/api-stack.ts /home/artur/Documents/Projects/Ctech/ctech-wallet/cdk/lib/frontend-stack.ts /home/artur/Documents/Projects/Ctech/ctech-cdk/lib/private-ipv4-ec2-service.ts`
+Run:
+`cat /home/artur/Documents/Projects/Ctech/ctech-wallet/cdk/lib/api-stack.ts /home/artur/Documents/Projects/Ctech/ctech-wallet/cdk/lib/frontend-stack.ts /home/artur/Documents/Projects/Ctech/ctech-cdk/lib/private-ipv4-ec2-service.ts`
 
-Copy the exact construct props shape (SSM parameter names for the shared ALB SG/listener ARN, the `ValkeyStack` SSM export helper, health-check path convention) — this plan does not restate that file's content since it must match byte-for-byte with whatever's current in `ctech-cdk` at implementation time, not a snapshot that can drift.
+Copy the exact construct props shape (SSM parameter names for the shared ALB SG/listener ARN, the `ValkeyStack` SSM
+export helper, health-check path convention) — this plan does not restate that file's content since it must match
+byte-for-byte with whatever's current in `ctech-cdk` at implementation time, not a snapshot that can drift.
 
 - [ ] **Step 2: Scaffold the CDK app**
 
@@ -732,7 +768,12 @@ npm install --save-dev typescript ts-node @types/node aws-cdk jest ts-jest @type
 
 - [ ] **Step 3: Write `cdk/lib/api-stack.ts`**
 
-Using the exact props confirmed in Step 1, build a stack that: looks up the shared ALB SG + HTTPS listener ARN via SSM, looks up the `ValkeyStack` URL via SSM, instantiates `PrivateIpv4Ec2Service` with a userdata script that fetches `s3://{bucket}/poker/current.zip`, extracts to `/opt/app/current`, and runs `/opt/app/current/app` with `VALKEY_URL` and `ENVIRONMENT` env vars set, and registers an `ApplicationListenerRule` for host header `poker-api.aoctech.app` at a unique priority (confirm the next free priority against `ctech-wallet/cdk/lib/api-stack.ts` and any other stack sharing the same listener — do not reuse a priority already taken).
+Using the exact props confirmed in Step 1, build a stack that: looks up the shared ALB SG + HTTPS listener ARN via SSM,
+looks up the `ValkeyStack` URL via SSM, instantiates `PrivateIpv4Ec2Service` with a userdata script that fetches
+`s3://{bucket}/poker/current.zip`, extracts to `/opt/app/current`, and runs `/opt/app/current/app` with `VALKEY_URL` and
+`ENVIRONMENT` env vars set, and registers an `ApplicationListenerRule` for host header `poker-api.aoctech.app` at a
+unique priority (confirm the next free priority against `ctech-wallet/cdk/lib/api-stack.ts` and any other stack sharing
+the same listener — do not reuse a priority already taken).
 
 - [ ] **Step 4: Write a synth smoke test**
 
@@ -770,9 +811,11 @@ git commit -m "feat: CDK stack skeleton importing shared ctech-cdk constructs"
 
 ### Task 4: CI pipeline
 
-Mirror `ctech-wallet/.github/workflows/api.yml` exactly (runner, Go setup, OIDC role assumption, versioned zip, SSM rolling deploy), renamed for poker.
+Mirror `ctech-wallet/.github/workflows/api.yml` exactly (runner, Go setup, OIDC role assumption, versioned zip, SSM
+rolling deploy), renamed for poker.
 
 **Files:**
+
 - Create: `.github/workflows/api.yml`
 
 - [ ] **Step 1: Read the reference workflow before writing**
@@ -780,15 +823,21 @@ Mirror `ctech-wallet/.github/workflows/api.yml` exactly (runner, Go setup, OIDC 
 Run: `cat /home/artur/Documents/Projects/Ctech/ctech-wallet/.github/workflows/api.yml`
 
 - [ ] **Step 2: Copy it to `ctech-poker/.github/workflows/api.yml`**, changing only:
-  - Working directory / paths-filter from `api/**` (unchanged — same relative path).
-  - OIDC role ARN from `arn:aws:iam::<acct>:role/ctech-wallet-gha-api` to `arn:aws:iam::<acct>:role/ctech-poker-gha-api` (the account ID and the actual role must be confirmed/created by whoever owns AWS IAM for this account before this workflow can run — flagging as an infra prerequisite, not something this plan's engineer can unilaterally decide).
-  - S3 upload path from `s3://{bucket}/wallet/current.zip` to `s3://{bucket}/poker/current.zip`.
-  - ASG name filter used by the `aws ssm send-command` step from wallet's ASG name to poker's (must match whatever `PrivateIpv4Ec2Service` in Task 3 names its ASG).
+    - Working directory / paths-filter from `api/**` (unchanged — same relative path).
+    - OIDC role ARN from `arn:aws:iam::<acct>:role/ctech-wallet-gha-api` to
+      `arn:aws:iam::<acct>:role/ctech-poker-gha-api` (the account ID and the actual role must be confirmed/created by
+      whoever owns AWS IAM for this account before this workflow can run — flagging as an infra prerequisite, not
+      something this plan's engineer can unilaterally decide).
+    - S3 upload path from `s3://{bucket}/wallet/current.zip` to `s3://{bucket}/poker/current.zip`.
+    - ASG name filter used by the `aws ssm send-command` step from wallet's ASG name to poker's (must match whatever
+      `PrivateIpv4Ec2Service` in Task 3 names its ASG).
 
 - [ ] **Step 3: Validate workflow syntax**
 
 Run: `cd /home/artur/Documents/Projects/Ctech/ctech-poker && actionlint .github/workflows/api.yml`
-Expected: no errors. If `actionlint` isn't installed, `gh workflow view` after pushing (or a YAML syntax check via `python3 -c "import yaml,sys; yaml.safe_load(open('.github/workflows/api.yml'))"`) is an acceptable substitute for this step alone — full CI-behavior verification only happens once this workflow actually runs in GitHub Actions.
+Expected: no errors. If `actionlint` isn't installed, `gh workflow view` after pushing (or a YAML syntax check via
+`python3 -c "import yaml,sys; yaml.safe_load(open('.github/workflows/api.yml'))"`) is an acceptable substitute for this
+step alone — full CI-behavior verification only happens once this workflow actually runs in GitHub Actions.
 
 - [ ] **Step 4: Commit**
 
@@ -804,11 +853,17 @@ git commit -m "ci: mirror wallet's api.yml deploy pipeline for poker"
 ### Task 5: Deck, CSPRNG shuffle, commit-reveal fairness
 
 **Files:**
+
 - Create: `api/internal/engine/deck/deck.go`
 - Test: `api/internal/engine/deck/deck_test.go`
 
 **Interfaces:**
-- Produces: `deck.Card{Rank, Suit}`, `deck.Rank` (2–14, Ace=14), `deck.Suit` (0–3), `deck.NewShuffle() (*deck.ShuffleResult, error)`, `deck.ShuffleResult{Cards [52]Card, ServerSeed [32]byte, CommitHash [32]byte}`, `deck.Verify(seed [32]byte, claimedCards [52]Card, publishedHash [32]byte) bool`. Task 9 (hand lifecycle) consumes `NewShuffle`, deals from `.Cards` in order, and reveals `.ServerSeed` at `HAND_COMPLETE`.
+
+- Produces: `deck.Card{Rank, Suit}`, `deck.Rank` (2–14, Ace=14), `deck.Suit` (0–3),
+  `deck.NewShuffle() (*deck.ShuffleResult, error)`,
+  `deck.ShuffleResult{Cards [52]Card, ServerSeed [32]byte, CommitHash [32]byte}`,
+  `deck.Verify(seed [32]byte, claimedCards [52]Card, publishedHash [32]byte) bool`. Task 9 (hand lifecycle) consumes
+  `NewShuffle`, deals from `.Cards` in order, and reveals `.ServerSeed` at `HAND_COMPLETE`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1041,12 +1096,16 @@ git commit -m "feat: CSPRNG deck shuffle with commit-reveal fairness proof"
 ### Task 6: 7-card hand evaluator
 
 **Files:**
+
 - Create: `api/internal/engine/handeval/handeval.go`
 - Test: `api/internal/engine/handeval/handeval_test.go`
 
 **Interfaces:**
+
 - Consumes: `deck.Card`, `deck.Rank`, `deck.Suit` (Task 5).
-- Produces: `handeval.Category` (enum, `HighCard`...`RoyalFlush`), `handeval.Score` (a `uint32`, higher always beats lower, equal means split pot), `handeval.Best7(cards [7]deck.Card) Score`. Task 9 consumes `Best7` to rank each player's hole+board cards at showdown.
+- Produces: `handeval.Category` (enum, `HighCard`...`RoyalFlush`), `handeval.Score` (a `uint32`, higher always beats
+  lower, equal means split pot), `handeval.Best7(cards [7]deck.Card) Score`. Task 9 consumes `Best7` to rank each
+  player's hole+board cards at showdown.
 
 - [ ] **Step 1: Write the failing tests — known hand-vs-hand comparisons**
 
@@ -1338,11 +1397,16 @@ git commit -m "feat: 7-card hand evaluator with kicker comparison and wheel-stra
 ### Task 7: `ComputeSidePots`
 
 **Files:**
+
 - Create: `api/internal/engine/sidepots/sidepots.go`
 - Test: `api/internal/engine/sidepots/sidepots_test.go`
 
 **Interfaces:**
-- Produces: `sidepots.Contribution{PlayerID string, Amount int64}`, `sidepots.PotLayer{Amount int64, Eligible []string}`, `sidepots.ComputeSidePots(contributions []Contribution) []PotLayer`. Task 9 consumes this at `SHOWDOWN`, intersecting each layer's `Eligible` list with non-folded players before running `handeval.Best7` to find that layer's winner(s).
+
+- Produces: `sidepots.Contribution{PlayerID string, Amount int64}`,
+  `sidepots.PotLayer{Amount int64, Eligible []string}`,
+  `sidepots.ComputeSidePots(contributions []Contribution) []PotLayer`. Task 9 consumes this at `SHOWDOWN`, intersecting
+  each layer's `Eligible` list with non-folded players before running `handeval.Best7` to find that layer's winner(s).
 
 - [ ] **Step 1: Write the failing tests — the exact 2-way and 3-way scenarios from OVERVIEW.md § 3.3**
 
@@ -1519,11 +1583,18 @@ git commit -m "feat: ComputeSidePots — layered side-pot algorithm with eligibi
 ### Task 8: Betting round — min-raise and short-all-in-does-not-reopen-action
 
 **Files:**
+
 - Create: `api/internal/engine/betting/betting.go`
 - Test: `api/internal/engine/betting/betting_test.go`
 
 **Interfaces:**
-- Produces: `betting.PlayerState{ID string, Stack, Contributed int64, Folded, AllIn, ActedSinceLastFullRaise bool}`, `betting.Round{Players []*PlayerState, CurrentBet, MinRaise int64}`, `betting.NewRound(players []*PlayerState, currentBet, minRaise int64) *Round`, `(*Round).Act(playerIdx int, action Action, amount int64) error`, `(*Round).IsComplete() bool`. Task 9 consumes this per betting round (pre-flop/flop/turn/river), constructing a fresh `Round` each time with `MinRaise` reset to the table's big blind at the start of every round.
+
+- Produces: `betting.PlayerState{ID string, Stack, Contributed int64, Folded, AllIn, ActedSinceLastFullRaise bool}`,
+  `betting.Round{Players []*PlayerState, CurrentBet, MinRaise int64}`,
+  `betting.NewRound(players []*PlayerState, currentBet, minRaise int64) *Round`,
+  `(*Round).Act(playerIdx int, action Action, amount int64) error`, `(*Round).IsComplete() bool`. Task 9 consumes this
+  per betting round (pre-flop/flop/turn/river), constructing a fresh `Round` each time with `MinRaise` reset to the
+  table's big blind at the start of every round.
 
 - [ ] **Step 1: Write the failing tests — the two hard rules named in OVERVIEW.md § 3.3**
 
@@ -1785,15 +1856,25 @@ git commit -m "feat: betting round engine — min-raise sizing, short-all-in non
 
 ### Task 9: Hand lifecycle orchestrator
 
-Ties Tasks 5–8 together into the full state machine (OVERVIEW.md § 3.1), including blind posting (heads-up special case), dealer rotation, the ready system, and mid-hand `PENDING_ENTRY` joins (OVERVIEW.md § 2).
+Ties Tasks 5–8 together into the full state machine (OVERVIEW.md § 3.1), including blind posting (heads-up special
+case), dealer rotation, the ready system, and mid-hand `PENDING_ENTRY` joins (OVERVIEW.md § 2).
 
 **Files:**
+
 - Create: `api/internal/engine/hand/hand.go`
 - Test: `api/internal/engine/hand/hand_test.go`
 
 **Interfaces:**
-- Consumes: `deck.NewShuffle`, `handeval.Best7`, `sidepots.ComputeSidePots`, `betting.NewRound`/`Act`/`IsComplete` (Tasks 5–8).
-- Produces: `hand.Player{ID string, Stack int64, State hand.PlayerState}`, `hand.PlayerState` enum (`Active, Folded, AllIn, SittingOut, Disconnected, PendingEntry`), `hand.Stage` enum (`WaitingForPlayers, PreFlop, Flop, Turn, River, Showdown, Complete`), `hand.NewTable(players []*Player, smallBlind, bigBlind int64) *hand.Table`, `(*Table).StartHand() error`, `(*Table).Act(playerID string, action betting.Action, amount int64) error`, `(*Table).Stage() Stage`, `(*Table).Payouts() map[string]int64` (populated once `Stage() == Complete`). Task 10's CLI harness consumes `NewTable`, `StartHand`, `Act`, `Payouts`.
+
+- Consumes: `deck.NewShuffle`, `handeval.Best7`, `sidepots.ComputeSidePots`, `betting.NewRound`/`Act`/`IsComplete` (
+  Tasks 5–8).
+- Produces: `hand.Player{ID string, Stack int64, State hand.PlayerState}`, `hand.PlayerState` enum (
+  `Active, Folded, AllIn, SittingOut, Disconnected, PendingEntry`), `hand.Stage` enum (
+  `WaitingForPlayers, PreFlop, Flop, Turn, River, Showdown, Complete`),
+  `hand.NewTable(players []*Player, smallBlind, bigBlind int64) *hand.Table`, `(*Table).StartHand() error`,
+  `(*Table).Act(playerID string, action betting.Action, amount int64) error`, `(*Table).Stage() Stage`,
+  `(*Table).Payouts() map[string]int64` (populated once `Stage() == Complete`). Task 10's CLI harness consumes
+  `NewTable`, `StartHand`, `Act`, `Payouts`.
 
 - [ ] **Step 1: Write the failing test — full hand, 3-way all-in, correct pot distribution**
 
@@ -2247,7 +2328,11 @@ func (t *Table) runShowdown() {
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `cd api && go test ./internal/engine/hand/... -v -race`
-Expected: all four tests PASS. If `TestFullHandWithThreeWayAllInProducesCorrectPayouts` fails on the exact payout split, debug by printing `table.round` state after each `Act` call — the most likely bug source is the `Contributed` bookkeeping between betting rounds (each street's `betting.Round` starts its own players' `Contributed` at 0; `Player.Contributed` on the `hand` package's own `Player` struct is the *cumulative across the whole hand* figure that side-pot math needs, so trace that specific accumulation first).
+Expected: all four tests PASS. If `TestFullHandWithThreeWayAllInProducesCorrectPayouts` fails on the exact payout split,
+debug by printing `table.round` state after each `Act` call — the most likely bug source is the `Contributed`
+bookkeeping between betting rounds (each street's `betting.Round` starts its own players' `Contributed` at 0;
+`Player.Contributed` on the `hand` package's own `Player` struct is the *cumulative across the whole hand* figure that
+side-pot math needs, so trace that specific accumulation first).
 
 - [ ] **Step 5: Commit**
 
@@ -2261,15 +2346,19 @@ git commit -m "feat: hand lifecycle orchestrator tying deck/handeval/sidepots/be
 
 ### Task 10: CLI test harness
 
-The Phase 1 deliverable per PLAN.md: a CLI that plays a scripted action sequence and prints the resulting pot distribution — no UI, no sockets.
+The Phase 1 deliverable per PLAN.md: a CLI that plays a scripted action sequence and prints the resulting pot
+distribution — no UI, no sockets.
 
 **Files:**
+
 - Create: `api/cmd/handreplay/main.go`
 - Create: `api/cmd/handreplay/script.example.json`
 - Test: `api/cmd/handreplay/main_test.go`
 
 **Interfaces:**
-- Consumes: `hand.NewTable`, `hand.Player`, `(*hand.Table).StartHand`, `(*hand.Table).Act`, `(*hand.Table).Payouts` (Task 9).
+
+- Consumes: `hand.NewTable`, `hand.Player`, `(*hand.Table).StartHand`, `(*hand.Table).Act`, `(*hand.Table).Payouts` (
+  Task 9).
 
 - [ ] **Step 1: Write the example script**
 
@@ -2426,7 +2515,10 @@ Expected: `TestRunScriptProducesPayoutsSummingToTotalPot` PASS.
 - [ ] **Step 6: Run the CLI manually to see the deliverable work end to end**
 
 Run: `cd api && go run ./cmd/handreplay`
-Expected output: JSON object with each player's payout, e.g. `{"Dealer": ..., "BB": ...}` (exact split depends on `handeval.Best7` result on the actual dealt cards, which vary run to run since the shuffle is genuinely random — that's expected and correct; the test above only asserts the total, not who wins, since the deal isn't seeded for reproducibility here).
+Expected output: JSON object with each player's payout, e.g. `{"Dealer": ..., "BB": ...}` (exact split depends on
+`handeval.Best7` result on the actual dealt cards, which vary run to run since the shuffle is genuinely random — that's
+expected and correct; the test above only asserts the total, not who wins, since the deal isn't seeded for
+reproducibility here).
 
 - [ ] **Step 7: Commit**
 
@@ -2440,8 +2532,21 @@ git commit -m "feat: handreplay CLI — scripted action sequence to pot distribu
 
 ## Self-Review Notes
 
-**Spec coverage:** Ready system, blind escalation (private rooms), leaderboard, achievements, sandbox roulette, and hand equity display (OVERVIEW.md § 2, § 9) are **not** in this plan — they require the table server (Phase 2), wallet/persistence integration (Phase 3), and frontend (Phase 4), none of which exist yet. Mid-hand `PENDING_ENTRY` joins are partially covered here (`AddMidHandJoiner`, `Table.players` gains a `PENDING_ENTRY` seat) but the "must post big blind to be dealt in" rule's *enforcement* (currently `StartHand` simply skips `PendingEntry` seats every hand until a future task marks them `Active`) is a stub deliberately left for Phase 2, where mid-hand joins interact with the live table server's seat-management — flagging this explicitly rather than silently under-building it.
+**Spec coverage:** Ready system, blind escalation (private rooms), leaderboard, achievements, sandbox roulette, and hand
+equity display (OVERVIEW.md § 2, § 9) are **not** in this plan — they require the table server (Phase 2),
+wallet/persistence integration (Phase 3), and frontend (Phase 4), none of which exist yet. Mid-hand `PENDING_ENTRY`
+joins are partially covered here (`AddMidHandJoiner`, `Table.players` gains a `PENDING_ENTRY` seat) but the "must post
+big blind to be dealt in" rule's *enforcement* (currently `StartHand` simply skips `PendingEntry` seats every hand until
+a future task marks them `Active`) is a stub deliberately left for Phase 2, where mid-hand joins interact with the live
+table server's seat-management — flagging this explicitly rather than silently under-building it.
 
-**Type consistency:** `hand.Player.Contributed`, `betting.PlayerState.Contributed`, and `sidepots.Contribution.Amount` are three different fields tracking related-but-distinct things (cumulative-across-hand vs. this-street-only vs. side-pot input) — Task 9's `Act` method bridges them. This is flagged in Task 9 Step 4's debugging note because it's the single most likely place a future implementer introduces a bookkeeping bug.
+**Type consistency:** `hand.Player.Contributed`, `betting.PlayerState.Contributed`, and `sidepots.Contribution.Amount`
+are three different fields tracking related-but-distinct things (cumulative-across-hand vs. this-street-only vs.
+side-pot input) — Task 9's `Act` method bridges them. This is flagged in Task 9 Step 4's debugging note because it's the
+single most likely place a future implementer introduces a bookkeeping bug.
 
-**Next plans (not in this document):** Phase 2 (WebSocket gateway, table-server wiring of `tablelease` + `hand`, disconnect/reconnect, durable action log/crash recovery), Phase 3 (room/lobby API, sandbox wallet integration, ready/blind-escalation/mid-hand-join enforcement), Phase 4 (frontend: lobby, table UI, animations, equity display, achievements, leaderboard, roulette) each get their own plan under `docs/plans/` once this one ships — writing their exact code now would be speculative against an engine that doesn't exist yet.
+**Next plans (not in this document):** Phase 2 (WebSocket gateway, table-server wiring of `tablelease` + `hand`,
+disconnect/reconnect, durable action log/crash recovery), Phase 3 (room/lobby API, sandbox wallet integration,
+ready/blind-escalation/mid-hand-join enforcement), Phase 4 (frontend: lobby, table UI, animations, equity display,
+achievements, leaderboard, roulette) each get their own plan under `docs/plans/` once this one ships — writing their
+exact code now would be speculative against an engine that doesn't exist yet.

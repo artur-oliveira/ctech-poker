@@ -14,11 +14,11 @@ prerequisites are met — see § 11.
   blind escalation, no per-room equity-display toggle (see § 9.4 — always on).
 - **Private rooms**: created with a shareable code/link, not listed. Extra config only available
   here, set once at creation and not editable afterwards:
-  - **Blind escalation** (optional): `blind_interval_minutes`, `blind_multiplier`, `blind_max`.
-    Blind rises automatically on a timer while the table is active, capped at `blind_max`. This
-    is **not** a tournament — no elimination, no multi-table, no prize pool; just a cash table
-    whose blind rises over time. Full tournament structure remains out of scope for MVP (§ 9).
-  - **Hand equity display toggle** (`equity_display_enabled`, default true) — see § 9.4.
+    - **Blind escalation** (optional): `blind_interval_minutes`, `blind_multiplier`, `blind_max`.
+      Blind rises automatically on a timer while the table is active, capped at `blind_max`. This
+      is **not** a tournament — no elimination, no multi-table, no prize pool; just a cash table
+      whose blind rises over time. Full tournament structure remains out of scope for MVP (§ 9).
+    - **Hand equity display toggle** (`equity_display_enabled`, default true) — see § 9.4.
 - Room config at creation: stakes (small/big blind), max seats (2–9), sandbox or real,
   buy-in min/max (as a multiple of big blind, standard poker convention).
 - **Ready system**: `WAITING_FOR_PLAYERS` only transitions to `PRE_FLOP` once ≥2 seated players
@@ -36,16 +36,19 @@ prerequisites are met — see § 11.
 ## 3. Game rules — Texas Hold'em (must be implemented exactly, this is the hard part)
 
 ### 3.1 Hand lifecycle
+
 `WAITING_FOR_PLAYERS → PRE_FLOP → FLOP → TURN → RIVER → SHOWDOWN → HAND_COMPLETE`, then
 dealer button rotates one seat clockwise and the next hand begins automatically if ≥2 players
 have chips.
 
 ### 3.2 Per-player states
+
 `ACTIVE`, `FOLDED`, `ALL_IN`, `SITTING_OUT` (voluntary), `DISCONNECTED` (see § 6 — distinct
 from sitting out; has a reconnect grace window), `PENDING_ENTRY` (mid-hand joiner, seated but
 not yet dealt in — see § 2).
 
 ### 3.3 Betting rules (the actual hard edge cases — do not hand-wave these)
+
 - **Blinds**: small blind and big blind posted automatically pre-flop by the two seats after
   the dealer button; heads-up (2 players) is a special case — dealer posts small blind.
 - **Minimum raise**: must be at least the size of the previous bet/raise in the same round
@@ -70,6 +73,7 @@ not yet dealt in — see § 2).
   active player left of the button if no bet on the river).
 
 ### 3.4 Hand evaluation
+
 Standard 10-category ranking (high card → royal flush), full 7-card evaluation with kicker
 comparison. This is a solved problem (well-known algorithms/lookup-table approaches exist) —
 **do not hand-roll a naive evaluator**; use a vetted approach and put it under a large table
@@ -77,6 +81,7 @@ of known hand-vs-hand comparisons as a regression test, since a silent mis-ranki
 of bug that only surfaces as "a player is quietly being paid wrong" in production.
 
 ### 3.5 Fairness
+
 - Server-authoritative shuffle using a CSPRNG (never `math/rand` unseeded or seeded
   predictably).
 - **Commit-reveal for provable fairness** (suggested, not in original brief): before each hand,
@@ -163,12 +168,14 @@ of bug that only surfaces as "a player is quietly being paid wrong" in productio
 ## 9. Gamification & engagement features
 
 ### 9.1 Leaderboard
+
 Ranked by non-monetary metrics only: win-rate %, hands played, VPIP, or achievement points
 (§ 9.2). No real-money amount won/lost is ever exposed on a public leaderboard — that's
 sensitive financial data. A sandbox-chips-won leaderboard is fine (not real money, no exposure
 risk) if wanted later; not required for MVP.
 
 ### 9.2 Achievements (star-tier system)
+
 Data-driven catalog, not hardcoded logic: `Achievement{ key, metric, tiers: [{stars, threshold}] }`.
 A per-player counter increments on the relevant event (usually hand completion); crossing a
 tier's threshold unlocks that star and fires a notification. Rarer metrics get a shorter/lower
@@ -176,6 +183,7 @@ threshold ladder than common ones — an editor sets each achievement's ladder b
 rarity of the event, there's no universal formula.
 
 Initial catalog:
+
 - **Vencer** (any win): 1 / 10 / 100 / 1,000 / 10,000 wins.
 - **Vencer por categoria de mão** (one ladder per hand category, high card → royal flush) —
   ladder gets shorter the rarer the category (royal flush: 1 / 5 / 10 / 25 / 50).
@@ -187,6 +195,7 @@ Initial catalog:
 - **Sobrevivente**: hands played without leaving the table.
 
 ### 9.3 Sandbox credit roulette
+
 Free sandbox credits, once per player per 24h (cooldown resets at a fixed time, e.g. midnight
 BRT). Fixed prize tiers (e.g. 100/200/500/1000) with probability inversely proportional to
 value — smaller prize, higher chance. Server-side CSPRNG selection, same fairness discipline as
@@ -194,15 +203,18 @@ the shuffle (§ 3.5): not real money, but still needs to be auditable and non-ma
 Sandbox-only — never touches the real-money ledger (§ 5).
 
 ### 9.4 Hand equity display
+
 Estimated win probability for the player's own hand, computed via Monte Carlo simulation
 against a random range for each still-active (non-folded) opponent, recalculated at every
 street (pre-flop/flop/turn/river). Computed server-side (cheap addition to the state push
 already going to that player) and sent privately — never reveals opponent hole cards.
+
 - **Public rooms**: always on, no toggle — keeps the experience consistent lobby-wide.
 - **Private rooms**: configurable at creation (`equity_display_enabled`, default true) — table
   owner can turn it off for a more traditional/purist game.
 
 ## 10. Explicitly out of scope for MVP
+
 - Tournaments (multi-table elimination, prize pools) — cash-game tables only for MVP; the
   optional timer-based blind escalation on private rooms (§ 2) is a lighter cash-table feature,
   not a tournament, and is in scope.
