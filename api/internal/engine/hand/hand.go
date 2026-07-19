@@ -75,6 +75,13 @@ type Table struct {
 	// player who actually played this hand, regardless of PendingEntry
 	// joiners appended to t.players since.
 	handOrder []*Player
+
+	// seenActionIDs de-dupes ActIdempotent calls by client-supplied
+	// action_id within the current hand (OVERVIEW.md § 4) — persisted as
+	// part of State (state.go) so any instance recovering mid-hand still
+	// rejects a replayed duplicate, not just the instance that originally
+	// saw it.
+	seenActionIDs map[string]bool
 }
 
 func NewTable(players []*Player, smallBlind, bigBlind int64) *Table {
@@ -139,6 +146,7 @@ func (t *Table) StartHand() error {
 	t.nextCard = 0
 	t.board = nil
 	t.payouts = nil
+	t.seenActionIDs = make(map[string]bool)
 
 	active := make([]*Player, 0, len(t.players))
 	for _, p := range t.players {
