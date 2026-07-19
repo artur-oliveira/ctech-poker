@@ -36,16 +36,25 @@ function TableContent() {
     </main>
   )
   const s = rt.snapshot, pot = s.seats.reduce((n, x) => n + x.contributed, 0);
-  return <main className="game">
-    <header><Link
-      href="/lobby"><ChevronLeft/> Lobby</Link><span>{s.stage.replaceAll('_', ' ')}</span><i><Wifi/> {rt.status}</i>
-    </header>
-    <div className="game-table">
-      <div className="game-rail"/>
-      <div className="game-felt"><Board cards={s.board} pot={pot} rake={s.rake}/></div>
-      {s.seats.map((seat, i) => <Seat key={seat.player_id} seat={seat} index={i}
-                                      isViewer={seat.player_id === viewer}/>)}</div>
-    <ActionBar onAct={rt.act}/><Chat items={rt.chat} onSend={rt.sendChat}/><AchievementToast unlock={rt.unlock}/></main>
+  return (
+    <main className="game">
+      <header>
+        <Link
+          href="/lobby"><ChevronLeft/> Lobby
+        </Link>
+        <span>{s.stage.replaceAll('_', ' ')}</span>
+        <i>
+          <Wifi/> {rt.status}
+        </i>
+      </header>
+      <div className="game-table">
+        <div className="game-rail"/>
+        <div className="game-felt"><Board cards={s.board} pot={pot} rake={s.rake}/></div>
+        {s.seats.map((seat, i) => <Seat key={seat.player_id} seat={seat} index={i}
+                                        isViewer={seat.player_id === viewer}/>)}</div>
+      <ActionBar onAct={rt.act}/><Chat items={rt.chat} onSend={rt.sendChat}/><AchievementToast unlock={rt.unlock}/>
+    </main>
+  )
 }
 
 export default function TablePage() {

@@ -1,5 +1,7 @@
 name: Frontend
 
+# Called by deploy.yml, which owns the trigger, the path filter and the
+# CDK → API → Frontend ordering. Never triggered on push directly.
 on:
   workflow_call:
 
@@ -17,6 +19,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Resolve environment
+        id: env
+        run: |
+          case "${{ github.ref_name }}" in
+            main)    echo "name=prod"  >> "$GITHUB_OUTPUT" ;;
+            staging) echo "name=stage" >> "$GITHUB_OUTPUT" ;;
+            *)       echo "name=dev"   >> "$GITHUB_OUTPUT" ;;
+          esac
+
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
@@ -26,32 +37,33 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Frontend quality gate (root CLAUDE.md): zero errors AND zero warnings.
+      # The poker ui has no test script — lint + build are the gate.
       - name: Lint
         run: npx eslint src --ext .ts,.tsx --max-warnings 0
 
+      # NEXT_PUBLIC_API_URL points at the app domain, not poker-api: CloudFront
+      # forwards /v1.0/* to the ALB, so the browser talks same-origin and never
+      # needs CORS. poker-api stays reachable directly for API clients.
       - name: Set environment
         run: |
-          case "${GITHUB_REF#refs/heads/}" in
-            main)
-              ENVIRONMENT=prod
-              APP_HOST=poker.aoctech.app
-              ACCOUNT_HOST=accounts.aoctech.app
-              ;;
-            staging)
-              ENVIRONMENT=stage
-              APP_HOST=poker-stage.aoctech.app
-              ACCOUNT_HOST=accounts-stage.aoctech.app
-              ;;
-            *)
-              ENVIRONMENT=dev
-              APP_HOST=poker-dev.aoctech.app
-              ACCOUNT_HOST=accounts-dev.aoctech.app
-              ;;
-          esac
-          echo "ENVIRONMENT=$ENVIRONMENT" >> "$GITHUB_ENV"
-          echo "NEXT_PUBLIC_API_URL=https://$APP_HOST" >> "$GITHUB_ENV"
-          echo "NEXT_PUBLIC_CTECH_URL=https://$ACCOUNT_HOST" >> "$GITHUB_ENV"
-          echo "NEXT_PUBLIC_CTECH_CLIENT_ID=poker" >> "$GITHUB_ENV"
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          if [ "$BRANCH" = "main" ]; then
+            echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_API_URL=https://poker.aoctech.app" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_CTECH_URL=https://accounts.aoctech.app" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_CTECH_CLIENT_ID=poker" >> $GITHUB_ENV
+          elif [ "$BRANCH" = "staging" ]; then
+            echo "ENVIRONMENT=stage" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_API_URL=https://poker-stage.aoctech.app" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_CTECH_URL=https://accounts-stage.aoctech.app" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_CTECH_CLIENT_ID=poker" >> $GITHUB_ENV
+          else
+            echo "ENVIRONMENT=dev" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_API_URL=https://poker-dev.aoctech.app" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_CTECH_URL=https://accounts-dev.aoctech.app" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_CTECH_CLIENT_ID=poker" >> $GITHUB_ENV
+          fi
 
       - name: Build static export
         run: npm run build
@@ -65,7 +77,7 @@ jobs:
       - name: Read stack outputs
         run: |
           STACK="CtechPoker-$(echo "$ENVIRONMENT" | sed 's/./\u&/')-Frontend"
-          OUTPUTS=$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs" --output json)
+          OUTPUTS=$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs" --output json 2>/dev/null || echo "[]")
           echo "S3_BUCKET=$(echo "$OUTPUTS" | jq -r '.[]|select(.OutputKey=="BucketName").OutputValue')" >> "$GITHUB_ENV"
           echo "DISTRIBUTION_ID=$(echo "$OUTPUTS" | jq -r '.[]|select(.OutputKey=="DistributionId").OutputValue')" >> "$GITHUB_ENV"
           echo "ROUTE_STORE_ARN=$(echo "$OUTPUTS" | jq -r '.[]|select(.OutputKey=="RouteStoreArn").OutputValue')" >> "$GITHUB_ENV"
