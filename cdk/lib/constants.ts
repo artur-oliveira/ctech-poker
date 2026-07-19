@@ -25,6 +25,9 @@ export const BASE_DOMAIN = 'aoctech.app';
 
 /** ALB (api) host prefix. */
 export const API_DOMAIN_PREFIX = 'poker-api';
+export const APP_DOMAIN_PREFIX = 'poker';
+export const ACCOUNTS_DOMAIN_PREFIX = 'accounts';
+export const API_PATH_PATTERNS = ['/v1.0/*'];
 
 /**
  * Shared HTTPS listener rule priorities on the ctech-cdk ALB (confirmed by
@@ -60,6 +63,9 @@ export const API_CURRENT_ARTIFACT_KEY = `${S3_PREFIX}/current.zip`;
 // ── Per-environment names ───────────────────────────────────────────────────
 export const asgName = (env: Environment) => `${env}-${SERVICE}-api`;
 export const instanceProfileName = (env: Environment) => `${env}-${SERVICE}-api-instance-profile`;
+export const frontendBucketName = (env: Environment) => `${env}-${SERVICE}-frontend`;
+export const routeStoreName = (env: Environment) => `${env}-${SERVICE}-routes`;
+export const instanceRoleName = (env: Environment) => `${env}-${SERVICE}-api-role`;
 
 // ── GitHub Actions role names (global, not per-env) ─────────────────────────
 export const GHA_API_ROLE = `${SERVICE}-gha-api`;
@@ -85,6 +91,17 @@ export const SSM_SHARED = (env: Environment) => ({
     valkeyUrl: `/ctech/${env}/valkey/url`,
     deploymentsBucket: `/ctech/${env}/s3/deployments-bucket`,
     logsBucket: `/ctech/${env}/s3/logs-bucket`,
+});
+
+/**
+ * Poker-owned runtime configuration. These parameters are operational
+ * prerequisites rather than resources created here: the client credentials
+ * only exist after ctech-account seeds poker's M2M client.
+ */
+export const SSM_POKER = (env: Environment) => ({
+    walletUrl: `/ctech/${env}/poker/wallet-url`,
+    clientId: `/ctech/${env}/poker/poker-client-id`,
+    clientSecret: `/ctech/${env}/poker/poker-client-secret`,
 });
 
 // ── Domain helper (identical to ctech-wallet's / ctech-dfe's) ───────────────

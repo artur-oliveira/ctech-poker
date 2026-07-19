@@ -16,13 +16,25 @@ test('synthesizes without error and declares exactly one ASG', () => {
     environment: 'dev',
     vpcId: 'vpc-0123456789abcdef0',
     domainName: 'poker-api-dev.aoctech.app',
+    appDomainName: 'poker-dev.aoctech.app',
+    authDomainName: 'accounts-dev.aoctech.app',
     instanceProfileName: 'dev-ctech-poker-api-instance-profile',
     deploymentsBucketName: 'dev-ctech-deployments',
     logsBucketName: 'dev-ctech-application-logs',
     tableStateArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_table_state',
     actionLogArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_action_log',
     actionGuardsArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_action_guards',
+    roomsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_rooms',
+    playerProfilesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_player_profiles',
+    walletUrlParam: '/ctech/dev/poker/wallet-url',
+    pokerClientIdParam: '/ctech/dev/poker/poker-client-id',
+    pokerClientSecretParam: '/ctech/dev/poker/poker-client-secret',
+    achievementProgressTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_achievement_progress',
+    leaderboardStatsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_leaderboard_stats',
+    rouletteSpinsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_roulette_spins',
   });
   const template = Template.fromStack(stack);
   template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
+  template.resourceCountIs('AWS::IAM::Role', 1);
+  template.resourceCountIs('AWS::IAM::InstanceProfile', 1);
 });

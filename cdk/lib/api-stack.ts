@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import {Construct} from 'constructs';
 import {
@@ -17,6 +18,7 @@ import {
   APP_PORT,
   asgName,
   HEALTH_CHECK_PATH,
+  instanceRoleName,
   S3_PREFIX,
   SERVICE,
   SSM_SHARED,
@@ -31,12 +33,24 @@ interface ApiStackProps extends cdk.StackProps {
   vpcId: string;
   /** ALB host header, e.g. poker-api-dev.aoctech.app. */
   domainName: string;
+  /** Browser app host, used for CORS and the JWT audience. */
+  appDomainName: string;
+  /** CTech Account issuer host. */
+  authDomainName: string;
   instanceProfileName: string;
   deploymentsBucketName: string;
   logsBucketName: string;
   tableStateArn: string;
   actionLogArn: string;
   actionGuardsArn: string;
+  roomsTableArn: string;
+  playerProfilesTableArn: string;
+  walletUrlParam: string;
+  pokerClientIdParam: string;
+  pokerClientSecretParam: string;
+  achievementProgressTableArn: string;
+  leaderboardStatsTableArn: string;
+  rouletteSpinsTableArn: string;
 }
 
 export class PokerApiStack extends cdk.Stack {
@@ -46,11 +60,52 @@ export class PokerApiStack extends cdk.Stack {
     super(scope, id, props);
 
     const {
-      environment, vpcId, domainName, instanceProfileName, deploymentsBucketName, logsBucketName,
+      environment, vpcId, domainName, appDomainName, authDomainName, instanceProfileName, deploymentsBucketName, logsBucketName,
       tableStateArn, actionLogArn, actionGuardsArn,
+      roomsTableArn, playerProfilesTableArn, walletUrlParam, pokerClientIdParam, pokerClientSecretParam,
+      achievementProgressTableArn, leaderboardStatsTableArn, rouletteSpinsTableArn,
     } = props;
 
     const shared = SSM_SHARED(environment);
+
+    const instanceRole = new iam.Role(this, 'ApiInstanceRole', {
+      roleName: instanceRoleName(environment),
+      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
+      ],
+    });
+    const profile = new iam.CfnInstanceProfile(this, 'ApiInstanceProfile', {
+      instanceProfileName,
+      roles: [instanceRole.roleName],
+    });
+
+    const tableArns = [
+      tableStateArn, actionLogArn, actionGuardsArn, roomsTableArn, playerProfilesTableArn,
+      achievementProgressTableArn, leaderboardStatsTableArn, rouletteSpinsTableArn,
+    ];
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: [
+        'dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:UpdateItem',
+        'dynamodb:Query', 'dynamodb:TransactWriteItems', 'dynamodb:DescribeTable',
+      ],
+      resources: [...tableArns, ...tableArns.map((arn) => `${arn}/index/*`)],
+    }));
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['ssm:GetParameter'],
+      resources: [shared.valkeyUrl, walletUrlParam, pokerClientIdParam, pokerClientSecretParam].map(
+          (path) => `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${path}`,
+      ),
+    }));
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['s3:GetObject'],
+      resources: [`arn:${cdk.Aws.PARTITION}:s3:::${deploymentsBucketName}/${S3_PREFIX}/*`],
+    }));
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['s3:PutObject'],
+      resources: [`arn:${cdk.Aws.PARTITION}:s3:::${logsBucketName}/${S3_PREFIX}/*`],
+    }));
 
     // ── Shared infrastructure from ctech-cdk ──────────────────────────────────
     const vpc = ec2.Vpc.fromLookup(this, 'Vpc', {vpcId});
@@ -117,9 +172,15 @@ export class PokerApiStack extends cdk.Stack {
       `AWS_REGION=${this.region}`,
       `AWS_USE_DUALSTACK_ENDPOINT=true`,
       `PORT=${APP_PORT}`,
+      `SERVICE_AUDIENCE=https://${appDomainName}`,
+      `CTECH_URL=https://${authDomainName}`,
+      // Poker is reached directly from the ALB, with no localhost nginx hop.
+      // Trust only peers inside this VPC before honoring X-Forwarded-For.
+      `TRUSTED_PROXIES=${vpc.vpcCidrBlock}`,
+      `CORS_ALLOWED_ORIGINS=https://${appDomainName}`,
       `ENV`,
 
-      // ── start.sh: fetches VALKEY_URL from SSM then exec-replaces into the binary.
+      // ── start.sh: fetches runtime configuration and M2M credentials from SSM.
       // No DB-number suffix — see constants.ts SSM_SHARED doc comment: ctech-dfe and
       // ctech-account both pass VALKEY_URL straight through unmodified, and
       // tablelease keys are already namespaced by prefix (table:{id}).
@@ -131,6 +192,12 @@ export class PokerApiStack extends cdk.Stack {
       // required there); in dev/stage the app falls back to an in-memory backend.
       `VALKEY_URL=$(aws ssm get-parameter --name "${shared.valkeyUrl}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
       `export VALKEY_URL`,
+      `WALLET_URL=$(aws ssm get-parameter --name "${walletUrlParam}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+      `export WALLET_URL`,
+      `POKER_CLIENT_ID=$(aws ssm get-parameter --name "${pokerClientIdParam}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+      `export POKER_CLIENT_ID`,
+      `POKER_CLIENT_SECRET=$(aws ssm get-parameter --name "${pokerClientSecretParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+      `export POKER_CLIENT_SECRET`,
       `exec /opt/app/current/app`,
       `START`,
       `chmod +x /opt/app/start.sh`,
@@ -269,6 +336,7 @@ export class PokerApiStack extends cdk.Stack {
       domainName,
       listenerRulePriority: ALB_LISTENER_PRIORITY,
     });
+    service.autoScalingGroup.node.addDependency(profile);
 
     // DynamoDB access for internal/tablestore.Store — TransactWriteItems is
     // required because every commit (CommitAction) writes the state item,
@@ -276,20 +344,24 @@ export class PokerApiStack extends cdk.Stack {
     // one transaction (ARCHITECTURE.md §2, revised: conditional writes are
     // the correctness mechanism).
     //
-    // NOT attached here: `service`'s instance profile is imported by name
-    // (iam.InstanceProfile.fromInstanceProfileName, in
-    // ctech-cdk/lib/private-ipv4-ec2-service.ts) rather than a Role this CDK
-    // app constructs, so CDK cannot attach a policy to it directly — the
-    // same pre-existing gap the instanceProfileName doc comment above
-    // already flags ("no IAM stack has been written for ctech-poker").
-    // Whichever future task creates `${env}-ctech-poker-api-instance-profile`
-    // must grant its role: dynamodb:GetItem/PutItem/UpdateItem/Query/
-    // TransactWriteItems on tableStateArn/actionLogArn/actionGuardsArn
-    // (passed into this stack for exactly that purpose — see the CfnOutputs
-    // below).
+    // The role and instance profile are owned by this stack so permissions
+    // evolve together with the API's storage and runtime configuration.
     new cdk.CfnOutput(this, 'TableStateArn', {value: tableStateArn, exportName: `${id}-table-state-arn`});
     new cdk.CfnOutput(this, 'ActionLogArn', {value: actionLogArn, exportName: `${id}-action-log-arn`});
     new cdk.CfnOutput(this, 'ActionGuardsArn', {value: actionGuardsArn, exportName: `${id}-action-guards-arn`});
+    new cdk.CfnOutput(this, 'RoomsTableArn', {value: roomsTableArn, exportName: `${id}-rooms-table-arn`});
+    new cdk.CfnOutput(this, 'WalletUrlParameterArn', {
+      value: `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${walletUrlParam}`,
+      exportName: `${id}-wallet-url-parameter-arn`,
+    });
+    new cdk.CfnOutput(this, 'PokerClientIdParameterArn', {
+      value: `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${pokerClientIdParam}`,
+      exportName: `${id}-poker-client-id-parameter-arn`,
+    });
+    new cdk.CfnOutput(this, 'PokerClientSecretParameterArn', {
+      value: `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${pokerClientSecretParam}`,
+      exportName: `${id}-poker-client-secret-parameter-arn`,
+    });
 
     // ── Outputs ───────────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'AsgName', {value: service.asgName, exportName: `${id}-asg-name`});

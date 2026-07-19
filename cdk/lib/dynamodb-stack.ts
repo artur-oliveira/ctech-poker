@@ -7,7 +7,10 @@ import {Environment} from '@aoctech/cdk';
 
 // Table names carry the `poker_` segment so they never collide with another
 // service's tables in the same AWS account.
-export type TableName = 'poker_table_state' | 'poker_action_log' | 'poker_action_guards';
+export type TableName =
+    'poker_table_state' | 'poker_action_log' | 'poker_action_guards' | 'poker_rooms' |
+    'poker_player_profiles' | 'poker_achievement_progress' | 'poker_leaderboard_stats' |
+    'poker_roulette_spins';
 
 interface DynamoDBStackProps extends cdk.StackProps {
   environment: Environment;
@@ -55,5 +58,42 @@ export class DynamoDBStack extends cdk.Stack {
     // table) — a guard only needs to outlive plausible client retries
     // (tablestore.guardTTLDays = 7 days).
     table('poker_action_guards', false, true);
+
+    // poker_rooms is lobby metadata only. The sparse indexes are populated by
+    // roomstore for public rooms and private-room share codes respectively.
+    const rooms = table('poker_rooms', true);
+    rooms.addGlobalSecondaryIndex({
+      indexName: 'gsi_public',
+      partitionKey: {name: 'gsi_public', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+    rooms.addGlobalSecondaryIndex({
+      indexName: 'gsi_share_code',
+      partitionKey: {name: 'gsi_share_code', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+    table('poker_player_profiles', false);
+    table('poker_achievement_progress', true);
+    const leaderboardStats = table('poker_leaderboard_stats', true);
+    leaderboardStats.addGlobalSecondaryIndex({
+      indexName: 'gsi_hands_won',
+      partitionKey: {name: 'gsi_hands_won_pk', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'hands_won', type: dynamodb.AttributeType.NUMBER},
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+    leaderboardStats.addGlobalSecondaryIndex({
+      indexName: 'gsi_hands_played',
+      partitionKey: {name: 'gsi_hands_played_pk', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'hands_played', type: dynamodb.AttributeType.NUMBER},
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+    leaderboardStats.addGlobalSecondaryIndex({
+      indexName: 'gsi_win_rate',
+      partitionKey: {name: 'gsi_win_rate_pk', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'win_rate_score', type: dynamodb.AttributeType.NUMBER},
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+    // One item per player/day and a TTL for automatic cooldown history cleanup.
+    table('poker_roulette_spins', true, true);
   }
 }

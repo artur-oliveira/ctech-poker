@@ -5,12 +5,17 @@ import {Environment} from '@aoctech/cdk';
 import {PokerApiStack} from '../lib/api-stack';
 import {DynamoDBStack} from '../lib/dynamodb-stack';
 import {ArchiverStack} from '../lib/archiver-stack';
+import {FrontendStack} from '../lib/frontend-stack';
 import {
+  ACCOUNTS_DOMAIN_PREFIX,
   API_DOMAIN_PREFIX,
+  APP_DOMAIN_PREFIX,
   AWS_ACCOUNT,
   AWS_REGION,
+  CERT_ARN,
   domainForEnv,
   instanceProfileName,
+  SSM_POKER,
 } from '../lib/constants';
 
 const app = new cdk.App();
@@ -30,6 +35,7 @@ const CTECH_DEPLOYMENTS_BUCKET = process.env.CTECH_DEPLOYMENTS_BUCKET || `${ENVI
 const CTECH_LOGS_BUCKET = process.env.CTECH_LOGS_BUCKET || `${ENVIRONMENT}-ctech-application-logs`;
 
 const env = {account: AWS_ACCOUNT, region: AWS_REGION};
+const pokerParameters = SSM_POKER(ENVIRONMENT);
 
 const id = (name: string) =>
     `CtechPoker-${ENVIRONMENT.charAt(0).toUpperCase() + ENVIRONMENT.slice(1)}-${name}`;
@@ -53,20 +59,36 @@ new ArchiverStack(app, id('Archiver'), {
 // =====================
 // API (EC2 + ASG, shared ALB from ctech-cdk)
 // =====================
-// NOTE: instanceProfileName points at an IAM instance profile that does not
-// exist yet — this task only scaffolds the CDK stack skeleton, no IAM stack
-// has been written for ctech-poker. `cdk deploy` will fail until a future
-// task creates `${env}-ctech-poker-api-instance-profile` (see constants.ts).
 new PokerApiStack(app, id('API'), {
   env,
   environment: ENVIRONMENT,
   vpcId: CTECH_VPC_ID,
   domainName: domainForEnv(ENVIRONMENT, API_DOMAIN_PREFIX),
+  appDomainName: domainForEnv(ENVIRONMENT, APP_DOMAIN_PREFIX),
+  authDomainName: domainForEnv(ENVIRONMENT, ACCOUNTS_DOMAIN_PREFIX),
   instanceProfileName: instanceProfileName(ENVIRONMENT),
   deploymentsBucketName: CTECH_DEPLOYMENTS_BUCKET,
   logsBucketName: CTECH_LOGS_BUCKET,
   tableStateArn: dynamoStack.tables.get('poker_table_state')!.tableArn,
   actionLogArn: dynamoStack.tables.get('poker_action_log')!.tableArn,
   actionGuardsArn: dynamoStack.tables.get('poker_action_guards')!.tableArn,
+  roomsTableArn: dynamoStack.tables.get('poker_rooms')!.tableArn,
+  playerProfilesTableArn: dynamoStack.tables.get('poker_player_profiles')!.tableArn,
+  achievementProgressTableArn: dynamoStack.tables.get('poker_achievement_progress')!.tableArn,
+  leaderboardStatsTableArn: dynamoStack.tables.get('poker_leaderboard_stats')!.tableArn,
+  rouletteSpinsTableArn: dynamoStack.tables.get('poker_roulette_spins')!.tableArn,
+  walletUrlParam: pokerParameters.walletUrl,
+  pokerClientIdParam: pokerParameters.clientId,
+  pokerClientSecretParam: pokerParameters.clientSecret,
   description: `CTech Poker API (EC2 + ASG + ALB) - ${ENVIRONMENT}`,
+});
+
+new FrontendStack(app, id('Frontend'), {
+  env,
+  environment: ENVIRONMENT,
+  certificateArn: CERT_ARN,
+  domainName: domainForEnv(ENVIRONMENT, APP_DOMAIN_PREFIX),
+  apiDomainName: domainForEnv(ENVIRONMENT, API_DOMAIN_PREFIX),
+  authDomainName: domainForEnv(ENVIRONMENT, ACCOUNTS_DOMAIN_PREFIX),
+  description: `CTech Poker Frontend (S3 + CloudFront) - ${ENVIRONMENT}`,
 });
