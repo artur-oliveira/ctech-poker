@@ -10,6 +10,12 @@ require (
 	gopkg.aoctech.app/api-commons v1.1.0
 )
 
+// LOCAL DEV ONLY — points at ctech-go-common's uncommitted/unpublished lock
+// package while it's tested against a real consumer. Remove once
+// ctech-go-common v1.2.0 (or later) is tagged and pushed, and replace with
+// `go get gopkg.aoctech.app/api-commons@vX.Y.Z` instead.
+replace gopkg.aoctech.app/api-commons => ../../ctech-go-common
+
 require (
 	github.com/andybalholm/brotli v1.2.2 // indirect
 	github.com/gofiber/schema v1.8.0 // indirect
