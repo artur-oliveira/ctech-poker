@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -12,124 +13,189 @@ import (
 )
 
 const (
-	tableSnapshots = "poker_hand_snapshots"
-	tableActionLog = "poker_action_log"
+	tableState        = "poker_table_state"
+	tableActionLog    = "poker_action_log"
+	tableActionGuards = "poker_action_guards"
 
-	snapshotSK = "latest"
+	// guardTTLDays mirrors ctech-wallet's idemTTLDays
+	// (ctech-wallet/api/internal/repositories/wallet.go:19) — a guard only
+	// needs to outlive plausible client retries, not forever.
+	guardTTLDays = 7
+
+	// logTTLDays bounds how long an audit-log entry stays in the hot
+	// DynamoDB table before TTL reaps it. Nothing is lost when that
+	// happens: the archiver Lambda (cdk/lib/archiver-stack.ts) ships every
+	// entry to S3 on insert, independent of and well before its eventual
+	// TTL expiry — DynamoDB serves the recent window, S3 is the
+	// indefinite archive.
+	logTTLDays = 90
 )
 
-// Store persists the durable state a crashed table server needs to resume:
-// the latest per-hand snapshot, and every action logged since it.
+// timeNowFunc is overridden in tests that need a deterministic TTL value.
+var timeNowFunc = time.Now
+
+// Store persists the one authoritative item per table, an audit log, and the
+// idempotency guards that back CommitAction's duplicate-action_id rejection.
 type Store struct {
-	snapshots dynamo.Base
-	actions   dynamo.Base
+	state  dynamo.Base
+	log    dynamo.Base
+	guards dynamo.Base
 }
 
 func NewStore(db *dynamodb.Client, env string) *Store {
 	return &Store{
-		snapshots: dynamo.NewBase(db, env, tableSnapshots),
-		actions:   dynamo.NewBase(db, env, tableActionLog),
+		state:  dynamo.NewBase(db, env, tableState),
+		log:    dynamo.NewBase(db, env, tableActionLog),
+		guards: dynamo.NewBase(db, env, tableActionGuards),
 	}
 }
 
-// SaveSnapshot overwrites the one snapshot item this table keeps — the prior
-// hand's snapshot is never needed once a new one lands (recovery only ever
-// replays forward from the latest).
-func (s *Store) SaveSnapshot(ctx context.Context, tableID, handID string, seq int, state hand.Snapshot) error {
+// SeedTable creates a table's very first state item at version 1. A no-op
+// (not an error) if the table already exists — GetOrCreateActor calls this
+// unconditionally the first time a table is touched on any instance, so two
+// instances racing to seed the same brand-new table must not both fail.
+func (s *Store) SeedTable(ctx context.Context, tableID string, state hand.State) error {
 	item, err := dynamo.Encode(struct {
-		PK     string        `dynamodbav:"pk"`
-		SK     string        `dynamodbav:"sk"`
-		HandID string        `dynamodbav:"hand_id"`
-		Seq    int           `dynamodbav:"seq"`
-		State  hand.Snapshot `dynamodbav:"state"`
-	}{PK: tableID, SK: snapshotSK, HandID: handID, Seq: seq, State: state})
+		PK      string     `dynamodbav:"pk"`
+		Version int        `dynamodbav:"version"`
+		State   hand.State `dynamodbav:"state"`
+	}{PK: tableID, Version: 1, State: state})
 	if err != nil {
-		return fmt.Errorf("tablestore: encode snapshot: %w", err)
+		return fmt.Errorf("tablestore: encode seed state: %w", err)
 	}
-	return s.snapshots.PutItem(ctx, item)
+	if err := s.state.PutItem(ctx, item); err != nil {
+		return fmt.Errorf("tablestore: seed table: %w", err)
+	}
+	return nil
 }
 
-func (s *Store) LoadSnapshot(ctx context.Context, tableID string) (*StoredSnapshot, error) {
-	item, err := s.snapshots.GetItem(ctx, tableID, snapshotSK)
+func (s *Store) LoadTable(ctx context.Context, tableID string) (*StoredTable, error) {
+	item, err := s.state.GetItem(ctx, tableID)
 	if err != nil {
-		return nil, fmt.Errorf("tablestore: get snapshot: %w", err)
+		return nil, fmt.Errorf("tablestore: get table: %w", err)
 	}
 	if item == nil {
 		return nil, nil
 	}
-	return dynamo.Decode[StoredSnapshot](item)
+	return dynamo.Decode[StoredTable](item)
 }
 
-// actionSK zero-pads seq to 10 digits so lexicographic sort order (what
-// DynamoDB's Query uses) matches numeric order up to 9,999,999,999 actions —
-// far beyond any single hand's action count.
-func actionSK(seq int) string {
-	return fmt.Sprintf("%010d", seq)
-}
-
-func (s *Store) AppendAction(ctx context.Context, tableID, handID string, seq int, entry ActionLogEntry) error {
-	item, err := dynamo.Encode(struct {
-		PK string `dynamodbav:"pk"`
-		SK string `dynamodbav:"sk"`
-		ActionLogEntry
-	}{PK: tableID + "#" + handID, SK: actionSK(seq), ActionLogEntry: entry})
+// CommitAction atomically bumps tableID's version (guarded by
+// expectedVersion), records entry in the audit log, and — when actionID is
+// non-empty — writes an idempotency guard so a replayed action_id fails the
+// transaction instead of being re-applied. Mirrors
+// ctech-wallet/api/internal/repositories/wallet.go's mutate/resolveTxErr
+// shape: on a failed condition, re-read the guard to disambiguate a version
+// race from a duplicate submission.
+func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID string, expectedVersion int, newState hand.State, entry ActionLogEntry) error {
+	stateItem, err := dynamo.Encode(struct {
+		State hand.State `dynamodbav:"state"`
+	}{State: newState})
 	if err != nil {
-		return fmt.Errorf("tablestore: encode action: %w", err)
+		return fmt.Errorf("tablestore: encode state: %w", err)
 	}
-	return s.actions.PutItem(ctx, item)
-}
+	stateAV := stateItem["state"]
 
-func (s *Store) LoadActionsSince(ctx context.Context, tableID, handID string, afterSeq int) ([]ActionLogEntry, error) {
-	result, err := s.actions.Query(ctx, dynamo.QueryOpts{
-		PK:               tableID + "#" + handID,
-		ScanIndexForward: true,
-		Limit:            1000,
+	values := map[string]types.AttributeValue{
+		":newVersion": mustN(expectedVersion + 1),
+		":expected":   mustN(expectedVersion),
+		":handID":     &types.AttributeValueMemberS{Value: handID},
+		":state":      stateAV,
+	}
+	stateTx := s.state.BuildRawUpdateTxItem(tableID, nil,
+		"SET version = :newVersion, hand_id = :handID, state = :state",
+		"attribute_exists(pk) AND version = :expected", nil, values)
+
+	logItem, err := dynamo.Encode(struct {
+		PK  string `dynamodbav:"pk"`
+		SK  string `dynamodbav:"sk"`
+		TTL int64  `dynamodbav:"ttl"`
+		ActionLogEntry
+	}{
+		PK: tableID + "#" + handID, SK: fmt.Sprintf("%010d", entry.Version),
+		TTL:            timeNowFunc().Add(logTTLDays * 24 * time.Hour).Unix(),
+		ActionLogEntry: entry,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("tablestore: query actions: %w", err)
+		return fmt.Errorf("tablestore: encode log entry: %w", err)
 	}
-	out := make([]ActionLogEntry, 0, len(result.Items))
-	for _, item := range result.Items {
-		e, err := dynamo.Decode[ActionLogEntry](item)
+	logTx := s.log.BuildPutTxItem(logItem)
+
+	items := []types.TransactWriteItem{stateTx, logTx}
+	if actionID != "" {
+		guardItem, err := dynamo.Encode(struct {
+			PK  string `dynamodbav:"pk"`
+			TTL int64  `dynamodbav:"ttl"`
+		}{PK: tableID + "#" + handID + "#" + actionID, TTL: timeNowFunc().Add(guardTTLDays * 24 * time.Hour).Unix()})
 		if err != nil {
-			return nil, fmt.Errorf("tablestore: decode action: %w", err)
+			return fmt.Errorf("tablestore: encode guard: %w", err)
 		}
-		if e.Seq > afterSeq {
-			out = append(out, *e)
-		}
+		items = append(items, s.guards.BuildPutTxItemIfAbsent(guardItem))
 	}
-	return out, nil
+
+	if err := s.state.TransactWrite(ctx, items); err != nil {
+		return s.resolveCommitErr(ctx, tableID, handID, actionID, err)
+	}
+	return nil
 }
 
-// mustCreateTestTables provisions both tables against DynamoDB Local —
-// production tables are provisioned by CDK (Task 11), never by app code.
-func mustCreateTestTables(ctx context.Context, t testingT, db *dynamodb.Client, env string) {
-	for _, name := range []string{env + "_" + tableSnapshots, env + "_" + tableActionLog} {
-		tableName := name
-		_, err := db.CreateTable(ctx, &dynamodb.CreateTableInput{
-			TableName: &tableName,
-			AttributeDefinitions: []types.AttributeDefinition{
-				{AttributeName: strPtr("pk"), AttributeType: types.ScalarAttributeTypeS},
-				{AttributeName: strPtr("sk"), AttributeType: types.ScalarAttributeTypeS},
-			},
-			KeySchema: []types.KeySchemaElement{
-				{AttributeName: strPtr("pk"), KeyType: types.KeyTypeHash},
-				{AttributeName: strPtr("sk"), KeyType: types.KeyTypeRange},
-			},
-			BillingMode: types.BillingModePayPerRequest,
-		})
+// resolveCommitErr disambiguates a failed transaction: an already-present
+// guard means a duplicate action_id; otherwise the state item's version
+// condition must have failed.
+func (s *Store) resolveCommitErr(ctx context.Context, tableID, handID, actionID string, txErr error) error {
+	if !dynamo.IsConditionFailed(txErr) {
+		return fmt.Errorf("tablestore: commit: %w", txErr)
+	}
+	if actionID != "" {
+		item, err := s.guards.GetItem(ctx, tableID+"#"+handID+"#"+actionID)
 		if err != nil {
-			var inUse *types.ResourceInUseException
-			if !errors.As(err, &inUse) {
-				t.Fatalf("create table %s: %v", name, err)
-			}
+			return fmt.Errorf("tablestore: check guard: %w", err)
+		}
+		if item != nil {
+			return ErrDuplicateAction
+		}
+	}
+	return ErrVersionConflict
+}
+
+func mustN(v int) types.AttributeValue {
+	return &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", v)}
+}
+
+// mustCreateTestTables provisions all three tables against DynamoDB Local —
+// production tables are provisioned by CDK, never by app code.
+func mustCreateTestTables(ctx context.Context, t testingT, db *dynamodb.Client, env string) {
+	pkOnly := []string{env + "_" + tableState, env + "_" + tableActionGuards}
+	pkSk := []string{env + "_" + tableActionLog}
+	for _, name := range pkOnly {
+		createTable(ctx, t, db, name, false)
+	}
+	for _, name := range pkSk {
+		createTable(ctx, t, db, name, true)
+	}
+}
+
+func createTable(ctx context.Context, t testingT, db *dynamodb.Client, name string, withSK bool) {
+	attrs := []types.AttributeDefinition{{AttributeName: strPtr("pk"), AttributeType: types.ScalarAttributeTypeS}}
+	keys := []types.KeySchemaElement{{AttributeName: strPtr("pk"), KeyType: types.KeyTypeHash}}
+	if withSK {
+		attrs = append(attrs, types.AttributeDefinition{AttributeName: strPtr("sk"), AttributeType: types.ScalarAttributeTypeS})
+		keys = append(keys, types.KeySchemaElement{AttributeName: strPtr("sk"), KeyType: types.KeyTypeRange})
+	}
+	tableName := name
+	_, err := db.CreateTable(ctx, &dynamodb.CreateTableInput{
+		TableName: &tableName, AttributeDefinitions: attrs, KeySchema: keys, BillingMode: types.BillingModePayPerRequest,
+	})
+	if err != nil {
+		var inUse *types.ResourceInUseException
+		if !errors.As(err, &inUse) {
+			t.Fatalf("create table %s: %v", name, err)
 		}
 	}
 }
 
 func strPtr(s string) *string { return &s }
 
-// testingT is the minimal *testing.T surface mustCreateTestTables needs,
-// kept as an unexported interface so this file (non-test code) never
-// imports the "testing" package.
+// testingT is the minimal *testing.T surface these helpers need, kept as an
+// unexported interface so this file (non-test code) never imports "testing".
 type testingT interface{ Fatalf(string, ...any) }

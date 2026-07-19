@@ -4,6 +4,7 @@ package tablestore
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -26,47 +27,62 @@ func testClient(t *testing.T) *dynamodb.Client {
 	})
 }
 
-func TestSaveAndLoadSnapshot(t *testing.T) {
+func TestSeedThenCommitThenLoad(t *testing.T) {
 	db := testClient(t)
 	s := NewStore(db, "test")
 	ctx := context.Background()
 	mustCreateTestTables(ctx, t, db, "test")
 
-	snap := hand.Snapshot{Stage: "pre_flop"}
-	if err := s.SaveSnapshot(ctx, "table-1", "hand-1", 3, snap); err != nil {
-		t.Fatalf("SaveSnapshot: %v", err)
+	if err := s.SeedTable(ctx, "table-1", hand.State{Stage: hand.WaitingForPlayers}); err != nil {
+		t.Fatalf("SeedTable: %v", err)
 	}
 
-	got, err := s.LoadSnapshot(ctx, "table-1")
-	if err != nil {
-		t.Fatalf("LoadSnapshot: %v", err)
+	loaded, err := s.LoadTable(ctx, "table-1")
+	if err != nil || loaded == nil || loaded.Version != 1 {
+		t.Fatalf("expected version 1 after seed, got %+v err=%v", loaded, err)
 	}
-	if got == nil || got.HandID != "hand-1" || got.Seq != 3 || got.State.Stage != "pre_flop" {
-		t.Fatalf("unexpected snapshot: %+v", got)
+
+	newState := hand.State{Stage: hand.PreFlop}
+	if err := s.CommitAction(ctx, "table-1", "hand-1", "act-1", 1, newState, ActionLogEntry{
+		TableID: "table-1", HandID: "hand-1", Version: 2, PlayerID: "p1", ActionID: "act-1", Action: "call",
+	}); err != nil {
+		t.Fatalf("CommitAction: %v", err)
+	}
+
+	loaded, err = s.LoadTable(ctx, "table-1")
+	if err != nil || loaded.Version != 2 || loaded.State.Stage != hand.PreFlop {
+		t.Fatalf("expected version 2 pre_flop after commit, got %+v err=%v", loaded, err)
 	}
 }
 
-func TestAppendAndLoadActionsSince(t *testing.T) {
+func TestCommitActionRejectsStaleVersion(t *testing.T) {
 	db := testClient(t)
 	s := NewStore(db, "test")
 	ctx := context.Background()
 	mustCreateTestTables(ctx, t, db, "test")
 
-	for i := 1; i <= 3; i++ {
-		entry := ActionLogEntry{TableID: "table-2", HandID: "hand-1", Seq: i, PlayerID: "p1", ActionID: "a" + string(rune('0'+i)), Action: "call"}
-		if err := s.AppendAction(ctx, "table-2", "hand-1", i, entry); err != nil {
-			t.Fatalf("AppendAction seq %d: %v", i, err)
-		}
+	_ = s.SeedTable(ctx, "table-2", hand.State{Stage: hand.WaitingForPlayers})
+
+	err := s.CommitAction(ctx, "table-2", "hand-1", "act-1", 99, hand.State{}, ActionLogEntry{TableID: "table-2", HandID: "hand-1", Version: 100, ActionID: "act-1"})
+	if !errors.Is(err, ErrVersionConflict) {
+		t.Fatalf("expected ErrVersionConflict against a stale expected version, got %v", err)
+	}
+}
+
+func TestCommitActionRejectsDuplicateActionID(t *testing.T) {
+	db := testClient(t)
+	s := NewStore(db, "test")
+	ctx := context.Background()
+	mustCreateTestTables(ctx, t, db, "test")
+
+	_ = s.SeedTable(ctx, "table-3", hand.State{Stage: hand.WaitingForPlayers})
+	entry := ActionLogEntry{TableID: "table-3", HandID: "hand-1", Version: 2, ActionID: "dup-1"}
+	if err := s.CommitAction(ctx, "table-3", "hand-1", "dup-1", 1, hand.State{Stage: hand.PreFlop}, entry); err != nil {
+		t.Fatalf("first commit: %v", err)
 	}
 
-	got, err := s.LoadActionsSince(ctx, "table-2", "hand-1", 1)
-	if err != nil {
-		t.Fatalf("LoadActionsSince: %v", err)
-	}
-	if len(got) != 2 {
-		t.Fatalf("expected 2 actions after seq 1, got %d", len(got))
-	}
-	if got[0].Seq != 2 || got[1].Seq != 3 {
-		t.Fatalf("expected ordered seq 2,3, got %d,%d", got[0].Seq, got[1].Seq)
+	err := s.CommitAction(ctx, "table-3", "hand-1", "dup-1", 2, hand.State{Stage: hand.Flop}, ActionLogEntry{TableID: "table-3", HandID: "hand-1", Version: 3, ActionID: "dup-1"})
+	if !errors.Is(err, ErrDuplicateAction) {
+		t.Fatalf("expected ErrDuplicateAction on a replayed action_id, got %v", err)
 	}
 }

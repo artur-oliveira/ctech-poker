@@ -1,28 +1,41 @@
-// Package tablestore persists the durable state a crashed table server needs
-// to resume: the latest per-hand snapshot, and every validated action logged
-// since it (log-before-broadcast, ARCHITECTURE.md § 3).
+// Package tablestore persists table state as a single DynamoDB item per
+// table, guarded by a version counter — DynamoDB's conditional writes are
+// the correctness mechanism (ARCHITECTURE.md §2, revised), not an in-memory
+// lock or a Redis lease.
 package tablestore
 
-import "gopkg.aoctech.app/poker/api/internal/engine/hand"
+import (
+	"errors"
 
-// ActionLogEntry is one durable record of a validated player action, written
-// before the resulting state is ever broadcast (ARCHITECTURE.md § 3).
+	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+)
+
+// ErrVersionConflict means another instance's action committed first —
+// CommitAction's caller (table.Actor) must re-read the table's current
+// state via LoadTable and retry validation against it.
+var ErrVersionConflict = errors.New("tablestore: version conflict")
+
+// ErrDuplicateAction means actionID was already committed for this hand —
+// the caller should treat this the same as a successful no-op.
+var ErrDuplicateAction = errors.New("tablestore: duplicate action_id")
+
+// ActionLogEntry is one durable audit/hand-history record (ARCHITECTURE.md
+// §8.2) — never read back for recovery; recovery reads StoredTable directly.
 type ActionLogEntry struct {
-	TableID  string `json:"table_id" dynamodbav:"table_id"`
-	HandID   string `json:"hand_id" dynamodbav:"hand_id"`
-	Seq      int    `json:"seq" dynamodbav:"seq"`
-	PlayerID string `json:"player_id" dynamodbav:"player_id"`
-	ActionID string `json:"action_id" dynamodbav:"action_id"`
-	Action   string `json:"action" dynamodbav:"action"`
-	Amount   int64  `json:"amount" dynamodbav:"amount"`
+	TableID  string `dynamodbav:"table_id"`
+	HandID   string `dynamodbav:"hand_id"`
+	Version  int    `dynamodbav:"version"`
+	PlayerID string `dynamodbav:"player_id"`
+	ActionID string `dynamodbav:"action_id"`
+	Action   string `dynamodbav:"action"`
+	Amount   int64  `dynamodbav:"amount"`
 }
 
-// StoredSnapshot pairs a hand.Snapshot with the hand/seq it was captured at,
-// so a recovering instance knows exactly which log entries to replay on top
-// of it (only those with seq > Seq for the same HandID).
-type StoredSnapshot struct {
-	TableID string        `dynamodbav:"pk"`
-	HandID  string        `dynamodbav:"hand_id"`
-	Seq     int           `dynamodbav:"seq"`
-	State   hand.Snapshot `dynamodbav:"state"`
+// StoredTable is the current authoritative state of one table, as read from
+// poker_table_state.
+type StoredTable struct {
+	TableID string     `dynamodbav:"pk"`
+	Version int        `dynamodbav:"version"`
+	HandID  string     `dynamodbav:"hand_id"`
+	State   hand.State `dynamodbav:"state"`
 }
