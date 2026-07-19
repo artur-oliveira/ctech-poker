@@ -72,8 +72,39 @@ func TestNoAllInsProducesASingleLayer(t *testing.T) {
 		{PlayerID: "A", Amount: 100},
 		{PlayerID: "B", Amount: 100},
 	}
-	got := ComputeSidePots(contributions)
-	if len(got) != 1 || got[0].Amount != 200 {
-		t.Fatalf("expected a single 200-chip layer, got %+v", got)
+	got := sortedEligible(ComputeSidePots(contributions))
+	want := []PotLayer{
+		{Amount: 200, Eligible: []string{"A", "B"}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}
+
+// Regression: two players tied at the same all-in level (75) — added from
+// task review. The tie must collapse into one layer boundary, not two
+// identical ones, and every eligible set must include both tied players.
+func TestTwoPlayersTiedAtSameAllInLevel(t *testing.T) {
+	contributions := []Contribution{
+		{PlayerID: "A", Amount: 75},
+		{PlayerID: "B", Amount: 75},
+		{PlayerID: "C", Amount: 200},
+		{PlayerID: "D", Amount: 400},
+	}
+	got := sortedEligible(ComputeSidePots(contributions))
+	want := []PotLayer{
+		{Amount: 300, Eligible: []string{"A", "B", "C", "D"}}, // 75 * 4
+		{Amount: 250, Eligible: []string{"C", "D"}},           // 125 * 2
+		{Amount: 200, Eligible: []string{"D"}},                // 200 * 1
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+	var total int64
+	for _, l := range got {
+		total += l.Amount
+	}
+	if total != 750 {
+		t.Fatalf("layers must sum to total contributed (750), got %d", total)
 	}
 }
