@@ -9,6 +9,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"go.uber.org/fx"
+	v1 "gopkg.aoctech.app/poker/api/internal/api/v1"
 	"gopkg.aoctech.app/poker/api/internal/config"
 )
 
@@ -26,10 +27,8 @@ func newFiberApp() *fiber.App {
 	return fiber.New()
 }
 
-func registerRoutes(app *fiber.App) {
-	app.Get("/health", func(c fiber.Ctx) error {
-		return c.JSON(fiber.Map{"status": "ok"})
-	})
+func registerRoutes(app *fiber.App, cfg *config.Config) {
+	v1.Register(app, cfg)
 }
 
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config) {

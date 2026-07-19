@@ -45,8 +45,12 @@ export const ALB_LISTENER_PRIORITY = 45;
  */
 export const APP_PORT = 8010;
 
-/** Health check path served by the Go API (api/internal/app/app.go). */
-export const HEALTH_CHECK_PATH = '/health';
+/**
+ * Detailed health check path served by the Go API (RFC draft-inadarei-api-health-check;
+ * see api/internal/api/v1/health.go). The ALB target group accepts 200 and 207
+ * (degraded but still serving) as healthy.
+ */
+export const HEALTH_CHECK_PATH = '/v1.0/health-check';
 
 /** S3 key prefix inside the shared deployments/logs buckets. */
 export const S3_PREFIX = SERVICE;
