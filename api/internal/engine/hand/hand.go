@@ -90,6 +90,11 @@ func (t *Table) Stage() Stage { return t.stage }
 
 func (t *Table) Payouts() map[string]int64 { return t.payouts }
 
+// PlayersForActor exposes the live player slice for Phase 2's table.Actor,
+// which needs to toggle Ready before a hand starts (StartHand only reads it,
+// nothing in this package previously needed to write it from outside).
+func (t *Table) PlayersForActor() []*Player { return t.players }
+
 func (t *Table) playerByID(id string) *Player {
 	for _, p := range t.players {
 		if p.ID == id {
