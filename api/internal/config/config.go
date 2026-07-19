@@ -16,14 +16,10 @@ type Config struct {
 	IdleTimeout  int64 `env:"IDLE_TIMEOUT" envDefault:"60"`
 	WriteTimeout int64 `env:"WRITE_TIMEOUT" envDefault:"10"`
 
-	// Cache / table-lease (see Task 4). Optional in dev — falls back to an
-	// in-memory backend that is NOT shared across replicas.
+	// Cache / table-lease (advisory cache-affinity hint only — never
+	// correctness-gating, ARCHITECTURE.md §2). Optional in dev — falls back
+	// to an in-memory backend that is NOT shared across replicas.
 	RedisURL string `env:"VALKEY_URL"`
-
-	// InstancePrivateIP is this instance's own address, advertised via
-	// tableowner.Registry so sibling instances can proxy WebSocket traffic
-	// for tables this instance owns (see internal/tablemanager/manager.go).
-	InstancePrivateIP string `env:"INSTANCE_PRIVATE_IP" envDefault:"127.0.0.1"`
 
 	// ctech-account auth (see internal/api/v1/tablews.go) — poker's first
 	// user-facing auth surface; mirrors ctech-wallet's config fields exactly.
@@ -40,10 +36,12 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("config: %w", err)
 	}
 	if cfg.RedisURL == "" && cfg.Env == "prod" {
-		// Fail closed: an empty VALKEY_URL in prod means the table-lease
-		// service silently degrades to an in-memory store that is NOT shared
-		// across the ASG's other instances — table-authority (single-writer
-		// per table) stops holding fleet-wide with no signal.
+		// Fail closed: an empty VALKEY_URL in prod means ws.Registry silently
+		// degrades to an in-memory, single-instance fan-out — two players at
+		// the same table on different ASG instances would stop seeing each
+		// other's broadcasts with no signal. (tablelease itself has no such
+		// requirement under ARCHITECTURE.md §2's revised model — it is an
+		// advisory cache-affinity hint, never correctness-gating.)
 		return nil, fmt.Errorf("config: VALKEY_URL must be set in production so table leases are fleet-shared")
 	}
 	return cfg, nil
