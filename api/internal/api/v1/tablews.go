@@ -13,8 +13,10 @@ import (
 	"github.com/valyala/fasthttp"
 	"gopkg.aoctech.app/api-commons/jwtverify"
 	"gopkg.aoctech.app/api-commons/ws"
+	"gopkg.aoctech.app/poker/api/internal/chatfilter"
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 )
@@ -28,12 +30,15 @@ const (
 
 // clientMessage is every shape a connected player can send once authenticated.
 type clientMessage struct {
-	Type     string `json:"type"` // "ready" | "act" | "ping"
+	Type     string `json:"type"` // "ready" | "act" | "post_big_blind" | "ping"
 	Ready    bool   `json:"ready,omitempty"`
 	Action   string `json:"action,omitempty"`
 	Amount   int64  `json:"amount,omitempty"`
 	ActionID string `json:"action_id,omitempty"`
+	Message  string `json:"message,omitempty"`
 }
+
+var tableChatFilter = chatfilter.New([]string{"idiota", "burro"})
 
 // readAuthToken reads the first WebSocket frame after the upgrade and
 // extracts the bearer JWT. The client sends it as {"token":"..."} (or a raw
@@ -111,7 +116,7 @@ func (l *seatLimiter) Allow(playerID string) bool {
 // gateway is independently testable without Phase 3's room service. Any
 // instance may accept any table's connection directly — there is no
 // "owner" to proxy to under ARCHITECTURE.md §2's revised model.
-func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager *tablemanager.Manager, reg ws.Registry, allowedOrigins []string, seed func(tableID string) func() *hand.Table) {
+func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager *tablemanager.Manager, reg ws.Registry, allowedOrigins []string, seed func(tableID string) func() *hand.Table, rooms *roomstore.Store) {
 	upgrader := fws.FastHTTPUpgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -146,11 +151,19 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 				_ = conn.Close()
 				return
 			}
+			if rooms != nil {
+				if room, roomErr := rooms.Get(ctx, tableID); roomErr == nil && room != nil {
+					actor.SetEquityEnabledForActor(room.EquityDisplayEnabled)
+				}
+			}
 
 			connKey := tableID + "#" + playerID
 			connID := uuid.NewString()
 			reg.Register(connKey, connID, &wsConnAdapter{conn: conn})
 			defer reg.Unregister(connKey, connID)
+			chatConnID := connID + "-chat"
+			reg.Register(tableID+"#chat", chatConnID, &wsConnAdapter{conn: conn})
+			defer reg.Unregister(tableID+"#chat", chatConnID)
 
 			send(map[string]any{"type": "connected", "conn_id": connID})
 			slog.Info("table ws connected", "table", tableID, "player", playerID, "conn", connID)
@@ -188,6 +201,22 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 					if err := actor.Dispatch(table.ActCmd{PlayerID: playerID, ActionID: m.ActionID, Action: betting.Action(m.Action), Amount: m.Amount, Reply: r}); err != nil {
 						send(map[string]any{"type": "error", "code": "invalid_action", "message": err.Error()})
 					}
+				case "post_big_blind":
+					r := make(chan error, 1)
+					if err := actor.Dispatch(table.PostBigBlindCmd{PlayerID: playerID, Reply: r}); err != nil {
+						send(map[string]any{"type": "error", "code": "invalid_post", "message": err.Error()})
+					}
+				case "chat":
+					message := strings.TrimSpace(m.Message)
+					if message == "" {
+						continue
+					}
+					if len(message) > 500 {
+						send(map[string]any{"type": "error", "code": "message_too_long"})
+						continue
+					}
+					data, _ := json.Marshal(map[string]any{"type": "chat", "player_id": playerID, "message": tableChatFilter.Clean(message)})
+					reg.Broadcast(ctx, tableID+"#chat", data)
 				}
 			}
 			close(done)

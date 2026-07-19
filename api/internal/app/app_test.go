@@ -9,14 +9,18 @@ import (
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/api-commons/jwtverify"
 	"gopkg.aoctech.app/api-commons/ws"
+	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/leaderboard"
+	"gopkg.aoctech.app/poker/api/internal/player"
+	"gopkg.aoctech.app/poker/api/internal/roulette"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 )
 
 func testRoutes(app *fiber.App, cfg *config.Config) {
 	verifier := jwtverify.NewVerifier("", "", "", cache.NewMemoryBackend(1))
 	manager := tablemanager.NewManager(nil, nil, nil)
-	registerRoutes(app, cfg, verifier, manager, ws.NewMemoryRegistry())
+	registerRoutes(app, cfg, nil, verifier, manager, ws.NewMemoryRegistry(), nil, (*buyin.Service)(nil), (*player.Service)(nil), (*leaderboard.Service)(nil), (*roulette.Service)(nil))
 }
 
 func TestLivenessEndpointReturnsOK(t *testing.T) {
@@ -51,7 +55,7 @@ func TestLivenessEndpointReturnsOK(t *testing.T) {
 	}
 }
 
-func TestHealthCheckEndpointReturnsDetailedStatus(t *testing.T) {
+func TestHealthCheckEndpointFailsWhenDynamoDBIsUnavailable(t *testing.T) {
 	app := fiber.New()
 	testRoutes(app, &config.Config{AppVersion: "1.2.3"})
 
@@ -60,11 +64,8 @@ func TestHealthCheckEndpointReturnsDetailedStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
-	// 200 (pass) unless cpu/memory happen to be over 90% on the test runner,
-	// in which case the same check degrades to 207 (warn) — either is a
-	// correct response, not a bug.
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != 207 {
-		t.Fatalf("expected 200 or 207, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 without DynamoDB, got %d", resp.StatusCode)
 	}
 
 	var body struct {
@@ -84,7 +85,10 @@ func TestHealthCheckEndpointReturnsDetailedStatus(t *testing.T) {
 	if body.ReleaseID != "1.2.3" {
 		t.Fatalf("expected releaseId 1.2.3, got %q", body.ReleaseID)
 	}
-	for _, key := range []string{"uptime", "cpu", "memory"} {
+	if body.Status != "fail" {
+		t.Fatalf("expected fail without DynamoDB, got %q", body.Status)
+	}
+	for _, key := range []string{"uptime", "cpu", "memory", "dynamodb"} {
 		if _, ok := body.Checks[key]; !ok {
 			t.Fatalf("expected checks to contain %q, got %+v", key, body.Checks)
 		}

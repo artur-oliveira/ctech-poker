@@ -9,12 +9,14 @@ import (
 // Config holds the 12-Factor environment configuration for the poker API.
 type Config struct {
 	AppVersion string `env:"APP_VERSION" envDefault:"0.0.1"`
-	Port       int    `env:"PORT" envDefault:"8010"`
-	Env        string `env:"ENVIRONMENT" envDefault:"dev"`
 
-	ReadTimeout  int64 `env:"READ_TIMEOUT" envDefault:"10"`
-	IdleTimeout  int64 `env:"IDLE_TIMEOUT" envDefault:"60"`
-	WriteTimeout int64 `env:"WRITE_TIMEOUT" envDefault:"10"`
+	Port int    `env:"PORT" envDefault:"8003"`
+	Env  string `env:"ENVIRONMENT" envDefault:"dev"`
+
+	ReadTimeout    int64    `env:"READ_TIMEOUT" envDefault:"10"`
+	IdleTimeout    int64    `env:"IDLE_TIMEOUT" envDefault:"60"`
+	WriteTimeout   int64    `env:"WRITE_TIMEOUT" envDefault:"10"`
+	TrustedProxies []string `env:"TRUSTED_PROXIES" envSeparator:","`
 
 	// Cache / table-lease (advisory cache-affinity hint only — never
 	// correctness-gating, ARCHITECTURE.md §2). Optional in dev — falls back
@@ -25,7 +27,7 @@ type Config struct {
 	// user-facing auth surface; mirrors ctech-wallet's config fields exactly.
 	CtechURL           string   `env:"CTECH_URL"`
 	CtechJWKSURL       string   `env:"CTECH_JWKS_URL"`
-	ServiceAudience    string   `env:"SERVICE_AUDIENCE" envDefault:"poker"`
+	ServiceAudience    string   `env:"SERVICE_AUDIENCE" envDefault:"https://poker.aoctech.app"`
 	CorsAllowedOrigins []string `env:"CORS_ALLOWED_ORIGINS" envSeparator:","`
 
 	// DynamoDB (tablestore) — mirrors ctech-wallet's config fields exactly.
@@ -35,7 +37,7 @@ type Config struct {
 	// ctech-wallet M2M client (sandbox credit/debit — see internal/walletclient).
 	// See this plan's Global Constraints: ctech-account must seed this client
 	// with scopes internal:wallet:credit and internal:wallet:debit.
-	WalletURL         string `env:"WALLET_URL"`
+	WalletURL         string `env:"WALLET_URL" envDefault:"https://wallet.aoctech.app"`
 	PokerClientID     string `env:"POKER_CLIENT_ID"`
 	PokerClientSecret string `env:"POKER_CLIENT_SECRET"`
 }
@@ -54,6 +56,18 @@ func Load() (*Config, error) {
 		// requirement under ARCHITECTURE.md §2's revised model — it is an
 		// advisory cache-affinity hint, never correctness-gating.)
 		return nil, fmt.Errorf("config: VALKEY_URL must be set in production so table leases are fleet-shared")
+	}
+	if cfg.ServiceAudience == "" && cfg.Env == "prod" {
+		return nil, fmt.Errorf("config: SERVICE_AUDIENCE must be set in production")
+	}
+	if cfg.CtechURL == "" && cfg.Env == "prod" {
+		return nil, fmt.Errorf("config: CTECH_URL must be set in production so the issuer is verified")
+	}
+	if cfg.ReadTimeout <= 0 || cfg.WriteTimeout <= 0 || cfg.IdleTimeout <= 0 {
+		return nil, fmt.Errorf("config: server timeouts must be positive")
+	}
+	if cfg.CtechJWKSURL == "" && cfg.CtechURL != "" {
+		cfg.CtechJWKSURL = cfg.CtechURL + "/.well-known/jwks.json"
 	}
 	return cfg, nil
 }

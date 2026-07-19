@@ -1,0 +1,17 @@
+package v1
+
+import (
+	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/poker/api/internal/problem"
+	"gopkg.aoctech.app/poker/api/internal/roulette"
+)
+
+func RegisterRoulette(router fiber.Router, auth fiber.Handler, svc *roulette.Service) {
+	router.Post("/roulette/spin", auth, func(c fiber.Ctx) error {
+		amount, err := svc.Spin(c.Context(), c.Locals(localsUserID).(string))
+		if err != nil {
+			return problem.InternalServer("spin failed").Send(c)
+		}
+		return c.JSON(fiber.Map{"amount": amount})
+	})
+}

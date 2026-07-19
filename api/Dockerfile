@@ -12,6 +12,6 @@ FROM gcr.io/distroless/static-debian12
 
 COPY --from=builder /app-bin /app
 
-EXPOSE 8010
+EXPOSE 8003
 
 ENTRYPOINT ["/app"]

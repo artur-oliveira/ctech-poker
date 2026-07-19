@@ -3,13 +3,18 @@ package v1
 
 import (
 	"bufio"
+	"context"
+	"log/slog"
 	"os"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/dynamo"
 	"gopkg.aoctech.app/poker/api/internal/config"
 )
 
@@ -36,9 +41,10 @@ const (
 
 // Health check component names.
 const (
-	componentServer = "server"
-	componentCPU    = "cpu"
-	componentMemory = "memory"
+	componentServer   = "server"
+	componentCPU      = "cpu"
+	componentMemory   = "memory"
+	componentDynamoDB = "dynamodb"
 )
 
 // Health check component types and measurements.
@@ -48,7 +54,12 @@ const (
 	measureUtilization = "utilization"
 	unitSecond         = "second"
 	unitPercent        = "percent"
+	unitMillisecond    = "millisecond"
+	measureResponse    = "responseTime"
+	typeDatastoreDB    = "datastore"
 )
+
+const healthCheckTimeout = 2 * time.Second
 
 // utilizationWarnPercent is the CPU/memory level above which the instance is
 // reported as degraded.
@@ -87,20 +98,21 @@ type liveness struct {
 // accepts 200 and 207, so a degraded (warn) instance keeps serving traffic while
 // a 503 takes it out of rotation.
 //
-// Poker has no external dependency wired into the Fx app yet (no DynamoDB, no
-// cache.Backend) — only the system-level checks every service reports
-// regardless of external deps are included here. Since none of these checks are
-// load-bearing, aggregate() can only ever return pass or warn at this stage;
-// that is correct, not a gap. Add dependency checks here once Phase 2 wires
-// them into internal/app.
-func RegisterHealth(router fiber.Router, cfg *config.Config) {
+// DynamoDB is load-bearing: without the authoritative table state the API
+// cannot safely serve a game, so a failed DescribeTable makes this probe fail
+// with 503 and removes the instance from the target group. CPU and memory only
+// degrade the probe to warn/207.
+func RegisterHealth(router fiber.Router, cfg *config.Config, db *dynamodb.Client) {
 	router.Get("/health", func(c fiber.Ctx) error {
 		return c.JSON(liveness{Status: statusPass, ReleaseID: cfg.AppVersion, ServiceID: healthServiceID})
 	})
 
 	router.Get("/health-check", func(c fiber.Ctx) error {
 		nowStr := time.Now().UTC().Format(time.RFC3339Nano)
+		ctx, cancel := context.WithTimeout(c.Context(), healthCheckTimeout)
+		defer cancel()
 
+		dynamoCheck := checkDynamoDB(ctx, db, dynamo.TableName(cfg.Env, "poker_table_state"), nowStr)
 		cpu := checkCPU(nowStr)
 		mem := checkMemory(nowStr)
 
@@ -115,9 +127,10 @@ func RegisterHealth(router fiber.Router, cfg *config.Config) {
 		}
 
 		checks := map[string]healthEntry{
-			measureUptime:   uptime,
-			componentCPU:    cpu,
-			componentMemory: mem,
+			measureUptime:     uptime,
+			componentCPU:      cpu,
+			componentMemory:   mem,
+			componentDynamoDB: dynamoCheck,
 		}
 
 		overall, statusCode := aggregate(checks)
@@ -130,6 +143,24 @@ func RegisterHealth(router fiber.Router, cfg *config.Config) {
 			Checks:      checks,
 		})
 	})
+}
+
+// checkDynamoDB describes a single load-bearing table. DescribeTable is
+// resource-scoped and verifies both connectivity and that the deployment's
+// expected schema resource exists; ListTables would require broad IAM access.
+func checkDynamoDB(ctx context.Context, db *dynamodb.Client, tableName, nowStr string) healthEntry {
+	if db == nil {
+		return healthEntry{componentDynamoDB, measureResponse, typeDatastoreDB, healthUnavailableV, unitMillisecond, statusFail, nowStr}
+	}
+	started := time.Now()
+	_, err := db.DescribeTable(ctx, &dynamodb.DescribeTableInput{TableName: aws.String(tableName)})
+	latency := float64(time.Since(started).Milliseconds())
+	status := statusPass
+	if err != nil {
+		status = statusFail
+		slog.Error("health check failed", "component", componentDynamoDB, "table", tableName, "error", err)
+	}
+	return healthEntry{componentDynamoDB, measureResponse, typeDatastoreDB, latency, unitMillisecond, status, nowStr}
 }
 
 // aggregate reduces the individual checks to the overall status and HTTP code:
