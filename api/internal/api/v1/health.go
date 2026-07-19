@@ -15,12 +15,6 @@ import (
 
 var startTime = time.Now()
 
-// checkTimeout caps the whole dependency fan-out so a hung dependency can never
-// hold the probe open. Unused today — poker has no external dependency checks
-// yet (see componentServer/CPU/Memory below) — kept named for when Phase 2
-// wires in a load-bearing dependency (e.g. cache.Backend) whose check needs it.
-const checkTimeout = 2 * time.Second
-
 // Health check statuses (draft-inadarei-api-health-check).
 const (
 	statusPass = "pass"
