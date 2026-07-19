@@ -27,6 +27,10 @@ type Config struct {
 	CtechJWKSURL       string   `env:"CTECH_JWKS_URL"`
 	ServiceAudience    string   `env:"SERVICE_AUDIENCE" envDefault:"poker"`
 	CorsAllowedOrigins []string `env:"CORS_ALLOWED_ORIGINS" envSeparator:","`
+
+	// DynamoDB (tablestore) — mirrors ctech-wallet's config fields exactly.
+	AWSRegion        string `env:"AWS_REGION" envDefault:"us-east-1"`
+	DynamoDBEndpoint string `env:"DYNAMODB_ENDPOINT"` // local override (DynamoDB Local), empty in prod
 }
 
 // Load reads config from environment variables.

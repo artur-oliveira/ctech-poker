@@ -6,12 +6,22 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/api-commons/cache"
+	"gopkg.aoctech.app/api-commons/jwtverify"
+	"gopkg.aoctech.app/api-commons/ws"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 )
+
+func testRoutes(app *fiber.App, cfg *config.Config) {
+	verifier := jwtverify.NewVerifier("", "", "", cache.NewMemoryBackend(1))
+	manager := tablemanager.NewManager(nil, nil, nil)
+	registerRoutes(app, cfg, verifier, manager, ws.NewMemoryRegistry())
+}
 
 func TestLivenessEndpointReturnsOK(t *testing.T) {
 	app := fiber.New()
-	registerRoutes(app, &config.Config{AppVersion: "1.2.3"})
+	testRoutes(app, &config.Config{AppVersion: "1.2.3"})
 
 	req, _ := http.NewRequest(http.MethodGet, "/v1.0/health", nil)
 	resp, err := app.Test(req)
@@ -43,7 +53,7 @@ func TestLivenessEndpointReturnsOK(t *testing.T) {
 
 func TestHealthCheckEndpointReturnsDetailedStatus(t *testing.T) {
 	app := fiber.New()
-	registerRoutes(app, &config.Config{AppVersion: "1.2.3"})
+	testRoutes(app, &config.Config{AppVersion: "1.2.3"})
 
 	req, _ := http.NewRequest(http.MethodGet, "/v1.0/health-check", nil)
 	resp, err := app.Test(req)
