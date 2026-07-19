@@ -2,9 +2,7 @@ package table
 
 import "gopkg.aoctech.app/poker/api/internal/engine/betting"
 
-// Command is anything the Actor's Run loop can process. Every command
-// carries its own reply channel so Dispatch can block until it's handled
-// without the caller needing to know the Actor's internal channel type.
+// Command is anything the Actor's Run loop can process.
 type Command interface {
 	reply() chan error
 }
