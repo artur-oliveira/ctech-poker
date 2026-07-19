@@ -29,6 +29,8 @@ const (
 // the highest rank value is Ace=14 (0b1110).
 type Score uint32
 
+func (s Score) Category() Category { return Category(s >> 24) }
+
 func makeScore(cat Category, tiebreaks ...deck.Rank) Score {
 	s := Score(cat) << 24
 	shift := 20

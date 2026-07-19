@@ -19,6 +19,7 @@ type State struct {
 	SmallBlind    int64
 	BigBlind      int64
 	DealerSeat    int
+	DealerDrawn   bool
 	Stage         Stage
 	Board         []deck.Card
 	Shuffle       *deck.ShuffleResult
@@ -27,8 +28,13 @@ type State struct {
 	RoundIdx      map[string]int
 	RoundBaseline map[string]int64
 	Payouts       map[string]int64
+	RakeBPS       int64
+	RakeCollected int64
 	HandOrder     []*Player
 	SeenActionIDs map[string]bool
+	ReadyToPost   map[string]bool
+	LastOutcome   *HandOutcome
+	WasEverAllIn  map[string]bool
 }
 
 // ExportState captures every field this Table carries, for durable storage.
@@ -38,6 +44,7 @@ func (t *Table) ExportState() State {
 		SmallBlind:    t.smallBlind,
 		BigBlind:      t.bigBlind,
 		DealerSeat:    t.dealerSeat,
+		DealerDrawn:   t.dealerDrawn,
 		Stage:         t.stage,
 		Board:         t.board,
 		Shuffle:       t.shuffle,
@@ -46,8 +53,13 @@ func (t *Table) ExportState() State {
 		RoundIdx:      t.roundIdx,
 		RoundBaseline: t.roundBaseline,
 		Payouts:       t.payouts,
+		RakeBPS:       t.rakeBPS,
+		RakeCollected: t.rakeCollected,
 		HandOrder:     t.handOrder,
 		SeenActionIDs: t.seenActionIDs,
+		ReadyToPost:   t.readyToPost,
+		LastOutcome:   t.lastOutcome,
+		WasEverAllIn:  t.wasEverAllIn,
 	}
 }
 
@@ -56,10 +68,14 @@ func (t *Table) ExportState() State {
 // trivial", there is no log to replay).
 func NewTableFromState(s State) *Table {
 	return &Table{
-		players:       s.Players,
-		smallBlind:    s.SmallBlind,
-		bigBlind:      s.BigBlind,
-		dealerSeat:    s.DealerSeat,
+		players:    s.Players,
+		smallBlind: s.SmallBlind,
+		bigBlind:   s.BigBlind,
+		dealerSeat: s.DealerSeat,
+		// Pre-Phase-3 snapshots have no DealerDrawn field. Any snapshot past
+		// the initial waiting state necessarily already assigned a dealer, so
+		// infer true to avoid re-drawing after recovery.
+		dealerDrawn:   s.DealerDrawn || s.Stage != WaitingForPlayers,
 		stage:         s.Stage,
 		board:         s.Board,
 		shuffle:       s.Shuffle,
@@ -68,8 +84,13 @@ func NewTableFromState(s State) *Table {
 		roundIdx:      s.RoundIdx,
 		roundBaseline: s.RoundBaseline,
 		payouts:       s.Payouts,
+		rakeBPS:       s.RakeBPS,
+		rakeCollected: s.RakeCollected,
 		handOrder:     s.HandOrder,
 		seenActionIDs: s.SeenActionIDs,
+		readyToPost:   s.ReadyToPost,
+		lastOutcome:   s.LastOutcome,
+		wasEverAllIn:  s.WasEverAllIn,
 	}
 }
 

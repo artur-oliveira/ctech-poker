@@ -5,6 +5,8 @@
 package hand
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
@@ -46,16 +48,17 @@ type Player struct {
 }
 
 type Table struct {
-	players    []*Player
-	smallBlind int64
-	bigBlind   int64
-	dealerSeat int
-	stage      Stage
-	board      []deck.Card
-	shuffle    *deck.ShuffleResult
-	nextCard   int
-	round      *betting.Round
-	roundIdx   map[string]int // playerID -> index into round.Players, for the active betting round
+	players     []*Player
+	smallBlind  int64
+	bigBlind    int64
+	dealerSeat  int
+	dealerDrawn bool
+	stage       Stage
+	board       []deck.Card
+	shuffle     *deck.ShuffleResult
+	nextCard    int
+	round       *betting.Round
+	roundIdx    map[string]int // playerID -> index into round.Players, for the active betting round
 
 	// roundBaseline records, for each player in the current round, the value
 	// round.Players[idx].Contributed held at the moment this round began
@@ -67,7 +70,9 @@ type Table struct {
 	// re-raise) doesn't get double-counted. See Act's doc comment.
 	roundBaseline map[string]int64
 
-	payouts map[string]int64
+	payouts       map[string]int64
+	rakeBPS       int64
+	rakeCollected int64
 
 	// handOrder is the seat order of players dealt into the current (or
 	// most recently completed) hand — the same slice built as `active` in
@@ -82,6 +87,27 @@ type Table struct {
 	// rejects a replayed duplicate, not just the instance that originally
 	// saw it.
 	seenActionIDs map[string]bool
+	readyToPost   map[string]bool
+	lastOutcome   *HandOutcome
+	wasEverAllIn  map[string]bool
+}
+
+// HandOutcome is the durable, server-internal summary consumed by
+// gamification. Payouts and winners are net of rake; refunded unmatched
+// contributions are not wins.
+type HandOutcome struct {
+	Winners            []string
+	WinningCategory    string
+	WonWithoutShowdown bool
+	ComebackWinners    []string
+	Participants       []string
+}
+
+var categoryNames = map[handeval.Category]string{
+	handeval.HighCard: "high_card", handeval.Pair: "pair", handeval.TwoPair: "two_pair",
+	handeval.ThreeOfAKind: "three_of_a_kind", handeval.Straight: "straight", handeval.Flush: "flush",
+	handeval.FullHouse: "full_house", handeval.FourOfAKind: "four_of_a_kind",
+	handeval.StraightFlush: "straight_flush", handeval.RoyalFlush: "royal_flush",
 }
 
 func NewTable(players []*Player, smallBlind, bigBlind int64) *Table {
@@ -97,10 +123,32 @@ func (t *Table) Stage() Stage { return t.stage }
 
 func (t *Table) Payouts() map[string]int64 { return t.payouts }
 
+func (t *Table) RakeCollected() int64 { return t.rakeCollected }
+
+func (t *Table) LastOutcomeForActor() *HandOutcome { return t.lastOutcome }
+
+// ConfigureRake enables the standard 2.5% real-money rake. Sandbox tables
+// always remain rake-free. The setting is persisted with the table state.
+func (t *Table) ConfigureRake(currencyMode string) {
+	if currencyMode == "real" {
+		t.rakeBPS = 250
+		return
+	}
+	t.rakeBPS = 0
+}
+
 // PlayersForActor exposes the live player slice for Phase 2's table.Actor,
 // which needs to toggle Ready before a hand starts (StartHand only reads it,
 // nothing in this package previously needed to write it from outside).
 func (t *Table) PlayersForActor() []*Player { return t.players }
+
+func (t *Table) HoleAndBoardForActor(playerID string) ([2]deck.Card, []deck.Card, bool) {
+	p := t.playerByID(playerID)
+	if p == nil || (p.State != Active && p.State != AllIn) {
+		return [2]deck.Card{}, nil, false
+	}
+	return p.HoleCards, append([]deck.Card(nil), t.board...), true
+}
 
 // CurrentPlayerCanActForActor exposes currentPlayerCanAct to Phase 2's
 // table.Actor (auto-fold deadline arming needs to know whose turn it is
@@ -130,9 +178,64 @@ func (t *Table) playerByID(id string) *Player {
 // AddMidHandJoiner seats a new player as PendingEntry (OVERVIEW.md § 2) — not
 // dealt in until the hand in progress completes, and required to post the
 // big blind on the hand they're first dealt into (handled in StartHand).
-func (t *Table) AddMidHandJoiner(p *Player) {
+func (t *Table) AddMidHandJoiner(p *Player) error {
+	if t.playerByID(p.ID) != nil {
+		return fmt.Errorf("hand: player %s is already seated", p.ID)
+	}
 	p.State = PendingEntry
 	t.players = append(t.players, p)
+	return nil
+}
+
+// MarkReadyToPost opts a pending entrant into the next hand. The entrant
+// will post one big blind even when their table position is not the regular
+// big-blind position.
+func (t *Table) MarkReadyToPost(playerID string) {
+	p := t.playerByID(playerID)
+	if p == nil || p.State != PendingEntry {
+		return
+	}
+	if t.readyToPost == nil {
+		t.readyToPost = make(map[string]bool)
+	}
+	t.readyToPost[playerID] = true
+}
+
+// AddWaitingPlayer seats a new player between hands (not PENDING_ENTRY —
+// they're eligible for the very next hand once ready, same as anyone seated
+// at table construction). Rejects joining while a hand the player would
+// otherwise be silently excluded from is already in progress — that path is
+// AddMidHandJoiner's job instead.
+func (t *Table) AddWaitingPlayer(p *Player) error {
+	if t.stage != WaitingForPlayers && t.stage != Complete {
+		return fmt.Errorf("hand: cannot add a waiting player while a hand is in progress, use AddMidHandJoiner")
+	}
+	if t.playerByID(p.ID) != nil {
+		return fmt.Errorf("hand: player %s is already seated", p.ID)
+	}
+	t.players = append(t.players, p)
+	return nil
+}
+
+// RemovePlayerForActor removes playerID from the table and returns their
+// current stack (the amount buyin.Service credits back on cash-out). Errors
+// if the player is currently Active/AllIn in a hand still in progress — a
+// seat can't be pulled out from under a hand it's dealt into; the caller
+// must wait for HAND_COMPLETE (or the player must fold first).
+func (t *Table) RemovePlayerForActor(playerID string) (int64, error) {
+	handInProgress := t.stage != WaitingForPlayers && t.stage != Complete
+	for i, p := range t.players {
+		if p.ID != playerID {
+			continue
+		}
+		if handInProgress && (p.State == Active || p.State == AllIn) {
+			return 0, fmt.Errorf("hand: cannot remove player %s mid-hand while still dealt in", playerID)
+		}
+		stack := p.Stack
+		t.players = append(t.players[:i], t.players[i+1:]...)
+		return stack, nil
+	}
+	return 0, fmt.Errorf("hand: player %s not found", playerID)
 }
 
 // StartHand begins a new hand: requires >=2 ready players, posts blinds
@@ -140,13 +243,12 @@ func (t *Table) AddMidHandJoiner(p *Player) {
 // shuffles via commit-reveal, and deals hole cards. dealerSeat itself is
 // rotated forward to the next seat at the END of each hand (see
 // rotateDealer, called from runShowdown) so the SECOND and later calls to
-// StartHand on the same Table use a new dealer. The very first hand's button
-// is NOT drawn by CSPRNG — it defaults to seat 0 (dealerSeat's zero value);
-// only rotation across hands is implemented.
+// StartHand on the same Table use a new dealer. The first hand's button is
+// drawn uniformly with crypto/rand among the players dealt into that hand.
 func (t *Table) StartHand() error {
 	readyCount := 0
 	for _, p := range t.players {
-		if p.State != PendingEntry && p.Ready {
+		if p.Ready && (p.State != PendingEntry || t.readyToPost[p.ID]) {
 			readyCount++
 		}
 	}
@@ -162,12 +264,23 @@ func (t *Table) StartHand() error {
 	t.nextCard = 0
 	t.board = nil
 	t.payouts = nil
+	t.lastOutcome = nil
+	t.wasEverAllIn = make(map[string]bool)
+	t.rakeCollected = 0
 	t.seenActionIDs = make(map[string]bool)
 
 	active := make([]*Player, 0, len(t.players))
+	newEntrants := make(map[string]bool)
 	for _, p := range t.players {
+		if !p.Ready || p.State == SittingOut {
+			continue
+		}
+		if p.State == PendingEntry && !t.readyToPost[p.ID] {
+			continue
+		}
 		if p.State == PendingEntry {
-			continue // sits out until this hand completes
+			newEntrants[p.ID] = true
+			delete(t.readyToPost, p.ID)
 		}
 		p.State = Active
 		p.Contributed = 0
@@ -176,9 +289,27 @@ func (t *Table) StartHand() error {
 	}
 
 	t.handOrder = active
+	if !t.dealerDrawn {
+		dealerIdx, err := randomIndex(len(active))
+		if err != nil {
+			return fmt.Errorf("hand: draw initial dealer: %w", err)
+		}
+		for i, p := range t.players {
+			if p == active[dealerIdx] {
+				t.dealerSeat = i
+				break
+			}
+		}
+		t.dealerDrawn = true
+	}
 	sbSeat, bbSeat := t.blindSeats(active)
 	t.postBlind(active[sbSeat], t.smallBlind)
 	t.postBlind(active[bbSeat], t.bigBlind)
+	for _, p := range active {
+		if newEntrants[p.ID] && p != active[bbSeat] {
+			t.postBlind(p, t.bigBlind)
+		}
+	}
 
 	t.startBettingRound(active, t.bigBlind, t.bigBlind)
 	// The blinds were posted onto Player.Contributed before the round
@@ -187,9 +318,57 @@ func (t *Table) StartHand() error {
 	// as already-in-this-street money instead of demanding it again.
 	t.seedRoundContribution(active[sbSeat].ID, active[sbSeat].Contributed)
 	t.seedRoundContribution(active[bbSeat].ID, active[bbSeat].Contributed)
+	for _, p := range active {
+		if newEntrants[p.ID] {
+			t.seedRoundContribution(p.ID, p.Contributed)
+		}
+	}
 	t.stage = PreFlop
 	return nil
 }
+
+// randomIndex uses rejection sampling so every index has exactly the same
+// probability even when n does not divide the uint64 range.
+func randomIndex(n int) (int, error) {
+	if n <= 0 {
+		return 0, fmt.Errorf("invalid upper bound %d", n)
+	}
+	max := ^uint64(0) - (^uint64(0) % uint64(n))
+	for {
+		var b [8]byte
+		if _, err := rand.Read(b[:]); err != nil {
+			return 0, err
+		}
+		v := binary.BigEndian.Uint64(b[:])
+		if v < max {
+			return int(v % uint64(n)), nil
+		}
+	}
+}
+
+// EscalateBlindsForActor raises both blinds while preserving their ratio.
+// The big blind is capped exactly at maxBigBlind and invalid configs are
+// ignored defensively.
+func (t *Table) EscalateBlindsForActor(multiplierPct int, maxBigBlind int64) {
+	if multiplierPct <= 100 || maxBigBlind <= 0 || t.bigBlind >= maxBigBlind {
+		return
+	}
+	oldBig := t.bigBlind
+	newBig := oldBig * int64(multiplierPct) / 100
+	if newBig <= oldBig {
+		newBig = oldBig + 1
+	}
+	if newBig > maxBigBlind {
+		newBig = maxBigBlind
+	}
+	t.smallBlind = t.smallBlind * newBig / oldBig
+	if t.smallBlind == 0 {
+		t.smallBlind = 1
+	}
+	t.bigBlind = newBig
+}
+
+func (t *Table) BigBlindForTest() int64 { return t.bigBlind }
 
 // blindSeats returns (smallBlindIdx, bigBlindIdx) as indices into active,
 // computed relative to dealerSeat's position within active. Heads-up is a
@@ -243,6 +422,10 @@ func (t *Table) postBlind(p *Player, amount int64) {
 	if amount >= p.Stack {
 		amount = p.Stack
 		p.State = AllIn
+		if t.wasEverAllIn == nil {
+			t.wasEverAllIn = make(map[string]bool)
+		}
+		t.wasEverAllIn[p.ID] = true
 	}
 	p.Stack -= amount
 	p.Contributed += amount
@@ -351,6 +534,10 @@ func (t *Table) Act(playerID string, action betting.Action, amount int64) error 
 	}
 	if bs.AllIn {
 		p.State = AllIn
+		if t.wasEverAllIn == nil {
+			t.wasEverAllIn = make(map[string]bool)
+		}
+		t.wasEverAllIn[p.ID] = true
 	}
 	p.Stack = bs.Stack
 	// bs.Contributed is this round's cumulative total for this player (it
@@ -449,6 +636,13 @@ func (t *Table) activePlayers() []*Player {
 }
 
 func (t *Table) runShowdown() {
+	nonFolded := 0
+	for _, p := range t.handOrder {
+		if p.State != Folded {
+			nonFolded++
+		}
+	}
+	wonWithoutShowdown := nonFolded == 1
 	t.stage = Showdown
 	contributions := make([]sidepots.Contribution, 0, len(t.players))
 	for _, p := range t.players {
@@ -459,6 +653,9 @@ func (t *Table) runShowdown() {
 	layers := sidepots.ComputeSidePots(contributions)
 
 	payouts := make(map[string]int64)
+	winningIDs := make([]string, 0)
+	var winningScore handeval.Score
+	remainingRakeCap := t.rakeCap()
 	for _, layer := range layers {
 		var winners []string
 		var bestScore handeval.Score
@@ -501,14 +698,24 @@ func (t *Table) runShowdown() {
 			}
 			continue
 		}
-		share := layer.Amount / int64(len(winners))
+		layerRake := t.rakeForLayer(layer.Amount, remainingRakeCap)
+		remainingRakeCap -= layerRake
+		t.rakeCollected += layerRake
+		netAmount := layer.Amount - layerRake
+		if netAmount > 0 {
+			winningIDs = append(winningIDs, winners...)
+			if bestScore > winningScore {
+				winningScore = bestScore
+			}
+		}
+		share := netAmount / int64(len(winners))
 		for _, w := range winners {
 			payouts[w] += share
 		}
 		// Odd chip goes to the first winner in seat order (closest to the
 		// button, standard convention) — winners is already in table seat
 		// order since layer.Eligible preserves contributions' input order.
-		remainder := layer.Amount - share*int64(len(winners))
+		remainder := netAmount - share*int64(len(winners))
 		if remainder > 0 {
 			payouts[winners[0]] += remainder
 		}
@@ -517,6 +724,66 @@ func (t *Table) runShowdown() {
 		t.playerByID(id).Stack += amount
 	}
 	t.payouts = payouts
+	outcome := HandOutcome{
+		Winners:            dedupeIDs(winningIDs),
+		WonWithoutShowdown: wonWithoutShowdown,
+		Participants:       participantIDs(t.handOrder),
+	}
+	if !wonWithoutShowdown {
+		outcome.WinningCategory = categoryNames[winningScore.Category()]
+	}
+	for _, id := range outcome.Winners {
+		if t.wasEverAllIn[id] {
+			outcome.ComebackWinners = append(outcome.ComebackWinners, id)
+		}
+	}
+	t.lastOutcome = &outcome
 	t.stage = Complete
 	t.rotateDealer()
+}
+
+func dedupeIDs(ids []string) []string {
+	seen := make(map[string]bool, len(ids))
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+func participantIDs(players []*Player) []string {
+	out := make([]string, len(players))
+	for i, player := range players {
+		out[i] = player.ID
+	}
+	return out
+}
+
+func (t *Table) rakeCap() int64 {
+	if t.rakeBPS == 0 || len(t.board) < 3 {
+		return 0
+	}
+	players := len(t.handOrder)
+	switch {
+	case players <= 2:
+		return t.bigBlind / 2
+	case players <= 4:
+		return t.bigBlind * 3 / 4
+	default:
+		return t.bigBlind
+	}
+}
+
+func (t *Table) rakeForLayer(amount, remainingCap int64) int64 {
+	if remainingCap <= 0 || t.rakeBPS <= 0 {
+		return 0
+	}
+	rake := amount * t.rakeBPS / 10000
+	if rake > remainingCap {
+		return remainingCap
+	}
+	return rake
 }

@@ -97,6 +97,7 @@ func TestHeadsUpDealerPostsSmallBlind(t *testing.T) {
 	}
 	table := NewTable(players, 10, 20)
 	table.dealerSeat = 0 // P1 is dealer
+	table.dealerDrawn = true
 
 	if err := table.StartHand(); err != nil {
 		t.Fatalf("StartHand: %v", err)
@@ -154,6 +155,7 @@ func TestAllInRunoutDoesNotStallTheHand(t *testing.T) {
 		{ID: "BB", Stack: 300, Ready: true},
 	}
 	table := NewTable(players, 10, 20)
+	table.dealerDrawn = true // scenario names encode the intended seat positions
 	if err := table.StartHand(); err != nil {
 		t.Fatalf("StartHand: %v", err)
 	}

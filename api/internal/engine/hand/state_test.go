@@ -10,6 +10,8 @@ func TestExportImportRoundTripsFullState(t *testing.T) {
 	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
 	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
 	original := NewTable([]*Player{p1, p2}, 10, 20)
+	original.dealerDrawn = true
+	original.readyToPost = map[string]bool{"p3": true}
 	if err := original.StartHand(); err != nil {
 		t.Fatalf("StartHand: %v", err)
 	}
@@ -19,6 +21,9 @@ func TestExportImportRoundTripsFullState(t *testing.T) {
 	}
 
 	rebuilt := NewTableFromState(original.ExportState())
+	if !rebuilt.dealerDrawn || !rebuilt.readyToPost["p3"] {
+		t.Fatalf("phase 3 state was not restored: dealerDrawn=%v readyToPost=%v", rebuilt.dealerDrawn, rebuilt.readyToPost)
+	}
 
 	originalView := original.ViewFor("p1")
 	rebuiltView := rebuilt.ViewFor("p1")

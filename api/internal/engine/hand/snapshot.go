@@ -11,6 +11,7 @@ type Snapshot struct {
 	Board   []string         `json:"board"`
 	Seats   []SeatView       `json:"seats"`
 	Payouts map[string]int64 `json:"payouts,omitempty"`
+	Rake    int64            `json:"rake,omitempty"`
 }
 
 type SeatView struct {
@@ -19,6 +20,7 @@ type SeatView struct {
 	State       string   `json:"state"`
 	Contributed int64    `json:"contributed"`
 	HoleCards   []string `json:"hole_cards,omitempty"`
+	Equity      *float64 `json:"equity,omitempty"`
 }
 
 var stageNames = map[Stage]string{
@@ -87,6 +89,7 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		Board:   boardCodes(t.board),
 		Seats:   seats,
 		Payouts: t.payouts,
+		Rake:    t.rakeCollected,
 	}
 }
 
