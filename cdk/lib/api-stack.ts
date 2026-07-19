@@ -34,6 +34,9 @@ interface ApiStackProps extends cdk.StackProps {
   instanceProfileName: string;
   deploymentsBucketName: string;
   logsBucketName: string;
+  tableStateArn: string;
+  actionLogArn: string;
+  actionGuardsArn: string;
 }
 
 export class PokerApiStack extends cdk.Stack {
@@ -42,7 +45,10 @@ export class PokerApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
 
-    const {environment, vpcId, domainName, instanceProfileName, deploymentsBucketName, logsBucketName} = props;
+    const {
+      environment, vpcId, domainName, instanceProfileName, deploymentsBucketName, logsBucketName,
+      tableStateArn, actionLogArn, actionGuardsArn,
+    } = props;
 
     const shared = SSM_SHARED(environment);
 
@@ -263,6 +269,27 @@ export class PokerApiStack extends cdk.Stack {
       domainName,
       listenerRulePriority: ALB_LISTENER_PRIORITY,
     });
+
+    // DynamoDB access for internal/tablestore.Store — TransactWriteItems is
+    // required because every commit (CommitAction) writes the state item,
+    // the audit-log entry, and (for player actions) the idempotency guard in
+    // one transaction (ARCHITECTURE.md §2, revised: conditional writes are
+    // the correctness mechanism).
+    //
+    // NOT attached here: `service`'s instance profile is imported by name
+    // (iam.InstanceProfile.fromInstanceProfileName, in
+    // ctech-cdk/lib/private-ipv4-ec2-service.ts) rather than a Role this CDK
+    // app constructs, so CDK cannot attach a policy to it directly — the
+    // same pre-existing gap the instanceProfileName doc comment above
+    // already flags ("no IAM stack has been written for ctech-poker").
+    // Whichever future task creates `${env}-ctech-poker-api-instance-profile`
+    // must grant its role: dynamodb:GetItem/PutItem/UpdateItem/Query/
+    // TransactWriteItems on tableStateArn/actionLogArn/actionGuardsArn
+    // (passed into this stack for exactly that purpose — see the CfnOutputs
+    // below).
+    new cdk.CfnOutput(this, 'TableStateArn', {value: tableStateArn, exportName: `${id}-table-state-arn`});
+    new cdk.CfnOutput(this, 'ActionLogArn', {value: actionLogArn, exportName: `${id}-action-log-arn`});
+    new cdk.CfnOutput(this, 'ActionGuardsArn', {value: actionGuardsArn, exportName: `${id}-action-guards-arn`});
 
     // ── Outputs ───────────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'AsgName', {value: service.asgName, exportName: `${id}-asg-name`});

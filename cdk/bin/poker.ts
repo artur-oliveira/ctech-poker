@@ -3,6 +3,8 @@ import * as cdk from 'aws-cdk-lib';
 import {Environment} from '@aoctech/cdk';
 
 import {PokerApiStack} from '../lib/api-stack';
+import {DynamoDBStack} from '../lib/dynamodb-stack';
+import {ArchiverStack} from '../lib/archiver-stack';
 import {
   API_DOMAIN_PREFIX,
   AWS_ACCOUNT,
@@ -33,6 +35,22 @@ const id = (name: string) =>
     `CtechPoker-${ENVIRONMENT.charAt(0).toUpperCase() + ENVIRONMENT.slice(1)}-${name}`;
 
 // =====================
+// DynamoDB (table state, action log + archival)
+// =====================
+const dynamoStack = new DynamoDBStack(app, id('DynamoDB'), {
+  env,
+  environment: ENVIRONMENT,
+  description: `CTech Poker DynamoDB tables - ${ENVIRONMENT}`,
+});
+
+new ArchiverStack(app, id('Archiver'), {
+  env,
+  environment: ENVIRONMENT,
+  actionLogTable: dynamoStack.tables.get('poker_action_log')!,
+  description: `CTech Poker action-log archiver (DynamoDB Streams -> S3) - ${ENVIRONMENT}`,
+});
+
+// =====================
 // API (EC2 + ASG, shared ALB from ctech-cdk)
 // =====================
 // NOTE: instanceProfileName points at an IAM instance profile that does not
@@ -47,5 +65,8 @@ new PokerApiStack(app, id('API'), {
   instanceProfileName: instanceProfileName(ENVIRONMENT),
   deploymentsBucketName: CTECH_DEPLOYMENTS_BUCKET,
   logsBucketName: CTECH_LOGS_BUCKET,
+  tableStateArn: dynamoStack.tables.get('poker_table_state')!.tableArn,
+  actionLogArn: dynamoStack.tables.get('poker_action_log')!.tableArn,
+  actionGuardsArn: dynamoStack.tables.get('poker_action_guards')!.tableArn,
   description: `CTech Poker API (EC2 + ASG + ALB) - ${ENVIRONMENT}`,
 });

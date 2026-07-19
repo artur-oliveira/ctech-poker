@@ -19,6 +19,9 @@ test('synthesizes without error and declares exactly one ASG', () => {
     instanceProfileName: 'dev-ctech-poker-api-instance-profile',
     deploymentsBucketName: 'dev-ctech-deployments',
     logsBucketName: 'dev-ctech-application-logs',
+    tableStateArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_table_state',
+    actionLogArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_action_log',
+    actionGuardsArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_action_guards',
   });
   const template = Template.fromStack(stack);
   template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
