@@ -1,0 +1,88 @@
+name: Frontend
+
+on:
+  workflow_call:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-24.04-arm
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npx eslint src --ext .ts,.tsx --max-warnings 0
+
+      - name: Set environment
+        run: |
+          case "${GITHUB_REF#refs/heads/}" in
+            main)
+              ENVIRONMENT=prod
+              APP_HOST=poker.aoctech.app
+              ACCOUNT_HOST=accounts.aoctech.app
+              ;;
+            staging)
+              ENVIRONMENT=stage
+              APP_HOST=poker-stage.aoctech.app
+              ACCOUNT_HOST=accounts-stage.aoctech.app
+              ;;
+            *)
+              ENVIRONMENT=dev
+              APP_HOST=poker-dev.aoctech.app
+              ACCOUNT_HOST=accounts-dev.aoctech.app
+              ;;
+          esac
+          echo "ENVIRONMENT=$ENVIRONMENT" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_API_URL=https://$APP_HOST" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_CTECH_URL=https://$ACCOUNT_HOST" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_CTECH_CLIENT_ID=poker" >> "$GITHUB_ENV"
+
+      - name: Build static export
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::868899309401:role/ctech-poker-gha-frontend
+          aws-region: us-east-1
+
+      - name: Read stack outputs
+        run: |
+          STACK="CtechPoker-$(echo "$ENVIRONMENT" | sed 's/./\u&/')-Frontend"
+          OUTPUTS=$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs" --output json)
+          echo "S3_BUCKET=$(echo "$OUTPUTS" | jq -r '.[]|select(.OutputKey=="BucketName").OutputValue')" >> "$GITHUB_ENV"
+          echo "DISTRIBUTION_ID=$(echo "$OUTPUTS" | jq -r '.[]|select(.OutputKey=="DistributionId").OutputValue')" >> "$GITHUB_ENV"
+          echo "ROUTE_STORE_ARN=$(echo "$OUTPUTS" | jq -r '.[]|select(.OutputKey=="RouteStoreArn").OutputValue')" >> "$GITHUB_ENV"
+
+      - name: Sync immutable assets
+        run: >-
+          aws s3 sync out/ "s3://${S3_BUCKET}/" --delete
+          --cache-control "public, max-age=31536000, immutable"
+          --exclude "*.html" --exclude "*.json"
+
+      - name: Sync pages and metadata
+        run: >-
+          aws s3 sync out/ "s3://${S3_BUCKET}/" --delete
+          --cache-control "no-cache" --include "*.html" --include "*.json"
+
+      - name: Publish route manifest
+        run: ./scripts/publish-routes.sh "$ROUTE_STORE_ARN" out
+
+      - name: Invalidate CloudFront
+        run: aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*"
