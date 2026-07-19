@@ -5,10 +5,13 @@ package tablestore
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
@@ -17,7 +20,7 @@ func testClient(t *testing.T) *dynamodb.Client {
 	t.Helper()
 	cfg, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRegion("us-east-1"),
-		config.WithCredentialsProvider(aws.AnonymousCredentials{}),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("dummy", "dummy", "")),
 	)
 	if err != nil {
 		t.Fatalf("config: %v", err)
@@ -27,11 +30,14 @@ func testClient(t *testing.T) *dynamodb.Client {
 	})
 }
 
+func isolatedEnv() string { return fmt.Sprintf("tablestore_test_%d", time.Now().UnixNano()) }
+
 func TestSeedThenCommitThenLoad(t *testing.T) {
 	db := testClient(t)
-	s := NewStore(db, "test")
+	env := isolatedEnv()
+	s := NewStore(db, env)
 	ctx := context.Background()
-	mustCreateTestTables(ctx, t, db, "test")
+	mustCreateTestTables(ctx, t, db, env)
 
 	if err := s.SeedTable(ctx, "table-1", hand.State{Stage: hand.WaitingForPlayers}); err != nil {
 		t.Fatalf("SeedTable: %v", err)
@@ -57,9 +63,10 @@ func TestSeedThenCommitThenLoad(t *testing.T) {
 
 func TestCommitActionRejectsStaleVersion(t *testing.T) {
 	db := testClient(t)
-	s := NewStore(db, "test")
+	env := isolatedEnv()
+	s := NewStore(db, env)
 	ctx := context.Background()
-	mustCreateTestTables(ctx, t, db, "test")
+	mustCreateTestTables(ctx, t, db, env)
 
 	_ = s.SeedTable(ctx, "table-2", hand.State{Stage: hand.WaitingForPlayers})
 
@@ -71,9 +78,10 @@ func TestCommitActionRejectsStaleVersion(t *testing.T) {
 
 func TestCommitActionRejectsDuplicateActionID(t *testing.T) {
 	db := testClient(t)
-	s := NewStore(db, "test")
+	env := isolatedEnv()
+	s := NewStore(db, env)
 	ctx := context.Background()
-	mustCreateTestTables(ctx, t, db, "test")
+	mustCreateTestTables(ctx, t, db, env)
 
 	_ = s.SeedTable(ctx, "table-3", hand.State{Stage: hand.WaitingForPlayers})
 	entry := ActionLogEntry{TableID: "table-3", HandID: "hand-1", Version: 2, ActionID: "dup-1"}

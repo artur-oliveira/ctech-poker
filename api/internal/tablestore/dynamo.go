@@ -102,9 +102,13 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 		":handID":     &types.AttributeValueMemberS{Value: handID},
 		":state":      stateAV,
 	}
+	names := map[string]string{
+		"#version": "version",
+		"#state":   "state",
+	}
 	stateTx := s.state.BuildRawUpdateTxItem(tableID, nil,
-		"SET version = :newVersion, hand_id = :handID, state = :state",
-		"attribute_exists(pk) AND version = :expected", nil, values)
+		"SET #version = :newVersion, hand_id = :handID, #state = :state",
+		"attribute_exists(pk) AND #version = :expected", names, values)
 
 	logItem, err := dynamo.Encode(struct {
 		PK  string `dynamodbav:"pk"`

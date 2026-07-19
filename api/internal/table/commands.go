@@ -45,3 +45,31 @@ type SitOutCmd struct {
 }
 
 func (c SitOutCmd) reply() chan error { return c.Reply }
+
+type JoinCmd struct {
+	PlayerID string
+	Stack    int64
+	MaxSeats int
+	// MidHand is retained for wire compatibility with the Phase 3 service.
+	// The actor derives pending-entry status from its authoritative hand state
+	// instead of trusting this potentially stale lobby hint.
+	MidHand bool
+	Reply   chan error
+}
+
+func (c JoinCmd) reply() chan error { return c.Reply }
+
+type LeaveCmd struct {
+	PlayerID string
+	Stack    chan int64 // receives the player's final stack, only after the removal commits
+	Reply    chan error
+}
+
+func (c LeaveCmd) reply() chan error { return c.Reply }
+
+type PostBigBlindCmd struct {
+	PlayerID string
+	Reply    chan error
+}
+
+func (c PostBigBlindCmd) reply() chan error { return c.Reply }

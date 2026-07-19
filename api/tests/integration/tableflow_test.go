@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/cache"
@@ -22,7 +23,7 @@ import (
 func testDynamoClient(t *testing.T) *dynamodb.Client {
 	t.Helper()
 	cfg, err := config.LoadDefaultConfig(context.Background(),
-		config.WithRegion("us-east-1"), config.WithCredentialsProvider(aws.AnonymousCredentials{}))
+		config.WithRegion("us-east-1"), config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("dummy", "dummy", "")))
 	if err != nil {
 		t.Fatalf("config: %v", err)
 	}
@@ -58,8 +59,8 @@ func mustCreatePokerTables(t *testing.T, db *dynamodb.Client, env string) {
 func TestTwoInstancesRacingSameTableResolveDeterministically(t *testing.T) {
 	backend := cache.NewMemoryBackend(16)
 	db := testDynamoClient(t)
-	store := tablestore.NewStore(db, "test")
-	mustCreatePokerTables(t, db, "test")
+	store := tablestore.NewStore(db, "flow_test")
+	mustCreatePokerTables(t, db, "flow_test")
 
 	seed := func() *hand.Table {
 		return hand.NewTable([]*hand.Player{{ID: "p1", Stack: 1000}, {ID: "p2", Stack: 1000}}, 10, 20)
@@ -97,8 +98,8 @@ func TestTwoInstancesRacingSameTableResolveDeterministically(t *testing.T) {
 func TestFreshInstanceReadsCurrentStateWithNoReplayNeeded(t *testing.T) {
 	backend := cache.NewMemoryBackend(16)
 	db := testDynamoClient(t)
-	store := tablestore.NewStore(db, "test")
-	mustCreatePokerTables(t, db, "test")
+	store := tablestore.NewStore(db, "flow_test")
+	mustCreatePokerTables(t, db, "flow_test")
 
 	seed := func() *hand.Table {
 		return hand.NewTable([]*hand.Player{{ID: "p1", Stack: 1000}, {ID: "p2", Stack: 1000}}, 10, 20)

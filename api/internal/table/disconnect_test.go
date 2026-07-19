@@ -13,8 +13,8 @@ import (
 
 func TestDisconnectAutoFoldsAtActionDeadline(t *testing.T) {
 	db := testClient(t)
-	store := tablestore.NewStore(db, "test")
-	mustCreateTestTables(t, db, "test")
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
 	a := newTestActor(t, store)
 	a.actionDeadline = 20 * time.Millisecond
 

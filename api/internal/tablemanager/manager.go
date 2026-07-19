@@ -19,16 +19,21 @@ import (
 type Actor = table.Actor
 
 type Manager struct {
-	leases    *tablelease.Service
-	store     *tablestore.Store
-	broadcast func(tableID, viewerID string, snap hand.Snapshot)
+	leases         *tablelease.Service
+	store          *tablestore.Store
+	broadcast      func(tableID, viewerID string, snap hand.Snapshot)
+	onHandComplete func(tableID string, outcome hand.HandOutcome)
 
 	mu     sync.Mutex
 	actors map[string]*Actor
 }
 
-func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast func(string, string, hand.Snapshot)) *Manager {
-	return &Manager{leases: leases, store: store, broadcast: broadcast, actors: make(map[string]*Actor)}
+func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast func(string, string, hand.Snapshot), completion ...func(string, hand.HandOutcome)) *Manager {
+	var onHandComplete func(string, hand.HandOutcome)
+	if len(completion) > 0 {
+		onHandComplete = completion[0]
+	}
+	return &Manager{leases: leases, store: store, broadcast: broadcast, onHandComplete: onHandComplete, actors: make(map[string]*Actor)}
 }
 
 // GetOrCreateActor returns this instance's Actor for tableID, seeding the
@@ -36,7 +41,7 @@ func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast f
 // only invoked then). A failed best-effort lease acquire never blocks this —
 // it only means the resulting Actor re-reads DynamoDB before every command
 // instead of trusting its cache between commits.
-func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed func() *hand.Table) (*Actor, error) {
+func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed func() *hand.Table, onCreated ...func(*Actor)) (*Actor, error) {
 	m.mu.Lock()
 	if a, ok := m.actors[tableID]; ok {
 		m.mu.Unlock()
@@ -64,6 +69,11 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	}
 
 	actor := table.New(tableID, m.store, trustCache, m.broadcastFor(tableID))
+	actor.SetOnHandCompleteForActor(func(outcome hand.HandOutcome) {
+		if m.onHandComplete != nil {
+			m.onHandComplete(tableID, outcome)
+		}
+	})
 	if trustCache {
 		// Only cancelable when there's a real cancellation trigger (losing
 		// the lease); an Actor without cache-affinity runs for the process
@@ -78,6 +88,9 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	m.mu.Lock()
 	m.actors[tableID] = actor
 	m.mu.Unlock()
+	for _, hook := range onCreated {
+		hook(actor)
+	}
 	return actor, nil
 }
 

@@ -8,9 +8,12 @@ package table
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"time"
 
+	"gopkg.aoctech.app/poker/api/internal/engine/equity"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
 
@@ -34,6 +37,12 @@ type Actor struct {
 	disconnectedSince            map[string]time.Time
 	consecutiveDisconnectedHands map[string]int
 	deadlineTimer                *time.Timer
+	escalationInterval           time.Duration
+	escalationCfg                roomstore.BlindEscalation
+	done                         chan struct{}
+	equityEnabled                atomic.Bool
+	onHandComplete               func(hand.HandOutcome)
+	completedHandNotified        string
 }
 
 // New returns an Actor for tableID. trustCache should be true only when the
@@ -43,13 +52,16 @@ type Actor struct {
 // latency, not correctness — a stale cache is always caught by
 // CommitAction's version check regardless of trustCache).
 func New(id string, store *tablestore.Store, trustCache bool, broadcast func(string, hand.Snapshot)) *Actor {
-	return &Actor{
+	a := &Actor{
 		id: id, store: store, trustCache: trustCache, broadcast: broadcast, cmds: make(chan Command, 64),
+		done:                         make(chan struct{}),
 		actionDeadline:               30 * time.Second,
 		disconnectGrace:              45 * time.Second,
 		disconnectedSince:            make(map[string]time.Time),
 		consecutiveDisconnectedHands: make(map[string]int),
 	}
+	a.equityEnabled.Store(true)
+	return a
 }
 
 func (a *Actor) Dispatch(cmd Command) error {
@@ -58,6 +70,7 @@ func (a *Actor) Dispatch(cmd Command) error {
 }
 
 func (a *Actor) Run(ctx context.Context) {
+	defer close(a.done)
 	for {
 		select {
 		case <-ctx.Done():
@@ -81,9 +94,59 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleReconnect(c)
 	case SitOutCmd:
 		return a.handleSitOut(ctx, c)
+	case JoinCmd:
+		return a.handleJoin(ctx, c)
+	case LeaveCmd:
+		return a.handleLeave(ctx, c)
+	case PostBigBlindCmd:
+		return a.handlePostBigBlind(ctx, c)
+	case escalateCmd:
+		return a.handleEscalate(ctx)
 	default:
 		return nil
 	}
+}
+
+func (a *Actor) handlePostBigBlind(ctx context.Context, c PostBigBlindCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	apply := func() error {
+		a.cached.MarkReadyToPost(c.PlayerID)
+		return a.commit(ctx, "", nil)
+	}
+	err := apply()
+	if errors.Is(err, tablestore.ErrVersionConflict) {
+		if err := a.ensureLoaded(ctx, true); err != nil {
+			return err
+		}
+		err = apply()
+	}
+	if err == nil {
+		a.broadcastAll()
+	}
+	return err
+}
+
+func (a *Actor) handleEscalate(ctx context.Context) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	apply := func() error {
+		a.cached.EscalateBlindsForActor(a.escalationCfg.Multiplier, a.escalationCfg.Max)
+		return a.commit(ctx, "", nil)
+	}
+	err := apply()
+	if errors.Is(err, tablestore.ErrVersionConflict) {
+		if err := a.ensureLoaded(ctx, true); err != nil {
+			return err
+		}
+		err = apply()
+	}
+	if err == nil {
+		a.broadcastAll()
+	}
+	return err
 }
 
 // ensureLoaded reads current state from the store the first time this Actor
@@ -152,37 +215,59 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
-	err := a.applyActAndCommit(ctx, c)
+	completed, err := a.applyActAndCommit(ctx, c)
 	if errors.Is(err, tablestore.ErrVersionConflict) {
 		// See handleReady's identical rationale — retry exactly once.
 		if err := a.ensureLoaded(ctx, true); err != nil {
 			return err
 		}
-		err = a.applyActAndCommit(ctx, c)
+		completed, err = a.applyActAndCommit(ctx, c)
 	}
 	if err != nil && !errors.Is(err, tablestore.ErrDuplicateAction) {
 		return err
 	}
 	a.armActionDeadlineForCurrentTurn()
 	a.broadcastAll()
+	if completed {
+		a.notifyHandComplete()
+	}
 	return nil
 }
 
-// applyActAndCommit reports success (nil error) both when the action applied
-// and committed, and when it was already applied elsewhere (not applied
-// locally, or ErrDuplicateAction from the store) — handleAct treats both as
-// "nothing left to do but broadcast current state" and calls broadcastAll
-// exactly once itself, so this method never calls it.
-func (a *Actor) applyActAndCommit(ctx context.Context, c ActCmd) error {
+func (a *Actor) notifyHandComplete() {
+	if a.cached == nil || a.cached.Stage() != hand.Complete || a.handID == "" || a.completedHandNotified == a.handID {
+		return
+	}
+	if outcome := a.cached.LastOutcomeForActor(); outcome != nil {
+		a.completedHandNotified = a.handID
+		if a.onHandComplete != nil {
+			a.onHandComplete(*outcome)
+		}
+	}
+}
+
+// SetOnHandCompleteForActor installs the post-commit gamification hook.
+// The actor invokes it at most once per local hand ID.
+func (a *Actor) SetOnHandCompleteForActor(fn func(hand.HandOutcome)) { a.onHandComplete = fn }
+
+// applyActAndCommit returns completed=true only when this Actor successfully
+// committed the transition to Complete. A duplicate observed after another
+// instance won the conditional write therefore cannot emit gamification a
+// second time from this process.
+
+func (a *Actor) applyActAndCommit(ctx context.Context, c ActCmd) (bool, error) {
 	applied, err := a.cached.ActIdempotent(c.ActionID, c.PlayerID, c.Action, c.Amount)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if !applied {
-		return nil
+		return false, nil
 	}
 	entry := tablestore.ActionLogEntry{PlayerID: c.PlayerID, ActionID: c.ActionID, Action: string(c.Action), Amount: c.Amount}
-	return a.commit(ctx, c.ActionID, &entry)
+	if err := a.commit(ctx, c.ActionID, &entry); err != nil {
+		return false, err
+	}
+	return a.cached.Stage() == hand.Complete, nil
 }
 
 func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.ActionLogEntry) error {
@@ -224,6 +309,80 @@ func (a *Actor) handleSitOut(ctx context.Context, c SitOutCmd) error {
 	}
 	a.broadcastAll()
 	return nil
+}
+
+func (a *Actor) handleJoin(ctx context.Context, c JoinCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	if err := a.applyJoinAndCommit(ctx, c); err != nil {
+		if errors.Is(err, tablestore.ErrVersionConflict) {
+			if err := a.ensureLoaded(ctx, true); err != nil {
+				return err
+			}
+			if err := a.applyJoinAndCommit(ctx, c); err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+	a.broadcastAll()
+	return nil
+}
+
+func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
+	if c.MaxSeats > 0 && len(a.cached.PlayersForActor()) >= c.MaxSeats {
+		return errors.New("table: no seats available")
+	}
+	p := &hand.Player{ID: c.PlayerID, Stack: c.Stack}
+	stage := a.cached.Stage()
+	if stage != hand.WaitingForPlayers && stage != hand.Complete {
+		if err := a.cached.AddMidHandJoiner(p); err != nil {
+			return err
+		}
+	} else if err := a.cached.AddWaitingPlayer(p); err != nil {
+		return err
+	}
+	return a.commit(ctx, "", nil)
+}
+
+// handleLeave removes the player and reports their final stack on c.Stack —
+// but only after the removal has actually committed, so a caller (buyin's
+// CashOut) never credits a wallet for a leave that a version conflict or
+// store error ultimately rolled back. The stack is recomputed from the
+// freshly-reloaded a.cached on the retry (see applyLeaveAndCommit), never
+// carried over from the stale pre-conflict attempt.
+func (a *Actor) handleLeave(ctx context.Context, c LeaveCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	stack, err := a.applyLeaveAndCommit(ctx, c)
+	if errors.Is(err, tablestore.ErrVersionConflict) {
+		if err := a.ensureLoaded(ctx, true); err != nil {
+			return err
+		}
+		stack, err = a.applyLeaveAndCommit(ctx, c)
+	}
+	if err != nil {
+		return err
+	}
+	if c.Stack != nil {
+		c.Stack <- stack
+	}
+	a.broadcastAll()
+	return nil
+}
+
+func (a *Actor) applyLeaveAndCommit(ctx context.Context, c LeaveCmd) (int64, error) {
+	stack, err := a.cached.RemovePlayerForActor(c.PlayerID)
+	if err != nil {
+		return 0, err
+	}
+	if err := a.commit(ctx, "", nil); err != nil {
+		return 0, err
+	}
+	return stack, nil
 }
 
 // armActionDeadlineIfTheirTurn starts (or restarts) the auto-fold timer when
@@ -269,9 +428,45 @@ func (a *Actor) broadcastAll() {
 		return
 	}
 	for _, p := range a.cached.PlayersForActor() {
-		a.broadcast(p.ID, a.cached.ViewFor(p.ID))
+		snapshot := a.cached.ViewFor(p.ID)
+		if a.equityEnabled.Load() && equityStage(a.cached.Stage()) {
+			a.attachEquity(p.ID, &snapshot)
+		}
+		a.broadcast(p.ID, snapshot)
 	}
 }
+
+func equityStage(stage hand.Stage) bool {
+	return stage == hand.PreFlop || stage == hand.Flop || stage == hand.Turn || stage == hand.River
+}
+
+func (a *Actor) attachEquity(viewerID string, snapshot *hand.Snapshot) {
+	hole, board, ok := a.cached.HoleAndBoardForActor(viewerID)
+	if !ok {
+		return
+	}
+	opponents := 0
+	for _, seat := range snapshot.Seats {
+		if seat.PlayerID != viewerID && (seat.State == "active" || seat.State == "all_in") {
+			opponents++
+		}
+	}
+	if opponents == 0 {
+		return
+	}
+	estimate, err := equity.Estimate(hole, board, nil, opponents, 500)
+	if err != nil {
+		return
+	}
+	for i := range snapshot.Seats {
+		if snapshot.Seats[i].PlayerID == viewerID {
+			snapshot.Seats[i].Equity = &estimate
+			return
+		}
+	}
+}
+
+func (a *Actor) SetEquityEnabledForActor(enabled bool) { a.equityEnabled.Store(enabled) }
 
 func newHandID() string {
 	return timeNowFunc().Format("20060102T150405.000000000")

@@ -27,8 +27,8 @@ func newTestActor(t *testing.T, store *tablestore.Store) *Actor {
 
 func TestActorCommitsReadyThenAct(t *testing.T) {
 	db := testClient(t)
-	store := tablestore.NewStore(db, "test")
-	mustCreateTestTables(t, db, "test")
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
 	a := newTestActor(t, store)
 
 	reply := make(chan error, 1)
@@ -47,7 +47,7 @@ func TestActorCommitsReadyThenAct(t *testing.T) {
 
 	var seat string
 	for _, s := range stored.State.Players {
-		if s.State == hand.Active {
+		if hand.NewTableFromState(stored.State).CurrentPlayerCanActForActor(s.ID) {
 			seat = s.ID
 			break
 		}
@@ -65,8 +65,8 @@ func TestActorCommitsReadyThenAct(t *testing.T) {
 
 func TestActorRecoversFromVersionConflictAndRetriesOnce(t *testing.T) {
 	db := testClient(t)
-	store := tablestore.NewStore(db, "test")
-	mustCreateTestTables(t, db, "test")
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
 	a := newTestActor(t, store)
 
 	reply := make(chan error, 1)
@@ -79,7 +79,7 @@ func TestActorRecoversFromVersionConflictAndRetriesOnce(t *testing.T) {
 
 	var seat string
 	for _, s := range stored.State.Players {
-		if s.State == hand.Active {
+		if hand.NewTableFromState(stored.State).CurrentPlayerCanActForActor(s.ID) {
 			seat = s.ID
 			break
 		}

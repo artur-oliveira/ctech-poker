@@ -44,3 +44,18 @@ func TestGetOrCreateActorSucceedsEvenWhenLeaseIsHeldElsewhere(t *testing.T) {
 		t.Fatalf("expected GetOrCreateActor to still succeed without the lease, got actor=%v err=%v", a, err)
 	}
 }
+
+func TestGetOrCreateActorRunsHookOnlyForNewActor(t *testing.T) {
+	m := NewManager(nil, nil, nil)
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	created := 0
+	if _, err := m.GetOrCreateActor(context.Background(), "table-hook", seed, func(*Actor) { created++ }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.GetOrCreateActor(context.Background(), "table-hook", seed, func(*Actor) { created++ }); err != nil {
+		t.Fatal(err)
+	}
+	if created != 1 {
+		t.Fatalf("creation hook ran %d times, want 1", created)
+	}
+}
