@@ -68,6 +68,13 @@ type Table struct {
 	roundBaseline map[string]int64
 
 	payouts map[string]int64
+
+	// handOrder is the seat order of players dealt into the current (or
+	// most recently completed) hand — the same slice built as `active` in
+	// StartHand. Used at hand-end to rotate dealerSeat forward to the next
+	// player who actually played this hand, regardless of PendingEntry
+	// joiners appended to t.players since.
+	handOrder []*Player
 }
 
 func NewTable(players []*Player, smallBlind, bigBlind int64) *Table {
@@ -100,9 +107,14 @@ func (t *Table) AddMidHandJoiner(p *Player) {
 	t.players = append(t.players, p)
 }
 
-// StartHand begins a new hand: requires >=2 ready players, draws/rotates the
-// dealer button, posts blinds (heads-up special case: dealer posts small
-// blind), shuffles via commit-reveal, and deals hole cards.
+// StartHand begins a new hand: requires >=2 ready players, posts blinds
+// relative to dealerSeat (heads-up special case: dealer posts small blind),
+// shuffles via commit-reveal, and deals hole cards. dealerSeat itself is
+// rotated forward to the next seat at the END of each hand (see
+// rotateDealer, called from runShowdown) so the SECOND and later calls to
+// StartHand on the same Table use a new dealer. The very first hand's button
+// is NOT drawn by CSPRNG — it defaults to seat 0 (dealerSeat's zero value);
+// only rotation across hands is implemented.
 func (t *Table) StartHand() error {
 	readyCount := 0
 	for _, p := range t.players {
@@ -134,7 +146,8 @@ func (t *Table) StartHand() error {
 		active = append(active, p)
 	}
 
-	sbSeat, bbSeat := t.blindSeats(len(active))
+	t.handOrder = active
+	sbSeat, bbSeat := t.blindSeats(active)
 	t.postBlind(active[sbSeat], t.smallBlind)
 	t.postBlind(active[bbSeat], t.bigBlind)
 
@@ -149,14 +162,52 @@ func (t *Table) StartHand() error {
 	return nil
 }
 
-// blindSeats returns (smallBlindIdx, bigBlindIdx) relative to the active
-// players slice ordered starting at the dealer. Heads-up is a special case:
-// the dealer posts the small blind.
-func (t *Table) blindSeats(numActive int) (sb, bb int) {
+// blindSeats returns (smallBlindIdx, bigBlindIdx) as indices into active,
+// computed relative to dealerSeat's position within active. Heads-up is a
+// special case: the dealer posts the small blind. 3+-way: the two seats
+// clockwise after the dealer post small and big blind respectively.
+func (t *Table) blindSeats(active []*Player) (sb, bb int) {
+	dealerIdx := t.dealerIndexWithin(active)
+	numActive := len(active)
 	if numActive == 2 {
-		return 0, 1 // dealer (index 0 in this ordering) posts small blind
+		return dealerIdx, (dealerIdx + 1) % numActive
 	}
-	return 1, 2
+	return (dealerIdx + 1) % numActive, (dealerIdx + 2) % numActive
+}
+
+// dealerIndexWithin returns dealerSeat's player's position within list (by
+// pointer identity), defaulting to 0 if the dealer isn't present in list —
+// which also covers dealerSeat's zero value before the very first hand ever
+// sets it (seat 0 is the default first dealer).
+func (t *Table) dealerIndexWithin(list []*Player) int {
+	if t.dealerSeat < 0 || t.dealerSeat >= len(t.players) {
+		return 0
+	}
+	dealer := t.players[t.dealerSeat]
+	for i, p := range list {
+		if p == dealer {
+			return i
+		}
+	}
+	return 0
+}
+
+// rotateDealer advances dealerSeat to the next player (by table seat index)
+// who was actually dealt into the hand that just completed, wrapping around.
+// Called once a hand reaches Complete so the next StartHand call uses a new
+// dealer.
+func (t *Table) rotateDealer() {
+	if len(t.handOrder) == 0 {
+		return
+	}
+	idx := t.dealerIndexWithin(t.handOrder)
+	next := t.handOrder[(idx+1)%len(t.handOrder)]
+	for i, p := range t.players {
+		if p == next {
+			t.dealerSeat = i
+			return
+		}
+	}
 }
 
 func (t *Table) postBlind(p *Player, amount int64) {
@@ -293,12 +344,28 @@ func (t *Table) Act(playerID string, action betting.Action, amount int64) error 
 
 func (t *Table) advanceStage() {
 	remaining := 0
+	canStillAct := 0
 	for _, p := range t.players {
 		if p.State == Active || p.State == AllIn {
 			remaining++
+			if p.State == Active {
+				canStillAct++
+			}
 		}
 	}
 	if remaining <= 1 {
+		t.runShowdown()
+		return
+	}
+	// Two or more players are still in the hand, but at most one of them is
+	// NOT all-in — e.g. two players shoved pre-flop and everyone else folded
+	// or called all-in too. There's nobody left who could call Act to ever
+	// complete another betting round (a lone non-all-in player has no one to
+	// bet against), so dealing the next street and calling startBettingRound
+	// would hang the hand forever. Deal out the rest of the board in one go
+	// and go straight to showdown, same as a real all-in runout.
+	if canStillAct <= 1 {
+		t.runoutBoard()
 		t.runShowdown()
 		return
 	}
@@ -318,6 +385,28 @@ func (t *Table) advanceStage() {
 		return
 	}
 	t.startBettingRound(t.activePlayers(), 0, t.bigBlind)
+}
+
+// runoutBoard deals every remaining community card, from the current stage
+// through the river, without starting a betting round. Used once at most one
+// player can still act — there's nothing left to bet on, just cards left to
+// reveal before showdown.
+func (t *Table) runoutBoard() {
+	for t.stage != River {
+		switch t.stage {
+		case PreFlop:
+			t.board = append(t.board, t.dealCard(), t.dealCard(), t.dealCard())
+			t.stage = Flop
+		case Flop:
+			t.board = append(t.board, t.dealCard())
+			t.stage = Turn
+		case Turn:
+			t.board = append(t.board, t.dealCard())
+			t.stage = River
+		default:
+			return
+		}
+	}
 }
 
 func (t *Table) activePlayers() []*Player {
@@ -362,6 +451,25 @@ func (t *Table) runShowdown() {
 			}
 		}
 		if len(winners) == 0 {
+			// Every player who reached this layer's contribution level has
+			// since folded — there's no one left to award it to at
+			// showdown. These chips were never called by anyone still in
+			// the hand, so they aren't "won" or "lost": they go back to
+			// whoever put them in. layer.Eligible lists exactly the
+			// contributor(s) who reached this layer's boundary, and by
+			// construction (ComputeSidePots) each contributed the same
+			// amount into this specific layer, so an even split (with the
+			// odd chip to the first, same convention as a showdown win) is
+			// the correct refund.
+			n := int64(len(layer.Eligible))
+			share := layer.Amount / n
+			for _, id := range layer.Eligible {
+				payouts[id] += share
+			}
+			remainder := layer.Amount - share*n
+			if remainder > 0 {
+				payouts[layer.Eligible[0]] += remainder
+			}
 			continue
 		}
 		share := layer.Amount / int64(len(winners))
@@ -381,4 +489,5 @@ func (t *Table) runShowdown() {
 	}
 	t.payouts = payouts
 	t.stage = Complete
+	t.rotateDealer()
 }
