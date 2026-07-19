@@ -237,6 +237,16 @@ func (t *Table) currentPlayerCanAct(id string) bool {
 //     level unchanged for someone who already matched it) is really a check.
 //     Redirect it to Check so it correctly records the action instead of
 //     erroring on "nothing to call".
+//
+// Both redirects are silent — the return value gives no signal that the
+// requested action was reinterpreted. Both conditions depend only on chip
+// totals already fixed before the call (never on the amount argument), so
+// they can never misfire on a genuine client mistake: a real raise attempt
+// that could still reach CurrentBet, or a real call where money is actually
+// owed, always passes through unchanged and still surfaces betting.Round's
+// own error. A caller that wants to know when its literal intent (Raise vs.
+// Call, Call vs. Check) was reinterpreted must diff the action it requested
+// against the resulting PlayerState itself — Act does not report it.
 func (t *Table) Act(playerID string, action betting.Action, amount int64) error {
 	idx, ok := t.roundIdx[playerID]
 	if !ok {
