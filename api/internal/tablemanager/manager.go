@@ -64,10 +64,15 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	}
 
 	actor := table.New(tableID, m.store, trustCache, m.broadcastFor(tableID))
-	runCtx, cancel := context.WithCancel(context.Background())
-	go actor.Run(runCtx)
 	if trustCache {
+		// Only cancelable when there's a real cancellation trigger (losing
+		// the lease); an Actor without cache-affinity runs for the process
+		// lifetime regardless, same as this branch's counterpart below.
+		runCtx, cancel := context.WithCancel(context.Background())
+		go actor.Run(runCtx)
 		m.leases.StartHeartbeat(runCtx, tableID, func() { cancel() })
+	} else {
+		go actor.Run(context.Background())
 	}
 
 	m.mu.Lock()
