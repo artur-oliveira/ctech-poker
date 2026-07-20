@@ -27,7 +27,7 @@ func TestBuyInRequiresPokerTermsBeforeWalletDebit(t *testing.T) {
 	wallet := &gateWallet{}
 	players := player.NewService(unacceptedProfiles{})
 	svc := NewServiceWithPlayers(wallet, nil, nil, players)
-	err := svc.BuyIn(context.Background(), "room-1", "u1", 400, false)
+	err := svc.BuyIn(context.Background(), "room-1", "u1", 400, false, "")
 	if !errors.Is(err, player.ErrTermsNotAccepted) {
 		t.Fatalf("got %v", err)
 	}

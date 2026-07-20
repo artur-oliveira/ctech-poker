@@ -94,12 +94,3 @@ func (s *Store) ListPublic(ctx context.Context, limit int, startKeyToken string)
 	// callers but always returns "" today.
 	return out, "", nil
 }
-
-func (s *Store) SetStatus(ctx context.Context, roomID, status string) error {
-	sk := roomSK
-	_, err := s.base.UpdateItem(ctx, roomID, &sk, map[string]any{"status": status})
-	if err != nil {
-		return fmt.Errorf("roomstore: set status: %w", err)
-	}
-	return nil
-}

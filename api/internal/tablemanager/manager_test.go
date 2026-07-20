@@ -11,7 +11,7 @@ import (
 
 func TestGetOrCreateActorReturnsSameActorOnSecondCall(t *testing.T) {
 	backend := cache.NewMemoryBackend(16)
-	m := NewManager(tablelease.NewService(backend), nil, nil)
+	m := NewManager(tablelease.NewService(backend), nil, nil, nil)
 	ctx := context.Background()
 
 	seed := func() *hand.Table { return hand.NewTable([]*hand.Player{{ID: "p1", Stack: 1000}}, 10, 20) }
@@ -37,7 +37,7 @@ func TestGetOrCreateActorSucceedsEvenWhenLeaseIsHeldElsewhere(t *testing.T) {
 	}
 	defer release()
 
-	m := NewManager(leases, nil, nil)
+	m := NewManager(leases, nil, nil, nil)
 	seed := func() *hand.Table { return hand.NewTable([]*hand.Player{{ID: "p1", Stack: 1000}}, 10, 20) }
 	a, err := m.GetOrCreateActor(ctx, "table-2", seed)
 	if err != nil || a == nil {
@@ -46,7 +46,7 @@ func TestGetOrCreateActorSucceedsEvenWhenLeaseIsHeldElsewhere(t *testing.T) {
 }
 
 func TestGetOrCreateActorRunsHookOnlyForNewActor(t *testing.T) {
-	m := NewManager(nil, nil, nil)
+	m := NewManager(nil, nil, nil, nil)
 	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
 	created := 0
 	if _, err := m.GetOrCreateActor(context.Background(), "table-hook", seed, func(*Actor) { created++ }); err != nil {

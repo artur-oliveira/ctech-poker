@@ -22,8 +22,7 @@ func (s *Store) Increment(ctx context.Context, playerID, key string, by int) (in
 	}
 	// AtomicIncrement adds one and returns the linearized value. Deriving the
 	// previous value from it avoids the racy read-before-write in the plan.
-	sk := key
-	current, err := s.base.AtomicIncrement(ctx, playerID, &sk, "counter")
+	current, err := s.base.AtomicIncrement(ctx, playerID, new(key), "counter")
 	if err != nil {
 		return 0, 0, fmt.Errorf("achievements: increment: %w", err)
 	}

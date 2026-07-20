@@ -48,14 +48,6 @@ func (s *Service) Acquire(ctx context.Context, tableID string) (release func(), 
 	return s.Locker.Acquire(ctx, leaseKeyPrefix+tableID)
 }
 
-// Renew extends the TTL of a lease this process currently holds. Returns an
-// error if this process no longer holds it (e.g. it already expired and was
-// re-acquired elsewhere) — the caller (table server) must treat that as
-// "I've lost authority over this table" and stop processing immediately.
-func (s *Service) Renew(ctx context.Context, tableID string) error {
-	return s.Locker.Renew(ctx, leaseKeyPrefix+tableID)
-}
-
 // StartHeartbeat renews the lease for tableID on DefaultHeartbeatInterval
 // until the returned stop func is called or Renew fails (lease lost) — in
 // which case it calls onLost, if provided.

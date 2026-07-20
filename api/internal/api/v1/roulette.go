@@ -6,8 +6,8 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/roulette"
 )
 
-func RegisterRoulette(router fiber.Router, auth fiber.Handler, svc *roulette.Service) {
-	router.Post("/roulette/spin", auth, func(c fiber.Ctx) error {
+func RegisterRoulette(router fiber.Router, auth fiber.Handler, svc *roulette.Service, spinLimiter *RateLimiter) {
+	router.Post("/roulette/spin", auth, rateLimit(spinLimiter, ipKey("roulette:spin")), func(c fiber.Ctx) error {
 		amount, err := svc.Spin(c.Context(), c.Locals(localsUserID).(string))
 		if err != nil {
 			return problem.InternalServer("spin failed").Send(c)

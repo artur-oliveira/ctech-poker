@@ -39,24 +39,6 @@ func TestNewServiceAcquireAndRelease(t *testing.T) {
 	}
 }
 
-func TestNewServiceRenewWiresThrough(t *testing.T) {
-	svc := NewService(cache.NewMemoryBackend(16))
-	ctx := context.Background()
-
-	_, ok, err := svc.Acquire(ctx, "table-2")
-	if err != nil || !ok {
-		t.Fatalf("expected acquire to succeed, got ok=%v err=%v", ok, err)
-	}
-
-	if err := svc.Renew(ctx, "table-2"); err != nil {
-		t.Fatalf("renew failed: %v", err)
-	}
-
-	if err := svc.Renew(ctx, "table-never-acquired"); err == nil {
-		t.Fatal("expected renew to fail for a table this process never acquired")
-	}
-}
-
 func TestNewServiceStartHeartbeatWiresThrough(t *testing.T) {
 	svc := NewService(cache.NewMemoryBackend(16))
 	ctx := context.Background()

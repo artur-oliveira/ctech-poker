@@ -19,8 +19,8 @@ import (
 
 func testRoutes(app *fiber.App, cfg *config.Config) {
 	verifier := jwtverify.NewVerifier("", "", "", cache.NewMemoryBackend(1))
-	manager := tablemanager.NewManager(nil, nil, nil)
-	registerRoutes(app, cfg, nil, verifier, manager, ws.NewMemoryRegistry(), nil, (*buyin.Service)(nil), (*player.Service)(nil), (*leaderboard.Service)(nil), (*roulette.Service)(nil))
+	manager := tablemanager.NewManager(nil, nil, nil, nil)
+	registerRoutes(app, cfg, nil, verifier, manager, ws.NewMemoryRegistry(), nil, nil, (*buyin.Service)(nil), (*player.Service)(nil), (*leaderboard.Service)(nil), (*roulette.Service)(nil))
 }
 
 func TestLivenessEndpointReturnsOK(t *testing.T) {

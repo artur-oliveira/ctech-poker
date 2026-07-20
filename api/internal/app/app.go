@@ -30,6 +30,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
+	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/roulette"
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
@@ -109,30 +110,41 @@ func newFiberApp(cfg *config.Config) *fiber.App {
 	return app
 }
 
-func newCacheBackend(cfg *config.Config) cache.Backend {
+func newCacheBackend(cfg *config.Config) (cache.Backend, error) {
 	if cfg.RedisURL == "" {
-		return cache.NewMemoryBackend(1024)
+		if cfg.Env != "dev" {
+			return nil, fmt.Errorf("redis required in non-dev env: RedisURL is empty")
+		}
+		slog.Warn("redis URL empty; using in-memory cache (dev only, NOT fleet-shared)")
+		return cache.NewMemoryBackend(1024), nil
 	}
 	rb, err := cache.NewRedisBackend(cfg.RedisURL)
 	if err != nil {
-		slog.Error("redis backend unavailable, falling back to in-memory (NOT fleet-shared)", "err", err)
-		return cache.NewMemoryBackend(1024)
+		if cfg.Env != "dev" {
+			return nil, fmt.Errorf("redis backend unavailable in non-dev env: %w", err)
+		}
+		slog.Warn("redis backend unavailable, falling back to in-memory (dev only, NOT fleet-shared)", "err", err)
+		return cache.NewMemoryBackend(1024), nil
 	}
-	return rb
+	return rb, nil
 }
 
 func newVerifier(c cache.Backend, cfg *config.Config) *jwtverify.Verifier {
 	return jwtverify.NewVerifier(cfg.CtechJWKSURL, cfg.ServiceAudience, cfg.CtechURL, c)
 }
 
-func newWsRegistry(lc fx.Lifecycle, c cache.Backend) ws.Registry {
+func newWsRegistry(lc fx.Lifecycle, c cache.Backend, cfg *config.Config) (ws.Registry, error) {
 	rb, ok := c.(*cache.RedisBackend)
 	if !ok {
-		return ws.NewMemoryRegistry()
+		if cfg.Env != "dev" {
+			return nil, fmt.Errorf("ws registry requires a Redis backend in non-dev env")
+		}
+		slog.Warn("using in-memory ws registry (dev only, NOT fleet-shared)")
+		return ws.NewMemoryRegistry(), nil
 	}
 	reg := ws.NewRedisRegistry(rb.Client())
 	lc.Append(fx.Hook{OnStart: reg.Start, OnStop: reg.Stop})
-	return reg
+	return reg, nil
 }
 
 func newTableLeaseService(c cache.Backend) *tablelease.Service {
@@ -179,7 +191,7 @@ func newBuyinService(wallet *walletclient.Client, manager *tablemanager.Manager,
 	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players)
 }
 
-func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service) *tablemanager.Manager {
+func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		data, _ := json.Marshal(map[string]any{"type": "state", "snapshot": snap})
 		reg.Broadcast(context.Background(), tableID+"#"+viewerID, data)
@@ -201,7 +213,19 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 			slog.Error("leaderboard record hand failed", "table", tableID, "err", err)
 		}
 	}
-	return tablemanager.NewManager(leases, store, broadcast, onHandComplete)
+	// roomLoader re-arms blind escalation from the room's authoritative config
+	// on every actor creation (T6), so escalation survives instance/lease moves.
+	roomLoader := func(tableID string) (*roomstore.BlindEscalation, bool, error) {
+		r, err := rooms.Get(context.Background(), tableID)
+		if err != nil {
+			return nil, false, err
+		}
+		if r == nil || r.BlindEscalation == nil {
+			return nil, false, nil
+		}
+		return r.BlindEscalation, true, nil
+	}
+	return tablemanager.NewManager(leases, store, broadcast, roomLoader, onHandComplete)
 }
 
 func roomBackedSeed(rooms *roomstore.Store) func(string) func() *hand.Table {
@@ -214,15 +238,13 @@ func roomBackedSeed(rooms *roomstore.Store) func(string) func() *hand.Table {
 			if err != nil || room == nil {
 				return hand.NewTable(nil, 10, 20)
 			}
-			table := hand.NewTable(nil, room.SmallBlind, room.BigBlind)
-			table.ConfigureRake(room.CurrencyMode)
-			return table
+			return table.SeedForRoom(room)
 		}
 	}
 }
 
-func registerRoutes(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier *jwtverify.Verifier, manager *tablemanager.Manager, reg ws.Registry, rooms *roomstore.Store, buyinSvc *buyin.Service, players *player.Service, leaderboardSvc *leaderboard.Service, rouletteSvc *roulette.Service) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), rooms, buyinSvc, players, leaderboardSvc, rouletteSvc)
+func registerRoutes(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier *jwtverify.Verifier, manager *tablemanager.Manager, reg ws.Registry, cacheBackend cache.Backend, rooms *roomstore.Store, buyinSvc *buyin.Service, players *player.Service, leaderboardSvc *leaderboard.Service, rouletteSvc *roulette.Service) {
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), rooms, buyinSvc, players, leaderboardSvc, rouletteSvc, cacheBackend)
 }
 
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config) {
