@@ -17,7 +17,7 @@ import {
 
   domainForEnv,
   instanceProfileName,
-  SSM_POKER,
+  SSM_POKER, ACCOUNTS_API_DOMAIN_PREFIX,
 } from '../lib/constants';
 import {OidcStack} from "../lib/oidc-stack";
 
@@ -74,7 +74,7 @@ new PokerApiStack(app, id('API'), {
   vpcId: CTECH_VPC_ID,
   domainName: domainForEnv(ENVIRONMENT, API_DOMAIN_PREFIX),
   appDomainName: domainForEnv(ENVIRONMENT, APP_DOMAIN_PREFIX),
-  authDomainName: domainForEnv(ENVIRONMENT, ACCOUNTS_DOMAIN_PREFIX),
+  authDomainName: domainForEnv(ENVIRONMENT, ACCOUNTS_API_DOMAIN_PREFIX),
   instanceProfileName: instanceProfileName(ENVIRONMENT),
   deploymentsBucketName: CTECH_DEPLOYMENTS_BUCKET,
   logsBucketName: CTECH_LOGS_BUCKET,

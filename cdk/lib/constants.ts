@@ -26,6 +26,7 @@ export const BASE_DOMAIN = 'aoctech.app';
 /** ALB (api) host prefix. */
 export const API_DOMAIN_PREFIX = 'poker-api';
 export const APP_DOMAIN_PREFIX = 'poker';
+export const ACCOUNTS_API_DOMAIN_PREFIX = 'accounts-api';
 export const ACCOUNTS_DOMAIN_PREFIX = 'accounts';
 export const API_PATH_PATTERNS = ['/v1.0/*'];
 
