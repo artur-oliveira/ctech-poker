@@ -88,13 +88,13 @@ function TableContent() {
           href="/lobby"><ChevronLeft/> Lobby
         </Link>
         <span>{STAGE_LABELS[s.stage] || s.stage.replaceAll('_', ' ')}</span>
-        <i className={`connection-state ${rt.status}`}>
-          <Wifi/> {rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}
-        </i>
+        <span className={`connection-state ${rt.status}`}>
+          <Wifi aria-hidden="true"/> {rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}
+        </span>
       </header>
-      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{rt.announcement}</div>
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-        {rt.status === 'connected' ? 'Conexão com a mesa restaurada.' : connectionMessage}
+        {[rt.announcement, rt.status === 'connected' ? 'Conexão com a mesa restaurada.' : connectionMessage]
+          .filter(Boolean).join(' ')}
       </div>
       {connectionMessage && <div className={`reconnect-notice ${rt.status}`}>
         <span aria-hidden="true"/><p>{connectionMessage}{rt.reconnectAttempt > 1 ? ` Tentativa ${rt.reconnectAttempt}.` : ''}</p>

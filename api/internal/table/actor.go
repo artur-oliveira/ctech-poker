@@ -123,7 +123,7 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 	case DisconnectCmd:
 		return a.handleDisconnect(c)
 	case ReconnectCmd:
-		return a.handleReconnect(c)
+		return a.handleReconnect(ctx, c)
 	case SitOutCmd:
 		return a.handleSitOut(ctx, c)
 	case JoinCmd:
@@ -317,7 +317,10 @@ func (a *Actor) handleDisconnect(c DisconnectCmd) error {
 	return nil
 }
 
-func (a *Actor) handleReconnect(c ReconnectCmd) error {
+func (a *Actor) handleReconnect(ctx context.Context, c ReconnectCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
 	delete(a.disconnectedSince, c.PlayerID)
 	if a.deadlineTimer != nil {
 		a.deadlineTimer.Stop()
