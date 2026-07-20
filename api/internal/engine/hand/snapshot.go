@@ -7,11 +7,24 @@ import "gopkg.aoctech.app/poker/api/internal/engine/deck"
 // player's hole cards" a single-source-of-truth guarantee instead of a
 // convention every caller has to remember.
 type Snapshot struct {
-	Stage   string           `json:"stage"`
-	Board   []string         `json:"board"`
-	Seats   []SeatView       `json:"seats"`
-	Payouts map[string]int64 `json:"payouts,omitempty"`
-	Rake    int64            `json:"rake,omitempty"`
+	Stage          string        `json:"stage"`
+	Board          []string      `json:"board"`
+	Seats          []SeatView    `json:"seats"`
+	Payouts        map[string]int64 `json:"payouts,omitempty"`
+	Rake           int64         `json:"rake,omitempty"`
+	CurrentPlayerID string       `json:"current_player_id,omitempty"`
+	LegalActions   *LegalActions `json:"legal_actions,omitempty"`
+}
+
+// LegalActions is the authoritative set of moves the viewer may make right
+// now, with the chip math the UI needs to render the raise control. The server
+// is the single source of truth — the client must not derive these itself.
+type LegalActions struct {
+	Actions    []string `json:"actions"`     // subset of fold|check|call|raise
+	CallAmount int64    `json:"call_amount"` // chips owed to call (0 when a check is available)
+	MinRaiseTo int64    `json:"min_raise_to"` // smallest total bet a raise may reach
+	MaxRaiseTo int64    `json:"max_raise_to"` // largest total bet (all-in): viewer stack + already contributed
+	Step       int64    `json:"step"`         // raise increment for the + / - stepper
 }
 
 type SeatView struct {
@@ -84,13 +97,87 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		}
 		seats = append(seats, sv)
 	}
+	current := t.currentPlayerToAct()
 	return Snapshot{
-		Stage:   stageNames[t.stage],
-		Board:   boardCodes(t.board),
-		Seats:   seats,
-		Payouts: t.payouts,
-		Rake:    t.rakeCollected,
+		Stage:          stageNames[t.stage],
+		Board:          boardCodes(t.board),
+		Seats:          seats,
+		Payouts:        t.payouts,
+		Rake:           t.rakeCollected,
+		CurrentPlayerID: current,
+		LegalActions:   t.legalActionsFor(viewerID, current),
 	}
+}
+
+// isBettingStage reports whether the hand is in a street where a player may
+// act (waiting/complete/showdown are not).
+func isBettingStage(s Stage) bool {
+	return s == PreFlop || s == Flop || s == Turn || s == River
+}
+
+// currentPlayerToAct returns the ID of the single player who must act now, or
+// "" when no decision is pending (waiting, complete, or between stages).
+func (t *Table) currentPlayerToAct() string {
+	if !isBettingStage(t.stage) || t.round == nil {
+		return ""
+	}
+	for _, p := range t.players {
+		if t.currentPlayerCanAct(p.ID) {
+			return p.ID
+		}
+	}
+	return ""
+}
+
+// legalActionsFor returns the authoritative moves viewerID may make given the
+// current round. It is only populated on the viewer's actual turn during a
+// betting street; otherwise it is an empty (but present) structure during a
+// betting street and nil between hands, so the client never falls back to its
+// own (non-authoritative) legality guess.
+func (t *Table) legalActionsFor(viewerID, current string) *LegalActions {
+	if !isBettingStage(t.stage) || t.round == nil {
+		return nil
+	}
+	if current != viewerID {
+		return &LegalActions{}
+	}
+	idx, ok := t.roundIdx[viewerID]
+	if !ok {
+		return &LegalActions{}
+	}
+	bs := t.round.Players[idx]
+	if bs.Folded || bs.AllIn {
+		return &LegalActions{}
+	}
+	la := &LegalActions{Actions: []string{"fold"}}
+	owed := t.round.CurrentBet - bs.Contributed
+	if owed <= 0 {
+		la.Actions = append(la.Actions, "check")
+	} else {
+		la.Actions = append(la.Actions, "call")
+		la.CallAmount = owed
+	}
+	// A raise is available only if the viewer has not yet acted since the last
+	// full raise AND still has enough chips to exceed the current bet.
+	canRaise := !bs.ActedSinceLastFullRaise && bs.Contributed+bs.Stack > t.round.CurrentBet
+	if canRaise {
+		la.Actions = append(la.Actions, "raise")
+		minRaiseTo := t.round.CurrentBet + t.round.MinRaise
+		if minRaiseTo <= t.round.CurrentBet {
+			minRaiseTo = t.round.CurrentBet + t.bigBlind
+		}
+		maxTo := bs.Contributed + bs.Stack
+		if minRaiseTo > maxTo {
+			minRaiseTo = maxTo
+		}
+		la.MinRaiseTo = minRaiseTo
+		la.MaxRaiseTo = maxTo
+		la.Step = t.round.MinRaise
+		if la.Step <= 0 {
+			la.Step = t.bigBlind
+		}
+	}
+	return la
 }
 
 // playerToActForTest returns the ID of whichever player currentPlayerCanAct

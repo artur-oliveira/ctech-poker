@@ -132,6 +132,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleLeave(ctx, c)
 	case PostBigBlindCmd:
 		return a.handlePostBigBlind(ctx, c)
+	case SnapshotCmd:
+		return a.handleSnapshot(ctx, c)
 	case autoFoldCheckCmd:
 		return a.handleAutoFoldCheck(ctx, c)
 	case escalateCmd:
@@ -153,6 +155,17 @@ func (a *Actor) handlePostBigBlind(ctx context.Context, c PostBigBlindCmd) error
 		return err
 	}
 	a.broadcastAll()
+	return nil
+}
+
+// handleSnapshot loads the table (seeding on first touch) and returns the
+// viewer-specific snapshot. Built inside Run so it never races broadcastAll's
+// concurrent ViewFor calls over a.cached.
+func (a *Actor) handleSnapshot(ctx context.Context, c SnapshotCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	c.Snapshot <- a.cached.ViewFor(c.PlayerID)
 	return nil
 }
 

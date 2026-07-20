@@ -92,6 +92,26 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 			return err
 		}
 	}
+
+	actor, err := s.manager.GetOrCreateActor(ctx, roomID, s.seedFor(ctx, roomID))
+	if err != nil || actor == nil {
+		return fmt.Errorf("buyin: table unavailable: %w", err)
+	}
+
+	// Idempotent re-join guard: check the seat BEFORE the debit. If the player
+	// is already seated there is nothing to charge or seat — return success
+	// without touching the wallet. This is what makes a retried join (or an
+	// SPA re-mount) safe: it can never double-charge, and it can never re-seat
+	// a cashed-out player with chips whose debit was swallowed by the wallet's
+	// per-key idempotency.
+	seated, err := s.isSeated(actor, playerID)
+	if err != nil {
+		return fmt.Errorf("buyin: seat check: %w", err)
+	}
+	if seated {
+		return nil
+	}
+
 	// Stable per (room, player) key so a retried request cannot double-debit.
 	// Repeat rebuys are not allowed; a genuine rebuy carries a fresh client
 	// nonce, which becomes a distinct key. When the caller passes nothing we
@@ -105,23 +125,43 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 		return fmt.Errorf("buyin: debit: %w", err)
 	}
 
-	actor, err := s.manager.GetOrCreateActor(ctx, roomID, s.seedFor(ctx, roomID))
-	if err != nil || actor == nil {
-		if refundErr := s.wallet.Credit(ctx, playerID, amount, idemKey+":refund", "poker_buyin_refund"); refundErr != nil {
-			return fmt.Errorf("buyin: table unavailable AND refund failed (manual reconciliation needed): actor=%v refund=%w", err, refundErr)
-		}
-		return fmt.Errorf("buyin: table unavailable, debit refunded: %w", err)
-	}
-
 	reply := make(chan error, 1)
 	joinErr := actor.Dispatch(table.JoinCmd{PlayerID: playerID, Stack: amount, MaxSeats: maxSeats, MidHand: midHand, Reply: reply})
 	if joinErr != nil {
+		// Already seated (e.g. a concurrent join won the race) is an idempotent
+		// success, not a failure — never refund a debit that bought a real seat.
+		if errors.Is(joinErr, hand.ErrAlreadySeated) {
+			return nil
+		}
 		if refundErr := s.wallet.Credit(ctx, playerID, amount, idemKey+":refund", "poker_buyin_refund"); refundErr != nil {
 			return fmt.Errorf("buyin: seat failed AND refund failed (manual reconciliation needed): seat=%v refund=%w", joinErr, refundErr)
 		}
 		return fmt.Errorf("buyin: seat failed, debit refunded: %w", joinErr)
 	}
 	return nil
+}
+
+// isSeated reports whether playerID already has a seat at the table. It reads
+// the current viewer snapshot from the actor's Run goroutine (hand.Table has
+// no lock), so it is safe to call concurrently with the actor's own
+// broadcastAll.
+func (s *Service) isSeated(actor *table.Actor, playerID string) (bool, error) {
+	snapCh := make(chan hand.Snapshot, 1)
+	reply := make(chan error, 1)
+	if err := actor.Dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: reply}); err != nil {
+		return false, err
+	}
+	select {
+	case snap := <-snapCh:
+		for _, seat := range snap.Seats {
+			if seat.PlayerID == playerID {
+				return true, nil
+			}
+		}
+		return false, nil
+	default:
+		return false, nil
+	}
 }
 
 // CashOut removes playerID from roomID's live table and credits their final

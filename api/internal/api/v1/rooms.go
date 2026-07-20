@@ -11,9 +11,9 @@ import (
 	"gopkg.aoctech.app/api-commons/dynamo"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
-	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
+	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 )
 
@@ -203,7 +203,8 @@ func (h *roomHandlers) ready(c fiber.Ctx) error {
 	return problem.NotImplemented("use the table WebSocket's ready message").Send(c)
 }
 
-func newRoomID() string    { var b [16]byte; _, _ = rand.Read(b[:]); return hex.EncodeToString(b[:]) }
+func newRoomID() string { var b [16]byte; _, _ = rand.Read(b[:]); return hex.EncodeToString(b[:]) }
+
 // 6 random bytes = 12 hex chars: still typeable, but too sparse to brute-force
 // online against GET /rooms/code/:code.
 func newShareCode() string { var b [6]byte; _, _ = rand.Read(b[:]); return fmt.Sprintf("%X", b) }

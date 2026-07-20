@@ -208,6 +208,20 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 			send(map[string]any{"type": "connected", "conn_id": connID})
 			slog.Info("table ws connected", "table", tableID, "player", playerID, "conn", connID)
 
+			// Push the current table state to this connection immediately. The
+			// actor only broadcasts on a state mutation, so a fresh socket would
+			// otherwise sit on ping/pong until the next action (leaving the
+			// client stuck on the loading screen). Sent directly to this conn —
+			// not via the fan-out registry — so it reaches the viewer even when
+			// they are not yet seated (spectator / pre-join).
+			snapCh := make(chan hand.Snapshot, 1)
+			snapReply := make(chan error, 1)
+			if err := dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: snapReply}); err == nil {
+				if snap, ok := <-snapCh; ok {
+					send(map[string]any{"type": "state", "snapshot": snap})
+				}
+			}
+
 			limiter := newSeatLimiter(10) // 10 actions/sec/seat — generous for a human, tight for a script
 			done := make(chan struct{})
 			go startHeartbeat(conn, done, wsPingInterval, wsPongWait)

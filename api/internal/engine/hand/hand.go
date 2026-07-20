@@ -7,6 +7,7 @@ package hand
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
@@ -14,6 +15,12 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/handeval"
 	"gopkg.aoctech.app/poker/api/internal/engine/sidepots"
 )
+
+// ErrAlreadySeated is returned by AddWaitingPlayer/AddMidHandJoiner when the
+// player is already at the table. Callers (buyin.BuyIn) treat it as a
+// successful no-op rather than an error, so a retried join cannot double-spend
+// or fire a spurious refund.
+var ErrAlreadySeated = errors.New("hand: already seated")
 
 type PlayerState uint8
 
@@ -180,7 +187,7 @@ func (t *Table) playerByID(id string) *Player {
 // big blind on the hand they're first dealt into (handled in StartHand).
 func (t *Table) AddMidHandJoiner(p *Player) error {
 	if t.playerByID(p.ID) != nil {
-		return fmt.Errorf("hand: player %s is already seated", p.ID)
+		return fmt.Errorf("%w: player %s", ErrAlreadySeated, p.ID)
 	}
 	p.State = PendingEntry
 	t.players = append(t.players, p)
@@ -211,7 +218,7 @@ func (t *Table) AddWaitingPlayer(p *Player) error {
 		return fmt.Errorf("hand: cannot add a waiting player while a hand is in progress, use AddMidHandJoiner")
 	}
 	if t.playerByID(p.ID) != nil {
-		return fmt.Errorf("hand: player %s is already seated", p.ID)
+		return fmt.Errorf("%w: player %s", ErrAlreadySeated, p.ID)
 	}
 	t.players = append(t.players, p)
 	return nil

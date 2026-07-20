@@ -1,6 +1,9 @@
 package table
 
-import "gopkg.aoctech.app/poker/api/internal/engine/betting"
+import (
+	"gopkg.aoctech.app/poker/api/internal/engine/betting"
+	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+)
 
 // Command is anything the Actor's Run loop can process.
 type Command interface {
@@ -73,6 +76,20 @@ type PostBigBlindCmd struct {
 }
 
 func (c PostBigBlindCmd) reply() chan error { return c.Reply }
+
+// SnapshotCmd asks the actor for the current viewer-specific table state. It
+// is how the WS gateway pushes the initial snapshot to a freshly connected
+// socket: broadcasts only fire on a state mutation (broadcastAll), so without
+// this a new connection would sit on ping/pong until the next action. The
+// snapshot is built inside Run (hand.Table has no lock) and handed back on the
+// Snapshot channel; Reply carries the usual command error.
+type SnapshotCmd struct {
+	PlayerID string
+	Snapshot chan hand.Snapshot
+	Reply    chan error
+}
+
+func (c SnapshotCmd) reply() chan error { return c.Reply }
 
 // autoFoldCheckCmd is dispatched by the auto-fold timer (a time.AfterFunc
 // goroutine) so that all actor-map mutations happen inside Run, never from the

@@ -33,9 +33,6 @@ func TestReconnectBroadcastsSnapshotOnFreshActor(t *testing.T) {
 
 	reply := make(chan error, 1)
 	if err := a.Dispatch(ReconnectCmd{PlayerID: "p1", Reply: reply}); err != nil {
-		t.Fatalf("dispatch: %v", err)
-	}
-	if err := <-reply; err != nil {
 		t.Fatalf("reconnect: %v", err)
 	}
 

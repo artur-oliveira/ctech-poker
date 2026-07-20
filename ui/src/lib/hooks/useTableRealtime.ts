@@ -6,6 +6,7 @@ import {useWebSocket, type WSStatus} from '@aoctech/ws-client';
 import {MockTableService, USE_MOCK, type MockScenario} from '@/lib/mock';
 import type {PokerAction, ServerMessage, TableSnapshot} from '@/lib/api/table'
 import {playerName} from '@/lib/utils'
+import {getRoom, joinRoom} from '@/lib/api/rooms'
 
 export type ConnectionStatus = WSStatus
 export type ActionError = { code: string; message: string }
@@ -140,6 +141,31 @@ export function useTableRealtime(id: string, viewerId?: string, mockOptions?: {s
       if (mockService.current === service) mockService.current = null;
     };
   }, [id, mockDelay, mockScenario, receive]);
+
+  // Seat the player the moment they open a table. The lobby only navigates to
+  // /table — it never calls joinRoom — so without this the WS client is an
+  // un-seated viewer: the server never broadcasts state to it and "Estou
+  // pronto" is a no-op. BuyIn is idempotent for an already-seated player, so
+  // re-mounts (incl. React StrictMode in dev) are safe and never double-charge.
+  useEffect(() => {
+    if (USE_MOCK || !id || !getAccessToken()) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const room = await getRoom(id);
+        if (cancelled) return;
+        const bb = room.big_blind > 0 ? room.big_blind : 1;
+        const mid = Math.round((room.buy_in_min + room.buy_in_max) / 2 / bb) * bb;
+        const amount = Math.min(room.buy_in_max, Math.max(room.buy_in_min, mid));
+        await joinRoom(id, amount);
+      } catch {
+        // Terms-not-accepted (403) and other failures are non-fatal here: the
+        // table still renders from the initial snapshot; the player just can't
+        // act until they join through the normal flow.
+      }
+    })();
+    return () => { cancelled = true };
+  }, [id]);
 
   const send = useCallback((value: object) => USE_MOCK ? Boolean(mockService.current?.send(value as Record<string, unknown>)) : wsSend(value), [wsSend]);
   const retryNow = useCallback(() => USE_MOCK ? mockService.current?.reconnect() : wsRetryNow(), [wsRetryNow]);
