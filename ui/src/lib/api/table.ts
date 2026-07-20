@@ -7,10 +7,22 @@ export interface SeatView {
   equity?: number
 }
 
+export type PokerAction = 'fold' | 'check' | 'call' | 'raise'
+
+export interface LegalActionState {
+  actions: PokerAction[];
+  call_amount?: number;
+  min_raise_to?: number;
+  max_raise_to?: number;
+  step?: number
+}
+
 export interface TableSnapshot {
   stage: string;
   board: string[];
   seats: SeatView[];
+  current_player_id?: string;
+  legal_actions?: LegalActionState;
   payouts?: Record<string, number>;
   rake?: number
 }
@@ -21,5 +33,7 @@ export type ServerMessage = {
   key?: string;
   stars?: number;
   player_id?: string;
-  message?: string
+  message?: string;
+  code?: string;
+  action_id?: string
 }

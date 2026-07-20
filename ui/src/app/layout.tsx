@@ -1,4 +1,4 @@
-import type {Metadata} from 'next'
+import type {Metadata, Viewport} from 'next'
 import {QueryProvider} from '@/lib/providers/QueryProvider'
 import './globals.css'
 
@@ -45,6 +45,11 @@ export const metadata: Metadata = {
     googleBot: {index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1, 'max-video-preview': -1}
   },
   category: 'games',
+}
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover'
 }
 export default function Layout({children}: { children: React.ReactNode }) {
   return <html lang="pt-BR" suppressHydrationWarning>

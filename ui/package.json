@@ -4,12 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3003",
+    "dev:mock": "NEXT_PUBLIC_MOCK_API=true next dev --port 3003",
     "build": "next build",
     "lint": "eslint"
   },
   "dependencies": {
     "@aoctech/auth-client": "^1.1.0",
-    "@aoctech/ws-client": "^1.0.0",
+    "@aoctech/ws-client": "^1.1.0",
     "@base-ui/react": "^1.6.0",
     "@hookform/resolvers": "^5.4.0",
     "@tanstack/react-query": "^5.101.2",

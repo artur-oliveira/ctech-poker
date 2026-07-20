@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-19T00:00:00-03:00",
+  "title": "Design System: CTech Poker",
+  "extensions": {
+    "colorMeta": {
+      "brand": { "role": "primary", "displayName": "Table Red", "canonical": "#af2a2f" },
+      "brand-bright": { "role": "primary", "displayName": "Bright Table Red", "canonical": "#d9464d" },
+      "wine": { "role": "neutral", "displayName": "Deep Wine", "canonical": "#5b1218" },
+      "ink": { "role": "neutral", "displayName": "Night Ink", "canonical": "#120d0e" },
+      "paper": { "role": "neutral", "displayName": "Card Paper", "canonical": "#f6f0e7" },
+      "gold": { "role": "secondary", "displayName": "Chip Gold", "canonical": "#e6b85c" },
+      "felt": { "role": "secondary", "displayName": "Table Felt", "canonical": "#0d5b45" },
+      "muted-rose": { "role": "neutral", "displayName": "Muted Rose", "canonical": "#ad9fa0" },
+      "text-secondary": { "role": "neutral", "displayName": "Text Secondary", "canonical": "#cbbfc0" },
+      "felt-text": { "role": "neutral", "displayName": "Felt Text", "canonical": "#e3f1ea" },
+      "success": { "role": "semantic", "displayName": "Success Green", "canonical": "#48c98c" },
+      "danger": { "role": "semantic", "displayName": "Destructive Red", "canonical": "#dc2626" },
+      "focus-ring": { "role": "semantic", "displayName": "Focus Ring", "canonical": "#ed777c" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Lobby / landing titles only." },
+      "title": { "displayName": "Title", "purpose": "Dialogs, panels, prominent lobby values." },
+      "body": { "displayName": "Body", "purpose": "Instructions, chat, descriptions; 65–75ch lines." },
+      "label": { "displayName": "Label", "purpose": "Buttons, form labels, navigation, action controls." },
+      "mono": { "displayName": "Mono Readout", "purpose": "Pots, stakes, timers, equity, compact state; tabular-nums." }
+    },
+    "shadows": [
+      { "name": "table-depth", "value": "0 30px 80px #000, inset 0 0 0 4px #b0774a", "purpose": "Outer rail only." },
+      { "name": "felt-depth", "value": "inset 0 0 70px #001f18", "purpose": "Playing surface only." },
+      { "name": "seat-lift", "value": "0 4px 8px #0009", "purpose": "Player seats; compact, no wide halo." },
+      { "name": "viewer-signal", "value": "0 0 0 3px #af2a2f40", "purpose": "Local player's seat / active identity." },
+      { "name": "overlay", "value": "0 30px 100px #000", "purpose": "Dialogs and high-priority overlays." },
+      { "name": "transient-feedback", "value": "0 15px 50px #0008", "purpose": "Achievement and result toasts." }
+    ],
+    "motion": [
+      { "name": "ease-out-quart", "value": "cubic-bezier(.25, 1, .5, 1)", "purpose": "Default state transitions, 150–250ms." },
+      { "name": "ease-out-quint", "value": "cubic-bezier(.22, 1, .36, 1)", "purpose": "Reconnect notice, wager-in." },
+      { "name": "ease-out-expo", "value": "cubic-bezier(.16, 1, .3, 1)", "purpose": "Card deal / reveal, winner confirm." }
+    ],
+    "breakpoints": [
+      { "name": "table-md", "value": "900px" },
+      { "name": "table-sm", "value": "600px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Table Red fill, white label, 12px radius, 40px tall. One main decision per group.",
+      "html": "<button class=\"ds-btn-primary\">Entrar</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #af2a2f; color: #fff; border: 0; border-radius: 12px; height: 40px; padding: 0 16px; font: 600 14px/1 'Geist', system-ui, sans-serif; cursor: pointer; transition: background-color 180ms cubic-bezier(.25,1,.5,1), transform 120ms cubic-bezier(.25,1,.5,1); } .ds-btn-primary:hover { background: #d9464d; } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: 3px solid #ed777c; outline-offset: 2px; } .ds-btn-primary:disabled { opacity: .5; pointer-events: none; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Translucent white well, white text, 1px hairline. Secondary table actions.",
+      "html": "<button class=\"ds-btn-outline\">Desistir</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #ffffff0d; color: #fff; border: 1px solid #ffffff24; border-radius: 12px; height: 40px; padding: 0 16px; font: 600 14px/1 'Geist', system-ui, sans-serif; cursor: pointer; transition: background-color 180ms cubic-bezier(.25,1,.5,1); } .ds-btn-outline:hover { background: #ffffff1a; } .ds-btn-outline:focus-visible { outline: 3px solid #ed777c; outline-offset: 2px; } .ds-btn-outline:disabled { opacity: .5; pointer-events: none; }"
+    },
+    {
+      "name": "Raise Action",
+      "kind": "button",
+      "refersTo": "action-raise",
+      "description": "Table Red fill, white label, 11px radius, 48px tall. The primary bet in the action bar.",
+      "html": "<button class=\"ds-action-raise\">Aumentar</button>",
+      "css": ".ds-action-raise { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #af2a2f; color: #fff; border: 1px solid #ffffff24; border-radius: 11px; height: 48px; padding: 12px 18px; font: 700 14px/1 'Geist', system-ui, sans-serif; cursor: pointer; transition: transform 120ms cubic-bezier(.25,1,.5,1), background-color 180ms cubic-bezier(.25,1,.5,1); } .ds-action-raise:hover { transform: translateY(-2px); } .ds-action-raise:active { transform: translateY(0) scale(.96); } .ds-action-raise:focus-visible { outline: 3px solid #ed777c; outline-offset: 2px; } .ds-action-raise:disabled { background: #5b1218; color: #ad9fa0; }"
+    },
+    {
+      "name": "Call Action",
+      "kind": "button",
+      "refersTo": "action-call",
+      "description": "Card Paper fill, Deep Wine text, 11px radius, 48px tall. The committed money-moving action.",
+      "html": "<button class=\"ds-action-call\">Pagar</button>",
+      "css": ".ds-action-call { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #f6f0e7; color: #5b1218; border: 1px solid #ffffff24; border-radius: 11px; height: 48px; padding: 12px 18px; font: 700 14px/1 'Geist', system-ui, sans-serif; cursor: pointer; transition: transform 120ms cubic-bezier(.25,1,.5,1); } .ds-action-call:hover { transform: translateY(-2px); } .ds-action-call:focus-visible { outline: 3px solid #ed777c; outline-offset: 2px; } .ds-action-call:disabled { background: #5b1218; color: #ad9fa0; }"
+    },
+    {
+      "name": "Player Seat",
+      "kind": "card",
+      "refersTo": "seat",
+      "description": "14px container, dark seat surface, 1px white hairline. Viewer/active states shift border to red and add a ring.",
+      "html": "<div class=\"ds-seat viewer is-turn\"><span class=\"ds-seat-name\">Você</span></div>",
+      "css": ".ds-seat { position: relative; display: flex; align-items: center; gap: 7px; background: #161011; border: 1px solid #ffffff26; border-radius: 14px; padding: 7px 10px; box-shadow: 0 4px 8px #0009; transition: border-color 220ms cubic-bezier(.25,1,.5,1), transform 220ms cubic-bezier(.25,1,.5,1); } .ds-seat:after { content: \"\"; position: absolute; inset: -5px; border: 2px solid transparent; border-radius: 17px; pointer-events: none; } .ds-seat.viewer { border-color: #d9464d; box-shadow: 0 4px 8px #0009, 0 0 0 3px #af2a2f40; } .ds-seat.is-turn:after { border-color: #d9464d; animation: ds-turn 1.5s cubic-bezier(.25,1,.5,1) infinite; } @keyframes ds-turn { 0%,100% { opacity: .4 } 50% { opacity: 1 } }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Translucent control surface, white text, 12px radius, 40px tall. Focus shifts to a red ring.",
+      "html": "<input class=\"ds-input\" placeholder=\"Diga algo…\" />",
+      "css": ".ds-input { width: 100%; box-sizing: border-box; background: #211416; color: #fff; border: 1px solid #ffffff24; border-radius: 12px; height: 40px; padding: 0 12px; font: 400 14px/1 'Geist', system-ui, sans-serif; } .ds-input::placeholder { color: #ad9fa0; } .ds-input:focus-visible { outline: 3px solid #ed777c; outline-offset: 1px; border-color: transparent; }"
+    },
+    {
+      "name": "Chat Toggle",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Circular Table Red FAB that opens the table chat.",
+      "html": "<button class=\"ds-chat-toggle\" aria-label=\"Abrir chat\">💬</button>",
+      "css": ".ds-chat-toggle { width: 45px; height: 45px; border-radius: 50%; border: 0; background: #af2a2f; color: #fff; display: grid; place-items: center; cursor: pointer; transition: background-color 180ms cubic-bezier(.25,1,.5,1); } .ds-chat-toggle:hover { background: #d9464d; } .ds-chat-toggle:focus-visible { outline: 3px solid #ed777c; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Living Table",
+    "overview": "CTech Poker feels like sitting at a responsive physical table with other people, not operating a static card diagram. Cards arrive with purpose, chips travel between meaningful positions, turns are unmistakable, and the table always acknowledges input. The dark room recedes so the felt, cards, people, and the current decision carry the scene.\n\nThis is the vivid member of the CTech product family. It inherits Geist typography, direct pt-BR copy, clear state semantics, familiar controls, restrained radii, accessible focus, and trust-first behavior from Account, Wallet, and DFe — then departs through a dark, table-focused composition and richer state motion. Vivid never means noisy: motion reports play, color reports meaning, decoration never competes with a decision.",
+    "keyCharacteristics": [
+      "A near-black wine room concentrates attention on green felt, warm cards, and people.",
+      "Oxblood red signals the primary action, the viewer, or an active moment — not ambient decoration.",
+      "Gold is reserved for chips, pots, winnings, and earned achievement.",
+      "Motion makes state changes legible and immediate; reduced motion preserves every cue without travel.",
+      "Shared CTech control shapes and typography keep the game credible beside Account, Wallet, and DFe."
+    ],
+    "rules": [
+      { "name": "The Three Materials Rule", "body": "Felt means play, card paper means cards or light contrast, and gold means value. Do not spread these colors decoratively across generic UI.", "section": "colors" },
+      { "name": "The Red Signal Rule", "body": "Table Red identifies the primary decision, active player context, or focus. One dominant red signal per decision area is enough.", "section": "colors" },
+      { "name": "The Readout Rule", "body": "If a value changes during play or must align with another value, render it in Geist Mono with tabular numerals. Player names and conversational copy stay in Geist.", "section": "typography" },
+      { "name": "The Game-Space Rule", "body": "Marketing titles may be fluid; table UI uses a fixed, tight type scale so responsive adaptation changes structure rather than shrinking critical labels.", "section": "typography" },
+      { "name": "The Physical Layer Rule", "body": "A shadow must answer 'what is above or inset from what?' If it cannot, use a tonal change or hairline instead.", "section": "elevation" },
+      { "name": "The One Glow Rule", "body": "Glow means live, focused, or personally active. Never apply ambient glows to a whole card grid or inactive controls.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do make every card, chip, turn, connection, and result transition communicate a real state change.",
+      "Do keep most interaction transitions between 150–250 ms with exponential ease-out curves.",
+      "Do preserve the shared CTech family vocabulary: Geist, direct copy, 12–16px radii, explicit states, clear focus, WCAG 2.2 AA.",
+      "Do reserve Table Red (#af2a2f) for the primary decision, active player context, and focus signal.",
+      "Do reserve Felt (#0d5b45), Card Paper (#f6f0e7), and Chip Gold (#e6b85c) for their named physical meanings.",
+      "Do pair suit, turn, win, error, and connection colors with text, iconography, shape, or position.",
+      "Do provide keyboard play, reduced-motion alternatives, reconnection feedback, and responsive table structure."
+    ],
+    "donts": [
+      "Don't create PokerStars-style static or frozen-feeling play; an unchanged table during latency must show an honest state.",
+      "Don't build casino clutter: no flashing chrome, competing promotions, or dense calls to action around the table.",
+      "Don't use predatory gambling patterns: no urgency pressure, loss-chasing prompts, manipulative rewards, or obscured money semantics.",
+      "Don't use childish gamification that weakens trust in real-money play.",
+      "Don't drift into crypto aesthetics: no neon speculation, token hype, terminal styling, or volatility theater.",
+      "Don't use border-left / border-right greater than 1px as an accent on a card, seat, callout, or alert.",
+      "Don't use gradient text, decorative grid/stripe backgrounds, default glassmorphism, or 32px-plus card radii.",
+      "Don't rely on hue alone to distinguish red/black suits, active turns, winners, errors, or connection status.",
+      "Don't animate layout properties or use bounce/elastic motion; never make a user wait for choreography before acting.",
+      "Don't hard-code brand colors as literals in components; reference the --brand / --paper / --wine tokens so theming stays single-source."
+    ]
+  }
+}

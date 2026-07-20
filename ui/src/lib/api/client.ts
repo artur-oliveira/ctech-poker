@@ -1,5 +1,6 @@
 import axios from 'axios';
 import {doRefresh} from '@/lib/auth/oauth'
+import {mockAdapter, USE_MOCK} from '@/lib/mock'
 
 let token: string | null = null;
 const listeners = new Set<(v: string | null) => void>()
@@ -20,7 +21,10 @@ export function subscribeAccessToken(f: (v: string | null) => void) {
   }
 }
 
-export const apiClient = axios.create({baseURL: process.env.NEXT_PUBLIC_API_URL || ''})
+export const apiClient = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_URL || '',
+  adapter: USE_MOCK ? mockAdapter : undefined
+})
 apiClient.interceptors.request.use(c => {
   if (token) c.headers.Authorization = `Bearer ${token}`;
   return c

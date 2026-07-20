@@ -9,7 +9,7 @@ const Dialog = Primitive.Root, DialogTrigger = Primitive.Trigger, DialogClose = 
 function DialogContent({className, children, ...props}: Primitive.Popup.Props) {
   return <Primitive.Portal><Primitive.Backdrop
     className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm data-open:animate-in data-closed:animate-out"/><Primitive.Popup
-    className={cn('fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/15 bg-[#211416] p-6 text-white shadow-2xl outline-none', className)} {...props}>{children}<Primitive.Close
+    className={cn('fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/15 bg-[var(--surface-control)] p-6 text-[var(--on-brand)] shadow-2xl outline-none', className)} {...props}>{children}<Primitive.Close
     render={<Button variant="ghost" size="icon" className="absolute right-3 top-3"/>}><X/><span
     className="sr-only">Fechar</span></Primitive.Close></Primitive.Popup></Primitive.Portal>
 }
@@ -23,7 +23,7 @@ function DialogTitle(p: Primitive.Title.Props) {
 }
 
 function DialogDescription(p: Primitive.Description.Props) {
-  return <Primitive.Description {...p} className={cn('text-sm text-[#ad9fa0]', p.className)}/>
+  return <Primitive.Description {...p} className={cn('text-sm text-[var(--muted-rose)]', p.className)}/>
 }
 
 function DialogFooter(p: React.ComponentProps<'div'>) {
