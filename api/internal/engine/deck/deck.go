@@ -70,15 +70,6 @@ func NewShuffle() (*ShuffleResult, error) {
 	}, nil
 }
 
-// Verify recomputes the shuffle from a revealed seed and checks it reproduces
-// both the claimed card order and the hash published before the hand started.
-func Verify(seed [32]byte, claimedCards [52]Card, publishedHash [32]byte) bool {
-	if shuffleWithSeed(seed) != claimedCards {
-		return false
-	}
-	return commitHash(seed, claimedCards) == publishedHash
-}
-
 func orderedDeck() [52]Card {
 	var d [52]Card
 	i := 0

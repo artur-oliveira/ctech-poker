@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 	"gopkg.aoctech.app/poker/api/internal/engine/equity"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
@@ -64,9 +65,40 @@ func New(id string, store *tablestore.Store, trustCache bool, broadcast func(str
 	return a
 }
 
+// ErrActorStopped is returned by Dispatch when the actor has stopped serving
+// (e.g. it lost its table lease and Run exited) and will never read the
+// command. Callers re-resolve a live actor via the manager.
+var ErrActorStopped = errors.New("table: actor stopped")
+
 func (a *Actor) Dispatch(cmd Command) error {
-	a.cmds <- cmd
-	return <-cmd.reply()
+	select {
+	case a.cmds <- cmd:
+		// Sent (channel is buffered). Wait for the reply, but bail if the
+		// actor stops before Run reads/processes it — otherwise we'd block
+		// forever on a dead actor.
+		select {
+		case err := <-cmd.reply():
+			return err
+		case <-a.done:
+			return ErrActorStopped
+		}
+	case <-a.done:
+		return ErrActorStopped
+	}
+}
+
+// Done exposes the actor's stop channel so the manager can detect a dead actor
+// (after a lease loss) and recreate a live one.
+func (a *Actor) Done() <-chan struct{} { return a.done }
+
+// IsAlive reports whether Run is still serving commands.
+func (a *Actor) IsAlive() bool {
+	select {
+	case <-a.done:
+		return false
+	default:
+		return true
+	}
 }
 
 func (a *Actor) Run(ctx context.Context) {
@@ -100,6 +132,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleLeave(ctx, c)
 	case PostBigBlindCmd:
 		return a.handlePostBigBlind(ctx, c)
+	case autoFoldCheckCmd:
+		return a.handleAutoFoldCheck(ctx, c)
 	case escalateCmd:
 		return a.handleEscalate(ctx)
 	default:
@@ -115,17 +149,11 @@ func (a *Actor) handlePostBigBlind(ctx context.Context, c PostBigBlindCmd) error
 		a.cached.MarkReadyToPost(c.PlayerID)
 		return a.commit(ctx, "", nil)
 	}
-	err := apply()
-	if errors.Is(err, tablestore.ErrVersionConflict) {
-		if err := a.ensureLoaded(ctx, true); err != nil {
-			return err
-		}
-		err = apply()
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		return err
 	}
-	if err == nil {
-		a.broadcastAll()
-	}
-	return err
+	a.broadcastAll()
+	return nil
 }
 
 func (a *Actor) handleEscalate(ctx context.Context) error {
@@ -136,17 +164,11 @@ func (a *Actor) handleEscalate(ctx context.Context) error {
 		a.cached.EscalateBlindsForActor(a.escalationCfg.Multiplier, a.escalationCfg.Max)
 		return a.commit(ctx, "", nil)
 	}
-	err := apply()
-	if errors.Is(err, tablestore.ErrVersionConflict) {
-		if err := a.ensureLoaded(ctx, true); err != nil {
-			return err
-		}
-		err = apply()
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		return err
 	}
-	if err == nil {
-		a.broadcastAll()
-	}
-	return err
+	a.broadcastAll()
+	return nil
 }
 
 // ensureLoaded reads current state from the store the first time this Actor
@@ -176,20 +198,9 @@ func (a *Actor) handleReady(ctx context.Context, c ReadyCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
-	if err := a.applyReadyAndCommit(ctx, c); err != nil {
-		if errors.Is(err, tablestore.ErrVersionConflict) {
-			// ARCHITECTURE.md §2: "the handler retries against the freshly-read
-			// state" — exactly once; a second conflict inside the same dispatch
-			// would mean real, sustained contention, not ordinary human-paced play.
-			if err := a.ensureLoaded(ctx, true); err != nil {
-				return err
-			}
-			if err := a.applyReadyAndCommit(ctx, c); err != nil {
-				return err
-			}
-		} else {
-			return err
-		}
+	apply := func() error { return a.applyReadyAndCommit(ctx, c) }
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		return err
 	}
 	a.broadcastAll()
 	return nil
@@ -283,6 +294,22 @@ func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.A
 	return nil
 }
 
+// retryOnConflict runs apply once. If a version conflict is detected (another
+// instance committed first), it reloads fresh state and applies once more.
+// Handlers whose apply needs a return value beyond error (Act, Leave) keep
+// their specialized retry; this covers the simple mutating handlers.
+func (a *Actor) retryOnConflict(ctx context.Context, apply func() error) error {
+	if err := apply(); err == nil {
+		return nil
+	} else if !errors.Is(err, tablestore.ErrVersionConflict) {
+		return err
+	}
+	if err := a.ensureLoaded(ctx, true); err != nil {
+		return err
+	}
+	return apply()
+}
+
 func (a *Actor) handleDisconnect(c DisconnectCmd) error {
 	a.disconnectedSince[c.PlayerID] = timeNowFunc()
 	a.armActionDeadlineIfTheirTurn(c.PlayerID)
@@ -303,11 +330,54 @@ func (a *Actor) handleSitOut(ctx context.Context, c SitOutCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
-	a.cached.SitOutForActor(c.PlayerID)
-	if err := a.commit(ctx, "", nil); err != nil && !errors.Is(err, tablestore.ErrVersionConflict) {
+	apply := func() error {
+		a.cached.SitOutForActor(c.PlayerID)
+		return a.commit(ctx, "", nil)
+	}
+	if err := a.retryOnConflict(ctx, apply); err != nil {
 		return err
 	}
 	a.broadcastAll()
+	return nil
+}
+
+// handleAutoFoldCheck runs inside Run (dispatched by the auto-fold timer) so it
+// can safely read/write the actor's disconnect bookkeeping maps. It decides
+// whether the disconnected player should be folded now or sat out (grace
+// exceeded or enough consecutive disconnected hands).
+func (a *Actor) handleAutoFoldCheck(ctx context.Context, c autoFoldCheckCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	a.consecutiveDisconnectedHands[c.PlayerID]++ // safe: runs in Run goroutine
+	if timeNowFunc().Sub(a.disconnectedSince[c.PlayerID]) >= a.disconnectGrace ||
+		a.consecutiveDisconnectedHands[c.PlayerID] >= 3 {
+		a.cached.SitOutForActor(c.PlayerID)
+		if err := a.commit(ctx, "", nil); err != nil && !errors.Is(err, tablestore.ErrVersionConflict) {
+			return err
+		}
+		a.broadcastAll()
+		return nil
+	}
+	completed, err := a.applyActAndCommit(ctx, ActCmd{
+		PlayerID: c.PlayerID, ActionID: "auto-fold-" + c.PlayerID, Action: "fold", Amount: 0, Reply: c.Reply,
+	})
+	if errors.Is(err, tablestore.ErrVersionConflict) {
+		if err := a.ensureLoaded(ctx, true); err != nil {
+			return err
+		}
+		completed, err = a.applyActAndCommit(ctx, ActCmd{
+			PlayerID: c.PlayerID, ActionID: "auto-fold-" + c.PlayerID, Action: "fold", Amount: 0, Reply: c.Reply,
+		})
+	}
+	if err != nil && !errors.Is(err, tablestore.ErrDuplicateAction) {
+		return err
+	}
+	a.armActionDeadlineForCurrentTurn()
+	a.broadcastAll()
+	if completed {
+		a.notifyHandComplete()
+	}
 	return nil
 }
 
@@ -315,17 +385,9 @@ func (a *Actor) handleJoin(ctx context.Context, c JoinCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
-	if err := a.applyJoinAndCommit(ctx, c); err != nil {
-		if errors.Is(err, tablestore.ErrVersionConflict) {
-			if err := a.ensureLoaded(ctx, true); err != nil {
-				return err
-			}
-			if err := a.applyJoinAndCommit(ctx, c); err != nil {
-				return err
-			}
-		} else {
-			return err
-		}
+	apply := func() error { return a.applyJoinAndCommit(ctx, c) }
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		return err
 	}
 	a.broadcastAll()
 	return nil
@@ -397,14 +459,11 @@ func (a *Actor) armActionDeadlineIfTheirTurn(playerID string) {
 	if a.deadlineTimer != nil {
 		a.deadlineTimer.Stop()
 	}
+	// The timer only dispatches a command; all map mutations happen inside Run
+	// (handleAutoFoldCheck), so there is no data race with the Run goroutine.
 	a.deadlineTimer = time.AfterFunc(a.actionDeadline, func() {
 		reply := make(chan error, 1)
-		_ = a.Dispatch(ActCmd{PlayerID: playerID, ActionID: "auto-fold-" + playerID, Action: "fold", Reply: reply})
-		a.consecutiveDisconnectedHands[playerID]++
-		if timeNowFunc().Sub(a.disconnectedSince[playerID]) >= a.disconnectGrace || a.consecutiveDisconnectedHands[playerID] >= 3 {
-			reply2 := make(chan error, 1)
-			_ = a.Dispatch(SitOutCmd{PlayerID: playerID, Reply: reply2})
-		}
+		_ = a.Dispatch(autoFoldCheckCmd{PlayerID: playerID, Reply: reply})
 	})
 }
 
@@ -427,10 +486,25 @@ func (a *Actor) broadcastAll() {
 	if a.broadcast == nil || a.cached == nil {
 		return
 	}
+	stage := a.cached.Stage()
+	doEquity := a.equityEnabled.Load() && equityStage(stage)
 	for _, p := range a.cached.PlayersForActor() {
 		snapshot := a.cached.ViewFor(p.ID)
-		if a.equityEnabled.Load() && equityStage(a.cached.Stage()) {
-			a.attachEquity(p.ID, &snapshot)
+		if doEquity {
+			if hole, board, ok := a.cached.HoleAndBoardForActor(p.ID); ok {
+				opponents := 0
+				for _, seat := range snapshot.Seats {
+					if seat.PlayerID != p.ID && (seat.State == "active" || seat.State == "all_in") {
+						opponents++
+					}
+				}
+				if opponents > 0 {
+					// Offload equity from the Run goroutine: compute in a
+					// goroutine over captured values and push a follow-up
+					// state update when ready.
+					go a.computeAndSendEquity(p.ID, snapshot, hole, board, opponents)
+				}
+			}
 		}
 		a.broadcast(p.ID, snapshot)
 	}
@@ -440,30 +514,27 @@ func equityStage(stage hand.Stage) bool {
 	return stage == hand.PreFlop || stage == hand.Flop || stage == hand.Turn || stage == hand.River
 }
 
-func (a *Actor) attachEquity(viewerID string, snapshot *hand.Snapshot) {
-	hole, board, ok := a.cached.HoleAndBoardForActor(viewerID)
-	if !ok {
-		return
-	}
-	opponents := 0
-	for _, seat := range snapshot.Seats {
-		if seat.PlayerID != viewerID && (seat.State == "active" || seat.State == "all_in") {
-			opponents++
-		}
-	}
-	if opponents == 0 {
-		return
-	}
+// computeAndSendEquity runs off the Run goroutine. It never touches a.cached;
+// it works on a copy of the captured snapshot so there is no race with Run or
+// with the synchronous broadcast that already sent the same Snapshot. When
+// ready it pushes a follow-up state update carrying the equity.
+func (a *Actor) computeAndSendEquity(viewerID string, snapshot hand.Snapshot, hole [2]deck.Card, board []deck.Card, opponents int) {
 	estimate, err := equity.Estimate(hole, board, nil, opponents, 500)
 	if err != nil {
 		return
 	}
-	for i := range snapshot.Seats {
-		if snapshot.Seats[i].PlayerID == viewerID {
-			snapshot.Seats[i].Equity = &estimate
-			return
+	// Copy Seats: the captured snapshot shares a backing array with the one the
+	// synchronous broadcast already sent, so mutating it in place would race.
+	out := snapshot
+	out.Seats = make([]hand.SeatView, len(snapshot.Seats))
+	copy(out.Seats, snapshot.Seats)
+	for i := range out.Seats {
+		if out.Seats[i].PlayerID == viewerID {
+			out.Seats[i].Equity = &estimate
+			break
 		}
 	}
+	a.broadcast(viewerID, out)
 }
 
 func (a *Actor) SetEquityEnabledForActor(enabled bool) { a.equityEnabled.Store(enabled) }

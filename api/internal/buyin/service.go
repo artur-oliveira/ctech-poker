@@ -8,8 +8,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
-	"github.com/google/uuid"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
@@ -58,9 +58,7 @@ func (s *Service) seedFor(ctx context.Context, roomID string) func() *hand.Table
 	return func() *hand.Table {
 		if s.rooms != nil {
 			if room, err := s.rooms.Get(ctx, roomID); err == nil && room != nil {
-				table := hand.NewTable(nil, room.SmallBlind, room.BigBlind)
-				table.ConfigureRake(room.CurrencyMode)
-				return table
+				return table.SeedForRoom(room)
 			}
 		}
 		return hand.NewTable(nil, 10, 20)
@@ -71,7 +69,7 @@ func (s *Service) seedFor(ctx context.Context, roomID string) func() *hand.Table
 // roomID's live table. If seating fails, the debit is immediately reversed
 // with a distinct idempotency key (":refund" suffix) so the reversal can
 // never collide with — or be mistaken as a retry of — the original debit.
-func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int64, midHand bool) error {
+func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int64, midHand bool, idemKey string) error {
 	maxSeats := 0
 	if s.rooms != nil {
 		room, err := s.rooms.Get(ctx, roomID)
@@ -94,8 +92,16 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 			return err
 		}
 	}
-	idemKey := fmt.Sprintf("%s#%s#buyin#%s", roomID, playerID, uuid.NewString())
-	if err := s.wallet.Debit(ctx, playerID, amount, idemKey, "poker_buyin"); err != nil {
+	// Stable per (room, player) key so a retried request cannot double-debit.
+	// Repeat rebuys are not allowed; a genuine rebuy carries a fresh client
+	// nonce, which becomes a distinct key. When the caller passes nothing we
+	// fall back to the playerID (still stable, still retry-safe).
+	nonce := idemKey
+	if nonce == "" {
+		nonce = playerID
+	}
+	key := fmt.Sprintf("%s#%s#buyin#%s", roomID, playerID, nonce)
+	if err := s.wallet.Debit(ctx, playerID, amount, key, "poker_buyin"); err != nil {
 		return fmt.Errorf("buyin: debit: %w", err)
 	}
 
@@ -124,7 +130,7 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 // player's chips are gone from the table but not yet in their wallet — this is
 // flagged as a genuine gap (see Task 3's closing note), not silently glossed
 // over.
-func (s *Service) CashOut(ctx context.Context, roomID, playerID string) (int64, error) {
+func (s *Service) CashOut(ctx context.Context, roomID, playerID, idemKey string) (int64, error) {
 	if s.rooms != nil {
 		room, err := s.rooms.Get(ctx, roomID)
 		if err != nil {
@@ -149,8 +155,17 @@ func (s *Service) CashOut(ctx context.Context, roomID, playerID string) (int64, 
 	}
 	stack := <-stackCh
 
-	idemKey := fmt.Sprintf("%s#%s#cashout#%s", roomID, playerID, uuid.NewString())
-	if err := s.wallet.Credit(ctx, playerID, stack, idemKey, "poker_cashout"); err != nil {
+	// Stable per (room, player) key by default; a fresh client nonce per
+	// cash-out click makes a rebuy-then-cashout distinct (and still retry-safe).
+	key := fmt.Sprintf("%s#%s#cashout", roomID, playerID)
+	if idemKey != "" {
+		key = fmt.Sprintf("%s#%s#cashout#%s", roomID, playerID, idemKey)
+	}
+	if err := s.wallet.Credit(ctx, playerID, stack, key, "poker_cashout"); err != nil {
+		// Seat already removed; the chips are between table and wallet. Surface
+		// a clear error and log the exact (player, amount) for ops reconciliation.
+		slog.Error("buyin: cash-out credit failed after seat removal — manual reconciliation",
+			"player", playerID, "room", roomID, "amount", stack, "err", err)
 		return stack, fmt.Errorf("buyin: cash-out credit failed after seat removal — manual reconciliation needed for %s amount %d: %w", playerID, stack, err)
 	}
 	return stack, nil

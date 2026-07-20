@@ -50,10 +50,10 @@ func NewStore(db *dynamodb.Client, env string) *Store {
 	}
 }
 
-// SeedTable creates a table's very first state item at version 1. A no-op
-// (not an error) if the table already exists — GetOrCreateActor calls this
-// unconditionally the first time a table is touched on any instance, so two
-// instances racing to seed the same brand-new table must not both fail.
+// SeedTable creates a table's very first state item at version 1. It is a
+// conditional create (attribute_not_exists(pk)) so a first-touch race between
+// two instances can never clobber an already-seeded table (M4). If the table
+// already exists the conditional fails and we treat it as a successful no-op.
 func (s *Store) SeedTable(ctx context.Context, tableID string, state hand.State) error {
 	item, err := dynamo.Encode(struct {
 		PK      string     `dynamodbav:"pk"`
@@ -63,7 +63,11 @@ func (s *Store) SeedTable(ctx context.Context, tableID string, state hand.State)
 	if err != nil {
 		return fmt.Errorf("tablestore: encode seed state: %w", err)
 	}
-	if err := s.state.PutItem(ctx, item); err != nil {
+	tx := s.state.BuildPutTxItemIfAbsent(item)
+	if err := s.state.TransactWrite(ctx, []types.TransactWriteItem{tx}); err != nil {
+		if dynamo.IsConditionFailed(err) {
+			return nil // already seeded
+		}
 		return fmt.Errorf("tablestore: seed table: %w", err)
 	}
 	return nil

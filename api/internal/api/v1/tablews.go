@@ -2,6 +2,7 @@ package v1
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"strings"
 	"sync"
@@ -47,7 +48,12 @@ var tableChatFilter = chatfilter.New([]string{"idiota", "burro"})
 // Mirrors ctech-wallet's internal/api/v1/ws.go.
 func readAuthToken(conn *fws.Conn) (token, shareCode string, ok bool) {
 	_ = conn.SetReadDeadline(time.Now().Add(wsAuthTimeout))
-	defer conn.SetReadDeadline(time.Time{})
+	defer func(conn *fws.Conn, t time.Time) {
+		err := conn.SetReadDeadline(t)
+		if err != nil {
+
+		}
+	}(conn, time.Time{})
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
 		return "", "", false
@@ -173,6 +179,24 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 				actor.SetEquityEnabledForActor(room.EquityDisplayEnabled)
 			}
 
+			// dispatch sends a command to the table actor, re-resolving a live
+			// actor if the current one has stopped (it lost its lease). Guards
+			// against the dead-actor Dispatch hang (T1).
+			dispatch := func(cmd table.Command) error {
+				for i := 0; i < 2; i++ {
+					err := actor.Dispatch(cmd)
+					if !errors.Is(err, table.ErrActorStopped) {
+						return err
+					}
+					fresh, rerr := manager.GetOrCreateActor(ctx, tableID, seed(tableID))
+					if rerr != nil {
+						return rerr
+					}
+					actor = fresh
+				}
+				return actor.Dispatch(cmd)
+			}
+
 			connKey := tableID + "#" + playerID
 			connID := uuid.NewString()
 			reg.Register(connKey, connID, &wsConnAdapter{conn: conn})
@@ -192,11 +216,11 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 				_, msg, e := conn.ReadMessage()
 				if e != nil {
 					reply := make(chan error, 1)
-					_ = actor.Dispatch(table.DisconnectCmd{PlayerID: playerID, Reply: reply})
+					_ = dispatch(table.DisconnectCmd{PlayerID: playerID, Reply: reply})
 					break
 				}
 				reply := make(chan error, 1)
-				_ = actor.Dispatch(table.ReconnectCmd{PlayerID: playerID, Reply: reply})
+				_ = dispatch(table.ReconnectCmd{PlayerID: playerID, Reply: reply})
 
 				var m clientMessage
 				if json.Unmarshal(msg, &m) != nil {
@@ -211,15 +235,15 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 					send(map[string]any{"type": "pong"})
 				case "ready":
 					r := make(chan error, 1)
-					_ = actor.Dispatch(table.ReadyCmd{PlayerID: playerID, Ready: m.Ready, Reply: r})
+					_ = dispatch(table.ReadyCmd{PlayerID: playerID, Ready: m.Ready, Reply: r})
 				case "act":
 					r := make(chan error, 1)
-					if err := actor.Dispatch(table.ActCmd{PlayerID: playerID, ActionID: m.ActionID, Action: betting.Action(m.Action), Amount: m.Amount, Reply: r}); err != nil {
+					if err := dispatch(table.ActCmd{PlayerID: playerID, ActionID: m.ActionID, Action: betting.Action(m.Action), Amount: m.Amount, Reply: r}); err != nil {
 						send(map[string]any{"type": "error", "code": "invalid_action", "message": err.Error()})
 					}
 				case "post_big_blind":
 					r := make(chan error, 1)
-					if err := actor.Dispatch(table.PostBigBlindCmd{PlayerID: playerID, Reply: r}); err != nil {
+					if err := dispatch(table.PostBigBlindCmd{PlayerID: playerID, Reply: r}); err != nil {
 						send(map[string]any{"type": "error", "code": "invalid_post", "message": err.Error()})
 					}
 				case "chat":

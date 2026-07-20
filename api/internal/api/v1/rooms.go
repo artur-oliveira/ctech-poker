@@ -11,6 +11,7 @@ import (
 	"gopkg.aoctech.app/api-commons/dynamo"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
@@ -22,15 +23,15 @@ type roomHandlers struct {
 	manager *tablemanager.Manager
 }
 
-func RegisterRooms(router fiber.Router, auth fiber.Handler, rooms *roomstore.Store, buyinSvc *buyin.Service, manager *tablemanager.Manager) {
+func RegisterRooms(router fiber.Router, auth fiber.Handler, rooms *roomstore.Store, buyinSvc *buyin.Service, manager *tablemanager.Manager, createLimiter, joinLimiter *RateLimiter) {
 	h := &roomHandlers{rooms: rooms, buyin: buyinSvc, manager: manager}
 	g := router.Group("/rooms", auth)
-	g.Post("/", h.createRoom)
+	g.Post("/", rateLimit(createLimiter, ipKey("rooms:create")), h.createRoom)
 	g.Get("/", h.listPublic)
 	g.Get("/stakes", h.listStakes)
 	g.Get("/code/:code", h.getByShareCode)
 	g.Get("/:id", h.getRoom)
-	g.Post("/:id/join", h.join)
+	g.Post("/:id/join", rateLimit(joinLimiter, ipKey("rooms:join")), h.join)
 	g.Post("/:id/leave", h.leave)
 	g.Post("/:id/ready", h.ready)
 }
@@ -88,12 +89,10 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 		}
 	}
 	if room.BlindEscalation != nil && h.manager != nil {
-		cfg := *room.BlindEscalation
+		// Escalation is now re-armed on every actor creation via the manager's
+		// roomLoader (T6), so the createRoom hook only needs to warm the actor.
 		_, _ = h.manager.GetOrCreateActor(c.Context(), room.ID, func() *hand.Table {
-			return hand.NewTable(nil, room.SmallBlind, room.BigBlind)
-		}, func(actor *tablemanager.Actor) {
-			actor.SetEquityEnabledForActor(room.EquityDisplayEnabled)
-			actor.StartEscalation(cfg)
+			return table.SeedForRoom(&room)
 		})
 	}
 	return c.Status(fiber.StatusCreated).JSON(room)
@@ -133,7 +132,8 @@ func (h *roomHandlers) getByShareCode(c fiber.Ctx) error {
 	if room == nil {
 		return problem.NotFound("room not found").Send(c)
 	}
-	return c.JSON(room)
+	userID, _ := c.Locals(localsUserID).(string)
+	return c.JSON(sanitizeRoom(room, userID))
 }
 
 // sanitizeRoom strips the share code from any viewer other than the room's
@@ -179,7 +179,7 @@ func (h *roomHandlers) join(c fiber.Ctx) error {
 	if !privateRoomAccessAllowed(room, userID, req.ShareCode) {
 		return problem.Forbidden("share code required to join a private room").Send(c)
 	}
-	if err := h.buyin.BuyIn(c.Context(), room.ID, userID, req.Amount, room.Status == "active"); err != nil {
+	if err := h.buyin.BuyIn(c.Context(), room.ID, userID, req.Amount, room.Status == "active", req.IdempotencyKey); err != nil {
 		if errors.Is(err, buyin.ErrTermsNotAccepted) {
 			return problem.Forbidden(err.Error()).Send(c)
 		}
@@ -189,8 +189,10 @@ func (h *roomHandlers) join(c fiber.Ctx) error {
 }
 
 func (h *roomHandlers) leave(c fiber.Ctx) error {
+	var req LeaveRoomRequest
+	_ = c.Bind().Body(&req)
 	userID, _ := c.Locals(localsUserID).(string)
-	stack, err := h.buyin.CashOut(c.Context(), c.Params("id"), userID)
+	stack, err := h.buyin.CashOut(c.Context(), c.Params("id"), userID, req.IdempotencyKey)
 	if err != nil {
 		return problem.Conflict(err.Error()).Send(c)
 	}
