@@ -1,6 +1,12 @@
 # ctech-poker — Development Plan
 
-> Phased roadmap, not a bite-sized TDD task list — implementation has not started.
+> Phased roadmap, not a bite-sized TDD task list. **Status (verified against the code,
+> 2026-07-20):** Phases 0–4 (foundations, engine, sandbox end-to-end, frontend/gamification)
+> are **implemented and live** in `api/`, `ui/`, `cdk/`. **Phase 5 (real-money mode) is NOT
+> started** — gated on ctech-wallet hold/capture endpoints + throughput, and on a Brazilian
+> regulatory opinion (see OVERVIEW.md §11). The OVERVIEW/ARCHITECTURE specs may describe
+> features not yet built (e.g. commit-reveal fairness surface B32, hand history); see
+> `docs/README.md` for the implemented-vs-designed breakdown.
 
 ## Phase 0 — Foundations
 
