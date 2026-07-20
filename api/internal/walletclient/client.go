@@ -50,12 +50,13 @@ type Client struct {
 // credit-scoped token must never be reused for a debit call or vice versa.
 func New(cfg *config.Config) *Client {
 	httpClient := &http.Client{Timeout: 10 * time.Second}
+	baseAuth := strings.TrimRight(cfg.CtechURL, "/")
 	base := strings.TrimRight(cfg.WalletURL, "/")
 	return &Client{
 		base:         base,
 		http:         httpClient,
-		creditTokens: oauth2client.New(httpClient, base+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeCredit),
-		debitTokens:  oauth2client.New(httpClient, base+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeDebit),
+		creditTokens: oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeCredit),
+		debitTokens:  oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeDebit),
 	}
 }
 

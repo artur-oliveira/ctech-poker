@@ -47,7 +47,7 @@ export const ALB_LISTENER_PRIORITY = 45;
  * the app with nginx, so appPort IS the ALB target/health-check port — no
  * separate NGINX_PORT.
  */
-export const APP_PORT = 8010;
+export const APP_PORT = 8003;
 
 /**
  * Detailed health check path served by the Go API (RFC draft-inadarei-api-health-check;
