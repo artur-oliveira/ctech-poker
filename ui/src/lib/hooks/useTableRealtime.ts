@@ -7,6 +7,7 @@ import {MockTableService, USE_MOCK, type MockScenario} from '@/lib/mock';
 import type {PokerAction, ServerMessage, TableSnapshot} from '@/lib/api/table'
 import {playerName} from '@/lib/utils'
 import {getRoom, joinRoom} from '@/lib/api/rooms'
+import {pushNotification} from '@/lib/notify'
 
 export type ConnectionStatus = WSStatus
 export type ActionError = { code: string; message: string }
@@ -159,9 +160,9 @@ export function useTableRealtime(id: string, viewerId?: string, mockOptions?: {s
         const amount = Math.min(room.buy_in_max, Math.max(room.buy_in_min, mid));
         await joinRoom(id, amount);
       } catch {
-        // Terms-not-accepted (403) and other failures are non-fatal here: the
-        // table still renders from the initial snapshot; the player just can't
-        // act until they join through the normal flow.
+        // The table still renders from its live snapshot, but the player can't
+        // act until seated — so surface the failure instead of swallowing it.
+        pushNotification('Não foi possível entrar na mesa. Volte ao lobby e tente novamente.');
       }
     })();
     return () => { cancelled = true };

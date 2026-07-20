@@ -1,6 +1,13 @@
 import axios from 'axios';
 import {doRefresh} from '@/lib/auth/oauth'
 import {mockAdapter, USE_MOCK} from '@/lib/mock'
+import {notifyApiError} from '@/lib/notify'
+
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    silentError?: boolean
+  }
+}
 
 let token: string | null = null;
 const listeners = new Set<(v: string | null) => void>()
@@ -39,5 +46,6 @@ apiClient.interceptors.response.use(r => r, async e => {
       return apiClient.request(e.config)
     }
   }
+  if (!e.config?.silentError) notifyApiError(e)
   return Promise.reject(e)
 })

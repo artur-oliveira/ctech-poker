@@ -38,7 +38,7 @@ export default function Home() {
         mesa.</p>
         <div className="hero-actions">
           <Button size="lg" onClick={() => startOAuthFlow('/lobby')}>Jogar agora <ArrowRight/></Button>
-          <Link className="button secondary" href="#experience">Conhecer o jogo</Link></div>
+          <Button variant="outline" render={<Link href="#experience" />}>Conhecer o jogo</Button></div>
         <div className="trust"><span><i/> Sandbox grátis</span><span>2–9 jogadores</span><span>Responsivo</span></div>
       </div>
       <HeroTable/></section>

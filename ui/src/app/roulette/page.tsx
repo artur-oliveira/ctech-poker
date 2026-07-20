@@ -1,7 +1,7 @@
 'use client'
 import {useState} from 'react';
 import Link from 'next/link';
-import {ChevronLeft, Sparkles} from 'lucide-react';
+import {ChevronLeft} from 'lucide-react';
 import {spin} from '@/lib/api/gamification';
 import {TermsGate} from '@/components/TermsGate';
 import {Button} from '@/components/ui/button';
@@ -26,11 +26,9 @@ export default function Roulette() {
 
   return <TermsGate><main className="app-page">
     <section className="roulette"><Link href="/lobby"><ChevronLeft/> Lobby</Link><small>RECOMPENSA DIÁRIA</small>
-      <h1>Roleta Sandbox</h1><p>Ganhe fichas virtuais para continuar jogando.</p>
-      <div className={`wheel ${turning ? 'turning' : ''}`}>
-        <Sparkles/><span>100</span><span>200</span><span>500</span><span>1000</span></div>
+      <h1>Fichas grátis</h1><p>Ganhe fichas de sandbox para continuar jogando.</p>
       {result && <strong>+{result} fichas sandbox</strong>}{error && <em>{error}</em>}
-      <Button size="lg" disabled={turning} onClick={go}>{turning ? 'Girando…' : 'Girar agora'}</Button>
+      <Button size="lg" disabled={turning} onClick={go}>{turning ? 'Resgatando…' : 'Resgatar fichas'}</Button>
     </section>
   </main></TermsGate>
 }

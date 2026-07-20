@@ -31,9 +31,9 @@ export async function getRoom(id: string) {
 }
 
 export async function createRoom(input: Omit<Room, 'room_id' | 'id' | 'currency_mode' | 'status'>) {
-  return (await apiClient.post<Room>('/v1.0/rooms', input)).data
+  return (await apiClient.post<Room>('/v1.0/rooms', input, {silentError: true})).data
 }
 
 export async function joinRoom(id: string, amount: number) {
-  await apiClient.post(`/v1.0/rooms/${id}/join`, {amount})
+  await apiClient.post(`/v1.0/rooms/${id}/join`, {amount}, {silentError: true})
 }

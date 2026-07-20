@@ -10,6 +10,7 @@
     --gold: #e6b85c;
     --felt: #0d5b45;
     --muted: #ad9fa0;
+    --muted-rose: #ad9fa0;
     --success: #48c98c;
     --danger: #dc2626;
     --on-brand: #fff;
@@ -225,48 +226,6 @@ button, a {
     color: white
 }
 
-.button {
-    border: 0;
-    border-radius: 12px;
-    padding: 13px 20px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
-    text-decoration: none;
-    cursor: pointer;
-    font-weight: 700;
-    transition: transform .2s, box-shadow .2s, background .2s
-}
-
-.button:hover {
-    transform: translateY(-2px)
-}
-
-.button svg {
-    width: 17px
-}
-
-.primary {
-    color: white;
-    background: linear-gradient(135deg, var(--brand-tint), var(--brand));
-    box-shadow: 0 14px 35px var(--brand-33)
-}
-
-.secondary, .ghost {
-    color: white;
-    background: var(--white-0c);
-    border: 1px solid var(--control-border)
-}
-
-.ghost {
-    padding: 10px 16px
-}
-
-.light {
-    background: var(--paper);
-    color: var(--wine)
-}
 
 .hero {
     min-height: 680px;
@@ -1094,71 +1053,6 @@ h1 em {
     color: var(--muted)
 }
 
-.modal-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 50;
-    background: var(--room-overlay);
-    backdrop-filter: blur(10px);
-    display: grid;
-    place-items: center;
-    padding: 20px
-}
-
-.modal {
-    position: relative;
-    width: min(460px, 100%);
-    background: var(--surface-control);
-    border: 1px solid var(--white-1c);
-    border-radius: 22px;
-    padding: 35px;
-    box-shadow: 0 30px 100px var(--black)
-}
-
-.modal h2 {
-    font-size: 30px;
-    margin: 7px 0 25px
-}
-
-.modal label {
-    display: grid;
-    grid-template-columns:1fr auto;
-    gap: 10px;
-    align-items: center;
-    margin: 15px 0;
-    color: var(--neutral-rose-4)
-}
-
-.modal select {
-    grid-column: 1/3
-}
-
-.modal select, .modal input[type=range] {
-    width: 100%;
-    background: var(--ink-soft);
-    color: white;
-    border: 1px solid var(--white-18);
-    border-radius: 10px;
-    padding: 12px
-}
-
-.modal-close {
-    position: absolute;
-    right: 18px;
-    top: 18px;
-    background: none;
-    border: 0;
-    color: white
-}
-
-.modal-close svg {
-    width: 18px
-}
-
-.modal > .button {
-    width: 100%;
-    margin-top: 12px
-}
 
 .game {
     min-height: 100dvh;
@@ -1972,6 +1866,63 @@ h1 em {
     text-transform: capitalize
 }
 
+.api-notifier {
+    position: fixed;
+    z-index: 40;
+    right: 20px;
+    top: 70px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: min(360px, calc(100vw - 40px))
+}
+
+.api-toast {
+    background: var(--toast-bg);
+    color: var(--toast-ink);
+    border-radius: 15px;
+    padding: 13px 16px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    box-shadow: 0 15px 50px var(--black-08);
+    animation: rise .4s
+}
+
+.api-toast.error {
+    border: 1px solid color-mix(in srgb, var(--muted-rose) 35%, transparent)
+}
+
+.api-toast > svg {
+    flex: none;
+    margin-top: 2px;
+    color: var(--muted-rose)
+}
+
+.api-toast p {
+    margin: 0;
+    flex: 1;
+    font-size: 14px;
+    line-height: 1.4
+}
+
+.api-toast button {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    color: var(--muted-rose);
+    background: transparent;
+    border: none;
+    cursor: pointer
+}
+
+.api-toast button:hover {
+    background: var(--black-08)
+}
+
 .game-loading {
     height: 100vh;
     display: flex;
@@ -2052,53 +2003,6 @@ h1 em {
     top: 30px
 }
 
-.wheel {
-    width: 260px;
-    height: 260px;
-    border-radius: 50%;
-    margin: 35px;
-    background: conic-gradient(var(--brand) 0 25%, var(--gold-bright-2) 0 50%, var(--wine-deep-6) 0 75%, var(--cream) 0);
-    border: 10px solid var(--rail-wood-2);
-    box-shadow: 0 25px 60px var(--black-08);
-    position: relative;
-    color: var(--wine-deep-7)
-}
-
-.wheel svg {
-    position: absolute;
-    left: 43%;
-    top: 43%;
-    width: 35px
-}
-
-.wheel span {
-    position: absolute;
-    font-weight: 900
-}
-
-.wheel span:nth-of-type(1) {
-    top: 15%;
-    left: 45%
-}
-
-.wheel span:nth-of-type(2) {
-    right: 14%;
-    top: 47%
-}
-
-.wheel span:nth-of-type(3) {
-    bottom: 15%;
-    left: 43%
-}
-
-.wheel span:nth-of-type(4) {
-    left: 12%;
-    top: 47%
-}
-
-.wheel.turning {
-    animation: wheel-spin 1.4s cubic-bezier(.2, .8, .2, 1)
-}
 
 .roulette > strong {
     font-size: 22px;
@@ -2111,11 +2015,6 @@ h1 em {
     margin-bottom: 15px
 }
 
-@keyframes wheel-spin {
-    to {
-        transform: rotate(1440deg)
-    }
-}
 
 @media (max-width: 800px) {
     .room-grid {

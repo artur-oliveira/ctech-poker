@@ -2,7 +2,7 @@ import {Button as Primitive} from '@base-ui/react/button';
 import {cva, type VariantProps} from 'class-variance-authority';
 import {cn} from '@/lib/utils'
 
-const variants = cva('inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-all outline-none focus-visible:ring-3 focus-visible:ring-[var(--brand)]/40 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4', {
+const variants = cva('inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-all outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]/40 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4', {
   variants: {
     variant: {
       default: 'bg-[var(--brand)] text-[var(--on-brand)] hover:bg-[var(--brand-bright)] shadow-lg shadow-[var(--brand)]/20',

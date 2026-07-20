@@ -1,5 +1,6 @@
 import type {Metadata, Viewport} from 'next'
 import {QueryProvider} from '@/lib/providers/QueryProvider'
+import {Notifier} from '@/components/Notifier'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -53,6 +54,6 @@ export const viewport: Viewport = {
 }
 export default function Layout({children}: { children: React.ReactNode }) {
   return <html lang="pt-BR" suppressHydrationWarning>
-  <body suppressHydrationWarning><QueryProvider>{children}</QueryProvider></body>
+  <body suppressHydrationWarning><QueryProvider>{children}</QueryProvider><Notifier/></body>
   </html>
 }
