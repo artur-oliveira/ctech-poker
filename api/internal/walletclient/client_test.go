@@ -32,15 +32,26 @@ func fakeWalletServer(t *testing.T, onMovement func(path string, body MovementRe
 	return httptest.NewServer(mux)
 }
 
+func fakeAuthServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1.0/token", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "fake-token", "expires_in": 3600})
+	})
+	return httptest.NewServer(mux)
+}
+
 func TestCreditSendsExpectedRequestBody(t *testing.T) {
 	var gotPath string
 	var gotBody MovementRequest
 	srv := fakeWalletServer(t, func(path string, body MovementRequest) {
 		gotPath, gotBody = path, body
 	})
+	authSrv := fakeAuthServer(t)
 	defer srv.Close()
+	defer authSrv.Close()
 
-	c := New(&config.Config{WalletURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"})
+	c := New(&config.Config{WalletURL: srv.URL, CtechURL: authSrv.URL, PokerClientID: "poker", PokerClientSecret: "secret"})
 	if err := c.Credit(t.Context(), "user-1", 500, "room-1#user-1#buyin-1", "buyin"); err != nil {
 		t.Fatalf("credit: %v", err)
 	}
@@ -55,9 +66,11 @@ func TestCreditSendsExpectedRequestBody(t *testing.T) {
 func TestDebitSendsExpectedRequestBody(t *testing.T) {
 	var gotPath string
 	srv := fakeWalletServer(t, func(path string, body MovementRequest) { gotPath = path })
+	authSrv := fakeAuthServer(t)
 	defer srv.Close()
+	defer authSrv.Close()
 
-	c := New(&config.Config{WalletURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"})
+	c := New(&config.Config{WalletURL: srv.URL, CtechURL: authSrv.URL, PokerClientID: "poker", PokerClientSecret: "secret"})
 	if err := c.Debit(t.Context(), "user-1", 500, "room-1#user-1#buyin-1", "buyin"); err != nil {
 		t.Fatalf("debit: %v", err)
 	}
