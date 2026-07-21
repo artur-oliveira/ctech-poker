@@ -23,15 +23,15 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
 - **WebSocket is served by the Go binary** on the ASG (not API Gateway).
 - **Valkey is mandatory in prod** (in-memory fallback is dev/stage only; prod fails closed).
 - **Archiver:** DynamoDB Stream (`poker_action_log`) → S3 Lambda (`archiver-stack.ts`).
-  **Known risk B10: no DLQ** (`retryAttempts: 3`, no `onFailure`).
+  B10 fixed: failures bisect + land in an SQS DLQ with a CloudWatch alarm on visible messages.
 
 ## ⚠️ Known issues
 
-- **B10** — archiver Lambda has no dead-letter queue; poison records are dropped after 3
-  retries. Fix by adding `onFailure` to the `DynamoEventSource`.
+- **B10 (fixed)** — archiver `DynamoEventSource` now has `bisectBatchOnError` +
+  `onFailure: SqsDlq`, and a CloudWatch alarm fires on any visible DLQ message.
 - **B31 relevance** — `poker_leaderboard_stats` has GSIs only for `hands_won` /
-  `hands_played` / `win_rate`. If a new ranking metric is added, it needs its own GSI (the
-  API's `Top()` defaults to `gsi_hands_won`).
+  `hands_played` / `win_rate`. The API rejects any other metric (incl. `achievement_points`);
+  adding a new ranking metric requires its own GSI here first.
 
 ## Layout
 

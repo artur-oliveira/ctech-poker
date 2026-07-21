@@ -8,8 +8,8 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
-func RegisterLeaderboard(router fiber.Router, svc *leaderboard.Service) {
-	router.Get("/leaderboard", func(c fiber.Ctx) error {
+func RegisterLeaderboard(router fiber.Router, auth fiber.Handler, svc *leaderboard.Service) {
+	router.Get("/leaderboard", auth, func(c fiber.Ctx) error {
 		limit := 50
 		if n, err := strconv.Atoi(c.Query("limit")); err == nil && n > 0 {
 			limit = n

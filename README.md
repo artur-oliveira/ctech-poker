@@ -4,11 +4,12 @@ Online Texas Hold'em poker for the CTech ecosystem, with a real-money mode backe
 `ctech-wallet` and a sandbox (play-money) mode that never touches it.
 
 Status: **sandbox mode implemented end-to-end** (`api/`, `ui/`, `cdk/` are live); real-money
-mode (wallet-backed hold/capture) is **implemented but gated** (Phase 5 Tasks 1–3 implemented,
-Tasks 4–12 pending — gated on `REAL_MONEY_ENABLED=true` + `LEGAL_SIGNOFF_REF` config, as of 2026-07-21).
+mode (wallet-backed hold/capture) is **implemented but gated** (Phase 5 Tasks 1–12 implemented
+— gated on `REAL_MONEY_ENABLED=true` + `LEGAL_SIGNOFF_REF` config, as of 2026-07-21).
 This is the source-of-truth status as of 2026-07-21, verified against the implementation; the
-OVERVIEW/ARCHITECTURE/PLAN docs are design specs and may describe features (e.g. commit-reveal
-fairness surface, hand-history) that are not yet built. See [OVERVIEW.md](OVERVIEW.md) for the product
+OVERVIEW/ARCHITECTURE/PLAN docs are design specs and may describe features that are not yet
+built (e.g. the commit-reveal fairness surface: the shuffle commit/seed primitives exist
+internally, but no endpoint publishes the commit or reveals the seed yet — B32). See [OVERVIEW.md](OVERVIEW.md) for the product
 and game-rules spec, [ARCHITECTURE.md](ARCHITECTURE.md) for the technical design (real-time transport,
 game-server model, wallet integration), and [PLAN.md](PLAN.md) for the phased build plan.
 

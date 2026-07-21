@@ -3,7 +3,7 @@
 > Phased roadmap, not a bite-sized TDD task list. **Status (verified against the code,
 2026-07-21):** Phases 0–4 (foundations, engine, sandbox end-to-end, frontend/gamification)
 are **implemented and live** in `api/`, `ui/`, `cdk/`. **Phase 5 (real-money mode) is
-IMPLEMENTED but GATED** (Tasks 1–3 done, Tasks 4–12 pending) — gated on ctech-wallet
+IMPLEMENTED but GATED** (Tasks 1–12 done — see the status list below) — gated on ctech-wallet
 hold/capture endpoints + throughput, and on a Brazilian regulatory opinion (see OVERVIEW.md
 §11). The `REAL_MONEY_ENABLED` + `LEGAL_SIGNOFF_REF` config gate enforces business sign-off.
 The OVERVIEW/ARCHITECTURE specs may describe features not yet built (e.g. commit-reveal

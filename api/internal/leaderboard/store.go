@@ -109,14 +109,9 @@ func (s *Store) Top(ctx context.Context, metric string, limit int) ([]Entry, err
 	} else if metric == "win_rate" {
 		index, key = gsiWinRate, "gsi_win_rate_pk"
 	}
-	// Achievement points remain sparse; win rate has its own materialized GSI.
-	queryLimit := limit
-	if metric == "achievement_points" {
-		queryLimit = 1000
-	}
 	result, err := s.base.Query(ctx, dynamo.QueryOpts{
 		PK: "all", PKField: key, IndexName: index,
-		ScanIndexForward: false, Limit: queryLimit,
+		ScanIndexForward: false, Limit: limit,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("leaderboard: query top: %w", err)

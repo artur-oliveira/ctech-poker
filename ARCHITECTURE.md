@@ -1,4 +1,8 @@
-# ctech-poker — Technical Architecture (proposal)
+# ctech-poker — Technical Architecture
+
+> Status (2026-07-21): implemented — sandbox mode is live end-to-end; Phase 5 real-money code
+> exists behind the `REAL_MONEY_ENABLED` + `LEGAL_SIGNOFF_REF` gate. Sections marked
+> "proposal" describe design intent that should still be confirmed against the live systems.
 
 ## 1. Stack
 

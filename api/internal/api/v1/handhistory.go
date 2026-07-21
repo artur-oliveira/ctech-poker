@@ -35,8 +35,8 @@ func (a *tablestoreAdapter) LoadActionsSince(ctx context.Context, tableID, handI
 	return out, nil
 }
 
-func RegisterHandHistory(router fiber.Router, store historyStore) {
-	router.Get("/tables/:tableId/hands/:handId/history", func(c fiber.Ctx) error {
+func RegisterHandHistory(router fiber.Router, auth fiber.Handler, store historyStore) {
+	router.Get("/tables/:tableId/hands/:handId/history", auth, func(c fiber.Ctx) error {
 		tableID := c.Params("tableId")
 		handID := c.Params("handId")
 		actions, err := store.LoadActionsSince(c.Context(), tableID, handID, 0)

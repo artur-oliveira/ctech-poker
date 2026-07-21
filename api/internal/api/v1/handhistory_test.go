@@ -16,7 +16,8 @@ func (f *fakeHistoryStore) LoadActionsSince(_ context.Context, _, _ string, _ in
 
 func TestHandHistoryReturnsActionLog(t *testing.T) {
 	app := fiber.New()
-	RegisterHandHistory(app.Group("/v1.0"), &fakeHistoryStore{})
+	allow := func(c fiber.Ctx) error { return c.Next() }
+	RegisterHandHistory(app.Group("/v1.0"), allow, &fakeHistoryStore{})
 
 	req := httptest.NewRequest(fiber.MethodGet, "/v1.0/tables/t1/hands/h1/history", nil)
 	resp, err := app.Test(req)
@@ -25,5 +26,17 @@ func TestHandHistoryReturnsActionLog(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandHistoryRequiresAuth(t *testing.T) {
+	app := fiber.New()
+	deny := func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusUnauthorized) }
+	RegisterHandHistory(app.Group("/v1.0"), deny, &fakeHistoryStore{})
+
+	req := httptest.NewRequest(fiber.MethodGet, "/v1.0/tables/t1/hands/h1/history", nil)
+	resp, err := app.Test(req)
+	if err != nil || resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("expected 401 from auth middleware, got %d, err %v", resp.StatusCode, err)
 	}
 }

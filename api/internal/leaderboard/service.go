@@ -63,7 +63,10 @@ func (s *Service) Top(ctx context.Context, metric string, limit int) ([]Entry, e
 	if metric == "" {
 		metric = "hands_won"
 	}
-	if metric != "hands_won" && metric != "hands_played" && metric != "win_rate" && metric != "achievement_points" {
+	// achievement_points is deliberately NOT rankable (B31): there is no
+	// gsi_achievement_points GSI, and ranking it via another metric's GSI
+	// silently returned wrong ordering. Add the GSI before re-enabling it.
+	if metric != "hands_won" && metric != "hands_played" && metric != "win_rate" {
 		return nil, fmt.Errorf("leaderboard: unsupported metric %q", metric)
 	}
 	if limit <= 0 {
@@ -88,8 +91,6 @@ func (s *Service) Top(ctx context.Context, metric string, limit int) ([]Entry, e
 			a, b = float64(entries[i].HandsPlayed), float64(entries[j].HandsPlayed)
 		case "win_rate":
 			a, b = entries[i].WinRate, entries[j].WinRate
-		case "achievement_points":
-			a, b = float64(entries[i].AchievementPoints), float64(entries[j].AchievementPoints)
 		default:
 			a, b = float64(entries[i].HandsWon), float64(entries[j].HandsWon)
 		}

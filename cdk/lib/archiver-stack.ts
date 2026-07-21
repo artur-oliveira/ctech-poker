@@ -4,10 +4,12 @@
 import {execFileSync} from 'child_process';
 import * as cdk from 'aws-cdk-lib';
 import {ILocalBundling, RemovalPolicy} from 'aws-cdk-lib';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import {DynamoEventSource} from 'aws-cdk-lib/aws-lambda-event-sources';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import {DynamoEventSource, SqsDlq} from 'aws-cdk-lib/aws-lambda-event-sources';
 import {StartingPosition} from 'aws-cdk-lib/aws-lambda';
 import {Construct} from 'constructs';
 import {Environment} from '@aoctech/cdk';
@@ -56,10 +58,30 @@ export class ArchiverStack extends cdk.Stack {
     });
 
     bucket.grantWrite(fn);
+
+    // B10: poison stream records land in a DLQ instead of being dropped after
+    // the retries. bisectBatchOnError isolates the bad record so a single
+    // poison item doesn't send its 99 batch-mates to the DLQ with it.
+    const dlq = new sqs.Queue(this, 'ArchiverDLQ', {
+      queueName: `${environment}-poker-action-log-archiver-dlq`,
+      retentionPeriod: cdk.Duration.days(14),
+      enforceSSL: true,
+    });
     fn.addEventSource(new DynamoEventSource(actionLogTable, {
       startingPosition: StartingPosition.TRIM_HORIZON,
       batchSize: 100,
       retryAttempts: 3,
+      bisectBatchOnError: true,
+      onFailure: new SqsDlq(dlq),
     }));
+
+    new cloudwatch.Alarm(this, 'ArchiverDLQAlarm', {
+      alarmName: `${environment}-poker-action-log-archiver-dlq-messages`,
+      alarmDescription: 'Archiver Lambda dropped action-log stream records to the DLQ — the S3 archive is missing data until they are replayed.',
+      metric: dlq.metricApproximateNumberOfMessagesVisible({period: cdk.Duration.minutes(5)}),
+      threshold: 1,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
   }
 }

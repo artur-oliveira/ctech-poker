@@ -34,10 +34,10 @@ func Register(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier 
 	RegisterHealth(router, cfg, db)
 
 	RegisterTableWS(router, verifier, manager, reg, cfg.CorsAllowedOrigins, seed, rooms, cfg)
-	if tableStore != nil {
-		RegisterHandHistory(router, &tablestoreAdapter{store: tableStore})
-	}
 	auth := authMiddleware(verifier)
+	if tableStore != nil {
+		RegisterHandHistory(router, auth, &tablestoreAdapter{store: tableStore})
+	}
 	if sessionStore != nil {
 		RegisterPlayerHistory(router, auth, sessionStore)
 	}
@@ -50,6 +50,6 @@ func Register(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier 
 
 	RegisterRooms(router, auth, rooms, buyinSvc, manager, createLimiter, joinLimiter)
 	RegisterPlayers(router, auth, players)
-	RegisterLeaderboard(router, leaderboardSvc)
+	RegisterLeaderboard(router, auth, leaderboardSvc)
 	RegisterRoulette(router, auth, rouletteSvc, spinLimiter)
 }

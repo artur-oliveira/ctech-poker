@@ -7,11 +7,12 @@ A real-time, multi-table Texas Hold'em poker product. Two currency modes:
 balance). MVP ships sandbox-complete; real-money mode ships only once its two hard
 prerequisites are met — see § 11.
 
-**Real-money implementation status (2026-07-21):** The wallet client, config gate, and
-buy-in/cash-out routing are **implemented** (Tasks 1–3 of Phase 5 plan). The reconciliation
-job, metrics/alarms, graceful drain, WAF, hand-history endpoint, load test, and session
-log (Tasks 4–12) are **not yet built**. Real-money flow is gated by `REAL_MONEY_ENABLED=true`
-+ `LEGAL_SIGNOFF_REF` config — see `api/internal/config/config.go:44-51`.
+**Real-money implementation status (2026-07-21):** Sandbox mode is implemented end-to-end,
+and all of Phase 5 (Tasks 1–12: wallet client, config gate, buy-in/cash-out routing,
+reconciliation job, metrics/alarms, graceful drain, WAF, hand-history endpoint, load test,
+session log) is **implemented but gated**: real-money flow only activates with
+`REAL_MONEY_ENABLED=true` + `LEGAL_SIGNOFF_REF` config — see
+`api/internal/config/config.go:44-51`.
 
 ## 2. Rooms
 
@@ -90,11 +91,14 @@ of bug that only surfaces as "a player is quietly being paid wrong" in productio
 
 - Server-authoritative shuffle using a CSPRNG (never `math/rand` unseeded or seeded
   predictably).
-- **Commit-reveal for provable fairness** (suggested, not in original brief): before each hand,
-  the server commits to a hash of the shuffled deck + a server seed; after the hand, it
-  reveals the seed so the shuffle is independently verifiable. This matters specifically
-  because this is *real-money* poker — "trust us, the shuffle was fair" is a weak position
-  the first time a player disputes a bad beat.
+- **Commit-reveal (partially implemented — B32):** the engine computes a commit hash over the
+  shuffled deck + a server seed for every hand (`deck.ShuffleResult{CommitHash, ServerSeed}`),
+  but **no endpoint publishes the commit or reveals the seed yet**, so the shuffle is *not*
+  independently verifiable by players today. The primitives exist internally; the
+  publish/reveal verification surface is future work that must ship before any
+  "provably fair" claim is made to players — especially for *real-money* poker, where
+  "trust us, the shuffle was fair" is a weak position the first time a player disputes
+  a bad beat.
 
 ## 4. Resilience & real-time
 

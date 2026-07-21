@@ -22,19 +22,23 @@ implemented end-to-end. Real-money mode & Hardening (Phase 5 Tasks 1–12) is FU
 - Tests: `go test ./... -race`. Integration tests use DynamoDB Local (`docker-compose.test.yml`). Engine logic is
   unit-tested; keep it that way.
 
-## ⚠️ KNOWN RISK — B9 authz gap (fix it, do not accept it)
+## B9 authz — what is enforced (fixed 2026-07)
 
-`internal/api/v1/auth.go:20` is the **only** authz check: `claims.Sub == "" → reject`. There is **no scope / kyc / role
-check**, `GET /leaderboard` is unauthenticated (`leaderboard.go:11`), and **M2M credentials are not distinguished from
-user credentials**. A token with any non-empty `sub` (including an M2M client credential with no session `sid`)
-satisfies the guard. Not exploitable for real funds today (sandbox-only), but it **must** be closed before real-money
-mode ships. When fixing: keep `playerID := claims.Sub` for IDOR safety, add a scope/client-type distinction, and decide
-whether `/leaderboard` needs auth.
+Player-facing auth requires a **user token**: non-empty `sub` AND non-empty `sid` (an empty `sid` marks an M2M
+`client_credentials` token — ecosystem convention, see `jwtverify.Claims`). Enforced in `authMiddleware`
+(`internal/api/v1/auth.go`) and in the WS gateway's token check (`tablews.go`), so M2M credentials can never act
+as players. `GET /leaderboard` and `GET /tables/:tableId/hands/:handId/history` now sit behind the same auth
+middleware (`leaderboard.go` / `handhistory.go` / `router.go`).
+`playerID := claims.Sub` is kept everywhere (IDOR safety). There is still **no scope / kyc / role check** on user
+routes — none is defined for poker's user surface today; revisit before real-money mode ships if scopes are added
+to the catalog.
 
 ## Other known issues (documentation only — see api/README.md)
 
-- B10 archiver Lambda has no DLQ; B31 `leaderboard.Top("achievement_points")` hits the wrong GSI; B32 commit-reveal is
-  unverifiable (no publish/reveal endpoint).
+- B10 fixed: archiver stream failures now go to an SQS DLQ with a CloudWatch alarm (`cdk/lib/archiver-stack.ts`).
+- B31 fixed by rejection: `leaderboard.Top("achievement_points")` returns an unsupported-metric error instead of
+  silently ranking via `gsi_hands_won`; add a `gsi_achievement_points` GSI before re-enabling the metric.
+- B32 remains: commit-reveal is unverifiable (no publish/reveal endpoint).
 - A separate audit (`docs/plans/2026-07-19-api-audit-remediation.md`) covers H1–H4 / M1–M7 / L1–L6 / E1–E3 / S1–S7. Some
   fixes are already in code (actor re-resolve `tablews.go:185-198`, prod Valkey fail-fast, HTTP rate limiters
   `router.go:39-41`); others are not — verify before relying on them.

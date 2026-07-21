@@ -147,8 +147,9 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 				_ = conn.Close()
 				return
 			}
+			// Empty sid = M2M client_credentials token — never a player (B9).
 			claims, err := verifier.VerifyClaims(ctx, token)
-			if err != nil || claims == nil || claims.Sub == "" {
+			if err != nil || claims == nil || claims.Sub == "" || claims.SID == "" {
 				send(map[string]any{"type": "error", "code": "unauthorized"})
 				_ = conn.Close()
 				return
