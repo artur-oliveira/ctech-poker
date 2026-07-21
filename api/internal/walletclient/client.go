@@ -23,8 +23,16 @@ const (
 	pathSandboxCredit = "/v1.0/internal/wallet/sandbox/credit"
 	pathSandboxDebit  = "/v1.0/internal/wallet/sandbox/debit"
 
-	scopeCredit = "internal:wallet:credit"
-	scopeDebit  = "internal:wallet:debit"
+	pathGameHold       = "/v1.0/internal/wallet/game/hold"
+	pathGameRelease    = "/v1.0/internal/wallet/game/hold/%s/release"
+	pathGameCashout    = "/v1.0/internal/wallet/game/cashout"
+	pathGameStatus     = "/v1.0/internal/wallet/game/status/%s"
+
+	scopeCredit       = "internal:wallet:credit"
+	scopeDebit        = "internal:wallet:debit"
+	scopeGameHold     = "internal:wallet:game-hold"
+	scopeGameCashout  = "internal:wallet:game-cashout"
+	scopeGameStatus   = "internal:wallet:game-status"
 )
 
 // MovementRequest mirrors ctech-wallet's MovementOpRequest exactly (see
@@ -43,6 +51,9 @@ type Client struct {
 	http         *http.Client
 	creditTokens *oauth2client.TokenManager
 	debitTokens  *oauth2client.TokenManager
+	gameHoldTokens   *oauth2client.TokenManager
+	gameCashoutTokens *oauth2client.TokenManager
+	gameStatusTokens  *oauth2client.TokenManager
 }
 
 // New builds the wallet client. Separate TokenManagers per scope mirror
@@ -53,10 +64,13 @@ func New(cfg *config.Config) *Client {
 	baseAuth := strings.TrimRight(cfg.CtechURL, "/")
 	base := strings.TrimRight(cfg.WalletURL, "/")
 	return &Client{
-		base:         base,
-		http:         httpClient,
-		creditTokens: oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeCredit),
-		debitTokens:  oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeDebit),
+		base:              base,
+		http:              httpClient,
+		creditTokens:      oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeCredit),
+		debitTokens:       oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeDebit),
+		gameHoldTokens:    oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameHold),
+		gameCashoutTokens: oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameCashout),
+		gameStatusTokens:  oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameStatus),
 	}
 }
 
@@ -68,16 +82,52 @@ func (c *Client) Debit(ctx context.Context, userID string, amount int64, idempot
 	return c.movement(ctx, c.base+pathSandboxDebit, c.debitTokens, userID, amount, idempotencyKey, reason)
 }
 
-func (c *Client) movement(ctx context.Context, url string, tokens *oauth2client.TokenManager, userID string, amount int64, idempotencyKey, reason string) error {
-	token, err := tokens.Get(ctx)
+// HoldGame reserves funds in the ring-fenced game wallet.
+func (c *Client) HoldGame(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) (string, error) {
+	return c.movementWithResponse(ctx, c.base+pathGameHold, c.gameHoldTokens, userID, amount, idempotencyKey, reason)
+}
+
+// ReleaseHold cancels a reservation in the ring-fenced game wallet.
+func (c *Client) ReleaseHold(ctx context.Context, holdID string) error {
+	token, err := c.gameHoldTokens.Get(ctx)
 	if err != nil {
 		return fmt.Errorf("walletclient: token: %w", err)
 	}
-	body, err := json.Marshal(MovementRequest{UserID: userID, Amount: amount, IdempotencyKey: idempotencyKey, Reason: reason})
+	url := fmt.Sprintf(c.base+pathGameRelease, holdID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("walletclient: request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		raw, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("walletclient: status %d: %s", resp.StatusCode, string(raw))
+	}
+	return nil
+}
+
+// CashoutGame settles a reservation in the ring-fenced game wallet.
+func (c *Client) CashoutGame(ctx context.Context, userID string, holdID string, idempotencyKey, reason string) error {
+	token, err := c.gameCashoutTokens.Get(ctx)
+	if err != nil {
+		return fmt.Errorf("walletclient: token: %w", err)
+	}
+	body, err := json.Marshal(map[string]any{
+		"user_id":         userID,
+		"hold_id":         holdID,
+		"idempotency_key": idempotencyKey,
+		"reason":          reason,
+	})
 	if err != nil {
 		return fmt.Errorf("walletclient: encode: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+pathGameCashout, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -94,4 +144,78 @@ func (c *Client) movement(ctx context.Context, url string, tokens *oauth2client.
 		return fmt.Errorf("walletclient: status %d: %s", resp.StatusCode, string(raw))
 	}
 	return nil
+}
+
+// IsGamblingActivated checks whether userID has completed ctech-wallet's
+// ActivateGambling flow (verified KYC + gambling addendum).
+func (c *Client) IsGamblingActivated(ctx context.Context, userID string) (bool, error) {
+	token, err := c.gameStatusTokens.Get(ctx)
+	if err != nil {
+		return false, fmt.Errorf("walletclient: token: %w", err)
+	}
+	url := fmt.Sprintf(c.base+pathGameStatus, userID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("walletclient: request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		raw, _ := io.ReadAll(resp.Body)
+		return false, fmt.Errorf("walletclient: status %d: %s", resp.StatusCode, string(raw))
+	}
+
+	var body struct {
+		Activated bool `json:"activated"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return false, fmt.Errorf("walletclient: decode: %w", err)
+	}
+	return body.Activated, nil
+}
+
+
+func (c *Client) movement(ctx context.Context, url string, tokens *oauth2client.TokenManager, userID string, amount int64, idempotencyKey, reason string) error {
+	_, err := c.movementWithResponse(ctx, url, tokens, userID, amount, idempotencyKey, reason)
+	return err
+}
+
+func (c *Client) movementWithResponse(ctx context.Context, url string, tokens *oauth2client.TokenManager, userID string, amount int64, idempotencyKey, reason string) (string, error) {
+	token, err := tokens.Get(ctx)
+	if err != nil {
+		return "", fmt.Errorf("walletclient: token: %w", err)
+	}
+	body, err := json.Marshal(MovementRequest{UserID: userID, Amount: amount, IdempotencyKey: idempotencyKey, Reason: reason})
+	if err != nil {
+		return "", fmt.Errorf("walletclient: encode: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("walletclient: request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		raw, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("walletclient: status %d: %s", resp.StatusCode, string(raw))
+	}
+
+	var res struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", fmt.Errorf("walletclient: decode response: %w", err)
+	}
+	return res.ID, nil
 }

@@ -3,12 +3,12 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The gamified experience the brief asks for, built on top of the already-correct engine/table-server/room
-layers from Phases 0-3: hand equity display, achievements, leaderboard, sandbox credit roulette (OVERVIEW.md §9),
+layers from Phases 0-3: hand equity display, achievements, leaderboard, sandbox credit sandbox credits (OVERVIEW.md §9),
 and a real-time SPA with card animations using the SVGs already committed under `ui/svgs/` (OVERVIEW.md §6).
 
 **Architecture:** Three small, independent gamification backends (equity is computed inline per-snapshot; achievements
 and leaderboard both hook into the same hand-completion event Phase 3's `table.Actor` already reaches every hand;
-roulette is a standalone once-per-24h endpoint) sit behind new routes, all still under `/v1.0/`. The frontend is a
+sandbox credits is a standalone once-per-24h endpoint) sit behind new routes, all still under `/v1.0/`. The frontend is a
 Next.js SPA mirroring `ctech-wallet/ui`'s exact stack and deploy shape (static export → S3 → CloudFront), reusing
 `@aoctech/auth-client` for OAuth and `@aoctech/ws-client` for the table WebSocket — no new frontend infra pattern,
 only a new consumer of patterns that already exist and are proven in production.
@@ -30,7 +30,7 @@ only a new consumer of patterns that already exist and are proven in production.
   real-money phase can't accidentally wire one in by just "adding a column".
 - Achievements are data-driven (`Achievement{Key, Metric, Tiers}`), never hardcoded per-achievement `if` branches
   (OVERVIEW.md §9.2).
-- Sandbox roulette never touches the real-money ledger — it only ever calls `walletclient.Client.Credit` against
+- Sandbox sandbox credits never touches the real-money ledger — it only ever calls `walletclient.Client.Credit` against
   the sandbox scope already established in Phase 3 (OVERVIEW.md §9.3).
 - The frontend is a static export (`next build` with `output: 'export'` in production, `next dev` with a rewrite
   proxy in development) — matches `ctech-wallet/ui/next.config.ts` exactly, so the same CloudFront + ALB-origin
@@ -1172,24 +1172,24 @@ git commit -m "feat(leaderboard): non-monetary hands-played/hands-won aggregatio
 
 ---
 
-### Task 5: Sandbox credit roulette
+### Task 5: Sandbox credit sandbox credits
 
 **Files:**
 - Create: `api/internal/roulette/service.go`
 - Create: `api/internal/roulette/store.go`
 - Test: `api/internal/roulette/service_test.go`
-- Create: `api/internal/api/v1/roulette.go`
+- Create: `api/internal/api/v1/sandbox credits.go`
 
 **Interfaces:**
 - Consumes: `walletclient.Client` (Phase 3).
 - Produces: `func (s *Service) Spin(ctx, playerID string) (awardedAmount int64, err error)`, route
-  `POST /v1.0/roulette/spin`.
+  `POST /v1.0/sandbox-credits`.
 
 - [ ] **Step 1: Write the failing test**
 
 ```go
 // api/internal/roulette/service_test.go
-package roulette
+package sandbox credits
 
 import (
 	"context"
@@ -1253,18 +1253,18 @@ func TestSpinRejectsSecondAttemptWithinCooldown(t *testing.T) {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `go test ./internal/roulette/... -v`
+Run: `go test ./internal/sandbox credits/... -v`
 Expected: FAIL with "undefined: NewService".
 
 - [ ] **Step 3: Implement `service.go`**
 
 ```go
 // api/internal/roulette/service.go
-// Package roulette implements OVERVIEW.md §9.3's free sandbox credit
-// roulette: a fixed set of prize tiers, probability inversely proportional
+// Package sandbox credits implements OVERVIEW.md §9.3's free sandbox credit
+// sandbox credits: a fixed set of prize tiers, probability inversely proportional
 // to value, CSPRNG selection, once per player per 24h. Sandbox-only — it
 // only ever calls the sandbox credit path, never the real-money ledger.
-package roulette
+package sandbox credits
 
 import (
 	"context"
@@ -1274,7 +1274,7 @@ import (
 	"fmt"
 )
 
-var ErrAlreadySpunToday = errors.New("roulette: already spun within the last 24h")
+var ErrAlreadySpunToday = errors.New("sandbox credits: already spun within the last 24h")
 
 // tier pairs a prize amount with its selection weight — weights are
 // inversely proportional to value (smaller prize, higher chance), matching
@@ -1317,7 +1317,7 @@ func NewService(wallet credit, cooldown cooldownStore) *Service {
 func (s *Service) Spin(ctx context.Context, playerID string) (int64, error) {
 	ok, err := s.cooldown.TryClaimSpin(ctx, playerID)
 	if err != nil {
-		return 0, fmt.Errorf("roulette: claim spin: %w", err)
+		return 0, fmt.Errorf("sandbox credits: claim spin: %w", err)
 	}
 	if !ok {
 		return 0, ErrAlreadySpunToday
@@ -1325,11 +1325,11 @@ func (s *Service) Spin(ctx context.Context, playerID string) (int64, error) {
 
 	amount, err := pickTier()
 	if err != nil {
-		return 0, fmt.Errorf("roulette: pick tier: %w", err)
+		return 0, fmt.Errorf("sandbox credits: pick tier: %w", err)
 	}
-	idemKey := fmt.Sprintf("%s#roulette#%d", playerID, amount) // best-effort; see closing note on idempotency granularity
-	if err := s.wallet.Credit(ctx, playerID, amount, idemKey, "sandbox_roulette"); err != nil {
-		return 0, fmt.Errorf("roulette: credit: %w", err)
+	idemKey := fmt.Sprintf("%s#sandbox credits#%d", playerID, amount) // best-effort; see closing note on idempotency granularity
+	if err := s.wallet.Credit(ctx, playerID, amount, idemKey, "sandbox_sandbox credits"); err != nil {
+		return 0, fmt.Errorf("sandbox credits: credit: %w", err)
 	}
 	return amount, nil
 }
@@ -1359,14 +1359,14 @@ func pickTier() (int64, error) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `go test ./internal/roulette/... -v`
+Run: `go test ./internal/sandbox credits/... -v`
 Expected: PASS.
 
 - [ ] **Step 5: Implement the DynamoDB cooldown store and HTTP route**
 
 ```go
 // api/internal/roulette/store.go
-package roulette
+package sandbox credits
 
 import (
 	"context"
@@ -1377,7 +1377,7 @@ import (
 	"gopkg.aoctech.app/api-commons/dynamo"
 )
 
-const tableSpins = "poker_roulette_spins"
+const tableSpins = "poker_sandbox credits_spins"
 
 // cooldownKey resets at a fixed time daily (OVERVIEW.md §9.3: "e.g. midnight
 // BRT") by using the UTC calendar date as part of the sort key — a player
@@ -1411,14 +1411,14 @@ func (s *Store) TryClaimSpin(ctx context.Context, playerID string) (bool, error)
 		SpunAt   string `dynamodbav:"spun_at"`
 	}{PK: playerID, SK: cooldownKey(time.Now()), SpunAt: dynamo.NowStr()})
 	if err != nil {
-		return false, fmt.Errorf("roulette: encode: %w", err)
+		return false, fmt.Errorf("sandbox credits: encode: %w", err)
 	}
 	txItem := s.base.BuildPutTxItemIfAbsent(item)
 	if err := s.base.TransactWrite(ctx, []types.TransactWriteItem{txItem}); err != nil {
 		if dynamo.IsConditionFailed(err) {
 			return false, nil
 		}
-		return false, fmt.Errorf("roulette: claim: %w", err)
+		return false, fmt.Errorf("sandbox credits: claim: %w", err)
 	}
 	return true, nil
 }
@@ -1429,7 +1429,7 @@ Add `"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"` import for `types.Tr
 - [ ] **Step 6: Add the HTTP route**
 
 ```go
-// api/internal/api/v1/roulette.go
+// api/internal/api/v1/sandbox credits.go
 package v1
 
 import (
@@ -1439,12 +1439,12 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/roulette"
 )
 
-func RegisterRoulette(router fiber.Router, auth fiber.Handler, svc *roulette.Service) {
-	router.Post("/roulette/spin", auth, func(c fiber.Ctx) error {
+func Registersandbox credits(router fiber.Router, auth fiber.Handler, svc *sandbox credits.Service) {
+	router.Post("/sandbox-credits", auth, func(c fiber.Ctx) error {
 		userID := c.Locals(localsUserID).(string)
 		amount, err := svc.Spin(c.Context(), userID)
 		if err != nil {
-			if errors.Is(err, roulette.ErrAlreadySpunToday) {
+			if errors.Is(err, sandbox credits.ErrAlreadySpunToday) {
 				return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "already spun today"})
 			}
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "spin failed"})
@@ -1454,13 +1454,13 @@ func RegisterRoulette(router fiber.Router, auth fiber.Handler, svc *roulette.Ser
 }
 ```
 
-Mount `RegisterRoulette(router, authMiddleware(verifier), rouletteSvc)` in `router.go`, add the Fx provider.
+Mount `Registersandbox credits(router, authMiddleware(verifier), sandbox creditsSvc)` in `router.go`, add the Fx provider.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add api/internal/roulette api/internal/api/v1/roulette.go
-git commit -m "feat(roulette): sandbox credit roulette with CSPRNG weighted tiers and a 24h cooldown"
+git add api/internal/roulette api/internal/api/v1/sandbox credits.go
+git commit -m "feat(sandbox credits): sandbox credit sandbox credits with CSPRNG weighted tiers and a 24h cooldown"
 ```
 
 ---
@@ -1635,7 +1635,7 @@ git commit -m "feat(table): fire achievements and leaderboard updates on every c
 
 **Interfaces:**
 - Extends `DynamoDBStack` with `poker_achievement_progress`, `poker_leaderboard_stats` (+ `gsi_hands_won`),
-  `poker_roulette_spins`.
+  `poker_sandbox credits_spins`.
 
 - [ ] **Step 1: Extend the test**
 
@@ -1646,7 +1646,7 @@ test('creates gamification tables', () => {
   const stack = new DynamoDBStack(app, 'TestDynamoDBStack3', {environment: 'dev'});
   const template = Template.fromStack(stack);
   template.resourceCountIs('AWS::DynamoDB::Table', 6);
-  for (const name of ['poker_achievement_progress', 'poker_leaderboard_stats', 'poker_roulette_spins']) {
+  for (const name of ['poker_achievement_progress', 'poker_leaderboard_stats', 'poker_sandbox credits_spins']) {
     template.hasResourceProperties('AWS::DynamoDB::Table', {TableName: `dev_${name}`});
   }
 });
@@ -1663,7 +1663,7 @@ Expected: FAIL — resource count is 3, not 6.
 // cdk/lib/dynamodb-stack.ts — TableName, extend
 export type TableName =
   | 'poker_hand_snapshots' | 'poker_action_log' | 'poker_rooms'
-  | 'poker_achievement_progress' | 'poker_leaderboard_stats' | 'poker_roulette_spins';
+  | 'poker_achievement_progress' | 'poker_leaderboard_stats' | 'poker_sandbox credits_spins';
 ```
 
 ```typescript
@@ -1676,7 +1676,7 @@ export type TableName =
       sortKey: {name: 'hands_won', type: dynamodb.AttributeType.NUMBER},
       projectionType: dynamodb.ProjectionType.ALL,
     });
-    table('poker_roulette_spins');
+    table('poker_sandbox credits_spins');
 ```
 
 `Store.IncrementStats` (Task 4) never writes a `gsi_hands_won_pk` attribute today — add it there so the GSI this
@@ -1700,7 +1700,7 @@ Expected: PASS.
 // cdk/lib/api-stack.ts — extend the existing dynamodb PolicyStatement's resources array
       resources: [
         handSnapshotsTableArn, actionLogTableArn, roomsTableArn,
-        achievementProgressTableArn, leaderboardStatsTableArn, rouletteSpinsTableArn,
+        achievementProgressTableArn, leaderboardStatsTableArn, sandbox creditsSpinsTableArn,
       ],
 ```
 
@@ -1711,7 +1711,7 @@ and Phase 3 Task 10's exact pattern.
 
 ```bash
 git add cdk/lib/dynamodb-stack.ts cdk/lib/api-stack.ts cdk/bin/poker.ts api/internal/leaderboard/store.go
-git commit -m "feat(cdk): provision achievement/leaderboard/roulette tables"
+git commit -m "feat(cdk): provision achievement/leaderboard/sandbox credits tables"
 ```
 
 ---
@@ -2425,12 +2425,12 @@ git commit -m "feat(ui): table page with seats, board, and action bar wired to t
 
 ---
 
-### Task 12: Achievements toast, leaderboard screen, roulette wheel
+### Task 12: Achievements toast, leaderboard screen, sandbox credits wheel
 
 **Files:**
 - Create: `ui/src/components/AchievementToast.tsx`
 - Create: `ui/src/app/leaderboard/page.tsx`
-- Create: `ui/src/app/roulette/page.tsx`
+- Create: `ui/src/app/sandbox credits/page.tsx`
 - Create: `ui/src/lib/api/gamification.ts`
 
 - [ ] **Step 1: API bindings**
@@ -2451,8 +2451,8 @@ export async function fetchLeaderboard(metric = 'hands_won'): Promise<Leaderboar
   return data
 }
 
-export async function spinRoulette(): Promise<{amount: number}> {
-  const {data} = await apiClient.post<{amount: number}>('/v1.0/roulette/spin')
+export async function spinsandbox credits(): Promise<{amount: number}> {
+  const {data} = await apiClient.post<{amount: number}>('/v1.0/sandbox-credits')
   return data
 }
 ```
@@ -2524,15 +2524,15 @@ export default function LeaderboardPage() {
 }
 ```
 
-- [ ] **Step 4: Roulette wheel**
+- [ ] **Step 4: sandbox credits wheel**
 
 ```tsx
-// ui/src/app/roulette/page.tsx
+// ui/src/app/sandbox credits/page.tsx
 'use client'
 import {useState} from 'react'
-import {spinRoulette} from '@/lib/api/gamification'
+import {spinsandbox credits} from '@/lib/api/gamification'
 
-export default function RoulettePage() {
+export default function sandbox creditsPage() {
   const [result, setResult] = useState<number | null>(null)
   const [spinning, setSpinning] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -2541,7 +2541,7 @@ export default function RoulettePage() {
     setSpinning(true)
     setError(null)
     try {
-      const {amount} = await spinRoulette()
+      const {amount} = await spinsandbox credits()
       setTimeout(() => {
         setResult(amount)
         setSpinning(false)
@@ -2568,14 +2568,14 @@ export default function RoulettePage() {
 
 - [ ] **Step 5: Manual verification**
 
-Run: `cd ui && npm run dev`, visit `/leaderboard` and `/roulette`, confirm data loads and a second spin same-day
+Run: `cd ui && npm run dev`, visit `/leaderboard` and `/sandbox credits`, confirm data loads and a second spin same-day
 shows the cooldown error.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add ui/src/components/AchievementToast.tsx ui/src/app/leaderboard ui/src/app/roulette ui/src/lib/api/gamification.ts ui/src/app/globals.css
-git commit -m "feat(ui): achievement toast, leaderboard screen, sandbox roulette wheel"
+git add ui/src/components/AchievementToast.tsx ui/src/app/leaderboard ui/src/app/sandbox credits ui/src/lib/api/gamification.ts ui/src/app/globals.css
+git commit -m "feat(ui): achievement toast, leaderboard screen, sandbox sandbox credits wheel"
 ```
 
 ---

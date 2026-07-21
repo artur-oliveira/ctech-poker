@@ -148,7 +148,7 @@ equity. `go test ./api/internal/table/...`.
 **Steps:**
 
 1. Add a Redis-backed fixed-window (or token-bucket) rate-limiter middleware; register on `POST /rooms`,
-   `POST /rooms/:id/join`, `POST /v1.0/roulette/spin` (429 on exceed). Since Redis is mandatory (T2), use it directly.
+   `POST /rooms/:id/join`, `POST /v1.0/sandbox-credits` (429 on exceed). Since Redis is mandatory (T2), use it directly.
 2. `getByShareCode`: return `sanitizeRoom(room, claims.Sub)` instead of raw `room` (L3).
 3. `tableChatFilter`: document it is cosmetic; optionally replace with case/accent-insensitive matching or drop the
    moderation claim (L2) — low priority, defer.

@@ -41,3 +41,28 @@ func TestLoadRejectsNonPositiveServerTimeout(t *testing.T) {
 		t.Fatal("expected invalid timeout to fail")
 	}
 }
+
+func TestLoadFailsClosedWhenRealMoneyEnabledWithoutLegalSignoff(t *testing.T) {
+	t.Setenv("REAL_MONEY_ENABLED", "true")
+	t.Setenv("LEGAL_SIGNOFF_REF", "")
+	if _, err := Load(); err == nil {
+		t.Fatal("expected Load to fail closed: REAL_MONEY_ENABLED=true with no LEGAL_SIGNOFF_REF")
+	}
+}
+
+func TestLoadSucceedsWhenRealMoneyEnabledWithLegalSignoff(t *testing.T) {
+	t.Setenv("REAL_MONEY_ENABLED", "true")
+	t.Setenv("LEGAL_SIGNOFF_REF", "LEGAL-2026-001")
+	if _, err := Load(); err != nil {
+		t.Fatalf("expected Load to succeed with a recorded legal sign-off, got %v", err)
+	}
+}
+
+func TestLoadSucceedsWithRealMoneyDisabledAndNoSignoff(t *testing.T) {
+	t.Setenv("REAL_MONEY_ENABLED", "false")
+	t.Setenv("LEGAL_SIGNOFF_REF", "")
+	if _, err := Load(); err != nil {
+		t.Fatalf("expected Load to succeed with real money disabled, got %v", err)
+	}
+}
+

@@ -102,9 +102,9 @@ authority.
 | `GET /players/me` | JWT | player profile + terms state (`player.go:14`) |
 | `POST /players/me/terms/accept` | JWT | accept poker ToS addendum (`player.go:15`) |
 | `GET /leaderboard` | **none** | see Known Issues B9 (`leaderboard.go:11`) |
-| `POST /roulette/spin` | JWT | daily sandbox-chip spin; rate-limited (60/min/IP) (`roulette.go:10`) |
+| `POST /sandbox-credits` | JWT | daily sandbox-chip spin; rate-limited (60/min/IP) (`sandbox credits.go:10`) |
 
-Auth group wiring: `RegisterRooms/Players/Roulette` all receive `auth` (`router.go:43-46`);
+Auth group wiring: `RegisterRooms/Players/sandbox credits` all receive `auth` (`router.go:43-46`);
 `RegisterLeaderboard` is registered **without** `auth` (`router.go:45`) — intentional per
 the audit but see B9.
 

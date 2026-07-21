@@ -57,6 +57,7 @@ type JoinCmd struct {
 	// The actor derives pending-entry status from its authoritative hand state
 	// instead of trusting this potentially stale lobby hint.
 	MidHand bool
+	HoldID  string
 	Reply   chan error
 }
 
@@ -65,6 +66,7 @@ func (c JoinCmd) reply() chan error { return c.Reply }
 type LeaveCmd struct {
 	PlayerID string
 	Stack    chan int64 // receives the player's final stack, only after the removal commits
+	HoldID   chan string // receives the player's holdID, only after the removal commits
 	Reply    chan error
 }
 

@@ -23,13 +23,13 @@ against the actual code.
 | Sandbox play-money poker (rooms, lobby, ready, game engine, WS realtime) | **IMPLEMENTED** | `api/`, `ui/` |
 | Engine: betting, side pots, 7-card eval, CSPRNG shuffle | **IMPLEMENTED + tested** | `api/internal/engine/*` |
 | Sandbox ledger, isolated from ctech-wallet real ledger | **IMPLEMENTED** | `api/internal/walletclient`, `buyin` `CurrencyMode` guard |
-| Frontend lobby/table/leaderboard/roulette-spin/achievements-toast | **IMPLEMENTED** | `ui/src/app/*` |
+| Frontend lobby/table/leaderboard/sandbox credits-spin/achievements-toast | **IMPLEMENTED** | `ui/src/app/*` |
 | Infra: EC2 ASG, DynamoDB, S3+CloudFront frontend, archiver Lambda | **IMPLEMENTED + live** | `cdk/lib/*` |
 | Real-money mode (wallet hold/capture) | **DESIGNED-ONLY (Phase 5, not started)** | no real-money path in `api/`; `OVERVIEW.md §5` |
 | Hand history | **DESIGNED-ONLY** | no route/component in code |
 | Commit-reveal fairness surface (publish `CommitHash` / reveal `ServerSeed`) | **DESIGNED-ONLY** | primes exist (`deck.go`) but no endpoint — **B32** |
 | Lobby stake/mode filters; private-room share-link UI | **DESIGNED-ONLY** | `ui/` RoomList has no filters |
-| Roulette wheel visual; achievements catalog screen; chat moderation | **DESIGNED-ONLY** | not in `ui/src` |
+| sandbox credits wheel visual; achievements catalog screen; chat moderation | **DESIGNED-ONLY** | not in `ui/src` |
 
 ## Known issues (documented honestly — do NOT fix code in docs)
 

@@ -1,5 +1,6 @@
 'use client'
 import {useCallback, useEffect, useRef, useState} from 'react';
+import {useRouter} from 'next/navigation';
 import {getAccessToken, subscribeAccessToken} from '@/lib/api/client';
 import {cardLabel} from '@/lib/cards';
 import {useWebSocket, type WSStatus} from '@aoctech/ws-client';
@@ -68,6 +69,7 @@ export function useTableRealtime(id: string, viewerId?: string, mockOptions?: {s
   const pendingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pendingActionRef = useRef<PokerAction | null>(null);
   const previousSnapshot = useRef<TableSnapshot | null>(null);
+  const router = useRouter();
   const sendRef = useRef<(value: object) => boolean>(() => false);
   const [snapshot, setSnapshot] = useState<TableSnapshot | null>(null);
   const [unlock, setUnlock] = useState<{key: string; stars: number} | null>(null);
@@ -160,9 +162,8 @@ export function useTableRealtime(id: string, viewerId?: string, mockOptions?: {s
         const amount = Math.min(room.buy_in_max, Math.max(room.buy_in_min, mid));
         await joinRoom(id, amount);
       } catch {
-        // The table still renders from its live snapshot, but the player can't
-        // act until seated — so surface the failure instead of swallowing it.
         pushNotification('Não foi possível entrar na mesa. Volte ao lobby e tente novamente.');
+        router.push('/lobby');
       }
     })();
     return () => { cancelled = true };

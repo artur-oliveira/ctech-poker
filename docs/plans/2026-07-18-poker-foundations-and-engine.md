@@ -27,7 +27,7 @@ complete isolation before Phase 2 wires it to a live table server.
   `slog.NewJSONHandler`, config: `github.com/caarlos0/env/v11`.
 - Never hand-roll what `gopkg.aoctech.app/api-commons` already provides (`cache.Backend`/`cache.RedisBackend`/
   `cache.NewMemoryBackend`, `ws` registry) — import it, don't reimplement.
-- CSPRNG only for anything shuffle/fairness/roulette-adjacent: `crypto/rand`, never `math/rand` unseeded/seeded
+- CSPRNG only for anything shuffle/fairness/sandbox credits-adjacent: `crypto/rand`, never `math/rand` unseeded/seeded
   predictably.
 - No new third-party dependency where the standard library already does the job (YAGNI) — the hand evaluator and shuffle
   are built on `crypto/rand`, `crypto/sha256`, `crypto/hmac` only.
@@ -2532,7 +2532,7 @@ git commit -m "feat: handreplay CLI — scripted action sequence to pot distribu
 
 ## Self-Review Notes
 
-**Spec coverage:** Ready system, blind escalation (private rooms), leaderboard, achievements, sandbox roulette, and hand
+**Spec coverage:** Ready system, blind escalation (private rooms), leaderboard, achievements, sandbox sandbox credits, and hand
 equity display (OVERVIEW.md § 2, § 9) are **not** in this plan — they require the table server (Phase 2),
 wallet/persistence integration (Phase 3), and frontend (Phase 4), none of which exist yet. Mid-hand `PENDING_ENTRY`
 joins are partially covered here (`AddMidHandJoiner`, `Table.players` gains a `PENDING_ENTRY` seat) but the "must post
@@ -2548,5 +2548,5 @@ single most likely place a future implementer introduces a bookkeeping bug.
 **Next plans (not in this document):** Phase 2 (WebSocket gateway, table-server wiring of `tablelease` + `hand`,
 disconnect/reconnect, durable action log/crash recovery), Phase 3 (room/lobby API, sandbox wallet integration,
 ready/blind-escalation/mid-hand-join enforcement), Phase 4 (frontend: lobby, table UI, animations, equity display,
-achievements, leaderboard, roulette) each get their own plan under `docs/plans/` once this one ships — writing their
+achievements, leaderboard, sandbox credits) each get their own plan under `docs/plans/` once this one ships — writing their
 exact code now would be speculative against an engine that doesn't exist yet.

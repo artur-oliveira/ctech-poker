@@ -54,7 +54,7 @@ verify cache (latency-only, lower priority).
 **What:** The wallet idempotency key is `…#buyin#<uuid>` / `…#cashout#<uuid>` — a fresh random key every invocation. The
 wallet's idempotency guard therefore **cannot** dedupe a retried request (client retry, ALB retry on a timeout after the
 debit already succeeded). Result: a single logical buy-in can **double-debit** the sandbox wallet, and a cash-out can
-double-credit. The roulette service (same file area) correctly uses a *stable* per-day key — buyin should follow that
+double-credit. The sandbox credits service (same file area) correctly uses a *stable* per-day key — buyin should follow that
 pattern.
 **Fix:** Derive the key from stable inputs: `fmt.Sprintf("%s#%s#buyin", roomID, playerID)` (one buy-in per player per
 room is already the model) plus, if re-buys are allowed, a client-supplied nonce or a monotonic seq persisted on the
@@ -136,9 +136,9 @@ on). At minimum, do not run it inside the serialization critical section.
 
 ### M6. No HTTP rate limiting / abuse controls on mutating endpoints (security/abuse)
 
-**Where:** `api/internal/api/v1/rooms.go` (`createRoom`, `join`), `roulette.go` (`Spin`), `leaderboard.go`.
+**Where:** `api/internal/api/v1/rooms.go` (`createRoom`, `join`), `sandbox credits.go` (`Spin`), `leaderboard.go`.
 **What:** Only the WS `seatLimiter` (per-connection, in-memory) exists. HTTP `POST /rooms`, `POST /rooms/:id/join`, and
-`POST /v1.0/roulette/spin` have no rate limit, so a script can spam room creation or (sandbox) chip spins. Low financial
+`POST /v1.0/sandbox-credits` have no rate limit, so a script can spam room creation or (sandbox) chip spins. Low financial
 risk today (sandbox) but abuse/DoS surface that grows with real money.
 **Fix:** Add a shared (Redis-backed) rate limiter at the gateway for mutating endpoints; reuse `api-commons` rate-limit
 if available, else a Valkey token-bucket. Note the WS `seatLimiter` is per-connection and therefore per-instance — under
@@ -270,15 +270,15 @@ No further engine changes recommended beyond H4/M5.
   share code; `sanitizeRoom` strips `ShareCode` for non-creators on `GET /rooms/:id`.
 - CORS: dev = wildcard, no credentials; prod = explicit origins + `AllowCredentials`. `CheckOrigin` mirrors this on the
   WS upgrade.
-- JWT bearer enforced on all `/rooms`, `/players`, `/roulette` groups. `createRoom`/`join` re-derive the actor from the
+- JWT bearer enforced on all `/rooms`, `/players`, `/sandbox credits` groups. `createRoom`/`join` re-derive the actor from the
   token user, not the body.
 
 **Findings:**
 
 - **S1 (HIGH, money):** `buyin` idempotency keys are unique per call (`uuid.NewString()`) — see **H3**. Under
-  at-least-once delivery a retried buy-in/cash-out double-moves chips. (Contrast: `roulette.Spin` correctly uses a
+  at-least-once delivery a retried buy-in/cash-out double-moves chips. (Contrast: `sandbox credits.Spin` correctly uses a
   stable per-day key.)
-- **S2 (MED, abuse/DoS):** No HTTP rate limiting on `POST /rooms`, `POST /rooms/:id/join`, `POST /v1.0/roulette/spin`. A
+- **S2 (MED, abuse/DoS):** No HTTP rate limiting on `POST /rooms`, `POST /rooms/:id/join`, `POST /v1.0/sandbox-credits`. A
   script can spam room creation (Dynamo write amplification) or sandbox chip spins. See **M6**. The WS `seatLimiter` is
   only per-connection/per-instance.
 - **S3 (LOW, info hygiene):** `GET /rooms/code/:code` returns the full `Room` (incl. `ShareCode`) instead of

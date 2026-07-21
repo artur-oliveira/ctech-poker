@@ -40,6 +40,15 @@ type Config struct {
 	WalletURL         string `env:"WALLET_URL" envDefault:"https://wallet.aoctech.app"`
 	PokerClientID     string `env:"POKER_CLIENT_ID"`
 	PokerClientSecret string `env:"POKER_CLIENT_SECRET"`
+
+	// Real-money mode gate (Phase 5) — see this plan's Global Constraints.
+	// Both fields fail closed together: RealMoneyEnabled=true with no
+	// LegalSignoffRef means "an engineer flipped a flag with no recorded
+	// business sign-off", which Load refuses to start with, not just warn
+	// about — the legal risk here is explicitly bigger than any engineering
+	// risk in this codebase (OVERVIEW.md §11).
+	RealMoneyEnabled bool   `env:"REAL_MONEY_ENABLED" envDefault:"false"`
+	LegalSignoffRef  string `env:"LEGAL_SIGNOFF_REF"`
 }
 
 // Load reads config from environment variables.
@@ -62,6 +71,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.CtechURL == "" && cfg.Env == "prod" {
 		return nil, fmt.Errorf("config: CTECH_URL must be set in production so the issuer is verified")
+	}
+	if cfg.RealMoneyEnabled && cfg.LegalSignoffRef == "" {
+		return nil, fmt.Errorf("config: REAL_MONEY_ENABLED=true requires a non-empty LEGAL_SIGNOFF_REF (OVERVIEW.md §11 — this is a business decision, not an engineering toggle)")
 	}
 	if cfg.ReadTimeout <= 0 || cfg.WriteTimeout <= 0 || cfg.IdleTimeout <= 0 {
 		return nil, fmt.Errorf("config: server timeouts must be positive")

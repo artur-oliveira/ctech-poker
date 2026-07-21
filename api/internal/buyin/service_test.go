@@ -10,6 +10,7 @@ import (
 
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
@@ -18,11 +19,18 @@ import (
 type fakeWallet struct {
 	credits []call
 	debits  []call
+	holds   []holdCall
 }
 type call struct {
 	userID string
 	amount int64
 	key    string
+}
+type holdCall struct {
+	userID string
+	amount int64
+	key    string
+	holdID string
 }
 
 func (f *fakeWallet) Credit(_ context.Context, userID string, amount int64, key, _ string) error {
@@ -33,6 +41,18 @@ func (f *fakeWallet) Debit(_ context.Context, userID string, amount int64, key, 
 	f.debits = append(f.debits, call{userID, amount, key})
 	return nil
 }
+func (f *fakeWallet) HoldGame(_ context.Context, userID string, amount int64, key, _ string) (string, error) {
+	id := fmt.Sprintf("hold-%d", len(f.holds))
+	f.holds = append(f.holds, holdCall{userID, amount, key, id})
+	return id, nil
+}
+func (f *fakeWallet) ReleaseHold(_ context.Context, holdID string) error {
+	return nil
+}
+func (f *fakeWallet) CashoutGame(_ context.Context, userID string, holdID string, key, _ string) error {
+	f.credits = append(f.credits, call{userID, 0, key}) // amount 0 just to mark it happened
+	return nil
+}
 
 func testManager(t *testing.T) *tablemanager.Manager {
 	t.Helper()
@@ -40,7 +60,7 @@ func testManager(t *testing.T) *tablemanager.Manager {
 	env := fmt.Sprintf("buyin_test_%d", time.Now().UnixNano())
 	mustCreateTestTables(t, db, env)
 	store := tablestore.NewStore(db, env)
-	return tablemanager.NewManager(tablelease.NewService(cache.NewMemoryBackend(16)), store, nil)
+	return tablemanager.NewManager(tablelease.NewService(cache.NewMemoryBackend(16)), store, nil, nil, nil)
 }
 
 func TestBuyInDebitsThenSeats(t *testing.T) {
@@ -55,7 +75,7 @@ func TestBuyInDebitsThenSeats(t *testing.T) {
 		t.Fatalf("get or create actor: %v", err)
 	}
 
-	if err := svc.BuyIn(ctx, "room-1", "user-1", 400, false); err != nil {
+	if err := svc.BuyIn(ctx, "room-1", "user-1", 400, false, ""); err != nil {
 		t.Fatalf("buyin: %v", err)
 	}
 	if len(wallet.debits) != 1 || wallet.debits[0].amount != 400 {
@@ -86,7 +106,7 @@ func TestCashOutRemovesThenCredits(t *testing.T) {
 		t.Fatalf("buyin: %v", err)
 	}
 
-	stack, err := svc.CashOut(ctx, "room-2", "user-1")
+	stack, err := svc.CashOut(ctx, "room-2", "user-1", "")
 	if err != nil {
 		t.Fatalf("cashout: %v", err)
 	}
@@ -95,5 +115,55 @@ func TestCashOutRemovesThenCredits(t *testing.T) {
 	}
 	if len(wallet.credits) != 1 || wallet.credits[0].amount != 400 {
 		t.Fatalf("expected one 400-chip credit, got %+v", wallet.credits)
+	}
+}
+
+type fakeActivation struct{ activated map[string]bool }
+func (f *fakeActivation) IsActivated(_ context.Context, userID string) (bool, error) {
+	return f.activated[userID], nil
+}
+
+type fakeRoomLookup struct{ room *roomstore.Room }
+func (f *fakeRoomLookup) Get(_ context.Context, _ string) (*roomstore.Room, error) { return f.room, nil }
+
+func TestBuyInRejectsRealRoomWithoutGamblingActivation(t *testing.T) {
+	sandbox := &fakeWallet{}
+	game := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := &fakeRoomLookup{room: &roomstore.Room{ID: "room-real-1", CurrencyMode: "real"}}
+	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{}})
+	ctx := context.Background()
+
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	if _, err := mgr.Acquire(ctx, "room-real-1", seed); err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+
+	if err := svc.BuyIn(ctx, "room-real-1", "user-1", 400, false, ""); err == nil {
+		t.Fatal("expected buy-in to be rejected for a non-activated user in a real room")
+	}
+}
+
+func TestBuyInUsesGameWalletForRealRooms(t *testing.T) {
+	sandbox := &fakeWallet{}
+	game := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := &fakeRoomLookup{room: &roomstore.Room{ID: "room-real-2", CurrencyMode: "real"}}
+	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}})
+	ctx := context.Background()
+
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	if _, err := mgr.Acquire(ctx, "room-real-2", seed); err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+
+	if err := svc.BuyIn(ctx, "room-real-2", "user-1", 400, false, ""); err != nil {
+		t.Fatalf("buyin: %v", err)
+	}
+	if len(game.holds) != 1 {
+		t.Fatalf("expected one game-wallet hold, got %d", len(game.holds))
+	}
+	if len(sandbox.debits) != 0 {
+		t.Fatalf("expected zero sandbox debits, got %d", len(sandbox.debits))
 	}
 }

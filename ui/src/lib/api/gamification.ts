@@ -12,5 +12,5 @@ export async function leaderboard() {
 }
 
 export async function spin() {
-  return (await apiClient.post<{ amount: number }>('/v1.0/roulette/spin', {}, {silentError: true})).data
+  return (await apiClient.post<{ amount: number }>('/v1.0/sandbox-credits', {}, {silentError: true})).data
 }

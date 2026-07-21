@@ -57,6 +57,21 @@ func (s *Store) Claim(ctx context.Context, playerID, day string, proposed int64,
 	return SpinRecord{Amount: decoded.Amount, Status: decoded.Status}, nil
 }
 
+func (s *Store) Get(ctx context.Context, playerID, day string) (SpinRecord, error) {
+	existing, err := s.base.GetItem(ctx, playerID, day)
+	if err != nil {
+		return SpinRecord{}, fmt.Errorf("roulette: get: %w", err)
+	}
+	if existing == nil {
+		return SpinRecord{}, nil
+	}
+	decoded, err := dynamo.Decode[spinItem](existing)
+	if err != nil {
+		return SpinRecord{}, fmt.Errorf("roulette: decode: %w", err)
+	}
+	return SpinRecord{Amount: decoded.Amount, Status: decoded.Status}, nil
+}
+
 func (s *Store) Complete(ctx context.Context, playerID, day string, now time.Time) error {
 	ok, err := s.base.UpdateItem(ctx, playerID, &day, map[string]any{"status": StatusCompleted, "completed_at": now.UTC().Format(time.RFC3339Nano)})
 	if err != nil {

@@ -46,13 +46,16 @@ const (
 )
 
 type Player struct {
-	ID          string
-	Stack       int64
-	Ready       bool
-	State       PlayerState
-	HoleCards   [2]deck.Card
-	Contributed int64 // this hand's total contribution across all rounds, for side-pot math
+	ID          string `dynamodbav:"id"`
+	Stack       int64  `dynamodbav:"stack"`
+	Ready       bool   `dynamodbav:"ready"`
+	State       PlayerState `dynamodbav:"state"`
+	HoleCards   [2]deck.Card `dynamodbav:"hole_cards"`
+	Contributed int64  `dynamodbav:"contributed"` // this hand's total contribution across all rounds, for side-pot math
+	HoldID      string `dynamodbav:"hold_id,omitempty"`
 }
+
+
 
 type Table struct {
 	players     []*Player
@@ -225,24 +228,25 @@ func (t *Table) AddWaitingPlayer(p *Player) error {
 }
 
 // RemovePlayerForActor removes playerID from the table and returns their
-// current stack (the amount buyin.Service credits back on cash-out). Errors
-// if the player is currently Active/AllIn in a hand still in progress — a
+// current stack and holdID (the amount buyin.Service credits back on cash-out).
+// Errors if the player is currently Active/AllIn in a hand still in progress — a
 // seat can't be pulled out from under a hand it's dealt into; the caller
 // must wait for HAND_COMPLETE (or the player must fold first).
-func (t *Table) RemovePlayerForActor(playerID string) (int64, error) {
+func (t *Table) RemovePlayerForActor(playerID string) (int64, string, error) {
 	handInProgress := t.stage != WaitingForPlayers && t.stage != Complete
 	for i, p := range t.players {
 		if p.ID != playerID {
 			continue
 		}
 		if handInProgress && (p.State == Active || p.State == AllIn) {
-			return 0, fmt.Errorf("hand: cannot remove player %s mid-hand while still dealt in", playerID)
+			return 0, "", fmt.Errorf("hand: cannot remove player %s mid-hand while still dealt in", playerID)
 		}
 		stack := p.Stack
+		holdID := p.HoldID
 		t.players = append(t.players[:i], t.players[i+1:]...)
-		return stack, nil
+		return stack, holdID, nil
 	}
-	return 0, fmt.Errorf("hand: player %s not found", playerID)
+	return 0, "", fmt.Errorf("hand: player %s not found", playerID)
 }
 
 // StartHand begins a new hand: requires >=2 ready players, posts blinds

@@ -37,6 +37,25 @@
     --focus-ring: #ed777c;
     --control-border: #ffffff24;
     --seat-border: #ffffff26;
+
+    /* Design System Tokens */
+    --font-size-tiny: 0.625rem;
+    --font-size-compact: 0.6875rem;
+    --font-size-mono: 0.75rem;
+    --font-size-body: 0.875rem;
+    --font-size-subtitle: 1.125rem;
+    --font-size-large: 1.25rem;
+    --font-size-title: 1.5rem;
+    --font-size-xl: 2rem;
+
+    --rounded-xs: 4px;
+    --rounded-sm: 8px;
+    --rounded-card: 6px;
+    --rounded-control: 12px;
+    --rounded-seat: 14px;
+    --rounded-panel: 16px;
+    --rounded-pill: 999px;
+
     --shadow-table: 0 30px 80px #000, inset 0 0 0 4px var(--table-rail-highlight);
     --shadow-felt: inset 0 0 70px #001f18;
     --shadow-seat: 0 4px 8px #0009;
@@ -192,7 +211,7 @@ button, a {
     gap: 10px;
     color: white;
     text-decoration: none;
-    font-size: 18px
+    font-size: var(--font-size-body)
 }
 
 .brand-mark {
@@ -218,7 +237,7 @@ button, a {
 .nav-links > a {
     color: var(--text-muted-soft);
     text-decoration: none;
-    font-size: 14px;
+    font-size: var(--font-size-body);
     transition: .25s
 }
 
@@ -246,7 +265,7 @@ button, a {
     align-items: center;
     gap: 10px;
     color: var(--brand-tint-soft);
-    font: 600 12px var(--font-mono);
+    font: 600 var(--font-size-mono) var(--font-mono);
     letter-spacing: .16em;
     text-transform: uppercase
 }
@@ -274,7 +293,7 @@ h1 em {
 .hero-copy > p {
     max-width: 570px;
     color: var(--neutral-rose-2);
-    font-size: 18px;
+    font-size: var(--font-size-subtitle);
     line-height: 1.75
 }
 
@@ -288,7 +307,7 @@ h1 em {
     display: flex;
     gap: 22px;
     color: var(--neutral-wine);
-    font-size: 12px;
+    font-size: var(--font-size-mono);
     margin-top: 28px
 }
 
@@ -307,7 +326,7 @@ h1 em {
     width: 7px;
     height: 7px;
     background: var(--success-bright);
-    border-radius: 50%;
+    border-radius: var(--rounded-pill);
     box-shadow: 0 0 12px var(--success-bright)
 }
 
@@ -322,7 +341,7 @@ h1 em {
     inset: 70px 5px 50px;
     transform: rotateX(52deg) rotateZ(-4deg);
     transform-style: preserve-3d;
-    border-radius: 50%;
+    border-radius: var(--rounded-pill);
     background: var(--rail-shadow);
     padding: 18px;
     box-shadow: 0 50px 80px var(--black-0b), 0 0 0 2px var(--rail-mid)
@@ -332,14 +351,14 @@ h1 em {
     position: absolute;
     inset: 5px;
     border: 8px solid var(--rail-light);
-    border-radius: 50%;
+    border-radius: var(--rounded-pill);
     box-shadow: inset 0 0 0 5px var(--rail-edge-2)
 }
 
 .felt {
     position: absolute;
     inset: 27px;
-    border-radius: 50%;
+    border-radius: var(--rounded-pill);
     background: radial-gradient(circle, var(--felt-bright), var(--felt-deep) 75%);
     box-shadow: inset 0 0 45px var(--felt-shadow)
 }
@@ -791,10 +810,15 @@ h1 em {
 }
 
 @media (max-width: 600px) {
-    .shell {
-        width: min(100% - 28px, 1160px)
+    .lobby-actions {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
     }
 
+    .btn-reward {
+      justify-content: center;
+    }
     .nav {
         height: 72px
     }
@@ -943,7 +967,7 @@ h1 em {
     justify-content: space-between
 }
 
-.app-nav > a:last-child, .ranking > a, .roulette > a {
+.app-nav > a:last-child, .ranking > a {
     display: flex;
     gap: 7px;
     align-items: center;

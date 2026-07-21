@@ -413,7 +413,7 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 	if c.MaxSeats > 0 && len(a.cached.PlayersForActor()) >= c.MaxSeats {
 		return errors.New("table: no seats available")
 	}
-	p := &hand.Player{ID: c.PlayerID, Stack: c.Stack}
+	p := &hand.Player{ID: c.PlayerID, Stack: c.Stack, HoldID: c.HoldID}
 	stage := a.cached.Stage()
 	if stage != hand.WaitingForPlayers && stage != hand.Complete {
 		if err := a.cached.AddMidHandJoiner(p); err != nil {
@@ -435,12 +435,12 @@ func (a *Actor) handleLeave(ctx context.Context, c LeaveCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
-	stack, err := a.applyLeaveAndCommit(ctx, c)
+	stack, holdID, err := a.applyLeaveAndCommit(ctx, c)
 	if errors.Is(err, tablestore.ErrVersionConflict) {
 		if err := a.ensureLoaded(ctx, true); err != nil {
 			return err
 		}
-		stack, err = a.applyLeaveAndCommit(ctx, c)
+		stack, holdID, err = a.applyLeaveAndCommit(ctx, c)
 	}
 	if err != nil {
 		return err
@@ -448,19 +448,22 @@ func (a *Actor) handleLeave(ctx context.Context, c LeaveCmd) error {
 	if c.Stack != nil {
 		c.Stack <- stack
 	}
+	if c.HoldID != nil {
+		c.HoldID <- holdID
+	}
 	a.broadcastAll()
 	return nil
 }
 
-func (a *Actor) applyLeaveAndCommit(ctx context.Context, c LeaveCmd) (int64, error) {
-	stack, err := a.cached.RemovePlayerForActor(c.PlayerID)
+func (a *Actor) applyLeaveAndCommit(ctx context.Context, c LeaveCmd) (int64, string, error) {
+	stack, holdID, err := a.cached.RemovePlayerForActor(c.PlayerID)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	if err := a.commit(ctx, "", nil); err != nil {
-		return 0, err
+		return 0, "", err
 	}
-	return stack, nil
+	return stack, holdID, nil
 }
 
 // armActionDeadlineIfTheirTurn starts (or restarts) the auto-fold timer when

@@ -66,7 +66,7 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     {player_id: MOCK_PLAYER_ID, hands_played: 184, hands_won: 49, win_rate: .266},
     {player_id: 'leo_rio', hands_played: 213, hands_won: 52, win_rate: .244},
   ], config);
-  if (method === 'POST' && path === '/v1.0/roulette/spin') return ok({amount: 250}, config);
+  if (method === 'POST' && path === '/v1.0/sandbox-credits') return ok({amount: 250}, config);
   return ok({}, config);
 }
 

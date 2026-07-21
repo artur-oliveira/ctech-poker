@@ -32,7 +32,7 @@ anchored to `ui/src`, not to `DESIGN.md`/`PRODUCT.md` (which are design specs).
 | `/lobby` | `src/app/lobby/page.tsx:6` | Room list + create; wrapped in `TermsGate` | IMPLEMENTED |
 | `/table?id=<id>` | `src/app/table/page.tsx:54` | Table/game client (room id is a **query param**, not a segment) | IMPLEMENTED |
 | `/leaderboard` | `src/app/leaderboard/page.tsx:7` | Ranking readout | IMPLEMENTED |
-| `/roulette` | `src/app/roulette/page.tsx:9` | Daily sandbox-chip spin | PARTIAL (no wheel visual) |
+| `/sandbox credits` | `src/app/sandbox credits/page.tsx:9` | Daily sandbox-chip spin | PARTIAL (no wheel visual) |
 | `/callback` | `src/app/callback/page.tsx:7` | OAuth code→token exchange + store | IMPLEMENTED |
 | (root layout) | `src/app/layout.tsx:55` | `QueryProvider` + `Notifier` | IMPLEMENTED |
 
@@ -97,8 +97,8 @@ anchored to `ui/src`, not to `DESIGN.md`/`PRODUCT.md` (which are design specs).
   `achievement_points`.)
 - **Achievements toast — IMPLEMENTED (display only):** fires from the server
   `achievement_unlocked` message. **No achievements catalog/list screen** exists.
-- **Roulette — PARTIAL:** spin API + result text are implemented (`roulette/page.tsx:9`,
-  `POST /v1.0/roulette/spin`); the **wheel visual/spin animation is DESIGNED-ONLY** — the
+- **sandbox credits — PARTIAL:** spin API + result text are implemented (`sandbox credits/page.tsx:9`,
+  `POST /v1.0/sandbox-credits`); the **wheel visual/spin animation is DESIGNED-ONLY** — the
   page is a button + "+N fichas" text.
 - **Hand-equity display — IMPLEMENTED as a pass-through:** `Seat.tsx` shows `seat.equity`
   when present; the value comes from the server snapshot (`lib/table.ts`). There is **no
@@ -118,7 +118,7 @@ anchored to `ui/src`, not to `DESIGN.md`/`PRODUCT.md` (which are design specs).
 
 Lobby stake/mode filters · private-room share-link UI · real-money/wallet flow ·
 cryptographic deck/audit surfaces · player reactions · **hand history** · chat moderation /
-toxicity filter · achievements catalog screen · roulette **wheel** visual · physical chip
+toxicity filter · achievements catalog screen · sandbox credits **wheel** visual · physical chip
 travel · Geist font binding. None of these exist in `ui/src` today.
 
 ## Cross-links

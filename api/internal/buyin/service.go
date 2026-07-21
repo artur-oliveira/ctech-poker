@@ -22,13 +22,26 @@ import (
 type walletMover interface {
 	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
 	Debit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
+	HoldGame(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) (string, error)
+	ReleaseHold(ctx context.Context, holdID string) error
+	CashoutGame(ctx context.Context, userID string, holdID string, idempotencyKey, reason string) error
+}
+
+type roomLookup interface {
+	Get(ctx context.Context, roomID string) (*roomstore.Room, error)
+}
+
+type activationChecker interface {
+	IsActivated(ctx context.Context, userID string) (bool, error)
 }
 
 type Service struct {
-	wallet  walletMover
-	manager *tablemanager.Manager
-	rooms   *roomstore.Store
-	players interface {
+	wallet     walletMover
+	game       walletMover
+	manager    *tablemanager.Manager
+	rooms      roomLookup
+	activation activationChecker
+	players    interface {
 		RequireAccepted(context.Context, string) error
 	}
 }
@@ -39,11 +52,15 @@ var ErrTermsNotAccepted = player.ErrTermsNotAccepted
 
 var ErrUnsupportedCurrencyMode = errors.New("buyin: unsupported currency mode")
 
-func NewService(wallet walletMover, manager *tablemanager.Manager, rooms *roomstore.Store) *Service {
+func NewService(wallet walletMover, manager *tablemanager.Manager, rooms roomLookup) *Service {
 	return &Service{wallet: wallet, manager: manager, rooms: rooms}
 }
 
-func NewServiceWithPlayers(wallet walletMover, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service) *Service {
+func NewServiceWithGame(wallet, game walletMover, manager *tablemanager.Manager, rooms roomLookup, activation activationChecker) *Service {
+	return &Service{wallet: wallet, game: game, manager: manager, rooms: rooms, activation: activation}
+}
+
+func NewServiceWithPlayers(wallet walletMover, manager *tablemanager.Manager, rooms roomLookup, players *player.Service) *Service {
 	return &Service{wallet: wallet, manager: manager, rooms: rooms, players: players}
 }
 
@@ -65,6 +82,27 @@ func (s *Service) seedFor(ctx context.Context, roomID string) func() *hand.Table
 	}
 }
 
+func (s *Service) walletFor(ctx context.Context, roomID, playerID string) (walletMover, error) {
+	room, err := s.rooms.Get(ctx, roomID)
+	if err != nil {
+		return nil, fmt.Errorf("buyin: room lookup: %w", err)
+	}
+	if room == nil || room.CurrencyMode != "real" {
+		return s.wallet, nil
+	}
+	if s.game == nil || s.activation == nil {
+		return nil, fmt.Errorf("buyin: room %s is real-money but this Service was built without NewServiceWithGame", roomID)
+	}
+	ok, err := s.activation.IsActivated(ctx, playerID)
+	if err != nil {
+		return nil, fmt.Errorf("buyin: activation check: %w", err)
+	}
+	if !ok {
+		return nil, fmt.Errorf("buyin: player %s has not activated gambling on ctech-wallet", playerID)
+	}
+	return s.game, nil
+}
+
 // BuyIn debits amount from playerID's sandbox wallet, then seats them into
 // roomID's live table. If seating fails, the debit is immediately reversed
 // with a distinct idempotency key (":refund" suffix) so the reversal can
@@ -78,9 +116,6 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 		}
 		if room == nil {
 			return fmt.Errorf("buyin: room not found")
-		}
-		if room.CurrencyMode != "sandbox" {
-			return ErrUnsupportedCurrencyMode
 		}
 		if room.BigBlind <= 0 || amount < room.BuyInMin || amount > room.BuyInMax || amount <= 0 || amount%room.BigBlind != 0 {
 			return fmt.Errorf("buyin: amount outside room limits")
@@ -98,12 +133,6 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 		return fmt.Errorf("buyin: table unavailable: %w", err)
 	}
 
-	// Idempotent re-join guard: check the seat BEFORE the debit. If the player
-	// is already seated there is nothing to charge or seat — return success
-	// without touching the wallet. This is what makes a retried join (or an
-	// SPA re-mount) safe: it can never double-charge, and it can never re-seat
-	// a cashed-out player with chips whose debit was swallowed by the wallet's
-	// per-key idempotency.
 	seated, err := s.isSeated(actor, playerID)
 	if err != nil {
 		return fmt.Errorf("buyin: seat check: %w", err)
@@ -112,32 +141,47 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 		return nil
 	}
 
-	// Stable per (room, player) key so a retried request cannot double-debit.
-	// Repeat rebuys are not allowed; a genuine rebuy carries a fresh client
-	// nonce, which becomes a distinct key. When the caller passes nothing we
-	// fall back to the playerID (still stable, still retry-safe).
 	nonce := idemKey
 	if nonce == "" {
 		nonce = playerID
 	}
 	key := fmt.Sprintf("%s#%s#buyin#%s", roomID, playerID, nonce)
-	if err := s.wallet.Debit(ctx, playerID, amount, key, "poker_buyin"); err != nil {
-		return fmt.Errorf("buyin: debit: %w", err)
+
+	mover, err := s.walletFor(ctx, roomID, playerID)
+	if err != nil {
+		return fmt.Errorf("buyin: %w", err)
+	}
+
+	var holdID string
+	if mover == s.game {
+		holdID, err = mover.HoldGame(ctx, playerID, amount, key, "poker_buyin")
+		if err != nil {
+			return fmt.Errorf("buyin: hold: %w", err)
+		}
+	} else {
+		if err := mover.Debit(ctx, playerID, amount, key, "poker_buyin"); err != nil {
+			return fmt.Errorf("buyin: debit: %w", err)
+		}
 	}
 
 	reply := make(chan error, 1)
-	joinErr := actor.Dispatch(table.JoinCmd{PlayerID: playerID, Stack: amount, MaxSeats: maxSeats, MidHand: midHand, Reply: reply})
+	joinErr := actor.Dispatch(table.JoinCmd{PlayerID: playerID, Stack: amount, MaxSeats: maxSeats, MidHand: midHand, HoldID: holdID, Reply: reply})
 	if joinErr != nil {
-		// Already seated (e.g. a concurrent join won the race) is an idempotent
-		// success, not a failure — never refund a debit that bought a real seat.
 		if errors.Is(joinErr, hand.ErrAlreadySeated) {
 			return nil
 		}
-		if refundErr := s.wallet.Credit(ctx, playerID, amount, idemKey+":refund", "poker_buyin_refund"); refundErr != nil {
-			return fmt.Errorf("buyin: seat failed AND refund failed (manual reconciliation needed): seat=%v refund=%w", joinErr, refundErr)
+		if mover == s.game {
+			if refundErr := mover.ReleaseHold(ctx, holdID); refundErr != nil {
+				return fmt.Errorf("buyin: seat failed AND release failed (manual reconciliation needed): seat=%v refund=%w", joinErr, refundErr)
+			}
+		} else {
+			if refundErr := mover.Credit(ctx, playerID, amount, idemKey+":refund", "poker_buyin_refund"); refundErr != nil {
+				return fmt.Errorf("buyin: seat failed AND refund failed (manual reconciliation needed): seat=%v refund=%w", joinErr, refundErr)
+			}
 		}
 		return fmt.Errorf("buyin: seat failed, debit refunded: %w", joinErr)
 	}
+
 	return nil
 }
 
@@ -171,29 +215,24 @@ func (s *Service) isSeated(actor *table.Actor, playerID string) (bool, error) {
 // flagged as a genuine gap (see Task 3's closing note), not silently glossed
 // over.
 func (s *Service) CashOut(ctx context.Context, roomID, playerID, idemKey string) (int64, error) {
-	if s.rooms != nil {
-		room, err := s.rooms.Get(ctx, roomID)
-		if err != nil {
-			return 0, fmt.Errorf("buyin: load room: %w", err)
-		}
-		if room == nil {
-			return 0, fmt.Errorf("buyin: room not found")
-		}
-		if room.CurrencyMode != "sandbox" {
-			return 0, ErrUnsupportedCurrencyMode
-		}
+	mover, err := s.walletFor(ctx, roomID, playerID)
+	if err != nil {
+		return 0, fmt.Errorf("buyin: %w", err)
 	}
+
 	actor, err := s.manager.GetOrCreateActor(ctx, roomID, s.seedFor(ctx, roomID))
 	if err != nil || actor == nil {
 		return 0, fmt.Errorf("buyin: table unavailable: %w", err)
 	}
 
 	stackCh := make(chan int64, 1)
+	holdIDCh := make(chan string, 1)
 	reply := make(chan error, 1)
-	if err := actor.Dispatch(table.LeaveCmd{PlayerID: playerID, Stack: stackCh, Reply: reply}); err != nil {
+	if err := actor.Dispatch(table.LeaveCmd{PlayerID: playerID, Stack: stackCh, HoldID: holdIDCh, Reply: reply}); err != nil {
 		return 0, fmt.Errorf("buyin: leave: %w", err)
 	}
 	stack := <-stackCh
+	holdID := <-holdIDCh
 
 	// Stable per (room, player) key by default; a fresh client nonce per
 	// cash-out click makes a rebuy-then-cashout distinct (and still retry-safe).
@@ -201,12 +240,22 @@ func (s *Service) CashOut(ctx context.Context, roomID, playerID, idemKey string)
 	if idemKey != "" {
 		key = fmt.Sprintf("%s#%s#cashout#%s", roomID, playerID, idemKey)
 	}
-	if err := s.wallet.Credit(ctx, playerID, stack, key, "poker_cashout"); err != nil {
-		// Seat already removed; the chips are between table and wallet. Surface
-		// a clear error and log the exact (player, amount) for ops reconciliation.
-		slog.Error("buyin: cash-out credit failed after seat removal — manual reconciliation",
-			"player", playerID, "room", roomID, "amount", stack, "err", err)
-		return stack, fmt.Errorf("buyin: cash-out credit failed after seat removal — manual reconciliation needed for %s amount %d: %w", playerID, stack, err)
+
+	if mover == s.game {
+		if holdID == "" {
+			return stack, fmt.Errorf("buyin: no hold ID found for player %s", playerID)
+		}
+		if err := mover.CashoutGame(ctx, playerID, holdID, key, "poker_cashout"); err != nil {
+			slog.Error("buyin: cash-out credit failed after seat removal — manual reconciliation",
+				"player", playerID, "room", roomID, "amount", stack, "hold_id", holdID, "err", err)
+			return stack, fmt.Errorf("buyin: cash-out credit failed after seat removal — manual reconciliation needed for %s amount %d: %w", playerID, stack, err)
+		}
+	} else {
+		if err := mover.Credit(ctx, playerID, stack, key, "poker_cashout"); err != nil {
+			slog.Error("buyin: cash-out credit failed after seat removal — manual reconciliation",
+				"player", playerID, "room", roomID, "amount", stack, "err", err)
+			return stack, fmt.Errorf("buyin: cash-out credit failed after seat removal — manual reconciliation needed for %s amount %d: %w", playerID, stack, err)
+		}
 	}
 	return stack, nil
 }

@@ -34,6 +34,7 @@ type credit interface {
 type spinStore interface {
 	Claim(context.Context, string, string, int64, time.Time) (SpinRecord, error)
 	Complete(context.Context, string, string, time.Time) error
+	Get(context.Context, string, string) (SpinRecord, error)
 }
 
 type Service struct {
@@ -67,15 +68,31 @@ func (s *Service) Spin(ctx context.Context, playerID string) (int64, error) {
 
 	idemKey := fmt.Sprintf("%s#roulette#%s", playerID, day)
 	if err := s.wallet.Credit(ctx, playerID, record.Amount, idemKey, "sandbox_roulette"); err != nil {
-		// Intentionally keep the record pending. The next request retries the
-		// exact same credit; the wallet idempotency key prevents double credit.
 		return 0, fmt.Errorf("roulette: credit pending: %w", err)
 	}
 	if err := s.store.Complete(ctx, playerID, day, now); err != nil {
-		// A retry is safe even if the credit succeeded and this write failed.
 		return 0, fmt.Errorf("roulette: mark completed: %w", err)
 	}
 	return record.Amount, nil
+}
+
+func (s *Service) RemainingTime(ctx context.Context, playerID string) (int64, error) {
+	if playerID == "" {
+		return 0, fmt.Errorf("roulette: empty player id")
+	}
+	now := s.now()
+	day := cooldownKey(now)
+	record, err := s.store.Get(ctx, playerID, day)
+	if err != nil {
+		return 0, fmt.Errorf("roulette: get record: %w", err)
+	}
+	if record.Amount == 0 && record.Status == "" {
+		return 0, nil
+	}
+
+	nowBRT := now.In(brt)
+	tomorrow := time.Date(nowBRT.Year(), nowBRT.Month(), nowBRT.Day()+1, 0, 0, 0, 0, brt)
+	return int64(tomorrow.Sub(nowBRT).Seconds()), nil
 }
 
 func pickTier() (int64, error) {
