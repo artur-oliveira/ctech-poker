@@ -175,7 +175,7 @@ export function useTableRealtime(id: string, viewerId?: string, mockOptions?: {
     return () => {
       cancelled = true
     };
-  }, [id]);
+  }, [id, router]);
   
   const send = useCallback((value: object) => USE_MOCK ? Boolean(mockService.current?.send(value as Record<string, unknown>)) : wsSend(value), [wsSend]);
   const retryNow = useCallback(() => USE_MOCK ? mockService.current?.reconnect() : wsRetryNow(), [wsRetryNow]);
