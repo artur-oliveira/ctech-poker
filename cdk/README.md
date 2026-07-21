@@ -6,14 +6,14 @@ claim below is anchored to `cdk/lib/`.
 
 ## Stacks (`cdk/lib/`)
 
-| Stack | File | What it provisions |
-|---|---|---|
-| `PokerDynamoDBStack` | `dynamodb-stack.ts` | 8 DynamoDB tables + GSIs |
-| `PokerApiStack` | `api-stack.ts` | EC2 ASG game server + ALB wiring + IAM |
-| `PokerArchiverStack` | `archiver-stack.ts` | Action-log archive Lambda (DynamoDB Streams → S3) |
-| `PokerFrontendStack` | `frontend-stack.ts` | S3 + CloudFront static host + route KeyValueStore |
-| `PokerOidcStack` | `oidc-stack.ts` | OIDC / auth integration |
-| (bin) | `bin/poker.ts` | App entrypoint; `cdk.json` → `npx ts-node bin/poker.ts` |
+| Stack                | File                | What it provisions                                      |
+|----------------------|---------------------|---------------------------------------------------------|
+| `PokerDynamoDBStack` | `dynamodb-stack.ts` | 8 DynamoDB tables + GSIs                                |
+| `PokerApiStack`      | `api-stack.ts`      | EC2 ASG game server + ALB wiring + IAM                  |
+| `PokerArchiverStack` | `archiver-stack.ts` | Action-log archive Lambda (DynamoDB Streams → S3)       |
+| `PokerFrontendStack` | `frontend-stack.ts` | S3 + CloudFront static host + route KeyValueStore       |
+| `PokerOidcStack`     | `oidc-stack.ts`     | OIDC / auth integration                                 |
+| (bin)                | `bin/poker.ts`      | App entrypoint; `cdk.json` → `npx ts-node bin/poker.ts` |
 
 Shared constants (no magic strings): `lib/constants.ts`. Account `868899309401`,
 region `us-east-1` (`constants.ts:13-14`).
@@ -47,24 +47,26 @@ On-demand billing with `maxReadRequestUnits/maxWriteRequestUnits: 1000`
 (`dynamodb-stack.ts:38`) — note this is **1000**, far above the `ctech-wallet` 5 WCU cap
 flagged in `OVERVIEW.md §5` (a separate service). PITR enabled in prod; encryption AWS-managed.
 
-| Table (prefixed `<env>_`) | Sort key | TTL | Stream | Notes |
-|---|---|---|---|---|
-| `poker_table_state` | no | – | – | single authoritative item per table, `version`ed |
-| `poker_action_log` | yes | 90d | **NEW_IMAGE** | feeds the archiver Lambda |
-| `poker_action_guards` | no | 7d | – | idempotency guard per action |
-| `poker_rooms` | yes | – | – | GSIs `gsi_public`, `gsi_share_code` |
-| `poker_player_profiles` | no | – | – | poker-local shadow of ctech-account user |
-| `poker_achievement_progress` | yes | – | – | |
-| `poker_leaderboard_stats` | yes | – | – | GSIs `gsi_hands_won`, `gsi_hands_played`, `gsi_win_rate` |
-| `poker_roulette_spins` | yes | daily | – | one item per player/day (24h cooldown) |
+| Table (prefixed `<env>_`)    | Sort key | TTL   | Stream        | Notes                                                    |
+|------------------------------|----------|-------|---------------|----------------------------------------------------------|
+| `poker_table_state`          | no       | –     | –             | single authoritative item per table, `version`ed         |
+| `poker_action_log`           | yes      | 90d   | **NEW_IMAGE** | feeds the archiver Lambda                                |
+| `poker_action_guards`        | no       | 7d    | –             | idempotency guard per action                             |
+| `poker_rooms`                | yes      | –     | –             | GSIs `gsi_public`, `gsi_share_code`                      |
+| `poker_player_profiles`      | no       | –     | –             | poker-local shadow of ctech-account user                 |
+| `poker_achievement_progress` | yes      | –     | –             |                                                          |
+| `poker_leaderboard_stats`    | yes      | –     | –             | GSIs `gsi_hands_won`, `gsi_hands_played`, `gsi_win_rate` |
+| `poker_daily_reward`         | yes      | daily | –             | one item per player/day (24h cooldown)                   |
 
 > **B31 relevance:** `poker_leaderboard_stats` has **no `achievement_points` GSI** — only
 > hands-won / hands-played / win-rate. The API's `Top("achievement_points")` therefore
-> silently falls through to `gsi_hands_won` (see [`../api/README.md`](../api/README.md#known-issues-documented-honestly--do-not-fix-code-here)).
+> silently falls through to `gsi_hands_won` (see [
+`../api/README.md`](../api/README.md#known-issues-documented-honestly--do-not-fix-code-here)).
 
 ## IAM
 
 `PokerApiStack` (`api-stack.ts:71-108`):
+
 - Instance role with `AmazonSSMManagedInstanceCore` + `CloudWatchAgentServerPolicy`.
 - DynamoDB: `GetItem/PutItem/UpdateItem/Query/TransactWriteItems/DescribeTable` on the 8
   tables **and** their indexes (`api-stack.ts:88-94`).

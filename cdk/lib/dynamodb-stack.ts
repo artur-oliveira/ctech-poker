@@ -10,7 +10,7 @@ import {Environment} from '@aoctech/cdk';
 export type TableName =
     'poker_table_state' | 'poker_action_log' | 'poker_action_guards' | 'poker_rooms' |
     'poker_player_profiles' | 'poker_achievement_progress' | 'poker_leaderboard_stats' |
-    'poker_roulette_spins';
+    'poker_daily_reward';
 
 interface DynamoDBStackProps extends cdk.StackProps {
   environment: Environment;
@@ -94,6 +94,6 @@ export class DynamoDBStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
     // One item per player/day and a TTL for automatic cooldown history cleanup.
-    table('poker_roulette_spins', true, true);
+    table('poker_daily_reward', true, true);
   }
 }

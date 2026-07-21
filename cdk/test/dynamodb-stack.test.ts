@@ -25,7 +25,7 @@ test('creates gamification tables and hands-won leaderboard index', () => {
   const app = new App();
   const stack = new DynamoDBStack(app, 'TestDynamoDBStack3', {environment: 'dev'});
   const template = Template.fromStack(stack);
-  for (const name of ['poker_achievement_progress', 'poker_leaderboard_stats', 'poker_roulette_spins']) {
+  for (const name of ['poker_achievement_progress', 'poker_leaderboard_stats', 'poker_daily_reward']) {
     template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {TableName: `dev_${name}`});
   }
   template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {

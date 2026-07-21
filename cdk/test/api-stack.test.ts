@@ -31,7 +31,7 @@ test('synthesizes without error and declares exactly one ASG', () => {
     pokerClientSecretParam: '/ctech/dev/poker/poker-client-secret',
     achievementProgressTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_achievement_progress',
     leaderboardStatsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_leaderboard_stats',
-    rouletteSpinsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_roulette_spins',
+    dailyRewardTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_daily_reward',
   });
   const template = Template.fromStack(stack);
   template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);

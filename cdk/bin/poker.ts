@@ -7,17 +7,17 @@ import {DynamoDBStack} from '../lib/dynamodb-stack';
 import {ArchiverStack} from '../lib/archiver-stack';
 import {FrontendStack} from '../lib/frontend-stack';
 import {
+  ACCOUNTS_API_DOMAIN_PREFIX,
   ACCOUNTS_DOMAIN_PREFIX,
   API_DOMAIN_PREFIX,
   APP_DOMAIN_PREFIX,
   AWS_ACCOUNT,
   AWS_REGION,
   CERT_ARN,
-  GITHUB_REPO_DEFAULT,
-
   domainForEnv,
+  GITHUB_REPO_DEFAULT,
   instanceProfileName,
-  SSM_POKER, ACCOUNTS_API_DOMAIN_PREFIX,
+  SSM_POKER,
 } from '../lib/constants';
 import {OidcStack} from "../lib/oidc-stack";
 
@@ -85,7 +85,7 @@ new PokerApiStack(app, id('API'), {
   playerProfilesTableArn: dynamoStack.tables.get('poker_player_profiles')!.tableArn,
   achievementProgressTableArn: dynamoStack.tables.get('poker_achievement_progress')!.tableArn,
   leaderboardStatsTableArn: dynamoStack.tables.get('poker_leaderboard_stats')!.tableArn,
-  rouletteSpinsTableArn: dynamoStack.tables.get('poker_roulette_spins')!.tableArn,
+  dailyRewardTableArn: dynamoStack.tables.get('poker_daily_reward')!.tableArn,
   walletUrlParam: pokerParameters.walletUrl,
   pokerClientIdParam: pokerParameters.clientId,
   pokerClientSecretParam: pokerParameters.clientSecret,

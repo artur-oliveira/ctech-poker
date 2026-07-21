@@ -50,7 +50,7 @@ interface ApiStackProps extends cdk.StackProps {
   pokerClientSecretParam: string;
   achievementProgressTableArn: string;
   leaderboardStatsTableArn: string;
-  rouletteSpinsTableArn: string;
+  dailyRewardTableArn: string;
 }
 
 export class PokerApiStack extends cdk.Stack {
@@ -60,10 +60,25 @@ export class PokerApiStack extends cdk.Stack {
     super(scope, id, props);
 
     const {
-      environment, vpcId, domainName, appDomainName, authDomainName, instanceProfileName, deploymentsBucketName, logsBucketName,
-      tableStateArn, actionLogArn, actionGuardsArn,
-      roomsTableArn, playerProfilesTableArn, walletUrlParam,  pokerClientIdParam, pokerClientSecretParam,
-      achievementProgressTableArn, leaderboardStatsTableArn, rouletteSpinsTableArn,
+      environment,
+      vpcId,
+      domainName,
+      appDomainName,
+      authDomainName,
+      instanceProfileName,
+      deploymentsBucketName,
+      logsBucketName,
+      tableStateArn,
+      actionLogArn,
+      actionGuardsArn,
+      roomsTableArn,
+      playerProfilesTableArn,
+      walletUrlParam,
+      pokerClientIdParam,
+      pokerClientSecretParam,
+      achievementProgressTableArn,
+      leaderboardStatsTableArn,
+      dailyRewardTableArn,
     } = props;
 
     const shared = SSM_SHARED(environment);
@@ -83,7 +98,7 @@ export class PokerApiStack extends cdk.Stack {
 
     const tableArns = [
       tableStateArn, actionLogArn, actionGuardsArn, roomsTableArn, playerProfilesTableArn,
-      achievementProgressTableArn, leaderboardStatsTableArn, rouletteSpinsTableArn,
+      achievementProgressTableArn, leaderboardStatsTableArn, dailyRewardTableArn,
     ];
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: [
@@ -95,7 +110,7 @@ export class PokerApiStack extends cdk.Stack {
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: ['ssm:GetParameter'],
       resources: [shared.valkeyUrl, walletUrlParam, pokerClientIdParam, pokerClientSecretParam].map(
-          (path) => `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${path}`,
+        (path) => `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${path}`,
       ),
     }));
     instanceRole.addToPolicy(new iam.PolicyStatement({
