@@ -4,7 +4,7 @@ import {useRouter} from 'next/navigation';
 import {getAccessToken, subscribeAccessToken} from '@/lib/api/client';
 import {cardLabel} from '@/lib/cards';
 import {useWebSocket, type WSStatus} from '@aoctech/ws-client';
-import {MockTableService, USE_MOCK, type MockScenario} from '@/lib/mock';
+import {type MockScenario, MockTableService, USE_MOCK} from '@/lib/mock';
 import type {PokerAction, ServerMessage, TableSnapshot} from '@/lib/api/table'
 import {playerName} from '@/lib/utils'
 import {getRoom, joinRoom} from '@/lib/api/rooms'
@@ -65,14 +65,17 @@ function describeSnapshot(previous: TableSnapshot | null, next: TableSnapshot, v
   return messages.join('. ')
 }
 
-export function useTableRealtime(id: string, viewerId?: string, mockOptions?: {scenario?: MockScenario; delay?: number}) {
+export function useTableRealtime(id: string, viewerId?: string, mockOptions?: {
+  scenario?: MockScenario;
+  delay?: number
+}) {
   const pendingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pendingActionRef = useRef<PokerAction | null>(null);
   const previousSnapshot = useRef<TableSnapshot | null>(null);
   const router = useRouter();
   const sendRef = useRef<(value: object) => boolean>(() => false);
   const [snapshot, setSnapshot] = useState<TableSnapshot | null>(null);
-  const [unlock, setUnlock] = useState<{key: string; stars: number} | null>(null);
+  const [unlock, setUnlock] = useState<{ key: string; stars: number } | null>(null);
   const [chat, setChat] = useState<{ player: string; message: string }[]>([]);
   const [pendingAction, setPendingAction] = useState<PokerAction | null>(null);
   const [lastActionError, setLastActionError] = useState<ActionError | null>(null);
@@ -80,19 +83,19 @@ export function useTableRealtime(id: string, viewerId?: string, mockOptions?: {s
   const [mockStatus, setMockStatus] = useState<WSStatus>('connecting');
   const [mockReconnectAttempt, setMockReconnectAttempt] = useState(0);
   const mockService = useRef<MockTableService | null>(null);
-
+  
   const clearPending = useCallback(() => {
     if (pendingTimer.current) clearTimeout(pendingTimer.current);
     pendingTimer.current = undefined;
     pendingActionRef.current = null;
     setPendingAction(null)
   }, []);
-
+  
   const failPending = useCallback((code: string) => {
     clearPending();
     setLastActionError(actionError(code))
   }, [clearPending]);
-
+  
   const receive = useCallback((message: ServerMessage) => {
     if (message.type === 'state' && message.snapshot) {
       const liveMessage = describeSnapshot(previousSnapshot.current, message.snapshot, viewerId);
@@ -102,13 +105,16 @@ export function useTableRealtime(id: string, viewerId?: string, mockOptions?: {s
       clearPending()
     }
     if (message.type === 'error') failPending(message.code || 'unknown');
-    if (message.type === 'achievement_unlocked' && message.key) setUnlock({key: message.key, stars: message.stars || 1});
+    if (message.type === 'achievement_unlocked' && message.key) setUnlock({
+      key: message.key,
+      stars: message.stars || 1
+    });
     if (message.type === 'chat' && message.message) {
       const chatMessage = message.message;
       setChat(value => [...value.slice(-39), {player: message.player_id || '?', message: chatMessage}])
     }
   }, [clearPending, failPending, viewerId]);
-
+  
   const origin = (process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/^http/, 'ws');
   const wsUrl = id ? `${origin}/v1.0/tables/${encodeURIComponent(id)}/ws` : null;
   const subscribeToken = useCallback((callback: (token: string) => void) => subscribeAccessToken(token => {
@@ -144,7 +150,7 @@ export function useTableRealtime(id: string, viewerId?: string, mockOptions?: {s
       if (mockService.current === service) mockService.current = null;
     };
   }, [id, mockDelay, mockScenario, receive]);
-
+  
   // Seat the player the moment they open a table. The lobby only navigates to
   // /table — it never calls joinRoom — so without this the WS client is an
   // un-seated viewer: the server never broadcasts state to it and "Estou
@@ -166,9 +172,11 @@ export function useTableRealtime(id: string, viewerId?: string, mockOptions?: {s
         router.push('/lobby');
       }
     })();
-    return () => { cancelled = true };
+    return () => {
+      cancelled = true
+    };
   }, [id]);
-
+  
   const send = useCallback((value: object) => USE_MOCK ? Boolean(mockService.current?.send(value as Record<string, unknown>)) : wsSend(value), [wsSend]);
   const retryNow = useCallback(() => USE_MOCK ? mockService.current?.reconnect() : wsRetryNow(), [wsRetryNow]);
   const status = USE_MOCK ? mockStatus : wsStatus;
@@ -176,11 +184,11 @@ export function useTableRealtime(id: string, viewerId?: string, mockOptions?: {s
   useEffect(() => {
     sendRef.current = send
   }, [send]);
-
+  
   useEffect(() => () => {
     if (pendingTimer.current) clearTimeout(pendingTimer.current)
   }, []);
-
+  
   const emit = useCallback((value: object) => {
     if (!send(value)) {
       setLastActionError(actionError('not_connected'));
@@ -188,7 +196,7 @@ export function useTableRealtime(id: string, viewerId?: string, mockOptions?: {s
     }
     return true
   }, [send]);
-
+  
   const act = useCallback((action: PokerAction, amount = 0) => {
     if (pendingActionRef.current) return false;
     setLastActionError(null);
@@ -205,7 +213,7 @@ export function useTableRealtime(id: string, viewerId?: string, mockOptions?: {s
     }, ACTION_TIMEOUT_MS);
     return true
   }, [clearPending, emit, send]);
-
+  
   return {
     status, snapshot, unlock, chat, pendingAction, actionError: lastActionError, reconnectAttempt, announcement,
     clearActionError: () => setLastActionError(null), retryNow,

@@ -689,7 +689,10 @@ h1 em {
         opacity: 1;
         transform: none
     }
-    100% { opacity: 1; transform: none }
+    100% {
+        opacity: 1;
+        transform: none
+    }
 }
 
 @keyframes hole-card-reveal {
@@ -701,19 +704,40 @@ h1 em {
         opacity: 1;
         transform: none
     }
-    100% { opacity: 1; transform: none }
+    100% {
+        opacity: 1;
+        transform: none
+    }
 }
 
 @keyframes card-back-turn {
-    0%, 44% { opacity: 1; transform: scaleX(1) }
-    50% { opacity: 1; transform: scaleX(.04) }
-    50.1%, 100% { opacity: 0; transform: scaleX(.04) }
+    0%, 44% {
+        opacity: 1;
+        transform: scaleX(1)
+    }
+    50% {
+        opacity: 1;
+        transform: scaleX(.04)
+    }
+    50.1%, 100% {
+        opacity: 0;
+        transform: scaleX(.04)
+    }
 }
 
 @keyframes card-front-turn {
-    0%, 50% { opacity: 0; transform: scaleX(.04) }
-    50.1% { opacity: 1; transform: scaleX(.04) }
-    100% { opacity: 1; transform: scaleX(1) }
+    0%, 50% {
+        opacity: 0;
+        transform: scaleX(.04)
+    }
+    50.1% {
+        opacity: 1;
+        transform: scaleX(.04)
+    }
+    100% {
+        opacity: 1;
+        transform: scaleX(1)
+    }
 }
 
 @keyframes wager-in {
@@ -724,29 +748,60 @@ h1 em {
 }
 
 @keyframes pot-count {
-    0% { opacity: .35; transform: translateY(4px) }
-    100% { opacity: 1; transform: none }
+    0% {
+        opacity: .35;
+        transform: translateY(4px)
+    }
+    100% {
+        opacity: 1;
+        transform: none
+    }
 }
 
 @keyframes turn-signal {
-    0%, 100% { opacity: .5; transform: scale(.96) }
-    50% { opacity: 1; transform: scale(1.025) }
+    0%, 100% {
+        opacity: .5;
+        transform: scale(.96)
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.025)
+    }
 }
 
 @keyframes winner-confirm {
-    0% { opacity: 0; transform: translate(-50%, 7px) scale(.85) }
-    35%, 78% { opacity: 1; transform: translate(-50%, 0) scale(1) }
-    100% { opacity: .88; transform: translate(-50%, -2px) scale(1) }
+    0% {
+        opacity: 0;
+        transform: translate(-50%, 7px) scale(.85)
+    }
+    35%, 78% {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1)
+    }
+    100% {
+        opacity: .88;
+        transform: translate(-50%, -2px) scale(1)
+    }
 }
 
 @keyframes viewer-winner-confirm {
-    from { opacity: 0; transform: translate(6px, 50%) scale(.85) }
-    to { opacity: 1; transform: translate(0, 50%) scale(1) }
+    from {
+        opacity: 0;
+        transform: translate(6px, 50%) scale(.85)
+    }
+    to {
+        opacity: 1;
+        transform: translate(0, 50%) scale(1)
+    }
 }
 
 @keyframes reconnect-progress {
-    from { transform: translateX(-105%) }
-    to { transform: translateX(240%) }
+    from {
+        transform: translateX(-105%)
+    }
+    to {
+        transform: translateX(240%)
+    }
 }
 
 @keyframes float {
@@ -811,14 +866,15 @@ h1 em {
 
 @media (max-width: 600px) {
     .lobby-actions {
-      flex-direction: column;
-      align-items: stretch;
-      gap: 12px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
     }
 
     .btn-reward {
-      justify-content: center;
+        justify-content: center;
     }
+
     .nav {
         height: 72px
     }
@@ -1259,7 +1315,10 @@ h1 em {
 }
 
 @keyframes reconnect-enter {
-    from { opacity: 0; transform: translate(-50%, -8px) }
+    from {
+        opacity: 0;
+        transform: translate(-50%, -8px)
+    }
 }
 
 .game-table {

@@ -3,7 +3,7 @@ import {FlaskConical} from 'lucide-react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import type {MockScenario} from '@/lib/mock';
 
-const scenarios: {value: MockScenario; label: string}[] = [
+const scenarios: { value: MockScenario; label: string }[] = [
   {value: 'full_hand', label: 'Mão completa interativa'},
   {value: 'waiting', label: 'Aguardando jogadores'},
   {value: 'pre_flop', label: 'Pré-flop · sua vez'},
@@ -16,7 +16,7 @@ const scenarios: {value: MockScenario; label: string}[] = [
   {value: 'timeout', label: 'Ação sem resposta'},
 ];
 
-export function MockControls({scenario, delay}: {scenario: MockScenario; delay: number}) {
+export function MockControls({scenario, delay}: { scenario: MockScenario; delay: number }) {
   const router = useRouter();
   const params = useSearchParams();
   const update = (key: string, value: string) => {
@@ -24,7 +24,7 @@ export function MockControls({scenario, delay}: {scenario: MockScenario; delay: 
     next.set(key, value);
     router.replace(`?${next.toString()}`, {scroll: false});
   };
-
+  
   return <details className="mock-controls">
     <summary><FlaskConical aria-hidden="true"/><span>Cenários de teste</span></summary>
     <div>

@@ -28,20 +28,20 @@ type call struct {
 	key    string
 }
 type holdCall struct {
-	userID       string
-	amount       int64
-	tableRef     string
+	userID         string
+	amount         int64
+	tableRef       string
 	idempotencyKey string
-	reason       string
-	holdID       string
+	reason         string
+	holdID         string
 }
 type cashoutCall struct {
-	userID      string
-	amount      int64
-	tableRef    string
-	holdIDs     []string
+	userID         string
+	amount         int64
+	tableRef       string
+	holdIDs        []string
 	idempotencyKey string
-	reason      string
+	reason         string
 }
 
 func (f *fakeWallet) Credit(_ context.Context, userID string, amount int64, key, _ string) error {
@@ -138,12 +138,16 @@ func TestCashOutRemovesThenCredits(t *testing.T) {
 }
 
 type fakeActivation struct{ activated map[string]bool }
+
 func (f *fakeActivation) IsGamblingActivated(_ context.Context, userID string) (bool, error) {
 	return f.activated[userID], nil
 }
 
 type fakeRoomLookup struct{ room *roomstore.Room }
-func (f *fakeRoomLookup) Get(_ context.Context, _ string) (*roomstore.Room, error) { return f.room, nil }
+
+func (f *fakeRoomLookup) Get(_ context.Context, _ string) (*roomstore.Room, error) {
+	return f.room, nil
+}
 
 func TestBuyInRejectsRealRoomWithoutGamblingActivation(t *testing.T) {
 	sandbox := &fakeWallet{}

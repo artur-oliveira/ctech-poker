@@ -46,16 +46,14 @@ const (
 )
 
 type Player struct {
-	ID          string `dynamodbav:"id"`
-	Stack       int64  `dynamodbav:"stack"`
-	Ready       bool   `dynamodbav:"ready"`
-	State       PlayerState `dynamodbav:"state"`
+	ID          string       `dynamodbav:"id"`
+	Stack       int64        `dynamodbav:"stack"`
+	Ready       bool         `dynamodbav:"ready"`
+	State       PlayerState  `dynamodbav:"state"`
 	HoleCards   [2]deck.Card `dynamodbav:"hole_cards"`
-	Contributed int64  `dynamodbav:"contributed"` // this hand's total contribution across all rounds, for side-pot math
-	HoldID      string `dynamodbav:"hold_id,omitempty"`
+	Contributed int64        `dynamodbav:"contributed"` // this hand's total contribution across all rounds, for side-pot math
+	HoldID      string       `dynamodbav:"hold_id,omitempty"`
 }
-
-
 
 type Table struct {
 	players     []*Player

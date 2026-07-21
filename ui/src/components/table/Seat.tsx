@@ -31,7 +31,8 @@ export function Seat({seat, isViewer, isTurn, index, payout = 0}: {
     })}</div>
     <div className="seat-info">
       <b>{playerName(seat.player_id, isViewer ? seat.player_id : undefined)}</b><span>{seat.stack.toLocaleString('pt-BR')} fichas</span>{chance != null && isViewer &&
-        <small className="seat-equity" aria-label={`Chance estimada de vitória: ${chance}%`}>Chance {chance}%</small>}{STATE_LABELS[seat.state] &&
+        <small className="seat-equity"
+               aria-label={`Chance estimada de vitória: ${chance}%`}>Chance {chance}%</small>}{STATE_LABELS[seat.state] &&
         <small className="seat-state">{STATE_LABELS[seat.state]}</small>}</div>
     {seat.contributed > 0 &&
         <span key={seat.contributed} className="seat-bet">{seat.contributed.toLocaleString('pt-BR')}</span>}

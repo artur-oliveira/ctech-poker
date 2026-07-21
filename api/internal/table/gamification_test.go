@@ -1,8 +1,9 @@
 package table
 
 import (
-	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"testing"
+
+	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
 
 func TestActorNotifiesHandCompletionOnlyOncePerHandID(t *testing.T) {

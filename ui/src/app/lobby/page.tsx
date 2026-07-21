@@ -11,7 +11,7 @@ import {Button} from "@/components/ui/button";
 
 export default function Lobby() {
   const [claiming, setClaiming] = useState(false);
-
+  
   async function claimReward() {
     setClaiming(true);
     try {
@@ -23,7 +23,7 @@ export default function Lobby() {
       setClaiming(false);
     }
   }
-
+  
   return <TermsGate>
     <main className="app-page">
       <nav className="app-nav shell"><Link href="/" className="brand"><span

@@ -11,6 +11,7 @@ import {DynamoEventSource} from 'aws-cdk-lib/aws-lambda-event-sources';
 import {StartingPosition} from 'aws-cdk-lib/aws-lambda';
 import {Construct} from 'constructs';
 import {Environment} from '@aoctech/cdk';
+import {localGoBundling} from "./bundle";
 
 // localGoBundling builds the archiver binary with the host's own Go
 // toolchain, skipping Docker entirely when `go` is on PATH — Docker-in-CI
@@ -18,20 +19,7 @@ import {Environment} from '@aoctech/cdk';
 // hard requirement just to bundle a single static Go binary. Falls back to
 // the Docker-based `bundling.image`/`command` path (still configured below)
 // when `go` isn't available.
-const localGoBundling: ILocalBundling = {
-  tryBundle(outputDir: string): boolean {
-    try {
-      execFileSync('go', ['build', '-o', `${outputDir}/bootstrap`, '.'], {
-        cwd: '../api/cmd/archiver',
-        env: {...process.env, GOOS: 'linux', GOARCH: 'arm64', CGO_ENABLED: '0'},
-        stdio: 'inherit',
-      });
-      return true;
-    } catch {
-      return false; // no local Go toolchain — fall back to Docker bundling
-    }
-  },
-};
+
 
 interface ArchiverStackProps extends cdk.StackProps {
   environment: Environment;
@@ -58,7 +46,7 @@ export class ArchiverStack extends cdk.Stack {
       handler: 'bootstrap',
       code: lambda.Code.fromAsset('../api/cmd/archiver', {
         bundling: {
-          local: localGoBundling,
+          local: localGoBundling('../api/cmd/archiver'),
           image: lambda.Runtime.PROVIDED_AL2023.bundlingImage,
           command: ['bash', '-c', 'GOOS=linux GOARCH=arm64 go build -o /asset-output/bootstrap .'],
         },

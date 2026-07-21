@@ -65,4 +65,3 @@ func TestLoadSucceedsWithRealMoneyDisabledAndNoSignoff(t *testing.T) {
 		t.Fatalf("expected Load to succeed with real money disabled, got %v", err)
 	}
 }
-

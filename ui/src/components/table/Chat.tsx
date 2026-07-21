@@ -5,9 +5,13 @@ import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {playerName} from '@/lib/utils';
 
-type ChatItem = {player: string; message: string};
+type ChatItem = { player: string; message: string };
 
-export function Chat({items, onSend, connected = true}: {items: ChatItem[]; onSend: (message: string) => boolean; connected?: boolean}) {
+export function Chat({items, onSend, connected = true}: {
+  items: ChatItem[];
+  onSend: (message: string) => boolean;
+  connected?: boolean
+}) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [sendError, setSendError] = useState('');
@@ -17,16 +21,16 @@ export function Chat({items, onSend, connected = true}: {items: ChatItem[]; onSe
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const latest = items.at(-1);
-
+  
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
-
+  
   useEffect(() => {
     const node = messagesRef.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [items.length, open]);
-
+  
   function submit(event: FormEvent) {
     event.preventDefault();
     const message = text.trim();
@@ -38,13 +42,14 @@ export function Chat({items, onSend, connected = true}: {items: ChatItem[]; onSe
     setText('');
     setSendError('')
   }
-
+  
   return <aside className={`game-chat ${open ? 'open' : ''}`} aria-label="Chat da mesa">
     <div className="sr-only" role="status" aria-live={open ? 'off' : 'polite'} aria-atomic="true">
       {latest ? `${playerName(latest.player)} disse: ${latest.message}` : ''}
     </div>
     <Button type="button" variant="ghost" size="icon" aria-label={open ? 'Fechar chat' : 'Abrir chat'}
-            aria-expanded={open} aria-controls={panelId} className="chat-toggle" onClick={() => setOpen(value => !value)}>
+            aria-expanded={open} aria-controls={panelId} className="chat-toggle"
+            onClick={() => setOpen(value => !value)}>
       {open ? <X/> : <MessageCircle/>}
     </Button>
     <div id={panelId} className="chat-body" aria-hidden={!open}>
@@ -61,8 +66,10 @@ export function Chat({items, onSend, connected = true}: {items: ChatItem[]; onSe
                onChange={event => {
                  setText(event.target.value);
                  if (sendError) setSendError('')
-               }} placeholder={connected ? 'Diga algo…' : 'Reconectando…'} aria-invalid={Boolean(sendError)} aria-describedby={sendError ? errorId : undefined}/>
-        <Button type="submit" size="icon" aria-label="Enviar mensagem" disabled={!text.trim() || !connected}><Send/></Button>
+               }} placeholder={connected ? 'Diga algo…' : 'Reconectando…'} aria-invalid={Boolean(sendError)}
+               aria-describedby={sendError ? errorId : undefined}/>
+        <Button type="submit" size="icon" aria-label="Enviar mensagem"
+                disabled={!text.trim() || !connected}><Send/></Button>
       </form>
       {sendError && <p id={errorId} className="chat-error" role="alert">{sendError}</p>}
     </div>

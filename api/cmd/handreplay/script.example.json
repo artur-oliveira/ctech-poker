@@ -1,21 +1,73 @@
 {
   "players": [
-    {"id": "Dealer", "stack": 1000, "ready": true},
-    {"id": "SB", "stack": 200, "ready": true},
-    {"id": "BB", "stack": 1000, "ready": true}
+    {
+      "id": "Dealer",
+      "stack": 1000,
+      "ready": true
+    },
+    {
+      "id": "SB",
+      "stack": 200,
+      "ready": true
+    },
+    {
+      "id": "BB",
+      "stack": 1000,
+      "ready": true
+    }
   ],
   "small_blind": 10,
   "big_blind": 20,
   "actions": [
-    {"player": "Dealer", "action": "raise", "amount": 220},
-    {"player": "SB", "action": "raise", "amount": 200},
-    {"player": "BB", "action": "call", "amount": 220},
-    {"player": "Dealer", "action": "call", "amount": 220},
-    {"player": "Dealer", "action": "check", "amount": 0},
-    {"player": "BB", "action": "check", "amount": 0},
-    {"player": "Dealer", "action": "check", "amount": 0},
-    {"player": "BB", "action": "check", "amount": 0},
-    {"player": "Dealer", "action": "check", "amount": 0},
-    {"player": "BB", "action": "check", "amount": 0}
+    {
+      "player": "Dealer",
+      "action": "raise",
+      "amount": 220
+    },
+    {
+      "player": "SB",
+      "action": "raise",
+      "amount": 200
+    },
+    {
+      "player": "BB",
+      "action": "call",
+      "amount": 220
+    },
+    {
+      "player": "Dealer",
+      "action": "call",
+      "amount": 220
+    },
+    {
+      "player": "Dealer",
+      "action": "check",
+      "amount": 0
+    },
+    {
+      "player": "BB",
+      "action": "check",
+      "amount": 0
+    },
+    {
+      "player": "Dealer",
+      "action": "check",
+      "amount": 0
+    },
+    {
+      "player": "BB",
+      "action": "check",
+      "amount": 0
+    },
+    {
+      "player": "Dealer",
+      "action": "check",
+      "amount": 0
+    },
+    {
+      "player": "BB",
+      "action": "check",
+      "amount": 0
+    }
   ]
 }

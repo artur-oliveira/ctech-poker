@@ -3,4 +3,4 @@ services:
     image: amazon/dynamodb-local:latest
     ports:
       - "8555:8000"
-    command: ["-jar", "DynamoDBLocal.jar", "-inMemory", "-sharedDb"]
+    command: [ "-jar", "DynamoDBLocal.jar", "-inMemory", "-sharedDb" ]

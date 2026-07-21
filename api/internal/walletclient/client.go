@@ -23,16 +23,16 @@ const (
 	pathSandboxCredit = "/v1.0/internal/wallet/sandbox/credit"
 	pathSandboxDebit  = "/v1.0/internal/wallet/sandbox/debit"
 
-	pathGameHold       = "/v1.0/internal/wallet/game/hold"
-	pathGameRelease    = "/v1.0/internal/wallet/game/hold/%s/release"
-	pathGameCashout    = "/v1.0/internal/wallet/game/cashout"
-	pathGameStatus     = "/v1.0/internal/wallet/game/status/%s"
+	pathGameHold    = "/v1.0/internal/wallet/game/hold"
+	pathGameRelease = "/v1.0/internal/wallet/game/hold/%s/release"
+	pathGameCashout = "/v1.0/internal/wallet/game/cashout"
+	pathGameStatus  = "/v1.0/internal/wallet/game/status/%s"
 
-	scopeCredit       = "internal:wallet:credit"
-	scopeDebit        = "internal:wallet:debit"
-	scopeGameHold     = "internal:wallet:game-hold"
-	scopeGameCashout  = "internal:wallet:game-cashout"
-	scopeGameStatus   = "internal:wallet:game-status"
+	scopeCredit      = "internal:wallet:credit"
+	scopeDebit       = "internal:wallet:debit"
+	scopeGameHold    = "internal:wallet:game-hold"
+	scopeGameCashout = "internal:wallet:game-cashout"
+	scopeGameStatus  = "internal:wallet:game-status"
 )
 
 // MovementRequest mirrors ctech-wallet's MovementOpRequest exactly (see
@@ -47,11 +47,11 @@ type MovementRequest struct {
 }
 
 type Client struct {
-	base         string
-	http         *http.Client
-	creditTokens *oauth2client.TokenManager
-	debitTokens  *oauth2client.TokenManager
-	gameHoldTokens   *oauth2client.TokenManager
+	base              string
+	http              *http.Client
+	creditTokens      *oauth2client.TokenManager
+	debitTokens       *oauth2client.TokenManager
+	gameHoldTokens    *oauth2client.TokenManager
 	gameCashoutTokens *oauth2client.TokenManager
 	gameStatusTokens  *oauth2client.TokenManager
 }
@@ -217,7 +217,6 @@ func (c *Client) IsGamblingActivated(ctx context.Context, userID string) (bool, 
 	}
 	return body.Activated, nil
 }
-
 
 func (c *Client) movement(ctx context.Context, url string, tokens *oauth2client.TokenManager, userID string, amount int64, idempotencyKey, reason string) error {
 	_, err := c.movementWithResponse(ctx, url, tokens, userID, amount, idempotencyKey, reason)

@@ -1,4 +1,9 @@
-import {clsx,type ClassValue} from 'clsx';import {twMerge} from 'tailwind-merge';export function cn(...values:ClassValue[]){return twMerge(clsx(values))}
+import {type ClassValue, clsx} from 'clsx';
+import {twMerge} from 'tailwind-merge';
+
+export function cn(...values: ClassValue[]) {
+  return twMerge(clsx(values))
+}
 
 // Player IDs are opaque (OIDC sub UUIDs in prod, slug-like IDs in mocks). Turn
 // an id into a readable label without truncating — truncation turns a UUID into

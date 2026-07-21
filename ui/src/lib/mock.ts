@@ -8,8 +8,28 @@ export const MOCK_PLAYER_ID = 'mock_player_ana';
 
 const ROOM_ID = '11111111111111111111111111111111';
 const rooms = [
-  {room_id: ROOM_ID, visibility: 'public', currency_mode: 'sandbox', small_blind: 25, big_blind: 50, max_seats: 8, buy_in_min: 1000, buy_in_max: 10000, status: 'playing'},
-  {room_id: '22222222222222222222222222222222', visibility: 'public', currency_mode: 'real', small_blind: 50, big_blind: 100, max_seats: 6, buy_in_min: 2000, buy_in_max: 20000, status: 'waiting'},
+  {
+    room_id: ROOM_ID,
+    visibility: 'public',
+    currency_mode: 'sandbox',
+    small_blind: 25,
+    big_blind: 50,
+    max_seats: 8,
+    buy_in_min: 1000,
+    buy_in_max: 10000,
+    status: 'playing'
+  },
+  {
+    room_id: '22222222222222222222222222222222',
+    visibility: 'public',
+    currency_mode: 'real',
+    small_blind: 50,
+    big_blind: 100,
+    max_seats: 6,
+    buy_in_min: 2000,
+    buy_in_max: 20000,
+    status: 'waiting'
+  },
 ];
 
 function ok<T>(data: T, config: InternalAxiosRequestConfig): AxiosResponse<T> {
@@ -27,7 +47,7 @@ function forcedError(method: string, path: string) {
   const raw = window.localStorage.getItem('ctech_poker_mock_errors');
   if (!raw) return undefined;
   try {
-    const rules = JSON.parse(raw) as Record<string, {status: number; body?: unknown}>;
+    const rules = JSON.parse(raw) as Record<string, { status: number; body?: unknown }>;
     return rules[`${method} ${path}`] || rules[`* ${path}`] || rules[`${method} *`] || rules['* *'];
   } catch {
     return undefined;
@@ -51,12 +71,28 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     });
   }
   const body = typeof config.data === 'string' ? JSON.parse(config.data || '{}') : (config.data || {});
-  if (method === 'GET' && path === '/v1.0/players/me') return ok({user_id: MOCK_PLAYER_ID, poker_terms_accepted: true}, config);
-  if (method === 'POST' && path === '/v1.0/players/me/terms/accept') return ok({user_id: MOCK_PLAYER_ID, poker_terms_accepted: true}, config);
+  if (method === 'GET' && path === '/v1.0/players/me') return ok({
+    user_id: MOCK_PLAYER_ID,
+    poker_terms_accepted: true
+  }, config);
+  if (method === 'POST' && path === '/v1.0/players/me/terms/accept') return ok({
+    user_id: MOCK_PLAYER_ID,
+    poker_terms_accepted: true
+  }, config);
   if (method === 'GET' && path === '/v1.0/rooms') return ok(rooms, config);
-  if (method === 'GET' && path === '/v1.0/rooms/stakes') return ok({stakes: [{small_blind: 10, big_blind: 20}, {small_blind: 25, big_blind: 50}, {small_blind: 50, big_blind: 100}]}, config);
+  if (method === 'GET' && path === '/v1.0/rooms/stakes') return ok({
+    stakes: [{
+      small_blind: 10,
+      big_blind: 20
+    }, {small_blind: 25, big_blind: 50}, {small_blind: 50, big_blind: 100}]
+  }, config);
   if (method === 'POST' && path === '/v1.0/rooms') {
-    const room = {...body, room_id: crypto.randomUUID().replaceAll('-', ''), currency_mode: 'sandbox', status: 'waiting'};
+    const room = {
+      ...body,
+      room_id: crypto.randomUUID().replaceAll('-', ''),
+      currency_mode: 'sandbox',
+      status: 'waiting'
+    };
     rooms.unshift(room);
     return ok(room, config);
   }
@@ -70,7 +106,17 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   return ok({}, config);
 }
 
-export type MockScenario = 'full_hand' | 'waiting' | 'pre_flop' | 'flop' | 'turn' | 'river' | 'showdown' | 'reconnecting' | 'action_error' | 'timeout';
+export type MockScenario =
+  'full_hand'
+  | 'waiting'
+  | 'pre_flop'
+  | 'flop'
+  | 'turn'
+  | 'river'
+  | 'showdown'
+  | 'reconnecting'
+  | 'action_error'
+  | 'timeout';
 export type MockConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
 
 const baseSeats = () => [
@@ -124,21 +170,94 @@ const FULL_HAND_RANK: Record<string, number> = {
 
 export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
   const seats = baseSeats();
-  if (scenario === 'waiting') return {stage: 'waiting_for_players', board: [], seats: seats.slice(0, 3).map(seat => ({...seat, contributed: 0})), rake: 0};
+  if (scenario === 'waiting') return {
+    stage: 'waiting_for_players',
+    board: [],
+    seats: seats.slice(0, 3).map(seat => ({...seat, contributed: 0})),
+    rake: 0
+  };
   if (scenario === 'full_hand') {
-    return {stage: 'pre_flop', board: [], seats: fullHandSeats(), current_player_id: MOCK_PLAYER_ID, legal_actions: {actions: ['fold', 'check', 'raise'], call_amount: 0, min_raise_to: 75, max_raise_to: 4900, step: 25}, rake: 5};
+    return {
+      stage: 'pre_flop',
+      board: [],
+      seats: fullHandSeats(),
+      current_player_id: MOCK_PLAYER_ID,
+      legal_actions: {
+        actions: ['fold', 'check', 'raise'],
+        call_amount: 0,
+        min_raise_to: 75,
+        max_raise_to: 4900,
+        step: 25
+      },
+      rake: 5
+    };
   }
   if (scenario === 'pre_flop' || scenario === 'action_error' || scenario === 'timeout' || scenario === 'reconnecting') {
-    return {stage: 'pre_flop', board: [], seats, current_player_id: MOCK_PLAYER_ID, legal_actions: {actions: ['fold', 'call', 'raise'], call_amount: 25, min_raise_to: 150, max_raise_to: 4900, step: 25}, rake: 5};
+    return {
+      stage: 'pre_flop',
+      board: [],
+      seats,
+      current_player_id: MOCK_PLAYER_ID,
+      legal_actions: {
+        actions: ['fold', 'call', 'raise'],
+        call_amount: 25,
+        min_raise_to: 150,
+        max_raise_to: 4900,
+        step: 25
+      },
+      rake: 5
+    };
   }
-  if (scenario === 'flop') return {stage: 'flop', board: ['7H', '8C', 'QS'], seats, current_player_id: MOCK_PLAYER_ID, legal_actions: {actions: ['fold', 'check', 'raise'], call_amount: 0, min_raise_to: 100, max_raise_to: 4900, step: 25}, rake: 8};
-  if (scenario === 'turn') return {stage: 'turn', board: ['7H', '8C', 'QS', '2D'], seats, current_player_id: MOCK_PLAYER_ID, legal_actions: {actions: ['fold', 'check', 'raise'], call_amount: 0, min_raise_to: 175, max_raise_to: 4900, step: 25}, rake: 11};
-  if (scenario === 'river') return {stage: 'river', board: ['7H', '8C', 'QS', '2D', 'AC'], seats, current_player_id: 'nina_recife', legal_actions: {actions: [], call_amount: 0}, rake: 14};
+  if (scenario === 'flop') return {
+    stage: 'flop',
+    board: ['7H', '8C', 'QS'],
+    seats,
+    current_player_id: MOCK_PLAYER_ID,
+    legal_actions: {
+      actions: ['fold', 'check', 'raise'],
+      call_amount: 0,
+      min_raise_to: 100,
+      max_raise_to: 4900,
+      step: 25
+    },
+    rake: 8
+  };
+  if (scenario === 'turn') return {
+    stage: 'turn',
+    board: ['7H', '8C', 'QS', '2D'],
+    seats,
+    current_player_id: MOCK_PLAYER_ID,
+    legal_actions: {
+      actions: ['fold', 'check', 'raise'],
+      call_amount: 0,
+      min_raise_to: 175,
+      max_raise_to: 4900,
+      step: 25
+    },
+    rake: 11
+  };
+  if (scenario === 'river') return {
+    stage: 'river',
+    board: ['7H', '8C', 'QS', '2D', 'AC'],
+    seats,
+    current_player_id: 'nina_recife',
+    legal_actions: {actions: [], call_amount: 0},
+    rake: 14
+  };
   seats[0] = {...seats[0], stack: 6125, contributed: 0};
-  return {stage: 'showdown', board: ['7H', '8C', 'QS', '2D', 'AC'], seats: revealShowdownCards(seats), payouts: {[MOCK_PLAYER_ID]: 1275}, rake: 20};
+  return {
+    stage: 'showdown',
+    board: ['7H', '8C', 'QS', '2D', 'AC'],
+    seats: revealShowdownCards(seats),
+    payouts: {[MOCK_PLAYER_ID]: 1275},
+    rake: 20
+  };
 }
 
-type MockHandlers = {onMessage: (message: ServerMessage) => void; onStatus: (status: MockConnectionStatus, attempt: number) => void};
+type MockHandlers = {
+  onMessage: (message: ServerMessage) => void;
+  onStatus: (status: MockConnectionStatus, attempt: number) => void
+};
 
 /** Stateful WebSocket-shaped client used by useTableRealtime in mock mode. */
 export class MockTableService {
@@ -147,22 +266,25 @@ export class MockTableService {
   private attempt = 0;
   private status: MockConnectionStatus = 'connecting';
   private streetCommitted: Record<string, number> = {};
-
+  
   constructor(private scenario: MockScenario, private delay: number, private handlers: MockHandlers) {
     this.snapshot = snapshotForScenario(scenario);
     if (scenario === 'full_hand') this.beginStreet(false);
   }
-
+  
   private later(task: () => void, factor = 1) {
-    const timer = setTimeout(() => { this.timers.delete(timer); task(); }, this.delay * factor);
+    const timer = setTimeout(() => {
+      this.timers.delete(timer);
+      task();
+    }, this.delay * factor);
     this.timers.add(timer);
   }
-
+  
   private setStatus(status: MockConnectionStatus) {
     this.status = status;
     this.handlers.onStatus(status, this.attempt)
   }
-
+  
   connect() {
     this.setStatus('connecting');
     if (this.scenario === 'reconnecting') {
@@ -173,35 +295,55 @@ export class MockTableService {
           this.setStatus('disconnected');
           this.attempt = 1;
           this.later(() => this.setStatus('reconnecting'), 1);
-          this.later(() => { this.setStatus('connected'); this.emitState(); }, 4)
+          this.later(() => {
+            this.setStatus('connected');
+            this.emitState();
+          }, 4)
         }, 3)
       });
       return;
     }
-    this.later(() => { this.setStatus('connected'); this.emitState(); });
+    this.later(() => {
+      this.setStatus('connected');
+      this.emitState();
+    });
   }
-
+  
   reconnect() {
     this.attempt += 1;
     this.setStatus('reconnecting');
-    this.later(() => { this.setStatus('connected'); this.emitState(); });
+    this.later(() => {
+      this.setStatus('connected');
+      this.emitState();
+    });
   }
-
+  
   send(value: Record<string, unknown>) {
     // The timeout scenario models a server that accepts the connection but
     // never replies to anything — so every action (and the watchdog ping)
     // hangs until the client-side timeout fires.
     if (this.scenario === 'timeout') return true;
     if (this.status !== 'connected') return false;
-    if (value.type === 'ping' || value.type === 'ready') { this.later(() => this.emitState()); return true; }
+    if (value.type === 'ping' || value.type === 'ready') {
+      this.later(() => this.emitState());
+      return true;
+    }
     if (value.type === 'chat') {
-      this.later(() => this.handlers.onMessage({type: 'chat', player_id: MOCK_PLAYER_ID, message: String(value.message || '')}));
+      this.later(() => this.handlers.onMessage({
+        type: 'chat',
+        player_id: MOCK_PLAYER_ID,
+        message: String(value.message || '')
+      }));
       this.later(() => this.handlers.onMessage({type: 'chat', player_id: 'bia_sp', message: 'Boa! Vamos nessa 👋'}), 2);
       return true;
     }
     if (value.type !== 'act') return true;
     if (this.scenario === 'action_error') {
-      this.later(() => this.handlers.onMessage({type: 'error', code: 'invalid_action', action_id: String(value.action_id || '')}));
+      this.later(() => this.handlers.onMessage({
+        type: 'error',
+        code: 'invalid_action',
+        action_id: String(value.action_id || '')
+      }));
       return true;
     }
     if (this.scenario === 'full_hand') {
@@ -220,13 +362,17 @@ export class MockTableService {
       }
       this.snapshot = {...this.snapshot, seats, current_player_id: 'bia_sp', legal_actions: {actions: []}};
       this.emitState();
-      if (value.action === 'raise') this.later(() => this.handlers.onMessage({type: 'achievement_unlocked', key: 'primeiro_aumento', stars: 2}), 2);
+      if (value.action === 'raise') this.later(() => this.handlers.onMessage({
+        type: 'achievement_unlocked',
+        key: 'primeiro_aumento',
+        stars: 2
+      }), 2);
     });
     return true;
   }
-
+  
   // --- Full-hand engine -----------------------------------------------------
-
+  
   /** Seed this street's per-street commitment. When `clear` is false the
    * current contributions (blinds) are carried in; otherwise the street starts
    * fresh at zero. */
@@ -236,13 +382,13 @@ export class MockTableService {
       if (seat.state === 'active') this.streetCommitted[seat.player_id] = clear ? 0 : (seat.contributed || 0);
     }
   }
-
+  
   private streetBet(seats: SeatView[]) {
     // Includes folded seats: a player's bet stays on the table as the amount
     // the rest of the table must still match, even after they fold.
     return Math.max(0, ...seats.map(s => this.streetCommitted[s.player_id] || 0));
   }
-
+  
   private legalActionsFor(seats: SeatView[], playerId: string): LegalActionState {
     const seat = seats.find(s => s.player_id === playerId);
     if (!seat || seat.state !== 'active') return {actions: []};
@@ -252,9 +398,15 @@ export class MockTableService {
     const maxTo = seat.stack + committed;
     const minTo = currentBet + 25;
     const actions: PokerAction[] = callAmount > 0 ? ['fold', 'call', 'raise'] : ['fold', 'check', 'raise'];
-    return {actions, call_amount: callAmount, min_raise_to: Math.min(maxTo, minTo), max_raise_to: Math.max(0, maxTo), step: 25};
+    return {
+      actions,
+      call_amount: callAmount,
+      min_raise_to: Math.min(maxTo, minTo),
+      max_raise_to: Math.max(0, maxTo),
+      step: 25
+    };
   }
-
+  
   private resolveFullHand(action: PokerAction, amount: number) {
     const seats = this.snapshot.seats.map(s => ({...s, hole_cards: s.hole_cards ? [...s.hole_cards] : undefined}));
     const viewer = seats.find(s => s.player_id === MOCK_PLAYER_ID);
@@ -296,15 +448,24 @@ export class MockTableService {
     }
     const currentBet = this.streetBet(seats);
     const matched = activeSeats.every(s => (this.streetCommitted[s.player_id] || 0) === currentBet || s.state === 'all_in');
-    this.snapshot = {...this.snapshot, seats, current_player_id: MOCK_PLAYER_ID, legal_actions: this.legalActionsFor(seats, MOCK_PLAYER_ID)};
+    this.snapshot = {
+      ...this.snapshot,
+      seats,
+      current_player_id: MOCK_PLAYER_ID,
+      legal_actions: this.legalActionsFor(seats, MOCK_PLAYER_ID)
+    };
     this.emitState();
-    if (action === 'raise') this.later(() => this.handlers.onMessage({type: 'achievement_unlocked', key: 'primeiro_aumento', stars: 2}), 2);
+    if (action === 'raise') this.later(() => this.handlers.onMessage({
+      type: 'achievement_unlocked',
+      key: 'primeiro_aumento',
+      stars: 2
+    }), 2);
     if (matched) {
       if (this.snapshot.stage === 'river') this.later(() => this.reachShowdown(seats, pot), 1);
       else this.later(() => this.advanceStreet(seats), 1);
     }
   }
-
+  
   private advanceStreet(seats: SeatView[]) {
     const stage = this.snapshot.stage;
     const next = stage === 'pre_flop' ? 'flop' : stage === 'flop' ? 'turn' : stage === 'turn' ? 'river' : 'showdown';
@@ -315,13 +476,18 @@ export class MockTableService {
     }
     this.beginStreet(true);
     const rake = next === 'flop' ? 8 : next === 'turn' ? 11 : 14;
-    this.snapshot = {...this.snapshot, stage: next, board, seats,
-      current_player_id: MOCK_PLAYER_ID, legal_actions: this.legalActionsFor(seats, MOCK_PLAYER_ID), rake};
+    this.snapshot = {
+      ...this.snapshot, stage: next, board, seats,
+      current_player_id: MOCK_PLAYER_ID, legal_actions: this.legalActionsFor(seats, MOCK_PLAYER_ID), rake
+    };
     this.emitState();
   }
-
+  
   private reachShowdown(seats: SeatView[], pot: number) {
-    const revealed = seats.map(s => FULL_HAND_REVEAL[s.player_id] ? {...s, hole_cards: FULL_HAND_REVEAL[s.player_id]} : s);
+    const revealed = seats.map(s => FULL_HAND_REVEAL[s.player_id] ? {
+      ...s,
+      hole_cards: FULL_HAND_REVEAL[s.player_id]
+    } : s);
     const contenders = revealed.filter(s => s.state === 'active');
     const winner = bestHand(contenders);
     const payouts: Record<string, number> = {};
@@ -329,15 +495,17 @@ export class MockTableService {
       winner.stack += pot;
       payouts[winner.player_id] = pot;
     }
-    this.snapshot = {...this.snapshot, stage: 'showdown', board: ['7H', '8C', 'QS', '2D', 'AC'], seats: revealed,
-      current_player_id: undefined, legal_actions: {actions: []}, payouts, rake: 20};
+    this.snapshot = {
+      ...this.snapshot, stage: 'showdown', board: ['7H', '8C', 'QS', '2D', 'AC'], seats: revealed,
+      current_player_id: undefined, legal_actions: {actions: []}, payouts, rake: 20
+    };
     this.emitState();
     this.later(() => {
       this.snapshot = {...this.snapshot, stage: 'complete'};
       this.emitState();
     }, 6);
   }
-
+  
   private finishHand(seats: SeatView[], activeSeats: SeatView[], pot: number) {
     const winner = bestHand(activeSeats);
     const payouts: Record<string, number> = {};
@@ -345,14 +513,21 @@ export class MockTableService {
       winner.stack += pot;
       payouts[winner.player_id] = pot;
     }
-    this.snapshot = {...this.snapshot, seats, current_player_id: undefined, legal_actions: {actions: []}, payouts, stage: 'complete'};
+    this.snapshot = {
+      ...this.snapshot,
+      seats,
+      current_player_id: undefined,
+      legal_actions: {actions: []},
+      payouts,
+      stage: 'complete'
+    };
     this.emitState();
   }
-
+  
   private emitState() {
     this.handlers.onMessage({type: 'state', snapshot: this.snapshot});
   }
-
+  
   close() {
     this.timers.forEach(clearTimeout);
     this.timers.clear();

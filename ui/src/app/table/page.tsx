@@ -8,6 +8,7 @@ import {getAccessToken} from '@/lib/api/client';
 import {useTableRealtime} from '@/lib/hooks/useTableRealtime';
 import {Seat} from '@/components/table/Seat';
 import {Board} from '@/components/table/Board';
+import type {ActionAvailability} from '@/components/table/ActionBar'
 import {ActionBar} from '@/components/table/ActionBar';
 import {Chat} from '@/components/table/Chat';
 import {MockControls} from '@/components/table/MockControls';
@@ -15,8 +16,7 @@ import {AchievementToast} from '@/components/AchievementToast'
 import {TermsGate} from '@/components/TermsGate'
 import {Button} from '@/components/ui/button'
 import type {PokerAction, TableSnapshot} from '@/lib/api/table'
-import type {ActionAvailability} from '@/components/table/ActionBar'
-import {MOCK_PLAYER_ID, USE_MOCK, type MockScenario} from '@/lib/mock'
+import {MOCK_PLAYER_ID, type MockScenario, USE_MOCK} from '@/lib/mock'
 
 const ROOM_ID = /^[a-f0-9]{32}$/i
 const CONNECTION_COPY = {
@@ -68,8 +68,10 @@ function TableContent() {
     </main>
   );
   if (!rt.snapshot) return <>
-    <main className="game-loading"><span className="loader"/><h2>{rt.status === 'connected' ? 'Aquecendo o seu lugar…' : 'Conectando à mesa…'}</h2>
-      <p role="status" aria-live="polite">{rt.status === 'connected' ? 'Sincronizando o estado mais recente.' : CONNECTION_COPY[rt.status]}</p>
+    <main className="game-loading"><span className="loader"/>
+      <h2>{rt.status === 'connected' ? 'Aquecendo o seu lugar…' : 'Conectando à mesa…'}</h2>
+      <p role="status"
+         aria-live="polite">{rt.status === 'connected' ? 'Sincronizando o estado mais recente.' : CONNECTION_COPY[rt.status]}</p>
       {rt.status === 'connected' ? <Button onClick={() => rt.ready()}>Estou pronto</Button> :
         <Button variant="outline" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>}
     </main>
@@ -97,8 +99,9 @@ function TableContent() {
           .filter(Boolean).join(' ')}
       </div>
       {connectionMessage && <div className={`reconnect-notice ${rt.status}`}>
-        <span aria-hidden="true"/><p>{connectionMessage}{rt.reconnectAttempt > 1 ? ` Tentativa ${rt.reconnectAttempt}.` : ''}</p>
-        <Button type="button" variant="ghost" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>
+          <span aria-hidden="true"/>
+          <p>{connectionMessage}{rt.reconnectAttempt > 1 ? ` Tentativa ${rt.reconnectAttempt}.` : ''}</p>
+          <Button type="button" variant="ghost" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>
       </div>}
       <div className="game-table">
         <div className="game-rail"/>
@@ -107,9 +110,11 @@ function TableContent() {
                                         isTurn={s.current_player_id === seat.player_id}
                                         payout={s.payouts?.[seat.player_id] || 0}
                                         isViewer={seat.player_id === viewer}/>)}</div>
-      <ActionBar onAct={rt.act} {...actions} actionKey={actionKey} connected={rt.status === 'connected'} pending={rt.pendingAction}
+      <ActionBar onAct={rt.act} {...actions} actionKey={actionKey} connected={rt.status === 'connected'}
+                 pending={rt.pendingAction}
                  error={rt.actionError} onDismissError={rt.clearActionError}/>
-      <Chat items={rt.chat} onSend={rt.sendChat} connected={rt.status === 'connected'}/><AchievementToast unlock={rt.unlock}/>
+      <Chat items={rt.chat} onSend={rt.sendChat} connected={rt.status === 'connected'}/><AchievementToast
+      unlock={rt.unlock}/>
       {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
     </main>
   )

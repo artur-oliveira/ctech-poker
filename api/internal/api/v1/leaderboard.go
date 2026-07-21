@@ -1,10 +1,11 @@
 package v1
 
 import (
+	"strconv"
+
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/problem"
-	"strconv"
 )
 
 func RegisterLeaderboard(router fiber.Router, svc *leaderboard.Service) {

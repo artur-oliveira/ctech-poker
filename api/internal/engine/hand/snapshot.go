@@ -7,21 +7,21 @@ import "gopkg.aoctech.app/poker/api/internal/engine/deck"
 // player's hole cards" a single-source-of-truth guarantee instead of a
 // convention every caller has to remember.
 type Snapshot struct {
-	Stage          string        `json:"stage"`
-	Board          []string      `json:"board"`
-	Seats          []SeatView    `json:"seats"`
-	Payouts        map[string]int64 `json:"payouts,omitempty"`
-	Rake           int64         `json:"rake,omitempty"`
-	CurrentPlayerID string       `json:"current_player_id,omitempty"`
-	LegalActions   *LegalActions `json:"legal_actions,omitempty"`
+	Stage           string           `json:"stage"`
+	Board           []string         `json:"board"`
+	Seats           []SeatView       `json:"seats"`
+	Payouts         map[string]int64 `json:"payouts,omitempty"`
+	Rake            int64            `json:"rake,omitempty"`
+	CurrentPlayerID string           `json:"current_player_id,omitempty"`
+	LegalActions    *LegalActions    `json:"legal_actions,omitempty"`
 }
 
 // LegalActions is the authoritative set of moves the viewer may make right
 // now, with the chip math the UI needs to render the raise control. The server
 // is the single source of truth — the client must not derive these itself.
 type LegalActions struct {
-	Actions    []string `json:"actions"`     // subset of fold|check|call|raise
-	CallAmount int64    `json:"call_amount"` // chips owed to call (0 when a check is available)
+	Actions    []string `json:"actions"`      // subset of fold|check|call|raise
+	CallAmount int64    `json:"call_amount"`  // chips owed to call (0 when a check is available)
 	MinRaiseTo int64    `json:"min_raise_to"` // smallest total bet a raise may reach
 	MaxRaiseTo int64    `json:"max_raise_to"` // largest total bet (all-in): viewer stack + already contributed
 	Step       int64    `json:"step"`         // raise increment for the + / - stepper
@@ -99,13 +99,13 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 	}
 	current := t.currentPlayerToAct()
 	return Snapshot{
-		Stage:          stageNames[t.stage],
-		Board:          boardCodes(t.board),
-		Seats:          seats,
-		Payouts:        t.payouts,
-		Rake:           t.rakeCollected,
+		Stage:           stageNames[t.stage],
+		Board:           boardCodes(t.board),
+		Seats:           seats,
+		Payouts:         t.payouts,
+		Rake:            t.rakeCollected,
 		CurrentPlayerID: current,
-		LegalActions:   t.legalActionsFor(viewerID, current),
+		LegalActions:    t.legalActionsFor(viewerID, current),
 	}
 }
 

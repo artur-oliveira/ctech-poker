@@ -1,7 +1,7 @@
 'use client'
 import {useEffect, useState} from 'react'
 import {CircleAlert, X} from 'lucide-react'
-import {dismissNotification, subscribeNotifications, type AppNotification} from '@/lib/notify'
+import {type AppNotification, dismissNotification, subscribeNotifications} from '@/lib/notify'
 
 export function Notifier() {
   const [items, setItems] = useState<AppNotification[]>([])

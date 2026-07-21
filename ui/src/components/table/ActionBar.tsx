@@ -51,26 +51,46 @@ function RaiseControl({minRaise, maxRaise, raiseStep, disabled, pending, onRaise
   </>;
 }
 
-export function ActionBar({onAct, available, callAmount, minRaise, maxRaise, raiseStep, actionKey, isTurn, connected, pending, error, onDismissError}: Props) {
+export function ActionBar({
+                            onAct,
+                            available,
+                            callAmount,
+                            minRaise,
+                            maxRaise,
+                            raiseStep,
+                            actionKey,
+                            isTurn,
+                            connected,
+                            pending,
+                            error,
+                            onDismissError
+                          }: Props) {
   const unavailable = !connected || !isTurn || pending !== null;
   const context = !connected ? 'Reconectando antes de liberar as ações…' : pending ? actionLabel[pending] : !isTurn ? 'Aguarde sua vez.' : 'Sua vez de agir.';
-  const label = (action: PokerAction, idle: string) => pending === action ? <><LoaderCircle className="action-spinner"/> {actionLabel[action]}</> : <span>{idle}</span>;
-
+  const label = (action: PokerAction, idle: string) => pending === action ? <><LoaderCircle
+    className="action-spinner"/> {actionLabel[action]}</> : <span>{idle}</span>;
+  
   return <div className="action-bar" role="group" aria-label="Ações da rodada" aria-busy={pending !== null}>
     <p id="action-context" className="action-context" aria-live="polite">{context}</p>
     <div className="action-choices" role="group" aria-label="Ações rápidas">
-      <Button type="button" variant="outline" disabled={unavailable || !available.fold} aria-describedby="action-context"
+      <Button type="button" variant="outline" disabled={unavailable || !available.fold}
+              aria-describedby="action-context"
               onClick={() => onAct('fold')}>{label('fold', 'Desistir')}</Button>
-      <Button type="button" variant="outline" disabled={unavailable || !available.check} aria-describedby="action-context"
+      <Button type="button" variant="outline" disabled={unavailable || !available.check}
+              aria-describedby="action-context"
               onClick={() => onAct('check')}>{label('check', 'Mesa')}</Button>
-      <Button type="button" variant="outline" disabled={unavailable || !available.call} aria-describedby="action-context"
-              onClick={() => onAct('call')} className="call">{label('call', callAmount > 0 ? `Pagar ${callAmount.toLocaleString('pt-BR')}` : 'Pagar')}</Button>
+      <Button type="button" variant="outline" disabled={unavailable || !available.call}
+              aria-describedby="action-context"
+              onClick={() => onAct('call')}
+              className="call">{label('call', callAmount > 0 ? `Pagar ${callAmount.toLocaleString('pt-BR')}` : 'Pagar')}</Button>
     </div>
     <RaiseControl key={actionKey} minRaise={minRaise} maxRaise={maxRaise} raiseStep={raiseStep}
-                  disabled={unavailable || !available.raise} pending={pending === 'raise'} onRaise={amount => onAct('raise', amount)}/>
+                  disabled={unavailable || !available.raise} pending={pending === 'raise'}
+                  onRaise={amount => onAct('raise', amount)}/>
     {error && <div className="action-error" role="alert">
-      <CircleAlert aria-hidden="true"/><p>{error.message}</p>
-      <Button type="button" variant="ghost" size="icon" aria-label="Fechar aviso" onClick={onDismissError}><X/></Button>
+        <CircleAlert aria-hidden="true"/><p>{error.message}</p>
+        <Button type="button" variant="ghost" size="icon" aria-label="Fechar aviso"
+                onClick={onDismissError}><X/></Button>
     </div>}
   </div>
 }
