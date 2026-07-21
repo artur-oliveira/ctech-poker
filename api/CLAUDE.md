@@ -1,7 +1,8 @@
 # api/ — CLAUDE.md
 
 Go real-time poker game server (Fiber v3 + `fasthttp/websocket` + DynamoDB + Valkey).
-**Sandbox (play-money) mode only — real-money is NOT implemented (Phase 5).**
+**Sandbox (play-money) mode is implemented end-to-end. Real-money mode & Hardening (Phase 5 Tasks 1–12) is FULLY IMPLEMENTED**
+(gated on `REAL_MONEY_ENABLED=true` + `LEGAL_SIGNOFF_REF` config, see `internal/config/config.go:44-51`).
 
 ## Conventions (follow these)
 

@@ -27,10 +27,13 @@ func TestDisconnectAutoFoldsAtActionDeadline(t *testing.T) {
 	stored, _ := store.LoadTable(ctx, "table-1")
 	var toAct string
 	for _, s := range stored.State.Players {
-		if s.State == hand.Active {
+		if hand.NewTableFromState(stored.State).CurrentPlayerCanActForActor(s.ID) {
 			toAct = s.ID
 			break
 		}
+	}
+	if toAct == "" {
+		t.Fatal("no player found with action to act")
 	}
 	reply3 := make(chan error, 1)
 	_ = a.Dispatch(DisconnectCmd{PlayerID: toAct, Reply: reply3})

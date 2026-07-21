@@ -37,4 +37,5 @@ test('synthesizes without error and declares exactly one ASG', () => {
   template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
   template.resourceCountIs('AWS::IAM::Role', 1);
   template.resourceCountIs('AWS::IAM::InstanceProfile', 1);
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
 });

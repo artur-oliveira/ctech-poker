@@ -1,8 +1,8 @@
 # ctech-poker — API (game server)
 
 Go real-time poker game server. **Sandbox (play-money) mode is implemented end-to-end.**
-Real-money mode is **not started** (Phase 5, gated on a Brazilian regulatory opinion —
-see [`../PLAN.md`](../PLAN.md) and [`../OVERVIEW.md`](../OVERVIEW.md) §11).
+Real-money mode & Hardening (Phase 5 Tasks 1–12) is **fully implemented** (requires `REAL_MONEY_ENABLED=true` +
+`LEGAL_SIGNOFF_REF` config — see [`../PLAN.md`](../PLAN.md) and [`../OVERVIEW.md`](../OVERVIEW.md) §11).
 
 > All claims below are anchored to the implementation (`api/`), not to the design docs
 > (`ARCHITECTURE.md`/`OVERVIEW.md`), which are proposals and may describe features not yet built.

@@ -9,6 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.29
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.60.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.105.2
+	github.com/aws/aws-sdk-go-v2/service/ssm v1.72.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/fasthttp/websocket v1.5.12
 	github.com/gofiber/fiber/v3 v3.4.0

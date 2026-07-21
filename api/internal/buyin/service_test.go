@@ -17,9 +17,10 @@ import (
 )
 
 type fakeWallet struct {
-	credits []call
-	debits  []call
-	holds   []holdCall
+	credits  []call
+	debits   []call
+	holds    []holdCall
+	cashouts []cashoutCall
 }
 type call struct {
 	userID string
@@ -27,10 +28,20 @@ type call struct {
 	key    string
 }
 type holdCall struct {
-	userID string
-	amount int64
-	key    string
-	holdID string
+	userID       string
+	amount       int64
+	tableRef     string
+	idempotencyKey string
+	reason       string
+	holdID       string
+}
+type cashoutCall struct {
+	userID      string
+	amount      int64
+	tableRef    string
+	holdIDs     []string
+	idempotencyKey string
+	reason      string
 }
 
 func (f *fakeWallet) Credit(_ context.Context, userID string, amount int64, key, _ string) error {
@@ -41,16 +52,16 @@ func (f *fakeWallet) Debit(_ context.Context, userID string, amount int64, key, 
 	f.debits = append(f.debits, call{userID, amount, key})
 	return nil
 }
-func (f *fakeWallet) HoldGame(_ context.Context, userID string, amount int64, key, _ string) (string, error) {
+func (f *fakeWallet) HoldGame(_ context.Context, userID string, amount int64, tableRef, idempotencyKey, reason string) (string, error) {
 	id := fmt.Sprintf("hold-%d", len(f.holds))
-	f.holds = append(f.holds, holdCall{userID, amount, key, id})
+	f.holds = append(f.holds, holdCall{userID, amount, tableRef, idempotencyKey, reason, id})
 	return id, nil
 }
 func (f *fakeWallet) ReleaseHold(_ context.Context, holdID string) error {
 	return nil
 }
-func (f *fakeWallet) CashoutGame(_ context.Context, userID string, holdID string, key, _ string) error {
-	f.credits = append(f.credits, call{userID, 0, key}) // amount 0 just to mark it happened
+func (f *fakeWallet) CashoutGame(_ context.Context, userID string, amount int64, tableRef string, holdIDs []string, key, reason string) error {
+	f.cashouts = append(f.cashouts, cashoutCall{userID, amount, tableRef, holdIDs, key, reason})
 	return nil
 }
 
@@ -63,10 +74,17 @@ func testManager(t *testing.T) *tablemanager.Manager {
 	return tablemanager.NewManager(tablelease.NewService(cache.NewMemoryBackend(16)), store, nil, nil, nil)
 }
 
+func testRoomLookup() *fakeRoomLookup {
+	return &fakeRoomLookup{room: &roomstore.Room{
+		ID: "test-room", CurrencyMode: "sandbox", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9,
+	}}
+}
+
 func TestBuyInDebitsThenSeats(t *testing.T) {
 	wallet := &fakeWallet{}
 	mgr := testManager(t)
-	svc := NewService(wallet, mgr, nil)
+	rooms := testRoomLookup()
+	svc := NewService(wallet, mgr, rooms)
 	ctx := context.Background()
 
 	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
@@ -95,14 +113,15 @@ func TestBuyInDebitsThenSeats(t *testing.T) {
 func TestCashOutRemovesThenCredits(t *testing.T) {
 	wallet := &fakeWallet{}
 	mgr := testManager(t)
-	svc := NewService(wallet, mgr, nil)
+	rooms := testRoomLookup()
+	svc := NewService(wallet, mgr, rooms)
 	ctx := context.Background()
 
 	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
 	if _, err := mgr.GetOrCreateActor(ctx, "room-2", seed); err != nil {
 		t.Fatalf("get or create actor: %v", err)
 	}
-	if err := svc.BuyIn(ctx, "room-2", "user-1", 400, false); err != nil {
+	if err := svc.BuyIn(ctx, "room-2", "user-1", 400, false, ""); err != nil {
 		t.Fatalf("buyin: %v", err)
 	}
 
@@ -119,7 +138,7 @@ func TestCashOutRemovesThenCredits(t *testing.T) {
 }
 
 type fakeActivation struct{ activated map[string]bool }
-func (f *fakeActivation) IsActivated(_ context.Context, userID string) (bool, error) {
+func (f *fakeActivation) IsGamblingActivated(_ context.Context, userID string) (bool, error) {
 	return f.activated[userID], nil
 }
 
@@ -130,12 +149,14 @@ func TestBuyInRejectsRealRoomWithoutGamblingActivation(t *testing.T) {
 	sandbox := &fakeWallet{}
 	game := &fakeWallet{}
 	mgr := testManager(t)
-	rooms := &fakeRoomLookup{room: &roomstore.Room{ID: "room-real-1", CurrencyMode: "real"}}
+	rooms := &fakeRoomLookup{room: &roomstore.Room{
+		ID: "room-real-1", CurrencyMode: "real", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9,
+	}}
 	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{}})
 	ctx := context.Background()
 
 	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
-	if _, err := mgr.Acquire(ctx, "room-real-1", seed); err != nil {
+	if _, err := mgr.GetOrCreateActor(ctx, "room-real-1", seed); err != nil {
 		t.Fatalf("acquire: %v", err)
 	}
 
@@ -148,12 +169,14 @@ func TestBuyInUsesGameWalletForRealRooms(t *testing.T) {
 	sandbox := &fakeWallet{}
 	game := &fakeWallet{}
 	mgr := testManager(t)
-	rooms := &fakeRoomLookup{room: &roomstore.Room{ID: "room-real-2", CurrencyMode: "real"}}
+	rooms := &fakeRoomLookup{room: &roomstore.Room{
+		ID: "room-real-2", CurrencyMode: "real", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9,
+	}}
 	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}})
 	ctx := context.Background()
 
 	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
-	if _, err := mgr.Acquire(ctx, "room-real-2", seed); err != nil {
+	if _, err := mgr.GetOrCreateActor(ctx, "room-real-2", seed); err != nil {
 		t.Fatalf("acquire: %v", err)
 	}
 

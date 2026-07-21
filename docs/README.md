@@ -25,8 +25,8 @@ against the actual code.
 | Sandbox ledger, isolated from ctech-wallet real ledger | **IMPLEMENTED** | `api/internal/walletclient`, `buyin` `CurrencyMode` guard |
 | Frontend lobby/table/leaderboard/sandbox credits-spin/achievements-toast | **IMPLEMENTED** | `ui/src/app/*` |
 | Infra: EC2 ASG, DynamoDB, S3+CloudFront frontend, archiver Lambda | **IMPLEMENTED + live** | `cdk/lib/*` |
-| Real-money mode (wallet hold/capture) | **DESIGNED-ONLY (Phase 5, not started)** | no real-money path in `api/`; `OVERVIEW.md §5` |
-| Hand history | **DESIGNED-ONLY** | no route/component in code |
+| Real-money mode & Hardening (Phase 5 Tasks 1–12) | **IMPLEMENTED (Gated by REAL_MONEY_ENABLED + LEGAL_SIGNOFF_REF)** | `walletclient`, `buyin`, `reconcile`, `metrics`, ASG drain, WAF, hand history, load test harness |
+| Hand history audit endpoint | **IMPLEMENTED** | `GET /v1.0/tables/:tableId/hands/:handId/history`, player sessions/hands history endpoints |
 | Commit-reveal fairness surface (publish `CommitHash` / reveal `ServerSeed`) | **DESIGNED-ONLY** | primes exist (`deck.go`) but no endpoint — **B32** |
 | Lobby stake/mode filters; private-room share-link UI | **DESIGNED-ONLY** | `ui/` RoomList has no filters |
 | sandbox credits wheel visual; achievements catalog screen; chat moderation | **DESIGNED-ONLY** | not in `ui/src` |

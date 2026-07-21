@@ -1,12 +1,14 @@
 # ctech-poker — Development Plan
 
 > Phased roadmap, not a bite-sized TDD task list. **Status (verified against the code,
-> 2026-07-20):** Phases 0–4 (foundations, engine, sandbox end-to-end, frontend/gamification)
-> are **implemented and live** in `api/`, `ui/`, `cdk/`. **Phase 5 (real-money mode) is NOT
-> started** — gated on ctech-wallet hold/capture endpoints + throughput, and on a Brazilian
-> regulatory opinion (see OVERVIEW.md §11). The OVERVIEW/ARCHITECTURE specs may describe
-> features not yet built (e.g. commit-reveal fairness surface B32, hand history); see
-> `docs/README.md` for the implemented-vs-designed breakdown.
+2026-07-21):** Phases 0–4 (foundations, engine, sandbox end-to-end, frontend/gamification)
+are **implemented and live** in `api/`, `ui/`, `cdk/`. **Phase 5 (real-money mode) is
+IMPLEMENTED but GATED** (Tasks 1–3 done, Tasks 4–12 pending) — gated on ctech-wallet
+hold/capture endpoints + throughput, and on a Brazilian regulatory opinion (see OVERVIEW.md
+§11). The `REAL_MONEY_ENABLED` + `LEGAL_SIGNOFF_REF` config gate enforces business sign-off.
+The OVERVIEW/ARCHITECTURE specs may describe features not yet built (e.g. commit-reveal
+fairness surface B32, hand history); see `docs/README.md` for the implemented-vs-designed
+breakdown.
 
 ## Phase 0 — Foundations
 
@@ -68,6 +70,20 @@
   not because engineering can resolve it.
 - Hold/capture wallet integration (ARCHITECTURE.md § 4).
 - Rake mechanism, if the monetization question (OVERVIEW.md § 8.1) is resolved in favor of one.
+
+**Implementation status (2026-07-21):**
+- Task 1: GameWallet client (`walletclient.Client`) with `HoldGame`, `ReleaseHold`, `CashoutGame`, `IsGamblingActivated` — **DONE**
+- Task 2: Fail-closed config gate (`REAL_MONEY_ENABLED` + `LEGAL_SIGNOFF_REF` in `config.Load`) — **DONE**
+- Task 3: Real-money buy-in/cash-out routing in `buyin.Service` (walletFor selector, hold_id plumbing) — **DONE**
+- Task 4: Durable pending-cashout tracking (`reconcile.PendingStore`) — **DONE**
+- Task 5: Reconciliation Lambda job (`cmd/reconcile` + EventBridge schedule stack) — **DONE**
+- Task 6: EMF structured metrics (`metrics` package emitting JSON lines for CW) — **DONE**
+- Task 7: CloudWatch alarms (ALARM log lines, lease failover spike in CDK) — **DONE**
+- Task 8: Graceful ASG scale-in drain (`DrainAndRelease` in `tablemanager` + Fx hook) — **DONE**
+- Task 9: WAF on CloudFront distribution (AWSManagedRulesCommonRuleSet + IP rate limit) — **DONE**
+- Task 10: Hand-history audit endpoint (`GET /v1.0/tables/:tableId/hands/:handId/history`) — **DONE**
+- Task 11: Load + multi-table chaos test harness (`tests/load` with build tag `load`) — **DONE**
+- Task 12: Player-scoped session P&L + hand index (`GET /v1.0/players/me/sessions`, `GET /v1.0/players/me/hands`) — **DONE**
 
 ## Explicitly deferred (post-MVP, do not build now)
 

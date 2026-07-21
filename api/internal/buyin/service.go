@@ -12,6 +12,7 @@ import (
 
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/player"
+	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
@@ -22,9 +23,9 @@ import (
 type walletMover interface {
 	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
 	Debit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
-	HoldGame(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) (string, error)
+	HoldGame(ctx context.Context, userID string, amount int64, tableRef, idempotencyKey, reason string) (string, error)
 	ReleaseHold(ctx context.Context, holdID string) error
-	CashoutGame(ctx context.Context, userID string, holdID string, idempotencyKey, reason string) error
+	CashoutGame(ctx context.Context, userID string, amount int64, tableRef string, holdIDs []string, idempotencyKey, reason string) error
 }
 
 type roomLookup interface {
@@ -32,7 +33,7 @@ type roomLookup interface {
 }
 
 type activationChecker interface {
-	IsActivated(ctx context.Context, userID string) (bool, error)
+	IsGamblingActivated(ctx context.Context, userID string) (bool, error)
 }
 
 type Service struct {
@@ -41,6 +42,7 @@ type Service struct {
 	manager    *tablemanager.Manager
 	rooms      roomLookup
 	activation activationChecker
+	pending    *reconcile.PendingStore
 	players    interface {
 		RequireAccepted(context.Context, string) error
 	}
@@ -58,6 +60,11 @@ func NewService(wallet walletMover, manager *tablemanager.Manager, rooms roomLoo
 
 func NewServiceWithGame(wallet, game walletMover, manager *tablemanager.Manager, rooms roomLookup, activation activationChecker) *Service {
 	return &Service{wallet: wallet, game: game, manager: manager, rooms: rooms, activation: activation}
+}
+
+func (s *Service) WithPendingStore(pending *reconcile.PendingStore) *Service {
+	s.pending = pending
+	return s
 }
 
 func NewServiceWithPlayers(wallet walletMover, manager *tablemanager.Manager, rooms roomLookup, players *player.Service) *Service {
@@ -93,7 +100,7 @@ func (s *Service) walletFor(ctx context.Context, roomID, playerID string) (walle
 	if s.game == nil || s.activation == nil {
 		return nil, fmt.Errorf("buyin: room %s is real-money but this Service was built without NewServiceWithGame", roomID)
 	}
-	ok, err := s.activation.IsActivated(ctx, playerID)
+	ok, err := s.activation.IsGamblingActivated(ctx, playerID)
 	if err != nil {
 		return nil, fmt.Errorf("buyin: activation check: %w", err)
 	}
@@ -154,7 +161,7 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 
 	var holdID string
 	if mover == s.game {
-		holdID, err = mover.HoldGame(ctx, playerID, amount, key, "poker_buyin")
+		holdID, err = mover.HoldGame(ctx, playerID, amount, roomID, key, "poker_buyin")
 		if err != nil {
 			return fmt.Errorf("buyin: hold: %w", err)
 		}
@@ -209,11 +216,9 @@ func (s *Service) isSeated(actor *table.Actor, playerID string) (bool, error) {
 }
 
 // CashOut removes playerID from roomID's live table and credits their final
-// stack back to the sandbox wallet. Unlike BuyIn, there is no compensating
-// action on failure: if the credit call fails after a successful removal, the
-// player's chips are gone from the table but not yet in their wallet — this is
-// flagged as a genuine gap (see Task 3's closing note), not silently glossed
-// over.
+// stack back to the appropriate wallet. For real-money rooms, credits the
+// game wallet using the hold IDs returned from the seat; for sandbox, credits
+// the sandbox wallet directly.
 func (s *Service) CashOut(ctx context.Context, roomID, playerID, idemKey string) (int64, error) {
 	mover, err := s.walletFor(ctx, roomID, playerID)
 	if err != nil {
@@ -241,21 +246,48 @@ func (s *Service) CashOut(ctx context.Context, roomID, playerID, idemKey string)
 		key = fmt.Sprintf("%s#%s#cashout#%s", roomID, playerID, idemKey)
 	}
 
+	if s.pending != nil {
+		mode := "sandbox"
+		if room, _ := s.rooms.Get(ctx, roomID); room != nil {
+			mode = room.CurrencyMode
+		}
+		var holdIDs []string
+		if holdID != "" {
+			holdIDs = []string{holdID}
+		}
+		_ = s.pending.Record(ctx, reconcile.PendingCashout{
+			ID:             key,
+			PlayerID:       playerID,
+			Amount:         stack,
+			CurrencyMode:   mode,
+			HoldIDs:        holdIDs,
+			TableRef:       roomID,
+			IdempotencyKey: key,
+		})
+	}
+
 	if mover == s.game {
 		if holdID == "" {
 			return stack, fmt.Errorf("buyin: no hold ID found for player %s", playerID)
 		}
-		if err := mover.CashoutGame(ctx, playerID, holdID, key, "poker_cashout"); err != nil {
-			slog.Error("buyin: cash-out credit failed after seat removal — manual reconciliation",
+		holdIDs := []string{holdID}
+		tableRef := roomID
+		if err := mover.CashoutGame(ctx, playerID, stack, tableRef, holdIDs, key, "poker_cashout"); err != nil {
+			slog.Error("buyin: cash-out credit failed after seat removal — reconciliation job will retry",
 				"player", playerID, "room", roomID, "amount", stack, "hold_id", holdID, "err", err)
-			return stack, fmt.Errorf("buyin: cash-out credit failed after seat removal — manual reconciliation needed for %s amount %d: %w", playerID, stack, err)
+			return stack, fmt.Errorf("buyin: cash-out credit failed after seat removal — reconciliation job will retry for %s amount %d: %w", playerID, stack, err)
 		}
 	} else {
 		if err := mover.Credit(ctx, playerID, stack, key, "poker_cashout"); err != nil {
-			slog.Error("buyin: cash-out credit failed after seat removal — manual reconciliation",
+			slog.Error("buyin: cash-out credit failed after seat removal — reconciliation job will retry",
 				"player", playerID, "room", roomID, "amount", stack, "err", err)
-			return stack, fmt.Errorf("buyin: cash-out credit failed after seat removal — manual reconciliation needed for %s amount %d: %w", playerID, stack, err)
+			return stack, fmt.Errorf("buyin: cash-out credit failed after seat removal — reconciliation job will retry for %s amount %d: %w", playerID, stack, err)
 		}
 	}
+
+	if s.pending != nil {
+		_ = s.pending.MarkResolved(ctx, key)
+	}
+
 	return stack, nil
 }

@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/metrics"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
@@ -20,14 +21,16 @@ import (
 type Actor = table.Actor
 
 type Manager struct {
+	env            string
 	leases         *tablelease.Service
 	store          *tablestore.Store
 	broadcast      func(tableID, viewerID string, snap hand.Snapshot)
 	onHandComplete func(tableID string, outcome hand.HandOutcome)
 	roomLoader     func(tableID string) (*roomstore.BlindEscalation, bool, error)
 
-	mu     sync.Mutex
-	actors map[string]*Actor
+	mu       sync.Mutex
+	actors   map[string]*Actor
+	releases map[string]func()
 }
 
 func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast func(string, string, hand.Snapshot), roomLoader func(string) (*roomstore.BlindEscalation, bool, error), completion ...func(string, hand.HandOutcome)) *Manager {
@@ -35,8 +38,18 @@ func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast f
 	if len(completion) > 0 {
 		onHandComplete = completion[0]
 	}
-	return &Manager{leases: leases, store: store, broadcast: broadcast, onHandComplete: onHandComplete, roomLoader: roomLoader, actors: make(map[string]*Actor)}
+	return &Manager{
+		leases:         leases,
+		store:          store,
+		broadcast:      broadcast,
+		onHandComplete: onHandComplete,
+		roomLoader:     roomLoader,
+		actors:         make(map[string]*Actor),
+		releases:       make(map[string]func()),
+	}
 }
+
+func (m *Manager) SetEnv(env string) { m.env = env }
 
 // GetOrCreateActor returns this instance's Actor for tableID, seeding the
 // table's very first DynamoDB state if it has never been played (seed is
@@ -75,12 +88,17 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 
 	trustCache := false
 	if m.leases != nil {
-		if _, ok, err := m.leases.Acquire(ctx, tableID); err == nil && ok {
+		if rel, ok, err := m.leases.Acquire(ctx, tableID); err == nil && ok {
 			trustCache = true
+			m.releases[tableID] = rel
 		}
 	}
 
 	actor := table.New(tableID, m.store, trustCache, m.broadcastFor(tableID))
+	if m.store == nil && seed != nil {
+		actor.SetCachedForTest(seed())
+	}
+	actor.SetEnv(m.env)
 	actor.SetOnHandCompleteForActor(func(outcome hand.HandOutcome) {
 		if m.onHandComplete != nil {
 			m.onHandComplete(tableID, outcome)
@@ -92,6 +110,7 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 		// lifetime regardless, same as this branch's counterpart below.
 		runCtx, cancel := context.WithCancel(context.Background())
 		m.leases.StartHeartbeat(runCtx, tableID, func() {
+			metrics.EmitTableMetric(m.env, "LeaseFailovers", 1, map[string]string{"table_id": tableID})
 			cancel()
 			m.removeActor(tableID)
 		})
@@ -132,5 +151,31 @@ func (m *Manager) broadcastFor(tableID string) func(string, hand.Snapshot) {
 		if m.broadcast != nil {
 			m.broadcast(tableID, viewerID, snap)
 		}
+	}
+}
+
+// Release releases tableID's lease and removes the actor from local registry.
+func (m *Manager) Release(tableID string) {
+	m.mu.Lock()
+	delete(m.actors, tableID)
+	rel, hasRel := m.releases[tableID]
+	delete(m.releases, tableID)
+	m.mu.Unlock()
+	if hasRel && rel != nil {
+		rel()
+	}
+}
+
+// DrainAndRelease releases every table lease held by this instance on graceful shutdown.
+func (m *Manager) DrainAndRelease(ctx context.Context) {
+	m.mu.Lock()
+	ids := make([]string, 0, len(m.actors))
+	for id := range m.actors {
+		ids = append(ids, id)
+	}
+	m.mu.Unlock()
+
+	for _, id := range ids {
+		m.Release(id)
 	}
 }

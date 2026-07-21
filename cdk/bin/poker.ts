@@ -6,6 +6,7 @@ import {PokerApiStack} from '../lib/api-stack';
 import {DynamoDBStack} from '../lib/dynamodb-stack';
 import {ArchiverStack} from '../lib/archiver-stack';
 import {FrontendStack} from '../lib/frontend-stack';
+import {ReconcileStack} from '../lib/reconcile-stack';
 import {
   ACCOUNTS_API_DOMAIN_PREFIX,
   ACCOUNTS_DOMAIN_PREFIX,
@@ -100,4 +101,14 @@ new FrontendStack(app, id('Frontend'), {
   apiDomainName: domainForEnv(ENVIRONMENT, API_DOMAIN_PREFIX),
   authDomainName: domainForEnv(ENVIRONMENT, ACCOUNTS_DOMAIN_PREFIX),
   description: `CTech Poker Frontend (S3 + CloudFront) - ${ENVIRONMENT}`,
+});
+
+new ReconcileStack(app, id('Reconcile'), {
+  env,
+  environment: ENVIRONMENT,
+  pendingCashoutsTableArn: dynamoStack.tables.get('poker_pending_cashouts')!.tableArn,
+  walletUrlParam: pokerParameters.walletUrl,
+  pokerClientIdParam: pokerParameters.clientId,
+  pokerClientSecretParam: pokerParameters.clientSecret,
+  description: `CTech Poker Cashout Reconcile Lambda - ${ENVIRONMENT}`,
 });

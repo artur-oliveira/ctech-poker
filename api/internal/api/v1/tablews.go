@@ -8,18 +8,20 @@ import (
 	"sync"
 	"time"
 
-	fws "github.com/fasthttp/websocket"
-	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
-	"github.com/valyala/fasthttp"
 	"gopkg.aoctech.app/api-commons/jwtverify"
 	"gopkg.aoctech.app/api-commons/ws"
 	"gopkg.aoctech.app/poker/api/internal/chatfilter"
+	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
+
+	fws "github.com/fasthttp/websocket"
+	"github.com/gofiber/fiber/v3"
+	"github.com/google/uuid"
+	"github.com/valyala/fasthttp"
 )
 
 const (
@@ -124,7 +126,7 @@ func (l *seatLimiter) Allow(playerID string) bool {
 // gateway is independently testable without Phase 3's room service. Any
 // instance may accept any table's connection directly — there is no
 // "owner" to proxy to under ARCHITECTURE.md §2's revised model.
-func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager *tablemanager.Manager, reg ws.Registry, allowedOrigins []string, seed func(tableID string) func() *hand.Table, rooms *roomstore.Store) {
+func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager *tablemanager.Manager, reg ws.Registry, allowedOrigins []string, seed func(tableID string) func() *hand.Table, rooms *roomstore.Store, cfg *config.Config) {
 	upgrader := fws.FastHTTPUpgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -165,6 +167,11 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 			}
 			if room != nil && !privateRoomAccessAllowed(room, playerID, shareCode) {
 				send(map[string]any{"type": "error", "code": "forbidden"})
+				_ = conn.Close()
+				return
+			}
+			if room != nil && room.CurrencyMode != "sandbox" && !cfg.RealMoneyEnabled {
+				send(map[string]any{"type": "error", "code": "unsupported_currency_mode"})
 				_ = conn.Close()
 				return
 			}

@@ -60,7 +60,7 @@ func TestHoldAndRelease(t *testing.T) {
 
 	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"})
 
-	id, err := c.HoldGame(t.Context(), "user-1", 500, "k1", "buyin")
+	id, err := c.HoldGame(t.Context(), "user-1", 500, "table-1", "k1", "buyin")
 	if err != nil || id != "hold-123" {
 		t.Fatalf("HoldGame failed: id=%s err=%v", id, err)
 	}
@@ -91,7 +91,7 @@ func TestCashoutGame(t *testing.T) {
 
 	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"})
 
-	if err := c.CashoutGame(t.Context(), "user-1", "hold-123", "k2", "cashout"); err != nil {
+	if err := c.CashoutGame(t.Context(), "user-1", 500, "table-1", []string{"hold-123"}, "k2", "cashout"); err != nil {
 		t.Fatalf("CashoutGame failed: %v", err)
 	}
 	if !cashoutCalled {

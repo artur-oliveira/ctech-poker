@@ -10,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/api-commons/dynamo"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
+	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
@@ -170,7 +171,10 @@ func (h *roomHandlers) join(c fiber.Ctx) error {
 		return problem.NotFound("room not found").Send(c)
 	}
 	if room.CurrencyMode != "sandbox" {
-		return problem.BadRequest("unsupported currency mode").Send(c)
+		cfg := c.Locals("config").(*config.Config)
+		if !cfg.RealMoneyEnabled {
+			return problem.BadRequest("unsupported currency mode").Send(c)
+		}
 	}
 	if req.Amount < room.BuyInMin || req.Amount > room.BuyInMax || req.Amount%room.BigBlind != 0 {
 		return problem.BadRequest("amount must be within range and a multiple of big_blind").Send(c)

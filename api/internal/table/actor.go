@@ -14,6 +14,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 	"gopkg.aoctech.app/poker/api/internal/engine/equity"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/metrics"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
@@ -23,6 +24,7 @@ var timeNowFunc = time.Now
 // Actor is the local serialization point for one table's hand.Table.
 type Actor struct {
 	id         string
+	env        string
 	store      *tablestore.Store
 	trustCache bool // set once at construction — see New's doc comment
 	broadcast  func(viewerID string, snap hand.Snapshot)
@@ -194,6 +196,9 @@ func (a *Actor) ensureLoaded(ctx context.Context, force bool) error {
 	if a.cached != nil && a.trustCache && !force {
 		return nil
 	}
+	if a.store == nil {
+		return nil
+	}
 	stored, err := a.store.LoadTable(ctx, a.id)
 	if err != nil {
 		return err
@@ -239,6 +244,7 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
+	start := timeNowFunc()
 	completed, err := a.applyActAndCommit(ctx, c)
 	if errors.Is(err, tablestore.ErrVersionConflict) {
 		// See handleReady's identical rationale — retry exactly once.
@@ -250,6 +256,7 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 	if err != nil && !errors.Is(err, tablestore.ErrDuplicateAction) {
 		return err
 	}
+	metrics.EmitTableMetric(a.env, "ActionLatencyMs", float64(timeNowFunc().Sub(start).Milliseconds()), map[string]string{"table_id": a.id})
 	a.armActionDeadlineForCurrentTurn()
 	a.broadcastAll()
 	if completed {
@@ -264,6 +271,7 @@ func (a *Actor) notifyHandComplete() {
 	}
 	if outcome := a.cached.LastOutcomeForActor(); outcome != nil {
 		a.completedHandNotified = a.handID
+		metrics.EmitTableMetric(a.env, "HandsCompleted", 1, map[string]string{"table_id": a.id})
 		if a.onHandComplete != nil {
 			a.onHandComplete(*outcome)
 		}
@@ -323,7 +331,10 @@ func (a *Actor) retryOnConflict(ctx context.Context, apply func() error) error {
 	return apply()
 }
 
+func (a *Actor) SetEnv(env string) { a.env = env }
+
 func (a *Actor) handleDisconnect(c DisconnectCmd) error {
+	metrics.EmitTableMetric(a.env, "Disconnects", 1, map[string]string{"table_id": a.id})
 	a.disconnectedSince[c.PlayerID] = timeNowFunc()
 	a.armActionDeadlineIfTheirTurn(c.PlayerID)
 	a.broadcastAll()
@@ -564,3 +575,6 @@ func newHandID() string {
 
 // TableForTest exposes the cached hand.Table for integration-test assertions.
 func (a *Actor) TableForTest() *hand.Table { return a.cached }
+
+// SetCachedForTest seeds the cached hand.Table when running without a store.
+func (a *Actor) SetCachedForTest(t *hand.Table) { a.cached = t }

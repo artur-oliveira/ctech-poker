@@ -5,6 +5,7 @@ import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import {HttpVersion} from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import {Environment} from '@aoctech/cdk';
 import {Construct} from 'constructs';
 import {API_PATH_PATTERNS, frontendBucketName, routeStoreName, SERVICE} from './constants';
@@ -90,8 +91,31 @@ async function handler(event) {
       compress: true,
       responseHeadersPolicy: securityHeaders,
     };
+    const webAcl = new wafv2.CfnWebACL(this, 'WebACL', {
+      scope: 'CLOUDFRONT',
+      defaultAction: {allow: {}},
+      visibilityConfig: {sampledRequestsEnabled: true, cloudWatchMetricsEnabled: true, metricName: `${SERVICE}-waf`},
+      rules: [
+        {
+          name: 'AWSManagedCommonRuleSet',
+          priority: 0,
+          overrideAction: {none: {}},
+          statement: {managedRuleGroupStatement: {vendorName: 'AWS', name: 'AWSManagedRulesCommonRuleSet'}},
+          visibilityConfig: {sampledRequestsEnabled: true, cloudWatchMetricsEnabled: true, metricName: 'CommonRuleSet'},
+        },
+        {
+          name: 'RateLimit',
+          priority: 1,
+          action: {block: {}},
+          statement: {rateBasedStatement: {limit: 2000, aggregateKeyType: 'IP'}},
+          visibilityConfig: {sampledRequestsEnabled: true, cloudWatchMetricsEnabled: true, metricName: 'RateLimit'},
+        },
+      ],
+    });
+
     this.distribution = new cloudfront.Distribution(this, 'Distribution', {
       comment: `CTech Poker Frontend - ${environment}`,
+      webAclId: webAcl.attrArn,
       defaultRootObject: 'index.html',
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(this.bucket, {originAccessControl: oac}),

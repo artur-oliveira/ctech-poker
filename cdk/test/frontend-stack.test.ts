@@ -13,6 +13,7 @@ test('creates private S3 hosting and a CloudFront distribution', () => {
   const template = Template.fromStack(stack);
   template.resourceCountIs('AWS::S3::Bucket', 1);
   template.resourceCountIs('AWS::CloudFront::Distribution', 1);
+  template.resourceCountIs('AWS::WAFv2::WebACL', 1);
   template.hasResourceProperties('AWS::CloudFront::Distribution', {
     DistributionConfig: {DefaultRootObject: 'index.html'},
   });

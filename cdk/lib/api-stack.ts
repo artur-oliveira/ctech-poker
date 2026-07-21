@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import {Construct} from 'constructs';
@@ -352,6 +353,36 @@ export class PokerApiStack extends cdk.Stack {
       listenerRulePriority: ALB_LISTENER_PRIORITY,
     });
     service.autoScalingGroup.node.addDependency(profile);
+
+    const alarmMetricFilter = service.appLogGroup.addMetricFilter('AlarmLogFilter', {
+      filterPattern: logs.FilterPattern.literal('"ALARM:"'),
+      metricNamespace: `CtechPoker/${environment}`,
+      metricName: 'AlarmLogLines',
+      metricValue: '1',
+    });
+    new cloudwatch.Alarm(this, 'AlarmLogAlarm', {
+      alarmName: `${environment}-${SERVICE}-alarm-log-lines`,
+      alarmDescription: 'An ALARM log line was emitted (reconcile credit failure or manual review condition).',
+      metric: alarmMetricFilter.metric({statistic: 'Sum', period: cdk.Duration.minutes(5)}),
+      threshold: 1,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    const leaseFailoverMetric = new cloudwatch.Metric({
+      namespace: `CtechPoker/${environment}`,
+      metricName: 'LeaseFailovers',
+      statistic: 'Sum',
+      period: cdk.Duration.minutes(5),
+    });
+    new cloudwatch.Alarm(this, 'LeaseFailoverSpikeAlarm', {
+      alarmName: `${environment}-${SERVICE}-lease-failover-spike`,
+      alarmDescription: 'Table lease failovers spiked — earliest signal of an instance going bad.',
+      metric: leaseFailoverMetric,
+      threshold: 5,
+      evaluationPeriods: 2,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
 
     // DynamoDB access for internal/tablestore.Store — TransactWriteItems is
     // required because every commit (CommitAction) writes the state item,

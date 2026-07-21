@@ -7,6 +7,12 @@ A real-time, multi-table Texas Hold'em poker product. Two currency modes:
 balance). MVP ships sandbox-complete; real-money mode ships only once its two hard
 prerequisites are met — see § 11.
 
+**Real-money implementation status (2026-07-21):** The wallet client, config gate, and
+buy-in/cash-out routing are **implemented** (Tasks 1–3 of Phase 5 plan). The reconciliation
+job, metrics/alarms, graceful drain, WAF, hand-history endpoint, load test, and session
+log (Tasks 4–12) are **not yet built**. Real-money flow is gated by `REAL_MONEY_ENABLED=true`
++ `LEGAL_SIGNOFF_REF` config — see `api/internal/config/config.go:44-51`.
+
 ## 2. Rooms
 
 - **Public rooms**: listed in a lobby, anyone can join up to table capacity. Stakes are fixed,

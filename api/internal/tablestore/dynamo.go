@@ -150,6 +150,28 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 // resolveCommitErr disambiguates a failed transaction: an already-present
 // guard means a duplicate action_id; otherwise the state item's version
 // condition must have failed.
+func (s *Store) LoadActionsSince(ctx context.Context, tableID, handID string, afterSeq int) ([]ActionLogEntry, error) {
+	pk := tableID + "#" + handID
+	result, err := s.log.Query(ctx, dynamo.QueryOpts{PK: pk})
+	if err != nil {
+		return nil, fmt.Errorf("tablestore: load actions: %w", err)
+	}
+	out := make([]ActionLogEntry, 0, len(result.Items))
+	for i, item := range result.Items {
+		e, err := dynamo.Decode[ActionLogEntry](item)
+		if err != nil || e == nil {
+			continue
+		}
+		if e.Seq == 0 {
+			e.Seq = i + 1
+		}
+		if e.Seq > afterSeq {
+			out = append(out, *e)
+		}
+	}
+	return out, nil
+}
+
 func (s *Store) resolveCommitErr(ctx context.Context, tableID, handID, actionID string, txErr error) error {
 	if !dynamo.IsConditionFailed(txErr) {
 		return fmt.Errorf("tablestore: commit: %w", txErr)

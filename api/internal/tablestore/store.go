@@ -25,6 +25,7 @@ type ActionLogEntry struct {
 	TableID  string `dynamodbav:"table_id"`
 	HandID   string `dynamodbav:"hand_id"`
 	Version  int    `dynamodbav:"version"`
+	Seq      int    `dynamodbav:"seq,omitempty"`
 	PlayerID string `dynamodbav:"player_id"`
 	ActionID string `dynamodbav:"action_id"`
 	Action   string `dynamodbav:"action"`

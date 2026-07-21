@@ -68,8 +68,8 @@ func TestTwoInstancesRacingSameTableResolveDeterministically(t *testing.T) {
 
 	// Two "instances", neither holding the lease — both must re-read before
 	// every command, so neither trusts a stale cache.
-	mgrA := tablemanager.NewManager(tablelease.NewService(backend), store, nil)
-	mgrB := tablemanager.NewManager(tablelease.NewService(backend), store, nil)
+	mgrA := tablemanager.NewManager(tablelease.NewService(backend), store, nil, nil)
+	mgrB := tablemanager.NewManager(tablelease.NewService(backend), store, nil, nil)
 
 	actorA, err := mgrA.GetOrCreateActor(context.Background(), "table-race", seed)
 	if err != nil {
@@ -105,7 +105,7 @@ func TestFreshInstanceReadsCurrentStateWithNoReplayNeeded(t *testing.T) {
 		return hand.NewTable([]*hand.Player{{ID: "p1", Stack: 1000}, {ID: "p2", Stack: 1000}}, 10, 20)
 	}
 
-	mgrA := tablemanager.NewManager(tablelease.NewService(backend), store, nil)
+	mgrA := tablemanager.NewManager(tablelease.NewService(backend), store, nil, nil)
 	actorA, err := mgrA.GetOrCreateActor(context.Background(), "table-crash", seed)
 	if err != nil {
 		t.Fatalf("acquire on instance A: %v", err)
@@ -118,7 +118,7 @@ func TestFreshInstanceReadsCurrentStateWithNoReplayNeeded(t *testing.T) {
 	// revision there is nothing to fail over: the next instance just reads
 	// current DynamoDB state directly (ARCHITECTURE.md §3).
 
-	mgrB := tablemanager.NewManager(tablelease.NewService(backend), store, nil)
+	mgrB := tablemanager.NewManager(tablelease.NewService(backend), store, nil, nil)
 	actorB, err := mgrB.GetOrCreateActor(context.Background(), "table-crash", seed)
 	if err != nil {
 		t.Fatalf("acquire on instance B: %v", err)

@@ -15,7 +15,9 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/roulette"
+	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
+	"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
 
 // Register mounts poker's routes under /v1.0. seed builds a brand-new
@@ -23,7 +25,7 @@ import (
 // tablemanager.Manager.GetOrCreateActor) — passed straight through to the WS
 // gateway. Any instance may accept any table's connection directly under
 // ARCHITECTURE.md §2's revised model — there is no proxy route.
-func Register(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier *jwtverify.Verifier, manager *tablemanager.Manager, reg ws.Registry, seed func(string) func() *hand.Table, rooms *roomstore.Store, buyinSvc *buyin.Service, players *player.Service, leaderboardSvc *leaderboard.Service, rouletteSvc *roulette.Service, cacheBackend cache.Backend) {
+func Register(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier *jwtverify.Verifier, manager *tablemanager.Manager, reg ws.Registry, seed func(string) func() *hand.Table, rooms *roomstore.Store, buyinSvc *buyin.Service, players *player.Service, leaderboardSvc *leaderboard.Service, rouletteSvc *roulette.Service, cacheBackend cache.Backend, tableStore *tablestore.Store, sessionStore *sessionlog.Store) {
 	router := app.Group("/v1.0")
 
 	// Health (unauthenticated): /v1.0/health is a dependency-free liveness probe;
@@ -31,8 +33,14 @@ func Register(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier 
 	// probes (it accepts 200 and 207).
 	RegisterHealth(router, cfg, db)
 
-	RegisterTableWS(router, verifier, manager, reg, cfg.CorsAllowedOrigins, seed, rooms)
+	RegisterTableWS(router, verifier, manager, reg, cfg.CorsAllowedOrigins, seed, rooms, cfg)
+	if tableStore != nil {
+		RegisterHandHistory(router, &tablestoreAdapter{store: tableStore})
+	}
 	auth := authMiddleware(verifier)
+	if sessionStore != nil {
+		RegisterPlayerHistory(router, auth, sessionStore)
+	}
 
 	// Fixed-window rate limits on the mutating endpoints (M6/S2). Keyed per
 	// caller IP; Redis (mandatory in prod, T2) makes the counter fleet-wide.

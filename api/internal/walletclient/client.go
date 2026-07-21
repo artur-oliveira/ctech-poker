@@ -83,8 +83,44 @@ func (c *Client) Debit(ctx context.Context, userID string, amount int64, idempot
 }
 
 // HoldGame reserves funds in the ring-fenced game wallet.
-func (c *Client) HoldGame(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) (string, error) {
-	return c.movementWithResponse(ctx, c.base+pathGameHold, c.gameHoldTokens, userID, amount, idempotencyKey, reason)
+// tableRef is an opaque caller-supplied session identifier (e.g. table_id:seat).
+func (c *Client) HoldGame(ctx context.Context, userID string, amount int64, tableRef, idempotencyKey, reason string) (string, error) {
+	token, err := c.gameHoldTokens.Get(ctx)
+	if err != nil {
+		return "", fmt.Errorf("walletclient: token: %w", err)
+	}
+	body, err := json.Marshal(map[string]any{
+		"user_id":         userID,
+		"amount":          amount,
+		"table_ref":       tableRef,
+		"idempotency_key": idempotencyKey,
+	})
+	if err != nil {
+		return "", fmt.Errorf("walletclient: encode: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+pathGameHold, bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("walletclient: request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		raw, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("walletclient: status %d: %s", resp.StatusCode, string(raw))
+	}
+	var res struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", fmt.Errorf("walletclient: decode response: %w", err)
+	}
+	return res.ID, nil
 }
 
 // ReleaseHold cancels a reservation in the ring-fenced game wallet.
@@ -113,16 +149,19 @@ func (c *Client) ReleaseHold(ctx context.Context, holdID string) error {
 }
 
 // CashoutGame settles a reservation in the ring-fenced game wallet.
-func (c *Client) CashoutGame(ctx context.Context, userID string, holdID string, idempotencyKey, reason string) error {
+// holdIDs is the list of hold IDs to settle (wallet requires array).
+// tableRef is an opaque caller-supplied session identifier.
+func (c *Client) CashoutGame(ctx context.Context, userID string, amount int64, tableRef string, holdIDs []string, idempotencyKey, reason string) error {
 	token, err := c.gameCashoutTokens.Get(ctx)
 	if err != nil {
 		return fmt.Errorf("walletclient: token: %w", err)
 	}
 	body, err := json.Marshal(map[string]any{
 		"user_id":         userID,
-		"hold_id":         holdID,
+		"amount":          amount,
+		"table_ref":       tableRef,
+		"hold_ids":        holdIDs,
 		"idempotency_key": idempotencyKey,
-		"reason":          reason,
 	})
 	if err != nil {
 		return fmt.Errorf("walletclient: encode: %w", err)

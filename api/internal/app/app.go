@@ -30,8 +30,9 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
-	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/roulette"
+	"gopkg.aoctech.app/poker/api/internal/sessionlog"
+	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
@@ -58,6 +59,7 @@ var Module = fx.Options(
 		newLeaderboardService,
 		newRouletteStore,
 		newRouletteService,
+		newSessionStore,
 		walletclient.New,
 		newBuyinService,
 		newTableManager,
@@ -187,7 +189,13 @@ func newRouletteStore(db *dynamodb.Client, cfg *config.Config) *roulette.Store {
 func newRouletteService(wallet *walletclient.Client, store *roulette.Store) *roulette.Service {
 	return roulette.NewService(wallet, store)
 }
-func newBuyinService(wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service) *buyin.Service {
+func newSessionStore(db *dynamodb.Client, cfg *config.Config) *sessionlog.Store {
+	return sessionlog.NewStore(db, cfg.Env)
+}
+func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service) *buyin.Service {
+	if cfg.RealMoneyEnabled {
+		return buyin.NewServiceWithGame(wallet, wallet, manager, rooms, wallet)
+	}
 	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players)
 }
 
@@ -243,11 +251,11 @@ func roomBackedSeed(rooms *roomstore.Store) func(string) func() *hand.Table {
 	}
 }
 
-func registerRoutes(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier *jwtverify.Verifier, manager *tablemanager.Manager, reg ws.Registry, cacheBackend cache.Backend, rooms *roomstore.Store, buyinSvc *buyin.Service, players *player.Service, leaderboardSvc *leaderboard.Service, rouletteSvc *roulette.Service) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), rooms, buyinSvc, players, leaderboardSvc, rouletteSvc, cacheBackend)
+func registerRoutes(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier *jwtverify.Verifier, manager *tablemanager.Manager, reg ws.Registry, cacheBackend cache.Backend, rooms *roomstore.Store, buyinSvc *buyin.Service, players *player.Service, leaderboardSvc *leaderboard.Service, rouletteSvc *roulette.Service, tableStore *tablestore.Store, sessionStore *sessionlog.Store) {
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), rooms, buyinSvc, players, leaderboardSvc, rouletteSvc, cacheBackend, tableStore, sessionStore)
 }
 
-func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config) {
+func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {
 	lc.Append(fx.Hook{
 		OnStart: func(context.Context) error {
 			addr := ":" + strconv.Itoa(cfg.Port)
@@ -260,7 +268,8 @@ func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config) {
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
-			slog.Info("shutting down ctech-poker-api")
+			slog.Info("shutting down ctech-poker-api, draining table manager leases")
+			manager.DrainAndRelease(ctx)
 			stopCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 			return app.ShutdownWithContext(stopCtx)

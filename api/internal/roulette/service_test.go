@@ -38,6 +38,17 @@ func (f *fakeSpinStore) Complete(_ context.Context, playerID, day string, _ time
 	return nil
 }
 
+func (f *fakeSpinStore) Get(_ context.Context, playerID, day string) (SpinRecord, error) {
+	if f.records == nil {
+		f.records = map[string]SpinRecord{}
+	}
+	key := playerID + "#" + day
+	if record, ok := f.records[key]; ok {
+		return record, nil
+	}
+	return SpinRecord{}, nil
+}
+
 type fakeCredit struct {
 	amounts []int64
 	keys    []string
