@@ -1,12 +1,12 @@
 'use client';
 import Link from 'next/link';
-import {Suspense, useState} from 'react';
+import {Suspense} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
-import {useQuery} from '@tanstack/react-query';
+import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {ChevronLeft, RotateCw, Wifi} from 'lucide-react';
 import {getViewerId} from '@/lib/utils';
 import {useTableRealtime} from '@/lib/hooks/useTableRealtime';
-import {getRoom} from '@/lib/api/rooms';
+import {getRoom, getSeated} from '@/lib/api/rooms';
 import {BuyInPanel} from '@/components/table/BuyInPanel';
 import {Seat} from '@/components/table/Seat';
 import {Board} from '@/components/table/Board';
@@ -56,8 +56,6 @@ function actionState(snapshot: TableSnapshot, viewer?: string) {
   return {available, callAmount, isTurn, minRaise, maxRaise, raiseStep: serverActions?.step || 25};
 }
 
-const seatedKey = (id: string) => `ctech_poker_seated_${id}`;
-
 function TableContent() {
   const router = useRouter();
   const params = useSearchParams(), id = params.get('id') || '', valid = ROOM_ID.test(id);
@@ -68,10 +66,17 @@ function TableContent() {
   const delay = [0, 350, 1200, 9000].includes(requestedDelay) ? requestedDelay : 350;
   const viewer = getViewerId();
   const {data: room} = useQuery({queryKey: ['room', id], queryFn: () => getRoom(id), enabled: valid});
+  const queryClient = useQueryClient();
   // Buy-in is an explicit ceremony: nothing is debited until the player
-  // confirms an amount. The session flag lets a seated player return to the
-  // table (reload, interruption) without repeating the ceremony.
-  const [seated, setSeated] = useState(() => typeof window !== 'undefined' && window.sessionStorage.getItem(seatedKey(id)) === '1');
+  // confirms an amount. The server (not local browser storage) is the
+  // source of truth for "is this player already seated" — that is what
+  // lets a player return via a new tab, a different browser, or a
+  // different device without repeating the ceremony for a seat they
+  // already have.
+  const {data: seatedStatus, isLoading: seatedLoading} = useQuery({
+    queryKey: ['seated', id], queryFn: () => getSeated(id), enabled: valid
+  });
+  const seated = seatedStatus?.seated ?? false;
   const rt = useTableRealtime(valid && seated ? id : '', viewer, inviteCode, USE_MOCK ? {scenario, delay} : undefined);
   if (!valid) return (
     <main className="game-loading">
@@ -80,10 +85,10 @@ function TableContent() {
       <Button render={<Link href="/lobby"/>}>Voltar ao lobby</Button>
     </main>
   );
+  if (seatedLoading) return <main className="game-loading"><span className="loader"/></main>;
   if (!seated) return <>
     <BuyInPanel roomId={id} shareCode={inviteCode} onSeatedAction={() => {
-      window.sessionStorage.setItem(seatedKey(id), '1');
-      setSeated(true);
+      queryClient.setQueryData(['seated', id], {seated: true, stack: 0});
     }}/>
     {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
   </>;
@@ -123,7 +128,7 @@ function TableContent() {
           {canInvite && <InviteDialog url={inviteUrl}/>}
           <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} onLeft={amount => {
             pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
-            window.sessionStorage.removeItem(seatedKey(id));
+            queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
             router.push('/lobby');
           }}/>
         </div>

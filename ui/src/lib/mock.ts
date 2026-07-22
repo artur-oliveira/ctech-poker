@@ -144,6 +144,9 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     }
     return ok({}, config);
   }
+  if (method === 'GET' && /^\/v1\.0\/rooms\/[^/]+\/seated$/.test(path)) {
+    return ok({seated: false, stack: 0}, config);
+  }
   const leaveMatch = method === 'POST' ? path.match(/^\/v1\.0\/rooms\/([^/]+)\/leave$/) : null;
   if (leaveMatch) {
     if (!rooms.find(r => r.room_id === leaveMatch[1])) fail(404, 'room not found', config);

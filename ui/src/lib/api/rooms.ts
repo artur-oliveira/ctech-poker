@@ -42,6 +42,15 @@ export async function joinRoom(id: string, amount: number, shareCode?: string) {
   await apiClient.post(`/v1.0/rooms/${id}/join`, {amount, share_code: shareCode || undefined}, {silentError: true});
 }
 
+export interface SeatedStatus {
+  seated: boolean;
+  stack: number;
+}
+
+export async function getSeated(id: string) {
+  return (await apiClient.get<SeatedStatus>(`/v1.0/rooms/${id}/seated`)).data;
+}
+
 export async function leaveRoom(id: string) {
   return (await apiClient.post<{ amount: number }>(`/v1.0/rooms/${id}/leave`, {}, {silentError: true})).data;
 }
