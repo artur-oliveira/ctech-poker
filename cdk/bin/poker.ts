@@ -7,6 +7,7 @@ import {DynamoDBStack} from '../lib/dynamodb-stack';
 import {ArchiverStack} from '../lib/archiver-stack';
 import {FrontendStack} from '../lib/frontend-stack';
 import {ReconcileStack} from '../lib/reconcile-stack';
+import {TableCleanupStack} from '../lib/tablecleanup-stack';
 import {
   ACCOUNTS_API_DOMAIN_PREFIX,
   ACCOUNTS_DOMAIN_PREFIX,
@@ -111,4 +112,15 @@ new ReconcileStack(app, id('Reconcile'), {
   pokerClientIdParam: pokerParameters.clientId,
   pokerClientSecretParam: pokerParameters.clientSecret,
   description: `CTech Poker Cashout Reconcile Lambda - ${ENVIRONMENT}`,
+});
+
+new TableCleanupStack(app, id('TableCleanup'), {
+  env,
+  environment: ENVIRONMENT,
+  tableStateArn: dynamoStack.tables.get('poker_table_state')!.tableArn,
+  roomsTableArn: dynamoStack.tables.get('poker_rooms')!.tableArn,
+  walletUrlParam: pokerParameters.walletUrl,
+  pokerClientIdParam: pokerParameters.clientId,
+  pokerClientSecretParam: pokerParameters.clientSecret,
+  description: `CTech Poker stale-table cleanup Lambda - ${ENVIRONMENT}`,
 });
