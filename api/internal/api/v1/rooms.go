@@ -32,6 +32,7 @@ func RegisterRooms(router fiber.Router, auth fiber.Handler, rooms *roomstore.Sto
 	g.Get("/stakes", h.listStakes)
 	g.Get("/code/:code", h.getByShareCode)
 	g.Get("/:id", h.getRoom)
+	g.Get("/:id/seated", h.seated)
 	g.Post("/:id/join", rateLimit(joinLimiter, ipKey("rooms:join")), h.join)
 	g.Post("/:id/leave", h.leave)
 	g.Post("/:id/ready", h.ready)
@@ -135,6 +136,20 @@ func (h *roomHandlers) getByShareCode(c fiber.Ctx) error {
 	}
 	userID, _ := c.Locals(localsUserID).(string)
 	return c.JSON(sanitizeRoom(room, userID))
+}
+
+// seated is the server-authoritative answer to "does this player already
+// hold a live seat at this table?" — used by the client on table-page load
+// so a player who closed their tab, or is opening the table from a second
+// device, is not asked to repeat the buy-in ceremony for a seat they already
+// have (playerID is always claims.Sub, never client-supplied — IDOR-safe).
+func (h *roomHandlers) seated(c fiber.Ctx) error {
+	userID, _ := c.Locals(localsUserID).(string)
+	seated, stack, err := h.buyin.Seated(c.Context(), c.Params("id"), userID)
+	if err != nil {
+		return problem.InternalServer("failed to check seat", c, err).Send(c)
+	}
+	return c.JSON(fiber.Map{"seated": seated, "stack": stack})
 }
 
 // sanitizeRoom strips the share code from any viewer other than the room's
