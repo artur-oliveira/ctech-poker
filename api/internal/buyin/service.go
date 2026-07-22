@@ -215,6 +215,37 @@ func (s *Service) isSeated(actor *table.Actor, playerID string) (bool, error) {
 	}
 }
 
+// Seated reports whether playerID currently holds a seat at roomID's live
+// table and, if so, their current stack. Unlike isSeated (which reuses an
+// actor the caller already has, e.g. mid-BuyIn), this acquires its own actor
+// handle — it is the read path for GET /rooms/:id/seated, which lets a
+// player reconnecting from a different device or a closed/reopened tab find
+// out their real seat state from the server instead of guessing from local
+// client storage.
+func (s *Service) Seated(ctx context.Context, roomID, playerID string) (bool, int64, error) {
+	actor, err := s.manager.GetOrCreateActor(ctx, roomID, s.seedFor(ctx, roomID))
+	if err != nil || actor == nil {
+		return false, 0, fmt.Errorf("buyin: table unavailable: %w", err)
+	}
+
+	snapCh := make(chan hand.Snapshot, 1)
+	reply := make(chan error, 1)
+	if err := actor.Dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: reply}); err != nil {
+		return false, 0, err
+	}
+	select {
+	case snap := <-snapCh:
+		for _, seat := range snap.Seats {
+			if seat.PlayerID == playerID {
+				return true, seat.Stack, nil
+			}
+		}
+		return false, 0, nil
+	default:
+		return false, 0, nil
+	}
+}
+
 // CashOut removes playerID from roomID's live table and credits their final
 // stack back to the appropriate wallet. For real-money rooms, credits the
 // game wallet using the hold IDs returned from the seat; for sandbox, credits

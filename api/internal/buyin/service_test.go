@@ -149,6 +149,46 @@ func (f *fakeRoomLookup) Get(_ context.Context, _ string) (*roomstore.Room, erro
 	return f.room, nil
 }
 
+func TestSeatedReportsExistingSeatAndStack(t *testing.T) {
+	wallet := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := testRoomLookup()
+	svc := NewService(wallet, mgr, rooms)
+	ctx := context.Background()
+
+	if err := svc.BuyIn(ctx, "test-room", "player-1", 100, false, "idem-1"); err != nil {
+		t.Fatalf("BuyIn: %v", err)
+	}
+
+	seated, stack, err := svc.Seated(ctx, "test-room", "player-1")
+	if err != nil {
+		t.Fatalf("Seated: %v", err)
+	}
+	if !seated || stack != 100 {
+		t.Fatalf("expected seated=true stack=100, got seated=%v stack=%d", seated, stack)
+	}
+}
+
+func TestSeatedReportsFalseForNeverJoinedPlayer(t *testing.T) {
+	wallet := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := testRoomLookup()
+	svc := NewService(wallet, mgr, rooms)
+	ctx := context.Background()
+
+	if err := svc.BuyIn(ctx, "test-room", "player-1", 100, false, "idem-1"); err != nil {
+		t.Fatalf("BuyIn: %v", err)
+	}
+
+	seated, stack, err := svc.Seated(ctx, "test-room", "player-2")
+	if err != nil {
+		t.Fatalf("Seated: %v", err)
+	}
+	if seated || stack != 0 {
+		t.Fatalf("expected seated=false stack=0 for a player who never joined, got seated=%v stack=%d", seated, stack)
+	}
+}
+
 func TestBuyInRejectsRealRoomWithoutGamblingActivation(t *testing.T) {
 	sandbox := &fakeWallet{}
 	game := &fakeWallet{}
