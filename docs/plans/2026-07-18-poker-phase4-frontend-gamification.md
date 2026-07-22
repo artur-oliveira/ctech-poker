@@ -1188,7 +1188,7 @@ git commit -m "feat(leaderboard): non-monetary hands-played/hands-won aggregatio
 - [ ] **Step 1: Write the failing test**
 
 ```go
-// api/internal/roulette/service_test.go
+// api/internal/dailyreward/service_test.go
 package sandbox credits
 
 import (
@@ -1259,7 +1259,7 @@ Expected: FAIL with "undefined: NewService".
 - [ ] **Step 3: Implement `service.go`**
 
 ```go
-// api/internal/roulette/service.go
+// api/internal/dailyreward/service.go
 // Package sandbox credits implements OVERVIEW.md §9.3's free sandbox credit
 // sandbox credits: a fixed set of prize tiers, probability inversely proportional
 // to value, CSPRNG selection, once per player per 24h. Sandbox-only — it
@@ -1365,7 +1365,7 @@ Expected: PASS.
 - [ ] **Step 5: Implement the DynamoDB cooldown store and HTTP route**
 
 ```go
-// api/internal/roulette/store.go
+// api/internal/dailyreward/store.go
 package sandbox credits
 
 import (
@@ -1459,7 +1459,7 @@ Mount `Registersandbox credits(router, authMiddleware(verifier), sandbox credits
 - [ ] **Step 7: Commit**
 
 ```bash
-git add api/internal/roulette api/internal/api/v1/sandbox credits.go
+git add api/internal/dailyreward api/internal/api/v1/sandbox credits.go
 git commit -m "feat(sandbox credits): sandbox credit sandbox credits with CSPRNG weighted tiers and a 24h cooldown"
 ```
 

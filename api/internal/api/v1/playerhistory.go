@@ -21,7 +21,7 @@ func RegisterPlayerHistory(router fiber.Router, auth fiber.Handler, reader sessi
 		}
 		sessions, err := reader.ListSessions(c.Context(), userID, 50)
 		if err != nil {
-			return problem.InternalServer("failed to list sessions").Send(c)
+			return problem.InternalServer("failed to list sessions", c, err).Send(c)
 		}
 		return c.JSON(fiber.Map{"sessions": sessions})
 	})
@@ -33,7 +33,7 @@ func RegisterPlayerHistory(router fiber.Router, auth fiber.Handler, reader sessi
 		}
 		hands, err := reader.ListHands(c.Context(), userID, 50)
 		if err != nil {
-			return problem.InternalServer("failed to list hands").Send(c)
+			return problem.InternalServer("failed to list hands", c, err).Send(c)
 		}
 		return c.JSON(fiber.Map{"hands": hands})
 	})

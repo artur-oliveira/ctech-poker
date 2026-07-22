@@ -41,7 +41,7 @@ func RegisterHandHistory(router fiber.Router, auth fiber.Handler, store historyS
 		handID := c.Params("handId")
 		actions, err := store.LoadActionsSince(c.Context(), tableID, handID, 0)
 		if err != nil {
-			return problem.InternalServer("failed to load hand history").Send(c)
+			return problem.InternalServer("failed to load hand history", c, err).Send(c)
 		}
 		return c.JSON(fiber.Map{"table_id": tableID, "hand_id": handID, "actions": actions})
 	})

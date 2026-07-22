@@ -86,7 +86,7 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 	}
 	if h.rooms != nil {
 		if err := h.rooms.Create(c.Context(), room); err != nil {
-			return problem.InternalServer("failed to create room").Send(c)
+			return problem.InternalServer("failed to create room", c, err).Send(c)
 		}
 	}
 	if room.BlindEscalation != nil && h.manager != nil {
@@ -106,7 +106,7 @@ func (h *roomHandlers) listStakes(c fiber.Ctx) error {
 func (h *roomHandlers) listPublic(c fiber.Ctx) error {
 	rooms, _, err := h.rooms.ListPublic(c.Context(), 50, c.Query("cursor"))
 	if err != nil {
-		return problem.InternalServer("failed to list rooms").Send(c)
+		return problem.InternalServer("failed to list rooms", c, err).Send(c)
 	}
 	return c.JSON(rooms)
 }
@@ -114,7 +114,7 @@ func (h *roomHandlers) listPublic(c fiber.Ctx) error {
 func (h *roomHandlers) getRoom(c fiber.Ctx) error {
 	room, err := h.rooms.Get(c.Context(), c.Params("id"))
 	if err != nil {
-		return problem.InternalServer("failed to get room").Send(c)
+		return problem.InternalServer("failed to get room", c, err).Send(c)
 	}
 	if room == nil {
 		return problem.NotFound("room not found").Send(c)
@@ -128,7 +128,7 @@ func (h *roomHandlers) getRoom(c fiber.Ctx) error {
 func (h *roomHandlers) getByShareCode(c fiber.Ctx) error {
 	room, err := h.rooms.GetByShareCode(c.Context(), c.Params("code"))
 	if err != nil {
-		return problem.InternalServer("failed to get room").Send(c)
+		return problem.InternalServer("failed to get room", c, err).Send(c)
 	}
 	if room == nil {
 		return problem.NotFound("room not found").Send(c)
@@ -165,7 +165,7 @@ func (h *roomHandlers) join(c fiber.Ctx) error {
 	}
 	room, err := h.rooms.Get(c.Context(), c.Params("id"))
 	if err != nil {
-		return problem.InternalServer("failed to get room").Send(c)
+		return problem.InternalServer("failed to get room", c, err).Send(c)
 	}
 	if room == nil {
 		return problem.NotFound("room not found").Send(c)

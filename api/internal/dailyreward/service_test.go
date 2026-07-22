@@ -1,4 +1,4 @@
-package roulette
+package dailyreward
 
 import (
 	"context"
@@ -8,20 +8,20 @@ import (
 )
 
 type fakeSpinStore struct {
-	records       map[string]SpinRecord
+	records       map[string]DailyRewardRecord
 	completeCalls int
 	failComplete  bool
 }
 
-func (f *fakeSpinStore) Claim(_ context.Context, playerID, day string, amount int64, _ time.Time) (SpinRecord, error) {
+func (f *fakeSpinStore) Claim(_ context.Context, playerID, day string, amount int64, _ time.Time) (DailyRewardRecord, error) {
 	if f.records == nil {
-		f.records = map[string]SpinRecord{}
+		f.records = map[string]DailyRewardRecord{}
 	}
 	key := playerID + "#" + day
 	if record, ok := f.records[key]; ok {
 		return record, nil
 	}
-	record := SpinRecord{Amount: amount, Status: StatusPending}
+	record := DailyRewardRecord{Amount: amount, Status: StatusPending}
 	f.records[key] = record
 	return record, nil
 }
@@ -38,15 +38,15 @@ func (f *fakeSpinStore) Complete(_ context.Context, playerID, day string, _ time
 	return nil
 }
 
-func (f *fakeSpinStore) Get(_ context.Context, playerID, day string) (SpinRecord, error) {
+func (f *fakeSpinStore) Get(_ context.Context, playerID, day string) (DailyRewardRecord, error) {
 	if f.records == nil {
-		f.records = map[string]SpinRecord{}
+		f.records = map[string]DailyRewardRecord{}
 	}
 	key := playerID + "#" + day
 	if record, ok := f.records[key]; ok {
 		return record, nil
 	}
-	return SpinRecord{}, nil
+	return DailyRewardRecord{}, nil
 }
 
 type fakeCredit struct {
@@ -73,7 +73,7 @@ func fixedService(wallet *fakeCredit, store *fakeSpinStore) *Service {
 
 func TestSpinPersistsThenCreditsAndCompletes(t *testing.T) {
 	store, wallet := &fakeSpinStore{}, &fakeCredit{}
-	amount, err := fixedService(wallet, store).Spin(context.Background(), "p1")
+	amount, _, err := fixedService(wallet, store).Spin(context.Background(), "p1")
 	if err != nil || amount != 500 {
 		t.Fatalf("amount=%d err=%v", amount, err)
 	}
@@ -85,12 +85,12 @@ func TestSpinPersistsThenCreditsAndCompletes(t *testing.T) {
 func TestPendingSpinRetriesSamePrizeAndIdempotencyKey(t *testing.T) {
 	store, wallet := &fakeSpinStore{}, &fakeCredit{fail: true}
 	svc := fixedService(wallet, store)
-	if _, err := svc.Spin(context.Background(), "p1"); err == nil {
+	if _, _, err := svc.Spin(context.Background(), "p1"); err == nil {
 		t.Fatal("expected first wallet failure")
 	}
 	wallet.fail = false
 	svc.pick = func() (int64, error) { return 1000, nil }
-	amount, err := svc.Spin(context.Background(), "p1")
+	amount, _, err := svc.Spin(context.Background(), "p1")
 	if err != nil || amount != 500 {
 		t.Fatalf("retry amount=%d err=%v", amount, err)
 	}
@@ -102,10 +102,10 @@ func TestPendingSpinRetriesSamePrizeAndIdempotencyKey(t *testing.T) {
 func TestCompletedSpinReturnsStoredPrizeWithoutCreditingAgain(t *testing.T) {
 	store, wallet := &fakeSpinStore{}, &fakeCredit{}
 	svc := fixedService(wallet, store)
-	if _, err := svc.Spin(context.Background(), "p1"); err != nil {
+	if _, _, err := svc.Spin(context.Background(), "p1"); err != nil {
 		t.Fatal(err)
 	}
-	amount, err := svc.Spin(context.Background(), "p1")
+	amount, _, err := svc.Spin(context.Background(), "p1")
 	if err != nil || amount != 500 || len(wallet.amounts) != 1 {
 		t.Fatalf("amount=%d credits=%d err=%v", amount, len(wallet.amounts), err)
 	}
@@ -114,11 +114,11 @@ func TestCompletedSpinReturnsStoredPrizeWithoutCreditingAgain(t *testing.T) {
 func TestCompletionFailureRetriesWalletSafely(t *testing.T) {
 	store, wallet := &fakeSpinStore{failComplete: true}, &fakeCredit{}
 	svc := fixedService(wallet, store)
-	if _, err := svc.Spin(context.Background(), "p1"); err == nil {
+	if _, _, err := svc.Spin(context.Background(), "p1"); err == nil {
 		t.Fatal("expected completion failure")
 	}
 	store.failComplete = false
-	if _, err := svc.Spin(context.Background(), "p1"); err != nil {
+	if _, _, err := svc.Spin(context.Background(), "p1"); err != nil {
 		t.Fatal(err)
 	}
 	if len(wallet.keys) != 2 || wallet.keys[0] != wallet.keys[1] {

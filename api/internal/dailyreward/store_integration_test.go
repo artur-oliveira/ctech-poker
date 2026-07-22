@@ -1,6 +1,6 @@
 //go:build integration
 
-package roulette
+package dailyreward
 
 import (
 	"context"

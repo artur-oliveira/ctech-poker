@@ -1022,6 +1022,12 @@ h1 em {
     gap: 12px
 }
 
+.reward-timer {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    opacity: .75
+}
+
 .lobby h1, .ranking h1, .roulette h1 {
     font-size: clamp(38px, 5vw, 62px);
     margin: 8px 0;

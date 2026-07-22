@@ -135,10 +135,24 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 	router.Get("/tables/:id/ws", func(c fiber.Ctx) error {
 		tableID := c.Params("id")
 		return upgrader.Upgrade(c.RequestCtx(), func(conn *fws.Conn) {
+			// Post-upgrade the handler runs on a hijacked goroutine outside
+			// Fiber's recover middleware — an unrecovered panic here kills the
+			// whole process, not just this connection.
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("table ws handler panic", "table", tableID, "panic", r)
+					_ = conn.Close()
+				}
+			}()
 			ctx := c.Context()
+			// Single adapter shared by this handler and the fan-out registry:
+			// its mutex is the only thing serializing data-frame writes, so
+			// every write path must go through it (fasthttp/websocket panics
+			// on concurrent writes).
+			safeConn := &wsConnAdapter{conn: conn}
 			send := func(msg any) {
 				data, _ := json.Marshal(msg)
-				_ = conn.WriteMessage(fws.TextMessage, data)
+				_ = safeConn.WriteMessage(fws.TextMessage, data)
 			}
 
 			token, shareCode, ok := readAuthToken(conn)
@@ -207,28 +221,14 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 
 			connKey := tableID + "#" + playerID
 			connID := uuid.NewString()
-			reg.Register(connKey, connID, &wsConnAdapter{conn: conn})
+			reg.Register(connKey, connID, safeConn)
 			defer reg.Unregister(connKey, connID)
 			chatConnID := connID + "-chat"
-			reg.Register(tableID+"#chat", chatConnID, &wsConnAdapter{conn: conn})
+			reg.Register(tableID+"#chat", chatConnID, safeConn)
 			defer reg.Unregister(tableID+"#chat", chatConnID)
 
 			send(map[string]any{"type": "connected", "conn_id": connID})
 			slog.Info("table ws connected", "table", tableID, "player", playerID, "conn", connID)
-
-			// Push the current table state to this connection immediately. The
-			// actor only broadcasts on a state mutation, so a fresh socket would
-			// otherwise sit on ping/pong until the next action (leaving the
-			// client stuck on the loading screen). Sent directly to this conn —
-			// not via the fan-out registry — so it reaches the viewer even when
-			// they are not yet seated (spectator / pre-join).
-			snapCh := make(chan hand.Snapshot, 1)
-			snapReply := make(chan error, 1)
-			if err := dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: snapReply}); err == nil {
-				if snap, ok := <-snapCh; ok {
-					send(map[string]any{"type": "state", "snapshot": snap})
-				}
-			}
 
 			limiter := newSeatLimiter(10) // 10 actions/sec/seat — generous for a human, tight for a script
 			done := make(chan struct{})
@@ -304,9 +304,17 @@ func startHeartbeat(conn *fws.Conn, done <-chan struct{}, pingInterval, pongWait
 	}
 }
 
-// wsConnAdapter adapts fasthttp/websocket.Conn to ws.Conn.
-type wsConnAdapter struct{ conn *fws.Conn }
+// wsConnAdapter adapts fasthttp/websocket.Conn to ws.Conn, serializing
+// writes: the registry broadcasts from actor goroutines while the read
+// loop replies inline, and fasthttp/websocket allows only one concurrent
+// data-frame writer per conn.
+type wsConnAdapter struct {
+	mu   sync.Mutex
+	conn *fws.Conn
+}
 
 func (w *wsConnAdapter) WriteMessage(messageType int, data []byte) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	return w.conn.WriteMessage(messageType, data)
 }

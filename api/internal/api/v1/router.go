@@ -10,11 +10,11 @@ import (
 	"gopkg.aoctech.app/api-commons/ws"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/dailyreward"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
-	"gopkg.aoctech.app/poker/api/internal/roulette"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
@@ -25,7 +25,7 @@ import (
 // tablemanager.Manager.GetOrCreateActor) — passed straight through to the WS
 // gateway. Any instance may accept any table's connection directly under
 // ARCHITECTURE.md §2's revised model — there is no proxy route.
-func Register(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier *jwtverify.Verifier, manager *tablemanager.Manager, reg ws.Registry, seed func(string) func() *hand.Table, rooms *roomstore.Store, buyinSvc *buyin.Service, players *player.Service, leaderboardSvc *leaderboard.Service, rouletteSvc *roulette.Service, cacheBackend cache.Backend, tableStore *tablestore.Store, sessionStore *sessionlog.Store) {
+func Register(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier *jwtverify.Verifier, manager *tablemanager.Manager, reg ws.Registry, seed func(string) func() *hand.Table, rooms *roomstore.Store, buyinSvc *buyin.Service, players *player.Service, leaderboardSvc *leaderboard.Service, dailyRewardSvc *dailyreward.Service, cacheBackend cache.Backend, tableStore *tablestore.Store, sessionStore *sessionlog.Store) {
 	router := app.Group("/v1.0")
 
 	// Health (unauthenticated): /v1.0/health is a dependency-free liveness probe;
@@ -51,5 +51,5 @@ func Register(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier 
 	RegisterRooms(router, auth, rooms, buyinSvc, manager, createLimiter, joinLimiter)
 	RegisterPlayers(router, auth, players)
 	RegisterLeaderboard(router, auth, leaderboardSvc)
-	RegisterRoulette(router, auth, rouletteSvc, spinLimiter)
+	RegisterDailyReward(router, auth, dailyRewardSvc, spinLimiter)
 }

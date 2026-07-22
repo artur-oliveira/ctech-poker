@@ -32,6 +32,13 @@ const rooms = [
   },
 ];
 
+/* ponytail: 90s mock cooldown (real API uses 24h) so the countdown is testable in dev;
+ * sessionStorage keeps it across reloads since the mock lives in the page */
+const MOCK_CREDIT_COOLDOWN_S = 90;
+const CREDIT_KEY = 'mock_next_credit_at';
+let nextCreditAt = typeof window === 'undefined' ? 0 : Number(sessionStorage.getItem(CREDIT_KEY)) || 0;
+const creditCooldown = () => Math.max(0, Math.ceil((nextCreditAt - Date.now()) / 1000));
+
 function ok<T>(data: T, config: InternalAxiosRequestConfig): AxiosResponse<T> {
   return {data, status: 200, statusText: 'OK', headers: {}, config};
 }
@@ -104,7 +111,13 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     {player_id: MOCK_PLAYER_ID, hands_played: 184, hands_won: 49, win_rate: .266},
     {player_id: 'leo_rio', hands_played: 213, hands_won: 52, win_rate: .244},
   ], config);
-  if (method === 'POST' && path === '/v1.0/sandbox-credits') return ok({amount: 250}, config);
+  if (method === 'GET' && path === '/v1.0/sandbox-credits') return ok({remaining_time_seconds: creditCooldown()}, config);
+  if (method === 'POST' && path === '/v1.0/sandbox-credits') {
+    if (creditCooldown() > 0) return ok({amount: 0, remaining_time_seconds: creditCooldown()}, config);
+    nextCreditAt = Date.now() + MOCK_CREDIT_COOLDOWN_S * 1000;
+    sessionStorage.setItem(CREDIT_KEY, String(nextCreditAt));
+    return ok({amount: 250, remaining_time_seconds: MOCK_CREDIT_COOLDOWN_S}, config);
+  }
   return ok({}, config);
 }
 

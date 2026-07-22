@@ -25,12 +25,12 @@ import (
 	v1 "gopkg.aoctech.app/poker/api/internal/api/v1"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/dailyreward"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
-	"gopkg.aoctech.app/poker/api/internal/roulette"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
@@ -84,10 +84,10 @@ func newFiberApp(cfg *config.Config) *fiber.App {
 				return p.Send(c)
 			}
 			if fiberErr, ok := errors.AsType[*fiber.Error](err); ok {
-				return problem.FromError(fiberErr).Send(c)
+				return problem.FromError(fiberErr, c).Send(c)
 			}
 			slog.Error("unhandled HTTP error", "request_id", requestid.FromContext(c), "path", c.Path(), "err", err)
-			return problem.InternalServer("an unexpected error occurred").Send(c)
+			return problem.InternalServer("an unexpected error occurred", c, err).Send(c)
 		},
 	})
 
@@ -183,11 +183,11 @@ func newLeaderboardStore(db *dynamodb.Client, cfg *config.Config) *leaderboard.S
 func newLeaderboardService(store *leaderboard.Store) *leaderboard.Service {
 	return leaderboard.NewServiceWithStore(store)
 }
-func newRouletteStore(db *dynamodb.Client, cfg *config.Config) *roulette.Store {
-	return roulette.NewStore(db, cfg.Env)
+func newRouletteStore(db *dynamodb.Client, cfg *config.Config) *dailyreward.Store {
+	return dailyreward.NewStore(db, cfg.Env)
 }
-func newRouletteService(wallet *walletclient.Client, store *roulette.Store) *roulette.Service {
-	return roulette.NewService(wallet, store)
+func newRouletteService(wallet *walletclient.Client, store *dailyreward.Store) *dailyreward.Service {
+	return dailyreward.NewService(wallet, store)
 }
 func newSessionStore(db *dynamodb.Client, cfg *config.Config) *sessionlog.Store {
 	return sessionlog.NewStore(db, cfg.Env)
@@ -251,8 +251,8 @@ func roomBackedSeed(rooms *roomstore.Store) func(string) func() *hand.Table {
 	}
 }
 
-func registerRoutes(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier *jwtverify.Verifier, manager *tablemanager.Manager, reg ws.Registry, cacheBackend cache.Backend, rooms *roomstore.Store, buyinSvc *buyin.Service, players *player.Service, leaderboardSvc *leaderboard.Service, rouletteSvc *roulette.Service, tableStore *tablestore.Store, sessionStore *sessionlog.Store) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), rooms, buyinSvc, players, leaderboardSvc, rouletteSvc, cacheBackend, tableStore, sessionStore)
+func registerRoutes(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier *jwtverify.Verifier, manager *tablemanager.Manager, reg ws.Registry, cacheBackend cache.Backend, rooms *roomstore.Store, buyinSvc *buyin.Service, players *player.Service, leaderboardSvc *leaderboard.Service, dailyRewardSvc *dailyreward.Service, tableStore *tablestore.Store, sessionStore *sessionlog.Store) {
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, cacheBackend, tableStore, sessionStore)
 }
 
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {

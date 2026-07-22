@@ -3,9 +3,12 @@ package problem
 
 import (
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/requestid"
 	common "gopkg.aoctech.app/api-commons/problem"
 )
 
@@ -27,19 +30,22 @@ func wrap(p *common.Problem) *Problem { return &Problem{Problem: *p} }
 func New(status int, typ, title, detail string) *Problem {
 	return wrap(common.New(status, typ, title, detail))
 }
-func BadRequest(detail string) *Problem     { return wrap(common.BadRequest(detail)) }
-func Unauthorized(detail string) *Problem   { return wrap(common.Unauthorized(detail)) }
-func Forbidden(detail string) *Problem      { return wrap(common.Forbidden(detail)) }
-func NotFound(detail string) *Problem       { return wrap(common.NotFound(detail)) }
-func Conflict(detail string) *Problem       { return wrap(common.Conflict(detail)) }
-func InternalServer(detail string) *Problem { return wrap(common.InternalServer(detail)) }
+func BadRequest(detail string) *Problem   { return wrap(common.BadRequest(detail)) }
+func Unauthorized(detail string) *Problem { return wrap(common.Unauthorized(detail)) }
+func Forbidden(detail string) *Problem    { return wrap(common.Forbidden(detail)) }
+func NotFound(detail string) *Problem     { return wrap(common.NotFound(detail)) }
+func Conflict(detail string) *Problem     { return wrap(common.Conflict(detail)) }
+func InternalServer(detail string, c fiber.Ctx, err error) *Problem {
+	slog.Error("unhandled error", "request_id", requestid.FromContext(c), "path", c.Path(), "err", err)
+	return wrap(common.InternalServer(detail))
+}
 
 func NotImplemented(detail string) *Problem {
 	return &Problem{Problem: *common.New(http.StatusNotImplemented, "/problems/not-implemented", "Not Implemented", detail)}
 }
 
-func FromError(err error) *Problem {
-	if fiberErr, ok := err.(*fiber.Error); ok {
+func FromError(err error, c fiber.Ctx) *Problem {
+	if fiberErr, ok := errors.AsType[*fiber.Error](err); ok {
 		switch fiberErr.Code {
 		case http.StatusBadRequest:
 			return BadRequest(fiberErr.Message)
@@ -57,5 +63,5 @@ func FromError(err error) *Problem {
 			}
 		}
 	}
-	return InternalServer("an unexpected error occurred")
+	return InternalServer("an unexpected error occurred", c, err)
 }

@@ -18,7 +18,7 @@ func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Se
 func (h *playerHandlers) me(c fiber.Ctx) error {
 	profile, err := h.players.GetOrCreate(c.Context(), c.Locals(localsUserID).(string))
 	if err != nil {
-		return problem.InternalServer("failed to load player profile").Send(c)
+		return problem.InternalServer("failed to load player profile", c, err).Send(c)
 	}
 	return c.JSON(playerResponse(profile))
 }
@@ -26,7 +26,7 @@ func (h *playerHandlers) me(c fiber.Ctx) error {
 func (h *playerHandlers) acceptTerms(c fiber.Ctx) error {
 	profile, err := h.players.AcceptTerms(c.Context(), c.Locals(localsUserID).(string))
 	if err != nil {
-		return problem.InternalServer("failed to accept poker terms").Send(c)
+		return problem.InternalServer("failed to accept poker terms", c, err).Send(c)
 	}
 	return c.JSON(playerResponse(profile))
 }
