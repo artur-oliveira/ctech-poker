@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import {Club, Gift, Trophy} from 'lucide-react';
+import {Club, Gift, LoaderCircle, Trophy} from 'lucide-react';
 import {StakesGrid} from '@/components/lobby/StakesGrid';
 import {CreateRoomDialog} from '@/components/lobby/CreateRoomDialog';
 import {ProfileMenu} from '@/components/lobby/ProfileMenu';
@@ -79,7 +79,7 @@ export default function Lobby() {
           <div className="lobby-actions">
             <Button variant="outline" size="lg" disabled={claiming || onCooldown} onClick={claimReward}
                     className="btn-reward">
-              <Gift size={18}/> {claiming ? 'Resgatando…'
+              {claiming ? <LoaderCircle size={18} className="action-spinner"/> : <Gift size={18}/>} {claiming ? 'Resgatando…'
                 : cooldown ? <>Próxima recompensa <span className="reward-timer">{formatCooldown(cooldown)}</span></>
                   : 'Recompensa Diária'}
             </Button>

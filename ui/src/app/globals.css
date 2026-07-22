@@ -260,6 +260,25 @@ button, a {
     z-index: 5
 }
 
+.hero-copy h1 {
+    animation: rise .8s var(--ease-out-quint) both
+}
+
+.hero-copy > p {
+    animation: rise .8s var(--ease-out-quint) both;
+    animation-delay: 90ms
+}
+
+.hero-actions {
+    animation: rise .8s var(--ease-out-quint) both;
+    animation-delay: 180ms
+}
+
+.trust {
+    animation: rise .8s var(--ease-out-quint) both;
+    animation-delay: 260ms
+}
+
 h1 {
     font-size: clamp(52px, 6vw, 82px);
     line-height: .98;
@@ -1902,7 +1921,8 @@ h1 em {
     padding: 6px 7px 6px 12px;
     border-radius: var(--rounded-control);
     background: var(--surface-error);
-    color: var(--paper)
+    color: var(--paper);
+    animation: reconnect-enter 220ms var(--ease-out-quint) both
 }
 
 .action-error > svg {
