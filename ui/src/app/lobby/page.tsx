@@ -47,7 +47,7 @@ export default function Lobby() {
     try {
       const r = await spin();
       setCooldown(r.remaining_time_seconds);
-      if (r.amount > 0) pushNotification(`Você ganhou +${r.amount} fichas sandbox!`, 'info');
+      if (r.amount > 0) pushNotification(`Você ganhou +${r.amount.toLocaleString('pt-BR')} fichas sandbox!`, 'info');
       else pushNotification(`Recompensa disponível em ${formatCooldown(r.remaining_time_seconds)}.`, 'info');
     } catch {
       pushNotification('Não foi possível resgatar a recompensa agora.', 'error');

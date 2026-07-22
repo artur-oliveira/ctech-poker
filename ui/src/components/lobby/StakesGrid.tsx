@@ -58,8 +58,8 @@ export function StakesGrid() {
   );
   return <div className="room-groups">{stakes.map(stake => (
     <section key={`${stake.small_blind}-${stake.big_blind}`} className="room-group"
-      aria-label={`Mesas com blinds ${stake.small_blind} / ${stake.big_blind}`}>
-      <h2><span>Blinds</span> {stake.small_blind} / {stake.big_blind}</h2>
+      aria-label={`Mesas com blinds ${stake.small_blind.toLocaleString('pt-BR')} / ${stake.big_blind.toLocaleString('pt-BR')}`}>
+      <h2><span>Blinds</span> {stake.small_blind.toLocaleString('pt-BR')} / {stake.big_blind.toLocaleString('pt-BR')}</h2>
       <div className="stake-grid">{MAX_SEATS_OPTIONS.map((maxSeats, i) => {
         const key = bucketKey(stake.small_blind, stake.big_blind, maxSeats);
         const active = rooms.filter(r => r.visibility === 'public' && r.small_blind === stake.small_blind
@@ -70,7 +70,7 @@ export function StakesGrid() {
           {active > 0 && <span className="status-dot"/>}
           <div>
             <small>SANDBOX · {maxSeats}-MAX</small>
-            <h3>{stake.small_blind} / {stake.big_blind}</h3>
+            <h3>{stake.small_blind.toLocaleString('pt-BR')} / {stake.big_blind.toLocaleString('pt-BR')}</h3>
             <span><Users/> {active > 0 ? `${active} mesa${active > 1 ? 's' : ''} ativa${active > 1 ? 's' : ''}`
               : 'Nenhuma mesa ativa'} · até {maxSeats} jogadores</span>
           </div>

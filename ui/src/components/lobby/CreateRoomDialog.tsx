@@ -74,7 +74,7 @@ export function CreateRoomDialog() {
             {stakes.map((stake, index) => <button type="button" key={`${stake.small_blind}-${stake.big_blind}`}
               role="radio" aria-checked={field.value === index}
               className={`rounded-xl border px-4 py-2 text-sm font-semibold transition-colors ${field.value === index ? 'border-[var(--brand-bright)] bg-[var(--brand)] text-[var(--on-brand)]' : 'border-white/15 bg-(--surface-control) text-[var(--on-brand)] hover:bg-white/10'}`}
-              onClick={() => field.onChange(index)}>{stake.small_blind} / {stake.big_blind}</button>)}
+              onClick={() => field.onChange(index)}>{stake.small_blind.toLocaleString('pt-BR')} / {stake.big_blind.toLocaleString('pt-BR')}</button>)}
           </div>}/>{!stakes.length && <p className="form-error">Nenhum stake disponível no momento.</p>}
           {form.formState.errors.stakeIndex &&
             <p className="form-error">{form.formState.errors.stakeIndex.message}</p>}</div>
