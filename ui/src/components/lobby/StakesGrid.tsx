@@ -60,11 +60,12 @@ export function StakesGrid() {
     <section key={`${stake.small_blind}-${stake.big_blind}`} className="room-group"
       aria-label={`Mesas com blinds ${stake.small_blind} / ${stake.big_blind}`}>
       <h2><span>Blinds</span> {stake.small_blind} / {stake.big_blind}</h2>
-      <div className="stake-grid">{MAX_SEATS_OPTIONS.map(maxSeats => {
+      <div className="stake-grid">{MAX_SEATS_OPTIONS.map((maxSeats, i) => {
         const key = bucketKey(stake.small_blind, stake.big_blind, maxSeats);
         const active = rooms.filter(r => r.visibility === 'public' && r.small_blind === stake.small_blind
           && r.big_blind === stake.big_blind && r.max_seats === maxSeats && r.seats_taken < maxSeats).length;
         return <Button variant="ghost" key={key} className="room-card h-auto" disabled={joiningKey === key}
+          style={{'--delay': `${i * 60}ms`} as React.CSSProperties}
           onClick={() => joinOrCreate(stake.small_blind, stake.big_blind, maxSeats)}>
           {active > 0 && <span className="status-dot"/>}
           <div>

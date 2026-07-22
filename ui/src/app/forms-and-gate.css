@@ -44,6 +44,7 @@
     border-radius: var(--rounded-panel);
     background: rgb(28 18 20 / 92%);
     box-shadow: 0 2rem 6rem rgb(0 0 0 / 35%);
+    animation: rise 320ms var(--ease-out-quart) both;
 }
 
 .terms-gate svg {

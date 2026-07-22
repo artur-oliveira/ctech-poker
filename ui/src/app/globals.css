@@ -1093,7 +1093,9 @@ h1 em {
     justify-content: space-between;
     align-items: center;
     cursor: pointer;
-    transition: .25s
+    transition: .25s;
+    animation: rise 420ms var(--ease-out-quart) both;
+    animation-delay: var(--delay, 0ms)
 }
 
 .room-card:hover {
@@ -1131,7 +1133,19 @@ h1 em {
     height: 7px;
     border-radius: 50%;
     background: var(--success);
-    box-shadow: 0 0 10px var(--success)
+    box-shadow: 0 0 10px var(--success);
+    animation: status-pulse 2s var(--ease-out-quart) infinite
+}
+
+@keyframes status-pulse {
+    0%, 100% {
+        opacity: 1;
+        box-shadow: 0 0 10px var(--success)
+    }
+    50% {
+        opacity: .6;
+        box-shadow: 0 0 4px var(--success)
+    }
 }
 
 .lobby-empty {
@@ -2033,13 +2047,23 @@ h1 em {
     display: flex;
     gap: 12px;
     align-items: center;
-    box-shadow: 0 15px 50px var(--black-08);
-    animation: rise .4s
+    box-shadow: 0 15px 50px var(--black-08), 0 0 0 1px var(--brand-13);
+    animation: rise .4s var(--ease-out-quint);
+    transition: opacity .35s var(--ease-out-quart), transform .35s var(--ease-out-quart)
+}
+
+.achievement-toast.leaving {
+    animation: none;
+    opacity: 0;
+    transform: translateY(-10px) scale(.97)
 }
 
 .achievement-toast > svg {
     fill: var(--gold-deep);
-    color: var(--gold-deep)
+    color: var(--gold-deep);
+    filter: drop-shadow(0 0 8px var(--brand-27));
+    animation: achievement-pop .5s var(--ease-out-quint) both;
+    animation-delay: 80ms
 }
 
 .achievement-toast small, .achievement-toast b {
@@ -2053,6 +2077,28 @@ h1 em {
 
 .achievement-toast b {
     text-transform: capitalize
+}
+
+.achievement-stars {
+    display: inline-flex;
+    gap: 1px
+}
+
+.achievement-stars span {
+    display: inline-block;
+    animation: achievement-pop .35s var(--ease-out-quint) both;
+    animation-delay: calc(220ms + var(--delay, 0ms))
+}
+
+@keyframes achievement-pop {
+    from {
+        opacity: 0;
+        transform: scale(.4) rotate(-20deg)
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) rotate(0)
+    }
 }
 
 .api-notifier {
@@ -2219,7 +2265,9 @@ h1 em {
     grid-template-columns:60px 1fr auto;
     align-items: center;
     border-bottom: 1px solid var(--white-12);
-    padding: 18px
+    padding: 18px;
+    animation: rise 380ms var(--ease-out-quart) both;
+    animation-delay: var(--delay, 0ms)
 }
 
 .ranking-list article > b {
