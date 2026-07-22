@@ -1,9 +1,9 @@
-'use client'
+'use client';
 import Link from 'next/link';
 import {Club, Gift, Trophy} from 'lucide-react';
 import {RoomList} from '@/components/lobby/RoomList';
 import {CreateRoomDialog} from '@/components/lobby/CreateRoomDialog';
-import {TermsGate} from '@/components/TermsGate'
+import {TermsGate} from '@/components/TermsGate';
 import {useState} from 'react';
 import {spin} from '@/lib/api/gamification';
 import {pushNotification} from '@/lib/notify';
@@ -17,7 +17,7 @@ export default function Lobby() {
     try {
       const r = await spin();
       pushNotification(`Você ganhou +${r.amount} fichas sandbox!`, 'info');
-    } catch (e) {
+    } catch {
       pushNotification('Não foi possível resgatar a recompensa agora.', 'error');
     } finally {
       setClaiming(false);
@@ -31,11 +31,15 @@ export default function Lobby() {
       </nav>
       <section className="lobby shell">
         <header>
-          <div><small>LOBBY SANDBOX</small><h1>Escolha sua mesa.</h1><p>Fichas virtuais, emoção de verdade. Nenhum
-            símbolo
-            monetário por aqui.</p></div>
+          <div>
+            <small>LOBBY SANDBOX</small>
+            <h1>Escolha sua mesa.</h1>
+            <p>
+              Fichas virtuais, emoção de verdade.
+            </p>
+          </div>
           <div className="lobby-actions">
-            <Button variant="outline" disabled={claiming} onClick={claimReward} className="btn-reward">
+            <Button variant="outline" size="lg" disabled={claiming} onClick={claimReward} className="btn-reward">
               <Gift size={18}/> {claiming ? 'Resgatando...' : 'Recompensa Diária'}
             </Button>
             <CreateRoomDialog/>
@@ -43,5 +47,5 @@ export default function Lobby() {
         </header>
         <RoomList/></section>
     </main>
-  </TermsGate>
+  </TermsGate>;
 }

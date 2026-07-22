@@ -7,9 +7,9 @@ export interface PlayerProfile {
 }
 
 export async function getMe() {
-  return (await apiClient.get<PlayerProfile>('/v1.0/players/me', {silentError: true})).data
+  return (await apiClient.get<PlayerProfile>('/v1.0/players/me', {silentError: true})).data;
 }
 
 export async function acceptPokerTerms() {
-  return (await apiClient.post<PlayerProfile>('/v1.0/players/me/terms/accept', {}, {silentError: true})).data
+  return (await apiClient.post<PlayerProfile>('/v1.0/players/me/terms/accept', {}, {silentError: true})).data;
 }

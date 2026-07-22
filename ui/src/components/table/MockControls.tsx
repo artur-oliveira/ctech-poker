@@ -1,4 +1,4 @@
-'use client'
+'use client';
 import {FlaskConical} from 'lucide-react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import type {MockScenario} from '@/lib/mock';

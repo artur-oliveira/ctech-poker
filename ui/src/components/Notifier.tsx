@@ -1,12 +1,12 @@
-'use client'
-import {useEffect, useState} from 'react'
-import {CircleAlert, X} from 'lucide-react'
-import {type AppNotification, dismissNotification, subscribeNotifications} from '@/lib/notify'
+'use client';
+import {useEffect, useState} from 'react';
+import {CircleAlert, X} from 'lucide-react';
+import {type AppNotification, dismissNotification, subscribeNotifications} from '@/lib/notify';
 
 export function Notifier() {
-  const [items, setItems] = useState<AppNotification[]>([])
-  useEffect(() => subscribeNotifications(setItems), [])
-  if (!items.length) return null
+  const [items, setItems] = useState<AppNotification[]>([]);
+  useEffect(() => subscribeNotifications(setItems), []);
+  if (!items.length) return null;
   return (
     <div className="api-notifier" role="region" aria-label="Avisos" aria-live="assertive">
       {items.map(n => (
@@ -17,5 +17,5 @@ export function Notifier() {
         </div>
       ))}
     </div>
-  )
+  );
 }

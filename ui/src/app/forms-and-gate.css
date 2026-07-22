@@ -1,7 +1,7 @@
 .form-error {
     margin: .4rem 0 0;
-    color: #ff9ca1;
-    font-size: .82rem;
+    color: var(--danger-soft);
+    font-size: var(--font-size-body);
 }
 
 .footer-content {
@@ -41,7 +41,7 @@
     width: min(100%, 31rem);
     padding: clamp(1.5rem, 5vw, 2.5rem);
     border: 1px solid rgb(255 255 255 / 12%);
-    border-radius: 1.5rem;
+    border-radius: var(--rounded-panel);
     background: rgb(28 18 20 / 92%);
     box-shadow: 0 2rem 6rem rgb(0 0 0 / 35%);
 }
@@ -79,7 +79,7 @@
 }
 
 .gate-check a {
-    color: #ff9ca1;
+    color: var(--danger-soft);
     text-underline-offset: .2em;
 }
 

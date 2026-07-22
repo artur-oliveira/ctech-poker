@@ -1,4 +1,4 @@
-'use client'
+'use client';
 import {useEffect, useState} from 'react';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {ShieldCheck} from 'lucide-react';
@@ -43,7 +43,7 @@ export function TermsGate({children}: { children: React.ReactNode }) {
       <ShieldCheck/><h1>Entre para continuar</h1>
       <p>Use sua conta CTech para acessar as mesas e manter suas preferências.</p>
       <Button className="w-full" size="lg"
-              onClick={() => startOAuthFlow(typeof window === 'undefined' ? '/lobby' : window.location.pathname + window.location.search)}>Entrar
+        onClick={() => startOAuthFlow(typeof window === 'undefined' ? '/lobby' : window.location.pathname + window.location.search)}>Entrar
         com CTech Account</Button>
     </div>
   </div>;
@@ -59,13 +59,13 @@ export function TermsGate({children}: { children: React.ReactNode }) {
       <p>Leia os documentos publicados na Central Jurídica CTech. O aceite é necessário para acessar mesas sandbox ou de
         dinheiro real.</p>
       <label className="gate-check"><Checkbox checked={checked}
-                                              onCheckedChange={value => setChecked(value === true)}/><span>Li e aceito os <a
+        onCheckedChange={value => setChecked(value === true)}/><span>Li e aceito os <a
         href={POKER_TERMS_URL} target="_blank" rel="noreferrer">Termos do CTech Poker</a> e a <a
         href={POKER_PRIVACY_URL} target="_blank"
         rel="noreferrer">Política de Privacidade do CTech Poker</a>.</span></label>
       {accept.isError && <p className="form-error">Não foi possível registrar o aceite.</p>}
       <Button className="w-full" size="lg" disabled={!checked || accept.isPending}
-              onClick={() => accept.mutate()}>{accept.isPending ? 'Registrando…' : 'Aceitar e continuar'}</Button>
+        onClick={() => accept.mutate()}>{accept.isPending ? 'Registrando…' : 'Aceitar e continuar'}</Button>
     </div>
   </div>;
   return children;

@@ -10,13 +10,13 @@ export function cardPath(c: string) {
   const normalized = c?.trim();
   const suit = suits[normalized?.[1]?.toLowerCase()], rankCode = normalized?.[0]?.toUpperCase();
   const rank = ranks[rankCode] || rankCode;
-  return suit && rank ? `/svgs/${suit}-${rank}.svg` : back
+  return suit && rank ? `/svgs/${suit}-${rank}.svg` : back;
 }
 
 export function cardLabel(card: string) {
   const normalized = card?.trim();
   const rank = rankLabels[normalized?.[0]?.toUpperCase()], suit = suitLabels[normalized?.[1]?.toLowerCase()];
-  return rank && suit ? `${rank} de ${suit}` : 'carta desconhecida'
+  return rank && suit ? `${rank} de ${suit}` : 'carta desconhecida';
 }
 
-export const back = '/svgs/card-back-red.svg'
+export const back = '/svgs/card-back-red.svg';

@@ -8,9 +8,9 @@ export interface Entry {
 }
 
 export async function leaderboard() {
-  return (await apiClient.get<Entry[]>('/v1.0/leaderboard')).data
+  return (await apiClient.get<Entry[]>('/v1.0/leaderboard')).data;
 }
 
 export async function spin() {
-  return (await apiClient.post<{ amount: number }>('/v1.0/sandbox-credits', {}, {silentError: true})).data
+  return (await apiClient.post<{ amount: number }>('/v1.0/sandbox-credits', {}, {silentError: true})).data;
 }

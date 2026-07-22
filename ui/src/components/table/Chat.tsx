@@ -1,4 +1,4 @@
-'use client'
+'use client';
 import {FormEvent, useEffect, useId, useRef, useState} from 'react';
 import {MessageCircle, Send, X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
@@ -7,10 +7,11 @@ import {playerName} from '@/lib/utils';
 
 type ChatItem = { player: string; message: string };
 
-export function Chat({items, onSend, connected = true}: {
+export function Chat({items, onSend, connected = true, viewerId}: {
   items: ChatItem[];
   onSend: (message: string) => boolean;
-  connected?: boolean
+  connected?: boolean;
+  viewerId?: string
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
@@ -37,19 +38,19 @@ export function Chat({items, onSend, connected = true}: {
     if (!message) return;
     if (!connected || !onSend(message)) {
       setSendError('Mensagem não enviada. Reconecte à mesa e tente novamente.');
-      return
+      return;
     }
     setText('');
-    setSendError('')
+    setSendError('');
   }
   
   return <aside className={`game-chat ${open ? 'open' : ''}`} aria-label="Chat da mesa">
     <div className="sr-only" role="status" aria-live={open ? 'off' : 'polite'} aria-atomic="true">
-      {latest ? `${playerName(latest.player)} disse: ${latest.message}` : ''}
+      {latest ? `${playerName(latest.player, viewerId)} disse: ${latest.message}` : ''}
     </div>
     <Button type="button" variant="ghost" size="icon" aria-label={open ? 'Fechar chat' : 'Abrir chat'}
-            aria-expanded={open} aria-controls={panelId} className="chat-toggle"
-            onClick={() => setOpen(value => !value)}>
+      aria-expanded={open} aria-controls={panelId} className="chat-toggle"
+      onClick={() => setOpen(value => !value)}>
       {open ? <X/> : <MessageCircle/>}
     </Button>
     <div id={panelId} className="chat-body" aria-hidden={!open}>
@@ -57,21 +58,21 @@ export function Chat({items, onSend, connected = true}: {
       <div className="messages" role="log" aria-live="polite" aria-relevant="additions text" ref={messagesRef}>
         {items.length === 0 ? <p className="messages-empty">Nenhuma mensagem ainda. Diga um oi para a mesa.</p> :
           items.map((message, index) => <p key={`${index}-${message.player}-${message.message}`}>
-            <b>{playerName(message.player)}</b>{message.message}
+            <b>{playerName(message.player, viewerId)}</b>{message.message}
           </p>)}
       </div>
       <form onSubmit={submit}>
         <label className="sr-only" htmlFor={inputId}>Mensagem para a mesa</label>
         <Input id={inputId} ref={inputRef} maxLength={500} value={text} disabled={!connected}
-               onChange={event => {
-                 setText(event.target.value);
-                 if (sendError) setSendError('')
-               }} placeholder={connected ? 'Diga algo…' : 'Reconectando…'} aria-invalid={Boolean(sendError)}
-               aria-describedby={sendError ? errorId : undefined}/>
+          onChange={event => {
+            setText(event.target.value);
+            if (sendError) setSendError('');
+          }} placeholder={connected ? 'Diga algo…' : 'Reconectando…'} aria-invalid={Boolean(sendError)}
+          aria-describedby={sendError ? errorId : undefined}/>
         <Button type="submit" size="icon" aria-label="Enviar mensagem"
-                disabled={!text.trim() || !connected}><Send/></Button>
+          disabled={!text.trim() || !connected}><Send/></Button>
       </form>
       {sendError && <p id={errorId} className="chat-error" role="alert">{sendError}</p>}
     </div>
-  </aside>
+  </aside>;
 }

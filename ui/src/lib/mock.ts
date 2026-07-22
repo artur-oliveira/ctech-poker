@@ -80,6 +80,8 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     poker_terms_accepted: true
   }, config);
   if (method === 'GET' && path === '/v1.0/rooms') return ok(rooms, config);
+  const roomMatch = method === 'GET' ? path.match(/^\/v1\.0\/rooms\/([^/]+)$/) : null;
+  if (roomMatch) return ok(rooms.find(r => r.room_id === roomMatch[1]) || rooms[0], config);
   if (method === 'GET' && path === '/v1.0/rooms/stakes') return ok({
     stakes: [{
       small_blind: 10,
@@ -135,8 +137,8 @@ function revealShowdownCards(seats: SeatView[]) {
     if (seat.player_id === 'bia_sp') return {...seat, hole_cards: ['9S', '9D']};
     if (seat.player_id === 'nina_recife') return {...seat, hole_cards: ['QC', 'JD']};
     if (seat.player_id === 'caio_goiânia') return {...seat, hole_cards: ['7C', '7D']};
-    return seat
-  })
+    return seat;
+  });
 }
 
 // Six-handed lineup used by the interactive full-hand simulation. Blinds are
@@ -282,7 +284,7 @@ export class MockTableService {
   
   private setStatus(status: MockConnectionStatus) {
     this.status = status;
-    this.handlers.onStatus(status, this.attempt)
+    this.handlers.onStatus(status, this.attempt);
   }
   
   connect() {
@@ -298,8 +300,8 @@ export class MockTableService {
           this.later(() => {
             this.setStatus('connected');
             this.emitState();
-          }, 4)
-        }, 3)
+          }, 4);
+        }, 3);
       });
       return;
     }

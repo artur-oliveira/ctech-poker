@@ -1,7 +1,11 @@
-import type {Metadata, Viewport} from 'next'
-import {QueryProvider} from '@/lib/providers/QueryProvider'
-import {Notifier} from '@/components/Notifier'
-import './globals.css'
+import type {Metadata, Viewport} from 'next';
+import {Geist, Geist_Mono} from 'next/font/google';
+import {QueryProvider} from '@/lib/providers/QueryProvider';
+import {Notifier} from '@/components/Notifier';
+import './globals.css';
+
+const sans = Geist({subsets: ['latin'], variable: '--font-sans'});
+const mono = Geist_Mono({subsets: ['latin'], variable: '--font-mono'});
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://poker.aoctech.app'),
@@ -46,14 +50,15 @@ export const metadata: Metadata = {
     googleBot: {index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1, 'max-video-preview': -1}
   },
   category: 'games',
-}
+};
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover'
-}
+};
 export default function Layout({children}: { children: React.ReactNode }) {
   return <html lang="pt-BR" suppressHydrationWarning>
-  <body suppressHydrationWarning><QueryProvider>{children}</QueryProvider><Notifier/></body>
-  </html>
+    <body suppressHydrationWarning className={`${sans.variable} ${mono.variable}`}>
+      <QueryProvider>{children}</QueryProvider><Notifier/></body>
+  </html>;
 }

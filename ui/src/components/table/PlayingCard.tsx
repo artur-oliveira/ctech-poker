@@ -12,7 +12,7 @@ export function PlayingCard({card, index, size, owner}: {
   const dimensions = size === 'board' ? {width: 68, height: 95} : {width: 46, height: 64};
   const style = {'--deal-index': index} as CSSProperties;
   if (!revealed) return <Image className={`playing-card ${size}-card`} src={back} alt="Carta fechada" {...dimensions}
-                               style={style}/>;
+    style={style}/>;
   
   const label = size === 'board'
     ? `Carta comunitária: ${cardLabel(card!)}`
@@ -21,10 +21,10 @@ export function PlayingCard({card, index, size, owner}: {
       : `Carta: ${cardLabel(card!)}`;
   return (
     <span className={`playing-card ${size}-card card-reveal`} role="img" aria-label={label} style={style}>
-    <span className="card-reveal-inner">
-      <Image className="card-back" src={back} alt="" aria-hidden="true" {...dimensions}/>
-      <Image className="card-front" src={cardPath(card!)} alt="" aria-hidden="true" {...dimensions}/>
+      <span className="card-reveal-inner">
+        <Image className="card-back" src={back} alt="" aria-hidden="true" {...dimensions}/>
+        <Image className="card-front" src={cardPath(card!)} alt="" aria-hidden="true" {...dimensions}/>
+      </span>
     </span>
-  </span>
   );
 }
