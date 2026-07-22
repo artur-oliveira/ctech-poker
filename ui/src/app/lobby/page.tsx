@@ -1,12 +1,15 @@
 'use client';
 import Link from 'next/link';
-import {Club, Gift, Trophy} from 'lucide-react';
+import {Club, Gift, LogOut, Trophy} from 'lucide-react';
 import {RoomList} from '@/components/lobby/RoomList';
 import {CreateRoomDialog} from '@/components/lobby/CreateRoomDialog';
+import {MockControls} from '@/components/table/MockControls';
 import {TermsGate} from '@/components/TermsGate';
 import {useEffect, useState} from 'react';
 import {remainingTime, spin} from '@/lib/api/gamification';
+import {logout} from '@/lib/auth/oauth';
 import {pushNotification} from '@/lib/notify';
+import {USE_MOCK} from '@/lib/mock';
 import {Button} from "@/components/ui/button";
 
 function formatCooldown(seconds: number) {
@@ -58,7 +61,13 @@ export default function Lobby() {
   return <TermsGate>
     <main className="app-page">
       <nav className="app-nav shell"><Link href="/" className="brand"><span
-        className="brand-mark"><Club/></span>CTech <b>Poker</b></Link><Link href="/leaderboard"><Trophy/> Ranking</Link>
+        className="brand-mark"><Club/></span>CTech <b>Poker</b></Link>
+        <div className="header-right">
+          <Link href="/leaderboard"><Trophy/> Ranking</Link>
+          <Button type="button" variant="ghost" size="icon" aria-label="Sair da conta" onClick={() => logout()}>
+            <LogOut/>
+          </Button>
+        </div>
       </nav>
       <section className="lobby shell">
         <header>
@@ -80,6 +89,7 @@ export default function Lobby() {
           </div>
         </header>
         <RoomList/></section>
+      {USE_MOCK && <MockControls/>}
     </main>
   </TermsGate>;
 }

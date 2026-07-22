@@ -3,15 +3,17 @@ import {FormEvent, useEffect, useId, useRef, useState} from 'react';
 import {MessageCircle, Send, X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
+import type {SeatView} from '@/lib/api/table';
 import {playerName} from '@/lib/utils';
 
 type ChatItem = { player: string; message: string };
 
-export function Chat({items, onSend, connected = true, viewerId}: {
+export function Chat({items, onSend, connected = true, viewerId, seats = []}: {
   items: ChatItem[];
   onSend: (message: string) => boolean;
   connected?: boolean;
-  viewerId?: string
+  viewerId?: string;
+  seats?: SeatView[]
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
@@ -22,6 +24,7 @@ export function Chat({items, onSend, connected = true, viewerId}: {
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const latest = items.at(-1);
+  const nameOf = (id: string) => playerName(id, viewerId, seats.find(seat => seat.player_id === id)?.name);
   
   useEffect(() => {
     if (open) inputRef.current?.focus();
@@ -46,7 +49,7 @@ export function Chat({items, onSend, connected = true, viewerId}: {
   
   return <aside className={`game-chat ${open ? 'open' : ''}`} aria-label="Chat da mesa">
     <div className="sr-only" role="status" aria-live={open ? 'off' : 'polite'} aria-atomic="true">
-      {latest ? `${playerName(latest.player, viewerId)} disse: ${latest.message}` : ''}
+      {latest ? `${nameOf(latest.player)} disse: ${latest.message}` : ''}
     </div>
     <Button type="button" variant="ghost" size="icon" aria-label={open ? 'Fechar chat' : 'Abrir chat'}
       aria-expanded={open} aria-controls={panelId} className="chat-toggle"
@@ -58,7 +61,7 @@ export function Chat({items, onSend, connected = true, viewerId}: {
       <div className="messages" role="log" aria-live="polite" aria-relevant="additions text" ref={messagesRef}>
         {items.length === 0 ? <p className="messages-empty">Nenhuma mensagem ainda. Diga um oi para a mesa.</p> :
           items.map((message, index) => <p key={`${index}-${message.player}-${message.message}`}>
-            <b>{playerName(message.player, viewerId)}</b>{message.message}
+            <b>{nameOf(message.player)}</b>{message.message}
           </p>)}
       </div>
       <form onSubmit={submit}>

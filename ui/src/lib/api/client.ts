@@ -28,6 +28,28 @@ export function subscribeAccessToken(f: (v: string | null) => void) {
   };
 }
 
+// The access token carries no display name (it's audience-restricted to this
+// resource server); the username comes from the id_token at exchange/refresh
+// time instead. Same module-singleton shape as the access token above.
+let username: string | null = null;
+const usernameListeners = new Set<(v: string | null) => void>();
+
+export function setUsername(v: string | null) {
+  username = v;
+  usernameListeners.forEach(f => f(v));
+}
+
+export function getUsername() {
+  return username;
+}
+
+export function subscribeUsername(f: (v: string | null) => void) {
+  usernameListeners.add(f);
+  return () => {
+    usernameListeners.delete(f);
+  };
+}
+
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || '',
   adapter: USE_MOCK ? mockAdapter : undefined
@@ -42,6 +64,7 @@ apiClient.interceptors.response.use(r => r, async e => {
     const r = await doRefresh();
     if (r) {
       setAccessToken(r.accessToken);
+      setUsername(r.username);
       e.config.headers.Authorization = `Bearer ${r.accessToken}`;
       return apiClient.request(e.config);
     }

@@ -16,10 +16,12 @@ export function getViewerId(): string | undefined {
   return token ? (decodeIdToken(token) as { sub?: string } | null)?.sub : undefined;
 }
 
-// Player IDs are opaque (OIDC sub UUIDs in prod, slug-like IDs in mocks). Turn
-// an id into a readable label without truncating — truncation turns a UUID into
-// garbage and provokes overflow. Mock ids like `mock_player_ana` read naturally.
-export function playerName(id: string, viewerId?: string): string {
+// Player IDs are opaque (OIDC sub UUIDs in prod) and carry no name — the
+// display name is cosmetic broadcast metadata a player sets after connecting
+// (see useTableRealtime's `set_name`), so callers pass whatever name they
+// already resolved from a SeatView. Until it arrives, `name` is undefined and
+// the seat shows as a not-yet-named placeholder.
+export function playerName(id: string, viewerId?: string, name?: string): string {
   if (viewerId && id === viewerId) return 'Você';
-  return id.replaceAll('_', ' ');
+  return name || 'Visitante';
 }

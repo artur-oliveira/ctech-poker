@@ -990,7 +990,7 @@ h1 em {
     justify-content: space-between
 }
 
-.app-nav > a:last-child, .ranking > a {
+.app-nav > a:last-child, .app-nav .header-right > a, .ranking > a {
     display: flex;
     gap: 7px;
     align-items: center;
@@ -1182,6 +1182,12 @@ h1 em {
 
 .game > header svg {
     width: 14px
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px
 }
 
 .connection-state svg {
@@ -1495,6 +1501,18 @@ h1 em {
 .game-seat.viewer {
     border-color: var(--brand-bright);
     box-shadow: var(--shadow-seat), 0 0 0 3px color-mix(in srgb, var(--brand) 25%, transparent)
+}
+
+/* Seat has joined but hasn't broadcast a display name yet (see set_name in
+   useTableRealtime) — dimmed, not just a text swap, so the table reads as
+   "still connecting" rather than a normal named opponent. */
+.game-seat.is-pending-name {
+    opacity: .62
+}
+
+.game-seat.is-pending-name .seat-info b {
+    color: var(--text-secondary);
+    font-style: italic
 }
 
 .seat-cards {

@@ -1,5 +1,6 @@
 export interface SeatView {
   player_id: string;
+  name?: string;
   stack: number;
   state: string;
   contributed: number;

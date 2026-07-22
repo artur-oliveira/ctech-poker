@@ -22,15 +22,16 @@ export function Seat({seat, isViewer, isTurn, index, payout = 0}: {
 }) {
   const cards = seat.hole_cards;
   const chance = seat.equity == null ? null : Math.round(seat.equity * 100);
+  const pendingName = !isViewer && !seat.name;
   return <div data-state={seat.state} aria-current={isTurn ? 'true' : undefined}
-    className={`game-seat seat-${index} ${seat.state} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${payout > 0 ? 'is-winner' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
+    className={`game-seat seat-${index} ${seat.state} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${payout > 0 ? 'is-winner' : ''} ${pendingName ? 'is-pending-name' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
     <div className="seat-cards">{[0, 1].map(i => {
       const card = cards?.[i];
       return <PlayingCard key={`${i}-${card || 'back'}`} card={card} index={i} size="hole"
         owner={isViewer ? 'viewer' : 'opponent'}/>;
     })}</div>
     <div className="seat-info">
-      <b>{playerName(seat.player_id, isViewer ? seat.player_id : undefined)}</b><span>{seat.stack.toLocaleString('pt-BR')} fichas</span>{chance != null && isViewer &&
+      <b>{playerName(seat.player_id, isViewer ? seat.player_id : undefined, seat.name)}</b><span>{seat.stack.toLocaleString('pt-BR')} fichas</span>{chance != null && isViewer &&
         <small className="seat-equity"
           aria-label={`Chance estimada de vitória: ${chance}%`}>Chance {chance}%</small>}{STATE_LABELS[seat.state] &&
         <small className="seat-state">{STATE_LABELS[seat.state]}</small>}</div>

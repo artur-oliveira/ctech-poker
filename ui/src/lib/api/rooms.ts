@@ -10,7 +10,11 @@ export interface Room {
   max_seats: number;
   buy_in_min: number;
   buy_in_max: number;
-  status: string
+  status: string;
+  // Present only for a private room's own creator (the server strips both
+  // from every other viewer's response).
+  share_code?: string;
+  created_by?: string
 }
 
 export interface Stake {
@@ -34,6 +38,10 @@ export async function createRoom(input: Omit<Room, 'room_id' | 'id' | 'currency_
   return (await apiClient.post<Room>('/v1.0/rooms', input, {silentError: true})).data;
 }
 
-export async function joinRoom(id: string, amount: number) {
-  await apiClient.post(`/v1.0/rooms/${id}/join`, {amount}, {silentError: true});
+export async function joinRoom(id: string, amount: number, shareCode?: string) {
+  await apiClient.post(`/v1.0/rooms/${id}/join`, {amount, share_code: shareCode || undefined}, {silentError: true});
+}
+
+export async function leaveRoom(id: string) {
+  return (await apiClient.post<{ amount: number }>(`/v1.0/rooms/${id}/leave`, {}, {silentError: true})).data;
 }

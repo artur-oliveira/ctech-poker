@@ -3,7 +3,7 @@ import Link from 'next/link';
 import {Suspense, useEffect, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {exchangeCode, startOAuthFlow} from '@/lib/auth/oauth';
-import {setAccessToken} from '@/lib/api/client';
+import {setAccessToken, setUsername} from '@/lib/api/client';
 import {Button} from '@/components/ui/button';
 
 function Callback() {
@@ -17,6 +17,7 @@ function Callback() {
     }
     exchangeCode(c, s).then(x => {
       setAccessToken(x.accessToken);
+      setUsername(x.username);
       r.replace(x.returnTo || '/lobby');
     }).catch(() => setFailed(true));
   }, [p, r]);

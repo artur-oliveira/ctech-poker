@@ -1,20 +1,25 @@
 'use client';
 import Link from 'next/link';
 import {Suspense, useState} from 'react';
-import {useSearchParams} from 'next/navigation';
+import {useRouter, useSearchParams} from 'next/navigation';
+import {useQuery} from '@tanstack/react-query';
 import {ChevronLeft, RotateCw, Wifi} from 'lucide-react';
 import {getViewerId} from '@/lib/utils';
 import {useTableRealtime} from '@/lib/hooks/useTableRealtime';
+import {getRoom} from '@/lib/api/rooms';
 import {BuyInPanel} from '@/components/table/BuyInPanel';
 import {Seat} from '@/components/table/Seat';
 import {Board} from '@/components/table/Board';
 import type {ActionAvailability} from '@/components/table/ActionBar';
 import {ActionBar} from '@/components/table/ActionBar';
 import {Chat} from '@/components/table/Chat';
+import {InviteDialog} from '@/components/table/InviteDialog';
+import {LeaveDialog} from '@/components/table/LeaveDialog';
 import {MockControls} from '@/components/table/MockControls';
 import {AchievementToast} from '@/components/AchievementToast';
 import {TermsGate} from '@/components/TermsGate';
 import {Button} from '@/components/ui/button';
+import {pushNotification} from '@/lib/notify';
 import type {PokerAction, TableSnapshot} from '@/lib/api/table';
 import {type MockScenario, USE_MOCK} from '@/lib/mock';
 
@@ -54,17 +59,20 @@ function actionState(snapshot: TableSnapshot, viewer?: string) {
 const seatedKey = (id: string) => `ctech_poker_seated_${id}`;
 
 function TableContent() {
+  const router = useRouter();
   const params = useSearchParams(), id = params.get('id') || '', valid = ROOM_ID.test(id);
+  const inviteCode = params.get('invite') || undefined;
   const requestedScenario = params.get('scenario') as MockScenario | null;
   const scenario: MockScenario = requestedScenario && MOCK_SCENARIOS.has(requestedScenario) ? requestedScenario : 'full_hand';
   const requestedDelay = Number(params.get('delay') || 350);
   const delay = [0, 350, 1200, 9000].includes(requestedDelay) ? requestedDelay : 350;
   const viewer = getViewerId();
+  const {data: room} = useQuery({queryKey: ['room', id], queryFn: () => getRoom(id), enabled: valid});
   // Buy-in is an explicit ceremony: nothing is debited until the player
   // confirms an amount. The session flag lets a seated player return to the
   // table (reload, interruption) without repeating the ceremony.
   const [seated, setSeated] = useState(() => typeof window !== 'undefined' && window.sessionStorage.getItem(seatedKey(id)) === '1');
-  const rt = useTableRealtime(valid && seated ? id : '', viewer, USE_MOCK ? {scenario, delay} : undefined);
+  const rt = useTableRealtime(valid && seated ? id : '', viewer, inviteCode, USE_MOCK ? {scenario, delay} : undefined);
   if (!valid) return (
     <main className="game-loading">
       <h2>Mesa inválida</h2>
@@ -73,7 +81,7 @@ function TableContent() {
     </main>
   );
   if (!seated) return <>
-    <BuyInPanel roomId={id} onSeatedAction={() => {
+    <BuyInPanel roomId={id} shareCode={inviteCode} onSeatedAction={() => {
       window.sessionStorage.setItem(seatedKey(id), '1');
       setSeated(true);
     }}/>
@@ -95,6 +103,12 @@ function TableContent() {
   const viewerSeat = s.seats.find(seat => seat.player_id === viewer);
   const actionKey = [s.stage, s.current_player_id, s.board.join(','), viewerSeat?.stack, viewerSeat?.contributed,
     actions.minRaise, actions.maxRaise, actions.raiseStep].join(':');
+  // A room's share_code is only ever present for its own creator (the server
+  // strips it from every other viewer) — so its presence alone gates the
+  // invite affordance for private tables; public tables need no code at all.
+  const canInvite = room && (room.visibility === 'public' || room.share_code);
+  const inviteUrl = typeof window !== 'undefined' ?
+    `${window.location.origin}/table?id=${id}${room?.share_code ? `&invite=${room.share_code}` : ''}` : '';
   return (
     <main className="game">
       <header>
@@ -102,9 +116,17 @@ function TableContent() {
           href="/lobby"><ChevronLeft/> Lobby
         </Link>
         <span>{STAGE_LABELS[s.stage] || s.stage.replaceAll('_', ' ')}</span>
-        <span className={`connection-state ${rt.status}`}>
-          <Wifi aria-hidden="true"/> {rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}
-        </span>
+        <div className="header-right">
+          <span className={`connection-state ${rt.status}`}>
+            <Wifi aria-hidden="true"/> {rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}
+          </span>
+          {canInvite && <InviteDialog url={inviteUrl}/>}
+          <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} onLeft={amount => {
+            pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
+            window.sessionStorage.removeItem(seatedKey(id));
+            router.push('/lobby');
+          }}/>
+        </div>
       </header>
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {[rt.announcement, rt.status === 'connected' ? 'Conexão com a mesa restaurada.' : connectionMessage]
@@ -125,7 +147,8 @@ function TableContent() {
       <ActionBar onActAction={rt.act} {...actions} pot={pot} actionKey={actionKey} connected={rt.status === 'connected'}
         pending={rt.pendingAction}
         error={rt.actionError} onDismissErrorAction={rt.clearActionError}/>
-      <Chat items={rt.chat} onSend={rt.sendChat} connected={rt.status === 'connected'} viewerId={viewer}/><AchievementToast
+      <Chat items={rt.chat} onSend={rt.sendChat} connected={rt.status === 'connected'} viewerId={viewer}
+        seats={s.seats}/><AchievementToast
         unlock={rt.unlock}/>
       {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
     </main>

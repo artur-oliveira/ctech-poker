@@ -14,7 +14,11 @@ function midBuyIn(min: number, max: number, bigBlind: number) {
 
 /** Buy-in ceremony: the explicit consent step between the lobby and the seat.
  * Nothing is debited until the player confirms an amount. */
-export function BuyInPanel({roomId, onSeatedAction}: { roomId: string; onSeatedAction: () => void }) {
+export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
+  roomId: string;
+  shareCode?: string;
+  onSeatedAction: () => void
+}) {
   const sliderId = useId();
   const [amount, setAmount] = useState<number | null>(null);
   const [joining, setJoining] = useState(false);
@@ -45,7 +49,7 @@ export function BuyInPanel({roomId, onSeatedAction}: { roomId: string; onSeatedA
     setJoining(true);
     setError('');
     try {
-      await joinRoom(roomId, value);
+      await joinRoom(roomId, value, shareCode);
       onSeatedAction();
     } catch {
       setError('Não foi possível sentar na mesa. Verifique suas fichas e tente novamente.');

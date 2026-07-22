@@ -1,6 +1,6 @@
 'use client';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {getAccessToken, subscribeAccessToken} from '@/lib/api/client';
+import {getAccessToken, getUsername, subscribeAccessToken} from '@/lib/api/client';
 import {cardLabel} from '@/lib/cards';
 import {useWebSocket, type WSStatus} from '@aoctech/ws-client';
 import {type MockScenario, MockTableService, USE_MOCK} from '@/lib/mock';
@@ -34,11 +34,9 @@ const STAGE_LABELS: Record<string, string> = {
   showdown: 'showdown', complete: 'mão encerrada'
 };
 
-function playerLabel(playerId: string, viewerId?: string) {
-  return playerName(playerId, viewerId);
-}
-
 function describeSnapshot(previous: TableSnapshot | null, next: TableSnapshot, viewerId?: string) {
+  const nameOf = (id: string) => next.seats.find(seat => seat.player_id === id)?.name;
+  const playerLabel = (id: string) => playerName(id, viewerId, nameOf(id));
   if (!previous) return `Mesa atualizada. ${STAGE_LABELS[next.stage] || next.stage}.`;
   const messages: string[] = [];
   if (next.stage !== previous.stage) messages.push(`Etapa: ${STAGE_LABELS[next.stage] || next.stage}`);
@@ -50,19 +48,19 @@ function describeSnapshot(previous: TableSnapshot | null, next: TableSnapshot, v
   const bettor = next.seats.find(seat => seat.contributed > (previousSeats.get(seat.player_id)?.contributed || 0));
   if (bettor) {
     const added = bettor.contributed - (previousSeats.get(bettor.player_id)?.contributed || 0);
-    messages.push(`${playerLabel(bettor.player_id, viewerId)} colocou ${added.toLocaleString('pt-BR')} fichas no pote`);
+    messages.push(`${playerLabel(bettor.player_id)} colocou ${added.toLocaleString('pt-BR')} fichas no pote`);
   }
   if (next.current_player_id && next.current_player_id !== previous.current_player_id) {
-    messages.push(next.current_player_id === viewerId ? 'Sua vez de agir' : `Vez de ${playerLabel(next.current_player_id, viewerId)}`);
+    messages.push(next.current_player_id === viewerId ? 'Sua vez de agir' : `Vez de ${playerLabel(next.current_player_id)}`);
   }
   if (next.payouts && !previous.payouts) {
     messages.push(...Object.entries(next.payouts).filter(([, amount]) => amount > 0)
-      .map(([playerId, amount]) => `${playerLabel(playerId, viewerId)} ganhou ${amount.toLocaleString('pt-BR')} fichas`));
+      .map(([playerId, amount]) => `${playerLabel(playerId)} ganhou ${amount.toLocaleString('pt-BR')} fichas`));
   }
   return messages.join('. ');
 }
 
-export function useTableRealtime(id: string, viewerId?: string, mockOptions?: {
+export function useTableRealtime(id: string, viewerId?: string, shareCode?: string, mockOptions?: {
   scenario?: MockScenario;
   delay?: number
 }) {
@@ -118,12 +116,15 @@ export function useTableRealtime(id: string, viewerId?: string, mockOptions?: {
   }), []);
   const handleOpen = useCallback(() => {
     sendRef.current({type: 'ping'});
+    const name = getUsername();
+    if (name) sendRef.current({type: 'set_name', name});
   }, []);
   const {status: wsStatus, attempt: wsReconnectAttempt, send: wsSend, reconnect: wsRetryNow} = useWebSocket({
     url: wsUrl,
     onMessage: data => receive(data as ServerMessage),
     enabled: Boolean(wsUrl) && !USE_MOCK,
     authToken: getAccessToken() || undefined,
+    shareCode,
     subscribeToken,
     onOpen: handleOpen
   });

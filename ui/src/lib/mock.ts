@@ -1,13 +1,14 @@
 // Development-only in-process API and realtime simulation. The environment
 // flag selects the adapter; no mock HTTP or WebSocket server is started.
 import {AxiosError, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
+import type {Room} from '@/lib/api/rooms';
 import type {LegalActionState, PokerAction, SeatView, ServerMessage, TableSnapshot} from '@/lib/api/table';
 
 export const USE_MOCK = process.env.NEXT_PUBLIC_MOCK_API === 'true';
 export const MOCK_PLAYER_ID = 'mock_player_ana';
 
 const ROOM_ID = '11111111111111111111111111111111';
-const rooms = [
+const rooms: Room[] = [
   {
     room_id: ROOM_ID,
     visibility: 'public',
@@ -43,6 +44,18 @@ function ok<T>(data: T, config: InternalAxiosRequestConfig): AxiosResponse<T> {
   return {data, status: 200, statusText: 'OK', headers: {}, config};
 }
 
+/** Mirrors the real API's problem-detail error shape (see api/internal/problem) for a given status. */
+function fail(status: number, detail: string, config: InternalAxiosRequestConfig): never {
+  throw new AxiosError('Mock request failed', String(status), config, undefined, {
+    data: {detail}, status, statusText: 'Mock Error', headers: {}, config
+  });
+}
+
+// Set by MockTableService as the active hand progresses — lets the REST
+// `leave` mock mirror the real engine's rule (hand.go: RemovePlayerForActor)
+// that a player still dealt in (active/all-in, hand in progress) can't cash out.
+let mockPlayerDealtIn = false;
+
 function mockDelay() {
   if (typeof window === 'undefined') return 0;
   const value = Number(window.localStorage.getItem('ctech_poker_mock_delay') || 350);
@@ -73,9 +86,7 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   const rule = forcedError(method, path);
   if (rule) {
     if (rule.status === 0) throw new AxiosError('Network Error', AxiosError.ERR_NETWORK, config);
-    throw new AxiosError('Mock request failed', String(rule.status), config, undefined, {
-      data: rule.body || {detail: 'Erro simulado'}, status: rule.status, statusText: 'Mock Error', headers: {}, config
-    });
+    fail(rule.status, (rule.body as { detail?: string })?.detail || 'Erro simulado', config);
   }
   const body = typeof config.data === 'string' ? JSON.parse(config.data || '{}') : (config.data || {});
   if (method === 'GET' && path === '/v1.0/players/me') return ok({
@@ -87,25 +98,58 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     poker_terms_accepted: true
   }, config);
   if (method === 'GET' && path === '/v1.0/rooms') return ok(rooms, config);
-  const roomMatch = method === 'GET' ? path.match(/^\/v1\.0\/rooms\/([^/]+)$/) : null;
-  if (roomMatch) return ok(rooms.find(r => r.room_id === roomMatch[1]) || rooms[0], config);
+  // Checked before the generic single-segment room-id match below, since
+  // "stakes" would otherwise itself match `/rooms/:id` and never reach here.
   if (method === 'GET' && path === '/v1.0/rooms/stakes') return ok({
     stakes: [{
       small_blind: 10,
       big_blind: 20
     }, {small_blind: 25, big_blind: 50}, {small_blind: 50, big_blind: 100}]
   }, config);
+  const roomMatch = method === 'GET' ? path.match(/^\/v1\.0\/rooms\/([^/]+)$/) : null;
+  if (roomMatch) {
+    const room = rooms.find(r => r.room_id === roomMatch[1]);
+    if (!room) fail(404, 'room not found', config);
+    return ok(room, config);
+  }
   if (method === 'POST' && path === '/v1.0/rooms') {
+    if (body.visibility !== 'public' && body.visibility !== 'private') fail(400, 'visibility must be public or private', config);
+    if (!(body.small_blind > 0) || !(body.big_blind > body.small_blind)) fail(400, 'blinds must be positive and big_blind greater than small_blind', config);
+    if (!(body.max_seats >= 2) || !(body.max_seats <= 9)) fail(400, 'max_seats must be between 2 and 9', config);
+    if (!(body.buy_in_min > 0) || body.buy_in_max < body.buy_in_min || body.buy_in_min % body.big_blind !== 0 || body.buy_in_max % body.big_blind !== 0) {
+      fail(400, 'buy-in limits must be ordered positive multiples of big_blind', config);
+    }
     const room = {
       ...body,
       room_id: crypto.randomUUID().replaceAll('-', ''),
       currency_mode: 'sandbox',
-      status: 'waiting'
+      status: 'waiting',
+      created_by: MOCK_PLAYER_ID,
+      ...(body.visibility === 'private' ? {share_code: crypto.randomUUID().slice(0, 6).toUpperCase()} : {})
     };
     rooms.unshift(room);
     return ok(room, config);
   }
-  if (method === 'POST' && /^\/v1\.0\/rooms\/[^/]+\/join$/.test(path)) return ok({}, config);
+  const joinMatch = method === 'POST' ? path.match(/^\/v1\.0\/rooms\/([^/]+)\/join$/) : null;
+  if (joinMatch) {
+    const room = rooms.find(r => r.room_id === joinMatch[1]);
+    if (!room) fail(404, 'room not found', config);
+    if (room.currency_mode !== 'sandbox') fail(400, 'unsupported currency mode', config);
+    if (!(body.amount >= room.buy_in_min) || body.amount > room.buy_in_max || body.amount % room.big_blind !== 0) {
+      fail(400, 'amount must be within range and a multiple of big_blind', config);
+    }
+    const isCreator = room.created_by === MOCK_PLAYER_ID;
+    if (room.visibility === 'private' && !isCreator && body.share_code !== room.share_code) {
+      fail(403, 'share code required to join a private room', config);
+    }
+    return ok({}, config);
+  }
+  const leaveMatch = method === 'POST' ? path.match(/^\/v1\.0\/rooms\/([^/]+)\/leave$/) : null;
+  if (leaveMatch) {
+    if (!rooms.find(r => r.room_id === leaveMatch[1])) fail(404, 'room not found', config);
+    if (mockPlayerDealtIn) fail(409, 'cannot remove player mid-hand while still dealt in', config);
+    return ok({amount: 4850}, config);
+  }
   if (method === 'GET' && path === '/v1.0/leaderboard') return ok([
     {player_id: 'bia_sp', hands_played: 248, hands_won: 71, win_rate: .286},
     {player_id: MOCK_PLAYER_ID, hands_played: 184, hands_won: 49, win_rate: .266},
@@ -135,14 +179,15 @@ export type MockScenario =
 export type MockConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
 
 const baseSeats = () => [
-  {player_id: MOCK_PLAYER_ID, stack: 4850, state: 'active', contributed: 50, hole_cards: ['AH', 'KD'], equity: .64},
-  {player_id: 'bia_sp', stack: 3925, state: 'active', contributed: 75, hole_cards: ['back', 'back']},
-  {player_id: 'leo_rio', stack: 6100, state: 'folded', contributed: 25, hole_cards: ['back', 'back']},
-  {player_id: 'nina_recife', stack: 2775, state: 'active', contributed: 75, hole_cards: ['back', 'back']},
+  {player_id: MOCK_PLAYER_ID, name: 'Ana', stack: 4850, state: 'active', contributed: 50, hole_cards: ['AH', 'KD'], equity: .64},
+  {player_id: 'bia_sp', name: 'Bia', stack: 3925, state: 'active', contributed: 75, hole_cards: ['back', 'back']},
+  {player_id: 'leo_rio', name: 'Léo', stack: 6100, state: 'folded', contributed: 25, hole_cards: ['back', 'back']},
+  {player_id: 'nina_recife', name: 'Nina', stack: 2775, state: 'active', contributed: 75, hole_cards: ['back', 'back']},
+  // Nameless on purpose — exercises the is-pending-name placeholder in dev.
   {player_id: 'gui_bh', stack: 5000, state: 'sitting_out', contributed: 0},
-  {player_id: 'joao_floripa', stack: 4375, state: 'active', contributed: 75, hole_cards: ['back', 'back']},
-  {player_id: 'mari_belém', stack: 8200, state: 'disconnected', contributed: 0},
-  {player_id: 'caio_goiânia', stack: 3400, state: 'all_in', contributed: 625, hole_cards: ['back', 'back']},
+  {player_id: 'joao_floripa', name: 'João', stack: 4375, state: 'active', contributed: 75, hole_cards: ['back', 'back']},
+  {player_id: 'mari_belém', name: 'Mari', stack: 8200, state: 'disconnected', contributed: 0},
+  {player_id: 'caio_goiânia', name: 'Caio', stack: 3400, state: 'all_in', contributed: 625, hole_cards: ['back', 'back']},
 ];
 
 function revealShowdownCards(seats: SeatView[]) {
@@ -158,12 +203,12 @@ function revealShowdownCards(seats: SeatView[]) {
 // already posted (viewer is the big blind, bia_sp the small blind).
 function fullHandSeats(): SeatView[] {
   return [
-    {player_id: MOCK_PLAYER_ID, stack: 4850, state: 'active', contributed: 50, hole_cards: ['AH', 'KD'], equity: .64},
-    {player_id: 'bia_sp', stack: 3925, state: 'active', contributed: 25, hole_cards: ['back', 'back']},
-    {player_id: 'leo_rio', stack: 6100, state: 'active', contributed: 0, hole_cards: ['back', 'back']},
-    {player_id: 'nina_recife', stack: 2775, state: 'active', contributed: 0, hole_cards: ['back', 'back']},
-    {player_id: 'joao_floripa', stack: 4375, state: 'active', contributed: 0, hole_cards: ['back', 'back']},
-    {player_id: 'caio_goiânia', stack: 3400, state: 'active', contributed: 0, hole_cards: ['back', 'back']},
+    {player_id: MOCK_PLAYER_ID, name: 'Ana', stack: 4850, state: 'active', contributed: 50, hole_cards: ['AH', 'KD'], equity: .64},
+    {player_id: 'bia_sp', name: 'Bia', stack: 3925, state: 'active', contributed: 25, hole_cards: ['back', 'back']},
+    {player_id: 'leo_rio', name: 'Léo', stack: 6100, state: 'active', contributed: 0, hole_cards: ['back', 'back']},
+    {player_id: 'nina_recife', name: 'Nina', stack: 2775, state: 'active', contributed: 0, hole_cards: ['back', 'back']},
+    {player_id: 'joao_floripa', name: 'João', stack: 4375, state: 'active', contributed: 0, hole_cards: ['back', 'back']},
+    {player_id: 'caio_goiânia', name: 'Caio', stack: 3400, state: 'active', contributed: 0, hole_cards: ['back', 'back']},
   ];
 }
 
@@ -540,12 +585,17 @@ export class MockTableService {
   }
   
   private emitState() {
+    const stage = this.snapshot.stage;
+    const handInProgress = stage !== 'waiting_for_players' && stage !== 'complete';
+    const viewer = this.snapshot.seats.find(s => s.player_id === MOCK_PLAYER_ID);
+    mockPlayerDealtIn = handInProgress && (viewer?.state === 'active' || viewer?.state === 'all_in');
     this.handlers.onMessage({type: 'state', snapshot: this.snapshot});
   }
   
   close() {
     this.timers.forEach(clearTimeout);
     this.timers.clear();
+    mockPlayerDealtIn = false;
   }
 }
 
