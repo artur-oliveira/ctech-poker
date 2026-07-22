@@ -56,7 +56,9 @@ export function StakesGrid() {
       Nenhum stake disponível no momento.
     </div>
   );
-  return <div className="room-groups">{stakes.map(stake => (
+  return <>
+    <p className="stake-hint">Toque em um stake: você entra numa mesa aberta ou criamos uma na hora, sem fila de espera.</p>
+    <div className="room-groups">{stakes.map(stake => (
     <section key={`${stake.small_blind}-${stake.big_blind}`} className="room-group"
       aria-label={`Mesas com blinds ${stake.small_blind.toLocaleString('pt-BR')} / ${stake.big_blind.toLocaleString('pt-BR')}`}>
       <h2><span>Blinds</span> {stake.small_blind.toLocaleString('pt-BR')} / {stake.big_blind.toLocaleString('pt-BR')}</h2>
@@ -78,5 +80,6 @@ export function StakesGrid() {
         </Button>;
       })}</div>
     </section>
-  ))}</div>;
+  ))}</div>
+  </>;
 }

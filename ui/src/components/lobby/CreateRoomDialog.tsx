@@ -73,7 +73,7 @@ export function CreateRoomDialog() {
           render={({field}) => <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="stake-label">
             {stakes.map((stake, index) => <button type="button" key={`${stake.small_blind}-${stake.big_blind}`}
               role="radio" aria-checked={field.value === index}
-              className={`rounded-xl border px-4 py-2 text-sm font-semibold transition-colors ${field.value === index ? 'border-[var(--brand-bright)] bg-[var(--brand)] text-[var(--on-brand)]' : 'border-white/15 bg-(--surface-control) text-[var(--on-brand)] hover:bg-white/10'}`}
+              className={`rounded-xl border px-4 py-2 min-h-11 text-sm font-semibold transition-colors ${field.value === index ? 'border-[var(--brand-bright)] bg-[var(--brand)] text-[var(--on-brand)]' : 'border-white/15 bg-(--surface-control) text-[var(--on-brand)] hover:bg-white/10'}`}
               onClick={() => field.onChange(index)}>{stake.small_blind.toLocaleString('pt-BR')} / {stake.big_blind.toLocaleString('pt-BR')}</button>)}
           </div>}/>{!stakes.length && <p className="form-error">Nenhum stake disponível no momento.</p>}
           {form.formState.errors.stakeIndex &&
@@ -83,7 +83,7 @@ export function CreateRoomDialog() {
           render={({field}) => <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="seats-label">
             {([6, 9] as const).map(option => <button type="button" key={option} role="radio"
               aria-checked={field.value === option}
-              className={`rounded-xl border px-4 py-2 text-sm font-semibold transition-colors ${field.value === option ? 'border-[var(--brand-bright)] bg-[var(--brand)] text-[var(--on-brand)]' : 'border-white/15 bg-(--surface-control) text-[var(--on-brand)] hover:bg-white/10'}`}
+              className={`rounded-xl border px-4 py-2 min-h-11 text-sm font-semibold transition-colors ${field.value === option ? 'border-[var(--brand-bright)] bg-[var(--brand)] text-[var(--on-brand)]' : 'border-white/15 bg-(--surface-control) text-[var(--on-brand)] hover:bg-white/10'}`}
               onClick={() => field.onChange(option)}>{option} lugares</button>)}
           </div>}/></div>
         {form.formState.errors.root && <p className="form-error">{form.formState.errors.root.message}</p>}

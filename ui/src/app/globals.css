@@ -1081,6 +1081,11 @@ h1 em {
     }
 }
 
+.stake-hint {
+    margin: 0 0 24px;
+    font-size: 14px
+}
+
 .room-groups {
     display: grid;
     gap: 40px
