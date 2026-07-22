@@ -7,6 +7,7 @@ package tablemanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -19,6 +20,13 @@ import (
 )
 
 type Actor = table.Actor
+
+// ErrTableArchived means tableID was archived by cmd/tablecleanup for
+// inactivity (StoredTable.Archived, api/internal/tablestore) — its seated
+// players were already refunded, and no new actor may be created for it.
+// buyin.Service wraps manager errors with %w so callers can errors.Is
+// against this directly.
+var ErrTableArchived = errors.New("tablemanager: table archived")
 
 type Manager struct {
 	env            string
@@ -78,6 +86,9 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 		existing, err := m.store.LoadTable(ctx, tableID)
 		if err != nil {
 			return nil, fmt.Errorf("tablemanager: load table: %w", err)
+		}
+		if existing != nil && existing.Archived {
+			return nil, ErrTableArchived
 		}
 		if existing == nil {
 			if err := m.store.SeedTable(ctx, tableID, seed().ExportState()); err != nil {
