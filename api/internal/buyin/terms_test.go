@@ -28,7 +28,11 @@ type unacceptedProfiles struct{}
 func (unacceptedProfiles) GetOrCreate(context.Context, string) (*player.PlayerProfile, error) {
 	return &player.PlayerProfile{UserID: "u1"}, nil
 }
-func (unacceptedProfiles) AcceptTerms(context.Context, string) error { return nil }
+func (unacceptedProfiles) AcceptTerms(context.Context, string) error     { return nil }
+func (unacceptedProfiles) SetName(context.Context, string, string) error { return nil }
+func (unacceptedProfiles) SetWalletMode(context.Context, string, string) error {
+	return nil
+}
 
 func TestBuyInRequiresPokerTermsBeforeWalletDebit(t *testing.T) {
 	wallet := &gateWallet{}

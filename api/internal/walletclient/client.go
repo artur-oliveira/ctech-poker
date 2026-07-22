@@ -27,13 +27,45 @@ const (
 	pathGameRelease = "/v1.0/internal/wallet/game/hold/%s/release"
 	pathGameCashout = "/v1.0/internal/wallet/game/cashout"
 	pathGameStatus  = "/v1.0/internal/wallet/game/status/%s"
+	pathBalance     = "/v1.0/internal/wallet/balance/%s"
 
 	scopeCredit      = "internal:wallet:credit"
 	scopeDebit       = "internal:wallet:debit"
 	scopeGameHold    = "internal:wallet:game-hold"
 	scopeGameCashout = "internal:wallet:game-cashout"
 	scopeGameStatus  = "internal:wallet:game-status"
+	scopeBalance     = "internal:wallet:balance"
 )
+
+// Error is a passthrough of ctech-wallet's own RFC 9457 problem+json body —
+// poker's problem package uses the same shape, so a caller can turn this
+// straight into problem.New(err.Status, err.Type, err.Title, err.Detail)
+// instead of masking it as an internal server error.
+type Error struct {
+	Status int    `json:"status"`
+	Type   string `json:"type"`
+	Title  string `json:"title"`
+	Detail string `json:"detail"`
+}
+
+func (e *Error) Error() string {
+	if e.Detail != "" {
+		return fmt.Sprintf("walletclient: %s: %s", e.Title, e.Detail)
+	}
+	return fmt.Sprintf("walletclient: %s", e.Title)
+}
+
+// walletError parses a failed response body as ctech-wallet's problem+json.
+// Falls back to a plain status/body error when the body isn't a well-formed
+// problem (status/title missing) — callers should treat that fallback the
+// same as any other internal error, not passthrough it to their own client.
+func walletError(statusCode int, raw []byte) error {
+	var p Error
+	if json.Unmarshal(raw, &p) == nil && p.Status != 0 && p.Title != "" {
+		return &p
+	}
+	return fmt.Errorf("walletclient: status %d: %s", statusCode, string(raw))
+}
 
 // MovementRequest mirrors ctech-wallet's MovementOpRequest exactly (see
 // ctech-wallet/api/internal/api/v1/dto.go) — amounts are integer centavos
@@ -54,6 +86,15 @@ type Client struct {
 	gameHoldTokens    *oauth2client.TokenManager
 	gameCashoutTokens *oauth2client.TokenManager
 	gameStatusTokens  *oauth2client.TokenManager
+	balanceTokens     *oauth2client.TokenManager
+}
+
+// Balances is ctech-wallet's M2M balance snapshot (GET
+// /internal/wallet/balance/:user_id) — real is deliberately never exposed
+// here, only game (ring-fenced real-money) and sandbox.
+type Balances struct {
+	GameBalance    int64 `json:"game_balance"`
+	SandboxBalance int64 `json:"sandbox_balance"`
 }
 
 // New builds the wallet client. Separate TokenManagers per scope mirror
@@ -71,6 +112,7 @@ func New(cfg *config.Config) *Client {
 		gameHoldTokens:    oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameHold),
 		gameCashoutTokens: oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameCashout),
 		gameStatusTokens:  oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameStatus),
+		balanceTokens:     oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeBalance),
 	}
 }
 
@@ -218,6 +260,36 @@ func (c *Client) IsGamblingActivated(ctx context.Context, userID string) (bool, 
 	return body.Activated, nil
 }
 
+// Balances reports userID's game+sandbox balances. real is never returned
+// (ctech-wallet keeps it out of this endpoint's response entirely).
+func (c *Client) Balances(ctx context.Context, userID string) (*Balances, error) {
+	token, err := c.balanceTokens.Get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("walletclient: token: %w", err)
+	}
+	url := fmt.Sprintf(c.base+pathBalance, userID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("walletclient: request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		raw, _ := io.ReadAll(resp.Body)
+		return nil, walletError(resp.StatusCode, raw)
+	}
+	var b Balances
+	if err := json.NewDecoder(resp.Body).Decode(&b); err != nil {
+		return nil, fmt.Errorf("walletclient: decode: %w", err)
+	}
+	return &b, nil
+}
+
 func (c *Client) movement(ctx context.Context, url string, tokens *oauth2client.TokenManager, userID string, amount int64, idempotencyKey, reason string) error {
 	_, err := c.movementWithResponse(ctx, url, tokens, userID, amount, idempotencyKey, reason)
 	return err
@@ -246,7 +318,7 @@ func (c *Client) movementWithResponse(ctx context.Context, url string, tokens *o
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		raw, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("walletclient: status %d: %s", resp.StatusCode, string(raw))
+		return "", walletError(resp.StatusCode, raw)
 	}
 
 	var res struct {

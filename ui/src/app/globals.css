@@ -1050,6 +1050,18 @@ h1 em {
     gap: 14px
 }
 
+.stake-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(240px, 320px));
+    gap: 14px
+}
+
+@media (max-width: 560px) {
+    .stake-grid {
+        grid-template-columns: 1fr
+    }
+}
+
 .room-groups {
     display: grid;
     gap: 40px
@@ -1188,6 +1200,59 @@ h1 em {
     display: flex;
     align-items: center;
     gap: 10px
+}
+
+.profile-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px
+}
+
+.balance-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font: 600 13px var(--font-mono);
+    background: var(--white-08);
+    border: 1px solid var(--white-13);
+    padding: 8px 14px;
+    border-radius: 999px;
+    color: var(--gold)
+}
+
+.profile-name-display {
+    all: unset;
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    cursor: pointer;
+    padding: 9px 11px;
+    border-radius: var(--rounded-control);
+    background: var(--white-08);
+    font-weight: 600;
+    color: var(--on-brand);
+    transition: background .2s
+}
+
+.profile-name-display:hover {
+    background: var(--white-13)
+}
+
+.profile-balances {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: var(--font-size-mono);
+    color: var(--muted)
+}
+
+.profile-balances span {
+    display: flex;
+    justify-content: space-between
+}
+
+.profile-balances b {
+    color: var(--on-brand)
 }
 
 .connection-state svg {

@@ -1,13 +1,13 @@
 'use client';
 import Link from 'next/link';
-import {Club, Gift, LogOut, Trophy} from 'lucide-react';
-import {RoomList} from '@/components/lobby/RoomList';
+import {Club, Gift, Trophy} from 'lucide-react';
+import {StakesGrid} from '@/components/lobby/StakesGrid';
 import {CreateRoomDialog} from '@/components/lobby/CreateRoomDialog';
+import {ProfileMenu} from '@/components/lobby/ProfileMenu';
 import {MockControls} from '@/components/table/MockControls';
 import {TermsGate} from '@/components/TermsGate';
 import {useEffect, useState} from 'react';
 import {remainingTime, spin} from '@/lib/api/gamification';
-import {logout} from '@/lib/auth/oauth';
 import {pushNotification} from '@/lib/notify';
 import {USE_MOCK} from '@/lib/mock';
 import {Button} from "@/components/ui/button";
@@ -64,9 +64,7 @@ export default function Lobby() {
         className="brand-mark"><Club/></span>CTech <b>Poker</b></Link>
         <div className="header-right">
           <Link href="/leaderboard"><Trophy/> Ranking</Link>
-          <Button type="button" variant="ghost" size="icon" aria-label="Sair da conta" onClick={() => logout()}>
-            <LogOut/>
-          </Button>
+          <ProfileMenu/>
         </div>
       </nav>
       <section className="lobby shell">
@@ -88,7 +86,7 @@ export default function Lobby() {
             <CreateRoomDialog/>
           </div>
         </header>
-        <RoomList/></section>
+        <StakesGrid/></section>
       {USE_MOCK && <MockControls/>}
     </main>
   </TermsGate>;

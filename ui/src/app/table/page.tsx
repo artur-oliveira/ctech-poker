@@ -4,7 +4,7 @@ import {Suspense} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {ChevronLeft, RotateCw, Wifi} from 'lucide-react';
-import {getViewerId} from '@/lib/utils';
+import {getViewerId, rotateSeats} from '@/lib/utils';
 import {useTableRealtime} from '@/lib/hooks/useTableRealtime';
 import {getRoom, getSeated} from '@/lib/api/rooms';
 import {BuyInPanel} from '@/components/table/BuyInPanel';
@@ -142,10 +142,14 @@ function TableContent() {
         <p>{connectionMessage}{rt.reconnectAttempt > 1 ? ` Tentativa ${rt.reconnectAttempt}.` : ''}</p>
         <Button type="button" variant="ghost" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>
       </div>}
+      {!connectionMessage && s.stage === 'waiting_for_players' && <div className="reconnect-notice">
+        <p>Aguardando jogadores. Confirme quando estiver pronto.</p>
+        <Button type="button" variant="ghost" onClick={() => rt.ready()}>Estou pronto</Button>
+      </div>}
       <div className="game-table">
         <div className="game-rail"/>
         <div className="game-felt"><Board cards={s.board} pot={pot} rake={s.rake}/></div>
-        {s.seats.map((seat, i) => <Seat key={seat.player_id} seat={seat} index={i}
+        {rotateSeats(s.seats, viewer).map((seat, i) => <Seat key={seat.player_id} seat={seat} index={i}
           isTurn={s.current_player_id === seat.player_id}
           payout={s.payouts?.[seat.player_id] || 0}
           isViewer={seat.player_id === viewer}/>)}</div>

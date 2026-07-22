@@ -52,6 +52,40 @@ func (s *Store) get(ctx context.Context, userID string) (*PlayerProfile, error) 
 	return profile, nil
 }
 
+func (s *Store) SetName(ctx context.Context, userID, name string) error {
+	if _, err := s.GetOrCreate(ctx, userID); err != nil {
+		return err
+	}
+	ok, err := s.base.UpdateItem(ctx, userID, nil, map[string]any{
+		"name":       name,
+		"updated_at": dynamo.NowStr(),
+	})
+	if err != nil {
+		return fmt.Errorf("player: set name: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("player: profile disappeared while setting name")
+	}
+	return nil
+}
+
+func (s *Store) SetWalletMode(ctx context.Context, userID, mode string) error {
+	if _, err := s.GetOrCreate(ctx, userID); err != nil {
+		return err
+	}
+	ok, err := s.base.UpdateItem(ctx, userID, nil, map[string]any{
+		"wallet_mode": mode,
+		"updated_at":  dynamo.NowStr(),
+	})
+	if err != nil {
+		return fmt.Errorf("player: set wallet mode: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("player: profile disappeared while setting wallet mode")
+	}
+	return nil
+}
+
 func (s *Store) AcceptTerms(ctx context.Context, userID string) error {
 	if _, err := s.GetOrCreate(ctx, userID); err != nil {
 		return err

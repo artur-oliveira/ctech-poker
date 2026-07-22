@@ -54,6 +54,20 @@ func publicIndexValue(r Room) string {
 	return ""
 }
 
+// SetSeatsTaken persists the table actor's live occupied-seat count so the
+// lobby can list "active tables" without querying tablemanager.
+func (s *Store) SetSeatsTaken(ctx context.Context, roomID string, seatsTaken int) error {
+	sk := roomSK
+	ok, err := s.base.UpdateItem(ctx, roomID, &sk, map[string]any{"seats_taken": seatsTaken})
+	if err != nil {
+		return fmt.Errorf("roomstore: set seats taken: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("roomstore: room disappeared while setting seats taken")
+	}
+	return nil
+}
+
 func (s *Store) Get(ctx context.Context, roomID string) (*Room, error) {
 	item, err := s.base.GetItem(ctx, roomID, roomSK)
 	if err != nil {

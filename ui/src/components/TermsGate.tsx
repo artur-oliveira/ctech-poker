@@ -1,10 +1,10 @@
 'use client';
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {ShieldCheck} from 'lucide-react';
-import {acceptPokerTerms, getMe} from '@/lib/api/player';
+import {acceptPokerTerms, getMe, updateMe} from '@/lib/api/player';
 import {doRefresh, startOAuthFlow} from '@/lib/auth/oauth';
-import {getAccessToken, setAccessToken, subscribeAccessToken} from '@/lib/api/client';
+import {getAccessToken, getUsername, setAccessToken, setUsername, subscribeAccessToken} from '@/lib/api/client';
 import {MOCK_PLAYER_ID, USE_MOCK} from '@/lib/mock';
 import {Button} from '@/components/ui/button';
 import {Checkbox} from '@/components/ui/checkbox';
@@ -24,18 +24,40 @@ export function TermsGate({children}: { children: React.ReactNode }) {
       setAccessToken(MOCK_PLAYER_ID);
     } else if (!getAccessToken()) {
       void doRefresh().then(result => {
-        if (result) setAccessToken(result.accessToken);
+        if (result) {
+          setAccessToken(result.accessToken);
+          setUsername(result.username);
+        }
       }).finally(() => setBooting(false));
     }
     return unsubscribe;
   }, []);
-  
+
   const me = useQuery({queryKey: ['player', 'me'], queryFn: getMe, enabled: Boolean(token)});
   const accept = useMutation({
     mutationFn: acceptPokerTerms,
     onSuccess: data => queryClient.setQueryData(['player', 'me'], data)
   });
-  
+  const nameSync = useMutation({
+    mutationFn: updateMe,
+    onSuccess: data => queryClient.setQueryData(['player', 'me'], data)
+  });
+
+  // One-time sync: a brand new profile has no name yet — seed it from the
+  // OIDC id_token's username the first time we see both. nameSyncAttempted
+  // guards against re-firing on every render (nameSync's identity changes
+  // each render, so it can't be omitted from the dep array).
+  const nameSyncAttempted = useRef(false);
+  useEffect(() => {
+    if (me.data && !me.data.name && !nameSyncAttempted.current) {
+      const name = getUsername();
+      if (name) {
+        nameSyncAttempted.current = true;
+        nameSync.mutate({name});
+      }
+    }
+  }, [me.data, nameSync]);
+
   if (booting || me.isLoading) return <div className="loading-screen"><span className="loader"/>Verificando sua conta…
   </div>;
   if (!token) return <div className="terms-gate">

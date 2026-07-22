@@ -75,7 +75,7 @@ func (s *Service) Spin(ctx context.Context, playerID string) (int64, int64, erro
 
 	idemKey := fmt.Sprintf("%s#daily_reward#%s", playerID, day)
 	if err := s.wallet.Credit(ctx, playerID, record.Amount, idemKey, "daily_reward"); err != nil {
-		return 0, 0, fmt.Errorf("dailyreward: credit pending: %w", err)
+		return 0, 0, err
 	}
 	if err := s.store.Complete(ctx, playerID, day, now); err != nil {
 		return 0, 0, fmt.Errorf("dailyreward: mark completed: %w", err)

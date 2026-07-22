@@ -33,7 +33,7 @@ func Register(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier 
 	// probes (it accepts 200 and 207).
 	RegisterHealth(router, cfg, db)
 
-	RegisterTableWS(router, verifier, manager, reg, cfg.CorsAllowedOrigins, seed, rooms, cfg)
+	RegisterTableWS(router, verifier, manager, reg, cfg.CorsAllowedOrigins, seed, rooms, cfg, players)
 	auth := authMiddleware(verifier)
 	if tableStore != nil {
 		RegisterHandHistory(router, auth, &tablestoreAdapter{store: tableStore})

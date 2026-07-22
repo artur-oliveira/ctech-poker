@@ -2,6 +2,7 @@ package walletclient
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -76,5 +77,78 @@ func TestDebitSendsExpectedRequestBody(t *testing.T) {
 	}
 	if gotPath != "/v1.0/internal/wallet/sandbox/debit" {
 		t.Fatalf("expected debit endpoint, got %s", gotPath)
+	}
+}
+
+func TestCreditPassesThroughWalletProblemJSON(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1.0/token", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "fake-token", "expires_in": 3600})
+	})
+	mux.HandleFunc("/v1.0/internal/wallet/sandbox/credit", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/problem+json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"type": "/problems/wallet-not-found", "title": "Wallet Not Found",
+			"status": http.StatusNotFound, "detail": "no sandbox wallet for user",
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"})
+	err := c.Credit(t.Context(), "user-1", 500, "key-1", "daily_reward")
+
+	var werr *Error
+	if !errors.As(err, &werr) {
+		t.Fatalf("expected *Error, got %v (%T)", err, err)
+	}
+	if werr.Status != http.StatusNotFound || werr.Type != "/problems/wallet-not-found" || werr.Detail != "no sandbox wallet for user" {
+		t.Fatalf("unexpected wallet error: %+v", werr)
+	}
+}
+
+func TestBalancesReturnsGameAndSandbox(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1.0/token", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "fake-token", "expires_in": 3600})
+	})
+	mux.HandleFunc("/v1.0/internal/wallet/balance/user-1", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"game_balance": 500, "sandbox_balance": 1000})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"})
+	b, err := c.Balances(t.Context(), "user-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.GameBalance != 500 || b.SandboxBalance != 1000 {
+		t.Fatalf("unexpected balances: %+v", b)
+	}
+}
+
+func TestCreditFallsBackToGenericErrorOnNonProblemBody(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1.0/token", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "fake-token", "expires_in": 3600})
+	})
+	mux.HandleFunc("/v1.0/internal/wallet/sandbox/credit", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("boom"))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"})
+	err := c.Credit(t.Context(), "user-1", 500, "key-1", "daily_reward")
+
+	var werr *Error
+	if errors.As(err, &werr) {
+		t.Fatalf("expected generic error, got typed *Error: %+v", werr)
+	}
+	if err == nil {
+		t.Fatal("expected an error")
 	}
 }

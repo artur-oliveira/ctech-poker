@@ -47,6 +47,7 @@ type Actor struct {
 	equityEnabled                atomic.Bool
 	onHandComplete               func(hand.HandOutcome)
 	completedHandNotified        string
+	onSeatsChanged               func(int)
 }
 
 // New returns an Actor for tableID. trustCache should be true only when the
@@ -175,8 +176,8 @@ func (a *Actor) handleSnapshot(ctx context.Context, c SnapshotCmd) error {
 	return nil
 }
 
-// handleSetName caches the display name a client offered at connect time (or
-// on reconnect). It never touches tablestore — the name is process-local
+// handleSetName caches the persisted display name the WS gateway looked up at
+// connect time. It never touches tablestore — the name is process-local
 // broadcast metadata, not authoritative table state.
 func (a *Actor) handleSetName(c SetNameCmd) error {
 	if c.Name == "" {
@@ -297,6 +298,17 @@ func (a *Actor) notifyHandComplete() {
 // SetOnHandCompleteForActor installs the post-commit gamification hook.
 // The actor invokes it at most once per local hand ID.
 func (a *Actor) SetOnHandCompleteForActor(fn func(hand.HandOutcome)) { a.onHandComplete = fn }
+
+// SetOnSeatsChangedForActor installs the post-commit occupancy write-through
+// hook, invoked with the new occupied-seat count after every committed join
+// or leave.
+func (a *Actor) SetOnSeatsChangedForActor(fn func(int)) { a.onSeatsChanged = fn }
+
+func (a *Actor) notifySeatsChanged() {
+	if a.onSeatsChanged != nil && a.cached != nil {
+		a.onSeatsChanged(len(a.cached.PlayersForActor()))
+	}
+}
 
 // applyActAndCommit returns completed=true only when this Actor successfully
 // committed the transition to Complete. A duplicate observed after another
@@ -432,6 +444,7 @@ func (a *Actor) handleJoin(ctx context.Context, c JoinCmd) error {
 	if err := a.retryOnConflict(ctx, apply); err != nil {
 		return err
 	}
+	a.notifySeatsChanged()
 	a.broadcastAll()
 	return nil
 }
@@ -478,6 +491,7 @@ func (a *Actor) handleLeave(ctx context.Context, c LeaveCmd) error {
 	if c.HoldID != nil {
 		c.HoldID <- holdID
 	}
+	a.notifySeatsChanged()
 	a.broadcastAll()
 	return nil
 }

@@ -49,8 +49,8 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 	if req.SmallBlind <= 0 || req.BigBlind <= req.SmallBlind {
 		return problem.BadRequest("blinds must be positive and big_blind greater than small_blind").Send(c)
 	}
-	if req.MaxSeats < 2 || req.MaxSeats > 9 {
-		return problem.BadRequest("max_seats must be between 2 and 9").Send(c)
+	if req.MaxSeats != 6 && req.MaxSeats != 9 {
+		return problem.BadRequest("max_seats must be 6 or 9").Send(c)
 	}
 	if req.BuyInMin <= 0 || req.BuyInMax < req.BuyInMin || req.BuyInMin%req.BigBlind != 0 || req.BuyInMax%req.BigBlind != 0 {
 		return problem.BadRequest("buy-in limits must be ordered positive multiples of big_blind").Send(c)

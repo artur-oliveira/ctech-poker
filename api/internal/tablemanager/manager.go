@@ -34,6 +34,7 @@ type Manager struct {
 	store          *tablestore.Store
 	broadcast      func(tableID, viewerID string, snap hand.Snapshot)
 	onHandComplete func(tableID string, outcome hand.HandOutcome)
+	onSeatsChanged func(tableID string, seatsTaken int)
 	roomLoader     func(tableID string) (*roomstore.BlindEscalation, bool, error)
 
 	mu       sync.Mutex
@@ -58,6 +59,11 @@ func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast f
 }
 
 func (m *Manager) SetEnv(env string) { m.env = env }
+
+// SetOnSeatsChanged installs the occupancy write-through hook, invoked with
+// (tableID, seatsTaken) after every table actor's committed join/leave, for
+// every actor this manager creates (including ones created before this call).
+func (m *Manager) SetOnSeatsChanged(fn func(tableID string, seatsTaken int)) { m.onSeatsChanged = fn }
 
 // GetOrCreateActor returns this instance's Actor for tableID, seeding the
 // table's very first DynamoDB state if it has never been played (seed is
@@ -113,6 +119,11 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	actor.SetOnHandCompleteForActor(func(outcome hand.HandOutcome) {
 		if m.onHandComplete != nil {
 			m.onHandComplete(tableID, outcome)
+		}
+	})
+	actor.SetOnSeatsChangedForActor(func(seatsTaken int) {
+		if m.onSeatsChanged != nil {
+			m.onSeatsChanged(tableID, seatsTaken)
 		}
 	})
 	if trustCache {

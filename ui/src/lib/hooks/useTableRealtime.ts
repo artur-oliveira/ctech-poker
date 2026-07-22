@@ -1,6 +1,6 @@
 'use client';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {getAccessToken, getUsername, subscribeAccessToken} from '@/lib/api/client';
+import {getAccessToken, subscribeAccessToken} from '@/lib/api/client';
 import {cardLabel} from '@/lib/cards';
 import {useWebSocket, type WSStatus} from '@aoctech/ws-client';
 import {type MockScenario, MockTableService, USE_MOCK} from '@/lib/mock';
@@ -116,8 +116,6 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   }), []);
   const handleOpen = useCallback(() => {
     sendRef.current({type: 'ping'});
-    const name = getUsername();
-    if (name) sendRef.current({type: 'set_name', name});
   }, []);
   const {status: wsStatus, attempt: wsReconnectAttempt, send: wsSend, reconnect: wsRetryNow} = useWebSocket({
     url: wsUrl,

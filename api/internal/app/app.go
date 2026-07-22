@@ -170,7 +170,9 @@ func newRoomStore(db *dynamodb.Client, cfg *config.Config) *roomstore.Store {
 func newPlayerStore(db *dynamodb.Client, cfg *config.Config) *player.Store {
 	return player.NewStore(db, cfg.Env)
 }
-func newPlayerService(store *player.Store) *player.Service { return player.NewService(store) }
+func newPlayerService(store *player.Store, wallet *walletclient.Client) *player.Service {
+	return player.NewService(store).WithWallet(wallet)
+}
 func newAchievementStore(db *dynamodb.Client, cfg *config.Config) *achievements.Store {
 	return achievements.NewStore(db, cfg.Env)
 }
@@ -233,7 +235,13 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		}
 		return r.BlindEscalation, true, nil
 	}
-	return tablemanager.NewManager(leases, store, broadcast, roomLoader, onHandComplete)
+	mgr := tablemanager.NewManager(leases, store, broadcast, roomLoader, onHandComplete)
+	mgr.SetOnSeatsChanged(func(tableID string, seatsTaken int) {
+		if err := rooms.SetSeatsTaken(context.Background(), tableID, seatsTaken); err != nil {
+			slog.Error("roomstore: seats taken write-through failed", "table", tableID, "err", err)
+		}
+	})
+	return mgr
 }
 
 func roomBackedSeed(rooms *roomstore.Store) func(string) func() *hand.Table {

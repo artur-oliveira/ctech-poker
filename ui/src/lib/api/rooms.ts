@@ -11,6 +11,9 @@ export interface Room {
   buy_in_min: number;
   buy_in_max: number;
   status: string;
+  // Persisted by the table actor as players join/leave (never computed live
+  // from tablemanager) — how the lobby knows a table has a free seat.
+  seats_taken: number;
   // Present only for a private room's own creator (the server strips both
   // from every other viewer's response).
   share_code?: string;
@@ -34,7 +37,7 @@ export async function getRoom(id: string) {
   return (await apiClient.get<Room>(`/v1.0/rooms/${id}`)).data;
 }
 
-export async function createRoom(input: Omit<Room, 'room_id' | 'id' | 'currency_mode' | 'status'>) {
+export async function createRoom(input: Omit<Room, 'room_id' | 'id' | 'currency_mode' | 'status' | 'seats_taken'>) {
   return (await apiClient.post<Room>('/v1.0/rooms', input, {silentError: true})).data;
 }
 

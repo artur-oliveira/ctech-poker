@@ -15,23 +15,34 @@ const rooms: Room[] = [
     currency_mode: 'sandbox',
     small_blind: 25,
     big_blind: 50,
-    max_seats: 8,
+    max_seats: 9,
     buy_in_min: 1000,
     buy_in_max: 10000,
-    status: 'playing'
+    status: 'playing',
+    seats_taken: 6
   },
   {
     room_id: '22222222222222222222222222222222',
     visibility: 'public',
-    currency_mode: 'real',
+    currency_mode: 'sandbox',
     small_blind: 50,
     big_blind: 100,
     max_seats: 6,
     buy_in_min: 2000,
     buy_in_max: 20000,
-    status: 'waiting'
+    status: 'waiting',
+    seats_taken: 2
   },
 ];
+
+const mockProfile = {
+  user_id: MOCK_PLAYER_ID,
+  name: 'Ana',
+  wallet_mode: 'sandbox' as 'sandbox' | 'real',
+  poker_terms_accepted: true,
+  game_balance: 12500,
+  sandbox_balance: 4850
+};
 
 /* ponytail: 90s mock cooldown (real API uses 24h) so the countdown is testable in dev;
  * sessionStorage keeps it across reloads since the mock lives in the page */
@@ -89,14 +100,24 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     fail(rule.status, (rule.body as { detail?: string })?.detail || 'Erro simulado', config);
   }
   const body = typeof config.data === 'string' ? JSON.parse(config.data || '{}') : (config.data || {});
-  if (method === 'GET' && path === '/v1.0/players/me') return ok({
-    user_id: MOCK_PLAYER_ID,
-    poker_terms_accepted: true
-  }, config);
+  if (method === 'GET' && path === '/v1.0/players/me') return ok({...mockProfile}, config);
   if (method === 'POST' && path === '/v1.0/players/me/terms/accept') return ok({
-    user_id: MOCK_PLAYER_ID,
+    ...mockProfile,
     poker_terms_accepted: true
   }, config);
+  if (method === 'POST' && path === '/v1.0/players/me') {
+    if (typeof body.name === 'string') {
+      if (!body.name.trim()) fail(400, 'name must not be empty', config);
+      mockProfile.name = body.name.trim();
+    }
+    if (typeof body.wallet_mode === 'string') {
+      if (body.wallet_mode !== 'sandbox' && body.wallet_mode !== 'real') {
+        fail(400, 'wallet_mode must be sandbox or real', config);
+      }
+      mockProfile.wallet_mode = body.wallet_mode;
+    }
+    return ok({...mockProfile}, config);
+  }
   if (method === 'GET' && path === '/v1.0/rooms') return ok(rooms, config);
   // Checked before the generic single-segment room-id match below, since
   // "stakes" would otherwise itself match `/rooms/:id` and never reach here.
@@ -115,7 +136,7 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   if (method === 'POST' && path === '/v1.0/rooms') {
     if (body.visibility !== 'public' && body.visibility !== 'private') fail(400, 'visibility must be public or private', config);
     if (!(body.small_blind > 0) || !(body.big_blind > body.small_blind)) fail(400, 'blinds must be positive and big_blind greater than small_blind', config);
-    if (!(body.max_seats >= 2) || !(body.max_seats <= 9)) fail(400, 'max_seats must be between 2 and 9', config);
+    if (body.max_seats !== 6 && body.max_seats !== 9) fail(400, 'max_seats must be 6 or 9', config);
     if (!(body.buy_in_min > 0) || body.buy_in_max < body.buy_in_min || body.buy_in_min % body.big_blind !== 0 || body.buy_in_max % body.big_blind !== 0) {
       fail(400, 'buy-in limits must be ordered positive multiples of big_blind', config);
     }
@@ -124,6 +145,7 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       room_id: crypto.randomUUID().replaceAll('-', ''),
       currency_mode: 'sandbox',
       status: 'waiting',
+      seats_taken: 0,
       created_by: MOCK_PLAYER_ID,
       ...(body.visibility === 'private' ? {share_code: crypto.randomUUID().slice(0, 6).toUpperCase()} : {})
     };
