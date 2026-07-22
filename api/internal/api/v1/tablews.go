@@ -33,13 +33,18 @@ const (
 
 // clientMessage is every shape a connected player can send once authenticated.
 type clientMessage struct {
-	Type     string `json:"type"` // "ready" | "act" | "post_big_blind" | "ping"
+	Type     string `json:"type"` // "ready" | "act" | "post_big_blind" | "set_name" | "chat" | "ping"
 	Ready    bool   `json:"ready,omitempty"`
 	Action   string `json:"action,omitempty"`
 	Amount   int64  `json:"amount,omitempty"`
 	ActionID string `json:"action_id,omitempty"`
 	Message  string `json:"message,omitempty"`
+	Name     string `json:"name,omitempty"`
 }
+
+// maxDisplayNameLen bounds the "set_name" message — the name is broadcast
+// as-is to every other seat, so it gets the same length ceiling as chat.
+const maxDisplayNameLen = 60
 
 var tableChatFilter = chatfilter.New([]string{"idiota", "burro"})
 
@@ -68,6 +73,23 @@ func readAuthToken(conn *fws.Conn) (token, shareCode string, ok bool) {
 		return p.Token, p.ShareCode, true
 	}
 	return strings.TrimSpace(string(msg)), "", true
+}
+
+// sanitizeDisplayName trims a client-supplied "set_name" value and caps it at
+// maxDisplayNameLen runes. This is cosmetic broadcast metadata, not identity
+// (playerID stays the JWT sub — see B9 in api/CLAUDE.md), so there is no
+// server-side verification against an id_token: worst case a player sets a
+// misleading label for their own seat, the same trust level as chat text.
+func sanitizeDisplayName(raw string) string {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		return ""
+	}
+	runes := []rune(name)
+	if len(runes) > maxDisplayNameLen {
+		runes = runes[:maxDisplayNameLen]
+	}
+	return string(runes)
 }
 
 // wsAllowedOrigin mirrors the HTTP CORS policy for the WebSocket upgrade:
@@ -268,6 +290,13 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 					if err := dispatch(table.PostBigBlindCmd{PlayerID: playerID, Reply: r}); err != nil {
 						send(map[string]any{"type": "error", "code": "invalid_post", "message": err.Error()})
 					}
+				case "set_name":
+					name := sanitizeDisplayName(m.Name)
+					if name == "" {
+						continue
+					}
+					r := make(chan error, 1)
+					_ = dispatch(table.SetNameCmd{PlayerID: playerID, Name: name, Reply: r})
 				case "chat":
 					message := strings.TrimSpace(m.Message)
 					if message == "" {

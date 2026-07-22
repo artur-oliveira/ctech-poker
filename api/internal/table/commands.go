@@ -93,6 +93,17 @@ type SnapshotCmd struct {
 
 func (c SnapshotCmd) reply() chan error { return c.Reply }
 
+// SetNameCmd caches a player's display name for broadcastAll to attach to
+// their SeatView. Cosmetic only — playerID (JWT sub) stays the sole identity
+// (IDOR safety is unaffected since Name never gates any action).
+type SetNameCmd struct {
+	PlayerID string
+	Name     string
+	Reply    chan error
+}
+
+func (c SetNameCmd) reply() chan error { return c.Reply }
+
 // autoFoldCheckCmd is dispatched by the auto-fold timer (a time.AfterFunc
 // goroutine) so that all actor-map mutations happen inside Run, never from the
 // timer goroutine (see armActionDeadlineIfTheirTurn).

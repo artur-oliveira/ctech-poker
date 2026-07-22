@@ -29,6 +29,7 @@ type LegalActions struct {
 
 type SeatView struct {
 	PlayerID    string   `json:"player_id"`
+	Name        string   `json:"name,omitempty"`
 	Stack       int64    `json:"stack"`
 	State       string   `json:"state"`
 	Contributed int64    `json:"contributed"`
@@ -92,7 +93,10 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 			State:       playerStateNames[p.State],
 			Contributed: p.Contributed,
 		}
-		if p.ID == viewerID || (revealAll && p.State != Folded) {
+		// t.stage == WaitingForPlayers means no hand has been dealt yet — a
+		// seat's HoleCards is still deck.Card{}'s zero value there, which
+		// cardCode would render as a bogus "\x00c" card.
+		if t.stage != WaitingForPlayers && (p.ID == viewerID || (revealAll && p.State != Folded)) {
 			sv.HoleCards = []string{cardCode(p.HoleCards[0]), cardCode(p.HoleCards[1])}
 		}
 		seats = append(seats, sv)

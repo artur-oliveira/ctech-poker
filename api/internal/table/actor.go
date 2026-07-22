@@ -39,6 +39,7 @@ type Actor struct {
 	disconnectGrace              time.Duration
 	disconnectedSince            map[string]time.Time
 	consecutiveDisconnectedHands map[string]int
+	playerNames                  map[string]string
 	deadlineTimer                *time.Timer
 	escalationInterval           time.Duration
 	escalationCfg                roomstore.BlindEscalation
@@ -62,6 +63,7 @@ func New(id string, store *tablestore.Store, trustCache bool, broadcast func(str
 		disconnectGrace:              45 * time.Second,
 		disconnectedSince:            make(map[string]time.Time),
 		consecutiveDisconnectedHands: make(map[string]int),
+		playerNames:                  make(map[string]string),
 	}
 	a.equityEnabled.Store(true)
 	return a
@@ -136,6 +138,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handlePostBigBlind(ctx, c)
 	case SnapshotCmd:
 		return a.handleSnapshot(ctx, c)
+	case SetNameCmd:
+		return a.handleSetName(c)
 	case autoFoldCheckCmd:
 		return a.handleAutoFoldCheck(ctx, c)
 	case escalateCmd:
@@ -168,6 +172,18 @@ func (a *Actor) handleSnapshot(ctx context.Context, c SnapshotCmd) error {
 		return err
 	}
 	c.Snapshot <- a.cached.ViewFor(c.PlayerID)
+	return nil
+}
+
+// handleSetName caches the display name a client offered at connect time (or
+// on reconnect). It never touches tablestore — the name is process-local
+// broadcast metadata, not authoritative table state.
+func (a *Actor) handleSetName(c SetNameCmd) error {
+	if c.Name == "" {
+		return nil
+	}
+	a.playerNames[c.PlayerID] = c.Name
+	a.broadcastAll()
 	return nil
 }
 
@@ -520,6 +536,7 @@ func (a *Actor) broadcastAll() {
 	doEquity := a.equityEnabled.Load() && equityStage(stage)
 	for _, p := range a.cached.PlayersForActor() {
 		snapshot := a.cached.ViewFor(p.ID)
+		a.applyPlayerNames(snapshot.Seats)
 		if doEquity {
 			if hole, board, ok := a.cached.HoleAndBoardForActor(p.ID); ok {
 				opponents := 0
@@ -537,6 +554,17 @@ func (a *Actor) broadcastAll() {
 			}
 		}
 		a.broadcast(p.ID, snapshot)
+	}
+}
+
+// applyPlayerNames fills in each seat's cached display name in place. Safe to
+// mutate directly: seats is a freshly built slice from this ViewFor call,
+// not yet shared with any other goroutine (unlike the equity copy below).
+func (a *Actor) applyPlayerNames(seats []hand.SeatView) {
+	for i := range seats {
+		if name, ok := a.playerNames[seats[i].PlayerID]; ok {
+			seats[i].Name = name
+		}
 	}
 }
 
