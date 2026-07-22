@@ -76,6 +76,39 @@ func TestCommitActionRejectsStaleVersion(t *testing.T) {
 	}
 }
 
+func TestSeedAndCommitSetLastActionAt(t *testing.T) {
+	db := testClient(t)
+	env := isolatedEnv()
+	s := NewStore(db, env)
+	ctx := context.Background()
+	mustCreateTestTables(ctx, t, db, env)
+
+	timeNowFunc = func() time.Time { return time.Unix(1000, 0) }
+	defer func() { timeNowFunc = time.Now }()
+
+	if err := s.SeedTable(ctx, "table-4", hand.State{Stage: hand.WaitingForPlayers}); err != nil {
+		t.Fatalf("SeedTable: %v", err)
+	}
+	loaded, err := s.LoadTable(ctx, "table-4")
+	if err != nil || loaded == nil || loaded.LastActionAt != 1000 {
+		t.Fatalf("expected last_action_at=1000 after seed, got %+v err=%v", loaded, err)
+	}
+	if loaded.Archived {
+		t.Fatalf("expected a freshly seeded table to not be archived")
+	}
+
+	timeNowFunc = func() time.Time { return time.Unix(2000, 0) }
+	if err := s.CommitAction(ctx, "table-4", "hand-1", "act-1", 1, hand.State{Stage: hand.PreFlop}, ActionLogEntry{
+		TableID: "table-4", HandID: "hand-1", Version: 2, PlayerID: "p1", ActionID: "act-1", Action: "call",
+	}); err != nil {
+		t.Fatalf("CommitAction: %v", err)
+	}
+	loaded, err = s.LoadTable(ctx, "table-4")
+	if err != nil || loaded.LastActionAt != 2000 {
+		t.Fatalf("expected last_action_at=2000 after commit, got %+v err=%v", loaded, err)
+	}
+}
+
 func TestCommitActionRejectsDuplicateActionID(t *testing.T) {
 	db := testClient(t)
 	env := isolatedEnv()

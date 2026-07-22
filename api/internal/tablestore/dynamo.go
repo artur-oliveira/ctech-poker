@@ -29,6 +29,12 @@ const (
 	// TTL expiry — DynamoDB serves the recent window, S3 is the
 	// indefinite archive.
 	logTTLDays = 90
+
+	// gsiActiveValue is the sparse gsi_active partition key value every live
+	// table carries — MarkArchived REMOVEs this attribute so an archived
+	// table drops out of gsi_active_last_action entirely, the same
+	// sparse-index convention as roomstore's gsi_public (roomstore/dynamo.go).
+	gsiActiveValue = "1"
 )
 
 // timeNowFunc is overridden in tests that need a deterministic TTL value.
@@ -56,10 +62,12 @@ func NewStore(db *dynamodb.Client, env string) *Store {
 // already exists the conditional fails and we treat it as a successful no-op.
 func (s *Store) SeedTable(ctx context.Context, tableID string, state hand.State) error {
 	item, err := dynamo.Encode(struct {
-		PK      string     `dynamodbav:"pk"`
-		Version int        `dynamodbav:"version"`
-		State   hand.State `dynamodbav:"state"`
-	}{PK: tableID, Version: 1, State: state})
+		PK           string     `dynamodbav:"pk"`
+		Version      int        `dynamodbav:"version"`
+		State        hand.State `dynamodbav:"state"`
+		LastActionAt int64      `dynamodbav:"last_action_at"`
+		GSIActive    string     `dynamodbav:"gsi_active"`
+	}{PK: tableID, Version: 1, State: state, LastActionAt: timeNowFunc().Unix(), GSIActive: gsiActiveValue})
 	if err != nil {
 		return fmt.Errorf("tablestore: encode seed state: %w", err)
 	}
@@ -101,17 +109,18 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 	stateAV := stateItem["state"]
 
 	values := map[string]types.AttributeValue{
-		":newVersion": mustN(expectedVersion + 1),
-		":expected":   mustN(expectedVersion),
-		":handID":     &types.AttributeValueMemberS{Value: handID},
-		":state":      stateAV,
+		":newVersion":   mustN(expectedVersion + 1),
+		":expected":     mustN(expectedVersion),
+		":handID":       &types.AttributeValueMemberS{Value: handID},
+		":state":        stateAV,
+		":lastActionAt": mustN(int(timeNowFunc().Unix())),
 	}
 	names := map[string]string{
 		"#version": "version",
 		"#state":   "state",
 	}
 	stateTx := s.state.BuildRawUpdateTxItem(tableID, nil,
-		"SET #version = :newVersion, hand_id = :handID, #state = :state",
+		"SET #version = :newVersion, hand_id = :handID, #state = :state, last_action_at = :lastActionAt",
 		"attribute_exists(pk) AND #version = :expected", names, values)
 
 	logItem, err := dynamo.Encode(struct {

@@ -35,8 +35,10 @@ type ActionLogEntry struct {
 // StoredTable is the current authoritative state of one table, as read from
 // poker_table_state.
 type StoredTable struct {
-	TableID string     `dynamodbav:"pk"`
-	Version int        `dynamodbav:"version"`
-	HandID  string     `dynamodbav:"hand_id"`
-	State   hand.State `dynamodbav:"state"`
+	TableID      string     `dynamodbav:"pk"`
+	Version      int        `dynamodbav:"version"`
+	HandID       string     `dynamodbav:"hand_id"`
+	State        hand.State `dynamodbav:"state"`
+	LastActionAt int64      `dynamodbav:"last_action_at"`
+	Archived     bool       `dynamodbav:"archived,omitempty"`
 }

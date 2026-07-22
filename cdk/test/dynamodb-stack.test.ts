@@ -9,7 +9,18 @@ test('creates poker_table_state, poker_action_log, poker_action_guards tables', 
   // dynamodb.TableV2 always synthesizes as AWS::DynamoDB::GlobalTable (even
   // with zero extra replicas) — not AWS::DynamoDB::Table.
   template.resourceCountIs('AWS::DynamoDB::GlobalTable', 11);
-  template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {TableName: 'dev_poker_table_state'});
+  template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'dev_poker_table_state',
+    GlobalSecondaryIndexes: Match.arrayWith([
+      Match.objectLike({
+        IndexName: 'gsi_active_last_action',
+        KeySchema: Match.arrayWith([
+          Match.objectLike({AttributeName: 'gsi_active', KeyType: 'HASH'}),
+          Match.objectLike({AttributeName: 'last_action_at', KeyType: 'RANGE'}),
+        ]),
+      }),
+    ]),
+  });
   template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_action_log',
     TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},

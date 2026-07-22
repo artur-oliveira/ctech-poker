@@ -48,7 +48,17 @@ export class DynamoDBStack extends cdk.Stack {
 
     // poker_table_state: the single authoritative item per table, versioned
     // (tablestore.CommitAction) — no TTL, no stream, always current.
-    table('poker_table_state', false);
+    // gsi_active_last_action is sparse — only tables still active carry a
+    // gsi_active value (tablestore.SeedTable sets it; cmd/tablecleanup's
+    // archive step REMOVEs it) — so an archived table drops out of the index
+    // instead of accumulating there forever.
+    const tableState = table('poker_table_state', false);
+    tableState.addGlobalSecondaryIndex({
+      indexName: 'gsi_active_last_action',
+      partitionKey: {name: 'gsi_active', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'last_action_at', type: dynamodb.AttributeType.NUMBER},
+      projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+    });
     // poker_action_log: TTL'd (tablestore.logTTLDays = 90 days — the "recent
     // window" served directly from Dynamo) with a stream so the archiver
     // Lambda (archiver-stack.ts) ships every entry to S3 before that TTL ever
