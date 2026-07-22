@@ -109,6 +109,74 @@ func TestSeedAndCommitSetLastActionAt(t *testing.T) {
 	}
 }
 
+func TestQueryStaleActiveFindsOnlyOldActiveTables(t *testing.T) {
+	db := testClient(t)
+	env := isolatedEnv()
+	s := NewStore(db, env)
+	ctx := context.Background()
+	mustCreateTestTables(ctx, t, db, env)
+
+	timeNowFunc = func() time.Time { return time.Unix(1000, 0) }
+	_ = s.SeedTable(ctx, "stale-1", hand.State{Stage: hand.WaitingForPlayers})
+	timeNowFunc = func() time.Time { return time.Unix(9000, 0) }
+	_ = s.SeedTable(ctx, "fresh-1", hand.State{Stage: hand.WaitingForPlayers})
+	timeNowFunc = time.Now
+
+	stale, err := s.QueryStaleActive(ctx, 5000, 10)
+	if err != nil {
+		t.Fatalf("QueryStaleActive: %v", err)
+	}
+	if len(stale) != 1 || stale[0].TableID != "stale-1" {
+		t.Fatalf("expected only stale-1 (last_action_at=1000 < cutoff=5000), got %+v", stale)
+	}
+}
+
+func TestMarkArchivedRemovesFromActiveIndexAndBlocksReSelection(t *testing.T) {
+	db := testClient(t)
+	env := isolatedEnv()
+	s := NewStore(db, env)
+	ctx := context.Background()
+	mustCreateTestTables(ctx, t, db, env)
+
+	timeNowFunc = func() time.Time { return time.Unix(1000, 0) }
+	_ = s.SeedTable(ctx, "stale-2", hand.State{Stage: hand.WaitingForPlayers})
+	timeNowFunc = time.Now
+
+	if err := s.MarkArchived(ctx, "stale-2", 1); err != nil {
+		t.Fatalf("MarkArchived: %v", err)
+	}
+
+	loaded, err := s.LoadTable(ctx, "stale-2")
+	if err != nil || !loaded.Archived {
+		t.Fatalf("expected archived=true, got %+v err=%v", loaded, err)
+	}
+
+	stale, err := s.QueryStaleActive(ctx, 999999999, 10)
+	if err != nil {
+		t.Fatalf("QueryStaleActive: %v", err)
+	}
+	for _, st := range stale {
+		if st.TableID == "stale-2" {
+			t.Fatalf("archived table stale-2 must not appear in gsi_active_last_action anymore")
+		}
+	}
+}
+
+func TestMarkArchivedRejectsStaleVersion(t *testing.T) {
+	db := testClient(t)
+	env := isolatedEnv()
+	s := NewStore(db, env)
+	ctx := context.Background()
+	mustCreateTestTables(ctx, t, db, env)
+
+	_ = s.SeedTable(ctx, "stale-3", hand.State{Stage: hand.WaitingForPlayers})
+
+	err := s.MarkArchived(ctx, "stale-3", 99)
+	if !errors.Is(err, ErrVersionConflict) {
+		t.Fatalf("expected ErrVersionConflict when the table moved on since the stale query, got %v", err)
+	}
+}
+
 func TestCommitActionRejectsDuplicateActionID(t *testing.T) {
 	db := testClient(t)
 	env := isolatedEnv()

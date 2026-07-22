@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/dynamo"
@@ -16,6 +17,11 @@ const (
 	tableState        = "poker_table_state"
 	tableActionLog    = "poker_action_log"
 	tableActionGuards = "poker_action_guards"
+
+	// gsiActiveLastAction is the sparse index cmd/tablecleanup queries for
+	// stale tables — see the gsi_active comment below and
+	// cdk/lib/dynamodb-stack.ts's matching addGlobalSecondaryIndex call.
+	gsiActiveLastAction = "gsi_active_last_action"
 
 	// guardTTLDays mirrors ctech-wallet's idemTTLDays
 	// (ctech-wallet/api/internal/repositories/wallet.go:19) — a guard only
@@ -43,6 +49,8 @@ var timeNowFunc = time.Now
 // Store persists the one authoritative item per table, an audit log, and the
 // idempotency guards that back CommitAction's duplicate-action_id rejection.
 type Store struct {
+	db     *dynamodb.Client
+	env    string
 	state  dynamo.Base
 	log    dynamo.Base
 	guards dynamo.Base
@@ -50,6 +58,8 @@ type Store struct {
 
 func NewStore(db *dynamodb.Client, env string) *Store {
 	return &Store{
+		db:     db,
+		env:    env,
 		state:  dynamo.NewBase(db, env, tableState),
 		log:    dynamo.NewBase(db, env, tableActionLog),
 		guards: dynamo.NewBase(db, env, tableActionGuards),
@@ -181,6 +191,73 @@ func (s *Store) LoadActionsSince(ctx context.Context, tableID, handID string, af
 	return out, nil
 }
 
+// QueryStaleActive returns every still-active table (gsi_active present)
+// whose last_action_at is older than olderThanUnix, oldest first — the read
+// side of cmd/tablecleanup's sweep. Queries gsi_active_last_action; never
+// scans (api-commons/dynamo package doc: "get_item > query > scan").
+// dynamo.Base.QueryGSI only supports equality conditions, not this
+// last_action_at < cutoff range, hence the raw *dynamodb.Client query.
+func (s *Store) QueryStaleActive(ctx context.Context, olderThanUnix int64, limit int) ([]StoredTable, error) {
+	out, err := s.db.Query(ctx, &dynamodb.QueryInput{
+		TableName:              aws.String(dynamo.TableName(s.env, tableState)),
+		IndexName:              aws.String(gsiActiveLastAction),
+		KeyConditionExpression: aws.String("gsi_active = :active AND last_action_at < :cutoff"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":active": &types.AttributeValueMemberS{Value: gsiActiveValue},
+			":cutoff": mustN(int(olderThanUnix)),
+		},
+		ScanIndexForward: aws.Bool(true), // oldest last_action_at first
+		Limit:            aws.Int32(int32(limit)),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("tablestore: query stale active: %w", err)
+	}
+	result := make([]StoredTable, 0, len(out.Items))
+	for _, keyItem := range out.Items {
+		id, ok := keyItem["pk"].(*types.AttributeValueMemberS)
+		if !ok {
+			continue
+		}
+		full, err := s.LoadTable(ctx, id.Value)
+		if err != nil {
+			return nil, fmt.Errorf("tablestore: load stale table %s: %w", id.Value, err)
+		}
+		if full != nil {
+			result = append(result, *full)
+		}
+	}
+	return result, nil
+}
+
+// MarkArchived flips tableID to archived and removes it from
+// gsi_active_last_action, guarded by expectedVersion — the same
+// version-equality discipline as CommitAction. If another instance
+// committed an action on this table since the caller's stale-active query
+// ran, this fails with ErrVersionConflict and the caller should simply skip
+// archiving it this pass (it is no longer stale).
+func (s *Store) MarkArchived(ctx context.Context, tableID string, expectedVersion int) error {
+	_, err := s.db.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName:           aws.String(dynamo.TableName(s.env, tableState)),
+		Key:                 map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: tableID}},
+		UpdateExpression:    aws.String("SET archived = :true REMOVE gsi_active"),
+		ConditionExpression: aws.String("attribute_exists(pk) AND #version = :expected"),
+		ExpressionAttributeNames: map[string]string{
+			"#version": "version",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":true":     &types.AttributeValueMemberBOOL{Value: true},
+			":expected": mustN(expectedVersion),
+		},
+	})
+	if err != nil {
+		if dynamo.IsConditionFailed(err) {
+			return ErrVersionConflict
+		}
+		return fmt.Errorf("tablestore: mark archived: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) resolveCommitErr(ctx context.Context, tableID, handID, actionID string, txErr error) error {
 	if !dynamo.IsConditionFailed(txErr) {
 		return fmt.Errorf("tablestore: commit: %w", txErr)
@@ -204,27 +281,39 @@ func mustN(v int) types.AttributeValue {
 // mustCreateTestTables provisions all three tables against DynamoDB Local —
 // production tables are provisioned by CDK, never by app code.
 func mustCreateTestTables(ctx context.Context, t testingT, db *dynamodb.Client, env string) {
-	pkOnly := []string{env + "_" + tableState, env + "_" + tableActionGuards}
-	pkSk := []string{env + "_" + tableActionLog}
-	for _, name := range pkOnly {
-		createTable(ctx, t, db, name, false)
-	}
-	for _, name := range pkSk {
-		createTable(ctx, t, db, name, true)
-	}
+	createTable(ctx, t, db, env+"_"+tableActionGuards, false, nil)
+	createTable(ctx, t, db, env+"_"+tableActionLog, true, nil)
+	createTable(ctx, t, db, env+"_"+tableState, false, []types.GlobalSecondaryIndex{{
+		IndexName: strPtr(gsiActiveLastAction),
+		KeySchema: []types.KeySchemaElement{
+			{AttributeName: strPtr("gsi_active"), KeyType: types.KeyTypeHash},
+			{AttributeName: strPtr("last_action_at"), KeyType: types.KeyTypeRange},
+		},
+		Projection: &types.Projection{ProjectionType: types.ProjectionTypeKeysOnly},
+	}})
 }
 
-func createTable(ctx context.Context, t testingT, db *dynamodb.Client, name string, withSK bool) {
+func createTable(ctx context.Context, t testingT, db *dynamodb.Client, name string, withSK bool, gsis []types.GlobalSecondaryIndex) {
 	attrs := []types.AttributeDefinition{{AttributeName: strPtr("pk"), AttributeType: types.ScalarAttributeTypeS}}
 	keys := []types.KeySchemaElement{{AttributeName: strPtr("pk"), KeyType: types.KeyTypeHash}}
 	if withSK {
 		attrs = append(attrs, types.AttributeDefinition{AttributeName: strPtr("sk"), AttributeType: types.ScalarAttributeTypeS})
 		keys = append(keys, types.KeySchemaElement{AttributeName: strPtr("sk"), KeyType: types.KeyTypeRange})
 	}
+	if len(gsis) > 0 {
+		attrs = append(attrs,
+			types.AttributeDefinition{AttributeName: strPtr("gsi_active"), AttributeType: types.ScalarAttributeTypeS},
+			types.AttributeDefinition{AttributeName: strPtr("last_action_at"), AttributeType: types.ScalarAttributeTypeN},
+		)
+	}
 	tableName := name
-	_, err := db.CreateTable(ctx, &dynamodb.CreateTableInput{
+	input := &dynamodb.CreateTableInput{
 		TableName: &tableName, AttributeDefinitions: attrs, KeySchema: keys, BillingMode: types.BillingModePayPerRequest,
-	})
+	}
+	if len(gsis) > 0 {
+		input.GlobalSecondaryIndexes = gsis
+	}
+	_, err := db.CreateTable(ctx, input)
 	if err != nil {
 		var inUse *types.ResourceInUseException
 		if !errors.As(err, &inUse) {
