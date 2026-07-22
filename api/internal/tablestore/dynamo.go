@@ -284,26 +284,26 @@ func mustCreateTestTables(ctx context.Context, t testingT, db *dynamodb.Client, 
 	createTable(ctx, t, db, env+"_"+tableActionGuards, false, nil)
 	createTable(ctx, t, db, env+"_"+tableActionLog, true, nil)
 	createTable(ctx, t, db, env+"_"+tableState, false, []types.GlobalSecondaryIndex{{
-		IndexName: strPtr(gsiActiveLastAction),
+		IndexName: new(gsiActiveLastAction),
 		KeySchema: []types.KeySchemaElement{
-			{AttributeName: strPtr("gsi_active"), KeyType: types.KeyTypeHash},
-			{AttributeName: strPtr("last_action_at"), KeyType: types.KeyTypeRange},
+			{AttributeName: new("gsi_active"), KeyType: types.KeyTypeHash},
+			{AttributeName: new("last_action_at"), KeyType: types.KeyTypeRange},
 		},
 		Projection: &types.Projection{ProjectionType: types.ProjectionTypeKeysOnly},
 	}})
 }
 
 func createTable(ctx context.Context, t testingT, db *dynamodb.Client, name string, withSK bool, gsis []types.GlobalSecondaryIndex) {
-	attrs := []types.AttributeDefinition{{AttributeName: strPtr("pk"), AttributeType: types.ScalarAttributeTypeS}}
-	keys := []types.KeySchemaElement{{AttributeName: strPtr("pk"), KeyType: types.KeyTypeHash}}
+	attrs := []types.AttributeDefinition{{AttributeName: new("pk"), AttributeType: types.ScalarAttributeTypeS}}
+	keys := []types.KeySchemaElement{{AttributeName: new("pk"), KeyType: types.KeyTypeHash}}
 	if withSK {
-		attrs = append(attrs, types.AttributeDefinition{AttributeName: strPtr("sk"), AttributeType: types.ScalarAttributeTypeS})
-		keys = append(keys, types.KeySchemaElement{AttributeName: strPtr("sk"), KeyType: types.KeyTypeRange})
+		attrs = append(attrs, types.AttributeDefinition{AttributeName: new("sk"), AttributeType: types.ScalarAttributeTypeS})
+		keys = append(keys, types.KeySchemaElement{AttributeName: new("sk"), KeyType: types.KeyTypeRange})
 	}
 	if len(gsis) > 0 {
 		attrs = append(attrs,
-			types.AttributeDefinition{AttributeName: strPtr("gsi_active"), AttributeType: types.ScalarAttributeTypeS},
-			types.AttributeDefinition{AttributeName: strPtr("last_action_at"), AttributeType: types.ScalarAttributeTypeN},
+			types.AttributeDefinition{AttributeName: new("gsi_active"), AttributeType: types.ScalarAttributeTypeS},
+			types.AttributeDefinition{AttributeName: new("last_action_at"), AttributeType: types.ScalarAttributeTypeN},
 		)
 	}
 	tableName := name
@@ -321,8 +321,6 @@ func createTable(ctx context.Context, t testingT, db *dynamodb.Client, name stri
 		}
 	}
 }
-
-func strPtr(s string) *string { return &s }
 
 // testingT is the minimal *testing.T surface these helpers need, kept as an
 // unexported interface so this file (non-test code) never imports "testing".

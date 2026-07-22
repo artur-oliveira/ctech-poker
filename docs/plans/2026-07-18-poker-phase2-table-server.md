@@ -516,12 +516,12 @@ func mustCreateTestTables(ctx context.Context, t testingT, db *dynamodb.Client, 
 		_, err := db.CreateTable(ctx, &dynamodb.CreateTableInput{
 			TableName: &name,
 			AttributeDefinitions: []types.AttributeDefinition{
-				{AttributeName: strPtr("pk"), AttributeType: types.ScalarAttributeTypeS},
-				{AttributeName: strPtr("sk"), AttributeType: types.ScalarAttributeTypeS},
+				{AttributeName: new("pk"), AttributeType: types.ScalarAttributeTypeS},
+				{AttributeName: new("sk"), AttributeType: types.ScalarAttributeTypeS},
 			},
 			KeySchema: []types.KeySchemaElement{
-				{AttributeName: strPtr("pk"), KeyType: types.KeyTypeHash},
-				{AttributeName: strPtr("sk"), KeyType: types.KeyTypeRange},
+				{AttributeName: new("pk"), KeyType: types.KeyTypeHash},
+				{AttributeName: new("sk"), KeyType: types.KeyTypeRange},
 			},
 			BillingMode: types.BillingModePayPerRequest,
 		})
@@ -534,7 +534,7 @@ func mustCreateTestTables(ctx context.Context, t testingT, db *dynamodb.Client, 
 	}
 }
 
-func strPtr(s string) *string { return &s }
+func new(s string) *string { return &s }
 ```
 
 Add a tiny `testingT` interface (`interface{ Fatalf(string, ...any) }`) and `isResourceInUse` helper (using

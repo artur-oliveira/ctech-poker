@@ -38,11 +38,11 @@ func mustCreateTestTables(t *testing.T, db *dynamodb.Client, env string) {
 
 func createTestTable(t *testing.T, db *dynamodb.Client, name string, withSK bool) {
 	t.Helper()
-	attrs := []types.AttributeDefinition{{AttributeName: strPtr("pk"), AttributeType: types.ScalarAttributeTypeS}}
-	keys := []types.KeySchemaElement{{AttributeName: strPtr("pk"), KeyType: types.KeyTypeHash}}
+	attrs := []types.AttributeDefinition{{AttributeName: new("pk"), AttributeType: types.ScalarAttributeTypeS}}
+	keys := []types.KeySchemaElement{{AttributeName: new("pk"), KeyType: types.KeyTypeHash}}
 	if withSK {
-		attrs = append(attrs, types.AttributeDefinition{AttributeName: strPtr("sk"), AttributeType: types.ScalarAttributeTypeS})
-		keys = append(keys, types.KeySchemaElement{AttributeName: strPtr("sk"), KeyType: types.KeyTypeRange})
+		attrs = append(attrs, types.AttributeDefinition{AttributeName: new("sk"), AttributeType: types.ScalarAttributeTypeS})
+		keys = append(keys, types.KeySchemaElement{AttributeName: new("sk"), KeyType: types.KeyTypeRange})
 	}
 	tableName := name
 	_, err := db.CreateTable(context.Background(), &dynamodb.CreateTableInput{TableName: &tableName, AttributeDefinitions: attrs, KeySchema: keys, BillingMode: types.BillingModePayPerRequest})
@@ -54,4 +54,4 @@ func createTestTable(t *testing.T, db *dynamodb.Client, name string, withSK bool
 	}
 }
 
-func strPtr(s string) *string { return &s }
+func new(s string) *string { return &s }
