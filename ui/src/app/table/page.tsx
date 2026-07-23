@@ -97,7 +97,7 @@ function TableContent() {
       <h2>{rt.status === 'connected' ? 'Aquecendo o seu lugar…' : 'Conectando à mesa…'}</h2>
       <p role="status"
          aria-live="polite">{rt.status === 'connected' ? 'Sincronizando o estado mais recente.' : CONNECTION_COPY[rt.status]}</p>
-      {rt.status === 'connected' ? <Button onClick={() => rt.ready()}>Estou pronto</Button> :
+      {rt.status !== 'connected' &&
         <Button variant="outline" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>}
     </main>
     {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
@@ -126,6 +126,8 @@ function TableContent() {
             <Wifi aria-hidden="true"/> {rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}
           </span>
           {canInvite && <InviteDialog url={inviteUrl}/>}
+          {viewerSeat && viewerSeat.state !== 'sitting_out' &&
+            <Button type="button" variant="ghost" onClick={() => rt.ready(false)}>Sentar fora</Button>}
           <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} onLeft={amount => {
             pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
             queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
@@ -143,8 +145,9 @@ function TableContent() {
           <Button type="button" variant="ghost" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>
       </div>}
       {!connectionMessage && (s.stage === 'waiting_for_players' || s.stage === 'complete') && <div className="reconnect-notice">
-          <p>{s.stage === 'complete' ? 'Mão encerrada. Confirme quando estiver pronto para a próxima.' : 'Aguardando jogadores. Confirme quando estiver pronto.'}</p>
-          <Button type="button" variant="ghost" onClick={() => rt.ready()}>Estou pronto</Button>
+          <p>{s.stage === 'complete' ? 'Mão encerrada.' : 'Aguardando jogadores.'}</p>
+          {viewerSeat?.state === 'sitting_out' &&
+            <Button type="button" variant="ghost" onClick={() => rt.ready(true)}>Voltar a jogar</Button>}
       </div>}
       <div className="game-table">
         <div className="game-rail"/>
@@ -152,6 +155,8 @@ function TableContent() {
         {rotateSeats(s.seats, viewer).map((seat, i) => <Seat key={seat.player_id} seat={seat} index={i}
                                                              isTurn={s.current_player_id === seat.player_id}
                                                              payout={s.payouts?.[seat.player_id] || 0}
+                                                             deadlineMs={s.action_deadline_unix_ms}
+                                                             nowMs={rt.snapshotAt}
                                                              isViewer={seat.player_id === viewer}/>)}</div>
       <ActionBar
         onActAction={rt.act}

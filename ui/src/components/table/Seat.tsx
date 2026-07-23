@@ -13,18 +13,23 @@ const STATE_LABELS: Record<string, string> = {
 // Seats 3/4/5 sit on the top rail; their winner pill must drop below instead of above.
 const TOP_SEAT_INDICES = [3, 4, 5];
 
-export function Seat({seat, isViewer, isTurn, index, payout = 0}: {
+export function Seat({seat, isViewer, isTurn, index, payout = 0, deadlineMs, nowMs}: {
   seat: SeatView;
   isViewer: boolean;
   isTurn: boolean;
   index: number;
-  payout?: number
+  payout?: number;
+  deadlineMs?: number;
+  nowMs?: number
 }) {
   const cards = seat.hole_cards;
   const chance = seat.equity == null ? null : Math.round(seat.equity * 100);
   const pendingName = !isViewer && !seat.name;
+  const remainingMs = isTurn && deadlineMs && nowMs ? Math.max(0, deadlineMs - nowMs) : null;
   return <div data-state={seat.state} aria-current={isTurn ? 'true' : undefined}
     className={`game-seat seat-${index} ${seat.state} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${payout > 0 ? 'is-winner' : ''} ${pendingName ? 'is-pending-name' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
+    {remainingMs != null &&
+      <span key={deadlineMs} className="seat-turn-ring" style={{animationDuration: `${remainingMs}ms`}} aria-hidden="true"/>}
     <div className="seat-cards">{[0, 1].map(i => {
       const card = cards?.[i];
       return <PlayingCard key={`${i}-${card || 'back'}`} card={card} index={i} size="hole"

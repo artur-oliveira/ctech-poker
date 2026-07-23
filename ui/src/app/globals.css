@@ -1603,6 +1603,21 @@ h1 em {
     animation: turn-signal 1.5s var(--ease-out-quart) infinite
 }
 
+.seat-turn-ring {
+    position: absolute;
+    inset: -4px;
+    border-radius: inherit;
+    border: 2px solid transparent;
+    border-top-color: var(--gold);
+    animation: seat-turn-countdown linear forwards;
+    pointer-events: none
+}
+
+@keyframes seat-turn-countdown {
+    from { transform: rotate(0deg); opacity: 1 }
+    to { transform: rotate(360deg); opacity: .3 }
+}
+
 .game-seat.is-winner {
     border-color: var(--gold)
 }

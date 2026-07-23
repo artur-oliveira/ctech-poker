@@ -69,6 +69,10 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const previousSnapshot = useRef<TableSnapshot | null>(null);
   const sendRef = useRef<(value: object) => boolean>(() => false);
   const [snapshot, setSnapshot] = useState<TableSnapshot | null>(null);
+  // Captured once per snapshot (in this event handler, never during render) so
+  // Seat can compute its countdown ring's remaining time as a pure function of
+  // props (deadlineMs - snapshotAt) instead of calling Date.now() itself.
+  const [snapshotAt, setSnapshotAt] = useState(0);
   const [unlock, setUnlock] = useState<{ key: string; stars: number } | null>(null);
   const [chat, setChat] = useState<{ player: string; message: string }[]>([]);
   const [pendingAction, setPendingAction] = useState<PokerAction | null>(null);
@@ -96,6 +100,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       previousSnapshot.current = message.snapshot;
       if (liveMessage) setAnnouncement(liveMessage);
       setSnapshot(message.snapshot);
+      setSnapshotAt(Date.now());
       clearPending();
     }
     if (message.type === 'error') failPending(message.code || 'unknown');
@@ -186,7 +191,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   }, [clearPending, emit, send]);
 
   return {
-    status, snapshot, unlock, chat, pendingAction, actionError: lastActionError, reconnectAttempt, announcement,
+    status, snapshot, snapshotAt, unlock, chat, pendingAction, actionError: lastActionError, reconnectAttempt, announcement,
     clearActionError: () => setLastActionError(null), retryNow,
     ready: (ready = true) => emit({type: 'ready', ready}), act,
     sendChat: (message: string) => emit({type: 'chat', message})

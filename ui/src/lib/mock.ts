@@ -290,7 +290,8 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
         max_raise_to: 4900,
         step: 25
       },
-      rake: 5
+      rake: 5,
+      ...(scenario === 'timeout' ? {action_deadline_unix_ms: Date.now() + 15000} : {})
     };
   }
   if (scenario === 'flop') return {
