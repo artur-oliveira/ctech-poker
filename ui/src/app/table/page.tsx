@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import {Suspense} from 'react';
+import {Suspense, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {ChevronLeft, RotateCw, Wifi} from 'lucide-react';
@@ -78,6 +78,15 @@ function TableContent() {
   });
   const seated = seatedStatus?.seated ?? false;
   const rt = useTableRealtime(valid && seated ? id : '', viewer, inviteCode, USE_MOCK ? {scenario, delay} : undefined);
+  // The next-hand deadline is fixed server-side once armed, but a state
+  // broadcast can still arrive mid-countdown (e.g. another player revealing
+  // cards) and shift rt.snapshotAt forward. Recomputing animationDuration
+  // against that later snapshotAt would shrink the CSS animation's total
+  // duration while it's already running, snapping the ring to its end frame
+  // long before the real 5s deadline. Freezing the duration at the first
+  // snapshot that armed this deadline keeps the ring in sync with backend
+  // time regardless of how many broadcasts land before it fires.
+  const [nextHandArmed, setNextHandArmed] = useState<{deadline: number; snapshotAt: number} | null>(null);
   if (!valid) return (
     <main className="game-loading">
       <h2>Mesa inválida</h2>
@@ -111,6 +120,11 @@ function TableContent() {
   // A room's share_code is only ever present for its own creator (the server
   // strips it from every other viewer) — so its presence alone gates the
   // invite affordance for private tables; public tables need no code at all.
+  if (s.next_hand_unix_ms && nextHandArmed?.deadline !== s.next_hand_unix_ms) {
+    setNextHandArmed({deadline: s.next_hand_unix_ms, snapshotAt: rt.snapshotAt});
+  }
+  const nextHandDurationMs = s.next_hand_unix_ms && nextHandArmed?.deadline === s.next_hand_unix_ms ?
+    Math.max(0, s.next_hand_unix_ms - nextHandArmed.snapshotAt) : 0;
   const canInvite = room && (room.visibility === 'public' || room.share_code);
   const inviteUrl = typeof window !== 'undefined' ?
     `${window.location.origin}/table?id=${id}${room?.share_code ? `&invite=${room.share_code}` : ''}` : '';
@@ -148,7 +162,7 @@ function TableContent() {
           <p>{s.stage === 'complete' ? 'Mão encerrada.' : 'Aguardando jogadores.'}</p>
           {s.next_hand_unix_ms &&
             <span key={s.next_hand_unix_ms} className="next-hand-ring"
-                  style={{animationDuration: `${Math.max(0, s.next_hand_unix_ms - rt.snapshotAt)}ms`}}
+                  style={{animationDuration: `${nextHandDurationMs}ms`}}
                   aria-hidden="true"/>}
           {viewerSeat?.state === 'sitting_out' &&
             <Button type="button" variant="ghost" onClick={() => rt.ready(true)}>Voltar a jogar</Button>}
