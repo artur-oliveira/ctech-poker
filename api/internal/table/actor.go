@@ -52,7 +52,7 @@ type Actor struct {
 	escalationCfg                roomstore.BlindEscalation
 	done                         chan struct{}
 	equityEnabled                atomic.Bool
-	onHandComplete               func(hand.HandOutcome)
+	onHandComplete               func(string, hand.HandOutcome)
 	completedHandNotified        string
 	onSeatsChanged               func(int)
 }
@@ -313,14 +313,14 @@ func (a *Actor) notifyHandComplete() {
 		a.completedHandNotified = a.handID
 		metrics.EmitTableMetric(a.env, "HandsCompleted", 1, map[string]string{"table_id": a.id})
 		if a.onHandComplete != nil {
-			a.onHandComplete(*outcome)
+			a.onHandComplete(a.handID, *outcome)
 		}
 	}
 }
 
 // SetOnHandCompleteForActor installs the post-commit gamification hook.
 // The actor invokes it at most once per local hand ID.
-func (a *Actor) SetOnHandCompleteForActor(fn func(hand.HandOutcome)) { a.onHandComplete = fn }
+func (a *Actor) SetOnHandCompleteForActor(fn func(string, hand.HandOutcome)) { a.onHandComplete = fn }
 
 // SetOnSeatsChangedForActor installs the post-commit occupancy write-through
 // hook, invoked with the new occupied-seat count after every committed join

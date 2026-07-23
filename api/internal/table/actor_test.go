@@ -176,3 +176,27 @@ func TestShowCardsCmdRevealsFoldedWinnerToEveryone(t *testing.T) {
 		}
 	}
 }
+
+func TestOnHandCompleteReceivesNonEmptyHandID(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+	a := newTestActor(t, store)
+	var gotHandID string
+	a.SetOnHandCompleteForActor(func(handID string, outcome hand.HandOutcome) {
+		gotHandID = handID
+	})
+
+	reply := make(chan error, 1)
+	_ = a.Dispatch(ReadyCmd{PlayerID: "p1", Ready: true, Reply: reply})
+	reply2 := make(chan error, 1)
+	_ = a.Dispatch(ReadyCmd{PlayerID: "p2", Ready: true, Reply: reply2})
+	stored, _ := store.LoadTable(context.Background(), "table-1")
+	toAct := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
+	reply3 := make(chan error, 1)
+	_ = a.Dispatch(ActCmd{PlayerID: toAct, ActionID: "a1", Action: betting.ActionFold, Reply: reply3})
+
+	if gotHandID == "" {
+		t.Fatal("expected onHandComplete to receive a non-empty handID")
+	}
+}

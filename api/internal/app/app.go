@@ -206,7 +206,7 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		data, _ := json.Marshal(map[string]any{"type": "state", "snapshot": snap})
 		reg.Broadcast(context.Background(), tableID+"#"+viewerID, data)
 	}
-	onHandComplete := func(tableID string, outcome hand.HandOutcome) {
+	onHandComplete := func(tableID, handID string, outcome hand.HandOutcome) {
 		ctx := context.Background()
 		unlocks, err := achv.RecordHand(ctx, tableID, outcome)
 		if err != nil {
