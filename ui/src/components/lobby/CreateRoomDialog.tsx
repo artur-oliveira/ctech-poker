@@ -48,7 +48,7 @@ export function CreateRoomDialog() {
         small_blind: stake.small_blind,
         big_blind: stake.big_blind,
         max_seats: values.maxSeats,
-        buy_in_min: stake.big_blind * 20,
+        buy_in_min: stake.big_blind * 40,
         buy_in_max: stake.big_blind * 100
       });
       await queryClient.invalidateQueries({queryKey: ['rooms']});

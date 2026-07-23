@@ -1406,7 +1406,7 @@ git commit -m "feat: 7-card hand evaluator with kicker comparison and wheel-stra
 - Produces: `sidepots.Contribution{PlayerID string, Amount int64}`,
   `sidepots.PotLayer{Amount int64, Eligible []string}`,
   `sidepots.ComputeSidePots(contributions []Contribution) []PotLayer`. Task 9 consumes this at `SHOWDOWN`, intersecting
-  each layer's `Eligible` list with non-folded players before running `handeval.Best7` to find that layer's winner(s).
+  each layer's `Eligible` list with non-folded players before running `handeval.Best7` to find that layer's winner (s).
 
 - [ ] **Step 1: Write the failing tests — the exact 2-way and 3-way scenarios from OVERVIEW.md § 3.3**
 
@@ -1866,8 +1866,8 @@ case), dealer rotation, the ready system, and mid-hand `PENDING_ENTRY` joins (OV
 
 **Interfaces:**
 
-- Consumes: `deck.NewShuffle`, `handeval.Best7`, `sidepots.ComputeSidePots`, `betting.NewRound`/`Act`/`IsComplete` (
-  Tasks 5–8).
+- Consumes: `deck.NewShuffle`, `handeval.Best7`, `sidepots.ComputeSidePots`, `betting.NewRound`/`Act`/`IsComplete`
+  (Tasks 5–8).
 - Produces: `hand.Player{ID string, Stack int64, State hand.PlayerState}`, `hand.PlayerState` enum (
   `Active, Folded, AllIn, SittingOut, Disconnected, PendingEntry`), `hand.Stage` enum (
   `WaitingForPlayers, PreFlop, Flop, Turn, River, Showdown, Complete`),
@@ -2357,8 +2357,8 @@ distribution — no UI, no sockets.
 
 **Interfaces:**
 
-- Consumes: `hand.NewTable`, `hand.Player`, `(*hand.Table).StartHand`, `(*hand.Table).Act`, `(*hand.Table).Payouts` (
-  Task 9).
+- Consumes: `hand.NewTable`, `hand.Player`, `(*hand.Table).StartHand`, `(*hand.Table).Act`, `(*hand.Table).Payouts`
+  (Task 9).
 
 - [ ] **Step 1: Write the example script**
 
@@ -2532,8 +2532,8 @@ git commit -m "feat: handreplay CLI — scripted action sequence to pot distribu
 
 ## Self-Review Notes
 
-**Spec coverage:** Ready system, blind escalation (private rooms), leaderboard, achievements, sandbox sandbox credits, and hand
-equity display (OVERVIEW.md § 2, § 9) are **not** in this plan — they require the table server (Phase 2),
+**Spec coverage:** Ready system, blind escalation (private rooms), leaderboard, achievements, sandbox sandbox credits,
+and hand equity display (OVERVIEW.md § 2, § 9) are **not** in this plan — they require the table server (Phase 2),
 wallet/persistence integration (Phase 3), and frontend (Phase 4), none of which exist yet. Mid-hand `PENDING_ENTRY`
 joins are partially covered here (`AddMidHandJoiner`, `Table.players` gains a `PENDING_ENTRY` seat) but the "must post
 big blind to be dealt in" rule's *enforcement* (currently `StartHand` simply skips `PendingEntry` seats every hand until
@@ -2548,5 +2548,5 @@ single most likely place a future implementer introduces a bookkeeping bug.
 **Next plans (not in this document):** Phase 2 (WebSocket gateway, table-server wiring of `tablelease` + `hand`,
 disconnect/reconnect, durable action log/crash recovery), Phase 3 (room/lobby API, sandbox wallet integration,
 ready/blind-escalation/mid-hand-join enforcement), Phase 4 (frontend: lobby, table UI, animations, equity display,
-achievements, leaderboard, sandbox credits) each get their own plan under `docs/plans/` once this one ships — writing their
-exact code now would be speculative against an engine that doesn't exist yet.
+achievements, leaderboard, sandbox credits) each get their own plan under `docs/plans/` once this one ships — writing
+their exact code now would be speculative against an engine that doesn't exist yet.

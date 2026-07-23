@@ -3,45 +3,44 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:
 > executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Supersedes:** `docs/plans/2026-07-18-poker-phase2-table-server.md` Tasks 2–12. That plan was written
-against `ARCHITECTURE.md`'s original lease-based-single-writer-actor proposal; §2/§3 of that document have
-since been revised to make **DynamoDB conditional writes the correctness mechanism**, not a Redis/Valkey
-lease. Task 1 (`hand.Snapshot`/`ViewFor`, per-viewer hole-card redaction) is unaffected by the revision and
-is already implemented — this plan does not repeat it.
+**Supersedes:** `docs/plans/2026-07-18-poker-phase2-table-server.md` Tasks 2–12. That plan was written against
+`ARCHITECTURE.md`'s original lease-based-single-writer-actor proposal; §2/§3 of that document have since been revised to
+make **DynamoDB conditional writes the correctness mechanism**, not a Redis/Valkey lease. Task 1 (`hand.Snapshot`/
+`ViewFor`, per-viewer hole-card redaction) is unaffected by the revision and is already implemented — this plan does not
+repeat it.
 
 Already-shipped code from the superseded plan that this revision deletes or replaces:
 
 - `api/internal/tablestore/*` — replaced (versioned single-item store, not snapshot+replay-log).
 - `api/internal/table/*` — replaced (Actor becomes an optional local cache, not the sole writer).
-- `api/internal/tableowner/*` — deleted outright (existed only to support the WS proxy, which this
-  revision removes: any instance may accept any table's WebSocket connection now).
+- `api/internal/tableowner/*` — deleted outright (existed only to support the WS proxy, which this revision removes: any
+  instance may accept any table's WebSocket connection now).
 - `api/internal/tablemanager/*` — replaced (no more acquire-or-fail / Locate / cross-instance routing).
 - `api/internal/api/v1/tableproxy.go` — deleted outright.
 - `api/internal/api/v1/tablews.go` — simplified (no remote-instance branch).
-- `InstancePrivateIP` config field — deleted (existed only for `tableowner` to advertise a routable
-  address; nothing consumes it once there is no proxy to route to).
+- `InstancePrivateIP` config field — deleted (existed only for `tableowner` to advertise a routable address; nothing
+  consumes it once there is no proxy to route to).
 
-**Goal:** Turn the Phase 0/1 pure engine (`internal/engine/hand.Table`) into a live table service reachable
-over WebSocket from **any** instance in the ASG, where correctness comes from a version-guarded conditional
-write against DynamoDB on every action — never from an in-memory lock or a Redis lease.
+**Goal:** Turn the Phase 0/1 pure engine (`internal/engine/hand.Table`) into a live table service reachable over
+WebSocket from **any** instance in the ASG, where correctness comes from a version-guarded conditional write against
+DynamoDB on every action — never from an in-memory lock or a Redis lease.
 
-**Architecture:** One DynamoDB item per table holds the full internal hand state plus a `version` counter.
-Any instance may receive a player's WebSocket connection and any of that player's actions: it validates the
-action against `hand.Table` (built from the item it just read, or from a locally cached copy), then commits
-the result with `ConditionExpression: version = :expected` in the same transaction as (a) an idempotency
-guard item keyed by the client's `action_id` and (b) an audit-log entry. A failed condition means another
-instance's action landed first; the instance re-reads, re-validates, and retries once. This is the same
-discipline `ctech-wallet`'s `WalletRepository.mutate`/`resolveTxErr` already applies to money (see
-`ctech-wallet/api/internal/repositories/wallet.go`) — poker's `tablestore.Store.CommitAction` mirrors that
-shape directly. `tablelease.Service` (already built, shared with `ctech-wallet` via
-`gopkg.aoctech.app/api-commons/lock`) is kept **only** as a latency optimization: an instance that currently
-holds a table's lease trusts its own in-memory `hand.Table` between actions instead of re-reading DynamoDB
-first; an instance without the lease always re-reads before validating. A bug in `tablelease` is a
-performance regression, never a correctness bug — nothing in this plan may treat lease possession as
-permission to skip the conditional write itself.
+**Architecture:** One DynamoDB item per table holds the full internal hand state plus a `version` counter. Any instance
+may receive a player's WebSocket connection and any of that player's actions: it validates the action against
+`hand.Table` (built from the item it just read, or from a locally cached copy), then commits the result with
+`ConditionExpression: version = :expected` in the same transaction as (a) an idempotency guard item keyed by the
+client's `action_id` and (b) an audit-log entry. A failed condition means another instance's action landed first; the
+instance re-reads, re-validates, and retries once. This is the same discipline `ctech-wallet`'s
+`WalletRepository.mutate`/`resolveTxErr` already applies to money (see
+`ctech-wallet/api/internal/repositories/wallet.go`) — poker's `tablestore.Store.CommitAction` mirrors that shape
+directly. `tablelease.Service` (already built, shared with `ctech-wallet` via
+`gopkg.aoctech.app/api-commons/lock`) is kept **only** as a latency optimization: an instance that currently holds a
+table's lease trusts its own in-memory `hand.Table` between actions instead of re-reading DynamoDB first; an instance
+without the lease always re-reads before validating. A bug in `tablelease` is a performance regression, never a
+correctness bug — nothing in this plan may treat lease possession as permission to skip the conditional write itself.
 
-**Tech Stack:** Go 1.26, Fiber v3, `github.com/fasthttp/websocket`, `gopkg.aoctech.app/api-commons/ws` (Redis
-Pub/Sub fan-out registry), `gopkg.aoctech.app/api-commons/dynamo` (DynamoDB helpers), the existing
+**Tech Stack:** Go 1.26, Fiber v3, `github.com/fasthttp/websocket`, `gopkg.aoctech.app/api-commons/ws` (Redis Pub/Sub
+fan-out registry), `gopkg.aoctech.app/api-commons/dynamo` (DynamoDB helpers), the existing
 `internal/tablelease` service (now advisory-only), AWS CDK.
 
 ## Global Constraints
@@ -49,34 +48,34 @@ Pub/Sub fan-out registry), `gopkg.aoctech.app/api-commons/dynamo` (DynamoDB help
 - Every route lives under `/v1.0/` (existing convention, `internal/api/v1/router.go`).
 - All amounts are integer chip counts (`int64`), never floats — matches the engine's existing convention.
 - **Correctness lives in DynamoDB's conditional writes, never in an in-memory lock or a Redis lease**
-  (ARCHITECTURE.md §2, as revised). No code in this plan may reject a write, or treat a write as safe,
-  based on lease possession.
+  (ARCHITECTURE.md §2, as revised). No code in this plan may reject a write, or treat a write as safe, based on lease
+  possession.
 - Idempotent actions: every player action carries a client-generated `action_id`; the server de-dupes on
-  `(table_id, hand_id, seat, action_id)` via a DynamoDB guard item written in the same transaction as the
-  state update (OVERVIEW.md §4) — never an in-memory set, since any instance may process any action.
-- Server-authoritative, no hidden-information leaks: a client is never sent another player's hole cards
-  before showdown, under any circumstance (ARCHITECTURE.md §8). Unaffected by this revision — `ViewFor`
+  `(table_id, hand_id, seat, action_id)` via a DynamoDB guard item written in the same transaction as the state update
+  (OVERVIEW.md §4) — never an in-memory set, since any instance may process any action.
+- Server-authoritative, no hidden-information leaks: a client is never sent another player's hole cards before showdown,
+  under any circumstance (ARCHITECTURE.md §8). Unaffected by this revision — `ViewFor`
   (Task 1) already enforces this and is reused as-is.
-- On reconnect, a client resyncs from a full authoritative snapshot read fresh from DynamoDB, never from a
-  replayed log — there is no log to replay under this revision (ARCHITECTURE.md §3: "recovery is trivial").
+- On reconnect, a client resyncs from a full authoritative snapshot read fresh from DynamoDB, never from a replayed
+  log — there is no log to replay under this revision (ARCHITECTURE.md §3: "recovery is trivial").
 - DynamoDB tables follow `ctech-wallet`'s naming convention: physical name `{env}_poker_{table}`.
 - Binary deployed to EC2 must be named `app` (existing CDK convention — unchanged by this plan).
 - Any instance may accept a WebSocket connection for any table — no forwarding, no proxy, no "owner".
 - **`poker_table_state`'s per-item size stays far under DynamoDB's 400KB hard cap.** `hand.State` (Task 2)
   holds only the *current hand in progress* — it is fully replaced (not appended to) by every `StartHand`
-  call, so it never accumulates history across hands. At a full 9-max table the encoded item is roughly
-  15–40KB even with generous `attributevalue` encoding overhead — ~10x headroom. This is a property of what
-  `State` is allowed to hold, not an incidental accident: nothing in this plan may add hand-history,
-  chat, or any other cross-hand accumulation into `State` — that belongs in `poker_action_log` instead,
-  which is unbounded by design (append-only, one row per commit).
+  call, so it never accumulates history across hands. At a full 9-max table the encoded item is roughly 15–40KB even
+  with generous `attributevalue` encoding overhead — ~10x headroom. This is a property of what
+  `State` is allowed to hold, not an incidental accident: nothing in this plan may add hand-history, chat, or any other
+  cross-hand accumulation into `State` — that belongs in `poker_action_log` instead, which is unbounded by design
+  (append-only, one row per commit).
 - `poker_action_guards` items are TTL'd (7 days, mirroring `ctech-wallet`'s `idemTTLDays` —
-  `ctech-wallet/api/internal/repositories/wallet.go:19`) — a guard only needs to outlive plausible client
-  retries, not forever.
-- `poker_action_log` is TTL'd too (`logTTLDays` = 90 days — the "recent hand history" window served
-  directly from DynamoDB) but is **never silently lost**: DynamoDB Streams ships every inserted entry to S3
-  (`poker-action-log-archive`, Task 10) immediately, on write — independent of when TTL later reaps the hot
-  copy. DynamoDB is the fast, recent-window store; S3 is the durable, indefinite-retention archive. This
-  bounds the hot table's storage/RCU footprint without ever discarding hand-history.
+  `ctech-wallet/api/internal/repositories/wallet.go:19`) — a guard only needs to outlive plausible client retries, not
+  forever.
+- `poker_action_log` is TTL'd too (`logTTLDays` = 90 days — the "recent hand history" window served directly from
+  DynamoDB) but is **never silently lost**: DynamoDB Streams ships every inserted entry to S3
+  (`poker-action-log-archive`, Task 10) immediately, on write — independent of when TTL later reaps the hot copy.
+  DynamoDB is the fast, recent-window store; S3 is the durable, indefinite-retention archive. This bounds the hot
+  table's storage/RCU footprint without ever discarding hand-history.
 
 ---
 
@@ -98,10 +97,9 @@ Pub/Sub fan-out registry), `gopkg.aoctech.app/api-commons/dynamo` (DynamoDB help
   consumed by Task 3's `tablestore.Store` (persists `State`) and Task 4's `table.Actor` (calls
   `ActIdempotent` instead of `Act` directly).
 
-`Snapshot`/`ViewFor` (Task 1) is a *redacted, viewer-facing* projection — it deliberately drops information
-(hidden hole cards, the shuffle's server seed) that recovery needs back. `State` is the opposite: a complete,
-unredacted mirror of every field on `Table`, used only for persistence/reconstruction, and must never be
-sent to a client.
+`Snapshot`/`ViewFor` (Task 1) is a *redacted, viewer-facing* projection — it deliberately drops information (hidden hole
+cards, the shuffle's server seed) that recovery needs back. `State` is the opposite: a complete, unredacted mirror of
+every field on `Table`, used only for persistence/reconstruction, and must never be sent to a client.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -322,26 +320,26 @@ git commit -m "feat(hand): add full-state export/import and idempotent Act for D
 **Interfaces:**
 
 - Consumes: `gopkg.aoctech.app/api-commons/dynamo.Base`/`NewBase`/`Encode`/`Decode`/`GetItem`/
-  `BuildRawUpdateTxItem`/`BuildPutTxItemIfAbsent`/`TransactWrite`/`IsConditionFailed` (existing shared
-  package — the exact primitives `ctech-wallet`'s `WalletRepository.mutate` already uses), `hand.State`
+  `BuildRawUpdateTxItem`/`BuildPutTxItemIfAbsent`/`TransactWrite`/`IsConditionFailed` (existing shared package — the
+  exact primitives `ctech-wallet`'s `WalletRepository.mutate` already uses), `hand.State`
   (Task 2).
 - Produces: `type StoredTable struct{...}`, `var ErrVersionConflict`, `var ErrDuplicateAction`,
   `func NewStore(db *dynamodb.Client, env string) *Store`,
   `func (s *Store) LoadTable(ctx, tableID string) (*StoredTable, error)`,
   `func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID string, expectedVersion int, newState hand.State, entry ActionLogEntry) error` —
-  all consumed by Task 4's `table.Actor`. `actionID` is `""` for a Ready-triggered commit (no idempotency
-  guard needed — only player actions carry a client-generated ID, per this plan's Global Constraints).
+  all consumed by Task 4's `table.Actor`. `actionID` is `""` for a Ready-triggered commit (no idempotency guard needed —
+  only player actions carry a client-generated ID, per this plan's Global Constraints).
 
 Three DynamoDB tables:
 
-- `poker_table_state` (pk=`table_id`, no sort key) — exactly one item per table, the current authoritative
-  state. Overwritten (version-guarded) on every commit.
-- `poker_action_log` (pk=`table_id#hand_id`, sk=zero-padded `version`) — append-only audit/hand-history
-  trail (ARCHITECTURE.md §8.2). **Never used for recovery** — recovery reads `poker_table_state` directly
-  (ARCHITECTURE.md §3: "recovery is trivial").
+- `poker_table_state` (pk=`table_id`, no sort key) — exactly one item per table, the current authoritative state.
+  Overwritten (version-guarded) on every commit.
+- `poker_action_log` (pk=`table_id#hand_id`, sk=zero-padded `version`) — append-only audit/hand-history trail
+  (ARCHITECTURE.md §8.2). **Never used for recovery** — recovery reads `poker_table_state` directly (ARCHITECTURE.md §3:
+  "recovery is trivial").
 - `poker_action_guards` (pk=`table_id#hand_id#action_id`) — one item per player action, written
-  `attribute_not_exists(pk)` in the same transaction as the state update. A transaction that fails because
-  this item already exists means a duplicate submission, not a race — mirrors
+  `attribute_not_exists(pk)` in the same transaction as the state update. A transaction that fails because this item
+  already exists means a duplicate submission, not a race — mirrors
   `ctech-wallet/api/internal/repositories/wallet.go`'s `guardTx`/`checkReplay` exactly.
 
 - [ ] **Step 1: Write `store.go` (types)**
@@ -722,16 +720,15 @@ git commit -m "feat(tablestore): versioned single-item store with conditional co
   (Task 3), `betting.Action` (existing).
 - Produces: `type Actor struct{...}`, `func New(id string, store *tablestore.Store, trustCache bool,
   broadcast func(viewerID string, snap hand.Snapshot)) *Actor`, `func (a *Actor) Run(ctx context.Context)`,
-  `func (a *Actor) Dispatch(cmd Command) error` — consumed by Task 5's `tablemanager` and Task 7's WS
-  gateway. `trustCache` is set once at construction by whether the caller currently holds the table's
-  `tablelease` — never re-consulted per-action (ARCHITECTURE.md §2: the lease is a latency hint, not a
-  gate); when `false`, the Actor re-reads DynamoDB before every single command instead of just after a
-  version conflict.
+  `func (a *Actor) Dispatch(cmd Command) error` — consumed by Task 5's `tablemanager` and Task 7's WS gateway.
+  `trustCache` is set once at construction by whether the caller currently holds the table's
+  `tablelease` — never re-consulted per-action (ARCHITECTURE.md §2: the lease is a latency hint, not a gate); when
+  `false`, the Actor re-reads DynamoDB before every single command instead of just after a version conflict.
 
-Every command still funnels through one goroutine per table **within this instance** — not because another
-instance is forbidden from writing (it may, freely), but because `hand.Table` itself has no internal lock,
-so two of *this instance's own* goroutines (e.g. two players' WebSocket connections landing on the same
-instance) must still be serialized before either touches the shared `*hand.Table` cache.
+Every command still funnels through one goroutine per table **within this instance** — not because another instance is
+forbidden from writing (it may, freely), but because `hand.Table` itself has no internal lock, so two of *this
+instance's own* goroutines (e.g. two players' WebSocket connections landing on the same instance) must still be
+serialized before either touches the shared `*hand.Table` cache.
 
 - [ ] **Step 1: Write `commands.go`**
 
@@ -882,8 +879,8 @@ func TestActorRecoversFromVersionConflictAndRetriesOnce(t *testing.T) {
 - [ ] **Step 3: Run test to verify it fails**
 
 Run: `docker compose -f api/docker-compose.test.yml up -d && go test -tags integration ./internal/table/... -v`
-Expected: FAIL with "undefined: New" (and `testClient`/`mustCreateTestTables` — Step 3.5 below adds a
-package-local copy so `internal/table`'s tests don't import `internal/tablestore`'s test file).
+Expected: FAIL with "undefined: New" (and `testClient`/`mustCreateTestTables` — Step 3.5 below adds a package-local copy
+so `internal/table`'s tests don't import `internal/tablestore`'s test file).
 
 - [ ] **Step 3.5: Add local test helpers**
 
@@ -1181,12 +1178,12 @@ git commit -m "feat(table): rewrite Actor as a local cache-affinity wrapper over
   `table.Actor`/`table.New` (Task 4), `hand.Table`/`hand.NewTable`/`hand.State` (existing/Task 2).
 - Produces: `func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast
   func(tableID, viewerID string, snap hand.Snapshot)) *Manager`,
-  `func (m *Manager) GetOrCreateActor(ctx, tableID string, seed func() *hand.Table) (*table.Actor, error)` —
-  consumed by Task 7's WS gateway.
+  `func (m *Manager) GetOrCreateActor(ctx, tableID string, seed func() *hand.Table) (*table.Actor, error)` — consumed by
+  Task 7's WS gateway.
 
-There is no `Locate` anymore — any instance may accept any table's connection, so there is nothing to route
-to. `GetOrCreateActor` best-effort-acquires the table's lease purely to decide `trustCache`; a failed
-acquire is not an error and does not block table access, per this plan's Global Constraints.
+There is no `Locate` anymore — any instance may accept any table's connection, so there is nothing to route to.
+`GetOrCreateActor` best-effort-acquires the table's lease purely to decide `trustCache`; a failed acquire is not an
+error and does not block table access, per this plan's Global Constraints.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1359,9 +1356,9 @@ git commit -m "feat(tablemanager): get-or-create Actors with best-effort cache-a
 - Modify: `api/internal/config/config.go` (remove `InstancePrivateIP` — its only consumer was
   `tableowner.Registry.Advertise`)
 
-`tableowner` existed solely to answer "which instance should I proxy this WebSocket connection to" — a
-question that no longer has meaning once any instance can accept any table's connection directly (Task 7).
-Keeping it around with no caller is exactly the kind of code this plan should not leave behind.
+`tableowner` existed solely to answer "which instance should I proxy this WebSocket connection to" — a question that no
+longer has meaning once any instance can accept any table's connection directly (Task 7). Keeping it around with no
+caller is exactly the kind of code this plan should not leave behind.
 
 - [ ] **Step 1: Remove the files**
 
@@ -1481,8 +1478,8 @@ git commit -m "feat(api): remove the cross-instance WS proxy — any instance no
 - Modify: `api/internal/table/actor.go`
 - Test: `api/internal/table/disconnect_test.go`
 
-Same behavior contract as the superseded plan's Task 9 (OVERVIEW.md §4: auto-fold at the action deadline,
-auto-sit-out after the grace window or 3 consecutive disconnected hands) — only the field names inside
+Same behavior contract as the superseded plan's Task 9 (OVERVIEW.md §4: auto-fold at the action deadline, auto-sit-out
+after the grace window or 3 consecutive disconnected hands) — only the field names inside
 `Actor` change (`a.cached` instead of `a.table`), and every mutating path now goes through `a.commit`
 instead of mutating in place.
 
@@ -1725,8 +1722,8 @@ git commit -m "feat(table): disconnect grace window, auto-fold action deadline, 
 
 ### Task 9: Per-seat action rate limiting
 
-Unchanged from the superseded plan's Task 10 — this concern has no dependency on the authority model
-revision. Implement exactly as previously specified:
+Unchanged from the superseded plan's Task 10 — this concern has no dependency on the authority model revision. Implement
+exactly as previously specified:
 
 **Files:**
 
@@ -1841,8 +1838,8 @@ git commit -m "feat(api): per-seat action rate limiting on the table WebSocket"
 - Create: `cdk/lib/dynamodb-stack.ts`
 - Create: `cdk/lib/archiver-stack.ts` (S3 bucket + Lambda + `DynamoEventSource` — kept out of
   `dynamodb-stack.ts` so each file has one responsibility, per this repo's file-structure convention)
-- Create: `api/cmd/archiver/main.go` (Go Lambda handler, `provided.al2023` runtime — same language as the
-  rest of this repo, matching the `api/cmd/handreplay` convention for a standalone binary)
+- Create: `api/cmd/archiver/main.go` (Go Lambda handler, `provided.al2023` runtime — same language as the rest of this
+  repo, matching the `api/cmd/handreplay` convention for a standalone binary)
 - Create: `api/cmd/archiver/main_test.go`
 - Modify: `cdk/lib/api-stack.ts`
 - Modify: `cdk/bin/poker.ts`
@@ -1850,17 +1847,17 @@ git commit -m "feat(api): per-seat action rate limiting on the table WebSocket"
 - Test: `cdk/test/archiver-stack.test.ts`
 
 **Interfaces:**
+
 - Consumes: `poker_action_log`'s DynamoDB Stream (`NEW_IMAGE` view) — every `PutItem`/`TransactWriteItems`
   insert `CommitAction` (Task 3) makes.
 - Produces: an S3 object per Lambda invocation batch at
   `s3://poker-action-log-archive-{env}/{table_id}/{hand_id}/{unix_nanos}.jsonl` — one JSON line per archived
-  `ActionLogEntry`. Nothing in this codebase reads this archive back yet (no consumer needed for Phase 2;
-  it exists so hand-history is never lost once `logTTLDays` — Task 3 — reaps the hot copy).
+  `ActionLogEntry`. Nothing in this codebase reads this archive back yet (no consumer needed for Phase 2; it exists so
+  hand-history is never lost once `logTTLDays` — Task 3 — reaps the hot copy).
 
-Same shape as the superseded plan's Task 11 for the tables themselves, minus the same-security-group
-ingress rule and the `INSTANCE_PRIVATE_IP` userdata line (both existed only for the now-deleted proxy),
-plus the extra IAM actions `CommitAction`'s `TransactWriteItems` needs, plus the archival pipeline this
-task adds new.
+Same shape as the superseded plan's Task 11 for the tables themselves, minus the same-security-group ingress rule and
+the `INSTANCE_PRIVATE_IP` userdata line (both existed only for the now-deleted proxy), plus the extra IAM actions
+`CommitAction`'s `TransactWriteItems` needs, plus the archival pipeline this task adds new.
 
 - [ ] **Step 1: Write the failing CDK test**
 
@@ -2166,7 +2163,8 @@ func main() {
 - [ ] **Step 8: Run test to verify it passes**
 
 Run: `go test ./cmd/archiver/... -v`
-Expected: PASS. Then add the module dependencies: `go get github.com/aws/aws-lambda-go github.com/aws/aws-sdk-go-v2/service/s3 && go mod tidy`.
+Expected: PASS. Then add the module dependencies:
+`go get github.com/aws/aws-lambda-go github.com/aws/aws-sdk-go-v2/service/s3 && go mod tidy`.
 
 - [ ] **Step 9: Implement `archiver-stack.ts`**
 
@@ -2274,10 +2272,10 @@ service.instanceRole.addToPolicy(new iam.PolicyStatement({
 }));
 ```
 
-Add `import * as iam from 'aws-cdk-lib/aws-iam';` to `api-stack.ts`'s imports. There is no same-SG ingress
-rule and no `INSTANCE_PRIVATE_IP` userdata line in this revision — both existed only for the now-deleted
-proxy (superseded plan's Task 11 Steps 5–6). The API instance role never needs S3 access to the archive
-bucket — only the archiver Lambda writes there (Step 9's `bucket.grantWrite(fn)` already covers it).
+Add `import * as iam from 'aws-cdk-lib/aws-iam';` to `api-stack.ts`'s imports. There is no same-SG ingress rule and no
+`INSTANCE_PRIVATE_IP` userdata line in this revision — both existed only for the now-deleted proxy (superseded plan's
+Task 11 Steps 5–6). The API instance role never needs S3 access to the archive bucket — only the archiver Lambda writes
+there (Step 9's `bucket.grantWrite(fn)` already covers it).
 
 - [ ] **Step 12: Wire `bin/poker.ts`**
 
@@ -2298,15 +2296,15 @@ new ArchiverStack(app, `${environment}-ctech-poker-archiver`, {
   actionGuardsArn: dynamoStack.tables.get('poker_action_guards')!.tableArn,
 ```
 
-Add `import {DynamoDBStack} from '../lib/dynamodb-stack';` and `import {ArchiverStack} from '../lib/archiver-stack';` to `bin/poker.ts`.
+Add `import {DynamoDBStack} from '../lib/dynamodb-stack';` and `import {ArchiverStack} from '../lib/archiver-stack';` to
+`bin/poker.ts`.
 
 - [ ] **Step 13: Synth to verify no CDK errors**
 
 Run: `cd cdk && npx tsc --noEmit` (full `cdk synth` needs live AWS context via `CTECH_VPC_ID` — same acceptable
 substitute the foundations plan already established, and additionally needs a Go toolchain available for
 `archiver-stack.ts`'s asset bundling command — acceptable to skip the asset-bundling path in `tsc --noEmit`
-since it only type-checks).
-Expected: no type errors.
+since it only type-checks). Expected: no type errors.
 
 - [ ] **Step 14: Commit**
 
@@ -2323,9 +2321,9 @@ git commit -m "feat(cdk): provision versioned table-state/action-log/action-guar
 
 - Create: `api/tests/integration/tableflow_test.go` (build tag `integration`)
 
-This is the engineering-level equivalent of ARCHITECTURE.md §2's revised deliverable: two instances racing
-on the same table resolve deterministically via DynamoDB's conditional write (one wins, the other retries
-against fresh state), and a "crashed" instance's replacement needs no replay — it just reads current state.
+This is the engineering-level equivalent of ARCHITECTURE.md §2's revised deliverable: two instances racing on the same
+table resolve deterministically via DynamoDB's conditional write (one wins, the other retries against fresh state), and
+a "crashed" instance's replacement needs no replay — it just reads current state.
 
 - [ ] **Step 1: Write the test**
 
@@ -2462,8 +2460,8 @@ func TestFreshInstanceReadsCurrentStateWithNoReplayNeeded(t *testing.T) {
 }
 ```
 
-Note: `actorB.TableForTest()` returns `a.cached`, which is populated only after the Actor has processed at
-least one command via `ensureLoaded`. Adjust the test to dispatch a no-op `ReadyCmd` (e.g. re-affirming
+Note: `actorB.TableForTest()` returns `a.cached`, which is populated only after the Actor has processed at least one
+command via `ensureLoaded`. Adjust the test to dispatch a no-op `ReadyCmd` (e.g. re-affirming
 `p1`'s existing `Ready: true`) on `actorB` before reading `TableForTest()`, so `ensureLoaded` has run.
 
 - [ ] **Step 2: Run test to verify it passes**
@@ -2483,6 +2481,6 @@ git commit -m "test(integration): verify optimistic concurrency across instances
 ## Closing note
 
 `internal/api/v1/tablews.go`'s auth/heartbeat helpers (`readAuthToken`, `wsAllowedOrigin`, `startHeartbeat`,
-`wsConnAdapter`) remain copied near-verbatim from `ctech-wallet/api/internal/api/v1/ws.go`, unchanged by this
-revision. Extracting them into a shared package once a third consumer (e.g. `ctech-dfe`) needs the same
-pattern is a reasonable follow-up, not a blocker — same call made in the superseded plan.
+`wsConnAdapter`) remain copied near-verbatim from `ctech-wallet/api/internal/api/v1/ws.go`, unchanged by this revision.
+Extracting them into a shared package once a third consumer (e.g. `ctech-dfe`) needs the same pattern is a reasonable
+follow-up, not a blocker — same call made in the superseded plan.

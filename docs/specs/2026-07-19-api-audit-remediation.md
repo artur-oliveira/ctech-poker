@@ -1,10 +1,10 @@
 # API Audit & Remediation Spec — ctech-poker `api/`
 
-**Date:** 2026-07-19
-**Scope:** `api/` — security, concurrency, behavior bugs, duplication, cache/distributed-fleet problems, performance.
-**Assumption (from task):** the service runs as a distributed, autoscaling fleet. Each instance owns its own
-process-local state (`tablemanager.Manager.actors`, `tablelease` affinity, in-memory `ws.Registry`, `seatLimiter`); some
-of that state is *correctness*-critical and some is only *latency*-critical. Findings below separate the two.
+**Date:** 2026-07-19 **Scope:** `api/` — security, concurrency, behavior bugs, duplication, cache/distributed-fleet
+problems, performance. **Assumption (from task):** the service runs as a distributed, autoscaling fleet. Each instance
+owns its own process-local state (`tablemanager.Manager.actors`, `tablelease` affinity, in-memory `ws.Registry`,
+`seatLimiter`); some of that state is *correctness*-critical and some is only *latency*-critical. Findings below
+separate the two.
 
 ## Architectural context (as built)
 
@@ -23,14 +23,14 @@ of that state is *correctness*-critical and some is only *latency*-critical. Fin
 ### H1. Dead Actor after lease loss → `Dispatch` hangs forever (distributed liveness)
 
 **Where:** `api/internal/table/actor.go` (`Run` closes `a.done` at line 73), `api/internal/tablemanager/manager.go`
-`GetOrCreateActor` (lines 77-90), `api/internal/tablelease/lease.go`.
-**What:** For a `trustCache` actor the lease heartbeat's `onLost` calls `cancel()`, `Run` returns, `a.done` closes. But
-the actor is **never removed from `m.actors`**. A subsequent `GetOrCreateActor` returns the dead actor; `actor.Dispatch`
+`GetOrCreateActor` (lines 77-90), `api/internal/tablelease/lease.go`. **What:** For a `trustCache` actor the lease
+heartbeat's `onLost` calls `cancel()`, `Run` returns, `a.done` closes. But the actor is **never removed from
+`m.actors`**. A subsequent `GetOrCreateActor` returns the dead actor; `actor.Dispatch`
 does `a.cmds <- cmd; return <-cmd.reply()` — `cmds` is buffered so the send succeeds, but nothing reads `reply` ever
 again → **request blocks until the HTTP read/write timeout**. This is triggered whenever an instance keeps running but
 loses the lease (GC pause > TTL, Redis blip, network partition to Valkey) and a player stays connected/reconnects to
-that instance. Under autoscaling this is the common path, not the edge.
-**Fix:** Detect liveness in `GetOrCreateActor`: if the cached actor's `done` is closed, drop it and recreate (without
+that instance. Under autoscaling this is the common path, not the edge. **Fix:** Detect liveness in `GetOrCreateActor`:
+if the cached actor's `done` is closed, drop it and recreate (without
 `trustCache`, since the lease is gone). Simplest: expose `(*Actor).Done() <-chan struct{}`, and in `GetOrCreateActor` do
 `if existing.done closed { delete; recreate }` under the lock. Alternatively make `Dispatch` select on `a.done` and
 return `ErrActorStopped` so callers fail fast and can recreate.
@@ -38,39 +38,38 @@ return `ErrActorStopped` so callers fail fast and can recreate.
 ### H2. WebSocket realtime breaks when Redis is absent/falls back to in-memory (distributed realtime)
 
 **Where:** `api/internal/app/app.go` `newCacheBackend` (112-122), `newWsRegistry` (128-136);
-`api/internal/tablemanager/manager.go` `broadcast` (183-186) → `reg.Broadcast(tableID+"#"+viewerID, …)`.
-**What:** When `RedisURL` is empty (or Redis errors) the app silently falls back to `cache.NewMemoryBackend` (logged "
+`api/internal/tablemanager/manager.go` `broadcast` (183-186) → `reg.Broadcast(tableID+"#"+viewerID, …)`. **What:** When
+`RedisURL` is empty (or Redis errors) the app silently falls back to `cache.NewMemoryBackend` (logged "
 NOT fleet-shared") and `ws.NewMemoryRegistry`. The `broadcast` closure then only reaches WS connections **on the same
 instance**. Because any instance may host an actor for any table, a viewer connected to instance B receives **no state
 updates** from an actor running on instance A. In a fleet this silently breaks the real-time game for the majority of
-viewers. The fallback is acceptable for local dev but must not be a silent prod mode.
-**Fix:** Treat absence of a shared registry in non-dev env as fatal (refuse to start, or at minimum refuse to serve
+viewers. The fallback is acceptable for local dev but must not be a silent prod mode. **Fix:** Treat absence of a shared
+registry in non-dev env as fatal (refuse to start, or at minimum refuse to serve
 `/ws` with a 503). Keep the in-memory fallback only behind an explicit dev flag. Same reasoning applies to the JWT
 verify cache (latency-only, lower priority).
 
 ### H3. `buyin` idempotency keys are unique per call → no replay protection (money correctness)
 
-**Where:** `api/internal/buyin/service.go` `BuyIn` (line 97, `uuid.NewString()`) and `CashOut` (line 152).
-**What:** The wallet idempotency key is `…#buyin#<uuid>` / `…#cashout#<uuid>` — a fresh random key every invocation. The
-wallet's idempotency guard therefore **cannot** dedupe a retried request (client retry, ALB retry on a timeout after the
-debit already succeeded). Result: a single logical buy-in can **double-debit** the sandbox wallet, and a cash-out can
-double-credit. The sandbox credits service (same file area) correctly uses a *stable* per-day key — buyin should follow that
-pattern.
-**Fix:** Derive the key from stable inputs: `fmt.Sprintf("%s#%s#buyin", roomID, playerID)` (one buy-in per player per
-room is already the model) plus, if re-buys are allowed, a client-supplied nonce or a monotonic seq persisted on the
-player. Same for cash-out. Do **not** embed `uuid`.
+**Where:** `api/internal/buyin/service.go` `BuyIn` (line 97, `uuid.NewString()`) and `CashOut` (line 152). **What:** The
+wallet idempotency key is `…#buyin#<uuid>` / `…#cashout#<uuid>` — a fresh random key every invocation. The wallet's
+idempotency guard therefore **cannot** dedupe a retried request (client retry, ALB retry on a timeout after the debit
+already succeeded). Result: a single logical buy-in can **double-debit** the sandbox wallet, and a cash-out can
+double-credit. The sandbox credits service (same file area) correctly uses a *stable* per-day key — buyin should follow
+that pattern. **Fix:** Derive the key from stable inputs: `fmt.Sprintf("%s#%s#buyin", roomID, playerID)` (one buy-in per
+player per room is already the model) plus, if re-buys are allowed, a client-supplied nonce or a monotonic seq persisted
+on the player. Same for cash-out. Do **not** embed `uuid`.
 
 ### H4. Auto-fold timer data race on actor maps (concurrency)
 
-**Where:** `api/internal/table/actor.go` `armActionDeadlineIfTheirTurn` (393-409).
-**What:** The `time.AfterFunc` closure runs on a **separate goroutine** from `Run`, and mutates
+**Where:** `api/internal/table/actor.go` `armActionDeadlineIfTheirTurn` (393-409). **What:** The `time.AfterFunc`
+closure runs on a **separate goroutine** from `Run`, and mutates
 `a.consecutiveDisconnectedHands[playerID]++` and reads `a.disconnectedSince[playerID]` directly, while `Run` writes both
 maps via `handleDisconnect`/`handleReconnect`. Concurrent map access from two goroutines is a data race (can panic/throw
 under race detector, and yields undefined behavior in prod). The `a.cached` read is avoided (commands are dispatched),
-but the bookkeeping maps are not.
-**Fix:** Do the consecutive-count / grace-window check **inside `Run`**. The timer should only `Dispatch` a single
-envelope command (e.g. an `autoFoldCheckCmd`) that runs in `Run` and reads/writes those maps. Or move the bookkeeping
-into the dispatched `SitOutCmd`/`ActCmd` handling. Do not touch actor fields from the timer goroutine.
+but the bookkeeping maps are not. **Fix:** Do the consecutive-count / grace-window check **inside `Run`**. The timer
+should only `Dispatch` a single envelope command (e.g. an `autoFoldCheckCmd`) that runs in `Run` and reads/writes those
+maps. Or move the bookkeeping into the dispatched `SitOutCmd`/`ActCmd` handling. Do not touch actor fields from the
+timer goroutine.
 
 ---
 
@@ -79,57 +78,53 @@ into the dispatched `SitOutCmd`/`ActCmd` handling. Do not touch actor fields fro
 ### M1. `handleSitOut` silently drops a version conflict (behavior/correctness)
 
 **Where:** `api/internal/table/actor.go` `handleSitOut` (302-312):
-`if err := a.commit(...); err != nil && !errors.Is(err, tablestore.ErrVersionConflict) { return err }`.
-**What:** Unlike every other mutating handler (Ready/Act/Join/Leave/PostBigBlind/Escalate, which retry exactly once on
+`if err := a.commit(...); err != nil && !errors.Is(err, tablestore.ErrVersionConflict) { return err }`. **What:** Unlike
+every other mutating handler (Ready/Act/Join/Leave/PostBigBlind/Escalate, which retry exactly once on
 `ErrVersionConflict`), SitOut **swallows** the conflict and returns success without applying the sit-out. The player's
-sit-out is lost with no error to the caller. Inconsistent and data-losing.
-**Fix:** Mirror the other handlers: on `ErrVersionConflict`, `ensureLoaded(ctx, true)` and re-apply once, then
-broadcast.
+sit-out is lost with no error to the caller. Inconsistent and data-losing. **Fix:** Mirror the other handlers: on
+`ErrVersionConflict`, `ensureLoaded(ctx, true)` and re-apply once, then broadcast.
 
 ### M2. Private-room blind escalation dies on instance/lease move (distributed behavior)
 
 **Where:** `api/internal/api/v1/rooms.go` `createRoom` (lines 90-98) → `actor.StartEscalation(cfg)`;
-`api/internal/table/escalation.go`.
-**What:** `StartEscalation` is only ever called on the actor created during `createRoom`, i.e. on whatever instance
-happened to create the room. The escalation worker correctly exits when that actor's `done` closes. But when the table
-later moves to another instance (lease lost/expired, or another instance becomes authoritative), the **new** actor is
-created via `GetOrCreateActor` without `StartEscalation`, so blinds stop escalating. Escalation is a property of the
-*table*, not of one instance's actor.
-**Fix:** Persist escalation config on the table (it already lives on `roomstore.Room.BlindEscalation`); have the actor (
-re)arm escalation from authoritative config on creation/load, independent of which instance created the room. Or drive
-escalation from a fleet-wide scheduler keyed by table ID in Valkey rather than a per-instance timer.
+`api/internal/table/escalation.go`. **What:** `StartEscalation` is only ever called on the actor created during
+`createRoom`, i.e. on whatever instance happened to create the room. The escalation worker correctly exits when that
+actor's `done` closes. But when the table later moves to another instance (lease lost/expired, or another instance
+becomes authoritative), the **new** actor is created via `GetOrCreateActor` without `StartEscalation`, so blinds stop
+escalating. Escalation is a property of the *table*, not of one instance's actor. **Fix:** Persist escalation config on
+the table (it already lives on `roomstore.Room.BlindEscalation`); have the actor (re)arm escalation from authoritative
+config on creation/load, independent of which instance created the room. Or drive escalation from a fleet-wide scheduler
+keyed by table ID in Valkey rather than a per-instance timer.
 
 ### M3. `Manager.GetOrCreateActor` TOCTOU → two live actors for one table on one instance (concurrency/correctness)
 
 **Where:** `api/internal/tablemanager/manager.go` lines 44-95: map read (46) then unlock (50), then
-load/seed/acquire/start, then re-lock and overwrite (88-90).
-**What:** Two concurrent calls for the same `tableID` can both miss the map, both create an actor, last write wins; the
-loser's actor is orphaned (may even hold the lease) and never serves traffic, while the map's actor may have **no**
-lease (so it re-reads DynamoDB every command). Wasteful and a latent source of thundering-herd re-reads.
-**Fix:** Hold the lock (or a per-table `sync.Once`) across the create path, or re-check the map under lock after
-acquiring the lease and discard a duplicate.
+load/seed/acquire/start, then re-lock and overwrite (88-90). **What:** Two concurrent calls for the same `tableID` can
+both miss the map, both create an actor, last write wins; the loser's actor is orphaned (may even hold the lease) and
+never serves traffic, while the map's actor may have **no**
+lease (so it re-reads DynamoDB every command). Wasteful and a latent source of thundering-herd re-reads. **Fix:** Hold
+the lock (or a per-table `sync.Once`) across the create path, or re-check the map under lock after acquiring the lease
+and discard a duplicate.
 
 ### M4. `SeedTable` uses `PutItem` (overwrite), not a conditional create (latent)
 
 **Where:** `api/internal/tablestore/dynamo.go` `SeedTable` (57-70). Comment claims "no-op if the table already exists"
-but `PutItem` **unconditionally overwrites**.
-**What:** `GetOrCreateActor` only calls `SeedTable` when `LoadTable` returned nil, so in practice it won't clobber a
-live table. But the first-touch race window (two instances both see nil) allows a second `PutItem` to overwrite
-state/version — currently harmless only because both seeds are identical. If seed inputs can ever differ (e.g. room
-config edited between calls, or real-money rake), this resets a live table to version 1.
-**Fix:** Use a conditional `PutItem` with `attribute_not_exists(pk)` (return `ErrVersionConflict`/ignore if present).
+but `PutItem` **unconditionally overwrites**. **What:** `GetOrCreateActor` only calls `SeedTable` when `LoadTable`
+returned nil, so in practice it won't clobber a live table. But the first-touch race window (two instances both see nil)
+allows a second `PutItem` to overwrite state/version — currently harmless only because both seeds are identical. If seed
+inputs can ever differ (e.g. room config edited between calls, or real-money rake), this resets a live table to version
+1. **Fix:** Use a conditional `PutItem` with `attribute_not_exists(pk)` (return `ErrVersionConflict`/ignore if present).
 Matches the no-op claim.
 
 ### M5. Equity computed synchronously on the broadcast hot path (performance)
 
 **Where:** `api/internal/table/actor.go` `broadcastAll` (426-437) → `attachEquity` (443-467) —
-`equity.Estimate(hole, board, nil, opponents, 500)` per viewer, every committed action.
-**What:** `broadcastAll` runs on the single `Run` goroutine (the table's serialization point). For an N-seat table every
-action triggers N Monte-Carlo estimations (500 iters each) **sequentially**, blocking all further commands for that
-table until equity is computed for every viewer. This is the dominant latency cost of the actor under load and scales
-with seats.
-**Fix:** (a) Compute equity **once per stage** and reuse across viewers (only the viewer's own hole cards differ, but
-opponents/board are shared — a single estimate with the viewer's hole cards is still N calls, but caching per
+`equity.Estimate(hole, board, nil, opponents, 500)` per viewer, every committed action. **What:** `broadcastAll` runs on
+the single `Run` goroutine (the table's serialization point). For an N-seat table every action triggers N Monte-Carlo
+estimations (500 iters each) **sequentially**, blocking all further commands for that table until equity is computed for
+every viewer. This is the dominant latency cost of the actor under load and scales with seats. **Fix:** (a) Compute
+equity **once per stage** and reuse across viewers (only the viewer's own hole cards differ, but opponents/board are
+shared — a single estimate with the viewer's hole cards is still N calls, but caching per
 `(stage, board)` is possible if hole cards are abstracted); (b) move estimation off the `Run` goroutine (async, attach
 on arrival); (c) lower iterations or gate behind a flag (already gated by `equityEnabled`, but still synchronous when
 on). At minimum, do not run it inside the serialization critical section.
@@ -138,11 +133,11 @@ on). At minimum, do not run it inside the serialization critical section.
 
 **Where:** `api/internal/api/v1/rooms.go` (`createRoom`, `join`), `sandbox credits.go` (`Spin`), `leaderboard.go`.
 **What:** Only the WS `seatLimiter` (per-connection, in-memory) exists. HTTP `POST /rooms`, `POST /rooms/:id/join`, and
-`POST /v1.0/sandbox-credits` have no rate limit, so a script can spam room creation or (sandbox) chip spins. Low financial
-risk today (sandbox) but abuse/DoS surface that grows with real money.
-**Fix:** Add a shared (Redis-backed) rate limiter at the gateway for mutating endpoints; reuse `api-commons` rate-limit
-if available, else a Valkey token-bucket. Note the WS `seatLimiter` is per-connection and therefore per-instance — under
-a fleet a player with two connections gets 2× the allowance; acceptable but document.
+`POST /v1.0/sandbox-credits` have no rate limit, so a script can spam room creation or (sandbox) chip spins. Low
+financial risk today (sandbox) but abuse/DoS surface that grows with real money. **Fix:** Add a shared (Redis-backed)
+rate limiter at the gateway for mutating endpoints; reuse `api-commons` rate-limit if available, else a Valkey
+token-bucket. Note the WS `seatLimiter` is per-connection and therefore per-instance — under a fleet a player with two
+connections gets 2× the allowance; acceptable but document.
 
 ---
 
@@ -151,8 +146,8 @@ a fleet a player with two connections gets 2× the allowance; acceptable but doc
 ### L1. Seed-building logic duplicated 3×, and `createRoom` seed omits `ConfigureRake` (DRY + latent real-money bug)
 
 **Where:** `app/app.go` `roomBackedSeed` (207-222), `buyin/service.go` `seedFor` (57-68), `api/v1/rooms.go` `createRoom`
-closure (92-94).
-**What:** Three near-identical closures build the first `hand.Table`. The `createRoom` one calls `hand.NewTable(...)` *
+closure (92-94). **What:** Three near-identical closures build the first `hand.Table`. The `createRoom` one calls
+`hand.NewTable(...)` *
 *without** `ConfigureRake`; the others call it. Sandbox rake is 0 so today it's harmless, but the moment real-money
 ships the createRoom-path seed would produce a rake-misconfigured table (`rakeBPS=0`, no rake collected). Three copies
 also drift. **Severity escalates to HIGH once real-money ships.**
@@ -161,31 +156,28 @@ that always calls `ConfigureRake(room.CurrencyMode)`. Wire all three call sites 
 
 ### L4. Retry-once version-conflict loop duplicated 6× (DRY)
 
-**Where:** `api/internal/table/actor.go` — `handlePostBigBlind` (119-124), `handleEscalate` (140-145), `handleReady` (
-180-193), `handleAct` (219-225), `handleJoin` (319-329), `handleLeave` (361-366). Only `handleSitOut` (302-312) omits
-it (see M1).
-**What:** Identical `if errors.Is(err, ErrVersionConflict) { ensureLoaded(true); re-apply }` block copy-pasted into 6
-handlers; `handleSitOut` is the inconsistent one. Drift risk: any future handler will likely forget the retry.
-**Fix:** Extract `retryOnConflict(apply func() error) error` that does the load+reapply once, and have all mutating
-handlers (including SitOut) call it.
+**Where:** `api/internal/table/actor.go` — `handlePostBigBlind` (119-124), `handleEscalate` (140-145), `handleReady`
+(180-193), `handleAct` (219-225), `handleJoin` (319-329), `handleLeave` (361-366). Only `handleSitOut` (302-312) omits
+it (see M1). **What:** Identical `if errors.Is(err, ErrVersionConflict) { ensureLoaded(true); re-apply }` block
+copy-pasted into 6 handlers; `handleSitOut` is the inconsistent one. Drift risk: any future handler will likely forget
+the retry. **Fix:** Extract `retryOnConflict(apply func() error) error` that does the load+reapply once, and have all
+mutating handlers (including SitOut) call it.
 
 ### L5. WS auth/origin helpers hand-mirror ctech-wallet (DRY / shared-code policy)
 
 **Where:** `api/internal/api/v1/tablews.go` `readAuthToken` (48-63), `wsAllowedOrigin` (69-83). Comments say "Mirrors
-ctech-wallet's internal/api/v1/ws.go".
-**What:** Bearer-frame read + origin check are copy-pasted from the sibling repo rather than imported. Per CTech "one
-codebase" policy (reuse `ctech-go-common`/`api-commons`), this belongs in `api-commons/ws` (or `ctech-go-common`) as a
-shared helper.
-**Fix:** Promote `readAuthToken`/`wsAllowedOrigin` (or their equivalents) into `api-commons/ws`; import here.
+ctech-wallet's internal/api/v1/ws.go". **What:** Bearer-frame read + origin check are copy-pasted from the sibling repo
+rather than imported. Per CTech "one codebase" policy (reuse `ctech-go-common`/`api-commons`), this belongs in
+`api-commons/ws` (or `ctech-go-common`) as a shared helper. **Fix:** Promote `readAuthToken`/`wsAllowedOrigin` (or their
+equivalents) into `api-commons/ws`; import here.
 
 ### L6. Dead code (cleanup)
 
 - `api/internal/roomstore/dynamo.go` `SetStatus` — defined, zero call sites.
 - `api/internal/engine/deck/deck.go` `Verify` — defined, zero call sites.
 - `api/internal/tablelease/lease.go` `Renew` — only referenced from `lease_test.go`; `StartHeartbeat` uses
-  `Locker.Renew` internally.
-  **Fix:** Delete or wire up. (Verified alive, not dead: `EquityDisplayEnabled`, `BlindEscalation`, `StartEscalation` —
-  all referenced.)
+  `Locker.Renew` internally. **Fix:** Delete or wire up. (Verified alive, not dead: `EquityDisplayEnabled`,
+  `BlindEscalation`, `StartEscalation` — all referenced.)
 
 ### L2. Chat filter is trivially weak (security/quality)
 
@@ -195,10 +187,9 @@ shared helper.
 
 ### L3. `getByShareCode` returns the full room incl. `ShareCode` (info hygiene)
 
-**Where:** `api/internal/api/v1/rooms.go` `getByShareCode` (128-137) returns `room` (not `sanitizeRoom`).
-**What:** The caller already knows the code, so leaking it back is low risk, but it's inconsistent with `getRoom` which
-sanitizes. Minor.
-**Fix:** Return `sanitizeRoom(room, claims.Sub)` for consistency.
+**Where:** `api/internal/api/v1/rooms.go` `getByShareCode` (128-137) returns `room` (not `sanitizeRoom`). **What:** The
+caller already knows the code, so leaking it back is low risk, but it's inconsistent with `getRoom` which sanitizes.
+Minor. **Fix:** Return `sanitizeRoom(room, claims.Sub)` for consistency.
 
 ### L4. `applyReadyAndCommit` swallows `StartHand` "need ≥2 ready players" (acceptable but undocumented)
 
@@ -270,17 +261,17 @@ No further engine changes recommended beyond H4/M5.
   share code; `sanitizeRoom` strips `ShareCode` for non-creators on `GET /rooms/:id`.
 - CORS: dev = wildcard, no credentials; prod = explicit origins + `AllowCredentials`. `CheckOrigin` mirrors this on the
   WS upgrade.
-- JWT bearer enforced on all `/rooms`, `/players`, `/sandbox credits` groups. `createRoom`/`join` re-derive the actor from the
-  token user, not the body.
+- JWT bearer enforced on all `/rooms`, `/players`, `/sandbox credits` groups. `createRoom`/`join` re-derive the actor
+  from the token user, not the body.
 
 **Findings:**
 
 - **S1 (HIGH, money):** `buyin` idempotency keys are unique per call (`uuid.NewString()`) — see **H3**. Under
-  at-least-once delivery a retried buy-in/cash-out double-moves chips. (Contrast: `sandbox credits.Spin` correctly uses a
-  stable per-day key.)
-- **S2 (MED, abuse/DoS):** No HTTP rate limiting on `POST /rooms`, `POST /rooms/:id/join`, `POST /v1.0/sandbox-credits`. A
-  script can spam room creation (Dynamo write amplification) or sandbox chip spins. See **M6**. The WS `seatLimiter` is
-  only per-connection/per-instance.
+  at-least-once delivery a retried buy-in/cash-out double-moves chips. (Contrast: `sandbox credits.Spin` correctly uses
+  a stable per-day key.)
+- **S2 (MED, abuse/DoS):** No HTTP rate limiting on `POST /rooms`, `POST /rooms/:id/join`, `POST /v1.0/sandbox-credits`.
+  A script can spam room creation (Dynamo write amplification) or sandbox chip spins. See **M6**. The WS `seatLimiter`
+  is only per-connection/per-instance.
 - **S3 (LOW, info hygiene):** `GET /rooms/code/:code` returns the full `Room` (incl. `ShareCode`) instead of
   `sanitizeRoom` — see **L3**.
 - **S4 (LOW, quality):** chat profanity filter is two exact-match words, no normalization — see **L2**.
@@ -293,11 +284,11 @@ No further engine changes recommended beyond H4/M5.
 
 ### M7. `buyin.CashOut` has no compensating action on credit failure (money)
 
-**Where:** `api/internal/buyin/service.go` `CashOut` (127-157).
-**What:** The seat is removed (committed) and then `wallet.Credit` is called with a fresh `uuid` idempotency key. If the
-credit fails (wallet down, timeout), the player's chips are gone from the table but not in their wallet, and the unique
-key means a retry can double-credit. The code comment acknowledges this as a known gap.
-**Fix:** (a) make the cash-out idempotency key stable (e.g. `roomID#playerID#cashout` — one cash-out per seat per room)
+**Where:** `api/internal/buyin/service.go` `CashOut` (127-157). **What:** The seat is removed (committed) and then
+`wallet.Credit` is called with a fresh `uuid` idempotency key. If the credit fails (wallet down, timeout), the player's
+chips are gone from the table but not in their wallet, and the unique key means a retry can double-credit. The code
+comment acknowledges this as a known gap. **Fix:** (a) make the cash-out idempotency key stable (e.g.
+`roomID#playerID#cashout` — one cash-out per seat per room)
 so a retry is safe; (b) on credit failure, either re-add the player to the seat (reverse the LeaveCmd) or enqueue a
 durable retry/outbox so the credit eventually lands. At minimum, surface a clear "manual reconciliation" error and log
 the exact (player, amount) for ops.

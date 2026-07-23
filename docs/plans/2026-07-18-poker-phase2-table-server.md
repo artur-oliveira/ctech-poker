@@ -1,36 +1,37 @@
 # Phase 2 — Table Server & Real-Time Transport Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:
+> executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Turn the Phase 0/1 pure engine (`internal/engine/hand.Table`) into a live, crash-recoverable,
 single-writer-per-table service reachable over WebSocket, per ARCHITECTURE.md §2-3 and OVERVIEW.md §4.
 
-**Architecture:** Each table is owned by exactly one goroutine (`table.Actor`) on exactly one instance, guarded
-by the existing `tablelease.Service` (Task 4 of the foundations plan). Every validated action is appended to a
-DynamoDB action log *before* being broadcast (log-before-broadcast), and a full-state snapshot is written at the
-start of every hand, so a crashed instance's replacement can resume mid-hand from `snapshot + replay(log since
-snapshot)`. Clients reach a table over a WebSocket gateway; a connection that lands on an instance which does not
-hold the table's lease is transparently proxied — not redirected — to the instance that does, over the private
-VPC network (both instances sit in the same security group; ALB only ever sees the client-facing hop).
+**Architecture:** Each table is owned by exactly one goroutine (`table.Actor`) on exactly one instance, guarded by the
+existing `tablelease.Service` (Task 4 of the foundations plan). Every validated action is appended to a DynamoDB action
+log *before* being broadcast (log-before-broadcast), and a full-state snapshot is written at the start of every hand, so
+a crashed instance's replacement can resume mid-hand from `snapshot + replay(log since
+snapshot)`. Clients reach a table over a WebSocket gateway; a connection that lands on an instance which does not hold
+the table's lease is transparently proxied — not redirected — to the instance that does, over the private VPC network
+(both instances sit in the same security group; ALB only ever sees the client-facing hop).
 
-**Tech Stack:** Go 1.26, Fiber v3, `github.com/fasthttp/websocket`, `gopkg.aoctech.app/api-commons/ws` (Redis
-Pub/Sub fan-out registry), `gopkg.aoctech.app/api-commons/dynamo` (DynamoDB helpers), the existing
+**Tech Stack:** Go 1.26, Fiber v3, `github.com/fasthttp/websocket`, `gopkg.aoctech.app/api-commons/ws` (Redis Pub/Sub
+fan-out registry), `gopkg.aoctech.app/api-commons/dynamo` (DynamoDB helpers), the existing
 `internal/tablelease` lease service, AWS CDK.
 
 ## Global Constraints
 
 - Every route lives under `/v1.0/` (existing convention, `internal/api/v1/router.go`).
 - All amounts are integer chip counts (`int64`), never floats — matches the engine's existing convention.
-- Log before broadcast: an `ActionLogEntry` write must complete before the resulting snapshot is pushed to any
-  client (ARCHITECTURE.md §3) — a broadcast must never claim a state the log doesn't yet agree happened.
+- Log before broadcast: an `ActionLogEntry` write must complete before the resulting snapshot is pushed to any client
+  (ARCHITECTURE.md §3) — a broadcast must never claim a state the log doesn't yet agree happened.
 - Idempotent actions: every player action carries a client-generated `action_id`; the server de-dupes on
-  `(table_id, hand_id, seat, action_id)` (OVERVIEW.md §4). Because one `table.Actor` goroutine is the only writer
-  for its table, this is enforced with a plain in-memory set, not a DynamoDB conditional write.
-- Server-authoritative, no hidden-information leaks: a client is never sent another player's hole cards before
-  showdown, under any circumstance, even hidden in a field the UI doesn't render (ARCHITECTURE.md §8).
+  `(table_id, hand_id, seat, action_id)` (OVERVIEW.md §4). Because one `table.Actor` goroutine is the only writer for
+  its table, this is enforced with a plain in-memory set, not a DynamoDB conditional write.
+- Server-authoritative, no hidden-information leaks: a client is never sent another player's hole cards before showdown,
+  under any circumstance, even hidden in a field the UI doesn't render (ARCHITECTURE.md §8).
 - On reconnect, a client resyncs from a full authoritative snapshot, never from replayed deltas (OVERVIEW.md §4).
-- DynamoDB tables follow `ctech-wallet`'s naming convention: physical name `{env}_poker_{table}`, so poker's
-  tables never collide with another service's tables in the same AWS account.
+- DynamoDB tables follow `ctech-wallet`'s naming convention: physical name `{env}_poker_{table}`, so poker's tables
+  never collide with another service's tables in the same AWS account.
 - Binary deployed to EC2 must be named `app` (existing CDK convention — unchanged by this plan).
 
 ---
@@ -38,18 +39,20 @@ Pub/Sub fan-out registry), `gopkg.aoctech.app/api-commons/dynamo` (DynamoDB help
 ### Task 1: Per-viewer state snapshot in the engine
 
 **Files:**
+
 - Modify: `api/internal/engine/hand/hand.go`
 - Create: `api/internal/engine/hand/snapshot.go`
 - Test: `api/internal/engine/hand/snapshot_test.go`
 
 **Interfaces:**
-- Consumes: `Table` (existing, this package), `deck.Card`, `betting.Round` (existing, read-only field access —
-  same package/import as already used in hand.go).
-- Produces: `type Snapshot struct{...}` and `func (t *Table) ViewFor(viewerID string) Snapshot`, consumed by
-  Task 3's `table.Actor`.
 
-The engine package already holds every field needed to answer "what can player X see right now" — building the
-wire-safe view here (instead of exporting raw fields to a networking package) keeps the "no hidden card leaks"
+- Consumes: `Table` (existing, this package), `deck.Card`, `betting.Round` (existing, read-only field access — same
+  package/import as already used in hand.go).
+- Produces: `type Snapshot struct{...}` and `func (t *Table) ViewFor(viewerID string) Snapshot`, consumed by Task 3's
+  `table.Actor`.
+
+The engine package already holds every field needed to answer "what can player X see right now" — building the wire-safe
+view here (instead of exporting raw fields to a networking package) keeps the "no hidden card leaks"
 rule enforced in one place, next to the data it protects.
 
 - [ ] **Step 1: Write the failing test**
@@ -246,25 +249,27 @@ git commit -m "feat(hand): add per-viewer Snapshot/ViewFor with hole-card redact
 ### Task 2: Durable action log + hand snapshot persistence
 
 **Files:**
+
 - Create: `api/internal/tablestore/store.go`
 - Create: `api/internal/tablestore/dynamo.go`
 - Test: `api/internal/tablestore/dynamo_test.go` (build tag `integration`)
 - Create: `api/docker-compose.test.yml`
 
 **Interfaces:**
-- Consumes: `gopkg.aoctech.app/api-commons/dynamo.Base`/`NewBase`/`Encode`/`Decode`/`Query` (existing shared
-  package), `hand.Snapshot` (Task 1).
+
+- Consumes: `gopkg.aoctech.app/api-commons/dynamo.Base`/`NewBase`/`Encode`/`Decode`/`Query` (existing shared package),
+  `hand.Snapshot` (Task 1).
 - Produces: `type Store struct{...}`, `func NewStore(db *dynamodb.Client, env string) *Store`,
   `func (s *Store) SaveSnapshot(ctx, tableID, handID string, snap hand.Snapshot) error`,
   `func (s *Store) LoadSnapshot(ctx, tableID string) (*StoredSnapshot, error)`,
   `func (s *Store) AppendAction(ctx, tableID, handID string, seq int, entry ActionLogEntry) error`,
-  `func (s *Store) LoadActionsSince(ctx, tableID, handID string, afterSeq int) ([]ActionLogEntry, error)` — all
-  consumed by Task 3's `table.Actor` and Task 5's `tablemanager`.
+  `func (s *Store) LoadActionsSince(ctx, tableID, handID string, afterSeq int) ([]ActionLogEntry, error)` — all consumed
+  by Task 3's `table.Actor` and Task 5's `tablemanager`.
 
-Two DynamoDB tables: `hand_snapshots` (pk=`table_id`, sk=`"latest"` — only the most recent snapshot is ever
-needed for recovery, so there is exactly one item per table, overwritten every hand) and `action_log` (pk=
-`table_id#hand_id`, sk=zero-padded `seq` — append-only, one item per action, queried by `begins_with` prefix
-scoped to one hand since recovery only ever needs the current hand's actions since the last snapshot).
+Two DynamoDB tables: `hand_snapshots` (pk=`table_id`, sk=`"latest"` — only the most recent snapshot is ever needed for
+recovery, so there is exactly one item per table, overwritten every hand) and `action_log` (pk=
+`table_id#hand_id`, sk=zero-padded `seq` — append-only, one item per action, queried by `begins_with` prefix scoped to
+one hand since recovery only ever needs the current hand's actions since the last snapshot).
 
 - [ ] **Step 1: Write `store.go` (types, no persistence yet)**
 
@@ -538,8 +543,8 @@ func new(s string) *string { return &s }
 ```
 
 Add a tiny `testingT` interface (`interface{ Fatalf(string, ...any) }`) and `isResourceInUse` helper (using
-`errors.As`) at the bottom of `dynamo.go` so `mustCreateTestTables` compiles without importing `testing` into
-non-test code — both are unexported and only reachable from `dynamo_test.go`.
+`errors.As`) at the bottom of `dynamo.go` so `mustCreateTestTables` compiles without importing `testing` into non-test
+code — both are unexported and only reachable from `dynamo_test.go`.
 
 - [ ] **Step 6: Run test to verify it passes**
 
@@ -558,11 +563,13 @@ git commit -m "feat(tablestore): DynamoDB-backed hand snapshot + action log pers
 ### Task 3: Table Actor — single-writer command loop
 
 **Files:**
+
 - Create: `api/internal/table/actor.go`
 - Create: `api/internal/table/commands.go`
 - Test: `api/internal/table/actor_test.go`
 
 **Interfaces:**
+
 - Consumes: `hand.Table`/`hand.Player`/`hand.Snapshot`/`(*hand.Table).ViewFor` (Task 1), `betting.Action`
   (existing), `tablestore.Store`/`ActionLogEntry` (Task 2).
 - Produces: `type Actor struct{...}`, `func New(id string, t *hand.Table, store *tablestore.Store, broadcast
@@ -870,8 +877,8 @@ func (t *Table) PlayersForActor() []*Player { return t.players }
 var timeNowFunc = time.Now
 ```
 
-(add `"time"` to actor.go's import block). `handleDisconnect`/`handleReconnect` are implemented in Task 8 — leave
-them returning `nil` for now:
+(add `"time"` to actor.go's import block). `handleDisconnect`/`handleReconnect` are implemented in Task 8 — leave them
+returning `nil` for now:
 
 ```go
 func (a *Actor) handleDisconnect(c DisconnectCmd) error { return nil }
@@ -895,20 +902,22 @@ git commit -m "feat(table): single-writer Actor command loop over hand.Table"
 ### Task 4: Table ownership advertisement
 
 **Files:**
+
 - Create: `api/internal/tableowner/owner.go`
 - Test: `api/internal/tableowner/owner_test.go`
 - Modify: `api/internal/config/config.go`
 
 **Interfaces:**
+
 - Consumes: `gopkg.aoctech.app/api-commons/cache.Backend` (existing, same interface `tablelease` already takes).
 - Produces: `func NewRegistry(c cache.Backend, ttl time.Duration) *Registry`,
   `func (r *Registry) Advertise(ctx, tableID, instanceAddr string) error`,
   `func (r *Registry) Lookup(ctx, tableID string) (string, bool, error)` — consumed by Task 5's `tablemanager`.
 
-`tablelease.Service` proves *who is allowed to write* to a table; it does not expose *where that instance is* (its
-CAS token is an internal implementation detail, never a routable address). This tiny separate registry is a plain
-`Set`/`Get` — no CAS needed, because only the instance that already won the lease ever calls `Advertise`, and it
-is refreshed on the same heartbeat cadence as the lease so it can never meaningfully outlive it.
+`tablelease.Service` proves *who is allowed to write* to a table; it does not expose *where that instance is* (its CAS
+token is an internal implementation detail, never a routable address). This tiny separate registry is a plain
+`Set`/`Get` — no CAS needed, because only the instance that already won the lease ever calls `Advertise`, and it is
+refreshed on the same heartbeat cadence as the lease so it can never meaningfully outlive it.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1028,21 +1037,23 @@ git commit -m "feat(tableowner): advertise table-to-instance ownership for WS ro
 ### Task 5: Table manager — acquire, recover, or locate the owner
 
 **Files:**
+
 - Create: `api/internal/tablemanager/manager.go`
 - Test: `api/internal/tablemanager/manager_test.go`
 
 **Interfaces:**
+
 - Consumes: `tablelease.Service` (existing, foundations plan), `tableowner.Registry` (Task 4),
   `tablestore.Store` (Task 2), `table.Actor`/`table.New` (Task 3), `hand.Table`/`hand.NewTable` (existing).
 - Produces: `func NewManager(leases *tablelease.Service, owners *tableowner.Registry, store *tablestore.Store,
   instanceAddr string, broadcast func(tableID, viewerID string, snap hand.Snapshot)) *Manager`,
   `func (m *Manager) Acquire(ctx, tableID string, seed func() *hand.Table) (*table.Actor, error)`,
-  `func (m *Manager) Locate(ctx, tableID string) (localActor *table.Actor, remoteAddr string, err error)` —
-  consumed by Task 6 (WS gateway) and Task 7 (internal proxy).
+  `func (m *Manager) Locate(ctx, tableID string) (localActor *table.Actor, remoteAddr string, err error)` — consumed by
+  Task 6 (WS gateway) and Task 7 (internal proxy).
 
-`seed` is a caller-supplied factory for a brand-new table (only used the very first time a table is ever
-acquired, when there's no snapshot yet to recover from) — Phase 3's room service is what actually knows a room's
-stakes/seats, so the engine `hand.Table` construction stays there, not hardcoded into `tablemanager`.
+`seed` is a caller-supplied factory for a brand-new table (only used the very first time a table is ever acquired, when
+there's no snapshot yet to recover from) — Phase 3's room service is what actually knows a room's stakes/seats, so the
+engine `hand.Table` construction stays there, not hardcoded into `tablemanager`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1054,10 +1065,11 @@ import (
 	"context"
 	"testing"
 
-	"gopkg.aoctech.app/api-commons/cache"
-	"gopkg.aoctech.app/poker/api/internal/engine/hand"
-	"gopkg.aoctech.app/poker/api/internal/tableowner"
-	"gopkg.aoctech.app/poker/api/internal/tablelease"
+
+"gopkg.aoctech.app/api-commons/cache"
+"gopkg.aoctech.app/poker/api/internal/engine/hand"
+"gopkg.aoctech.app/poker/api/internal/tablelease"
+"gopkg.aoctech.app/poker/api/internal/tableowner"
 )
 
 func TestAcquireCreatesActorOnFirstCall(t *testing.T) {
@@ -1124,11 +1136,12 @@ import (
 	"fmt"
 	"sync"
 
-	"gopkg.aoctech.app/poker/api/internal/engine/hand"
-	"gopkg.aoctech.app/poker/api/internal/table"
-	"gopkg.aoctech.app/poker/api/internal/tableowner"
-	"gopkg.aoctech.app/poker/api/internal/tablelease"
-	"gopkg.aoctech.app/poker/api/internal/tablestore"
+
+"gopkg.aoctech.app/poker/api/internal/engine/hand"
+"gopkg.aoctech.app/poker/api/internal/table"
+"gopkg.aoctech.app/poker/api/internal/tablelease"
+"gopkg.aoctech.app/poker/api/internal/tableowner"
+"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
 
 type Manager struct {
@@ -1263,9 +1276,9 @@ func (m *Manager) Locate(ctx context.Context, tableID string) (*Actor, string, e
 ```
 
 `recoverOrSeed`'s snapshot-replay gap is flagged honestly rather than hidden — full replay-from-log requires
-`hand.Table` to accept a starting `Snapshot` plus a `Replay([]ActionLogEntry)` entry point that re-applies each
-logged action through the existing `Act`/`StartHand` methods. That is real engine work, not table-manager
-plumbing, so it is broken out as its own task next.
+`hand.Table` to accept a starting `Snapshot` plus a `Replay([]ActionLogEntry)` entry point that re-applies each logged
+action through the existing `Act`/`StartHand` methods. That is real engine work, not table-manager plumbing, so it is
+broken out as its own task next.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -1284,18 +1297,20 @@ git commit -m "feat(tablemanager): acquire/recover-seed table Actors, locate rem
 ### Task 6: Crash recovery — replay the action log into a fresh `hand.Table`
 
 **Files:**
+
 - Modify: `api/internal/engine/hand/hand.go`
 - Test: `api/internal/engine/hand/replay_test.go`
 - Modify: `api/internal/tablemanager/manager.go`
 - Modify: `api/internal/tablemanager/manager_test.go`
 
 **Interfaces:**
-- Consumes: `tablestore.ActionLogEntry` (Task 2), existing `hand.Table.Act`/`StartHand`.
-- Produces: `func (t *Table) Replay(handID string, entries []tablestore.ActionLogEntry) error` — consumed by
-  Task 5's `recoverOrSeed`.
 
-`Replay` re-runs each logged action through the table's own `Act` — it does not special-case anything, so replay
-can never drift from live behavior (the same code path validates both).
+- Consumes: `tablestore.ActionLogEntry` (Task 2), existing `hand.Table.Act`/`StartHand`.
+- Produces: `func (t *Table) Replay(handID string, entries []tablestore.ActionLogEntry) error` — consumed by Task 5's
+  `recoverOrSeed`.
+
+`Replay` re-runs each logged action through the table's own `Act` — it does not special-case anything, so replay can
+never drift from live behavior (the same code path validates both).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1375,8 +1390,8 @@ func (t *Table) Replay(handID string, entries []ReplayedAction) error {
 }
 ```
 
-Update `replay_test.go`'s `entries` to use `hand.ReplayedAction` instead of `tablestore.ActionLogEntry` (removing
-the now-unnecessary `tablestore` import from the test file):
+Update `replay_test.go`'s `entries` to use `hand.ReplayedAction` instead of `tablestore.ActionLogEntry` (removing the
+now-unnecessary `tablestore` import from the test file):
 
 ```go
 	entries := []ReplayedAction{
@@ -1452,21 +1467,23 @@ git commit -m "feat(hand,tablemanager): replay durable action log to recover a c
 ### Task 7: Client-facing WebSocket gateway
 
 **Files:**
+
 - Create: `api/internal/api/v1/tablews.go`
 - Modify: `api/internal/api/v1/router.go`
 - Modify: `api/internal/app/app.go`
 
 **Interfaces:**
+
 - Consumes: `tablemanager.Manager.Acquire`/`Locate` (Task 5), `gopkg.aoctech.app/api-commons/jwtverify.Verifier`
-  (existing shared package, not yet used anywhere in poker — this task introduces user auth to the service for
-  the first time), `gopkg.aoctech.app/api-commons/ws.Registry` (existing shared package).
+  (existing shared package, not yet used anywhere in poker — this task introduces user auth to the service for the first
+  time), `gopkg.aoctech.app/api-commons/ws.Registry` (existing shared package).
 - Produces: `func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager *tablemanager.Manager,
   reg ws.Registry, allowedOrigins []string)`, mounted at `GET /v1.0/tables/:id/ws`.
 
-Auth and heartbeat mechanics mirror `ctech-wallet`'s `internal/api/v1/ws.go` exactly (first-post-upgrade-frame
-JWT, native ping/pong, origin check) — poker has no user-auth middleware yet, so this task is where it's
-introduced, copied rather than imported since it isn't (yet) extracted to `ctech-go-common` (flagged as a
-follow-up dedup candidate in this plan's closing note, not built now).
+Auth and heartbeat mechanics mirror `ctech-wallet`'s `internal/api/v1/ws.go` exactly (first-post-upgrade-frame JWT,
+native ping/pong, origin check) — poker has no user-auth middleware yet, so this task is where it's introduced, copied
+rather than imported since it isn't (yet) extracted to `ctech-go-common` (flagged as a follow-up dedup candidate in this
+plan's closing note, not built now).
 
 - [ ] **Step 1: Add `CtechJWKSURL`/`ServiceAudience`/`CtechURL`/`CorsAllowedOrigins` to config**
 
@@ -1736,13 +1753,13 @@ func registerRoutes(app *fiber.App, cfg *config.Config, verifier *jwtverify.Veri
 ```
 
 Update `Module`'s `fx.Provide` list to include `newCacheBackend, newVerifier, newWsRegistry, newTableLeaseService,
-newTableOwnerRegistry, newTableManager` alongside the existing `config.Load, newFiberApp`. Add the corresponding
-imports (`cache`, `jwtverify`, `ws`, `tablelease`, `tableowner`, `tablemanager`, `hand`, `encoding/json`, `context`,
+newTableOwnerRegistry, newTableManager` alongside the existing `config.Load, newFiberApp`. Add the corresponding imports
+(`cache`, `jwtverify`, `ws`, `tablelease`, `tableowner`, `tablemanager`, `hand`, `encoding/json`, `context`,
 `strconv`).
 
 Note: `broadcast`'s fan-out key is `tableID+"#"+viewerID` — `ws.Registry.Broadcast` fans out to every connection
-registered under one key, but each viewer's snapshot is redacted differently (Task 1), so each viewer needs its
-own channel; `Register`/`Unregister` in `RegisterTableWS` (Step 2) must key on this same composite, not on
+registered under one key, but each viewer's snapshot is redacted differently (Task 1), so each viewer needs its own
+channel; `Register`/`Unregister` in `RegisterTableWS` (Step 2) must key on this same composite, not on
 `tableID` alone — go back and change both `reg.Register(tableID, connID, ...)` calls in Step 2 to
 `reg.Register(tableID+"#"+playerID, connID, ...)`.
 
@@ -1763,19 +1780,22 @@ git commit -m "feat(api): client-facing table WebSocket gateway with per-viewer 
 ### Task 8: Cross-instance WebSocket proxy
 
 **Files:**
+
 - Create: `api/internal/api/v1/tableproxy.go`
 - Modify: `api/internal/api/v1/tablews.go`
 - Modify: `api/internal/api/v1/router.go`
 
 **Interfaces:**
+
 - Consumes: `tablemanager.Manager.Acquire` (Task 5), the same auth/heartbeat helpers as Task 7.
-- Produces: `func RegisterTableProxy(router fiber.Router, manager *tablemanager.Manager, verifier *jwtverify.Verifier, seed func(string) func() *hand.Table)`
+- Produces:
+  `func RegisterTableProxy(router fiber.Router, manager *tablemanager.Manager, verifier *jwtverify.Verifier, seed func(string) func() *hand.Table)`
   at `GET /v1.0/internal/tables/:id/proxy`, and `proxyToRemoteInstance` (referenced by Task 7, implemented here).
 
-This is what makes ARCHITECTURE.md §2's "routes each client connection to the instance holding that table's
-lease" real: the receiving instance does not tell the browser to reconnect elsewhere (private instance IPs are
-not internet-routable behind the shared no-NAT ALB pattern) — it dials the owning instance itself over the VPC and
-splices the two WebSocket connections together, transparent to the client.
+This is what makes ARCHITECTURE.md §2's "routes each client connection to the instance holding that table's lease" real:
+the receiving instance does not tell the browser to reconnect elsewhere (private instance IPs are not internet-routable
+behind the shared no-NAT ALB pattern) — it dials the owning instance itself over the VPC and splices the two WebSocket
+connections together, transparent to the client.
 
 - [ ] **Step 1: Implement the internal proxy endpoint**
 
@@ -1905,10 +1925,10 @@ func proxyToRemoteInstance(ctx any, client *fws.Conn, remoteAddr, tableID, token
 }
 ```
 
-Change `proxyToRemoteInstance`'s `ctx any` parameter to the correct `context.Context` type and drop it if unused
-(it currently is — `dialRemote` doesn't take one, and neither does the read/write loop). Simplify the signature to
-`func proxyToRemoteInstance(client *fws.Conn, remoteAddr, tableID, token string, send func(any))` and update
-Task 7's call site (`proxyToRemoteInstance(ctx, conn, remoteAddr, tableID, token, send)` →
+Change `proxyToRemoteInstance`'s `ctx any` parameter to the correct `context.Context` type and drop it if unused (it
+currently is — `dialRemote` doesn't take one, and neither does the read/write loop). Simplify the signature to
+`func proxyToRemoteInstance(client *fws.Conn, remoteAddr, tableID, token string, send func(any))` and update Task 7's
+call site (`proxyToRemoteInstance(ctx, conn, remoteAddr, tableID, token, send)` →
 `proxyToRemoteInstance(conn, remoteAddr, tableID, token, send)`).
 
 - [ ] **Step 3: Mount the proxy route**
@@ -1935,16 +1955,18 @@ git commit -m "feat(api): proxy WebSocket traffic to the instance that owns a ta
 ### Task 9: Disconnect/reconnect grace window and per-turn action timeout
 
 **Files:**
+
 - Modify: `api/internal/table/actor.go`
 - Modify: `api/internal/table/commands.go`
 - Modify: `api/internal/api/v1/tablews.go`
 - Test: `api/internal/table/disconnect_test.go`
 
 **Interfaces:**
+
 - Consumes: existing `Actor`/`Command` types (Task 3).
 - Produces: real `handleDisconnect`/`handleReconnect` bodies, `ActionDeadlineCmd` (internal, fired by a
-  `time.AfterFunc` the Actor arms on every turn change) — behavior only, no new exported surface beyond what
-  Task 3 already declared.
+  `time.AfterFunc` the Actor arms on every turn change) — behavior only, no new exported surface beyond what Task 3
+  already declared.
 
 OVERVIEW.md §4: a `DISCONNECTED` player's hand auto-folds at their next action deadline (seat held through a grace
 window), and auto-sits-out after the grace window lapses or after N consecutive disconnected hands.
@@ -2145,9 +2167,9 @@ func (a *Actor) armActionDeadlineForCurrentTurn() {
 			close(done)
 ```
 
-Dispatching `ReconnectCmd` on every inbound message (not just the first after a real disconnect) is deliberately
-cheap and idempotent — `handleReconnect` only ever clears a map entry and stops a timer, both no-ops when nothing
-was armed, so there's no benefit to tracking "was this actually a reconnect" separately.
+Dispatching `ReconnectCmd` on every inbound message (not just the first after a real disconnect) is deliberately cheap
+and idempotent — `handleReconnect` only ever clears a map entry and stops a timer, both no-ops when nothing was armed,
+so there's no benefit to tracking "was this actually a reconnect" separately.
 
 - [ ] **Step 6: Run test to verify it passes**
 
@@ -2166,10 +2188,12 @@ git commit -m "feat(table): disconnect grace window, auto-fold action deadline, 
 ### Task 10: Per-seat action rate limiting
 
 **Files:**
+
 - Modify: `api/internal/api/v1/tablews.go`
 - Test: `api/internal/api/v1/ratelimit_test.go`
 
 **Interfaces:**
+
 - Produces: `type seatLimiter struct{...}`, `func newSeatLimiter(perSecond int) *seatLimiter`,
   `func (l *seatLimiter) Allow(playerID string) bool` — used inline in `RegisterTableWS`'s message loop.
 
@@ -2255,8 +2279,8 @@ func (l *seatLimiter) Allow(playerID string) bool {
 }
 ```
 
-`timeNowFunc` is package `table`'s, not `v1`'s — add a local one instead: `var timeNowFunc = time.Now` at the top
-of `tablews.go` (a second package-level var of the same name in a different package is not a conflict; Go scopes
+`timeNowFunc` is package `table`'s, not `v1`'s — add a local one instead: `var timeNowFunc = time.Now` at the top of
+`tablews.go` (a second package-level var of the same name in a different package is not a conflict; Go scopes
 per-package).
 
 - [ ] **Step 4: Enforce the limit in the message loop**
@@ -2291,6 +2315,7 @@ git commit -m "feat(api): per-seat action rate limiting on the table WebSocket"
 ### Task 11: CDK — DynamoDB tables, instance metadata, and same-SG proxy ingress
 
 **Files:**
+
 - Create: `cdk/lib/dynamodb-stack.ts`
 - Modify: `cdk/lib/api-stack.ts`
 - Modify: `cdk/lib/constants.ts`
@@ -2298,6 +2323,7 @@ git commit -m "feat(api): per-seat action rate limiting on the table WebSocket"
 - Test: `cdk/test/dynamodb-stack.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Environment` (existing `@aoctech/cdk` type), the existing `PokerApiStack` construct.
 - Produces: `class DynamoDBStack extends cdk.Stack { tables: Map<TableName, dynamodb.TableV2> }`, wired into
   `bin/poker.ts` and granted to `PokerApiStack`'s instance role.
@@ -2417,9 +2443,9 @@ change in `ctech-cdk`, not in this repo) before this step, per this monorepo's s
       `INSTANCE_PRIVATE_IP=$(curl -sf -H "X-aws-ec2-metadata-token: $(curl -sf -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60')" http://169.254.169.254/latest/meta-data/local-ipv4)`,
 ```
 
-This line resolves at boot (bash, inside the instance), not at CDK synth time — it must go in `start.sh`'s
-heredoc (where `VALKEY_URL` is already resolved the same way), not the static env file which is written before
-boot. Move it: append `export INSTANCE_PRIVATE_IP` right after the existing `export VALKEY_URL` line in
+This line resolves at boot (bash, inside the instance), not at CDK synth time — it must go in `start.sh`'s heredoc
+(where `VALKEY_URL` is already resolved the same way), not the static env file which is written before boot. Move it:
+append `export INSTANCE_PRIVATE_IP` right after the existing `export VALKEY_URL` line in
 `start.sh`'s heredoc instead.
 
 - [ ] **Step 7: Wire `bin/poker.ts`**
@@ -2440,10 +2466,9 @@ Add `import {DynamoDBStack} from '../lib/dynamodb-stack';` to `bin/poker.ts`.
 - [ ] **Step 8: Synth to verify no CDK errors**
 
 Run: `cd cdk && npx cdk synth`
-Expected: synthesizes without error (no live AWS calls needed — `ec2.Vpc.fromLookup` requires `CTECH_VPC_ID`; if
-unset in this environment, this step is a `tsc`-level compile check only via `npx tsc --noEmit`, which is an
-acceptable substitute here since Task 11 of the foundations plan already established `cdk synth` needs live AWS
-context).
+Expected: synthesizes without error (no live AWS calls needed — `ec2.Vpc.fromLookup` requires `CTECH_VPC_ID`; if unset
+in this environment, this step is a `tsc`-level compile check only via `npx tsc --noEmit`, which is an acceptable
+substitute here since Task 11 of the foundations plan already established `cdk synth` needs live AWS context).
 
 - [ ] **Step 9: Commit**
 
@@ -2457,16 +2482,18 @@ git commit -m "feat(cdk): provision action-log/snapshot tables, allow instance-t
 ### Task 12: End-to-end integration test — two players, a full hand, a crash, and recovery
 
 **Files:**
+
 - Create: `api/tests/integration/tableflow_test.go` (build tag `integration`)
 
 **Interfaces:**
+
 - Consumes: everything from Tasks 1-9 (`tablemanager.Manager`, `table.Actor`, `tablestore.Store`,
   `hand.NewTable`).
 
-This is the engineering-level equivalent of ARCHITECTURE.md §2's deliverable ("two browser tabs can play a full
-hand... killing the server process mid-hand and restarting it resumes correctly") — driven directly against
-`tablemanager`/`table.Actor` instead of real browsers/sockets, which is what those two components exist to make
-possible without an end-to-end browser harness.
+This is the engineering-level equivalent of ARCHITECTURE.md §2's deliverable ("two browser tabs can play a full hand...
+killing the server process mid-hand and restarting it resumes correctly") — driven directly against
+`tablemanager`/`table.Actor` instead of real browsers/sockets, which is what those two components exist to make possible
+without an end-to-end browser harness.
 
 - [ ] **Step 1: Write the test**
 
@@ -2484,9 +2511,9 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/table"
+	"gopkg.aoctech.app/poker/api/internal/tablelease"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 	"gopkg.aoctech.app/poker/api/internal/tableowner"
-	"gopkg.aoctech.app/poker/api/internal/tablelease"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
 
@@ -2535,10 +2562,10 @@ func TestTableSurvivesInstanceRestartMidHand(t *testing.T) {
 ```
 
 `actorA.TableForTest()`/`Manager.Acquire` won't compile against a locally-held-lease conflict — instance A never
-released its lease before instance B tries to acquire it, so `Acquire` returns "owned by another instance". Fix
-the test's premise (Step 2) rather than the code: this is exactly the crash-recovery gap `tablelease` closes via
-TTL expiry, which a fast unit test cannot wait out — replace instance A's flow with an explicit `release()` call
-right after dispatching the two `ReadyCmd`s, documented as standing in for "the lease's TTL eventually expires":
+released its lease before instance B tries to acquire it, so `Acquire` returns "owned by another instance". Fix the
+test's premise (Step 2) rather than the code: this is exactly the crash-recovery gap `tablelease` closes via TTL expiry,
+which a fast unit test cannot wait out — replace instance A's flow with an explicit `release()` call right after
+dispatching the two `ReadyCmd`s, documented as standing in for "the lease's TTL eventually expires":
 
 ```go
 	// Instance A "crashes": release the lease explicitly to stand in for TTL
@@ -2548,8 +2575,8 @@ right after dispatching the two `ReadyCmd`s, documented as standing in for "the 
 	           // is deliberate: nothing calls actorA again after this point.
 ```
 
-Add a `release func()` return-through from `Manager.Acquire` is a bigger interface change than this test
-warrants — instead, expose a narrow test-only escape hatch:
+Add a `release func()` return-through from `Manager.Acquire` is a bigger interface change than this test warrants —
+instead, expose a narrow test-only escape hatch:
 
 ```go
 // api/internal/tablemanager/manager.go — add
@@ -2564,10 +2591,9 @@ func (m *Manager) ReleaseForTest(ctx context.Context, tableID string) {
 }
 ```
 
-This still doesn't force-expire the CAS lock itself (the shared `sharedlock.Locker` has no `Release`-by-key
-without the original token, which `Manager` never retained past `Acquire`) — the honest fix is for `Manager` to
-retain the lease's `release func()` it currently discards (see `manager.go`'s `_ = release` in Task 5 Step 3) and
-expose it:
+This still doesn't force-expire the CAS lock itself (the shared `sharedlock.Locker` has no `Release`-by-key without the
+original token, which `Manager` never retained past `Acquire`) — the honest fix is for `Manager` to retain the lease's
+`release func()` it currently discards (see `manager.go`'s `_ = release` in Task 5 Step 3) and expose it:
 
 ```go
 // api/internal/tablemanager/manager.go — Manager gains a field
@@ -2656,8 +2682,8 @@ func mustCreatePokerTables(t *testing.T, db *dynamodb.Client, env string) {
 ```
 
 Add `"errors"`, `"github.com/aws/aws-sdk-go-v2/aws"`, `"github.com/aws/aws-sdk-go-v2/config"`,
-`"github.com/aws/aws-sdk-go-v2/service/dynamodb"`, `"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"` to the
-test file's imports.
+`"github.com/aws/aws-sdk-go-v2/service/dynamodb"`, `"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"` to the test
+file's imports.
 
 - [ ] **Step 3: Run test to verify it passes**
 
@@ -2676,7 +2702,7 @@ git commit -m "test(integration): verify a table recovers a hand in progress aft
 ## Closing note — flagged, not built now
 
 `internal/api/v1/tablews.go`'s auth/heartbeat helpers (`readAuthToken`, `wsAllowedOrigin`, `startHeartbeat`,
-`wsConnAdapter`) are copied near-verbatim from `ctech-wallet/api/internal/api/v1/ws.go` because they aren't yet
-shared. This is the same category of duplication Task 12 of the foundations plan already extracted once (the
-lock/lease CAS pattern); a second extraction into `gopkg.aoctech.app/api-commons/ws` (or a new `wsauth` package)
+`wsConnAdapter`) are copied near-verbatim from `ctech-wallet/api/internal/api/v1/ws.go` because they aren't yet shared.
+This is the same category of duplication Task 12 of the foundations plan already extracted once (the lock/lease CAS
+pattern); a second extraction into `gopkg.aoctech.app/api-commons/ws` (or a new `wsauth` package)
 once `ctech-dfe`'s equivalent is also in scope is a reasonable follow-up, not a blocker for this plan.

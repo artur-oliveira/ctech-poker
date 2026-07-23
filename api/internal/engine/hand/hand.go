@@ -268,16 +268,18 @@ func (t *Table) AddWaitingPlayer(p *Player) error {
 
 // RemovePlayerForActor removes playerID from the table and returns their
 // current stack and holdID (the amount buyin.Service credits back on cash-out).
-// Errors if the player is currently Active/AllIn in a hand still in progress — a
-// seat can't be pulled out from under a hand it's dealt into; the caller
-// must wait for HAND_COMPLETE (or the player must fold first).
+// Errors if the player was dealt into a hand still in progress — a seat can't
+// be pulled out from under a hand it's dealt into, even after folding: a
+// folded player's contribution still sits in t.handOrder/side-pot eligibility
+// until runShowdown resolves it, and playerByID would panic on a nil lookup
+// if t.players no longer had them. The caller must wait for HAND_COMPLETE.
 func (t *Table) RemovePlayerForActor(playerID string) (int64, string, error) {
 	handInProgress := t.stage != WaitingForPlayers && t.stage != Complete
 	for i, p := range t.players {
 		if p.ID != playerID {
 			continue
 		}
-		if handInProgress && (p.State == Active || p.State == AllIn) {
+		if handInProgress && t.dealtIntoCurrentHand(playerID) {
 			return 0, "", fmt.Errorf("hand: cannot remove player %s mid-hand while still dealt in", playerID)
 		}
 		stack := p.Stack
@@ -286,6 +288,19 @@ func (t *Table) RemovePlayerForActor(playerID string) (int64, string, error) {
 		return stack, holdID, nil
 	}
 	return 0, "", fmt.Errorf("hand: player %s not found", playerID)
+}
+
+// dealtIntoCurrentHand reports whether playerID is part of t.handOrder — the
+// seat order snapshotted at the start of the current hand — regardless of
+// their present PlayerState (Active, AllIn, or Folded all still count: their
+// chips are only fully settled once runShowdown runs).
+func (t *Table) dealtIntoCurrentHand(playerID string) bool {
+	for _, p := range t.handOrder {
+		if p.ID == playerID {
+			return true
+		}
+	}
+	return false
 }
 
 // eligibleForNextHand reports whether p is dealt into the next hand: ready,

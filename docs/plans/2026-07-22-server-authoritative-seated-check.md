@@ -276,7 +276,8 @@ func TestSeatedEndpointReturnsTrueForSeatedPlayer(t *testing.T) {
 
 > Note for the implementer: this repo's convention (confirmed in `internal/buyin/dynamo_helpers_test.go`) is that each
 > package keeps its **own** copy of the DynamoDB Local test helpers rather than sharing an exported helper package. Task
-> 1's test in `internal/buyin/service_test.go` already exercises `Seated` end-to-end against a real actor; this HTTP-layer
+> 1's test in `internal/buyin/service_test.go` already exercises `Seated` end-to-end against a real actor; this
+> HTTP-layer
 > test is a thin wrapper and may reasonably be skipped in favor of Task 1's coverage if `roomHandlers` has no existing
 > test file to extend — do not invent a new shared test-helper package to unblock it (YAGNI). If
 > `../../api/internal/api/v1` already has an integration test file for another route (e.g. `join`/`leave`), extend that

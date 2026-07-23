@@ -316,6 +316,57 @@ func TestAllInRunoutDoesNotStallTheHand(t *testing.T) {
 	}
 }
 
+// TestRemovePlayerForActorRejectsFoldedPlayerStillInHand reproduces a
+// production panic: a player folds, then leaves the table before the hand
+// reaches showdown. RemovePlayerForActor only blocked removal for
+// Active/AllIn players, so a folded player (still in t.handOrder, still
+// carrying a contribution that side-pot eligibility needs to resolve) could
+// be deleted from t.players. runShowdown's playerByID lookup for that ID then
+// returned nil, and dereferencing p.State panicked with a nil pointer.
+// Removal must stay blocked for anyone dealt into the hand, in any state,
+// until the hand reaches Complete.
+func TestRemovePlayerForActorRejectsFoldedPlayerStillInHand(t *testing.T) {
+	players := []*Player{
+		{ID: "Dealer", Stack: 500, Ready: true},
+		{ID: "SB", Stack: 500, Ready: true},
+		{ID: "BB", Stack: 500, Ready: true},
+	}
+	table := NewTable(players, 10, 20)
+	table.dealerDrawn = true // scenario names encode the intended seat positions
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+
+	if err := table.Act("Dealer", betting.ActionFold, 0); err != nil {
+		t.Fatalf("Dealer folds: %v", err)
+	}
+
+	if _, _, err := table.RemovePlayerForActor("Dealer"); err == nil {
+		t.Fatal("expected removal of a folded-but-still-dealt-in player to be rejected while the hand is in progress")
+	}
+
+	// SB still owes 10 to match BB's posted big blind; call it so the
+	// preflop round completes, then check the rest of the streets through to
+	// showdown with the folded player still seated — this is exactly where
+	// the panic used to happen if removal had wrongly succeeded above.
+	if err := table.Act("SB", betting.ActionCall, 20); err != nil {
+		t.Fatalf("SB calls the big blind: %v", err)
+	}
+	for table.Stage() != Complete {
+		for _, id := range []string{"SB", "BB"} {
+			if table.currentPlayerCanAct(id) {
+				if err := table.Act(id, betting.ActionCheck, 0); err != nil {
+					t.Fatalf("check on %v for %s: %v", table.Stage(), id, err)
+				}
+			}
+		}
+	}
+
+	if _, _, err := table.RemovePlayerForActor("Dealer"); err != nil {
+		t.Fatalf("expected removal to succeed once the hand is Complete, got: %v", err)
+	}
+}
+
 // TestBustedAllInPlayerSitsOutInsteadOfBeingRedealt reproduces the reported
 // bug: a player who shoves all-in, loses, and ends the hand at Stack 0 was
 // still included in the next StartHand call and dealt fresh hole cards

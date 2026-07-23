@@ -4,43 +4,43 @@
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
 > checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** (1) Depois que uma mão chega em `Complete`, qualquer jogador que foi dealt in nessa mão pode
-voluntariamente revelar suas hole cards a todos na mesa (mesmo quando a mão terminou por fold-to-one,
-sem showdown genuíno — hoje `ViewFor` nunca revela essas cartas, de propósito, por causa da correção
-do "bug3" desta sessão). (2) Qualquer conjunto de cartas revelado (por showdown genuíno OU por reveal
-voluntário) ganha um texto do tipo de mão (ex.: "Dois pares"), sempre que o board tiver as 5 cartas
-comunitárias (sem elas não há avaliação de 7 cartas possível). (3) Efeitos sonoros usam os arquivos
+**Goal:** (1) Depois que uma mão chega em `Complete`, qualquer jogador que foi dealt in nessa mão pode voluntariamente
+revelar suas hole cards a todos na mesa (mesmo quando a mão terminou por fold-to-one, sem showdown genuíno — hoje
+`ViewFor` nunca revela essas cartas, de propósito, por causa da correção do "bug3" desta sessão). (2) Qualquer conjunto
+de cartas revelado (por showdown genuíno OU por reveal voluntário) ganha um texto do tipo de mão (ex.: "Dois pares"),
+sempre que o board tiver as 5 cartas comunitárias (sem elas não há avaliação de 7 cartas possível). (3) Efeitos sonoros
+usam os arquivos
 `.mp3` que **já existem** em `ui/public/sounds/` (`revealing-card-table.mp3`,
 `player-showing-card.mp3`, `cards-on-table.mp3`, `half-pot-chips.mp3`, `all-in-chips.mp3`,
 `basic-chips-1.mp3`, `basic-chips-2.mp3`) — hoje nenhum código no client toca esses arquivos.
 
-**Architecture:** `hand.Table` ganha um novo campo por jogador (`Player.VoluntarilyShown bool`,
-persistido do mesmo jeito que `Player.Ready`/`Player.State` já são — direto no struct, sem tocar
-`state.go`) e um método novo `RevealHoleCards(playerID string) error`. `ViewFor`'s condição de reveal
-por seat passa a ser `dealtIn[p.ID] && (p.ID == viewerID || (revealAll && p.State != Folded) ||
-p.VoluntarilyShown)` — o reveal voluntário é ortogonal ao `revealAll` da correção do bug3 (não a
-substitui, soma a ela). O tipo de mão vira um campo **por seat** (`SeatView.HandCategory`), não um
-campo único de mesa: em qualquer showdown com 2+ mãos reveladas cada jogador tem seu próprio tipo de
-mão (o perdedor pode ter "Par", o vencedor "Dois pares") — um único campo table-wide perderia essa
-informação. `table.Actor` ganha um comando novo (`ShowCardsCmd`) seguindo exatamente o padrão de
-`SitOutCmd`/`handleSitOut` (ensureLoaded → apply no cache → retry-on-conflict → commit → broadcastAll).
-Sons ficam inteiramente no client: um módulo novo `ui/src/lib/sound.ts` que mapeia nome de evento →
-arquivo, disparado de dentro do `receive` callback do `useTableRealtime.ts` (evento, não render —
+**Architecture:** `hand.Table` ganha um novo campo por jogador (`Player.VoluntarilyShown bool`, persistido do mesmo
+jeito que `Player.Ready`/`Player.State` já são — direto no struct, sem tocar
+`state.go`) e um método novo `RevealHoleCards(playerID string) error`. `ViewFor`'s condição de reveal por seat passa a
+ser `dealtIn[p.ID] && (p.ID == viewerID || (revealAll && p.State != Folded) ||
+p.VoluntarilyShown)` — o reveal voluntário é ortogonal ao `revealAll` da correção do bug3 (não a substitui, soma a ela).
+O tipo de mão vira um campo **por seat** (`SeatView.HandCategory`), não um campo único de mesa: em qualquer showdown com
+2+ mãos reveladas cada jogador tem seu próprio tipo de mão (o perdedor pode ter "Par", o vencedor "Dois pares") — um
+único campo table-wide perderia essa informação. `table.Actor` ganha um comando novo (`ShowCardsCmd`) seguindo
+exatamente o padrão de
+`SitOutCmd`/`handleSitOut` (ensureLoaded → apply no cache → retry-on-conflict → commit → broadcastAll). Sons ficam
+inteiramente no client: um módulo novo `ui/src/lib/sound.ts` que mapeia nome de evento → arquivo, disparado de dentro do
+`receive` callback do `useTableRealtime.ts` (evento, não render —
 `new Audio(...).play()` é uma chamada impura, tem que rodar fora do corpo do componente).
 
 **Tech Stack:** Go (`internal/engine/hand`, `internal/engine/handeval`, `internal/table`), Next.js 16
-(`useTableRealtime.ts`, `Seat.tsx` — o flip de carta em `PlayingCard.tsx` **já existe e já é
-reaproveitável sem mudança**, confirmado por leitura).
+(`useTableRealtime.ts`, `Seat.tsx` — o flip de carta em `PlayingCard.tsx` **já existe e já é reaproveitável sem
+mudança**, confirmado por leitura).
 
 ## Global Constraints
 
 - `internal/engine/hand` continua sem import de `time`/rede.
-- Valores de wire continuam em inglês/`snake_case` (ex.: `high_card`, `two_pair`) — a tradução pro
-  PT-BR acontece no client, mesma convenção já usada por `STAGE_LABELS`/`STATE_LABELS` em
+- Valores de wire continuam em inglês/`snake_case` (ex.: `high_card`, `two_pair`) — a tradução pro PT-BR acontece no
+  client, mesma convenção já usada por `STAGE_LABELS`/`STATE_LABELS` em
   `page.tsx`/`Seat.tsx`. Não traduzir no servidor.
 - `go test ./... -race`; testes com `//go:build integration` precisam do DynamoDB Local.
-- UI: `eslint src --max-warnings 0` && `next build` sem erros/warnings. Nenhuma biblioteca nova — Web
-  Audio API nativa (`new Audio(...)`), sem dependência.
+- UI: `eslint src --max-warnings 0` && `next build` sem erros/warnings. Nenhuma biblioteca nova — Web Audio API nativa
+  (`new Audio(...)`), sem dependência.
 
 ---
 
@@ -55,8 +55,8 @@ reaproveitável sem mudança**, confirmado por leitura).
 
 - `SeatView` ganha `HandCategory string \`json:"hand_category,omitempty"\`` — populado em `ViewFor`
   para qualquer seat cujas `HoleCards` estejam visíveis ao viewer (própria mão, `revealAll`, ou reveal
-  voluntário — ver Task 2) **e** `len(t.board) == 5`. Sem essas 5 cartas não há 7-card hand a avaliar
-  (ex.: fold no pré-flop revelado voluntariamente mostra só as cartas, sem rótulo de tipo).
+  voluntário — ver Task 2) **e** `len (t.board) == 5`. Sem essas 5 cartas não há 7-card hand a avaliar (ex.: fold no
+  pré-flop revelado voluntariamente mostra só as cartas, sem rótulo de tipo).
 
 - [ ] **Step 1: Escrever o teste que falha**
 
@@ -160,9 +160,8 @@ git commit -m "feat(api): expose each revealed seat's hand type (hand_category) 
 - `Player.VoluntarilyShown bool` (já adicionado na Task 1) — resetado a `false` para todos no início de
   `StartHand`, junto dos outros campos por-mão (`p.Contributed = 0`, etc., dentro do loop que monta
   `active`).
-- New `func (t *Table) RevealHoleCards(playerID string) error` — erro se a mesa não está `Complete`, se
-  o jogador não foi dealt in nesta mão (`!dealtIn`), ou se o jogador não existe. Idempotente: chamar
-  duas vezes não é erro.
+- New `func (t *Table) RevealHoleCards(playerID string) error` — erro se a mesa não está `Complete`, se o jogador não
+  foi dealt in nesta mão (`!dealtIn`), ou se o jogador não existe. Idempotente: chamar duas vezes não é erro.
 
 - [ ] **Step 1: Escrever os testes que falham**
 
@@ -242,9 +241,9 @@ Em `hand.go`, adicionar ao `Player` struct (se ainda não feito na Task 1):
 	VoluntarilyShown bool `dynamodbav:"voluntarily_shown"`
 ```
 
-No loop ativo de `StartHand` (o mesmo loop que já zera `p.Contributed = 0` para quem entra `active`),
-adicionar a mesma linha para **todos** os jogadores da mesa, não só os `active` — um jogador que ficou
-de fora (sitting-out) também precisa ter a flag limpa para a mão seguinte:
+No loop ativo de `StartHand` (o mesmo loop que já zera `p.Contributed = 0` para quem entra `active`), adicionar a mesma
+linha para **todos** os jogadores da mesa, não só os `active` — um jogador que ficou de fora (sitting-out) também
+precisa ter a flag limpa para a mão seguinte:
 
 ```go
 	for _, p := range t.players {
@@ -252,8 +251,8 @@ de fora (sitting-out) também precisa ter a flag limpa para a mão seguinte:
 	}
 ```
 
-(Colocar essa linha logo antes do loop existente que monta `active`, não dentro dele — precisa cobrir
-todo mundo, inclusive quem não joga esta mão.)
+(Colocar essa linha logo antes do loop existente que monta `active`, não dentro dele — precisa cobrir todo mundo,
+inclusive quem não joga esta mão.)
 
 Adicionar, perto de `RequestReturnFromSitOut`:
 
@@ -421,27 +420,27 @@ git commit -m "feat(api): wire ShowCardsCmd for voluntary post-hand card reveal"
 - `useTableRealtime` ganha `showCards: () => void` no objeto retornado, emitindo
   `{type: 'show_cards'}` (verificar o nome exato do tipo de mensagem que o gateway espera — checar
   `tablews.go` / o switch de tipos de mensagem do servidor antes de fixar o nome; este plano assume
-  `show_cards` por analogia com `ready`/`act`, mas o implementador deve confirmar contra o código do
-  gateway WS antes de codar).
+  `show_cards` por analogia com `ready`/`act`, mas o implementador deve confirmar contra o código do gateway WS antes de
+  codar).
 - Tradução PT-BR de `hand_category`: novo `const HAND_CATEGORY_LABELS: Record<string, string>` em
   `Seat.tsx` (mesmo padrão de `STATE_LABELS`), cobrindo os 10 valores de `categoryNames` em
-  `internal/engine/hand/hand.go` (`high_card` → "Carta alta", `pair` → "Par", `two_pair` → "Dois
-  pares", `three_of_a_kind` → "Trinca", `straight` → "Sequência", `flush` → "Flush", `full_house` →
+  `internal/engine/hand/hand.go` (`high_card` → "Carta alta", `pair` → "Par", `two_pair` → "Dois pares",
+  `three_of_a_kind` → "Trinca", `straight` → "Sequência", `flush` → "Flush", `full_house` →
   "Full house", `four_of_a_kind` → "Quadra", `straight_flush` → "Straight flush", `royal_flush` →
   "Royal flush").
 
 - [ ] **Step 1-N (resumo — seguir o padrão exato do Task 6 da Feature A):**
-  1. Campo TS em `table.ts`.
-  2. `useTableRealtime.ts`: adicionar `showCards` ao objeto retornado, análogo a `ready`/`sendChat`.
-  3. `Seat.tsx`: renderizar `HAND_CATEGORY_LABELS[seat.hand_category] ` como uma `<small>` extra
-     (mesma posição visual de `seat-state`) quando `seat.hand_category` estiver presente.
-  4. `page.tsx`: quando `s.stage === 'complete'` e o seat do viewer tem `hole_cards` vazio (ainda não
-     revelado) e o viewer foi dealt in nesta mão (checar via alguma pista disponível no snapshot — se
-     necessário, adicionar um booleano auxiliar no wire, mas preferir primeiro checar se
-     `viewerSeat.state` já distingue isso antes de adicionar campo novo), mostrar um botão "Mostrar
-     cartas" chamando `rt.showCards()`.
-  5. Lint + build: `npx eslint src --max-warnings 0 && npx next build`.
-  6. Commit: `feat(ui): voluntary "show cards" button and hand-type label on reveal`.
+    1. Campo TS em `table.ts`.
+    2. `useTableRealtime.ts`: adicionar `showCards` ao objeto retornado, análogo a `ready`/`sendChat`.
+    3. `Seat.tsx`: renderizar `HAND_CATEGORY_LABELS[seat.hand_category] ` como uma `<small>` extra (mesma posição visual
+       de `seat-state`) quando `seat.hand_category` estiver presente.
+    4. `page.tsx`: quando `s.stage === 'complete'` e o seat do viewer tem `hole_cards` vazio (ainda não revelado) e o
+       viewer foi dealt in nesta mão (checar via alguma pista disponível no snapshot — se necessário, adicionar um
+       booleano auxiliar no wire, mas preferir primeiro checar se
+       `viewerSeat.state` já distingue isso antes de adicionar campo novo), mostrar um botão "Mostrar cartas" chamando
+       `rt.showCards()`.
+    5. Lint + build: `npx eslint src --max-warnings 0 && npx next build`.
+    6. Commit: `feat(ui): voluntary "show cards" button and hand-type label on reveal`.
 
 > Nota pro implementador: o passo 4 precisa de um jeito de saber, no client, se o viewer tem uma mão
 > "escondível" nesta rodada (dealt in, mas cartas ainda não em `hole_cards` do próprio snapshot — o
@@ -462,18 +461,17 @@ git commit -m "feat(api): wire ShowCardsCmd for voluntary post-hand card reveal"
 
 **Interfaces:**
 
-- `playSound(name: SoundName): void` — `new Audio(path).play().catch(() => {})` (o `.catch` engole o
-  erro comum de autoplay bloqueado por política do navegador antes de qualquer interação do usuário;
-  não é um erro real da aplicação).
+- `playSound(name: SoundName): void` — `new Audio(path).play().catch(() => {})` (o `.catch` engole o erro comum de
+  autoplay bloqueado por política do navegador antes de qualquer interação do usuário; não é um erro real da aplicação).
 - `type SoundName = 'reveal' | 'showing_card' | 'dealing' | 'half_pot' | 'all_in' | 'bet'`.
 - Mapeamento pra arquivo (todos já existem em `ui/public/sounds/`):
-  - `reveal` → `revealing-card-table.mp3` (showdown genuíno revela cartas)
-  - `showing_card` → `player-showing-card.mp3` (reveal voluntário, Task 3 acima)
-  - `dealing` → `cards-on-table.mp3` (nova mão começa / board avança)
-  - `half_pot` → `half-pot-chips.mp3` (uma aposta ≈ metade do pote atual)
-  - `all_in` → `all-in-chips.mp3` (alguém fica all-in)
-  - `bet` → alternar entre `basic-chips-1.mp3`/`basic-chips-2.mp3` (aposta/raise/call genérico, pra
-    não soar repetitivo)
+    - `reveal` → `revealing-card-table.mp3` (showdown genuíno revela cartas)
+    - `showing_card` → `player-showing-card.mp3` (reveal voluntário, Task 3 acima)
+    - `dealing` → `cards-on-table.mp3` (nova mão começa / board avança)
+    - `half_pot` → `half-pot-chips.mp3` (uma aposta ≈ metade do pote atual)
+    - `all_in` → `all-in-chips.mp3` (alguém fica all-in)
+    - `bet` → alternar entre `basic-chips-1.mp3`/`basic-chips-2.mp3` (aposta/raise/call genérico, pra não soar
+      repetitivo)
 
 - [ ] **Step 1: `sound.ts`**
 
@@ -498,11 +496,11 @@ export function playSound(name: SoundName) {
 
 - [ ] **Step 2: Disparar de dentro do `receive` callback**
 
-Em `useTableRealtime.ts`, dentro do `receive` (evento, não render — seguro chamar `playSound` aqui),
-ao lado da lógica já existente que monta `describeSnapshot`/`liveMessage`: comparar `previous`/`next`
+Em `useTableRealtime.ts`, dentro do `receive` (evento, não render — seguro chamar `playSound` aqui), ao lado da lógica
+já existente que monta `describeSnapshot`/`liveMessage`: comparar `previous`/`next`
 e chamar `playSound(...)` nas transições relevantes (board cresceu → `dealing`; algum seat passou a
-`all_in` → `all_in`; um bet/raise/call aumentou `contributed` → `bet`, e se o valor apostado for ≥
-metade do pote anterior, `half_pot` no lugar; `stage` virou `complete` com `won_without_showdown ===
+`all_in` → `all_in`; um bet/raise/call aumentou `contributed` → `bet`, e se o valor apostado for ≥ metade do pote
+anterior, `half_pot` no lugar; `stage` virou `complete` com `won_without_showdown ===
 false` → `reveal`). O `ShowCardsCmd` bem-sucedido (resposta do próprio `rt.showCards()`) dispara
 `showing_card` diretamente no callback de sucesso, não precisa de diffing.
 
@@ -518,8 +516,8 @@ false` → `reveal`). O `ShowCardsCmd` bem-sucedido (resposta do próprio `rt.sh
 cd ui && npx eslint src --max-warnings 0 && npx next build
 ```
 
-Testar em duas abas reais (autoplay do navegador exige interação do usuário antes do primeiro som —
-confirmar que isso não quebra a experiência, já que o `.catch` silencioso cobre esse caso).
+Testar em duas abas reais (autoplay do navegador exige interação do usuário antes do primeiro som — confirmar que isso
+não quebra a experiência, já que o `.catch` silencioso cobre esse caso).
 
 - [ ] **Step 4: Commit**
 
@@ -530,14 +528,13 @@ git commit -m "feat(ui): wire existing sound assets to reveal/deal/bet/all-in ev
 
 ## Self-Review Notes
 
-- **Reveal voluntário é ortogonal à correção do bug3**, não a desfaz: `revealAll` continua exigindo
-  showdown genuíno; `VoluntarilyShown` é um opt-in por jogador, verificado separadamente.
-- **`HandCategory` é por seat, não por mesa** — decisão deliberada: um showdown com 2+ mãos reveladas
-  deve mostrar o tipo de CADA mão revelada, não só a vencedora.
-- **Sons reaproveitam assets que já existem** no repo (`ui/public/sounds/*.mp3`, confirmado por
-  listagem direta) — nenhum arquivo novo a conseguir/licenciar, só wiring.
+- **Reveal voluntário é ortogonal à correção do bug3**, não a desfaz: `revealAll` continua exigindo showdown genuíno;
+  `VoluntarilyShown` é um opt-in por jogador, verificado separadamente.
+- **`HandCategory` é por seat, não por mesa** — decisão deliberada: um showdown com 2+ mãos reveladas deve mostrar o
+  tipo de CADA mão revelada, não só a vencedora.
+- **Sons reaproveitam assets que já existem** no repo (`ui/public/sounds/*.mp3`, confirmado por listagem direta) —
+  nenhum arquivo novo a conseguir/licenciar, só wiring.
 - **Um ponto em aberto explicitamente flagado** (Task 4): falta decidir se `Snapshot` precisa de
-  `WonWithoutShowdown` pra o client saber quando oferecer o botão "Mostrar cartas" sem heurística
-  frágil — decisão do implementador, documentada como nota, não resolvida silenciosamente.
-- **Fora de escopo:** Feature D (histórico/auditoria), conforme ordenação confirmada (bug3 → A → B →
-  C → D).
+  `WonWithoutShowdown` pra o client saber quando oferecer o botão "Mostrar cartas" sem heurística frágil — decisão do
+  implementador, documentada como nota, não resolvida silenciosamente.
+- **Fora de escopo:** Feature D (histórico/auditoria), conforme ordenação confirmada (bug3 → A → B → C → D).

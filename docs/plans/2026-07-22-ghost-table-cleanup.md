@@ -634,8 +634,10 @@ func TestGetOrCreateActorRejectsArchivedTable(t *testing.T) {
 > `mustCreateTestTables(ctx, t, db, env)` by calling it if `tablemanager`'s test can import it (it is unexported in
 > package `tablestore`, so — matching this repo's per-package-copy convention confirmed in Task 2 Step 4 — copy the same
 > three-table+GSI creation helper into this new test file, or, simpler and equally valid per convention: add a one-line
-> exported wrapper `tablestore.CreateTestTables(ctx, t, db, env)` if `tablemanager_test.go` needs it in more than one test
-> in the future. For a single test, inlining the table-creation calls directly in this test function is the smaller diff —
+> exported wrapper `tablestore.CreateTestTables(ctx, t, db, env)` if `tablemanager_test.go` needs it in more than one
+> test
+> in the future. For a single test, inlining the table-creation calls directly in this test function is the smaller
+> diff —
 > do that instead of adding a new exported helper.
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1227,9 +1229,9 @@ git commit -m "feat(cdk): add TableCleanupStack — scheduled Lambda for stale s
   exported helper) and what the fallback is, rather than leaving a TODO.
 - **Type consistency:** `QueryStaleActive(ctx, olderThanUnix int64, limit int) ([]StoredTable, error)` and
   `MarkArchived(ctx, tableID string, expectedVersion int) error` (Task 2) are the exact signatures `staleQuerier` (Task
-  4) declares and the exact ones exercised in Task 2's and Task 3's tests. `ErrTableArchived` (Task 3) is the same
-  identifier `buyin`'s existing `%w`-wrapping already makes `errors.Is`-reachable — no `buyin` code changes needed,
-  verified by Task 3 Step 5's regression run.
+    4) declares and the exact ones exercised in Task 2's and Task 3's tests. `ErrTableArchived` (Task 3) is the same
+       identifier `buyin`'s existing `%w`-wrapping already makes `errors.Is`-reachable — no `buyin` code changes needed,
+       verified by Task 3 Step 5's regression run.
 - **Risk called out, not hidden:** Task 4's `run()` logs and `continue`s (never aborts the whole sweep) on a per-table
   refund or archive failure — one bad table can't block the rest of the batch, matching `cmd/reconcile`'s own per-entry
   error handling (`main.go:57-65`).

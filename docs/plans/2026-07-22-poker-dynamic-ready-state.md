@@ -5,46 +5,41 @@
 > checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** (1) A player who joins a table is ready to play immediately — no manual "Estou pronto"
-click — but can mark themselves sitting-out. (2) Returning from sitting-out is free unless the
-player's seat projects to SB or BB of the very next hand, in which case returning costs posting
-that big blind out of position (same mechanic mid-hand joiners already pay). (3) Every player (not
-just disconnected ones) gets a visible per-turn countdown — default 15s, adjustable per room — and
-is auto-folded when it expires; a disconnected player who times out still falls through to the
-existing grace/consecutive-hands sit-out escalation, unchanged.
+click — but can mark themselves sitting-out. (2) Returning from sitting-out is free unless the player's seat projects to
+SB or BB of the very next hand, in which case returning costs posting that big blind out of position (same mechanic
+mid-hand joiners already pay). (3) Every player (not just disconnected ones) gets a visible per-turn countdown — default
+15s, adjustable per room — and is auto-folded when it expires; a disconnected player who times out still falls through
+to the existing grace/consecutive-hands sit-out escalation, unchanged.
 
 **Architecture:** `hand.Table` (pure engine, no time/networking) gains: auto-ready on
 `AddWaitingPlayer`/`AddMidHandJoiner`, a `RequestReturnFromSitOut` method reusing the exact
-`PendingEntry`/`newEntrants` BB-out-of-position template `StartHand` already has for mid-hand
-joiners, and a `wouldBeNextBlind` projection helper. `table.Actor` gains a single unified per-turn
-timer (`turnTimer`/`turnTimeoutCmd`) that **replaces** the disconnect-only `actionDeadline`
-(30s)/`deadlineTimer` mechanism: it arms for whichever player currently must act, regardless of
-connection state, and folds them on expiry — but when that player is *also* in `disconnectedSince`,
-it first runs the existing grace/consecutive-hands check (unchanged thresholds: 45s, 3 hands) before
-deciding fold vs. sit-out. This removes a real bug the naive "add a second timer" approach would
-have introduced: two independent per-turn timers (a new 15s one and the old 30s one) racing on the
-same disconnected player's turn would make the old one's `consecutiveDisconnectedHands` counter
-never increment (the new timer folds first every time), silently breaking the "3 disconnected hands
-→ auto sit-out" escalation. Unifying into one timer avoids that.
+`PendingEntry`/`newEntrants` BB-out-of-position template `StartHand` already has for mid-hand joiners, and a
+`wouldBeNextBlind` projection helper. `table.Actor` gains a single unified per-turn timer (`turnTimer`/`turnTimeoutCmd`)
+that **replaces** the disconnect-only `actionDeadline`
+(30s)/`deadlineTimer` mechanism: it arms for whichever player currently must act, regardless of connection state, and
+folds them on expiry — but when that player is *also* in `disconnectedSince`, it first runs the existing
+grace/consecutive-hands check (unchanged thresholds: 45s, 3 hands) before deciding fold vs. sit-out. This removes a real
+bug the naive "add a second timer" approach would have introduced: two independent per-turn timers (a new 15s one and
+the old 30s one) racing on the same disconnected player's turn would make the old one's `consecutiveDisconnectedHands`
+counter never increment (the new timer folds first every time), silently breaking the "3 disconnected hands → auto
+sit-out" escalation. Unifying into one timer avoids that.
 
 **Tech Stack:** Go (existing `internal/engine/hand`, `internal/table`, `internal/roomstore`,
-`internal/api/v1`), Next.js 16 (existing `useTableRealtime.ts`, CSS-driven animations, no new
-dependency).
+`internal/api/v1`), Next.js 16 (existing `useTableRealtime.ts`, CSS-driven animations, no new dependency).
 
 ## Global Constraints
 
-- Engine package (`internal/engine/hand`) stays pure logic — no `time`/networking import. Wall-clock
-  deadlines live in `table.Actor` only, which sets them onto a `hand.Snapshot` value it already
-  builds (no new engine dependency).
-- `go test ./... -race`. Anything under `//go:build integration` needs DynamoDB Local
-  (`docker-compose.test.yml`).
-- UI gate: `eslint src --max-warnings 0` && `next build` with zero errors/warnings. Animations are
-  CSS only (`globals.css` keyframes) — reuse the existing `key={value}`-remount-to-restart-animation
-  convention already used by `.seat-win` (`Seat.tsx:40`), not `setInterval`/effect-driven state.
-- Player identity is always `claims.Sub` — never client-supplied (unaffected by this plan; no new
-  identity-bearing input is introduced).
+- Engine package (`internal/engine/hand`) stays pure logic — no `time`/networking import. Wall-clock deadlines live in
+  `table.Actor` only, which sets them onto a `hand.Snapshot` value it already builds (no new engine dependency).
+- `go test ./... -race`. Anything under `//go:build integration` needs DynamoDB Local (`docker-compose.test.yml`).
+- UI gate: `eslint src --max-warnings 0` && `next build` with zero errors/warnings. Animations are CSS only
+  (`globals.css` keyframes) — reuse the existing `key={value}`-remount-to-restart-animation convention already used by
+  `.seat-win` (`Seat.tsx:40`), not `setInterval`/effect-driven state.
+- Player identity is always `claims.Sub` — never client-supplied (unaffected by this plan; no new identity-bearing input
+  is introduced).
 - Reuse `problem.*` HTTP error constructors, existing `roomstore.Store`, existing
-  `tablemanager.Manager` roomLoader hook (already re-invoked on every actor creation — this plan
-  extends what it loads, not the mechanism itself).
+  `tablemanager.Manager` roomLoader hook (already re-invoked on every actor creation — this plan extends what it loads,
+  not the mechanism itself).
 
 ---
 
@@ -106,9 +101,9 @@ Expected: FAIL — both assert `p.Ready` is `true`, but the zero value is `false
 
 - [ ] **Step 3: Write minimal implementation**
 
-In `hand.go`, `AddWaitingPlayer` (existing, ~line 217): after constructing nothing new is
-constructed here (the `*Player` is caller-supplied) — set `p.Ready = true` as the first line inside
-the function, before the existing `t.playerByID` duplicate check:
+In `hand.go`, `AddWaitingPlayer` (existing, ~line 217): after constructing nothing new is constructed here (the
+`*Player` is caller-supplied) — set `p.Ready = true` as the first line inside the function, before the existing
+`t.playerByID` duplicate check:
 
 ```go
 func (t *Table) AddWaitingPlayer(p *Player) error {
@@ -139,8 +134,8 @@ func (t *Table) AddMidHandJoiner(p *Player) error {
 ```
 
 Mid-hand joiners stay excluded from the *current* hand regardless of `Ready` (`StartHand`'s
-`PendingEntry && !readyToPost` check is untouched) — `Ready: true` here only means "don't require a
-second manual ready click on top of `PostBigBlindCmd`" once they're eligible.
+`PendingEntry && !readyToPost` check is untouched) — `Ready: true` here only means "don't require a second manual ready
+click on top of `PostBigBlindCmd`" once they're eligible.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -150,10 +145,9 @@ cd api && go test ./internal/engine/hand/... -run TestAdd.*IsReadyImmediately -v
 
 - [ ] **Step 5: Extract the shared start-hand helper in actor.go**
 
-In `../../api/internal/table/actor.go`, replace `applyReadyAndCommit`'s inline start-hand check
-(current lines 244-258) with a call to a new shared helper, and make `applyJoinAndCommit` use the
-same helper (so a join that brings the table to 2+ ready players starts the hand immediately instead
-of waiting for a `ReadyCmd` that no longer needs to be sent):
+In `../../api/internal/table/actor.go`, replace `applyReadyAndCommit`'s inline start-hand check (current lines 244-258)
+with a call to a new shared helper, and make `applyJoinAndCommit` use the same helper (so a join that brings the table
+to 2+ ready players starts the hand immediately instead of waiting for a `ReadyCmd` that no longer needs to be sent):
 
 ```go
 func (a *Actor) applyReadyAndCommit(ctx context.Context, c ReadyCmd) error {
@@ -208,8 +202,8 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 cd api && go build ./... && go test ./internal/table/... ./internal/engine/hand/... -race
 ```
 
-Expected: all pass (no `//go:build integration` tests run without DynamoDB Local — that's fine,
-this task touches no integration-only path).
+Expected: all pass (no `//go:build integration` tests run without DynamoDB Local — that's fine, this task touches no
+integration-only path).
 
 - [ ] **Step 7: Commit**
 
@@ -230,10 +224,10 @@ git commit -m "feat(api): auto-ready players on join, no manual ready click to e
 
 **Interfaces:**
 
-- New: `func (t *Table) RequestReturnFromSitOut(playerID string)` — no-op if `playerID` is not
-  currently `SittingOut`. Clears `SittingOut` immediately (free return) unless the player projects
-  to SB/BB of the next hand to start, in which case it marks `owesBigBlind[playerID] = true` and
-  leaves `SittingOut` set; `StartHand` clears it once that hand actually charges the BB (mirrors
+- New: `func (t *Table) RequestReturnFromSitOut(playerID string)` — no-op if `playerID` is not currently `SittingOut`.
+  Clears `SittingOut` immediately (free return) unless the player projects to SB/BB of the next hand to start, in which
+  case it marks `owesBigBlind[playerID] = true` and leaves `SittingOut` set; `StartHand` clears it once that hand
+  actually charges the BB (mirrors
   `readyToPost`/`newEntrants` exactly).
 - `StartHand`'s active-player loop (hand.go ~257-298) gains the "owing return" branch.
 - `State`/`ExportState`/`NewTableFromState` gain `OwesBigBlind map[string]bool` /
@@ -427,11 +421,11 @@ with:
 	}
 ```
 
-The added `if p.State != PendingEntry { p.State = SittingOut }` branch also closes a pre-existing
-cosmetic gap: a player who merely has `Ready == false` (never called `SitOutForActor`) previously
-kept whatever stale `State` they had from the last hand between hands — now `StartHand` labels them
-`SittingOut` the moment it actually skips them, so the UI's "Ausente" badge is accurate the instant
-it matters. This does not change who gets dealt in (that was already gated by `!p.Ready` alone).
+The added `if p.State != PendingEntry { p.State = SittingOut }` branch also closes a pre-existing cosmetic gap: a player
+who merely has `Ready == false` (never called `SitOutForActor`) previously kept whatever stale `State` they had from the
+last hand between hands — now `StartHand` labels them
+`SittingOut` the moment it actually skips them, so the UI's "Ausente" badge is accurate the instant it matters. This
+does not change who gets dealt in (that was already gated by `!p.Ready` alone).
 
 - [ ] **Step 5: Persist `owesBigBlind`**
 
@@ -441,10 +435,12 @@ In `state.go`, add to `State` struct, `ExportState`, and `NewTableFromState`:
 // State struct: add field
 	OwesBigBlind  map[string]bool
 ```
+
 ```go
 // ExportState: add
 		OwesBigBlind:  t.owesBigBlind,
 ```
+
 ```go
 // NewTableFromState: add
 		owesBigBlind:  s.OwesBigBlind,
@@ -478,9 +474,8 @@ git commit -m "feat(api): sitting-out return path, free unless near own blind (p
 **Interfaces:**
 
 - `applyReadyAndCommit` (Task 1's version) now branches on `c.Ready`: `false` → `SitOutForActor`
-  (existing method, unchanged); `true` → `RequestReturnFromSitOut` (Task 2) before the existing
-  Ready-flag assignment stands. Per confirmed decision: sitting-out reuses `ReadyCmd`, no new
-  dedicated command.
+  (existing method, unchanged); `true` → `RequestReturnFromSitOut` (Task 2) before the existing Ready-flag assignment
+  stands. Per confirmed decision: sitting-out reuses `ReadyCmd`, no new dedicated command.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -536,8 +531,8 @@ docker compose -f docker-compose.test.yml up -d
 cd api && go test -tags integration ./internal/table/... -run TestReadyFalseMarksSittingOut -v
 ```
 
-Expected: FAIL — today `ReadyCmd{Ready:false}` only flips the `Ready` bool, `State` stays whatever
-it was (not `SittingOut`).
+Expected: FAIL — today `ReadyCmd{Ready:false}` only flips the `Ready` bool, `State` stays whatever it was (not
+`SittingOut`).
 
 - [ ] **Step 3: Implement**
 
@@ -562,10 +557,9 @@ func (a *Actor) applyReadyAndCommit(ctx context.Context, c ReadyCmd) error {
 ```
 
 `SitOutForActor` already exists and is safe to call unconditionally (idempotent: it just sets
-`State = SittingOut`, no guard needed — mutating `Player.State` for a seat still mid-hand does not
-affect that hand's already-frozen `betting.Round.Players` copy, so this is safe even if the player
-is currently `Active`/`AllIn` in a hand still in progress; the label becomes accurate immediately,
-the live round is unaffected).
+`State = SittingOut`, no guard needed — mutating `Player.State` for a seat still mid-hand does not affect that hand's
+already-frozen `betting.Round.Players` copy, so this is safe even if the player is currently `Active`/`AllIn` in a hand
+still in progress; the label becomes accurate immediately, the live round is unaffected).
 
 - [ ] **Step 4: Run to verify it passes**
 
@@ -596,15 +590,14 @@ git commit -m "feat(api): wire ReadyCmd to sitting-out (ready:false) and return 
 
 **Interfaces:**
 
-- `roomstore.Room.TurnTimeoutSeconds int` (new field, `omitempty`-style default: `0` means "use the
-  15s default", mirrors how `BlindEscalation` is `nil`-checked, not how it's mandatory).
-- `CreateRoomRequest.TurnTimeoutSeconds *int` — public rooms may not set it (always 15s, same rule
-  as `BlindEscalation` being private-only); private rooms may set 5–60s.
+- `roomstore.Room.TurnTimeoutSeconds int` (new field, `omitempty`-style default: `0` means "use the 15s default",
+  mirrors how `BlindEscalation` is `nil`-checked, not how it's mandatory).
+- `CreateRoomRequest.TurnTimeoutSeconds *int` — public rooms may not set it (always 15s, same rule as `BlindEscalation`
+  being private-only); private rooms may set 5–60s.
 - `tablemanager.NewManager`'s `roomLoader` param changes from
   `func(tableID string) (*roomstore.BlindEscalation, bool, error)` to
-  `func(tableID string) (*roomstore.Room, bool, error)` — every existing test call site passes a
-  literal `nil` for this param, which compiles unchanged under the new function type (verified: no
-  test constructs a non-nil roomLoader today).
+  `func(tableID string) (*roomstore.Room, bool, error)` — every existing test call site passes a literal `nil` for this
+  param, which compiles unchanged under the new function type (verified: no test constructs a non-nil roomLoader today).
 - New: `table.DefaultTurnTimeout = 15 * time.Second`, `table.TurnTimeoutFor(seconds int) time.Duration`
   (0 → default).
 
@@ -624,8 +617,7 @@ In `roomdto.go`, add to `CreateRoomRequest`:
 	TurnTimeoutSeconds   *int                       `json:"turn_timeout_seconds,omitempty"`
 ```
 
-In `rooms.go`'s `createRoom` (~line 58, alongside the existing `BlindEscalation` public/private
-check), add:
+In `rooms.go`'s `createRoom` (~line 58, alongside the existing `BlindEscalation` public/private check), add:
 
 ```go
 	if req.Visibility == "public" && req.TurnTimeoutSeconds != nil {
@@ -679,6 +671,7 @@ In `manager.go`, change the field and param type (~line 38, 45):
 ```go
 	roomLoader     func(tableID string) (*roomstore.Room, bool, error)
 ```
+
 ```go
 func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast func(string, string, hand.Snapshot), roomLoader func(string) (*roomstore.Room, bool, error), completion ...func(string, hand.HandOutcome)) *Manager {
 ```
@@ -740,16 +733,15 @@ with:
 cd api && go build ./...
 ```
 
-Expected: no errors (Task 5 below adds `SetTurnTimeoutForActor` — build this task together with
-Task 5's Step 1 if your toolchain rejects the intermediate state; they're one logical unit split
-only for review size).
+Expected: no errors (Task 5 below adds `SetTurnTimeoutForActor` — build this task together with Task 5's Step 1 if your
+toolchain rejects the intermediate state; they're one logical unit split only for review size).
 
 - [ ] **Step 7: Extend `rooms_test.go` for the new validation**
 
 Add table-driven cases to whatever existing `createRoom` validation test exists in
 `../../api/internal/api/v1/rooms_test.go` (check its current structure first —
-`grep -n "func Test.*CreateRoom" rooms_test.go`) covering: public room + `TurnTimeoutSeconds` set →
-400; private room + `TurnTimeoutSeconds: 3` (below 5) → 400; private room + `TurnTimeoutSeconds: 20`
+`grep -n "func Test.*CreateRoom" rooms_test.go`) covering: public room + `TurnTimeoutSeconds` set → 400; private room +
+`TurnTimeoutSeconds: 3` (below 5) → 400; private room + `TurnTimeoutSeconds: 20`
 → 201 with `room.TurnTimeoutSeconds == 20`.
 
 - [ ] **Step 8: Commit**
@@ -777,8 +769,8 @@ git commit -m "feat(api): per-room configurable turn timeout (default 15s, priva
 
 - `hand.Snapshot` gains `ActionDeadlineUnixMs int64 \`json:"action_deadline_unix_ms,omitempty"\`` —
   populated by `Actor`, not by the engine (engine stays time-free).
-- `hand.Table` gains `func (t *Table) CurrentPlayerIDForActor() string` (thin exported wrapper
-  around the already-private `currentPlayerToAct`, same naming convention as
+- `hand.Table` gains `func (t *Table) CurrentPlayerIDForActor() string` (thin exported wrapper around the
+  already-private `currentPlayerToAct`, same naming convention as
   `CurrentPlayerCanActForActor`).
 - `Actor.actionDeadline`/`Actor.deadlineTimer`/`autoFoldCheckCmd`/`handleAutoFoldCheck`/
   `armActionDeadlineIfTheirTurn`/`armActionDeadlineForCurrentTurn` are **removed**, replaced by
@@ -788,8 +780,8 @@ git commit -m "feat(api): per-room configurable turn timeout (default 15s, priva
 
 - [ ] **Step 1: Write the failing pure-unit tests (no DynamoDB needed)**
 
-Add `../../api/internal/table/turntimeout_test.go` (no build tag, mirrors `escalation_test.go`'s
-bare-`&Actor{}` pattern):
+Add `../../api/internal/table/turntimeout_test.go` (no build tag, mirrors `escalation_test.go`'s bare-`&Actor{}`
+pattern):
 
 ```go
 package table
@@ -896,8 +888,8 @@ with:
 ```
 
 In `New` (~line 59-71), replace `actionDeadline: 30 * time.Second,` with
-`turnTimeout: DefaultTurnTimeout,` (import the `table` package's own constant — same package, no
-import needed, just reference `DefaultTurnTimeout` directly from Task 4's `turntimeout.go`).
+`turnTimeout: DefaultTurnTimeout,` (import the `table` package's own constant — same package, no import needed, just
+reference `DefaultTurnTimeout` directly from Task 4's `turntimeout.go`).
 
 Add the setter (near `SetEquityEnabledForActor`):
 
@@ -966,9 +958,9 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 }
 ```
 
-This needs `"gopkg.aoctech.app/poker/api/internal/engine/betting"` imported in `actor.go` if not
-already (check — `ActCmd.Action` is already `betting.Action` typed there, so it should already be
-imported for `handleAct`'s signature; verify with `grep -n '"gopkg.aoctech.app/poker/api/internal/engine/betting"' actor.go`).
+This needs `"gopkg.aoctech.app/poker/api/internal/engine/betting"` imported in `actor.go` if not already (check —
+`ActCmd.Action` is already `betting.Action` typed there, so it should already be imported for `handleAct`'s signature;
+verify with `grep -n '"gopkg.aoctech.app/poker/api/internal/engine/betting"' actor.go`).
 
 - [ ] **Step 6: Replace the arming functions with the unified `armTurnTimer`**
 
@@ -1001,8 +993,7 @@ func (a *Actor) armTurnTimer(current string) {
 
 - [ ] **Step 7: Call `armTurnTimer` from `broadcastAll`, drop the old call sites**
 
-In `broadcastAll` (~lines 555-582), add the arm call at the top and stamp the deadline onto each
-outgoing snapshot:
+In `broadcastAll` (~lines 555-582), add the arm call at the top and stamp the deadline onto each outgoing snapshot:
 
 ```go
 func (a *Actor) broadcastAll() {
@@ -1027,17 +1018,16 @@ func (a *Actor) broadcastAll() {
 }
 ```
 
-(Keep the existing equity block body exactly as-is — only the two new lines above `doEquity` and
-the `if current != ""` stamp are added; do not reformat the rest of the function.)
+(Keep the existing equity block body exactly as-is — only the two new lines above `doEquity` and the `if current != ""`
+stamp are added; do not reformat the rest of the function.)
 
 Remove the now-dead calls: `handleDisconnect` no longer calls `a.armActionDeadlineIfTheirTurn(c.PlayerID)`
-(the universal timer is already running for whoever's turn it is, independent of connection state —
-disconnecting mid-someone-else's-turn arms nothing either way, exactly as before); `handleAct` and
-`handleTurnTimeout` no longer call `a.armActionDeadlineForCurrentTurn()` (folded into `broadcastAll`,
-which every one of them already calls). `handleReconnect` drops its
-`if a.deadlineTimer != nil { a.deadlineTimer.Stop() }` line entirely (the universal timer isn't
-disconnect-scoped, so reconnecting must not stop or reset it — the clock keeps running for whoever's
-turn it already was).
+(the universal timer is already running for whoever's turn it is, independent of connection state — disconnecting
+mid-someone-else's-turn arms nothing either way, exactly as before); `handleAct` and
+`handleTurnTimeout` no longer call `a.armActionDeadlineForCurrentTurn()` (folded into `broadcastAll`, which every one of
+them already calls). `handleReconnect` drops its
+`if a.deadlineTimer != nil { a.deadlineTimer.Stop() }` line entirely (the universal timer isn't disconnect-scoped, so
+reconnecting must not stop or reset it — the clock keeps running for whoever's turn it already was).
 
 - [ ] **Step 8: Add `CurrentPlayerIDForActor` to hand.Table and `ActionDeadlineUnixMs` to Snapshot**
 
@@ -1065,10 +1055,10 @@ In `snapshot.go`, add to the `Snapshot` struct (~line 9-17):
 	a.turnTimeout = 20 * time.Millisecond // was: a.actionDeadline = 20 * time.Millisecond
 ```
 
-The rest of `TestDisconnectAutoFoldsAtActionDeadline` is unchanged — it still disconnects the
-player-to-act, sleeps past the deadline, and asserts they were auto-folded; the mechanism underneath
-is now the unified `turnTimer`/`handleTurnTimeout` instead of the old disconnect-only path, but the
-externally observable behavior (disconnected player on the clock times out → folds) is identical.
+The rest of `TestDisconnectAutoFoldsAtActionDeadline` is unchanged — it still disconnects the player-to-act, sleeps past
+the deadline, and asserts they were auto-folded; the mechanism underneath is now the unified `turnTimer`/
+`handleTurnTimeout` instead of the old disconnect-only path, but the externally observable behavior (disconnected player
+on the clock times out → folds) is identical.
 
 - [ ] **Step 10: Run every affected test**
 
@@ -1082,10 +1072,10 @@ cd api && go test -tags integration ./... -race
 
 Expected: all green. Pay special attention to
 `TestAllInRunoutDoesNotStallTheHand`/`TestBustedAllInPlayerSitsOutInsteadOfBeingRedealt`
-(`hand_test.go`) and any other integration test that drives a full hand via repeated `Act` calls —
-none of them should now unexpectedly time out mid-test, since the default `turnTimeout` (15s) is far
-longer than any test's execution time; only tests that explicitly set a short `turnTimeout` (this
-task's new ones, plus `disconnect_test.go`) exercise the timeout path at all.
+(`hand_test.go`) and any other integration test that drives a full hand via repeated `Act` calls — none of them should
+now unexpectedly time out mid-test, since the default `turnTimeout` (15s) is far longer than any test's execution time;
+only tests that explicitly set a short `turnTimeout` (this task's new ones, plus `disconnect_test.go`) exercise the
+timeout path at all.
 
 - [ ] **Step 11: Commit**
 
@@ -1126,14 +1116,14 @@ In `table.ts`, add to `TableSnapshot`:
 In `page.tsx`:
 
 - The button at line 100 (`{rt.status === 'connected' ? <Button onClick={() => rt.ready()}>Estou
-  pronto</Button> : ...}`) is removed entirely — auto-ready-on-join (Task 1) means there is nothing
-  left for a freshly-connected player to confirm. Keep the surrounding loading `<main>` block
-  otherwise unchanged (it now just shows the loader/sync copy without a button while
+  pronto</Button> : ...}`) is removed entirely — auto-ready-on-join (Task 1) means there is nothing left for a
+  freshly-connected player to confirm. Keep the surrounding loading `<main>` block otherwise unchanged (it now just
+  shows the loader/sync copy without a button while
   `!rt.snapshot`).
 - The reconnect-notice band at lines 145-148 (shown when `stage === 'waiting_for_players' ||
   stage === 'complete'`) changes: only show a button when the viewer's own seat is currently
-  `sitting_out`, and its label/action becomes "Voltar a jogar" (still `rt.ready(true)` — same wire
-  message, now meaningfully a "return" rather than a first-time confirmation):
+  `sitting_out`, and its label/action becomes "Voltar a jogar" (still `rt.ready(true)` — same wire message, now
+  meaningfully a "return" rather than a first-time confirmation):
 
 ```tsx
       {!connectionMessage && (s.stage === 'waiting_for_players' || s.stage === 'complete') && <div className="reconnect-notice">
@@ -1143,8 +1133,8 @@ In `page.tsx`:
       </div>}
 ```
 
-- Add a persistent sitting-out toggle to the header (alongside `LeaveDialog`, only relevant once
-  actually seated and not already sitting out) — reuses `rt.ready(false)`:
+- Add a persistent sitting-out toggle to the header (alongside `LeaveDialog`, only relevant once actually seated and not
+  already sitting out) — reuses `rt.ready(false)`:
 
 ```tsx
           {viewerSeat && viewerSeat.state !== 'sitting_out' &&
@@ -1153,8 +1143,8 @@ In `page.tsx`:
 
 - [ ] **Step 3: Add the countdown ring to Seat.tsx**
 
-In `Seat.tsx`, add a `deadlineMs?: number` prop and render a ring only for the seat currently on the
-clock, following the exact `key={value}`-remount-to-restart-CSS-animation convention `.seat-win`
+In `Seat.tsx`, add a `deadlineMs?: number` prop and render a ring only for the seat currently on the clock, following
+the exact `key={value}`-remount-to-restart-CSS-animation convention `.seat-win`
 already uses (line 40) — no `setInterval`, no effect:
 
 ```tsx
@@ -1180,12 +1170,11 @@ export function Seat({seat, isViewer, isTurn, index, payout = 0, deadlineMs}: {
 }
 ```
 
-`Date.now()` here runs once per render at mount/prop-change time (same as any plain React render),
-not inside an effect or interval — this is the same "compute once, let CSS own the animation clock"
-pattern the codebase already uses, not the anti-pattern flagged earlier this session
-(`react-hooks/set-state-in-effect` was about calling `setState` from inside a `useEffect` tick loop;
-this reads `Date.now()` during render and hands the result straight to a CSS custom duration, no
-state involved).
+`Date.now()` here runs once per render at mount/prop-change time (same as any plain React render), not inside an effect
+or interval — this is the same "compute once, let CSS own the animation clock"
+pattern the codebase already uses, not the anti-pattern flagged earlier this session (`react-hooks/set-state-in-effect`
+was about calling `setState` from inside a `useEffect` tick loop; this reads `Date.now()` during render and hands the
+result straight to a CSS custom duration, no state involved).
 
 - [ ] **Step 4: Pass `deadlineMs` from page.tsx**
 
@@ -1201,11 +1190,11 @@ Where `<Seat .../>` is rendered (~line 152):
 
 - [ ] **Step 5: Add the CSS**
 
-In `globals.css`, add near `.game-seat.is-turn:after` (~line 995/1601 — there are two rules, a base
-and a media-query override; add the new class near the base one, honoring
+In `globals.css`, add near `.game-seat.is-turn:after` (~line 995/1601 — there are two rules, a base and a media-query
+override; add the new class near the base one, honoring
 `prefers-reduced-motion` the same way surrounding keyframes do — check the existing
-`@media (prefers-reduced-motion: reduce)` block in this file and add `.seat-turn-ring` to its
-animation-disabling selector list):
+`@media (prefers-reduced-motion: reduce)` block in this file and add `.seat-turn-ring` to its animation-disabling
+selector list):
 
 ```css
 .seat-turn-ring {
@@ -1248,11 +1237,11 @@ cd ui && npx eslint src --max-warnings 0 && npx next build
 cd ui && npm run dev
 ```
 
-Open `?scenario=timeout` and confirm: the seat on the clock shows a shrinking/rotating ring that
-reaches empty at the configured deadline; a real two-browser session confirms sitting-out
-(`Sentar fora`) marks the seat `Ausente` and excludes it from the next hand, and `Voltar a jogar`
-either returns immediately or (if that seat is about to be dealt SB/BB) the player is charged the
-big blind on the next hand they're dealt into.
+Open `?scenario=timeout` and confirm: the seat on the clock shows a shrinking/rotating ring that reaches empty at the
+configured deadline; a real two-browser session confirms sitting-out (`Sentar fora`) marks the seat `Ausente` and
+excludes it from the next hand, and `Voltar a jogar`
+either returns immediately or (if that seat is about to be dealt SB/BB) the player is charged the big blind on the next
+hand they're dealt into.
 
 - [ ] **Step 8: Commit**
 
@@ -1264,24 +1253,23 @@ git commit -m "feat(ui): sitting-out toggle, per-turn countdown ring, drop manua
 
 ## Self-Review Notes
 
-- **Spec coverage:** "entra pronto, pode sentar fora" → Task 1 + Task 6. "voltar custa BB se perto do
-  próprio blind" → Task 2 (engine) + Task 3 (wiring). "timer 15s ajustável por sala, vale pra todo
-  mundo" → Task 4 (config) + Task 5 (engine/actor) + Task 6 (UI countdown).
-- **Real bug found and fixed during design, not just requested feature:** running a brand-new
-  15s-for-everyone timer *alongside* the existing 30s disconnect-only timer would have silently
-  broken the "3 consecutive disconnected hands → auto sit-out" escalation (the new timer would
-  always fold first, so the old timer — and its `consecutiveDisconnectedHands` increment — would
-  never fire again once a player is disconnected on their own turn). Task 5 unifies both into one
-  timer specifically to avoid this; this is called out explicitly in Task 5's Architecture summary
-  and Step 5's handler so a future reader doesn't "fix" it back apart.
+- **Spec coverage:** "entra pronto, pode sentar fora" → Task 1 + Task 6. "voltar custa BB se perto do próprio blind" →
+  Task 2 (engine) + Task 3 (wiring). "timer 15s ajustável por sala, vale pra todo mundo" → Task 4 (config) + Task 5
+  (engine/actor) + Task 6 (UI countdown).
+- **Real bug found and fixed during design, not just requested feature:** running a brand-new 15s-for-everyone timer
+  *alongside* the existing 30s disconnect-only timer would have silently broken the "3 consecutive disconnected hands →
+  auto sit-out" escalation (the new timer would always fold first, so the old timer — and its
+  `consecutiveDisconnectedHands` increment — would never fire again once a player is disconnected on their own turn).
+  Task 5 unifies both into one timer specifically to avoid this; this is called out explicitly in Task 5's Architecture
+  summary and Step 5's handler so a future reader doesn't "fix" it back apart.
 - **Type/wire consistency:** `hand.Snapshot.ActionDeadlineUnixMs int64` (Task 5) →
-  `TableSnapshot.action_deadline_unix_ms?: number` (Task 6) → `Seat`'s `deadlineMs` prop — same
-  value, no transformation, matches the existing `current_player_id`/`current_player_id` pass-through
-  pattern already in `page.tsx`.
-- **No placeholders except one, explicitly flagged:** Task 6 Step 5's CSS ring is intentionally a
-  minimal rotating-border placeholder, not a full conic-gradient drain — flagged inline as a design
-  refinement point, not silently shipped as "done."
-- **Out of scope, confirmed by the user, not touched by this plan:** Feature B (5s countdown before
-  next hand), Feature C (voluntary card reveal + hand-type text + sounds), Feature D (hand-history
-  persistence for audit). Bug "winner's cards shown on fold-to-one" was fixed separately, before this
-  plan, per the user's confirmed ordering (bug3 → A → B → C → D).
+  `TableSnapshot.action_deadline_unix_ms?: number` (Task 6) → `Seat`'s `deadlineMs` prop — same value, no
+  transformation, matches the existing `current_player_id`/`current_player_id` pass-through pattern already in
+  `page.tsx`.
+- **No placeholders except one, explicitly flagged:** Task 6 Step 5's CSS ring is intentionally a minimal
+  rotating-border placeholder, not a full conic-gradient drain — flagged inline as a design refinement point, not
+  silently shipped as "done."
+- **Out of scope, confirmed by the user, not touched by this plan:** Feature B (5s countdown before next hand), Feature
+  C (voluntary card reveal + hand-type text + sounds), Feature D (hand-history persistence for audit). Bug "winner's
+  cards shown on fold-to-one" was fixed separately, before this plan, per the user's confirmed ordering (bug3 → A → B →
+  C → D).

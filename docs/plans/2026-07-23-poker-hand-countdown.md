@@ -4,36 +4,32 @@
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
 > checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Depois que uma mão chega em `Complete`, a mesa espera 5 segundos (visíveis a todos via um
-indicador de contagem regressiva) e então inicia a próxima mão automaticamente — sem qualquer ação do
-cliente. Isso fecha uma lacuna real deixada pela Feature A: o Task 6 daquele plano removeu o botão
-manual "Estou pronto", e hoje **nada** dispara `tryStartHand()` depois que uma mão termina, exceto um
-novo `ReadyCmd`/`JoinCmd` — ou seja, sem esta feature a mesa trava em `complete` para sempre depois da
-primeira mão em produção.
+**Goal:** Depois que uma mão chega em `Complete`, a mesa espera 5 segundos (visíveis a todos via um indicador de
+contagem regressiva) e então inicia a próxima mão automaticamente — sem qualquer ação do cliente. Isso fecha uma lacuna
+real deixada pela Feature A: o Task 6 daquele plano removeu o botão manual "Estou pronto", e hoje **nada** dispara
+`tryStartHand()` depois que uma mão termina, exceto um novo `ReadyCmd`/`JoinCmd` — ou seja, sem esta feature a mesa
+trava em `complete` para sempre depois da primeira mão em produção.
 
-**Architecture:** `hand.Table` (engine puro) não muda — `StartHand`/`tryStartHand` já existem e já
-toleram "menos de 2 prontos" como no-op silencioso (`StartHand`'s erro é engolido em `tryStartHand`,
-`api/internal/table/actor.go:266-272`). Toda a lógica nova vive em `table.Actor`, seguindo exatamente o
-mesmo padrão já estabelecido pelo timer de turno unificado (`armTurnTimer`/`turnTimeoutCmd`/
+**Architecture:** `hand.Table` (engine puro) não muda — `StartHand`/`tryStartHand` já existem e já toleram "menos de 2
+prontos" como no-op silencioso (`StartHand`'s erro é engolido em `tryStartHand`,
+`api/internal/table/actor.go:266-272`). Toda a lógica nova vive em `table.Actor`, seguindo exatamente o mesmo padrão já
+estabelecido pelo timer de turno unificado (`armTurnTimer`/`turnTimeoutCmd`/
 `handleTurnTimeout`, Feature A Task 5) e pela escalada de blind (`internal/table/escalation.go`): um
-`time.AfterFunc` que só despacha um comando pro loop único do ator (`a.Dispatch`), nunca muta estado
-direto da goroutine do timer. O timer de próxima-mão é armado dentro de `broadcastAll` (mesmo lugar que
-já arma o `turnTimer`), condicionado a `stage == Complete`, e é idempotente por `handID` (uma vez
-armado para um `handID`, não rearma de novo até o `handID` mudar — evita reiniciar o contador de 5s a
-cada broadcast).
+`time.AfterFunc` que só despacha um comando pro loop único do ator (`a.Dispatch`), nunca muta estado direto da goroutine
+do timer. O timer de próxima-mão é armado dentro de `broadcastAll` (mesmo lugar que já arma o `turnTimer`), condicionado
+a `stage == Complete`, e é idempotente por `handID` (uma vez armado para um `handID`, não rearma de novo até o `handID`
+mudar — evita reiniciar o contador de 5s a cada broadcast).
 
-**Tech Stack:** Go (`internal/table`, `internal/engine/hand`), Next.js 16 (`useTableRealtime.ts`,
-CSS-driven animations, mesmo padrão `key={value}` + `animationDuration` já usado pelo anel de turno).
+**Tech Stack:** Go (`internal/table`, `internal/engine/hand`), Next.js 16 (`useTableRealtime.ts`, CSS-driven animations,
+mesmo padrão `key={value}` + `animationDuration` já usado pelo anel de turno).
 
 ## Global Constraints
 
 - `internal/engine/hand` continua sem import de `time`/rede — o delay de 5s vive só em `table.Actor`.
-- `go test ./... -race`; testes com `//go:build integration` precisam do DynamoDB Local
-  (`docker-compose.test.yml`).
-- UI: `eslint src --max-warnings 0` && `next build` sem erros/warnings. Nada de `setInterval`/estado
-  ticking em efeito — reusar a técnica já validada (CSS anima, o componente só calcula a duração uma
-  vez a partir de `deadlineMs - nowMs`, ambos vindos de props/snapshot, nunca de `Date.now()` chamado
-  durante o render).
+- `go test ./... -race`; testes com `//go:build integration` precisam do DynamoDB Local (`docker-compose.test.yml`).
+- UI: `eslint src --max-warnings 0` && `next build` sem erros/warnings. Nada de `setInterval`/estado ticking em efeito —
+  reusar a técnica já validada (CSS anima, o componente só calcula a duração uma vez a partir de `deadlineMs - nowMs`,
+  ambos vindos de props/snapshot, nunca de `Date.now()` chamado durante o render).
 
 ---
 
@@ -50,13 +46,12 @@ CSS-driven animations, mesmo padrão `key={value}` + `animationDuration` já usa
 
 - `hand.Snapshot` gains `NextHandUnixMs int64 \`json:"next_hand_unix_ms,omitempty"\`` — populado por
   `Actor`, igual `ActionDeadlineUnixMs`.
-- New const `NextHandDelay = 5 * time.Second` em `internal/table/turntimeout.go` (mesmo arquivo que já
-  tem `DefaultTurnTimeout`, mesma convenção).
+- New const `NextHandDelay = 5 * time.Second` em `internal/table/turntimeout.go` (mesmo arquivo que já tem
+  `DefaultTurnTimeout`, mesma convenção).
 - `Actor` ganha `nextHandTimer *time.Timer`, `nextHandDeadline time.Time`, `nextHandArmedFor string`
   (guarda o `handID` para o qual o timer já foi armado — chave de idempotência, análoga a
   `turnDeadlineFor`).
-- New command `nextHandCmd{Reply chan error}` (sem `PlayerID` — é uma transição de mesa inteira, não
-  de um jogador).
+- New command `nextHandCmd{Reply chan error}` (sem `PlayerID` — é uma transição de mesa inteira, não de um jogador).
 - New `func (a *Actor) armNextHandTimer()` chamado de dentro de `broadcastAll`, ao lado de
   `armTurnTimer`.
 - New `func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error`.
@@ -259,8 +254,8 @@ cd api && go test ./internal/table/... -run TestArmNextHandTimer -v
 
 - [ ] **Step 8: Teste de integração ponta a ponta**
 
-Add to `../../api/internal/table/nexthand_integration_test.go` (`//go:build integration`, mesmo padrão
-de `disconnect_test.go`):
+Add to `../../api/internal/table/nexthand_integration_test.go` (`//go:build integration`, mesmo padrão de
+`disconnect_test.go`):
 
 ```go
 func TestHandCompleteAutoStartsNextHandAfterDelay(t *testing.T) {
@@ -330,8 +325,8 @@ git commit -m "feat(api): auto-start the next hand 5s after the previous one com
 
 - `TableSnapshot.next_hand_unix_ms?: number` (campo novo do wire).
 - Reaproveita o padrão já validado do anel de turno (Feature A Task 6): `key={value}` +
-  `animationDuration` calculado uma vez por render a partir de `deadlineMs - nowMs` (ambos vindos de
-  props/snapshot — `nowMs` já existe como `rt.snapshotAt`, exportado pelo hook desde a Feature A).
+  `animationDuration` calculado uma vez por render a partir de `deadlineMs - nowMs` (ambos vindos de props/snapshot —
+  `nowMs` já existe como `rt.snapshotAt`, exportado pelo hook desde a Feature A).
 
 - [ ] **Step 1: Campo TS**
 
@@ -341,8 +336,8 @@ git commit -m "feat(api): auto-start the next hand 5s after the previous one com
 
 - [ ] **Step 2: Banda "Mão encerrada" ganha o anel**
 
-Em `page.tsx`, a banda que já existe (Feature A Task 6) ganha um indicador visual ao lado do texto,
-só quando `s.next_hand_unix_ms` está presente:
+Em `page.tsx`, a banda que já existe (Feature A Task 6) ganha um indicador visual ao lado do texto, só quando
+`s.next_hand_unix_ms` está presente:
 
 ```tsx
       {!connectionMessage && (s.stage === 'waiting_for_players' || s.stage === 'complete') && <div className="reconnect-notice">
@@ -379,8 +374,7 @@ Ao lado de `.seat-turn-ring` em `globals.css`:
 }
 ```
 
-(Reaproveita o `@keyframes seat-turn-countdown` já criado na Feature A — mesma animação, elemento
-diferente.)
+(Reaproveita o `@keyframes seat-turn-countdown` já criado na Feature A — mesma animação, elemento diferente.)
 
 - [ ] **Step 4: Mock**
 
@@ -393,8 +387,8 @@ Em `mock.ts`, adicionar um cenário (ou estender o existente `complete`, se houv
 cd ui && npx eslint src --max-warnings 0 && npx next build
 ```
 
-Abrir a mesa após uma mão terminar (dois navegadores/abas) e confirmar: o anel aparece por ~5s e a
-próxima mão começa sozinha, sem clique.
+Abrir a mesa após uma mão terminar (dois navegadores/abas) e confirmar: o anel aparece por ~5s e a próxima mão começa
+sozinha, sem clique.
 
 - [ ] **Step 6: Commit**
 
@@ -405,13 +399,12 @@ git commit -m "feat(ui): visual countdown before the next hand auto-starts"
 
 ## Self-Review Notes
 
-- **Por que esta feature existe de verdade, não é só polish:** confirmado por leitura de código (não
-  suposição) que depois do Task 6 da Feature A (remoção do botão manual "Estou pronto"), não existe
-  NENHUM outro gatilho de `tryStartHand()` além de `ReadyCmd`/`JoinCmd` — sem esta feature, toda mesa
-  trava em `complete` após a primeira mão em produção assim que a Feature A for implantada sozinha.
-- **Reaproveita 100% dos padrões já validados na Feature A** (timer via `time.AfterFunc` despachando
-  comando pro loop do ator, idempotência por chave, stamp de deadline em `broadcastAll`, anel CSS via
+- **Por que esta feature existe de verdade, não é só polish:** confirmado por leitura de código (não suposição) que
+  depois do Task 6 da Feature A (remoção do botão manual "Estou pronto"), não existe NENHUM outro gatilho de
+  `tryStartHand()` além de `ReadyCmd`/`JoinCmd` — sem esta feature, toda mesa trava em `complete` após a primeira mão em
+  produção assim que a Feature A for implantada sozinha.
+- **Reaproveita 100% dos padrões já validados na Feature A** (timer via `time.AfterFunc` despachando comando pro loop do
+  ator, idempotência por chave, stamp de deadline em `broadcastAll`, anel CSS via
   `key`-remount) — nenhum mecanismo novo, só uma segunda instância do mesmo mecanismo.
-- **Fora de escopo, não tocado por este plano:** Feature C (reveal voluntário/sons/texto de tipo de
-  mão) e Feature D (histórico/auditoria), conforme ordenação confirmada pelo usuário (bug3 → A → B → C
-  → D).
+- **Fora de escopo, não tocado por este plano:** Feature C (reveal voluntário/sons/texto de tipo de mão) e Feature D
+  (histórico/auditoria), conforme ordenação confirmada pelo usuário (bug3 → A → B → C → D).

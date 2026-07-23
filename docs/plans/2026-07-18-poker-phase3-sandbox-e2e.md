@@ -5,41 +5,40 @@
 
 **Goal:** A fully playable sandbox-money product: room creation/joining (public/private), the ready system, blind
 escalation, sandbox buy-in/cash-out against `ctech-wallet`'s existing sandbox credit/debit endpoints, and the
-`currency_mode` boundary enforced end to end (OVERVIEW.md §2, §5, §7). This is the MVP's actual ship target —
-real-money mode is Phase 5, gated on two `ctech-wallet` prerequisites that are out of scope here.
+`currency_mode` boundary enforced end to end (OVERVIEW.md §2, §5, §7). This is the MVP's actual ship target — real-money
+mode is Phase 5, gated on two `ctech-wallet` prerequisites that are out of scope here.
 
-**Architecture:** A new `rooms` DynamoDB table is the lobby *directory* (metadata: stakes, visibility, config) —
-it is not the live authoritative table state, which continues to live in Phase 2's `table.Actor` +
-snapshot/action-log. Buy-in debits sandbox chips from `ctech-wallet` before seating a player in the live actor;
-cash-out reverses the order (remove from the actor first, then credit). Both directions use the same
-compensating-action discipline OVERVIEW.md §5 demands even in sandbox mode: if the wallet call and the seat
-mutation can't both succeed atomically, the wallet call always happens first, and a failed second step is
-reversed with an idempotency key distinct from the original attempt.
+**Architecture:** A new `rooms` DynamoDB table is the lobby *directory* (metadata: stakes, visibility, config) — it is
+not the live authoritative table state, which continues to live in Phase 2's `table.Actor` + snapshot/action-log. Buy-in
+debits sandbox chips from `ctech-wallet` before seating a player in the live actor; cash-out reverses the order (remove
+from the actor first, then credit). Both directions use the same compensating-action discipline OVERVIEW.md §5 demands
+even in sandbox mode: if the wallet call and the seat mutation can't both succeed atomically, the wallet call always
+happens first, and a failed second step is reversed with an idempotency key distinct from the original attempt.
 
-**Tech Stack:** Same as Phase 2 (Go, Fiber v3, `api-commons/dynamo`), plus `api-commons/oauth2client` for the
-outbound M2M call to `ctech-wallet`.
+**Tech Stack:** Same as Phase 2 (Go, Fiber v3, `api-commons/dynamo`), plus `api-commons/oauth2client` for the outbound
+M2M call to `ctech-wallet`.
 
 ## Global Constraints
 
 - Every route lives under `/v1.0/` (existing convention).
 - Room config is set once at creation for private rooms and is never editable afterward (OVERVIEW.md §2).
-- `currency_mode` is checked on every wallet-adjacent code path, not just at room creation (OVERVIEW.md §5) — this
-  plan only ever creates `sandbox` rooms; any request for `real` is rejected with `400`, since Phase 5's two
-  prerequisites (wallet hold/capture endpoint, wallet DynamoDB throughput) are outside this plan's scope.
+- `currency_mode` is checked on every wallet-adjacent code path, not just at room creation (OVERVIEW.md §5) — this plan
+  only ever creates `sandbox` rooms; any request for `real` is rejected with `400`, since Phase 5's two prerequisites
+  (wallet hold/capture endpoint, wallet DynamoDB throughput) are outside this plan's scope.
 - Public rooms: fixed stakes from a curated list, no blind escalation, equity display always on (no toggle).
 - Private rooms: `blind_interval_minutes`/`blind_multiplier`/`blind_max` optional at creation only;
   `equity_display_enabled` (default `true`) also creation-only.
 - Buy-in amount is a multiple of the big blind, bounded by the room's configured min/max (OVERVIEW.md §2).
-- Mid-hand join on public rooms seats a player as `PENDING_ENTRY`; they must post the big blind to be dealt into
-  the next hand, or they keep waiting undealt (OVERVIEW.md §2 — the "post to play" rule).
+- Mid-hand join on public rooms seats a player as `PENDING_ENTRY`; they must post the big blind to be dealt into the
+  next hand, or they keep waiting undealt (OVERVIEW.md §2 — the "post to play" rule).
 - Wallet sandbox integration targets the *current, confirmed-live* `ctech-wallet` contract:
   `POST /v1.0/internal/wallet/sandbox/credit` and `/debit`, scopes `internal:wallet:credit`/`internal:wallet:debit`,
   body `{user_id, amount, idempotency_key, reason}` (all confirmed against
   `ctech-wallet/api/internal/api/v1/{router,internal,dto}.go`).
-- **External prerequisite, not built by this plan:** `ctech-account` must seed an M2M `client_credentials` client
-  for poker (`POKER_CLIENT_ID`/`POKER_CLIENT_SECRET`) with `allowed_scopes: ["internal:wallet:credit",
-  "internal:wallet:debit"]`, the same way `ctech-wallet`'s own M2M client was seeded for its KYC scope. Flag this
-  to a human before Task 2 is exercised against a real (non-fake) wallet.
+- **External prerequisite, not built by this plan:** `ctech-account` must seed an M2M `client_credentials` client for
+  poker (`POKER_CLIENT_ID`/`POKER_CLIENT_SECRET`) with `allowed_scopes: ["internal:wallet:credit",
+  "internal:wallet:debit"]`, the same way `ctech-wallet`'s own M2M client was seeded for its KYC scope. Flag this to a
+  human before Task 2 is exercised against a real (non-fake) wallet.
 
 ---
 
@@ -256,17 +255,17 @@ func (s *Store) SetStatus(ctx context.Context, roomID, status string) error {
 }
 ```
 
-`ListPublic`'s `startKeyToken` parameter is accepted-but-unused today — flagged inline rather than removed, since
-the interface contract in this task's own header commits callers (Task 4) to that signature; wiring real
-`ExclusiveStartKey` pagination is one line to add later (`dynamo.QueryOpts.ExclusiveStartKey`) once room counts
-justify it.
+`ListPublic`'s `startKeyToken` parameter is accepted-but-unused today — flagged inline rather than removed, since the
+interface contract in this task's own header commits callers (Task 4) to that signature; wiring real
+`ExclusiveStartKey` pagination is one line to add later (`dynamo.QueryOpts.ExclusiveStartKey`) once room counts justify
+it.
 
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `go test -tags integration ./internal/roomstore/... -v`
 Expected: PASS. (`testClient`/`mustCreateTestTable` follow the exact pattern from Phase 2 Task 2's
-`tablestore/dynamo_test.go` — copy those two helpers into this test file, substituting the table name/GSI
-definitions for `poker_rooms` with its two GSIs, both string-keyed, `ProjectionType.ALL` equivalent
+`tablestore/dynamo_test.go` — copy those two helpers into this test file, substituting the table name/GSI definitions
+for `poker_rooms` with its two GSIs, both string-keyed, `ProjectionType.ALL` equivalent
 `AttributeDefinitions` for `gsi_public`/`gsi_share_code`.)
 
 - [ ] **Step 6: Commit**
@@ -513,14 +512,14 @@ git commit -m "feat(walletclient): sandbox credit/debit client against ctech-wal
   (Phase 2 — needs a new `JoinCmd`/`LeaveCmd` this task adds), `roomstore.Store` (Task 1).
 - Produces: `type Service struct{...}`, `func NewService(wallet *walletclient.Client, manager
   *tablemanager.Manager, rooms *roomstore.Store) *Service`, `func (s *Service) BuyIn(ctx, roomID, playerID string,
-  amount int64) error`, `func (s *Service) CashOut(ctx, roomID, playerID string) (int64, error)` — consumed by
-  Task 4's HTTP routes.
+  amount int64) error`, `func (s *Service) CashOut(ctx, roomID, playerID string) (int64, error)` — consumed by Task 4's
+  HTTP routes.
 
-Debit happens before seating (a debit that isn't followed by a seat is just "money not spent yet" from the
-player's point of view, recoverable by retrying the same buy-in); seating happens before credit on cash-out (a
-credit issued before the seat is actually removed would let a race double-spend the stack). If seating fails
-after a successful debit, a single compensating credit — with a *different* idempotency key derived from the same
-attempt — reverses it immediately.
+Debit happens before seating (a debit that isn't followed by a seat is just "money not spent yet" from the player's
+point of view, recoverable by retrying the same buy-in); seating happens before credit on cash-out (a credit issued
+before the seat is actually removed would let a race double-spend the stack). If seating fails after a successful debit,
+a single compensating credit — with a *different* idempotency key derived from the same attempt — reverses it
+immediately.
 
 - [ ] **Step 1: Add `JoinCmd`/`LeaveCmd` to Phase 2's `table` package**
 
@@ -582,8 +581,8 @@ return nil
 ```
 
 `AddWaitingPlayer` and `RemovePlayerForActor` don't exist on `hand.Table` yet — `AddMidHandJoiner` (existing) only
-covers the mid-hand case; a between-hands join has always implicitly been "construct the whole player slice up
-front" in every test so far, since Phase 0/1 never needed a runtime add-before-first-hand path.
+covers the mid-hand case; a between-hands join has always implicitly been "construct the whole player slice up front" in
+every test so far, since Phase 0/1 never needed a runtime add-before-first-hand path.
 
 ```go
 // api/internal/engine/hand/hand.go — add near AddMidHandJoiner
@@ -646,9 +645,9 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/table"
+	"gopkg.aoctech.app/poker/api/internal/tablelease"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 	"gopkg.aoctech.app/poker/api/internal/tableowner"
-	"gopkg.aoctech.app/poker/api/internal/tablelease"
 )
 
 type fakeWallet struct {
@@ -829,9 +828,9 @@ func (s *Service) CashOut(ctx context.Context, roomID, playerID string) (int64, 
 }
 ```
 
-`Actor.TableForTest()` (used only by this task's test) already exists from Phase 2 Task 12 — no new export needed
-beyond what that task added. `hand` import in `service.go` is unused — remove it (it was only needed by the
-test file, which imports it separately).
+`Actor.TableForTest()` (used only by this task's test) already exists from Phase 2 Task 12 — no new export needed beyond
+what that task added. `hand` import in `service.go` is unused — remove it (it was only needed by the test file, which
+imports it separately).
 
 - [ ] **Step 5: Run test to verify it passes**
 
@@ -859,9 +858,9 @@ git commit -m "feat(buyin): sandbox buy-in/cash-out orchestration with debit-the
 
 **Interfaces:**
 
-- Consumes: `roomstore.Store` (Task 1), `buyin.Service` (Task 3), `jwtverify.Verifier.Middleware()`-equivalent
-  (Phase 2 introduced `jwtverify.Verifier` but no reusable Fiber middleware wrapper yet — this task adds one,
-  mirroring `ctech-wallet`'s `middleware.Verifier.Middleware()`).
+- Consumes: `roomstore.Store` (Task 1), `buyin.Service` (Task 3), `jwtverify.Verifier.Middleware()`-equivalent (Phase 2
+  introduced `jwtverify.Verifier` but no reusable Fiber middleware wrapper yet — this task adds one, mirroring
+  `ctech-wallet`'s `middleware.Verifier.Middleware()`).
 - Produces: routes `POST /v1.0/rooms`, `GET /v1.0/rooms`, `GET /v1.0/rooms/:id`, `POST /v1.0/rooms/:id/join`,
   `POST /v1.0/rooms/:id/leave`, `POST /v1.0/rooms/:id/ready`.
 
@@ -967,8 +966,8 @@ func TestCreatePublicRoomRejectsBlindEscalation(t *testing.T) {
 ```
 
 The anonymous `BlindEscalation` struct literal above won't satisfy `*roomstore.BlindEscalation`'s type — fix by
-importing `roomstore` in the test and constructing `&roomstore.BlindEscalation{...}` directly instead of an
-anonymous struct.
+importing `roomstore` in the test and constructing `&roomstore.BlindEscalation{...}` directly instead of an anonymous
+struct.
 
 - [ ] **Step 4: Run test to verify it fails**
 
@@ -1233,8 +1232,8 @@ git commit -m "feat(api): seed live tables from room configuration instead of a 
 
 **Interfaces:**
 
-- Modifies `StartHand` so the very first hand's dealer button is drawn via CSPRNG among ready players
-  (OVERVIEW.md §2), replacing the existing "defaults to seat 0" behavior documented in `StartHand`'s own comment.
+- Modifies `StartHand` so the very first hand's dealer button is drawn via CSPRNG among ready players (OVERVIEW.md §2),
+  replacing the existing "defaults to seat 0" behavior documented in `StartHand`'s own comment.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1441,14 +1440,14 @@ active = append(active, p)
 }
 ```
 
-A player who opts in is dealt Active like anyone else — `blindSeats`' existing logic already determines who posts
-the big blind based on seat position relative to the dealer, not based on `PendingEntry` history, so no change is
-needed there to actually enforce "must post the big blind": the enforcement is that they're excluded from `active`
-entirely until they opt in, and once in, ordinary blind assignment applies. This matches real cardroom behavior
-(a "post to play" seat pays the big blind out of position on their first hand back, which `blindSeats`' rotation
-already produces for whichever seat happens to be in the big blind position — good enough for MVP; a stricter
-"always exactly the big blind regardless of seat position" rule is not implemented, flagged here rather than
-silently assumed equivalent).
+A player who opts in is dealt Active like anyone else — `blindSeats`' existing logic already determines who posts the
+big blind based on seat position relative to the dealer, not based on `PendingEntry` history, so no change is needed
+there to actually enforce "must post the big blind": the enforcement is that they're excluded from `active`
+entirely until they opt in, and once in, ordinary blind assignment applies. This matches real cardroom behavior (a "post
+to play" seat pays the big blind out of position on their first hand back, which `blindSeats`' rotation already produces
+for whichever seat happens to be in the big blind position — good enough for MVP; a stricter
+"always exactly the big blind regardless of seat position" rule is not implemented, flagged here rather than silently
+assumed equivalent).
 
 - [ ] **Step 4: Wire `PostBigBlindCmd` into the table Actor / WS gateway**
 
@@ -1504,8 +1503,8 @@ git commit -m "feat(hand): enforce post-to-play for mid-hand joiners before they
 **Interfaces:**
 
 - Consumes: `roomstore.BlindEscalation` (Task 1).
-- Produces: `func (a *Actor) StartEscalation(cfg roomstore.BlindEscalation)` — called once, right after a private
-  room's Actor is created (wired in Task 9).
+- Produces: `func (a *Actor) StartEscalation(cfg roomstore.BlindEscalation)` — called once, right after a private room's
+  Actor is created (wired in Task 9).
 
 Escalation ticks are posted onto the Actor's own command channel — keeping every mutation of `hand.Table` (even a
 blind-amount bump) inside the single-writer loop, consistent with every other Actor mutation in this plan.
@@ -1648,9 +1647,9 @@ git commit -m "feat(table): private-room blind escalation on a timer"
 
 **Interfaces:**
 
-- `tablemanager.Manager.Acquire` gains an optional post-creation hook so `rooms.go` can call `StartEscalation` on
-  a freshly created private-room Actor without `tablemanager` importing `roomstore` (keeping the layering: engine
-  ← table ← tablemanager ← api/v1, never the reverse).
+- `tablemanager.Manager.Acquire` gains an optional post-creation hook so `rooms.go` can call `StartEscalation` on a
+  freshly created private-room Actor without `tablemanager` importing `roomstore` (keeping the layering: engine ←
+  table ← tablemanager ← api/v1, never the reverse).
 
 - [ ] **Step 1: Add an acquire hook**
 
@@ -1667,8 +1666,7 @@ hook(actor)
 ```
 
 Every existing call site (Phase 2 Task 7's `RegisterTableWS`, Task 8's `RegisterTableProxy`, Task 3's
-`buyin.Service`, this plan's own tests) keeps compiling unchanged — `onCreated` is variadic, so omitting it is a
-no-op.
+`buyin.Service`, this plan's own tests) keeps compiling unchanged — `onCreated` is variadic, so omitting it is a no-op.
 
 - [ ] **Step 2: Enforce `currency_mode` and start escalation on room creation**
 
@@ -1682,8 +1680,8 @@ no-op.
 ```
 
 No code change is actually needed beyond the comment above — `createRoom` (Task 4) already hardcodes
-`CurrencyMode: "sandbox"` and `CreateRoomRequest` has no field a caller could use to request otherwise. This step
-exists to make that enforcement decision explicit and reviewable, not to add new logic.
+`CurrencyMode: "sandbox"` and `CreateRoomRequest` has no field a caller could use to request otherwise. This step exists
+to make that enforcement decision explicit and reviewable, not to add new logic.
 
 - [ ] **Step 3: Start escalation for private rooms with a configured timer**
 
@@ -1827,8 +1825,8 @@ resources: [handSnapshotsTableArn, actionLogTableArn, roomsTableArn],
     `export POKER_CLIENT_SECRET`,
 ```
 
-`service.instanceRole` needs `ssm:GetParameter` on these three paths, in addition to the `valkeyUrl` grant
-presumably already present from the foundations plan — add (or extend) the SSM policy statement accordingly:
+`service.instanceRole` needs `ssm:GetParameter` on these three paths, in addition to the `valkeyUrl` grant presumably
+already present from the foundations plan — add (or extend) the SSM policy statement accordingly:
 
 ```typescript
 // cdk/lib/api-stack.ts — instance role grants
@@ -1858,10 +1856,10 @@ roomsTableArn: dynamoStack.tables.get('poker_rooms')!.tableArn,
 `/ctech/${environment}/poker/poker-client-secret`,
 ```
 
-These three SSM parameters are **not created by this CDK stack** — they must be written manually (or by a
-separate ops runbook) once `ctech-account` has actually seeded poker's M2M client (this plan's Global
-Constraints' external prerequisite). Flag this to a human before deploying; it is infrastructure-as-a-prerequisite,
-not something `cdk deploy` can bootstrap on its own since the client doesn't exist yet at CDK-authoring time.
+These three SSM parameters are **not created by this CDK stack** — they must be written manually (or by a separate ops
+runbook) once `ctech-account` has actually seeded poker's M2M client (this plan's Global Constraints' external
+prerequisite). Flag this to a human before deploying; it is infrastructure-as-a-prerequisite, not something `cdk deploy`
+can bootstrap on its own since the client doesn't exist yet at CDK-authoring time.
 
 - [ ] **Step 7: Synth to verify no CDK errors**
 
@@ -1880,10 +1878,10 @@ git commit -m "feat(cdk): provision rooms table, wire wallet M2M secrets via SSM
 ### Task 11: `PlayerProfile` — poker-local user shadow row + poker ToS gate
 
 **Gap this closes:** every poker table so far (`Seat.player_id`, Task 1's `rooms`, Phase 5's `sessionlog`)
-foreign-keys a bare `user_id` straight from the JWT against ctech-account's own user record. Nothing poker-local
-anchors that id, and nothing gates a poker-specific Terms of Service/fair-play addendum (collusion, chip-dumping,
-action-is-final-once-submitted) — a document distinct from both ctech-account's platform ToS and ctech-wallet's
-gambling addendum. `ctech-wallet` already solved exactly this shape for its own consent needs
+foreign-keys a bare `user_id` straight from the JWT against ctech-account's own user record. Nothing poker-local anchors
+that id, and nothing gates a poker-specific Terms of Service/fair-play addendum (collusion, chip-dumping,
+action-is-final-once-submitted) — a document distinct from both ctech-account's platform ToS and ctech-wallet's gambling
+addendum. `ctech-wallet` already solved exactly this shape for its own consent needs
 (`api/internal/domain/wallet/user.go`'s `User{UserID pk, TermsAddendumVersion, GamblingAddendumVersion, ...}`,
 computed-equality version check, never a stored boolean) — this task is that same pattern, reused, not reinvented.
 
@@ -1907,13 +1905,13 @@ cdk/lib/dynamodb-stack.ts           # MODIFIED — player_profiles table (on-dem
 cdk/test/dynamodb-stack.test.ts     # MODIFIED
 ```
 
-- [ ] **Step 1: Write the failing test.** `player/model_test.go` asserts `PlayerProfile.TermsAccepted()` is a
-  computed equality (`PokerTermsVersion == CurrentPokerTermsVersion`), not a stored boolean — an old/blank
-  version must read as not-accepted. `api/v1/player_test.go` asserts `GET /v1.0/players/me` on a brand-new user
-  auto-provisions the row (never a 404 — a user existing in ctech-account always has a poker profile the moment
-  they touch poker) and reports `poker_terms_accepted: false`; `POST .../terms/accept` stamps the current version
-  and a second `GET` reflects `true`. `buyin/service_test.go` gets a new case: `BuyIn` on a profile that hasn't
-  accepted returns a distinct sentinel error (`ErrTermsNotAccepted`), not a generic failure.
+- [ ] **Step 1: Write the failing test.** `player/model_test.go` asserts `PlayerProfile.TermsAccepted()` is a computed
+  equality (`PokerTermsVersion == CurrentPokerTermsVersion`), not a stored boolean — an old/blank version must read as
+  not-accepted. `api/v1/player_test.go` asserts `GET /v1.0/players/me` on a brand-new user auto-provisions the row
+  (never a 404 — a user existing in ctech-account always has a poker profile the moment they touch poker) and reports
+  `poker_terms_accepted: false`; `POST .../terms/accept` stamps the current version and a second `GET` reflects `true`.
+  `buyin/service_test.go` gets a new case: `BuyIn` on a profile that hasn't accepted returns a distinct sentinel error
+  (`ErrTermsNotAccepted`), not a generic failure.
 
 - [ ] **Step 2: Run test to verify it fails.**
 
@@ -1949,16 +1947,16 @@ func (p *PlayerProfile) TermsAccepted() bool {
 
 `store.go`: `GetOrCreate(ctx, userID)` — conditional `Put` with `attribute_not_exists(pk)`, swallow the
 condition-failure and re-`Get` (same idempotent-create shape `rooms`' store already uses in Task 1). `AcceptTerms(ctx,
-  userID)` — `UpdateItem` setting `poker_terms_version`/`poker_terms_accepted_at`/`updated_at` only (never a
-whole-row `Put` — mirrors wallet's own "partial update, never whole-row Put" comment, since a future second
-consent field on this row must not be silently revocable by an unrelated writer).
+  userID)` — `UpdateItem` setting `poker_terms_version`/`poker_terms_accepted_at`/`updated_at` only (never a whole-row
+`Put` — mirrors wallet's own "partial update, never whole-row Put" comment, since a future second consent field on this
+row must not be silently revocable by an unrelated writer).
 
 - [ ] **Step 4: Implement the service, HTTP routes, and the `BuyIn` gate.** `player.Service.RequireAccepted(ctx,
-  userID) error` — `GetOrCreate` then check `TermsAccepted()`, return `ErrTermsNotAccepted` if not. Wire it as the
-  first check inside `buyin.Service.BuyIn`, before the wallet debit — a player who hasn't accepted poker's terms
-  never reaches the wallet or the seat. HTTP: `GET /v1.0/players/me` returns the profile (auto-provisioning via
-  `GetOrCreate`); `POST /v1.0/players/me/terms/accept` calls `AcceptTerms` then returns the refreshed profile —
-  same shape as ctech-account's own `POST /terms/accept` (`ctech-account/api/internal/handler/terms.go`).
+  userID) error` — `GetOrCreate` then check `TermsAccepted()`, return `ErrTermsNotAccepted` if not. Wire it as the first
+  check inside `buyin.Service.BuyIn`, before the wallet debit — a player who hasn't accepted poker's terms never reaches
+  the wallet or the seat. HTTP: `GET /v1.0/players/me` returns the profile (auto-provisioning via
+  `GetOrCreate`); `POST /v1.0/players/me/terms/accept` calls `AcceptTerms` then returns the refreshed profile — same
+  shape as ctech-account's own `POST /terms/accept` (`ctech-account/api/internal/handler/terms.go`).
 
 - [ ] **Step 5: Run test to verify it passes.**
 
@@ -1977,10 +1975,10 @@ git commit -m "feat: PlayerProfile shadow row + poker-ToS gate on buy-in"
 
 ## Closing note — flagged, not built now
 
-- `buyin.Service.CashOut` has no compensating action if the wallet credit fails after the seat has already been
-  removed (Task 3's doc comment on `CashOut` calls this out explicitly). A production-grade fix mirrors
+- `buyin.Service.CashOut` has no compensating action if the wallet credit fails after the seat has already been removed
+  (Task 3's doc comment on `CashOut` calls this out explicitly). A production-grade fix mirrors
   `ctech-wallet`'s own withdrawal reconciliation job (`cmd/reconcile`) — a background job that finds
-  "removed-but-not-credited" cash-outs and retries the credit. Not built here: it's a real gap worth a human
-  decision on priority before Phase 3 ships to real users, not a silent omission.
-- The M2M client seeding prerequisite (Global Constraints) is a `ctech-account` change this plan cannot make
-  itself — surfaced again here so it isn't lost between this plan's start and its actual execution.
+  "removed-but-not-credited" cash-outs and retries the credit. Not built here: it's a real gap worth a human decision on
+  priority before Phase 3 ships to real users, not a silent omission.
+- The M2M client seeding prerequisite (Global Constraints) is a `ctech-account` change this plan cannot make itself —
+  surfaced again here so it isn't lost between this plan's start and its actual execution.

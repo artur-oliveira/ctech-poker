@@ -5,52 +5,52 @@
 > checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fechar a lacuna documentada como "Phase 5 Task 12 não implementado" —
-`poker_player_hands`/`poker_player_sessions` nunca são escritas em produção — e implementar B32
-(`README.md:150-157`, "commit-reveal is unverifiable by clients") publicando o hash de commit do
-shuffle no início da mão e revelando a semente no fim, para que fairness seja auditável pelo cliente.
+`poker_player_hands`/`poker_player_sessions` nunca são escritas em produção — e implementar B32 (`README.md:150-157`,
+"commit-reveal is unverifiable by clients") publicando o hash de commit do shuffle no início da mão e revelando a
+semente no fim, para que fairness seja auditável pelo cliente.
 
-**Achado importante (verificado por leitura, não suposto):** boa parte da infraestrutura de
-histórico **já existe e está em produção**, não é gap:
+**Achado importante (verificado por leitura, não suposto):** boa parte da infraestrutura de histórico **já existe e está
+em produção**, não é gap:
+
 - `internal/tablestore` já grava toda ação em `poker_action_log` via `CommitAction`
   (`internal/tablestore/dynamo.go:112-171`), e `GET /tables/:tableId/hands/:handId/history`
   (`internal/api/v1/handhistory.go`) já lê isso — auditoria de ações por mão já funciona.
-- `cmd/archiver` já arquiva `poker_action_log` em S3 antes do TTL expirar — retenção de longo prazo já
-  existe.
+- `cmd/archiver` já arquiva `poker_action_log` em S3 antes do TTL expirar — retenção de longo prazo já existe.
 - `internal/sessionlog.Store` (`RecordSession`/`ListSessions`/`RecordHand`/`ListHands`) e os endpoints
-  `GET /players/me/sessions` / `GET /players/me/hands` (`internal/api/v1/playerhistory.go`) **já
-  existem e já estão registrados** — o read-path está pronto.
-- O gap real, confirmado por grep (`RecordSession`/`RecordHand` nunca aparecem fora de teste): o
-  **write-path nunca é chamado** em código de produção. As tabelas ficam vazias para sempre porque
-  ninguém escreve nelas.
+  `GET /players/me/sessions` / `GET /players/me/hands` (`internal/api/v1/playerhistory.go`) **já existem e já estão
+  registrados** — o read-path está pronto.
+- O gap real, confirmado por grep (`RecordSession`/`RecordHand` nunca aparecem fora de teste): o **write-path nunca é
+  chamado** em código de produção. As tabelas ficam vazias para sempre porque ninguém escreve nelas.
 
 **Architecture:** Três mudanças independentes, nesta ordem:
+
 1. Propagar `handID` até o hook de fim-de-mão (`table.Actor.onHandComplete` hoje só recebe
-   `hand.HandOutcome`, sem `handID` — `a.handID` é privado ao `Actor`). Mesmo padrão de mudança de
-   assinatura já usado com sucesso nesta sessão para `tablemanager.NewManager`'s `roomLoader`
-   (Feature A, Task 4) — trocar o tipo do parâmetro/campo, atualizar o único call site real, confirmar
-   que os call sites de teste continuam compilando.
-2. Estender `hand.HandOutcome` com `Payouts`/`Contributions map[string]int64` (ambos já computados
-   dentro de `runShowdown`, só precisam ser anexados ao outcome antes de retornar) para que
+   `hand.HandOutcome`, sem `handID` — `a.handID` é privado ao `Actor`). Mesmo padrão de mudança de assinatura já usado
+   com sucesso nesta sessão para `tablemanager.NewManager`'s `roomLoader`
+   (Feature A, Task 4) — trocar o tipo do parâmetro/campo, atualizar o único call site real, confirmar que os call sites
+   de teste continuam compilando.
+2. Estender `hand.HandOutcome` com `Payouts`/`Contributions map[string]int64` (ambos já computados dentro de
+   `runShowdown`, só precisam ser anexados ao outcome antes de retornar) para que
    `sessionlog.HandItem.NetChange` seja calculável no hook sem reabrir o `Table`.
-3. Chamar `sessionlog.RecordHand` no hook de fim-de-mão (`app.go`) e `sessionlog.RecordSession` nos
-   pontos de entrada/saída do `buyin.Service` (`BuyIn`/`CashOut`), como dependências opcionais
-   nil-checked — mesmo padrão já usado por `s.pending`/`s.players`/`s.rooms` no próprio `buyin.Service`.
+3. Chamar `sessionlog.RecordHand` no hook de fim-de-mão (`app.go`) e `sessionlog.RecordSession` nos pontos de
+   entrada/saída do `buyin.Service` (`BuyIn`/`CashOut`), como dependências opcionais nil-checked — mesmo padrão já usado
+   por `s.pending`/`s.players`/`s.rooms` no próprio `buyin.Service`.
 4. B32: publicar `ShuffleCommitHash` (seguro publicar imediatamente, já documentado em
    `internal/engine/deck/deck.go:51`) no `Snapshot` assim que a mão começa, e revelar
-   `ShuffleServerSeedHex` só quando `stage == Complete` (a mesma janela de tempo que `revealAll` já
-   usa para hole cards — nunca revelar a semente enquanto a mão ainda pode ser influenciada por ela).
+   `ShuffleServerSeedHex` só quando `stage == Complete` (a mesma janela de tempo que `revealAll` já usa para hole
+   cards — nunca revelar a semente enquanto a mão ainda pode ser influenciada por ela).
 
 **Tech Stack:** Go (`internal/engine/hand`, `internal/table`, `internal/tablemanager`,
 `internal/app`, `internal/buyin`, `internal/sessionlog`).
 
 ## Global Constraints
 
-- `internal/engine/hand` continua sem import de `time`/rede — `ShuffleCommitHash`/`ServerSeed` já são
-  campos de `deck.ShuffleResult`, nada novo a computar ali, só a exposição via `Snapshot`.
+- `internal/engine/hand` continua sem import de `time`/rede — `ShuffleCommitHash`/`ServerSeed` já são campos de
+  `deck.ShuffleResult`, nada novo a computar ali, só a exposição via `Snapshot`.
 - `go test ./... -race`; testes com `//go:build integration` precisam do DynamoDB Local.
-- Nenhuma chamada a `sessionlog`/hooks novos pode ser fatal ao fluxo principal — seguir exatamente o
-  padrão já existente em `app.go`'s `onHandComplete` (`slog.Error` e seguir em frente, nunca abortar a
-  mão por causa de uma falha de auditoria).
+- Nenhuma chamada a `sessionlog`/hooks novos pode ser fatal ao fluxo principal — seguir exatamente o padrão já existente
+  em `app.go`'s `onHandComplete` (`slog.Error` e seguir em frente, nunca abortar a mão por causa de uma falha de
+  auditoria).
 
 ---
 
@@ -195,8 +195,8 @@ git commit -m "feat(api): propagate handID through the hand-complete hook"
 
 **Interfaces:**
 
-- `HandOutcome` ganha `Payouts map[string]int64` e `Contributions map[string]int64` — ambos já
-  computados como variáveis locais dentro de `runShowdown` (`payouts` e a fonte de `contributions`
+- `HandOutcome` ganha `Payouts map[string]int64` e `Contributions map[string]int64` — ambos já computados como variáveis
+  locais dentro de `runShowdown` (`payouts` e a fonte de `contributions`
   usada para `sidepots.ComputeSidePots`), só precisam ser anexados ao `outcome` antes de
   `t.lastOutcome = &outcome`.
 
@@ -250,8 +250,8 @@ type HandOutcome struct {
 }
 ```
 
-Em `runShowdown`, a variável `contributions` já existe como `[]sidepots.Contribution` — construir um
-map paralelo (ou reaproveitar, se já for indexável por ID) e anexar ambos ao `outcome`:
+Em `runShowdown`, a variável `contributions` já existe como `[]sidepots.Contribution` — construir um map paralelo (ou
+reaproveitar, se já for indexável por ID) e anexar ambos ao `outcome`:
 
 ```go
 	contributionsByID := make(map[string]int64, len(contributions))
@@ -268,8 +268,7 @@ map paralelo (ou reaproveitar, se já for indexável por ID) e anexar ambos ao `
 ```
 
 (Inserir isso substituindo a construção atual de `outcome` — o resto do corpo, incluindo
-`outcome.WinningCategory`/`outcome.ComebackWinners`, continua igual, só adicionando os dois campos
-novos.)
+`outcome.WinningCategory`/`outcome.ComebackWinners`, continua igual, só adicionando os dois campos novos.)
 
 - [ ] **Step 4: Rodar e confirmar passagem**
 
@@ -302,13 +301,13 @@ git commit -m "feat(api): carry per-player payouts and contributions on HandOutc
   `TableID == tableID && EndedAt == 0`.
 - New `func (s *Store) CloseSession(ctx context.Context, item SessionItem) error` — apenas
   `RecordSession` de novo com a MESMA `PK`/`SK` (sobrescreve o item aberto com `EndedAt`/
-  `CashoutAmount`/`NetPnL` preenchidos). Dynamo `PutItem` sobrescreve por chave — não precisa de update
-  condicional aqui (não é caminho de correção monetária, é só auditoria; a fonte de verdade do saldo
-  continua sendo `ctech-wallet`, isto aqui nunca credita/debita nada).
+  `CashoutAmount`/`NetPnL` preenchidos). Dynamo `PutItem` sobrescreve por chave — não precisa de update condicional aqui
+  (não é caminho de correção monetária, é só auditoria; a fonte de verdade do saldo continua sendo `ctech-wallet`, isto
+  aqui nunca credita/debita nada).
 - `buyin.Service` ganha um campo opcional `sessions *sessionlog.Store` (nil-checked, mesmo padrão de
-  `s.pending`) + um setter `SetSessionStore` (ou parâmetro de construtor — escolher o que já existir
-  nos construtores `NewServiceWithGame`/`NewServiceWithPlayers`, adicionar sem quebrar call sites
-  existentes: usar um setter é mais seguro contra quebrar assinatura).
+  `s.pending`) + um setter `SetSessionStore` (ou parâmetro de construtor — escolher o que já existir nos construtores
+  `NewServiceWithGame`/`NewServiceWithPlayers`, adicionar sem quebrar call sites existentes: usar um setter é mais
+  seguro contra quebrar assinatura).
 - `app.go`'s `onHandComplete` chama `sessionStore.RecordHand` para cada `outcome.Participants[i]`.
 
 - [ ] **Step 1: Escrever os testes que falham (sessionlog)**
@@ -396,9 +395,8 @@ type Service struct {
 func (s *Service) SetSessionStore(store *sessionlog.Store) { s.sessions = store }
 ```
 
-Em `BuyIn`, depois que `actor.Dispatch(table.JoinCmd{...})` tiver sucesso (nenhum erro, incluindo o
-caso `ErrAlreadySeated` tratado como no-op — **não** gravar sessão nesse caso, já existia sessão
-aberta):
+Em `BuyIn`, depois que `actor.Dispatch(table.JoinCmd{...})` tiver sucesso (nenhum erro, incluindo o caso
+`ErrAlreadySeated` tratado como no-op — **não** gravar sessão nesse caso, já existia sessão aberta):
 
 ```go
 	if s.sessions != nil {
@@ -410,9 +408,8 @@ aberta):
 	}
 ```
 
-(Checar o nome exato do helper de timestamp em `gopkg.aoctech.app/api-commons/dynamo` — usar o mesmo
-que `sessionlog.Store` já usa internamente, `time.Now().UnixMilli()` direto se não houver helper
-exportado.)
+(Checar o nome exato do helper de timestamp em `gopkg.aoctech.app/api-commons/dynamo` — usar o mesmo que
+`sessionlog.Store` já usa internamente, `time.Now().UnixMilli()` direto se não houver helper exportado.)
 
 Em `CashOut`, depois de obter `stack` (chips finais) com sucesso:
 
@@ -431,8 +428,8 @@ Em `CashOut`, depois de obter `stack` (chips finais) com sucesso:
 
 - [ ] **Step 5: Wiring em `app.go`'s `onHandComplete`**
 
-`newTableManager` precisa receber `sessionStore *sessionlog.Store` (novo parâmetro — atualizar o único
-call site real em `registerRoutes`/onde quer que `newTableManager` seja chamado):
+`newTableManager` precisa receber `sessionStore *sessionlog.Store` (novo parâmetro — atualizar o único call site real em
+`registerRoutes`/onde quer que `newTableManager` seja chamado):
 
 ```go
 	if sessionStore != nil {
@@ -482,8 +479,8 @@ git commit -m "feat(api): write poker_player_hands and poker_player_sessions (wa
 
 - `Snapshot` ganha `ShuffleCommitHash string \`json:"shuffle_commit_hash,omitempty"\`` (hex de
   `t.shuffle.CommitHash`, sempre presente uma vez que a mão começou — "safe to publish immediately",
-  comentário já existente em `deck.go:51`) e `ShuffleServerSeedHex string
-  \`json:"shuffle_server_seed_hex,omitempty"\`` (hex de `t.shuffle.ServerSeed`, só quando
+  comentário já existente em `deck.go:51`) e `ShuffleServerSeedHex string \`json:"shuffle_server_seed_hex,omitempty"\`
+  ` (hex de `t.shuffle.ServerSeed`, só quando
   `t.stage == Complete` — nunca antes, ou um cliente poderia prever cartas futuras).
 
 - [ ] **Step 1: Escrever os testes que falham**
@@ -577,17 +574,16 @@ git commit -m "feat(api): publish shuffle commit hash immediately, reveal seed o
 
 ## Self-Review Notes
 
-- **A maior parte da infraestrutura já existia** (action log, archiver, sessionlog read-path, endpoints
-  de leitura) — este plano NÃO recria nada disso, só fecha o write-path morto e adiciona B32, que era
-  o gap real confirmado por grep, não suposição.
-- **`handID` propagation (Task 1) segue exatamente o precedente já usado com sucesso** na Feature A
-  (mudança de assinatura de `roomLoader` em `tablemanager.NewManager`) — mesmo tipo de mudança
-  mecânica e de baixo risco.
-- **Nenhuma escrita de auditoria é fatal ao fluxo principal** — todo erro vira `slog.Error`, nunca
-  aborta a mão nem o buy-in/cash-out (mesmo padrão já usado por `achv.RecordHand`/
+- **A maior parte da infraestrutura já existia** (action log, archiver, sessionlog read-path, endpoints de leitura) —
+  este plano NÃO recria nada disso, só fecha o write-path morto e adiciona B32, que era o gap real confirmado por grep,
+  não suposição.
+- **`handID` propagation (Task 1) segue exatamente o precedente já usado com sucesso** na Feature A (mudança de
+  assinatura de `roomLoader` em `tablemanager.NewManager`) — mesmo tipo de mudança mecânica e de baixo risco.
+- **Nenhuma escrita de auditoria é fatal ao fluxo principal** — todo erro vira `slog.Error`, nunca aborta a mão nem o
+  buy-in/cash-out (mesmo padrão já usado por `achv.RecordHand`/
   `leaderboardSvc.RecordHand` em `app.go`).
-- **B32 é uma decisão já catalogada** (README.md:150-157, `api/CLAUDE.md`'s "Other known issues") —
-  este plano implementa o que já estava documentado como pendente, não inventa um requisito novo.
-- **Fora de escopo:** nenhuma mudança em `cmd/handreplay` (é ferramenta de dev/replay manual,
-  desconectada do dado real arquivado — não confundir com este plano). Features B e C já implementadas
-  antes desta, conforme ordenação confirmada (bug3 → A → B → C → D).
+- **B32 é uma decisão já catalogada** (README.md:150-157, `api/CLAUDE.md`'s "Other known issues") — este plano
+  implementa o que já estava documentado como pendente, não inventa um requisito novo.
+- **Fora de escopo:** nenhuma mudança em `cmd/handreplay` (é ferramenta de dev/replay manual, desconectada do dado real
+  arquivado — não confundir com este plano). Features B e C já implementadas antes desta, conforme ordenação confirmada
+  (bug3 → A → B → C → D).

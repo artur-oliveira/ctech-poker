@@ -498,10 +498,11 @@ func (a *Actor) handleKickTimeout(ctx context.Context, c kickTimeoutCmd) error {
 	}
 	delete(a.kickTimers, c.PlayerID)
 	// ponytail: RemovePlayerForActor rejects removal while the player is
-	// still Active/AllIn mid-hand. In practice that can't coincide with 5
-	// minutes disconnected — handleTurnTimeout's 45s/3-hand disconnect grace
-	// already forces them to SittingOut long before this fires. If it ever
-	// races anyway, skip silently; nothing to retry from here.
+	// still dealt into a hand in progress (any state, including Folded — see
+	// RemovePlayerForActor's doc comment). In practice that can't coincide
+	// with 5 minutes disconnected — handleTurnTimeout's 45s/3-hand disconnect
+	// grace already forces them to SittingOut long before this fires. If it
+	// ever races anyway, skip silently; nothing to retry from here.
 	return a.handleLeave(ctx, LeaveCmd{PlayerID: c.PlayerID})
 }
 

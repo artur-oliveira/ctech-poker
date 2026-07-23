@@ -8,12 +8,22 @@ type publicStake struct {
 // Values are stored in the smallest integer unit. Real mode interprets 10/25
 // as R$0.10/R$0.25; sandbox displays virtual chips without a currency symbol.
 var realPublicStakes = []publicStake{
-	{10, 25}, {50, 100}, {250, 500}, {500, 1000},
-	{1000, 2500}, {2500, 5000}, {5000, 10000},
+	{10, 25},
+	{25, 50},
+	{50, 100},
+	{100, 250},
+	{250, 500},
+	{500, 1000},
+	{1000, 2500},
+	{2500, 5000},
+	{5000, 10000},
 }
 
-var sandboxPublicStakes = append(append([]publicStake{}, realPublicStakes...),
-	publicStake{10000, 25000}, publicStake{25000, 50000}, publicStake{50000, 100000},
+var sandboxPublicStakes = append(
+	append([]publicStake{}, realPublicStakes...),
+	publicStake{10000, 25000},
+	publicStake{25000, 50000},
+	publicStake{50000, 100000},
 )
 
 func isAllowedPublicStake(mode string, smallBlind, bigBlind int64) bool {

@@ -1,6 +1,7 @@
 # Phase 4 — Frontend Polish & Gamification Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:
+> executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The gamified experience the brief asks for, built on top of the already-correct engine/table-server/room
 layers from Phases 0-3: hand equity display, achievements, leaderboard, sandbox credit sandbox credits (OVERVIEW.md §9),
@@ -8,52 +9,54 @@ and a real-time SPA with card animations using the SVGs already committed under 
 
 **Architecture:** Three small, independent gamification backends (equity is computed inline per-snapshot; achievements
 and leaderboard both hook into the same hand-completion event Phase 3's `table.Actor` already reaches every hand;
-sandbox credits is a standalone once-per-24h endpoint) sit behind new routes, all still under `/v1.0/`. The frontend is a
-Next.js SPA mirroring `ctech-wallet/ui`'s exact stack and deploy shape (static export → S3 → CloudFront), reusing
-`@aoctech/auth-client` for OAuth and `@aoctech/ws-client` for the table WebSocket — no new frontend infra pattern,
-only a new consumer of patterns that already exist and are proven in production.
+sandbox credits is a standalone once-per-24h endpoint) sit behind new routes, all still under `/v1.0/`. The frontend is
+a Next.js SPA mirroring `ctech-wallet/ui`'s exact stack and deploy shape (static export → S3 → CloudFront), reusing
+`@aoctech/auth-client` for OAuth and `@aoctech/ws-client` for the table WebSocket — no new frontend infra pattern, only
+a new consumer of patterns that already exist and are proven in production.
 
-**Tech Stack:** Go 1.26 (backend gamification), Next.js 16 + React 19 + TypeScript + Tailwind + ShadCN
-(frontend, matching `ctech-wallet/ui`'s `package.json` exactly), `@aoctech/auth-client`, `@aoctech/ws-client`,
+**Tech Stack:** Go 1.26 (backend gamification), Next.js 16 + React 19 + TypeScript + Tailwind + ShadCN (frontend,
+matching `ctech-wallet/ui`'s `package.json` exactly), `@aoctech/auth-client`, `@aoctech/ws-client`,
 `@tanstack/react-query`, AWS CDK (S3 + CloudFront, matching `ctech-wallet/cdk/lib/frontend-stack.ts`).
 
 ## Global Constraints
 
 - Every backend route lives under `/v1.0/` (existing convention).
-- Hand equity is computed server-side only, sent privately to the owning viewer, never derived or computed
-  client-side (ARCHITECTURE.md §6 — client-side equity would require exposing remaining-deck composition, which
-  leaks information about opponents' hole cards by elimination).
-- Public rooms: equity display always on, no toggle. Private rooms: `equity_display_enabled` from the room's
-  config (Phase 3), default `true`.
-- No public leaderboard ever exposes a real-money amount won/lost (OVERVIEW.md §9.1) — moot for this plan since
-  Phase 3 only ever creates sandbox rooms, but the leaderboard schema itself must have no such field, so a future
-  real-money phase can't accidentally wire one in by just "adding a column".
+- Hand equity is computed server-side only, sent privately to the owning viewer, never derived or computed client-side
+  (ARCHITECTURE.md §6 — client-side equity would require exposing remaining-deck composition, which leaks information
+  about opponents' hole cards by elimination).
+- Public rooms: equity display always on, no toggle. Private rooms: `equity_display_enabled` from the room's config
+  (Phase 3), default `true`.
+- No public leaderboard ever exposes a real-money amount won/lost (OVERVIEW.md §9.1) — moot for this plan since Phase 3
+  only ever creates sandbox rooms, but the leaderboard schema itself must have no such field, so a future real-money
+  phase can't accidentally wire one in by just "adding a column".
 - Achievements are data-driven (`Achievement{Key, Metric, Tiers}`), never hardcoded per-achievement `if` branches
   (OVERVIEW.md §9.2).
 - Sandbox sandbox credits never touches the real-money ledger — it only ever calls `walletclient.Client.Credit` against
   the sandbox scope already established in Phase 3 (OVERVIEW.md §9.3).
-- The frontend is a static export (`next build` with `output: 'export'` in production, `next dev` with a rewrite
-  proxy in development) — matches `ctech-wallet/ui/next.config.ts` exactly, so the same CloudFront + ALB-origin
-  pattern applies with zero new infra concepts.
-- The UI must read as a game, not a SaaS dashboard (OVERVIEW.md §6) — every table-state-changing frontend update
-  goes through a CSS transition, never an instant DOM swap.
+- The frontend is a static export (`next build` with `output: 'export'` in production, `next dev` with a rewrite proxy
+  in development) — matches `ctech-wallet/ui/next.config.ts` exactly, so the same CloudFront + ALB-origin pattern
+  applies with zero new infra concepts.
+- The UI must read as a game, not a SaaS dashboard (OVERVIEW.md §6) — every table-state-changing frontend update goes
+  through a CSS transition, never an instant DOM swap.
 
 ---
 
 ### Task 1: Hand equity Monte Carlo calculator
 
 **Files:**
+
 - Create: `api/internal/engine/equity/equity.go`
 - Test: `api/internal/engine/equity/equity_test.go`
 
 **Interfaces:**
+
 - Consumes: `deck.Card`, `handeval.Best7` (existing engine packages).
 - Produces: `func Estimate(hole [2]deck.Card, board []deck.Card, deadCards []deck.Card, numOpponents, iterations
   int) (float64, error)` — consumed by Task 2's snapshot wiring.
 
-`deadCards` excludes cards already known to be out of play (the viewer's own hole cards, the board) from the
-sampling pool — opponents' actual hole cards are never known to this function, which is the entire point: it
-estimates against random opponent ranges, not real ones.
+`deadCards` excludes cards already known to be out of play (the viewer's own hole cards, the board) from the sampling
+pool — opponents' actual hole cards are never known to this function, which is the entire point: it estimates against
+random opponent ranges, not real ones.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -232,17 +235,19 @@ git commit -m "feat(equity): Monte Carlo hand-equity estimator against random op
 ### Task 2: Wire equity into the per-viewer snapshot
 
 **Files:**
+
 - Modify: `api/internal/engine/hand/snapshot.go`
 - Modify: `api/internal/table/actor.go`
 - Test: `api/internal/engine/hand/snapshot_test.go`
 
 **Interfaces:**
-- Extends `hand.Snapshot`/`SeatView` with an `Equity *float64` field, populated only for the requesting viewer's
-  own (still-active) seat, and only when `equityEnabled` is true.
 
-Equity computation stays out of `hand.ViewFor` itself — the engine package has no dependency on `equity` today
-(and shouldn't gain a Monte Carlo dependency for what is fundamentally table-server orchestration, not hand
-rules) — `table.Actor` computes it and attaches it to the snapshot it already builds per viewer.
+- Extends `hand.Snapshot`/`SeatView` with an `Equity *float64` field, populated only for the requesting viewer's own
+  (still-active) seat, and only when `equityEnabled` is true.
+
+Equity computation stays out of `hand.ViewFor` itself — the engine package has no dependency on `equity` today (and
+shouldn't gain a Monte Carlo dependency for what is fundamentally table-server orchestration, not hand rules) —
+`table.Actor` computes it and attaches it to the snapshot it already builds per viewer.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -378,8 +383,8 @@ imports to `actor.go`.
 	actor := table.New(tableID, ht, m.store, m.broadcastFor(tableID), m.equityEnabledFor(tableID))
 ```
 
-`Manager` needs a way to know a table's equity setting without importing `roomstore` (same layering rule as Task
-9 of the Phase 3 plan) — reuse the same variadic-hook pattern already established there instead of a new field:
+`Manager` needs a way to know a table's equity setting without importing `roomstore` (same layering rule as Task 9 of
+the Phase 3 plan) — reuse the same variadic-hook pattern already established there instead of a new field:
 
 ```go
 // api/internal/tablemanager/manager.go — replace the m.equityEnabledFor(tableID) call with a stored default,
@@ -394,11 +399,11 @@ imports to `actor.go`.
 ```
 
 This surfaces a real sequencing gap: `equityEnabled` is baked into `table.New` at Actor-construction time, but
-`rooms.go`'s `createRoom` only calls `Acquire` for *private rooms with escalation configured* (Phase 3 Task 9) —
-every other room (public, or private without escalation) never calls `Acquire` until the first WebSocket
-connection reaches it (Phase 2 Task 7's lazy `manager.Acquire` call), which has no room-config context at all
-today. Fix by giving the WS gateway's `seed` closure (Phase 3 Task 5's `roomBackedSeed`) the equity flag too,
-since it already loads the `roomstore.Room` row:
+`rooms.go`'s `createRoom` only calls `Acquire` for *private rooms with escalation configured* (Phase 3 Task 9) — every
+other room (public, or private without escalation) never calls `Acquire` until the first WebSocket connection reaches it
+(Phase 2 Task 7's lazy `manager.Acquire` call), which has no room-config context at all today. Fix by giving the WS
+gateway's `seed` closure (Phase 3 Task 5's `roomBackedSeed`) the equity flag too, since it already loads the
+`roomstore.Room` row:
 
 ```go
 // api/internal/app/app.go — replace roomBackedSeed AND how it's threaded into RegisterTableWS
@@ -414,8 +419,8 @@ func equityForRoom(rooms *roomstore.Store, tableID string) bool {
 }
 ```
 
-`RegisterTableWS`/`RegisterTableProxy` both call `manager.Acquire(ctx, tableID, seed(tableID))` today with no
-equity argument — extend `Manager.Acquire`'s existing variadic `onCreated ...func(*Actor)` hook (Phase 3 Task 9)
+`RegisterTableWS`/`RegisterTableProxy` both call `manager.Acquire(ctx, tableID, seed(tableID))` today with no equity
+argument — extend `Manager.Acquire`'s existing variadic `onCreated ...func(*Actor)` hook (Phase 3 Task 9)
 instead of another signature change: `table.Actor` needs a settable equity flag reachable from that hook.
 
 ```go
@@ -454,6 +459,7 @@ git commit -m "feat(table): compute and attach per-viewer hand equity, respectin
 ### Task 3: Achievement catalog and progress tracking
 
 **Files:**
+
 - Create: `api/internal/achievements/catalog.go`
 - Create: `api/internal/achievements/store.go`
 - Create: `api/internal/achievements/service.go`
@@ -461,12 +467,13 @@ git commit -m "feat(table): compute and attach per-viewer hand equity, respectin
 - Modify: `api/internal/table/actor.go`
 
 **Interfaces:**
+
 - Consumes: a new `hand.HandOutcome` the engine emits when a hand completes (this task adds it), `dynamo.Base`
   (existing shared package).
 - Produces: `type Achievement struct{...}`, `var Catalog []Achievement`, `type Store struct{...}`,
   `func NewStore(db *dynamodb.Client, env string) *Store`, `type Service struct{...}`, `func NewService(store
-  *Store) *Service`, `func (s *Service) RecordHand(ctx, tableID string, outcome hand.HandOutcome) error` — the
-  last one is consumed by Task 6's wiring into `table.Actor`.
+  *Store) *Service`, `func (s *Service) RecordHand(ctx, tableID string, outcome hand.HandOutcome) error` — the last one
+  is consumed by Task 6's wiring into `table.Actor`.
 
 - [ ] **Step 1: Emit a structured hand outcome from the engine**
 
@@ -495,8 +502,8 @@ var categoryNames = map[handeval.Category]string{
 ```
 
 `handeval.Category`'s ten constant names must match exactly what `handeval.go` actually declares — confirm against
-`api/internal/engine/handeval/handeval.go`'s `Category` block before transcribing (Task 6 of the foundations plan
-is the source of truth for the exact identifiers; this task must not invent new ones).
+`api/internal/engine/handeval/handeval.go`'s `Category` block before transcribing (Task 6 of the foundations plan is the
+source of truth for the exact identifiers; this task must not invent new ones).
 
 ```go
 // api/internal/engine/hand/hand.go — runShowdown, capture the outcome as the last thing it does, before rotateDealer
@@ -550,11 +557,11 @@ recomputed — and `wasEverAllIn`, a per-hand set populated wherever `p.State = 
 	}
 ```
 
-`runShowdown`'s existing per-layer loop already computes `bestScore`/`winners` per layer — track the single
-overall winning score/category across the whole hand (the highest layer's winner, since side-pot layering means
-the main-pot winner's hand is the one meaningfully "the winning hand" for a category achievement) by capturing it
-on the LAST layer processed (layers are iterated in ascending contribution order — `sidepots.ComputeSidePots`'s
-existing contract from the foundations plan — so the last layer is the highest, main-pot-equivalent one):
+`runShowdown`'s existing per-layer loop already computes `bestScore`/`winners` per layer — track the single overall
+winning score/category across the whole hand (the highest layer's winner, since side-pot layering means the main-pot
+winner's hand is the one meaningfully "the winning hand" for a category achievement) by capturing it on the LAST layer
+processed (layers are iterated in ascending contribution order — `sidepots.ComputeSidePots`'s existing contract from the
+foundations plan — so the last layer is the highest, main-pot-equivalent one):
 
 ```go
 // api/internal/engine/hand/hand.go — runShowdown, declare before the `for _, layer := range layers` loop
@@ -719,9 +726,9 @@ var Catalog = []Achievement{
 }
 ```
 
-`KeyBluff` is tracked here as a catalog entry but **never incremented by this task** — real bluff detection needs
-each folded opponent's actual hole cards compared against the winner's hand, which `hand.HandOutcome` does not
-carry (see this plan's Closing Note: flagged as a deliberate simplification, not silently dropped).
+`KeyBluff` is tracked here as a catalog entry but **never incremented by this task** — real bluff detection needs each
+folded opponent's actual hole cards compared against the winner's hand, which `hand.HandOutcome` does not carry (see
+this plan's Closing Note: flagged as a deliberate simplification, not silently dropped).
 
 - [ ] **Step 5: Implement the service**
 
@@ -797,8 +804,8 @@ func TierCrossed(key string, previousTotal, newTotal int) (int, bool) {
 }
 ```
 
-`Increment`'s interface returns only the new total, not the previous one — `TierCrossed` needs both. Fix by
-having `progressStore.Increment` return both:
+`Increment`'s interface returns only the new total, not the previous one — `TierCrossed` needs both. Fix by having
+`progressStore.Increment` return both:
 
 ```go
 // api/internal/achievements/service.go — replace the interface and every call site
@@ -807,8 +814,8 @@ type progressStore interface {
 }
 ```
 
-Update `RecordHand`'s four call sites to capture `(prev, cur, err)` and call `TierCrossed(key, prev, cur)`,
-returning the crossed-tier info via a growing `[]TierUnlock` return value:
+Update `RecordHand`'s four call sites to capture `(prev, cur, err)` and call `TierCrossed(key, prev, cur)`, returning
+the crossed-tier info via a growing `[]TierUnlock` return value:
 
 ```go
 // api/internal/achievements/service.go — final version
@@ -910,9 +917,9 @@ func (s *Store) Increment(ctx context.Context, playerID, key string, by int) (pr
 }
 ```
 
-`AtomicIncrement` (existing `dynamo.Base` method, confirmed in Phase 2's research) requires the item to already
-exist for `ADD` to work predictably from zero — DynamoDB's `ADD` on a missing attribute initializes it to the
-operand, so a brand-new `(playerID, key)` pair works correctly with no pre-creation step needed; `before == nil`
+`AtomicIncrement` (existing `dynamo.Base` method, confirmed in Phase 2's research) requires the item to already exist
+for `ADD` to work predictably from zero — DynamoDB's `ADD` on a missing attribute initializes it to the operand, so a
+brand-new `(playerID, key)` pair works correctly with no pre-creation step needed; `before == nil`
 on the very first call is expected and handled (`prev` stays `0`).
 
 - [ ] **Step 8: Commit**
@@ -927,12 +934,14 @@ git commit -m "feat(achievements): data-driven star-tier catalog with DynamoDB-b
 ### Task 4: Leaderboard aggregation
 
 **Files:**
+
 - Create: `api/internal/leaderboard/store.go`
 - Create: `api/internal/leaderboard/service.go`
 - Test: `api/internal/leaderboard/service_test.go`
 - Create: `api/internal/api/v1/leaderboard.go`
 
 **Interfaces:**
+
 - Consumes: `hand.HandOutcome` (Task 3), `dynamo.Base` (existing).
 - Produces: `func (s *Service) RecordHand(ctx, outcome hand.HandOutcome) error`, `func (s *Service) Top(ctx,
   metric string, limit int) ([]Entry, error)`, route `GET /v1.0/leaderboard?metric=win_rate|hands_played`.
@@ -1175,12 +1184,14 @@ git commit -m "feat(leaderboard): non-monetary hands-played/hands-won aggregatio
 ### Task 5: Sandbox credit sandbox credits
 
 **Files:**
+
 - Create: `api/internal/roulette/service.go`
 - Create: `api/internal/roulette/store.go`
 - Test: `api/internal/roulette/service_test.go`
 - Create: `api/internal/api/v1/sandbox credits.go`
 
 **Interfaces:**
+
 - Consumes: `walletclient.Client` (Phase 3).
 - Produces: `func (s *Service) Spin(ctx, playerID string) (awardedAmount int64, err error)`, route
   `POST /v1.0/sandbox-credits`.
@@ -1454,7 +1465,8 @@ func Registersandbox credits(router fiber.Router, auth fiber.Handler, svc *sandb
 }
 ```
 
-Mount `Registersandbox credits(router, authMiddleware(verifier), sandbox creditsSvc)` in `router.go`, add the Fx provider.
+Mount `Registersandbox credits(router, authMiddleware(verifier), sandbox creditsSvc)` in `router.go`, add the Fx
+provider.
 
 - [ ] **Step 7: Commit**
 
@@ -1468,11 +1480,13 @@ git commit -m "feat(sandbox credits): sandbox credit sandbox credits with CSPRNG
 ### Task 6: Wire achievements/leaderboard into hand completion
 
 **Files:**
+
 - Modify: `api/internal/table/actor.go`
 - Modify: `api/internal/tablemanager/manager.go`
 - Test: `api/internal/table/gamification_test.go`
 
 **Interfaces:**
+
 - `table.Actor` gains an `onHandComplete func(hand.HandOutcome)` callback, invoked once per completed hand.
 
 - [ ] **Step 1: Write the failing test**
@@ -1629,11 +1643,13 @@ git commit -m "feat(table): fire achievements and leaderboard updates on every c
 ### Task 7: CDK — gamification tables
 
 **Files:**
+
 - Modify: `cdk/lib/dynamodb-stack.ts`
 - Modify: `cdk/lib/api-stack.ts`
 - Test: `cdk/test/dynamodb-stack.test.ts`
 
 **Interfaces:**
+
 - Extends `DynamoDBStack` with `poker_achievement_progress`, `poker_leaderboard_stats` (+ `gsi_hands_won`),
   `poker_sandbox credits_spins`.
 
@@ -1679,8 +1695,8 @@ export type TableName =
     table('poker_sandbox credits_spins');
 ```
 
-`Store.IncrementStats` (Task 4) never writes a `gsi_hands_won_pk` attribute today — add it there so the GSI this
-task provisions is actually populated:
+`Store.IncrementStats` (Task 4) never writes a `gsi_hands_won_pk` attribute today — add it there so the GSI this task
+provisions is actually populated:
 
 ```go
 // api/internal/leaderboard/store.go — IncrementStats, after both AtomicIncrement calls
@@ -1704,8 +1720,8 @@ Expected: PASS.
       ],
 ```
 
-Add the three corresponding `ApiStackProps` fields and thread them from `bin/poker.ts`, matching Phase 2 Task 11
-and Phase 3 Task 10's exact pattern.
+Add the three corresponding `ApiStackProps` fields and thread them from `bin/poker.ts`, matching Phase 2 Task 11 and
+Phase 3 Task 10's exact pattern.
 
 - [ ] **Step 6: Commit**
 
@@ -1719,16 +1735,18 @@ git commit -m "feat(cdk): provision achievement/leaderboard/sandbox credits tabl
 ### Task 8: Frontend scaffold
 
 **Files:**
+
 - Create: `ui/package.json`, `ui/next.config.ts`, `ui/tsconfig.json`, `ui/tailwind.config` (via `postcss.config.mjs`
-  + ShadCN defaults, matching `ctech-wallet/ui`), `ui/src/app/layout.tsx`, `ui/src/lib/auth/oauth.ts`,
-  `ui/src/lib/api/client.ts`, `ui/src/app/callback/page.tsx`
+    + ShadCN defaults, matching `ctech-wallet/ui`), `ui/src/app/layout.tsx`, `ui/src/lib/auth/oauth.ts`,
+      `ui/src/lib/api/client.ts`, `ui/src/app/callback/page.tsx`
 
 **Interfaces:**
-- Produces the base app shell every later frontend task builds on: authenticated API client, OAuth callback
-  handling, root layout.
 
-This task is a direct structural mirror of `ctech-wallet/ui`'s equivalent files — copied and re-scoped (poker's
-own client ID, poker's own API base path), not redesigned, since the pattern is already proven in production.
+- Produces the base app shell every later frontend task builds on: authenticated API client, OAuth callback handling,
+  root layout.
+
+This task is a direct structural mirror of `ctech-wallet/ui`'s equivalent files — copied and re-scoped (poker's own
+client ID, poker's own API base path), not redesigned, since the pattern is already proven in production.
 
 - [ ] **Step 1: `package.json`**
 
@@ -1940,12 +1958,14 @@ git commit -m "feat(ui): Next.js SPA scaffold with OAuth callback and authentica
 ### Task 9: Lobby page
 
 **Files:**
+
 - Create: `ui/src/app/lobby/page.tsx`
 - Create: `ui/src/components/lobby/RoomList.tsx`
 - Create: `ui/src/components/lobby/CreateRoomDialog.tsx`
 - Create: `ui/src/lib/api/rooms.ts`
 
 **Interfaces:**
+
 - Consumes: `GET /v1.0/rooms`, `POST /v1.0/rooms` (Phase 3 Task 4).
 
 - [ ] **Step 1: API bindings**
@@ -2120,8 +2140,8 @@ export default function LobbyPage() {
 
 - [ ] **Step 5: Manual verification**
 
-Run: `cd ui && npm run dev` (with the Go API running locally on :8003), open `/lobby`, confirm the room list
-loads and a created room navigates to `/table/:id`.
+Run: `cd ui && npm run dev` (with the Go API running locally on :8003), open `/lobby`, confirm the room list loads and a
+created room navigates to `/table/:id`.
 
 - [ ] **Step 6: Commit**
 
@@ -2135,12 +2155,14 @@ git commit -m "feat(ui): lobby page with public room listing and room creation"
 ### Task 10: Real-time table state hook
 
 **Files:**
+
 - Create: `ui/src/lib/hooks/useTableRealtime.ts`
 - Create: `ui/src/lib/api/table.ts`
 
 **Interfaces:**
-- Consumes: `@aoctech/ws-client`'s `useWebSocket` (existing shared package, same one `ctech-wallet/ui` already
-  uses), `GET /v1.0/tables/:id/ws` (Phase 2 Task 7).
+
+- Consumes: `@aoctech/ws-client`'s `useWebSocket` (existing shared package, same one `ctech-wallet/ui` already uses),
+  `GET /v1.0/tables/:id/ws` (Phase 2 Task 7).
 
 - [ ] **Step 1: Wire types + the hook**
 
@@ -2220,8 +2242,8 @@ export function useTableRealtime(tableId: string) {
 
 - [ ] **Step 2: Manual verification**
 
-Run: `cd ui && npm run build` (compiles — no server-dependent test at this layer; end-to-end behavior is verified
-once Task 11 renders against it).
+Run: `cd ui && npm run build` (compiles — no server-dependent test at this layer; end-to-end behavior is verified once
+Task 11 renders against it).
 
 - [ ] **Step 3: Commit**
 
@@ -2235,6 +2257,7 @@ git commit -m "feat(ui): real-time table state hook over the table WebSocket gat
 ### Task 11: Table page — seats, cards, action bar
 
 **Files:**
+
 - Create: `ui/src/app/table/[id]/page.tsx`
 - Create: `ui/src/components/table/Seat.tsx`
 - Create: `ui/src/components/table/Board.tsx`
@@ -2242,6 +2265,7 @@ git commit -m "feat(ui): real-time table state hook over the table WebSocket gat
 - Create: `ui/src/lib/cards.ts`
 
 **Interfaces:**
+
 - Consumes: `useTableRealtime` (Task 10), the SVGs already committed at `ui/svgs/`.
 
 - [ ] **Step 1: Card-code-to-SVG mapping**
@@ -2406,15 +2430,15 @@ export default function TablePage() {
 }
 ```
 
-`ActionBar`'s hardcoded `bigBlind={20}` is a known gap — the snapshot doesn't currently carry the room's blind
-amounts (only `hand.Snapshot`'s existing fields do, and blinds aren't one of them). Flagged rather than silently
-wrong: a follow-up would add `SmallBlind`/`BigBlind` to `hand.Snapshot` (Phase 2's `snapshot.go`) the same way
+`ActionBar`'s hardcoded `bigBlind={20}` is a known gap — the snapshot doesn't currently carry the room's blind amounts
+(only `hand.Snapshot`'s existing fields do, and blinds aren't one of them). Flagged rather than silently wrong: a
+follow-up would add `SmallBlind`/`BigBlind` to `hand.Snapshot` (Phase 2's `snapshot.go`) the same way
 `Stage`/`Board` are already there — small, but out of this task's scope since it touches Phase 2 code again.
 
 - [ ] **Step 6: Manual verification**
 
-Run: `cd ui && npm run dev`, open two browser tabs against `/table/:id` for a room both accounts joined via the
-lobby, confirm cards render from the SVGs, actions transmit, and the board animates in on each new street.
+Run: `cd ui && npm run dev`, open two browser tabs against `/table/:id` for a room both accounts joined via the lobby,
+confirm cards render from the SVGs, actions transmit, and the board animates in on each new street.
 
 - [ ] **Step 7: Commit**
 
@@ -2428,6 +2452,7 @@ git commit -m "feat(ui): table page with seats, board, and action bar wired to t
 ### Task 12: Achievements toast, leaderboard screen, sandbox credits wheel
 
 **Files:**
+
 - Create: `ui/src/components/AchievementToast.tsx`
 - Create: `ui/src/app/leaderboard/page.tsx`
 - Create: `ui/src/app/sandbox credits/page.tsx`
@@ -2583,6 +2608,7 @@ git commit -m "feat(ui): achievement toast, leaderboard screen, sandbox sandbox 
 ### Task 13: Basic chat with moderation
 
 **Files:**
+
 - Modify: `api/internal/api/v1/tablews.go`
 - Modify: `api/internal/api/v1/tableproxy.go`
 - Create: `api/internal/chatfilter/filter.go`
@@ -2590,8 +2616,9 @@ git commit -m "feat(ui): achievement toast, leaderboard screen, sandbox sandbox 
 - Create: `ui/src/components/table/Chat.tsx`
 
 **Interfaces:**
-- Extends `clientMessage` with a `"chat"` type; server relays via `ws.Registry.Broadcast` on the table's key,
-  after a basic profanity filter (OVERVIEW.md §8.4).
+
+- Extends `clientMessage` with a `"chat"` type; server relays via `ws.Registry.Broadcast` on the table's key, after a
+  basic profanity filter (OVERVIEW.md §8.4).
 
 - [ ] **Step 1: Write the failing filter test**
 
@@ -2699,8 +2726,8 @@ Chat broadcasts to a distinct key (`tableID+"#chat"`) so it doesn't collide with
 			defer reg.Unregister(tableID+"#chat", connID+"-chat")
 ```
 
-Report/mute (the other half of OVERVIEW.md §8.4) is out of this task's scope — flagged in the closing note, not
-silently dropped.
+Report/mute (the other half of OVERVIEW.md §8.4) is out of this task's scope — flagged in the closing note, not silently
+dropped.
 
 - [ ] **Step 6: Frontend chat component**
 
@@ -2734,8 +2761,8 @@ export function Chat({onSend, messages}: {onSend: (msg: string) => void; message
 ```
 
 Wiring `Chat` into `useTableRealtime`/`TablePage` requires accumulating `{type:'chat', player_id, message}`
-messages client-side into a list and a `sendChat` function alongside `sendReady`/`sendAct` — add both following
-the exact same pattern already established for `sendReady` in Task 10's hook.
+messages client-side into a list and a `sendChat` function alongside `sendReady`/`sendAct` — add both following the
+exact same pattern already established for `sendReady` in Task 10's hook.
 
 - [ ] **Step 7: Commit**
 
@@ -2749,14 +2776,16 @@ git commit -m "feat(chat): basic table chat with a profanity filter"
 ### Task 14: CDK/CI — frontend hosting and deploy pipeline
 
 **Files:**
+
 - Create: `cdk/lib/frontend-stack.ts`
 - Modify: `cdk/bin/poker.ts`
 - Create: `.github/workflows/frontend.yml`
 - Test: `cdk/test/frontend-stack.test.ts`
 
 **Interfaces:**
-- Mirrors `ctech-wallet/cdk/lib/frontend-stack.ts` exactly (S3 + CloudFront + OAC, ALB-origin API proxying) —
-  same pattern, poker's own bucket/distribution names.
+
+- Mirrors `ctech-wallet/cdk/lib/frontend-stack.ts` exactly (S3 + CloudFront + OAC, ALB-origin API proxying) — same
+  pattern, poker's own bucket/distribution names.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2791,9 +2820,9 @@ Copy `ctech-wallet/cdk/lib/frontend-stack.ts` verbatim into `cdk/lib/frontend-st
 `frontendBucketName`/`routeStoreName`/`SERVICE`/`API_PATH_PATTERNS` imports to poker's own `constants.ts`
 equivalents (add `frontendBucketName = (env: Environment) => \`${env}-${SERVICE}-frontend\`` and
 `API_PATH_PATTERNS = ['/v1.0/*']` to `cdk/lib/constants.ts` if not already present from an earlier task), and the
-distribution's default root object / SPA fallback behavior (identical — Next.js static export needs the same
-404→200 rewrite CloudFront function wallet's stack already implements, since poker's routing is the same
-client-side-routed SPA shape).
+distribution's default root object / SPA fallback behavior (identical — Next.js static export needs the same 404→200
+rewrite CloudFront function wallet's stack already implements, since poker's routing is the same client-side-routed SPA
+shape).
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -2814,11 +2843,11 @@ new FrontendStack(app, `${environment}-ctech-poker-frontend`, {
 
 - [ ] **Step 6: Add the CI workflow**
 
-Copy `ctech-wallet/.github/workflows/frontend.yml` into `.github/workflows/frontend.yml`, substituting poker's
-own S3 bucket name / CloudFront distribution ID (read from CDK outputs the same way the existing `api.yml`
-workflow already reads `AsgName` — mirror that `aws cloudformation describe-stacks --query` pattern for the
-frontend stack's bucket/distribution outputs instead) and poker's own `NEXT_PUBLIC_*` build-time env vars
-(`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_CTECH_URL`, `NEXT_PUBLIC_CTECH_CLIENT_ID`).
+Copy `ctech-wallet/.github/workflows/frontend.yml` into `.github/workflows/frontend.yml`, substituting poker's own S3
+bucket name / CloudFront distribution ID (read from CDK outputs the same way the existing `api.yml`
+workflow already reads `AsgName` — mirror that `aws cloudformation describe-stacks --query` pattern for the frontend
+stack's bucket/distribution outputs instead) and poker's own `NEXT_PUBLIC_*` build-time env vars (`NEXT_PUBLIC_API_URL`,
+`NEXT_PUBLIC_CTECH_URL`, `NEXT_PUBLIC_CTECH_CLIENT_ID`).
 
 - [ ] **Step 7: Synth to verify no CDK errors**
 
@@ -2836,15 +2865,15 @@ git commit -m "feat(cdk): S3+CloudFront frontend hosting and its CI deploy pipel
 
 ## Closing note — flagged, not built now
 
-- **Bluff detection** (`achievements.KeyBluff`) is cataloged but never incremented — real detection needs a
-  folded opponent's hole cards compared against the winner's hand at a hand that ended without showdown, which
+- **Bluff detection** (`achievements.KeyBluff`) is cataloged but never incremented — real detection needs a folded
+  opponent's hole cards compared against the winner's hand at a hand that ended without showdown, which
   `hand.HandOutcome` (Task 3) doesn't currently carry. Adding a `FoldedHands map[string]handeval.Score` field to
-  `HandOutcome` and a comparison in `achievements.Service.RecordHand` is the natural follow-up — scoped out here
-  to keep Task 3 to one clearly-testable unit of work.
-- **Report/mute** (the other half of OVERVIEW.md §8.4's chat moderation) is not built — Task 13 only ships the
-  profanity mask. A `POST /v1.0/tables/:id/report` endpoint plus a per-player mute list checked before
-  broadcasting chat is the natural next slice.
+  `HandOutcome` and a comparison in `achievements.Service.RecordHand` is the natural follow-up — scoped out here to keep
+  Task 3 to one clearly-testable unit of work.
+- **Report/mute** (the other half of OVERVIEW.md §8.4's chat moderation) is not built — Task 13 only ships the profanity
+  mask. A `POST /v1.0/tables/:id/report` endpoint plus a per-player mute list checked before broadcasting chat is the
+  natural next slice.
 - **`ActionBar`'s hardcoded big blind** (Task 11) is a real, named gap — `hand.Snapshot` needs a `SmallBlind`/
   `BigBlind` field (touches Phase 2 code) before the frontend can show the correct raise sizing without guessing.
-- **Cash-out reconciliation** was already flagged in Phase 3's closing note and remains open here — gamification
-  doesn't make it worse, but it's still the single biggest correctness gap left in the sandbox money path.
+- **Cash-out reconciliation** was already flagged in Phase 3's closing note and remains open here — gamification doesn't
+  make it worse, but it's still the single biggest correctness gap left in the sandbox money path.

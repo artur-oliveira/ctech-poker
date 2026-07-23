@@ -1,20 +1,22 @@
 # Phase 5 — Real-Money Mode & Production Hardening Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:
+> executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Turn the sandbox-complete MVP (Phases 0-4) into a real-money-capable, resilient, horizontally-scalable
 production product, per PLAN.md's Phase 5 gate and ARCHITECTURE.md §4/§7/§8: real-money buy-in/cash-out against
 `ctech-wallet`'s ring-fenced `game` balance, a durable reconciliation job (no money left in limbo), observability
-+ alarms, graceful scale-in, WAF hardening, load/chaos testing, and the hand-history audit endpoint OVERVIEW.md
-§8.2 flagged as a suggestion.
+
++ alarms, graceful scale-in, WAF hardening, load/chaos testing, and the hand-history audit endpoint OVERVIEW.md §8.2
+  flagged as a suggestion.
 
 **Architecture:** Real-money mode reuses every mechanism Phases 2-4 already built (table.Actor, tablemanager,
 buyin.Service, room currency_mode) — it does not introduce a parallel code path. The only new pieces are: (1) a
 `GameWallet` variant of `walletclient.Client` targeting `ctech-wallet`'s ring-fenced `game` balance instead of
-`sandbox`, (2) a fail-closed feature gate (`REAL_MONEY_ENABLED` + a recorded legal sign-off reference) so real
-money can never flow without both an engineering and a business decision on record, and (3) a reconciliation job
-that makes Phase 3's previously-flagged "cash-out credit can fail after seat removal" gap safe — mandatory once
-real chips are involved, optional (and left undone) in sandbox.
+`sandbox`, (2) a fail-closed feature gate (`REAL_MONEY_ENABLED` + a recorded legal sign-off reference) so real money can
+never flow without both an engineering and a business decision on record, and (3) a reconciliation job that makes Phase
+3's previously-flagged "cash-out credit can fail after seat removal" gap safe — mandatory once real chips are involved,
+optional (and left undone) in sandbox.
 
 **Tech Stack:** Same as Phases 2-4, plus AWS Lambda + EventBridge Scheduler for the reconciliation job (mirroring
 `ctech-wallet`'s own `cmd/reconcile`/`ReconcileStack`), CloudWatch EMF for structured metrics, AWS WAFv2.
@@ -24,40 +26,39 @@ real chips are involved, optional (and left undone) in sandbox.
 - **Real-money mode is gated on prerequisites this plan cannot satisfy itself** (they require changes in
   `ctech-wallet`, a different repo): as of the current, confirmed-live `ctech-wallet` API
   (`ctech-wallet/api/internal/api/v1/router.go`), the only M2M internal routes are
-  `/v1.0/internal/wallet/sandbox/{credit,debit}` and `/v1.0/internal/wallet/real/debit` — there is **no M2M route
-  for the `game` wallet** at all. **Before Task 1 is exercised against a real (non-fake) wallet, a human must
-  coordinate with `ctech-wallet` to build `docs/plans/2026-07-19-poker-game-holds.md`** (a separate repo, own
-  plan, already written and cross-referenced from this one).
-- **Reconciled decision (resolved — supersedes this plan's original plain-credit/debit assumption):** the
-  wallet contract is **reservation-shaped**, not plain unconditional credit/debit —
+  `/v1.0/internal/wallet/sandbox/{credit,debit}` and `/v1.0/internal/wallet/real/debit` — there is **no M2M route for
+  the `game` wallet** at all. **Before Task 1 is exercised against a real (non-fake) wallet, a human must coordinate
+  with `ctech-wallet` to build `docs/plans/2026-07-19-poker-game-holds.md`** (a separate repo, own plan, already written
+  and cross-referenced from this one).
+- **Reconciled decision (resolved — supersedes this plan's original plain-credit/debit assumption):** the wallet
+  contract is **reservation-shaped**, not plain unconditional credit/debit —
   `POST /v1.0/internal/wallet/game/hold`, `POST /v1.0/internal/wallet/game/hold/{id}/release`,
-  `POST /v1.0/internal/wallet/game/cashout` (scopes `internal:wallet:game-hold`/`internal:wallet:game-cashout`),
-  per `ctech-wallet/docs/specs/2026-07-19-poker-game-holds-design.md`. Reasoning, in short: only the money
-  custodian (`ctech-wallet`) should be the one reconciling money, per that repo's own Financial Safety
-  Invariants discipline — and a plain credit/debit contract gives `ctech-wallet` zero independent signal if
-  poker itself (not just one in-flight call) ever stops coming back to settle an open reservation. This plan's
-  own Task 4 (durable pending-credit tracking) and the wallet-side stale-hold sweep are **complementary, not
-  redundant**: Task 4 covers "a single call to wallet failed in flight, poker retries it"; the wallet-side hold
-  covers "poker itself never comes back at all" — only the money-holder can detect the second case
-  independently. This also isn't poker-specific: `game` is already framed (root `CLAUDE.md`) as the base for
-  "skill-game (poker/dominó) integration" — a shared reservation primitive in `ctech-wallet` is reused by any
-  future skill game rather than each one re-earning its own real-money-safety review, the same reuse-over-
-  reinvention principle already applied to `ctech-go-common/lock`/`jwtverify`. Task 1 below must be rewritten
-  against this contract before implementation — its current code sketch (`CreditGame`/`DebitGame`) reflects
-  the superseded plain-credit/debit assumption and needs `HoldGame`/`ReleaseHold`/`CashoutGame` in its place,
-  matching the wallet-side method names 1:1. Task 3's buy-in/cash-out wiring must carry the returned `hold_id`
-  through room/seat state (or `sessionlog` from Task 12, which already records per-table amounts and is a
-  natural place to also persist the `hold_id` needed at cash-out time) so `CashoutGame` can reference it.
-- **Legal gate (OVERVIEW.md §11):** real-money poker's legal status under Brazilian gambling regulation is
-  unresolved business risk, bigger than any engineering risk in this plan. `REAL_MONEY_ENABLED` must never be set
-  `true` in any environment without a recorded legal sign-off reference — enforced in code (Task 2), not just by
-  policy.
-- `currency_mode="real"` is enforced end to end exactly like `sandbox` was in Phase 3: checked at room creation,
-  at buy-in, at cash-out — never assumed from context.
+  `POST /v1.0/internal/wallet/game/cashout` (scopes `internal:wallet:game-hold`/`internal:wallet:game-cashout`), per
+  `ctech-wallet/docs/specs/2026-07-19-poker-game-holds-design.md`. Reasoning, in short: only the money custodian
+  (`ctech-wallet`) should be the one reconciling money, per that repo's own Financial Safety Invariants discipline — and
+  a plain credit/debit contract gives `ctech-wallet` zero independent signal if poker itself (not just one in-flight
+  call) ever stops coming back to settle an open reservation. This plan's own Task 4 (durable pending-credit tracking)
+  and the wallet-side stale-hold sweep are **complementary, not redundant**: Task 4 covers "a single call to wallet
+  failed in flight, poker retries it"; the wallet-side hold covers "poker itself never comes back at all" — only the
+  money-holder can detect the second case independently. This also isn't poker-specific: `game` is already framed (root
+  `CLAUDE.md`) as the base for
+  "skill-game (poker/dominó) integration" — a shared reservation primitive in `ctech-wallet` is reused by any future
+  skill game rather than each one re-earning its own real-money-safety review, the same reuse-over- reinvention
+  principle already applied to `ctech-go-common/lock`/`jwtverify`. Task 1 below must be rewritten against this contract
+  before implementation — its current code sketch (`CreditGame`/`DebitGame`) reflects the superseded plain-credit/debit
+  assumption and needs `HoldGame`/`ReleaseHold`/`CashoutGame` in its place, matching the wallet-side method names 1:1.
+  Task 3's buy-in/cash-out wiring must carry the returned `hold_id`
+  through room/seat state (or `sessionlog` from Task 12, which already records per-table amounts and is a natural place
+  to also persist the `hold_id` needed at cash-out time) so `CashoutGame` can reference it.
+- **Legal gate (OVERVIEW.md §11):** real-money poker's legal status under Brazilian gambling regulation is unresolved
+  business risk, bigger than any engineering risk in this plan. `REAL_MONEY_ENABLED` must never be set
+  `true` in any environment without a recorded legal sign-off reference — enforced in code (Task 2), not just by policy.
+- `currency_mode="real"` is enforced end to end exactly like `sandbox` was in Phase 3: checked at room creation, at
+  buy-in, at cash-out — never assumed from context.
 - Real money still uses integer chip counts (`int64`) — same convention as every other amount in this codebase.
 - No new infra pattern is introduced where an existing one already fits: the reconciliation job mirrors
-  `ctech-wallet`'s own Lambda + EventBridge Scheduler shape; alarms mirror `ctech-wallet`'s "grep the app log for
-  an ALARM line, alarm on any occurrence" pattern (`ctech-wallet/cdk/lib/api-stack.ts`'s `AlarmLogFilter`).
+  `ctech-wallet`'s own Lambda + EventBridge Scheduler shape; alarms mirror `ctech-wallet`'s "grep the app log for an
+  ALARM line, alarm on any occurrence" pattern (`ctech-wallet/cdk/lib/api-stack.ts`'s `AlarmLogFilter`).
 - Every route stays under `/v1.0/` (existing convention).
 
 ---
@@ -65,10 +66,12 @@ real chips are involved, optional (and left undone) in sandbox.
 ### Task 1: `GameWallet` client and activation check
 
 **Files:**
+
 - Modify: `api/internal/walletclient/client.go`
 - Test: `api/internal/walletclient/gamewallet_test.go`
 
 **Interfaces:**
+
 - Produces: `func (c *Client) CreditGame(ctx, userID string, amount int64, idempotencyKey, reason string) error`,
   `func (c *Client) DebitGame(ctx, userID string, amount int64, idempotencyKey, reason string) error`,
   `func (c *Client) IsGamblingActivated(ctx, userID string) (bool, error)` — consumed by Task 3's real-money
@@ -228,10 +231,12 @@ git commit -m "feat(walletclient): game-wallet credit/debit and gambling-activat
 ### Task 2: Fail-closed real-money feature gate
 
 **Files:**
+
 - Modify: `api/internal/config/config.go`
 - Test: `api/internal/config/config_test.go`
 
 **Interfaces:**
+
 - Produces: `Config.RealMoneyEnabled bool`, `Config.LegalSignoffRef string` — `Load()` errors if the former is
   `true` and the latter is empty.
 
@@ -314,12 +319,14 @@ git commit -m "feat(config): fail closed on real-money mode without a recorded l
 ### Task 3: Real-money room creation, buy-in, and cash-out
 
 **Files:**
+
 - Modify: `api/internal/api/v1/rooms.go`
 - Modify: `api/internal/buyin/service.go`
 - Test: `api/internal/buyin/service_test.go`
 - Test: `api/internal/api/v1/rooms_test.go`
 
 **Interfaces:**
+
 - `buyin.Service` gains a `game walletMover` (the `GameWallet` side of `walletclient.Client`) and an
   `activation func(ctx, userID string) (bool, error)`; routes to `game`/`sandbox` based on the room's
   `CurrencyMode`.
@@ -377,8 +384,8 @@ func TestBuyInUsesGameWalletForRealRooms(t *testing.T) {
 }
 ```
 
-`fakeRoomLookup` is a small test double implementing the same one-method interface `NewServiceWithGame` needs
-from `roomstore.Store` (`Get`) — add it alongside the other fakes:
+`fakeRoomLookup` is a small test double implementing the same one-method interface `NewServiceWithGame` needs from
+`roomstore.Store` (`Get`) — add it alongside the other fakes:
 
 ```go
 // api/internal/buyin/service_test.go — add
@@ -464,10 +471,10 @@ func (s *Service) walletFor(ctx context.Context, roomID, playerID string) (walle
 	}
 ```
 
-Every subsequent refund/credit call inside `BuyIn` and `CashOut` (both already written in Phase 3 Task 3) must
-switch from `s.wallet` to the same resolved `mover` — replace every remaining `s.wallet.Credit(...)` /
-`s.wallet.Debit(...)` call in both methods with `mover.Credit(...)`/`mover.Debit(...)`, resolving `mover` once at
-the top of `CashOut` the same way `BuyIn` now does.
+Every subsequent refund/credit call inside `BuyIn` and `CashOut` (both already written in Phase 3 Task 3) must switch
+from `s.wallet` to the same resolved `mover` — replace every remaining `s.wallet.Credit(...)` /
+`s.wallet.Debit(...)` call in both methods with `mover.Credit(...)`/`mover.Debit(...)`, resolving `mover` once at the
+top of `CashOut` the same way `BuyIn` now does.
 
 - [ ] **Step 4: Enforce activation and `currency_mode="real"` gating at room creation**
 
@@ -495,8 +502,8 @@ the top of `CashOut` the same way `BuyIn` now does.
 		CurrencyMode: currencyMode,
 ```
 
-Add `cfg *config.Config` to `roomHandlers` and thread it through `RegisterRooms`'s parameters and `router.go`'s
-call site.
+Add `cfg *config.Config` to `roomHandlers` and thread it through `RegisterRooms`'s parameters and `router.go`'s call
+site.
 
 - [ ] **Step 5: Run test to verify it passes**
 
@@ -515,20 +522,22 @@ git commit -m "feat(buyin): route real-money rooms to the ring-fenced game walle
 ### Task 4: Cash-out reconciliation — durable pending-credit tracking
 
 **Files:**
+
 - Create: `api/internal/reconcile/pending.go`
 - Modify: `api/internal/buyin/service.go`
 - Test: `api/internal/reconcile/pending_test.go`
 - Test: `api/internal/buyin/service_test.go`
 
 **Interfaces:**
+
 - Produces: `type PendingCashout struct{...}`, `func NewPendingStore(db *dynamodb.Client, env string)
   *PendingStore`, `func (s *PendingStore) Record(ctx, PendingCashout) error`, `func (s *PendingStore)
   MarkResolved(ctx, id string) error`, `func (s *PendingStore) ListUnresolved(ctx, olderThan time.Duration)
   ([]PendingCashout, error)` — consumed by Task 5's reconciliation job.
 
-This closes Phase 3's explicitly-flagged gap ("no compensating action if the wallet credit fails after seat
-removal") — mandatory for real money, where "chips gone from the table but not yet in the wallet" is an actual
-financial loss, not a sandbox inconvenience.
+This closes Phase 3's explicitly-flagged gap ("no compensating action if the wallet credit fails after seat removal") —
+mandatory for real money, where "chips gone from the table but not yet in the wallet" is an actual financial loss, not a
+sandbox inconvenience.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -664,8 +673,8 @@ func (s *PendingStore) ListUnresolved(ctx context.Context, olderThan time.Durati
 }
 ```
 
-`dynamo.Base` has no exported `Scan` method (by design — "no scans in production" per its own package doc) — this
-task's own justification above argues for an exception, which must be a deliberate, narrow addition to
+`dynamo.Base` has no exported `Scan` method (by design — "no scans in production" per its own package doc) — this task's
+own justification above argues for an exception, which must be a deliberate, narrow addition to
 `dynamo.Base`, not a workaround inside `reconcile`:
 
 ```go
@@ -739,13 +748,14 @@ func (s *PendingStore) ListUnresolved(ctx context.Context, olderThan time.Durati
 	return stack, nil
 ```
 
-Add `NewServiceWithGame`'s signature to accept a trailing `pending *reconcile.PendingStore` parameter (nil is
-valid — Phase 3's sandbox-only callers and most tests never need it); update the two call sites from Task 1/3's
-tests accordingly (pass `nil`).
+Add `NewServiceWithGame`'s signature to accept a trailing `pending *reconcile.PendingStore` parameter (nil is valid —
+Phase 3's sandbox-only callers and most tests never need it); update the two call sites from Task 1/3's tests
+accordingly (pass `nil`).
 
 - [ ] **Step 5: Run test to verify it passes**
 
-Run: `docker compose -f api/docker-compose.test.yml up -d && go test -tags integration ./internal/reconcile/... -v && go test ./internal/buyin/... -v`
+Run:
+`docker compose -f api/docker-compose.test.yml up -d && go test -tags integration ./internal/reconcile/... -v && go test ./internal/buyin/... -v`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
@@ -760,12 +770,14 @@ git commit -m "feat(reconcile): durable pending-cashout tracking for cash-outs w
 ### Task 5: Reconciliation job (Lambda + EventBridge Scheduler)
 
 **Files:**
+
 - Create: `api/cmd/reconcile/main.go`
 - Create: `cdk/lib/reconcile-stack.ts`
 - Modify: `cdk/bin/poker.ts`
 - Test: `api/cmd/reconcile/main_test.go`
 
 **Interfaces:**
+
 - Consumes: `reconcile.PendingStore` (Task 4), `walletclient.Client` (Task 1).
 - Produces: a standalone Go binary, deployed as a Lambda on a 5-minute EventBridge schedule — mirrors
   `ctech-wallet`'s own `cmd/reconcile`/`ReconcileStack` shape exactly.
@@ -823,8 +835,8 @@ func TestRunResolvesEveryUnresolvedRealCashout(t *testing.T) {
 }
 ```
 
-`main_test.go` is missing a `"time"` import — add it. `run`'s 4th parameter (`nil` above) is a sandbox-credit
-mover, added in Step 3.
+`main_test.go` is missing a `"time"` import — add it. `run`'s 4th parameter (`nil` above) is a sandbox-credit mover,
+added in Step 3.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -1022,8 +1034,8 @@ export class ReconcileStack extends cdk.Stack {
 }
 ```
 
-The `ReconcileSchedule`'s `target.roleArn` construction above is malformed (an inline ternary that never actually
-grants invoke permission) — replace it with the straightforward form:
+The `ReconcileSchedule`'s `target.roleArn` construction above is malformed (an inline ternary that never actually grants
+invoke permission) — replace it with the straightforward form:
 
 ```typescript
 // cdk/lib/reconcile-stack.ts — replace the CfnSchedule block
@@ -1040,9 +1052,9 @@ grants invoke permission) — replace it with the straightforward form:
 ```
 
 `config.Load()`'s existing env var names (`WALLET_URL`, `POKER_CLIENT_ID`, `POKER_CLIENT_SECRET`) don't match the
-Lambda's `*_PARAM` environment variables above (those are SSM *paths*, not values) — the Lambda handler must
-resolve them itself before calling `config.Load()`, since Lambda has no userdata boot script to pre-resolve SSM
-the way EC2 does:
+Lambda's `*_PARAM` environment variables above (those are SSM *paths*, not values) — the Lambda handler must resolve
+them itself before calling `config.Load()`, since Lambda has no userdata boot script to pre-resolve SSM the way EC2
+does:
 
 ```go
 // api/cmd/reconcile/main.go — handler, before config.Load()
@@ -1088,8 +1100,8 @@ func resolveSSMParams(ctx context.Context, walletURLParam, clientIDParam, client
 }
 ```
 
-Add `"github.com/aws/aws-sdk-go-v2/service/ssm"` import. Grant the Lambda role `ssm:GetParameter` on all three
-paths (already present in the CDK block above).
+Add `"github.com/aws/aws-sdk-go-v2/service/ssm"` import. Grant the Lambda role `ssm:GetParameter` on all three paths
+(already present in the CDK block above).
 
 - [ ] **Step 6: Add the Lambda build target**
 
@@ -1112,8 +1124,8 @@ new ReconcileStack(app, `${environment}-ctech-poker-reconcile`, {
 });
 ```
 
-Add `poker_pending_cashouts` to `DynamoDBStack`'s `TableName` union and its `table()` calls (same pattern as every
-prior table in Phases 2-4).
+Add `poker_pending_cashouts` to `DynamoDBStack`'s `TableName` union and its `table()` calls (same pattern as every prior
+table in Phases 2-4).
 
 - [ ] **Step 8: Commit**
 
@@ -1127,19 +1139,21 @@ git commit -m "feat(reconcile): scheduled Lambda job resolving stuck cash-out cr
 ### Task 6: Structured metrics (EMF) — hands/hour, action latency, disconnect rate, lease-failover count
 
 **Files:**
+
 - Create: `api/internal/metrics/emf.go`
 - Modify: `api/internal/table/actor.go`
 - Modify: `api/internal/tablemanager/manager.go`
 - Test: `api/internal/metrics/emf_test.go`
 
 **Interfaces:**
-- Produces: `func EmitTableMetric(name string, value float64, dims map[string]string)` — writes a CloudWatch
-  Embedded Metric Format JSON line to stdout (the CloudWatch agent already ships `app.log` to a log group per
-  existing CDK userdata; EMF-formatted lines in that same stream are auto-extracted into real CloudWatch metrics,
-  no new infra needed).
 
-ARCHITECTURE.md §7: per-table hands/hour, average action latency, disconnect rate, lease-failover count — "a
-spike in lease-failover count is the earliest signal of an instance going bad."
+- Produces: `func EmitTableMetric(name string, value float64, dims map[string]string)` — writes a CloudWatch Embedded
+  Metric Format JSON line to stdout (the CloudWatch agent already ships `app.log` to a log group per existing CDK
+  userdata; EMF-formatted lines in that same stream are auto-extracted into real CloudWatch metrics, no new infra
+  needed).
+
+ARCHITECTURE.md §7: per-table hands/hour, average action latency, disconnect rate, lease-failover count — "a spike in
+lease-failover count is the earliest signal of an instance going bad."
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1308,12 +1322,14 @@ git commit -m "feat(metrics): EMF hands/hour, action latency, disconnect rate, l
 ### Task 7: CloudWatch alarms
 
 **Files:**
+
 - Modify: `cdk/lib/api-stack.ts`
 - Test: `cdk/test/api-stack.test.ts`
 
 **Interfaces:**
-- Adds a `LeaseFailovers` metric-filter alarm (spike detection — ARCHITECTURE.md §7's "earliest signal of an
-  instance going bad") and an `ALARM`-log-line alarm (mirrors `ctech-wallet/cdk/lib/api-stack.ts`'s existing
+
+- Adds a `LeaseFailovers` metric-filter alarm (spike detection — ARCHITECTURE.md §7's "earliest signal of an instance
+  going bad") and an `ALARM`-log-line alarm (mirrors `ctech-wallet/cdk/lib/api-stack.ts`'s existing
   `AlarmLogFilter` pattern exactly, now that Task 5's reconcile job and Task 6's metrics both use that convention).
 
 - [ ] **Step 1: Write the failing test**
@@ -1371,8 +1387,8 @@ Add `import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';` and `import * as
 
 `Task 6`'s `metrics.go` hardcodes namespace `CtechPoker` (not per-environment, unlike the `AlarmLogAlarm`'s
 `CtechPoker/${environment}` metric filter namespace) — this is a real inconsistency: fix `metrics.go`'s
-`namespace` constant to include the environment, which requires it to accept the environment as a parameter
-rather than being a package-level constant:
+`namespace` constant to include the environment, which requires it to accept the environment as a parameter rather than
+being a package-level constant:
 
 ```go
 // api/internal/metrics/emf.go — replace the namespace constant and both Emit functions' signatures
@@ -1386,13 +1402,14 @@ func EmitTableMetricTo(w io.Writer, env, name string, value float64, dims map[st
 ```
 
 Update every Task 6 call site (`actor.go`, `manager.go`) to pass `cfg.Env` (threaded into `table.Actor`/
-`tablemanager.Manager` construction, following the same pattern `equityEnabled` and `escalationCfg` already use —
-add an `env string` field to `Actor`, set once in `New`, and to `Manager` similarly) and update `emf_test.go`'s
-call sites to the new signature (`EmitTableMetricTo(&buf, "test", "HandsCompleted", 1, ...)`).
+`tablemanager.Manager` construction, following the same pattern `equityEnabled` and `escalationCfg` already use — add an
+`env string` field to `Actor`, set once in `New`, and to `Manager` similarly) and update `emf_test.go`'s call sites to
+the new signature (`EmitTableMetricTo(&buf, "test", "HandsCompleted", 1, ...)`).
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd cdk && npx jest api-stack.test.ts && cd ../api && go build ./... && go test ./internal/metrics/... ./internal/table/... ./internal/tablemanager/... -v`
+Run:
+`cd cdk && npx jest api-stack.test.ts && cd ../api && go build ./... && go test ./internal/metrics/... ./internal/table/... ./internal/tablemanager/... -v`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -1407,18 +1424,20 @@ git commit -m "feat(cdk): alarm on ALARM log lines and lease-failover spikes"
 ### Task 8: Graceful ASG scale-in draining
 
 **Files:**
+
 - Modify: `api/internal/tablemanager/manager.go`
 - Modify: `api/internal/app/app.go`
 - Create: `cdk/lib/lifecycle-hook.ts` (small helper, inlined into `api-stack.ts` if simpler)
 - Test: `api/internal/tablemanager/drain_test.go`
 
 **Interfaces:**
-- Produces: `func (m *Manager) DrainAndRelease(ctx context.Context)` — releases every locally-owned table lease,
-  letting sibling instances pick each table up via Phase 2's existing recovery path, instead of the instance
-  disappearing abruptly mid-hand on scale-in or deploy.
 
-An ASG termination lifecycle hook delays actual instance shutdown until this drain completes (bounded by a
-timeout — a table stuck mid-hand forever must not block scale-in indefinitely).
+- Produces: `func (m *Manager) DrainAndRelease(ctx context.Context)` — releases every locally-owned table lease, letting
+  sibling instances pick each table up via Phase 2's existing recovery path, instead of the instance disappearing
+  abruptly mid-hand on scale-in or deploy.
+
+An ASG termination lifecycle hook delays actual instance shutdown until this drain completes (bounded by a timeout — a
+table stuck mid-hand forever must not block scale-in indefinitely).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1430,10 +1449,11 @@ import (
 	"context"
 	"testing"
 
-	"gopkg.aoctech.app/api-commons/cache"
-	"gopkg.aoctech.app/poker/api/internal/engine/hand"
-	"gopkg.aoctech.app/poker/api/internal/tableowner"
-	"gopkg.aoctech.app/poker/api/internal/tablelease"
+
+"gopkg.aoctech.app/api-commons/cache"
+"gopkg.aoctech.app/poker/api/internal/engine/hand"
+"gopkg.aoctech.app/poker/api/internal/tablelease"
+"gopkg.aoctech.app/poker/api/internal/tableowner"
 )
 
 func TestDrainAndReleaseFreesEveryLocallyOwnedTable(t *testing.T) {
@@ -1494,9 +1514,9 @@ func (m *Manager) DrainAndRelease(ctx context.Context) {
 }
 ```
 
-`ReleaseForTest` (Phase 2 Task 12) is a fine name for a test-only escape hatch but is now called from production
-code — rename it (and its call site in the Phase 2 integration test) to `Release`, dropping the "ForTest" suffix
-now that it has a real caller:
+`ReleaseForTest` (Phase 2 Task 12) is a fine name for a test-only escape hatch but is now called from production code —
+rename it (and its call site in the Phase 2 integration test) to `Release`, dropping the "ForTest" suffix now that it
+has a real caller:
 
 ```go
 // api/internal/tablemanager/manager.go — rename ReleaseForTest to Release everywhere in this file
@@ -1534,8 +1554,8 @@ func registerDrainHook(lc fx.Lifecycle, manager *tablemanager.Manager) {
 ```
 
 Add `registerDrainHook` to `Module`'s `fx.Invoke` list. Fx's default shutdown timeout (used by `app.ShutdownWithContext`
-in `startServer`'s existing `OnStop` hook) already bounds how long this can run — no separate timeout needed here,
-since `fx.New(...).Run()`'s signal handling calls every `OnStop` hook under the same deadline.
+in `startServer`'s existing `OnStop` hook) already bounds how long this can run — no separate timeout needed here, since
+`fx.New(...).Run()`'s signal handling calls every `OnStop` hook under the same deadline.
 
 - [ ] **Step 6: CDK — ASG termination lifecycle hook**
 
@@ -1551,8 +1571,8 @@ since `fx.New(...).Run()`'s signal handling calls every `OnStop` hook under the 
 
 `SIGTERM` delivery on ASG-driven termination is handled by systemd's own default `TimeoutStopSec` behavior for
 `app.service` (already defined in the foundations plan's userdata) sending `SIGTERM` to the process, which
-`fx.New(...).Run()` already listens for and turns into the `OnStop` sequence above — the lifecycle hook's only
-job is to give that up to 60 extra seconds before AWS force-terminates the instance, which needs
+`fx.New(...).Run()` already listens for and turns into the `OnStop` sequence above — the lifecycle hook's only job is to
+give that up to 60 extra seconds before AWS force-terminates the instance, which needs
 `app.service`'s existing `RestartSec`/no explicit `TimeoutStopSec` override adjusted:
 
 ```typescript
@@ -1560,8 +1580,8 @@ job is to give that up to 60 extra seconds before AWS force-terminates the insta
       `TimeoutStopSec=55`,
 ```
 
-`service.autoScalingGroup` must be a public readonly field on `PrivateIpv4Ec2Service` for this to compile — same
-caveat as Phase 2 Task 11's `instanceRole`/`securityGroup` fields: add it in `ctech-cdk` first if missing.
+`service.autoScalingGroup` must be a public readonly field on `PrivateIpv4Ec2Service` for this to compile — same caveat
+as Phase 2 Task 11's `instanceRole`/`securityGroup` fields: add it in `ctech-cdk` first if missing.
 
 - [ ] **Step 7: Run the full suite**
 
@@ -1580,10 +1600,12 @@ git commit -m "feat(tablemanager): drain and release owned table leases on grace
 ### Task 9: WAF on the frontend distribution
 
 **Files:**
+
 - Modify: `cdk/lib/frontend-stack.ts`
 - Test: `cdk/test/frontend-stack.test.ts`
 
 **Interfaces:**
+
 - Attaches an AWS-managed WAFv2 WebACL (common rule set + rate-based rule) to the CloudFront distribution.
 
 - [ ] **Step 1: Extend the test**
@@ -1638,9 +1660,9 @@ Expected: FAIL — no `AWS::WAFv2::WebACL` yet.
       webAclId: webAcl.attrArn,
 ```
 
-Add `import * as wafv2 from 'aws-cdk-lib/aws-wafv2';` to `frontend-stack.ts`. Since `FrontendStack` itself is
-already region-pinned (CloudFront requires `us-east-1` for its certificate per `CERT_ARN`'s existing convention),
-no separate stack/region split is needed for the WebACL.
+Add `import * as wafv2 from 'aws-cdk-lib/aws-wafv2';` to `frontend-stack.ts`. Since `FrontendStack` itself is already
+region-pinned (CloudFront requires `us-east-1` for its certificate per `CERT_ARN`'s existing convention), no separate
+stack/region split is needed for the WebACL.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -1659,18 +1681,20 @@ git commit -m "feat(cdk): attach AWS-managed WAF rule set and rate limiting to t
 ### Task 10: Hand-history audit endpoint
 
 **Files:**
+
 - Create: `api/internal/api/v1/handhistory.go`
 - Modify: `api/internal/api/v1/router.go`
 - Test: `api/internal/api/v1/handhistory_test.go`
 
 **Interfaces:**
+
 - Consumes: `tablestore.Store.LoadActionsSince`/`LoadSnapshot` (Phase 2), `deck.ShuffleResult`/`deck.Verify`
   (existing engine package).
-- Produces: `GET /v1.0/tables/:tableId/hands/:handId/history` → full action log + the revealed shuffle seed, so
-  any player (or a third party) can independently verify the shuffle was fair (OVERVIEW.md §8.2/§3.5).
+- Produces: `GET /v1.0/tables/:tableId/hands/:handId/history` → full action log + the revealed shuffle seed, so any
+  player (or a third party) can independently verify the shuffle was fair (OVERVIEW.md §8.2/§3.5).
 
-This is cheap precisely because commit-reveal (Phase 1) and the durable action log (Phase 2) already exist — this
-task only exposes what's already recorded, it records nothing new.
+This is cheap precisely because commit-reveal (Phase 1) and the durable action log (Phase 2) already exist — this task
+only exposes what's already recorded, it records nothing new.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1706,10 +1730,9 @@ func TestHandHistoryReturnsActionLog(t *testing.T) {
 }
 ```
 
-`fakeHistoryStore`'s first parameter type (`interface{}` standing in for `context.Context`) is a placeholder that
-won't satisfy Go's actual interface matching against `tablestore.Store`'s real method signature — fix in Step 3
-once the real `historyStore` interface is declared, then correct this test to use `context.Context` and the
-matching return type.
+`fakeHistoryStore`'s first parameter type (`interface{}` standing in for `context.Context`) is a placeholder that won't
+satisfy Go's actual interface matching against `tablestore.Store`'s real method signature — fix in Step 3 once the real
+`historyStore` interface is declared, then correct this test to use `context.Context` and the matching return type.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -1782,12 +1805,12 @@ func (a *tablestoreAdapter) LoadActionsSince(ctx context.Context, tableID, handI
 ```
 
 Add `"gopkg.aoctech.app/poker/api/internal/tablestore"` import. Mount
-`RegisterHandHistory(router, &tablestoreAdapter{store: tablestoreInstance})` in `router.go`'s `Register`, threading
-a `*tablestore.Store` parameter through (Phase 2 never actually wired a production `*tablestore.Store` instance
-into `app.go`'s Fx graph — Phase 2 Task 2 built the type but Phase 2 Task 7's `tablemanager.NewManager` call
-passed `nil` for it; fix that now by adding the missing `func newTablestoreStore(db *dynamodb.Client, cfg
-*config.Config) *tablestore.Store { return tablestore.NewStore(db, cfg.Env) }` Fx provider and passing it into
-both `newTableManager` and this endpoint).
+`RegisterHandHistory(router, &tablestoreAdapter{store: tablestoreInstance})` in `router.go`'s `Register`, threading a
+`*tablestore.Store` parameter through (Phase 2 never actually wired a production `*tablestore.Store` instance into
+`app.go`'s Fx graph — Phase 2 Task 2 built the type but Phase 2 Task 7's `tablemanager.NewManager` call passed `nil` for
+it; fix that now by adding the missing `func newTablestoreStore(db *dynamodb.Client, cfg
+*config.Config) *tablestore.Store { return tablestore.NewStore(db, cfg.Env) }` Fx provider and passing it into both
+`newTableManager` and this endpoint).
 
 - [ ] **Step 4: Fix `handhistory_test.go`'s placeholder**
 
@@ -1819,15 +1842,16 @@ git commit -m "feat(api): hand-history audit endpoint exposing the durable actio
 ### Task 11: Load and multi-table chaos test
 
 **Files:**
+
 - Create: `api/tests/load/loadtest.go` (build tag `load`, not run in normal CI)
 - Test: none in the TDD sense — this task's own deliverable IS the test harness
 
 **Interfaces:**
-- A standalone Go program (not a `_test.go` file, since it needs a tunable duration/table-count via flags, and
-  reports throughput rather than pass/fail) driving many concurrent `tablemanager.Manager` + `table.Actor`
-  instances against an in-memory `cache.Backend`, measuring hands/sec and confirming zero cross-table
-  interference (each table's final payouts sum to its total buy-ins, per table, independent of how many other
-  tables ran concurrently).
+
+- A standalone Go program (not a `_test.go` file, since it needs a tunable duration/table-count via flags, and reports
+  throughput rather than pass/fail) driving many concurrent `tablemanager.Manager` + `table.Actor`
+  instances against an in-memory `cache.Backend`, measuring hands/sec and confirming zero cross-table interference (each
+  table's final payouts sum to its total buy-ins, per table, independent of how many other tables ran concurrently).
 
 - [ ] **Step 1: Implement the harness**
 
@@ -1850,12 +1874,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"gopkg.aoctech.app/api-commons/cache"
-	"gopkg.aoctech.app/poker/api/internal/engine/betting"
-	"gopkg.aoctech.app/poker/api/internal/engine/hand"
-	"gopkg.aoctech.app/poker/api/internal/tablemanager"
-	"gopkg.aoctech.app/poker/api/internal/tableowner"
-	"gopkg.aoctech.app/poker/api/internal/tablelease"
+
+"gopkg.aoctech.app/api-commons/cache"
+"gopkg.aoctech.app/poker/api/internal/engine/betting"
+"gopkg.aoctech.app/poker/api/internal/engine/hand"
+"gopkg.aoctech.app/poker/api/internal/tablelease"
+"gopkg.aoctech.app/poker/api/internal/tablemanager"
+"gopkg.aoctech.app/poker/api/internal/tableowner"
 )
 
 func main() {
@@ -1940,10 +1965,9 @@ parameter type).
 - [ ] **Step 2: Run it manually**
 
 Run: `go run -tags load ./tests/load -tables=100 -hands=20`
-Expected: prints a throughput line and zero "ISOLATION VIOLATION" lines. This is a manual/CI-optional tool, not a
-gating test — record its output in the task's completion report so a human can judge whether throughput meets
-whatever SLA the business sets (no numeric target is specified anywhere in OVERVIEW.md/ARCHITECTURE.md to assert
-against automatically).
+Expected: prints a throughput line and zero "ISOLATION VIOLATION" lines. This is a manual/CI-optional tool, not a gating
+test — record its output in the task's completion report so a human can judge whether throughput meets whatever SLA the
+business sets (no numeric target is specified anywhere in OVERVIEW.md/ARCHITECTURE.md to assert against automatically).
 
 - [ ] **Step 3: Commit**
 
@@ -1957,33 +1981,35 @@ git commit -m "test(load): multi-table throughput and isolation load-test harnes
 ### Task 12: Player-scoped hand/session history and per-table P&L
 
 **Files:**
+
 - Create: `api/internal/sessionlog/store.go`, `api/internal/sessionlog/service.go`
 - Test: `api/internal/sessionlog/service_test.go`
 - Modify: `api/internal/buyin/service.go` (record buy-in/cash-out events into `sessionlog`)
-- Modify: `api/internal/table/actor.go` (or wherever Phase 4's achievements/leaderboard hand-completion hook
-  lives — reuse it, don't add a second hook) to also append a per-player hand-index entry at `HAND_COMPLETE`
+- Modify: `api/internal/table/actor.go` (or wherever Phase 4's achievements/leaderboard hand-completion hook lives —
+  reuse it, don't add a second hook) to also append a per-player hand-index entry at `HAND_COMPLETE`
 - Create: `api/internal/api/v1/playerhistory.go`
 - Test: `api/internal/api/v1/playerhistory_test.go`
 - Modify: `api/internal/api/v1/router.go`
 
 **Interfaces:**
-- Consumes: `buyin.Service.BuyIn`/`CashOut` (Task 3, Phase 3) call sites; the same hand-completion event Phase
-  4's achievements/leaderboard already hook (this plan's own Architecture section names it: "achievements/
-  leaderboard both hook into the same hand-completion event Phase 3's `table.Actor` already reaches every
-  hand" — Task 12 adds a third consumer of that existing hook, not a new one).
+
+- Consumes: `buyin.Service.BuyIn`/`CashOut` (Task 3, Phase 3) call sites; the same hand-completion event Phase 4's
+  achievements/leaderboard already hook (this plan's own Architecture section names it: "achievements/ leaderboard both
+  hook into the same hand-completion event Phase 3's `table.Actor` already reaches every hand" — Task 12 adds a third
+  consumer of that existing hook, not a new one).
 - Produces: `GET /v1.0/players/me/sessions` → paginated per-table sessions: `{table_id, currency_mode,
   buy_in_total, cash_out_total, net_result, started_at, ended_at}` (`ended_at` null while still seated).
 - Produces: `GET /v1.0/players/me/hands?table_id=&cursor=` → paginated per-hand index:
   `{table_id, hand_id, played_at, net_chips}`. Each entry is the discovery key for Task 10's existing
-  `GET /v1.0/tables/:tableId/hands/:handId/history` — Task 10 already returns the full action log and
-  revealed shuffle seed for a known `(tableId, handId)`; this task is what lets a player find that pair for
-  a hand they played, closing the gap OVERVIEW.md §8.2 named ("queryable per player") but Task 10 alone
-  never implemented, since Task 10 requires already knowing both ids.
+  `GET /v1.0/tables/:tableId/hands/:handId/history` — Task 10 already returns the full action log and revealed shuffle
+  seed for a known `(tableId, handId)`; this task is what lets a player find that pair for a hand they played, closing
+  the gap OVERVIEW.md §8.2 named ("queryable per player") but Task 10 alone never implemented, since Task 10 requires
+  already knowing both ids.
 
-Both endpoints are scoped to the caller's own JWT (`middleware.GetUserID(c)`, same as every other user route
-in this codebase) — never another player's id, and never exposed on the public leaderboard (OVERVIEW.md §9.1's
-no-real-money-amount-on-a-public-surface rule is about the *leaderboard*; this is a private account statement,
-same privacy tier as `ctech-wallet`'s own `GET /v1.0/wallet/:type/ledger`, not a new precedent).
+Both endpoints are scoped to the caller's own JWT (`middleware.GetUserID(c)`, same as every other user route in this
+codebase) — never another player's id, and never exposed on the public leaderboard (OVERVIEW.md §9.1's
+no-real-money-amount-on-a-public-surface rule is about the *leaderboard*; this is a private account statement, same
+privacy tier as `ctech-wallet`'s own `GET /v1.0/wallet/:type/ledger`, not a new precedent).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2030,8 +2056,8 @@ func TestRecordBuyInThenCashOutProducesNetResult(t *testing.T) {
 }
 ```
 
-`memStore`'s first parameter type (`interface{}` standing in for `context.Context`) is a placeholder, fixed in
-Step 3 once the real `store` interface is declared — same convention Task 10 used for its own placeholder.
+`memStore`'s first parameter type (`interface{}` standing in for `context.Context`) is a placeholder, fixed in Step 3
+once the real `store` interface is declared — same convention Task 10 used for its own placeholder.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -2052,9 +2078,9 @@ package sessionlog
 import (
 	"context"
 
-	"gopkg.aoctech.app/api-commons/dynamo"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"gopkg.aoctech.app/api-commons/dynamo"
 )
 
 const (
@@ -2080,12 +2106,12 @@ type Session struct {
 // look up Task 10's full-detail endpoint, nothing more (that endpoint is the
 // single source of the actual action log/seed; this index is not a copy of it).
 type HandEntry struct {
-	PlayerID  string `dynamodbav:"pk" json:"-"`
-	SK        string `dynamodbav:"sk" json:"-"` // played_at#hand_id, sortable
-	TableID   string `dynamodbav:"table_id" json:"table_id"`
-	HandID    string `dynamodbav:"hand_id" json:"hand_id"`
-	PlayedAt  string `dynamodbav:"played_at" json:"played_at"`
-	NetChips  int64  `dynamodbav:"net_chips" json:"net_chips"`
+	PlayerID string `dynamodbav:"pk" json:"-"`
+	SK       string `dynamodbav:"sk" json:"-"` // played_at#hand_id, sortable
+	TableID  string `dynamodbav:"table_id" json:"table_id"`
+	HandID   string `dynamodbav:"hand_id" json:"hand_id"`
+	PlayedAt string `dynamodbav:"played_at" json:"played_at"`
+	NetChips int64  `dynamodbav:"net_chips" json:"net_chips"`
 }
 
 type Store struct {
@@ -2171,8 +2197,8 @@ func (s *Service) RecordHand(ctx context.Context, playerID string, h HandEntry) 
 ```
 
 Wire `sessionlog.Service.RecordBuyIn`/`RecordCashOut` into `buyin.Service.BuyIn`/`CashOut` (Task 3, Phase 3)
-right after the wallet call succeeds — log-and-continue on a `sessionlog` error, never fail the buy-in/cash-out
-itself over a history-recording problem. Wire `RecordHand` into the same hand-completion hook Phase 4's
+right after the wallet call succeeds — log-and-continue on a `sessionlog` error, never fail the buy-in/cash-out itself
+over a history-recording problem. Wire `RecordHand` into the same hand-completion hook Phase 4's
 `leaderboard.Service.IncrementStats` and achievements already consume, once per seated player per completed hand.
 
 - [ ] **Step 4: HTTP endpoints**
@@ -2237,26 +2263,26 @@ git commit -m "feat(api): player-scoped session P&L and hand-history index"
 
 ## Closing note — flagged, not built now
 
-- **The single biggest blocker to actually shipping Phase 5** is the `ctech-wallet` prerequisite in this plan's
-  Global Constraints — three new M2M endpoints on a repo this plan cannot touch. Task 1 is written against that
-  contract but cannot be exercised end-to-end against a real wallet until it exists.
-- **Wallet contract reconciled (resolved 2026-07-19):** the hold/release/cashout contract wins — see this
-  plan's Global Constraints for the reasoning (money-custody principle: reconciliation stays with the money
-  holder; Task 4 here and the wallet-side stale-hold sweep cover two different, non-overlapping failure
-  modes). **Task 1's code sketch above still shows the superseded plain `CreditGame`/`DebitGame` shape** — it
-  needs rewriting to `HoldGame`/`ReleaseHold`/`CashoutGame` against
-  `ctech-wallet/docs/specs/2026-07-19-poker-game-holds-design.md`'s actual contract before this task is
-  implemented; flagged here rather than silently left inconsistent, since the fix touches Task 1's example
-  code, Task 3's buy-in/cash-out wiring (needs to carry `hold_id` through to cash-out), and Task 12's
-  `sessionlog` schema (a natural place to persist the `hold_id`) — a multi-task edit deferred to whoever
-  actually implements Phase 5, not done as a docs-only pass here.
-- **Legal sign-off** (`LEGAL_SIGNOFF_REF`) is a config value this plan enforces the *presence* of, not its
-  *validity* — nothing here checks that the referenced sign-off document is real, current, or covers the
-  deployment's actual jurisdiction. That verification is inherently a human process, not a code path.
+- **The single biggest blocker to actually shipping Phase 5** is the `ctech-wallet` prerequisite in this plan's Global
+  Constraints — three new M2M endpoints on a repo this plan cannot touch. Task 1 is written against that contract but
+  cannot be exercised end-to-end against a real wallet until it exists.
+- **Wallet contract reconciled (resolved 2026-07-19):** the hold/release/cashout contract wins — see this plan's Global
+  Constraints for the reasoning (money-custody principle: reconciliation stays with the money holder; Task 4 here and
+  the wallet-side stale-hold sweep cover two different, non-overlapping failure modes). **Task 1's code sketch above
+  still shows the superseded plain `CreditGame`/`DebitGame` shape** — it needs rewriting to `HoldGame`/`ReleaseHold`/
+  `CashoutGame` against
+  `ctech-wallet/docs/specs/2026-07-19-poker-game-holds-design.md`'s actual contract before this task is implemented;
+  flagged here rather than silently left inconsistent, since the fix touches Task 1's example code, Task 3's
+  buy-in/cash-out wiring (needs to carry `hold_id` through to cash-out), and Task 12's
+  `sessionlog` schema (a natural place to persist the `hold_id`) — a multi-task edit deferred to whoever actually
+  implements Phase 5, not done as a docs-only pass here.
+- **Legal sign-off** (`LEGAL_SIGNOFF_REF`) is a config value this plan enforces the *presence* of, not its *validity* —
+  nothing here checks that the referenced sign-off document is real, current, or covers the deployment's actual
+  jurisdiction. That verification is inherently a human process, not a code path.
 - **`ListUnresolved`'s `Scan`** (Task 4) is a deliberate, narrowly-justified exception to `ctech-go-common`'s own
   "no scans" rule — flagged the same way Task 12 of the foundations plan flagged its `ctech-go-common` extraction:
   a real change to a shared package, reviewed and merged there before this plan's Task 4 can compile against it.
-- **Bluff detection, chat report/mute, and the hardcoded `ActionBar` big blind** were already flagged in Phase 4's
-  own closing note and remain open — nothing in Phase 5 touches them.
-- No numeric SLA (target hands/sec, p99 action latency) is defined anywhere in the product's own specs — Task
-  11's load test reports numbers but this plan does not invent a pass/fail threshold not asked for.
+- **Bluff detection, chat report/mute, and the hardcoded `ActionBar` big blind** were already flagged in Phase 4's own
+  closing note and remain open — nothing in Phase 5 touches them.
+- No numeric SLA (target hands/sec, p99 action latency) is defined anywhere in the product's own specs — Task 11's load
+  test reports numbers but this plan does not invent a pass/fail threshold not asked for.
