@@ -90,3 +90,52 @@ func TestActorRecoversFromVersionConflictAndRetriesOnce(t *testing.T) {
 	}
 	time.Sleep(5 * time.Millisecond)
 }
+
+// TestReadyFalseMarksSittingOutAndReadyTrueReturnsFree seeds a 4-handed table
+// with a fixed dealer (p1) so the projected SB/BB (p2, p3) are deterministic —
+// p4 is neither, so its return from sitting-out must be free and immediate.
+func TestReadyFalseMarksSittingOutAndReadyTrueReturnsFree(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+
+	seed := hand.NewTable([]*hand.Player{
+		{ID: "p1", Stack: 1000, Ready: true},
+		{ID: "p2", Stack: 1000, Ready: true},
+		{ID: "p3", Stack: 1000, Ready: true},
+		{ID: "p4", Stack: 1000, Ready: true},
+	}, 10, 20)
+	state := seed.ExportState()
+	state.DealerSeat = 0
+	state.DealerDrawn = true
+	ctx := context.Background()
+	if err := store.SeedTable(ctx, "table-1", state); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	a := New("table-1", store, true, func(string, hand.Snapshot) {})
+	runCtx, cancel := context.WithCancel(ctx)
+	t.Cleanup(cancel)
+	go a.Run(runCtx)
+
+	reply := make(chan error, 1)
+	if err := a.Dispatch(ReadyCmd{PlayerID: "p4", Ready: false, Reply: reply}); err != nil {
+		t.Fatalf("ReadyCmd(false): %v", err)
+	}
+	stored, _ := store.LoadTable(ctx, "table-1")
+	for _, s := range stored.State.Players {
+		if s.ID == "p4" && s.State != hand.SittingOut {
+			t.Fatalf("expected p4 to be SittingOut after ready:false, got %v", s.State)
+		}
+	}
+
+	reply2 := make(chan error, 1)
+	if err := a.Dispatch(ReadyCmd{PlayerID: "p4", Ready: true, Reply: reply2}); err != nil {
+		t.Fatalf("ReadyCmd(true): %v", err)
+	}
+	stored, _ = store.LoadTable(ctx, "table-1")
+	for _, s := range stored.State.Players {
+		if s.ID == "p4" && s.State == hand.SittingOut {
+			t.Fatal("expected p4's free return (not projected SB/BB) to clear SittingOut immediately")
+		}
+	}
+}

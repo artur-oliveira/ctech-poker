@@ -247,6 +247,11 @@ func (a *Actor) applyReadyAndCommit(ctx context.Context, c ReadyCmd) error {
 			p.Ready = c.Ready
 		}
 	}
+	if c.Ready {
+		a.cached.RequestReturnFromSitOut(c.PlayerID)
+	} else {
+		a.cached.SitOutForActor(c.PlayerID)
+	}
 	a.tryStartHand()
 	return a.commit(ctx, "", nil)
 }
