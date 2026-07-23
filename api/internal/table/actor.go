@@ -44,6 +44,10 @@ type Actor struct {
 	turnTimer                    *time.Timer
 	turnDeadline                 time.Time
 	turnDeadlineFor              string
+	nextHandTimer                *time.Timer
+	nextHandDeadline             time.Time
+	nextHandArmedFor             string
+	nextHandDelay                time.Duration
 	escalationInterval           time.Duration
 	escalationCfg                roomstore.BlindEscalation
 	done                         chan struct{}
@@ -64,6 +68,7 @@ func New(id string, store *tablestore.Store, trustCache bool, broadcast func(str
 		id: id, store: store, trustCache: trustCache, broadcast: broadcast, cmds: make(chan Command, 64),
 		done:                         make(chan struct{}),
 		turnTimeout:                  DefaultTurnTimeout,
+		nextHandDelay:                NextHandDelay,
 		disconnectGrace:              45 * time.Second,
 		disconnectedSince:            make(map[string]time.Time),
 		consecutiveDisconnectedHands: make(map[string]int),
@@ -146,6 +151,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleSetName(c)
 	case turnTimeoutCmd:
 		return a.handleTurnTimeout(ctx, c)
+	case nextHandCmd:
+		return a.handleNextHand(ctx, c)
 	case escalateCmd:
 		return a.handleEscalate(ctx)
 	default:
@@ -558,6 +565,55 @@ func (a *Actor) armTurnTimer(current string) {
 	})
 }
 
+// armNextHandTimer (re-)arms the 5s post-hand countdown when the table is
+// Complete. Idempotent per handID: re-arming for the SAME hand does not
+// restart the countdown (matches armTurnTimer's convention). complete is
+// passed in by broadcastAll (already knows the current stage) so this stays
+// a plain bool check, no engine dependency beyond what's already cached.
+func (a *Actor) armNextHandTimer(complete bool) {
+	if !complete {
+		if a.nextHandTimer != nil {
+			a.nextHandTimer.Stop()
+		}
+		a.nextHandArmedFor = ""
+		return
+	}
+	if a.handID == a.nextHandArmedFor {
+		return
+	}
+	if a.nextHandTimer != nil {
+		a.nextHandTimer.Stop()
+	}
+	a.nextHandArmedFor = a.handID
+	a.nextHandDeadline = timeNowFunc().Add(a.nextHandDelay)
+	a.nextHandTimer = time.AfterFunc(a.nextHandDelay, func() {
+		reply := make(chan error, 1)
+		_ = a.Dispatch(nextHandCmd{Reply: reply})
+	})
+}
+
+// handleNextHand attempts to start the next hand once the 5s post-hand
+// countdown expires. A stale timer (a client already returned from sitting
+// out and tryStartHand already ran, or the table isn't Complete anymore) is a
+// silent no-op. tryStartHand itself already swallows "fewer than 2 ready
+// players" — if that happens here, the table just stays Complete until a
+// ReadyCmd(true) brings it back (Feature A, Task 3), same as before this
+// feature existed.
+func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	if a.cached.Stage() != hand.Complete {
+		return nil
+	}
+	a.tryStartHand()
+	if err := a.commit(ctx, "", nil); err != nil && !errors.Is(err, tablestore.ErrVersionConflict) {
+		return err
+	}
+	a.broadcastAll()
+	return nil
+}
+
 func (a *Actor) broadcastAll() {
 	if a.broadcast == nil || a.cached == nil {
 		return
@@ -565,11 +621,15 @@ func (a *Actor) broadcastAll() {
 	stage := a.cached.Stage()
 	current := a.cached.CurrentPlayerIDForActor()
 	a.armTurnTimer(current)
+	a.armNextHandTimer(stage == hand.Complete)
 	doEquity := a.equityEnabled.Load() && equityStage(stage)
 	for _, p := range a.cached.PlayersForActor() {
 		snapshot := a.cached.ViewFor(p.ID)
 		if current != "" && current == a.turnDeadlineFor {
 			snapshot.ActionDeadlineUnixMs = a.turnDeadline.UnixMilli()
+		}
+		if stage == hand.Complete && a.handID == a.nextHandArmedFor {
+			snapshot.NextHandUnixMs = a.nextHandDeadline.UnixMilli()
 		}
 		a.applyPlayerNames(snapshot.Seats)
 		if doEquity {

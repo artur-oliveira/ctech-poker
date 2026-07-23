@@ -112,6 +112,17 @@ func (c SetNameCmd) reply() chan error { return c.Reply }
 // WHOEVER currently must act, connected or not — a disconnected player who
 // times out here still falls through to the existing grace/consecutive-hands
 // check inside handleTurnTimeout before deciding fold vs. sit-out.
+// nextHandCmd is dispatched by the 5s post-hand timer (a time.AfterFunc
+// goroutine) so the actual StartHand attempt happens inside Run, never from
+// the timer goroutine (see armNextHandTimer). A stale command (the table is
+// no longer Complete, or a new hand already started through some other path)
+// is a silent no-op — handleNextHand re-checks the stage before acting.
+type nextHandCmd struct {
+	Reply chan error
+}
+
+func (c nextHandCmd) reply() chan error { return c.Reply }
+
 type turnTimeoutCmd struct {
 	PlayerID string
 	Reply    chan error

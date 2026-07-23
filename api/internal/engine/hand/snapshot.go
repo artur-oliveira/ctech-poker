@@ -15,6 +15,7 @@ type Snapshot struct {
 	CurrentPlayerID      string           `json:"current_player_id,omitempty"`
 	LegalActions         *LegalActions    `json:"legal_actions,omitempty"`
 	ActionDeadlineUnixMs int64            `json:"action_deadline_unix_ms,omitempty"`
+	NextHandUnixMs       int64            `json:"next_hand_unix_ms,omitempty"`
 }
 
 // LegalActions is the authoritative set of moves the viewer may make right

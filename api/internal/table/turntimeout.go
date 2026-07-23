@@ -14,3 +14,7 @@ func TurnTimeoutFor(seconds int) time.Duration {
 	}
 	return time.Duration(seconds) * time.Second
 }
+
+// NextHandDelay is how long the table waits after a hand reaches Complete
+// before auto-starting the next one.
+const NextHandDelay = 5 * time.Second
