@@ -84,7 +84,7 @@ func (s *Service) Spin(ctx context.Context, playerID string) (int64, int64, erro
 		return record.Amount, 0, nil
 	}
 
-	idemKey := fmt.Sprintf("%s#daily_reward_v2#%s", playerID, day)
+	idemKey := fmt.Sprintf("%s#daily_reward#%s", playerID, day)
 	if err := s.wallet.Credit(ctx, playerID, record.Amount, idemKey, "daily_reward"); err != nil {
 		return 0, 0, err
 	}
