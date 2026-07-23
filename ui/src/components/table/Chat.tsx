@@ -25,7 +25,10 @@ export function Chat({items, onSend, connected = true, viewerId, seats = []}: {
   const messagesRef = useRef<HTMLDivElement>(null);
   const latest = items.at(-1);
   const nameOf = (id: string) => playerName(id, viewerId, seats.find(seat => seat.player_id === id)?.name);
-  
+  const [seenCount, setSeenCount] = useState(items.length);
+  if (open && items.length !== seenCount) setSeenCount(items.length);
+  const unread = open ? 0 : Math.max(0, items.length - seenCount);
+
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
@@ -55,6 +58,7 @@ export function Chat({items, onSend, connected = true, viewerId, seats = []}: {
       aria-expanded={open} aria-controls={panelId} className="chat-toggle"
       onClick={() => setOpen(value => !value)}>
       {open ? <X/> : <MessageCircle/>}
+      {unread > 0 && <span className="chat-unread-dot" aria-hidden="true"/>}
     </Button>
     <div id={panelId} className="chat-body" aria-hidden={!open}>
       <h3>Chat da mesa</h3>

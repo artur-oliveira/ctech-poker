@@ -57,9 +57,11 @@ export default function Home() {
         <Link href="/guide">Ver o guia completo <ArrowRight/></Link>
       </div>
       <div className="showcase-frame">
-        <div className="browser-chrome"><span/><span/><span/><small>ctechpoker.app/mesa</small></div>
-        <Image src="/guide/table-flop.png" alt="Mesa real do CTech Poker em andamento, com cartas comunitárias e barra de ações"
-          width={1280} height={800}/>
+        <div className="showcase-inner">
+          <div className="browser-chrome"><span/><span/><span/><small>ctechpoker.app/mesa</small></div>
+          <Image src="/guide/table-flop.png" alt="Mesa real do CTech Poker em andamento, com cartas comunitárias e barra de ações"
+            width={1280} height={800}/>
+        </div>
         <figure className="showcase-peek">
           <Image src="/guide/lobby.png" alt="Lobby do CTech Poker com mesas agrupadas por stake" width={640}
             height={400}/>

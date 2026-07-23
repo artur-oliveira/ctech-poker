@@ -42,7 +42,12 @@ export function ProfileMenu() {
   const walletMode: WalletMode = me?.wallet_mode || 'sandbox';
   const balanceLabel = walletMode === 'real' ? formatReal(me?.game_balance) : formatSandbox(me?.sandbox_balance);
 
-  return <Popover>
+  return <Popover onOpenChange={(open, details) => {
+    if (!open && editingName && details.reason === 'escape-key') {
+      details.cancel();
+      setEditingName(false);
+    }
+  }}>
     <div className="profile-summary">
       <span className="balance-pill">{balanceLabel}</span>
       <PopoverTrigger render={<Button variant="ghost" size="icon" className="rounded-full" aria-label="Abrir perfil"/>}>

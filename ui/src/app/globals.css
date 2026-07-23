@@ -627,14 +627,19 @@ h1 em {
 
 .showcase-frame {
     position: relative;
+    transform: rotate(-1.2deg);
+    animation: rise .8s var(--ease-out-quint) both;
+    animation-delay: 120ms
+}
+
+/* clips the chrome+screenshot to the panel's rounded corners without also
+   clipping .showcase-peek, which deliberately escapes the frame's edge */
+.showcase-inner {
     border-radius: var(--rounded-panel);
     overflow: hidden;
     border: 1px solid var(--control-border);
     background: var(--surface-control);
-    box-shadow: 0 40px 90px var(--black-08);
-    transform: rotate(-1.2deg);
-    animation: rise .8s var(--ease-out-quint) both;
-    animation-delay: 120ms
+    box-shadow: 0 40px 90px var(--black-08)
 }
 
 .browser-chrome {
@@ -1365,7 +1370,7 @@ h1 em {
     gap: 10px
 }
 
-@media (max-width: 480px) {
+@media (max-width: 600px) {
     .app-nav {
         flex-wrap: wrap;
         height: auto;
@@ -1621,7 +1626,7 @@ h1 em {
 
 .game-pot b {
     color: var(--gold-pale);
-    font-size: 14px
+    font-size: var(--font-size-body)
 }
 
 .game-pot small {
@@ -2382,6 +2387,7 @@ h1 em {
 }
 
 .chat-toggle {
+    position: relative;
     float: right;
     width: 45px;
     height: 45px;
@@ -2391,6 +2397,18 @@ h1 em {
     color: var(--on-brand);
     display: grid;
     place-items: center
+}
+
+.chat-unread-dot {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--gold);
+    border: 2px solid var(--table-room);
+    animation: chip-drop 260ms var(--ease-out-quint) both
 }
 
 .chat-toggle svg {
