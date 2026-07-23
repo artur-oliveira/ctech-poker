@@ -3,6 +3,7 @@ import {Geist, Geist_Mono} from 'next/font/google';
 import {QueryProvider} from '@/lib/providers/QueryProvider';
 import {Notifier} from '@/components/Notifier';
 import './globals.css';
+import React from "react";
 
 const sans = Geist({subsets: ['latin'], variable: '--font-sans'});
 const mono = Geist_Mono({subsets: ['latin'], variable: '--font-mono'});
@@ -57,7 +58,7 @@ export const viewport: Viewport = {
   viewportFit: 'cover'
 };
 export default function Layout({children}: { children: React.ReactNode }) {
-  return <html lang="pt-BR" suppressHydrationWarning>
+  return <html lang="pt-BR" suppressHydrationWarning data-scroll-behavior="smooth">
     <body suppressHydrationWarning className={`${sans.variable} ${mono.variable}`}>
       <QueryProvider>{children}</QueryProvider><Notifier/></body>
   </html>;

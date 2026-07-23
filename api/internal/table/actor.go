@@ -615,9 +615,9 @@ func (a *Actor) armNextHandTimer(complete bool) {
 // countdown expires. A stale timer (a client already returned from sitting
 // out and tryStartHand already ran, or the table isn't Complete anymore) is a
 // silent no-op. tryStartHand itself already swallows "fewer than 2 ready
-// players" — if that happens here, the table just stays Complete until a
-// ReadyCmd(true) brings it back (Feature A, Task 3), same as before this
-// feature existed.
+// players" — StartHand falls the table back to WaitingForPlayers in that
+// case, so it doesn't stay stuck on Complete; a ReadyCmd(true) later starts
+// the next hand normally.
 func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err

@@ -608,3 +608,60 @@ func playToCompletion(t *testing.T, table *Table, playerIDs []string) {
 		}
 	}
 }
+
+// TestBustedHeadsUpPlayerCannotStartDegenerateSoloHand reproduces the
+// reported bug: heads-up, one player busts to Stack 0 and correctly
+// transitions to SittingOut, but StartHand's readyCount check counted them as
+// ready anyway (it never checked SittingOut), so the next StartHand call
+// "succeeded" with only one real player actually dealt in. That lone
+// survivor then posted both blinds against themselves every hand, and — via
+// the OTHER half of this bug (runShowdown scanning t.players instead of
+// t.handOrder for contributions) — the busted player's stale leftover
+// Contributed kept resurfacing as an "eligible" refund target every
+// subsequent hand, so their stack grew forever off a hand they were never
+// dealt into. StartHand must refuse to start when fewer than 2 players are
+// truly eligible (Ready and not SittingOut).
+func TestBustedHeadsUpPlayerCannotStartDegenerateSoloHand(t *testing.T) {
+	players := []*Player{
+		{ID: "A", Stack: 500, Ready: true},
+		{ID: "B", Stack: 1000, Ready: true},
+	}
+	table := NewTable(players, 10, 20)
+	table.dealerDrawn = true // A is dealer/SB heads-up
+
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+
+	// Rig the deal so B's quad aces beat A's weak hole cards deterministically,
+	// busting A to Stack 0.
+	players[0].HoleCards = [2]deck.Card{{Rank: deck.Five, Suit: deck.Clubs}, {Rank: deck.Six, Suit: deck.Clubs}}
+	players[1].HoleCards = [2]deck.Card{{Rank: deck.Ace, Suit: deck.Spades}, {Rank: deck.Ace, Suit: deck.Hearts}}
+	table.shuffle.Cards[4] = deck.Card{Rank: deck.Ace, Suit: deck.Clubs}
+	table.shuffle.Cards[5] = deck.Card{Rank: deck.Ace, Suit: deck.Diamonds}
+	table.shuffle.Cards[6] = deck.Card{Rank: deck.Two, Suit: deck.Spades}
+	table.shuffle.Cards[7] = deck.Card{Rank: deck.Three, Suit: deck.Spades}
+	table.shuffle.Cards[8] = deck.Card{Rank: deck.Four, Suit: deck.Hearts}
+
+	if err := table.Act("A", betting.ActionRaise, 500); err != nil {
+		t.Fatalf("A shoves all-in for 500: %v", err)
+	}
+	if err := table.Act("B", betting.ActionCall, 0); err != nil {
+		t.Fatalf("B calls all-in: %v", err)
+	}
+
+	if table.Stage() != Complete {
+		t.Fatalf("expected the all-in runout to reach Complete, got stage %v", table.Stage())
+	}
+	a := table.playerByID("A")
+	if a.Stack != 0 || a.State != SittingOut {
+		t.Fatalf("A must be busted (Stack 0, SittingOut), got stack=%d state=%v", a.Stack, a.State)
+	}
+
+	if err := table.StartHand(); err == nil {
+		t.Fatal("StartHand must refuse to start with only 1 truly eligible player (B); A is busted and SittingOut")
+	}
+	if table.Stage() != WaitingForPlayers {
+		t.Fatalf("table must fall back to WaitingForPlayers, not stay stuck on Complete, got stage %v", table.Stage())
+	}
+}

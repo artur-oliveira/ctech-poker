@@ -262,6 +262,26 @@ func (t *Table) RemovePlayerForActor(playerID string) (int64, string, error) {
 	return 0, "", fmt.Errorf("hand: player %s not found", playerID)
 }
 
+// eligibleForNextHand reports whether p is dealt into the next hand: ready,
+// not sitting out (unless they're owed a free return per
+// RequestReturnFromSitOut), and not a still-pending mid-hand joiner (unless
+// they've opted in via MarkReadyToPost). StartHand's readyCount gate and its
+// active-player selection loop must agree on this, or a table can start a
+// hand with fewer real players than it thinks it has (e.g. a busted,
+// SittingOut player still counted as ready).
+func (t *Table) eligibleForNextHand(p *Player) bool {
+	if !p.Ready {
+		return false
+	}
+	if p.State == SittingOut && !t.owesBigBlind[p.ID] {
+		return false
+	}
+	if p.State == PendingEntry && !t.readyToPost[p.ID] {
+		return false
+	}
+	return true
+}
+
 // StartHand begins a new hand: requires >=2 ready players, posts blinds
 // relative to dealerSeat (heads-up special case: dealer posts small blind),
 // shuffles via commit-reveal, and deals hole cards. dealerSeat itself is
@@ -272,11 +292,15 @@ func (t *Table) RemovePlayerForActor(playerID string) (int64, string, error) {
 func (t *Table) StartHand() error {
 	readyCount := 0
 	for _, p := range t.players {
-		if p.Ready && (p.State != PendingEntry || t.readyToPost[p.ID]) {
+		if t.eligibleForNextHand(p) {
 			readyCount++
 		}
 	}
 	if readyCount < 2 {
+		// A Complete table with too few eligible players must fall back to
+		// WaitingForPlayers, or it (and any post-hand countdown UI relying on
+		// Stage) stays stuck on Complete forever.
+		t.stage = WaitingForPlayers
 		return fmt.Errorf("hand: need at least 2 ready players, have %d", readyCount)
 	}
 
@@ -299,21 +323,17 @@ func (t *Table) StartHand() error {
 	active := make([]*Player, 0, len(t.players))
 	newEntrants := make(map[string]bool)
 	for _, p := range t.players {
-		owingReturn := p.State == SittingOut && p.Ready && t.owesBigBlind[p.ID]
-		if !p.Ready || (p.State == SittingOut && !owingReturn) {
+		if !t.eligibleForNextHand(p) {
 			if p.State != PendingEntry {
 				p.State = SittingOut
 			}
-			continue
-		}
-		if p.State == PendingEntry && !t.readyToPost[p.ID] {
 			continue
 		}
 		if p.State == PendingEntry {
 			newEntrants[p.ID] = true
 			delete(t.readyToPost, p.ID)
 		}
-		if owingReturn {
+		if p.State == SittingOut {
 			newEntrants[p.ID] = true
 			delete(t.owesBigBlind, p.ID)
 		}
@@ -757,8 +777,8 @@ func (t *Table) runShowdown() {
 	}
 	wonWithoutShowdown := nonFolded == 1
 	t.stage = Showdown
-	contributions := make([]sidepots.Contribution, 0, len(t.players))
-	for _, p := range t.players {
+	contributions := make([]sidepots.Contribution, 0, len(t.handOrder))
+	for _, p := range t.handOrder {
 		if p.Contributed > 0 {
 			contributions = append(contributions, sidepots.Contribution{PlayerID: p.ID, Amount: p.Contributed})
 		}
