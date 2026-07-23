@@ -177,6 +177,39 @@ func TestViewForOmitsWonWithoutShowdownForGenuineShowdown(t *testing.T) {
 	}
 }
 
+func TestViewForPublishesCommitHashAssoonAsHandStarts(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	view := table.ViewFor("p1")
+	if view.ShuffleCommitHash == "" {
+		t.Fatal("expected the shuffle commit hash to be published as soon as the hand starts")
+	}
+	if view.ShuffleServerSeedHex != "" {
+		t.Fatal("must not reveal the server seed before the hand is complete")
+	}
+}
+
+func TestViewForRevealsServerSeedOnlyOnceComplete(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	_ = table.StartHand()
+	for table.Stage() != Complete {
+		toAct := table.playerToActForTest()
+		if err := table.Act(toAct, betting.ActionCall, 0); err != nil {
+			_ = table.Act(toAct, betting.ActionCheck, 0)
+		}
+	}
+	view := table.ViewFor("p1")
+	if view.ShuffleServerSeedHex == "" {
+		t.Fatal("expected the server seed revealed once the hand is Complete")
+	}
+}
+
 func TestViewForOmitsHandCategoryWhenCardsAreHidden(t *testing.T) {
 	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
 	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}

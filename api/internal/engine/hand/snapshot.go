@@ -1,6 +1,8 @@
 package hand
 
 import (
+	"encoding/hex"
+
 	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 	"gopkg.aoctech.app/poker/api/internal/engine/handeval"
 )
@@ -20,6 +22,8 @@ type Snapshot struct {
 	ActionDeadlineUnixMs int64            `json:"action_deadline_unix_ms,omitempty"`
 	NextHandUnixMs       int64            `json:"next_hand_unix_ms,omitempty"`
 	WonWithoutShowdown   bool             `json:"won_without_showdown,omitempty"`
+	ShuffleCommitHash    string           `json:"shuffle_commit_hash,omitempty"`
+	ShuffleServerSeedHex string           `json:"shuffle_server_seed_hex,omitempty"`
 }
 
 // LegalActions is the authoritative set of moves the viewer may make right
@@ -123,7 +127,7 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		seats = append(seats, sv)
 	}
 	current := t.currentPlayerToAct()
-	return Snapshot{
+	out := Snapshot{
 		Stage:              stageNames[t.stage],
 		Board:              boardCodes(t.board),
 		Seats:              seats,
@@ -133,6 +137,13 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		LegalActions:       t.legalActionsFor(viewerID, current),
 		WonWithoutShowdown: wonWithoutShowdown,
 	}
+	if t.shuffle != nil {
+		out.ShuffleCommitHash = hex.EncodeToString(t.shuffle.CommitHash[:])
+		if t.stage == Complete {
+			out.ShuffleServerSeedHex = hex.EncodeToString(t.shuffle.ServerSeed[:])
+		}
+	}
+	return out
 }
 
 // isBettingStage reports whether the hand is in a street where a player may
