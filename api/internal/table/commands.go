@@ -28,6 +28,18 @@ type ActCmd struct {
 
 func (c ActCmd) reply() chan error { return c.Reply }
 
+// ConnectCmd is dispatched exactly once per physical WS connection, right
+// after the gateway registers it — so the actor can count concurrently open
+// connections per player (e.g. two browser tabs) and only treat the player
+// as disconnected once the LAST one closes. See ReconnectCmd, which instead
+// fires on every inbound frame and cannot be used for counting.
+type ConnectCmd struct {
+	PlayerID string
+	Reply    chan error
+}
+
+func (c ConnectCmd) reply() chan error { return c.Reply }
+
 type DisconnectCmd struct {
 	PlayerID string
 	Reply    chan error
@@ -136,3 +148,15 @@ type turnTimeoutCmd struct {
 }
 
 func (c turnTimeoutCmd) reply() chan error { return c.Reply }
+
+// kickTimeoutCmd is dispatched by the per-player auto-kick timer (a
+// time.AfterFunc goroutine, see armKickTimer) once a disconnected player has
+// been gone for kickGrace. A stale command (they reconnected or left in the
+// meantime) is a silent no-op — handleKickTimeout re-checks disconnectedSince
+// first.
+type kickTimeoutCmd struct {
+	PlayerID string
+	Reply    chan error
+}
+
+func (c kickTimeoutCmd) reply() chan error { return c.Reply }

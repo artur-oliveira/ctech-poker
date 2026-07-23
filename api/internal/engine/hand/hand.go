@@ -180,11 +180,37 @@ func (t *Table) CurrentPlayerIDForActor() string {
 
 // SitOutForActor marks a player SittingOut — used by Phase 2's disconnect
 // grace-window handling once a disconnected player exceeds the grace period
-// or enough consecutive disconnected hands (OVERVIEW.md § 4).
+// or enough consecutive disconnected hands (OVERVIEW.md § 4), and by a
+// player's own voluntary "sit out" toggle. A player still Active in the
+// current hand is folded out of the live betting round first: a bare state
+// flip left betting.Round still waiting on their decision forever (the round
+// never completes, and CurrentPlayerIDForActor never changes, so the
+// universal turn timer's idempotent re-arm treats it as a no-op — the hand
+// wedges permanently). A player already AllIn has no decision left to make
+// and stays AllIn through showdown; Ready is already false by the time a
+// caller reaches here for a voluntary sit-out, which alone excludes them from
+// the next hand via eligibleForNextHand.
 func (t *Table) SitOutForActor(playerID string) {
-	if p := t.playerByID(playerID); p != nil {
-		p.State = SittingOut
+	p := t.playerByID(playerID)
+	if p == nil {
+		return
 	}
+	if p.State != Active {
+		if p.State != AllIn {
+			p.State = SittingOut
+		}
+		return
+	}
+	if idx, ok := t.roundIdx[playerID]; ok && t.round != nil {
+		if err := t.round.Act(idx, betting.ActionFold, 0); err == nil {
+			p.State = Folded
+			if t.round.IsComplete() {
+				t.advanceStage()
+			}
+			return
+		}
+	}
+	p.State = SittingOut
 }
 
 func (t *Table) playerByID(id string) *Player {
@@ -644,6 +670,9 @@ func (t *Table) currentPlayerCanAct(id string) bool {
 // Call, Call vs. Check) was reinterpreted must diff the action it requested
 // against the resulting PlayerState itself — Act does not report it.
 func (t *Table) Act(playerID string, action betting.Action, amount int64) error {
+	if current := t.currentPlayerToAct(); current != "" && current != playerID {
+		return fmt.Errorf("hand: it is not player %s's turn to act", playerID)
+	}
 	idx, ok := t.roundIdx[playerID]
 	if !ok {
 		return fmt.Errorf("hand: player %s has no pending action this round", playerID)

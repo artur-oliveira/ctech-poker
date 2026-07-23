@@ -187,6 +187,42 @@ func TestRequestReturnFromSitOutIsNoOpForNonSittingOutPlayer(t *testing.T) {
 	}
 }
 
+// TestSitOutForActorFoldsTheCurrentPlayerInsteadOfWedgingTheRound guards the
+// bug where a bare state flip (no fold in the live betting round) left
+// betting.Round waiting forever on a decision nobody could ever make again —
+// the hand never reaches Complete and the universal turn timer's idempotent
+// re-arm treats the unchanged CurrentPlayerIDForActor as a no-op, wedging the
+// table permanently. This is exactly the path both a voluntary "sit out"
+// mid-hand and the disconnect-escalation timeout take.
+func TestSitOutForActorFoldsTheCurrentPlayerInsteadOfWedgingTheRound(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	current := table.CurrentPlayerIDForActor()
+	if current == "" {
+		t.Fatal("expected a player to be on the clock after StartHand")
+	}
+
+	table.SitOutForActor(current)
+
+	if p := table.playerByID(current); p.State != Folded {
+		t.Fatalf("expected the sat-out player to be Folded (out of the live round), got state %v", p.State)
+	}
+	if table.Stage() != Complete {
+		t.Fatalf("folding the only other active player in a heads-up hand must end it — stage is still %v, hand is wedged", table.Stage())
+	}
+	other := p1.ID
+	if current == p1.ID {
+		other = p2.ID
+	}
+	if table.Payouts()[other] == 0 {
+		t.Fatalf("the player who did not sit out must win the pot uncontested, got payouts %+v", table.Payouts())
+	}
+}
+
 func TestReadyGateBlocksHandStartWithFewerThanTwoReady(t *testing.T) {
 	players := []*Player{
 		{ID: "P1", Stack: 1000, Ready: true},

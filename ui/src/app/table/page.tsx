@@ -22,6 +22,7 @@ import {Button} from '@/components/ui/button';
 import {pushNotification} from '@/lib/notify';
 import type {PokerAction, TableSnapshot} from '@/lib/api/table';
 import {type MockScenario, USE_MOCK} from '@/lib/mock';
+import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
 
 const ROOM_ID = /^[a-f0-9]{32}$/i;
 const CONNECTION_COPY = {
@@ -30,12 +31,22 @@ const CONNECTION_COPY = {
   disconnected: 'Conexão interrompida. Tentando novamente…',
   error: 'A conexão oscilou. Suas fichas continuam seguras.'
 } as const;
+// @aoctech/ws-client gives up on its own retry loop after MAX_RECONNECT_ATTEMPTS
+// and never schedules another one — only a fresh token (handled elsewhere) or
+// this button's retryNow() tries again. Telling the player "tentando
+// novamente" past that point would be a lie.
+const RECONNECT_GIVEN_UP_COPY = 'Conexão perdida. Toque para tentar novamente.';
 const STAGE_LABELS: Record<string, string> = {
   waiting_for_players: 'Aguardando jogadores', pre_flop: 'Pré-flop', flop: 'Flop', turn: 'Turn', river: 'River',
   showdown: 'Showdown', complete: 'Mão encerrada'
 };
 const BETTING_STAGES = new Set(['pre_flop', 'flop', 'turn', 'river']);
-const MOCK_SCENARIOS = new Set<MockScenario>(['full_hand', 'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'reconnecting', 'action_error', 'timeout']);
+
+function connectionCopyFor(status: keyof typeof CONNECTION_COPY, attempt: number) {
+  if (status === 'disconnected' && attempt > MAX_RECONNECT_ATTEMPTS) return RECONNECT_GIVEN_UP_COPY;
+  return CONNECTION_COPY[status];
+}
+const MOCK_SCENARIOS = new Set<MockScenario>(['full_hand', 'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'complete', 'reconnecting', 'action_error', 'timeout']);
 
 function actionState(snapshot: TableSnapshot, viewer?: string) {
   const seat = snapshot.seats.find(item => item.player_id === viewer);
@@ -105,14 +116,14 @@ function TableContent() {
     <main className="game-loading"><span className="loader"/>
       <h2>{rt.status === 'connected' ? 'Aquecendo o seu lugar…' : 'Conectando à mesa…'}</h2>
       <p role="status"
-         aria-live="polite">{rt.status === 'connected' ? 'Sincronizando o estado mais recente.' : CONNECTION_COPY[rt.status]}</p>
+         aria-live="polite">{rt.status === 'connected' ? 'Sincronizando o estado mais recente.' : connectionCopyFor(rt.status, rt.reconnectAttempt)}</p>
       {rt.status !== 'connected' &&
         <Button variant="outline" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>}
     </main>
     {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
   </>;
   const s = rt.snapshot, pot = s.seats.reduce((n, x) => n + x.contributed, 0);
-  const connectionMessage = rt.status === 'connected' ? null : CONNECTION_COPY[rt.status];
+  const connectionMessage = rt.status === 'connected' ? null : connectionCopyFor(rt.status, rt.reconnectAttempt);
   const actions = actionState(s, viewer);
   const viewerSeat = s.seats.find(seat => seat.player_id === viewer);
   const actionKey = [s.stage, s.current_player_id, s.board.join(','), viewerSeat?.stack, viewerSeat?.contributed,
@@ -141,7 +152,11 @@ function TableContent() {
           </span>
           {canInvite && <InviteDialog url={inviteUrl}/>}
           {viewerSeat && viewerSeat.state !== 'sitting_out' &&
-            <Button type="button" variant="ghost" onClick={() => rt.ready(false)}>Sentar fora</Button>}
+            <Button type="button" variant="ghost" disabled={rt.readyPending}
+              onClick={() => rt.ready(false)}>Sentar fora</Button>}
+          {viewerSeat?.state === 'sitting_out' &&
+            <Button type="button" variant="ghost" disabled={rt.readyPending}
+              onClick={() => rt.ready(true)}>Voltar a jogar</Button>}
           <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} onLeft={amount => {
             pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
             queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
@@ -164,11 +179,10 @@ function TableContent() {
             <span key={s.next_hand_unix_ms} className="next-hand-ring"
                   style={{animationDuration: `${nextHandDurationMs}ms`}}
                   aria-hidden="true"/>}
-          {viewerSeat?.state === 'sitting_out' &&
-            <Button type="button" variant="ghost" onClick={() => rt.ready(true)}>Voltar a jogar</Button>}
           {s.stage === 'complete' && s.won_without_showdown && viewerSeat &&
             viewerSeat.state !== 'sitting_out' && viewerSeat.state !== 'pending_entry' &&
-            <Button type="button" variant="ghost" onClick={() => rt.showCards()}>Mostrar cartas</Button>}
+            <Button type="button" variant="ghost" disabled={rt.showCardsPending}
+              onClick={() => rt.showCards()}>Mostrar cartas</Button>}
       </div>}
       <div className="game-table">
         <div className="game-rail"/>

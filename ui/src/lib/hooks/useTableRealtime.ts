@@ -1,6 +1,7 @@
 'use client';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {getAccessToken, subscribeAccessToken} from '@/lib/api/client';
+import {getAccessToken, setAccessToken, setUsername, subscribeAccessToken} from '@/lib/api/client';
+import {doRefresh} from '@/lib/auth/oauth';
 import {cardLabel} from '@/lib/cards';
 import {useWebSocket, type WSStatus} from '@aoctech/ws-client';
 import {type MockScenario, MockTableService, USE_MOCK} from '@/lib/mock';
@@ -12,6 +13,16 @@ export type ConnectionStatus = WSStatus
 export type ActionError = { code: string; message: string }
 
 const ACTION_TIMEOUT_MS = 8000;
+// A player parked at the table for hours (away, in a long hand, distracted)
+// never issues another REST call, so nothing would otherwise notice the JWT
+// is about to expire — the socket would reconnect-loop with the same stale
+// token until @aoctech/ws-client's retry budget runs out and gives up for
+// good. Refreshing well inside any realistic access-token lifetime keeps
+// subscribeAccessToken's listener (already wired into useWebSocket below)
+// firing with a live token before that ever happens; ws-client force-
+// reconnects on a genuinely new token regardless of how many attempts it has
+// already burned.
+const TOKEN_REFRESH_INTERVAL_MS = 4 * 60 * 1000;
 
 const ERROR_MESSAGES: Record<string, string> = {
   unauthorized: 'Sua sessão expirou. Entre novamente para continuar.',
@@ -69,7 +80,7 @@ function describeSnapshot(previous: TableSnapshot | null, next: TableSnapshot, v
 function playSoundForTransition(previous: TableSnapshot | null, next: TableSnapshot) {
   if (!previous) return;
   if (next.board.length > previous.board.length) {
-    playSound('dealing');
+    playSound(previous.board.length === 0 ? 'dealing' : 'reveal');
     return;
   }
   const previousSeats = new Map(previous.seats.map(seat => [seat.player_id, seat]));
@@ -96,6 +107,23 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const pendingActionRef = useRef<PokerAction | null>(null);
   const previousSnapshot = useRef<TableSnapshot | null>(null);
   const sendRef = useRef<(value: object) => boolean>(() => false);
+  // A mid-hand joiner is seated as pending_entry and stays that way forever
+  // unless the client opts them in (PostBigBlindCmd) — the product intent is
+  // an automatic buy-in for the next hand's big blind, no manual click, so
+  // fire it once as soon as the viewer's own seat shows pending_entry. Reset
+  // when they leave that state so a *later* pending_entry spell (re-joining
+  // after leaving) posts again instead of being silently skipped.
+  const postedBigBlindRef = useRef(false);
+  // ready() and showCards() go straight through emit() with no server
+  // round-trip tracking (unlike act(), which pendingActionRef already
+  // guards) — a double-click/double-tap sends the frame twice. A short
+  // synchronous ref lock (not state, so two clicks in the same tick can't
+  // both read a stale "not pending" value) blocks the repeat; the mirrored
+  // state only drives the button's disabled/pending visual.
+  const readyLockRef = useRef(false);
+  const showCardsLockRef = useRef(false);
+  const [readyPending, setReadyPending] = useState(false);
+  const [showCardsPending, setShowCardsPending] = useState(false);
   const [snapshot, setSnapshot] = useState<TableSnapshot | null>(null);
   // Captured once per snapshot (in this event handler, never during render) so
   // Seat can compute its countdown ring's remaining time as a pure function of
@@ -131,6 +159,15 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       setSnapshot(message.snapshot);
       setSnapshotAt(Date.now());
       clearPending();
+      const ownSeat = message.snapshot.seats.find(seat => seat.player_id === viewerId);
+      if (ownSeat?.state === 'pending_entry') {
+        if (!postedBigBlindRef.current) {
+          postedBigBlindRef.current = true;
+          sendRef.current({type: 'post_big_blind'});
+        }
+      } else {
+        postedBigBlindRef.current = false;
+      }
     }
     if (message.type === 'error') failPending(message.code || 'unknown');
     if (message.type === 'achievement_unlocked' && message.key) setUnlock({
@@ -194,6 +231,34 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     if (pendingTimer.current) clearTimeout(pendingTimer.current);
   }, []);
 
+  useEffect(() => {
+    if (USE_MOCK || !id) return () => {};
+    const interval = setInterval(() => {
+      void doRefresh().then(result => {
+        if (result) {
+          setAccessToken(result.accessToken);
+          setUsername(result.username);
+        }
+      });
+    }, TOKEN_REFRESH_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [id]);
+
+  // A backgrounded tab (screen lock, app switch) can have its WS silently
+  // killed by the OS without a clean close event — the client-side heartbeat
+  // only notices once it wakes up, and by then the socket may have already
+  // burned through its whole reconnect budget. Forcing a reconnect attempt
+  // the moment the tab becomes visible again skips straight past any
+  // exhausted backoff instead of waiting on it.
+  useEffect(() => {
+    if (USE_MOCK || typeof document === 'undefined') return () => {};
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible' && status !== 'connected') retryNow();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [status, retryNow]);
+
   const emit = useCallback((value: object) => {
     if (!send(value)) {
       setLastActionError(actionError('not_connected'));
@@ -222,8 +287,26 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   return {
     status, snapshot, snapshotAt, unlock, chat, pendingAction, actionError: lastActionError, reconnectAttempt, announcement,
     clearActionError: () => setLastActionError(null), retryNow,
-    ready: (ready = true) => emit({type: 'ready', ready}), act,
+    readyPending, showCardsPending,
+    ready: (ready = true) => {
+      if (readyLockRef.current) return false;
+      readyLockRef.current = true;
+      setReadyPending(true);
+      setTimeout(() => {
+        readyLockRef.current = false;
+        setReadyPending(false);
+      }, 1000);
+      return emit({type: 'ready', ready});
+    },
+    act,
     showCards: () => {
+      if (showCardsLockRef.current) return false;
+      showCardsLockRef.current = true;
+      setShowCardsPending(true);
+      setTimeout(() => {
+        showCardsLockRef.current = false;
+        setShowCardsPending(false);
+      }, 1000);
       const ok = emit({type: 'show_cards'});
       if (ok) playSound('showing_card');
       return ok;

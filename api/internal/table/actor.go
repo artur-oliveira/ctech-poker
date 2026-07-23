@@ -40,6 +40,22 @@ type Actor struct {
 	disconnectGrace              time.Duration
 	disconnectedSince            map[string]time.Time
 	consecutiveDisconnectedHands map[string]int
+	// activeConns counts live WS connections per playerID (a player can have
+	// more than one open, e.g. two browser tabs). handleDisconnect only marks
+	// a player disconnected once this hits zero, and handleConnect/
+	// handleReconnect always clear that mark — so one tab dying while another
+	// stays open never falsely flags the player as gone, and a disconnect
+	// event racing a reconnect event from a different connection's goroutine
+	// can never leave a live player stuck marked disconnected (the counter is
+	// commutative regardless of which event the Run loop processes first).
+	activeConns map[string]int
+	// kickGrace bounds how long a disconnected player can occupy a seat
+	// before being auto-removed (Leave, cashing them out same as a manual
+	// exit). kickTimers holds one AfterFunc per currently-disconnected
+	// player — unlike turnTimer/nextHandTimer there can be several at once,
+	// one per seat.
+	kickGrace                    time.Duration
+	kickTimers                   map[string]*time.Timer
 	playerNames                  map[string]string
 	turnTimer                    *time.Timer
 	turnDeadline                 time.Time
@@ -72,6 +88,9 @@ func New(id string, store *tablestore.Store, trustCache bool, broadcast func(str
 		disconnectGrace:              45 * time.Second,
 		disconnectedSince:            make(map[string]time.Time),
 		consecutiveDisconnectedHands: make(map[string]int),
+		activeConns:                  make(map[string]int),
+		kickGrace:                    5 * time.Minute,
+		kickTimers:                   make(map[string]*time.Timer),
 		playerNames:                  make(map[string]string),
 	}
 	a.equityEnabled.Store(true)
@@ -133,6 +152,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleReady(ctx, c)
 	case ActCmd:
 		return a.handleAct(ctx, c)
+	case ConnectCmd:
+		return a.handleConnect(c)
 	case DisconnectCmd:
 		return a.handleDisconnect(c)
 	case ReconnectCmd:
@@ -155,6 +176,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleTurnTimeout(ctx, c)
 	case nextHandCmd:
 		return a.handleNextHand(ctx, c)
+	case kickTimeoutCmd:
+		return a.handleKickTimeout(ctx, c)
 	case escalateCmd:
 		return a.handleEscalate(ctx)
 	default:
@@ -286,22 +309,19 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 		return err
 	}
 	start := timeNowFunc()
-	completed, err := a.applyActAndCommit(ctx, c)
+	_, err := a.applyActAndCommit(ctx, c)
 	if errors.Is(err, tablestore.ErrVersionConflict) {
 		// See handleReady's identical rationale — retry exactly once.
 		if err := a.ensureLoaded(ctx, true); err != nil {
 			return err
 		}
-		completed, err = a.applyActAndCommit(ctx, c)
+		_, err = a.applyActAndCommit(ctx, c)
 	}
 	if err != nil && !errors.Is(err, tablestore.ErrDuplicateAction) {
 		return err
 	}
 	metrics.EmitTableMetric(a.env, "ActionLatencyMs", float64(timeNowFunc().Sub(start).Milliseconds()), map[string]string{"table_id": a.id})
 	a.broadcastAll()
-	if completed {
-		a.notifyHandComplete()
-	}
 	return nil
 }
 
@@ -384,9 +404,28 @@ func (a *Actor) retryOnConflict(ctx context.Context, apply func() error) error {
 
 func (a *Actor) SetEnv(env string) { a.env = env }
 
+// handleConnect fires exactly once per physical WS connection, right after
+// the gateway registers it — unlike ReconnectCmd (fired on every inbound
+// frame from every connection), this is the only place safe to count
+// connections. A player with a second tab already open bumps this to 2; only
+// the LAST connection to close (handleDisconnect dropping the count to 0)
+// ever marks the player disconnected.
+func (a *Actor) handleConnect(c ConnectCmd) error {
+	a.activeConns[c.PlayerID]++
+	a.clearDisconnectMark(c.PlayerID)
+	return nil
+}
+
 func (a *Actor) handleDisconnect(c DisconnectCmd) error {
+	if a.activeConns[c.PlayerID] > 0 {
+		a.activeConns[c.PlayerID]--
+	}
+	if a.activeConns[c.PlayerID] > 0 {
+		return nil // another connection (another tab) for this player is still live
+	}
 	metrics.EmitTableMetric(a.env, "Disconnects", 1, map[string]string{"table_id": a.id})
 	a.disconnectedSince[c.PlayerID] = timeNowFunc()
+	a.armKickTimer(c.PlayerID)
 	a.broadcastAll()
 	return nil
 }
@@ -402,12 +441,59 @@ func (a *Actor) handleReconnect(ctx context.Context, c ReconnectCmd) error {
 	// with N seats pinging independently that's an O(N) snapshot flood with
 	// no state change behind it. Only broadcast when this player was actually
 	// marked disconnected.
-	if _, wasDisconnected := a.disconnectedSince[c.PlayerID]; !wasDisconnected {
+	if !a.clearDisconnectMark(c.PlayerID) {
 		return nil
 	}
-	delete(a.disconnectedSince, c.PlayerID)
 	a.broadcastAll()
 	return nil
+}
+
+// clearDisconnectMark deletes playerID's stale disconnect bookkeeping and
+// reports whether anything was actually cleared, so callers only broadcast
+// (or otherwise react) when this genuinely changed something.
+func (a *Actor) clearDisconnectMark(playerID string) bool {
+	delete(a.consecutiveDisconnectedHands, playerID)
+	if t, armed := a.kickTimers[playerID]; armed {
+		t.Stop()
+		delete(a.kickTimers, playerID)
+	}
+	if _, wasDisconnected := a.disconnectedSince[playerID]; !wasDisconnected {
+		return false
+	}
+	delete(a.disconnectedSince, playerID)
+	return true
+}
+
+// armKickTimer (re-)arms the auto-kick clock for a just-disconnected player.
+// Only handleDisconnect calls this, exactly once per disconnect episode (the
+// same invariant handleConnect/handleReconnect's clearDisconnectMark relies
+// on), so unlike armTurnTimer there's no same-player no-op check needed.
+func (a *Actor) armKickTimer(playerID string) {
+	if t, armed := a.kickTimers[playerID]; armed {
+		t.Stop()
+	}
+	a.kickTimers[playerID] = time.AfterFunc(a.kickGrace, func() {
+		reply := make(chan error, 1)
+		_ = a.Dispatch(kickTimeoutCmd{PlayerID: playerID, Reply: reply})
+	})
+}
+
+// handleKickTimeout fires 5 minutes after a player disconnects and removes
+// them from the table (same cash-out path as a manual Leave), freeing the
+// seat for someone else. Stale if they reconnected since (clearDisconnectMark
+// already stopped this timer, but a fire can still be in flight on the cmds
+// channel when that happens) or already left.
+func (a *Actor) handleKickTimeout(ctx context.Context, c kickTimeoutCmd) error {
+	if _, disconnected := a.disconnectedSince[c.PlayerID]; !disconnected {
+		return nil
+	}
+	delete(a.kickTimers, c.PlayerID)
+	// ponytail: RemovePlayerForActor rejects removal while the player is
+	// still Active/AllIn mid-hand. In practice that can't coincide with 5
+	// minutes disconnected — handleTurnTimeout's 45s/3-hand disconnect grace
+	// already forces them to SittingOut long before this fires. If it ever
+	// races anyway, skip silently; nothing to retry from here.
+	return a.handleLeave(ctx, LeaveCmd{PlayerID: c.PlayerID})
 }
 
 func (a *Actor) handleSitOut(ctx context.Context, c SitOutCmd) error {
@@ -457,6 +543,11 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 	if since, disconnected := a.disconnectedSince[c.PlayerID]; disconnected {
 		a.consecutiveDisconnectedHands[c.PlayerID]++ // safe: runs in Run goroutine
 		if timeNowFunc().Sub(since) >= a.disconnectGrace || a.consecutiveDisconnectedHands[c.PlayerID] >= 3 {
+			// SitOutForActor folds the player out of the live round itself
+			// (not just a bare state flip), so the round can actually
+			// complete and, if this was the last decision pending, advance
+			// the hand to Complete — broadcastAll's notifyHandComplete call
+			// picks that up same as a normal Act would.
 			a.cached.SitOutForActor(c.PlayerID)
 			if err := a.commit(ctx, "", nil); err != nil && !errors.Is(err, tablestore.ErrVersionConflict) {
 				return err
@@ -465,14 +556,14 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 			return nil
 		}
 	}
-	completed, err := a.applyActAndCommit(ctx, ActCmd{
+	_, err := a.applyActAndCommit(ctx, ActCmd{
 		PlayerID: c.PlayerID, ActionID: "turn-timeout-" + c.PlayerID, Action: betting.ActionFold, Amount: 0, Reply: c.Reply,
 	})
 	if errors.Is(err, tablestore.ErrVersionConflict) {
 		if err := a.ensureLoaded(ctx, true); err != nil {
 			return err
 		}
-		completed, err = a.applyActAndCommit(ctx, ActCmd{
+		_, err = a.applyActAndCommit(ctx, ActCmd{
 			PlayerID: c.PlayerID, ActionID: "turn-timeout-" + c.PlayerID, Action: betting.ActionFold, Amount: 0, Reply: c.Reply,
 		})
 	}
@@ -480,9 +571,6 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 		return err
 	}
 	a.broadcastAll()
-	if completed {
-		a.notifyHandComplete()
-	}
 	return nil
 }
 
@@ -535,6 +623,13 @@ func (a *Actor) handleLeave(ctx context.Context, c LeaveCmd) error {
 	}
 	if err != nil {
 		return err
+	}
+	delete(a.disconnectedSince, c.PlayerID)
+	delete(a.consecutiveDisconnectedHands, c.PlayerID)
+	delete(a.activeConns, c.PlayerID)
+	if t, armed := a.kickTimers[c.PlayerID]; armed {
+		t.Stop()
+		delete(a.kickTimers, c.PlayerID)
 	}
 	if c.Stack != nil {
 		c.Stack <- stack
@@ -669,6 +764,7 @@ func (a *Actor) broadcastAll() {
 		}
 		a.broadcast(p.ID, snapshot)
 	}
+	a.notifyHandComplete()
 }
 
 // applyPlayerNames fills in each seat's cached display name in place. Safe to

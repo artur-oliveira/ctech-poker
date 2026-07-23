@@ -40,11 +40,6 @@
       "amount": 220
     },
     {
-      "player": "Dealer",
-      "action": "check",
-      "amount": 0
-    },
-    {
       "player": "BB",
       "action": "check",
       "amount": 0

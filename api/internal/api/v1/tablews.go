@@ -239,6 +239,13 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 			reg.Register(tableID+"#chat", chatConnID, safeConn)
 			defer reg.Unregister(tableID+"#chat", chatConnID)
 
+			connectReply := make(chan error, 1)
+			_ = dispatch(table.ConnectCmd{PlayerID: playerID, Reply: connectReply})
+			defer func() {
+				disconnectReply := make(chan error, 1)
+				_ = dispatch(table.DisconnectCmd{PlayerID: playerID, Reply: disconnectReply})
+			}()
+
 			send(map[string]any{"type": "connected", "conn_id": connID})
 			slog.Info("table ws connected", "table", tableID, "player", playerID, "conn", connID)
 
@@ -263,8 +270,6 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 			for {
 				_, msg, e := conn.ReadMessage()
 				if e != nil {
-					reply := make(chan error, 1)
-					_ = dispatch(table.DisconnectCmd{PlayerID: playerID, Reply: reply})
 					break
 				}
 				reply := make(chan error, 1)
