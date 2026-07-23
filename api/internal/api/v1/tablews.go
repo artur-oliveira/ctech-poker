@@ -180,6 +180,11 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 					_ = conn.Close()
 					return
 				}
+				if room == nil {
+					send(map[string]any{"type": "error", "code": "not_found"})
+					_ = conn.Close()
+					return
+				}
 			}
 			if room != nil && !privateRoomAccessAllowed(room, playerID, shareCode) {
 				send(map[string]any{"type": "error", "code": "forbidden"})
@@ -206,7 +211,7 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 			// actor if the current one has stopped (it lost its lease). Guards
 			// against the dead-actor Dispatch hang (T1).
 			dispatch := func(cmd table.Command) error {
-				for i := 0; i < 2; i++ {
+				for range 2 {
 					err := actor.Dispatch(cmd)
 					if !errors.Is(err, table.ErrActorStopped) {
 						return err

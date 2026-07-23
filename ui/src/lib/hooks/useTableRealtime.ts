@@ -27,6 +27,7 @@ const TOKEN_REFRESH_INTERVAL_MS = 4 * 60 * 1000;
 const ERROR_MESSAGES: Record<string, string> = {
   unauthorized: 'Sua sessão expirou. Entre novamente para continuar.',
   forbidden: 'Você não tem acesso a esta mesa.',
+  not_found: 'Essa sala não está mais disponível.',
   unavailable: 'A mesa está indisponível no momento. Tente reconectar.',
   rate_limited: 'Muitas ações em sequência. Aguarde um instante e tente novamente.',
   invalid_action: 'Essa ação não é mais válida. Confira o estado atual da mesa.',

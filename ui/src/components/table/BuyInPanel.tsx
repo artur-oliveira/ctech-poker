@@ -5,6 +5,7 @@ import {ChevronLeft} from 'lucide-react';
 import {useQuery} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
 import {getRoom, joinRoom} from '@/lib/api/rooms';
+import {isNotFound} from '@/lib/api/client';
 
 function midBuyIn(min: number, max: number, bigBlind: number) {
   const bb = bigBlind > 0 ? bigBlind : 1;
@@ -23,14 +24,21 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
   const [amount, setAmount] = useState<number | null>(null);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState('');
-  const {data: room, isLoading, isError, refetch} = useQuery({
+  const {data: room, isLoading, error: roomError, isError, refetch} = useQuery({
     queryKey: ['room', roomId],
-    queryFn: () => getRoom(roomId)
+    queryFn: () => getRoom(roomId),
+    retry: (count, err) => !isNotFound(err) && count < 3
   });
 
   if (isLoading) return (
     <main className="game-loading"><span className="loader"/>
       <h2>Preparando a mesa…</h2>
+    </main>
+  );
+  if (isError && isNotFound(roomError)) return (
+    <main className="game-loading">
+      <h2>Essa sala não está mais disponível</h2>
+      <Button variant="ghost" render={<Link href="/lobby"/>}><ChevronLeft/> Voltar ao lobby</Button>
     </main>
   );
   if (isError || !room || !room.buy_in_max) return (

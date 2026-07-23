@@ -73,6 +73,13 @@ export function subscribePlayerId(f: (v: string | null) => void) {
   };
 }
 
+// A 404 (room deleted/expired) is permanent — retrying it is pointless and
+// just hammers the API. Query configs use this to skip TanStack's default
+// retry for that one status while still retrying real network hiccups.
+export function isNotFound(error: unknown) {
+  return axios.isAxiosError(error) && error.response?.status === 404;
+}
+
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || '',
   adapter: USE_MOCK ? mockAdapter : undefined

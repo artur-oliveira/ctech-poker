@@ -153,6 +153,13 @@ func (h *roomHandlers) getByShareCode(c fiber.Ctx) error {
 // device, is not asked to repeat the buy-in ceremony for a seat they already
 // have (playerID is always claims.Sub, never client-supplied — IDOR-safe).
 func (h *roomHandlers) seated(c fiber.Ctx) error {
+	room, err := h.rooms.Get(c.Context(), c.Params("id"))
+	if err != nil {
+		return problem.InternalServer("failed to get room", c, err).Send(c)
+	}
+	if room == nil {
+		return problem.NotFound("room not found").Send(c)
+	}
 	userID, _ := c.Locals(localsUserID).(string)
 	seated, stack, err := h.buyin.Seated(c.Context(), c.Params("id"), userID)
 	if err != nil {

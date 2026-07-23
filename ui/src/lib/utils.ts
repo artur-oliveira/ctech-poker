@@ -7,6 +7,19 @@ export function cn(...values: ClassValue[]) {
   return twMerge(clsx(values));
 }
 
+export const HAND_CATEGORY_LABELS: Record<string, string> = {
+  high_card: 'Carta alta',
+  pair: 'Par',
+  two_pair: 'Dois pares',
+  three_of_a_kind: 'Trinca',
+  straight: 'Sequência',
+  flush: 'Flush',
+  full_house: 'Full house',
+  four_of_a_kind: 'Quadra',
+  straight_flush: 'Straight flush',
+  royal_flush: 'Royal flush'
+};
+
 // The single answer to "who is looking at this screen" — the profile's
 // user_id (matches seat.player_id / current_player_id server-side) in prod,
 // the fixed mock player in mock mode. NOT decodeIdToken: that only ever

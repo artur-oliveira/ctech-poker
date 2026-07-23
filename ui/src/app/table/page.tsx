@@ -1,12 +1,13 @@
 'use client';
 import Link from 'next/link';
-import {Suspense, useState} from 'react';
+import {Suspense, useEffect, useRef, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {ChevronLeft, RotateCw, Wifi} from 'lucide-react';
 import {getViewerId, rotateSeats} from '@/lib/utils';
 import {useTableRealtime} from '@/lib/hooks/useTableRealtime';
 import {getRoom, getSeated} from '@/lib/api/rooms';
+import {isNotFound} from '@/lib/api/client';
 import {BuyInPanel} from '@/components/table/BuyInPanel';
 import {Seat} from '@/components/table/Seat';
 import {Board} from '@/components/table/Board';
@@ -16,6 +17,7 @@ import {Chat} from '@/components/table/Chat';
 import {InviteDialog} from '@/components/table/InviteDialog';
 import {LeaveDialog} from '@/components/table/LeaveDialog';
 import {MockControls} from '@/components/table/MockControls';
+import {HandOutcomeBanner, type HandOutcomeState} from '@/components/table/HandOutcome';
 import {AchievementToast} from '@/components/AchievementToast';
 import {TermsGate} from '@/components/TermsGate';
 import {Button} from '@/components/ui/button';
@@ -76,7 +78,10 @@ function TableContent() {
   const requestedDelay = Number(params.get('delay') || 350);
   const delay = [0, 350, 1200, 9000].includes(requestedDelay) ? requestedDelay : 350;
   const viewer = getViewerId();
-  const {data: room} = useQuery({queryKey: ['room', id], queryFn: () => getRoom(id), enabled: valid});
+  const {data: room} = useQuery({
+    queryKey: ['room', id], queryFn: () => getRoom(id), enabled: valid,
+    retry: (count, err) => !isNotFound(err) && count < 3
+  });
   const queryClient = useQueryClient();
   // Buy-in is an explicit ceremony: nothing is debited until the player
   // confirms an amount. The server (not local browser storage) is the
@@ -85,7 +90,8 @@ function TableContent() {
   // different device without repeating the ceremony for a seat they
   // already have.
   const {data: seatedStatus, isLoading: seatedLoading} = useQuery({
-    queryKey: ['seated', id], queryFn: () => getSeated(id), enabled: valid
+    queryKey: ['seated', id], queryFn: () => getSeated(id), enabled: valid,
+    retry: (count, err) => !isNotFound(err) && count < 3
   });
   const seated = seatedStatus?.seated ?? false;
   const rt = useTableRealtime(valid && seated ? id : '', viewer, inviteCode, USE_MOCK ? {scenario, delay} : undefined);
@@ -98,6 +104,31 @@ function TableContent() {
   // snapshot that armed this deadline keeps the ring in sync with backend
   // time regardless of how many broadcasts land before it fires.
   const [nextHandArmed, setNextHandArmed] = useState<{deadline: number; snapshotAt: number} | null>(null);
+  // Fires the win/lose banner exactly once per resolved hand: payouts appear
+  // once when a hand completes and stay put across every later broadcast of
+  // that same `complete` snapshot (show_cards, pings, ...), so comparing
+  // against the previous render's payouts (not the current one) is what
+  // keeps this from re-firing on those repeats.
+  const previousPayoutsRef = useRef<TableSnapshot['payouts']>(undefined);
+  const outcomeKeyRef = useRef(0);
+  const [handOutcome, setHandOutcome] = useState<HandOutcomeState | null>(null);
+  useEffect(() => {
+    const snap = rt.snapshot;
+    const isFreshPayout = Boolean(snap?.payouts) && !previousPayoutsRef.current;
+    previousPayoutsRef.current = snap?.payouts;
+    if (!isFreshPayout || !snap?.payouts || !viewer) return;
+    // Only a viewer who stayed in for the whole hand (never folded, never sat
+    // out) gets a win/lose moment — folding is routine and already has its
+    // own quiet "Desistiu" seat state; celebrating or consoling every single
+    // fold would turn the delight into noise.
+    const seat = snap.seats.find(item => item.player_id === viewer);
+    if (seat?.state !== 'active' && seat?.state !== 'all_in') return;
+    outcomeKeyRef.current += 1;
+    const amount = snap.payouts[viewer] || 0;
+    setHandOutcome({
+      key: outcomeKeyRef.current, kind: amount > 0 ? 'win' : 'lose', amount, handCategory: seat.hand_category
+    });
+  }, [rt.snapshot, viewer]);
   if (!valid) return (
     <main className="game-loading">
       <h2>Mesa inválida</h2>
@@ -148,7 +179,8 @@ function TableContent() {
         <span>{STAGE_LABELS[s.stage] || s.stage.replaceAll('_', ' ')}</span>
         <div className="header-right">
           <span className={`connection-state ${rt.status}`}>
-            <Wifi aria-hidden="true"/> {rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}
+            <Wifi aria-hidden="true"/>
+            <span className="connection-label">{rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}</span>
           </span>
           {canInvite && <InviteDialog url={inviteUrl}/>}
           {viewerSeat && viewerSeat.state !== 'sitting_out' &&
@@ -192,7 +224,9 @@ function TableContent() {
                                                              payout={s.payouts?.[seat.player_id] || 0}
                                                              deadlineMs={s.action_deadline_unix_ms}
                                                              nowMs={rt.snapshotAt}
-                                                             isViewer={seat.player_id === viewer}/>)}</div>
+                                                             isViewer={seat.player_id === viewer}/>)}
+        <HandOutcomeBanner outcome={handOutcome}/>
+      </div>
       <ActionBar
         onActAction={rt.act}
         {...actions}

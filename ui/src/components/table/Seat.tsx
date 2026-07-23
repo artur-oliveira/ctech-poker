@@ -1,6 +1,6 @@
 import {PlayingCard} from '@/components/table/PlayingCard';
 import type {SeatView} from '@/lib/api/table';
-import {playerName} from '@/lib/utils';
+import {HAND_CATEGORY_LABELS, playerName} from '@/lib/utils';
 
 const STATE_LABELS: Record<string, string> = {
   folded: 'Desistiu',
@@ -8,19 +8,6 @@ const STATE_LABELS: Record<string, string> = {
   sitting_out: 'Ausente',
   disconnected: 'Desconectado',
   pending_entry: 'Aguardando'
-};
-
-const HAND_CATEGORY_LABELS: Record<string, string> = {
-  high_card: 'Carta alta',
-  pair: 'Par',
-  two_pair: 'Dois pares',
-  three_of_a_kind: 'Trinca',
-  straight: 'Sequência',
-  flush: 'Flush',
-  full_house: 'Full house',
-  four_of_a_kind: 'Quadra',
-  straight_flush: 'Straight flush',
-  royal_flush: 'Royal flush'
 };
 
 // Seats 3/4/5 sit on the top rail; their winner pill must drop below instead of above.

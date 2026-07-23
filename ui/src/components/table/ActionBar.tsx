@@ -37,6 +37,12 @@ function isPlainKey(event: KeyboardEvent) {
   return !event.metaKey && !event.ctrlKey && !event.altKey && !event.repeat && !isTypingTarget(event.target);
 }
 
+// Phones (≤800px, see the matching CSS breakpoint) don't have room to show
+// the preset/slider sizing UI at all times alongside Fold/Check/Pagar, so it
+// stays collapsed until the player taps Aumentar once to reveal it; desktop
+// keeps it always open (CSS ignores the collapsed class above that width).
+const COMPACT_QUERY = '(max-width: 800px)';
+
 /** Raise control. Keyed by `actionKey` in the parent so the chosen amount
  * resets to the street minimum on every new decision without an effect. */
 function RaiseControl({minRaise, maxRaise, raiseStep, pot, disabled, pending, onRaise}: {
@@ -44,6 +50,7 @@ function RaiseControl({minRaise, maxRaise, raiseStep, pot, disabled, pending, on
   onRaise: (amount: number) => void;
 }) {
   const [amount, setAmount] = useState(minRaise);
+  const [expanded, setExpanded] = useState(false);
   const safeAmount = Math.min(maxRaise, Math.max(minRaise, amount));
   const inactive = disabled || maxRaise <= minRaise;
   const snap = (value: number) => Math.min(maxRaise, Math.max(minRaise, Math.round(value / raiseStep) * raiseStep));
@@ -68,8 +75,16 @@ function RaiseControl({minRaise, maxRaise, raiseStep, pot, disabled, pending, on
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  function handleRaiseClick() {
+    if (!expanded && window.matchMedia(COMPACT_QUERY).matches) {
+      setExpanded(true);
+      return;
+    }
+    onRaise(safeAmount);
+  }
+
   return <>
-    <label className="bet-control" htmlFor="raise-amount">
+    <label className={`bet-control${expanded ? '' : ' bet-control-collapsed'}`} htmlFor="raise-amount">
       <span className="sr-only">Valor total do aumento</span>
       <div className="bet-presets" role="group" aria-label="Valores rápidos de aumento">
         {presets.map(preset => <button key={preset.label} type="button" disabled={inactive}
@@ -83,10 +98,12 @@ function RaiseControl({minRaise, maxRaise, raiseStep, pot, disabled, pending, on
       <output id="raise-amount-output" htmlFor="raise-amount">{safeAmount.toLocaleString('pt-BR')}</output>
     </label>
     <Button type="button" disabled={inactive} aria-keyshortcuts="r"
-            aria-describedby="action-context" onClick={() => onRaise(safeAmount)} className="raise">
+            aria-describedby="action-context" onClick={handleRaiseClick} className="raise">
       {pending ? <><LoaderCircle className="action-spinner"/> {actionLabel.raise}</> :
-        <span>Aumentar <kbd aria-hidden="true">R</kbd></span>}
+        <span>{expanded ? `Aumentar ${safeAmount.toLocaleString('pt-BR')}` : 'Aumentar'} <kbd aria-hidden="true">R</kbd></span>}
     </Button>
+    {expanded && <Button type="button" variant="ghost" className="raise-cancel"
+                         onClick={() => setExpanded(false)}>Cancelar</Button>}
   </>;
 }
 
