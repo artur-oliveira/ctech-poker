@@ -145,6 +145,38 @@ func TestViewForIncludesHandCategoryWhenBoardIsComplete(t *testing.T) {
 	}
 }
 
+func TestViewForFlagsWonWithoutShowdownForFoldToOne(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	_ = table.StartHand()
+	toAct := table.playerToActForTest()
+	if err := table.Act(toAct, betting.ActionFold, 0); err != nil {
+		t.Fatalf("fold: %v", err)
+	}
+	view := table.ViewFor(toAct)
+	if !view.WonWithoutShowdown {
+		t.Fatal("expected won_without_showdown=true after a fold-to-one, so the client can offer a voluntary reveal button")
+	}
+}
+
+func TestViewForOmitsWonWithoutShowdownForGenuineShowdown(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	_ = table.StartHand()
+	for table.Stage() != Complete {
+		toAct := table.playerToActForTest()
+		if err := table.Act(toAct, betting.ActionCall, 0); err != nil {
+			_ = table.Act(toAct, betting.ActionCheck, 0)
+		}
+	}
+	view := table.ViewFor("p1")
+	if view.WonWithoutShowdown {
+		t.Fatal("expected won_without_showdown=false after a genuine showdown")
+	}
+}
+
 func TestViewForOmitsHandCategoryWhenCardsAreHidden(t *testing.T) {
 	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
 	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}

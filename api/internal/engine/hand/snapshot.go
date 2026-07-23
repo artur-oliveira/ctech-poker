@@ -19,6 +19,7 @@ type Snapshot struct {
 	LegalActions         *LegalActions    `json:"legal_actions,omitempty"`
 	ActionDeadlineUnixMs int64            `json:"action_deadline_unix_ms,omitempty"`
 	NextHandUnixMs       int64            `json:"next_hand_unix_ms,omitempty"`
+	WonWithoutShowdown   bool             `json:"won_without_showdown,omitempty"`
 }
 
 // LegalActions is the authoritative set of moves the viewer may make right
@@ -93,7 +94,8 @@ func boardCodes(board []deck.Card) []string {
 // so the lone remaining player's cards stay hidden too.
 func (t *Table) ViewFor(viewerID string) Snapshot {
 	seats := make([]SeatView, 0, len(t.players))
-	revealAll := t.stage == Complete && t.lastOutcome != nil && !t.lastOutcome.WonWithoutShowdown
+	wonWithoutShowdown := t.stage == Complete && t.lastOutcome != nil && t.lastOutcome.WonWithoutShowdown
+	revealAll := t.stage == Complete && t.lastOutcome != nil && !wonWithoutShowdown
 	// Only players actually dealt into the current/last hand have real
 	// HoleCards — anyone else (waiting for the first hand, or a mid-hand
 	// joiner seated as PendingEntry) still holds deck.Card{}'s zero value,
@@ -122,13 +124,14 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 	}
 	current := t.currentPlayerToAct()
 	return Snapshot{
-		Stage:           stageNames[t.stage],
-		Board:           boardCodes(t.board),
-		Seats:           seats,
-		Payouts:         t.payouts,
-		Rake:            t.rakeCollected,
-		CurrentPlayerID: current,
-		LegalActions:    t.legalActionsFor(viewerID, current),
+		Stage:              stageNames[t.stage],
+		Board:              boardCodes(t.board),
+		Seats:              seats,
+		Payouts:            t.payouts,
+		Rake:               t.rakeCollected,
+		CurrentPlayerID:    current,
+		LegalActions:       t.legalActionsFor(viewerID, current),
+		WonWithoutShowdown: wonWithoutShowdown,
 	}
 }
 
