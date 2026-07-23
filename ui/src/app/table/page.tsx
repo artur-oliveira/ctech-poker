@@ -96,7 +96,7 @@ function TableContent() {
     <main className="game-loading"><span className="loader"/>
       <h2>{rt.status === 'connected' ? 'Aquecendo o seu lugar…' : 'Conectando à mesa…'}</h2>
       <p role="status"
-        aria-live="polite">{rt.status === 'connected' ? 'Sincronizando o estado mais recente.' : CONNECTION_COPY[rt.status]}</p>
+         aria-live="polite">{rt.status === 'connected' ? 'Sincronizando o estado mais recente.' : CONNECTION_COPY[rt.status]}</p>
       {rt.status === 'connected' ? <Button onClick={() => rt.ready()}>Estou pronto</Button> :
         <Button variant="outline" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>}
     </main>
@@ -138,27 +138,32 @@ function TableContent() {
           .filter(Boolean).join(' ')}
       </div>
       {connectionMessage && <div className={`reconnect-notice ${rt.status}`}>
-        <span aria-hidden="true"/>
-        <p>{connectionMessage}{rt.reconnectAttempt > 1 ? ` Tentativa ${rt.reconnectAttempt}.` : ''}</p>
-        <Button type="button" variant="ghost" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>
+          <span aria-hidden="true"/>
+          <p>{connectionMessage}{rt.reconnectAttempt > 1 ? ` Tentativa ${rt.reconnectAttempt}.` : ''}</p>
+          <Button type="button" variant="ghost" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>
       </div>}
-      {!connectionMessage && s.stage === 'waiting_for_players' && <div className="reconnect-notice">
-        <p>Aguardando jogadores. Confirme quando estiver pronto.</p>
-        <Button type="button" variant="ghost" onClick={() => rt.ready()}>Estou pronto</Button>
+      {!connectionMessage && (s.stage === 'waiting_for_players' || s.stage === 'complete') && <div className="reconnect-notice">
+          <p>{s.stage === 'complete' ? 'Mão encerrada. Confirme quando estiver pronto para a próxima.' : 'Aguardando jogadores. Confirme quando estiver pronto.'}</p>
+          <Button type="button" variant="ghost" onClick={() => rt.ready()}>Estou pronto</Button>
       </div>}
       <div className="game-table">
         <div className="game-rail"/>
         <div className="game-felt"><Board cards={s.board} pot={pot} rake={s.rake}/></div>
         {rotateSeats(s.seats, viewer).map((seat, i) => <Seat key={seat.player_id} seat={seat} index={i}
-          isTurn={s.current_player_id === seat.player_id}
-          payout={s.payouts?.[seat.player_id] || 0}
-          isViewer={seat.player_id === viewer}/>)}</div>
-      <ActionBar onActAction={rt.act} {...actions} pot={pot} actionKey={actionKey} connected={rt.status === 'connected'}
+                                                             isTurn={s.current_player_id === seat.player_id}
+                                                             payout={s.payouts?.[seat.player_id] || 0}
+                                                             isViewer={seat.player_id === viewer}/>)}</div>
+      <ActionBar
+        onActAction={rt.act}
+        {...actions}
+        pot={pot}
+        actionKey={actionKey}
+        connected={rt.status === 'connected'}
         pending={rt.pendingAction}
         error={rt.actionError} onDismissErrorAction={rt.clearActionError}/>
       <Chat items={rt.chat} onSend={rt.sendChat} connected={rt.status === 'connected'} viewerId={viewer}
-        seats={s.seats}/><AchievementToast
-        unlock={rt.unlock}/>
+            seats={s.seats}/><AchievementToast
+      unlock={rt.unlock}/>
       {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
     </main>
   );

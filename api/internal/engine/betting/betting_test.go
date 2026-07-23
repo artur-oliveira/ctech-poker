@@ -18,6 +18,22 @@ func TestRaiseBelowMinimumIsRejected(t *testing.T) {
 	}
 }
 
+func TestFoldToOneRemainingPlayerCompletesRoundEvenIfThatPlayerNeverActed(t *testing.T) {
+	// Heads-up pre-flop: P1 is SB (acts first), P2 is BB and has not acted
+	// yet this round. P1 folds — P2 is the only player left, so the round
+	// must be complete right away; there's no one left for P2 to act against.
+	p1 := &PlayerState{ID: "P1", Stack: 990, Contributed: 10}
+	p2 := &PlayerState{ID: "P2", Stack: 980, Contributed: 20}
+	r := NewRound([]*PlayerState{p1, p2}, 20, 20)
+
+	if err := r.Act(0, ActionFold, 0); err != nil {
+		t.Fatalf("P1 folds: %v", err)
+	}
+	if !r.IsComplete() {
+		t.Fatal("round must be complete once only one non-folded player remains, regardless of whether that player has acted")
+	}
+}
+
 func TestShortAllInDoesNotReopenActionForPlayersWhoAlreadyActed(t *testing.T) {
 	p1 := &PlayerState{ID: "P1", Stack: 1000}
 	p2 := &PlayerState{ID: "P2", Stack: 1000}

@@ -80,12 +80,22 @@ func boardCodes(board []deck.Card) []string {
 
 // ViewFor builds the snapshot viewerID is allowed to see: their own hole
 // cards always visible; every other seat's hole cards hidden until the hand
-// reaches Complete, at which point every non-folded hand was shown at
-// showdown and is safe to reveal to everyone (folded hands are never
-// revealed — a folded player's cards were never part of the showdown).
+// reaches Complete via a genuine showdown, at which point every non-folded
+// hand was shown and is safe to reveal to everyone (folded hands are never
+// revealed — a folded player's cards were never part of the showdown). A
+// hand that ends because every other player folded has no showdown at all,
+// so the lone remaining player's cards stay hidden too.
 func (t *Table) ViewFor(viewerID string) Snapshot {
 	seats := make([]SeatView, 0, len(t.players))
-	revealAll := t.stage == Complete
+	revealAll := t.stage == Complete && t.lastOutcome != nil && !t.lastOutcome.WonWithoutShowdown
+	// Only players actually dealt into the current/last hand have real
+	// HoleCards — anyone else (waiting for the first hand, or a mid-hand
+	// joiner seated as PendingEntry) still holds deck.Card{}'s zero value,
+	// which cardCode would render as a bogus "\x00c" card.
+	dealtIn := make(map[string]bool, len(t.handOrder))
+	for _, hp := range t.handOrder {
+		dealtIn[hp.ID] = true
+	}
 	for _, p := range t.players {
 		sv := SeatView{
 			PlayerID:    p.ID,
@@ -93,10 +103,7 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 			State:       playerStateNames[p.State],
 			Contributed: p.Contributed,
 		}
-		// t.stage == WaitingForPlayers means no hand has been dealt yet — a
-		// seat's HoleCards is still deck.Card{}'s zero value there, which
-		// cardCode would render as a bogus "\x00c" card.
-		if t.stage != WaitingForPlayers && (p.ID == viewerID || (revealAll && p.State != Folded)) {
+		if dealtIn[p.ID] && (p.ID == viewerID || (revealAll && p.State != Folded)) {
 			sv.HoleCards = []string{cardCode(p.HoleCards[0]), cardCode(p.HoleCards[1])}
 		}
 		seats = append(seats, sv)

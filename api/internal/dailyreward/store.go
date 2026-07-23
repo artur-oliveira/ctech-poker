@@ -82,3 +82,11 @@ func (s *Store) Complete(ctx context.Context, playerID, day string, now time.Tim
 	}
 	return nil
 }
+
+func (s *Store) IsFirstReward(ctx context.Context, playerID string) (bool, error) {
+	result, err := s.base.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: 1})
+	if err != nil {
+		return false, err
+	}
+	return len(result.Items) == 0, nil
+}

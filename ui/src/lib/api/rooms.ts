@@ -42,7 +42,15 @@ export async function createRoom(input: Omit<Room, 'room_id' | 'id' | 'currency_
 }
 
 export async function joinRoom(id: string, amount: number, shareCode?: string) {
-  await apiClient.post(`/v1.0/rooms/${id}/join`, {amount, share_code: shareCode || undefined}, {silentError: true});
+  // idem_key must be fresh per buy-in click (a rejoin/rebuy is a distinct
+  // debit) but stable across a single click's own network retries — the
+  // server derives its wallet idempotency key from this, so leaving it out
+  // makes every buy-in for this player+room collide on the same key.
+  await apiClient.post(
+    `/v1.0/rooms/${id}/join`,
+    {amount, share_code: shareCode || undefined, idem_key: crypto.randomUUID()},
+    {silentError: true},
+  );
 }
 
 export interface SeatedStatus {
@@ -55,5 +63,10 @@ export async function getSeated(id: string) {
 }
 
 export async function leaveRoom(id: string) {
-  return (await apiClient.post<{ amount: number }>(`/v1.0/rooms/${id}/leave`, {}, {silentError: true})).data;
+  // idem_key fresh per cash-out click, same reasoning as joinRoom above.
+  return (await apiClient.post<{ amount: number }>(
+    `/v1.0/rooms/${id}/leave`,
+    {idem_key: crypto.randomUUID()},
+    {silentError: true},
+  )).data;
 }

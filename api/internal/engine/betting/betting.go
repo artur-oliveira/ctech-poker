@@ -125,6 +125,18 @@ func (r *Round) Act(playerIdx int, action Action, amount int64) error {
 // IsComplete reports whether every player still in the hand (not folded, not
 // all-in) has acted since the last full raise and matches CurrentBet.
 func (r *Round) IsComplete() bool {
+	notFolded := 0
+	for _, p := range r.Players {
+		if !p.Folded {
+			notFolded++
+		}
+	}
+	// A fold down to one remaining player ends the hand outright — there's no
+	// one left to bet against, so the round is complete regardless of
+	// whether that lone player has ever acted this round.
+	if notFolded <= 1 {
+		return true
+	}
 	for _, p := range r.Players {
 		if p.Folded || p.AllIn {
 			continue

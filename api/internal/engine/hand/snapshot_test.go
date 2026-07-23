@@ -32,6 +32,79 @@ func TestViewForHidesOtherHoleCards(t *testing.T) {
 	}
 }
 
+func TestViewForHidesMidHandJoinerZeroValueCards(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	_ = table.StartHand()
+	for table.Stage() != Complete {
+		toAct := table.playerToActForTest()
+		if err := table.Act(toAct, betting.ActionCall, 0); err != nil {
+			_ = table.Act(toAct, betting.ActionCheck, 0)
+		}
+	}
+
+	// p3 joins after the hand is already Complete — never dealt cards this
+	// hand, so p3.HoleCards is still deck.Card{}'s zero value.
+	p3 := &Player{ID: "p3", Stack: 1000}
+	if err := table.AddMidHandJoiner(p3); err != nil {
+		t.Fatalf("AddMidHandJoiner: %v", err)
+	}
+
+	view := table.ViewFor("p3")
+	for _, s := range view.Seats {
+		if s.PlayerID != "p3" {
+			continue
+		}
+		if len(s.HoleCards) != 0 {
+			t.Fatalf("mid-hand joiner never dealt cards this hand must not see hole_cards, got %v", s.HoleCards)
+		}
+	}
+
+	// Other viewers must not see p3's phantom cards either (revealAll clause).
+	view2 := table.ViewFor("p1")
+	for _, s := range view2.Seats {
+		if s.PlayerID != "p3" {
+			continue
+		}
+		if len(s.HoleCards) != 0 {
+			t.Fatalf("other viewers must not see mid-hand joiner's phantom cards, got %v", s.HoleCards)
+		}
+	}
+}
+
+// TestViewForHidesWinnerHoleCardsWhenHandEndsByFold reproduces the reported
+// bug: a hand that ends because every other player folded (no genuine
+// showdown) must not reveal the lone remaining player's hole cards to anyone
+// but themselves. Only a hand that actually reaches Complete via a real
+// showdown (2+ non-folded players comparing hands) may reveal.
+func TestViewForHidesWinnerHoleCardsWhenHandEndsByFold(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	toAct := table.playerToActForTest()
+	if err := table.Act(toAct, betting.ActionFold, 0); err != nil {
+		t.Fatalf("%s folds: %v", toAct, err)
+	}
+	if table.Stage() != Complete {
+		t.Fatalf("expected hand to reach Complete after fold-to-one, got %v", table.Stage())
+	}
+
+	winnerID := "p1"
+	if toAct == "p1" {
+		winnerID = "p2"
+	}
+	view := table.ViewFor(toAct) // viewer is the player who folded, not the winner
+	for _, s := range view.Seats {
+		if s.PlayerID == winnerID && len(s.HoleCards) != 0 {
+			t.Fatalf("winner-by-fold hole cards must stay hidden (no genuine showdown), got %v", s.HoleCards)
+		}
+	}
+}
+
 func TestViewForRevealsAllHandsAtShowdownForNonFolded(t *testing.T) {
 	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
 	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}

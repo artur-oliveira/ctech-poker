@@ -50,6 +50,29 @@ export function subscribeUsername(f: (v: string | null) => void) {
   };
 }
 
+// "Who am I" for turn/seat comparisons. The access token's `sub` can't be read
+// client-side (decodeIdToken only surfaces id_token display claims), so this
+// is set from GET /v1.0/players/me's `user_id` — the same value the server
+// uses as seat.player_id / current_player_id.
+let playerId: string | null = null;
+const playerIdListeners = new Set<(v: string | null) => void>();
+
+export function setPlayerId(v: string | null) {
+  playerId = v;
+  playerIdListeners.forEach(f => f(v));
+}
+
+export function getPlayerId() {
+  return playerId;
+}
+
+export function subscribePlayerId(f: (v: string | null) => void) {
+  playerIdListeners.add(f);
+  return () => {
+    playerIdListeners.delete(f);
+  };
+}
+
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || '',
   adapter: USE_MOCK ? mockAdapter : undefined

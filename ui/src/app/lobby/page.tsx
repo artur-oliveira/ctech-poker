@@ -7,6 +7,7 @@ import {ProfileMenu} from '@/components/lobby/ProfileMenu';
 import {MockControls} from '@/components/table/MockControls';
 import {TermsGate} from '@/components/TermsGate';
 import {useEffect, useState} from 'react';
+import {useQueryClient} from '@tanstack/react-query';
 import {remainingTime, spin} from '@/lib/api/gamification';
 import {pushNotification} from '@/lib/notify';
 import {USE_MOCK} from '@/lib/mock';
@@ -21,6 +22,7 @@ function formatCooldown(seconds: number) {
 }
 
 export default function Lobby() {
+  const queryClient = useQueryClient();
   const [claiming, setClaiming] = useState(false);
   // null = cooldown still unknown (loading); 0 = claimable
   const [cooldown, setCooldown] = useState<number | null>(null);
@@ -47,7 +49,13 @@ export default function Lobby() {
     try {
       const r = await spin();
       setCooldown(r.remaining_time_seconds);
-      if (r.amount > 0) pushNotification(`Você ganhou +${r.amount.toLocaleString('pt-BR')} fichas sandbox!`, 'info');
+      if (r.amount > 0) {
+        pushNotification(`Você ganhou +${r.amount.toLocaleString('pt-BR')} fichas sandbox!`, 'info');
+        // Reward always credits the sandbox ledger (walletclient.Credit is
+        // sandbox-only server-side) — refetch so the header's balance pill
+        // picks up the new sandbox_balance instead of showing stale data.
+        void queryClient.invalidateQueries({queryKey: ['player', 'me']});
+      }
       else pushNotification(`Recompensa disponível em ${formatCooldown(r.remaining_time_seconds)}.`, 'info');
     } catch {
       pushNotification('Não foi possível resgatar a recompensa agora.', 'error');

@@ -732,6 +732,11 @@ func (t *Table) runShowdown() {
 	for id, amount := range payouts {
 		t.playerByID(id).Stack += amount
 	}
+	for _, p := range t.handOrder {
+		if p.Stack <= 0 {
+			p.State = SittingOut
+		}
+	}
 	t.payouts = payouts
 	outcome := HandOutcome{
 		Winners:            dedupeIDs(winningIDs),

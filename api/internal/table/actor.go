@@ -373,6 +373,16 @@ func (a *Actor) handleReconnect(ctx context.Context, c ReconnectCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
+	// This runs on EVERY inbound frame (tablews.go's read loop dispatches it
+	// ahead of every message, including plain keepalive pings) so any traffic
+	// clears a stale disconnect mark. Broadcasting unconditionally here means
+	// every ping from every seat re-pushes the snapshot to the whole table —
+	// with N seats pinging independently that's an O(N) snapshot flood with
+	// no state change behind it. Only broadcast when this player was actually
+	// marked disconnected.
+	if _, wasDisconnected := a.disconnectedSince[c.PlayerID]; !wasDisconnected {
+		return nil
+	}
 	delete(a.disconnectedSince, c.PlayerID)
 	if a.deadlineTimer != nil {
 		a.deadlineTimer.Stop()

@@ -23,6 +23,8 @@ type tier struct {
 	weight int
 }
 
+const FirstAward int64 = 1_000_000
+
 var tiers = []tier{
 	{500, 50},
 	{1000, 30},
@@ -42,6 +44,7 @@ type spinStore interface {
 	Claim(context.Context, string, string, int64, time.Time) (DailyRewardRecord, error)
 	Complete(context.Context, string, string, time.Time) error
 	Get(context.Context, string, string) (DailyRewardRecord, error)
+	IsFirstReward(context.Context, string) (bool, error)
 }
 
 type Service struct {
@@ -65,6 +68,15 @@ func (s *Service) Spin(ctx context.Context, playerID string) (int64, int64, erro
 	if err != nil {
 		return 0, 0, fmt.Errorf("dailyreward: pick tier: %w", err)
 	}
+
+	firstReward, err := s.store.IsFirstReward(ctx, playerID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("dailyreward: check first reward: %w", err)
+	}
+	if firstReward {
+		proposed = FirstAward
+	}
+
 	record, err := s.store.Claim(ctx, playerID, day, proposed, now)
 	if err != nil {
 		return 0, 0, fmt.Errorf("dailyreward: claim spin: %w", err)
@@ -73,7 +85,7 @@ func (s *Service) Spin(ctx context.Context, playerID string) (int64, int64, erro
 		return record.Amount, 0, nil
 	}
 
-	idemKey := fmt.Sprintf("%s#daily_reward#%s", playerID, day)
+	idemKey := fmt.Sprintf("%s#daily_reward_v2#%s", playerID, day)
 	if err := s.wallet.Credit(ctx, playerID, record.Amount, idemKey, "daily_reward"); err != nil {
 		return 0, 0, err
 	}

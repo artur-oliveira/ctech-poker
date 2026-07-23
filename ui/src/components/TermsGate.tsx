@@ -4,7 +4,14 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {ShieldCheck} from 'lucide-react';
 import {acceptPokerTerms, getMe, updateMe} from '@/lib/api/player';
 import {doRefresh, startOAuthFlow} from '@/lib/auth/oauth';
-import {getAccessToken, getUsername, setAccessToken, setUsername, subscribeAccessToken} from '@/lib/api/client';
+import {
+  getAccessToken,
+  getUsername,
+  setAccessToken,
+  setPlayerId,
+  setUsername,
+  subscribeAccessToken
+} from '@/lib/api/client';
 import {MOCK_PLAYER_ID, USE_MOCK} from '@/lib/mock';
 import {Button} from '@/components/ui/button';
 import {Checkbox} from '@/components/ui/checkbox';
@@ -57,6 +64,10 @@ export function TermsGate({children}: { children: React.ReactNode }) {
       }
     }
   }, [me.data, nameSync]);
+
+  useEffect(() => {
+    setPlayerId(me.data?.user_id ?? null);
+  }, [me.data?.user_id]);
 
   if (booting || me.isLoading) return <div className="loading-screen"><span className="loader"/>Verificando sua conta…
   </div>;

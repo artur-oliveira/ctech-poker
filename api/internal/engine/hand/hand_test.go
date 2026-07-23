@@ -192,6 +192,81 @@ func TestAllInRunoutDoesNotStallTheHand(t *testing.T) {
 	}
 }
 
+// TestBustedAllInPlayerSitsOutInsteadOfBeingRedealt reproduces the reported
+// bug: a player who shoves all-in, loses, and ends the hand at Stack 0 was
+// still included in the next StartHand call and dealt fresh hole cards
+// despite having no chips. runShowdown must transition a Stack-0 seat to
+// SittingOut so StartHand's existing SittingOut skip (which already exists
+// for the disconnect flow) keeps them out until they rebuy.
+func TestBustedAllInPlayerSitsOutInsteadOfBeingRedealt(t *testing.T) {
+	players := []*Player{
+		{ID: "Dealer", Stack: 500, Ready: true},
+		{ID: "SB", Stack: 50, Ready: true},
+		{ID: "BB", Stack: 300, Ready: true},
+	}
+	table := NewTable(players, 10, 20)
+	table.dealerDrawn = true // scenario names encode the intended seat positions
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+
+	// Rig the deal so Dealer's quad aces beat SB's weak hole cards
+	// deterministically instead of depending on crypto/rand — SB must lose
+	// this all-in and bust to Stack 0.
+	players[0].HoleCards = [2]deck.Card{{Rank: deck.Ace, Suit: deck.Spades}, {Rank: deck.Ace, Suit: deck.Hearts}}    // Dealer: As Ah
+	players[1].HoleCards = [2]deck.Card{{Rank: deck.Five, Suit: deck.Clubs}, {Rank: deck.Six, Suit: deck.Clubs}}     // SB: 5c 6c
+	players[2].HoleCards = [2]deck.Card{{Rank: deck.Seven, Suit: deck.Hearts}, {Rank: deck.Eight, Suit: deck.Hearts}} // BB: 7h 8h (folds, never shown)
+	table.shuffle.Cards[6] = deck.Card{Rank: deck.Ace, Suit: deck.Clubs}
+	table.shuffle.Cards[7] = deck.Card{Rank: deck.Ace, Suit: deck.Diamonds}
+	table.shuffle.Cards[8] = deck.Card{Rank: deck.Two, Suit: deck.Spades}
+	table.shuffle.Cards[9] = deck.Card{Rank: deck.Three, Suit: deck.Spades}
+	table.shuffle.Cards[10] = deck.Card{Rank: deck.Four, Suit: deck.Hearts}
+
+	if err := table.Act("Dealer", betting.ActionRaise, 500); err != nil {
+		t.Fatalf("Dealer shoves all-in for 500: %v", err)
+	}
+	if err := table.Act("SB", betting.ActionRaise, 50); err != nil {
+		t.Fatalf("SB shoves all-in for 50 (short all-in, redirected to a call): %v", err)
+	}
+	if err := table.Act("BB", betting.ActionFold, 0); err != nil {
+		t.Fatalf("BB folds: %v", err)
+	}
+
+	if table.Stage() != Complete {
+		t.Fatalf("expected the all-in runout to reach Complete immediately, got stage %v", table.Stage())
+	}
+	payouts := table.Payouts()
+	if payouts["SB"] != 0 {
+		t.Fatalf("SB's rigged weak hand must not win any pot, got payout %d", payouts["SB"])
+	}
+	if payouts["Dealer"] == 0 {
+		t.Fatal("Dealer's rigged quad aces must win the pot")
+	}
+
+	sb := table.playerByID("SB")
+	if sb.Stack != 0 {
+		t.Fatalf("SB must be busted (Stack 0) after losing their entire all-in, got %d", sb.Stack)
+	}
+	if sb.State != SittingOut {
+		t.Fatalf("busted SB must transition to SittingOut so the next hand doesn't redeal them, got state %v", sb.State)
+	}
+
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("second StartHand (Dealer+BB only): %v", err)
+	}
+	if len(table.handOrder) != 2 {
+		t.Fatalf("busted SB must be excluded from the next hand, expected 2 active players, got %d", len(table.handOrder))
+	}
+	for _, p := range table.handOrder {
+		if p.ID == "SB" {
+			t.Fatal("busted SB must not be dealt into the next hand")
+		}
+	}
+	if sb.State != SittingOut {
+		t.Fatalf("SB must remain SittingOut (not silently reset to Active) across StartHand, got state %v", sb.State)
+	}
+}
+
 // TestOrphanedSidePotLayerIsRefundedNotDropped covers Finding 2: a pot layer
 // whose sole eligible contributor(s) have since folded must not simply
 // vanish from Payouts() — sidepots.ComputeSidePots' Eligible list includes

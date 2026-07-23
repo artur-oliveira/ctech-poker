@@ -29,7 +29,7 @@ func (s *Store) IncrementStats(ctx context.Context, playerID string, playedDelta
 	key := map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: playerID}, "sk": &types.AttributeValueMemberS{Value: sk}}
 	out, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
 		Key:                      key,
-		UpdateExpression:         awsString("ADD #played :played, #won :won SET #updated = :now, #wonpk = :all, #playedpk = :all, #ratepk = :all"),
+		UpdateExpression:         new("ADD #played :played, #won :won SET #updated = :now, #wonpk = :all, #playedpk = :all, #ratepk = :all"),
 		ExpressionAttributeNames: map[string]string{"#played": "hands_played", "#won": "hands_won", "#updated": "updated_at", "#wonpk": "gsi_hands_won_pk", "#playedpk": "gsi_hands_played_pk", "#ratepk": "gsi_win_rate_pk"},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":played": &types.AttributeValueMemberN{Value: strconv.Itoa(playedDelta)}, ":won": &types.AttributeValueMemberN{Value: strconv.Itoa(wonDelta)},
@@ -66,8 +66,8 @@ func (s *Store) materializeWinRate(ctx context.Context, playerID string, played,
 		}
 		_, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
 			Key:                      map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: playerID}, "sk": &types.AttributeValueMemberS{Value: sk}},
-			UpdateExpression:         awsString("SET #rate = :rate"),
-			ConditionExpression:      awsString("#played = :played AND #won = :won"),
+			UpdateExpression:         new("SET #rate = :rate"),
+			ConditionExpression:      new("#played = :played AND #won = :won"),
 			ExpressionAttributeNames: map[string]string{"#rate": "win_rate_score", "#played": "hands_played", "#won": "hands_won"},
 			ExpressionAttributeValues: map[string]types.AttributeValue{
 				":rate":   &types.AttributeValueMemberN{Value: strconv.FormatFloat(rate, 'f', 9, 64)},

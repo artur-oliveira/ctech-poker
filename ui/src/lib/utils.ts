@@ -1,19 +1,20 @@
 import {type ClassValue, clsx} from 'clsx';
 import {twMerge} from 'tailwind-merge';
-import {getAccessToken} from '@/lib/api/client';
-import {decodeIdToken} from '@/lib/auth/oauth';
+import {getPlayerId} from '@/lib/api/client';
 import {MOCK_PLAYER_ID, USE_MOCK} from '@/lib/mock';
 
 export function cn(...values: ClassValue[]) {
   return twMerge(clsx(values));
 }
 
-// The single answer to "who is looking at this screen" — OIDC sub in prod,
-// the fixed mock player in mock mode.
+// The single answer to "who is looking at this screen" — the profile's
+// user_id (matches seat.player_id / current_player_id server-side) in prod,
+// the fixed mock player in mock mode. NOT decodeIdToken: that only ever
+// returns username/first_name/last_name, never `sub` — using it here silently
+// left every viewer comparison undefined.
 export function getViewerId(): string | undefined {
   if (USE_MOCK) return MOCK_PLAYER_ID;
-  const token = getAccessToken();
-  return token ? (decodeIdToken(token) as { sub?: string } | null)?.sub : undefined;
+  return getPlayerId() ?? undefined;
 }
 
 // Player IDs are opaque (OIDC sub UUIDs in prod) and carry no name — the
