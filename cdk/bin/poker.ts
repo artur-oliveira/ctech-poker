@@ -88,6 +88,8 @@ new PokerApiStack(app, id('API'), {
   achievementProgressTableArn: dynamoStack.tables.get('poker_achievement_progress')!.tableArn,
   leaderboardStatsTableArn: dynamoStack.tables.get('poker_leaderboard_stats')!.tableArn,
   dailyRewardTableArn: dynamoStack.tables.get('poker_daily_reward')!.tableArn,
+  playerSessionsTableArn: dynamoStack.tables.get('poker_player_sessions')!.tableArn,
+  playerHandsTableArn: dynamoStack.tables.get('poker_player_hands')!.tableArn,
   walletUrlParam: pokerParameters.walletUrl,
   pokerClientIdParam: pokerParameters.clientId,
   pokerClientSecretParam: pokerParameters.clientSecret,

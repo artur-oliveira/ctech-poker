@@ -52,6 +52,8 @@ interface ApiStackProps extends cdk.StackProps {
   achievementProgressTableArn: string;
   leaderboardStatsTableArn: string;
   dailyRewardTableArn: string;
+  playerSessionsTableArn: string;
+  playerHandsTableArn: string;
 }
 
 export class PokerApiStack extends cdk.Stack {
