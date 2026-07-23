@@ -1559,6 +1559,11 @@ h1 em {
     animation-name: card-front-turn
 }
 
+.card-flip-slow .card-back,
+.card-flip-slow .card-front {
+    animation-duration: 760ms
+}
+
 .hole-card .card-back,
 .hole-card .card-front {
     animation-duration: 440ms;

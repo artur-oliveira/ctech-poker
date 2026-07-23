@@ -2,11 +2,12 @@ import Image from 'next/image';
 import type {CSSProperties} from 'react';
 import {back, cardLabel, cardPath} from '@/lib/cards';
 
-export function PlayingCard({card, index, size, owner}: {
+export function PlayingCard({card, index, size, owner, slow}: {
   card?: string;
   index: number;
   size: 'board' | 'hole';
-  owner?: 'viewer' | 'opponent'
+  owner?: 'viewer' | 'opponent';
+  slow?: boolean;
 }) {
   const revealed = Boolean(card && card.toLowerCase() !== 'back' && cardPath(card) !== back);
   const dimensions = size === 'board' ? {width: 68, height: 95} : {width: 46, height: 64};
@@ -20,7 +21,7 @@ export function PlayingCard({card, index, size, owner}: {
       ? `Sua carta: ${cardLabel(card!)}`
       : `Carta: ${cardLabel(card!)}`;
   return (
-    <span className={`playing-card ${size}-card card-reveal`} role="img" aria-label={label} style={style}>
+    <span className={`playing-card ${size}-card card-reveal${slow ? ' card-flip-slow' : ''}`} role="img" aria-label={label} style={style}>
       <span className="card-reveal-inner">
         <Image className="card-back" src={back} alt="" aria-hidden="true" {...dimensions}/>
         <Image className="card-front" src={cardPath(card!)} alt="" aria-hidden="true" {...dimensions}/>
