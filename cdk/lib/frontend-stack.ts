@@ -91,31 +91,8 @@ async function handler(event) {
       compress: true,
       responseHeadersPolicy: securityHeaders,
     };
-    const webAcl = new wafv2.CfnWebACL(this, 'WebACL', {
-      scope: 'CLOUDFRONT',
-      defaultAction: {allow: {}},
-      visibilityConfig: {sampledRequestsEnabled: true, cloudWatchMetricsEnabled: true, metricName: `${SERVICE}-waf`},
-      rules: [
-        {
-          name: 'AWSManagedCommonRuleSet',
-          priority: 0,
-          overrideAction: {none: {}},
-          statement: {managedRuleGroupStatement: {vendorName: 'AWS', name: 'AWSManagedRulesCommonRuleSet'}},
-          visibilityConfig: {sampledRequestsEnabled: true, cloudWatchMetricsEnabled: true, metricName: 'CommonRuleSet'},
-        },
-        {
-          name: 'RateLimit',
-          priority: 1,
-          action: {block: {}},
-          statement: {rateBasedStatement: {limit: 2000, aggregateKeyType: 'IP'}},
-          visibilityConfig: {sampledRequestsEnabled: true, cloudWatchMetricsEnabled: true, metricName: 'RateLimit'},
-        },
-      ],
-    });
-
     this.distribution = new cloudfront.Distribution(this, 'Distribution', {
       comment: `CTech Poker Frontend - ${environment}`,
-      webAclId: webAcl.attrArn,
       defaultRootObject: 'index.html',
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(this.bucket, {originAccessControl: oac}),
