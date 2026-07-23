@@ -66,6 +66,10 @@ type Actor struct {
 	nextHandArmedFor             string
 	nextHandDelay                time.Duration
 	lastBroadcastStage           hand.Stage
+	runoutTimer                  *time.Timer
+	runoutTimerHandID            string
+	runoutTimerStage             hand.Stage
+	runoutStreetDelay            time.Duration
 	escalationInterval           time.Duration
 	escalationCfg                roomstore.BlindEscalation
 	done                         chan struct{}
@@ -87,6 +91,7 @@ func New(id string, store *tablestore.Store, trustCache bool, broadcast func(str
 		done:                         make(chan struct{}),
 		turnTimeout:                  DefaultTurnTimeout,
 		nextHandDelay:                NextHandDelay,
+		runoutStreetDelay:            RunoutStreetDelay,
 		disconnectGrace:              45 * time.Second,
 		disconnectedSince:            make(map[string]time.Time),
 		consecutiveDisconnectedHands: make(map[string]int),
@@ -178,6 +183,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleTurnTimeout(ctx, c)
 	case nextHandCmd:
 		return a.handleNextHand(ctx, c)
+	case runoutStepCmd:
+		return a.handleRunoutStep(ctx, c)
 	case kickTimeoutCmd:
 		return a.handleKickTimeout(ctx, c)
 	case escalateCmd:
@@ -747,6 +754,54 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 	return nil
 }
 
+// armRunoutTimer (re-)arms the paced all-in-runout timer while
+// IsAwaitingRunoutForActor is true. Idempotent per (handID, stage) pair —
+// re-arming for the same point in the runout does not restart the delay,
+// matching armTurnTimer/armNextHandTimer's convention. stage is passed in by
+// broadcastAll (already knows the current stage) so this stays a plain
+// comparison, no extra engine call.
+func (a *Actor) armRunoutTimer(awaiting bool, stage hand.Stage) {
+	if !awaiting {
+		if a.runoutTimer != nil {
+			a.runoutTimer.Stop()
+		}
+		a.runoutTimerHandID = ""
+		return
+	}
+	if a.handID == a.runoutTimerHandID && stage == a.runoutTimerStage {
+		return
+	}
+	if a.runoutTimer != nil {
+		a.runoutTimer.Stop()
+	}
+	a.runoutTimerHandID = a.handID
+	a.runoutTimerStage = stage
+	a.runoutTimer = time.AfterFunc(a.runoutStreetDelay, func() {
+		reply := make(chan error, 1)
+		_ = a.Dispatch(runoutStepCmd{Reply: reply})
+	})
+}
+
+// handleRunoutStep fires runoutStreetDelay after the previous runout street
+// was dealt and deals exactly the next one, pacing an all-in board reveal
+// instead of showing the whole runout in a single broadcast. A stale fire
+// (the awaited state no longer holds, e.g. this table already finished the
+// runout through another path) is a silent no-op.
+func (a *Actor) handleRunoutStep(ctx context.Context, c runoutStepCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	if !a.cached.IsAwaitingRunoutForActor() {
+		return nil
+	}
+	a.cached.AdvanceRunoutStreetForActor()
+	if err := a.commit(ctx, "", nil); err != nil && !errors.Is(err, tablestore.ErrVersionConflict) {
+		return err
+	}
+	a.broadcastAll()
+	return nil
+}
+
 func (a *Actor) broadcastAll() {
 	if a.broadcast == nil || a.cached == nil {
 		return
@@ -758,6 +813,7 @@ func (a *Actor) broadcastAll() {
 		grace = RevealGrace
 	}
 	a.armTurnTimer(current, stage, grace)
+	a.armRunoutTimer(a.cached.IsAwaitingRunoutForActor(), stage)
 	a.armNextHandTimer(stage == hand.Complete)
 	a.lastBroadcastStage = stage
 	doEquity := a.equityEnabled.Load() && equityStage(stage)

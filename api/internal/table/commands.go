@@ -149,6 +149,13 @@ type turnTimeoutCmd struct {
 
 func (c turnTimeoutCmd) reply() chan error { return c.Reply }
 
+// runoutStepCmd is dispatched by the paced all-in-runout timer (a
+// time.AfterFunc armed in armRunoutTimer) — runoutStreetDelay after the
+// previous street was dealt, dealing exactly the next one.
+type runoutStepCmd struct{ Reply chan error }
+
+func (c runoutStepCmd) reply() chan error { return c.Reply }
+
 // kickTimeoutCmd is dispatched by the per-player auto-kick timer (a
 // time.AfterFunc goroutine, see armKickTimer) once a disconnected player has
 // been gone for kickGrace. A stale command (they reconnected or left in the

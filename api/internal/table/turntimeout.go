@@ -25,3 +25,8 @@ const NextHandDelay = 5 * time.Second
 // pressuring the next player to act. Only the first arm after a stage
 // transition gets it — see broadcastAll's stage-change check in actor.go.
 const RevealGrace = 1500 * time.Millisecond
+
+// RunoutStreetDelay paces an all-in runout: how long the engine waits after
+// dealing one community-card street before dealing the next, once two or
+// more streets remain to be revealed after an all-in is accepted.
+const RunoutStreetDelay = 2 * time.Second
