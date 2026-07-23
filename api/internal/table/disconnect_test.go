@@ -16,7 +16,7 @@ func TestDisconnectAutoFoldsAtActionDeadline(t *testing.T) {
 	store := tablestore.NewStore(db, "table_test")
 	mustCreateTestTables(t, db, "table_test")
 	a := newTestActor(t, store)
-	a.actionDeadline = 20 * time.Millisecond
+	a.turnTimeout = 20 * time.Millisecond
 
 	ctx := context.Background()
 	reply := make(chan error, 1)

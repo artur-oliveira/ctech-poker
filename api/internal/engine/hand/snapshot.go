@@ -7,13 +7,14 @@ import "gopkg.aoctech.app/poker/api/internal/engine/deck"
 // player's hole cards" a single-source-of-truth guarantee instead of a
 // convention every caller has to remember.
 type Snapshot struct {
-	Stage           string           `json:"stage"`
-	Board           []string         `json:"board"`
-	Seats           []SeatView       `json:"seats"`
-	Payouts         map[string]int64 `json:"payouts,omitempty"`
-	Rake            int64            `json:"rake,omitempty"`
-	CurrentPlayerID string           `json:"current_player_id,omitempty"`
-	LegalActions    *LegalActions    `json:"legal_actions,omitempty"`
+	Stage                string           `json:"stage"`
+	Board                []string         `json:"board"`
+	Seats                []SeatView       `json:"seats"`
+	Payouts              map[string]int64 `json:"payouts,omitempty"`
+	Rake                 int64            `json:"rake,omitempty"`
+	CurrentPlayerID      string           `json:"current_player_id,omitempty"`
+	LegalActions         *LegalActions    `json:"legal_actions,omitempty"`
+	ActionDeadlineUnixMs int64            `json:"action_deadline_unix_ms,omitempty"`
 }
 
 // LegalActions is the authoritative set of moves the viewer may make right

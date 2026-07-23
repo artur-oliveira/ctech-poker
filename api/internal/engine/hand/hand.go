@@ -166,6 +166,14 @@ func (t *Table) CurrentPlayerCanActForActor(playerID string) bool {
 	return t.currentPlayerCanAct(playerID)
 }
 
+// CurrentPlayerIDForActor exposes currentPlayerToAct to Phase 2's table.Actor
+// (the universal per-turn timer needs to know who must act now, and whether
+// that has changed since the last broadcast, without duplicating round-state
+// logic outside this package).
+func (t *Table) CurrentPlayerIDForActor() string {
+	return t.currentPlayerToAct()
+}
+
 // SitOutForActor marks a player SittingOut — used by Phase 2's disconnect
 // grace-window handling once a disconnected player exceeds the grace period
 // or enough consecutive disconnected hands (OVERVIEW.md § 4).

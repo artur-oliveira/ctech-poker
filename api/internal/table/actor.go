@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 	"gopkg.aoctech.app/poker/api/internal/engine/equity"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
@@ -35,12 +36,14 @@ type Actor struct {
 	version int
 	handID  string
 
-	actionDeadline               time.Duration
+	turnTimeout                  time.Duration
 	disconnectGrace              time.Duration
 	disconnectedSince            map[string]time.Time
 	consecutiveDisconnectedHands map[string]int
 	playerNames                  map[string]string
-	deadlineTimer                *time.Timer
+	turnTimer                    *time.Timer
+	turnDeadline                 time.Time
+	turnDeadlineFor              string
 	escalationInterval           time.Duration
 	escalationCfg                roomstore.BlindEscalation
 	done                         chan struct{}
@@ -60,7 +63,7 @@ func New(id string, store *tablestore.Store, trustCache bool, broadcast func(str
 	a := &Actor{
 		id: id, store: store, trustCache: trustCache, broadcast: broadcast, cmds: make(chan Command, 64),
 		done:                         make(chan struct{}),
-		actionDeadline:               30 * time.Second,
+		turnTimeout:                  DefaultTurnTimeout,
 		disconnectGrace:              45 * time.Second,
 		disconnectedSince:            make(map[string]time.Time),
 		consecutiveDisconnectedHands: make(map[string]int),
@@ -141,8 +144,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleSnapshot(ctx, c)
 	case SetNameCmd:
 		return a.handleSetName(c)
-	case autoFoldCheckCmd:
-		return a.handleAutoFoldCheck(ctx, c)
+	case turnTimeoutCmd:
+		return a.handleTurnTimeout(ctx, c)
 	case escalateCmd:
 		return a.handleEscalate(ctx)
 	default:
@@ -286,7 +289,6 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 		return err
 	}
 	metrics.EmitTableMetric(a.env, "ActionLatencyMs", float64(timeNowFunc().Sub(start).Milliseconds()), map[string]string{"table_id": a.id})
-	a.armActionDeadlineForCurrentTurn()
 	a.broadcastAll()
 	if completed {
 		a.notifyHandComplete()
@@ -376,7 +378,6 @@ func (a *Actor) SetEnv(env string) { a.env = env }
 func (a *Actor) handleDisconnect(c DisconnectCmd) error {
 	metrics.EmitTableMetric(a.env, "Disconnects", 1, map[string]string{"table_id": a.id})
 	a.disconnectedSince[c.PlayerID] = timeNowFunc()
-	a.armActionDeadlineIfTheirTurn(c.PlayerID)
 	a.broadcastAll()
 	return nil
 }
@@ -396,9 +397,6 @@ func (a *Actor) handleReconnect(ctx context.Context, c ReconnectCmd) error {
 		return nil
 	}
 	delete(a.disconnectedSince, c.PlayerID)
-	if a.deadlineTimer != nil {
-		a.deadlineTimer.Stop()
-	}
 	a.broadcastAll()
 	return nil
 }
@@ -418,39 +416,43 @@ func (a *Actor) handleSitOut(ctx context.Context, c SitOutCmd) error {
 	return nil
 }
 
-// handleAutoFoldCheck runs inside Run (dispatched by the auto-fold timer) so it
-// can safely read/write the actor's disconnect bookkeeping maps. It decides
-// whether the disconnected player should be folded now or sat out (grace
-// exceeded or enough consecutive disconnected hands).
-func (a *Actor) handleAutoFoldCheck(ctx context.Context, c autoFoldCheckCmd) error {
+// handleTurnTimeout runs inside Run (dispatched by the universal per-turn
+// timer) so it can safely read/write the actor's disconnect bookkeeping maps.
+// It fires for whoever currently must act, regardless of connection state. A
+// stale timer (the player already acted through the normal path before this
+// fired) is a silent no-op — CurrentPlayerCanActForActor is false by then.
+func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
-	a.consecutiveDisconnectedHands[c.PlayerID]++ // safe: runs in Run goroutine
-	if timeNowFunc().Sub(a.disconnectedSince[c.PlayerID]) >= a.disconnectGrace ||
-		a.consecutiveDisconnectedHands[c.PlayerID] >= 3 {
-		a.cached.SitOutForActor(c.PlayerID)
-		if err := a.commit(ctx, "", nil); err != nil && !errors.Is(err, tablestore.ErrVersionConflict) {
-			return err
-		}
-		a.broadcastAll()
+	if !a.cached.CurrentPlayerCanActForActor(c.PlayerID) {
 		return nil
 	}
+	if since, disconnected := a.disconnectedSince[c.PlayerID]; disconnected {
+		a.consecutiveDisconnectedHands[c.PlayerID]++ // safe: runs in Run goroutine
+		if timeNowFunc().Sub(since) >= a.disconnectGrace || a.consecutiveDisconnectedHands[c.PlayerID] >= 3 {
+			a.cached.SitOutForActor(c.PlayerID)
+			if err := a.commit(ctx, "", nil); err != nil && !errors.Is(err, tablestore.ErrVersionConflict) {
+				return err
+			}
+			a.broadcastAll()
+			return nil
+		}
+	}
 	completed, err := a.applyActAndCommit(ctx, ActCmd{
-		PlayerID: c.PlayerID, ActionID: "auto-fold-" + c.PlayerID, Action: "fold", Amount: 0, Reply: c.Reply,
+		PlayerID: c.PlayerID, ActionID: "turn-timeout-" + c.PlayerID, Action: betting.ActionFold, Amount: 0, Reply: c.Reply,
 	})
 	if errors.Is(err, tablestore.ErrVersionConflict) {
 		if err := a.ensureLoaded(ctx, true); err != nil {
 			return err
 		}
 		completed, err = a.applyActAndCommit(ctx, ActCmd{
-			PlayerID: c.PlayerID, ActionID: "auto-fold-" + c.PlayerID, Action: "fold", Amount: 0, Reply: c.Reply,
+			PlayerID: c.PlayerID, ActionID: "turn-timeout-" + c.PlayerID, Action: betting.ActionFold, Amount: 0, Reply: c.Reply,
 		})
 	}
 	if err != nil && !errors.Is(err, tablestore.ErrDuplicateAction) {
 		return err
 	}
-	a.armActionDeadlineForCurrentTurn()
 	a.broadcastAll()
 	if completed {
 		a.notifyHandComplete()
@@ -530,39 +532,30 @@ func (a *Actor) applyLeaveAndCommit(ctx context.Context, c LeaveCmd) (int64, str
 	return stack, holdID, nil
 }
 
-// armActionDeadlineIfTheirTurn starts (or restarts) the auto-fold timer when
-// the just-disconnected player is the one currently on the clock. A
-// disconnect that happens on someone else's turn arms nothing yet —
-// armActionDeadlineForCurrentTurn (called from handleAct) picks it up once
-// it actually becomes their turn.
-func (a *Actor) armActionDeadlineIfTheirTurn(playerID string) {
-	if a.cached == nil || !a.cached.CurrentPlayerCanActForActor(playerID) {
+// armTurnTimer (re-)arms the universal per-turn timer for current — the
+// player who must act right now, connected or not (empty string when no
+// decision is pending). Idempotent: re-arming for the SAME current player is
+// a no-op (does not restart their clock), matching "the timer counts down
+// from when the turn actually began," not from every subsequent broadcast.
+func (a *Actor) armTurnTimer(current string) {
+	if current == a.turnDeadlineFor {
 		return
 	}
-	if a.deadlineTimer != nil {
-		a.deadlineTimer.Stop()
+	if a.turnTimer != nil {
+		a.turnTimer.Stop()
 	}
-	// The timer only dispatches a command; all map mutations happen inside Run
-	// (handleAutoFoldCheck), so there is no data race with the Run goroutine.
-	a.deadlineTimer = time.AfterFunc(a.actionDeadline, func() {
+	a.turnDeadlineFor = current
+	if current == "" {
+		return
+	}
+	a.turnDeadline = timeNowFunc().Add(a.turnTimeout)
+	// The timer only dispatches a command; all map/state mutations happen
+	// inside Run (handleTurnTimeout), so there is no data race with the Run
+	// goroutine.
+	a.turnTimer = time.AfterFunc(a.turnTimeout, func() {
 		reply := make(chan error, 1)
-		_ = a.Dispatch(autoFoldCheckCmd{PlayerID: playerID, Reply: reply})
+		_ = a.Dispatch(turnTimeoutCmd{PlayerID: current, Reply: reply})
 	})
-}
-
-// armActionDeadlineForCurrentTurn re-arms the auto-fold timer for whichever
-// disconnected player's turn it now is, called after every committed action
-// so a turn change picks up the right player's deadline.
-func (a *Actor) armActionDeadlineForCurrentTurn() {
-	if a.deadlineTimer != nil {
-		a.deadlineTimer.Stop()
-	}
-	for id := range a.disconnectedSince {
-		if a.cached.CurrentPlayerCanActForActor(id) {
-			a.armActionDeadlineIfTheirTurn(id)
-			return
-		}
-	}
 }
 
 func (a *Actor) broadcastAll() {
@@ -570,9 +563,14 @@ func (a *Actor) broadcastAll() {
 		return
 	}
 	stage := a.cached.Stage()
+	current := a.cached.CurrentPlayerIDForActor()
+	a.armTurnTimer(current)
 	doEquity := a.equityEnabled.Load() && equityStage(stage)
 	for _, p := range a.cached.PlayersForActor() {
 		snapshot := a.cached.ViewFor(p.ID)
+		if current != "" && current == a.turnDeadlineFor {
+			snapshot.ActionDeadlineUnixMs = a.turnDeadline.UnixMilli()
+		}
 		a.applyPlayerNames(snapshot.Seats)
 		if doEquity {
 			if hole, board, ok := a.cached.HoleAndBoardForActor(p.ID); ok {
@@ -636,12 +634,10 @@ func (a *Actor) SetEquityEnabledForActor(enabled bool) { a.equityEnabled.Store(e
 
 // SetTurnTimeoutForActor sets the per-turn action deadline from the room's
 // configured turn_timeout_seconds (0 handled by table.TurnTimeoutFor before
-// this is called). Task 5 replaces the underlying actionDeadline/deadlineTimer
-// mechanism with a unified timer that also covers connected players; this
-// setter's name and signature are stable across that change.
+// this is called).
 func (a *Actor) SetTurnTimeoutForActor(d time.Duration) {
 	if d > 0 {
-		a.actionDeadline = d
+		a.turnTimeout = d
 	}
 }
 

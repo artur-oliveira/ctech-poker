@@ -106,12 +106,15 @@ type SetNameCmd struct {
 
 func (c SetNameCmd) reply() chan error { return c.Reply }
 
-// autoFoldCheckCmd is dispatched by the auto-fold timer (a time.AfterFunc
-// goroutine) so that all actor-map mutations happen inside Run, never from the
-// timer goroutine (see armActionDeadlineIfTheirTurn).
-type autoFoldCheckCmd struct {
+// turnTimeoutCmd is dispatched by the universal per-turn timer (a
+// time.AfterFunc goroutine) so that all actor-map/state mutations happen
+// inside Run, never from the timer goroutine (see armTurnTimer). Fires for
+// WHOEVER currently must act, connected or not — a disconnected player who
+// times out here still falls through to the existing grace/consecutive-hands
+// check inside handleTurnTimeout before deciding fold vs. sit-out.
+type turnTimeoutCmd struct {
 	PlayerID string
 	Reply    chan error
 }
 
-func (c autoFoldCheckCmd) reply() chan error { return c.Reply }
+func (c turnTimeoutCmd) reply() chan error { return c.Reply }
