@@ -14,6 +14,7 @@ type Room struct {
 	BuyInMax             int64            `dynamodbav:"buy_in_max" json:"buy_in_max"`
 	ShareCode            string           `dynamodbav:"share_code,omitempty" json:"share_code,omitempty"`             // private rooms only
 	BlindEscalation      *BlindEscalation `dynamodbav:"blind_escalation,omitempty" json:"blind_escalation,omitempty"` // private rooms only
+	TurnTimeoutSeconds   int              `dynamodbav:"turn_timeout_seconds,omitempty" json:"turn_timeout_seconds,omitempty"` // private rooms only, 0 = default
 	EquityDisplayEnabled bool             `dynamodbav:"equity_display_enabled" json:"equity_display_enabled"`
 	Status               string           `dynamodbav:"status" json:"status"` // "waiting" | "active"
 	// SeatsTaken mirrors the table actor's live occupied-seat count, written

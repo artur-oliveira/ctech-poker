@@ -634,6 +634,17 @@ func (a *Actor) computeAndSendEquity(viewerID string, snapshot hand.Snapshot, ho
 
 func (a *Actor) SetEquityEnabledForActor(enabled bool) { a.equityEnabled.Store(enabled) }
 
+// SetTurnTimeoutForActor sets the per-turn action deadline from the room's
+// configured turn_timeout_seconds (0 handled by table.TurnTimeoutFor before
+// this is called). Task 5 replaces the underlying actionDeadline/deadlineTimer
+// mechanism with a unified timer that also covers connected players; this
+// setter's name and signature are stable across that change.
+func (a *Actor) SetTurnTimeoutForActor(d time.Duration) {
+	if d > 0 {
+		a.actionDeadline = d
+	}
+}
+
 func newHandID() string {
 	return timeNowFunc().Format("20060102T150405.000000000")
 }

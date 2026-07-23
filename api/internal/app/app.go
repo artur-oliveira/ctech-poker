@@ -223,17 +223,18 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 			slog.Error("leaderboard record hand failed", "table", tableID, "err", err)
 		}
 	}
-	// roomLoader re-arms blind escalation from the room's authoritative config
-	// on every actor creation (T6), so escalation survives instance/lease moves.
-	roomLoader := func(tableID string) (*roomstore.BlindEscalation, bool, error) {
+	// roomLoader re-arms blind escalation and the per-turn action timeout from
+	// the room's authoritative config on every actor creation (T6), so both
+	// survive instance/lease moves.
+	roomLoader := func(tableID string) (*roomstore.Room, bool, error) {
 		r, err := rooms.Get(context.Background(), tableID)
 		if err != nil {
 			return nil, false, err
 		}
-		if r == nil || r.BlindEscalation == nil {
+		if r == nil {
 			return nil, false, nil
 		}
-		return r.BlindEscalation, true, nil
+		return r, true, nil
 	}
 	mgr := tablemanager.NewManager(leases, store, broadcast, roomLoader, onHandComplete)
 	mgr.SetOnSeatsChanged(func(tableID string, seatsTaken int) {

@@ -35,14 +35,14 @@ type Manager struct {
 	broadcast      func(tableID, viewerID string, snap hand.Snapshot)
 	onHandComplete func(tableID string, outcome hand.HandOutcome)
 	onSeatsChanged func(tableID string, seatsTaken int)
-	roomLoader     func(tableID string) (*roomstore.BlindEscalation, bool, error)
+	roomLoader     func(tableID string) (*roomstore.Room, bool, error)
 
 	mu       sync.Mutex
 	actors   map[string]*Actor
 	releases map[string]func()
 }
 
-func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast func(string, string, hand.Snapshot), roomLoader func(string) (*roomstore.BlindEscalation, bool, error), completion ...func(string, hand.HandOutcome)) *Manager {
+func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast func(string, string, hand.Snapshot), roomLoader func(string) (*roomstore.Room, bool, error), completion ...func(string, hand.HandOutcome)) *Manager {
 	var onHandComplete func(string, hand.HandOutcome)
 	if len(completion) > 0 {
 		onHandComplete = completion[0]
@@ -143,12 +143,15 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 
 	m.actors[tableID] = actor
 
-	// Re-arm blind escalation from the room's authoritative config so it
-	// survives instance/lease moves (T6). Any instance creating the actor
-	// loads the room and starts escalation.
+	// Re-arm blind escalation and the per-turn action timeout from the room's
+	// authoritative config so both survive instance/lease moves (T6). Any
+	// instance creating the actor loads the room once and applies both.
 	if m.roomLoader != nil {
-		if cfg, ok, err := m.roomLoader(tableID); err == nil && ok && cfg != nil {
-			actor.StartEscalation(*cfg)
+		if room, ok, err := m.roomLoader(tableID); err == nil && ok && room != nil {
+			if room.BlindEscalation != nil {
+				actor.StartEscalation(*room.BlindEscalation)
+			}
+			actor.SetTurnTimeoutForActor(table.TurnTimeoutFor(room.TurnTimeoutSeconds))
 		}
 	}
 

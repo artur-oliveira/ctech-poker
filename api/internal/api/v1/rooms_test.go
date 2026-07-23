@@ -2,6 +2,7 @@ package v1
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http/httptest"
 	"testing"
 
@@ -38,6 +39,61 @@ func TestCreateRoomRejectsInvalidBuyInMultiples(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("got %d", resp.StatusCode)
+	}
+}
+
+func TestCreatePublicRoomRejectsTurnTimeoutSeconds(t *testing.T) {
+	app := fiber.New()
+	h := &roomHandlers{}
+	app.Post("/rooms", func(c fiber.Ctx) error { c.Locals(localsUserID, "u1"); return c.Next() }, h.createRoom)
+	body := []byte(`{"visibility":"public","small_blind":10,"big_blind":20,"max_seats":9,"buy_in_min":400,"buy_in_max":2000,"turn_timeout_seconds":20}`)
+	req := httptest.NewRequest(fiber.MethodPost, "/rooms", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("got %d", resp.StatusCode)
+	}
+}
+
+func TestCreatePrivateRoomRejectsTurnTimeoutBelowMinimum(t *testing.T) {
+	app := fiber.New()
+	h := &roomHandlers{}
+	app.Post("/rooms", func(c fiber.Ctx) error { c.Locals(localsUserID, "u1"); return c.Next() }, h.createRoom)
+	body := []byte(`{"visibility":"private","small_blind":10,"big_blind":20,"max_seats":6,"buy_in_min":400,"buy_in_max":2000,"turn_timeout_seconds":3}`)
+	req := httptest.NewRequest(fiber.MethodPost, "/rooms", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("got %d", resp.StatusCode)
+	}
+}
+
+func TestCreatePrivateRoomAcceptsValidTurnTimeout(t *testing.T) {
+	app := fiber.New()
+	h := &roomHandlers{}
+	app.Post("/rooms", func(c fiber.Ctx) error { c.Locals(localsUserID, "u1"); return c.Next() }, h.createRoom)
+	body := []byte(`{"visibility":"private","small_blind":10,"big_blind":20,"max_seats":6,"buy_in_min":400,"buy_in_max":2000,"turn_timeout_seconds":20}`)
+	req := httptest.NewRequest(fiber.MethodPost, "/rooms", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("got %d", resp.StatusCode)
+	}
+	var room roomstore.Room
+	if err := json.NewDecoder(resp.Body).Decode(&room); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if room.TurnTimeoutSeconds != 20 {
+		t.Fatalf("expected TurnTimeoutSeconds 20, got %d", room.TurnTimeoutSeconds)
 	}
 }
 

@@ -64,6 +64,12 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 	if cfg := req.BlindEscalation; cfg != nil && (cfg.IntervalMinutes <= 0 || cfg.Multiplier <= 100 || cfg.Max < req.BigBlind) {
 		return problem.BadRequest("invalid blind escalation").Send(c)
 	}
+	if req.Visibility == "public" && req.TurnTimeoutSeconds != nil {
+		return problem.BadRequest("turn timeout is only configurable on private rooms").Send(c)
+	}
+	if req.TurnTimeoutSeconds != nil && (*req.TurnTimeoutSeconds < 5 || *req.TurnTimeoutSeconds > 60) {
+		return problem.BadRequest("turn_timeout_seconds must be between 5 and 60").Send(c)
+	}
 	userID, ok := c.Locals(localsUserID).(string)
 	if !ok || userID == "" {
 		return problem.Unauthorized("invalid credentials").Send(c)
@@ -84,6 +90,9 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 	if req.Visibility == "private" {
 		room.ShareCode = newShareCode()
 		room.BlindEscalation = req.BlindEscalation
+		if req.TurnTimeoutSeconds != nil {
+			room.TurnTimeoutSeconds = *req.TurnTimeoutSeconds
+		}
 	}
 	if h.rooms != nil {
 		if err := h.rooms.Create(c.Context(), room); err != nil {
