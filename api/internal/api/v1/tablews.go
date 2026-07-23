@@ -34,7 +34,7 @@ const (
 
 // clientMessage is every shape a connected player can send once authenticated.
 type clientMessage struct {
-	Type     string `json:"type"` // "ready" | "act" | "post_big_blind" | "chat" | "ping"
+	Type     string `json:"type"` // "ready" | "act" | "post_big_blind" | "show_cards" | "chat" | "ping"
 	Ready    bool   `json:"ready,omitempty"`
 	Action   string `json:"action,omitempty"`
 	Amount   int64  `json:"amount,omitempty"`
@@ -279,6 +279,11 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 					r := make(chan error, 1)
 					if err := dispatch(table.PostBigBlindCmd{PlayerID: playerID, Reply: r}); err != nil {
 						send(map[string]any{"type": "error", "code": "invalid_post", "message": err.Error()})
+					}
+				case "show_cards":
+					r := make(chan error, 1)
+					if err := dispatch(table.ShowCardsCmd{PlayerID: playerID, Reply: r}); err != nil {
+						send(map[string]any{"type": "error", "code": "invalid_action", "message": err.Error()})
 					}
 				case "chat":
 					message := strings.TrimSpace(m.Message)
