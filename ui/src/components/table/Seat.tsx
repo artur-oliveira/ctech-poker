@@ -1,3 +1,4 @@
+import {ChipStack} from '@/components/table/ChipStack';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import type {SeatView} from '@/lib/api/table';
 import {HAND_CATEGORY_LABELS, playerName} from '@/lib/utils';
@@ -13,14 +14,15 @@ const STATE_LABELS: Record<string, string> = {
 // Seats 3/4/5 sit on the top rail; their winner pill must drop below instead of above.
 const TOP_SEAT_INDICES = [3, 4, 5];
 
-export function Seat({seat, isViewer, isTurn, index, payout = 0, deadlineMs, nowMs}: {
+export function Seat({seat, isViewer, isTurn, index, payout = 0, deadlineMs, nowMs, bigBlind}: {
   seat: SeatView;
   isViewer: boolean;
   isTurn: boolean;
   index: number;
   payout?: number;
   deadlineMs?: number;
-  nowMs?: number
+  nowMs?: number;
+  bigBlind?: number
 }) {
   const cards = seat.hole_cards;
   const chance = seat.equity == null ? null : Math.round(seat.equity * 100);
@@ -41,8 +43,10 @@ export function Seat({seat, isViewer, isTurn, index, payout = 0, deadlineMs, now
           aria-label={`Chance estimada de vitória: ${chance}%`}>Chance {chance}%</small>}{STATE_LABELS[seat.state] &&
         <small className="seat-state">{STATE_LABELS[seat.state]}</small>}{seat.hand_category &&
         <small className="seat-hand-category">{HAND_CATEGORY_LABELS[seat.hand_category] || seat.hand_category}</small>}</div>
-    {seat.contributed > 0 &&
-        <span key={seat.contributed} className="seat-bet">{seat.contributed.toLocaleString('pt-BR')}</span>}
+    {seat.contributed > 0 && <span key={seat.contributed} className="seat-bet">
+        <ChipStack amount={seat.contributed} bigBlind={bigBlind}/>
+        <b aria-label={`Aposta de ${seat.contributed.toLocaleString('pt-BR')} fichas`}>{seat.contributed.toLocaleString('pt-BR')}</b>
+      </span>}
     {payout > 0 && <span key={payout} className="seat-win" role="status">+{payout.toLocaleString('pt-BR')}</span>
     }</div>;
 }

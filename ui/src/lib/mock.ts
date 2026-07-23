@@ -198,6 +198,7 @@ export type MockScenario =
   | 'turn'
   | 'river'
   | 'showdown'
+  | 'side_pot'
   | 'reconnecting'
   | 'action_error'
   | 'timeout'
@@ -301,6 +302,36 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
     seats: revealShowdownCards(seats),
     payouts: {[MOCK_PLAYER_ID]: 250},
     rake: 5,
+    next_hand_unix_ms: Date.now() + 5000
+  };
+  // A short-stacked all-in (Ana, 300) can only ever win the layer every
+  // contributor matched — the main pot (300 * 3 = 900). The extra 400 that
+  // Bia and Léo each put in above that forms a side pot (400 * 2 = 800) Ana
+  // is not eligible for, even though her hand is the best of the three: this
+  // is the one case where two different seats each show a win pill (and a
+  // chip stack) from the same hand at once.
+  if (scenario === 'side_pot') return {
+    stage: 'complete',
+    board: ['7H', '8C', 'QS', '2D', 'AC'],
+    seats: [
+      {
+        player_id: MOCK_PLAYER_ID, name: 'Ana', stack: 0, state: 'all_in', contributed: 300,
+        hole_cards: ['AH', '8D'], hand_category: 'two_pair'
+      },
+      {
+        player_id: 'bia_sp', name: 'Bia', stack: 0, state: 'all_in', contributed: 700,
+        hole_cards: ['JC', 'JD'], hand_category: 'pair'
+      },
+      {
+        player_id: 'leo_rio', name: 'Léo', stack: 5400, state: 'active', contributed: 700,
+        hole_cards: ['9S', '4D'], hand_category: 'high_card'
+      },
+      {player_id: 'nina_recife', name: 'Nina', stack: 2700, state: 'folded', contributed: 75, hole_cards: ['back', 'back']},
+      {player_id: 'joao_floripa', name: 'João', stack: 4375, state: 'folded', contributed: 0, hole_cards: ['back', 'back']},
+      {player_id: 'caio_goiânia', name: 'Caio', stack: 3350, state: 'folded', contributed: 50, hole_cards: ['back', 'back']},
+    ],
+    payouts: {[MOCK_PLAYER_ID]: 900, 'bia_sp': 800},
+    rake: 25,
     next_hand_unix_ms: Date.now() + 5000
   };
   if (scenario === 'flop') return {

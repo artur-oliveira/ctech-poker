@@ -49,7 +49,7 @@ function connectionCopyFor(status: keyof typeof CONNECTION_COPY, attempt: number
   if (status === 'disconnected' && attempt > MAX_RECONNECT_ATTEMPTS) return RECONNECT_GIVEN_UP_COPY;
   return CONNECTION_COPY[status];
 }
-const MOCK_SCENARIOS = new Set<MockScenario>(['full_hand', 'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'complete', 'reconnecting', 'action_error', 'timeout']);
+const MOCK_SCENARIOS = new Set<MockScenario>(['full_hand', 'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot', 'complete', 'reconnecting', 'action_error', 'timeout']);
 
 function actionState(snapshot: TableSnapshot, viewer?: string) {
   const seat = snapshot.seats.find(item => item.player_id === viewer);
@@ -155,6 +155,7 @@ function TableContent() {
     {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
   </>;
   const s = rt.snapshot, pot = s.seats.reduce((n, x) => n + x.contributed, 0);
+  const bigBlind = room?.big_blind || 25;
   const connectionMessage = rt.status === 'connected' ? null : connectionCopyFor(rt.status, rt.reconnectAttempt);
   const actions = actionState(s, viewer);
   const viewerSeat = s.seats.find(seat => seat.player_id === viewer);
@@ -220,12 +221,13 @@ function TableContent() {
       </div>}
       <div className="game-table">
         <div className="game-rail"/>
-        <div className="game-felt"><Board cards={s.board} pot={pot} rake={s.rake}/></div>
+        <div className="game-felt"><Board cards={s.board} pot={pot} rake={s.rake} bigBlind={bigBlind}/></div>
         {rotateSeats(s.seats, viewer).map((seat, i) => <Seat key={seat.player_id} seat={seat} index={i}
                                                              isTurn={s.current_player_id === seat.player_id}
                                                              payout={s.payouts?.[seat.player_id] || 0}
                                                              deadlineMs={s.action_deadline_unix_ms}
                                                              nowMs={rt.snapshotAt}
+                                                             bigBlind={bigBlind}
                                                              isViewer={seat.player_id === viewer}/>)}
         <HandOutcomeBanner outcome={handOutcome}/>
       </div>

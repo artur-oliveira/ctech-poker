@@ -1497,7 +1497,10 @@ h1 em {
     font: 600 10px var(--font-mono);
     letter-spacing: .13em;
     color: var(--felt-text);
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
     margin-bottom: 14px
 }
 
@@ -1751,22 +1754,119 @@ h1 em {
 
 .seat-bet {
     position: absolute;
-    top: 115%;
+    top: calc(100% + 9px);
     left: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    transform: translateX(-50%);
+    transform-origin: 50% 0;
+    animation: wager-in 220ms var(--ease-out-quint)
+}
+
+.seat-bet b {
     background: var(--gold-deep);
     color: var(--gold-ink);
     padding: 3px 7px;
     border-radius: var(--rounded-pill);
     font: bold 10px var(--font-mono);
-    transform-origin: 50% 0;
-    animation: wager-in 220ms var(--ease-out-quint)
+    white-space: nowrap
 }
 
-/* bottom-row seats: bet travels up toward the pot, clear of the action bar */
-.seat-0 .seat-bet, .seat-1 .seat-bet, .seat-8 .seat-bet {
+/* bottom-row seats (plus the bottom-right corner, seat 7): bet travels up
+   toward the felt, clear of the action bar, instead of sitting under the seat.
+   A fixed offset (not a percentage of the seat's own box) is what keeps this
+   detached-from-the-seat without drifting off the felt at the seat's own size
+   changes across breakpoints. */
+.seat-0 .seat-bet, .seat-1 .seat-bet, .seat-7 .seat-bet, .seat-8 .seat-bet {
     top: auto;
-    bottom: 115%;
+    bottom: calc(100% + 9px);
+    flex-direction: column-reverse;
     transform-origin: 50% 100%
+}
+
+/* the two side seats sit level with the felt, not above/below it: the bet
+   travels sideways toward the center instead of down off the rail. Stays in a
+   column (chip above the number, same as every other seat) rather than a row
+   — a row nearly doubles the badge's width, which is what drove it into the
+   pot on narrow viewports where this seat has little horizontal clearance. */
+.seat-2 .seat-bet {
+    top: 50%;
+    left: calc(100% + 6px);
+    bottom: auto;
+    transform: translateY(-50%);
+    transform-origin: 0 50%
+}
+
+.seat-6 .seat-bet {
+    top: 50%;
+    left: auto;
+    right: calc(100% + 6px);
+    bottom: auto;
+    transform: translateY(-50%);
+    transform-origin: 100% 50%
+}
+
+/* Chip stacks read relative to the big blind (see lib/chips.ts): more chips and a
+   brighter gold as the tier climbs, never color alone (chip count + the mono
+   number beside it both carry the value). */
+.chip-stack {
+    position: relative;
+    display: inline-block;
+    flex: none;
+    --chip-size: 15px;
+    --chip-gap: 3px;
+    width: var(--chip-size);
+    height: calc(var(--chip-size) + (var(--tier) - 1) * var(--chip-gap))
+}
+
+.chip-stack-pot {
+    --chip-size: 22px;
+    --chip-gap: 4px
+}
+
+.chip {
+    position: absolute;
+    left: 0;
+    bottom: calc(var(--i) * var(--chip-gap));
+    z-index: var(--i);
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: 2px dashed var(--gold-ink);
+    background: radial-gradient(circle at 32% 28%, var(--gold-bright-2), var(--gold) 60%, var(--gold-deep) 100%);
+    box-shadow: 0 1px 0 var(--gold-ink), 0 2px 3px var(--black-06);
+    animation: chip-drop 260ms var(--ease-out-quint) both;
+    animation-delay: calc(var(--i) * 45ms)
+}
+
+.chip-stack-pot .chip {
+    border-width: 3px
+}
+
+.chip-stack.tier-1 .chip {
+    background: radial-gradient(circle at 32% 28%, var(--gold-pale), var(--gold-deep) 100%)
+}
+
+.chip-stack.tier-3 .chip {
+    background: radial-gradient(circle at 32% 28%, var(--gold-bright-3), var(--gold-bright) 55%, var(--gold-deep) 100%)
+}
+
+.chip-stack.tier-4 .chip, .chip-stack.tier-5 .chip {
+    background: radial-gradient(circle at 32% 28%, var(--gold-bright-3), var(--gold-bright) 50%, var(--gold-deep) 100%);
+    box-shadow: 0 1px 0 var(--gold-ink), 0 0 6px 1px color-mix(in srgb, var(--gold-bright) 55%, transparent)
+}
+
+.chip-stack.tier-5 .chip {
+    box-shadow: 0 1px 0 var(--gold-ink), 0 0 9px 2px color-mix(in srgb, var(--gold-bright) 70%, transparent)
+}
+
+@keyframes chip-drop {
+    from {
+        opacity: 0;
+        transform: translateY(-8px) scale(.6)
+    }
 }
 
 .seat-win {
@@ -2983,7 +3083,7 @@ h1 em {
        desktop rule above); seat-cards now floats there too, so give the
        chip enough clearance to sit above the 43px-tall cards instead of
        stacking on top of them */
-    .seat-0 .seat-bet, .seat-1 .seat-bet, .seat-8 .seat-bet {
+    .seat-0 .seat-bet, .seat-1 .seat-bet, .seat-7 .seat-bet, .seat-8 .seat-bet {
         bottom: calc(100% + 44px)
     }
 

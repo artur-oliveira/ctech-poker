@@ -12,6 +12,7 @@ const scenarios: { value: MockScenario; label: string }[] = [
   {value: 'turn', label: 'Turn · sua vez'},
   {value: 'river', label: 'River · vez do rival'},
   {value: 'showdown', label: 'Showdown · vitória'},
+  {value: 'side_pot', label: 'Showdown · pote lateral (2 vencedores)'},
   {value: 'reconnecting', label: 'Queda e reconexão'},
   {value: 'action_error', label: 'Ação rejeitada'},
   {value: 'timeout', label: 'Ação sem resposta'},
