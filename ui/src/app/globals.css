@@ -64,6 +64,9 @@
     --ease-out-expo: cubic-bezier(.16, 1, .3, 1);
     /* ponytail: stacked mobile action bar footprint (context + presets + quick + bet + raise rows), generous for 2-line pt-BR context; upgrade to measured height if layout grows */
     --action-bar-stack: 260px;
+    /* clearance .game-chat needs above the action bar; redeclared at the
+       800px breakpoint where the bar's own padding shrinks (see .action-bar) */
+    --action-bar-clear: 75px;
     /* ponytail: captured drift tokens — exact values previously written as literals across the
        stylesheet (landing/lobby/dialog/seat gradients), promoted to single-source tokens so the
        design system stays the only place colors live. */
@@ -2007,6 +2010,18 @@ h1 em {
     bottom: auto
 }
 
+/* side-pot showdowns can show a seat's live contribution and its resolved
+   payout at once — both pills sit on the same side of the seat by default,
+   so push the win pill clear of the bet pill instead of stacking on it. */
+.game-seat:not(.viewer) .seat-bet + .seat-win {
+    bottom: calc(100% + 60px)
+}
+
+.game-seat.top-seat:not(.viewer) .seat-bet + .seat-win {
+    top: calc(100% + 60px);
+    bottom: auto
+}
+
 .hand-outcome {
     position: absolute;
     inset: 0;
@@ -2363,7 +2378,7 @@ h1 em {
     position: fixed;
     z-index: 20;
     right: 16px;
-    bottom: 75px
+    bottom: var(--action-bar-clear)
 }
 
 .chat-toggle {
@@ -3252,16 +3267,20 @@ h1 em {
         padding: 0 12px
     }
 
-    .game-chat {
-        bottom: 70px
+    :root {
+        --action-bar-clear: 70px
     }
 
     .seat-1, .seat-7 {
         bottom: 9%
     }
 
-    .seat-3, .seat-5 {
-        top: 6%
+    /* seat-cards float above the seat box at this width (see the .seat-cards
+       override above) instead of sitting inside it — the top row needs more
+       clearance from the header than the desktop 1%/10% offsets give, or the
+       floated cards render behind the header bar. */
+    .seat-3, .seat-4, .seat-5 {
+        top: 8%
     }
 }
 
