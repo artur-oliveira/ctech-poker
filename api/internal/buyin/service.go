@@ -9,11 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
+	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 )
@@ -43,6 +45,7 @@ type Service struct {
 	rooms      roomLookup
 	activation activationChecker
 	pending    *reconcile.PendingStore
+	sessions   *sessionlog.Store
 	players    interface {
 		RequireAccepted(context.Context, string) error
 	}
@@ -64,6 +67,11 @@ func NewServiceWithGame(wallet, game walletMover, manager *tablemanager.Manager,
 
 func (s *Service) WithPendingStore(pending *reconcile.PendingStore) *Service {
 	s.pending = pending
+	return s
+}
+
+func (s *Service) WithSessionStore(sessions *sessionlog.Store) *Service {
+	s.sessions = sessions
 	return s
 }
 
@@ -187,6 +195,14 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 			}
 		}
 		return fmt.Errorf("buyin: seat failed, debit refunded: %w", joinErr)
+	}
+
+	if s.sessions != nil {
+		if err := s.sessions.RecordSession(ctx, sessionlog.SessionItem{
+			PK: playerID, TableID: roomID, BuyinAmount: amount, JoinedAt: time.Now().UnixMilli(),
+		}); err != nil {
+			slog.Error("sessionlog: record session open failed", "player", playerID, "table", roomID, "err", err)
+		}
 	}
 
 	return nil
@@ -318,6 +334,17 @@ func (s *Service) CashOut(ctx context.Context, roomID, playerID, idemKey string)
 
 	if s.pending != nil {
 		_ = s.pending.MarkResolved(ctx, key)
+	}
+
+	if s.sessions != nil {
+		if open, err := s.sessions.FindOpenSession(ctx, playerID, roomID); err == nil && open != nil {
+			open.EndedAt = time.Now().UnixMilli()
+			open.CashoutAmount = stack
+			open.NetPnL = stack - open.BuyinAmount
+			if err := s.sessions.CloseSession(ctx, *open); err != nil {
+				slog.Error("sessionlog: close session failed", "player", playerID, "table", roomID, "err", err)
+			}
+		}
 	}
 
 	return stack, nil

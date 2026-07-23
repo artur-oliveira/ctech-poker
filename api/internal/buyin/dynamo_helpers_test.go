@@ -5,13 +5,16 @@ package buyin
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 )
 
 // testClient / mustCreateTestTables mirror api/internal/table's own copies —
@@ -58,3 +61,12 @@ func createTestTable(t *testing.T, db *dynamodb.Client, name string, withSK bool
 }
 
 func new(s string) *string { return &s }
+
+func testSessionStore(t *testing.T) *sessionlog.Store {
+	t.Helper()
+	db := testClient(t)
+	env := fmt.Sprintf("buyin_sessions_test_%d", time.Now().UnixNano())
+	createTestTable(t, db, env+"_poker_player_sessions", true)
+	createTestTable(t, db, env+"_poker_player_hands", true)
+	return sessionlog.NewStore(db, env)
+}

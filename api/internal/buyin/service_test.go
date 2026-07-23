@@ -137,6 +137,58 @@ func TestCashOutRemovesThenCredits(t *testing.T) {
 	}
 }
 
+func TestBuyInRecordsAnOpenSessionWhenSessionStoreIsSet(t *testing.T) {
+	wallet := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := testRoomLookup()
+	svc := NewService(wallet, mgr, rooms)
+	sessions := testSessionStore(t)
+	svc.WithSessionStore(sessions)
+	ctx := context.Background()
+
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	if _, err := mgr.GetOrCreateActor(ctx, "room-3", seed); err != nil {
+		t.Fatalf("get or create actor: %v", err)
+	}
+	if err := svc.BuyIn(ctx, "room-3", "user-1", 400, false, ""); err != nil {
+		t.Fatalf("buyin: %v", err)
+	}
+
+	open, err := sessions.FindOpenSession(ctx, "user-1", "room-3")
+	if err != nil || open == nil {
+		t.Fatalf("expected an open session recorded, got %+v err=%v", open, err)
+	}
+	if open.BuyinAmount != 400 {
+		t.Fatalf("expected buyin amount 400 recorded, got %d", open.BuyinAmount)
+	}
+}
+
+func TestCashOutClosesTheOpenSession(t *testing.T) {
+	wallet := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := testRoomLookup()
+	svc := NewService(wallet, mgr, rooms)
+	sessions := testSessionStore(t)
+	svc.WithSessionStore(sessions)
+	ctx := context.Background()
+
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	if _, err := mgr.GetOrCreateActor(ctx, "room-4", seed); err != nil {
+		t.Fatalf("get or create actor: %v", err)
+	}
+	if err := svc.BuyIn(ctx, "room-4", "user-1", 400, false, ""); err != nil {
+		t.Fatalf("buyin: %v", err)
+	}
+	if _, err := svc.CashOut(ctx, "room-4", "user-1", ""); err != nil {
+		t.Fatalf("cashout: %v", err)
+	}
+
+	open, _ := sessions.FindOpenSession(ctx, "user-1", "room-4")
+	if open != nil {
+		t.Fatal("expected the session to be closed after cash-out")
+	}
+}
+
 type fakeActivation struct{ activated map[string]bool }
 
 func (f *fakeActivation) IsGamblingActivated(_ context.Context, userID string) (bool, error) {

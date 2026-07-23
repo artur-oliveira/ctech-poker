@@ -76,6 +76,28 @@ func (s *Store) ListSessions(ctx context.Context, playerID string, limit int) ([
 	return out, nil
 }
 
+// FindOpenSession returns the most recent session recorded for playerID at
+// tableID that has not yet been closed (EndedAt == 0), or nil if none exists.
+func (s *Store) FindOpenSession(ctx context.Context, playerID, tableID string) (*SessionItem, error) {
+	sessions, err := s.ListSessions(ctx, playerID, 50)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range sessions {
+		if item.TableID == tableID && item.EndedAt == 0 {
+			return &item, nil
+		}
+	}
+	return nil, nil
+}
+
+// CloseSession overwrites the same session item (same PK/SK) with its final
+// EndedAt/CashoutAmount/NetPnL — a plain PutItem, since this is an audit trail,
+// not the wallet balance's source of truth (that stays ctech-wallet).
+func (s *Store) CloseSession(ctx context.Context, item SessionItem) error {
+	return s.RecordSession(ctx, item)
+}
+
 func (s *Store) RecordHand(ctx context.Context, item HandItem) error {
 	if item.SK == "" {
 		item.SK = fmt.Sprintf("%d#%s", time.Now().UnixMilli(), item.HandID)

@@ -194,14 +194,14 @@ func newRouletteService(wallet *walletclient.Client, store *dailyreward.Store) *
 func newSessionStore(db *dynamodb.Client, cfg *config.Config) *sessionlog.Store {
 	return sessionlog.NewStore(db, cfg.Env)
 }
-func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service) *buyin.Service {
+func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service, sessionStore *sessionlog.Store) *buyin.Service {
 	if cfg.RealMoneyEnabled {
-		return buyin.NewServiceWithGame(wallet, wallet, manager, rooms, wallet)
+		return buyin.NewServiceWithGame(wallet, wallet, manager, rooms, wallet).WithSessionStore(sessionStore)
 	}
-	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players)
+	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players).WithSessionStore(sessionStore)
 }
 
-func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store) *tablemanager.Manager {
+func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		data, _ := json.Marshal(map[string]any{"type": "state", "snapshot": snap})
 		reg.Broadcast(context.Background(), tableID+"#"+viewerID, data)
@@ -221,6 +221,23 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		}
 		if err := leaderboardSvc.RecordHand(ctx, outcome); err != nil {
 			slog.Error("leaderboard record hand failed", "table", tableID, "err", err)
+		}
+		if sessionStore != nil {
+			for _, id := range outcome.Participants {
+				net := outcome.Payouts[id] - outcome.Contributions[id]
+				result := "lost"
+				for _, w := range outcome.Winners {
+					if w == id {
+						result = "won"
+						break
+					}
+				}
+				if err := sessionStore.RecordHand(ctx, sessionlog.HandItem{
+					PK: id, TableID: tableID, HandID: handID, Outcome: result, NetChange: net, EndedAt: time.Now().UnixMilli(),
+				}); err != nil {
+					slog.Error("sessionlog: record hand failed", "table", tableID, "hand", handID, "player", id, "err", err)
+				}
+			}
 		}
 	}
 	// roomLoader re-arms blind escalation and the per-turn action timeout from
