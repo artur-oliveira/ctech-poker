@@ -1,6 +1,9 @@
 package hand
 
-import "gopkg.aoctech.app/poker/api/internal/engine/deck"
+import (
+	"gopkg.aoctech.app/poker/api/internal/engine/deck"
+	"gopkg.aoctech.app/poker/api/internal/engine/handeval"
+)
 
 // Snapshot is the wire-safe view of a Table for exactly one viewer. Building
 // it here (not in a networking package) is what makes "never leak another
@@ -30,13 +33,14 @@ type LegalActions struct {
 }
 
 type SeatView struct {
-	PlayerID    string   `json:"player_id"`
-	Name        string   `json:"name,omitempty"`
-	Stack       int64    `json:"stack"`
-	State       string   `json:"state"`
-	Contributed int64    `json:"contributed"`
-	HoleCards   []string `json:"hole_cards,omitempty"`
-	Equity      *float64 `json:"equity,omitempty"`
+	PlayerID     string   `json:"player_id"`
+	Name         string   `json:"name,omitempty"`
+	Stack        int64    `json:"stack"`
+	State        string   `json:"state"`
+	Contributed  int64    `json:"contributed"`
+	HoleCards    []string `json:"hole_cards,omitempty"`
+	Equity       *float64 `json:"equity,omitempty"`
+	HandCategory string   `json:"hand_category,omitempty"`
 }
 
 var stageNames = map[Stage]string{
@@ -105,8 +109,14 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 			State:       playerStateNames[p.State],
 			Contributed: p.Contributed,
 		}
-		if dealtIn[p.ID] && (p.ID == viewerID || (revealAll && p.State != Folded)) {
+		if dealtIn[p.ID] && (p.ID == viewerID || (revealAll && p.State != Folded) || p.VoluntarilyShown) {
 			sv.HoleCards = []string{cardCode(p.HoleCards[0]), cardCode(p.HoleCards[1])}
+			if len(t.board) == 5 {
+				var full [7]deck.Card
+				full[0], full[1] = p.HoleCards[0], p.HoleCards[1]
+				copy(full[2:], t.board)
+				sv.HandCategory = categoryNames[handeval.Best7(full).Category()]
+			}
 		}
 		seats = append(seats, sv)
 	}

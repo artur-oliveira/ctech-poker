@@ -53,6 +53,8 @@ type Player struct {
 	HoleCards   [2]deck.Card `dynamodbav:"hole_cards"`
 	Contributed int64        `dynamodbav:"contributed"` // this hand's total contribution across all rounds, for side-pot math
 	HoldID      string       `dynamodbav:"hold_id,omitempty"`
+
+	VoluntarilyShown bool `dynamodbav:"voluntarily_shown"`
 }
 
 type Table struct {

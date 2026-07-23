@@ -125,3 +125,37 @@ func TestViewForRevealsAllHandsAtShowdownForNonFolded(t *testing.T) {
 		}
 	}
 }
+
+func TestViewForIncludesHandCategoryWhenBoardIsComplete(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	_ = table.StartHand()
+	for table.Stage() != Complete {
+		toAct := table.playerToActForTest()
+		if err := table.Act(toAct, betting.ActionCall, 0); err != nil {
+			_ = table.Act(toAct, betting.ActionCheck, 0)
+		}
+	}
+	view := table.ViewFor("p1")
+	for _, s := range view.Seats {
+		if s.HandCategory == "" {
+			t.Fatalf("expected a hand_category for seat %s once the board is complete and cards are revealed", s.PlayerID)
+		}
+	}
+}
+
+func TestViewForOmitsHandCategoryWhenCardsAreHidden(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	view := table.ViewFor("p1")
+	for _, s := range view.Seats {
+		if s.PlayerID == "p2" && s.HandCategory != "" {
+			t.Fatal("must not leak an opponent's hand category before their cards are visible")
+		}
+	}
+}
