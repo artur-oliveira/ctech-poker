@@ -10,6 +10,19 @@ const STATE_LABELS: Record<string, string> = {
   pending_entry: 'Aguardando'
 };
 
+const HAND_CATEGORY_LABELS: Record<string, string> = {
+  high_card: 'Carta alta',
+  pair: 'Par',
+  two_pair: 'Dois pares',
+  three_of_a_kind: 'Trinca',
+  straight: 'Sequência',
+  flush: 'Flush',
+  full_house: 'Full house',
+  four_of_a_kind: 'Quadra',
+  straight_flush: 'Straight flush',
+  royal_flush: 'Royal flush'
+};
+
 // Seats 3/4/5 sit on the top rail; their winner pill must drop below instead of above.
 const TOP_SEAT_INDICES = [3, 4, 5];
 
@@ -39,7 +52,8 @@ export function Seat({seat, isViewer, isTurn, index, payout = 0, deadlineMs, now
       <b title={seat.name || undefined}>{playerName(seat.player_id, isViewer ? seat.player_id : undefined, seat.name)}</b><span>{seat.stack.toLocaleString('pt-BR')} fichas</span>{chance != null && isViewer &&
         <small className="seat-equity"
           aria-label={`Chance estimada de vitória: ${chance}%`}>Chance {chance}%</small>}{STATE_LABELS[seat.state] &&
-        <small className="seat-state">{STATE_LABELS[seat.state]}</small>}</div>
+        <small className="seat-state">{STATE_LABELS[seat.state]}</small>}{seat.hand_category &&
+        <small className="seat-hand-category">{HAND_CATEGORY_LABELS[seat.hand_category] || seat.hand_category}</small>}</div>
     {seat.contributed > 0 &&
         <span key={seat.contributed} className="seat-bet">{seat.contributed.toLocaleString('pt-BR')}</span>}
     {payout > 0 && <span key={payout} className="seat-win" role="status">+{payout.toLocaleString('pt-BR')}</span>

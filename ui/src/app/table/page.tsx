@@ -152,6 +152,9 @@ function TableContent() {
                   aria-hidden="true"/>}
           {viewerSeat?.state === 'sitting_out' &&
             <Button type="button" variant="ghost" onClick={() => rt.ready(true)}>Voltar a jogar</Button>}
+          {s.stage === 'complete' && s.won_without_showdown && viewerSeat &&
+            viewerSeat.state !== 'sitting_out' && viewerSeat.state !== 'pending_entry' &&
+            <Button type="button" variant="ghost" onClick={() => rt.showCards()}>Mostrar cartas</Button>}
       </div>}
       <div className="game-table">
         <div className="game-rail"/>

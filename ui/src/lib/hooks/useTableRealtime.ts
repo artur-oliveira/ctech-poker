@@ -194,6 +194,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     status, snapshot, snapshotAt, unlock, chat, pendingAction, actionError: lastActionError, reconnectAttempt, announcement,
     clearActionError: () => setLastActionError(null), retryNow,
     ready: (ready = true) => emit({type: 'ready', ready}), act,
+    showCards: () => emit({type: 'show_cards'}),
     sendChat: (message: string) => emit({type: 'chat', message})
   };
 }

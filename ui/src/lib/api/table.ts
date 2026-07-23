@@ -5,7 +5,8 @@ export interface SeatView {
   state: string;
   contributed: number;
   hole_cards?: string[];
-  equity?: number
+  equity?: number;
+  hand_category?: string
 }
 
 export type PokerAction = 'fold' | 'check' | 'call' | 'raise'
@@ -27,7 +28,8 @@ export interface TableSnapshot {
   payouts?: Record<string, number>;
   rake?: number;
   action_deadline_unix_ms?: number;
-  next_hand_unix_ms?: number
+  next_hand_unix_ms?: number;
+  won_without_showdown?: boolean
 }
 
 export type ServerMessage = {
