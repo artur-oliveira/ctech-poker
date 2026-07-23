@@ -49,6 +49,23 @@ export default function Home() {
         <div><Icon/></div>
         <h3>{title}</h3><p>{body}</p></article>)}</div>
     </section>
+    <section className="showcase shell">
+      <div className="showcase-copy">
+        <h2>A mesa de verdade, sem instalar nada.</h2>
+        <p>Direto do navegador: cartas, fichas, cronômetro de ação e chat, exatamente como você vai jogar. Sem
+          apps, sem downloads, sem cliente pesado para atualizar.</p>
+        <Link href="/guide">Ver o guia completo <ArrowRight/></Link>
+      </div>
+      <div className="showcase-frame">
+        <div className="browser-chrome"><span/><span/><span/><small>ctechpoker.app/mesa</small></div>
+        <Image src="/guide/table-flop.png" alt="Mesa real do CTech Poker em andamento, com cartas comunitárias e barra de ações"
+          width={1280} height={800}/>
+        <figure className="showcase-peek">
+          <Image src="/guide/lobby.png" alt="Lobby do CTech Poker com mesas agrupadas por stake" width={640}
+            height={400}/>
+        </figure>
+      </div>
+    </section>
     <section className="cta shell">
       <div><h2>Comece uma mesa em minutos.</h2><p>Entre com sua conta CTech e jogue de graça no sandbox.</p></div>
       <Button variant="light" size="lg" onClick={() => startOAuthFlow('/lobby')}>Jogar agora <ArrowRight/></Button>

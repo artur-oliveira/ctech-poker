@@ -81,7 +81,14 @@ function describeSnapshot(previous: TableSnapshot | null, next: TableSnapshot, v
 function playSoundForTransition(previous: TableSnapshot | null, next: TableSnapshot) {
   if (!previous) return;
   if (next.board.length > previous.board.length) {
-    playSound(previous.board.length === 0 ? 'dealing' : 'reveal');
+    const added = next.board.length - previous.board.length;
+    // Flop deals 3 cards one at a time (Board/PlayingCard stagger reveal
+    // animation-delay by 220ms per index) — one reveal sound per card, timed
+    // to match. Turn/river add a single card with no stagger.
+    for (let i = 0; i < added; i++) {
+      if (i === 0) playSound('reveal');
+      else setTimeout(() => playSound('reveal'), i * 220);
+    }
     return;
   }
   const previousSeats = new Map(previous.seats.map(seat => [seat.player_id, seat]));

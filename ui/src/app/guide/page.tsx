@@ -62,16 +62,47 @@ export default function Guide() {
 
       <article className="guide-section reverse">
         <div>
-          <h2>Como jogar</h2>
-          <p>Na sua vez, a barra de ações na parte inferior mostra o que você pode fazer — as opções disponíveis
-            mudam conforme o estado da mão. Use o botão <b>?</b> no cabeçalho da mesa para consultar o ranking de
-            mãos sem sair do jogo.</p>
-          <p>Quer entender as regras completas por trás de cada ação? Veja o <Link href="/poker-rules">guia de
-            regras</Link>.</p>
+          <h2>Como agir na sua vez</h2>
+          <p>Na sua vez, a borda dourada marca o seu assento e a barra de ações aparece na parte inferior — as
+            opções disponíveis mudam conforme o estado da mão. <b>Fold</b> desiste, <b>Check</b> passa a vez sem
+            apostar, <b>Pagar</b> cobre a aposta em aberto e <b>Aumentar</b> eleva o valor com atalhos de
+            meio pote, pote cheio ou all-in (máx).</p>
+          <p>Prefere o teclado? As letras nos botões — <b>F</b>, <b>C</b>, <b>P</b>, <b>R</b> — são os atalhos.
+            Sua força de mão estimada aparece junto às suas cartas, e o botão <b>?</b> no cabeçalho abre o ranking
+            de mãos sem sair do jogo.</p>
         </div>
         <figure className="guide-shot">
-          <Image src="/guide/table.png" alt="Mesa em andamento com a barra de ações disponível" width={1280}
-            height={800}/>
+          <Image src="/guide/table-preflop.png" alt="Mesa no pré-flop com a barra de ações e a força da mão do jogador"
+            width={1280} height={800}/>
+        </figure>
+      </article>
+
+      <article className="guide-section">
+        <div>
+          <h2>Flop, turn e river</h2>
+          <p>A cada rodada de apostas concluída, uma nova carta comunitária entra no centro da mesa: três no flop,
+            mais uma no turn e a última no river. O pote e o rake ficam sempre visíveis ao lado das cartas, e cada
+            assento mostra um anel de contagem regressiva quando é a vez de agir — perder o prazo passa a vez
+            automaticamente.</p>
+        </div>
+        <figure className="guide-shot">
+          <Image src="/guide/table-flop.png" alt="Mesa no flop com três cartas comunitárias reveladas"
+            width={1280} height={800}/>
+        </figure>
+      </article>
+
+      <article className="guide-section reverse">
+        <div>
+          <h2>Showdown e pote lateral</h2>
+          <p>Se mais de um jogador chegar ao showdown, as cartas de cada um ficam visíveis e a melhor combinação de
+            5 cartas leva o pote. Quando alguém vai all-in com menos fichas que os demais, a mesa divide o pote em
+            pote principal e pote lateral — cada jogador só concorre ao que apostou.</p>
+          <p>Quer entender as regras completas por trás de cada fase e o ranking de mãos? Veja o
+            <Link href="/poker-rules"> guia de regras</Link>.</p>
+        </div>
+        <figure className="guide-shot">
+          <Image src="/guide/table-showdown.png" alt="Showdown com as cartas de todos os jogadores reveladas"
+            width={1280} height={800}/>
         </figure>
       </article>
     </section>
