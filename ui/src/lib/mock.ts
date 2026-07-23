@@ -200,7 +200,8 @@ export type MockScenario =
   | 'showdown'
   | 'reconnecting'
   | 'action_error'
-  | 'timeout';
+  | 'timeout'
+  | 'complete';
 export type MockConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
 
 const baseSeats = () => [
@@ -294,6 +295,14 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
       ...(scenario === 'timeout' ? {action_deadline_unix_ms: Date.now() + 15000} : {})
     };
   }
+  if (scenario === 'complete') return {
+    stage: 'complete',
+    board: ['7H', '8C', 'QS', '2D', 'AC'],
+    seats: revealShowdownCards(seats),
+    payouts: {[MOCK_PLAYER_ID]: 250},
+    rake: 5,
+    next_hand_unix_ms: Date.now() + 5000
+  };
   if (scenario === 'flop') return {
     stage: 'flop',
     board: ['7H', '8C', 'QS'],

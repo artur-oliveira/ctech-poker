@@ -26,7 +26,8 @@ export interface TableSnapshot {
   legal_actions?: LegalActionState;
   payouts?: Record<string, number>;
   rake?: number;
-  action_deadline_unix_ms?: number
+  action_deadline_unix_ms?: number;
+  next_hand_unix_ms?: number
 }
 
 export type ServerMessage = {

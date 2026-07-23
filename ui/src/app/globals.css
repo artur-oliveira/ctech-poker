@@ -1618,6 +1618,17 @@ h1 em {
     to { transform: rotate(360deg); opacity: .3 }
 }
 
+.next-hand-ring {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-left: .5em;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: var(--gold);
+    animation: seat-turn-countdown linear forwards
+}
+
 .game-seat.is-winner {
     border-color: var(--gold)
 }

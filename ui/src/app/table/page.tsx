@@ -146,6 +146,10 @@ function TableContent() {
       </div>}
       {!connectionMessage && (s.stage === 'waiting_for_players' || s.stage === 'complete') && <div className="reconnect-notice">
           <p>{s.stage === 'complete' ? 'Mão encerrada.' : 'Aguardando jogadores.'}</p>
+          {s.next_hand_unix_ms &&
+            <span key={s.next_hand_unix_ms} className="next-hand-ring"
+                  style={{animationDuration: `${Math.max(0, s.next_hand_unix_ms - rt.snapshotAt)}ms`}}
+                  aria-hidden="true"/>}
           {viewerSeat?.state === 'sitting_out' &&
             <Button type="button" variant="ghost" onClick={() => rt.ready(true)}>Voltar a jogar</Button>}
       </div>}
