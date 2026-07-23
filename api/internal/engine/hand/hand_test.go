@@ -280,15 +280,26 @@ func TestAllInRunoutDoesNotStallTheHand(t *testing.T) {
 		t.Fatalf("SB shoves all-in for 50 (short all-in, redirected to a call): %v", err)
 	}
 	// After this fold, Dealer and SB are both all-in and BB has folded — 0
-	// players can still act. Before the fix this would start a Flop betting
-	// round with nobody able to complete it, hanging the hand forever; no
-	// further call to Act should ever be needed after this line.
+	// players can still act. Before the original fix this would have
+	// started a Flop betting round with nobody able to complete it, hanging
+	// the hand forever. Now advanceStage deals only the immediate next
+	// missing street (the flop) synchronously here; pacing the rest one
+	// street at a time (via AdvanceRunoutStreetForActor) is table.Actor's
+	// job, driven directly below since there's no Actor in this test.
 	if err := table.Act("BB", betting.ActionFold, 0); err != nil {
 		t.Fatalf("BB folds: %v", err)
 	}
+	if table.Stage() != Flop {
+		t.Fatalf("expected the flop dealt immediately, got stage %v", table.Stage())
+	}
+	if !table.IsAwaitingRunoutForActor() {
+		t.Fatal("expected a paced runout to still be pending (turn + river missing)")
+	}
+	table.AdvanceRunoutStreetForActor()
+	table.AdvanceRunoutStreetForActor()
 
 	if table.Stage() != Complete {
-		t.Fatalf("expected the all-in runout to reach Complete immediately, got stage %v", table.Stage())
+		t.Fatalf("expected the all-in runout to reach Complete once every street is dealt, got stage %v", table.Stage())
 	}
 	if len(table.board) != 5 {
 		t.Fatalf("expected the full board to be dealt by the runout, got %d cards", len(table.board))
@@ -344,9 +355,14 @@ func TestBustedAllInPlayerSitsOutInsteadOfBeingRedealt(t *testing.T) {
 	if err := table.Act("BB", betting.ActionFold, 0); err != nil {
 		t.Fatalf("BB folds: %v", err)
 	}
+	// advanceStage deals only the immediate next missing street (the flop)
+	// synchronously; pace the rest via AdvanceRunoutStreetForActor, same as
+	// table.Actor's paced timer would in production.
+	table.AdvanceRunoutStreetForActor()
+	table.AdvanceRunoutStreetForActor()
 
 	if table.Stage() != Complete {
-		t.Fatalf("expected the all-in runout to reach Complete immediately, got stage %v", table.Stage())
+		t.Fatalf("expected the all-in runout to reach Complete once every street is dealt, got stage %v", table.Stage())
 	}
 	payouts := table.Payouts()
 	if payouts["SB"] != 0 {
@@ -685,9 +701,14 @@ func TestBustedHeadsUpPlayerCannotStartDegenerateSoloHand(t *testing.T) {
 	if err := table.Act("B", betting.ActionCall, 0); err != nil {
 		t.Fatalf("B calls all-in: %v", err)
 	}
+	// advanceStage deals only the immediate next missing street (the flop)
+	// synchronously; pace the rest via AdvanceRunoutStreetForActor, same as
+	// table.Actor's paced timer would in production.
+	table.AdvanceRunoutStreetForActor()
+	table.AdvanceRunoutStreetForActor()
 
 	if table.Stage() != Complete {
-		t.Fatalf("expected the all-in runout to reach Complete, got stage %v", table.Stage())
+		t.Fatalf("expected the all-in runout to reach Complete once every street is dealt, got stage %v", table.Stage())
 	}
 	a := table.playerByID("A")
 	if a.Stack != 0 || a.State != SittingOut {

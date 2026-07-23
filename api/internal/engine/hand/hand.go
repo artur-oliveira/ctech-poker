@@ -721,16 +721,7 @@ func (t *Table) Act(playerID string, action betting.Action, amount int64) error 
 }
 
 func (t *Table) advanceStage() {
-	remaining := 0
-	canStillAct := 0
-	for _, p := range t.players {
-		if p.State == Active || p.State == AllIn {
-			remaining++
-			if p.State == Active {
-				canStillAct++
-			}
-		}
-	}
+	remaining, canStillAct := t.countRemainingAndActable()
 	if remaining <= 1 {
 		t.runShowdown()
 		return
@@ -740,11 +731,12 @@ func (t *Table) advanceStage() {
 	// or called all-in too. There's nobody left who could call Act to ever
 	// complete another betting round (a lone non-all-in player has no one to
 	// bet against), so dealing the next street and calling startBettingRound
-	// would hang the hand forever. Deal out the rest of the board in one go
-	// and go straight to showdown, same as a real all-in runout.
+	// would hang the hand forever. Deal the immediate next street now (same
+	// as a normal transition below) and let the caller (table.Actor) pace
+	// any further streets one at a time via AdvanceRunoutStreetForActor —
+	// see IsAwaitingRunoutForActor.
 	if canStillAct <= 1 {
-		t.runoutBoard()
-		t.runShowdown()
+		t.AdvanceRunoutStreetForActor()
 		return
 	}
 
@@ -765,26 +757,61 @@ func (t *Table) advanceStage() {
 	t.startBettingRound(t.activePlayers(), 0, t.bigBlind)
 }
 
-// runoutBoard deals every remaining community card, from the current stage
-// through the river, without starting a betting round. Used once at most one
-// player can still act — there's nothing left to bet on, just cards left to
-// reveal before showdown.
-func (t *Table) runoutBoard() {
-	for t.stage != River {
-		switch t.stage {
-		case PreFlop:
-			t.board = append(t.board, t.dealCard(), t.dealCard(), t.dealCard())
-			t.stage = Flop
-		case Flop:
-			t.board = append(t.board, t.dealCard())
-			t.stage = Turn
-		case Turn:
-			t.board = append(t.board, t.dealCard())
-			t.stage = River
-		default:
-			return
+// countRemainingAndActable reports how many players are still in the hand
+// (Active or AllIn) and how many of those can still make a betting decision
+// (Active only) — shared by advanceStage and IsAwaitingRunoutForActor so both
+// agree on exactly the same definition of "nobody left to bet against".
+func (t *Table) countRemainingAndActable() (remaining, canStillAct int) {
+	for _, p := range t.players {
+		if p.State == Active || p.State == AllIn {
+			remaining++
+			if p.State == Active {
+				canStillAct++
+			}
 		}
 	}
+	return remaining, canStillAct
+}
+
+// AdvanceRunoutStreetForActor deals exactly the next missing community-card
+// street (no betting round — at most one player can still act) and, once
+// that street is the river, runs showdown immediately. Phase 2's table.Actor
+// calls this once synchronously from within Act (via advanceStage, to reveal
+// the first missing street right away) and again from a paced timer for
+// every further street, checking IsAwaitingRunoutForActor between calls to
+// know whether another call is still needed.
+func (t *Table) AdvanceRunoutStreetForActor() {
+	switch t.stage {
+	case PreFlop:
+		t.board = append(t.board, t.dealCard(), t.dealCard(), t.dealCard())
+		t.stage = Flop
+	case Flop:
+		t.board = append(t.board, t.dealCard())
+		t.stage = Turn
+	case Turn:
+		t.board = append(t.board, t.dealCard())
+		t.stage = River
+	}
+	if t.stage == River {
+		t.runShowdown()
+	}
+}
+
+// IsAwaitingRunoutForActor reports whether the table is mid all-in runout —
+// the board still has a street left to deal and no betting round can ever
+// complete again (at most one player can still act). Excluding PreFlop keeps
+// this from ever firing before the single remaining actor has had their own
+// pre-flop turn: advanceStage always deals the immediate next missing street
+// synchronously inside the same Act call, so by the time anyone observes
+// this from outside a hand, PreFlop can never still be the case here.
+// Recomputed from player state on every call — no persisted flag needed,
+// since dealing a street is the only thing that can change the answer.
+func (t *Table) IsAwaitingRunoutForActor() bool {
+	if t.stage != Flop && t.stage != Turn {
+		return false
+	}
+	remaining, canStillAct := t.countRemainingAndActable()
+	return remaining > 1 && canStillAct <= 1
 }
 
 func (t *Table) activePlayers() []*Player {
