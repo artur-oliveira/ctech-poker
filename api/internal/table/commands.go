@@ -49,6 +49,13 @@ type SitOutCmd struct {
 
 func (c SitOutCmd) reply() chan error { return c.Reply }
 
+type ShowCardsCmd struct {
+	PlayerID string
+	Reply    chan error
+}
+
+func (c ShowCardsCmd) reply() chan error { return c.Reply }
+
 type JoinCmd struct {
 	PlayerID string
 	Stack    int64

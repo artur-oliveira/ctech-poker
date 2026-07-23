@@ -139,3 +139,40 @@ func TestReadyFalseMarksSittingOutAndReadyTrueReturnsFree(t *testing.T) {
 		}
 	}
 }
+
+func TestShowCardsCmdRevealsFoldedWinnerToEveryone(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+	a := newTestActor(t, store)
+	ctx := context.Background()
+
+	reply := make(chan error, 1)
+	_ = a.Dispatch(ReadyCmd{PlayerID: "p1", Ready: true, Reply: reply})
+	reply2 := make(chan error, 1)
+	_ = a.Dispatch(ReadyCmd{PlayerID: "p2", Ready: true, Reply: reply2})
+
+	stored, _ := store.LoadTable(ctx, "table-1")
+	toAct := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
+	winnerID := "p1"
+	if toAct == "p1" {
+		winnerID = "p2"
+	}
+	reply3 := make(chan error, 1)
+	if err := a.Dispatch(ActCmd{PlayerID: toAct, ActionID: "a1", Action: betting.ActionFold, Reply: reply3}); err != nil {
+		t.Fatalf("fold: %v", err)
+	}
+
+	reply4 := make(chan error, 1)
+	if err := a.Dispatch(ShowCardsCmd{PlayerID: winnerID, Reply: reply4}); err != nil {
+		t.Fatalf("ShowCardsCmd: %v", err)
+	}
+	stored, _ = store.LoadTable(ctx, "table-1")
+	table := hand.NewTableFromState(stored.State)
+	view := table.ViewFor(toAct)
+	for _, s := range view.Seats {
+		if s.PlayerID == winnerID && len(s.HoleCards) != 2 {
+			t.Fatal("expected winner's cards visible to the other player after ShowCardsCmd")
+		}
+	}
+}

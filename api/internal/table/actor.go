@@ -139,6 +139,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleReconnect(ctx, c)
 	case SitOutCmd:
 		return a.handleSitOut(ctx, c)
+	case ShowCardsCmd:
+		return a.handleShowCards(ctx, c)
 	case JoinCmd:
 		return a.handleJoin(ctx, c)
 	case LeaveCmd:
@@ -414,6 +416,23 @@ func (a *Actor) handleSitOut(ctx context.Context, c SitOutCmd) error {
 	}
 	apply := func() error {
 		a.cached.SitOutForActor(c.PlayerID)
+		return a.commit(ctx, "", nil)
+	}
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		return err
+	}
+	a.broadcastAll()
+	return nil
+}
+
+func (a *Actor) handleShowCards(ctx context.Context, c ShowCardsCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	apply := func() error {
+		if err := a.cached.RevealHoleCards(c.PlayerID); err != nil {
+			return err
+		}
 		return a.commit(ctx, "", nil)
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
