@@ -60,10 +60,12 @@ type Actor struct {
 	turnTimer                    *time.Timer
 	turnDeadline                 time.Time
 	turnDeadlineFor              string
+	turnDeadlineForStage         hand.Stage
 	nextHandTimer                *time.Timer
 	nextHandDeadline             time.Time
 	nextHandArmedFor             string
 	nextHandDelay                time.Duration
+	lastBroadcastStage           hand.Stage
 	escalationInterval           time.Duration
 	escalationCfg                roomstore.BlindEscalation
 	done                         chan struct{}
@@ -655,28 +657,45 @@ func (a *Actor) applyLeaveAndCommit(ctx context.Context, c LeaveCmd) (int64, str
 
 // armTurnTimer (re-)arms the universal per-turn timer for current — the
 // player who must act right now, connected or not (empty string when no
-// decision is pending). Idempotent: re-arming for the SAME current player is
-// a no-op (does not restart their clock), matching "the timer counts down
-// from when the turn actually began," not from every subsequent broadcast.
-func (a *Actor) armTurnTimer(current string) {
-	if current == a.turnDeadlineFor {
+// decision is pending). Idempotent per (current, stage) pair: re-arming for
+// the SAME current player on the SAME street is a no-op (does not restart
+// their clock), matching "the timer counts down from when the turn actually
+// began," not from every subsequent broadcast. stage is part of the key
+// (not just current) because currentPlayerToAct always resolves to the
+// earliest non-folded active player in table order at the start of a fresh
+// betting round — the very same player ID can easily be "current" again on
+// the next street (trivially so in heads-up), which must still count as a
+// brand new turn. grace is added on top of the normal turnTimeout —
+// broadcastAll passes RevealGrace for the first arm after a stage transition
+// into Flop/Turn/River, and 0 otherwise.
+func (a *Actor) armTurnTimer(current string, stage hand.Stage, grace time.Duration) {
+	if current == a.turnDeadlineFor && stage == a.turnDeadlineForStage {
 		return
 	}
 	if a.turnTimer != nil {
 		a.turnTimer.Stop()
 	}
 	a.turnDeadlineFor = current
+	a.turnDeadlineForStage = stage
 	if current == "" {
 		return
 	}
-	a.turnDeadline = timeNowFunc().Add(a.turnTimeout)
+	duration := a.turnTimeout + grace
+	a.turnDeadline = timeNowFunc().Add(duration)
 	// The timer only dispatches a command; all map/state mutations happen
 	// inside Run (handleTurnTimeout), so there is no data race with the Run
 	// goroutine.
-	a.turnTimer = time.AfterFunc(a.turnTimeout, func() {
+	a.turnTimer = time.AfterFunc(duration, func() {
 		reply := make(chan error, 1)
 		_ = a.Dispatch(turnTimeoutCmd{PlayerID: current, Reply: reply})
 	})
+}
+
+// isRevealStreet reports whether stage is one of the three streets whose
+// arrival deals new board cards and therefore plays a reveal animation —
+// PreFlop's hole cards use a different (faster) animation and are excluded.
+func isRevealStreet(stage hand.Stage) bool {
+	return stage == hand.Flop || stage == hand.Turn || stage == hand.River
 }
 
 // armNextHandTimer (re-)arms the 5s post-hand countdown when the table is
@@ -734,8 +753,13 @@ func (a *Actor) broadcastAll() {
 	}
 	stage := a.cached.Stage()
 	current := a.cached.CurrentPlayerIDForActor()
-	a.armTurnTimer(current)
+	grace := time.Duration(0)
+	if stage != a.lastBroadcastStage && isRevealStreet(stage) {
+		grace = RevealGrace
+	}
+	a.armTurnTimer(current, stage, grace)
 	a.armNextHandTimer(stage == hand.Complete)
+	a.lastBroadcastStage = stage
 	doEquity := a.equityEnabled.Load() && equityStage(stage)
 	for _, p := range a.cached.PlayersForActor() {
 		snapshot := a.cached.ViewFor(p.ID)

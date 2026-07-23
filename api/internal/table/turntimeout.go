@@ -18,3 +18,10 @@ func TurnTimeoutFor(seconds int) time.Duration {
 // NextHandDelay is how long the table waits after a hand reaches Complete
 // before auto-starting the next one.
 const NextHandDelay = 5 * time.Second
+
+// RevealGrace is added on top of the normal per-turn deadline the first time
+// a new street (Flop/Turn/River) is dealt, so the board-card reveal
+// animation has time to finish before the countdown visibly starts
+// pressuring the next player to act. Only the first arm after a stage
+// transition gets it — see broadcastAll's stage-change check in actor.go.
+const RevealGrace = 1500 * time.Millisecond
