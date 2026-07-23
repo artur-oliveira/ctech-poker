@@ -247,14 +247,21 @@ func (a *Actor) applyReadyAndCommit(ctx context.Context, c ReadyCmd) error {
 			p.Ready = c.Ready
 		}
 	}
+	a.tryStartHand()
+	return a.commit(ctx, "", nil)
+}
+
+// tryStartHand attempts to start a new hand if the table is between hands.
+// "need at least 2 ready players" is not a caller error — the table just
+// keeps waiting; StartHand's own error is swallowed here on purpose. Called
+// from both a Ready toggle and a fresh Join, since a join alone can now bring
+// the table to 2+ ready players (auto-ready on join).
+func (a *Actor) tryStartHand() {
 	if a.cached.Stage() == hand.WaitingForPlayers || a.cached.Stage() == hand.Complete {
 		if err := a.cached.StartHand(); err == nil {
 			a.handID = newHandID()
 		}
-		// "need at least 2 ready players" is not a caller error — the table
-		// just keeps waiting; swallow it here.
 	}
-	return a.commit(ctx, "", nil)
 }
 
 func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
@@ -472,6 +479,7 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 	} else if err := a.cached.AddWaitingPlayer(p); err != nil {
 		return err
 	}
+	a.tryStartHand()
 	return a.commit(ctx, "", nil)
 }
 

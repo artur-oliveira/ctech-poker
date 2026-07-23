@@ -110,6 +110,32 @@ func TestHeadsUpDealerPostsSmallBlind(t *testing.T) {
 	}
 }
 
+func TestAddWaitingPlayerIsReadyImmediately(t *testing.T) {
+	table := NewTable(nil, 10, 20)
+	p := &Player{ID: "p1", Stack: 1000}
+	if err := table.AddWaitingPlayer(p); err != nil {
+		t.Fatalf("AddWaitingPlayer: %v", err)
+	}
+	if !p.Ready {
+		t.Fatal("a player added via AddWaitingPlayer must be Ready immediately (no manual ready click to enter play)")
+	}
+}
+
+func TestAddMidHandJoinerIsReadyImmediately(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	_ = table.StartHand()
+
+	p3 := &Player{ID: "p3", Stack: 1000}
+	if err := table.AddMidHandJoiner(p3); err != nil {
+		t.Fatalf("AddMidHandJoiner: %v", err)
+	}
+	if !p3.Ready {
+		t.Fatal("a mid-hand joiner must be Ready immediately (still gated by readyToPost/BB, see PostBigBlindCmd)")
+	}
+}
+
 func TestReadyGateBlocksHandStartWithFewerThanTwoReady(t *testing.T) {
 	players := []*Player{
 		{ID: "P1", Stack: 1000, Ready: true},

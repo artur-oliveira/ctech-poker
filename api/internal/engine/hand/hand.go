@@ -190,6 +190,7 @@ func (t *Table) AddMidHandJoiner(p *Player) error {
 	if t.playerByID(p.ID) != nil {
 		return fmt.Errorf("%w: player %s", ErrAlreadySeated, p.ID)
 	}
+	p.Ready = true
 	p.State = PendingEntry
 	t.players = append(t.players, p)
 	return nil
@@ -221,6 +222,7 @@ func (t *Table) AddWaitingPlayer(p *Player) error {
 	if t.playerByID(p.ID) != nil {
 		return fmt.Errorf("%w: player %s", ErrAlreadySeated, p.ID)
 	}
+	p.Ready = true
 	t.players = append(t.players, p)
 	return nil
 }
