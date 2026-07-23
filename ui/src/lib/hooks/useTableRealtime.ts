@@ -6,6 +6,7 @@ import {useWebSocket, type WSStatus} from '@aoctech/ws-client';
 import {type MockScenario, MockTableService, USE_MOCK} from '@/lib/mock';
 import type {PokerAction, ServerMessage, TableSnapshot} from '@/lib/api/table';
 import {playerName} from '@/lib/utils';
+import {playSound} from '@/lib/sound';
 
 export type ConnectionStatus = WSStatus
 export type ActionError = { code: string; message: string }
@@ -60,6 +61,33 @@ function describeSnapshot(previous: TableSnapshot | null, next: TableSnapshot, v
   return messages.join('. ');
 }
 
+// Plays at most one sound per snapshot transition (never on every broadcast —
+// each condition compares against the previous snapshot exactly like
+// describeSnapshot does). Priority: a new board card beats an all-in beats a
+// bet beats a fold-to-one reveal, since at most one usually fires per frame
+// anyway.
+function playSoundForTransition(previous: TableSnapshot | null, next: TableSnapshot) {
+  if (!previous) return;
+  if (next.board.length > previous.board.length) {
+    playSound('dealing');
+    return;
+  }
+  const previousSeats = new Map(previous.seats.map(seat => [seat.player_id, seat]));
+  const wentAllIn = next.seats.some(seat => seat.state === 'all_in' && previousSeats.get(seat.player_id)?.state !== 'all_in');
+  if (wentAllIn) {
+    playSound('all_in');
+    return;
+  }
+  const pot = previous.seats.reduce((n, seat) => n + seat.contributed, 0);
+  const bettor = next.seats.find(seat => seat.contributed > (previousSeats.get(seat.player_id)?.contributed || 0));
+  if (bettor) {
+    const added = bettor.contributed - (previousSeats.get(bettor.player_id)?.contributed || 0);
+    playSound(pot > 0 && added >= pot / 2 ? 'half_pot' : 'bet');
+    return;
+  }
+  if (next.stage === 'complete' && previous.stage !== 'complete' && !next.won_without_showdown) playSound('reveal');
+}
+
 export function useTableRealtime(id: string, viewerId?: string, shareCode?: string, mockOptions?: {
   scenario?: MockScenario;
   delay?: number
@@ -97,6 +125,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const receive = useCallback((message: ServerMessage) => {
     if (message.type === 'state' && message.snapshot) {
       const liveMessage = describeSnapshot(previousSnapshot.current, message.snapshot, viewerId);
+      playSoundForTransition(previousSnapshot.current, message.snapshot);
       previousSnapshot.current = message.snapshot;
       if (liveMessage) setAnnouncement(liveMessage);
       setSnapshot(message.snapshot);
@@ -194,7 +223,11 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     status, snapshot, snapshotAt, unlock, chat, pendingAction, actionError: lastActionError, reconnectAttempt, announcement,
     clearActionError: () => setLastActionError(null), retryNow,
     ready: (ready = true) => emit({type: 'ready', ready}), act,
-    showCards: () => emit({type: 'show_cards'}),
+    showCards: () => {
+      const ok = emit({type: 'show_cards'});
+      if (ok) playSound('showing_card');
+      return ok;
+    },
     sendChat: (message: string) => emit({type: 'chat', message})
   };
 }
