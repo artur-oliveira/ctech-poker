@@ -997,6 +997,10 @@ h1 em {
         transform: none !important
     }
 
+    .seat-turn-ring {
+        --seat-ring-progress: 100% !important
+    }
+
     .reconnect-notice > span {
         transform: none !important;
         background: var(--gold) !important
@@ -1603,14 +1607,28 @@ h1 em {
     animation: turn-signal 1.5s var(--ease-out-quart) infinite
 }
 
+@property --seat-ring-progress {
+    syntax: '<percentage>';
+    inherits: false;
+    initial-value: 100%
+}
+
 .seat-turn-ring {
     position: absolute;
     inset: -4px;
+    padding: 2px;
     border-radius: inherit;
-    border: 2px solid transparent;
-    border-top-color: var(--gold);
-    animation: seat-turn-countdown linear forwards;
+    background: conic-gradient(var(--gold) var(--seat-ring-progress), transparent 0);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    animation: seat-turn-deplete linear forwards;
     pointer-events: none
+}
+
+@keyframes seat-turn-deplete {
+    from { --seat-ring-progress: 100% }
+    to { --seat-ring-progress: 0% }
 }
 
 @keyframes seat-turn-countdown {
