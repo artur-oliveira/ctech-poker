@@ -23,6 +23,10 @@ func TestBroadcastAddsRevealGraceOnlyOnFirstArmAfterStageTransition(t *testing.T
 		seen[id] = snapshot
 	})
 	actor.cached = table
+	// Equity computation is irrelevant to this test and runs asynchronously
+	// (broadcastAll spawns a goroutine per viewer that also calls a.broadcast
+	// later); leaving it enabled races the synchronous writes to seen below.
+	actor.SetEquityEnabledForActor(false)
 	actor.broadcastAll() // settles lastBroadcastStage at PreFlop, no grace expected there
 
 	// Drive PreFlop to completion. dealerSeat is randomized (not pinned, since
