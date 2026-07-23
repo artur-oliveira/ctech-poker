@@ -564,6 +564,30 @@ func TestVoluntarilyShownResetsOnNextHand(t *testing.T) {
 	}
 }
 
+func TestHandOutcomeIncludesPayoutsAndContributions(t *testing.T) {
+	players := []*Player{
+		{ID: "P1", Stack: 1000, Ready: true},
+		{ID: "P2", Stack: 1000, Ready: true},
+	}
+	table := NewTable(players, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	for table.Stage() != Complete {
+		toAct := table.playerToActForTest()
+		if err := table.Act(toAct, betting.ActionCall, 0); err != nil {
+			_ = table.Act(toAct, betting.ActionCheck, 0)
+		}
+	}
+	outcome := table.LastOutcomeForActor()
+	if outcome.Payouts == nil || outcome.Contributions == nil {
+		t.Fatal("expected HandOutcome to carry Payouts and Contributions")
+	}
+	if outcome.Contributions["P1"] == 0 && outcome.Contributions["P2"] == 0 {
+		t.Fatal("expected non-zero contributions recorded for at least one player")
+	}
+}
+
 func playToCompletion(t *testing.T, table *Table, playerIDs []string) {
 	t.Helper()
 	for i := 0; table.Stage() != Complete; i++ {

@@ -112,6 +112,8 @@ type HandOutcome struct {
 	WonWithoutShowdown bool
 	ComebackWinners    []string
 	Participants       []string
+	Payouts            map[string]int64
+	Contributions      map[string]int64
 }
 
 var categoryNames = map[handeval.Category]string{
@@ -840,10 +842,16 @@ func (t *Table) runShowdown() {
 		}
 	}
 	t.payouts = payouts
+	contributionsByID := make(map[string]int64, len(contributions))
+	for _, c := range contributions {
+		contributionsByID[c.PlayerID] = c.Amount
+	}
 	outcome := HandOutcome{
 		Winners:            dedupeIDs(winningIDs),
 		WonWithoutShowdown: wonWithoutShowdown,
 		Participants:       participantIDs(t.handOrder),
+		Payouts:            payouts,
+		Contributions:      contributionsByID,
 	}
 	if !wonWithoutShowdown {
 		outcome.WinningCategory = categoryNames[winningScore.Category()]
