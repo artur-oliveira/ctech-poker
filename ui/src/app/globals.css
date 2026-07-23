@@ -997,7 +997,7 @@ h1 em {
         transform: none !important
     }
 
-    .seat-turn-ring {
+    .seat-turn-ring, .next-hand-ring {
         --seat-ring-progress: 100% !important
     }
 
@@ -1631,20 +1631,19 @@ h1 em {
     to { --seat-ring-progress: 0% }
 }
 
-@keyframes seat-turn-countdown {
-    from { transform: rotate(0deg); opacity: 1 }
-    to { transform: rotate(360deg); opacity: .3 }
-}
-
 .next-hand-ring {
     display: inline-block;
-    width: 14px;
-    height: 14px;
+    width: 18px;
+    height: 18px;
     margin-left: .5em;
+    padding: 2px;
     border-radius: 50%;
-    border: 2px solid transparent;
-    border-top-color: var(--gold);
-    animation: seat-turn-countdown linear forwards
+    vertical-align: middle;
+    background: conic-gradient(var(--gold) var(--seat-ring-progress), transparent 0);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    animation: seat-turn-deplete linear forwards
 }
 
 .game-seat.is-winner {
