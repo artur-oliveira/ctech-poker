@@ -18,6 +18,21 @@ func TestRaiseBelowMinimumIsRejected(t *testing.T) {
 	}
 }
 
+// TestCheckIsLegalWhenContributedExceedsCurrentBet reproduces a production
+// bug: a player who already contributed MORE than CurrentBet this round
+// (e.g. a limp/straddle, or CurrentBet dropping relative to an earlier
+// over-contribution) owes nothing and must be allowed to check. The old
+// check `Contributed != CurrentBet` rejected this with a negative "owes"
+// amount even though nothing was actually owed.
+func TestCheckIsLegalWhenContributedExceedsCurrentBet(t *testing.T) {
+	p1 := &PlayerState{ID: "P1", Stack: 1000, Contributed: 35}
+	r := NewRound([]*PlayerState{p1}, 25, 25)
+
+	if err := r.Act(0, ActionCheck, 0); err != nil {
+		t.Fatalf("expected check to succeed when Contributed(35) > CurrentBet(25), got: %v", err)
+	}
+}
+
 func TestFoldToOneRemainingPlayerCompletesRoundEvenIfThatPlayerNeverActed(t *testing.T) {
 	// Heads-up pre-flop: P1 is SB (acts first), P2 is BB and has not acted
 	// yet this round. P1 folds — P2 is the only player left, so the round

@@ -30,3 +30,8 @@ const RevealGrace = 1500 * time.Millisecond
 // dealing one community-card street before dealing the next, once two or
 // more streets remain to be revealed after an all-in is accepted.
 const RunoutStreetDelay = 2 * time.Second
+
+// AFKSweepInterval is how often the actor checks every seated player's
+// LastActionAt for staleness, independent of whose turn it is — see
+// armAFKSweepTimer's doc comment.
+const AFKSweepInterval = time.Minute

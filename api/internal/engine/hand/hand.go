@@ -55,6 +55,17 @@ type Player struct {
 	HoldID      string       `dynamodbav:"hold_id,omitempty"`
 
 	VoluntarilyShown bool `dynamodbav:"voluntarily_shown"`
+
+	// LastActionAt is the unix-ms time of this player's last genuine,
+	// explicitly user-originated command (an Act, a Ready/SitOut toggle) —
+	// never a server-synthesized one (a turn-timeout auto-fold, a disconnect
+	// auto-sit-out). table.Actor is the only writer; it deliberately updates
+	// this on real inbound commands only, so a connected-but-unresponsive
+	// player can't have their own auto-folds mask how long they've actually
+	// been silent. Persisted (survives an Actor restart, unlike the
+	// in-memory disconnect bookkeeping) so a periodic sweep can detect and
+	// remove a stale seat even if no disconnect was ever observed for it.
+	LastActionAt int64 `dynamodbav:"last_action_at,omitempty"`
 }
 
 type Table struct {

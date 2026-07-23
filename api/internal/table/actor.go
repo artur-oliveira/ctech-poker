@@ -72,6 +72,8 @@ type Actor struct {
 	runoutStreetDelay            time.Duration
 	escalationInterval           time.Duration
 	escalationCfg                roomstore.BlindEscalation
+	afkSweepTimer                *time.Timer
+	afkSweepInterval             time.Duration
 	done                         chan struct{}
 	equityEnabled                atomic.Bool
 	onHandComplete               func(string, hand.HandOutcome)
@@ -99,8 +101,10 @@ func New(id string, store *tablestore.Store, trustCache bool, broadcast func(str
 		kickGrace:                    5 * time.Minute,
 		kickTimers:                   make(map[string]*time.Timer),
 		playerNames:                  make(map[string]string),
+		afkSweepInterval:             AFKSweepInterval,
 	}
 	a.equityEnabled.Store(true)
+	a.armAFKSweepTimer()
 	return a
 }
 
@@ -187,6 +191,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleRunoutStep(ctx, c)
 	case kickTimeoutCmd:
 		return a.handleKickTimeout(ctx, c)
+	case afkSweepCmd:
+		return a.handleAFKSweep(ctx, c)
 	case escalateCmd:
 		return a.handleEscalate(ctx)
 	default:
@@ -277,6 +283,7 @@ func (a *Actor) handleReady(ctx context.Context, c ReadyCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
+	a.markLastAction(c.PlayerID)
 	apply := func() error { return a.applyReadyAndCommit(ctx, c) }
 	if err := a.retryOnConflict(ctx, apply); err != nil {
 		return err
@@ -317,6 +324,7 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
+	a.markLastAction(c.PlayerID)
 	start := timeNowFunc()
 	_, err := a.applyActAndCommit(ctx, c)
 	if errors.Is(err, tablestore.ErrVersionConflict) {
@@ -383,6 +391,14 @@ func (a *Actor) applyActAndCommit(ctx context.Context, c ActCmd) (bool, error) {
 }
 
 func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.ActionLogEntry) error {
+	if a.store == nil {
+		// Mirrors ensureLoaded's nil-store no-op: unit tests construct an
+		// Actor with a nil store to exercise engine-level handler logic
+		// without a real (DynamoDB Local) backing store. Never nil in
+		// production — the manager always supplies a real *tablestore.Store.
+		a.version++
+		return nil
+	}
 	newState := a.cached.ExportState()
 	if entry == nil {
 		entry = &tablestore.ActionLogEntry{}
@@ -506,10 +522,72 @@ func (a *Actor) handleKickTimeout(ctx context.Context, c kickTimeoutCmd) error {
 	return a.handleLeave(ctx, LeaveCmd{PlayerID: c.PlayerID})
 }
 
+// markLastAction stamps playerID's LastActionAt with now — called only from
+// handlers driven by a genuine inbound client command (Act, Ready, SitOut),
+// never from a server-synthesized one (turn-timeout fold, disconnect
+// auto-sit-out, the AFK sweep's own removal), so it reflects actual human
+// presence rather than the system acting on the player's behalf. A no-op if
+// the player isn't seated (defensive; every caller already resolved them).
+func (a *Actor) markLastAction(playerID string) {
+	for _, p := range a.cached.PlayersForActor() {
+		if p.ID == playerID {
+			p.LastActionAt = timeNowFunc().UnixMilli()
+			return
+		}
+	}
+}
+
+// armAFKSweepTimer (re-)arms the periodic AFK sweep. Unlike every other timer
+// in this file, it isn't tied to a game-state transition — it re-arms itself
+// unconditionally after every fire (from handleAFKSweep), so it keeps
+// checking every AFKSweepInterval for as long as the actor is alive. Once the
+// actor dies (Run's ctx cancelled), the next fire's Dispatch hits a.done and
+// returns ErrActorStopped without re-arming, so this doesn't outlive the
+// actor.
+func (a *Actor) armAFKSweepTimer() {
+	a.afkSweepTimer = time.AfterFunc(a.afkSweepInterval, func() {
+		reply := make(chan error, 1)
+		_ = a.Dispatch(afkSweepCmd{Reply: reply})
+	})
+}
+
+// handleAFKSweep exists because the per-turn timer only ever checks whoever
+// the engine currently prompts (armTurnTimer/handleTurnTimeout) — a player
+// who never becomes "current" for a long stretch, or one whose disconnect
+// bookkeeping was lost to an actor restart (disconnectedSince/kickTimers are
+// in-memory only; LastActionAt is persisted specifically so this check
+// survives that), would otherwise occupy a seat forever. Reuses kickGrace as
+// the staleness threshold — same "gone" semantics whether detected via
+// transport disconnect or via activity silence, both flowing into the exact
+// same removal path (handleLeave) as the disconnect-driven kick, including
+// its existing has-a-live-hand guard (a stale player mid-hand is retried on
+// the next sweep instead of being force-removed there).
+func (a *Actor) handleAFKSweep(ctx context.Context, c afkSweepCmd) error {
+	defer a.armAFKSweepTimer()
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return nil // transient load failure; next sweep retries
+	}
+	now := timeNowFunc()
+	var stale []string
+	for _, p := range a.cached.PlayersForActor() {
+		if p.LastActionAt == 0 {
+			continue
+		}
+		if now.Sub(time.UnixMilli(p.LastActionAt)) >= a.kickGrace {
+			stale = append(stale, p.ID)
+		}
+	}
+	for _, id := range stale {
+		_ = a.handleLeave(ctx, LeaveCmd{PlayerID: id})
+	}
+	return nil
+}
+
 func (a *Actor) handleSitOut(ctx context.Context, c SitOutCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
+	a.markLastAction(c.PlayerID)
 	apply := func() error {
 		a.cached.SitOutForActor(c.PlayerID)
 		return a.commit(ctx, "", nil)
@@ -601,7 +679,7 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 	if c.MaxSeats > 0 && len(a.cached.PlayersForActor()) >= c.MaxSeats {
 		return errors.New("table: no seats available")
 	}
-	p := &hand.Player{ID: c.PlayerID, Stack: c.Stack, HoldID: c.HoldID}
+	p := &hand.Player{ID: c.PlayerID, Stack: c.Stack, HoldID: c.HoldID, LastActionAt: timeNowFunc().UnixMilli()}
 	stage := a.cached.Stage()
 	if stage != hand.WaitingForPlayers && stage != hand.Complete {
 		if err := a.cached.AddMidHandJoiner(p); err != nil {

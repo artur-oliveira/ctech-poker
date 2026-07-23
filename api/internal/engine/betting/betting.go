@@ -61,7 +61,7 @@ func (r *Round) Act(playerIdx int, action Action, amount int64) error {
 		return nil
 
 	case ActionCheck:
-		if p.Contributed != r.CurrentBet {
+		if p.Contributed < r.CurrentBet {
 			return fmt.Errorf("betting: player %s must call or fold, cannot check (owes %d)", p.ID, r.CurrentBet-p.Contributed)
 		}
 		p.ActedSinceLastFullRaise = true

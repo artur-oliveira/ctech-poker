@@ -167,3 +167,11 @@ type kickTimeoutCmd struct {
 }
 
 func (c kickTimeoutCmd) reply() chan error { return c.Reply }
+
+// afkSweepCmd is dispatched by the self-perpetuating AFK sweep timer (a
+// time.AfterFunc armed in armAFKSweepTimer, re-armed every AFKSweepInterval
+// regardless of outcome) — checks every seated player's LastActionAt for
+// staleness, independent of whose turn it currently is.
+type afkSweepCmd struct{ Reply chan error }
+
+func (c afkSweepCmd) reply() chan error { return c.Reply }

@@ -25,7 +25,7 @@ func (s *Store) GetOrCreate(ctx context.Context, userID string) (*PlayerProfile,
 		return profile, err
 	}
 	now := dynamo.NowStr()
-	profile := PlayerProfile{UserID: userID, CreatedAt: now, UpdatedAt: now}
+	profile := PlayerProfile{UserID: userID, Name: RandomName(), CreatedAt: now, UpdatedAt: now}
 	item, err := dynamo.Encode(profile)
 	if err != nil {
 		return nil, fmt.Errorf("player: encode: %w", err)
