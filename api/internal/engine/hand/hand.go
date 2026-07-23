@@ -96,6 +96,7 @@ type Table struct {
 	// saw it.
 	seenActionIDs map[string]bool
 	readyToPost   map[string]bool
+	owesBigBlind  map[string]bool
 	lastOutcome   *HandOutcome
 	wasEverAllIn  map[string]bool
 }
@@ -283,7 +284,11 @@ func (t *Table) StartHand() error {
 	active := make([]*Player, 0, len(t.players))
 	newEntrants := make(map[string]bool)
 	for _, p := range t.players {
-		if !p.Ready || p.State == SittingOut {
+		owingReturn := p.State == SittingOut && p.Ready && t.owesBigBlind[p.ID]
+		if !p.Ready || (p.State == SittingOut && !owingReturn) {
+			if p.State != PendingEntry {
+				p.State = SittingOut
+			}
 			continue
 		}
 		if p.State == PendingEntry && !t.readyToPost[p.ID] {
@@ -292,6 +297,10 @@ func (t *Table) StartHand() error {
 		if p.State == PendingEntry {
 			newEntrants[p.ID] = true
 			delete(t.readyToPost, p.ID)
+		}
+		if owingReturn {
+			newEntrants[p.ID] = true
+			delete(t.owesBigBlind, p.ID)
 		}
 		p.State = Active
 		p.Contributed = 0
@@ -385,6 +394,60 @@ func (t *Table) BigBlindForTest() int64 { return t.bigBlind }
 // computed relative to dealerSeat's position within active. Heads-up is a
 // special case: the dealer posts the small blind. 3+-way: the two seats
 // clockwise after the dealer post small and big blind respectively.
+// wouldBeNextBlind reports whether playerID would post the small or big
+// blind if StartHand ran right now with playerID included among the active
+// players — used by RequestReturnFromSitOut to decide whether returning from
+// sitting-out is free or costs a big blind (the same rule as a brand-new
+// mid-hand joiner: "perto do próprio blind" = SB or BB of the very next hand,
+// no window).
+func (t *Table) wouldBeNextBlind(playerID string) bool {
+	active := make([]*Player, 0, len(t.players))
+	for _, p := range t.players {
+		if p.ID == playerID {
+			active = append(active, p) // the returning candidate is always projected as playing
+			continue
+		}
+		if !p.Ready || p.State == SittingOut {
+			continue
+		}
+		if p.State == PendingEntry && !t.readyToPost[p.ID] {
+			continue
+		}
+		active = append(active, p)
+	}
+	if len(active) < 2 {
+		return false
+	}
+	sb, bb := t.blindSeats(active)
+	for i, p := range active {
+		if p.ID == playerID {
+			return i == sb || i == bb
+		}
+	}
+	return false
+}
+
+// RequestReturnFromSitOut lets a sitting-out player rejoin. A no-op if the
+// player is not currently SittingOut. Reuses the exact BB-out-of-position
+// template StartHand already applies to mid-hand joiners (readyToPost):
+// projects whether this player would be SB/BB of the next hand and, if so,
+// defers the actual return until StartHand charges that big blind instead of
+// clearing SittingOut immediately.
+func (t *Table) RequestReturnFromSitOut(playerID string) {
+	p := t.playerByID(playerID)
+	if p == nil || p.State != SittingOut {
+		return
+	}
+	if t.wouldBeNextBlind(playerID) {
+		if t.owesBigBlind == nil {
+			t.owesBigBlind = make(map[string]bool)
+		}
+		t.owesBigBlind[playerID] = true
+		return
+	}
+	p.State = Active
+}
+
 func (t *Table) blindSeats(active []*Player) (sb, bb int) {
 	dealerIdx := t.dealerIndexWithin(active)
 	numActive := len(active)

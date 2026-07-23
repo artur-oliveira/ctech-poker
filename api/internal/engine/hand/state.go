@@ -33,6 +33,7 @@ type State struct {
 	HandOrder     []*Player
 	SeenActionIDs map[string]bool
 	ReadyToPost   map[string]bool
+	OwesBigBlind  map[string]bool
 	LastOutcome   *HandOutcome
 	WasEverAllIn  map[string]bool
 }
@@ -58,6 +59,7 @@ func (t *Table) ExportState() State {
 		HandOrder:     t.handOrder,
 		SeenActionIDs: t.seenActionIDs,
 		ReadyToPost:   t.readyToPost,
+		OwesBigBlind:  t.owesBigBlind,
 		LastOutcome:   t.lastOutcome,
 		WasEverAllIn:  t.wasEverAllIn,
 	}
@@ -89,6 +91,7 @@ func NewTableFromState(s State) *Table {
 		handOrder:     s.HandOrder,
 		seenActionIDs: s.SeenActionIDs,
 		readyToPost:   s.ReadyToPost,
+		owesBigBlind:  s.OwesBigBlind,
 		lastOutcome:   s.LastOutcome,
 		wasEverAllIn:  s.WasEverAllIn,
 	}

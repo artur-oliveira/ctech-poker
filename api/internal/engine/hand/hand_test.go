@@ -136,6 +136,57 @@ func TestAddMidHandJoinerIsReadyImmediately(t *testing.T) {
 	}
 }
 
+// TestReturnFromSitOutIsFreeWhenNotNearOwnBlind: a 4-handed table where the
+// returning player's seat would NOT be SB/BB of the next hand returns
+// immediately, no BB owed.
+func TestReturnFromSitOutIsFreeWhenNotNearOwnBlind(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	p3 := &Player{ID: "p3", Stack: 1000, Ready: true}
+	p4 := &Player{ID: "p4", Stack: 1000, Ready: true, State: SittingOut}
+	table := NewTable([]*Player{p1, p2, p3, p4}, 10, 20)
+	table.dealerDrawn = true // dealerSeat 0 (p1); blinds for the next hand land on p2 (SB), p3 (BB)
+
+	table.RequestReturnFromSitOut("p4")
+	if p4.State == SittingOut {
+		t.Fatal("p4's seat is not SB/BB of the next hand — return must be free and immediate")
+	}
+}
+
+// TestReturnFromSitOutOwesBigBlindWhenNearOwnBlind: the returning player's
+// seat IS the projected BB of the next hand — return must stay SittingOut
+// until StartHand charges the out-of-position BB.
+func TestReturnFromSitOutOwesBigBlindWhenNearOwnBlind(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true, State: SittingOut}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	table.dealerDrawn = true // heads-up: dealer (p1) posts SB, p2 posts BB — p2 IS the projected BB
+
+	table.RequestReturnFromSitOut("p2")
+	if p2.State != SittingOut {
+		t.Fatal("p2 projects to BB of the next hand — must stay SittingOut until the BB is actually charged")
+	}
+
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	if p2.State != Active {
+		t.Fatalf("expected p2 to be dealt in after paying the owed BB, got state %v", p2.State)
+	}
+	if p2.Contributed < 20 {
+		t.Fatalf("expected p2 to have posted at least the big blind (20), got %d", p2.Contributed)
+	}
+}
+
+func TestRequestReturnFromSitOutIsNoOpForNonSittingOutPlayer(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1}, 10, 20)
+	table.RequestReturnFromSitOut("p1") // must not panic or change anything
+	if p1.State != Active {
+		t.Fatalf("no-op expected, got state %v", p1.State)
+	}
+}
+
 func TestReadyGateBlocksHandStartWithFewerThanTwoReady(t *testing.T) {
 	players := []*Player{
 		{ID: "P1", Stack: 1000, Ready: true},
