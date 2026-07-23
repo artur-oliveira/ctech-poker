@@ -504,6 +504,66 @@ func blindPosters(t *testing.T, players []*Player, smallBlind, bigBlind int64) (
 // case where nothing is owed) — a plain check-down with no folds or raises.
 // Bounded iteration count so a regression that reintroduces Finding 1's hang
 // fails the test instead of hanging `go test` forever.
+func TestRevealHoleCardsMakesFoldedWinnerCardsVisible(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	toAct := table.playerToActForTest()
+	winnerID := "p1"
+	if toAct == "p1" {
+		winnerID = "p2"
+	}
+	if err := table.Act(toAct, betting.ActionFold, 0); err != nil {
+		t.Fatalf("%s folds: %v", toAct, err)
+	}
+
+	if err := table.RevealHoleCards(winnerID); err != nil {
+		t.Fatalf("RevealHoleCards: %v", err)
+	}
+	view := table.ViewFor(toAct)
+	for _, s := range view.Seats {
+		if s.PlayerID == winnerID && len(s.HoleCards) != 2 {
+			t.Fatal("expected the voluntarily-revealed winner's hole cards to be visible to everyone")
+		}
+	}
+}
+
+func TestRevealHoleCardsRejectsPlayerNotDealtIntoTheHand(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	_ = table.StartHand()
+	p3 := &Player{ID: "p3", Stack: 1000}
+	_ = table.AddMidHandJoiner(p3)
+	if err := table.RevealHoleCards("p3"); err == nil {
+		t.Fatal("expected an error revealing cards for a player never dealt into this hand")
+	}
+}
+
+func TestVoluntarilyShownResetsOnNextHand(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	_ = table.StartHand()
+	toAct := table.playerToActForTest()
+	_ = table.Act(toAct, betting.ActionFold, 0)
+	winnerID := "p1"
+	if toAct == "p1" {
+		winnerID = "p2"
+	}
+	_ = table.RevealHoleCards(winnerID)
+
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("second StartHand: %v", err)
+	}
+	if table.playerByID(winnerID).VoluntarilyShown {
+		t.Fatal("VoluntarilyShown must reset at the start of the next hand")
+	}
+}
+
 func playToCompletion(t *testing.T, table *Table, playerIDs []string) {
 	t.Helper()
 	for i := 0; table.Stage() != Complete; i++ {

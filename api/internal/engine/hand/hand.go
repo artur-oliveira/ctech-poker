@@ -290,6 +290,9 @@ func (t *Table) StartHand() error {
 	t.wasEverAllIn = make(map[string]bool)
 	t.rakeCollected = 0
 	t.seenActionIDs = make(map[string]bool)
+	for _, p := range t.players {
+		p.VoluntarilyShown = false
+	}
 
 	active := make([]*Player, 0, len(t.players))
 	newEntrants := make(map[string]bool)
@@ -456,6 +459,30 @@ func (t *Table) RequestReturnFromSitOut(playerID string) {
 		return
 	}
 	p.State = Active
+}
+
+// RevealHoleCards lets a player who was dealt into the just-completed hand
+// voluntarily show their cards to everyone, even when the hand ended without
+// a genuine showdown (fold-to-one) — ViewFor's revealAll gate never covers
+// this case on purpose (see the bug3 fix), so this is a separate, per-player
+// opt-in. Idempotent: calling it twice for the same player is a no-op, not an
+// error.
+func (t *Table) RevealHoleCards(playerID string) error {
+	if t.stage != Complete {
+		return fmt.Errorf("hand: cards can only be revealed after the hand is complete")
+	}
+	dealtIn := false
+	for _, hp := range t.handOrder {
+		if hp.ID == playerID {
+			dealtIn = true
+			break
+		}
+	}
+	if !dealtIn {
+		return fmt.Errorf("hand: player %s was not dealt into this hand", playerID)
+	}
+	t.playerByID(playerID).VoluntarilyShown = true
+	return nil
 }
 
 func (t *Table) blindSeats(active []*Player) (sb, bb int) {
