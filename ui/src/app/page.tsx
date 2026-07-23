@@ -26,7 +26,8 @@ export default function Home() {
   return <main className="landing">
     <nav className="nav shell"><Link href="/" className="brand"><span
       className="brand-mark"><Club/></span><span>CTech <b>Poker</b></span></Link>
-    <div className="nav-links"><Link href="#experience">Experiência</Link><Link href="/leaderboard">Ranking</Link>
+    <div className="nav-links"><Link href="#experience">Experiência</Link><Link href="/poker-rules">Regras</Link><Link
+      href="/leaderboard">Ranking</Link>
       <Button variant="ghost" onClick={() => startOAuthFlow()}>Entrar</Button>
     </div>
     </nav>

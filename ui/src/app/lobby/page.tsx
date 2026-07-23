@@ -1,8 +1,9 @@
 'use client';
 import Link from 'next/link';
-import {Club, Gift, LoaderCircle, Trophy} from 'lucide-react';
+import {BookOpen, Club, Gift, LoaderCircle, Trophy} from 'lucide-react';
 import {StakesGrid} from '@/components/lobby/StakesGrid';
 import {CreateRoomDialog} from '@/components/lobby/CreateRoomDialog';
+import {OnboardingIntro} from '@/components/lobby/OnboardingIntro';
 import {ProfileMenu} from '@/components/lobby/ProfileMenu';
 import {MockControls} from '@/components/table/MockControls';
 import {TermsGate} from '@/components/TermsGate';
@@ -71,11 +72,13 @@ export default function Lobby() {
       <nav className="app-nav shell"><Link href="/" className="brand"><span
         className="brand-mark"><Club/></span>CTech <b>Poker</b></Link>
         <div className="header-right">
+          <Link href="/guide"><BookOpen/> Guia</Link>
           <Link href="/leaderboard"><Trophy/> Ranking</Link>
           <ProfileMenu/>
         </div>
       </nav>
       <section className="lobby shell">
+        <OnboardingIntro/>
         <header>
           <div>
             <small>LOBBY SANDBOX</small>

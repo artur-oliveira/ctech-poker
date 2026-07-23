@@ -18,6 +18,7 @@ import {InviteDialog} from '@/components/table/InviteDialog';
 import {LeaveDialog} from '@/components/table/LeaveDialog';
 import {MockControls} from '@/components/table/MockControls';
 import {HandOutcomeBanner, type HandOutcomeState} from '@/components/table/HandOutcome';
+import {HandRankingsDialog} from '@/components/table/HandRankingsDialog';
 import {AchievementToast} from '@/components/AchievementToast';
 import {TermsGate} from '@/components/TermsGate';
 import {Button} from '@/components/ui/button';
@@ -182,6 +183,7 @@ function TableContent() {
             <Wifi aria-hidden="true"/>
             <span className="connection-label">{rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}</span>
           </span>
+          <HandRankingsDialog/>
           {canInvite && <InviteDialog url={inviteUrl}/>}
           {viewerSeat && viewerSeat.state !== 'sitting_out' &&
             <Button type="button" variant="ghost" disabled={rt.readyPending}
