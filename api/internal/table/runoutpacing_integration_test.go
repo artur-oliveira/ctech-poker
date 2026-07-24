@@ -23,18 +23,19 @@ func TestAllInRunoutPacesEachStreetBehindATimer(t *testing.T) {
 	store := tablestore.NewStore(db, "table_test")
 	mustCreateTestTables(t, db, "table_test")
 
+	tableID := uniqueTableID(t)
 	seed := hand.NewTable([]*hand.Player{{ID: "p1", Stack: 30, Ready: true}, {ID: "p2", Stack: 1000, Ready: true}}, 10, 20)
 	state := seed.ExportState()
 	state.DealerSeat = 0
 	state.DealerDrawn = true
 	ctx := context.Background()
-	if err := store.SeedTable(ctx, "table-runout-pacing", state); err != nil {
+	if err := store.SeedTable(ctx, tableID, state); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 
 	var mu sync.Mutex
 	firstSeenAt := map[int]time.Time{}
-	a := New("table-runout-pacing", store, true, func(_ string, snapshot hand.Snapshot) {
+	a := New(tableID, store, true, func(_ string, snapshot hand.Snapshot) {
 		mu.Lock()
 		if _, ok := firstSeenAt[len(snapshot.Board)]; !ok {
 			firstSeenAt[len(snapshot.Board)] = time.Now()
@@ -49,14 +50,14 @@ func TestAllInRunoutPacesEachStreetBehindATimer(t *testing.T) {
 	mustDispatch(t, a, ReadyCmd{PlayerID: "p1", Ready: true, Reply: make(chan error, 1)})
 	mustDispatch(t, a, ReadyCmd{PlayerID: "p2", Ready: true, Reply: make(chan error, 1)})
 
-	stored, err := store.LoadTable(ctx, "table-runout-pacing")
+	stored, err := store.LoadTable(ctx, tableID)
 	if err != nil || stored == nil {
 		t.Fatalf("expected hand to have started, got %+v err=%v", stored, err)
 	}
 	first := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
 	mustDispatch(t, a, ActCmd{PlayerID: first, ActionID: "shove", Action: betting.ActionRaise, Amount: 30, Reply: make(chan error, 1)})
 
-	stored, _ = store.LoadTable(ctx, "table-runout-pacing")
+	stored, _ = store.LoadTable(ctx, tableID)
 	second := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
 	callStart := time.Now()
 	mustDispatch(t, a, ActCmd{PlayerID: second, ActionID: "call", Action: betting.ActionCall, Reply: make(chan error, 1)})
@@ -86,9 +87,88 @@ func TestAllInRunoutPacesEachStreetBehindATimer(t *testing.T) {
 		t.Fatalf("expected the turn roughly %v after the all-in call, got %v", a.runoutStreetDelay, elapsed)
 	}
 
-	stored, _ = store.LoadTable(ctx, "table-runout-pacing")
+	stored, _ = store.LoadTable(ctx, tableID)
 	if stored.State.Stage != hand.Complete {
 		t.Fatalf("expected the hand Complete once the runout finishes, got %v", stored.State.Stage)
+	}
+}
+
+// TestRunoutSelfHealsAfterActorDiesMidPace reproduces a fleet failure mode
+// found from production websocket traces: armRunoutTimer is a bare
+// process-local time.AfterFunc with nothing persisted alongside it. If the
+// Actor instance that armed it dies (crash, deploy, lease handoff) before it
+// fires, the hand is stuck forever mid all-in-runout — the board never
+// finishes dealing — even though the persisted table state is perfectly
+// fine and playable. A brand new Actor instance (as if a different fleet
+// node picked the table back up) must self-heal this the moment it loads
+// state at all, even via something as passive as a Snapshot request.
+func TestRunoutSelfHealsAfterActorDiesMidPace(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+
+	tableID := uniqueTableID(t)
+	seed := hand.NewTable([]*hand.Player{{ID: "p1", Stack: 30, Ready: true}, {ID: "p2", Stack: 1000, Ready: true}}, 10, 20)
+	state := seed.ExportState()
+	state.DealerSeat = 0
+	state.DealerDrawn = true
+	ctx := context.Background()
+	if err := store.SeedTable(ctx, tableID, state); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	// First "node": drives the shove + call (the flop is dealt synchronously
+	// inside that Act call, no timer needed yet), then vanishes — its own
+	// runout timer is set absurdly long so it can never fire during this
+	// test, standing in for a node that died before its timer ever went off.
+	gone := New(tableID, store, true, func(string, hand.Snapshot) {})
+	gone.runoutStreetDelay = time.Hour
+	goneCtx, cancelGone := context.WithCancel(ctx)
+	go gone.Run(goneCtx)
+	mustDispatch(t, gone, ReadyCmd{PlayerID: "p1", Ready: true, Reply: make(chan error, 1)})
+	mustDispatch(t, gone, ReadyCmd{PlayerID: "p2", Ready: true, Reply: make(chan error, 1)})
+	stored, err := store.LoadTable(ctx, tableID)
+	if err != nil || stored == nil {
+		t.Fatalf("expected hand to have started, got %+v err=%v", stored, err)
+	}
+	first := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
+	mustDispatch(t, gone, ActCmd{PlayerID: first, ActionID: "shove", Action: betting.ActionRaise, Amount: 30, Reply: make(chan error, 1)})
+	stored, _ = store.LoadTable(ctx, tableID)
+	second := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
+	mustDispatch(t, gone, ActCmd{PlayerID: second, ActionID: "call", Action: betting.ActionCall, Reply: make(chan error, 1)})
+	cancelGone()
+
+	stored, _ = store.LoadTable(ctx, tableID)
+	if stored.State.Stage != hand.Flop {
+		t.Fatalf("expected the flop dealt and the hand stuck awaiting a runout, got stage %v", stored.State.Stage)
+	}
+
+	// Second "node": a fresh Actor for the same table, standing in for
+	// whichever instance next picks this table up. It never sees an Act,
+	// Ready, or any command that mutates game state — only a passive
+	// Snapshot request (the same thing a WS connect issues). ensureLoaded
+	// must still notice the stuck runout and re-arm it from durable state.
+	var mu sync.Mutex
+	firstSeenAt := map[int]time.Time{}
+	revived := New(tableID, store, true, func(_ string, snapshot hand.Snapshot) {
+		mu.Lock()
+		if _, ok := firstSeenAt[len(snapshot.Board)]; !ok {
+			firstSeenAt[len(snapshot.Board)] = time.Now()
+		}
+		mu.Unlock()
+	})
+	revived.runoutStreetDelay = 50 * time.Millisecond
+	revivedCtx, cancelRevived := context.WithCancel(ctx)
+	t.Cleanup(cancelRevived)
+	go revived.Run(revivedCtx)
+
+	mustDispatch(t, revived, SnapshotCmd{PlayerID: "p1", Snapshot: make(chan hand.Snapshot, 1), Reply: make(chan error, 1)})
+
+	waitForBoardLen(t, &mu, firstSeenAt, 5, 3*time.Second)
+
+	stored, _ = store.LoadTable(ctx, tableID)
+	if stored.State.Stage != hand.Complete {
+		t.Fatalf("expected the revived actor's re-armed runout to finish the hand, got stage %v", stored.State.Stage)
 	}
 }
 

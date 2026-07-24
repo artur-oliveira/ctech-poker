@@ -72,8 +72,8 @@ export default function Lobby() {
       <nav className="app-nav shell"><Link href="/" className="brand"><span
         className="brand-mark"><Club/></span>CTech <b>Poker</b></Link>
         <div className="header-right">
-          <Link href="/guide"><BookOpen/> Guia</Link>
-          <Link href="/leaderboard"><Trophy/> Ranking</Link>
+          <Link href="/guide"><BookOpen/> <span className="header-right-label">Guia</span></Link>
+          <Link href="/leaderboard"><Trophy/> <span className="header-right-label">Ranking</span></Link>
           <ProfileMenu/>
         </div>
       </nav>

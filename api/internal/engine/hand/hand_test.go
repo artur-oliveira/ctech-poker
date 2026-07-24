@@ -14,6 +14,11 @@ func TestFullHandWithThreeWayAllInProducesCorrectPayouts(t *testing.T) {
 		{ID: "BB", Stack: 1000, Ready: true},
 	}
 	table := NewTable(players, 10, 20)
+	// Scenario names encode the intended seat positions (see the action
+	// sequence below) rather than leaving the first hand's dealer to a
+	// random draw.
+	table.dealerSeat = 0
+	table.dealerDrawn = true
 
 	if err := table.StartHand(); err != nil {
 		t.Fatalf("StartHand: %v", err)
@@ -39,11 +44,15 @@ func TestFullHandWithThreeWayAllInProducesCorrectPayouts(t *testing.T) {
 	table.shuffle.Cards[9] = deck.Card{Rank: deck.Three, Suit: deck.Spades}
 	table.shuffle.Cards[10] = deck.Card{Rank: deck.Four, Suit: deck.Hearts}
 
-	// Pre-flop: Dealer raises to 220 (their whole intent), SB shoves all-in
-	// for 200 total (a short all-in — SB already posted 10 as small blind,
-	// so calling Dealer's raise plus going all-in uses the remaining 190 of
-	// their 200 stack; Table.Act redirects this ActionRaise to a Call since
-	// 200 can't reach the 220 current bet), BB calls.
+	// Pre-flop (dealer pinned above, so seat order is exact): Dealer is UTG
+	// and raises to 220 (their whole intent), SB shoves all-in for 200 total
+	// (a short all-in — SB already posted 10 as small blind, so calling
+	// Dealer's raise plus going all-in uses the remaining 190 of their 200
+	// stack; Table.Act redirects this ActionRaise to a Call since 200 can't
+	// reach the 220 current bet), BB calls and closes the round -- neither
+	// SB's short all-in nor BB's call was a real raise, so Dealer's own
+	// raise already satisfied their own action requirement and they owe
+	// nothing further this street.
 	if err := table.Act("Dealer", betting.ActionRaise, 220); err != nil {
 		t.Fatalf("Dealer raises to 220: %v", err)
 	}
@@ -53,21 +62,23 @@ func TestFullHandWithThreeWayAllInProducesCorrectPayouts(t *testing.T) {
 	if err := table.Act("BB", betting.ActionCall, 220); err != nil {
 		t.Fatalf("BB calls 220: %v", err)
 	}
-	if err := table.Act("Dealer", betting.ActionCall, 220); err != nil {
-		t.Fatalf("Dealer calls the short all-in (owes nothing more, already at 220): %v", err)
+	if table.Stage() != Flop {
+		t.Fatalf("expected the flop once BB's call closed pre-flop action, got %v", table.Stage())
 	}
 
 	// SB is all-in with 200 total in the pot; Dealer and BB each have 220 in.
 	// Main pot: 200*3=600, eligible all three. Side pot: 20*2=40, eligible
 	// Dealer+BB only. Play remaining streets with both non-all-in players
-	// checking through (SB has no more decisions — they're all-in).
+	// checking through (SB has no more decisions — they're all-in). Post-flop
+	// action starts left of the button and skips the all-in SB, so BB checks
+	// first each street, then Dealer.
 	for table.Stage() != Showdown && table.Stage() != Complete {
-		for _, id := range []string{"Dealer", "BB"} {
-			if table.currentPlayerCanAct(id) {
-				if err := table.Act(id, betting.ActionCheck, 0); err != nil {
-					t.Fatalf("check on %v for %s: %v", table.Stage(), id, err)
-				}
-			}
+		id := table.CurrentPlayerIDForActor()
+		if id == "" {
+			t.Fatalf("no player currently on turn but hand did not reach Showdown/Complete (stage %v)", table.Stage())
+		}
+		if err := table.Act(id, betting.ActionCheck, 0); err != nil {
+			t.Fatalf("check on %v for %s: %v", table.Stage(), id, err)
 		}
 	}
 
@@ -472,6 +483,12 @@ func TestOrphanedSidePotLayerIsRefundedNotDropped(t *testing.T) {
 		{ID: "D2", Stack: 2000, Ready: true},
 	}
 	table := NewTable(players, 10, 20)
+	// Pin the dealer to C (index 1) so blindSeats assigns SB/BB to D1/D2 and
+	// pre-flop action starts at A (index 0), matching the hardcoded sequence
+	// below deterministically rather than leaving it to the random initial
+	// dealer draw.
+	table.dealerSeat = 1
+	table.dealerDrawn = true
 	if err := table.StartHand(); err != nil {
 		t.Fatalf("StartHand: %v", err)
 	}
@@ -480,7 +497,8 @@ func TestOrphanedSidePotLayerIsRefundedNotDropped(t *testing.T) {
 	}
 
 	// Pre-flop: A and C shove all-in for 100 each (their whole stack); D1
-	// (posted BB) and D2 call the 100, both staying active with room behind.
+	// (posted SB) and D2 (posted BB) call the 100, both staying active with
+	// room behind.
 	if err := table.Act("A", betting.ActionRaise, 100); err != nil {
 		t.Fatalf("A shoves all-in for 100: %v", err)
 	}
@@ -565,7 +583,7 @@ func TestDealerButtonRotatesBetweenHands(t *testing.T) {
 
 	// Play hand 1 out to completion with everyone just calling/checking —
 	// the point of this test is dealer rotation, not showdown math.
-	playToCompletion(t, table, []string{"P1", "P2", "P3"})
+	playToCompletion(t, table)
 	if table.Stage() != Complete {
 		t.Fatalf("expected hand 1 to reach Complete, got %v", table.Stage())
 	}
@@ -691,23 +709,18 @@ func TestHandOutcomeIncludesPayoutsAndContributions(t *testing.T) {
 	}
 }
 
-func playToCompletion(t *testing.T, table *Table, playerIDs []string) {
+func playToCompletion(t *testing.T, table *Table) {
 	t.Helper()
 	for i := 0; table.Stage() != Complete; i++ {
 		if i > 1000 {
 			t.Fatalf("hand did not reach Complete after 1000 action rounds — possible stall (Finding 1 regression?)")
 		}
-		acted := false
-		for _, id := range playerIDs {
-			if table.currentPlayerCanAct(id) {
-				if err := table.Act(id, betting.ActionCall, 0); err != nil {
-					t.Fatalf("Act(%s, Call): %v", id, err)
-				}
-				acted = true
-			}
+		current := table.CurrentPlayerIDForActor()
+		if current == "" {
+			t.Fatalf("no player currently on turn but hand did not reach Complete (stage %v) — possible stall", table.Stage())
 		}
-		if !acted && table.Stage() != Complete {
-			t.Fatalf("no player could act but hand did not reach Complete (stage %v) — possible stall", table.Stage())
+		if err := table.Act(current, betting.ActionCall, 0); err != nil {
+			t.Fatalf("Act(%s, Call): %v", current, err)
 		}
 	}
 }
@@ -771,5 +784,133 @@ func TestBustedHeadsUpPlayerCannotStartDegenerateSoloHand(t *testing.T) {
 	}
 	if table.Stage() != WaitingForPlayers {
 		t.Fatalf("table must fall back to WaitingForPlayers, not stay stuck on Complete, got stage %v", table.Stage())
+	}
+}
+
+// TestAllInRunoutWaitsForFacingPlayerToRespond reproduces a production bug
+// found from real websocket traces: as soon as one heads-up player shoves
+// all-in, IsAwaitingRunoutForActor was computed purely from player STATE
+// (only one player left Active) with no check that the still-Active player
+// had actually matched the bet. That let the paced runout timer start
+// dealing streets straight to Complete the instant the shove landed — one
+// Act() call before the facing player had any chance to call or fold. Their
+// decision was silently skipped and their Contributed stayed frozen at its
+// pre-shove amount.
+func TestAllInRunoutWaitsForFacingPlayerToRespond(t *testing.T) {
+	players := []*Player{
+		{ID: "P1", Stack: 1000, Ready: true}, // dealer/SB
+		{ID: "P2", Stack: 100, Ready: true},  // BB, short stack
+	}
+	table := NewTable(players, 10, 20)
+	table.dealerSeat = 0
+	table.dealerDrawn = true
+
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	// Pre-flop, heads-up: SB (P1) acts first.
+	if err := table.Act("P1", betting.ActionCall, 0); err != nil {
+		t.Fatalf("P1 calls to close pre-flop: %v", err)
+	}
+	if err := table.Act("P2", betting.ActionCheck, 0); err != nil {
+		t.Fatalf("P2 checks to close pre-flop: %v", err)
+	}
+	if table.Stage() != Flop {
+		t.Fatalf("expected Flop after pre-flop closes, got %v", table.Stage())
+	}
+
+	// Post-flop, heads-up: BB (P2) acts first and shoves their entire
+	// remaining stack (80, after posting the 20 big blind).
+	if err := table.Act("P2", betting.ActionRaise, 80); err != nil {
+		t.Fatalf("P2 shoves all-in for 80: %v", err)
+	}
+	if table.Stage() != Flop {
+		t.Fatalf("shoving must not itself advance the stage, got %v", table.Stage())
+	}
+	if table.IsAwaitingRunoutForActor() {
+		t.Fatal("must not treat this as an all-in runout yet — P1 hasn't called or folded the shove")
+	}
+	if current := table.CurrentPlayerIDForActor(); current != "P1" {
+		t.Fatalf("P1 must still be on the hook to call/fold the shove, current player is %q", current)
+	}
+
+	// Now P1 actually responds — only then may the runout proceed.
+	if err := table.Act("P1", betting.ActionCall, 0); err != nil {
+		t.Fatalf("P1 calls the all-in: %v", err)
+	}
+	if table.Stage() != Turn {
+		t.Fatalf("expected the runout to deal the turn immediately once P1's call closed the action, got %v", table.Stage())
+	}
+	if p1 := table.playerByID("P1"); p1.Contributed != 100 {
+		t.Fatalf("P1's call must actually add chips to the pot, got Contributed=%d", p1.Contributed)
+	}
+
+	table.AdvanceRunoutStreetForActor() // river
+	if table.Stage() != Complete {
+		t.Fatalf("expected Complete once the river is dealt, got %v", table.Stage())
+	}
+}
+
+// TestUncalledAllInExcessIsNotCountedAsAWin reproduces a second production
+// bug found alongside the one above: an all-in shove's uncalled excess forms
+// its own side-pot layer with exactly one eligible contributor. runShowdown's
+// winner-determination loop trivially declared that lone contributor the
+// "winner" of their own returned money, adding them to HandOutcome.Winners
+// (and, since they were ever all-in, ComebackWinners too) — so the losing
+// all-in player fired win/comeback achievements for a hand they lost, purely
+// because their overbet came back to them.
+func TestUncalledAllInExcessIsNotCountedAsAWin(t *testing.T) {
+	players := []*Player{
+		{ID: "Shover", Stack: 1000, Ready: true},
+		{ID: "Caller", Stack: 100, Ready: true},
+	}
+	table := NewTable(players, 10, 20)
+	table.dealerSeat = 0 // Shover is dealer/SB
+	table.dealerDrawn = true
+
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	// Rig the deal so Caller's pocket aces beat Shover's weak hole cards —
+	// Caller wins outright despite being the short stack. Board avoids
+	// pairing/straightening/flushing Shover's 5c6c (no 3/4/7-8 run, no third
+	// club) so Caller's pair of aces is the unambiguous winner.
+	players[0].HoleCards = [2]deck.Card{{Rank: deck.Five, Suit: deck.Clubs}, {Rank: deck.Six, Suit: deck.Clubs}}
+	players[1].HoleCards = [2]deck.Card{{Rank: deck.Ace, Suit: deck.Spades}, {Rank: deck.Ace, Suit: deck.Hearts}}
+	table.shuffle.Cards[4] = deck.Card{Rank: deck.King, Suit: deck.Diamonds}
+	table.shuffle.Cards[5] = deck.Card{Rank: deck.Queen, Suit: deck.Hearts}
+	table.shuffle.Cards[6] = deck.Card{Rank: deck.Nine, Suit: deck.Spades}
+	table.shuffle.Cards[7] = deck.Card{Rank: deck.Two, Suit: deck.Clubs}
+	table.shuffle.Cards[8] = deck.Card{Rank: deck.Seven, Suit: deck.Diamonds}
+
+	if err := table.Act("Shover", betting.ActionRaise, 1000); err != nil {
+		t.Fatalf("Shover shoves all-in for 1000: %v", err)
+	}
+	if err := table.Act("Caller", betting.ActionCall, 0); err != nil {
+		t.Fatalf("Caller calls all-in for their remaining 90: %v", err)
+	}
+	table.AdvanceRunoutStreetForActor()
+	table.AdvanceRunoutStreetForActor()
+	if table.Stage() != Complete {
+		t.Fatalf("expected Complete, got %v", table.Stage())
+	}
+
+	outcome := table.LastOutcomeForActor()
+	for _, id := range outcome.Winners {
+		if id == "Shover" {
+			t.Fatal("Shover lost the hand — must not appear in Winners just because their uncalled excess was refunded")
+		}
+	}
+	for _, id := range outcome.ComebackWinners {
+		if id == "Shover" {
+			t.Fatal("Shover lost the hand — must not appear in ComebackWinners")
+		}
+	}
+	payouts := table.Payouts()
+	if payouts["Shover"] != 900 { // 1000 shoved - 100 matched by Caller, refunded uncalled
+		t.Fatalf("Shover must still get their uncalled 900 back, got %d", payouts["Shover"])
+	}
+	if payouts["Caller"] != 200 { // 100+100 matched pot, Caller's rigged aces win it
+		t.Fatalf("Caller must win the contested 200 pot, got %d", payouts["Caller"])
 	}
 }

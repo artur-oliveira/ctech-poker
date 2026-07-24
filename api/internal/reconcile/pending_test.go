@@ -24,7 +24,7 @@ func testClient(t *testing.T) *dynamodb.Client {
 		t.Fatalf("load aws config: %v", err)
 	}
 	return dynamodb.NewFromConfig(cfg, func(o *dynamodb.Options) {
-		o.BaseEndpoint = aws.String("http://localhost:8000")
+		o.BaseEndpoint = aws.String("http://localhost:8555")
 	})
 }
 

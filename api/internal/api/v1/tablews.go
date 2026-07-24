@@ -127,7 +127,17 @@ func (l *seatLimiter) Allow(playerID string) bool {
 // gateway is independently testable without Phase 3's room service. Any
 // instance may accept any table's connection directly — there is no
 // "owner" to proxy to under ARCHITECTURE.md §2's revised model.
-func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager *tablemanager.Manager, reg ws.Registry, allowedOrigins []string, seed func(tableID string) func() *hand.Table, rooms *roomstore.Store, cfg *config.Config, players *player.Service) {
+func RegisterTableWS(
+	router fiber.Router,
+	verifier *jwtverify.Verifier,
+	manager *tablemanager.Manager,
+	reg ws.Registry,
+	allowedOrigins []string,
+	seed func(tableID string) func() *hand.Table,
+	rooms *roomstore.Store,
+	cfg *config.Config,
+	players *player.Service,
+) {
 	upgrader := fws.FastHTTPUpgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,

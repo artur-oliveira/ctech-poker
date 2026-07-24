@@ -158,12 +158,76 @@ func (t *Table) currentPlayerToAct() string {
 	if !isBettingStage(t.stage) || t.round == nil {
 		return ""
 	}
-	for _, p := range t.players {
-		if t.currentPlayerCanAct(p.ID) {
-			return p.ID
+	for _, id := range t.actionScanOrder() {
+		if t.currentPlayerCanAct(id) {
+			return id
 		}
 	}
 	return ""
+}
+
+// actionScanOrder returns every player dealt into this hand (t.handOrder --
+// stable for the whole hand, unlike t.roundIdx which drops folded players
+// street to street) rotated to start at the seat that must act first this
+// street: left of the big blind pre-flop, left of the button post-flop
+// (heads-up's button IS the small blind, so post-flop "left of the button"
+// already resolves to the big blind seat -- no extra heads-up special case
+// needed there; blindSeats already special-cases heads-up for the pre-flop
+// assignment itself). currentPlayerCanAct (called by every consumer of this
+// order) already filters out anyone folded/all-in/not in the current round,
+// so a still-included-but-ineligible seat here is harmless.
+//
+// The anchor MUST be handOrder-relative, not roundIdx-relative: roundIdx is
+// rebuilt fresh (and shrinks) at the start of every street via
+// startBettingRound(t.activePlayers(), ...), which excludes anyone already
+// folded. If the button itself had folded, computing the anchor against that
+// shrunken set would make dealerIndexWithin's "not found" fallback silently
+// default to index 0 of whatever remained -- an arbitrary seat, not the
+// actual button -- corrupting the rotation for every other seat still in the
+// hand. handOrder never shrinks mid-hand, so the button is always found at
+// its real seat regardless of who has folded since.
+//
+// currentPlayerToAct previously scanned t.players in raw join order, which
+// only happened to match real action order when the dealer draw/rotation put
+// the correct first-to-act player at the lowest join-order index -- any other
+// case (most hands, since the dealer rotates every hand while join order
+// never changes) let the wrong seat act first, e.g. the big blind checking
+// before the small blind/dealer had a chance to act heads-up. Recomputed
+// fresh from persisted state alone (t.players + t.handOrder + t.dealerSeat +
+// t.stage) on every call rather than cached, so an instance recovering
+// mid-round needs no separate restore path for it.
+func (t *Table) actionScanOrder() []string {
+	// Membership is checked by ID, not pointer identity: t.players and
+	// t.handOrder are the SAME *Player pointers only within one in-memory
+	// Table built by a single StartHand call. Once a Table round-trips
+	// through NewTableFromState (every real command after the first, via
+	// table.Actor's ensureLoaded), State.Players and State.HandOrder are
+	// decoded as independently-allocated structs -- comparing by pointer
+	// would silently match nobody and empty out `active` every time.
+	dealt := make(map[string]bool, len(t.handOrder))
+	for _, p := range t.handOrder {
+		dealt[p.ID] = true
+	}
+	active := make([]*Player, 0, len(t.handOrder))
+	for _, p := range t.players {
+		if dealt[p.ID] {
+			active = append(active, p)
+		}
+	}
+	n := len(active)
+	if n == 0 {
+		return nil
+	}
+	startIdx := (t.dealerIndexWithin(active) + 1) % n
+	if t.stage == PreFlop {
+		_, bbIdx := t.blindSeats(active)
+		startIdx = (bbIdx + 1) % n
+	}
+	order := make([]string, n)
+	for i := 0; i < n; i++ {
+		order[i] = active[(startIdx+i)%n].ID
+	}
+	return order
 }
 
 // legalActionsFor returns the authoritative moves viewerID may make given the
@@ -217,14 +281,16 @@ func (t *Table) legalActionsFor(viewerID, current string) *LegalActions {
 	return la
 }
 
-// playerToActForTest returns the ID of whichever player currentPlayerCanAct
-// reports true for — test-only helper so snapshot_test.go can drive a hand to
+// playerToActForTest returns the ID of whoever must act now — test-only
+// alias for currentPlayerToAct so snapshot_test.go can drive a hand to
 // completion without hardcoding seat order (which depends on
-// dealerIndexWithin).
+// dealerIndexWithin). Unlike currentPlayerToAct, it isn't gated on
+// isBettingStage/t.round==nil, matching its previous behavior of scanning
+// currentPlayerCanAct directly regardless of stage.
 func (t *Table) playerToActForTest() string {
-	for _, p := range t.players {
-		if t.currentPlayerCanAct(p.ID) {
-			return p.ID
+	for _, id := range t.actionScanOrder() {
+		if t.currentPlayerCanAct(id) {
+			return id
 		}
 	}
 	return ""

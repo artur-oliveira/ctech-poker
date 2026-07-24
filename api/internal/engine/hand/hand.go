@@ -413,7 +413,15 @@ func (t *Table) StartHand() error {
 	t.postBlind(active[sbSeat], t.smallBlind)
 	t.postBlind(active[bbSeat], t.bigBlind)
 	for _, p := range active {
-		if newEntrants[p.ID] && p != active[bbSeat] {
+		// A new entrant who lands in the SB or BB seat this very hand is
+		// already posting a blind above via the normal seat-based post — an
+		// additional "pay a big blind to enter" charge on top would leave
+		// them contributed more than t.round.CurrentBet (still just
+		// t.bigBlind, set below), which currentPlayerCanAct/IsComplete can
+		// never resolve via a check: both require Contributed to exactly
+		// equal CurrentBet, so that seat would stay "current" forever and
+		// the hand would hang.
+		if newEntrants[p.ID] && p != active[bbSeat] && p != active[sbSeat] {
 			t.postBlind(p, t.bigBlind)
 		}
 	}
@@ -665,6 +673,15 @@ func (t *Table) currentPlayerCanAct(id string) bool {
 	if !ok {
 		return false
 	}
+	// t.round/t.roundIdx are never reset on Complete, so they still hold the
+	// finished hand's last betting round. That's normally harmless (everyone
+	// left in it is Folded/AllIn/already-acted), but if id was since removed
+	// from t.players entirely (RemovePlayerForActor, e.g. a disconnect-kick)
+	// their leftover roundIdx entry must not be trusted — t.playerByID(id)
+	// below would return nil and Act's p.State assignment would panic.
+	if t.playerByID(id) == nil {
+		return false
+	}
 	bs := t.round.Players[idx]
 	return !bs.Folded && !bs.AllIn && (!bs.ActedSinceLastFullRaise || bs.Contributed != t.round.CurrentBet)
 }
@@ -836,6 +853,16 @@ func (t *Table) IsAwaitingRunoutForActor() bool {
 	if t.stage != Flop && t.stage != Turn {
 		return false
 	}
+	// canStillAct <= 1 alone isn't enough: it goes true the instant a player
+	// shoves all-in, one Act() call before the other player (still Active,
+	// still owing a call) has had any chance to respond. Without this gate,
+	// the paced runout timer starts dealing streets straight to showdown
+	// while that call/fold decision is still outstanding — the facing
+	// player's action is silently skipped. Only treat it as a genuine
+	// all-in runout once the live betting round has actually closed.
+	if t.round != nil && !t.round.IsComplete() {
+		return false
+	}
 	remaining, canStillAct := t.countRemainingAndActable()
 	return remaining > 1 && canStillAct <= 1
 }
@@ -872,11 +899,26 @@ func (t *Table) runShowdown() {
 	var winningScore handeval.Score
 	remainingRakeCap := t.rakeCap()
 	for _, layer := range layers {
+		if len(layer.Eligible) == 1 {
+			// Only one player ever contributed to this layer — it's an
+			// uncalled bet, not a contested pot. Nobody else ever had a
+			// stake in it, so it's never a "win": no rake, and the sole
+			// contributor must not land in Winners/ComebackWinners (that
+			// falsely fires win/comeback achievements for a player who lost
+			// their actual showdown and just got their own excess back).
+			payouts[layer.Eligible[0]] += layer.Amount
+			continue
+		}
 		var winners []string
 		var bestScore handeval.Score
 		for _, id := range layer.Eligible {
 			p := t.playerByID(id)
-			if p.State == Folded {
+			// p should always be found (handOrder is pointer-aliased to
+			// players — see NewTableFromState), but a removed-mid-hand player
+			// (a since-fixed actor-level race could still theoretically
+			// produce this) must never crash a showdown that seats real
+			// money: treat them as ineligible to win rather than panic.
+			if p == nil || p.State == Folded {
 				continue
 			}
 			var full [7]deck.Card
@@ -936,7 +978,17 @@ func (t *Table) runShowdown() {
 		}
 	}
 	for id, amount := range payouts {
-		t.playerByID(id).Stack += amount
+		// A payout recipient who left t.players entirely before showdown
+		// resolved (RemovePlayerForActor allows removal once stage reaches
+		// WaitingForPlayers/Complete, but never clears t.handOrder — a stale
+		// handOrder entry can outlive that removal until the next StartHand)
+		// has nowhere left to credit these chips. Their own stack was
+		// already cashed out at removal time, before this outcome was known,
+		// so the amount is an orphaned artifact of the race rather than
+		// money either side is still owed — drop it rather than panic.
+		if p := t.playerByID(id); p != nil {
+			p.Stack += amount
+		}
 	}
 	for _, p := range t.handOrder {
 		if p.Stack <= 0 {

@@ -12,24 +12,30 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
 
-func newTestActor(t *testing.T, store *tablestore.Store) *Actor {
+// newTestActor seeds a fresh 2-player table under a tableID derived from the
+// calling test's name (t.Name()), never a shared literal — tablestore.SeedTable
+// is put-if-absent, so a hardcoded ID silently reuses whatever state a
+// PREVIOUSLY run test left behind against a persistent DynamoDB Local
+// instance, instead of the fresh state this test thinks it just seeded.
+func newTestActor(t *testing.T, store *tablestore.Store) (*Actor, string) {
 	t.Helper()
+	tableID := uniqueTableID(t)
 	seed := hand.NewTable([]*hand.Player{{ID: "p1", Stack: 1000}, {ID: "p2", Stack: 1000}}, 10, 20)
-	if err := store.SeedTable(context.Background(), "table-1", seed.ExportState()); err != nil {
+	if err := store.SeedTable(context.Background(), tableID, seed.ExportState()); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	a := New("table-1", store, true, func(string, hand.Snapshot) {})
+	a := New(tableID, store, true, func(string, hand.Snapshot) {})
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go a.Run(ctx)
-	return a
+	return a, tableID
 }
 
 func TestActorCommitsReadyThenAct(t *testing.T) {
 	db := testClient(t)
 	store := tablestore.NewStore(db, "table_test")
 	mustCreateTestTables(t, db, "table_test")
-	a := newTestActor(t, store)
+	a, tableID := newTestActor(t, store)
 
 	reply := make(chan error, 1)
 	if err := a.Dispatch(ReadyCmd{PlayerID: "p1", Ready: true, Reply: reply}); err != nil {
@@ -40,24 +46,18 @@ func TestActorCommitsReadyThenAct(t *testing.T) {
 		t.Fatalf("ready p2: %v", err)
 	}
 
-	stored, err := store.LoadTable(context.Background(), "table-1")
+	stored, err := store.LoadTable(context.Background(), tableID)
 	if err != nil || stored == nil || stored.State.Stage == hand.WaitingForPlayers {
 		t.Fatalf("expected hand to have started and committed, got %+v err=%v", stored, err)
 	}
 
-	var seat string
-	for _, s := range stored.State.Players {
-		if hand.NewTableFromState(stored.State).CurrentPlayerCanActForActor(s.ID) {
-			seat = s.ID
-			break
-		}
-	}
+	seat := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
 	reply3 := make(chan error, 1)
 	if err := a.Dispatch(ActCmd{PlayerID: seat, ActionID: "a1", Action: betting.ActionCall, Reply: reply3}); err != nil {
 		t.Fatalf("act: %v", err)
 	}
 
-	stored, err = store.LoadTable(context.Background(), "table-1")
+	stored, err = store.LoadTable(context.Background(), tableID)
 	if err != nil || stored.Version < 3 {
 		t.Fatalf("expected version to have advanced past ready+ready+act, got %+v err=%v", stored, err)
 	}
@@ -67,23 +67,17 @@ func TestActorRecoversFromVersionConflictAndRetriesOnce(t *testing.T) {
 	db := testClient(t)
 	store := tablestore.NewStore(db, "table_test")
 	mustCreateTestTables(t, db, "table_test")
-	a := newTestActor(t, store)
+	a, tableID := newTestActor(t, store)
 
 	reply := make(chan error, 1)
 	_ = a.Dispatch(ReadyCmd{PlayerID: "p1", Ready: true, Reply: reply})
 	reply2 := make(chan error, 1)
 	_ = a.Dispatch(ReadyCmd{PlayerID: "p2", Ready: true, Reply: reply2})
 
-	stored, _ := store.LoadTable(context.Background(), "table-1")
-	_ = store.CommitAction(context.Background(), "table-1", stored.HandID, "", stored.Version, stored.State, tablestore.ActionLogEntry{TableID: "table-1", HandID: stored.HandID, Version: stored.Version + 1})
+	stored, _ := store.LoadTable(context.Background(), tableID)
+	_ = store.CommitAction(context.Background(), tableID, stored.HandID, "", stored.Version, stored.State, tablestore.ActionLogEntry{TableID: tableID, HandID: stored.HandID, Version: stored.Version + 1})
 
-	var seat string
-	for _, s := range stored.State.Players {
-		if hand.NewTableFromState(stored.State).CurrentPlayerCanActForActor(s.ID) {
-			seat = s.ID
-			break
-		}
-	}
+	seat := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
 	reply3 := make(chan error, 1)
 	if err := a.Dispatch(ActCmd{PlayerID: seat, ActionID: "a1", Action: betting.ActionCall, Reply: reply3}); err != nil {
 		t.Fatalf("expected the Actor to reload and retry past the version conflict, got: %v", err)
@@ -99,6 +93,7 @@ func TestReadyFalseMarksSittingOutAndReadyTrueReturnsFree(t *testing.T) {
 	store := tablestore.NewStore(db, "table_test")
 	mustCreateTestTables(t, db, "table_test")
 
+	tableID := uniqueTableID(t)
 	seed := hand.NewTable([]*hand.Player{
 		{ID: "p1", Stack: 1000, Ready: true},
 		{ID: "p2", Stack: 1000, Ready: true},
@@ -109,10 +104,10 @@ func TestReadyFalseMarksSittingOutAndReadyTrueReturnsFree(t *testing.T) {
 	state.DealerSeat = 0
 	state.DealerDrawn = true
 	ctx := context.Background()
-	if err := store.SeedTable(ctx, "table-1", state); err != nil {
+	if err := store.SeedTable(ctx, tableID, state); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	a := New("table-1", store, true, func(string, hand.Snapshot) {})
+	a := New(tableID, store, true, func(string, hand.Snapshot) {})
 	runCtx, cancel := context.WithCancel(ctx)
 	t.Cleanup(cancel)
 	go a.Run(runCtx)
@@ -121,7 +116,7 @@ func TestReadyFalseMarksSittingOutAndReadyTrueReturnsFree(t *testing.T) {
 	if err := a.Dispatch(ReadyCmd{PlayerID: "p4", Ready: false, Reply: reply}); err != nil {
 		t.Fatalf("ReadyCmd(false): %v", err)
 	}
-	stored, _ := store.LoadTable(ctx, "table-1")
+	stored, _ := store.LoadTable(ctx, tableID)
 	for _, s := range stored.State.Players {
 		if s.ID == "p4" && s.State != hand.SittingOut {
 			t.Fatalf("expected p4 to be SittingOut after ready:false, got %v", s.State)
@@ -132,7 +127,7 @@ func TestReadyFalseMarksSittingOutAndReadyTrueReturnsFree(t *testing.T) {
 	if err := a.Dispatch(ReadyCmd{PlayerID: "p4", Ready: true, Reply: reply2}); err != nil {
 		t.Fatalf("ReadyCmd(true): %v", err)
 	}
-	stored, _ = store.LoadTable(ctx, "table-1")
+	stored, _ = store.LoadTable(ctx, tableID)
 	for _, s := range stored.State.Players {
 		if s.ID == "p4" && s.State == hand.SittingOut {
 			t.Fatal("expected p4's free return (not projected SB/BB) to clear SittingOut immediately")
@@ -144,7 +139,7 @@ func TestShowCardsCmdRevealsFoldedWinnerToEveryone(t *testing.T) {
 	db := testClient(t)
 	store := tablestore.NewStore(db, "table_test")
 	mustCreateTestTables(t, db, "table_test")
-	a := newTestActor(t, store)
+	a, tableID := newTestActor(t, store)
 	ctx := context.Background()
 
 	reply := make(chan error, 1)
@@ -152,7 +147,7 @@ func TestShowCardsCmdRevealsFoldedWinnerToEveryone(t *testing.T) {
 	reply2 := make(chan error, 1)
 	_ = a.Dispatch(ReadyCmd{PlayerID: "p2", Ready: true, Reply: reply2})
 
-	stored, _ := store.LoadTable(ctx, "table-1")
+	stored, _ := store.LoadTable(ctx, tableID)
 	toAct := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
 	winnerID := "p1"
 	if toAct == "p1" {
@@ -167,7 +162,7 @@ func TestShowCardsCmdRevealsFoldedWinnerToEveryone(t *testing.T) {
 	if err := a.Dispatch(ShowCardsCmd{PlayerID: winnerID, Reply: reply4}); err != nil {
 		t.Fatalf("ShowCardsCmd: %v", err)
 	}
-	stored, _ = store.LoadTable(ctx, "table-1")
+	stored, _ = store.LoadTable(ctx, tableID)
 	table := hand.NewTableFromState(stored.State)
 	view := table.ViewFor(toAct)
 	for _, s := range view.Seats {
@@ -181,7 +176,7 @@ func TestOnHandCompleteReceivesNonEmptyHandID(t *testing.T) {
 	db := testClient(t)
 	store := tablestore.NewStore(db, "table_test")
 	mustCreateTestTables(t, db, "table_test")
-	a := newTestActor(t, store)
+	a, tableID := newTestActor(t, store)
 	var gotHandID string
 	a.SetOnHandCompleteForActor(func(handID string, outcome hand.HandOutcome) {
 		gotHandID = handID
@@ -191,7 +186,7 @@ func TestOnHandCompleteReceivesNonEmptyHandID(t *testing.T) {
 	_ = a.Dispatch(ReadyCmd{PlayerID: "p1", Ready: true, Reply: reply})
 	reply2 := make(chan error, 1)
 	_ = a.Dispatch(ReadyCmd{PlayerID: "p2", Ready: true, Reply: reply2})
-	stored, _ := store.LoadTable(context.Background(), "table-1")
+	stored, _ := store.LoadTable(context.Background(), tableID)
 	toAct := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
 	reply3 := make(chan error, 1)
 	_ = a.Dispatch(ActCmd{PlayerID: toAct, ActionID: "a1", Action: betting.ActionFold, Reply: reply3})

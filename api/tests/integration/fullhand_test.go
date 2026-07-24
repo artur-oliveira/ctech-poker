@@ -62,7 +62,7 @@ func TestFullHandJoinBetRaiseFold(t *testing.T) {
 
 	mgr := tablemanager.NewManager(tablelease.NewService(backend), store, nil, nil)
 	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
-	actor, err := mgr.GetOrCreateActor(context.Background(), "table-full-hand", seed)
+	actor, err := mgr.GetOrCreateActor(context.Background(), uniqueTableID(t), seed)
 	if err != nil {
 		t.Fatalf("acquire actor: %v", err)
 	}

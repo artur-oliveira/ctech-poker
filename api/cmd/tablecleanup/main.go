@@ -55,6 +55,7 @@ func run(ctx context.Context, stale staleQuerier, rooms roomLookup, wallet sandb
 	if err != nil {
 		return fmt.Errorf("tablecleanup: query stale: %w", err)
 	}
+	slog.Info("tablecleanup: sweep complete", "stale_found", len(tables))
 
 	for _, st := range tables {
 		room, err := rooms.Get(ctx, st.TableID)

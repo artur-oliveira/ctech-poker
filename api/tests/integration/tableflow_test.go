@@ -5,7 +5,10 @@ package integration
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -19,6 +22,20 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
+
+var uniqueTableIDSeq atomic.Int64
+
+// uniqueTableID scopes a tableID to both this test's name AND this process
+// invocation. tablemanager.GetOrCreateActor only seeds a table when
+// store.LoadTable finds nothing yet -- against a persistent (non-restarted)
+// DynamoDB Local, a hardcoded literal ID would silently pick up whatever
+// state a PREVIOUS run of the same test left behind instead of starting
+// fresh, since t.Name() alone repeats identically across separate `go test`
+// invocations.
+func uniqueTableID(t *testing.T) string {
+	t.Helper()
+	return fmt.Sprintf("table-%s-%d-%d", t.Name(), time.Now().UnixNano(), uniqueTableIDSeq.Add(1))
+}
 
 func testDynamoClient(t *testing.T) *dynamodb.Client {
 	t.Helper()
@@ -61,6 +78,7 @@ func TestTwoInstancesRacingSameTableResolveDeterministically(t *testing.T) {
 	db := testDynamoClient(t)
 	store := tablestore.NewStore(db, "flow_test")
 	mustCreatePokerTables(t, db, "flow_test")
+	tableID := uniqueTableID(t)
 
 	seed := func() *hand.Table {
 		return hand.NewTable([]*hand.Player{{ID: "p1", Stack: 1000}, {ID: "p2", Stack: 1000}}, 10, 20)
@@ -71,11 +89,11 @@ func TestTwoInstancesRacingSameTableResolveDeterministically(t *testing.T) {
 	mgrA := tablemanager.NewManager(tablelease.NewService(backend), store, nil, nil)
 	mgrB := tablemanager.NewManager(tablelease.NewService(backend), store, nil, nil)
 
-	actorA, err := mgrA.GetOrCreateActor(context.Background(), "table-race", seed)
+	actorA, err := mgrA.GetOrCreateActor(context.Background(), tableID, seed)
 	if err != nil {
 		t.Fatalf("acquire on instance A: %v", err)
 	}
-	actorB, err := mgrB.GetOrCreateActor(context.Background(), "table-race", seed)
+	actorB, err := mgrB.GetOrCreateActor(context.Background(), tableID, seed)
 	if err != nil {
 		t.Fatalf("acquire on instance B: %v", err)
 	}
@@ -89,7 +107,7 @@ func TestTwoInstancesRacingSameTableResolveDeterministically(t *testing.T) {
 		t.Fatalf("ready p2 via B (must survive A's concurrent version bump): %v", err)
 	}
 
-	stored, err := store.LoadTable(context.Background(), "table-race")
+	stored, err := store.LoadTable(context.Background(), tableID)
 	if err != nil || stored == nil || stored.State.Stage == hand.WaitingForPlayers {
 		t.Fatalf("expected the hand to have started after both readies landed, got %+v err=%v", stored, err)
 	}
@@ -100,13 +118,14 @@ func TestFreshInstanceReadsCurrentStateWithNoReplayNeeded(t *testing.T) {
 	db := testDynamoClient(t)
 	store := tablestore.NewStore(db, "flow_test")
 	mustCreatePokerTables(t, db, "flow_test")
+	tableID := uniqueTableID(t)
 
 	seed := func() *hand.Table {
 		return hand.NewTable([]*hand.Player{{ID: "p1", Stack: 1000}, {ID: "p2", Stack: 1000}}, 10, 20)
 	}
 
 	mgrA := tablemanager.NewManager(tablelease.NewService(backend), store, nil, nil)
-	actorA, err := mgrA.GetOrCreateActor(context.Background(), "table-crash", seed)
+	actorA, err := mgrA.GetOrCreateActor(context.Background(), tableID, seed)
 	if err != nil {
 		t.Fatalf("acquire on instance A: %v", err)
 	}
@@ -119,7 +138,7 @@ func TestFreshInstanceReadsCurrentStateWithNoReplayNeeded(t *testing.T) {
 	// current DynamoDB state directly (ARCHITECTURE.md §3).
 
 	mgrB := tablemanager.NewManager(tablelease.NewService(backend), store, nil, nil)
-	actorB, err := mgrB.GetOrCreateActor(context.Background(), "table-crash", seed)
+	actorB, err := mgrB.GetOrCreateActor(context.Background(), tableID, seed)
 	if err != nil {
 		t.Fatalf("acquire on instance B: %v", err)
 	}

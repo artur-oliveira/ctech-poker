@@ -16,6 +16,7 @@
       "ready": true
     }
   ],
+  "dealer_seat": 0,
   "small_blind": 10,
   "big_blind": 20,
   "actions": [
@@ -35,11 +36,6 @@
       "amount": 300
     },
     {
-      "player": "Dealer",
-      "action": "call",
-      "amount": 300
-    },
-    {
       "player": "BB",
       "action": "bet",
       "amount": 200
@@ -47,16 +43,6 @@
     {
       "player": "Dealer",
       "action": "fold",
-      "amount": 0
-    },
-    {
-      "player": "BB",
-      "action": "check",
-      "amount": 0
-    },
-    {
-      "player": "BB",
-      "action": "check",
       "amount": 0
     }
   ]

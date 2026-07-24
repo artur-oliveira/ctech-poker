@@ -5,7 +5,10 @@ package table
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -13,6 +16,19 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
+
+var uniqueTableIDSeq atomic.Int64
+
+// uniqueTableID returns a tableID scoped to both this test's name AND this
+// specific process invocation -- t.Name() alone repeats identically across
+// separate `go test` runs, so against a persistent (non-restarted) DynamoDB
+// Local, tablestore.SeedTable's put-if-absent semantics would silently reuse
+// whatever state a PREVIOUS run of the same test left behind instead of
+// seeding fresh.
+func uniqueTableID(t *testing.T) string {
+	t.Helper()
+	return fmt.Sprintf("table-%s-%d-%d", t.Name(), time.Now().UnixNano(), uniqueTableIDSeq.Add(1))
+}
 
 func testClient(t *testing.T) *dynamodb.Client {
 	t.Helper()

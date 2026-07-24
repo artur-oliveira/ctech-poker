@@ -1,5 +1,5 @@
 'use client';
-import {useState} from 'react';
+import React, {useState} from 'react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {useRouter} from 'next/navigation';
 import {ArrowRight, Users} from 'lucide-react';
@@ -17,7 +17,9 @@ export function StakesGrid() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [joiningKey, setJoiningKey] = useState<string | null>(null);
-  const {data: stakes = [], isLoading: stakesLoading} = useQuery({queryKey: ['stakes'], queryFn: listStakes});
+  const {data: stakes = [], isLoading: stakesLoading, isError: stakesError, refetch: refetchStakes} = useQuery({
+    queryKey: ['stakes'], queryFn: listStakes
+  });
   const {data: rooms = [], isLoading: roomsLoading} = useQuery({
     queryKey: ['rooms'], queryFn: listRooms, refetchInterval: 5000
   });
@@ -49,6 +51,12 @@ export function StakesGrid() {
     <div className="lobby-empty">
       <span className="loader"/>
       Buscando mesas…
+    </div>
+  );
+  if (stakesError) return (
+    <div className="lobby-empty">
+      Não foi possível carregar os stakes.
+      <Button variant="outline" size="sm" onClick={() => refetchStakes()}>Tentar novamente</Button>
     </div>
   );
   if (!stakes.length) return (

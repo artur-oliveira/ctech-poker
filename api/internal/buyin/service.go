@@ -293,6 +293,35 @@ func (s *Service) CashOut(ctx context.Context, roomID, playerID, idemKey string)
 		key = fmt.Sprintf("%s#%s#cashout#%s", roomID, playerID, idemKey)
 	}
 
+	return stack, s.settle(ctx, roomID, playerID, stack, holdID, mover, key)
+}
+
+// SettleSystemRemoval credits a player's final stack back to their wallet and
+// closes their sessionlog entry after table.Actor has already removed them
+// outside any client request — an AFK sweep or a disconnect kick timeout
+// (wired through tablemanager's onPlayerRemoved hook in app.go). Those
+// removals commit inside the Actor's own goroutine before this Service ever
+// sees them, so unlike CashOut there is no seat left to protect by failing
+// early: without this, a system-removed player's chips were simply discarded
+// (never credited to any wallet) and their session stayed open forever,
+// which is also why the lobby's "return to table" banner could point at a
+// table the player no longer holds a seat at.
+func (s *Service) SettleSystemRemoval(ctx context.Context, roomID, playerID string, stack int64, holdID, reason string) error {
+	mover, err := s.walletFor(ctx, roomID, playerID)
+	if err != nil {
+		return fmt.Errorf("buyin: settle system removal: %w", err)
+	}
+	key := fmt.Sprintf("%s#%s#system_leave#%s", roomID, playerID, reason)
+	return s.settle(ctx, roomID, playerID, stack, holdID, mover, key)
+}
+
+// settle is CashOut and SettleSystemRemoval's shared tail: record a
+// pending-cashout safety net, credit the resolved wallet, then close the
+// player's open sessionlog entry. mover and the idempotency key are resolved
+// by the caller since CashOut must fail before removing the player if the
+// wallet can't be determined, while SettleSystemRemoval has no such seat to
+// protect (the removal already happened).
+func (s *Service) settle(ctx context.Context, roomID, playerID string, stack int64, holdID string, mover walletMover, key string) error {
 	if s.pending != nil {
 		mode := "sandbox"
 		if room, _ := s.rooms.Get(ctx, roomID); room != nil {
@@ -315,21 +344,17 @@ func (s *Service) CashOut(ctx context.Context, roomID, playerID, idemKey string)
 
 	if mover == s.game {
 		if holdID == "" {
-			return stack, fmt.Errorf("buyin: no hold ID found for player %s", playerID)
+			return fmt.Errorf("buyin: no hold ID found for player %s", playerID)
 		}
-		holdIDs := []string{holdID}
-		tableRef := roomID
-		if err := mover.CashoutGame(ctx, playerID, stack, tableRef, holdIDs, key, "poker_cashout"); err != nil {
+		if err := mover.CashoutGame(ctx, playerID, stack, roomID, []string{holdID}, key, "poker_cashout"); err != nil {
 			slog.Error("buyin: cash-out credit failed after seat removal — reconciliation job will retry",
 				"player", playerID, "room", roomID, "amount", stack, "hold_id", holdID, "err", err)
-			return stack, fmt.Errorf("buyin: cash-out credit failed after seat removal — reconciliation job will retry for %s amount %d: %w", playerID, stack, err)
+			return fmt.Errorf("buyin: cash-out credit failed after seat removal — reconciliation job will retry for %s amount %d: %w", playerID, stack, err)
 		}
-	} else {
-		if err := mover.Credit(ctx, playerID, stack, key, "poker_cashout"); err != nil {
-			slog.Error("buyin: cash-out credit failed after seat removal — reconciliation job will retry",
-				"player", playerID, "room", roomID, "amount", stack, "err", err)
-			return stack, fmt.Errorf("buyin: cash-out credit failed after seat removal — reconciliation job will retry for %s amount %d: %w", playerID, stack, err)
-		}
+	} else if err := mover.Credit(ctx, playerID, stack, key, "poker_cashout"); err != nil {
+		slog.Error("buyin: cash-out credit failed after seat removal — reconciliation job will retry",
+			"player", playerID, "room", roomID, "amount", stack, "err", err)
+		return fmt.Errorf("buyin: cash-out credit failed after seat removal — reconciliation job will retry for %s amount %d: %w", playerID, stack, err)
 	}
 
 	if s.pending != nil {
@@ -347,5 +372,5 @@ func (s *Service) CashOut(ctx context.Context, roomID, playerID, idemKey string)
 		}
 	}
 
-	return stack, nil
+	return nil
 }

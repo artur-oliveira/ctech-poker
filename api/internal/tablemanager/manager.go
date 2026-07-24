@@ -29,13 +29,14 @@ type Actor = table.Actor
 var ErrTableArchived = errors.New("tablemanager: table archived")
 
 type Manager struct {
-	env            string
-	leases         *tablelease.Service
-	store          *tablestore.Store
-	broadcast      func(tableID, viewerID string, snap hand.Snapshot)
-	onHandComplete func(tableID, handID string, outcome hand.HandOutcome)
-	onSeatsChanged func(tableID string, seatsTaken int)
-	roomLoader     func(tableID string) (*roomstore.Room, bool, error)
+	env             string
+	leases          *tablelease.Service
+	store           *tablestore.Store
+	broadcast       func(tableID, viewerID string, snap hand.Snapshot)
+	onHandComplete  func(tableID, handID string, outcome hand.HandOutcome)
+	onSeatsChanged  func(tableID string, seatsTaken int)
+	onPlayerRemoved func(tableID, playerID, reason string, stack int64, holdID string)
+	roomLoader      func(tableID string) (*roomstore.Room, bool, error)
 
 	mu       sync.Mutex
 	actors   map[string]*Actor
@@ -64,6 +65,16 @@ func (m *Manager) SetEnv(env string) { m.env = env }
 // (tableID, seatsTaken) after every table actor's committed join/leave, for
 // every actor this manager creates (including ones created before this call).
 func (m *Manager) SetOnSeatsChanged(fn func(tableID string, seatsTaken int)) { m.onSeatsChanged = fn }
+
+// SetOnPlayerRemoved installs the system-removal notification hook (AFK
+// sweep / disconnect kick timeout only — never a player-requested leave),
+// invoked with (tableID, playerID, reason, stack, holdID) for every actor
+// this manager creates, including ones created before this call. stack/holdID
+// are what buyin.SettleSystemRemoval needs to credit the removed player's
+// wallet and close their sessionlog entry.
+func (m *Manager) SetOnPlayerRemoved(fn func(tableID, playerID, reason string, stack int64, holdID string)) {
+	m.onPlayerRemoved = fn
+}
 
 // GetOrCreateActor returns this instance's Actor for tableID, seeding the
 // table's very first DynamoDB state if it has never been played (seed is
@@ -124,6 +135,11 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	actor.SetOnSeatsChangedForActor(func(seatsTaken int) {
 		if m.onSeatsChanged != nil {
 			m.onSeatsChanged(tableID, seatsTaken)
+		}
+	})
+	actor.SetOnPlayerRemovedForActor(func(playerID, reason string, stack int64, holdID string) {
+		if m.onPlayerRemoved != nil {
+			m.onPlayerRemoved(tableID, playerID, reason, stack, holdID)
 		}
 	})
 	if trustCache {

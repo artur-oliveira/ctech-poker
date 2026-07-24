@@ -16,7 +16,7 @@ func TestHandCompleteAutoStartsNextHandAfterDelay(t *testing.T) {
 	db := testClient(t)
 	store := tablestore.NewStore(db, "table_test")
 	mustCreateTestTables(t, db, "table_test")
-	a := newTestActor(t, store)
+	a, tableID := newTestActor(t, store)
 	a.nextHandDelay = 20 * time.Millisecond
 
 	ctx := context.Background()
@@ -25,12 +25,12 @@ func TestHandCompleteAutoStartsNextHandAfterDelay(t *testing.T) {
 	reply2 := make(chan error, 1)
 	_ = a.Dispatch(ReadyCmd{PlayerID: "p2", Ready: true, Reply: reply2})
 
-	stored, _ := store.LoadTable(ctx, "table-1")
+	stored, _ := store.LoadTable(ctx, tableID)
 	toAct := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
 	reply3 := make(chan error, 1)
 	_ = a.Dispatch(ActCmd{PlayerID: toAct, ActionID: "a1", Action: betting.ActionFold, Reply: reply3})
 
-	stored, _ = store.LoadTable(ctx, "table-1")
+	stored, _ = store.LoadTable(ctx, tableID)
 	if stored.State.Stage != hand.Complete {
 		t.Fatalf("expected hand to reach Complete after fold-to-one, got %v", stored.State.Stage)
 	}
@@ -38,7 +38,7 @@ func TestHandCompleteAutoStartsNextHandAfterDelay(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	stored, _ = store.LoadTable(ctx, "table-1")
+	stored, _ = store.LoadTable(ctx, tableID)
 	if stored.HandID == handIDAfterFold {
 		t.Fatal("expected a new hand to have started automatically after the 5s (here 20ms) delay")
 	}

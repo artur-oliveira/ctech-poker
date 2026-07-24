@@ -15,7 +15,7 @@ func TestDisconnectAutoFoldsAtActionDeadline(t *testing.T) {
 	db := testClient(t)
 	store := tablestore.NewStore(db, "table_test")
 	mustCreateTestTables(t, db, "table_test")
-	a := newTestActor(t, store)
+	a, tableID := newTestActor(t, store)
 	a.turnTimeout = 20 * time.Millisecond
 
 	ctx := context.Background()
@@ -24,14 +24,8 @@ func TestDisconnectAutoFoldsAtActionDeadline(t *testing.T) {
 	reply2 := make(chan error, 1)
 	_ = a.Dispatch(ReadyCmd{PlayerID: "p2", Ready: true, Reply: reply2})
 
-	stored, _ := store.LoadTable(ctx, "table-1")
-	var toAct string
-	for _, s := range stored.State.Players {
-		if hand.NewTableFromState(stored.State).CurrentPlayerCanActForActor(s.ID) {
-			toAct = s.ID
-			break
-		}
-	}
+	stored, _ := store.LoadTable(ctx, tableID)
+	toAct := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
 	if toAct == "" {
 		t.Fatal("no player found with action to act")
 	}
@@ -40,7 +34,7 @@ func TestDisconnectAutoFoldsAtActionDeadline(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	stored, _ = store.LoadTable(ctx, "table-1")
+	stored, _ = store.LoadTable(ctx, tableID)
 	for _, s := range stored.State.Players {
 		if s.ID == toAct && s.State != hand.Folded {
 			t.Fatalf("expected %s to be auto-folded after missing its action deadline, got state %v", toAct, s.State)

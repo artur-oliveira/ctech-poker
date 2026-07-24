@@ -69,6 +69,37 @@ func (t *Table) ExportState() State {
 // only recovery path this revision needs (ARCHITECTURE.md §3: "recovery is
 // trivial", there is no log to replay).
 func NewTableFromState(s State) *Table {
+	// s.Players and s.HandOrder decode as independently-allocated *Player
+	// structs even for the same player — dynamodbav/JSON never preserves
+	// pointer aliasing across two separate fields. Within one continuous
+	// in-memory Table this aliasing holds (StartHand seeds handOrder with
+	// the exact same pointers as players), so every mutation via
+	// t.playerByID — which only ever searches t.players — is instantly
+	// visible through t.handOrder too. Re-link handOrder here to point at
+	// the matching players entries so that invariant is restored after a
+	// reload. Without this, any consumer that reads a mutable field (most
+	// importantly runShowdown's Contributed-based pot calculation) off
+	// t.handOrder keeps seeing whatever value that player had AT THIS
+	// RELOAD, forever, even as later Act() calls keep updating the
+	// t.players copy — contributed chips can silently vanish from the pot
+	// entirely once a mid-hand reload happens, which is a normal occurrence
+	// on any version-conflict retry (e.g. two instances serving the same
+	// table directly with no proxying — ARCHITECTURE.md §2).
+	byID := make(map[string]*Player, len(s.Players))
+	for _, p := range s.Players {
+		byID[p.ID] = p
+	}
+	handOrder := make([]*Player, len(s.HandOrder))
+	for i, p := range s.HandOrder {
+		if linked, ok := byID[p.ID]; ok {
+			handOrder[i] = linked
+		} else {
+			// Dealt into this hand but no longer seated (e.g. cashed out
+			// after the hand completed) — no players entry to link to.
+			handOrder[i] = p
+		}
+	}
+
 	return &Table{
 		players:    s.Players,
 		smallBlind: s.SmallBlind,
@@ -88,7 +119,7 @@ func NewTableFromState(s State) *Table {
 		payouts:       s.Payouts,
 		rakeBPS:       s.RakeBPS,
 		rakeCollected: s.RakeCollected,
-		handOrder:     s.HandOrder,
+		handOrder:     handOrder,
 		seenActionIDs: s.SeenActionIDs,
 		readyToPost:   s.ReadyToPost,
 		owesBigBlind:  s.OwesBigBlind,

@@ -64,6 +64,7 @@ var Module = fx.Options(
 		newBuyinService,
 		newTableManager,
 	),
+	fx.Invoke(wirePlayerRemovedHook),
 	fx.Invoke(registerRoutes),
 	fx.Invoke(startServer),
 )
@@ -260,6 +261,31 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		}
 	})
 	return mgr
+}
+
+// wirePlayerRemovedHook installs table.Actor's system-removal notification —
+// AFK sweep / disconnect kick timeout only, see onPlayerRemoved's doc comment
+// in actor.go. Split out of newTableManager (rather than set there like
+// onHandComplete/onSeatsChanged) because buyin.Service itself depends on
+// *tablemanager.Manager — wiring the hook here, after Fx has built both, is
+// the only way to avoid a construction cycle. SetOnPlayerRemoved is safe to
+// call after actors already exist (tablemanager.Manager checks the hook
+// dynamically on every fire, not at actor-creation time).
+func wirePlayerRemovedHook(mgr *tablemanager.Manager, buyinSvc *buyin.Service, reg ws.Registry) {
+	mgr.SetOnPlayerRemoved(func(tableID, playerID, reason string, stack int64, holdID string) {
+		ctx := context.Background()
+		// Pushes an explicit "removed" frame straight to the removed player's
+		// own connection (same per-player fan-out key the "state" broadcast
+		// uses) — without it, a system-removed player's socket just stops
+		// receiving state broadcasts (they're no longer in PlayersForActor)
+		// with no signal telling the client why, so it sits on a stale table
+		// instead of redirecting to the lobby.
+		data, _ := json.Marshal(map[string]any{"type": "removed", "code": reason})
+		reg.Broadcast(ctx, tableID+"#"+playerID, data)
+		if err := buyinSvc.SettleSystemRemoval(ctx, tableID, playerID, stack, holdID, reason); err != nil {
+			slog.Error("buyin: settle system removal failed", "table", tableID, "player", playerID, "reason", reason, "err", err)
+		}
+	})
 }
 
 func roomBackedSeed(rooms *roomstore.Store) func(string) func() *hand.Table {

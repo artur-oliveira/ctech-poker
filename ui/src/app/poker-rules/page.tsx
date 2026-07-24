@@ -44,8 +44,7 @@ export default function PokerRules() {
       <article id="stakes" className="rules-section">
         <h2>Stakes</h2>
         <p>O par de blinds de uma mesa (por exemplo, 25 / 50) define o seu stake e, junto dele, a faixa de compra de
-          fichas — normalmente entre 20 e 100 vezes o big blind. Toda mesa aqui no CTech Poker usa fichas virtuais do
-          sandbox: nada de dinheiro real entra ou sai do jogo.</p>
+          fichas — normalmente entre 40 e 100 vezes o big blind.</p>
       </article>
 
       <article id="acoes" className="rules-section">

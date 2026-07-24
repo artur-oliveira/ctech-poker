@@ -54,31 +54,44 @@ type Actor struct {
 	// exit). kickTimers holds one AfterFunc per currently-disconnected
 	// player — unlike turnTimer/nextHandTimer there can be several at once,
 	// one per seat.
-	kickGrace                    time.Duration
-	kickTimers                   map[string]*time.Timer
-	playerNames                  map[string]string
-	turnTimer                    *time.Timer
-	turnDeadline                 time.Time
-	turnDeadlineFor              string
-	turnDeadlineForStage         hand.Stage
-	nextHandTimer                *time.Timer
-	nextHandDeadline             time.Time
-	nextHandArmedFor             string
-	nextHandDelay                time.Duration
-	lastBroadcastStage           hand.Stage
-	runoutTimer                  *time.Timer
-	runoutTimerHandID            string
-	runoutTimerStage             hand.Stage
-	runoutStreetDelay            time.Duration
-	escalationInterval           time.Duration
-	escalationCfg                roomstore.BlindEscalation
-	afkSweepTimer                *time.Timer
-	afkSweepInterval             time.Duration
-	done                         chan struct{}
-	equityEnabled                atomic.Bool
-	onHandComplete               func(string, hand.HandOutcome)
-	completedHandNotified        string
-	onSeatsChanged               func(int)
+	kickGrace             time.Duration
+	kickTimers            map[string]*time.Timer
+	playerNames           map[string]string
+	turnTimer             *time.Timer
+	turnDeadline          time.Time
+	turnDeadlineFor       string
+	turnDeadlineForStage  hand.Stage
+	nextHandTimer         *time.Timer
+	nextHandDeadline      time.Time
+	nextHandArmedFor      string
+	nextHandDelay         time.Duration
+	lastBroadcastStage    hand.Stage
+	runoutTimer           *time.Timer
+	runoutTimerHandID     string
+	runoutTimerStage      hand.Stage
+	runoutStreetDelay     time.Duration
+	escalationInterval    time.Duration
+	escalationCfg         roomstore.BlindEscalation
+	afkSweepTimer         *time.Timer
+	afkSweepInterval      time.Duration
+	done                  chan struct{}
+	equityEnabled         atomic.Bool
+	onHandComplete        func(string, hand.HandOutcome)
+	completedHandNotified string
+	onSeatsChanged        func(int)
+	// onPlayerRemoved fires only for a system-initiated removal (AFK sweep,
+	// disconnect kick timeout) — never for a player-requested LeaveCmd, which
+	// the client already knows about and navigates away for itself. It lets
+	// the gateway push an explicit "removed" message to that player's own
+	// socket, so the client stops silently reconnecting into a seat it no
+	// longer holds and instead redirects to the lobby (see tablews.go/
+	// useTableRealtime.ts). stack/holdID are the same values a player-initiated
+	// CashOut would have received on its Stack/HoldID channels — a system
+	// removal never goes through buyin.Service.CashOut itself (it fires from
+	// inside the Actor's own goroutine), so without forwarding them here the
+	// removed player's chips are never credited back to any wallet and their
+	// sessionlog entry is never closed (buyin.SettleSystemRemoval does both).
+	onPlayerRemoved func(playerID, reason string, stack int64, holdID string)
 }
 
 // New returns an Actor for tableID. trustCache should be true only when the
@@ -276,7 +289,35 @@ func (a *Actor) ensureLoaded(ctx context.Context, force bool) error {
 	a.cached = hand.NewTableFromState(stored.State)
 	a.version = stored.Version
 	a.handID = stored.HandID
+	a.rearmTimersFromCache()
 	return nil
+}
+
+// rearmTimersFromCache re-derives and re-arms the turn/runout/next-hand
+// timers from whatever is now cached. All three are idempotent per
+// (handID, stage) — see armTurnTimer/armRunoutTimer/armNextHandTimer — so
+// calling this on every fresh load is safe and cheap. This is what lets a
+// hand self-heal from the fleet's core failure mode: these timers are bare
+// in-process time.AfterFunc calls with no persisted counterpart, so if the
+// actor instance that armed one dies before it fires (node restart, lease
+// handoff, autoscale-in), nothing else ever resumes it — the hand (most
+// visibly an all-in runout) stays frozen forever even though the table's
+// persisted state is fine. ensureLoaded runs on every command a
+// non-lease-holding actor handles and on first construction everywhere, so
+// the next bit of traffic this table sees from ANY node — even a bare
+// ping's ReconnectCmd — re-derives these timers from durable state instead
+// of trusting whatever the previous instance's memory (now gone) intended.
+// Reveal grace is a live-broadcast pacing nicety, not a correctness
+// requirement, so this always arms with zero grace — broadcastAll still
+// applies the real grace on its own next call for anyone actually watching.
+func (a *Actor) rearmTimersFromCache() {
+	if a.cached == nil {
+		return
+	}
+	stage := a.cached.Stage()
+	a.armTurnTimer(a.cached.CurrentPlayerIDForActor(), stage, 0)
+	a.armRunoutTimer(a.cached.IsAwaitingRunoutForActor(), stage)
+	a.armNextHandTimer(stage == hand.Complete)
 }
 
 func (a *Actor) handleReady(ctx context.Context, c ReadyCmd) error {
@@ -327,12 +368,29 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 	a.markLastAction(c.PlayerID)
 	start := timeNowFunc()
 	_, err := a.applyActAndCommit(ctx, c)
-	if errors.Is(err, tablestore.ErrVersionConflict) {
-		// See handleReady's identical rationale — retry exactly once.
-		if err := a.ensureLoaded(ctx, true); err != nil {
-			return err
+	if err != nil && !errors.Is(err, tablestore.ErrDuplicateAction) {
+		// Two distinct reasons to reload and retry exactly once:
+		//   - ErrVersionConflict: another instance committed first: definite
+		//     staleness.
+		//   - trustCache==true and any other error: this instance normally
+		//     trusts a.cached between commits (ensureLoaded(ctx,false) is a
+		//     no-op once cached is set) and only re-reads on a version
+		//     conflict from ITS OWN write attempts. But ARCHITECTURE.md §2 /
+		//     tablews.go's RegisterTableWS explicitly allow any instance to
+		//     accept any table's connections directly, with no proxying to
+		//     the lease holder — so another instance can commit actions this
+		//     one never observes, and its next local Act() call (e.g. a
+		//     turn-order check) can reject a genuinely legal action against
+		//     stale data without ever reaching a conditional write to
+		//     conflict on. Retrying here can't mask a truly invalid action:
+		//     if it's genuinely invalid, re-running it against freshly
+		//     loaded state reproduces the identical rejection.
+		if errors.Is(err, tablestore.ErrVersionConflict) || a.trustCache {
+			if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+				return reloadErr
+			}
+			_, err = a.applyActAndCommit(ctx, c)
 		}
-		_, err = a.applyActAndCommit(ctx, c)
 	}
 	if err != nil && !errors.Is(err, tablestore.ErrDuplicateAction) {
 		return err
@@ -363,6 +421,12 @@ func (a *Actor) SetOnHandCompleteForActor(fn func(string, hand.HandOutcome)) { a
 // hook, invoked with the new occupied-seat count after every committed join
 // or leave.
 func (a *Actor) SetOnSeatsChangedForActor(fn func(int)) { a.onSeatsChanged = fn }
+
+// SetOnPlayerRemovedForActor installs the system-removal notification hook —
+// see onPlayerRemoved's doc comment.
+func (a *Actor) SetOnPlayerRemovedForActor(fn func(playerID, reason string, stack int64, holdID string)) {
+	a.onPlayerRemoved = fn
+}
 
 func (a *Actor) notifySeatsChanged() {
 	if a.onSeatsChanged != nil && a.cached != nil {
@@ -519,7 +583,15 @@ func (a *Actor) handleKickTimeout(ctx context.Context, c kickTimeoutCmd) error {
 	// with 5 minutes disconnected — handleTurnTimeout's 45s/3-hand disconnect
 	// grace already forces them to SittingOut long before this fires. If it
 	// ever races anyway, skip silently; nothing to retry from here.
-	return a.handleLeave(ctx, LeaveCmd{PlayerID: c.PlayerID})
+	stackCh := make(chan int64, 1)
+	holdIDCh := make(chan string, 1)
+	if err := a.handleLeave(ctx, LeaveCmd{PlayerID: c.PlayerID, Stack: stackCh, HoldID: holdIDCh}); err != nil {
+		return err
+	}
+	if a.onPlayerRemoved != nil {
+		a.onPlayerRemoved(c.PlayerID, "disconnected", <-stackCh, <-holdIDCh)
+	}
+	return nil
 }
 
 // markLastAction stamps playerID's LastActionAt with now — called only from
@@ -578,7 +650,14 @@ func (a *Actor) handleAFKSweep(ctx context.Context, c afkSweepCmd) error {
 		}
 	}
 	for _, id := range stale {
-		_ = a.handleLeave(ctx, LeaveCmd{PlayerID: id})
+		stackCh := make(chan int64, 1)
+		holdIDCh := make(chan string, 1)
+		if err := a.handleLeave(ctx, LeaveCmd{PlayerID: id, Stack: stackCh, HoldID: holdIDCh}); err != nil {
+			continue // still dealt into a hand in progress; next sweep retries
+		}
+		if a.onPlayerRemoved != nil {
+			a.onPlayerRemoved(id, "idle", <-stackCh, <-holdIDCh)
+		}
 	}
 	return nil
 }
@@ -637,8 +716,23 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 			// the hand to Complete — broadcastAll's notifyHandComplete call
 			// picks that up same as a normal Act would.
 			a.cached.SitOutForActor(c.PlayerID)
-			if err := a.commit(ctx, "", nil); err != nil && !errors.Is(err, tablestore.ErrVersionConflict) {
-				return err
+			if err := a.commit(ctx, "", nil); err != nil {
+				if !errors.Is(err, tablestore.ErrVersionConflict) {
+					return err
+				}
+				// a.cached now holds an uncommitted SitOutForActor mutation
+				// layered on stale state -- discard it by reloading fresh,
+				// authoritative state instead of leaving this fabricated,
+				// never-persisted table in memory for whatever this actor
+				// does next (e.g. a later kick-timeout removal computing
+				// handInProgress/dealtIntoCurrentHand off of it, which could
+				// wrongly allow removing a player still dealt into the REAL
+				// hand and leave a stale handOrder entry for a since-removed
+				// player — runShowdown's playerByID lookup on that entry
+				// would then panic).
+				if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+					return reloadErr
+				}
 			}
 			a.broadcastAll()
 			return nil
@@ -650,6 +744,16 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 	if errors.Is(err, tablestore.ErrVersionConflict) {
 		if err := a.ensureLoaded(ctx, true); err != nil {
 			return err
+		}
+		// Re-check after the reload rather than blindly retrying the same
+		// fold: whatever committed first may have already resolved this
+		// exact turn (folded/removed the player through another path
+		// entirely — e.g. the other server's own disconnect-kick), and
+		// c.PlayerID's leftover roundIdx entry from a now-stale round must
+		// not be trusted (see currentPlayerCanAct's doc comment).
+		if !a.cached.CurrentPlayerCanActForActor(c.PlayerID) {
+			a.broadcastAll()
+			return nil
 		}
 		_, err = a.applyActAndCommit(ctx, ActCmd{
 			PlayerID: c.PlayerID, ActionID: "turn-timeout-" + c.PlayerID, Action: betting.ActionFold, Amount: 0, Reply: c.Reply,
@@ -826,8 +930,18 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 		return nil
 	}
 	a.tryStartHand()
-	if err := a.commit(ctx, "", nil); err != nil && !errors.Is(err, tablestore.ErrVersionConflict) {
-		return err
+	if err := a.commit(ctx, "", nil); err != nil {
+		if !errors.Is(err, tablestore.ErrVersionConflict) {
+			return err
+		}
+		// a.cached now holds an uncommitted tryStartHand mutation (possibly a
+		// whole fabricated next hand, dealt from a stale player roster) layered
+		// on stale state -- discard it by reloading fresh, authoritative state
+		// instead of leaving it in memory for this actor's next command to
+		// trust (see handleTurnTimeout's identical fix for the full story).
+		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+			return reloadErr
+		}
 	}
 	a.broadcastAll()
 	return nil
@@ -874,8 +988,16 @@ func (a *Actor) handleRunoutStep(ctx context.Context, c runoutStepCmd) error {
 		return nil
 	}
 	a.cached.AdvanceRunoutStreetForActor()
-	if err := a.commit(ctx, "", nil); err != nil && !errors.Is(err, tablestore.ErrVersionConflict) {
-		return err
+	if err := a.commit(ctx, "", nil); err != nil {
+		if !errors.Is(err, tablestore.ErrVersionConflict) {
+			return err
+		}
+		// Same discard-and-reload fix as handleTurnTimeout/handleNextHand:
+		// a.cached currently holds an uncommitted AdvanceRunoutStreetForActor
+		// mutation layered on stale state.
+		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+			return reloadErr
+		}
 	}
 	a.broadcastAll()
 	return nil
@@ -972,6 +1094,24 @@ func (a *Actor) SetEquityEnabledForActor(enabled bool) { a.equityEnabled.Store(e
 func (a *Actor) SetTurnTimeoutForActor(d time.Duration) {
 	if d > 0 {
 		a.turnTimeout = d
+	}
+}
+
+// SetDisconnectGraceForActor overrides how long a disconnected player is
+// given before their turn-timeout auto-fold escalates to auto-sit-out
+// (handleTurnTimeout). Test-only knob — no room config exposes this today.
+func (a *Actor) SetDisconnectGraceForActor(d time.Duration) {
+	if d > 0 {
+		a.disconnectGrace = d
+	}
+}
+
+// SetKickGraceForActor overrides how long a disconnected player can occupy a
+// seat before armKickTimer auto-removes them. Test-only knob — no room
+// config exposes this today.
+func (a *Actor) SetKickGraceForActor(d time.Duration) {
+	if d > 0 {
+		a.kickGrace = d
 	}
 }
 

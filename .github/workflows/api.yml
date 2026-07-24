@@ -14,6 +14,16 @@ jobs:
     name: Test
     runs-on: ubuntu-24.04-arm
 
+    # DynamoDB Local backs the -tags integration suite below (internal/table,
+    # tests/integration, etc.) — every testClient()/testDynamoClient() helper
+    # in that suite hardcodes http://localhost:8555, matching the port
+    # mapping here and in docker-compose.test.yml (used for local dev).
+    services:
+      dynamodb-local:
+        image: amazon/dynamodb-local:latest
+        ports:
+          - 8555:8000
+
     steps:
       - uses: actions/checkout@v6
 
@@ -22,9 +32,26 @@ jobs:
           go-version-file: api/go.mod
           cache-dependency-path: api/go.sum
 
-      - name: Run tests
+      - name: Wait for DynamoDB Local
+        run: |
+          # DynamoDB Local returns HTTP 400 (missing SigV4 auth) for a bare
+          # GET even once fully up — curl without -f still exits 0 as long
+          # as it got ANY HTTP response, which is all "is it listening yet"
+          # needs here.
+          for i in $(seq 1 30); do
+            curl -s -o /dev/null http://localhost:8555 && exit 0
+            sleep 1
+          done
+          echo "DynamoDB Local never became reachable on :8555" >&2
+          exit 1
+
+      - name: Run unit tests
         working-directory: api
         run: go test ./... -race -count=1
+
+      - name: Run integration tests
+        working-directory: api
+        run: go test -tags integration ./... -race -count=1
 
   deploy:
     name: Build & Deploy

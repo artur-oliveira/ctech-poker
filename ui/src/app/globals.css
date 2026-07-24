@@ -994,16 +994,6 @@ h1 em {
 }
 
 @media (max-width: 600px) {
-    .lobby-actions {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 12px;
-    }
-
-    .btn-reward {
-        justify-content: center;
-    }
-
     .nav {
         height: 72px
     }
@@ -1184,6 +1174,18 @@ h1 em {
     gap: 12px
 }
 
+@media (max-width: 600px) {
+    .lobby-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px
+    }
+
+    .btn-reward {
+        justify-content: center
+    }
+}
+
 .reward-timer {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
@@ -1204,12 +1206,6 @@ h1 em {
 
 .lobby p, .ranking p, .roulette p {
     color: var(--muted)
-}
-
-.room-grid {
-    display: grid;
-    grid-template-columns:repeat(3, 1fr);
-    gap: 14px
 }
 
 .stake-grid {
@@ -1320,10 +1316,12 @@ h1 em {
     border: 1px dashed var(--white-1d);
     border-radius: var(--rounded-panel);
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: center;
     gap: 15px;
-    color: var(--muted)
+    color: var(--muted);
+    text-align: center
 }
 
 
@@ -1393,7 +1391,15 @@ h1 em {
 
     .app-nav .header-right {
         gap: 16px;
-        flex-wrap: wrap
+        flex-wrap: nowrap
+    }
+
+    .header-right-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
     }
 }
 
@@ -2927,6 +2933,19 @@ h1 em {
     margin-right: 0
 }
 
+/* full list only (not the in-game compact dialog): slower, wider stagger so each
+   example card visibly finishes its flip before the next starts */
+.hand-ranking-list:not(.compact) .hand-ranking-cards .card-reveal-inner {
+    animation-duration: 460ms;
+    animation-delay: calc(var(--deal-index, 0) * 150ms)
+}
+
+.hand-ranking-list:not(.compact) .hand-ranking-cards .card-back,
+.hand-ranking-list:not(.compact) .hand-ranking-cards .card-front {
+    animation-duration: 460ms;
+    animation-delay: calc(var(--deal-index, 0) * 150ms)
+}
+
 .hand-ranking-list strong {
     display: block;
     font-size: var(--font-size-body)
@@ -3594,10 +3613,6 @@ h1 em {
    same compact-seat tier — full desktop name-cards collide with the board on
    a 390px-tall table. */
 @media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
-    .room-grid {
-        grid-template-columns:1fr 1fr
-    }
-
     .lobby > header {
         align-items: flex-start;
         gap: 25px;
@@ -3716,10 +3731,6 @@ h1 em {
 }
 
 @media (max-width: 520px) {
-    .room-grid {
-        grid-template-columns:1fr
-    }
-
     .game-chrome > header {
         flex-wrap: wrap;
         row-gap: 6px;
