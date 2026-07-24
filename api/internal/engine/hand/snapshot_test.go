@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
+	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 )
 
 func TestViewForHidesOtherHoleCards(t *testing.T) {
@@ -174,6 +175,62 @@ func TestViewForOmitsWonWithoutShowdownForGenuineShowdown(t *testing.T) {
 	view := table.ViewFor("p1")
 	if view.WonWithoutShowdown {
 		t.Fatal("expected won_without_showdown=false after a genuine showdown")
+	}
+}
+
+// TestViewForOmitsUncalledExcessRecipientFromWinners is the wire-level half
+// of TestUncalledAllInExcessIsNotCountedAsAWin (hand_test.go): the engine
+// already keeps HandOutcome.Winners correct, but Snapshot — what the client
+// actually receives — didn't expose it at all, leaving the frontend to infer
+// "win" from payout>0, which is also true for a shover's refunded excess.
+func TestViewForOmitsUncalledExcessRecipientFromWinners(t *testing.T) {
+	players := []*Player{
+		{ID: "Shover", Stack: 1000, Ready: true},
+		{ID: "Caller", Stack: 100, Ready: true},
+	}
+	table := NewTable(players, 10, 20)
+	table.dealerSeat = 0
+	table.dealerDrawn = true
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	players[0].HoleCards = [2]deck.Card{{Rank: deck.Five, Suit: deck.Clubs}, {Rank: deck.Six, Suit: deck.Clubs}}
+	players[1].HoleCards = [2]deck.Card{{Rank: deck.Ace, Suit: deck.Spades}, {Rank: deck.Ace, Suit: deck.Hearts}}
+	table.shuffle.Cards[4] = deck.Card{Rank: deck.King, Suit: deck.Diamonds}
+	table.shuffle.Cards[5] = deck.Card{Rank: deck.Queen, Suit: deck.Hearts}
+	table.shuffle.Cards[6] = deck.Card{Rank: deck.Nine, Suit: deck.Spades}
+	table.shuffle.Cards[7] = deck.Card{Rank: deck.Two, Suit: deck.Clubs}
+	table.shuffle.Cards[8] = deck.Card{Rank: deck.Seven, Suit: deck.Diamonds}
+
+	if err := table.Act("Shover", betting.ActionRaise, 1000); err != nil {
+		t.Fatalf("Shover shoves all-in for 1000: %v", err)
+	}
+	if err := table.Act("Caller", betting.ActionCall, 0); err != nil {
+		t.Fatalf("Caller calls all-in for their remaining 90: %v", err)
+	}
+	table.AdvanceRunoutStreetForActor()
+	table.AdvanceRunoutStreetForActor()
+	if table.Stage() != Complete {
+		t.Fatalf("expected Complete, got %v", table.Stage())
+	}
+
+	view := table.ViewFor("Shover")
+	if view.Payouts["Shover"] <= 0 {
+		t.Fatal("expected Shover's uncalled excess to still show up in Payouts")
+	}
+	for _, id := range view.Winners {
+		if id == "Shover" {
+			t.Fatal("Shover lost the hand — must not appear in the wire Snapshot's Winners just because their uncalled excess was refunded")
+		}
+	}
+	found := false
+	for _, id := range view.Winners {
+		if id == "Caller" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("expected Caller, who actually won the contested pot, in the wire Snapshot's Winners")
 	}
 }
 

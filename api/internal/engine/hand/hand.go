@@ -295,6 +295,19 @@ func (t *Table) RemovePlayerForActor(playerID string) (int64, string, error) {
 		}
 		stack := p.Stack
 		holdID := p.HoldID
+		// dealerSeat is a raw index into t.players, not a player identity.
+		// Splicing out anyone seated before the button shifts every later
+		// player's index down by one; without this adjustment dealerSeat
+		// would keep pointing at that same numeric slot, which now holds a
+		// different player — silently handing them the button/blinds without
+		// ever actually rotating. Removing the button itself (i ==
+		// dealerSeat) needs no adjustment: the slot's index is unchanged, so
+		// whoever shifts into it (the button's former neighbor) becomes
+		// dealer, which is the standard "next player takes the empty button"
+		// convention.
+		if i < t.dealerSeat {
+			t.dealerSeat--
+		}
 		t.players = append(t.players[:i], t.players[i+1:]...)
 		return stack, holdID, nil
 	}

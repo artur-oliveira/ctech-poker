@@ -12,18 +12,24 @@ import (
 // player's hole cards" a single-source-of-truth guarantee instead of a
 // convention every caller has to remember.
 type Snapshot struct {
-	Stage                string           `json:"stage"`
-	Board                []string         `json:"board"`
-	Seats                []SeatView       `json:"seats"`
-	Payouts              map[string]int64 `json:"payouts,omitempty"`
-	Rake                 int64            `json:"rake,omitempty"`
-	CurrentPlayerID      string           `json:"current_player_id,omitempty"`
-	LegalActions         *LegalActions    `json:"legal_actions,omitempty"`
-	ActionDeadlineUnixMs int64            `json:"action_deadline_unix_ms,omitempty"`
-	NextHandUnixMs       int64            `json:"next_hand_unix_ms,omitempty"`
-	WonWithoutShowdown   bool             `json:"won_without_showdown,omitempty"`
-	ShuffleCommitHash    string           `json:"shuffle_commit_hash,omitempty"`
-	ShuffleServerSeedHex string           `json:"shuffle_server_seed_hex,omitempty"`
+	Stage   string           `json:"stage"`
+	Board   []string         `json:"board"`
+	Seats   []SeatView       `json:"seats"`
+	Payouts map[string]int64 `json:"payouts,omitempty"`
+	// Winners lists who actually won a contested pot this hand, as opposed to
+	// merely appearing in Payouts — a payout also fires for an uncalled
+	// all-in's excess or an orphaned side-pot refund (runShowdown), neither of
+	// which is a win. The client must use this, not "payout > 0", to decide
+	// who gets the win banner/pill.
+	Winners              []string      `json:"winners,omitempty"`
+	Rake                 int64         `json:"rake,omitempty"`
+	CurrentPlayerID      string        `json:"current_player_id,omitempty"`
+	LegalActions         *LegalActions `json:"legal_actions,omitempty"`
+	ActionDeadlineUnixMs int64         `json:"action_deadline_unix_ms,omitempty"`
+	NextHandUnixMs       int64         `json:"next_hand_unix_ms,omitempty"`
+	WonWithoutShowdown   bool          `json:"won_without_showdown,omitempty"`
+	ShuffleCommitHash    string        `json:"shuffle_commit_hash,omitempty"`
+	ShuffleServerSeedHex string        `json:"shuffle_server_seed_hex,omitempty"`
 }
 
 // LegalActions is the authoritative set of moves the viewer may make right
@@ -100,6 +106,10 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 	seats := make([]SeatView, 0, len(t.players))
 	wonWithoutShowdown := t.stage == Complete && t.lastOutcome != nil && t.lastOutcome.WonWithoutShowdown
 	revealAll := t.stage == Complete && t.lastOutcome != nil && !wonWithoutShowdown
+	var winners []string
+	if t.stage == Complete && t.lastOutcome != nil {
+		winners = t.lastOutcome.Winners
+	}
 	// Only players actually dealt into the current/last hand have real
 	// HoleCards — anyone else (waiting for the first hand, or a mid-hand
 	// joiner seated as PendingEntry) still holds deck.Card{}'s zero value,
@@ -132,6 +142,7 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		Board:              boardCodes(t.board),
 		Seats:              seats,
 		Payouts:            t.payouts,
+		Winners:            winners,
 		Rake:               t.rakeCollected,
 		CurrentPlayerID:    current,
 		LegalActions:       t.legalActionsFor(viewerID, current),

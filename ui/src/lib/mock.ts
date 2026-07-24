@@ -362,6 +362,7 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
     board: ['7H', '8C', 'QS', '2D', 'AC'],
     seats: revealShowdownCards(seats),
     payouts: {[MOCK_PLAYER_ID]: 250},
+    winners: [MOCK_PLAYER_ID],
     rake: 5,
     next_hand_unix_ms: Date.now() + 5000
   };
@@ -413,6 +414,7 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
       },
     ],
     payouts: {[MOCK_PLAYER_ID]: 900, 'bia_sp': 800},
+    winners: [MOCK_PLAYER_ID, 'bia_sp'],
     rake: 25,
     next_hand_unix_ms: Date.now() + 5000
   };
@@ -458,6 +460,7 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
     board: ['7H', '8C', 'QS', '2D', 'AC'],
     seats: revealShowdownCards(seats),
     payouts: {[MOCK_PLAYER_ID]: 1275},
+    winners: [MOCK_PLAYER_ID],
     rake: 20
   };
 }
@@ -711,7 +714,8 @@ export class MockTableService {
     }
     this.snapshot = {
       ...this.snapshot, stage: 'showdown', board: ['7H', '8C', 'QS', '2D', 'AC'], seats: revealed,
-      current_player_id: undefined, legal_actions: {actions: []}, payouts, rake: 20
+      current_player_id: undefined, legal_actions: {actions: []}, payouts,
+      winners: winner ? [winner.player_id] : undefined, rake: 20
     };
     this.emitState();
     this.later(() => {
@@ -733,6 +737,7 @@ export class MockTableService {
       current_player_id: undefined,
       legal_actions: {actions: []},
       payouts,
+      winners: winner ? [winner.player_id] : undefined,
       stage: 'complete'
     };
     this.emitState();

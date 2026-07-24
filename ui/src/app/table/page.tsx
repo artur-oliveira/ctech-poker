@@ -141,7 +141,9 @@ function TableContent() {
     if (seat?.state !== 'active' && seat?.state !== 'all_in') return;
     outcomeKeyRef.current += 1;
     const amount = snap.payouts[viewer] || 0;
-    const kind = amount > 0 ? 'win' : 'lose';
+    // Not `amount > 0`: an uncalled all-in's excess or an orphaned side-pot
+    // refund also shows up as a payout without being an actual win.
+    const kind = snap.winners?.includes(viewer) ? 'win' : 'lose';
     // The banner names one rival hand as the point of comparison: the
     // toughest hand it beat when the viewer won (proof it beat everyone),
     // or the hand that actually beat it when the viewer lost. Only seats
@@ -151,7 +153,7 @@ function TableContent() {
     const opponentCategory = kind === 'win' ?
       snap.seats.filter(item => item.player_id !== viewer && item.hand_category)
         .sort((a, b) => HAND_RANK_INDEX[a.hand_category!] - HAND_RANK_INDEX[b.hand_category!])[0]?.hand_category :
-      snap.seats.find(item => item.player_id !== viewer && (snap.payouts?.[item.player_id] || 0) > 0)?.hand_category;
+      snap.seats.find(item => item.player_id !== viewer && snap.winners?.includes(item.player_id))?.hand_category;
     setHandOutcome({
       key: outcomeKeyRef.current, kind, amount, handCategory: seat.hand_category, opponentCategory
     });

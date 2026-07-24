@@ -43,6 +43,7 @@ export function TableStage({snapshot, viewer, pot, bigBlind, nowMs, outcome, hol
     <Seat key={seat.player_id} seat={seat} index={index}
           isTurn={snapshot.current_player_id === seat.player_id}
           payout={snapshot.payouts?.[seat.player_id] || 0}
+          isWinner={snapshot.winners?.includes(seat.player_id) ?? false}
           deadlineMs={snapshot.action_deadline_unix_ms}
           nowMs={nowMs}
           bigBlind={bigBlind}

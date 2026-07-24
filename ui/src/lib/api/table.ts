@@ -26,6 +26,11 @@ export interface TableSnapshot {
   current_player_id?: string;
   legal_actions?: LegalActionState;
   payouts?: Record<string, number>;
+  // Who actually won a contested pot, as opposed to merely appearing in
+  // `payouts` — an uncalled all-in's excess or an orphaned side-pot refund
+  // also lands in `payouts` without being a win. Use this for win UI, not
+  // `payouts[id] > 0`.
+  winners?: string[];
   rake?: number;
   action_deadline_unix_ms?: number;
   next_hand_unix_ms?: number;

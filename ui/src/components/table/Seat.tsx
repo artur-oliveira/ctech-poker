@@ -24,12 +24,13 @@ const STATE_LABELS: Record<string, string> = {
 // Seats 3/4/5 sit on the top rail; their winner pill must drop below instead of above.
 const TOP_SEAT_INDICES = [3, 4, 5];
 
-export function Seat({seat, isViewer, isTurn, index, payout = 0, deadlineMs, nowMs, bigBlind}: {
+export function Seat({seat, isViewer, isTurn, index, payout = 0, isWinner = false, deadlineMs, nowMs, bigBlind}: {
   seat: SeatView;
   isViewer: boolean;
   isTurn: boolean;
   index: number;
   payout?: number;
+  isWinner?: boolean;
   deadlineMs?: number;
   nowMs?: number;
   bigBlind?: number
@@ -39,7 +40,7 @@ export function Seat({seat, isViewer, isTurn, index, payout = 0, deadlineMs, now
   const pendingName = !isViewer && !seat.name;
   const remainingMs = isTurn && deadlineMs && nowMs ? Math.max(0, deadlineMs - nowMs) : null;
   return <div data-state={seat.state} aria-current={isTurn ? 'true' : undefined}
-              className={`game-seat seat-${index} ${seat.state} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${payout > 0 ? 'is-winner' : ''} ${pendingName ? 'is-pending-name' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
+              className={`game-seat seat-${index} ${seat.state} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${isWinner ? 'is-winner' : ''} ${pendingName ? 'is-pending-name' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
     {remainingMs != null &&
         <span key={deadlineMs} className="seat-turn-ring" style={{animationDuration: `${remainingMs}ms`}}
               aria-hidden="true"/>}
@@ -64,7 +65,7 @@ export function Seat({seat, isViewer, isTurn, index, payout = 0, deadlineMs, now
         <ChipStack amount={seat.contributed} bigBlind={bigBlind}/>
         <b aria-label={`Aposta de ${seat.contributed.toLocaleString('pt-BR')} fichas`}>{seat.contributed.toLocaleString('pt-BR')}</b>
       </span>}
-    {payout > 0 &&
+    {isWinner && payout > 0 &&
         <span key={`win-${payout}`} className="seat-win" role="status">+{payout.toLocaleString('pt-BR')}</span>
     }</div>;
 }

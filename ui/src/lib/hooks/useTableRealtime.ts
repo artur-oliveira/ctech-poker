@@ -67,7 +67,10 @@ function describeSnapshot(previous: TableSnapshot | null, next: TableSnapshot, v
     messages.push(next.current_player_id === viewerId ? 'Sua vez de agir' : `Vez de ${playerLabel(next.current_player_id)}`);
   }
   if (next.payouts && !previous.payouts) {
-    messages.push(...Object.entries(next.payouts).filter(([, amount]) => amount > 0)
+    // Not every payout>0 is a win: an uncalled all-in's excess or an orphaned
+    // side-pot refund also moves chips back to a player without them having
+    // won anything, so this is gated on `winners`, not the raw amount.
+    messages.push(...Object.entries(next.payouts).filter(([playerId, amount]) => amount > 0 && next.winners?.includes(playerId))
       .map(([playerId, amount]) => `${playerLabel(playerId)} ganhou ${amount.toLocaleString('pt-BR')} fichas`));
   }
   return messages.join('. ');
