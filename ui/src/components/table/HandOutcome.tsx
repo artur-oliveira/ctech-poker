@@ -2,13 +2,28 @@
 import {useEffect, useState} from 'react';
 import {PartyPopper} from 'lucide-react';
 import {HAND_CATEGORY_LABELS} from '@/lib/utils';
+import {PlayingCard} from '@/components/table/PlayingCard';
+import {ChipStack} from '@/components/table/ChipStack';
+import {useCountUp} from '@/lib/hooks/useCountUp';
 
 export type HandOutcomeState = {
-  key: number; kind: 'win' | 'lose'; amount: number; handCategory?: string; opponentCategory?: string
+  key: number; kind: 'win' | 'lose'; handCategory?: string; opponentCategory?: string;
+  // The winning 5-card hand (or just the 2 hole cards when the board isn't
+  // complete) for whoever actually won this pot — the viewer's own on a win,
+  // the rival's on a loss — undefined when the hand ended without a
+  // showdown, since no one's cards were ever revealed to compare.
+  winningCards?: string[];
+  // The viewer's stack right before this hand resolved and right after — the
+  // chip counter below animates between the two, up when they gained chips,
+  // down when they lost some, and stays hidden when neither changed (e.g. a
+  // free showdown they simply lost with nothing left in the pot for them).
+  stackBefore?: number;
+  stackAfter?: number;
 };
 
 const EXIT_MS = 320;
 const CONFETTI_PIECES = Array.from({length: 8}, (_, i) => i);
+const CHIP_COUNT_MS = 700;
 
 type CategoryMeta = { gender: 'm' | 'f'; plural?: boolean };
 
@@ -76,16 +91,54 @@ function describeMatchup(kind: 'win' | 'lose', ownKey?: string, rivalKey?: strin
   return variants[seed % variants.length];
 }
 
+/** Three-beat reveal of a stack change: the stack as it was, the delta that's
+ * about to land, then the two merging into one counted total — counting up
+ * on a gain, down on a loss, since the same sequence reads honestly either
+ * way. Skips straight to the merged total under reduced motion instead of
+ * dropping the animation silently — the number itself still has to end up
+ * correct. */
+function ChipCountUp({from, to}: { from: number; to: number }) {
+  const delta = to - from;
+  const [reduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const [phase, setPhase] = useState<'base' | 'delta' | 'counting'>(reduced ? 'counting' : 'base');
+
+  // No dependency on from/to to reset `phase`: this component lives under a
+  // parent keyed by the outcome's hand key, so a new hand remounts it fresh
+  // (phase starts over at its initial value) instead of needing a manual
+  // reset here.
+  useEffect(() => {
+    if (reduced) return () => {
+    };
+    const toDelta = setTimeout(() => setPhase('delta'), 260);
+    const toCounting = setTimeout(() => setPhase('counting'), 560);
+    return () => {
+      clearTimeout(toDelta);
+      clearTimeout(toCounting);
+    };
+  }, [reduced]);
+
+  const display = useCountUp(from, phase === 'counting' ? to : from, CHIP_COUNT_MS);
+  const sign = delta > 0 ? '+' : '−';
+  return <span className={`hand-outcome-chips ${delta > 0 ? 'gain' : 'loss'}`}>
+    {phase === 'base' && <span key="base" className="hand-outcome-chips-base">
+      {from.toLocaleString('pt-BR')} fichas</span>}
+    {phase === 'delta' && <span key="delta" className="hand-outcome-chips-delta">
+      <span>{from.toLocaleString('pt-BR')}</span><b>{sign}{Math.abs(delta).toLocaleString('pt-BR')}</b></span>}
+    {phase === 'counting' && <span key="counting" className="hand-outcome-chips-total">
+      {delta > 0 && <ChipStack amount={delta} size="pot"/>}{display.toLocaleString('pt-BR')} fichas</span>}
+  </span>;
+}
+
 /** Fires once per resolved hand (keyed by an ever-increasing counter the
  * caller bumps only when payouts first appear for that hand) — never on the
  * repeat broadcasts that follow while the table sits in `complete`. Purely
  * decorative: the sr-only live region already announces the same outcome.
  *
- * Stays open for as long as the table itself is still on that resolved hand
- * (`holdOpen`, driven by `snapshot.stage === 'complete'`) instead of a fixed
- * timer — a player who glances away mid-hand and looks back a few seconds
- * later still finds their win/loss on screen, not a banner that already
- * auto-dismissed under them. It closes once the next hand actually starts. */
+ * Stays open for as long as the table itself is still showing that resolved
+ * hand's payouts (`holdOpen`) instead of a fixed timer — a player who glances
+ * away mid-hand and looks back a few seconds later still finds their
+ * win/loss on screen, not a banner that already auto-dismissed under them.
+ * It closes once the next hand actually starts. */
 export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeState | null; holdOpen: boolean }) {
   const [shown, setShown] = useState(outcome);
   const [seenKey, setSeenKey] = useState(outcome?.key);
@@ -113,8 +166,12 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
         <span key={i}/>)}</span>}
       {shown.kind === 'win' ? <PartyPopper/> : null}
       <b>{shown.kind === 'win' ? 'Você venceu a mão!' : 'Não foi dessa vez.'}</b>
-      {shown.kind === 'win' &&
-          <span className="hand-outcome-amount">+{shown.amount.toLocaleString('pt-BR')} fichas</span>}
+      {shown.winningCards && <span className="hand-outcome-cards">
+        {shown.winningCards.map((card, i) => <PlayingCard key={i} card={card} index={i} size="hole"
+                                                            owner={shown.kind === 'win' ? 'viewer' : 'opponent'}/>)}
+      </span>}
+      {shown.stackBefore != null && shown.stackAfter != null && shown.stackBefore !== shown.stackAfter &&
+          <ChipCountUp from={shown.stackBefore} to={shown.stackAfter}/>}
       {detail ? <p className="hand-outcome-detail">{detail}</p> : category && <small>{category}</small>}
       {shown.kind === 'lose' && <small>A próxima mão já está a caminho.</small>}
     </div>

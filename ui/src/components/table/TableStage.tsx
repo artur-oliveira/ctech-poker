@@ -34,9 +34,14 @@ type Props = {
   nowMs: number;
   outcome: HandOutcomeState | null;
   holdOutcomeOpen: boolean;
+  // The viewer's stack right before the currently-showing resolution, so
+  // their own seat can count a chip loss down the same way the win pill
+  // already counts a payout up. Only meaningful (non-undefined) while that
+  // resolution's payouts are still on screen.
+  viewerStackBefore?: number;
 };
 
-export function TableStage({snapshot, viewer, pot, bigBlind, nowMs, outcome, holdOutcomeOpen}: Props) {
+export function TableStage({snapshot, viewer, pot, bigBlind, nowMs, outcome, holdOutcomeOpen, viewerStackBefore}: Props) {
   const vertical = useVerticalStage();
   const seats = rotateSeats(snapshot.seats, viewer);
   const seatNode = (seat: TableSnapshot['seats'][number], index: number) =>
@@ -47,7 +52,8 @@ export function TableStage({snapshot, viewer, pot, bigBlind, nowMs, outcome, hol
           deadlineMs={snapshot.action_deadline_unix_ms}
           nowMs={nowMs}
           bigBlind={bigBlind}
-          isViewer={seat.player_id === viewer}/>;
+          isViewer={seat.player_id === viewer}
+          stackBefore={seat.player_id === viewer ? viewerStackBefore : undefined}/>;
   const board = <Board cards={snapshot.board} pot={pot} rake={snapshot.rake} bigBlind={bigBlind}/>;
 
   if (!vertical) return (

@@ -17,7 +17,7 @@ func TurnTimeoutFor(seconds int) time.Duration {
 
 // NextHandDelay is how long the table waits after a hand reaches Complete
 // before auto-starting the next one.
-const NextHandDelay = 8 * time.Second
+const NextHandDelay = 12 * time.Second
 
 // RevealGrace is added on top of the normal per-turn deadline the first time
 // a new street (Flop/Turn/River) is dealt, so the board-card reveal

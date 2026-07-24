@@ -23,7 +23,7 @@ import {TermsGate} from '@/components/TermsGate';
 import {Button} from '@/components/ui/button';
 import {pushNotification} from '@/lib/notify';
 import type {PokerAction, TableSnapshot} from '@/lib/api/table';
-import {HAND_RANK_INDEX} from '@/lib/pokerRules';
+import {bestFiveCardHand, HAND_RANK_INDEX} from '@/lib/pokerRules';
 import {type MockScenario, USE_MOCK} from '@/lib/mock';
 import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
 
@@ -127,6 +127,25 @@ function TableContent() {
   // keeps this from re-firing on those repeats.
   const previousPayoutsRef = useRef<TableSnapshot['payouts']>(undefined);
   const outcomeKeyRef = useRef(0);
+  // The viewer's stack at the moment the CURRENT hand began (its first
+  // pre_flop snapshot) — captured once per hand, before any of this hand's
+  // blinds, bets, or winnings apply. Comparing against the stack right
+  // before resolution instead would only ever show a hold or a gain: by
+  // resolution time a loser's chips are already in the pot from betting
+  // earlier in the same hand, so "before resolution" already has this hand's
+  // losses baked in. Adjusted directly during render (not an effect) — the
+  // same derived-state-from-props pattern HandOutcomeBanner uses below —
+  // since the viewer's own seat also reads it during render to animate its
+  // stack number alongside the banner.
+  const [previousStage, setPreviousStage] = useState<string | undefined>(undefined);
+  const [stackAtHandStart, setStackAtHandStart] = useState<number | undefined>(undefined);
+  if (rt.snapshot && viewer && rt.snapshot.stage !== previousStage) {
+    if (rt.snapshot.stage === 'pre_flop' && previousStage !== 'pre_flop') {
+      const liveSeat = rt.snapshot.seats.find(item => item.player_id === viewer);
+      if (liveSeat) setStackAtHandStart(liveSeat.stack);
+    }
+    setPreviousStage(rt.snapshot.stage);
+  }
   const [handOutcome, setHandOutcome] = useState<HandOutcomeState | null>(null);
   useEffect(() => {
     const snap = rt.snapshot;
@@ -140,9 +159,9 @@ function TableContent() {
     const seat = snap.seats.find(item => item.player_id === viewer);
     if (seat?.state !== 'active' && seat?.state !== 'all_in') return;
     outcomeKeyRef.current += 1;
-    const amount = snap.payouts[viewer] || 0;
-    // Not `amount > 0`: an uncalled all-in's excess or an orphaned side-pot
-    // refund also shows up as a payout without being an actual win.
+    // Membership in `winners`, not a truthy payout, decides win/lose: an
+    // uncalled all-in's excess or an orphaned side-pot refund also shows up
+    // in `payouts` without being an actual win.
     const kind = snap.winners?.includes(viewer) ? 'win' : 'lose';
     // The banner names one rival hand as the point of comparison: the
     // toughest hand it beat when the viewer won (proof it beat everyone),
@@ -154,10 +173,23 @@ function TableContent() {
       snap.seats.filter(item => item.player_id !== viewer && item.hand_category)
         .sort((a, b) => HAND_RANK_INDEX[a.hand_category!] - HAND_RANK_INDEX[b.hand_category!])[0]?.hand_category :
       snap.seats.find(item => item.player_id !== viewer && snap.winners?.includes(item.player_id))?.hand_category;
+    // The hand that actually won this pot: the viewer's own cards on a win
+    // (always known), or the first winning rival's cards on a loss — but only
+    // when a showdown actually revealed them (a hand that ended with everyone
+    // else folding never shows opponent cards). Combined with the board (once
+    // the board is complete) and reduced to the actual best 5-card hand — a
+    // bare pair of hole cards doesn't show what the player actually won with
+    // when the winning combination uses the board too.
+    const winnerSeat = kind === 'win' ? seat : snap.seats.find(item => snap.winners?.includes(item.player_id));
+    const winnerHole = winnerSeat?.hole_cards?.length === 2 &&
+      winnerSeat.hole_cards.every(card => card.toLowerCase() !== 'back') ? winnerSeat.hole_cards : undefined;
+    const winningCards = winnerHole && snap.board.length === 5 ?
+      bestFiveCardHand([...winnerHole, ...snap.board]) : winnerHole;
     setHandOutcome({
-      key: outcomeKeyRef.current, kind, amount, handCategory: seat.hand_category, opponentCategory
+      key: outcomeKeyRef.current, kind, handCategory: seat.hand_category, opponentCategory,
+      winningCards, stackBefore: stackAtHandStart, stackAfter: seat.stack
     });
-  }, [rt.snapshot, viewer]);
+  }, [rt.snapshot, viewer, stackAtHandStart]);
   if (!valid) return (
     <main className="game-loading">
       <h1 className="sr-only">Mesa de poker</h1>
@@ -271,8 +303,15 @@ function TableContent() {
                       onClick={() => rt.showCards()}>Mostrar cartas</Button>}
         </div>}
       </div>
+      {/* `payouts`, not `stage === 'complete'`: a showdown hand shows payouts
+          one broadcast earlier, at `stage === 'showdown'`, and only flips to
+          `complete` a moment later. Gating on the stage name left a window
+          where the outcome had already fired but holdOpen was still false,
+          racing the banner's own exit timer into dismissing it before
+          `complete` ever arrived. */}
       <TableStage snapshot={s} viewer={viewer} pot={pot} bigBlind={bigBlind} nowMs={rt.snapshotAt}
-                  outcome={handOutcome} holdOutcomeOpen={s.stage === 'complete'}/>
+                  outcome={handOutcome} holdOutcomeOpen={Boolean(s.payouts)}
+                  viewerStackBefore={s.payouts ? stackAtHandStart : undefined}/>
       <ActionBar
         onActAction={rt.act}
         {...actions}

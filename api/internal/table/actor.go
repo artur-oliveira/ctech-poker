@@ -921,7 +921,7 @@ func isRevealStreet(stage hand.Stage) bool {
 	return stage == hand.Flop || stage == hand.Turn || stage == hand.River
 }
 
-// armNextHandTimer (re-)arms the 8s post-hand countdown when the table is
+// armNextHandTimer (re-)arms the 12s post-hand countdown when the table is
 // Complete. Idempotent per handID: re-arming for the SAME hand does not
 // restart the countdown (matches armTurnTimer's convention). complete is
 // passed in by broadcastAll (already knows the current stage) so this stays

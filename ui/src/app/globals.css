@@ -2122,8 +2122,8 @@ h1 em {
     display: grid;
     gap: 4px;
     justify-items: center;
-    max-width: 260px;
-    padding: 16px 26px;
+    max-width: 300px;
+    padding: 16px 20px;
     border-radius: var(--rounded-panel);
     background: var(--toast-bg);
     color: var(--toast-ink);
@@ -2150,9 +2150,57 @@ h1 em {
     font-size: var(--font-size-body)
 }
 
-.hand-outcome-amount {
+.hand-outcome-cards {
+    display: flex;
+    gap: 6px;
+    margin-block: 2px
+}
+
+.hand-outcome-cards .hole-card {
+    width: 40px;
+    height: 56px
+}
+
+.hand-outcome-chips-base, .hand-outcome-chips-delta, .hand-outcome-chips-total {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     font: 800 var(--font-size-body) var(--font-mono);
+    animation: chip-phase-in 220ms var(--ease-out-quart) both
+}
+
+.hand-outcome-chips-base {
+    color: var(--text-secondary)
+}
+
+.hand-outcome-chips-delta {
+    color: var(--text-secondary)
+}
+
+.hand-outcome-chips-delta b {
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--gold);
+    color: var(--gold-ink);
+    font-size: var(--font-size-mono)
+}
+
+.hand-outcome-chips.loss .hand-outcome-chips-delta b {
+    background: var(--surface-error);
+    color: var(--danger-soft)
+}
+
+.hand-outcome-chips-total {
     color: var(--gold-ink)
+}
+
+.hand-outcome-card.lose .hand-outcome-chips-base,
+.hand-outcome-card.lose .hand-outcome-chips.gain .hand-outcome-chips-total {
+    color: var(--paper)
+}
+
+.hand-outcome-chips.loss .hand-outcome-chips-total {
+    color: var(--danger-soft)
 }
 
 .hand-outcome-card small {
@@ -2245,6 +2293,13 @@ h1 em {
     from {
         opacity: 0;
         transform: translateY(10px) scale(.9)
+    }
+}
+
+@keyframes chip-phase-in {
+    from {
+        opacity: 0;
+        transform: translateY(4px) scale(.92)
     }
 }
 
