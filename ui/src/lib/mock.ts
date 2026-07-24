@@ -215,6 +215,9 @@ const baseSeats = () => [
   {player_id: 'joao_floripa', name: 'João', stack: 4375, state: 'active', contributed: 75, hole_cards: ['back', 'back']},
   {player_id: 'mari_belém', name: 'Mari', stack: 8200, state: 'disconnected', contributed: 0},
   {player_id: 'caio_goiânia', name: 'Caio', stack: 3400, state: 'all_in', contributed: 625, hole_cards: ['back', 'back']},
+  // 9th seat — the room's max_seats, so dev/QA always sees the table at
+  // real worst-case capacity, not a comfortably under-full one.
+  {player_id: 'rafa_curitiba', name: 'Rafa', stack: 5200, state: 'active', contributed: 75, hole_cards: ['back', 'back']},
 ];
 
 function revealShowdownCards(seats: SeatView[]) {

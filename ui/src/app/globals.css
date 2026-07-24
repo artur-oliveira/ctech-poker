@@ -62,6 +62,19 @@
     --ease-out-quart: cubic-bezier(.25, 1, .5, 1);
     --ease-out-quint: cubic-bezier(.22, 1, .36, 1);
     --ease-out-expo: cubic-bezier(.16, 1, .3, 1);
+
+    /* z-index scale — app-wide overlay layers only (fixed/sticky chrome that can
+       compete for the same stacking context). Local sibling-ordering z-index
+       (card flip faces, seat badges, per-chip stacking) stays as plain small
+       ints scoped to their own positioned ancestor; those can't collide with
+       this scale and don't belong in it. Dialogs (@base-ui) use Tailwind's
+       z-50, already above every tier here. */
+    --z-chrome: 20;
+    --z-notice: 25;
+    --z-toast: 30;
+    --z-dev: 40;
+    /* opaque mask stop — CSS mask luminance only, never a rendered color */
+    --mask-opaque: #fff;
     /* ponytail: stacked mobile action bar footprint (context + presets + quick + bet + raise rows), generous for 2-line pt-BR context; upgrade to measured height if layout grows */
     --action-bar-stack: 260px;
     /* clearance .game-chat needs above the action bar; redeclared at the
@@ -205,7 +218,7 @@ button, a {
     align-items: center;
     justify-content: space-between;
     position: relative;
-    z-index: 20
+    z-index: var(--z-chrome)
 }
 
 .brand {
@@ -1322,7 +1335,7 @@ h1 em {
     grid-template-rows:auto minmax(320px, 1fr) auto
 }
 
-.game > header {
+.game-chrome > header {
     min-height: 55px;
     display: flex;
     align-items: center;
@@ -1334,7 +1347,7 @@ h1 em {
     letter-spacing: .1em
 }
 
-.game > header a, .game > header i {
+.game-chrome > header a, .game-chrome > header i {
     color: inherit;
     text-decoration: none;
     display: flex;
@@ -1343,14 +1356,14 @@ h1 em {
     font-style: normal
 }
 
-.game > header a {
+.game-chrome > header a {
     min-height: 44px;
     padding-inline: 6px;
     margin-left: -6px;
     border-radius: var(--rounded-control)
 }
 
-.game > header a:focus-visible {
+.game-chrome > header a:focus-visible {
     outline: 3px solid var(--focus-ring);
     outline-offset: 2px
 }
@@ -1360,7 +1373,7 @@ h1 em {
     outline-offset: 2px
 }
 
-.game > header svg {
+.game-chrome > header svg {
     width: 14px
 }
 
@@ -1456,7 +1469,7 @@ h1 em {
 
 .mock-controls {
     position: fixed;
-    z-index: 40;
+    z-index: var(--z-dev);
     bottom: max(16px, env(safe-area-inset-bottom));
     left: max(12px, env(safe-area-inset-left));
     width: min(250px, calc(100vw - 24px));
@@ -1534,7 +1547,7 @@ h1 em {
 
 .reconnect-notice {
     position: fixed;
-    z-index: 25;
+    z-index: var(--z-notice);
     top: max(58px, calc(env(safe-area-inset-top) + 48px));
     left: 50%;
     width: min(420px, calc(100vw - 24px));
@@ -1579,6 +1592,13 @@ h1 em {
     from {
         opacity: 0;
         transform: translate(-50%, -8px)
+    }
+}
+
+@keyframes reconnect-enter-static {
+    from {
+        opacity: 0;
+        transform: translateY(-6px)
     }
 }
 
@@ -1726,7 +1746,7 @@ h1 em {
     animation: pot-count 180ms var(--ease-out-quart)
 }
 
-.board > div > span {
+.board > div > span:not(.playing-card) {
     width: 68px;
     height: 95px;
     border: 1px dashed var(--white-2a);
@@ -1774,7 +1794,7 @@ h1 em {
     padding: 2px;
     border-radius: inherit;
     background: conic-gradient(var(--gold) var(--seat-ring-progress), transparent 0);
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask: linear-gradient(var(--mask-opaque) 0 0) content-box, linear-gradient(var(--mask-opaque) 0 0);
     -webkit-mask-composite: xor;
             mask-composite: exclude;
     animation: seat-turn-deplete linear forwards;
@@ -1796,7 +1816,7 @@ h1 em {
     border-radius: 50%;
     vertical-align: middle;
     background: conic-gradient(var(--gold) var(--seat-ring-progress), transparent 0);
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask: linear-gradient(var(--mask-opaque) 0 0) content-box, linear-gradient(var(--mask-opaque) 0 0);
     -webkit-mask-composite: xor;
             mask-composite: exclude;
     animation: seat-turn-deplete linear forwards;
@@ -1822,6 +1842,12 @@ h1 em {
 .game-seat.is-pending-name .seat-info b {
     color: var(--text-secondary);
     font-style: italic
+}
+
+/* Desktop/tablet read seats as name cards; only the phone-width redesign
+   below (avatar + chips, color instead of name) turns this on. */
+.seat-avatar {
+    display: none
 }
 
 .seat-cards {
@@ -2221,6 +2247,7 @@ h1 em {
 }
 
 .action-bar button {
+    min-width: 0;
     min-height: 48px;
     border: 1px solid var(--control-border);
     background: var(--surface-control);
@@ -2381,7 +2408,7 @@ h1 em {
 
 .game-chat {
     position: fixed;
-    z-index: 20;
+    z-index: var(--z-chrome);
     right: 16px;
     bottom: var(--action-bar-clear)
 }
@@ -2506,7 +2533,7 @@ h1 em {
 
 .achievement-toast {
     position: fixed;
-    z-index: 30;
+    z-index: var(--z-toast);
     right: 20px;
     top: 70px;
     background: var(--toast-bg);
@@ -2572,7 +2599,7 @@ h1 em {
 
 .api-notifier {
     position: fixed;
-    z-index: 40;
+    z-index: var(--z-dev);
     right: 20px;
     top: 70px;
     display: flex;
@@ -3167,6 +3194,382 @@ h1 em {
     height: auto
 }
 
+/* ===== Vertical stage — portrait handhelds =====
+   TableStage picks this composition via matchMedia (its own DOM tree), so
+   everything here is scoped by class, not viewport width: nothing below
+   fights the desktop oval geometry or the width-tier media blocks. Opponents
+   become avatar chips around a tall capsule; the viewer leaves the ring and
+   becomes a hero HUD (large hole cards) docked above the action bar. */
+.game-table.stage-v {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    padding: 8px 12px 0
+}
+
+/* The ring keeps a tall-capsule proportion instead of swallowing all leftover
+   height — on tablets the felt would otherwise balloon into a near-circle of
+   dead green. Short phones opt back into full-bleed width (see the
+   max-height tier at the end of this file). */
+.stage-v-ring {
+    position: relative;
+    flex: 1;
+    align-self: center;
+    aspect-ratio: 3 / 4;
+    width: auto;
+    max-width: 100%;
+    min-height: 300px
+}
+
+.stage-v .game-rail {
+    inset: 28px 4px 12px;
+    border-radius: 999px
+}
+
+/* Horizontal felt inset stretches with the ring (12%) so the avatar band
+   between rail and felt stays roughly avatar-sized from phone to portrait
+   tablet; vertical insets leave the top arc's captions clear of the header. */
+.stage-v .game-felt {
+    inset: clamp(56px, 9%, 84px) clamp(44px, 12%, 90px) clamp(48px, 8%, 76px);
+    border-radius: 999px
+}
+
+.stage-v .board > div {
+    gap: 4px
+}
+
+.stage-v .board-card, .stage-v .board > div > span {
+    width: 40px;
+    height: 56px
+}
+
+/* --- Opponents: avatar chips on the rail band --- */
+.stage-v-ring .game-seat {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    min-width: 0;
+    left: var(--seat-x);
+    top: var(--seat-y);
+    right: auto;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+    gap: 0;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: none
+}
+
+.stage-v-ring .game-seat:after {
+    border-radius: 50%;
+    inset: -3px
+}
+
+.stage-v-ring .seat-avatar {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    font-size: var(--font-size-tiny)
+}
+
+/* folded already grayscales globally; sitting-out, disconnected and
+   pending-entry only need it here, where no state word is painted. */
+.stage-v-ring .game-seat.sitting_out .seat-avatar,
+.stage-v-ring .game-seat.disconnected .seat-avatar,
+.stage-v-ring .game-seat.is-pending-name .seat-avatar {
+    filter: grayscale(1) opacity(.65)
+}
+
+.stage-v-ring .game-seat.all_in .seat-avatar {
+    box-shadow: 0 0 0 3px var(--gold)
+}
+
+/* Caption below the avatar (chip count only — the name lives in the avatar's
+   initials and stays in the DOM for assistive tech); hole cards float above,
+   over the rail band, so they never reach the board at showdown. Top-arc
+   seats (4/5) mirror: caption above, cards below toward the felt. */
+.stage-v-ring .seat-info {
+    position: absolute;
+    z-index: 1;
+    top: 100%;
+    left: 50%;
+    width: max-content;
+    max-width: 64px;
+    margin-top: 3px;
+    transform: translateX(-50%);
+    text-align: center;
+    pointer-events: none
+}
+
+.stage-v-ring .seat-info b,
+.stage-v-ring .seat-info .seat-state {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%)
+}
+
+.stage-v-ring .seat-info span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--font-size-tiny);
+    white-space: nowrap
+}
+
+.stage-v-ring .seat-info .seat-equity, .stage-v-ring .seat-info .seat-hand-category {
+    display: none
+}
+
+.stage-v-ring .game-seat .seat-cards {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% - 3px);
+    top: auto;
+    transform: translateX(-50%);
+    z-index: 0
+}
+
+.stage-v-ring .seat-cards > .playing-card {
+    width: 30px;
+    height: 42px;
+    margin-right: -12px
+}
+
+.stage-v-ring .seat-4 .seat-cards, .stage-v-ring .seat-5 .seat-cards {
+    bottom: auto;
+    top: calc(100% - 3px)
+}
+
+.stage-v-ring .seat-4 .seat-info, .stage-v-ring .seat-5 .seat-info {
+    top: auto;
+    bottom: 100%;
+    margin-top: 0;
+    margin-bottom: 3px
+}
+
+/* Bets point inward toward the pot: sideways for the two columns, downward
+   past the cards for the top arc. Every seat-N spelled out to out-specificity
+   the desktop per-seat bet rules. */
+.stage-v-ring .seat-1 .seat-bet, .stage-v-ring .seat-2 .seat-bet, .stage-v-ring .seat-3 .seat-bet,
+.stage-v-ring .seat-6 .seat-bet, .stage-v-ring .seat-7 .seat-bet, .stage-v-ring .seat-8 .seat-bet {
+    top: 50%;
+    left: calc(100% + 8px);
+    right: auto;
+    bottom: auto;
+    flex-direction: column;
+    transform: translateY(-50%);
+    transform-origin: 0 50%
+}
+
+.stage-v-ring .seat-6 .seat-bet, .stage-v-ring .seat-7 .seat-bet, .stage-v-ring .seat-8 .seat-bet {
+    left: auto;
+    right: calc(100% + 8px);
+    transform-origin: 100% 50%
+}
+
+/* Top-arc bets slide sideways into the gap between the two top seats —
+   below-the-cards placement lands on the pot/rake row on short screens. */
+.stage-v-ring .seat-4 .seat-bet {
+    top: 50%;
+    left: calc(100% + 8px);
+    right: auto;
+    bottom: auto;
+    transform: translateY(-50%);
+    transform-origin: 0 50%
+}
+
+.stage-v-ring .seat-5 .seat-bet {
+    top: 50%;
+    left: auto;
+    right: calc(100% + 8px);
+    bottom: auto;
+    transform: translateY(-50%);
+    transform-origin: 100% 50%
+}
+
+/* Winner pill: top arc drops it below, everyone else keeps it above. */
+.stage-v-ring .seat-4 .seat-win, .stage-v-ring .seat-5 .seat-win {
+    top: calc(100% + 8px);
+    bottom: auto
+}
+
+/* Ring order mirrors the desktop oval (counter-clockwise from the viewer):
+   1-3 climb the left column, 4-5 cross the top, 6-8 descend the right. */
+.stage-v-ring .seat-1 { --seat-x: 12%; --seat-y: 74% }
+.stage-v-ring .seat-2 { --seat-x: 7%; --seat-y: 48% }
+.stage-v-ring .seat-3 { --seat-x: 12%; --seat-y: 22% }
+.stage-v-ring .seat-4 { --seat-x: 32%; --seat-y: 34px }
+.stage-v-ring .seat-5 { --seat-x: 68%; --seat-y: 34px }
+.stage-v-ring .seat-6 { --seat-x: 88%; --seat-y: 22% }
+.stage-v-ring .seat-7 { --seat-x: 93%; --seat-y: 48% }
+.stage-v-ring .seat-8 { --seat-x: 88%; --seat-y: 74% }
+
+/* --- Viewer hero HUD --- */
+.stage-v > .game-seat {
+    position: relative;
+    inset: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: min(440px, 100%);
+    margin: 0 auto;
+    padding: 7px 12px
+}
+
+/* The hero IS obviously you — the brand border moves from "viewer" to
+   "your turn" here, keeping one red signal per decision (Red Signal Rule). */
+.stage-v > .game-seat.viewer {
+    min-width: 0;
+    border-color: var(--seat-border);
+    box-shadow: var(--shadow-seat)
+}
+
+.stage-v > .game-seat.viewer.is-turn {
+    border-color: var(--brand-bright);
+    box-shadow: var(--shadow-seat), 0 0 0 3px color-mix(in srgb, var(--brand) 35%, transparent)
+}
+
+.stage-v > .game-seat .seat-cards {
+    position: static;
+    transform: none
+}
+
+.stage-v > .game-seat .seat-cards > .playing-card {
+    width: 56px;
+    height: 78px;
+    margin-right: -12px
+}
+
+.stage-v > .game-seat .seat-info {
+    position: static;
+    flex: 1;
+    min-width: 0;
+    transform: none;
+    text-align: left
+}
+
+.stage-v > .game-seat .seat-info b {
+    max-width: none;
+    font-size: var(--font-size-compact)
+}
+
+.stage-v > .game-seat .seat-info span {
+    max-width: none;
+    margin-top: 4px;
+    font: 700 15px var(--font-mono);
+    font-variant-numeric: tabular-nums
+}
+
+.stage-v > .game-seat .seat-info small {
+    max-width: none;
+    font-size: var(--font-size-tiny)
+}
+
+/* Your wager floats from the HUD up toward the pot. */
+.stage-v > .game-seat .seat-bet {
+    top: auto;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    transform-origin: 50% 100%;
+    flex-direction: column-reverse
+}
+
+.stage-v > .game-seat .seat-win,
+.stage-v > .game-seat.viewer .seat-win {
+    left: auto;
+    right: 12px;
+    bottom: calc(100% + 10px);
+    top: auto;
+    animation-name: winner-confirm
+}
+
+/* Roomier portrait surfaces (tablets, large phones): board and seats step up
+   one size so the capped ring doesn't dwarf them. */
+@media (min-width: 560px) {
+    .stage-v .board-card, .stage-v .board > div > span {
+        width: 48px;
+        height: 68px
+    }
+
+    .stage-v-ring .game-seat {
+        width: 46px;
+        height: 46px
+    }
+
+    .stage-v-ring .seat-cards > .playing-card {
+        width: 34px;
+        height: 47px;
+        margin-right: -14px
+    }
+
+    .stage-v-ring .seat-info {
+        max-width: 84px
+    }
+}
+
+/* Largest portrait surfaces (Surface Pro class): one more size step. */
+@media (min-width: 840px) {
+    .stage-v .board-card, .stage-v .board > div > span {
+        width: 56px;
+        height: 79px
+    }
+
+    .stage-v-ring .game-seat {
+        width: 52px;
+        height: 52px
+    }
+
+    .stage-v-ring .seat-cards > .playing-card {
+        width: 38px;
+        height: 53px;
+        margin-right: -16px
+    }
+
+    .stage-v-ring .seat-info {
+        max-width: 96px
+    }
+
+    .stage-v > .game-seat .seat-cards > .playing-card {
+        width: 64px;
+        height: 89px
+    }
+}
+
+/* On the vertical stage the action zone (bar + hero HUD) changes height as
+   the raise UI expands — a bottom-anchored chat toggle keeps landing on it.
+   Anchor chat to the ring's top-right corner instead (the capsule curve
+   leaves it empty) and open the panel downward. */
+@media (orientation: portrait) and (max-width: 1023px) {
+    .game-chat.game-chat {
+        right: 12px;
+        top: calc(env(safe-area-inset-top) + 60px);
+        bottom: auto
+    }
+
+    .game-chat .chat-body {
+        margin-bottom: 0;
+        margin-top: 8px;
+        width: min(285px, calc(100vw - 24px));
+        float: right;
+        clear: right
+    }
+
+    /* Achievement toast ducks below the chat toggle that owns this corner. */
+    .achievement-toast {
+        top: calc(env(safe-area-inset-top) + 114px);
+        right: 12px
+    }
+}
+
 @media (max-width: 720px) {
     .onboarding-intro {
         flex-direction: column;
@@ -3187,7 +3590,10 @@ h1 em {
     }
 }
 
-@media (max-width: 800px) {
+/* The second arm pulls landscape handhelds (any width, short height) into the
+   same compact-seat tier — full desktop name-cards collide with the board on
+   a 390px-tall table. */
+@media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
     .room-grid {
         grid-template-columns:1fr 1fr
     }
@@ -3280,6 +3686,13 @@ h1 em {
         grid-column: 1 / -1
     }
 
+    /* collapsed = only the raise button occupies this grid row (the slider
+       is display:none), so it must claim both columns or half the row sits
+       empty */
+    .raise-collapsed {
+        grid-column: 1 / -1
+    }
+
     .action-bar button {
         width: 100%;
         padding: 0 12px
@@ -3307,12 +3720,35 @@ h1 em {
         grid-template-columns:1fr
     }
 
-    .game > header {
+    .game-chrome > header {
+        flex-wrap: wrap;
+        row-gap: 6px;
         padding-right: max(12px, env(safe-area-inset-right));
         padding-left: max(12px, env(safe-area-inset-left))
     }
 
-    .game > header > span {
+    /* Lobby link + stage label can already eat most of a phone-width row;
+       without this the trailing icons (Convidar/Sentar fora/Sair da mesa)
+       get pushed past the edge and .game's overflow-x:clip hides them
+       entirely instead of just reflowing. */
+    /* One header row on phones: the Lobby link collapses to its chevron
+       (label stays for assistive tech) so the stage label and every table
+       tool fit beside it without wrapping. */
+    .header-lobby-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
+    }
+
+    .game-chrome > header .header-right {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 6px
+    }
+
+    .game-chrome > header > span {
         max-width: 32vw;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -3329,63 +3765,21 @@ h1 em {
         clip-path: inset(50%)
     }
 
-    .game-table {
-        width: 100vw
+    /* A fixed banner can't reliably dodge a header that wraps to two lines —
+       pin it in normal flow under the header instead, so it can never sit on
+       top of Sentar fora / Sair da mesa (see .game-chrome in page.tsx). */
+    /* Right margin keeps the in-flow notice clear of the chat toggle that
+       anchors to the ring's top-right corner on the vertical stage. */
+    .reconnect-notice {
+        position: static;
+        width: auto;
+        margin: 6px calc(64px + env(safe-area-inset-right)) 0 12px;
+        transform: none;
+        animation: reconnect-enter-static 240ms var(--ease-out-quint) both
     }
 
-    .game-rail {
-        inset: 13% -15% 10%
-    }
-
-    .game-felt {
-        inset: 17% -10% 14%
-    }
-
-    .game-seat {
-        min-width: 72px;
-        max-width: 92px;
-        padding: 6px
-    }
-
-    .seat-0 {
-        left: 34%
-    }
-
-    .seat-4 {
-        left: 34%
-    }
-
-    .seat-2 {
-        left: 0
-    }
-
-    .seat-6 {
-        right: 0
-    }
-
-    .seat-1 {
-        left: 0
-    }
-
-    .seat-7 {
-        right: 0
-    }
-
-    .seat-3 {
-        left: 0
-    }
-
-    .seat-5 {
-        right: 0
-    }
-
-    .board > div {
-        gap: 3px
-    }
-
-    .board-card, .board > div > span {
-        width: 43px;
-        height: 60px
+    .reconnect-notice > span:not(.next-hand-ring) {
+        inset: auto 0 0
     }
 
     .action-bar button {
@@ -3397,13 +3791,9 @@ h1 em {
         grid-template-columns:minmax(64px, 1fr) 58px
     }
 
-    .game-chat {
-        right: 10px
-    }
-
     .mock-controls {
         top: auto;
-        bottom: calc(142px + env(safe-area-inset-bottom));
+        bottom: calc(258px + env(safe-area-inset-bottom));
         left: max(12px, env(safe-area-inset-left));
         width: 44px
     }
@@ -3441,14 +3831,17 @@ h1 em {
     }
 }
 
-@media (max-height: 520px) and (orientation: landscape) {
+@media (max-height: 620px) and (orientation: landscape) {
     .game {
         grid-template-columns:minmax(320px, 1fr) clamp(220px, 28vw, 264px);
         grid-template-rows:auto minmax(320px, 1fr)
     }
 
-    .game > header {
-        grid-column: 1 / -1;
+    .game-chrome {
+        grid-column: 1 / -1
+    }
+
+    .game-chrome > header {
         min-height: 48px;
         padding-top: max(2px, env(safe-area-inset-top));
         padding-bottom: 2px
@@ -3491,6 +3884,108 @@ h1 em {
         right: calc(clamp(220px, 28vw, 264px) + 12px);
         bottom: max(12px, env(safe-area-inset-bottom))
     }
+
+    /* A 390px-tall ring is wide, not tall: spread the bottom/top rows into
+       the corners, pin the side seats to the true vertical middle, and keep
+       bets tight to their seats so nothing reaches the board. */
+    .seat-0 { left: 33%; bottom: 2% }
+    .seat-8 { left: 56%; bottom: 2% }
+    .seat-1 { left: 12%; bottom: 7% }
+    .seat-7 { right: 12%; bottom: 7% }
+    .seat-2 { left: 1%; top: 40% }
+    .seat-6 { right: 1%; top: 40% }
+    .seat-3 { left: 13%; top: 5% }
+    .seat-5 { right: 13%; top: 5% }
+    .seat-4 { left: 46%; top: 4% }
+
+    /* Top-center seat: cards float over the header if they stay above the
+       pill — flip them below, toward the felt. */
+    .seat-4 .seat-cards {
+        bottom: auto;
+        top: calc(100% - 3px)
+    }
+
+    .seat-4 .seat-bet {
+        top: calc(100% + 48px)
+    }
+
+    .seat-bet {
+        top: calc(100% + 4px)
+    }
+
+    .seat-0 .seat-bet, .seat-8 .seat-bet {
+        bottom: calc(100% + 40px)
+    }
+
+    /* Lower-corner bets slide sideways toward the pot — floating them up
+       lands them on the mid-side seats at this height. */
+    .seat-1 .seat-bet {
+        top: 50%;
+        left: calc(100% + 6px);
+        bottom: auto;
+        transform: translateY(-50%);
+        transform-origin: 0 50%;
+        flex-direction: column
+    }
+
+    .seat-7 .seat-bet {
+        top: 50%;
+        left: auto;
+        right: calc(100% + 6px);
+        bottom: auto;
+        transform: translateY(-50%);
+        transform-origin: 100% 50%;
+        flex-direction: column
+    }
+
+    .board-card, .board > div > span {
+        width: 42px;
+        height: 59px
+    }
+}
+
+/* Short portrait phones (SE/8 class): the ring loses its height to header +
+   HUD + action bar, so the whole stage steps down one size — smaller board,
+   avatars and hero cards — instead of letting the mid-row seats collide with
+   the community cards. Placed after the width tiers so it wins the cascade. */
+@media (orientation: portrait) and (max-height: 760px) {
+    .stage-v .game-felt {
+        inset: clamp(46px, 8%, 84px) clamp(34px, 10%, 90px) clamp(38px, 7%, 76px)
+    }
+
+    .stage-v .board > div {
+        gap: 3px
+    }
+
+    .stage-v .board-card, .stage-v .board > div > span {
+        width: 34px;
+        height: 48px
+    }
+
+    .stage-v .game-pot {
+        margin-bottom: 8px
+    }
+
+    .stage-v-ring .game-seat {
+        width: 34px;
+        height: 34px
+    }
+
+    .stage-v-ring .seat-cards > .playing-card {
+        width: 26px;
+        height: 36px;
+        margin-right: -11px
+    }
+
+    .stage-v > .game-seat .seat-cards > .playing-card {
+        width: 48px;
+        height: 67px
+    }
+
+    /* Lower corners drop a notch so the mid-row captions clear their
+       neighbors' floated cards on short rings. */
+    .stage-v-ring .seat-1 { --seat-y: 77% }
+    .stage-v-ring .seat-8 { --seat-y: 77% }
 }
 
 @media (pointer: coarse) {

@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import {BookOpen, Club, Gift, LoaderCircle, Trophy} from 'lucide-react';
 import {StakesGrid} from '@/components/lobby/StakesGrid';
+import {ActiveTableBanner} from '@/components/lobby/ActiveTableBanner';
 import {CreateRoomDialog} from '@/components/lobby/CreateRoomDialog';
 import {OnboardingIntro} from '@/components/lobby/OnboardingIntro';
 import {ProfileMenu} from '@/components/lobby/ProfileMenu';
@@ -56,8 +57,7 @@ export default function Lobby() {
         // sandbox-only server-side) — refetch so the header's balance pill
         // picks up the new sandbox_balance instead of showing stale data.
         void queryClient.invalidateQueries({queryKey: ['player', 'me']});
-      }
-      else pushNotification(`Recompensa disponível em ${formatCooldown(r.remaining_time_seconds)}.`, 'info');
+      } else pushNotification(`Recompensa disponível em ${formatCooldown(r.remaining_time_seconds)}.`, 'info');
     } catch {
       pushNotification('Não foi possível resgatar a recompensa agora.', 'error');
     } finally {
@@ -66,7 +66,7 @@ export default function Lobby() {
   }
 
   const onCooldown = cooldown === null || cooldown > 0;
-  
+
   return <TermsGate>
     <main className="app-page">
       <nav className="app-nav shell"><Link href="/" className="brand"><span
@@ -90,14 +90,17 @@ export default function Lobby() {
           <div className="lobby-actions">
             <Button variant="outline" size="lg" disabled={claiming || onCooldown} onClick={claimReward}
                     className="btn-reward">
-              {claiming ? <LoaderCircle size={18} className="action-spinner"/> : <Gift size={18}/>} {claiming ? 'Resgatando…'
-                : cooldown ? <>Próxima recompensa <span className="reward-timer">{formatCooldown(cooldown)}</span></>
-                  : 'Recompensa Diária'}
+              {claiming ? <LoaderCircle size={18} className="action-spinner"/> :
+                <Gift size={18}/>} {claiming ? 'Resgatando…'
+              : cooldown ? <>Próxima recompensa <span className="reward-timer">{formatCooldown(cooldown)}</span></>
+                : 'Recompensa Diária'}
             </Button>
             <CreateRoomDialog/>
           </div>
         </header>
-        <StakesGrid/></section>
+        <ActiveTableBanner/>
+        <StakesGrid/>
+      </section>
       {USE_MOCK && <MockControls/>}
     </main>
   </TermsGate>;

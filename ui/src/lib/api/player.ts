@@ -23,3 +23,18 @@ export async function acceptPokerTerms() {
 export async function updateMe(input: {name?: string; wallet_mode?: WalletMode}) {
   return (await apiClient.post<PlayerProfile>('/v1.0/players/me', input, {silentError: true})).data;
 }
+
+export interface PlayerSession {
+  table_id: string;
+  buyin_amount: number;
+  cashout_amount: number;
+  net_pnl: number;
+  joined_at: number;
+  ended_at: number;
+}
+
+// Most-recent-first (server sorts descending) — sessions[0].ended_at === 0
+// means that table is still the player's open seat.
+export async function getSessions() {
+  return (await apiClient.get<{ sessions: PlayerSession[] }>('/v1.0/players/me/sessions', {silentError: true})).data.sessions;
+}

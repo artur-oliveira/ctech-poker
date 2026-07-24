@@ -31,18 +31,22 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
   });
 
   if (isLoading) return (
-    <main className="game-loading"><span className="loader"/>
+    <main className="game-loading">
+      <h1 className="sr-only">Mesa de poker</h1>
+      <span className="loader"/>
       <h2>Preparando a mesa…</h2>
     </main>
   );
   if (isError && isNotFound(roomError)) return (
     <main className="game-loading">
+      <h1 className="sr-only">Mesa de poker</h1>
       <h2>Essa sala não está mais disponível</h2>
       <Button variant="ghost" render={<Link href="/lobby"/>}><ChevronLeft/> Voltar ao lobby</Button>
     </main>
   );
   if (isError || !room || !room.buy_in_max) return (
     <main className="game-loading">
+      <h1 className="sr-only">Mesa de poker</h1>
       <h2>Não foi possível abrir a mesa</h2>
       <p>Confira sua conexão e tente novamente.</p>
       <Button onClick={() => refetch()}>Tentar novamente</Button>
@@ -67,6 +71,7 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
 
   return (
     <main className="game-loading buyin">
+      <h1 className="sr-only">Mesa de poker</h1>
       <small>BLINDS {room.small_blind} / {room.big_blind} · {room.currency_mode === 'real' ? 'DINHEIRO REAL' : 'SANDBOX'}</small>
       <h2>Sente-se à mesa</h2>
       <p>Escolha quantas fichas levar. Nada é debitado antes de você confirmar.</p>

@@ -142,6 +142,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const [pendingAction, setPendingAction] = useState<PokerAction | null>(null);
   const [lastActionError, setLastActionError] = useState<ActionError | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  const [removed, setRemoved] = useState<{ code?: string } | null>(null);
   const [mockStatus, setMockStatus] = useState<WSStatus>('connecting');
   const [mockReconnectAttempt, setMockReconnectAttempt] = useState(0);
   const mockService = useRef<MockTableService | null>(null);
@@ -178,6 +179,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       }
     }
     if (message.type === 'error') failPending(message.code || 'unknown');
+    if (message.type === 'removed') setRemoved({code: message.code});
     if (message.type === 'achievement_unlocked' && message.key) setUnlock({
       key: message.key,
       stars: message.stars || 1
@@ -293,7 +295,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   }, [clearPending, emit, send]);
 
   return {
-    status, snapshot, snapshotAt, unlock, chat, pendingAction, actionError: lastActionError, reconnectAttempt, announcement,
+    status, snapshot, snapshotAt, unlock, chat, pendingAction, actionError: lastActionError, reconnectAttempt, announcement, removed,
     clearActionError: () => setLastActionError(null), retryNow,
     readyPending, showCardsPending,
     ready: (ready = true) => {

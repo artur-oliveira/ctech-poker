@@ -40,6 +40,13 @@ export function playerName(id: string, viewerId?: string, name?: string): string
   return name || 'Visitante';
 }
 
+// Shared avatar-fallback initials: first + last name initial, uppercased.
+export function initials(name?: string): string {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() || '?';
+}
+
 // Seat CSS position is purely index-driven (Seat.tsx's `seat-${index}` class),
 // so the server's seat order must be rotated before rendering — otherwise the
 // viewer lands wherever the server happens to seat them instead of always at

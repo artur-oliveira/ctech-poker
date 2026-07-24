@@ -3,21 +3,20 @@ import Link from 'next/link';
 import {Suspense, useEffect, useRef, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
-import {ChevronLeft, RotateCw, Wifi} from 'lucide-react';
-import {getViewerId, rotateSeats} from '@/lib/utils';
+import {ChevronLeft, Pause, Play, RotateCw, Wifi} from 'lucide-react';
+import {getViewerId} from '@/lib/utils';
 import {useTableRealtime} from '@/lib/hooks/useTableRealtime';
 import {getRoom, getSeated} from '@/lib/api/rooms';
 import {isNotFound} from '@/lib/api/client';
 import {BuyInPanel} from '@/components/table/BuyInPanel';
-import {Seat} from '@/components/table/Seat';
-import {Board} from '@/components/table/Board';
+import {TableStage} from '@/components/table/TableStage';
 import type {ActionAvailability} from '@/components/table/ActionBar';
 import {ActionBar} from '@/components/table/ActionBar';
 import {Chat} from '@/components/table/Chat';
 import {InviteDialog} from '@/components/table/InviteDialog';
 import {LeaveDialog} from '@/components/table/LeaveDialog';
 import {MockControls} from '@/components/table/MockControls';
-import {HandOutcomeBanner, type HandOutcomeState} from '@/components/table/HandOutcome';
+import type {HandOutcomeState} from '@/components/table/HandOutcome';
 import {HandRankingsDialog} from '@/components/table/HandRankingsDialog';
 import {AchievementToast} from '@/components/AchievementToast';
 import {TermsGate} from '@/components/TermsGate';
@@ -34,6 +33,10 @@ const CONNECTION_COPY = {
   disconnected: 'Conexão interrompida. Tentando novamente…',
   error: 'A conexão oscilou. Suas fichas continuam seguras.'
 } as const;
+const REMOVED_REASON_COPY: Record<string, string> = {
+  idle: 'Você foi removido da mesa por inatividade.',
+  disconnected: 'Você foi removido da mesa após ficar desconectado por muito tempo.'
+};
 // @aoctech/ws-client gives up on its own retry loop after MAX_RECONNECT_ATTEMPTS
 // and never schedules another one — only a fresh token (handled elsewhere) or
 // this button's retryNow() tries again. Telling the player "tentando
@@ -96,6 +99,16 @@ function TableContent() {
   });
   const seated = seatedStatus?.seated ?? false;
   const rt = useTableRealtime(valid && seated ? id : '', viewer, inviteCode, USE_MOCK ? {scenario, delay} : undefined);
+  // The server never closes a removed player's socket (it just stops
+  // targeting it in future broadcasts) — without reacting to this message the
+  // client would otherwise sit frozen on the last snapshot it received, or
+  // silently reconnect into a seat it no longer holds.
+  useEffect(() => {
+    if (!rt.removed) return;
+    pushNotification(REMOVED_REASON_COPY[rt.removed.code || ''] || 'Você foi removido da mesa.', 'info');
+    queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
+    router.push('/lobby');
+  }, [rt.removed, id, queryClient, router]);
   // The next-hand deadline is fixed server-side once armed, but a state
   // broadcast can still arrive mid-countdown (e.g. another player revealing
   // cards) and shift rt.snapshotAt forward. Recomputing animationDuration
@@ -132,12 +145,18 @@ function TableContent() {
   }, [rt.snapshot, viewer]);
   if (!valid) return (
     <main className="game-loading">
+      <h1 className="sr-only">Mesa de poker</h1>
       <h2>Mesa inválida</h2>
       <p>O identificador precisa ser um código de sala válido.</p>
       <Button render={<Link href="/lobby"/>}>Voltar ao lobby</Button>
     </main>
   );
-  if (seatedLoading) return <main className="game-loading"><span className="loader"/></main>;
+  if (seatedLoading) return (
+    <main className="game-loading">
+      <h1 className="sr-only">Mesa de poker</h1>
+      <span className="loader"/>
+    </main>
+  );
   if (!seated) return <>
     <BuyInPanel roomId={id} shareCode={inviteCode} onSeatedAction={() => {
       queryClient.setQueryData(['seated', id], {seated: true, stack: 0});
@@ -145,7 +164,9 @@ function TableContent() {
     {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
   </>;
   if (!rt.snapshot) return <>
-    <main className="game-loading"><span className="loader"/>
+    <main className="game-loading">
+      <h1 className="sr-only">Mesa de poker</h1>
+      <span className="loader"/>
       <h2>{rt.status === 'connected' ? 'Aquecendo o seu lugar…' : 'Conectando à mesa…'}</h2>
       <p role="status"
          aria-live="polite">{rt.status === 'connected' ? 'Sincronizando o estado mais recente.' : connectionCopyFor(rt.status, rt.reconnectAttempt)}</p>
@@ -170,67 +191,70 @@ function TableContent() {
   const nextHandDurationMs = s.next_hand_unix_ms && nextHandArmed?.deadline === s.next_hand_unix_ms ?
     Math.max(0, s.next_hand_unix_ms - nextHandArmed.snapshotAt) : 0;
   const canInvite = room && (room.visibility === 'public' || room.share_code);
+  const canShowCards = s.stage === 'complete' && s.won_without_showdown && viewerSeat &&
+    viewerSeat.state !== 'sitting_out' && viewerSeat.state !== 'pending_entry';
   const inviteUrl = typeof window !== 'undefined' ?
     `${window.location.origin}/table?id=${id}${room?.share_code ? `&invite=${room.share_code}` : ''}` : '';
   return (
     <main className="game">
-      <header>
-        <Link
-          href="/lobby"><ChevronLeft/> Lobby
-        </Link>
-        <span>{STAGE_LABELS[s.stage] || s.stage.replaceAll('_', ' ')}</span>
-        <div className="header-right">
-          <span className={`connection-state ${rt.status}`}>
-            <Wifi aria-hidden="true"/>
-            <span className="connection-label">{rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}</span>
-          </span>
-          <HandRankingsDialog/>
-          {canInvite && <InviteDialog url={inviteUrl}/>}
-          {viewerSeat && viewerSeat.state !== 'sitting_out' &&
-            <Button type="button" variant="ghost" disabled={rt.readyPending}
-              onClick={() => rt.ready(false)}>Sentar fora</Button>}
-          {viewerSeat?.state === 'sitting_out' &&
-            <Button type="button" variant="ghost" disabled={rt.readyPending}
-              onClick={() => rt.ready(true)}>Voltar a jogar</Button>}
-          <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} onLeft={amount => {
-            pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
-            queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
-            router.push('/lobby');
-          }}/>
+      <h1 className="sr-only">Mesa de poker — {STAGE_LABELS[s.stage] || s.stage.replaceAll('_', ' ')}</h1>
+      <div className="game-chrome">
+        <header>
+          <Link href="/lobby" aria-label="Voltar ao lobby"><ChevronLeft/> <span
+            className="header-lobby-label">Lobby</span></Link>
+          <span aria-hidden="true">{STAGE_LABELS[s.stage] || s.stage.replaceAll('_', ' ')}</span>
+          <div className="header-right">
+            <span className={`connection-state ${rt.status}`}>
+              <Wifi aria-hidden="true"/>
+              <span className="connection-label">{rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}</span>
+            </span>
+            <HandRankingsDialog/>
+            {canInvite && <InviteDialog url={inviteUrl}/>}
+            {viewerSeat && viewerSeat.state !== 'sitting_out' &&
+              <Button type="button" variant="ghost" size="icon" aria-label="Sentar fora" disabled={rt.readyPending}
+                onClick={() => rt.ready(false)}><Pause/></Button>}
+            {viewerSeat?.state === 'sitting_out' &&
+              <Button type="button" variant="ghost" size="icon" aria-label="Voltar a jogar" disabled={rt.readyPending}
+                onClick={() => rt.ready(true)}><Play/></Button>}
+            <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} onLeft={amount => {
+              pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
+              queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
+              router.push('/lobby');
+            }}/>
+          </div>
+        </header>
+        <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {[rt.announcement, rt.status === 'connected' ? 'Conexão com a mesa restaurada.' : connectionMessage]
+            .filter(Boolean).join(' ')}
         </div>
-      </header>
-      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-        {[rt.announcement, rt.status === 'connected' ? 'Conexão com a mesa restaurada.' : connectionMessage]
-          .filter(Boolean).join(' ')}
+        {connectionMessage && <div className={`reconnect-notice ${rt.status}`}>
+            <span aria-hidden="true"/>
+            <p>{connectionMessage}{rt.reconnectAttempt > 1 ? ` Tentativa ${rt.reconnectAttempt}.` : ''}</p>
+            <Button type="button" variant="ghost" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>
+        </div>}
+        {/* The header's stage label already reads "aguardando jogadores" / "mão
+            encerrada" — this box only earns its place when it has something
+            the header doesn't: the next-hand countdown or the show-cards
+            action. An empty-room wait with neither would otherwise float a
+            duplicate label over the header. On phones, this notice renders
+            in-flow right below the header (see .game-chrome / .reconnect-notice
+            mobile rules) instead of floating fixed over it — a floating
+            overlay can't reliably avoid the header once it wraps to two
+            lines, which used to hide and block taps on Sentar fora/Sair da
+            mesa for the whole time this notice was up. */}
+        {!connectionMessage && (s.next_hand_unix_ms || canShowCards) && <div className="reconnect-notice">
+            <p>{s.stage === 'complete' ? 'Mão encerrada.' : 'Aguardando jogadores.'}</p>
+            {s.next_hand_unix_ms &&
+              <span key={s.next_hand_unix_ms} className="next-hand-ring"
+                    style={{animationDuration: `${nextHandDurationMs}ms`}}
+                    aria-hidden="true"/>}
+            {canShowCards &&
+              <Button type="button" variant="ghost" disabled={rt.showCardsPending}
+                onClick={() => rt.showCards()}>Mostrar cartas</Button>}
+        </div>}
       </div>
-      {connectionMessage && <div className={`reconnect-notice ${rt.status}`}>
-          <span aria-hidden="true"/>
-          <p>{connectionMessage}{rt.reconnectAttempt > 1 ? ` Tentativa ${rt.reconnectAttempt}.` : ''}</p>
-          <Button type="button" variant="ghost" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>
-      </div>}
-      {!connectionMessage && (s.stage === 'waiting_for_players' || s.stage === 'complete') && <div className="reconnect-notice">
-          <p>{s.stage === 'complete' ? 'Mão encerrada.' : 'Aguardando jogadores.'}</p>
-          {s.next_hand_unix_ms &&
-            <span key={s.next_hand_unix_ms} className="next-hand-ring"
-                  style={{animationDuration: `${nextHandDurationMs}ms`}}
-                  aria-hidden="true"/>}
-          {s.stage === 'complete' && s.won_without_showdown && viewerSeat &&
-            viewerSeat.state !== 'sitting_out' && viewerSeat.state !== 'pending_entry' &&
-            <Button type="button" variant="ghost" disabled={rt.showCardsPending}
-              onClick={() => rt.showCards()}>Mostrar cartas</Button>}
-      </div>}
-      <div className="game-table">
-        <div className="game-rail"/>
-        <div className="game-felt"><Board cards={s.board} pot={pot} rake={s.rake} bigBlind={bigBlind}/></div>
-        {rotateSeats(s.seats, viewer).map((seat, i) => <Seat key={seat.player_id} seat={seat} index={i}
-                                                             isTurn={s.current_player_id === seat.player_id}
-                                                             payout={s.payouts?.[seat.player_id] || 0}
-                                                             deadlineMs={s.action_deadline_unix_ms}
-                                                             nowMs={rt.snapshotAt}
-                                                             bigBlind={bigBlind}
-                                                             isViewer={seat.player_id === viewer}/>)}
-        <HandOutcomeBanner outcome={handOutcome}/>
-      </div>
+      <TableStage snapshot={s} viewer={viewer} pot={pot} bigBlind={bigBlind} nowMs={rt.snapshotAt}
+                  outcome={handOutcome}/>
       <ActionBar
         onActAction={rt.act}
         {...actions}

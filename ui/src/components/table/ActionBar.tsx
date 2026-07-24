@@ -1,5 +1,5 @@
 'use client';
-import {useEffect, useState} from 'react';
+import {useCallback, useEffect, useState} from 'react';
 import {CircleAlert, LoaderCircle, X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
@@ -37,11 +37,12 @@ function isPlainKey(event: KeyboardEvent) {
   return !event.metaKey && !event.ctrlKey && !event.altKey && !event.repeat && !isTypingTarget(event.target);
 }
 
-// Phones (≤800px, see the matching CSS breakpoint) don't have room to show
-// the preset/slider sizing UI at all times alongside Fold/Check/Pagar, so it
-// stays collapsed until the player taps Aumentar once to reveal it; desktop
-// keeps it always open (CSS ignores the collapsed class above that width).
-const COMPACT_QUERY = '(max-width: 800px)';
+// Handhelds (≤800px or short landscape — keep in sync with the matching CSS
+// media tier) don't have room to show the preset/slider sizing UI at all
+// times alongside Fold/Check/Pagar, so it stays collapsed until the player
+// taps Aumentar once to reveal it; desktop keeps it always open (CSS ignores
+// the collapsed class outside this query).
+const COMPACT_QUERY = '(max-width: 800px), (max-height: 620px) and (orientation: landscape)';
 
 /** Raise control. Keyed by `actionKey` in the parent so the chosen amount
  * resets to the street minimum on every new decision without an effect. */
@@ -62,8 +63,7 @@ function RaiseControl({minRaise, maxRaise, raiseStep, pot, disabled, pending, on
   ];
 
   useEffect(() => {
-    if (inactive) return () => {
-    };
+    if (inactive) return undefined;
 
     function onKey(event: KeyboardEvent) {
       if (!isPlainKey(event) || event.key.toLowerCase() !== 'r') return;
@@ -73,7 +73,7 @@ function RaiseControl({minRaise, maxRaise, raiseStep, pot, disabled, pending, on
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  });
+  }, [inactive, safeAmount, onRaise]);
 
   function handleRaiseClick() {
     if (!expanded && window.matchMedia(COMPACT_QUERY).matches) {
@@ -98,7 +98,8 @@ function RaiseControl({minRaise, maxRaise, raiseStep, pot, disabled, pending, on
       <output id="raise-amount-output" htmlFor="raise-amount">{safeAmount.toLocaleString('pt-BR')}</output>
     </label>
     <Button type="button" disabled={inactive} aria-keyshortcuts="r"
-            aria-describedby="action-context" onClick={handleRaiseClick} className="raise">
+            aria-describedby="action-context" onClick={handleRaiseClick}
+            className={`raise${expanded ? '' : ' raise-collapsed'}`}>
       {pending ? <><LoaderCircle className="action-spinner"/> {actionLabel.raise}</> :
         <span>{expanded ? `Aumentar ${safeAmount.toLocaleString('pt-BR')}` : 'Aumentar'} <kbd aria-hidden="true">R</kbd></span>}
     </Button>
@@ -130,27 +131,26 @@ export function ActionBar({
     }
     return <span>{idle}{key && <kbd aria-hidden="true">{key}</kbd>}</span>;
   };
+  const onRaise = useCallback((amount: number) => onActAction('raise', amount), [onActAction]);
+  const canFold = available.fold, canCheck = available.check, canCall = available.call;
 
   useEffect(() => {
-    if (unavailable) return () => {
-    };
+    if (unavailable) return undefined;
     const keyActions: Record<string, PokerAction> = {f: 'fold', c: 'check', p: 'call'};
+    const legal: Record<string, boolean> = {f: canFold, c: canCheck, p: canCall};
 
     function onKey(event: KeyboardEvent) {
-      if (!isPlainKey(event)) return () => {
-      };
-      const action = keyActions[event.key.toLowerCase()];
-      if (!action || !available[action]) return () => {
-      };
+      if (!isPlainKey(event)) return;
+      const key = event.key.toLowerCase();
+      const action = keyActions[key];
+      if (!action || !legal[key]) return;
       event.preventDefault();
       onActAction(action);
-      return () => {
-      };
     }
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  });
+  }, [unavailable, canFold, canCheck, canCall, onActAction]);
 
   return <div className="action-bar" role="group" aria-label="Ações da rodada" aria-busy={pending !== null}>
     <p id="action-context" className="action-context" aria-live="polite">{context}</p>
@@ -168,7 +168,7 @@ export function ActionBar({
     </div>
     <RaiseControl key={actionKey} minRaise={minRaise} maxRaise={maxRaise} raiseStep={raiseStep} pot={pot}
                   disabled={unavailable || !available.raise} pending={pending === 'raise'}
-                  onRaise={amount => onActAction('raise', amount)}/>
+                  onRaise={onRaise}/>
     {error && <div className="action-error" role="alert">
         <CircleAlert aria-hidden="true"/><p>{error.message}</p>
         <Button type="button" variant="ghost" size="icon" aria-label="Fechar aviso"
