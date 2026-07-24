@@ -1,0 +1,43 @@
+//go:build integration
+
+package table
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/tablestore"
+)
+
+func TestDisconnectAutoFoldsAtActionDeadline(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+	a, tableID := newTestActor(t, store)
+	a.turnTimeout = 20 * time.Millisecond
+
+	ctx := context.Background()
+	reply := make(chan error, 1)
+	_ = a.Dispatch(ReadyCmd{PlayerID: "p1", Ready: true, Reply: reply})
+	reply2 := make(chan error, 1)
+	_ = a.Dispatch(ReadyCmd{PlayerID: "p2", Ready: true, Reply: reply2})
+
+	stored, _ := store.LoadTable(ctx, tableID)
+	toAct := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
+	if toAct == "" {
+		t.Fatal("no player found with action to act")
+	}
+	reply3 := make(chan error, 1)
+	_ = a.Dispatch(DisconnectCmd{PlayerID: toAct, Reply: reply3})
+
+	time.Sleep(50 * time.Millisecond)
+
+	stored, _ = store.LoadTable(ctx, tableID)
+	for _, s := range stored.State.Players {
+		if s.ID == toAct && s.State != hand.Folded {
+			t.Fatalf("expected %s to be auto-folded after missing its action deadline, got state %v", toAct, s.State)
+		}
+	}
+}

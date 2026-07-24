@@ -1,0 +1,19 @@
+bin/
+# cdk/bin holds the CDK app entrypoint (source, not build output) — the bare
+# bin/ rule above (Go build output) would otherwise swallow it silently.
+!cdk/bin/
+node_modules/
+cdk.out/
+*.log
+.DS_Store
+api/archiver
+out/
+.next/
+api/dist/
+.env
+.env.local
+.idea/
+.superpowers/
+api/tablecleanup
+api/reconcilie
+api/server

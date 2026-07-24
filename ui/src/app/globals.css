@@ -1,0 +1,4271 @@
+@import "tailwindcss";
+@import "./forms-and-gate.css";
+
+:root {
+    --brand: #af2a2f;
+    --brand-bright: #d9464d;
+    --wine: #5b1218;
+    --ink: #120d0e;
+    --paper: #f6f0e7;
+    --gold: #e6b85c;
+    --felt: #0d5b45;
+    --muted: #ad9fa0;
+    --muted-rose: #ad9fa0;
+    --success: #48c98c;
+    --danger: #dc2626;
+    --on-brand: #fff;
+    --table-room: var(--ink);
+    --table-room-wine: var(--wine);
+    --table-rail: #7c4d2f;
+    --table-rail-edge: #291714;
+    --table-rail-highlight: #b0774a;
+    --table-felt-light: #18765b;
+    --table-felt-dark: #084b38;
+    --surface-seat: #161011;
+    --surface-control: #211416;
+    --surface-control-hover: #3e3133;
+    --surface-notice: #211416;
+    --surface-error: #3b0b0e;
+    --text-secondary: #cbbfc0;
+    --felt-text: #e3f1ea;
+    --felt-text-muted: #d9eee7;
+    --gold-ink: #30230a;
+    --gold-deep: #d8ae5d;
+    --danger-soft: #f5b0b3;
+    --toast-bg: #efe0bf;
+    --toast-ink: #3a241a;
+    --focus-ring: #ed777c;
+    --control-border: #ffffff24;
+    --seat-border: #ffffff26;
+
+    /* Design System Tokens */
+    --font-size-tiny: 0.625rem;
+    --font-size-compact: 0.6875rem;
+    --font-size-mono: 0.75rem;
+    --font-size-body: 0.875rem;
+    --font-size-subtitle: 1.125rem;
+    --font-size-large: 1.25rem;
+    --font-size-title: 1.5rem;
+    --font-size-xl: 2rem;
+
+    --rounded-xs: 4px;
+    --rounded-sm: 8px;
+    --rounded-card: 6px;
+    --rounded-control: 12px;
+    --rounded-seat: 14px;
+    --rounded-panel: 16px;
+    --rounded-pill: 999px;
+
+    --shadow-table: 0 30px 80px #000, inset 0 0 0 4px var(--table-rail-highlight);
+    --shadow-felt: inset 0 0 70px #001f18;
+    --shadow-seat: 0 4px 8px #0009;
+    --ease-out-quart: cubic-bezier(.25, 1, .5, 1);
+    --ease-out-quint: cubic-bezier(.22, 1, .36, 1);
+    --ease-out-expo: cubic-bezier(.16, 1, .3, 1);
+
+    /* z-index scale — app-wide overlay layers only (fixed/sticky chrome that can
+       compete for the same stacking context). Local sibling-ordering z-index
+       (card flip faces, seat badges, per-chip stacking) stays as plain small
+       ints scoped to their own positioned ancestor; those can't collide with
+       this scale and don't belong in it. Dialogs (@base-ui) use Tailwind's
+       z-50, already above every tier here. */
+    --z-chrome: 20;
+    --z-notice: 25;
+    --z-toast: 30;
+    --z-dev: 40;
+    /* opaque mask stop — CSS mask luminance only, never a rendered color */
+    --mask-opaque: #fff;
+    /* ponytail: stacked mobile action bar footprint (context + presets + quick + bet + raise rows), generous for 2-line pt-BR context; upgrade to measured height if layout grows */
+    --action-bar-stack: 260px;
+    /* clearance .game-chat needs above the action bar; redeclared at the
+       800px breakpoint where the bar's own padding shrinks (see .action-bar) */
+    --action-bar-clear: 75px;
+    /* ponytail: captured drift tokens — exact values previously written as literals across the
+       stylesheet (landing/lobby/dialog/seat gradients), promoted to single-source tokens so the
+       design system stays the only place colors live. */
+    /* white alpha overlays */
+    --white-03: #ffffff03;
+    --white-08: #ffffff08;
+    --white-0b: #ffffff0b;
+    --white-0c: #ffffff0c;
+    --white-12: #ffffff12;
+    --white-13: #ffffff13;
+    --white-18: #ffffff18;
+    --white-1b: #ffffff1b;
+    --white-1c: #ffffff1c;
+    --white-1d: #ffffff1d;
+    --white-22: #ffffff22;
+    --white-2a: #ffffff2a;
+    --white-2c: #ffffff2c;
+    /* black alpha overlays */
+    --black: #000;
+    --black-06: #0006;
+    --black-07: #0007;
+    --black-08: #0008;
+    --black-0b: #000b;
+    /* brand / red family */
+    --brand-33: #af2a2f55;
+    --brand-53: #af2a2f88;
+    --brand-27: #af2a2f44;
+    --brand-13: #af2a2f22;
+    --brand-08: #af2a2f14;
+    --brand-07: #af2a2f12;
+    --brand-40: #d8404766;
+    --brand-deep-33: #db4a5055;
+    --brand-tint: #c7353b;
+    --brand-tint-soft: #e2b7b9;
+    --brand-bright-2: #e24a51;
+    --brand-bright-3: #d85b61;
+    --brand-bright-4: #e65b62;
+    --brand-bright-5: #df5a61;
+    --brand-bright-6: #d75359;
+    --brand-bright-7: #ef747a;
+    /* wine family */
+    --wine-deep-2: #6e1d23;
+    --wine-deep-3: #5b171a;
+    --wine-deep-4: #721d23;
+    --wine-deep-5: #45151a;
+    --wine-deep-6: #792128;
+    --wine-deep-7: #201214;
+    --wine-edge: #824b4e;
+    --wine-edge-2: #3d2224;
+    /* gold family */
+    --gold-bright: #e7bd63;
+    --gold-bright-2: #e7c36f;
+    --gold-bright-3: #e9c678;
+    --gold-pale: #efe1b7;
+    --cream: #f1e5ce;
+    /* neutrals / muted */
+    --text-muted-soft: #d9cccd;
+    --neutral-rose-2: #c0b3b4;
+    --neutral-rose-3: #c9bcbd;
+    --neutral-rose-4: #bcaeb0;
+    --neutral-wine: #897d7e;
+    --neutral-wine-2: #5e5051;
+    --neutral-wine-3: #645758;
+    --ink-soft: #130d0e;
+    --room-grad-1: #180d10;
+    --room-grad-2: #100c0d;
+    --room-grad-3: #251012;
+    --room-grad-4: #0d090a;
+    --room-overlay: #080506d9;
+    /* rail / wood */
+    --rail-shadow: #351d17;
+    --rail-mid: #7c5035;
+    --rail-light: #a46d42;
+    --rail-edge-2: #382018;
+    --rail-wood-2: #5b3428;
+    /* felt / green */
+    --felt-bright: #12694f;
+    --felt-deep: #084332;
+    --success-bright: #45c489;
+    --felt-text-soft: #b6d6c5;
+    --felt-27: #0a806044;
+    --felt-shadow: #001f18;
+    /* overlay near-blacks */
+    --overlay-night: #001b;
+    --overlay-night-2: #0018;
+    --overlay-night-3: #001d;
+    /* surface alpha */
+    --surface-seat-92: #171011eb
+}
+
+* {
+    box-sizing: border-box
+}
+
+html {
+    scroll-behavior: smooth
+}
+
+body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--font-sans), sans-serif
+}
+
+button, a {
+    font: inherit
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0
+}
+
+.shell {
+    width: min(1160px, calc(100% - 40px));
+    margin-inline: auto
+}
+
+.landing {
+    min-height: 100vh;
+    overflow: hidden;
+    background: radial-gradient(circle at 75% 8%, var(--wine-deep-2) 0, transparent 30%), linear-gradient(160deg, var(--room-grad-1) 0%, var(--room-grad-2) 55%, var(--room-grad-3) 100%)
+}
+
+.nav {
+    height: 84px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    z-index: var(--z-chrome)
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: white;
+    text-decoration: none;
+    font-size: var(--font-size-body)
+}
+
+.brand-mark {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    background: linear-gradient(145deg, var(--brand-bright), var(--brand));
+    box-shadow: 0 8px 24px var(--brand-33)
+}
+
+.brand-mark svg {
+    width: 19px
+}
+
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 28px
+}
+
+.nav-links > a {
+    color: var(--text-muted-soft);
+    text-decoration: none;
+    font-size: var(--font-size-body);
+    transition: .25s
+}
+
+.nav-links > a:hover {
+    color: white
+}
+
+
+.hero {
+    min-height: 680px;
+    display: grid;
+    grid-template-columns:1fr 1fr;
+    align-items: center;
+    gap: 56px;
+    padding-block: 50px 100px
+}
+
+.hero-copy {
+    position: relative;
+    z-index: 5
+}
+
+.hero-copy h1 {
+    animation: rise .8s var(--ease-out-quint) both
+}
+
+.hero-copy > p {
+    animation: rise .8s var(--ease-out-quint) both;
+    animation-delay: 90ms
+}
+
+.hero-actions {
+    animation: rise .8s var(--ease-out-quint) both;
+    animation-delay: 180ms
+}
+
+.trust {
+    animation: rise .8s var(--ease-out-quint) both;
+    animation-delay: 260ms
+}
+
+h1 {
+    font-size: clamp(52px, 6vw, 82px);
+    line-height: .98;
+    letter-spacing: -.04em;
+    margin: 0 0 24px;
+    max-width: 700px
+}
+
+h1 em {
+    font-style: normal;
+    color: var(--brand-bright-2);
+    text-shadow: 0 0 45px var(--brand-33)
+}
+
+.hero-copy > p {
+    max-width: 570px;
+    color: var(--neutral-rose-2);
+    font-size: var(--font-size-subtitle);
+    line-height: 1.75
+}
+
+.hero-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 34px
+}
+
+.trust {
+    display: flex;
+    gap: 22px;
+    color: var(--neutral-wine);
+    font-size: var(--font-size-mono);
+    margin-top: 28px
+}
+
+.trust span {
+    display: flex;
+    align-items: center;
+    gap: 7px
+}
+
+.trust span:not(:first-child):before {
+    content: '·';
+    color: var(--neutral-wine-2)
+}
+
+.trust i {
+    width: 7px;
+    height: 7px;
+    background: var(--success-bright);
+    border-radius: var(--rounded-pill);
+    box-shadow: 0 0 12px var(--success-bright)
+}
+
+.hero-visual {
+    position: relative;
+    height: 500px;
+    perspective: 1000px
+}
+
+.poker-table {
+    position: absolute;
+    inset: 70px 5px 50px;
+    transform: rotateX(52deg) rotateZ(-4deg);
+    transform-style: preserve-3d;
+    border-radius: var(--rounded-pill);
+    background: var(--rail-shadow);
+    padding: 18px;
+    box-shadow: 0 50px 80px var(--black-0b), 0 0 0 2px var(--rail-mid)
+}
+
+.rail {
+    position: absolute;
+    inset: 5px;
+    border: 8px solid var(--rail-light);
+    border-radius: var(--rounded-pill);
+    box-shadow: inset 0 0 0 5px var(--rail-edge-2)
+}
+
+.felt {
+    position: absolute;
+    inset: 27px;
+    border-radius: var(--rounded-pill);
+    background: radial-gradient(circle, var(--felt-bright), var(--felt-deep) 75%);
+    box-shadow: inset 0 0 45px var(--felt-shadow)
+}
+
+.pot {
+    position: absolute;
+    left: 50%;
+    top: 27%;
+    transform: translateX(-50%);
+    font: 600 9px var(--font-mono);
+    letter-spacing: .12em;
+    color: var(--felt-text-soft)
+}
+
+.pot b {
+    color: var(--gold)
+}
+
+.community {
+    position: absolute;
+    left: 50%;
+    top: 46%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    gap: 6px
+}
+
+.community img {
+    border-radius: var(--rounded-xs);
+    filter: drop-shadow(0 8px 6px var(--overlay-night));
+    animation: deal .7s cubic-bezier(.2, .8, .2, 1) both;
+    animation-delay: calc(var(--i) * .12s)
+}
+
+.card-placeholder {
+    width: 70px;
+    height: 98px;
+    border: 1px dashed var(--white-2c);
+    border-radius: 6px
+}
+
+.table-logo {
+    position: absolute;
+    left: 50%;
+    bottom: 18%;
+    transform: translateX(-50%);
+    font: 700 10px var(--font-mono);
+    letter-spacing: .35em;
+    color: var(--white-1b);
+    display: flex;
+    align-items: center
+}
+
+.table-logo svg {
+    width: 14px
+}
+
+.demo-seat {
+    position: absolute;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface-seat-92);
+    border: 1px solid var(--white-1c);
+    border-radius: 14px;
+    padding: 7px 11px;
+    box-shadow: 0 12px 25px var(--black-08);
+    animation: float 4s ease-in-out infinite
+}
+
+.demo-seat .avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--rounded-control);
+    display: grid;
+    place-items: center;
+    background: linear-gradient(145deg, var(--wine-edge), var(--wine-edge-2));
+    font-weight: 800
+}
+
+.demo-seat b, .demo-seat small {
+    display: block;
+    font-size: var(--font-size-compact)
+}
+
+.demo-seat small {
+    color: var(--gold);
+    margin-top: 3px
+}
+
+.demo-seat.top {
+    top: 22px;
+    left: 48%
+}
+
+.demo-seat.bottom {
+    bottom: 4px;
+    left: 43%;
+    border-color: var(--brand-40)
+}
+
+.demo-seat.left {
+    left: -8px;
+    top: 43%;
+    animation-delay: -1s
+}
+
+.demo-seat.right {
+    right: -4px;
+    top: 42%;
+    animation-delay: -2s
+}
+
+.hole {
+    position: absolute;
+    display: flex;
+    left: 102%;
+    bottom: 5px
+}
+
+.hole img {
+    margin-left: -13px;
+    filter: drop-shadow(0 5px 5px var(--black-08))
+}
+
+.ambient {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px)
+}
+
+.ambient-one {
+    width: 180px;
+    height: 180px;
+    background: var(--brand-27);
+    right: -20px;
+    top: 40px
+}
+
+.ambient-two {
+    width: 140px;
+    height: 140px;
+    background: var(--felt-27);
+    left: 20px;
+    bottom: 20px
+}
+
+.chip-orbit {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: repeating-conic-gradient(var(--gold-bright) 0 15deg, var(--wine-deep-3) 15deg 30deg);
+    border: 4px solid var(--gold-pale);
+    box-shadow: 0 6px 12px var(--black-08);
+    animation: drift 5s ease-in-out infinite
+}
+
+.chip-a {
+    right: 9%;
+    bottom: 18%
+}
+
+.chip-b {
+    left: 12%;
+    top: 24%;
+    animation-delay: -2s
+}
+
+.experience {
+    padding-block: 110px
+}
+
+.experience header {
+    max-width: 680px
+}
+
+.experience h2 {
+    font-size: clamp(34px, 4vw, 52px);
+    margin: 0 0 14px;
+    letter-spacing: -.04em
+}
+
+.experience header p, .feature-grid p {
+    color: var(--muted);
+    line-height: 1.65
+}
+
+.feature-grid {
+    display: grid;
+    grid-template-columns:repeat(2, 1fr);
+    gap: 44px 56px;
+    margin-top: 56px
+}
+
+.feature-grid article {
+    padding-top: 26px;
+    border-top: 1px solid var(--white-13);
+    animation: rise .7s both;
+    animation-delay: var(--delay)
+}
+
+.feature-grid article > div {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    background: var(--brand-13);
+    color: var(--brand-bright-4)
+}
+
+.feature-grid svg {
+    width: 20px
+}
+
+.feature-grid h3 {
+    margin: 20px 0 8px;
+    font-size: var(--font-size-subtitle)
+}
+
+.feature-grid p {
+    font-size: 14px
+}
+
+.showcase {
+    padding-block: 20px 90px;
+    display: grid;
+    grid-template-columns: .85fr 1.4fr;
+    gap: 64px;
+    align-items: center
+}
+
+.showcase-copy h2 {
+    font-size: clamp(30px, 3.4vw, 44px);
+    letter-spacing: -.04em;
+    margin: 0 0 14px
+}
+
+.showcase-copy p {
+    color: var(--muted);
+    line-height: 1.65;
+    max-width: 40ch
+}
+
+.showcase-copy > a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 22px;
+    color: var(--brand-bright-4);
+    text-decoration: none;
+    font: 600 var(--font-size-label) inherit
+}
+
+.showcase-copy > a svg {
+    width: 16px
+}
+
+.showcase-frame {
+    position: relative;
+    transform: rotate(-1.2deg);
+    animation: rise .8s var(--ease-out-quint) both;
+    animation-delay: 120ms
+}
+
+/* clips the chrome+screenshot to the panel's rounded corners without also
+   clipping .showcase-peek, which deliberately escapes the frame's edge */
+.showcase-inner {
+    border-radius: var(--rounded-panel);
+    overflow: hidden;
+    border: 1px solid var(--control-border);
+    background: var(--surface-control);
+    box-shadow: 0 40px 90px var(--black-08)
+}
+
+.browser-chrome {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 11px 16px;
+    background: var(--surface-seat);
+    border-bottom: 1px solid var(--white-13)
+}
+
+.browser-chrome span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--white-1c)
+}
+
+.browser-chrome small {
+    margin-left: 10px;
+    color: var(--neutral-rose-3);
+    font: 600 11px var(--font-mono)
+}
+
+.showcase-frame > img {
+    display: block;
+    width: 100%;
+    height: auto
+}
+
+.showcase-peek {
+    position: absolute;
+    width: 220px;
+    right: -26px;
+    bottom: -26px;
+    margin: 0;
+    border-radius: var(--rounded-sm);
+    overflow: hidden;
+    border: 1px solid var(--control-border);
+    box-shadow: 0 20px 45px var(--black-08);
+    animation: float 5s ease-in-out infinite
+}
+
+.showcase-peek img {
+    display: block;
+    width: 100%;
+    height: auto
+}
+
+.cta {
+    margin-block: 60px 100px;
+    padding: 46px 52px;
+    border-radius: var(--rounded-panel);
+    background: radial-gradient(circle at 85%, var(--brand-deep-33), transparent 25%), linear-gradient(120deg, var(--wine-deep-4), var(--brand));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 30px 60px var(--black-06)
+}
+
+.cta h2 {
+    font-size: var(--font-size-xl);
+    margin: 0 0 8px
+}
+
+.cta p {
+    margin: 0;
+    color: var(--brand-tint-soft)
+}
+
+.footer {
+    border-top: 1px solid var(--white-12);
+    min-height: 110px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 32px;
+    color: var(--neutral-wine);
+    font-size: 12px
+}
+
+.footer .brand {
+    opacity: .8
+}
+
+.loading-screen {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px
+}
+
+.loading-screen h2 {
+    margin: 0
+}
+
+.loading-screen p {
+    color: var(--muted);
+    margin: 0;
+    max-width: 44ch
+}
+
+.loader {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--white-22);
+    border-top-color: var(--brand-bright);
+    border-radius: 50%;
+    animation: spin .7s linear infinite
+}
+
+@keyframes board-deal {
+    from {
+        opacity: 0;
+        transform: translate(80px, -62px) rotate(9deg) scale(.92);
+        filter: drop-shadow(0 2px 2px var(--overlay-night-2)) blur(1px)
+    }
+    to {
+        opacity: 1;
+        transform: none;
+        filter: drop-shadow(0 8px 8px var(--overlay-night-3)) blur(0)
+    }
+}
+
+@keyframes hole-deal {
+    from {
+        opacity: 0;
+        transform: translateY(-18px) rotate(5deg) scale(.9)
+    }
+}
+
+@keyframes board-card-reveal {
+    0% {
+        opacity: 0;
+        transform: translate(80px, -62px) rotateZ(9deg) scale(.92)
+    }
+    48% {
+        opacity: 1;
+        transform: none
+    }
+    100% {
+        opacity: 1;
+        transform: none
+    }
+}
+
+@keyframes hole-card-reveal {
+    0% {
+        opacity: 0;
+        transform: translateY(-18px) rotateZ(5deg) scale(.9)
+    }
+    48% {
+        opacity: 1;
+        transform: none
+    }
+    100% {
+        opacity: 1;
+        transform: none
+    }
+}
+
+@keyframes card-back-turn {
+    0%, 44% {
+        opacity: 1;
+        transform: scaleX(1)
+    }
+    50% {
+        opacity: 1;
+        transform: scaleX(.04)
+    }
+    50.1%, 100% {
+        opacity: 0;
+        transform: scaleX(.04)
+    }
+}
+
+@keyframes card-front-turn {
+    0%, 50% {
+        opacity: 0;
+        transform: scaleX(.04)
+    }
+    50.1% {
+        opacity: 1;
+        transform: scaleX(.04)
+    }
+    100% {
+        opacity: 1;
+        transform: scaleX(1)
+    }
+}
+
+@keyframes wager-in {
+    from {
+        opacity: 0;
+        transform: translateY(-9px) scale(.65)
+    }
+}
+
+/* Same entrance as wager-in, minus the translateY — the hero HUD's bet chip
+   sits inline in the card's flex row now, not floating above it, so it has
+   no "up toward the pot" direction to travel from. */
+@keyframes wager-in-inline {
+    from {
+        opacity: 0;
+        transform: scale(.65)
+    }
+}
+
+@keyframes pot-count {
+    0% {
+        opacity: .35;
+        transform: translateY(4px)
+    }
+    100% {
+        opacity: 1;
+        transform: none
+    }
+}
+
+@keyframes turn-signal {
+    0%, 100% {
+        opacity: .5;
+        transform: scale(.96)
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.025)
+    }
+}
+
+@keyframes winner-confirm {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, 7px) scale(.85)
+    }
+    5%, 88% {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1)
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -2px) scale(1);
+        visibility: hidden
+    }
+}
+
+@keyframes viewer-winner-confirm {
+    0% {
+        opacity: 0;
+        transform: translate(6px, 50%) scale(.85)
+    }
+    5%, 88% {
+        opacity: 1;
+        transform: translate(0, 50%) scale(1)
+    }
+    100% {
+        opacity: 0;
+        transform: translate(0, 50%) scale(1);
+        visibility: hidden
+    }
+}
+
+@keyframes reconnect-progress {
+    from {
+        transform: translateX(-105%)
+    }
+    to {
+        transform: translateX(240%)
+    }
+}
+
+@keyframes float {
+    50% {
+        transform: translateY(-6px)
+    }
+}
+
+@keyframes drift {
+    50% {
+        transform: translate(12px, -15px) rotate(180deg)
+    }
+}
+
+@keyframes rise {
+    from {
+        opacity: 0;
+        transform: translateY(20px)
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg)
+    }
+}
+
+@media (max-width: 900px) {
+    .hero {
+        grid-template-columns:1fr;
+        padding-top: 70px
+    }
+
+    .hero-copy {
+        text-align: center
+    }
+
+    .hero-copy > p {
+        margin-inline: auto
+    }
+
+    .hero-actions, .trust {
+        justify-content: center
+    }
+
+    .hero-visual {
+        height: 460px
+    }
+
+    .cta {
+        gap: 30px
+    }
+
+    .showcase {
+        grid-template-columns: 1fr;
+        text-align: center
+    }
+
+    .showcase-copy p {
+        margin-inline: auto
+    }
+
+    .showcase-frame {
+        transform: none
+    }
+
+    .showcase-peek {
+        width: 170px;
+        right: -12px;
+        bottom: -18px
+    }
+
+    .nav-links > a {
+        display: none
+    }
+}
+
+@media (max-width: 600px) {
+    .nav {
+        height: 72px
+    }
+
+    .hero {
+        padding-top: 48px;
+        gap: 20px;
+        min-height: auto
+    }
+
+    .hero-actions {
+        flex-direction: column
+    }
+
+    .trust {
+        gap: 9px;
+        flex-wrap: wrap
+    }
+
+    .hero-visual {
+        height: 370px;
+        transform: scale(.88);
+        margin-inline: -30px
+    }
+
+    .poker-table {
+        inset: 65px 0
+    }
+
+    .demo-seat.left {
+        left: -5px
+    }
+
+    .demo-seat.right {
+        right: -5px
+    }
+
+    .card-placeholder, .community img {
+        width: 48px;
+        height: 68px
+    }
+
+    .feature-grid {
+        grid-template-columns:1fr
+    }
+
+    .experience {
+        padding-block: 75px
+    }
+
+    .cta {
+        margin-block: 30px 70px;
+        padding: 34px 25px;
+        align-items: flex-start;
+        flex-direction: column
+    }
+
+    .cta h2 {
+        font-size: var(--font-size-title)
+    }
+
+    .footer {
+        padding-block: 30px;
+        flex-direction: column;
+        gap: 18px;
+        text-align: center
+    }
+}
+
+@media (max-width: 600px) {
+    .game-table {
+        width: min(920px, 92vw)
+    }
+
+    .game-seat {
+        gap: 5px;
+        padding: 5px 8px
+    }
+
+    .seat-cards > .playing-card {
+        width: 40px;
+        height: 56px;
+        margin-right: -20px
+    }
+
+    /* keep the two mid-side seats off the clipped viewport edge */
+    .seat-2 {
+        left: 2%
+    }
+
+    .seat-6 {
+        right: 2%
+    }
+
+    /* stack the action bar: context, quick actions, bet range, and raise each own a row */
+    .action-bar {
+        grid-template-columns: 1fr
+    }
+
+    .action-choices {
+        grid-template-columns: repeat(3, 1fr)
+    }
+
+    .bet-control {
+        grid-template-columns: minmax(0, 1fr) 68px
+    }
+
+    /* lift the chat toggle clear of the taller stacked action bar */
+    .game-chat.game-chat {
+        bottom: calc(var(--action-bar-stack) + env(safe-area-inset-bottom))
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *:before, *:after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important
+    }
+
+    .game-seat.is-turn:after {
+        opacity: 1 !important;
+        transform: none !important
+    }
+
+    .seat-turn-ring, .next-hand-ring {
+        --seat-ring-progress: 100% !important
+    }
+
+    .next-hand-ring {
+        animation-name: none !important;
+        background-image: conic-gradient(var(--gold) 100%, transparent 0) !important
+    }
+
+    .reconnect-notice > span {
+        transform: none !important;
+        background: var(--gold) !important
+    }
+}
+
+.app-page {
+    min-height: 100vh;
+    background: radial-gradient(circle at 20% 0, var(--wine-deep-5), transparent 35%), var(--room-grad-2)
+}
+
+.app-nav {
+    height: 78px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between
+}
+
+.app-nav > a:last-child, .app-nav .header-right > a, .ranking > a {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    color: var(--neutral-rose-3);
+    text-decoration: none;
+    font-size: 14px
+}
+
+.app-nav svg, .ranking > a svg, .roulette > a svg {
+    width: 16px
+}
+
+.lobby {
+    padding-block: 60px
+}
+
+.lobby > header {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 20px 24px;
+    flex-wrap: wrap;
+    margin-bottom: 45px
+}
+
+.lobby-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px
+}
+
+@media (max-width: 600px) {
+    .lobby-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px
+    }
+
+    .btn-reward {
+        justify-content: center
+    }
+}
+
+.reward-timer {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    opacity: .75
+}
+
+.lobby h1, .ranking h1, .roulette h1 {
+    font-size: clamp(38px, 5vw, 62px);
+    margin: 8px 0;
+    letter-spacing: -.05em
+}
+
+.lobby small, .modal > small, .ranking header small, .roulette > small {
+    font: 600 11px var(--font-mono);
+    letter-spacing: .15em;
+    color: var(--brand-bright-5)
+}
+
+.lobby p, .ranking p, .roulette p {
+    color: var(--muted)
+}
+
+.stake-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(240px, 320px));
+    gap: 14px
+}
+
+@media (max-width: 560px) {
+    .stake-grid {
+        grid-template-columns: 1fr
+    }
+}
+
+.stake-hint {
+    margin: 0 0 24px;
+    font-size: 14px
+}
+
+.room-groups {
+    display: grid;
+    gap: 40px
+}
+
+.room-group > h2 {
+    font: 600 0.75rem var(--font-mono);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin: 0 0 12px;
+    border-bottom: 1px solid var(--white-12);
+    padding-bottom: 8px
+}
+
+.room-group > h2 > span {
+    color: var(--muted)
+}
+
+.room-card {
+    position: relative;
+    text-align: left;
+    color: white;
+    background: var(--white-08);
+    border: 1px solid var(--white-13);
+    border-radius: var(--rounded-panel);
+    padding: 23px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: .25s;
+    animation: rise 420ms var(--ease-out-quart) both;
+    animation-delay: var(--delay, 0ms)
+}
+
+.room-card:hover {
+    transform: translateY(-5px);
+    border-color: var(--brand-53);
+    background: var(--brand-08)
+}
+
+.room-card > svg {
+    width: 18px;
+    color: var(--brand-bright-6)
+}
+
+.room-card h3 {
+    font-size: 24px;
+    margin: 9px 0
+}
+
+.room-card div > span {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    gap: 6px
+}
+
+.room-card div > span svg {
+    width: 14px
+}
+
+.status-dot {
+    position: absolute;
+    right: 16px;
+    top: 16px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 10px var(--success);
+    animation: status-pulse 2s var(--ease-out-quart) infinite
+}
+
+@keyframes status-pulse {
+    0%, 100% {
+        opacity: 1;
+        box-shadow: 0 0 10px var(--success)
+    }
+    50% {
+        opacity: .6;
+        box-shadow: 0 0 4px var(--success)
+    }
+}
+
+.lobby-empty {
+    min-height: 250px;
+    border: 1px dashed var(--white-1d);
+    border-radius: var(--rounded-panel);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    color: var(--muted);
+    text-align: center
+}
+
+
+.game {
+    min-height: 100dvh;
+    overflow-x: clip;
+    background: radial-gradient(circle at 50% 50%, var(--table-room-wine), var(--table-room) 65%);
+    display: grid;
+    grid-template-rows:auto minmax(320px, 1fr) auto
+}
+
+.game-chrome > header {
+    min-height: 55px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: max(6px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) 6px max(24px, env(safe-area-inset-left));
+    color: var(--muted);
+    font: 600 11px var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: .1em
+}
+
+.game-chrome > header a, .game-chrome > header i {
+    color: inherit;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-style: normal
+}
+
+.game-chrome > header a {
+    min-height: 44px;
+    padding-inline: 6px;
+    margin-left: -6px;
+    border-radius: var(--rounded-control)
+}
+
+.game-chrome > header a:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px
+}
+
+:where(a, button, input, select, textarea, [tabindex], summary):focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px
+}
+
+.game-chrome > header svg {
+    width: 14px
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px
+}
+
+@media (max-width: 600px) {
+    .app-nav {
+        flex-wrap: wrap;
+        height: auto;
+        row-gap: 10px;
+        padding-block: 14px
+    }
+
+    .app-nav .header-right {
+        gap: 16px;
+        flex-wrap: nowrap
+    }
+
+    .header-right-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
+    }
+}
+
+.connection-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+    white-space: nowrap
+}
+
+.profile-summary {
+    display: flex;
+    align-items: center;
+    gap: 10px
+}
+
+.balance-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font: 600 13px var(--font-mono);
+    background: var(--white-08);
+    border: 1px solid var(--white-13);
+    padding: 8px 14px;
+    border-radius: 999px;
+    color: var(--gold)
+}
+
+.profile-name-display {
+    all: unset;
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    cursor: pointer;
+    padding: 9px 11px;
+    border-radius: var(--rounded-control);
+    background: var(--white-08);
+    font-weight: 600;
+    color: var(--on-brand);
+    transition: background .2s
+}
+
+.profile-name-display:hover {
+    background: var(--white-13)
+}
+
+.profile-balances {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: var(--font-size-mono);
+    color: var(--muted)
+}
+
+.profile-balances span {
+    display: flex;
+    justify-content: space-between
+}
+
+.profile-balances b {
+    color: var(--on-brand)
+}
+
+.connection-state svg {
+    color: var(--success);
+    transition: color 180ms var(--ease-out-quart)
+}
+
+.connection-state:not(.connected) svg {
+    color: var(--gold)
+}
+
+.mock-controls {
+    position: fixed;
+    z-index: var(--z-dev);
+    bottom: max(16px, env(safe-area-inset-bottom));
+    left: max(12px, env(safe-area-inset-left));
+    width: min(250px, calc(100vw - 24px));
+    color: var(--paper);
+    font-size: 12px
+}
+
+.mock-controls summary {
+    min-height: 44px;
+    width: max-content;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border: 1px solid var(--control-border);
+    border-radius: 12px;
+    background: var(--surface-control);
+    box-shadow: 0 4px 8px var(--black-08);
+    cursor: pointer;
+    font-weight: 700;
+    list-style: none
+}
+
+.mock-controls summary::-webkit-details-marker {
+    display: none
+}
+
+.mock-controls summary svg {
+    width: 16px;
+    color: var(--gold)
+}
+
+.mock-controls[open] summary {
+    border-radius: 12px 12px 0 0
+}
+
+.mock-controls > div {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 0 12px 12px 12px;
+    background: var(--surface-control);
+    box-shadow: 0 4px 8px var(--black-08)
+}
+
+.mock-controls label {
+    display: grid;
+    gap: 5px;
+    color: var(--text-secondary);
+    font-weight: 650
+}
+
+.mock-controls select {
+    min-height: 40px;
+    max-width: 100%;
+    padding: 0 10px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-sm);
+    background: var(--surface-seat);
+    color: var(--paper);
+    font: inherit
+}
+
+.mock-controls p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.4
+}
+
+.mock-controls summary:focus-visible,
+.mock-controls select:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px
+}
+
+.reconnect-notice {
+    position: fixed;
+    z-index: var(--z-notice);
+    top: max(58px, calc(env(safe-area-inset-top) + 48px));
+    left: 50%;
+    width: min(420px, calc(100vw - 24px));
+    overflow: hidden;
+    transform: translateX(-50%);
+    border-radius: 12px;
+    background: var(--surface-notice);
+    color: var(--paper);
+    box-shadow: 0 6px 8px var(--black-07);
+    display: grid;
+    grid-template-columns:minmax(0, 1fr) auto;
+    align-items: center;
+    animation: reconnect-enter 240ms var(--ease-out-quint) both
+}
+
+.reconnect-notice p {
+    margin: 0;
+    padding: 11px 14px;
+    font-size: 12px;
+    font-weight: 650;
+    text-align: center
+}
+
+.reconnect-notice button {
+    min-height: 44px;
+    margin-inline-end: 5px;
+    padding-inline: 10px;
+    color: var(--gold);
+    white-space: nowrap
+}
+
+.reconnect-notice > span:not(.next-hand-ring) {
+    position: absolute;
+    inset: auto 0 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    transform: translateX(-105%);
+    animation: reconnect-progress 1.3s linear infinite
+}
+
+@keyframes reconnect-enter {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -8px)
+    }
+}
+
+@keyframes reconnect-enter-static {
+    from {
+        opacity: 0;
+        transform: translateY(-6px)
+    }
+}
+
+.game-table {
+    position: relative;
+    width: min(920px, 80vw);
+    margin: auto;
+    min-height: 320px;
+    height: 100%
+}
+
+.game-rail {
+    position: absolute;
+    inset: 8% 4% 7%;
+    border-radius: 50%;
+    background: var(--table-rail);
+    border: 8px solid var(--table-rail-edge);
+    box-shadow: var(--shadow-table)
+}
+
+.game-felt {
+    position: absolute;
+    inset: 12% 8% 11%;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--table-felt-light), var(--table-felt-dark) 72%);
+    box-shadow: var(--shadow-felt);
+    display: grid;
+    place-items: center
+}
+
+.board {
+    text-align: center
+}
+
+.game-pot {
+    font: 600 10px var(--font-mono);
+    letter-spacing: .13em;
+    color: var(--felt-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 14px
+}
+
+.game-pot b {
+    color: var(--gold-pale);
+    font-size: var(--font-size-body)
+}
+
+.game-pot small {
+    margin-left: 10px;
+    color: var(--felt-text-muted)
+}
+
+.board > div {
+    display: flex;
+    gap: 7px
+}
+
+.playing-card {
+    display: block;
+    flex: none;
+    object-fit: contain
+}
+
+.board-card {
+    width: 68px;
+    height: 95px;
+    border-radius: 6px
+}
+
+.board > img.board-card,
+.board-card img {
+    filter: drop-shadow(0 8px 8px var(--overlay-night-3))
+}
+
+.card-reveal {
+    position: relative
+}
+
+.card-reveal-inner {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 100%
+}
+
+.board-card .card-reveal-inner {
+    animation: board-card-reveal 780ms var(--ease-out-expo) both;
+    animation-delay: calc(var(--deal-index, 0) * 320ms)
+}
+
+.hole-card .card-reveal-inner {
+    animation: hole-card-reveal 440ms var(--ease-out-expo) both;
+    animation-delay: calc(var(--deal-index, 0) * 75ms)
+}
+
+.card-reveal img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit
+}
+
+.card-reveal .card-back,
+.card-reveal .card-front {
+    transform-origin: center;
+    animation-duration: 560ms;
+    animation-timing-function: var(--ease-out-expo);
+    animation-fill-mode: both;
+    animation-delay: calc(var(--deal-index, 0) * 80ms)
+}
+
+.card-reveal .card-back {
+    z-index: 2;
+    animation-name: card-back-turn
+}
+
+.card-reveal .card-front {
+    z-index: 1;
+    animation-name: card-front-turn
+}
+
+.card-flip-slow .card-back,
+.card-flip-slow .card-front {
+    animation-duration: 900ms
+}
+
+.hole-card .card-back,
+.hole-card .card-front {
+    animation-duration: 440ms;
+    animation-delay: calc(var(--deal-index, 0) * 75ms)
+}
+
+.board-card .card-back,
+.board-card .card-front {
+    animation-delay: calc(var(--deal-index, 0) * 320ms)
+}
+
+.pot-value {
+    display: inline-block;
+    font-variant-numeric: tabular-nums;
+    animation: pot-count 180ms var(--ease-out-quart)
+}
+
+.board > div > span:not(.playing-card) {
+    width: 68px;
+    height: 95px;
+    border: 1px dashed var(--white-2a);
+    border-radius: 6px
+}
+
+.game-seat {
+    position: absolute;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--surface-seat);
+    border: 1px solid var(--seat-border);
+    border-radius: 14px;
+    padding: 7px 10px;
+    box-shadow: var(--shadow-seat);
+    transition: opacity 380ms var(--ease-out-quart), filter 380ms var(--ease-out-quart), border-color 380ms var(--ease-out-quart), transform 380ms var(--ease-out-quart)
+}
+
+.game-seat:after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: -5px;
+    border: 2px solid transparent;
+    border-radius: calc(var(--rounded-seat) + 3px);
+    pointer-events: none
+}
+
+.game-seat.is-turn:after {
+    border-color: var(--brand-bright);
+    animation: turn-signal 2s var(--ease-out-quart) infinite
+}
+
+@property --seat-ring-progress {
+    syntax: '<percentage>';
+    inherits: false;
+    initial-value: 100%
+}
+
+.seat-turn-ring {
+    position: absolute;
+    inset: -4px;
+    padding: 2px;
+    border-radius: inherit;
+    background: conic-gradient(var(--gold) var(--seat-ring-progress), transparent 0);
+    -webkit-mask: linear-gradient(var(--mask-opaque) 0 0) content-box, linear-gradient(var(--mask-opaque) 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: seat-turn-deplete linear forwards;
+    will-change: --seat-ring-progress;
+    pointer-events: none
+}
+
+@keyframes seat-turn-deplete {
+    from {
+        --seat-ring-progress: 100%
+    }
+    to {
+        --seat-ring-progress: 0%
+    }
+}
+
+.next-hand-ring {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    margin-left: .5em;
+    padding: 2px;
+    border-radius: 50%;
+    vertical-align: middle;
+    background: conic-gradient(var(--gold) var(--seat-ring-progress), transparent 0);
+    -webkit-mask: linear-gradient(var(--mask-opaque) 0 0) content-box, linear-gradient(var(--mask-opaque) 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: next-hand-ring-in 220ms var(--ease-out-quint) both,
+               seat-turn-deplete var(--ring-duration, 0ms) linear forwards,
+               next-hand-urgent 900ms ease-in-out var(--urgent-delay, 9999s) infinite alternate;
+    will-change: --seat-ring-progress
+}
+
+@keyframes next-hand-ring-in {
+    from {
+        opacity: 0;
+        transform: scale(.6)
+    }
+}
+
+@keyframes next-hand-urgent {
+    from {
+        background-image: conic-gradient(var(--gold) var(--seat-ring-progress), transparent 0)
+    }
+    to {
+        background-image: conic-gradient(var(--brand-bright) var(--seat-ring-progress), transparent 0)
+    }
+}
+
+.game-seat.is-winner {
+    border-color: var(--gold)
+}
+
+.game-seat.viewer {
+    border-color: var(--brand-bright);
+    box-shadow: var(--shadow-seat), 0 0 0 3px color-mix(in srgb, var(--brand) 25%, transparent)
+}
+
+/* Seat has joined but hasn't broadcast a display name yet (see set_name in
+   useTableRealtime) — dimmed, not just a text swap, so the table reads as
+   "still connecting" rather than a normal named opponent. */
+.game-seat.is-pending-name {
+    opacity: .62
+}
+
+.game-seat.is-pending-name .seat-info b {
+    color: var(--text-secondary);
+    font-style: italic
+}
+
+/* Desktop/tablet read seats as name cards; only the phone-width redesign
+   below (avatar + chips, color instead of name) turns this on. */
+.seat-avatar {
+    display: none
+}
+
+.seat-cards {
+    display: flex
+}
+
+.seat-cards > .playing-card {
+    width: 46px;
+    height: 64px;
+    margin-right: -22px;
+    border-radius: var(--rounded-xs)
+}
+
+.seat-cards > img.playing-card {
+    filter: drop-shadow(0 4px 4px var(--black));
+    animation: hole-deal 320ms var(--ease-out-expo) both;
+    animation-delay: calc(var(--deal-index, 0) * 65ms)
+}
+
+.seat-cards > .playing-card:last-child {
+    margin-right: 0
+}
+
+.hole-card img {
+    filter: drop-shadow(0 4px 4px var(--black))
+}
+
+.seat-info b, .seat-info span, .seat-info small {
+    display: block;
+    max-width: 130px;
+    overflow: hidden;
+    font-size: var(--font-size-tiny);
+    white-space: nowrap;
+    text-overflow: ellipsis
+}
+
+.seat-info span {
+    color: var(--gold);
+    margin-top: 3px
+}
+
+.seat-info small {
+    color: var(--success);
+    margin-top: 3px
+}
+
+.seat-info .seat-state {
+    color: var(--text-secondary)
+}
+
+.seat-equity {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 72px;
+    margin-top: 3px
+}
+
+.seat-equity small {
+    margin-top: 0
+}
+
+.seat-bet {
+    position: absolute;
+    top: calc(100% + 9px);
+    left: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    transform: translateX(-50%);
+    transform-origin: 50% 0;
+    animation: wager-in 220ms var(--ease-out-quint)
+}
+
+.seat-bet b {
+    background: var(--gold-deep);
+    color: var(--gold-ink);
+    padding: 3px 7px;
+    border-radius: var(--rounded-pill);
+    font: bold 10px var(--font-mono);
+    white-space: nowrap
+}
+
+/* bottom-row seats (plus the bottom-right corner, seat 7): bet travels up
+   toward the felt, clear of the action bar, instead of sitting under the seat.
+   A fixed offset (not a percentage of the seat's own box) is what keeps this
+   detached-from-the-seat without drifting off the felt at the seat's own size
+   changes across breakpoints. */
+.seat-0 .seat-bet, .seat-1 .seat-bet, .seat-7 .seat-bet, .seat-8 .seat-bet {
+    top: auto;
+    bottom: calc(100% + 9px);
+    flex-direction: column-reverse;
+    transform-origin: 50% 100%
+}
+
+/* the two side seats sit level with the felt, not above/below it: the bet
+   travels sideways toward the center instead of down off the rail. Stays in a
+   column (chip above the number, same as every other seat) rather than a row
+   — a row nearly doubles the badge's width, which is what drove it into the
+   pot on narrow viewports where this seat has little horizontal clearance. */
+.seat-2 .seat-bet {
+    top: 50%;
+    left: calc(100% + 6px);
+    bottom: auto;
+    transform: translateY(-50%);
+    transform-origin: 0 50%
+}
+
+.seat-6 .seat-bet {
+    top: 50%;
+    left: auto;
+    right: calc(100% + 6px);
+    bottom: auto;
+    transform: translateY(-50%);
+    transform-origin: 100% 50%
+}
+
+/* Chip stacks read relative to the big blind (see lib/chips.ts): more chips and a
+   brighter gold as the tier climbs, never color alone (chip count + the mono
+   number beside it both carry the value). */
+.chip-stack {
+    position: relative;
+    display: inline-block;
+    flex: none;
+    --chip-size: 15px;
+    --chip-gap: 3px;
+    width: var(--chip-size);
+    height: calc(var(--chip-size) + (var(--tier) - 1) * var(--chip-gap))
+}
+
+.chip-stack-pot {
+    --chip-size: 22px;
+    --chip-gap: 4px
+}
+
+.chip {
+    position: absolute;
+    left: 0;
+    bottom: calc(var(--i) * var(--chip-gap));
+    z-index: var(--i);
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: 2px dashed var(--gold-ink);
+    background: radial-gradient(circle at 32% 28%, var(--gold-bright-2), var(--gold) 60%, var(--gold-deep) 100%);
+    box-shadow: 0 1px 0 var(--gold-ink), 0 2px 3px var(--black-06);
+    animation: chip-drop 260ms var(--ease-out-quint) both;
+    animation-delay: calc(var(--i) * 45ms)
+}
+
+.chip-stack-pot .chip {
+    border-width: 3px
+}
+
+.chip-stack.tier-1 .chip {
+    background: radial-gradient(circle at 32% 28%, var(--gold-pale), var(--gold-deep) 100%)
+}
+
+.chip-stack.tier-3 .chip {
+    background: radial-gradient(circle at 32% 28%, var(--gold-bright-3), var(--gold-bright) 55%, var(--gold-deep) 100%)
+}
+
+.chip-stack.tier-4 .chip, .chip-stack.tier-5 .chip {
+    background: radial-gradient(circle at 32% 28%, var(--gold-bright-3), var(--gold-bright) 50%, var(--gold-deep) 100%);
+    box-shadow: 0 1px 0 var(--gold-ink), 0 0 6px 1px color-mix(in srgb, var(--gold-bright) 55%, transparent)
+}
+
+.chip-stack.tier-5 .chip {
+    box-shadow: 0 1px 0 var(--gold-ink), 0 0 9px 2px color-mix(in srgb, var(--gold-bright) 70%, transparent)
+}
+
+@keyframes chip-drop {
+    from {
+        opacity: 0;
+        transform: translateY(-8px) scale(.6)
+    }
+}
+
+.seat-win {
+    position: absolute;
+    z-index: 4;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: var(--gold);
+    color: var(--gold-ink);
+    font: 800 11px var(--font-mono);
+    white-space: nowrap;
+    pointer-events: none;
+    animation: winner-confirm 4s var(--ease-out-expo) both
+}
+
+.game-seat.viewer .seat-win {
+    left: calc(100% + 8px);
+    bottom: 50%;
+    animation-name: viewer-winner-confirm
+}
+
+.game-seat.top-seat:not(.viewer) .seat-win {
+    top: calc(100% + 8px);
+    bottom: auto
+}
+
+/* side-pot showdowns can show a seat's live contribution and its resolved
+   payout at once — both pills sit on the same side of the seat by default,
+   so push the win pill clear of the bet pill instead of stacking on it. */
+.game-seat:not(.viewer) .seat-bet + .seat-win {
+    bottom: calc(100% + 60px)
+}
+
+.game-seat.top-seat:not(.viewer) .seat-bet + .seat-win {
+    top: calc(100% + 60px);
+    bottom: auto
+}
+
+.hand-outcome {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    display: grid;
+    place-items: center;
+    padding: 12px;
+    pointer-events: none
+}
+
+.hand-outcome-card {
+    display: grid;
+    gap: 4px;
+    justify-items: center;
+    max-width: 300px;
+    padding: 16px 20px;
+    border-radius: var(--rounded-panel);
+    background: var(--toast-bg);
+    color: var(--toast-ink);
+    text-align: center;
+    box-shadow: 0 15px 50px var(--black-08);
+    animation: hand-outcome-in 320ms var(--ease-out-quint) both
+}
+
+.hand-outcome-card.lose {
+    background: var(--surface-control);
+    color: var(--paper);
+    box-shadow: 0 15px 50px var(--black-08), 0 0 0 1px var(--control-border)
+}
+
+.hand-outcome-card > svg {
+    width: 22px;
+    color: var(--gold-deep);
+    filter: drop-shadow(0 0 8px var(--brand-27));
+    animation: achievement-pop .45s var(--ease-out-quint) both;
+    animation-delay: 90ms
+}
+
+.hand-outcome-card b {
+    font-size: var(--font-size-body)
+}
+
+.hand-outcome-cards {
+    display: flex;
+    gap: 6px;
+    margin-block: 2px
+}
+
+.hand-outcome-cards .hole-card {
+    width: 40px;
+    height: 56px
+}
+
+.hand-outcome-chips-base, .hand-outcome-chips-delta, .hand-outcome-chips-total {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font: 800 var(--font-size-body) var(--font-mono);
+    animation: chip-phase-in 220ms var(--ease-out-quart) both
+}
+
+.hand-outcome-chips-base {
+    color: var(--text-secondary)
+}
+
+.hand-outcome-chips-delta {
+    color: var(--text-secondary)
+}
+
+.hand-outcome-chips-delta b {
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--gold);
+    color: var(--gold-ink);
+    font-size: var(--font-size-mono)
+}
+
+.hand-outcome-chips.loss .hand-outcome-chips-delta b {
+    background: var(--surface-error);
+    color: var(--danger-soft)
+}
+
+.hand-outcome-chips-total {
+    color: var(--gold-ink)
+}
+
+.hand-outcome-card.lose .hand-outcome-chips-base,
+.hand-outcome-card.lose .hand-outcome-chips.gain .hand-outcome-chips-total {
+    color: var(--paper)
+}
+
+.hand-outcome-chips.loss .hand-outcome-chips-total {
+    color: var(--danger-soft)
+}
+
+.hand-outcome-card small {
+    font-size: var(--font-size-mono)
+}
+
+.hand-outcome-card.lose small {
+    color: var(--text-secondary)
+}
+
+.hand-outcome-detail {
+    font-size: var(--font-size-body);
+    line-height: 1.35
+}
+
+.hand-outcome-card.lose .hand-outcome-detail {
+    color: var(--text-secondary)
+}
+
+.hand-outcome-card.leaving {
+    animation: none;
+    opacity: 0;
+    transform: translateY(-8px) scale(.97);
+    transition: opacity 260ms var(--ease-out-quart), transform 260ms var(--ease-out-quart)
+}
+
+.hand-outcome-confetti {
+    position: absolute;
+    inset: 0;
+    pointer-events: none
+}
+
+.hand-outcome-confetti span {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 6px;
+    height: 6px;
+    margin: -3px;
+    border-radius: 50%;
+    background: var(--gold);
+    opacity: 0;
+    animation: confetti-burst 650ms var(--ease-out-quart) both
+}
+
+.hand-outcome-confetti span:nth-child(1) {
+    --rot: 0deg
+}
+
+.hand-outcome-confetti span:nth-child(2) {
+    --rot: 45deg;
+    background: var(--brand-bright);
+    animation-delay: 30ms
+}
+
+.hand-outcome-confetti span:nth-child(3) {
+    --rot: 90deg;
+    animation-delay: 60ms
+}
+
+.hand-outcome-confetti span:nth-child(4) {
+    --rot: 135deg;
+    background: var(--brand-bright);
+    animation-delay: 20ms
+}
+
+.hand-outcome-confetti span:nth-child(5) {
+    --rot: 180deg;
+    animation-delay: 80ms
+}
+
+.hand-outcome-confetti span:nth-child(6) {
+    --rot: 225deg;
+    background: var(--brand-bright);
+    animation-delay: 40ms
+}
+
+.hand-outcome-confetti span:nth-child(7) {
+    --rot: 270deg;
+    animation-delay: 10ms
+}
+
+.hand-outcome-confetti span:nth-child(8) {
+    --rot: 315deg;
+    background: var(--brand-bright);
+    animation-delay: 50ms
+}
+
+@keyframes hand-outcome-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(.9)
+    }
+}
+
+@keyframes chip-phase-in {
+    from {
+        opacity: 0;
+        transform: translateY(4px) scale(.92)
+    }
+}
+
+@keyframes confetti-burst {
+    0% {
+        opacity: 1;
+        transform: rotate(var(--rot)) translateX(0) scale(1)
+    }
+    70% {
+        opacity: 1
+    }
+    100% {
+        opacity: 0;
+        transform: rotate(var(--rot)) translateX(38px) scale(.4)
+    }
+}
+
+.seat-0 {
+    left: 43%;
+    bottom: 1%
+}
+
+.seat-1 {
+    left: 8%;
+    bottom: 13%
+}
+
+.seat-2 {
+    left: -1%;
+    top: 44%
+}
+
+.seat-3 {
+    left: 10%;
+    top: 10%
+}
+
+.seat-4 {
+    left: 43%;
+    top: 1%
+}
+
+.seat-5 {
+    right: 10%;
+    top: 10%
+}
+
+.seat-6 {
+    right: -1%;
+    top: 44%
+}
+
+.seat-7 {
+    right: 8%;
+    bottom: 13%
+}
+
+.seat-8 {
+    left: 63%;
+    bottom: 1%
+}
+
+.folded {
+    filter: grayscale(1);
+    border-style: dashed
+}
+
+.folded .seat-cards {
+    opacity: .5
+}
+
+.action-bar {
+    position: relative;
+    z-index: 10;
+    display: grid;
+    grid-template-columns:auto minmax(190px, 320px) auto;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    padding: 9px max(15px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(15px, env(safe-area-inset-left));
+    background: linear-gradient(transparent, var(--table-room))
+}
+
+.action-choices {
+    display: grid;
+    grid-template-columns:repeat(3, minmax(88px, auto));
+    gap: 8px
+}
+
+.action-context {
+    grid-column: 1 / -1;
+    min-width: 0;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.2;
+    text-align: center
+}
+
+.action-bar button {
+    min-width: 0;
+    min-height: 48px;
+    border: 1px solid var(--control-border);
+    background: var(--surface-control);
+    color: var(--paper);
+    border-radius: var(--rounded-control);
+    padding: 12px 18px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 120ms var(--ease-out-quart), background-color 180ms var(--ease-out-quart), color 180ms var(--ease-out-quart)
+}
+
+.action-bar button:hover {
+    transform: translateY(-2px);
+    background: var(--surface-control-hover)
+}
+
+.action-bar button:disabled {
+    opacity: 1;
+    border-color: var(--control-border);
+    background: var(--surface-seat);
+    color: var(--muted);
+    cursor: not-allowed;
+    transform: none
+}
+
+.action-bar button:active {
+    transform: translateY(0) scale(.96);
+    transition-duration: 70ms
+}
+
+.game button:focus-visible,
+.game-loading button:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+    box-shadow: none
+}
+
+.action-bar button > span {
+    transition: transform 120ms var(--ease-out-quart)
+}
+
+.action-bar button:active > span {
+    transform: scale(1.035)
+}
+
+.action-spinner {
+    animation: spin .7s linear infinite
+}
+
+.action-bar .call {
+    background: var(--paper);
+    color: var(--wine)
+}
+
+.action-bar .raise {
+    background: var(--brand);
+    color: var(--on-brand)
+}
+
+.bet-control {
+    min-width: 0;
+    display: grid;
+    grid-template-columns:minmax(112px, 1fr) 68px;
+    align-items: center;
+    gap: 8px;
+    color: var(--gold);
+    font: 600 12px var(--font-mono)
+}
+
+.bet-control input[type=range] {
+    min-width: 0;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    accent-color: var(--brand);
+    cursor: pointer
+}
+
+.bet-control input[type=range]:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 1px;
+    border-radius: var(--rounded-sm);
+    box-shadow: none
+}
+
+.bet-control input[type=range]:disabled {
+    opacity: .65;
+    cursor: not-allowed
+}
+
+.bet-control output {
+    min-height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--rounded-control);
+    background: var(--surface-control);
+    color: var(--gold);
+    font-variant-numeric: tabular-nums
+}
+
+.bet-presets {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 6px
+}
+
+.action-bar .bet-presets button {
+    flex: 1;
+    min-height: 30px;
+    padding: 2px 8px;
+    font: 600 var(--font-size-compact) var(--font-mono);
+    border-radius: var(--rounded-sm)
+}
+
+.action-bar kbd {
+    margin-left: 6px;
+    padding: 1px 5px;
+    font: 600 var(--font-size-tiny) var(--font-mono);
+    border: 1px solid;
+    border-radius: var(--rounded-xs);
+    opacity: .55
+}
+
+.action-error {
+    grid-column: 1 / -1;
+    width: min(100%, 660px);
+    justify-self: center;
+    display: grid;
+    grid-template-columns:auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px;
+    padding: 6px 7px 6px 12px;
+    border-radius: var(--rounded-control);
+    background: var(--surface-error);
+    color: var(--paper);
+    animation: reconnect-enter 220ms var(--ease-out-quint) both
+}
+
+.action-error > svg {
+    width: 18px;
+    color: var(--danger-soft)
+}
+
+.action-error p {
+    min-width: 0;
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.35;
+    overflow-wrap: anywhere
+}
+
+.action-error button {
+    min-height: 44px;
+    width: 44px;
+    padding: 0
+}
+
+.game-chat {
+    position: fixed;
+    z-index: var(--z-chrome);
+    right: 16px;
+    bottom: var(--action-bar-clear)
+}
+
+.chat-toggle {
+    position: relative;
+    float: right;
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    border: 0;
+    background: var(--brand);
+    color: var(--on-brand);
+    display: grid;
+    place-items: center
+}
+
+.chat-unread-dot {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--gold);
+    border: 2px solid var(--table-room);
+    animation: chip-drop 260ms var(--ease-out-quint) both
+}
+
+.chat-toggle svg {
+    width: 19px
+}
+
+.chat-body {
+    display: none;
+    width: 285px;
+    height: 320px;
+    background: var(--surface-seat);
+    border: 1px solid var(--seat-border);
+    border-radius: 16px;
+    margin-bottom: 8px;
+    padding: 17px
+}
+
+.game-chat.open .chat-body {
+    display: flex;
+    flex-direction: column;
+    animation: rise .25s
+}
+
+.chat-body h3 {
+    font-size: 14px;
+    margin: 0 0 10px
+}
+
+.messages {
+    flex: 1;
+    overflow: auto
+}
+
+.messages p {
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow-wrap: break-word
+}
+
+.messages .messages-empty {
+    margin-top: 20px;
+    color: var(--muted);
+    line-height: 1.5;
+    text-align: center
+}
+
+.messages b {
+    color: var(--gold);
+    margin-right: 7px
+}
+
+.chat-body form {
+    display: flex
+}
+
+.chat-body input {
+    min-width: 0;
+    flex: 1;
+    background: var(--surface-control);
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-sm);
+    color: var(--paper);
+    padding: 9px
+}
+
+.chat-body input::placeholder {
+    color: var(--muted)
+}
+
+.chat-body input:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 1px;
+    border-color: transparent;
+    box-shadow: none
+}
+
+.chat-body form button {
+    background: none;
+    color: var(--brand-bright);
+    border: 0;
+    min-width: 44px;
+    min-height: 44px
+}
+
+.chat-body form svg {
+    width: 17px
+}
+
+.chat-error {
+    margin: 7px 0 0;
+    color: var(--danger-soft);
+    font-size: var(--font-size-compact);
+    line-height: 1.35
+}
+
+.achievement-toast {
+    position: fixed;
+    z-index: var(--z-toast);
+    right: 20px;
+    top: 70px;
+    background: var(--toast-bg);
+    color: var(--toast-ink);
+    border-radius: var(--rounded-panel);
+    padding: 13px 18px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    box-shadow: 0 15px 50px var(--black-08), 0 0 0 1px var(--brand-13);
+    animation: rise .4s var(--ease-out-quint);
+    transition: opacity .35s var(--ease-out-quart), transform .35s var(--ease-out-quart)
+}
+
+.achievement-toast.leaving {
+    animation: none;
+    opacity: 0;
+    transform: translateY(-10px) scale(.97)
+}
+
+.achievement-toast > svg {
+    fill: var(--gold-deep);
+    color: var(--gold-deep);
+    filter: drop-shadow(0 0 8px var(--brand-27));
+    animation: achievement-pop .5s var(--ease-out-quint) both;
+    animation-delay: 80ms
+}
+
+.achievement-toast small, .achievement-toast b {
+    display: block
+}
+
+.achievement-toast small {
+    font: 600 9px var(--font-mono);
+    letter-spacing: .1em
+}
+
+.achievement-toast b {
+    text-transform: capitalize
+}
+
+.achievement-stars {
+    display: inline-flex;
+    gap: 1px
+}
+
+.achievement-stars span {
+    display: inline-block;
+    animation: achievement-pop .35s var(--ease-out-quint) both;
+    animation-delay: calc(220ms + var(--delay, 0ms))
+}
+
+@keyframes achievement-pop {
+    from {
+        opacity: 0;
+        transform: scale(.4) rotate(-20deg)
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) rotate(0)
+    }
+}
+
+.api-notifier {
+    position: fixed;
+    z-index: var(--z-dev);
+    right: 20px;
+    top: 70px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: min(360px, calc(100vw - 40px))
+}
+
+.api-toast {
+    background: var(--toast-bg);
+    color: var(--toast-ink);
+    border-radius: var(--rounded-panel);
+    padding: 13px 16px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    box-shadow: 0 15px 50px var(--black-08);
+    animation: rise .4s
+}
+
+.api-toast.error {
+    border: 1px solid color-mix(in srgb, var(--muted-rose) 35%, transparent)
+}
+
+.api-toast > svg {
+    flex: none;
+    margin-top: 2px;
+    color: var(--muted-rose)
+}
+
+.api-toast p {
+    margin: 0;
+    flex: 1;
+    font-size: 14px;
+    line-height: 1.4
+}
+
+.api-toast button {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--rounded-sm);
+    color: var(--muted-rose);
+    background: transparent;
+    border: none;
+    cursor: pointer
+}
+
+.api-toast button:hover {
+    background: var(--black-08)
+}
+
+.game-loading {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    background: var(--room-grad-2)
+}
+
+.game-loading h2 {
+    margin: 0
+}
+
+.buyin {
+    padding: 24px;
+    text-align: center
+}
+
+.buyin > small {
+    font: 600 0.75rem var(--font-mono);
+    letter-spacing: .1em;
+    color: var(--text-secondary)
+}
+
+.buyin > p {
+    color: var(--muted);
+    margin: 0;
+    max-width: 44ch
+}
+
+.buyin-control {
+    display: grid;
+    gap: 8px;
+    width: min(360px, 100%);
+    background: var(--surface-control);
+    border: 1px solid var(--control-border);
+    border-radius: 16px;
+    padding: 24px;
+    margin-block: 8px
+}
+
+.buyin-control label {
+    font: 600 0.875rem var(--font-sans);
+    text-align: left
+}
+
+.buyin-control input[type=range] {
+    accent-color: var(--brand);
+    width: 100%
+}
+
+.buyin-control input[type=range]:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px
+}
+
+.buyin-control output {
+    font: 700 1.5rem var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--gold)
+}
+
+.buyin-control output span {
+    font: 400 0.875rem var(--font-sans);
+    color: var(--text-secondary)
+}
+
+.buyin-control > small {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums
+}
+
+.buyin-error {
+    color: var(--brand-bright-7);
+    background: var(--surface-error);
+    border-radius: 12px;
+    padding: 8px 16px;
+    max-width: 44ch
+}
+
+.ranking {
+    padding-block: 35px 90px
+}
+
+.ranking header {
+    text-align: center;
+    max-width: 650px;
+    margin: 60px auto
+}
+
+.ranking header > svg {
+    width: 45px;
+    height: 45px;
+    color: var(--gold)
+}
+
+.ranking-list {
+    max-width: 800px;
+    margin: auto
+}
+
+.ranking-list article {
+    display: grid;
+    grid-template-columns:60px 1fr auto;
+    align-items: center;
+    border-bottom: 1px solid var(--white-12);
+    padding: 18px;
+    animation: rise 380ms var(--ease-out-quart) both;
+    animation-delay: var(--delay, 0ms)
+}
+
+.ranking-list article > b {
+    font: 700 20px var(--font-mono);
+    color: var(--neutral-wine)
+}
+
+.ranking-list article:first-child > b {
+    color: var(--gold)
+}
+
+.ranking-list article.viewer {
+    border: 1px solid var(--brand-53);
+    border-radius: 12px;
+    background: var(--brand-08)
+}
+
+.ranking-list article.viewer span {
+    font-weight: 600
+}
+
+.ranking-list span small, .ranking-list strong small {
+    display: block;
+    color: var(--muted);
+    font-weight: 400;
+    margin-top: 4px
+}
+
+.ranking-list strong {
+    text-align: right;
+    color: var(--gold-bright-3)
+}
+
+.roulette {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 30px
+}
+
+.roulette > a {
+    position: absolute;
+    left: 30px;
+    top: 30px
+}
+
+
+.roulette > strong {
+    font-size: var(--font-size-large);
+    color: var(--gold);
+    margin-bottom: 15px
+}
+
+.roulette > em {
+    color: var(--brand-bright-7);
+    margin-bottom: 15px
+}
+
+.onboarding-intro {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 18px;
+    padding: 22px 56px 22px 22px;
+    margin-bottom: 32px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-panel);
+    background: var(--surface-control);
+    animation: rise 420ms var(--ease-out-quart) both
+}
+
+.onboarding-intro-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: var(--brand-13);
+    color: var(--brand-bright-4)
+}
+
+.onboarding-intro-icon svg {
+    width: 20px
+}
+
+.onboarding-intro-copy {
+    flex: 1;
+    min-width: 200px
+}
+
+.onboarding-intro-copy b {
+    display: block;
+    font-size: var(--font-size-subtitle)
+}
+
+.onboarding-intro-copy p {
+    margin: 6px 0 0;
+    max-width: 56ch;
+    color: var(--text-muted-soft)
+}
+
+.onboarding-intro-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    align-self: center
+}
+
+.onboarding-intro-close {
+    position: absolute;
+    top: 10px;
+    right: 10px
+}
+
+.hand-ranking-list {
+    display: grid;
+    gap: 2px;
+    margin-top: 20px;
+    list-style: none;
+    padding: 0
+}
+
+.hand-ranking-list li {
+    display: grid;
+    grid-template-columns: 28px auto 1fr;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 4px;
+    border-bottom: 1px solid var(--white-12)
+}
+
+.hand-ranking-list li:last-child {
+    border-bottom: none
+}
+
+.hand-ranking-list > li > b {
+    font: 700 16px var(--font-mono);
+    color: var(--neutral-wine)
+}
+
+.hand-ranking-list li:first-child > b {
+    color: var(--gold)
+}
+
+.hand-ranking-cards {
+    display: flex
+}
+
+.hand-ranking-cards .hole-card {
+    width: 34px;
+    height: 48px;
+    margin-right: -14px
+}
+
+.hand-ranking-cards .hole-card:last-child {
+    margin-right: 0
+}
+
+/* full list only (not the in-game compact dialog): slower, wider stagger so each
+   example card visibly finishes its flip before the next starts */
+.hand-ranking-list:not(.compact) .hand-ranking-cards .card-reveal-inner {
+    animation-duration: 460ms;
+    animation-delay: calc(var(--deal-index, 0) * 150ms)
+}
+
+.hand-ranking-list:not(.compact) .hand-ranking-cards .card-back,
+.hand-ranking-list:not(.compact) .hand-ranking-cards .card-front {
+    animation-duration: 460ms;
+    animation-delay: calc(var(--deal-index, 0) * 150ms)
+}
+
+.hand-ranking-list strong {
+    display: block;
+    font-size: var(--font-size-body)
+}
+
+.hand-ranking-list small {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted)
+}
+
+.hand-ranking-list.compact li {
+    grid-template-columns: 22px auto 1fr;
+    gap: 12px;
+    padding: 9px 2px
+}
+
+.hand-ranking-list.compact .hole-card {
+    width: 26px;
+    height: 37px;
+    margin-right: -11px
+}
+
+.hand-ranking-list.compact strong {
+    font-size: var(--font-size-compact)
+}
+
+.hand-ranking-list.compact small {
+    font-size: var(--font-size-tiny)
+}
+
+.rules {
+    padding-block: 35px 90px
+}
+
+.rules > a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--neutral-rose-3);
+    text-decoration: none;
+    font-size: var(--font-size-body)
+}
+
+.rules > a svg {
+    width: 16px
+}
+
+.rules header {
+    text-align: center;
+    max-width: 620px;
+    margin: 40px auto 32px
+}
+
+.rules header small {
+    display: block;
+    color: var(--gold);
+    font: 600 var(--font-size-mono) var(--font-mono);
+    letter-spacing: .12em;
+    margin-bottom: 10px
+}
+
+.rules header > svg {
+    width: 32px;
+    height: 32px;
+    color: var(--gold);
+    margin-bottom: 6px
+}
+
+.rules header p {
+    color: var(--muted);
+    line-height: 1.65
+}
+
+.rules-toc {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    max-width: 720px;
+    margin: 0 auto 50px
+}
+
+.rules-toc a {
+    padding: 8px 16px;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-pill);
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: var(--font-size-body);
+    transition: color 180ms var(--ease-out-quart), border-color 180ms var(--ease-out-quart)
+}
+
+.rules-toc a:hover, .rules-toc a:focus-visible {
+    color: var(--on-brand);
+    border-color: var(--brand-bright)
+}
+
+.rules-section {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 32px 0;
+    border-top: 1px solid var(--white-13);
+    scroll-margin-top: 90px
+}
+
+.rules-section:first-of-type {
+    border-top: none;
+    padding-top: 0
+}
+
+.rules-section h2 {
+    margin: 0 0 12px;
+    font-size: var(--font-size-large)
+}
+
+.rules-section > p {
+    color: var(--text-muted-soft);
+    line-height: 1.65;
+    max-width: 68ch
+}
+
+.rules-list, .rules-steps {
+    display: grid;
+    gap: 14px;
+    margin: 18px 0 0;
+    padding: 0;
+    list-style: none
+}
+
+.rules-steps {
+    counter-reset: rules-step
+}
+
+.rules-list li, .rules-steps li {
+    display: flex;
+    gap: 12px;
+    line-height: 1.6;
+    color: var(--text-muted-soft)
+}
+
+.rules-steps li {
+    counter-increment: rules-step
+}
+
+.rules-steps li:before {
+    content: counter(rules-step);
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--brand-13);
+    color: var(--brand-bright-4);
+    font: 700 var(--font-size-compact) var(--font-mono)
+}
+
+.rules-list li:before {
+    content: '';
+    flex: none;
+    width: 6px;
+    height: 6px;
+    margin-top: 9px;
+    border-radius: 50%;
+    background: var(--gold)
+}
+
+.rules-list b, .rules-steps b {
+    color: var(--on-brand)
+}
+
+.guide {
+    padding-block: 35px 90px
+}
+
+.guide > a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--neutral-rose-3);
+    text-decoration: none;
+    font-size: var(--font-size-body)
+}
+
+.guide > a svg {
+    width: 16px
+}
+
+.guide header {
+    text-align: center;
+    max-width: 620px;
+    margin: 40px auto 60px
+}
+
+.guide header small {
+    display: block;
+    color: var(--gold);
+    font: 600 var(--font-size-mono) var(--font-mono);
+    letter-spacing: .12em;
+    margin-bottom: 10px
+}
+
+.guide header > svg {
+    width: 32px;
+    height: 32px;
+    color: var(--gold);
+    margin-bottom: 6px
+}
+
+.guide header p {
+    color: var(--muted);
+    line-height: 1.65
+}
+
+.guide-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    gap: 48px;
+    max-width: 1020px;
+    margin: 0 auto;
+    padding: 56px 0;
+    border-top: 1px solid var(--white-13)
+}
+
+.guide-section:first-of-type {
+    border-top: none;
+    padding-top: 0
+}
+
+.guide-section.reverse .guide-shot {
+    order: -1
+}
+
+.guide-section h2 {
+    margin: 0 0 12px;
+    font-size: var(--font-size-large)
+}
+
+.guide-section > div > p {
+    color: var(--text-muted-soft);
+    line-height: 1.65;
+    max-width: 46ch
+}
+
+.guide-section .rules-steps, .guide-section .rules-list {
+    margin-top: 18px
+}
+
+.guide-shot {
+    border-radius: var(--rounded-panel);
+    overflow: hidden;
+    border: 1px solid var(--control-border);
+    box-shadow: 0 30px 60px var(--black-06);
+    background: var(--surface-control)
+}
+
+.guide-shot img {
+    display: block;
+    width: 100%;
+    height: auto
+}
+
+/* ===== Vertical stage — portrait handhelds =====
+   TableStage picks this composition via matchMedia (its own DOM tree), so
+   everything here is scoped by class, not viewport width: nothing below
+   fights the desktop oval geometry or the width-tier media blocks. Opponents
+   become avatar chips around a tall capsule; the viewer leaves the ring and
+   becomes a hero HUD (large hole cards) docked above the action bar. */
+.game-table.stage-v {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    padding: 8px 12px 0
+}
+
+/* The ring keeps a tall-capsule proportion instead of swallowing all leftover
+   height — on tablets the felt would otherwise balloon into a near-circle of
+   dead green. Short phones opt back into full-bleed width (see the
+   max-height tier at the end of this file). */
+.stage-v-ring {
+    position: relative;
+    flex: 1;
+    align-self: center;
+    aspect-ratio: 3 / 4;
+    width: auto;
+    max-width: 100%;
+    min-height: 300px
+}
+
+.stage-v .game-rail {
+    inset: 28px 4px 12px;
+    border-radius: 999px
+}
+
+/* Horizontal felt inset stretches with the ring (12%) so the avatar band
+   between rail and felt stays roughly avatar-sized from phone to portrait
+   tablet; vertical insets leave the top arc's captions clear of the header. */
+.stage-v .game-felt {
+    inset: clamp(56px, 9%, 84px) clamp(44px, 12%, 90px) clamp(48px, 8%, 76px);
+    border-radius: 999px
+}
+
+.stage-v .board > div {
+    gap: 4px
+}
+
+.stage-v .board-card, .stage-v .board > div > span {
+    width: 40px;
+    height: 56px
+}
+
+/* --- Opponents: avatar chips on the rail band --- */
+.stage-v-ring .game-seat {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    min-width: 0;
+    left: var(--seat-x);
+    top: var(--seat-y);
+    right: auto;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+    gap: 0;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: none
+}
+
+.stage-v-ring .game-seat:after {
+    border-radius: 50%;
+    inset: -3px
+}
+
+.stage-v-ring .seat-avatar {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    font-size: var(--font-size-tiny)
+}
+
+/* folded already grayscales globally; sitting-out, disconnected and
+   pending-entry only need it here, where no state word is painted. */
+.stage-v-ring .game-seat.sitting_out .seat-avatar,
+.stage-v-ring .game-seat.disconnected .seat-avatar,
+.stage-v-ring .game-seat.is-pending-name .seat-avatar {
+    filter: grayscale(1) opacity(.65)
+}
+
+.stage-v-ring .game-seat.all_in .seat-avatar {
+    box-shadow: 0 0 0 3px var(--gold)
+}
+
+/* Caption below the avatar (chip count only — the name lives in the avatar's
+   initials and stays in the DOM for assistive tech); hole cards float above,
+   over the rail band, so they never reach the board at showdown. Top-arc
+   seats (4/5) mirror: caption above, cards below toward the felt. */
+.stage-v-ring .seat-info {
+    position: absolute;
+    z-index: 1;
+    top: 100%;
+    left: 50%;
+    width: max-content;
+    max-width: 64px;
+    margin-top: 3px;
+    transform: translateX(-50%);
+    text-align: center;
+    pointer-events: none
+}
+
+.stage-v-ring .seat-info b,
+.stage-v-ring .seat-info .seat-state {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%)
+}
+
+.stage-v-ring .seat-info span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--font-size-tiny);
+    white-space: nowrap
+}
+
+.stage-v-ring .seat-info .seat-equity, .stage-v-ring .seat-info .seat-hand-category {
+    display: none
+}
+
+.stage-v-ring .game-seat .seat-cards {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% - 3px);
+    top: auto;
+    transform: translateX(-50%);
+    z-index: 0
+}
+
+.stage-v-ring .seat-cards > .playing-card {
+    width: 30px;
+    height: 42px;
+    margin-right: -12px
+}
+
+.stage-v-ring .seat-4 .seat-cards, .stage-v-ring .seat-5 .seat-cards {
+    bottom: auto;
+    top: calc(100% - 3px)
+}
+
+.stage-v-ring .seat-4 .seat-info, .stage-v-ring .seat-5 .seat-info {
+    top: auto;
+    bottom: 100%;
+    margin-top: 0;
+    margin-bottom: 3px
+}
+
+/* Bets point inward toward the pot: sideways for the two columns, downward
+   past the cards for the top arc. Every seat-N spelled out to out-specificity
+   the desktop per-seat bet rules. */
+.stage-v-ring .seat-1 .seat-bet, .stage-v-ring .seat-2 .seat-bet, .stage-v-ring .seat-3 .seat-bet,
+.stage-v-ring .seat-6 .seat-bet, .stage-v-ring .seat-7 .seat-bet, .stage-v-ring .seat-8 .seat-bet {
+    top: 50%;
+    left: calc(100% + 8px);
+    right: auto;
+    bottom: auto;
+    flex-direction: column;
+    transform: translateY(-50%);
+    transform-origin: 0 50%
+}
+
+.stage-v-ring .seat-6 .seat-bet, .stage-v-ring .seat-7 .seat-bet, .stage-v-ring .seat-8 .seat-bet {
+    left: auto;
+    right: calc(100% + 8px);
+    transform-origin: 100% 50%
+}
+
+/* Top-arc bets slide sideways into the gap between the two top seats —
+   below-the-cards placement lands on the pot/rake row on short screens. */
+.stage-v-ring .seat-4 .seat-bet {
+    top: 50%;
+    left: calc(100% + 8px);
+    right: auto;
+    bottom: auto;
+    transform: translateY(-50%);
+    transform-origin: 0 50%
+}
+
+.stage-v-ring .seat-5 .seat-bet {
+    top: 50%;
+    left: auto;
+    right: calc(100% + 8px);
+    bottom: auto;
+    transform: translateY(-50%);
+    transform-origin: 100% 50%
+}
+
+/* Winner pill: top arc drops it below, everyone else keeps it above. */
+.stage-v-ring .seat-4 .seat-win, .stage-v-ring .seat-5 .seat-win {
+    top: calc(100% + 8px);
+    bottom: auto
+}
+
+/* Ring order mirrors the desktop oval (counter-clockwise from the viewer):
+   1-3 climb the left column, 4-5 cross the top, 6-8 descend the right. */
+.stage-v-ring .seat-1 {
+    --seat-x: 12%;
+    --seat-y: 74%
+}
+
+.stage-v-ring .seat-2 {
+    --seat-x: 7%;
+    --seat-y: 48%
+}
+
+.stage-v-ring .seat-3 {
+    --seat-x: 12%;
+    --seat-y: 22%
+}
+
+.stage-v-ring .seat-4 {
+    --seat-x: 32%;
+    --seat-y: 34px
+}
+
+.stage-v-ring .seat-5 {
+    --seat-x: 68%;
+    --seat-y: 34px
+}
+
+.stage-v-ring .seat-6 {
+    --seat-x: 88%;
+    --seat-y: 22%
+}
+
+.stage-v-ring .seat-7 {
+    --seat-x: 93%;
+    --seat-y: 48%
+}
+
+.stage-v-ring .seat-8 {
+    --seat-x: 88%;
+    --seat-y: 74%
+}
+
+/* --- Viewer hero HUD --- */
+.stage-v > .game-seat {
+    position: relative;
+    inset: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: min(440px, 100%);
+    margin: 0 auto;
+    padding: 7px 12px
+}
+
+/* The hero IS obviously you — the brand border moves from "viewer" to
+   "your turn" here, keeping one red signal per decision (Red Signal Rule). */
+.stage-v > .game-seat.viewer {
+    min-width: 0;
+    border-color: var(--seat-border);
+    box-shadow: var(--shadow-seat)
+}
+
+.stage-v > .game-seat.viewer.is-turn {
+    border-color: var(--brand-bright);
+    box-shadow: var(--shadow-seat), 0 0 0 3px color-mix(in srgb, var(--brand) 35%, transparent)
+}
+
+.stage-v > .game-seat .seat-cards {
+    position: static;
+    transform: none
+}
+
+.stage-v > .game-seat .seat-cards > .playing-card {
+    width: 56px;
+    height: 78px;
+    margin-right: -12px
+}
+
+.stage-v > .game-seat .seat-info {
+    position: static;
+    flex: 1;
+    min-width: 0;
+    transform: none;
+    text-align: left
+}
+
+.stage-v > .game-seat .seat-info b {
+    max-width: none;
+    font-size: var(--font-size-compact)
+}
+
+.stage-v > .game-seat .seat-info span {
+    max-width: none;
+    margin-top: 4px;
+    font: 700 15px var(--font-mono);
+    font-variant-numeric: tabular-nums
+}
+
+.stage-v > .game-seat .seat-info small {
+    max-width: none;
+    font-size: var(--font-size-tiny)
+}
+
+/* The 72px ring-seat width (set for cramped avatar chips) clips "Chance
+   100%" in the roomier hero card; the card has width to spare, so let the
+   readout claim it instead of truncating the number the viewer is meant to
+   act on. */
+.stage-v > .game-seat .seat-info .seat-equity {
+    width: 104px
+}
+
+.stage-v > .game-seat .seat-info .seat-equity small {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap
+}
+
+/* Docked inside the HUD card (trailing edge) instead of floating above it —
+   the ring seats keep their own avatar right next to the bet chip, but the
+   hero card has nothing else nearby to anchor a floating chip to. */
+.stage-v > .game-seat .seat-bet {
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    transform: none;
+    animation: wager-in-inline 220ms var(--ease-out-quint)
+}
+
+.stage-v > .game-seat .seat-win,
+.stage-v > .game-seat.viewer .seat-win {
+    left: auto;
+    right: 12px;
+    bottom: calc(100% + 10px);
+    top: auto;
+    animation-name: winner-confirm
+}
+
+/* Roomier portrait surfaces (tablets, large phones): board and seats step up
+   one size so the capped ring doesn't dwarf them. */
+@media (min-width: 560px) {
+    .stage-v .board-card, .stage-v .board > div > span {
+        width: 48px;
+        height: 68px
+    }
+
+    .stage-v-ring .game-seat {
+        width: 46px;
+        height: 46px
+    }
+
+    .stage-v-ring .seat-cards > .playing-card {
+        width: 34px;
+        height: 47px;
+        margin-right: -14px
+    }
+
+    .stage-v-ring .seat-info {
+        max-width: 84px
+    }
+}
+
+/* Largest portrait surfaces (Surface Pro class): one more size step. */
+@media (min-width: 840px) {
+    .stage-v .board-card, .stage-v .board > div > span {
+        width: 56px;
+        height: 79px
+    }
+
+    .stage-v-ring .game-seat {
+        width: 52px;
+        height: 52px
+    }
+
+    .stage-v-ring .seat-cards > .playing-card {
+        width: 38px;
+        height: 53px;
+        margin-right: -16px
+    }
+
+    .stage-v-ring .seat-info {
+        max-width: 96px
+    }
+
+    .stage-v > .game-seat .seat-cards > .playing-card {
+        width: 64px;
+        height: 89px
+    }
+}
+
+/* On the vertical stage the action zone (bar + hero HUD) changes height as
+   the raise UI expands — a bottom-anchored chat toggle keeps landing on it.
+   Anchor chat to the ring's top-right corner instead (the capsule curve
+   leaves it empty) and open the panel downward. */
+@media (orientation: portrait) and (max-width: 1023px) {
+    .game-chat.game-chat {
+        right: 12px;
+        top: calc(env(safe-area-inset-top) + 60px);
+        bottom: auto
+    }
+
+    .game-chat .chat-body {
+        margin-bottom: 0;
+        margin-top: 8px;
+        width: min(285px, calc(100vw - 24px));
+        float: right;
+        clear: right
+    }
+
+    /* Achievement toast ducks below the chat toggle that owns this corner. */
+    .achievement-toast {
+        top: calc(env(safe-area-inset-top) + 114px);
+        right: 12px
+    }
+}
+
+@media (max-width: 720px) {
+    .onboarding-intro {
+        flex-direction: column;
+        padding: 20px
+    }
+
+    .onboarding-intro-close {
+        top: 14px;
+        right: 14px
+    }
+
+    .guide-section, .guide-section.reverse {
+        grid-template-columns: 1fr
+    }
+
+    .guide-section.reverse .guide-shot {
+        order: 0
+    }
+}
+
+/* The second arm pulls landscape handhelds (any width, short height) into the
+   same compact-seat tier — full desktop name-cards collide with the board on
+   a 390px-tall table. */
+@media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
+    .lobby > header {
+        align-items: flex-start;
+        gap: 25px;
+        flex-direction: column
+    }
+
+    .game-table {
+        width: 100%;
+        min-height: 340px
+    }
+
+    .game-seat {
+        min-width: 78px;
+        gap: 0;
+        padding: 7px 8px;
+        box-shadow: none
+    }
+
+    .seat-cards {
+        position: absolute;
+        left: 50%;
+        bottom: calc(100% - 3px);
+        transform: translateX(-50%);
+        z-index: 0
+    }
+
+    .seat-cards > .playing-card {
+        width: 31px;
+        height: 43px;
+        margin-right: -20px
+    }
+
+    /* bottom-row seats float their bet chip toward the pot (see the
+       desktop rule above); seat-cards now floats there too, so give the
+       chip enough clearance to sit above the 43px-tall cards instead of
+       stacking on top of them */
+    .seat-0 .seat-bet, .seat-1 .seat-bet, .seat-7 .seat-bet, .seat-8 .seat-bet {
+        bottom: calc(100% + 44px)
+    }
+
+    .game-seat.viewer {
+        min-width: 96px;
+        border-color: var(--brand-bright);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 25%, transparent)
+    }
+
+    .seat-info {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        text-align: center
+    }
+
+    .seat-info b {
+        font-size: var(--font-size-compact)
+    }
+
+    .seat-info span, .seat-info small {
+        font-size: var(--font-size-tiny)
+    }
+
+    .seat-equity {
+        width: 54px;
+        margin-inline: auto
+    }
+
+    .board-card, .board > div > span {
+        width: 48px;
+        height: 68px
+    }
+
+    .action-bar {
+        grid-template-columns:minmax(0, 1fr) minmax(112px, .42fr);
+        padding-top: 8px
+    }
+
+    .action-choices {
+        grid-column: 1 / -1;
+        grid-template-columns:repeat(3, minmax(0, 1fr))
+    }
+
+    .bet-control {
+        grid-template-columns:minmax(72px, 1fr) 64px
+    }
+
+    .bet-control-collapsed {
+        display: none
+    }
+
+    .raise-cancel {
+        grid-column: 1 / -1
+    }
+
+    /* collapsed = only the raise button occupies this grid row (the slider
+       is display:none), so it must claim both columns or half the row sits
+       empty */
+    .raise-collapsed {
+        grid-column: 1 / -1
+    }
+
+    .action-bar button {
+        width: 100%;
+        padding: 0 12px
+    }
+
+    :root {
+        --action-bar-clear: 70px
+    }
+
+    .seat-1, .seat-7 {
+        bottom: 9%
+    }
+
+    /* seat-cards float above the seat box at this width (see the .seat-cards
+       override above) instead of sitting inside it — the top row needs more
+       clearance from the header than the desktop 1%/10% offsets give, or the
+       floated cards render behind the header bar. */
+    .seat-3, .seat-4, .seat-5 {
+        top: 8%
+    }
+}
+
+@media (max-width: 520px) {
+    .game-chrome > header {
+        flex-wrap: wrap;
+        row-gap: 6px;
+        padding-right: max(12px, env(safe-area-inset-right));
+        padding-left: max(12px, env(safe-area-inset-left))
+    }
+
+    /* Lobby link + stage label can already eat most of a phone-width row;
+       without this the trailing icons (Convidar/Sentar fora/Sair da mesa)
+       get pushed past the edge and .game's overflow-x:clip hides them
+       entirely instead of just reflowing. */
+    /* One header row on phones: the Lobby link collapses to its chevron
+       (label stays for assistive tech) so the stage label and every table
+       tool fit beside it without wrapping. */
+    .header-lobby-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
+    }
+
+    .game-chrome > header .header-right {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 6px
+    }
+
+    .game-chrome > header > span {
+        max-width: 32vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap
+    }
+
+    /* icon-only status indicator: the "Ao vivo"/"Reconectando" label has no
+       room next to Convidar/Sentar fora/Sair da mesa at phone widths */
+    .connection-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
+    }
+
+    /* A fixed banner can't reliably dodge a header that wraps to two lines —
+       pin it in normal flow under the header instead, so it can never sit on
+       top of Sentar fora / Sair da mesa (see .game-chrome in page.tsx). */
+    /* Right margin keeps the in-flow notice clear of the chat toggle that
+       anchors to the ring's top-right corner on the vertical stage. */
+    .reconnect-notice {
+        position: static;
+        width: auto;
+        margin: 6px calc(64px + env(safe-area-inset-right)) 0 12px;
+        transform: none;
+        animation: reconnect-enter-static 240ms var(--ease-out-quint) both
+    }
+
+    .reconnect-notice > span:not(.next-hand-ring) {
+        inset: auto 0 0
+    }
+
+    .action-bar button {
+        font-size: 12px;
+        padding-inline: 8px
+    }
+
+    .bet-control {
+        grid-template-columns:minmax(64px, 1fr) 58px
+    }
+
+    .mock-controls {
+        top: auto;
+        bottom: calc(258px + env(safe-area-inset-bottom));
+        left: max(12px, env(safe-area-inset-left));
+        width: 44px
+    }
+
+    .mock-controls summary {
+        width: 44px;
+        padding: 0;
+        justify-content: center;
+        border-radius: 12px
+    }
+
+    .mock-controls summary span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
+    }
+
+    .mock-controls > div {
+        position: absolute;
+        bottom: calc(100% + 6px);
+        left: 0;
+        width: min(250px, calc(100vw - 24px));
+        border-radius: 12px
+    }
+
+    .ranking-list article {
+        grid-template-columns:40px 1fr auto;
+        padding: 15px 5px
+    }
+
+    .ranking-list strong {
+        font-size: 12px
+    }
+}
+
+@media (max-height: 620px) and (orientation: landscape) {
+    .game {
+        grid-template-columns:minmax(320px, 1fr) clamp(220px, 28vw, 264px);
+        grid-template-rows:auto minmax(320px, 1fr)
+    }
+
+    .game-chrome {
+        grid-column: 1 / -1
+    }
+
+    .game-chrome > header {
+        min-height: 48px;
+        padding-top: max(2px, env(safe-area-inset-top));
+        padding-bottom: 2px
+    }
+
+    .game-table {
+        grid-column: 1;
+        grid-row: 2;
+        width: 100%;
+        min-height: 320px
+    }
+
+    .game-rail {
+        inset: 10% 1% 8%
+    }
+
+    .game-felt {
+        inset: 15% 6% 13%
+    }
+
+    .action-bar {
+        grid-column: 2;
+        grid-row: 2;
+        align-content: center;
+        grid-template-columns:1fr;
+        padding: 12px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) 12px;
+        background: var(--room-grad-4)
+    }
+
+    .action-choices {
+        grid-column: auto;
+        grid-template-columns:1fr
+    }
+
+    .bet-control {
+        grid-template-columns:minmax(76px, 1fr) 58px
+    }
+
+    .game-chat {
+        right: calc(clamp(220px, 28vw, 264px) + 12px);
+        bottom: max(12px, env(safe-area-inset-bottom))
+    }
+
+    /* A 390px-tall ring is wide, not tall: spread the bottom/top rows into
+       the corners, pin the side seats to the true vertical middle, and keep
+       bets tight to their seats so nothing reaches the board. */
+    .seat-0 {
+        left: 33%;
+        bottom: 2%
+    }
+
+    .seat-8 {
+        left: 56%;
+        bottom: 2%
+    }
+
+    .seat-1 {
+        left: 12%;
+        bottom: 7%
+    }
+
+    .seat-7 {
+        right: 12%;
+        bottom: 7%
+    }
+
+    .seat-2 {
+        left: 1%;
+        top: 40%
+    }
+
+    .seat-6 {
+        right: 1%;
+        top: 40%
+    }
+
+    .seat-3 {
+        left: 13%;
+        top: 5%
+    }
+
+    .seat-5 {
+        right: 13%;
+        top: 5%
+    }
+
+    .seat-4 {
+        left: 46%;
+        top: 4%
+    }
+
+    /* Top-center seat: cards float over the header if they stay above the
+       pill — flip them below, toward the felt. */
+    .seat-4 .seat-cards {
+        bottom: auto;
+        top: calc(100% - 3px)
+    }
+
+    .seat-4 .seat-bet {
+        top: calc(100% + 48px)
+    }
+
+    .seat-bet {
+        top: calc(100% + 4px)
+    }
+
+    .seat-0 .seat-bet, .seat-8 .seat-bet {
+        bottom: calc(100% + 40px)
+    }
+
+    /* Lower-corner bets slide sideways toward the pot — floating them up
+       lands them on the mid-side seats at this height. */
+    .seat-1 .seat-bet {
+        top: 50%;
+        left: calc(100% + 6px);
+        bottom: auto;
+        transform: translateY(-50%);
+        transform-origin: 0 50%;
+        flex-direction: column
+    }
+
+    .seat-7 .seat-bet {
+        top: 50%;
+        left: auto;
+        right: calc(100% + 6px);
+        bottom: auto;
+        transform: translateY(-50%);
+        transform-origin: 100% 50%;
+        flex-direction: column
+    }
+
+    .board-card, .board > div > span {
+        width: 42px;
+        height: 59px
+    }
+}
+
+/* Short portrait phones (SE/8 class): the ring loses its height to header +
+   HUD + action bar, so the whole stage steps down one size — smaller board,
+   avatars and hero cards — instead of letting the mid-row seats collide with
+   the community cards. Placed after the width tiers so it wins the cascade. */
+@media (orientation: portrait) and (max-height: 760px) {
+    .stage-v .game-felt {
+        inset: clamp(46px, 8%, 84px) clamp(34px, 10%, 90px) clamp(38px, 7%, 76px)
+    }
+
+    .stage-v .board > div {
+        gap: 3px
+    }
+
+    .stage-v .board-card, .stage-v .board > div > span {
+        width: 34px;
+        height: 48px
+    }
+
+    .stage-v .game-pot {
+        margin-bottom: 8px
+    }
+
+    .stage-v-ring .game-seat {
+        width: 34px;
+        height: 34px
+    }
+
+    .stage-v-ring .seat-cards > .playing-card {
+        width: 26px;
+        height: 36px;
+        margin-right: -11px
+    }
+
+    .stage-v > .game-seat .seat-cards > .playing-card {
+        width: 48px;
+        height: 67px
+    }
+
+    /* Lower corners drop a notch so the mid-row captions clear their
+       neighbors' floated cards on short rings. */
+    .stage-v-ring .seat-1 {
+        --seat-y: 77%
+    }
+
+    .stage-v-ring .seat-8 {
+        --seat-y: 77%
+    }
+}
+
+@media (pointer: coarse) {
+    .action-bar kbd {
+        display: none
+    }
+
+    .game button, .game a, .game input[type=range] {
+        min-height: 44px;
+        touch-action: manipulation
+    }
+}
+
+@media (forced-colors: active) {
+    .game-seat,
+    .game-seat.viewer,
+    .game-seat.is-winner,
+    .game-seat.is-turn:after {
+        border-color: CanvasText
+    }
+
+    .game-seat.is-turn:after {
+        border-style: double
+    }
+
+    .game button:focus-visible,
+    .game-loading button:focus-visible,
+    .chat-body input:focus-visible,
+    .bet-control input[type=range]:focus-visible {
+        outline-color: Highlight
+    }
+}
