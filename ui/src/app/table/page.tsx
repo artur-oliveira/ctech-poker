@@ -270,7 +270,7 @@ function TableContent() {
         </div>}
       </div>
       <TableStage snapshot={s} viewer={viewer} pot={pot} bigBlind={bigBlind} nowMs={rt.snapshotAt}
-                  outcome={handOutcome}/>
+                  outcome={handOutcome} holdOutcomeOpen={s.stage === 'complete'}/>
       <ActionBar
         onActAction={rt.act}
         {...actions}

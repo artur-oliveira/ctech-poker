@@ -855,6 +855,16 @@ h1 em {
     }
 }
 
+/* Same entrance as wager-in, minus the translateY — the hero HUD's bet chip
+   sits inline in the card's flex row now, not floating above it, so it has
+   no "up toward the pot" direction to travel from. */
+@keyframes wager-in-inline {
+    from {
+        opacity: 0;
+        transform: scale(.65)
+    }
+}
+
 @keyframes pot-count {
     0% {
         opacity: .35;
@@ -3605,14 +3615,31 @@ h1 em {
     font-size: var(--font-size-tiny)
 }
 
-/* Your wager floats from the HUD up toward the pot. */
+/* The 72px ring-seat width (set for cramped avatar chips) clips "Chance
+   100%" in the roomier hero card; the card has width to spare, so let the
+   readout claim it instead of truncating the number the viewer is meant to
+   act on. */
+.stage-v > .game-seat .seat-info .seat-equity {
+    width: 104px
+}
+
+.stage-v > .game-seat .seat-info .seat-equity small {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap
+}
+
+/* Docked inside the HUD card (trailing edge) instead of floating above it —
+   the ring seats keep their own avatar right next to the bet chip, but the
+   hero card has nothing else nearby to anchor a floating chip to. */
 .stage-v > .game-seat .seat-bet {
-    top: auto;
-    bottom: calc(100% + 10px);
-    left: 50%;
-    transform: translateX(-50%);
-    transform-origin: 50% 100%;
-    flex-direction: column-reverse
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    transform: none;
+    animation: wager-in-inline 220ms var(--ease-out-quint)
 }
 
 .stage-v > .game-seat .seat-win,

@@ -28,6 +28,11 @@ const actionLabel: Record<PokerAction, string> = {
   fold: 'Desistindo…', check: 'Confirmando…', call: 'Pagando…', raise: 'Aumentando…'
 };
 
+// "Fold"/"Check" stay in English deliberately — BR players call them that at
+// the table even in Portuguese play — while "Pagar"/"Aumentar" carry an
+// amount, where a loanword reads worse. Confirmed intentional; don't
+// "fix" this into Desistir/Passar without checking first.
+
 /** True when the key press belongs to a text field (chat input, etc.), never the raise slider. */
 function isTypingTarget(target: EventTarget | null) {
   return target instanceof HTMLElement && !!target.closest('input:not([type=range]), textarea, select, [contenteditable]');
@@ -172,6 +177,10 @@ export function ActionBar({
   };
   const onRaise = useCallback((amount: number) => onActAction('raise', amount), [onActAction]);
   const canFold = available.fold, canCheck = available.check, canCall = available.call;
+  // Nothing to do this street at all (waiting for players, folded, showdown/
+  // complete) — collapse the choice row + raise slider instead of painting
+  // the full disabled control surface a spectating player has no use for.
+  const noLegalActions = !canFold && !canCheck && !canCall && !available.raise;
 
   useEffect(() => {
     if (unavailable) return undefined;
@@ -193,7 +202,7 @@ export function ActionBar({
 
   return <div className="action-bar" role="group" aria-label="Ações da rodada" aria-busy={pending !== null}>
     <p id="action-context" className="action-context" aria-live="polite">{context}</p>
-    <div className="action-choices" role="group" aria-label="Ações rápidas">
+    {!noLegalActions && <div className="action-choices" role="group" aria-label="Ações rápidas">
       <Button type="button" variant="outline" disabled={unavailable || !available.fold}
               aria-describedby="action-context" aria-keyshortcuts="f"
               onClick={() => onActAction('fold')}>{label('fold', 'Fold', 'F')}</Button>
@@ -204,10 +213,10 @@ export function ActionBar({
               aria-describedby="action-context" aria-keyshortcuts="p"
               onClick={() => onActAction('call')}
               className="call">{label('call', callAmount > 0 ? `Pagar ${callAmount.toLocaleString('pt-BR')}` : 'Pagar', 'P')}</Button>
-    </div>
-    <RaiseControl key={actionKey} minRaise={minRaise} maxRaise={maxRaise} raiseStep={raiseStep} pot={pot}
-                  disabled={unavailable || !available.raise} pending={pending === 'raise'}
-                  onRaise={onRaise}/>
+    </div>}
+    {!noLegalActions && <RaiseControl key={actionKey} minRaise={minRaise} maxRaise={maxRaise} raiseStep={raiseStep}
+                                      pot={pot} disabled={unavailable || !available.raise}
+                                      pending={pending === 'raise'} onRaise={onRaise}/>}
     {error && <div className="action-error" role="alert">
         <CircleAlert aria-hidden="true"/><p>{error.message}</p>
         <Button type="button" variant="ghost" size="icon" aria-label="Fechar aviso"

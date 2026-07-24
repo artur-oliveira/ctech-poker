@@ -33,9 +33,10 @@ type Props = {
   bigBlind: number;
   nowMs: number;
   outcome: HandOutcomeState | null;
+  holdOutcomeOpen: boolean;
 };
 
-export function TableStage({snapshot, viewer, pot, bigBlind, nowMs, outcome}: Props) {
+export function TableStage({snapshot, viewer, pot, bigBlind, nowMs, outcome, holdOutcomeOpen}: Props) {
   const vertical = useVerticalStage();
   const seats = rotateSeats(snapshot.seats, viewer);
   const seatNode = (seat: TableSnapshot['seats'][number], index: number) =>
@@ -53,7 +54,7 @@ export function TableStage({snapshot, viewer, pot, bigBlind, nowMs, outcome}: Pr
       <div className="game-rail"/>
       <div className="game-felt">{board}</div>
       {seats.map(seatNode)}
-      <HandOutcomeBanner outcome={outcome}/>
+      <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}/>
     </div>
   );
 
@@ -67,7 +68,7 @@ export function TableStage({snapshot, viewer, pot, bigBlind, nowMs, outcome}: Pr
         <div className="game-rail"/>
         <div className="game-felt">{board}</div>
         {opponents.map((seat, i) => seatNode(seat, i + 1))}
-        <HandOutcomeBanner outcome={outcome}/>
+        <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}/>
       </div>
       {viewerFirst && seatNode(seats[0], 0)}
     </div>
