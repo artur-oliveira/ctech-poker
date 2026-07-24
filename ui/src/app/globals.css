@@ -1124,6 +1124,11 @@ h1 em {
         --seat-ring-progress: 100% !important
     }
 
+    .next-hand-ring {
+        animation-name: none !important;
+        background-image: conic-gradient(var(--gold) 100%, transparent 0) !important
+    }
+
     .reconnect-notice > span {
         transform: none !important;
         background: var(--gold) !important
@@ -1829,8 +1834,26 @@ h1 em {
     -webkit-mask: linear-gradient(var(--mask-opaque) 0 0) content-box, linear-gradient(var(--mask-opaque) 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
-    animation: seat-turn-deplete linear forwards;
+    animation: next-hand-ring-in 220ms var(--ease-out-quint) both,
+               seat-turn-deplete var(--ring-duration, 0ms) linear forwards,
+               next-hand-urgent 900ms ease-in-out var(--urgent-delay, 9999s) infinite alternate;
     will-change: --seat-ring-progress
+}
+
+@keyframes next-hand-ring-in {
+    from {
+        opacity: 0;
+        transform: scale(.6)
+    }
+}
+
+@keyframes next-hand-urgent {
+    from {
+        background-image: conic-gradient(var(--gold) var(--seat-ring-progress), transparent 0)
+    }
+    to {
+        background-image: conic-gradient(var(--brand-bright) var(--seat-ring-progress), transparent 0)
+    }
 }
 
 .game-seat.is-winner {
@@ -2127,6 +2150,15 @@ h1 em {
 }
 
 .hand-outcome-card.lose small {
+    color: var(--text-secondary)
+}
+
+.hand-outcome-detail {
+    font-size: var(--font-size-body);
+    line-height: 1.35
+}
+
+.hand-outcome-card.lose .hand-outcome-detail {
     color: var(--text-secondary)
 }
 

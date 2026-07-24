@@ -42,3 +42,10 @@ export const HAND_RANKINGS: HandRankingEntry[] = [
     example: ['AH', 'JD', '8C', '5S', '2H']
   }
 ].map(entry => ({...entry, label: HAND_CATEGORY_LABELS[entry.key] || entry.key}));
+
+// Strongest → weakest as a lookup (0 = royal_flush) so any comparison that
+// needs "which category wins" reads off HAND_RANKINGS' order instead of
+// re-declaring it (used by HandOutcomeBanner to find the toughest rival hand).
+export const HAND_RANK_INDEX: Record<string, number> = Object.fromEntries(
+  HAND_RANKINGS.map((entry, index) => [entry.key, index])
+);

@@ -23,6 +23,7 @@ import {TermsGate} from '@/components/TermsGate';
 import {Button} from '@/components/ui/button';
 import {pushNotification} from '@/lib/notify';
 import type {PokerAction, TableSnapshot} from '@/lib/api/table';
+import {HAND_RANK_INDEX} from '@/lib/pokerRules';
 import {type MockScenario, USE_MOCK} from '@/lib/mock';
 import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
 
@@ -140,8 +141,19 @@ function TableContent() {
     if (seat?.state !== 'active' && seat?.state !== 'all_in') return;
     outcomeKeyRef.current += 1;
     const amount = snap.payouts[viewer] || 0;
+    const kind = amount > 0 ? 'win' : 'lose';
+    // The banner names one rival hand as the point of comparison: the
+    // toughest hand it beat when the viewer won (proof it beat everyone),
+    // or the hand that actually beat it when the viewer lost. Only seats
+    // that reached showdown carry hand_category, so this stays undefined
+    // (and the banner falls back to the plain category chip) whenever the
+    // hand ended without one — e.g. everyone else folded.
+    const opponentCategory = kind === 'win' ?
+      snap.seats.filter(item => item.player_id !== viewer && item.hand_category)
+        .sort((a, b) => HAND_RANK_INDEX[a.hand_category!] - HAND_RANK_INDEX[b.hand_category!])[0]?.hand_category :
+      snap.seats.find(item => item.player_id !== viewer && (snap.payouts?.[item.player_id] || 0) > 0)?.hand_category;
     setHandOutcome({
-      key: outcomeKeyRef.current, kind: amount > 0 ? 'win' : 'lose', amount, handCategory: seat.hand_category
+      key: outcomeKeyRef.current, kind, amount, handCategory: seat.hand_category, opponentCategory
     });
   }, [rt.snapshot, viewer]);
   if (!valid) return (
@@ -247,7 +259,10 @@ function TableContent() {
             <p>{s.stage === 'complete' ? 'Mão encerrada.' : 'Aguardando jogadores.'}</p>
           {s.next_hand_unix_ms &&
               <span key={s.next_hand_unix_ms} className="next-hand-ring"
-                    style={{animationDuration: `${nextHandDurationMs}ms`}}
+                    style={{
+                      '--ring-duration': `${nextHandDurationMs}ms`,
+                      '--urgent-delay': `${Math.max(0, nextHandDurationMs - 3000)}ms`,
+                    } as React.CSSProperties}
                     aria-hidden="true"/>}
           {canShowCards &&
               <Button type="button" variant="ghost" disabled={rt.showCardsPending}
