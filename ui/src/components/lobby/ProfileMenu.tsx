@@ -56,11 +56,12 @@ export function ProfileMenu() {
           {editingName ? (
             <div className="flex gap-2">
               <Input aria-labelledby="profile-name-label" value={name} onChange={e => setName(e.target.value)}
-                autoFocus onKeyDown={e => {
-                  if (e.key === 'Enter' && name.trim()) save.mutate({name: name.trim()});
-                  if (e.key === 'Escape') setEditingName(false);
-                }}/>
-              <Button size="sm" disabled={!name.trim() || save.isPending} onClick={() => save.mutate({name: name.trim()})}>
+                     autoFocus onKeyDown={e => {
+                if (e.key === 'Enter' && name.trim()) save.mutate({name: name.trim()});
+                if (e.key === 'Escape') setEditingName(false);
+              }}/>
+              <Button size="sm" disabled={!name.trim() || save.isPending}
+                      onClick={() => save.mutate({name: name.trim()})}>
                 Salvar
               </Button>
             </div>
@@ -76,7 +77,7 @@ export function ProfileMenu() {
         <div className="flex items-center justify-between">
           <Label id="wallet-mode-label">{walletMode === 'real' ? 'Dinheiro real' : 'Sandbox'}</Label>
           <Switch aria-labelledby="wallet-mode-label" checked={walletMode === 'real'} disabled={save.isPending}
-            onCheckedChange={checked => save.mutate({wallet_mode: checked ? 'real' : 'sandbox'})}/>
+                  onCheckedChange={checked => save.mutate({wallet_mode: checked ? 'real' : 'sandbox'})}/>
         </div>
         <div className="profile-balances">
           <span>Fichas sandbox <b>{formatSandbox(me?.sandbox_balance)}</b></span>

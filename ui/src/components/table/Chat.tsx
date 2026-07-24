@@ -32,12 +32,12 @@ export function Chat({items, onSend, connected = true, viewerId, seats = []}: {
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
-  
+
   useEffect(() => {
     const node = messagesRef.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [items.length, open]);
-  
+
   function submit(event: FormEvent) {
     event.preventDefault();
     const message = text.trim();
@@ -49,14 +49,14 @@ export function Chat({items, onSend, connected = true, viewerId, seats = []}: {
     setText('');
     setSendError('');
   }
-  
+
   return <aside className={`game-chat ${open ? 'open' : ''}`} aria-label="Chat da mesa">
     <div className="sr-only" role="status" aria-live={open ? 'off' : 'polite'} aria-atomic="true">
       {latest ? `${nameOf(latest.player)} disse: ${latest.message}` : ''}
     </div>
     <Button type="button" variant="ghost" size="icon" aria-label={open ? 'Fechar chat' : 'Abrir chat'}
-      aria-expanded={open} aria-controls={panelId} className="chat-toggle"
-      onClick={() => setOpen(value => !value)}>
+            aria-expanded={open} aria-controls={panelId} className="chat-toggle"
+            onClick={() => setOpen(value => !value)}>
       {open ? <X/> : <MessageCircle/>}
       {unread > 0 && <span className="chat-unread-dot" aria-hidden="true"/>}
     </Button>
@@ -71,13 +71,13 @@ export function Chat({items, onSend, connected = true, viewerId, seats = []}: {
       <form onSubmit={submit}>
         <label className="sr-only" htmlFor={inputId}>Mensagem para a mesa</label>
         <Input id={inputId} ref={inputRef} maxLength={500} value={text} disabled={!connected}
-          onChange={event => {
-            setText(event.target.value);
-            if (sendError) setSendError('');
-          }} placeholder={connected ? 'Diga algo…' : 'Reconectando…'} aria-invalid={Boolean(sendError)}
-          aria-describedby={sendError ? errorId : undefined}/>
+               onChange={event => {
+                 setText(event.target.value);
+                 if (sendError) setSendError('');
+               }} placeholder={connected ? 'Diga algo…' : 'Reconectando…'} aria-invalid={Boolean(sendError)}
+               aria-describedby={sendError ? errorId : undefined}/>
         <Button type="submit" size="icon" aria-label="Enviar mensagem"
-          disabled={!text.trim() || !connected}><Send/></Button>
+                disabled={!text.trim() || !connected}><Send/></Button>
       </form>
       {sendError && <p id={errorId} className="chat-error" role="alert">{sendError}</p>}
     </div>

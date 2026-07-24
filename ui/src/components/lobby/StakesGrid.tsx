@@ -65,29 +65,31 @@ export function StakesGrid() {
     </div>
   );
   return <>
-    <p className="stake-hint">Toque em um stake: você entra numa mesa aberta ou criamos uma na hora, sem fila de espera.</p>
+    <p className="stake-hint">Toque em um stake: você entra numa mesa aberta ou criamos uma na hora, sem fila de
+      espera.</p>
     <div className="room-groups">{stakes.map(stake => (
-    <section key={`${stake.small_blind}-${stake.big_blind}`} className="room-group"
-      aria-label={`Mesas com blinds ${stake.small_blind.toLocaleString('pt-BR')} / ${stake.big_blind.toLocaleString('pt-BR')}`}>
-      <h2><span>Blinds</span> {stake.small_blind.toLocaleString('pt-BR')} / {stake.big_blind.toLocaleString('pt-BR')}</h2>
-      <div className="stake-grid">{MAX_SEATS_OPTIONS.map((maxSeats, i) => {
-        const key = bucketKey(stake.small_blind, stake.big_blind, maxSeats);
-        const active = rooms.filter(r => r.visibility === 'public' && r.small_blind === stake.small_blind
-          && r.big_blind === stake.big_blind && r.max_seats === maxSeats && r.seats_taken < maxSeats).length;
-        return <Button variant="ghost" key={key} className="room-card h-auto" disabled={joiningKey === key}
-          style={{'--delay': `${i * 60}ms`} as React.CSSProperties}
-          onClick={() => joinOrCreate(stake.small_blind, stake.big_blind, maxSeats)}>
-          {active > 0 && <span className="status-dot"/>}
-          <div>
-            <small>SANDBOX · {maxSeats}-MAX</small>
-            <h3>{stake.small_blind.toLocaleString('pt-BR')} / {stake.big_blind.toLocaleString('pt-BR')}</h3>
-            <span><Users/> {active > 0 ? `${active} mesa${active > 1 ? 's' : ''} ativa${active > 1 ? 's' : ''}`
-              : 'Nenhuma mesa ativa'} · até {maxSeats} jogadores</span>
-          </div>
-          <ArrowRight/>
-        </Button>;
-      })}</div>
-    </section>
-  ))}</div>
+      <section key={`${stake.small_blind}-${stake.big_blind}`} className="room-group"
+               aria-label={`Mesas com blinds ${stake.small_blind.toLocaleString('pt-BR')} / ${stake.big_blind.toLocaleString('pt-BR')}`}>
+        <h2><span>Blinds</span> {stake.small_blind.toLocaleString('pt-BR')} / {stake.big_blind.toLocaleString('pt-BR')}
+        </h2>
+        <div className="stake-grid">{MAX_SEATS_OPTIONS.map((maxSeats, i) => {
+          const key = bucketKey(stake.small_blind, stake.big_blind, maxSeats);
+          const active = rooms.filter(r => r.visibility === 'public' && r.small_blind === stake.small_blind
+            && r.big_blind === stake.big_blind && r.max_seats === maxSeats && r.seats_taken < maxSeats).length;
+          return <Button variant="ghost" key={key} className="room-card h-auto" disabled={joiningKey === key}
+                         style={{'--delay': `${i * 60}ms`} as React.CSSProperties}
+                         onClick={() => joinOrCreate(stake.small_blind, stake.big_blind, maxSeats)}>
+            {active > 0 && <span className="status-dot"/>}
+            <div>
+              <small>SANDBOX · {maxSeats}-MAX</small>
+              <h3>{stake.small_blind.toLocaleString('pt-BR')} / {stake.big_blind.toLocaleString('pt-BR')}</h3>
+              <span><Users/> {active > 0 ? `${active} mesa${active > 1 ? 's' : ''} ativa${active > 1 ? 's' : ''}`
+                : 'Nenhuma mesa ativa'} · até {maxSeats} jogadores</span>
+            </div>
+            <ArrowRight/>
+          </Button>;
+        })}</div>
+      </section>
+    ))}</div>
   </>;
 }

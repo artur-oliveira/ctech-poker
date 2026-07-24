@@ -13,5 +13,6 @@ const FILES: Record<SoundName, string[]> = {
 export function playSound(name: SoundName) {
   const files = FILES[name];
   const file = files[Math.floor(Math.random() * files.length)];
-  new Audio(file).play().catch(() => {});
+  new Audio(file).play().catch(() => {
+  });
 }

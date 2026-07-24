@@ -5,13 +5,13 @@ import {cn} from '@/lib/utils';
 const Popover = Primitive.Root, PopoverTrigger = Primitive.Trigger;
 
 function PopoverContent({
-  className,
-  children,
-  side = 'bottom',
-  sideOffset = 8,
-  align = 'end',
-  ...props
-}: Primitive.Popup.Props & Pick<Primitive.Positioner.Props, 'align' | 'side' | 'sideOffset'>) {
+                          className,
+                          children,
+                          side = 'bottom',
+                          sideOffset = 8,
+                          align = 'end',
+                          ...props
+                        }: Primitive.Popup.Props & Pick<Primitive.Positioner.Props, 'align' | 'side' | 'sideOffset'>) {
   return <Primitive.Portal>
     <Primitive.Positioner side={side} sideOffset={sideOffset} align={align} className="isolate z-50">
       <Primitive.Popup

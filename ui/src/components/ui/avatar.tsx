@@ -8,7 +8,8 @@ function Avatar({className, ...props}: Primitive.Root.Props) {
 }
 
 function AvatarFallback({className, ...props}: Primitive.Fallback.Props) {
-  return <Primitive.Fallback className={cn('flex size-full items-center justify-center uppercase', className)} {...props}/>;
+  return <Primitive.Fallback
+    className={cn('flex size-full items-center justify-center uppercase', className)} {...props}/>;
 }
 
 export {Avatar, AvatarFallback};

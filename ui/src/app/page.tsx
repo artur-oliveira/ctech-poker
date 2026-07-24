@@ -26,10 +26,10 @@ export default function Home() {
   return <main className="landing">
     <nav className="nav shell"><Link href="/" className="brand"><span
       className="brand-mark"><Club/></span><span>CTech <b>Poker</b></span></Link>
-    <div className="nav-links"><Link href="#experience">Experiência</Link><Link href="/poker-rules">Regras</Link><Link
-      href="/leaderboard">Ranking</Link>
-      <Button variant="ghost" onClick={() => startOAuthFlow()}>Entrar</Button>
-    </div>
+      <div className="nav-links"><Link href="#experience">Experiência</Link><Link href="/poker-rules">Regras</Link><Link
+        href="/leaderboard">Ranking</Link>
+        <Button variant="ghost" onClick={() => startOAuthFlow()}>Entrar</Button>
+      </div>
     </nav>
     <section className="hero shell">
       <div className="hero-copy">
@@ -45,7 +45,7 @@ export default function Home() {
       <header><h2>Uma mesa completa</h2><p>Interações naturais, informação no momento certo e movimentos suaves que
         ajudam você a acompanhar cada jogada.</p></header>
       <div className="feature-grid">{features.map(({icon: Icon, title, body}, i) => <article key={title}
-        style={{'--delay': `${i * 90}ms`} as React.CSSProperties}>
+                                                                                             style={{'--delay': `${i * 90}ms`} as React.CSSProperties}>
         <div><Icon/></div>
         <h3>{title}</h3><p>{body}</p></article>)}</div>
     </section>
@@ -59,12 +59,13 @@ export default function Home() {
       <div className="showcase-frame">
         <div className="showcase-inner">
           <div className="browser-chrome"><span/><span/><span/><small>ctechpoker.app/mesa</small></div>
-          <Image src="/guide/table-flop.png" alt="Mesa real do CTech Poker em andamento, com cartas comunitárias e barra de ações"
-            width={1280} height={800}/>
+          <Image src="/guide/table-flop.png"
+                 alt="Mesa real do CTech Poker em andamento, com cartas comunitárias e barra de ações"
+                 width={1280} height={800}/>
         </div>
         <figure className="showcase-peek">
           <Image src="/guide/lobby.png" alt="Lobby do CTech Poker com mesas agrupadas por stake" width={640}
-            height={400}/>
+                 height={400}/>
         </figure>
       </div>
     </section>
@@ -92,10 +93,10 @@ function HeroTable() {
       <div className="rail"/>
       <div className="felt"><span className="pot">POTE <b>2.450</b></span>
         <div className="community">{['heart-10', 'spade-jack', 'diamond-queen'].map((c, i) => <Image key={c}
-          src={`/svgs/${c}.svg`}
-          alt="" width={70}
-          height={98}
-          style={{'--i': i} as React.CSSProperties}/>)}<span
+                                                                                                     src={`/svgs/${c}.svg`}
+                                                                                                     alt="" width={70}
+                                                                                                     height={98}
+                                                                                                     style={{'--i': i} as React.CSSProperties}/>)}<span
           className="card-placeholder"/><span className="card-placeholder"/></div>
         <div className="table-logo"><Club/> CTECH</div>
       </div>
@@ -103,7 +104,7 @@ function HeroTable() {
         <div className={`demo-seat ${pos}`} key={name}><span
           className="avatar">{name[0]}</span><span><b>{name}</b><small>{chips}</small></span>{name === 'Você' &&
             <div className="hole"><Image src="/svgs/spade-ace.svg" alt="Ás de espadas" width={42} height={59}/><Image
-              src="/svgs/heart-ace.svg" alt="Ás de copas" width={42} height={59}/></div>}</div>)}
+                src="/svgs/heart-ace.svg" alt="Ás de copas" width={42} height={59}/></div>}</div>)}
       <div className="chip-orbit chip-a"/>
       <div className="chip-orbit chip-b"/>
     </div>

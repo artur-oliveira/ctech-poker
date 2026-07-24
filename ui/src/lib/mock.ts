@@ -206,18 +206,47 @@ export type MockScenario =
 export type MockConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
 
 const baseSeats = () => [
-  {player_id: MOCK_PLAYER_ID, name: 'Ana', stack: 4850, state: 'active', contributed: 50, hole_cards: ['AH', 'KD'], equity: .64},
+  {
+    player_id: MOCK_PLAYER_ID,
+    name: 'Ana',
+    stack: 4850,
+    state: 'active',
+    contributed: 50,
+    hole_cards: ['AH', 'KD'],
+    equity: .64
+  },
   {player_id: 'bia_sp', name: 'Bia', stack: 3925, state: 'active', contributed: 75, hole_cards: ['back', 'back']},
   {player_id: 'leo_rio', name: 'Léo', stack: 6100, state: 'folded', contributed: 25, hole_cards: ['back', 'back']},
   {player_id: 'nina_recife', name: 'Nina', stack: 2775, state: 'active', contributed: 75, hole_cards: ['back', 'back']},
   // Nameless on purpose — exercises the is-pending-name placeholder in dev.
   {player_id: 'gui_bh', stack: 5000, state: 'sitting_out', contributed: 0},
-  {player_id: 'joao_floripa', name: 'João', stack: 4375, state: 'active', contributed: 75, hole_cards: ['back', 'back']},
+  {
+    player_id: 'joao_floripa',
+    name: 'João',
+    stack: 4375,
+    state: 'active',
+    contributed: 75,
+    hole_cards: ['back', 'back']
+  },
   {player_id: 'mari_belém', name: 'Mari', stack: 8200, state: 'disconnected', contributed: 0},
-  {player_id: 'caio_goiânia', name: 'Caio', stack: 3400, state: 'all_in', contributed: 625, hole_cards: ['back', 'back']},
+  {
+    player_id: 'caio_goiânia',
+    name: 'Caio',
+    stack: 3400,
+    state: 'all_in',
+    contributed: 625,
+    hole_cards: ['back', 'back']
+  },
   // 9th seat — the room's max_seats, so dev/QA always sees the table at
   // real worst-case capacity, not a comfortably under-full one.
-  {player_id: 'rafa_curitiba', name: 'Rafa', stack: 5200, state: 'active', contributed: 75, hole_cards: ['back', 'back']},
+  {
+    player_id: 'rafa_curitiba',
+    name: 'Rafa',
+    stack: 5200,
+    state: 'active',
+    contributed: 75,
+    hole_cards: ['back', 'back']
+  },
 ];
 
 function revealShowdownCards(seats: SeatView[]) {
@@ -233,12 +262,41 @@ function revealShowdownCards(seats: SeatView[]) {
 // already posted (viewer is the big blind, bia_sp the small blind).
 function fullHandSeats(): SeatView[] {
   return [
-    {player_id: MOCK_PLAYER_ID, name: 'Ana', stack: 4850, state: 'active', contributed: 50, hole_cards: ['AH', 'KD'], equity: .64},
+    {
+      player_id: MOCK_PLAYER_ID,
+      name: 'Ana',
+      stack: 4850,
+      state: 'active',
+      contributed: 50,
+      hole_cards: ['AH', 'KD'],
+      equity: .64
+    },
     {player_id: 'bia_sp', name: 'Bia', stack: 3925, state: 'active', contributed: 25, hole_cards: ['back', 'back']},
     {player_id: 'leo_rio', name: 'Léo', stack: 6100, state: 'active', contributed: 0, hole_cards: ['back', 'back']},
-    {player_id: 'nina_recife', name: 'Nina', stack: 2775, state: 'active', contributed: 0, hole_cards: ['back', 'back']},
-    {player_id: 'joao_floripa', name: 'João', stack: 4375, state: 'active', contributed: 0, hole_cards: ['back', 'back']},
-    {player_id: 'caio_goiânia', name: 'Caio', stack: 3400, state: 'active', contributed: 0, hole_cards: ['back', 'back']},
+    {
+      player_id: 'nina_recife',
+      name: 'Nina',
+      stack: 2775,
+      state: 'active',
+      contributed: 0,
+      hole_cards: ['back', 'back']
+    },
+    {
+      player_id: 'joao_floripa',
+      name: 'João',
+      stack: 4375,
+      state: 'active',
+      contributed: 0,
+      hole_cards: ['back', 'back']
+    },
+    {
+      player_id: 'caio_goiânia',
+      name: 'Caio',
+      stack: 3400,
+      state: 'active',
+      contributed: 0,
+      hole_cards: ['back', 'back']
+    },
   ];
 }
 
@@ -329,9 +387,30 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
         player_id: 'leo_rio', name: 'Léo', stack: 5400, state: 'active', contributed: 700,
         hole_cards: ['9S', '4D'], hand_category: 'high_card'
       },
-      {player_id: 'nina_recife', name: 'Nina', stack: 2700, state: 'folded', contributed: 75, hole_cards: ['back', 'back']},
-      {player_id: 'joao_floripa', name: 'João', stack: 4375, state: 'folded', contributed: 0, hole_cards: ['back', 'back']},
-      {player_id: 'caio_goiânia', name: 'Caio', stack: 3350, state: 'folded', contributed: 50, hole_cards: ['back', 'back']},
+      {
+        player_id: 'nina_recife',
+        name: 'Nina',
+        stack: 2700,
+        state: 'folded',
+        contributed: 75,
+        hole_cards: ['back', 'back']
+      },
+      {
+        player_id: 'joao_floripa',
+        name: 'João',
+        stack: 4375,
+        state: 'folded',
+        contributed: 0,
+        hole_cards: ['back', 'back']
+      },
+      {
+        player_id: 'caio_goiânia',
+        name: 'Caio',
+        stack: 3350,
+        state: 'folded',
+        contributed: 50,
+        hole_cards: ['back', 'back']
+      },
     ],
     payouts: {[MOCK_PLAYER_ID]: 900, 'bia_sp': 800},
     rake: 25,
@@ -395,25 +474,12 @@ export class MockTableService {
   private attempt = 0;
   private status: MockConnectionStatus = 'connecting';
   private streetCommitted: Record<string, number> = {};
-  
+
   constructor(private scenario: MockScenario, private delay: number, private handlers: MockHandlers) {
     this.snapshot = snapshotForScenario(scenario);
     if (scenario === 'full_hand') this.beginStreet(false);
   }
-  
-  private later(task: () => void, factor = 1) {
-    const timer = setTimeout(() => {
-      this.timers.delete(timer);
-      task();
-    }, this.delay * factor);
-    this.timers.add(timer);
-  }
-  
-  private setStatus(status: MockConnectionStatus) {
-    this.status = status;
-    this.handlers.onStatus(status, this.attempt);
-  }
-  
+
   connect() {
     this.setStatus('connecting');
     if (this.scenario === 'reconnecting') {
@@ -437,7 +503,7 @@ export class MockTableService {
       this.emitState();
     });
   }
-  
+
   reconnect() {
     this.attempt += 1;
     this.setStatus('reconnecting');
@@ -446,7 +512,7 @@ export class MockTableService {
       this.emitState();
     });
   }
-  
+
   send(value: Record<string, unknown>) {
     // The timeout scenario models a server that accepts the connection but
     // never replies to anything — so every action (and the watchdog ping)
@@ -499,9 +565,28 @@ export class MockTableService {
     });
     return true;
   }
-  
+
+  close() {
+    this.timers.forEach(clearTimeout);
+    this.timers.clear();
+    mockPlayerDealtIn = false;
+  }
+
+  private later(task: () => void, factor = 1) {
+    const timer = setTimeout(() => {
+      this.timers.delete(timer);
+      task();
+    }, this.delay * factor);
+    this.timers.add(timer);
+  }
+
   // --- Full-hand engine -----------------------------------------------------
-  
+
+  private setStatus(status: MockConnectionStatus) {
+    this.status = status;
+    this.handlers.onStatus(status, this.attempt);
+  }
+
   /** Seed this street's per-street commitment. When `clear` is false the
    * current contributions (blinds) are carried in; otherwise the street starts
    * fresh at zero. */
@@ -511,13 +596,13 @@ export class MockTableService {
       if (seat.state === 'active') this.streetCommitted[seat.player_id] = clear ? 0 : (seat.contributed || 0);
     }
   }
-  
+
   private streetBet(seats: SeatView[]) {
     // Includes folded seats: a player's bet stays on the table as the amount
     // the rest of the table must still match, even after they fold.
     return Math.max(0, ...seats.map(s => this.streetCommitted[s.player_id] || 0));
   }
-  
+
   private legalActionsFor(seats: SeatView[], playerId: string): LegalActionState {
     const seat = seats.find(s => s.player_id === playerId);
     if (!seat || seat.state !== 'active') return {actions: []};
@@ -535,7 +620,7 @@ export class MockTableService {
       step: 25
     };
   }
-  
+
   private resolveFullHand(action: PokerAction, amount: number) {
     const seats = this.snapshot.seats.map(s => ({...s, hole_cards: s.hole_cards ? [...s.hole_cards] : undefined}));
     const viewer = seats.find(s => s.player_id === MOCK_PLAYER_ID);
@@ -594,7 +679,7 @@ export class MockTableService {
       else this.later(() => this.advanceStreet(seats), 1);
     }
   }
-  
+
   private advanceStreet(seats: SeatView[]) {
     const stage = this.snapshot.stage;
     const next = stage === 'pre_flop' ? 'flop' : stage === 'flop' ? 'turn' : stage === 'turn' ? 'river' : 'showdown';
@@ -611,7 +696,7 @@ export class MockTableService {
     };
     this.emitState();
   }
-  
+
   private reachShowdown(seats: SeatView[], pot: number) {
     const revealed = seats.map(s => FULL_HAND_REVEAL[s.player_id] ? {
       ...s,
@@ -634,7 +719,7 @@ export class MockTableService {
       this.emitState();
     }, 6);
   }
-  
+
   private finishHand(seats: SeatView[], activeSeats: SeatView[], pot: number) {
     const winner = bestHand(activeSeats);
     const payouts: Record<string, number> = {};
@@ -652,19 +737,13 @@ export class MockTableService {
     };
     this.emitState();
   }
-  
+
   private emitState() {
     const stage = this.snapshot.stage;
     const handInProgress = stage !== 'waiting_for_players' && stage !== 'complete';
     const viewer = this.snapshot.seats.find(s => s.player_id === MOCK_PLAYER_ID);
     mockPlayerDealtIn = handInProgress && (viewer?.state === 'active' || viewer?.state === 'all_in');
     this.handlers.onMessage({type: 'state', snapshot: this.snapshot});
-  }
-  
-  close() {
-    this.timers.forEach(clearTimeout);
-    this.timers.clear();
-    mockPlayerDealtIn = false;
   }
 }
 

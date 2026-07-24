@@ -52,6 +52,7 @@ function connectionCopyFor(status: keyof typeof CONNECTION_COPY, attempt: number
   if (status === 'disconnected' && attempt > MAX_RECONNECT_ATTEMPTS) return RECONNECT_GIVEN_UP_COPY;
   return CONNECTION_COPY[status];
 }
+
 const MOCK_SCENARIOS = new Set<MockScenario>(['full_hand', 'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot', 'complete', 'reconnecting', 'action_error', 'timeout']);
 
 function actionState(snapshot: TableSnapshot, viewer?: string) {
@@ -117,7 +118,7 @@ function TableContent() {
   // long before the real 5s deadline. Freezing the duration at the first
   // snapshot that armed this deadline keeps the ring in sync with backend
   // time regardless of how many broadcasts land before it fires.
-  const [nextHandArmed, setNextHandArmed] = useState<{deadline: number; snapshotAt: number} | null>(null);
+  const [nextHandArmed, setNextHandArmed] = useState<{ deadline: number; snapshotAt: number } | null>(null);
   // Fires the win/lose banner exactly once per resolved hand: payouts appear
   // once when a hand completes and stay put across every later broadcast of
   // that same `complete` snapshot (show_cards, pings, ...), so comparing
@@ -171,7 +172,7 @@ function TableContent() {
       <p role="status"
          aria-live="polite">{rt.status === 'connected' ? 'Sincronizando o estado mais recente.' : connectionCopyFor(rt.status, rt.reconnectAttempt)}</p>
       {rt.status !== 'connected' &&
-        <Button variant="outline" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>}
+          <Button variant="outline" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>}
     </main>
     {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
   </>;
@@ -211,11 +212,11 @@ function TableContent() {
             <HandRankingsDialog/>
             {canInvite && <InviteDialog url={inviteUrl}/>}
             {viewerSeat && viewerSeat.state !== 'sitting_out' &&
-              <Button type="button" variant="ghost" size="icon" aria-label="Sentar fora" disabled={rt.readyPending}
-                onClick={() => rt.ready(false)}><Pause/></Button>}
+                <Button type="button" variant="ghost" size="icon" aria-label="Sentar fora" disabled={rt.readyPending}
+                        onClick={() => rt.ready(false)}><Pause/></Button>}
             {viewerSeat?.state === 'sitting_out' &&
-              <Button type="button" variant="ghost" size="icon" aria-label="Voltar a jogar" disabled={rt.readyPending}
-                onClick={() => rt.ready(true)}><Play/></Button>}
+                <Button type="button" variant="ghost" size="icon" aria-label="Voltar a jogar" disabled={rt.readyPending}
+                        onClick={() => rt.ready(true)}><Play/></Button>}
             <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} onLeft={amount => {
               pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
               queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
@@ -244,13 +245,13 @@ function TableContent() {
             mesa for the whole time this notice was up. */}
         {!connectionMessage && (s.next_hand_unix_ms || canShowCards) && <div className="reconnect-notice">
             <p>{s.stage === 'complete' ? 'Mão encerrada.' : 'Aguardando jogadores.'}</p>
-            {s.next_hand_unix_ms &&
+          {s.next_hand_unix_ms &&
               <span key={s.next_hand_unix_ms} className="next-hand-ring"
                     style={{animationDuration: `${nextHandDurationMs}ms`}}
                     aria-hidden="true"/>}
-            {canShowCards &&
+          {canShowCards &&
               <Button type="button" variant="ghost" disabled={rt.showCardsPending}
-                onClick={() => rt.showCards()}>Mostrar cartas</Button>}
+                      onClick={() => rt.showCards()}>Mostrar cartas</Button>}
         </div>}
       </div>
       <TableStage snapshot={s} viewer={viewer} pot={pot} bigBlind={bigBlind} nowMs={rt.snapshotAt}

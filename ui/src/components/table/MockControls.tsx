@@ -66,17 +66,17 @@ export function MockControls({scenario, delay}: { scenario?: MockScenario; delay
     <summary><FlaskConical aria-hidden="true"/><span>Cenários de teste</span></summary>
     <div>
       {scenario && <label>Cena
-        <select value={scenario} onChange={event => update('scenario', event.target.value)}>
-          {scenarios.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
-        </select>
+          <select value={scenario} onChange={event => update('scenario', event.target.value)}>
+            {scenarios.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
       </label>}
       {delay != null && <label>Latência
-        <select value={delay} onChange={event => update('delay', event.target.value)}>
-          <option value="0">Sem atraso</option>
-          <option value="350">350 ms</option>
-          <option value="1200">1,2 s</option>
-          <option value="9000">9 s · timeout</option>
-        </select>
+          <select value={delay} onChange={event => update('delay', event.target.value)}>
+              <option value="0">Sem atraso</option>
+              <option value="350">350 ms</option>
+              <option value="1200">1,2 s</option>
+              <option value="9000">9 s · timeout</option>
+          </select>
       </label>}
       <label>Simular erro (toda requisição)
         <select value={errorMode} onChange={event => {

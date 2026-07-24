@@ -242,7 +242,8 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   }, []);
 
   useEffect(() => {
-    if (USE_MOCK || !id) return () => {};
+    if (USE_MOCK || !id) return () => {
+    };
     const interval = setInterval(() => {
       void doRefresh().then(result => {
         if (result) {
@@ -261,7 +262,8 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   // the moment the tab becomes visible again skips straight past any
   // exhausted backoff instead of waiting on it.
   useEffect(() => {
-    if (USE_MOCK || typeof document === 'undefined') return () => {};
+    if (USE_MOCK || typeof document === 'undefined') return () => {
+    };
     const onVisibility = () => {
       if (document.visibilityState === 'visible' && status !== 'connected') retryNow();
     };
@@ -295,9 +297,20 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   }, [clearPending, emit, send]);
 
   return {
-    status, snapshot, snapshotAt, unlock, chat, pendingAction, actionError: lastActionError, reconnectAttempt, announcement, removed,
-    clearActionError: () => setLastActionError(null), retryNow,
-    readyPending, showCardsPending,
+    status,
+    snapshot,
+    snapshotAt,
+    unlock,
+    chat,
+    pendingAction,
+    actionError: lastActionError,
+    reconnectAttempt,
+    announcement,
+    removed,
+    clearActionError: () => setLastActionError(null),
+    retryNow,
+    readyPending,
+    showCardsPending,
     ready: (ready = true) => {
       if (readyLockRef.current) return false;
       readyLockRef.current = true;

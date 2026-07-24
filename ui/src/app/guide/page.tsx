@@ -24,7 +24,7 @@ export default function Guide() {
         </div>
         <figure className="guide-shot">
           <Image src="/guide/lobby.png" alt="Lobby do CTech Poker com stakes agrupados por blinds" width={1280}
-            height={800}/>
+                 height={800}/>
         </figure>
       </article>
 
@@ -41,7 +41,7 @@ export default function Guide() {
         </div>
         <figure className="guide-shot">
           <Image src="/guide/buyin.png" alt="Painel de compra de fichas antes de sentar na mesa" width={1280}
-            height={800}/>
+                 height={800}/>
         </figure>
       </article>
 
@@ -56,7 +56,7 @@ export default function Guide() {
         </div>
         <figure className="guide-shot">
           <Image src="/guide/create-room.png" alt="Diálogo de criação de mesa privada com stakes e lugares"
-            width={1280} height={800}/>
+                 width={1280} height={800}/>
         </figure>
       </article>
 
@@ -73,7 +73,7 @@ export default function Guide() {
         </div>
         <figure className="guide-shot">
           <Image src="/guide/table-preflop.png" alt="Mesa no pré-flop com a barra de ações e a força da mão do jogador"
-            width={1280} height={800}/>
+                 width={1280} height={800}/>
         </figure>
       </article>
 
@@ -87,7 +87,7 @@ export default function Guide() {
         </div>
         <figure className="guide-shot">
           <Image src="/guide/table-flop.png" alt="Mesa no flop com três cartas comunitárias reveladas"
-            width={1280} height={800}/>
+                 width={1280} height={800}/>
         </figure>
       </article>
 
@@ -102,7 +102,7 @@ export default function Guide() {
         </div>
         <figure className="guide-shot">
           <Image src="/guide/table-showdown.png" alt="Showdown com as cartas de todos os jogadores reveladas"
-            width={1280} height={800}/>
+                 width={1280} height={800}/>
         </figure>
       </article>
     </section>

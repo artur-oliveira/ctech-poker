@@ -10,7 +10,7 @@ export function ChipStack({amount, bigBlind = 25, size = 'seat'}: {
   const tier = chipTier(amount, bigBlind);
   if (tier <= 0) return null;
   return <span key={amount} className={`chip-stack chip-stack-${size} tier-${tier}`}
-    style={{'--tier': tier} as React.CSSProperties} aria-hidden="true">
+               style={{'--tier': tier} as React.CSSProperties} aria-hidden="true">
     {Array.from({length: tier}, (_, i) => <span key={i} className="chip" style={{'--i': i} as React.CSSProperties}/>)}
   </span>;
 }

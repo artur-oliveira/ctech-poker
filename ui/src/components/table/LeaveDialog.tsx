@@ -19,7 +19,11 @@ import {leaveRoom} from '@/lib/api/rooms';
 const DEALT_IN_MESSAGE = 'Você está na mão atual. Desista ou aguarde o fim da rodada para sair.';
 const GENERIC_MESSAGE = 'Não foi possível sair da mesa agora. Tente novamente.';
 
-export function LeaveDialog({roomId, stack, onLeft}: { roomId: string; stack: number; onLeft: (amount: number) => void }) {
+export function LeaveDialog({roomId, stack, onLeft}: {
+  roomId: string;
+  stack: number;
+  onLeft: (amount: number) => void
+}) {
   const [open, setOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [error, setError] = useState('');

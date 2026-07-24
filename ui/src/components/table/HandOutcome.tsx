@@ -25,7 +25,8 @@ export function HandOutcomeBanner({outcome}: { outcome: HandOutcomeState | null 
   }
 
   useEffect(() => {
-    if (!shown) return () => {};
+    if (!shown) return () => {
+    };
     const startLeave = setTimeout(() => setLeaving(true), HOLD_MS);
     const clear = setTimeout(() => setShown(null), HOLD_MS + EXIT_MS);
     return () => {

@@ -30,25 +30,30 @@ export function Seat({seat, isViewer, isTurn, index, payout = 0, deadlineMs, now
   const pendingName = !isViewer && !seat.name;
   const remainingMs = isTurn && deadlineMs && nowMs ? Math.max(0, deadlineMs - nowMs) : null;
   return <div data-state={seat.state} aria-current={isTurn ? 'true' : undefined}
-    className={`game-seat seat-${index} ${seat.state} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${payout > 0 ? 'is-winner' : ''} ${pendingName ? 'is-pending-name' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
+              className={`game-seat seat-${index} ${seat.state} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${payout > 0 ? 'is-winner' : ''} ${pendingName ? 'is-pending-name' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
     {remainingMs != null &&
-      <span key={deadlineMs} className="seat-turn-ring" style={{animationDuration: `${remainingMs}ms`}} aria-hidden="true"/>}
+        <span key={deadlineMs} className="seat-turn-ring" style={{animationDuration: `${remainingMs}ms`}}
+              aria-hidden="true"/>}
     <div className="seat-cards">{[0, 1].map(i => {
       const card = cards?.[i];
       return <PlayingCard key={`${i}-${card || 'back'}`} card={card} index={i} size="hole"
-        owner={isViewer ? 'viewer' : 'opponent'}/>;
+                          owner={isViewer ? 'viewer' : 'opponent'}/>;
     })}</div>
-    <Avatar className="seat-avatar" aria-hidden="true"><AvatarFallback>{isViewer ? 'EU' : initials(seat.name)}</AvatarFallback></Avatar>
+    <Avatar className="seat-avatar"
+            aria-hidden="true"><AvatarFallback>{isViewer ? 'EU' : initials(seat.name)}</AvatarFallback></Avatar>
     <div className="seat-info">
-      <b title={seat.name || undefined}>{playerName(seat.player_id, isViewer ? seat.player_id : undefined, seat.name)}</b><span>{seat.stack.toLocaleString('pt-BR')} fichas</span>{chance != null && isViewer &&
+      <b
+        title={seat.name || undefined}>{playerName(seat.player_id, isViewer ? seat.player_id : undefined, seat.name)}</b><span>{seat.stack.toLocaleString('pt-BR')} fichas</span>{chance != null && isViewer &&
         <small className="seat-equity"
-          aria-label={`Chance estimada de vitória: ${chance}%`}>Chance {chance}%</small>}{STATE_LABELS[seat.state] &&
+               aria-label={`Chance estimada de vitória: ${chance}%`}>Chance {chance}%</small>}{STATE_LABELS[seat.state] &&
         <small className="seat-state">{STATE_LABELS[seat.state]}</small>}{seat.hand_category &&
-        <small className="seat-hand-category">{HAND_CATEGORY_LABELS[seat.hand_category] || seat.hand_category}</small>}</div>
+        <small className="seat-hand-category">{HAND_CATEGORY_LABELS[seat.hand_category] || seat.hand_category}</small>}
+    </div>
     {seat.contributed > 0 && <span key={`bet-${seat.contributed}`} className="seat-bet">
         <ChipStack amount={seat.contributed} bigBlind={bigBlind}/>
         <b aria-label={`Aposta de ${seat.contributed.toLocaleString('pt-BR')} fichas`}>{seat.contributed.toLocaleString('pt-BR')}</b>
       </span>}
-    {payout > 0 && <span key={`win-${payout}`} className="seat-win" role="status">+{payout.toLocaleString('pt-BR')}</span>
+    {payout > 0 &&
+        <span key={`win-${payout}`} className="seat-win" role="status">+{payout.toLocaleString('pt-BR')}</span>
     }</div>;
 }

@@ -1802,15 +1802,19 @@ h1 em {
     background: conic-gradient(var(--gold) var(--seat-ring-progress), transparent 0);
     -webkit-mask: linear-gradient(var(--mask-opaque) 0 0) content-box, linear-gradient(var(--mask-opaque) 0 0);
     -webkit-mask-composite: xor;
-            mask-composite: exclude;
+    mask-composite: exclude;
     animation: seat-turn-deplete linear forwards;
     will-change: --seat-ring-progress;
     pointer-events: none
 }
 
 @keyframes seat-turn-deplete {
-    from { --seat-ring-progress: 100% }
-    to { --seat-ring-progress: 0% }
+    from {
+        --seat-ring-progress: 100%
+    }
+    to {
+        --seat-ring-progress: 0%
+    }
 }
 
 .next-hand-ring {
@@ -1824,7 +1828,7 @@ h1 em {
     background: conic-gradient(var(--gold) var(--seat-ring-progress), transparent 0);
     -webkit-mask: linear-gradient(var(--mask-opaque) 0 0) content-box, linear-gradient(var(--mask-opaque) 0 0);
     -webkit-mask-composite: xor;
-            mask-composite: exclude;
+    mask-composite: exclude;
     animation: seat-turn-deplete linear forwards;
     will-change: --seat-ring-progress
 }
@@ -2140,14 +2144,48 @@ h1 em {
     animation: confetti-burst 650ms var(--ease-out-quart) both
 }
 
-.hand-outcome-confetti span:nth-child(1) { --rot: 0deg }
-.hand-outcome-confetti span:nth-child(2) { --rot: 45deg; background: var(--brand-bright); animation-delay: 30ms }
-.hand-outcome-confetti span:nth-child(3) { --rot: 90deg; animation-delay: 60ms }
-.hand-outcome-confetti span:nth-child(4) { --rot: 135deg; background: var(--brand-bright); animation-delay: 20ms }
-.hand-outcome-confetti span:nth-child(5) { --rot: 180deg; animation-delay: 80ms }
-.hand-outcome-confetti span:nth-child(6) { --rot: 225deg; background: var(--brand-bright); animation-delay: 40ms }
-.hand-outcome-confetti span:nth-child(7) { --rot: 270deg; animation-delay: 10ms }
-.hand-outcome-confetti span:nth-child(8) { --rot: 315deg; background: var(--brand-bright); animation-delay: 50ms }
+.hand-outcome-confetti span:nth-child(1) {
+    --rot: 0deg
+}
+
+.hand-outcome-confetti span:nth-child(2) {
+    --rot: 45deg;
+    background: var(--brand-bright);
+    animation-delay: 30ms
+}
+
+.hand-outcome-confetti span:nth-child(3) {
+    --rot: 90deg;
+    animation-delay: 60ms
+}
+
+.hand-outcome-confetti span:nth-child(4) {
+    --rot: 135deg;
+    background: var(--brand-bright);
+    animation-delay: 20ms
+}
+
+.hand-outcome-confetti span:nth-child(5) {
+    --rot: 180deg;
+    animation-delay: 80ms
+}
+
+.hand-outcome-confetti span:nth-child(6) {
+    --rot: 225deg;
+    background: var(--brand-bright);
+    animation-delay: 40ms
+}
+
+.hand-outcome-confetti span:nth-child(7) {
+    --rot: 270deg;
+    animation-delay: 10ms
+}
+
+.hand-outcome-confetti span:nth-child(8) {
+    --rot: 315deg;
+    background: var(--brand-bright);
+    animation-delay: 50ms
+}
 
 @keyframes hand-outcome-in {
     from {
@@ -3422,14 +3460,45 @@ h1 em {
 
 /* Ring order mirrors the desktop oval (counter-clockwise from the viewer):
    1-3 climb the left column, 4-5 cross the top, 6-8 descend the right. */
-.stage-v-ring .seat-1 { --seat-x: 12%; --seat-y: 74% }
-.stage-v-ring .seat-2 { --seat-x: 7%; --seat-y: 48% }
-.stage-v-ring .seat-3 { --seat-x: 12%; --seat-y: 22% }
-.stage-v-ring .seat-4 { --seat-x: 32%; --seat-y: 34px }
-.stage-v-ring .seat-5 { --seat-x: 68%; --seat-y: 34px }
-.stage-v-ring .seat-6 { --seat-x: 88%; --seat-y: 22% }
-.stage-v-ring .seat-7 { --seat-x: 93%; --seat-y: 48% }
-.stage-v-ring .seat-8 { --seat-x: 88%; --seat-y: 74% }
+.stage-v-ring .seat-1 {
+    --seat-x: 12%;
+    --seat-y: 74%
+}
+
+.stage-v-ring .seat-2 {
+    --seat-x: 7%;
+    --seat-y: 48%
+}
+
+.stage-v-ring .seat-3 {
+    --seat-x: 12%;
+    --seat-y: 22%
+}
+
+.stage-v-ring .seat-4 {
+    --seat-x: 32%;
+    --seat-y: 34px
+}
+
+.stage-v-ring .seat-5 {
+    --seat-x: 68%;
+    --seat-y: 34px
+}
+
+.stage-v-ring .seat-6 {
+    --seat-x: 88%;
+    --seat-y: 22%
+}
+
+.stage-v-ring .seat-7 {
+    --seat-x: 93%;
+    --seat-y: 48%
+}
+
+.stage-v-ring .seat-8 {
+    --seat-x: 88%;
+    --seat-y: 74%
+}
 
 /* --- Viewer hero HUD --- */
 .stage-v > .game-seat {
@@ -3899,15 +3968,50 @@ h1 em {
     /* A 390px-tall ring is wide, not tall: spread the bottom/top rows into
        the corners, pin the side seats to the true vertical middle, and keep
        bets tight to their seats so nothing reaches the board. */
-    .seat-0 { left: 33%; bottom: 2% }
-    .seat-8 { left: 56%; bottom: 2% }
-    .seat-1 { left: 12%; bottom: 7% }
-    .seat-7 { right: 12%; bottom: 7% }
-    .seat-2 { left: 1%; top: 40% }
-    .seat-6 { right: 1%; top: 40% }
-    .seat-3 { left: 13%; top: 5% }
-    .seat-5 { right: 13%; top: 5% }
-    .seat-4 { left: 46%; top: 4% }
+    .seat-0 {
+        left: 33%;
+        bottom: 2%
+    }
+
+    .seat-8 {
+        left: 56%;
+        bottom: 2%
+    }
+
+    .seat-1 {
+        left: 12%;
+        bottom: 7%
+    }
+
+    .seat-7 {
+        right: 12%;
+        bottom: 7%
+    }
+
+    .seat-2 {
+        left: 1%;
+        top: 40%
+    }
+
+    .seat-6 {
+        right: 1%;
+        top: 40%
+    }
+
+    .seat-3 {
+        left: 13%;
+        top: 5%
+    }
+
+    .seat-5 {
+        right: 13%;
+        top: 5%
+    }
+
+    .seat-4 {
+        left: 46%;
+        top: 4%
+    }
 
     /* Top-center seat: cards float over the header if they stay above the
        pill — flip them below, toward the felt. */
@@ -3995,8 +4099,13 @@ h1 em {
 
     /* Lower corners drop a notch so the mid-row captions clear their
        neighbors' floated cards on short rings. */
-    .stage-v-ring .seat-1 { --seat-y: 77% }
-    .stage-v-ring .seat-8 { --seat-y: 77% }
+    .stage-v-ring .seat-1 {
+        --seat-y: 77%
+    }
+
+    .stage-v-ring .seat-8 {
+        --seat-y: 77%
+    }
 }
 
 @media (pointer: coarse) {

@@ -59,7 +59,7 @@ export const viewport: Viewport = {
 };
 export default function Layout({children}: { children: React.ReactNode }) {
   return <html lang="pt-BR" suppressHydrationWarning data-scroll-behavior="smooth">
-    <body suppressHydrationWarning className={`${sans.variable} ${mono.variable}`}>
-      <QueryProvider>{children}</QueryProvider><Notifier/></body>
+  <body suppressHydrationWarning className={`${sans.variable} ${mono.variable}`}>
+  <QueryProvider>{children}</QueryProvider><Notifier/></body>
   </html>;
 }

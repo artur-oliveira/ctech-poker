@@ -51,7 +51,7 @@ export function initials(name?: string): string {
 // so the server's seat order must be rotated before rendering — otherwise the
 // viewer lands wherever the server happens to seat them instead of always at
 // the hero slot (index 0).
-export function rotateSeats<T extends {player_id: string}>(seats: T[], viewerId?: string): T[] {
+export function rotateSeats<T extends { player_id: string }>(seats: T[], viewerId?: string): T[] {
   const at = viewerId ? seats.findIndex(seat => seat.player_id === viewerId) : -1;
   if (at <= 0) return seats;
   return [...seats.slice(at), ...seats.slice(0, at)];

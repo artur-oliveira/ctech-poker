@@ -28,6 +28,6 @@ export function OnboardingIntro() {
         mesa</Button>
     </div>
     <Button type="button" variant="ghost" size="icon" aria-label="Fechar introdução"
-      className="onboarding-intro-close" onClick={dismiss}><X/></Button>
+            className="onboarding-intro-close" onClick={dismiss}><X/></Button>
   </div>;
 }

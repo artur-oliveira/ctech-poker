@@ -81,28 +81,43 @@ export function CreateRoomDialog() {
         sandbox.</DialogDescription></DialogHeader>
       <form onSubmit={form.handleSubmit(submit)} className="space-y-5">
         <div className="space-y-2"><Label id="stake-label">Stakes sandbox</Label><Controller control={form.control}
-          name="stakeIndex"
-          render={({field}) => <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="stake-label">
-            {stakes.map((stake, index) => <button type="button" key={`${stake.small_blind}-${stake.big_blind}`}
-              role="radio" aria-checked={field.value === index} tabIndex={field.value === index ? 0 : -1}
-              className={`rounded-xl border px-4 py-2 min-h-11 text-sm font-semibold transition-colors ${field.value === index ? 'border-[var(--brand-bright)] bg-[var(--brand)] text-[var(--on-brand)]' : 'border-white/15 bg-(--surface-control) text-[var(--on-brand)] hover:bg-white/10'}`}
-              onClick={() => field.onChange(index)}
-              onKeyDown={e => radioGroupKeyDown(e, index, stakes.length, field.onChange)}>{stake.small_blind.toLocaleString('pt-BR')} / {stake.big_blind.toLocaleString('pt-BR')}</button>)}
-          </div>}/>{!stakes.length && <p className="form-error">Nenhum stake disponível no momento.</p>}
+                                                                                             name="stakeIndex"
+                                                                                             render={({field}) => <div
+                                                                                               className="flex flex-wrap gap-2"
+                                                                                               role="radiogroup"
+                                                                                               aria-labelledby="stake-label">
+                                                                                               {stakes.map((stake, index) =>
+                                                                                                 <button type="button"
+                                                                                                         key={`${stake.small_blind}-${stake.big_blind}`}
+                                                                                                         role="radio"
+                                                                                                         aria-checked={field.value === index}
+                                                                                                         tabIndex={field.value === index ? 0 : -1}
+                                                                                                         className={`rounded-xl border px-4 py-2 min-h-11 text-sm font-semibold transition-colors ${field.value === index ? 'border-[var(--brand-bright)] bg-[var(--brand)] text-[var(--on-brand)]' : 'border-white/15 bg-(--surface-control) text-[var(--on-brand)] hover:bg-white/10'}`}
+                                                                                                         onClick={() => field.onChange(index)}
+                                                                                                         onKeyDown={e => radioGroupKeyDown(e, index, stakes.length, field.onChange)}>{stake.small_blind.toLocaleString('pt-BR')} / {stake.big_blind.toLocaleString('pt-BR')}</button>)}
+                                                                                             </div>}/>{!stakes.length &&
+            <p className="form-error">Nenhum stake disponível no momento.</p>}
           {form.formState.errors.stakeIndex &&
-            <p className="form-error">{form.formState.errors.stakeIndex.message}</p>}</div>
+              <p className="form-error">{form.formState.errors.stakeIndex.message}</p>}</div>
         <div className="space-y-2"><Label id="seats-label">Lugares</Label><Controller control={form.control}
-          name="maxSeats"
-          render={({field}) => <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="seats-label">
-            {MAX_SEATS_OPTIONS.map((option, index) => <button type="button" key={option} role="radio"
-              aria-checked={field.value === option} tabIndex={field.value === option ? 0 : -1}
-              className={`rounded-xl border px-4 py-2 min-h-11 text-sm font-semibold transition-colors ${field.value === option ? 'border-[var(--brand-bright)] bg-[var(--brand)] text-[var(--on-brand)]' : 'border-white/15 bg-(--surface-control) text-[var(--on-brand)] hover:bg-white/10'}`}
-              onClick={() => field.onChange(option)}
-              onKeyDown={e => radioGroupKeyDown(e, index, MAX_SEATS_OPTIONS.length, next => field.onChange(MAX_SEATS_OPTIONS[next]))}>{option} lugares</button>)}
-          </div>}/></div>
+                                                                                      name="maxSeats"
+                                                                                      render={({field}) => <div
+                                                                                        className="flex flex-wrap gap-2"
+                                                                                        role="radiogroup"
+                                                                                        aria-labelledby="seats-label">
+                                                                                        {MAX_SEATS_OPTIONS.map((option, index) =>
+                                                                                          <button type="button"
+                                                                                                  key={option}
+                                                                                                  role="radio"
+                                                                                                  aria-checked={field.value === option}
+                                                                                                  tabIndex={field.value === option ? 0 : -1}
+                                                                                                  className={`rounded-xl border px-4 py-2 min-h-11 text-sm font-semibold transition-colors ${field.value === option ? 'border-[var(--brand-bright)] bg-[var(--brand)] text-[var(--on-brand)]' : 'border-white/15 bg-(--surface-control) text-[var(--on-brand)] hover:bg-white/10'}`}
+                                                                                                  onClick={() => field.onChange(option)}
+                                                                                                  onKeyDown={e => radioGroupKeyDown(e, index, MAX_SEATS_OPTIONS.length, next => field.onChange(MAX_SEATS_OPTIONS[next]))}>{option} lugares</button>)}
+                                                                                      </div>}/></div>
         {form.formState.errors.root && <p className="form-error">{form.formState.errors.root.message}</p>}
         <DialogFooter><Button type="submit" size="lg"
-          disabled={form.formState.isSubmitting || !stakes.length}>{form.formState.isSubmitting ? 'Criando…' : 'Criar mesa privada'}</Button></DialogFooter>
+                              disabled={form.formState.isSubmitting || !stakes.length}>{form.formState.isSubmitting ? 'Criando…' : 'Criar mesa privada'}</Button></DialogFooter>
       </form>
     </DialogContent>
   </Dialog>;

@@ -12,7 +12,7 @@ export function ActiveTableBanner() {
   if (!open) return null;
 
   return <Button variant="ghost" className="room-card h-auto"
-    onClick={() => router.push(`/table?id=${encodeURIComponent(open.table_id)}`)}>
+                 onClick={() => router.push(`/table?id=${encodeURIComponent(open.table_id)}`)}>
     <span className="status-dot"/>
     <div>
       <small>MESA EM ANDAMENTO</small>

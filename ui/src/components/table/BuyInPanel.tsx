@@ -78,8 +78,8 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
       <div className="buyin-control">
         <label htmlFor={sliderId}>Buy-in</label>
         <input id={sliderId} type="range" min={room.buy_in_min} max={room.buy_in_max} step={step} value={value}
-          disabled={joining} onChange={event => setAmount(Number(event.target.value))}
-          aria-valuetext={`${value.toLocaleString('pt-BR')} fichas`}/>
+               disabled={joining} onChange={event => setAmount(Number(event.target.value))}
+               aria-valuetext={`${value.toLocaleString('pt-BR')} fichas`}/>
         <output htmlFor={sliderId}>{value.toLocaleString('pt-BR')} <span>fichas</span></output>
         <small>mín. {room.buy_in_min.toLocaleString('pt-BR')} · máx. {room.buy_in_max.toLocaleString('pt-BR')}</small>
       </div>

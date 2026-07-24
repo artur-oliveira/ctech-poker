@@ -20,7 +20,7 @@ export async function acceptPokerTerms() {
   return (await apiClient.post<PlayerProfile>('/v1.0/players/me/terms/accept', {}, {silentError: true})).data;
 }
 
-export async function updateMe(input: {name?: string; wallet_mode?: WalletMode}) {
+export async function updateMe(input: { name?: string; wallet_mode?: WalletMode }) {
   return (await apiClient.post<PlayerProfile>('/v1.0/players/me', input, {silentError: true})).data;
 }
 
@@ -36,5 +36,7 @@ export interface PlayerSession {
 // Most-recent-first (server sorts descending) — sessions[0].ended_at === 0
 // means that table is still the player's open seat.
 export async function getSessions() {
-  return (await apiClient.get<{ sessions: PlayerSession[] }>('/v1.0/players/me/sessions', {silentError: true})).data.sessions;
+  return (await apiClient.get<{
+    sessions: PlayerSession[]
+  }>('/v1.0/players/me/sessions', {silentError: true})).data.sessions;
 }
