@@ -83,6 +83,8 @@ export class PokerApiStack extends cdk.Stack {
       pokerClientSecretParam,
       achievementProgressTableArn,
       leaderboardStatsTableArn,
+      playerSessionsTableArn,
+      playerHandsTableArn,
       dailyRewardTableArn,
     } = props;
 
@@ -103,7 +105,8 @@ export class PokerApiStack extends cdk.Stack {
 
     const tableArns = [
       tableStateArn, tableStateHistoryArn, actionLogArn, actionGuardsArn, roomsTableArn, playerProfilesTableArn,
-      achievementProgressTableArn, leaderboardStatsTableArn, dailyRewardTableArn,
+      achievementProgressTableArn, leaderboardStatsTableArn, dailyRewardTableArn, playerSessionsTableArn,
+      playerHandsTableArn,
     ];
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: [
