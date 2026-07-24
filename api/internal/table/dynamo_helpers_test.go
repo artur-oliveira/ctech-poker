@@ -43,7 +43,7 @@ func testClient(t *testing.T) *dynamodb.Client {
 func mustCreateTestTables(t *testing.T, db *dynamodb.Client, env string) {
 	t.Helper()
 	pkOnly := []string{env + "_poker_table_state", env + "_poker_action_guards"}
-	pkSk := []string{env + "_poker_action_log"}
+	pkSk := []string{env + "_poker_action_log", env + "_poker_table_state_history"}
 	for _, name := range pkOnly {
 		createTestTable(t, db, name, false)
 	}

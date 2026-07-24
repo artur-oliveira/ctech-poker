@@ -1658,13 +1658,13 @@ git commit -m "feat(table): fire achievements and leaderboard updates on every c
 ```typescript
 // cdk/test/dynamodb-stack.test.ts — add
 test('creates gamification tables', () => {
-  const app = new App();
-  const stack = new DynamoDBStack(app, 'TestDynamoDBStack3', {environment: 'dev'});
-  const template = Template.fromStack(stack);
-  template.resourceCountIs('AWS::DynamoDB::Table', 6);
-  for (const name of ['poker_achievement_progress', 'poker_leaderboard_stats', 'poker_sandbox credits_spins']) {
-    template.hasResourceProperties('AWS::DynamoDB::Table', {TableName: `dev_${name}`});
-  }
+    const app = new App();
+    const stack = new DynamoDBStack(app, 'TestDynamoDBStack3', {environment: 'dev'});
+    const template = Template.fromStack(stack);
+    template.resourceCountIs('AWS::DynamoDB::Table', 6);
+    for (const name of ['poker_achievement_progress', 'poker_leaderboard_stats', 'poker_sandbox credits_spins']) {
+        template.hasResourceProperties('AWS::DynamoDB::Table', {TableName: `dev_${name}`});
+    }
 });
 ```
 

@@ -1,10 +1,16 @@
 # Reveal Timing Grace + All-In Runout Pacing Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:
+> executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** give the next-to-act player a grace period on top of their action timer after every board reveal, and pace an all-in runout's remaining streets one at a time (2s apart) from the backend, instead of dealing everything in one broadcast.
+**Goal:** give the next-to-act player a grace period on top of their action timer after every board reveal, and pace an
+all-in runout's remaining streets one at a time (2s apart) from the backend, instead of dealing everything in one
+broadcast.
 
-**Architecture:** two independent, backend-owned timing changes layered on the existing `table.Actor` timer-arming pattern (`time.AfterFunc` + a dispatched command), with zero new wire fields — the frontend already renders a growing board array correctly. Engine (`api/internal/engine/hand`) stays pure (no timers); all pacing lives in `api/internal/table/actor.go`.
+**Architecture:** two independent, backend-owned timing changes layered on the existing `table.Actor` timer-arming
+pattern (`time.AfterFunc` + a dispatched command), with zero new wire fields — the frontend already renders a growing
+board array correctly. Engine (`api/internal/engine/hand`) stays pure (no timers); all pacing lives in
+`api/internal/table/actor.go`.
 
 **Tech Stack:** Go (engine + table actor), Next.js/React + CSS (reveal animation).
 
@@ -13,26 +19,37 @@
 ## Global Constraints
 
 - Backend owns all state/timing; the frontend only renders state it receives, never fakes or independently paces timing.
-- No new wire/snapshot field — reuse the existing per-`Act` `broadcastAll()` and the frontend's existing growing-board-array handling.
-- Reveal grace is a fixed **+1.5s** (`RevealGrace`), added only to the first action-timer arm immediately after a stage transition into Flop, Turn, or River — not to PreFlop, and not to any same-street follow-up action.
-- All-in runout pacing is a fixed **2s** per remaining street (`RunoutStreetDelay`), using the same `time.AfterFunc` + dispatched-command pattern as `armTurnTimer`/`armNextHandTimer`.
-- The immediate next missing street is always dealt synchronously (same as today); only *further* streets (2 or more missing) get the paced timer treatment. A single missing street (e.g. all-in on the turn, only the river left) reveals immediately with no pacing at all, exactly like normal play.
+- No new wire/snapshot field — reuse the existing per-`Act` `broadcastAll()` and the frontend's existing
+  growing-board-array handling.
+- Reveal grace is a fixed **+1.5s** (`RevealGrace`), added only to the first action-timer arm immediately after a stage
+  transition into Flop, Turn, or River — not to PreFlop, and not to any same-street follow-up action.
+- All-in runout pacing is a fixed **2s** per remaining street (`RunoutStreetDelay`), using the same `time.AfterFunc` +
+  dispatched-command pattern as `armTurnTimer`/`armNextHandTimer`.
+- The immediate next missing street is always dealt synchronously (same as today); only *further* streets (2 or more
+  missing) get the paced timer treatment. A single missing street (e.g. all-in on the turn, only the river left) reveals
+  immediately with no pacing at all, exactly like normal play.
 - `NextHandDelay` (5s) must only ever arm after the runout's final showdown broadcasts — never race it.
-- The river's own flip animation is subtly slower than the turn's, **always** (normal hands and runouts alike) — the frontend needs no runout-specific state to know this, only "this is the river card."
-- No code change needed for the achievements/made-hand-category gating item — already confirmed correct (see spec's "Confirmed: no change needed" section). No task below touches it.
+- The river's own flip animation is subtly slower than the turn's, **always** (normal hands and runouts alike) — the
+  frontend needs no runout-specific state to know this, only "this is the river card."
+- No code change needed for the achievements/made-hand-category gating item — already confirmed correct (see spec's
+  "Confirmed: no change needed" section). No task below touches it.
 
 ---
 
 ### Task 1: Reveal grace period
 
 **Files:**
+
 - Modify: `api/internal/table/turntimeout.go`
 - Modify: `api/internal/table/actor.go:39-74` (struct), `:656-680` (`armTurnTimer`), `:731-768` (`broadcastAll`)
 - Modify: `api/internal/table/turntimeout_test.go:11,31,42` (3 call sites)
 - Create: `api/internal/table/revealgrace_test.go`
 
 **Interfaces:**
-- Produces: `RevealGrace` (const, `table` package), `Actor.armTurnTimer(current string, grace time.Duration)` (signature change), `Actor.lastBroadcastStage hand.Stage` (field), `isRevealStreet(stage hand.Stage) bool` (package-level helper).
+
+- Produces: `RevealGrace` (const, `table` package), `Actor.armTurnTimer(current string, grace time.Duration)` (signature
+  change), `Actor.lastBroadcastStage hand.Stage` (field), `isRevealStreet(stage hand.Stage) bool` (package-level
+  helper).
 - Consumes: `hand.Stage`, `hand.Flop`/`hand.Turn`/`hand.River`/`hand.Complete` (already imported in `actor.go`).
 
 - [ ] **Step 1: Write the failing test**
@@ -114,7 +131,11 @@ func TestBroadcastAddsRevealGraceOnlyOnFirstArmAfterStageTransition(t *testing.T
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `go test ./api/internal/table/... -run TestBroadcastAddsRevealGraceOnlyOnFirstArmAfterStageTransition -v`
-Expected: FAIL — compile error, `armTurnTimer` (called internally by `broadcastAll`) doesn't yet apply any grace, or (once Step 3's signature isn't in place yet) a build error is fine here since this is a pure test-first commit boundary. If Go reports a build failure because `broadcastAll`'s current single-arg call still compiles fine, the test will instead fail on the deadline assertion (`deadline` inside `turnTimeout` window with no grace, i.e. `wantMin`/`wantMax` for the graced case not met). Either failure mode is acceptable for this step.
+Expected: FAIL — compile error, `armTurnTimer` (called internally by `broadcastAll`) doesn't yet apply any grace, or
+(once Step 3's signature isn't in place yet) a build error is fine here since this is a pure test-first commit boundary.
+If Go reports a build failure because `broadcastAll`'s current single-arg call still compiles fine, the test will
+instead fail on the deadline assertion (`deadline` inside `turnTimeout` window with no grace, i.e. `wantMin`/`wantMax`
+for the graced case not met). Either failure mode is acceptable for this step.
 
 - [ ] **Step 3: Implement**
 
@@ -171,7 +192,8 @@ func (a *Actor) armTurnTimer(current string, grace time.Duration) {
 }
 ```
 
-Add a package-level helper right after `armTurnTimer` (or near `equityStage`, whichever reads better — place it next to `equityStage` at the bottom of the file):
+Add a package-level helper right after `armTurnTimer` (or near `equityStage`, whichever reads better — place it next to
+`equityStage` at the bottom of the file):
 
 ```go
 // isRevealStreet reports whether stage is one of the three streets whose
@@ -204,10 +226,12 @@ func (a *Actor) broadcastAll() {
 
 (Leave the rest of `broadcastAll` — everything from `snapshot := a.cached.ViewFor(p.ID)` onward — unchanged.)
 
-In `api/internal/table/turntimeout_test.go`, update the 3 existing `armTurnTimer` call sites to pass the new second argument:
+In `api/internal/table/turntimeout_test.go`, update the 3 existing `armTurnTimer` call sites to pass the new second
+argument:
 
 - Line 11: `a.armTurnTimer("p1")` → `a.armTurnTimer("p1", 0)`
-- Line 31: `a.armTurnTimer("p1")` → `a.armTurnTimer("p1", 0)` (both occurrences in `TestArmTurnTimerIsIdempotentForTheSameCurrentPlayer`)
+- Line 31: `a.armTurnTimer("p1")` → `a.armTurnTimer("p1", 0)` (both occurrences in
+  `TestArmTurnTimerIsIdempotentForTheSameCurrentPlayer`)
 - Line 33: `a.armTurnTimer("p1")` → `a.armTurnTimer("p1", 0)`
 - Line 42: `a.armTurnTimer("p1")` → `a.armTurnTimer("p1", 0)`
 - Line 43: `a.armTurnTimer("")` → `a.armTurnTimer("", 0)`
@@ -216,7 +240,8 @@ In `api/internal/table/turntimeout_test.go`, update the 3 existing `armTurnTimer
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `go test ./api/internal/table/... -run 'TestBroadcastAddsRevealGraceOnlyOnFirstArmAfterStageTransition|TestArmTurnTimer' -v`
+Run:
+`go test ./api/internal/table/... -run 'TestBroadcastAddsRevealGraceOnlyOnFirstArmAfterStageTransition|TestArmTurnTimer' -v`
 Expected: PASS for all matched tests.
 
 - [ ] **Step 5: Run the full table package test suite**
@@ -236,12 +261,17 @@ git commit -m "feat(api): add +1.5s reveal grace to the first action timer after
 ### Task 2: Engine — paced all-in runout primitives
 
 **Files:**
+
 - Modify: `api/internal/engine/hand/hand.go:723-788` (`advanceStage`, remove `runoutBoard`, add new methods)
 - Create: `api/internal/engine/hand/runout_test.go`
 
 **Interfaces:**
-- Produces: `Table.AdvanceRunoutStreetForActor()` (exported, no args, no return), `Table.IsAwaitingRunoutForActor() bool` (exported), `Table.countRemainingAndActable() (remaining, canStillAct int)` (unexported, shared by both).
-- Consumes: existing `Table.runShowdown()`, `Table.dealCard()`, `Table.stage`, `Table.board`, `Table.players`, `Stage` constants (`PreFlop`, `Flop`, `Turn`, `River`, `Complete`).
+
+- Produces: `Table.AdvanceRunoutStreetForActor()` (exported, no args, no return),
+  `Table.IsAwaitingRunoutForActor() bool` (exported), `Table.countRemainingAndActable() (remaining, canStillAct int)`
+  (unexported, shared by both).
+- Consumes: existing `Table.runShowdown()`, `Table.dealCard()`, `Table.stage`, `Table.board`, `Table.players`, `Stage`
+  constants (`PreFlop`, `Flop`, `Turn`, `River`, `Complete`).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -380,7 +410,8 @@ Expected: FAIL — `table.IsAwaitingRunoutForActor` / `table.AdvanceRunoutStreet
 
 - [ ] **Step 3: Implement**
 
-In `api/internal/engine/hand/hand.go`, replace the whole block from `func (t *Table) advanceStage()` through the end of `func (t *Table) runoutBoard()` (currently lines 723-788) with:
+In `api/internal/engine/hand/hand.go`, replace the whole block from `func (t *Table) advanceStage()` through the end of
+`func (t *Table) runoutBoard()` (currently lines 723-788) with:
 
 ```go
 func (t *Table) advanceStage() {
@@ -481,12 +512,14 @@ func (t *Table) IsAwaitingRunoutForActor() bool {
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `go test ./api/internal/engine/hand/... -run TestAllIn -v`
-Expected: PASS for both `TestAllInPreflopDealsFlopImmediatelyThenAwaitsPacedRunout` and `TestAllInWithOnlyRiverMissingSkipsPacing`.
+Expected: PASS for both `TestAllInPreflopDealsFlopImmediatelyThenAwaitsPacedRunout` and
+`TestAllInWithOnlyRiverMissingSkipsPacing`.
 
 - [ ] **Step 5: Run the full hand package test suite**
 
 Run: `go test ./api/internal/engine/hand/... -race`
-Expected: PASS — confirms removing `runoutBoard` didn't break any other test (none reference it directly; verified during planning).
+Expected: PASS — confirms removing `runoutBoard` didn't break any other test (none reference it directly; verified
+during planning).
 
 - [ ] **Step 6: Commit**
 
@@ -500,14 +533,19 @@ git commit -m "feat(engine): deal all-in runout streets one at a time instead of
 ### Task 3: Actor — paced all-in runout timer wiring
 
 **Files:**
+
 - Modify: `api/internal/table/commands.go` (add `runoutStepCmd`)
 - Modify: `api/internal/table/turntimeout.go` (add `RunoutStreetDelay`)
-- Modify: `api/internal/table/actor.go` (struct fields, `New`, `handle`, `broadcastAll`, new `armRunoutTimer`/`handleRunoutStep`)
+- Modify: `api/internal/table/actor.go` (struct fields, `New`, `handle`, `broadcastAll`, new `armRunoutTimer`/
+  `handleRunoutStep`)
 - Create: `api/internal/table/runoutpacing_integration_test.go`
 
 **Interfaces:**
-- Produces: `RunoutStreetDelay` (const), `runoutStepCmd` (unexported `Command`), `Actor.armRunoutTimer(awaiting bool, stage hand.Stage)`, `Actor.handleRunoutStep(ctx, runoutStepCmd) error`.
-- Consumes: Task 2's `hand.Table.IsAwaitingRunoutForActor() bool` and `hand.Table.AdvanceRunoutStreetForActor()`, Task 1's `broadcastAll` structure.
+
+- Produces: `RunoutStreetDelay` (const), `runoutStepCmd` (unexported `Command`),
+  `Actor.armRunoutTimer(awaiting bool, stage hand.Stage)`, `Actor.handleRunoutStep(ctx, runoutStepCmd) error`.
+- Consumes: Task 2's `hand.Table.IsAwaitingRunoutForActor() bool` and `hand.Table.AdvanceRunoutStreetForActor()`, Task
+  1's `broadcastAll` structure.
 
 - [ ] **Step 1: Write the failing integration test**
 
@@ -633,7 +671,8 @@ func waitForBoardLen(t *testing.T, mu *sync.Mutex, seen map[int]time.Time, n int
 
 - [ ] **Step 2: Start DynamoDB Local and run the test to verify it fails**
 
-Run: `docker compose -f api/tests/integration/docker-compose.test.yml up -d` (adjust path if the compose file lives elsewhere — check with `find api -iname docker-compose.test.yml`)
+Run: `docker compose -f api/tests/integration/docker-compose.test.yml up -d` (adjust path if the compose file lives
+elsewhere — check with `find api -iname docker-compose.test.yml`)
 Run: `go test ./api/internal/table/... -tags integration -run TestAllInRunoutPacesEachStreetBehindATimer -v`
 Expected: FAIL — `a.runoutStreetDelay` undefined (build error).
 
@@ -770,11 +809,13 @@ git commit -m "feat(api): pace all-in runout streets 2s apart via a backend time
 ### Task 4: Frontend — slower river flip
 
 **Files:**
+
 - Modify: `ui/src/components/table/PlayingCard.tsx`
 - Modify: `ui/src/components/table/Board.tsx`
 - Modify: `ui/src/app/globals.css`
 
 **Interfaces:**
+
 - Produces: `PlayingCard`'s new optional `slow?: boolean` prop, `.card-flip-slow` CSS class.
 - Consumes: nothing new — `Board.tsx` already knows each card's true array index.
 
@@ -814,7 +855,8 @@ export function PlayingCard({card, index, size, owner, slow}: {
 
 - [ ] **Step 2: Pass `slow` for the river card in `Board.tsx`**
 
-In `ui/src/components/table/Board.tsx`, the river is always the 5th card in `cards` (array index `4` — flop is indices 0-2, turn is index 3), regardless of the separate `--deal-index` stagger prop:
+In `ui/src/components/table/Board.tsx`, the river is always the 5th card in `cards` (array index `4` — flop is indices
+0-2, turn is index 3), regardless of the separate `--deal-index` stagger prop:
 
 ```tsx
 import {PlayingCard} from '@/components/table/PlayingCard';
@@ -852,7 +894,8 @@ add:
 }
 ```
 
-(760ms vs. the base 560ms — subtly slower, same easing/delay inherited from the base `.card-reveal .card-back`/`.card-front` rule since only `animation-duration` is overridden.)
+(760ms vs. the base 560ms — subtly slower, same easing/delay inherited from the base `.card-reveal .card-back`/
+`.card-front` rule since only `animation-duration` is overridden.)
 
 - [ ] **Step 4: Lint and build**
 
@@ -865,7 +908,9 @@ Expected: build succeeds with zero errors and zero warnings (per `ui/CLAUDE.md`'
 - [ ] **Step 5: Manually verify in the browser**
 
 Run: `cd ui && npm run dev:mock`
-Open the table page with the mock controls, step through a hand to the river, and confirm the river card visibly takes a beat longer to flip than the turn card did. Also confirm normal (non-all-in) hands show the same slower river flip — this is not runout-specific.
+Open the table page with the mock controls, step through a hand to the river, and confirm the river card visibly takes a
+beat longer to flip than the turn card did. Also confirm normal (non-all-in) hands show the same slower river flip —
+this is not runout-specific.
 
 - [ ] **Step 6: Commit**
 
@@ -878,7 +923,15 @@ git commit -m "feat(ui): flip the river card subtly slower than the turn, always
 
 ## Self-Review Notes
 
-- **Spec coverage:** Section A → Task 1. Section B (backend pacing) → Tasks 2-3. Section B's frontend river-flip detail → Task 4. Achievements item → explicitly no task (Global Constraints calls this out so it isn't mistaken for a gap).
-- **No new wire field:** confirmed no task adds anything to `Snapshot` — Task 3 only paces *when* `broadcastAll` fires, reusing the existing `Board []string` field the frontend already renders.
-- **Ordering:** Task 3 depends on Task 2's exported engine methods; Task 1 and Task 4 are independent of everything else. Recommended execution order is as numbered, but 1 and 4 could run in parallel with 2→3 if using subagent-driven-development with multiple workers.
-- **Type/signature consistency checked:** `armTurnTimer(current string, grace time.Duration)` (Task 1) is called with `(current, grace)` in `broadcastAll` and with `(id, 0)` everywhere in tests; `IsAwaitingRunoutForActor()`/`AdvanceRunoutStreetForActor()` (Task 2) are called with identical names/signatures in Task 3's `armRunoutTimer`/`handleRunoutStep`.
+- **Spec coverage:** Section A → Task 1. Section B (backend pacing) → Tasks 2-3. Section B's frontend river-flip
+  detail → Task 4. Achievements item → explicitly no task (Global Constraints calls this out so it isn't mistaken for a
+  gap).
+- **No new wire field:** confirmed no task adds anything to `Snapshot` — Task 3 only paces *when* `broadcastAll` fires,
+  reusing the existing `Board []string` field the frontend already renders.
+- **Ordering:** Task 3 depends on Task 2's exported engine methods; Task 1 and Task 4 are independent of everything
+  else. Recommended execution order is as numbered, but 1 and 4 could run in parallel with 2→3 if using
+  subagent-driven-development with multiple workers.
+- **Type/signature consistency checked:** `armTurnTimer(current string, grace time.Duration)` (Task 1) is called with
+  `(current, grace)` in `broadcastAll` and with `(id, 0)` everywhere in tests; `IsAwaitingRunoutForActor()`/
+  `AdvanceRunoutStreetForActor()` (Task 2) are called with identical names/signatures in Task 3's `armRunoutTimer`/
+  `handleRunoutStep`.

@@ -81,6 +81,7 @@ new PokerApiStack(app, id('API'), {
   deploymentsBucketName: CTECH_DEPLOYMENTS_BUCKET,
   logsBucketName: CTECH_LOGS_BUCKET,
   tableStateArn: dynamoStack.tables.get('poker_table_state')!.tableArn,
+  tableStateHistoryArn: dynamoStack.tables.get('poker_table_state_history')!.tableArn,
   actionLogArn: dynamoStack.tables.get('poker_action_log')!.tableArn,
   actionGuardsArn: dynamoStack.tables.get('poker_action_guards')!.tableArn,
   roomsTableArn: dynamoStack.tables.get('poker_rooms')!.tableArn,

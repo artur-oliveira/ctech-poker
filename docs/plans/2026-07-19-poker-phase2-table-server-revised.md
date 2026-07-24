@@ -2283,9 +2283,9 @@ there (Step 9's `bucket.grantWrite(fn)` already covers it).
 // cdk/bin/poker.ts — after the existing stacks are constructed, before PokerApiStack
 const dynamoStack = new DynamoDBStack(app, `${environment}-ctech-poker-dynamodb`, {environment, env: awsEnv});
 new ArchiverStack(app, `${environment}-ctech-poker-archiver`, {
-  environment,
-  env: awsEnv,
-  actionLogTable: dynamoStack.tables.get('poker_action_log')!,
+    environment,
+    env: awsEnv,
+    actionLogTable: dynamoStack.tables.get('poker_action_log')!,
 });
 ```
 

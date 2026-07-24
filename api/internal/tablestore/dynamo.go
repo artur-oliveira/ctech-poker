@@ -17,6 +17,11 @@ const (
 	tableState        = "poker_table_state"
 	tableActionLog    = "poker_action_log"
 	tableActionGuards = "poker_action_guards"
+	// tableStateHistory is an append-only audit copy of every hand's final
+	// state, written just before the table resets for the next hand — never
+	// read back for correctness, only for auditing/debugging (unlike
+	// poker_table_state, which is the single authoritative item per table).
+	tableStateHistory = "poker_table_state_history"
 
 	// gsiActiveLastAction is the sparse index cmd/tablecleanup queries for
 	// stale tables — see the gsi_active comment below and
@@ -49,21 +54,40 @@ var timeNowFunc = time.Now
 // Store persists the one authoritative item per table, an audit log, and the
 // idempotency guards that back CommitAction's duplicate-action_id rejection.
 type Store struct {
-	db     *dynamodb.Client
-	env    string
-	state  dynamo.Base
-	log    dynamo.Base
-	guards dynamo.Base
+	db      *dynamodb.Client
+	env     string
+	state   dynamo.Base
+	log     dynamo.Base
+	guards  dynamo.Base
+	history dynamo.Base
 }
 
 func NewStore(db *dynamodb.Client, env string) *Store {
 	return &Store{
-		db:     db,
-		env:    env,
-		state:  dynamo.NewBase(db, env, tableState),
-		log:    dynamo.NewBase(db, env, tableActionLog),
-		guards: dynamo.NewBase(db, env, tableActionGuards),
+		db:      db,
+		env:     env,
+		state:   dynamo.NewBase(db, env, tableState),
+		log:     dynamo.NewBase(db, env, tableActionLog),
+		guards:  dynamo.NewBase(db, env, tableActionGuards),
+		history: dynamo.NewBase(db, env, tableStateHistory),
 	}
+}
+
+// SaveTableStateHistory appends tableID's current state to the audit history
+// table, keyed by table ID and the unix-second timestamp it was captured at.
+// Plain PutItem, not transactional: this is a best-effort audit copy, never
+// the authoritative item, so callers should treat a failure here as
+// non-fatal (see table.Actor.saveHandHistorySnapshot).
+func (s *Store) SaveTableStateHistory(ctx context.Context, tableID string, unixSeconds int64, state hand.State) error {
+	item, err := dynamo.Encode(struct {
+		PK    string     `dynamodbav:"pk"`
+		SK    string     `dynamodbav:"sk"`
+		State hand.State `dynamodbav:"state"`
+	}{PK: tableID, SK: fmt.Sprintf("%d", unixSeconds), State: state})
+	if err != nil {
+		return fmt.Errorf("tablestore: encode history snapshot: %w", err)
+	}
+	return s.history.PutItem(ctx, item)
 }
 
 // SeedTable creates a table's very first state item at version 1. It is a
@@ -278,11 +302,12 @@ func mustN(v int) types.AttributeValue {
 	return &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", v)}
 }
 
-// mustCreateTestTables provisions all three tables against DynamoDB Local —
+// mustCreateTestTables provisions all four tables against DynamoDB Local —
 // production tables are provisioned by CDK, never by app code.
 func mustCreateTestTables(ctx context.Context, t testingT, db *dynamodb.Client, env string) {
 	createTable(ctx, t, db, env+"_"+tableActionGuards, false, nil)
 	createTable(ctx, t, db, env+"_"+tableActionLog, true, nil)
+	createTable(ctx, t, db, env+"_"+tableStateHistory, true, nil)
 	createTable(ctx, t, db, env+"_"+tableState, false, []types.GlobalSecondaryIndex{{
 		IndexName: new(gsiActiveLastAction),
 		KeySchema: []types.KeySchemaElement{

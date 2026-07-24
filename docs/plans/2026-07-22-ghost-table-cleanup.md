@@ -742,7 +742,7 @@ import (
 )
 
 type fakeStaleQuerier struct {
-	stale []tablestore.StoredTable
+	stale    []tablestore.StoredTable
 	archived []string
 }
 

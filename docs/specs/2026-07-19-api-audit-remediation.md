@@ -113,8 +113,9 @@ but `PutItem` **unconditionally overwrites**. **What:** `GetOrCreateActor` only 
 returned nil, so in practice it won't clobber a live table. But the first-touch race window (two instances both see nil)
 allows a second `PutItem` to overwrite state/version — currently harmless only because both seeds are identical. If seed
 inputs can ever differ (e.g. room config edited between calls, or real-money rake), this resets a live table to version
+
 1. **Fix:** Use a conditional `PutItem` with `attribute_not_exists(pk)` (return `ErrVersionConflict`/ignore if present).
-Matches the no-op claim.
+   Matches the no-op claim.
 
 ### M5. Equity computed synchronously on the broadcast hot path (performance)
 

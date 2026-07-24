@@ -344,7 +344,7 @@ func (a *Actor) applyReadyAndCommit(ctx context.Context, c ReadyCmd) error {
 	} else {
 		a.cached.SitOutForActor(c.PlayerID)
 	}
-	a.tryStartHand()
+	a.tryStartHand(ctx)
 	return a.commit(ctx, "", nil)
 }
 
@@ -352,12 +352,33 @@ func (a *Actor) applyReadyAndCommit(ctx context.Context, c ReadyCmd) error {
 // "need at least 2 ready players" is not a caller error — the table just
 // keeps waiting; StartHand's own error is swallowed here on purpose. Called
 // from both a Ready toggle and a fresh Join, since a join alone can now bring
-// the table to 2+ ready players (auto-ready on join).
-func (a *Actor) tryStartHand() {
+// the table to 2+ ready players (auto-ready on join). When the table is
+// Complete, the just-finished hand's final state is snapshotted to the audit
+// history table before StartHand() resets it to just players/chips.
+func (a *Actor) tryStartHand(ctx context.Context) {
 	if a.cached.Stage() == hand.WaitingForPlayers || a.cached.Stage() == hand.Complete {
+		if a.cached.Stage() == hand.Complete {
+			a.saveHandHistorySnapshot(ctx)
+		}
 		if err := a.cached.StartHand(); err == nil {
 			a.handID = newHandID()
 		}
+	}
+}
+
+// saveHandHistorySnapshot persists the table's current (pre-reset) state to
+// poker_table_state_history for audit purposes. Best-effort: this is an
+// append-only audit copy, not the authoritative item, so a failure here never
+// blocks the hand transition — it only emits a metric. A version-conflict
+// retry re-running tryStartHand is harmless: once another instance has
+// already advanced the stage past Complete, the reloaded cache no longer
+// satisfies the Complete guard above, so the snapshot is not repeated.
+func (a *Actor) saveHandHistorySnapshot(ctx context.Context) {
+	if a.store == nil {
+		return
+	}
+	if err := a.store.SaveTableStateHistory(ctx, a.id, timeNowFunc().Unix(), a.cached.ExportState()); err != nil {
+		metrics.EmitTableMetric(a.env, "TableStateHistorySaveError", 1, map[string]string{"table_id": a.id})
 	}
 }
 
@@ -767,7 +788,14 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 }
 
 func (a *Actor) handleJoin(ctx context.Context, c JoinCmd) error {
-	if err := a.ensureLoaded(ctx, false); err != nil {
+	// Force a fresh reload here (unlike every other handler's ensureLoaded(ctx,
+	// false)): a join is the highest-risk moment for a new viewer to be folded
+	// into a stale in-memory cache — e.g. a lease-holding actor whose local
+	// state is behind because it never observed another instance's commit (see
+	// ensureLoaded's doc comment). A fresh read costs one extra DynamoDB read
+	// per join and guarantees a joining player never sees leftover
+	// LastOutcome/board/deadlines from before they existed.
+	if err := a.ensureLoaded(ctx, true); err != nil {
 		return err
 	}
 	apply := func() error { return a.applyJoinAndCommit(ctx, c) }
@@ -792,7 +820,7 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 	} else if err := a.cached.AddWaitingPlayer(p); err != nil {
 		return err
 	}
-	a.tryStartHand()
+	a.tryStartHand(ctx)
 	return a.commit(ctx, "", nil)
 }
 
@@ -888,7 +916,7 @@ func isRevealStreet(stage hand.Stage) bool {
 	return stage == hand.Flop || stage == hand.Turn || stage == hand.River
 }
 
-// armNextHandTimer (re-)arms the 5s post-hand countdown when the table is
+// armNextHandTimer (re-)arms the 8s post-hand countdown when the table is
 // Complete. Idempotent per handID: re-arming for the SAME hand does not
 // restart the countdown (matches armTurnTimer's convention). complete is
 // passed in by broadcastAll (already knows the current stage) so this stays
@@ -929,7 +957,7 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 	if a.cached.Stage() != hand.Complete {
 		return nil
 	}
-	a.tryStartHand()
+	a.tryStartHand(ctx)
 	if err := a.commit(ctx, "", nil); err != nil {
 		if !errors.Is(err, tablestore.ErrVersionConflict) {
 			return err

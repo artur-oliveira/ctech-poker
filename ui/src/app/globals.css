@@ -1694,8 +1694,8 @@ h1 em {
 }
 
 .board-card .card-reveal-inner {
-    animation: board-card-reveal 560ms var(--ease-out-expo) both;
-    animation-delay: calc(var(--deal-index, 0) * 220ms)
+    animation: board-card-reveal 780ms var(--ease-out-expo) both;
+    animation-delay: calc(var(--deal-index, 0) * 320ms)
 }
 
 .hole-card .card-reveal-inner {
@@ -1732,7 +1732,7 @@ h1 em {
 
 .card-flip-slow .card-back,
 .card-flip-slow .card-front {
-    animation-duration: 760ms
+    animation-duration: 900ms
 }
 
 .hole-card .card-back,
@@ -1743,7 +1743,7 @@ h1 em {
 
 .board-card .card-back,
 .board-card .card-front {
-    animation-delay: calc(var(--deal-index, 0) * 220ms)
+    animation-delay: calc(var(--deal-index, 0) * 320ms)
 }
 
 .pot-value {
@@ -1770,7 +1770,7 @@ h1 em {
     border-radius: 14px;
     padding: 7px 10px;
     box-shadow: var(--shadow-seat);
-    transition: opacity 220ms var(--ease-out-quart), filter 220ms var(--ease-out-quart), border-color 220ms var(--ease-out-quart), transform 220ms var(--ease-out-quart)
+    transition: opacity 380ms var(--ease-out-quart), filter 380ms var(--ease-out-quart), border-color 380ms var(--ease-out-quart), transform 380ms var(--ease-out-quart)
 }
 
 .game-seat:after {
@@ -1785,7 +1785,7 @@ h1 em {
 
 .game-seat.is-turn:after {
     border-color: var(--brand-bright);
-    animation: turn-signal 1.5s var(--ease-out-quart) infinite
+    animation: turn-signal 2s var(--ease-out-quart) infinite
 }
 
 @property --seat-ring-progress {
@@ -1906,6 +1906,18 @@ h1 em {
 
 .seat-info .seat-state {
     color: var(--text-secondary)
+}
+
+.seat-equity {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 72px;
+    margin-top: 3px
+}
+
+.seat-equity small {
+    margin-top: 0
 }
 
 .seat-bet {
@@ -3741,6 +3753,11 @@ h1 em {
 
     .seat-info span, .seat-info small {
         font-size: var(--font-size-tiny)
+    }
+
+    .seat-equity {
+        width: 54px;
+        margin-inline: auto
     }
 
     .board-card, .board > div > span {

@@ -22,6 +22,7 @@ test('synthesizes without error and declares exactly one ASG', () => {
     deploymentsBucketName: 'dev-ctech-deployments',
     logsBucketName: 'dev-ctech-application-logs',
     tableStateArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_table_state',
+    tableStateHistoryArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_table_state_history',
     actionLogArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_action_log',
     actionGuardsArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_action_guards',
     roomsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_rooms',

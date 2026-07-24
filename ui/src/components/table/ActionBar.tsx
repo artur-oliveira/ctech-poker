@@ -37,6 +37,16 @@ function isPlainKey(event: KeyboardEvent) {
   return !event.metaKey && !event.ctrlKey && !event.altKey && !event.repeat && !isTypingTarget(event.target);
 }
 
+/** Same as isPlainKey but allows ctrlKey through — used only by the arrow-key
+ * bet-adjust shortcuts, where holding ctrl means "step faster". */
+function isBetAdjustKey(event: KeyboardEvent) {
+  return !event.metaKey && !event.altKey && !event.repeat && !isTypingTarget(event.target);
+}
+
+// Holding ctrl while nudging the bet with the arrow keys steps this many
+// times faster.
+const FAST_STEP_MULTIPLIER = 3;
+
 // Handhelds (≤800px or short landscape — keep in sync with the matching CSS
 // media tier) don't have room to show the preset/slider sizing UI at all
 // times alongside Fold/Check/Pagar, so it stays collapsed until the player
@@ -66,14 +76,43 @@ function RaiseControl({minRaise, maxRaise, raiseStep, pot, disabled, pending, on
     if (inactive) return undefined;
 
     function onKey(event: KeyboardEvent) {
-      if (!isPlainKey(event) || event.key.toLowerCase() !== 'r') return;
-      event.preventDefault();
-      onRaise(safeAmount);
+      const key = event.key.toLowerCase();
+      if (isPlainKey(event)) {
+        if (key === 'r') {
+          event.preventDefault();
+          onRaise(safeAmount);
+          return;
+        }
+        if (key === 'h') {
+          event.preventDefault();
+          setAmount(Math.min(maxRaise, Math.max(minRaise, Math.round(pot / 2 / raiseStep) * raiseStep)));
+          return;
+        }
+        if (key === 'a') {
+          event.preventDefault();
+          setAmount(maxRaise);
+          onRaise(maxRaise);
+          return;
+        }
+      }
+      if (!isBetAdjustKey(event)) return;
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setAmount(minRaise);
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setAmount(maxRaise);
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault();
+        const step = raiseStep * (event.ctrlKey ? FAST_STEP_MULTIPLIER : 1);
+        const delta = event.key === 'ArrowRight' ? step : -step;
+        setAmount(value => Math.min(maxRaise, Math.max(minRaise, value + delta)));
+      }
     }
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [inactive, safeAmount, onRaise]);
+  }, [inactive, safeAmount, onRaise, minRaise, maxRaise, raiseStep, pot]);
 
   function handleRaiseClick() {
     if (!expanded && window.matchMedia(COMPACT_QUERY).matches) {

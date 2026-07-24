@@ -1,11 +1,12 @@
-export type SoundName = 'reveal' | 'showing_card' | 'half_pot' | 'all_in' | 'bet';
+export type SoundName = 'reveal' | 'showing_card' | 'half_pot' | 'all_in' | 'bet' | 'your_turn';
 
 const FILES: Record<SoundName, string[]> = {
   reveal: ['/sounds/revealing-card-table.mp3'],
   showing_card: ['/sounds/player-showing-card.mp3'],
   half_pot: ['/sounds/half-pot-chips.mp3'],
   all_in: ['/sounds/all-in-chips.mp3'],
-  bet: ['/sounds/basic-chips-1.mp3', '/sounds/basic-chips-2.mp3']
+  bet: ['/sounds/basic-chips-1.mp3', '/sounds/basic-chips-2.mp3'],
+  your_turn: ['/sounds/your-turn.mp3']
 };
 
 // .catch swallows the common autoplay-blocked-before-user-interaction

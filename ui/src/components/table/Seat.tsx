@@ -1,8 +1,17 @@
 import {Avatar, AvatarFallback} from '@/components/ui/avatar';
+import {Progress} from '@/components/ui/progress';
 import {ChipStack} from '@/components/table/ChipStack';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import type {SeatView} from '@/lib/api/table';
 import {HAND_CATEGORY_LABELS, initials, playerName} from '@/lib/utils';
+
+// chance <= 20% red, <= 60% yellow (reusing the --gold token already used for
+// bet amounts on this same seat card), > 60% green.
+function equityTone(chance: number) {
+  if (chance <= 20) return 'bg-[var(--danger)]';
+  if (chance <= 60) return 'bg-[var(--gold)]';
+  return 'bg-[var(--success)]';
+}
 
 const STATE_LABELS: Record<string, string> = {
   folded: 'Desistiu',
@@ -44,8 +53,10 @@ export function Seat({seat, isViewer, isTurn, index, payout = 0, deadlineMs, now
     <div className="seat-info">
       <b
         title={seat.name || undefined}>{playerName(seat.player_id, isViewer ? seat.player_id : undefined, seat.name)}</b><span>{seat.stack.toLocaleString('pt-BR')} fichas</span>{chance != null && isViewer &&
-        <small className="seat-equity"
-               aria-label={`Chance estimada de vitória: ${chance}%`}>Chance {chance}%</small>}{STATE_LABELS[seat.state] &&
+        <div className="seat-equity" aria-label={`Chance estimada de vitória: ${chance}%`}>
+          <Progress value={chance} indicatorClassName={equityTone(chance)}/>
+          <small>Chance {chance}%</small>
+        </div>}{STATE_LABELS[seat.state] &&
         <small className="seat-state">{STATE_LABELS[seat.state]}</small>}{seat.hand_category &&
         <small className="seat-hand-category">{HAND_CATEGORY_LABELS[seat.hand_category] || seat.hand_category}</small>}
     </div>

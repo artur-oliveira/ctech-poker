@@ -78,8 +78,14 @@ function describeSnapshot(previous: TableSnapshot | null, next: TableSnapshot, v
 // describeSnapshot does). Priority: a new board card beats an all-in beats a
 // bet beats a fold-to-one reveal, since at most one usually fires per frame
 // anyway.
-function playSoundForTransition(previous: TableSnapshot | null, next: TableSnapshot) {
+function playSoundForTransition(previous: TableSnapshot | null, next: TableSnapshot, viewerId?: string) {
   if (!previous) return;
+  // Table is busy with a lot going on at once — the turn ring alone is easy
+  // to miss, so this fires independently of (and can co-occur with) whatever
+  // else this transition triggers below (a bet, a fold-to-one reveal, etc).
+  if (viewerId && next.current_player_id === viewerId && previous.current_player_id !== viewerId) {
+    playSound('your_turn');
+  }
   if (next.board.length > previous.board.length) {
     const added = next.board.length - previous.board.length;
     // Flop deals 3 cards one at a time (Board/PlayingCard stagger reveal
@@ -162,7 +168,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const receive = useCallback((message: ServerMessage) => {
     if (message.type === 'state' && message.snapshot) {
       const liveMessage = describeSnapshot(previousSnapshot.current, message.snapshot, viewerId);
-      playSoundForTransition(previousSnapshot.current, message.snapshot);
+      playSoundForTransition(previousSnapshot.current, message.snapshot, viewerId);
       previousSnapshot.current = message.snapshot;
       if (liveMessage) setAnnouncement(liveMessage);
       setSnapshot(message.snapshot);

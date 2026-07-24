@@ -42,6 +42,7 @@ interface ApiStackProps extends cdk.StackProps {
   deploymentsBucketName: string;
   logsBucketName: string;
   tableStateArn: string;
+  tableStateHistoryArn: string;
   actionLogArn: string;
   actionGuardsArn: string;
   roomsTableArn: string;
@@ -72,6 +73,7 @@ export class PokerApiStack extends cdk.Stack {
       deploymentsBucketName,
       logsBucketName,
       tableStateArn,
+      tableStateHistoryArn,
       actionLogArn,
       actionGuardsArn,
       roomsTableArn,
@@ -100,7 +102,7 @@ export class PokerApiStack extends cdk.Stack {
     });
 
     const tableArns = [
-      tableStateArn, actionLogArn, actionGuardsArn, roomsTableArn, playerProfilesTableArn,
+      tableStateArn, tableStateHistoryArn, actionLogArn, actionGuardsArn, roomsTableArn, playerProfilesTableArn,
       achievementProgressTableArn, leaderboardStatsTableArn, dailyRewardTableArn,
     ];
     instanceRole.addToPolicy(new iam.PolicyStatement({

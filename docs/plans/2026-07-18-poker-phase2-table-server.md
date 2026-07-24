@@ -2337,12 +2337,12 @@ import {Template} from 'aws-cdk-lib/assertions';
 import {DynamoDBStack} from '../lib/dynamodb-stack';
 
 test('creates poker_hand_snapshots and poker_action_log tables', () => {
-  const app = new App();
-  const stack = new DynamoDBStack(app, 'TestDynamoDBStack', {environment: 'dev'});
-  const template = Template.fromStack(stack);
-  template.resourceCountIs('AWS::DynamoDB::Table', 2);
-  template.hasResourceProperties('AWS::DynamoDB::Table', {TableName: 'dev_poker_hand_snapshots'});
-  template.hasResourceProperties('AWS::DynamoDB::Table', {TableName: 'dev_poker_action_log'});
+    const app = new App();
+    const stack = new DynamoDBStack(app, 'TestDynamoDBStack', {environment: 'dev'});
+    const template = Template.fromStack(stack);
+    template.resourceCountIs('AWS::DynamoDB::Table', 2);
+    template.hasResourceProperties('AWS::DynamoDB::Table', {TableName: 'dev_poker_hand_snapshots'});
+    template.hasResourceProperties('AWS::DynamoDB::Table', {TableName: 'dev_poker_action_log'});
 });
 ```
 
@@ -2368,38 +2368,38 @@ import {Environment} from '@aoctech/cdk';
 export type TableName = 'poker_hand_snapshots' | 'poker_action_log';
 
 interface DynamoDBStackProps extends cdk.StackProps {
-  environment: Environment;
+    environment: Environment;
 }
 
 export class DynamoDBStack extends cdk.Stack {
-  public readonly tables: Map<TableName, dynamodb.TableV2>;
+    public readonly tables: Map<TableName, dynamodb.TableV2>;
 
-  constructor(scope: Construct, id: string, props: DynamoDBStackProps) {
-    super(scope, id, props);
-    this.tables = new Map();
-    const {environment} = props;
-    const removalPolicy = environment === 'dev' ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN;
-    const pointInTimeRecoverySpecification =
-      environment === 'prod' ? {pointInTimeRecoveryEnabled: true} : undefined;
+    constructor(scope: Construct, id: string, props: DynamoDBStackProps) {
+        super(scope, id, props);
+        this.tables = new Map();
+        const {environment} = props;
+        const removalPolicy = environment === 'dev' ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN;
+        const pointInTimeRecoverySpecification =
+            environment === 'prod' ? {pointInTimeRecoveryEnabled: true} : undefined;
 
-    const table = (name: TableName): dynamodb.TableV2 => {
-      const tableName = `${environment}_${name}`;
-      const t = new dynamodb.TableV2(this, tableName, {
-        tableName,
-        partitionKey: {name: 'pk', type: dynamodb.AttributeType.STRING},
-        sortKey: {name: 'sk', type: dynamodb.AttributeType.STRING},
-        billing: Billing.onDemand({maxReadRequestUnits: 1000, maxWriteRequestUnits: 1000}),
-        removalPolicy,
-        pointInTimeRecoverySpecification,
-        encryption: dynamodb.TableEncryptionV2.awsManagedKey(),
-      });
-      this.tables.set(name, t);
-      return t;
-    };
+        const table = (name: TableName): dynamodb.TableV2 => {
+            const tableName = `${environment}_${name}`;
+            const t = new dynamodb.TableV2(this, tableName, {
+                tableName,
+                partitionKey: {name: 'pk', type: dynamodb.AttributeType.STRING},
+                sortKey: {name: 'sk', type: dynamodb.AttributeType.STRING},
+                billing: Billing.onDemand({maxReadRequestUnits: 1000, maxWriteRequestUnits: 1000}),
+                removalPolicy,
+                pointInTimeRecoverySpecification,
+                encryption: dynamodb.TableEncryptionV2.awsManagedKey(),
+            });
+            this.tables.set(name, t);
+            return t;
+        };
 
-    table('poker_hand_snapshots');
-    table('poker_action_log');
-  }
+        table('poker_hand_snapshots');
+        table('poker_action_log');
+    }
 }
 ```
 

@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"gopkg.aoctech.app/api-commons/dynamo"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
 
@@ -174,6 +175,27 @@ func TestMarkArchivedRejectsStaleVersion(t *testing.T) {
 	err := s.MarkArchived(ctx, "stale-3", 99)
 	if !errors.Is(err, ErrVersionConflict) {
 		t.Fatalf("expected ErrVersionConflict when the table moved on since the stale query, got %v", err)
+	}
+}
+
+func TestSaveTableStateHistoryPersistsSnapshot(t *testing.T) {
+	db := testClient(t)
+	env := isolatedEnv()
+	s := NewStore(db, env)
+	ctx := context.Background()
+	mustCreateTestTables(ctx, t, db, env)
+
+	if err := s.SaveTableStateHistory(ctx, "table-5", 1234567890, hand.State{Stage: hand.Complete}); err != nil {
+		t.Fatalf("SaveTableStateHistory: %v", err)
+	}
+
+	item, err := s.history.GetItem(ctx, "table-5", "1234567890")
+	if err != nil {
+		t.Fatalf("GetItem: %v", err)
+	}
+	loaded, err := dynamo.Decode[StoredTable](item)
+	if err != nil || loaded == nil || loaded.State.Stage != hand.Complete {
+		t.Fatalf("expected a persisted Complete-stage snapshot, got %+v err=%v", loaded, err)
 	}
 }
 

@@ -8,8 +8,8 @@ import {Environment} from '@aoctech/cdk';
 // Table names carry the `poker_` segment so they never collide with another
 // service's tables in the same AWS account.
 export type TableName =
-    'poker_table_state' | 'poker_action_log' | 'poker_action_guards' | 'poker_rooms' |
-    'poker_player_profiles' | 'poker_achievement_progress' | 'poker_leaderboard_stats' |
+    'poker_table_state' | 'poker_table_state_history' | 'poker_action_log' | 'poker_action_guards' |
+    'poker_rooms' | 'poker_player_profiles' | 'poker_achievement_progress' | 'poker_leaderboard_stats' |
     'poker_daily_reward' | 'poker_pending_cashouts' | 'poker_player_sessions' | 'poker_player_hands';
 
 interface DynamoDBStackProps extends cdk.StackProps {
@@ -59,6 +59,11 @@ export class DynamoDBStack extends cdk.Stack {
       sortKey: {name: 'last_action_at', type: dynamodb.AttributeType.NUMBER},
       projectionType: dynamodb.ProjectionType.KEYS_ONLY,
     });
+    // poker_table_state_history: append-only audit snapshot of each hand's
+    // final state, written just before the table resets for the next hand —
+    // pk is the table ID, sk is the unix-seconds capture time. No TTL (kept
+    // indefinitely for audit) and no stream (nothing consumes it downstream).
+    table('poker_table_state_history', true);
     // poker_action_log: TTL'd (tablestore.logTTLDays = 90 days — the "recent
     // window" served directly from Dynamo) with a stream so the archiver
     // Lambda (archiver-stack.ts) ships every entry to S3 before that TTL ever
