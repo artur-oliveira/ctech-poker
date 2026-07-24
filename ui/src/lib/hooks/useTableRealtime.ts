@@ -91,12 +91,14 @@ function playSoundForTransition(previous: TableSnapshot | null, next: TableSnaps
   }
   if (next.board.length > previous.board.length) {
     const added = next.board.length - previous.board.length;
-    // Flop deals 3 cards one at a time (Board/PlayingCard stagger reveal
-    // animation-delay by 220ms per index) — one reveal sound per card, timed
-    // to match. Turn/river add a single card with no stagger.
+    // Flop deals 3 cards one at a time (Board/PlayingCard stagger reveal via
+    // --deal-index; see .board-card .card-reveal-inner in globals.css) — one
+    // reveal sound per card, timed to match. Keep this in sync with that
+    // animation-delay with a little gap (currently 360ms/index). Turn/river add a single card
+    // with no stagger.
     for (let i = 0; i < added; i++) {
       if (i === 0) playSound('reveal');
-      else setTimeout(() => playSound('reveal'), i * 220);
+      else setTimeout(() => playSound('reveal'), i * 360);
     }
     return;
   }

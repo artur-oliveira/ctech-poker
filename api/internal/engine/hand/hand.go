@@ -309,6 +309,23 @@ func (t *Table) RemovePlayerForActor(playerID string) (int64, string, error) {
 			t.dealerSeat--
 		}
 		t.players = append(t.players[:i], t.players[i+1:]...)
+		if len(t.players) == 0 {
+			// The last hand's handOrder/payouts/lastOutcome are otherwise only
+			// cleared by the next StartHand — with the table empty that may
+			// not happen for a long time (or ever). Left dangling, a later
+			// rejoiner reusing this same playerID gets erroneously re-linked
+			// to the stale handOrder entry on the next state reload
+			// (NewTableFromState matches by ID, not by seating instance),
+			// which then leaks that entry's zero-value HoleCards as if the
+			// rejoiner were dealt into a hand that doesn't exist. The stale
+			// t.payouts also makes the client's isFreshPayout check fire a
+			// bogus win/lose banner on the very first snapshot after
+			// rejoining. Nobody is left seated to see a recap, so clearing
+			// now is safe.
+			t.handOrder = nil
+			t.payouts = nil
+			t.lastOutcome = nil
+		}
 		return stack, holdID, nil
 	}
 	return 0, "", fmt.Errorf("hand: player %s not found", playerID)
@@ -364,8 +381,25 @@ func (t *Table) StartHand() error {
 	if readyCount < 2 {
 		// A Complete table with too few eligible players must fall back to
 		// WaitingForPlayers, or it (and any post-hand countdown UI relying on
-		// Stage) stays stuck on Complete forever.
+		// Stage) stays stuck on Complete forever. Clearing handOrder/payouts/
+		// lastOutcome here too (not just on the success path below) is what
+		// actor.go's join comment promises callers: without it, a lone
+		// remaining/rejoining player (or any ready-toggle that re-enters this
+		// branch) keeps rebroadcasting the previous hand's payouts forever —
+		// ViewFor's dealtIn gate leaks stale/zero-value hole cards for anyone
+		// whose ID still matches a handOrder entry, and the client's
+		// holdOutcomeOpen (driven by Boolean(payouts)) never closes. The same
+		// staleness applies to each player's Contributed: it's only reset by
+		// the active-player loop further down, which this early return skips,
+		// so a lone remaining player can otherwise carry the last hand's
+		// contribution into a waiting_for_players snapshot.
+		t.handOrder = nil
+		t.payouts = nil
+		t.lastOutcome = nil
 		t.stage = WaitingForPlayers
+		for _, p := range t.players {
+			p.Contributed = 0
+		}
 		return fmt.Errorf("hand: need at least 2 ready players, have %d", readyCount)
 	}
 

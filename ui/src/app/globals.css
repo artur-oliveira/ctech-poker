@@ -1844,26 +1844,8 @@ h1 em {
     -webkit-mask: linear-gradient(var(--mask-opaque) 0 0) content-box, linear-gradient(var(--mask-opaque) 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
-    animation: next-hand-ring-in 220ms var(--ease-out-quint) both,
-               seat-turn-deplete var(--ring-duration, 0ms) linear forwards,
-               next-hand-urgent 900ms ease-in-out var(--urgent-delay, 9999s) infinite alternate;
+    animation: seat-turn-deplete linear forwards;
     will-change: --seat-ring-progress
-}
-
-@keyframes next-hand-ring-in {
-    from {
-        opacity: 0;
-        transform: scale(.6)
-    }
-}
-
-@keyframes next-hand-urgent {
-    from {
-        background-image: conic-gradient(var(--gold) var(--seat-ring-progress), transparent 0)
-    }
-    to {
-        background-image: conic-gradient(var(--brand-bright) var(--seat-ring-progress), transparent 0)
-    }
 }
 
 .game-seat.is-winner {

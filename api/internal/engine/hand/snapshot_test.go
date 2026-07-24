@@ -281,3 +281,54 @@ func TestViewForOmitsHandCategoryWhenCardsAreHidden(t *testing.T) {
 		}
 	}
 }
+
+// TestViewForExposesBlindSeatsHeadsUp mirrors TestHeadsUpDealerPostsSmallBlind's
+// dealer-posts-small-blind rule, but asserts on the wire snapshot instead of
+// Contributed, since that's what the client actually has to work with.
+func TestViewForExposesBlindSeatsHeadsUp(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	table.dealerSeat = 0 // p1 is dealer
+	table.dealerDrawn = true
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+
+	view := table.ViewFor("p1")
+	if view.SmallBlindPlayerID != "p1" {
+		t.Fatalf("heads-up: dealer (p1) must be small blind, got %q", view.SmallBlindPlayerID)
+	}
+	if view.BigBlindPlayerID != "p2" {
+		t.Fatalf("heads-up: non-dealer (p2) must be big blind, got %q", view.BigBlindPlayerID)
+	}
+}
+
+func TestViewForExposesBlindSeatsThreeHanded(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	p3 := &Player{ID: "p3", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2, p3}, 10, 20)
+	table.dealerSeat = 0 // p1 is dealer
+	table.dealerDrawn = true
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+
+	view := table.ViewFor("p1")
+	if view.SmallBlindPlayerID != "p2" {
+		t.Fatalf("3-handed: seat left of dealer (p2) must be small blind, got %q", view.SmallBlindPlayerID)
+	}
+	if view.BigBlindPlayerID != "p3" {
+		t.Fatalf("3-handed: seat two left of dealer (p3) must be big blind, got %q", view.BigBlindPlayerID)
+	}
+}
+
+func TestViewForOmitsBlindSeatsBeforeFirstHand(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1}, 10, 20)
+	view := table.ViewFor("p1")
+	if view.SmallBlindPlayerID != "" || view.BigBlindPlayerID != "" {
+		t.Fatalf("no hand has started, blind seats must be empty, got sb=%q bb=%q", view.SmallBlindPlayerID, view.BigBlindPlayerID)
+	}
+}

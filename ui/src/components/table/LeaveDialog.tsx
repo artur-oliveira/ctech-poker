@@ -19,10 +19,10 @@ import {leaveRoom} from '@/lib/api/rooms';
 const DEALT_IN_MESSAGE = 'Você está na mão atual. Desista ou aguarde o fim da rodada para sair.';
 const GENERIC_MESSAGE = 'Não foi possível sair da mesa agora. Tente novamente.';
 
-export function LeaveDialog({roomId, stack, onLeft}: {
+export function LeaveDialog({roomId, stack, onLeftAction}: {
   roomId: string;
   stack: number;
-  onLeft: (amount: number) => void
+  onLeftAction: (amount: number) => void
 }) {
   const [open, setOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -34,8 +34,16 @@ export function LeaveDialog({roomId, stack, onLeft}: {
     try {
       const {amount} = await leaveRoom(roomId);
       setOpen(false);
-      onLeft(amount);
+      onLeftAction(amount);
     } catch (e) {
+      // A 409 "player not found" means the hand engine already dropped the
+      // player (e.g. a prior leave/disconnect raced this one) — treat it as
+      // a normal, already-completed leave rather than an error.
+      if (isAxiosError(e) && e.response?.status === 409 && e.response.data?.detail?.includes('not found')) {
+        setOpen(false);
+        onLeftAction(stack);
+        return;
+      }
       setError(isAxiosError(e) && e.response?.status === 409 ? DEALT_IN_MESSAGE : GENERIC_MESSAGE);
       setLeaving(false);
     }

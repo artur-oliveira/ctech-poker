@@ -914,3 +914,112 @@ func TestUncalledAllInExcessIsNotCountedAsAWin(t *testing.T) {
 		t.Fatalf("Caller must win the contested 200 pot, got %d", payouts["Caller"])
 	}
 }
+
+// TestRejoinAfterTableEmptiesDoesNotLeakStaleHandData reproduces the reported
+// bug: a player finishes a hand, both players leave (table goes empty), then
+// the same player rejoins under the same ID before any new hand starts. On
+// the next state reload (a normal occurrence — every real command
+// round-trips through NewTableFromState), the old handOrder entry used to
+// get re-linked by ID to the new (fresh, zero hole cards) Player object,
+// making ViewFor think the rejoiner was dealt into a hand that doesn't
+// exist, and the stale Payouts made the client fire a false win/lose banner
+// on the very first snapshot after rejoining.
+func TestRejoinAfterTableEmptiesDoesNotLeakStaleHandData(t *testing.T) {
+	players := []*Player{
+		{ID: "P1", Stack: 500, Ready: true},
+		{ID: "P2", Stack: 500, Ready: true},
+	}
+	table := NewTable(players, 10, 20)
+	table.dealerDrawn = true
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	if err := table.Act("P1", betting.ActionFold, 0); err != nil {
+		t.Fatalf("P1 folds: %v", err)
+	}
+	if table.Stage() != Complete {
+		t.Fatalf("expected Complete after uncontested fold, got %v", table.Stage())
+	}
+
+	if _, _, err := table.RemovePlayerForActor("P2"); err != nil {
+		t.Fatalf("remove P2: %v", err)
+	}
+	if _, _, err := table.RemovePlayerForActor("P1"); err != nil {
+		t.Fatalf("remove P1: %v", err)
+	}
+
+	rejoined := &Player{ID: "P1", Stack: 2500, Ready: true}
+	if err := table.AddWaitingPlayer(rejoined); err != nil {
+		t.Fatalf("rejoin P1: %v", err)
+	}
+
+	// table.Actor opportunistically calls StartHand after every join; with
+	// only one player seated this fails (readyCount < 2) but still falls
+	// back to WaitingForPlayers, exactly as in the reported bug.
+	if err := table.StartHand(); err == nil {
+		t.Fatal("expected StartHand to reject a solo table")
+	}
+	if table.Stage() != WaitingForPlayers {
+		t.Fatalf("expected fallback to waiting_for_players, got %v", table.Stage())
+	}
+
+	// Simulate the persistence round-trip every real command goes through.
+	table = NewTableFromState(table.ExportState())
+
+	snap := table.ViewFor("P1")
+	if snap.Payouts != nil {
+		t.Fatalf("stale payouts leaked into a fresh rejoin: %+v", snap.Payouts)
+	}
+	for _, seat := range snap.Seats {
+		if seat.PlayerID == "P1" && len(seat.HoleCards) != 0 {
+			t.Fatalf("rejoining player must not see hole cards before a new hand deals: %+v", seat.HoleCards)
+		}
+	}
+}
+
+// TestSittingOutAfterHandDoesNotLeakStalePayouts reproduces a second report:
+// nobody leaves the table, but the loser sits out right after a hand
+// completes. table.Actor's tryStartHand re-runs StartHand on every later
+// Ready toggle (actor.go's applyReadyAndCommit); each call hits the
+// readyCount<2 branch again since only one player is ready, and used to
+// leave the finished hand's Payouts/HandOrder in place forever, so the
+// client's holdOutcomeOpen (Boolean(payouts)) kept re-showing the "you lost"
+// banner to a player who was just sitting out, not playing a new hand.
+func TestSittingOutAfterHandDoesNotLeakStalePayouts(t *testing.T) {
+	players := []*Player{
+		{ID: "P1", Stack: 500, Ready: true},
+		{ID: "P2", Stack: 500, Ready: true},
+	}
+	table := NewTable(players, 10, 20)
+	table.dealerDrawn = true
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	if err := table.Act("P1", betting.ActionFold, 0); err != nil {
+		t.Fatalf("P1 folds: %v", err)
+	}
+	if table.Stage() != Complete {
+		t.Fatalf("expected Complete after uncontested fold, got %v", table.Stage())
+	}
+
+	// P1 sits out instead of leaving; a Ready(false) toggle re-triggers
+	// StartHand with only P2 ready, same as table.Actor does on every
+	// ReadyCmd.
+	table.SitOutForActor("P1")
+	if err := table.StartHand(); err == nil {
+		t.Fatal("expected StartHand to reject with only one ready player")
+	}
+	if table.Stage() != WaitingForPlayers {
+		t.Fatalf("expected fallback to waiting_for_players, got %v", table.Stage())
+	}
+
+	snap := table.ViewFor("P1")
+	if snap.Payouts != nil {
+		t.Fatalf("stale payouts leaked into a sitting-out snapshot: %+v", snap.Payouts)
+	}
+	for _, seat := range snap.Seats {
+		if seat.Contributed != 0 {
+			t.Fatalf("stale contributed=%d leaked into a waiting_for_players snapshot for seat %s", seat.Contributed, seat.PlayerID)
+		}
+	}
+}

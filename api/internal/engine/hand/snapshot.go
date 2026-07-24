@@ -30,6 +30,8 @@ type Snapshot struct {
 	WonWithoutShowdown   bool          `json:"won_without_showdown,omitempty"`
 	ShuffleCommitHash    string        `json:"shuffle_commit_hash,omitempty"`
 	ShuffleServerSeedHex string        `json:"shuffle_server_seed_hex,omitempty"`
+	SmallBlindPlayerID   string        `json:"small_blind_player_id,omitempty"`
+	BigBlindPlayerID     string        `json:"big_blind_player_id,omitempty"`
 }
 
 // LegalActions is the authoritative set of moves the viewer may make right
@@ -147,6 +149,11 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		CurrentPlayerID:    current,
 		LegalActions:       t.legalActionsFor(viewerID, current),
 		WonWithoutShowdown: wonWithoutShowdown,
+	}
+	if len(t.handOrder) >= 2 {
+		sb, bb := t.blindSeats(t.handOrder)
+		out.SmallBlindPlayerID = t.handOrder[sb].ID
+		out.BigBlindPlayerID = t.handOrder[bb].ID
 	}
 	if t.shuffle != nil {
 		out.ShuffleCommitHash = hex.EncodeToString(t.shuffle.CommitHash[:])

@@ -15,24 +15,24 @@ const (
 )
 
 type SessionItem struct {
-	PK            string `dynamodbav:"pk"` // player_id
-	SK            string `dynamodbav:"sk"` // timestamp / session_id
-	TableID       string `dynamodbav:"table_id"`
-	BuyinAmount   int64  `dynamodbav:"buyin_amount"`
-	CashoutAmount int64  `dynamodbav:"cashout_amount"`
-	NetPnL        int64  `dynamodbav:"net_pnl"`
-	JoinedAt      int64  `dynamodbav:"joined_at"`
-	EndedAt       int64  `dynamodbav:"ended_at"`
+	PK            string `dynamodbav:"pk" json:"pk"` // player_id
+	SK            string `dynamodbav:"sk" json:"sk"` // timestamp / session_id
+	TableID       string `dynamodbav:"table_id" json:"table_id"`
+	BuyinAmount   int64  `dynamodbav:"buyin_amount" json:"buyin_amount"`
+	CashoutAmount int64  `dynamodbav:"cashout_amount" json:"cashout_amount"`
+	NetPnL        int64  `dynamodbav:"net_pnl" json:"net_pnl"`
+	JoinedAt      int64  `dynamodbav:"joined_at" json:"joined_at"`
+	EndedAt       int64  `dynamodbav:"ended_at" json:"ended_at"`
 }
 
 type HandItem struct {
-	PK        string `dynamodbav:"pk"` // player_id
-	SK        string `dynamodbav:"sk"` // timestamp / hand_id
-	TableID   string `dynamodbav:"table_id"`
-	HandID    string `dynamodbav:"hand_id"`
-	Outcome   string `dynamodbav:"outcome"`
-	NetChange int64  `dynamodbav:"net_change"`
-	EndedAt   int64  `dynamodbav:"ended_at"`
+	PK        string `dynamodbav:"pk" json:"pk"` // player_id
+	SK        string `dynamodbav:"sk" json:"sk"` // timestamp / hand_id
+	TableID   string `dynamodbav:"table_id" json:"table_id"`
+	HandID    string `dynamodbav:"hand_id" json:"hand_id"`
+	Outcome   string `dynamodbav:"outcome" json:"outcome"`
+	NetChange int64  `dynamodbav:"net_change" json:"net_change"`
+	EndedAt   int64  `dynamodbav:"ended_at" json:"ended_at"`
 }
 
 type Store struct {

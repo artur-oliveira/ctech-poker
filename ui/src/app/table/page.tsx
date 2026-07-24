@@ -263,7 +263,7 @@ function TableContent() {
             {viewerSeat?.state === 'sitting_out' &&
                 <Button type="button" variant="ghost" size="icon" aria-label="Voltar a jogar" disabled={rt.readyPending}
                         onClick={() => rt.ready(true)}><Play/></Button>}
-            <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} onLeft={amount => {
+            <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} onLeftAction={amount => {
               pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
               queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
               router.push('/lobby');
@@ -293,10 +293,7 @@ function TableContent() {
             <p>{s.stage === 'complete' ? 'Mão encerrada.' : 'Aguardando jogadores.'}</p>
           {s.next_hand_unix_ms &&
               <span key={s.next_hand_unix_ms} className="next-hand-ring"
-                    style={{
-                      '--ring-duration': `${nextHandDurationMs}ms`,
-                      '--urgent-delay': `${Math.max(0, nextHandDurationMs - 3000)}ms`,
-                    } as React.CSSProperties}
+                    style={{animationDuration: `${nextHandDurationMs}ms`}}
                     aria-hidden="true"/>}
           {canShowCards &&
               <Button type="button" variant="ghost" disabled={rt.showCardsPending}
