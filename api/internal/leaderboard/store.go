@@ -24,18 +24,32 @@ func NewStore(db *dynamodb.Client, env string) *Store {
 	return &Store{base: dynamo.NewBase(db, env, tableStats)}
 }
 
-func (s *Store) IncrementStats(ctx context.Context, playerID string, playedDelta, wonDelta int) error {
+// IncrementStats bumps this hand's counters and, since a write here happens
+// every hand anyway, piggybacks a refresh of the denormalized player_name
+// (DynamoDB has no join, so the leaderboard row must carry its own copy) —
+// cheaper than eagerly cascading a rename everywhere the player_id appears.
+// Skipped entirely when name is unknown, so a caller that can't resolve it
+// never blanks out a name written by a previous hand.
+func (s *Store) IncrementStats(ctx context.Context, playerID, name string, playedDelta, wonDelta int) error {
 	sk := statsSK
 	key := map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: playerID}, "sk": &types.AttributeValueMemberS{Value: sk}}
+	updateExpr := "ADD #played :played, #won :won SET #updated = :now, #wonpk = :all, #playedpk = :all, #ratepk = :all"
+	names := map[string]string{"#played": "hands_played", "#won": "hands_won", "#updated": "updated_at", "#wonpk": "gsi_hands_won_pk", "#playedpk": "gsi_hands_played_pk", "#ratepk": "gsi_win_rate_pk"}
+	values := map[string]types.AttributeValue{
+		":played": &types.AttributeValueMemberN{Value: strconv.Itoa(playedDelta)}, ":won": &types.AttributeValueMemberN{Value: strconv.Itoa(wonDelta)},
+		":now": &types.AttributeValueMemberS{Value: dynamo.NowStr()}, ":all": &types.AttributeValueMemberS{Value: "all"},
+	}
+	if name != "" {
+		updateExpr += ", #name = :name"
+		names["#name"] = "player_name"
+		values[":name"] = &types.AttributeValueMemberS{Value: name}
+	}
 	out, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
-		Key:                      key,
-		UpdateExpression:         new("ADD #played :played, #won :won SET #updated = :now, #wonpk = :all, #playedpk = :all, #ratepk = :all"),
-		ExpressionAttributeNames: map[string]string{"#played": "hands_played", "#won": "hands_won", "#updated": "updated_at", "#wonpk": "gsi_hands_won_pk", "#playedpk": "gsi_hands_played_pk", "#ratepk": "gsi_win_rate_pk"},
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":played": &types.AttributeValueMemberN{Value: strconv.Itoa(playedDelta)}, ":won": &types.AttributeValueMemberN{Value: strconv.Itoa(wonDelta)},
-			":now": &types.AttributeValueMemberS{Value: dynamo.NowStr()}, ":all": &types.AttributeValueMemberS{Value: "all"},
-		},
-		ReturnValues: types.ReturnValueAllNew,
+		Key:                       key,
+		UpdateExpression:          new(updateExpr),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+		ReturnValues:              types.ReturnValueAllNew,
 	})
 	if err != nil {
 		return fmt.Errorf("leaderboard: increment stats: %w", err)

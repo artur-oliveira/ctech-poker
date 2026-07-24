@@ -11,6 +11,7 @@ import (
 
 type Entry struct {
 	PlayerID          string  `dynamodbav:"pk" json:"player_id"`
+	PlayerName        string  `dynamodbav:"player_name,omitempty" json:"player_name,omitempty"`
 	HandsPlayed       int     `dynamodbav:"hands_played" json:"hands_played"`
 	HandsWon          int     `dynamodbav:"hands_won" json:"hands_won"`
 	AchievementPoints int     `dynamodbav:"achievement_points" json:"achievement_points"`
@@ -18,7 +19,7 @@ type Entry struct {
 }
 
 type statsStore interface {
-	IncrementStats(context.Context, string, int, int) error
+	IncrementStats(ctx context.Context, playerID, name string, playedDelta, wonDelta int) error
 	IncrementAchievementPoints(context.Context, string, int) error
 	Top(context.Context, string, int) ([]Entry, error)
 }
@@ -26,7 +27,11 @@ type Service struct{ store statsStore }
 
 func NewServiceWithStore(store statsStore) *Service { return &Service{store: store} }
 
-func (s *Service) RecordHand(ctx context.Context, outcome hand.HandOutcome) error {
+// RecordHand updates every participant's counters. names supplies the
+// already-known display name for each player_id (the table actor resolves it
+// once at join, from the canonical poker_player_profiles record) — no extra
+// lookup here, just carrying it along to the write that's happening anyway.
+func (s *Service) RecordHand(ctx context.Context, outcome hand.HandOutcome, names map[string]string) error {
 	winners := make(map[string]bool, len(outcome.Winners))
 	for _, id := range outcome.Winners {
 		winners[id] = true
@@ -41,7 +46,7 @@ func (s *Service) RecordHand(ctx context.Context, outcome hand.HandOutcome) erro
 		if winners[id] {
 			won = 1
 		}
-		if err := s.store.IncrementStats(ctx, id, 1, won); err != nil {
+		if err := s.store.IncrementStats(ctx, id, names[id], 1, won); err != nil {
 			return err
 		}
 	}

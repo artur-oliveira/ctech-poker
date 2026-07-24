@@ -2,6 +2,7 @@ import {apiClient} from './client';
 
 export interface Entry {
   player_id: string;
+  player_name?: string;
   hands_played: number;
   hands_won: number;
   win_rate: number

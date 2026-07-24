@@ -12,7 +12,7 @@ func TestActorNotifiesHandCompletionOnlyOncePerHandID(t *testing.T) {
 		LastOutcome: &hand.HandOutcome{Winners: []string{"p1"}, Participants: []string{"p1", "p2"}},
 	})
 	calls := 0
-	a := &Actor{cached: table, handID: "hand-1", onHandComplete: func(string, hand.HandOutcome) { calls++ }}
+	a := &Actor{cached: table, handID: "hand-1", onHandComplete: func(string, hand.HandOutcome, map[string]string) { calls++ }}
 	a.notifyHandComplete()
 	a.notifyHandComplete()
 	if calls != 1 {

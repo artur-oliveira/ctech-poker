@@ -33,7 +33,7 @@ type Manager struct {
 	leases          *tablelease.Service
 	store           *tablestore.Store
 	broadcast       func(tableID, viewerID string, snap hand.Snapshot)
-	onHandComplete  func(tableID, handID string, outcome hand.HandOutcome)
+	onHandComplete  func(tableID, handID string, outcome hand.HandOutcome, names map[string]string)
 	onSeatsChanged  func(tableID string, seatsTaken int)
 	onPlayerRemoved func(tableID, playerID, reason string, stack int64, holdID string)
 	roomLoader      func(tableID string) (*roomstore.Room, bool, error)
@@ -43,8 +43,8 @@ type Manager struct {
 	releases map[string]func()
 }
 
-func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast func(string, string, hand.Snapshot), roomLoader func(string) (*roomstore.Room, bool, error), completion ...func(string, string, hand.HandOutcome)) *Manager {
-	var onHandComplete func(string, string, hand.HandOutcome)
+func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast func(string, string, hand.Snapshot), roomLoader func(string) (*roomstore.Room, bool, error), completion ...func(string, string, hand.HandOutcome, map[string]string)) *Manager {
+	var onHandComplete func(string, string, hand.HandOutcome, map[string]string)
 	if len(completion) > 0 {
 		onHandComplete = completion[0]
 	}
@@ -127,9 +127,9 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 		actor.SetCachedForTest(seed())
 	}
 	actor.SetEnv(m.env)
-	actor.SetOnHandCompleteForActor(func(handID string, outcome hand.HandOutcome) {
+	actor.SetOnHandCompleteForActor(func(handID string, outcome hand.HandOutcome, names map[string]string) {
 		if m.onHandComplete != nil {
-			m.onHandComplete(tableID, handID, outcome)
+			m.onHandComplete(tableID, handID, outcome, names)
 		}
 	})
 	actor.SetOnSeatsChangedForActor(func(seatsTaken int) {

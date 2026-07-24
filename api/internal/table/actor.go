@@ -76,7 +76,7 @@ type Actor struct {
 	afkSweepInterval      time.Duration
 	done                  chan struct{}
 	equityEnabled         atomic.Bool
-	onHandComplete        func(string, hand.HandOutcome)
+	onHandComplete        func(string, hand.HandOutcome, map[string]string)
 	completedHandNotified string
 	onSeatsChanged        func(int)
 	// onPlayerRemoved fires only for a system-initiated removal (AFK sweep,
@@ -429,14 +429,19 @@ func (a *Actor) notifyHandComplete() {
 		a.completedHandNotified = a.handID
 		metrics.EmitTableMetric(a.env, "HandsCompleted", 1, map[string]string{"table_id": a.id})
 		if a.onHandComplete != nil {
-			a.onHandComplete(a.handID, *outcome)
+			a.onHandComplete(a.handID, *outcome, a.playerNames)
 		}
 	}
 }
 
 // SetOnHandCompleteForActor installs the post-commit gamification hook.
-// The actor invokes it at most once per local hand ID.
-func (a *Actor) SetOnHandCompleteForActor(fn func(string, hand.HandOutcome)) { a.onHandComplete = fn }
+// The actor invokes it at most once per local hand ID. The map param is the
+// actor's own playerNames cache (player_id -> display name), already
+// populated at join from the canonical profile — handed along so downstream
+// writers (e.g. the leaderboard) can denormalize a name without a fresh read.
+func (a *Actor) SetOnHandCompleteForActor(fn func(string, hand.HandOutcome, map[string]string)) {
+	a.onHandComplete = fn
+}
 
 // SetOnSeatsChangedForActor installs the post-commit occupancy write-through
 // hook, invoked with the new occupied-seat count after every committed join

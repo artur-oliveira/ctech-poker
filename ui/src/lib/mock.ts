@@ -176,9 +176,9 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     return ok({amount: 4850}, config);
   }
   if (method === 'GET' && path === '/v1.0/leaderboard') return ok([
-    {player_id: 'bia_sp', hands_played: 248, hands_won: 71, win_rate: .286},
-    {player_id: MOCK_PLAYER_ID, hands_played: 184, hands_won: 49, win_rate: .266},
-    {player_id: 'leo_rio', hands_played: 213, hands_won: 52, win_rate: .244},
+    {player_id: 'bia_sp', player_name: 'Bia', hands_played: 248, hands_won: 71, win_rate: .286},
+    {player_id: MOCK_PLAYER_ID, player_name: mockProfile.name, hands_played: 184, hands_won: 49, win_rate: .266},
+    {player_id: 'leo_rio', player_name: 'Leo', hands_played: 213, hands_won: 52, win_rate: .244},
   ], config);
   if (method === 'GET' && path === '/v1.0/sandbox-credits') return ok({remaining_time_seconds: creditCooldown()}, config);
   if (method === 'POST' && path === '/v1.0/sandbox-credits') {

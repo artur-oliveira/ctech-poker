@@ -10,9 +10,12 @@ import (
 
 type memStats struct{ rows map[string]*Entry }
 
-func (m *memStats) IncrementStats(_ context.Context, id string, p, w int) error {
+func (m *memStats) IncrementStats(_ context.Context, id, name string, p, w int) error {
 	if m.rows[id] == nil {
 		m.rows[id] = &Entry{PlayerID: id}
+	}
+	if name != "" {
+		m.rows[id].PlayerName = name
 	}
 	m.rows[id].HandsPlayed += p
 	m.rows[id].HandsWon += w
@@ -35,11 +38,18 @@ func (m *memStats) Top(_ context.Context, _ string, _ int) ([]Entry, error) {
 func TestRecordHandAndTop(t *testing.T) {
 	m := &memStats{rows: map[string]*Entry{}}
 	s := NewServiceWithStore(m)
-	if err := s.RecordHand(context.Background(), hand.HandOutcome{Winners: []string{"p1"}, Participants: []string{"p1", "p2"}}); err != nil {
+	names := map[string]string{"p1": "Player One"}
+	if err := s.RecordHand(context.Background(), hand.HandOutcome{Winners: []string{"p1"}, Participants: []string{"p1", "p2"}}, names); err != nil {
 		t.Fatal(err)
 	}
 	if m.rows["p1"].HandsWon != 1 || m.rows["p2"].HandsPlayed != 1 {
 		t.Fatalf("rows=%+v", m.rows)
+	}
+	if m.rows["p1"].PlayerName != "Player One" {
+		t.Fatalf("expected denormalized name carried through to the stats row, got %+v", m.rows["p1"])
+	}
+	if m.rows["p2"].PlayerName != "" {
+		t.Fatalf("expected p2's unknown name to stay blank rather than overwrite with empty, got %+v", m.rows["p2"])
 	}
 	top, err := s.Top(context.Background(), "win_rate", 10)
 	if err != nil || top[0].PlayerID != "p1" {

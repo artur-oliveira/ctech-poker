@@ -17,7 +17,7 @@ export default function Ranking() {
           <div className="ranking-list">{data.map((e, i) => <article key={e.player_id}
                                                                      className={e.player_id === viewer ? 'viewer' : undefined}
                                                                      style={{'--delay': `${Math.min(i, 10) * 40}ms`} as React.CSSProperties}>
-            <b>{String(i + 1).padStart(2, '0')}</b><span>{playerName(e.player_id, viewer)}<small>{e.hands_played} mãos</small></span><strong>{e.hands_won} vitórias<small>{(e.win_rate * 100).toFixed(1)}%
+            <b>{String(i + 1).padStart(2, '0')}</b><span>{playerName(e.player_id, viewer, e.player_name)}<small>{e.hands_played} mãos</small></span><strong>{e.hands_won} vitórias<small>{(e.win_rate * 100).toFixed(1)}%
             de aproveitamento</small></strong></article>)}</div>}
     </section>
   </main>;

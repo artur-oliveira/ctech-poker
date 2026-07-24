@@ -207,7 +207,7 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		data, _ := json.Marshal(map[string]any{"type": "state", "snapshot": snap})
 		reg.Broadcast(context.Background(), tableID+"#"+viewerID, data)
 	}
-	onHandComplete := func(tableID, handID string, outcome hand.HandOutcome) {
+	onHandComplete := func(tableID, handID string, outcome hand.HandOutcome, names map[string]string) {
 		ctx := context.Background()
 		unlocks, err := achv.RecordHand(ctx, tableID, outcome)
 		if err != nil {
@@ -220,7 +220,7 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		if err := leaderboardSvc.RecordUnlocks(ctx, unlocks); err != nil {
 			slog.Error("leaderboard achievement points failed", "table", tableID, "err", err)
 		}
-		if err := leaderboardSvc.RecordHand(ctx, outcome); err != nil {
+		if err := leaderboardSvc.RecordHand(ctx, outcome, names); err != nil {
 			slog.Error("leaderboard record hand failed", "table", tableID, "err", err)
 		}
 		if sessionStore != nil {

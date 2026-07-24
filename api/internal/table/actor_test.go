@@ -178,7 +178,7 @@ func TestOnHandCompleteReceivesNonEmptyHandID(t *testing.T) {
 	mustCreateTestTables(t, db, "table_test")
 	a, tableID := newTestActor(t, store)
 	var gotHandID string
-	a.SetOnHandCompleteForActor(func(handID string, outcome hand.HandOutcome) {
+	a.SetOnHandCompleteForActor(func(handID string, outcome hand.HandOutcome, names map[string]string) {
 		gotHandID = handID
 	})
 
