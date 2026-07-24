@@ -59,10 +59,10 @@ interface ApiStackProps extends cdk.StackProps {
 
 export class PokerApiStack extends cdk.Stack {
   public readonly asgName: string;
-
+  
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
-
+    
     const {
       environment,
       vpcId,
@@ -87,9 +87,9 @@ export class PokerApiStack extends cdk.Stack {
       playerHandsTableArn,
       dailyRewardTableArn,
     } = props;
-
+    
     const shared = SSM_SHARED(environment);
-
+    
     const instanceRole = new iam.Role(this, 'ApiInstanceRole', {
       roleName: instanceRoleName(environment),
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
@@ -102,7 +102,7 @@ export class PokerApiStack extends cdk.Stack {
       instanceProfileName,
       roles: [instanceRole.roleName],
     });
-
+    
     const tableArns = [
       tableStateArn, tableStateHistoryArn, actionLogArn, actionGuardsArn, roomsTableArn, playerProfilesTableArn,
       achievementProgressTableArn, leaderboardStatsTableArn, dailyRewardTableArn, playerSessionsTableArn,
@@ -110,8 +110,12 @@ export class PokerApiStack extends cdk.Stack {
     ];
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: [
-        'dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:UpdateItem',
-        'dynamodb:Query', 'dynamodb:TransactWriteItems', 'dynamodb:DescribeTable',
+        'dynamodb:GetItem',
+        'dynamodb:PutItem',
+        'dynamodb:UpdateItem',
+        'dynamodb:Query',
+        'dynamodb:DescribeTable',
+        'dynamodb:ConditionCheckItem',
       ],
       resources: [...tableArns, ...tableArns.map((arn) => `${arn}/index/*`)],
     }));
@@ -129,13 +133,13 @@ export class PokerApiStack extends cdk.Stack {
       actions: ['s3:PutObject'],
       resources: [`arn:${cdk.Aws.PARTITION}:s3:::${logsBucketName}/${S3_PREFIX}/*`],
     }));
-
+    
     // ── Shared infrastructure from ctech-cdk ──────────────────────────────────
     const vpc = ec2.Vpc.fromLookup(this, 'Vpc', {vpcId});
-
+    
     const albSgId = ssm.StringParameter.valueForStringParameter(this, shared.albSgId);
     const albSg = ec2.SecurityGroup.fromSecurityGroupId(this, 'AlbSg', albSgId);
-
+    
     const httpsListenerArn = ssm.StringParameter.valueForStringParameter(
       this, shared.httpsListenerArn,
     );
@@ -143,7 +147,7 @@ export class PokerApiStack extends cdk.Stack {
       this, 'HttpsListener',
       {listenerArn: httpsListenerArn, securityGroup: albSg},
     );
-
+    
     const isProd = environment === 'prod';
     this.asgName = asgName(environment);
     const logRetention: logs.RetentionDays = isProd ? logs.RetentionDays.ONE_MONTH : logs.RetentionDays.ONE_WEEK;
@@ -153,10 +157,10 @@ export class PokerApiStack extends cdk.Stack {
     // PrivateIpv4Ec2Service requires a name regardless (its HTTP2XX-5XX metric
     // filters attach here).
     const logGroupNginx = `/${SERVICE}/${environment}/nginx`;
-
+    
     // ── User Data ─────────────────────────────────────────────────────────────
     const userData = ec2.UserData.forLinux();
-
+    
     userData.addCommands(
       // ── Packages + directories ───────────────────────────────────────────────
       'dnf install -y amazon-cloudwatch-agent amazon-ssm-agent unzip jq',
@@ -164,11 +168,11 @@ export class PokerApiStack extends cdk.Stack {
       'mkdir -p /opt/app/releases /var/log/app',
       'chown -R webapp:webapp /opt/app /var/log/app',
     );
-
+    
     addSwapCommands(userData);
     addDualStackSsmAgentCommands(userData);
     addCloudWatchAgentDualStackOverride(userData);
-
+    
     userData.addCommands(
       // {instance_id} is resolved by the CW agent at runtime, not by bash.
       `cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWA'`,
@@ -185,7 +189,7 @@ export class PokerApiStack extends cdk.Stack {
       `}`,
       `CWA`,
       `/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s`,
-
+      
       // ── Static env file (loaded by systemd EnvironmentFile=) ─────────────────
       // CDK tokens are substituted at synthesis time; bash does not expand them.
       // Only non-secret values live here. Secrets (none yet) would come from SSM
@@ -202,7 +206,7 @@ export class PokerApiStack extends cdk.Stack {
       `TRUSTED_PROXIES=${vpc.vpcCidrBlock}`,
       `CORS_ALLOWED_ORIGINS=https://${appDomainName}`,
       `ENV`,
-
+      
       // ── start.sh: fetches runtime configuration and M2M credentials from SSM.
       // No DB-number suffix — see constants.ts SSM_SHARED doc comment: ctech-dfe and
       // ctech-account both pass VALKEY_URL straight through unmodified, and
@@ -224,7 +228,7 @@ export class PokerApiStack extends cdk.Stack {
       `exec /opt/app/current/app`,
       `START`,
       `chmod +x /opt/app/start.sh`,
-
+      
       // ── systemd app.service ──────────────────────────────────────────────────
       `cat > /etc/systemd/system/app.service << 'SVC'`,
       `[Unit]`,
@@ -251,7 +255,7 @@ export class PokerApiStack extends cdk.Stack {
       `SVC`,
       `systemctl daemon-reload`,
       `systemctl enable app`,
-
+      
       // ── deploy.sh: called by SSM RunCommand from GitHub Actions ──────────────
       // Expects a zip containing a pre-built `app` binary (linux/arm64).
       // __BUCKET__ is replaced by sed so bash $variables are not expanded at write
@@ -291,7 +295,7 @@ export class PokerApiStack extends cdk.Stack {
       `DEPLOY`,
       `sed -i 's|__BUCKET__|${deploymentsBucketName}|g' /opt/app/deploy.sh`,
       `chmod +x /opt/app/deploy.sh`,
-
+      
       // ── upload-logs.sh: bundles rotated logs and ships to S3 ─────────────────
       // IMDSv2 token required (requireImdsv2 is enforced on this instance).
       `cat > /opt/app/upload-logs.sh << 'UPLOAD'`,
@@ -312,7 +316,7 @@ export class PokerApiStack extends cdk.Stack {
       `UPLOAD`,
       `sed -i 's|__LOG_BUCKET__|${logsBucketName}|g' /opt/app/upload-logs.sh`,
       `chmod +x /opt/app/upload-logs.sh`,
-
+      
       // ── logrotate: daily, gzip, copytruncate, ship to S3 ─────────────────────
       `cat > /etc/logrotate.d/${SERVICE} << 'LOGROTATE'`,
       `/var/log/app/app.log {`,
@@ -330,11 +334,11 @@ export class PokerApiStack extends cdk.Stack {
       `    endscript`,
       `}`,
       `LOGROTATE`,
-
+      
       // ── Bootstrap: deploy current.zip if it already exists in S3 ─────────────
       `aws s3api head-object --bucket "${deploymentsBucketName}" --key "${API_CURRENT_ARTIFACT_KEY}" 2>/dev/null && /opt/app/deploy.sh ${API_CURRENT_ARTIFACT_KEY} || echo "No bootstrap artifact, waiting for first deploy"`,
     );
-
+    
     // ── Shared no-NAT-Gateway EC2/ASG pattern (@aoctech/cdk) ───────────────────
     // Priority must be unique across services: 15=dfe, 25=account, 35=wallet, 45=poker.
     const service = new PrivateIpv4Ec2Service(this, 'ApiService', {
@@ -360,7 +364,7 @@ export class PokerApiStack extends cdk.Stack {
       listenerRulePriority: ALB_LISTENER_PRIORITY,
     });
     service.autoScalingGroup.node.addDependency(profile);
-
+    
     const alarmMetricFilter = service.appLogGroup.addMetricFilter('AlarmLogFilter', {
       filterPattern: logs.FilterPattern.literal('"ALARM:"'),
       metricNamespace: `CtechPoker/${environment}`,
@@ -375,7 +379,7 @@ export class PokerApiStack extends cdk.Stack {
       evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
-
+    
     const leaseFailoverMetric = new cloudwatch.Metric({
       namespace: `CtechPoker/${environment}`,
       metricName: 'LeaseFailovers',
@@ -390,7 +394,7 @@ export class PokerApiStack extends cdk.Stack {
       evaluationPeriods: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
-
+    
     // DynamoDB access for internal/tablestore.Store — TransactWriteItems is
     // required because every commit (CommitAction) writes the state item,
     // the audit-log entry, and (for player actions) the idempotency guard in
@@ -415,7 +419,7 @@ export class PokerApiStack extends cdk.Stack {
       value: `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${pokerClientSecretParam}`,
       exportName: `${id}-poker-client-secret-parameter-arn`,
     });
-
+    
     // ── Outputs ───────────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'AsgName', {value: service.asgName, exportName: `${id}-asg-name`});
     new cdk.CfnOutput(this, 'AppLogGroupName', {
