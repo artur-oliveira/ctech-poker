@@ -8,6 +8,7 @@ import (
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/api-commons/jwtverify"
 	"gopkg.aoctech.app/api-commons/ws"
+	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/dailyreward"
@@ -25,7 +26,24 @@ import (
 // tablemanager.Manager.GetOrCreateActor) — passed straight through to the WS
 // gateway. Any instance may accept any table's connection directly under
 // ARCHITECTURE.md §2's revised model — there is no proxy route.
-func Register(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier *jwtverify.Verifier, manager *tablemanager.Manager, reg ws.Registry, seed func(string) func() *hand.Table, rooms *roomstore.Store, buyinSvc *buyin.Service, players *player.Service, leaderboardSvc *leaderboard.Service, dailyRewardSvc *dailyreward.Service, cacheBackend cache.Backend, tableStore *tablestore.Store, sessionStore *sessionlog.Store) {
+func Register(
+	app *fiber.App,
+	cfg *config.Config,
+	db *dynamodb.Client,
+	verifier *jwtverify.Verifier,
+	manager *tablemanager.Manager,
+	reg ws.Registry,
+	seed func(string) func() *hand.Table,
+	cacheBackend cache.Backend,
+	rooms *roomstore.Store,
+	buyinSvc *buyin.Service,
+	players *player.Service,
+	leaderboardSvc *leaderboard.Service,
+	dailyRewardSvc *dailyreward.Service,
+	tableStore *tablestore.Store,
+	sessionStore *sessionlog.Store,
+	achievementStore *achievements.Store,
+) {
 	router := app.Group("/v1.0")
 
 	// Health (unauthenticated): /v1.0/health is a dependency-free liveness probe;
@@ -35,12 +53,9 @@ func Register(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier 
 
 	RegisterTableWS(router, verifier, manager, reg, cfg.CorsAllowedOrigins, seed, rooms, cfg, players)
 	auth := authMiddleware(verifier)
-	if tableStore != nil {
-		RegisterHandHistory(router, auth, &tablestoreAdapter{store: tableStore})
-	}
-	if sessionStore != nil {
-		RegisterPlayerHistory(router, auth, sessionStore)
-	}
+	RegisterHandHistory(router, auth, &tablestoreAdapter{store: tableStore})
+	RegisterPlayerHistory(router, auth, sessionStore)
+	RegisterAchievements(router, auth, achievementStore)
 
 	// Fixed-window rate limits on the mutating endpoints (M6/S2). Keyed per
 	// caller IP; Redis (mandatory in prod, T2) makes the counter fleet-wide.

@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import {BookOpen, Club, Gift, LoaderCircle, Trophy} from 'lucide-react';
+import {Award, BookOpen, Club, Gift, LoaderCircle, Trophy} from 'lucide-react';
 import {StakesGrid} from '@/components/lobby/StakesGrid';
 import {ActiveTableBanner} from '@/components/lobby/ActiveTableBanner';
 import {CreateRoomDialog} from '@/components/lobby/CreateRoomDialog';
@@ -74,6 +74,7 @@ export default function Lobby() {
         <div className="header-right">
           <Link href="/guide"><BookOpen/> <span className="header-right-label">Guia</span></Link>
           <Link href="/leaderboard"><Trophy/> <span className="header-right-label">Ranking</span></Link>
+          <Link href="/achievements"><Award/> <span className="header-right-label">Conquistas</span></Link>
           <ProfileMenu/>
         </div>
       </nav>

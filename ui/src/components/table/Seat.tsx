@@ -22,10 +22,20 @@ const STATE_LABELS: Record<string, string> = {
   pending_entry: 'Aguardando'
 };
 
+// Poker jargon stays in its short form on the badge itself (matches D/SB/BB
+// conventions used table-side worldwide); the full word only surfaces via
+// title/aria-label for hover and assistive tech.
+const ROLE_LABELS: Record<string, string> = {
+  D: 'Dealer',
+  SB: 'Small blind',
+  BB: 'Big blind',
+  'D/SB': 'Dealer e small blind'
+};
+
 // Seats 3/4/5 sit on the top rail; their winner pill must drop below instead of above.
 const TOP_SEAT_INDICES = [3, 4, 5];
 
-export function Seat({seat, isViewer, isTurn, index, payout = 0, isWinner = false, deadlineMs, nowMs, bigBlind, stackBefore}: {
+export function Seat({seat, isViewer, isTurn, index, payout = 0, isWinner = false, deadlineMs, nowMs, bigBlind, stackBefore, isDealer = false, isSmallBlind = false, isBigBlind = false}: {
   seat: SeatView;
   isViewer: boolean;
   isTurn: boolean;
@@ -38,7 +48,10 @@ export function Seat({seat, isViewer, isTurn, index, payout = 0, isWinner = fals
   // Set only on the viewer's own seat, only while a loss's payout is still
   // on screen — lets the stack count down the same way a payout counts it up
   // below, instead of just snapping to the smaller number.
-  stackBefore?: number
+  stackBefore?: number;
+  isDealer?: boolean;
+  isSmallBlind?: boolean;
+  isBigBlind?: boolean
 }) {
   const cards = seat.hole_cards;
   const chance = seat.equity == null ? null : Math.round(seat.equity * 100);
@@ -46,11 +59,16 @@ export function Seat({seat, isViewer, isTurn, index, payout = 0, isWinner = fals
   const remainingMs = isTurn && deadlineMs && nowMs ? Math.max(0, deadlineMs - nowMs) : null;
   const stackFrom = payout > 0 ? seat.stack - payout : stackBefore ?? seat.stack;
   const displayStack = useCountUp(stackFrom, seat.stack);
+  // Heads-up has the dealer double as the small blind — one combined badge
+  // rather than two overlapping pills.
+  const role = isDealer && isSmallBlind ? 'D/SB' : isDealer ? 'D' : isSmallBlind ? 'SB' : isBigBlind ? 'BB' : null;
   return <div data-state={seat.state} aria-current={isTurn ? 'true' : undefined}
               className={`game-seat seat-${index} ${seat.state} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${isWinner ? 'is-winner' : ''} ${pendingName ? 'is-pending-name' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
     {remainingMs != null &&
         <span key={deadlineMs} className="seat-turn-ring" style={{animationDuration: `${remainingMs}ms`}}
               aria-hidden="true"/>}
+    {role && <span className={`seat-role ${isDealer ? 'is-dealer' : ''}`} title={ROLE_LABELS[role]}
+                    aria-label={ROLE_LABELS[role]}>{role}</span>}
     <div className="seat-cards">{[0, 1].map(i => {
       const card = cards?.[i];
       return <PlayingCard key={`${i}-${card || 'back'}`} card={card} index={i} size="hole"

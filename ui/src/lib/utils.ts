@@ -20,6 +20,37 @@ export const HAND_CATEGORY_LABELS: Record<string, string> = {
   royal_flush: 'Royal flush'
 };
 
+export const ACHIEVEMENT_LABELS: Record<string, string> = {
+  wins: "Vitórias",
+  hands_played: "Mãos Jogadas",
+  comeback: "De Volta ao Jogo",
+  bluff: "Mestre do Blefe",
+  survivor: "Sobrevivente",
+
+  looser: "Não Foi Dessa Vez",
+  almost_winner: "Por Um Detalhe",
+  tied: "Dividindo o Pote",
+
+  bad_beat: "Que Azar!",
+  cooler: "Sem Escapatória",
+  cracked_aces: "Maldito Ás",
+  fallen_king: "KKKKKKKKK",
+
+  giant_slayer: "Virou o Jogo",
+  showdown_warrior: "Paga pra Ver",
+
+  win_category_high_card: "Carta Alta",
+  win_category_pair: "Um Par",
+  win_category_two_pair: "Dois Pares",
+  win_category_three_of_a_kind: "Trinca",
+  win_category_straight: "Sequência",
+  win_category_flush: "Flush",
+  win_category_full_house: "Full House",
+  win_category_four_of_a_kind: "Quadra",
+  win_category_straight_flush: "Straight Flush",
+  win_category_royal_flush: "Royal Flush",
+};
+
 // The single answer to "who is looking at this screen" — the profile's
 // user_id (matches seat.player_id / current_player_id server-side) in prod,
 // the fixed mock player in mock mode. NOT decodeIdToken: that only ever

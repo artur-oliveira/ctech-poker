@@ -182,7 +182,7 @@ function TableContent() {
     // when the winning combination uses the board too.
     const winnerSeat = kind === 'win' ? seat : snap.seats.find(item => snap.winners?.includes(item.player_id));
     const winnerHole = winnerSeat?.hole_cards?.length === 2 &&
-      winnerSeat.hole_cards.every(card => card.toLowerCase() !== 'back') ? winnerSeat.hole_cards : undefined;
+    winnerSeat.hole_cards.every(card => card.toLowerCase() !== 'back') ? winnerSeat.hole_cards : undefined;
     const winningCards = winnerHole && snap.board.length === 5 ?
       bestFiveCardHand([...winnerHole, ...snap.board]) : winnerHole;
     setHandOutcome({
@@ -317,9 +317,13 @@ function TableContent() {
         connected={rt.status === 'connected'}
         pending={rt.pendingAction}
         error={rt.actionError} onDismissErrorAction={rt.clearActionError}/>
-      <Chat items={rt.chat} onSend={rt.sendChat} connected={rt.status === 'connected'} viewerId={viewer}
-            seats={s.seats}/><AchievementToast
-      unlock={rt.unlock}/>
+      <Chat items={rt.chat}
+            onSend={rt.sendChat}
+            connected={rt.status === 'connected'}
+            viewerId={viewer}
+            seats={s.seats}/>
+
+      <AchievementToast unlock={rt.unlock}/>
       {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
     </main>
   );

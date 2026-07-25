@@ -302,6 +302,9 @@ func TestViewForExposesBlindSeatsHeadsUp(t *testing.T) {
 	if view.BigBlindPlayerID != "p2" {
 		t.Fatalf("heads-up: non-dealer (p2) must be big blind, got %q", view.BigBlindPlayerID)
 	}
+	if view.DealerPlayerID != "p1" {
+		t.Fatalf("heads-up: dealer must be p1, got %q", view.DealerPlayerID)
+	}
 }
 
 func TestViewForExposesBlindSeatsThreeHanded(t *testing.T) {
@@ -322,6 +325,9 @@ func TestViewForExposesBlindSeatsThreeHanded(t *testing.T) {
 	if view.BigBlindPlayerID != "p3" {
 		t.Fatalf("3-handed: seat two left of dealer (p3) must be big blind, got %q", view.BigBlindPlayerID)
 	}
+	if view.DealerPlayerID != "p1" {
+		t.Fatalf("3-handed: dealer must be p1, got %q", view.DealerPlayerID)
+	}
 }
 
 func TestViewForOmitsBlindSeatsBeforeFirstHand(t *testing.T) {
@@ -330,5 +336,8 @@ func TestViewForOmitsBlindSeatsBeforeFirstHand(t *testing.T) {
 	view := table.ViewFor("p1")
 	if view.SmallBlindPlayerID != "" || view.BigBlindPlayerID != "" {
 		t.Fatalf("no hand has started, blind seats must be empty, got sb=%q bb=%q", view.SmallBlindPlayerID, view.BigBlindPlayerID)
+	}
+	if view.DealerPlayerID != "" {
+		t.Fatalf("no hand has started, dealer must be empty, got %q", view.DealerPlayerID)
 	}
 }

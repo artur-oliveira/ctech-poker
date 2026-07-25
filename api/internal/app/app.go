@@ -233,8 +233,28 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 						break
 					}
 				}
+				var holeCards []string
+				if own, ok := outcome.PlayerHands[id]; ok {
+					holeCards = own.HoleCards[:]
+				}
+				var opponents []sessionlog.OpponentSummary
+				for _, opp := range outcome.Participants {
+					if opp == id {
+						continue
+					}
+					info, ok := outcome.PlayerHands[opp]
+					if !ok {
+						continue
+					}
+					summary := sessionlog.OpponentSummary{PlayerID: opp, Name: names[opp]}
+					if info.Revealed {
+						summary.HoleCards = info.HoleCards[:]
+					}
+					opponents = append(opponents, summary)
+				}
 				if err := sessionStore.RecordHand(ctx, sessionlog.HandItem{
 					PK: id, TableID: tableID, HandID: handID, Outcome: result, NetChange: net, EndedAt: time.Now().UnixMilli(),
+					Board: outcome.Board, HoleCards: holeCards, Opponents: opponents,
 				}); err != nil {
 					slog.Error("sessionlog: record hand failed", "table", tableID, "hand", handID, "player", id, "err", err)
 				}
@@ -303,8 +323,24 @@ func roomBackedSeed(rooms *roomstore.Store) func(string) func() *hand.Table {
 	}
 }
 
-func registerRoutes(app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier *jwtverify.Verifier, manager *tablemanager.Manager, reg ws.Registry, cacheBackend cache.Backend, rooms *roomstore.Store, buyinSvc *buyin.Service, players *player.Service, leaderboardSvc *leaderboard.Service, dailyRewardSvc *dailyreward.Service, tableStore *tablestore.Store, sessionStore *sessionlog.Store) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, cacheBackend, tableStore, sessionStore)
+func registerRoutes(
+	app *fiber.App,
+	cfg *config.Config,
+	db *dynamodb.Client,
+	verifier *jwtverify.Verifier,
+	manager *tablemanager.Manager,
+	reg ws.Registry,
+	cacheBackend cache.Backend,
+	rooms *roomstore.Store,
+	buyinSvc *buyin.Service,
+	players *player.Service,
+	leaderboardSvc *leaderboard.Service,
+	dailyRewardSvc *dailyreward.Service,
+	tableStore *tablestore.Store,
+	sessionStore *sessionlog.Store,
+	achievementStore *achievements.Store,
+) {
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore)
 }
 
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {

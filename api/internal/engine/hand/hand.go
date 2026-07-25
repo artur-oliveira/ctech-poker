@@ -125,6 +125,39 @@ type HandOutcome struct {
 	Participants       []string
 	Payouts            map[string]int64
 	Contributions      map[string]int64
+	// Board and PlayerHands are the just-completed hand's community cards and
+	// every participant's hole cards, captured here because t.board/HoleCards
+	// get overwritten in place by the next StartHand — this is the only
+	// durable copy a caller (sessionlog's per-player match history) ever
+	// gets. Card codes use Snapshot's 2-char notation ("Ah", "Tc", ...).
+	Board       []string
+	PlayerHands map[string]PlayerHandInfo
+	// ShowdownResults holds each non-folded participant's OWN best-hand
+	// category and result. Unlike PlayerHands/Revealed, this is never
+	// exposed to opponents — it only drives per-player achievements
+	// (looser/almost_winner/tied/bad_beat/cooler) in achievements.Service,
+	// which needs a player's own category regardless of whether that hand
+	// was ever shown to the table. Only populated when !WonWithoutShowdown
+	// (a real showdown happened, so there's something to compare).
+	ShowdownResults map[string]ShowdownResult
+}
+
+// PlayerHandInfo is one participant's hole cards from HandOutcome. Revealed
+// mirrors ViewFor's exact visibility rule (a genuine showdown reveal, or a
+// voluntary show — never a bare folded hand) so a consumer can show these
+// cards to other players without re-deriving that logic; HoleCards is always
+// populated regardless of Revealed so the player can see their own cards.
+type PlayerHandInfo struct {
+	HoleCards [2]string
+	Revealed  bool
+}
+
+// ShowdownResult is one participant's own showdown outcome, see
+// HandOutcome.ShowdownResults.
+type ShowdownResult struct {
+	Category string
+	Won      bool
+	Tied     bool // Won and outcome.Winners had more than one ID
 }
 
 var categoryNames = map[handeval.Category]string{
@@ -1056,10 +1089,39 @@ func (t *Table) runShowdown() {
 	}
 	if !wonWithoutShowdown {
 		outcome.WinningCategory = categoryNames[winningScore.Category()]
+		winnerSet := make(map[string]bool, len(outcome.Winners))
+		for _, w := range outcome.Winners {
+			winnerSet[w] = true
+		}
+		tied := len(outcome.Winners) > 1
+		outcome.ShowdownResults = make(map[string]ShowdownResult, len(t.handOrder))
+		for _, p := range t.handOrder {
+			if p.State == Folded {
+				continue
+			}
+			var full [7]deck.Card
+			full[0], full[1] = p.HoleCards[0], p.HoleCards[1]
+			copy(full[2:], t.board)
+			won := winnerSet[p.ID]
+			outcome.ShowdownResults[p.ID] = ShowdownResult{
+				Category: categoryNames[handeval.Best7(full).Category()],
+				Won:      won,
+				Tied:     won && tied,
+			}
+		}
 	}
 	for _, id := range outcome.Winners {
 		if t.wasEverAllIn[id] {
 			outcome.ComebackWinners = append(outcome.ComebackWinners, id)
+		}
+	}
+	outcome.Board = boardCodes(t.board)
+	outcome.PlayerHands = make(map[string]PlayerHandInfo, len(t.handOrder))
+	for _, p := range t.handOrder {
+		revealed := (!wonWithoutShowdown && p.State != Folded) || p.VoluntarilyShown
+		outcome.PlayerHands[p.ID] = PlayerHandInfo{
+			HoleCards: [2]string{cardCode(p.HoleCards[0]), cardCode(p.HoleCards[1])},
+			Revealed:  revealed,
 		}
 	}
 	t.lastOutcome = &outcome

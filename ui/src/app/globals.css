@@ -1444,6 +1444,15 @@ h1 em {
     color: var(--gold)
 }
 
+/* Pill wraps to two lines and squeezes the nav before the 600px row-wrap
+   kicks in (brand + 3 labeled links + pill + avatar don't fit between
+   ~601-680px) — hide it here; balance is one tap away via avatar. */
+@media (max-width: 700px) {
+    .balance-pill {
+        display: none
+    }
+}
+
 .profile-name-display {
     all: unset;
     box-sizing: border-box;
@@ -1833,19 +1842,17 @@ h1 em {
 }
 
 .next-hand-ring {
-    display: inline-block;
-    width: 18px;
-    height: 18px;
-    margin-left: .5em;
+    position: absolute;
+    inset: 0;
     padding: 2px;
-    border-radius: 50%;
-    vertical-align: middle;
+    border-radius: inherit;
     background: conic-gradient(var(--gold) var(--seat-ring-progress), transparent 0);
     -webkit-mask: linear-gradient(var(--mask-opaque) 0 0) content-box, linear-gradient(var(--mask-opaque) 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
     animation: seat-turn-deplete linear forwards;
-    will-change: --seat-ring-progress
+    will-change: --seat-ring-progress;
+    pointer-events: none
 }
 
 .game-seat.is-winner {
@@ -2050,6 +2057,33 @@ h1 em {
         opacity: 0;
         transform: translateY(-8px) scale(.6)
     }
+}
+
+/* Role badge sits on the seat card's corner rather than floating toward the
+   pot like the bet/win pills — it identifies the seat itself, not something
+   that happened this street, so it stays put regardless of seat position. */
+.seat-role {
+    position: absolute;
+    z-index: 4;
+    top: -8px;
+    left: -8px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: var(--gold-deep);
+    color: var(--gold-ink);
+    font: 800 10px var(--font-mono);
+    line-height: 1;
+    white-space: nowrap;
+    box-shadow: 0 1px 0 var(--gold-ink), 0 2px 4px var(--black-06)
+}
+
+/* Dealer reads as the classic light "buck" so it's distinguishable from the
+   blind pills at a glance, not just by its D/SB text. */
+.seat-role.is-dealer {
+    background: var(--paper);
+    color: var(--ink);
+    border: 2px solid var(--gold);
+    padding: 1px 5px
 }
 
 .seat-win {
@@ -3342,6 +3376,251 @@ h1 em {
     height: auto
 }
 
+.achievements {
+    padding-block: 35px 90px
+}
+
+.achievements > a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--neutral-rose-3);
+    text-decoration: none;
+    font-size: var(--font-size-body)
+}
+
+.achievements > a svg {
+    width: 16px
+}
+
+.achievements header {
+    text-align: center;
+    max-width: 620px;
+    margin: 40px auto 48px
+}
+
+.achievements header small {
+    display: block;
+    color: var(--gold);
+    font: 600 var(--font-size-mono) var(--font-mono);
+    letter-spacing: .12em;
+    margin-bottom: 10px
+}
+
+.achievements header > svg {
+    width: 32px;
+    height: 32px;
+    color: var(--gold);
+    margin-bottom: 6px
+}
+
+.achievements header p {
+    color: var(--muted);
+    line-height: 1.65
+}
+
+.achievements-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px
+}
+
+.achievement-card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 20px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-panel);
+    background: var(--surface-control);
+    transition: border-color 180ms var(--ease-out-quart)
+}
+
+.achievement-card:has(.achievement-star:hover, .achievement-star:focus-visible) {
+    border-color: var(--gold)
+}
+
+.achievement-card-art {
+    display: flex;
+    height: 48px
+}
+
+.achievement-card-art .hole-card {
+    width: 34px;
+    height: 48px;
+    margin-right: -14px
+}
+
+.achievement-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px
+}
+
+.achievement-card-body h3 {
+    margin: 0;
+    font-size: var(--font-size-subtitle)
+}
+
+.achievement-card-body > p {
+    margin: 0 0 6px;
+    color: var(--text-muted-soft);
+    line-height: 1.55;
+    font-size: var(--font-size-body)
+}
+
+.achievement-stars {
+    position: relative;
+    display: flex;
+    gap: 2px;
+    /* Reserved clearance for .achievement-star-tooltip's popup, so it never
+       overlaps the description text above — fixed, not conditional on
+       hover, to avoid the row shifting when the tooltip appears. */
+    margin-top: 24px
+}
+
+.achievement-star {
+    display: inline-flex;
+    padding: 3px;
+    border: none;
+    background: none;
+    color: var(--neutral-rose-4);
+    cursor: default;
+    border-radius: var(--rounded-xs)
+}
+
+.achievement-star svg {
+    width: 20px;
+    height: 20px
+}
+
+.achievement-star.is-filled {
+    color: var(--gold)
+}
+
+.achievement-star:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px
+}
+
+.achievement-star-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    padding: 4px 8px;
+    border-radius: var(--rounded-xs);
+    background: var(--ink);
+    color: var(--paper);
+    font: 600 var(--font-size-compact) var(--font-mono);
+    white-space: nowrap;
+    pointer-events: none;
+    animation: rise 140ms var(--ease-out-quart) both
+}
+
+.achievement-count {
+    margin: 4px 0 0;
+    color: var(--text-muted-soft);
+    font: 600 var(--font-size-compact) var(--font-mono)
+}
+
+.achievement-count-locked {
+    color: var(--neutral-rose-4);
+    letter-spacing: .02em
+}
+
+.achievements-teaser {
+    padding-block: 90px;
+    display: grid;
+    grid-template-columns: .9fr 1.3fr;
+    gap: 56px;
+    align-items: center
+}
+
+.achievements-teaser-copy h2 {
+    font-size: clamp(30px, 3.4vw, 44px);
+    letter-spacing: -.04em;
+    margin: 0 0 14px
+}
+
+.achievements-teaser-copy p {
+    color: var(--muted);
+    line-height: 1.65;
+    max-width: 42ch
+}
+
+.achievements-teaser-copy > a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 22px;
+    color: var(--brand-bright-4);
+    text-decoration: none;
+    font: 600 var(--font-size-body) inherit
+}
+
+.achievements-teaser-copy > a svg {
+    width: 16px
+}
+
+.achievements-teaser-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px
+}
+
+.achievements-teaser-grid article {
+    padding: 18px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-panel);
+    background: var(--surface-control);
+    animation: rise .7s both;
+    animation-delay: var(--delay)
+}
+
+.achievements-teaser-art {
+    display: flex;
+    height: 42px;
+    margin-bottom: 12px
+}
+
+.achievements-teaser-art .hole-card {
+    width: 30px;
+    height: 42px;
+    margin-right: -13px
+}
+
+.achievements-teaser-grid b {
+    display: block;
+    margin-bottom: 4px
+}
+
+.achievements-teaser-grid small {
+    display: block;
+    color: var(--muted);
+    line-height: 1.5;
+    font-size: var(--font-size-body)
+}
+
+/* Placed after the base rule (not in the earlier shared max-width:900px
+   block) so it actually wins the cascade — .achievements-teaser's own
+   unconditional grid-template-columns declaration sits below that block in
+   source order and would otherwise override an equal-specificity match
+   living above it. */
+@media (max-width: 900px) {
+    .achievements-teaser {
+        grid-template-columns: 1fr;
+        text-align: center
+    }
+
+    .achievements-teaser-copy p {
+        margin-inline: auto
+    }
+
+    .achievements-teaser-copy > a {
+        justify-content: center
+    }
+}
+
 /* ===== Vertical stage — portrait handhelds =====
    TableStage picks this composition via matchMedia (its own DOM tree), so
    everything here is scoped by class, not viewport width: nothing below
@@ -3417,6 +3696,18 @@ h1 em {
 .stage-v-ring .game-seat:after {
     border-radius: 50%;
     inset: -3px
+}
+
+/* Shrunk to fit the 38-52px avatar chip; still readable at arm's length. */
+.stage-v-ring .seat-role {
+    top: -3px;
+    left: -3px;
+    padding: 1px 4px;
+    font-size: 8px
+}
+
+.stage-v-ring .seat-role.is-dealer {
+    padding: 0 3px
 }
 
 .stage-v-ring .seat-avatar {

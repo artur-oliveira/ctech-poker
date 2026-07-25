@@ -4,6 +4,13 @@ import Link from 'next/link';
 import {ArrowRight, Club, ShieldCheck, Trophy, Users, Zap} from 'lucide-react';
 import {startOAuthFlow} from '@/lib/auth/oauth';
 import {Button} from '@/components/ui/button';
+import {PlayingCard} from '@/components/table/PlayingCard';
+import {achievementDescription, achievementExample, achievementLabel} from '@/lib/achievements';
+import React from "react";
+
+// A curated, static preview — not fetched from the catalog. The landing page
+// is public and shouldn't take an API dependency just to tease four cards.
+const LANDING_ACHIEVEMENTS = ['win_category_royal_flush', 'giant_slayer', 'bluff', 'wins'];
 
 const features = [{
   icon: Zap,
@@ -20,14 +27,18 @@ const features = [{
 }, {
   icon: ShieldCheck,
   title: 'Jogo auditável',
-  body: 'Servidor autoritativo e baralho criptográfico. Cada mão é aleatória e verificável.'
+  body: 'Servidor autoritativo e embaralhamento de verdade. Cada mão é aleatória e verificável.'
 }];
 export default function Home() {
   return <main className="landing">
     <nav className="nav shell"><Link href="/" className="brand"><span
       className="brand-mark"><Club/></span><span>CTech <b>Poker</b></span></Link>
-      <div className="nav-links"><Link href="#experience">Experiência</Link><Link href="/poker-rules">Regras</Link><Link
-        href="/leaderboard">Ranking</Link>
+      <div className="nav-links">
+        <Link href="#experience">Experiência</Link>
+        <Link href="#achievements">Conquistas</Link>
+        <Link href="/poker-rules">Regras</Link>
+        <Link href="#guide">Guia</Link>
+        <Link href="/leaderboard">Ranking</Link>
         <Button variant="ghost" onClick={() => startOAuthFlow()}>Entrar</Button>
       </div>
     </nav>
@@ -42,23 +53,53 @@ export default function Home() {
       </div>
       <HeroTable/></section>
     <section id="experience" className="experience shell">
-      <header><h2>Uma mesa completa</h2><p>Interações naturais, informação no momento certo e movimentos suaves que
-        ajudam você a acompanhar cada jogada.</p></header>
-      <div className="feature-grid">{features.map(({icon: Icon, title, body}, i) => <article key={title}
-                                                                                             style={{'--delay': `${i * 90}ms`} as React.CSSProperties}>
-        <div><Icon/></div>
-        <h3>{title}</h3><p>{body}</p></article>)}</div>
+      <header>
+        <h2>Uma mesa completa</h2>
+        <p>Interações naturais, informação no momento certo e movimentos suaves que
+          ajudam você a acompanhar cada jogada.</p>
+      </header>
+      <div className="feature-grid">
+        {features.map(({icon: Icon, title, body}, i) => <article key={title}
+                                                                 style={{'--delay': `${i * 90}ms`} as React.CSSProperties}>
+          <div><Icon/></div>
+          <h3>{title}</h3><p>{body}</p></article>)}
+      </div>
     </section>
-    <section className="showcase shell">
+    <section id="achievements" className="achievements-teaser shell">
+      <div className="achievements-teaser-copy">
+        <h2>Suba de nível a cada mão.</h2>
+        <p>Blefes que funcionam, all-ins que viram o jogo, mãos raras na mesa — cada conquista marca um jeito diferente
+          de jogar bem, do sandbox ao dinheiro real.</p>
+        <Link href="/achievements">Ver todas as conquistas <ArrowRight/></Link>
+      </div>
+      <div className="achievements-teaser-grid">
+        {LANDING_ACHIEVEMENTS.map((key, i) =>
+          <article key={key}
+                   style={{'--delay': `${i * 90}ms`} as React.CSSProperties}>
+            <div className="achievements-teaser-art" aria-hidden="true">
+              {achievementExample(key).map((card, ci) => <PlayingCard key={`${card}-${ci}`} card={card} index={ci}
+                                                                      size="hole"/>)}
+            </div>
+            <b>{achievementLabel(key)}</b>
+            <small>{achievementDescription(key)}</small>
+          </article>)}
+      </div>
+    </section>
+    <section id="showcase" className="showcase shell">
       <div className="showcase-copy">
-        <h2>A mesa de verdade, sem instalar nada.</h2>
+        <h2>O poker de verdade, sem instalar nada.</h2>
         <p>Direto do navegador: cartas, fichas, cronômetro de ação e chat, exatamente como você vai jogar. Sem
           apps, sem downloads, sem cliente pesado para atualizar.</p>
         <Link href="/guide">Ver o guia completo <ArrowRight/></Link>
       </div>
       <div className="showcase-frame">
         <div className="showcase-inner">
-          <div className="browser-chrome"><span/><span/><span/><small>ctechpoker.app/mesa</small></div>
+          <div className="browser-chrome">
+            <span/>
+            <span/>
+            <span/>
+            <small>poker.aoctech.app/table</small>
+          </div>
           <Image src="/guide/table-flop.png"
                  alt="Mesa real do CTech Poker em andamento, com cartas comunitárias e barra de ações"
                  width={1280} height={800}/>
@@ -70,8 +111,13 @@ export default function Home() {
       </div>
     </section>
     <section className="cta shell">
-      <div><h2>Comece uma mesa em minutos.</h2><p>Entre com sua conta CTech e jogue de graça no sandbox.</p></div>
-      <Button variant="light" size="lg" onClick={() => startOAuthFlow('/lobby')}>Jogar agora <ArrowRight/></Button>
+      <div>
+        <h2>Comece uma mesa em minutos.</h2>
+        <p>Entre com sua conta CTech e jogue de graça no sandbox.</p>
+      </div>
+      <Button variant="light" size="lg" onClick={() => startOAuthFlow('/lobby')}>
+        Jogar agora <ArrowRight/>
+      </Button>
     </section>
     <footer className="footer shell">
       <div className="brand"><span className="brand-mark"><Club/></span><span>CTech <b>Poker</b></span></div>

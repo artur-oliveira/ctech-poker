@@ -664,6 +664,80 @@ func TestRevealHoleCardsRejectsPlayerNotDealtIntoTheHand(t *testing.T) {
 	}
 }
 
+// TestHandOutcomeCapturesBoardAndHoleCards pins down what sessionlog's
+// per-player match history needs: a folded player's hole cards must be
+// captured (Revealed=false, never shown to opponents) but the winner who
+// folds-showdown-won-without-showdown never reveals either, while a genuine
+// showdown or a voluntary show marks Revealed=true.
+func TestHandOutcomeCapturesBoardAndHoleCards(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	toAct := table.playerToActForTest()
+	folder := toAct
+	if err := table.Act(folder, betting.ActionFold, 0); err != nil {
+		t.Fatalf("%s folds: %v", folder, err)
+	}
+
+	outcome := table.LastOutcomeForActor()
+	if outcome == nil {
+		t.Fatal("expected a hand outcome after everyone but one player folds")
+	}
+	if len(outcome.Board) != 0 {
+		t.Fatalf("won-without-showdown pre-flop must not reveal any board cards, got %v", outcome.Board)
+	}
+	for id, info := range outcome.PlayerHands {
+		if info.HoleCards == ([2]string{}) {
+			t.Fatalf("expected %s's own hole cards to always be captured", id)
+		}
+		if info.Revealed {
+			t.Fatalf("won-without-showdown must never mark %s's hand revealed", id)
+		}
+	}
+}
+
+// TestHandOutcomeShowdownResultsMarksWinnerAndLoser pins down what
+// achievements.Service needs (looser/almost_winner/tied/bad_beat/cooler):
+// a genuine showdown must populate ShowdownResults for every non-folded
+// participant with their own category and Won, and must leave it nil for a
+// won-without-showdown pot (nothing was ever compared).
+func TestHandOutcomeShowdownResultsMarksWinnerAndLoser(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	for table.Stage() != Complete {
+		toAct := table.playerToActForTest()
+		if err := table.Act(toAct, betting.ActionCall, 0); err != nil {
+			_ = table.Act(toAct, betting.ActionCheck, 0)
+		}
+	}
+	outcome := table.LastOutcomeForActor()
+	if outcome == nil {
+		t.Fatal("expected a hand outcome after a completed showdown")
+	}
+	if len(outcome.ShowdownResults) != 2 {
+		t.Fatalf("expected both non-folded players in ShowdownResults, got %+v", outcome.ShowdownResults)
+	}
+	winners := make(map[string]bool, len(outcome.Winners))
+	for _, w := range outcome.Winners {
+		winners[w] = true
+	}
+	for id, result := range outcome.ShowdownResults {
+		if result.Category == "" {
+			t.Fatalf("expected %s's own category to be captured", id)
+		}
+		if result.Won != winners[id] {
+			t.Fatalf("%s: ShowdownResults.Won=%v but outcome.Winners=%v", id, result.Won, outcome.Winners)
+		}
+	}
+}
+
 func TestVoluntarilyShownResetsOnNextHand(t *testing.T) {
 	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
 	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}

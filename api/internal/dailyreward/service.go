@@ -23,7 +23,7 @@ type tier struct {
 	weight int
 }
 
-const FirstAward int64 = 1_000_000
+const FirstAward int64 = 100_000
 
 var tiers = []tier{
 	{5000, 55},

@@ -34,7 +34,12 @@ export interface TableSnapshot {
   rake?: number;
   action_deadline_unix_ms?: number;
   next_hand_unix_ms?: number;
-  won_without_showdown?: boolean
+  won_without_showdown?: boolean;
+  // Absent before the first hand's dealer is drawn (mirrors the API's
+  // omitempty). Heads-up play has the dealer double as the small blind.
+  dealer_player_id?: string;
+  small_blind_player_id?: string;
+  big_blind_player_id?: string
 }
 
 export type ServerMessage = {

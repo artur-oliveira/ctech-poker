@@ -53,7 +53,10 @@ export function TableStage({snapshot, viewer, pot, bigBlind, nowMs, outcome, hol
           nowMs={nowMs}
           bigBlind={bigBlind}
           isViewer={seat.player_id === viewer}
-          stackBefore={seat.player_id === viewer ? viewerStackBefore : undefined}/>;
+          stackBefore={seat.player_id === viewer ? viewerStackBefore : undefined}
+          isDealer={snapshot.dealer_player_id === seat.player_id}
+          isSmallBlind={snapshot.small_blind_player_id === seat.player_id}
+          isBigBlind={snapshot.big_blind_player_id === seat.player_id}/>;
   const board = <Board cards={snapshot.board} pot={pot} rake={snapshot.rake} bigBlind={bigBlind}/>;
 
   if (!vertical) return (

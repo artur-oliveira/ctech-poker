@@ -1,6 +1,7 @@
 // Development-only in-process API and realtime simulation. The environment
 // flag selects the adapter; no mock HTTP or WebSocket server is started.
 import {AxiosError, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
+import type {Achievement, PlayerAchievementProgress, Tier} from '@/lib/api/achievements';
 import type {Room} from '@/lib/api/rooms';
 import type {LegalActionState, PokerAction, SeatView, ServerMessage, TableSnapshot} from '@/lib/api/table';
 
@@ -43,6 +44,72 @@ const mockProfile = {
   game_balance: 12500,
   sandbox_balance: 4850
 };
+
+// Mirrors api/internal/achievements/catalog.go — same keys, metrics and tier
+// thresholds, so the mock exercises the exact shape the real catalog sends.
+const commonTiers: Tier[] = [{stars: 1, threshold: 1}, {stars: 2, threshold: 10}, {
+  stars: 3,
+  threshold: 100
+}, {stars: 4, threshold: 1000}, {stars: 5, threshold: 10000}];
+const rareTiers: Tier[] = [{stars: 1, threshold: 1}, {stars: 2, threshold: 5}, {
+  stars: 3,
+  threshold: 25
+}, {stars: 4, threshold: 100}, {stars: 5, threshold: 500}];
+const categoryOrder = ['high_card', 'pair', 'two_pair', 'three_of_a_kind', 'straight', 'flush', 'full_house', 'four_of_a_kind', 'straight_flush', 'royal_flush'];
+const achievementCatalog: Achievement[] = [
+  {key: 'wins', metric: 'hand_won', tiers: commonTiers},
+  {
+    key: 'hands_played',
+    metric: 'hand_played',
+    tiers: [{stars: 1, threshold: 100}, {stars: 2, threshold: 1000}, {stars: 3, threshold: 10000}, {
+      stars: 4,
+      threshold: 50000
+    }, {stars: 5, threshold: 100000}]
+  },
+  {key: 'comeback', metric: 'won_after_all_in', tiers: rareTiers},
+  {key: 'bluff', metric: 'won_without_showdown_weaker_hand', tiers: rareTiers},
+  {
+    key: 'survivor',
+    metric: 'hands_without_leaving',
+    tiers: [{stars: 1, threshold: 50}, {stars: 2, threshold: 250}, {stars: 3, threshold: 1000}, {
+      stars: 4,
+      threshold: 5000
+    }, {stars: 5, threshold: 25000}]
+  },
+  {key: 'looser', metric: 'hand_lost_at_showdown', tiers: commonTiers},
+  {key: 'almost_winner', metric: 'hand_lost_same_category_as_winner', tiers: commonTiers},
+  {key: 'tied', metric: 'hand_tied', tiers: commonTiers},
+  {key: 'bad_beat', metric: 'hand_lost_with_trips_or_better', tiers: rareTiers},
+  {key: 'cooler', metric: 'hand_lost_with_full_house_or_better', tiers: rareTiers},
+  {key: 'cracked_aces', metric: 'pocket_aces_lost', tiers: rareTiers},
+  {key: 'fallen_king', metric: 'pocket_kings_lost', tiers: rareTiers},
+  {key: 'giant_slayer', metric: 'won_allin_vs_bigger_stack', tiers: rareTiers},
+  {key: 'showdown_warrior', metric: 'reached_showdown', tiers: commonTiers},
+  ...categoryOrder.map(category => ({
+    key: `win_category_${category}`,
+    metric: 'hand_won_with_category',
+    tiers: category === 'royal_flush'
+      ? [{stars: 1, threshold: 1}, {stars: 2, threshold: 5}, {stars: 3, threshold: 10}, {
+        stars: 4,
+        threshold: 25
+      }, {stars: 5, threshold: 50}]
+      : commonTiers
+  }))
+];
+
+// Deliberately varied so dev can eyeball every star-fill state: 0 progress,
+// mid-tier, and maxed-out.
+const mockAchievementProgress: PlayerAchievementProgress[] = [
+  {key: 'wins', count: 42},
+  {key: 'hands_played', count: 1250},
+  {key: 'comeback', count: 3},
+  {key: 'survivor', count: 4200},
+  {key: 'showdown_warrior', count: 10005},
+  {key: 'looser', count: 60},
+  {key: 'bad_beat', count: 100},
+  {key: 'giant_slayer', count: 1},
+  {key: 'win_category_flush', count: 12}
+];
 
 /* ponytail: 90s mock cooldown (real API uses 24h) so the countdown is testable in dev;
  * sessionStorage keeps it across reloads since the mock lives in the page */
@@ -180,6 +247,8 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     {player_id: MOCK_PLAYER_ID, player_name: mockProfile.name, hands_played: 184, hands_won: 49, win_rate: .266},
     {player_id: 'leo_rio', player_name: 'Leo', hands_played: 213, hands_won: 52, win_rate: .244},
   ], config);
+  if (method === 'GET' && path === '/v1.0/achievements') return ok(achievementCatalog, config);
+  if (method === 'GET' && path === '/v1.0/players/me/achievements') return ok(mockAchievementProgress, config);
   if (method === 'GET' && path === '/v1.0/sandbox-credits') return ok({remaining_time_seconds: creditCooldown()}, config);
   if (method === 'POST' && path === '/v1.0/sandbox-credits') {
     if (creditCooldown() > 0) return ok({amount: 0, remaining_time_seconds: creditCooldown()}, config);
@@ -337,7 +406,11 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
         max_raise_to: 4900,
         step: 25
       },
-      rake: 5
+      rake: 5,
+      // Dealer sits immediately before the small blind in turn order.
+      dealer_player_id: 'caio_goiânia',
+      small_blind_player_id: 'bia_sp',
+      big_blind_player_id: MOCK_PLAYER_ID
     };
   }
   if (scenario === 'pre_flop' || scenario === 'action_error' || scenario === 'timeout' || scenario === 'reconnecting') {
@@ -354,6 +427,11 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
         step: 25
       },
       rake: 5,
+      // leo_rio's 25 contributed-then-folded is the small blind; Ana's 50 is
+      // the big blind she's now facing a raise on top of (baseSeats above).
+      dealer_player_id: 'rafa_curitiba',
+      small_blind_player_id: 'leo_rio',
+      big_blind_player_id: MOCK_PLAYER_ID,
       ...(scenario === 'timeout' ? {action_deadline_unix_ms: Date.now() + 15000} : {})
     };
   }
@@ -364,7 +442,10 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
     payouts: {[MOCK_PLAYER_ID]: 250},
     winners: [MOCK_PLAYER_ID],
     rake: 5,
-    next_hand_unix_ms: Date.now() + 5000
+    next_hand_unix_ms: Date.now() + 5000,
+    dealer_player_id: 'rafa_curitiba',
+    small_blind_player_id: 'leo_rio',
+    big_blind_player_id: MOCK_PLAYER_ID
   };
   // A short-stacked all-in (Ana, 300) can only ever win the layer every
   // contributor matched — the main pot (300 * 3 = 900). The extra 400 that
@@ -416,7 +497,10 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
     payouts: {[MOCK_PLAYER_ID]: 900, 'bia_sp': 800},
     winners: [MOCK_PLAYER_ID, 'bia_sp'],
     rake: 25,
-    next_hand_unix_ms: Date.now() + 5000
+    next_hand_unix_ms: Date.now() + 5000,
+    dealer_player_id: 'joao_floripa',
+    small_blind_player_id: 'nina_recife',
+    big_blind_player_id: 'caio_goiânia'
   };
   if (scenario === 'flop') return {
     stage: 'flop',
@@ -430,7 +514,10 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
       max_raise_to: 4900,
       step: 25
     },
-    rake: 8
+    rake: 8,
+    dealer_player_id: 'rafa_curitiba',
+    small_blind_player_id: 'leo_rio',
+    big_blind_player_id: MOCK_PLAYER_ID
   };
   if (scenario === 'turn') return {
     stage: 'turn',
@@ -444,7 +531,10 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
       max_raise_to: 4900,
       step: 25
     },
-    rake: 11
+    rake: 11,
+    dealer_player_id: 'rafa_curitiba',
+    small_blind_player_id: 'leo_rio',
+    big_blind_player_id: MOCK_PLAYER_ID
   };
   if (scenario === 'river') return {
     stage: 'river',
@@ -452,7 +542,10 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
     seats,
     current_player_id: 'nina_recife',
     legal_actions: {actions: [], call_amount: 0},
-    rake: 14
+    rake: 14,
+    dealer_player_id: 'rafa_curitiba',
+    small_blind_player_id: 'leo_rio',
+    big_blind_player_id: MOCK_PLAYER_ID
   };
   seats[0] = {...seats[0], stack: 6125, contributed: 0};
   return {
@@ -461,7 +554,10 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
     seats: revealShowdownCards(seats),
     payouts: {[MOCK_PLAYER_ID]: 1275},
     winners: [MOCK_PLAYER_ID],
-    rake: 20
+    rake: 20,
+    dealer_player_id: 'rafa_curitiba',
+    small_blind_player_id: 'leo_rio',
+    big_blind_player_id: MOCK_PLAYER_ID
   };
 }
 

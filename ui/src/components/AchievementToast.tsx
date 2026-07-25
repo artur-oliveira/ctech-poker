@@ -1,6 +1,8 @@
 'use client';
-import {useEffect, useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {Star} from 'lucide-react';
+import {ACHIEVEMENT_LABELS} from "@/lib/utils";
+
 
 const HOLD_MS = 4200;
 const EXIT_MS = 350;
@@ -32,7 +34,7 @@ export function AchievementToast({unlock}: { unlock: { key: string; stars: numbe
     <Star/>
     <span>
       <small>CONQUISTA DESBLOQUEADA</small>
-      <b>{shown.key.replaceAll('_', ' ')}</b>
+      <b>{ACHIEVEMENT_LABELS[shown.key] || shown.key.replaceAll('_', ' ')}</b>
       <span className="achievement-stars" aria-hidden="true">{Array.from({length: shown.stars}, (_, i) =>
         <span key={i} style={{'--delay': `${Math.min(i, 5) * 70}ms`} as React.CSSProperties}>★</span>)}</span>
       <span className="sr-only">{shown.stars} estrela{shown.stars === 1 ? '' : 's'}</span>

@@ -22,6 +22,36 @@ func TestFindOpenSessionReturnsTheMostRecentUnclosedSessionForTable(t *testing.T
 	}
 }
 
+// TestFindOpenSessionSurvivesFiftyPlusNewerSessionsElsewhere pins down the
+// multi-tabling bug: FindOpenSession used to cap its query at the 50 most
+// recent items across the player's ENTIRE history (all tables), so an old
+// table's still-open session got pushed out of that window by 50+ newer
+// sessions opened/closed at other tables in the meantime — leaving ended_at
+// stuck at 0 forever once the player actually left the old table. It must
+// now page through the whole partition (filtered server-side to tableID)
+// instead of giving up after the first page.
+func TestFindOpenSessionSurvivesFiftyPlusNewerSessionsElsewhere(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	_ = store.RecordSession(ctx, SessionItem{PK: "p3", TableID: "old-table", JoinedAt: 1})
+
+	for i := 0; i < 60; i++ {
+		item := SessionItem{PK: "p3", TableID: "other-table", JoinedAt: 2, EndedAt: 3}
+		if err := store.RecordSession(ctx, item); err != nil {
+			t.Fatalf("seed session %d: %v", i, err)
+		}
+	}
+
+	open, err := store.FindOpenSession(ctx, "p3", "old-table")
+	if err != nil {
+		t.Fatalf("FindOpenSession: %v", err)
+	}
+	if open == nil || open.TableID != "old-table" {
+		t.Fatalf("expected to still find old-table's open session behind 60 newer closed sessions, got %+v", open)
+	}
+}
+
 func TestCloseSessionOverwritesTheSameItem(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()
