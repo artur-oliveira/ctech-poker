@@ -3,9 +3,24 @@ import Link from 'next/link';
 import {useId, useState} from 'react';
 import {ChevronLeft} from 'lucide-react';
 import {useQuery} from '@tanstack/react-query';
+import axios from 'axios';
 import {Button} from '@/components/ui/button';
 import {getRoom, joinRoom} from '@/lib/api/rooms';
 import {isNotFound} from '@/lib/api/client';
+
+const GENERIC_JOIN_ERROR = 'Não foi possível sentar na mesa. Verifique suas fichas e tente novamente.';
+
+// The API's real-money buy-in gate (buyin.walletFor) reports "has not
+// activated gambling on ctech-wallet" as a plain RFC 9457 `detail` string —
+// surface it verbatim so a real-money player knows to activate their wallet,
+// instead of the generic sandbox message.
+function joinErrorMessage(err: unknown) {
+  if (axios.isAxiosError(err)) {
+    const detail = (err.response?.data as {detail?: string} | undefined)?.detail;
+    if (detail?.includes('gambling')) return 'Sua carteira ainda não tem apostas ativadas. Ative em ctech-wallet e tente novamente.';
+  }
+  return GENERIC_JOIN_ERROR;
+}
 
 function midBuyIn(min: number, max: number, bigBlind: number) {
   const bb = bigBlind > 0 ? bigBlind : 1;
@@ -56,6 +71,10 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
 
   const step = room.big_blind > 0 ? room.big_blind : 1;
   const value = amount ?? midBuyIn(room.buy_in_min, room.buy_in_max, room.big_blind);
+  const isReal = room.currency_mode === 'real';
+  const unit = isReal ? 'reais' : 'fichas';
+  const fmt = (n: number) => isReal ? (n / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})
+    : n.toLocaleString('pt-BR');
 
   async function confirm() {
     setJoining(true);
@@ -63,8 +82,8 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
     try {
       await joinRoom(roomId, value, shareCode);
       onSeatedAction();
-    } catch {
-      setError('Não foi possível sentar na mesa. Verifique suas fichas e tente novamente.');
+    } catch (err) {
+      setError(joinErrorMessage(err));
       setJoining(false);
     }
   }
@@ -74,18 +93,18 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
       <h1 className="sr-only">Mesa de poker</h1>
       <small>BLINDS {room.small_blind} / {room.big_blind} · {room.currency_mode === 'real' ? 'DINHEIRO REAL' : 'SANDBOX'}</small>
       <h2>Sente-se à mesa</h2>
-      <p>Escolha quantas fichas levar. Nada é debitado antes de você confirmar.</p>
+      <p>Escolha {isReal ? 'quanto dinheiro' : 'quantas fichas'} levar. Nada é debitado antes de você confirmar.</p>
       <div className="buyin-control">
         <label htmlFor={sliderId}>Buy-in</label>
         <input id={sliderId} type="range" min={room.buy_in_min} max={room.buy_in_max} step={step} value={value}
                disabled={joining} onChange={event => setAmount(Number(event.target.value))}
-               aria-valuetext={`${value.toLocaleString('pt-BR')} fichas`}/>
-        <output htmlFor={sliderId}>{value.toLocaleString('pt-BR')} <span>fichas</span></output>
-        <small>mín. {room.buy_in_min.toLocaleString('pt-BR')} · máx. {room.buy_in_max.toLocaleString('pt-BR')}</small>
+               aria-valuetext={`${fmt(value)} ${unit}`}/>
+        <output htmlFor={sliderId}>{fmt(value)} <span>{unit}</span></output>
+        <small>mín. {fmt(room.buy_in_min)} · máx. {fmt(room.buy_in_max)}</small>
       </div>
       {error && <p className="buyin-error" role="alert">{error}</p>}
       <Button size="lg" onClick={confirm} disabled={joining}>
-        {joining ? 'Entrando…' : `Entrar com ${value.toLocaleString('pt-BR')} fichas`}
+        {joining ? 'Entrando…' : `Entrar com ${fmt(value)}`}
       </Button>
       <Button variant="ghost" render={<Link href="/lobby"/>}><ChevronLeft/> Voltar ao lobby</Button>
     </main>

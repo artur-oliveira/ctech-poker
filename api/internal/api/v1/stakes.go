@@ -46,3 +46,11 @@ func sandboxStakeCatalog() map[string]any {
 		"stakes":        sandboxPublicStakes,
 	}
 }
+
+func realStakeCatalog() map[string]any {
+	return map[string]any{
+		"currency_mode": "real",
+		"unit":          "brl_cent",
+		"stakes":        realPublicStakes,
+	}
+}

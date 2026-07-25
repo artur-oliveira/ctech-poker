@@ -94,6 +94,8 @@ new PokerApiStack(app, id('API'), {
   walletUrlParam: pokerParameters.walletUrl,
   pokerClientIdParam: pokerParameters.clientId,
   pokerClientSecretParam: pokerParameters.clientSecret,
+  realMoneyEnabledParam: pokerParameters.realMoneyEnabled,
+  legalSignoffRefParam: pokerParameters.legalSignoffRef,
   description: `CTech Poker API (EC2 + ASG + ALB) - ${ENVIRONMENT}`,
 });
 

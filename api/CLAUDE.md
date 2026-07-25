@@ -1,14 +1,20 @@
 # api/ — CLAUDE.md
 
 Go real-time poker game server (Fiber v3 + `fasthttp/websocket` + DynamoDB + Valkey). **Sandbox (play-money) mode is
-implemented end-to-end. Real-money mode (Phase 5) is implemented in `buyin`/`walletclient`/`reconcile` but
-unreachable in production today: `POST /rooms` hardcodes `CurrencyMode: "sandbox"`
-(`internal/api/v1/rooms.go:93`) with no request field to ask for `real`, so no room can ever exercise the
-real-money path regardless of `REAL_MONEY_ENABLED`.** Also: the real-money `buyin.Service` wiring
-(`internal/app/app.go:198-203`) skips the terms-of-service acceptance check that sandbox gets
-(`buyin/service.go:140-144`) — needs a `players` service wired in, not a deliberate exemption. See
+implemented end-to-end. Real-money mode (Phase 5) is now reachable in-repo (fixed 2026-07-25):** `POST /rooms`
+accepts `currency_mode: "real"` (`internal/api/v1/roomdto.go`, `internal/api/v1/rooms.go:createRoom`), gated on
+`cfg.RealMoneyEnabled`; `GET /rooms/stakes?currency_mode=real` serves the BRL-cent catalog under the same gate.
+`newBuyinService`'s real-money branch now chains `.WithPlayers(players)` so real-money buy-ins get the same
+terms-of-service gate sandbox does. CDK (`cdk/lib/api-stack.ts`) fetches `REAL_MONEY_ENABLED`/`LEGAL_SIGNOFF_REF`
+from SSM (`/ctech/{env}/poker/real-money-enabled`, `.../legal-signoff-ref`) on every boot. **Still blocking, found
+2026-07-25 while verifying cross-repo:** ctech-wallet's scope catalog (`ctech-account/api/internal/scopes/catalog.go`)
+has no `internal:wallet:game-status` entry, so no M2M client can ever be granted the scope
+`ctech-wallet`'s `GET /wallet/game/status/:user_id` requires — poker's `IsGamblingActivated` check can never
+succeed until ctech-account adds that scope. Also unresolved: no ASG lifecycle hook exists in either
+`ctech-cdk`'s `PrivateIpv4Ec2Service` or this repo's `cdk/lib/api-stack.ts` — `tablemanager.DrainAndRelease`
+relies on the EC2 default shutdown grace period, not a guaranteed drain window. See
 `docs/plans/2026-07-19-poker-phase5-realmoney-and-hardening.md`'s Status section for the full task-by-task
-verdict.
+verdict (predates this fix; treat the blockers above as current, the rest as historical).
 
 ## Conventions (follow these)
 

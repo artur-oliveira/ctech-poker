@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 )
 
@@ -97,6 +98,65 @@ func TestCreatePrivateRoomAcceptsValidTurnTimeout(t *testing.T) {
 	}
 }
 
+func TestCreateRoomRejectsRealMoneyWhenDisabled(t *testing.T) {
+	app := fiber.New()
+	h := &roomHandlers{cfg: &config.Config{RealMoneyEnabled: false}}
+	app.Post("/rooms", func(c fiber.Ctx) error { c.Locals(localsUserID, "u1"); return c.Next() }, h.createRoom)
+	body := []byte(`{"visibility":"private","currency_mode":"real","small_blind":10,"big_blind":20,"max_seats":6,"buy_in_min":400,"buy_in_max":2000}`)
+	req := httptest.NewRequest(fiber.MethodPost, "/rooms", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateRoomAcceptsRealMoneyWhenEnabled(t *testing.T) {
+	app := fiber.New()
+	h := &roomHandlers{cfg: &config.Config{RealMoneyEnabled: true}}
+	app.Post("/rooms", func(c fiber.Ctx) error { c.Locals(localsUserID, "u1"); return c.Next() }, h.createRoom)
+	body := []byte(`{"visibility":"private","currency_mode":"real","small_blind":10,"big_blind":20,"max_seats":6,"buy_in_min":400,"buy_in_max":2000}`)
+	req := httptest.NewRequest(fiber.MethodPost, "/rooms", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("got %d", resp.StatusCode)
+	}
+	var room roomstore.Room
+	if err := json.NewDecoder(resp.Body).Decode(&room); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if room.CurrencyMode != "real" {
+		t.Fatalf("expected CurrencyMode real, got %q", room.CurrencyMode)
+	}
+}
+
+func TestCreateRoomDefaultsToSandbox(t *testing.T) {
+	app := fiber.New()
+	h := &roomHandlers{}
+	app.Post("/rooms", func(c fiber.Ctx) error { c.Locals(localsUserID, "u1"); return c.Next() }, h.createRoom)
+	body := []byte(`{"visibility":"private","small_blind":10,"big_blind":20,"max_seats":6,"buy_in_min":400,"buy_in_max":2000}`)
+	req := httptest.NewRequest(fiber.MethodPost, "/rooms", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var room roomstore.Room
+	if err := json.NewDecoder(resp.Body).Decode(&room); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if room.CurrencyMode != "sandbox" {
+		t.Fatalf("expected CurrencyMode sandbox, got %q", room.CurrencyMode)
+	}
+}
+
 func TestPublicSandboxStakesAreCurated(t *testing.T) {
 	if !isAllowedPublicStake("sandbox", 10, 25) || !isAllowedPublicStake("sandbox", 50000, 100000) {
 		t.Fatal("expected the lowest and highest sandbox stakes to be allowed")
@@ -106,6 +166,41 @@ func TestPublicSandboxStakesAreCurated(t *testing.T) {
 	}
 	if isAllowedPublicStake("real", 10000, 25000) {
 		t.Fatal("sandbox-only high stake leaked into the real-money catalog")
+	}
+}
+
+func TestListStakesHidesRealCatalogWhenDisabled(t *testing.T) {
+	app := fiber.New()
+	h := &roomHandlers{cfg: &config.Config{RealMoneyEnabled: false}}
+	app.Get("/rooms/stakes", h.listStakes)
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/rooms/stakes?currency_mode=real", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("got %d", resp.StatusCode)
+	}
+}
+
+func TestListStakesServesRealCatalogWhenEnabled(t *testing.T) {
+	app := fiber.New()
+	h := &roomHandlers{cfg: &config.Config{RealMoneyEnabled: true}}
+	app.Get("/rooms/stakes", h.listStakes)
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/rooms/stakes?currency_mode=real", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("got %d", resp.StatusCode)
+	}
+	var body struct {
+		CurrencyMode string `json:"currency_mode"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.CurrencyMode != "real" {
+		t.Fatalf("expected real catalog, got %q", body.CurrencyMode)
 	}
 }
 

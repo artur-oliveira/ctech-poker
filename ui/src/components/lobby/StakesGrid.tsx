@@ -18,7 +18,7 @@ export function StakesGrid() {
   const queryClient = useQueryClient();
   const [joiningKey, setJoiningKey] = useState<string | null>(null);
   const {data: stakes = [], isLoading: stakesLoading, isError: stakesError, refetch: refetchStakes} = useQuery({
-    queryKey: ['stakes'], queryFn: listStakes
+    queryKey: ['stakes'], queryFn: () => listStakes()
   });
   const {data: rooms = [], isLoading: roomsLoading} = useQuery({
     queryKey: ['rooms'], queryFn: () => listRooms(), refetchInterval: 5000
@@ -72,7 +72,7 @@ export function StakesGrid() {
       <section key={`${stake.small_blind}-${stake.big_blind}`} className="room-group"
                aria-label={`Mesas com blinds ${stake.small_blind.toLocaleString('pt-BR')} / ${stake.big_blind.toLocaleString('pt-BR')}`}>
         <h2>
-          <span>Blinds</span>
+          <span>Blinds </span>
           {stake.small_blind.toLocaleString('pt-BR')} / {stake.big_blind.toLocaleString('pt-BR')}
         </h2>
         <div className="stake-grid">{MAX_SEATS_OPTIONS.map((opt, i) => {

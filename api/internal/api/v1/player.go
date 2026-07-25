@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
+	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
@@ -34,6 +35,7 @@ type playerAchievementStore interface {
 
 type playerHandlers struct {
 	players      *player.Service
+	cfg          *config.Config
 	sessions     sessionLogReader
 	achievements playerAchievementStore
 }
@@ -41,8 +43,8 @@ type playerHandlers struct {
 // RegisterPlayers mounts every /players/me/* route: profile, wallet-mode,
 // terms acceptance, session/hand history, and achievement progress all live
 // under the same resource and share the same auth-derived playerID.
-func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Service, sessions sessionLogReader, achievementStore playerAchievementStore) {
-	h := &playerHandlers{players: players, sessions: sessions, achievements: achievementStore}
+func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Service, sessions sessionLogReader, achievementStore playerAchievementStore, cfg *config.Config) {
+	h := &playerHandlers{players: players, sessions: sessions, achievements: achievementStore, cfg: cfg}
 	g := router.Group("/players", auth)
 	g.Get("/me", h.me)
 	g.Post("/me", h.updateMe)
@@ -81,6 +83,9 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 		}
 	}
 	if req.WalletMode != nil {
+		if *req.WalletMode == "real" && (h.cfg == nil || !h.cfg.RealMoneyEnabled) {
+			return problem.BadRequest("unsupported wallet mode").Send(c)
+		}
 		if _, err := h.players.SetWalletMode(c.Context(), userID, *req.WalletMode); err != nil {
 			if errors.Is(err, player.ErrInvalidWalletMode) {
 				return problem.BadRequest("wallet_mode must be sandbox or real").Send(c)

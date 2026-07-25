@@ -6,7 +6,7 @@ package roomstore
 type Room struct {
 	ID                   string           `dynamodbav:"room_id" json:"room_id"`
 	Visibility           string           `dynamodbav:"visibility" json:"visibility"`       // "public" | "private"
-	CurrencyMode         string           `dynamodbav:"currency_mode" json:"currency_mode"` // "sandbox" only, this plan
+	CurrencyMode         string           `dynamodbav:"currency_mode" json:"currency_mode"` // "sandbox" | "real" (real requires REAL_MONEY_ENABLED)
 	SmallBlind           int64            `dynamodbav:"small_blind" json:"small_blind"`
 	BigBlind             int64            `dynamodbav:"big_blind" json:"big_blind"`
 	MaxSeats             int              `dynamodbav:"max_seats" json:"max_seats"` // 6 or 9

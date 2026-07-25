@@ -76,7 +76,7 @@ export function ProfileMenu() {
         </div>
         <div className="flex items-center justify-between">
           <Label id="wallet-mode-label">{walletMode === 'real' ? 'Dinheiro real' : 'Sandbox'}</Label>
-          <Switch aria-labelledby="wallet-mode-label" checked={walletMode === 'real'} disabled={true}
+          <Switch aria-labelledby="wallet-mode-label" checked={walletMode === 'real'}
                   onCheckedChange={checked => save.mutate({wallet_mode: checked ? 'real' : 'sandbox'})}/>
         </div>
         <div className="profile-balances">

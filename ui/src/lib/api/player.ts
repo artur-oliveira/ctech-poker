@@ -1,5 +1,5 @@
-import {apiClient} from './client';
 import type {Page} from './client';
+import {apiClient} from './client';
 
 export type WalletMode = 'sandbox' | 'real';
 
@@ -22,7 +22,7 @@ export async function acceptPokerTerms() {
 }
 
 export async function updateMe(input: { name?: string; wallet_mode?: WalletMode }) {
-  return (await apiClient.post<PlayerProfile>('/v1.0/players/me', input, {silentError: true})).data;
+  return (await apiClient.post<PlayerProfile>('/v1.0/players/me', input, {silentError: false})).data;
 }
 
 export interface PlayerSession {

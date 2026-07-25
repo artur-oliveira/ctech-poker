@@ -50,6 +50,8 @@ interface ApiStackProps extends cdk.StackProps {
   walletUrlParam: string;
   pokerClientIdParam: string;
   pokerClientSecretParam: string;
+  realMoneyEnabledParam: string;
+  legalSignoffRefParam: string;
   achievementProgressTableArn: string;
   leaderboardStatsTableArn: string;
   dailyRewardTableArn: string;
@@ -81,6 +83,8 @@ export class PokerApiStack extends cdk.Stack {
       walletUrlParam,
       pokerClientIdParam,
       pokerClientSecretParam,
+      realMoneyEnabledParam,
+      legalSignoffRefParam,
       achievementProgressTableArn,
       leaderboardStatsTableArn,
       playerSessionsTableArn,
@@ -121,7 +125,10 @@ export class PokerApiStack extends cdk.Stack {
     }));
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: ['ssm:GetParameter'],
-      resources: [shared.valkeyUrl, walletUrlParam, pokerClientIdParam, pokerClientSecretParam].map(
+      resources: [
+        shared.valkeyUrl, walletUrlParam, pokerClientIdParam, pokerClientSecretParam,
+        realMoneyEnabledParam, legalSignoffRefParam,
+      ].map(
         (path) => `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${path}`,
       ),
     }));
@@ -225,6 +232,13 @@ export class PokerApiStack extends cdk.Stack {
       `export POKER_CLIENT_ID`,
       `POKER_CLIENT_SECRET=$(aws ssm get-parameter --name "${pokerClientSecretParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
       `export POKER_CLIENT_SECRET`,
+      // Real-money kill switch: both fetched fresh on every boot/restart so
+      // ops can flip them via SSM without a redeploy. Falls back to
+      // false/empty → config.Load() keeps real-money mode off (fails closed).
+      `REAL_MONEY_ENABLED=$(aws ssm get-parameter --name "${realMoneyEnabledParam}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "false")`,
+      `export REAL_MONEY_ENABLED`,
+      `LEGAL_SIGNOFF_REF=$(aws ssm get-parameter --name "${legalSignoffRefParam}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+      `export LEGAL_SIGNOFF_REF`,
       `exec /opt/app/current/app`,
       `START`,
       `chmod +x /opt/app/start.sh`,
@@ -418,6 +432,14 @@ export class PokerApiStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'PokerClientSecretParameterArn', {
       value: `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${pokerClientSecretParam}`,
       exportName: `${id}-poker-client-secret-parameter-arn`,
+    });
+    new cdk.CfnOutput(this, 'RealMoneyEnabledParameterArn', {
+      value: `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${realMoneyEnabledParam}`,
+      exportName: `${id}-real-money-enabled-parameter-arn`,
+    });
+    new cdk.CfnOutput(this, 'LegalSignoffRefParameterArn', {
+      value: `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${legalSignoffRefParam}`,
+      exportName: `${id}-legal-signoff-ref-parameter-arn`,
     });
     
     // ── Outputs ───────────────────────────────────────────────────────────────

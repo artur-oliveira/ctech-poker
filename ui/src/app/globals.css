@@ -73,6 +73,7 @@
     --z-notice: 25;
     --z-toast: 30;
     --z-dev: 40;
+    --z-api: 60;
     /* opaque mask stop — CSS mask luminance only, never a rendered color */
     --mask-opaque: #fff;
     /* ponytail: stacked mobile action bar footprint (context + presets + quick + bet + raise rows), generous for 2-line pt-BR context; upgrade to measured height if layout grows */
@@ -1225,7 +1226,7 @@ h1 em {
 
 .stake-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(240px, 320px));
+    grid-template-columns: repeat(3, minmax(240px, 320px));
     gap: 14px
 }
 
@@ -2997,7 +2998,7 @@ h1 em {
 
 .api-notifier {
     position: fixed;
-    z-index: var(--z-dev);
+    z-index: var(--z-api);
     right: 20px;
     top: 70px;
     display: flex;

@@ -198,7 +198,8 @@ func (s *Store) ListHands(ctx context.Context, playerID string, limit int, start
 
 func (s *Store) ListHandsByTable(ctx context.Context, playerID, tableID string, limit int, startKey map[string]dynamotypes.AttributeValue) ([]HandItem, map[string]dynamotypes.AttributeValue, error) {
 	res, err := s.hands.QueryComposite(ctx, dynamo.CompositeQueryOpts{
-		PK: playerID,
+		PK:        playerID,
+		IndexName: tableHandsGsiTable,
 		SKEq: []dynamo.KV{
 			{Field: "table_id", Value: tableID},
 		},

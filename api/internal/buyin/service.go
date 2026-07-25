@@ -75,6 +75,11 @@ func (s *Service) WithSessionStore(sessions *sessionlog.Store) *Service {
 	return s
 }
 
+func (s *Service) WithPlayers(players *player.Service) *Service {
+	s.players = players
+	return s
+}
+
 func NewServiceWithPlayers(wallet walletMover, manager *tablemanager.Manager, rooms roomLookup, players *player.Service) *Service {
 	return &Service{wallet: wallet, manager: manager, rooms: rooms, players: players}
 }

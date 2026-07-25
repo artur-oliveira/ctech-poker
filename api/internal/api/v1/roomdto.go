@@ -4,6 +4,7 @@ import "gopkg.aoctech.app/poker/api/internal/roomstore"
 
 type CreateRoomRequest struct {
 	Visibility           string                     `json:"visibility"`
+	CurrencyMode         string                     `json:"currency_mode,omitempty"` // "sandbox" (default) or "real"; real requires REAL_MONEY_ENABLED
 	SmallBlind           int64                      `json:"small_blind"`
 	BigBlind             int64                      `json:"big_blind"`
 	MaxSeats             int                        `json:"max_seats"`

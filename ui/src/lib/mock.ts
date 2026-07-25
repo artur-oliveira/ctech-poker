@@ -314,12 +314,19 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   if (method === 'GET' && path === '/v1.0/rooms') return ok(page(rooms), config);
   // Checked before the generic single-segment room-id match below, since
   // "stakes" would otherwise itself match `/rooms/:id` and never reach here.
-  if (method === 'GET' && path === '/v1.0/rooms/stakes') return ok({
-    stakes: [{
-      small_blind: 10,
-      big_blind: 20
-    }, {small_blind: 25, big_blind: 50}, {small_blind: 50, big_blind: 100}]
-  }, config);
+  if (method === 'GET' && path === '/v1.0/rooms/stakes') {
+    // Mock mirrors REAL_MONEY_ENABLED=false: "real" 404s, same as prod with
+    // the flag off, so CreateRoomDialog's real-money toggle stays hidden.
+    if (config.params?.currency_mode === 'real') {
+      fail(404, 'real-money mode is not available', config);
+    }
+    return ok({
+      stakes: [{
+        small_blind: 10,
+        big_blind: 20
+      }, {small_blind: 25, big_blind: 50}, {small_blind: 50, big_blind: 100}]
+    }, config);
+  }
   const roomMatch = method === 'GET' ? path.match(/^\/v1\.0\/rooms\/([^/]+)$/) : null;
   if (roomMatch) {
     const room = rooms.find(r => r.room_id === roomMatch[1]);

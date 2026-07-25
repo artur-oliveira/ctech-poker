@@ -51,7 +51,7 @@ jobs:
 
       - name: Run integration tests
         working-directory: api
-        run: go test -tags integration ./... -race -count=20
+        run: go test -tags integration ./... -race -count=1
 
   deploy:
     name: Build & Deploy

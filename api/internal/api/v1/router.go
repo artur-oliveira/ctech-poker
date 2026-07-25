@@ -62,8 +62,8 @@ func Register(
 	joinLimiter := NewRateLimiter(cacheBackend, 30, time.Minute)
 	spinLimiter := NewRateLimiter(cacheBackend, 60, time.Minute)
 
-	RegisterRooms(router, auth, rooms, buyinSvc, manager, createLimiter, joinLimiter)
-	RegisterPlayers(router, auth, players, sessionStore, achievementStore)
+	RegisterRooms(router, auth, rooms, buyinSvc, manager, cfg, createLimiter, joinLimiter)
+	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg)
 	RegisterLeaderboard(router, auth, leaderboardSvc)
 	RegisterDailyReward(router, auth, dailyRewardSvc, spinLimiter)
 }

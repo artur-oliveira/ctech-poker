@@ -197,7 +197,7 @@ func newSessionStore(db *dynamodb.Client, cfg *config.Config) *sessionlog.Store 
 }
 func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service, sessionStore *sessionlog.Store) *buyin.Service {
 	if cfg.RealMoneyEnabled {
-		return buyin.NewServiceWithGame(wallet, wallet, manager, rooms, wallet).WithSessionStore(sessionStore)
+		return buyin.NewServiceWithGame(wallet, wallet, manager, rooms, wallet).WithSessionStore(sessionStore).WithPlayers(players)
 	}
 	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players).WithSessionStore(sessionStore)
 }

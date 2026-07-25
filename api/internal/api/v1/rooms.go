@@ -25,10 +25,11 @@ type roomHandlers struct {
 	rooms   *roomstore.Store
 	buyin   *buyin.Service
 	manager *tablemanager.Manager
+	cfg     *config.Config
 }
 
-func RegisterRooms(router fiber.Router, auth fiber.Handler, rooms *roomstore.Store, buyinSvc *buyin.Service, manager *tablemanager.Manager, createLimiter, joinLimiter *RateLimiter) {
-	h := &roomHandlers{rooms: rooms, buyin: buyinSvc, manager: manager}
+func RegisterRooms(router fiber.Router, auth fiber.Handler, rooms *roomstore.Store, buyinSvc *buyin.Service, manager *tablemanager.Manager, cfg *config.Config, createLimiter, joinLimiter *RateLimiter) {
+	h := &roomHandlers{rooms: rooms, buyin: buyinSvc, manager: manager, cfg: cfg}
 	g := router.Group("/rooms", auth)
 	g.Post("/", rateLimit(createLimiter, ipKey("rooms:create")), h.createRoom)
 	g.Get("/", h.listPublic)
@@ -49,6 +50,16 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 	if req.Visibility != "public" && req.Visibility != "private" {
 		return problem.BadRequest("visibility must be public or private").Send(c)
 	}
+	currencyMode := req.CurrencyMode
+	if currencyMode == "" {
+		currencyMode = "sandbox"
+	}
+	if currencyMode != "sandbox" && currencyMode != "real" {
+		return problem.BadRequest("currency_mode must be sandbox or real").Send(c)
+	}
+	if currencyMode == "real" && (h.cfg == nil || !h.cfg.RealMoneyEnabled) {
+		return problem.BadRequest("unsupported currency mode").Send(c)
+	}
 	if req.SmallBlind <= 0 || req.BigBlind <= req.SmallBlind {
 		return problem.BadRequest("blinds must be positive and big_blind greater than small_blind").Send(c)
 	}
@@ -64,8 +75,8 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 	if req.Visibility == "public" && req.BlindEscalation != nil {
 		return problem.BadRequest("blind escalation is only configurable on private rooms").Send(c)
 	}
-	if req.Visibility == "public" && !isAllowedPublicStake("sandbox", req.SmallBlind, req.BigBlind) {
-		return problem.BadRequest("unsupported public sandbox stake").Send(c)
+	if req.Visibility == "public" && !isAllowedPublicStake(currencyMode, req.SmallBlind, req.BigBlind) {
+		return problem.BadRequest("unsupported public stake for this currency mode").Send(c)
 	}
 	if cfg := req.BlindEscalation; cfg != nil && (cfg.IntervalMinutes <= 0 || cfg.Multiplier <= 100 || cfg.Max < req.BigBlind) {
 		return problem.BadRequest("invalid blind escalation").Send(c)
@@ -90,7 +101,7 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 	room := roomstore.Room{
 		ID:                   newRoomID(),
 		Visibility:           req.Visibility,
-		CurrencyMode:         "sandbox",
+		CurrencyMode:         currencyMode,
 		SmallBlind:           req.SmallBlind,
 		BigBlind:             req.BigBlind,
 		MaxSeats:             req.MaxSeats,
@@ -124,7 +135,18 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 }
 
 func (h *roomHandlers) listStakes(c fiber.Ctx) error {
-	return c.JSON(sandboxStakeCatalog())
+	mode := c.Query("currency_mode", "sandbox")
+	switch mode {
+	case "sandbox":
+		return c.JSON(sandboxStakeCatalog())
+	case "real":
+		if h.cfg == nil || !h.cfg.RealMoneyEnabled {
+			return problem.NotFound("real-money mode is not available").Send(c)
+		}
+		return c.JSON(realStakeCatalog())
+	default:
+		return problem.BadRequest("currency_mode must be sandbox or real").Send(c)
+	}
 }
 
 func (h *roomHandlers) listPublic(c fiber.Ctx) error {
@@ -216,11 +238,8 @@ func (h *roomHandlers) join(c fiber.Ctx) error {
 	if room == nil {
 		return problem.NotFound("room not found").Send(c)
 	}
-	if room.CurrencyMode != "sandbox" {
-		cfg := c.Locals("config").(*config.Config)
-		if !cfg.RealMoneyEnabled {
-			return problem.BadRequest("unsupported currency mode").Send(c)
-		}
+	if room.CurrencyMode != "sandbox" && (h.cfg == nil || !h.cfg.RealMoneyEnabled) {
+		return problem.BadRequest("unsupported currency mode").Send(c)
 	}
 	if req.Amount < room.BuyInMin || req.Amount > room.BuyInMax || req.Amount%room.BigBlind != 0 {
 		return problem.BadRequest("amount must be within range and a multiple of big_blind").Send(c)
