@@ -165,11 +165,11 @@ func newDynamoClient(cfg *config.Config) (*dynamodb.Client, error) {
 func newTableStore(db *dynamodb.Client, cfg *config.Config) *tablestore.Store {
 	return tablestore.NewStore(db, cfg.Env)
 }
-func newRoomStore(db *dynamodb.Client, cfg *config.Config) *roomstore.Store {
-	return roomstore.NewStore(db, cfg.Env)
+func newRoomStore(db *dynamodb.Client, cfg *config.Config, c cache.Backend) *roomstore.Store {
+	return roomstore.NewStore(db, cfg.Env, c)
 }
-func newPlayerStore(db *dynamodb.Client, cfg *config.Config) *player.Store {
-	return player.NewStore(db, cfg.Env)
+func newPlayerStore(db *dynamodb.Client, cfg *config.Config, c cache.Backend) *player.Store {
+	return player.NewStore(db, cfg.Env, c)
 }
 func newPlayerService(store *player.Store, wallet *walletclient.Client) *player.Service {
 	return player.NewService(store).WithWallet(wallet)
@@ -186,14 +186,14 @@ func newLeaderboardStore(db *dynamodb.Client, cfg *config.Config) *leaderboard.S
 func newLeaderboardService(store *leaderboard.Store) *leaderboard.Service {
 	return leaderboard.NewServiceWithStore(store)
 }
-func newRouletteStore(db *dynamodb.Client, cfg *config.Config) *dailyreward.Store {
-	return dailyreward.NewStore(db, cfg.Env)
+func newRouletteStore(db *dynamodb.Client, cfg *config.Config, c cache.Backend) *dailyreward.Store {
+	return dailyreward.NewStore(db, cfg.Env, c)
 }
 func newRouletteService(wallet *walletclient.Client, store *dailyreward.Store) *dailyreward.Service {
 	return dailyreward.NewService(wallet, store)
 }
-func newSessionStore(db *dynamodb.Client, cfg *config.Config) *sessionlog.Store {
-	return sessionlog.NewStore(db, cfg.Env)
+func newSessionStore(db *dynamodb.Client, cfg *config.Config, c cache.Backend) *sessionlog.Store {
+	return sessionlog.NewStore(db, cfg.Env, c)
 }
 func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service, sessionStore *sessionlog.Store) *buyin.Service {
 	if cfg.RealMoneyEnabled {

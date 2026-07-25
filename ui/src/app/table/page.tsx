@@ -15,6 +15,7 @@ import {ActionBar} from '@/components/table/ActionBar';
 import {Chat} from '@/components/table/Chat';
 import {InviteDialog} from '@/components/table/InviteDialog';
 import {LeaveDialog} from '@/components/table/LeaveDialog';
+import {RebuyDialog} from '@/components/table/RebuyDialog';
 import {MockControls} from '@/components/table/MockControls';
 import type {HandOutcomeState} from '@/components/table/HandOutcome';
 import {LastWinners} from '@/components/table/LastWinners';
@@ -62,7 +63,12 @@ function actionState(snapshot: TableSnapshot, viewer?: string) {
   const seat = snapshot.seats.find(item => item.player_id === viewer);
   const serverActions = snapshot.legal_actions;
   const currentContribution = Math.max(0, ...snapshot.seats.map(item => item.contributed));
-  const callAmount = serverActions?.call_amount ?? Math.max(0, currentContribution - (seat?.contributed || 0));
+  const rawCallAmount = serverActions?.call_amount ?? Math.max(0, currentContribution - (seat?.contributed || 0));
+  // A call can never cost more than the caller's own stack — a shorter stack
+  // facing a bigger bet just calls all-in for what it has, so the amount
+  // shown (and asked to pay) must be capped here regardless of what the raw
+  // "amount needed to match" comes out to.
+  const callAmount = Math.min(seat?.stack || 0, rawCallAmount);
   const isTurn = snapshot.current_player_id ? snapshot.current_player_id === viewer : Boolean(seat && seat.state === 'active' && BETTING_STAGES.has(snapshot.stage));
   const legacyActions: PokerAction[] = !seat || !BETTING_STAGES.has(snapshot.stage) || seat.state !== 'active' ? [] : [
     'fold', callAmount > 0 ? 'call' : 'check', ...(seat.stack > callAmount ? ['raise' as const] : [])
@@ -270,9 +276,11 @@ function TableContent() {
             {viewerSeat && viewerSeat.state !== 'sitting_out' &&
                 <Button type="button" variant="ghost" size="icon" aria-label="Sentar fora" disabled={rt.readyPending}
                         onClick={() => rt.ready(false)}><Pause/></Button>}
-            {viewerSeat?.state === 'sitting_out' &&
+            {viewerSeat?.state === 'sitting_out' && viewerSeat.stack > 0 &&
                 <Button type="button" variant="ghost" size="icon" aria-label="Voltar a jogar" disabled={rt.readyPending}
                         onClick={() => rt.ready(true)}><Play/></Button>}
+            {viewerSeat?.state === 'sitting_out' && viewerSeat.stack === 0 && room &&
+                <RebuyDialog roomId={id} room={room} onRebuyAction={() => rt.ready(true)}/>}
             <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} onLeftAction={amount => {
               pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
               queryClient.setQueryData(['seated', id], {seated: false, stack: 0});

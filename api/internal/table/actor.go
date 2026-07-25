@@ -56,32 +56,38 @@ type Actor struct {
 	// exit). kickTimers holds one AfterFunc per currently-disconnected
 	// player — unlike turnTimer/nextHandTimer there can be several at once,
 	// one per seat.
-	kickGrace             time.Duration
-	kickTimers            map[string]*time.Timer
-	playerNames           map[string]string
-	turnTimer             *time.Timer
-	turnDeadline          time.Time
-	turnDeadlineFor       string
-	turnDeadlineForStage  hand.Stage
-	nextHandTimer         *time.Timer
-	nextHandDeadline      time.Time
-	nextHandArmedFor      string
-	nextHandDelay         time.Duration
-	lastBroadcastStage    hand.Stage
-	runoutTimer           *time.Timer
-	runoutTimerHandID     string
-	runoutTimerStage      hand.Stage
-	runoutStreetDelay     time.Duration
-	escalationInterval    time.Duration
-	escalationCfg         roomstore.BlindEscalation
-	afkSweepTimer         *time.Timer
-	afkSweepInterval      time.Duration
-	done                  chan struct{}
-	equityEnabled         atomic.Bool
-	onHandComplete        func(string, hand.HandOutcome, map[string]string)
-	completedHandNotified string
-	outcomeLoggedForHand  string
-	onSeatsChanged        func(int)
+	kickGrace            time.Duration
+	kickTimers           map[string]*time.Timer
+	playerNames          map[string]string
+	turnTimer            *time.Timer
+	turnDeadline         time.Time
+	turnDeadlineFor      string
+	turnDeadlineForStage hand.Stage
+	// pendingPersistedDeadline carries a just-loaded StoredTable's
+	// TurnDeadlineUnixMs across to the next armTurnTimer call (set by
+	// ensureLoaded, consumed and zeroed by armTurnTimer) so a freshly
+	// (re)loaded actor resumes the true remaining time on the current turn
+	// instead of computing a brand new turnTimeout window from now.
+	pendingPersistedDeadline int64
+	nextHandTimer            *time.Timer
+	nextHandDeadline         time.Time
+	nextHandArmedFor         string
+	nextHandDelay            time.Duration
+	lastBroadcastStage       hand.Stage
+	runoutTimer              *time.Timer
+	runoutTimerHandID        string
+	runoutTimerStage         hand.Stage
+	runoutStreetDelay        time.Duration
+	escalationInterval       time.Duration
+	escalationCfg            roomstore.BlindEscalation
+	afkSweepTimer            *time.Timer
+	afkSweepInterval         time.Duration
+	done                     chan struct{}
+	equityEnabled            atomic.Bool
+	onHandComplete           func(string, hand.HandOutcome, map[string]string)
+	completedHandNotified    string
+	outcomeLoggedForHand     string
+	onSeatsChanged           func(int)
 	// onPlayerRemoved fires only for a system-initiated removal (AFK sweep,
 	// disconnect kick timeout) — never for a player-requested LeaveCmd, which
 	// the client already knows about and navigates away for itself. It lets
@@ -292,6 +298,7 @@ func (a *Actor) ensureLoaded(ctx context.Context, force bool) error {
 	a.cached = hand.NewTableFromState(stored.State)
 	a.version = stored.Version
 	a.handID = stored.HandID
+	a.pendingPersistedDeadline = stored.TurnDeadlineUnixMs
 	a.rearmTimersFromCache()
 	return nil
 }
@@ -543,11 +550,31 @@ func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.A
 	}
 	newState := a.cached.ExportState()
 	entry.TableID, entry.HandID, entry.Version = a.id, a.handID, a.version+1
-	if err := a.store.CommitAction(ctx, a.id, a.handID, actionID, a.version, newState, *entry); err != nil {
+	deadline := a.turnDeadlineForPersist()
+	if err := a.store.CommitAction(ctx, a.id, a.handID, actionID, a.version, newState, deadline, *entry); err != nil {
 		return err
 	}
 	a.version++
 	return nil
+}
+
+// turnDeadlineForPersist returns the deadline to commit alongside this
+// state: unchanged (already-armed) if this action didn't change whose turn
+// it is or what stage they're acting in, freshly computed one turnTimeout
+// from now if it did, 0 if no one is on the clock. armTurnTimer (called from
+// broadcastAll right after every commit) is the one source of truth for
+// actually scheduling the timeout and for a.turnDeadlineFor/ForStage — this
+// only has to agree closely enough that a later reload resumes the same
+// instant instead of granting a fresh window (see StoredTable.TurnDeadlineUnixMs).
+func (a *Actor) turnDeadlineForPersist() int64 {
+	current := a.cached.CurrentPlayerIDForActor()
+	if current == "" {
+		return 0
+	}
+	if current == a.turnDeadlineFor && a.cached.Stage() == a.turnDeadlineForStage {
+		return a.turnDeadline.UnixMilli()
+	}
+	return timeNowFunc().Add(a.turnTimeout).UnixMilli()
 }
 
 // retryOnConflict runs apply once. If a version conflict is detected (another
@@ -950,14 +977,30 @@ func (a *Actor) armTurnTimer(current string, stage hand.Stage, grace time.Durati
 	a.turnDeadlineFor = current
 	a.turnDeadlineForStage = stage
 	if current == "" {
+		a.pendingPersistedDeadline = 0
 		return
 	}
-	duration := a.turnTimeout + grace
-	a.turnDeadline = timeNowFunc().Add(duration)
+	deadline := timeNowFunc().Add(a.turnTimeout + grace)
+	// A freshly (re)loaded actor (ensureLoaded set this from
+	// StoredTable.TurnDeadlineUnixMs) has never armed this exact turn before,
+	// so the guard above never matches on its first call here — reuse the
+	// persisted deadline verbatim (even if already past — the timer below
+	// then fires ~immediately, correctly enforcing an overdue auto-fold)
+	// instead of granting a brand new full window just because this
+	// instance's own bookkeeping started from zero values.
+	if a.pendingPersistedDeadline > 0 {
+		deadline = time.UnixMilli(a.pendingPersistedDeadline)
+	}
+	a.pendingPersistedDeadline = 0
+	a.turnDeadline = deadline
+	remaining := time.Until(deadline)
+	if remaining < 0 {
+		remaining = 0
+	}
 	// The timer only dispatches a command; all map/state mutations happen
 	// inside Run (handleTurnTimeout), so there is no data race with the Run
 	// goroutine.
-	a.turnTimer = time.AfterFunc(duration, func() {
+	a.turnTimer = time.AfterFunc(remaining, func() {
 		reply := make(chan error, 1)
 		_ = a.Dispatch(turnTimeoutCmd{PlayerID: current, Reply: reply})
 	})

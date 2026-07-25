@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"gopkg.aoctech.app/api-commons/cache"
 )
 
 func testClient(t *testing.T) *dynamodb.Client {
@@ -73,7 +74,7 @@ func mustCreateTestTable(ctx context.Context, t *testing.T, db *dynamodb.Client,
 
 func TestCreateGetAndListPublic(t *testing.T) {
 	db := testClient(t)
-	s := NewStore(db, "test")
+	s := NewStore(db, "test", cache.NewMemoryBackend(10))
 	ctx := context.Background()
 	mustCreateTestTable(ctx, t, db, "test")
 

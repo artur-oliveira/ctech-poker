@@ -48,6 +48,7 @@ type Service struct {
 	sessions   *sessionlog.Store
 	players    interface {
 		RequireAccepted(context.Context, string) error
+		GetOrCreate(context.Context, string) (*player.PlayerProfile, error)
 	}
 }
 
@@ -200,6 +201,17 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 			}
 		}
 		return fmt.Errorf("buyin: seat failed, debit refunded: %w", joinErr)
+	}
+
+	// Seed the display name at seating time, not lazily on this player's own
+	// WS connect (tablews.go does that too, for reconnects) — otherwise every
+	// other viewer sees this seat as "Visitante" for however long it takes
+	// this player's client to actually open its socket after buying in.
+	if s.players != nil {
+		if profile, perr := s.players.GetOrCreate(ctx, playerID); perr == nil && profile != nil && profile.Name != "" {
+			nameReply := make(chan error, 1)
+			_ = actor.Dispatch(table.SetNameCmd{PlayerID: playerID, Name: profile.Name, Reply: nameReply})
+		}
 	}
 
 	if s.sessions != nil {

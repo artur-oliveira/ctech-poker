@@ -69,6 +69,9 @@ function RaiseControl({minRaise, maxRaise, raiseStep, pot, disabled, pending, on
   const [expanded, setExpanded] = useState(false);
   const safeAmount = Math.min(maxRaise, Math.max(minRaise, amount));
   const inactive = disabled || maxRaise <= minRaise;
+  // Raising to the max is shoving the whole stack — call it what it is
+  // instead of a "Pay" label with a number that happens to equal the stack.
+  const isAllIn = safeAmount >= maxRaise;
   const snap = (value: number) => Math.min(maxRaise, Math.max(minRaise, Math.round(value / raiseStep) * raiseStep));
   const presets = [
     {label: 'Mín', value: minRaise},
@@ -144,8 +147,8 @@ function RaiseControl({minRaise, maxRaise, raiseStep, pot, disabled, pending, on
     <Button type="button" disabled={inactive} aria-keyshortcuts="r"
             aria-describedby="action-context" onClick={handleRaiseClick}
             className={`raise${expanded ? '' : ' raise-collapsed'}`}>
-      {pending ? <><LoaderCircle className="action-spinner"/> {actionLabel.raise}</> :
-        <span>{expanded ? `Aumentar ${safeAmount.toLocaleString('pt-BR')}` : 'Aumentar'} <kbd aria-hidden="true">R</kbd></span>}
+      {pending ? <><LoaderCircle className="action-spinner"/> {isAllIn ? 'Indo All In…' : actionLabel.raise}</> :
+        <span>{expanded ? (isAllIn ? `All In ${safeAmount.toLocaleString('pt-BR')}` : `Aumentar ${safeAmount.toLocaleString('pt-BR')}`) : (isAllIn ? 'All In' : 'Aumentar')} <kbd aria-hidden="true">R</kbd></span>}
     </Button>
     {expanded && <Button type="button" variant="ghost" className="raise-cancel"
                          onClick={() => setExpanded(false)}>Cancelar</Button>}

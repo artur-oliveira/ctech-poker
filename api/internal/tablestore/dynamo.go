@@ -115,11 +115,25 @@ func (s *Store) SeedTable(ctx context.Context, tableID string, state hand.State)
 	return nil
 }
 
+// LoadTable always does a strongly consistent read (via TransactGetItems,
+// the only way api-commons' dynamo.Base exposes one for a single-item get).
+// A plain eventually-consistent GetItem here would let ensureLoaded
+// (internal/table/actor.go) observe "no item" for a table this same request
+// just seeded/committed a moment earlier on a different replica — any
+// instance may serve any table with no proxying to a lease holder
+// (ARCHITECTURE.md §2), so that race is routine, not a corner case, and it
+// surfaces to players as a wrongly-rejected "no state seeded" action error.
 func (s *Store) LoadTable(ctx context.Context, tableID string) (*StoredTable, error) {
-	item, err := s.state.GetItem(ctx, tableID)
+	resp, err := s.state.TransactGetItems(ctx, []types.TransactGetItem{
+		{Get: &types.Get{
+			TableName: aws.String(s.state.TableName),
+			Key:       map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: tableID}},
+		}},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("tablestore: get table: %w", err)
 	}
+	item := resp[0].Item
 	if item == nil {
 		return nil, nil
 	}
@@ -133,7 +147,7 @@ func (s *Store) LoadTable(ctx context.Context, tableID string) (*StoredTable, er
 // ctech-wallet/api/internal/repositories/wallet.go's mutate/resolveTxErr
 // shape: on a failed condition, re-read the guard to disambiguate a version
 // race from a duplicate submission.
-func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID string, expectedVersion int, newState hand.State, entry ActionLogEntry) error {
+func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID string, expectedVersion int, newState hand.State, turnDeadlineUnixMs int64, entry ActionLogEntry) error {
 	entry.Timestamp = timeNowFunc().UnixMilli()
 	stateItem, err := dynamo.Encode(struct {
 		State hand.State `dynamodbav:"state"`
@@ -148,6 +162,7 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 		":expected":     mustN(expectedVersion),
 		":handID":       &types.AttributeValueMemberS{Value: handID},
 		":state":        stateAV,
+		":turnDeadline": mustN(int(turnDeadlineUnixMs)),
 		":lastActionAt": mustN(int(timeNowFunc().Unix())),
 	}
 	names := map[string]string{
@@ -155,7 +170,7 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 		"#state":   "state",
 	}
 	stateTx := s.state.BuildRawUpdateTxItem(tableID, nil,
-		"SET #version = :newVersion, hand_id = :handID, #state = :state, last_action_at = :lastActionAt",
+		"SET #version = :newVersion, hand_id = :handID, #state = :state, turn_deadline_unix_ms = :turnDeadline, last_action_at = :lastActionAt",
 		"attribute_exists(pk) AND #version = :expected", names, values)
 
 	logItem, err := dynamo.Encode(struct {

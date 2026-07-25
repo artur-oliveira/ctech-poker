@@ -7,8 +7,17 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamotypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/api-commons/dynamo"
+	"gopkg.aoctech.app/poker/api/internal/cachekit"
 )
+
+// handCacheTTL is long-lived and needs no invalidation: RecordHand always
+// writes a brand-new SK (HandID, a ULID), so an existing hand item is never
+// mutated after GetHand could first observe it.
+const handCacheTTL = time.Hour
+
+func handCacheKey(playerID, handID string) string { return "hand:" + playerID + ":" + handID }
 
 // sessionSK builds the sort key for a session item: a nanosecond timestamp
 // makes cross-table collisions (two RecordSession calls landing in the same
@@ -81,12 +90,14 @@ type OpponentSummary struct {
 type Store struct {
 	sessions dynamo.Base
 	hands    dynamo.Base
+	cache    cache.Backend
 }
 
-func NewStore(db *dynamodb.Client, env string) *Store {
+func NewStore(db *dynamodb.Client, env string, c cache.Backend) *Store {
 	return &Store{
 		sessions: dynamo.NewBase(db, env, tableSessions),
 		hands:    dynamo.NewBase(db, env, tableHands),
+		cache:    c,
 	}
 }
 
@@ -221,16 +232,13 @@ func (s *Store) ListHandsByTable(ctx context.Context, playerID, tableID string, 
 }
 
 func (s *Store) GetHand(ctx context.Context, playerID, handID string) (*HandItem, error) {
-	res, err := s.hands.GetItem(ctx, playerID, handID)
-	if err != nil {
-		return nil, err
-	} else if res == nil {
-		return nil, nil
-	}
-	loaded, err := dynamo.Decode[HandItem](res)
-
-	if err != nil {
-		return nil, err
-	}
-	return loaded, nil
+	return cachekit.GetOrLoad(ctx, s.cache, handCacheKey(playerID, handID), handCacheTTL, func() (*HandItem, error) {
+		res, err := s.hands.GetItem(ctx, playerID, handID)
+		if err != nil {
+			return nil, err
+		} else if res == nil {
+			return nil, nil
+		}
+		return dynamo.Decode[HandItem](res)
+	})
 }

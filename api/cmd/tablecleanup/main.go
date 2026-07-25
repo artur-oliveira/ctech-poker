@@ -147,7 +147,7 @@ func handler(ctx context.Context) error {
 	}
 	db := dynamodb.NewFromConfig(awsCfg)
 	store := tablestore.NewStore(db, cfg.Env)
-	rooms := roomstore.NewStore(db, cfg.Env)
+	rooms := roomstore.NewStore(db, cfg.Env, cache.NewMemoryBackend(10))
 	wallet := walletclient.New(cfg, cache.NewMemoryBackend(10))
 	return run(ctx, store, rooms, wallet, staleCutoff)
 }

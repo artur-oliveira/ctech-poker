@@ -856,7 +856,7 @@ export class MockTableService {
     if (!seat || seat.state !== 'active') return {actions: []};
     const committed = this.streetCommitted[playerId] || 0;
     const currentBet = this.streetBet(seats);
-    const callAmount = Math.max(0, currentBet - committed);
+    const callAmount = Math.min(seat.stack, Math.max(0, currentBet - committed));
     const maxTo = seat.stack + committed;
     const minTo = currentBet + 25;
     const actions: PokerAction[] = callAmount > 0 ? ['fold', 'call', 'raise'] : ['fold', 'check', 'raise'];

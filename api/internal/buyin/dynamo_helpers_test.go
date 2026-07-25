@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 )
 
@@ -68,5 +69,5 @@ func testSessionStore(t *testing.T) *sessionlog.Store {
 	env := fmt.Sprintf("buyin_sessions_test_%d", time.Now().UnixNano())
 	createTestTable(t, db, env+"_poker_player_sessions", true)
 	createTestTable(t, db, env+"_poker_player_hands", true)
-	return sessionlog.NewStore(db, env)
+	return sessionlog.NewStore(db, env, cache.NewMemoryBackend(10))
 }

@@ -22,10 +22,15 @@ function joinErrorMessage(err: unknown) {
   return GENERIC_JOIN_ERROR;
 }
 
-function midBuyIn(min: number, max: number, bigBlind: number) {
+export function midBuyIn(min: number, max: number, bigBlind: number) {
   const bb = bigBlind > 0 ? bigBlind : 1;
   const mid = Math.round((min + max) / 2 / bb) * bb;
   return Math.min(max, Math.max(min, mid));
+}
+
+export function formatBuyIn(amount: number, isReal: boolean) {
+  return isReal ? (amount / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}) :
+    amount.toLocaleString('pt-BR');
 }
 
 /** Buy-in ceremony: the explicit consent step between the lobby and the seat.
@@ -73,8 +78,7 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
   const value = amount ?? midBuyIn(room.buy_in_min, room.buy_in_max, room.big_blind);
   const isReal = room.currency_mode === 'real';
   const unit = isReal ? 'reais' : 'fichas';
-  const fmt = (n: number) => isReal ? (n / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})
-    : n.toLocaleString('pt-BR');
+  const fmt = (n: number) => formatBuyIn(n, isReal);
 
   async function confirm() {
     setJoining(true);

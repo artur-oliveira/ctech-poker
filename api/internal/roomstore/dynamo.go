@@ -4,10 +4,13 @@ package roomstore
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/api-commons/dynamo"
+	"gopkg.aoctech.app/poker/api/internal/cachekit"
 )
 
 const (
@@ -16,15 +19,24 @@ const (
 	gsiShareCode = "gsi_share_code"
 
 	roomSK = "meta"
+
+	// roomCacheTTL is short: seats_taken changes on every seat join/leave
+	// (SetSeatsTaken), which already invalidates the key on write — this TTL
+	// is only the safety net for a missed invalidation, not the main
+	// consistency mechanism.
+	roomCacheTTL = 30 * time.Second
 )
 
 type Store struct {
-	base dynamo.Base
+	base  dynamo.Base
+	cache cache.Backend
 }
 
-func NewStore(db *dynamodb.Client, env string) *Store {
-	return &Store{base: dynamo.NewBase(db, env, tableRooms)}
+func NewStore(db *dynamodb.Client, env string, c cache.Backend) *Store {
+	return &Store{base: dynamo.NewBase(db, env, tableRooms), cache: c}
 }
+
+func roomCacheKey(roomID string) string { return "room:" + roomID }
 
 func (s *Store) Create(ctx context.Context, r Room) error {
 	item, err := dynamo.Encode(struct {
@@ -66,6 +78,7 @@ func (s *Store) SetSeatsTaken(ctx context.Context, roomID string, seatsTaken int
 	if !ok {
 		return fmt.Errorf("roomstore: room disappeared while setting seats taken")
 	}
+	cachekit.Invalidate(ctx, s.cache, roomCacheKey(roomID))
 	return nil
 }
 
@@ -77,18 +90,21 @@ func (s *Store) Delete(ctx context.Context, roomID string) error {
 	if err != nil {
 		return fmt.Errorf("roomstore: delete: %w", err)
 	}
+	cachekit.Invalidate(ctx, s.cache, roomCacheKey(roomID))
 	return nil
 }
 
 func (s *Store) Get(ctx context.Context, roomID string) (*Room, error) {
-	item, err := s.base.GetItem(ctx, roomID, roomSK)
-	if err != nil {
-		return nil, fmt.Errorf("roomstore: get: %w", err)
-	}
-	if item == nil {
-		return nil, nil
-	}
-	return dynamo.Decode[Room](item)
+	return cachekit.GetOrLoad(ctx, s.cache, roomCacheKey(roomID), roomCacheTTL, func() (*Room, error) {
+		item, err := s.base.GetItem(ctx, roomID, roomSK)
+		if err != nil {
+			return nil, fmt.Errorf("roomstore: get: %w", err)
+		}
+		if item == nil {
+			return nil, nil
+		}
+		return dynamo.Decode[Room](item)
+	})
 }
 
 func (s *Store) GetByShareCode(ctx context.Context, code string) (*Room, error) {
