@@ -111,7 +111,10 @@ export class DynamoDBStack extends cdk.Stack {
     // One item per player/day and a TTL for automatic cooldown history cleanup.
     table('poker_daily_reward', true, true);
     table('poker_pending_cashouts', true);
-    table('poker_player_sessions', true);
+    // poker_player_sessions: TTL'd — only tracks which table a player is
+    // currently at (or was recently at); the durable per-hand history lives
+    // in poker_player_hands instead.
+    table('poker_player_sessions', true, true);
     table('poker_player_hands', true);
   }
 }

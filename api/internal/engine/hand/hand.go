@@ -7,6 +7,7 @@ package hand
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -140,6 +141,13 @@ type HandOutcome struct {
 	// was ever shown to the table. Only populated when !WonWithoutShowdown
 	// (a real showdown happened, so there's something to compare).
 	ShowdownResults map[string]ShowdownResult
+	// ServerSeed and CommitHash are this hand's shuffle fairness proof
+	// (deck.ShuffleResult), hex-encoded. ServerSeed alone lets anyone
+	// recompute the full 52-card shuffle (shuffleWithSeed is a deterministic
+	// function of it) and CommitHash lets them verify it matches what the
+	// server committed to before dealing (ARCHITECTURE.md § 3.5 / B32).
+	ServerSeed string
+	CommitHash string
 }
 
 // PlayerHandInfo is one participant's hole cards from HandOutcome. Revealed
@@ -1086,6 +1094,10 @@ func (t *Table) runShowdown() {
 		Participants:       participantIDs(t.handOrder),
 		Payouts:            payouts,
 		Contributions:      contributionsByID,
+	}
+	if t.shuffle != nil {
+		outcome.ServerSeed = hex.EncodeToString(t.shuffle.ServerSeed[:])
+		outcome.CommitHash = hex.EncodeToString(t.shuffle.CommitHash[:])
 	}
 	if !wonWithoutShowdown {
 		outcome.WinningCategory = categoryNames[winningScore.Category()]

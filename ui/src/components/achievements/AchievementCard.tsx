@@ -2,7 +2,7 @@
 import {useState} from 'react';
 import {Star} from 'lucide-react';
 import {PlayingCard} from '@/components/table/PlayingCard';
-import {achievementProgress, type Achievement, type AchievementProgress} from '@/lib/api/achievements';
+import {type Achievement, achievementProgress, type AchievementProgress} from '@/lib/api/achievements';
 import {achievementDescription, achievementExample, achievementLabel} from '@/lib/achievements';
 
 // Progress is undefined for the not-logged variant (no player data to merge):
@@ -28,7 +28,8 @@ export function AchievementCard({achievement, count}: { achievement: Achievement
           const filled = previewing ? i <= hoverIndex! : Boolean(progress && i < progress.starsFilled);
           return <button key={tier.stars} type="button" className={`achievement-star${filled ? ' is-filled' : ''}`}
                          onMouseEnter={() => setHoverIndex(i)} onFocus={() => setHoverIndex(i)}
-                         onBlur={() => setHoverIndex(null)} aria-label={`Nível ${tier.stars}: ${tier.threshold.toLocaleString('pt-BR')}`}>
+                         onBlur={() => setHoverIndex(null)}
+                         aria-label={`Nível ${tier.stars}: ${tier.threshold.toLocaleString('pt-BR')}`}>
             <Star fill={filled ? 'currentColor' : 'none'} aria-hidden="true"/>
           </button>;
         })}
@@ -38,8 +39,10 @@ export function AchievementCard({achievement, count}: { achievement: Achievement
         </span>}
       </div>
       {progress
-        ? <p className="achievement-count">{progress.maxed ? 'Completo' : `${progress.count.toLocaleString('pt-BR')}/${progress.nextTier!.threshold.toLocaleString('pt-BR')}`}</p>
-        : <p className="achievement-count achievement-count-locked">{achievement.tiers.map(t => t.threshold.toLocaleString('pt-BR')).join(' · ')}</p>}
+        ? <p
+          className="achievement-count">{progress.maxed ? 'Completo' : `${progress.count.toLocaleString('pt-BR')}/${progress.nextTier!.threshold.toLocaleString('pt-BR')}`}</p>
+        : <p
+          className="achievement-count achievement-count-locked">{achievement.tiers.map(t => t.threshold.toLocaleString('pt-BR')).join(' · ')}</p>}
     </div>
   </article>;
 }

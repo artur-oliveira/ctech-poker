@@ -35,7 +35,21 @@ const ROLE_LABELS: Record<string, string> = {
 // Seats 3/4/5 sit on the top rail; their winner pill must drop below instead of above.
 const TOP_SEAT_INDICES = [3, 4, 5];
 
-export function Seat({seat, isViewer, isTurn, index, payout = 0, isWinner = false, deadlineMs, nowMs, bigBlind, stackBefore, isDealer = false, isSmallBlind = false, isBigBlind = false}: {
+export function Seat({
+                       seat,
+                       isViewer,
+                       isTurn,
+                       index,
+                       payout = 0,
+                       isWinner = false,
+                       deadlineMs,
+                       nowMs,
+                       bigBlind,
+                       stackBefore,
+                       isDealer = false,
+                       isSmallBlind = false,
+                       isBigBlind = false
+                     }: {
   seat: SeatView;
   isViewer: boolean;
   isTurn: boolean;
@@ -68,7 +82,7 @@ export function Seat({seat, isViewer, isTurn, index, payout = 0, isWinner = fals
         <span key={deadlineMs} className="seat-turn-ring" style={{animationDuration: `${remainingMs}ms`}}
               aria-hidden="true"/>}
     {role && <span className={`seat-role ${isDealer ? 'is-dealer' : ''}`} title={ROLE_LABELS[role]}
-                    aria-label={ROLE_LABELS[role]}>{role}</span>}
+                   aria-label={ROLE_LABELS[role]}>{role}</span>}
     <div className="seat-cards">{[0, 1].map(i => {
       const card = cards?.[i];
       return <PlayingCard key={`${i}-${card || 'back'}`} card={card} index={i} size="hole"
@@ -80,8 +94,8 @@ export function Seat({seat, isViewer, isTurn, index, payout = 0, isWinner = fals
       <b
         title={seat.name || undefined}>{playerName(seat.player_id, isViewer ? seat.player_id : undefined, seat.name)}</b><span>{displayStack.toLocaleString('pt-BR')} fichas</span>{chance != null && isViewer &&
         <div className="seat-equity" aria-label={`Chance estimada de vitória: ${chance}%`}>
-          <Progress value={chance} indicatorClassName={equityTone(chance)}/>
-          <small>Chance {chance}%</small>
+            <Progress value={chance} indicatorClassName={equityTone(chance)}/>
+            <small>Chance {chance}%</small>
         </div>}{STATE_LABELS[seat.state] &&
         <small className="seat-state">{STATE_LABELS[seat.state]}</small>}{seat.hand_category &&
         <small className="seat-hand-category">{HAND_CATEGORY_LABELS[seat.hand_category] || seat.hand_category}</small>}

@@ -168,7 +168,7 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
       <b>{shown.kind === 'win' ? 'Você venceu a mão!' : 'Não foi dessa vez.'}</b>
       {shown.winningCards && <span className="hand-outcome-cards">
         {shown.winningCards.map((card, i) => <PlayingCard key={i} card={card} index={i} size="hole"
-                                                            owner={shown.kind === 'win' ? 'viewer' : 'opponent'}/>)}
+                                                          owner={shown.kind === 'win' ? 'viewer' : 'opponent'}/>)}
       </span>}
       {shown.stackBefore != null && shown.stackAfter != null && shown.stackBefore !== shown.stackAfter &&
           <ChipCountUp from={shown.stackBefore} to={shown.stackAfter}/>}

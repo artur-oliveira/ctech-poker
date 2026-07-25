@@ -22,6 +22,15 @@ func sessionSK() string {
 const (
 	tableSessions = "poker_player_sessions"
 	tableHands    = "poker_player_hands"
+
+	// sessionTTLDays bounds how long a session item (open or closed) stays in
+	// poker_player_sessions — this table only answers "which table is/was a
+	// player at", it isn't the durable history (that's poker_player_hands, no
+	// TTL). Set once at creation, not refreshed on close: a session outliving
+	// this window before cashing out just drops its "currently seated" lookup
+	// early, which is harmless since the wallet stays the source of truth for
+	// balance (CloseSession's doc comment).
+	sessionTTLDays = 30
 )
 
 type SessionItem struct {
@@ -33,6 +42,7 @@ type SessionItem struct {
 	NetPnL        int64  `dynamodbav:"net_pnl" json:"net_pnl"`
 	JoinedAt      int64  `dynamodbav:"joined_at" json:"joined_at"`
 	EndedAt       int64  `dynamodbav:"ended_at" json:"ended_at"`
+	TTL           int64  `dynamodbav:"ttl,omitempty" json:"-"`
 }
 
 type HandItem struct {
@@ -40,12 +50,17 @@ type HandItem struct {
 	SK        string            `dynamodbav:"sk" json:"sk"` // timestamp / hand_id
 	TableID   string            `dynamodbav:"table_id" json:"table_id"`
 	HandID    string            `dynamodbav:"hand_id" json:"hand_id"`
-	Outcome   string            `dynamodbav:"outcome" json:"outcome"`
+	Outcome   string            `dynamodbav:"outcome" json:"outcome"` // won | lost | tied
 	NetChange int64             `dynamodbav:"net_change" json:"net_change"`
 	EndedAt   int64             `dynamodbav:"ended_at" json:"ended_at"`
 	Board     []string          `dynamodbav:"board,omitempty" json:"board,omitempty"`
 	HoleCards []string          `dynamodbav:"hole_cards,omitempty" json:"hole_cards,omitempty"`
 	Opponents []OpponentSummary `dynamodbav:"opponents,omitempty" json:"opponents,omitempty"`
+	// ServerSeed and CommitHash are the hand's shuffle fairness proof
+	// (hand.HandOutcome.ServerSeed/CommitHash), hex-encoded — lets the
+	// player independently verify the deck they were dealt (B32).
+	ServerSeed string `dynamodbav:"server_seed,omitempty" json:"server_seed,omitempty"`
+	CommitHash string `dynamodbav:"commit_hash,omitempty" json:"commit_hash,omitempty"`
 }
 
 // OpponentSummary is one other participant of a recorded hand, for a
@@ -73,6 +88,9 @@ func NewStore(db *dynamodb.Client, env string) *Store {
 func (s *Store) RecordSession(ctx context.Context, item SessionItem) error {
 	if item.SK == "" {
 		item.SK = sessionSK()
+	}
+	if item.TTL == 0 {
+		item.TTL = time.Now().Add(sessionTTLDays * 24 * time.Hour).Unix()
 	}
 	encoded, err := dynamo.Encode(item)
 	if err != nil {

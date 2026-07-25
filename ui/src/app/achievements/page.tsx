@@ -68,14 +68,14 @@ export default function Achievements() {
       </header>
       {authed && mine.isError &&
           <p className="form-error">Não foi possível carregar seu progresso agora. As conquistas abaixo mostram só o
-            catálogo.</p>}
+              catálogo.</p>}
       {catalog.isLoading ? <div className="lobby-empty"><span className="loader"/>Carregando conquistas…</div>
         : catalog.isError ? <div className="lobby-empty">Não foi possível carregar as conquistas.
-          <Button variant="outline" size="sm" onClick={() => void catalog.refetch()}>Tentar novamente</Button>
-        </div>
-        : <div className="achievements-grid">
-          {catalog.data!.map(a => <AchievementCard key={a.key} achievement={a} count={countFor(a.key)}/>)}
-        </div>}
+            <Button variant="outline" size="sm" onClick={() => void catalog.refetch()}>Tentar novamente</Button>
+          </div>
+          : <div className="achievements-grid">
+            {catalog.data!.map(a => <AchievementCard key={a.key} achievement={a} count={countFor(a.key)}/>)}
+          </div>}
     </section>
   </main>;
 }

@@ -92,7 +92,10 @@ function scoreFiveCards(cards: string[]): FiveCardScore {
     .sort((a, b) => b.count - a.count || b.value - a.value);
   const kickers = groups.flatMap(g => Array(g.count).fill(g.value));
 
-  if (isStraight && isFlush) return {category: straightHigh === 14 ? 'royal_flush' : 'straight_flush', tiebreak: [straightHigh]};
+  if (isStraight && isFlush) return {
+    category: straightHigh === 14 ? 'royal_flush' : 'straight_flush',
+    tiebreak: [straightHigh]
+  };
   if (groups[0].count === 4) return {category: 'four_of_a_kind', tiebreak: kickers};
   if (groups[0].count === 3 && groups[1]?.count === 2) return {category: 'full_house', tiebreak: kickers};
   if (isFlush) return {category: 'flush', tiebreak: values};

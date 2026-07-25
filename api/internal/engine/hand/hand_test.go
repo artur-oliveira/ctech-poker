@@ -399,8 +399,8 @@ func TestBustedAllInPlayerSitsOutInsteadOfBeingRedealt(t *testing.T) {
 	// Rig the deal so Dealer's quad aces beat SB's weak hole cards
 	// deterministically instead of depending on crypto/rand — SB must lose
 	// this all-in and bust to Stack 0.
-	players[0].HoleCards = [2]deck.Card{{Rank: deck.Ace, Suit: deck.Spades}, {Rank: deck.Ace, Suit: deck.Hearts}}    // Dealer: As Ah
-	players[1].HoleCards = [2]deck.Card{{Rank: deck.Five, Suit: deck.Clubs}, {Rank: deck.Six, Suit: deck.Clubs}}     // SB: 5c 6c
+	players[0].HoleCards = [2]deck.Card{{Rank: deck.Ace, Suit: deck.Spades}, {Rank: deck.Ace, Suit: deck.Hearts}}     // Dealer: As Ah
+	players[1].HoleCards = [2]deck.Card{{Rank: deck.Five, Suit: deck.Clubs}, {Rank: deck.Six, Suit: deck.Clubs}}      // SB: 5c 6c
 	players[2].HoleCards = [2]deck.Card{{Rank: deck.Seven, Suit: deck.Hearts}, {Rank: deck.Eight, Suit: deck.Hearts}} // BB: 7h 8h (folds, never shown)
 	table.shuffle.Cards[6] = deck.Card{Rank: deck.Ace, Suit: deck.Clubs}
 	table.shuffle.Cards[7] = deck.Card{Rank: deck.Ace, Suit: deck.Diamonds}
@@ -735,6 +735,32 @@ func TestHandOutcomeShowdownResultsMarksWinnerAndLoser(t *testing.T) {
 		if result.Won != winners[id] {
 			t.Fatalf("%s: ShowdownResults.Won=%v but outcome.Winners=%v", id, result.Won, outcome.Winners)
 		}
+	}
+}
+
+// TestHandOutcomeCapturesShuffleFairnessProof pins down that ServerSeed and
+// CommitHash (deck.ShuffleResult, B32) survive into HandOutcome after a real
+// StartHand-driven hand, hex-encoded — the field consumers (sessionlog.HandItem)
+// need to let a player recompute and verify the shuffle themselves.
+func TestHandOutcomeCapturesShuffleFairnessProof(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	for table.Stage() != Complete {
+		toAct := table.playerToActForTest()
+		if err := table.Act(toAct, betting.ActionCall, 0); err != nil {
+			_ = table.Act(toAct, betting.ActionCheck, 0)
+		}
+	}
+	outcome := table.LastOutcomeForActor()
+	if outcome == nil {
+		t.Fatal("expected a hand outcome after a completed showdown")
+	}
+	if len(outcome.ServerSeed) != 64 || len(outcome.CommitHash) != 64 {
+		t.Fatalf("expected 32-byte hex-encoded seed/hash (64 chars each), got seed=%q hash=%q", outcome.ServerSeed, outcome.CommitHash)
 	}
 }
 

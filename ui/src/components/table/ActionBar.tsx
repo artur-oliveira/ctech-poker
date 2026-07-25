@@ -203,16 +203,16 @@ export function ActionBar({
   return <div className="action-bar" role="group" aria-label="Ações da rodada" aria-busy={pending !== null}>
     <p id="action-context" className="action-context" aria-live="polite">{context}</p>
     {!noLegalActions && <div className="action-choices" role="group" aria-label="Ações rápidas">
-      <Button type="button" variant="outline" disabled={unavailable || !available.fold}
-              aria-describedby="action-context" aria-keyshortcuts="f"
-              onClick={() => onActAction('fold')}>{label('fold', 'Fold', 'F')}</Button>
-      <Button type="button" variant="outline" disabled={unavailable || !available.check}
-              aria-describedby="action-context" aria-keyshortcuts="c"
-              onClick={() => onActAction('check')}>{label('check', 'Check', 'C')}</Button>
-      <Button type="button" variant="outline" disabled={unavailable || !available.call}
-              aria-describedby="action-context" aria-keyshortcuts="p"
-              onClick={() => onActAction('call')}
-              className="call">{label('call', callAmount > 0 ? `Pagar ${callAmount.toLocaleString('pt-BR')}` : 'Pagar', 'P')}</Button>
+        <Button type="button" variant="outline" disabled={unavailable || !available.fold}
+                aria-describedby="action-context" aria-keyshortcuts="f"
+                onClick={() => onActAction('fold')}>{label('fold', 'Fold', 'F')}</Button>
+        <Button type="button" variant="outline" disabled={unavailable || !available.check}
+                aria-describedby="action-context" aria-keyshortcuts="c"
+                onClick={() => onActAction('check')}>{label('check', 'Check', 'C')}</Button>
+        <Button type="button" variant="outline" disabled={unavailable || !available.call}
+                aria-describedby="action-context" aria-keyshortcuts="p"
+                onClick={() => onActAction('call')}
+                className="call">{label('call', callAmount > 0 ? `Pagar ${callAmount.toLocaleString('pt-BR')}` : 'Pagar', 'P')}</Button>
     </div>}
     {!noLegalActions && <RaiseControl key={actionKey} minRaise={minRaise} maxRaise={maxRaise} raiseStep={raiseStep}
                                       pot={pot} disabled={unavailable || !available.raise}

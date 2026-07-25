@@ -233,6 +233,9 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 						break
 					}
 				}
+				if sr, ok := outcome.ShowdownResults[id]; ok && sr.Tied {
+					result = "tied"
+				}
 				var holeCards []string
 				if own, ok := outcome.PlayerHands[id]; ok {
 					holeCards = own.HoleCards[:]
@@ -255,6 +258,7 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 				if err := sessionStore.RecordHand(ctx, sessionlog.HandItem{
 					PK: id, TableID: tableID, HandID: handID, Outcome: result, NetChange: net, EndedAt: time.Now().UnixMilli(),
 					Board: outcome.Board, HoleCards: holeCards, Opponents: opponents,
+					ServerSeed: outcome.ServerSeed, CommitHash: outcome.CommitHash,
 				}); err != nil {
 					slog.Error("sessionlog: record hand failed", "table", tableID, "hand", handID, "player", id, "err", err)
 				}

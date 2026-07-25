@@ -41,7 +41,16 @@ type Props = {
   viewerStackBefore?: number;
 };
 
-export function TableStage({snapshot, viewer, pot, bigBlind, nowMs, outcome, holdOutcomeOpen, viewerStackBefore}: Props) {
+export function TableStage({
+                             snapshot,
+                             viewer,
+                             pot,
+                             bigBlind,
+                             nowMs,
+                             outcome,
+                             holdOutcomeOpen,
+                             viewerStackBefore
+                           }: Props) {
   const vertical = useVerticalStage();
   const seats = rotateSeats(snapshot.seats, viewer);
   const seatNode = (seat: TableSnapshot['seats'][number], index: number) =>
