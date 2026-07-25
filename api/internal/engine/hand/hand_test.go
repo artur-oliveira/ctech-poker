@@ -1123,3 +1123,53 @@ func TestSittingOutAfterHandDoesNotLeakStalePayouts(t *testing.T) {
 		}
 	}
 }
+
+// TestWaitingForPlayersFallbackClearsBoardAndShuffle reproduces the "new
+// join sees the previous hand's board" report: an all-in runout deals a full
+// 5-card board and a shuffle commit hash, the hand completes, then only one
+// player stays ready so StartHand's readyCount<2 branch falls back to
+// WaitingForPlayers. That branch cleared handOrder/payouts/lastOutcome but
+// never cleared board/shuffle, so a fresh joiner's very first snapshot
+// showed a "waiting_for_players" stage carrying the last hand's board and
+// shuffle_commit_hash.
+func TestWaitingForPlayersFallbackClearsBoardAndShuffle(t *testing.T) {
+	players := []*Player{
+		{ID: "P1", Stack: 500, Ready: true},
+		{ID: "P2", Stack: 500, Ready: true},
+	}
+	table := NewTable(players, 10, 20)
+	table.dealerDrawn = true
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	if err := table.Act("P1", betting.ActionRaise, 500); err != nil {
+		t.Fatalf("P1 shoves all-in: %v", err)
+	}
+	if err := table.Act("P2", betting.ActionRaise, 500); err != nil {
+		t.Fatalf("P2 calls all-in: %v", err)
+	}
+	table.AdvanceRunoutStreetForActor()
+	table.AdvanceRunoutStreetForActor()
+	if table.Stage() != Complete {
+		t.Fatalf("expected Complete after the all-in runout, got %v", table.Stage())
+	}
+	if len(table.board) != 5 {
+		t.Fatalf("expected a full 5-card board dealt by the runout, got %d cards", len(table.board))
+	}
+
+	table.SitOutForActor("P1")
+	if err := table.StartHand(); err == nil {
+		t.Fatal("expected StartHand to reject with only one ready player")
+	}
+	if table.Stage() != WaitingForPlayers {
+		t.Fatalf("expected fallback to waiting_for_players, got %v", table.Stage())
+	}
+
+	snap := table.ViewFor("P2")
+	if len(snap.Board) != 0 {
+		t.Fatalf("stale board leaked into a waiting_for_players snapshot: %+v", snap.Board)
+	}
+	if snap.ShuffleCommitHash != "" {
+		t.Fatalf("stale shuffle_commit_hash leaked into a waiting_for_players snapshot: %q", snap.ShuffleCommitHash)
+	}
+}

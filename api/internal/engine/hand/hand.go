@@ -458,6 +458,9 @@ func (t *Table) StartHand() error {
 		t.handOrder = nil
 		t.payouts = nil
 		t.lastOutcome = nil
+		t.board = nil
+		t.shuffle = nil
+		t.nextCard = 0
 		t.stage = WaitingForPlayers
 		for _, p := range t.players {
 			p.Contributed = 0
