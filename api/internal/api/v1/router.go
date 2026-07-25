@@ -54,8 +54,7 @@ func Register(
 	RegisterTableWS(router, verifier, manager, reg, cfg.CorsAllowedOrigins, seed, rooms, cfg, players)
 	auth := authMiddleware(verifier)
 	RegisterHandHistory(router, auth, &tablestoreAdapter{store: tableStore})
-	RegisterPlayerHistory(router, auth, sessionStore)
-	RegisterAchievements(router, auth, achievementStore)
+	RegisterAchievementCatalog(router)
 
 	// Fixed-window rate limits on the mutating endpoints (M6/S2). Keyed per
 	// caller IP; Redis (mandatory in prod, T2) makes the counter fleet-wide.
@@ -64,7 +63,7 @@ func Register(
 	spinLimiter := NewRateLimiter(cacheBackend, 60, time.Minute)
 
 	RegisterRooms(router, auth, rooms, buyinSvc, manager, createLimiter, joinLimiter)
-	RegisterPlayers(router, auth, players)
+	RegisterPlayers(router, auth, players, sessionStore, achievementStore)
 	RegisterLeaderboard(router, auth, leaderboardSvc)
 	RegisterDailyReward(router, auth, dailyRewardSvc, spinLimiter)
 }

@@ -24,11 +24,17 @@ func (f *fakeStaleQuerier) MarkArchived(_ context.Context, tableID string, _ int
 }
 
 type fakeRoomLookup struct {
-	rooms map[string]*roomstore.Room
+	rooms   map[string]*roomstore.Room
+	deleted []string
 }
 
 func (f *fakeRoomLookup) Get(_ context.Context, roomID string) (*roomstore.Room, error) {
 	return f.rooms[roomID], nil
+}
+
+func (f *fakeRoomLookup) Delete(_ context.Context, roomID string) error {
+	f.deleted = append(f.deleted, roomID)
+	return nil
 }
 
 type fakeSandboxCredit struct {
@@ -67,6 +73,9 @@ func TestRunRefundsSeatedSandboxPlayersAndArchives(t *testing.T) {
 	}
 	if len(stale.archived) != 1 || stale.archived[0] != "table-1" {
 		t.Fatalf("expected table-1 to be archived, got %v", stale.archived)
+	}
+	if len(rooms.deleted) != 1 || rooms.deleted[0] != "table-1" {
+		t.Fatalf("expected table-1's room to be deleted, got %v", rooms.deleted)
 	}
 }
 

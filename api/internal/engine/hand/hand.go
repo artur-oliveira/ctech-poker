@@ -123,9 +123,13 @@ type HandOutcome struct {
 	WinningCategory    string
 	WonWithoutShowdown bool
 	ComebackWinners    []string
-	Participants       []string
-	Payouts            map[string]int64
-	Contributions      map[string]int64
+	// AllInPlayers lists every participant who went all-in at any point this
+	// hand (win or lose) — drives the all_in achievement, distinct from
+	// ComebackWinners which only counts those who also won.
+	AllInPlayers  []string
+	Participants  []string
+	Payouts       map[string]int64
+	Contributions map[string]int64
 	// Board and PlayerHands are the just-completed hand's community cards and
 	// every participant's hole cards, captured here because t.board/HoleCards
 	// get overwritten in place by the next StartHand — this is the only
@@ -218,6 +222,14 @@ func (t *Table) HoleAndBoardForActor(playerID string) ([2]deck.Card, []deck.Card
 // CurrentPlayerCanActForActor exposes currentPlayerCanAct to Phase 2's
 // table.Actor (auto-fold deadline arming needs to know whose turn it is
 // without duplicating the round-state check outside this package).
+// PlayerAllInForActor reports whether id is currently in the AllIn state —
+// used by table.Actor to relabel a just-committed bet/call/raise as "all_in"
+// in the action log when it pushed the player's whole stack in.
+func (t *Table) PlayerAllInForActor(id string) bool {
+	p := t.playerByID(id)
+	return p != nil && p.State == AllIn
+}
+
 func (t *Table) CurrentPlayerCanActForActor(playerID string) bool {
 	return t.currentPlayerCanAct(playerID)
 }
@@ -1126,6 +1138,9 @@ func (t *Table) runShowdown() {
 		if t.wasEverAllIn[id] {
 			outcome.ComebackWinners = append(outcome.ComebackWinners, id)
 		}
+	}
+	for id := range t.wasEverAllIn {
+		outcome.AllInPlayers = append(outcome.AllInPlayers, id)
 	}
 	outcome.Board = boardCodes(t.board)
 	outcome.PlayerHands = make(map[string]PlayerHandInfo, len(t.handOrder))

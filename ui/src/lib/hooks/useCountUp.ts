@@ -10,8 +10,11 @@ export function useCountUp(from: number, to: number, durationMs = DEFAULT_MS): n
   const [display, setDisplay] = useState(() => (reduced ? to : from));
 
   useEffect(() => {
-    if (from === to || reduced) return () => {
-    };
+    if (from === to || reduced) {
+      setDisplay(to);
+      return () => {
+      };
+    }
     setDisplay(from);
     const start = performance.now();
     let raf = requestAnimationFrame(function tick(now) {

@@ -42,8 +42,10 @@ const rooms: Room[] = [
 // matches in mock mode instead of always failing.
 const mockHands: HandItem[] = [
   {
+    pk: ROOM_ID,
     table_id: ROOM_ID,
     hand_id: 'hand_0003',
+    sk: 'hand_0003',
     outcome: 'won',
     net_change: 4200,
     ended_at: Math.floor(Date.now() / 1000) - 60 * 12,
@@ -54,8 +56,10 @@ const mockHands: HandItem[] = [
     commit_hash: '0fe99d12a113b9a6c05bcd8323cb1d35cc1ab8714daec4c0e300f78247c60bbe'
   },
   {
+    pk: ROOM_ID,
     table_id: ROOM_ID,
     hand_id: 'hand_0002',
+    sk: 'hand_0002',
     outcome: 'lost',
     net_change: -1800,
     ended_at: Math.floor(Date.now() / 1000) - 60 * 40,
@@ -66,8 +70,10 @@ const mockHands: HandItem[] = [
     commit_hash: '6ad2da62948a2414364a1faffde7caded33faf4d426db17f4819dedbfa803347'
   },
   {
+    pk: '22222222222222222222222222222222',
     table_id: '22222222222222222222222222222222',
     hand_id: 'hand_0001',
+    sk: 'hand_0001',
     outcome: 'tied',
     net_change: 0,
     ended_at: Math.floor(Date.now() / 1000) - 60 * 90,
@@ -166,6 +172,7 @@ const achievementCatalog: Achievement[] = [
   {key: 'fallen_king', metric: 'pocket_kings_lost', tiers: rareTiers},
   {key: 'giant_slayer', metric: 'won_allin_vs_bigger_stack', tiers: rareTiers},
   {key: 'showdown_warrior', metric: 'reached_showdown', tiers: commonTiers},
+  {key: 'all_in', metric: 'went_all_in', tiers: commonTiers},
   ...categoryOrder.map(category => ({
     key: `win_category_${category}`,
     metric: 'hand_won_with_category',

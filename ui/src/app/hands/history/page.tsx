@@ -32,12 +32,13 @@ function HandHistoryContent() {
     enabled: Boolean(tableId && handId)
   });
 
+  const actions = (history.data?.actions || []).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   const viewerId = getViewerId();
   const opponentNames = new Map((hand.data?.opponents || []).map(o => [o.player_id, o.name]));
   const resolveName = (playerId: string) => playerName(playerId, viewerId, opponentNames.get(playerId));
 
   if (!tableId || !handId) return <div className="hand-history shell">
-    <p className="form-error">Link inválido: faltam table_id ou hand_id.</p>
+    <p className="form-error">Link inválido</p>
     <Link href="/hands"><ChevronLeft/> Minhas mãos</Link>
   </div>;
 
@@ -68,7 +69,7 @@ function HandHistoryContent() {
     <header className="hand-history-header">
       <OutcomeBadge outcome={h.outcome}/>
       <h1>Detalhes da mão</h1>
-      <p>{formatDate(h.ended_at)} · Mesa {h.table_id.slice(0, 8)}…</p>
+      <p>{formatDate(h.ended_at / 1000)} · Mesa {h.table_id.slice(0, 8)}…</p>
       <span className={`hand-net large ${h.net_change > 0 ? 'gain' : h.net_change < 0 ? 'loss' : 'even'}`}>
         {h.net_change > 0 ? '+' : ''}{h.net_change.toLocaleString('pt-BR')} fichas
       </span>
@@ -110,7 +111,7 @@ function HandHistoryContent() {
       <h2>Histórico de ações</h2>
       {history.isLoading ? <div className="lobby-empty"><span className="loader"/>Carregando ações…</div> :
         history.isError ? <p className="form-error">Não foi possível carregar o histórico de ações.</p> :
-          <ActionTimeline actions={history.data?.actions || []} resolveName={resolveName}/>}
+          <ActionTimeline actions={actions} resolveName={resolveName}/>}
     </section>
 
     <section className="hand-history-fairness">

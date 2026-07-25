@@ -25,7 +25,7 @@ type Config struct {
 
 	// ctech-account auth (see internal/api/v1/tablews.go) — poker's first
 	// user-facing auth surface; mirrors ctech-wallet's config fields exactly.
-	CtechURL           string   `env:"CTECH_URL"`
+	CtechURL           string   `env:"CTECH_URL" envDefault:"https://accounts.aoctech.app"`
 	CtechJWKSURL       string   `env:"CTECH_JWKS_URL"`
 	ServiceAudience    string   `env:"SERVICE_AUDIENCE" envDefault:"https://poker.aoctech.app"`
 	CorsAllowedOrigins []string `env:"CORS_ALLOWED_ORIGINS" envSeparator:","`
@@ -77,6 +77,20 @@ func Load() (*Config, error) {
 	}
 	if cfg.ReadTimeout <= 0 || cfg.WriteTimeout <= 0 || cfg.IdleTimeout <= 0 {
 		return nil, fmt.Errorf("config: server timeouts must be positive")
+	}
+	if cfg.CtechJWKSURL == "" && cfg.CtechURL != "" {
+		cfg.CtechJWKSURL = cfg.CtechURL + "/.well-known/jwks.json"
+	}
+	return cfg, nil
+}
+
+func LoadForLambda() (*Config, error) {
+	cfg := &Config{}
+	if err := env.Parse(cfg); err != nil {
+		return nil, fmt.Errorf("config: %w", err)
+	}
+	if cfg.CtechURL == "" && cfg.Env == "prod" {
+		return nil, fmt.Errorf("config: CTECH_URL must be set in production so the issuer is verified")
 	}
 	if cfg.CtechJWKSURL == "" && cfg.CtechURL != "" {
 		cfg.CtechJWKSURL = cfg.CtechURL + "/.well-known/jwks.json"

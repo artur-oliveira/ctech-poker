@@ -13,7 +13,9 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/fasthttp/websocket v1.5.12
 	github.com/gofiber/fiber/v3 v3.4.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
+	github.com/oklog/ulid/v2 v2.1.1
 	github.com/valkey-io/valkey-go v1.0.76
 	github.com/valyala/fasthttp v1.72.0
 	go.uber.org/fx v1.24.0
@@ -41,7 +43,6 @@ require (
 	github.com/aws/smithy-go v1.27.4 // indirect
 	github.com/gofiber/schema v1.8.3 // indirect
 	github.com/gofiber/utils/v2 v2.2.0 // indirect
-	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/klauspost/compress v1.19.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.23 // indirect

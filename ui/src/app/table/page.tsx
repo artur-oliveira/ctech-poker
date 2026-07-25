@@ -27,7 +27,7 @@ import {bestFiveCardHand, HAND_RANK_INDEX} from '@/lib/pokerRules';
 import {type MockScenario, USE_MOCK} from '@/lib/mock';
 import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
 
-const ROOM_ID = /^[a-f0-9]{32}$/i;
+const ROOM_ID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 const CONNECTION_COPY = {
   connecting: 'Conectando à mesa…',
   reconnecting: 'Reconectando à mesa…',

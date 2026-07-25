@@ -49,6 +49,8 @@ export interface OpponentSummary {
 }
 
 export interface HandItem {
+  pk: string;
+  sk: string;
   table_id: string;
   hand_id: string;
   outcome: HandOutcome;
@@ -67,5 +69,5 @@ export async function getHands() {
 }
 
 export async function getHand(handId: string) {
-  return (await apiClient.get<HandItem>(`/v1.0/players/me/hands/${handId}`, {silentError: true})).data;
+  return (await apiClient.get<HandItem>(`/v1.0/players/me/hands/${encodeURIComponent(handId)}`, {silentError: true})).data;
 }

@@ -38,6 +38,7 @@ export const ACHIEVEMENT_LABELS: Record<string, string> = {
 
   giant_slayer: "Virou o Jogo",
   showdown_warrior: "Paga pra Ver",
+  all_in: "Tudo ou Nada",
 
   win_category_high_card: "Carta Alta",
   win_category_pair: "Um Par",

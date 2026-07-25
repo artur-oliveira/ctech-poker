@@ -1,13 +1,109 @@
-import {ArrowUp, Check, Equal, X} from 'lucide-react';
-import type {HandHistoryAction} from '@/lib/api/table';
+import {
+  ArrowRight,
+  ArrowUp,
+  Check,
+  ChevronRight,
+  CircleDollarSign,
+  Eye,
+  HelpCircle,
+  LogIn,
+  LogOut,
+  LucideIcon,
+  Pause,
+  Play,
+  TrendingUp,
+  Trophy,
+  WifiOff,
+  X,
+} from 'lucide-react';
 
-const ACTION_META: Record<string, { label: string; Icon: typeof Check }> = {
-  fold: {label: 'Fold', Icon: X},
-  check: {label: 'Check', Icon: Check},
-  call: {label: 'Call', Icon: Equal},
-  raise: {label: 'Raise', Icon: ArrowUp},
-  bet: {label: 'Bet', Icon: ArrowUp},
-  all_in: {label: 'All-in', Icon: ArrowUp}
+import {Action, HandHistoryAction} from '@/lib/api/table';
+import React from "react";
+
+const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
+  // Sistema
+  join: {
+    label: 'Entrou na mesa',
+    Icon: LogIn,
+  },
+  leave: {
+    label: 'Saiu da mesa',
+    Icon: LogOut,
+  },
+  ready: {
+    label: 'Pronto para jogar',
+    Icon: Play,
+  },
+  not_ready: {
+    label: 'Não está pronto',
+    Icon: Pause,
+  },
+  sit_out: {
+    label: 'Entrou em Sit Out',
+    Icon: Pause,
+  },
+  disconnect_sit_out: {
+    label: 'Desconectou (Sit Out)',
+    Icon: WifiOff,
+  },
+
+  // Fluxo da partida
+  next_hand: {
+    label: 'Nova mão',
+    Icon: ChevronRight,
+  },
+  runout_step: {
+    label: 'Runout',
+    Icon: ArrowRight,
+  },
+  escalate_blinds: {
+    label: 'Blinds aumentaram',
+    Icon: TrendingUp,
+  },
+  post_big_blind: {
+    label: 'Postou o Big Blind',
+    Icon: CircleDollarSign,
+  },
+
+  // Ações do jogador
+  check: {
+    label: 'Check',
+    Icon: Check,
+  },
+  fold: {
+    label: 'Fold',
+    Icon: X,
+  },
+  call: {
+    label: 'Call',
+    Icon: ArrowRight,
+  },
+  bet: {
+    label: 'Bet',
+    Icon: CircleDollarSign,
+  },
+  raise: {
+    label: 'Raise',
+    Icon: ArrowUp,
+  },
+  all_in: {
+    label: 'All-in',
+    Icon: ArrowUp,
+  },
+  show_cards: {
+    label: 'Mostrou as cartas',
+    Icon: Eye,
+  },
+
+  // Resultado da mão
+  won: {
+    label: 'Venceu',
+    Icon: Trophy,
+  },
+  tie: {
+    label: 'Empatou',
+    Icon: Trophy,
+  },
 };
 
 function formatTime(unixMillis: number) {
@@ -22,7 +118,7 @@ export function ActionTimeline({actions, resolveName}: {
 
   return <ol className="action-timeline">
     {actions.map((a, i) => {
-      const meta = ACTION_META[a.action] || {label: a.action, Icon: Equal};
+      const meta = ACTION_META[a.action] || {label: a.action, Icon: HelpCircle};
       const Icon = meta.Icon;
       return <li key={a.seq} className={`action-row action-${a.action}`}
                  style={{'--delay': `${Math.min(i, 12) * 30}ms`} as React.CSSProperties}>

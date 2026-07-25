@@ -7,10 +7,12 @@ package table
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"sync/atomic"
 	"time"
 
+	"github.com/oklog/ulid/v2"
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 	"gopkg.aoctech.app/poker/api/internal/engine/equity"
@@ -78,6 +80,7 @@ type Actor struct {
 	equityEnabled         atomic.Bool
 	onHandComplete        func(string, hand.HandOutcome, map[string]string)
 	completedHandNotified string
+	outcomeLoggedForHand  string
 	onSeatsChanged        func(int)
 	// onPlayerRemoved fires only for a system-initiated removal (AFK sweep,
 	// disconnect kick timeout) — never for a player-requested LeaveCmd, which
@@ -219,7 +222,7 @@ func (a *Actor) handlePostBigBlind(ctx context.Context, c PostBigBlindCmd) error
 	}
 	apply := func() error {
 		a.cached.MarkReadyToPost(c.PlayerID)
-		return a.commit(ctx, "", nil)
+		return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "post_big_blind"})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
 		return err
@@ -257,7 +260,7 @@ func (a *Actor) handleEscalate(ctx context.Context) error {
 	}
 	apply := func() error {
 		a.cached.EscalateBlindsForActor(a.escalationCfg.Multiplier, a.escalationCfg.Max)
-		return a.commit(ctx, "", nil)
+		return a.commit(ctx, "", &tablestore.ActionLogEntry{Action: "escalate_blinds"})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
 		return err
@@ -339,13 +342,15 @@ func (a *Actor) applyReadyAndCommit(ctx context.Context, c ReadyCmd) error {
 			p.Ready = c.Ready
 		}
 	}
+	action := "not_ready"
 	if c.Ready {
 		a.cached.RequestReturnFromSitOut(c.PlayerID)
+		action = "ready"
 	} else {
 		a.cached.SitOutForActor(c.PlayerID)
 	}
 	a.tryStartHand(ctx)
-	return a.commit(ctx, "", nil)
+	return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: action})
 }
 
 // tryStartHand attempts to start a new hand if the table is between hands.
@@ -417,6 +422,9 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 		return err
 	}
 	metrics.EmitTableMetric(a.env, "ActionLatencyMs", float64(timeNowFunc().Sub(start).Milliseconds()), map[string]string{"table_id": a.id})
+	if err := a.commitOutcomeLogEntries(ctx); err != nil {
+		return err
+	}
 	a.broadcastAll()
 	return nil
 }
@@ -473,11 +481,56 @@ func (a *Actor) applyActAndCommit(ctx context.Context, c ActCmd) (bool, error) {
 	if !applied {
 		return false, nil
 	}
-	entry := tablestore.ActionLogEntry{PlayerID: c.PlayerID, ActionID: c.ActionID, Action: string(c.Action), Amount: c.Amount}
+	action := string(c.Action)
+	if a.cached.PlayerAllInForActor(c.PlayerID) {
+		action = "all_in"
+	}
+	entry := tablestore.ActionLogEntry{PlayerID: c.PlayerID, ActionID: c.ActionID, Action: action, Amount: c.Amount}
 	if err := a.commit(ctx, c.ActionID, &entry); err != nil {
 		return false, err
 	}
 	return a.cached.Stage() == hand.Complete, nil
+}
+
+// commitOutcomeLogEntries appends one "won" or "tie" ActionLogEntry per
+// winner once a hand reaches Complete, so the hand-history timeline shows
+// final results alongside the actions that led to them. Both handleAct (the
+// final betting action) and handleRunoutStep (an all-in runout's last dealt
+// street) can be the call that pushes a hand to Complete, so this guards on
+// handID to log each hand's outcome exactly once regardless of which one
+// got there.
+func (a *Actor) commitOutcomeLogEntries(ctx context.Context) error {
+	if a.cached == nil || a.cached.Stage() != hand.Complete || a.handID == "" || a.outcomeLoggedForHand == a.handID {
+		return nil
+	}
+	outcome := a.cached.LastOutcomeForActor()
+	if outcome == nil {
+		return nil
+	}
+	a.outcomeLoggedForHand = a.handID
+	if outcome.WonWithoutShowdown {
+		for _, id := range outcome.Winners {
+			entry := tablestore.ActionLogEntry{PlayerID: id, Action: "won", Amount: outcome.Payouts[id]}
+			if err := a.commit(ctx, "", &entry); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for id, result := range outcome.ShowdownResults {
+		if !result.Won {
+			continue
+		}
+		action := "won"
+		if result.Tied {
+			action = "tie"
+		}
+		entry := tablestore.ActionLogEntry{PlayerID: id, Action: action, Amount: outcome.Payouts[id]}
+		if err := a.commit(ctx, "", &entry); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.ActionLogEntry) error {
@@ -490,9 +543,6 @@ func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.A
 		return nil
 	}
 	newState := a.cached.ExportState()
-	if entry == nil {
-		entry = &tablestore.ActionLogEntry{}
-	}
 	entry.TableID, entry.HandID, entry.Version = a.id, a.handID, a.version+1
 	if err := a.store.CommitAction(ctx, a.id, a.handID, actionID, a.version, newState, *entry); err != nil {
 		return err
@@ -695,7 +745,7 @@ func (a *Actor) handleSitOut(ctx context.Context, c SitOutCmd) error {
 	a.markLastAction(c.PlayerID)
 	apply := func() error {
 		a.cached.SitOutForActor(c.PlayerID)
-		return a.commit(ctx, "", nil)
+		return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "sit_out"})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
 		return err
@@ -712,7 +762,7 @@ func (a *Actor) handleShowCards(ctx context.Context, c ShowCardsCmd) error {
 		if err := a.cached.RevealHoleCards(c.PlayerID); err != nil {
 			return err
 		}
-		return a.commit(ctx, "", nil)
+		return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "show_cards"})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
 		return err
@@ -742,7 +792,7 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 			// the hand to Complete — broadcastAll's notifyHandComplete call
 			// picks that up same as a normal Act would.
 			a.cached.SitOutForActor(c.PlayerID)
-			if err := a.commit(ctx, "", nil); err != nil {
+			if err := a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "disconnect_sit_out"}); err != nil {
 				if !errors.Is(err, tablestore.ErrVersionConflict) {
 					return err
 				}
@@ -826,7 +876,7 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 		return err
 	}
 	a.tryStartHand(ctx)
-	return a.commit(ctx, "", nil)
+	return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "join"})
 }
 
 // handleLeave removes the player and reports their final stack on c.Stack —
@@ -872,7 +922,7 @@ func (a *Actor) applyLeaveAndCommit(ctx context.Context, c LeaveCmd) (int64, str
 	if err != nil {
 		return 0, "", err
 	}
-	if err := a.commit(ctx, "", nil); err != nil {
+	if err := a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "leave"}); err != nil {
 		return 0, "", err
 	}
 	return stack, holdID, nil
@@ -963,7 +1013,7 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 		return nil
 	}
 	a.tryStartHand(ctx)
-	if err := a.commit(ctx, "", nil); err != nil {
+	if err := a.commit(ctx, "", &tablestore.ActionLogEntry{Action: "next_hand"}); err != nil {
 		if !errors.Is(err, tablestore.ErrVersionConflict) {
 			return err
 		}
@@ -1021,7 +1071,7 @@ func (a *Actor) handleRunoutStep(ctx context.Context, c runoutStepCmd) error {
 		return nil
 	}
 	a.cached.AdvanceRunoutStreetForActor()
-	if err := a.commit(ctx, "", nil); err != nil {
+	if err := a.commit(ctx, "", &tablestore.ActionLogEntry{Action: "runout_step"}); err != nil {
 		if !errors.Is(err, tablestore.ErrVersionConflict) {
 			return err
 		}
@@ -1031,6 +1081,9 @@ func (a *Actor) handleRunoutStep(ctx context.Context, c runoutStepCmd) error {
 		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
 			return reloadErr
 		}
+	}
+	if err := a.commitOutcomeLogEntries(ctx); err != nil {
+		return err
 	}
 	a.broadcastAll()
 	return nil
@@ -1149,7 +1202,7 @@ func (a *Actor) SetKickGraceForActor(d time.Duration) {
 }
 
 func newHandID() string {
-	return timeNowFunc().Format("20060102T150405.000000000")
+	return ulid.MustNew(ulid.Timestamp(timeNowFunc()), rand.Reader).String()
 }
 
 // TableForTest exposes the cached hand.Table for integration-test assertions.

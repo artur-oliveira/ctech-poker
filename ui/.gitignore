@@ -1,2 +1,4 @@
 tsconfig.tsbuildinfo
 .impeccable/critique/*.md
+*.har
+.impeccable/hook.cache.json

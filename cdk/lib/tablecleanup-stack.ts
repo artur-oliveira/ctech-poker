@@ -26,7 +26,14 @@ interface TableCleanupStackProps extends cdk.StackProps {
 export class TableCleanupStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TableCleanupStackProps) {
     super(scope, id, props);
-    const {environment, tableStateArn, roomsTableArn, walletUrlParam, pokerClientIdParam, pokerClientSecretParam} = props;
+    const {
+      environment,
+      tableStateArn,
+      roomsTableArn,
+      walletUrlParam,
+      pokerClientIdParam,
+      pokerClientSecretParam
+    } = props;
 
     const role = new iam.Role(this, 'TableCleanupRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
@@ -34,10 +41,12 @@ export class TableCleanupStack extends cdk.Stack {
     });
     role.addToPolicy(new iam.PolicyStatement({
       actions: ['dynamodb:Query', 'dynamodb:GetItem', 'dynamodb:UpdateItem'],
-      resources: [tableStateArn, `${tableStateArn}/index/*`],
+      resources: [
+        tableStateArn, `${tableStateArn}/index/*`,
+      ],
     }));
     role.addToPolicy(new iam.PolicyStatement({
-      actions: ['dynamodb:GetItem'],
+      actions: ['dynamodb:GetItem', 'dynamodb:DeleteItem'],
       resources: [roomsTableArn],
     }));
     role.addToPolicy(new iam.PolicyStatement({

@@ -21,7 +21,8 @@ const DESCRIPTIONS: Record<string, string> = {
   cracked_aces: 'Foi ao showdown com par de ases e ainda assim perdeu.',
   fallen_king: 'Foi ao showdown com par de reis e ainda assim perdeu.',
   giant_slayer: 'Ganhou all-in contra um adversário com stack maior que o seu.',
-  showdown_warrior: 'Chegou ao showdown. Não teve medo de ver as cartas do adversário.'
+  showdown_warrior: 'Chegou ao showdown. Não teve medo de ver as cartas do adversário.',
+  all_in: 'Empurrou todas as fichas para o meio da mesa.'
 };
 
 const EXAMPLES: Record<string, string[]> = {
@@ -38,7 +39,8 @@ const EXAMPLES: Record<string, string[]> = {
   cracked_aces: ['AH', 'AS'],
   fallen_king: ['KD', 'KC'],
   giant_slayer: ['2H', '7D'],
-  showdown_warrior: ['JH', 'TD']
+  showdown_warrior: ['JH', 'TD'],
+  all_in: ['AS', 'KS']
 };
 
 export function achievementLabel(key: string): string {

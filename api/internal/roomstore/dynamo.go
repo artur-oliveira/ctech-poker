@@ -68,6 +68,17 @@ func (s *Store) SetSeatsTaken(ctx context.Context, roomID string, seatsTaken int
 	return nil
 }
 
+// Delete removes roomID's record entirely, dropping it out of gsi_public
+// along with it. Room PK == the table's PK (same ID space), so
+// cmd/tablecleanup calls this with the same tableID it just archived.
+func (s *Store) Delete(ctx context.Context, roomID string) error {
+	_, err := s.base.DeleteItem(ctx, roomID, roomSK)
+	if err != nil {
+		return fmt.Errorf("roomstore: delete: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) Get(ctx context.Context, roomID string) (*Room, error) {
 	item, err := s.base.GetItem(ctx, roomID, roomSK)
 	if err != nil {

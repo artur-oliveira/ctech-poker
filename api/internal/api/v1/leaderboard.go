@@ -8,16 +8,21 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
+type leaderboardHandlers struct{ svc *leaderboard.Service }
+
 func RegisterLeaderboard(router fiber.Router, auth fiber.Handler, svc *leaderboard.Service) {
-	router.Get("/leaderboard", auth, func(c fiber.Ctx) error {
-		limit := 50
-		if n, err := strconv.Atoi(c.Query("limit")); err == nil && n > 0 {
-			limit = n
-		}
-		entries, err := svc.Top(c.Context(), c.Query("metric", "hands_won"), limit)
-		if err != nil {
-			return problem.BadRequest(err.Error()).Send(c)
-		}
-		return c.JSON(entries)
-	})
+	h := &leaderboardHandlers{svc: svc}
+	router.Get("/leaderboard", auth, h.top)
+}
+
+func (h *leaderboardHandlers) top(c fiber.Ctx) error {
+	limit := 50
+	if n, err := strconv.Atoi(c.Query("limit")); err == nil && n > 0 {
+		limit = n
+	}
+	entries, err := h.svc.Top(c.Context(), c.Query("metric", "hands_won"), limit)
+	if err != nil {
+		return problem.BadRequest(err.Error()).Send(c)
+	}
+	return c.JSON(entries)
 }

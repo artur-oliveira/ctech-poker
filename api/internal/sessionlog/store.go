@@ -165,7 +165,10 @@ func (s *Store) CloseSession(ctx context.Context, item SessionItem) error {
 
 func (s *Store) RecordHand(ctx context.Context, item HandItem) error {
 	if item.SK == "" {
-		item.SK = fmt.Sprintf("%d#%s", time.Now().UnixNano(), item.HandID)
+		// HandID is a ULID: lexically sortable by creation time and globally
+		// unique on its own, so it doubles as the sort key directly — no
+		// timestamp prefix needed. GetHand looks up by this exact SK.
+		item.SK = item.HandID
 	}
 	encoded, err := dynamo.Encode(item)
 	if err != nil {
@@ -198,6 +201,8 @@ func (s *Store) GetHand(ctx context.Context, playerID, handID string) (*HandItem
 	res, err := s.hands.GetItem(ctx, playerID, handID)
 	if err != nil {
 		return nil, err
+	} else if res == nil {
+		return nil, nil
 	}
 	loaded, err := dynamo.Decode[HandItem](res)
 

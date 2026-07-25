@@ -36,14 +36,19 @@ func (a *tablestoreAdapter) LoadActionsSince(ctx context.Context, tableID, handI
 	return out, nil
 }
 
+type handHistoryHandlers struct{ store historyStore }
+
 func RegisterHandHistory(router fiber.Router, auth fiber.Handler, store historyStore) {
-	router.Get("/tables/:tableId/hands/:handId/history", auth, func(c fiber.Ctx) error {
-		tableID := c.Params("tableId")
-		handID := c.Params("handId")
-		actions, err := store.LoadActionsSince(c.Context(), tableID, handID, 0)
-		if err != nil {
-			return problem.InternalServer("failed to load hand history", c, err).Send(c)
-		}
-		return c.JSON(fiber.Map{"table_id": tableID, "hand_id": handID, "actions": actions})
-	})
+	h := &handHistoryHandlers{store: store}
+	router.Get("/tables/:tableId/hands/:handId/history", auth, h.history)
+}
+
+func (h *handHistoryHandlers) history(c fiber.Ctx) error {
+	tableID := c.Params("tableId")
+	handID := c.Params("handId")
+	actions, err := h.store.LoadActionsSince(c.Context(), tableID, handID, 0)
+	if err != nil {
+		return problem.InternalServer("failed to load hand history", c, err).Send(c)
+	}
+	return c.JSON(fiber.Map{"table_id": tableID, "hand_id": handID, "actions": actions})
 }

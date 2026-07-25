@@ -56,14 +56,15 @@ export default function HandsHistory() {
                 uma mesa termina.</div> :
               <div className="hands-list">
                 {data.map((hand, i) => <Link key={hand.hand_id}
-                                             href={`/hand/history?table_id=${hand.table_id}&hand_id=${hand.hand_id}`}
+                                             href={`/hands/history?table_id=${hand.table_id}&hand_id=${encodeURIComponent(hand.sk)}`}
                                              className="hand-row"
                                              style={{'--delay': `${Math.min(i, 10) * 40}ms`} as React.CSSProperties}>
                   <div className="hand-row-top">
                     <div className="hand-row-cards">
                       <div className="hand-row-card-group">
                         <small>Suas cartas{handCategoryLabel(hand.hole_cards, hand.board) &&
-                            <span className="hand-category"> · {handCategoryLabel(hand.hole_cards, hand.board)}</span>}</small>
+                            <span
+                                className="hand-category"> · {handCategoryLabel(hand.hole_cards, hand.board)}</span>}</small>
                         <div className="hand-row-card-group-cards">
                           {(hand.hole_cards || []).map((c, idx) => <PlayingCard key={idx} card={c} index={idx}
                                                                                 size="hole" owner="viewer"/>)}
@@ -88,7 +89,7 @@ export default function HandsHistory() {
                     </div>
                   </div>
                   <div className="hand-row-bottom">
-                    <span>{formatDate(hand.ended_at)}</span>
+                    <span>{formatDate(hand.ended_at / 1000)}</span>
                     {hand.server_seed &&
                         <span className="hand-row-seed"
                               title={hand.server_seed}>seed {truncateSeed(hand.server_seed)}</span>}

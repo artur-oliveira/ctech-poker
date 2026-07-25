@@ -113,7 +113,7 @@ func handler(ctx context.Context) error {
 		}
 	}
 
-	cfg, err := config.Load()
+	cfg, err := config.LoadForLambda()
 	if err != nil {
 		return err
 	}

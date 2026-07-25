@@ -29,6 +29,7 @@ const (
 	KeyCrackedAces     = "cracked_aces"
 	KeyGiantSlayer     = "giant_slayer"
 	KeyShowdownWarrior = "showdown_warrior"
+	KeyAllIn           = "all_in"
 )
 
 func KeyWinByCategory(category string) string { return fmt.Sprintf("win_category_%s", category) }
@@ -100,6 +101,11 @@ var Catalog = []Achievement{
 	{
 		Key:    KeyShowdownWarrior,
 		Metric: "reached_showdown",
+		Tiers:  commonTiers,
+	},
+	{
+		Key:    KeyAllIn,
+		Metric: "went_all_in",
 		Tiers:  commonTiers,
 	},
 }

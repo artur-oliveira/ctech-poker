@@ -53,6 +53,11 @@ func (s *Service) RecordHand(ctx context.Context, tableID string, outcome hand.H
 			}
 		}
 	}
+	for _, id := range dedupe(outcome.AllInPlayers) {
+		if err := bump(id, KeyAllIn); err != nil {
+			return nil, err
+		}
+	}
 	for _, id := range dedupe(outcome.ComebackWinners) {
 		if err := bump(id, KeyComeback); err != nil {
 			return nil, err

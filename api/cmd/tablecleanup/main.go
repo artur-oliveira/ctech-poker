@@ -25,8 +25,8 @@ import (
 // staleCutoff is how long a table may sit with no committed action before
 // this job archives it. cmd/reconcile's analogous gracePeriod is 2 minutes
 // (for a completed cash-out awaiting credit); a table being idle mid-session
-// is a much slower signal, so this is measured in hours, not minutes.
-const staleCutoff = 6 * time.Hour
+// is a much slower signal;
+const staleCutoff = 30 * time.Minute
 
 // queryBatchLimit bounds how many stale tables one invocation processes.
 // Any remainder is picked up on the next scheduled run since last_action_at
@@ -40,6 +40,7 @@ type staleQuerier interface {
 
 type roomLookup interface {
 	Get(ctx context.Context, roomID string) (*roomstore.Room, error)
+	Delete(ctx context.Context, roomID string) error
 }
 
 type sandboxCredit interface {
@@ -86,6 +87,12 @@ func run(ctx context.Context, stale staleQuerier, rooms roomLookup, wallet sandb
 			slog.Error("tablecleanup: archive failed (table may have just received a fresh action; skipping)", "table_id", st.TableID, "err", err)
 			continue
 		}
+		// Room PK == table PK, deleted only after the table is confirmed
+		// archived so a mid-sweep crash never drops a room while its table
+		// is still live/joinable.
+		if err := rooms.Delete(ctx, st.TableID); err != nil {
+			slog.Error("tablecleanup: room delete failed, room will linger in lobby listing", "table_id", st.TableID, "err", err)
+		}
 		slog.Info("tablecleanup: archived stale table", "table_id", st.TableID, "seats_refunded", len(st.State.Players))
 	}
 	return nil
@@ -129,7 +136,7 @@ func handler(ctx context.Context) error {
 		}
 	}
 
-	cfg, err := config.Load()
+	cfg, err := config.LoadForLambda()
 	if err != nil {
 		return err
 	}

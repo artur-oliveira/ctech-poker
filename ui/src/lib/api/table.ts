@@ -55,10 +55,15 @@ export type ServerMessage = {
   action_id?: string
 }
 
+export type Action = (
+  'post_big_blind' | 'escalate_blinds' | 'not_ready' | 'ready' | 'sit_out' | 'show_cards' | 'disconnect_sit_out' | 'join' |
+  'leave' | 'next_hand' | 'runout_step' | 'check' | 'fold' | 'call' | 'bet' | 'raise' | 'all_in' | 'won' | 'tie'
+  )
+
 export interface HandHistoryAction {
   seq: number;
   player_id: string;
-  action: string;
+  action: Action;
   amount: number;
   timestamp: number; // unix millis
 }
