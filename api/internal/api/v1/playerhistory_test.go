@@ -18,6 +18,9 @@ func (m *mockHistoryReader) ListSessions(_ context.Context, playerID string, _ i
 func (m *mockHistoryReader) ListHands(_ context.Context, playerID string, _ int) ([]sessionlog.HandItem, error) {
 	return []sessionlog.HandItem{{PK: playerID, HandID: "h-1", NetChange: 50}}, nil
 }
+func (m *mockHistoryReader) GetHand(_ context.Context, playerID, handID string) (*sessionlog.HandItem, error) {
+	return &sessionlog.HandItem{PK: playerID, HandID: handID, NetChange: 50}, nil
+}
 
 func mockAuthMiddleware() fiber.Handler {
 	return func(c fiber.Ctx) error {

@@ -22,14 +22,15 @@ var ErrDuplicateAction = errors.New("tablestore: duplicate action_id")
 // ActionLogEntry is one durable audit/hand-history record (ARCHITECTURE.md
 // §8.2) — never read back for recovery; recovery reads StoredTable directly.
 type ActionLogEntry struct {
-	TableID  string `dynamodbav:"table_id"`
-	HandID   string `dynamodbav:"hand_id"`
-	Version  int    `dynamodbav:"version"`
-	Seq      int    `dynamodbav:"seq,omitempty"`
-	PlayerID string `dynamodbav:"player_id"`
-	ActionID string `dynamodbav:"action_id"`
-	Action   string `dynamodbav:"action"`
-	Amount   int64  `dynamodbav:"amount"`
+	TableID   string `dynamodbav:"table_id"`
+	HandID    string `dynamodbav:"hand_id"`
+	Version   int    `dynamodbav:"version"`
+	Seq       int    `dynamodbav:"seq,omitempty"`
+	PlayerID  string `dynamodbav:"player_id"`
+	ActionID  string `dynamodbav:"action_id"`
+	Action    string `dynamodbav:"action"`
+	Amount    int64  `dynamodbav:"amount"`
+	Timestamp int64  `dynamodbav:"timestamp"` // unix millis, set by CommitAction
 }
 
 // StoredTable is the current authoritative state of one table, as read from

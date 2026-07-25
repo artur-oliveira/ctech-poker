@@ -147,13 +147,14 @@ Auth group wiring: `RegisterRooms/Players/sandbox credits` all receive `auth` (`
   `store.go:106`). The `poker_leaderboard_stats` table has GSIs only for `hands_won`,
   `hands_played`, and `win_rate` (`cdk/lib/dynamodb-stack.ts:78-95`) — **there is no
   `achievement_points` GSI** — so the call silently returns a *hands-won* ranking, not an achievement-points ranking.
-- **B32 — commit-reveal fairness is not verifiable by clients**
-  (`internal/engine/deck/deck.go:50-69`): the shuffle produces a `ServerSeed` and
-  `CommitHash` and the code comment says the `CommitHash` is safe to publish (`deck.go:51`) — **but no HTTP or WS
-  endpoint publishes `CommitHash` or reveals
-  `ServerSeed`**. The primes exist; the surface to verify them does not. Fairness is therefore currently unprovable by
-  players (OVERVIEW §3.5 / ARCHITECTURE.md §2's
-  "commit-reveal surface" remain DESIGNED-ONLY).
+- **B32 fixed** — commit-reveal fairness is verifiable by clients via the WS snapshot
+  (`internal/engine/hand/snapshot.go:160-165`): `ShuffleCommitHash` is published in every
+  snapshot as soon as `StartHand` sets `t.shuffle` (before any hole card is dealt), and
+  `ShuffleServerSeedHex` is added once `Stage == Complete` (the reveal). A player can hash
+  their own copy of `ServerSeed` client-side and compare it against the `CommitHash` they
+  received before the hand started. Persisted long-term too, hex-encoded, on
+  `hand.HandOutcome`/`sessionlog.HandItem` (`ServerSeed`/`CommitHash`). Covered by
+  `snapshot_test.go:245-265`.
 - **Remediation context:** `docs/plans/2026-07-19-api-audit-remediation.md` (and its spec)
   is a separate audit covering H1–H4, M1–M7, L1–L6, E1–E3, S1–S7. Several fixes are **already in the code** (T1 actor
   re-resolve `tablews.go:185-198`; T2 prod fail-fast on missing Valkey via `start.sh` in `cdk/lib/api-stack.ts`; M6 rate

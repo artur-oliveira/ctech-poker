@@ -37,7 +37,7 @@ export default function Home() {
         <Link href="#experience">Experiência</Link>
         <Link href="#achievements">Conquistas</Link>
         <Link href="/poker-rules">Regras</Link>
-        <Link href="#guide">Guia</Link>
+        <Link href="/guide">Guia</Link>
         <Link href="/leaderboard">Ranking</Link>
         <Button variant="ghost" onClick={() => startOAuthFlow()}>Entrar</Button>
       </div>

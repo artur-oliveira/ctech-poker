@@ -5,6 +5,7 @@ package sessionlog
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 func TestFindOpenSessionReturnsTheMostRecentUnclosedSessionForTable(t *testing.T) {
@@ -71,5 +72,31 @@ func TestCloseSessionOverwritesTheSameItem(t *testing.T) {
 	}
 	if sessions[0].EndedAt != 99 {
 		t.Fatal("expected the overwritten item to carry EndedAt")
+	}
+}
+
+// TestCloseSessionRefreshesTTL pins down that closing a long-open session
+// resets its TTL from close time, not join time — CloseSession forwards the
+// item's original (open-time) TTL to RecordSession, whose "default only if
+// zero" guard would otherwise leave it unchanged, letting a session that sat
+// open for most of sessionTTLDays expire right after (or even before) close.
+func TestCloseSessionRefreshesTTL(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	staleTTL := time.Now().Add(time.Hour).Unix()
+	_ = store.RecordSession(ctx, SessionItem{PK: "p4", SK: "fixed", TableID: "t1", JoinedAt: 1, TTL: staleTTL})
+
+	open, _ := store.FindOpenSession(ctx, "p4", "t1")
+	open.EndedAt = 99
+	if err := store.CloseSession(ctx, *open); err != nil {
+		t.Fatalf("CloseSession: %v", err)
+	}
+
+	sessions, _ := store.ListSessions(ctx, "p4", 10)
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	if sessions[0].TTL <= staleTTL {
+		t.Fatalf("expected TTL refreshed past the stale open-time value %d, got %d", staleTTL, sessions[0].TTL)
 	}
 }

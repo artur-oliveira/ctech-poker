@@ -132,6 +132,16 @@ function canonicalOrder(cards: string[]): string[] {
     .flatMap(([, group]) => group);
 }
 
+function bestOf(cards: string[]): { cards: string[]; score: FiveCardScore } {
+  if (cards.length <= 5) return {cards, score: scoreFiveCards(cards)};
+  let best: { cards: string[]; score: FiveCardScore } | null = null;
+  for (const combo of nChooseK(cards, 5)) {
+    const score = scoreFiveCards(combo);
+    if (!best || compareScores(score, best.score) > 0) best = {cards: combo, score};
+  }
+  return best!;
+}
+
 /** The best 5-card poker hand out of up to 7 cards (2 hole + 5 board), for
  * displaying the actual winning combination rather than just the category
  * name. The server only ever sends a category label (e.g. "two_pair") plus
@@ -139,10 +149,12 @@ function canonicalOrder(cards: string[]): string[] {
  * every 5-card subset locally and keeps the strongest one. */
 export function bestFiveCardHand(cards: string[]): string[] {
   if (cards.length <= 5) return canonicalOrder(cards);
-  let best: { cards: string[]; score: FiveCardScore } | null = null;
-  for (const combo of nChooseK(cards, 5)) {
-    const score = scoreFiveCards(combo);
-    if (!best || compareScores(score, best.score) > 0) best = {cards: combo, score};
-  }
-  return canonicalOrder(best!.cards);
+  return canonicalOrder(bestOf(cards).cards);
+}
+
+/** Same evaluation as bestFiveCardHand, but returns the HAND_RANKINGS
+ * category key (e.g. "two_pair") instead of the card list — for labeling a
+ * player's hand in a hand-history view, client-side, from raw cards only. */
+export function bestHandCategory(cards: string[]): string {
+  return bestOf(cards).score.category;
 }

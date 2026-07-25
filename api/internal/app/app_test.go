@@ -12,10 +12,52 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/dailyreward"
+	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 )
+
+// TestHandItemForMarksWinnerAmongMultipleOpponents pins down that a 3+-way
+// hand's history reports each opponent's own Won flag explicitly — before
+// OpponentSummary.Won existed, a player's match history only let a client
+// infer who won by elimination when there was exactly one opponent
+// (heads-up); with 2+ opponents there was no way to tell which one(s) won.
+func TestHandItemForMarksWinnerAmongMultipleOpponents(t *testing.T) {
+	outcome := hand.HandOutcome{
+		Winners:      []string{"p2"},
+		Participants: []string{"p1", "p2", "p3"},
+		Payouts:      map[string]int64{"p1": 0, "p2": 300, "p3": 0},
+		Contributions: map[string]int64{
+			"p1": 100, "p2": 100, "p3": 100,
+		},
+		PlayerHands: map[string]hand.PlayerHandInfo{
+			"p1": {HoleCards: [2]string{"Ah", "Kh"}, Revealed: true},
+			"p2": {HoleCards: [2]string{"2c", "2d"}, Revealed: true},
+			"p3": {HoleCards: [2]string{"Qs", "Qc"}, Revealed: true},
+		},
+	}
+
+	item := handItemFor(outcome, "p1", nil)
+	if item.Outcome != "lost" {
+		t.Fatalf("expected p1 outcome lost, got %q", item.Outcome)
+	}
+	if len(item.Opponents) != 2 {
+		t.Fatalf("expected 2 opponents, got %d", len(item.Opponents))
+	}
+	var wonCount int
+	for _, opp := range item.Opponents {
+		if opp.Won {
+			wonCount++
+			if opp.PlayerID != "p2" {
+				t.Fatalf("expected p2 marked as winner, got %q", opp.PlayerID)
+			}
+		}
+	}
+	if wonCount != 1 {
+		t.Fatalf("expected exactly one opponent marked Won, got %d", wonCount)
+	}
+}
 
 func testRoutes(app *fiber.App, cfg *config.Config) {
 	verifier := jwtverify.NewVerifier("", "", "", cache.NewMemoryBackend(1))

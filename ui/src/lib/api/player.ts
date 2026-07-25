@@ -36,7 +36,36 @@ export interface PlayerSession {
 // Most-recent-first (server sorts descending) — sessions[0].ended_at === 0
 // means that table is still the player's open seat.
 export async function getSessions() {
-  return (await apiClient.get<{
-    sessions: PlayerSession[]
-  }>('/v1.0/players/me/sessions', {silentError: true})).data.sessions;
+  return (await apiClient.get<PlayerSession[]>('/v1.0/players/me/sessions', {silentError: true})).data;
+}
+
+export type HandOutcome = 'won' | 'lost' | 'tied';
+
+export interface OpponentSummary {
+  player_id: string;
+  name?: string;
+  hole_cards?: string[];
+  won?: boolean;
+}
+
+export interface HandItem {
+  table_id: string;
+  hand_id: string;
+  outcome: HandOutcome;
+  net_change: number;
+  ended_at: number;
+  board?: string[];
+  hole_cards?: string[];
+  opponents?: OpponentSummary[];
+  server_seed?: string;
+  commit_hash?: string;
+}
+
+// Most-recent-first (server sorts descending), capped at 50 by the API.
+export async function getHands() {
+  return (await apiClient.get<HandItem[]>('/v1.0/players/me/hands', {silentError: true})).data;
+}
+
+export async function getHand(handId: string) {
+  return (await apiClient.get<HandItem>(`/v1.0/players/me/hands/${handId}`, {silentError: true})).data;
 }

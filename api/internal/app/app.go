@@ -225,41 +225,9 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		}
 		if sessionStore != nil {
 			for _, id := range outcome.Participants {
-				net := outcome.Payouts[id] - outcome.Contributions[id]
-				result := "lost"
-				for _, w := range outcome.Winners {
-					if w == id {
-						result = "won"
-						break
-					}
-				}
-				if sr, ok := outcome.ShowdownResults[id]; ok && sr.Tied {
-					result = "tied"
-				}
-				var holeCards []string
-				if own, ok := outcome.PlayerHands[id]; ok {
-					holeCards = own.HoleCards[:]
-				}
-				var opponents []sessionlog.OpponentSummary
-				for _, opp := range outcome.Participants {
-					if opp == id {
-						continue
-					}
-					info, ok := outcome.PlayerHands[opp]
-					if !ok {
-						continue
-					}
-					summary := sessionlog.OpponentSummary{PlayerID: opp, Name: names[opp]}
-					if info.Revealed {
-						summary.HoleCards = info.HoleCards[:]
-					}
-					opponents = append(opponents, summary)
-				}
-				if err := sessionStore.RecordHand(ctx, sessionlog.HandItem{
-					PK: id, TableID: tableID, HandID: handID, Outcome: result, NetChange: net, EndedAt: time.Now().UnixMilli(),
-					Board: outcome.Board, HoleCards: holeCards, Opponents: opponents,
-					ServerSeed: outcome.ServerSeed, CommitHash: outcome.CommitHash,
-				}); err != nil {
+				item := handItemFor(outcome, id, names)
+				item.PK, item.TableID, item.HandID, item.EndedAt = id, tableID, handID, time.Now().UnixMilli()
+				if err := sessionStore.RecordHand(ctx, item); err != nil {
 					slog.Error("sessionlog: record hand failed", "table", tableID, "hand", handID, "player", id, "err", err)
 				}
 			}
@@ -285,6 +253,54 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		}
 	})
 	return mgr
+}
+
+// handItemFor builds one participant's poker_player_hand record from a
+// completed hand.HandOutcome — pure so the outcome-to-history mapping (own
+// result, opponent hole cards, opponent Won) is unit-testable without a live
+// table/actor. Caller fills in PK/TableID/HandID/EndedAt.
+func handItemFor(outcome hand.HandOutcome, id string, names map[string]string) sessionlog.HandItem {
+	net := outcome.Payouts[id] - outcome.Contributions[id]
+	result := "lost"
+	for _, w := range outcome.Winners {
+		if w == id {
+			result = "won"
+			break
+		}
+	}
+	if sr, ok := outcome.ShowdownResults[id]; ok && sr.Tied {
+		result = "tied"
+	}
+	var holeCards []string
+	if own, ok := outcome.PlayerHands[id]; ok {
+		holeCards = own.HoleCards[:]
+	}
+	var opponents []sessionlog.OpponentSummary
+	for _, opp := range outcome.Participants {
+		if opp == id {
+			continue
+		}
+		info, ok := outcome.PlayerHands[opp]
+		if !ok {
+			continue
+		}
+		summary := sessionlog.OpponentSummary{PlayerID: opp, Name: names[opp]}
+		if info.Revealed {
+			summary.HoleCards = info.HoleCards[:]
+		}
+		for _, w := range outcome.Winners {
+			if w == opp {
+				summary.Won = true
+				break
+			}
+		}
+		opponents = append(opponents, summary)
+	}
+	return sessionlog.HandItem{
+		Outcome: result, NetChange: net,
+		Board: outcome.Board, HoleCards: holeCards, Opponents: opponents,
+		ServerSeed: outcome.ServerSeed, CommitHash: outcome.CommitHash,
+	}
 }
 
 // wirePlayerRemovedHook installs table.Actor's system-removal notification —

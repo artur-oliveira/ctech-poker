@@ -8,15 +8,15 @@ import {ACHIEVEMENT_LABELS, HAND_CATEGORY_LABELS} from '@/lib/utils';
 const WIN_CATEGORY_PREFIX = 'win_category_';
 
 const DESCRIPTIONS: Record<string, string> = {
-  wins: 'Toda mão vencida conta um ponto. Sem atalho — é resultado na mesa.',
-  hands_played: 'Toda mão jogada soma, ganhando ou perdendo. Mostra quem realmente senta à mesa.',
+  wins: 'Toda mão vencida conta um ponto.',
+  hands_played: 'Toda mão jogada soma, ganhando ou perdendo.',
   comeback: 'Foi all-in, ficou por um fio e ainda assim virou a mesa.',
   bluff: 'Ganhou sem showdown com a mão mais fraca — blefe puro, sem carta na manga.',
-  survivor: 'Resistiu na mesma mesa por muitas mãos seguidas, sem sair.',
-  looser: 'Perdeu no showdown. Faz parte do jogo — ninguém vence toda mão.',
-  almost_winner: 'Perdeu para alguém com a mesma categoria de mão, só que um pouco mais forte.',
+  survivor: 'Jogou na mesma mesa por muitas mãos seguidas, sem sair.',
+  looser: 'Perdeu no showdown. Faz parte do jogo — ninguém vence sempre.',
+  almost_winner: 'Perdeu para alguém com a mesma mão, só que um pouco mais forte.',
   tied: 'Empatou no showdown e dividiu o pote com o adversário.',
-  bad_beat: 'Perdeu com trinca ou mais forte — uma mão ótima, só que não o bastante.',
+  bad_beat: 'Perdeu com trinca ou mais forte — uma mão ótima, mas não o suficiente.',
   cooler: 'Perdeu com full house ou mais forte — quase impossível fugir dessa.',
   cracked_aces: 'Foi ao showdown com par de ases e ainda assim perdeu.',
   fallen_king: 'Foi ao showdown com par de reis e ainda assim perdeu.',

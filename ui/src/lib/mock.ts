@@ -2,8 +2,9 @@
 // flag selects the adapter; no mock HTTP or WebSocket server is started.
 import {AxiosError, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
 import type {Achievement, PlayerAchievementProgress, Tier} from '@/lib/api/achievements';
+import type {HandItem} from '@/lib/api/player';
 import type {Room} from '@/lib/api/rooms';
-import type {LegalActionState, PokerAction, SeatView, ServerMessage, TableSnapshot} from '@/lib/api/table';
+import type {HandHistoryAction, LegalActionState, PokerAction, SeatView, ServerMessage, TableSnapshot} from '@/lib/api/table';
 
 export const USE_MOCK = process.env.NEXT_PUBLIC_MOCK_API === 'true';
 export const MOCK_PLAYER_ID = 'mock_player_ana';
@@ -35,6 +36,86 @@ const rooms: Room[] = [
     seats_taken: 2
   },
 ];
+
+// Real seed/commit-hash pairs, precomputed offline by replaying deck.go's
+// shuffleWithSeed/commitHash — so the /hand/history deck-verify grid actually
+// matches in mock mode instead of always failing.
+const mockHands: HandItem[] = [
+  {
+    table_id: ROOM_ID,
+    hand_id: 'hand_0003',
+    outcome: 'won',
+    net_change: 4200,
+    ended_at: Math.floor(Date.now() / 1000) - 60 * 12,
+    board: ['9c', '5c', '6h', '8h', '3h'],
+    hole_cards: ['Kd', 'Kc'],
+    opponents: [{player_id: 'bia_sp', name: 'Bia', hole_cards: ['7d', 'Jd']}],
+    server_seed: '028e42b0ae6c416ea890ea7737dc16c4c354e4ac8ae5b5607f4470b79628620a',
+    commit_hash: '0fe99d12a113b9a6c05bcd8323cb1d35cc1ab8714daec4c0e300f78247c60bbe'
+  },
+  {
+    table_id: ROOM_ID,
+    hand_id: 'hand_0002',
+    outcome: 'lost',
+    net_change: -1800,
+    ended_at: Math.floor(Date.now() / 1000) - 60 * 40,
+    board: ['2c', '3d', '2d', 'Jd', 'Ad'],
+    hole_cards: ['Qd', '3c'],
+    opponents: [{player_id: 'leo_rio', name: 'Leo', hole_cards: ['Ac', '2s'], won: true}],
+    server_seed: 'f0fcb9b6dcc37fda6e9ef08f1215eb56e6ac4b1a32a2f6ee535d33ba98e10ac0',
+    commit_hash: '6ad2da62948a2414364a1faffde7caded33faf4d426db17f4819dedbfa803347'
+  },
+  {
+    table_id: '22222222222222222222222222222222',
+    hand_id: 'hand_0001',
+    outcome: 'tied',
+    net_change: 0,
+    ended_at: Math.floor(Date.now() / 1000) - 60 * 90,
+    board: ['9c', '2d', '9h', '8h', '9s'],
+    hole_cards: ['Kc', '7d'],
+    opponents: [{player_id: 'leo_rio', name: 'Leo', hole_cards: ['6s', '8c'], won: true}],
+    server_seed: 'dc3e9e4d25dd4c612648a0eada3539b4912da6fbd0a79341df221e8f51657b96',
+    commit_hash: '063062170463cd2c086f4603c9635f6fb67c7baa1ba0b8597d01966650c2c685'
+  }
+];
+
+// Each action lands a few seconds after the previous one, ending at the
+// hand's own ended_at — mirrors how CommitAction stamps Timestamp in prod.
+function timedActions(endedAtSeconds: number, actions: Omit<HandHistoryAction, 'timestamp'>[]): HandHistoryAction[] {
+  const startMs = endedAtSeconds * 1000 - actions.length * 4000;
+  return actions.map((a, i) => ({...a, timestamp: startMs + i * 4000}));
+}
+
+const mockHandActions: Record<string, HandHistoryAction[]> = {
+  hand_0003: timedActions(mockHands[0].ended_at, [
+    {seq: 1, player_id: 'bia_sp', action: 'raise', amount: 150},
+    {seq: 2, player_id: MOCK_PLAYER_ID, action: 'call', amount: 150},
+    {seq: 3, player_id: 'bia_sp', action: 'check', amount: 0},
+    {seq: 4, player_id: MOCK_PLAYER_ID, action: 'raise', amount: 400},
+    {seq: 5, player_id: 'bia_sp', action: 'call', amount: 400},
+    {seq: 6, player_id: 'bia_sp', action: 'check', amount: 0},
+    {seq: 7, player_id: MOCK_PLAYER_ID, action: 'raise', amount: 1200},
+    {seq: 8, player_id: 'bia_sp', action: 'fold', amount: 0}
+  ]),
+  hand_0002: timedActions(mockHands[1].ended_at, [
+    {seq: 1, player_id: MOCK_PLAYER_ID, action: 'raise', amount: 100},
+    {seq: 2, player_id: 'leo_rio', action: 'call', amount: 100},
+    {seq: 3, player_id: MOCK_PLAYER_ID, action: 'check', amount: 0},
+    {seq: 4, player_id: 'leo_rio', action: 'raise', amount: 300},
+    {seq: 5, player_id: MOCK_PLAYER_ID, action: 'call', amount: 300},
+    {seq: 6, player_id: MOCK_PLAYER_ID, action: 'check', amount: 0},
+    {seq: 7, player_id: 'leo_rio', action: 'raise', amount: 900},
+    {seq: 8, player_id: MOCK_PLAYER_ID, action: 'call', amount: 900}
+  ]),
+  hand_0001: timedActions(mockHands[2].ended_at, [
+    {seq: 1, player_id: 'leo_rio', action: 'check', amount: 0},
+    {seq: 2, player_id: MOCK_PLAYER_ID, action: 'check', amount: 0},
+    {seq: 3, player_id: 'leo_rio', action: 'raise', amount: 200},
+    {seq: 4, player_id: MOCK_PLAYER_ID, action: 'call', amount: 200},
+    {seq: 5, player_id: 'leo_rio', action: 'check', amount: 0},
+    {seq: 6, player_id: MOCK_PLAYER_ID, action: 'check', amount: 0}
+  ])
+};
 
 const mockProfile = {
   user_id: MOCK_PLAYER_ID,
@@ -168,6 +249,7 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   }
   const body = typeof config.data === 'string' ? JSON.parse(config.data || '{}') : (config.data || {});
   if (method === 'GET' && path === '/v1.0/players/me') return ok({...mockProfile}, config);
+  if (method === 'GET' && path === '/v1.0/players/me/sessions') return ok([], config);
   if (method === 'POST' && path === '/v1.0/players/me/terms/accept') return ok({
     ...mockProfile,
     poker_terms_accepted: true
@@ -241,6 +323,19 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     if (!rooms.find(r => r.room_id === leaveMatch[1])) fail(404, 'room not found', config);
     if (mockPlayerDealtIn) fail(409, 'cannot remove player mid-hand while still dealt in', config);
     return ok({amount: 4850}, config);
+  }
+  if (method === 'GET' && path === '/v1.0/players/me/hands') return ok(mockHands, config);
+  const handMatch = method === 'GET' ? path.match(/^\/v1\.0\/players\/me\/hands\/([^/]+)$/) : null;
+  if (handMatch) {
+    const hand = mockHands.find(h => h.hand_id === handMatch[1]);
+    if (!hand) fail(404, 'hand not found', config);
+    return ok(hand, config);
+  }
+  const handHistoryMatch = method === 'GET' ? path.match(/^\/v1\.0\/tables\/[^/]+\/hands\/([^/]+)\/history$/) : null;
+  if (handHistoryMatch) {
+    const hand = mockHands.find(h => h.hand_id === handHistoryMatch[1]);
+    if (!hand) fail(404, 'hand not found', config);
+    return ok({table_id: hand.table_id, hand_id: hand.hand_id, actions: mockHandActions[hand.hand_id] || []}, config);
   }
   if (method === 'GET' && path === '/v1.0/leaderboard') return ok([
     {player_id: 'bia_sp', player_name: 'Bia', hands_played: 248, hands_won: 71, win_rate: .286},

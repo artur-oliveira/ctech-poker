@@ -71,6 +71,10 @@ type OpponentSummary struct {
 	PlayerID  string   `dynamodbav:"player_id" json:"player_id"`
 	Name      string   `dynamodbav:"name,omitempty" json:"name,omitempty"`
 	HoleCards []string `dynamodbav:"hole_cards,omitempty" json:"hole_cards,omitempty"`
+	// Won is explicit so a 3+-way hand's history is readable without
+	// inferring the winner from the viewer's own Outcome — that inference
+	// only works heads-up (exactly one opponent).
+	Won bool `dynamodbav:"won,omitempty" json:"won,omitempty"`
 }
 
 type Store struct {
@@ -150,8 +154,12 @@ func (s *Store) FindOpenSession(ctx context.Context, playerID, tableID string) (
 
 // CloseSession overwrites the same session item (same PK/SK) with its final
 // EndedAt/CashoutAmount/NetPnL — a plain PutItem, since this is an audit trail,
-// not the wallet balance's source of truth (that stays ctech-wallet).
+// not the wallet balance's source of truth (that stays ctech-wallet). TTL is
+// reset to sessionTTLDays from now: item.TTL still carries the value set at
+// RecordSession (open time), and RecordSession's "default only if zero" guard
+// would otherwise leave a long-open session's TTL unchanged at close.
 func (s *Store) CloseSession(ctx context.Context, item SessionItem) error {
+	item.TTL = time.Now().Add(sessionTTLDays * 24 * time.Hour).Unix()
 	return s.RecordSession(ctx, item)
 }
 
@@ -184,4 +192,17 @@ func (s *Store) ListHands(ctx context.Context, playerID string, limit int) ([]Ha
 		}
 	}
 	return outHands, nil
+}
+
+func (s *Store) GetHand(ctx context.Context, playerID, handID string) (*HandItem, error) {
+	res, err := s.hands.GetItem(ctx, playerID, handID)
+	if err != nil {
+		return nil, err
+	}
+	loaded, err := dynamo.Decode[HandItem](res)
+
+	if err != nil {
+		return nil, err
+	}
+	return loaded, nil
 }

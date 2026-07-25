@@ -134,6 +134,7 @@ func (s *Store) LoadTable(ctx context.Context, tableID string) (*StoredTable, er
 // shape: on a failed condition, re-read the guard to disambiguate a version
 // race from a duplicate submission.
 func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID string, expectedVersion int, newState hand.State, entry ActionLogEntry) error {
+	entry.Timestamp = timeNowFunc().UnixMilli()
 	stateItem, err := dynamo.Encode(struct {
 		State hand.State `dynamodbav:"state"`
 	}{State: newState})

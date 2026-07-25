@@ -342,19 +342,24 @@ func (s *Service) settle(ctx context.Context, roomID, playerID string, stack int
 		})
 	}
 
-	if mover == s.game {
-		if holdID == "" {
-			return fmt.Errorf("buyin: no hold ID found for player %s", playerID)
-		}
-		if err := mover.CashoutGame(ctx, playerID, stack, roomID, []string{holdID}, key, "poker_cashout"); err != nil {
+	// stack == 0 (player busted, nothing to return) — skip the wallet call
+	// entirely, ctech-wallet's Credit/CashoutGame reject a zero amount as a
+	// validation error, and there is nothing to reconcile for a $0 credit.
+	if stack > 0 {
+		if mover == s.game {
+			if holdID == "" {
+				return fmt.Errorf("buyin: no hold ID found for player %s", playerID)
+			}
+			if err := mover.CashoutGame(ctx, playerID, stack, roomID, []string{holdID}, key, "poker_cashout"); err != nil {
+				slog.Error("buyin: cash-out credit failed after seat removal — reconciliation job will retry",
+					"player", playerID, "room", roomID, "amount", stack, "hold_id", holdID, "err", err)
+				return fmt.Errorf("buyin: cash-out credit failed after seat removal — reconciliation job will retry for %s amount %d: %w", playerID, stack, err)
+			}
+		} else if err := mover.Credit(ctx, playerID, stack, key, "poker_cashout"); err != nil {
 			slog.Error("buyin: cash-out credit failed after seat removal — reconciliation job will retry",
-				"player", playerID, "room", roomID, "amount", stack, "hold_id", holdID, "err", err)
+				"player", playerID, "room", roomID, "amount", stack, "err", err)
 			return fmt.Errorf("buyin: cash-out credit failed after seat removal — reconciliation job will retry for %s amount %d: %w", playerID, stack, err)
 		}
-	} else if err := mover.Credit(ctx, playerID, stack, key, "poker_cashout"); err != nil {
-		slog.Error("buyin: cash-out credit failed after seat removal — reconciliation job will retry",
-			"player", playerID, "room", roomID, "amount", stack, "err", err)
-		return fmt.Errorf("buyin: cash-out credit failed after seat removal — reconciliation job will retry for %s amount %d: %w", playerID, stack, err)
 	}
 
 	if s.pending != nil {

@@ -110,6 +110,36 @@ func TestSeedAndCommitSetLastActionAt(t *testing.T) {
 	}
 }
 
+// TestCommitActionStampsLogEntryTimestamp pins down that every ActionLogEntry
+// gets a timestamp set by CommitAction itself (unix millis), regardless of
+// what the caller passed in — actor.go never sets it, so without this the
+// audit log had no record of when each action happened.
+func TestCommitActionStampsLogEntryTimestamp(t *testing.T) {
+	db := testClient(t)
+	env := isolatedEnv()
+	s := NewStore(db, env)
+	ctx := context.Background()
+	mustCreateTestTables(ctx, t, db, env)
+
+	timeNowFunc = func() time.Time { return time.Unix(5000, 0) }
+	defer func() { timeNowFunc = time.Now }()
+
+	_ = s.SeedTable(ctx, "table-5", hand.State{Stage: hand.WaitingForPlayers})
+	if err := s.CommitAction(ctx, "table-5", "hand-1", "act-1", 1, hand.State{Stage: hand.PreFlop}, ActionLogEntry{
+		TableID: "table-5", HandID: "hand-1", Version: 2, PlayerID: "p1", ActionID: "act-1", Action: "call",
+	}); err != nil {
+		t.Fatalf("CommitAction: %v", err)
+	}
+
+	entries, err := s.LoadActionsSince(ctx, "table-5", "hand-1", 0)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("expected one logged action, got %+v err=%v", entries, err)
+	}
+	if want := time.Unix(5000, 0).UnixMilli(); entries[0].Timestamp != want {
+		t.Fatalf("expected logged action timestamp %d, got %d", want, entries[0].Timestamp)
+	}
+}
+
 func TestQueryStaleActiveFindsOnlyOldActiveTables(t *testing.T) {
 	db := testClient(t)
 	env := isolatedEnv()

@@ -1,3 +1,5 @@
+import {apiClient} from './client';
+
 export interface SeatView {
   player_id: string;
   name?: string;
@@ -51,4 +53,22 @@ export type ServerMessage = {
   message?: string;
   code?: string;
   action_id?: string
+}
+
+export interface HandHistoryAction {
+  seq: number;
+  player_id: string;
+  action: string;
+  amount: number;
+  timestamp: number; // unix millis
+}
+
+export interface HandHistory {
+  table_id: string;
+  hand_id: string;
+  actions: HandHistoryAction[];
+}
+
+export async function getHandHistory(tableId: string, handId: string) {
+  return (await apiClient.get<HandHistory>(`/v1.0/tables/${tableId}/hands/${handId}/history`, {silentError: true})).data;
 }

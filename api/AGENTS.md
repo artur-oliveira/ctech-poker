@@ -40,5 +40,6 @@ preserve/extend tests for betting/sidepots/eval/shuffle changes.
 
 ## Known issues to be aware of (do not paper over)
 
-B10 (archiver no DLQ), B31 (`Top("achievement_points")` wrong GSI), B32 (no commit-reveal publish/reveal endpoint). See
+B10 (archiver no DLQ), B31 (`Top("achievement_points")` wrong GSI). B32 (commit-reveal publish/reveal) fixed via
+WS snapshot (`snapshot.go:160-165`). See
 `api/README.md` and `docs/plans/2026-07-19-api-audit-remediation.md`.

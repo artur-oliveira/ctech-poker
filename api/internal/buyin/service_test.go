@@ -11,6 +11,7 @@ import (
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
+	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
@@ -186,6 +187,35 @@ func TestCashOutClosesTheOpenSession(t *testing.T) {
 	open, _ := sessions.FindOpenSession(ctx, "user-1", "room-4")
 	if open != nil {
 		t.Fatal("expected the session to be closed after cash-out")
+	}
+}
+
+// TestSettleSkipsWalletCallForZeroStack pins down that a busted player
+// (stack 0 at cash-out/removal) never reaches wallet.Credit/CashoutGame —
+// ctech-wallet rejects a zero amount as a validation error, which used to
+// surface as "buyin: cash-out credit failed after seat removal" even though
+// there was nothing to credit. The session must still close normally.
+func TestSettleSkipsWalletCallForZeroStack(t *testing.T) {
+	wallet := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := testRoomLookup()
+	svc := NewService(wallet, mgr, rooms)
+	sessions := testSessionStore(t)
+	svc.WithSessionStore(sessions)
+	ctx := context.Background()
+
+	_ = sessions.RecordSession(ctx, sessionlog.SessionItem{PK: "user-1", TableID: "room-5", JoinedAt: 1})
+
+	if err := svc.settle(ctx, "room-5", "user-1", 0, "", wallet, "room-5#user-1#zero"); err != nil {
+		t.Fatalf("settle: %v", err)
+	}
+	if len(wallet.credits) != 0 {
+		t.Fatalf("expected no wallet credit for a zero stack, got %+v", wallet.credits)
+	}
+
+	open, _ := sessions.FindOpenSession(ctx, "user-1", "room-5")
+	if open != nil {
+		t.Fatal("expected the session to still be closed after a zero-stack settle")
 	}
 }
 
