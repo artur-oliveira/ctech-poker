@@ -76,7 +76,7 @@ function RaiseControl({minRaise, maxRaise, raiseStep, pot, disabled, pending, on
   const presets = [
     {label: 'Mín', value: minRaise},
     {label: '½ pote', value: snap(pot / 2)},
-    {label: 'Pote', va  lue: snap(pot)},
+    {label: 'Pote', value: snap(pot)},
     {label: 'Máx', value: maxRaise},
   ];
 
