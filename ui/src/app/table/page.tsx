@@ -280,6 +280,7 @@ function TableContent() {
                 <Button type="button" variant="ghost" size="icon" aria-label="Voltar a jogar" disabled={rt.readyPending}
                         onClick={() => rt.ready(true)}><Play/></Button>}
             {viewerSeat?.state === 'sitting_out' && viewerSeat.stack === 0 && room &&
+                s.stage !== 'showdown' && s.stage !== 'complete' &&
                 <RebuyDialog roomId={id} room={room} onRebuyAction={() => rt.ready(true)}/>}
             <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} onLeftAction={amount => {
               pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
