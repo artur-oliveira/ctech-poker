@@ -1,4 +1,5 @@
 import {apiClient} from './client';
+import type {Page} from './client';
 
 export interface Room {
   room_id?: string;
@@ -25,8 +26,8 @@ export interface Stake {
   big_blind: number
 }
 
-export async function listRooms() {
-  return (await apiClient.get<Room[]>('/v1.0/rooms')).data;
+export async function listRooms(cursor?: string) {
+  return (await apiClient.get<Page<Room>>('/v1.0/rooms', {params: {cursor}})).data.data;
 }
 
 export async function listStakes() {

@@ -50,6 +50,19 @@ export const HAND_RANK_INDEX: Record<string, number> = Object.fromEntries(
   HAND_RANKINGS.map((entry, index) => [entry.key, index])
 );
 
+// How many of a resolved 5-card hand's cards actually make the combination,
+// vs. ride along as kickers — for emphasizing the cards that matter (e.g. a
+// pair's 2 cards) over the 3 that don't, instead of showing all 5 as equals.
+// Categories where every card participates (straights, flushes, full house)
+// claim all 5; high_card claims only the top card, since the rest are pure
+// tiebreakers. Paired with canonicalOrder, which already sorts the matching
+// group(s) first, so slicing the first N cards off bestFiveCardHand's output
+// is enough to isolate them.
+export const HAND_MATCH_SIZE: Record<string, number> = {
+  royal_flush: 5, straight_flush: 5, four_of_a_kind: 4, full_house: 5, flush: 5,
+  straight: 5, three_of_a_kind: 3, two_pair: 4, pair: 2, high_card: 1
+};
+
 const RANK_ORDER = '23456789TJQKA';
 
 function rankValue(card: string): number {

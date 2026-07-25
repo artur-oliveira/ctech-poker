@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/dynamo"
 )
 
@@ -101,21 +102,18 @@ func (s *Store) GetByShareCode(ctx context.Context, code string) (*Room, error) 
 	return dynamo.Decode[Room](result.Items[0])
 }
 
-func (s *Store) ListPublic(ctx context.Context, limit int, startKeyToken string) ([]Room, string, error) {
-	result, err := s.base.QueryGSI(ctx, gsiPublic, "gsi_public", "public", limit, nil)
+func (s *Store) ListPublic(ctx context.Context, limit int, startKey map[string]types.AttributeValue) ([]Room, map[string]types.AttributeValue, error) {
+	result, err := s.base.QueryGSI(ctx, gsiPublic, "gsi_public", "public", limit, startKey)
 	if err != nil {
-		return nil, "", fmt.Errorf("roomstore: list public: %w", err)
+		return nil, nil, fmt.Errorf("roomstore: list public: %w", err)
 	}
 	out := make([]Room, 0, len(result.Items))
 	for _, item := range result.Items {
 		r, err := dynamo.Decode[Room](item)
 		if err != nil {
-			return nil, "", fmt.Errorf("roomstore: decode: %w", err)
+			return nil, nil, fmt.Errorf("roomstore: decode: %w", err)
 		}
 		out = append(out, *r)
 	}
-	// Pagination tokens are out of scope for this MVP list (rooms count is
-	// small pre-launch); startKeyToken is accepted for forward-compatible
-	// callers but always returns "" today.
-	return out, "", nil
+	return out, result.LastEvaluatedKey, nil
 }

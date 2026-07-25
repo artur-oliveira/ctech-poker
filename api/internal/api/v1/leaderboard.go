@@ -1,8 +1,6 @@
 package v1
 
 import (
-	"strconv"
-
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/problem"
@@ -16,13 +14,11 @@ func RegisterLeaderboard(router fiber.Router, auth fiber.Handler, svc *leaderboa
 }
 
 func (h *leaderboardHandlers) top(c fiber.Ctx) error {
-	limit := 50
-	if n, err := strconv.Atoi(c.Query("limit")); err == nil && n > 0 {
-		limit = n
-	}
-	entries, err := h.svc.Top(c.Context(), c.Query("metric", "hands_won"), limit)
+	limit := limitParam(c)
+	cursor := c.Query("cursor")
+	entries, lastKey, err := h.svc.Top(c.Context(), c.Query("metric", "hands_won"), limit, decodeCursor(cursor))
 	if err != nil {
 		return problem.BadRequest(err.Error()).Send(c)
 	}
-	return c.JSON(entries)
+	return sendPage(c, entries, lastKey, cursor)
 }

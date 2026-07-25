@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
@@ -28,12 +29,12 @@ func (m *memStats) IncrementAchievementPoints(_ context.Context, id string, poin
 	m.rows[id].AchievementPoints += points
 	return nil
 }
-func (m *memStats) Top(_ context.Context, _ string, _ int) ([]Entry, error) {
+func (m *memStats) Top(_ context.Context, _ string, _ int, _ map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
 	out := []Entry{}
 	for _, e := range m.rows {
 		out = append(out, *e)
 	}
-	return out, nil
+	return out, nil, nil
 }
 func TestRecordHandAndTop(t *testing.T) {
 	m := &memStats{rows: map[string]*Entry{}}
@@ -51,7 +52,7 @@ func TestRecordHandAndTop(t *testing.T) {
 	if m.rows["p2"].PlayerName != "" {
 		t.Fatalf("expected p2's unknown name to stay blank rather than overwrite with empty, got %+v", m.rows["p2"])
 	}
-	top, err := s.Top(context.Background(), "win_rate", 10)
+	top, _, err := s.Top(context.Background(), "win_rate", 10, nil)
 	if err != nil || top[0].PlayerID != "p1" {
 		t.Fatalf("top=%+v err=%v", top, err)
 	}

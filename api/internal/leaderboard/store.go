@@ -116,7 +116,7 @@ func (s *Store) IncrementAchievementPoints(ctx context.Context, playerID string,
 	return nil
 }
 
-func (s *Store) Top(ctx context.Context, metric string, limit int) ([]Entry, error) {
+func (s *Store) Top(ctx context.Context, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
 	index, key := gsiHandsWon, "gsi_hands_won_pk"
 	if metric == "hands_played" {
 		index, key = gsiHandsPlayed, "gsi_hands_played_pk"
@@ -125,18 +125,18 @@ func (s *Store) Top(ctx context.Context, metric string, limit int) ([]Entry, err
 	}
 	result, err := s.base.Query(ctx, dynamo.QueryOpts{
 		PK: "all", PKField: key, IndexName: index,
-		ScanIndexForward: false, Limit: limit,
+		ScanIndexForward: false, Limit: limit, ExclusiveStartKey: startKey,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("leaderboard: query top: %w", err)
+		return nil, nil, fmt.Errorf("leaderboard: query top: %w", err)
 	}
 	out := make([]Entry, 0, len(result.Items))
 	for _, item := range result.Items {
 		e, err := dynamo.Decode[Entry](item)
 		if err != nil {
-			return nil, fmt.Errorf("leaderboard: decode: %w", err)
+			return nil, nil, fmt.Errorf("leaderboard: decode: %w", err)
 		}
 		out = append(out, *e)
 	}
-	return out, nil
+	return out, result.LastEvaluatedKey, nil
 }

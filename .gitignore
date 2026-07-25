@@ -17,3 +17,4 @@ api/dist/
 api/tablecleanup
 api/reconcilie
 api/server
+*.har

@@ -1,3 +1,4 @@
+import type {CSSProperties} from 'react';
 import {Avatar, AvatarFallback} from '@/components/ui/avatar';
 import {Progress} from '@/components/ui/progress';
 import {ChipStack} from '@/components/table/ChipStack';
@@ -34,6 +35,12 @@ const ROLE_LABELS: Record<string, string> = {
 
 // Seats 3/4/5 sit on the top rail; their winner pill must drop below instead of above.
 const TOP_SEAT_INDICES = [3, 4, 5];
+
+// A small burst around the winner's own seat — independent of the viewer's
+// personal win/lose banner — so every player at the table can tell who just
+// won without reading anyone's chip count. Angles only; color alternates via
+// CSS nth-child, same trick as the center-table confetti in HandOutcome.
+const SEAT_CONFETTI_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
 
 export function Seat({
                        seat,
@@ -83,11 +90,15 @@ export function Seat({
               aria-hidden="true"/>}
     {role && <span className={`seat-role ${isDealer ? 'is-dealer' : ''}`} title={ROLE_LABELS[role]}
                    aria-label={ROLE_LABELS[role]}>{role}</span>}
-    <div className="seat-cards">{[0, 1].map(i => {
+    <div className={`seat-cards ${isWinner && payout > 0 ? 'is-collecting' : ''}`}>{[0, 1].map(i => {
       const card = cards?.[i];
       return <PlayingCard key={`${i}-${card || 'back'}`} card={card} index={i} size="hole"
                           owner={isViewer ? 'viewer' : 'opponent'}/>;
     })}</div>
+    {isWinner && payout > 0 && <span key={`confetti-${payout}`} className="seat-confetti" aria-hidden="true">
+      {SEAT_CONFETTI_ANGLES.map((rot, i) => <span key={i} style={{'--rot': `${rot}deg`,
+        animationDelay: `${(i % 4) * 20}ms`} as CSSProperties}/>)}
+    </span>}
     <Avatar className="seat-avatar"
             aria-hidden="true"><AvatarFallback>{isViewer ? 'EU' : initials(seat.name)}</AvatarFallback></Avatar>
     <div className="seat-info">

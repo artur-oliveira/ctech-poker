@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/api-commons/oauth2client"
 	"gopkg.aoctech.app/poker/api/internal/config"
 )
@@ -100,19 +101,19 @@ type Balances struct {
 // New builds the wallet client. Separate TokenManagers per scope mirror
 // ctech-wallet's own kycclient pattern of one scope per token manager — a
 // credit-scoped token must never be reused for a debit call or vice versa.
-func New(cfg *config.Config) *Client {
+func New(cfg *config.Config, cacheB cache.Backend) *Client {
 	httpClient := &http.Client{Timeout: 10 * time.Second}
 	baseAuth := strings.TrimRight(cfg.CtechURL, "/")
 	base := strings.TrimRight(cfg.WalletURL, "/")
 	return &Client{
 		base:              base,
 		http:              httpClient,
-		creditTokens:      oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeCredit),
-		debitTokens:       oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeDebit),
-		gameHoldTokens:    oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameHold),
-		gameCashoutTokens: oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameCashout),
-		gameStatusTokens:  oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameStatus),
-		balanceTokens:     oauth2client.New(httpClient, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeBalance),
+		creditTokens:      oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeCredit),
+		debitTokens:       oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeDebit),
+		gameHoldTokens:    oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameHold),
+		gameCashoutTokens: oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameCashout),
+		gameStatusTokens:  oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameStatus),
+		balanceTokens:     oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeBalance),
 	}
 }
 

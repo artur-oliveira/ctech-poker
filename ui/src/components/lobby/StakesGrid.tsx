@@ -21,7 +21,7 @@ export function StakesGrid() {
     queryKey: ['stakes'], queryFn: listStakes
   });
   const {data: rooms = [], isLoading: roomsLoading} = useQuery({
-    queryKey: ['rooms'], queryFn: listRooms, refetchInterval: 5000
+    queryKey: ['rooms'], queryFn: () => listRooms(), refetchInterval: 5000
   });
 
   async function joinOrCreate(smallBlind: number, bigBlind: number, maxSeats: number) {

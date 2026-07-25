@@ -9,6 +9,15 @@ declare module 'axios' {
   }
 }
 
+// Standard envelope for every list endpoint (cursor-based DynamoDB pagination).
+export interface Page<T> {
+  data: T[];
+  has_next: boolean;
+  next_cursor: string | null;
+  has_previous: boolean;
+  previous_cursor: string | null;
+}
+
 let token: string | null = null;
 const listeners = new Set<(v: string | null) => void>();
 

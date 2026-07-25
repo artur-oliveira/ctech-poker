@@ -7,7 +7,7 @@ import {getSessions} from '@/lib/api/player';
 
 export function ActiveTableBanner() {
   const router = useRouter();
-  const {data: sessions = []} = useQuery({queryKey: ['sessions', 'me'], queryFn: getSessions});
+  const {data: sessions = []} = useQuery({queryKey: ['sessions', 'me'], queryFn: () => getSessions()});
   const open = sessions.find(s => s.ended_at === 0);
   if (!open) return null;
 

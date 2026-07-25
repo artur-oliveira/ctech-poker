@@ -346,10 +346,16 @@ func (a *Actor) applyReadyAndCommit(ctx context.Context, c ReadyCmd) error {
 	if c.Ready {
 		a.cached.RequestReturnFromSitOut(c.PlayerID)
 		action = "ready"
+		// Sit-out (ready:false) never raises the ready-player count, so it must not
+		// trigger tryStartHand: doing so during Stage==Complete forced the "not enough
+		// ready players" fallback early, snapping the table back to WaitingForPlayers
+		// and clearing payouts before next_hand_unix_ms elapsed — killing the other
+		// player's win banner mid-countdown. armNextHandTimer still starts the next
+		// hand once the grace period actually ends.
+		a.tryStartHand(ctx)
 	} else {
 		a.cached.SitOutForActor(c.PlayerID)
 	}
-	a.tryStartHand(ctx)
 	return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: action})
 }
 
@@ -518,14 +524,7 @@ func (a *Actor) commitOutcomeLogEntries(ctx context.Context) error {
 		return nil
 	}
 	for id, result := range outcome.ShowdownResults {
-		if !result.Won {
-			continue
-		}
-		action := "won"
-		if result.Tied {
-			action = "tie"
-		}
-		entry := tablestore.ActionLogEntry{PlayerID: id, Action: action, Amount: outcome.Payouts[id]}
+		entry := tablestore.ActionLogEntry{PlayerID: id, Action: result.Action(), Amount: outcome.Payouts[id]}
 		if err := a.commit(ctx, "", &entry); err != nil {
 			return err
 		}

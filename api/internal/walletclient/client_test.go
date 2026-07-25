@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/config"
 )
 
@@ -52,7 +53,7 @@ func TestCreditSendsExpectedRequestBody(t *testing.T) {
 	defer srv.Close()
 	defer authSrv.Close()
 
-	c := New(&config.Config{WalletURL: srv.URL, CtechURL: authSrv.URL, PokerClientID: "poker", PokerClientSecret: "secret"})
+	c := New(&config.Config{WalletURL: srv.URL, CtechURL: authSrv.URL, PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
 	if err := c.Credit(t.Context(), "user-1", 500, "room-1#user-1#buyin-1", "buyin"); err != nil {
 		t.Fatalf("credit: %v", err)
 	}
@@ -71,7 +72,7 @@ func TestDebitSendsExpectedRequestBody(t *testing.T) {
 	defer srv.Close()
 	defer authSrv.Close()
 
-	c := New(&config.Config{WalletURL: srv.URL, CtechURL: authSrv.URL, PokerClientID: "poker", PokerClientSecret: "secret"})
+	c := New(&config.Config{WalletURL: srv.URL, CtechURL: authSrv.URL, PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
 	if err := c.Debit(t.Context(), "user-1", 500, "room-1#user-1#buyin-1", "buyin"); err != nil {
 		t.Fatalf("debit: %v", err)
 	}
@@ -96,7 +97,7 @@ func TestCreditPassesThroughWalletProblemJSON(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"})
+	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
 	err := c.Credit(t.Context(), "user-1", 500, "key-1", "daily_reward")
 
 	var werr *Error
@@ -119,7 +120,7 @@ func TestBalancesReturnsGameAndSandbox(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"})
+	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
 	b, err := c.Balances(t.Context(), "user-1")
 	if err != nil {
 		t.Fatal(err)
@@ -141,7 +142,7 @@ func TestCreditFallsBackToGenericErrorOnNonProblemBody(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"})
+	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
 	err := c.Credit(t.Context(), "user-1", 500, "key-1", "daily_reward")
 
 	var werr *Error

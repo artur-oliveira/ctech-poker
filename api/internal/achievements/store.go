@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	dynamotypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	dynamo "gopkg.aoctech.app/api-commons/dynamo"
 )
 
@@ -38,21 +39,21 @@ type PlayerAchievementProgress struct {
 	Count int    `dynamodbav:"counter" json:"count"`
 }
 
-func (s *Store) ListAchievements(ctx context.Context, playerID string, limit int) ([]PlayerAchievementProgress, error) {
+func (s *Store) ListAchievements(ctx context.Context, playerID string, limit int, startKey map[string]dynamotypes.AttributeValue) ([]PlayerAchievementProgress, map[string]dynamotypes.AttributeValue, error) {
 	if playerID == "" || limit < 0 {
-		return []PlayerAchievementProgress{}, fmt.Errorf("achievements: invalid playerId or limit values")
+		return []PlayerAchievementProgress{}, nil, fmt.Errorf("achievements: invalid playerId or limit values")
 	}
-	result, err := s.base.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: limit})
+	result, err := s.base.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: limit, ExclusiveStartKey: startKey})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	out := make([]PlayerAchievementProgress, 0, len(result.Items))
 	for _, item := range result.Items {
 		e, err := dynamo.Decode[PlayerAchievementProgress](item)
 		if err != nil {
-			return nil, fmt.Errorf("achievements: decode: %w", err)
+			return nil, nil, fmt.Errorf("achievements: decode: %w", err)
 		}
 		out = append(out, *e)
 	}
-	return out, nil
+	return out, result.LastEvaluatedKey, nil
 }

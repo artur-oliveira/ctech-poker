@@ -187,7 +187,7 @@ function TableContent() {
       bestFiveCardHand([...winnerHole, ...snap.board]) : winnerHole;
     setHandOutcome({
       key: outcomeKeyRef.current, kind, handCategory: seat.hand_category, opponentCategory,
-      winningCards, stackBefore: stackAtHandStart, stackAfter: seat.stack
+      winningCards, winningHoleCards: winnerHole, stackBefore: stackAtHandStart, stackAfter: seat.stack
     });
   }, [rt.snapshot, viewer, stackAtHandStart]);
   if (!valid) return (

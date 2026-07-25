@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
 
@@ -18,12 +19,12 @@ func (m *memStore) Increment(_ context.Context, playerID, key string, by int) (i
 	return previous, m.progress[playerID][key], nil
 }
 
-func (m *memStore) ListAchievements(_ context.Context, playerID string, _ int) ([]PlayerAchievementProgress, error) {
+func (m *memStore) ListAchievements(_ context.Context, playerID string, _ int, _ map[string]types.AttributeValue) ([]PlayerAchievementProgress, map[string]types.AttributeValue, error) {
 	out := make([]PlayerAchievementProgress, 0, len(m.progress[playerID]))
 	for key, count := range m.progress[playerID] {
 		out = append(out, PlayerAchievementProgress{Key: key, Count: count})
 	}
-	return out, nil
+	return out, nil, nil
 }
 
 func TestRecordHandUpdatesProgressAndUnlocks(t *testing.T) {

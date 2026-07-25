@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
@@ -21,7 +22,7 @@ type Entry struct {
 type statsStore interface {
 	IncrementStats(ctx context.Context, playerID, name string, playedDelta, wonDelta int) error
 	IncrementAchievementPoints(context.Context, string, int) error
-	Top(context.Context, string, int) ([]Entry, error)
+	Top(ctx context.Context, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error)
 }
 type Service struct{ store statsStore }
 
@@ -64,7 +65,7 @@ func (s *Service) RecordUnlocks(ctx context.Context, unlocks []achievements.Tier
 	return nil
 }
 
-func (s *Service) Top(ctx context.Context, metric string, limit int) ([]Entry, error) {
+func (s *Service) Top(ctx context.Context, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
 	if metric == "" {
 		metric = "hands_won"
 	}
@@ -72,7 +73,7 @@ func (s *Service) Top(ctx context.Context, metric string, limit int) ([]Entry, e
 	// gsi_achievement_points GSI, and ranking it via another metric's GSI
 	// silently returned wrong ordering. Add the GSI before re-enabling it.
 	if metric != "hands_won" && metric != "hands_played" && metric != "win_rate" {
-		return nil, fmt.Errorf("leaderboard: unsupported metric %q", metric)
+		return nil, nil, fmt.Errorf("leaderboard: unsupported metric %q", metric)
 	}
 	if limit <= 0 {
 		limit = 50
@@ -80,9 +81,9 @@ func (s *Service) Top(ctx context.Context, metric string, limit int) ([]Entry, e
 	if limit > 100 {
 		limit = 100
 	}
-	entries, err := s.store.Top(ctx, metric, limit)
+	entries, lastKey, err := s.store.Top(ctx, metric, limit, startKey)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for i := range entries {
 		if entries[i].HandsPlayed > 0 {
@@ -107,5 +108,5 @@ func (s *Service) Top(ctx context.Context, metric string, limit int) ([]Entry, e
 	if len(entries) > limit {
 		entries = entries[:limit]
 	}
-	return entries, nil
+	return entries, lastKey, nil
 }

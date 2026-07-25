@@ -1865,13 +1865,78 @@ h1 em {
     pointer-events: none
 }
 
+/* Tells every player at the table who just won, not only the winner's own
+   client — a border color change alone is easy to miss mid-glance, so it's
+   paired with a couple of gold pulses and, on the cards themselves, a lift
+   (see .seat-cards.is-collecting below). */
 .game-seat.is-winner {
-    border-color: var(--gold)
+    border-color: var(--gold);
+    animation: winner-seat-glow 1.6s var(--ease-out-quart) 2
+}
+
+@keyframes winner-seat-glow {
+    0%, 100% {
+        box-shadow: var(--shadow-seat)
+    }
+    50% {
+        box-shadow: var(--shadow-seat), 0 0 0 4px color-mix(in srgb, var(--gold) 45%, transparent),
+        0 0 22px 4px color-mix(in srgb, var(--gold) 45%, transparent)
+    }
+}
+
+/* One-shot flourish on the winning seat's own cards: a lift, a tilt, a gold
+   flash, then back to rest — reads as "these cards just won" without making
+   the seat go card-less while the resolved hand is still on screen. */
+.seat-cards.is-collecting > .playing-card {
+    animation: winner-card-lift 700ms var(--ease-out-quart) both;
+    animation-delay: calc(var(--deal-index, 0) * 90ms + 120ms)
+}
+
+@keyframes winner-card-lift {
+    0%, 100% {
+        transform: translateY(0) rotate(0) scale(1);
+        filter: drop-shadow(0 4px 4px var(--black))
+    }
+    45% {
+        transform: translateY(-10px) rotate(-4deg) scale(1.1);
+        filter: drop-shadow(0 8px 14px color-mix(in srgb, var(--gold) 70%, transparent))
+    }
+}
+
+.seat-confetti {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none
+}
+
+.seat-confetti span {
+    position: absolute;
+    top: 30%;
+    left: 50%;
+    width: 5px;
+    height: 5px;
+    margin: -2.5px;
+    border-radius: 50%;
+    background: var(--gold);
+    opacity: 0;
+    animation: confetti-burst 620ms var(--ease-out-quart) both
+}
+
+.seat-confetti span:nth-child(even) {
+    background: var(--brand-bright)
 }
 
 .game-seat.viewer {
     border-color: var(--brand-bright);
     box-shadow: var(--shadow-seat), 0 0 0 3px color-mix(in srgb, var(--brand) 25%, transparent)
+}
+
+/* .viewer and .is-winner carry equal specificity and disagree on
+   border-color — without this, winning your own hand silently keeps the
+   viewer's red border instead of ever showing the gold winner highlight. */
+.game-seat.viewer.is-winner {
+    border-color: var(--gold)
 }
 
 /* Seat has joined but hasn't broadcast a display name yet (see set_name in
@@ -2185,6 +2250,42 @@ h1 em {
 .hand-outcome-cards .hole-card {
     width: 40px;
     height: 56px
+}
+
+/* is-match cards are the actual combination (a pair's 2, a straight's 5);
+   is-kicker cards rode along but didn't make the hand — shrink and dim them
+   so the eye lands on what actually won instead of reading all 5 as equals. */
+.hand-outcome-card-slot {
+    position: relative;
+    display: flex;
+    transition: transform 220ms var(--ease-out-quart), opacity 220ms var(--ease-out-quart)
+}
+
+.hand-outcome-card-slot.is-kicker {
+    transform: scale(.8) translateY(5px);
+    opacity: .5
+}
+
+/* is-hole marks the 2 cards that came from the player's own hand, not the
+   shared board — a colored ring plus a small "Mão" tag instead of leaving
+   all 5 cards visually identical. */
+.hand-outcome-card-slot.is-hole .hole-card {
+    box-shadow: 0 0 0 2px var(--brand-bright), 0 4px 10px var(--black-06)
+}
+
+.hand-outcome-card-tag {
+    position: absolute;
+    z-index: 2;
+    top: -6px;
+    right: -5px;
+    padding: 1px 5px;
+    border-radius: 999px;
+    background: var(--brand-bright);
+    color: var(--on-brand);
+    font: 800 8px var(--font-mono);
+    line-height: 1.5;
+    letter-spacing: .02em;
+    box-shadow: 0 2px 4px var(--black-06)
 }
 
 .hand-outcome-chips-base, .hand-outcome-chips-delta, .hand-outcome-chips-total {
@@ -4322,6 +4423,29 @@ h1 em {
 
     .ranking-list strong {
         font-size: 12px
+    }
+
+    /* 300px max-width can overflow a phone-width ring/felt; clamp to the
+       viewport and tighten the card row so the win/lose card + its 5 cards
+       and the "Mão" tags never clip at the edges. */
+    .hand-outcome-card {
+        max-width: min(300px, calc(100vw - 32px));
+        padding: 14px 16px
+    }
+
+    .hand-outcome-cards {
+        gap: 4px
+    }
+
+    .hand-outcome-cards .hole-card {
+        width: 34px;
+        height: 48px
+    }
+
+    .hand-outcome-card-tag {
+        top: -5px;
+        right: -3px;
+        padding: 0 4px
     }
 }
 

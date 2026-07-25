@@ -16,6 +16,7 @@ import (
 	awscfg "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
@@ -147,7 +148,7 @@ func handler(ctx context.Context) error {
 	db := dynamodb.NewFromConfig(awsCfg)
 	store := tablestore.NewStore(db, cfg.Env)
 	rooms := roomstore.NewStore(db, cfg.Env)
-	wallet := walletclient.New(cfg)
+	wallet := walletclient.New(cfg, cache.NewMemoryBackend(10))
 	return run(ctx, store, rooms, wallet, staleCutoff)
 }
 

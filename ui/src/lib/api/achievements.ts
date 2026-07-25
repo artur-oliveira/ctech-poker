@@ -1,4 +1,5 @@
 import {apiClient} from './client';
+import type {Page} from './client';
 
 export interface Tier {
   stars: number;
@@ -24,8 +25,10 @@ export async function getAchievementCatalog() {
 // Auth required: the caller's own per-key progress counters. Keys absent
 // here simply have no progress yet (count 0), matching the API's
 // query-by-partition-key semantics (nothing written == nothing to list).
-export async function getMyAchievements() {
-  return (await apiClient.get<PlayerAchievementProgress[]>('/v1.0/players/me/achievements', {silentError: true})).data;
+export async function getMyAchievements(cursor?: string) {
+  return (await apiClient.get<Page<PlayerAchievementProgress>>('/v1.0/players/me/achievements', {
+    params: {cursor}, silentError: true
+  })).data.data;
 }
 
 export interface AchievementProgress {

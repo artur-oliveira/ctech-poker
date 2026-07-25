@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
 
 type progressStore interface {
 	Increment(context.Context, string, string, int) (previous, current int, err error)
-	ListAchievements(context.Context, string, int) ([]PlayerAchievementProgress, error)
+	ListAchievements(ctx context.Context, playerID string, limit int, startKey map[string]types.AttributeValue) ([]PlayerAchievementProgress, map[string]types.AttributeValue, error)
 }
 
 type Service struct{ store progressStore }

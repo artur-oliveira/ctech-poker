@@ -14,6 +14,7 @@ import (
 	awscfg "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
@@ -123,7 +124,7 @@ func handler(ctx context.Context) error {
 	}
 	db := dynamodb.NewFromConfig(awsCfg)
 	pendingStore := reconcile.NewPendingStore(db, cfg.Env)
-	wallet := walletclient.New(cfg)
+	wallet := walletclient.New(cfg, cache.NewMemoryBackend(10))
 	return run(ctx, pendingStore, wallet, wallet)
 }
 

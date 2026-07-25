@@ -4,12 +4,20 @@ import {AxiosError, type AxiosResponse, type InternalAxiosRequestConfig} from 'a
 import type {Achievement, PlayerAchievementProgress, Tier} from '@/lib/api/achievements';
 import type {HandItem} from '@/lib/api/player';
 import type {Room} from '@/lib/api/rooms';
-import type {HandHistoryAction, LegalActionState, PokerAction, SeatView, ServerMessage, TableSnapshot} from '@/lib/api/table';
+import type {Page} from '@/lib/api/client';
+import type {
+  HandHistoryAction,
+  LegalActionState,
+  PokerAction,
+  SeatView,
+  ServerMessage,
+  TableSnapshot
+} from '@/lib/api/table';
 
 export const USE_MOCK = process.env.NEXT_PUBLIC_MOCK_API === 'true';
 export const MOCK_PLAYER_ID = 'mock_player_ana';
 
-const ROOM_ID = '11111111111111111111111111111111';
+const ROOM_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const rooms: Room[] = [
   {
     room_id: ROOM_ID,
@@ -24,7 +32,7 @@ const rooms: Room[] = [
     seats_taken: 6
   },
   {
-    room_id: '22222222222222222222222222222222',
+    room_id: '01BX5ZZKBKACTAV9WEVGEMMVRZ',
     visibility: 'public',
     currency_mode: 'sandbox',
     small_blind: 50,
@@ -70,8 +78,8 @@ const mockHands: HandItem[] = [
     commit_hash: '6ad2da62948a2414364a1faffde7caded33faf4d426db17f4819dedbfa803347'
   },
   {
-    pk: '22222222222222222222222222222222',
-    table_id: '22222222222222222222222222222222',
+    pk: '01BX5ZZKBKACTAV9WEVGEMMVRZ',
+    table_id: '01BX5ZZKBKACTAV9WEVGEMMVRZ',
     hand_id: 'hand_0001',
     sk: 'hand_0001',
     outcome: 'tied',
@@ -210,6 +218,11 @@ function ok<T>(data: T, config: InternalAxiosRequestConfig): AxiosResponse<T> {
   return {data, status: 200, statusText: 'OK', headers: {}, config};
 }
 
+/** Wraps a list in the standard single-page pagination envelope (mock data never overflows a page). */
+function page<T>(items: T[]): Page<T> {
+  return {data: items, has_next: false, next_cursor: null, has_previous: false, previous_cursor: null};
+}
+
 /** Mirrors the real API's problem-detail error shape (see api/internal/problem) for a given status. */
 function fail(status: number, detail: string, config: InternalAxiosRequestConfig): never {
   throw new AxiosError('Mock request failed', String(status), config, undefined, {
@@ -240,6 +253,30 @@ function forcedError(method: string, path: string) {
   }
 }
 
+function generateNativeULID() {
+  const ENCODING = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // Crockford's Base32
+  let time = Date.now();
+
+  // 1. Encode Timestamp (48 bits -> 10 characters)
+  let timeChars = "";
+  for (let i = 9; i >= 0; i--) {
+    timeChars = ENCODING[time % 32] + timeChars;
+    time = Math.floor(time / 32);
+  }
+
+  // 2. Encode Randomness (80 bits -> 16 characters) using Secure Crypto
+  const randomBytes = new Uint8Array(16);
+  crypto.getRandomValues(randomBytes);
+
+  let randomChars = "";
+  for (let i = 0; i < 16; i++) {
+    randomChars += ENCODING[randomBytes[i] % 32];
+  }
+
+  return timeChars + randomChars;
+}
+
+
 function wait(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -256,7 +293,7 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   }
   const body = typeof config.data === 'string' ? JSON.parse(config.data || '{}') : (config.data || {});
   if (method === 'GET' && path === '/v1.0/players/me') return ok({...mockProfile}, config);
-  if (method === 'GET' && path === '/v1.0/players/me/sessions') return ok([], config);
+  if (method === 'GET' && path === '/v1.0/players/me/sessions') return ok(page([]), config);
   if (method === 'POST' && path === '/v1.0/players/me/terms/accept') return ok({
     ...mockProfile,
     poker_terms_accepted: true
@@ -274,7 +311,7 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     }
     return ok({...mockProfile}, config);
   }
-  if (method === 'GET' && path === '/v1.0/rooms') return ok(rooms, config);
+  if (method === 'GET' && path === '/v1.0/rooms') return ok(page(rooms), config);
   // Checked before the generic single-segment room-id match below, since
   // "stakes" would otherwise itself match `/rooms/:id` and never reach here.
   if (method === 'GET' && path === '/v1.0/rooms/stakes') return ok({
@@ -298,7 +335,7 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     }
     const room = {
       ...body,
-      room_id: crypto.randomUUID().replaceAll('-', ''),
+      room_id: generateNativeULID(),
       currency_mode: 'sandbox',
       status: 'waiting',
       seats_taken: 0,
@@ -331,7 +368,7 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     if (mockPlayerDealtIn) fail(409, 'cannot remove player mid-hand while still dealt in', config);
     return ok({amount: 4850}, config);
   }
-  if (method === 'GET' && path === '/v1.0/players/me/hands') return ok(mockHands, config);
+  if (method === 'GET' && path === '/v1.0/players/me/hands') return ok(page(mockHands), config);
   const handMatch = method === 'GET' ? path.match(/^\/v1\.0\/players\/me\/hands\/([^/]+)$/) : null;
   if (handMatch) {
     const hand = mockHands.find(h => h.hand_id === handMatch[1]);
@@ -344,13 +381,13 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     if (!hand) fail(404, 'hand not found', config);
     return ok({table_id: hand.table_id, hand_id: hand.hand_id, actions: mockHandActions[hand.hand_id] || []}, config);
   }
-  if (method === 'GET' && path === '/v1.0/leaderboard') return ok([
+  if (method === 'GET' && path === '/v1.0/leaderboard') return ok(page([
     {player_id: 'bia_sp', player_name: 'Bia', hands_played: 248, hands_won: 71, win_rate: .286},
     {player_id: MOCK_PLAYER_ID, player_name: mockProfile.name, hands_played: 184, hands_won: 49, win_rate: .266},
     {player_id: 'leo_rio', player_name: 'Leo', hands_played: 213, hands_won: 52, win_rate: .244},
-  ], config);
+  ]), config);
   if (method === 'GET' && path === '/v1.0/achievements') return ok(achievementCatalog, config);
-  if (method === 'GET' && path === '/v1.0/players/me/achievements') return ok(mockAchievementProgress, config);
+  if (method === 'GET' && path === '/v1.0/players/me/achievements') return ok(page(mockAchievementProgress), config);
   if (method === 'GET' && path === '/v1.0/sandbox-credits') return ok({remaining_time_seconds: creditCooldown()}, config);
   if (method === 'POST' && path === '/v1.0/sandbox-credits') {
     if (creditCooldown() > 0) return ok({amount: 0, remaining_time_seconds: creditCooldown()}, config);

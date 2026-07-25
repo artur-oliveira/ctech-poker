@@ -172,6 +172,15 @@ type ShowdownResult struct {
 	Tied     bool // Won and outcome.Winners had more than one ID
 }
 
+func (s ShowdownResult) Action() string {
+	if s.Tied {
+		return "tie"
+	} else if s.Won {
+		return "won"
+	}
+	return "lost"
+}
+
 var categoryNames = map[handeval.Category]string{
 	handeval.HighCard: "high_card", handeval.Pair: "pair", handeval.TwoPair: "two_pair",
 	handeval.ThreeOfAKind: "three_of_a_kind", handeval.Straight: "straight", handeval.Flush: "flush",

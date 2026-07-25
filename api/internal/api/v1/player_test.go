@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
@@ -14,12 +15,15 @@ import (
 
 type mockHistoryReader struct{}
 
-func (m *mockHistoryReader) ListSessions(_ context.Context, playerID string, _ int) ([]sessionlog.SessionItem, error) {
-	return []sessionlog.SessionItem{{PK: playerID, TableID: "tbl-1", NetPnL: 100}}, nil
+func (m *mockHistoryReader) ListSessions(_ context.Context, playerID string, _ int, _ map[string]types.AttributeValue) ([]sessionlog.SessionItem, map[string]types.AttributeValue, error) {
+	return []sessionlog.SessionItem{{PK: playerID, TableID: "tbl-1", NetPnL: 100}}, nil, nil
 }
 
-func (m *mockHistoryReader) ListHands(_ context.Context, playerID string, _ int) ([]sessionlog.HandItem, error) {
-	return []sessionlog.HandItem{{PK: playerID, HandID: "h-1", NetChange: 50}}, nil
+func (m *mockHistoryReader) ListHands(_ context.Context, playerID string, _ int, _ map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error) {
+	return []sessionlog.HandItem{{PK: playerID, HandID: "h-1", NetChange: 50}}, nil, nil
+}
+func (m *mockHistoryReader) ListHandsByTable(_ context.Context, playerID, tableID string, _ int, _ map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error) {
+	return []sessionlog.HandItem{{PK: playerID, HandID: "h-1", NetChange: 50, TableID: tableID}}, nil, nil
 }
 func (m *mockHistoryReader) GetHand(_ context.Context, playerID, handID string) (*sessionlog.HandItem, error) {
 	return &sessionlog.HandItem{PK: playerID, HandID: handID, NetChange: 50}, nil

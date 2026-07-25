@@ -2,6 +2,7 @@
 import {useEffect, useState} from 'react';
 import {PartyPopper} from 'lucide-react';
 import {HAND_CATEGORY_LABELS} from '@/lib/utils';
+import {bestHandCategory, HAND_MATCH_SIZE} from '@/lib/pokerRules';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {ChipStack} from '@/components/table/ChipStack';
 import {useCountUp} from '@/lib/hooks/useCountUp';
@@ -13,6 +14,11 @@ export type HandOutcomeState = {
   // the rival's on a loss — undefined when the hand ended without a
   // showdown, since no one's cards were ever revealed to compare.
   winningCards?: string[];
+  // The 2 hole cards belonging to that same winning hand — a subset of
+  // winningCards — so the banner can mark exactly which cards came from the
+  // player's own hand vs. the shared board instead of showing all 5 as one
+  // undifferentiated group.
+  winningHoleCards?: string[];
   // The viewer's stack right before this hand resolved and right after — the
   // chip counter below animates between the two, up when they gained chips,
   // down when they lost some, and stays hidden when neither changed (e.g. a
@@ -160,15 +166,38 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
   if (!shown) return null;
   const category = shown.handCategory && (HAND_CATEGORY_LABELS[shown.handCategory] || shown.handCategory);
   const detail = describeMatchup(shown.kind, shown.handCategory, shown.opponentCategory, shown.key);
+  // Read the category straight off winningCards itself (the same 5 cards
+  // already rendered below) instead of trusting the server's optional
+  // handCategory/opponentCategory fields — those only ever describe the
+  // viewer's own hand and the toughest rival, never "whoever's cards are in
+  // winningCards", so on a loss they'd point at the wrong side entirely.
+  // Only a genuine 5-card resolution has a category to slice; the 2-card
+  // fallback (board incomplete) shows every card as equally "the hand".
+  const winningCategory = shown.winningCards?.length === 5 ? bestHandCategory(shown.winningCards) : undefined;
+  const matchSize = winningCategory ? HAND_MATCH_SIZE[winningCategory] ?? shown.winningCards!.length :
+    shown.winningCards?.length ?? 0;
+  const holeCards = new Set(shown.winningHoleCards);
   return <div className="hand-outcome" aria-hidden="true">
     <div key={shown.key} className={`hand-outcome-card ${shown.kind}${leaving ? ' leaving' : ''}`}>
       {shown.kind === 'win' && <span className="hand-outcome-confetti">{CONFETTI_PIECES.map(i =>
         <span key={i}/>)}</span>}
       {shown.kind === 'win' ? <PartyPopper/> : null}
       <b>{shown.kind === 'win' ? 'Você venceu a mão!' : 'Não foi dessa vez.'}</b>
+      {/* Cards making the actual combination (`is-match`) stay full-size and
+          lit; the rest (`is-kicker`) shrink and dim instead of reading as
+          equal partners in the win — a pair shouldn't look like it needed all
+          5 cards. `is-hole` marks the 2 that came from the hand itself, not
+          the shared board, with its own ring + tag. */}
       {shown.winningCards && <span className="hand-outcome-cards">
-        {shown.winningCards.map((card, i) => <PlayingCard key={i} card={card} index={i} size="hole"
-                                                          owner={shown.kind === 'win' ? 'viewer' : 'opponent'}/>)}
+        {shown.winningCards.map((card, i) => {
+          const fromHole = holeCards.has(card);
+          return <span key={card}
+                       className={`hand-outcome-card-slot ${i < matchSize ? 'is-match' : 'is-kicker'} ${fromHole ? 'is-hole' : ''}`}>
+            <PlayingCard card={card} index={i} size="hole" owner={fromHole ?
+              (shown.kind === 'win' ? 'viewer' : 'opponent') : undefined}/>
+            {fromHole && <small className="hand-outcome-card-tag">Mão</small>}
+          </span>;
+        })}
       </span>}
       {shown.stackBefore != null && shown.stackAfter != null && shown.stackBefore !== shown.stackAfter &&
           <ChipCountUp from={shown.stackBefore} to={shown.stackAfter}/>}

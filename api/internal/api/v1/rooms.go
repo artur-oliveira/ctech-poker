@@ -114,11 +114,12 @@ func (h *roomHandlers) listStakes(c fiber.Ctx) error {
 }
 
 func (h *roomHandlers) listPublic(c fiber.Ctx) error {
-	rooms, _, err := h.rooms.ListPublic(c.Context(), 50, c.Query("cursor"))
+	cursor := c.Query("cursor")
+	rooms, lastKey, err := h.rooms.ListPublic(c.Context(), 50, decodeCursor(cursor))
 	if err != nil {
 		return problem.InternalServer("failed to list rooms", c, err).Send(c)
 	}
-	return c.JSON(rooms)
+	return sendPage(c, rooms, lastKey, cursor)
 }
 
 func (h *roomHandlers) getRoom(c fiber.Ctx) error {

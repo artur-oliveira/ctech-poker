@@ -20,8 +20,9 @@ func sessionSK() string {
 }
 
 const (
-	tableSessions = "poker_player_sessions"
-	tableHands    = "poker_player_hands"
+	tableSessions      = "poker_player_sessions"
+	tableHands         = "poker_player_hands"
+	tableHandsGsiTable = "gsi_table_id"
 
 	// sessionTTLDays bounds how long a session item (open or closed) stays in
 	// poker_player_sessions — this table only answers "which table is/was a
@@ -103,13 +104,13 @@ func (s *Store) RecordSession(ctx context.Context, item SessionItem) error {
 	return s.sessions.PutItem(ctx, encoded)
 }
 
-func (s *Store) ListSessions(ctx context.Context, playerID string, limit int) ([]SessionItem, error) {
+func (s *Store) ListSessions(ctx context.Context, playerID string, limit int, startKey map[string]dynamotypes.AttributeValue) ([]SessionItem, map[string]dynamotypes.AttributeValue, error) {
 	if limit <= 0 {
 		limit = 50
 	}
-	res, err := s.sessions.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: limit, ScanIndexForward: false})
+	res, err := s.sessions.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: limit, ScanIndexForward: false, ExclusiveStartKey: startKey})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	out := make([]SessionItem, 0, len(res.Items))
 	for _, raw := range res.Items {
@@ -118,7 +119,7 @@ func (s *Store) ListSessions(ctx context.Context, playerID string, limit int) ([
 			out = append(out, *item)
 		}
 	}
-	return out, nil
+	return out, res.LastEvaluatedKey, nil
 }
 
 // FindOpenSession returns the most recent session recorded for playerID at
@@ -177,16 +178,14 @@ func (s *Store) RecordHand(ctx context.Context, item HandItem) error {
 	return s.hands.PutItem(ctx, encoded)
 }
 
-func (s *Store) ListHands(ctx context.Context, playerID string, limit int) ([]HandItem, error) {
+func (s *Store) ListHands(ctx context.Context, playerID string, limit int, startKey map[string]dynamotypes.AttributeValue) ([]HandItem, map[string]dynamotypes.AttributeValue, error) {
 	if limit <= 0 {
 		limit = 50
 	}
-	res, err := s.hands.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: limit, ScanIndexForward: false})
+	res, err := s.hands.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: limit, ScanIndexForward: false, ExclusiveStartKey: startKey})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	out := make([]SessionItem, 0, len(res.Items))
-	_ = out
 	outHands := make([]HandItem, 0, len(res.Items))
 	for _, raw := range res.Items {
 		item, err := dynamo.Decode[HandItem](raw)
@@ -194,7 +193,30 @@ func (s *Store) ListHands(ctx context.Context, playerID string, limit int) ([]Ha
 			outHands = append(outHands, *item)
 		}
 	}
-	return outHands, nil
+	return outHands, res.LastEvaluatedKey, nil
+}
+
+func (s *Store) ListHandsByTable(ctx context.Context, playerID, tableID string, limit int, startKey map[string]dynamotypes.AttributeValue) ([]HandItem, map[string]dynamotypes.AttributeValue, error) {
+	res, err := s.hands.QueryComposite(ctx, dynamo.CompositeQueryOpts{
+		PK: playerID,
+		SKEq: []dynamo.KV{
+			{Field: "table_id", Value: tableID},
+		},
+		Limit:             limit,
+		ScanIndexForward:  false,
+		ExclusiveStartKey: startKey,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	outHands := make([]HandItem, 0, len(res.Items))
+	for _, raw := range res.Items {
+		item, err := dynamo.Decode[HandItem](raw)
+		if err == nil && item != nil {
+			outHands = append(outHands, *item)
+		}
+	}
+	return outHands, res.LastEvaluatedKey, nil
 }
 
 func (s *Store) GetHand(ctx context.Context, playerID, handID string) (*HandItem, error) {

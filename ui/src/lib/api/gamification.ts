@@ -1,4 +1,5 @@
 import {apiClient} from './client';
+import type {Page} from './client';
 
 export interface Entry {
   player_id: string;
@@ -8,8 +9,8 @@ export interface Entry {
   win_rate: number
 }
 
-export async function leaderboard() {
-  return (await apiClient.get<Entry[]>('/v1.0/leaderboard')).data;
+export async function leaderboard(cursor?: string) {
+  return (await apiClient.get<Page<Entry>>('/v1.0/leaderboard', {params: {cursor}})).data.data;
 }
 
 export async function spin(): Promise<{ amount: number; remaining_time_seconds: number; }> {

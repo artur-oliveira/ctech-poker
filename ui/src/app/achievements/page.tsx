@@ -12,7 +12,7 @@ import {useOptionalSession} from "@/lib/auth/session";
 export default function Achievements() {
   const {authed, checking} = useOptionalSession();
   const catalog = useQuery({queryKey: ['achievements', 'catalog'], queryFn: getAchievementCatalog});
-  const mine = useQuery({queryKey: ['achievements', 'me'], queryFn: getMyAchievements, enabled: authed});
+  const mine = useQuery({queryKey: ['achievements', 'me'], queryFn: () => getMyAchievements(), enabled: authed});
   const progress = new Map((mine.data || []).map(p => [p.key, p.count]));
   // While mine is still loading, leave count undefined (renders the neutral
   // tier ladder) instead of flashing "0" for every card before the real

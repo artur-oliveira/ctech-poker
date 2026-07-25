@@ -8,7 +8,7 @@ import {ProfileMenu} from "@/components/lobby/ProfileMenu";
 import {useOptionalSession} from "@/lib/auth/session";
 
 export default function Ranking() {
-  const {data = [], isLoading} = useQuery({queryKey: ['leaderboard'], queryFn: leaderboard});
+  const {data = [], isLoading} = useQuery({queryKey: ['leaderboard'], queryFn: () => leaderboard()});
   const viewer = getViewerId();
   const {authed} = useOptionalSession();
 

@@ -1,4 +1,5 @@
 import {apiClient} from './client';
+import type {Page} from './client';
 
 export type WalletMode = 'sandbox' | 'real';
 
@@ -34,9 +35,12 @@ export interface PlayerSession {
 }
 
 // Most-recent-first (server sorts descending) — sessions[0].ended_at === 0
-// means that table is still the player's open seat.
-export async function getSessions() {
-  return (await apiClient.get<PlayerSession[]>('/v1.0/players/me/sessions', {silentError: true})).data;
+// means that table is still the player's open seat. cursor pages backward
+// through history; omit it for the first (most recent) page.
+export async function getSessions(cursor?: string) {
+  return (await apiClient.get<Page<PlayerSession>>('/v1.0/players/me/sessions', {
+    params: {cursor}, silentError: true
+  })).data.data;
 }
 
 export type HandOutcome = 'won' | 'lost' | 'tied';
@@ -63,9 +67,11 @@ export interface HandItem {
   commit_hash?: string;
 }
 
-// Most-recent-first (server sorts descending), capped at 50 by the API.
-export async function getHands() {
-  return (await apiClient.get<HandItem[]>('/v1.0/players/me/hands', {silentError: true})).data;
+// Most-recent-first (server sorts descending), capped at 50 per page.
+export async function getHands(cursor?: string) {
+  return (await apiClient.get<Page<HandItem>>('/v1.0/players/me/hands', {
+    params: {cursor}, silentError: true
+  })).data.data;
 }
 
 export async function getHand(handId: string) {

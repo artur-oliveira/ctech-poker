@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/url"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/player"
@@ -21,13 +22,14 @@ type UpdatePlayerRequest struct {
 }
 
 type sessionLogReader interface {
-	ListSessions(ctx context.Context, playerID string, limit int) ([]sessionlog.SessionItem, error)
-	ListHands(ctx context.Context, playerID string, limit int) ([]sessionlog.HandItem, error)
+	ListSessions(ctx context.Context, playerID string, limit int, startKey map[string]types.AttributeValue) ([]sessionlog.SessionItem, map[string]types.AttributeValue, error)
+	ListHands(ctx context.Context, playerID string, limit int, startKey map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error)
+	ListHandsByTable(ctx context.Context, playerID, tableID string, limit int, startKey map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error)
 	GetHand(ctx context.Context, playerID, handID string) (*sessionlog.HandItem, error)
 }
 
 type playerAchievementStore interface {
-	ListAchievements(ctx context.Context, playerID string, limit int) ([]achievements.PlayerAchievementProgress, error)
+	ListAchievements(ctx context.Context, playerID string, limit int, startKey map[string]types.AttributeValue) ([]achievements.PlayerAchievementProgress, map[string]types.AttributeValue, error)
 }
 
 type playerHandlers struct {
@@ -104,20 +106,31 @@ func (h *playerHandlers) acceptTerms(c fiber.Ctx) error {
 
 func (h *playerHandlers) sessionHistory(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
-	sessions, err := h.sessions.ListSessions(c.Context(), userID, 50)
+	cursor := c.Query("cursor")
+	sessions, lastKey, err := h.sessions.ListSessions(c.Context(), userID, 50, decodeCursor(cursor))
 	if err != nil {
 		return problem.InternalServer("failed to list sessions", c, err).Send(c)
 	}
-	return c.JSON(sessions)
+	return sendPage(c, sessions, lastKey, cursor)
 }
 
 func (h *playerHandlers) handHistory(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
-	hands, err := h.sessions.ListHands(c.Context(), userID, 50)
+	cursor := c.Query("cursor")
+	limit := limitParam(c)
+
+	if tableID := c.Query("table_id"); tableID != "" {
+		hands, lastKey, err := h.sessions.ListHandsByTable(c.Context(), userID, tableID, limit, decodeCursor(cursor))
+		if err != nil {
+			return problem.InternalServer("failed to list hands", c, err).Send(c)
+		}
+		return sendPage(c, hands, lastKey, cursor)
+	}
+	hands, lastKey, err := h.sessions.ListHands(c.Context(), userID, limit, decodeCursor(cursor))
 	if err != nil {
 		return problem.InternalServer("failed to list hands", c, err).Send(c)
 	}
-	return c.JSON(hands)
+	return sendPage(c, hands, lastKey, cursor)
 }
 
 func (h *playerHandlers) handByID(c fiber.Ctx) error {
@@ -141,11 +154,12 @@ func (h *playerHandlers) handByID(c fiber.Ctx) error {
 
 func (h *playerHandlers) achievementProgress(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
-	progress, err := h.achievements.ListAchievements(c.Context(), userID, 100)
+	cursor := c.Query("cursor")
+	progress, lastKey, err := h.achievements.ListAchievements(c.Context(), userID, 100, decodeCursor(cursor))
 	if err != nil {
 		return problem.InternalServer("failed to list achievements", c, err).Send(c)
 	}
-	return c.JSON(progress)
+	return sendPage(c, progress, lastKey, cursor)
 }
 
 // responseWithBalance adds the wallet balance to the profile response.

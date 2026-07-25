@@ -8,9 +8,9 @@ import {Environment} from '@aoctech/cdk';
 // Table names carry the `poker_` segment so they never collide with another
 // service's tables in the same AWS account.
 export type TableName =
-    'poker_table_state' | 'poker_table_state_history' | 'poker_action_log' | 'poker_action_guards' |
-    'poker_rooms' | 'poker_player_profiles' | 'poker_achievement_progress' | 'poker_leaderboard_stats' |
-    'poker_daily_reward' | 'poker_pending_cashouts' | 'poker_player_sessions' | 'poker_player_hands';
+  'poker_table_state' | 'poker_table_state_history' | 'poker_action_log' | 'poker_action_guards' |
+  'poker_rooms' | 'poker_player_profiles' | 'poker_achievement_progress' | 'poker_leaderboard_stats' |
+  'poker_daily_reward' | 'poker_pending_cashouts' | 'poker_player_sessions' | 'poker_player_hands';
 
 interface DynamoDBStackProps extends cdk.StackProps {
   environment: Environment;
@@ -25,10 +25,10 @@ export class DynamoDBStack extends cdk.Stack {
     const {environment} = props;
     const removalPolicy = environment === 'dev' ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN;
     const pointInTimeRecoverySpecification =
-        environment === 'prod' ? {pointInTimeRecoveryEnabled: true} : undefined;
+      environment === 'prod' ? {pointInTimeRecoveryEnabled: true} : undefined;
 
     const table = (
-        name: TableName, withSortKey: boolean, withTTL: boolean = false, withStream: boolean = false,
+      name: TableName, withSortKey: boolean, withTTL: boolean = false, withStream: boolean = false,
     ): dynamodb.TableV2 => {
       const tableName = `${environment}_${name}`;
       const t = new dynamodb.TableV2(this, tableName, {
@@ -115,6 +115,21 @@ export class DynamoDBStack extends cdk.Stack {
     // currently at (or was recently at); the durable per-hand history lives
     // in poker_player_hands instead.
     table('poker_player_sessions', true, true);
-    table('poker_player_hands', true);
+    const playerHands = table('poker_player_hands', true);
+    playerHands.addGlobalSecondaryIndex({
+      indexName: 'gsi_table_id',
+      partitionKey: {
+        name: 'pk', type: dynamodb.AttributeType.STRING
+      },
+      sortKeys: [
+        {
+          name: 'table_id', type: dynamodb.AttributeType.STRING,
+        },
+        {
+          name: 'sk', type: dynamodb.AttributeType.STRING,
+        }
+      ],
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
   }
 }

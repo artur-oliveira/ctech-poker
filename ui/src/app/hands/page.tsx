@@ -29,7 +29,7 @@ function handCategoryLabel(holeCards?: string[], board?: string[]): string | nul
 }
 
 export default function HandsHistory() {
-  const {data = [], isLoading, isError, refetch} = useQuery({queryKey: ['hands'], queryFn: getHands});
+  const {data = [], isLoading, isError, refetch} = useQuery({queryKey: ['hands'], queryFn: () => getHands()});
 
   return <TermsGate>
     <main className="app-page">

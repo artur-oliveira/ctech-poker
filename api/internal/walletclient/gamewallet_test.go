@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/config"
 )
 
@@ -23,7 +24,7 @@ func TestIsGamblingActivated(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"})
+	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
 
 	t.Run("activated", func(t *testing.T) {
 		ok, err := c.IsGamblingActivated(t.Context(), "user-1")
@@ -58,7 +59,7 @@ func TestHoldAndRelease(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"})
+	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
 
 	id, err := c.HoldGame(t.Context(), "user-1", 500, "table-1", "k1", "buyin")
 	if err != nil || id != "hold-123" {
@@ -89,7 +90,7 @@ func TestCashoutGame(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"})
+	c := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL, PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
 
 	if err := c.CashoutGame(t.Context(), "user-1", 500, "table-1", []string{"hold-123"}, "k2", "cashout"); err != nil {
 		t.Fatalf("CashoutGame failed: %v", err)
