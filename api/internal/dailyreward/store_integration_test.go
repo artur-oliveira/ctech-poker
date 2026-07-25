@@ -13,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"gopkg.aoctech.app/api-commons/cache"
 )
 
 func TestStoreKeepsPendingPrizeAndCompletes(t *testing.T) {
@@ -28,7 +27,7 @@ func TestStoreKeepsPendingPrizeAndCompletes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := NewStore(db, env, cache.NewMemoryBackend(10))
+	store := NewStore(db, env)
 	now := time.Date(2026, 7, 19, 12, 0, 0, 0, brt)
 	first, err := store.Claim(context.Background(), "p1", cooldownKey(now), 500, now)
 	if err != nil || first.Amount != 500 || first.Status != StatusPending {

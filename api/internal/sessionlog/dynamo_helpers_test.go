@@ -12,7 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/api-commons/dynamo"
 )
 
@@ -27,7 +26,7 @@ func newTestStore(t *testing.T) *Store {
 	env := "sessionlog_test"
 	createTestTable(t, db, dynamo.TableName(env, tableSessions))
 	createTestTable(t, db, dynamo.TableName(env, tableHands))
-	return NewStore(db, env, cache.NewMemoryBackend(10))
+	return NewStore(db, env)
 }
 
 func createTestTable(t *testing.T, db *dynamodb.Client, name string) {
