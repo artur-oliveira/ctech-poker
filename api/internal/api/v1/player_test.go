@@ -32,7 +32,7 @@ func (m *mockHistoryReader) GetHand(_ context.Context, playerID, handID string) 
 func TestPlayerHistoryEndpoints(t *testing.T) {
 	app := fiber.New()
 	auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "user-123"); return c.Next() }
-	RegisterPlayers(app.Group("/v1.0"), auth, player.NewService(&fakePlayerStore{}), &mockHistoryReader{}, nil)
+	RegisterPlayers(app.Group("/v1.0"), auth, player.NewService(&fakePlayerStore{}), &mockHistoryReader{}, nil, nil)
 
 	t.Run("GET /players/me/sessions", func(t *testing.T) {
 		req := httptest.NewRequest(fiber.MethodGet, "/v1.0/players/me/sessions", nil)
@@ -145,7 +145,7 @@ func TestUpdateMeSetsWalletModeWithoutTouchingName(t *testing.T) {
 	auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "u1"); return c.Next() }
 	app.Post("/players/me", auth, h.updateMe)
 
-	req := httptest.NewRequest(fiber.MethodPost, "/players/me", strings.NewReader(`{"wallet_mode":"real"}`))
+	req := httptest.NewRequest(fiber.MethodPost, "/players/me", strings.NewReader(`{"wallet_mode":"sandbox"}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {
@@ -164,8 +164,8 @@ func TestUpdateMeSetsWalletModeWithoutTouchingName(t *testing.T) {
 	if body.Name != "Artur" {
 		t.Fatalf("Name = %q, want untouched %q", body.Name, "Artur")
 	}
-	if body.WalletMode != "real" {
-		t.Fatalf("WalletMode = %q, want %q", body.WalletMode, "real")
+	if body.WalletMode != "sandbox" {
+		t.Fatalf("WalletMode = %q, want %q", body.WalletMode, "sandbox")
 	}
 
 	req = httptest.NewRequest(fiber.MethodPost, "/players/me", strings.NewReader(`{"wallet_mode":"bogus"}`))
