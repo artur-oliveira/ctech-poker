@@ -24,6 +24,21 @@ anchored to `ui/src`, not to `DESIGN.md`/`PRODUCT.md` (which are design specs).
   (default `http://localhost:8003`). Mock mode: `NEXT_PUBLIC_MOCK_API=true`
   (`dev:mock` script) runs a full in-memory realtime engine (`lib/mock.ts`).
 
+## Configuration (environment variables)
+
+| Key | Where read | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | `src/lib/api/client.ts` | poker API base URL (HTTP + derives WS origin); dev default `http://localhost:8003` via proxy |
+| `NEXT_PUBLIC_APP_URL` | `src/app/layout.tsx` | `metadataBase` for OG/meta tags |
+| `NEXT_PUBLIC_MOCK_API` | `src/lib/mock.ts` | `true` runs the in-memory mock realtime engine instead of a live API (`dev:mock` script) |
+| `NEXT_PUBLIC_CTECH_URL` | `src/lib/auth/oauth.ts` | ctech-account base URL for `OAuthClient` |
+| `NEXT_PUBLIC_CTECH_CLIENT_ID` | `src/lib/auth/oauth.ts` | poker's OAuth client id |
+| `DEV_API_ORIGIN` | `next.config.ts` | dev-only rewrite target for `/v1.0/*`; default `http://localhost:8003` |
+
+No `.env.example` exists in `ui/` today. `NEXT_PUBLIC_*` values are injected at build time by
+`frontend.yml` per environment (static export bakes them in — there is no runtime env lookup after
+build).
+
 ## Routes (App Router, `src/app/`)
 
 | Route | File | Purpose | Status |

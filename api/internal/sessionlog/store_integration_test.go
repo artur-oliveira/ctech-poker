@@ -66,7 +66,7 @@ func TestCloseSessionOverwritesTheSameItem(t *testing.T) {
 		t.Fatalf("CloseSession: %v", err)
 	}
 
-	sessions, _ := store.ListSessions(ctx, "p2", 10)
+	sessions, _, _ := store.ListSessions(ctx, "p2", 10, nil)
 	if len(sessions) != 1 {
 		t.Fatalf("expected the close to overwrite, not append — got %d items", len(sessions))
 	}
@@ -92,7 +92,7 @@ func TestCloseSessionRefreshesTTL(t *testing.T) {
 		t.Fatalf("CloseSession: %v", err)
 	}
 
-	sessions, _ := store.ListSessions(ctx, "p4", 10)
+	sessions, _, _ := store.ListSessions(ctx, "p4", 10, nil)
 	if len(sessions) != 1 {
 		t.Fatalf("expected 1 session, got %d", len(sessions))
 	}

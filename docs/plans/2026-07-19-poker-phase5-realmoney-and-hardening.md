@@ -63,6 +63,39 @@ optional (and left undone) in sandbox.
 
 ---
 
+## Status (verified against code, 2026-07-25)
+
+Checkboxes below are stale — most of this plan was implemented without ticking them; do not use checkbox
+state as a completion signal, read the code. Verified this pass (fork audit + spot-checked):
+
+- **Done:** Task 1 (`GameWallet` client — `internal/walletclient/client.go:130-262`, though its package
+  doc comment at `client.go:1-4` is now wrong and still says "sandbox ledger only"), Task 2 (fail-closed
+  gate, `internal/config/config.go:50-51,75-77`), Task 4 (pending-cashout tracking,
+  `internal/buyin/service.go:324-343`), Task 5 (`cmd/reconcile/main.go` + `cdk/lib/reconcile-stack.ts`),
+  Task 6 (`internal/metrics/emf.go`), Task 7 (`cdk/lib/api-stack.ts:368-391`), Task 9 (WAF,
+  `cdk/lib/frontend-stack.ts`), Task 10 (`internal/api/v1/handhistory.go`), Task 11
+  (`tests/load/load_test.go`), Task 12 (`sessionlog` P&L fields).
+- **Partial / blocking gap — Task 3:** buy-in/cash-out logic fully branches on `CurrencyMode == "real"`
+  (`internal/buyin/service.go`) and is unit-tested, but **`POST /rooms` hardcodes
+  `CurrencyMode: "sandbox"`** (`internal/api/v1/rooms.go:93`) with no field on `CreateRoomRequest`
+  (`internal/api/v1/roomdto.go`) to request otherwise — there is currently no way to create a `real` room
+  through the API, so this entire path is unreachable end to end despite being implemented. Separately,
+  `newBuyinService` (`internal/app/app.go:198-203`) wires the real-money branch via
+  `NewServiceWithGame(...)` with no `players` service, which silently skips the terms-of-service
+  acceptance gate (`buyin/service.go:140-144`) that sandbox buy-ins still get — looks like an oversight,
+  not a deliberate exemption.
+- **Not verified in this repo (cross-repo/out of scope for this audit):** Task 8's ASG lifecycle-hook
+  timing depends on the shared `@aoctech/cdk` `PrivateIpv4Ec2Service` construct's defaults, not anything in
+  this repo. Task 1's live wallet integration depends on `ctech-wallet` actually exposing
+  `/v1.0/internal/wallet/game/{hold,hold/:id/release,cashout,status/:id}` today — re-confirm against that
+  repo's current `router.go` before relying on it.
+- **Frontend: not started.** `ui/src` has zero real-money surface beyond a label swap
+  (`components/table/BuyInPanel.tsx:75` shows "DINHEIRO REAL" vs "SANDBOX" off `room.currency_mode`, but
+  `createRoom`'s input type `Omit`s `currency_mode` so the UI can't request one anyway). No deposit,
+  withdrawal, KYC/gambling-activation status, or hold-based buy-in/cash-out UI exists.
+
+---
+
 ### Task 1: `GameWallet` client and activation check
 
 **Files:**
@@ -146,38 +179,38 @@ Expected: FAIL with "undefined: IsGamblingActivated" / "undefined: CreditGame".
 ```go
 // api/internal/walletclient/client.go — add constants
 const (
-	pathGameCredit = "/v1.0/internal/wallet/game/credit"
-	pathGameDebit  = "/v1.0/internal/wallet/game/debit"
-	pathGameStatus = "/v1.0/internal/wallet/game/status/%s"
+pathGameCredit = "/v1.0/internal/wallet/game/credit"
+pathGameDebit = "/v1.0/internal/wallet/game/debit"
+pathGameStatus = "/v1.0/internal/wallet/game/status/%s"
 
-	scopeGameCredit = "internal:wallet:game-credit"
-	scopeGameDebit  = "internal:wallet:game-debit"
-	scopeGameStatus = "internal:wallet:game-status"
+scopeGameCredit = "internal:wallet:game-credit"
+scopeGameDebit = "internal:wallet:game-debit"
+scopeGameStatus = "internal:wallet:game-status"
 )
 ```
 
 ```go
 // api/internal/walletclient/client.go — Client struct, add
-	gameCreditTokens *oauth2client.TokenManager
-	gameDebitTokens  *oauth2client.TokenManager
-	gameStatusTokens *oauth2client.TokenManager
+gameCreditTokens *oauth2client.TokenManager
+gameDebitTokens  *oauth2client.TokenManager
+gameStatusTokens *oauth2client.TokenManager
 ```
 
 ```go
 // api/internal/walletclient/client.go — New, add alongside the existing two token managers
-		gameCreditTokens: oauth2client.New(httpClient, base+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameCredit),
-		gameDebitTokens:  oauth2client.New(httpClient, base+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameDebit),
-		gameStatusTokens: oauth2client.New(httpClient, base+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameStatus),
+gameCreditTokens: oauth2client.New(httpClient, base+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameCredit),
+gameDebitTokens:  oauth2client.New(httpClient, base+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameDebit),
+gameStatusTokens: oauth2client.New(httpClient, base+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameStatus),
 ```
 
 ```go
 // api/internal/walletclient/client.go — add
 func (c *Client) CreditGame(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error {
-	return c.movement(ctx, c.base+pathGameCredit, c.gameCreditTokens, userID, amount, idempotencyKey, reason)
+return c.movement(ctx, c.base+pathGameCredit, c.gameCreditTokens, userID, amount, idempotencyKey, reason)
 }
 
 func (c *Client) DebitGame(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error {
-	return c.movement(ctx, c.base+pathGameDebit, c.gameDebitTokens, userID, amount, idempotencyKey, reason)
+return c.movement(ctx, c.base+pathGameDebit, c.gameDebitTokens, userID, amount, idempotencyKey, reason)
 }
 
 // IsGamblingActivated checks whether userID has completed ctech-wallet's
@@ -186,31 +219,31 @@ func (c *Client) DebitGame(ctx context.Context, userID string, amount int64, ide
 // simply fail wallet-side for an unactivated user, and failing that late
 // (after a debit attempt) is worse than checking first.
 func (c *Client) IsGamblingActivated(ctx context.Context, userID string) (bool, error) {
-	token, err := c.gameStatusTokens.Get(ctx)
-	if err != nil {
-		return false, fmt.Errorf("walletclient: token: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+fmt.Sprintf(pathGameStatus, userID), nil)
-	if err != nil {
-		return false, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return false, fmt.Errorf("walletclient: request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
-		return false, fmt.Errorf("walletclient: status %d: %s", resp.StatusCode, string(raw))
-	}
-	var body struct {
-		Activated bool `json:"activated"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return false, fmt.Errorf("walletclient: decode: %w", err)
-	}
-	return body.Activated, nil
+token, err := c.gameStatusTokens.Get(ctx)
+if err != nil {
+return false, fmt.Errorf("walletclient: token: %w", err)
+}
+req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+fmt.Sprintf(pathGameStatus, userID), nil)
+if err != nil {
+return false, err
+}
+req.Header.Set("Authorization", "Bearer "+token)
+resp, err := c.http.Do(req)
+if err != nil {
+return false, fmt.Errorf("walletclient: request: %w", err)
+}
+defer func () { _ = resp.Body.Close() }()
+if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+raw, _ := io.ReadAll(resp.Body)
+return false, fmt.Errorf("walletclient: status %d: %s", resp.StatusCode, string(raw))
+}
+var body struct {
+Activated bool `json:"activated"`
+}
+if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+return false, fmt.Errorf("walletclient: decode: %w", err)
+}
+return body.Activated, nil
 }
 ```
 
@@ -285,21 +318,21 @@ Expected: FAIL — `RealMoneyEnabled`/`LegalSignoffRef` fields don't exist.
 
 ```go
 // api/internal/config/config.go — Config struct, add
-	// Real-money mode gate (Phase 5) — see this plan's Global Constraints.
-	// Both fields fail closed together: RealMoneyEnabled=true with no
-	// LegalSignoffRef means "an engineer flipped a flag with no recorded
-	// business sign-off", which Load refuses to start with, not just warn
-	// about — the legal risk here is explicitly bigger than any engineering
-	// risk in this codebase (OVERVIEW.md §11).
-	RealMoneyEnabled bool   `env:"REAL_MONEY_ENABLED" envDefault:"false"`
-	LegalSignoffRef  string `env:"LEGAL_SIGNOFF_REF"`
+// Real-money mode gate (Phase 5) — see this plan's Global Constraints.
+// Both fields fail closed together: RealMoneyEnabled=true with no
+// LegalSignoffRef means "an engineer flipped a flag with no recorded
+// business sign-off", which Load refuses to start with, not just warn
+// about — the legal risk here is explicitly bigger than any engineering
+// risk in this codebase (OVERVIEW.md §11).
+RealMoneyEnabled bool   `env:"REAL_MONEY_ENABLED" envDefault:"false"`
+LegalSignoffRef  string `env:"LEGAL_SIGNOFF_REF"`
 ```
 
 ```go
 // api/internal/config/config.go — Load, add after the existing VALKEY_URL fail-closed check
-	if cfg.RealMoneyEnabled && cfg.LegalSignoffRef == "" {
-		return nil, fmt.Errorf("config: REAL_MONEY_ENABLED=true requires a non-empty LEGAL_SIGNOFF_REF (OVERVIEW.md §11 — this is a business decision, not an engineering toggle)")
-	}
+if cfg.RealMoneyEnabled && cfg.LegalSignoffRef == "" {
+return nil, fmt.Errorf("config: REAL_MONEY_ENABLED=true requires a non-empty LEGAL_SIGNOFF_REF (OVERVIEW.md §11 — this is a business decision, not an engineering toggle)")
+}
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -338,49 +371,49 @@ git commit -m "feat(config): fail closed on real-money mode without a recorded l
 type fakeActivation struct{ activated map[string]bool }
 
 func (f *fakeActivation) IsActivated(_ context.Context, userID string) (bool, error) {
-	return f.activated[userID], nil
+return f.activated[userID], nil
 }
 
 func TestBuyInRejectsRealRoomWithoutGamblingActivation(t *testing.T) {
-	sandbox := &fakeWallet{}
-	game := &fakeWallet{}
-	mgr := testManager(nil)
-	rooms := &fakeRoomLookup{room: &roomstore.Room{ID: "room-real-1", CurrencyMode: "real"}}
-	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{}})
-	ctx := context.Background()
+sandbox := &fakeWallet{}
+game := &fakeWallet{}
+mgr := testManager(nil)
+rooms := &fakeRoomLookup{room: &roomstore.Room{ID: "room-real-1", CurrencyMode: "real"}}
+svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{}})
+ctx := context.Background()
 
-	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
-	if _, err := mgr.Acquire(ctx, "room-real-1", seed); err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
+seed := func () *hand.Table { return hand.NewTable(nil, 10, 20) }
+if _, err := mgr.Acquire(ctx, "room-real-1", seed); err != nil {
+t.Fatalf("acquire: %v", err)
+}
 
-	if err := svc.BuyIn(ctx, "room-real-1", "user-1", 400, false); err == nil {
-		t.Fatal("expected buy-in to be rejected for a non-activated user in a real room")
-	}
-	if len(game.debits) != 0 {
-		t.Fatal("expected no game-wallet debit attempted before the activation check")
-	}
+if err := svc.BuyIn(ctx, "room-real-1", "user-1", 400, false); err == nil {
+t.Fatal("expected buy-in to be rejected for a non-activated user in a real room")
+}
+if len(game.debits) != 0 {
+t.Fatal("expected no game-wallet debit attempted before the activation check")
+}
 }
 
 func TestBuyInUsesGameWalletForRealRooms(t *testing.T) {
-	sandbox := &fakeWallet{}
-	game := &fakeWallet{}
-	mgr := testManager(nil)
-	rooms := &fakeRoomLookup{room: &roomstore.Room{ID: "room-real-2", CurrencyMode: "real"}}
-	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}})
-	ctx := context.Background()
+sandbox := &fakeWallet{}
+game := &fakeWallet{}
+mgr := testManager(nil)
+rooms := &fakeRoomLookup{room: &roomstore.Room{ID: "room-real-2", CurrencyMode: "real"}}
+svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}})
+ctx := context.Background()
 
-	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
-	if _, err := mgr.Acquire(ctx, "room-real-2", seed); err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
+seed := func () *hand.Table { return hand.NewTable(nil, 10, 20) }
+if _, err := mgr.Acquire(ctx, "room-real-2", seed); err != nil {
+t.Fatalf("acquire: %v", err)
+}
 
-	if err := svc.BuyIn(ctx, "room-real-2", "user-1", 400, false); err != nil {
-		t.Fatalf("buyin: %v", err)
-	}
-	if len(game.debits) != 1 || len(sandbox.debits) != 0 {
-		t.Fatalf("expected exactly one game-wallet debit and zero sandbox debits, got game=%d sandbox=%d", len(game.debits), len(sandbox.debits))
-	}
+if err := svc.BuyIn(ctx, "room-real-2", "user-1", 400, false); err != nil {
+t.Fatalf("buyin: %v", err)
+}
+if len(game.debits) != 1 || len(sandbox.debits) != 0 {
+t.Fatalf("expected exactly one game-wallet debit and zero sandbox debits, got game=%d sandbox=%d", len(game.debits), len(sandbox.debits))
+}
 }
 ```
 
@@ -404,19 +437,19 @@ Expected: FAIL with "undefined: NewServiceWithGame".
 ```go
 // api/internal/buyin/service.go — narrow roomstore.Store to what this package needs
 type roomLookup interface {
-	Get(ctx context.Context, roomID string) (*roomstore.Room, error)
+Get(ctx context.Context, roomID string) (*roomstore.Room, error)
 }
 
 type activationChecker interface {
-	IsActivated(ctx context.Context, userID string) (bool, error)
+IsActivated(ctx context.Context, userID string) (bool, error)
 }
 ```
 
 ```go
 // api/internal/buyin/service.go — Service struct, add
-	game       walletMover
-	rooms      roomLookup
-	activation activationChecker
+game       walletMover
+rooms      roomLookup
+activation activationChecker
 ```
 
 ```go
@@ -424,51 +457,51 @@ type activationChecker interface {
 // NewService builds a sandbox-only Service (Phase 3's original constructor —
 // kept for callers, mostly tests, that never touch real-money rooms).
 func NewService(wallet walletMover, manager *tablemanager.Manager, rooms roomLookup) *Service {
-	return &Service{wallet: wallet, manager: manager, rooms: rooms}
+return &Service{wallet: wallet, manager: manager, rooms: rooms}
 }
 
 // NewServiceWithGame builds a Service that also handles real-money rooms —
 // game is the ring-fenced-balance wallet client, activation checks
 // ctech-wallet's ActivateGambling status before ever attempting a debit.
 func NewServiceWithGame(wallet, game walletMover, manager *tablemanager.Manager, rooms roomLookup, activation activationChecker) *Service {
-	return &Service{wallet: wallet, game: game, manager: manager, rooms: rooms, activation: activation}
+return &Service{wallet: wallet, game: game, manager: manager, rooms: rooms, activation: activation}
 }
 ```
 
 ```go
 // api/internal/buyin/service.go — add, used by both BuyIn and CashOut
 func (s *Service) walletFor(ctx context.Context, roomID, playerID string) (walletMover, error) {
-	room, err := s.rooms.Get(ctx, roomID)
-	if err != nil {
-		return nil, fmt.Errorf("buyin: room lookup: %w", err)
-	}
-	if room == nil || room.CurrencyMode != "real" {
-		return s.wallet, nil
-	}
-	if s.game == nil || s.activation == nil {
-		return nil, fmt.Errorf("buyin: room %s is real-money but this Service was built without NewServiceWithGame", roomID)
-	}
-	ok, err := s.activation.IsActivated(ctx, playerID)
-	if err != nil {
-		return nil, fmt.Errorf("buyin: activation check: %w", err)
-	}
-	if !ok {
-		return nil, fmt.Errorf("buyin: player %s has not activated gambling on ctech-wallet", playerID)
-	}
-	return s.game, nil
+room, err := s.rooms.Get(ctx, roomID)
+if err != nil {
+return nil, fmt.Errorf("buyin: room lookup: %w", err)
+}
+if room == nil || room.CurrencyMode != "real" {
+return s.wallet, nil
+}
+if s.game == nil || s.activation == nil {
+return nil, fmt.Errorf("buyin: room %s is real-money but this Service was built without NewServiceWithGame", roomID)
+}
+ok, err := s.activation.IsActivated(ctx, playerID)
+if err != nil {
+return nil, fmt.Errorf("buyin: activation check: %w", err)
+}
+if !ok {
+return nil, fmt.Errorf("buyin: player %s has not activated gambling on ctech-wallet", playerID)
+}
+return s.game, nil
 }
 ```
 
 ```go
 // api/internal/buyin/service.go — BuyIn, replace the hardcoded s.wallet.Debit call
-	mover, err := s.walletFor(ctx, roomID, playerID)
-	if err != nil {
-		return fmt.Errorf("buyin: %w", err)
-	}
-	idemKey := fmt.Sprintf("%s#%s#buyin", roomID, playerID)
-	if err := mover.Debit(ctx, playerID, amount, idemKey, "poker_buyin"); err != nil {
-		return fmt.Errorf("buyin: debit: %w", err)
-	}
+mover, err := s.walletFor(ctx, roomID, playerID)
+if err != nil {
+return fmt.Errorf("buyin: %w", err)
+}
+idemKey := fmt.Sprintf("%s#%s#buyin", roomID, playerID)
+if err := mover.Debit(ctx, playerID, amount, idemKey, "poker_buyin"); err != nil {
+return fmt.Errorf("buyin: debit: %w", err)
+}
 ```
 
 Every subsequent refund/credit call inside `BuyIn` and `CashOut` (both already written in Phase 3 Task 3) must switch
@@ -480,26 +513,26 @@ top of `CashOut` the same way `BuyIn` now does.
 
 ```go
 // api/internal/api/v1/rooms.go — CreateRoomRequest, add
-	CurrencyMode string `json:"currency_mode,omitempty"` // "sandbox" (default) | "real"
+CurrencyMode string `json:"currency_mode,omitempty"` // "sandbox" (default) | "real"
 ```
 
 ```go
 // api/internal/api/v1/rooms.go — createRoom, replace the hardcoded CurrencyMode: "sandbox"
-	currencyMode := req.CurrencyMode
-	if currencyMode == "" {
-		currencyMode = "sandbox"
-	}
-	if currencyMode == "real" && !h.cfg.RealMoneyEnabled {
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "real-money mode is not enabled in this environment"})
-	}
-	if currencyMode != "sandbox" && currencyMode != "real" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "currency_mode must be sandbox or real"})
-	}
+currencyMode := req.CurrencyMode
+if currencyMode == "" {
+currencyMode = "sandbox"
+}
+if currencyMode == "real" && !h.cfg.RealMoneyEnabled {
+return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "real-money mode is not enabled in this environment"})
+}
+if currencyMode != "sandbox" && currencyMode != "real" {
+return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "currency_mode must be sandbox or real"})
+}
 ```
 
 ```go
 // api/internal/api/v1/rooms.go — room := roomstore.Room{...}, replace CurrencyMode: "sandbox"
-		CurrencyMode: currencyMode,
+CurrencyMode: currencyMode,
 ```
 
 Add `cfg *config.Config` to `roomHandlers` and thread it through `RegisterRooms`'s parameters and `router.go`'s call
@@ -685,38 +718,38 @@ own justification above argues for an exception, which must be a deliberate, nar
 // pending-reconciliation queue that's supposed to drain within seconds).
 // Callers must document why their table is exempt at the call site.
 func (b *Base) ScanAll(ctx context.Context) (*QueryResult, error) {
-	out, err := b.db.Scan(ctx, &dynamodb.ScanInput{TableName: aws.String(b.TableName)})
-	if err != nil {
-		return nil, wrapDynamoErr(err)
-	}
-	return &QueryResult{Items: out.Items}, nil
+out, err := b.db.Scan(ctx, &dynamodb.ScanInput{TableName: aws.String(b.TableName)})
+if err != nil {
+return nil, wrapDynamoErr(err)
+}
+return &QueryResult{Items: out.Items}, nil
 }
 ```
 
 ```go
 // api/internal/reconcile/pending.go — replace ListUnresolved with its real implementation
 func (s *PendingStore) ListUnresolved(ctx context.Context, olderThan time.Duration) ([]PendingCashout, error) {
-	result, err := s.base.ScanAll(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("reconcile: scan: %w", err)
-	}
-	cutoff := time.Now().Add(-olderThan)
-	out := make([]PendingCashout, 0, len(result.Items))
-	for _, item := range result.Items {
-		p, err := dynamo.Decode[PendingCashout](item)
-		if err != nil {
-			return nil, fmt.Errorf("reconcile: decode: %w", err)
-		}
-		if p.Resolved {
-			continue
-		}
-		recordedAt, err := time.Parse(time.RFC3339Nano, p.RecordedAt)
-		if err == nil && recordedAt.After(cutoff) {
-			continue
-		}
-		out = append(out, *p)
-	}
-	return out, nil
+result, err := s.base.ScanAll(ctx)
+if err != nil {
+return nil, fmt.Errorf("reconcile: scan: %w", err)
+}
+cutoff := time.Now().Add(-olderThan)
+out := make([]PendingCashout, 0, len(result.Items))
+for _, item := range result.Items {
+p, err := dynamo.Decode[PendingCashout](item)
+if err != nil {
+return nil, fmt.Errorf("reconcile: decode: %w", err)
+}
+if p.Resolved {
+continue
+}
+recordedAt, err := time.Parse(time.RFC3339Nano, p.RecordedAt)
+if err == nil && recordedAt.After(cutoff) {
+continue
+}
+out = append(out, *p)
+}
+return out, nil
 }
 ```
 
@@ -724,28 +757,28 @@ func (s *PendingStore) ListUnresolved(ctx context.Context, olderThan time.Durati
 
 ```go
 // api/internal/buyin/service.go — Service struct, add
-	pending *reconcile.PendingStore
+pending *reconcile.PendingStore
 ```
 
 ```go
 // api/internal/buyin/service.go — CashOut, replace the final Credit block
-	idemKey := fmt.Sprintf("%s#%s#cashout", roomID, playerID)
-	pendingID := idemKey // stable per (room, player, attempt-shape) — good enough as a dedup-safe record ID
-	if s.pending != nil {
-		room, _ := s.rooms.Get(ctx, roomID)
-		mode := "sandbox"
-		if room != nil {
-			mode = room.CurrencyMode
-		}
-		_ = s.pending.Record(ctx, reconcile.PendingCashout{ID: pendingID, PlayerID: playerID, Amount: stack, CurrencyMode: mode, IdempotencyKey: idemKey})
-	}
-	if err := mover.Credit(ctx, playerID, stack, idemKey, "poker_cashout"); err != nil {
-		return stack, fmt.Errorf("buyin: cash-out credit failed after seat removal — reconciliation job will retry (pending id %s): %w", pendingID, err)
-	}
-	if s.pending != nil {
-		_ = s.pending.MarkResolved(ctx, pendingID)
-	}
-	return stack, nil
+idemKey := fmt.Sprintf("%s#%s#cashout", roomID, playerID)
+pendingID := idemKey // stable per (room, player, attempt-shape) — good enough as a dedup-safe record ID
+if s.pending != nil {
+room, _ := s.rooms.Get(ctx, roomID)
+mode := "sandbox"
+if room != nil {
+mode = room.CurrencyMode
+}
+_ = s.pending.Record(ctx, reconcile.PendingCashout{ID: pendingID, PlayerID: playerID, Amount: stack, CurrencyMode: mode, IdempotencyKey: idemKey})
+}
+if err := mover.Credit(ctx, playerID, stack, idemKey, "poker_cashout"); err != nil {
+return stack, fmt.Errorf("buyin: cash-out credit failed after seat removal — reconciliation job will retry (pending id %s): %w", pendingID, err)
+}
+if s.pending != nil {
+_ = s.pending.MarkResolved(ctx, pendingID)
+}
+return stack, nil
 ```
 
 Add `NewServiceWithGame`'s signature to accept a trailing `pending *reconcile.PendingStore` parameter (nil is valid —
@@ -965,11 +998,11 @@ const RECONCILE_RATE_MINUTES = 5;
 const API_DIR = path.join(__dirname, '../../api');
 
 interface ReconcileStackProps extends cdk.StackProps {
-  environment: Environment;
-  pendingCashoutsTableArn: string;
-  walletUrlParam: string;
-  pokerClientIdParam: string;
-  pokerClientSecretParam: string;
+    environment: Environment;
+    pendingCashoutsTableArn: string;
+    walletUrlParam: string;
+    pokerClientIdParam: string;
+    pokerClientSecretParam: string;
 }
 
 /**
@@ -979,58 +1012,64 @@ interface ReconcileStackProps extends cdk.StackProps {
  * DynamoDB + ctech-wallet's public API, same rationale as wallet's own job).
  */
 export class ReconcileStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props: ReconcileStackProps) {
-    super(scope, id, props);
-    const {environment, pendingCashoutsTableArn, walletUrlParam, pokerClientIdParam, pokerClientSecretParam} = props;
+    constructor(scope: Construct, id: string, props: ReconcileStackProps) {
+        super(scope, id, props);
+        const {
+            environment,
+            pendingCashoutsTableArn,
+            walletUrlParam,
+            pokerClientIdParam,
+            pokerClientSecretParam
+        } = props;
 
-    const role = new iam.Role(this, 'ReconcileRole', {
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')],
-    });
-    role.addToPolicy(new iam.PolicyStatement({
-      actions: ['dynamodb:Scan', 'dynamodb:UpdateItem'],
-      resources: [pendingCashoutsTableArn],
-    }));
-    role.addToPolicy(new iam.PolicyStatement({
-      actions: ['ssm:GetParameter'],
-      resources: [
-        `arn:aws:ssm:${this.region}:${this.account}:parameter${walletUrlParam}`,
-        `arn:aws:ssm:${this.region}:${this.account}:parameter${pokerClientIdParam}`,
-        `arn:aws:ssm:${this.region}:${this.account}:parameter${pokerClientSecretParam}`,
-      ],
-    }));
+        const role = new iam.Role(this, 'ReconcileRole', {
+            assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+            managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')],
+        });
+        role.addToPolicy(new iam.PolicyStatement({
+            actions: ['dynamodb:Scan', 'dynamodb:UpdateItem'],
+            resources: [pendingCashoutsTableArn],
+        }));
+        role.addToPolicy(new iam.PolicyStatement({
+            actions: ['ssm:GetParameter'],
+            resources: [
+                `arn:aws:ssm:${this.region}:${this.account}:parameter${walletUrlParam}`,
+                `arn:aws:ssm:${this.region}:${this.account}:parameter${pokerClientIdParam}`,
+                `arn:aws:ssm:${this.region}:${this.account}:parameter${pokerClientSecretParam}`,
+            ],
+        }));
 
-    const fn = new lambda.Function(this, 'ReconcileFunction', {
-      functionName: `${environment}-${SERVICE}-reconcile`,
-      runtime: lambda.Runtime.PROVIDED_AL2023,
-      architecture: lambda.Architecture.ARM_64,
-      handler: 'bootstrap',
-      code: lambda.Code.fromAsset(path.join(API_DIR, 'dist/reconcile')), // built by `make build-reconcile` — see Step 6
-      role,
-      timeout: cdk.Duration.minutes(2),
-      memorySize: 256,
-      environment: {
-        ENVIRONMENT: environment,
-        WALLET_URL_PARAM: walletUrlParam,
-        POKER_CLIENT_ID_PARAM: pokerClientIdParam,
-        POKER_CLIENT_SECRET_PARAM: pokerClientSecretParam,
-      },
-      logRetention: environment === 'prod' ? logs.RetentionDays.ONE_MONTH : logs.RetentionDays.ONE_WEEK,
-    });
+        const fn = new lambda.Function(this, 'ReconcileFunction', {
+            functionName: `${environment}-${SERVICE}-reconcile`,
+            runtime: lambda.Runtime.PROVIDED_AL2023,
+            architecture: lambda.Architecture.ARM_64,
+            handler: 'bootstrap',
+            code: lambda.Code.fromAsset(path.join(API_DIR, 'dist/reconcile')), // built by `make build-reconcile` — see Step 6
+            role,
+            timeout: cdk.Duration.minutes(2),
+            memorySize: 256,
+            environment: {
+                ENVIRONMENT: environment,
+                WALLET_URL_PARAM: walletUrlParam,
+                POKER_CLIENT_ID_PARAM: pokerClientIdParam,
+                POKER_CLIENT_SECRET_PARAM: pokerClientSecretParam,
+            },
+            logRetention: environment === 'prod' ? logs.RetentionDays.ONE_MONTH : logs.RetentionDays.ONE_WEEK,
+        });
 
-    new scheduler.CfnSchedule(this, 'ReconcileSchedule', {
-      flexibleTimeWindow: {mode: 'OFF'},
-      scheduleExpression: `rate(${RECONCILE_RATE_MINUTES} minutes)`,
-      target: {
-        arn: fn.functionArn,
-        roleArn: new iam.Role(this, 'SchedulerInvokeRole', {
-          assumedBy: new iam.ServicePrincipal('scheduler.amazonaws.com'),
-        }).addToPrincipalPolicy
-          ? undefined
-          : undefined, // placeholder removed below — see the corrected block
-      } as scheduler.CfnSchedule.TargetProperty,
-    });
-  }
+        new scheduler.CfnSchedule(this, 'ReconcileSchedule', {
+            flexibleTimeWindow: {mode: 'OFF'},
+            scheduleExpression: `rate(${RECONCILE_RATE_MINUTES} minutes)`,
+            target: {
+                arn: fn.functionArn,
+                roleArn: new iam.Role(this, 'SchedulerInvokeRole', {
+                    assumedBy: new iam.ServicePrincipal('scheduler.amazonaws.com'),
+                }).addToPrincipalPolicy
+                    ? undefined
+                    : undefined, // placeholder removed below — see the corrected block
+            } as scheduler.CfnSchedule.TargetProperty,
+        });
+    }
 }
 ```
 
@@ -1039,16 +1078,16 @@ invoke permission) — replace it with the straightforward form:
 
 ```typescript
 // cdk/lib/reconcile-stack.ts — replace the CfnSchedule block
-    const schedulerRole = new iam.Role(this, 'SchedulerInvokeRole', {
-      assumedBy: new iam.ServicePrincipal('scheduler.amazonaws.com'),
-    });
-    fn.grantInvoke(schedulerRole);
+const schedulerRole = new iam.Role(this, 'SchedulerInvokeRole', {
+    assumedBy: new iam.ServicePrincipal('scheduler.amazonaws.com'),
+});
+fn.grantInvoke(schedulerRole);
 
-    new scheduler.CfnSchedule(this, 'ReconcileSchedule', {
-      flexibleTimeWindow: {mode: 'OFF'},
-      scheduleExpression: `rate(${RECONCILE_RATE_MINUTES} minutes)`,
-      target: {arn: fn.functionArn, roleArn: schedulerRole.roleArn},
-    });
+new scheduler.CfnSchedule(this, 'ReconcileSchedule', {
+    flexibleTimeWindow: {mode: 'OFF'},
+    scheduleExpression: `rate(${RECONCILE_RATE_MINUTES} minutes)`,
+    target: {arn: fn.functionArn, roleArn: schedulerRole.roleArn},
+});
 ```
 
 `config.Load()`'s existing env var names (`WALLET_URL`, `POKER_CLIENT_ID`, `POKER_CLIENT_SECRET`) don't match the
@@ -1058,13 +1097,13 @@ does:
 
 ```go
 // api/cmd/reconcile/main.go — handler, before config.Load()
-	resolved, err := resolveSSMParams(ctx, os.Getenv("WALLET_URL_PARAM"), os.Getenv("POKER_CLIENT_ID_PARAM"), os.Getenv("POKER_CLIENT_SECRET_PARAM"))
-	if err != nil {
-		return err
-	}
-	_ = os.Setenv("WALLET_URL", resolved.walletURL)
-	_ = os.Setenv("POKER_CLIENT_ID", resolved.clientID)
-	_ = os.Setenv("POKER_CLIENT_SECRET", resolved.clientSecret)
+resolved, err := resolveSSMParams(ctx, os.Getenv("WALLET_URL_PARAM"), os.Getenv("POKER_CLIENT_ID_PARAM"), os.Getenv("POKER_CLIENT_SECRET_PARAM"))
+if err != nil {
+return err
+}
+_ = os.Setenv("WALLET_URL", resolved.walletURL)
+_ = os.Setenv("POKER_CLIENT_ID", resolved.clientID)
+_ = os.Setenv("POKER_CLIENT_SECRET", resolved.clientSecret)
 ```
 
 ```go
@@ -1072,31 +1111,31 @@ does:
 type resolvedParams struct{ walletURL, clientID, clientSecret string }
 
 func resolveSSMParams(ctx context.Context, walletURLParam, clientIDParam, clientSecretParam string) (resolvedParams, error) {
-	awsCfg, err := awscfg.LoadDefaultConfig(ctx)
-	if err != nil {
-		return resolvedParams{}, err
-	}
-	ssmClient := ssm.NewFromConfig(awsCfg)
-	get := func(name string, withDecryption bool) (string, error) {
-		out, err := ssmClient.GetParameter(ctx, &ssm.GetParameterInput{Name: &name, WithDecryption: &withDecryption})
-		if err != nil {
-			return "", err
-		}
-		return *out.Parameter.Value, nil
-	}
-	walletURL, err := get(walletURLParam, false)
-	if err != nil {
-		return resolvedParams{}, err
-	}
-	clientID, err := get(clientIDParam, false)
-	if err != nil {
-		return resolvedParams{}, err
-	}
-	clientSecret, err := get(clientSecretParam, true)
-	if err != nil {
-		return resolvedParams{}, err
-	}
-	return resolvedParams{walletURL: walletURL, clientID: clientID, clientSecret: clientSecret}, nil
+awsCfg, err := awscfg.LoadDefaultConfig(ctx)
+if err != nil {
+return resolvedParams{}, err
+}
+ssmClient := ssm.NewFromConfig(awsCfg)
+get := func (name string, withDecryption bool) (string, error) {
+out, err := ssmClient.GetParameter(ctx, &ssm.GetParameterInput{Name: &name, WithDecryption: &withDecryption})
+if err != nil {
+return "", err
+}
+return *out.Parameter.Value, nil
+}
+walletURL, err := get(walletURLParam, false)
+if err != nil {
+return resolvedParams{}, err
+}
+clientID, err := get(clientIDParam, false)
+if err != nil {
+return resolvedParams{}, err
+}
+clientSecret, err := get(clientSecretParam, true)
+if err != nil {
+return resolvedParams{}, err
+}
+return resolvedParams{walletURL: walletURL, clientID: clientID, clientSecret: clientSecret}, nil
 }
 ```
 
@@ -1116,11 +1155,11 @@ build-reconcile:
 ```typescript
 // cdk/bin/poker.ts — add
 new ReconcileStack(app, `${environment}-ctech-poker-reconcile`, {
-  environment, env: awsEnv,
-  pendingCashoutsTableArn: dynamoStack.tables.get('poker_pending_cashouts')!.tableArn,
-  walletUrlParam: `/ctech/${environment}/poker/wallet-url`,
-  pokerClientIdParam: `/ctech/${environment}/poker/poker-client-id`,
-  pokerClientSecretParam: `/ctech/${environment}/poker/poker-client-secret`,
+    environment, env: awsEnv,
+    pendingCashoutsTableArn: dynamoStack.tables.get('poker_pending_cashouts')!.tableArn,
+    walletUrlParam: `/ctech/${environment}/poker/wallet-url`,
+    pokerClientIdParam: `/ctech/${environment}/poker/poker-client-id`,
+    pokerClientSecretParam: `/ctech/${environment}/poker/poker-client-secret`,
 });
 ```
 
@@ -1266,41 +1305,41 @@ Expected: PASS.
 
 ```go
 // api/internal/table/actor.go — handleAct, right after `if a.table.Stage() == hand.Complete`
-	if a.table.Stage() == hand.Complete {
-		metrics.EmitTableMetric("HandsCompleted", 1, map[string]string{"table_id": a.id})
-		a.persistSnapshot()
-		...
-	}
+if a.table.Stage() == hand.Complete {
+metrics.EmitTableMetric("HandsCompleted", 1, map[string]string{"table_id": a.id})
+a.persistSnapshot()
+...
+}
 ```
 
 ```go
 // api/internal/table/actor.go — handleAct, wrap the existing a.table.Act call to time it
 func (a *Actor) handleAct(c ActCmd) error {
-	if a.seenIDs[c.ActionID] {
-		a.broadcastAll()
-		return nil
-	}
-	start := timeNowFunc()
-	if err := a.table.Act(c.PlayerID, c.Action, c.Amount); err != nil {
-		return err
-	}
-	metrics.EmitTableMetric("ActionLatencyMs", float64(timeNowFunc().Sub(start).Milliseconds()), map[string]string{"table_id": a.id})
-	...
+if a.seenIDs[c.ActionID] {
+a.broadcastAll()
+return nil
+}
+start := timeNowFunc()
+if err := a.table.Act(c.PlayerID, c.Action, c.Amount); err != nil {
+return err
+}
+metrics.EmitTableMetric("ActionLatencyMs", float64(timeNowFunc().Sub(start).Milliseconds()), map[string]string{"table_id": a.id})
+...
 ```
 
 ```go
 // api/internal/table/actor.go — handleDisconnect, add
 func (a *Actor) handleDisconnect(c DisconnectCmd) error {
-	metrics.EmitTableMetric("Disconnects", 1, map[string]string{"table_id": a.id})
-	...
+metrics.EmitTableMetric("Disconnects", 1, map[string]string{"table_id": a.id})
+...
 ```
 
 ```go
 // api/internal/tablemanager/manager.go — Acquire, inside the StartHeartbeat onLost callback
-	stop := m.leases.StartHeartbeat(runCtx, tableID, func() {
-		metrics.EmitTableMetric("LeaseFailovers", 1, map[string]string{"table_id": tableID})
-		cancel()
-		...
+stop := m.leases.StartHeartbeat(runCtx, tableID, func () {
+metrics.EmitTableMetric("LeaseFailovers", 1, map[string]string{"table_id": tableID})
+cancel()
+...
 ```
 
 Add `"gopkg.aoctech.app/poker/api/internal/metrics"` imports to both files.
@@ -1337,8 +1376,8 @@ git commit -m "feat(metrics): EMF hands/hour, action latency, disconnect rate, l
 ```typescript
 // cdk/test/api-stack.test.ts — add
 test('creates an alarm on ALARM-prefixed log lines and a lease-failover-spike alarm', () => {
-  // (constructed against the existing test stack setup already in this file)
-  template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
+    // (constructed against the existing test stack setup already in this file)
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
 });
 ```
 
@@ -1351,35 +1390,35 @@ Expected: FAIL — zero alarms exist yet.
 
 ```typescript
 // cdk/lib/api-stack.ts — after `service` is constructed, alongside the existing IAM grants
-    const alarmMetricFilter = service.appLogGroup.addMetricFilter('AlarmLogFilter', {
-      filterPattern: logs.FilterPattern.literal('"ALARM:"'),
-      metricNamespace: `CtechPoker/${environment}`,
-      metricName: 'AlarmLogLines',
-      metricValue: '1',
-    });
-    new cloudwatch.Alarm(this, 'AlarmLogAlarm', {
-      alarmName: `${environment}-${SERVICE}-alarm-log-lines`,
-      alarmDescription: 'An ALARM log line was emitted (reconcile credit failure, or another manual-review condition) — needs investigation.',
-      metric: alarmMetricFilter.metric({statistic: 'Sum', period: cdk.Duration.minutes(5)}),
-      threshold: 1,
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+const alarmMetricFilter = service.appLogGroup.addMetricFilter('AlarmLogFilter', {
+    filterPattern: logs.FilterPattern.literal('"ALARM:"'),
+    metricNamespace: `CtechPoker/${environment}`,
+    metricName: 'AlarmLogLines',
+    metricValue: '1',
+});
+new cloudwatch.Alarm(this, 'AlarmLogAlarm', {
+    alarmName: `${environment}-${SERVICE}-alarm-log-lines`,
+    alarmDescription: 'An ALARM log line was emitted (reconcile credit failure, or another manual-review condition) — needs investigation.',
+    metric: alarmMetricFilter.metric({statistic: 'Sum', period: cdk.Duration.minutes(5)}),
+    threshold: 1,
+    evaluationPeriods: 1,
+    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+});
 
-    const leaseFailoverMetric = new cloudwatch.Metric({
-      namespace: `CtechPoker`, // Task 6's metrics.go hardcodes this namespace, not per-environment
-      metricName: 'LeaseFailovers',
-      statistic: 'Sum',
-      period: cdk.Duration.minutes(5),
-    });
-    new cloudwatch.Alarm(this, 'LeaseFailoverSpikeAlarm', {
-      alarmName: `${environment}-${SERVICE}-lease-failover-spike`,
-      alarmDescription: 'Table lease failovers spiked — earliest signal of an instance going bad (ARCHITECTURE.md §7).',
-      metric: leaseFailoverMetric,
-      threshold: 5,
-      evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+const leaseFailoverMetric = new cloudwatch.Metric({
+    namespace: `CtechPoker`, // Task 6's metrics.go hardcodes this namespace, not per-environment
+    metricName: 'LeaseFailovers',
+    statistic: 'Sum',
+    period: cdk.Duration.minutes(5),
+});
+new cloudwatch.Alarm(this, 'LeaseFailoverSpikeAlarm', {
+    alarmName: `${environment}-${SERVICE}-lease-failover-spike`,
+    alarmDescription: 'Table lease failovers spiked — earliest signal of an instance going bad (ARCHITECTURE.md §7).',
+    metric: leaseFailoverMetric,
+    threshold: 5,
+    evaluationPeriods: 2,
+    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+});
 ```
 
 Add `import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';` and `import * as logs from 'aws-cdk-lib/aws-logs';`
@@ -1393,12 +1432,12 @@ being a package-level constant:
 ```go
 // api/internal/metrics/emf.go — replace the namespace constant and both Emit functions' signatures
 func EmitTableMetric(env, name string, value float64, dims map[string]string) {
-	EmitTableMetricTo(os.Stdout, env, name, value, dims)
+EmitTableMetricTo(os.Stdout, env, name, value, dims)
 }
 
 func EmitTableMetricTo(w io.Writer, env, name string, value float64, dims map[string]string) {
-	namespace := "CtechPoker/" + env
-	...
+namespace := "CtechPoker/" + env
+...
 ```
 
 Update every Task 6 call site (`actor.go`, `manager.go`) to pass `cfg.Env` (threaded into `table.Actor`/
@@ -1449,11 +1488,10 @@ import (
 	"context"
 	"testing"
 
-
-"gopkg.aoctech.app/api-commons/cache"
-"gopkg.aoctech.app/poker/api/internal/engine/hand"
-"gopkg.aoctech.app/poker/api/internal/tablelease"
-"gopkg.aoctech.app/poker/api/internal/tableowner"
+	"gopkg.aoctech.app/api-commons/cache"
+	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/tablelease"
+	"gopkg.aoctech.app/poker/api/internal/tableowner"
 )
 
 func TestDrainAndReleaseFreesEveryLocallyOwnedTable(t *testing.T) {
@@ -1502,15 +1540,15 @@ Expected: FAIL with "undefined: DrainAndRelease".
 // not a separate "wait for HAND_COMPLETE" mechanism (which would risk never
 // terminating if players keep a hand running).
 func (m *Manager) DrainAndRelease(ctx context.Context) {
-	m.mu.Lock()
-	ids := make([]string, 0, len(m.actors))
-	for id := range m.actors {
-		ids = append(ids, id)
-	}
-	m.mu.Unlock()
-	for _, id := range ids {
-		m.ReleaseForTest(id) // same release mechanics Phase 2 Task 12 already added for its crash-simulation test
-	}
+m.mu.Lock()
+ids := make([]string, 0, len(m.actors))
+for id := range m.actors {
+ids = append(ids, id)
+}
+m.mu.Unlock()
+for _, id := range ids {
+m.ReleaseForTest(id) // same release mechanics Phase 2 Task 12 already added for its crash-simulation test
+}
 }
 ```
 
@@ -1521,14 +1559,14 @@ has a real caller:
 ```go
 // api/internal/tablemanager/manager.go — rename ReleaseForTest to Release everywhere in this file
 func (m *Manager) Release(tableID string) {
-	m.mu.Lock()
-	release, ok := m.releases[tableID]
-	delete(m.actors, tableID)
-	delete(m.releases, tableID)
-	m.mu.Unlock()
-	if ok {
-		release()
-	}
+m.mu.Lock()
+release, ok := m.releases[tableID]
+delete(m.actors, tableID)
+delete(m.releases, tableID)
+m.mu.Unlock()
+if ok {
+release()
+}
 }
 ```
 
@@ -1544,12 +1582,12 @@ Expected: PASS.
 ```go
 // api/internal/app/app.go — add
 func registerDrainHook(lc fx.Lifecycle, manager *tablemanager.Manager) {
-	lc.Append(fx.Hook{
-		OnStop: func(ctx context.Context) error {
-			manager.DrainAndRelease(ctx)
-			return nil
-		},
-	})
+lc.Append(fx.Hook{
+OnStop: func (ctx context.Context) error {
+manager.DrainAndRelease(ctx)
+return nil
+},
+})
 }
 ```
 
@@ -1561,12 +1599,12 @@ in `startServer`'s existing `OnStop` hook) already bounds how long this can run 
 
 ```typescript
 // cdk/lib/api-stack.ts — after `service` is constructed
-    service.autoScalingGroup.addLifecycleHook('TerminationDrainHook', {
-      lifecycleTransition: autoscaling.LifecycleTransition.INSTANCE_TERMINATING,
-      defaultResult: autoscaling.DefaultResult.CONTINUE, // never blocks termination indefinitely
-      heartbeatTimeout: cdk.Duration.seconds(60), // bounded: a stuck drain must not block scale-in forever
-      notificationTarget: undefined, // SIGTERM-to-systemd is enough; no SNS fan-out needed for this hook
-    });
+service.autoScalingGroup.addLifecycleHook('TerminationDrainHook', {
+    lifecycleTransition: autoscaling.LifecycleTransition.INSTANCE_TERMINATING,
+    defaultResult: autoscaling.DefaultResult.CONTINUE, // never blocks termination indefinitely
+    heartbeatTimeout: cdk.Duration.seconds(60), // bounded: a stuck drain must not block scale-in forever
+    notificationTarget: undefined, // SIGTERM-to-systemd is enough; no SNS fan-out needed for this hook
+});
 ```
 
 `SIGTERM` delivery on ASG-driven termination is handled by systemd's own default `TimeoutStopSec` behavior for
@@ -1577,7 +1615,7 @@ give that up to 60 extra seconds before AWS force-terminates the instance, which
 
 ```typescript
 // cdk/lib/api-stack.ts — the `cat > /etc/systemd/system/app.service` heredoc, [Service] section, add
-      `TimeoutStopSec=55`,
+`TimeoutStopSec=55`,
 ```
 
 `service.autoScalingGroup` must be a public readonly field on `PrivateIpv4Ec2Service` for this to compile — same caveat
@@ -1613,13 +1651,13 @@ git commit -m "feat(tablemanager): drain and release owned table leases on grace
 ```typescript
 // cdk/test/frontend-stack.test.ts — add
 test('attaches a WAF WebACL with a rate-based rule to the distribution', () => {
-  const app = new App();
-  const stack = new FrontendStack(app, 'TestFrontendStackWAF', {
-    environment: 'dev', certificateArn: 'arn:aws:acm:us-east-1:868899309401:certificate/test',
-    apiDomainName: 'poker-api-dev.aoctech.app', authDomainName: 'accounts.aoctech.app',
-  });
-  const template = Template.fromStack(stack);
-  template.resourceCountIs('AWS::WAFv2::WebACL', 1);
+    const app = new App();
+    const stack = new FrontendStack(app, 'TestFrontendStackWAF', {
+        environment: 'dev', certificateArn: 'arn:aws:acm:us-east-1:868899309401:certificate/test',
+        apiDomainName: 'poker-api-dev.aoctech.app', authDomainName: 'accounts.aoctech.app',
+    });
+    const template = Template.fromStack(stack);
+    template.resourceCountIs('AWS::WAFv2::WebACL', 1);
 });
 ```
 
@@ -1632,32 +1670,36 @@ Expected: FAIL — no `AWS::WAFv2::WebACL` yet.
 
 ```typescript
 // cdk/lib/frontend-stack.ts — add, before the CloudFront distribution is constructed
-    const webAcl = new wafv2.CfnWebACL(this, 'WebACL', {
-      scope: 'CLOUDFRONT', // CLOUDFRONT-scoped WebACLs must be created in us-east-1, matching this stack's own region
-      defaultAction: {allow: {}},
-      visibilityConfig: {sampledRequestsEnabled: true, cloudWatchMetricsEnabled: true, metricName: `${SERVICE}-waf`},
-      rules: [
+const webAcl = new wafv2.CfnWebACL(this, 'WebACL', {
+    scope: 'CLOUDFRONT', // CLOUDFRONT-scoped WebACLs must be created in us-east-1, matching this stack's own region
+    defaultAction: {allow: {}},
+    visibilityConfig: {sampledRequestsEnabled: true, cloudWatchMetricsEnabled: true, metricName: `${SERVICE}-waf`},
+    rules: [
         {
-          name: 'AWSManagedCommonRuleSet',
-          priority: 0,
-          overrideAction: {none: {}},
-          statement: {managedRuleGroupStatement: {vendorName: 'AWS', name: 'AWSManagedRulesCommonRuleSet'}},
-          visibilityConfig: {sampledRequestsEnabled: true, cloudWatchMetricsEnabled: true, metricName: 'CommonRuleSet'},
+            name: 'AWSManagedCommonRuleSet',
+            priority: 0,
+            overrideAction: {none: {}},
+            statement: {managedRuleGroupStatement: {vendorName: 'AWS', name: 'AWSManagedRulesCommonRuleSet'}},
+            visibilityConfig: {
+                sampledRequestsEnabled: true,
+                cloudWatchMetricsEnabled: true,
+                metricName: 'CommonRuleSet'
+            },
         },
         {
-          name: 'RateLimit',
-          priority: 1,
-          action: {block: {}},
-          statement: {rateBasedStatement: {limit: 2000, aggregateKeyType: 'IP'}},
-          visibilityConfig: {sampledRequestsEnabled: true, cloudWatchMetricsEnabled: true, metricName: 'RateLimit'},
+            name: 'RateLimit',
+            priority: 1,
+            action: {block: {}},
+            statement: {rateBasedStatement: {limit: 2000, aggregateKeyType: 'IP'}},
+            visibilityConfig: {sampledRequestsEnabled: true, cloudWatchMetricsEnabled: true, metricName: 'RateLimit'},
         },
-      ],
-    });
+    ],
+});
 ```
 
 ```typescript
 // cdk/lib/frontend-stack.ts — the Distribution construction, add
-      webAclId: webAcl.attrArn,
+webAclId: webAcl.attrArn,
 ```
 
 Add `import * as wafv2 from 'aws-cdk-lib/aws-wafv2';` to `frontend-stack.ts`. Since `FrontendStack` itself is already
@@ -1788,19 +1830,19 @@ production wiring needs a thin adapter rather than passing `*tablestore.Store` d
 ```go
 // api/internal/api/v1/handhistory.go — add
 type tablestoreAdapter struct {
-	store *tablestore.Store
+store *tablestore.Store
 }
 
 func (a *tablestoreAdapter) LoadActionsSince(ctx context.Context, tableID, handID string, afterSeq int) ([]HistoryAction, error) {
-	entries, err := a.store.LoadActionsSince(ctx, tableID, handID, afterSeq)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]HistoryAction, len(entries))
-	for i, e := range entries {
-		out[i] = HistoryAction{Seq: e.Seq, PlayerID: e.PlayerID, Action: e.Action, Amount: e.Amount}
-	}
-	return out, nil
+entries, err := a.store.LoadActionsSince(ctx, tableID, handID, afterSeq)
+if err != nil {
+return nil, err
+}
+out := make([]HistoryAction, len(entries))
+for i, e := range entries {
+out[i] = HistoryAction{Seq: e.Seq, PlayerID: e.PlayerID, Action: e.Action, Amount: e.Amount}
+}
+return out, nil
 }
 ```
 
@@ -1819,7 +1861,7 @@ it; fix that now by adding the missing `func newTablestoreStore(db *dynamodb.Cli
 type fakeHistoryStore struct{}
 
 func (f *fakeHistoryStore) LoadActionsSince(context.Context, string, string, int) ([]HistoryAction, error) {
-	return []HistoryAction{{PlayerID: "p1", Action: "call", Seq: 1}}, nil
+return []HistoryAction{{PlayerID: "p1", Action: "call", Seq: 1}}, nil
 }
 ```
 
@@ -1874,13 +1916,12 @@ import (
 	"sync/atomic"
 	"time"
 
-
-"gopkg.aoctech.app/api-commons/cache"
-"gopkg.aoctech.app/poker/api/internal/engine/betting"
-"gopkg.aoctech.app/poker/api/internal/engine/hand"
-"gopkg.aoctech.app/poker/api/internal/tablelease"
-"gopkg.aoctech.app/poker/api/internal/tablemanager"
-"gopkg.aoctech.app/poker/api/internal/tableowner"
+	"gopkg.aoctech.app/api-commons/cache"
+	"gopkg.aoctech.app/poker/api/internal/engine/betting"
+	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/tablelease"
+	"gopkg.aoctech.app/poker/api/internal/tablemanager"
+	"gopkg.aoctech.app/poker/api/internal/tableowner"
 )
 
 func main() {
@@ -2024,8 +2065,14 @@ type memStore struct {
 	hands    []HandEntry
 }
 
-func (m *memStore) PutSession(_ interface{}, s Session) error { m.sessions = append(m.sessions, s); return nil }
-func (m *memStore) PutHandEntry(_ interface{}, h HandEntry) error { m.hands = append(m.hands, h); return nil }
+func (m *memStore) PutSession(_ interface{}, s Session) error {
+	m.sessions = append(m.sessions, s);
+	return nil
+}
+func (m *memStore) PutHandEntry(_ interface{}, h HandEntry) error {
+	m.hands = append(m.hands, h);
+	return nil
+}
 func (m *memStore) ListSessions(_ interface{}, playerID string, limit int, cursor string) ([]Session, string, error) {
 	return m.sessions, "", nil
 }

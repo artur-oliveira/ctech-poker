@@ -38,7 +38,7 @@ func TestWinRateUsesMaterializedGSI(t *testing.T) {
 	if err := svc.RecordHand(ctx, hand.HandOutcome{Winners: []string{"winner"}, Participants: []string{"winner", "other"}}, names); err != nil {
 		t.Fatal(err)
 	}
-	top, err := svc.Top(ctx, "win_rate", 10)
+	top, _, err := svc.Top(ctx, "win_rate", 10, nil)
 	if err != nil || len(top) != 2 || top[0].PlayerID != "winner" || top[0].WinRate != 1 {
 		t.Fatalf("top=%+v err=%v", top, err)
 	}

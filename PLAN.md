@@ -1,11 +1,15 @@
 # ctech-poker — Development Plan
 
-> Phased roadmap, not a bite-sized TDD task list. **Status (verified against the code,
-2026-07-21):** Phases 0–4 (foundations, engine, sandbox end-to-end, frontend/gamification)
-are **implemented and live** in `api/`, `ui/`, `cdk/`. **Phase 5 (real-money mode) is
-IMPLEMENTED but GATED** (Tasks 1–12 done — see the status list below) — gated on ctech-wallet
-hold/capture endpoints + throughput, and on a Brazilian regulatory opinion (see OVERVIEW.md
-§11). The `REAL_MONEY_ENABLED` + `LEGAL_SIGNOFF_REF` config gate enforces business sign-off.
+> Phased roadmap, not a bite-sized TDD task list. **Status (re-verified against the code,
+2026-07-25):** Phases 0–4 (foundations, engine, sandbox end-to-end, frontend/gamification)
+are **implemented and live** in `api/`, `ui/`, `cdk/`. **Phase 5 (real-money mode) backend
+logic is implemented (Tasks 1, 2, 4–12 done) but Task 3 is only partial and blocks all of
+it end-to-end: `POST /rooms` hardcodes `CurrencyMode: "sandbox"` with no field to request
+`real`, so no room can ever exercise the real-money path regardless of
+`REAL_MONEY_ENABLED`.** Frontend has no real-money surface at all (see the status list below
+and `docs/plans/2026-07-19-poker-phase5-realmoney-and-hardening.md`'s Status section). Also
+gated on ctech-wallet hold/capture endpoint availability + throughput, and on a Brazilian
+regulatory opinion (see OVERVIEW.md §11).
 The OVERVIEW/ARCHITECTURE specs may describe features not yet built (e.g. commit-reveal
 fairness surface B32, hand history); see `docs/README.md` for the implemented-vs-designed
 breakdown.
@@ -71,10 +75,10 @@ breakdown.
 - Hold/capture wallet integration (ARCHITECTURE.md § 4).
 - Rake mechanism, if the monetization question (OVERVIEW.md § 8.1) is resolved in favor of one.
 
-**Implementation status (2026-07-21):**
+**Implementation status (re-verified 2026-07-25):**
 - Task 1: GameWallet client (`walletclient.Client`) with `HoldGame`, `ReleaseHold`, `CashoutGame`, `IsGamblingActivated` — **DONE**
 - Task 2: Fail-closed config gate (`REAL_MONEY_ENABLED` + `LEGAL_SIGNOFF_REF` in `config.Load`) — **DONE**
-- Task 3: Real-money buy-in/cash-out routing in `buyin.Service` (walletFor selector, hold_id plumbing) — **DONE**
+- Task 3: Real-money buy-in/cash-out routing in `buyin.Service` (walletFor selector, hold_id plumbing) — **PARTIAL, blocking**: the service-layer routing is done and unit-tested, but `POST /rooms` has no way to create a `real` room (`internal/api/v1/rooms.go:93`), so it's unreachable via the API; also the real-money `buyin.Service` wiring skips the terms-acceptance check sandbox gets (`internal/app/app.go:198-203`)
 - Task 4: Durable pending-cashout tracking (`reconcile.PendingStore`) — **DONE**
 - Task 5: Reconciliation Lambda job (`cmd/reconcile` + EventBridge schedule stack) — **DONE**
 - Task 6: EMF structured metrics (`metrics` package emitting JSON lines for CW) — **DONE**

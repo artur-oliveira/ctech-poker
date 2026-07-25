@@ -1,8 +1,14 @@
 # api/ — CLAUDE.md
 
 Go real-time poker game server (Fiber v3 + `fasthttp/websocket` + DynamoDB + Valkey). **Sandbox (play-money) mode is
-implemented end-to-end. Real-money mode & Hardening (Phase 5 Tasks 1–12) is FULLY IMPLEMENTED**
-(gated on `REAL_MONEY_ENABLED=true` + `LEGAL_SIGNOFF_REF` config, see `internal/config/config.go:44-51`).
+implemented end-to-end. Real-money mode (Phase 5) is implemented in `buyin`/`walletclient`/`reconcile` but
+unreachable in production today: `POST /rooms` hardcodes `CurrencyMode: "sandbox"`
+(`internal/api/v1/rooms.go:93`) with no request field to ask for `real`, so no room can ever exercise the
+real-money path regardless of `REAL_MONEY_ENABLED`.** Also: the real-money `buyin.Service` wiring
+(`internal/app/app.go:198-203`) skips the terms-of-service acceptance check that sandbox gets
+(`buyin/service.go:140-144`) — needs a `players` service wired in, not a deliberate exemption. See
+`docs/plans/2026-07-19-poker-phase5-realmoney-and-hardening.md`'s Status section for the full task-by-task
+verdict.
 
 ## Conventions (follow these)
 

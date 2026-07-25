@@ -97,7 +97,7 @@ func TestCreateGetAndListPublic(t *testing.T) {
 		t.Fatalf("get by share code: %+v, err=%v", byCode, err)
 	}
 
-	list, _, err := s.ListPublic(ctx, 10, "")
+	list, _, err := s.ListPublic(ctx, 10, nil)
 	if err != nil {
 		t.Fatalf("list public: %v", err)
 	}

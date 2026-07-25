@@ -1,8 +1,12 @@
 # ctech-poker — API (game server)
 
 Go real-time poker game server. **Sandbox (play-money) mode is implemented end-to-end.**
-Real-money mode & Hardening (Phase 5 Tasks 1–12) is **fully implemented** (requires `REAL_MONEY_ENABLED=true` +
-`LEGAL_SIGNOFF_REF` config — see [`../PLAN.md`](../PLAN.md) and [`../OVERVIEW.md`](../OVERVIEW.md) §11).
+Real-money mode (Phase 5) has its buy-in/cash-out/reconciliation logic implemented (`internal/buyin`,
+`internal/walletclient`, `cmd/reconcile`), gated behind `REAL_MONEY_ENABLED=true` + `LEGAL_SIGNOFF_REF`
+(see Configuration below) — **but is unreachable in production**: `POST /rooms` hardcodes
+`CurrencyMode: "sandbox"` with no way to request `real`, so the gate never actually opens. See
+[`../docs/plans/2026-07-19-poker-phase5-realmoney-and-hardening.md`](../docs/plans/2026-07-19-poker-phase5-realmoney-and-hardening.md)'s
+Status section for the verified task-by-task state.
 
 > All claims below are anchored to the implementation (`api/`), not to the design docs
 > (`ARCHITECTURE.md`/`OVERVIEW.md`), which are proposals and may describe features not yet built.
@@ -29,6 +33,47 @@ Real-money mode & Hardening (Phase 5 Tasks 1–12) is **fully implemented** (req
 - Dockerfile: `golang:1.26-alpine` builder → `distroless/static-debian12`, `EXPOSE 8003`.
 - Deploy: GitHub Actions `api.yml` builds the binary, uploads to the shared deployments S3 bucket, and does a rolling
   SSM deploy across the EC2 Auto-Scaling Group (see [`../cdk/README.md`](../cdk/README.md)).
+
+## Configuration (environment variables)
+
+All keys are read by `env.Parse` into `internal/config.Config` (`internal/config/config.go:10-52`)
+unless noted otherwise. `*` = fails closed (server refuses to start) if unset/empty in
+`ENVIRONMENT=prod`.
+
+| Key | Default | Purpose |
+|---|---|---|
+| `APP_VERSION` | `0.0.1` | reported version; set by CI |
+| `PORT` | `8003` | HTTP listen port |
+| `ENVIRONMENT` | `dev` | gates the prod-only fail-closed checks below |
+| `READ_TIMEOUT` / `WRITE_TIMEOUT` / `IDLE_TIMEOUT` | `10` / `10` / `60` | HTTP server timeouts (seconds) |
+| `TRUSTED_PROXIES` | — | comma-separated, Fiber proxy trust list |
+| `VALKEY_URL` * | — | cache / `ws.Registry` fan-out backend; empty in prod means cross-instance realtime silently breaks |
+| `CTECH_URL` * | `https://accounts.aoctech.app` | ctech-account issuer base URL |
+| `CTECH_JWKS_URL` | derived from `CTECH_URL` if empty | JWKS endpoint |
+| `SERVICE_AUDIENCE` * | `https://poker.aoctech.app` | expected JWT audience |
+| `CORS_ALLOWED_ORIGINS` | — | comma-separated |
+| `AWS_REGION` | `us-east-1` | AWS SDK region |
+| `DYNAMODB_ENDPOINT` | — | local-only override (DynamoDB Local); leave empty in prod |
+| `WALLET_URL` | `https://wallet.aoctech.app` | ctech-wallet base URL |
+| `POKER_CLIENT_ID` / `POKER_CLIENT_SECRET` | — | poker's M2M client credentials against ctech-wallet |
+| `REAL_MONEY_ENABLED` | `false` | Phase 5 gate; see below |
+| `LEGAL_SIGNOFF_REF` | — | required non-empty if `REAL_MONEY_ENABLED=true`, else `Load()` errors (business sign-off, not an engineering toggle) |
+
+`cmd/server` uses `config.Load()` (all `*` checks apply). `cmd/tablecleanup`/`cmd/reconcile` and the
+Lambda entrypoints use `config.LoadForLambda()`, which only enforces the `CTECH_URL`/`CTECH_JWKS_URL`
+checks.
+
+**⚠️ `REAL_MONEY_ENABLED` and `LEGAL_SIGNOFF_REF` are not wired in any `cdk/` stack.** Every other key
+above is set by `cdk/lib/api-stack.ts`'s instance userdata; these two are not — turning on real-money
+mode in prod today requires editing the ASG launch template/userdata by hand, outside CDK.
+
+Per-binary keys read outside `Config` (not in the struct above):
+
+| Key | Binary | Purpose |
+|---|---|---|
+| `ARCHIVE_BUCKET` | `cmd/archiver` | S3 bucket for the DynamoDB Stream archive |
+| `WALLET_URL_PARAM` | `cmd/tablecleanup`, `cmd/reconcile` | **SSM parameter name** (not the value) holding the wallet URL |
+| `POKER_CLIENT_ID_PARAM` / `POKER_CLIENT_SECRET_PARAM` | `cmd/tablecleanup`, `cmd/reconcile` | SSM parameter names for M2M creds |
 
 ## Real-time transport (WebSocket)
 
@@ -119,19 +164,23 @@ Auth group wiring: `RegisterRooms/Players/sandbox credits` all receive `auth` (`
   funds (sandbox-only), but must be fixed before real-money.
 - **Tracked as a known risk to fix, not accepted.** See [`api/CLAUDE.md`](./CLAUDE.md).
 
-## Sandbox ledger (play-money, isolated from ctech-wallet)
+## Sandbox & real-money ledgers
 
-- `internal/walletclient` calls **only** `ctech-wallet`'s internal sandbox credit/debit routes
-  (`/v1.0/internal/wallet/sandbox/credit|debit`,
-  `internal/walletclient/client.go:23-24`). It authenticates with the poker M2M client and scopes
-  `internal:wallet:credit` / `internal:wallet:debit` (`client.go:26-27`).
-- `buyin` (`internal/buyin/service.go`) gates every buy-in/cash-out on
-  `room.CurrencyMode == "sandbox"`, returning `ErrUnsupportedCurrencyMode` otherwise (`service.go:82-83`, `:182-183`).
-  **There is no real-money code path** — the
-  `currency_mode` boundary is enforced server-side (OVERVIEW §5).
-- Sandbox chips are non-convertible by construction: the only wallet calls are the sandbox endpoints, and there is no
-  hold/capture or conversion route. Real-money integration (Phase 5) depends on `ctech-wallet` first gaining
-  hold/capture endpoints and raising its DynamoDB throughput cap (see `OVERVIEW.md §5` / `ARCHITECTURE.md §4`).
+- `internal/walletclient` talks to `ctech-wallet`'s internal M2M routes: sandbox
+  credit/debit (`/v1.0/internal/wallet/sandbox/credit|debit`) for play-money, plus a
+  hold/release/cashout/activation contract (`/v1.0/internal/wallet/game/*`) for real money
+  (`HoldGame`/`ReleaseHold`/`CashoutGame`/`IsGamblingActivated`, `client.go:130-262`). It authenticates
+  with the poker M2M client using per-call scopes.
+- `buyin` (`internal/buyin/service.go`) branches on `room.CurrencyMode`: `sandbox` uses plain
+  credit/debit (`NewServiceWithPlayers`); `real` uses the hold-based `GameWallet` path
+  (`NewServiceWithGame`, wired only when `REAL_MONEY_ENABLED=true`, `internal/app/app.go:198-203`).
+  Any other value returns `ErrUnsupportedCurrencyMode`.
+- **The real-money path is implemented but currently unreachable**: `POST /rooms` always creates
+  `CurrencyMode: "sandbox"` rooms (`internal/api/v1/rooms.go:93`) — there is no request field to ask for
+  a real-money room, so the `real` branch above never executes outside tests. Also, the real-money wiring
+  in `app.go` doesn't pass a `players` service into `NewServiceWithGame`, so it skips the
+  terms-of-service acceptance check sandbox buy-ins get (`buyin/service.go:140-144`) — fix before exposing
+  real-money room creation. Full status: see the Phase 5 plan's Status section referenced above.
 
 ## Known issues (documented honestly — do NOT fix code here)
 

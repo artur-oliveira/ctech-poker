@@ -1,7 +1,7 @@
-// Package walletclient calls ctech-wallet's internal sandbox credit/debit
-// endpoints using poker's own M2M client_credentials token. Real-money
-// hold/capture is Phase 5 (gated on prerequisites ctech-wallet doesn't
-// expose yet) — this client only ever touches the sandbox ledger.
+// Package walletclient calls ctech-wallet's internal M2M endpoints using
+// poker's own client_credentials token: plain credit/debit against the
+// sandbox ledger, and a hold/release/cashout/activation contract against
+// the real-money "game" ledger (Phase 5, gated by config.RealMoneyEnabled).
 package walletclient
 
 import (

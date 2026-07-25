@@ -7,12 +7,16 @@ A real-time, multi-table Texas Hold'em poker product. Two currency modes:
 balance). MVP ships sandbox-complete; real-money mode ships only once its two hard
 prerequisites are met — see § 11.
 
-**Real-money implementation status (2026-07-21):** Sandbox mode is implemented end-to-end,
-and all of Phase 5 (Tasks 1–12: wallet client, config gate, buy-in/cash-out routing,
-reconciliation job, metrics/alarms, graceful drain, WAF, hand-history endpoint, load test,
-session log) is **implemented but gated**: real-money flow only activates with
-`REAL_MONEY_ENABLED=true` + `LEGAL_SIGNOFF_REF` config — see
-`api/internal/config/config.go:44-51`.
+**Real-money implementation status (re-verified 2026-07-25):** Sandbox mode is implemented
+end-to-end. Of Phase 5 (Tasks 1–12), Tasks 1, 2, 4–12 are implemented (wallet client, config
+gate, reconciliation job, metrics/alarms, graceful drain, WAF, hand-history endpoint, load
+test, session log). Task 3 (real-money buy-in/cash-out routing) is implemented in
+`buyin.Service` but **not reachable**: `POST /rooms` has no field to request a `real`
+`currency_mode` room (`api/internal/api/v1/rooms.go:93`), so `REAL_MONEY_ENABLED=true` +
+`LEGAL_SIGNOFF_REF` (`api/internal/config/config.go:50-51`) gates a path nothing can enter.
+`ui/` has no real-money UI beyond a currency-mode label. See `PLAN.md`'s Phase 5 status list
+and `docs/plans/2026-07-19-poker-phase5-realmoney-and-hardening.md`'s Status section for the
+full punch list.
 
 ## 2. Rooms
 
