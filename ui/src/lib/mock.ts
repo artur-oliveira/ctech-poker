@@ -368,7 +368,10 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     if (mockPlayerDealtIn) fail(409, 'cannot remove player mid-hand while still dealt in', config);
     return ok({amount: 4850}, config);
   }
-  if (method === 'GET' && path === '/v1.0/players/me/hands') return ok(page(mockHands), config);
+  if (method === 'GET' && path === '/v1.0/players/me/hands') {
+    const tableId = config.params?.table_id;
+    return ok(page(tableId ? mockHands.filter(h => h.table_id === tableId) : mockHands), config);
+  }
   const handMatch = method === 'GET' ? path.match(/^\/v1\.0\/players\/me\/hands\/([^/]+)$/) : null;
   if (handMatch) {
     const hand = mockHands.find(h => h.hand_id === handMatch[1]);

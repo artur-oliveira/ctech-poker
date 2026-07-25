@@ -1,0 +1,64 @@
+'use client';
+import {useState} from 'react';
+import type {CSSProperties} from 'react';
+import {Trophy} from 'lucide-react';
+import type {HandItem} from '@/lib/api/player';
+import {bestFiveCardHand, bestHandCategory} from '@/lib/pokerRules';
+import {HAND_CATEGORY_LABELS} from '@/lib/utils';
+import {PlayingCard} from '@/components/table/PlayingCard';
+
+export type WinnerLogEntry = { key: string; names: string[]; category?: string; cards?: string[] };
+
+// `/players/me/hands` only ever carries the viewer's own perspective, so a
+// hand's "winner(s)" are the viewer (outcome won/tied) plus whichever
+// opponents the server flagged `won` — a split pot lists more than one name.
+// A `lost` hand never puts the viewer in that list. The winning combo is
+// read off whichever winner actually has hole cards on record (the viewer
+// always does; an opponent only when the hand went to showdown) combined
+// with the board, mirroring the derivation HandOutcomeBanner already does.
+export function deriveWinners(items: HandItem[], limit = 5): WinnerLogEntry[] {
+  return items.slice(0, limit).map(item => {
+    const winners: { name: string; hole?: string[] }[] = [];
+    if (item.outcome !== 'lost') winners.push({name: 'Você', hole: item.hole_cards});
+    for (const opp of item.opponents || []) if (opp.won) winners.push({name: opp.name || 'Visitante', hole: opp.hole_cards});
+    const board = item.board?.length === 5 ? item.board : undefined;
+    const withHole = winners.find(w => w.hole?.length === 2);
+    const cards = withHole?.hole && board ? bestFiveCardHand([...withHole.hole, ...board]) : withHole?.hole;
+    const category = cards?.length === 5 ? bestHandCategory(cards) : undefined;
+    return {key: item.hand_id, names: winners.map(w => w.name), category, cards};
+  }).filter(entry => entry.names.length > 0);
+}
+
+/** Floating toggle mirroring Chat's affordance (bottom-left instead of
+ * bottom-right) — the last 5 resolved hands at this table, newest first,
+ * sourced from the player's own hand-history endpoint rather than live
+ * socket state, so it's populated the moment the table loads instead of
+ * only after the viewer sits through a fresh resolution. Desktop/tablet
+ * only: hidden under the phone breakpoint, where the header, hero HUD,
+ * action bar and chat toggle already contest the same strip. */
+export function LastWinners({items}: { items: HandItem[] }) {
+  const [open, setOpen] = useState(false);
+  const winners = deriveWinners(items);
+  if (!winners.length) return null;
+  return <aside className={`last-winners ${open ? 'open' : ''}`} aria-label="Últimos vencedores da mesa">
+    <button type="button" className="last-winners-toggle" aria-expanded={open} aria-controls="last-winners-panel"
+            aria-label={open ? 'Fechar últimos vencedores' : 'Ver últimos vencedores'}
+            onClick={() => setOpen(value => !value)}>
+      <Trophy aria-hidden="true"/>
+    </button>
+    <div id="last-winners-panel" className="last-winners-panel">
+      <h3>Últimos vencedores</h3>
+      <ul>
+        {winners.map((entry, i) => <li key={entry.key} style={{'--stagger-index': i} as CSSProperties}>
+          {entry.cards && <span className="last-winners-cards">
+            {entry.cards.map((card, ci) => <PlayingCard key={card} card={card} index={ci} size="hole"/>)}
+          </span>}
+          <span className="last-winners-info">
+            <b>{entry.names.join(' e ')}</b>
+            {entry.category && <small>{HAND_CATEGORY_LABELS[entry.category] || entry.category}</small>}
+          </span>
+        </li>)}
+      </ul>
+    </div>
+  </aside>;
+}

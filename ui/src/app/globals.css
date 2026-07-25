@@ -2811,6 +2811,124 @@ h1 em {
     line-height: 1.35
 }
 
+/* Mirrors .game-chat's fixed toggle/panel exactly, docked bottom-left
+   instead of bottom-right (same --action-bar-clear clearance so it never
+   sits under the action bar), so the two floating widgets read as one
+   family instead of two different patterns. Desktop/tablet only — see the
+   phone-width hide rule further down. */
+.last-winners {
+    position: fixed;
+    z-index: var(--z-chrome);
+    left: 16px;
+    bottom: var(--action-bar-clear)
+}
+
+.last-winners-toggle {
+    position: relative;
+    float: left;
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    border: 0;
+    background: var(--gold);
+    color: var(--gold-ink);
+    display: grid;
+    place-items: center
+}
+
+.last-winners-toggle svg {
+    width: 19px
+}
+
+.last-winners-panel {
+    display: none;
+    width: 260px;
+    max-height: 320px;
+    overflow-y: auto;
+    background: var(--surface-seat);
+    border: 1px solid var(--seat-border);
+    border-radius: 16px;
+    margin-bottom: 8px;
+    padding: 17px
+}
+
+.last-winners.open .last-winners-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    animation: rise .25s
+}
+
+.last-winners-panel h3 {
+    font-size: 14px;
+    margin: 0
+}
+
+.last-winners-panel ul {
+    display: flex;
+    flex-direction: column;
+    gap: 10px
+}
+
+.last-winners-panel li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: winner-row-in .3s var(--ease-out-quart) both;
+    animation-delay: calc(var(--stagger-index, 0) * 60ms)
+}
+
+@keyframes winner-row-in {
+    from {
+        opacity: 0;
+        transform: translateX(-8px)
+    }
+}
+
+.last-winners-cards {
+    display: flex;
+    flex-shrink: 0
+}
+
+.last-winners-cards .hole-card {
+    width: 26px;
+    height: 36px;
+    margin-right: -14px
+}
+
+.last-winners-cards .hole-card:last-child {
+    margin-right: 0
+}
+
+.last-winners-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0
+}
+
+.last-winners-info b {
+    font-size: var(--font-size-compact);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+
+.last-winners-info small {
+    color: var(--gold);
+    font-size: var(--font-size-tiny)
+}
+
+/* Phone-width real estate is already contested (header wraps, hero HUD +
+   action bar + chat toggle share the same strip) — the last-winners widget
+   is a nice-to-have there, not a must-have, so it drops out entirely rather
+   than squeezing in as a third floating corner element. Tablets (portrait
+   or landscape) keep it. */
+@media (max-width: 520px), (max-height: 480px) and (orientation: landscape) {
+    .last-winners {
+        display: none
+    }
+}
+
 .achievement-toast {
     position: fixed;
     z-index: var(--z-toast);

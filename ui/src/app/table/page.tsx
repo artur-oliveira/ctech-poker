@@ -17,6 +17,7 @@ import {InviteDialog} from '@/components/table/InviteDialog';
 import {LeaveDialog} from '@/components/table/LeaveDialog';
 import {MockControls} from '@/components/table/MockControls';
 import type {HandOutcomeState} from '@/components/table/HandOutcome';
+import {LastWinners} from '@/components/table/LastWinners';
 import {HandRankingsDialog} from '@/components/table/HandRankingsDialog';
 import {AchievementToast} from '@/components/AchievementToast';
 import {TermsGate} from '@/components/TermsGate';
@@ -24,6 +25,7 @@ import {Button} from '@/components/ui/button';
 import {pushNotification} from '@/lib/notify';
 import type {PokerAction, TableSnapshot} from '@/lib/api/table';
 import {bestFiveCardHand, HAND_RANK_INDEX} from '@/lib/pokerRules';
+import {getHands} from '@/lib/api/player';
 import {type MockScenario, USE_MOCK} from '@/lib/mock';
 import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
 
@@ -100,6 +102,13 @@ function TableContent() {
     retry: (count, err) => !isNotFound(err) && count < 3
   });
   const seated = seatedStatus?.seated ?? false;
+  // Last-winners strip: sourced from the player's own hand-history endpoint
+  // (not live socket state) so it's populated from table load, not only
+  // after the viewer sits through a fresh resolution. Re-fetched once per
+  // resolved hand below.
+  const {data: tableHands = []} = useQuery({
+    queryKey: ['hands', id], queryFn: () => getHands({tableId: id}), enabled: valid
+  });
   const rt = useTableRealtime(valid && seated ? id : '', viewer, inviteCode, USE_MOCK ? {scenario, delay} : undefined);
   // The server never closes a removed player's socket (it just stops
   // targeting it in future broadcasts) — without reacting to this message the
@@ -151,6 +160,7 @@ function TableContent() {
     const snap = rt.snapshot;
     const isFreshPayout = Boolean(snap?.payouts) && !previousPayoutsRef.current;
     previousPayoutsRef.current = snap?.payouts;
+    if (isFreshPayout) queryClient.invalidateQueries({queryKey: ['hands', id]});
     if (!isFreshPayout || !snap?.payouts || !viewer) return;
     // Only a viewer who stayed in for the whole hand (never folded, never sat
     // out) gets a win/lose moment — folding is routine and already has its
@@ -189,7 +199,7 @@ function TableContent() {
       key: outcomeKeyRef.current, kind, handCategory: seat.hand_category, opponentCategory,
       winningCards, winningHoleCards: winnerHole, stackBefore: stackAtHandStart, stackAfter: seat.stack
     });
-  }, [rt.snapshot, viewer, stackAtHandStart]);
+  }, [rt.snapshot, viewer, stackAtHandStart, queryClient, id]);
   if (!valid) return (
     <main className="game-loading">
       <h1 className="sr-only">Mesa de poker</h1>
@@ -322,6 +332,7 @@ function TableContent() {
             connected={rt.status === 'connected'}
             viewerId={viewer}
             seats={s.seats}/>
+      <LastWinners items={tableHands}/>
 
       <AchievementToast unlock={rt.unlock}/>
       {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}

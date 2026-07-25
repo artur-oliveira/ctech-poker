@@ -35,11 +35,11 @@ const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
     Icon: Play,
   },
   not_ready: {
-    label: 'Não está pronto',
+    label: 'Sit out',
     Icon: Pause,
   },
   sit_out: {
-    label: 'Entrou em Sit Out',
+    label: 'Sit Out',
     Icon: Pause,
   },
   disconnect_sit_out: {
