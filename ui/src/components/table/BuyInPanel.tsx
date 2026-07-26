@@ -98,6 +98,9 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
       <small>BLINDS {room.small_blind} / {room.big_blind} · {room.currency_mode === 'real' ? 'DINHEIRO REAL' : 'SANDBOX'}</small>
       <h2>Sente-se à mesa</h2>
       <p>Escolha {isReal ? 'quanto dinheiro' : 'quantas fichas'} levar. Nada é debitado antes de você confirmar.</p>
+      {isReal && !!room.entry_fee_cents &&
+        <p className="buyin-fee-notice">Taxa fixa de mesa: {formatBuyIn(room.entry_fee_cents, true)} (cobrada
+          junto com o buy-in, não é uma comissão sobre o pote).</p>}
       <div className="buyin-control">
         <label htmlFor={sliderId}>Buy-in</label>
         <input id={sliderId} type="range" min={room.buy_in_min} max={room.buy_in_max} step={step} value={value}

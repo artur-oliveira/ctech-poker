@@ -86,8 +86,11 @@ export default function PokerRules() {
 
         <article id="rake" className="rules-section">
           <h2>Rake</h2>
-          <p>O rake é a comissão que a casa retém sobre o pote de cada mão — é assim que a mesa se sustenta. O valor
-            fica sempre visível ao lado do pote durante o jogo, nunca embutido ou escondido.</p>
+          <p>Nas mesas sandbox, o rake é a comissão que a casa retém sobre o pote de cada mão — é assim que a mesa se
+            sustenta. O valor fica sempre visível ao lado do pote durante o jogo, nunca embutido ou escondido.</p>
+          <p>Nas mesas de dinheiro real, não existe rake: todo o dinheiro do pote é decidido pelos jogadores na mesa.
+            Em vez disso, cobramos uma taxa fixa de mesa ao entrar (o &quot;aluguel&quot; da sala), que não depende do
+            tamanho do pote nem é um percentual do blind.</p>
         </article>
       </section>
     </main>

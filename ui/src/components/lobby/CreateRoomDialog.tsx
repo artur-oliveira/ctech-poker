@@ -131,7 +131,10 @@ export function CreateRoomDialog() {
                                                                                                          tabIndex={field.value === index ? 0 : -1}
                                                                                                          className={`rounded-xl border px-4 py-2 min-h-11 text-sm font-semibold transition-colors ${field.value === index ? 'border-[var(--brand-bright)] bg-[var(--brand)] text-[var(--on-brand)]' : 'border-white/15 bg-(--surface-control) text-[var(--on-brand)] hover:bg-white/10'}`}
                                                                                                          onClick={() => field.onChange(index)}
-                                                                                                         onKeyDown={e => radioGroupKeyDown(e, index, stakes.length, field.onChange)}>{formatStake(stake.small_blind, currencyMode)} / {formatStake(stake.big_blind, currencyMode)}</button>)}
+                                                                                                         onKeyDown={e => radioGroupKeyDown(e, index, stakes.length, field.onChange)}>
+                                                                                                   {formatStake(stake.small_blind, currencyMode)} / {formatStake(stake.big_blind, currencyMode)}
+                                                                                                   {currencyMode === 'real' && stake.fee_cents ? <><br/><small className="opacity-80">taxa {formatStake(stake.fee_cents, 'real')}</small></> : null}
+                                                                                                 </button>)}
                                                                                              </div>}/>{!stakes.length &&
             <p className="form-error">Nenhum stake disponível no momento.</p>}
           {form.formState.errors.stakeIndex &&

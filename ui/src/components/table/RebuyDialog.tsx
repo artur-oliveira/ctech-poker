@@ -63,6 +63,9 @@ export function RebuyDialog({roomId, room, onRebuyAction}: {
         <DialogTitle>Você ficou sem fichas</DialogTitle>
         <DialogDescription>Compre mais {unit} para continuar jogando nesta mesa.</DialogDescription>
       </DialogHeader>
+      {isReal && !!room.entry_fee_cents &&
+        <p className="buyin-fee-notice">Taxa fixa de mesa: {formatBuyIn(room.entry_fee_cents, true)} (cobrada
+          de novo a cada vez que você compra fichas).</p>}
       <div className="buyin-control">
         <label htmlFor={sliderId}>Recompra</label>
         <input id={sliderId} type="range" min={room.buy_in_min} max={room.buy_in_max} step={step} value={value}

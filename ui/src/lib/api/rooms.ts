@@ -18,12 +18,17 @@ export interface Room {
   // Present only for a private room's own creator (the server strips both
   // from every other viewer's response).
   share_code?: string;
-  created_by?: string
+  created_by?: string;
+  // Fixed real-money table-entry fee (BRL cents), charged on every seat-entry
+  // (join/rebuy) — zero/absent for sandbox rooms. Set once at room creation,
+  // never a function of the pot (see docs/plans/2026-07-25-realmoney-fixed-fee-and-sandbox-rake.md).
+  entry_fee_cents?: number;
 }
 
 export interface Stake {
   small_blind: number;
-  big_blind: number
+  big_blind: number;
+  fee_cents?: number;
 }
 
 export async function listRooms(cursor?: string) {
