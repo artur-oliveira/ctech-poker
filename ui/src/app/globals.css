@@ -879,12 +879,10 @@ h1 em {
 
 @keyframes turn-signal {
     0%, 100% {
-        opacity: .5;
-        transform: scale(.96)
+        opacity: .45
     }
     50% {
-        opacity: 1;
-        transform: scale(1.025)
+        opacity: 1
     }
 }
 
@@ -1131,13 +1129,9 @@ h1 em {
         transform: none !important
     }
 
-    .seat-turn-ring, .next-hand-ring {
-        --seat-ring-progress: 100% !important
-    }
-
-    .next-hand-ring {
+    .perimeter-timer {
         animation-name: none !important;
-        background-image: conic-gradient(var(--gold) 100%, transparent 0) !important
+        stroke-dashoffset: 0 !important
     }
 
     .reconnect-notice > span {
@@ -1811,10 +1805,10 @@ h1 em {
 .game-seat:after {
     content: "";
     position: absolute;
-    z-index: -1;
-    inset: -5px;
+    z-index: 1;
+    inset: -1px;
     border: 2px solid transparent;
-    border-radius: calc(var(--rounded-seat) + 3px);
+    border-radius: inherit;
     pointer-events: none
 }
 
@@ -1823,47 +1817,34 @@ h1 em {
     animation: turn-signal 2s var(--ease-out-quart) infinite
 }
 
-@property --seat-ring-progress {
-    syntax: '<percentage>';
-    inherits: false;
-    initial-value: 100%
-}
-
-.seat-turn-ring {
+.perimeter-timer {
     position: absolute;
-    inset: -4px;
-    padding: 2px;
-    border-radius: inherit;
-    background: conic-gradient(var(--gold) var(--seat-ring-progress), transparent 0);
-    -webkit-mask: linear-gradient(var(--mask-opaque) 0 0) content-box, linear-gradient(var(--mask-opaque) 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    animation: seat-turn-deplete linear forwards;
-    will-change: --seat-ring-progress;
+    z-index: 2;
+    inset: -1px;
+    width: calc(100% + 2px);
+    height: calc(100% + 2px);
+    overflow: visible;
+    fill: none;
+    stroke: var(--gold);
+    stroke-width: 2px;
+    stroke-linecap: round;
+    stroke-dasharray: 100;
+    stroke-dashoffset: 0;
+    animation: perimeter-deplete linear forwards;
+    will-change: stroke-dashoffset;
     pointer-events: none
 }
 
-@keyframes seat-turn-deplete {
-    from {
-        --seat-ring-progress: 100%
-    }
+@keyframes perimeter-deplete {
     to {
-        --seat-ring-progress: 0%
+        stroke-dashoffset: 100
     }
 }
 
 .next-hand-ring {
-    position: absolute;
     inset: 0;
-    padding: 2px;
-    border-radius: inherit;
-    background: conic-gradient(var(--gold) var(--seat-ring-progress), transparent 0);
-    -webkit-mask: linear-gradient(var(--mask-opaque) 0 0) content-box, linear-gradient(var(--mask-opaque) 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    animation: seat-turn-deplete linear forwards;
-    will-change: --seat-ring-progress;
-    pointer-events: none
+    width: 100%;
+    height: 100%
 }
 
 /* Tells every player at the table who just won, not only the winner's own
@@ -3940,7 +3921,12 @@ h1 em {
 
 .stage-v-ring .game-seat:after {
     border-radius: 50%;
-    inset: -3px
+    inset: -1px
+}
+
+.stage-v-ring .seat-turn-ring rect {
+    rx: 50%;
+    ry: 50%
 }
 
 /* Shrunk to fit the 38-52px avatar chip; still readable at arm's length. */

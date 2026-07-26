@@ -5,7 +5,11 @@ import {useRouter, useSearchParams} from 'next/navigation';
 import type {MockScenario} from '@/lib/mock';
 
 const scenarios: { value: MockScenario; label: string }[] = [
-  {value: 'full_hand', label: 'Mão completa interativa'},
+  {value: 'full_hand', label: 'Mesa-bot · vitória'},
+  {value: 'full_hand_loss', label: 'Mesa-bot · derrota'},
+  {value: 'full_hand_tie', label: 'Mesa-bot · empate'},
+  {value: 'all_in', label: 'Mesa-bot · rival all-in'},
+  {value: 'auto_fold', label: 'Prazo esgotado · auto-fold'},
   {value: 'waiting', label: 'Aguardando jogadores'},
   {value: 'pre_flop', label: 'Pré-flop · sua vez'},
   {value: 'flop', label: 'Flop · mesa livre'},
@@ -13,9 +17,13 @@ const scenarios: { value: MockScenario; label: string }[] = [
   {value: 'river', label: 'River · vez do rival'},
   {value: 'showdown', label: 'Showdown · vitória'},
   {value: 'side_pot', label: 'Showdown · pote lateral (2 vencedores)'},
+  {value: 'complete', label: 'Resultado · vitória'},
+  {value: 'complete_loss', label: 'Resultado · derrota'},
+  {value: 'complete_tie', label: 'Resultado · empate'},
+  {value: 'fold_win', label: 'Resultado · todos foldaram'},
   {value: 'reconnecting', label: 'Queda e reconexão'},
   {value: 'action_error', label: 'Ação rejeitada'},
-  {value: 'timeout', label: 'Ação sem resposta'},
+  {value: 'timeout', label: 'Servidor sem resposta'},
 ];
 
 const MOCK_ERROR_KEY = 'ctech_poker_mock_errors';

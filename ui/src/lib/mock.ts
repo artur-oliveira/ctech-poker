@@ -410,6 +410,10 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
 
 export type MockScenario =
   'full_hand'
+  | 'full_hand_loss'
+  | 'full_hand_tie'
+  | 'all_in'
+  | 'auto_fold'
   | 'waiting'
   | 'pre_flop'
   | 'flop'
@@ -420,6 +424,9 @@ export type MockScenario =
   | 'reconnecting'
   | 'action_error'
   | 'timeout'
+  | 'complete_loss'
+  | 'complete_tie'
+  | 'fold_win'
   | 'complete';
 export type MockConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
 
@@ -518,11 +525,23 @@ function fullHandSeats(): SeatView[] {
   ];
 }
 
-// Final hole cards revealed at showdown, paired with a hand strength rank so
-// the mock can name a winner without a full evaluator. Ranks are consistent
-// with the fixed board (7H 8C QS 2D AC): the viewer wins with top pair (aces),
-// nobody makes a set from the board, so the result is honest and inspectable.
-const FULL_HAND_REVEAL: Record<string, [string, string]> = {
+type InteractiveScenario = 'full_hand' | 'full_hand_loss' | 'full_hand_tie' | 'all_in' | 'auto_fold';
+type HandVariant = {
+  board: [string, string, string, string, string];
+  reveal: Record<string, [string, string]>;
+  rank: Record<string, number>;
+  category: Record<string, string>;
+};
+
+const INTERACTIVE_SCENARIOS = new Set<MockScenario>([
+  'full_hand', 'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold'
+]);
+
+// Fixed, internally-consistent showdowns make the visual outcomes repeatable
+// while bot decisions remain seeded and profile-driven. A tie uses Broadway
+// on the board, so every player still in the hand genuinely shares the same
+// five-card straight rather than merely receiving an artificial equal rank.
+const WIN_REVEAL: Record<string, [string, string]> = {
   [MOCK_PLAYER_ID]: ['AH', 'KD'], // pair of aces, king kicker — best hand
   'bia_sp': ['9S', '9D'],         // pair of nines
   'nina_recife': ['6C', '6D'],    // pair of sixes
@@ -530,8 +549,54 @@ const FULL_HAND_REVEAL: Record<string, [string, string]> = {
   'leo_rio': ['JH', 'TH'],        // jack high
   'joao_floripa': ['5S', '4D'],   // five high
 };
-const FULL_HAND_RANK: Record<string, number> = {
+const WIN_RANK: Record<string, number> = {
   [MOCK_PLAYER_ID]: 6, 'bia_sp': 5, 'nina_recife': 4, 'caio_goiânia': 3, 'leo_rio': 2, 'joao_floripa': 1,
+};
+const WIN_CATEGORY: Record<string, string> = {
+  [MOCK_PLAYER_ID]: 'pair', 'bia_sp': 'pair', 'nina_recife': 'pair',
+  'caio_goiânia': 'pair', 'leo_rio': 'high_card', 'joao_floripa': 'high_card'
+};
+const LOSS_REVEAL: Record<string, [string, string]> = {
+  [MOCK_PLAYER_ID]: ['AH', 'KD'],
+  'bia_sp': ['AS', 'AD'],
+  'nina_recife': ['8S', '8D'],
+  'caio_goiânia': ['7C', '7D'],
+  'leo_rio': ['QH', 'QC'],
+  'joao_floripa': ['2C', '2S'],
+};
+const LOSS_RANK: Record<string, number> = {
+  [MOCK_PLAYER_ID]: 1, 'bia_sp': 6, 'leo_rio': 5, 'nina_recife': 4, 'caio_goiânia': 3, 'joao_floripa': 2,
+};
+const LOSS_CATEGORY: Record<string, string> = {
+  [MOCK_PLAYER_ID]: 'pair', 'bia_sp': 'three_of_a_kind', 'leo_rio': 'three_of_a_kind',
+  'nina_recife': 'three_of_a_kind', 'caio_goiânia': 'three_of_a_kind', 'joao_floripa': 'three_of_a_kind'
+};
+const TIE_REVEAL: Record<string, [string, string]> = {
+  [MOCK_PLAYER_ID]: ['2C', '3D'],
+  'bia_sp': ['4C', '5D'],
+  'nina_recife': ['6C', '7D'],
+  'caio_goiânia': ['8C', '9D'],
+  'leo_rio': ['2S', '4D'],
+  'joao_floripa': ['3S', '6D'],
+};
+const TIE_RANK = Object.fromEntries(Object.keys(TIE_REVEAL).map(id => [id, 1]));
+const TIE_CATEGORY = Object.fromEntries(Object.keys(TIE_REVEAL).map(id => [id, 'straight']));
+const HAND_VARIANTS: Record<InteractiveScenario, HandVariant> = {
+  full_hand: {
+    board: ['7H', '8C', 'QS', '2D', 'AC'], reveal: WIN_REVEAL, rank: WIN_RANK, category: WIN_CATEGORY
+  },
+  all_in: {
+    board: ['7H', '8C', 'QS', '2D', 'AC'], reveal: WIN_REVEAL, rank: WIN_RANK, category: WIN_CATEGORY
+  },
+  auto_fold: {
+    board: ['7H', '8C', 'QS', '2D', 'AC'], reveal: WIN_REVEAL, rank: WIN_RANK, category: WIN_CATEGORY
+  },
+  full_hand_loss: {
+    board: ['7H', '8C', 'QS', '2D', 'AC'], reveal: LOSS_REVEAL, rank: LOSS_RANK, category: LOSS_CATEGORY
+  },
+  full_hand_tie: {
+    board: ['AH', 'KD', 'QS', 'JC', 'TH'], reveal: TIE_REVEAL, rank: TIE_RANK, category: TIE_CATEGORY
+  },
 };
 
 export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
@@ -542,19 +607,19 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
     seats: seats.slice(0, 3).map(seat => ({...seat, contributed: 0})),
     rake: 0
   };
-  if (scenario === 'full_hand') {
+  if (INTERACTIVE_SCENARIOS.has(scenario)) {
+    const handSeats = fullHandSeats();
+    if (scenario === 'auto_fold') {
+      const raiser = handSeats.find(seat => seat.player_id === 'bia_sp')!;
+      raiser.stack -= 125;
+      raiser.contributed = 150;
+    }
     return {
       stage: 'pre_flop',
       board: [],
-      seats: fullHandSeats(),
-      current_player_id: MOCK_PLAYER_ID,
-      legal_actions: {
-        actions: ['fold', 'check', 'raise'],
-        call_amount: 0,
-        min_raise_to: 75,
-        max_raise_to: 4900,
-        step: 25
-      },
+      seats: handSeats,
+      current_player_id: scenario === 'auto_fold' ? MOCK_PLAYER_ID : 'leo_rio',
+      legal_actions: {actions: []},
       rake: 5,
       // Dealer sits immediately before the small blind in turn order.
       dealer_player_id: 'caio_goiânia',
@@ -584,18 +649,37 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
       ...(scenario === 'timeout' ? {action_deadline_unix_ms: Date.now() + 15000} : {})
     };
   }
-  if (scenario === 'complete') return {
-    stage: 'complete',
-    board: ['7H', '8C', 'QS', '2D', 'AC'],
-    seats: revealShowdownCards(seats),
-    payouts: {[MOCK_PLAYER_ID]: 250},
-    winners: [MOCK_PLAYER_ID],
-    rake: 5,
-    next_hand_unix_ms: Date.now() + 5000,
-    dealer_player_id: 'rafa_curitiba',
-    small_blind_player_id: 'leo_rio',
-    big_blind_player_id: MOCK_PLAYER_ID
-  };
+  if (scenario === 'complete' || scenario === 'complete_loss' || scenario === 'complete_tie' || scenario === 'fold_win') {
+    const variant = scenario === 'complete_loss' ? HAND_VARIANTS.full_hand_loss :
+      scenario === 'complete_tie' ? HAND_VARIANTS.full_hand_tie : HAND_VARIANTS.full_hand;
+    const resolvedSeats = fullHandSeats().map(seat => {
+      const holeCards = variant.reveal[seat.player_id];
+      const isFolded = scenario === 'fold_win' && seat.player_id !== MOCK_PLAYER_ID;
+      return {
+        ...seat,
+        state: isFolded ? 'folded' : seat.state,
+        hole_cards: isFolded ? ['back', 'back'] : holeCards,
+        hand_category: isFolded || !holeCards ? undefined : variant.category[seat.player_id]
+      };
+    });
+    const winners = scenario === 'complete_loss' ? ['bia_sp'] :
+      scenario === 'complete_tie' ? [MOCK_PLAYER_ID, 'bia_sp'] : [MOCK_PLAYER_ID];
+    const payouts: Record<string, number> = scenario === 'complete_loss' ? {bia_sp: 1275} :
+      scenario === 'complete_tie' ? {[MOCK_PLAYER_ID]: 638, bia_sp: 637} : {[MOCK_PLAYER_ID]: 1275};
+    return {
+      stage: 'complete',
+      board: scenario === 'fold_win' ? [] : variant.board,
+      seats: resolvedSeats,
+      payouts,
+      winners,
+      rake: 5,
+      next_hand_unix_ms: Date.now() + 5000,
+      won_without_showdown: scenario === 'fold_win',
+      dealer_player_id: 'rafa_curitiba',
+      small_blind_player_id: 'leo_rio',
+      big_blind_player_id: MOCK_PLAYER_ID
+    };
+  }
   // A short-stacked all-in (Ana, 300) can only ever win the layer every
   // contributor matched — the main pot (300 * 3 = 900). The extra 400 that
   // Bia and Léo each put in above that forms a side pot (400 * 2 = 800) Ana
@@ -715,6 +799,27 @@ type MockHandlers = {
   onStatus: (status: MockConnectionStatus, attempt: number) => void
 };
 
+type BotProfile = {
+  style: 'tight' | 'loose' | 'aggressive' | 'calling_station' | 'volatile';
+  aggression: number;
+  call: number;
+  shove: number;
+};
+
+const BOT_PROFILES: Record<string, BotProfile> = {
+  'bia_sp': {style: 'tight', aggression: .22, call: .58, shove: .02},
+  'leo_rio': {style: 'aggressive', aggression: .7, call: .66, shove: .08},
+  'nina_recife': {style: 'tight', aggression: .16, call: .46, shove: .01},
+  'joao_floripa': {style: 'calling_station', aggression: .12, call: .9, shove: .02},
+  'caio_goiânia': {style: 'volatile', aggression: .58, call: .6, shove: .2},
+};
+
+const TURN_TIMEOUT_MS = 12_000;
+const AUTO_FOLD_TIMEOUT_MS = 6_000;
+const NEXT_HAND_DELAY_MS = 5_000;
+// Clockwise poker order, independent of the array's visual seat order.
+const FULL_HAND_ORDER = ['bia_sp', MOCK_PLAYER_ID, 'leo_rio', 'nina_recife', 'joao_floripa', 'caio_goiânia'];
+
 /** Stateful WebSocket-shaped client used by useTableRealtime in mock mode. */
 export class MockTableService {
   private snapshot: TableSnapshot;
@@ -722,10 +827,13 @@ export class MockTableService {
   private attempt = 0;
   private status: MockConnectionStatus = 'connecting';
   private streetCommitted: Record<string, number> = {};
+  private turnOrder: string[] = [];
+  private turnTimer?: ReturnType<typeof setTimeout>;
+  private decisionNumber = 0;
 
   constructor(private scenario: MockScenario, private delay: number, private handlers: MockHandlers) {
     this.snapshot = snapshotForScenario(scenario);
-    if (scenario === 'full_hand') this.beginStreet(false);
+    if (INTERACTIVE_SCENARIOS.has(scenario)) this.beginStreet(false);
   }
 
   connect() {
@@ -748,7 +856,8 @@ export class MockTableService {
     }
     this.later(() => {
       this.setStatus('connected');
-      this.emitState();
+      if (INTERACTIVE_SCENARIOS.has(this.scenario)) this.startInteractiveHand();
+      else this.emitState();
     });
   }
 
@@ -789,8 +898,26 @@ export class MockTableService {
       }));
       return true;
     }
-    if (this.scenario === 'full_hand') {
-      this.resolveFullHand(value.action as PokerAction, Number(value.amount || 0));
+    if (INTERACTIVE_SCENARIOS.has(this.scenario)) {
+      if (this.snapshot.current_player_id !== MOCK_PLAYER_ID) {
+        this.later(() => this.handlers.onMessage({
+          type: 'error',
+          code: 'invalid_action',
+          action_id: String(value.action_id || '')
+        }));
+        return true;
+      }
+      const action = value.action as PokerAction;
+      const legal = this.legalActionsFor(this.snapshot.seats, MOCK_PLAYER_ID);
+      if (!legal.actions.includes(action)) {
+        this.later(() => this.handlers.onMessage({
+          type: 'error',
+          code: 'invalid_action',
+          action_id: String(value.action_id || '')
+        }));
+        return true;
+      }
+      this.resolveAction(MOCK_PLAYER_ID, action, Number(value.amount || 0));
       return true;
     }
     this.later(() => {
@@ -817,37 +944,40 @@ export class MockTableService {
   close() {
     this.timers.forEach(clearTimeout);
     this.timers.clear();
+    this.turnTimer = undefined;
     mockPlayerDealtIn = false;
   }
 
   private later(task: () => void, factor = 1) {
+    this.laterMs(task, this.delay * factor);
+  }
+
+  private laterMs(task: () => void, milliseconds: number) {
     const timer = setTimeout(() => {
       this.timers.delete(timer);
       task();
-    }, this.delay * factor);
+    }, milliseconds);
     this.timers.add(timer);
+    return timer;
   }
 
-  // --- Full-hand engine -----------------------------------------------------
+  // --- Interactive mini-table engine ---------------------------------------
 
   private setStatus(status: MockConnectionStatus) {
     this.status = status;
     this.handlers.onStatus(status, this.attempt);
   }
 
-  /** Seed this street's per-street commitment. When `clear` is false the
-   * current contributions (blinds) are carried in; otherwise the street starts
-   * fresh at zero. */
   private beginStreet(clear: boolean) {
     this.streetCommitted = {};
     for (const seat of this.snapshot.seats) {
-      if (seat.state === 'active') this.streetCommitted[seat.player_id] = clear ? 0 : (seat.contributed || 0);
+      if (seat.state === 'active' || seat.state === 'all_in') {
+        this.streetCommitted[seat.player_id] = clear ? 0 : (seat.contributed || 0);
+      }
     }
   }
 
   private streetBet(seats: SeatView[]) {
-    // Includes folded seats: a player's bet stays on the table as the amount
-    // the rest of the table must still match, even after they fold.
     return Math.max(0, ...seats.map(s => this.streetCommitted[s.player_id] || 0));
   }
 
@@ -859,7 +989,8 @@ export class MockTableService {
     const callAmount = Math.min(seat.stack, Math.max(0, currentBet - committed));
     const maxTo = seat.stack + committed;
     const minTo = currentBet + 25;
-    const actions: PokerAction[] = callAmount > 0 ? ['fold', 'call', 'raise'] : ['fold', 'check', 'raise'];
+    const actions: PokerAction[] = callAmount > 0 ? ['fold', 'call'] : ['fold', 'check'];
+    if (maxTo > currentBet && seat.stack > callAmount) actions.push('raise');
     return {
       actions,
       call_amount: callAmount,
@@ -869,123 +1000,316 @@ export class MockTableService {
     };
   }
 
-  private resolveFullHand(action: PokerAction, amount: number) {
-    const seats = this.snapshot.seats.map(s => ({...s, hole_cards: s.hole_cards ? [...s.hole_cards] : undefined}));
-    const viewer = seats.find(s => s.player_id === MOCK_PLAYER_ID);
-    if (!viewer) return;
-    const commit = (seat: SeatView, total: number) => {
-      const add = Math.max(0, total - seat.contributed);
-      seat.contributed += add;
-      this.streetCommitted[seat.player_id] = (this.streetCommitted[seat.player_id] || 0) + add;
-      seat.stack -= add;
-      if (seat.stack === 0) seat.state = 'all_in';
-    };
-    if (actionFolds(action)) {
-      viewer.state = 'folded';
-    } else if (viewer.state === 'active') {
-      const committed = this.streetCommitted[viewer.player_id] || 0;
-      const currentBet = this.streetBet(seats);
-      if (action === 'raise') {
-        const maxTo = viewer.stack + committed;
-        const target = Math.min(maxTo, Math.max(currentBet + 25, amount || currentBet + 25));
-        commit(viewer, target);
-      } else {
-        const need = currentBet - committed;
-        commit(viewer, committed + Math.min(viewer.stack, Math.max(0, need)));
-      }
+  private startInteractiveHand() {
+    if (this.scenario === 'auto_fold') {
+      this.turnOrder = [MOCK_PLAYER_ID];
+    } else {
+      this.turnOrder = this.orderAfter(this.snapshot.big_blind_player_id || MOCK_PLAYER_ID)
+        .filter(id => this.canAct(id));
     }
-    // Auto-play the remaining active players (call/check only, no raises) so
-    // the betting round resolves and the hand can advance on its own.
-    for (const seat of seats) {
-      if (seat.player_id === MOCK_PLAYER_ID || seat.state !== 'active') continue;
-      const committed = this.streetCommitted[seat.player_id] || 0;
-      const need = this.streetBet(seats) - committed;
-      if (need > 0 && seat.stack > 0) commit(seat, committed + Math.min(seat.stack, need));
-    }
-    const activeSeats = seats.filter(s => s.state === 'active');
-    const pot = seats.reduce((total, seat) => total + seat.contributed, 0);
-    if (viewer.state !== 'active') {
-      this.finishHand(seats, activeSeats, pot);
+    this.activateNextTurn();
+  }
+
+  private orderAfter(playerId: string) {
+    const seated = new Set(this.snapshot.seats.map(seat => seat.player_id));
+    const ids = FULL_HAND_ORDER.filter(id => seated.has(id));
+    const start = ids.indexOf(playerId);
+    return [...ids.slice(start + 1), ...ids.slice(0, start + 1)];
+  }
+
+  private canAct(playerId: string) {
+    return this.snapshot.seats.find(seat => seat.player_id === playerId)?.state === 'active';
+  }
+
+  private contenders(seats = this.snapshot.seats) {
+    return seats.filter(seat => seat.state === 'active' || seat.state === 'all_in');
+  }
+
+  private cancelTurnTimer() {
+    if (!this.turnTimer) return;
+    clearTimeout(this.turnTimer);
+    this.timers.delete(this.turnTimer);
+    this.turnTimer = undefined;
+  }
+
+  private activateNextTurn() {
+    this.cancelTurnTimer();
+    this.turnOrder = this.turnOrder.filter(id => this.canAct(id));
+    if (this.contenders().length <= 1) {
+      this.finishWithoutShowdown();
       return;
     }
+    if (this.turnOrder.length === 0) {
+      this.advanceStreet();
+      return;
+    }
+    const playerId = this.turnOrder[0];
+    const timeout = this.scenario === 'auto_fold' ? AUTO_FOLD_TIMEOUT_MS : TURN_TIMEOUT_MS;
+    this.snapshot = {
+      ...this.snapshot,
+      current_player_id: playerId,
+      legal_actions: playerId === MOCK_PLAYER_ID ? this.legalActionsFor(this.snapshot.seats, playerId) : {actions: []},
+      action_deadline_unix_ms: Date.now() + timeout
+    };
+    this.emitState();
+    this.turnTimer = this.laterMs(() => {
+      this.turnTimer = undefined;
+      if (this.snapshot.current_player_id === playerId) this.resolveAction(playerId, 'fold', 0);
+    }, timeout);
+    if (playerId !== MOCK_PLAYER_ID) {
+      const thinkTime = Math.max(300, Math.min(1600, this.delay * (1.2 + this.seededRandom(playerId))));
+      this.laterMs(() => {
+        if (this.snapshot.current_player_id !== playerId) return;
+        const decision = this.botDecision(playerId);
+        this.resolveAction(playerId, decision.action, decision.amount);
+      }, thinkTime);
+    }
+  }
+
+  private commit(seat: SeatView, streetTotal: number) {
+    const committed = this.streetCommitted[seat.player_id] || 0;
+    const add = Math.min(seat.stack, Math.max(0, streetTotal - committed));
+    seat.stack -= add;
+    seat.contributed += add;
+    this.streetCommitted[seat.player_id] = committed + add;
+    if (seat.stack === 0) seat.state = 'all_in';
+  }
+
+  private resolveAction(playerId: string, action: PokerAction, amount: number) {
+    if (this.snapshot.current_player_id !== playerId) return;
+    this.cancelTurnTimer();
+    const seats = this.snapshot.seats.map(seat => ({
+      ...seat,
+      hole_cards: seat.hole_cards ? [...seat.hole_cards] : undefined
+    }));
+    const seat = seats.find(item => item.player_id === playerId);
+    if (!seat || seat.state !== 'active') return;
     const currentBet = this.streetBet(seats);
-    const matched = activeSeats.every(s => (this.streetCommitted[s.player_id] || 0) === currentBet || s.state === 'all_in');
+    const committed = this.streetCommitted[playerId] || 0;
+    let raised = false;
+    if (action === 'fold') {
+      seat.state = 'folded';
+    } else if (action === 'raise') {
+      const maximum = committed + seat.stack;
+      const target = Math.min(maximum, Math.max(currentBet + 25, amount || currentBet + 25));
+      this.commit(seat, target);
+      raised = this.streetCommitted[playerId] > currentBet;
+    } else {
+      this.commit(seat, committed + Math.max(0, currentBet - committed));
+    }
+
     this.snapshot = {
       ...this.snapshot,
       seats,
-      current_player_id: MOCK_PLAYER_ID,
-      legal_actions: this.legalActionsFor(seats, MOCK_PLAYER_ID)
+      current_player_id: undefined,
+      legal_actions: {actions: []},
+      action_deadline_unix_ms: undefined
     };
     this.emitState();
-    if (action === 'raise') this.later(() => this.handlers.onMessage({
+    if (action === 'raise' && playerId === MOCK_PLAYER_ID) this.later(() => this.handlers.onMessage({
       type: 'achievement_unlocked',
       key: 'primeiro_aumento',
       stars: 2
     }), 2);
-    if (matched) {
-      if (this.snapshot.stage === 'river') this.later(() => this.reachShowdown(seats, pot), 1);
-      else this.later(() => this.advanceStreet(seats), 1);
-    }
-  }
 
-  private advanceStreet(seats: SeatView[]) {
-    const stage = this.snapshot.stage;
-    const next = stage === 'pre_flop' ? 'flop' : stage === 'flop' ? 'turn' : stage === 'turn' ? 'river' : 'showdown';
-    const board = next === 'flop' ? ['7H', '8C', 'QS'] : next === 'turn' ? ['7H', '8C', 'QS', '2D'] : ['7H', '8C', 'QS', '2D', 'AC'];
-    if (next === 'showdown') {
-      this.reachShowdown(seats, seats.reduce((total, seat) => total + seat.contributed, 0));
+    if (this.contenders(seats).length <= 1) {
+      this.later(() => this.finishWithoutShowdown(), 1);
       return;
     }
+    this.turnOrder.shift();
+    if (raised) {
+      this.turnOrder = this.orderAfter(playerId)
+        .filter(id => id !== playerId && this.canActIn(seats, id));
+    }
+    this.later(() => this.activateNextTurn(), 1);
+  }
+
+  private canActIn(seats: SeatView[], playerId: string) {
+    return seats.find(seat => seat.player_id === playerId)?.state === 'active';
+  }
+
+  private advanceStreet() {
+    const stage = this.snapshot.stage;
+    const next = stage === 'pre_flop' ? 'flop' : stage === 'flop' ? 'turn' : stage === 'turn' ? 'river' : 'showdown';
+    if (next === 'showdown') {
+      this.reachShowdown();
+      return;
+    }
+    const variant = HAND_VARIANTS[this.scenario as InteractiveScenario];
+    const board = next === 'flop' ? variant.board.slice(0, 3) :
+      next === 'turn' ? variant.board.slice(0, 4) : variant.board;
     this.beginStreet(true);
     const rake = next === 'flop' ? 8 : next === 'turn' ? 11 : 14;
     this.snapshot = {
-      ...this.snapshot, stage: next, board, seats,
-      current_player_id: MOCK_PLAYER_ID, legal_actions: this.legalActionsFor(seats, MOCK_PLAYER_ID), rake
+      ...this.snapshot,
+      stage: next,
+      board,
+      current_player_id: undefined,
+      legal_actions: {actions: []},
+      action_deadline_unix_ms: undefined,
+      rake
     };
     this.emitState();
+    const active = this.snapshot.seats.filter(seat => seat.state === 'active');
+    if (active.length < 2) {
+      this.later(() => this.advanceStreet(), 2);
+      return;
+    }
+    this.turnOrder = this.orderAfter(this.snapshot.dealer_player_id || '')
+      .filter(id => this.canAct(id));
+    this.later(() => this.activateNextTurn(), 2);
   }
 
-  private reachShowdown(seats: SeatView[], pot: number) {
-    const revealed = seats.map(s => FULL_HAND_REVEAL[s.player_id] ? {
-      ...s,
-      hole_cards: FULL_HAND_REVEAL[s.player_id]
-    } : s);
-    const contenders = revealed.filter(s => s.state === 'active');
-    const winner = bestHand(contenders);
-    const payouts: Record<string, number> = {};
-    if (winner) {
-      winner.stack += pot;
-      payouts[winner.player_id] = pot;
-    }
+  private reachShowdown() {
+    this.cancelTurnTimer();
+    const variant = HAND_VARIANTS[this.scenario as InteractiveScenario];
+    const revealed = this.snapshot.seats.map(seat => {
+      const holeCards = variant.reveal[seat.player_id];
+      if (!holeCards || (seat.state !== 'active' && seat.state !== 'all_in')) return seat;
+      return {
+        ...seat,
+        hole_cards: holeCards,
+        hand_category: variant.category[seat.player_id]
+      };
+    });
+    const {payouts, winnerIds} = this.distributePots(revealed, variant.rank);
     this.snapshot = {
-      ...this.snapshot, stage: 'showdown', board: ['7H', '8C', 'QS', '2D', 'AC'], seats: revealed,
-      current_player_id: undefined, legal_actions: {actions: []}, payouts,
-      winners: winner ? [winner.player_id] : undefined, rake: 20
+      ...this.snapshot,
+      stage: 'showdown',
+      board: variant.board,
+      seats: revealed,
+      current_player_id: undefined,
+      legal_actions: {actions: []},
+      action_deadline_unix_ms: undefined,
+      payouts,
+      winners: winnerIds,
+      rake: 20
     };
     this.emitState();
     this.later(() => {
-      this.snapshot = {...this.snapshot, stage: 'complete'};
+      this.snapshot = {
+        ...this.snapshot,
+        stage: 'complete',
+        next_hand_unix_ms: Date.now() + NEXT_HAND_DELAY_MS
+      };
       this.emitState();
     }, 6);
   }
 
-  private finishHand(seats: SeatView[], activeSeats: SeatView[], pot: number) {
-    const winner = bestHand(activeSeats);
+  /** Resolve main/side pots one contribution layer at a time. Folded chips
+   * stay in every layer they funded, while only active/all-in seats are
+   * eligible to win it. A lone unmatched top layer is a refund (payout but
+   * not a winner), matching the production contract's winners/payouts split. */
+  private distributePots(seats: SeatView[], ranks: Record<string, number>) {
+    const levels = [...new Set(seats.map(seat => seat.contributed).filter(amount => amount > 0))]
+      .sort((a, b) => a - b);
     const payouts: Record<string, number> = {};
-    if (winner) {
-      winner.stack += pot;
-      payouts[winner.player_id] = pot;
+    const winnerIds = new Set<string>();
+    let previous = 0;
+    for (const level of levels) {
+      const contributors = seats.filter(seat => seat.contributed >= level);
+      const layer = (level - previous) * contributors.length;
+      previous = level;
+      if (layer <= 0) continue;
+      const eligible = contributors.filter(seat => seat.state === 'active' || seat.state === 'all_in');
+      if (eligible.length === 0) continue;
+      const bestRank = Math.max(...eligible.map(seat => ranks[seat.player_id] || 0));
+      const layerWinners = eligible.filter(seat => (ranks[seat.player_id] || 0) === bestRank);
+      const share = Math.floor(layer / layerWinners.length);
+      let remainder = layer - share * layerWinners.length;
+      for (const winner of layerWinners) {
+        const amount = share + (remainder-- > 0 ? 1 : 0);
+        winner.stack += amount;
+        payouts[winner.player_id] = (payouts[winner.player_id] || 0) + amount;
+        if (contributors.length > 1) winnerIds.add(winner.player_id);
+      }
     }
+    return {payouts, winnerIds: [...winnerIds]};
+  }
+
+  private finishWithoutShowdown() {
+    this.cancelTurnTimer();
+    const seats = this.snapshot.seats.map(seat => ({...seat}));
+    const winner = this.contenders(seats)[0];
+    if (!winner) return;
+    const pot = seats.reduce((total, seat) => total + seat.contributed, 0);
+    const payouts: Record<string, number> = {};
+    winner.stack += pot;
+    payouts[winner.player_id] = pot;
     this.snapshot = {
       ...this.snapshot,
       seats,
       current_player_id: undefined,
       legal_actions: {actions: []},
       payouts,
-      winners: winner ? [winner.player_id] : undefined,
-      stage: 'complete'
+      winners: [winner.player_id],
+      stage: 'complete',
+      action_deadline_unix_ms: undefined,
+      next_hand_unix_ms: Date.now() + NEXT_HAND_DELAY_MS,
+      won_without_showdown: true
     };
     this.emitState();
+  }
+
+  private botDecision(playerId: string): { action: PokerAction; amount: number } {
+    const legal = this.legalActionsFor(this.snapshot.seats, playerId);
+    const seat = this.snapshot.seats.find(item => item.player_id === playerId)!;
+    const profile = BOT_PROFILES[playerId] || BOT_PROFILES.bia_sp;
+    const callAmount = legal.call_amount || 0;
+    const currentBet = this.streetBet(this.snapshot.seats);
+    const committed = this.streetCommitted[playerId] || 0;
+    const decisionIndex = this.decisionNumber++;
+    const random = this.seededRandom(`${playerId}:${profile.style}`);
+
+    // The first orbit deliberately covers poker's basic vocabulary; later
+    // decisions come from the profiles below. This keeps every QA run useful
+    // without turning the whole simulation into a rigid action script.
+    if (this.snapshot.stage === 'pre_flop' && decisionIndex < 5) {
+      const opening: Record<string, PokerAction> = {
+        'leo_rio': 'fold',
+        'nina_recife': 'call',
+        'joao_floripa': 'raise',
+        'caio_goiânia': this.scenario === 'all_in' ? 'raise' : 'call',
+        'bia_sp': 'call'
+      };
+      const preferred = opening[playerId];
+      if (preferred && legal.actions.includes(preferred)) {
+        if (preferred !== 'raise') return {action: preferred, amount: 0};
+        const shove = this.scenario === 'all_in' && playerId === 'caio_goiânia';
+        return {action: 'raise', amount: shove ? legal.max_raise_to || 0 : Math.min(150, legal.max_raise_to || 150)};
+      }
+    }
+
+    // The loss/tie scenarios guarantee that one rival reaches showdown with
+    // Ana; otherwise a perfectly valid random fold could turn the named
+    // scenario into an uncontested win and make the QA outcome non-repeatable.
+    if (playerId === 'bia_sp' && (this.scenario === 'full_hand_loss' || this.scenario === 'full_hand_tie')) {
+      return callAmount > 0 ? {action: 'call', amount: 0} : {action: 'check', amount: 0};
+    }
+
+    if (legal.actions.includes('raise') && (random < profile.shove || random < profile.aggression * .55)) {
+      const maximum = legal.max_raise_to || committed + seat.stack;
+      const minimum = legal.min_raise_to || currentBet + 25;
+      const shove = random < profile.shove;
+      const target = shove ? maximum : Math.min(maximum, Math.max(minimum, currentBet + Math.max(25, Math.round((seat.stack * .08) / 25) * 25)));
+      return {action: 'raise', amount: target};
+    }
+    if (callAmount > 0) {
+      const pressure = callAmount / Math.max(1, seat.stack + callAmount);
+      if (random > profile.call - pressure * .65) return {action: 'fold', amount: 0};
+      return {action: 'call', amount: 0};
+    }
+    return {action: 'check', amount: 0};
+  }
+
+  private seededRandom(salt: string) {
+    const source = `${this.scenario}:${this.snapshot.stage}:${this.decisionNumber}:${salt}`;
+    let hash = 2166136261;
+    for (let i = 0; i < source.length; i++) {
+      hash ^= source.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0) / 4294967296;
   }
 
   private emitState() {
@@ -999,13 +1323,4 @@ export class MockTableService {
 
 function actionFolds(action: PokerAction) {
   return action === 'fold';
-}
-
-/** Pick the strongest shown hand among contenders using the pre-ranked mock hands. */
-function bestHand(contenders: SeatView[]): SeatView | undefined {
-  let best: SeatView | undefined;
-  for (const seat of contenders) {
-    if (!best || (FULL_HAND_RANK[seat.player_id] || 0) > (FULL_HAND_RANK[best.player_id] || 0)) best = seat;
-  }
-  return best;
 }

@@ -21,5 +21,5 @@ export const decodeServerMessage = (data: object): object => {
   const bytes = new Uint8Array(data as ArrayBuffer);
   const msg = ServerMessage.decode(bytes);
   console.log(msg);
-  return msg; 
+  return msg;
 };

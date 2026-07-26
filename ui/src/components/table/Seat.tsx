@@ -2,6 +2,7 @@ import type {CSSProperties} from 'react';
 import {Avatar, AvatarFallback} from '@/components/ui/avatar';
 import {Progress} from '@/components/ui/progress';
 import {ChipStack} from '@/components/table/ChipStack';
+import {PerimeterTimer} from '@/components/table/PerimeterTimer';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import type {SeatView} from '@/lib/api/table';
 import {HAND_CATEGORY_LABELS, initials, playerName} from '@/lib/utils';
@@ -86,8 +87,8 @@ export function Seat({
   return <div data-state={seat.state} aria-current={isTurn ? 'true' : undefined}
               className={`game-seat seat-${index} ${seat.state} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${isWinner ? 'is-winner' : ''} ${pendingName ? 'is-pending-name' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
     {remainingMs != null &&
-        <span key={deadlineMs} className="seat-turn-ring" style={{animationDuration: `${remainingMs}ms`}}
-              aria-hidden="true"/>}
+        <PerimeterTimer className="seat-turn-ring" durationMs={remainingMs}
+                        restartKey={deadlineMs ?? 0} radius={14}/>}
     {role && <span className={`seat-role ${isDealer ? 'is-dealer' : ''}`} title={ROLE_LABELS[role]}
                    aria-label={ROLE_LABELS[role]}>{role}</span>}
     <div className={`seat-cards ${isWinner && payout > 0 ? 'is-collecting' : ''}`}>{[0, 1].map(i => {

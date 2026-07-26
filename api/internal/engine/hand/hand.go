@@ -226,7 +226,11 @@ func (t *Table) PlayersForActor() []*Player { return t.players }
 
 func (t *Table) HoleAndBoardForActor(playerID string) ([2]deck.Card, []deck.Card, bool) {
 	p := t.playerByID(playerID)
-	if p == nil || (p.State != Active && p.State != AllIn) {
+	// State alone is not proof that the player belongs to the current hand:
+	// a sitting-out seat may request a free return mid-hand and become Active
+	// for the next deal. Only handOrder identifies players who actually
+	// received cards in this hand.
+	if p == nil || !t.dealtIntoCurrentHand(playerID) || (p.State != Active && p.State != AllIn) {
 		return [2]deck.Card{}, nil, false
 	}
 	return p.HoleCards, append([]deck.Card(nil), t.board...), true
@@ -952,7 +956,11 @@ func (t *Table) advanceStage() {
 // (Active only) — shared by advanceStage and IsAwaitingRunoutForActor so both
 // agree on exactly the same definition of "nobody left to bet against".
 func (t *Table) countRemainingAndActable() (remaining, canStillAct int) {
-	for _, p := range t.players {
+	// handOrder is immutable for the duration of a hand. t.players can also
+	// contain a mid-hand joiner or a sitting-out player who has requested a
+	// return and is already marked Active for the next deal; neither may
+	// influence this hand's showdown/runout decisions.
+	for _, p := range t.handOrder {
 		if p.State == Active || p.State == AllIn {
 			remaining++
 			if p.State == Active {
@@ -1015,8 +1023,14 @@ func (t *Table) IsAwaitingRunoutForActor() bool {
 }
 
 func (t *Table) activePlayers() []*Player {
-	out := make([]*Player, 0, len(t.players))
-	for _, p := range t.players {
+	// Later streets may only contain players dealt into this hand. Iterating
+	// the broader seated-player list here used to insert an Active-for-next-
+	// hand returner into Round while actionScanOrder (correctly) excluded
+	// them via handOrder. Once every dealt player checked, Round.IsComplete
+	// waited on that unreachable ghost actor and current_player_id became
+	// empty forever.
+	out := make([]*Player, 0, len(t.handOrder))
+	for _, p := range t.handOrder {
 		if p.State == Active || p.State == AllIn {
 			out = append(out, p)
 		}

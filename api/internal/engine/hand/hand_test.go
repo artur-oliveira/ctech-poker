@@ -243,6 +243,67 @@ func TestRequestReturnFromSitOutIsNoOpForNonSittingOutPlayer(t *testing.T) {
 	}
 }
 
+// TestMidHandReturnDoesNotBecomeGhostActor reproduces a live-table trace:
+// a player who sat out of the current hand requests a free return while the
+// pre-flop round is still running. Their seat becomes Active for the next
+// hand, but they are not part of this hand's immutable handOrder and must not
+// be inserted into later streets' betting rounds. Otherwise the dealt players
+// can all check, Round.IsComplete still waits for the undealt returner, and
+// CurrentPlayerIDForActor becomes empty forever.
+func TestMidHandReturnDoesNotBecomeGhostActor(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	p3 := &Player{ID: "p3", Stack: 1000, Ready: true}
+	returner := &Player{ID: "returner", Stack: 1000, Ready: false, State: SittingOut}
+	table := NewTable([]*Player{p1, p2, p3, returner}, 10, 20)
+	table.dealerSeat = 0
+	table.dealerDrawn = true
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+
+	returner.Ready = true
+	table.RequestReturnFromSitOut(returner.ID)
+	if returner.State != Active {
+		t.Fatalf("returner should be ready for the next hand, got state %v", returner.State)
+	}
+
+	for table.Stage() == PreFlop {
+		current := table.CurrentPlayerIDForActor()
+		if current == "" {
+			t.Fatal("pre-flop lost its current player")
+		}
+		if err := table.Act(current, betting.ActionCall, 0); err != nil {
+			t.Fatalf("%s pre-flop action: %v", current, err)
+		}
+	}
+	if table.Stage() != Flop {
+		t.Fatalf("expected flop, got %v", table.Stage())
+	}
+	if _, _, ok := table.HoleAndBoardForActor(returner.ID); ok {
+		t.Fatal("undealt returner must not be treated as a participant for equity")
+	}
+
+	for range 3 {
+		current := table.CurrentPlayerIDForActor()
+		if current == "" {
+			t.Fatal("flop lost its current player before every dealt player acted")
+		}
+		if current == returner.ID {
+			t.Fatal("undealt returner was prompted to act in the current hand")
+		}
+		if err := table.Act(current, betting.ActionCheck, 0); err != nil {
+			t.Fatalf("%s flop check: %v", current, err)
+		}
+	}
+	if table.Stage() != Turn {
+		t.Fatalf("expected checks to advance to turn, got stage=%v current=%q", table.Stage(), table.CurrentPlayerIDForActor())
+	}
+	if table.CurrentPlayerIDForActor() == "" {
+		t.Fatal("turn has no current player after the dealt players checked the flop")
+	}
+}
+
 // TestSitOutForActorFoldsTheCurrentPlayerInsteadOfWedgingTheRound guards the
 // bug where a bare state flip (no fold in the live betting round) left
 // betting.Round waiting forever on a decision nobody could ever make again —

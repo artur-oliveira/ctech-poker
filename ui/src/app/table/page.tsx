@@ -10,6 +10,7 @@ import {getRoom, getSeated} from '@/lib/api/rooms';
 import {isNotFound} from '@/lib/api/client';
 import {BuyInPanel} from '@/components/table/BuyInPanel';
 import {TableStage} from '@/components/table/TableStage';
+import {PerimeterTimer} from '@/components/table/PerimeterTimer';
 import type {ActionAvailability} from '@/components/table/ActionBar';
 import {ActionBar} from '@/components/table/ActionBar';
 import {Chat} from '@/components/table/Chat';
@@ -57,7 +58,12 @@ function connectionCopyFor(status: keyof typeof CONNECTION_COPY, attempt: number
   return CONNECTION_COPY[status];
 }
 
-const MOCK_SCENARIOS = new Set<MockScenario>(['full_hand', 'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot', 'complete', 'reconnecting', 'action_error', 'timeout']);
+const MOCK_SCENARIOS = new Set<MockScenario>([
+  'full_hand', 'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
+  'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot',
+  'complete', 'complete_loss', 'complete_tie', 'fold_win',
+  'reconnecting', 'action_error', 'timeout'
+]);
 
 function actionState(snapshot: TableSnapshot, viewer?: string) {
   const seat = snapshot.seats.find(item => item.player_id === viewer);
@@ -315,9 +321,10 @@ function TableContent() {
         {!connectionMessage && (s.next_hand_unix_ms || canShowCards) && <div className="reconnect-notice">
             <p>{s.stage === 'complete' ? 'Mão encerrada.' : 'Aguardando jogadores.'}</p>
           {s.next_hand_unix_ms &&
-              <span key={s.next_hand_unix_ms} className="next-hand-ring"
-                    style={{animationDuration: `${nextHandDurationMs}ms`}}
-                    aria-hidden="true"/>}
+              <PerimeterTimer className="next-hand-ring"
+                              durationMs={nextHandDurationMs}
+                              restartKey={s.next_hand_unix_ms}
+                              radius={12}/>}
           {canShowCards &&
               <Button type="button" variant="ghost" disabled={rt.showCardsPending}
                       onClick={() => rt.showCards()}>Mostrar cartas</Button>}
