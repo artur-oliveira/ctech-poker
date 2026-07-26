@@ -24,7 +24,7 @@ func TestHandOutcomeUsesNetOfRakeWinnerAndExcludesRefunds(t *testing.T) {
 	table := NewTable([]*Player{p1, p2}, 10, 20)
 	table.handOrder = []*Player{p1, p2}
 	table.board = []deck.Card{{Rank: deck.Two, Suit: deck.Clubs}, {Rank: deck.Three, Suit: deck.Diamonds}, {Rank: deck.Four, Suit: deck.Hearts}}
-	table.ConfigureRake("real")
+	table.ConfigureRake("sandbox")
 	table.runShowdown()
 
 	outcome := table.LastOutcomeForActor()

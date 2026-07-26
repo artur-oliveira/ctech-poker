@@ -6,9 +6,9 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 )
 
-func TestRealMoneyRakeUsesPercentageAndPlayerCaps(t *testing.T) {
+func TestSandboxRakeUsesPercentageAndPlayerCaps(t *testing.T) {
 	table := NewTable(nil, 50, 100)
-	table.ConfigureRake("real")
+	table.ConfigureRake("sandbox")
 	table.board = make([]deck.Card, 3)
 
 	table.handOrder = []*Player{{ID: "p1"}, {ID: "p2"}}
@@ -32,16 +32,16 @@ func TestRealMoneyRakeUsesPercentageAndPlayerCaps(t *testing.T) {
 	}
 }
 
-func TestSandboxAndPreflopPotsHaveNoRake(t *testing.T) {
+func TestRealMoneyAndPreflopPotsHaveNoRake(t *testing.T) {
 	table := NewTable(nil, 50, 100)
 	table.handOrder = []*Player{{}, {}}
 	table.board = make([]deck.Card, 3)
-	table.ConfigureRake("sandbox")
+	table.ConfigureRake("real")
 	if cap := table.rakeCap(); cap != 0 {
-		t.Fatalf("sandbox cap = %d, want zero", cap)
+		t.Fatalf("real-money cap = %d, want zero (real-money never takes rake)", cap)
 	}
 
-	table.ConfigureRake("real")
+	table.ConfigureRake("sandbox")
 	table.board = nil
 	if cap := table.rakeCap(); cap != 0 {
 		t.Fatalf("preflop cap = %d, want zero", cap)
@@ -50,7 +50,7 @@ func TestSandboxAndPreflopPotsHaveNoRake(t *testing.T) {
 
 func TestRakeConfigurationSurvivesPersistence(t *testing.T) {
 	table := NewTable(nil, 50, 100)
-	table.ConfigureRake("real")
+	table.ConfigureRake("sandbox")
 	table.rakeCollected = 17
 	rebuilt := NewTableFromState(table.ExportState())
 	if rebuilt.rakeBPS != 250 || rebuilt.rakeCollected != 17 {

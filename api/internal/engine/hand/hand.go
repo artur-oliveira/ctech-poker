@@ -205,10 +205,14 @@ func (t *Table) RakeCollected() int64 { return t.rakeCollected }
 
 func (t *Table) LastOutcomeForActor() *HandOutcome { return t.lastOutcome }
 
-// ConfigureRake enables the standard 2.5% real-money rake. Sandbox tables
-// always remain rake-free. The setting is persisted with the table state.
+// ConfigureRake enables the standard 2.5% sandbox rake. Real-money tables
+// are always rake-free — Brazilian law treats a cut of the pot/blind on a
+// public real-money game as a bet requiring SPA authorization; poker's
+// real-money revenue comes entirely from the fixed table-entry fee charged
+// at buy-in instead (buyin.Service.BuyIn), never from the pot. The setting
+// is persisted with the table state.
 func (t *Table) ConfigureRake(currencyMode string) {
-	if currencyMode == "real" {
+	if currencyMode == "sandbox" {
 		t.rakeBPS = 250
 		return
 	}
