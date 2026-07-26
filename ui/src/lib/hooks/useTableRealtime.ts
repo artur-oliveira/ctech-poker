@@ -33,6 +33,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   rate_limited: 'Muitas ações em sequência. Aguarde um instante e tente novamente.',
   invalid_action: 'Essa ação não é mais válida. Confira o estado atual da mesa.',
   missing_action_id: 'A ação não pôde ser identificada. Atualize a página e tente novamente.',
+  missing_precondition: 'O estado da mesa ainda não está pronto para receber essa ação.',
+  stale_state: 'A mesa mudou antes da sua ação. Sincronizando o estado mais recente.',
   invalid_post: 'Não foi possível confirmar o blind. Tente novamente.',
   message_too_long: 'A mensagem ultrapassa o limite de 500 caracteres.',
   not_connected: 'Sem conexão com a mesa. Reconecte antes de agir.',
@@ -126,10 +128,25 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   scenario?: MockScenario;
   delay?: number
 }) {
+  const activeTableIDRef = useRef(id);
+  useEffect(() => {
+    activeTableIDRef.current = id;
+    return () => {
+      if (activeTableIDRef.current === id) activeTableIDRef.current = '';
+    };
+  }, [id]);
   const pendingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const pendingActionRef = useRef<{id: string; action: PokerAction; snapshotVersion: number} | null>(null);
+  const pendingActionRef = useRef<{
+    id: string;
+    action: PokerAction;
+    snapshotVersion: number;
+    handId: string;
+  } | null>(null);
   const latestVersionRef = useRef(-1);
+  const latestHandIDRef = useRef('');
   const previousSnapshot = useRef<TableSnapshot | null>(null);
+  const awaitingReconnectSnapshotRef = useRef(false);
+  const resetOnOpenRef = useRef(true);
   const sendRef = useRef<(value: object) => boolean>(() => false);
   // A mid-hand joiner is seated as pending_entry and stays that way forever
   // unless the client opts them in (PostBigBlindCmd) — the product intent is
@@ -209,6 +226,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       const version = message.snapshot.snapshot_version ?? 0;
       if (latestVersionRef.current >= 0 && version < latestVersionRef.current) return;
       latestVersionRef.current = version;
+      latestHandIDRef.current = message.snapshot.hand_id ?? '';
       const liveMessage = describeSnapshot(previousSnapshot.current, message.snapshot, viewerId);
       playSoundForTransition(previousSnapshot.current, message.snapshot, viewerId);
       previousSnapshot.current = message.snapshot;
@@ -220,6 +238,17 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       // be pending against the snapshot it was sent from.
       if (pendingActionRef.current && version > pendingActionRef.current.snapshotVersion) {
         clearPending(pendingActionRef.current.id);
+      }
+      // A sync_state response is serialized after the action frame on the
+      // same socket. Even at the same version it is authoritative proof that
+      // the timed-out action was not committed.
+      if (message.action_id && pendingActionRef.current?.id === message.action_id) {
+        clearPending(message.action_id);
+      }
+      // A reconnect's initial snapshot is built with a forced store read.
+      if (awaitingReconnectSnapshotRef.current) {
+        awaitingReconnectSnapshotRef.current = false;
+        clearPending();
       }
       // Compatibility while API instances are rolling from the unversioned
       // protocol: those servers have no ACK frames, so their next full state
@@ -267,9 +296,24 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     }
     if (message.type === 'error') {
       const code = message.code || 'unknown';
-      if (message.action_id && pendingActionRef.current?.id === message.action_id) failPending(code, message.action_id);
+      if ((code === 'stale_state' || code === 'rate_limited') && message.action_id &&
+        pendingActionRef.current?.id === message.action_id) {
+        setLastActionError(actionError(code));
+        const actionId = message.action_id;
+        if (pendingTimer.current) clearTimeout(pendingTimer.current);
+        pendingTimer.current = setTimeout(() => {
+          if (pendingActionRef.current?.id === actionId) {
+            sendRef.current({type: 'sync_state', action_id: actionId});
+          }
+        }, code === 'rate_limited' ? 1000 : 0);
+      } else if (message.action_id && pendingActionRef.current?.id === message.action_id) {
+        failPending(code, message.action_id);
+      }
       else if (message.action_id) finishAuxiliaryCommand(message.action_id, code);
       else setLastActionError(actionError(code));
+    }
+    if (message.type === 'connected') {
+      awaitingReconnectSnapshotRef.current = true;
     }
     if (message.type === 'removed') setRemoved({code: message.code});
     if (message.type === 'achievement_unlocked' && message.key) setUnlock({
@@ -281,6 +325,9 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       setChat(value => [...value.slice(-39), {player: message.player_id || '?', message: chatMessage}]);
     }
   }, [clearPending, failPending, finishAuxiliaryCommand, viewerId]);
+  const receiveForTable = useCallback((message: ServerMessage) => {
+    if (activeTableIDRef.current === id) receive(message);
+  }, [id, receive]);
 
   const origin = (process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/^http/, 'ws');
   const wsUrl = id ? `${origin}/v1.0/tables/${encodeURIComponent(id)}/ws` : null;
@@ -288,6 +335,18 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     if (token) callback(token);
   }), []);
   const handleOpen = useCallback(() => {
+    if (resetOnOpenRef.current) {
+      resetOnOpenRef.current = false;
+      setSnapshot(null);
+      setSnapshotAt(0);
+      setPendingAction(null);
+      setReadyPending(false);
+      setShowCardsPending(false);
+      setLastActionError(null);
+      setAnnouncement('');
+      setRemoved(null);
+      setChat([]);
+    }
     sendRef.current({type: 'ping'});
   }, []);
   const {status: wsStatus, attempt: wsReconnectAttempt, send: wsSend, reconnect: wsRetryNow} = useWebSocket({
@@ -295,7 +354,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     binaryType: 'arraybuffer',
     encode: encodeClientMessage,
     decode: decodeServerMessage,
-    onMessage: data => receive(data as ServerMessage),
+    onMessage: data => receiveForTable(data as ServerMessage),
     enabled: Boolean(wsUrl) && !USE_MOCK,
     authToken: getAccessToken() || undefined,
     shareCode,
@@ -308,10 +367,28 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     if (!USE_MOCK || !id) return () => {
 
     };
+    // A scenario change creates a brand-new in-memory server whose snapshot
+    // versions start at one again. Reset every client-side value tied to the
+    // previous service before connecting it; otherwise the monotonic-version
+    // guard rejects the new scenario's snapshots as stale and leaves the
+    // completed hand frozen on screen.
+    latestVersionRef.current = -1;
     previousSnapshot.current = null;
     const service = new MockTableService(mockScenario, mockDelay, {
-      onMessage: receive,
+      onMessage: receiveForTable,
       onStatus: (next, attempt) => {
+        if (next === 'connecting') {
+          setSnapshot(null);
+          setSnapshotAt(0);
+          setAnnouncement('');
+          setLastActionError(null);
+          setRemoved(null);
+          clearPending();
+          for (const actionId of [readyActionRef.current, showCardsActionRef.current, postBigBlindActionRef.current]) {
+            if (actionId) finishAuxiliaryCommand(actionId);
+          }
+          postedBigBlindRef.current = false;
+        }
         setMockStatus(next);
         setMockReconnectAttempt(attempt);
       }
@@ -322,7 +399,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       service.close();
       if (mockService.current === service) mockService.current = null;
     };
-  }, [id, mockDelay, mockScenario, receive]);
+  }, [clearPending, finishAuxiliaryCommand, id, mockDelay, mockScenario, receiveForTable]);
 
   const send = useCallback((value: object) => USE_MOCK ? Boolean(mockService.current?.send(value as Record<string, unknown>)) : wsSend(value), [wsSend]);
   const retryNow = useCallback(() => USE_MOCK ? mockService.current?.reconnect() : wsRetryNow(), [wsRetryNow]);
@@ -331,6 +408,32 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   useEffect(() => {
     sendRef.current = send;
   }, [send]);
+
+  // Query-param navigation reuses this hook instance. Every realtime ref is
+  // table-scoped; carrying version 100 from table A into table B version 10
+  // would otherwise reject B forever as "stale".
+  useEffect(() => {
+    latestVersionRef.current = -1;
+    latestHandIDRef.current = '';
+    previousSnapshot.current = null;
+    awaitingReconnectSnapshotRef.current = false;
+    postedBigBlindRef.current = false;
+    postBigBlindActionRef.current = null;
+    readyActionRef.current = null;
+    showCardsActionRef.current = null;
+    readyLockRef.current = false;
+    showCardsLockRef.current = false;
+    for (const timer of [pendingTimer.current, readyTimerRef.current, showCardsTimerRef.current,
+      postBigBlindTimerRef.current]) {
+      if (timer) clearTimeout(timer);
+    }
+    pendingTimer.current = undefined;
+    readyTimerRef.current = undefined;
+    showCardsTimerRef.current = undefined;
+    postBigBlindTimerRef.current = undefined;
+    pendingActionRef.current = null;
+    resetOnOpenRef.current = true;
+  }, [id]);
 
   useEffect(() => () => {
     if (pendingTimer.current) clearTimeout(pendingTimer.current);
@@ -380,23 +483,37 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const act = useCallback((action: PokerAction, amount = 0) => {
     if (pendingActionRef.current) return false;
     setLastActionError(null);
+    const snapshotVersion = latestVersionRef.current;
+    const handId = latestHandIDRef.current;
+    if (snapshotVersion <= 0 || !handId) {
+      setLastActionError(actionError('missing_precondition'));
+      return false;
+    }
     const actionId = crypto.randomUUID();
-    pendingActionRef.current = {id: actionId, action, snapshotVersion: latestVersionRef.current};
+    pendingActionRef.current = {id: actionId, action, snapshotVersion, handId};
     setPendingAction(action);
-    if (!emit({type: 'act', action, amount, action_id: actionId})) {
+    if (!emit({
+      type: 'act',
+      action,
+      amount,
+      action_id: actionId,
+      expected_snapshot_version: snapshotVersion,
+      expected_hand_id: handId
+    })) {
       clearPending(actionId);
       return false;
     }
     pendingTimer.current = setTimeout(() => {
-      clearPending(actionId);
-      if (!send({type: 'ping'})) {
-        setLastActionError(actionError('connection_lost'));
-        return;
-      }
+      if (pendingActionRef.current?.id !== actionId) return;
       setLastActionError(actionError('action_timeout'));
+      if (!send({type: 'sync_state', action_id: actionId})) {
+        setLastActionError(actionError('connection_lost'));
+        awaitingReconnectSnapshotRef.current = true;
+        retryNow();
+      }
     }, ACTION_TIMEOUT_MS);
     return true;
-  }, [clearPending, emit, send]);
+  }, [clearPending, emit, retryNow, send]);
 
   return {
     status,

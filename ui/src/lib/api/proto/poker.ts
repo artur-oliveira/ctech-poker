@@ -23,6 +23,8 @@ export interface Seat {
   hole_cards: string[];
   equity?: number | undefined;
   hand_category: string;
+  /** connected | disconnected */
+  connection_state: string;
 }
 
 export interface BlindEscalation {
@@ -106,7 +108,7 @@ export interface TableSnapshot_PayoutsEntry {
 
 /** ClientMessage is sent from the client to the server. */
 export interface ClientMessage {
-  /** "auth" | "ping" | "ready" | "act" | "post_big_blind" | "show_cards" | "chat" */
+  /** "auth" | "ping" | "sync_state" | "ready" | "act" | "post_big_blind" | "show_cards" | "chat" */
   type: string;
   /** payload fields */
   token: string;
@@ -122,6 +124,10 @@ export interface ClientMessage {
   action_id: string;
   /** for chat command */
   message: string;
+  /** optimistic precondition for act */
+  expected_snapshot_version: number;
+  /** prevents a delayed action crossing hands */
+  expected_hand_id: string;
 }
 
 /** ServerMessage is sent from the server to the client. */
@@ -232,6 +238,7 @@ function createBaseSeat(): Seat {
     hole_cards: [],
     equity: undefined,
     hand_category: "",
+    connection_state: "",
   };
 }
 
@@ -260,6 +267,9 @@ export const Seat: MessageFns<Seat> = {
     }
     if (message.hand_category !== "") {
       writer.uint32(66).string(message.hand_category);
+    }
+    if (message.connection_state !== "") {
+      writer.uint32(74).string(message.connection_state);
     }
     return writer;
   },
@@ -335,6 +345,14 @@ export const Seat: MessageFns<Seat> = {
           message.hand_category = reader.string();
           continue;
         }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.connection_state = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -357,6 +375,7 @@ export const Seat: MessageFns<Seat> = {
     message.hole_cards = object.hole_cards?.map((e) => e) || [];
     message.equity = object.equity ?? undefined;
     message.hand_category = object.hand_category ?? "";
+    message.connection_state = object.connection_state ?? "";
     return message;
   },
 };
@@ -1279,7 +1298,18 @@ export const TableSnapshot_PayoutsEntry: MessageFns<TableSnapshot_PayoutsEntry> 
 };
 
 function createBaseClientMessage(): ClientMessage {
-  return { type: "", token: "", share_code: "", ready: false, action: "", amount: 0, action_id: "", message: "" };
+  return {
+    type: "",
+    token: "",
+    share_code: "",
+    ready: false,
+    action: "",
+    amount: 0,
+    action_id: "",
+    message: "",
+    expected_snapshot_version: 0,
+    expected_hand_id: "",
+  };
 }
 
 export const ClientMessage: MessageFns<ClientMessage> = {
@@ -1307,6 +1337,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     }
     if (message.message !== "") {
       writer.uint32(66).string(message.message);
+    }
+    if (message.expected_snapshot_version !== 0) {
+      writer.uint32(72).uint64(message.expected_snapshot_version);
+    }
+    if (message.expected_hand_id !== "") {
+      writer.uint32(82).string(message.expected_hand_id);
     }
     return writer;
   },
@@ -1382,6 +1418,22 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           message.message = reader.string();
           continue;
         }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.expected_snapshot_version = longToNumber(reader.uint64());
+          continue;
+        }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.expected_hand_id = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1404,6 +1456,8 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     message.amount = object.amount ?? 0;
     message.action_id = object.action_id ?? "";
     message.message = object.message ?? "";
+    message.expected_snapshot_version = object.expected_snapshot_version ?? 0;
+    message.expected_hand_id = object.expected_hand_id ?? "";
     return message;
   },
 };

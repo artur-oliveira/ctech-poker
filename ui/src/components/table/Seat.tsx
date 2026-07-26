@@ -78,14 +78,16 @@ export function Seat({
   const cards = seat.hole_cards;
   const chance = seat.equity == null ? null : Math.round(seat.equity * 100);
   const pendingName = !isViewer && !seat.name;
+  const isDisconnected = seat.connection_state === 'disconnected';
   const remainingMs = isTurn && deadlineMs && nowMs ? Math.max(0, deadlineMs - nowMs) : null;
   const stackFrom = payout > 0 ? seat.stack - payout : stackBefore ?? seat.stack;
   const displayStack = useCountUp(stackFrom, seat.stack);
   // Heads-up has the dealer double as the small blind — one combined badge
   // rather than two overlapping pills.
   const role = isDealer && isSmallBlind ? 'D/SB' : isDealer ? 'D' : isSmallBlind ? 'SB' : isBigBlind ? 'BB' : null;
-  return <div data-state={seat.state} aria-current={isTurn ? 'true' : undefined}
-              className={`game-seat seat-${index} ${seat.state} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${isWinner ? 'is-winner' : ''} ${pendingName ? 'is-pending-name' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
+  return <div data-state={seat.state} data-connection-state={seat.connection_state}
+              aria-current={isTurn ? 'true' : undefined}
+              className={`game-seat seat-${index} ${seat.state} ${isDisconnected ? 'disconnected' : ''} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${isWinner ? 'is-winner' : ''} ${pendingName ? 'is-pending-name' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
     {remainingMs != null &&
         <PerimeterTimer className="seat-turn-ring" durationMs={remainingMs}
                         restartKey={deadlineMs ?? 0} radius={14}/>}
@@ -109,7 +111,8 @@ export function Seat({
             <Progress value={chance} indicatorClassName={equityTone(chance)}/>
             <small>Chance {chance}%</small>
         </div>}{STATE_LABELS[seat.state] &&
-        <small className="seat-state">{STATE_LABELS[seat.state]}</small>}{seat.hand_category &&
+        <small className="seat-state">{STATE_LABELS[seat.state]}</small>}{isDisconnected && seat.state !== 'disconnected' &&
+        <small className="seat-state">Desconectado</small>}{seat.hand_category &&
         <small className="seat-hand-category">{HAND_CATEGORY_LABELS[seat.hand_category] || seat.hand_category}</small>}
     </div>
     {seat.contributed > 0 && <span key={`bet-${seat.contributed}`} className="seat-bet">

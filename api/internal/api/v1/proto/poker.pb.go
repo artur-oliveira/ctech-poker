@@ -74,17 +74,18 @@ func (x *Card) GetSuit() string {
 }
 
 type Seat struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      string                 `protobuf:"bytes,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Stack         int64                  `protobuf:"varint,3,opt,name=stack,proto3" json:"stack,omitempty"`
-	State         string                 `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
-	Contributed   int64                  `protobuf:"varint,5,opt,name=contributed,proto3" json:"contributed,omitempty"`
-	HoleCards     []string               `protobuf:"bytes,6,rep,name=hole_cards,json=holeCards,proto3" json:"hole_cards,omitempty"`
-	Equity        *float64               `protobuf:"fixed64,7,opt,name=equity,proto3,oneof" json:"equity,omitempty"`
-	HandCategory  string                 `protobuf:"bytes,8,opt,name=hand_category,json=handCategory,proto3" json:"hand_category,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId        string                 `protobuf:"bytes,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Name            string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Stack           int64                  `protobuf:"varint,3,opt,name=stack,proto3" json:"stack,omitempty"`
+	State           string                 `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
+	Contributed     int64                  `protobuf:"varint,5,opt,name=contributed,proto3" json:"contributed,omitempty"`
+	HoleCards       []string               `protobuf:"bytes,6,rep,name=hole_cards,json=holeCards,proto3" json:"hole_cards,omitempty"`
+	Equity          *float64               `protobuf:"fixed64,7,opt,name=equity,proto3,oneof" json:"equity,omitempty"`
+	HandCategory    string                 `protobuf:"bytes,8,opt,name=hand_category,json=handCategory,proto3" json:"hand_category,omitempty"`
+	ConnectionState string                 `protobuf:"bytes,9,opt,name=connection_state,json=connectionState,proto3" json:"connection_state,omitempty"` // connected | disconnected
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Seat) Reset() {
@@ -169,6 +170,13 @@ func (x *Seat) GetEquity() float64 {
 func (x *Seat) GetHandCategory() string {
 	if x != nil {
 		return x.HandCategory
+	}
+	return ""
+}
+
+func (x *Seat) GetConnectionState() string {
+	if x != nil {
+		return x.ConnectionState
 	}
 	return ""
 }
@@ -772,17 +780,19 @@ func (x *TableSnapshot) GetHandId() string {
 // ClientMessage is sent from the client to the server.
 type ClientMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "auth" | "ping" | "ready" | "act" | "post_big_blind" | "show_cards" | "chat"
+	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "auth" | "ping" | "sync_state" | "ready" | "act" | "post_big_blind" | "show_cards" | "chat"
 	// payload fields
-	Token         string `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`                          // for auth frame
-	ShareCode     string `protobuf:"bytes,3,opt,name=share_code,json=shareCode,proto3" json:"share_code,omitempty"` // for auth frame
-	Ready         bool   `protobuf:"varint,4,opt,name=ready,proto3" json:"ready,omitempty"`                         // for ready command
-	Action        string `protobuf:"bytes,5,opt,name=action,proto3" json:"action,omitempty"`                        // for act command
-	Amount        int64  `protobuf:"varint,6,opt,name=amount,proto3" json:"amount,omitempty"`                       // for act command
-	ActionId      string `protobuf:"bytes,7,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`    // for act command
-	Message       string `protobuf:"bytes,8,opt,name=message,proto3" json:"message,omitempty"`                      // for chat command
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Token                   string `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`                                                                       // for auth frame
+	ShareCode               string `protobuf:"bytes,3,opt,name=share_code,json=shareCode,proto3" json:"share_code,omitempty"`                                              // for auth frame
+	Ready                   bool   `protobuf:"varint,4,opt,name=ready,proto3" json:"ready,omitempty"`                                                                      // for ready command
+	Action                  string `protobuf:"bytes,5,opt,name=action,proto3" json:"action,omitempty"`                                                                     // for act command
+	Amount                  int64  `protobuf:"varint,6,opt,name=amount,proto3" json:"amount,omitempty"`                                                                    // for act command
+	ActionId                string `protobuf:"bytes,7,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`                                                 // for act command
+	Message                 string `protobuf:"bytes,8,opt,name=message,proto3" json:"message,omitempty"`                                                                   // for chat command
+	ExpectedSnapshotVersion uint64 `protobuf:"varint,9,opt,name=expected_snapshot_version,json=expectedSnapshotVersion,proto3" json:"expected_snapshot_version,omitempty"` // optimistic precondition for act
+	ExpectedHandId          string `protobuf:"bytes,10,opt,name=expected_hand_id,json=expectedHandId,proto3" json:"expected_hand_id,omitempty"`                            // prevents a delayed action crossing hands
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *ClientMessage) Reset() {
@@ -867,6 +877,20 @@ func (x *ClientMessage) GetActionId() string {
 func (x *ClientMessage) GetMessage() string {
 	if x != nil {
 		return x.Message
+	}
+	return ""
+}
+
+func (x *ClientMessage) GetExpectedSnapshotVersion() uint64 {
+	if x != nil {
+		return x.ExpectedSnapshotVersion
+	}
+	return 0
+}
+
+func (x *ClientMessage) GetExpectedHandId() string {
+	if x != nil {
+		return x.ExpectedHandId
 	}
 	return ""
 }
@@ -1045,7 +1069,7 @@ const file_poker_proto_rawDesc = "" +
 	"\vpoker.proto\x12\x05poker\".\n" +
 	"\x04Card\x12\x12\n" +
 	"\x04rank\x18\x01 \x01(\tR\x04rank\x12\x12\n" +
-	"\x04suit\x18\x02 \x01(\tR\x04suit\"\xf1\x01\n" +
+	"\x04suit\x18\x02 \x01(\tR\x04suit\"\x9c\x02\n" +
 	"\x04Seat\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
@@ -1055,7 +1079,8 @@ const file_poker_proto_rawDesc = "" +
 	"\n" +
 	"hole_cards\x18\x06 \x03(\tR\tholeCards\x12\x1b\n" +
 	"\x06equity\x18\a \x01(\x01H\x00R\x06equity\x88\x01\x01\x12#\n" +
-	"\rhand_category\x18\b \x01(\tR\fhandCategoryB\t\n" +
+	"\rhand_category\x18\b \x01(\tR\fhandCategory\x12)\n" +
+	"\x10connection_state\x18\t \x01(\tR\x0fconnectionStateB\t\n" +
 	"\a_equity\"n\n" +
 	"\x0fBlindEscalation\x12)\n" +
 	"\x10interval_minutes\x18\x01 \x01(\x05R\x0fintervalMinutes\x12\x1e\n" +
@@ -1136,7 +1161,7 @@ const file_poker_proto_rawDesc = "" +
 	"\ahand_id\x18\x13 \x01(\tR\x06handId\x1a:\n" +
 	"\fPayoutsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xd5\x01\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xbb\x02\n" +
 	"\rClientMessage\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x14\n" +
 	"\x05token\x18\x02 \x01(\tR\x05token\x12\x1d\n" +
@@ -1146,7 +1171,10 @@ const file_poker_proto_rawDesc = "" +
 	"\x06action\x18\x05 \x01(\tR\x06action\x12\x16\n" +
 	"\x06amount\x18\x06 \x01(\x03R\x06amount\x12\x1b\n" +
 	"\taction_id\x18\a \x01(\tR\bactionId\x12\x18\n" +
-	"\amessage\x18\b \x01(\tR\amessage\"\xd8\x03\n" +
+	"\amessage\x18\b \x01(\tR\amessage\x12:\n" +
+	"\x19expected_snapshot_version\x18\t \x01(\x04R\x17expectedSnapshotVersion\x12(\n" +
+	"\x10expected_hand_id\x18\n" +
+	" \x01(\tR\x0eexpectedHandId\"\xd8\x03\n" +
 	"\rServerMessage\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x17\n" +
 	"\aconn_id\x18\x02 \x01(\tR\x06connId\x120\n" +

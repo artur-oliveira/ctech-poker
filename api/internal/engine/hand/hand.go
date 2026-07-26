@@ -48,6 +48,7 @@ const (
 
 type Player struct {
 	ID          string       `dynamodbav:"id"`
+	Name        string       `dynamodbav:"name,omitempty"`
 	Stack       int64        `dynamodbav:"stack"`
 	Ready       bool         `dynamodbav:"ready"`
 	State       PlayerState  `dynamodbav:"state"`
@@ -223,6 +224,18 @@ func (t *Table) ConfigureRake(currencyMode string) {
 // which needs to toggle Ready before a hand starts (StartHand only reads it,
 // nothing in this package previously needed to write it from outside).
 func (t *Table) PlayersForActor() []*Player { return t.players }
+
+// SetPlayerNameForActor persists display identity with the seat so snapshots
+// built by any actor instance carry the same name. It reports whether the
+// value changed, allowing connection setup to avoid a no-op table commit.
+func (t *Table) SetPlayerNameForActor(playerID, name string) bool {
+	p := t.playerByID(playerID)
+	if p == nil || name == "" || p.Name == name {
+		return false
+	}
+	p.Name = name
+	return true
+}
 
 func (t *Table) HoleAndBoardForActor(playerID string) ([2]deck.Card, []deck.Card, bool) {
 	p := t.playerByID(playerID)
@@ -864,7 +877,11 @@ func (t *Table) currentPlayerCanAct(id string) bool {
 // Call, Call vs. Check) was reinterpreted must diff the action it requested
 // against the resulting PlayerState itself — Act does not report it.
 func (t *Table) Act(playerID string, action betting.Action, amount int64) error {
-	if current := t.currentPlayerToAct(); current != "" && current != playerID {
+	current := t.currentPlayerToAct()
+	if current == "" {
+		return fmt.Errorf("hand: no player has a pending action")
+	}
+	if current != playerID {
 		return fmt.Errorf("hand: it is not player %s's turn to act", playerID)
 	}
 	idx, ok := t.roundIdx[playerID]

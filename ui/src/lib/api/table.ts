@@ -3,6 +3,7 @@ import {apiClient} from './client';
 export interface SeatView {
   player_id: string;
   name?: string;
+  connection_state?: 'connected' | 'disconnected';
   stack: number;
   state: string;
   contributed: number;

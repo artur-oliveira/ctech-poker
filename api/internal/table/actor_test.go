@@ -85,6 +85,100 @@ func TestActorRecoversFromVersionConflictAndRetriesOnce(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 }
 
+func TestDuplicateActionReloadsAuthoritativeStateBeforeBroadcast(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+	tableID := uniqueTableID(t)
+	seed := hand.NewTable([]*hand.Player{
+		{ID: "p1", Stack: 1000},
+		{ID: "p2", Stack: 1000},
+	}, 10, 20)
+	if err := store.SeedTable(context.Background(), tableID, seed.ExportState()); err != nil {
+		t.Fatal(err)
+	}
+	broadcastB := make(chan hand.Snapshot, 16)
+	a := New(tableID, store, true, func(string, hand.Snapshot) {})
+	b := New(tableID, store, true, func(_ string, snapshot hand.Snapshot) { broadcastB <- snapshot })
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go a.Run(ctx)
+	go b.Run(ctx)
+
+	if err := a.Dispatch(ReadyCmd{PlayerID: "p1", Ready: true, Reply: make(chan error, 1)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Dispatch(ReadyCmd{PlayerID: "p2", Ready: true, Reply: make(chan error, 1)}); err != nil {
+		t.Fatal(err)
+	}
+	snapCh := make(chan hand.Snapshot, 1)
+	if err := b.Dispatch(SnapshotCmd{PlayerID: "p1", Snapshot: snapCh, Reply: make(chan error, 1)}); err != nil {
+		t.Fatal(err)
+	}
+	stale := <-snapCh
+	current := stale.CurrentPlayerID
+
+	cmd := ActCmd{PlayerID: current, ActionID: "same-action", Action: betting.ActionFold, Reply: make(chan error, 1)}
+	if err := a.Dispatch(cmd); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.Dispatch(cmd); err != nil {
+		t.Fatalf("duplicate must be acknowledged as a successful no-op: %v", err)
+	}
+	stored, err := store.LoadTable(context.Background(), tableID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var last hand.Snapshot
+	for len(broadcastB) > 0 {
+		last = <-broadcastB
+	}
+	if int(last.SnapshotVersion) != stored.Version {
+		t.Fatalf("duplicate broadcast used stale version %d; authoritative=%d", last.SnapshotVersion, stored.Version)
+	}
+	if b.version != stored.Version {
+		t.Fatalf("actor cache stayed stale after duplicate: actor=%d store=%d", b.version, stored.Version)
+	}
+}
+
+func TestSnapshotForcesAuthoritativeReloadAcrossActors(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+	tableID := uniqueTableID(t)
+	seed := hand.NewTable([]*hand.Player{
+		{ID: "p1", Stack: 1000},
+		{ID: "p2", Stack: 1000},
+	}, 10, 20)
+	if err := store.SeedTable(context.Background(), tableID, seed.ExportState()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	a := New(tableID, store, true, nil)
+	b := New(tableID, store, true, nil)
+	go a.Run(ctx)
+	go b.Run(ctx)
+
+	first := make(chan hand.Snapshot, 1)
+	if err := b.Dispatch(SnapshotCmd{PlayerID: "p1", Snapshot: first, Reply: make(chan error, 1)}); err != nil {
+		t.Fatal(err)
+	}
+	before := <-first
+	if err := a.Dispatch(ReadyCmd{PlayerID: "p1", Ready: true, Reply: make(chan error, 1)}); err != nil {
+		t.Fatal(err)
+	}
+
+	second := make(chan hand.Snapshot, 1)
+	if err := b.Dispatch(SnapshotCmd{PlayerID: "p1", Snapshot: second, Reply: make(chan error, 1)}); err != nil {
+		t.Fatal(err)
+	}
+	after := <-second
+	if after.SnapshotVersion <= before.SnapshotVersion {
+		t.Fatalf("snapshot returned stale cache: before=%d after=%d", before.SnapshotVersion, after.SnapshotVersion)
+	}
+}
+
 // TestReadyFalseMarksSittingOutAndReadyTrueReturnsFree seeds a 4-handed table
 // with a fixed dealer (p1) so the projected SB/BB (p2, p3) are deterministic —
 // p4 is neither, so its return from sitting-out must be free and immediate.

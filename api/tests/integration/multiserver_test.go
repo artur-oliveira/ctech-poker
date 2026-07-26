@@ -584,10 +584,10 @@ func TestDisconnectKickRemovesSeatAcrossServers(t *testing.T) {
 	// p2's own server (B) sees the connection open, then die -- server A never
 	// receives either event, exactly like a real client whose WS lands on one
 	// specific instance.
-	if err := actorB.Dispatch(table.ConnectCmd{PlayerID: "p2", Reply: make(chan error, 1)}); err != nil {
+	if err := actorB.Dispatch(table.ConnectCmd{PlayerID: "p2", ConnID: "p2-conn", Reply: make(chan error, 1)}); err != nil {
 		t.Fatalf("connect p2 via B: %v", err)
 	}
-	if err := actorB.Dispatch(table.DisconnectCmd{PlayerID: "p2", Reply: make(chan error, 1)}); err != nil {
+	if err := actorB.Dispatch(table.DisconnectCmd{PlayerID: "p2", ConnID: "p2-conn", Reply: make(chan error, 1)}); err != nil {
 		t.Fatalf("disconnect p2 via B: %v", err)
 	}
 

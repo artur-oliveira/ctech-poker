@@ -70,14 +70,15 @@ type PotView struct {
 }
 
 type SeatView struct {
-	PlayerID     string   `json:"player_id"`
-	Name         string   `json:"name,omitempty"`
-	Stack        int64    `json:"stack"`
-	State        string   `json:"state"`
-	Contributed  int64    `json:"contributed"`
-	HoleCards    []string `json:"hole_cards,omitempty"`
-	Equity       *float64 `json:"equity,omitempty"`
-	HandCategory string   `json:"hand_category,omitempty"`
+	PlayerID        string   `json:"player_id"`
+	Name            string   `json:"name,omitempty"`
+	ConnectionState string   `json:"connection_state,omitempty"`
+	Stack           int64    `json:"stack"`
+	State           string   `json:"state"`
+	Contributed     int64    `json:"contributed"`
+	HoleCards       []string `json:"hole_cards,omitempty"`
+	Equity          *float64 `json:"equity,omitempty"`
+	HandCategory    string   `json:"hand_category,omitempty"`
 }
 
 var stageNames = map[Stage]string{
@@ -147,6 +148,7 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 	for _, p := range t.players {
 		sv := SeatView{
 			PlayerID:    p.ID,
+			Name:        p.Name,
 			Stack:       p.Stack,
 			State:       playerStateNames[p.State],
 			Contributed: p.Contributed,

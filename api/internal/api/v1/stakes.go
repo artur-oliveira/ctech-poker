@@ -30,22 +30,22 @@ var realPublicStakes = []publicStake{
 	{SmallBlind: 5000, BigBlind: 10000, FeeCents: 800},
 }
 
-// sandboxPublicStakes mirrors realPublicStakes' blind pairs (sandbox chips
-// happen to use the same denominations) plus three sandbox-only high tiers,
-// but never carries a real-money fee — sandbox tables fund themselves via
-// rake instead (hand.Table.ConfigureRake).
-var sandboxPublicStakes = buildSandboxStakes()
-
-func buildSandboxStakes() []publicStake {
-	stakes := make([]publicStake, len(realPublicStakes))
-	for i, s := range realPublicStakes {
-		stakes[i] = publicStake{SmallBlind: s.SmallBlind, BigBlind: s.BigBlind}
-	}
-	return append(stakes,
-		publicStake{SmallBlind: 10000, BigBlind: 25000},
-		publicStake{SmallBlind: 25000, BigBlind: 50000},
-		publicStake{SmallBlind: 50000, BigBlind: 100000},
-	)
+var sandboxPublicStakes = []publicStake{
+	{SmallBlind: 10, BigBlind: 20},
+	{SmallBlind: 25, BigBlind: 50},
+	{SmallBlind: 50, BigBlind: 100},
+	// Low — R$2,00 fee
+	{SmallBlind: 100, BigBlind: 200},
+	{SmallBlind: 200, BigBlind: 500},
+	// Mid — R$4,00 fee
+	{SmallBlind: 500, BigBlind: 1000},
+	{SmallBlind: 1000, BigBlind: 2000},
+	// High — R$8,00 fee
+	{SmallBlind: 2500, BigBlind: 5000},
+	{SmallBlind: 5000, BigBlind: 10000},
+	{SmallBlind: 10000, BigBlind: 25000},
+	{SmallBlind: 25000, BigBlind: 50000},
+	{SmallBlind: 50000, BigBlind: 100000},
 }
 
 func isAllowedPublicStake(mode string, smallBlind, bigBlind int64) bool {

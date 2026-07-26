@@ -200,8 +200,11 @@ func TestCreateRoomRejectsPrivateRealMoneyRoomOffCatalog(t *testing.T) {
 }
 
 func TestPublicSandboxStakesAreCurated(t *testing.T) {
-	if !isAllowedPublicStake("sandbox", 5, 10) || !isAllowedPublicStake("sandbox", 50000, 100000) {
+	if !isAllowedPublicStake("sandbox", 10, 20) || !isAllowedPublicStake("sandbox", 50000, 100000) {
 		t.Fatal("expected the lowest and highest sandbox stakes to be allowed")
+	}
+	if isAllowedPublicStake("sandbox", 5, 10) {
+		t.Fatal("removed 5/10 sandbox stake was still accepted")
 	}
 	if isAllowedPublicStake("sandbox", 7, 14) {
 		t.Fatal("uncurated public stake was accepted")

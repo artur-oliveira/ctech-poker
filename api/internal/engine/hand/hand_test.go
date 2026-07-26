@@ -1279,3 +1279,13 @@ func TestWaitingForPlayersFallbackClearsBoardAndShuffle(t *testing.T) {
 		t.Fatalf("stale shuffle_commit_hash leaked into a waiting_for_players snapshot: %q", snap.ShuffleCommitHash)
 	}
 }
+
+func TestActRejectsWhenNoPlayerHasPendingDecision(t *testing.T) {
+	table := NewTable([]*Player{
+		{ID: "p1", Stack: 1000},
+		{ID: "p2", Stack: 1000},
+	}, 10, 20)
+	if err := table.Act("p1", betting.ActionCheck, 0); err == nil {
+		t.Fatal("waiting table must reject an action when current_player_id is empty")
+	}
+}

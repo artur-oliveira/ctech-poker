@@ -20,11 +20,13 @@ type ReadyCmd struct {
 func (c ReadyCmd) reply() chan error { return c.Reply }
 
 type ActCmd struct {
-	PlayerID string
-	ActionID string
-	Action   betting.Action
-	Amount   int64
-	Reply    chan error
+	PlayerID                string
+	ActionID                string
+	ExpectedSnapshotVersion uint64
+	ExpectedHandID          string
+	Action                  betting.Action
+	Amount                  int64
+	Reply                   chan error
 }
 
 func (c ActCmd) reply() chan error { return c.Reply }
@@ -36,6 +38,7 @@ func (c ActCmd) reply() chan error { return c.Reply }
 // fires on every inbound frame and cannot be used for counting.
 type ConnectCmd struct {
 	PlayerID string
+	ConnID   string
 	Reply    chan error
 }
 
@@ -43,6 +46,7 @@ func (c ConnectCmd) reply() chan error { return c.Reply }
 
 type DisconnectCmd struct {
 	PlayerID string
+	ConnID   string
 	Reply    chan error
 }
 

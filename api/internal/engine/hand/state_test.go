@@ -7,7 +7,7 @@ import (
 )
 
 func TestExportImportRoundTripsFullState(t *testing.T) {
-	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p1 := &Player{ID: "p1", Name: "Ana", Stack: 1000, Ready: true}
 	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
 	original := NewTable([]*Player{p1, p2}, 10, 20)
 	original.dealerDrawn = true
@@ -32,6 +32,9 @@ func TestExportImportRoundTripsFullState(t *testing.T) {
 	}
 	if len(originalView.Board) != len(rebuiltView.Board) {
 		t.Fatalf("board length mismatch: original=%d rebuilt=%d", len(originalView.Board), len(rebuiltView.Board))
+	}
+	if rebuiltView.Seats[0].Name != "Ana" {
+		t.Fatalf("persisted player name lost across recovery: %+v", rebuiltView.Seats[0])
 	}
 
 	nextToAct := rebuilt.playerToActForTest()

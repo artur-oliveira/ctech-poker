@@ -453,7 +453,14 @@ const baseSeats = () => [
     contributed: 75,
     hole_cards: ['back', 'back']
   },
-  {player_id: 'mari_belém', name: 'Mari', stack: 8200, state: 'disconnected', contributed: 0},
+  {
+    player_id: 'mari_belém',
+    name: 'Mari',
+    stack: 8200,
+    state: 'active',
+    connection_state: 'disconnected' as const,
+    contributed: 0
+  },
   {
     player_id: 'caio_goiânia',
     name: 'Caio',
@@ -879,6 +886,10 @@ export class MockTableService {
     if (this.status !== 'connected') return false;
     if (value.type === 'ping') {
       this.later(() => this.emitState());
+      return true;
+    }
+    if (value.type === 'sync_state') {
+      this.later(() => this.emitState(String(value.action_id || '')));
       return true;
     }
     if (value.type === 'ready' || value.type === 'post_big_blind' || value.type === 'show_cards') {
@@ -1324,14 +1335,18 @@ export class MockTableService {
     return (hash >>> 0) / 4294967296;
   }
 
-  private emitState() {
+  private emitState(actionId?: string) {
     const stage = this.snapshot.stage;
     const handInProgress = stage !== 'waiting_for_players' && stage !== 'complete';
     const viewer = this.snapshot.seats.find(s => s.player_id === MOCK_PLAYER_ID);
     mockPlayerDealtIn = handInProgress && (viewer?.state === 'active' || viewer?.state === 'all_in');
     this.snapshotVersion += 1;
-    this.snapshot = {...this.snapshot, snapshot_version: this.snapshotVersion};
-    this.handlers.onMessage({type: 'state', snapshot: this.snapshot});
+    this.snapshot = {
+      ...this.snapshot,
+      snapshot_version: this.snapshotVersion,
+      hand_id: this.snapshot.hand_id || (stage === 'waiting_for_players' ? undefined : `mock-${this.scenario}-hand`)
+    };
+    this.handlers.onMessage({type: 'state', snapshot: this.snapshot, action_id: actionId});
   }
 }
 

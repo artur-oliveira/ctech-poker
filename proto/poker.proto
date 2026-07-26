@@ -19,6 +19,7 @@ message Seat {
   repeated string hole_cards = 6;
   optional double equity = 7;
   string hand_category = 8;
+  string connection_state = 9; // connected | disconnected
 }
 
 message BlindEscalation {
@@ -92,7 +93,7 @@ message TableSnapshot {
 
 // ClientMessage is sent from the client to the server.
 message ClientMessage {
-  string type = 1; // "auth" | "ping" | "ready" | "act" | "post_big_blind" | "show_cards" | "chat"
+  string type = 1; // "auth" | "ping" | "sync_state" | "ready" | "act" | "post_big_blind" | "show_cards" | "chat"
   
   // payload fields
   string token = 2; // for auth frame
@@ -102,6 +103,8 @@ message ClientMessage {
   int64 amount = 6; // for act command
   string action_id = 7; // for act command
   string message = 8; // for chat command
+  uint64 expected_snapshot_version = 9; // optimistic precondition for act
+  string expected_hand_id = 10; // prevents a delayed action crossing hands
 }
 
 // ServerMessage is sent from the server to the client.

@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -43,15 +44,10 @@ type Actor struct {
 	disconnectGrace              time.Duration
 	disconnectedSince            map[string]time.Time
 	consecutiveDisconnectedHands map[string]int
-	// activeConns counts live WS connections per playerID (a player can have
-	// more than one open, e.g. two browser tabs). handleDisconnect only marks
-	// a player disconnected once this hits zero, and handleConnect/
-	// handleReconnect always clear that mark — so one tab dying while another
-	// stays open never falsely flags the player as gone, and a disconnect
-	// event racing a reconnect event from a different connection's goroutine
-	// can never leave a live player stuck marked disconnected (the counter is
-	// commutative regardless of which event the Run loop processes first).
-	activeConns map[string]int
+	// activeConns tracks physical connection IDs, not just a count. Connect
+	// and Disconnect are therefore idempotent when a live WS is re-registered
+	// after actor replacement, and one tab closing cannot disconnect another.
+	activeConns map[string]map[string]struct{}
 	// kickGrace bounds how long a disconnected player can occupy a seat
 	// before being auto-removed (Leave, cashing them out same as a manual
 	// exit). kickTimers holds one AfterFunc per currently-disconnected
@@ -59,7 +55,6 @@ type Actor struct {
 	// one per seat.
 	kickGrace            time.Duration
 	kickTimers           map[string]*time.Timer
-	playerNames          map[string]string
 	turnTimer            *time.Timer
 	turnDeadline         time.Time
 	turnDeadlineFor      string
@@ -120,10 +115,9 @@ func New(id string, store *tablestore.Store, trustCache bool, broadcast func(str
 		disconnectGrace:              45 * time.Second,
 		disconnectedSince:            make(map[string]time.Time),
 		consecutiveDisconnectedHands: make(map[string]int),
-		activeConns:                  make(map[string]int),
+		activeConns:                  make(map[string]map[string]struct{}),
 		kickGrace:                    5 * time.Minute,
 		kickTimers:                   make(map[string]*time.Timer),
-		playerNames:                  make(map[string]string),
 		afkSweepInterval:             AFKSweepInterval,
 	}
 	a.equityEnabled.Store(true)
@@ -205,7 +199,7 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 	case SnapshotCmd:
 		return a.handleSnapshot(ctx, c)
 	case SetNameCmd:
-		return a.handleSetName(c)
+		return a.handleSetName(ctx, c)
 	case turnTimeoutCmd:
 		return a.handleTurnTimeout(ctx, c)
 	case nextHandCmd:
@@ -249,24 +243,40 @@ func (a *Actor) handlePostBigBlind(ctx context.Context, c PostBigBlindCmd) error
 // viewer-specific snapshot. Built inside Run so it never races broadcastAll's
 // concurrent ViewFor calls over a.cached.
 func (a *Actor) handleSnapshot(ctx context.Context, c SnapshotCmd) error {
-	if err := a.ensureLoaded(ctx, false); err != nil {
+	// A snapshot is an explicit synchronization boundary. Always read the
+	// authoritative item: another fleet actor is allowed to commit without
+	// owning this actor's cache-affinity lease.
+	if err := a.ensureLoaded(ctx, true); err != nil {
 		return err
 	}
 	snapshot := a.cached.ViewFor(c.PlayerID)
 	snapshot.SnapshotVersion = uint64(a.version)
 	snapshot.HandID = a.handID
+	a.applyPresence(snapshot.Seats)
 	c.Snapshot <- snapshot
 	return nil
 }
 
-// handleSetName caches the persisted display name the WS gateway looked up at
-// connect time. It never touches tablestore — the name is process-local
-// broadcast metadata, not authoritative table state.
-func (a *Actor) handleSetName(c SetNameCmd) error {
+// handleSetName persists display identity with the seat so every actor in the
+// fleet produces the same snapshot. A no-op name does not bump table version.
+func (a *Actor) handleSetName(ctx context.Context, c SetNameCmd) error {
 	if c.Name == "" {
 		return nil
 	}
-	a.playerNames[c.PlayerID] = c.Name
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	apply := func() error {
+		if !a.cached.SetPlayerNameForActor(c.PlayerID, c.Name) {
+			return nil
+		}
+		return a.commit(ctx, "", &tablestore.ActionLogEntry{
+			PlayerID: c.PlayerID, Action: "set_name",
+		})
+	}
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		return err
+	}
 	a.broadcastAll()
 	return nil
 }
@@ -422,6 +432,9 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
+	if err := a.validateActionPrecondition(ctx, c); err != nil {
+		return err
+	}
 	a.markLastAction(c.PlayerID)
 	start := timeNowFunc()
 	_, err := a.applyActAndCommit(ctx, c)
@@ -450,6 +463,13 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 			_, err = a.applyActAndCommit(ctx, c)
 		}
 	}
+	if errors.Is(err, tablestore.ErrDuplicateAction) {
+		// The guard proves another commit already won. Discard the speculative
+		// local mutation before outcome logging or broadcasting.
+		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+			return reloadErr
+		}
+	}
 	if err != nil && !errors.Is(err, tablestore.ErrDuplicateAction) {
 		return err
 	}
@@ -461,6 +481,26 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 	return nil
 }
 
+func (a *Actor) validateActionPrecondition(ctx context.Context, c ActCmd) error {
+	// Internal/system commands and older direct unit tests omit preconditions.
+	// The WebSocket boundary requires both for every user-originated act.
+	if c.ExpectedSnapshotVersion == 0 && c.ExpectedHandID == "" {
+		return nil
+	}
+	if c.ExpectedSnapshotVersion == 0 || c.ExpectedHandID == "" {
+		return fmt.Errorf("table: incomplete action precondition")
+	}
+	if uint64(a.version) != c.ExpectedSnapshotVersion || a.handID != c.ExpectedHandID {
+		if err := a.ensureLoaded(ctx, true); err != nil {
+			return err
+		}
+	}
+	if uint64(a.version) != c.ExpectedSnapshotVersion || a.handID != c.ExpectedHandID {
+		return fmt.Errorf("table: stale action state")
+	}
+	return nil
+}
+
 func (a *Actor) notifyHandComplete() {
 	if a.cached == nil || a.cached.Stage() != hand.Complete || a.handID == "" || a.completedHandNotified == a.handID {
 		return
@@ -469,16 +509,21 @@ func (a *Actor) notifyHandComplete() {
 		a.completedHandNotified = a.handID
 		metrics.EmitTableMetric(a.env, "HandsCompleted", 1, map[string]string{"table_id": a.id})
 		if a.onHandComplete != nil {
-			a.onHandComplete(a.handID, *outcome, a.playerNames)
+			names := make(map[string]string)
+			for _, p := range a.cached.PlayersForActor() {
+				if p.Name != "" {
+					names[p.ID] = p.Name
+				}
+			}
+			a.onHandComplete(a.handID, *outcome, names)
 		}
 	}
 }
 
 // SetOnHandCompleteForActor installs the post-commit gamification hook.
 // The actor invokes it at most once per local hand ID. The map param is the
-// actor's own playerNames cache (player_id -> display name), already
-// populated at join from the canonical profile — handed along so downstream
-// writers (e.g. the leaderboard) can denormalize a name without a fresh read.
+// persisted seat-name map (player_id -> display name), handed along so
+// downstream writers can denormalize a name without a fresh profile read.
 func (a *Actor) SetOnHandCompleteForActor(fn func(string, hand.HandOutcome, map[string]string)) {
 	a.onHandComplete = fn
 }
@@ -647,16 +692,34 @@ func (a *Actor) SetEnv(env string) { a.env = env }
 // the LAST connection to close (handleDisconnect dropping the count to 0)
 // ever marks the player disconnected.
 func (a *Actor) handleConnect(c ConnectCmd) error {
-	a.activeConns[c.PlayerID]++
-	a.clearDisconnectMark(c.PlayerID)
+	if c.ConnID == "" {
+		return errors.New("table: conn_id is required")
+	}
+	if a.activeConns[c.PlayerID] == nil {
+		a.activeConns[c.PlayerID] = make(map[string]struct{})
+	}
+	a.activeConns[c.PlayerID][c.ConnID] = struct{}{}
+	if a.clearDisconnectMark(c.PlayerID) {
+		a.broadcastAll()
+	}
 	return nil
 }
 
 func (a *Actor) handleDisconnect(c DisconnectCmd) error {
-	if a.activeConns[c.PlayerID] > 0 {
-		a.activeConns[c.PlayerID]--
+	if conns := a.activeConns[c.PlayerID]; conns != nil {
+		if c.ConnID != "" {
+			if _, registered := conns[c.ConnID]; !registered {
+				return nil
+			}
+		}
+		delete(conns, c.ConnID)
+		if len(conns) == 0 {
+			delete(a.activeConns, c.PlayerID)
+		}
+	} else if c.ConnID != "" {
+		return nil
 	}
-	if a.activeConns[c.PlayerID] > 0 {
+	if len(a.activeConns[c.PlayerID]) > 0 {
 		return nil // another connection (another tab) for this player is still live
 	}
 	metrics.EmitTableMetric(a.env, "Disconnects", 1, map[string]string{"table_id": a.id})
@@ -1208,7 +1271,7 @@ func (a *Actor) broadcastAll() {
 		if stage == hand.Complete && a.handID == a.nextHandArmedFor {
 			snapshot.NextHandUnixMs = a.nextHandDeadline.UnixMilli()
 		}
-		a.applyPlayerNames(snapshot.Seats)
+		a.applyPresence(snapshot.Seats)
 		if doEquity {
 			if hole, board, ok := a.cached.HoleAndBoardForActor(p.ID); ok {
 				opponents := 0
@@ -1230,13 +1293,14 @@ func (a *Actor) broadcastAll() {
 	a.notifyHandComplete()
 }
 
-// applyPlayerNames fills in each seat's cached display name in place. Safe to
-// mutate directly: seats is a freshly built slice from this ViewFor call,
-// not yet shared with any other goroutine (unlike the equity copy below).
-func (a *Actor) applyPlayerNames(seats []hand.SeatView) {
+// applyPresence keeps transport presence separate from poker state: a folded
+// or all-in player can simultaneously be disconnected without losing either
+// piece of information.
+func (a *Actor) applyPresence(seats []hand.SeatView) {
 	for i := range seats {
-		if name, ok := a.playerNames[seats[i].PlayerID]; ok {
-			seats[i].Name = name
+		seats[i].ConnectionState = "connected"
+		if _, disconnected := a.disconnectedSince[seats[i].PlayerID]; disconnected {
+			seats[i].ConnectionState = "disconnected"
 		}
 	}
 }

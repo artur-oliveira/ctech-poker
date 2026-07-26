@@ -35,16 +35,6 @@ const (
 	wsWriteWait    = 5 * time.Second
 )
 
-// clientMessage is every shape a connected player can send once authenticated.
-type clientMessage struct {
-	Type     string `json:"type"` // "ready" | "act" | "post_big_blind" | "show_cards" | "chat" | "ping"
-	Ready    bool   `json:"ready,omitempty"`
-	Action   string `json:"action,omitempty"`
-	Amount   int64  `json:"amount,omitempty"`
-	ActionID string `json:"action_id,omitempty"`
-	Message  string `json:"message,omitempty"`
-}
-
 var tableChatFilter = chatfilter.New([]string{"idiota", "burro"})
 
 // readAuthToken reads the first WebSocket frame after the upgrade and
@@ -110,6 +100,65 @@ type seatLimiter struct {
 	resetAt   map[string]time.Time
 }
 
+// tableConnectionTracker is process-local transport truth, independent of a
+// table Actor's lifetime. When an actor is replaced after lease loss, every
+// still-open connection on this instance is replayed into the new actor
+// before the interrupted command is retried.
+type tableConnectionTracker struct {
+	mu    sync.Mutex
+	conns map[string]map[string]map[string]struct{} // table -> player -> connID
+}
+
+type trackedTableConnection struct {
+	playerID string
+	connID   string
+}
+
+func newTableConnectionTracker() *tableConnectionTracker {
+	return &tableConnectionTracker{conns: make(map[string]map[string]map[string]struct{})}
+}
+
+func (t *tableConnectionTracker) add(tableID, playerID, connID string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.conns[tableID] == nil {
+		t.conns[tableID] = make(map[string]map[string]struct{})
+	}
+	if t.conns[tableID][playerID] == nil {
+		t.conns[tableID][playerID] = make(map[string]struct{})
+	}
+	t.conns[tableID][playerID][connID] = struct{}{}
+}
+
+func (t *tableConnectionTracker) remove(tableID, playerID, connID string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	players := t.conns[tableID]
+	if players == nil {
+		return
+	}
+	delete(players[playerID], connID)
+	if len(players[playerID]) == 0 {
+		delete(players, playerID)
+	}
+	if len(players) == 0 {
+		delete(t.conns, tableID)
+	}
+}
+
+func (t *tableConnectionTracker) listTable(tableID string) []trackedTableConnection {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	players := t.conns[tableID]
+	out := make([]trackedTableConnection, 0)
+	for playerID, conns := range players {
+		for connID := range conns {
+			out = append(out, trackedTableConnection{playerID: playerID, connID: connID})
+		}
+	}
+	return out
+}
+
 func newSeatLimiter(perSecond int) *seatLimiter {
 	return &seatLimiter{perWindow: perSecond, window: time.Second, counts: make(map[string]int), resetAt: make(map[string]time.Time)}
 }
@@ -147,6 +196,7 @@ func RegisterTableWS(
 	cfg *config.Config,
 	players *player.Service,
 ) {
+	connectionTracker := newTableConnectionTracker()
 	upgrader := fws.FastHTTPUpgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -227,6 +277,8 @@ func RegisterTableWS(
 			if room != nil {
 				actor.SetEquityEnabledForActor(room.EquityDisplayEnabled)
 			}
+			connID := uuid.NewString()
+			connectionRegistered := false
 
 			// dispatch sends a command to the table actor, re-resolving a live
 			// actor if the current one has stopped (it lost its lease). Guards
@@ -242,6 +294,19 @@ func RegisterTableWS(
 						return rerr
 					}
 					actor = fresh
+					if room != nil {
+						actor.SetEquityEnabledForActor(room.EquityDisplayEnabled)
+					}
+					if connectionRegistered {
+						for _, live := range connectionTracker.listTable(tableID) {
+							connectReply := make(chan error, 1)
+							if rerr := actor.Dispatch(table.ConnectCmd{
+								PlayerID: live.playerID, ConnID: live.connID, Reply: connectReply,
+							}); rerr != nil {
+								return rerr
+							}
+						}
+					}
 				}
 				return actor.Dispatch(cmd)
 			}
@@ -258,18 +323,25 @@ func RegisterTableWS(
 			}
 
 			connKey := tableID + "#" + playerID
-			connID := uuid.NewString()
 			reg.Register(connKey, connID, safeConn)
 			defer reg.Unregister(connKey, connID)
+			connectionTracker.add(tableID, playerID, connID)
+			defer connectionTracker.remove(tableID, playerID, connID)
 			chatConnID := connID + "-chat"
 			reg.Register(tableID+"#chat", chatConnID, safeConn)
 			defer reg.Unregister(tableID+"#chat", chatConnID)
 
 			connectReply := make(chan error, 1)
-			_ = dispatch(table.ConnectCmd{PlayerID: playerID, Reply: connectReply})
+			if err := dispatch(table.ConnectCmd{PlayerID: playerID, ConnID: connID, Reply: connectReply}); err != nil {
+				send(&pokerproto.ServerMessage{Type: "error", Code: "unavailable"})
+				_ = conn.Close()
+				return
+			}
+			connectionRegistered = true
 			defer func() {
 				disconnectReply := make(chan error, 1)
-				_ = dispatch(table.DisconnectCmd{PlayerID: playerID, Reply: disconnectReply})
+				_ = dispatch(table.DisconnectCmd{PlayerID: playerID, ConnID: connID, Reply: disconnectReply})
+				connectionRegistered = false
 			}()
 
 			send(&pokerproto.ServerMessage{Type: "connected", ConnId: connID})
@@ -281,13 +353,18 @@ func RegisterTableWS(
 			// client stuck on the loading screen). Sent directly to this conn,
 			// not via the fan-out registry, so it reaches the viewer even when
 			// they are not yet seated (spectator / pre-join).
-			snapCh := make(chan hand.Snapshot, 1)
-			snapReply := make(chan error, 1)
-			if err := dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: snapReply}); err == nil {
-				if snap, ok := <-snapCh; ok {
-					send(&pokerproto.ServerMessage{Type: "state", Snapshot: ConvertSnapshot(snap)})
+			sendSnapshot := func(actionID string) {
+				snapCh := make(chan hand.Snapshot, 1)
+				snapReply := make(chan error, 1)
+				if err := dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: snapReply}); err == nil {
+					if snap, ok := <-snapCh; ok {
+						send(&pokerproto.ServerMessage{
+							Type: "state", Snapshot: ConvertSnapshot(snap), ActionId: actionID,
+						})
+					}
 				}
 			}
+			sendSnapshot("")
 
 			limiter := newSeatLimiter(10) // 10 actions/sec/seat — generous for a human, tight for a script
 			done := make(chan struct{})
@@ -305,7 +382,7 @@ func RegisterTableWS(
 				if err := goproto.Unmarshal(msg, &m); err != nil {
 					continue
 				}
-				if (m.Type == "act" || m.Type == "chat") && !limiter.Allow(playerID) {
+				if (m.Type == "act" || m.Type == "chat" || m.Type == "sync_state") && !limiter.Allow(playerID) {
 					send(&pokerproto.ServerMessage{Type: "error", Code: "rate_limited", ActionId: m.ActionId})
 					continue
 				}
@@ -315,6 +392,17 @@ func RegisterTableWS(
 					}
 					send(&pokerproto.ServerMessage{
 						Type: "error", Code: "missing_action_id", Message: "action_id is required",
+					})
+					return false
+				}
+				requireActionPrecondition := func() bool {
+					if m.ExpectedSnapshotVersion > 0 && strings.TrimSpace(m.ExpectedHandId) != "" {
+						return true
+					}
+					send(&pokerproto.ServerMessage{
+						Type: "error", Code: "missing_precondition",
+						Message:  "expected_snapshot_version and expected_hand_id are required",
+						ActionId: m.ActionId,
 					})
 					return false
 				}
@@ -332,6 +420,8 @@ func RegisterTableWS(
 				switch m.Type {
 				case "ping":
 					send(&pokerproto.ServerMessage{Type: "pong"})
+				case "sync_state":
+					sendSnapshot(m.ActionId)
 				case "ready":
 					ensureActionID()
 					r := make(chan error, 1)
@@ -341,12 +431,21 @@ func RegisterTableWS(
 						ack()
 					}
 				case "act":
-					if !requireActionID() {
+					if !requireActionID() || !requireActionPrecondition() {
 						continue
 					}
 					r := make(chan error, 1)
-					if err := dispatch(table.ActCmd{PlayerID: playerID, ActionID: m.ActionId, Action: betting.Action(m.Action), Amount: m.Amount, Reply: r}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+					if err := dispatch(table.ActCmd{
+						PlayerID: playerID, ActionID: m.ActionId,
+						ExpectedSnapshotVersion: m.ExpectedSnapshotVersion,
+						ExpectedHandID:          m.ExpectedHandId,
+						Action:                  betting.Action(m.Action), Amount: m.Amount, Reply: r,
+					}); err != nil {
+						code := "invalid_action"
+						if strings.Contains(err.Error(), "stale action state") {
+							code = "stale_state"
+						}
+						send(&pokerproto.ServerMessage{Type: "error", Code: code, Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()
 					}
@@ -510,14 +609,15 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 			equity = new(*s.Equity)
 		}
 		protoSeats[i] = &pokerproto.Seat{
-			PlayerId:     s.PlayerID,
-			Name:         s.Name,
-			Stack:        s.Stack,
-			State:        s.State,
-			Contributed:  s.Contributed,
-			HoleCards:    s.HoleCards,
-			Equity:       equity,
-			HandCategory: s.HandCategory,
+			PlayerId:        s.PlayerID,
+			Name:            s.Name,
+			ConnectionState: s.ConnectionState,
+			Stack:           s.Stack,
+			State:           s.State,
+			Contributed:     s.Contributed,
+			HoleCards:       s.HoleCards,
+			Equity:          equity,
+			HandCategory:    s.HandCategory,
 		}
 	}
 
