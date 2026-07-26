@@ -33,6 +33,52 @@ func TestViewForHidesOtherHoleCards(t *testing.T) {
 	}
 }
 
+func TestLegalRaisePresetsAreAuthoritativeAndBounded(t *testing.T) {
+	table := NewTable([]*Player{
+		{ID: "p1", Stack: 1000, Ready: true},
+		{ID: "p2", Stack: 1000, Ready: true},
+		{ID: "p3", Stack: 1000, Ready: true},
+	}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatal(err)
+	}
+	current := table.currentPlayerToAct()
+	legal := table.ViewFor(current).LegalActions
+	if legal == nil || legal.MaxRaiseTo == 0 {
+		t.Fatal("current player must receive server-authored raise limits")
+	}
+	values := []int64{
+		legal.OneThirdPotRaiseTo, legal.HalfPotRaiseTo,
+		legal.TwoThirdsPotRaiseTo, legal.PotRaiseTo,
+	}
+	for i, value := range values {
+		if value < legal.MinRaiseTo || value > legal.MaxRaiseTo {
+			t.Fatalf("preset %d=%d outside [%d,%d]", i, value, legal.MinRaiseTo, legal.MaxRaiseTo)
+		}
+		if i > 0 && value < values[i-1] {
+			t.Fatalf("presets must be monotonic, got %v", values)
+		}
+	}
+	if legal.Step != 20 {
+		t.Fatalf("raise step should use the 20-chip big blind, got %d", legal.Step)
+	}
+}
+
+func TestOddChipStartsLeftOfDealer(t *testing.T) {
+	players := []*Player{{ID: "dealer"}, {ID: "left"}, {ID: "right"}}
+	table := NewTable(players, 10, 20)
+	table.handOrder = players
+	table.dealerSeat = 0
+
+	if got := table.oddChipWinner([]string{"dealer", "left"}); got != "left" {
+		t.Fatalf("odd chip winner = %s, want player left of dealer", got)
+	}
+	table.dealerSeat = 1
+	if got := table.oddChipWinner([]string{"dealer", "right"}); got != "right" {
+		t.Fatalf("odd chip winner after button move = %s, want right", got)
+	}
+}
+
 func TestViewForHidesMidHandJoinerZeroValueCards(t *testing.T) {
 	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
 	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}

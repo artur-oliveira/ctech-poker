@@ -306,29 +306,65 @@ func RegisterTableWS(
 					continue
 				}
 				if (m.Type == "act" || m.Type == "chat") && !limiter.Allow(playerID) {
-					send(&pokerproto.ServerMessage{Type: "error", Code: "rate_limited"})
+					send(&pokerproto.ServerMessage{Type: "error", Code: "rate_limited", ActionId: m.ActionId})
 					continue
+				}
+				requireActionID := func() bool {
+					if strings.TrimSpace(m.ActionId) != "" {
+						return true
+					}
+					send(&pokerproto.ServerMessage{
+						Type: "error", Code: "missing_action_id", Message: "action_id is required",
+					})
+					return false
+				}
+				ensureActionID := func() {
+					if strings.TrimSpace(m.ActionId) == "" {
+						// Ready/show/post were historically sent without an ID.
+						// Generate one during the rolling-deploy window; new
+						// clients always provide their own correlation ID.
+						m.ActionId = uuid.NewString()
+					}
+				}
+				ack := func() {
+					send(&pokerproto.ServerMessage{Type: "action_ack", ActionId: m.ActionId})
 				}
 				switch m.Type {
 				case "ping":
 					send(&pokerproto.ServerMessage{Type: "pong"})
 				case "ready":
+					ensureActionID()
 					r := make(chan error, 1)
-					_ = dispatch(table.ReadyCmd{PlayerID: playerID, Ready: m.Ready, Reply: r})
+					if err := dispatch(table.ReadyCmd{PlayerID: playerID, ActionID: m.ActionId, Ready: m.Ready, Reply: r}); err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+					} else {
+						ack()
+					}
 				case "act":
+					if !requireActionID() {
+						continue
+					}
 					r := make(chan error, 1)
 					if err := dispatch(table.ActCmd{PlayerID: playerID, ActionID: m.ActionId, Action: betting.Action(m.Action), Amount: m.Amount, Reply: r}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error()})
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+					} else {
+						ack()
 					}
 				case "post_big_blind":
+					ensureActionID()
 					r := make(chan error, 1)
-					if err := dispatch(table.PostBigBlindCmd{PlayerID: playerID, Reply: r}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_post", Message: err.Error()})
+					if err := dispatch(table.PostBigBlindCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_post", Message: err.Error(), ActionId: m.ActionId})
+					} else {
+						ack()
 					}
 				case "show_cards":
+					ensureActionID()
 					r := make(chan error, 1)
-					if err := dispatch(table.ShowCardsCmd{PlayerID: playerID, Reply: r}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error()})
+					if err := dispatch(table.ShowCardsCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+					} else {
+						ack()
 					}
 				case "chat":
 					message := strings.TrimSpace(m.Message)
@@ -488,11 +524,24 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 	var protoLA *pokerproto.LegalActions
 	if snap.LegalActions != nil {
 		protoLA = &pokerproto.LegalActions{
-			Actions:    snap.LegalActions.Actions,
-			CallAmount: snap.LegalActions.CallAmount,
-			MinRaiseTo: snap.LegalActions.MinRaiseTo,
-			MaxRaiseTo: snap.LegalActions.MaxRaiseTo,
-			Step:       snap.LegalActions.Step,
+			Actions:             snap.LegalActions.Actions,
+			CallAmount:          snap.LegalActions.CallAmount,
+			MinRaiseTo:          snap.LegalActions.MinRaiseTo,
+			MaxRaiseTo:          snap.LegalActions.MaxRaiseTo,
+			Step:                snap.LegalActions.Step,
+			CurrentContribution: snap.LegalActions.CurrentContribution,
+			CurrentBet:          snap.LegalActions.CurrentBet,
+			OneThirdPotRaiseTo:  snap.LegalActions.OneThirdPotRaiseTo,
+			HalfPotRaiseTo:      snap.LegalActions.HalfPotRaiseTo,
+			TwoThirdsPotRaiseTo: snap.LegalActions.TwoThirdsPotRaiseTo,
+			PotRaiseTo:          snap.LegalActions.PotRaiseTo,
+		}
+	}
+	protoPots := make([]*pokerproto.Pot, len(snap.Pots))
+	for i, pot := range snap.Pots {
+		protoPots[i] = &pokerproto.Pot{
+			Amount:            pot.Amount,
+			EligiblePlayerIds: pot.EligiblePlayerIDs,
 		}
 	}
 
@@ -513,6 +562,9 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		SmallBlindPlayerId:   snap.SmallBlindPlayerID,
 		BigBlindPlayerId:     snap.BigBlindPlayerID,
 		DealerPlayerId:       snap.DealerPlayerID,
+		SnapshotVersion:      snap.SnapshotVersion,
+		Pots:                 protoPots,
+		HandId:               snap.HandID,
 	}
 }
 

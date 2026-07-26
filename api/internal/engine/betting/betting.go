@@ -90,15 +90,27 @@ func (r *Round) Act(playerIdx int, action Action, amount int64) error {
 		if amount <= r.CurrentBet {
 			return fmt.Errorf("betting: raise amount %d must exceed current bet %d", amount, r.CurrentBet)
 		}
-		raiseSize := amount - r.CurrentBet
 		delta := amount - p.Contributed
+		if delta <= 0 {
+			return fmt.Errorf("betting: raise amount %d must exceed player contribution %d", amount, p.Contributed)
+		}
 		goingAllIn := delta >= p.Stack
+		if goingAllIn {
+			delta = p.Stack
+			amount = p.Contributed + delta
+		}
+		// Validate and classify the raise from the amount the player can
+		// actually put in, never the untrusted target supplied by the client.
+		// Otherwise amount=1_000_000 with a 150-chip stack turns a +50 short
+		// all-in into a fabricated full raise that reopens action.
+		raiseSize := amount - r.CurrentBet
+		if raiseSize <= 0 {
+			return fmt.Errorf("betting: all-in amount %d must exceed current bet %d", amount, r.CurrentBet)
+		}
 		if raiseSize < r.MinRaise && !goingAllIn {
 			return fmt.Errorf("betting: raise size %d below minimum raise %d", raiseSize, r.MinRaise)
 		}
 		if goingAllIn {
-			delta = p.Stack
-			amount = p.Contributed + delta
 			p.AllIn = true
 		}
 		p.Stack -= delta

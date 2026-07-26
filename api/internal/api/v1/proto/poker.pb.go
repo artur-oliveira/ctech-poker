@@ -406,14 +406,20 @@ func (x *Room) GetCreatedAt() string {
 }
 
 type LegalActions struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Actions       []string               `protobuf:"bytes,1,rep,name=actions,proto3" json:"actions,omitempty"`                            // subset of fold|check|call|raise
-	CallAmount    int64                  `protobuf:"varint,2,opt,name=call_amount,json=callAmount,proto3" json:"call_amount,omitempty"`   // chips owed to call (0 when a check is available)
-	MinRaiseTo    int64                  `protobuf:"varint,3,opt,name=min_raise_to,json=minRaiseTo,proto3" json:"min_raise_to,omitempty"` // smallest total bet a raise may reach
-	MaxRaiseTo    int64                  `protobuf:"varint,4,opt,name=max_raise_to,json=maxRaiseTo,proto3" json:"max_raise_to,omitempty"` // largest total bet (all-in): viewer stack + already contributed
-	Step          int64                  `protobuf:"varint,5,opt,name=step,proto3" json:"step,omitempty"`                                 // raise increment for the + / - stepper
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Actions             []string               `protobuf:"bytes,1,rep,name=actions,proto3" json:"actions,omitempty"`                                                     // subset of fold|check|call|raise
+	CallAmount          int64                  `protobuf:"varint,2,opt,name=call_amount,json=callAmount,proto3" json:"call_amount,omitempty"`                            // chips owed to call (0 when a check is available)
+	MinRaiseTo          int64                  `protobuf:"varint,3,opt,name=min_raise_to,json=minRaiseTo,proto3" json:"min_raise_to,omitempty"`                          // smallest total bet a raise may reach
+	MaxRaiseTo          int64                  `protobuf:"varint,4,opt,name=max_raise_to,json=maxRaiseTo,proto3" json:"max_raise_to,omitempty"`                          // largest total bet (all-in): viewer stack + already contributed
+	Step                int64                  `protobuf:"varint,5,opt,name=step,proto3" json:"step,omitempty"`                                                          // raise increment for the + / - stepper
+	CurrentContribution int64                  `protobuf:"varint,6,opt,name=current_contribution,json=currentContribution,proto3" json:"current_contribution,omitempty"` // viewer contribution in this betting street
+	CurrentBet          int64                  `protobuf:"varint,7,opt,name=current_bet,json=currentBet,proto3" json:"current_bet,omitempty"`                            // highest contribution in this betting street
+	OneThirdPotRaiseTo  int64                  `protobuf:"varint,8,opt,name=one_third_pot_raise_to,json=oneThirdPotRaiseTo,proto3" json:"one_third_pot_raise_to,omitempty"`
+	HalfPotRaiseTo      int64                  `protobuf:"varint,9,opt,name=half_pot_raise_to,json=halfPotRaiseTo,proto3" json:"half_pot_raise_to,omitempty"`
+	TwoThirdsPotRaiseTo int64                  `protobuf:"varint,10,opt,name=two_thirds_pot_raise_to,json=twoThirdsPotRaiseTo,proto3" json:"two_thirds_pot_raise_to,omitempty"`
+	PotRaiseTo          int64                  `protobuf:"varint,11,opt,name=pot_raise_to,json=potRaiseTo,proto3" json:"pot_raise_to,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *LegalActions) Reset() {
@@ -481,6 +487,100 @@ func (x *LegalActions) GetStep() int64 {
 	return 0
 }
 
+func (x *LegalActions) GetCurrentContribution() int64 {
+	if x != nil {
+		return x.CurrentContribution
+	}
+	return 0
+}
+
+func (x *LegalActions) GetCurrentBet() int64 {
+	if x != nil {
+		return x.CurrentBet
+	}
+	return 0
+}
+
+func (x *LegalActions) GetOneThirdPotRaiseTo() int64 {
+	if x != nil {
+		return x.OneThirdPotRaiseTo
+	}
+	return 0
+}
+
+func (x *LegalActions) GetHalfPotRaiseTo() int64 {
+	if x != nil {
+		return x.HalfPotRaiseTo
+	}
+	return 0
+}
+
+func (x *LegalActions) GetTwoThirdsPotRaiseTo() int64 {
+	if x != nil {
+		return x.TwoThirdsPotRaiseTo
+	}
+	return 0
+}
+
+func (x *LegalActions) GetPotRaiseTo() int64 {
+	if x != nil {
+		return x.PotRaiseTo
+	}
+	return 0
+}
+
+type Pot struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Amount            int64                  `protobuf:"varint,1,opt,name=amount,proto3" json:"amount,omitempty"`
+	EligiblePlayerIds []string               `protobuf:"bytes,2,rep,name=eligible_player_ids,json=eligiblePlayerIds,proto3" json:"eligible_player_ids,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *Pot) Reset() {
+	*x = Pot{}
+	mi := &file_poker_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Pot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Pot) ProtoMessage() {}
+
+func (x *Pot) ProtoReflect() protoreflect.Message {
+	mi := &file_poker_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Pot.ProtoReflect.Descriptor instead.
+func (*Pot) Descriptor() ([]byte, []int) {
+	return file_poker_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *Pot) GetAmount() int64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+func (x *Pot) GetEligiblePlayerIds() []string {
+	if x != nil {
+		return x.EligiblePlayerIds
+	}
+	return nil
+}
+
 type TableSnapshot struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
 	Stage                string                 `protobuf:"bytes,1,opt,name=stage,proto3" json:"stage,omitempty"`
@@ -499,13 +599,16 @@ type TableSnapshot struct {
 	SmallBlindPlayerId   string                 `protobuf:"bytes,14,opt,name=small_blind_player_id,json=smallBlindPlayerId,proto3" json:"small_blind_player_id,omitempty"`
 	BigBlindPlayerId     string                 `protobuf:"bytes,15,opt,name=big_blind_player_id,json=bigBlindPlayerId,proto3" json:"big_blind_player_id,omitempty"`
 	DealerPlayerId       string                 `protobuf:"bytes,16,opt,name=dealer_player_id,json=dealerPlayerId,proto3" json:"dealer_player_id,omitempty"`
+	SnapshotVersion      uint64                 `protobuf:"varint,17,opt,name=snapshot_version,json=snapshotVersion,proto3" json:"snapshot_version,omitempty"`
+	Pots                 []*Pot                 `protobuf:"bytes,18,rep,name=pots,proto3" json:"pots,omitempty"`
+	HandId               string                 `protobuf:"bytes,19,opt,name=hand_id,json=handId,proto3" json:"hand_id,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
 
 func (x *TableSnapshot) Reset() {
 	*x = TableSnapshot{}
-	mi := &file_poker_proto_msgTypes[5]
+	mi := &file_poker_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -517,7 +620,7 @@ func (x *TableSnapshot) String() string {
 func (*TableSnapshot) ProtoMessage() {}
 
 func (x *TableSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_poker_proto_msgTypes[5]
+	mi := &file_poker_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -530,7 +633,7 @@ func (x *TableSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TableSnapshot.ProtoReflect.Descriptor instead.
 func (*TableSnapshot) Descriptor() ([]byte, []int) {
-	return file_poker_proto_rawDescGZIP(), []int{5}
+	return file_poker_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *TableSnapshot) GetStage() string {
@@ -645,6 +748,27 @@ func (x *TableSnapshot) GetDealerPlayerId() string {
 	return ""
 }
 
+func (x *TableSnapshot) GetSnapshotVersion() uint64 {
+	if x != nil {
+		return x.SnapshotVersion
+	}
+	return 0
+}
+
+func (x *TableSnapshot) GetPots() []*Pot {
+	if x != nil {
+		return x.Pots
+	}
+	return nil
+}
+
+func (x *TableSnapshot) GetHandId() string {
+	if x != nil {
+		return x.HandId
+	}
+	return ""
+}
+
 // ClientMessage is sent from the client to the server.
 type ClientMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -663,7 +787,7 @@ type ClientMessage struct {
 
 func (x *ClientMessage) Reset() {
 	*x = ClientMessage{}
-	mi := &file_poker_proto_msgTypes[6]
+	mi := &file_poker_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -675,7 +799,7 @@ func (x *ClientMessage) String() string {
 func (*ClientMessage) ProtoMessage() {}
 
 func (x *ClientMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_poker_proto_msgTypes[6]
+	mi := &file_poker_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -688,7 +812,7 @@ func (x *ClientMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientMessage.ProtoReflect.Descriptor instead.
 func (*ClientMessage) Descriptor() ([]byte, []int) {
-	return file_poker_proto_rawDescGZIP(), []int{6}
+	return file_poker_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ClientMessage) GetType() string {
@@ -760,18 +884,21 @@ type ServerMessage struct {
 	Key      string         `protobuf:"bytes,7,opt,name=key,proto3" json:"key,omitempty"`                           // for achievement unlocked frame
 	Stars    int32          `protobuf:"varint,8,opt,name=stars,proto3" json:"stars,omitempty"`                      // for achievement unlocked frame
 	// lobby payload fields
-	Room          *Room  `protobuf:"bytes,9,opt,name=room,proto3" json:"room,omitempty"`                                 // for room_created
-	RoomId        string `protobuf:"bytes,10,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`              // for room_updated
-	SeatsTaken    int32  `protobuf:"varint,11,opt,name=seats_taken,json=seatsTaken,proto3" json:"seats_taken,omitempty"` // for room_updated
-	Amount        int64  `protobuf:"varint,12,opt,name=amount,proto3" json:"amount,omitempty"`                           // for payment_received
-	Text          string `protobuf:"bytes,13,opt,name=text,proto3" json:"text,omitempty"`                                // for system_broadcast
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Room            *Room    `protobuf:"bytes,9,opt,name=room,proto3" json:"room,omitempty"`                                                // for room_created
+	RoomId          string   `protobuf:"bytes,10,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`                             // for room_updated
+	SeatsTaken      int32    `protobuf:"varint,11,opt,name=seats_taken,json=seatsTaken,proto3" json:"seats_taken,omitempty"`                // for room_updated
+	Amount          int64    `protobuf:"varint,12,opt,name=amount,proto3" json:"amount,omitempty"`                                          // for payment_received
+	Text            string   `protobuf:"bytes,13,opt,name=text,proto3" json:"text,omitempty"`                                               // for system_broadcast
+	ActionId        string   `protobuf:"bytes,14,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`                       // correlation id for action_ack/error
+	SnapshotVersion uint64   `protobuf:"varint,15,opt,name=snapshot_version,json=snapshotVersion,proto3" json:"snapshot_version,omitempty"` // for equity delta
+	Equity          *float64 `protobuf:"fixed64,16,opt,name=equity,proto3,oneof" json:"equity,omitempty"`                                   // for equity delta (player_id identifies owner)
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ServerMessage) Reset() {
 	*x = ServerMessage{}
-	mi := &file_poker_proto_msgTypes[7]
+	mi := &file_poker_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -783,7 +910,7 @@ func (x *ServerMessage) String() string {
 func (*ServerMessage) ProtoMessage() {}
 
 func (x *ServerMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_poker_proto_msgTypes[7]
+	mi := &file_poker_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -796,7 +923,7 @@ func (x *ServerMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerMessage.ProtoReflect.Descriptor instead.
 func (*ServerMessage) Descriptor() ([]byte, []int) {
-	return file_poker_proto_rawDescGZIP(), []int{7}
+	return file_poker_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ServerMessage) GetType() string {
@@ -890,6 +1017,27 @@ func (x *ServerMessage) GetText() string {
 	return ""
 }
 
+func (x *ServerMessage) GetActionId() string {
+	if x != nil {
+		return x.ActionId
+	}
+	return ""
+}
+
+func (x *ServerMessage) GetSnapshotVersion() uint64 {
+	if x != nil {
+		return x.SnapshotVersion
+	}
+	return 0
+}
+
+func (x *ServerMessage) GetEquity() float64 {
+	if x != nil && x.Equity != nil {
+		return *x.Equity
+	}
+	return 0
+}
+
 var File_poker_proto protoreflect.FileDescriptor
 
 const file_poker_proto_rawDesc = "" +
@@ -942,7 +1090,7 @@ const file_poker_proto_rawDesc = "" +
 	"\n" +
 	"created_by\x18\x10 \x01(\tR\tcreatedBy\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x11 \x01(\tR\tcreatedAt\"\xa1\x01\n" +
+	"created_at\x18\x11 \x01(\tR\tcreatedAt\"\xac\x03\n" +
 	"\fLegalActions\x12\x18\n" +
 	"\aactions\x18\x01 \x03(\tR\aactions\x12\x1f\n" +
 	"\vcall_amount\x18\x02 \x01(\x03R\n" +
@@ -951,7 +1099,19 @@ const file_poker_proto_rawDesc = "" +
 	"minRaiseTo\x12 \n" +
 	"\fmax_raise_to\x18\x04 \x01(\x03R\n" +
 	"maxRaiseTo\x12\x12\n" +
-	"\x04step\x18\x05 \x01(\x03R\x04step\"\xf2\x05\n" +
+	"\x04step\x18\x05 \x01(\x03R\x04step\x121\n" +
+	"\x14current_contribution\x18\x06 \x01(\x03R\x13currentContribution\x12\x1f\n" +
+	"\vcurrent_bet\x18\a \x01(\x03R\n" +
+	"currentBet\x122\n" +
+	"\x16one_third_pot_raise_to\x18\b \x01(\x03R\x12oneThirdPotRaiseTo\x12)\n" +
+	"\x11half_pot_raise_to\x18\t \x01(\x03R\x0ehalfPotRaiseTo\x124\n" +
+	"\x17two_thirds_pot_raise_to\x18\n" +
+	" \x01(\x03R\x13twoThirdsPotRaiseTo\x12 \n" +
+	"\fpot_raise_to\x18\v \x01(\x03R\n" +
+	"potRaiseTo\"M\n" +
+	"\x03Pot\x12\x16\n" +
+	"\x06amount\x18\x01 \x01(\x03R\x06amount\x12.\n" +
+	"\x13eligible_player_ids\x18\x02 \x03(\tR\x11eligiblePlayerIds\"\xd6\x06\n" +
 	"\rTableSnapshot\x12\x14\n" +
 	"\x05stage\x18\x01 \x01(\tR\x05stage\x12\x14\n" +
 	"\x05board\x18\x02 \x03(\tR\x05board\x12!\n" +
@@ -969,7 +1129,11 @@ const file_poker_proto_rawDesc = "" +
 	"\x17shuffle_server_seed_hex\x18\r \x01(\tR\x14shuffleServerSeedHex\x121\n" +
 	"\x15small_blind_player_id\x18\x0e \x01(\tR\x12smallBlindPlayerId\x12-\n" +
 	"\x13big_blind_player_id\x18\x0f \x01(\tR\x10bigBlindPlayerId\x12(\n" +
-	"\x10dealer_player_id\x18\x10 \x01(\tR\x0edealerPlayerId\x1a:\n" +
+	"\x10dealer_player_id\x18\x10 \x01(\tR\x0edealerPlayerId\x12)\n" +
+	"\x10snapshot_version\x18\x11 \x01(\x04R\x0fsnapshotVersion\x12\x1e\n" +
+	"\x04pots\x18\x12 \x03(\v2\n" +
+	".poker.PotR\x04pots\x12\x17\n" +
+	"\ahand_id\x18\x13 \x01(\tR\x06handId\x1a:\n" +
 	"\fPayoutsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xd5\x01\n" +
@@ -982,7 +1146,7 @@ const file_poker_proto_rawDesc = "" +
 	"\x06action\x18\x05 \x01(\tR\x06action\x12\x16\n" +
 	"\x06amount\x18\x06 \x01(\x03R\x06amount\x12\x1b\n" +
 	"\taction_id\x18\a \x01(\tR\bactionId\x12\x18\n" +
-	"\amessage\x18\b \x01(\tR\amessage\"\xe8\x02\n" +
+	"\amessage\x18\b \x01(\tR\amessage\"\xd8\x03\n" +
 	"\rServerMessage\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x17\n" +
 	"\aconn_id\x18\x02 \x01(\tR\x06connId\x120\n" +
@@ -998,7 +1162,11 @@ const file_poker_proto_rawDesc = "" +
 	"\vseats_taken\x18\v \x01(\x05R\n" +
 	"seatsTaken\x12\x16\n" +
 	"\x06amount\x18\f \x01(\x03R\x06amount\x12\x12\n" +
-	"\x04text\x18\r \x01(\tR\x04textB>Z<gopkg.aoctech.app/poker/api/internal/api/v1/proto;pokerprotob\x06proto3"
+	"\x04text\x18\r \x01(\tR\x04text\x12\x1b\n" +
+	"\taction_id\x18\x0e \x01(\tR\bactionId\x12)\n" +
+	"\x10snapshot_version\x18\x0f \x01(\x04R\x0fsnapshotVersion\x12\x1b\n" +
+	"\x06equity\x18\x10 \x01(\x01H\x00R\x06equity\x88\x01\x01B\t\n" +
+	"\a_equityB>Z<gopkg.aoctech.app/poker/api/internal/api/v1/proto;pokerprotob\x06proto3"
 
 var (
 	file_poker_proto_rawDescOnce sync.Once
@@ -1012,30 +1180,32 @@ func file_poker_proto_rawDescGZIP() []byte {
 	return file_poker_proto_rawDescData
 }
 
-var file_poker_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_poker_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_poker_proto_goTypes = []any{
 	(*Card)(nil),            // 0: poker.Card
 	(*Seat)(nil),            // 1: poker.Seat
 	(*BlindEscalation)(nil), // 2: poker.BlindEscalation
 	(*Room)(nil),            // 3: poker.Room
 	(*LegalActions)(nil),    // 4: poker.LegalActions
-	(*TableSnapshot)(nil),   // 5: poker.TableSnapshot
-	(*ClientMessage)(nil),   // 6: poker.ClientMessage
-	(*ServerMessage)(nil),   // 7: poker.ServerMessage
-	nil,                     // 8: poker.TableSnapshot.PayoutsEntry
+	(*Pot)(nil),             // 5: poker.Pot
+	(*TableSnapshot)(nil),   // 6: poker.TableSnapshot
+	(*ClientMessage)(nil),   // 7: poker.ClientMessage
+	(*ServerMessage)(nil),   // 8: poker.ServerMessage
+	nil,                     // 9: poker.TableSnapshot.PayoutsEntry
 }
 var file_poker_proto_depIdxs = []int32{
 	2, // 0: poker.Room.blind_escalation:type_name -> poker.BlindEscalation
 	1, // 1: poker.TableSnapshot.seats:type_name -> poker.Seat
-	8, // 2: poker.TableSnapshot.payouts:type_name -> poker.TableSnapshot.PayoutsEntry
+	9, // 2: poker.TableSnapshot.payouts:type_name -> poker.TableSnapshot.PayoutsEntry
 	4, // 3: poker.TableSnapshot.legal_actions:type_name -> poker.LegalActions
-	5, // 4: poker.ServerMessage.snapshot:type_name -> poker.TableSnapshot
-	3, // 5: poker.ServerMessage.room:type_name -> poker.Room
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	5, // 4: poker.TableSnapshot.pots:type_name -> poker.Pot
+	6, // 5: poker.ServerMessage.snapshot:type_name -> poker.TableSnapshot
+	3, // 6: poker.ServerMessage.room:type_name -> poker.Room
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_poker_proto_init() }
@@ -1044,13 +1214,14 @@ func file_poker_proto_init() {
 		return
 	}
 	file_poker_proto_msgTypes[1].OneofWrappers = []any{}
+	file_poker_proto_msgTypes[8].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_poker_proto_rawDesc), len(file_poker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

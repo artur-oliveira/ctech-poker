@@ -1,6 +1,8 @@
 package hand
 
 import (
+	"fmt"
+
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 )
@@ -134,6 +136,9 @@ func NewTableFromState(s State) *Table {
 // changed; the caller (table.Actor) should treat this as "already
 // committed", not as an error.
 func (t *Table) ActIdempotent(actionID, playerID string, action betting.Action, amount int64) (applied bool, err error) {
+	if actionID == "" {
+		return false, fmt.Errorf("hand: action_id is required")
+	}
 	if t.seenActionIDs == nil {
 		t.seenActionIDs = make(map[string]bool)
 	}

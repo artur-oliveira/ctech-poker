@@ -62,6 +62,19 @@ export interface LegalActions {
   max_raise_to: number;
   /** raise increment for the + / - stepper */
   step: number;
+  /** viewer contribution in this betting street */
+  current_contribution: number;
+  /** highest contribution in this betting street */
+  current_bet: number;
+  one_third_pot_raise_to: number;
+  half_pot_raise_to: number;
+  two_thirds_pot_raise_to: number;
+  pot_raise_to: number;
+}
+
+export interface Pot {
+  amount: number;
+  eligible_player_ids: string[];
 }
 
 export interface TableSnapshot {
@@ -81,6 +94,9 @@ export interface TableSnapshot {
   small_blind_player_id: string;
   big_blind_player_id: string;
   dealer_player_id: string;
+  snapshot_version: number;
+  pots: Pot[];
+  hand_id: string;
 }
 
 export interface TableSnapshot_PayoutsEntry {
@@ -140,6 +156,12 @@ export interface ServerMessage {
   amount: number;
   /** for system_broadcast */
   text: string;
+  /** correlation id for action_ack/error */
+  action_id: string;
+  /** for equity delta */
+  snapshot_version: number;
+  /** for equity delta (player_id identifies owner) */
+  equity?: number | undefined;
 }
 
 function createBaseCard(): Card {
@@ -190,7 +212,7 @@ export const Card: MessageFns<Card> = {
   },
 
   create<I extends Exact<DeepPartial<Card>, I>>(base?: I): Card {
-    return Card.fromPartial(base ?? ({} as object));
+    return Card.fromPartial(base ?? ({} as any));
   },
   fromPartial<I extends Exact<DeepPartial<Card>, I>>(object: I): Card {
     const message = createBaseCard();
@@ -323,7 +345,7 @@ export const Seat: MessageFns<Seat> = {
   },
 
   create<I extends Exact<DeepPartial<Seat>, I>>(base?: I): Seat {
-    return Seat.fromPartial(base ?? ({} as object));
+    return Seat.fromPartial(base ?? ({} as any));
   },
   fromPartial<I extends Exact<DeepPartial<Seat>, I>>(object: I): Seat {
     const message = createBaseSeat();
@@ -398,7 +420,7 @@ export const BlindEscalation: MessageFns<BlindEscalation> = {
   },
 
   create<I extends Exact<DeepPartial<BlindEscalation>, I>>(base?: I): BlindEscalation {
-    return BlindEscalation.fromPartial(base ?? ({} as object));
+    return BlindEscalation.fromPartial(base ?? ({} as any));
   },
   fromPartial<I extends Exact<DeepPartial<BlindEscalation>, I>>(object: I): BlindEscalation {
     const message = createBaseBlindEscalation();
@@ -640,7 +662,7 @@ export const Room: MessageFns<Room> = {
   },
 
   create<I extends Exact<DeepPartial<Room>, I>>(base?: I): Room {
-    return Room.fromPartial(base ?? ({} as object));
+    return Room.fromPartial(base ?? ({} as any));
   },
   fromPartial<I extends Exact<DeepPartial<Room>, I>>(object: I): Room {
     const message = createBaseRoom();
@@ -668,7 +690,19 @@ export const Room: MessageFns<Room> = {
 };
 
 function createBaseLegalActions(): LegalActions {
-  return { actions: [], call_amount: 0, min_raise_to: 0, max_raise_to: 0, step: 0 };
+  return {
+    actions: [],
+    call_amount: 0,
+    min_raise_to: 0,
+    max_raise_to: 0,
+    step: 0,
+    current_contribution: 0,
+    current_bet: 0,
+    one_third_pot_raise_to: 0,
+    half_pot_raise_to: 0,
+    two_thirds_pot_raise_to: 0,
+    pot_raise_to: 0,
+  };
 }
 
 export const LegalActions: MessageFns<LegalActions> = {
@@ -687,6 +721,24 @@ export const LegalActions: MessageFns<LegalActions> = {
     }
     if (message.step !== 0) {
       writer.uint32(40).int64(message.step);
+    }
+    if (message.current_contribution !== 0) {
+      writer.uint32(48).int64(message.current_contribution);
+    }
+    if (message.current_bet !== 0) {
+      writer.uint32(56).int64(message.current_bet);
+    }
+    if (message.one_third_pot_raise_to !== 0) {
+      writer.uint32(64).int64(message.one_third_pot_raise_to);
+    }
+    if (message.half_pot_raise_to !== 0) {
+      writer.uint32(72).int64(message.half_pot_raise_to);
+    }
+    if (message.two_thirds_pot_raise_to !== 0) {
+      writer.uint32(80).int64(message.two_thirds_pot_raise_to);
+    }
+    if (message.pot_raise_to !== 0) {
+      writer.uint32(88).int64(message.pot_raise_to);
     }
     return writer;
   },
@@ -738,6 +790,54 @@ export const LegalActions: MessageFns<LegalActions> = {
           message.step = longToNumber(reader.int64());
           continue;
         }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.current_contribution = longToNumber(reader.int64());
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.current_bet = longToNumber(reader.int64());
+          continue;
+        }
+        case 8: {
+          if (tag !== 64) {
+            break;
+          }
+
+          message.one_third_pot_raise_to = longToNumber(reader.int64());
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.half_pot_raise_to = longToNumber(reader.int64());
+          continue;
+        }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.two_thirds_pot_raise_to = longToNumber(reader.int64());
+          continue;
+        }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.pot_raise_to = longToNumber(reader.int64());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -748,7 +848,7 @@ export const LegalActions: MessageFns<LegalActions> = {
   },
 
   create<I extends Exact<DeepPartial<LegalActions>, I>>(base?: I): LegalActions {
-    return LegalActions.fromPartial(base ?? ({} as object));
+    return LegalActions.fromPartial(base ?? ({} as any));
   },
   fromPartial<I extends Exact<DeepPartial<LegalActions>, I>>(object: I): LegalActions {
     const message = createBaseLegalActions();
@@ -757,6 +857,70 @@ export const LegalActions: MessageFns<LegalActions> = {
     message.min_raise_to = object.min_raise_to ?? 0;
     message.max_raise_to = object.max_raise_to ?? 0;
     message.step = object.step ?? 0;
+    message.current_contribution = object.current_contribution ?? 0;
+    message.current_bet = object.current_bet ?? 0;
+    message.one_third_pot_raise_to = object.one_third_pot_raise_to ?? 0;
+    message.half_pot_raise_to = object.half_pot_raise_to ?? 0;
+    message.two_thirds_pot_raise_to = object.two_thirds_pot_raise_to ?? 0;
+    message.pot_raise_to = object.pot_raise_to ?? 0;
+    return message;
+  },
+};
+
+function createBasePot(): Pot {
+  return { amount: 0, eligible_player_ids: [] };
+}
+
+export const Pot: MessageFns<Pot> = {
+  encode(message: Pot, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.amount !== 0) {
+      writer.uint32(8).int64(message.amount);
+    }
+    for (const v of message.eligible_player_ids) {
+      writer.uint32(18).string(v!);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): Pot {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePot();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.amount = longToNumber(reader.int64());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.eligible_player_ids.push(reader.string());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<Pot>, I>>(base?: I): Pot {
+    return Pot.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<Pot>, I>>(object: I): Pot {
+    const message = createBasePot();
+    message.amount = object.amount ?? 0;
+    message.eligible_player_ids = object.eligible_player_ids?.map((e) => e) || [];
     return message;
   },
 };
@@ -779,6 +943,9 @@ function createBaseTableSnapshot(): TableSnapshot {
     small_blind_player_id: "",
     big_blind_player_id: "",
     dealer_player_id: "",
+    snapshot_version: 0,
+    pots: [],
+    hand_id: "",
   };
 }
 
@@ -794,7 +961,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
       Seat.encode(v!, writer.uint32(26).fork()).join();
     }
     globalThis.Object.entries(message.payouts).forEach(([key, value]: [string, number]) => {
-      TableSnapshot_PayoutsEntry.encode({ key: key as string, value }, writer.uint32(34).fork()).join();
+      TableSnapshot_PayoutsEntry.encode({ key: key as any, value }, writer.uint32(34).fork()).join();
     });
     for (const v of message.winners) {
       writer.uint32(42).string(v!);
@@ -831,6 +998,15 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     }
     if (message.dealer_player_id !== "") {
       writer.uint32(130).string(message.dealer_player_id);
+    }
+    if (message.snapshot_version !== 0) {
+      writer.uint32(136).uint64(message.snapshot_version);
+    }
+    for (const v of message.pots) {
+      Pot.encode(v!, writer.uint32(146).fork()).join();
+    }
+    if (message.hand_id !== "") {
+      writer.uint32(154).string(message.hand_id);
     }
     return writer;
   },
@@ -973,6 +1149,30 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           message.dealer_player_id = reader.string();
           continue;
         }
+        case 17: {
+          if (tag !== 136) {
+            break;
+          }
+
+          message.snapshot_version = longToNumber(reader.uint64());
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          message.pots.push(Pot.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 19: {
+          if (tag !== 154) {
+            break;
+          }
+
+          message.hand_id = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -983,7 +1183,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
   },
 
   create<I extends Exact<DeepPartial<TableSnapshot>, I>>(base?: I): TableSnapshot {
-    return TableSnapshot.fromPartial(base ?? ({} as object));
+    return TableSnapshot.fromPartial(base ?? ({} as any));
   },
   fromPartial<I extends Exact<DeepPartial<TableSnapshot>, I>>(object: I): TableSnapshot {
     const message = createBaseTableSnapshot();
@@ -1013,6 +1213,9 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     message.small_blind_player_id = object.small_blind_player_id ?? "";
     message.big_blind_player_id = object.big_blind_player_id ?? "";
     message.dealer_player_id = object.dealer_player_id ?? "";
+    message.snapshot_version = object.snapshot_version ?? 0;
+    message.pots = object.pots?.map((e) => Pot.fromPartial(e)) || [];
+    message.hand_id = object.hand_id ?? "";
     return message;
   },
 };
@@ -1065,7 +1268,7 @@ export const TableSnapshot_PayoutsEntry: MessageFns<TableSnapshot_PayoutsEntry> 
   },
 
   create<I extends Exact<DeepPartial<TableSnapshot_PayoutsEntry>, I>>(base?: I): TableSnapshot_PayoutsEntry {
-    return TableSnapshot_PayoutsEntry.fromPartial(base ?? ({} as object));
+    return TableSnapshot_PayoutsEntry.fromPartial(base ?? ({} as any));
   },
   fromPartial<I extends Exact<DeepPartial<TableSnapshot_PayoutsEntry>, I>>(object: I): TableSnapshot_PayoutsEntry {
     const message = createBaseTableSnapshot_PayoutsEntry();
@@ -1189,7 +1392,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
   },
 
   create<I extends Exact<DeepPartial<ClientMessage>, I>>(base?: I): ClientMessage {
-    return ClientMessage.fromPartial(base ?? ({} as object));
+    return ClientMessage.fromPartial(base ?? ({} as any));
   },
   fromPartial<I extends Exact<DeepPartial<ClientMessage>, I>>(object: I): ClientMessage {
     const message = createBaseClientMessage();
@@ -1220,6 +1423,9 @@ function createBaseServerMessage(): ServerMessage {
     seats_taken: 0,
     amount: 0,
     text: "",
+    action_id: "",
+    snapshot_version: 0,
+    equity: undefined,
   };
 }
 
@@ -1263,6 +1469,15 @@ export const ServerMessage: MessageFns<ServerMessage> = {
     }
     if (message.text !== "") {
       writer.uint32(106).string(message.text);
+    }
+    if (message.action_id !== "") {
+      writer.uint32(114).string(message.action_id);
+    }
+    if (message.snapshot_version !== 0) {
+      writer.uint32(120).uint64(message.snapshot_version);
+    }
+    if (message.equity !== undefined) {
+      writer.uint32(129).double(message.equity);
     }
     return writer;
   },
@@ -1378,6 +1593,30 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           message.text = reader.string();
           continue;
         }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.action_id = reader.string();
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.snapshot_version = longToNumber(reader.uint64());
+          continue;
+        }
+        case 16: {
+          if (tag !== 129) {
+            break;
+          }
+
+          message.equity = reader.double();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1388,7 +1627,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
   },
 
   create<I extends Exact<DeepPartial<ServerMessage>, I>>(base?: I): ServerMessage {
-    return ServerMessage.fromPartial(base ?? ({} as object));
+    return ServerMessage.fromPartial(base ?? ({} as any));
   },
   fromPartial<I extends Exact<DeepPartial<ServerMessage>, I>>(object: I): ServerMessage {
     const message = createBaseServerMessage();
@@ -1407,6 +1646,9 @@ export const ServerMessage: MessageFns<ServerMessage> = {
     message.seats_taken = object.seats_taken ?? 0;
     message.amount = object.amount ?? 0;
     message.text = object.text ?? "";
+    message.action_id = object.action_id ?? "";
+    message.snapshot_version = object.snapshot_version ?? 0;
+    message.equity = object.equity ?? undefined;
     return message;
   },
 };
@@ -1415,9 +1657,9 @@ type Builtin = Date | Function | Uint8Array | string | number | boolean | undefi
 
 export type DeepPartial<T> = T extends Builtin ? T
   : T extends globalThis.Array<infer U> ? globalThis.Array<DeepPartial<U>>
-    : T extends ReadonlyArray<infer U> ? ReadonlyArray<DeepPartial<U>>
-      : T extends {} ? { [K in keyof T]?: DeepPartial<T[K]> }
-        : Partial<T>;
+  : T extends ReadonlyArray<infer U> ? ReadonlyArray<DeepPartial<U>>
+  : T extends {} ? { [K in keyof T]?: DeepPartial<T[K]> }
+  : Partial<T>;
 
 type KeysOfUnion<T> = T extends T ? keyof T : never;
 export type Exact<P, I extends P> = P extends Builtin ? P

@@ -25,7 +25,7 @@ import {AchievementToast} from '@/components/AchievementToast';
 import {TermsGate} from '@/components/TermsGate';
 import {Button} from '@/components/ui/button';
 import {pushNotification} from '@/lib/notify';
-import type {PokerAction, TableSnapshot} from '@/lib/api/table';
+import type {TableSnapshot} from '@/lib/api/table';
 import {bestFiveCardHand, HAND_RANK_INDEX} from '@/lib/pokerRules';
 import {getHands} from '@/lib/api/player';
 import {type MockScenario, USE_MOCK} from '@/lib/mock';
@@ -51,8 +51,6 @@ const STAGE_LABELS: Record<string, string> = {
   waiting_for_players: 'Aguardando jogadores', pre_flop: 'Pré-flop', flop: 'Flop', turn: 'Turn', river: 'River',
   showdown: 'Showdown', complete: 'Mão encerrada'
 };
-const BETTING_STAGES = new Set(['pre_flop', 'flop', 'turn', 'river']);
-
 function connectionCopyFor(status: keyof typeof CONNECTION_COPY, attempt: number) {
   if (status === 'disconnected' && attempt > MAX_RECONNECT_ATTEMPTS) return RECONNECT_GIVEN_UP_COPY;
   return CONNECTION_COPY[status];
@@ -68,25 +66,30 @@ const MOCK_SCENARIOS = new Set<MockScenario>([
 function actionState(snapshot: TableSnapshot, viewer?: string) {
   const seat = snapshot.seats.find(item => item.player_id === viewer);
   const serverActions = snapshot.legal_actions;
-  const currentContribution = Math.max(0, ...snapshot.seats.map(item => item.contributed));
-  const rawCallAmount = serverActions?.call_amount ?? Math.max(0, currentContribution - (seat?.contributed || 0));
-  // A call can never cost more than the caller's own stack — a shorter stack
-  // facing a bigger bet just calls all-in for what it has, so the amount
-  // shown (and asked to pay) must be capped here regardless of what the raw
-  // "amount needed to match" comes out to.
-  const callAmount = Math.min(seat?.stack || 0, rawCallAmount);
-  const isTurn = snapshot.current_player_id ? snapshot.current_player_id === viewer : Boolean(seat && seat.state === 'active' && BETTING_STAGES.has(snapshot.stage));
-  const legacyActions: PokerAction[] = !seat || !BETTING_STAGES.has(snapshot.stage) || seat.state !== 'active' ? [] : [
-    'fold', callAmount > 0 ? 'call' : 'check', ...(seat.stack > callAmount ? ['raise' as const] : [])
-  ];
-  const actions = new Set(serverActions?.actions || legacyActions);
+  const callAmount = Math.min(seat?.stack || 0, Math.max(0, serverActions?.call_amount || 0));
+  // An empty current_player_id is a deliberate server state (street
+  // transition, runout, showdown), never permission for the viewer to act.
+  const isTurn = Boolean(viewer && snapshot.current_player_id === viewer);
+  const actions = new Set(serverActions?.actions || []);
   const available: ActionAvailability = {
     fold: actions.has('fold'), check: actions.has('check'), call: actions.has('call'), raise: actions.has('raise')
   };
-  const legacyMax = Math.max(25, (seat?.stack || 0) + (seat?.contributed || 0));
-  const maxRaise = Math.max(0, serverActions?.max_raise_to ?? legacyMax);
-  const minRaise = Math.min(maxRaise, Math.max(0, serverActions?.min_raise_to ?? Math.min(100, maxRaise)));
-  return {available, callAmount, isTurn, minRaise, maxRaise, raiseStep: serverActions?.step || 25};
+  const maxRaise = Math.max(0, serverActions?.max_raise_to || 0);
+  const minRaise = Math.min(maxRaise, Math.max(0, serverActions?.min_raise_to || 0));
+  return {
+    available, callAmount, isTurn, minRaise, maxRaise, raiseStep: Math.max(1, serverActions?.step || 1),
+    effectiveStack: Math.min(seat?.stack || 0, Math.max(0, ...snapshot.seats
+      .filter(item => item.player_id !== viewer && item.state !== 'folded' && item.state !== 'sitting_out')
+      .map(item => item.stack))),
+    raisePresets: [
+      {label: 'Mín', value: minRaise},
+      {label: '⅓ pote', value: serverActions?.one_third_pot_raise_to || minRaise},
+      {label: '½ pote', value: serverActions?.half_pot_raise_to || minRaise},
+      {label: '⅔ pote', value: serverActions?.two_thirds_pot_raise_to || minRaise},
+      {label: 'Pote', value: serverActions?.pot_raise_to || minRaise},
+      {label: 'Máx', value: maxRaise}
+    ]
+  };
 }
 
 function TableContent() {
@@ -206,14 +209,20 @@ function TableContent() {
     // the board is complete) and reduced to the actual best 5-card hand — a
     // bare pair of hole cards doesn't show what the player actually won with
     // when the winning combination uses the board too.
-    const winnerSeat = (kind === 'win' || kind === 'tie') ? seat : snap.seats.find(item => snap.winners?.includes(item.player_id));
+    const winnerSeat = (kind === 'win' || kind === 'tie') ? seat :
+      snap.seats.find(item => snap.winners?.includes(item.player_id));
     const winnerHole = winnerSeat?.hole_cards?.length === 2 &&
     winnerSeat.hole_cards.every(card => card.toLowerCase() !== 'back') ? winnerSeat.hole_cards : undefined;
     const winningCards = winnerHole && snap.board.length === 5 ?
       bestFiveCardHand([...winnerHole, ...snap.board]) : winnerHole;
+    const viewerHole = seat.hole_cards?.length === 2 &&
+    seat.hole_cards.every(card => card.toLowerCase() !== 'back') ? seat.hole_cards : undefined;
+    const viewerCards = viewerHole && snap.board.length === 5 ?
+      bestFiveCardHand([...viewerHole, ...snap.board]) : viewerHole;
     setHandOutcome({
       key: outcomeKeyRef.current, kind, handCategory: seat.hand_category, opponentCategory,
-      winningCards, winningHoleCards: winnerHole, stackBefore: stackAtHandStart, stackAfter: seat.stack
+      winningCards, winningHoleCards: winnerHole, viewerCards, viewerHoleCards: viewerHole,
+      winnerName: winnerSeat?.name, stackBefore: stackAtHandStart, stackAfter: seat.stack
     });
   }, [rt.snapshot, viewer, stackAtHandStart, queryClient, id]);
   if (!valid) return (
@@ -248,7 +257,8 @@ function TableContent() {
     </main>
     {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
   </>;
-  const s = rt.snapshot, pot = s.seats.reduce((n, x) => n + x.contributed, 0);
+  const s = rt.snapshot, pot = s.pots?.reduce((n, x) => n + x.amount, 0) ??
+    s.seats.reduce((n, x) => n + x.contributed, 0);
   const bigBlind = room?.big_blind || 25;
   const connectionMessage = rt.status === 'connected' ? null : connectionCopyFor(rt.status, rt.reconnectAttempt);
   const actions = actionState(s, viewer);
@@ -342,7 +352,6 @@ function TableContent() {
       <ActionBar
         onActAction={rt.act}
         {...actions}
-        pot={pot}
         actionKey={actionKey}
         connected={rt.status === 'connected'}
         pending={rt.pendingAction}

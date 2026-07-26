@@ -70,3 +70,17 @@ func TestActIdempotentSkipsRepeatedActionID(t *testing.T) {
 		t.Fatal("duplicate action_id must not mutate state")
 	}
 }
+
+func TestActIdempotentRejectsEmptyActionID(t *testing.T) {
+	table := NewTable([]*Player{
+		{ID: "p1", Stack: 1000, Ready: true},
+		{ID: "p2", Stack: 1000, Ready: true},
+	}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatal(err)
+	}
+	toAct := table.currentPlayerToAct()
+	if _, err := table.ActIdempotent("", toAct, betting.ActionCall, 0); err == nil {
+		t.Fatal("empty action_id must be rejected instead of poisoning the hand-wide dedupe key")
+	}
+}

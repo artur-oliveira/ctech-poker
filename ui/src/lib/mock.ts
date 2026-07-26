@@ -830,6 +830,7 @@ export class MockTableService {
   private turnOrder: string[] = [];
   private turnTimer?: ReturnType<typeof setTimeout>;
   private decisionNumber = 0;
+  private snapshotVersion = 0;
 
   constructor(private scenario: MockScenario, private delay: number, private handlers: MockHandlers) {
     this.snapshot = snapshotForScenario(scenario);
@@ -876,8 +877,15 @@ export class MockTableService {
     // hangs until the client-side timeout fires.
     if (this.scenario === 'timeout') return true;
     if (this.status !== 'connected') return false;
-    if (value.type === 'ping' || value.type === 'ready') {
+    if (value.type === 'ping') {
       this.later(() => this.emitState());
+      return true;
+    }
+    if (value.type === 'ready' || value.type === 'post_big_blind' || value.type === 'show_cards') {
+      this.later(() => this.handlers.onMessage({
+        type: 'action_ack', action_id: String(value.action_id || '')
+      }));
+      if (value.type === 'ready') this.later(() => this.emitState(), 2);
       return true;
     }
     if (value.type === 'chat') {
@@ -917,10 +925,14 @@ export class MockTableService {
         }));
         return true;
       }
+      this.later(() => this.handlers.onMessage({
+        type: 'action_ack', action_id: String(value.action_id || '')
+      }));
       this.resolveAction(MOCK_PLAYER_ID, action, Number(value.amount || 0));
       return true;
     }
     this.later(() => {
+      this.handlers.onMessage({type: 'action_ack', action_id: String(value.action_id || '')});
       const seats = this.snapshot.seats.map(seat => ({...seat}));
       const viewer = seats.find(seat => seat.player_id === MOCK_PLAYER_ID);
       if (viewer && actionFolds(value.action as PokerAction)) viewer.state = 'folded';
@@ -1317,6 +1329,8 @@ export class MockTableService {
     const handInProgress = stage !== 'waiting_for_players' && stage !== 'complete';
     const viewer = this.snapshot.seats.find(s => s.player_id === MOCK_PLAYER_ID);
     mockPlayerDealtIn = handInProgress && (viewer?.state === 'active' || viewer?.state === 'all_in');
+    this.snapshotVersion += 1;
+    this.snapshot = {...this.snapshot, snapshot_version: this.snapshotVersion};
     this.handlers.onMessage({type: 'state', snapshot: this.snapshot});
   }
 }

@@ -32,6 +32,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   unavailable: 'A mesa está indisponível no momento. Tente reconectar.',
   rate_limited: 'Muitas ações em sequência. Aguarde um instante e tente novamente.',
   invalid_action: 'Essa ação não é mais válida. Confira o estado atual da mesa.',
+  missing_action_id: 'A ação não pôde ser identificada. Atualize a página e tente novamente.',
   invalid_post: 'Não foi possível confirmar o blind. Tente novamente.',
   message_too_long: 'A mensagem ultrapassa o limite de 500 caracteres.',
   not_connected: 'Sem conexão com a mesa. Reconecte antes de agir.',
@@ -126,7 +127,8 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   delay?: number
 }) {
   const pendingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const pendingActionRef = useRef<PokerAction | null>(null);
+  const pendingActionRef = useRef<{id: string; action: PokerAction; snapshotVersion: number} | null>(null);
+  const latestVersionRef = useRef(-1);
   const previousSnapshot = useRef<TableSnapshot | null>(null);
   const sendRef = useRef<(value: object) => boolean>(() => false);
   // A mid-hand joiner is seated as pending_entry and stays that way forever
@@ -136,6 +138,8 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   // when they leave that state so a *later* pending_entry spell (re-joining
   // after leaving) posts again instead of being silently skipped.
   const postedBigBlindRef = useRef(false);
+  const postBigBlindActionRef = useRef<string | null>(null);
+  const postBigBlindTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // ready() and showCards() go straight through emit() with no server
   // round-trip tracking (unlike act(), which pendingActionRef already
   // guards) — a double-click/double-tap sends the frame twice. A short
@@ -144,6 +148,10 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   // state only drives the button's disabled/pending visual.
   const readyLockRef = useRef(false);
   const showCardsLockRef = useRef(false);
+  const readyActionRef = useRef<string | null>(null);
+  const showCardsActionRef = useRef<string | null>(null);
+  const readyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const showCardsTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [readyPending, setReadyPending] = useState(false);
   const [showCardsPending, setShowCardsPending] = useState(false);
   const [snapshot, setSnapshot] = useState<TableSnapshot | null>(null);
@@ -161,38 +169,108 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const [mockReconnectAttempt, setMockReconnectAttempt] = useState(0);
   const mockService = useRef<MockTableService | null>(null);
 
-  const clearPending = useCallback(() => {
+  const clearPending = useCallback((expectedId?: string) => {
+    if (expectedId && pendingActionRef.current?.id !== expectedId) return;
     if (pendingTimer.current) clearTimeout(pendingTimer.current);
     pendingTimer.current = undefined;
     pendingActionRef.current = null;
     setPendingAction(null);
   }, []);
 
-  const failPending = useCallback((code: string) => {
-    clearPending();
+  const failPending = useCallback((code: string, expectedId?: string) => {
+    clearPending(expectedId);
     setLastActionError(actionError(code));
   }, [clearPending]);
 
+  const finishAuxiliaryCommand = useCallback((actionId: string, failedCode?: string) => {
+    if (readyActionRef.current === actionId) {
+      if (readyTimerRef.current) clearTimeout(readyTimerRef.current);
+      readyActionRef.current = null;
+      readyLockRef.current = false;
+      setReadyPending(false);
+    }
+    if (showCardsActionRef.current === actionId) {
+      if (showCardsTimerRef.current) clearTimeout(showCardsTimerRef.current);
+      showCardsActionRef.current = null;
+      showCardsLockRef.current = false;
+      setShowCardsPending(false);
+    }
+    if (postBigBlindActionRef.current === actionId) {
+      if (postBigBlindTimerRef.current) clearTimeout(postBigBlindTimerRef.current);
+      postBigBlindActionRef.current = null;
+      if (failedCode) postedBigBlindRef.current = false;
+    }
+    if (failedCode) setLastActionError(actionError(failedCode));
+  }, []);
+
   const receive = useCallback((message: ServerMessage) => {
     if (message.type === 'state' && message.snapshot) {
+      const legacyUnversioned = !message.snapshot.snapshot_version;
+      const version = message.snapshot.snapshot_version ?? 0;
+      if (latestVersionRef.current >= 0 && version < latestVersionRef.current) return;
+      latestVersionRef.current = version;
       const liveMessage = describeSnapshot(previousSnapshot.current, message.snapshot, viewerId);
       playSoundForTransition(previousSnapshot.current, message.snapshot, viewerId);
       previousSnapshot.current = message.snapshot;
       if (liveMessage) setAnnouncement(liveMessage);
       setSnapshot(message.snapshot);
       setSnapshotAt(Date.now());
-      clearPending();
+      // ACK is authoritative. This version check is the recovery path for a
+      // lost ACK: once a newer state arrives, the old decision cannot still
+      // be pending against the snapshot it was sent from.
+      if (pendingActionRef.current && version > pendingActionRef.current.snapshotVersion) {
+        clearPending(pendingActionRef.current.id);
+      }
+      // Compatibility while API instances are rolling from the unversioned
+      // protocol: those servers have no ACK frames, so their next full state
+      // remains the only available confirmation signal.
+      if (legacyUnversioned) {
+        clearPending();
+        for (const id of [readyActionRef.current, showCardsActionRef.current, postBigBlindActionRef.current]) {
+          if (id) finishAuxiliaryCommand(id);
+        }
+      }
       const ownSeat = message.snapshot.seats.find(seat => seat.player_id === viewerId);
       if (ownSeat?.state === 'pending_entry') {
-        if (!postedBigBlindRef.current) {
+        if (!postedBigBlindRef.current && !postBigBlindActionRef.current) {
           postedBigBlindRef.current = true;
-          sendRef.current({type: 'post_big_blind'});
+          const actionId = crypto.randomUUID();
+          postBigBlindActionRef.current = actionId;
+          const retry = (remaining: number) => {
+            if (postBigBlindActionRef.current !== actionId) return;
+            if (!sendRef.current({type: 'post_big_blind', action_id: actionId})) {
+              postBigBlindActionRef.current = null;
+              postedBigBlindRef.current = false;
+              return;
+            }
+            postBigBlindTimerRef.current = setTimeout(() => {
+              if (remaining > 1) retry(remaining - 1);
+              else finishAuxiliaryCommand(actionId, 'action_timeout');
+            }, 2000);
+          };
+          retry(3);
         }
       } else {
         postedBigBlindRef.current = false;
       }
     }
-    if (message.type === 'error') failPending(message.code || 'unknown');
+    if (message.type === 'equity' && message.player_id && message.equity !== undefined &&
+      message.snapshot_version === latestVersionRef.current) {
+      setSnapshot(value => value ? {
+        ...value,
+        seats: value.seats.map(seat => seat.player_id === message.player_id ? {...seat, equity: message.equity} : seat)
+      } : value);
+    }
+    if (message.type === 'action_ack' && message.action_id) {
+      clearPending(message.action_id);
+      finishAuxiliaryCommand(message.action_id);
+    }
+    if (message.type === 'error') {
+      const code = message.code || 'unknown';
+      if (message.action_id && pendingActionRef.current?.id === message.action_id) failPending(code, message.action_id);
+      else if (message.action_id) finishAuxiliaryCommand(message.action_id, code);
+      else setLastActionError(actionError(code));
+    }
     if (message.type === 'removed') setRemoved({code: message.code});
     if (message.type === 'achievement_unlocked' && message.key) setUnlock({
       key: message.key,
@@ -202,7 +280,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       const chatMessage = message.message;
       setChat(value => [...value.slice(-39), {player: message.player_id || '?', message: chatMessage}]);
     }
-  }, [clearPending, failPending, viewerId]);
+  }, [clearPending, failPending, finishAuxiliaryCommand, viewerId]);
 
   const origin = (process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/^http/, 'ws');
   const wsUrl = id ? `${origin}/v1.0/tables/${encodeURIComponent(id)}/ws` : null;
@@ -256,6 +334,9 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
 
   useEffect(() => () => {
     if (pendingTimer.current) clearTimeout(pendingTimer.current);
+    if (readyTimerRef.current) clearTimeout(readyTimerRef.current);
+    if (showCardsTimerRef.current) clearTimeout(showCardsTimerRef.current);
+    if (postBigBlindTimerRef.current) clearTimeout(postBigBlindTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -299,11 +380,15 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const act = useCallback((action: PokerAction, amount = 0) => {
     if (pendingActionRef.current) return false;
     setLastActionError(null);
-    if (!emit({type: 'act', action, amount, action_id: crypto.randomUUID()})) return false;
-    pendingActionRef.current = action;
+    const actionId = crypto.randomUUID();
+    pendingActionRef.current = {id: actionId, action, snapshotVersion: latestVersionRef.current};
     setPendingAction(action);
+    if (!emit({type: 'act', action, amount, action_id: actionId})) {
+      clearPending(actionId);
+      return false;
+    }
     pendingTimer.current = setTimeout(() => {
-      clearPending();
+      clearPending(actionId);
       if (!send({type: 'ping'})) {
         setLastActionError(actionError('connection_lost'));
         return;
@@ -330,24 +415,30 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     showCardsPending,
     ready: (ready = true) => {
       if (readyLockRef.current) return false;
+      const actionId = crypto.randomUUID();
       readyLockRef.current = true;
+      readyActionRef.current = actionId;
       setReadyPending(true);
-      setTimeout(() => {
-        readyLockRef.current = false;
-        setReadyPending(false);
-      }, 1000);
-      return emit({type: 'ready', ready});
+      if (!emit({type: 'ready', ready, action_id: actionId})) {
+        finishAuxiliaryCommand(actionId);
+        return false;
+      }
+      readyTimerRef.current = setTimeout(() => finishAuxiliaryCommand(actionId, 'action_timeout'), ACTION_TIMEOUT_MS);
+      return true;
     },
     act,
     showCards: () => {
       if (showCardsLockRef.current) return false;
+      const actionId = crypto.randomUUID();
       showCardsLockRef.current = true;
+      showCardsActionRef.current = actionId;
       setShowCardsPending(true);
-      setTimeout(() => {
-        showCardsLockRef.current = false;
-        setShowCardsPending(false);
-      }, 1000);
-      const ok = emit({type: 'show_cards'});
+      const ok = emit({type: 'show_cards', action_id: actionId});
+      if (!ok) {
+        finishAuxiliaryCommand(actionId);
+        return false;
+      }
+      showCardsTimerRef.current = setTimeout(() => finishAuxiliaryCommand(actionId, 'action_timeout'), ACTION_TIMEOUT_MS);
       if (ok) playSound('showing_card');
       return ok;
     },

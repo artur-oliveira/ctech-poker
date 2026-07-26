@@ -53,6 +53,17 @@ message LegalActions {
   int64 min_raise_to = 3; // smallest total bet a raise may reach
   int64 max_raise_to = 4; // largest total bet (all-in): viewer stack + already contributed
   int64 step = 5;         // raise increment for the + / - stepper
+  int64 current_contribution = 6; // viewer contribution in this betting street
+  int64 current_bet = 7;          // highest contribution in this betting street
+  int64 one_third_pot_raise_to = 8;
+  int64 half_pot_raise_to = 9;
+  int64 two_thirds_pot_raise_to = 10;
+  int64 pot_raise_to = 11;
+}
+
+message Pot {
+  int64 amount = 1;
+  repeated string eligible_player_ids = 2;
 }
 
 message TableSnapshot {
@@ -72,6 +83,9 @@ message TableSnapshot {
   string small_blind_player_id = 14;
   string big_blind_player_id = 15;
   string dealer_player_id = 16;
+  uint64 snapshot_version = 17;
+  repeated Pot pots = 18;
+  string hand_id = 19;
 }
 
 // --- WEBSOCKET ENVELOPES ---
@@ -109,4 +123,7 @@ message ServerMessage {
   int32 seats_taken = 11; // for room_updated
   int64 amount = 12; // for payment_received
   string text = 13; // for system_broadcast
+  string action_id = 14; // correlation id for action_ack/error
+  uint64 snapshot_version = 15; // for equity delta
+  optional double equity = 16; // for equity delta (player_id identifies owner)
 }

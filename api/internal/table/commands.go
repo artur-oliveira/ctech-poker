@@ -12,6 +12,7 @@ type Command interface {
 
 type ReadyCmd struct {
 	PlayerID string
+	ActionID string
 	Ready    bool
 	Reply    chan error
 }
@@ -63,6 +64,7 @@ func (c SitOutCmd) reply() chan error { return c.Reply }
 
 type ShowCardsCmd struct {
 	PlayerID string
+	ActionID string
 	Reply    chan error
 }
 
@@ -93,6 +95,7 @@ func (c LeaveCmd) reply() chan error { return c.Reply }
 
 type PostBigBlindCmd struct {
 	PlayerID string
+	ActionID string
 	Reply    chan error
 }
 

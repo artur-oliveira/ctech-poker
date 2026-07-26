@@ -14,11 +14,14 @@ export type HandOutcomeState = {
   // the rival's on a loss — undefined when the hand ended without a
   // showdown, since no one's cards were ever revealed to compare.
   winningCards?: string[];
-  // The 2 hole cards belonging to that same winning hand — a subset of
-  // winningCards — so the banner can mark exactly which cards came from the
-  // player's own hand vs. the shared board instead of showing all 5 as one
-  // undifferentiated group.
+  // The 2 hole cards belonging to that same winning hand — retained so a win
+  // can identify which combination cards came from the viewer.
   winningHoleCards?: string[];
+  // The viewer's own resolved hand is also retained on a loss so the result
+  // can explain the showdown as an actual hand-to-hand comparison.
+  viewerCards?: string[];
+  viewerHoleCards?: string[];
+  winnerName?: string;
   // The viewer's stack right before this hand resolved and right after — the
   // chip counter below animates between the two, up when they gained chips,
   // down when they lost some, and stays hidden when neither changed (e.g. a
@@ -31,75 +34,40 @@ const EXIT_MS = 320;
 const CONFETTI_PIECES = Array.from({length: 8}, (_, i) => i);
 const CHIP_COUNT_MS = 700;
 
-type CategoryMeta = { gender: 'm' | 'f'; plural?: boolean };
-
-// Portuguese noun gender/number per category, for the possessive ("Seu" /
-// "Sua" / "Seus" / "Suas") and verb agreement in the matchup sentence below.
-// Only two_pair is plural ("dois pares"); everything else stays singular.
-const CATEGORY_META: Record<string, CategoryMeta> = {
-  high_card: {gender: 'f'},
-  pair: {gender: 'm'},
-  two_pair: {gender: 'm', plural: true},
-  three_of_a_kind: {gender: 'f'},
-  straight: {gender: 'f'},
-  flush: {gender: 'm'},
-  full_house: {gender: 'm'},
-  four_of_a_kind: {gender: 'f'},
-  straight_flush: {gender: 'm'},
-  royal_flush: {gender: 'm'}
-};
-
-function possessive({gender, plural}: CategoryMeta): string {
-  return plural ? (gender === 'f' ? 'Suas' : 'Seus') : (gender === 'f' ? 'Sua' : 'Seu');
+function categoryFor(cards?: string[], fallback?: string): string | undefined {
+  return cards?.length === 5 ? bestHandCategory(cards) : fallback;
 }
 
-function agree(singular: string, plural: string, meta: CategoryMeta): string {
-  return meta.plural ? plural : singular;
+function categoryLabel(category?: string): string | undefined {
+  return category && (HAND_CATEGORY_LABELS[category] || category);
 }
 
-// One sentence naming the actual matchup instead of a bare category chip:
-// same category on both sides needs a tie-break line (the category alone
-// doesn't explain who won); different categories name both hands directly.
-// `seed` (the outcome's ever-increasing key) rotates through a few phrasings
-// so a player on a winning or losing streak doesn't read the same line twice
-// in a row.
-function describeMatchup(kind: 'win' | 'lose' | 'tie', ownKey?: string, rivalKey?: string, seed = 0): string | null {
-  if (!ownKey || !rivalKey) return null;
-  const own = CATEGORY_META[ownKey] || {gender: 'm'};
-  const ownLower = (HAND_CATEGORY_LABELS[ownKey] || ownKey).toLowerCase();
-  const rivalLower = (HAND_CATEGORY_LABELS[rivalKey] || rivalKey).toLowerCase();
-  const poss = possessive(own);
+// The resolved five cards include kickers because poker needs them to rank a
+// hand. The outcome does not: it shows only the cards that visibly make the
+// named combination (two for a pair, four for two pair, all five for a
+// straight, and so on). A hand won without showdown has no revealed
+// combination, so it deliberately renders no cards.
+function combinationCards(cards?: string[], fallbackCategory?: string): string[] {
+  if (cards?.length !== 5) return [];
+  const category = categoryFor(cards, fallbackCategory);
+  return cards.slice(0, category ? HAND_MATCH_SIZE[category] ?? cards.length : cards.length);
+}
 
-  if (ownKey === rivalKey) {
-    const variants = kind === 'win' ? [
-      `${poss} ${ownLower} é ${agree('maior', 'maiores', own)} ${ownLower}.`,
-      `${poss} ${ownLower} ${agree('é', 'são', own)} ${agree('o', 'os', own)} ` +
-      `${agree('melhor', 'melhores', own)} da mesa no desempate.`
-    ] : kind === 'tie' ? [
-      `Divisão de pote com ${ownLower}.`,
-      `Pote dividido com ${ownLower}.`
-    ] : [
-      `${poss} ${ownLower} não ${agree('vence', 'vencem', own)} de ${rivalLower}.`,
-      `${poss} ${ownLower} ${agree('perdeu', 'perderam', own)} no desempate.`
-    ];
-    return variants[seed % variants.length];
-  }
-
-  const ownLabel = HAND_CATEGORY_LABELS[ownKey] || ownKey;
-  const variants = kind === 'win' ? [
-    `${ownLabel} ganha em cima de ${rivalLower}.`,
-    `${ownLabel} supera ${rivalLower} com folga.`,
-    `${ownLabel} leva a melhor sobre ${rivalLower}.`,
-    `${ownLabel} fecha na frente de ${rivalLower}.`
-  ] : kind === 'tie' ? [
-    `Pote dividido: ${ownLabel} empata com ${rivalLower}.`
-  ] : [
-    `${poss} ${ownLower} não ganha de ${rivalLower}.`,
-    `${poss} ${ownLower} não vence ${rivalLower}.`,
-    `${poss} ${ownLower} fica atrás de ${rivalLower}.`,
-    `${poss} ${ownLower} não é páreo para ${rivalLower}.`
-  ];
-  return variants[seed % variants.length];
+function OutcomeCards({cards, viewerHoleCards, startIndex = 0}: {
+  cards: string[];
+  viewerHoleCards?: string[];
+  startIndex?: number;
+}) {
+  const viewerCards = new Set(viewerHoleCards);
+  if (!cards.length) return null;
+  return <span className="hand-outcome-cards">
+    {cards.map((card, index) => {
+      const isViewerCard = viewerCards.has(card);
+      return <span key={card} className={`hand-outcome-card-slot${isViewerCard ? ' is-viewer' : ''}`}>
+        <PlayingCard card={card} index={startIndex + index} size="hole" owner={isViewerCard ? 'viewer' : undefined}/>
+      </span>;
+    })}
+  </span>;
 }
 
 /** Three-beat reveal of a stack change: the stack as it was, the delta that's
@@ -169,45 +137,62 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
   }, [leaving]);
 
   if (!shown) return null;
-  const category = shown.handCategory && (HAND_CATEGORY_LABELS[shown.handCategory] || shown.handCategory);
-  const detail = describeMatchup(shown.kind, shown.handCategory, shown.opponentCategory, shown.key);
-  // Read the category straight off winningCards itself (the same 5 cards
-  // already rendered below) instead of trusting the server's optional
-  // handCategory/opponentCategory fields — those only ever describe the
-  // viewer's own hand and the toughest rival, never "whoever's cards are in
-  // winningCards", so on a loss they'd point at the wrong side entirely.
-  // Only a genuine 5-card resolution has a category to slice; the 2-card
-  // fallback (board incomplete) shows every card as equally "the hand".
-  const winningCategory = shown.winningCards?.length === 5 ? bestHandCategory(shown.winningCards) : undefined;
-  const matchSize = winningCategory ? HAND_MATCH_SIZE[winningCategory] ?? shown.winningCards!.length :
-    shown.winningCards?.length ?? 0;
-  const holeCards = new Set(shown.winningHoleCards);
+  const ownCategory = categoryFor(shown.viewerCards || shown.winningCards, shown.handCategory);
+  const winnerCategory = categoryFor(shown.winningCards, shown.opponentCategory);
+  const ownCombination = combinationCards(shown.viewerCards || shown.winningCards, shown.handCategory);
+  const winningCombination = combinationCards(shown.winningCards, shown.opponentCategory);
+  const chipChange = shown.stackBefore != null && shown.stackAfter != null &&
+    shown.stackBefore !== shown.stackAfter
+    ? <ChipCountUp from={shown.stackBefore} to={shown.stackAfter}/>
+    : null;
+
   return <div className="hand-outcome" aria-hidden="true">
     <div key={shown.key} className={`hand-outcome-card ${shown.kind}${leaving ? ' leaving' : ''}`}>
-      {shown.kind === 'win' && <span className="hand-outcome-confetti">{CONFETTI_PIECES.map(i =>
-        <span key={i}/>)}</span>}
-      {shown.kind === 'win' ? <PartyPopper/> : shown.kind === 'tie' ? <Equal/> : null}
-      <b>{shown.kind === 'win' ? 'Você venceu a mão!' : shown.kind === 'tie' ? 'Empate!' : 'Não foi dessa vez.'}</b>
-      {/* Cards making the actual combination (`is-match`) stay full-size and
-          lit; the rest (`is-kicker`) shrink and dim instead of reading as
-          equal partners in the win — a pair shouldn't look like it needed all
-          5 cards. `is-hole` marks the 2 that came from the hand itself, not
-          the shared board, with its own ring + tag. */}
-      {shown.winningCards && <span className="hand-outcome-cards">
-        {shown.winningCards.map((card, i) => {
-          const fromHole = holeCards.has(card);
-          return <span key={card}
-                       className={`hand-outcome-card-slot ${i < matchSize ? 'is-match' : 'is-kicker'} ${fromHole ? 'is-hole' : ''}`}>
-            <PlayingCard card={card} index={i} size="hole" owner={fromHole ?
-              ((shown.kind === 'win' || shown.kind === 'tie') ? 'viewer' : 'opponent') : undefined}/>
-            {fromHole && <small className="hand-outcome-card-tag">Mão</small>}
-          </span>;
-        })}
-      </span>}
-      {shown.stackBefore != null && shown.stackAfter != null && shown.stackBefore !== shown.stackAfter &&
-          <ChipCountUp from={shown.stackBefore} to={shown.stackAfter}/>}
-      {detail ? <p className="hand-outcome-detail">{detail}</p> : category && <small>{category}</small>}
-      {(shown.kind === 'lose' || shown.kind === 'tie') && <small>A próxima mão já está a caminho.</small>}
+      {shown.kind === 'win' && <>
+        <span className="hand-outcome-confetti">{CONFETTI_PIECES.map(i => <span key={i}/>)}</span>
+        <div className="hand-outcome-heading">
+          <PartyPopper/>
+          <span><b>Você venceu!</b><small>{categoryLabel(ownCategory) || 'Pote conquistado'}</small></span>
+        </div>
+        <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>
+        {chipChange}
+      </>}
+
+      {shown.kind === 'lose' && <>
+        <div className="hand-outcome-heading">
+          <span><b>Não foi dessa vez.</b><small>Veja o confronto final</small></span>
+        </div>
+        <div className="hand-outcome-comparison">
+          <div className="hand-outcome-comparison-row winner">
+            <span className="hand-outcome-hand-name">
+              <small>{shown.winnerName || 'Vencedor'}</small>
+              <strong>{categoryLabel(winnerCategory) || 'Mão vencedora'}</strong>
+            </span>
+            <OutcomeCards cards={winningCombination} startIndex={0}/>
+          </div>
+          <span className="hand-outcome-versus">venceu</span>
+          <div className="hand-outcome-comparison-row viewer">
+            <span className="hand-outcome-hand-name">
+              <small>Você</small>
+              <strong>{categoryLabel(ownCategory) || 'Sua mão'}</strong>
+            </span>
+            <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards} startIndex={5}/>
+          </div>
+        </div>
+        {chipChange}
+        <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
+      </>}
+
+      {shown.kind === 'tie' && <>
+        <div className="hand-outcome-heading">
+          <Equal/>
+          <span><b>Pote dividido</b><small>{categoryLabel(ownCategory) || 'Combinação empatada'}</small></span>
+        </div>
+        <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>
+        <p className="hand-outcome-tie-note">Mesma combinação. Os naipes não desempatam.</p>
+        {chipChange}
+        <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
+      </>}
     </div>
   </div>;
 }

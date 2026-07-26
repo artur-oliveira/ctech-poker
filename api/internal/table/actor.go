@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"sort"
 	"sync/atomic"
 	"time"
 
@@ -228,10 +229,17 @@ func (a *Actor) handlePostBigBlind(ctx context.Context, c PostBigBlindCmd) error
 	}
 	apply := func() error {
 		a.cached.MarkReadyToPost(c.PlayerID)
-		return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "post_big_blind"})
+		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "post_big_blind",
+		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
-		return err
+		if !errors.Is(err, tablestore.ErrDuplicateAction) {
+			return err
+		}
+		if err := a.ensureLoaded(ctx, true); err != nil {
+			return err
+		}
 	}
 	a.broadcastAll()
 	return nil
@@ -244,7 +252,10 @@ func (a *Actor) handleSnapshot(ctx context.Context, c SnapshotCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
-	c.Snapshot <- a.cached.ViewFor(c.PlayerID)
+	snapshot := a.cached.ViewFor(c.PlayerID)
+	snapshot.SnapshotVersion = uint64(a.version)
+	snapshot.HandID = a.handID
+	c.Snapshot <- snapshot
 	return nil
 }
 
@@ -334,16 +345,21 @@ func (a *Actor) handleReady(ctx context.Context, c ReadyCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
-	a.markLastAction(c.PlayerID)
 	apply := func() error { return a.applyReadyAndCommit(ctx, c) }
 	if err := a.retryOnConflict(ctx, apply); err != nil {
-		return err
+		if !errors.Is(err, tablestore.ErrDuplicateAction) {
+			return err
+		}
+		if err := a.ensureLoaded(ctx, true); err != nil {
+			return err
+		}
 	}
 	a.broadcastAll()
 	return nil
 }
 
 func (a *Actor) applyReadyAndCommit(ctx context.Context, c ReadyCmd) error {
+	a.markLastAction(c.PlayerID)
 	for _, p := range a.cached.PlayersForActor() {
 		if p.ID == c.PlayerID {
 			p.Ready = c.Ready
@@ -363,7 +379,9 @@ func (a *Actor) applyReadyAndCommit(ctx context.Context, c ReadyCmd) error {
 	} else {
 		a.cached.SitOutForActor(c.PlayerID)
 	}
-	return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: action})
+	return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+		PlayerID: c.PlayerID, ActionID: c.ActionID, Action: action,
+	})
 }
 
 // tryStartHand attempts to start a new hand if the table is between hands.
@@ -428,6 +446,7 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 			if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
 				return reloadErr
 			}
+			a.markLastAction(c.PlayerID)
 			_, err = a.applyActAndCommit(ctx, c)
 		}
 	}
@@ -520,22 +539,48 @@ func (a *Actor) commitOutcomeLogEntries(ctx context.Context) error {
 	if outcome == nil {
 		return nil
 	}
-	a.outcomeLoggedForHand = a.handID
+	entries := make([]tablestore.ActionLogEntry, 0)
 	if outcome.WonWithoutShowdown {
 		for _, id := range outcome.Winners {
-			entry := tablestore.ActionLogEntry{PlayerID: id, Action: "won", Amount: outcome.Payouts[id]}
-			if err := a.commit(ctx, "", &entry); err != nil {
+			entries = append(entries, tablestore.ActionLogEntry{PlayerID: id, Action: "won", Amount: outcome.Payouts[id]})
+		}
+	} else {
+		ids := make([]string, 0, len(outcome.ShowdownResults))
+		for id := range outcome.ShowdownResults {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			result := outcome.ShowdownResults[id]
+			entries = append(entries, tablestore.ActionLogEntry{PlayerID: id, Action: result.Action(), Amount: outcome.Payouts[id]})
+		}
+	}
+	for _, entry := range entries {
+		actionID := "outcome:" + a.handID + ":" + entry.PlayerID
+		entry.ActionID = actionID
+		for {
+			err := a.commit(ctx, actionID, &entry)
+			if err == nil {
+				break
+			}
+			if !errors.Is(err, tablestore.ErrDuplicateAction) && !errors.Is(err, tablestore.ErrVersionConflict) {
 				return err
 			}
+			// A prior partial attempt may already have written this row and
+			// advanced the table version. Reload before continuing so the next
+			// missing outcome entry does not conflict against that stale
+			// version. A version conflict retries this same deterministic row.
+			if err := a.ensureLoaded(ctx, true); err != nil {
+				return err
+			}
+			if errors.Is(err, tablestore.ErrDuplicateAction) {
+				break
+			}
 		}
-		return nil
 	}
-	for id, result := range outcome.ShowdownResults {
-		entry := tablestore.ActionLogEntry{PlayerID: id, Action: result.Action(), Amount: outcome.Payouts[id]}
-		if err := a.commit(ctx, "", &entry); err != nil {
-			return err
-		}
-	}
+	// Do not suppress retries after a partial write. Deterministic action IDs
+	// make already-written rows safe to replay.
+	a.outcomeLoggedForHand = a.handID
 	return nil
 }
 
@@ -768,8 +813,8 @@ func (a *Actor) handleSitOut(ctx context.Context, c SitOutCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
-	a.markLastAction(c.PlayerID)
 	apply := func() error {
+		a.markLastAction(c.PlayerID)
 		a.cached.SitOutForActor(c.PlayerID)
 		return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "sit_out"})
 	}
@@ -788,10 +833,17 @@ func (a *Actor) handleShowCards(ctx context.Context, c ShowCardsCmd) error {
 		if err := a.cached.RevealHoleCards(c.PlayerID); err != nil {
 			return err
 		}
-		return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "show_cards"})
+		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "show_cards",
+		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
-		return err
+		if !errors.Is(err, tablestore.ErrDuplicateAction) {
+			return err
+		}
+		if err := a.ensureLoaded(ctx, true); err != nil {
+			return err
+		}
 	}
 	a.broadcastAll()
 	return nil
@@ -1148,6 +1200,8 @@ func (a *Actor) broadcastAll() {
 	doEquity := a.equityEnabled.Load() && equityStage(stage)
 	for _, p := range a.cached.PlayersForActor() {
 		snapshot := a.cached.ViewFor(p.ID)
+		snapshot.SnapshotVersion = uint64(a.version)
+		snapshot.HandID = a.handID
 		if current != "" && current == a.turnDeadlineFor {
 			snapshot.ActionDeadlineUnixMs = a.turnDeadline.UnixMilli()
 		}
@@ -1167,7 +1221,7 @@ func (a *Actor) broadcastAll() {
 					// Offload equity from the Run goroutine: compute in a
 					// goroutine over captured values and push a follow-up
 					// state update when ready.
-					go a.computeAndSendEquity(p.ID, snapshot, hole, board, opponents)
+					go a.computeAndSendEquity(p.ID, snapshot.SnapshotVersion, hole, board, opponents)
 				}
 			}
 		}
@@ -1195,23 +1249,23 @@ func equityStage(stage hand.Stage) bool {
 // it works on a copy of the captured snapshot so there is no race with Run or
 // with the synchronous broadcast that already sent the same Snapshot. When
 // ready it pushes a follow-up state update carrying the equity.
-func (a *Actor) computeAndSendEquity(viewerID string, snapshot hand.Snapshot, hole [2]deck.Card, board []deck.Card, opponents int) {
+func (a *Actor) computeAndSendEquity(
+	viewerID string,
+	snapshotVersion uint64,
+	hole [2]deck.Card,
+	board []deck.Card,
+	opponents int,
+) {
 	estimate, err := equity.Estimate(hole, board, nil, opponents, 500)
 	if err != nil {
 		return
 	}
-	// Copy Seats: the captured snapshot shares a backing array with the one the
-	// synchronous broadcast already sent, so mutating it in place would race.
-	out := snapshot
-	out.Seats = make([]hand.SeatView, len(snapshot.Seats))
-	copy(out.Seats, snapshot.Seats)
-	for i := range out.Seats {
-		if out.Seats[i].PlayerID == viewerID {
-			out.Seats[i].Equity = &estimate
-			break
-		}
-	}
-	a.broadcast(viewerID, out)
+	a.broadcast(viewerID, hand.Snapshot{
+		SnapshotVersion: snapshotVersion,
+		EquityOnly:      true,
+		EquityPlayerID:  viewerID,
+		EquityValue:     &estimate,
+	})
 }
 
 func (a *Actor) SetEquityEnabledForActor(enabled bool) { a.equityEnabled.Store(enabled) }

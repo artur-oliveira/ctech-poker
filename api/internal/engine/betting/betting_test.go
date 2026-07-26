@@ -97,6 +97,25 @@ func TestShortAllInDoesNotReopenActionForPlayersWhoAlreadyActed(t *testing.T) {
 	}
 }
 
+func TestOversizedAllInTargetUsesActualStackForRaiseClassification(t *testing.T) {
+	p1 := &PlayerState{ID: "P1", Stack: 900, Contributed: 100, ActedSinceLastFullRaise: true}
+	p2 := &PlayerState{ID: "P2", Stack: 50, Contributed: 100}
+	r := NewRound([]*PlayerState{p1, p2}, 100, 100)
+
+	if err := r.Act(1, ActionRaise, 1_000_000); err != nil {
+		t.Fatalf("oversized target should clamp to the player's all-in stack: %v", err)
+	}
+	if r.CurrentBet != 150 {
+		t.Fatalf("current bet = %d, want actual all-in total 150", r.CurrentBet)
+	}
+	if r.MinRaise != 100 {
+		t.Fatalf("short all-in must preserve the 100 minimum raise, got %d", r.MinRaise)
+	}
+	if !p1.ActedSinceLastFullRaise {
+		t.Fatal("short all-in derived from a clamped target must not reopen P1's action")
+	}
+}
+
 func TestFullRaiseReopensActionForEveryone(t *testing.T) {
 	p1 := &PlayerState{ID: "P1", Stack: 1000}
 	p2 := &PlayerState{ID: "P2", Stack: 1000}

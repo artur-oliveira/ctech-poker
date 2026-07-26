@@ -1130,12 +1130,11 @@ func (t *Table) runShowdown() {
 		for _, w := range winners {
 			payouts[w] += share
 		}
-		// Odd chip goes to the first winner in seat order (closest to the
-		// button, standard convention) — winners is already in table seat
-		// order since layer.Eligible preserves contributions' input order.
+		// Odd chips start left of the dealer and move clockwise. Raw table
+		// order is not enough because the button moves between hands.
 		remainder := netAmount - share*int64(len(winners))
 		if remainder > 0 {
-			payouts[winners[0]] += remainder
+			payouts[t.oddChipWinner(winners)] += remainder
 		}
 	}
 	for id, amount := range payouts {
@@ -1215,6 +1214,24 @@ func (t *Table) runShowdown() {
 	t.lastOutcome = &outcome
 	t.stage = Complete
 	t.rotateDealer()
+}
+
+func (t *Table) oddChipWinner(winners []string) string {
+	if len(winners) == 0 {
+		return ""
+	}
+	winnerSet := make(map[string]bool, len(winners))
+	for _, id := range winners {
+		winnerSet[id] = true
+	}
+	dealer := t.dealerIndexWithin(t.handOrder)
+	for offset := 1; offset <= len(t.handOrder); offset++ {
+		id := t.handOrder[(dealer+offset)%len(t.handOrder)].ID
+		if winnerSet[id] {
+			return id
+		}
+	}
+	return winners[0]
 }
 
 func dedupeIDs(ids []string) []string {

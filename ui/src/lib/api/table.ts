@@ -18,7 +18,18 @@ export interface LegalActionState {
   call_amount?: number;
   min_raise_to?: number;
   max_raise_to?: number;
-  step?: number
+  step?: number;
+  current_contribution?: number;
+  current_bet?: number;
+  one_third_pot_raise_to?: number;
+  half_pot_raise_to?: number;
+  two_thirds_pot_raise_to?: number;
+  pot_raise_to?: number
+}
+
+export interface PotView {
+  amount: number;
+  eligible_player_ids: string[]
 }
 
 export interface TableSnapshot {
@@ -42,6 +53,11 @@ export interface TableSnapshot {
   dealer_player_id?: string;
   small_blind_player_id?: string;
   big_blind_player_id?: string
+  snapshot_version?: number;
+  pots?: PotView[];
+  hand_id?: string;
+  shuffle_commit_hash?: string;
+  shuffle_server_seed_hex?: string
 }
 
 export type ServerMessage = {
@@ -52,7 +68,9 @@ export type ServerMessage = {
   player_id?: string;
   message?: string;
   code?: string;
-  action_id?: string
+  action_id?: string;
+  snapshot_version?: number;
+  equity?: number
 }
 
 export type Action = (

@@ -15,7 +15,8 @@ type Props = {
   minRaise: number;
   maxRaise: number;
   raiseStep: number;
-  pot: number;
+  effectiveStack: number;
+  raisePresets: {label: string; value: number}[];
   actionKey: string;
   isTurn: boolean;
   connected: boolean;
@@ -61,24 +62,21 @@ const COMPACT_QUERY = '(max-width: 800px), (max-height: 620px) and (orientation:
 
 /** Raise control. Keyed by `actionKey` in the parent so the chosen amount
  * resets to the street minimum on every new decision without an effect. */
-function RaiseControl({minRaise, maxRaise, raiseStep, pot, disabled, pending, onRaise}: {
-  minRaise: number; maxRaise: number; raiseStep: number; pot: number; disabled: boolean; pending: boolean;
+function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending, onRaise}: {
+  minRaise: number; maxRaise: number; raiseStep: number; disabled: boolean; pending: boolean;
+  presets: {label: string; value: number}[];
   onRaise: (amount: number) => void;
 }) {
   const [amount, setAmount] = useState(minRaise);
   const [expanded, setExpanded] = useState(false);
   const safeAmount = Math.min(maxRaise, Math.max(minRaise, amount));
-  const inactive = disabled || maxRaise <= minRaise;
+  const inactive = disabled || maxRaise < minRaise;
   // Raising to the max is shoving the whole stack — call it what it is
   // instead of a "Pay" label with a number that happens to equal the stack.
   const isAllIn = safeAmount >= maxRaise;
-  const snap = (value: number) => Math.min(maxRaise, Math.max(minRaise, Math.round(value / raiseStep) * raiseStep));
-  const presets = [
-    {label: 'Mín', value: minRaise},
-    {label: '½ pote', value: snap(pot / 2)},
-    {label: 'Pote', value: snap(pot)},
-    {label: 'Máx', value: maxRaise},
-  ];
+  const uniquePresets = presets
+    .map(preset => ({...preset, value: Math.min(maxRaise, Math.max(minRaise, preset.value))}))
+    .filter((preset, index, all) => all.findIndex(item => item.value === preset.value) === index);
 
   useEffect(() => {
     if (inactive) return undefined;
@@ -93,7 +91,7 @@ function RaiseControl({minRaise, maxRaise, raiseStep, pot, disabled, pending, on
         }
         if (key === 'h') {
           event.preventDefault();
-          setAmount(Math.min(maxRaise, Math.max(minRaise, Math.round(pot / 2 / raiseStep) * raiseStep)));
+          setAmount(presets.find(preset => preset.label === '½ pote')?.value ?? minRaise);
           return;
         }
         if (key === 'a') {
@@ -120,7 +118,7 @@ function RaiseControl({minRaise, maxRaise, raiseStep, pot, disabled, pending, on
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [inactive, safeAmount, onRaise, minRaise, maxRaise, raiseStep, pot]);
+  }, [inactive, safeAmount, onRaise, minRaise, maxRaise, raiseStep, presets]);
 
   function handleRaiseClick() {
     if (!expanded && window.matchMedia(COMPACT_QUERY).matches) {
@@ -134,7 +132,7 @@ function RaiseControl({minRaise, maxRaise, raiseStep, pot, disabled, pending, on
     <label className={`bet-control${expanded ? '' : ' bet-control-collapsed'}`} htmlFor="raise-amount">
       <span className="sr-only">Valor total do aumento</span>
       <div className="bet-presets" role="group" aria-label="Valores rápidos de aumento">
-        {presets.map(preset => <button key={preset.label} type="button" disabled={inactive}
+        {uniquePresets.map(preset => <button key={preset.label} type="button" disabled={inactive}
                                        onClick={() => setAmount(preset.value)}>{preset.label}</button>)}
       </div>
       <Input id="raise-amount" aria-describedby="action-context" type="range"
@@ -162,7 +160,8 @@ export function ActionBar({
                             minRaise,
                             maxRaise,
                             raiseStep,
-                            pot,
+                            effectiveStack,
+                            raisePresets,
                             actionKey,
                             isTurn,
                             connected,
@@ -171,7 +170,9 @@ export function ActionBar({
                             onDismissErrorAction
                           }: Props) {
   const unavailable = !connected || !isTurn || pending !== null;
-  const context = !connected ? 'Reconectando antes de liberar as ações…' : pending ? actionLabel[pending] : !isTurn ? 'Aguarde sua vez.' : 'Sua vez de agir.';
+  const context = !connected ? 'Reconectando antes de liberar as ações…' : pending ? actionLabel[pending] : !isTurn ?
+    'Aguarde sua vez.' : effectiveStack > 0 ?
+      `Sua vez de agir. Stack efetivo: ${effectiveStack.toLocaleString('pt-BR')} fichas.` : 'Sua vez de agir.';
   const label = (action: PokerAction, idle: string, key?: string) => {
     if (pending === action) {
       return <><LoaderCircle className="action-spinner"/> {actionLabel[action]}</>;
@@ -218,7 +219,7 @@ export function ActionBar({
                 className="call">{label('call', callAmount > 0 ? `Pagar ${callAmount.toLocaleString('pt-BR')}` : 'Pagar', 'P')}</Button>
     </div>}
     {!noLegalActions && <RaiseControl key={actionKey} minRaise={minRaise} maxRaise={maxRaise} raiseStep={raiseStep}
-                                      pot={pot} disabled={unavailable || !available.raise}
+                                      disabled={unavailable || !available.raise} presets={raisePresets}
                                       pending={pending === 'raise'} onRaise={onRaise}/>}
     {error && <div className="action-error" role="alert">
         <CircleAlert aria-hidden="true"/><p>{error.message}</p>

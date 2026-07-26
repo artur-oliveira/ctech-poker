@@ -3,8 +3,10 @@ package hand
 import (
 	"encoding/hex"
 
+	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 	"gopkg.aoctech.app/poker/api/internal/engine/handeval"
+	"gopkg.aoctech.app/poker/api/internal/engine/sidepots"
 )
 
 // Snapshot is the wire-safe view of a Table for exactly one viewer. Building
@@ -33,17 +35,38 @@ type Snapshot struct {
 	SmallBlindPlayerID   string        `json:"small_blind_player_id,omitempty"`
 	BigBlindPlayerID     string        `json:"big_blind_player_id,omitempty"`
 	DealerPlayerID       string        `json:"dealer_player_id,omitempty"`
+	SnapshotVersion      uint64        `json:"snapshot_version,omitempty"`
+	Pots                 []PotView     `json:"pots,omitempty"`
+	HandID               string        `json:"hand_id,omitempty"`
+
+	// EquityOnly is actor-internal metadata. An asynchronous equity estimate
+	// is transported as a versioned delta instead of replaying the complete
+	// snapshot captured before the calculation started.
+	EquityOnly     bool     `json:"-"`
+	EquityPlayerID string   `json:"-"`
+	EquityValue    *float64 `json:"-"`
 }
 
 // LegalActions is the authoritative set of moves the viewer may make right
 // now, with the chip math the UI needs to render the raise control. The server
 // is the single source of truth — the client must not derive these itself.
 type LegalActions struct {
-	Actions    []string `json:"actions"`      // subset of fold|check|call|raise
-	CallAmount int64    `json:"call_amount"`  // chips owed to call (0 when a check is available)
-	MinRaiseTo int64    `json:"min_raise_to"` // smallest total bet a raise may reach
-	MaxRaiseTo int64    `json:"max_raise_to"` // largest total bet (all-in): viewer stack + already contributed
-	Step       int64    `json:"step"`         // raise increment for the + / - stepper
+	Actions             []string `json:"actions"`      // subset of fold|check|call|raise
+	CallAmount          int64    `json:"call_amount"`  // chips owed to call (0 when a check is available)
+	MinRaiseTo          int64    `json:"min_raise_to"` // smallest total bet a raise may reach
+	MaxRaiseTo          int64    `json:"max_raise_to"` // largest total bet (all-in): viewer stack + already contributed
+	Step                int64    `json:"step"`         // raise increment for the + / - stepper
+	CurrentContribution int64    `json:"current_contribution"`
+	CurrentBet          int64    `json:"current_bet"`
+	OneThirdPotRaiseTo  int64    `json:"one_third_pot_raise_to"`
+	HalfPotRaiseTo      int64    `json:"half_pot_raise_to"`
+	TwoThirdsPotRaiseTo int64    `json:"two_thirds_pot_raise_to"`
+	PotRaiseTo          int64    `json:"pot_raise_to"`
+}
+
+type PotView struct {
+	Amount            int64    `json:"amount"`
+	EligiblePlayerIDs []string `json:"eligible_player_ids"`
 }
 
 type SeatView struct {
@@ -150,6 +173,7 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		CurrentPlayerID:    current,
 		LegalActions:       t.legalActionsFor(viewerID, current),
 		WonWithoutShowdown: wonWithoutShowdown,
+		Pots:               t.potViews(),
 	}
 	if len(t.handOrder) >= 2 {
 		sb, bb := t.blindSeats(t.handOrder)
@@ -162,6 +186,29 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		if t.stage == Complete {
 			out.ShuffleServerSeedHex = hex.EncodeToString(t.shuffle.ServerSeed[:])
 		}
+	}
+	return out
+}
+
+func (t *Table) potViews() []PotView {
+	contributions := make([]sidepots.Contribution, 0, len(t.handOrder))
+	folded := make(map[string]bool, len(t.handOrder))
+	for _, p := range t.handOrder {
+		if p.Contributed > 0 {
+			contributions = append(contributions, sidepots.Contribution{PlayerID: p.ID, Amount: p.Contributed})
+		}
+		folded[p.ID] = p.State == Folded
+	}
+	layers := sidepots.ComputeSidePots(contributions)
+	out := make([]PotView, 0, len(layers))
+	for _, layer := range layers {
+		eligible := make([]string, 0, len(layer.Eligible))
+		for _, id := range layer.Eligible {
+			if !folded[id] {
+				eligible = append(eligible, id)
+			}
+		}
+		out = append(out, PotView{Amount: layer.Amount, EligiblePlayerIDs: eligible})
 	}
 	return out
 }
@@ -270,7 +317,11 @@ func (t *Table) legalActionsFor(viewerID, current string) *LegalActions {
 	if bs.Folded || bs.AllIn {
 		return &LegalActions{}
 	}
-	la := &LegalActions{Actions: []string{"fold"}}
+	la := &LegalActions{
+		Actions:             []string{"fold"},
+		CurrentContribution: bs.Contributed,
+		CurrentBet:          t.round.CurrentBet,
+	}
 	owed := t.round.CurrentBet - bs.Contributed
 	if owed <= 0 {
 		la.Actions = append(la.Actions, "check")
@@ -293,12 +344,42 @@ func (t *Table) legalActionsFor(viewerID, current string) *LegalActions {
 		}
 		la.MinRaiseTo = minRaiseTo
 		la.MaxRaiseTo = maxTo
-		la.Step = t.round.MinRaise
+		la.Step = t.bigBlind
 		if la.Step <= 0 {
-			la.Step = t.bigBlind
+			la.Step = 1
 		}
+		la.OneThirdPotRaiseTo = t.potFractionRaiseTo(bs, owed, minRaiseTo, maxTo, 1, 3)
+		la.HalfPotRaiseTo = t.potFractionRaiseTo(bs, owed, minRaiseTo, maxTo, 1, 2)
+		la.TwoThirdsPotRaiseTo = t.potFractionRaiseTo(bs, owed, minRaiseTo, maxTo, 2, 3)
+		la.PotRaiseTo = t.potFractionRaiseTo(bs, owed, minRaiseTo, maxTo, 1, 1)
 	}
 	return la
+}
+
+func (t *Table) potFractionRaiseTo(
+	bs *betting.PlayerState,
+	owed, minRaiseTo, maxRaiseTo, numerator, denominator int64,
+) int64 {
+	if denominator <= 0 {
+		return minRaiseTo
+	}
+	if owed < 0 {
+		owed = 0
+	}
+	var pot int64
+	for _, p := range t.handOrder {
+		pot += p.Contributed
+	}
+	// A fraction-of-pot raise is sized after first matching the current bet:
+	// raise-to = own street contribution + call + fraction*(pot + call).
+	target := bs.Contributed + owed + (pot+owed)*numerator/denominator
+	if target < minRaiseTo {
+		target = minRaiseTo
+	}
+	if target > maxRaiseTo {
+		target = maxRaiseTo
+	}
+	return target
 }
 
 // playerToActForTest returns the ID of whoever must act now — test-only
