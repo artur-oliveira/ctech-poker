@@ -1,20 +1,16 @@
 # api/ — CLAUDE.md
 
 Go real-time poker game server (Fiber v3 + `fasthttp/websocket` + DynamoDB + Valkey). **Sandbox (play-money) mode is
-implemented end-to-end. Real-money mode (Phase 5) is now reachable in-repo (fixed 2026-07-25):** `POST /rooms`
-accepts `currency_mode: "real"` (`internal/api/v1/roomdto.go`, `internal/api/v1/rooms.go:createRoom`), gated on
-`cfg.RealMoneyEnabled`; `GET /rooms/stakes?currency_mode=real` serves the BRL-cent catalog under the same gate.
-`newBuyinService`'s real-money branch now chains `.WithPlayers(players)` so real-money buy-ins get the same
-terms-of-service gate sandbox does. CDK (`cdk/lib/api-stack.ts`) fetches `REAL_MONEY_ENABLED`/`LEGAL_SIGNOFF_REF`
-from SSM (`/ctech/{env}/poker/real-money-enabled`, `.../legal-signoff-ref`) on every boot. **Still blocking, found
-2026-07-25 while verifying cross-repo:** ctech-wallet's scope catalog (`ctech-account/api/internal/scopes/catalog.go`)
-has no `internal:wallet:game-status` entry, so no M2M client can ever be granted the scope
-`ctech-wallet`'s `GET /wallet/game/status/:user_id` requires — poker's `IsGamblingActivated` check can never
-succeed until ctech-account adds that scope. Also unresolved: no ASG lifecycle hook exists in either
-`ctech-cdk`'s `PrivateIpv4Ec2Service` or this repo's `cdk/lib/api-stack.ts` — `tablemanager.DrainAndRelease`
-relies on the EC2 default shutdown grace period, not a guaranteed drain window. See
-`docs/plans/2026-07-19-poker-phase5-realmoney-and-hardening.md`'s Status section for the full task-by-task
-verdict (predates this fix; treat the blockers above as current, the rest as historical).
+implemented end-to-end with a 2.5% rake engine. Real-money mode (Phase 5) is fully implemented end-to-end under the
+Brazil-legal fixed-fee model (no rake, flat entry fee per tier):** `POST /rooms` accepts `currency_mode: "real"`,
+validates blinds against the 10-tier fee catalog, and stores the fixed `EntryFeeCents` on the room. Every real-money
+buy-in and rebuy charges that entry fee to the player's real withdrawable wallet via `walletclient.DebitReal`.
+Failed fee debits are queued to the same retry table (`poker_pending_cashouts` with `Kind: "fee_debit"`) for Lambda
+reconciliation retries. **Still blocking, found 2026-07-25 while verifying cross-repo:**
+1. ctech-wallet's scope catalog (`ctech-account/api/internal/scopes/catalog.go`) has no `internal:wallet:game-status` entry, so no M2M client can ever be granted the scope `ctech-wallet`'s `GET /wallet/game/status/:user_id` requires.
+2. Poker's M2M client has never been granted the `internal:wallet:debit-real` scope in `ctech-account`'s catalog.
+Both are data/config actions in `ctech-account`, not code changes in this repo.
+Also unresolved: no ASG lifecycle hook exists in either `ctech-cdk`'s `PrivateIpv4Ec2Service` or this repo's `cdk/lib/api-stack.ts` — `tablemanager.DrainAndRelease` relies on the EC2 default shutdown grace period, not a guaranteed drain window.
 
 ## Conventions (follow these)
 

@@ -1,7 +1,6 @@
 # ui/ — CLAUDE.md
 
-Next.js 16 (App Router) SPA for the poker lobby, tables, and game client. **Sandbox mode
-only — real-money UI is DESIGNED-ONLY.**
+Next.js 16 (App Router) SPA for the poker lobby, tables, and game client. **Both sandbox (virtual currency) and real-money (Brazil-legal fixed-fee model) modes are fully supported in the UI.**
 
 ## Conventions
 
@@ -26,8 +25,7 @@ only — real-money UI is DESIGNED-ONLY.**
 
 ## DESIGNED-ONLY (do not assume present)
 
-Lobby stake/mode filters · private-room share-link UI · real-money/wallet flow · crypto
-fairness/audit surfaces · player reactions · hand history · chat moderation · achievements
+Lobby stake/mode filters · crypto fairness/audit surfaces · player reactions · chat moderation · achievements
 catalog screen · roulette wheel visual · physical chip travel · Geist font binding
 (`--font-sans`/`--font-mono` not yet wired via `next/font`). All confirmed absent in `src/`.
 
