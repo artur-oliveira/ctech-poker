@@ -3,12 +3,13 @@ import {ClientMessage, ServerMessage} from "@/lib/api/proto/poker";
 /**
  * Encodes outbound client messages into binary frames.
  */
-export const encodeClientMessage = (val: object): Uint8Array => {
+export const encodeClientMessage = (val: object): ArrayBuffer => {
   const msg = ClientMessage.fromPartial(val);
   if ((val as { token: string }).token && !msg.type) {
     msg.type = 'auth';
   }
-  return ClientMessage.encode(msg).finish();
+  const bytes = ClientMessage.encode(msg).finish();
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 };
 
 /**
@@ -19,6 +20,5 @@ export const decodeServerMessage = (data: object): object => {
     return JSON.parse(data);
   }
   const bytes = new Uint8Array(data as ArrayBuffer);
-  const msg = ServerMessage.decode(bytes);
-  return msg;
+  return ServerMessage.decode(bytes);
 };

@@ -220,6 +220,18 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 			reg.Broadcast(context.Background(), tableID+"#"+viewerID, data)
 		}
 	}
+	persistHandHistory := func(tableID, handID string, outcome hand.HandOutcome, names map[string]string) {
+		if sessionStore == nil {
+			return
+		}
+		for _, id := range outcome.Participants {
+			item := handItemFor(outcome, id, names)
+			item.PK, item.TableID, item.HandID, item.EndedAt = id, tableID, handID, time.Now().UnixMilli()
+			if err := sessionStore.RecordHand(context.Background(), item); err != nil {
+				slog.Error("sessionlog: record hand failed", "table", tableID, "hand", handID, "player", id, "err", err)
+			}
+		}
+	}
 	onHandComplete := func(tableID, handID string, outcome hand.HandOutcome, names map[string]string) {
 		ctx := context.Background()
 		unlocks, err := achv.RecordHand(ctx, tableID, outcome)
@@ -242,15 +254,7 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		if err := leaderboardSvc.RecordHand(ctx, outcome, names); err != nil {
 			slog.Error("leaderboard record hand failed", "table", tableID, "err", err)
 		}
-		if sessionStore != nil {
-			for _, id := range outcome.Participants {
-				item := handItemFor(outcome, id, names)
-				item.PK, item.TableID, item.HandID, item.EndedAt = id, tableID, handID, time.Now().UnixMilli()
-				if err := sessionStore.RecordHand(ctx, item); err != nil {
-					slog.Error("sessionlog: record hand failed", "table", tableID, "hand", handID, "player", id, "err", err)
-				}
-			}
-		}
+		persistHandHistory(tableID, handID, outcome, names)
 	}
 	// roomLoader re-arms blind escalation and the per-turn action timeout from
 	// the room's authoritative config on every actor creation (T6), so both
@@ -266,6 +270,7 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		return r, true, nil
 	}
 	mgr := tablemanager.NewManager(leases, store, broadcast, roomLoader, onHandComplete)
+	mgr.SetOnHandUpdated(persistHandHistory)
 	mgr.SetOnSeatsChanged(func(tableID string, seatsTaken int) {
 		if err := rooms.SetSeatsTaken(context.Background(), tableID, seatsTaken); err != nil {
 			slog.Error("roomstore: seats taken write-through failed", "table", tableID, "err", err)
@@ -312,6 +317,13 @@ func handItemFor(outcome hand.HandOutcome, id string, names map[string]string) s
 		summary := sessionlog.OpponentSummary{PlayerID: opp, Name: names[opp]}
 		if info.Revealed {
 			summary.HoleCards = info.HoleCards[:]
+		} else if info.RevealedCards[0] || info.RevealedCards[1] {
+			summary.HoleCards = []string{"back", "back"}
+			for i, revealed := range info.RevealedCards {
+				if revealed {
+					summary.HoleCards[i] = info.HoleCards[i]
+				}
+			}
 		}
 		for _, w := range outcome.Winners {
 			if w == opp {

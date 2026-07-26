@@ -739,9 +739,10 @@ type TableSnapshot struct {
 	PotResults           []*PotResult           `protobuf:"bytes,20,rep,name=pot_results,json=potResults,proto3" json:"pot_results,omitempty"`
 	// Allows clients to apply explicit compatibility fallbacks during rolling
 	// deployments instead of mistaking absent proto3 fields for false.
-	ProtocolVersion uint32 `protobuf:"varint,21,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	ProtocolVersion   uint32 `protobuf:"varint,21,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"`
+	IdleRemovalUnixMs int64  `protobuf:"varint,22,opt,name=idle_removal_unix_ms,json=idleRemovalUnixMs,proto3" json:"idle_removal_unix_ms,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *TableSnapshot) Reset() {
@@ -921,10 +922,17 @@ func (x *TableSnapshot) GetProtocolVersion() uint32 {
 	return 0
 }
 
+func (x *TableSnapshot) GetIdleRemovalUnixMs() int64 {
+	if x != nil {
+		return x.IdleRemovalUnixMs
+	}
+	return 0
+}
+
 // ClientMessage is sent from the client to the server.
 type ClientMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "auth" | "ping" | "sync_state" | "ready" | "act" | "post_big_blind" | "show_cards" | "chat"
+	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "auth" | "ping" | "sync_state" | "ready" | "act" | "post_big_blind" | "show_cards" | "keep_seat" | "chat"
 	// payload fields
 	Token                   string `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`                                                                       // for auth frame
 	ShareCode               string `protobuf:"bytes,3,opt,name=share_code,json=shareCode,proto3" json:"share_code,omitempty"`                                              // for auth frame
@@ -1306,7 +1314,7 @@ const file_poker_proto_rawDesc = "" +
 	"\x06refund\x18\x06 \x01(\bR\x06refund\x1a:\n" +
 	"\fPayoutsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xb4\a\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xe5\a\n" +
 	"\rTableSnapshot\x12\x14\n" +
 	"\x05stage\x18\x01 \x01(\tR\x05stage\x12\x14\n" +
 	"\x05board\x18\x02 \x03(\tR\x05board\x12!\n" +
@@ -1331,7 +1339,8 @@ const file_poker_proto_rawDesc = "" +
 	"\ahand_id\x18\x13 \x01(\tR\x06handId\x121\n" +
 	"\vpot_results\x18\x14 \x03(\v2\x10.poker.PotResultR\n" +
 	"potResults\x12)\n" +
-	"\x10protocol_version\x18\x15 \x01(\rR\x0fprotocolVersion\x1a:\n" +
+	"\x10protocol_version\x18\x15 \x01(\rR\x0fprotocolVersion\x12/\n" +
+	"\x14idle_removal_unix_ms\x18\x16 \x01(\x03R\x11idleRemovalUnixMs\x1a:\n" +
 	"\fPayoutsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xee\x02\n" +

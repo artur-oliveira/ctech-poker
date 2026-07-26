@@ -65,6 +65,7 @@ export interface TableSnapshot {
   rake?: number;
   action_deadline_unix_ms?: number;
   next_hand_unix_ms?: number;
+  idle_removal_unix_ms?: number;
   won_without_showdown?: boolean;
   // Absent before the first hand's dealer is drawn (mirrors the API's
   // omitempty). Heads-up play has the dealer double as the small blind.
@@ -95,7 +96,7 @@ export type ServerMessage = {
 
 export type Action = (
   'post_big_blind' | 'escalate_blinds' | 'not_ready' | 'ready' | 'sit_out' | 'show_cards' | 'disconnect_sit_out' | 'join' |
-  'leave' | 'next_hand' | 'runout_step' | 'check' | 'fold' | 'call' | 'bet' | 'raise' | 'all_in' | 'won' | 'tie'
+  'leave' | 'keep_seat' | 'next_hand' | 'runout_step' | 'check' | 'fold' | 'call' | 'bet' | 'raise' | 'all_in' | 'won' | 'tie'
   )
 
 export interface HandHistoryAction {

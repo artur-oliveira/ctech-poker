@@ -150,6 +150,7 @@ export interface TableSnapshot {
    * deployments instead of mistaking absent proto3 fields for false.
    */
   protocol_version: number;
+  idle_removal_unix_ms: number;
 }
 
 export interface TableSnapshot_PayoutsEntry {
@@ -159,7 +160,7 @@ export interface TableSnapshot_PayoutsEntry {
 
 /** ClientMessage is sent from the client to the server. */
 export interface ClientMessage {
-  /** "auth" | "ping" | "sync_state" | "ready" | "act" | "post_big_blind" | "show_cards" | "chat" */
+  /** "auth" | "ping" | "sync_state" | "ready" | "act" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" */
   type: string;
   /** payload fields */
   token: string;
@@ -1259,6 +1260,7 @@ function createBaseTableSnapshot(): TableSnapshot {
     hand_id: "",
     pot_results: [],
     protocol_version: 0,
+    idle_removal_unix_ms: 0,
   };
 }
 
@@ -1326,6 +1328,9 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     }
     if (message.protocol_version !== 0) {
       writer.uint32(168).uint32(message.protocol_version);
+    }
+    if (message.idle_removal_unix_ms !== 0) {
+      writer.uint32(176).int64(message.idle_removal_unix_ms);
     }
     return writer;
   },
@@ -1508,6 +1513,14 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           message.protocol_version = reader.uint32();
           continue;
         }
+        case 22: {
+          if (tag !== 176) {
+            break;
+          }
+
+          message.idle_removal_unix_ms = longToNumber(reader.int64());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1553,6 +1566,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     message.hand_id = object.hand_id ?? "";
     message.pot_results = object.pot_results?.map((e) => PotResult.fromPartial(e)) || [];
     message.protocol_version = object.protocol_version ?? 0;
+    message.idle_removal_unix_ms = object.idle_removal_unix_ms ?? 0;
     return message;
   },
 };

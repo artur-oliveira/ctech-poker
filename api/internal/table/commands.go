@@ -75,6 +75,16 @@ type ShowCardsCmd struct {
 
 func (c ShowCardsCmd) reply() chan error { return c.Reply }
 
+// KeepSeatCmd is an explicit human-presence signal used by the idle-removal
+// warning. Transport heartbeats deliberately do not count as activity.
+type KeepSeatCmd struct {
+	PlayerID string
+	ActionID string
+	Reply    chan error
+}
+
+func (c KeepSeatCmd) reply() chan error { return c.Reply }
+
 type JoinCmd struct {
 	PlayerID string
 	Stack    int64

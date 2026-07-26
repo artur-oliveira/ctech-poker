@@ -92,7 +92,7 @@ func wsAllowedOrigin(ctx *fasthttp.RequestCtx, allowed []string) bool {
 
 func rateLimitedTableMessage(messageType string) bool {
 	switch messageType {
-	case "act", "chat", "sync_state", "ready", "post_big_blind", "show_cards", "ping":
+	case "act", "chat", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "ping":
 		return true
 	default:
 		return false
@@ -476,6 +476,14 @@ func RegisterTableWS(
 					} else {
 						ack()
 					}
+				case "keep_seat":
+					ensureActionID()
+					r := make(chan error, 1)
+					if err := dispatch(table.KeepSeatCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+					} else {
+						ack()
+					}
 				case "chat":
 					message := strings.TrimSpace(m.Message)
 					if message == "" {
@@ -683,6 +691,7 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		LegalActions:         protoLA,
 		ActionDeadlineUnixMs: snap.ActionDeadlineUnixMs,
 		NextHandUnixMs:       snap.NextHandUnixMs,
+		IdleRemovalUnixMs:    snap.IdleRemovalUnixMs,
 		WonWithoutShowdown:   snap.WonWithoutShowdown,
 		ShuffleCommitHash:    snap.ShuffleCommitHash,
 		ShuffleServerSeedHex: snap.ShuffleServerSeedHex,
@@ -693,7 +702,7 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		Pots:                 protoPots,
 		HandId:               snap.HandID,
 		PotResults:           protoPotResults,
-		ProtocolVersion:      3,
+		ProtocolVersion:      4,
 	}
 }
 

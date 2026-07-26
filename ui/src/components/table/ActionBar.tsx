@@ -5,6 +5,7 @@ import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import type {PokerAction} from '@/lib/api/table';
 import type {ActionError} from '@/lib/hooks/useTableRealtime';
+import {betShortcutAmount} from '@/lib/betShortcuts';
 
 export type ActionAvailability = Record<PokerAction, boolean>
 
@@ -49,10 +50,6 @@ function isBetAdjustKey(event: KeyboardEvent) {
   return !event.metaKey && !event.altKey && !event.repeat && !isTypingTarget(event.target);
 }
 
-// Holding ctrl while nudging the bet with the arrow keys steps this many
-// times faster.
-const FAST_STEP_MULTIPLIER = 3;
-
 // Handhelds (≤800px or short landscape — keep in sync with the matching CSS
 // media tier) don't have room to show the preset/slider sizing UI at all
 // times alongside Fold/Check/Pagar, so it stays collapsed until the player
@@ -91,28 +88,27 @@ function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending
         }
         if (key === 'h') {
           event.preventDefault();
-          setAmount(presets.find(preset => preset.label === '½ pote')?.value ?? minRaise);
+          setAmount(betShortcutAmount(key, safeAmount, minRaise, maxRaise, raiseStep, false,
+            presets.find(preset => preset.label === '½ pote')?.value) ?? safeAmount);
           return;
         }
         if (key === 'a') {
           event.preventDefault();
-          setAmount(maxRaise);
-          onRaise(maxRaise);
+          setAmount(betShortcutAmount(key, safeAmount, minRaise, maxRaise, raiseStep) ?? safeAmount);
           return;
         }
       }
       if (!isBetAdjustKey(event)) return;
       if (event.key === 'ArrowDown') {
         event.preventDefault();
-        setAmount(minRaise);
+        setAmount(betShortcutAmount(event.key, safeAmount, minRaise, maxRaise, raiseStep) ?? safeAmount);
       } else if (event.key === 'ArrowUp') {
         event.preventDefault();
-        setAmount(maxRaise);
+        setAmount(betShortcutAmount(event.key, safeAmount, minRaise, maxRaise, raiseStep) ?? safeAmount);
       } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault();
-        const step = raiseStep * (event.ctrlKey ? FAST_STEP_MULTIPLIER : 1);
-        const delta = event.key === 'ArrowRight' ? step : -step;
-        setAmount(value => Math.min(maxRaise, Math.max(minRaise, value + delta)));
+        setAmount(value => betShortcutAmount(event.key, value, minRaise, maxRaise, raiseStep,
+          event.ctrlKey) ?? value);
       }
     }
 
@@ -136,6 +132,7 @@ function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending
                                        onClick={() => setAmount(preset.value)}>{preset.label}</button>)}
       </div>
       <Input id="raise-amount" aria-describedby="action-context" type="range"
+             aria-keyshortcuts="a h ArrowUp ArrowDown ArrowLeft ArrowRight"
              min={minRaise} max={maxRaise} step={raiseStep} value={safeAmount}
              disabled={inactive}
              onChange={event => setAmount(Number(event.target.value))}

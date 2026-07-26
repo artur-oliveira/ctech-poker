@@ -76,6 +76,26 @@ func TestHandItemForDoesNotCallDistinctSidePotWinnersTied(t *testing.T) {
 	}
 }
 
+func TestHandItemForPreservesPartialOpponentReveal(t *testing.T) {
+	outcome := hand.HandOutcome{
+		Participants: []string{"viewer", "folder"},
+		PlayerHands: map[string]hand.PlayerHandInfo{
+			"viewer": {HoleCards: [2]string{"Ah", "Kh"}},
+			"folder": {
+				HoleCards:     [2]string{"Qs", "Qc"},
+				RevealedCards: [2]bool{true, false},
+			},
+		},
+	}
+	item := handItemFor(outcome, "viewer", nil)
+	if len(item.Opponents) != 1 ||
+		len(item.Opponents[0].HoleCards) != 2 ||
+		item.Opponents[0].HoleCards[0] != "Qs" ||
+		item.Opponents[0].HoleCards[1] != "back" {
+		t.Fatalf("partial reveal was not preserved in history: %+v", item.Opponents)
+	}
+}
+
 func testRoutes(app *fiber.App, cfg *config.Config) {
 	verifier := jwtverify.NewVerifier("", "", "", cache.NewMemoryBackend(1))
 	manager := tablemanager.NewManager(nil, nil, nil, nil)

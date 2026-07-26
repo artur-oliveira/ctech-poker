@@ -630,6 +630,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       showCardsTimerRef.current = setTimeout(() => finishAuxiliaryCommand(actionId, 'action_timeout'), ACTION_TIMEOUT_MS);
       return ok;
     },
+    keepSeat: () => emit({type: 'keep_seat', action_id: crypto.randomUUID()}),
     sendChat: (message: string) => emit({type: 'chat', message})
   };
 }

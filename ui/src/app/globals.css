@@ -1599,6 +1599,36 @@ h1 em {
     animation: reconnect-enter 240ms var(--ease-out-quint) both
 }
 
+.idle-warning {
+    position: fixed;
+    z-index: var(--z-notice);
+    left: 50%;
+    bottom: calc(var(--action-bar-stack) + 1rem);
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    max-width: min(92vw, 34rem);
+    padding: .75rem 1rem;
+    border: 1px solid color-mix(in srgb, var(--gold) 55%, transparent);
+    border-radius: 1rem;
+    background: var(--surface-notice);
+    box-shadow: 0 .75rem 2rem rgb(0 0 0 / 35%);
+}
+
+.idle-warning svg {
+    flex: 0 0 auto;
+    color: var(--gold);
+}
+
+.idle-warning p {
+    margin: 0;
+}
+
+.idle-warning button {
+    flex: 0 0 auto;
+}
+
 .reconnect-notice p {
     margin: 0;
     padding: 11px 14px;

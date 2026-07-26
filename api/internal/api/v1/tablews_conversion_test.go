@@ -9,9 +9,10 @@ import (
 func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 	startStack := int64(500)
 	converted := ConvertSnapshot(hand.Snapshot{
-		Stage:           "pre_flop",
-		SnapshotVersion: 42,
-		HandID:          "hand-42",
+		Stage:             "pre_flop",
+		SnapshotVersion:   42,
+		HandID:            "hand-42",
+		IdleRemovalUnixMs: 123456,
 		Seats: []hand.SeatView{{
 			PlayerID: "p1", Name: "Ana", State: "folded",
 			ConnectionState: "disconnected", DealtIn: true, Ready: false,
@@ -45,7 +46,7 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 	if converted.Seats[0].StackAtHandStart == nil || converted.Seats[0].GetStackAtHandStart() != 500 {
 		t.Fatalf("pre-blind stack lost during protobuf conversion: %+v", converted.Seats[0])
 	}
-	if converted.ProtocolVersion != 3 || len(converted.PotResults) != 1 ||
+	if converted.ProtocolVersion != 4 || converted.IdleRemovalUnixMs != 123456 || len(converted.PotResults) != 1 ||
 		converted.PotResults[0].WinnerPlayerIds[0] != "p1" ||
 		converted.PotResults[0].Payouts["p1"] != 293 {
 		t.Fatalf("result protocol fields lost during conversion: %+v", converted)
@@ -53,7 +54,7 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 }
 
 func TestEveryStateChangingOrAmplifiableMessageIsRateLimited(t *testing.T) {
-	for _, messageType := range []string{"act", "chat", "sync_state", "ready", "post_big_blind", "show_cards", "ping"} {
+	for _, messageType := range []string{"act", "chat", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "ping"} {
 		if !rateLimitedTableMessage(messageType) {
 			t.Errorf("%q bypasses the per-seat limiter", messageType)
 		}

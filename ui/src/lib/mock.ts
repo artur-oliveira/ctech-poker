@@ -1437,7 +1437,7 @@ export class MockTableService {
     this.snapshot = {
       ...this.snapshot,
       snapshot_version: this.snapshotVersion,
-      protocol_version: 3,
+      protocol_version: 4,
       hand_id: this.snapshot.hand_id || (stage === 'waiting_for_players' ? undefined : `mock-${this.scenario}-hand`)
     };
     this.handlers.onMessage({type: 'state', snapshot: this.snapshot, action_id: actionId});

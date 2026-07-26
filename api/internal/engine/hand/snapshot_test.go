@@ -294,11 +294,11 @@ func TestViewForOmitsUncalledExcessRecipientFromWinners(t *testing.T) {
 	}
 	players[0].HoleCards = [2]deck.Card{{Rank: deck.Five, Suit: deck.Clubs}, {Rank: deck.Six, Suit: deck.Clubs}}
 	players[1].HoleCards = [2]deck.Card{{Rank: deck.Ace, Suit: deck.Spades}, {Rank: deck.Ace, Suit: deck.Hearts}}
-	table.shuffle.Cards[4] = deck.Card{Rank: deck.King, Suit: deck.Diamonds}
-	table.shuffle.Cards[5] = deck.Card{Rank: deck.Queen, Suit: deck.Hearts}
-	table.shuffle.Cards[6] = deck.Card{Rank: deck.Nine, Suit: deck.Spades}
-	table.shuffle.Cards[7] = deck.Card{Rank: deck.Two, Suit: deck.Clubs}
-	table.shuffle.Cards[8] = deck.Card{Rank: deck.Seven, Suit: deck.Diamonds}
+	table.shuffle.Cards[5] = deck.Card{Rank: deck.King, Suit: deck.Diamonds}
+	table.shuffle.Cards[6] = deck.Card{Rank: deck.Queen, Suit: deck.Hearts}
+	table.shuffle.Cards[7] = deck.Card{Rank: deck.Nine, Suit: deck.Spades}
+	table.shuffle.Cards[9] = deck.Card{Rank: deck.Two, Suit: deck.Clubs}
+	table.shuffle.Cards[11] = deck.Card{Rank: deck.Seven, Suit: deck.Diamonds}
 
 	if err := table.Act("Shover", betting.ActionRaise, 1000); err != nil {
 		t.Fatalf("Shover shoves all-in for 1000: %v", err)

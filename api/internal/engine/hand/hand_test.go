@@ -46,13 +46,13 @@ func TestFullHandWithThreeWayAllInProducesCorrectPayouts(t *testing.T) {
 	players[0].HoleCards = [2]deck.Card{{Rank: deck.Five, Suit: deck.Clubs}, {Rank: deck.Six, Suit: deck.Clubs}}      // Dealer: 5c 6c
 	players[1].HoleCards = [2]deck.Card{{Rank: deck.Ace, Suit: deck.Spades}, {Rank: deck.Ace, Suit: deck.Hearts}}     // SB: As Ah
 	players[2].HoleCards = [2]deck.Card{{Rank: deck.Seven, Suit: deck.Hearts}, {Rank: deck.Eight, Suit: deck.Hearts}} // BB: 7h 8h
-	// t.nextCard is 6 at this point (3 players x 2 hole cards already
-	// dealt); indices 6..10 are the flop/turn/river in dealing order.
-	table.shuffle.Cards[6] = deck.Card{Rank: deck.Ace, Suit: deck.Clubs}
-	table.shuffle.Cards[7] = deck.Card{Rank: deck.Ace, Suit: deck.Diamonds}
-	table.shuffle.Cards[8] = deck.Card{Rank: deck.Two, Suit: deck.Spades}
-	table.shuffle.Cards[9] = deck.Card{Rank: deck.Three, Suit: deck.Spades}
-	table.shuffle.Cards[10] = deck.Card{Rank: deck.Four, Suit: deck.Hearts}
+	// t.nextCard is 6 at this point. The board consumes a burn before each
+	// street: flop 7..9, turn 11 and river 13.
+	table.shuffle.Cards[7] = deck.Card{Rank: deck.Ace, Suit: deck.Clubs}
+	table.shuffle.Cards[8] = deck.Card{Rank: deck.Ace, Suit: deck.Diamonds}
+	table.shuffle.Cards[9] = deck.Card{Rank: deck.Two, Suit: deck.Spades}
+	table.shuffle.Cards[11] = deck.Card{Rank: deck.Three, Suit: deck.Spades}
+	table.shuffle.Cards[13] = deck.Card{Rank: deck.Four, Suit: deck.Hearts}
 
 	// Pre-flop (dealer pinned above, so seat order is exact): Dealer is UTG
 	// and raises to 220 (their whole intent), SB shoves all-in for 200 total
@@ -535,11 +535,11 @@ func TestBustedAllInPlayerSitsOutInsteadOfBeingRedealt(t *testing.T) {
 	players[0].HoleCards = [2]deck.Card{{Rank: deck.Ace, Suit: deck.Spades}, {Rank: deck.Ace, Suit: deck.Hearts}}     // Dealer: As Ah
 	players[1].HoleCards = [2]deck.Card{{Rank: deck.Five, Suit: deck.Clubs}, {Rank: deck.Six, Suit: deck.Clubs}}      // SB: 5c 6c
 	players[2].HoleCards = [2]deck.Card{{Rank: deck.Seven, Suit: deck.Hearts}, {Rank: deck.Eight, Suit: deck.Hearts}} // BB: 7h 8h (folds, never shown)
-	table.shuffle.Cards[6] = deck.Card{Rank: deck.Ace, Suit: deck.Clubs}
-	table.shuffle.Cards[7] = deck.Card{Rank: deck.Ace, Suit: deck.Diamonds}
-	table.shuffle.Cards[8] = deck.Card{Rank: deck.Two, Suit: deck.Spades}
-	table.shuffle.Cards[9] = deck.Card{Rank: deck.Three, Suit: deck.Spades}
-	table.shuffle.Cards[10] = deck.Card{Rank: deck.Four, Suit: deck.Hearts}
+	table.shuffle.Cards[7] = deck.Card{Rank: deck.Ace, Suit: deck.Clubs}
+	table.shuffle.Cards[8] = deck.Card{Rank: deck.Ace, Suit: deck.Diamonds}
+	table.shuffle.Cards[9] = deck.Card{Rank: deck.Two, Suit: deck.Spades}
+	table.shuffle.Cards[11] = deck.Card{Rank: deck.Three, Suit: deck.Spades}
+	table.shuffle.Cards[13] = deck.Card{Rank: deck.Four, Suit: deck.Hearts}
 
 	if err := table.Act("Dealer", betting.ActionRaise, 500); err != nil {
 		t.Fatalf("Dealer shoves all-in for 500: %v", err)
@@ -1023,11 +1023,11 @@ func TestBustedHeadsUpPlayerCannotStartDegenerateSoloHand(t *testing.T) {
 	// busting A to Stack 0.
 	players[0].HoleCards = [2]deck.Card{{Rank: deck.Five, Suit: deck.Clubs}, {Rank: deck.Six, Suit: deck.Clubs}}
 	players[1].HoleCards = [2]deck.Card{{Rank: deck.Ace, Suit: deck.Spades}, {Rank: deck.Ace, Suit: deck.Hearts}}
-	table.shuffle.Cards[4] = deck.Card{Rank: deck.Ace, Suit: deck.Clubs}
-	table.shuffle.Cards[5] = deck.Card{Rank: deck.Ace, Suit: deck.Diamonds}
-	table.shuffle.Cards[6] = deck.Card{Rank: deck.Two, Suit: deck.Spades}
-	table.shuffle.Cards[7] = deck.Card{Rank: deck.Three, Suit: deck.Spades}
-	table.shuffle.Cards[8] = deck.Card{Rank: deck.Four, Suit: deck.Hearts}
+	table.shuffle.Cards[5] = deck.Card{Rank: deck.Ace, Suit: deck.Clubs}
+	table.shuffle.Cards[6] = deck.Card{Rank: deck.Ace, Suit: deck.Diamonds}
+	table.shuffle.Cards[7] = deck.Card{Rank: deck.Two, Suit: deck.Spades}
+	table.shuffle.Cards[9] = deck.Card{Rank: deck.Three, Suit: deck.Spades}
+	table.shuffle.Cards[11] = deck.Card{Rank: deck.Four, Suit: deck.Hearts}
 
 	if err := table.Act("A", betting.ActionRaise, 500); err != nil {
 		t.Fatalf("A shoves all-in for 500: %v", err)
@@ -1147,11 +1147,11 @@ func TestUncalledAllInExcessIsNotCountedAsAWin(t *testing.T) {
 	// club) so Caller's pair of aces is the unambiguous winner.
 	players[0].HoleCards = [2]deck.Card{{Rank: deck.Five, Suit: deck.Clubs}, {Rank: deck.Six, Suit: deck.Clubs}}
 	players[1].HoleCards = [2]deck.Card{{Rank: deck.Ace, Suit: deck.Spades}, {Rank: deck.Ace, Suit: deck.Hearts}}
-	table.shuffle.Cards[4] = deck.Card{Rank: deck.King, Suit: deck.Diamonds}
-	table.shuffle.Cards[5] = deck.Card{Rank: deck.Queen, Suit: deck.Hearts}
-	table.shuffle.Cards[6] = deck.Card{Rank: deck.Nine, Suit: deck.Spades}
-	table.shuffle.Cards[7] = deck.Card{Rank: deck.Two, Suit: deck.Clubs}
-	table.shuffle.Cards[8] = deck.Card{Rank: deck.Seven, Suit: deck.Diamonds}
+	table.shuffle.Cards[5] = deck.Card{Rank: deck.King, Suit: deck.Diamonds}
+	table.shuffle.Cards[6] = deck.Card{Rank: deck.Queen, Suit: deck.Hearts}
+	table.shuffle.Cards[7] = deck.Card{Rank: deck.Nine, Suit: deck.Spades}
+	table.shuffle.Cards[9] = deck.Card{Rank: deck.Two, Suit: deck.Clubs}
+	table.shuffle.Cards[11] = deck.Card{Rank: deck.Seven, Suit: deck.Diamonds}
 
 	if err := table.Act("Shover", betting.ActionRaise, 1000); err != nil {
 		t.Fatalf("Shover shoves all-in for 1000: %v", err)

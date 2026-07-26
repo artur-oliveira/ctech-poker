@@ -34,6 +34,7 @@ type Manager struct {
 	store           *tablestore.Store
 	broadcast       func(tableID, viewerID string, snap hand.Snapshot)
 	onHandComplete  func(tableID, handID string, outcome hand.HandOutcome, names map[string]string)
+	onHandUpdated   func(tableID, handID string, outcome hand.HandOutcome, names map[string]string)
 	onSeatsChanged  func(tableID string, seatsTaken int)
 	onPlayerRemoved func(tableID, playerID, reason string, stack int64, holdID string)
 	roomLoader      func(tableID string) (*roomstore.Room, bool, error)
@@ -60,6 +61,10 @@ func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast f
 }
 
 func (m *Manager) SetEnv(env string) { m.env = env }
+
+func (m *Manager) SetOnHandUpdated(fn func(tableID, handID string, outcome hand.HandOutcome, names map[string]string)) {
+	m.onHandUpdated = fn
+}
 
 // SetOnSeatsChanged installs the occupancy write-through hook, invoked with
 // (tableID, seatsTaken) after every table actor's committed join/leave, for
@@ -130,6 +135,11 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	actor.SetOnHandCompleteForActor(func(handID string, outcome hand.HandOutcome, names map[string]string) {
 		if m.onHandComplete != nil {
 			m.onHandComplete(tableID, handID, outcome, names)
+		}
+	})
+	actor.SetOnHandUpdatedForActor(func(handID string, outcome hand.HandOutcome, names map[string]string) {
+		if m.onHandUpdated != nil {
+			m.onHandUpdated(tableID, handID, outcome, names)
 		}
 	})
 	actor.SetOnSeatsChangedForActor(func(seatsTaken int) {

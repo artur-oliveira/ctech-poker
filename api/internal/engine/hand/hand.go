@@ -169,8 +169,9 @@ type HandOutcome struct {
 // cards to other players without re-deriving that logic; HoleCards is always
 // populated regardless of Revealed so the player can see their own cards.
 type PlayerHandInfo struct {
-	HoleCards [2]string
-	Revealed  bool
+	HoleCards     [2]string
+	Revealed      bool
+	RevealedCards [2]bool
 }
 
 // PotResult records one contribution layer independently. Multiple IDs in
@@ -311,6 +312,12 @@ func (t *Table) CurrentPlayerIDForActor() string {
 func (t *Table) SitOutForActor(playerID string) {
 	p := t.playerByID(playerID)
 	if p == nil {
+		return
+	}
+	// Once resolution is over, AllIn is only a residue of the finished hand,
+	// not a reason to keep the seat eligible for the next deal.
+	if t.stage == Complete || t.stage == WaitingForPlayers {
+		p.State = SittingOut
 		return
 	}
 	if p.State != Active {
@@ -583,7 +590,6 @@ func (t *Table) StartHand() error {
 		p.HandStartStack = &startingStack
 		p.State = Active
 		p.Contributed = 0
-		p.HoleCards = [2]deck.Card{t.dealCard(), t.dealCard()}
 		active = append(active, p)
 	}
 
@@ -604,6 +610,12 @@ func (t *Table) StartHand() error {
 	sbSeat, bbSeat := t.blindSeats(active)
 	t.postBlind(active[sbSeat], t.smallBlind)
 	t.postBlind(active[bbSeat], t.bigBlind)
+	dealerIdx := t.dealerIndexWithin(active)
+	for pass := 0; pass < 2; pass++ {
+		for offset := 1; offset <= len(active); offset++ {
+			active[(dealerIdx+offset)%len(active)].HoleCards[pass] = t.dealCard()
+		}
+	}
 	for _, p := range active {
 		// A new entrant who lands in the SB or BB seat this very hand is
 		// already posting a blind above via the normal seat-based post — an
@@ -761,6 +773,12 @@ func (t *Table) RevealHoleCard(playerID string, cardIndex *int32) (changed bool,
 		changed = !p.VoluntarilyShownCards[0] || !p.VoluntarilyShownCards[1]
 		p.VoluntarilyShownCards = [2]bool{true, true}
 		p.VoluntarilyShown = true
+		if t.lastOutcome != nil {
+			info := t.lastOutcome.PlayerHands[playerID]
+			info.Revealed = true
+			info.RevealedCards = [2]bool{true, true}
+			t.lastOutcome.PlayerHands[playerID] = info
+		}
 		return changed, nil
 	}
 	if *cardIndex < 0 || *cardIndex > 1 {
@@ -771,6 +789,12 @@ func (t *Table) RevealHoleCard(playerID string, cardIndex *int32) (changed bool,
 	}
 	p.VoluntarilyShownCards[*cardIndex] = true
 	p.VoluntarilyShown = p.VoluntarilyShownCards[0] && p.VoluntarilyShownCards[1]
+	if t.lastOutcome != nil {
+		info := t.lastOutcome.PlayerHands[playerID]
+		info.RevealedCards[*cardIndex] = true
+		info.Revealed = info.RevealedCards[0] && info.RevealedCards[1]
+		t.lastOutcome.PlayerHands[playerID] = info
+	}
 	return true, nil
 }
 
@@ -790,9 +814,8 @@ func (t *Table) blindSeats(active []*Player) (sb, bb int) {
 }
 
 // dealerIndexWithin returns dealerSeat's player's position within list (by
-// pointer identity), defaulting to 0 if the dealer isn't present in list —
-// which also covers dealerSeat's zero value before the very first hand ever
-// sets it (seat 0 is the default first dealer).
+// pointer identity). If that seat is sitting out, the button advances to the
+// first eligible seat clockwise rather than jumping to list index zero.
 func (t *Table) dealerIndexWithin(list []*Player) int {
 	if t.dealerSeat < 0 || t.dealerSeat >= len(t.players) {
 		return 0
@@ -801,6 +824,14 @@ func (t *Table) dealerIndexWithin(list []*Player) int {
 	for i, p := range list {
 		if p == dealer {
 			return i
+		}
+	}
+	for offset := 1; offset <= len(t.players); offset++ {
+		candidate := t.players[(t.dealerSeat+offset)%len(t.players)]
+		for i, p := range list {
+			if p == candidate {
+				return i
+			}
 		}
 	}
 	return 0
@@ -841,6 +872,18 @@ func (t *Table) dealCard() deck.Card {
 	c := t.shuffle.Cards[t.nextCard]
 	t.nextCard++
 	return c
+}
+
+func (t *Table) burnCard() { _ = t.dealCard() }
+
+func (t *Table) dealFlop() {
+	t.burnCard()
+	t.board = append(t.board, t.dealCard(), t.dealCard(), t.dealCard())
+}
+
+func (t *Table) dealBoardCard() {
+	t.burnCard()
+	t.board = append(t.board, t.dealCard())
 }
 
 func (t *Table) startBettingRound(active []*Player, currentBet, minRaise int64) {
@@ -1002,13 +1045,13 @@ func (t *Table) advanceStage() {
 
 	switch t.stage {
 	case PreFlop:
-		t.board = append(t.board, t.dealCard(), t.dealCard(), t.dealCard())
+		t.dealFlop()
 		t.stage = Flop
 	case Flop:
-		t.board = append(t.board, t.dealCard())
+		t.dealBoardCard()
 		t.stage = Turn
 	case Turn:
-		t.board = append(t.board, t.dealCard())
+		t.dealBoardCard()
 		t.stage = River
 	case River:
 		t.runShowdown()
@@ -1047,13 +1090,13 @@ func (t *Table) countRemainingAndActable() (remaining, canStillAct int) {
 func (t *Table) AdvanceRunoutStreetForActor() {
 	switch t.stage {
 	case PreFlop:
-		t.board = append(t.board, t.dealCard(), t.dealCard(), t.dealCard())
+		t.dealFlop()
 		t.stage = Flop
 	case Flop:
-		t.board = append(t.board, t.dealCard())
+		t.dealBoardCard()
 		t.stage = Turn
 	case Turn:
-		t.board = append(t.board, t.dealCard())
+		t.dealBoardCard()
 		t.stage = River
 	}
 	if t.stage == River {
@@ -1316,8 +1359,9 @@ func (t *Table) runShowdown() {
 	for _, p := range t.handOrder {
 		revealed := (!wonWithoutShowdown && p.State != Folded) || p.VoluntarilyShown
 		outcome.PlayerHands[p.ID] = PlayerHandInfo{
-			HoleCards: [2]string{cardCode(p.HoleCards[0]), cardCode(p.HoleCards[1])},
-			Revealed:  revealed,
+			HoleCards:     [2]string{cardCode(p.HoleCards[0]), cardCode(p.HoleCards[1])},
+			Revealed:      revealed,
+			RevealedCards: [2]bool{revealed, revealed},
 		}
 	}
 	t.lastOutcome = &outcome

@@ -29,6 +29,7 @@ type Snapshot struct {
 	LegalActions         *LegalActions   `json:"legal_actions,omitempty"`
 	ActionDeadlineUnixMs int64           `json:"action_deadline_unix_ms,omitempty"`
 	NextHandUnixMs       int64           `json:"next_hand_unix_ms,omitempty"`
+	IdleRemovalUnixMs    int64           `json:"idle_removal_unix_ms,omitempty"`
 	WonWithoutShowdown   bool            `json:"won_without_showdown,omitempty"`
 	ShuffleCommitHash    string          `json:"shuffle_commit_hash,omitempty"`
 	ShuffleServerSeedHex string          `json:"shuffle_server_seed_hex,omitempty"`

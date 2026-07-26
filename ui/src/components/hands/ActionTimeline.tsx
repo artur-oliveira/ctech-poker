@@ -4,6 +4,7 @@ import {
   Check,
   ChevronRight,
   CircleDollarSign,
+  Clock3,
   Eye,
   HelpCircle,
   LogIn,
@@ -45,6 +46,10 @@ const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
   disconnect_sit_out: {
     label: 'Desconectou (Sit Out)',
     Icon: WifiOff,
+  },
+  keep_seat: {
+    label: 'Confirmou presença',
+    Icon: Clock3,
   },
 
   // Fluxo da partida

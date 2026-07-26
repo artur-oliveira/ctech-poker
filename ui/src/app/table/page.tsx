@@ -3,7 +3,7 @@ import Link from 'next/link';
 import {Suspense, useEffect, useRef, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
-import {ChevronLeft, Pause, Play, RotateCw, Wifi} from 'lucide-react';
+import {ChevronLeft, ClockAlert, Pause, Play, RotateCw, Wifi} from 'lucide-react';
 import {getViewerId} from '@/lib/utils';
 import {useTableRealtime} from '@/lib/hooks/useTableRealtime';
 import {getRoom, getSeated} from '@/lib/api/rooms';
@@ -97,6 +97,31 @@ function actionState(snapshot: TableSnapshot, viewer?: string) {
       {label: 'Máx', value: maxRaise}
     ]
   };
+}
+
+function IdleWarning({deadline, onKeepSeat}: {deadline?: number; onKeepSeat: () => boolean}) {
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    if (!deadline) return undefined;
+    const delay = Math.max(0, deadline - Date.now() - 60_000);
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const timeout = setTimeout(() => {
+      setNow(Date.now());
+      interval = setInterval(() => setNow(Date.now()), 1000);
+    }, delay);
+    return () => {
+      clearTimeout(timeout);
+      if (interval) clearInterval(interval);
+    };
+  }, [deadline]);
+  if (!deadline || !now) return null;
+  const seconds = Math.max(0, Math.ceil((deadline - now) / 1000));
+  if (seconds > 60) return null;
+  return <div className="idle-warning" role="alert">
+    <ClockAlert aria-hidden="true"/>
+    <p>Você será removido por inatividade em <strong>{seconds}s</strong>.</p>
+    <Button type="button" variant="outline" onClick={onKeepSeat}>Continuar na mesa</Button>
+  </div>;
 }
 
 function TableContent() {
@@ -367,6 +392,7 @@ function TableContent() {
         connected={rt.status === 'connected'}
         pending={rt.pendingAction}
         error={rt.actionError} onDismissErrorAction={rt.clearActionError}/>
+      <IdleWarning deadline={s.idle_removal_unix_ms} onKeepSeat={rt.keepSeat}/>
       <Chat items={rt.chat}
             onSend={rt.sendChat}
             connected={rt.status === 'connected'}

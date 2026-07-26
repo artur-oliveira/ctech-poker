@@ -81,6 +81,7 @@ type Actor struct {
 	done                     chan struct{}
 	equityEnabled            atomic.Bool
 	onHandComplete           func(string, hand.HandOutcome, map[string]string)
+	onHandUpdated            func(string, hand.HandOutcome, map[string]string)
 	completedHandNotified    string
 	outcomeLoggedForHand     string
 	onSeatsChanged           func(int)
@@ -190,6 +191,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleSitOut(ctx, c)
 	case ShowCardsCmd:
 		return a.handleShowCards(ctx, c)
+	case KeepSeatCmd:
+		return a.handleKeepSeat(ctx, c)
 	case JoinCmd:
 		return a.handleJoin(ctx, c)
 	case LeaveCmd:
@@ -222,6 +225,9 @@ func (a *Actor) handlePostBigBlind(ctx context.Context, c PostBigBlindCmd) error
 		return err
 	}
 	apply := func() error {
+		if !a.isSeated(c.PlayerID) {
+			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+		}
 		a.cached.MarkReadyToPost(c.PlayerID)
 		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
 			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "post_big_blind",
@@ -252,6 +258,12 @@ func (a *Actor) handleSnapshot(ctx context.Context, c SnapshotCmd) error {
 	snapshot := a.cached.ViewFor(c.PlayerID)
 	snapshot.SnapshotVersion = uint64(a.version)
 	snapshot.HandID = a.handID
+	for _, p := range a.cached.PlayersForActor() {
+		if p.ID == c.PlayerID && p.LastActionAt > 0 {
+			snapshot.IdleRemovalUnixMs = p.LastActionAt + a.kickGrace.Milliseconds()
+			break
+		}
+	}
 	a.applyPresence(snapshot.Seats)
 	c.Snapshot <- snapshot
 	return nil
@@ -369,6 +381,9 @@ func (a *Actor) handleReady(ctx context.Context, c ReadyCmd) error {
 }
 
 func (a *Actor) applyReadyAndCommit(ctx context.Context, c ReadyCmd) error {
+	if !a.isSeated(c.PlayerID) {
+		return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+	}
 	a.markLastAction(c.PlayerID)
 	for _, p := range a.cached.PlayersForActor() {
 		if p.ID == c.PlayerID {
@@ -385,7 +400,9 @@ func (a *Actor) applyReadyAndCommit(ctx context.Context, c ReadyCmd) error {
 		// and clearing payouts before next_hand_unix_ms elapsed — killing the other
 		// player's win banner mid-countdown. armNextHandTimer still starts the next
 		// hand once the grace period actually ends.
-		a.tryStartHand(ctx)
+		if a.cached.Stage() == hand.WaitingForPlayers {
+			a.tryStartHand(ctx)
+		}
 	} else {
 		a.cached.SitOutForActor(c.PlayerID)
 	}
@@ -398,14 +415,10 @@ func (a *Actor) applyReadyAndCommit(ctx context.Context, c ReadyCmd) error {
 // "need at least 2 ready players" is not a caller error — the table just
 // keeps waiting; StartHand's own error is swallowed here on purpose. Called
 // from both a Ready toggle and a fresh Join, since a join alone can now bring
-// the table to 2+ ready players (auto-ready on join). When the table is
-// Complete, the just-finished hand's final state is snapshotted to the audit
-// history table before StartHand() resets it to just players/chips.
+// the table to 2+ ready players (auto-ready on join). Complete is deliberately
+// excluded: nextHandCmd owns that transition and preserves the reveal window.
 func (a *Actor) tryStartHand(ctx context.Context) {
-	if a.cached.Stage() == hand.WaitingForPlayers || a.cached.Stage() == hand.Complete {
-		if a.cached.Stage() == hand.Complete {
-			a.saveHandHistorySnapshot(ctx)
-		}
+	if a.cached.Stage() == hand.WaitingForPlayers {
 		if err := a.cached.StartHand(); err == nil {
 			a.handID = newHandID()
 		}
@@ -526,6 +539,12 @@ func (a *Actor) notifyHandComplete() {
 // downstream writers can denormalize a name without a fresh profile read.
 func (a *Actor) SetOnHandCompleteForActor(fn func(string, hand.HandOutcome, map[string]string)) {
 	a.onHandComplete = fn
+}
+
+// SetOnHandUpdatedForActor installs the history-only hook used when a
+// participant voluntarily reveals cards after completion.
+func (a *Actor) SetOnHandUpdatedForActor(fn func(string, hand.HandOutcome, map[string]string)) {
+	a.onHandUpdated = fn
 }
 
 // SetOnSeatsChangedForActor installs the post-commit occupancy write-through
@@ -819,6 +838,15 @@ func (a *Actor) markLastAction(playerID string) {
 	}
 }
 
+func (a *Actor) isSeated(playerID string) bool {
+	for _, p := range a.cached.PlayersForActor() {
+		if p.ID == playerID {
+			return true
+		}
+	}
+	return false
+}
+
 // armAFKSweepTimer (re-)arms the periodic AFK sweep. Unlike every other timer
 // in this file, it isn't tied to a game-state transition — it re-arms itself
 // unconditionally after every fire (from handleAFKSweep), so it keeps
@@ -877,12 +905,40 @@ func (a *Actor) handleSitOut(ctx context.Context, c SitOutCmd) error {
 		return err
 	}
 	apply := func() error {
+		if !a.isSeated(c.PlayerID) {
+			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+		}
 		a.markLastAction(c.PlayerID)
 		a.cached.SitOutForActor(c.PlayerID)
 		return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "sit_out"})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
 		return err
+	}
+	a.broadcastAll()
+	return nil
+}
+
+func (a *Actor) handleKeepSeat(ctx context.Context, c KeepSeatCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	apply := func() error {
+		if !a.isSeated(c.PlayerID) {
+			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+		}
+		a.markLastAction(c.PlayerID)
+		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "keep_seat",
+		})
+	}
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		if !errors.Is(err, tablestore.ErrDuplicateAction) {
+			return err
+		}
+		if err := a.ensureLoaded(ctx, true); err != nil {
+			return err
+		}
 	}
 	a.broadcastAll()
 	return nil
@@ -916,6 +972,15 @@ func (a *Actor) handleShowCards(ctx context.Context, c ShowCardsCmd) error {
 	}
 	if changed {
 		a.broadcastAll()
+		if outcome := a.cached.LastOutcomeForActor(); outcome != nil && a.onHandUpdated != nil {
+			names := make(map[string]string)
+			for _, p := range a.cached.PlayersForActor() {
+				if p.Name != "" {
+					names[p.ID] = p.Name
+				}
+			}
+			a.onHandUpdated(a.handID, *outcome, names)
+		}
 	}
 	return nil
 }
@@ -1024,7 +1089,9 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 	} else if err := a.cached.AddWaitingPlayer(p); err != nil {
 		return err
 	}
-	a.tryStartHand(ctx)
+	if stage == hand.WaitingForPlayers {
+		a.tryStartHand(ctx)
+	}
 	return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "join"})
 }
 
@@ -1163,10 +1230,9 @@ func (a *Actor) armNextHandTimer(complete bool) {
 	})
 }
 
-// handleNextHand attempts to start the next hand once the 5s post-hand
-// countdown expires. A stale timer (a client already returned from sitting
-// out and tryStartHand already ran, or the table isn't Complete anymore) is a
-// silent no-op. tryStartHand itself already swallows "fewer than 2 ready
+// handleNextHand attempts to start the next hand once the post-hand
+// countdown expires. A stale timer (the table isn't Complete anymore) is a
+// silent no-op. StartHand's "fewer than 2 ready
 // players" — StartHand falls the table back to WaitingForPlayers in that
 // case, so it doesn't stay stuck on Complete; a ReadyCmd(true) later starts
 // the next hand normally.
@@ -1177,7 +1243,10 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 	if a.cached.Stage() != hand.Complete {
 		return nil
 	}
-	a.tryStartHand(ctx)
+	a.saveHandHistorySnapshot(ctx)
+	if err := a.cached.StartHand(); err == nil {
+		a.handID = newHandID()
+	}
 	if err := a.commit(ctx, "", &tablestore.ActionLogEntry{Action: "next_hand"}); err != nil {
 		if !errors.Is(err, tablestore.ErrVersionConflict) {
 			return err
@@ -1278,6 +1347,9 @@ func (a *Actor) broadcastAll() {
 		}
 		if stage == hand.Complete && a.handID == a.nextHandArmedFor {
 			snapshot.NextHandUnixMs = a.nextHandDeadline.UnixMilli()
+		}
+		if p.LastActionAt > 0 {
+			snapshot.IdleRemovalUnixMs = p.LastActionAt + a.kickGrace.Milliseconds()
 		}
 		a.applyPresence(snapshot.Seats)
 		if doEquity {
