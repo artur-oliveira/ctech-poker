@@ -23,6 +23,7 @@ const (
 	pathToken         = "/v1.0/token"
 	pathSandboxCredit = "/v1.0/internal/wallet/sandbox/credit"
 	pathSandboxDebit  = "/v1.0/internal/wallet/sandbox/debit"
+	pathRealDebit     = "/v1.0/internal/wallet/real/debit"
 
 	pathGameHold    = "/v1.0/internal/wallet/game/hold"
 	pathGameRelease = "/v1.0/internal/wallet/game/hold/%s/release"
@@ -32,6 +33,7 @@ const (
 
 	scopeCredit      = "internal:wallet:credit"
 	scopeDebit       = "internal:wallet:debit"
+	scopeDebitReal   = "internal:wallet:debit-real"
 	scopeGameHold    = "internal:wallet:game-hold"
 	scopeGameCashout = "internal:wallet:game-cashout"
 	scopeGameStatus  = "internal:wallet:game-status"
@@ -84,6 +86,7 @@ type Client struct {
 	http              *http.Client
 	creditTokens      *oauth2client.TokenManager
 	debitTokens       *oauth2client.TokenManager
+	debitRealTokens   *oauth2client.TokenManager
 	gameHoldTokens    *oauth2client.TokenManager
 	gameCashoutTokens *oauth2client.TokenManager
 	gameStatusTokens  *oauth2client.TokenManager
@@ -110,6 +113,7 @@ func New(cfg *config.Config, cacheB cache.Backend) *Client {
 		http:              httpClient,
 		creditTokens:      oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeCredit),
 		debitTokens:       oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeDebit),
+		debitRealTokens:   oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeDebitReal),
 		gameHoldTokens:    oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameHold),
 		gameCashoutTokens: oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameCashout),
 		gameStatusTokens:  oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameStatus),
@@ -123,6 +127,18 @@ func (c *Client) Credit(ctx context.Context, userID string, amount int64, idempo
 
 func (c *Client) Debit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error {
 	return c.movement(ctx, c.base+pathSandboxDebit, c.debitTokens, userID, amount, idempotencyKey, reason)
+}
+
+// DebitReal charges a fixed amount directly against the player's real
+// (withdrawable) wallet — used for poker's fixed table-entry fee, which is
+// platform revenue and never part of the at-stake game-wallet pot (see
+// buyin.Service.BuyIn). ctech-wallet already exposes this endpoint for
+// ctech-billing's subscription charges; poker's own M2M client additionally
+// needs the internal:wallet:debit-real scope granted in ctech-account before
+// this can succeed in any real environment (see this plan's Global Constraints
+// — a cross-repo/config blocker, not a code gap here).
+func (c *Client) DebitReal(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error {
+	return c.movement(ctx, c.base+pathRealDebit, c.debitRealTokens, userID, amount, idempotencyKey, reason)
 }
 
 // HoldGame reserves funds in the ring-fenced game wallet.

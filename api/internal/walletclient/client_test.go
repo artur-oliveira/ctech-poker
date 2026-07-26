@@ -153,3 +153,30 @@ func TestCreditFallsBackToGenericErrorOnNonProblemBody(t *testing.T) {
 		t.Fatal("expected an error")
 	}
 }
+
+func TestDebitRealSendsExpectedRequestBody(t *testing.T) {
+	var gotPath string
+	var gotBody MovementRequest
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1.0/internal/wallet/real/debit", func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		_ = json.NewDecoder(r.Body).Decode(&gotBody)
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "entry-3"})
+	})
+	srv := httptest.NewServer(mux)
+	authSrv := fakeAuthServer(t)
+	defer srv.Close()
+	defer authSrv.Close()
+
+	c := New(&config.Config{WalletURL: srv.URL, CtechURL: authSrv.URL, PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
+	if err := c.DebitReal(t.Context(), "user-1", 100, "room-1#user-1#buyinfee#n1", "poker_table_fee"); err != nil {
+		t.Fatalf("DebitReal: %v", err)
+	}
+	if gotPath != "/v1.0/internal/wallet/real/debit" {
+		t.Fatalf("expected path /v1.0/internal/wallet/real/debit, got %s", gotPath)
+	}
+	if gotBody.UserID != "user-1" || gotBody.Amount != 100 || gotBody.Reason != "poker_table_fee" {
+		t.Fatalf("unexpected request body: %+v", gotBody)
+	}
+}
