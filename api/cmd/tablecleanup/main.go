@@ -27,7 +27,7 @@ import (
 // this job archives it. cmd/reconcile's analogous gracePeriod is 2 minutes
 // (for a completed cash-out awaiting credit); a table being idle mid-session
 // is a much slower signal;
-const staleCutoff = 30 * time.Minute
+const staleCutoff = 15 * time.Minute
 
 // queryBatchLimit bounds how many stale tables one invocation processes.
 // Any remainder is picked up on the next scheduled run since last_action_at

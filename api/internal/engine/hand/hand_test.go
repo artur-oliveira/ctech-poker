@@ -1,6 +1,7 @@
 package hand
 
 import (
+	"errors"
 	"testing"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
@@ -144,6 +145,50 @@ func TestAddMidHandJoinerIsReadyImmediately(t *testing.T) {
 	}
 	if !p3.Ready {
 		t.Fatal("a mid-hand joiner must be Ready immediately (still gated by readyToPost/BB, see PostBigBlindCmd)")
+	}
+}
+
+// TestAddWaitingPlayerRebuysBustedSeatInsteadOfRejecting reproduces the
+// rebuy bug: a busted player (Stack 0) never leaves t.players, so a plain
+// "reject if already seated" join silently no-ops the rebuy and never
+// credits the chips. AddWaitingPlayer must top up the existing seat instead.
+func TestAddWaitingPlayerRebuysBustedSeatInsteadOfRejecting(t *testing.T) {
+	busted := &Player{ID: "p1", Stack: 0, Ready: true, State: SittingOut}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	p3 := &Player{ID: "p3", Stack: 1000, Ready: true}
+	p4 := &Player{ID: "p4", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{busted, p2, p3, p4}, 10, 20)
+	table.dealerDrawn = true // dealerSeat 0 (busted p1); next blinds land on p2 (SB), p3 (BB) — p1 is neither
+
+	rebuy := &Player{ID: "p1", Stack: 500}
+	if err := table.AddWaitingPlayer(rebuy); err != nil {
+		t.Fatalf("AddWaitingPlayer rebuy: %v", err)
+	}
+	if len(table.players) != 4 {
+		t.Fatalf("rebuy must top up the existing seat, not add a second one, got %d players", len(table.players))
+	}
+	if busted.Stack != 500 {
+		t.Fatalf("expected busted seat's stack credited to 500, got %d", busted.Stack)
+	}
+	if busted.State == SittingOut {
+		t.Fatal("p1's seat is not SB/BB of the next hand — rebuy return must be free and immediate")
+	}
+}
+
+// TestAddWaitingPlayerRejectsRebuyWithChipsRemaining guards the idempotency
+// side of the same fix: a player who still has chips must still hit
+// ErrAlreadySeated, so a retried join request can't double-spend.
+func TestAddWaitingPlayerRejectsRebuyWithChipsRemaining(t *testing.T) {
+	seated := &Player{ID: "p1", Stack: 300, Ready: true}
+	table := NewTable([]*Player{seated}, 10, 20)
+
+	dup := &Player{ID: "p1", Stack: 500}
+	err := table.AddWaitingPlayer(dup)
+	if !errors.Is(err, ErrAlreadySeated) {
+		t.Fatalf("expected ErrAlreadySeated for a seat with chips remaining, got %v", err)
+	}
+	if seated.Stack != 300 {
+		t.Fatalf("stack must not change on a rejected duplicate join, got %d", seated.Stack)
 	}
 }
 

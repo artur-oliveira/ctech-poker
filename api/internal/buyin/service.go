@@ -154,11 +154,15 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 		return fmt.Errorf("buyin: table unavailable: %w", err)
 	}
 
-	seated, err := s.isSeated(actor, playerID)
+	seated, stack, err := s.isSeated(actor, playerID)
 	if err != nil {
 		return fmt.Errorf("buyin: seat check: %w", err)
 	}
-	if seated {
+	// A seated player with chips left is an idempotent retry of a join
+	// already committed — no-op. A seated player with Stack<=0 (busted, still
+	// occupying the seat per runShowdown) is a genuine rebuy and must fall
+	// through to debit + dispatch below, or the credit never happens.
+	if seated && stack > 0 {
 		return nil
 	}
 
@@ -229,22 +233,22 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 // the current viewer snapshot from the actor's Run goroutine (hand.Table has
 // no lock), so it is safe to call concurrently with the actor's own
 // broadcastAll.
-func (s *Service) isSeated(actor *table.Actor, playerID string) (bool, error) {
+func (s *Service) isSeated(actor *table.Actor, playerID string) (bool, int64, error) {
 	snapCh := make(chan hand.Snapshot, 1)
 	reply := make(chan error, 1)
 	if err := actor.Dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: reply}); err != nil {
-		return false, err
+		return false, 0, err
 	}
 	select {
 	case snap := <-snapCh:
 		for _, seat := range snap.Seats {
 			if seat.PlayerID == playerID {
-				return true, nil
+				return true, seat.Stack, nil
 			}
 		}
-		return false, nil
+		return false, 0, nil
 	default:
-		return false, nil
+		return false, 0, nil
 	}
 }
 

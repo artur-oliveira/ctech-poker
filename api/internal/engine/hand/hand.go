@@ -299,12 +299,43 @@ func (t *Table) playerByID(id string) *Player {
 // dealt in until the hand in progress completes, and required to post the
 // big blind on the hand they're first dealt into (handled in StartHand).
 func (t *Table) AddMidHandJoiner(p *Player) error {
-	if t.playerByID(p.ID) != nil {
-		return fmt.Errorf("%w: player %s", ErrAlreadySeated, p.ID)
+	if existing := t.playerByID(p.ID); existing != nil {
+		return t.rebuyExisting(existing, p)
 	}
 	p.Ready = true
 	p.State = PendingEntry
 	t.players = append(t.players, p)
+	return nil
+}
+
+// rebuyExisting tops up a seat that's still occupied by a busted (Stack<=0)
+// player — bust never removes a player from t.players (runShowdown's
+// Stack<=0 loop just sets State=SittingOut), so without this a rebuy's join
+// would hit ErrAlreadySeated and buyin.Service would silently no-op it,
+// never crediting the chips the player just paid for. A player who still has
+// chips keeps hitting ErrAlreadySeated: that guard is what stops a retried
+// join request from double-spending. Re-entry follows the exact same
+// out-of-position rule as RequestReturnFromSitOut (owe a big blind if
+// rebuying into what would be the very next SB/BB) so a rebuy can't dodge
+// the blind everyone else pays for a seat.
+func (t *Table) rebuyExisting(existing, incoming *Player) error {
+	if existing.Stack > 0 {
+		return fmt.Errorf("%w: player %s", ErrAlreadySeated, existing.ID)
+	}
+	existing.Stack = incoming.Stack
+	existing.HoldID = incoming.HoldID
+	existing.LastActionAt = incoming.LastActionAt
+	existing.Ready = true
+	if existing.State == SittingOut {
+		if t.wouldBeNextBlind(existing.ID) {
+			if t.owesBigBlind == nil {
+				t.owesBigBlind = make(map[string]bool)
+			}
+			t.owesBigBlind[existing.ID] = true
+		} else {
+			existing.State = Active
+		}
+	}
 	return nil
 }
 
@@ -331,8 +362,8 @@ func (t *Table) AddWaitingPlayer(p *Player) error {
 	if t.stage != WaitingForPlayers && t.stage != Complete {
 		return fmt.Errorf("hand: cannot add a waiting player while a hand is in progress, use AddMidHandJoiner")
 	}
-	if t.playerByID(p.ID) != nil {
-		return fmt.Errorf("%w: player %s", ErrAlreadySeated, p.ID)
+	if existing := t.playerByID(p.ID); existing != nil {
+		return t.rebuyExisting(existing, p)
 	}
 	p.Ready = true
 	t.players = append(t.players, p)
