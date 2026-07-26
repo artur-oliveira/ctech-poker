@@ -14,7 +14,7 @@ import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/c
 import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
 import {initials} from '@/lib/utils';
 import {cardPath} from '@/lib/cards';
-import {DECK_VARIANTS, DEFAULT_DECK_VARIANT, type DeckVariantId} from '@/lib/cardVariants';
+import {DECK_VARIANTS, type DeckVariantId, DEFAULT_DECK_VARIANT} from '@/lib/cardVariants';
 
 const ACES = ['As', 'Ah', 'Ad', 'Ac'];
 
@@ -100,8 +100,12 @@ export function ProfileMenu() {
                 <SelectItem key={id} value={id as DeckVariantId} label={variant.label}>
                   <span className="deck-variant-option">
                     <span className="deck-variant-option-cards">
-                      {ACES.map(card => <Image key={card} src={cardPath(card, id as DeckVariantId)} alt=""
-                                                width={20} height={28}/>)}
+                      {ACES.map(card => <Image
+                        key={card} src={cardPath(card, id as DeckVariantId)} alt=""
+                        height={0}
+                        width={0}
+                        style={{width: '20px', height: "auto"}}/>
+                      )}
                     </span>
                     {variant.label}
                   </span>

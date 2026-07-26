@@ -114,13 +114,14 @@ message TableSnapshot {
   // Allows clients to apply explicit compatibility fallbacks during rolling
   // deployments instead of mistaking absent proto3 fields for false.
   uint32 protocol_version = 21;
+  int64 idle_removal_unix_ms = 22;
 }
 
 // --- WEBSOCKET ENVELOPES ---
 
 // ClientMessage is sent from the client to the server.
 message ClientMessage {
-  string type = 1; // "auth" | "ping" | "sync_state" | "ready" | "act" | "post_big_blind" | "show_cards" | "chat"
+  string type = 1; // "auth" | "ping" | "sync_state" | "ready" | "act" | "post_big_blind" | "show_cards" | "keep_seat" | "chat"
   
   // payload fields
   string token = 2; // for auth frame

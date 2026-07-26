@@ -17,22 +17,22 @@ export interface DeckVariant {
 }
 
 export const DECK_VARIANTS: Record<DeckVariantId, DeckVariant> = {
-  'two-color': {
-    label: 'Clássico (2 cores)',
-    colors: {
-      spade: '#1A1A1A',
-      club: '#1A1A1A',
-      heart: '#CC0000',
-      diamond: '#CC0000'
-    }
-  },
   'four-color': {
-    label: '4 cores (Padrão)',
+    label: 'Padrão',
     colors: {
       spade: '#1A1A1A',
       heart: '#E60000',
       diamond: '#0066CC',
       club: '#008A00'
+    }
+  },
+  'two-color': {
+    label: 'Clássico',
+    colors: {
+      spade: '#1A1A1A',
+      club: '#1A1A1A',
+      heart: '#CC0000',
+      diamond: '#CC0000'
     }
   },
   colorblind: {

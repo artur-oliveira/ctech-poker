@@ -75,6 +75,22 @@ func setReady(t *testing.T, a *Actor, id string, ready bool) error {
 	return a.Dispatch(ReadyCmd{PlayerID: id, Ready: ready, Reply: make(chan error, 1)})
 }
 
+// startNextHand dispatches the exact command used by the post-hand timer.
+// Keeping this lifecycle-heavy test independent of wall-clock timing avoids
+// racing pause/leave commands against an artificially shortened reveal
+// window; nexthand_integration_test.go separately covers the timer itself.
+func startNextHand(t *testing.T, a *Actor, store *tablestore.Store, tableID string) *tablestore.StoredTable {
+	t.Helper()
+	if err := a.Dispatch(nextHandCmd{Reply: make(chan error, 1)}); err != nil {
+		t.Fatalf("start next hand: %v", err)
+	}
+	st := loadState(t, store, tableID)
+	if st.State.Stage != hand.PreFlop {
+		t.Fatalf("expected next hand to start at pre_flop, got stage %v", st.State.Stage)
+	}
+	return st
+}
+
 func postBigBlind(t *testing.T, a *Actor, id string) {
 	t.Helper()
 	if err := a.Dispatch(PostBigBlindCmd{PlayerID: id, Reply: make(chan error, 1)}); err != nil {
@@ -232,6 +248,7 @@ func TestNineHandedTableGrowsPlaysPausesAndLeaves(t *testing.T) {
 	}
 	a := New(tableID, store, true, func(string, hand.Snapshot) {})
 	a.SetEquityEnabledForActor(false) // equity's Monte Carlo simulation is irrelevant here and would otherwise fire on every broadcast across 15+ hands
+	a.nextHandDelay = time.Hour
 	runCtx, cancel := context.WithCancel(ctx)
 	t.Cleanup(cancel)
 	go a.Run(runCtx)
@@ -279,12 +296,10 @@ func TestNineHandedTableGrowsPlaysPausesAndLeaves(t *testing.T) {
 	for n := 3; n <= maxSeats; n++ {
 		id := fmt.Sprintf("p%d", n)
 
-		if err := setReady(t, a, players[0], true); err != nil {
-			t.Fatalf("re-ready %s: %v", players[0], err)
-		}
-		if st := loadState(t, store, tableID); st.State.Stage != hand.PreFlop {
-			t.Fatalf("expected a fresh hand among %d players before %s joins, got stage %v", len(players), id, st.State.Stage)
-		}
+		// Complete deliberately remains visible for the post-hand reveal
+		// window. The actor's next-hand timer, rather than an unrelated
+		// Ready command, owns the transition into the following hand.
+		startNextHand(t, a, store, tableID)
 
 		joinPlayer(t, a, id, buyIn, maxSeats)
 		postBigBlind(t, a, id)
@@ -298,13 +313,7 @@ func TestNineHandedTableGrowsPlaysPausesAndLeaves(t *testing.T) {
 		playHandCallingDown(t, a, store, tableID, nextActionID)
 		verifyChipConservation(t, store, tableID, totalBuyIn)
 
-		if err := setReady(t, a, players[0], true); err != nil {
-			t.Fatalf("re-ready %s to start %s's first hand: %v", players[0], id, err)
-		}
-		next := hand.NewTableFromState(loadState(t, store, tableID).State)
-		if next.Stage() != hand.PreFlop {
-			t.Fatalf("expected the %d-player hand to start, got stage %v", n, next.Stage())
-		}
+		next := hand.NewTableFromState(startNextHand(t, a, store, tableID).State)
 		if got := len(next.PlayersForActor()); got != n {
 			t.Fatalf("expected %d seated players once %s is dealt in, got %d", n, id, got)
 		}
@@ -328,13 +337,7 @@ func TestNineHandedTableGrowsPlaysPausesAndLeaves(t *testing.T) {
 	if err := setReady(t, a, pausedID, false); err != nil {
 		t.Fatalf("pause %s: %v", pausedID, err)
 	}
-	if err := setReady(t, a, players[0], true); err != nil {
-		t.Fatalf("re-ready %s to start the post-pause hand: %v", players[0], err)
-	}
-	paused := hand.NewTableFromState(loadState(t, store, tableID).State)
-	if paused.Stage() != hand.PreFlop {
-		t.Fatalf("expected a hand to start with %s sitting out, got stage %v", pausedID, paused.Stage())
-	}
+	paused := hand.NewTableFromState(startNextHand(t, a, store, tableID).State)
 	if got := len(paused.PlayersForActor()); got != len(players) {
 		t.Fatalf("expected %s's seat to stay occupied while paused, got %d players (want %d)", pausedID, got, len(players))
 	}
@@ -357,10 +360,7 @@ func TestNineHandedTableGrowsPlaysPausesAndLeaves(t *testing.T) {
 	}
 	returned := false
 	for i := 0; i < 2; i++ {
-		if err := setReady(t, a, players[0], true); err != nil {
-			t.Fatalf("re-ready %s: %v", players[0], err)
-		}
-		tbl := hand.NewTableFromState(loadState(t, store, tableID).State)
+		tbl := hand.NewTableFromState(startNextHand(t, a, store, tableID).State)
 		if pl := findPlayer(tbl, pausedID); pl != nil && pl.State != hand.PendingEntry && pl.State != hand.SittingOut {
 			returned = true
 			break
@@ -392,9 +392,7 @@ func TestNineHandedTableGrowsPlaysPausesAndLeaves(t *testing.T) {
 		t.Fatalf("expected %d seats remaining after %s left, got %d", len(players), leavingID, got)
 	}
 
-	if err := setReady(t, a, players[0], true); err != nil {
-		t.Fatalf("re-ready %s: %v", players[0], err)
-	}
+	startNextHand(t, a, store, tableID)
 	playHandCallingDown(t, a, store, tableID, nextActionID)
 	verifyChipConservation(t, store, tableID, totalBuyIn)
 }
