@@ -75,8 +75,12 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 	if req.Visibility == "public" && req.BlindEscalation != nil {
 		return problem.BadRequest("blind escalation is only configurable on private rooms").Send(c)
 	}
-	if req.Visibility == "public" && !isAllowedPublicStake(currencyMode, req.SmallBlind, req.BigBlind) {
-		return problem.BadRequest("unsupported public stake for this currency mode").Send(c)
+	// Real-money rooms must always use one of the fixed catalog stakes,
+	// public or private — the fixed entry fee below only exists for
+	// catalog tiers, so an off-catalog real-money room would have nothing
+	// correct to charge. Sandbox private rooms keep free-form blinds.
+	if (req.Visibility == "public" || currencyMode == "real") && !isAllowedPublicStake(currencyMode, req.SmallBlind, req.BigBlind) {
+		return problem.BadRequest("unsupported stake for this currency mode").Send(c)
 	}
 	if cfg := req.BlindEscalation; cfg != nil && (cfg.IntervalMinutes <= 0 || cfg.Multiplier <= 100 || cfg.Max < req.BigBlind) {
 		return problem.BadRequest("invalid blind escalation").Send(c)
@@ -98,6 +102,10 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 	if req.Visibility == "public" {
 		equity = true
 	}
+	entryFeeCents := int64(0)
+	if currencyMode == "real" {
+		entryFeeCents, _ = realStakeFeeCents(req.SmallBlind, req.BigBlind)
+	}
 	room := roomstore.Room{
 		ID:                   newRoomID(),
 		Visibility:           req.Visibility,
@@ -107,6 +115,7 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 		MaxSeats:             req.MaxSeats,
 		BuyInMin:             req.BuyInMin,
 		BuyInMax:             req.BuyInMax,
+		EntryFeeCents:        entryFeeCents,
 		EquityDisplayEnabled: equity,
 		Status:               "waiting",
 		CreatedBy:            userID,

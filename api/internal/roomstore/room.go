@@ -12,6 +12,12 @@ type Room struct {
 	MaxSeats             int              `dynamodbav:"max_seats" json:"max_seats"` // 6 or 9
 	BuyInMin             int64            `dynamodbav:"buy_in_min" json:"buy_in_min"`
 	BuyInMax             int64            `dynamodbav:"buy_in_max" json:"buy_in_max"`
+	// EntryFeeCents is the fixed real-money table-entry fee (BRL cents),
+	// charged to every player who takes a seat (buyin.Service.BuyIn) — never
+	// recomputed after creation, so a later change to the fee catalog never
+	// retroactively changes an already-created room's fee. Always zero for
+	// sandbox rooms (sandbox funds itself via rake instead).
+	EntryFeeCents        int64            `dynamodbav:"entry_fee_cents,omitempty" json:"entry_fee_cents,omitempty"`
 	ShareCode            string           `dynamodbav:"share_code,omitempty" json:"share_code,omitempty"`                     // private rooms only
 	BlindEscalation      *BlindEscalation `dynamodbav:"blind_escalation,omitempty" json:"blind_escalation,omitempty"`         // private rooms only
 	TurnTimeoutSeconds   int              `dynamodbav:"turn_timeout_seconds,omitempty" json:"turn_timeout_seconds,omitempty"` // private rooms only, 0 = default

@@ -157,11 +157,53 @@ func TestCreateRoomDefaultsToSandbox(t *testing.T) {
 	}
 }
 
+func TestCreateRoomStoresFixedEntryFeeForRealMoney(t *testing.T) {
+	app := fiber.New()
+	h := &roomHandlers{cfg: &config.Config{RealMoneyEnabled: true}}
+	app.Post("/rooms", func(c fiber.Ctx) error { c.Locals(localsUserID, "u1"); return c.Next() }, h.createRoom)
+	body := []byte(`{"visibility":"private","currency_mode":"real","small_blind":10,"big_blind":20,"max_seats":6,"buy_in_min":400,"buy_in_max":2000}`)
+	req := httptest.NewRequest(fiber.MethodPost, "/rooms", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("got %d", resp.StatusCode)
+	}
+	var room roomstore.Room
+	if err := json.NewDecoder(resp.Body).Decode(&room); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if room.EntryFeeCents != 100 {
+		t.Fatalf("expected EntryFeeCents 100 for the 10/20 micro tier, got %d", room.EntryFeeCents)
+	}
+}
+
+func TestCreateRoomRejectsPrivateRealMoneyRoomOffCatalog(t *testing.T) {
+	app := fiber.New()
+	h := &roomHandlers{cfg: &config.Config{RealMoneyEnabled: true}}
+	app.Post("/rooms", func(c fiber.Ctx) error { c.Locals(localsUserID, "u1"); return c.Next() }, h.createRoom)
+	// 7/14 matches no real-money tier — private real-money rooms must be
+	// rejected the same as a public one would be, since there is no fee
+	// tier to charge.
+	body := []byte(`{"visibility":"private","currency_mode":"real","small_blind":7,"big_blind":14,"max_seats":6,"buy_in_min":280,"buy_in_max":1400}`)
+	req := httptest.NewRequest(fiber.MethodPost, "/rooms", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("got %d, want 400", resp.StatusCode)
+	}
+}
+
 func TestPublicSandboxStakesAreCurated(t *testing.T) {
-	if !isAllowedPublicStake("sandbox", 10, 25) || !isAllowedPublicStake("sandbox", 50000, 100000) {
+	if !isAllowedPublicStake("sandbox", 5, 10) || !isAllowedPublicStake("sandbox", 50000, 100000) {
 		t.Fatal("expected the lowest and highest sandbox stakes to be allowed")
 	}
-	if isAllowedPublicStake("sandbox", 10, 20) {
+	if isAllowedPublicStake("sandbox", 7, 14) {
 		t.Fatal("uncurated public stake was accepted")
 	}
 	if isAllowedPublicStake("real", 10000, 25000) {
