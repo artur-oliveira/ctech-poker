@@ -35,33 +35,42 @@ type sandboxCredit interface {
 	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
 }
 
-func run(ctx context.Context, pending pendingLister, game gameCredit, sandbox sandboxCredit) error {
+type feeDebiter interface {
+	DebitReal(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
+}
+
+func run(ctx context.Context, pending pendingLister, game gameCredit, sandbox sandboxCredit, fee feeDebiter) error {
 	entries, err := pending.ListUnresolved(ctx, gracePeriod)
 	if err != nil {
 		return fmt.Errorf("reconcile: list unresolved: %w", err)
 	}
 	for _, e := range entries {
-		var creditErr error
-		switch e.CurrencyMode {
-		case "real":
-			tableRef := e.TableRef
-			if tableRef == "" {
-				tableRef = "unknown"
-			}
-			creditErr = game.CashoutGame(ctx, e.PlayerID, e.Amount, tableRef, e.HoldIDs, e.IdempotencyKey, "poker_cashout_reconcile")
+		var opErr error
+		switch e.Kind {
+		case reconcile.KindFeeDebit:
+			opErr = fee.DebitReal(ctx, e.PlayerID, e.Amount, e.IdempotencyKey, "poker_table_fee_reconcile")
 		default:
-			if sandbox != nil {
-				creditErr = sandbox.Credit(ctx, e.PlayerID, e.Amount, e.IdempotencyKey, "poker_cashout_reconcile")
+			switch e.CurrencyMode {
+			case "real":
+				tableRef := e.TableRef
+				if tableRef == "" {
+					tableRef = "unknown"
+				}
+				opErr = game.CashoutGame(ctx, e.PlayerID, e.Amount, tableRef, e.HoldIDs, e.IdempotencyKey, "poker_cashout_reconcile")
+			default:
+				if sandbox != nil {
+					opErr = sandbox.Credit(ctx, e.PlayerID, e.Amount, e.IdempotencyKey, "poker_cashout_reconcile")
+				}
 			}
 		}
 
-		if creditErr != nil {
-			slog.Error("ALARM: reconcile credit failed, needs manual review",
-				"pending_id", e.ID, "player", e.PlayerID, "amount", e.Amount, "err", creditErr)
+		if opErr != nil {
+			slog.Error("ALARM: reconcile operation failed, needs manual review",
+				"pending_id", e.ID, "kind", e.Kind, "player", e.PlayerID, "amount", e.Amount, "err", opErr)
 			continue
 		}
 		if err := pending.MarkResolved(ctx, e.ID); err != nil {
-			slog.Error("ALARM: reconcile resolved credit but failed to mark pending entry resolved",
+			slog.Error("ALARM: reconcile resolved operation but failed to mark pending entry resolved",
 				"pending_id", e.ID, "err", err)
 		}
 	}
@@ -125,7 +134,7 @@ func handler(ctx context.Context) error {
 	db := dynamodb.NewFromConfig(awsCfg)
 	pendingStore := reconcile.NewPendingStore(db, cfg.Env)
 	wallet := walletclient.New(cfg, cache.NewMemoryBackend(10))
-	return run(ctx, pendingStore, wallet, wallet)
+	return run(ctx, pendingStore, wallet, wallet, wallet)
 }
 
 func main() {

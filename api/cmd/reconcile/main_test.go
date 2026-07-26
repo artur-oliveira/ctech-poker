@@ -49,6 +49,15 @@ func (f *fakeSandboxCredit) Credit(_ context.Context, userID string, amount int6
 	return nil
 }
 
+type fakeFeeDebiter struct {
+	debits []reconcile.PendingCashout
+}
+
+func (f *fakeFeeDebiter) DebitReal(_ context.Context, userID string, amount int64, idempotencyKey, reason string) error {
+	f.debits = append(f.debits, reconcile.PendingCashout{PlayerID: userID, Amount: amount, IdempotencyKey: idempotencyKey})
+	return nil
+}
+
 func TestRunResolvesUnresolvedCashouts(t *testing.T) {
 	pending := &fakePendingLister{
 		unresolved: []reconcile.PendingCashout{
@@ -59,7 +68,7 @@ func TestRunResolvesUnresolvedCashouts(t *testing.T) {
 	game := &fakeGameCredit{}
 	sandbox := &fakeSandboxCredit{}
 
-	if err := run(context.Background(), pending, game, sandbox); err != nil {
+	if err := run(context.Background(), pending, game, sandbox, &fakeFeeDebiter{}); err != nil {
 		t.Fatalf("run: %v", err)
 	}
 
@@ -71,5 +80,24 @@ func TestRunResolvesUnresolvedCashouts(t *testing.T) {
 	}
 	if len(sandbox.credits) != 1 || sandbox.credits[0].PlayerID != "user-2" {
 		t.Fatalf("expected 1 sandbox credit, got %+v", sandbox.credits)
+	}
+}
+
+func TestRunRetriesFeeDebit(t *testing.T) {
+	pending := &fakePendingLister{
+		unresolved: []reconcile.PendingCashout{
+			{ID: "fee-1", PlayerID: "user-1", Amount: 100, CurrencyMode: "real", Kind: reconcile.KindFeeDebit, IdempotencyKey: "k1"},
+		},
+	}
+	fee := &fakeFeeDebiter{}
+
+	if err := run(context.Background(), pending, &fakeGameCredit{}, &fakeSandboxCredit{}, fee); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(pending.resolved) != 1 || pending.resolved[0] != "fee-1" {
+		t.Fatalf("expected fee-1 resolved, got %v", pending.resolved)
+	}
+	if len(fee.debits) != 1 || fee.debits[0].PlayerID != "user-1" || fee.debits[0].Amount != 100 {
+		t.Fatalf("expected one 100-cent fee retry for user-1, got %+v", fee.debits)
 	}
 }
