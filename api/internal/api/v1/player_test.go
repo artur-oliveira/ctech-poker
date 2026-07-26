@@ -73,6 +73,11 @@ func (s *fakePlayerStore) SetWalletMode(_ context.Context, id string, mode strin
 	s.profile.WalletMode = mode
 	return nil
 }
+func (s *fakePlayerStore) SetDeckVariant(_ context.Context, id string, variant string) error {
+	s.profile.UserID = id
+	s.profile.DeckVariant = variant
+	return nil
+}
 
 func TestPlayerTermsLifecycle(t *testing.T) {
 	store := &fakePlayerStore{}

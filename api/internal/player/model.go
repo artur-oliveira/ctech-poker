@@ -11,10 +11,16 @@ const (
 	WalletModeReal    = "real"
 )
 
+// DefaultDeckVariant matches DEFAULT_DECK_VARIANT in the UI's
+// src/lib/cardVariants.ts — kept as a plain string here since the full
+// variant catalog (cosmetic-only) lives and grows on the frontend.
+const DefaultDeckVariant = "four-color"
+
 type PlayerProfile struct {
 	UserID            string `dynamodbav:"pk" json:"user_id"`
 	Name              string `dynamodbav:"name,omitempty" json:"name,omitempty"`
 	WalletMode        string `dynamodbav:"wallet_mode,omitempty" json:"wallet_mode,omitempty"`
+	DeckVariant       string `dynamodbav:"deck_variant,omitempty" json:"deck_variant,omitempty"`
 	PokerTermsVersion string `dynamodbav:"poker_terms_version,omitempty" json:"-"`
 	TermsAcceptedAt   string `dynamodbav:"poker_terms_accepted_at,omitempty" json:"poker_terms_accepted_at,omitempty"`
 	CreatedAt         string `dynamodbav:"created_at" json:"-"`
@@ -32,4 +38,13 @@ func (p *PlayerProfile) EffectiveWalletMode() string {
 		return WalletModeSandbox
 	}
 	return p.WalletMode
+}
+
+// EffectiveDeckVariant defaults an unset preference to four-color, same
+// rationale as EffectiveWalletMode.
+func (p *PlayerProfile) EffectiveDeckVariant() string {
+	if p == nil || p.DeckVariant == "" {
+		return DefaultDeckVariant
+	}
+	return p.DeckVariant
 }

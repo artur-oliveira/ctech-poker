@@ -48,7 +48,9 @@ export function Seat({
                        isViewer,
                        isTurn,
                        index,
-                       payout = 0,
+                       credit = 0,
+                       winAmount = 0,
+                       refundAmount = 0,
                        isWinner = false,
                        deadlineMs,
                        nowMs,
@@ -65,7 +67,9 @@ export function Seat({
   isViewer: boolean;
   isTurn: boolean;
   index: number;
-  payout?: number;
+  credit?: number;
+  winAmount?: number;
+  refundAmount?: number;
   isWinner?: boolean;
   deadlineMs?: number;
   nowMs?: number;
@@ -86,7 +90,7 @@ export function Seat({
   const pendingName = !isViewer && !seat.name;
   const isDisconnected = seat.connection_state === 'disconnected';
   const remainingMs = isTurn && deadlineMs && nowMs ? Math.max(0, deadlineMs - nowMs) : null;
-  const stackFrom = payout > 0 ? seat.stack - payout : stackBefore ?? seat.stack;
+  const stackFrom = credit > 0 ? seat.stack - credit : stackBefore ?? seat.stack;
   const displayStack = useCountUp(stackFrom, seat.stack);
   // Heads-up has the dealer double as the small blind — one combined badge
   // rather than two overlapping pills.
@@ -100,7 +104,7 @@ export function Seat({
                         restartKey={deadlineMs ?? 0} radius={14}/>}
     {role && <span className={`seat-role ${isDealer ? 'is-dealer' : ''}`} title={ROLE_LABELS[role]}
                    aria-label={ROLE_LABELS[role]}>{role}</span>}
-    <div className={`seat-cards ${isWinner && payout > 0 ? 'is-collecting' : ''}`}>{[0, 1].map(i => {
+    <div className={`seat-cards ${isWinner && winAmount > 0 ? 'is-collecting' : ''}`}>{[0, 1].map(i => {
       const card = cards?.[i];
       const publiclyRevealed = seat.hole_cards_revealed?.[i] ?? false;
       return <PlayingCard key={`${i}-${card || 'back'}`} card={card} index={i} size="hole"
@@ -108,7 +112,7 @@ export function Seat({
                           onReveal={canRevealCards && !publiclyRevealed ? () => onRevealCard?.(i) : undefined}
                           revealPending={revealPending}/>;
     })}</div>
-    {isWinner && payout > 0 && <span key={`confetti-${payout}`} className="seat-confetti" aria-hidden="true">
+    {isWinner && winAmount > 0 && <span key={`confetti-${winAmount}`} className="seat-confetti" aria-hidden="true">
       {SEAT_CONFETTI_ANGLES.map((rot, i) => <span key={i} style={{'--rot': `${rot}deg`,
         animationDelay: `${(i % 4) * 20}ms`} as CSSProperties}/>)}
     </span>}
@@ -121,7 +125,8 @@ export function Seat({
             <Progress value={chance} indicatorClassName={equityTone(chance)}/>
             <small>Chance {chance}%</small>
         </div>}{STATE_LABELS[seat.state] &&
-        <small className="seat-state">{pausedAfterHand ? 'Pausado após esta mão' : STATE_LABELS[seat.state]}</small>}{isDisconnected && seat.state !== 'disconnected' &&
+        <small className="seat-state">{STATE_LABELS[seat.state]}</small>}{pausedAfterHand &&
+        <small className="seat-state seat-next-state">Pausa na próxima mão</small>}{isDisconnected && seat.state !== 'disconnected' &&
         <small className="seat-state">Desconectado</small>}{seat.hand_category &&
         <small className="seat-hand-category">{HAND_CATEGORY_LABELS[seat.hand_category] || seat.hand_category}</small>}
     </div>
@@ -129,7 +134,12 @@ export function Seat({
         <ChipStack amount={seat.contributed} bigBlind={bigBlind}/>
         <b aria-label={`Aposta de ${seat.contributed.toLocaleString('pt-BR')} fichas`}>{seat.contributed.toLocaleString('pt-BR')}</b>
       </span>}
-    {isWinner && payout > 0 &&
-        <span key={`win-${payout}`} className="seat-win" role="status">+{payout.toLocaleString('pt-BR')}</span>
+    {isWinner && winAmount > 0 &&
+        <span key={`win-${winAmount}`} className="seat-win" role="status">+{winAmount.toLocaleString('pt-BR')}</span>
+    }
+    {refundAmount > 0 &&
+        <span key={`refund-${refundAmount}`} className="seat-refund">
+          ↩ {refundAmount.toLocaleString('pt-BR')}
+        </span>
     }</div>;
 }

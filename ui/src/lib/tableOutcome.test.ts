@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type {TableSnapshot} from './api/table.ts';
-import {seatParticipated, shouldShowOutcome, tableOutcomeKind} from './tableOutcome.ts';
+import {playerPotBreakdown, seatParticipated, shouldShowOutcome, tableOutcomeKind} from './tableOutcome.ts';
 
-const snapshot = {
+const snapshot: TableSnapshot = {
   stage: 'complete',
   board: [],
   seats: [
@@ -15,18 +15,18 @@ const snapshot = {
   pot_results: [
     {
       amount: 150, payout_amount: 150,
-      eligible_player_ids: ['main', 'side', 'loser'], winner_player_ids: ['main']
+      eligible_player_ids: ['main', 'side', 'loser'], winner_player_ids: ['main'], payouts: {main: 150}
     },
     {
       amount: 100, payout_amount: 100,
-      eligible_player_ids: ['side', 'loser'], winner_player_ids: ['side']
+      eligible_player_ids: ['side', 'loser'], winner_player_ids: ['side'], payouts: {side: 100}
     }
   ]
-} satisfies TableSnapshot;
+};
 
-test('different side-pot winners are wins, not a tie', () => {
+test('different side-pot winners are never mislabeled as a tie', () => {
   assert.equal(tableOutcomeKind(snapshot, 'main'), 'win');
-  assert.equal(tableOutcomeKind(snapshot, 'side'), 'win');
+  assert.equal(tableOutcomeKind(snapshot, 'side'), 'mixed');
   assert.equal(tableOutcomeKind(snapshot, 'loser'), 'lose');
 });
 
@@ -42,8 +42,38 @@ test('only winners sharing the same pot are tied', () => {
   assert.equal(tableOutcomeKind(tied, 'side'), 'tie');
 });
 
+test('winning one pot and losing another is a mixed result', () => {
+  const mixed = {
+    ...snapshot,
+    pot_results: [
+      snapshot.pot_results![0],
+      {...snapshot.pot_results![1], eligible_player_ids: ['main', 'side', 'loser']}
+    ]
+  };
+  assert.equal(tableOutcomeKind(mixed, 'main'), 'mixed');
+});
+
+test('contested winnings and refunds remain separate', () => {
+  const withRefund = {
+    ...snapshot,
+    payouts: {main: 190},
+    pot_results: [
+      snapshot.pot_results![0],
+      {
+        amount: 40, payout_amount: 40, eligible_player_ids: ['main'],
+        winner_player_ids: [], payouts: {main: 40}, refund: true
+      }
+    ]
+  };
+  assert.deepEqual(playerPotBreakdown(withRefund, 'main'), {credit: 190, won: 150, refund: 40});
+});
+
 test('a busted showdown participant still receives the outcome', () => {
   assert.equal(shouldShowOutcome(snapshot.seats[2]), true);
+});
+
+test('a folded participant still receives the outcome and reveal controls', () => {
+  assert.equal(shouldShowOutcome({...snapshot.seats[0], state: 'folded'}), true);
 });
 
 test('protocol-v1 participation falls back to the viewer cards', () => {

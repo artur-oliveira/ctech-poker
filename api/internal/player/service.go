@@ -11,16 +11,23 @@ import (
 var ErrTermsNotAccepted = errors.New("poker terms not accepted")
 var ErrEmptyName = errors.New("player: name is empty")
 var ErrInvalidWalletMode = errors.New("player: wallet_mode must be sandbox or real")
+var ErrInvalidDeckVariant = errors.New("player: deck_variant must not be empty")
 
 // maxDisplayNameLen bounds a player's display name — it is broadcast as-is to
 // every other seat at a table, so it gets the same length ceiling as chat.
 const maxDisplayNameLen = 60
+
+// maxDeckVariantLen is a generous cap, not a catalog check — the variant
+// catalog is cosmetic-only and lives on the frontend (src/lib/cardVariants.ts),
+// so the backend just stores whatever id it's given.
+const maxDeckVariantLen = 60
 
 type profileStore interface {
 	GetOrCreate(context.Context, string) (*PlayerProfile, error)
 	AcceptTerms(context.Context, string) error
 	SetName(context.Context, string, string) error
 	SetWalletMode(context.Context, string, string) error
+	SetDeckVariant(context.Context, string, string) error
 }
 
 // balanceFetcher is the subset of *walletclient.Client the profile endpoint
@@ -58,6 +65,23 @@ func (s *Service) SetWalletMode(ctx context.Context, userID, mode string) (*Play
 		return nil, ErrInvalidWalletMode
 	}
 	if err := s.store.SetWalletMode(ctx, userID, mode); err != nil {
+		return nil, err
+	}
+	return s.store.GetOrCreate(ctx, userID)
+}
+
+// SetDeckVariant persists the player's card-color-scheme preference. The id
+// itself is opaque to the backend — it just needs to round-trip back to the
+// frontend, which owns the catalog and picks the default when unset.
+func (s *Service) SetDeckVariant(ctx context.Context, userID, variant string) (*PlayerProfile, error) {
+	variant = strings.TrimSpace(variant)
+	if variant == "" {
+		return nil, ErrInvalidDeckVariant
+	}
+	if len(variant) > maxDeckVariantLen {
+		variant = variant[:maxDeckVariantLen]
+	}
+	if err := s.store.SetDeckVariant(ctx, userID, variant); err != nil {
 		return nil, err
 	}
 	return s.store.GetOrCreate(ctx, userID)

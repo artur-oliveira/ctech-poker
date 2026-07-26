@@ -1,5 +1,6 @@
 import type {Page} from './client';
 import {apiClient} from './client';
+import type {DeckVariantId} from '../cardVariants';
 
 export type WalletMode = 'sandbox' | 'real';
 
@@ -11,6 +12,9 @@ export interface PlayerProfile {
   poker_terms_accepted_at?: string;
   game_balance?: number;
   sandbox_balance?: number;
+  // Not sent by the backend yet — reserved so the deck color variant can be
+  // wired in without another PlayerProfile shape change.
+  deck_variant?: DeckVariantId;
 }
 
 export async function getMe() {
@@ -21,7 +25,7 @@ export async function acceptPokerTerms() {
   return (await apiClient.post<PlayerProfile>('/v1.0/players/me/terms/accept', {}, {silentError: true})).data;
 }
 
-export async function updateMe(input: { name?: string; wallet_mode?: WalletMode }) {
+export async function updateMe(input: { name?: string; wallet_mode?: WalletMode; deck_variant?: DeckVariantId }) {
   return (await apiClient.post<PlayerProfile>('/v1.0/players/me', input, {silentError: false})).data;
 }
 

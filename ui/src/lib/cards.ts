@@ -1,3 +1,5 @@
+import {DEFAULT_DECK_VARIANT, type DeckVariantId} from './cardVariants';
+
 const ranks: Record<string, string> = {T: '10', J: 'jack', Q: 'queen', K: 'king', A: 'ace'};
 const suits: Record<string, string> = {c: 'club', d: 'diamond', h: 'heart', s: 'spade'};
 const rankLabels: Record<string, string> = {
@@ -6,11 +8,12 @@ const rankLabels: Record<string, string> = {
 };
 const suitLabels: Record<string, string> = {c: 'paus', d: 'ouros', h: 'copas', s: 'espadas'};
 
-export function cardPath(c: string) {
+export function cardPath(c: string, variant: DeckVariantId = DEFAULT_DECK_VARIANT) {
   const normalized = c?.trim();
   const suit = suits[normalized?.[1]?.toLowerCase()], rankCode = normalized?.[0]?.toUpperCase();
   const rank = ranks[rankCode] || rankCode;
-  return suit && rank ? `/svgs/${suit}-${rank}.svg` : back;
+  if (!suit || !rank) return back;
+  return `/svgs/variants/${variant}/${suit}-${rank}.svg`;
 }
 
 export function cardLabel(card: string) {

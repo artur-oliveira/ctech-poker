@@ -46,6 +46,11 @@ export interface Seat {
    * are always visible to themselves; this mask says what everyone may see.
    */
   hole_cards_revealed: boolean[];
+  /**
+   * Stack before this hand posted blinds or accepted any wager. Optional so
+   * clients can fall back safely while API instances are rolling.
+   */
+  stack_at_hand_start?: number | undefined;
 }
 
 export interface BlindEscalation {
@@ -108,6 +113,15 @@ export interface PotResult {
   eligible_player_ids: string[];
   /** empty for refunds */
   winner_player_ids: string[];
+  /** exact per-player credits, including odd chips */
+  payouts: { [key: string]: number };
+  /** true for uncalled/orphaned contribution returns */
+  refund: boolean;
+}
+
+export interface PotResult_PayoutsEntry {
+  key: string;
+  value: number;
 }
 
 export interface TableSnapshot {
@@ -281,6 +295,7 @@ function createBaseSeat(): Seat {
     dealt_in: undefined,
     ready: undefined,
     hole_cards_revealed: [],
+    stack_at_hand_start: undefined,
   };
 }
 
@@ -324,6 +339,9 @@ export const Seat: MessageFns<Seat> = {
       writer.bool(v);
     }
     writer.join();
+    if (message.stack_at_hand_start !== undefined) {
+      writer.uint32(104).int64(message.stack_at_hand_start);
+    }
     return writer;
   },
 
@@ -440,6 +458,14 @@ export const Seat: MessageFns<Seat> = {
 
           break;
         }
+        case 13: {
+          if (tag !== 104) {
+            break;
+          }
+
+          message.stack_at_hand_start = longToNumber(reader.int64());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -466,6 +492,7 @@ export const Seat: MessageFns<Seat> = {
     message.dealt_in = object.dealt_in ?? undefined;
     message.ready = object.ready ?? undefined;
     message.hole_cards_revealed = object.hole_cards_revealed?.map((e) => e) || [];
+    message.stack_at_hand_start = object.stack_at_hand_start ?? undefined;
     return message;
   },
 };
@@ -1035,7 +1062,7 @@ export const Pot: MessageFns<Pot> = {
 };
 
 function createBasePotResult(): PotResult {
-  return { amount: 0, payout_amount: 0, eligible_player_ids: [], winner_player_ids: [] };
+  return { amount: 0, payout_amount: 0, eligible_player_ids: [], winner_player_ids: [], payouts: {}, refund: false };
 }
 
 export const PotResult: MessageFns<PotResult> = {
@@ -1051,6 +1078,12 @@ export const PotResult: MessageFns<PotResult> = {
     }
     for (const v of message.winner_player_ids) {
       writer.uint32(34).string(v!);
+    }
+    globalThis.Object.entries(message.payouts).forEach(([key, value]: [string, number]) => {
+      PotResult_PayoutsEntry.encode({ key: key as any, value }, writer.uint32(42).fork()).join();
+    });
+    if (message.refund !== false) {
+      writer.uint32(48).bool(message.refund);
     }
     return writer;
   },
@@ -1094,6 +1127,25 @@ export const PotResult: MessageFns<PotResult> = {
           message.winner_player_ids.push(reader.string());
           continue;
         }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          const entry5 = PotResult_PayoutsEntry.decode(reader, reader.uint32());
+          if (entry5.value !== undefined) {
+            message.payouts[entry5.key] = entry5.value;
+          }
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.refund = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1112,6 +1164,74 @@ export const PotResult: MessageFns<PotResult> = {
     message.payout_amount = object.payout_amount ?? 0;
     message.eligible_player_ids = object.eligible_player_ids?.map((e) => e) || [];
     message.winner_player_ids = object.winner_player_ids?.map((e) => e) || [];
+    message.payouts = (globalThis.Object.entries(object.payouts ?? {}) as [string, number][]).reduce(
+      (acc: { [key: string]: number }, [key, value]: [string, number]) => {
+        if (value !== undefined) {
+          acc[key] = globalThis.Number(value);
+        }
+        return acc;
+      },
+      {},
+    );
+    message.refund = object.refund ?? false;
+    return message;
+  },
+};
+
+function createBasePotResult_PayoutsEntry(): PotResult_PayoutsEntry {
+  return { key: "", value: 0 };
+}
+
+export const PotResult_PayoutsEntry: MessageFns<PotResult_PayoutsEntry> = {
+  encode(message: PotResult_PayoutsEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.key !== "") {
+      writer.uint32(10).string(message.key);
+    }
+    if (message.value !== 0) {
+      writer.uint32(16).int64(message.value);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PotResult_PayoutsEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePotResult_PayoutsEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.key = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.value = longToNumber(reader.int64());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<PotResult_PayoutsEntry>, I>>(base?: I): PotResult_PayoutsEntry {
+    return PotResult_PayoutsEntry.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PotResult_PayoutsEntry>, I>>(object: I): PotResult_PayoutsEntry {
+    const message = createBasePotResult_PayoutsEntry();
+    message.key = object.key ?? "";
+    message.value = object.value ?? 0;
     return message;
   },
 };

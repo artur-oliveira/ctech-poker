@@ -90,6 +90,15 @@ func wsAllowedOrigin(ctx *fasthttp.RequestCtx, allowed []string) bool {
 	return false
 }
 
+func rateLimitedTableMessage(messageType string) bool {
+	switch messageType {
+	case "act", "chat", "sync_state", "ready", "post_big_blind", "show_cards", "ping":
+		return true
+	default:
+		return false
+	}
+}
+
 // seatLimiter is a fixed-window per-player counter — abuse prevention
 // (ARCHITECTURE.md §8), not precise rate metering.
 type seatLimiter struct {
@@ -382,7 +391,7 @@ func RegisterTableWS(
 				if err := goproto.Unmarshal(msg, &m); err != nil {
 					continue
 				}
-				if (m.Type == "act" || m.Type == "chat" || m.Type == "sync_state") && !limiter.Allow(playerID) {
+				if rateLimitedTableMessage(m.Type) && !limiter.Allow(playerID) {
 					send(&pokerproto.ServerMessage{Type: "error", Code: "rate_limited", ActionId: m.ActionId})
 					continue
 				}
@@ -622,6 +631,7 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 			Contributed:       s.Contributed,
 			HoleCards:         s.HoleCards,
 			HoleCardsRevealed: s.HoleCardsRevealed,
+			StackAtHandStart:  s.StackAtHandStart,
 			Equity:            equity,
 			HandCategory:      s.HandCategory,
 		}
@@ -657,6 +667,8 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 			PayoutAmount:      result.PayoutAmount,
 			EligiblePlayerIds: result.EligiblePlayerIDs,
 			WinnerPlayerIds:   result.WinnerPlayerIDs,
+			Payouts:           result.Payouts,
+			Refund:            result.Refund,
 		}
 	}
 
@@ -681,7 +693,7 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		Pots:                 protoPots,
 		HandId:               snap.HandID,
 		PotResults:           protoPotResults,
-		ProtocolVersion:      2,
+		ProtocolVersion:      3,
 	}
 }
 

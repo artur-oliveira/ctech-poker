@@ -71,10 +71,12 @@ type PotView struct {
 }
 
 type PotResultView struct {
-	Amount            int64    `json:"amount"`
-	PayoutAmount      int64    `json:"payout_amount"`
-	EligiblePlayerIDs []string `json:"eligible_player_ids"`
-	WinnerPlayerIDs   []string `json:"winner_player_ids,omitempty"`
+	Amount            int64            `json:"amount"`
+	PayoutAmount      int64            `json:"payout_amount"`
+	EligiblePlayerIDs []string         `json:"eligible_player_ids"`
+	WinnerPlayerIDs   []string         `json:"winner_player_ids,omitempty"`
+	Payouts           map[string]int64 `json:"payouts,omitempty"`
+	Refund            bool             `json:"refund,omitempty"`
 }
 
 type SeatView struct {
@@ -91,6 +93,7 @@ type SeatView struct {
 	Contributed       int64    `json:"contributed"`
 	HoleCards         []string `json:"hole_cards,omitempty"`
 	HoleCardsRevealed []bool   `json:"hole_cards_revealed,omitempty"`
+	StackAtHandStart  *int64   `json:"stack_at_hand_start,omitempty"`
 	Equity            *float64 `json:"equity,omitempty"`
 	HandCategory      string   `json:"hand_category,omitempty"`
 }
@@ -136,6 +139,17 @@ func boardCodes(board []deck.Card) []string {
 	return out
 }
 
+func cloneInt64Map(source map[string]int64) map[string]int64 {
+	if len(source) == 0 {
+		return nil
+	}
+	cloned := make(map[string]int64, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
+}
+
 // ViewFor builds the snapshot viewerID is allowed to see: their own hole
 // cards always visible; every other seat's hole cards hidden until the hand
 // reaches Complete via a genuine showdown, at which point every non-folded
@@ -158,6 +172,8 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 				PayoutAmount:      result.PayoutAmount,
 				EligiblePlayerIDs: append([]string(nil), result.EligiblePlayerIDs...),
 				WinnerPlayerIDs:   append([]string(nil), result.Winners...),
+				Payouts:           cloneInt64Map(result.Payouts),
+				Refund:            result.Refund,
 			}
 		}
 	}
@@ -171,13 +187,14 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 	}
 	for _, p := range t.players {
 		sv := SeatView{
-			PlayerID:    p.ID,
-			Name:        p.Name,
-			Stack:       p.Stack,
-			State:       playerStateNames[p.State],
-			DealtIn:     dealtIn[p.ID],
-			Ready:       p.Ready,
-			Contributed: p.Contributed,
+			PlayerID:         p.ID,
+			Name:             p.Name,
+			Stack:            p.Stack,
+			State:            playerStateNames[p.State],
+			DealtIn:          dealtIn[p.ID],
+			Ready:            p.Ready,
+			Contributed:      p.Contributed,
+			StackAtHandStart: p.HandStartStack,
 		}
 		publicReveal := []bool{
 			p.VoluntarilyShown || p.VoluntarilyShownCards[0],

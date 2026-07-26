@@ -5,6 +5,7 @@ import {Seat} from '@/components/table/Seat';
 import {HandOutcomeBanner, type HandOutcomeState} from '@/components/table/HandOutcome';
 import {rotateSeats} from '@/lib/utils';
 import type {TableSnapshot} from '@/lib/api/table';
+import {playerPotBreakdown} from '@/lib/tableOutcome';
 
 // Portrait handhelds get a different experience, not a shrunk table: a tall
 // capsule ringed by compact opponents, with the viewer promoted to a hero HUD
@@ -59,10 +60,13 @@ export function TableStage({
                            }: Props) {
   const vertical = useVerticalStage();
   const seats = rotateSeats(snapshot.seats, viewer);
-  const seatNode = (seat: TableSnapshot['seats'][number], index: number) =>
-    <Seat key={seat.player_id} seat={seat} index={index}
+  const seatNode = (seat: TableSnapshot['seats'][number], index: number) => {
+    const breakdown = playerPotBreakdown(snapshot, seat.player_id);
+    return <Seat key={seat.player_id} seat={seat} index={index}
           isTurn={snapshot.current_player_id === seat.player_id}
-          payout={snapshot.payouts?.[seat.player_id] || 0}
+          credit={snapshot.payouts?.[seat.player_id] || 0}
+          winAmount={breakdown.won}
+          refundAmount={breakdown.refund}
           isWinner={snapshot.winners?.includes(seat.player_id) ?? false}
           deadlineMs={snapshot.action_deadline_unix_ms}
           nowMs={nowMs}
@@ -75,6 +79,7 @@ export function TableStage({
           isDealer={snapshot.dealer_player_id === seat.player_id}
           isSmallBlind={snapshot.small_blind_player_id === seat.player_id}
           isBigBlind={snapshot.big_blind_player_id === seat.player_id}/>;
+  };
   const board = <Board cards={snapshot.board} pot={pot} pots={snapshot.pots}
                        rake={snapshot.rake} bigBlind={bigBlind}/>;
 

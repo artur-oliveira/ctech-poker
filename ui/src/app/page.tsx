@@ -5,6 +5,7 @@ import {ArrowRight, Club, ShieldCheck, Trophy, Users, Zap} from 'lucide-react';
 import {startOAuthFlow} from '@/lib/auth/oauth';
 import {Button} from '@/components/ui/button';
 import {PlayingCard} from '@/components/table/PlayingCard';
+import {cardPath} from '@/lib/cards';
 import {achievementDescription, achievementExample, achievementLabel} from '@/lib/achievements';
 import React from "react";
 
@@ -138,19 +139,19 @@ function HeroTable() {
     <div className="poker-table">
       <div className="rail"/>
       <div className="felt"><span className="pot">POTE <b>2.450</b></span>
-        <div className="community">{['heart-10', 'spade-jack', 'diamond-queen'].map((c, i) => <Image key={c}
-                                                                                                     src={`/svgs/${c}.svg`}
-                                                                                                     alt="" width={70}
-                                                                                                     height={98}
-                                                                                                     style={{'--i': i} as React.CSSProperties}/>)}<span
+        <div className="community">{['Th', 'Js', 'Qd'].map((c, i) => <Image key={c}
+                                                                             src={cardPath(c)}
+                                                                             alt="" width={70}
+                                                                             height={98}
+                                                                             style={{'--i': i} as React.CSSProperties}/>)}<span
           className="card-placeholder"/><span className="card-placeholder"/></div>
         <div className="table-logo"><Club/> CTECH</div>
       </div>
       {[['Kely', '1.820', 'top'], ['Você', '3.240', 'bottom'], ['Wellington', '980', 'left'], ['Thiago', '2.100', 'right']].map(([name, chips, pos]) =>
         <div className={`demo-seat ${pos}`} key={name}><span
           className="avatar">{name[0]}</span><span><b>{name}</b><small>{chips}</small></span>{name === 'Você' &&
-            <div className="hole"><Image src="/svgs/spade-ace.svg" alt="Ás de espadas" width={42} height={59}/><Image
-                src="/svgs/heart-ace.svg" alt="Ás de copas" width={42} height={59}/></div>}</div>)}
+            <div className="hole"><Image src={cardPath('As')} alt="Ás de espadas" width={42} height={59}/><Image
+                src={cardPath('Ah')} alt="Ás de copas" width={42} height={59}/></div>}</div>)}
       <div className="chip-orbit chip-a"/>
       <div className="chip-orbit chip-b"/>
     </div>

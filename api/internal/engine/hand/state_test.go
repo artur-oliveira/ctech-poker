@@ -36,6 +36,9 @@ func TestExportImportRoundTripsFullState(t *testing.T) {
 	if rebuiltView.Seats[0].Name != "Ana" {
 		t.Fatalf("persisted player name lost across recovery: %+v", rebuiltView.Seats[0])
 	}
+	if rebuiltView.Seats[0].StackAtHandStart == nil || *rebuiltView.Seats[0].StackAtHandStart != 1000 {
+		t.Fatalf("pre-blind stack lost across recovery: %+v", rebuiltView.Seats[0])
+	}
 
 	nextToAct := rebuilt.playerToActForTest()
 	if nextToAct == "" {

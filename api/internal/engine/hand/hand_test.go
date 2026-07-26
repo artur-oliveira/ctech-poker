@@ -27,6 +27,15 @@ func TestFullHandWithThreeWayAllInProducesCorrectPayouts(t *testing.T) {
 	if table.Stage() != PreFlop {
 		t.Fatalf("expected PreFlop after StartHand, got %v", table.Stage())
 	}
+	for _, player := range players {
+		expected := int64(1000)
+		if player.ID == "SB" {
+			expected = 200
+		}
+		if player.HandStartStack == nil || *player.HandStartStack != expected {
+			t.Fatalf("%s pre-blind stack must be %d, got %+v", player.ID, expected, player.HandStartStack)
+		}
+	}
 
 	// Rig the deal so the showdown winner is deterministic instead of
 	// depending on deck.NewShuffle's crypto/rand seed: SB gets pocket aces
@@ -109,6 +118,9 @@ func TestFullHandWithThreeWayAllInProducesCorrectPayouts(t *testing.T) {
 	}
 	if got := outcome.PotResults[1].Winners; len(got) != 1 || got[0] != "Dealer" {
 		t.Fatalf("side pot must be won outright by Dealer, got %v", got)
+	}
+	if outcome.PotResults[0].Payouts["SB"] != 600 || outcome.PotResults[1].Payouts["Dealer"] != 40 {
+		t.Fatalf("pot results must preserve exact per-pot credits: %+v", outcome.PotResults)
 	}
 	for _, id := range []string{"SB", "Dealer"} {
 		if result := outcome.ShowdownResults[id]; !result.Won || result.Tied || result.SplitPot {
@@ -1170,6 +1182,21 @@ func TestUncalledAllInExcessIsNotCountedAsAWin(t *testing.T) {
 	}
 	if payouts["Caller"] != 200 { // 100+100 matched pot, Caller's rigged aces win it
 		t.Fatalf("Caller must win the contested 200 pot, got %d", payouts["Caller"])
+	}
+	var contested, refund *PotResult
+	for i := range outcome.PotResults {
+		result := &outcome.PotResults[i]
+		if result.Refund {
+			refund = result
+		} else {
+			contested = result
+		}
+	}
+	if contested == nil || contested.Payouts["Caller"] != 200 {
+		t.Fatalf("contested win was not attributed exactly: %+v", outcome.PotResults)
+	}
+	if refund == nil || refund.Payouts["Shover"] != 900 || len(refund.Winners) != 0 {
+		t.Fatalf("uncalled excess was not identified as a refund: %+v", outcome.PotResults)
 	}
 }
 

@@ -26,9 +26,15 @@ import {TermsGate} from '@/components/TermsGate';
 import {Button} from '@/components/ui/button';
 import {pushNotification} from '@/lib/notify';
 import type {TableSnapshot} from '@/lib/api/table';
-import {bestFiveCardHand, HAND_RANK_INDEX} from '@/lib/pokerRules';
+import {bestFiveCardHand} from '@/lib/pokerRules';
 import {getHands} from '@/lib/api/player';
-import {relevantWinner, seatParticipated, shouldShowOutcome, tableOutcomeKind} from '@/lib/tableOutcome';
+import {
+  playerPotBreakdown,
+  relevantWinner,
+  seatParticipated,
+  shouldShowOutcome,
+  tableOutcomeKind
+} from '@/lib/tableOutcome';
 import {type MockScenario, USE_MOCK} from '@/lib/mock';
 import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
 
@@ -150,33 +156,33 @@ function TableContent() {
   // that same `complete` snapshot (show_cards, pings, ...), so comparing
   // against the previous render's payouts (not the current one) is what
   // keeps this from re-firing on those repeats.
-  const previousPayoutsRef = useRef<TableSnapshot['payouts']>(undefined);
+  const previousPayoutsRef = useRef<{tableID: string; payouts?: TableSnapshot['payouts']}>({tableID: ''});
   const outcomeKeyRef = useRef(0);
-  // The viewer's stack at the moment the CURRENT hand began (its first
-  // pre_flop snapshot) — captured once per hand, before any of this hand's
-  // blinds, bets, or winnings apply. Comparing against the stack right
-  // before resolution instead would only ever show a hold or a gain: by
-  // resolution time a loser's chips are already in the pot from betting
-  // earlier in the same hand, so "before resolution" already has this hand's
-  // losses baked in. Adjusted directly during render (not an effect) — the
-  // same derived-state-from-props pattern HandOutcomeBanner uses below —
-  // since the viewer's own seat also reads it during render to animate its
-  // stack number alongside the banner.
-  const [previousStage, setPreviousStage] = useState<string | undefined>(undefined);
-  const [stackAtHandStart, setStackAtHandStart] = useState<number | undefined>(undefined);
-  if (rt.snapshot && viewer && rt.snapshot.stage !== previousStage) {
-    if (rt.snapshot.stage === 'pre_flop' && previousStage !== 'pre_flop') {
-      const liveSeat = rt.snapshot.seats.find(item => item.player_id === viewer);
-      if (liveSeat) setStackAtHandStart(liveSeat.stack);
-    }
-    setPreviousStage(rt.snapshot.stage);
+  const [rememberedStart, setRememberedStart] =
+    useState<{tableID: string; handID: string; stack: number} | null>(null);
+  const [scopedHandOutcome, setScopedHandOutcome] =
+    useState<{tableID: string; value: HandOutcomeState} | null>(null);
+  // Protocol v3 publishes the exact pre-blind stack. During a rolling deploy,
+  // remember the earliest live snapshot as stack+contributed; unlike the old
+  // stage-based state this is scoped to both table and hand and also works
+  // when the first frame arrives on flop/turn after a reconnect.
+  const liveSeat = rt.snapshot?.seats.find(item => item.player_id === viewer);
+  if (rt.snapshot?.hand_id && liveSeat && seatParticipated(liveSeat) &&
+    !Object.keys(rt.snapshot.payouts || {}).length &&
+    (rememberedStart?.tableID !== id || rememberedStart.handID !== rt.snapshot.hand_id)) {
+    setRememberedStart({
+      tableID: id,
+      handID: rt.snapshot.hand_id,
+      stack: liveSeat.stack_at_hand_start ?? liveSeat.stack + liveSeat.contributed
+    });
   }
-  const [handOutcome, setHandOutcome] = useState<HandOutcomeState | null>(null);
   useEffect(() => {
     const snap = rt.snapshot;
     const hasPayouts = Boolean(snap?.payouts && Object.keys(snap.payouts).length > 0);
-    const isFreshPayout = hasPayouts && !previousPayoutsRef.current;
-    previousPayoutsRef.current = hasPayouts ? snap?.payouts : undefined;
+    const previousPayouts = previousPayoutsRef.current.tableID === id ?
+      previousPayoutsRef.current.payouts : undefined;
+    const isFreshPayout = hasPayouts && !previousPayouts;
+    previousPayoutsRef.current = {tableID: id, payouts: hasPayouts ? snap?.payouts : undefined};
     if (isFreshPayout) void queryClient.invalidateQueries({queryKey: ['hands', id]});
     if (!isFreshPayout || !snap || !hasPayouts || !viewer) return;
     // Seat state does not prove participation: a player may become active
@@ -189,16 +195,13 @@ function TableContent() {
     // uncalled all-in's excess or an orphaned side-pot refund also shows up
     // in `payouts` without being an actual win.
     const kind = tableOutcomeKind(snap, viewer);
-    // The banner names one rival hand as the point of comparison: the
-    // toughest hand it beat when the viewer won (proof it beat everyone),
-    // or the hand that actually beat it when the viewer lost. Only seats
+    // The banner names one rival hand as the point of comparison when the
+    // viewer lost at least one eligible pot. Only seats
     // that reached showdown carry hand_category, so this stays undefined
     // (and the banner falls back to the plain category chip) whenever the
     // hand ended without one — e.g. everyone else folded.
-    const opponentCategory = kind === 'win' ?
-      snap.seats.filter(item => item.player_id !== viewer && item.hand_category)
-        .sort((a, b) => HAND_RANK_INDEX[a.hand_category!] - HAND_RANK_INDEX[b.hand_category!])[0]?.hand_category :
-      relevantWinner(snap, viewer)?.hand_category;
+    const opponentCategory = (kind === 'lose' || kind === 'mixed') ?
+      relevantWinner(snap, viewer)?.hand_category : undefined;
     // The hand that actually won this pot: the viewer's own cards on a win
     // (always known), or the first winning rival's cards on a loss — but only
     // when a showdown actually revealed them (a hand that ended with everyone
@@ -206,7 +209,7 @@ function TableContent() {
     // the board is complete) and reduced to the actual best 5-card hand — a
     // bare pair of hole cards doesn't show what the player actually won with
     // when the winning combination uses the board too.
-    const winnerSeat = (kind === 'win' || kind === 'tie') ? seat : relevantWinner(snap, viewer);
+    const winnerSeat = kind === 'lose' ? relevantWinner(snap, viewer) : seat;
     const winnerHole = winnerSeat?.hole_cards?.length === 2 &&
     winnerSeat.hole_cards.every(card => card.toLowerCase() !== 'back') ? winnerSeat.hole_cards : undefined;
     const winningCards = winnerHole && snap.board.length === 5 ?
@@ -215,12 +218,19 @@ function TableContent() {
     seat.hole_cards.every(card => card.toLowerCase() !== 'back') ? seat.hole_cards : undefined;
     const viewerCards = viewerHole && snap.board.length === 5 ?
       bestFiveCardHand([...viewerHole, ...snap.board]) : viewerHole;
-    setHandOutcome({
-      key: outcomeKeyRef.current, kind, handCategory: seat.hand_category, opponentCategory,
-      winningCards, winningHoleCards: winnerHole, viewerCards, viewerHoleCards: viewerHole,
-      winnerName: winnerSeat?.name, stackBefore: stackAtHandStart, stackAfter: seat.stack
+    const stackBefore = seat.stack_at_hand_start ??
+      (rememberedStart?.tableID === id && rememberedStart.handID === snap.hand_id ? rememberedStart.stack : undefined);
+    const breakdown = playerPotBreakdown(snap, viewer);
+    setScopedHandOutcome({
+      tableID: id,
+      value: {
+        key: outcomeKeyRef.current, kind, handCategory: seat.hand_category, opponentCategory,
+        winningCards, winningHoleCards: winnerHole, viewerCards, viewerHoleCards: viewerHole,
+        winnerName: winnerSeat?.name, stackBefore, stackAfter: seat.stack,
+        wonAmount: breakdown.won, refundAmount: breakdown.refund
+      }
     });
-  }, [rt.snapshot, viewer, stackAtHandStart, queryClient, id]);
+  }, [rt.snapshot, viewer, queryClient, id, rememberedStart]);
   if (!valid) return (
     <main className="game-loading">
       <h1 className="sr-only">Mesa de poker</h1>
@@ -259,6 +269,9 @@ function TableContent() {
   const connectionMessage = rt.status === 'connected' ? null : connectionCopyFor(rt.status, rt.reconnectAttempt);
   const actions = actionState(s, viewer);
   const viewerSeat = s.seats.find(seat => seat.player_id === viewer);
+  const viewerStackBefore = viewerSeat?.stack_at_hand_start ??
+    (rememberedStart?.tableID === id && rememberedStart.handID === s.hand_id ? rememberedStart.stack : undefined);
+  const handOutcome = scopedHandOutcome?.tableID === id ? scopedHandOutcome.value : null;
   const actionKey = [s.stage, s.current_player_id, s.board.join(','), viewerSeat?.stack, viewerSeat?.contributed,
     actions.minRaise, actions.maxRaise, actions.raiseStep].join(':');
   // A room's share_code is only ever present for its own creator (the server
@@ -273,6 +286,7 @@ function TableContent() {
   const isPaused = viewerSeat?.ready === false || viewerSeat?.state === 'sitting_out';
   const canRevealCards = s.stage === 'complete' && seatParticipated(viewerSeat) &&
     Boolean(viewerSeat?.hole_cards?.some(card => card.toLowerCase() !== 'back')) &&
+    !((s.protocol_version ?? 0) < 2 && !s.won_without_showdown && viewerSeat?.state !== 'folded') &&
     [0, 1].some(index => !(viewerSeat?.hole_cards_revealed?.[index] ?? false));
   const inviteUrl = typeof window !== 'undefined' ?
     `${window.location.origin}/table?id=${id}${room?.share_code ? `&invite=${room.share_code}` : ''}` : '';
@@ -343,7 +357,7 @@ function TableContent() {
           `complete` ever arrived. */}
       <TableStage snapshot={s} viewer={viewer} pot={pot} bigBlind={bigBlind} nowMs={rt.snapshotAt}
                   outcome={handOutcome} holdOutcomeOpen={Boolean(s.payouts && Object.keys(s.payouts).length > 0)}
-                  viewerStackBefore={(s.payouts && Object.keys(s.payouts).length > 0) ? stackAtHandStart : undefined}
+                  viewerStackBefore={(s.payouts && Object.keys(s.payouts).length > 0) ? viewerStackBefore : undefined}
                   canRevealCards={canRevealCards} revealPending={rt.showCardsPending}
                   onRevealCard={index => rt.showCards(index)}/>
       <ActionBar

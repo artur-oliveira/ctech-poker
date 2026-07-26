@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import type {CSSProperties} from 'react';
 import {back, cardLabel, cardPath} from '@/lib/cards';
+import {useDeckVariant} from '@/lib/hooks/useDeckVariant';
 
 export function PlayingCard({card, index, size, owner, slow, onReveal, revealPending}: {
   card?: string;
@@ -11,14 +12,15 @@ export function PlayingCard({card, index, size, owner, slow, onReveal, revealPen
   onReveal?: () => void;
   revealPending?: boolean;
 }) {
-  const revealed = Boolean(card && card.toLowerCase() !== 'back' && cardPath(card) !== back);
+  const variant = useDeckVariant();
+  const revealed = Boolean(card && card.toLowerCase() !== 'back' && cardPath(card, variant) !== back);
   const dimensions = size === 'board' ? {width: 68, height: 95} : {width: 46, height: 64};
   const style = {'--deal-index': index} as CSSProperties;
   if (onReveal && revealed) {
     return <button type="button" className={`playing-card ${size}-card revealable-card`}
                    aria-label={`Mostrar sua ${index + 1}ª carta: ${cardLabel(card!)}`}
                    disabled={revealPending} onClick={onReveal} style={style}>
-      <Image src={cardPath(card!)} alt="" aria-hidden="true" {...dimensions}/>
+      <Image src={cardPath(card!, variant)} alt="" aria-hidden="true" {...dimensions}/>
       <span aria-hidden="true">{revealPending ? '…' : 'Mostrar'}</span>
     </button>;
   }
@@ -35,7 +37,7 @@ export function PlayingCard({card, index, size, owner, slow, onReveal, revealPen
           aria-label={label} style={style}>
       <span className="card-reveal-inner">
         <Image className="card-back" src={back} alt="" aria-hidden="true" {...dimensions}/>
-        <Image className="card-front" src={cardPath(card!)} alt="" aria-hidden="true" {...dimensions}/>
+        <Image className="card-front" src={cardPath(card!, variant)} alt="" aria-hidden="true" {...dimensions}/>
       </span>
     </span>
   );

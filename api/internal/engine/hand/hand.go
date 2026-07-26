@@ -55,6 +55,10 @@ type Player struct {
 	HoleCards   [2]deck.Card `dynamodbav:"hole_cards"`
 	Contributed int64        `dynamodbav:"contributed"` // this hand's total contribution across all rounds, for side-pot math
 	HoldID      string       `dynamodbav:"hold_id,omitempty"`
+	// HandStartStack is captured before StartHand posts any blind. A pointer
+	// preserves presence across rolling deployments and distinguishes a real
+	// zero-chip all-in entry from older persisted state that never recorded it.
+	HandStartStack *int64 `dynamodbav:"hand_start_stack,omitempty"`
 
 	// VoluntarilyShown is retained for persisted-state compatibility with the
 	// original all-or-nothing reveal. New writes use VoluntarilyShownCards.
@@ -177,6 +181,8 @@ type PotResult struct {
 	PayoutAmount      int64
 	EligiblePlayerIDs []string
 	Winners           []string
+	Payouts           map[string]int64
+	Refund            bool
 }
 
 // ShowdownResult is one participant's own showdown outcome, see
@@ -553,6 +559,7 @@ func (t *Table) StartHand() error {
 	for _, p := range t.players {
 		p.VoluntarilyShown = false
 		p.VoluntarilyShownCards = [2]bool{}
+		p.HandStartStack = nil
 	}
 
 	active := make([]*Player, 0, len(t.players))
@@ -572,6 +579,8 @@ func (t *Table) StartHand() error {
 			newEntrants[p.ID] = true
 			delete(t.owesBigBlind, p.ID)
 		}
+		startingStack := p.Stack
+		p.HandStartStack = &startingStack
 		p.State = Active
 		p.Contributed = 0
 		p.HoleCards = [2]deck.Card{t.dealCard(), t.dealCard()}
@@ -1129,6 +1138,8 @@ func (t *Table) runShowdown() {
 			potResults = append(potResults, PotResult{
 				Amount: layer.Amount, PayoutAmount: layer.Amount,
 				EligiblePlayerIDs: append([]string(nil), layer.Eligible...),
+				Payouts:           map[string]int64{layer.Eligible[0]: layer.Amount},
+				Refund:            true,
 			})
 			continue
 		}
@@ -1171,16 +1182,21 @@ func (t *Table) runShowdown() {
 			// the correct refund.
 			n := int64(len(layer.Eligible))
 			share := layer.Amount / n
+			layerPayouts := make(map[string]int64, len(layer.Eligible))
 			for _, id := range layer.Eligible {
 				payouts[id] += share
+				layerPayouts[id] += share
 			}
 			remainder := layer.Amount - share*n
 			if remainder > 0 {
 				payouts[layer.Eligible[0]] += remainder
+				layerPayouts[layer.Eligible[0]] += remainder
 			}
 			potResults = append(potResults, PotResult{
 				Amount: layer.Amount, PayoutAmount: layer.Amount,
 				EligiblePlayerIDs: append([]string(nil), layer.Eligible...),
+				Payouts:           layerPayouts,
+				Refund:            true,
 			})
 			continue
 		}
@@ -1195,20 +1211,25 @@ func (t *Table) runShowdown() {
 			}
 		}
 		share := netAmount / int64(len(winners))
+		layerPayouts := make(map[string]int64, len(winners))
 		for _, w := range winners {
 			payouts[w] += share
+			layerPayouts[w] += share
 		}
 		// Odd chips start left of the dealer and move clockwise. Raw table
 		// order is not enough because the button moves between hands.
 		remainder := netAmount - share*int64(len(winners))
 		if remainder > 0 {
-			payouts[t.oddChipWinner(winners)] += remainder
+			oddChipWinner := t.oddChipWinner(winners)
+			payouts[oddChipWinner] += remainder
+			layerPayouts[oddChipWinner] += remainder
 		}
 		potResults = append(potResults, PotResult{
 			Amount:            layer.Amount,
 			PayoutAmount:      netAmount,
 			EligiblePlayerIDs: eligible,
 			Winners:           append([]string(nil), winners...),
+			Payouts:           layerPayouts,
 		})
 	}
 	for id, amount := range payouts {

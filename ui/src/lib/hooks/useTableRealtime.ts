@@ -1,6 +1,6 @@
 'use client';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {getAccessToken, setAccessToken, setUsername, subscribeAccessToken} from '@/lib/api/client';
+import {getAccessToken, setAccessToken, setPlayerId, setUsername, subscribeAccessToken} from '@/lib/api/client';
 import {doRefresh} from '@/lib/auth/oauth';
 import {cardLabel} from '@/lib/cards';
 import {useWebSocket, type WSStatus} from '@aoctech/ws-client';
@@ -73,11 +73,29 @@ function describeSnapshot(previous: TableSnapshot | null, next: TableSnapshot, v
   const nextHasPayouts = next.payouts && Object.keys(next.payouts).length > 0;
   const prevHasPayouts = previous.payouts && Object.keys(previous.payouts).length > 0;
   if (nextHasPayouts && !prevHasPayouts) {
-    // Not every payout>0 is a win: an uncalled all-in's excess or an orphaned
-    // side-pot refund also moves chips back to a player without them having
-    // won anything, so this is gated on `winners`, not the raw amount.
-    messages.push(...Object.entries(next.payouts || {}).filter(([playerId, amount]) => amount > 0 && next.winners?.includes(playerId))
-      .map(([playerId, amount]) => `${playerLabel(playerId)} ganhou ${amount.toLocaleString('pt-BR')} fichas`));
+    if (next.pot_results?.length) {
+      for (const pot of next.pot_results) {
+        if (pot.refund) {
+          messages.push(...Object.entries(pot.payouts || {})
+            .filter(([, amount]) => amount > 0)
+            .map(([playerId, amount]) =>
+              `${playerLabel(playerId)} recebeu ${amount.toLocaleString('pt-BR')} fichas devolvidas`));
+        } else if (pot.winner_player_ids.length === 1) {
+          const winner = pot.winner_player_ids[0];
+          const amount = pot.payouts?.[winner] ?? pot.payout_amount;
+          messages.push(`${playerLabel(winner)} ganhou ${amount.toLocaleString('pt-BR')} fichas`);
+        } else if (pot.winner_player_ids.length > 1) {
+          messages.push(`${pot.winner_player_ids.map(playerLabel).join(' e ')} dividiram um pote de ${pot.payout_amount.toLocaleString('pt-BR')} fichas`);
+        }
+      }
+    } else {
+      // Compatibility with protocol v1, which only published aggregate
+      // credits and could not distinguish a win from a refund precisely.
+      messages.push(...Object.entries(next.payouts || {})
+        .filter(([playerId, amount]) => amount > 0 && next.winners?.includes(playerId))
+        .map(([playerId, amount]) =>
+          `${playerLabel(playerId)} recebeu ${amount.toLocaleString('pt-BR')} fichas`));
+    }
   }
   return messages.join('. ');
 }
@@ -170,9 +188,11 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const showCardsActionRef = useRef<string | null>(null);
   const readyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const showCardsTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const authRecoveryRef = useRef(false);
   const [readyPending, setReadyPending] = useState(false);
   const [showCardsPending, setShowCardsPending] = useState(false);
   const [snapshot, setSnapshot] = useState<TableSnapshot | null>(null);
+  const [snapshotTableID, setSnapshotTableID] = useState('');
   // Captured once per snapshot (in this event handler, never during render) so
   // Seat can compute its countdown ring's remaining time as a pure function of
   // props (deadlineMs - snapshotAt) instead of calling Date.now() itself.
@@ -221,6 +241,27 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     if (failedCode) setLastActionError(actionError(failedCode));
   }, []);
 
+  const recoverSession = useCallback(() => {
+    if (USE_MOCK || authRecoveryRef.current) return;
+    authRecoveryRef.current = true;
+    void doRefresh().then(result => {
+      if (result) {
+        setAccessToken(result.accessToken);
+        setUsername(result.username);
+      } else {
+        setAccessToken(null);
+        setUsername(null);
+        setPlayerId(null);
+      }
+    }).catch(() => {
+      setAccessToken(null);
+      setUsername(null);
+      setPlayerId(null);
+    }).finally(() => {
+      authRecoveryRef.current = false;
+    });
+  }, []);
+
   const receive = useCallback((message: ServerMessage) => {
     if (message.type === 'state' && message.snapshot) {
       const legacyUnversioned = !message.snapshot.snapshot_version;
@@ -234,6 +275,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       previousSnapshot.current = message.snapshot;
       if (liveMessage) setAnnouncement(liveMessage);
       setSnapshot(message.snapshot);
+      setSnapshotTableID(activeTableIDRef.current);
       setSnapshotAt(Date.now());
       // ACK is authoritative. This version check is the recovery path for a
       // lost ACK: once a newer state arrives, the old decision cannot still
@@ -313,6 +355,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     }
     if (message.type === 'error') {
       const code = message.code || 'unknown';
+      if (code === 'unauthorized') recoverSession();
       if ((code === 'stale_state' || code === 'rate_limited') && message.action_id &&
         pendingActionRef.current?.id === message.action_id) {
         setLastActionError(actionError(code));
@@ -341,7 +384,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       const chatMessage = message.message;
       setChat(value => [...value.slice(-39), {player: message.player_id || '?', message: chatMessage}]);
     }
-  }, [clearPending, failPending, finishAuxiliaryCommand, viewerId]);
+  }, [clearPending, failPending, finishAuxiliaryCommand, recoverSession, viewerId]);
   const receiveForTable = useCallback((message: ServerMessage) => {
     if (activeTableIDRef.current === id) receive(message);
   }, [id, receive]);
@@ -355,6 +398,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     if (resetOnOpenRef.current) {
       resetOnOpenRef.current = false;
       setSnapshot(null);
+      setSnapshotTableID('');
       setSnapshotAt(0);
       setPendingAction(null);
       setReadyPending(false);
@@ -396,6 +440,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       onStatus: (next, attempt) => {
         if (next === 'connecting') {
           setSnapshot(null);
+          setSnapshotTableID('');
           setSnapshotAt(0);
           setAnnouncement('');
           setLastActionError(null);
@@ -468,7 +513,16 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
         if (result) {
           setAccessToken(result.accessToken);
           setUsername(result.username);
+        } else {
+          setAccessToken(null);
+          setUsername(null);
+          setPlayerId(null);
         }
+      }).catch(() => {
+        // A periodic refresh can fail because the device is temporarily
+        // offline. Keep the current session until the server explicitly
+        // rejects it; that path invokes recoverSession and clears invalid
+        // credentials when refresh is no longer possible.
       });
     }, TOKEN_REFRESH_INTERVAL_MS);
     return () => clearInterval(interval);
@@ -535,7 +589,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
 
   return {
     status,
-    snapshot,
+    snapshot: snapshotTableID === id ? snapshot : null,
     snapshotAt,
     unlock,
     chat,

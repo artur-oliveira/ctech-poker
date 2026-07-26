@@ -3,6 +3,7 @@
 import {AxiosError, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
 import type {Achievement, PlayerAchievementProgress, Tier} from '@/lib/api/achievements';
 import type {HandItem} from '@/lib/api/player';
+import type {DeckVariantId} from '@/lib/cardVariants';
 import type {Room} from '@/lib/api/rooms';
 import type {Page} from '@/lib/api/client';
 import type {
@@ -135,6 +136,7 @@ const mockProfile = {
   user_id: MOCK_PLAYER_ID,
   name: 'Ana',
   wallet_mode: 'sandbox' as 'sandbox' | 'real',
+  deck_variant: 'four-color' as DeckVariantId,
   poker_terms_accepted: true,
   game_balance: 12500,
   sandbox_balance: 4850
@@ -308,6 +310,10 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
         fail(400, 'wallet_mode must be sandbox or real', config);
       }
       mockProfile.wallet_mode = body.wallet_mode;
+    }
+    if (typeof body.deck_variant === 'string') {
+      if (!body.deck_variant.trim()) fail(400, 'deck_variant must not be empty', config);
+      mockProfile.deck_variant = body.deck_variant;
     }
     return ok({...mockProfile}, config);
   }
@@ -693,7 +699,8 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
         amount: 1275,
         payout_amount: 1275,
         eligible_player_ids: resolvedSeats.filter(seat => seat.state !== 'folded').map(seat => seat.player_id),
-        winner_player_ids: winners
+        winner_player_ids: winners,
+        payouts
       }],
       rake: 5,
       next_hand_unix_ms: Date.now() + 5000,
@@ -759,12 +766,14 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
       {
         amount: 900, payout_amount: 900,
         eligible_player_ids: [MOCK_PLAYER_ID, 'bia_sp', 'leo_rio'],
-        winner_player_ids: [MOCK_PLAYER_ID]
+        winner_player_ids: [MOCK_PLAYER_ID],
+        payouts: {[MOCK_PLAYER_ID]: 900}
       },
       {
         amount: 800, payout_amount: 800,
         eligible_player_ids: ['bia_sp', 'leo_rio'],
-        winner_player_ids: ['bia_sp']
+        winner_player_ids: ['bia_sp'],
+        payouts: {bia_sp: 800}
       }
     ],
     rake: 25,
@@ -1299,7 +1308,8 @@ export class MockTableService {
         payouts[recipient.player_id] = (payouts[recipient.player_id] || 0) + layer;
         potResults.push({
           amount: layer, payout_amount: layer,
-          eligible_player_ids: [recipient.player_id], winner_player_ids: []
+          eligible_player_ids: [recipient.player_id], winner_player_ids: [],
+          payouts: {[recipient.player_id]: layer}, refund: true
         });
         continue;
       }
@@ -1309,17 +1319,20 @@ export class MockTableService {
       const layerWinners = eligible.filter(seat => (ranks[seat.player_id] || 0) === bestRank);
       const share = Math.floor(layer / layerWinners.length);
       let remainder = layer - share * layerWinners.length;
+      const layerPayouts: Record<string, number> = {};
       for (const winner of layerWinners) {
         const amount = share + (remainder-- > 0 ? 1 : 0);
         winner.stack += amount;
         payouts[winner.player_id] = (payouts[winner.player_id] || 0) + amount;
+        layerPayouts[winner.player_id] = amount;
         if (contributors.length > 1) winnerIds.add(winner.player_id);
       }
       potResults.push({
         amount: layer,
         payout_amount: layer,
         eligible_player_ids: eligible.map(seat => seat.player_id),
-        winner_player_ids: layerWinners.map(seat => seat.player_id)
+        winner_player_ids: layerWinners.map(seat => seat.player_id),
+        payouts: layerPayouts
       });
     }
     return {payouts, winnerIds: [...winnerIds], potResults};
@@ -1343,7 +1356,8 @@ export class MockTableService {
       winners: [winner.player_id],
       pot_results: [{
         amount: pot, payout_amount: pot,
-        eligible_player_ids: [winner.player_id], winner_player_ids: [winner.player_id]
+        eligible_player_ids: [winner.player_id], winner_player_ids: [winner.player_id],
+        payouts: {[winner.player_id]: pot}
       }],
       stage: 'complete',
       action_deadline_unix_ms: undefined,
@@ -1423,7 +1437,7 @@ export class MockTableService {
     this.snapshot = {
       ...this.snapshot,
       snapshot_version: this.snapshotVersion,
-      protocol_version: 2,
+      protocol_version: 3,
       hand_id: this.snapshot.hand_id || (stage === 'waiting_for_players' ? undefined : `mock-${this.scenario}-hand`)
     };
     this.handlers.onMessage({type: 'state', snapshot: this.snapshot, action_id: actionId});

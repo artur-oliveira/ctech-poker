@@ -35,6 +35,9 @@ func (unacceptedProfiles) SetName(context.Context, string, string) error { retur
 func (unacceptedProfiles) SetWalletMode(context.Context, string, string) error {
 	return nil
 }
+func (unacceptedProfiles) SetDeckVariant(context.Context, string, string) error {
+	return nil
+}
 
 func TestBuyInRequiresPokerTermsBeforeWalletDebit(t *testing.T) {
 	wallet := &gateWallet{}

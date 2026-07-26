@@ -18,8 +18,9 @@ import (
 // Name and WalletMode are pointers so an absent key means "don't touch this
 // field" — a wallet-mode-only update must not blank out the display name.
 type UpdatePlayerRequest struct {
-	Name       *string `json:"name"`
-	WalletMode *string `json:"wallet_mode"`
+	Name        *string `json:"name"`
+	WalletMode  *string `json:"wallet_mode"`
+	DeckVariant *string `json:"deck_variant"`
 }
 
 type sessionLogReader interface {
@@ -89,6 +90,14 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 		if _, err := h.players.SetWalletMode(c.Context(), userID, *req.WalletMode); err != nil {
 			if errors.Is(err, player.ErrInvalidWalletMode) {
 				return problem.BadRequest("wallet_mode must be sandbox or real").Send(c)
+			}
+			return problem.InternalServer("failed to update player profile", c, err).Send(c)
+		}
+	}
+	if req.DeckVariant != nil {
+		if _, err := h.players.SetDeckVariant(c.Context(), userID, *req.DeckVariant); err != nil {
+			if errors.Is(err, player.ErrInvalidDeckVariant) {
+				return problem.BadRequest("deck_variant must not be empty").Send(c)
 			}
 			return problem.InternalServer("failed to update player profile", c, err).Send(c)
 		}
@@ -186,6 +195,7 @@ func playerResponse(profile *player.PlayerProfile) fiber.Map {
 		"user_id":                 profile.UserID,
 		"name":                    profile.Name,
 		"wallet_mode":             profile.EffectiveWalletMode(),
+		"deck_variant":            profile.EffectiveDeckVariant(),
 		"poker_terms_accepted":    profile.TermsAccepted(),
 		"poker_terms_accepted_at": profile.TermsAcceptedAt,
 	}

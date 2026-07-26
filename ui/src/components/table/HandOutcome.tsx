@@ -8,7 +8,7 @@ import {ChipStack} from '@/components/table/ChipStack';
 import {useCountUp} from '@/lib/hooks/useCountUp';
 
 export type HandOutcomeState = {
-  key: number; kind: 'win' | 'lose' | 'tie'; handCategory?: string; opponentCategory?: string;
+  key: number; kind: 'win' | 'lose' | 'tie' | 'mixed'; handCategory?: string; opponentCategory?: string;
   // The winning 5-card hand (or just the 2 hole cards when the board isn't
   // complete) for whoever actually won this pot — the viewer's own on a win,
   // the rival's on a loss — undefined when the hand ended without a
@@ -28,6 +28,8 @@ export type HandOutcomeState = {
   // free showdown they simply lost with nothing left in the pot for them).
   stackBefore?: number;
   stackAfter?: number;
+  wonAmount?: number;
+  refundAmount?: number;
 };
 
 const EXIT_MS = 320;
@@ -145,9 +147,22 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
     shown.stackBefore !== shown.stackAfter
     ? <ChipCountUp from={shown.stackBefore} to={shown.stackAfter}/>
     : null;
+  const amountDetails = [
+    shown.wonAmount ? `${shown.wonAmount.toLocaleString('pt-BR')} fichas ganhas` : '',
+    shown.refundAmount ? `${shown.refundAmount.toLocaleString('pt-BR')} fichas devolvidas` : ''
+  ].filter(Boolean).join(' e ');
+  const announcement = shown.kind === 'win'
+    ? `Você venceu${amountDetails ? `: ${amountDetails}` : ''}.`
+    : shown.kind === 'lose'
+      ? `Você perdeu esta mão${shown.winnerName ? `. Vencedor: ${shown.winnerName}` : ''}.`
+      : shown.kind === 'tie'
+        ? `Pote dividido${amountDetails ? `: ${amountDetails}` : ''}.`
+        : `Resultado misto: você ganhou ao menos um pote e perdeu outro${amountDetails ? `. ${amountDetails}` : ''}.`;
 
-  return <div className="hand-outcome" aria-hidden="true">
-    <div key={shown.key} className={`hand-outcome-card ${shown.kind}${leaving ? ' leaving' : ''}`}>
+  return <>
+    <span className="sr-only" role="status" aria-live="polite">{announcement}</span>
+    <div className="hand-outcome" aria-hidden="true">
+      <div key={shown.key} className={`hand-outcome-card ${shown.kind}${leaving ? ' leaving' : ''}`}>
       {shown.kind === 'win' && <>
         <span className="hand-outcome-confetti">{CONFETTI_PIECES.map(i => <span key={i}/>)}</span>
         <div className="hand-outcome-heading">
@@ -193,6 +208,18 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
         {chipChange}
         <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
       </>}
+
+      {shown.kind === 'mixed' && <>
+        <div className="hand-outcome-heading">
+          <Equal/>
+          <span><b>Resultado misto</b><small>Você ganhou um pote e perdeu outro</small></span>
+        </div>
+        <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>
+        {amountDetails && <p className="hand-outcome-tie-note">{amountDetails}</p>}
+        {chipChange}
+        <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
+      </>}
+      </div>
     </div>
-  </div>;
+  </>;
 }

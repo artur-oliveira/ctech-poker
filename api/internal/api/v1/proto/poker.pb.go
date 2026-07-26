@@ -95,8 +95,11 @@ type Seat struct {
 	// Public reveal mask for the two hole-card positions. A player's own cards
 	// are always visible to themselves; this mask says what everyone may see.
 	HoleCardsRevealed []bool `protobuf:"varint,12,rep,packed,name=hole_cards_revealed,json=holeCardsRevealed,proto3" json:"hole_cards_revealed,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Stack before this hand posted blinds or accepted any wager. Optional so
+	// clients can fall back safely while API instances are rolling.
+	StackAtHandStart *int64 `protobuf:"varint,13,opt,name=stack_at_hand_start,json=stackAtHandStart,proto3,oneof" json:"stack_at_hand_start,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Seat) Reset() {
@@ -211,6 +214,13 @@ func (x *Seat) GetHoleCardsRevealed() []bool {
 		return x.HoleCardsRevealed
 	}
 	return nil
+}
+
+func (x *Seat) GetStackAtHandStart() int64 {
+	if x != nil && x.StackAtHandStart != nil {
+		return *x.StackAtHandStart
+	}
+	return 0
 }
 
 type BlindEscalation struct {
@@ -626,7 +636,9 @@ type PotResult struct {
 	Amount            int64                  `protobuf:"varint,1,opt,name=amount,proto3" json:"amount,omitempty"`                                 // gross layer amount before rake
 	PayoutAmount      int64                  `protobuf:"varint,2,opt,name=payout_amount,json=payoutAmount,proto3" json:"payout_amount,omitempty"` // net contested payout, or refund amount
 	EligiblePlayerIds []string               `protobuf:"bytes,3,rep,name=eligible_player_ids,json=eligiblePlayerIds,proto3" json:"eligible_player_ids,omitempty"`
-	WinnerPlayerIds   []string               `protobuf:"bytes,4,rep,name=winner_player_ids,json=winnerPlayerIds,proto3" json:"winner_player_ids,omitempty"` // empty for refunds
+	WinnerPlayerIds   []string               `protobuf:"bytes,4,rep,name=winner_player_ids,json=winnerPlayerIds,proto3" json:"winner_player_ids,omitempty"`                                   // empty for refunds
+	Payouts           map[string]int64       `protobuf:"bytes,5,rep,name=payouts,proto3" json:"payouts,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // exact per-player credits, including odd chips
+	Refund            bool                   `protobuf:"varint,6,opt,name=refund,proto3" json:"refund,omitempty"`                                                                             // true for uncalled/orphaned contribution returns
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -687,6 +699,20 @@ func (x *PotResult) GetWinnerPlayerIds() []string {
 		return x.WinnerPlayerIds
 	}
 	return nil
+}
+
+func (x *PotResult) GetPayouts() map[string]int64 {
+	if x != nil {
+		return x.Payouts
+	}
+	return nil
+}
+
+func (x *PotResult) GetRefund() bool {
+	if x != nil {
+		return x.Refund
+	}
+	return false
 }
 
 type TableSnapshot struct {
@@ -1195,7 +1221,7 @@ const file_poker_proto_rawDesc = "" +
 	"\vpoker.proto\x12\x05poker\".\n" +
 	"\x04Card\x12\x12\n" +
 	"\x04rank\x18\x01 \x01(\tR\x04rank\x12\x12\n" +
-	"\x04suit\x18\x02 \x01(\tR\x04suit\"\x9e\x03\n" +
+	"\x04suit\x18\x02 \x01(\tR\x04suit\"\xea\x03\n" +
 	"\x04Seat\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
@@ -1210,10 +1236,12 @@ const file_poker_proto_rawDesc = "" +
 	"\bdealt_in\x18\n" +
 	" \x01(\bH\x01R\adealtIn\x88\x01\x01\x12\x19\n" +
 	"\x05ready\x18\v \x01(\bH\x02R\x05ready\x88\x01\x01\x12.\n" +
-	"\x13hole_cards_revealed\x18\f \x03(\bR\x11holeCardsRevealedB\t\n" +
+	"\x13hole_cards_revealed\x18\f \x03(\bR\x11holeCardsRevealed\x122\n" +
+	"\x13stack_at_hand_start\x18\r \x01(\x03H\x03R\x10stackAtHandStart\x88\x01\x01B\t\n" +
 	"\a_equityB\v\n" +
 	"\t_dealt_inB\b\n" +
-	"\x06_ready\"n\n" +
+	"\x06_readyB\x16\n" +
+	"\x14_stack_at_hand_start\"n\n" +
 	"\x0fBlindEscalation\x12)\n" +
 	"\x10interval_minutes\x18\x01 \x01(\x05R\x0fintervalMinutes\x12\x1e\n" +
 	"\n" +
@@ -1268,12 +1296,17 @@ const file_poker_proto_rawDesc = "" +
 	"potRaiseTo\"M\n" +
 	"\x03Pot\x12\x16\n" +
 	"\x06amount\x18\x01 \x01(\x03R\x06amount\x12.\n" +
-	"\x13eligible_player_ids\x18\x02 \x03(\tR\x11eligiblePlayerIds\"\xa4\x01\n" +
+	"\x13eligible_player_ids\x18\x02 \x03(\tR\x11eligiblePlayerIds\"\xb1\x02\n" +
 	"\tPotResult\x12\x16\n" +
 	"\x06amount\x18\x01 \x01(\x03R\x06amount\x12#\n" +
 	"\rpayout_amount\x18\x02 \x01(\x03R\fpayoutAmount\x12.\n" +
 	"\x13eligible_player_ids\x18\x03 \x03(\tR\x11eligiblePlayerIds\x12*\n" +
-	"\x11winner_player_ids\x18\x04 \x03(\tR\x0fwinnerPlayerIds\"\xb4\a\n" +
+	"\x11winner_player_ids\x18\x04 \x03(\tR\x0fwinnerPlayerIds\x127\n" +
+	"\apayouts\x18\x05 \x03(\v2\x1d.poker.PotResult.PayoutsEntryR\apayouts\x12\x16\n" +
+	"\x06refund\x18\x06 \x01(\bR\x06refund\x1a:\n" +
+	"\fPayoutsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xb4\a\n" +
 	"\rTableSnapshot\x12\x14\n" +
 	"\x05stage\x18\x01 \x01(\tR\x05stage\x12\x14\n" +
 	"\x05board\x18\x02 \x03(\tR\x05board\x12!\n" +
@@ -1351,7 +1384,7 @@ func file_poker_proto_rawDescGZIP() []byte {
 	return file_poker_proto_rawDescData
 }
 
-var file_poker_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_poker_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_poker_proto_goTypes = []any{
 	(*Card)(nil),            // 0: poker.Card
 	(*Seat)(nil),            // 1: poker.Seat
@@ -1363,22 +1396,24 @@ var file_poker_proto_goTypes = []any{
 	(*TableSnapshot)(nil),   // 7: poker.TableSnapshot
 	(*ClientMessage)(nil),   // 8: poker.ClientMessage
 	(*ServerMessage)(nil),   // 9: poker.ServerMessage
-	nil,                     // 10: poker.TableSnapshot.PayoutsEntry
+	nil,                     // 10: poker.PotResult.PayoutsEntry
+	nil,                     // 11: poker.TableSnapshot.PayoutsEntry
 }
 var file_poker_proto_depIdxs = []int32{
 	2,  // 0: poker.Room.blind_escalation:type_name -> poker.BlindEscalation
-	1,  // 1: poker.TableSnapshot.seats:type_name -> poker.Seat
-	10, // 2: poker.TableSnapshot.payouts:type_name -> poker.TableSnapshot.PayoutsEntry
-	4,  // 3: poker.TableSnapshot.legal_actions:type_name -> poker.LegalActions
-	5,  // 4: poker.TableSnapshot.pots:type_name -> poker.Pot
-	6,  // 5: poker.TableSnapshot.pot_results:type_name -> poker.PotResult
-	7,  // 6: poker.ServerMessage.snapshot:type_name -> poker.TableSnapshot
-	3,  // 7: poker.ServerMessage.room:type_name -> poker.Room
-	8,  // [8:8] is the sub-list for method output_type
-	8,  // [8:8] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	10, // 1: poker.PotResult.payouts:type_name -> poker.PotResult.PayoutsEntry
+	1,  // 2: poker.TableSnapshot.seats:type_name -> poker.Seat
+	11, // 3: poker.TableSnapshot.payouts:type_name -> poker.TableSnapshot.PayoutsEntry
+	4,  // 4: poker.TableSnapshot.legal_actions:type_name -> poker.LegalActions
+	5,  // 5: poker.TableSnapshot.pots:type_name -> poker.Pot
+	6,  // 6: poker.TableSnapshot.pot_results:type_name -> poker.PotResult
+	7,  // 7: poker.ServerMessage.snapshot:type_name -> poker.TableSnapshot
+	3,  // 8: poker.ServerMessage.room:type_name -> poker.Room
+	9,  // [9:9] is the sub-list for method output_type
+	9,  // [9:9] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_poker_proto_init() }
@@ -1395,7 +1430,7 @@ func file_poker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_poker_proto_rawDesc), len(file_poker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

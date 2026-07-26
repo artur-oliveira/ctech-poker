@@ -15,6 +15,7 @@ export interface SeatView {
   contributed: number;
   hole_cards?: string[];
   hole_cards_revealed?: boolean[];
+  stack_at_hand_start?: number;
   equity?: number;
   hand_category?: string
 }
@@ -44,7 +45,9 @@ export interface PotResultView {
   amount: number;
   payout_amount: number;
   eligible_player_ids: string[];
-  winner_player_ids: string[]
+  winner_player_ids: string[];
+  payouts?: Record<string, number>;
+  refund?: boolean
 }
 
 export interface TableSnapshot {

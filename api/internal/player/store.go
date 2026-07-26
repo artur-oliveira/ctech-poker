@@ -86,6 +86,23 @@ func (s *Store) SetWalletMode(ctx context.Context, userID, mode string) error {
 	return nil
 }
 
+func (s *Store) SetDeckVariant(ctx context.Context, userID, variant string) error {
+	if _, err := s.GetOrCreate(ctx, userID); err != nil {
+		return err
+	}
+	ok, err := s.base.UpdateItem(ctx, userID, nil, map[string]any{
+		"deck_variant": variant,
+		"updated_at":   dynamo.NowStr(),
+	})
+	if err != nil {
+		return fmt.Errorf("player: set deck variant: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("player: profile disappeared while setting deck variant")
+	}
+	return nil
+}
+
 func (s *Store) AcceptTerms(ctx context.Context, userID string) error {
 	if _, err := s.GetOrCreate(ctx, userID); err != nil {
 		return err

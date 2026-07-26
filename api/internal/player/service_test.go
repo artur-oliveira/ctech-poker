@@ -24,6 +24,10 @@ func (s *memoryStore) SetWalletMode(_ context.Context, _ string, mode string) er
 	s.profile.WalletMode = mode
 	return nil
 }
+func (s *memoryStore) SetDeckVariant(_ context.Context, _ string, variant string) error {
+	s.profile.DeckVariant = variant
+	return nil
+}
 
 func TestRequireAccepted(t *testing.T) {
 	store := &memoryStore{profile: PlayerProfile{UserID: "u1"}}
@@ -82,6 +86,23 @@ func TestSetWalletMode(t *testing.T) {
 
 	if _, err := svc.SetWalletMode(context.Background(), "u1", "bogus"); !errors.Is(err, ErrInvalidWalletMode) {
 		t.Fatalf("got %v, want ErrInvalidWalletMode", err)
+	}
+}
+
+func TestSetDeckVariant(t *testing.T) {
+	store := &memoryStore{profile: PlayerProfile{UserID: "u1"}}
+	svc := NewService(store)
+
+	profile, err := svc.SetDeckVariant(context.Background(), "u1", "colorblind")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.DeckVariant != "colorblind" {
+		t.Fatalf("DeckVariant = %q, want %q", profile.DeckVariant, "colorblind")
+	}
+
+	if _, err := svc.SetDeckVariant(context.Background(), "u1", "   "); !errors.Is(err, ErrInvalidDeckVariant) {
+		t.Fatalf("got %v, want ErrInvalidDeckVariant", err)
 	}
 }
 

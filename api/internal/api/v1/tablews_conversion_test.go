@@ -7,6 +7,7 @@ import (
 )
 
 func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
+	startStack := int64(500)
 	converted := ConvertSnapshot(hand.Snapshot{
 		Stage:           "pre_flop",
 		SnapshotVersion: 42,
@@ -15,10 +16,12 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 			PlayerID: "p1", Name: "Ana", State: "folded",
 			ConnectionState: "disconnected", DealtIn: true, Ready: false,
 			HoleCardsRevealed: []bool{true, false},
+			StackAtHandStart:  &startStack,
 		}},
 		PotResults: []hand.PotResultView{{
 			Amount: 300, PayoutAmount: 293,
 			EligiblePlayerIDs: []string{"p1", "p2"}, WinnerPlayerIDs: []string{"p1"},
+			Payouts: map[string]int64{"p1": 293},
 		}},
 	})
 	if converted.SnapshotVersion != 42 || converted.HandId != "hand-42" {
@@ -39,9 +42,26 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 	if got := converted.Seats[0].HoleCardsRevealed; len(got) != 2 || !got[0] || got[1] {
 		t.Fatalf("per-card reveal mask lost during protobuf conversion: %v", got)
 	}
-	if converted.ProtocolVersion != 2 || len(converted.PotResults) != 1 ||
-		converted.PotResults[0].WinnerPlayerIds[0] != "p1" {
+	if converted.Seats[0].StackAtHandStart == nil || converted.Seats[0].GetStackAtHandStart() != 500 {
+		t.Fatalf("pre-blind stack lost during protobuf conversion: %+v", converted.Seats[0])
+	}
+	if converted.ProtocolVersion != 3 || len(converted.PotResults) != 1 ||
+		converted.PotResults[0].WinnerPlayerIds[0] != "p1" ||
+		converted.PotResults[0].Payouts["p1"] != 293 {
 		t.Fatalf("result protocol fields lost during conversion: %+v", converted)
+	}
+}
+
+func TestEveryStateChangingOrAmplifiableMessageIsRateLimited(t *testing.T) {
+	for _, messageType := range []string{"act", "chat", "sync_state", "ready", "post_big_blind", "show_cards", "ping"} {
+		if !rateLimitedTableMessage(messageType) {
+			t.Errorf("%q bypasses the per-seat limiter", messageType)
+		}
+	}
+	for _, messageType := range []string{"unknown"} {
+		if rateLimitedTableMessage(messageType) {
+			t.Errorf("%q should not consume the action limiter", messageType)
+		}
 	}
 }
 
