@@ -22,7 +22,15 @@ message Seat {
   string connection_state = 9; // connected | disconnected
   // True when this seat belongs to the hand identified by TableSnapshot.hand_id.
   // A seat can be active while false when it returns mid-hand for the next deal.
-  bool dealt_in = 10;
+  // Optional so a new client can distinguish an old server (field absent)
+  // from an explicit false for a player waiting for the next hand.
+  optional bool dealt_in = 10;
+  // The next-hand opt-in. During a live hand a player can be folded from the
+  // current round while ready=false already communicates "paused afterwards".
+  optional bool ready = 11;
+  // Public reveal mask for the two hole-card positions. A player's own cards
+  // are always visible to themselves; this mask says what everyone may see.
+  repeated bool hole_cards_revealed = 12;
 }
 
 message BlindEscalation {
@@ -70,6 +78,13 @@ message Pot {
   repeated string eligible_player_ids = 2;
 }
 
+message PotResult {
+  int64 amount = 1; // gross layer amount before rake
+  int64 payout_amount = 2; // net contested payout, or refund amount
+  repeated string eligible_player_ids = 3;
+  repeated string winner_player_ids = 4; // empty for refunds
+}
+
 message TableSnapshot {
   string stage = 1;
   repeated string board = 2;
@@ -90,6 +105,10 @@ message TableSnapshot {
   uint64 snapshot_version = 17;
   repeated Pot pots = 18;
   string hand_id = 19;
+  repeated PotResult pot_results = 20;
+  // Allows clients to apply explicit compatibility fallbacks during rolling
+  // deployments instead of mistaking absent proto3 fields for false.
+  uint32 protocol_version = 21;
 }
 
 // --- WEBSOCKET ENVELOPES ---
@@ -108,6 +127,7 @@ message ClientMessage {
   string message = 8; // for chat command
   uint64 expected_snapshot_version = 9; // optimistic precondition for act
   string expected_hand_id = 10; // prevents a delayed action crossing hands
+  optional int32 card_index = 11; // 0 or 1 for show_cards; absent means both (legacy)
 }
 
 // ServerMessage is sent from the server to the client.

@@ -144,6 +144,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   } | null>(null);
   const latestVersionRef = useRef(-1);
   const latestHandIDRef = useRef('');
+  const latestProtocolVersionRef = useRef(0);
   const previousSnapshot = useRef<TableSnapshot | null>(null);
   const awaitingReconnectSnapshotRef = useRef(false);
   const resetOnOpenRef = useRef(true);
@@ -227,6 +228,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       if (latestVersionRef.current >= 0 && version < latestVersionRef.current) return;
       latestVersionRef.current = version;
       latestHandIDRef.current = message.snapshot.hand_id ?? '';
+      latestProtocolVersionRef.current = message.snapshot.protocol_version ?? 0;
       const liveMessage = describeSnapshot(previousSnapshot.current, message.snapshot, viewerId);
       playSoundForTransition(previousSnapshot.current, message.snapshot, viewerId);
       previousSnapshot.current = message.snapshot;
@@ -291,8 +293,23 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       } : value);
     }
     if (message.type === 'action_ack' && message.action_id) {
+      const revealedCard = showCardsActionRef.current === message.action_id;
       clearPending(message.action_id);
       finishAuxiliaryCommand(message.action_id);
+      if (revealedCard) {
+        // Protocol v1 only supports reveal-both and has no public reveal
+        // mask. Mirror that acknowledged result locally until the API-first
+        // rollout reaches protocol v2.
+        if (latestProtocolVersionRef.current < 2) {
+          setSnapshot(value => value ? {
+            ...value,
+            seats: value.seats.map(seat => seat.player_id === viewerId
+              ? {...seat, hole_cards_revealed: [true, true]}
+              : seat)
+          } : value);
+        }
+        playSound('showing_card');
+      }
     }
     if (message.type === 'error') {
       const code = message.code || 'unknown';
@@ -415,6 +432,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   useEffect(() => {
     latestVersionRef.current = -1;
     latestHandIDRef.current = '';
+    latestProtocolVersionRef.current = 0;
     previousSnapshot.current = null;
     awaitingReconnectSnapshotRef.current = false;
     postedBigBlindRef.current = false;
@@ -544,19 +562,18 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       return true;
     },
     act,
-    showCards: () => {
+    showCards: (cardIndex?: number) => {
       if (showCardsLockRef.current) return false;
       const actionId = crypto.randomUUID();
       showCardsLockRef.current = true;
       showCardsActionRef.current = actionId;
       setShowCardsPending(true);
-      const ok = emit({type: 'show_cards', action_id: actionId});
+      const ok = emit({type: 'show_cards', action_id: actionId, card_index: cardIndex});
       if (!ok) {
         finishAuxiliaryCommand(actionId);
         return false;
       }
       showCardsTimerRef.current = setTimeout(() => finishAuxiliaryCommand(actionId, 'action_timeout'), ACTION_TIMEOUT_MS);
-      if (ok) playSound('showing_card');
       return ok;
     },
     sendChat: (message: string) => emit({type: 'chat', message})

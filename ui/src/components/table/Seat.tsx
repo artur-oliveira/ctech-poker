@@ -56,7 +56,10 @@ export function Seat({
                        stackBefore,
                        isDealer = false,
                        isSmallBlind = false,
-                       isBigBlind = false
+                       isBigBlind = false,
+                       canRevealCards = false,
+                       revealPending = false,
+                       onRevealCard
                      }: {
   seat: SeatView;
   isViewer: boolean;
@@ -73,7 +76,10 @@ export function Seat({
   stackBefore?: number;
   isDealer?: boolean;
   isSmallBlind?: boolean;
-  isBigBlind?: boolean
+  isBigBlind?: boolean;
+  canRevealCards?: boolean;
+  revealPending?: boolean;
+  onRevealCard?: (index: number) => void
 }) {
   const cards = seat.hole_cards;
   const chance = seat.equity == null ? null : Math.round(seat.equity * 100);
@@ -85,6 +91,7 @@ export function Seat({
   // Heads-up has the dealer double as the small blind — one combined badge
   // rather than two overlapping pills.
   const role = isDealer && isSmallBlind ? 'D/SB' : isDealer ? 'D' : isSmallBlind ? 'SB' : isBigBlind ? 'BB' : null;
+  const pausedAfterHand = seat.ready === false && seat.state !== 'sitting_out';
   return <div data-state={seat.state} data-connection-state={seat.connection_state}
               aria-current={isTurn ? 'true' : undefined}
               className={`game-seat seat-${index} ${seat.state} ${isDisconnected ? 'disconnected' : ''} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${isWinner ? 'is-winner' : ''} ${pendingName ? 'is-pending-name' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
@@ -95,8 +102,11 @@ export function Seat({
                    aria-label={ROLE_LABELS[role]}>{role}</span>}
     <div className={`seat-cards ${isWinner && payout > 0 ? 'is-collecting' : ''}`}>{[0, 1].map(i => {
       const card = cards?.[i];
+      const publiclyRevealed = seat.hole_cards_revealed?.[i] ?? false;
       return <PlayingCard key={`${i}-${card || 'back'}`} card={card} index={i} size="hole"
-                          owner={isViewer ? 'viewer' : 'opponent'}/>;
+                          owner={isViewer ? 'viewer' : 'opponent'}
+                          onReveal={canRevealCards && !publiclyRevealed ? () => onRevealCard?.(i) : undefined}
+                          revealPending={revealPending}/>;
     })}</div>
     {isWinner && payout > 0 && <span key={`confetti-${payout}`} className="seat-confetti" aria-hidden="true">
       {SEAT_CONFETTI_ANGLES.map((rot, i) => <span key={i} style={{'--rot': `${rot}deg`,
@@ -111,7 +121,7 @@ export function Seat({
             <Progress value={chance} indicatorClassName={equityTone(chance)}/>
             <small>Chance {chance}%</small>
         </div>}{STATE_LABELS[seat.state] &&
-        <small className="seat-state">{STATE_LABELS[seat.state]}</small>}{isDisconnected && seat.state !== 'disconnected' &&
+        <small className="seat-state">{pausedAfterHand ? 'Pausado após esta mão' : STATE_LABELS[seat.state]}</small>}{isDisconnected && seat.state !== 'disconnected' &&
         <small className="seat-state">Desconectado</small>}{seat.hand_category &&
         <small className="seat-hand-category">{HAND_CATEGORY_LABELS[seat.hand_category] || seat.hand_category}</small>}
     </div>

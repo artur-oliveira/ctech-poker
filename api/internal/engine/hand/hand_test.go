@@ -100,6 +100,21 @@ func TestFullHandWithThreeWayAllInProducesCorrectPayouts(t *testing.T) {
 	if payouts["Dealer"] != 40 {
 		t.Fatalf("Dealer's rigged straight must beat BB's board-pair-of-aces for the 40 side pot (SB isn't eligible for it), got %d", payouts["Dealer"])
 	}
+	outcome := table.LastOutcomeForActor()
+	if len(outcome.PotResults) != 2 {
+		t.Fatalf("expected main+side pot results, got %+v", outcome.PotResults)
+	}
+	if got := outcome.PotResults[0].Winners; len(got) != 1 || got[0] != "SB" {
+		t.Fatalf("main pot must be won outright by SB, got %v", got)
+	}
+	if got := outcome.PotResults[1].Winners; len(got) != 1 || got[0] != "Dealer" {
+		t.Fatalf("side pot must be won outright by Dealer, got %v", got)
+	}
+	for _, id := range []string{"SB", "Dealer"} {
+		if result := outcome.ShowdownResults[id]; !result.Won || result.Tied || result.SplitPot {
+			t.Fatalf("%s won a distinct pot outright and must not be marked tied: %+v", id, result)
+		}
+	}
 }
 
 func TestHeadsUpDealerPostsSmallBlind(t *testing.T) {
@@ -888,6 +903,43 @@ func TestVoluntarilyShownResetsOnNextHand(t *testing.T) {
 	}
 	if table.playerByID(winnerID).VoluntarilyShown {
 		t.Fatal("VoluntarilyShown must reset at the start of the next hand")
+	}
+	if table.playerByID(winnerID).VoluntarilyShownCards != ([2]bool{}) {
+		t.Fatal("per-card voluntary reveal mask must reset at the start of the next hand")
+	}
+}
+
+func TestRevealHoleCardIsIndependentAndIdempotent(t *testing.T) {
+	players := []*Player{
+		{ID: "p1", Stack: 1000, Ready: true},
+		{ID: "p2", Stack: 1000, Ready: true},
+	}
+	table := NewTable(players, 10, 20)
+	_ = table.StartHand()
+	folder := table.playerToActForTest()
+	_ = table.Act(folder, betting.ActionFold, 0)
+
+	first := int32(0)
+	changed, err := table.RevealHoleCard(folder, &first)
+	if err != nil || !changed {
+		t.Fatalf("first reveal: changed=%v err=%v", changed, err)
+	}
+	if got := table.playerByID(folder).VoluntarilyShownCards; got != ([2]bool{true, false}) {
+		t.Fatalf("expected only card zero revealed, got %v", got)
+	}
+	changed, err = table.RevealHoleCard(folder, &first)
+	if err != nil || changed {
+		t.Fatalf("duplicate reveal must be a no-op: changed=%v err=%v", changed, err)
+	}
+	otherID := "p1"
+	if folder == "p1" {
+		otherID = "p2"
+	}
+	for _, seat := range table.ViewFor(otherID).Seats {
+		if seat.PlayerID == folder &&
+			(len(seat.HoleCards) != 2 || seat.HoleCards[0] == "back" || seat.HoleCards[1] != "back") {
+			t.Fatalf("other viewer must see exactly the first card, got %v", seat.HoleCards)
+		}
 	}
 }
 

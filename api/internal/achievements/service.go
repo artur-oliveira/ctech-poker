@@ -48,8 +48,12 @@ func (s *Service) RecordHand(ctx context.Context, tableID string, outcome hand.H
 		if err := bump(id, KeyWins); err != nil {
 			return nil, err
 		}
-		if outcome.WinningCategory != "" {
-			if err := bump(id, KeyWinByCategory(outcome.WinningCategory)); err != nil {
+		category := outcome.WinningCategory
+		if result, ok := outcome.ShowdownResults[id]; ok && result.Category != "" {
+			category = result.Category
+		}
+		if category != "" {
+			if err := bump(id, KeyWinByCategory(category)); err != nil {
 				return nil, err
 			}
 		}
@@ -74,7 +78,7 @@ func (s *Service) RecordHand(ctx context.Context, tableID string, outcome hand.H
 			return nil, err
 		}
 		if result.Won {
-			if result.Tied {
+			if result.Tied || result.SplitPot {
 				if err := bump(id, KeyTied); err != nil {
 					return nil, err
 				}
@@ -84,7 +88,7 @@ func (s *Service) RecordHand(ctx context.Context, tableID string, outcome hand.H
 		if err := bump(id, KeyLooser); err != nil {
 			return nil, err
 		}
-		if result.Category == outcome.WinningCategory {
+		if lostToSameCategory(outcome, id, result.Category) {
 			if err := bump(id, KeyAlmostWinner); err != nil {
 				return nil, err
 			}
@@ -111,6 +115,30 @@ func (s *Service) RecordHand(ctx context.Context, tableID string, outcome hand.H
 		}
 	}
 	return unlocks, nil
+}
+
+func lostToSameCategory(outcome hand.HandOutcome, playerID, category string) bool {
+	if len(outcome.PotResults) == 0 {
+		return category != "" && category == outcome.WinningCategory
+	}
+	for _, pot := range outcome.PotResults {
+		eligible := false
+		for _, id := range pot.EligiblePlayerIDs {
+			if id == playerID {
+				eligible = true
+				break
+			}
+		}
+		if !eligible {
+			continue
+		}
+		for _, winner := range pot.Winners {
+			if result, ok := outcome.ShowdownResults[winner]; ok && result.Category == category {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // categoryAtLeast reports whether category is at least as strong as floor,

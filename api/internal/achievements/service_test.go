@@ -94,6 +94,33 @@ func TestRecordHandTracksShowdownLossesAndGiantSlayer(t *testing.T) {
 	}
 }
 
+func TestRecordHandUsesEachSidePotWinnersOwnCategory(t *testing.T) {
+	store := &memStore{progress: map[string]map[string]int{}}
+	service := NewServiceWithStore(store)
+	outcome := hand.HandOutcome{
+		Winners:         []string{"main", "side"},
+		WinningCategory: "full_house",
+		Participants:    []string{"main", "side"},
+		ShowdownResults: map[string]hand.ShowdownResult{
+			"main": {Category: "full_house", Won: true},
+			"side": {Category: "three_of_a_kind", Won: true},
+		},
+	}
+	if _, err := service.RecordHand(context.Background(), "table-side-pot", outcome); err != nil {
+		t.Fatal(err)
+	}
+	if store.progress["main"][KeyWinByCategory("full_house")] != 1 {
+		t.Fatalf("main-pot winner category missing: %+v", store.progress["main"])
+	}
+	if store.progress["side"][KeyWinByCategory("three_of_a_kind")] != 1 ||
+		store.progress["side"][KeyWinByCategory("full_house")] != 0 {
+		t.Fatalf("side-pot winner inherited the global category: %+v", store.progress["side"])
+	}
+	if store.progress["main"][KeyTied] != 0 || store.progress["side"][KeyTied] != 0 {
+		t.Fatal("distinct pot winners must not earn the tied achievement")
+	}
+}
+
 func TestTierCrossedReturnsHighestTierAcrossLargeIncrement(t *testing.T) {
 	stars, ok := TierCrossed(KeyWins, 0, 100)
 	if !ok || stars != 3 {

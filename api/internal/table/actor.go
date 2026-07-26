@@ -892,10 +892,16 @@ func (a *Actor) handleShowCards(ctx context.Context, c ShowCardsCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
+	changed := false
 	apply := func() error {
-		if err := a.cached.RevealHoleCards(c.PlayerID); err != nil {
+		applied, err := a.cached.RevealHoleCard(c.PlayerID, c.CardIndex)
+		if err != nil {
 			return err
 		}
+		if !applied {
+			return nil
+		}
+		changed = true
 		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
 			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "show_cards",
 		})
@@ -908,7 +914,9 @@ func (a *Actor) handleShowCards(ctx context.Context, c ShowCardsCmd) error {
 			return err
 		}
 	}
-	a.broadcastAll()
+	if changed {
+		a.broadcastAll()
+	}
 	return nil
 }
 

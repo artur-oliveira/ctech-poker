@@ -56,7 +56,10 @@ type Player struct {
 	Contributed int64        `dynamodbav:"contributed"` // this hand's total contribution across all rounds, for side-pot math
 	HoldID      string       `dynamodbav:"hold_id,omitempty"`
 
-	VoluntarilyShown bool `dynamodbav:"voluntarily_shown"`
+	// VoluntarilyShown is retained for persisted-state compatibility with the
+	// original all-or-nothing reveal. New writes use VoluntarilyShownCards.
+	VoluntarilyShown      bool    `dynamodbav:"voluntarily_shown,omitempty"`
+	VoluntarilyShownCards [2]bool `dynamodbav:"voluntarily_shown_cards,omitempty"`
 
 	// LastActionAt is the unix-ms time of this player's last genuine,
 	// explicitly user-originated command (an Act, a Ready/SitOut toggle) —
@@ -131,6 +134,7 @@ type HandOutcome struct {
 	Participants  []string
 	Payouts       map[string]int64
 	Contributions map[string]int64
+	PotResults    []PotResult
 	// Board and PlayerHands are the just-completed hand's community cards and
 	// every participant's hole cards, captured here because t.board/HoleCards
 	// get overwritten in place by the next StartHand — this is the only
@@ -165,12 +169,26 @@ type PlayerHandInfo struct {
 	Revealed  bool
 }
 
+// PotResult records one contribution layer independently. Multiple IDs in
+// Winners means that specific pot was split; winners of different layers are
+// not a tie.
+type PotResult struct {
+	Amount            int64
+	PayoutAmount      int64
+	EligiblePlayerIDs []string
+	Winners           []string
+}
+
 // ShowdownResult is one participant's own showdown outcome, see
 // HandOutcome.ShowdownResults.
 type ShowdownResult struct {
 	Category string
 	Won      bool
-	Tied     bool // Won and outcome.Winners had more than one ID
+	// Tied is the participant's overall history result: they won only split
+	// pots and no pot outright. SplitPot separately records that any pot they
+	// won was shared, including mixed outright+split outcomes.
+	Tied     bool
+	SplitPot bool
 }
 
 func (s ShowdownResult) Action() string {
@@ -534,6 +552,7 @@ func (t *Table) StartHand() error {
 	t.seenActionIDs = make(map[string]bool)
 	for _, p := range t.players {
 		p.VoluntarilyShown = false
+		p.VoluntarilyShownCards = [2]bool{}
 	}
 
 	active := make([]*Player, 0, len(t.players))
@@ -707,15 +726,13 @@ func (t *Table) RequestReturnFromSitOut(playerID string) {
 	p.State = Active
 }
 
-// RevealHoleCards lets a player who was dealt into the just-completed hand
-// voluntarily show their cards to everyone, even when the hand ended without
-// a genuine showdown (fold-to-one) — ViewFor's revealAll gate never covers
-// this case on purpose (see the bug3 fix), so this is a separate, per-player
-// opt-in. Idempotent: calling it twice for the same player is a no-op, not an
-// error.
-func (t *Table) RevealHoleCards(playerID string) error {
+// RevealHoleCard lets a participant reveal either card independently. A nil
+// index retains compatibility with the legacy show_cards command and reveals
+// both. changed=false is an idempotent no-op and must not create another
+// persisted action/version.
+func (t *Table) RevealHoleCard(playerID string, cardIndex *int32) (changed bool, err error) {
 	if t.stage != Complete {
-		return fmt.Errorf("hand: cards can only be revealed after the hand is complete")
+		return false, fmt.Errorf("hand: cards can only be revealed after the hand is complete")
 	}
 	dealtIn := false
 	for _, hp := range t.handOrder {
@@ -725,10 +742,33 @@ func (t *Table) RevealHoleCards(playerID string) error {
 		}
 	}
 	if !dealtIn {
-		return fmt.Errorf("hand: player %s was not dealt into this hand", playerID)
+		return false, fmt.Errorf("hand: player %s was not dealt into this hand", playerID)
 	}
-	t.playerByID(playerID).VoluntarilyShown = true
-	return nil
+	p := t.playerByID(playerID)
+	if p == nil {
+		return false, fmt.Errorf("hand: player %s is no longer seated", playerID)
+	}
+	if cardIndex == nil {
+		changed = !p.VoluntarilyShownCards[0] || !p.VoluntarilyShownCards[1]
+		p.VoluntarilyShownCards = [2]bool{true, true}
+		p.VoluntarilyShown = true
+		return changed, nil
+	}
+	if *cardIndex < 0 || *cardIndex > 1 {
+		return false, fmt.Errorf("hand: card index %d is invalid", *cardIndex)
+	}
+	if p.VoluntarilyShown || p.VoluntarilyShownCards[*cardIndex] {
+		return false, nil
+	}
+	p.VoluntarilyShownCards[*cardIndex] = true
+	p.VoluntarilyShown = p.VoluntarilyShownCards[0] && p.VoluntarilyShownCards[1]
+	return true, nil
+}
+
+// RevealHoleCards preserves the engine API used by older callers.
+func (t *Table) RevealHoleCards(playerID string) error {
+	_, err := t.RevealHoleCard(playerID, nil)
+	return err
 }
 
 func (t *Table) blindSeats(active []*Player) (sb, bb int) {
@@ -1074,6 +1114,7 @@ func (t *Table) runShowdown() {
 
 	payouts := make(map[string]int64)
 	winningIDs := make([]string, 0)
+	potResults := make([]PotResult, 0, len(layers))
 	var winningScore handeval.Score
 	remainingRakeCap := t.rakeCap()
 	for _, layer := range layers {
@@ -1085,9 +1126,14 @@ func (t *Table) runShowdown() {
 			// falsely fires win/comeback achievements for a player who lost
 			// their actual showdown and just got their own excess back).
 			payouts[layer.Eligible[0]] += layer.Amount
+			potResults = append(potResults, PotResult{
+				Amount: layer.Amount, PayoutAmount: layer.Amount,
+				EligiblePlayerIDs: append([]string(nil), layer.Eligible...),
+			})
 			continue
 		}
 		var winners []string
+		eligible := make([]string, 0, len(layer.Eligible))
 		var bestScore handeval.Score
 		for _, id := range layer.Eligible {
 			p := t.playerByID(id)
@@ -1099,6 +1145,7 @@ func (t *Table) runShowdown() {
 			if p == nil || p.State == Folded {
 				continue
 			}
+			eligible = append(eligible, id)
 			var full [7]deck.Card
 			full[0], full[1] = p.HoleCards[0], p.HoleCards[1]
 			copy(full[2:], t.board)
@@ -1131,6 +1178,10 @@ func (t *Table) runShowdown() {
 			if remainder > 0 {
 				payouts[layer.Eligible[0]] += remainder
 			}
+			potResults = append(potResults, PotResult{
+				Amount: layer.Amount, PayoutAmount: layer.Amount,
+				EligiblePlayerIDs: append([]string(nil), layer.Eligible...),
+			})
 			continue
 		}
 		layerRake := t.rakeForLayer(layer.Amount, remainingRakeCap)
@@ -1153,6 +1204,12 @@ func (t *Table) runShowdown() {
 		if remainder > 0 {
 			payouts[t.oddChipWinner(winners)] += remainder
 		}
+		potResults = append(potResults, PotResult{
+			Amount:            layer.Amount,
+			PayoutAmount:      netAmount,
+			EligiblePlayerIDs: eligible,
+			Winners:           append([]string(nil), winners...),
+		})
 	}
 	for id, amount := range payouts {
 		// A payout recipient who left t.players entirely before showdown
@@ -1183,6 +1240,7 @@ func (t *Table) runShowdown() {
 		Participants:       participantIDs(t.handOrder),
 		Payouts:            payouts,
 		Contributions:      contributionsByID,
+		PotResults:         potResults,
 	}
 	if t.shuffle != nil {
 		outcome.ServerSeed = hex.EncodeToString(t.shuffle.ServerSeed[:])
@@ -1194,7 +1252,6 @@ func (t *Table) runShowdown() {
 		for _, w := range outcome.Winners {
 			winnerSet[w] = true
 		}
-		tied := len(outcome.Winners) > 1
 		outcome.ShowdownResults = make(map[string]ShowdownResult, len(t.handOrder))
 		for _, p := range t.handOrder {
 			if p.State == Folded {
@@ -1204,10 +1261,24 @@ func (t *Table) runShowdown() {
 			full[0], full[1] = p.HoleCards[0], p.HoleCards[1]
 			copy(full[2:], t.board)
 			won := winnerSet[p.ID]
+			wonOutright, splitPot := false, false
+			for _, result := range potResults {
+				for _, winner := range result.Winners {
+					if winner != p.ID {
+						continue
+					}
+					if len(result.Winners) > 1 {
+						splitPot = true
+					} else {
+						wonOutright = true
+					}
+				}
+			}
 			outcome.ShowdownResults[p.ID] = ShowdownResult{
 				Category: categoryNames[handeval.Best7(full).Category()],
 				Won:      won,
-				Tied:     won && tied,
+				Tied:     won && splitPot && !wonOutright,
+				SplitPot: splitPot,
 			}
 		}
 	}

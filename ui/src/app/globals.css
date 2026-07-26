@@ -1971,6 +1971,44 @@ h1 em {
     margin-right: 0
 }
 
+.revealable-card {
+    position: relative;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--paper);
+    cursor: pointer;
+    overflow: hidden;
+    transition: transform 180ms var(--ease-out-quart), filter 180ms var(--ease-out-quart)
+}
+
+.revealable-card:hover:not(:disabled) {
+    transform: translateY(-3px);
+    filter: brightness(1.08)
+}
+
+.revealable-card:disabled {
+    cursor: wait
+}
+
+.revealable-card > img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain
+}
+
+.revealable-card > span {
+    position: absolute;
+    inset: auto 2px 3px;
+    padding: 2px;
+    border-radius: var(--rounded-xs);
+    background: var(--overlay-night-3);
+    color: var(--paper);
+    font: 700 7px var(--font-sans);
+    line-height: 1.1;
+    text-align: center
+}
+
 .hole-card img {
     filter: drop-shadow(0 4px 4px var(--black))
 }
@@ -2557,6 +2595,10 @@ h1 em {
 
 .folded .seat-cards {
     opacity: .5
+}
+
+.folded.viewer .seat-cards:has(.revealable-card) {
+    opacity: 1
 }
 
 .action-bar {

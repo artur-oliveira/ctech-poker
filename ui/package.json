@@ -6,7 +6,8 @@
     "dev": "next dev --port 3003",
     "dev:mock": "NEXT_PUBLIC_MOCK_API=true next dev --port 3003",
     "build": "next build",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --experimental-strip-types --test src/lib/tableOutcome.test.ts"
   },
   "dependencies": {
     "@aoctech/auth-client": "^1.1.0",

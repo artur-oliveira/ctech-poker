@@ -28,8 +28,24 @@ export interface Seat {
   /**
    * True when this seat belongs to the hand identified by TableSnapshot.hand_id.
    * A seat can be active while false when it returns mid-hand for the next deal.
+   * Optional so a new client can distinguish an old server (field absent)
+   * from an explicit false for a player waiting for the next hand.
    */
-  dealt_in: boolean;
+  dealt_in?:
+    | boolean
+    | undefined;
+  /**
+   * The next-hand opt-in. During a live hand a player can be folded from the
+   * current round while ready=false already communicates "paused afterwards".
+   */
+  ready?:
+    | boolean
+    | undefined;
+  /**
+   * Public reveal mask for the two hole-card positions. A player's own cards
+   * are always visible to themselves; this mask says what everyone may see.
+   */
+  hole_cards_revealed: boolean[];
 }
 
 export interface BlindEscalation {
@@ -84,6 +100,16 @@ export interface Pot {
   eligible_player_ids: string[];
 }
 
+export interface PotResult {
+  /** gross layer amount before rake */
+  amount: number;
+  /** net contested payout, or refund amount */
+  payout_amount: number;
+  eligible_player_ids: string[];
+  /** empty for refunds */
+  winner_player_ids: string[];
+}
+
 export interface TableSnapshot {
   stage: string;
   board: string[];
@@ -104,6 +130,12 @@ export interface TableSnapshot {
   snapshot_version: number;
   pots: Pot[];
   hand_id: string;
+  pot_results: PotResult[];
+  /**
+   * Allows clients to apply explicit compatibility fallbacks during rolling
+   * deployments instead of mistaking absent proto3 fields for false.
+   */
+  protocol_version: number;
 }
 
 export interface TableSnapshot_PayoutsEntry {
@@ -133,6 +165,8 @@ export interface ClientMessage {
   expected_snapshot_version: number;
   /** prevents a delayed action crossing hands */
   expected_hand_id: string;
+  /** 0 or 1 for show_cards; absent means both (legacy) */
+  card_index?: number | undefined;
 }
 
 /** ServerMessage is sent from the server to the client. */
@@ -244,7 +278,9 @@ function createBaseSeat(): Seat {
     equity: undefined,
     hand_category: "",
     connection_state: "",
-    dealt_in: false,
+    dealt_in: undefined,
+    ready: undefined,
+    hole_cards_revealed: [],
   };
 }
 
@@ -277,9 +313,17 @@ export const Seat: MessageFns<Seat> = {
     if (message.connection_state !== "") {
       writer.uint32(74).string(message.connection_state);
     }
-    if (message.dealt_in !== false) {
+    if (message.dealt_in !== undefined) {
       writer.uint32(80).bool(message.dealt_in);
     }
+    if (message.ready !== undefined) {
+      writer.uint32(88).bool(message.ready);
+    }
+    writer.uint32(98).fork();
+    for (const v of message.hole_cards_revealed) {
+      writer.bool(v);
+    }
+    writer.join();
     return writer;
   },
 
@@ -370,6 +414,32 @@ export const Seat: MessageFns<Seat> = {
           message.dealt_in = reader.bool();
           continue;
         }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.ready = reader.bool();
+          continue;
+        }
+        case 12: {
+          if (tag === 96) {
+            message.hole_cards_revealed.push(reader.bool());
+
+            continue;
+          }
+
+          if (tag === 98) {
+            const end2 = reader.uint32() + reader.pos;
+            while (reader.pos < end2) {
+              message.hole_cards_revealed.push(reader.bool());
+            }
+
+            continue;
+          }
+
+          break;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -393,7 +463,9 @@ export const Seat: MessageFns<Seat> = {
     message.equity = object.equity ?? undefined;
     message.hand_category = object.hand_category ?? "";
     message.connection_state = object.connection_state ?? "";
-    message.dealt_in = object.dealt_in ?? false;
+    message.dealt_in = object.dealt_in ?? undefined;
+    message.ready = object.ready ?? undefined;
+    message.hole_cards_revealed = object.hole_cards_revealed?.map((e) => e) || [];
     return message;
   },
 };
@@ -962,6 +1034,88 @@ export const Pot: MessageFns<Pot> = {
   },
 };
 
+function createBasePotResult(): PotResult {
+  return { amount: 0, payout_amount: 0, eligible_player_ids: [], winner_player_ids: [] };
+}
+
+export const PotResult: MessageFns<PotResult> = {
+  encode(message: PotResult, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.amount !== 0) {
+      writer.uint32(8).int64(message.amount);
+    }
+    if (message.payout_amount !== 0) {
+      writer.uint32(16).int64(message.payout_amount);
+    }
+    for (const v of message.eligible_player_ids) {
+      writer.uint32(26).string(v!);
+    }
+    for (const v of message.winner_player_ids) {
+      writer.uint32(34).string(v!);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PotResult {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePotResult();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.amount = longToNumber(reader.int64());
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.payout_amount = longToNumber(reader.int64());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.eligible_player_ids.push(reader.string());
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.winner_player_ids.push(reader.string());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  create<I extends Exact<DeepPartial<PotResult>, I>>(base?: I): PotResult {
+    return PotResult.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PotResult>, I>>(object: I): PotResult {
+    const message = createBasePotResult();
+    message.amount = object.amount ?? 0;
+    message.payout_amount = object.payout_amount ?? 0;
+    message.eligible_player_ids = object.eligible_player_ids?.map((e) => e) || [];
+    message.winner_player_ids = object.winner_player_ids?.map((e) => e) || [];
+    return message;
+  },
+};
+
 function createBaseTableSnapshot(): TableSnapshot {
   return {
     stage: "",
@@ -983,6 +1137,8 @@ function createBaseTableSnapshot(): TableSnapshot {
     snapshot_version: 0,
     pots: [],
     hand_id: "",
+    pot_results: [],
+    protocol_version: 0,
   };
 }
 
@@ -1044,6 +1200,12 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     }
     if (message.hand_id !== "") {
       writer.uint32(154).string(message.hand_id);
+    }
+    for (const v of message.pot_results) {
+      PotResult.encode(v!, writer.uint32(162).fork()).join();
+    }
+    if (message.protocol_version !== 0) {
+      writer.uint32(168).uint32(message.protocol_version);
     }
     return writer;
   },
@@ -1210,6 +1372,22 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           message.hand_id = reader.string();
           continue;
         }
+        case 20: {
+          if (tag !== 162) {
+            break;
+          }
+
+          message.pot_results.push(PotResult.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 21: {
+          if (tag !== 168) {
+            break;
+          }
+
+          message.protocol_version = reader.uint32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1253,6 +1431,8 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     message.snapshot_version = object.snapshot_version ?? 0;
     message.pots = object.pots?.map((e) => Pot.fromPartial(e)) || [];
     message.hand_id = object.hand_id ?? "";
+    message.pot_results = object.pot_results?.map((e) => PotResult.fromPartial(e)) || [];
+    message.protocol_version = object.protocol_version ?? 0;
     return message;
   },
 };
@@ -1327,6 +1507,7 @@ function createBaseClientMessage(): ClientMessage {
     message: "",
     expected_snapshot_version: 0,
     expected_hand_id: "",
+    card_index: undefined,
   };
 }
 
@@ -1361,6 +1542,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     }
     if (message.expected_hand_id !== "") {
       writer.uint32(82).string(message.expected_hand_id);
+    }
+    if (message.card_index !== undefined) {
+      writer.uint32(88).int32(message.card_index);
     }
     return writer;
   },
@@ -1452,6 +1636,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           message.expected_hand_id = reader.string();
           continue;
         }
+        case 11: {
+          if (tag !== 88) {
+            break;
+          }
+
+          message.card_index = reader.int32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1476,6 +1668,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     message.message = object.message ?? "";
     message.expected_snapshot_version = object.expected_snapshot_version ?? 0;
     message.expected_hand_id = object.expected_hand_id ?? "";
+    message.card_index = object.card_index ?? undefined;
     return message;
   },
 };

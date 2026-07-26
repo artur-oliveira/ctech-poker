@@ -8,9 +8,13 @@ export interface SeatView {
   state: string;
   // True only when this seat belongs to the hand identified by `hand_id`.
   // `state: active` alone can mean the player is waiting for the next deal.
-  dealt_in: boolean;
+  dealt_in?: boolean;
+  // Optional during the API-first rollout; absent snapshots use state-based
+  // compatibility behavior without falsely marking every player paused.
+  ready?: boolean;
   contributed: number;
   hole_cards?: string[];
+  hole_cards_revealed?: boolean[];
   equity?: number;
   hand_category?: string
 }
@@ -36,6 +40,13 @@ export interface PotView {
   eligible_player_ids: string[]
 }
 
+export interface PotResultView {
+  amount: number;
+  payout_amount: number;
+  eligible_player_ids: string[];
+  winner_player_ids: string[]
+}
+
 export interface TableSnapshot {
   stage: string;
   board: string[];
@@ -59,6 +70,8 @@ export interface TableSnapshot {
   big_blind_player_id?: string
   snapshot_version?: number;
   pots?: PotView[];
+  pot_results?: PotResultView[];
+  protocol_version?: number;
   hand_id?: string;
   shuffle_commit_hash?: string;
   shuffle_server_seed_hex?: string

@@ -675,6 +675,7 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
         ...seat,
         state: isFolded ? 'folded' : seat.state,
         hole_cards: isFolded ? ['back', 'back'] : holeCards,
+        hole_cards_revealed: isFolded || scenario === 'fold_win' ? [false, false] : [true, true],
         hand_category: isFolded || !holeCards ? undefined : variant.category[seat.player_id]
       };
     });
@@ -688,6 +689,12 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
       seats: resolvedSeats,
       payouts,
       winners,
+      pot_results: [{
+        amount: 1275,
+        payout_amount: 1275,
+        eligible_player_ids: resolvedSeats.filter(seat => seat.state !== 'folded').map(seat => seat.player_id),
+        winner_player_ids: winners
+      }],
       rake: 5,
       next_hand_unix_ms: Date.now() + 5000,
       won_without_showdown: scenario === 'fold_win',
@@ -748,6 +755,18 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
     ],
     payouts: {[MOCK_PLAYER_ID]: 900, 'bia_sp': 800},
     winners: [MOCK_PLAYER_ID, 'bia_sp'],
+    pot_results: [
+      {
+        amount: 900, payout_amount: 900,
+        eligible_player_ids: [MOCK_PLAYER_ID, 'bia_sp', 'leo_rio'],
+        winner_player_ids: [MOCK_PLAYER_ID]
+      },
+      {
+        amount: 800, payout_amount: 800,
+        eligible_player_ids: ['bia_sp', 'leo_rio'],
+        winner_player_ids: ['bia_sp']
+      }
+    ],
     rake: 25,
     next_hand_unix_ms: Date.now() + 5000,
     dealer_player_id: 'joao_floripa',
@@ -905,10 +924,36 @@ export class MockTableService {
       return true;
     }
     if (value.type === 'ready' || value.type === 'post_big_blind' || value.type === 'show_cards') {
+      if (value.type === 'ready') {
+        const ready = Boolean(value.ready);
+        this.snapshot = {
+          ...this.snapshot,
+          seats: this.snapshot.seats.map(seat => seat.player_id === MOCK_PLAYER_ID ? {
+            ...seat,
+            ready,
+            state: !ready && !['complete', 'waiting_for_players'].includes(this.snapshot.stage)
+              ? 'folded'
+              : ready && seat.state === 'sitting_out' ? 'active' : seat.state
+          } : seat)
+        };
+      }
+      if (value.type === 'show_cards') {
+        const index = typeof value.card_index === 'number' ? value.card_index : undefined;
+        this.snapshot = {
+          ...this.snapshot,
+          seats: this.snapshot.seats.map(seat => {
+            if (seat.player_id !== MOCK_PLAYER_ID) return seat;
+            const revealed = [...(seat.hole_cards_revealed || [false, false])];
+            if (index === undefined) revealed[0] = revealed[1] = true;
+            else if (index === 0 || index === 1) revealed[index] = true;
+            return {...seat, hole_cards_revealed: revealed};
+          })
+        };
+      }
       this.later(() => this.handlers.onMessage({
         type: 'action_ack', action_id: String(value.action_id || '')
       }));
-      if (value.type === 'ready') this.later(() => this.emitState(), 2);
+      if (value.type === 'ready' || value.type === 'show_cards') this.later(() => this.emitState(), 2);
       return true;
     }
     if (value.type === 'chat') {
@@ -1207,7 +1252,7 @@ export class MockTableService {
         hand_category: variant.category[seat.player_id]
       };
     });
-    const {payouts, winnerIds} = this.distributePots(revealed, variant.rank);
+    const {payouts, winnerIds, potResults} = this.distributePots(revealed, variant.rank);
     this.snapshot = {
       ...this.snapshot,
       stage: 'showdown',
@@ -1218,6 +1263,7 @@ export class MockTableService {
       action_deadline_unix_ms: undefined,
       payouts,
       winners: winnerIds,
+      pot_results: potResults,
       rake: 20
     };
     this.emitState();
@@ -1240,12 +1286,23 @@ export class MockTableService {
       .sort((a, b) => a - b);
     const payouts: Record<string, number> = {};
     const winnerIds = new Set<string>();
+    const potResults: NonNullable<TableSnapshot['pot_results']> = [];
     let previous = 0;
     for (const level of levels) {
       const contributors = seats.filter(seat => seat.contributed >= level);
       const layer = (level - previous) * contributors.length;
       previous = level;
       if (layer <= 0) continue;
+      if (contributors.length === 1) {
+        const [recipient] = contributors;
+        recipient.stack += layer;
+        payouts[recipient.player_id] = (payouts[recipient.player_id] || 0) + layer;
+        potResults.push({
+          amount: layer, payout_amount: layer,
+          eligible_player_ids: [recipient.player_id], winner_player_ids: []
+        });
+        continue;
+      }
       const eligible = contributors.filter(seat => seat.state === 'active' || seat.state === 'all_in');
       if (eligible.length === 0) continue;
       const bestRank = Math.max(...eligible.map(seat => ranks[seat.player_id] || 0));
@@ -1258,8 +1315,14 @@ export class MockTableService {
         payouts[winner.player_id] = (payouts[winner.player_id] || 0) + amount;
         if (contributors.length > 1) winnerIds.add(winner.player_id);
       }
+      potResults.push({
+        amount: layer,
+        payout_amount: layer,
+        eligible_player_ids: eligible.map(seat => seat.player_id),
+        winner_player_ids: layerWinners.map(seat => seat.player_id)
+      });
     }
-    return {payouts, winnerIds: [...winnerIds]};
+    return {payouts, winnerIds: [...winnerIds], potResults};
   }
 
   private finishWithoutShowdown() {
@@ -1278,6 +1341,10 @@ export class MockTableService {
       legal_actions: {actions: []},
       payouts,
       winners: [winner.player_id],
+      pot_results: [{
+        amount: pot, payout_amount: pot,
+        eligible_player_ids: [winner.player_id], winner_player_ids: [winner.player_id]
+      }],
       stage: 'complete',
       action_deadline_unix_ms: undefined,
       next_hand_unix_ms: Date.now() + NEXT_HAND_DELAY_MS,
@@ -1356,6 +1423,7 @@ export class MockTableService {
     this.snapshot = {
       ...this.snapshot,
       snapshot_version: this.snapshotVersion,
+      protocol_version: 2,
       hand_id: this.snapshot.hand_id || (stage === 'waiting_for_players' ? undefined : `mock-${this.scenario}-hand`)
     };
     this.handlers.onMessage({type: 'state', snapshot: this.snapshot, action_id: actionId});

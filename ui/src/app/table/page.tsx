@@ -28,6 +28,7 @@ import {pushNotification} from '@/lib/notify';
 import type {TableSnapshot} from '@/lib/api/table';
 import {bestFiveCardHand, HAND_RANK_INDEX} from '@/lib/pokerRules';
 import {getHands} from '@/lib/api/player';
+import {relevantWinner, seatParticipated, shouldShowOutcome, tableOutcomeKind} from '@/lib/tableOutcome';
 import {type MockScenario, USE_MOCK} from '@/lib/mock';
 import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
 
@@ -182,20 +183,12 @@ function TableContent() {
     // mid-hand after returning/rebuying, but they are only eligible for the
     // next deal. `dealt_in` is the server-authored membership of this hand.
     const seat = snap.seats.find(item => item.player_id === viewer);
-    if (!seat?.dealt_in) return;
-    // Only a viewer who stayed in for the whole hand (never folded, never sat
-    // out) gets a win/lose moment — folding is routine and already has its
-    // own quiet "Desistiu" seat state; celebrating or consoling every single
-    // fold would turn the delight into noise.
-    if (seat.state !== 'active' && seat.state !== 'all_in') return;
+    if (!shouldShowOutcome(seat)) return;
     outcomeKeyRef.current += 1;
     // Membership in `winners`, not a truthy payout, decides win/lose: an
     // uncalled all-in's excess or an orphaned side-pot refund also shows up
     // in `payouts` without being an actual win.
-    const isWinner = snap.winners?.includes(viewer);
-    const kind = isWinner
-      ? ((snap.winners?.length ?? 0) > 1 ? 'tie' : 'win')
-      : 'lose';
+    const kind = tableOutcomeKind(snap, viewer);
     // The banner names one rival hand as the point of comparison: the
     // toughest hand it beat when the viewer won (proof it beat everyone),
     // or the hand that actually beat it when the viewer lost. Only seats
@@ -205,7 +198,7 @@ function TableContent() {
     const opponentCategory = kind === 'win' ?
       snap.seats.filter(item => item.player_id !== viewer && item.hand_category)
         .sort((a, b) => HAND_RANK_INDEX[a.hand_category!] - HAND_RANK_INDEX[b.hand_category!])[0]?.hand_category :
-      snap.seats.find(item => item.player_id !== viewer && snap.winners?.includes(item.player_id))?.hand_category;
+      relevantWinner(snap, viewer)?.hand_category;
     // The hand that actually won this pot: the viewer's own cards on a win
     // (always known), or the first winning rival's cards on a loss — but only
     // when a showdown actually revealed them (a hand that ended with everyone
@@ -213,8 +206,7 @@ function TableContent() {
     // the board is complete) and reduced to the actual best 5-card hand — a
     // bare pair of hole cards doesn't show what the player actually won with
     // when the winning combination uses the board too.
-    const winnerSeat = (kind === 'win' || kind === 'tie') ? seat :
-      snap.seats.find(item => snap.winners?.includes(item.player_id));
+    const winnerSeat = (kind === 'win' || kind === 'tie') ? seat : relevantWinner(snap, viewer);
     const winnerHole = winnerSeat?.hole_cards?.length === 2 &&
     winnerSeat.hole_cards.every(card => card.toLowerCase() !== 'back') ? winnerSeat.hole_cards : undefined;
     const winningCards = winnerHole && snap.board.length === 5 ?
@@ -278,8 +270,10 @@ function TableContent() {
   const nextHandDurationMs = s.next_hand_unix_ms && nextHandArmed?.deadline === s.next_hand_unix_ms ?
     Math.max(0, s.next_hand_unix_ms - nextHandArmed.snapshotAt) : 0;
   const canInvite = room && (room.visibility === 'public' || room.share_code);
-  const canShowCards = s.stage === 'complete' && s.won_without_showdown && viewerSeat?.dealt_in &&
-    (viewerSeat.state === 'active' || viewerSeat.state === 'all_in');
+  const isPaused = viewerSeat?.ready === false || viewerSeat?.state === 'sitting_out';
+  const canRevealCards = s.stage === 'complete' && seatParticipated(viewerSeat) &&
+    Boolean(viewerSeat?.hole_cards?.some(card => card.toLowerCase() !== 'back')) &&
+    [0, 1].some(index => !(viewerSeat?.hole_cards_revealed?.[index] ?? false));
   const inviteUrl = typeof window !== 'undefined' ?
     `${window.location.origin}/table?id=${id}${room?.share_code ? `&invite=${room.share_code}` : ''}` : '';
   return (
@@ -297,13 +291,13 @@ function TableContent() {
             </span>
             <HandRankingsDialog/>
             {canInvite && <InviteDialog url={inviteUrl}/>}
-            {viewerSeat && viewerSeat.state !== 'sitting_out' &&
+            {viewerSeat && !isPaused &&
                 <Button type="button" variant="ghost" size="icon" aria-label="Sentar fora" disabled={rt.readyPending}
                         onClick={() => rt.ready(false)}><Pause/></Button>}
-            {viewerSeat?.state === 'sitting_out' && viewerSeat.stack > 0 &&
+            {viewerSeat && isPaused && viewerSeat.stack > 0 &&
                 <Button type="button" variant="ghost" size="icon" aria-label="Voltar a jogar" disabled={rt.readyPending}
                         onClick={() => rt.ready(true)}><Play/></Button>}
-            {viewerSeat?.state === 'sitting_out' && viewerSeat.stack === 0 && room &&
+            {viewerSeat && isPaused && viewerSeat.stack === 0 && room &&
               s.stage !== 'showdown' && s.stage !== 'complete' &&
                 <RebuyDialog roomId={id} room={room} onRebuyAction={() => rt.ready(true)}/>}
             <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} onLeftAction={amount => {
@@ -332,16 +326,13 @@ function TableContent() {
             overlay can't reliably avoid the header once it wraps to two
             lines, which used to hide and block taps on Sentar fora/Sair da
             mesa for the whole time this notice was up. */}
-        {!connectionMessage && (s.next_hand_unix_ms || canShowCards) && <div className="reconnect-notice">
+        {!connectionMessage && s.next_hand_unix_ms && <div className="reconnect-notice">
             <p>{s.stage === 'complete' ? 'Mão encerrada.' : 'Aguardando jogadores.'}</p>
           {s.next_hand_unix_ms &&
               <PerimeterTimer className="next-hand-ring"
                               durationMs={nextHandDurationMs}
                               restartKey={s.next_hand_unix_ms}
                               radius={12}/>}
-          {canShowCards &&
-              <Button type="button" variant="ghost" disabled={rt.showCardsPending}
-                      onClick={() => rt.showCards()}>Mostrar cartas</Button>}
         </div>}
       </div>
       {/* `payouts`, not `stage === 'complete'`: a showdown hand shows payouts
@@ -352,7 +343,9 @@ function TableContent() {
           `complete` ever arrived. */}
       <TableStage snapshot={s} viewer={viewer} pot={pot} bigBlind={bigBlind} nowMs={rt.snapshotAt}
                   outcome={handOutcome} holdOutcomeOpen={Boolean(s.payouts && Object.keys(s.payouts).length > 0)}
-                  viewerStackBefore={(s.payouts && Object.keys(s.payouts).length > 0) ? stackAtHandStart : undefined}/>
+                  viewerStackBefore={(s.payouts && Object.keys(s.payouts).length > 0) ? stackAtHandStart : undefined}
+                  canRevealCards={canRevealCards} revealPending={rt.showCardsPending}
+                  onRevealCard={index => rt.showCards(index)}/>
       <ActionBar
         onActAction={rt.act}
         {...actions}

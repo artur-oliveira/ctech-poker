@@ -67,9 +67,10 @@ type SitOutCmd struct {
 func (c SitOutCmd) reply() chan error { return c.Reply }
 
 type ShowCardsCmd struct {
-	PlayerID string
-	ActionID string
-	Reply    chan error
+	PlayerID  string
+	ActionID  string
+	CardIndex *int32
+	Reply     chan error
 }
 
 func (c ShowCardsCmd) reply() chan error { return c.Reply }

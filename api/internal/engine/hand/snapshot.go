@@ -23,21 +23,22 @@ type Snapshot struct {
 	// all-in's excess or an orphaned side-pot refund (runShowdown), neither of
 	// which is a win. The client must use this, not "payout > 0", to decide
 	// who gets the win banner/pill.
-	Winners              []string      `json:"winners,omitempty"`
-	Rake                 int64         `json:"rake,omitempty"`
-	CurrentPlayerID      string        `json:"current_player_id,omitempty"`
-	LegalActions         *LegalActions `json:"legal_actions,omitempty"`
-	ActionDeadlineUnixMs int64         `json:"action_deadline_unix_ms,omitempty"`
-	NextHandUnixMs       int64         `json:"next_hand_unix_ms,omitempty"`
-	WonWithoutShowdown   bool          `json:"won_without_showdown,omitempty"`
-	ShuffleCommitHash    string        `json:"shuffle_commit_hash,omitempty"`
-	ShuffleServerSeedHex string        `json:"shuffle_server_seed_hex,omitempty"`
-	SmallBlindPlayerID   string        `json:"small_blind_player_id,omitempty"`
-	BigBlindPlayerID     string        `json:"big_blind_player_id,omitempty"`
-	DealerPlayerID       string        `json:"dealer_player_id,omitempty"`
-	SnapshotVersion      uint64        `json:"snapshot_version,omitempty"`
-	Pots                 []PotView     `json:"pots,omitempty"`
-	HandID               string        `json:"hand_id,omitempty"`
+	Winners              []string        `json:"winners,omitempty"`
+	Rake                 int64           `json:"rake,omitempty"`
+	CurrentPlayerID      string          `json:"current_player_id,omitempty"`
+	LegalActions         *LegalActions   `json:"legal_actions,omitempty"`
+	ActionDeadlineUnixMs int64           `json:"action_deadline_unix_ms,omitempty"`
+	NextHandUnixMs       int64           `json:"next_hand_unix_ms,omitempty"`
+	WonWithoutShowdown   bool            `json:"won_without_showdown,omitempty"`
+	ShuffleCommitHash    string          `json:"shuffle_commit_hash,omitempty"`
+	ShuffleServerSeedHex string          `json:"shuffle_server_seed_hex,omitempty"`
+	SmallBlindPlayerID   string          `json:"small_blind_player_id,omitempty"`
+	BigBlindPlayerID     string          `json:"big_blind_player_id,omitempty"`
+	DealerPlayerID       string          `json:"dealer_player_id,omitempty"`
+	SnapshotVersion      uint64          `json:"snapshot_version,omitempty"`
+	Pots                 []PotView       `json:"pots,omitempty"`
+	PotResults           []PotResultView `json:"pot_results,omitempty"`
+	HandID               string          `json:"hand_id,omitempty"`
 
 	// EquityOnly is actor-internal metadata. An asynchronous equity estimate
 	// is transported as a versioned delta instead of replaying the complete
@@ -69,6 +70,13 @@ type PotView struct {
 	EligiblePlayerIDs []string `json:"eligible_player_ids"`
 }
 
+type PotResultView struct {
+	Amount            int64    `json:"amount"`
+	PayoutAmount      int64    `json:"payout_amount"`
+	EligiblePlayerIDs []string `json:"eligible_player_ids"`
+	WinnerPlayerIDs   []string `json:"winner_player_ids,omitempty"`
+}
+
 type SeatView struct {
 	PlayerID        string `json:"player_id"`
 	Name            string `json:"name,omitempty"`
@@ -78,11 +86,13 @@ type SeatView struct {
 	// DealtIn is true when this seat belongs to the hand identified by the
 	// snapshot's HandID. Seat state is deliberately not used for this: a
 	// player may become Active mid-hand while waiting for the next deal.
-	DealtIn      bool     `json:"dealt_in"`
-	Contributed  int64    `json:"contributed"`
-	HoleCards    []string `json:"hole_cards,omitempty"`
-	Equity       *float64 `json:"equity,omitempty"`
-	HandCategory string   `json:"hand_category,omitempty"`
+	DealtIn           bool     `json:"dealt_in"`
+	Ready             bool     `json:"ready"`
+	Contributed       int64    `json:"contributed"`
+	HoleCards         []string `json:"hole_cards,omitempty"`
+	HoleCardsRevealed []bool   `json:"hole_cards_revealed,omitempty"`
+	Equity            *float64 `json:"equity,omitempty"`
+	HandCategory      string   `json:"hand_category,omitempty"`
 }
 
 var stageNames = map[Stage]string{
@@ -138,8 +148,18 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 	wonWithoutShowdown := t.stage == Complete && t.lastOutcome != nil && t.lastOutcome.WonWithoutShowdown
 	revealAll := t.stage == Complete && t.lastOutcome != nil && !wonWithoutShowdown
 	var winners []string
+	var potResults []PotResultView
 	if t.stage == Complete && t.lastOutcome != nil {
 		winners = t.lastOutcome.Winners
+		potResults = make([]PotResultView, len(t.lastOutcome.PotResults))
+		for i, result := range t.lastOutcome.PotResults {
+			potResults[i] = PotResultView{
+				Amount:            result.Amount,
+				PayoutAmount:      result.PayoutAmount,
+				EligiblePlayerIDs: append([]string(nil), result.EligiblePlayerIDs...),
+				WinnerPlayerIDs:   append([]string(nil), result.Winners...),
+			}
+		}
 	}
 	// Only players actually dealt into the current/last hand have real
 	// HoleCards — anyone else (waiting for the first hand, or a mid-hand
@@ -156,11 +176,25 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 			Stack:       p.Stack,
 			State:       playerStateNames[p.State],
 			DealtIn:     dealtIn[p.ID],
+			Ready:       p.Ready,
 			Contributed: p.Contributed,
 		}
-		if dealtIn[p.ID] && (p.ID == viewerID || (revealAll && p.State != Folded) || p.VoluntarilyShown) {
-			sv.HoleCards = []string{cardCode(p.HoleCards[0]), cardCode(p.HoleCards[1])}
-			if len(t.board) == 5 {
+		publicReveal := []bool{
+			p.VoluntarilyShown || p.VoluntarilyShownCards[0],
+			p.VoluntarilyShown || p.VoluntarilyShownCards[1],
+		}
+		if revealAll && p.State != Folded {
+			publicReveal[0], publicReveal[1] = true, true
+		}
+		sv.HoleCardsRevealed = publicReveal
+		if dealtIn[p.ID] && (p.ID == viewerID || publicReveal[0] || publicReveal[1]) {
+			sv.HoleCards = []string{"back", "back"}
+			for i := range sv.HoleCards {
+				if p.ID == viewerID || publicReveal[i] {
+					sv.HoleCards[i] = cardCode(p.HoleCards[i])
+				}
+			}
+			if len(t.board) == 5 && (p.ID == viewerID || (publicReveal[0] && publicReveal[1])) {
 				var full [7]deck.Card
 				full[0], full[1] = p.HoleCards[0], p.HoleCards[1]
 				copy(full[2:], t.board)
@@ -181,6 +215,7 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		LegalActions:       t.legalActionsFor(viewerID, current),
 		WonWithoutShowdown: wonWithoutShowdown,
 		Pots:               t.potViews(),
+		PotResults:         potResults,
 	}
 	if len(t.handOrder) >= 2 {
 		sb, bb := t.blindSeats(t.handOrder)

@@ -59,6 +59,23 @@ func TestHandItemForMarksWinnerAmongMultipleOpponents(t *testing.T) {
 	}
 }
 
+func TestHandItemForDoesNotCallDistinctSidePotWinnersTied(t *testing.T) {
+	outcome := hand.HandOutcome{
+		Winners:      []string{"main-winner", "side-winner"},
+		Participants: []string{"main-winner", "side-winner", "loser"},
+		ShowdownResults: map[string]hand.ShowdownResult{
+			"main-winner": {Won: true, Category: "full_house"},
+			"side-winner": {Won: true, Category: "three_of_a_kind"},
+			"loser":       {Category: "pair"},
+		},
+	}
+	for _, id := range []string{"main-winner", "side-winner"} {
+		if got := handItemFor(outcome, id, nil).Outcome; got != "won" {
+			t.Fatalf("%s won a distinct pot outright, got history outcome %q", id, got)
+		}
+	}
+}
+
 func testRoutes(app *fiber.App, cfg *config.Config) {
 	verifier := jwtverify.NewVerifier("", "", "", cache.NewMemoryBackend(1))
 	manager := tablemanager.NewManager(nil, nil, nil, nil)

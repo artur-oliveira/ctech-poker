@@ -13,7 +13,12 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 		HandID:          "hand-42",
 		Seats: []hand.SeatView{{
 			PlayerID: "p1", Name: "Ana", State: "folded",
-			ConnectionState: "disconnected", DealtIn: true,
+			ConnectionState: "disconnected", DealtIn: true, Ready: false,
+			HoleCardsRevealed: []bool{true, false},
+		}},
+		PotResults: []hand.PotResultView{{
+			Amount: 300, PayoutAmount: 293,
+			EligiblePlayerIDs: []string{"p1", "p2"}, WinnerPlayerIDs: []string{"p1"},
 		}},
 	})
 	if converted.SnapshotVersion != 42 || converted.HandId != "hand-42" {
@@ -25,8 +30,18 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 	if converted.Seats[0].State != "folded" {
 		t.Fatal("transport presence must not overwrite poker state")
 	}
-	if !converted.Seats[0].DealtIn {
+	if !converted.Seats[0].GetDealtIn() {
 		t.Fatal("hand membership lost during protobuf conversion")
+	}
+	if converted.Seats[0].Ready == nil || converted.Seats[0].GetReady() {
+		t.Fatal("explicit paused state lost during protobuf conversion")
+	}
+	if got := converted.Seats[0].HoleCardsRevealed; len(got) != 2 || !got[0] || got[1] {
+		t.Fatalf("per-card reveal mask lost during protobuf conversion: %v", got)
+	}
+	if converted.ProtocolVersion != 2 || len(converted.PotResults) != 1 ||
+		converted.PotResults[0].WinnerPlayerIds[0] != "p1" {
+		t.Fatalf("result protocol fields lost during conversion: %+v", converted)
 	}
 }
 

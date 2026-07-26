@@ -39,6 +39,9 @@ type Props = {
   // already counts a payout up. Only meaningful (non-undefined) while that
   // resolution's payouts are still on screen.
   viewerStackBefore?: number;
+  canRevealCards?: boolean;
+  revealPending?: boolean;
+  onRevealCard?: (index: number) => void;
 };
 
 export function TableStage({
@@ -49,7 +52,10 @@ export function TableStage({
                              nowMs,
                              outcome,
                              holdOutcomeOpen,
-                             viewerStackBefore
+                             viewerStackBefore,
+                             canRevealCards,
+                             revealPending,
+                             onRevealCard
                            }: Props) {
   const vertical = useVerticalStage();
   const seats = rotateSeats(snapshot.seats, viewer);
@@ -62,6 +68,9 @@ export function TableStage({
           nowMs={nowMs}
           bigBlind={bigBlind}
           isViewer={seat.player_id === viewer}
+          canRevealCards={seat.player_id === viewer && canRevealCards}
+          revealPending={revealPending}
+          onRevealCard={onRevealCard}
           stackBefore={seat.player_id === viewer ? viewerStackBefore : undefined}
           isDealer={snapshot.dealer_player_id === seat.player_id}
           isSmallBlind={snapshot.small_blind_player_id === seat.player_id}

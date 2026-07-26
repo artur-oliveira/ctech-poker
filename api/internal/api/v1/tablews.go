@@ -460,7 +460,9 @@ func RegisterTableWS(
 				case "show_cards":
 					ensureActionID()
 					r := make(chan error, 1)
-					if err := dispatch(table.ShowCardsCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
+					if err := dispatch(table.ShowCardsCmd{
+						PlayerID: playerID, ActionID: m.ActionId, CardIndex: m.CardIndex, Reply: r,
+					}); err != nil {
 						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()
@@ -608,17 +610,20 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		if s.Equity != nil {
 			equity = new(*s.Equity)
 		}
+		dealtIn, ready := s.DealtIn, s.Ready
 		protoSeats[i] = &pokerproto.Seat{
-			PlayerId:        s.PlayerID,
-			Name:            s.Name,
-			ConnectionState: s.ConnectionState,
-			Stack:           s.Stack,
-			State:           s.State,
-			DealtIn:         s.DealtIn,
-			Contributed:     s.Contributed,
-			HoleCards:       s.HoleCards,
-			Equity:          equity,
-			HandCategory:    s.HandCategory,
+			PlayerId:          s.PlayerID,
+			Name:              s.Name,
+			ConnectionState:   s.ConnectionState,
+			Stack:             s.Stack,
+			State:             s.State,
+			DealtIn:           &dealtIn,
+			Ready:             &ready,
+			Contributed:       s.Contributed,
+			HoleCards:         s.HoleCards,
+			HoleCardsRevealed: s.HoleCardsRevealed,
+			Equity:            equity,
+			HandCategory:      s.HandCategory,
 		}
 	}
 
@@ -645,6 +650,15 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 			EligiblePlayerIds: pot.EligiblePlayerIDs,
 		}
 	}
+	protoPotResults := make([]*pokerproto.PotResult, len(snap.PotResults))
+	for i, result := range snap.PotResults {
+		protoPotResults[i] = &pokerproto.PotResult{
+			Amount:            result.Amount,
+			PayoutAmount:      result.PayoutAmount,
+			EligiblePlayerIds: result.EligiblePlayerIDs,
+			WinnerPlayerIds:   result.WinnerPlayerIDs,
+		}
+	}
 
 	return &pokerproto.TableSnapshot{
 		Stage:                snap.Stage,
@@ -666,6 +680,8 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		SnapshotVersion:      snap.SnapshotVersion,
 		Pots:                 protoPots,
 		HandId:               snap.HandID,
+		PotResults:           protoPotResults,
+		ProtocolVersion:      2,
 	}
 }
 
