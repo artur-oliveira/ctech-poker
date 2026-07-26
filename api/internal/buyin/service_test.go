@@ -18,10 +18,11 @@ import (
 )
 
 type fakeWallet struct {
-	credits  []call
-	debits   []call
-	holds    []holdCall
-	cashouts []cashoutCall
+	credits   []call
+	debits    []call
+	feeDebits []call
+	holds     []holdCall
+	cashouts  []cashoutCall
 }
 type call struct {
 	userID string
@@ -63,6 +64,10 @@ func (f *fakeWallet) ReleaseHold(_ context.Context, holdID string) error {
 }
 func (f *fakeWallet) CashoutGame(_ context.Context, userID string, amount int64, tableRef string, holdIDs []string, key, reason string) error {
 	f.cashouts = append(f.cashouts, cashoutCall{userID, amount, tableRef, holdIDs, key, reason})
+	return nil
+}
+func (f *fakeWallet) DebitReal(_ context.Context, userID string, amount int64, key, _ string) error {
+	f.feeDebits = append(f.feeDebits, call{userID, amount, key})
 	return nil
 }
 
@@ -314,5 +319,83 @@ func TestBuyInUsesGameWalletForRealRooms(t *testing.T) {
 	}
 	if len(sandbox.debits) != 0 {
 		t.Fatalf("expected zero sandbox debits, got %d", len(sandbox.debits))
+	}
+}
+
+func TestBuyInChargesFixedEntryFeeForRealRoomsAfterSeating(t *testing.T) {
+	sandbox := &fakeWallet{}
+	game := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := &fakeRoomLookup{room: &roomstore.Room{
+		ID: "room-real-fee", CurrencyMode: "real", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9,
+		EntryFeeCents: 100,
+	}}
+	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}})
+	ctx := context.Background()
+
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	if _, err := mgr.GetOrCreateActor(ctx, "room-real-fee", seed); err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+
+	if err := svc.BuyIn(ctx, "room-real-fee", "user-1", 400, false, "nonce-1"); err != nil {
+		t.Fatalf("buyin: %v", err)
+	}
+	if len(game.feeDebits) != 1 || game.feeDebits[0].amount != 100 || game.feeDebits[0].userID != "user-1" {
+		t.Fatalf("expected one 100-cent fee debit for user-1, got %+v", game.feeDebits)
+	}
+	if len(game.holds) != 1 || game.holds[0].amount != 400 {
+		t.Fatalf("expected the stake hold to remain 400 (fee is separate), got %+v", game.holds)
+	}
+}
+
+func TestBuyInChargesFeeAgainOnRebuyAfterLeaving(t *testing.T) {
+	sandbox := &fakeWallet{}
+	game := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := &fakeRoomLookup{room: &roomstore.Room{
+		ID: "room-real-rebuy", CurrencyMode: "real", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9,
+		EntryFeeCents: 100,
+	}}
+	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}})
+	ctx := context.Background()
+
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	if _, err := mgr.GetOrCreateActor(ctx, "room-real-rebuy", seed); err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+
+	if err := svc.BuyIn(ctx, "room-real-rebuy", "user-1", 400, false, "nonce-1"); err != nil {
+		t.Fatalf("first buyin: %v", err)
+	}
+	if _, err := svc.CashOut(ctx, "room-real-rebuy", "user-1", ""); err != nil {
+		t.Fatalf("cashout: %v", err)
+	}
+	// A fresh nonce, exactly like the UI's rebuy flow (RebuyDialog calls the
+	// same joinRoom as a first-time join, with a new crypto.randomUUID()).
+	if err := svc.BuyIn(ctx, "room-real-rebuy", "user-1", 400, false, "nonce-2"); err != nil {
+		t.Fatalf("rebuy: %v", err)
+	}
+	if len(game.feeDebits) != 2 {
+		t.Fatalf("expected the fee to be charged again on rebuy after leaving, got %+v", game.feeDebits)
+	}
+}
+
+func TestBuyInSkipsFeeForSandboxRooms(t *testing.T) {
+	wallet := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := testRoomLookup() // sandbox room, EntryFeeCents unset (0)
+	svc := NewService(wallet, mgr, rooms)
+	ctx := context.Background()
+
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	if _, err := mgr.GetOrCreateActor(ctx, "room-sandbox-fee", seed); err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	if err := svc.BuyIn(ctx, "room-sandbox-fee", "user-1", 400, false, ""); err != nil {
+		t.Fatalf("buyin: %v", err)
+	}
+	if len(wallet.feeDebits) != 0 {
+		t.Fatalf("expected no fee debit for a sandbox room, got %+v", wallet.feeDebits)
 	}
 }

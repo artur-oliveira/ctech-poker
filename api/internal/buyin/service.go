@@ -28,6 +28,7 @@ type walletMover interface {
 	HoldGame(ctx context.Context, userID string, amount int64, tableRef, idempotencyKey, reason string) (string, error)
 	ReleaseHold(ctx context.Context, holdID string) error
 	CashoutGame(ctx context.Context, userID string, amount int64, tableRef string, holdIDs []string, idempotencyKey, reason string) error
+	DebitReal(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
 }
 
 type roomLookup interface {
@@ -130,8 +131,10 @@ func (s *Service) walletFor(ctx context.Context, roomID, playerID string) (walle
 // never collide with — or be mistaken as a retry of — the original debit.
 func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int64, midHand bool, idemKey string) error {
 	maxSeats := 0
+	var room *roomstore.Room
 	if s.rooms != nil {
-		room, err := s.rooms.Get(ctx, roomID)
+		var err error
+		room, err = s.rooms.Get(ctx, roomID)
 		if err != nil {
 			return fmt.Errorf("buyin: load room: %w", err)
 		}
@@ -223,6 +226,21 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 			PK: playerID, TableID: roomID, BuyinAmount: amount, JoinedAt: time.Now().UnixMilli(),
 		}); err != nil {
 			slog.Error("sessionlog: record session open failed", "player", playerID, "table", roomID, "err", err)
+		}
+	}
+
+	if room != nil && room.CurrencyMode == "real" && room.EntryFeeCents > 0 {
+		feeKey := fmt.Sprintf("%s#%s#buyinfee#%s", roomID, playerID, nonce)
+		if err := s.game.DebitReal(ctx, playerID, room.EntryFeeCents, feeKey, "poker_table_fee"); err != nil {
+			slog.Error("ALARM: poker table entry fee charge failed after seating, needs manual review",
+				"player", playerID, "room", roomID, "amount", room.EntryFeeCents, "err", err)
+			if s.pending != nil {
+				_ = s.pending.Record(ctx, reconcile.PendingCashout{
+					ID: feeKey, PlayerID: playerID, Amount: room.EntryFeeCents, CurrencyMode: "real",
+					Kind: reconcile.KindFeeDebit, TableRef: roomID, IdempotencyKey: feeKey,
+				})
+			}
+			return fmt.Errorf("buyin: table fee charge failed after seating — reconciliation job will retry: %w", err)
 		}
 	}
 

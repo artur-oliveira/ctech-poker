@@ -23,6 +23,7 @@ func (w *gateWallet) ReleaseHold(context.Context, string) error { return nil }
 func (w *gateWallet) CashoutGame(context.Context, string, int64, string, []string, string, string) error {
 	return nil
 }
+func (w *gateWallet) DebitReal(context.Context, string, int64, string, string) error { return nil }
 
 type unacceptedProfiles struct{}
 
