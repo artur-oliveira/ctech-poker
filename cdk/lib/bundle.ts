@@ -6,7 +6,7 @@ export const localGoBundling = (cwd: string): ILocalBundling => {
     tryBundle(outputDir: string): boolean {
       try {
         execFileSync('go', ['build', '-o', `${outputDir}/bootstrap`, '.'], {
-          cwd: '../api/cmd/archiver',
+          cwd,
           env: {...process.env, GOOS: 'linux', GOARCH: 'arm64', CGO_ENABLED: '0'},
           stdio: 'inherit',
         });

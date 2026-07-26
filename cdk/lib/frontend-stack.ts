@@ -89,8 +89,8 @@ async function handler(event) {
       originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
       allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
       compress: true,
-      responseHeadersPolicy: securityHeaders,
     };
+
     this.distribution = new cloudfront.Distribution(this, 'Distribution', {
       comment: `CTech Poker Frontend - ${environment}`,
       defaultRootObject: 'index.html',
