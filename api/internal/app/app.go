@@ -251,6 +251,12 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		if err := rooms.SetSeatsTaken(context.Background(), tableID, seatsTaken); err != nil {
 			slog.Error("roomstore: seats taken write-through failed", "table", tableID, "err", err)
 		}
+		data, _ := json.Marshal(map[string]any{
+			"type":        "room_updated",
+			"room_id":     tableID,
+			"seats_taken": seatsTaken,
+		})
+		reg.Broadcast(context.Background(), "lobby", data)
 	})
 	return mgr
 }

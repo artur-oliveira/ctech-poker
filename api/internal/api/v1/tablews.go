@@ -369,3 +369,82 @@ func (w *wsConnAdapter) WriteMessage(messageType int, data []byte) error {
 	defer w.mu.Unlock()
 	return w.conn.WriteMessage(messageType, data)
 }
+
+// RegisterGeneralWS mounts GET /v1.0/ws. It upgrades the request to a WebSocket connection
+// that registers the client for global ("lobby") and user-specific ("user#<player_id>") messages.
+func RegisterGeneralWS(
+	router fiber.Router,
+	verifier *jwtverify.Verifier,
+	reg ws.Registry,
+	allowedOrigins []string,
+) {
+	upgrader := fws.FastHTTPUpgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin:     func(ctx *fasthttp.RequestCtx) bool { return wsAllowedOrigin(ctx, allowedOrigins) },
+	}
+	router.Get("/ws", func(c fiber.Ctx) error {
+		return upgrader.Upgrade(c.RequestCtx(), func(conn *fws.Conn) {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("general ws handler panic", "panic", r)
+					_ = conn.Close()
+				}
+			}()
+			ctx := c.Context()
+			safeConn := &wsConnAdapter{conn: conn}
+			send := func(msg any) {
+				data, _ := json.Marshal(msg)
+				_ = safeConn.WriteMessage(fws.TextMessage, data)
+			}
+
+			token, _, ok := readAuthToken(conn)
+			if !ok {
+				send(map[string]any{"type": "error", "code": "unauthorized"})
+				_ = conn.Close()
+				return
+			}
+			claims, err := verifier.VerifyClaims(ctx, token)
+			if err != nil || claims == nil || claims.Sub == "" || claims.SID == "" {
+				send(map[string]any{"type": "error", "code": "unauthorized"})
+				_ = conn.Close()
+				return
+			}
+			playerID := claims.Sub
+			connID := uuid.NewString()
+
+			// Register for user-specific broadcasts
+			userChan := "user#" + playerID
+			reg.Register(userChan, connID, safeConn)
+			defer reg.Unregister(userChan, connID)
+
+			// Register for global/lobby broadcasts
+			lobbyChan := "lobby"
+			reg.Register(lobbyChan, connID, safeConn)
+			defer reg.Unregister(lobbyChan, connID)
+
+			send(map[string]any{"type": "connected", "conn_id": connID})
+			slog.Info("general ws connected", "player", playerID, "conn", connID)
+
+			done := make(chan struct{})
+			go startHeartbeat(conn, done, wsPingInterval, wsPongWait)
+
+			for {
+				_, msg, e := conn.ReadMessage()
+				if e != nil {
+					break
+				}
+				var m clientMessage
+				if json.Unmarshal(msg, &m) != nil {
+					continue
+				}
+				if m.Type == "ping" {
+					send(map[string]any{"type": "pong"})
+				}
+			}
+			close(done)
+			slog.Info("general ws disconnected", "player", playerID, "conn", connID)
+		})
+	})
+}
+

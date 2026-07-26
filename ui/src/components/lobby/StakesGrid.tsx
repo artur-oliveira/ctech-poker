@@ -6,6 +6,7 @@ import {ArrowRight, Users} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {createRoom, listRooms, listStakes} from '@/lib/api/rooms';
 import {pushNotification} from '@/lib/notify';
+import {useLobbyRealtime} from '@/lib/hooks/useLobbyRealtime';
 
 const MAX_SEATS_OPTIONS = [[2, 'HEADS-UP'], [6, '6-MAX'], [9, 'FULL-RING']] as const;
 
@@ -17,11 +18,14 @@ export function StakesGrid() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [joiningKey, setJoiningKey] = useState<string | null>(null);
+  
+  useLobbyRealtime();
+
   const {data: stakes = [], isLoading: stakesLoading, isError: stakesError, refetch: refetchStakes} = useQuery({
     queryKey: ['stakes'], queryFn: () => listStakes()
   });
   const {data: rooms = [], isLoading: roomsLoading} = useQuery({
-    queryKey: ['rooms'], queryFn: () => listRooms(), refetchInterval: 5000
+    queryKey: ['rooms'], queryFn: () => listRooms()
   });
 
   async function joinOrCreate(smallBlind: number, bigBlind: number, maxSeats: number) {

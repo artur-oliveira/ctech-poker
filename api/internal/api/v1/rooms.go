@@ -3,6 +3,7 @@ package v1
 import (
 	"crypto/rand"
 	"crypto/subtle"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -10,6 +11,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/oklog/ulid/v2"
 	"gopkg.aoctech.app/api-commons/dynamo"
+	"gopkg.aoctech.app/api-commons/ws"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
@@ -25,11 +27,12 @@ type roomHandlers struct {
 	rooms   *roomstore.Store
 	buyin   *buyin.Service
 	manager *tablemanager.Manager
+	reg     ws.Registry
 	cfg     *config.Config
 }
 
-func RegisterRooms(router fiber.Router, auth fiber.Handler, rooms *roomstore.Store, buyinSvc *buyin.Service, manager *tablemanager.Manager, cfg *config.Config, createLimiter, joinLimiter *RateLimiter) {
-	h := &roomHandlers{rooms: rooms, buyin: buyinSvc, manager: manager, cfg: cfg}
+func RegisterRooms(router fiber.Router, auth fiber.Handler, rooms *roomstore.Store, buyinSvc *buyin.Service, manager *tablemanager.Manager, reg ws.Registry, cfg *config.Config, createLimiter, joinLimiter *RateLimiter) {
+	h := &roomHandlers{rooms: rooms, buyin: buyinSvc, manager: manager, reg: reg, cfg: cfg}
 	g := router.Group("/rooms", auth)
 	g.Post("/", rateLimit(createLimiter, ipKey("rooms:create")), h.createRoom)
 	g.Get("/", h.listPublic)
@@ -131,6 +134,13 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 	if h.rooms != nil {
 		if err := h.rooms.Create(c.Context(), room); err != nil {
 			return problem.InternalServer("failed to create room", c, err).Send(c)
+		}
+		if h.reg != nil {
+			data, _ := json.Marshal(map[string]any{
+				"type": "room_created",
+				"room": room,
+			})
+			h.reg.Broadcast(c.Context(), "lobby", data)
 		}
 	}
 	if room.BlindEscalation != nil && h.manager != nil {

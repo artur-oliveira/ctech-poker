@@ -18,6 +18,7 @@ import {
   DialogTrigger
 } from '@/components/ui/dialog';
 import {Label} from '@/components/ui/label';
+import {getMe} from '@/lib/api/player';
 import {createRoom, listStakes} from '@/lib/api/rooms';
 
 const MAX_SEATS_OPTIONS = [6, 9] as const;
@@ -49,10 +50,12 @@ export function CreateRoomDialog() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const {data: sandboxStakes = []} = useQuery({queryKey: ['stakes'], queryFn: () => listStakes()});
-  // 404s when REAL_MONEY_ENABLED is off server-side — that's how the toggle
-  // below decides whether to show up at all, no separate feature-flag call.
+  const {data: me} = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
+  // Only fetch (and only offer) real-money stakes for players already in real-money
+  // wallet mode. 404s when REAL_MONEY_ENABLED is off server-side, hiding the toggle.
   const {data: realStakes = []} = useQuery({
-    queryKey: ['stakes', 'real'], queryFn: () => listStakes('real'), retry: false
+    queryKey: ['stakes', 'real'], queryFn: () => listStakes('real'), retry: false,
+    enabled: me?.wallet_mode === 'real'
   });
   const queryClient = useQueryClient();
   const form = useForm<Values>({

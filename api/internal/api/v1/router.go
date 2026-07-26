@@ -52,6 +52,7 @@ func Register(
 	RegisterHealth(router, cfg, db)
 
 	RegisterTableWS(router, verifier, manager, reg, cfg.CorsAllowedOrigins, seed, rooms, cfg, players)
+	RegisterGeneralWS(router, verifier, reg, cfg.CorsAllowedOrigins)
 	auth := authMiddleware(verifier)
 	RegisterHandHistory(router, auth, &tablestoreAdapter{store: tableStore})
 	RegisterAchievementCatalog(router)
@@ -62,7 +63,7 @@ func Register(
 	joinLimiter := NewRateLimiter(cacheBackend, 30, time.Minute)
 	spinLimiter := NewRateLimiter(cacheBackend, 60, time.Minute)
 
-	RegisterRooms(router, auth, rooms, buyinSvc, manager, cfg, createLimiter, joinLimiter)
+	RegisterRooms(router, auth, rooms, buyinSvc, manager, reg, cfg, createLimiter, joinLimiter)
 	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg)
 	RegisterLeaderboard(router, auth, leaderboardSvc)
 	RegisterDailyReward(router, auth, dailyRewardSvc, spinLimiter)
