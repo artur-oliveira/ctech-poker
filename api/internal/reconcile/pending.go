@@ -15,11 +15,24 @@ const (
 	pendingSK    = "pending"
 )
 
+// Kind values for PendingCashout.Kind. Empty string means KindCashout, for
+// backward compatibility with entries recorded before this field existed.
+const (
+	KindCashout  = "cashout"
+	KindFeeDebit = "fee_debit"
+)
+
 type PendingCashout struct {
 	ID             string   `dynamodbav:"id" json:"id"`
 	PlayerID       string   `dynamodbav:"player_id" json:"player_id"`
 	Amount         int64    `dynamodbav:"amount" json:"amount"`
 	CurrencyMode   string   `dynamodbav:"currency_mode" json:"currency_mode"` // "sandbox" | "real"
+	// Kind distinguishes what this pending entry retries. Empty/KindCashout:
+	// credit a player's final stack back to their wallet (the original use of
+	// this store). KindFeeDebit: charge the fixed real-money table-entry fee
+	// that failed after the player was already seated (buyin.Service.BuyIn)
+	// — same retry-until-resolved shape, opposite direction of money movement.
+	Kind           string   `dynamodbav:"kind,omitempty" json:"kind,omitempty"`
 	HoldIDs        []string `dynamodbav:"hold_ids" json:"hold_ids"`
 	TableRef       string   `dynamodbav:"table_ref" json:"table_ref"`
 	IdempotencyKey string   `dynamodbav:"idempotency_key" json:"idempotency_key"`
