@@ -2230,6 +2230,17 @@ h1 em {
     box-shadow: 0 15px 50px var(--black-08), 0 0 0 1px var(--control-border)
 }
 
+.hand-outcome-card.tie {
+    background: #1e293b;
+    color: var(--paper);
+    box-shadow: 0 15px 50px var(--black-08), 0 0 0 1px var(--control-border)
+}
+
+.hand-outcome-card.tie > svg {
+    color: #38bdf8;
+    filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.4))
+}
+
 .hand-outcome-card > svg {
     width: 22px;
     color: var(--gold-deep);
@@ -2323,7 +2334,9 @@ h1 em {
 }
 
 .hand-outcome-card.lose .hand-outcome-chips-base,
-.hand-outcome-card.lose .hand-outcome-chips.gain .hand-outcome-chips-total {
+.hand-outcome-card.lose .hand-outcome-chips.gain .hand-outcome-chips-total,
+.hand-outcome-card.tie .hand-outcome-chips-base,
+.hand-outcome-card.tie .hand-outcome-chips.gain .hand-outcome-chips-total {
     color: var(--paper)
 }
 
@@ -2335,7 +2348,8 @@ h1 em {
     font-size: var(--font-size-mono)
 }
 
-.hand-outcome-card.lose small {
+.hand-outcome-card.lose small,
+.hand-outcome-card.tie small {
     color: var(--text-secondary)
 }
 
@@ -2344,7 +2358,8 @@ h1 em {
     line-height: 1.35
 }
 
-.hand-outcome-card.lose .hand-outcome-detail {
+.hand-outcome-card.lose .hand-outcome-detail,
+.hand-outcome-card.tie .hand-outcome-detail {
     color: var(--text-secondary)
 }
 

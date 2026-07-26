@@ -23,6 +23,9 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 	"github.com/valyala/fasthttp"
+
+	goproto "google.golang.org/protobuf/proto"
+	pokerproto "gopkg.aoctech.app/poker/api/internal/api/v1/proto"
 )
 
 const (
@@ -61,6 +64,12 @@ func readAuthToken(conn *fws.Conn) (token, shareCode string, ok bool) {
 	if err != nil {
 		return "", "", false
 	}
+	// Try parsing as Protobuf ClientMessage first
+	var protoMsg pokerproto.ClientMessage
+	if err := goproto.Unmarshal(msg, &protoMsg); err == nil && (protoMsg.Token != "" || protoMsg.Type == "auth") {
+		return protoMsg.Token, protoMsg.ShareCode, true
+	}
+	// Fallback to JSON
 	var p struct {
 		Token     string `json:"token"`
 		ShareCode string `json:"share_code"`
@@ -161,21 +170,23 @@ func RegisterTableWS(
 			// every write path must go through it (fasthttp/websocket panics
 			// on concurrent writes).
 			safeConn := &wsConnAdapter{conn: conn}
-			send := func(msg any) {
-				data, _ := json.Marshal(msg)
-				_ = safeConn.WriteMessage(fws.TextMessage, data)
+			send := func(msg *pokerproto.ServerMessage) {
+				data, err := goproto.Marshal(msg)
+				if err == nil {
+					_ = safeConn.WriteMessage(fws.BinaryMessage, data)
+				}
 			}
 
 			token, shareCode, ok := readAuthToken(conn)
 			if !ok {
-				send(map[string]any{"type": "error", "code": "unauthorized"})
+				send(&pokerproto.ServerMessage{Type: "error", Code: "unauthorized"})
 				_ = conn.Close()
 				return
 			}
 			// Empty sid = M2M client_credentials token — never a player (B9).
 			claims, err := verifier.VerifyClaims(ctx, token)
 			if err != nil || claims == nil || claims.Sub == "" || claims.SID == "" {
-				send(map[string]any{"type": "error", "code": "unauthorized"})
+				send(&pokerproto.ServerMessage{Type: "error", Code: "unauthorized"})
 				_ = conn.Close()
 				return
 			}
@@ -186,30 +197,30 @@ func RegisterTableWS(
 			var room *roomstore.Room
 			if rooms != nil {
 				if room, err = rooms.Get(ctx, tableID); err != nil {
-					send(map[string]any{"type": "error", "code": "unavailable"})
+					send(&pokerproto.ServerMessage{Type: "error", Code: "unavailable"})
 					_ = conn.Close()
 					return
 				}
 				if room == nil {
-					send(map[string]any{"type": "error", "code": "not_found"})
+					send(&pokerproto.ServerMessage{Type: "error", Code: "not_found"})
 					_ = conn.Close()
 					return
 				}
 			}
 			if room != nil && !privateRoomAccessAllowed(room, playerID, shareCode) {
-				send(map[string]any{"type": "error", "code": "forbidden"})
+				send(&pokerproto.ServerMessage{Type: "error", Code: "forbidden"})
 				_ = conn.Close()
 				return
 			}
 			if room != nil && room.CurrencyMode != "sandbox" && !cfg.RealMoneyEnabled {
-				send(map[string]any{"type": "error", "code": "unsupported_currency_mode"})
+				send(&pokerproto.ServerMessage{Type: "error", Code: "unsupported_currency_mode"})
 				_ = conn.Close()
 				return
 			}
 
 			actor, err := manager.GetOrCreateActor(ctx, tableID, seed(tableID))
 			if err != nil {
-				send(map[string]any{"type": "error", "code": "unavailable"})
+				send(&pokerproto.ServerMessage{Type: "error", Code: "unavailable"})
 				_ = conn.Close()
 				return
 			}
@@ -261,7 +272,7 @@ func RegisterTableWS(
 				_ = dispatch(table.DisconnectCmd{PlayerID: playerID, Reply: disconnectReply})
 			}()
 
-			send(map[string]any{"type": "connected", "conn_id": connID})
+			send(&pokerproto.ServerMessage{Type: "connected", ConnId: connID})
 			slog.Info("table ws connected", "table", tableID, "player", playerID, "conn", connID)
 
 			// Push the current table state to this connection immediately. The
@@ -274,7 +285,7 @@ func RegisterTableWS(
 			snapReply := make(chan error, 1)
 			if err := dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: snapReply}); err == nil {
 				if snap, ok := <-snapCh; ok {
-					send(map[string]any{"type": "state", "snapshot": snap})
+					send(&pokerproto.ServerMessage{Type: "state", Snapshot: ConvertSnapshot(snap)})
 				}
 			}
 
@@ -290,34 +301,34 @@ func RegisterTableWS(
 				reply := make(chan error, 1)
 				_ = dispatch(table.ReconnectCmd{PlayerID: playerID, Reply: reply})
 
-				var m clientMessage
-				if json.Unmarshal(msg, &m) != nil {
+				var m pokerproto.ClientMessage
+				if err := goproto.Unmarshal(msg, &m); err != nil {
 					continue
 				}
 				if (m.Type == "act" || m.Type == "chat") && !limiter.Allow(playerID) {
-					send(map[string]any{"type": "error", "code": "rate_limited"})
+					send(&pokerproto.ServerMessage{Type: "error", Code: "rate_limited"})
 					continue
 				}
 				switch m.Type {
 				case "ping":
-					send(map[string]any{"type": "pong"})
+					send(&pokerproto.ServerMessage{Type: "pong"})
 				case "ready":
 					r := make(chan error, 1)
 					_ = dispatch(table.ReadyCmd{PlayerID: playerID, Ready: m.Ready, Reply: r})
 				case "act":
 					r := make(chan error, 1)
-					if err := dispatch(table.ActCmd{PlayerID: playerID, ActionID: m.ActionID, Action: betting.Action(m.Action), Amount: m.Amount, Reply: r}); err != nil {
-						send(map[string]any{"type": "error", "code": "invalid_action", "message": err.Error()})
+					if err := dispatch(table.ActCmd{PlayerID: playerID, ActionID: m.ActionId, Action: betting.Action(m.Action), Amount: m.Amount, Reply: r}); err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error()})
 					}
 				case "post_big_blind":
 					r := make(chan error, 1)
 					if err := dispatch(table.PostBigBlindCmd{PlayerID: playerID, Reply: r}); err != nil {
-						send(map[string]any{"type": "error", "code": "invalid_post", "message": err.Error()})
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_post", Message: err.Error()})
 					}
 				case "show_cards":
 					r := make(chan error, 1)
 					if err := dispatch(table.ShowCardsCmd{PlayerID: playerID, Reply: r}); err != nil {
-						send(map[string]any{"type": "error", "code": "invalid_action", "message": err.Error()})
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error()})
 					}
 				case "chat":
 					message := strings.TrimSpace(m.Message)
@@ -325,10 +336,14 @@ func RegisterTableWS(
 						continue
 					}
 					if len(message) > 500 {
-						send(map[string]any{"type": "error", "code": "message_too_long"})
+						send(&pokerproto.ServerMessage{Type: "error", Code: "message_too_long"})
 						continue
 					}
-					data, _ := json.Marshal(map[string]any{"type": "chat", "player_id": playerID, "message": tableChatFilter.Clean(message)})
+					data, _ := goproto.Marshal(&pokerproto.ServerMessage{
+						Type:     "chat",
+						PlayerId: playerID,
+						Message:  tableChatFilter.Clean(message),
+					})
 					reg.Broadcast(ctx, tableID+"#chat", data)
 				}
 			}
@@ -367,7 +382,7 @@ type wsConnAdapter struct {
 func (w *wsConnAdapter) WriteMessage(messageType int, data []byte) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return w.conn.WriteMessage(messageType, data)
+	return w.conn.WriteMessage(fws.BinaryMessage, data)
 }
 
 // RegisterGeneralWS mounts GET /v1.0/ws. It upgrades the request to a WebSocket connection
@@ -393,20 +408,22 @@ func RegisterGeneralWS(
 			}()
 			ctx := c.Context()
 			safeConn := &wsConnAdapter{conn: conn}
-			send := func(msg any) {
-				data, _ := json.Marshal(msg)
-				_ = safeConn.WriteMessage(fws.TextMessage, data)
+			send := func(msg *pokerproto.ServerMessage) {
+				data, err := goproto.Marshal(msg)
+				if err == nil {
+					_ = safeConn.WriteMessage(fws.BinaryMessage, data)
+				}
 			}
 
 			token, _, ok := readAuthToken(conn)
 			if !ok {
-				send(map[string]any{"type": "error", "code": "unauthorized"})
+				send(&pokerproto.ServerMessage{Type: "error", Code: "unauthorized"})
 				_ = conn.Close()
 				return
 			}
 			claims, err := verifier.VerifyClaims(ctx, token)
 			if err != nil || claims == nil || claims.Sub == "" || claims.SID == "" {
-				send(map[string]any{"type": "error", "code": "unauthorized"})
+				send(&pokerproto.ServerMessage{Type: "error", Code: "unauthorized"})
 				_ = conn.Close()
 				return
 			}
@@ -423,7 +440,7 @@ func RegisterGeneralWS(
 			reg.Register(lobbyChan, connID, safeConn)
 			defer reg.Unregister(lobbyChan, connID)
 
-			send(map[string]any{"type": "connected", "conn_id": connID})
+			send(&pokerproto.ServerMessage{Type: "connected", ConnId: connID})
 			slog.Info("general ws connected", "player", playerID, "conn", connID)
 
 			done := make(chan struct{})
@@ -434,12 +451,12 @@ func RegisterGeneralWS(
 				if e != nil {
 					break
 				}
-				var m clientMessage
-				if json.Unmarshal(msg, &m) != nil {
+				var m pokerproto.ClientMessage
+				if err := goproto.Unmarshal(msg, &m); err != nil {
 					continue
 				}
 				if m.Type == "ping" {
-					send(map[string]any{"type": "pong"})
+					send(&pokerproto.ServerMessage{Type: "pong"})
 				}
 			}
 			close(done)
@@ -448,3 +465,84 @@ func RegisterGeneralWS(
 	})
 }
 
+// ConvertSnapshot converts the engine's hand.Snapshot structure to the Protobuf TableSnapshot type.
+func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
+	protoSeats := make([]*pokerproto.Seat, len(snap.Seats))
+	for i, s := range snap.Seats {
+		var equity *float64
+		if s.Equity != nil {
+			equity = new(*s.Equity)
+		}
+		protoSeats[i] = &pokerproto.Seat{
+			PlayerId:     s.PlayerID,
+			Name:         s.Name,
+			Stack:        s.Stack,
+			State:        s.State,
+			Contributed:  s.Contributed,
+			HoleCards:    s.HoleCards,
+			Equity:       equity,
+			HandCategory: s.HandCategory,
+		}
+	}
+
+	var protoLA *pokerproto.LegalActions
+	if snap.LegalActions != nil {
+		protoLA = &pokerproto.LegalActions{
+			Actions:    snap.LegalActions.Actions,
+			CallAmount: snap.LegalActions.CallAmount,
+			MinRaiseTo: snap.LegalActions.MinRaiseTo,
+			MaxRaiseTo: snap.LegalActions.MaxRaiseTo,
+			Step:       snap.LegalActions.Step,
+		}
+	}
+
+	return &pokerproto.TableSnapshot{
+		Stage:                snap.Stage,
+		Board:                snap.Board,
+		Seats:                protoSeats,
+		Payouts:              snap.Payouts,
+		Winners:              snap.Winners,
+		Rake:                 snap.Rake,
+		CurrentPlayerId:      snap.CurrentPlayerID,
+		LegalActions:         protoLA,
+		ActionDeadlineUnixMs: snap.ActionDeadlineUnixMs,
+		NextHandUnixMs:       snap.NextHandUnixMs,
+		WonWithoutShowdown:   snap.WonWithoutShowdown,
+		ShuffleCommitHash:    snap.ShuffleCommitHash,
+		ShuffleServerSeedHex: snap.ShuffleServerSeedHex,
+		SmallBlindPlayerId:   snap.SmallBlindPlayerID,
+		BigBlindPlayerId:     snap.BigBlindPlayerID,
+		DealerPlayerId:       snap.DealerPlayerID,
+	}
+}
+
+// ConvertRoom converts the roomstore.Room structure to the Protobuf Room type.
+func ConvertRoom(r roomstore.Room) *pokerproto.Room {
+	var protoEscalation *pokerproto.BlindEscalation
+	if r.BlindEscalation != nil {
+		protoEscalation = &pokerproto.BlindEscalation{
+			IntervalMinutes: int32(r.BlindEscalation.IntervalMinutes),
+			Multiplier:      int32(r.BlindEscalation.Multiplier),
+			Max:             r.BlindEscalation.Max,
+		}
+	}
+	return &pokerproto.Room{
+		RoomId:               r.ID,
+		Visibility:           r.Visibility,
+		CurrencyMode:         r.CurrencyMode,
+		SmallBlind:           r.SmallBlind,
+		BigBlind:             r.BigBlind,
+		MaxSeats:             int32(r.MaxSeats),
+		BuyInMin:             r.BuyInMin,
+		BuyInMax:             r.BuyInMax,
+		EntryFeeCents:        r.EntryFeeCents,
+		ShareCode:            r.ShareCode,
+		BlindEscalation:      protoEscalation,
+		TurnTimeoutSeconds:   int32(r.TurnTimeoutSeconds),
+		EquityDisplayEnabled: r.EquityDisplayEnabled,
+		Status:               r.Status,
+		SeatsTaken:           int32(r.SeatsTaken),
+		CreatedBy:            r.CreatedBy,
+		CreatedAt:            r.CreatedAt,
+	}
+}

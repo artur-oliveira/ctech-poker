@@ -1,6 +1,6 @@
 'use client';
 import {useEffect, useState} from 'react';
-import {PartyPopper} from 'lucide-react';
+import {PartyPopper, Equal} from 'lucide-react';
 import {HAND_CATEGORY_LABELS} from '@/lib/utils';
 import {bestHandCategory, HAND_MATCH_SIZE} from '@/lib/pokerRules';
 import {PlayingCard} from '@/components/table/PlayingCard';
@@ -8,7 +8,7 @@ import {ChipStack} from '@/components/table/ChipStack';
 import {useCountUp} from '@/lib/hooks/useCountUp';
 
 export type HandOutcomeState = {
-  key: number; kind: 'win' | 'lose'; handCategory?: string; opponentCategory?: string;
+  key: number; kind: 'win' | 'lose' | 'tie'; handCategory?: string; opponentCategory?: string;
   // The winning 5-card hand (or just the 2 hole cards when the board isn't
   // complete) for whoever actually won this pot — the viewer's own on a win,
   // the rival's on a loss — undefined when the hand ended without a
@@ -63,7 +63,7 @@ function agree(singular: string, plural: string, meta: CategoryMeta): string {
 // `seed` (the outcome's ever-increasing key) rotates through a few phrasings
 // so a player on a winning or losing streak doesn't read the same line twice
 // in a row.
-function describeMatchup(kind: 'win' | 'lose', ownKey?: string, rivalKey?: string, seed = 0): string | null {
+function describeMatchup(kind: 'win' | 'lose' | 'tie', ownKey?: string, rivalKey?: string, seed = 0): string | null {
   if (!ownKey || !rivalKey) return null;
   const own = CATEGORY_META[ownKey] || {gender: 'm'};
   const ownLower = (HAND_CATEGORY_LABELS[ownKey] || ownKey).toLowerCase();
@@ -75,6 +75,9 @@ function describeMatchup(kind: 'win' | 'lose', ownKey?: string, rivalKey?: strin
       `${poss} ${ownLower} é ${agree('maior', 'maiores', own)} ${ownLower}.`,
       `${poss} ${ownLower} ${agree('é', 'são', own)} ${agree('o', 'os', own)} ` +
       `${agree('melhor', 'melhores', own)} da mesa no desempate.`
+    ] : kind === 'tie' ? [
+      `Divisão de pote com ${ownLower}.`,
+      `Pote dividido com ${ownLower}.`
     ] : [
       `${poss} ${ownLower} não ${agree('vence', 'vencem', own)} de ${rivalLower}.`,
       `${poss} ${ownLower} ${agree('perdeu', 'perderam', own)} no desempate.`
@@ -88,6 +91,8 @@ function describeMatchup(kind: 'win' | 'lose', ownKey?: string, rivalKey?: strin
     `${ownLabel} supera ${rivalLower} com folga.`,
     `${ownLabel} leva a melhor sobre ${rivalLower}.`,
     `${ownLabel} fecha na frente de ${rivalLower}.`
+  ] : kind === 'tie' ? [
+    `Pote dividido: ${ownLabel} empata com ${rivalLower}.`
   ] : [
     `${poss} ${ownLower} não ganha de ${rivalLower}.`,
     `${poss} ${ownLower} não vence ${rivalLower}.`,
@@ -181,8 +186,8 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
     <div key={shown.key} className={`hand-outcome-card ${shown.kind}${leaving ? ' leaving' : ''}`}>
       {shown.kind === 'win' && <span className="hand-outcome-confetti">{CONFETTI_PIECES.map(i =>
         <span key={i}/>)}</span>}
-      {shown.kind === 'win' ? <PartyPopper/> : null}
-      <b>{shown.kind === 'win' ? 'Você venceu a mão!' : 'Não foi dessa vez.'}</b>
+      {shown.kind === 'win' ? <PartyPopper/> : shown.kind === 'tie' ? <Equal/> : null}
+      <b>{shown.kind === 'win' ? 'Você venceu a mão!' : shown.kind === 'tie' ? 'Empate!' : 'Não foi dessa vez.'}</b>
       {/* Cards making the actual combination (`is-match`) stay full-size and
           lit; the rest (`is-kicker`) shrink and dim instead of reading as
           equal partners in the win — a pair shouldn't look like it needed all
@@ -194,7 +199,7 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
           return <span key={card}
                        className={`hand-outcome-card-slot ${i < matchSize ? 'is-match' : 'is-kicker'} ${fromHole ? 'is-hole' : ''}`}>
             <PlayingCard card={card} index={i} size="hole" owner={fromHole ?
-              (shown.kind === 'win' ? 'viewer' : 'opponent') : undefined}/>
+              ((shown.kind === 'win' || shown.kind === 'tie') ? 'viewer' : 'opponent') : undefined}/>
             {fromHole && <small className="hand-outcome-card-tag">Mão</small>}
           </span>;
         })}
@@ -202,7 +207,7 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
       {shown.stackBefore != null && shown.stackAfter != null && shown.stackBefore !== shown.stackAfter &&
           <ChipCountUp from={shown.stackBefore} to={shown.stackAfter}/>}
       {detail ? <p className="hand-outcome-detail">{detail}</p> : category && <small>{category}</small>}
-      {shown.kind === 'lose' && <small>A próxima mão já está a caminho.</small>}
+      {(shown.kind === 'lose' || shown.kind === 'tie') && <small>A próxima mão já está a caminho.</small>}
     </div>
   </div>;
 }

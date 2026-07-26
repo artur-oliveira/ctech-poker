@@ -3,7 +3,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -23,6 +22,7 @@ import (
 	"gopkg.aoctech.app/api-commons/ws"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	v1 "gopkg.aoctech.app/poker/api/internal/api/v1"
+	pokerproto "gopkg.aoctech.app/poker/api/internal/api/v1/proto"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/dailyreward"
@@ -37,6 +37,8 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
+
+	goproto "google.golang.org/protobuf/proto"
 )
 
 // Module is the root Fx module for the poker API.
@@ -204,8 +206,13 @@ func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *t
 
 func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
-		data, _ := json.Marshal(map[string]any{"type": "state", "snapshot": snap})
-		reg.Broadcast(context.Background(), tableID+"#"+viewerID, data)
+		data, err := goproto.Marshal(&pokerproto.ServerMessage{
+			Type:     "state",
+			Snapshot: v1.ConvertSnapshot(snap),
+		})
+		if err == nil {
+			reg.Broadcast(context.Background(), tableID+"#"+viewerID, data)
+		}
 	}
 	onHandComplete := func(tableID, handID string, outcome hand.HandOutcome, names map[string]string) {
 		ctx := context.Background()
@@ -214,8 +221,14 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 			slog.Error("achievements record hand failed", "table", tableID, "err", err)
 		}
 		for _, unlock := range unlocks {
-			data, _ := json.Marshal(map[string]any{"type": "achievement_unlocked", "key": unlock.Key, "stars": unlock.Stars})
-			reg.Broadcast(ctx, tableID+"#"+unlock.PlayerID, data)
+			data, err := goproto.Marshal(&pokerproto.ServerMessage{
+				Type:  "achievement_unlocked",
+				Key:   unlock.Key,
+				Stars: int32(unlock.Stars),
+			})
+			if err == nil {
+				reg.Broadcast(ctx, tableID+"#"+unlock.PlayerID, data)
+			}
 		}
 		if err := leaderboardSvc.RecordUnlocks(ctx, unlocks); err != nil {
 			slog.Error("leaderboard achievement points failed", "table", tableID, "err", err)
@@ -251,10 +264,10 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		if err := rooms.SetSeatsTaken(context.Background(), tableID, seatsTaken); err != nil {
 			slog.Error("roomstore: seats taken write-through failed", "table", tableID, "err", err)
 		}
-		data, _ := json.Marshal(map[string]any{
-			"type":        "room_updated",
-			"room_id":     tableID,
-			"seats_taken": seatsTaken,
+		data, _ := goproto.Marshal(&pokerproto.ServerMessage{
+			Type:       "room_updated",
+			RoomId:     tableID,
+			SeatsTaken: int32(seatsTaken),
 		})
 		reg.Broadcast(context.Background(), "lobby", data)
 	})
@@ -326,7 +339,10 @@ func wirePlayerRemovedHook(mgr *tablemanager.Manager, buyinSvc *buyin.Service, r
 		// receiving state broadcasts (they're no longer in PlayersForActor)
 		// with no signal telling the client why, so it sits on a stale table
 		// instead of redirecting to the lobby.
-		data, _ := json.Marshal(map[string]any{"type": "removed", "code": reason})
+		data, _ := goproto.Marshal(&pokerproto.ServerMessage{
+			Type: "removed",
+			Code: reason,
+		})
 		reg.Broadcast(ctx, tableID+"#"+playerID, data)
 		if err := buyinSvc.SettleSystemRemoval(ctx, tableID, playerID, stack, holdID, reason); err != nil {
 			slog.Error("buyin: settle system removal failed", "table", tableID, "player", playerID, "reason", reason, "err", err)

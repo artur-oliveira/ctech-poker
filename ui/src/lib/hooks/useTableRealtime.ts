@@ -8,6 +8,7 @@ import {type MockScenario, MockTableService, USE_MOCK} from '@/lib/mock';
 import type {PokerAction, ServerMessage, TableSnapshot} from '@/lib/api/table';
 import {playerName} from '@/lib/utils';
 import {playSound} from '@/lib/sound';
+import {decodeServerMessage, encodeClientMessage} from "@/lib/ws/utils";
 
 export type ConnectionStatus = WSStatus
 export type ActionError = { code: string; message: string }
@@ -66,11 +67,13 @@ function describeSnapshot(previous: TableSnapshot | null, next: TableSnapshot, v
   if (next.current_player_id && next.current_player_id !== previous.current_player_id) {
     messages.push(next.current_player_id === viewerId ? 'Sua vez de agir' : `Vez de ${playerLabel(next.current_player_id)}`);
   }
-  if (next.payouts && !previous.payouts) {
+  const nextHasPayouts = next.payouts && Object.keys(next.payouts).length > 0;
+  const prevHasPayouts = previous.payouts && Object.keys(previous.payouts).length > 0;
+  if (nextHasPayouts && !prevHasPayouts) {
     // Not every payout>0 is a win: an uncalled all-in's excess or an orphaned
     // side-pot refund also moves chips back to a player without them having
     // won anything, so this is gated on `winners`, not the raw amount.
-    messages.push(...Object.entries(next.payouts).filter(([playerId, amount]) => amount > 0 && next.winners?.includes(playerId))
+    messages.push(...Object.entries(next.payouts || {}).filter(([playerId, amount]) => amount > 0 && next.winners?.includes(playerId))
       .map(([playerId, amount]) => `${playerLabel(playerId)} ganhou ${amount.toLocaleString('pt-BR')} fichas`));
   }
   return messages.join('. ');
@@ -211,6 +214,9 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   }, []);
   const {status: wsStatus, attempt: wsReconnectAttempt, send: wsSend, reconnect: wsRetryNow} = useWebSocket({
     url: wsUrl,
+    binaryType: 'arraybuffer',
+    encode: encodeClientMessage,
+    decode: decodeServerMessage,
     onMessage: data => receive(data as ServerMessage),
     enabled: Boolean(wsUrl) && !USE_MOCK,
     authToken: getAccessToken() || undefined,

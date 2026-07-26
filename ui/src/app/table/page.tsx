@@ -164,10 +164,11 @@ function TableContent() {
   const [handOutcome, setHandOutcome] = useState<HandOutcomeState | null>(null);
   useEffect(() => {
     const snap = rt.snapshot;
-    const isFreshPayout = Boolean(snap?.payouts) && !previousPayoutsRef.current;
-    previousPayoutsRef.current = snap?.payouts;
-    if (isFreshPayout) queryClient.invalidateQueries({queryKey: ['hands', id]});
-    if (!isFreshPayout || !snap?.payouts || !viewer) return;
+    const hasPayouts = Boolean(snap?.payouts && Object.keys(snap.payouts).length > 0);
+    const isFreshPayout = hasPayouts && !previousPayoutsRef.current;
+    previousPayoutsRef.current = hasPayouts ? snap?.payouts : undefined;
+    if (isFreshPayout) void queryClient.invalidateQueries({queryKey: ['hands', id]});
+    if (!isFreshPayout || !snap || !hasPayouts || !viewer) return;
     // Only a viewer who stayed in for the whole hand (never folded, never sat
     // out) gets a win/lose moment — folding is routine and already has its
     // own quiet "Desistiu" seat state; celebrating or consoling every single
@@ -178,7 +179,10 @@ function TableContent() {
     // Membership in `winners`, not a truthy payout, decides win/lose: an
     // uncalled all-in's excess or an orphaned side-pot refund also shows up
     // in `payouts` without being an actual win.
-    const kind = snap.winners?.includes(viewer) ? 'win' : 'lose';
+    const isWinner = snap.winners?.includes(viewer);
+    const kind = isWinner
+      ? ((snap.winners?.length ?? 0) > 1 ? 'tie' : 'win')
+      : 'lose';
     // The banner names one rival hand as the point of comparison: the
     // toughest hand it beat when the viewer won (proof it beat everyone),
     // or the hand that actually beat it when the viewer lost. Only seats
@@ -196,7 +200,7 @@ function TableContent() {
     // the board is complete) and reduced to the actual best 5-card hand — a
     // bare pair of hole cards doesn't show what the player actually won with
     // when the winning combination uses the board too.
-    const winnerSeat = kind === 'win' ? seat : snap.seats.find(item => snap.winners?.includes(item.player_id));
+    const winnerSeat = (kind === 'win' || kind === 'tie') ? seat : snap.seats.find(item => snap.winners?.includes(item.player_id));
     const winnerHole = winnerSeat?.hole_cards?.length === 2 &&
     winnerSeat.hole_cards.every(card => card.toLowerCase() !== 'back') ? winnerSeat.hole_cards : undefined;
     const winningCards = winnerHole && snap.board.length === 5 ?
@@ -280,7 +284,7 @@ function TableContent() {
                 <Button type="button" variant="ghost" size="icon" aria-label="Voltar a jogar" disabled={rt.readyPending}
                         onClick={() => rt.ready(true)}><Play/></Button>}
             {viewerSeat?.state === 'sitting_out' && viewerSeat.stack === 0 && room &&
-                s.stage !== 'showdown' && s.stage !== 'complete' &&
+              s.stage !== 'showdown' && s.stage !== 'complete' &&
                 <RebuyDialog roomId={id} room={room} onRebuyAction={() => rt.ready(true)}/>}
             <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} onLeftAction={amount => {
               pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
@@ -326,8 +330,8 @@ function TableContent() {
           racing the banner's own exit timer into dismissing it before
           `complete` ever arrived. */}
       <TableStage snapshot={s} viewer={viewer} pot={pot} bigBlind={bigBlind} nowMs={rt.snapshotAt}
-                  outcome={handOutcome} holdOutcomeOpen={Boolean(s.payouts)}
-                  viewerStackBefore={s.payouts ? stackAtHandStart : undefined}/>
+                  outcome={handOutcome} holdOutcomeOpen={Boolean(s.payouts && Object.keys(s.payouts).length > 0)}
+                  viewerStackBefore={(s.payouts && Object.keys(s.payouts).length > 0) ? stackAtHandStart : undefined}/>
       <ActionBar
         onActAction={rt.act}
         {...actions}

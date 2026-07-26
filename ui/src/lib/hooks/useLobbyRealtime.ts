@@ -6,6 +6,7 @@ import {useWebSocket} from '@aoctech/ws-client';
 import {USE_MOCK} from '@/lib/mock';
 import type {Room} from '@/lib/api/rooms';
 import {pushNotification} from '@/lib/notify';
+import {decodeServerMessage, encodeClientMessage} from "@/lib/ws/utils";
 
 interface LobbyMessage {
   type: string;
@@ -38,14 +39,14 @@ export function useLobbyRealtime() {
         return oldRooms.map(r => {
           const id = r.room_id || r.id;
           if (id === room_id) {
-            return { ...r, seats_taken };
+            return {...r, seats_taken};
           }
           return r;
         });
       });
     } else if (message.type === 'payment_received') {
       const amount = message.amount || 0;
-      pushNotification(`Pagamento recebido: R$ ${(amount / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'info');
+      pushNotification(`Pagamento recebido: R$ ${(amount / 100).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 'info');
     } else if (message.type === 'system_broadcast') {
       pushNotification(message.text || '', 'info');
     }
@@ -64,6 +65,9 @@ export function useLobbyRealtime() {
 
   const {status, send, reconnect} = useWebSocket({
     url: wsUrl,
+    binaryType: 'arraybuffer',
+    encode: encodeClientMessage,
+    decode: decodeServerMessage,
     onMessage: data => receive(data as LobbyMessage),
     enabled: !USE_MOCK,
     authToken: getAccessToken() || undefined,
@@ -75,5 +79,5 @@ export function useLobbyRealtime() {
     sendRef.current = send;
   }, [send]);
 
-  return { status, reconnect };
+  return {status, reconnect};
 }

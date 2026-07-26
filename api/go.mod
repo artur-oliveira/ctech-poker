@@ -20,6 +20,7 @@ require (
 	github.com/valkey-io/valkey-go v1.0.76
 	github.com/valyala/fasthttp v1.72.0
 	go.uber.org/fx v1.24.0
+	google.golang.org/protobuf v1.36.11
 	gopkg.aoctech.app/api-commons v1.4.0
 )
 

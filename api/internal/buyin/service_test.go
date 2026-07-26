@@ -169,6 +169,42 @@ func TestBuyInRecordsAnOpenSessionWhenSessionStoreIsSet(t *testing.T) {
 	}
 }
 
+func TestBuyInRebuyIncrementsExistingSession(t *testing.T) {
+	wallet := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := testRoomLookup()
+	svc := NewService(wallet, mgr, rooms)
+	sessions := testSessionStore(t)
+	svc.WithSessionStore(sessions)
+	ctx := context.Background()
+
+	// Seed table with user-1 already seated but having 0 chips (busted rebuy situation)
+	seed := func() *hand.Table {
+		p := &hand.Player{ID: "user-1", Stack: 0, State: hand.SittingOut}
+		return hand.NewTable([]*hand.Player{p}, 10, 20)
+	}
+	if _, err := mgr.GetOrCreateActor(ctx, "room-rebuy", seed); err != nil {
+		t.Fatalf("get or create actor: %v", err)
+	}
+
+	// First, record an open session manually to simulate the initial session being open
+	_ = sessions.RecordSession(ctx, sessionlog.SessionItem{PK: "user-1", TableID: "room-rebuy", BuyinAmount: 400, JoinedAt: 1})
+
+	// Perform buyin (rebuy) of 200 chips
+	if err := svc.BuyIn(ctx, "room-rebuy", "user-1", 200, false, ""); err != nil {
+		t.Fatalf("buyin: %v", err)
+	}
+
+	// Verify that the existing open session has been updated (BuyinAmount updated to 400 + 200 = 600)
+	open, err := sessions.FindOpenSession(ctx, "user-1", "room-rebuy")
+	if err != nil || open == nil {
+		t.Fatalf("expected an open session to exist, got %+v err=%v", open, err)
+	}
+	if open.BuyinAmount != 600 {
+		t.Fatalf("expected cumulative buyin amount of 600, got %d", open.BuyinAmount)
+	}
+}
+
 func TestCashOutClosesTheOpenSession(t *testing.T) {
 	wallet := &fakeWallet{}
 	mgr := testManager(t)

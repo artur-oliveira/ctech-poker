@@ -3,7 +3,6 @@ package v1
 import (
 	"crypto/rand"
 	"crypto/subtle"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -12,6 +11,7 @@ import (
 	"github.com/oklog/ulid/v2"
 	"gopkg.aoctech.app/api-commons/dynamo"
 	"gopkg.aoctech.app/api-commons/ws"
+	pokerproto "gopkg.aoctech.app/poker/api/internal/api/v1/proto"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
@@ -19,6 +19,8 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
+
+	goproto "google.golang.org/protobuf/proto"
 )
 
 var availableSeats = []int{2, 6, 9}
@@ -136,9 +138,9 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 			return problem.InternalServer("failed to create room", c, err).Send(c)
 		}
 		if h.reg != nil {
-			data, _ := json.Marshal(map[string]any{
-				"type": "room_created",
-				"room": room,
+			data, _ := goproto.Marshal(&pokerproto.ServerMessage{
+				Type: "room_created",
+				Room: ConvertRoom(room),
 			})
 			h.reg.Broadcast(c.Context(), "lobby", data)
 		}

@@ -1,0 +1,112 @@
+syntax = "proto3";
+package poker;
+
+option go_package = "gopkg.aoctech.app/poker/api/internal/api/v1/proto;pokerproto";
+
+// --- CORE MODELS ---
+
+message Card {
+  string rank = 1;
+  string suit = 2;
+}
+
+message Seat {
+  string player_id = 1;
+  string name = 2;
+  int64 stack = 3;
+  string state = 4;
+  int64 contributed = 5;
+  repeated string hole_cards = 6;
+  optional double equity = 7;
+  string hand_category = 8;
+}
+
+message BlindEscalation {
+  int32 interval_minutes = 1;
+  int32 multiplier = 2;
+  int64 max = 3;
+}
+
+message Room {
+  string room_id = 1;
+  string visibility = 2;
+  string currency_mode = 3;
+  int64 small_blind = 4;
+  int64 big_blind = 5;
+  int32 max_seats = 6;
+  int64 buy_in_min = 7;
+  int64 buy_in_max = 8;
+  int64 entry_fee_cents = 9;
+  string share_code = 10;
+  BlindEscalation blind_escalation = 11;
+  int32 turn_timeout_seconds = 12;
+  bool equity_display_enabled = 13;
+  string status = 14;
+  int32 seats_taken = 15;
+  string created_by = 16;
+  string created_at = 17;
+}
+
+message LegalActions {
+  repeated string actions = 1;      // subset of fold|check|call|raise
+  int64 call_amount = 2;  // chips owed to call (0 when a check is available)
+  int64 min_raise_to = 3; // smallest total bet a raise may reach
+  int64 max_raise_to = 4; // largest total bet (all-in): viewer stack + already contributed
+  int64 step = 5;         // raise increment for the + / - stepper
+}
+
+message TableSnapshot {
+  string stage = 1;
+  repeated string board = 2;
+  repeated Seat seats = 3;
+  map<string, int64> payouts = 4;
+  repeated string winners = 5;
+  int64 rake = 6;
+  string current_player_id =  7;
+  LegalActions legal_actions = 8;
+  int64 action_deadline_unix_ms = 9;
+  int64 next_hand_unix_ms = 10;
+  bool won_without_showdown = 11;
+  string shuffle_commit_hash = 12;
+  string shuffle_server_seed_hex = 13;
+  string small_blind_player_id = 14;
+  string big_blind_player_id = 15;
+  string dealer_player_id = 16;
+}
+
+// --- WEBSOCKET ENVELOPES ---
+
+// ClientMessage is sent from the client to the server.
+message ClientMessage {
+  string type = 1; // "auth" | "ping" | "ready" | "act" | "post_big_blind" | "show_cards" | "chat"
+  
+  // payload fields
+  string token = 2; // for auth frame
+  string share_code = 3; // for auth frame
+  bool ready = 4; // for ready command
+  string action = 5; // for act command
+  int64 amount = 6; // for act command
+  string action_id = 7; // for act command
+  string message = 8; // for chat command
+}
+
+// ServerMessage is sent from the server to the client.
+message ServerMessage {
+  string type = 1; // "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast"
+  
+  // payload fields
+  string conn_id = 2; // for connected frame
+  TableSnapshot snapshot = 3; // for state frame
+  string player_id = 4; // for chat frame
+  string message = 5; // for chat frame, error message, or removed reason
+  string code = 6; // for error frame or removed frame
+  string key = 7; // for achievement unlocked frame
+  int32 stars = 8; // for achievement unlocked frame
+  
+  // lobby payload fields
+  Room room = 9; // for room_created
+  string room_id = 10; // for room_updated
+  int32 seats_taken = 11; // for room_updated
+  int64 amount = 12; // for payment_received
+  string text = 13; // for system_broadcast
+}

@@ -222,10 +222,17 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 	}
 
 	if s.sessions != nil {
-		if err := s.sessions.RecordSession(ctx, sessionlog.SessionItem{
-			PK: playerID, TableID: roomID, BuyinAmount: amount, JoinedAt: time.Now().UnixMilli(),
-		}); err != nil {
-			slog.Error("sessionlog: record session open failed", "player", playerID, "table", roomID, "err", err)
+		if open, err := s.sessions.FindOpenSession(ctx, playerID, roomID); err == nil && open != nil {
+			open.BuyinAmount += amount
+			if err := s.sessions.RecordSession(ctx, *open); err != nil {
+				slog.Error("sessionlog: update session rebuy failed", "player", playerID, "table", roomID, "err", err)
+			}
+		} else {
+			if err := s.sessions.RecordSession(ctx, sessionlog.SessionItem{
+				PK: playerID, TableID: roomID, BuyinAmount: amount, JoinedAt: time.Now().UnixMilli(),
+			}); err != nil {
+				slog.Error("sessionlog: record session open failed", "player", playerID, "table", roomID, "err", err)
+			}
 		}
 	}
 
