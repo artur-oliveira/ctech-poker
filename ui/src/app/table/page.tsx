@@ -178,12 +178,16 @@ function TableContent() {
     previousPayoutsRef.current = hasPayouts ? snap?.payouts : undefined;
     if (isFreshPayout) void queryClient.invalidateQueries({queryKey: ['hands', id]});
     if (!isFreshPayout || !snap || !hasPayouts || !viewer) return;
+    // Seat state does not prove participation: a player may become active
+    // mid-hand after returning/rebuying, but they are only eligible for the
+    // next deal. `dealt_in` is the server-authored membership of this hand.
+    const seat = snap.seats.find(item => item.player_id === viewer);
+    if (!seat?.dealt_in) return;
     // Only a viewer who stayed in for the whole hand (never folded, never sat
     // out) gets a win/lose moment — folding is routine and already has its
     // own quiet "Desistiu" seat state; celebrating or consoling every single
     // fold would turn the delight into noise.
-    const seat = snap.seats.find(item => item.player_id === viewer);
-    if (seat?.state !== 'active' && seat?.state !== 'all_in') return;
+    if (seat.state !== 'active' && seat.state !== 'all_in') return;
     outcomeKeyRef.current += 1;
     // Membership in `winners`, not a truthy payout, decides win/lose: an
     // uncalled all-in's excess or an orphaned side-pot refund also shows up
@@ -274,8 +278,8 @@ function TableContent() {
   const nextHandDurationMs = s.next_hand_unix_ms && nextHandArmed?.deadline === s.next_hand_unix_ms ?
     Math.max(0, s.next_hand_unix_ms - nextHandArmed.snapshotAt) : 0;
   const canInvite = room && (room.visibility === 'public' || room.share_code);
-  const canShowCards = s.stage === 'complete' && s.won_without_showdown && viewerSeat &&
-    viewerSeat.state !== 'sitting_out' && viewerSeat.state !== 'pending_entry';
+  const canShowCards = s.stage === 'complete' && s.won_without_showdown && viewerSeat?.dealt_in &&
+    (viewerSeat.state === 'active' || viewerSeat.state === 'all_in');
   const inviteUrl = typeof window !== 'undefined' ?
     `${window.location.origin}/table?id=${id}${room?.share_code ? `&invite=${room.share_code}` : ''}` : '';
   return (

@@ -614,6 +614,7 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 			ConnectionState: s.ConnectionState,
 			Stack:           s.Stack,
 			State:           s.State,
+			DealtIn:         s.DealtIn,
 			Contributed:     s.Contributed,
 			HoleCards:       s.HoleCards,
 			Equity:          equity,

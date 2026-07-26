@@ -436,20 +436,22 @@ const baseSeats = () => [
     name: 'Ana',
     stack: 4850,
     state: 'active',
+    dealt_in: true,
     contributed: 50,
     hole_cards: ['AH', 'KD'],
     equity: .64
   },
-  {player_id: 'bia_sp', name: 'Bia', stack: 3925, state: 'active', contributed: 75, hole_cards: ['back', 'back']},
-  {player_id: 'leo_rio', name: 'Léo', stack: 6100, state: 'folded', contributed: 25, hole_cards: ['back', 'back']},
-  {player_id: 'nina_recife', name: 'Nina', stack: 2775, state: 'active', contributed: 75, hole_cards: ['back', 'back']},
+  {player_id: 'bia_sp', name: 'Bia', stack: 3925, state: 'active', dealt_in: true, contributed: 75, hole_cards: ['back', 'back']},
+  {player_id: 'leo_rio', name: 'Léo', stack: 6100, state: 'folded', dealt_in: true, contributed: 25, hole_cards: ['back', 'back']},
+  {player_id: 'nina_recife', name: 'Nina', stack: 2775, state: 'active', dealt_in: true, contributed: 75, hole_cards: ['back', 'back']},
   // Nameless on purpose — exercises the is-pending-name placeholder in dev.
-  {player_id: 'gui_bh', stack: 5000, state: 'sitting_out', contributed: 0},
+  {player_id: 'gui_bh', stack: 5000, state: 'sitting_out', dealt_in: false, contributed: 0},
   {
     player_id: 'joao_floripa',
     name: 'João',
     stack: 4375,
     state: 'active',
+    dealt_in: true,
     contributed: 75,
     hole_cards: ['back', 'back']
   },
@@ -458,6 +460,7 @@ const baseSeats = () => [
     name: 'Mari',
     stack: 8200,
     state: 'active',
+    dealt_in: true,
     connection_state: 'disconnected' as const,
     contributed: 0
   },
@@ -466,6 +469,7 @@ const baseSeats = () => [
     name: 'Caio',
     stack: 3400,
     state: 'all_in',
+    dealt_in: true,
     contributed: 625,
     hole_cards: ['back', 'back']
   },
@@ -476,6 +480,7 @@ const baseSeats = () => [
     name: 'Rafa',
     stack: 5200,
     state: 'active',
+    dealt_in: true,
     contributed: 75,
     hole_cards: ['back', 'back']
   },
@@ -499,17 +504,19 @@ function fullHandSeats(): SeatView[] {
       name: 'Ana',
       stack: 4850,
       state: 'active',
+      dealt_in: true,
       contributed: 50,
       hole_cards: ['AH', 'KD'],
       equity: .64
     },
-    {player_id: 'bia_sp', name: 'Bia', stack: 3925, state: 'active', contributed: 25, hole_cards: ['back', 'back']},
-    {player_id: 'leo_rio', name: 'Léo', stack: 6100, state: 'active', contributed: 0, hole_cards: ['back', 'back']},
+    {player_id: 'bia_sp', name: 'Bia', stack: 3925, state: 'active', dealt_in: true, contributed: 25, hole_cards: ['back', 'back']},
+    {player_id: 'leo_rio', name: 'Léo', stack: 6100, state: 'active', dealt_in: true, contributed: 0, hole_cards: ['back', 'back']},
     {
       player_id: 'nina_recife',
       name: 'Nina',
       stack: 2775,
       state: 'active',
+      dealt_in: true,
       contributed: 0,
       hole_cards: ['back', 'back']
     },
@@ -518,6 +525,7 @@ function fullHandSeats(): SeatView[] {
       name: 'João',
       stack: 4375,
       state: 'active',
+      dealt_in: true,
       contributed: 0,
       hole_cards: ['back', 'back']
     },
@@ -526,6 +534,7 @@ function fullHandSeats(): SeatView[] {
       name: 'Caio',
       stack: 3400,
       state: 'active',
+      dealt_in: true,
       contributed: 0,
       hole_cards: ['back', 'back']
     },
@@ -698,15 +707,15 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
     board: ['7H', '8C', 'QS', '2D', 'AC'],
     seats: [
       {
-        player_id: MOCK_PLAYER_ID, name: 'Ana', stack: 0, state: 'all_in', contributed: 300,
+        player_id: MOCK_PLAYER_ID, name: 'Ana', stack: 0, state: 'all_in', dealt_in: true, contributed: 300,
         hole_cards: ['AH', '8D'], hand_category: 'two_pair'
       },
       {
-        player_id: 'bia_sp', name: 'Bia', stack: 0, state: 'all_in', contributed: 700,
+        player_id: 'bia_sp', name: 'Bia', stack: 0, state: 'all_in', dealt_in: true, contributed: 700,
         hole_cards: ['JC', 'JD'], hand_category: 'pair'
       },
       {
-        player_id: 'leo_rio', name: 'Léo', stack: 5400, state: 'active', contributed: 700,
+        player_id: 'leo_rio', name: 'Léo', stack: 5400, state: 'active', dealt_in: true, contributed: 700,
         hole_cards: ['9S', '4D'], hand_category: 'high_card'
       },
       {
@@ -714,6 +723,7 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
         name: 'Nina',
         stack: 2700,
         state: 'folded',
+        dealt_in: true,
         contributed: 75,
         hole_cards: ['back', 'back']
       },
@@ -722,6 +732,7 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
         name: 'João',
         stack: 4375,
         state: 'folded',
+        dealt_in: true,
         contributed: 0,
         hole_cards: ['back', 'back']
       },
@@ -730,6 +741,7 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
         name: 'Caio',
         stack: 3350,
         state: 'folded',
+        dealt_in: true,
         contributed: 50,
         hole_cards: ['back', 'back']
       },

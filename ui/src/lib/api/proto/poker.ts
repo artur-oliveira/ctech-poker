@@ -25,6 +25,11 @@ export interface Seat {
   hand_category: string;
   /** connected | disconnected */
   connection_state: string;
+  /**
+   * True when this seat belongs to the hand identified by TableSnapshot.hand_id.
+   * A seat can be active while false when it returns mid-hand for the next deal.
+   */
+  dealt_in: boolean;
 }
 
 export interface BlindEscalation {
@@ -239,6 +244,7 @@ function createBaseSeat(): Seat {
     equity: undefined,
     hand_category: "",
     connection_state: "",
+    dealt_in: false,
   };
 }
 
@@ -270,6 +276,9 @@ export const Seat: MessageFns<Seat> = {
     }
     if (message.connection_state !== "") {
       writer.uint32(74).string(message.connection_state);
+    }
+    if (message.dealt_in !== false) {
+      writer.uint32(80).bool(message.dealt_in);
     }
     return writer;
   },
@@ -353,6 +362,14 @@ export const Seat: MessageFns<Seat> = {
           message.connection_state = reader.string();
           continue;
         }
+        case 10: {
+          if (tag !== 80) {
+            break;
+          }
+
+          message.dealt_in = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -376,6 +393,7 @@ export const Seat: MessageFns<Seat> = {
     message.equity = object.equity ?? undefined;
     message.hand_category = object.hand_category ?? "";
     message.connection_state = object.connection_state ?? "";
+    message.dealt_in = object.dealt_in ?? false;
     return message;
   },
 };

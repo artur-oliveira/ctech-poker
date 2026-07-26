@@ -6,6 +6,9 @@ export interface SeatView {
   connection_state?: 'connected' | 'disconnected';
   stack: number;
   state: string;
+  // True only when this seat belongs to the hand identified by `hand_id`.
+  // `state: active` alone can mean the player is waiting for the next deal.
+  dealt_in: boolean;
   contributed: number;
   hole_cards?: string[];
   equity?: number;

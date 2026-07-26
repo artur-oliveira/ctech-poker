@@ -70,15 +70,19 @@ type PotView struct {
 }
 
 type SeatView struct {
-	PlayerID        string   `json:"player_id"`
-	Name            string   `json:"name,omitempty"`
-	ConnectionState string   `json:"connection_state,omitempty"`
-	Stack           int64    `json:"stack"`
-	State           string   `json:"state"`
-	Contributed     int64    `json:"contributed"`
-	HoleCards       []string `json:"hole_cards,omitempty"`
-	Equity          *float64 `json:"equity,omitempty"`
-	HandCategory    string   `json:"hand_category,omitempty"`
+	PlayerID        string `json:"player_id"`
+	Name            string `json:"name,omitempty"`
+	ConnectionState string `json:"connection_state,omitempty"`
+	Stack           int64  `json:"stack"`
+	State           string `json:"state"`
+	// DealtIn is true when this seat belongs to the hand identified by the
+	// snapshot's HandID. Seat state is deliberately not used for this: a
+	// player may become Active mid-hand while waiting for the next deal.
+	DealtIn      bool     `json:"dealt_in"`
+	Contributed  int64    `json:"contributed"`
+	HoleCards    []string `json:"hole_cards,omitempty"`
+	Equity       *float64 `json:"equity,omitempty"`
+	HandCategory string   `json:"hand_category,omitempty"`
 }
 
 var stageNames = map[Stage]string{
@@ -151,6 +155,7 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 			Name:        p.Name,
 			Stack:       p.Stack,
 			State:       playerStateNames[p.State],
+			DealtIn:     dealtIn[p.ID],
 			Contributed: p.Contributed,
 		}
 		if dealtIn[p.ID] && (p.ID == viewerID || (revealAll && p.State != Folded) || p.VoluntarilyShown) {

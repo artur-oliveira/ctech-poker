@@ -20,6 +20,9 @@ message Seat {
   optional double equity = 7;
   string hand_category = 8;
   string connection_state = 9; // connected | disconnected
+  // True when this seat belongs to the hand identified by TableSnapshot.hand_id.
+  // A seat can be active while false when it returns mid-hand for the next deal.
+  bool dealt_in = 10;
 }
 
 message BlindEscalation {

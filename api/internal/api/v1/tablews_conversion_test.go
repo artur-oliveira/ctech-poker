@@ -13,7 +13,7 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 		HandID:          "hand-42",
 		Seats: []hand.SeatView{{
 			PlayerID: "p1", Name: "Ana", State: "folded",
-			ConnectionState: "disconnected",
+			ConnectionState: "disconnected", DealtIn: true,
 		}},
 	})
 	if converted.SnapshotVersion != 42 || converted.HandId != "hand-42" {
@@ -24,6 +24,9 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 	}
 	if converted.Seats[0].State != "folded" {
 		t.Fatal("transport presence must not overwrite poker state")
+	}
+	if !converted.Seats[0].DealtIn {
+		t.Fatal("hand membership lost during protobuf conversion")
 	}
 }
 

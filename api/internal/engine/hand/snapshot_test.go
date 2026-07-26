@@ -120,6 +120,58 @@ func TestViewForHidesMidHandJoinerZeroValueCards(t *testing.T) {
 	}
 }
 
+func TestViewForMarksActiveMidHandRebuyAsNotDealtIn(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	p3 := &Player{ID: "p3", Stack: 1000, Ready: true}
+	p4 := &Player{ID: "p4", Stack: 0, Ready: true, State: SittingOut}
+	table := NewTable([]*Player{p1, p2, p3, p4}, 10, 20)
+	table.dealerSeat = 0
+	table.dealerDrawn = true
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+
+	if err := table.AddMidHandJoiner(&Player{ID: p4.ID, Stack: 500}); err != nil {
+		t.Fatalf("mid-hand rebuy: %v", err)
+	}
+	if p4.State != Active {
+		t.Fatalf("expected p4 active for the next deal, got %v", p4.State)
+	}
+
+	for table.Stage() != Complete {
+		current := table.CurrentPlayerIDForActor()
+		if current == "" {
+			t.Fatalf("hand stopped without a current player at stage %v", table.Stage())
+		}
+		if err := table.Act(current, betting.ActionCall, 0); err != nil {
+			if checkErr := table.Act(current, betting.ActionCheck, 0); checkErr != nil {
+				t.Fatalf("%s could neither call (%v) nor check (%v)", current, err, checkErr)
+			}
+		}
+	}
+
+	view := table.ViewFor(p4.ID)
+	if len(view.Payouts) == 0 {
+		t.Fatal("expected completed-hand snapshot to contain payouts")
+	}
+	for _, seat := range view.Seats {
+		switch seat.PlayerID {
+		case p1.ID, p2.ID, p3.ID:
+			if !seat.DealtIn {
+				t.Fatalf("dealt player %s reported dealt_in=false", seat.PlayerID)
+			}
+		case p4.ID:
+			if seat.State != "active" {
+				t.Fatalf("expected rebuy seat active for the next deal, got %q", seat.State)
+			}
+			if seat.DealtIn {
+				t.Fatal("active mid-hand rebuy reported dealt_in=true")
+			}
+		}
+	}
+}
+
 // TestViewForHidesWinnerHoleCardsWhenHandEndsByFold reproduces the reported
 // bug: a hand that ends because every other player folded (no genuine
 // showdown) must not reveal the lone remaining player's hole cards to anyone

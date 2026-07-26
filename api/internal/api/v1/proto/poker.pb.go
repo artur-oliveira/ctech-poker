@@ -84,8 +84,11 @@ type Seat struct {
 	Equity          *float64               `protobuf:"fixed64,7,opt,name=equity,proto3,oneof" json:"equity,omitempty"`
 	HandCategory    string                 `protobuf:"bytes,8,opt,name=hand_category,json=handCategory,proto3" json:"hand_category,omitempty"`
 	ConnectionState string                 `protobuf:"bytes,9,opt,name=connection_state,json=connectionState,proto3" json:"connection_state,omitempty"` // connected | disconnected
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// True when this seat belongs to the hand identified by TableSnapshot.hand_id.
+	// A seat can be active while false when it returns mid-hand for the next deal.
+	DealtIn       bool `protobuf:"varint,10,opt,name=dealt_in,json=dealtIn,proto3" json:"dealt_in,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Seat) Reset() {
@@ -179,6 +182,13 @@ func (x *Seat) GetConnectionState() string {
 		return x.ConnectionState
 	}
 	return ""
+}
+
+func (x *Seat) GetDealtIn() bool {
+	if x != nil {
+		return x.DealtIn
+	}
+	return false
 }
 
 type BlindEscalation struct {
@@ -1069,7 +1079,7 @@ const file_poker_proto_rawDesc = "" +
 	"\vpoker.proto\x12\x05poker\".\n" +
 	"\x04Card\x12\x12\n" +
 	"\x04rank\x18\x01 \x01(\tR\x04rank\x12\x12\n" +
-	"\x04suit\x18\x02 \x01(\tR\x04suit\"\x9c\x02\n" +
+	"\x04suit\x18\x02 \x01(\tR\x04suit\"\xb7\x02\n" +
 	"\x04Seat\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
@@ -1080,7 +1090,9 @@ const file_poker_proto_rawDesc = "" +
 	"hole_cards\x18\x06 \x03(\tR\tholeCards\x12\x1b\n" +
 	"\x06equity\x18\a \x01(\x01H\x00R\x06equity\x88\x01\x01\x12#\n" +
 	"\rhand_category\x18\b \x01(\tR\fhandCategory\x12)\n" +
-	"\x10connection_state\x18\t \x01(\tR\x0fconnectionStateB\t\n" +
+	"\x10connection_state\x18\t \x01(\tR\x0fconnectionState\x12\x19\n" +
+	"\bdealt_in\x18\n" +
+	" \x01(\bR\adealtInB\t\n" +
 	"\a_equity\"n\n" +
 	"\x0fBlindEscalation\x12)\n" +
 	"\x10interval_minutes\x18\x01 \x01(\x05R\x0fintervalMinutes\x12\x1e\n" +
