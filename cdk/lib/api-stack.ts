@@ -49,6 +49,7 @@ interface ApiStackProps extends cdk.StackProps {
   playerProfilesTableArn: string;
   playerNotesTableArn: string;
   handSharesTableArn: string;
+  pokerStatsTableArn: string;
   walletUrlParam: string;
   pokerClientIdParam: string;
   pokerClientSecretParam: string;
@@ -85,6 +86,7 @@ export class PokerApiStack extends cdk.Stack {
       playerProfilesTableArn,
       playerNotesTableArn,
       handSharesTableArn,
+      pokerStatsTableArn,
       walletUrlParam,
       pokerClientIdParam,
       pokerClientSecretParam,
@@ -116,7 +118,7 @@ export class PokerApiStack extends cdk.Stack {
     const tableArns = [
       tableStateArn, tableStateHistoryArn, actionLogArn, actionGuardsArn, roomsTableArn, playerProfilesTableArn,
       achievementProgressTableArn, leaderboardStatsTableArn, dailyRewardTableArn, playerSessionsTableArn,
-      playerHandsTableArn, playerNotesTableArn, handSharesTableArn,
+      playerHandsTableArn, playerNotesTableArn, handSharesTableArn, pokerStatsTableArn,
     ];
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: [

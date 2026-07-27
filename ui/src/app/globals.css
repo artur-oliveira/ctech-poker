@@ -1742,6 +1742,297 @@ h1 em {
     color: var(--on-brand)
 }
 
+.self-hud-dialog {
+    max-width: 680px
+}
+
+.self-hud-sample {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0 16px;
+    border-bottom: 1px solid var(--white-13);
+    color: var(--muted)
+}
+
+.self-hud-sample b {
+    color: var(--on-brand);
+    font: 700 15px var(--font-mono)
+}
+
+.self-hud-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 16px
+}
+
+.self-hud-metrics article {
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid var(--white-13);
+    border-radius: var(--rounded-card);
+    background: var(--white-05)
+}
+
+.self-hud-metrics header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px
+}
+
+.self-hud-metrics header span {
+    color: var(--gold);
+    font: 700 12px var(--font-mono);
+    letter-spacing: .06em
+}
+
+.self-hud-metrics strong {
+    font: 750 24px var(--font-mono);
+    color: var(--on-brand)
+}
+
+.self-hud-metrics article > b {
+    display: block;
+    font-size: 13px
+}
+
+.self-hud-metrics p {
+    margin: 6px 0 12px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45
+}
+
+.self-hud-metrics small {
+    color: var(--muted-rose);
+    font: 600 11px var(--font-mono)
+}
+
+.self-hud-notice,
+.self-hud-loading,
+.self-hud-empty {
+    color: var(--muted)
+}
+
+.self-hud-notice {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin: 16px 0 0;
+    font-size: 12px
+}
+
+.self-hud-notice svg {
+    width: 15px;
+    flex: 0 0 auto
+}
+
+.poker-style {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 260px;
+    align-items: center;
+    gap: 24px;
+    margin-top: 18px;
+    padding: 18px;
+    border: 1px solid var(--white-13);
+    border-radius: var(--rounded-card);
+    background: linear-gradient(135deg, var(--white-05), transparent)
+}
+
+.poker-style-copy > small {
+    color: var(--gold);
+    font: 700 11px var(--font-mono);
+    letter-spacing: .06em;
+    text-transform: uppercase
+}
+
+.poker-style-copy h3 {
+    margin: 5px 0 12px;
+    font-size: 18px
+}
+
+.poker-style-copy p {
+    margin: 12px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45
+}
+
+.poker-style-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px
+}
+
+.poker-style-badges span {
+    padding: 6px 9px;
+    border: 1px solid color-mix(in srgb, var(--gold) 34%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--gold) 10%, transparent);
+    color: var(--gold);
+    font: 700 11px var(--font-mono);
+    cursor: help
+}
+
+.poker-style-radar svg {
+    display: block;
+    width: 100%;
+    overflow: visible
+}
+
+.poker-radar-grid,
+.poker-radar-axis {
+    fill: none;
+    stroke: var(--white-13);
+    stroke-width: 1
+}
+
+.poker-radar-value {
+    fill: color-mix(in srgb, var(--gold) 18%, transparent);
+    stroke: var(--gold);
+    stroke-width: 2;
+    stroke-linejoin: round
+}
+
+.poker-style-radar circle {
+    fill: var(--gold)
+}
+
+.poker-style-radar text {
+    fill: var(--muted);
+    font: 600 7px var(--font-mono)
+}
+
+.rabbit-hunt {
+    position: absolute;
+    z-index: 24;
+    left: 50%;
+    bottom: 14%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: calc(100% - 24px);
+    padding: 8px 10px;
+    border: 1px solid var(--white-13);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--surface-control) 92%, transparent);
+    box-shadow: var(--shadow-soft);
+    backdrop-filter: blur(12px)
+}
+
+.rabbit-hunt button {
+    all: unset;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    cursor: pointer
+}
+
+.rabbit-hunt button:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 4px;
+    border-radius: 999px
+}
+
+.rabbit-hunt svg {
+    flex: 0 0 auto;
+    width: 19px;
+    color: var(--gold)
+}
+
+.rabbit-hunt button span,
+.rabbit-hunt-label {
+    display: flex;
+    flex-direction: column;
+    white-space: nowrap
+}
+
+.rabbit-hunt b,
+.rabbit-hunt-label {
+    color: var(--on-brand);
+    font-size: 12px
+}
+
+.rabbit-hunt small {
+    color: var(--muted);
+    font-size: 10px
+}
+
+.rabbit-hunt-cards {
+    display: flex;
+    gap: 4px
+}
+
+.rabbit-hunt-cards .playing-card {
+    width: 34px
+}
+
+.stage-v .rabbit-hunt {
+    bottom: 7%
+}
+
+@media (max-width: 620px) {
+    .rabbit-hunt {
+        bottom: 6%;
+        padding: 7px 9px
+    }
+
+    .rabbit-hunt-cards .playing-card {
+        width: 28px
+    }
+}
+
+.self-hud-loading,
+.self-hud-empty {
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-align: center
+}
+
+.self-hud-empty svg {
+    width: 32px;
+    height: 32px;
+    color: var(--gold)
+}
+
+.self-hud-empty b {
+    color: var(--on-brand)
+}
+
+@media (max-width: 620px) {
+    .self-hud-dialog {
+        max-height: calc(100dvh - 2rem);
+        overflow-y: auto
+    }
+
+    .self-hud-metrics {
+        grid-template-columns: 1fr
+    }
+
+    .self-hud-metrics article {
+        padding: 14px
+    }
+
+    .poker-style {
+        grid-template-columns: 1fr;
+        gap: 12px
+    }
+
+    .poker-style-radar {
+        width: min(100%, 280px);
+        margin: 0 auto
+    }
+}
+
 .showcase-privacy-row {
     display: flex;
     align-items: center;
@@ -3236,6 +3527,48 @@ h1 em {
 
 .time-bank-status.active svg {
     color: var(--gold)
+}
+
+.voice-action {
+    display: flex;
+    align-items: center
+}
+
+.voice-action button {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--white-13);
+    border-radius: 50%;
+    background: var(--white-05);
+    color: var(--muted);
+    cursor: pointer
+}
+
+.voice-action button:hover:not(:disabled),
+.voice-action button[aria-pressed=true] {
+    border-color: color-mix(in srgb, var(--gold) 45%, transparent);
+    color: var(--gold)
+}
+
+.voice-action button[aria-pressed=true] {
+    animation: voice-listening 1.1s ease-in-out infinite
+}
+
+.voice-action button:disabled {
+    opacity: .4;
+    cursor: not-allowed
+}
+
+.voice-action svg {
+    width: 16px
+}
+
+@keyframes voice-listening {
+    50% {
+        box-shadow: 0 0 0 5px color-mix(in srgb, var(--gold) 12%, transparent)
+    }
 }
 
 .action-preselectors {

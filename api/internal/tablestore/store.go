@@ -22,15 +22,20 @@ var ErrDuplicateAction = errors.New("tablestore: duplicate action_id")
 // ActionLogEntry is one durable audit/hand-history record (ARCHITECTURE.md
 // §8.2) — never read back for recovery; recovery reads StoredTable directly.
 type ActionLogEntry struct {
-	TableID   string `dynamodbav:"table_id"`
-	HandID    string `dynamodbav:"hand_id"`
-	Version   int    `dynamodbav:"version"`
-	Seq       int    `dynamodbav:"seq,omitempty"`
-	PlayerID  string `dynamodbav:"player_id"`
-	ActionID  string `dynamodbav:"action_id"`
-	Action    string `dynamodbav:"action"`
-	Amount    int64  `dynamodbav:"amount"`
-	Timestamp int64  `dynamodbav:"timestamp"` // unix millis, set by CommitAction
+	TableID  string `dynamodbav:"table_id"`
+	HandID   string `dynamodbav:"hand_id"`
+	Version  int    `dynamodbav:"version"`
+	Seq      int    `dynamodbav:"seq,omitempty"`
+	PlayerID string `dynamodbav:"player_id"`
+	ActionID string `dynamodbav:"action_id"`
+	Action   string `dynamodbav:"action"`
+	// BettingAction is the normalized poker decision before Action is
+	// decorated as "all_in". It distinguishes an all-in call from an all-in
+	// raise for exact VPIP/PFR/3-bet accounting. Older rows omit it and are
+	// handled conservatively by pokerstats.
+	BettingAction string `dynamodbav:"betting_action,omitempty"`
+	Amount        int64  `dynamodbav:"amount"`
+	Timestamp     int64  `dynamodbav:"timestamp"` // unix millis, set by CommitAction
 	// Frame is a public, hole-card-free projection of the authoritative table
 	// immediately after this action. It makes recent hands replayable without
 	// exposing the unredacted persisted hand.State.

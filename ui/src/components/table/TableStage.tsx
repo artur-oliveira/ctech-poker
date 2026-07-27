@@ -7,6 +7,7 @@ import {rotateSeats} from '@/lib/utils';
 import type {TableSnapshot} from '@/lib/api/table';
 import {playerPotBreakdown} from '@/lib/tableOutcome';
 import type {PlayerNote} from '@/lib/api/playerNotes';
+import {RabbitHunt} from '@/components/table/RabbitHunt';
 
 // Portrait handhelds get a different experience, not a shrunk table: a tall
 // capsule ringed by compact opponents, with the viewer promoted to a hero HUD
@@ -96,6 +97,7 @@ export function TableStage({
       <div className="game-felt">{board}</div>
       {seats.map(seatNode)}
       <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}/>
+      <RabbitHunt snapshot={snapshot} viewer={viewer}/>
     </div>
   );
 
@@ -110,6 +112,7 @@ export function TableStage({
         <div className="game-felt">{board}</div>
         {opponents.map((seat, i) => seatNode(seat, i + 1))}
         <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}/>
+        <RabbitHunt snapshot={snapshot} viewer={viewer}/>
       </div>
       {viewerFirst && seatNode(seats[0], 0)}
     </div>

@@ -5,7 +5,6 @@ import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import {HttpVersion} from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import {Environment} from '@aoctech/cdk';
 import {Construct} from 'constructs';
 import {API_PATH_PATTERNS, frontendBucketName, routeStoreName, SERVICE} from './constants';
@@ -60,6 +59,15 @@ async function handler(event) {
     });
     const securityHeaders = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeaders', {
       responseHeadersPolicyName: `${environment}-${SERVICE}-security-headers`,
+      customHeadersBehavior: {
+        customHeaders: [
+          {
+            header: 'Permissions-Policy',
+            value: 'on-device-speech-recognition=self', // Correto: sem aspas simples
+            override: true,
+          },
+        ],
+      },
       securityHeadersBehavior: {
         contentTypeOptions: {override: true},
         frameOptions: {frameOption: cloudfront.HeadersFrameOption.DENY, override: true},

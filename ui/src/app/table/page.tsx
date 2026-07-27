@@ -418,6 +418,7 @@ function TableContent() {
         actionDeadlineMs={s.action_deadline_unix_ms}
         actionBaseDeadlineMs={s.action_base_deadline_unix_ms}
         timeBankMs={viewerSeat?.time_bank_ms ?? 0}
+        voiceCommands={preferences.voiceCommands}
         connected={rt.status === 'connected'}
         pending={rt.pendingAction}
         error={rt.actionError} onDismissErrorAction={rt.clearActionError}/>

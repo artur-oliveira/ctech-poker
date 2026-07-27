@@ -9,11 +9,11 @@ test('creates private S3 hosting and a CloudFront distribution', () => {
     certificateArn: 'arn:aws:acm:us-east-1:868899309401:certificate/test',
     apiDomainName: 'poker-api-dev.aoctech.app',
     authDomainName: 'accounts-dev.aoctech.app',
+    extraConnectSrc: ['https://challenges.cloudflare.com'],
   });
   const template = Template.fromStack(stack);
   template.resourceCountIs('AWS::S3::Bucket', 1);
   template.resourceCountIs('AWS::CloudFront::Distribution', 1);
-  template.resourceCountIs('AWS::WAFv2::WebACL', 1);
   template.hasResourceProperties('AWS::CloudFront::Distribution', {
     DistributionConfig: {DefaultRootObject: 'index.html'},
   });

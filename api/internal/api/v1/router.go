@@ -17,6 +17,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/playernotes"
+	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
@@ -47,6 +48,7 @@ func Register(
 	achievementStore *achievements.Store,
 	playerNoteStore *playernotes.Store,
 	handShareStore *handshare.Store,
+	pokerStatsStore *pokerstats.Store,
 ) {
 	router := app.Group("/v1.0")
 
@@ -71,6 +73,7 @@ func Register(
 	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg)
 	RegisterPlayerNotes(router, auth, playerNoteStore)
 	RegisterHandShares(router, auth, sessionStore, tableStore, handShareStore)
+	RegisterPokerStats(router, auth, pokerStatsStore)
 	RegisterLeaderboard(router, auth, leaderboardSvc)
 	RegisterDailyReward(router, auth, dailyRewardSvc, spinLimiter)
 }

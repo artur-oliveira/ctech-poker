@@ -6,6 +6,7 @@ import {Input} from '@/components/ui/input';
 import type {PokerAction} from '@/lib/api/table';
 import type {ActionError} from '@/lib/hooks/useTableRealtime';
 import {betShortcutAmount} from '@/lib/betShortcuts';
+import {VoiceActionButton} from '@/components/table/VoiceActionButton';
 import {
   resolvePreselection,
   type ActionPreselection
@@ -33,6 +34,7 @@ type Props = {
   actionDeadlineMs?: number;
   actionBaseDeadlineMs?: number;
   timeBankMs: number;
+  voiceCommands: boolean;
 }
 
 const actionLabel: Record<PokerAction, string> = {
@@ -236,7 +238,8 @@ export function ActionBar({
                             selectionScope,
                             actionDeadlineMs,
                             actionBaseDeadlineMs,
-                            timeBankMs
+                            timeBankMs,
+                            voiceCommands
                           }: Props) {
   const unavailable = !connected || !isTurn || pending !== null;
   const context = !connected ? 'Reconectando antes de liberar as ações…' : pending ? actionLabel[pending] : !isTurn ?
@@ -278,6 +281,9 @@ export function ActionBar({
       <p id="action-context" className="action-context" aria-live="polite">{context}</p>
       <TimeBankStatus isTurn={isTurn} baseDeadline={actionBaseDeadlineMs}
                       actionDeadline={actionDeadlineMs} balance={timeBankMs}/>
+      <VoiceActionButton enabled={voiceCommands} disabled={unavailable}
+                         available={available} minRaise={minRaise} maxRaise={maxRaise}
+                         onAct={onActAction}/>
     </div>
     <PreselectionControls key={selectionScope} canPreselect={canPreselect} isTurn={isTurn}
                            connected={connected} pending={pending} available={available} onAct={onActAction}/>

@@ -6,6 +6,7 @@ export type TableThemeId = 'classic' | 'midnight' | 'burgundy' | 'ocean';
 export type TablePreferences = {
   theme: TableThemeId;
   dealerVoice: boolean;
+  voiceCommands: boolean;
   realityCheckMinutes: number;
 };
 
@@ -18,7 +19,9 @@ export const TABLE_THEMES: Record<TableThemeId, {label: string; colors: [string,
 
 const STORAGE_KEY = 'ctech-poker:table-preferences:v1';
 const CHANGE_EVENT = 'ctech-poker:table-preferences';
-const DEFAULTS: TablePreferences = {theme: 'classic', dealerVoice: false, realityCheckMinutes: 60};
+const DEFAULTS: TablePreferences = {
+  theme: 'classic', dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60
+};
 const REALITY_INTERVALS = new Set([0, 30, 60, 90, 120]);
 
 function normalize(value: unknown): TablePreferences {
@@ -26,6 +29,7 @@ function normalize(value: unknown): TablePreferences {
   return {
     theme: input.theme && input.theme in TABLE_THEMES ? input.theme : DEFAULTS.theme,
     dealerVoice: input.dealerVoice === true,
+    voiceCommands: input.voiceCommands === true,
     realityCheckMinutes: typeof input.realityCheckMinutes === 'number' &&
     REALITY_INTERVALS.has(input.realityCheckMinutes) ? input.realityCheckMinutes : DEFAULTS.realityCheckMinutes
   };

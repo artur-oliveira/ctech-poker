@@ -11,7 +11,7 @@ export type TableName =
   'poker_table_state' | 'poker_table_state_history' | 'poker_action_log' | 'poker_action_guards' |
   'poker_rooms' | 'poker_player_profiles' | 'poker_achievement_progress' | 'poker_leaderboard_stats' |
   'poker_daily_reward' | 'poker_pending_cashouts' | 'poker_player_sessions' | 'poker_player_hands' |
-  'poker_player_notes' | 'poker_hand_shares';
+  'poker_player_notes' | 'poker_hand_shares' | 'poker_player_poker_stats';
 
 interface DynamoDBStackProps extends cdk.StackProps {
   environment: Environment;
@@ -96,6 +96,9 @@ export class DynamoDBStack extends cdk.Stack {
     // Opaque public token -> sanitized hand projection. TTL enforces the
     // owner's chosen expiry without retaining public links indefinitely.
     table('poker_hand_shares', false, true);
+    // One permanent private aggregate per player plus short-lived idempotency
+    // guards for completed hands.
+    table('poker_player_poker_stats', false, true);
     table('poker_achievement_progress', true);
     const leaderboardStats = table('poker_leaderboard_stats', true);
     leaderboardStats.addGlobalSecondaryIndex({

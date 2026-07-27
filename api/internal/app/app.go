@@ -31,6 +31,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/playernotes"
+	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
@@ -59,6 +60,7 @@ var Module = fx.Options(
 		newPlayerService,
 		newPlayerNoteStore,
 		newHandShareStore,
+		newPokerStatsStore,
 		newAchievementStore,
 		newAchievementService,
 		newLeaderboardStore,
@@ -186,6 +188,9 @@ func newPlayerNoteStore(db *dynamodb.Client, cfg *config.Config) *playernotes.St
 func newHandShareStore(db *dynamodb.Client, cfg *config.Config) *handshare.Store {
 	return handshare.NewStore(db, cfg.Env)
 }
+func newPokerStatsStore(db *dynamodb.Client, cfg *config.Config) *pokerstats.Store {
+	return pokerstats.NewStore(db, cfg.Env)
+}
 func newAchievementStore(db *dynamodb.Client, cfg *config.Config) *achievements.Store {
 	return achievements.NewStore(db, cfg.Env)
 }
@@ -214,7 +219,7 @@ func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *t
 	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players).WithSessionStore(sessionStore)
 }
 
-func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store) *tablemanager.Manager {
+func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
 		if snap.EquityOnly {
@@ -263,6 +268,12 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		}
 		if err := leaderboardSvc.RecordHand(ctx, outcome, names); err != nil {
 			slog.Error("leaderboard record hand failed", "table", tableID, "err", err)
+		}
+		actions, err := store.LoadActionsSince(ctx, tableID, handID, 0)
+		if err != nil {
+			slog.Error("pokerstats: load hand actions failed", "table", tableID, "hand", handID, "err", err)
+		} else if err := pokerStatsStore.RecordHand(ctx, tableID, handID, pokerstats.Analyze(outcome.Participants, actions)); err != nil {
+			slog.Error("pokerstats: record hand failed", "table", tableID, "hand", handID, "err", err)
 		}
 		persistHandHistory(tableID, handID, outcome, names)
 	}
@@ -411,8 +422,9 @@ func registerRoutes(
 	achievementStore *achievements.Store,
 	playerNoteStore *playernotes.Store,
 	handShareStore *handshare.Store,
+	pokerStatsStore *pokerstats.Store,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore)
 }
 
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {

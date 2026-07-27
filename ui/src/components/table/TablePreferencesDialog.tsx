@@ -1,5 +1,5 @@
 'use client';
-import {Settings2, Volume2} from 'lucide-react';
+import {Mic, Settings2, Volume2} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {
   Dialog,
@@ -63,6 +63,12 @@ export function TablePreferencesDialog() {
             <small>Narra as principais ações e cartas.</small></span></span>
           <Switch aria-labelledby="dealer-voice-label" checked={preferences.dealerVoice}
                   onCheckedChange={checked => update({dealerVoice: checked})}/>
+        </div>
+        <div className="table-preference-toggle">
+          <span><Mic aria-hidden="true"/><span><Label id="voice-actions-label">Comandos por voz</Label>
+            <small>Push-to-talk para as ações da rodada.</small></span></span>
+          <Switch aria-labelledby="voice-actions-label" checked={preferences.voiceCommands}
+                  onCheckedChange={checked => update({voiceCommands: checked})}/>
         </div>
         <div>
           <Label id="reality-check-label">Lembrete de sessão</Label>

@@ -183,6 +183,34 @@ const mockHandActions: Record<string, HandHistoryAction[]> = {
   ])
 };
 
+function sharedMockActions(actions: HandHistoryAction[]) {
+  const aliases = new Map<string, string>([[MOCK_PLAYER_ID, 'hero']]);
+  const alias = (id?: string) => {
+    if (!id) return undefined;
+    if (!aliases.has(id)) aliases.set(id, `player_${aliases.size}`);
+    return aliases.get(id)!;
+  };
+  return actions.map(action => ({
+    ...action,
+    player_id: alias(action.player_id) || '',
+    frame: action.frame ? {
+      ...action.frame,
+      current_player_id: alias(action.frame.current_player_id),
+      dealer_player_id: alias(action.frame.dealer_player_id),
+      small_blind_player_id: alias(action.frame.small_blind_player_id),
+      big_blind_player_id: alias(action.frame.big_blind_player_id),
+      winners: action.frame.winners?.map(id => alias(id)!),
+      payouts: action.frame.payouts && Object.fromEntries(
+        Object.entries(action.frame.payouts).map(([id, amount]) => [alias(id)!, amount])
+      ),
+      seats: action.frame.seats?.map(seat => {
+        const playerId = alias(seat.player_id)!;
+        return {...seat, player_id: playerId, name: playerId === 'hero' ? 'Você' : 'Jogador'};
+      })
+    } : undefined
+  }));
+}
+
 const mockProfile = {
   user_id: MOCK_PLAYER_ID,
   name: 'Ana',
@@ -348,6 +376,16 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   }
   const body = typeof config.data === 'string' ? JSON.parse(config.data || '{}') : (config.data || {});
   if (method === 'GET' && path === '/v1.0/players/me') return ok({...mockProfile}, config);
+  if (method === 'GET' && path === '/v1.0/players/me/poker-stats') return ok({
+    hands: 184,
+    vpip_hands: 47,
+    pfr_hands: 31,
+    three_bet_hands: 9,
+    three_bet_chances: 67,
+    vpip_rate: 47 / 184,
+    pfr_rate: 31 / 184,
+    three_bet_rate: 9 / 67
+  }, config);
   if (method === 'GET' && path === '/v1.0/players/me/sessions') return ok(page([]), config);
   if (method === 'GET' && path === '/v1.0/players/me/notes/') return ok({data: mockPlayerNotes}, config);
   const playerNoteMatch = method === 'POST' ? path.match(/^\/v1\.0\/players\/me\/notes\/([^/]+)$/) : null;
@@ -485,7 +523,7 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       opponents: hand.opponents?.map((opponent, index) => ({
         alias: `Jogador ${index + 1}`, hole_cards: opponent.hole_cards, won: opponent.won
       })),
-      actions: mockHandActions[hand.hand_id] || [],
+      actions: sharedMockActions(mockHandActions[hand.hand_id] || []),
       created_at: Date.now(),
       expires_at: Date.now() + Number(body.expiry_days || 7) * 86_400_000
     }, config);
@@ -500,7 +538,7 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       opponents: hand.opponents?.map((opponent, index) => ({
         alias: `Jogador ${index + 1}`, hole_cards: opponent.hole_cards, won: opponent.won
       })),
-      actions: mockHandActions[hand.hand_id] || [],
+      actions: sharedMockActions(mockHandActions[hand.hand_id] || []),
       created_at: Date.now(), expires_at: Date.now() + 7 * 86_400_000
     }, config);
   }

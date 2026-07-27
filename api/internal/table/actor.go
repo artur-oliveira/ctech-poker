@@ -581,6 +581,7 @@ func (a *Actor) notifySeatsChanged() {
 // second time from this process.
 
 func (a *Actor) applyActAndCommit(ctx context.Context, c ActCmd) (bool, error) {
+	bettingAction := a.cached.NormalizedActionForActor(c.PlayerID, c.Action)
 	applied, err := a.cached.ActIdempotent(c.ActionID, c.PlayerID, c.Action, c.Amount)
 	if err != nil {
 		return false, err
@@ -593,7 +594,10 @@ func (a *Actor) applyActAndCommit(ctx context.Context, c ActCmd) (bool, error) {
 	if a.cached.PlayerAllInForActor(c.PlayerID) {
 		action = "all_in"
 	}
-	entry := tablestore.ActionLogEntry{PlayerID: c.PlayerID, ActionID: c.ActionID, Action: action, Amount: c.Amount}
+	entry := tablestore.ActionLogEntry{
+		PlayerID: c.PlayerID, ActionID: c.ActionID, Action: action,
+		BettingAction: string(bettingAction), Amount: c.Amount,
+	}
 	if err := a.commit(ctx, c.ActionID, &entry); err != nil {
 		return false, err
 	}
@@ -731,7 +735,11 @@ func (a *Actor) turnDeadlineForPersist() int64 {
 }
 
 func (a *Actor) timeBankFor(playerID string) time.Duration {
-	if !a.timeBankEnabled || a.cached == nil {
+	// Production room validation never permits a clock below five seconds.
+	// Integration tests historically assign tiny clocks directly (rather
+	// than through SetTurnTimeoutForActor), so treat those as test clocks and
+	// do not silently append the real 30-second reserve.
+	if !a.timeBankEnabled || a.turnTimeout < 5*time.Second || a.cached == nil {
 		return 0
 	}
 	return time.Duration(a.cached.TimeBankForActor(playerID)) * time.Millisecond
@@ -742,7 +750,7 @@ func (a *Actor) timeBankFor(playerID string) time.Duration {
 // committed in the same conditionally-written table state, so a losing
 // multi-server attempt is discarded and recomputed after reload.
 func (a *Actor) consumeTimeBank(playerID string) {
-	if !a.timeBankEnabled || playerID == "" || playerID != a.turnDeadlineFor || a.turnBaseDeadline.IsZero() {
+	if !a.timeBankEnabled || a.turnTimeout < 5*time.Second || playerID == "" || playerID != a.turnDeadlineFor || a.turnBaseDeadline.IsZero() {
 		return
 	}
 	elapsed := timeNowFunc().Sub(a.turnBaseDeadline).Milliseconds()

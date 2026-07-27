@@ -303,6 +303,24 @@ func (t *Table) PlayerAllInForActor(id string) bool {
 	return p != nil && p.State == AllIn
 }
 
+// NormalizedActionForActor returns the action Act will actually apply. The
+// caller records this before Act potentially advances the street and destroys
+// the current round context.
+func (t *Table) NormalizedActionForActor(playerID string, action betting.Action) betting.Action {
+	idx, ok := t.roundIdx[playerID]
+	if !ok || t.round == nil || idx < 0 || idx >= len(t.round.Players) {
+		return action
+	}
+	bs := t.round.Players[idx]
+	if (action == betting.ActionRaise || action == betting.ActionBet) && bs.Contributed+bs.Stack <= t.round.CurrentBet {
+		return betting.ActionCall
+	}
+	if action == betting.ActionCall && bs.Contributed >= t.round.CurrentBet {
+		return betting.ActionCheck
+	}
+	return action
+}
+
 func (t *Table) CurrentPlayerCanActForActor(playerID string) bool {
 	return t.currentPlayerCanAct(playerID)
 }
@@ -1040,12 +1058,7 @@ func (t *Table) Act(playerID string, action betting.Action, amount int64) error 
 	}
 	bs := t.round.Players[idx]
 
-	if (action == betting.ActionRaise || action == betting.ActionBet) && bs.Contributed+bs.Stack <= t.round.CurrentBet {
-		action = betting.ActionCall
-	}
-	if action == betting.ActionCall && bs.Contributed >= t.round.CurrentBet {
-		action = betting.ActionCheck
-	}
+	action = t.NormalizedActionForActor(playerID, action)
 
 	if err := t.round.Act(idx, action, amount); err != nil {
 		return err

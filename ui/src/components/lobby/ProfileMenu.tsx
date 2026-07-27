@@ -2,7 +2,7 @@
 import {useState} from 'react';
 import Image from 'next/image';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {LogOut} from 'lucide-react';
+import {Activity, LogOut} from 'lucide-react';
 import {getMe, updateMe, type WalletMode} from '@/lib/api/player';
 import {logout} from '@/lib/auth/oauth';
 import {Avatar, AvatarFallback} from '@/components/ui/avatar';
@@ -16,6 +16,7 @@ import {initials} from '@/lib/utils';
 import {cardPath} from '@/lib/cards';
 import {DECK_VARIANTS, type DeckVariantId, DEFAULT_DECK_VARIANT} from '@/lib/cardVariants';
 import {ProfileShowcaseDialog} from '@/components/lobby/ProfileShowcaseDialog';
+import {SelfHudDialog} from '@/components/lobby/SelfHudDialog';
 
 const ACES = ['As', 'Ah', 'Ad', 'Ac'];
 
@@ -33,6 +34,7 @@ export function ProfileMenu() {
   const [name, setName] = useState('');
   const [editingName, setEditingName] = useState(false);
   const [showcaseOpen, setShowcaseOpen] = useState(false);
+  const [selfHudOpen, setSelfHudOpen] = useState(false);
 
   const save = useMutation({
     mutationFn: updateMe,
@@ -123,10 +125,14 @@ export function ProfileMenu() {
         <Button type="button" variant="outline" className="w-full" onClick={() => setShowcaseOpen(true)}>
           Vitrine do perfil
         </Button>
+        <Button type="button" variant="outline" className="w-full" onClick={() => setSelfHudOpen(true)}>
+          <Activity/> Seu jogo
+        </Button>
         <Button variant="outline" className="w-full" onClick={() => logout()}><LogOut/> Sair da conta</Button>
       </div>
     </PopoverContent>
   </Popover>
     <ProfileShowcaseDialog open={showcaseOpen} onOpenChange={setShowcaseOpen}/>
+    <SelfHudDialog open={selfHudOpen} onOpenChange={setSelfHudOpen}/>
   </>;
 }
