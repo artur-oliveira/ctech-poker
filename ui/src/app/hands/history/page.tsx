@@ -41,25 +41,20 @@ function HandHistoryContent() {
   const resolveName = (playerId: string) => playerName(playerId, viewerId, opponentNames.get(playerId));
 
   if (!tableId || !handId) return <div className="hand-history shell">
-    <p className="form-error">Link inválido</p>
-    <Link href="/hands"><ChevronLeft/> Minhas mãos</Link>
+    <p className="form-error">Link de mão inválido ou incompleto.</p>
+    <Link href="/hands"><ChevronLeft/> Voltar para Minhas Mãos</Link>
   </div>;
 
-  if (hand.isLoading) return <div className="loading-screen"><span className="loader"/>Carregando a mão…</div>;
+  if (hand.isLoading) return <div className="loading-screen"><span className="loader"/>Carregando detalhes da mão…</div>;
 
   if (hand.isError || !hand.data) return <div className="hand-history shell">
-    <Link href="/hands"><ChevronLeft/> Minhas mãos</Link>
-    <p className="form-error">Não foi possível carregar esta mão. Ela pode não pertencer à sua conta.</p>
+    <Link href="/hands"><ChevronLeft/> Voltar para Minhas Mãos</Link>
+    <p className="form-error">Não foi possível carregar esta mão. Verifique se você está conectado na conta correta.</p>
   </div>;
 
   const h = hand.data;
-  // A tie still means the viewer took a share of the pot, same as an
-  // outright win — only an outright loss leaves the viewer with no crown.
   const viewerIsWinner = h.outcome === 'won' || h.outcome === 'tied';
 
-  // Server only sends a category on live table state, never on hand
-  // history — resolvable client-side whenever a player's hole cards are
-  // known (revealed at showdown) and the board ran out in full.
   function categoryFor(holeCards?: string[]): string | null {
     if (holeCards?.length !== 2 || h.board?.length !== 5) return null;
     return HAND_CATEGORY_LABELS[bestHandCategory([...holeCards, ...h.board])] || null;
@@ -68,23 +63,30 @@ function HandHistoryContent() {
   const viewerCategory = categoryFor(h.hole_cards);
 
   return <div className="hand-history shell">
-    <Link href="/hands"><ChevronLeft/> Minhas mãos</Link>
+    <Link href="/hands"><ChevronLeft/> Voltar para Minhas Mãos</Link>
     <header className="hand-history-header">
       <OutcomeBadge outcome={h.outcome}/>
-      <h1>Detalhes da mão</h1>
+      <h1>Detalhes da Mão</h1>
       <p>{formatDate(h.ended_at / 1000)} · Mesa {h.table_id.slice(0, 8)}…</p>
       <span className={`hand-net large ${h.net_change > 0 ? 'gain' : h.net_change < 0 ? 'loss' : 'even'}`}>
         {h.net_change > 0 ? '+' : ''}{h.net_change.toLocaleString('pt-BR')} fichas
       </span>
       {!history.isLoading && !history.isError &&
-        <div className="hand-history-tools"><HandExportButton hand={h} actions={actions} viewerId={viewerId}/>
-          <ShareHandDialog handId={h.hand_id} outcome={h.outcome}/></div>}
+        <div className="hand-history-tools">
+          <HandExportButton hand={h} actions={actions} viewerId={viewerId}/>
+          <ShareHandDialog handId={h.hand_id} outcome={h.outcome}/>
+        </div>}
     </header>
 
     {!history.isLoading && !history.isError && actions.some(action => action.frame) &&
       <div className="hand-replay-launch">
-        <div><Play aria-hidden="true"/><span><b>Reviva esta mão ação por ação</b>
-          <small>Abre uma mesa de replay em tela inteira.</small></span></div>
+        <div>
+          <Play aria-hidden="true"/>
+          <span>
+            <b>Reviva esta mão ação por ação</b>
+            <small>Abre o replayer de mesa interativo em tela cheia.</small>
+          </span>
+        </div>
         <Button render={<Link href={`/hands/replay?table_id=${encodeURIComponent(tableId)}&hand_id=${encodeURIComponent(handId)}`}
                               target="_blank" rel="noreferrer"/>}>
           Assistir replay <ExternalLink aria-hidden="true"/>
@@ -115,7 +117,7 @@ function HandHistoryContent() {
     </section>
 
     <section className="hand-history-board">
-      <h2>Board</h2>
+      <h2>Board Comunitário</h2>
       <div className="hand-board">
         {Array.from({length: 5}, (_, i) => h.board?.[i]).map((c, i) => c
           ? <PlayingCard key={i} card={c} index={i} size="board"/>
@@ -124,17 +126,17 @@ function HandHistoryContent() {
     </section>
 
     <section className="hand-history-actions">
-      <h2>Histórico de ações</h2>
-      {history.isLoading ? <div className="lobby-empty"><span className="loader"/>Carregando ações…</div> :
-        history.isError ? <p className="form-error">Não foi possível carregar o histórico de ações.</p> :
+      <h2>Histórico de Ações</h2>
+      {history.isLoading ? <div className="lobby-empty"><span className="loader"/>Carregando histórico de ações…</div> :
+        history.isError ? <p className="form-error">Não foi possível carregar a sequência de ações desta mão.</p> :
           <ActionTimeline actions={actions} resolveName={resolveName}/>}
     </section>
 
     <section className="hand-history-fairness">
-      <h2><ShieldCheck aria-hidden="true"/> Prova de integridade</h2>
+      <h2><ShieldCheck aria-hidden="true"/> Prova de Integridade (Provably Fair)</h2>
       {h.server_seed && h.commit_hash
         ? <DeckReveal key={h.hand_id} serverSeed={h.server_seed} commitHash={h.commit_hash}/>
-        : <p className="deck-reveal-status mismatch">Prova de integridade indisponível para esta mão.</p>}
+        : <p className="deck-reveal-status mismatch">Prova de integridade criptográfica indisponível para esta mão.</p>}
     </section>
   </div>;
 }
@@ -142,7 +144,7 @@ function HandHistoryContent() {
 export default function HandHistoryPage() {
   return <TermsGate>
     <main className="app-page">
-      <Suspense fallback={<div className="loading-screen"><span className="loader"/></div>}>
+      <Suspense fallback={<div className="loading-screen"><span className="loader"/>Carregando mão…</div>}>
         <HandHistoryContent/>
       </Suspense>
     </main>

@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import {Award, BookOpen, ChevronLeft, Club, History, Trophy} from 'lucide-react';
+import {Award, BookOpen, ChevronLeft, Club, History, ShieldCheck, Trophy} from 'lucide-react';
 import {HandRankings} from '@/components/HandRankings';
 import {useOptionalSession} from "@/lib/auth/session";
 import {ProfileMenu} from "@/components/lobby/ProfileMenu";
@@ -12,7 +12,7 @@ const SECTIONS = [
   {id: 'stakes', label: 'Stakes'},
   {id: 'acoes', label: 'Ações'},
   {id: 'fases', label: 'Fases da mão'},
-  {id: 'rake', label: 'Rake'}
+  {id: 'rake', label: 'Rake & Transparência'}
 ];
 
 export default function PokerRules() {
@@ -35,8 +35,7 @@ export default function PokerRules() {
           <small>REFERÊNCIA RÁPIDA</small>
           <BookOpen aria-hidden="true"/>
           <h1>Regras do Texas Hold&apos;em</h1>
-          <p>O essencial para sentar em qualquer mesa com confiança — da força das mãos ao motivo de a casa cobrar
-            rake.</p>
+          <p>O essencial para sentar em qualquer mesa com confiança — da hierarquia das mãos às regras de aposta e transparência do jogo.</p>
         </header>
         <nav className="rules-toc" aria-label="Seções desta página">
           {SECTIONS.map(s => <a key={s.id} href={`#${s.id}`}>{s.label}</a>)}
@@ -44,56 +43,51 @@ export default function PokerRules() {
 
         <article id="maos" className="rules-section">
           <h2>Ranking de mãos</h2>
-          <p>Da mais forte à mais fraca. Em caso de empate na mesma categoria, vence quem tem as cartas mais altas
-            dentro dela.</p>
+          <p>Da combinação mais forte à mais fraca. Em caso de empate na mesma categoria, vence quem tem as cartas mais altas (kicker) dentro dela.</p>
           <HandRankings/>
         </article>
 
         <article id="blinds" className="rules-section">
           <h2>Blinds</h2>
-          <p>Antes de qualquer carta ser distribuída, os dois jogadores à esquerda do dealer postam uma aposta
-            obrigatória: o <b>small blind</b> e, ao lado dele, o <b>big blind</b> — o dobro do valor. Isso garante que
-            sempre haja algo no pote para disputar, mesmo que todos desistam ainda na primeira rodada.</p>
+          <p>Antes de qualquer carta ser distribuída, os dois jogadores à esquerda do dealer postam uma aposta obrigatória: o <b>small blind</b> e, ao lado dele, o <b>big blind</b> (o dobro do valor). Isso garante que sempre haja fichas no pote para disputar em cada rodada.</p>
         </article>
 
         <article id="stakes" className="rules-section">
-          <h2>Stakes</h2>
-          <p>O par de blinds de uma mesa (por exemplo, 25 / 50) define o seu stake e, junto dele, a faixa de compra de
-            fichas — normalmente entre 40 e 100 vezes o big blind.</p>
+          <h2>Stakes e Buy-in</h2>
+          <p>O par de blinds de uma mesa (por exemplo, 25 / 50) define o seu stake e a faixa de compra de fichas (buy-in mínimo e máximo), permitindo que você entre com um cacife adequado à sua banca sandbox.</p>
         </article>
 
         <article id="acoes" className="rules-section">
           <h2>Ações na sua vez</h2>
           <ul className="rules-list">
-            <li><span><b>Fold</b> — desiste da mão e perde o que já apostou nela.</span></li>
-            <li><span><b>Check</b> — passa a vez sem apostar; só é possível quando nenhuma aposta está em aberto na
-            rodada.</span></li>
-            <li><span><b>Pagar</b> — cobre a maior aposta em aberto para continuar na mão.</span></li>
-            <li><span><b>Aumentar</b> — eleva a aposta em aberto, forçando os outros a pagar mais para continuar.</span>
-            </li>
+            <li><span><b>Fold</b> — desiste da mão e abre mão das fichas já apostadas nela.</span></li>
+            <li><span><b>Check</b> — passa a vez sem apostar (somente quando não há aposta pendente na rodada).</span></li>
+            <li><span><b>Pagar (Call)</b> — cobre a aposta em aberto para continuar na disputa do pote.</span></li>
+            <li><span><b>Aumentar (Raise)</b> — eleva a aposta em aberto, exigindo que os adversários igualem para permanecer na mão.</span></li>
           </ul>
         </article>
 
         <article id="fases" className="rules-section">
-          <h2>Fases da mão</h2>
+          <h2>Fases de uma mão</h2>
           <ol className="rules-steps">
-            <li><span><b>Pré-flop</b> — cada jogador recebe duas cartas fechadas; a primeira rodada de apostas começa
-            pelo jogador seguinte ao big blind.</span></li>
-            <li><span><b>Flop</b> — três cartas comunitárias são reveladas no centro da mesa.</span></li>
-            <li><span><b>Turn</b> — uma quarta carta comunitária é revelada.</span></li>
+            <li><span><b>Pré-flop</b> — cada jogador recebe duas cartas fechadas. A rodada de apostas inicia no jogador à esquerda do big blind.</span></li>
+            <li><span><b>Flop</b> — três cartas comunitárias são abertas no centro da mesa.</span></li>
+            <li><span><b>Turn</b> — a quarta carta comunitária é revelada.</span></li>
             <li><span><b>River</b> — a quinta e última carta comunitária é revelada.</span></li>
-            <li><span><b>Showdown</b> — quem ainda está na mão mostra as cartas; a melhor combinação de 5 cartas (entre
-            as 2 na mão e as 5 da mesa) leva o pote.</span></li>
+            <li><span><b>Showdown</b> — quem permaneceu na mão revela suas cartas. A melhor combinação de 5 cartas (entre as 2 da mão e as 5 da mesa) vence o pote.</span></li>
           </ol>
         </article>
 
         <article id="rake" className="rules-section">
-          <h2>Rake</h2>
-          <p>Nas mesas sandbox, o rake é a comissão que a casa retém sobre o pote de cada mão — é assim que a mesa se
-            sustenta. O valor fica sempre visível ao lado do pote durante o jogo, nunca embutido ou escondido.</p>
-          <p>Nas mesas de dinheiro real, não existe rake: todo o dinheiro do pote é decidido pelos jogadores na mesa.
-            Em vez disso, cobramos uma taxa fixa de mesa ao entrar (o &quot;aluguel&quot; da sala), que não depende do
-            tamanho do pote nem é um percentual do blind.</p>
+          <h2>Rake e Integridade Criptográfica</h2>
+          <p>Nas mesas sandbox, uma pequena comissão (rake) é aplicada proporcionalmente sobre o pote acumulado para manter o equilíbrio econômico da partida. O valor retido é transparente e exibido ao lado do pote em tempo real.</p>
+          <div className="rules-fairness-box">
+            <ShieldCheck aria-hidden="true"/>
+            <div>
+              <strong>Embaralhamento Provably Fair (SHA-256)</strong>
+              <p>Cada baralho é selado com um hash criptográfico antes de a mão começar. Ao final da jogada, a chave secreta (server seed) é revelada no histórico para que você possa verificar auditavelmente a ordem exata de cada carta.</p>
+            </div>
+          </div>
         </article>
 
         <div className="rules-footer-cta">
@@ -110,4 +104,3 @@ export default function PokerRules() {
     </main>
   );
 }
-

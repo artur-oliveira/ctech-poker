@@ -11,7 +11,7 @@ const mono = Geist_Mono({subsets: ['latin'], variable: '--font-mono'});
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://poker.aoctech.app'),
   title: {default: 'CTech Poker — a mesa está pronta', template: '%s · CTech Poker'},
-  description: 'Texas Hold’em prático, social e responsivo, onde você estiver. Jogue com fichas sandbox ou dinheiro real e reúna seus amigos.',
+  description: 'Texas Hold’em prático, social e responsivo no navegador. Jogue em mesas sandbox de 2 a 9 jogadores com provably fair, ranking e conquistas com seus amigos.',
   applicationName: 'CTech Poker',
   keywords: ['poker online', 'Texas Hold’em', 'poker com amigos', 'CTech Poker', 'poker sandbox'],
   alternates: {canonical: '/'},

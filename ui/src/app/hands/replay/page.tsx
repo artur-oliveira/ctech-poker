@@ -23,26 +23,34 @@ function ReplayContent() {
   });
 
   if (!tableId || !handId) return <div className="replay-page-error">
-    <h1>Replay inválido</h1><Button render={<Link href="/hands"/>}>Minhas mãos</Button>
+    <h1>Replay inválido</h1>
+    <p>O parâmetro de mesa ou mão está ausente ou malformatado.</p>
+    <Button render={<Link href="/hands"/>}>Minhas Mãos</Button>
   </div>;
-  if (hand.isLoading || history.isLoading) return <div className="loading-screen"><span className="loader"/>Preparando a mesa…</div>;
+
+  if (hand.isLoading || history.isLoading) return <div className="loading-screen"><span className="loader"/>Preparando a mesa de replay…</div>;
+
   if (hand.isError || history.isError || !hand.data) return <div className="replay-page-error">
-    <h1>Não foi possível abrir o replay</h1>
+    <h1>Não foi possível carregar o replay</h1>
     <p>A mão pode não pertencer à sua conta ou o histórico não está mais disponível.</p>
-    <Button render={<Link href="/hands"/>}>Minhas mãos</Button>
+    <Button render={<Link href="/hands"/>}>Minhas Mãos</Button>
   </div>;
 
   const actions = [...(history.data?.actions || [])].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   return <main className="replay-page">
-    <nav><Link href={`/hands/history?table_id=${encodeURIComponent(tableId)}&hand_id=${encodeURIComponent(handId)}`}>
-      <ChevronLeft/> Detalhes da mão
-    </Link></nav>
+    <nav>
+      <Link href={`/hands/history?table_id=${encodeURIComponent(tableId)}&hand_id=${encodeURIComponent(handId)}`}>
+        <ChevronLeft/> Voltar para Detalhes da Mão
+      </Link>
+    </nav>
     <HandReplayer hand={hand.data} actions={actions} viewerId={getViewerId()}/>
   </main>;
 }
 
 export default function ReplayPage() {
-  return <TermsGate><Suspense fallback={<div className="loading-screen"><span className="loader"/></div>}>
-    <ReplayContent/>
-  </Suspense></TermsGate>;
+  return <TermsGate>
+    <Suspense fallback={<div className="loading-screen"><span className="loader"/>Carregando replay…</div>}>
+      <ReplayContent/>
+    </Suspense>
+  </TermsGate>;
 }

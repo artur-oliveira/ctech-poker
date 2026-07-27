@@ -35,32 +35,37 @@ function ProfileContent() {
     </nav>
     <section className="profile-showcase shell">
       {authed && <Link href="/lobby"><ChevronLeft/> Lobby</Link>}
-      {showcase.isLoading ? <div className="lobby-empty"><span className="loader"/>Carregando vitrine…</div> :
+      {showcase.isLoading ? <div className="lobby-empty"><span className="loader"/>Carregando vitrine do jogador…</div> :
         showcase.isError || !showcase.data ? <div className="lobby-empty">
           <Sparkles aria-hidden="true"/>
           <h1>Vitrine indisponível</h1>
-          <p>Este perfil não existe ou está configurado como privado.</p>
-          <Button render={<Link href="/lobby"/>}>Ir ao lobby</Button>
+          <p>Este perfil não existe ou não foi encontrado.</p>
+          <Button render={<Link href="/lobby"/>}>Ir para o Lobby</Button>
         </div> : <>
           <header>
             <span className="profile-showcase-avatar" aria-hidden="true">
               {(showcase.data.name || '?').slice(0, 2).toUpperCase()}
             </span>
-            <div><small>VITRINE DO JOGADOR</small><h1>{showcase.data.name || 'Jogador'}</h1></div>
+            <div>
+              <small>VITRINE DO JOGADOR</small>
+              <h1>{showcase.data.name || 'Jogador'}</h1>
+            </div>
           </header>
           <div className="profile-showcase-content">
             <section>
-              <h2><Trophy aria-hidden="true"/> Conquistas em destaque</h2>
+              <h2><Trophy aria-hidden="true"/> Conquistas em Destaque</h2>
               {showcase.data.featured_achievements.length ? <div className="profile-featured-list">
                 {showcase.data.featured_achievements.map(item => <article key={item.key}>
                   <Sparkles aria-hidden="true"/>
-                  <div><b>{achievementLabel(item.key)}</b>
-                    <span>{item.count.toLocaleString('pt-BR')} registrados</span></div>
+                  <div>
+                    <b>{achievementLabel(item.key)}</b>
+                    <span>{item.count.toLocaleString('pt-BR')} registradas</span>
+                  </div>
                 </article>)}
-              </div> : <p className="profile-showcase-empty">Nenhuma conquista escolhida.</p>}
+              </div> : <p className="profile-showcase-empty">Nenhuma conquista selecionada para exibição.</p>}
             </section>
             <section>
-              <h2>Melhor resultado recente</h2>
+              <h2>Melhor Vitória Recente</h2>
               {showcase.data.best_hand ? <article className="profile-best-hand">
                 <div className="profile-best-hand-cards">
                   {(showcase.data.best_hand.hole_cards || []).map((card, index) =>
@@ -69,7 +74,7 @@ function ProfileContent() {
                 <b>+{showcase.data.best_hand.net_change.toLocaleString('pt-BR')} fichas</b>
                 <span>{new Date(showcase.data.best_hand.ended_at < 1e12 ?
                   showcase.data.best_hand.ended_at * 1000 : showcase.data.best_hand.ended_at).toLocaleDateString('pt-BR')}</span>
-              </article> : <p className="profile-showcase-empty">Ainda não há uma vitória recente para exibir.</p>}
+              </article> : <p className="profile-showcase-empty">Nenhuma vitória recente registrada nesta vitrine.</p>}
             </section>
           </div>
         </>}
@@ -78,8 +83,7 @@ function ProfileContent() {
 }
 
 export default function ProfilePage() {
-  return <Suspense fallback={<main className="loading-screen"><span className="loader"/></main>}>
+  return <Suspense fallback={<main className="loading-screen"><span className="loader"/>Carregando perfil…</main>}>
     <ProfileContent/>
   </Suspense>;
 }
-

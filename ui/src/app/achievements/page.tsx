@@ -19,9 +19,7 @@ export default function Achievements() {
 
   const progressMap = useMemo(() => new Map((mine.data || []).map(p => [p.key, p.count])), [mine.data]);
 
-  // While mine is still loading, leave count undefined (renders the neutral
-  // tier ladder) instead of flashing "0" for every card before the real
-  // numbers land.
+  // While mine is still loading, leave count undefined (renders neutral tier ladder)
   const countFor = useCallback((key: string) => authed && !mine.isLoading ? progressMap.get(key) ?? 0 : undefined, [authed, mine.isLoading, progressMap]);
 
   const stats = useMemo(() => {
@@ -39,7 +37,9 @@ export default function Achievements() {
       if (p.maxed) completedCount++;
     }
 
-    return {starsEarned, maxStars, completedCount, unlockedCount};
+    const completionRate = maxStars > 0 ? Math.round((starsEarned / maxStars) * 100) : 0;
+
+    return {starsEarned, maxStars, completedCount, unlockedCount, completionRate};
   }, [authed, catalog.data, mine.isLoading, progressMap]);
 
   const filteredCatalog = useMemo(() => {
@@ -56,7 +56,7 @@ export default function Achievements() {
     });
   }, [catalog.data, authed, activeTab, countFor]);
 
-  if (checking) return <div className="loading-screen"><span className="loader"/>Carregando…</div>;
+  if (checking) return <div className="loading-screen"><span className="loader"/>Carregando conquistas…</div>;
 
   return <main className="app-page">
     <nav className="app-nav shell">
@@ -76,8 +76,8 @@ export default function Achievements() {
         <Trophy aria-hidden="true"/>
         <h1>Conquistas</h1>
         <p>{authed
-          ? 'Cada estrela marca um degrau vencido. Passe o mouse ou o foco em uma estrela para ver a meta dela.'
-          : 'Entre com sua conta CTech para acompanhar seu próprio progresso em cada uma.'}</p>
+          ? 'Cada estrela representa uma meta vencida. Passe o mouse em uma estrela para conferir o requisito de cada nível.'
+          : 'Entre com sua conta CTech para registrar seu progresso e desbloquear conquistas a cada mão.'}</p>
       </header>
 
       {stats && (
@@ -93,6 +93,10 @@ export default function Achievements() {
           <div className="stat-card">
             <span className="stat-label">Completas</span>
             <strong className="stat-value">{stats.completedCount}</strong>
+          </div>
+          <div className="stat-card">
+            <span className="stat-label">Maestria geral</span>
+            <strong className="stat-value">{stats.completionRate}%</strong>
           </div>
         </div>
       )}
@@ -139,16 +143,15 @@ export default function Achievements() {
       )}
 
       {authed && mine.isError &&
-          <p className="form-error">Não foi possível carregar seu progresso agora. As conquistas abaixo mostram só o
-              catálogo.</p>}
-      {catalog.isLoading ? <div className="lobby-empty"><span className="loader"/>Carregando conquistas…</div>
-        : catalog.isError ? <div className="lobby-empty">Não foi possível carregar as conquistas.
+          <p className="form-error">Não foi possível carregar seu progresso no momento. O catálogo abaixo exibe as metas gerais.</p>}
+      {catalog.isLoading ? <div className="lobby-empty"><span className="loader"/>Carregando catálogo de conquistas…</div>
+        : catalog.isError ? <div className="lobby-empty">Não foi possível carregar o catálogo de conquistas.
             <Button variant="outline" size="sm" onClick={() => void catalog.refetch()}>Tentar novamente</Button>
           </div>
           : filteredCatalog.length === 0 ? (
             <div className="lobby-empty">
               <Sparkles aria-hidden="true"/>
-              <p>Nenhuma conquista encontrada nesta categoria.</p>
+              <p>Nenhuma conquista nesta categoria.</p>
               <Button variant="outline" size="sm" onClick={() => setActiveTab('all')}>Ver todas</Button>
             </div>
           ) : (
@@ -159,4 +162,3 @@ export default function Achievements() {
     </section>
   </main>;
 }
-

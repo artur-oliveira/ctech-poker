@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import Image from 'next/image';
-import {Award, BookOpen, ChevronLeft, Club, Compass, History, Trophy} from 'lucide-react';
+import {Award, BookOpen, ChevronLeft, Club, Compass, History, Keyboard, Trophy} from 'lucide-react';
 import {useOptionalSession} from "@/lib/auth/session";
 import {ProfileMenu} from "@/components/lobby/ProfileMenu";
 import {Button} from "@/components/ui/button";
@@ -11,8 +11,9 @@ const SECTIONS = [
   {id: 'entrar', label: 'Entrar na mesa'},
   {id: 'privada', label: 'Mesa privada'},
   {id: 'acoes', label: 'Ações na vez'},
+  {id: 'atalhos', label: 'Atalhos & Dicas'},
   {id: 'fases', label: 'Flop, turn e river'},
-  {id: 'showdown', label: 'Showdown'}
+  {id: 'showdown', label: 'Showdown & Replay'}
 ];
 
 export default function Guide() {
@@ -36,8 +37,7 @@ export default function Guide() {
           <small>GUIA DA MESA</small>
           <Compass aria-hidden="true"/>
           <h1>Como funciona o CTech Poker</h1>
-          <p>Do lobby até a primeira mão: onde escolher uma mesa, como entrar, como criar uma sala só para os seus
-            amigos e como agir quando chegar a sua vez.</p>
+          <p>Do lobby até a vitória: onde escolher uma mesa, como criar salas privadas para amigos, usar atalhos de teclado e rever suas jogadas em replay.</p>
         </header>
 
         <nav className="rules-toc" aria-label="Seções do guia">
@@ -46,10 +46,8 @@ export default function Guide() {
 
         <article id="lobby" className="guide-section">
           <div>
-            <h2>O lobby</h2>
-            <p>Todas as mesas públicas aparecem agrupadas por stake (o par de blinds). Cada cartão mostra quantas mesas
-              daquele stake estão ativas agora e para quantos jogadores. Ali também ficam a recompensa diária e o
-              ranking da comunidade.</p>
+            <h2>O lobby de mesas</h2>
+            <p>No lobby você encontra todas as mesas públicas organizadas por stake (par de blinds). Cada cartão indica o número de lugares (2 a 9 assentos) e quantas mesas daquele nível estão ativas no momento. É também no lobby que você resgata seu bônus diário de fichas e acessa o ranking da comunidade.</p>
           </div>
           <figure className="guide-shot">
             <Image src="/guide/lobby.png" alt="Lobby do CTech Poker com stakes agrupados por blinds" width={1280}
@@ -61,11 +59,9 @@ export default function Guide() {
           <div>
             <h2>Entrar em uma mesa</h2>
             <ol className="rules-steps">
-              <li><span>Toque no stake que quiser jogar — você entra em uma mesa aberta ou o sistema cria uma na
-              hora.</span></li>
-              <li><span>Escolha quantas fichas levar para a mesa (buy-in). Nada é debitado antes de você
-              confirmar.</span></li>
-              <li><span>Pronto — você está sentado e a próxima mão já entra na fila.</span></li>
+              <li><span>Selecione o stake que deseja jogar no lobby. O sistema conecta você a uma mesa existente ou cria uma nova instantaneamente.</span></li>
+              <li><span>Defina o valor do seu buy-in (quantidade de fichas para entrar). Nada é debitado antes da sua confirmação.</span></li>
+              <li><span>Você ocupa seu assento e entra na rodada assim que a próxima mão for iniciada.</span></li>
             </ol>
           </div>
           <figure className="guide-shot">
@@ -78,9 +74,9 @@ export default function Guide() {
           <div>
             <h2>Criar uma sala privada</h2>
             <ol className="rules-steps">
-              <li><span>No lobby, toque em <b>Mesa privada</b>.</span></li>
-              <li><span>Escolha o stake e o número de lugares (6 ou 9).</span></li>
-              <li><span>Compartilhe o link de convite gerado — só quem recebe o link entra na sua sala.</span></li>
+              <li><span>No lobby, clique em <b>Mesa privada</b>.</span></li>
+              <li><span>Escolha o stake desejado e a quantidade de assentos (6 ou 9 lugares).</span></li>
+              <li><span>Copie e compartilhe o link de convite exclusivo — somente quem tem o link pode acessar sua sala.</span></li>
             </ol>
           </div>
           <figure className="guide-shot">
@@ -92,13 +88,8 @@ export default function Guide() {
         <article id="acoes" className="guide-section reverse">
           <div>
             <h2>Como agir na sua vez</h2>
-            <p>Na sua vez, a borda dourada marca o seu assento e a barra de ações aparece na parte inferior — as
-              opções disponíveis mudam conforme o estado da mão. <b>Fold</b> desiste, <b>Check</b> passa a vez sem
-              apostar, <b>Pagar</b> cobre a aposta em aberto e <b>Aumentar</b> eleva o valor com atalhos de
-              meio pote, pote cheio ou all-in (máx).</p>
-            <p>Prefere o teclado? As letras nos botões — <b>F</b>, <b>C</b>, <b>P</b>, <b>R</b> — são os atalhos.
-              Sua força de mão estimada aparece junto às suas cartas, e o botão <b>?</b> no cabeçalho abre o ranking
-              de mãos sem sair do jogo.</p>
+            <p>Na sua vez de jogar, uma borda iluminada destaca seu assento e a barra de ações é ativada. As opções se adaptam ao momento da mão: <b>Fold</b> (desistir), <b>Check</b> (passar a vez), <b>Pagar</b> (igualar aposta) e <b>Aumentar</b> (elevar a aposta com atalhos de meio pote, pote cheio ou all-in).</p>
+            <p>O tempo de ação é contado por um anel circular no assento. Caso o tempo expire sem interação, a mão é passada ou descartada automaticamente para manter a partida fluida.</p>
           </div>
           <figure className="guide-shot">
             <Image src="/guide/table-preflop.png"
@@ -107,13 +98,29 @@ export default function Guide() {
           </figure>
         </article>
 
-        <article id="fases" className="guide-section">
+        <article id="atalhos" className="guide-section">
+          <div>
+            <h2><Keyboard aria-hidden="true"/> Atalhos de teclado & Dicas</h2>
+            <p>Jogue mais rápido usando os atalhos de teclado nativos durante a partida:</p>
+            <ul className="rules-list">
+              <li><span><b>F</b> — Desistir (Fold)</span></li>
+              <li><span><b>C</b> — Passar a vez (Check) ou Pagar (Call)</span></li>
+              <li><span><b>P</b> — Aumentar para Pote Cheiro (Pot Raise)</span></li>
+              <li><span><b>A</b> — All in</span></li>
+              <li><span><b>R</b> — Aumentar (Raise)</span></li>
+            </ul>
+            <p>A força estimada da sua mão é exibida abaixo das suas cartas, e o botão <b>?</b> no topo abre o ranking completo de combinações sem sair do jogo.</p>
+          </div>
+          <figure className="guide-shot">
+            <Image src="/guide/table-flop.png" alt="Mesa no flop mostrando indicadores e controles"
+                   width={1280} height={800}/>
+          </figure>
+        </article>
+
+        <article id="fases" className="guide-section reverse">
           <div>
             <h2>Flop, turn e river</h2>
-            <p>A cada rodada de apostas concluída, uma nova carta comunitária entra no centro da mesa: três no flop,
-              mais uma no turn e a última no river. O pote e o rake ficam sempre visíveis ao lado das cartas, e cada
-              assento mostra um anel de contagem regressiva quando é a vez de agir — perder o prazo passa a vez
-              automaticamente.</p>
+            <p>Conforme as rodadas de apostas avançam, as cartas comunitárias surgem no centro do feltro: 3 no flop, 1 no turn e 1 no river. O pote principal, potes laterais e o rake em tempo real ficam destacados no centro da mesa.</p>
           </div>
           <figure className="guide-shot">
             <Image src="/guide/table-flop.png" alt="Mesa no flop com três cartas comunitárias reveladas"
@@ -121,14 +128,11 @@ export default function Guide() {
           </figure>
         </article>
 
-        <article id="showdown" className="guide-section reverse">
+        <article id="showdown" className="guide-section">
           <div>
-            <h2>Showdown e pote lateral</h2>
-            <p>Se mais de um jogador chegar ao showdown, as cartas de cada um ficam visíveis e a melhor combinação de
-              5 cartas leva o pote. Quando alguém vai all-in com menos fichas que os demais, a mesa divide o pote em
-              pote principal e pote lateral — cada jogador só concorre ao que apostou.</p>
-            <p>Quer entender as regras completas por trás de cada fase e o ranking de mãos? Veja o
-              <Link href="/poker-rules"> guia de regras</Link>.</p>
+            <h2>Showdown, Replay & Provably Fair</h2>
+            <p>No showdown, os jogadores remanescentes revelam suas cartas e o sistema premia a melhor combinação de 5 cartas. Todas as mãos jogadas ficam salvas na sua aba <b>Mãos</b>.</p>
+            <p>Em cada mão salva você pode abrir o <b>Replayer de Mãos Interativo</b> para rever jogada por jogada ou conferir o código SHA-256 de verificação <b>Provably Fair</b>.</p>
           </div>
           <figure className="guide-shot">
             <Image src="/guide/table-showdown.png" alt="Showdown com as cartas de todos os jogadores reveladas"
@@ -138,7 +142,7 @@ export default function Guide() {
 
         <div className="guide-footer-cta">
           <h3>Pronto para testar na prática?</h3>
-          <p>Entre em uma mesa sandbox com fichas fictícias e experimente o CTech Poker sem compromisso.</p>
+          <p>Entre em uma mesa sandbox com fichas fictícias e experimente o CTech Poker agora mesmo.</p>
           <div className="rules-cta-buttons">
             <Button render={<Link href={authed ? "/lobby" : "/"}/>}>
               {authed ? "Ir para o Lobby" : "Começar a Jogar"}
@@ -152,4 +156,3 @@ export default function Guide() {
     </main>
   );
 }
-

@@ -70,13 +70,13 @@ export default function HandsHistory() {
         <header>
           <History aria-hidden="true"/><small>SEU HISTÓRICO</small>
           <h1>Mãos jogadas</h1>
-          <p>As últimas 50 mãos que você jogou, com suas cartas, o board e a prova de integridade de cada baralho.</p>
+          <p>Histórico recente das suas mãos com cartas, board comunitário e prova de integridade criptográfica.</p>
         </header>
 
         {stats && (
           <div className="hands-stats-bar">
             <div className="stat-card">
-              <span className="stat-label">Mãos exibidas</span>
+              <span className="stat-label">Mãos registradas</span>
               <strong className="stat-value">{stats.totalHands}</strong>
             </div>
             <div className="stat-card">
@@ -87,7 +87,7 @@ export default function HandsHistory() {
             </div>
             <div className="stat-card">
               <span className="stat-label">Taxa de vitória</span>
-              <strong className="stat-value">{stats.winRate}% <small>({stats.winsCount}V)</small></strong>
+              <strong className="stat-value">{stats.winRate}% <small>({stats.winsCount}V / {stats.totalHands - stats.winsCount}D)</small></strong>
             </div>
           </div>
         )}
@@ -124,16 +124,15 @@ export default function HandsHistory() {
           </div>
         )}
 
-        {isLoading ? <div className="lobby-empty"><span className="loader"/>Buscando suas mãos…</div> :
+        {isLoading ? <div className="lobby-empty"><span className="loader"/>Buscando seu histórico de mãos…</div> :
           isError ? <div className="lobby-empty">Não foi possível carregar seu histórico agora.
               <button type="button" className="link-retry" onClick={() => void refetch()}>Tentar novamente</button>
             </div> :
-            !data.length ? <div className="lobby-empty">Você ainda não jogou nenhuma mão. Elas aparecem aqui assim que
-                uma mesa termina.</div> :
+            !data.length ? <div className="lobby-empty">Você ainda não jogou nenhuma mão. As rodadas concluídas aparecerão aqui automaticamente.</div> :
               !filteredHands.length ? (
                 <div className="lobby-empty">
                   <Sparkles aria-hidden="true"/>
-                  <p>Nenhuma mão encontrada para este filtro.</p>
+                  <p>Nenhuma mão encontrada neste filtro.</p>
                   <Button variant="outline" size="sm" onClick={() => setFilter('all')}>Ver todas</Button>
                 </div>
               ) : (
@@ -185,4 +184,3 @@ export default function HandsHistory() {
     </main>
   </TermsGate>;
 }
-
