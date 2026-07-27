@@ -1,4 +1,4 @@
-// Presentation metadata for the achievements catalog — descriptions and
+// Presentation metadata for the achievements catalog: descriptions and
 // illustrative playing cards per achievement key. Split out from utils.ts to
 // avoid a cycle: pokerRules.ts already imports HAND_CATEGORY_LABELS from
 // utils.ts, so this file (not utils.ts) is what pulls in HAND_RANKINGS.
@@ -11,13 +11,13 @@ const DESCRIPTIONS: Record<string, string> = {
   wins: 'Toda mão vencida conta um ponto.',
   hands_played: 'Toda mão jogada soma, ganhando ou perdendo.',
   comeback: 'Foi all-in, ficou por um fio e ainda assim virou a mesa.',
-  bluff: 'Ganhou sem showdown com a mão mais fraca — blefe puro, sem carta na manga.',
+  bluff: 'Ganhou sem showdown com a mão mais fraca, blefe puro, sem carta na manga.',
   survivor: 'Jogou na mesma mesa por muitas mãos seguidas, sem sair.',
-  looser: 'Perdeu no showdown. Faz parte do jogo — ninguém vence sempre.',
+  looser: 'Perdeu no showdown. Faz parte do jogo, ninguém vence sempre.',
   almost_winner: 'Perdeu para alguém com a mesma mão, só que um pouco mais forte.',
   tied: 'Empatou no showdown e dividiu o pote com o adversário.',
-  bad_beat: 'Perdeu com trinca ou mais forte — uma mão ótima, mas não o suficiente.',
-  cooler: 'Perdeu com full house ou mais forte — quase impossível fugir dessa.',
+  bad_beat: 'Perdeu com trinca ou mais forte, uma mão ótima, mas não o suficiente.',
+  cooler: 'Perdeu com full house ou mais forte, quase impossível fugir dessa.',
   cracked_aces: 'Foi ao showdown com par de ases e ainda assim perdeu.',
   fallen_king: 'Foi ao showdown com par de reis e ainda assim perdeu.',
   giant_slayer: 'Ganhou all-in contra um adversário com stack maior que o seu.',

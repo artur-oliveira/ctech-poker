@@ -9,7 +9,7 @@ import {cardPath} from '@/lib/cards';
 import {achievementDescription, achievementExample, achievementLabel} from '@/lib/achievements';
 import React from "react";
 
-// A curated, static preview — not fetched from the catalog. The landing page
+// A curated, static preview, not fetched from the catalog. The landing page
 // is public and shouldn't take an API dependency just to tease four cards.
 const LANDING_ACHIEVEMENTS = ['win_category_royal_flush', 'giant_slayer', 'bluff', 'wins'];
 
@@ -96,7 +96,7 @@ export default function Home() {
     <section id="achievements" className="achievements-teaser shell">
       <div className="achievements-teaser-copy">
         <h2>Suba de nível a cada mão.</h2>
-        <p>Blefes que funcionam, all-ins decisivos, combinações raras na mesa — cada conquista premia seu estilo de jogo com até 5 estrelas de maestria.</p>
+        <p>Blefes que funcionam, all-ins decisivos, combinações raras na mesa: cada conquista premia seu estilo de jogo com até 5 estrelas de maestria.</p>
         <Link href="/achievements">Ver catálogo de conquistas <ArrowRight/></Link>
       </div>
       <div className="achievements-teaser-grid">

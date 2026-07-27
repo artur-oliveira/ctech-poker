@@ -61,7 +61,7 @@ export function subscribeUsername(f: (v: string | null) => void) {
 
 // "Who am I" for turn/seat comparisons. The access token's `sub` can't be read
 // client-side (decodeIdToken only surfaces id_token display claims), so this
-// is set from GET /v1.0/players/me's `user_id` — the same value the server
+// is set from GET /v1.0/players/me's `user_id`, the same value the server
 // uses as seat.player_id / current_player_id.
 let playerId: string | null = null;
 const playerIdListeners = new Set<(v: string | null) => void>();
@@ -82,7 +82,7 @@ export function subscribePlayerId(f: (v: string | null) => void) {
   };
 }
 
-// A 404 (room deleted/expired) is permanent — retrying it is pointless and
+// A 404 (room deleted/expired) is permanent. Retrying it is pointless and
 // just hammers the API. Query configs use this to skip TanStack's default
 // retry for that one status while still retrying real network hiccups.
 export function isNotFound(error: unknown) {

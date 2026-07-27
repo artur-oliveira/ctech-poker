@@ -2,7 +2,7 @@ import {useEffect, useState} from 'react';
 
 const DEFAULT_MS = 700;
 
-/** Ticks a displayed number from `from` to `to` — up or down, whichever the
+/** Ticks a displayed number from `from` to `to`, up or down, whichever the
  * sign of the delta calls for. No-ops (jumps straight to `to`) when the two
  * already match, or under reduced motion. */
 export function useCountUp(from: number, to: number, durationMs = DEFAULT_MS): number {

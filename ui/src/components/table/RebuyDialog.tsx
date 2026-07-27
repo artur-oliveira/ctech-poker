@@ -17,7 +17,7 @@ import {formatBuyIn, midBuyIn} from './BuyInPanel';
 
 const GENERIC_ERROR = 'Não foi possível comprar mais fichas agora. Tente novamente.';
 
-/** Shown once a seated player's stack hits zero — the "Play" toggle is a dead
+/** Shown once a seated player's stack hits zero. The "Play" toggle is a dead
  * end at that point, so this offers the same buy-in ceremony as first sitting
  * down instead. Stays reachable via its own trigger if dismissed, since
  * busting doesn't force a decision. */

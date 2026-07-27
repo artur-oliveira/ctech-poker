@@ -24,8 +24,8 @@ function truncateSeed(hex: string) {
   return `${hex.slice(0, 8)}…`;
 }
 
-// Server only sends a category on live table state, never on hand history —
-// resolvable client-side whenever the full 2 hole + 5 board cards are known.
+// Server only sends a category on live table state, never on hand history.
+// It's resolvable client-side whenever the full 2 hole + 5 board cards are known.
 function handCategoryLabel(holeCards?: string[], board?: string[]): string | null {
   if (holeCards?.length !== 2 || board?.length !== 5) return null;
   return HAND_CATEGORY_LABELS[bestHandCategory([...holeCards, ...board])] || null;

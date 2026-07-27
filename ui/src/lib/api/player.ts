@@ -12,7 +12,7 @@ export interface PlayerProfile {
   poker_terms_accepted_at?: string;
   game_balance?: number;
   sandbox_balance?: number;
-  // Not sent by the backend yet — reserved so the deck color variant can be
+  // Not sent by the backend yet, reserved so the deck color variant can be
   // wired in without another PlayerProfile shape change.
   deck_variant?: DeckVariantId;
   showcase_public: boolean;
@@ -60,7 +60,7 @@ export interface PlayerSession {
   ended_at: number;
 }
 
-// Most-recent-first (server sorts descending) — sessions[0].ended_at === 0
+// Most-recent-first (server sorts descending): sessions[0].ended_at === 0
 // means that table is still the player's open seat. cursor pages backward
 // through history; omit it for the first (most recent) page.
 export async function getSessions(cursor?: string) {

@@ -10,7 +10,7 @@ const FILES: Record<SoundName, string[]> = {
 };
 
 // .catch swallows the common autoplay-blocked-before-user-interaction
-// rejection — not a real application error.
+// rejection: not a real application error.
 export function playSound(name: SoundName) {
   const files = FILES[name];
   const file = files[Math.floor(Math.random() * files.length)];

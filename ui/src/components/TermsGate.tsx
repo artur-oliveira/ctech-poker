@@ -50,7 +50,7 @@ export function TermsGate({children}: { children: React.ReactNode }) {
     onSuccess: data => queryClient.setQueryData(['player', 'me'], data)
   });
 
-  // One-time sync: a brand new profile has no name yet — seed it from the
+  // One-time sync: a brand new profile has no name yet, so seed it from the
   // OIDC id_token's username the first time we see both. nameSyncAttempted
   // guards against re-firing on every render (nameSync's identity changes
   // each render, so it can't be omitted from the dep array).

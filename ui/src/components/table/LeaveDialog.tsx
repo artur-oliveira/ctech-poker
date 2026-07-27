@@ -15,7 +15,7 @@ import {
 import {leaveRoom} from '@/lib/api/rooms';
 
 // The engine rejects a cash-out while the player is still dealt into the
-// current hand (active/all-in) — fold or wait for showdown first.
+// current hand (active/all-in): fold or wait for showdown first.
 const DEALT_IN_MESSAGE = 'Você está na mão atual. Desista ou aguarde o fim da rodada para sair.';
 const GENERIC_MESSAGE = 'Não foi possível sair da mesa agora. Tente novamente.';
 
@@ -37,7 +37,7 @@ export function LeaveDialog({roomId, stack, onLeftAction}: {
       onLeftAction(amount);
     } catch (e) {
       // A 409 "player not found" means the hand engine already dropped the
-      // player (e.g. a prior leave/disconnect raced this one) — treat it as
+      // player (e.g. a prior leave/disconnect raced this one), so treat it as
       // a normal, already-completed leave rather than an error.
       if (isAxiosError(e) && e.response?.status === 409 && e.response.data?.detail?.includes('not found')) {
         setOpen(false);

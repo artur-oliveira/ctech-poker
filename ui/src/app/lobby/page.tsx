@@ -54,7 +54,7 @@ export default function Lobby() {
       if (r.amount > 0) {
         pushNotification(`Você ganhou +${r.amount.toLocaleString('pt-BR')} fichas sandbox!`, 'info');
         // Reward always credits the sandbox ledger (walletclient.Credit is
-        // sandbox-only server-side) — refetch so the header's balance pill
+        // sandbox-only server-side); refetch so the header's balance pill
         // picks up the new sandbox_balance instead of showing stale data.
         void queryClient.invalidateQueries({queryKey: ['player', 'me']});
       } else pushNotification(`Recompensa disponível em ${formatCooldown(r.remaining_time_seconds)}.`, 'info');

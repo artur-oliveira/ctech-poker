@@ -3,7 +3,7 @@ import {Progress as Primitive} from '@base-ui/react/progress';
 import {cn} from '@/lib/utils';
 
 // @base-ui/react/progress renders unstyled Root/Track/Indicator parts and
-// does not size the Indicator for you (unlike Radix) — the width below is
+// does not size the Indicator for you (unlike Radix). The width below is
 // this component's responsibility, not a default we're overriding.
 function Progress({className, indicatorClassName, value, ...props}: Primitive.Root.Props & {
   indicatorClassName?: string;

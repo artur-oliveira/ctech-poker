@@ -11,7 +11,7 @@ export function serializeHand(hand: HandItem, actions: HandHistoryAction[], view
   const names = new Map((hand.opponents || []).map(opponent => [opponent.player_id, opponent.name || 'Adversário']));
   const nameOf = (id: string) => id === viewerId ? 'Você' : names.get(id) || (id ? `Jogador ${id.slice(0, 8)}` : 'Mesa');
   const lines = [
-    `CTech Poker — Mão ${hand.hand_id}`,
+    `CTech Poker: Mão ${hand.hand_id}`,
     `Mesa: ${hand.table_id}`,
     `Encerrada em: ${new Date(hand.ended_at).toLocaleString('pt-BR')}`,
     `Resultado: ${OUTCOMES[hand.outcome]} (${hand.net_change >= 0 ? '+' : ''}${hand.net_change} fichas)`,
@@ -20,13 +20,13 @@ export function serializeHand(hand: HandItem, actions: HandHistoryAction[], view
     `Board: ${hand.board?.join(' ') || 'sem board'}`
   ];
   for (const opponent of hand.opponents || []) {
-    lines.push(`${opponent.name || 'Adversário'}: ${opponent.hole_cards?.join(' ') || 'cartas não reveladas'}${opponent.won ? ' — vencedor' : ''}`);
+    lines.push(`${opponent.name || 'Adversário'}: ${opponent.hole_cards?.join(' ') || 'cartas não reveladas'}${opponent.won ? ' (vencedor)' : ''}`);
   }
   lines.push('', 'Ações:');
   for (const action of actions) {
     const time = action.timestamp ? new Date(action.timestamp).toLocaleTimeString('pt-BR') : '--:--:--';
     const amount = action.amount > 0 ? ` ${action.amount.toLocaleString('pt-BR')}` : '';
-    lines.push(`${time}  ${nameOf(action.player_id)} — ${ACTIONS[action.action] || action.action}${amount}`);
+    lines.push(`${time}  ${nameOf(action.player_id)}: ${ACTIONS[action.action] || action.action}${amount}`);
   }
   if (hand.commit_hash) lines.push('', `Commit hash: ${hand.commit_hash}`);
   return `${lines.join('\n')}\n`;

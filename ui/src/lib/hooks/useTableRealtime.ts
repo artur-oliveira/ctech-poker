@@ -17,7 +17,7 @@ export type ActionError = { code: string; message: string }
 const ACTION_TIMEOUT_MS = 8000;
 // A player parked at the table for hours (away, in a long hand, distracted)
 // never issues another REST call, so nothing would otherwise notice the JWT
-// is about to expire — the socket would reconnect-loop with the same stale
+// is about to expire, so the socket would reconnect-loop with the same stale
 // token until @aoctech/ws-client's retry budget runs out and gives up for
 // good. Refreshing well inside any realistic access-token lifetime keeps
 // subscribeAccessToken's listener (already wired into useWebSocket below)
@@ -103,14 +103,14 @@ function describeSnapshot(previous: TableSnapshot | null, next: TableSnapshot, v
   return messages.join('. ');
 }
 
-// Plays at most one sound per snapshot transition (never on every broadcast —
+// Plays at most one sound per snapshot transition (never on every broadcast):
 // each condition compares against the previous snapshot exactly like
 // describeSnapshot does). Priority: a new board card beats an all-in beats a
 // bet beats a fold-to-one reveal, since at most one usually fires per frame
 // anyway.
 function playSoundForTransition(previous: TableSnapshot | null, next: TableSnapshot, viewerId?: string) {
   if (!previous) return;
-  // Table is busy with a lot going on at once — the turn ring alone is easy
+  // Table is busy with a lot going on at once. The turn ring alone is easy
   // to miss, so this fires independently of (and can co-occur with) whatever
   // else this transition triggers below (a bet, a fold-to-one reveal, etc).
   if (viewerId && next.current_player_id === viewerId && previous.current_player_id !== viewerId) {
@@ -119,7 +119,7 @@ function playSoundForTransition(previous: TableSnapshot | null, next: TableSnaps
   if (next.board.length > previous.board.length) {
     const added = next.board.length - previous.board.length;
     // Flop deals 3 cards one at a time (Board/PlayingCard stagger reveal via
-    // --deal-index; see .board-card .card-reveal-inner in globals.css) — one
+    // --deal-index; see .board-card .card-reveal-inner in globals.css): one
     // reveal sound per card, timed to match. Keep this in sync with that
     // animation-delay with a little gap (currently 360ms/index). Turn/river add a single card
     // with no stagger.
@@ -171,7 +171,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const resetOnOpenRef = useRef(true);
   const sendRef = useRef<(value: object) => boolean>(() => false);
   // A mid-hand joiner is seated as pending_entry and stays that way forever
-  // unless the client opts them in (PostBigBlindCmd) — the product intent is
+  // unless the client opts them in (PostBigBlindCmd). The product intent is
   // an automatic buy-in for the next hand's big blind, no manual click, so
   // fire it once as soon as the viewer's own seat shows pending_entry. Reset
   // when they leave that state so a *later* pending_entry spell (re-joining
@@ -181,7 +181,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const postBigBlindTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // ready() and showCards() go straight through emit() with no server
   // round-trip tracking (unlike act(), which pendingActionRef already
-  // guards) — a double-click/double-tap sends the frame twice. A short
+  // guards): a double-click/double-tap sends the frame twice. A short
   // synchronous ref lock (not state, so two clicks in the same tick can't
   // both read a stale "not pending" value) blocks the repeat; the mirrored
   // state only drives the button's disabled/pending visual.
@@ -557,7 +557,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   }, [id]);
 
   // A backgrounded tab (screen lock, app switch) can have its WS silently
-  // killed by the OS without a clean close event — the client-side heartbeat
+  // killed by the OS without a clean close event. The client-side heartbeat
   // only notices once it wakes up, and by then the socket may have already
   // burned through its whole reconnect budget. Forcing a reconnect attempt
   // the moment the tab becomes visible again skips straight past any

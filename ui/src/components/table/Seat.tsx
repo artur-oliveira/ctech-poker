@@ -39,8 +39,8 @@ const ROLE_LABELS: Record<string, string> = {
 // Seats 3/4/5 sit on the top rail; their winner pill must drop below instead of above.
 const TOP_SEAT_INDICES = [3, 4, 5];
 
-// A small burst around the winner's own seat — independent of the viewer's
-// personal win/lose banner — so every player at the table can tell who just
+// A small burst around the winner's own seat, independent of the viewer's
+// personal win/lose banner, so every player at the table can tell who just
 // won without reading anyone's chip count. Angles only; color alternates via
 // CSS nth-child, same trick as the center-table confetti in HandOutcome.
 const SEAT_CONFETTI_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
@@ -63,7 +63,7 @@ export function Seat({
                        isBigBlind = false,
                        canRevealCards = false,
                        revealPending = false,
-                       onRevealCard,
+                       onRevealCardAction,
                        playerNote,
                        onEditNote
                      }: {
@@ -79,7 +79,7 @@ export function Seat({
   nowMs?: number;
   bigBlind?: number;
   // Set only on the viewer's own seat, only while a loss's payout is still
-  // on screen — lets the stack count down the same way a payout counts it up
+  // on screen. Lets the stack count down the same way a payout counts it up
   // below, instead of just snapping to the smaller number.
   stackBefore?: number;
   isDealer?: boolean;
@@ -87,7 +87,7 @@ export function Seat({
   isBigBlind?: boolean;
   canRevealCards?: boolean;
   revealPending?: boolean;
-  onRevealCard?: (index: number) => void
+  onRevealCardAction?: (index: number) => void
   playerNote?: PlayerNote;
   onEditNote?: () => void;
 }) {
@@ -98,8 +98,8 @@ export function Seat({
   const remainingMs = isTurn && deadlineMs && nowMs ? Math.max(0, deadlineMs - nowMs) : null;
   const stackFrom = credit > 0 ? seat.stack - credit : stackBefore ?? seat.stack;
   const displayStack = useCountUp(stackFrom, seat.stack);
-  // Heads-up has the dealer double as the small blind — one combined badge
-  // rather than two overlapping pills.
+  // Heads-up has the dealer double as the small blind, so one combined badge
+  // replaces two overlapping pills.
   const role = isDealer && isSmallBlind ? 'D/SB' : isDealer ? 'D' : isSmallBlind ? 'SB' : isBigBlind ? 'BB' : null;
   const pausedAfterHand = seat.ready === false && seat.state !== 'sitting_out';
   return <div data-state={seat.state} data-connection-state={seat.connection_state}
@@ -116,7 +116,7 @@ export function Seat({
       const publiclyRevealed = seat.hole_cards_revealed?.[i] ?? false;
       return <PlayingCard key={`${i}-${card || 'back'}`} card={card} index={i} size="hole"
                           owner={isViewer ? 'viewer' : 'opponent'}
-                          onReveal={canRevealCards && !publiclyRevealed ? () => onRevealCard?.(i) : undefined}
+                          onReveal={canRevealCards && !publiclyRevealed ? () => onRevealCardAction?.(i) : undefined}
                           revealPending={revealPending}/>;
     })}</div>
     {isWinner && winAmount > 0 && <span key={`confetti-${winAmount}`} className="seat-confetti" aria-hidden="true">

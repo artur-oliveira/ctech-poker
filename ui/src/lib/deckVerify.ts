@@ -1,8 +1,8 @@
 // Client-side replay of api/internal/engine/deck/deck.go's commit-reveal
 // shuffle (OVERVIEW.md § 3.5), so a player can independently recompute the
 // full 52-card deck from the hand's published commit hash + revealed server
-// seed and confirm the two match — proof the deck wasn't altered mid-hand.
-const SUITS = ['c', 'd', 'h', 's'] as const; // Clubs, Diamonds, Hearts, Spades — deck.go's iota order
+// seed and confirm the two match, proving the deck wasn't altered mid-hand.
+const SUITS = ['c', 'd', 'h', 's'] as const; // Clubs, Diamonds, Hearts, Spades, matching deck.go's iota order
 const RANK_CHARS = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'];
 
 export interface DeckCard {
@@ -34,8 +34,8 @@ function orderedDeck(): DeckCard[] {
 
 const MAX_U32 = 0xffffffff;
 
-// Fisher-Yates driven by an HMAC-SHA256 byte stream keyed on the seed —
-// deterministic (same seed -> same permutation) with rejection sampling to
+// Fisher-Yates driven by an HMAC-SHA256 byte stream keyed on the seed.
+// Deterministic (same seed -> same permutation), with rejection sampling to
 // avoid modulo bias, mirroring shuffleWithSeed in deck.go exactly, including
 // consuming a counter tick on every rejected draw.
 export async function shuffleWithSeed(seedHex: string): Promise<DeckCard[]> {
@@ -82,7 +82,7 @@ export interface VerifyResult {
 }
 
 // Replays the shuffle from the revealed seed and checks it against the
-// commit hash published before the hand — the entire point of the exercise.
+// commit hash published before the hand: the entire point of the exercise.
 export async function verifyDeck(serverSeedHex: string, commitHashHex: string): Promise<VerifyResult> {
   const deck = await shuffleWithSeed(serverSeedHex);
   const computedHash = await commitHash(serverSeedHex, deck);

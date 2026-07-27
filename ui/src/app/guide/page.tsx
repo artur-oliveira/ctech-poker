@@ -76,7 +76,7 @@ export default function Guide() {
             <ol className="rules-steps">
               <li><span>No lobby, clique em <b>Mesa privada</b>.</span></li>
               <li><span>Escolha o stake desejado e a quantidade de assentos (6 ou 9 lugares).</span></li>
-              <li><span>Copie e compartilhe o link de convite exclusivo — somente quem tem o link pode acessar sua sala.</span></li>
+              <li><span>Copie e compartilhe o link de convite exclusivo. Somente quem tem o link pode acessar sua sala.</span></li>
             </ol>
           </div>
           <figure className="guide-shot">
@@ -103,11 +103,11 @@ export default function Guide() {
             <h2><Keyboard aria-hidden="true"/> Atalhos de teclado & Dicas</h2>
             <p>Jogue mais rápido usando os atalhos de teclado nativos durante a partida:</p>
             <ul className="rules-list">
-              <li><span><b>F</b> — Desistir (Fold)</span></li>
-              <li><span><b>C</b> — Passar a vez (Check) ou Pagar (Call)</span></li>
-              <li><span><b>P</b> — Aumentar para Pote Cheiro (Pot Raise)</span></li>
-              <li><span><b>A</b> — All in</span></li>
-              <li><span><b>R</b> — Aumentar (Raise)</span></li>
+              <li><span><b>F</b>: Desistir (Fold)</span></li>
+              <li><span><b>C</b>: Passar a vez (Check) ou Pagar (Call)</span></li>
+              <li><span><b>P</b>: Aumentar para Pote Cheiro (Pot Raise)</span></li>
+              <li><span><b>A</b>: All in</span></li>
+              <li><span><b>R</b>: Aumentar (Raise)</span></li>
             </ul>
             <p>A força estimada da sua mão é exibida abaixo das suas cartas, e o botão <b>?</b> no topo abre o ranking completo de combinações sem sair do jogo.</p>
           </div>

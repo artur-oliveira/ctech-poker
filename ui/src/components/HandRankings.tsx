@@ -2,7 +2,7 @@ import {PlayingCard} from '@/components/table/PlayingCard';
 import {HAND_RANKINGS} from '@/lib/pokerRules';
 
 /** Shared between /poker-rules (full reference) and the table's in-game "?"
- * dialog (`compact`) — one ranked list, not two copies to drift apart. */
+ * dialog (`compact`): one ranked list, not two copies to drift apart. */
 export function HandRankings({compact = false}: { compact?: boolean }) {
   return <ol className={`hand-ranking-list${compact ? ' compact' : ''}`}>
     {HAND_RANKINGS.map((hand, i) => <li key={hand.key}>

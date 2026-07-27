@@ -50,8 +50,8 @@ function readGlobalMockError(): string {
   }
 }
 
-/** Every REST call goes through this rule first (see forcedError in lib/mock.ts) —
- * a blunt, global way to check every screen's error handling without per-endpoint plumbing. */
+/** Every REST call goes through this rule first (see forcedError in lib/mock.ts).
+ * A blunt, global way to check every screen's error handling without per-endpoint plumbing. */
 function writeGlobalMockError(value: string) {
   if (!value) {
     window.localStorage.removeItem(MOCK_ERROR_KEY);

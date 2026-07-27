@@ -1,4 +1,4 @@
-// Unlike TermsGate, this page never forces a login redirect — it has a real
+// Unlike TermsGate, this page never forces a login redirect. It has a real
 // public variant. It only checks whether a session already exists (silent
 // refresh, same call TermsGate makes) so a returning player sees their own
 // progress without a hard gate blocking a first-time or logged-out visitor.
@@ -28,7 +28,7 @@ export function useOptionalSession() {
   }, []);
 
   // Pages using this hook (leaderboard, guide, etc.) never mount TermsGate,
-  // so nothing else here ever calls setPlayerId — without this, getViewerId()
+  // so nothing else here ever calls setPlayerId. Without this, getViewerId()
   // silently returns undefined for a real session and viewer highlighting
   // breaks, unless the player happened to already visit a TermsGate page first.
   const me = useQuery({queryKey: ['player', 'me'], queryFn: getMe, enabled: Boolean(token)});

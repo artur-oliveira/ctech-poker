@@ -11,15 +11,15 @@ export type HandOutcomeState = {
   key: number; kind: 'win' | 'lose' | 'tie' | 'mixed' | 'fold'; handCategory?: string; opponentCategory?: string;
   // Only set when kind is 'fold': whether the viewer's own hole cards would
   // actually have beaten the eventual winner's revealed hand had they stayed
-  // in — undefined when the hand never reached a showdown (no one's cards to
+  // in. Undefined when the hand never reached a showdown (no one's cards to
   // compare against), which reads as the plain "you folded" message instead.
   couldHaveWon?: boolean;
   // The winning 5-card hand (or just the 2 hole cards when the board isn't
-  // complete) for whoever actually won this pot — the viewer's own on a win,
-  // the rival's on a loss — undefined when the hand ended without a
+  // complete) for whoever actually won this pot: the viewer's own on a win,
+  // the rival's on a loss. Undefined when the hand ended without a
   // showdown, since no one's cards were ever revealed to compare.
   winningCards?: string[];
-  // The 2 hole cards belonging to that same winning hand — retained so a win
+  // The 2 hole cards belonging to that same winning hand, retained so a win
   // can identify which combination cards came from the viewer.
   winningHoleCards?: string[];
   // The viewer's own resolved hand is also retained on a loss so the result
@@ -27,7 +27,7 @@ export type HandOutcomeState = {
   viewerCards?: string[];
   viewerHoleCards?: string[];
   winnerName?: string;
-  // The viewer's stack right before this hand resolved and right after — the
+  // The viewer's stack right before this hand resolved and right after. The
   // chip counter below animates between the two, up when they gained chips,
   // down when they lost some, and stays hidden when neither changed (e.g. a
   // free showdown they simply lost with nothing left in the pot for them).
@@ -61,7 +61,7 @@ function combinationCards(cards?: string[], fallbackCategory?: string): string[]
 }
 
 // Same combination as combinationCards, but with the kicker(s) appended
-// after it — for a showdown lost or won by kicker within the same hand
+// after it, for a showdown lost or won by kicker within the same hand
 // category, where naming just "Par" for both sides hides the actual reason
 // one beat the other.
 function combinationWithKickers(cards?: string[], fallbackCategory?: string): {cards: string[]; kickerFrom: number} {
@@ -91,10 +91,10 @@ function OutcomeCards({cards, viewerHoleCards, startIndex = 0, kickerFrom}: {
 }
 
 /** Three-beat reveal of a stack change: the stack as it was, the delta that's
- * about to land, then the two merging into one counted total — counting up
+ * about to land, then the two merging into one counted total. Counts up
  * on a gain, down on a loss, since the same sequence reads honestly either
  * way. Skips straight to the merged total under reduced motion instead of
- * dropping the animation silently — the number itself still has to end up
+ * dropping the animation silently, since the number itself still has to end up
  * correct. */
 function ChipCountUp({from, to}: { from: number; to: number }) {
   const delta = to - from;
@@ -129,12 +129,12 @@ function ChipCountUp({from, to}: { from: number; to: number }) {
 }
 
 /** Fires once per resolved hand (keyed by an ever-increasing counter the
- * caller bumps only when payouts first appear for that hand) — never on the
+ * caller bumps only when payouts first appear for that hand), never on the
  * repeat broadcasts that follow while the table sits in `complete`. Purely
  * decorative: the sr-only live region already announces the same outcome.
  *
  * Stays open for as long as the table itself is still showing that resolved
- * hand's payouts (`holdOpen`) instead of a fixed timer — a player who glances
+ * hand's payouts (`holdOpen`) instead of a fixed timer, so a player who glances
  * away mid-hand and looks back a few seconds later still finds their
  * win/loss on screen, not a banner that already auto-dismissed under them.
  * It closes once the next hand actually starts. */
@@ -162,7 +162,7 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
   const ownCombination = combinationCards(shown.viewerCards || shown.winningCards, shown.handCategory);
   const winningCombination = combinationCards(shown.winningCards, shown.opponentCategory);
   // Naming the same category for both sides ("Par" vs. "Par") hides why one
-  // beat the other — show the kicker(s) that actually broke the tie instead.
+  // beat the other, so show the kicker(s) that actually broke the tie instead.
   const decidedByKicker = shown.kind === 'lose' && ownCategory && ownCategory === winnerCategory;
   const ownWithKickers = combinationWithKickers(shown.viewerCards, shown.handCategory);
   const winningWithKickers = combinationWithKickers(shown.winningCards, shown.opponentCategory);
@@ -222,7 +222,7 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
                           viewerHoleCards={shown.viewerHoleCards} startIndex={5}/>
           </div>
         </div>
-        {decidedByKicker && <p className="hand-outcome-kicker-note">Mesma combinação — o kicker decidiu.</p>}
+        {decidedByKicker && <p className="hand-outcome-kicker-note">Mesma combinação, o kicker decidiu.</p>}
         {chipChange}
         <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
       </>}

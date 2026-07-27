@@ -3,6 +3,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {ChevronLeft, ChevronRight, Pause, Play, RotateCcw} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {TableStage} from '@/components/table/TableStage';
+import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
 import type {HandHistoryAction, TableSnapshot} from '@/lib/api/table';
 import type {HandItem} from '@/lib/api/player';
 import {playerName} from '@/lib/utils';
@@ -18,16 +19,40 @@ const ACTION_LABELS: Record<string, string> = {
   tie: 'empatou', show_cards: 'mostrou cartas', runout_step: 'abriu o board'
 };
 
+// Matches .board-card-reveal's animation in globals.css: each new card
+// starts BOARD_CARD_STAGGER_MS after the last and takes BOARD_CARD_REVEAL_MS
+// to finish, so the flop (3 cards) needs noticeably longer than the turn or
+// river (1 card) to fully deal before the replay advances.
+const BOARD_CARD_REVEAL_MS = 780;
+const BOARD_CARD_STAGGER_MS = 320;
+const REVEAL_BUFFER_MS = 200;
+const ACTION_STEP_MS = 900;
+
+function stepDelayMs(currentBoardLen?: number, nextBoardLen?: number) {
+  const cardsAdded = Math.max(0, (nextBoardLen ?? 0) - (currentBoardLen ?? 0));
+  if (cardsAdded === 0) return ACTION_STEP_MS;
+  return BOARD_CARD_STAGGER_MS * (cardsAdded - 1) + BOARD_CARD_REVEAL_MS + REVEAL_BUFFER_MS;
+}
+
 export function HandReplayer({
-  hand,
-  actions,
-  viewerId
-}: {
+                               hand,
+                               actions,
+                               viewerId
+                             }: {
   hand: HandItem;
   actions: HandHistoryAction[];
   viewerId?: string;
 }) {
-  const replayActions = useMemo(() => actions.filter(action => action.frame), [actions]);
+  const replayActions = useMemo(() => {
+    const filteredActions: HandHistoryAction[] = [];
+    for (const act of actions.filter(action => action.frame)) {
+      filteredActions.push(act);
+      if (act.frame?.stage === 'complete') {
+        break;
+      }
+    }
+    return filteredActions;
+  }, [actions]);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -44,15 +69,15 @@ export function HandReplayer({
         }
         return current + 1;
       });
-    }, (replayActions[safeIndex + 1]?.frame?.board?.length !== replayActions[safeIndex]?.frame?.board?.length ?
-      1450 : 900) / speed);
+    }, stepDelayMs(replayActions[safeIndex]?.frame?.board?.length, replayActions[safeIndex + 1]?.frame?.board?.length) / speed);
     return () => window.clearTimeout(timer);
   }, [playing, safeIndex, lastIndex, replayActions, speed]);
 
   if (!replayActions.length) return <section className="hand-replayer unavailable">
     <div>
       <h2>Replay da mão</h2>
-      <p>Esta mão foi registrada antes dos frames de replay serem habilitados. As próximas mãos poderão ser reproduzidas ação por ação.</p>
+      <p>Esta mão foi registrada antes dos frames de replay serem habilitados. As próximas mãos poderão ser reproduzidas
+        ação por ação.</p>
     </div>
   </section>;
 
@@ -97,7 +122,11 @@ export function HandReplayer({
         <h2>Replay da mão</h2>
         <p>Ação {safeIndex + 1} de {replayActions.length} · {STAGE_LABELS[frame.stage] || frame.stage}</p>
       </div>
-      <span className="replay-pot">Pote <b key={`${current.seq}-${frame.pot}`}>{frame.pot.toLocaleString('pt-BR')}</b></span>
+      <div className="replay-header-end">
+        {frame.stage === 'complete' && <OutcomeBadge outcome={hand.outcome}/>}
+        <span className="replay-pot">Pote <b
+          key={`${current.seq}-${frame.pot}`}>{frame.pot.toLocaleString('pt-BR')}</b></span>
+      </div>
     </header>
     <div className="replay-live-table">
       <TableStage snapshot={replaySnapshot} viewer={viewerId} pot={frame.pot} bigBlind={25}
@@ -109,9 +138,15 @@ export function HandReplayer({
     </div>
     <div className="replay-controls">
       <Button type="button" variant="ghost" size="icon" aria-label="Voltar ao início"
-              onClick={() => { setPlaying(false); setIndex(0); }}><RotateCcw/></Button>
+              onClick={() => {
+                setPlaying(false);
+                setIndex(0);
+              }}><RotateCcw/></Button>
       <Button type="button" variant="ghost" size="icon" aria-label="Ação anterior"
-              disabled={safeIndex === 0} onClick={() => { setPlaying(false); setIndex(value => Math.max(0, value - 1)); }}>
+              disabled={safeIndex === 0} onClick={() => {
+        setPlaying(false);
+        setIndex(value => Math.max(0, value - 1));
+      }}>
         <ChevronLeft/>
       </Button>
       <Button type="button" aria-label={playing ? 'Pausar replay' : 'Reproduzir replay'}
@@ -121,16 +156,23 @@ export function HandReplayer({
               }}>{playing ? <Pause/> : <Play/>}<span>{playing ? 'Pausar' : 'Reproduzir'}</span></Button>
       <Button type="button" variant="ghost" size="icon" aria-label="Próxima ação"
               disabled={safeIndex === lastIndex}
-              onClick={() => { setPlaying(false); setIndex(value => Math.min(lastIndex, value + 1)); }}>
+              onClick={() => {
+                setPlaying(false);
+                setIndex(value => Math.min(lastIndex, value + 1));
+              }}>
         <ChevronRight/>
       </Button>
       <button type="button" className="replay-speed" onClick={() => setSpeed(value => value === 1 ? 2 : 1)}
-              aria-label={`Velocidade ${speed} vezes`}>{speed}×</button>
+              aria-label={`Velocidade ${speed} vezes`}>{speed}×
+      </button>
       <label>
         <span className="sr-only">Posição do replay</span>
         <input type="range" min={0} max={lastIndex} value={safeIndex}
                aria-valuetext={`Ação ${safeIndex + 1} de ${replayActions.length}`}
-               onChange={event => { setPlaying(false); setIndex(Number(event.target.value)); }}/>
+               onChange={event => {
+                 setPlaying(false);
+                 setIndex(Number(event.target.value));
+               }}/>
       </label>
     </div>
     <span className="replay-progress" aria-hidden="true"

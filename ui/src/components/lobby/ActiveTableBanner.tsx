@@ -17,7 +17,7 @@ export function ActiveTableBanner() {
     <div>
       <small>MESA EM ANDAMENTO</small>
       <h3><Undo2 size={20}/> Voltar à mesa</h3>
-      <span>Você ainda está sentado — retome de onde parou.</span>
+      <span>Você ainda está sentado. Retome de onde parou.</span>
     </div>
     <ArrowRight/>
   </Button>;

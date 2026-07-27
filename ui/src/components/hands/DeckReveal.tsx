@@ -42,14 +42,14 @@ export function DeckReveal({serverSeed, commitHash}: { serverSeed: string; commi
       {result && <p className={`deck-reveal-status ${result.matches ? 'match' : 'mismatch'}`}>
         {result.matches ? <CircleCheck/> : <CircleX/>}
         {result.matches
-          ? 'O hash recalculado bate com o commit hash publicado — o baralho não foi alterado.'
+          ? 'O hash recalculado bate com o commit hash publicado: o baralho não foi alterado.'
           : `Hash recalculado não confere: ${truncateHash(result.computedHash)}`}
       </p>}
     </div>
     {result && <>
         <div className="deck-reveal-actions">
             <ShieldCheck aria-hidden="true"/>
-            <p>Baralho completo, na ordem embaralhada. Clique em cada carta para revelar a posição — inclusive as que
+            <p>Baralho completo, na ordem embaralhada. Clique em cada carta para revelar a posição, inclusive as que
                 nunca chegaram a ser mostradas na mesa.</p>
             <button type="button" className="deck-reveal-toggle-all"
                     onClick={() => setRevealed(revealed.size === 52 ? new Set() : new Set(result.deck.map((_, i) => i)))}>

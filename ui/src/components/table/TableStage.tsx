@@ -13,7 +13,7 @@ import {RabbitHunt} from '@/components/table/RabbitHunt';
 // capsule ringed by compact opponents, with the viewer promoted to a hero HUD
 // (large hole cards) docked above the action bar. Landscape phones, tablets in
 // landscape, and desktop keep the classic oval. Selected per layout tree via
-// matchMedia instead of stacking CSS overrides on one DOM — the geometry of
+// matchMedia instead of stacking CSS overrides on one DOM, since the geometry of
 // the two stages is too different to patch across breakpoints.
 const VERTICAL_STAGE_QUERY = '(orientation: portrait) and (max-width: 1023px)';
 
@@ -44,9 +44,9 @@ type Props = {
   viewerStackBefore?: number;
   canRevealCards?: boolean;
   revealPending?: boolean;
-  onRevealCard?: (index: number) => void;
+  onRevealCardAction?: (index: number) => void;
   playerNotes?: Record<string, PlayerNote>;
-  onEditPlayerNote?: (seat: TableSnapshot['seats'][number]) => void;
+  onEditPlayerNoteAction?: (seat: TableSnapshot['seats'][number]) => void;
 };
 
 export function TableStage({
@@ -60,9 +60,9 @@ export function TableStage({
                              viewerStackBefore,
                              canRevealCards,
                              revealPending,
-                             onRevealCard,
+                             onRevealCardAction,
                              playerNotes,
-                             onEditPlayerNote
+                             onEditPlayerNoteAction
                            }: Props) {
   const vertical = useVerticalStage();
   const seats = rotateSeats(snapshot.seats, viewer);
@@ -80,9 +80,9 @@ export function TableStage({
           isViewer={seat.player_id === viewer}
           canRevealCards={seat.player_id === viewer && canRevealCards}
           revealPending={revealPending}
-          onRevealCard={onRevealCard}
+          onRevealCardAction={onRevealCardAction}
           playerNote={playerNotes?.[seat.player_id]}
-          onEditNote={seat.player_id !== viewer && onEditPlayerNote ? () => onEditPlayerNote(seat) : undefined}
+          onEditNote={seat.player_id !== viewer && onEditPlayerNoteAction ? () => onEditPlayerNoteAction(seat) : undefined}
           stackBefore={seat.player_id === viewer ? viewerStackBefore : undefined}
           isDealer={snapshot.dealer_player_id === seat.player_id}
           isSmallBlind={snapshot.small_blind_player_id === seat.player_id}

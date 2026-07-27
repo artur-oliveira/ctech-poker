@@ -58,7 +58,7 @@ const REMOVED_REASON_COPY: Record<string, string> = {
   disconnected: 'Você foi removido da mesa após ficar desconectado por muito tempo.'
 };
 // @aoctech/ws-client gives up on its own retry loop after MAX_RECONNECT_ATTEMPTS
-// and never schedules another one — only a fresh token (handled elsewhere) or
+// and never schedules another one. Only a fresh token (handled elsewhere) or
 // this button's retryNow() tries again. Telling the player "tentando
 // novamente" past that point would be a lie.
 const RECONNECT_GIVEN_UP_COPY = 'Conexão perdida. Toque para tentar novamente.';
@@ -150,7 +150,7 @@ function TableContent() {
   const queryClient = useQueryClient();
   // Buy-in is an explicit ceremony: nothing is debited until the player
   // confirms an amount. The server (not local browser storage) is the
-  // source of truth for "is this player already seated" — that is what
+  // source of truth for "is this player already seated", which is what
   // lets a player return via a new tab, a different browser, or a
   // different device without repeating the ceremony for a seat they
   // already have.
@@ -176,7 +176,7 @@ function TableContent() {
   const rt = useTableRealtime(valid && seated ? id : '', viewer, inviteCode, USE_MOCK ? {scenario, delay} : undefined);
   useDealerVoice(rt.announcement, preferences.dealerVoice);
   // The server never closes a removed player's socket (it just stops
-  // targeting it in future broadcasts) — without reacting to this message the
+  // targeting it in future broadcasts). Without reacting to this message the
   // client would otherwise sit frozen on the last snapshot it received, or
   // silently reconnect into a seat it no longer holds.
   useEffect(() => {
@@ -242,14 +242,14 @@ function TableContent() {
     // viewer lost at least one eligible pot. Only seats
     // that reached showdown carry hand_category, so this stays undefined
     // (and the banner falls back to the plain category chip) whenever the
-    // hand ended without one — e.g. everyone else folded.
+    // hand ended without one (e.g. everyone else folded).
     const opponentCategory = (kind === 'lose' || kind === 'mixed') ?
       relevantWinner(snap, viewer)?.hand_category : undefined;
     // The hand that actually won this pot: the viewer's own cards on a win
-    // (always known), or the first winning rival's cards on a loss — but only
+    // (always known), or the first winning rival's cards on a loss, but only
     // when a showdown actually revealed them (a hand that ended with everyone
     // else folding never shows opponent cards). Combined with the board (once
-    // the board is complete) and reduced to the actual best 5-card hand — a
+    // the board is complete) and reduced to the actual best 5-card hand, since a
     // bare pair of hole cards doesn't show what the player actually won with
     // when the winning combination uses the board too.
     const winnerSeat = kind === 'lose' ? relevantWinner(snap, viewer) : seat;
@@ -264,7 +264,7 @@ function TableContent() {
     const stackBefore = seat.stack_at_hand_start ??
       (rememberedStart?.tableID === id && rememberedStart.handID === snap.hand_id ? rememberedStart.stack : undefined);
     const breakdown = playerPotBreakdown(snap, viewer);
-    // Folding is not a loss in the sense of having contested the pot — it
+    // Folding is not a loss in the sense of having contested the pot. It
     // gets its own banner ("você desistiu"), only naming a rival hand when
     // the board actually ran to a showdown that revealed one, and only
     // claiming "poderia ter ganhado" when the folded hand would truly have
@@ -327,7 +327,7 @@ function TableContent() {
   const actionKey = [s.stage, s.current_player_id, s.board.join(','), viewerSeat?.stack, viewerSeat?.contributed,
     actions.minRaise, actions.maxRaise, actions.raiseStep].join(':');
   // A room's share_code is only ever present for its own creator (the server
-  // strips it from every other viewer) — so its presence alone gates the
+  // strips it from every other viewer), so its presence alone gates the
   // invite affordance for private tables; public tables need no code at all.
   if (s.next_hand_unix_ms && nextHandArmed?.deadline !== s.next_hand_unix_ms) {
     setNextHandArmed({deadline: s.next_hand_unix_ms, snapshotAt: rt.snapshotAt});
@@ -346,7 +346,7 @@ function TableContent() {
   const playerNotesByID = Object.fromEntries(playerNotes.map(note => [note.opponent_id, note]));
   return (
     <main className="game" data-table-theme={preferences.theme}>
-      <h1 className="sr-only">Mesa de poker — {STAGE_LABELS[s.stage] || s.stage.replaceAll('_', ' ')}</h1>
+      <h1 className="sr-only">Mesa de poker: {STAGE_LABELS[s.stage] || s.stage.replaceAll('_', ' ')}</h1>
       <div className="game-chrome">
         <header>
           <Link href="/lobby" aria-label="Voltar ao lobby"><ChevronLeft/> <span
@@ -386,12 +386,12 @@ function TableContent() {
             <Button type="button" variant="ghost" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>
         </div>}
         {/* The header's stage label already reads "aguardando jogadores" / "mão
-            encerrada" — this box only earns its place when it has something
+            encerrada", so this box only earns its place when it has something
             the header doesn't: the next-hand countdown or the show-cards
             action. An empty-room wait with neither would otherwise float a
             duplicate label over the header. On phones, this notice renders
             in-flow right below the header (see .game-chrome / .reconnect-notice
-            mobile rules) instead of floating fixed over it — a floating
+            mobile rules) instead of floating fixed over it, since a floating
             overlay can't reliably avoid the header once it wraps to two
             lines, which used to hide and block taps on Sentar fora/Sair da
             mesa for the whole time this notice was up. */}
@@ -414,9 +414,9 @@ function TableContent() {
                   outcome={handOutcome} holdOutcomeOpen={Boolean(s.payouts && Object.keys(s.payouts).length > 0)}
                   viewerStackBefore={(s.payouts && Object.keys(s.payouts).length > 0) ? viewerStackBefore : undefined}
                   canRevealCards={canRevealCards} revealPending={rt.showCardsPending}
-                  onRevealCard={index => rt.showCards(index)}
+                  onRevealCardAction={index => rt.showCards(index)}
                   playerNotes={playerNotesByID}
-                  onEditPlayerNote={seat => setNoteOpponent({player_id: seat.player_id, name: seat.name})}/>
+                  onEditPlayerNoteAction={seat => setNoteOpponent({player_id: seat.player_id, name: seat.name})}/>
       <ActionBar
         onActAction={rt.act}
         {...actions}

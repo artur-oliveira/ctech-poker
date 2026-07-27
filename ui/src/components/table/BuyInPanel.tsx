@@ -11,8 +11,8 @@ import {isNotFound} from '@/lib/api/client';
 const GENERIC_JOIN_ERROR = 'Não foi possível sentar na mesa. Verifique suas fichas e tente novamente.';
 
 // The API's real-money buy-in gate (buyin.walletFor) reports "has not
-// activated gambling on ctech-wallet" as a plain RFC 9457 `detail` string —
-// surface it verbatim so a real-money player knows to activate their wallet,
+// activated gambling on ctech-wallet" as a plain RFC 9457 `detail` string.
+// Surface it verbatim so a real-money player knows to activate their wallet,
 // instead of the generic sandbox message.
 function joinErrorMessage(err: unknown) {
   if (axios.isAxiosError(err)) {

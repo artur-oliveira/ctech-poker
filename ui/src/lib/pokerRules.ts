@@ -7,7 +7,7 @@ export type HandRankingEntry = {
   example: string[];
 };
 
-// Ordered strongest to weakest — matches how players expect to read a
+// Ordered strongest to weakest, matching how players expect to read a
 // rankings reference. `example` cards are illustrative only, independent of
 // any board shown elsewhere in the app.
 export const HAND_RANKINGS: HandRankingEntry[] = [
@@ -38,7 +38,7 @@ export const HAND_RANKINGS: HandRankingEntry[] = [
   {key: 'pair', description: 'Duas cartas do mesmo valor.', example: ['AH', 'AD', '9C', '5D', '2S']},
   {
     key: 'high_card',
-    description: 'Nenhuma combinação — vale a carta mais alta.',
+    description: 'Nenhuma combinação, vale a carta mais alta.',
     example: ['AH', 'JD', '8C', '5S', '2H']
   }
 ].map(entry => ({...entry, label: HAND_CATEGORY_LABELS[entry.key] || entry.key}));
@@ -51,7 +51,7 @@ export const HAND_RANK_INDEX: Record<string, number> = Object.fromEntries(
 );
 
 // How many of a resolved 5-card hand's cards actually make the combination,
-// vs. ride along as kickers — for emphasizing the cards that matter (e.g. a
+// vs. ride along as kickers, for emphasizing the cards that matter (e.g. a
 // pair's 2 cards) over the 3 that don't, instead of showing all 5 as equals.
 // Categories where every card participates (straights, flushes, full house)
 // claim all 5; high_card claims only the top card, since the rest are pure
@@ -79,7 +79,7 @@ function nChooseK<T>(items: T[], k: number): T[][] {
 type FiveCardScore = { category: string; tiebreak: number[] };
 
 // Ranks one 5-card hand: category (matching HAND_RANKINGS' keys) plus a
-// tiebreak vector compared lexicographically, highest first — the same
+// tiebreak vector compared lexicographically, highest first, the same
 // values a human would cite when explaining why one hand beats another
 // (quads' rank, then kicker; two pair's high pair, low pair, then kicker).
 function scoreFiveCards(cards: string[]): FiveCardScore {
@@ -129,9 +129,9 @@ function compareScores(a: FiveCardScore, b: FiveCardScore): number {
   return 0;
 }
 
-// Orders a resolved 5-card hand the way a player reads it — the cards making
+// Orders a resolved 5-card hand the way a player reads it: the cards making
 // the hand first (a pair's two, a trip's three, ...), highest group first,
-// then kickers descending — matching HAND_RANKINGS' own example arrays.
+// then kickers descending, matching HAND_RANKINGS' own example arrays.
 function canonicalOrder(cards: string[]): string[] {
   const groups = new Map<number, string[]>();
   for (const card of cards) {
@@ -140,8 +140,8 @@ function canonicalOrder(cards: string[]): string[] {
     group.push(card);
     groups.set(value, group);
   }
-  // The wheel (A-2-3-4-5): the Ace plays low, so it reads last, not first —
-  // sort by 1 instead of its usual 14 whenever these are exactly the wheel's
+  // The wheel (A-2-3-4-5): the Ace plays low, so it reads last, not first.
+  // Sort by 1 instead of its usual 14 whenever these are exactly the wheel's
   // five distinct values (only possible here when every group is a single
   // card, i.e. this really is that straight and not some other combination
   // that happens to include an Ace and a 5).
@@ -176,14 +176,14 @@ export function bestFiveCardHand(cards: string[]): string[] {
 }
 
 /** Same evaluation as bestFiveCardHand, but returns the HAND_RANKINGS
- * category key (e.g. "two_pair") instead of the card list — for labeling a
+ * category key (e.g. "two_pair") instead of the card list, for labeling a
  * player's hand in a hand-history view, client-side, from raw cards only. */
 export function bestHandCategory(cards: string[]): string {
   return bestOf(cards).score.category;
 }
 
 /** Compares two up-to-7-card hands (hole cards + board) and reports whether
- * the first beats the second — positive when it does, negative when it
+ * the first beats the second: positive when it does, negative when it
  * loses, 0 on a true tie. Used to tell a folded player whether they'd
  * actually have won had they stayed in, not just that someone else did. */
 export function compareHands(cardsA: string[], cardsB: string[]): number {

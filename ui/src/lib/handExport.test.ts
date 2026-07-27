@@ -9,7 +9,7 @@ test('text export includes authorized cards, actions and fairness proof', () => 
     hole_cards: ['As', 'Ad'], opponents: [{player_id: 'p2', name: 'Bia'}], commit_hash: 'abc'
   }, [{seq: 1, player_id: 'viewer', action: 'raise', amount: 100, timestamp: 1_700_000_000_000}], 'viewer');
   assert.match(text, /Suas cartas: As Ad/);
-  assert.match(text, /Você — Raise 100/);
+  assert.match(text, /Você: Raise 100/);
   assert.match(text, /Bia: cartas não reveladas/);
   assert.match(text, /Commit hash: abc/);
 });

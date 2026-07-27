@@ -1,6 +1,6 @@
 import {chipTier} from '@/lib/chips';
 
-/** Purely decorative — the numeric chip count next to it already carries the value for
+/** Purely decorative: the numeric chip count next to it already carries the value for
  * screen readers, so every chip here stays out of the accessibility tree. */
 export function ChipStack({amount, bigBlind = 25, size = 'seat'}: {
   amount: number;

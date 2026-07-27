@@ -59,7 +59,7 @@ export interface TableSnapshot {
   legal_actions?: LegalActionState;
   payouts?: Record<string, number>;
   // Who actually won a contested pot, as opposed to merely appearing in
-  // `payouts` — an uncalled all-in's excess or an orphaned side-pot refund
+  // `payouts`: an uncalled all-in's excess or an orphaned side-pot refund
   // also lands in `payouts` without being a win. Use this for win UI, not
   // `payouts[id] > 0`.
   winners?: string[];

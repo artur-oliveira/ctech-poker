@@ -41,8 +41,8 @@ const actionLabel: Record<PokerAction, string> = {
   fold: 'Desistindo…', check: 'Confirmando…', call: 'Pagando…', raise: 'Aumentando…'
 };
 
-// "Fold"/"Check" stay in English deliberately — BR players call them that at
-// the table even in Portuguese play — while "Pagar"/"Aumentar" carry an
+// "Fold"/"Check" stay in English deliberately: BR players call them that at
+// the table even in Portuguese play, while "Pagar"/"Aumentar" carry an
 // amount, where a loanword reads worse. Confirmed intentional; don't
 // "fix" this into Desistir/Passar without checking first.
 
@@ -55,13 +55,13 @@ function isPlainKey(event: KeyboardEvent) {
   return !event.metaKey && !event.ctrlKey && !event.altKey && !event.repeat && !isTypingTarget(event.target);
 }
 
-/** Same as isPlainKey but allows ctrlKey through — used only by the arrow-key
+/** Same as isPlainKey but allows ctrlKey through. Used only by the arrow-key
  * bet-adjust shortcuts, where holding ctrl means "step faster". */
 function isBetAdjustKey(event: KeyboardEvent) {
   return !event.metaKey && !event.altKey && !event.repeat && !isTypingTarget(event.target);
 }
 
-// Handhelds (≤800px or short landscape — keep in sync with the matching CSS
+// Handhelds (≤800px or short landscape; keep in sync with the matching CSS
 // media tier) don't have room to show the preset/slider sizing UI at all
 // times alongside Fold/Check/Pagar, so it stays collapsed until the player
 // taps Aumentar once to reveal it; desktop keeps it always open (CSS ignores
@@ -137,7 +137,7 @@ function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending
   const [expanded, setExpanded] = useState(false);
   const safeAmount = Math.min(maxRaise, Math.max(minRaise, amount));
   const inactive = disabled || maxRaise < minRaise;
-  // Raising to the max is shoving the whole stack — call it what it is
+  // Raising to the max is shoving the whole stack, so call it what it is
   // instead of a "Pay" label with a number that happens to equal the stack.
   const isAllIn = safeAmount >= maxRaise;
   const uniquePresets = presets
@@ -254,7 +254,7 @@ export function ActionBar({
   const onRaise = useCallback((amount: number) => onActAction('raise', amount), [onActAction]);
   const canFold = available.fold, canCheck = available.check, canCall = available.call;
   // Nothing to do this street at all (waiting for players, folded, showdown/
-  // complete) — collapse the choice row + raise slider instead of painting
+  // complete), so collapse the choice row + raise slider instead of painting
   // the full disabled control surface a spectating player has no use for.
   const noLegalActions = !canFold && !canCheck && !canCall && !available.raise;
 

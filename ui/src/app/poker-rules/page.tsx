@@ -35,7 +35,7 @@ export default function PokerRules() {
           <small>REFERÊNCIA RÁPIDA</small>
           <BookOpen aria-hidden="true"/>
           <h1>Regras do Texas Hold&apos;em</h1>
-          <p>O essencial para sentar em qualquer mesa com confiança — da hierarquia das mãos às regras de aposta e transparência do jogo.</p>
+          <p>O essencial para sentar em qualquer mesa com confiança, da hierarquia das mãos às regras de aposta e transparência do jogo.</p>
         </header>
         <nav className="rules-toc" aria-label="Seções desta página">
           {SECTIONS.map(s => <a key={s.id} href={`#${s.id}`}>{s.label}</a>)}
@@ -60,21 +60,21 @@ export default function PokerRules() {
         <article id="acoes" className="rules-section">
           <h2>Ações na sua vez</h2>
           <ul className="rules-list">
-            <li><span><b>Fold</b> — desiste da mão e abre mão das fichas já apostadas nela.</span></li>
-            <li><span><b>Check</b> — passa a vez sem apostar (somente quando não há aposta pendente na rodada).</span></li>
-            <li><span><b>Pagar (Call)</b> — cobre a aposta em aberto para continuar na disputa do pote.</span></li>
-            <li><span><b>Aumentar (Raise)</b> — eleva a aposta em aberto, exigindo que os adversários igualem para permanecer na mão.</span></li>
+            <li><span><b>Fold</b>: desiste da mão e abre mão das fichas já apostadas nela.</span></li>
+            <li><span><b>Check</b>: passa a vez sem apostar (somente quando não há aposta pendente na rodada).</span></li>
+            <li><span><b>Pagar (Call)</b>: cobre a aposta em aberto para continuar na disputa do pote.</span></li>
+            <li><span><b>Aumentar (Raise)</b>: eleva a aposta em aberto, exigindo que os adversários igualem para permanecer na mão.</span></li>
           </ul>
         </article>
 
         <article id="fases" className="rules-section">
           <h2>Fases de uma mão</h2>
           <ol className="rules-steps">
-            <li><span><b>Pré-flop</b> — cada jogador recebe duas cartas fechadas. A rodada de apostas inicia no jogador à esquerda do big blind.</span></li>
-            <li><span><b>Flop</b> — três cartas comunitárias são abertas no centro da mesa.</span></li>
-            <li><span><b>Turn</b> — a quarta carta comunitária é revelada.</span></li>
-            <li><span><b>River</b> — a quinta e última carta comunitária é revelada.</span></li>
-            <li><span><b>Showdown</b> — quem permaneceu na mão revela suas cartas. A melhor combinação de 5 cartas (entre as 2 da mão e as 5 da mesa) vence o pote.</span></li>
+            <li><span><b>Pré-flop</b>: cada jogador recebe duas cartas fechadas. A rodada de apostas inicia no jogador à esquerda do big blind.</span></li>
+            <li><span><b>Flop</b>: três cartas comunitárias são abertas no centro da mesa.</span></li>
+            <li><span><b>Turn</b>: a quarta carta comunitária é revelada.</span></li>
+            <li><span><b>River</b>: a quinta e última carta comunitária é revelada.</span></li>
+            <li><span><b>Showdown</b>: quem permaneceu na mão revela suas cartas. A melhor combinação de 5 cartas (entre as 2 da mão e as 5 da mesa) vence o pote.</span></li>
           </ol>
         </article>
 

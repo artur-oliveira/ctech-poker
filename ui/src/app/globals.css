@@ -63,7 +63,7 @@
     --ease-out-quint: cubic-bezier(.22, 1, .36, 1);
     --ease-out-expo: cubic-bezier(.16, 1, .3, 1);
 
-    /* z-index scale — app-wide overlay layers only (fixed/sticky chrome that can
+    /* z-index scale: app-wide overlay layers only (fixed/sticky chrome that can
        compete for the same stacking context). Local sibling-ordering z-index
        (card flip faces, seat badges, per-chip stacking) stays as plain small
        ints scoped to their own positioned ancestor; those can't collide with
@@ -74,14 +74,14 @@
     --z-toast: 30;
     --z-dev: 40;
     --z-api: 60;
-    /* opaque mask stop — CSS mask luminance only, never a rendered color */
+    /* opaque mask stop, CSS mask luminance only, never a rendered color */
     --mask-opaque: #fff;
     /* ponytail: stacked mobile action bar footprint (context + presets + quick + bet + raise rows), generous for 2-line pt-BR context; upgrade to measured height if layout grows */
     --action-bar-stack: 260px;
     /* clearance .game-chat needs above the action bar; redeclared at the
        800px breakpoint where the bar's own padding shrinks (see .action-bar) */
     --action-bar-clear: 75px;
-    /* ponytail: captured drift tokens — exact values previously written as literals across the
+    /* ponytail: captured drift tokens. Exact values previously written as literals across the
        stylesheet (landing/lobby/dialog/seat gradients), promoted to single-source tokens so the
        design system stays the only place colors live. */
     /* white alpha overlays */
@@ -856,7 +856,7 @@ h1 em {
     }
 }
 
-/* Same entrance as wager-in, minus the translateY — the hero HUD's bet chip
+/* Same entrance as wager-in, minus the translateY: the hero HUD's bet chip
    sits inline in the card's flex row now, not floating above it, so it has
    no "up toward the pot" direction to travel from. */
 @keyframes wager-in-inline {
@@ -1700,7 +1700,7 @@ h1 em {
 
 /* Pill wraps to two lines and squeezes the nav before the 600px row-wrap
    kicks in (brand + 3 labeled links + pill + avatar don't fit between
-   ~601-680px) — hide it here; balance is one tap away via avatar. */
+   ~601-680px), so hide it here; balance is one tap away via avatar. */
 @media (max-width: 700px) {
     .balance-pill {
         display: none
@@ -2548,7 +2548,7 @@ h1 em {
 }
 
 /* Base size for a bare hole-card outside a context that already sizes
-   .playing-card locally (Seat.tsx, HandOutcome.tsx) — without this, the
+   .playing-card locally (Seat.tsx, HandOutcome.tsx). Without this, the
    card-reveal span has no in-flow content (its children are all
    position: absolute) and collapses to 0x0. */
 .hole-card {
@@ -2699,7 +2699,7 @@ h1 em {
 }
 
 /* Tells every player at the table who just won, not only the winner's own
-   client — a border color change alone is easy to miss mid-glance, so it's
+   client, since a border color change alone is easy to miss mid-glance, so it's
    paired with a couple of gold pulses and, on the cards themselves, a lift
    (see .seat-cards.is-collecting below). */
 .game-seat.is-winner {
@@ -2718,7 +2718,7 @@ h1 em {
 }
 
 /* One-shot flourish on the winning seat's own cards: a lift, a tilt, a gold
-   flash, then back to rest — reads as "these cards just won" without making
+   flash, then back to rest. Reads as "these cards just won" without making
    the seat go card-less while the resolved hand is still on screen. */
 .seat-cards.is-collecting > .playing-card {
     animation: winner-card-lift 700ms var(--ease-out-quart) both;
@@ -2766,14 +2766,14 @@ h1 em {
 }
 
 /* .viewer and .is-winner carry equal specificity and disagree on
-   border-color — without this, winning your own hand silently keeps the
+   border-color. Without this, winning your own hand silently keeps the
    viewer's red border instead of ever showing the gold winner highlight. */
 .game-seat.viewer.is-winner {
     border-color: var(--gold)
 }
 
 /* Seat has joined but hasn't broadcast a display name yet (see set_name in
-   useTableRealtime) — dimmed, not just a text swap, so the table reads as
+   useTableRealtime), dimmed, not just a text swap, so the table reads as
    "still connecting" rather than a normal named opponent. */
 .game-seat.is-pending-name {
     opacity: .62
@@ -2928,8 +2928,8 @@ h1 em {
 
 /* the two side seats sit level with the felt, not above/below it: the bet
    travels sideways toward the center instead of down off the rail. Stays in a
-   column (chip above the number, same as every other seat) rather than a row
-   — a row nearly doubles the badge's width, which is what drove it into the
+   column (chip above the number, same as every other seat) rather than a row,
+   since a row nearly doubles the badge's width, which is what drove it into the
    pot on narrow viewports where this seat has little horizontal clearance. */
 .seat-2 .seat-bet {
     top: 50%;
@@ -3010,7 +3010,7 @@ h1 em {
 }
 
 /* Role badge sits on the seat card's corner rather than floating toward the
-   pot like the bet/win pills — it identifies the seat itself, not something
+   pot like the bet/win pills. It identifies the seat itself, not something
    that happened this street, so it stays put regardless of seat position. */
 .seat-role {
     position: absolute;
@@ -3078,7 +3078,7 @@ h1 em {
 }
 
 /* side-pot showdowns can show a seat's live contribution and its resolved
-   payout at once — both pills sit on the same side of the seat by default,
+   payout at once, and both pills sit on the same side of the seat by default,
    so push the win pill clear of the bet pill instead of stacking on it. */
 .game-seat:not(.viewer) .seat-bet + .seat-win {
     bottom: calc(100% + 60px)
@@ -4330,7 +4330,7 @@ h1 em {
 /* Mirrors .game-chat's fixed toggle/panel exactly, docked bottom-left
    instead of bottom-right (same --action-bar-clear clearance so it never
    sits under the action bar), so the two floating widgets read as one
-   family instead of two different patterns. Desktop/tablet only — see the
+   family instead of two different patterns. Desktop/tablet only, see the
    phone-width hide rule further down. */
 .last-winners {
     position: fixed;
@@ -4435,7 +4435,7 @@ h1 em {
 }
 
 /* Phone-width real estate is already contested (header wraps, hero HUD +
-   action bar + chat toggle share the same strip) — the last-winners widget
+   action bar + chat toggle share the same strip), so the last-winners widget
    is a nice-to-have there, not a must-have, so it drops out entirely rather
    than squeezing in as a third floating corner element. Tablets (portrait
    or landscape) keep it. */
@@ -5219,7 +5219,7 @@ h1 em {
     display: flex;
     gap: 2px;
     /* Reserved clearance for .achievement-star-tooltip's popup, so it never
-       overlaps the description text above — fixed, not conditional on
+       overlaps the description text above. Fixed, not conditional on
        hover, to avoid the row shifting when the tooltip appears. */
     margin-top: 24px
 }
@@ -5347,7 +5347,7 @@ h1 em {
 }
 
 /* Placed after the base rule (not in the earlier shared max-width:900px
-   block) so it actually wins the cascade — .achievements-teaser's own
+   block) so it actually wins the cascade. .achievements-teaser's own
    unconditional grid-template-columns declaration sits below that block in
    source order and would otherwise override an equal-specificity match
    living above it. */
@@ -5366,7 +5366,7 @@ h1 em {
     }
 }
 
-/* ===== Vertical stage — portrait handhelds =====
+/* ===== Vertical stage: portrait handhelds =====
    TableStage picks this composition via matchMedia (its own DOM tree), so
    everything here is scoped by class, not viewport width: nothing below
    fights the desktop oval geometry or the width-tier media blocks. Opponents
@@ -5383,7 +5383,7 @@ h1 em {
 }
 
 /* The ring keeps a tall-capsule proportion instead of swallowing all leftover
-   height — on tablets the felt would otherwise balloon into a near-circle of
+   height, since on tablets the felt would otherwise balloon into a near-circle of
    dead green. Short phones opt back into full-bleed width (see the
    max-height tier at the end of this file). */
 .stage-v-ring {
@@ -5488,7 +5488,7 @@ h1 em {
     box-shadow: 0 0 0 3px var(--gold)
 }
 
-/* Caption below the avatar (chip count only — the name lives in the avatar's
+/* Caption below the avatar (chip count only, the name lives in the avatar's
    initials and stays in the DOM for assistive tech); hole cards float above,
    over the rail band, so they never reach the board at showdown. Top-arc
    seats (4/5) mirror: caption above, cards below toward the felt. */
@@ -5573,7 +5573,7 @@ h1 em {
     transform-origin: 100% 50%
 }
 
-/* Top-arc bets slide sideways into the gap between the two top seats —
+/* Top-arc bets slide sideways into the gap between the two top seats,
    below-the-cards placement lands on the pot/rake row on short screens. */
 .stage-v-ring .seat-4 .seat-bet {
     top: 50%;
@@ -5657,7 +5657,7 @@ h1 em {
     padding: 7px 12px
 }
 
-/* The hero IS obviously you — the brand border moves from "viewer" to
+/* The hero IS obviously you: the brand border moves from "viewer" to
    "your turn" here, keeping one red signal per decision (Red Signal Rule). */
 .stage-v > .game-seat.viewer {
     min-width: 0;
@@ -5720,7 +5720,7 @@ h1 em {
     white-space: nowrap
 }
 
-/* Docked inside the HUD card (trailing edge) instead of floating above it —
+/* Docked inside the HUD card (trailing edge) instead of floating above it,
    the ring seats keep their own avatar right next to the bet chip, but the
    hero card has nothing else nearby to anchor a floating chip to. */
 .stage-v > .game-seat .seat-bet {
@@ -5801,7 +5801,7 @@ h1 em {
 }
 
 /* On the vertical stage the action zone (bar + hero HUD) changes height as
-   the raise UI expands — a bottom-anchored chat toggle keeps landing on it.
+   the raise UI expands, so a bottom-anchored chat toggle keeps landing on it.
    Anchor chat to the ring's top-right corner instead (the capsule curve
    leaves it empty) and open the panel downward. */
 @media (orientation: portrait) and (max-width: 1023px) {
@@ -5859,7 +5859,7 @@ h1 em {
 }
 
 /* The second arm pulls landscape handhelds (any width, short height) into the
-   same compact-seat tier — full desktop name-cards collide with the board on
+   same compact-seat tier: full desktop name-cards collide with the board on
    a 390px-tall table. */
 @media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
     .lobby > header {
@@ -5976,7 +5976,7 @@ h1 em {
     }
 
     /* seat-cards float above the seat box at this width (see the .seat-cards
-       override above) instead of sitting inside it — the top row needs more
+       override above) instead of sitting inside it, since the top row needs more
        clearance from the header than the desktop 1%/10% offsets give, or the
        floated cards render behind the header bar. */
     .seat-3, .seat-4, .seat-5 {
@@ -6030,7 +6030,7 @@ h1 em {
         clip-path: inset(50%)
     }
 
-    /* A fixed banner can't reliably dodge a header that wraps to two lines —
+    /* A fixed banner can't reliably dodge a header that wraps to two lines,
        pin it in normal flow under the header instead, so it can never sit on
        top of Sentar fora / Sair da mesa (see .game-chrome in page.tsx). */
     /* Right margin keeps the in-flow notice clear of the chat toggle that
@@ -6228,7 +6228,7 @@ h1 em {
     }
 
     /* Top-center seat: cards float over the header if they stay above the
-       pill — flip them below, toward the felt. */
+       pill, so flip them below, toward the felt. */
     .seat-4 .seat-cards {
         bottom: auto;
         top: calc(100% - 3px)
@@ -6246,7 +6246,7 @@ h1 em {
         bottom: calc(100% + 40px)
     }
 
-    /* Lower-corner bets slide sideways toward the pot — floating them up
+    /* Lower-corner bets slide sideways toward the pot; floating them up
        lands them on the mid-side seats at this height. */
     .seat-1 .seat-bet {
         top: 50%;
@@ -6274,8 +6274,8 @@ h1 em {
 }
 
 /* Short portrait phones (SE/8 class): the ring loses its height to header +
-   HUD + action bar, so the whole stage steps down one size — smaller board,
-   avatars and hero cards — instead of letting the mid-row seats collide with
+   HUD + action bar, so the whole stage steps down one size (smaller board,
+   avatars and hero cards) instead of letting the mid-row seats collide with
    the community cards. Placed after the width tiers so it wins the cascade. */
 @media (orientation: portrait) and (max-height: 760px) {
     .stage-v .game-felt {
@@ -6744,6 +6744,13 @@ h1 em {
     background: transparent
 }
 
+.replay-header-end {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: none
+}
+
 .replay-pot {
     flex: none;
     color: var(--felt-text);
@@ -6759,7 +6766,11 @@ h1 em {
 }
 
 .replay-live-table {
-    padding: 12px 0 16px;
+    /* Horizontal gutter matters here: seats intentionally overhang the
+       game-table's edge by ~1% (see .seat-2/.seat-6), and this container
+       clips overflow, so zero side padding cuts the rightmost/leftmost
+       seat off. */
+    padding: 12px 24px 16px;
     background: var(--table-room)
 }
 
@@ -6805,7 +6816,10 @@ h1 em {
 
 .replay-page .hand-replayer > header {
     min-height: 72px;
-    padding-left: max(160px, calc(env(safe-area-inset-left) + 160px))
+    /* Reserves room for the absolutely-positioned back link (nav, top-left)
+       so it never overlaps the title; must stay wider than that link's
+       rendered width ("Voltar para Detalhes da Mão" ≈ 190px at 12px/Geist). */
+    padding-left: max(220px, calc(env(safe-area-inset-left) + 220px))
 }
 
 .replay-page .replay-live-table .game-table {

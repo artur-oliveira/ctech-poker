@@ -21,7 +21,7 @@ export function InviteDialog({url}: { url: string }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Clipboard API unavailable/blocked — the input stays visible and selectable for a manual copy.
+      // Clipboard API unavailable/blocked. The input stays visible and selectable for a manual copy.
     }
   }
 
@@ -30,7 +30,7 @@ export function InviteDialog({url}: { url: string }) {
       try {
         await navigator.share({url});
       } catch {
-        // User dismissed the native share sheet — nothing to recover from.
+        // User dismissed the native share sheet, nothing to recover from.
       }
       return;
     }

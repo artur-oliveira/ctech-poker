@@ -11,7 +11,7 @@ export type WinnerLogEntry = { key: string; names: string[]; category?: string; 
 
 // `/players/me/hands` only ever carries the viewer's own perspective, so a
 // hand's "winner(s)" are the viewer (outcome won/tied) plus whichever
-// opponents the server flagged `won` — a split pot lists more than one name.
+// opponents the server flagged `won`, so a split pot lists more than one name.
 // A `lost` hand never puts the viewer in that list. The winning combo is
 // read off whichever winner actually has hole cards on record (the viewer
 // always does; an opponent only when the hand went to showdown) combined
@@ -30,7 +30,7 @@ export function deriveWinners(items: HandItem[], limit = 5): WinnerLogEntry[] {
 }
 
 /** Floating toggle mirroring Chat's affordance (bottom-left instead of
- * bottom-right) — the last 5 resolved hands at this table, newest first,
+ * bottom-right). Shows the last 5 resolved hands at this table, newest first,
  * sourced from the player's own hand-history endpoint rather than live
  * socket state, so it's populated the moment the table loads instead of
  * only after the viewer sits through a fresh resolution. Desktop/tablet
