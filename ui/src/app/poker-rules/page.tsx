@@ -4,6 +4,7 @@ import {Award, BookOpen, ChevronLeft, Club, History, Trophy} from 'lucide-react'
 import {HandRankings} from '@/components/HandRankings';
 import {useOptionalSession} from "@/lib/auth/session";
 import {ProfileMenu} from "@/components/lobby/ProfileMenu";
+import {Button} from "@/components/ui/button";
 
 const SECTIONS = [
   {id: 'maos', label: 'Mãos'},
@@ -94,7 +95,19 @@ export default function PokerRules() {
             Em vez disso, cobramos uma taxa fixa de mesa ao entrar (o &quot;aluguel&quot; da sala), que não depende do
             tamanho do pote nem é um percentual do blind.</p>
         </article>
+
+        <div className="rules-footer-cta">
+          <h3>Quer ver como tudo isso funciona na prática?</h3>
+          <p>Confira nosso guia passo a passo da mesa ou entre direto no lobby para escolher um stake.</p>
+          <div className="rules-cta-buttons">
+            <Button render={<Link href="/guide"/>}>Ver Guia da Mesa</Button>
+            <Button variant="outline" render={<Link href={authed ? "/lobby" : "/"}/>}>
+              {authed ? "Ir para o Lobby" : "Ir para o Início"}
+            </Button>
+          </div>
+        </div>
       </section>
     </main>
   );
 }
+

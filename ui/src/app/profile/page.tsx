@@ -3,15 +3,18 @@ import {Suspense} from 'react';
 import Link from 'next/link';
 import {useSearchParams} from 'next/navigation';
 import {useQuery} from '@tanstack/react-query';
-import {ChevronLeft, Club, Sparkles, Trophy} from 'lucide-react';
+import {Award, BookOpen, ChevronLeft, Club, History, Sparkles, Trophy} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {getProfileShowcase} from '@/lib/api/player';
 import {achievementLabel} from '@/lib/achievements';
+import {useOptionalSession} from "@/lib/auth/session";
+import {ProfileMenu} from "@/components/lobby/ProfileMenu";
 
 function ProfileContent() {
   const params = useSearchParams();
   const playerID = params.get('id') || '';
+  const {authed} = useOptionalSession();
   const showcase = useQuery({
     queryKey: ['profile-showcase', playerID],
     queryFn: () => getProfileShowcase(playerID),
@@ -22,9 +25,16 @@ function ProfileContent() {
   return <main className="app-page profile-showcase-page">
     <nav className="app-nav shell">
       <Link href="/" className="brand"><span className="brand-mark"><Club/></span>CTech <b>Poker</b></Link>
-      <Link href="/lobby"><ChevronLeft/> Lobby</Link>
+      {authed ? <div className="header-right">
+        <Link href="/guide"><BookOpen/> <span className="header-right-label">Guia</span></Link>
+        <Link href="/leaderboard"><Trophy/> <span className="header-right-label">Ranking</span></Link>
+        <Link href="/achievements"><Award/> <span className="header-right-label">Conquistas</span></Link>
+        <Link href="/hands"><History/> <span className="header-right-label">Mãos</span></Link>
+        <ProfileMenu/>
+      </div> : <Link href="/lobby"><ChevronLeft/> Lobby</Link>}
     </nav>
     <section className="profile-showcase shell">
+      {authed && <Link href="/lobby"><ChevronLeft/> Lobby</Link>}
       {showcase.isLoading ? <div className="lobby-empty"><span className="loader"/>Carregando vitrine…</div> :
         showcase.isError || !showcase.data ? <div className="lobby-empty">
           <Sparkles aria-hidden="true"/>
@@ -72,3 +82,4 @@ export default function ProfilePage() {
     <ProfileContent/>
   </Suspense>;
 }
+

@@ -7,6 +7,7 @@ import {Club, ShieldCheck} from 'lucide-react';
 import {getHandShare} from '@/lib/api/handShares';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {HandReplayer} from '@/components/hands/HandReplayer';
+import {Button} from '@/components/ui/button';
 import type {HandItem} from '@/lib/api/player';
 
 function SharedHandContent() {
@@ -40,6 +41,10 @@ function SharedHandContent() {
     </div>
     {(item.actions || []).some(action => action.frame) &&
       <HandReplayer hand={hand} actions={item.actions || []} viewerId="hero"/>}
+    <footer className="public-hand-footer">
+      <p>Gostou dessa jogada? Experimente o CTech Poker agora mesmo.</p>
+      <Button render={<Link href="/"/>}>Jogar no CTech Poker</Button>
+    </footer>
   </section>;
 }
 
@@ -51,3 +56,4 @@ export default function SharedHandPage() {
     </Suspense>
   </main>;
 }
+

@@ -4,6 +4,16 @@ import Image from 'next/image';
 import {Award, BookOpen, ChevronLeft, Club, Compass, History, Trophy} from 'lucide-react';
 import {useOptionalSession} from "@/lib/auth/session";
 import {ProfileMenu} from "@/components/lobby/ProfileMenu";
+import {Button} from "@/components/ui/button";
+
+const SECTIONS = [
+  {id: 'lobby', label: 'O lobby'},
+  {id: 'entrar', label: 'Entrar na mesa'},
+  {id: 'privada', label: 'Mesa privada'},
+  {id: 'acoes', label: 'Ações na vez'},
+  {id: 'fases', label: 'Flop, turn e river'},
+  {id: 'showdown', label: 'Showdown'}
+];
 
 export default function Guide() {
   const {authed} = useOptionalSession();
@@ -30,7 +40,11 @@ export default function Guide() {
             amigos e como agir quando chegar a sua vez.</p>
         </header>
 
-        <article className="guide-section">
+        <nav className="rules-toc" aria-label="Seções do guia">
+          {SECTIONS.map(s => <a key={s.id} href={`#${s.id}`}>{s.label}</a>)}
+        </nav>
+
+        <article id="lobby" className="guide-section">
           <div>
             <h2>O lobby</h2>
             <p>Todas as mesas públicas aparecem agrupadas por stake (o par de blinds). Cada cartão mostra quantas mesas
@@ -43,7 +57,7 @@ export default function Guide() {
           </figure>
         </article>
 
-        <article className="guide-section reverse">
+        <article id="entrar" className="guide-section reverse">
           <div>
             <h2>Entrar em uma mesa</h2>
             <ol className="rules-steps">
@@ -60,7 +74,7 @@ export default function Guide() {
           </figure>
         </article>
 
-        <article className="guide-section">
+        <article id="privada" className="guide-section">
           <div>
             <h2>Criar uma sala privada</h2>
             <ol className="rules-steps">
@@ -75,7 +89,7 @@ export default function Guide() {
           </figure>
         </article>
 
-        <article className="guide-section reverse">
+        <article id="acoes" className="guide-section reverse">
           <div>
             <h2>Como agir na sua vez</h2>
             <p>Na sua vez, a borda dourada marca o seu assento e a barra de ações aparece na parte inferior — as
@@ -93,7 +107,7 @@ export default function Guide() {
           </figure>
         </article>
 
-        <article className="guide-section">
+        <article id="fases" className="guide-section">
           <div>
             <h2>Flop, turn e river</h2>
             <p>A cada rodada de apostas concluída, uma nova carta comunitária entra no centro da mesa: três no flop,
@@ -107,7 +121,7 @@ export default function Guide() {
           </figure>
         </article>
 
-        <article className="guide-section reverse">
+        <article id="showdown" className="guide-section reverse">
           <div>
             <h2>Showdown e pote lateral</h2>
             <p>Se mais de um jogador chegar ao showdown, as cartas de cada um ficam visíveis e a melhor combinação de
@@ -121,7 +135,21 @@ export default function Guide() {
                    width={1280} height={800}/>
           </figure>
         </article>
+
+        <div className="guide-footer-cta">
+          <h3>Pronto para testar na prática?</h3>
+          <p>Entre em uma mesa sandbox com fichas fictícias e experimente o CTech Poker sem compromisso.</p>
+          <div className="rules-cta-buttons">
+            <Button render={<Link href={authed ? "/lobby" : "/"}/>}>
+              {authed ? "Ir para o Lobby" : "Começar a Jogar"}
+            </Button>
+            <Button variant="outline" render={<Link href="/poker-rules"/>}>
+              Guia de Regras
+            </Button>
+          </div>
+        </div>
       </section>
     </main>
   );
 }
+
