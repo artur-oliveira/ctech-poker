@@ -1,0 +1,139 @@
+'use client';
+import {useEffect, useMemo, useState} from 'react';
+import {ChevronLeft, ChevronRight, Pause, Play, RotateCcw} from 'lucide-react';
+import {Button} from '@/components/ui/button';
+import {TableStage} from '@/components/table/TableStage';
+import type {HandHistoryAction, TableSnapshot} from '@/lib/api/table';
+import type {HandItem} from '@/lib/api/player';
+import {playerName} from '@/lib/utils';
+
+const STAGE_LABELS: Record<string, string> = {
+  waiting_for_players: 'Início', pre_flop: 'Pré-flop', flop: 'Flop',
+  turn: 'Turn', river: 'River', showdown: 'Showdown', complete: 'Resultado'
+};
+
+const ACTION_LABELS: Record<string, string> = {
+  check: 'deu check', fold: 'foldou', call: 'pagou', bet: 'apostou',
+  raise: 'aumentou para', all_in: 'foi all-in com', won: 'venceu',
+  tie: 'empatou', show_cards: 'mostrou cartas', runout_step: 'abriu o board'
+};
+
+export function HandReplayer({
+  hand,
+  actions,
+  viewerId
+}: {
+  hand: HandItem;
+  actions: HandHistoryAction[];
+  viewerId?: string;
+}) {
+  const replayActions = useMemo(() => actions.filter(action => action.frame), [actions]);
+  const [index, setIndex] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const lastIndex = Math.max(0, replayActions.length - 1);
+  const safeIndex = Math.min(index, lastIndex);
+
+  useEffect(() => {
+    if (!playing || replayActions.length < 2) return undefined;
+    const timer = window.setTimeout(() => {
+      setIndex(current => {
+        if (current >= lastIndex) {
+          setPlaying(false);
+          return current;
+        }
+        return current + 1;
+      });
+    }, (replayActions[safeIndex + 1]?.frame?.board?.length !== replayActions[safeIndex]?.frame?.board?.length ?
+      1450 : 900) / speed);
+    return () => window.clearTimeout(timer);
+  }, [playing, safeIndex, lastIndex, replayActions, speed]);
+
+  if (!replayActions.length) return <section className="hand-replayer unavailable">
+    <div>
+      <h2>Replay da mão</h2>
+      <p>Esta mão foi registrada antes dos frames de replay serem habilitados. As próximas mãos poderão ser reproduzidas ação por ação.</p>
+    </div>
+  </section>;
+
+  const current = replayActions[safeIndex];
+  const frame = current.frame!;
+  const opponents = new Map((hand.opponents || []).map(opponent => [opponent.player_id, opponent]));
+  const shownPlayers = new Set(replayActions.slice(0, safeIndex + 1)
+    .filter(action => action.action === 'show_cards').map(action => action.player_id));
+  const showFinalCards = frame.stage === 'complete' || frame.stage === 'showdown';
+  const actionLabel = ACTION_LABELS[current.action] || current.action.replaceAll('_', ' ');
+  const actor = playerName(current.player_id, viewerId, opponents.get(current.player_id)?.name ||
+    frame.seats?.find(seat => seat.player_id === current.player_id)?.name);
+
+  const holeCardsFor = (playerId: string) => {
+    if (playerId === viewerId) return hand.hole_cards;
+    if (!showFinalCards && !shownPlayers.has(playerId)) return undefined;
+    return opponents.get(playerId)?.hole_cards;
+  };
+  const replaySnapshot: TableSnapshot = {
+    stage: frame.stage,
+    board: frame.board || [],
+    current_player_id: frame.current_player_id,
+    dealer_player_id: frame.dealer_player_id,
+    small_blind_player_id: frame.small_blind_player_id,
+    big_blind_player_id: frame.big_blind_player_id,
+    payouts: frame.payouts,
+    winners: frame.winners,
+    pots: frame.pot > 0 ? [{
+      amount: frame.pot,
+      eligible_player_ids: (frame.seats || []).filter(seat => seat.dealt_in).map(seat => seat.player_id)
+    }] : [],
+    seats: (frame.seats || []).map(seat => ({
+      ...seat,
+      hole_cards: holeCardsFor(seat.player_id),
+      hole_cards_revealed: holeCardsFor(seat.player_id)?.map(card => card.toLowerCase() !== 'back')
+    }))
+  };
+
+  return <section className="hand-replayer" aria-label="Replay interativo da mão">
+    <header>
+      <div>
+        <h2>Replay da mão</h2>
+        <p>Ação {safeIndex + 1} de {replayActions.length} · {STAGE_LABELS[frame.stage] || frame.stage}</p>
+      </div>
+      <span className="replay-pot">Pote <b key={`${current.seq}-${frame.pot}`}>{frame.pot.toLocaleString('pt-BR')}</b></span>
+    </header>
+    <div className="replay-live-table">
+      <TableStage snapshot={replaySnapshot} viewer={viewerId} pot={frame.pot} bigBlind={25}
+                  nowMs={current.timestamp} outcome={null} holdOutcomeOpen={false}/>
+      <p key={`action-${current.seq}`} className="replay-action" aria-live="polite">
+        <b>{actor}</b> {actionLabel}
+        {current.amount > 0 && <> <strong>{current.amount.toLocaleString('pt-BR')}</strong></>}
+      </p>
+    </div>
+    <div className="replay-controls">
+      <Button type="button" variant="ghost" size="icon" aria-label="Voltar ao início"
+              onClick={() => { setPlaying(false); setIndex(0); }}><RotateCcw/></Button>
+      <Button type="button" variant="ghost" size="icon" aria-label="Ação anterior"
+              disabled={safeIndex === 0} onClick={() => { setPlaying(false); setIndex(value => Math.max(0, value - 1)); }}>
+        <ChevronLeft/>
+      </Button>
+      <Button type="button" aria-label={playing ? 'Pausar replay' : 'Reproduzir replay'}
+              onClick={() => {
+                if (safeIndex === lastIndex) setIndex(0);
+                setPlaying(value => !value);
+              }}>{playing ? <Pause/> : <Play/>}<span>{playing ? 'Pausar' : 'Reproduzir'}</span></Button>
+      <Button type="button" variant="ghost" size="icon" aria-label="Próxima ação"
+              disabled={safeIndex === lastIndex}
+              onClick={() => { setPlaying(false); setIndex(value => Math.min(lastIndex, value + 1)); }}>
+        <ChevronRight/>
+      </Button>
+      <button type="button" className="replay-speed" onClick={() => setSpeed(value => value === 1 ? 2 : 1)}
+              aria-label={`Velocidade ${speed} vezes`}>{speed}×</button>
+      <label>
+        <span className="sr-only">Posição do replay</span>
+        <input type="range" min={0} max={lastIndex} value={safeIndex}
+               aria-valuetext={`Ação ${safeIndex + 1} de ${replayActions.length}`}
+               onChange={event => { setPlaying(false); setIndex(Number(event.target.value)); }}/>
+      </label>
+    </div>
+    <span className="replay-progress" aria-hidden="true"
+          style={{transform: `scaleX(${(safeIndex + 1) / replayActions.length})`}}/>
+  </section>;
+}

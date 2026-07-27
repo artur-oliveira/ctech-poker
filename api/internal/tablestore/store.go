@@ -31,6 +31,32 @@ type ActionLogEntry struct {
 	Action    string `dynamodbav:"action"`
 	Amount    int64  `dynamodbav:"amount"`
 	Timestamp int64  `dynamodbav:"timestamp"` // unix millis, set by CommitAction
+	// Frame is a public, hole-card-free projection of the authoritative table
+	// immediately after this action. It makes recent hands replayable without
+	// exposing the unredacted persisted hand.State.
+	Frame *ReplayFrame `dynamodbav:"frame,omitempty"`
+}
+
+type ReplayFrame struct {
+	Stage              string           `dynamodbav:"stage" json:"stage"`
+	Board              []string         `dynamodbav:"board,omitempty" json:"board,omitempty"`
+	Seats              []ReplaySeat     `dynamodbav:"seats,omitempty" json:"seats,omitempty"`
+	CurrentPlayerID    string           `dynamodbav:"current_player_id,omitempty" json:"current_player_id,omitempty"`
+	DealerPlayerID     string           `dynamodbav:"dealer_player_id,omitempty" json:"dealer_player_id,omitempty"`
+	SmallBlindPlayerID string           `dynamodbav:"small_blind_player_id,omitempty" json:"small_blind_player_id,omitempty"`
+	BigBlindPlayerID   string           `dynamodbav:"big_blind_player_id,omitempty" json:"big_blind_player_id,omitempty"`
+	Pot                int64            `dynamodbav:"pot" json:"pot"`
+	Payouts            map[string]int64 `dynamodbav:"payouts,omitempty" json:"payouts,omitempty"`
+	Winners            []string         `dynamodbav:"winners,omitempty" json:"winners,omitempty"`
+}
+
+type ReplaySeat struct {
+	PlayerID    string `dynamodbav:"player_id" json:"player_id"`
+	Name        string `dynamodbav:"name,omitempty" json:"name,omitempty"`
+	Stack       int64  `dynamodbav:"stack" json:"stack"`
+	State       string `dynamodbav:"state" json:"state"`
+	Contributed int64  `dynamodbav:"contributed" json:"contributed"`
+	DealtIn     bool   `dynamodbav:"dealt_in" json:"dealt_in"`
 }
 
 // StoredTable is the current authoritative state of one table, as read from

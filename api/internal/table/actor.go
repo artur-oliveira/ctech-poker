@@ -659,12 +659,44 @@ func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.A
 	}
 	newState := a.cached.ExportState()
 	entry.TableID, entry.HandID, entry.Version = a.id, a.handID, a.version+1
+	entry.Frame = replayFrameFor(a.cached.ViewFor(""))
 	deadline := a.turnDeadlineForPersist()
 	if err := a.store.CommitAction(ctx, a.id, a.handID, actionID, a.version, newState, deadline, *entry); err != nil {
 		return err
 	}
 	a.version++
 	return nil
+}
+
+// replayFrameFor deliberately copies only public gameplay state. In
+// particular, SeatView.HoleCards is never persisted in the shared action log:
+// the participant-scoped hand record remains the sole source of cards a
+// replay viewer is allowed to see.
+func replayFrameFor(snapshot hand.Snapshot) *tablestore.ReplayFrame {
+	frame := &tablestore.ReplayFrame{
+		Stage: snapshot.Stage, Board: append([]string(nil), snapshot.Board...),
+		CurrentPlayerID:    snapshot.CurrentPlayerID,
+		DealerPlayerID:     snapshot.DealerPlayerID,
+		SmallBlindPlayerID: snapshot.SmallBlindPlayerID,
+		BigBlindPlayerID:   snapshot.BigBlindPlayerID,
+		Payouts:            snapshot.Payouts, Winners: append([]string(nil), snapshot.Winners...),
+		Seats: make([]tablestore.ReplaySeat, 0, len(snapshot.Seats)),
+	}
+	for _, pot := range snapshot.Pots {
+		frame.Pot += pot.Amount
+	}
+	if frame.Pot == 0 {
+		for _, seat := range snapshot.Seats {
+			frame.Pot += seat.Contributed
+		}
+	}
+	for _, seat := range snapshot.Seats {
+		frame.Seats = append(frame.Seats, tablestore.ReplaySeat{
+			PlayerID: seat.PlayerID, Name: seat.Name, Stack: seat.Stack,
+			State: seat.State, Contributed: seat.Contributed, DealtIn: seat.DealtIn,
+		})
+	}
+	return frame
 }
 
 // turnDeadlineForPersist returns the deadline to commit alongside this

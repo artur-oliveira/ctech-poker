@@ -9,11 +9,12 @@ import (
 )
 
 type HistoryAction struct {
-	Seq       int    `json:"seq"`
-	PlayerID  string `json:"player_id"`
-	Action    string `json:"action"`
-	Amount    int64  `json:"amount"`
-	Timestamp int64  `json:"timestamp"` // unix millis, from ActionLogEntry.Timestamp
+	Seq       int                     `json:"seq"`
+	PlayerID  string                  `json:"player_id"`
+	Action    string                  `json:"action"`
+	Amount    int64                   `json:"amount"`
+	Timestamp int64                   `json:"timestamp"` // unix millis, from ActionLogEntry.Timestamp
+	Frame     *tablestore.ReplayFrame `json:"frame,omitempty"`
 }
 
 type historyStore interface {
@@ -31,7 +32,10 @@ func (a *tablestoreAdapter) LoadActionsSince(ctx context.Context, tableID, handI
 	}
 	out := make([]HistoryAction, len(entries))
 	for i, e := range entries {
-		out[i] = HistoryAction{Seq: e.Seq, PlayerID: e.PlayerID, Action: e.Action, Amount: e.Amount, Timestamp: e.Timestamp}
+		out[i] = HistoryAction{
+			Seq: e.Seq, PlayerID: e.PlayerID, Action: e.Action, Amount: e.Amount,
+			Timestamp: e.Timestamp, Frame: e.Frame,
+		}
 	}
 	return out, nil
 }

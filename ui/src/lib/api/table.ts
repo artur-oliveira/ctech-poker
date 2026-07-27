@@ -105,6 +105,29 @@ export interface HandHistoryAction {
   action: Action;
   amount: number;
   timestamp: number; // unix millis
+  frame?: ReplayFrame
+}
+
+export interface ReplaySeat {
+  player_id: string;
+  name?: string;
+  stack: number;
+  state: string;
+  contributed: number;
+  dealt_in: boolean
+}
+
+export interface ReplayFrame {
+  stage: string;
+  board?: string[];
+  seats?: ReplaySeat[];
+  current_player_id?: string;
+  dealer_player_id?: string;
+  small_blind_player_id?: string;
+  big_blind_player_id?: string;
+  pot: number;
+  payouts?: Record<string, number>;
+  winners?: string[]
 }
 
 export interface HandHistory {

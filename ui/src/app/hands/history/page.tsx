@@ -3,13 +3,14 @@ import Link from 'next/link';
 import {Suspense} from 'react';
 import {useSearchParams} from 'next/navigation';
 import {useQuery} from '@tanstack/react-query';
-import {ChevronLeft, Crown, ShieldCheck} from 'lucide-react';
+import {ChevronLeft, Crown, ExternalLink, Play, ShieldCheck} from 'lucide-react';
 import {getHand} from '@/lib/api/player';
 import {getHandHistory} from '@/lib/api/table';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
 import {ActionTimeline} from '@/components/hands/ActionTimeline';
 import {DeckReveal} from '@/components/hands/DeckReveal';
+import {Button} from '@/components/ui/button';
 import {TermsGate} from '@/components/TermsGate';
 import {getViewerId, HAND_CATEGORY_LABELS, playerName} from '@/lib/utils';
 import {bestHandCategory} from '@/lib/pokerRules';
@@ -74,6 +75,16 @@ function HandHistoryContent() {
         {h.net_change > 0 ? '+' : ''}{h.net_change.toLocaleString('pt-BR')} fichas
       </span>
     </header>
+
+    {!history.isLoading && !history.isError && actions.some(action => action.frame) &&
+      <div className="hand-replay-launch">
+        <div><Play aria-hidden="true"/><span><b>Reviva esta mão ação por ação</b>
+          <small>Abre uma mesa de replay em tela inteira.</small></span></div>
+        <Button render={<Link href={`/hands/replay?table_id=${encodeURIComponent(tableId)}&hand_id=${encodeURIComponent(handId)}`}
+                              target="_blank" rel="noreferrer"/>}>
+          Assistir replay <ExternalLink aria-hidden="true"/>
+        </Button>
+      </div>}
 
     <section className="hand-history-players">
       <article className={`hand-history-seat viewer${viewerIsWinner ? ' is-winner' : ''}`}>

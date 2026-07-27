@@ -5268,6 +5268,49 @@ h1 em {
     font-weight: 600
 }
 
+.hand-replay-launch {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 50px;
+    padding: 16px 18px;
+    border-radius: var(--rounded-panel);
+    background: var(--surface-seat)
+}
+
+.hand-replay-launch > div {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px
+}
+
+.hand-replay-launch > div > svg {
+    width: 20px;
+    flex: none;
+    color: var(--gold)
+}
+
+.hand-replay-launch b, .hand-replay-launch small {
+    display: block
+}
+
+.hand-replay-launch b {
+    color: var(--paper);
+    font-size: 14px
+}
+
+.hand-replay-launch small {
+    margin-top: 3px;
+    color: var(--muted-rose);
+    font-size: 12px
+}
+
+.hand-replay-launch > a {
+    flex: none
+}
+
 .winner-crown {
     position: absolute;
     top: -14px;
@@ -5279,6 +5322,204 @@ h1 em {
 
 .hand-history-board, .hand-history-actions, .hand-history-fairness {
     margin-bottom: 50px
+}
+
+.hand-replayer {
+    position: relative;
+    left: 50%;
+    width: min(1100px, calc(100vw - 32px));
+    transform: translateX(-50%);
+    margin-bottom: 50px;
+    overflow: hidden;
+    border-radius: var(--rounded-panel);
+    background: var(--surface-seat)
+}
+
+.hand-replayer > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--seat-border)
+}
+
+.hand-replayer h2 {
+    margin: 0
+}
+
+.hand-replayer > header p, .hand-replayer.unavailable p {
+    margin: 4px 0 0;
+    color: var(--muted-rose);
+    font-size: 12px
+}
+
+.hand-replayer.unavailable {
+    left: auto;
+    width: auto;
+    transform: none;
+    padding: 18px;
+    border: 1px solid var(--seat-border);
+    background: transparent
+}
+
+.replay-pot {
+    flex: none;
+    color: var(--felt-text);
+    font: 600 12px var(--font-mono)
+}
+
+.replay-pot b {
+    margin-left: 5px;
+    color: var(--gold);
+    font-size: 16px;
+    display: inline-block;
+    animation: replay-pot-pulse 360ms var(--ease-out-quart)
+}
+
+.replay-live-table {
+    padding: 12px 0 16px;
+    background: var(--table-room)
+}
+
+.replay-live-table .game-table {
+    width: 100%;
+    height: clamp(470px, 50vw, 560px)
+}
+
+.replay-page {
+    min-height: 100svh;
+    background: var(--table-room);
+    overflow: hidden
+}
+
+.replay-page > nav {
+    position: absolute;
+    z-index: 20;
+    top: max(12px, env(safe-area-inset-top));
+    left: max(14px, env(safe-area-inset-left))
+}
+
+.replay-page > nav a {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    text-decoration: none
+}
+
+.replay-page > nav svg {
+    width: 16px
+}
+
+.replay-page .hand-replayer {
+    left: auto;
+    width: 100%;
+    min-height: 100svh;
+    margin: 0;
+    border-radius: 0;
+    transform: none
+}
+
+.replay-page .hand-replayer > header {
+    min-height: 72px;
+    padding-left: max(160px, calc(env(safe-area-inset-left) + 160px))
+}
+
+.replay-page .replay-live-table .game-table {
+    height: calc(100svh - 178px);
+    min-height: 440px;
+    max-height: none
+}
+
+.replay-page .replay-controls {
+    background: var(--surface-seat)
+}
+
+.replay-page-error {
+    min-height: 100svh;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 12px;
+    padding: 24px;
+    text-align: center
+}
+
+.replay-action {
+    width: fit-content;
+    max-width: 100%;
+    margin: 4px auto 0;
+    padding: 8px 12px;
+    border-radius: var(--rounded-pill);
+    background: var(--surface-control);
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-align: center;
+    animation: replay-action-enter 320ms var(--ease-out-quart)
+}
+
+.replay-action b {
+    color: var(--paper)
+}
+
+.replay-action strong {
+    color: var(--gold)
+}
+
+.replay-controls {
+    display: grid;
+    grid-template-columns: auto auto minmax(130px, auto) auto auto minmax(100px, 1fr);
+    align-items: center;
+    gap: 5px;
+    padding: 12px
+}
+
+.replay-controls > label {
+    min-width: 0;
+    display: flex;
+    padding-inline: 8px
+}
+
+.replay-controls input {
+    width: 100%;
+    accent-color: var(--brand)
+}
+
+.replay-speed {
+    min-width: 42px;
+    min-height: 38px;
+    border: 0;
+    border-radius: var(--rounded-control);
+    background: transparent;
+    color: var(--text-secondary);
+    font: 700 12px var(--font-mono);
+    cursor: pointer
+}
+
+.replay-speed:hover {
+    background: var(--surface-control-hover);
+    color: var(--paper)
+}
+
+.replay-progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: var(--brand-bright);
+    transform-origin: left;
+    transition: transform 320ms var(--ease-out-quart)
+}
+
+@keyframes replay-action-enter {
+    from { opacity: 0 }
+}
+
+@keyframes replay-pot-pulse {
+    45% { color: var(--paper); transform: scale(1.18) }
 }
 
 .hand-history h2 {
@@ -5503,6 +5744,12 @@ h1 em {
 }
 
 @media (max-width: 700px) {
+    .hand-replayer {
+        left: auto;
+        width: 100%;
+        transform: none
+    }
+
     .hand-history-players {
         grid-template-columns: 1fr 1fr
     }
@@ -5515,6 +5762,72 @@ h1 em {
     .action-row-when {
         display: none
     }
+
+    .replay-live-table .game-table {
+        min-height: 460px;
+        height: 68svh;
+        max-height: 620px
+    }
+
+    .hand-replay-launch {
+        align-items: stretch;
+        flex-direction: column
+    }
+
+    .hand-replay-launch > a {
+        width: 100%
+    }
+
+    .replay-page {
+        overflow: auto
+    }
+
+    .replay-page .hand-replayer > header {
+        min-height: 112px;
+        padding: 48px 14px 12px
+    }
+
+    .replay-page .replay-live-table .game-table {
+        min-height: 500px;
+        height: calc(100svh - 230px)
+    }
+
+    .replay-controls {
+        grid-template-columns: auto auto minmax(112px, 1fr) auto auto
+    }
+
+    .replay-controls > label {
+        grid-column: 1 / -1;
+        width: 100%
+    }
+}
+
+@media (orientation: portrait) and (min-width: 701px) and (max-width: 1023px) {
+    .replay-live-table .game-table {
+        min-height: 540px;
+        height: 70svh;
+        max-height: 680px
+    }
+}
+
+@media (min-width: 701px) {
+    .replay-page .hand-replayer {
+        height: 100svh;
+        min-height: 0;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto
+    }
+
+    .replay-page .replay-live-table {
+        min-height: 0;
+        display: grid;
+        grid-template-rows: minmax(0, 1fr) auto
+    }
+
+    .replay-page .replay-live-table .game-table {
+        height: 100%;
+        min-height: 0
+    }
 }
 
 @media (max-width: 520px) {
@@ -5524,5 +5837,28 @@ h1 em {
 
     .deck-grid {
         grid-template-columns: repeat(auto-fill, minmax(38px, 1fr))
+    }
+
+    .hand-replayer > header {
+        align-items: flex-start
+    }
+
+    .replay-controls > button:nth-child(1) {
+        display: none
+    }
+
+    .replay-controls {
+        grid-template-columns: auto minmax(118px, 1fr) auto auto
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .replay-action,
+    .replay-pot b {
+        animation: none
+    }
+
+    .replay-progress {
+        transition: none
     }
 }

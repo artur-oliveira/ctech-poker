@@ -101,8 +101,52 @@ function timedActions(endedAtSeconds: number, actions: Omit<HandHistoryAction, '
   return actions.map((a, i) => ({...a, timestamp: startMs + i * 4000}));
 }
 
+function replayActions(
+  hand: HandItem,
+  streetEnds: [number, number, number],
+  actions: Omit<HandHistoryAction, 'timestamp' | 'frame'>[]
+): HandHistoryAction[] {
+  const timed = timedActions(hand.ended_at, actions);
+  const opponent = hand.opponents?.[0];
+  const stacks: Record<string, number> = {[MOCK_PLAYER_ID]: 5000};
+  if (opponent) stacks[opponent.player_id] = 5000;
+  let pot = 0;
+  return timed.map((action, index) => {
+    if (action.amount > 0) {
+      const paid = Math.min(stacks[action.player_id] || 0, action.amount);
+      stacks[action.player_id] = (stacks[action.player_id] || 0) - paid;
+      pot += paid;
+    }
+    const boardCount = index < streetEnds[0] ? 0 : index < streetEnds[1] ? 3 : index < streetEnds[2] ? 4 : 5;
+    const final = index === timed.length - 1;
+    return {
+      ...action,
+      frame: {
+        stage: final ? 'complete' : boardCount === 0 ? 'pre_flop' : boardCount === 3 ? 'flop' : boardCount === 4 ? 'turn' : 'river',
+        board: hand.board?.slice(0, boardCount),
+        pot,
+        current_player_id: timed[index + 1]?.player_id,
+        winners: final ? hand.outcome === 'lost' ? hand.opponents?.filter(item => item.won).map(item => item.player_id) :
+          [MOCK_PLAYER_ID] : undefined,
+        seats: [
+          {
+            player_id: MOCK_PLAYER_ID, name: 'Ana', stack: stacks[MOCK_PLAYER_ID],
+            state: action.action === 'fold' && action.player_id === MOCK_PLAYER_ID ? 'folded' : 'active',
+            contributed: action.player_id === MOCK_PLAYER_ID ? action.amount : 0, dealt_in: true
+          },
+          ...(opponent ? [{
+            player_id: opponent.player_id, name: opponent.name, stack: stacks[opponent.player_id],
+            state: action.action === 'fold' && action.player_id === opponent.player_id ? 'folded' : 'active',
+            contributed: action.player_id === opponent.player_id ? action.amount : 0, dealt_in: true
+          }] : [])
+        ]
+      }
+    };
+  });
+}
+
 const mockHandActions: Record<string, HandHistoryAction[]> = {
-  hand_0003: timedActions(mockHands[0].ended_at, [
+  hand_0003: replayActions(mockHands[0], [2, 5, 7], [
     {seq: 1, player_id: 'bia_sp', action: 'raise', amount: 150},
     {seq: 2, player_id: MOCK_PLAYER_ID, action: 'call', amount: 150},
     {seq: 3, player_id: 'bia_sp', action: 'check', amount: 0},
@@ -112,7 +156,7 @@ const mockHandActions: Record<string, HandHistoryAction[]> = {
     {seq: 7, player_id: MOCK_PLAYER_ID, action: 'raise', amount: 1200},
     {seq: 8, player_id: 'bia_sp', action: 'fold', amount: 0}
   ]),
-  hand_0002: timedActions(mockHands[1].ended_at, [
+  hand_0002: replayActions(mockHands[1], [2, 5, 7], [
     {seq: 1, player_id: MOCK_PLAYER_ID, action: 'raise', amount: 100},
     {seq: 2, player_id: 'leo_rio', action: 'call', amount: 100},
     {seq: 3, player_id: MOCK_PLAYER_ID, action: 'check', amount: 0},
@@ -122,7 +166,7 @@ const mockHandActions: Record<string, HandHistoryAction[]> = {
     {seq: 7, player_id: 'leo_rio', action: 'raise', amount: 900},
     {seq: 8, player_id: MOCK_PLAYER_ID, action: 'call', amount: 900}
   ]),
-  hand_0001: timedActions(mockHands[2].ended_at, [
+  hand_0001: replayActions(mockHands[2], [2, 4, 5], [
     {seq: 1, player_id: 'leo_rio', action: 'check', amount: 0},
     {seq: 2, player_id: MOCK_PLAYER_ID, action: 'check', amount: 0},
     {seq: 3, player_id: 'leo_rio', action: 'raise', amount: 200},
