@@ -1140,6 +1140,104 @@ h1 em {
     }
 }
 
+/* Local table preferences and non-interruptive session reality check. */
+.table-preferences {
+    display: grid;
+    gap: 20px
+}
+
+.table-preferences > div:not(.table-preference-toggle) {
+    display: grid;
+    gap: 8px
+}
+
+.table-theme-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px
+}
+
+.table-theme-option > span {
+    width: 28px;
+    height: 18px;
+    border: 2px solid var(--white-22);
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--theme-a), var(--theme-b))
+}
+
+.table-preference-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px
+}
+
+.table-preference-toggle > span {
+    display: flex;
+    align-items: center;
+    gap: 10px
+}
+
+.table-preference-toggle svg {
+    width: 18px;
+    color: var(--gold)
+}
+
+.table-preference-toggle small {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 11px
+}
+
+.reality-check-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px
+}
+
+.reality-check-title svg {
+    width: 22px;
+    color: var(--gold)
+}
+
+.reality-check-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    overflow: hidden;
+    border-radius: var(--rounded-control);
+    background: var(--white-12)
+}
+
+.reality-check-stats > div {
+    padding: 12px;
+    background: var(--surface-seat)
+}
+
+.reality-check-stats > div:last-child {
+    grid-column: 1 / -1
+}
+
+.reality-check-stats dt {
+    color: var(--muted-rose);
+    font-size: 11px
+}
+
+.reality-check-stats dd {
+    margin: 4px 0 0;
+    color: var(--paper);
+    font: 700 16px var(--font-mono)
+}
+
+.reality-check-stats dd.positive {
+    color: var(--success)
+}
+
+.reality-check-stats dd.negative {
+    color: var(--danger-soft)
+}
+
 .app-page {
     min-height: 100vh;
     background: radial-gradient(circle at 20% 0, var(--wine-deep-5), transparent 35%), var(--room-grad-2)
@@ -1693,6 +1791,33 @@ h1 em {
     box-shadow: var(--shadow-felt);
     display: grid;
     place-items: center
+}
+
+.game[data-table-theme=midnight] {
+    --table-felt-light: #244b65;
+    --table-felt-dark: #102b3d;
+    --felt-shadow: #061923;
+    --table-rail: #3e4d59;
+    --table-rail-edge: #17232b;
+    --table-rail-highlight: #718694
+}
+
+.game[data-table-theme=burgundy] {
+    --table-felt-light: #71323b;
+    --table-felt-dark: #35151b;
+    --felt-shadow: #210b0f;
+    --table-rail: #63392f;
+    --table-rail-edge: #291411;
+    --table-rail-highlight: #9a6252
+}
+
+.game[data-table-theme=ocean] {
+    --table-felt-light: #14717a;
+    --table-felt-dark: #073f49;
+    --felt-shadow: #00262d;
+    --table-rail: #574538;
+    --table-rail-edge: #241b16;
+    --table-rail-highlight: #8c705c
 }
 
 .board {
@@ -2691,6 +2816,36 @@ h1 em {
     font-size: 12px;
     line-height: 1.2;
     text-align: center
+}
+
+.action-preselectors {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px
+}
+
+.action-preselectors > span {
+    color: var(--muted);
+    font-size: 11px
+}
+
+.action-bar .action-preselectors button {
+    min-height: 38px;
+    padding: 5px 12px;
+    border-radius: var(--rounded-pill);
+    font-size: 12px
+}
+
+.action-bar .action-preselectors button.selected {
+    border-color: var(--gold);
+    background: var(--gold);
+    color: var(--gold-ink)
+}
+
+.action-preselectors button small {
+    display: none
 }
 
 .action-bar button {
@@ -5217,6 +5372,12 @@ h1 em {
 .hand-history-header p {
     color: var(--muted-rose);
     margin-top: 6px
+}
+
+.hand-history-tools {
+    display: flex;
+    justify-content: center;
+    margin-top: 16px
 }
 
 .hand-history-players {

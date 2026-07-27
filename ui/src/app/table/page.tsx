@@ -21,13 +21,17 @@ import {MockControls} from '@/components/table/MockControls';
 import type {HandOutcomeState} from '@/components/table/HandOutcome';
 import {LastWinners} from '@/components/table/LastWinners';
 import {HandRankingsDialog} from '@/components/table/HandRankingsDialog';
+import {TablePreferencesDialog} from '@/components/table/TablePreferencesDialog';
+import {RealityCheck} from '@/components/table/RealityCheck';
 import {AchievementToast} from '@/components/AchievementToast';
 import {TermsGate} from '@/components/TermsGate';
 import {Button} from '@/components/ui/button';
 import {pushNotification} from '@/lib/notify';
 import type {TableSnapshot} from '@/lib/api/table';
 import {bestFiveCardHand} from '@/lib/pokerRules';
-import {getHands} from '@/lib/api/player';
+import {getHands, getSessions} from '@/lib/api/player';
+import {useTablePreferences} from '@/lib/tablePreferences';
+import {useDealerVoice} from '@/lib/hooks/useDealerVoice';
 import {
   playerPotBreakdown,
   relevantWinner,
@@ -133,6 +137,8 @@ function TableContent() {
   const requestedDelay = Number(params.get('delay') || 350);
   const delay = [0, 350, 1200, 9000].includes(requestedDelay) ? requestedDelay : 350;
   const viewer = getViewerId();
+  const [tableOpenedAt] = useState(() => Math.floor(Date.now() / 1000));
+  const {preferences} = useTablePreferences();
   const {data: room} = useQuery({
     queryKey: ['room', id], queryFn: () => getRoom(id), enabled: valid,
     retry: (count, err) => !isNotFound(err) && count < 3
@@ -156,7 +162,11 @@ function TableContent() {
   const {data: tableHands = []} = useQuery({
     queryKey: ['hands', id], queryFn: () => getHands({tableId: id}), enabled: valid
   });
+  const {data: sessions = []} = useQuery({
+    queryKey: ['sessions', 'me'], queryFn: () => getSessions(), enabled: valid && seated
+  });
   const rt = useTableRealtime(valid && seated ? id : '', viewer, inviteCode, USE_MOCK ? {scenario, delay} : undefined);
+  useDealerVoice(rt.announcement, preferences.dealerVoice);
   // The server never closes a removed player's socket (it just stops
   // targeting it in future broadcasts) — without reacting to this message the
   // client would otherwise sit frozen on the last snapshot it received, or
@@ -315,8 +325,9 @@ function TableContent() {
     [0, 1].some(index => !(viewerSeat?.hole_cards_revealed?.[index] ?? false));
   const inviteUrl = typeof window !== 'undefined' ?
     `${window.location.origin}/table?id=${id}${room?.share_code ? `&invite=${room.share_code}` : ''}` : '';
+  const openSession = sessions.find(session => session.table_id === id && session.ended_at === 0);
   return (
-    <main className="game">
+    <main className="game" data-table-theme={preferences.theme}>
       <h1 className="sr-only">Mesa de poker — {STAGE_LABELS[s.stage] || s.stage.replaceAll('_', ' ')}</h1>
       <div className="game-chrome">
         <header>
@@ -329,6 +340,7 @@ function TableContent() {
               <span className="connection-label">{rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}</span>
             </span>
             <HandRankingsDialog/>
+            <TablePreferencesDialog/>
             {canInvite && <InviteDialog url={inviteUrl}/>}
             {viewerSeat && !isPaused &&
                 <Button type="button" variant="ghost" size="icon" aria-label="Sentar fora" disabled={rt.readyPending}
@@ -389,10 +401,17 @@ function TableContent() {
         onActAction={rt.act}
         {...actions}
         actionKey={actionKey}
+        selectionScope={`${s.hand_id || 'waiting'}:${s.stage}`}
+        canPreselect={Boolean(viewerSeat?.dealt_in && viewerSeat.state === 'active' && !actions.isTurn &&
+          s.stage !== 'showdown' && s.stage !== 'complete')}
         connected={rt.status === 'connected'}
         pending={rt.pendingAction}
         error={rt.actionError} onDismissErrorAction={rt.clearActionError}/>
       <IdleWarning deadline={s.idle_removal_unix_ms} onKeepSeat={rt.keepSeat}/>
+      {viewerSeat && <RealityCheck joinedAt={openSession?.joined_at || tableOpenedAt}
+                                   buyIn={openSession?.buyin_amount || viewerSeat.stack_at_hand_start || viewerSeat.stack}
+                                   currentStack={viewerSeat.stack} handId={s.hand_id}
+                                   handComplete={s.stage === 'complete'} isTurn={actions.isTurn}/>}
       <Chat items={rt.chat}
             onSend={rt.sendChat}
             connected={rt.status === 'connected'}

@@ -6,6 +6,10 @@ import {Input} from '@/components/ui/input';
 import type {PokerAction} from '@/lib/api/table';
 import type {ActionError} from '@/lib/hooks/useTableRealtime';
 import {betShortcutAmount} from '@/lib/betShortcuts';
+import {
+  resolvePreselection,
+  type ActionPreselection
+} from '@/lib/actionPreselection';
 
 export type ActionAvailability = Record<PokerAction, boolean>
 
@@ -24,6 +28,8 @@ type Props = {
   pending: PokerAction | null;
   error: ActionError | null;
   onDismissErrorAction: () => void
+  canPreselect: boolean;
+  selectionScope: string;
 }
 
 const actionLabel: Record<PokerAction, string> = {
@@ -56,6 +62,39 @@ function isBetAdjustKey(event: KeyboardEvent) {
 // taps Aumentar once to reveal it; desktop keeps it always open (CSS ignores
 // the collapsed class outside this query).
 const COMPACT_QUERY = '(max-width: 800px), (max-height: 620px) and (orientation: landscape)';
+
+function PreselectionControls({canPreselect, isTurn, connected, pending, available, onAct}: {
+  canPreselect: boolean;
+  isTurn: boolean;
+  connected: boolean;
+  pending: PokerAction | null;
+  available: ActionAvailability;
+  onAct: (action: PokerAction) => boolean;
+}) {
+  const [selection, setSelection] = useState<ActionPreselection | null>(null);
+
+  useEffect(() => {
+    if (!selection || !isTurn || !connected || pending) return;
+    const legal = (Object.keys(available) as PokerAction[]).filter(action => available[action]);
+    const action = resolvePreselection(selection, legal);
+    queueMicrotask(() => setSelection(null));
+    if (action) onAct(action);
+  }, [selection, isTurn, connected, pending, available, onAct]);
+
+  if (!canPreselect && !selection) return null;
+  const option = (value: ActionPreselection, label: string, description: string) =>
+    <button type="button" className={selection === value ? 'selected' : ''}
+            aria-pressed={selection === value} title={description}
+            disabled={!connected || pending !== null}
+            onClick={() => setSelection(current => current === value ? null : value)}>
+      <span>{label}<small>{description}</small></span>
+    </button>;
+  return <div className="action-preselectors" role="group" aria-label="Preparar próxima ação">
+    <span>Próxima ação</span>
+    {option('check_fold', 'Check / Fold', 'Check se for grátis; caso contrário, fold')}
+    {option('fold', 'Fold', 'Desistir quando chegar sua vez')}
+  </div>;
+}
 
 /** Raise control. Keyed by `actionKey` in the parent so the chosen amount
  * resets to the street minimum on every new decision without an effect. */
@@ -164,7 +203,9 @@ export function ActionBar({
                             connected,
                             pending,
                             error,
-                            onDismissErrorAction
+                            onDismissErrorAction,
+                            canPreselect,
+                            selectionScope
                           }: Props) {
   const unavailable = !connected || !isTurn || pending !== null;
   const context = !connected ? 'Reconectando antes de liberar as ações…' : pending ? actionLabel[pending] : !isTurn ?
@@ -203,6 +244,8 @@ export function ActionBar({
 
   return <div className="action-bar" role="group" aria-label="Ações da rodada" aria-busy={pending !== null}>
     <p id="action-context" className="action-context" aria-live="polite">{context}</p>
+    <PreselectionControls key={selectionScope} canPreselect={canPreselect} isTurn={isTurn}
+                           connected={connected} pending={pending} available={available} onAct={onActAction}/>
     {!noLegalActions && <div className="action-choices" role="group" aria-label="Ações rápidas">
         <Button type="button" variant="outline" disabled={unavailable || !available.fold}
                 aria-describedby="action-context" aria-keyshortcuts="f"
