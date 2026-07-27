@@ -2,9 +2,8 @@
 package equity
 
 import (
-	"crypto/rand"
-	"encoding/binary"
 	"fmt"
+	"math/rand/v2"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 	"gopkg.aoctech.app/poker/api/internal/engine/handeval"
@@ -27,13 +26,17 @@ func Estimate(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, ite
 		return 0, fmt.Errorf("equity: not enough cards to sample %d opponents", numOpponents)
 	}
 
+	// pool is freshly built for this call, so the sampler can permute it in
+	// place. It only ever touches the first `need` slots, which leaves a
+	// validly shuffled deck behind for the next iteration — so the whole loop
+	// allocates nothing.
+	var fullBoard [5]deck.Card
+	copy(fullBoard[:], board)
+
 	var shares float64
 	for range iterations {
-		draw, err := shuffleSubset(pool, need)
-		if err != nil {
-			return 0, fmt.Errorf("equity: sample: %w", err)
-		}
-		fullBoard := append(append([]deck.Card(nil), board...), draw[:boardNeeded]...)
+		draw := sample(pool, need)
+		copy(fullBoard[len(board):], draw[:boardNeeded])
 		myScore := best7(hole, fullBoard)
 		bestScore := myScore
 		tiedWinners := 1
@@ -54,10 +57,10 @@ func Estimate(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, ite
 	return shares / float64(iterations), nil
 }
 
-func best7(hole [2]deck.Card, board []deck.Card) handeval.Score {
+func best7(hole [2]deck.Card, board [5]deck.Card) handeval.Score {
 	var cards [7]deck.Card
 	cards[0], cards[1] = hole[0], hole[1]
-	copy(cards[2:], board)
+	copy(cards[2:], board[:])
 	return handeval.Best7(cards)
 }
 
@@ -86,32 +89,19 @@ func remainingDeck(hole [2]deck.Card, board, dead []deck.Card) ([]deck.Card, err
 	return pool, nil
 }
 
-func shuffleSubset(pool []deck.Card, n int) ([]deck.Card, error) {
-	cards := append([]deck.Card(nil), pool...)
+// sample partially Fisher-Yates shuffles cards in place and returns its first
+// n as the drawn subset.
+//
+// It draws from math/rand/v2 rather than crypto/rand. This is a Monte Carlo
+// estimate shown to a player as a UI hint — it never picks a card that is
+// dealt, never touches the shuffle commit-reveal, and never moves a chip, so
+// unpredictability buys nothing here while a CSPRNG read per card dominated
+// the whole estimate's cost. Anything that actually deals cards still goes
+// through deck.NewShuffle.
+func sample(cards []deck.Card, n int) []deck.Card {
 	for i := 0; i < n; i++ {
-		offset, err := randIntn(len(cards) - i)
-		if err != nil {
-			return nil, err
-		}
-		j := i + offset
+		j := i + rand.IntN(len(cards)-i)
 		cards[i], cards[j] = cards[j], cards[i]
 	}
-	return cards[:n], nil
-}
-
-func randIntn(n int) (int, error) {
-	if n <= 0 {
-		return 0, fmt.Errorf("invalid upper bound %d", n)
-	}
-	limit := ^uint64(0) - (^uint64(0) % uint64(n))
-	for {
-		var bytes [8]byte
-		if _, err := rand.Read(bytes[:]); err != nil {
-			return 0, err
-		}
-		value := binary.BigEndian.Uint64(bytes[:])
-		if value < limit {
-			return int(value % uint64(n)), nil
-		}
-	}
+	return cards[:n]
 }

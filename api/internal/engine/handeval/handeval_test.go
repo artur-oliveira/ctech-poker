@@ -153,7 +153,7 @@ func TestAceLowNonWheelIsNotMisdetectedAsStraight(t *testing.T) {
 		c(deck.Ace, deck.Clubs), c(deck.Two, deck.Diamonds), c(deck.Three, deck.Hearts),
 		c(deck.Four, deck.Spades), c(deck.Six, deck.Clubs), c(deck.Nine, deck.Diamonds), c(deck.Jack, deck.Hearts),
 	}
-	if Best7(notAWheel) >= makeScore(Straight, deck.Five) {
+	if Best7(notAWheel).Category() >= Straight {
 		t.Fatal("A-2-3-4-6 must not be scored as a straight — it is not the wheel (A-2-3-4-5)")
 	}
 }

@@ -27,8 +27,15 @@ Also unresolved: no ASG lifecycle hook exists in either `ctech-cdk`'s `PrivateIp
 - **Sandbox isolation is load-bearing:** `buyin` must keep rejecting non-`sandbox`
   `CurrencyMode` (`ErrUnsupportedCurrencyMode`). Do not add a real-money wallet path here without ctech-wallet's
   hold/capture endpoints first.
+- **`handeval` is table-driven — never edit `handeval/ref` without regenerating.** `ref` is the reference evaluator
+  and the sole definition of the canonical hand ordering; `tables.bin` is compiled from it by
+  `go generate ./internal/engine/handeval/...` and embedded. Changing `ref` without regenerating leaves stale tables
+  that silently mis-rank every showdown — nothing fails to compile. `handeval/hashq` is shared by the runtime and the
+  generator precisely so the perfect hash can't drift between them; keep it that way.
 - Tests: `go test ./... -race`. Integration tests use DynamoDB Local (`docker-compose.test.yml`). Engine logic is
-  unit-tested; keep it that way.
+  unit-tested; keep it that way. `handeval` additionally has an exhaustive differential test over all
+  C(52,7) = 133,784,560 hands behind `-tags exhaustive` (~10 min) — run it after any change to `ref`, `hashq`, or the
+  generator.
 
 ## B9 authz — what is enforced (fixed 2026-07)
 
