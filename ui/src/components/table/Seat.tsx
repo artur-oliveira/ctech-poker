@@ -7,6 +7,8 @@ import {PlayingCard} from '@/components/table/PlayingCard';
 import type {SeatView} from '@/lib/api/table';
 import {HAND_CATEGORY_LABELS, initials, playerName} from '@/lib/utils';
 import {useCountUp} from '@/lib/hooks/useCountUp';
+import {NotebookPen} from 'lucide-react';
+import type {PlayerNote} from '@/lib/api/playerNotes';
 
 // chance <= 20% red, <= 60% yellow (reusing the --gold token already used for
 // bet amounts on this same seat card), > 60% green.
@@ -61,7 +63,9 @@ export function Seat({
                        isBigBlind = false,
                        canRevealCards = false,
                        revealPending = false,
-                       onRevealCard
+                       onRevealCard,
+                       playerNote,
+                       onEditNote
                      }: {
   seat: SeatView;
   isViewer: boolean;
@@ -84,6 +88,8 @@ export function Seat({
   canRevealCards?: boolean;
   revealPending?: boolean;
   onRevealCard?: (index: number) => void
+  playerNote?: PlayerNote;
+  onEditNote?: () => void;
 }) {
   const cards = seat.hole_cards;
   const chance = seat.equity == null ? null : Math.round(seat.equity * 100);
@@ -97,6 +103,7 @@ export function Seat({
   const role = isDealer && isSmallBlind ? 'D/SB' : isDealer ? 'D' : isSmallBlind ? 'SB' : isBigBlind ? 'BB' : null;
   const pausedAfterHand = seat.ready === false && seat.state !== 'sitting_out';
   return <div data-state={seat.state} data-connection-state={seat.connection_state}
+              data-player-id={seat.player_id}
               aria-current={isTurn ? 'true' : undefined}
               className={`game-seat seat-${index} ${seat.state} ${isDisconnected ? 'disconnected' : ''} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${isWinner ? 'is-winner' : ''} ${pendingName ? 'is-pending-name' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
     {remainingMs != null &&
@@ -118,6 +125,14 @@ export function Seat({
     </span>}
     <Avatar className="seat-avatar"
             aria-hidden="true"><AvatarFallback>{isViewer ? 'EU' : initials(seat.name)}</AvatarFallback></Avatar>
+    {!isViewer && onEditNote && <button type="button"
+        className={`seat-note-trigger ${playerNote ? 'has-note' : ''}`}
+        aria-label={playerNote ? `Editar nota privada sobre ${seat.name || 'jogador'}` : `Adicionar nota privada sobre ${seat.name || 'jogador'}`}
+        title={playerNote ? 'Editar nota privada' : 'Adicionar nota privada'}
+        onClick={onEditNote}>
+      {playerNote?.tag && <span className={`player-note-dot tag-${playerNote.tag}`} aria-hidden="true"/>}
+      <NotebookPen aria-hidden="true"/>
+    </button>}
     <div className="seat-info">
       <b
         title={seat.name || undefined}>{playerName(seat.player_id, isViewer ? seat.player_id : undefined, seat.name)}</b><span>{displayStack.toLocaleString('pt-BR')} fichas</span>{chance != null && isViewer &&

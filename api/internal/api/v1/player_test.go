@@ -57,6 +57,10 @@ func (s *fakePlayerStore) GetOrCreate(_ context.Context, id string) (*player.Pla
 	s.profile.UserID = id
 	return &s.profile, nil
 }
+func (s *fakePlayerStore) Get(_ context.Context, id string) (*player.PlayerProfile, error) {
+	s.profile.UserID = id
+	return &s.profile, nil
+}
 func (s *fakePlayerStore) AcceptTerms(_ context.Context, id string) error {
 	s.profile.UserID = id
 	s.profile.PokerTermsVersion = player.CurrentPokerTermsVersion
@@ -76,6 +80,12 @@ func (s *fakePlayerStore) SetWalletMode(_ context.Context, id string, mode strin
 func (s *fakePlayerStore) SetDeckVariant(_ context.Context, id string, variant string) error {
 	s.profile.UserID = id
 	s.profile.DeckVariant = variant
+	return nil
+}
+func (s *fakePlayerStore) SetShowcase(_ context.Context, id string, public bool, featured []string) error {
+	s.profile.UserID = id
+	s.profile.ShowcasePublic = public
+	s.profile.FeaturedAchievements = featured
 	return nil
 }
 

@@ -15,6 +15,7 @@ import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
 import {initials} from '@/lib/utils';
 import {cardPath} from '@/lib/cards';
 import {DECK_VARIANTS, type DeckVariantId, DEFAULT_DECK_VARIANT} from '@/lib/cardVariants';
+import {ProfileShowcaseDialog} from '@/components/lobby/ProfileShowcaseDialog';
 
 const ACES = ['As', 'Ah', 'Ad', 'Ac'];
 
@@ -31,6 +32,7 @@ export function ProfileMenu() {
   const {data: me} = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
   const [name, setName] = useState('');
   const [editingName, setEditingName] = useState(false);
+  const [showcaseOpen, setShowcaseOpen] = useState(false);
 
   const save = useMutation({
     mutationFn: updateMe,
@@ -44,7 +46,7 @@ export function ProfileMenu() {
   const deckVariant: DeckVariantId = me?.deck_variant || DEFAULT_DECK_VARIANT;
   const balanceLabel = walletMode === 'real' ? formatReal(me?.game_balance) : formatSandbox(me?.sandbox_balance);
 
-  return <Popover onOpenChange={(open, details) => {
+  return <><Popover onOpenChange={(open, details) => {
     if (!open && editingName && details.reason === 'escape-key') {
       details.cancel();
       setEditingName(false);
@@ -118,8 +120,13 @@ export function ProfileMenu() {
           <span>Fichas sandbox <b>{formatSandbox(me?.sandbox_balance)}</b></span>
           <span>Dinheiro real <b>{formatReal(me?.game_balance)}</b></span>
         </div>
+        <Button type="button" variant="outline" className="w-full" onClick={() => setShowcaseOpen(true)}>
+          Vitrine do perfil
+        </Button>
         <Button variant="outline" className="w-full" onClick={() => logout()}><LogOut/> Sair da conta</Button>
       </div>
     </PopoverContent>
-  </Popover>;
+  </Popover>
+    <ProfileShowcaseDialog open={showcaseOpen} onOpenChange={setShowcaseOpen}/>
+  </>;
 }

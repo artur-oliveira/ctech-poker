@@ -52,6 +52,15 @@ func (s *Store) get(ctx context.Context, userID string) (*PlayerProfile, error) 
 	return profile, nil
 }
 
+// Get loads an existing profile without creating a row for arbitrary public
+// showcase lookups.
+func (s *Store) Get(ctx context.Context, userID string) (*PlayerProfile, error) {
+	if userID == "" {
+		return nil, fmt.Errorf("player: empty user id")
+	}
+	return s.get(ctx, userID)
+}
+
 func (s *Store) SetName(ctx context.Context, userID, name string) error {
 	if _, err := s.GetOrCreate(ctx, userID); err != nil {
 		return err
@@ -99,6 +108,24 @@ func (s *Store) SetDeckVariant(ctx context.Context, userID, variant string) erro
 	}
 	if !ok {
 		return fmt.Errorf("player: profile disappeared while setting deck variant")
+	}
+	return nil
+}
+
+func (s *Store) SetShowcase(ctx context.Context, userID string, public bool, featured []string) error {
+	if _, err := s.GetOrCreate(ctx, userID); err != nil {
+		return err
+	}
+	ok, err := s.base.UpdateItem(ctx, userID, nil, map[string]any{
+		"showcase_public":       public,
+		"featured_achievements": featured,
+		"updated_at":            dynamo.NowStr(),
+	})
+	if err != nil {
+		return fmt.Errorf("player: set showcase: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("player: profile disappeared while setting showcase")
 	}
 	return nil
 }

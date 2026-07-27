@@ -2,6 +2,7 @@ package v1
 
 import (
 	"testing"
+	"time"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
@@ -18,6 +19,7 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 			ConnectionState: "disconnected", DealtIn: true, Ready: false,
 			HoleCardsRevealed: []bool{true, false},
 			StackAtHandStart:  &startStack,
+			TimeBankMs:        27000,
 		}},
 		PotResults: []hand.PotResultView{{
 			Amount: 300, PayoutAmount: 293,
@@ -46,7 +48,8 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 	if converted.Seats[0].StackAtHandStart == nil || converted.Seats[0].GetStackAtHandStart() != 500 {
 		t.Fatalf("pre-blind stack lost during protobuf conversion: %+v", converted.Seats[0])
 	}
-	if converted.ProtocolVersion != 4 || converted.IdleRemovalUnixMs != 123456 || len(converted.PotResults) != 1 ||
+	if converted.ProtocolVersion != 5 || converted.IdleRemovalUnixMs != 123456 ||
+		converted.Seats[0].TimeBankMs != 27000 || len(converted.PotResults) != 1 ||
 		converted.PotResults[0].WinnerPlayerIds[0] != "p1" ||
 		converted.PotResults[0].Payouts["p1"] != 293 {
 		t.Fatalf("result protocol fields lost during conversion: %+v", converted)
@@ -54,7 +57,7 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 }
 
 func TestEveryStateChangingOrAmplifiableMessageIsRateLimited(t *testing.T) {
-	for _, messageType := range []string{"act", "chat", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "ping"} {
+	for _, messageType := range []string{"act", "chat", "reaction", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "ping"} {
 		if !rateLimitedTableMessage(messageType) {
 			t.Errorf("%q bypasses the per-seat limiter", messageType)
 		}
@@ -63,6 +66,19 @@ func TestEveryStateChangingOrAmplifiableMessageIsRateLimited(t *testing.T) {
 		if rateLimitedTableMessage(messageType) {
 			t.Errorf("%q should not consume the action limiter", messageType)
 		}
+	}
+}
+
+func TestReactionLimiterAllowsOnlyOneBurstPerWindow(t *testing.T) {
+	limiter := newWindowSeatLimiter(1, 2*time.Second)
+	if !limiter.Allow("p1") {
+		t.Fatal("first reaction should be allowed")
+	}
+	if limiter.Allow("p1") {
+		t.Fatal("second reaction in the same window should be blocked")
+	}
+	if !limiter.Allow("p2") {
+		t.Fatal("one player's reaction limit must not block another player")
 	}
 }
 

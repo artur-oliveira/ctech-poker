@@ -27,6 +27,7 @@ test('synthesizes without error and declares exactly one ASG', () => {
     actionGuardsArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_action_guards',
     roomsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_rooms',
     playerProfilesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_player_profiles',
+    playerNotesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_player_notes',
     walletUrlParam: '/ctech/dev/poker/wallet-url',
     pokerClientIdParam: '/ctech/dev/poker/poker-client-id',
     pokerClientSecretParam: '/ctech/dev/poker/poker-client-secret',

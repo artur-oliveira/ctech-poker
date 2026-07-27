@@ -6,6 +6,7 @@ import {HandOutcomeBanner, type HandOutcomeState} from '@/components/table/HandO
 import {rotateSeats} from '@/lib/utils';
 import type {TableSnapshot} from '@/lib/api/table';
 import {playerPotBreakdown} from '@/lib/tableOutcome';
+import type {PlayerNote} from '@/lib/api/playerNotes';
 
 // Portrait handhelds get a different experience, not a shrunk table: a tall
 // capsule ringed by compact opponents, with the viewer promoted to a hero HUD
@@ -43,6 +44,8 @@ type Props = {
   canRevealCards?: boolean;
   revealPending?: boolean;
   onRevealCard?: (index: number) => void;
+  playerNotes?: Record<string, PlayerNote>;
+  onEditPlayerNote?: (seat: TableSnapshot['seats'][number]) => void;
 };
 
 export function TableStage({
@@ -56,7 +59,9 @@ export function TableStage({
                              viewerStackBefore,
                              canRevealCards,
                              revealPending,
-                             onRevealCard
+                             onRevealCard,
+                             playerNotes,
+                             onEditPlayerNote
                            }: Props) {
   const vertical = useVerticalStage();
   const seats = rotateSeats(snapshot.seats, viewer);
@@ -75,6 +80,8 @@ export function TableStage({
           canRevealCards={seat.player_id === viewer && canRevealCards}
           revealPending={revealPending}
           onRevealCard={onRevealCard}
+          playerNote={playerNotes?.[seat.player_id]}
+          onEditNote={seat.player_id !== viewer && onEditPlayerNote ? () => onEditPlayerNote(seat) : undefined}
           stackBefore={seat.player_id === viewer ? viewerStackBefore : undefined}
           isDealer={snapshot.dealer_player_id === seat.player_id}
           isSmallBlind={snapshot.small_blind_player_id === seat.player_id}

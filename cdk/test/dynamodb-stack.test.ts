@@ -8,7 +8,7 @@ test('creates poker_table_state, poker_action_log, poker_action_guards tables', 
   const template = Template.fromStack(stack);
   // dynamodb.TableV2 always synthesizes as AWS::DynamoDB::GlobalTable (even
   // with zero extra replicas) — not AWS::DynamoDB::Table.
-  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 12);
+  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 13);
   template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_table_state',
     GlobalSecondaryIndexes: Match.arrayWith([
@@ -61,6 +61,18 @@ test('creates poker_player_profiles table without secondary indexes', () => {
   const stack = new DynamoDBStack(app, 'TestPlayerProfilesStack', {environment: 'dev'});
   Template.fromStack(stack).hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_player_profiles',
+  });
+});
+
+test('creates private player notes with a viewer/opponent composite key', () => {
+  const app = new App();
+  const stack = new DynamoDBStack(app, 'TestPlayerNotesStack', {environment: 'dev'});
+  Template.fromStack(stack).hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'dev_poker_player_notes',
+    KeySchema: Match.arrayWith([
+      Match.objectLike({AttributeName: 'pk', KeyType: 'HASH'}),
+      Match.objectLike({AttributeName: 'sk', KeyType: 'RANGE'}),
+    ]),
   });
 });
 

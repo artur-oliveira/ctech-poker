@@ -47,6 +47,7 @@ interface ApiStackProps extends cdk.StackProps {
   actionGuardsArn: string;
   roomsTableArn: string;
   playerProfilesTableArn: string;
+  playerNotesTableArn: string;
   walletUrlParam: string;
   pokerClientIdParam: string;
   pokerClientSecretParam: string;
@@ -80,6 +81,7 @@ export class PokerApiStack extends cdk.Stack {
       actionGuardsArn,
       roomsTableArn,
       playerProfilesTableArn,
+      playerNotesTableArn,
       walletUrlParam,
       pokerClientIdParam,
       pokerClientSecretParam,
@@ -110,13 +112,14 @@ export class PokerApiStack extends cdk.Stack {
     const tableArns = [
       tableStateArn, tableStateHistoryArn, actionLogArn, actionGuardsArn, roomsTableArn, playerProfilesTableArn,
       achievementProgressTableArn, leaderboardStatsTableArn, dailyRewardTableArn, playerSessionsTableArn,
-      playerHandsTableArn,
+      playerHandsTableArn, playerNotesTableArn,
     ];
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: [
         'dynamodb:GetItem',
         'dynamodb:PutItem',
         'dynamodb:UpdateItem',
+        'dynamodb:DeleteItem',
         'dynamodb:Query',
         'dynamodb:DescribeTable',
         'dynamodb:ConditionCheckItem',

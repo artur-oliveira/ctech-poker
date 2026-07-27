@@ -18,6 +18,7 @@ export interface SeatView {
   stack_at_hand_start?: number;
   equity?: number;
   hand_category?: string
+  time_bank_ms?: number
 }
 
 export type PokerAction = 'fold' | 'check' | 'call' | 'raise'
@@ -64,6 +65,7 @@ export interface TableSnapshot {
   winners?: string[];
   rake?: number;
   action_deadline_unix_ms?: number;
+  action_base_deadline_unix_ms?: number;
   next_hand_unix_ms?: number;
   idle_removal_unix_ms?: number;
   won_without_showdown?: boolean;
@@ -92,6 +94,8 @@ export type ServerMessage = {
   action_id?: string;
   snapshot_version?: number;
   equity?: number
+  reaction_id?: string;
+  target_player_id?: string
 }
 
 export type Action = (

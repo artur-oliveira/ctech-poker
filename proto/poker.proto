@@ -34,6 +34,9 @@ message Seat {
   // Stack before this hand posted blinds or accepted any wager. Optional so
   // clients can fall back safely while API instances are rolling.
   optional int64 stack_at_hand_start = 13;
+  // Durable decision reserve in milliseconds. Zero is a valid exhausted
+  // balance, so clients must not replace it with a default.
+  int64 time_bank_ms = 14;
 }
 
 message BlindEscalation {
@@ -115,13 +118,16 @@ message TableSnapshot {
   // deployments instead of mistaking absent proto3 fields for false.
   uint32 protocol_version = 21;
   int64 idle_removal_unix_ms = 22;
+  // End of the normal room clock. The interval between this and
+  // action_deadline_unix_ms belongs to the current player's time bank.
+  int64 action_base_deadline_unix_ms = 23;
 }
 
 // --- WEBSOCKET ENVELOPES ---
 
 // ClientMessage is sent from the client to the server.
 message ClientMessage {
-  string type = 1; // "auth" | "ping" | "sync_state" | "ready" | "act" | "post_big_blind" | "show_cards" | "keep_seat" | "chat"
+  string type = 1; // "auth" | "ping" | "sync_state" | "ready" | "act" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction"
   
   // payload fields
   string token = 2; // for auth frame
@@ -134,6 +140,8 @@ message ClientMessage {
   uint64 expected_snapshot_version = 9; // optimistic precondition for act
   string expected_hand_id = 10; // prevents a delayed action crossing hands
   optional int32 card_index = 11; // 0 or 1 for show_cards; absent means both (legacy)
+  string reaction_id = 12; // catalog key; never arbitrary display text
+  string target_player_id = 13; // required only by thrown-object reactions
 }
 
 // ServerMessage is sent from the server to the client.
@@ -158,4 +166,6 @@ message ServerMessage {
   string action_id = 14; // correlation id for action_ack/error
   uint64 snapshot_version = 15; // for equity delta
   optional double equity = 16; // for equity delta (player_id identifies owner)
+  string reaction_id = 17; // ephemeral table reaction catalog key
+  string target_player_id = 18; // destination for thrown objects
 }

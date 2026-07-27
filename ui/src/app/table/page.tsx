@@ -23,6 +23,8 @@ import {LastWinners} from '@/components/table/LastWinners';
 import {HandRankingsDialog} from '@/components/table/HandRankingsDialog';
 import {TablePreferencesDialog} from '@/components/table/TablePreferencesDialog';
 import {RealityCheck} from '@/components/table/RealityCheck';
+import {PlayerNoteDialog} from '@/components/table/PlayerNoteDialog';
+import {TableReactions} from '@/components/table/TableReactions';
 import {AchievementToast} from '@/components/AchievementToast';
 import {TermsGate} from '@/components/TermsGate';
 import {Button} from '@/components/ui/button';
@@ -32,6 +34,7 @@ import {bestFiveCardHand} from '@/lib/pokerRules';
 import {getHands, getSessions} from '@/lib/api/player';
 import {useTablePreferences} from '@/lib/tablePreferences';
 import {useDealerVoice} from '@/lib/hooks/useDealerVoice';
+import {getPlayerNotes, type PlayerNote} from '@/lib/api/playerNotes';
 import {
   playerPotBreakdown,
   relevantWinner,
@@ -165,6 +168,10 @@ function TableContent() {
   const {data: sessions = []} = useQuery({
     queryKey: ['sessions', 'me'], queryFn: () => getSessions(), enabled: valid && seated
   });
+  const {data: playerNotes = []} = useQuery({
+    queryKey: ['player-notes'], queryFn: getPlayerNotes, enabled: valid && seated
+  });
+  const [noteOpponent, setNoteOpponent] = useState<{player_id: string; name?: string} | null>(null);
   const rt = useTableRealtime(valid && seated ? id : '', viewer, inviteCode, USE_MOCK ? {scenario, delay} : undefined);
   useDealerVoice(rt.announcement, preferences.dealerVoice);
   // The server never closes a removed player's socket (it just stops
@@ -326,6 +333,7 @@ function TableContent() {
   const inviteUrl = typeof window !== 'undefined' ?
     `${window.location.origin}/table?id=${id}${room?.share_code ? `&invite=${room.share_code}` : ''}` : '';
   const openSession = sessions.find(session => session.table_id === id && session.ended_at === 0);
+  const playerNotesByID = Object.fromEntries(playerNotes.map(note => [note.opponent_id, note]));
   return (
     <main className="game" data-table-theme={preferences.theme}>
       <h1 className="sr-only">Mesa de poker — {STAGE_LABELS[s.stage] || s.stage.replaceAll('_', ' ')}</h1>
@@ -396,7 +404,9 @@ function TableContent() {
                   outcome={handOutcome} holdOutcomeOpen={Boolean(s.payouts && Object.keys(s.payouts).length > 0)}
                   viewerStackBefore={(s.payouts && Object.keys(s.payouts).length > 0) ? viewerStackBefore : undefined}
                   canRevealCards={canRevealCards} revealPending={rt.showCardsPending}
-                  onRevealCard={index => rt.showCards(index)}/>
+                  onRevealCard={index => rt.showCards(index)}
+                  playerNotes={playerNotesByID}
+                  onEditPlayerNote={seat => setNoteOpponent({player_id: seat.player_id, name: seat.name})}/>
       <ActionBar
         onActAction={rt.act}
         {...actions}
@@ -404,6 +414,9 @@ function TableContent() {
         selectionScope={`${s.hand_id || 'waiting'}:${s.stage}`}
         canPreselect={Boolean(viewerSeat?.dealt_in && viewerSeat.state === 'active' && !actions.isTurn &&
           s.stage !== 'showdown' && s.stage !== 'complete')}
+        actionDeadlineMs={s.action_deadline_unix_ms}
+        actionBaseDeadlineMs={s.action_base_deadline_unix_ms}
+        timeBankMs={viewerSeat?.time_bank_ms ?? 0}
         connected={rt.status === 'connected'}
         pending={rt.pendingAction}
         error={rt.actionError} onDismissErrorAction={rt.clearActionError}/>
@@ -417,7 +430,20 @@ function TableContent() {
             connected={rt.status === 'connected'}
             viewerId={viewer}
             seats={s.seats}/>
+      <TableReactions items={rt.reactions} seats={s.seats} viewerId={viewer}
+                      connected={rt.status === 'connected'} onSend={rt.sendReaction}/>
       <LastWinners items={tableHands}/>
+      <PlayerNoteDialog key={noteOpponent?.player_id || 'closed'} opponent={noteOpponent}
+                        existing={noteOpponent ? playerNotesByID[noteOpponent.player_id] : undefined}
+                        open={Boolean(noteOpponent)}
+                        onOpenChange={open => !open && setNoteOpponent(null)}
+                        onSaved={(note: PlayerNote | null) => {
+                          if (!noteOpponent) return;
+                          queryClient.setQueryData<PlayerNote[]>(['player-notes'], current => {
+                            const rest = (current || []).filter(item => item.opponent_id !== noteOpponent.player_id);
+                            return note ? [...rest, note] : rest;
+                          });
+                        }}/>
 
       <AchievementToast unlock={rt.unlock}/>
       {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}

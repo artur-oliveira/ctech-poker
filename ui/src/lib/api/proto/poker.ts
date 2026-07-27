@@ -50,7 +50,14 @@ export interface Seat {
    * Stack before this hand posted blinds or accepted any wager. Optional so
    * clients can fall back safely while API instances are rolling.
    */
-  stack_at_hand_start?: number | undefined;
+  stack_at_hand_start?:
+    | number
+    | undefined;
+  /**
+   * Durable decision reserve in milliseconds. Zero is a valid exhausted
+   * balance, so clients must not replace it with a default.
+   */
+  time_bank_ms: number;
 }
 
 export interface BlindEscalation {
@@ -70,7 +77,7 @@ export interface Room {
   buy_in_max: number;
   entry_fee_cents: number;
   share_code: string;
-  blind_escalation: BlindEscalation | undefined;
+  blind_escalation?: BlindEscalation | undefined;
   turn_timeout_seconds: number;
   equity_display_enabled: boolean;
   status: string;
@@ -132,7 +139,7 @@ export interface TableSnapshot {
   winners: string[];
   rake: number;
   current_player_id: string;
-  legal_actions: LegalActions | undefined;
+  legal_actions?: LegalActions | undefined;
   action_deadline_unix_ms: number;
   next_hand_unix_ms: number;
   won_without_showdown: boolean;
@@ -151,6 +158,11 @@ export interface TableSnapshot {
    */
   protocol_version: number;
   idle_removal_unix_ms: number;
+  /**
+   * End of the normal room clock. The interval between this and
+   * action_deadline_unix_ms belongs to the current player's time bank.
+   */
+  action_base_deadline_unix_ms: number;
 }
 
 export interface TableSnapshot_PayoutsEntry {
@@ -160,7 +172,7 @@ export interface TableSnapshot_PayoutsEntry {
 
 /** ClientMessage is sent from the client to the server. */
 export interface ClientMessage {
-  /** "auth" | "ping" | "sync_state" | "ready" | "act" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" */
+  /** "auth" | "ping" | "sync_state" | "ready" | "act" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" */
   type: string;
   /** payload fields */
   token: string;
@@ -181,7 +193,13 @@ export interface ClientMessage {
   /** prevents a delayed action crossing hands */
   expected_hand_id: string;
   /** 0 or 1 for show_cards; absent means both (legacy) */
-  card_index?: number | undefined;
+  card_index?:
+    | number
+    | undefined;
+  /** catalog key; never arbitrary display text */
+  reaction_id: string;
+  /** required only by thrown-object reactions */
+  target_player_id: string;
 }
 
 /** ServerMessage is sent from the server to the client. */
@@ -191,7 +209,7 @@ export interface ServerMessage {
   /** payload fields */
   conn_id: string;
   /** for state frame */
-  snapshot:
+  snapshot?:
     | TableSnapshot
     | undefined;
   /** for chat frame */
@@ -205,7 +223,7 @@ export interface ServerMessage {
   /** for achievement unlocked frame */
   stars: number;
   /** lobby payload fields */
-  room:
+  room?:
     | Room
     | undefined;
   /** for room_updated */
@@ -221,7 +239,13 @@ export interface ServerMessage {
   /** for equity delta */
   snapshot_version: number;
   /** for equity delta (player_id identifies owner) */
-  equity?: number | undefined;
+  equity?:
+    | number
+    | undefined;
+  /** ephemeral table reaction catalog key */
+  reaction_id: string;
+  /** destination for thrown objects */
+  target_player_id: string;
 }
 
 function createBaseCard(): Card {
@@ -271,6 +295,24 @@ export const Card: MessageFns<Card> = {
     return message;
   },
 
+  fromJSON(object: any): Card {
+    return {
+      rank: isSet(object.rank) ? globalThis.String(object.rank) : "",
+      suit: isSet(object.suit) ? globalThis.String(object.suit) : "",
+    };
+  },
+
+  toJSON(message: Card): unknown {
+    const obj: any = {};
+    if (message.rank !== "") {
+      obj.rank = message.rank;
+    }
+    if (message.suit !== "") {
+      obj.suit = message.suit;
+    }
+    return obj;
+  },
+
   create<I extends Exact<DeepPartial<Card>, I>>(base?: I): Card {
     return Card.fromPartial(base ?? ({} as any));
   },
@@ -297,6 +339,7 @@ function createBaseSeat(): Seat {
     ready: undefined,
     hole_cards_revealed: [],
     stack_at_hand_start: undefined,
+    time_bank_ms: 0,
   };
 }
 
@@ -342,6 +385,9 @@ export const Seat: MessageFns<Seat> = {
     writer.join();
     if (message.stack_at_hand_start !== undefined) {
       writer.uint32(104).int64(message.stack_at_hand_start);
+    }
+    if (message.time_bank_ms !== 0) {
+      writer.uint32(112).int64(message.time_bank_ms);
     }
     return writer;
   },
@@ -467,6 +513,14 @@ export const Seat: MessageFns<Seat> = {
           message.stack_at_hand_start = longToNumber(reader.int64());
           continue;
         }
+        case 14: {
+          if (tag !== 112) {
+            break;
+          }
+
+          message.time_bank_ms = longToNumber(reader.int64());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -474,6 +528,104 @@ export const Seat: MessageFns<Seat> = {
       reader.skip(tag & 7);
     }
     return message;
+  },
+
+  fromJSON(object: any): Seat {
+    return {
+      player_id: isSet(object.playerId)
+        ? globalThis.String(object.playerId)
+        : isSet(object.player_id)
+        ? globalThis.String(object.player_id)
+        : "",
+      name: isSet(object.name) ? globalThis.String(object.name) : "",
+      stack: isSet(object.stack) ? globalThis.Number(object.stack) : 0,
+      state: isSet(object.state) ? globalThis.String(object.state) : "",
+      contributed: isSet(object.contributed) ? globalThis.Number(object.contributed) : 0,
+      hole_cards: globalThis.Array.isArray(object?.holeCards)
+        ? object.holeCards.map((e: any) => globalThis.String(e))
+        : globalThis.Array.isArray(object?.hole_cards)
+        ? object.hole_cards.map((e: any) => globalThis.String(e))
+        : [],
+      equity: isSet(object.equity) ? globalThis.Number(object.equity) : undefined,
+      hand_category: isSet(object.handCategory)
+        ? globalThis.String(object.handCategory)
+        : isSet(object.hand_category)
+        ? globalThis.String(object.hand_category)
+        : "",
+      connection_state: isSet(object.connectionState)
+        ? globalThis.String(object.connectionState)
+        : isSet(object.connection_state)
+        ? globalThis.String(object.connection_state)
+        : "",
+      dealt_in: isSet(object.dealtIn)
+        ? globalThis.Boolean(object.dealtIn)
+        : isSet(object.dealt_in)
+        ? globalThis.Boolean(object.dealt_in)
+        : undefined,
+      ready: isSet(object.ready) ? globalThis.Boolean(object.ready) : undefined,
+      hole_cards_revealed: globalThis.Array.isArray(object?.holeCardsRevealed)
+        ? object.holeCardsRevealed.map((e: any) => globalThis.Boolean(e))
+        : globalThis.Array.isArray(object?.hole_cards_revealed)
+        ? object.hole_cards_revealed.map((e: any) => globalThis.Boolean(e))
+        : [],
+      stack_at_hand_start: isSet(object.stackAtHandStart)
+        ? globalThis.Number(object.stackAtHandStart)
+        : isSet(object.stack_at_hand_start)
+        ? globalThis.Number(object.stack_at_hand_start)
+        : undefined,
+      time_bank_ms: isSet(object.timeBankMs)
+        ? globalThis.Number(object.timeBankMs)
+        : isSet(object.time_bank_ms)
+        ? globalThis.Number(object.time_bank_ms)
+        : 0,
+    };
+  },
+
+  toJSON(message: Seat): unknown {
+    const obj: any = {};
+    if (message.player_id !== "") {
+      obj.playerId = message.player_id;
+    }
+    if (message.name !== "") {
+      obj.name = message.name;
+    }
+    if (message.stack !== 0) {
+      obj.stack = Math.round(message.stack);
+    }
+    if (message.state !== "") {
+      obj.state = message.state;
+    }
+    if (message.contributed !== 0) {
+      obj.contributed = Math.round(message.contributed);
+    }
+    if (message.hole_cards?.length) {
+      obj.holeCards = message.hole_cards;
+    }
+    if (message.equity !== undefined) {
+      obj.equity = message.equity;
+    }
+    if (message.hand_category !== "") {
+      obj.handCategory = message.hand_category;
+    }
+    if (message.connection_state !== "") {
+      obj.connectionState = message.connection_state;
+    }
+    if (message.dealt_in !== undefined) {
+      obj.dealtIn = message.dealt_in;
+    }
+    if (message.ready !== undefined) {
+      obj.ready = message.ready;
+    }
+    if (message.hole_cards_revealed?.length) {
+      obj.holeCardsRevealed = message.hole_cards_revealed;
+    }
+    if (message.stack_at_hand_start !== undefined) {
+      obj.stackAtHandStart = Math.round(message.stack_at_hand_start);
+    }
+    if (message.time_bank_ms !== 0) {
+      obj.timeBankMs = Math.round(message.time_bank_ms);
+    }
+    return obj;
   },
 
   create<I extends Exact<DeepPartial<Seat>, I>>(base?: I): Seat {
@@ -494,6 +646,7 @@ export const Seat: MessageFns<Seat> = {
     message.ready = object.ready ?? undefined;
     message.hole_cards_revealed = object.hole_cards_revealed?.map((e) => e) || [];
     message.stack_at_hand_start = object.stack_at_hand_start ?? undefined;
+    message.time_bank_ms = object.time_bank_ms ?? 0;
     return message;
   },
 };
@@ -554,6 +707,32 @@ export const BlindEscalation: MessageFns<BlindEscalation> = {
       reader.skip(tag & 7);
     }
     return message;
+  },
+
+  fromJSON(object: any): BlindEscalation {
+    return {
+      interval_minutes: isSet(object.intervalMinutes)
+        ? globalThis.Number(object.intervalMinutes)
+        : isSet(object.interval_minutes)
+        ? globalThis.Number(object.interval_minutes)
+        : 0,
+      multiplier: isSet(object.multiplier) ? globalThis.Number(object.multiplier) : 0,
+      max: isSet(object.max) ? globalThis.Number(object.max) : 0,
+    };
+  },
+
+  toJSON(message: BlindEscalation): unknown {
+    const obj: any = {};
+    if (message.interval_minutes !== 0) {
+      obj.intervalMinutes = Math.round(message.interval_minutes);
+    }
+    if (message.multiplier !== 0) {
+      obj.multiplier = Math.round(message.multiplier);
+    }
+    if (message.max !== 0) {
+      obj.max = Math.round(message.max);
+    }
+    return obj;
   },
 
   create<I extends Exact<DeepPartial<BlindEscalation>, I>>(base?: I): BlindEscalation {
@@ -798,6 +977,144 @@ export const Room: MessageFns<Room> = {
     return message;
   },
 
+  fromJSON(object: any): Room {
+    return {
+      room_id: isSet(object.roomId)
+        ? globalThis.String(object.roomId)
+        : isSet(object.room_id)
+        ? globalThis.String(object.room_id)
+        : "",
+      visibility: isSet(object.visibility) ? globalThis.String(object.visibility) : "",
+      currency_mode: isSet(object.currencyMode)
+        ? globalThis.String(object.currencyMode)
+        : isSet(object.currency_mode)
+        ? globalThis.String(object.currency_mode)
+        : "",
+      small_blind: isSet(object.smallBlind)
+        ? globalThis.Number(object.smallBlind)
+        : isSet(object.small_blind)
+        ? globalThis.Number(object.small_blind)
+        : 0,
+      big_blind: isSet(object.bigBlind)
+        ? globalThis.Number(object.bigBlind)
+        : isSet(object.big_blind)
+        ? globalThis.Number(object.big_blind)
+        : 0,
+      max_seats: isSet(object.maxSeats)
+        ? globalThis.Number(object.maxSeats)
+        : isSet(object.max_seats)
+        ? globalThis.Number(object.max_seats)
+        : 0,
+      buy_in_min: isSet(object.buyInMin)
+        ? globalThis.Number(object.buyInMin)
+        : isSet(object.buy_in_min)
+        ? globalThis.Number(object.buy_in_min)
+        : 0,
+      buy_in_max: isSet(object.buyInMax)
+        ? globalThis.Number(object.buyInMax)
+        : isSet(object.buy_in_max)
+        ? globalThis.Number(object.buy_in_max)
+        : 0,
+      entry_fee_cents: isSet(object.entryFeeCents)
+        ? globalThis.Number(object.entryFeeCents)
+        : isSet(object.entry_fee_cents)
+        ? globalThis.Number(object.entry_fee_cents)
+        : 0,
+      share_code: isSet(object.shareCode)
+        ? globalThis.String(object.shareCode)
+        : isSet(object.share_code)
+        ? globalThis.String(object.share_code)
+        : "",
+      blind_escalation: isSet(object.blindEscalation)
+        ? BlindEscalation.fromJSON(object.blindEscalation)
+        : isSet(object.blind_escalation)
+        ? BlindEscalation.fromJSON(object.blind_escalation)
+        : undefined,
+      turn_timeout_seconds: isSet(object.turnTimeoutSeconds)
+        ? globalThis.Number(object.turnTimeoutSeconds)
+        : isSet(object.turn_timeout_seconds)
+        ? globalThis.Number(object.turn_timeout_seconds)
+        : 0,
+      equity_display_enabled: isSet(object.equityDisplayEnabled)
+        ? globalThis.Boolean(object.equityDisplayEnabled)
+        : isSet(object.equity_display_enabled)
+        ? globalThis.Boolean(object.equity_display_enabled)
+        : false,
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      seats_taken: isSet(object.seatsTaken)
+        ? globalThis.Number(object.seatsTaken)
+        : isSet(object.seats_taken)
+        ? globalThis.Number(object.seats_taken)
+        : 0,
+      created_by: isSet(object.createdBy)
+        ? globalThis.String(object.createdBy)
+        : isSet(object.created_by)
+        ? globalThis.String(object.created_by)
+        : "",
+      created_at: isSet(object.createdAt)
+        ? globalThis.String(object.createdAt)
+        : isSet(object.created_at)
+        ? globalThis.String(object.created_at)
+        : "",
+    };
+  },
+
+  toJSON(message: Room): unknown {
+    const obj: any = {};
+    if (message.room_id !== "") {
+      obj.roomId = message.room_id;
+    }
+    if (message.visibility !== "") {
+      obj.visibility = message.visibility;
+    }
+    if (message.currency_mode !== "") {
+      obj.currencyMode = message.currency_mode;
+    }
+    if (message.small_blind !== 0) {
+      obj.smallBlind = Math.round(message.small_blind);
+    }
+    if (message.big_blind !== 0) {
+      obj.bigBlind = Math.round(message.big_blind);
+    }
+    if (message.max_seats !== 0) {
+      obj.maxSeats = Math.round(message.max_seats);
+    }
+    if (message.buy_in_min !== 0) {
+      obj.buyInMin = Math.round(message.buy_in_min);
+    }
+    if (message.buy_in_max !== 0) {
+      obj.buyInMax = Math.round(message.buy_in_max);
+    }
+    if (message.entry_fee_cents !== 0) {
+      obj.entryFeeCents = Math.round(message.entry_fee_cents);
+    }
+    if (message.share_code !== "") {
+      obj.shareCode = message.share_code;
+    }
+    if (message.blind_escalation !== undefined) {
+      obj.blindEscalation = BlindEscalation.toJSON(message.blind_escalation);
+    }
+    if (message.turn_timeout_seconds !== 0) {
+      obj.turnTimeoutSeconds = Math.round(message.turn_timeout_seconds);
+    }
+    if (message.equity_display_enabled !== false) {
+      obj.equityDisplayEnabled = message.equity_display_enabled;
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (message.seats_taken !== 0) {
+      obj.seatsTaken = Math.round(message.seats_taken);
+    }
+    if (message.created_by !== "") {
+      obj.createdBy = message.created_by;
+    }
+    if (message.created_at !== "") {
+      obj.createdAt = message.created_at;
+    }
+    return obj;
+  },
+
   create<I extends Exact<DeepPartial<Room>, I>>(base?: I): Room {
     return Room.fromPartial(base ?? ({} as any));
   },
@@ -984,6 +1301,96 @@ export const LegalActions: MessageFns<LegalActions> = {
     return message;
   },
 
+  fromJSON(object: any): LegalActions {
+    return {
+      actions: globalThis.Array.isArray(object?.actions) ? object.actions.map((e: any) => globalThis.String(e)) : [],
+      call_amount: isSet(object.callAmount)
+        ? globalThis.Number(object.callAmount)
+        : isSet(object.call_amount)
+        ? globalThis.Number(object.call_amount)
+        : 0,
+      min_raise_to: isSet(object.minRaiseTo)
+        ? globalThis.Number(object.minRaiseTo)
+        : isSet(object.min_raise_to)
+        ? globalThis.Number(object.min_raise_to)
+        : 0,
+      max_raise_to: isSet(object.maxRaiseTo)
+        ? globalThis.Number(object.maxRaiseTo)
+        : isSet(object.max_raise_to)
+        ? globalThis.Number(object.max_raise_to)
+        : 0,
+      step: isSet(object.step) ? globalThis.Number(object.step) : 0,
+      current_contribution: isSet(object.currentContribution)
+        ? globalThis.Number(object.currentContribution)
+        : isSet(object.current_contribution)
+        ? globalThis.Number(object.current_contribution)
+        : 0,
+      current_bet: isSet(object.currentBet)
+        ? globalThis.Number(object.currentBet)
+        : isSet(object.current_bet)
+        ? globalThis.Number(object.current_bet)
+        : 0,
+      one_third_pot_raise_to: isSet(object.oneThirdPotRaiseTo)
+        ? globalThis.Number(object.oneThirdPotRaiseTo)
+        : isSet(object.one_third_pot_raise_to)
+        ? globalThis.Number(object.one_third_pot_raise_to)
+        : 0,
+      half_pot_raise_to: isSet(object.halfPotRaiseTo)
+        ? globalThis.Number(object.halfPotRaiseTo)
+        : isSet(object.half_pot_raise_to)
+        ? globalThis.Number(object.half_pot_raise_to)
+        : 0,
+      two_thirds_pot_raise_to: isSet(object.twoThirdsPotRaiseTo)
+        ? globalThis.Number(object.twoThirdsPotRaiseTo)
+        : isSet(object.two_thirds_pot_raise_to)
+        ? globalThis.Number(object.two_thirds_pot_raise_to)
+        : 0,
+      pot_raise_to: isSet(object.potRaiseTo)
+        ? globalThis.Number(object.potRaiseTo)
+        : isSet(object.pot_raise_to)
+        ? globalThis.Number(object.pot_raise_to)
+        : 0,
+    };
+  },
+
+  toJSON(message: LegalActions): unknown {
+    const obj: any = {};
+    if (message.actions?.length) {
+      obj.actions = message.actions;
+    }
+    if (message.call_amount !== 0) {
+      obj.callAmount = Math.round(message.call_amount);
+    }
+    if (message.min_raise_to !== 0) {
+      obj.minRaiseTo = Math.round(message.min_raise_to);
+    }
+    if (message.max_raise_to !== 0) {
+      obj.maxRaiseTo = Math.round(message.max_raise_to);
+    }
+    if (message.step !== 0) {
+      obj.step = Math.round(message.step);
+    }
+    if (message.current_contribution !== 0) {
+      obj.currentContribution = Math.round(message.current_contribution);
+    }
+    if (message.current_bet !== 0) {
+      obj.currentBet = Math.round(message.current_bet);
+    }
+    if (message.one_third_pot_raise_to !== 0) {
+      obj.oneThirdPotRaiseTo = Math.round(message.one_third_pot_raise_to);
+    }
+    if (message.half_pot_raise_to !== 0) {
+      obj.halfPotRaiseTo = Math.round(message.half_pot_raise_to);
+    }
+    if (message.two_thirds_pot_raise_to !== 0) {
+      obj.twoThirdsPotRaiseTo = Math.round(message.two_thirds_pot_raise_to);
+    }
+    if (message.pot_raise_to !== 0) {
+      obj.potRaiseTo = Math.round(message.pot_raise_to);
+    }
+    return obj;
+  },
+
   create<I extends Exact<DeepPartial<LegalActions>, I>>(base?: I): LegalActions {
     return LegalActions.fromPartial(base ?? ({} as any));
   },
@@ -1049,6 +1456,28 @@ export const Pot: MessageFns<Pot> = {
       reader.skip(tag & 7);
     }
     return message;
+  },
+
+  fromJSON(object: any): Pot {
+    return {
+      amount: isSet(object.amount) ? globalThis.Number(object.amount) : 0,
+      eligible_player_ids: globalThis.Array.isArray(object?.eligiblePlayerIds)
+        ? object.eligiblePlayerIds.map((e: any) => globalThis.String(e))
+        : globalThis.Array.isArray(object?.eligible_player_ids)
+        ? object.eligible_player_ids.map((e: any) => globalThis.String(e))
+        : [],
+    };
+  },
+
+  toJSON(message: Pot): unknown {
+    const obj: any = {};
+    if (message.amount !== 0) {
+      obj.amount = Math.round(message.amount);
+    }
+    if (message.eligible_player_ids?.length) {
+      obj.eligiblePlayerIds = message.eligible_player_ids;
+    }
+    return obj;
   },
 
   create<I extends Exact<DeepPartial<Pot>, I>>(base?: I): Pot {
@@ -1156,6 +1585,66 @@ export const PotResult: MessageFns<PotResult> = {
     return message;
   },
 
+  fromJSON(object: any): PotResult {
+    return {
+      amount: isSet(object.amount) ? globalThis.Number(object.amount) : 0,
+      payout_amount: isSet(object.payoutAmount)
+        ? globalThis.Number(object.payoutAmount)
+        : isSet(object.payout_amount)
+        ? globalThis.Number(object.payout_amount)
+        : 0,
+      eligible_player_ids: globalThis.Array.isArray(object?.eligiblePlayerIds)
+        ? object.eligiblePlayerIds.map((e: any) => globalThis.String(e))
+        : globalThis.Array.isArray(object?.eligible_player_ids)
+        ? object.eligible_player_ids.map((e: any) => globalThis.String(e))
+        : [],
+      winner_player_ids: globalThis.Array.isArray(object?.winnerPlayerIds)
+        ? object.winnerPlayerIds.map((e: any) => globalThis.String(e))
+        : globalThis.Array.isArray(object?.winner_player_ids)
+        ? object.winner_player_ids.map((e: any) => globalThis.String(e))
+        : [],
+      payouts: isObject(object.payouts)
+        ? (globalThis.Object.entries(object.payouts) as [string, any][]).reduce(
+          (acc: { [key: string]: number }, [key, value]: [string, any]) => {
+            acc[key] = globalThis.Number(value);
+            return acc;
+          },
+          {},
+        )
+        : {},
+      refund: isSet(object.refund) ? globalThis.Boolean(object.refund) : false,
+    };
+  },
+
+  toJSON(message: PotResult): unknown {
+    const obj: any = {};
+    if (message.amount !== 0) {
+      obj.amount = Math.round(message.amount);
+    }
+    if (message.payout_amount !== 0) {
+      obj.payoutAmount = Math.round(message.payout_amount);
+    }
+    if (message.eligible_player_ids?.length) {
+      obj.eligiblePlayerIds = message.eligible_player_ids;
+    }
+    if (message.winner_player_ids?.length) {
+      obj.winnerPlayerIds = message.winner_player_ids;
+    }
+    if (message.payouts) {
+      const entries = globalThis.Object.entries(message.payouts) as [string, number][];
+      if (entries.length > 0) {
+        obj.payouts = {};
+        entries.forEach(([k, v]) => {
+          obj.payouts[k] = Math.round(v);
+        });
+      }
+    }
+    if (message.refund !== false) {
+      obj.refund = message.refund;
+    }
+    return obj;
+  },
+
   create<I extends Exact<DeepPartial<PotResult>, I>>(base?: I): PotResult {
     return PotResult.fromPartial(base ?? ({} as any));
   },
@@ -1226,6 +1715,24 @@ export const PotResult_PayoutsEntry: MessageFns<PotResult_PayoutsEntry> = {
     return message;
   },
 
+  fromJSON(object: any): PotResult_PayoutsEntry {
+    return {
+      key: isSet(object.key) ? globalThis.String(object.key) : "",
+      value: isSet(object.value) ? globalThis.Number(object.value) : 0,
+    };
+  },
+
+  toJSON(message: PotResult_PayoutsEntry): unknown {
+    const obj: any = {};
+    if (message.key !== "") {
+      obj.key = message.key;
+    }
+    if (message.value !== 0) {
+      obj.value = Math.round(message.value);
+    }
+    return obj;
+  },
+
   create<I extends Exact<DeepPartial<PotResult_PayoutsEntry>, I>>(base?: I): PotResult_PayoutsEntry {
     return PotResult_PayoutsEntry.fromPartial(base ?? ({} as any));
   },
@@ -1261,6 +1768,7 @@ function createBaseTableSnapshot(): TableSnapshot {
     pot_results: [],
     protocol_version: 0,
     idle_removal_unix_ms: 0,
+    action_base_deadline_unix_ms: 0,
   };
 }
 
@@ -1331,6 +1839,9 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     }
     if (message.idle_removal_unix_ms !== 0) {
       writer.uint32(176).int64(message.idle_removal_unix_ms);
+    }
+    if (message.action_base_deadline_unix_ms !== 0) {
+      writer.uint32(184).int64(message.action_base_deadline_unix_ms);
     }
     return writer;
   },
@@ -1521,6 +2032,14 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           message.idle_removal_unix_ms = longToNumber(reader.int64());
           continue;
         }
+        case 23: {
+          if (tag !== 184) {
+            break;
+          }
+
+          message.action_base_deadline_unix_ms = longToNumber(reader.int64());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1528,6 +2047,188 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
       reader.skip(tag & 7);
     }
     return message;
+  },
+
+  fromJSON(object: any): TableSnapshot {
+    return {
+      stage: isSet(object.stage) ? globalThis.String(object.stage) : "",
+      board: globalThis.Array.isArray(object?.board) ? object.board.map((e: any) => globalThis.String(e)) : [],
+      seats: globalThis.Array.isArray(object?.seats) ? object.seats.map((e: any) => Seat.fromJSON(e)) : [],
+      payouts: isObject(object.payouts)
+        ? (globalThis.Object.entries(object.payouts) as [string, any][]).reduce(
+          (acc: { [key: string]: number }, [key, value]: [string, any]) => {
+            acc[key] = globalThis.Number(value);
+            return acc;
+          },
+          {},
+        )
+        : {},
+      winners: globalThis.Array.isArray(object?.winners) ? object.winners.map((e: any) => globalThis.String(e)) : [],
+      rake: isSet(object.rake) ? globalThis.Number(object.rake) : 0,
+      current_player_id: isSet(object.currentPlayerId)
+        ? globalThis.String(object.currentPlayerId)
+        : isSet(object.current_player_id)
+        ? globalThis.String(object.current_player_id)
+        : "",
+      legal_actions: isSet(object.legalActions)
+        ? LegalActions.fromJSON(object.legalActions)
+        : isSet(object.legal_actions)
+        ? LegalActions.fromJSON(object.legal_actions)
+        : undefined,
+      action_deadline_unix_ms: isSet(object.actionDeadlineUnixMs)
+        ? globalThis.Number(object.actionDeadlineUnixMs)
+        : isSet(object.action_deadline_unix_ms)
+        ? globalThis.Number(object.action_deadline_unix_ms)
+        : 0,
+      next_hand_unix_ms: isSet(object.nextHandUnixMs)
+        ? globalThis.Number(object.nextHandUnixMs)
+        : isSet(object.next_hand_unix_ms)
+        ? globalThis.Number(object.next_hand_unix_ms)
+        : 0,
+      won_without_showdown: isSet(object.wonWithoutShowdown)
+        ? globalThis.Boolean(object.wonWithoutShowdown)
+        : isSet(object.won_without_showdown)
+        ? globalThis.Boolean(object.won_without_showdown)
+        : false,
+      shuffle_commit_hash: isSet(object.shuffleCommitHash)
+        ? globalThis.String(object.shuffleCommitHash)
+        : isSet(object.shuffle_commit_hash)
+        ? globalThis.String(object.shuffle_commit_hash)
+        : "",
+      shuffle_server_seed_hex: isSet(object.shuffleServerSeedHex)
+        ? globalThis.String(object.shuffleServerSeedHex)
+        : isSet(object.shuffle_server_seed_hex)
+        ? globalThis.String(object.shuffle_server_seed_hex)
+        : "",
+      small_blind_player_id: isSet(object.smallBlindPlayerId)
+        ? globalThis.String(object.smallBlindPlayerId)
+        : isSet(object.small_blind_player_id)
+        ? globalThis.String(object.small_blind_player_id)
+        : "",
+      big_blind_player_id: isSet(object.bigBlindPlayerId)
+        ? globalThis.String(object.bigBlindPlayerId)
+        : isSet(object.big_blind_player_id)
+        ? globalThis.String(object.big_blind_player_id)
+        : "",
+      dealer_player_id: isSet(object.dealerPlayerId)
+        ? globalThis.String(object.dealerPlayerId)
+        : isSet(object.dealer_player_id)
+        ? globalThis.String(object.dealer_player_id)
+        : "",
+      snapshot_version: isSet(object.snapshotVersion)
+        ? globalThis.Number(object.snapshotVersion)
+        : isSet(object.snapshot_version)
+        ? globalThis.Number(object.snapshot_version)
+        : 0,
+      pots: globalThis.Array.isArray(object?.pots)
+        ? object.pots.map((e: any) => Pot.fromJSON(e))
+        : [],
+      hand_id: isSet(object.handId)
+        ? globalThis.String(object.handId)
+        : isSet(object.hand_id)
+        ? globalThis.String(object.hand_id)
+        : "",
+      pot_results: globalThis.Array.isArray(object?.potResults)
+        ? object.potResults.map((e: any) => PotResult.fromJSON(e))
+        : globalThis.Array.isArray(object?.pot_results)
+        ? object.pot_results.map((e: any) => PotResult.fromJSON(e))
+        : [],
+      protocol_version: isSet(object.protocolVersion)
+        ? globalThis.Number(object.protocolVersion)
+        : isSet(object.protocol_version)
+        ? globalThis.Number(object.protocol_version)
+        : 0,
+      idle_removal_unix_ms: isSet(object.idleRemovalUnixMs)
+        ? globalThis.Number(object.idleRemovalUnixMs)
+        : isSet(object.idle_removal_unix_ms)
+        ? globalThis.Number(object.idle_removal_unix_ms)
+        : 0,
+      action_base_deadline_unix_ms: isSet(object.actionBaseDeadlineUnixMs)
+        ? globalThis.Number(object.actionBaseDeadlineUnixMs)
+        : isSet(object.action_base_deadline_unix_ms)
+        ? globalThis.Number(object.action_base_deadline_unix_ms)
+        : 0,
+    };
+  },
+
+  toJSON(message: TableSnapshot): unknown {
+    const obj: any = {};
+    if (message.stage !== "") {
+      obj.stage = message.stage;
+    }
+    if (message.board?.length) {
+      obj.board = message.board;
+    }
+    if (message.seats?.length) {
+      obj.seats = message.seats.map((e) => Seat.toJSON(e));
+    }
+    if (message.payouts) {
+      const entries = globalThis.Object.entries(message.payouts) as [string, number][];
+      if (entries.length > 0) {
+        obj.payouts = {};
+        entries.forEach(([k, v]) => {
+          obj.payouts[k] = Math.round(v);
+        });
+      }
+    }
+    if (message.winners?.length) {
+      obj.winners = message.winners;
+    }
+    if (message.rake !== 0) {
+      obj.rake = Math.round(message.rake);
+    }
+    if (message.current_player_id !== "") {
+      obj.currentPlayerId = message.current_player_id;
+    }
+    if (message.legal_actions !== undefined) {
+      obj.legalActions = LegalActions.toJSON(message.legal_actions);
+    }
+    if (message.action_deadline_unix_ms !== 0) {
+      obj.actionDeadlineUnixMs = Math.round(message.action_deadline_unix_ms);
+    }
+    if (message.next_hand_unix_ms !== 0) {
+      obj.nextHandUnixMs = Math.round(message.next_hand_unix_ms);
+    }
+    if (message.won_without_showdown !== false) {
+      obj.wonWithoutShowdown = message.won_without_showdown;
+    }
+    if (message.shuffle_commit_hash !== "") {
+      obj.shuffleCommitHash = message.shuffle_commit_hash;
+    }
+    if (message.shuffle_server_seed_hex !== "") {
+      obj.shuffleServerSeedHex = message.shuffle_server_seed_hex;
+    }
+    if (message.small_blind_player_id !== "") {
+      obj.smallBlindPlayerId = message.small_blind_player_id;
+    }
+    if (message.big_blind_player_id !== "") {
+      obj.bigBlindPlayerId = message.big_blind_player_id;
+    }
+    if (message.dealer_player_id !== "") {
+      obj.dealerPlayerId = message.dealer_player_id;
+    }
+    if (message.snapshot_version !== 0) {
+      obj.snapshotVersion = Math.round(message.snapshot_version);
+    }
+    if (message.pots?.length) {
+      obj.pots = message.pots.map((e) => Pot.toJSON(e));
+    }
+    if (message.hand_id !== "") {
+      obj.handId = message.hand_id;
+    }
+    if (message.pot_results?.length) {
+      obj.potResults = message.pot_results.map((e) => PotResult.toJSON(e));
+    }
+    if (message.protocol_version !== 0) {
+      obj.protocolVersion = Math.round(message.protocol_version);
+    }
+    if (message.idle_removal_unix_ms !== 0) {
+      obj.idleRemovalUnixMs = Math.round(message.idle_removal_unix_ms);
+    }
+    if (message.action_base_deadline_unix_ms !== 0) {
+      obj.actionBaseDeadlineUnixMs = Math.round(message.action_base_deadline_unix_ms);
+    }
+    return obj;
   },
 
   create<I extends Exact<DeepPartial<TableSnapshot>, I>>(base?: I): TableSnapshot {
@@ -1567,6 +2268,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     message.pot_results = object.pot_results?.map((e) => PotResult.fromPartial(e)) || [];
     message.protocol_version = object.protocol_version ?? 0;
     message.idle_removal_unix_ms = object.idle_removal_unix_ms ?? 0;
+    message.action_base_deadline_unix_ms = object.action_base_deadline_unix_ms ?? 0;
     return message;
   },
 };
@@ -1618,6 +2320,24 @@ export const TableSnapshot_PayoutsEntry: MessageFns<TableSnapshot_PayoutsEntry> 
     return message;
   },
 
+  fromJSON(object: any): TableSnapshot_PayoutsEntry {
+    return {
+      key: isSet(object.key) ? globalThis.String(object.key) : "",
+      value: isSet(object.value) ? globalThis.Number(object.value) : 0,
+    };
+  },
+
+  toJSON(message: TableSnapshot_PayoutsEntry): unknown {
+    const obj: any = {};
+    if (message.key !== "") {
+      obj.key = message.key;
+    }
+    if (message.value !== 0) {
+      obj.value = Math.round(message.value);
+    }
+    return obj;
+  },
+
   create<I extends Exact<DeepPartial<TableSnapshot_PayoutsEntry>, I>>(base?: I): TableSnapshot_PayoutsEntry {
     return TableSnapshot_PayoutsEntry.fromPartial(base ?? ({} as any));
   },
@@ -1642,6 +2362,8 @@ function createBaseClientMessage(): ClientMessage {
     expected_snapshot_version: 0,
     expected_hand_id: "",
     card_index: undefined,
+    reaction_id: "",
+    target_player_id: "",
   };
 }
 
@@ -1679,6 +2401,12 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     }
     if (message.card_index !== undefined) {
       writer.uint32(88).int32(message.card_index);
+    }
+    if (message.reaction_id !== "") {
+      writer.uint32(98).string(message.reaction_id);
+    }
+    if (message.target_player_id !== "") {
+      writer.uint32(106).string(message.target_player_id);
     }
     return writer;
   },
@@ -1778,6 +2506,22 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           message.card_index = reader.int32();
           continue;
         }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.reaction_id = reader.string();
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.target_player_id = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1785,6 +2529,96 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       reader.skip(tag & 7);
     }
     return message;
+  },
+
+  fromJSON(object: any): ClientMessage {
+    return {
+      type: isSet(object.type) ? globalThis.String(object.type) : "",
+      token: isSet(object.token) ? globalThis.String(object.token) : "",
+      share_code: isSet(object.shareCode)
+        ? globalThis.String(object.shareCode)
+        : isSet(object.share_code)
+        ? globalThis.String(object.share_code)
+        : "",
+      ready: isSet(object.ready) ? globalThis.Boolean(object.ready) : false,
+      action: isSet(object.action) ? globalThis.String(object.action) : "",
+      amount: isSet(object.amount) ? globalThis.Number(object.amount) : 0,
+      action_id: isSet(object.actionId)
+        ? globalThis.String(object.actionId)
+        : isSet(object.action_id)
+        ? globalThis.String(object.action_id)
+        : "",
+      message: isSet(object.message) ? globalThis.String(object.message) : "",
+      expected_snapshot_version: isSet(object.expectedSnapshotVersion)
+        ? globalThis.Number(object.expectedSnapshotVersion)
+        : isSet(object.expected_snapshot_version)
+        ? globalThis.Number(object.expected_snapshot_version)
+        : 0,
+      expected_hand_id: isSet(object.expectedHandId)
+        ? globalThis.String(object.expectedHandId)
+        : isSet(object.expected_hand_id)
+        ? globalThis.String(object.expected_hand_id)
+        : "",
+      card_index: isSet(object.cardIndex)
+        ? globalThis.Number(object.cardIndex)
+        : isSet(object.card_index)
+        ? globalThis.Number(object.card_index)
+        : undefined,
+      reaction_id: isSet(object.reactionId)
+        ? globalThis.String(object.reactionId)
+        : isSet(object.reaction_id)
+        ? globalThis.String(object.reaction_id)
+        : "",
+      target_player_id: isSet(object.targetPlayerId)
+        ? globalThis.String(object.targetPlayerId)
+        : isSet(object.target_player_id)
+        ? globalThis.String(object.target_player_id)
+        : "",
+    };
+  },
+
+  toJSON(message: ClientMessage): unknown {
+    const obj: any = {};
+    if (message.type !== "") {
+      obj.type = message.type;
+    }
+    if (message.token !== "") {
+      obj.token = message.token;
+    }
+    if (message.share_code !== "") {
+      obj.shareCode = message.share_code;
+    }
+    if (message.ready !== false) {
+      obj.ready = message.ready;
+    }
+    if (message.action !== "") {
+      obj.action = message.action;
+    }
+    if (message.amount !== 0) {
+      obj.amount = Math.round(message.amount);
+    }
+    if (message.action_id !== "") {
+      obj.actionId = message.action_id;
+    }
+    if (message.message !== "") {
+      obj.message = message.message;
+    }
+    if (message.expected_snapshot_version !== 0) {
+      obj.expectedSnapshotVersion = Math.round(message.expected_snapshot_version);
+    }
+    if (message.expected_hand_id !== "") {
+      obj.expectedHandId = message.expected_hand_id;
+    }
+    if (message.card_index !== undefined) {
+      obj.cardIndex = Math.round(message.card_index);
+    }
+    if (message.reaction_id !== "") {
+      obj.reactionId = message.reaction_id;
+    }
+    if (message.target_player_id !== "") {
+      obj.targetPlayerId = message.target_player_id;
+    }
+    return obj;
   },
 
   create<I extends Exact<DeepPartial<ClientMessage>, I>>(base?: I): ClientMessage {
@@ -1803,6 +2637,8 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     message.expected_snapshot_version = object.expected_snapshot_version ?? 0;
     message.expected_hand_id = object.expected_hand_id ?? "";
     message.card_index = object.card_index ?? undefined;
+    message.reaction_id = object.reaction_id ?? "";
+    message.target_player_id = object.target_player_id ?? "";
     return message;
   },
 };
@@ -1825,6 +2661,8 @@ function createBaseServerMessage(): ServerMessage {
     action_id: "",
     snapshot_version: 0,
     equity: undefined,
+    reaction_id: "",
+    target_player_id: "",
   };
 }
 
@@ -1877,6 +2715,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
     }
     if (message.equity !== undefined) {
       writer.uint32(129).double(message.equity);
+    }
+    if (message.reaction_id !== "") {
+      writer.uint32(138).string(message.reaction_id);
+    }
+    if (message.target_player_id !== "") {
+      writer.uint32(146).string(message.target_player_id);
     }
     return writer;
   },
@@ -2016,6 +2860,22 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           message.equity = reader.double();
           continue;
         }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.reaction_id = reader.string();
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          message.target_player_id = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2023,6 +2883,120 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       reader.skip(tag & 7);
     }
     return message;
+  },
+
+  fromJSON(object: any): ServerMessage {
+    return {
+      type: isSet(object.type) ? globalThis.String(object.type) : "",
+      conn_id: isSet(object.connId)
+        ? globalThis.String(object.connId)
+        : isSet(object.conn_id)
+        ? globalThis.String(object.conn_id)
+        : "",
+      snapshot: isSet(object.snapshot) ? TableSnapshot.fromJSON(object.snapshot) : undefined,
+      player_id: isSet(object.playerId)
+        ? globalThis.String(object.playerId)
+        : isSet(object.player_id)
+        ? globalThis.String(object.player_id)
+        : "",
+      message: isSet(object.message) ? globalThis.String(object.message) : "",
+      code: isSet(object.code) ? globalThis.String(object.code) : "",
+      key: isSet(object.key) ? globalThis.String(object.key) : "",
+      stars: isSet(object.stars) ? globalThis.Number(object.stars) : 0,
+      room: isSet(object.room) ? Room.fromJSON(object.room) : undefined,
+      room_id: isSet(object.roomId)
+        ? globalThis.String(object.roomId)
+        : isSet(object.room_id)
+        ? globalThis.String(object.room_id)
+        : "",
+      seats_taken: isSet(object.seatsTaken)
+        ? globalThis.Number(object.seatsTaken)
+        : isSet(object.seats_taken)
+        ? globalThis.Number(object.seats_taken)
+        : 0,
+      amount: isSet(object.amount) ? globalThis.Number(object.amount) : 0,
+      text: isSet(object.text) ? globalThis.String(object.text) : "",
+      action_id: isSet(object.actionId)
+        ? globalThis.String(object.actionId)
+        : isSet(object.action_id)
+        ? globalThis.String(object.action_id)
+        : "",
+      snapshot_version: isSet(object.snapshotVersion)
+        ? globalThis.Number(object.snapshotVersion)
+        : isSet(object.snapshot_version)
+        ? globalThis.Number(object.snapshot_version)
+        : 0,
+      equity: isSet(object.equity) ? globalThis.Number(object.equity) : undefined,
+      reaction_id: isSet(object.reactionId)
+        ? globalThis.String(object.reactionId)
+        : isSet(object.reaction_id)
+        ? globalThis.String(object.reaction_id)
+        : "",
+      target_player_id: isSet(object.targetPlayerId)
+        ? globalThis.String(object.targetPlayerId)
+        : isSet(object.target_player_id)
+        ? globalThis.String(object.target_player_id)
+        : "",
+    };
+  },
+
+  toJSON(message: ServerMessage): unknown {
+    const obj: any = {};
+    if (message.type !== "") {
+      obj.type = message.type;
+    }
+    if (message.conn_id !== "") {
+      obj.connId = message.conn_id;
+    }
+    if (message.snapshot !== undefined) {
+      obj.snapshot = TableSnapshot.toJSON(message.snapshot);
+    }
+    if (message.player_id !== "") {
+      obj.playerId = message.player_id;
+    }
+    if (message.message !== "") {
+      obj.message = message.message;
+    }
+    if (message.code !== "") {
+      obj.code = message.code;
+    }
+    if (message.key !== "") {
+      obj.key = message.key;
+    }
+    if (message.stars !== 0) {
+      obj.stars = Math.round(message.stars);
+    }
+    if (message.room !== undefined) {
+      obj.room = Room.toJSON(message.room);
+    }
+    if (message.room_id !== "") {
+      obj.roomId = message.room_id;
+    }
+    if (message.seats_taken !== 0) {
+      obj.seatsTaken = Math.round(message.seats_taken);
+    }
+    if (message.amount !== 0) {
+      obj.amount = Math.round(message.amount);
+    }
+    if (message.text !== "") {
+      obj.text = message.text;
+    }
+    if (message.action_id !== "") {
+      obj.actionId = message.action_id;
+    }
+    if (message.snapshot_version !== 0) {
+      obj.snapshotVersion = Math.round(message.snapshot_version);
+    }
+    if (message.equity !== undefined) {
+      obj.equity = message.equity;
+    }
+    if (message.reaction_id !== "") {
+      obj.reactionId = message.reaction_id;
+    }
+    if (message.target_player_id !== "") {
+      obj.targetPlayerId = message.target_player_id;
+    }
+    return obj;
   },
 
   create<I extends Exact<DeepPartial<ServerMessage>, I>>(base?: I): ServerMessage {
@@ -2048,6 +3022,8 @@ export const ServerMessage: MessageFns<ServerMessage> = {
     message.action_id = object.action_id ?? "";
     message.snapshot_version = object.snapshot_version ?? 0;
     message.equity = object.equity ?? undefined;
+    message.reaction_id = object.reaction_id ?? "";
+    message.target_player_id = object.target_player_id ?? "";
     return message;
   },
 };
@@ -2075,9 +3051,19 @@ function longToNumber(int64: { toString(): string }): number {
   return num;
 }
 
+function isObject(value: any): boolean {
+  return typeof value === "object" && value !== null;
+}
+
+function isSet(value: any): boolean {
+  return value !== null && value !== undefined;
+}
+
 export interface MessageFns<T> {
   encode(message: T, writer?: BinaryWriter): BinaryWriter;
   decode(input: BinaryReader | Uint8Array, length?: number): T;
+  fromJSON(object: any): T;
+  toJSON(message: T): unknown;
   create<I extends Exact<DeepPartial<T>, I>>(base?: I): T;
   fromPartial<I extends Exact<DeepPartial<T>, I>>(object: I): T;
 }

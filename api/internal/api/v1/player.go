@@ -18,9 +18,11 @@ import (
 // Name and WalletMode are pointers so an absent key means "don't touch this
 // field" — a wallet-mode-only update must not blank out the display name.
 type UpdatePlayerRequest struct {
-	Name        *string `json:"name"`
-	WalletMode  *string `json:"wallet_mode"`
-	DeckVariant *string `json:"deck_variant"`
+	Name                 *string   `json:"name"`
+	WalletMode           *string   `json:"wallet_mode"`
+	DeckVariant          *string   `json:"deck_variant"`
+	ShowcasePublic       *bool     `json:"showcase_public"`
+	FeaturedAchievements *[]string `json:"featured_achievements"`
 }
 
 type sessionLogReader interface {
@@ -46,6 +48,7 @@ type playerHandlers struct {
 // under the same resource and share the same auth-derived playerID.
 func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Service, sessions sessionLogReader, achievementStore playerAchievementStore, cfg *config.Config) {
 	h := &playerHandlers{players: players, sessions: sessions, achievements: achievementStore, cfg: cfg}
+	router.Get("/players/:playerId/showcase", h.showcase)
 	g := router.Group("/players", auth)
 	g.Get("/me", h.me)
 	g.Post("/me", h.updateMe)
@@ -100,6 +103,26 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 				return problem.BadRequest("deck_variant must not be empty").Send(c)
 			}
 			return problem.InternalServer("failed to update player profile", c, err).Send(c)
+		}
+	}
+	if req.ShowcasePublic != nil || req.FeaturedAchievements != nil {
+		current, err := h.players.GetOrCreate(c.Context(), userID)
+		if err != nil {
+			return problem.InternalServer("failed to load player profile", c, err).Send(c)
+		}
+		public := current.ShowcasePublic
+		featured := current.FeaturedAchievements
+		if req.ShowcasePublic != nil {
+			public = *req.ShowcasePublic
+		}
+		if req.FeaturedAchievements != nil {
+			featured = *req.FeaturedAchievements
+		}
+		if _, err := h.players.SetShowcase(c.Context(), userID, public, featured); err != nil {
+			if errors.Is(err, player.ErrInvalidShowcase) {
+				return problem.BadRequest("featured_achievements must contain up to three valid unique keys").Send(c)
+			}
+			return problem.InternalServer("failed to update profile showcase", c, err).Send(c)
 		}
 	}
 
@@ -176,6 +199,55 @@ func (h *playerHandlers) achievementProgress(c fiber.Ctx) error {
 	return sendPage(c, progress, lastKey, cursor)
 }
 
+func (h *playerHandlers) showcase(c fiber.Ctx) error {
+	playerID, err := url.PathUnescape(c.Params("playerId"))
+	if err != nil || playerID == "" {
+		return problem.BadRequest("player id is invalid").Send(c)
+	}
+	profile, err := h.players.PublicShowcase(c.Context(), playerID)
+	if errors.Is(err, player.ErrShowcasePrivate) {
+		return problem.NotFound("profile showcase not found").Send(c)
+	}
+	if err != nil {
+		return problem.InternalServer("failed to load profile showcase", c, err).Send(c)
+	}
+	progress, _, err := h.achievements.ListAchievements(c.Context(), playerID, 100, nil)
+	if err != nil {
+		return problem.InternalServer("failed to load showcase achievements", c, err).Send(c)
+	}
+	counts := make(map[string]int, len(progress))
+	for _, item := range progress {
+		counts[item.Key] = item.Count
+	}
+	featured := make([]fiber.Map, 0, len(profile.FeaturedAchievements))
+	for _, key := range profile.FeaturedAchievements {
+		featured = append(featured, fiber.Map{"key": key, "count": counts[key]})
+	}
+
+	var bestHand fiber.Map
+	var bestNet int64
+	if hands, _, listErr := h.sessions.ListHands(c.Context(), playerID, 50, nil); listErr == nil {
+		for i := range hands {
+			if hands[i].NetChange > bestNet {
+				bestNet = hands[i].NetChange
+				// Opponent identities/cards, storage keys and shuffle secrets
+				// are deliberately absent from the public projection.
+				bestHand = fiber.Map{
+					"hand_id": hands[i].HandID, "table_id": hands[i].TableID,
+					"net_change": hands[i].NetChange, "ended_at": hands[i].EndedAt,
+					"board": hands[i].Board, "hole_cards": hands[i].HoleCards,
+				}
+			}
+		}
+	}
+	return c.JSON(fiber.Map{
+		"player_id":             profile.UserID,
+		"name":                  profile.Name,
+		"featured_achievements": featured,
+		"best_hand":             bestHand,
+	})
+}
+
 // responseWithBalance adds the wallet balance to the profile response.
 // A wallet lookup failure (e.g. ctech-wallet briefly down) does not fail the
 // whole request — the profile itself is still valid without a balance.
@@ -196,6 +268,8 @@ func playerResponse(profile *player.PlayerProfile) fiber.Map {
 		"name":                    profile.Name,
 		"wallet_mode":             profile.EffectiveWalletMode(),
 		"deck_variant":            profile.EffectiveDeckVariant(),
+		"showcase_public":         profile.ShowcasePublic,
+		"featured_achievements":   profile.FeaturedAchievements,
 		"poker_terms_accepted":    profile.TermsAccepted(),
 		"poker_terms_accepted_at": profile.TermsAcceptedAt,
 	}

@@ -51,8 +51,8 @@ func TestBroadcastAddsRevealGraceOnlyOnFirstArmAfterStageTransition(t *testing.T
 	actor.broadcastAll()
 	firstToAct := table.CurrentPlayerIDForActor()
 	deadline := time.UnixMilli(seen[firstToAct].ActionDeadlineUnixMs)
-	wantMin := before.Add(actor.turnTimeout + RevealGrace - 300*time.Millisecond)
-	wantMax := before.Add(actor.turnTimeout + RevealGrace + 300*time.Millisecond)
+	wantMin := before.Add(actor.turnTimeout + RevealGrace + actor.timeBankFor(firstToAct) - 300*time.Millisecond)
+	wantMax := before.Add(actor.turnTimeout + RevealGrace + actor.timeBankFor(firstToAct) + 300*time.Millisecond)
 	if deadline.Before(wantMin) || deadline.After(wantMax) {
 		t.Fatalf("expected deadline ~turnTimeout+%v after the flop reveal, got %v (turnTimeout=%v)", RevealGrace, deadline, actor.turnTimeout)
 	}
@@ -69,8 +69,8 @@ func TestBroadcastAddsRevealGraceOnlyOnFirstArmAfterStageTransition(t *testing.T
 	actor.broadcastAll()
 	secondToAct := table.CurrentPlayerIDForActor()
 	deadline2 := time.UnixMilli(seen[secondToAct].ActionDeadlineUnixMs)
-	wantMin2 := before2.Add(actor.turnTimeout - 300*time.Millisecond)
-	wantMax2 := before2.Add(actor.turnTimeout + 300*time.Millisecond)
+	wantMin2 := before2.Add(actor.turnTimeout + actor.timeBankFor(secondToAct) - 300*time.Millisecond)
+	wantMax2 := before2.Add(actor.turnTimeout + actor.timeBankFor(secondToAct) + 300*time.Millisecond)
 	if deadline2.Before(wantMin2) || deadline2.After(wantMax2) {
 		t.Fatalf("expected no grace on the same-street follow-up, deadline %v not within the turnTimeout-only window", deadline2)
 	}

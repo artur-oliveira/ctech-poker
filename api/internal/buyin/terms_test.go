@@ -30,12 +30,18 @@ type unacceptedProfiles struct{}
 func (unacceptedProfiles) GetOrCreate(context.Context, string) (*player.PlayerProfile, error) {
 	return &player.PlayerProfile{UserID: "u1"}, nil
 }
+func (unacceptedProfiles) Get(context.Context, string) (*player.PlayerProfile, error) {
+	return &player.PlayerProfile{UserID: "u1"}, nil
+}
 func (unacceptedProfiles) AcceptTerms(context.Context, string) error     { return nil }
 func (unacceptedProfiles) SetName(context.Context, string, string) error { return nil }
 func (unacceptedProfiles) SetWalletMode(context.Context, string, string) error {
 	return nil
 }
 func (unacceptedProfiles) SetDeckVariant(context.Context, string, string) error {
+	return nil
+}
+func (unacceptedProfiles) SetShowcase(context.Context, string, bool, []string) error {
 	return nil
 }
 

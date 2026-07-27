@@ -18,3 +18,5 @@ api/tablecleanup
 api/reconcilie
 api/server
 *.har
+*.d.ts
+cdk/*/*.js

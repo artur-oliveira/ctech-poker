@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import {BookOpen, ChevronLeft, Club, Trophy} from 'lucide-react';
+import {Award, BookOpen, ChevronLeft, Club, History, Trophy} from 'lucide-react';
 import {HandRankings} from '@/components/HandRankings';
 import {useOptionalSession} from "@/lib/auth/session";
 import {ProfileMenu} from "@/components/lobby/ProfileMenu";
@@ -24,6 +24,8 @@ export default function PokerRules() {
         {authed ? <div className="header-right">
           <Link href="/guide"><BookOpen/> <span className="header-right-label">Guia</span></Link>
           <Link href="/leaderboard"><Trophy/> <span className="header-right-label">Ranking</span></Link>
+          <Link href="/achievements"><Award/> <span className="header-right-label">Conquistas</span></Link>
+          <Link href="/hands"><History/> <span className="header-right-label">Mãos</span></Link>
           <ProfileMenu/>
         </div> : <Link href="/"><ChevronLeft/> Voltar</Link>}
       </nav>

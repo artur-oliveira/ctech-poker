@@ -9,6 +9,7 @@ import type {PokerAction, ServerMessage, TableSnapshot} from '@/lib/api/table';
 import {playerName} from '@/lib/utils';
 import {playSound} from '@/lib/sound';
 import {decodeServerMessage, encodeClientMessage} from "@/lib/ws/utils";
+import {isTableReaction, type TableReactionEvent, type TableReactionID} from '@/lib/reactions';
 
 export type ConnectionStatus = WSStatus
 export type ActionError = { code: string; message: string }
@@ -199,6 +200,8 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const [snapshotAt, setSnapshotAt] = useState(0);
   const [unlock, setUnlock] = useState<{ key: string; stars: number } | null>(null);
   const [chat, setChat] = useState<{ player: string; message: string }[]>([]);
+  const [reactions, setReactions] = useState<TableReactionEvent[]>([]);
+  const reactionTimersRef = useRef<Set<number>>(new Set());
   const [pendingAction, setPendingAction] = useState<PokerAction | null>(null);
   const [lastActionError, setLastActionError] = useState<ActionError | null>(null);
   const [announcement, setAnnouncement] = useState('');
@@ -384,6 +387,21 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       const chatMessage = message.message;
       setChat(value => [...value.slice(-39), {player: message.player_id || '?', message: chatMessage}]);
     }
+    if (message.type === 'reaction' && message.player_id && message.reaction_id &&
+      isTableReaction(message.reaction_id)) {
+      const reaction: TableReactionEvent = {
+        id: `${Date.now()}-${message.player_id}-${message.reaction_id}-${Math.random()}`,
+        playerId: message.player_id,
+        reactionId: message.reaction_id,
+        targetPlayerId: message.target_player_id || undefined
+      };
+      setReactions(value => [...value.slice(-7), reaction]);
+      const timer = window.setTimeout(() => {
+        setReactions(value => value.filter(item => item.id !== reaction.id));
+        reactionTimersRef.current.delete(timer);
+      }, 2400);
+      reactionTimersRef.current.add(timer);
+    }
   }, [clearPending, failPending, finishAuxiliaryCommand, recoverSession, viewerId]);
   const receiveForTable = useCallback((message: ServerMessage) => {
     if (activeTableIDRef.current === id) receive(message);
@@ -503,6 +521,8 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     if (readyTimerRef.current) clearTimeout(readyTimerRef.current);
     if (showCardsTimerRef.current) clearTimeout(showCardsTimerRef.current);
     if (postBigBlindTimerRef.current) clearTimeout(postBigBlindTimerRef.current);
+    for (const timer of reactionTimersRef.current) window.clearTimeout(timer);
+    reactionTimersRef.current.clear();
   }, []);
 
   useEffect(() => {
@@ -593,6 +613,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     snapshotAt,
     unlock,
     chat,
+    reactions,
     pendingAction,
     actionError: lastActionError,
     reconnectAttempt,
@@ -631,6 +652,9 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       return ok;
     },
     keepSeat: () => emit({type: 'keep_seat', action_id: crypto.randomUUID()}),
-    sendChat: (message: string) => emit({type: 'chat', message})
+    sendChat: (message: string) => emit({type: 'chat', message}),
+    sendReaction: (reactionId: TableReactionID, targetPlayerId?: string) =>
+      emit({type: 'reaction', reaction_id: reactionId, target_player_id: targetPlayerId || '',
+        action_id: crypto.randomUUID()})
   };
 }

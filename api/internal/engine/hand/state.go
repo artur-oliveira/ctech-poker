@@ -89,6 +89,7 @@ func NewTableFromState(s State) *Table {
 	// table directly with no proxying — ARCHITECTURE.md §2).
 	byID := make(map[string]*Player, len(s.Players))
 	for _, p := range s.Players {
+		initializeTimeBank(p)
 		byID[p.ID] = p
 	}
 	handOrder := make([]*Player, len(s.HandOrder))

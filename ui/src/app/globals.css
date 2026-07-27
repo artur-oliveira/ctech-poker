@@ -1114,6 +1114,10 @@ h1 em {
     .game-chat.game-chat {
         bottom: calc(var(--action-bar-stack) + env(safe-area-inset-bottom))
     }
+
+    .table-reactions {
+        bottom: calc(var(--action-bar-stack) + env(safe-area-inset-bottom))
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1188,6 +1192,163 @@ h1 em {
     margin-top: 3px;
     color: var(--muted);
     font-size: 11px
+}
+
+/* Private opponent notes stay visually secondary to the hand. The marker is
+   always visible once tagged; the edit affordance appears on hover/focus for
+   untagged players and remains a full-size touch target on portrait layouts. */
+.seat-note-trigger {
+    position: absolute;
+    z-index: 5;
+    top: -10px;
+    right: -10px;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: var(--surface-control);
+    color: var(--muted-rose);
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 160ms var(--ease-out-quart), color 160ms var(--ease-out-quart), transform 160ms var(--ease-out-quart)
+}
+
+.seat-note-trigger svg {
+    width: 14px;
+    height: 14px
+}
+
+.seat-note-trigger .player-note-dot {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    width: 8px;
+    height: 8px
+}
+
+.game-seat:hover .seat-note-trigger,
+.seat-note-trigger:focus-visible,
+.seat-note-trigger.has-note {
+    opacity: 1
+}
+
+.seat-note-trigger:hover {
+    color: var(--paper);
+    transform: translateY(-1px)
+}
+
+.player-note-privacy {
+    display: flex;
+    align-items: center;
+    gap: 7px
+}
+
+.player-note-privacy svg {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 auto
+}
+
+.player-note-form {
+    display: grid;
+    gap: 18px
+}
+
+.player-note-form fieldset {
+    min-width: 0;
+    border: 0
+}
+
+.player-note-form legend,
+.player-note-form label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 700
+}
+
+.player-note-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px
+}
+
+.player-note-tags button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 34px;
+    padding: 6px 9px;
+    border: 1px solid var(--white-22);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted-rose);
+    font: 600 11px var(--font-sans);
+    cursor: pointer
+}
+
+.player-note-tags button.is-selected {
+    border-color: var(--brand-bright);
+    color: var(--paper);
+    background: color-mix(in srgb, var(--brand) 18%, transparent)
+}
+
+.player-note-dot,
+.player-note-tag-none {
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--white-22)
+}
+
+.player-note-tag-none {
+    border: 1px dashed var(--muted)
+}
+
+.player-note-dot.tag-red { background: #ef4444 }
+.player-note-dot.tag-orange { background: #f97316 }
+.player-note-dot.tag-yellow { background: #eab308 }
+.player-note-dot.tag-green { background: #22c55e }
+.player-note-dot.tag-blue { background: #3b82f6 }
+.player-note-dot.tag-purple { background: #a855f7 }
+
+.player-note-form textarea {
+    width: 100%;
+    min-height: 112px;
+    resize: vertical;
+    padding: 10px 12px;
+    border: 1px solid var(--white-22);
+    border-radius: var(--rounded-control);
+    outline: none;
+    background: var(--white-08);
+    color: var(--paper);
+    font: 400 14px/1.5 var(--font-sans)
+}
+
+.player-note-form textarea::placeholder {
+    color: var(--muted-rose)
+}
+
+.player-note-form textarea:focus {
+    border-color: var(--brand-bright);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 28%, transparent)
+}
+
+.player-note-form > div {
+    position: relative
+}
+
+.player-note-form > div > small {
+    display: block;
+    margin-top: 5px;
+    color: var(--muted-rose);
+    text-align: right;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums
 }
 
 .reality-check-title {
@@ -1579,6 +1740,228 @@ h1 em {
 
 .profile-balances b {
     color: var(--on-brand)
+}
+
+.showcase-privacy-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--white-13)
+}
+
+.showcase-privacy-row b,
+.showcase-privacy-row small {
+    display: block
+}
+
+.showcase-privacy-row small,
+.showcase-achievements > p {
+    margin-top: 3px;
+    color: var(--muted-rose);
+    font-size: 11px
+}
+
+.showcase-achievements {
+    display: grid;
+    max-height: min(360px, 44vh);
+    margin-top: 16px;
+    overflow-y: auto;
+    border: 0
+}
+
+.showcase-achievements legend {
+    width: 100%;
+    font-weight: 700
+}
+
+.showcase-achievements legend span {
+    float: right;
+    color: var(--gold);
+    font-variant-numeric: tabular-nums
+}
+
+.showcase-achievements > p {
+    margin-bottom: 10px
+}
+
+.showcase-achievements label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    padding: 8px 2px;
+    border-bottom: 1px solid var(--white-08);
+    cursor: pointer
+}
+
+.showcase-achievements label span span,
+.showcase-achievements label small {
+    display: block
+}
+
+.showcase-achievements label small {
+    color: var(--muted-rose);
+    font-size: 10px
+}
+
+.showcase-share-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 16px
+}
+
+.profile-showcase {
+    padding-block: clamp(36px, 8vw, 88px)
+}
+
+.profile-showcase > .lobby-empty {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    max-width: 760px;
+    margin-inline: auto;
+    padding: 36px 24px
+}
+
+.profile-showcase > .lobby-empty > svg {
+    width: 30px;
+    height: 30px;
+    color: var(--gold)
+}
+
+.profile-showcase > .lobby-empty h1 {
+    font-size: clamp(26px, 4vw, 38px);
+    letter-spacing: -.03em
+}
+
+.profile-showcase > .lobby-empty p {
+    max-width: 52ch
+}
+
+.profile-showcase > header {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    max-width: 760px;
+    margin-inline: auto;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--white-13)
+}
+
+.profile-showcase > header small {
+    color: var(--muted-rose);
+    font-size: 11px;
+    letter-spacing: .08em
+}
+
+.profile-showcase > header h1 {
+    margin-top: 2px;
+    font-size: clamp(28px, 5vw, 48px);
+    letter-spacing: -.03em
+}
+
+.profile-showcase-avatar {
+    display: grid;
+    place-items: center;
+    width: 68px;
+    height: 68px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--brand);
+    color: var(--paper);
+    font: 800 20px var(--font-sans)
+}
+
+.profile-showcase-content {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(240px, .8fr);
+    gap: 36px;
+    max-width: 760px;
+    margin: 28px auto 0
+}
+
+.profile-showcase-content h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    font-size: 17px
+}
+
+.profile-showcase-content h2 svg {
+    width: 18px;
+    color: var(--gold)
+}
+
+.profile-featured-list {
+    display: grid;
+    gap: 1px;
+    overflow: hidden;
+    border-radius: var(--rounded-card);
+    background: var(--white-13)
+}
+
+.profile-featured-list article {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 15px;
+    background: var(--surface-seat)
+}
+
+.profile-featured-list svg {
+    width: 18px;
+    color: var(--gold)
+}
+
+.profile-featured-list b,
+.profile-featured-list span {
+    display: block
+}
+
+.profile-featured-list span,
+.profile-showcase-empty,
+.profile-best-hand span {
+    color: var(--muted-rose);
+    font-size: 11px
+}
+
+.profile-best-hand {
+    min-height: 148px;
+    padding: 16px;
+    border-radius: var(--rounded-card);
+    background: var(--surface-seat);
+    text-align: center
+}
+
+.profile-best-hand-cards {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 10px
+}
+
+.profile-best-hand-cards .playing-card {
+    width: 54px;
+    height: 76px;
+    margin-right: -12px
+}
+
+.profile-best-hand b,
+.profile-best-hand span {
+    display: block
+}
+
+.profile-best-hand b {
+    color: var(--success)
+}
+
+@media (max-width: 640px) {
+    .profile-showcase-content {
+        grid-template-columns: 1fr
+    }
 }
 
 .deck-variant-option {
@@ -2808,14 +3191,51 @@ h1 em {
     gap: 8px
 }
 
-.action-context {
+.action-context-row {
     grid-column: 1 / -1;
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 10px
+}
+
+.action-context {
     min-width: 0;
     margin: 0;
     color: var(--text-secondary);
     font-size: 12px;
     line-height: 1.2;
     text-align: center
+}
+
+.time-bank-status {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 5px;
+    min-height: 24px;
+    padding: 3px 8px;
+    border-radius: var(--rounded-pill);
+    background: color-mix(in srgb, var(--brand) 18%, var(--surface-control));
+    color: var(--paper);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums
+}
+
+.time-bank-status svg {
+    width: 13px;
+    height: 13px;
+    color: var(--brand-bright)
+}
+
+.time-bank-status.active {
+    background: color-mix(in srgb, var(--gold) 22%, var(--surface-control));
+    color: var(--paper)
+}
+
+.time-bank-status.active svg {
+    color: var(--gold)
 }
 
 .action-preselectors {
@@ -3131,6 +3551,186 @@ h1 em {
     color: var(--danger-soft);
     font-size: var(--font-size-compact);
     line-height: 1.35
+}
+
+.table-reactions {
+    position: fixed;
+    z-index: var(--z-chrome);
+    right: 70px;
+    bottom: var(--action-bar-clear)
+}
+
+.reaction-toggle {
+    width: 45px;
+    height: 45px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--surface-control);
+    color: var(--gold)
+}
+
+.reaction-panel {
+    position: absolute;
+    right: 0;
+    bottom: 53px;
+    display: flex;
+    width: min(300px, calc(100vw - 24px));
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--seat-border);
+    border-radius: 16px;
+    background: var(--surface-seat);
+    animation: rise 180ms var(--ease-out-quart)
+}
+
+.reaction-panel header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between
+}
+
+.reaction-panel header button {
+    width: 36px;
+    height: 36px;
+    color: var(--text-secondary)
+}
+
+.reaction-quick {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px
+}
+
+.reaction-quick button,
+.reaction-objects button {
+    min-height: 44px;
+    border: 0;
+    border-radius: var(--rounded-control);
+    background: var(--surface-control);
+    color: var(--paper);
+    cursor: pointer
+}
+
+.reaction-quick button {
+    font-size: 24px
+}
+
+.reaction-quick button:hover,
+.reaction-objects button:hover {
+    background: var(--surface-control-hover)
+}
+
+.reaction-quick button:disabled,
+.reaction-objects button:disabled {
+    opacity: .45;
+    cursor: not-allowed
+}
+
+.reaction-panel label {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--text-secondary);
+    font-size: 12px
+}
+
+.reaction-panel select {
+    min-width: 0;
+    flex: 1;
+    min-height: 40px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control);
+    background: var(--surface-control);
+    color: var(--paper);
+    padding: 0 10px
+}
+
+.reaction-objects {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 7px
+}
+
+.reaction-objects button {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px;
+    font-size: 10px
+}
+
+.reaction-objects button span {
+    font-size: 19px
+}
+
+.table-reaction-layer {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-toast);
+    pointer-events: none
+}
+
+.table-reaction-effect {
+    position: fixed;
+    left: var(--reaction-x);
+    top: var(--reaction-y);
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    margin: -22px;
+    border-radius: 50%;
+    background: var(--surface-seat);
+    font-size: 25px;
+    filter: drop-shadow(0 4px 6px var(--black));
+    visibility: hidden;
+    will-change: transform, opacity
+}
+
+.table-reaction-effect.emote {
+    animation: reaction-emote 2.2s var(--ease-out-quart) both
+}
+
+.table-reaction-effect.thrown {
+    background: transparent;
+    animation: reaction-throw 1.05s var(--ease-out-quart) both
+}
+
+@keyframes reaction-emote {
+    0% {
+        opacity: 0;
+        transform: translateY(10px) scale(.72)
+    }
+    14%, 72% {
+        opacity: 1;
+        transform: translateY(var(--reaction-dy)) scale(1)
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(calc(var(--reaction-dy) - 12px)) scale(.9)
+    }
+}
+
+@keyframes reaction-throw {
+    0% {
+        opacity: 0;
+        transform: translate(0, 0) rotate(-18deg) scale(.7)
+    }
+    12% {
+        opacity: 1
+    }
+    78% {
+        opacity: 1;
+        transform: translate(var(--reaction-dx), var(--reaction-dy)) rotate(330deg) scale(1)
+    }
+    100% {
+        opacity: 0;
+        transform: translate(var(--reaction-dx), var(--reaction-dy)) rotate(360deg) scale(.72)
+    }
 }
 
 /* Mirrors .game-chat's fixed toggle/panel exactly, docked bottom-left
@@ -3461,8 +4061,8 @@ h1 em {
 
 .ranking header {
     text-align: center;
-    max-width: 650px;
-    margin: 60px auto
+    max-width: 620px;
+    margin: 40px auto 60px
 }
 
 .ranking header > svg {
@@ -4273,6 +4873,15 @@ h1 em {
     font-size: var(--font-size-tiny)
 }
 
+.stage-v-ring .seat-note-trigger {
+    top: -7px;
+    right: -7px;
+    width: 24px;
+    height: 24px;
+    opacity: 1;
+    background: var(--surface-seat)
+}
+
 /* folded already grayscales globally; sitting-out, disconnected and
    pending-entry only need it here, where no state word is painted. */
 .stage-v-ring .game-seat.sitting_out .seat-avatar,
@@ -4605,6 +5214,18 @@ h1 em {
     .game-chat.game-chat {
         right: 12px;
         top: calc(env(safe-area-inset-top) + 60px);
+        bottom: auto
+    }
+
+    .table-reactions {
+        right: 66px;
+        top: calc(env(safe-area-inset-top) + 60px);
+        bottom: auto
+    }
+
+    .reaction-panel {
+        top: 53px;
+        right: -54px;
         bottom: auto
     }
 
@@ -4956,6 +5577,11 @@ h1 em {
 
     .game-chat {
         right: calc(clamp(220px, 28vw, 264px) + 12px);
+        bottom: max(12px, env(safe-area-inset-bottom))
+    }
+
+    .table-reactions {
+        right: calc(clamp(220px, 28vw, 264px) + 64px);
         bottom: max(12px, env(safe-area-inset-bottom))
     }
 

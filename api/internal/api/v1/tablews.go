@@ -37,6 +37,15 @@ const (
 
 var tableChatFilter = chatfilter.New([]string{"idiota", "burro"})
 
+var tableReactions = map[string]bool{
+	"clap": true, "laugh": true, "wow": true,
+	"chip": true, "coffee": true, "clover": true,
+}
+
+var targetedTableReactions = map[string]bool{
+	"chip": true, "coffee": true, "clover": true,
+}
+
 // readAuthToken reads the first WebSocket frame after the upgrade and
 // extracts the bearer JWT plus an optional private-room share code. The
 // client sends {"token":"...","share_code":"..."} (or a raw token) once; a
@@ -92,7 +101,7 @@ func wsAllowedOrigin(ctx *fasthttp.RequestCtx, allowed []string) bool {
 
 func rateLimitedTableMessage(messageType string) bool {
 	switch messageType {
-	case "act", "chat", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "ping":
+	case "act", "chat", "reaction", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "ping":
 		return true
 	default:
 		return false
@@ -170,6 +179,10 @@ func (t *tableConnectionTracker) listTable(tableID string) []trackedTableConnect
 
 func newSeatLimiter(perSecond int) *seatLimiter {
 	return &seatLimiter{perWindow: perSecond, window: time.Second, counts: make(map[string]int), resetAt: make(map[string]time.Time)}
+}
+
+func newWindowSeatLimiter(perWindow int, window time.Duration) *seatLimiter {
+	return &seatLimiter{perWindow: perWindow, window: window, counts: make(map[string]int), resetAt: make(map[string]time.Time)}
 }
 
 func (l *seatLimiter) Allow(playerID string) bool {
@@ -376,6 +389,7 @@ func RegisterTableWS(
 			sendSnapshot("")
 
 			limiter := newSeatLimiter(10) // 10 actions/sec/seat — generous for a human, tight for a script
+			reactionLimiter := newWindowSeatLimiter(1, 2*time.Second)
 			done := make(chan struct{})
 			go startHeartbeat(conn, done, wsPingInterval, wsPongWait)
 
@@ -499,6 +513,42 @@ func RegisterTableWS(
 						Message:  tableChatFilter.Clean(message),
 					})
 					reg.Broadcast(ctx, tableID+"#chat", data)
+				case "reaction":
+					ensureActionID()
+					if !tableReactions[m.ReactionId] {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_reaction", ActionId: m.ActionId})
+						continue
+					}
+					if !reactionLimiter.Allow(playerID) {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "reaction_rate_limited", ActionId: m.ActionId})
+						continue
+					}
+					snapCh := make(chan hand.Snapshot, 1)
+					snapReply := make(chan error, 1)
+					if err := dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: snapReply}); err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "unavailable", ActionId: m.ActionId})
+						continue
+					}
+					snap := <-snapCh
+					senderSeated, targetSeated := false, !targetedTableReactions[m.ReactionId]
+					for _, seat := range snap.Seats {
+						if seat.PlayerID == playerID {
+							senderSeated = true
+						}
+						if seat.PlayerID == m.TargetPlayerId && seat.PlayerID != playerID {
+							targetSeated = true
+						}
+					}
+					if !senderSeated || !targetSeated {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_reaction_target", ActionId: m.ActionId})
+						continue
+					}
+					data, _ := goproto.Marshal(&pokerproto.ServerMessage{
+						Type: "reaction", PlayerId: playerID, ReactionId: m.ReactionId,
+						TargetPlayerId: m.TargetPlayerId,
+					})
+					reg.Broadcast(ctx, tableID+"#chat", data)
+					ack()
 				}
 			}
 			close(done)
@@ -640,6 +690,7 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 			HoleCards:         s.HoleCards,
 			HoleCardsRevealed: s.HoleCardsRevealed,
 			StackAtHandStart:  s.StackAtHandStart,
+			TimeBankMs:        s.TimeBankMs,
 			Equity:            equity,
 			HandCategory:      s.HandCategory,
 		}
@@ -681,28 +732,29 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 	}
 
 	return &pokerproto.TableSnapshot{
-		Stage:                snap.Stage,
-		Board:                snap.Board,
-		Seats:                protoSeats,
-		Payouts:              snap.Payouts,
-		Winners:              snap.Winners,
-		Rake:                 snap.Rake,
-		CurrentPlayerId:      snap.CurrentPlayerID,
-		LegalActions:         protoLA,
-		ActionDeadlineUnixMs: snap.ActionDeadlineUnixMs,
-		NextHandUnixMs:       snap.NextHandUnixMs,
-		IdleRemovalUnixMs:    snap.IdleRemovalUnixMs,
-		WonWithoutShowdown:   snap.WonWithoutShowdown,
-		ShuffleCommitHash:    snap.ShuffleCommitHash,
-		ShuffleServerSeedHex: snap.ShuffleServerSeedHex,
-		SmallBlindPlayerId:   snap.SmallBlindPlayerID,
-		BigBlindPlayerId:     snap.BigBlindPlayerID,
-		DealerPlayerId:       snap.DealerPlayerID,
-		SnapshotVersion:      snap.SnapshotVersion,
-		Pots:                 protoPots,
-		HandId:               snap.HandID,
-		PotResults:           protoPotResults,
-		ProtocolVersion:      4,
+		Stage:                    snap.Stage,
+		Board:                    snap.Board,
+		Seats:                    protoSeats,
+		Payouts:                  snap.Payouts,
+		Winners:                  snap.Winners,
+		Rake:                     snap.Rake,
+		CurrentPlayerId:          snap.CurrentPlayerID,
+		LegalActions:             protoLA,
+		ActionDeadlineUnixMs:     snap.ActionDeadlineUnixMs,
+		ActionBaseDeadlineUnixMs: snap.ActionBaseDeadlineUnixMs,
+		NextHandUnixMs:           snap.NextHandUnixMs,
+		IdleRemovalUnixMs:        snap.IdleRemovalUnixMs,
+		WonWithoutShowdown:       snap.WonWithoutShowdown,
+		ShuffleCommitHash:        snap.ShuffleCommitHash,
+		ShuffleServerSeedHex:     snap.ShuffleServerSeedHex,
+		SmallBlindPlayerId:       snap.SmallBlindPlayerID,
+		BigBlindPlayerId:         snap.BigBlindPlayerID,
+		DealerPlayerId:           snap.DealerPlayerID,
+		SnapshotVersion:          snap.SnapshotVersion,
+		Pots:                     protoPots,
+		HandId:                   snap.HandID,
+		PotResults:               protoPotResults,
+		ProtocolVersion:          5,
 	}
 }
 

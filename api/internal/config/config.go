@@ -41,6 +41,12 @@ type Config struct {
 	PokerClientID     string `env:"POKER_CLIENT_ID"`
 	PokerClientSecret string `env:"POKER_CLIENT_SECRET"`
 
+	// Adaptive bot checks are disabled when no secret is configured. The
+	// public site key belongs to the static frontend build; only this secret
+	// is accepted by Cloudflare Siteverify.
+	TurnstileSecret           string `env:"TURNSTILE_SECRET"`
+	TurnstileExpectedHostname string `env:"TURNSTILE_EXPECTED_HOSTNAME"`
+
 	// Real-money mode gate (Phase 5) — see this plan's Global Constraints.
 	// Both fields fail closed together: RealMoneyEnabled=true with no
 	// LegalSignoffRef means "an engineer flipped a flag with no recorded

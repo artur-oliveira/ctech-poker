@@ -98,8 +98,11 @@ type Seat struct {
 	// Stack before this hand posted blinds or accepted any wager. Optional so
 	// clients can fall back safely while API instances are rolling.
 	StackAtHandStart *int64 `protobuf:"varint,13,opt,name=stack_at_hand_start,json=stackAtHandStart,proto3,oneof" json:"stack_at_hand_start,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Durable decision reserve in milliseconds. Zero is a valid exhausted
+	// balance, so clients must not replace it with a default.
+	TimeBankMs    int64 `protobuf:"varint,14,opt,name=time_bank_ms,json=timeBankMs,proto3" json:"time_bank_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Seat) Reset() {
@@ -219,6 +222,13 @@ func (x *Seat) GetHoleCardsRevealed() []bool {
 func (x *Seat) GetStackAtHandStart() int64 {
 	if x != nil && x.StackAtHandStart != nil {
 		return *x.StackAtHandStart
+	}
+	return 0
+}
+
+func (x *Seat) GetTimeBankMs() int64 {
+	if x != nil {
+		return x.TimeBankMs
 	}
 	return 0
 }
@@ -741,8 +751,11 @@ type TableSnapshot struct {
 	// deployments instead of mistaking absent proto3 fields for false.
 	ProtocolVersion   uint32 `protobuf:"varint,21,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"`
 	IdleRemovalUnixMs int64  `protobuf:"varint,22,opt,name=idle_removal_unix_ms,json=idleRemovalUnixMs,proto3" json:"idle_removal_unix_ms,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// End of the normal room clock. The interval between this and
+	// action_deadline_unix_ms belongs to the current player's time bank.
+	ActionBaseDeadlineUnixMs int64 `protobuf:"varint,23,opt,name=action_base_deadline_unix_ms,json=actionBaseDeadlineUnixMs,proto3" json:"action_base_deadline_unix_ms,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *TableSnapshot) Reset() {
@@ -929,10 +942,17 @@ func (x *TableSnapshot) GetIdleRemovalUnixMs() int64 {
 	return 0
 }
 
+func (x *TableSnapshot) GetActionBaseDeadlineUnixMs() int64 {
+	if x != nil {
+		return x.ActionBaseDeadlineUnixMs
+	}
+	return 0
+}
+
 // ClientMessage is sent from the client to the server.
 type ClientMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "auth" | "ping" | "sync_state" | "ready" | "act" | "post_big_blind" | "show_cards" | "keep_seat" | "chat"
+	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "auth" | "ping" | "sync_state" | "ready" | "act" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction"
 	// payload fields
 	Token                   string `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`                                                                       // for auth frame
 	ShareCode               string `protobuf:"bytes,3,opt,name=share_code,json=shareCode,proto3" json:"share_code,omitempty"`                                              // for auth frame
@@ -944,6 +964,8 @@ type ClientMessage struct {
 	ExpectedSnapshotVersion uint64 `protobuf:"varint,9,opt,name=expected_snapshot_version,json=expectedSnapshotVersion,proto3" json:"expected_snapshot_version,omitempty"` // optimistic precondition for act
 	ExpectedHandId          string `protobuf:"bytes,10,opt,name=expected_hand_id,json=expectedHandId,proto3" json:"expected_hand_id,omitempty"`                            // prevents a delayed action crossing hands
 	CardIndex               *int32 `protobuf:"varint,11,opt,name=card_index,json=cardIndex,proto3,oneof" json:"card_index,omitempty"`                                      // 0 or 1 for show_cards; absent means both (legacy)
+	ReactionId              string `protobuf:"bytes,12,opt,name=reaction_id,json=reactionId,proto3" json:"reaction_id,omitempty"`                                          // catalog key; never arbitrary display text
+	TargetPlayerId          string `protobuf:"bytes,13,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`                            // required only by thrown-object reactions
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -1055,6 +1077,20 @@ func (x *ClientMessage) GetCardIndex() int32 {
 	return 0
 }
 
+func (x *ClientMessage) GetReactionId() string {
+	if x != nil {
+		return x.ReactionId
+	}
+	return ""
+}
+
+func (x *ClientMessage) GetTargetPlayerId() string {
+	if x != nil {
+		return x.TargetPlayerId
+	}
+	return ""
+}
+
 // ServerMessage is sent from the server to the client.
 type ServerMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1076,6 +1112,8 @@ type ServerMessage struct {
 	ActionId        string   `protobuf:"bytes,14,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`                       // correlation id for action_ack/error
 	SnapshotVersion uint64   `protobuf:"varint,15,opt,name=snapshot_version,json=snapshotVersion,proto3" json:"snapshot_version,omitempty"` // for equity delta
 	Equity          *float64 `protobuf:"fixed64,16,opt,name=equity,proto3,oneof" json:"equity,omitempty"`                                   // for equity delta (player_id identifies owner)
+	ReactionId      string   `protobuf:"bytes,17,opt,name=reaction_id,json=reactionId,proto3" json:"reaction_id,omitempty"`                 // ephemeral table reaction catalog key
+	TargetPlayerId  string   `protobuf:"bytes,18,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`   // destination for thrown objects
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1222,6 +1260,20 @@ func (x *ServerMessage) GetEquity() float64 {
 	return 0
 }
 
+func (x *ServerMessage) GetReactionId() string {
+	if x != nil {
+		return x.ReactionId
+	}
+	return ""
+}
+
+func (x *ServerMessage) GetTargetPlayerId() string {
+	if x != nil {
+		return x.TargetPlayerId
+	}
+	return ""
+}
+
 var File_poker_proto protoreflect.FileDescriptor
 
 const file_poker_proto_rawDesc = "" +
@@ -1229,7 +1281,7 @@ const file_poker_proto_rawDesc = "" +
 	"\vpoker.proto\x12\x05poker\".\n" +
 	"\x04Card\x12\x12\n" +
 	"\x04rank\x18\x01 \x01(\tR\x04rank\x12\x12\n" +
-	"\x04suit\x18\x02 \x01(\tR\x04suit\"\xea\x03\n" +
+	"\x04suit\x18\x02 \x01(\tR\x04suit\"\x8c\x04\n" +
 	"\x04Seat\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
@@ -1245,7 +1297,9 @@ const file_poker_proto_rawDesc = "" +
 	" \x01(\bH\x01R\adealtIn\x88\x01\x01\x12\x19\n" +
 	"\x05ready\x18\v \x01(\bH\x02R\x05ready\x88\x01\x01\x12.\n" +
 	"\x13hole_cards_revealed\x18\f \x03(\bR\x11holeCardsRevealed\x122\n" +
-	"\x13stack_at_hand_start\x18\r \x01(\x03H\x03R\x10stackAtHandStart\x88\x01\x01B\t\n" +
+	"\x13stack_at_hand_start\x18\r \x01(\x03H\x03R\x10stackAtHandStart\x88\x01\x01\x12 \n" +
+	"\ftime_bank_ms\x18\x0e \x01(\x03R\n" +
+	"timeBankMsB\t\n" +
 	"\a_equityB\v\n" +
 	"\t_dealt_inB\b\n" +
 	"\x06_readyB\x16\n" +
@@ -1314,7 +1368,7 @@ const file_poker_proto_rawDesc = "" +
 	"\x06refund\x18\x06 \x01(\bR\x06refund\x1a:\n" +
 	"\fPayoutsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xe5\a\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xa5\b\n" +
 	"\rTableSnapshot\x12\x14\n" +
 	"\x05stage\x18\x01 \x01(\tR\x05stage\x12\x14\n" +
 	"\x05board\x18\x02 \x03(\tR\x05board\x12!\n" +
@@ -1340,10 +1394,11 @@ const file_poker_proto_rawDesc = "" +
 	"\vpot_results\x18\x14 \x03(\v2\x10.poker.PotResultR\n" +
 	"potResults\x12)\n" +
 	"\x10protocol_version\x18\x15 \x01(\rR\x0fprotocolVersion\x12/\n" +
-	"\x14idle_removal_unix_ms\x18\x16 \x01(\x03R\x11idleRemovalUnixMs\x1a:\n" +
+	"\x14idle_removal_unix_ms\x18\x16 \x01(\x03R\x11idleRemovalUnixMs\x12>\n" +
+	"\x1caction_base_deadline_unix_ms\x18\x17 \x01(\x03R\x18actionBaseDeadlineUnixMs\x1a:\n" +
 	"\fPayoutsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xee\x02\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xb9\x03\n" +
 	"\rClientMessage\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x14\n" +
 	"\x05token\x18\x02 \x01(\tR\x05token\x12\x1d\n" +
@@ -1358,8 +1413,11 @@ const file_poker_proto_rawDesc = "" +
 	"\x10expected_hand_id\x18\n" +
 	" \x01(\tR\x0eexpectedHandId\x12\"\n" +
 	"\n" +
-	"card_index\x18\v \x01(\x05H\x00R\tcardIndex\x88\x01\x01B\r\n" +
-	"\v_card_index\"\xd8\x03\n" +
+	"card_index\x18\v \x01(\x05H\x00R\tcardIndex\x88\x01\x01\x12\x1f\n" +
+	"\vreaction_id\x18\f \x01(\tR\n" +
+	"reactionId\x12(\n" +
+	"\x10target_player_id\x18\r \x01(\tR\x0etargetPlayerIdB\r\n" +
+	"\v_card_index\"\xa3\x04\n" +
 	"\rServerMessage\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x17\n" +
 	"\aconn_id\x18\x02 \x01(\tR\x06connId\x120\n" +
@@ -1378,7 +1436,10 @@ const file_poker_proto_rawDesc = "" +
 	"\x04text\x18\r \x01(\tR\x04text\x12\x1b\n" +
 	"\taction_id\x18\x0e \x01(\tR\bactionId\x12)\n" +
 	"\x10snapshot_version\x18\x0f \x01(\x04R\x0fsnapshotVersion\x12\x1b\n" +
-	"\x06equity\x18\x10 \x01(\x01H\x00R\x06equity\x88\x01\x01B\t\n" +
+	"\x06equity\x18\x10 \x01(\x01H\x00R\x06equity\x88\x01\x01\x12\x1f\n" +
+	"\vreaction_id\x18\x11 \x01(\tR\n" +
+	"reactionId\x12(\n" +
+	"\x10target_player_id\x18\x12 \x01(\tR\x0etargetPlayerIdB\t\n" +
 	"\a_equityB>Z<gopkg.aoctech.app/poker/api/internal/api/v1/proto;pokerprotob\x06proto3"
 
 var (

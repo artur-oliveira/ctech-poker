@@ -1,6 +1,6 @@
 'use client';
 import {useCallback, useEffect, useState} from 'react';
-import {CircleAlert, LoaderCircle, X} from 'lucide-react';
+import {CircleAlert, Clock3, LoaderCircle, X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import type {PokerAction} from '@/lib/api/table';
@@ -30,6 +30,9 @@ type Props = {
   onDismissErrorAction: () => void
   canPreselect: boolean;
   selectionScope: string;
+  actionDeadlineMs?: number;
+  actionBaseDeadlineMs?: number;
+  timeBankMs: number;
 }
 
 const actionLabel: Record<PokerAction, string> = {
@@ -62,6 +65,31 @@ function isBetAdjustKey(event: KeyboardEvent) {
 // taps Aumentar once to reveal it; desktop keeps it always open (CSS ignores
 // the collapsed class outside this query).
 const COMPACT_QUERY = '(max-width: 800px), (max-height: 620px) and (orientation: landscape)';
+
+function TimeBankStatus({isTurn, baseDeadline, actionDeadline, balance}: {
+  isTurn: boolean;
+  baseDeadline?: number;
+  actionDeadline?: number;
+  balance: number;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  const bankActive = Boolean(isTurn && baseDeadline && actionDeadline && now >= baseDeadline);
+  const remaining = bankActive && actionDeadline ? Math.max(0, actionDeadline - now) : Math.max(0, balance);
+
+  useEffect(() => {
+    if (!isTurn || !actionDeadline) return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, [isTurn, actionDeadline]);
+
+  const seconds = Math.ceil(remaining / 1000);
+  return <span className={`time-bank-status${bankActive ? ' active' : ''}`} role="timer"
+               aria-label={`${bankActive ? 'Time bank em uso' : 'Time bank disponível'}: ${seconds} segundos`}
+               title="Reserva de decisão: recarrega 5 segundos por mão, até 30">
+    <Clock3 aria-hidden="true"/>
+    <span>{bankActive ? 'Time bank' : 'Reserva'} <b>{seconds}s</b></span>
+  </span>;
+}
 
 function PreselectionControls({canPreselect, isTurn, connected, pending, available, onAct}: {
   canPreselect: boolean;
@@ -205,7 +233,10 @@ export function ActionBar({
                             error,
                             onDismissErrorAction,
                             canPreselect,
-                            selectionScope
+                            selectionScope,
+                            actionDeadlineMs,
+                            actionBaseDeadlineMs,
+                            timeBankMs
                           }: Props) {
   const unavailable = !connected || !isTurn || pending !== null;
   const context = !connected ? 'Reconectando antes de liberar as ações…' : pending ? actionLabel[pending] : !isTurn ?
@@ -243,7 +274,11 @@ export function ActionBar({
   }, [unavailable, canFold, canCheck, canCall, onActAction]);
 
   return <div className="action-bar" role="group" aria-label="Ações da rodada" aria-busy={pending !== null}>
-    <p id="action-context" className="action-context" aria-live="polite">{context}</p>
+    <div className="action-context-row">
+      <p id="action-context" className="action-context" aria-live="polite">{context}</p>
+      <TimeBankStatus isTurn={isTurn} baseDeadline={actionBaseDeadlineMs}
+                      actionDeadline={actionDeadlineMs} balance={timeBankMs}/>
+    </div>
     <PreselectionControls key={selectionScope} canPreselect={canPreselect} isTurn={isTurn}
                            connected={connected} pending={pending} available={available} onAct={onActAction}/>
     {!noLegalActions && <div className="action-choices" role="group" aria-label="Ações rápidas">

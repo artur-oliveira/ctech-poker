@@ -6,6 +6,7 @@ import type {HandItem} from '@/lib/api/player';
 import type {DeckVariantId} from '@/lib/cardVariants';
 import type {Room} from '@/lib/api/rooms';
 import type {Page} from '@/lib/api/client';
+import type {PlayerNote} from '@/lib/api/playerNotes';
 import type {
   HandHistoryAction,
   LegalActionState,
@@ -17,6 +18,12 @@ import type {
 
 export const USE_MOCK = process.env.NEXT_PUBLIC_MOCK_API === 'true';
 export const MOCK_PLAYER_ID = 'mock_player_ana';
+let mockPlayerNotes: PlayerNote[] = [{
+  opponent_id: 'bia_sp',
+  tag: 'purple',
+  note: 'Defende bastante o big blind.',
+  updated_at: new Date().toISOString()
+}];
 
 const ROOM_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const rooms: Room[] = [
@@ -182,6 +189,8 @@ const mockProfile = {
   wallet_mode: 'sandbox' as 'sandbox' | 'real',
   deck_variant: 'four-color' as DeckVariantId,
   poker_terms_accepted: true,
+  showcase_public: true,
+  featured_achievements: ['wins', 'hands_played', 'bad_beat'] as string[],
   game_balance: 12500,
   sandbox_balance: 4850
 };
@@ -340,6 +349,20 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   const body = typeof config.data === 'string' ? JSON.parse(config.data || '{}') : (config.data || {});
   if (method === 'GET' && path === '/v1.0/players/me') return ok({...mockProfile}, config);
   if (method === 'GET' && path === '/v1.0/players/me/sessions') return ok(page([]), config);
+  if (method === 'GET' && path === '/v1.0/players/me/notes/') return ok({data: mockPlayerNotes}, config);
+  const playerNoteMatch = method === 'POST' ? path.match(/^\/v1\.0\/players\/me\/notes\/([^/]+)$/) : null;
+  if (playerNoteMatch) {
+    const opponentId = decodeURIComponent(playerNoteMatch[1]);
+    const tag = typeof body.tag === 'string' ? body.tag : '';
+    const note = typeof body.note === 'string' ? body.note.trim() : '';
+    if (opponentId === MOCK_PLAYER_ID) fail(400, 'opponent must be another player', config);
+    if (note.length > 500) fail(400, 'note must have at most 500 characters', config);
+    mockPlayerNotes = mockPlayerNotes.filter(item => item.opponent_id !== opponentId);
+    if (!tag && !note) return ok({deleted: true}, config);
+    const saved: PlayerNote = {opponent_id: opponentId, tag: tag || undefined, note, updated_at: new Date().toISOString()};
+    mockPlayerNotes.push(saved);
+    return ok(saved, config);
+  }
   if (method === 'POST' && path === '/v1.0/players/me/terms/accept') return ok({
     ...mockProfile,
     poker_terms_accepted: true
@@ -359,7 +382,25 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       if (!body.deck_variant.trim()) fail(400, 'deck_variant must not be empty', config);
       mockProfile.deck_variant = body.deck_variant;
     }
+    if (typeof body.showcase_public === 'boolean') mockProfile.showcase_public = body.showcase_public;
+    if (Array.isArray(body.featured_achievements)) {
+      if (body.featured_achievements.length > 3) fail(400, 'too many featured achievements', config);
+      mockProfile.featured_achievements = [...body.featured_achievements];
+    }
     return ok({...mockProfile}, config);
+  }
+  const showcaseMatch = method === 'GET' ? path.match(/^\/v1\.0\/players\/([^/]+)\/showcase$/) : null;
+  if (showcaseMatch) {
+    if (decodeURIComponent(showcaseMatch[1]) !== MOCK_PLAYER_ID || !mockProfile.showcase_public) {
+      fail(404, 'profile showcase not found', config);
+    }
+    const counts = new Map(mockAchievementProgress.map(item => [item.key, item.count]));
+    return ok({
+      player_id: mockProfile.user_id,
+      name: mockProfile.name,
+      featured_achievements: mockProfile.featured_achievements.map(key => ({key, count: counts.get(key) || 0})),
+      best_hand: mockHands[0]
+    }, config);
   }
   if (method === 'GET' && path === '/v1.0/rooms') return ok(page(rooms), config);
   // Checked before the generic single-segment room-id match below, since
@@ -1018,6 +1059,15 @@ export class MockTableService {
       this.later(() => this.handlers.onMessage({type: 'chat', player_id: 'bia_sp', message: 'Boa! Vamos nessa 👋'}), 2);
       return true;
     }
+    if (value.type === 'reaction') {
+      this.later(() => this.handlers.onMessage({
+        type: 'reaction',
+        player_id: MOCK_PLAYER_ID,
+        reaction_id: String(value.reaction_id || ''),
+        target_player_id: String(value.target_player_id || '')
+      }));
+      return true;
+    }
     if (value.type !== 'act') return true;
     if (this.scenario === 'action_error') {
       this.later(() => this.handlers.onMessage({
@@ -1178,17 +1228,21 @@ export class MockTableService {
     }
     const playerId = this.turnOrder[0];
     const timeout = this.scenario === 'auto_fold' ? AUTO_FOLD_TIMEOUT_MS : TURN_TIMEOUT_MS;
+    const baseDeadline = Date.now() + timeout;
+    const actingSeat = this.snapshot.seats.find(seat => seat.player_id === playerId);
+    const timeBank = actingSeat?.time_bank_ms ?? 10_000;
     this.snapshot = {
       ...this.snapshot,
       current_player_id: playerId,
       legal_actions: playerId === MOCK_PLAYER_ID ? this.legalActionsFor(this.snapshot.seats, playerId) : {actions: []},
-      action_deadline_unix_ms: Date.now() + timeout
+      action_base_deadline_unix_ms: baseDeadline,
+      action_deadline_unix_ms: baseDeadline + timeBank
     };
     this.emitState();
     this.turnTimer = this.laterMs(() => {
       this.turnTimer = undefined;
       if (this.snapshot.current_player_id === playerId) this.resolveAction(playerId, 'fold', 0);
-    }, timeout);
+    }, timeout + timeBank);
     if (playerId !== MOCK_PLAYER_ID) {
       const thinkTime = Math.max(300, Math.min(1600, this.delay * (1.2 + this.seededRandom(playerId))));
       this.laterMs(() => {
@@ -1217,6 +1271,9 @@ export class MockTableService {
     }));
     const seat = seats.find(item => item.player_id === playerId);
     if (!seat || seat.state !== 'active') return;
+    const bankUsed = this.snapshot.action_base_deadline_unix_ms ?
+      Math.max(0, Date.now() - this.snapshot.action_base_deadline_unix_ms) : 0;
+    seat.time_bank_ms = Math.max(0, (seat.time_bank_ms ?? 10_000) - bankUsed);
     const currentBet = this.streetBet(seats);
     const committed = this.streetCommitted[playerId] || 0;
     let raised = false;
@@ -1236,7 +1293,8 @@ export class MockTableService {
       seats,
       current_player_id: undefined,
       legal_actions: {actions: []},
-      action_deadline_unix_ms: undefined
+      action_deadline_unix_ms: undefined,
+      action_base_deadline_unix_ms: undefined
     };
     this.emitState();
     if (action === 'raise' && playerId === MOCK_PLAYER_ID) this.later(() => this.handlers.onMessage({
@@ -1280,6 +1338,7 @@ export class MockTableService {
       current_player_id: undefined,
       legal_actions: {actions: []},
       action_deadline_unix_ms: undefined,
+      action_base_deadline_unix_ms: undefined,
       rake
     };
     this.emitState();
@@ -1314,6 +1373,7 @@ export class MockTableService {
       current_player_id: undefined,
       legal_actions: {actions: []},
       action_deadline_unix_ms: undefined,
+      action_base_deadline_unix_ms: undefined,
       payouts,
       winners: winnerIds,
       pot_results: potResults,
@@ -1481,7 +1541,11 @@ export class MockTableService {
     this.snapshot = {
       ...this.snapshot,
       snapshot_version: this.snapshotVersion,
-      protocol_version: 4,
+      protocol_version: 5,
+      seats: this.snapshot.seats.map(seat => ({
+        ...seat,
+        time_bank_ms: seat.time_bank_ms ?? 10_000
+      })),
       hand_id: this.snapshot.hand_id || (stage === 'waiting_for_players' ? undefined : `mock-${this.scenario}-hand`)
     };
     this.handlers.onMessage({type: 'state', snapshot: this.snapshot, action_id: actionId});

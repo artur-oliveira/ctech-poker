@@ -75,6 +75,24 @@ type Player struct {
 	// in-memory disconnect bookkeeping) so a periodic sweep can detect and
 	// remove a stale seat even if no disconnect was ever observed for it.
 	LastActionAt int64 `dynamodbav:"last_action_at,omitempty"`
+
+	// TimeBankMs is pointer-backed so a rolling deployment can distinguish
+	// an older persisted seat (nil: initialize it once) from a player who
+	// genuinely exhausted their bank (non-nil zero). The table actor owns
+	// consumption; the engine only persists and recharges it between hands.
+	TimeBankMs *int64 `dynamodbav:"time_bank_ms,omitempty"`
+}
+
+const (
+	DefaultTimeBankMs  int64 = 30_000
+	TimeBankRechargeMs int64 = 5_000
+)
+
+func initializeTimeBank(p *Player) {
+	if p.TimeBankMs == nil {
+		initial := DefaultTimeBankMs
+		p.TimeBankMs = &initial
+	}
 }
 
 type Table struct {
@@ -356,6 +374,7 @@ func (t *Table) AddMidHandJoiner(p *Player) error {
 	}
 	p.Ready = true
 	p.State = PendingEntry
+	initializeTimeBank(p)
 	t.players = append(t.players, p)
 	return nil
 }
@@ -418,6 +437,7 @@ func (t *Table) AddWaitingPlayer(p *Player) error {
 		return t.rebuyExisting(existing, p)
 	}
 	p.Ready = true
+	initializeTimeBank(p)
 	t.players = append(t.players, p)
 	return nil
 }
@@ -572,6 +592,7 @@ func (t *Table) StartHand() error {
 	active := make([]*Player, 0, len(t.players))
 	newEntrants := make(map[string]bool)
 	for _, p := range t.players {
+		initializeTimeBank(p)
 		if !t.eligibleForNextHand(p) {
 			if p.State != PendingEntry {
 				p.State = SittingOut
@@ -590,6 +611,13 @@ func (t *Table) StartHand() error {
 		p.HandStartStack = &startingStack
 		p.State = Active
 		p.Contributed = 0
+		if *p.TimeBankMs < DefaultTimeBankMs {
+			recharged := *p.TimeBankMs + TimeBankRechargeMs
+			if recharged > DefaultTimeBankMs {
+				recharged = DefaultTimeBankMs
+			}
+			*p.TimeBankMs = recharged
+		}
 		active = append(active, p)
 	}
 
@@ -688,6 +716,36 @@ func (t *Table) EscalateBlindsForActor(multiplierPct int, maxBigBlind int64) {
 }
 
 func (t *Table) BigBlindForTest() int64 { return t.bigBlind }
+
+// TimeBankForActor returns the durable balance for a seat. It deliberately
+// initializes legacy nil values once, while preserving an exhausted zero.
+func (t *Table) TimeBankForActor(playerID string) int64 {
+	p := t.playerByID(playerID)
+	if p == nil {
+		return 0
+	}
+	initializeTimeBank(p)
+	return *p.TimeBankMs
+}
+
+// ConsumeTimeBankForActor deducts elapsed bank time and returns the new
+// balance. Actor serialization makes the mutation race-free; DynamoDB's
+// version condition makes it safe across server instances.
+func (t *Table) ConsumeTimeBankForActor(playerID string, elapsedMs int64) int64 {
+	p := t.playerByID(playerID)
+	if p == nil {
+		return 0
+	}
+	initializeTimeBank(p)
+	if elapsedMs < 0 {
+		elapsedMs = 0
+	}
+	if elapsedMs > *p.TimeBankMs {
+		elapsedMs = *p.TimeBankMs
+	}
+	*p.TimeBankMs -= elapsedMs
+	return *p.TimeBankMs
+}
 
 // blindSeats returns (smallBlindIdx, bigBlindIdx) as indices into active,
 // computed relative to dealerSeat's position within active. Heads-up is a

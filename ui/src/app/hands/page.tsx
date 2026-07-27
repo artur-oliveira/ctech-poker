@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import {useQuery} from '@tanstack/react-query';
-import {BookOpen, ChevronLeft, ChevronRight, Club, History, Trophy} from 'lucide-react';
+import {Award, BookOpen, ChevronLeft, ChevronRight, Club, History, Trophy} from 'lucide-react';
 import {getHands} from '@/lib/api/player';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
@@ -38,6 +38,8 @@ export default function HandsHistory() {
         <div className="header-right">
           <Link href="/guide"><BookOpen/> <span className="header-right-label">Guia</span></Link>
           <Link href="/leaderboard"><Trophy/> <span className="header-right-label">Ranking</span></Link>
+          <Link href="/achievements"><Award/> <span className="header-right-label">Conquistas</span></Link>
+          <Link href="/hands"><History/> <span className="header-right-label">Mãos</span></Link>
           <ProfileMenu/>
         </div>
       </nav>

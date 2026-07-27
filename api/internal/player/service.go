@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
 
@@ -12,6 +13,8 @@ var ErrTermsNotAccepted = errors.New("poker terms not accepted")
 var ErrEmptyName = errors.New("player: name is empty")
 var ErrInvalidWalletMode = errors.New("player: wallet_mode must be sandbox or real")
 var ErrInvalidDeckVariant = errors.New("player: deck_variant must not be empty")
+var ErrInvalidShowcase = errors.New("player: invalid showcase")
+var ErrShowcasePrivate = errors.New("player: showcase is private")
 
 // maxDisplayNameLen bounds a player's display name — it is broadcast as-is to
 // every other seat at a table, so it gets the same length ceiling as chat.
@@ -24,10 +27,12 @@ const maxDeckVariantLen = 60
 
 type profileStore interface {
 	GetOrCreate(context.Context, string) (*PlayerProfile, error)
+	Get(context.Context, string) (*PlayerProfile, error)
 	AcceptTerms(context.Context, string) error
 	SetName(context.Context, string, string) error
 	SetWalletMode(context.Context, string, string) error
 	SetDeckVariant(context.Context, string, string) error
+	SetShowcase(context.Context, string, bool, []string) error
 }
 
 // balanceFetcher is the subset of *walletclient.Client the profile endpoint
@@ -88,6 +93,41 @@ func (s *Service) SetDeckVariant(ctx context.Context, userID, variant string) (*
 }
 
 func (s *Service) GetOrCreate(ctx context.Context, userID string) (*PlayerProfile, error) {
+	return s.store.GetOrCreate(ctx, userID)
+}
+
+func (s *Service) PublicShowcase(ctx context.Context, userID string) (*PlayerProfile, error) {
+	profile, err := s.store.Get(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if profile == nil || !profile.ShowcasePublic {
+		return nil, ErrShowcasePrivate
+	}
+	return profile, nil
+}
+
+func (s *Service) SetShowcase(ctx context.Context, userID string, public bool, featured []string) (*PlayerProfile, error) {
+	if len(featured) > 3 {
+		return nil, ErrInvalidShowcase
+	}
+	valid := make(map[string]bool, len(achievements.Catalog))
+	for _, item := range achievements.Catalog {
+		valid[item.Key] = true
+	}
+	seen := make(map[string]bool, len(featured))
+	normalized := make([]string, 0, len(featured))
+	for _, key := range featured {
+		key = strings.TrimSpace(key)
+		if key == "" || !valid[key] || seen[key] {
+			return nil, ErrInvalidShowcase
+		}
+		seen[key] = true
+		normalized = append(normalized, key)
+	}
+	if err := s.store.SetShowcase(ctx, userID, public, normalized); err != nil {
+		return nil, err
+	}
 	return s.store.GetOrCreate(ctx, userID)
 }
 

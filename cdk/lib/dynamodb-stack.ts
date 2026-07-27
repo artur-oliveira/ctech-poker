@@ -10,7 +10,8 @@ import {Environment} from '@aoctech/cdk';
 export type TableName =
   'poker_table_state' | 'poker_table_state_history' | 'poker_action_log' | 'poker_action_guards' |
   'poker_rooms' | 'poker_player_profiles' | 'poker_achievement_progress' | 'poker_leaderboard_stats' |
-  'poker_daily_reward' | 'poker_pending_cashouts' | 'poker_player_sessions' | 'poker_player_hands';
+  'poker_daily_reward' | 'poker_pending_cashouts' | 'poker_player_sessions' | 'poker_player_hands' |
+  'poker_player_notes';
 
 interface DynamoDBStackProps extends cdk.StackProps {
   environment: Environment;
@@ -88,6 +89,10 @@ export class DynamoDBStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
     table('poker_player_profiles', false);
+    // Private annotation namespace: pk is always the authenticated viewer and
+    // sk is the opponent. Nothing reads this table while constructing public
+    // table snapshots.
+    table('poker_player_notes', true);
     table('poker_achievement_progress', true);
     const leaderboardStats = table('poker_leaderboard_stats', true);
     leaderboardStats.addGlobalSecondaryIndex({

@@ -29,6 +29,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
+	"gopkg.aoctech.app/poker/api/internal/playernotes"
 	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
@@ -55,6 +56,7 @@ var Module = fx.Options(
 		newRoomStore,
 		newPlayerStore,
 		newPlayerService,
+		newPlayerNoteStore,
 		newAchievementStore,
 		newAchievementService,
 		newLeaderboardStore,
@@ -175,6 +177,9 @@ func newPlayerStore(db *dynamodb.Client, cfg *config.Config) *player.Store {
 }
 func newPlayerService(store *player.Store, wallet *walletclient.Client) *player.Service {
 	return player.NewService(store).WithWallet(wallet)
+}
+func newPlayerNoteStore(db *dynamodb.Client, cfg *config.Config) *playernotes.Store {
+	return playernotes.NewStore(db, cfg.Env)
 }
 func newAchievementStore(db *dynamodb.Client, cfg *config.Config) *achievements.Store {
 	return achievements.NewStore(db, cfg.Env)
@@ -399,8 +404,9 @@ func registerRoutes(
 	tableStore *tablestore.Store,
 	sessionStore *sessionlog.Store,
 	achievementStore *achievements.Store,
+	playerNoteStore *playernotes.Store,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore)
 }
 
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {

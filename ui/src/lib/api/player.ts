@@ -15,6 +15,8 @@ export interface PlayerProfile {
   // Not sent by the backend yet — reserved so the deck color variant can be
   // wired in without another PlayerProfile shape change.
   deck_variant?: DeckVariantId;
+  showcase_public: boolean;
+  featured_achievements?: string[];
 }
 
 export async function getMe() {
@@ -25,8 +27,28 @@ export async function acceptPokerTerms() {
   return (await apiClient.post<PlayerProfile>('/v1.0/players/me/terms/accept', {}, {silentError: true})).data;
 }
 
-export async function updateMe(input: { name?: string; wallet_mode?: WalletMode; deck_variant?: DeckVariantId }) {
+export async function updateMe(input: {
+  name?: string;
+  wallet_mode?: WalletMode;
+  deck_variant?: DeckVariantId;
+  showcase_public?: boolean;
+  featured_achievements?: string[];
+}) {
   return (await apiClient.post<PlayerProfile>('/v1.0/players/me', input, {silentError: false})).data;
+}
+
+export interface ProfileShowcase {
+  player_id: string;
+  name?: string;
+  featured_achievements: Array<{key: string; count: number}>;
+  best_hand?: Pick<HandItem, 'hand_id' | 'table_id' | 'net_change' | 'ended_at' | 'board' | 'hole_cards'>;
+}
+
+export async function getProfileShowcase(playerId: string) {
+  return (await apiClient.get<ProfileShowcase>(
+    `/v1.0/players/${encodeURIComponent(playerId)}/showcase`,
+    {silentError: true}
+  )).data;
 }
 
 export interface PlayerSession {

@@ -41,6 +41,7 @@ type Actor struct {
 	handID  string
 
 	turnTimeout                  time.Duration
+	timeBankEnabled              bool
 	disconnectGrace              time.Duration
 	disconnectedSince            map[string]time.Time
 	consecutiveDisconnectedHands map[string]int
@@ -57,6 +58,7 @@ type Actor struct {
 	kickTimers           map[string]*time.Timer
 	turnTimer            *time.Timer
 	turnDeadline         time.Time
+	turnBaseDeadline     time.Time
 	turnDeadlineFor      string
 	turnDeadlineForStage hand.Stage
 	// pendingPersistedDeadline carries a just-loaded StoredTable's
@@ -111,6 +113,7 @@ func New(id string, store *tablestore.Store, trustCache bool, broadcast func(str
 		id: id, store: store, trustCache: trustCache, broadcast: broadcast, cmds: make(chan Command, 64),
 		done:                         make(chan struct{}),
 		turnTimeout:                  DefaultTurnTimeout,
+		timeBankEnabled:              true,
 		nextHandDelay:                NextHandDelay,
 		runoutStreetDelay:            RunoutStreetDelay,
 		disconnectGrace:              45 * time.Second,
@@ -577,6 +580,7 @@ func (a *Actor) applyActAndCommit(ctx context.Context, c ActCmd) (bool, error) {
 	if !applied {
 		return false, nil
 	}
+	a.consumeTimeBank(c.PlayerID)
 	action := string(c.Action)
 	if a.cached.PlayerAllInForActor(c.PlayerID) {
 		action = "all_in"
@@ -715,7 +719,28 @@ func (a *Actor) turnDeadlineForPersist() int64 {
 	if current == a.turnDeadlineFor && a.cached.Stage() == a.turnDeadlineForStage {
 		return a.turnDeadline.UnixMilli()
 	}
-	return timeNowFunc().Add(a.turnTimeout).UnixMilli()
+	return timeNowFunc().Add(a.turnTimeout + a.timeBankFor(current)).UnixMilli()
+}
+
+func (a *Actor) timeBankFor(playerID string) time.Duration {
+	if !a.timeBankEnabled || a.cached == nil {
+		return 0
+	}
+	return time.Duration(a.cached.TimeBankForActor(playerID)) * time.Millisecond
+}
+
+// consumeTimeBank charges only the part of a decision made after the normal
+// room clock expired. The total deadline and the durable balance are
+// committed in the same conditionally-written table state, so a losing
+// multi-server attempt is discarded and recomputed after reload.
+func (a *Actor) consumeTimeBank(playerID string) {
+	if !a.timeBankEnabled || playerID == "" || playerID != a.turnDeadlineFor || a.turnBaseDeadline.IsZero() {
+		return
+	}
+	elapsed := timeNowFunc().Sub(a.turnBaseDeadline).Milliseconds()
+	if elapsed > 0 {
+		a.cached.ConsumeTimeBankForActor(playerID, elapsed)
+	}
 }
 
 // retryOnConflict runs apply once. If a version conflict is detected (another
@@ -1037,6 +1062,7 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 			// complete and, if this was the last decision pending, advance
 			// the hand to Complete — broadcastAll's notifyHandComplete call
 			// picks that up same as a normal Act would.
+			a.consumeTimeBank(c.PlayerID)
 			a.cached.SitOutForActor(c.PlayerID)
 			if err := a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "disconnect_sit_out"}); err != nil {
 				if !errors.Is(err, tablestore.ErrVersionConflict) {
@@ -1060,8 +1086,9 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 			return nil
 		}
 	}
+	timeoutActionID := fmt.Sprintf("turn-timeout-%s-%d", c.PlayerID, a.version)
 	_, err := a.applyActAndCommit(ctx, ActCmd{
-		PlayerID: c.PlayerID, ActionID: "turn-timeout-" + c.PlayerID, Action: betting.ActionFold, Amount: 0, Reply: c.Reply,
+		PlayerID: c.PlayerID, ActionID: timeoutActionID, Action: betting.ActionFold, Amount: 0, Reply: c.Reply,
 	})
 	if errors.Is(err, tablestore.ErrVersionConflict) {
 		if err := a.ensureLoaded(ctx, true); err != nil {
@@ -1077,8 +1104,9 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 			a.broadcastAll()
 			return nil
 		}
+		timeoutActionID = fmt.Sprintf("turn-timeout-%s-%d", c.PlayerID, a.version)
 		_, err = a.applyActAndCommit(ctx, ActCmd{
-			PlayerID: c.PlayerID, ActionID: "turn-timeout-" + c.PlayerID, Action: betting.ActionFold, Amount: 0, Reply: c.Reply,
+			PlayerID: c.PlayerID, ActionID: timeoutActionID, Action: betting.ActionFold, Amount: 0, Reply: c.Reply,
 		})
 	}
 	if err != nil && !errors.Is(err, tablestore.ErrDuplicateAction) {
@@ -1200,9 +1228,12 @@ func (a *Actor) armTurnTimer(current string, stage hand.Stage, grace time.Durati
 	a.turnDeadlineForStage = stage
 	if current == "" {
 		a.pendingPersistedDeadline = 0
+		a.turnBaseDeadline = time.Time{}
 		return
 	}
-	deadline := timeNowFunc().Add(a.turnTimeout + grace)
+	bank := a.timeBankFor(current)
+	a.turnBaseDeadline = timeNowFunc().Add(a.turnTimeout + grace)
+	deadline := a.turnBaseDeadline.Add(bank)
 	// A freshly (re)loaded actor (ensureLoaded set this from
 	// StoredTable.TurnDeadlineUnixMs) has never armed this exact turn before,
 	// so the guard above never matches on its first call here — reuse the
@@ -1212,6 +1243,7 @@ func (a *Actor) armTurnTimer(current string, stage hand.Stage, grace time.Durati
 	// instance's own bookkeeping started from zero values.
 	if a.pendingPersistedDeadline > 0 {
 		deadline = time.UnixMilli(a.pendingPersistedDeadline)
+		a.turnBaseDeadline = deadline.Add(-bank)
 	}
 	a.pendingPersistedDeadline = 0
 	a.turnDeadline = deadline
@@ -1376,6 +1408,7 @@ func (a *Actor) broadcastAll() {
 		snapshot.HandID = a.handID
 		if current != "" && current == a.turnDeadlineFor {
 			snapshot.ActionDeadlineUnixMs = a.turnDeadline.UnixMilli()
+			snapshot.ActionBaseDeadlineUnixMs = a.turnBaseDeadline.UnixMilli()
 		}
 		if stage == hand.Complete && a.handID == a.nextHandArmedFor {
 			snapshot.NextHandUnixMs = a.nextHandDeadline.UnixMilli()
@@ -1452,6 +1485,12 @@ func (a *Actor) SetEquityEnabledForActor(enabled bool) { a.equityEnabled.Store(e
 func (a *Actor) SetTurnTimeoutForActor(d time.Duration) {
 	if d > 0 {
 		a.turnTimeout = d
+		// Room creation rejects values below five seconds. Sub-five-second
+		// values are therefore test-only clocks; disable the real 30-second
+		// reserve so timeout tests stay fast without weakening production.
+		if d < 5*time.Second {
+			a.timeBankEnabled = false
+		}
 	}
 }
 

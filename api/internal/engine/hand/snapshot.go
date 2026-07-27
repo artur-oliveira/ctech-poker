@@ -23,23 +23,24 @@ type Snapshot struct {
 	// all-in's excess or an orphaned side-pot refund (runShowdown), neither of
 	// which is a win. The client must use this, not "payout > 0", to decide
 	// who gets the win banner/pill.
-	Winners              []string        `json:"winners,omitempty"`
-	Rake                 int64           `json:"rake,omitempty"`
-	CurrentPlayerID      string          `json:"current_player_id,omitempty"`
-	LegalActions         *LegalActions   `json:"legal_actions,omitempty"`
-	ActionDeadlineUnixMs int64           `json:"action_deadline_unix_ms,omitempty"`
-	NextHandUnixMs       int64           `json:"next_hand_unix_ms,omitempty"`
-	IdleRemovalUnixMs    int64           `json:"idle_removal_unix_ms,omitempty"`
-	WonWithoutShowdown   bool            `json:"won_without_showdown,omitempty"`
-	ShuffleCommitHash    string          `json:"shuffle_commit_hash,omitempty"`
-	ShuffleServerSeedHex string          `json:"shuffle_server_seed_hex,omitempty"`
-	SmallBlindPlayerID   string          `json:"small_blind_player_id,omitempty"`
-	BigBlindPlayerID     string          `json:"big_blind_player_id,omitempty"`
-	DealerPlayerID       string          `json:"dealer_player_id,omitempty"`
-	SnapshotVersion      uint64          `json:"snapshot_version,omitempty"`
-	Pots                 []PotView       `json:"pots,omitempty"`
-	PotResults           []PotResultView `json:"pot_results,omitempty"`
-	HandID               string          `json:"hand_id,omitempty"`
+	Winners                  []string        `json:"winners,omitempty"`
+	Rake                     int64           `json:"rake,omitempty"`
+	CurrentPlayerID          string          `json:"current_player_id,omitempty"`
+	LegalActions             *LegalActions   `json:"legal_actions,omitempty"`
+	ActionDeadlineUnixMs     int64           `json:"action_deadline_unix_ms,omitempty"`
+	ActionBaseDeadlineUnixMs int64           `json:"action_base_deadline_unix_ms,omitempty"`
+	NextHandUnixMs           int64           `json:"next_hand_unix_ms,omitempty"`
+	IdleRemovalUnixMs        int64           `json:"idle_removal_unix_ms,omitempty"`
+	WonWithoutShowdown       bool            `json:"won_without_showdown,omitempty"`
+	ShuffleCommitHash        string          `json:"shuffle_commit_hash,omitempty"`
+	ShuffleServerSeedHex     string          `json:"shuffle_server_seed_hex,omitempty"`
+	SmallBlindPlayerID       string          `json:"small_blind_player_id,omitempty"`
+	BigBlindPlayerID         string          `json:"big_blind_player_id,omitempty"`
+	DealerPlayerID           string          `json:"dealer_player_id,omitempty"`
+	SnapshotVersion          uint64          `json:"snapshot_version,omitempty"`
+	Pots                     []PotView       `json:"pots,omitempty"`
+	PotResults               []PotResultView `json:"pot_results,omitempty"`
+	HandID                   string          `json:"hand_id,omitempty"`
 
 	// EquityOnly is actor-internal metadata. An asynchronous equity estimate
 	// is transported as a versioned delta instead of replaying the complete
@@ -97,6 +98,7 @@ type SeatView struct {
 	StackAtHandStart  *int64   `json:"stack_at_hand_start,omitempty"`
 	Equity            *float64 `json:"equity,omitempty"`
 	HandCategory      string   `json:"hand_category,omitempty"`
+	TimeBankMs        int64    `json:"time_bank_ms"`
 }
 
 var stageNames = map[Stage]string{
@@ -196,6 +198,7 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 			Ready:            p.Ready,
 			Contributed:      p.Contributed,
 			StackAtHandStart: p.HandStartStack,
+			TimeBankMs:       t.TimeBankForActor(p.ID),
 		}
 		publicReveal := []bool{
 			p.VoluntarilyShown || p.VoluntarilyShownCards[0],
