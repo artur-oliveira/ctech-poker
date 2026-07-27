@@ -211,7 +211,12 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 // condition must have failed.
 func (s *Store) LoadActionsSince(ctx context.Context, tableID, handID string, afterSeq int) ([]ActionLogEntry, error) {
 	pk := tableID + "#" + handID
-	result, err := s.log.Query(ctx, dynamo.QueryOpts{PK: pk})
+	// Oldest first: Seq (below) numbers entries by their position in this
+	// result when the stored record predates the Seq field, and every caller
+	// (hand history, hand-share replay) presents actions in that same order —
+	// ScanIndexForward defaults to false (DynamoDB's newest-first), which
+	// silently reversed both the sequence numbers and the replay itself.
+	result, err := s.log.Query(ctx, dynamo.QueryOpts{PK: pk, ScanIndexForward: true})
 	if err != nil {
 		return nil, fmt.Errorf("tablestore: load actions: %w", err)
 	}

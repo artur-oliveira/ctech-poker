@@ -97,7 +97,7 @@ export function TableStage({
       <div className="game-felt">{board}</div>
       {seats.map(seatNode)}
       <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}/>
-      <RabbitHunt snapshot={snapshot} viewer={viewer}/>
+      <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer}/>
     </div>
   );
 
@@ -112,7 +112,7 @@ export function TableStage({
         <div className="game-felt">{board}</div>
         {opponents.map((seat, i) => seatNode(seat, i + 1))}
         <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}/>
-        <RabbitHunt snapshot={snapshot} viewer={viewer}/>
+        <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer}/>
       </div>
       {viewerFirst && seatNode(seats[0], 0)}
     </div>

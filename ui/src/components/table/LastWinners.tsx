@@ -50,9 +50,10 @@ export function LastWinners({items}: { items: HandItem[] }) {
       <h3>Últimos vencedores</h3>
       <ul>
         {winners.map((entry, i) => <li key={entry.key} style={{'--stagger-index': i} as CSSProperties}>
-          {entry.cards && <span className="last-winners-cards">
-            {entry.cards.map((card, ci) => <PlayingCard key={card} card={card} index={ci} size="hole"/>)}
-          </span>}
+          <span className="last-winners-cards">
+            {entry.cards ? entry.cards.map((card, ci) => <PlayingCard key={card} card={card} index={ci} size="hole"/>) :
+              [0, 1].map(ci => <PlayingCard key={ci} index={ci} size="hole"/>)}
+          </span>
           <span className="last-winners-info">
             <b>{entry.names.join(' e ')}</b>
             {entry.category && <small>{HAND_CATEGORY_LABELS[entry.category] || entry.category}</small>}

@@ -140,9 +140,19 @@ function canonicalOrder(cards: string[]): string[] {
     group.push(card);
     groups.set(value, group);
   }
+  // The wheel (A-2-3-4-5): the Ace plays low, so it reads last, not first —
+  // sort by 1 instead of its usual 14 whenever these are exactly the wheel's
+  // five distinct values (only possible here when every group is a single
+  // card, i.e. this really is that straight and not some other combination
+  // that happens to include an Ace and a 5).
+  const isWheel = groups.size === 5 && [14, 5, 4, 3, 2].every(v => groups.has(v));
   return [...groups.entries()]
-    .sort((a, b) => b[1].length - a[1].length || b[0] - a[0])
+    .sort((a, b) => b[1].length - a[1].length || (isWheel ? valueForOrder(b[0]) - valueForOrder(a[0]) : b[0] - a[0]))
     .flatMap(([, group]) => group);
+
+  function valueForOrder(value: number): number {
+    return value === 14 ? 1 : value;
+  }
 }
 
 function bestOf(cards: string[]): { cards: string[]; score: FiveCardScore } {
@@ -170,4 +180,12 @@ export function bestFiveCardHand(cards: string[]): string[] {
  * player's hand in a hand-history view, client-side, from raw cards only. */
 export function bestHandCategory(cards: string[]): string {
   return bestOf(cards).score.category;
+}
+
+/** Compares two up-to-7-card hands (hole cards + board) and reports whether
+ * the first beats the second — positive when it does, negative when it
+ * loses, 0 on a true tie. Used to tell a folded player whether they'd
+ * actually have won had they stayed in, not just that someone else did. */
+export function compareHands(cardsA: string[], cardsB: string[]): number {
+  return compareScores(bestOf(cardsA).score, bestOf(cardsB).score);
 }

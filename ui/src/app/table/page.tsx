@@ -31,7 +31,7 @@ import {TermsGate} from '@/components/TermsGate';
 import {Button} from '@/components/ui/button';
 import {pushNotification} from '@/lib/notify';
 import type {TableSnapshot} from '@/lib/api/table';
-import {bestFiveCardHand} from '@/lib/pokerRules';
+import {bestFiveCardHand, compareHands} from '@/lib/pokerRules';
 import {getHands, getSessions} from '@/lib/api/player';
 import {useTablePreferences} from '@/lib/tablePreferences';
 import {useDealerVoice} from '@/lib/hooks/useDealerVoice';
@@ -264,10 +264,19 @@ function TableContent() {
     const stackBefore = seat.stack_at_hand_start ??
       (rememberedStart?.tableID === id && rememberedStart.handID === snap.hand_id ? rememberedStart.stack : undefined);
     const breakdown = playerPotBreakdown(snap, viewer);
+    // Folding is not a loss in the sense of having contested the pot — it
+    // gets its own banner ("você desistiu"), only naming a rival hand when
+    // the board actually ran to a showdown that revealed one, and only
+    // claiming "poderia ter ganhado" when the folded hand would truly have
+    // beaten what got shown.
+    const folded = seat.state === 'folded';
+    const couldHaveWon = folded && viewerCards?.length === 5 && winningCards?.length === 5 ?
+      compareHands(viewerCards, winningCards) > 0 : undefined;
     setScopedHandOutcome({
       tableID: id,
       value: {
-        key: outcomeKeyRef.current, kind, handCategory: seat.hand_category, opponentCategory,
+        key: outcomeKeyRef.current, kind: folded ? 'fold' : kind, couldHaveWon,
+        handCategory: seat.hand_category, opponentCategory,
         winningCards, winningHoleCards: winnerHole, viewerCards, viewerHoleCards: viewerHole,
         winnerName: winnerSeat?.name, stackBefore, stackAfter: seat.stack,
         wonAmount: breakdown.won, refundAmount: breakdown.refund

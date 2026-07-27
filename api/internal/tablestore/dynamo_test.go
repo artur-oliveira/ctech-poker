@@ -140,6 +140,39 @@ func TestCommitActionStampsLogEntryTimestamp(t *testing.T) {
 	}
 }
 
+// TestLoadActionsSinceReturnsChronologicalOrder pins down that actions come
+// back oldest-first: hand-share/hand-history replay both trust list order as
+// the timeline, and the position-based Seq fallback below assigns 1, 2, 3...
+// off that same order — either one silently reverses if the underlying query
+// ever regresses to DynamoDB's default newest-first order.
+func TestLoadActionsSinceReturnsChronologicalOrder(t *testing.T) {
+	db := testClient(t)
+	env := isolatedEnv()
+	s := NewStore(db, env)
+	ctx := context.Background()
+	mustCreateTestTables(ctx, t, db, env)
+
+	_ = s.SeedTable(ctx, "table-6", hand.State{Stage: hand.WaitingForPlayers})
+	for i, action := range []string{"call", "check", "raise"} {
+		if err := s.CommitAction(ctx, "table-6", "hand-1", fmt.Sprintf("act-%d", i+1), i+1, hand.State{}, 0, ActionLogEntry{
+			TableID: "table-6", HandID: "hand-1", Version: i + 2, PlayerID: "p1", ActionID: fmt.Sprintf("act-%d", i+1), Action: action,
+		}); err != nil {
+			t.Fatalf("CommitAction %s: %v", action, err)
+		}
+	}
+
+	entries, err := s.LoadActionsSince(ctx, "table-6", "hand-1", 0)
+	if err != nil || len(entries) != 3 {
+		t.Fatalf("expected 3 logged actions, got %+v err=%v", entries, err)
+	}
+	want := []string{"call", "check", "raise"}
+	for i, entry := range entries {
+		if entry.Action != want[i] || entry.Seq != i+1 {
+			t.Fatalf("expected entries oldest-first %v with seq 1..3, got %+v", want, entries)
+		}
+	}
+}
+
 func TestQueryStaleActiveFindsOnlyOldActiveTables(t *testing.T) {
 	db := testClient(t)
 	env := isolatedEnv()

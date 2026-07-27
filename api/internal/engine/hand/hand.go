@@ -615,6 +615,10 @@ func (t *Table) StartHand() error {
 			if p.State != PendingEntry {
 				p.State = SittingOut
 			}
+			// A player sitting out this hand (e.g. busted all-in awaiting
+			// rebuy) must not keep broadcasting their last hand's bet chips
+			// on the felt once the next hand has started.
+			p.Contributed = 0
 			continue
 		}
 		if p.State == PendingEntry {

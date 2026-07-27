@@ -8,7 +8,12 @@ import {ChipStack} from '@/components/table/ChipStack';
 import {useCountUp} from '@/lib/hooks/useCountUp';
 
 export type HandOutcomeState = {
-  key: number; kind: 'win' | 'lose' | 'tie' | 'mixed'; handCategory?: string; opponentCategory?: string;
+  key: number; kind: 'win' | 'lose' | 'tie' | 'mixed' | 'fold'; handCategory?: string; opponentCategory?: string;
+  // Only set when kind is 'fold': whether the viewer's own hole cards would
+  // actually have beaten the eventual winner's revealed hand had they stayed
+  // in — undefined when the hand never reached a showdown (no one's cards to
+  // compare against), which reads as the plain "you folded" message instead.
+  couldHaveWon?: boolean;
   // The winning 5-card hand (or just the 2 hole cards when the board isn't
   // complete) for whoever actually won this pot — the viewer's own on a win,
   // the rival's on a loss — undefined when the hand ended without a
@@ -55,17 +60,30 @@ function combinationCards(cards?: string[], fallbackCategory?: string): string[]
   return cards.slice(0, category ? HAND_MATCH_SIZE[category] ?? cards.length : cards.length);
 }
 
-function OutcomeCards({cards, viewerHoleCards, startIndex = 0}: {
+// Same combination as combinationCards, but with the kicker(s) appended
+// after it — for a showdown lost or won by kicker within the same hand
+// category, where naming just "Par" for both sides hides the actual reason
+// one beat the other.
+function combinationWithKickers(cards?: string[], fallbackCategory?: string): {cards: string[]; kickerFrom: number} {
+  const combination = combinationCards(cards, fallbackCategory);
+  if (!combination.length || cards?.length !== 5) return {cards: combination, kickerFrom: combination.length};
+  return {cards, kickerFrom: combination.length};
+}
+
+function OutcomeCards({cards, viewerHoleCards, startIndex = 0, kickerFrom}: {
   cards: string[];
   viewerHoleCards?: string[];
   startIndex?: number;
+  kickerFrom?: number;
 }) {
   const viewerCards = new Set(viewerHoleCards);
   if (!cards.length) return null;
   return <span className="hand-outcome-cards">
     {cards.map((card, index) => {
       const isViewerCard = viewerCards.has(card);
-      return <span key={card} className={`hand-outcome-card-slot${isViewerCard ? ' is-viewer' : ''}`}>
+      const isKicker = kickerFrom != null && index >= kickerFrom;
+      return <span key={card}
+                   className={`hand-outcome-card-slot${isViewerCard ? ' is-viewer' : ''}${isKicker ? ' is-kicker' : ''}`}>
         <PlayingCard card={card} index={startIndex + index} size="hole" owner={isViewerCard ? 'viewer' : undefined}/>
       </span>;
     })}
@@ -143,6 +161,11 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
   const winnerCategory = categoryFor(shown.winningCards, shown.opponentCategory);
   const ownCombination = combinationCards(shown.viewerCards || shown.winningCards, shown.handCategory);
   const winningCombination = combinationCards(shown.winningCards, shown.opponentCategory);
+  // Naming the same category for both sides ("Par" vs. "Par") hides why one
+  // beat the other — show the kicker(s) that actually broke the tie instead.
+  const decidedByKicker = shown.kind === 'lose' && ownCategory && ownCategory === winnerCategory;
+  const ownWithKickers = combinationWithKickers(shown.viewerCards, shown.handCategory);
+  const winningWithKickers = combinationWithKickers(shown.winningCards, shown.opponentCategory);
   const chipChange = shown.stackBefore != null && shown.stackAfter != null &&
     shown.stackBefore !== shown.stackAfter
     ? <ChipCountUp from={shown.stackBefore} to={shown.stackAfter}/>
@@ -157,7 +180,9 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
       ? `Você perdeu esta mão${shown.winnerName ? `. Vencedor: ${shown.winnerName}` : ''}.`
       : shown.kind === 'tie'
         ? `Pote dividido${amountDetails ? `: ${amountDetails}` : ''}.`
-        : `Resultado misto: você ganhou ao menos um pote e perdeu outro${amountDetails ? `. ${amountDetails}` : ''}.`;
+        : shown.kind === 'fold'
+          ? shown.couldHaveWon ? 'Você desistiu, mas sua mão venceria a mão revelada.' : 'Você desistiu desta mão.'
+          : `Resultado misto: você ganhou ao menos um pote e perdeu outro${amountDetails ? `. ${amountDetails}` : ''}.`;
 
   return <>
     <span className="sr-only" role="status" aria-live="polite">{announcement}</span>
@@ -183,7 +208,8 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
               <small>{shown.winnerName || 'Vencedor'}</small>
               <strong>{categoryLabel(winnerCategory) || 'Mão vencedora'}</strong>
             </span>
-            <OutcomeCards cards={winningCombination} startIndex={0}/>
+            <OutcomeCards cards={decidedByKicker ? winningWithKickers.cards : winningCombination}
+                          kickerFrom={decidedByKicker ? winningWithKickers.kickerFrom : undefined} startIndex={0}/>
           </div>
           <span className="hand-outcome-versus">venceu</span>
           <div className="hand-outcome-comparison-row viewer">
@@ -191,9 +217,12 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
               <small>Você</small>
               <strong>{categoryLabel(ownCategory) || 'Sua mão'}</strong>
             </span>
-            <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards} startIndex={5}/>
+            <OutcomeCards cards={decidedByKicker ? ownWithKickers.cards : ownCombination}
+                          kickerFrom={decidedByKicker ? ownWithKickers.kickerFrom : undefined}
+                          viewerHoleCards={shown.viewerHoleCards} startIndex={5}/>
           </div>
         </div>
+        {decidedByKicker && <p className="hand-outcome-kicker-note">Mesma combinação — o kicker decidiu.</p>}
         {chipChange}
         <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
       </>}
@@ -217,6 +246,31 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
         <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>
         {amountDetails && <p className="hand-outcome-tie-note">{amountDetails}</p>}
         {chipChange}
+        <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
+      </>}
+
+      {shown.kind === 'fold' && <>
+        <div className="hand-outcome-heading">
+          <span><b>{shown.couldHaveWon ? 'Você poderia ter ganhado!' : 'Você desistiu.'}</b>
+            <small>{shown.couldHaveWon ? 'Sua mão batia a mão revelada' : 'Aguardando a próxima mão'}</small></span>
+        </div>
+        {shown.couldHaveWon && <div className="hand-outcome-comparison">
+          <div className="hand-outcome-comparison-row winner">
+            <span className="hand-outcome-hand-name">
+              <small>{shown.winnerName || 'Vencedor'}</small>
+              <strong>{categoryLabel(winnerCategory) || 'Mão revelada'}</strong>
+            </span>
+            <OutcomeCards cards={winningCombination} startIndex={0}/>
+          </div>
+          <span className="hand-outcome-versus">perdia de</span>
+          <div className="hand-outcome-comparison-row viewer">
+            <span className="hand-outcome-hand-name">
+              <small>Sua mão (desistida)</small>
+              <strong>{categoryLabel(ownCategory) || 'Sua mão'}</strong>
+            </span>
+            <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards} startIndex={5}/>
+          </div>
+        </div>}
         <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
       </>}
       </div>

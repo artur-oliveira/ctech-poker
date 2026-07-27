@@ -3125,10 +3125,17 @@ h1 em {
 }
 
 .hand-outcome-card.tie,
-.hand-outcome-card.mixed {
+.hand-outcome-card.mixed,
+.hand-outcome-card.fold {
     background: color-mix(in srgb, var(--surface-control) 78%, var(--table-felt-dark));
     color: var(--paper);
     box-shadow: 0 15px 50px var(--black-08)
+}
+
+.hand-outcome-card.fold:has(.hand-outcome-comparison) {
+    width: min(410px, calc(100vw - 32px));
+    max-width: 410px;
+    padding: 18px
 }
 
 .hand-outcome-heading {
@@ -3187,6 +3194,18 @@ h1 em {
 
 .hand-outcome-card-slot.is-viewer .hole-card {
     box-shadow: 0 0 0 2px var(--brand-bright), 0 4px 10px var(--black-06)
+}
+
+.hand-outcome-card-slot.is-kicker {
+    opacity: .55;
+    margin-left: 4px
+}
+
+.hand-outcome-kicker-note {
+    color: var(--felt-text-muted);
+    font-size: var(--font-size-caption);
+    text-align: center;
+    margin: 0
 }
 
 .hand-outcome-comparison {
