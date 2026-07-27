@@ -470,6 +470,40 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     const tableId = config.params?.table_id;
     return ok(page(tableId ? mockHands.filter(h => h.table_id === tableId) : mockHands), config);
   }
+  const createShareMatch = method === 'POST' ? path.match(/^\/v1\.0\/players\/me\/hands\/([^/]+)\/share$/) : null;
+  if (createShareMatch) {
+    const hand = mockHands.find(h => h.hand_id === createShareMatch[1]);
+    if (!hand) fail(404, 'hand not found', config);
+    return ok({
+      token: 'mock-share-demo',
+      kind: body.kind === 'bad_beat' ? 'bad_beat' : 'brag',
+      outcome: hand.outcome,
+      net_change: hand.net_change,
+      ended_at: hand.ended_at,
+      board: hand.board,
+      hero_cards: body.include_hero_cards ? hand.hole_cards : undefined,
+      opponents: hand.opponents?.map((opponent, index) => ({
+        alias: `Jogador ${index + 1}`, hole_cards: opponent.hole_cards, won: opponent.won
+      })),
+      actions: mockHandActions[hand.hand_id] || [],
+      created_at: Date.now(),
+      expires_at: Date.now() + Number(body.expiry_days || 7) * 86_400_000
+    }, config);
+  }
+  const publicShareMatch = method === 'GET' ? path.match(/^\/v1\.0\/hand-shares\/([^/]+)$/) : null;
+  if (publicShareMatch) {
+    if (publicShareMatch[1] !== 'mock-share-demo') fail(404, 'hand share not found', config);
+    const hand = mockHands[0];
+    return ok({
+      token: 'mock-share-demo', kind: 'brag', outcome: hand.outcome, net_change: hand.net_change,
+      ended_at: hand.ended_at, board: hand.board, hero_cards: hand.hole_cards,
+      opponents: hand.opponents?.map((opponent, index) => ({
+        alias: `Jogador ${index + 1}`, hole_cards: opponent.hole_cards, won: opponent.won
+      })),
+      actions: mockHandActions[hand.hand_id] || [],
+      created_at: Date.now(), expires_at: Date.now() + 7 * 86_400_000
+    }, config);
+  }
   const handMatch = method === 'GET' ? path.match(/^\/v1\.0\/players\/me\/hands\/([^/]+)$/) : null;
   if (handMatch) {
     const hand = mockHands.find(h => h.hand_id === handMatch[1]);

@@ -966,6 +966,7 @@ type ClientMessage struct {
 	CardIndex               *int32 `protobuf:"varint,11,opt,name=card_index,json=cardIndex,proto3,oneof" json:"card_index,omitempty"`                                      // 0 or 1 for show_cards; absent means both (legacy)
 	ReactionId              string `protobuf:"bytes,12,opt,name=reaction_id,json=reactionId,proto3" json:"reaction_id,omitempty"`                                          // catalog key; never arbitrary display text
 	TargetPlayerId          string `protobuf:"bytes,13,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`                            // required only by thrown-object reactions
+	TurnstileToken          string `protobuf:"bytes,14,opt,name=turnstile_token,json=turnstileToken,proto3" json:"turnstile_token,omitempty"`                              // response token for an adaptive bot challenge
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -1087,6 +1088,13 @@ func (x *ClientMessage) GetReactionId() string {
 func (x *ClientMessage) GetTargetPlayerId() string {
 	if x != nil {
 		return x.TargetPlayerId
+	}
+	return ""
+}
+
+func (x *ClientMessage) GetTurnstileToken() string {
+	if x != nil {
+		return x.TurnstileToken
 	}
 	return ""
 }
@@ -1398,7 +1406,7 @@ const file_poker_proto_rawDesc = "" +
 	"\x1caction_base_deadline_unix_ms\x18\x17 \x01(\x03R\x18actionBaseDeadlineUnixMs\x1a:\n" +
 	"\fPayoutsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xb9\x03\n" +
+	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xe2\x03\n" +
 	"\rClientMessage\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x14\n" +
 	"\x05token\x18\x02 \x01(\tR\x05token\x12\x1d\n" +
@@ -1416,7 +1424,8 @@ const file_poker_proto_rawDesc = "" +
 	"card_index\x18\v \x01(\x05H\x00R\tcardIndex\x88\x01\x01\x12\x1f\n" +
 	"\vreaction_id\x18\f \x01(\tR\n" +
 	"reactionId\x12(\n" +
-	"\x10target_player_id\x18\r \x01(\tR\x0etargetPlayerIdB\r\n" +
+	"\x10target_player_id\x18\r \x01(\tR\x0etargetPlayerId\x12'\n" +
+	"\x0fturnstile_token\x18\x0e \x01(\tR\x0eturnstileTokenB\r\n" +
 	"\v_card_index\"\xa3\x04\n" +
 	"\rServerMessage\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x17\n" +

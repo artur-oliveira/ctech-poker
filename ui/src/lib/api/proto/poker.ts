@@ -200,6 +200,8 @@ export interface ClientMessage {
   reaction_id: string;
   /** required only by thrown-object reactions */
   target_player_id: string;
+  /** response token for an adaptive bot challenge */
+  turnstile_token: string;
 }
 
 /** ServerMessage is sent from the server to the client. */
@@ -2364,6 +2366,7 @@ function createBaseClientMessage(): ClientMessage {
     card_index: undefined,
     reaction_id: "",
     target_player_id: "",
+    turnstile_token: "",
   };
 }
 
@@ -2407,6 +2410,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     }
     if (message.target_player_id !== "") {
       writer.uint32(106).string(message.target_player_id);
+    }
+    if (message.turnstile_token !== "") {
+      writer.uint32(114).string(message.turnstile_token);
     }
     return writer;
   },
@@ -2522,6 +2528,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           message.target_player_id = reader.string();
           continue;
         }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.turnstile_token = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2574,6 +2588,11 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         : isSet(object.target_player_id)
         ? globalThis.String(object.target_player_id)
         : "",
+      turnstile_token: isSet(object.turnstileToken)
+        ? globalThis.String(object.turnstileToken)
+        : isSet(object.turnstile_token)
+        ? globalThis.String(object.turnstile_token)
+        : "",
     };
   },
 
@@ -2618,6 +2637,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     if (message.target_player_id !== "") {
       obj.targetPlayerId = message.target_player_id;
     }
+    if (message.turnstile_token !== "") {
+      obj.turnstileToken = message.turnstile_token;
+    }
     return obj;
   },
 
@@ -2639,6 +2661,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     message.card_index = object.card_index ?? undefined;
     message.reaction_id = object.reaction_id ?? "";
     message.target_player_id = object.target_player_id ?? "";
+    message.turnstile_token = object.turnstile_token ?? "";
     return message;
   },
 };

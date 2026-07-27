@@ -25,6 +25,7 @@ import {OidcStack} from "../lib/oidc-stack";
 
 const app = new cdk.App();
 
+const CLOUDFLARE_CHALLENGE_SRC = 'https://challenges.cloudflare.com'
 const ENVIRONMENT = (process.env.ENVIRONMENT || 'dev') as Environment;
 const GITHUB_REPO = (process.env.GITHUB_REPO || GITHUB_REPO_DEFAULT);
 // VPC is managed by ctech-cdk (shared across every CTech service in this
@@ -87,6 +88,7 @@ new PokerApiStack(app, id('API'), {
   roomsTableArn: dynamoStack.tables.get('poker_rooms')!.tableArn,
   playerProfilesTableArn: dynamoStack.tables.get('poker_player_profiles')!.tableArn,
   playerNotesTableArn: dynamoStack.tables.get('poker_player_notes')!.tableArn,
+  handSharesTableArn: dynamoStack.tables.get('poker_hand_shares')!.tableArn,
   achievementProgressTableArn: dynamoStack.tables.get('poker_achievement_progress')!.tableArn,
   leaderboardStatsTableArn: dynamoStack.tables.get('poker_leaderboard_stats')!.tableArn,
   dailyRewardTableArn: dynamoStack.tables.get('poker_daily_reward')!.tableArn,
@@ -95,6 +97,7 @@ new PokerApiStack(app, id('API'), {
   walletUrlParam: pokerParameters.walletUrl,
   pokerClientIdParam: pokerParameters.clientId,
   pokerClientSecretParam: pokerParameters.clientSecret,
+  turnstileSecretParam: pokerParameters.turnstileSecret,
   realMoneyEnabledParam: pokerParameters.realMoneyEnabled,
   legalSignoffRefParam: pokerParameters.legalSignoffRef,
   description: `CTech Poker API (EC2 + ASG + ALB) - ${ENVIRONMENT}`,
@@ -107,6 +110,7 @@ new FrontendStack(app, id('Frontend'), {
   domainName: domainForEnv(ENVIRONMENT, APP_DOMAIN_PREFIX),
   apiDomainName: domainForEnv(ENVIRONMENT, API_DOMAIN_PREFIX),
   authDomainName: domainForEnv(ENVIRONMENT, ACCOUNTS_DOMAIN_PREFIX),
+  extraConnectSrc: [CLOUDFLARE_CHALLENGE_SRC],
   description: `CTech Poker Frontend (S3 + CloudFront) - ${ENVIRONMENT}`,
 });
 

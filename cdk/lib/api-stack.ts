@@ -48,9 +48,11 @@ interface ApiStackProps extends cdk.StackProps {
   roomsTableArn: string;
   playerProfilesTableArn: string;
   playerNotesTableArn: string;
+  handSharesTableArn: string;
   walletUrlParam: string;
   pokerClientIdParam: string;
   pokerClientSecretParam: string;
+  turnstileSecretParam: string;
   realMoneyEnabledParam: string;
   legalSignoffRefParam: string;
   achievementProgressTableArn: string;
@@ -82,9 +84,11 @@ export class PokerApiStack extends cdk.Stack {
       roomsTableArn,
       playerProfilesTableArn,
       playerNotesTableArn,
+      handSharesTableArn,
       walletUrlParam,
       pokerClientIdParam,
       pokerClientSecretParam,
+      turnstileSecretParam,
       realMoneyEnabledParam,
       legalSignoffRefParam,
       achievementProgressTableArn,
@@ -112,7 +116,7 @@ export class PokerApiStack extends cdk.Stack {
     const tableArns = [
       tableStateArn, tableStateHistoryArn, actionLogArn, actionGuardsArn, roomsTableArn, playerProfilesTableArn,
       achievementProgressTableArn, leaderboardStatsTableArn, dailyRewardTableArn, playerSessionsTableArn,
-      playerHandsTableArn, playerNotesTableArn,
+      playerHandsTableArn, playerNotesTableArn, handSharesTableArn,
     ];
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: [
@@ -129,7 +133,7 @@ export class PokerApiStack extends cdk.Stack {
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: ['ssm:GetParameter'],
       resources: [
-        shared.valkeyUrl, walletUrlParam, pokerClientIdParam, pokerClientSecretParam,
+        shared.valkeyUrl, walletUrlParam, pokerClientIdParam, pokerClientSecretParam, turnstileSecretParam,
         realMoneyEnabledParam, legalSignoffRefParam,
       ].map(
         (path) => `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${path}`,
@@ -215,6 +219,7 @@ export class PokerApiStack extends cdk.Stack {
       // Trust only peers inside this VPC before honoring X-Forwarded-For.
       `TRUSTED_PROXIES=${vpc.vpcCidrBlock}`,
       `CORS_ALLOWED_ORIGINS=https://${appDomainName}`,
+      `TURNSTILE_EXPECTED_HOSTNAME=${appDomainName}`,
       `ENV`,
       
       // ── start.sh: fetches runtime configuration and M2M credentials from SSM.
@@ -235,6 +240,8 @@ export class PokerApiStack extends cdk.Stack {
       `export POKER_CLIENT_ID`,
       `POKER_CLIENT_SECRET=$(aws ssm get-parameter --name "${pokerClientSecretParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
       `export POKER_CLIENT_SECRET`,
+      `TURNSTILE_SECRET=$(aws ssm get-parameter --name "${turnstileSecretParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+      `export TURNSTILE_SECRET`,
       // Real-money kill switch: both fetched fresh on every boot/restart so
       // ops can flip them via SSM without a redeploy. Falls back to
       // false/empty → config.Load() keeps real-money mode off (fails closed).

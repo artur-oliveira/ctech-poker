@@ -53,16 +53,19 @@ jobs:
             echo "NEXT_PUBLIC_API_URL=https://poker.aoctech.app" >> $GITHUB_ENV
             echo "NEXT_PUBLIC_CTECH_URL=https://accounts.aoctech.app" >> $GITHUB_ENV
             echo "NEXT_PUBLIC_CTECH_CLIENT_ID=poker" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_TURNSTILE_SITE_KEY=${{ vars.TURNSTILE_SITE_KEY_PROD }}" >> $GITHUB_ENV
           elif [ "$BRANCH" = "staging" ]; then
             echo "ENVIRONMENT=stage" >> $GITHUB_ENV
             echo "NEXT_PUBLIC_API_URL=https://poker-stage.aoctech.app" >> $GITHUB_ENV
             echo "NEXT_PUBLIC_CTECH_URL=https://accounts-stage.aoctech.app" >> $GITHUB_ENV
             echo "NEXT_PUBLIC_CTECH_CLIENT_ID=poker" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_TURNSTILE_SITE_KEY=${{ vars.TURNSTILE_SITE_KEY_STAGE }}" >> $GITHUB_ENV
           else
             echo "ENVIRONMENT=dev" >> $GITHUB_ENV
             echo "NEXT_PUBLIC_API_URL=https://poker-dev.aoctech.app" >> $GITHUB_ENV
             echo "NEXT_PUBLIC_CTECH_URL=https://accounts-dev.aoctech.app" >> $GITHUB_ENV
             echo "NEXT_PUBLIC_CTECH_CLIENT_ID=poker" >> $GITHUB_ENV
+            echo "NEXT_PUBLIC_TURNSTILE_SITE_KEY=${{ vars.TURNSTILE_SITE_KEY_DEV }}" >> $GITHUB_ENV
           fi
 
       - name: Build static export

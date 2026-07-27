@@ -11,6 +11,7 @@ import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
 import {ActionTimeline} from '@/components/hands/ActionTimeline';
 import {DeckReveal} from '@/components/hands/DeckReveal';
 import {HandExportButton} from '@/components/hands/HandExportButton';
+import {ShareHandDialog} from '@/components/hands/ShareHandDialog';
 import {Button} from '@/components/ui/button';
 import {TermsGate} from '@/components/TermsGate';
 import {getViewerId, HAND_CATEGORY_LABELS, playerName} from '@/lib/utils';
@@ -76,7 +77,8 @@ function HandHistoryContent() {
         {h.net_change > 0 ? '+' : ''}{h.net_change.toLocaleString('pt-BR')} fichas
       </span>
       {!history.isLoading && !history.isError &&
-        <div className="hand-history-tools"><HandExportButton hand={h} actions={actions} viewerId={viewerId}/></div>}
+        <div className="hand-history-tools"><HandExportButton hand={h} actions={actions} viewerId={viewerId}/>
+          <ShareHandDialog handId={h.hand_id} outcome={h.outcome}/></div>}
     </header>
 
     {!history.isLoading && !history.isError && actions.some(action => action.frame) &&

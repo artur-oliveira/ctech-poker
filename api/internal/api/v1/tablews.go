@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -10,6 +11,7 @@ import (
 
 	"gopkg.aoctech.app/api-commons/jwtverify"
 	"gopkg.aoctech.app/api-commons/ws"
+	"gopkg.aoctech.app/poker/api/internal/botcheck"
 	"gopkg.aoctech.app/poker/api/internal/chatfilter"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
@@ -101,7 +103,7 @@ func wsAllowedOrigin(ctx *fasthttp.RequestCtx, allowed []string) bool {
 
 func rateLimitedTableMessage(messageType string) bool {
 	switch messageType {
-	case "act", "chat", "reaction", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "ping":
+	case "act", "chat", "reaction", "bot_challenge", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "ping":
 		return true
 	default:
 		return false
@@ -219,6 +221,7 @@ func RegisterTableWS(
 	players *player.Service,
 ) {
 	connectionTracker := newTableConnectionTracker()
+	checker := botcheck.New(cfg.TurnstileSecret, cfg.TurnstileExpectedHostname)
 	upgrader := fws.FastHTTPUpgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -226,6 +229,7 @@ func RegisterTableWS(
 	}
 	router.Get("/tables/:id/ws", func(c fiber.Ctx) error {
 		tableID := c.Params("id")
+		remoteIP := c.IP()
 		return upgrader.Upgrade(c.RequestCtx(), func(conn *fws.Conn) {
 			// Post-upgrade the handler runs on a hijacked goroutine outside
 			// Fiber's recover middleware — an unrecovered panic here kills the
@@ -390,6 +394,8 @@ func RegisterTableWS(
 
 			limiter := newSeatLimiter(10) // 10 actions/sec/seat — generous for a human, tight for a script
 			reactionLimiter := newWindowSeatLimiter(1, 2*time.Second)
+			botRiskScore := 0
+			challengeRequired := false
 			done := make(chan struct{})
 			go startHeartbeat(conn, done, wsPingInterval, wsPongWait)
 
@@ -457,6 +463,27 @@ func RegisterTableWS(
 					if !requireActionID() || !requireActionPrecondition() {
 						continue
 					}
+					if challengeRequired {
+						send(&pokerproto.ServerMessage{Type: "bot_challenge", Code: "bot_challenge_required"})
+						send(&pokerproto.ServerMessage{Type: "error", Code: "bot_challenge_required", ActionId: m.ActionId})
+						continue
+					}
+					decisionLatency := time.Duration(-1)
+					if checker.Enabled() {
+						snapCh := make(chan hand.Snapshot, 1)
+						snapReply := make(chan error, 1)
+						if err := dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: snapReply}); err == nil {
+							snap := <-snapCh
+							if snap.CurrentPlayerID == playerID && snap.ActionBaseDeadlineUnixMs > 0 {
+								timeout := table.DefaultTurnTimeout
+								if room != nil {
+									timeout = table.TurnTimeoutFor(room.TurnTimeoutSeconds)
+								}
+								turnStarted := time.UnixMilli(snap.ActionBaseDeadlineUnixMs).Add(-timeout)
+								decisionLatency = time.Since(turnStarted)
+							}
+						}
+					}
 					r := make(chan error, 1)
 					if err := dispatch(table.ActCmd{
 						PlayerID: playerID, ActionID: m.ActionId,
@@ -471,7 +498,44 @@ func RegisterTableWS(
 						send(&pokerproto.ServerMessage{Type: "error", Code: code, Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()
+						if checker.Enabled() {
+							switch {
+							// Check/Fold preselection is an intentional
+							// accessibility and speed feature. It can fire in
+							// the same frame as a state update, so treating it
+							// as bot evidence would punish normal use. Only
+							// chip-committing decisions contribute positive
+							// risk; slower/check/fold decisions decay it.
+							case (m.Action == string(betting.ActionCall) || m.Action == string(betting.ActionRaise)) &&
+								decisionLatency >= 0 && decisionLatency < 150*time.Millisecond:
+								botRiskScore += 2
+							case (m.Action == string(betting.ActionCall) || m.Action == string(betting.ActionRaise)) &&
+								decisionLatency >= 0 && decisionLatency < 350*time.Millisecond:
+								botRiskScore++
+							case botRiskScore > 0:
+								botRiskScore--
+							}
+							if botRiskScore >= 16 {
+								challengeRequired = true
+								send(&pokerproto.ServerMessage{Type: "bot_challenge"})
+							}
+						}
 					}
+				case "bot_challenge":
+					if !checker.Enabled() || !challengeRequired {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "bot_challenge_not_required", ActionId: m.ActionId})
+						continue
+					}
+					verifyCtx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
+					err := checker.Verify(verifyCtx, m.TurnstileToken, remoteIP)
+					cancel()
+					if err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "bot_challenge_failed", ActionId: m.ActionId})
+						continue
+					}
+					challengeRequired = false
+					botRiskScore = 0
+					send(&pokerproto.ServerMessage{Type: "bot_challenge_passed", ActionId: m.ActionId})
 				case "post_big_blind":
 					ensureActionID()
 					r := make(chan error, 1)

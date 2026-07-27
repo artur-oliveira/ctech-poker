@@ -40,6 +40,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   message_too_long: 'A mensagem ultrapassa o limite de 500 caracteres.',
   not_connected: 'Sem conexão com a mesa. Reconecte antes de agir.',
   action_timeout: 'A mesa demorou para confirmar a ação. O estado será atualizado antes de uma nova tentativa.',
+  bot_challenge_required: 'Conclua a verificação para continuar jogando.',
+  bot_challenge_failed: 'A verificação não foi concluída. Tente novamente.',
   connection_lost: 'A conexão caiu antes da confirmação. Aguarde a atualização da mesa.'
 };
 
@@ -205,6 +207,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const [pendingAction, setPendingAction] = useState<PokerAction | null>(null);
   const [lastActionError, setLastActionError] = useState<ActionError | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  const [botChallengeRequired, setBotChallengeRequired] = useState(false);
   const [removed, setRemoved] = useState<{ code?: string } | null>(null);
   const [mockStatus, setMockStatus] = useState<WSStatus>('connecting');
   const [mockReconnectAttempt, setMockReconnectAttempt] = useState(0);
@@ -377,6 +380,11 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     }
     if (message.type === 'connected') {
       awaitingReconnectSnapshotRef.current = true;
+    }
+    if (message.type === 'bot_challenge') setBotChallengeRequired(true);
+    if (message.type === 'bot_challenge_passed') {
+      setBotChallengeRequired(false);
+      setLastActionError(null);
     }
     if (message.type === 'removed') setRemoved({code: message.code});
     if (message.type === 'achievement_unlocked' && message.key) setUnlock({
@@ -572,6 +580,9 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     return true;
   }, [send]);
 
+  const submitBotChallenge = useCallback((token: string) =>
+    emit({type: 'bot_challenge', turnstile_token: token, action_id: crypto.randomUUID()}), [emit]);
+
   const act = useCallback((action: PokerAction, amount = 0) => {
     if (pendingActionRef.current) return false;
     setLastActionError(null);
@@ -618,6 +629,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     actionError: lastActionError,
     reconnectAttempt,
     announcement,
+    botChallengeRequired,
     removed,
     clearActionError: () => setLastActionError(null),
     retryNow,
@@ -655,6 +667,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     sendChat: (message: string) => emit({type: 'chat', message}),
     sendReaction: (reactionId: TableReactionID, targetPlayerId?: string) =>
       emit({type: 'reaction', reaction_id: reactionId, target_player_id: targetPlayerId || '',
-        action_id: crypto.randomUUID()})
+        action_id: crypto.randomUUID()}),
+    submitBotChallenge
   };
 }

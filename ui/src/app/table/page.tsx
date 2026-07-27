@@ -25,6 +25,7 @@ import {TablePreferencesDialog} from '@/components/table/TablePreferencesDialog'
 import {RealityCheck} from '@/components/table/RealityCheck';
 import {PlayerNoteDialog} from '@/components/table/PlayerNoteDialog';
 import {TableReactions} from '@/components/table/TableReactions';
+import {BotChallenge} from '@/components/table/BotChallenge';
 import {AchievementToast} from '@/components/AchievementToast';
 import {TermsGate} from '@/components/TermsGate';
 import {Button} from '@/components/ui/button';
@@ -432,6 +433,7 @@ function TableContent() {
             seats={s.seats}/>
       <TableReactions items={rt.reactions} seats={s.seats} viewerId={viewer}
                       connected={rt.status === 'connected'} onSend={rt.sendReaction}/>
+      <BotChallenge required={rt.botChallengeRequired} onTokenAction={rt.submitBotChallenge}/>
       <LastWinners items={tableHands}/>
       <PlayerNoteDialog key={noteOpponent?.player_id || 'closed'} opponent={noteOpponent}
                         existing={noteOpponent ? playerNotesByID[noteOpponent.player_id] : undefined}

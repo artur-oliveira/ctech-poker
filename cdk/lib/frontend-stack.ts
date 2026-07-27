@@ -16,6 +16,7 @@ interface FrontendStackProps extends cdk.StackProps {
   domainName?: string;
   apiDomainName: string;
   authDomainName: string;
+  extraConnectSrc: string[];
 }
 
 export class FrontendStack extends cdk.Stack {
@@ -25,7 +26,7 @@ export class FrontendStack extends cdk.Stack {
 
   constructor(scope: Construct, id: string, props: FrontendStackProps) {
     super(scope, id, props);
-    const {environment, certificateArn, domainName, apiDomainName, authDomainName} = props;
+    const {environment, certificateArn, domainName, apiDomainName, authDomainName, extraConnectSrc} = props;
     const isProd = environment === 'prod';
 
     this.bucket = new s3.Bucket(this, 'Bucket', {
@@ -72,7 +73,7 @@ async function handler(event) {
           contentSecurityPolicy: [
             "default-src 'self'", "base-uri 'self'", "object-src 'none'", "frame-ancestors 'none'",
             "img-src 'self' data:", "style-src 'self' 'unsafe-inline'", "script-src 'self' 'unsafe-inline'",
-            `connect-src 'self' https://${authDomainName}`,
+            `connect-src 'self' https://${authDomainName} ${extraConnectSrc.join(' ')}`,
           ].join('; '),
           override: true,
         },

@@ -142,6 +142,7 @@ message ClientMessage {
   optional int32 card_index = 11; // 0 or 1 for show_cards; absent means both (legacy)
   string reaction_id = 12; // catalog key; never arbitrary display text
   string target_player_id = 13; // required only by thrown-object reactions
+  string turnstile_token = 14; // response token for an adaptive bot challenge
 }
 
 // ServerMessage is sent from the server to the client.

@@ -3700,6 +3700,248 @@ h1 em {
     animation: reaction-throw 1.05s var(--ease-out-quart) both
 }
 
+.bot-challenge-dialog > button {
+    display: none
+}
+
+.bot-challenge-dialog h2 {
+    display: flex;
+    align-items: center;
+    gap: 9px
+}
+
+.bot-challenge-dialog h2 svg {
+    width: 23px;
+    height: 23px;
+    color: var(--brand-bright)
+}
+
+.turnstile-slot {
+    min-height: 70px;
+    display: grid;
+    place-items: center
+}
+
+.bot-challenge-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    color: var(--text-secondary);
+    font-size: 13px
+}
+
+.bot-challenge-status svg {
+    width: 16px
+}
+
+.bot-challenge-error {
+    margin: 0;
+    padding: 11px;
+    border-radius: var(--rounded-control);
+    background: color-mix(in srgb, var(--danger) 16%, var(--surface-seat));
+    color: var(--danger-soft);
+    line-height: 1.45
+}
+
+.bot-challenge-dialog > small {
+    display: block;
+    margin-top: 14px;
+    color: var(--muted);
+    line-height: 1.4
+}
+
+.share-hand-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px
+}
+
+.share-hand-form fieldset {
+    display: grid;
+    gap: 8px;
+    border: 0
+}
+
+.share-hand-form legend {
+    margin-bottom: 8px;
+    font-weight: 700
+}
+
+.share-hand-form fieldset label,
+.share-hand-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 10px;
+    border-radius: var(--rounded-control);
+    background: var(--surface-seat)
+}
+
+.share-hand-form label small,
+.share-hand-check span {
+    display: block
+}
+
+.share-hand-form label small {
+    margin-top: 2px;
+    color: var(--muted)
+}
+
+.share-hand-expiry {
+    display: flex;
+    align-items: center;
+    gap: 9px
+}
+
+.share-hand-expiry select {
+    min-height: 40px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control);
+    background: var(--surface-control);
+    color: var(--paper);
+    padding: 0 9px
+}
+
+.share-hand-privacy {
+    display: flex;
+    gap: 8px;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.45
+}
+
+.share-hand-privacy svg {
+    width: 18px;
+    flex: 0 0 auto;
+    color: var(--brand-bright)
+}
+
+.share-hand-created {
+    text-align: center
+}
+
+.share-hand-created > svg {
+    width: 38px;
+    height: 38px;
+    padding: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    color: var(--success-ink)
+}
+
+.share-hand-created > p {
+    color: var(--text-secondary);
+    font-size: 13px
+}
+
+.share-hand-created > div {
+    display: flex
+}
+
+.share-hand-created input {
+    min-width: 0;
+    flex: 1;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control) 0 0 var(--rounded-control);
+    background: var(--surface-seat);
+    color: var(--paper);
+    padding: 9px
+}
+
+.share-hand-created button {
+    border-radius: 0 var(--rounded-control) var(--rounded-control) 0
+}
+
+.public-hand-page {
+    min-height: 100dvh;
+    background: var(--table-room);
+    color: var(--paper);
+    padding: 20px
+}
+
+.public-hand-page > nav,
+.public-hand {
+    width: min(1100px, 100%);
+    margin-inline: auto
+}
+
+.public-hand {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding-block: 36px
+}
+
+.public-hand > header {
+    text-align: center
+}
+
+.public-hand > header > span {
+    color: var(--gold);
+    font-weight: 700
+}
+
+.public-hand > header h1 {
+    margin: 8px 0;
+    font-size: 2.25rem
+}
+
+.public-hand > header p {
+    display: flex;
+    justify-content: center;
+    gap: 7px;
+    color: var(--text-secondary)
+}
+
+.public-hand > header svg {
+    width: 18px
+}
+
+.public-hand-cards {
+    display: grid;
+    grid-template-columns: minmax(180px, .7fr) minmax(300px, 1.3fr);
+    gap: 18px
+}
+
+.public-hand-cards article {
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid var(--seat-border);
+    border-radius: 16px;
+    background: var(--surface-seat)
+}
+
+.public-hand-cards article > div {
+    display: flex;
+    gap: 7px;
+    margin-top: 12px
+}
+
+.public-hand.unavailable,
+.public-hand.loading {
+    align-items: center;
+    justify-content: center;
+    min-height: 70dvh;
+    text-align: center
+}
+
+@media (max-width: 700px) {
+    .public-hand-page {
+        padding: 14px
+    }
+
+    .public-hand-cards {
+        grid-template-columns: 1fr
+    }
+
+    .public-hand-cards article > div {
+        overflow-x: auto;
+        padding-bottom: 4px
+    }
+}
+
 @keyframes reaction-emote {
     0% {
         opacity: 0;

@@ -104,6 +104,7 @@ export const SSM_POKER = (env: Environment) => ({
   walletUrl: `/ctech/${env}/poker/wallet-url`,
   clientId: `/ctech/${env}/poker/poker-client-id`,
   clientSecret: `/ctech/${env}/poker/poker-client-secret`,
+  turnstileSecret: `/ctech/${env}/poker/turnstile-secret`,
   // Real-money kill switch + legal sign-off reference. Both live in SSM (not
   // baked into userdata) so ops can flip them without a CDK redeploy —
   // config.Load() fails closed if REAL_MONEY_ENABLED=true and this ref is
