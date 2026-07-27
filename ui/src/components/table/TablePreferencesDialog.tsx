@@ -66,7 +66,7 @@ export function TablePreferencesDialog() {
         </div>
         <div className="table-preference-toggle">
           <span><Mic aria-hidden="true"/><span><Label id="voice-actions-label">Comandos por voz</Label>
-            <small>Push-to-talk para as ações da rodada.</small></span></span>
+            <small>Push-to-talk. O jogo recebe somente a ação reconhecida, nunca o áudio.</small></span></span>
           <Switch aria-labelledby="voice-actions-label" checked={preferences.voiceCommands}
                   onCheckedChange={checked => update({voiceCommands: checked})}/>
         </div>

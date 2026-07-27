@@ -129,6 +129,7 @@ export class PokerApiStack extends cdk.Stack {
         'dynamodb:Query',
         'dynamodb:DescribeTable',
         'dynamodb:ConditionCheckItem',
+        'dynamodb:TransactWriteItems',
       ],
       resources: [...tableArns, ...tableArns.map((arn) => `${arn}/index/*`)],
     }));

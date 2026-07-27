@@ -1,6 +1,6 @@
 'use client';
 
-import {useEffect, useRef, useState} from 'react';
+import {useEffect, useRef, useState, useSyncExternalStore} from 'react';
 import {Mic, MicOff} from 'lucide-react';
 import type {PokerAction} from '@/lib/api/table';
 import {parseVoiceAction} from '@/lib/voiceActions';
@@ -26,6 +26,8 @@ function constructor() {
   return speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
 }
 
+const subscribeSupport = () => () => {};
+
 export function VoiceActionButton({enabled, disabled, available, minRaise, maxRaise, onAct}: {
   enabled: boolean;
   disabled: boolean;
@@ -35,7 +37,11 @@ export function VoiceActionButton({enabled, disabled, available, minRaise, maxRa
   onAct: (action: PokerAction, amount?: number) => boolean;
 }) {
   const recognition = useRef<Recognition | null>(null);
-  const [supported] = useState(() => typeof window !== 'undefined' && Boolean(constructor()));
+  const supported = useSyncExternalStore(
+    subscribeSupport,
+    () => Boolean(constructor()),
+    () => false
+  );
   const [listening, setListening] = useState(false);
   const [feedback, setFeedback] = useState('');
 
