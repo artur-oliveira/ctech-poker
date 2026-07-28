@@ -1,13 +1,15 @@
-import {fireEvent, render, screen} from '@testing-library/react';
+import {act, fireEvent, render, screen} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import type {HandItem} from '@/lib/api/player';
+import type {Page} from '@/lib/api/client';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   refetch: vi.fn(),
+  fetchNextPage: vi.fn(),
 }));
 
-vi.mock('@tanstack/react-query', () => ({useQuery: mocks.query}));
+vi.mock('@tanstack/react-query', () => ({useInfiniteQuery: mocks.query}));
 vi.mock('@/components/TermsGate', () => ({TermsGate: ({children}: {children: React.ReactNode}) => children}));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
 vi.mock('@/components/table/PlayingCard', () => ({
@@ -36,10 +38,34 @@ const hands: HandItem[] = [
   },
 ];
 
+function pageOf(items: HandItem[], hasNext = false): Page<HandItem> {
+  return {
+    data: items,
+    has_next: hasNext,
+    next_cursor: hasNext ? 'next' : null,
+    has_previous: false,
+    previous_cursor: null,
+  };
+}
+
+function queryResult(pages: Page<HandItem>[], overrides: Record<string, unknown> = {}) {
+  const last = pages[pages.length - 1];
+  return {
+    data: {pages, pageParams: pages.map(() => undefined)},
+    isLoading: false,
+    isError: false,
+    refetch: mocks.refetch,
+    fetchNextPage: mocks.fetchNextPage,
+    hasNextPage: Boolean(last?.has_next),
+    isFetchingNextPage: false,
+    ...overrides,
+  };
+}
+
 describe('hands list page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.query.mockReturnValue({data: hands, isLoading: false, isError: false, refetch: mocks.refetch});
+    mocks.query.mockReturnValue(queryResult([pageOf(hands)]));
   });
 
   test('summarizes backend outcomes and renders safe hand links and incomplete cards', () => {
@@ -53,6 +79,7 @@ describe('hands list page', () => {
       'href', '/hands/history?table_id=table-one&hand_id=hand%231'
     );
     expect(screen.getByTitle('1234567890abcdef')).toHaveTextContent('seed 12345678…');
+    expect(screen.queryByRole('button', {name: /Carregar mais/})).not.toBeInTheDocument();
   });
 
   test('filters wins, losses and restores all results from an empty filter', () => {
@@ -65,27 +92,58 @@ describe('hands list page', () => {
     fireEvent.click(screen.getByRole('tab', {name: 'Derrotas (1)'}));
     expect(screen.getByText('lost')).toBeInTheDocument();
 
-    mocks.query.mockReturnValue({
-      data: [hands[0]], isLoading: false, isError: false, refetch: mocks.refetch,
-    });
+    mocks.query.mockReturnValue(queryResult([pageOf([hands[0]])]));
     rerender(<HandsHistory/>);
-    expect(screen.getByText('Nenhuma mão encontrada neste filtro.')).toBeInTheDocument();
+    expect(screen.getByText(/Nenhuma mão encontrada neste filtro/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', {name: 'Ver todas'}));
     expect(screen.getByText('won')).toBeInTheDocument();
   });
 
   test('handles loading, failure with retry, and an empty account', () => {
-    mocks.query.mockReturnValueOnce({data: [], isLoading: true, isError: false, refetch: mocks.refetch});
+    mocks.query.mockReturnValueOnce(queryResult([], {isLoading: true}));
     const view = render(<HandsHistory/>);
     expect(screen.getByText(/Buscando seu histórico/)).toBeInTheDocument();
 
-    mocks.query.mockReturnValueOnce({data: [], isLoading: false, isError: true, refetch: mocks.refetch});
+    mocks.query.mockReturnValueOnce(queryResult([], {isError: true}));
     view.rerender(<HandsHistory/>);
     fireEvent.click(screen.getByRole('button', {name: 'Tentar novamente'}));
     expect(mocks.refetch).toHaveBeenCalledOnce();
 
-    mocks.query.mockReturnValueOnce({data: [], isLoading: false, isError: false, refetch: mocks.refetch});
+    mocks.query.mockReturnValueOnce(queryResult([pageOf([])]));
     view.rerender(<HandsHistory/>);
     expect(screen.getByText(/ainda não jogou nenhuma mão/)).toBeInTheDocument();
+  });
+
+  test('marks counts as partial, appends pages and loads more on scroll or click', () => {
+    const observed: IntersectionObserverCallback[] = [];
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(callback: IntersectionObserverCallback) {
+        observed.push(callback);
+      }
+
+      observe = vi.fn();
+      unobserve = vi.fn();
+      disconnect = vi.fn();
+      takeRecords = vi.fn(() => []);
+    });
+
+    mocks.query.mockReturnValue(queryResult([pageOf(hands, true)]));
+    const view = render(<HandsHistory/>);
+    expect(screen.getByRole('tab', {name: 'Todas (3+)'})).toBeInTheDocument();
+    expect(screen.getByRole('tab', {name: 'Vitórias (2+)'})).toBeInTheDocument();
+    expect(screen.getByText('3+', {selector: '.stat-value'})).toBeInTheDocument();
+
+    act(() => observed[0]([{isIntersecting: true} as IntersectionObserverEntry], {} as IntersectionObserver));
+    expect(mocks.fetchNextPage).toHaveBeenCalledOnce();
+
+    fireEvent.click(screen.getByRole('button', {name: 'Carregar mais mãos'}));
+    expect(mocks.fetchNextPage).toHaveBeenCalledTimes(2);
+
+    const secondPage: HandItem[] = [{...hands[0], hand_id: 'h4', sk: 'hand#4', net_change: 300}];
+    mocks.query.mockReturnValue(queryResult([pageOf(hands, true), pageOf(secondPage)]));
+    view.rerender(<HandsHistory/>);
+    expect(screen.getAllByText('won')).toHaveLength(2);
+    expect(screen.getByRole('tab', {name: 'Todas (4)'})).toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: /Carregar mais/})).not.toBeInTheDocument();
   });
 });

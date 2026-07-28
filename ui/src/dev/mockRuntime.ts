@@ -66,7 +66,7 @@ const mockHands: HandItem[] = [
     sk: 'hand_0003',
     outcome: 'won',
     net_change: 4200,
-    ended_at: Math.floor(Date.now() / 1000) - 60 * 12,
+    ended_at: Date.now() - 60_000 * 12,
     board: ['9c', '5c', '6h', '8h', '3h'],
     hole_cards: ['Kd', 'Kc'],
     opponents: [{player_id: 'bia_sp', name: 'Bia', hole_cards: ['7d', 'Jd']}],
@@ -80,7 +80,7 @@ const mockHands: HandItem[] = [
     sk: 'hand_0002',
     outcome: 'lost',
     net_change: -1800,
-    ended_at: Math.floor(Date.now() / 1000) - 60 * 40,
+    ended_at: Date.now() - 60_000 * 40,
     board: ['2c', '3d', '2d', 'Jd', 'Ad'],
     hole_cards: ['Qd', '3c'],
     opponents: [{player_id: 'leo_rio', name: 'Leo', hole_cards: ['Ac', '2s'], won: true}],
@@ -94,7 +94,7 @@ const mockHands: HandItem[] = [
     sk: 'hand_0001',
     outcome: 'tied',
     net_change: 0,
-    ended_at: Math.floor(Date.now() / 1000) - 60 * 90,
+    ended_at: Date.now() - 60_000 * 90,
     board: ['9c', '2d', '9h', '8h', '9s'],
     hole_cards: ['Kc', '7d'],
     opponents: [{player_id: 'leo_rio', name: 'Leo', hole_cards: ['6s', '8c'], won: true}],
@@ -103,10 +103,27 @@ const mockHands: HandItem[] = [
   }
 ];
 
+// Only the three hands above have replay data; these clones exist so the
+// history page's cursor paging and infinite scroll are exercisable in mock
+// mode. Each one keeps a real hand's `sk`, so opening it still resolves.
+const MOCK_HANDS_PAGE = 8;
+const mockHistory: HandItem[] = [
+  ...mockHands,
+  ...Array.from({length: 21}, (_, i) => {
+    const base = mockHands[i % mockHands.length];
+    return {
+      ...base,
+      hand_id: `${base.hand_id}_r${i}`,
+      ended_at: base.ended_at - (i + 1) * 3_600_000,
+      net_change: base.net_change === 0 ? 0 : base.net_change + (i % 5) * 130 * Math.sign(base.net_change)
+    };
+  })
+];
+
 // Each action lands a few seconds after the previous one, ending at the
 // hand's own ended_at — mirrors how CommitAction stamps Timestamp in prod.
-function timedActions(endedAtSeconds: number, actions: Omit<HandHistoryAction, 'timestamp'>[]): HandHistoryAction[] {
-  const startMs = endedAtSeconds * 1000 - actions.length * 4000;
+function timedActions(endedAtMs: number, actions: Omit<HandHistoryAction, 'timestamp'>[]): HandHistoryAction[] {
+  const startMs = endedAtMs - actions.length * 4000;
   return actions.map((a, i) => ({...a, timestamp: startMs + i * 4000}));
 }
 
@@ -508,7 +525,16 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   }
   if (method === 'GET' && path === '/v1.0/players/me/hands') {
     const tableId = config.params?.table_id;
-    return ok(page(tableId ? mockHands.filter(h => h.table_id === tableId) : mockHands), config);
+    const all = tableId ? mockHistory.filter(h => h.table_id === tableId) : mockHistory;
+    const start = Number(config.params?.cursor) || 0;
+    const end = start + MOCK_HANDS_PAGE;
+    return ok({
+      data: all.slice(start, end),
+      has_next: end < all.length,
+      next_cursor: end < all.length ? String(end) : null,
+      has_previous: start > 0,
+      previous_cursor: start > 0 ? String(Math.max(0, start - MOCK_HANDS_PAGE)) : null
+    }, config);
   }
   const createShareMatch = method === 'POST' ? path.match(/^\/v1\.0\/players\/me\/hands\/([^/]+)\/share$/) : null;
   if (createShareMatch) {

@@ -66,7 +66,7 @@ describe('API domain modules', () => {
     await updateMe({name: 'Novo'});
     await getProfileShowcase('a/b');
     await expect(getSessions('older')).resolves.toEqual(['session']);
-    await expect(getHands({cursor: 'more', tableId: 'table-1'})).resolves.toEqual(['hand']);
+    await expect(getHands({cursor: 'more', tableId: 'table-1'})).resolves.toEqual({data: ['hand']});
     await getHand('h/1');
     await createHandShare('h/1', {kind: 'brag', include_hero_cards: true, expiry_days: 7});
     await getHandShare('a/b');

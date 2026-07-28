@@ -1,7 +1,7 @@
 'use client';
-import React, {useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import Link from 'next/link';
-import {useQuery} from '@tanstack/react-query';
+import {useInfiniteQuery} from '@tanstack/react-query';
 import {Award, BookOpen, ChevronLeft, ChevronRight, Club, History, Sparkles, Trophy} from 'lucide-react';
 import {getHands} from '@/lib/api/player';
 import {PlayingCard} from '@/components/table/PlayingCard';
@@ -32,26 +32,56 @@ function handCategoryLabel(holeCards?: string[], board?: string[]): string | nul
 }
 
 export default function HandsHistory() {
-  const {data = [], isLoading, isError, refetch} = useQuery({queryKey: ['hands'], queryFn: () => getHands()});
+  const {data, isLoading, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage} = useInfiniteQuery({
+    queryKey: ['hands'],
+    queryFn: ({pageParam}) => getHands({cursor: pageParam}),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: page => (page.has_next && page.next_cursor) || undefined
+  });
   const [filter, setFilter] = useState<HandFilter>('all');
 
+  // The entrance stagger is per page, not per flattened index: appended rows
+  // should cascade like the first batch did instead of all landing on the
+  // clamped 400 ms delay.
+  const hands = useMemo(
+    () => (data?.pages ?? []).flatMap(page => page.data.map((hand, i) => ({hand, delay: Math.min(i, 10) * 40}))),
+    [data]
+  );
+  // Counts only cover what's been fetched so far; "+" keeps that honest
+  // instead of presenting a page as the full history.
+  const more = hasNextPage ? '+' : '';
+
   const stats = useMemo(() => {
-    if (!data.length) return null;
+    if (!hands.length) return null;
     let netSum = 0;
     let winsCount = 0;
-    for (const h of data) {
-      netSum += h.net_change;
-      if (h.outcome === 'won' || h.outcome === 'tied') winsCount++;
+    for (const {hand} of hands) {
+      netSum += hand.net_change;
+      if (hand.outcome === 'won' || hand.outcome === 'tied') winsCount++;
     }
-    const winRate = Math.round((winsCount / data.length) * 100);
-    return {totalHands: data.length, netSum, winsCount, winRate};
-  }, [data]);
+    const winRate = Math.round((winsCount / hands.length) * 100);
+    return {totalHands: hands.length, netSum, winsCount, winRate};
+  }, [hands]);
 
   const filteredHands = useMemo(() => {
-    if (filter === 'wins') return data.filter(h => h.outcome === 'won' || h.outcome === 'tied');
-    if (filter === 'losses') return data.filter(h => h.outcome === 'lost');
-    return data;
-  }, [data, filter]);
+    if (filter === 'wins') return hands.filter(({hand}) => hand.outcome === 'won' || hand.outcome === 'tied');
+    if (filter === 'losses') return hands.filter(({hand}) => hand.outcome === 'lost');
+    return hands;
+  }, [hands, filter]);
+
+  const sentinel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = sentinel.current;
+    if (!node || !hasNextPage) return undefined;
+    // rootMargin pre-fetches the next page just before the list bottoms out,
+    // so scrolling never stops on a spinner.
+    const observer = new IntersectionObserver(
+      entries => entries[0]?.isIntersecting && void fetchNextPage(),
+      {rootMargin: '600px 0px'}
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasNextPage, fetchNextPage, filteredHands.length]);
 
   return <TermsGate>
     <main className="app-page">
@@ -76,8 +106,8 @@ export default function HandsHistory() {
         {stats && (
           <div className="hands-stats-bar">
             <div className="stat-card">
-              <span className="stat-label">Mãos registradas</span>
-              <strong className="stat-value">{stats.totalHands}</strong>
+              <span className="stat-label">Mãos carregadas</span>
+              <strong className="stat-value">{stats.totalHands}{more}</strong>
             </div>
             <div className="stat-card">
               <span className="stat-label">Balanço total</span>
@@ -87,12 +117,13 @@ export default function HandsHistory() {
             </div>
             <div className="stat-card">
               <span className="stat-label">Taxa de vitória</span>
-              <strong className="stat-value">{stats.winRate}% <small>({stats.winsCount}V / {stats.totalHands - stats.winsCount}D)</small></strong>
+              <strong className="stat-value">{stats.winRate}% <small>({stats.winsCount}V
+                / {stats.totalHands - stats.winsCount}D)</small></strong>
             </div>
           </div>
         )}
 
-        {!isLoading && !isError && data.length > 0 && (
+        {!isLoading && !isError && hands.length > 0 && (
           <div className="filter-tabs" role="tablist" aria-label="Filtro de mãos">
             <button
               type="button"
@@ -101,7 +132,7 @@ export default function HandsHistory() {
               className={`filter-tab${filter === 'all' ? ' active' : ''}`}
               onClick={() => setFilter('all')}
             >
-              Todas ({data.length})
+              Todas ({hands.length}{more})
             </button>
             <button
               type="button"
@@ -110,7 +141,7 @@ export default function HandsHistory() {
               className={`filter-tab${filter === 'wins' ? ' active' : ''}`}
               onClick={() => setFilter('wins')}
             >
-              Vitórias ({stats?.winsCount ?? 0})
+              Vitórias ({stats?.winsCount ?? 0}{more})
             </button>
             <button
               type="button"
@@ -119,7 +150,7 @@ export default function HandsHistory() {
               className={`filter-tab${filter === 'losses' ? ' active' : ''}`}
               onClick={() => setFilter('losses')}
             >
-              Derrotas ({data.length - (stats?.winsCount ?? 0)})
+              Derrotas ({hands.length - (stats?.winsCount ?? 0)}{more})
             </button>
           </div>
         )}
@@ -128,19 +159,21 @@ export default function HandsHistory() {
           isError ? <div className="lobby-empty">Não foi possível carregar seu histórico agora.
               <button type="button" className="link-retry" onClick={() => void refetch()}>Tentar novamente</button>
             </div> :
-            !data.length ? <div className="lobby-empty">Você ainda não jogou nenhuma mão. As rodadas concluídas aparecerão aqui automaticamente.</div> :
+            !hands.length ?
+              <div className="lobby-empty">Você ainda não jogou nenhuma mão. As rodadas concluídas aparecerão aqui
+                automaticamente.</div> :
               !filteredHands.length ? (
                 <div className="lobby-empty">
                   <Sparkles aria-hidden="true"/>
-                  <p>Nenhuma mão encontrada neste filtro.</p>
+                  <p>Nenhuma mão encontrada neste filtro entre as {hands.length} carregadas.</p>
                   <Button variant="outline" size="sm" onClick={() => setFilter('all')}>Ver todas</Button>
                 </div>
               ) : (
                 <div className="hands-list">
-                  {filteredHands.map((hand, i) => <Link key={hand.hand_id}
-                                               href={`/hands/history?table_id=${hand.table_id}&hand_id=${encodeURIComponent(hand.sk)}`}
-                                               className="hand-row"
-                                               style={{'--delay': `${Math.min(i, 10) * 40}ms`} as React.CSSProperties}>
+                  {filteredHands.map(({hand, delay}) => <Link key={hand.hand_id}
+                                                              href={`/hands/history?table_id=${hand.table_id}&hand_id=${encodeURIComponent(hand.sk)}`}
+                                                              className="hand-row"
+                                                              style={{'--delay': `${delay}ms`} as React.CSSProperties}>
                     <div className="hand-row-top">
                       <div className="hand-row-cards">
                         <div className="hand-row-card-group">
@@ -180,6 +213,21 @@ export default function HandsHistory() {
                   </Link>)}
                 </div>
               )}
+
+        {hasNextPage && !isLoading && !isError && (
+          <div className="hands-more" ref={sentinel}>
+            {/* The observer above auto-loads on scroll; the button is the
+                keyboard/reduced-input path and the recovery after a failure. */}
+            <Button variant="outline" size="sm" disabled={isFetchingNextPage} onClick={() => void fetchNextPage()}>
+              {isFetchingNextPage ? 'Carregando mais mãos…' : 'Carregar mais mãos'}
+            </Button>
+            <span
+              className={`hands-more-track${isFetchingNextPage ? ' is-loading' : ''}`}
+              role="status"
+              aria-label={isFetchingNextPage ? 'Carregando mais mãos' : ''}
+            />
+          </div>
+        )}
       </section>
     </main>
   </TermsGate>;

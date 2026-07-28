@@ -96,10 +96,13 @@ export interface HandItem {
 // Most-recent-first (server sorts descending), capped at 50 per page.
 // `tableId` scopes it to one table's hands (e.g. the live table's own
 // "last winners" strip) instead of the viewer's whole history.
+// Returns the whole envelope, not just the items: the history page pages
+// through it (has_next / next_cursor) instead of showing one page as if it
+// were the complete history.
 export async function getHands({cursor, tableId}: { cursor?: string; tableId?: string } = {}) {
   return (await apiClient.get<Page<HandItem>>('/v1.0/players/me/hands', {
     params: {cursor, table_id: tableId}, silentError: true
-  })).data.data;
+  })).data;
 }
 
 export async function getHand(handId: string) {

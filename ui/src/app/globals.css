@@ -176,7 +176,9 @@
 }
 
 html {
-    scroll-behavior: smooth
+    scroll-behavior: smooth;
+    /* keeps in-page scroll targets clear of the sticky app nav */
+    scroll-padding-top: 92px
 }
 
 body {
@@ -1401,14 +1403,35 @@ h1 em {
 
 .app-page {
     min-height: 100vh;
+    /* clip (not hidden) so the sticky nav's full-bleed backdrop can overflow
+       the shell gutters without turning this into a scroll container */
+    overflow-x: clip;
     background: radial-gradient(circle at 20% 0, var(--wine-deep-5), transparent 35%), var(--room-grad-2)
 }
 
 .app-nav {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-chrome);
     height: 78px;
     display: flex;
     align-items: center;
     justify-content: space-between
+}
+
+/* The nav is shell-width, so the bar it needs while stuck has to escape the
+   gutters; otherwise list rows scroll visibly past it on both sides. */
+.app-nav::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    margin-inline: calc(50% - 50vw);
+    /* Not decorative glass: the bar has to stay readable over rows sliding
+       under it while keeping the page's own wine tint at scroll 0. */
+    background: color-mix(in srgb, var(--room-grad-2) 84%, transparent);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--white-08)
 }
 
 .app-nav > a:last-child, .app-nav .header-right > a, .ranking > a {
@@ -6392,6 +6415,58 @@ h1 em {
     display: flex;
     flex-direction: column;
     gap: 10px
+}
+
+.hands-more {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding-block: 24px 8px
+}
+
+/* Indeterminate hairline instead of a spinner: the list is already long,
+   a 32px rotating ring under it reads as an error state. */
+.hands-more-track {
+    width: 120px;
+    height: 2px;
+    border-radius: 999px;
+    background: var(--white-08);
+    overflow: hidden
+}
+
+.hands-more-track::after {
+    content: '';
+    display: block;
+    width: 38%;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--brand-bright);
+    transform: translateX(-100%);
+    opacity: 0
+}
+
+.hands-more-track.is-loading::after {
+    opacity: 1;
+    animation: hands-more-sweep 1.1s ease-in-out infinite
+}
+
+@keyframes hands-more-sweep {
+    from {
+        transform: translateX(-100%)
+    }
+    to {
+        transform: translateX(263%)
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    /* the global reduce rule stops the sweep mid-track; show a steady fill */
+    .hands-more-track.is-loading::after {
+        width: 100%;
+        transform: none;
+        opacity: .7
+    }
 }
 
 .hand-row {

@@ -168,7 +168,8 @@ function TableContent() {
   // after the viewer sits through a fresh resolution. Re-fetched once per
   // resolved hand below.
   const {data: tableHands = []} = useQuery({
-    queryKey: ['hands', id], queryFn: () => getHands({tableId: id}), enabled: valid
+    queryKey: ['hands', id], queryFn: () => getHands({tableId: id}), enabled: valid,
+    select: page => page.data
   });
   const {data: sessions = []} = useQuery({
     queryKey: ['sessions', 'me'], queryFn: () => getSessions(), enabled: valid && seated
