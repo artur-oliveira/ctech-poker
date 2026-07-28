@@ -444,9 +444,10 @@ describe('useTableRealtime', () => {
     expect(result.current.actionError).toBeNull();
   });
 
-  test('retries a failed action connection and refreshes credentials without closing the socket', async () => {
+  // The token keep-alive itself lives in lib/auth/session (mounted app-wide by
+  // QueryProvider), not here: it has to keep running in the lobby too.
+  test('retries a failed action connection without closing the socket again', () => {
     vi.useFakeTimers();
-    auth.refresh.mockResolvedValue({accessToken: 'rotated-token', username: 'novo'});
     const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
     receive({type: 'state', snapshot: snapshot()});
     act(() => result.current.act('call'));
@@ -457,12 +458,7 @@ describe('useTableRealtime', () => {
     expect(ws.reconnect).toHaveBeenCalledTimes(1);
 
     ws.send.mockReturnValue(true);
-    await act(async () => {
-      vi.advanceTimersByTime(4 * 60 * 1000);
-      await Promise.resolve();
-    });
-    expect(auth.setAccessToken).toHaveBeenCalledWith('rotated-token');
-    expect(auth.setUsername).toHaveBeenCalledWith('novo');
+    act(() => vi.advanceTimersByTime(4 * 60 * 1000));
     expect(ws.reconnect).toHaveBeenCalledTimes(1);
   });
 

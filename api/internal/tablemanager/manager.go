@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -116,6 +117,16 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 		// Stale/dead actor (lease lost) — drop it and recreate below.
 		delete(m.actors, tableID)
 	}
+
+	// Past this point tableID is retained by state that outlives the caller:
+	// the Actor's own id, this registry's map key, the broadcast/metric/lease
+	// closures below. Callers arrive from Fiber handlers where c.Params gives
+	// back a string pointing into fasthttp's recycled request buffer, so the
+	// bytes mutate as soon as that request is done. GET /rooms/:id/seated
+	// created the actor for a live table and its id later read
+	// "/01KYNA8GAXYP5TF8K71XB1DMT", making every LoadTable miss and every
+	// action fail with "table: no state seeded for this table yet".
+	tableID = strings.Clone(tableID)
 
 	if m.store != nil {
 		existing, err := m.store.LoadTable(ctx, tableID)

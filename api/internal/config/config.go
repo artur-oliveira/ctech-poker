@@ -78,6 +78,13 @@ func Load() (*Config, error) {
 	if cfg.CtechURL == "" && cfg.Env == "prod" {
 		return nil, fmt.Errorf("config: CTECH_URL must be set in production so the issuer is verified")
 	}
+	if len(cfg.CorsAllowedOrigins) == 0 && cfg.Env == "prod" {
+		// An empty list is the dev wildcard: CORS allows any origin without
+		// credentials, and wsAllowedOrigin accepts every WebSocket upgrade.
+		// That is a deliberate development convenience and must never be what
+		// production silently falls back to when the env file is incomplete.
+		return nil, fmt.Errorf("config: CORS_ALLOWED_ORIGINS must be set in production — an empty list allows every origin")
+	}
 	if cfg.RealMoneyEnabled && cfg.LegalSignoffRef == "" {
 		return nil, fmt.Errorf("config: REAL_MONEY_ENABLED=true requires a non-empty LEGAL_SIGNOFF_REF (OVERVIEW.md §11 — this is a business decision, not an engineering toggle)")
 	}

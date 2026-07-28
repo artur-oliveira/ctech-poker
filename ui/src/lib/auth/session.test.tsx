@@ -27,7 +27,54 @@ vi.mock('@/lib/api/client', () => ({
   },
 }));
 
-import {useOptionalSession} from './session';
+import {recoverSession, TOKEN_REFRESH_INTERVAL_MS, useOptionalSession, useSessionKeepAlive} from './session';
+
+describe('session keep-alive', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.refresh.mockResolvedValue({accessToken: 'fresh', username: 'Ana'});
+  });
+
+  test('renews the token on a timer for as long as the app is mounted', async () => {
+    vi.useFakeTimers();
+    const {unmount} = renderHook(() => useSessionKeepAlive());
+    expect(mocks.refresh).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(TOKEN_REFRESH_INTERVAL_MS);
+      await Promise.resolve();
+    });
+    expect(mocks.setToken).toHaveBeenCalledWith('fresh');
+
+    unmount();
+    await act(async () => {
+      vi.advanceTimersByTime(TOKEN_REFRESH_INTERVAL_MS);
+      await Promise.resolve();
+    });
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  test('an unauthorized socket clears the session when the refresh is refused', async () => {
+    mocks.refresh.mockResolvedValue(null);
+    recoverSession();
+    await waitFor(() => expect(mocks.setToken).toHaveBeenCalledWith(null));
+    expect(mocks.setPlayerId).toHaveBeenCalledWith(null);
+  });
+
+  test('keeps the session when a refresh fails on a network error', async () => {
+    mocks.refresh.mockRejectedValue(new Error('offline'));
+    vi.useFakeTimers();
+    const {unmount} = renderHook(() => useSessionKeepAlive());
+    await act(async () => {
+      vi.advanceTimersByTime(TOKEN_REFRESH_INTERVAL_MS);
+      await Promise.resolve();
+    });
+    expect(mocks.setToken).not.toHaveBeenCalled();
+    unmount();
+    vi.useRealTimers();
+  });
+});
 
 describe('useOptionalSession', () => {
   beforeEach(() => {

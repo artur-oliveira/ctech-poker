@@ -35,6 +35,12 @@ const (
 	wsAuthTimeout  = 5 * time.Second
 	wsPongWait     = wsPingInterval + 15*time.Second
 	wsWriteWait    = 5 * time.Second
+	// fasthttp/websocket buffers a whole message before handing it over and
+	// applies no limit of its own, so without this one authenticated client
+	// can make the server allocate an arbitrarily large frame. Every client
+	// message this protocol defines is a small protobuf (the largest, a chat
+	// line, is capped at 500 characters), so 32 KiB is already generous.
+	wsMaxMessageBytes = 32 * 1024
 )
 
 var tableChatFilter = chatfilter.New([]string{"idiota", "burro"})
@@ -261,6 +267,7 @@ func RegisterTableWS(
 			// its mutex is the only thing serializing data-frame writes, so
 			// every write path must go through it (fasthttp/websocket panics
 			// on concurrent writes).
+			conn.SetReadLimit(wsMaxMessageBytes)
 			safeConn := &wsConnAdapter{conn: conn}
 			send := func(msg *pokerproto.ServerMessage) {
 				data, err := goproto.Marshal(msg)
@@ -742,6 +749,7 @@ func RegisterGeneralWS(
 			// upgrade returns, this goroutine is not.
 			ctx, cancelCtx := context.WithCancel(context.Background())
 			defer cancelCtx()
+			conn.SetReadLimit(wsMaxMessageBytes)
 			safeConn := &wsConnAdapter{conn: conn}
 			send := func(msg *pokerproto.ServerMessage) {
 				data, err := goproto.Marshal(msg)

@@ -10,6 +10,71 @@ import {USE_MOCK} from "@/lib/mockConfig";
 import {doRefresh} from "@/lib/auth/oauth";
 import {getMe} from "@/lib/api/player";
 
+/** Access tokens live 15 minutes; refresh well inside that window. */
+export const TOKEN_REFRESH_INTERVAL_MS = 4 * 60 * 1000;
+
+let refreshInFlight = false;
+
+function clearSession() {
+  setAccessToken(null);
+  setUsername(null);
+  setPlayerId(null);
+}
+
+/**
+ * Silent OAuth refresh shared by every caller, so two of them can never race
+ * the same refresh token. `clearOnNetworkError` is the only difference between
+ * them: the periodic keep-alive treats a thrown request as "device is offline
+ * for a moment" and keeps the session, while a server that actively answered
+ * `unauthorized` has already told us the credentials are dead. A refresh that
+ * resolves with no result means the session is over either way.
+ */
+export function refreshSession({clearOnNetworkError = false} = {}) {
+  if (USE_MOCK || refreshInFlight) return;
+  refreshInFlight = true;
+  void doRefresh()
+    .then(result => {
+      if (result) {
+        setAccessToken(result.accessToken);
+        setUsername(result.username);
+      } else {
+        clearSession();
+      }
+    })
+    .catch(() => {
+      if (clearOnNetworkError) clearSession();
+    })
+    .finally(() => {
+      refreshInFlight = false;
+    });
+}
+
+/**
+ * Called when a WebSocket is answered with `unauthorized`. Without it the
+ * socket reconnects with the same dead token forever: the upgrade itself
+ * succeeds, so ws-client resets its backoff on every open, and the server
+ * closes right after reading the auth frame — prod logged 325 such round
+ * trips in ten minutes off a token that had expired.
+ */
+export function recoverSession() {
+  refreshSession({clearOnNetworkError: true});
+}
+
+/**
+ * Keeps the access token alive for as long as the app is open. This used to
+ * live inside useTableRealtime, which meant it only ran while a table was
+ * mounted: sitting in the lobby for 15 minutes expired the token with nothing
+ * left to renew it.
+ */
+export function useSessionKeepAlive() {
+  useEffect(() => {
+    if (USE_MOCK) return () => {
+    };
+    const interval = setInterval(() => refreshSession(), TOKEN_REFRESH_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, []);
+}
+
 export function useOptionalSession() {
   const [token, setToken] = useState<string | null>(() => getAccessToken());
   const [checking, setChecking] = useState(() => !USE_MOCK && !getAccessToken());

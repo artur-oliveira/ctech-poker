@@ -2,6 +2,7 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {useQueryClient} from '@tanstack/react-query';
 import {getAccessToken, subscribeAccessToken} from '@/lib/api/client';
+import {recoverSession} from '@/lib/auth/session';
 import {useWebSocket} from '@aoctech/ws-client';
 import {USE_MOCK} from '@/lib/mockConfig';
 import type {Room} from '@/lib/api/rooms';
@@ -10,6 +11,7 @@ import {decodeServerMessage, encodeClientMessage} from "@/lib/ws/utils";
 
 interface LobbyMessage {
   type: string;
+  code?: string;
   room?: Room;
   room_id?: string;
   seats_taken?: number;
@@ -24,7 +26,13 @@ export function useLobbyRealtime() {
   useEffect(() => subscribeAccessToken(setSocketAuthToken), []);
 
   const receive = useCallback((message: LobbyMessage) => {
-    if (message.type === 'room_created' && message.room) {
+    if (message.type === 'error' && message.code === 'unauthorized') {
+      // The server accepts the upgrade and only then rejects the auth frame,
+      // which resets ws-client's backoff, so an expired token here means an
+      // endless reconnect loop (prod: 325 attempts in ten minutes) unless the
+      // token is actually renewed.
+      recoverSession();
+    } else if (message.type === 'room_created' && message.room) {
       const newRoom = message.room;
       queryClient.setQueryData<Room[]>(['rooms'], (oldRooms) => {
         if (!oldRooms) return [newRoom];
@@ -67,7 +75,9 @@ export function useLobbyRealtime() {
     encode: encodeClientMessage,
     decode: decodeServerMessage,
     onMessage: data => receive(data as LobbyMessage),
-    enabled: !USE_MOCK,
+    // No token means no session to authenticate with: connecting anyway only
+    // produces the same unauthorized/close loop against the server.
+    enabled: !USE_MOCK && Boolean(socketAuthToken),
     authToken: socketAuthToken || undefined,
     onOpen: handleOpen
   });

@@ -80,7 +80,15 @@ var Module = fx.Options(
 
 func newFiberApp(cfg *config.Config) *fiber.App {
 	app := fiber.New(fiber.Config{
-		AppName:      fmt.Sprintf("CTech Poker - %s - %s", cfg.Env, cfg.AppVersion),
+		AppName: fmt.Sprintf("CTech Poker - %s - %s", cfg.Env, cfg.AppVersion),
+		// Fiber's default hands back strings that alias fasthttp's per-request
+		// buffer: valid until the handler returns, garbage afterwards. This app
+		// routinely outlives its own requests (hijacked WebSocket goroutines,
+		// table Actors created from an HTTP route and kept in tablemanager), and
+		// that aliasing already caused two prod incidents where a table ID
+		// mutated into another request's bytes. One copy per accessor is
+		// cheaper than auditing every handler for what escapes.
+		Immutable:    true,
 		ReadTimeout:  time.Duration(cfg.ReadTimeout) * time.Second,
 		WriteTimeout: time.Duration(cfg.WriteTimeout) * time.Second,
 		IdleTimeout:  time.Duration(cfg.IdleTimeout) * time.Second,

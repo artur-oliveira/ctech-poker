@@ -1,13 +1,7 @@
 'use client';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {
-  getAccessToken,
-  setAccessToken,
-  setPlayerId,
-  setUsername,
-  subscribeAccessToken
-} from '@/lib/api/client';
-import {doRefresh} from '@/lib/auth/oauth';
+import {getAccessToken, subscribeAccessToken} from '@/lib/api/client';
+import {recoverSession} from '@/lib/auth/session';
 import {cardLabel} from '@/lib/cards';
 import {useWebSocket, type WSStatus} from '@aoctech/ws-client';
 import type {MockTableService} from '@/dev/mockRuntime';
@@ -22,16 +16,6 @@ export type ConnectionStatus = WSStatus
 export type ActionError = { code: string; message: string }
 
 const ACTION_TIMEOUT_MS = 8000;
-// A player parked at the table for hours (away, in a long hand, distracted)
-// never issues another REST call, so nothing would otherwise notice the JWT
-// is about to expire, so the socket would reconnect-loop with the same stale
-// token until @aoctech/ws-client's retry budget runs out and gives up for
-// good. Refreshing well inside any realistic access-token lifetime keeps
-// the in-memory credential current before that ever happens. The active
-// socket remains authenticated for its lifetime and a real reconnect reads
-// the latest authToken prop. Subscribing the socket to token changes would
-// deliberately close a healthy connection after every silent refresh.
-const TOKEN_REFRESH_INTERVAL_MS = 4 * 60 * 1000;
 // Rejections that mean "your view of the table is not the server's view".
 // invalid_action belongs here even though it is also the code for a genuinely
 // illegal move: a resync costs one snapshot, while not resyncing leaves a
@@ -217,7 +201,6 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const showCardsActionRef = useRef<string | null>(null);
   const readyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const showCardsTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const authRecoveryRef = useRef(false);
   const [readyPending, setReadyPending] = useState(false);
   const [showCardsPending, setShowCardsPending] = useState(false);
   const [snapshot, setSnapshot] = useState<TableSnapshot | null>(null);
@@ -286,27 +269,6 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       if (failedCode) postedBigBlindRef.current = false;
     }
     if (failedCode) setLastActionError(actionError(failedCode));
-  }, []);
-
-  const recoverSession = useCallback(() => {
-    if (USE_MOCK || authRecoveryRef.current) return;
-    authRecoveryRef.current = true;
-    void doRefresh().then(result => {
-      if (result) {
-        setAccessToken(result.accessToken);
-        setUsername(result.username);
-      } else {
-        setAccessToken(null);
-        setUsername(null);
-        setPlayerId(null);
-      }
-    }).catch(() => {
-      setAccessToken(null);
-      setUsername(null);
-      setPlayerId(null);
-    }).finally(() => {
-      authRecoveryRef.current = false;
-    });
   }, []);
 
   const armResyncWatchdog = useCallback(() => {
@@ -498,7 +460,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       };
       showReaction(reaction);
     }
-  }, [armResyncWatchdog, clearPending, failPending, finishAuxiliaryCommand, recoverSession, showReaction, viewerId]);
+  }, [armResyncWatchdog, clearPending, failPending, finishAuxiliaryCommand, showReaction, viewerId]);
   const receiveForTable = useCallback((message: ServerMessage) => {
     if (activeTableIDRef.current === id) receive(message);
   }, [id, receive]);
@@ -528,7 +490,10 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     encode: encodeClientMessage,
     decode: decodeServerMessage,
     onMessage: data => receiveForTable(data as ServerMessage),
-    enabled: Boolean(wsUrl) && !USE_MOCK,
+    // Without a token the server answers unauthorized and closes right after
+    // the upgrade, which resets ws-client's backoff — an endless loop rather
+    // than a bounded retry. Wait for a session instead.
+    enabled: Boolean(wsUrl) && !USE_MOCK && Boolean(socketAuthToken),
     authToken: socketAuthToken || undefined,
     shareCode,
     onOpen: handleOpen
@@ -635,29 +600,6 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     for (const timer of soundTimersRef.current) window.clearTimeout(timer);
     soundTimersRef.current.clear();
   }, []);
-
-  useEffect(() => {
-    if (USE_MOCK || !id) return () => {
-    };
-    const interval = setInterval(() => {
-      void doRefresh().then(result => {
-        if (result) {
-          setAccessToken(result.accessToken);
-          setUsername(result.username);
-        } else {
-          setAccessToken(null);
-          setUsername(null);
-          setPlayerId(null);
-        }
-      }).catch(() => {
-        // A periodic refresh can fail because the device is temporarily
-        // offline. Keep the current session until the server explicitly
-        // rejects it; that path invokes recoverSession and clears invalid
-        // credentials when refresh is no longer possible.
-      });
-    }, TOKEN_REFRESH_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [id]);
 
   // A backgrounded tab (screen lock, app switch) can have its WS silently
   // killed by the OS without a clean close event. The client-side heartbeat
