@@ -1274,26 +1274,28 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 		}
 	}
 	timeoutActionID := fmt.Sprintf("turn-timeout-%s-%d", c.PlayerID, a.version)
+	timeoutAction := betting.ActionFold
+	if a.cached.ProspectiveCallAmountForActor(c.PlayerID) == 0 {
+		timeoutAction = betting.ActionCheck
+	}
 	_, err := a.applyActAndCommit(ctx, ActCmd{
-		PlayerID: c.PlayerID, ActionID: timeoutActionID, Action: betting.ActionFold, Amount: 0, Reply: c.Reply,
+		PlayerID: c.PlayerID, ActionID: timeoutActionID, Action: timeoutAction, Amount: 0, Reply: c.Reply,
 	})
 	if errors.Is(err, tablestore.ErrVersionConflict) {
 		if err := a.ensureLoaded(ctx, true); err != nil {
 			return err
 		}
-		// Re-check after the reload rather than blindly retrying the same
-		// fold: whatever committed first may have already resolved this
-		// exact turn (folded/removed the player through another path
-		// entirely — e.g. the other server's own disconnect-kick), and
-		// c.PlayerID's leftover roundIdx entry from a now-stale round must
-		// not be trusted (see currentPlayerCanAct's doc comment).
 		if a.cached.CurrentPlayerIDForActor() != c.PlayerID {
 			a.broadcastAll()
 			return nil
 		}
 		timeoutActionID = fmt.Sprintf("turn-timeout-%s-%d", c.PlayerID, a.version)
+		timeoutAction = betting.ActionFold
+		if a.cached.ProspectiveCallAmountForActor(c.PlayerID) == 0 {
+			timeoutAction = betting.ActionCheck
+		}
 		_, err = a.applyActAndCommit(ctx, ActCmd{
-			PlayerID: c.PlayerID, ActionID: timeoutActionID, Action: betting.ActionFold, Amount: 0, Reply: c.Reply,
+			PlayerID: c.PlayerID, ActionID: timeoutActionID, Action: timeoutAction, Amount: 0, Reply: c.Reply,
 		})
 	}
 	if err != nil && !errors.Is(err, tablestore.ErrDuplicateAction) {
@@ -1574,10 +1576,73 @@ func (a *Actor) handleRunoutStep(ctx context.Context, c runoutStepCmd) error {
 	return nil
 }
 
+func (a *Actor) processInlinePreselections(ctx context.Context) {
+	for a.activity.Preselections != nil && len(a.activity.Preselections) > 0 &&
+		a.cached != nil && a.cached.Stage() != hand.Complete {
+		current := a.cached.CurrentPlayerIDForActor()
+		if current == "" {
+			return
+		}
+		preselection, ok := a.activity.Preselections[current]
+		if !ok {
+			return
+		}
+		callAmount := a.cached.ProspectiveCallAmountForActor(current)
+		var action betting.Action
+		var amount int64
+
+		switch preselection.Selection {
+		case "check_fold":
+			if callAmount == 0 {
+				action = betting.ActionCheck
+			} else {
+				action = betting.ActionFold
+			}
+		case "fold":
+			action = betting.ActionFold
+		case "call":
+			if preselection.Amount == callAmount && callAmount > 0 {
+				action = betting.ActionCall
+				amount = callAmount
+			} else if callAmount == 0 {
+				action = betting.ActionCheck
+			} else {
+				delete(a.activity.Preselections, current)
+				continue
+			}
+		case "call_any":
+			if callAmount == 0 {
+				action = betting.ActionCheck
+			} else {
+				action = betting.ActionCall
+				amount = callAmount
+			}
+		default:
+			delete(a.activity.Preselections, current)
+			continue
+		}
+
+		delete(a.activity.Preselections, current)
+		autoActionID := fmt.Sprintf("auto-preselect-%s-%s-%d", current, preselection.Selection, a.version)
+		applied, err := a.applyActAndCommit(ctx, ActCmd{
+			PlayerID: current,
+			ActionID: autoActionID,
+			Action:   action,
+			Amount:   amount,
+		})
+		if err != nil || !applied {
+			_ = a.ensureLoaded(ctx, true)
+			return
+		}
+		_ = a.commitOutcomeLogEntries(ctx)
+	}
+}
+
 func (a *Actor) broadcastAll() {
 	if a.broadcast == nil || a.cached == nil {
 		return
 	}
+	a.processInlinePreselections(context.Background())
 	stage := a.cached.Stage()
 	current := a.cached.CurrentPlayerIDForActor()
 	grace := time.Duration(0)
