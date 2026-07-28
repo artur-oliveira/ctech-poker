@@ -35,6 +35,11 @@ type Round struct {
 	Players    []*PlayerState
 	CurrentBet int64
 	MinRaise   int64
+	// LastActorID is the durable cursor used by the hand engine to continue
+	// clockwise from the player who just acted. It matters after a full raise:
+	// that raise reopens earlier players, but must not let them jump ahead of
+	// seats later in the same orbit that have not responded yet.
+	LastActorID string
 }
 
 // NewRound starts a betting round. currentBet/minRaise seed initial state —
@@ -58,6 +63,7 @@ func (r *Round) Act(playerIdx int, action Action, amount int64) error {
 	switch action {
 	case ActionFold:
 		p.Folded = true
+		r.LastActorID = p.ID
 		return nil
 
 	case ActionCheck:
@@ -65,6 +71,7 @@ func (r *Round) Act(playerIdx int, action Action, amount int64) error {
 			return fmt.Errorf("betting: player %s must call or fold, cannot check (owes %d)", p.ID, r.CurrentBet-p.Contributed)
 		}
 		p.ActedSinceLastFullRaise = true
+		r.LastActorID = p.ID
 		return nil
 
 	case ActionCall:
@@ -81,6 +88,7 @@ func (r *Round) Act(playerIdx int, action Action, amount int64) error {
 			p.Contributed += owed
 		}
 		p.ActedSinceLastFullRaise = true
+		r.LastActorID = p.ID
 		return nil
 
 	case ActionBet, ActionRaise:
@@ -127,6 +135,7 @@ func (r *Round) Act(playerIdx int, action Action, amount int64) error {
 			}
 		}
 		p.ActedSinceLastFullRaise = true
+		r.LastActorID = p.ID
 		return nil
 
 	default:

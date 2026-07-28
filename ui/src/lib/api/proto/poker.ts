@@ -58,6 +58,11 @@ export interface Seat {
    * balance, so clients must not replace it with a default.
    */
   time_bank_ms: number;
+  /**
+   * Canonical server-side evaluator score. Higher wins; equal is a split.
+   * Only present when the same visibility rules allow hand_category.
+   */
+  hand_score: number;
 }
 
 export interface BlindEscalation {
@@ -131,6 +136,22 @@ export interface PotResult_PayoutsEntry {
   value: number;
 }
 
+export interface ChatMessage {
+  id: string;
+  player_id: string;
+  message: string;
+  timestamp: number;
+}
+
+export interface TableReaction {
+  id: string;
+  player_id: string;
+  reaction_id: string;
+  target_player_id: string;
+  timestamp: number;
+  expires_at: number;
+}
+
 export interface TableSnapshot {
   stage: string;
   board: string[];
@@ -163,6 +184,10 @@ export interface TableSnapshot {
    * action_deadline_unix_ms belongs to the current player's time bank.
    */
   action_base_deadline_unix_ms: number;
+  chat_messages: ChatMessage[];
+  reactions: TableReaction[];
+  /** Viewer-scoped one-shot value: "check_fold" | "fold" | empty. */
+  action_preselection: string;
 }
 
 export interface TableSnapshot_PayoutsEntry {
@@ -172,7 +197,7 @@ export interface TableSnapshot_PayoutsEntry {
 
 /** ClientMessage is sent from the client to the server. */
 export interface ClientMessage {
-  /** "auth" | "ping" | "sync_state" | "ready" | "act" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" */
+  /** "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" */
   type: string;
   /** payload fields */
   token: string;
@@ -180,7 +205,7 @@ export interface ClientMessage {
   share_code: string;
   /** for ready command */
   ready: boolean;
-  /** for act command */
+  /** poker action, or check_fold|fold|empty for preselect_action */
   action: string;
   /** for act command */
   amount: number;
@@ -342,6 +367,7 @@ function createBaseSeat(): Seat {
     hole_cards_revealed: [],
     stack_at_hand_start: undefined,
     time_bank_ms: 0,
+    hand_score: 0,
   };
 }
 
@@ -390,6 +416,9 @@ export const Seat: MessageFns<Seat> = {
     }
     if (message.time_bank_ms !== 0) {
       writer.uint32(112).int64(message.time_bank_ms);
+    }
+    if (message.hand_score !== 0) {
+      writer.uint32(120).uint32(message.hand_score);
     }
     return writer;
   },
@@ -523,6 +552,14 @@ export const Seat: MessageFns<Seat> = {
           message.time_bank_ms = longToNumber(reader.int64());
           continue;
         }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.hand_score = reader.uint32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -580,6 +617,11 @@ export const Seat: MessageFns<Seat> = {
         : isSet(object.time_bank_ms)
         ? globalThis.Number(object.time_bank_ms)
         : 0,
+      hand_score: isSet(object.handScore)
+        ? globalThis.Number(object.handScore)
+        : isSet(object.hand_score)
+        ? globalThis.Number(object.hand_score)
+        : 0,
     };
   },
 
@@ -627,6 +669,9 @@ export const Seat: MessageFns<Seat> = {
     if (message.time_bank_ms !== 0) {
       obj.timeBankMs = Math.round(message.time_bank_ms);
     }
+    if (message.hand_score !== 0) {
+      obj.handScore = Math.round(message.hand_score);
+    }
     return obj;
   },
 
@@ -649,6 +694,7 @@ export const Seat: MessageFns<Seat> = {
     message.hole_cards_revealed = object.hole_cards_revealed?.map((e) => e) || [];
     message.stack_at_hand_start = object.stack_at_hand_start ?? undefined;
     message.time_bank_ms = object.time_bank_ms ?? 0;
+    message.hand_score = object.hand_score ?? 0;
     return message;
   },
 };
@@ -1746,6 +1792,274 @@ export const PotResult_PayoutsEntry: MessageFns<PotResult_PayoutsEntry> = {
   },
 };
 
+function createBaseChatMessage(): ChatMessage {
+  return { id: "", player_id: "", message: "", timestamp: 0 };
+}
+
+export const ChatMessage: MessageFns<ChatMessage> = {
+  encode(message: ChatMessage, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.player_id !== "") {
+      writer.uint32(18).string(message.player_id);
+    }
+    if (message.message !== "") {
+      writer.uint32(26).string(message.message);
+    }
+    if (message.timestamp !== 0) {
+      writer.uint32(32).int64(message.timestamp);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ChatMessage {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseChatMessage();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.id = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.player_id = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.message = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.timestamp = longToNumber(reader.int64());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ChatMessage {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      player_id: isSet(object.playerId)
+        ? globalThis.String(object.playerId)
+        : isSet(object.player_id)
+        ? globalThis.String(object.player_id)
+        : "",
+      message: isSet(object.message) ? globalThis.String(object.message) : "",
+      timestamp: isSet(object.timestamp) ? globalThis.Number(object.timestamp) : 0,
+    };
+  },
+
+  toJSON(message: ChatMessage): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.player_id !== "") {
+      obj.playerId = message.player_id;
+    }
+    if (message.message !== "") {
+      obj.message = message.message;
+    }
+    if (message.timestamp !== 0) {
+      obj.timestamp = Math.round(message.timestamp);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ChatMessage>, I>>(base?: I): ChatMessage {
+    return ChatMessage.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ChatMessage>, I>>(object: I): ChatMessage {
+    const message = createBaseChatMessage();
+    message.id = object.id ?? "";
+    message.player_id = object.player_id ?? "";
+    message.message = object.message ?? "";
+    message.timestamp = object.timestamp ?? 0;
+    return message;
+  },
+};
+
+function createBaseTableReaction(): TableReaction {
+  return { id: "", player_id: "", reaction_id: "", target_player_id: "", timestamp: 0, expires_at: 0 };
+}
+
+export const TableReaction: MessageFns<TableReaction> = {
+  encode(message: TableReaction, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.player_id !== "") {
+      writer.uint32(18).string(message.player_id);
+    }
+    if (message.reaction_id !== "") {
+      writer.uint32(26).string(message.reaction_id);
+    }
+    if (message.target_player_id !== "") {
+      writer.uint32(34).string(message.target_player_id);
+    }
+    if (message.timestamp !== 0) {
+      writer.uint32(40).int64(message.timestamp);
+    }
+    if (message.expires_at !== 0) {
+      writer.uint32(48).int64(message.expires_at);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): TableReaction {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTableReaction();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.id = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.player_id = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.reaction_id = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.target_player_id = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.timestamp = longToNumber(reader.int64());
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.expires_at = longToNumber(reader.int64());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): TableReaction {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      player_id: isSet(object.playerId)
+        ? globalThis.String(object.playerId)
+        : isSet(object.player_id)
+        ? globalThis.String(object.player_id)
+        : "",
+      reaction_id: isSet(object.reactionId)
+        ? globalThis.String(object.reactionId)
+        : isSet(object.reaction_id)
+        ? globalThis.String(object.reaction_id)
+        : "",
+      target_player_id: isSet(object.targetPlayerId)
+        ? globalThis.String(object.targetPlayerId)
+        : isSet(object.target_player_id)
+        ? globalThis.String(object.target_player_id)
+        : "",
+      timestamp: isSet(object.timestamp) ? globalThis.Number(object.timestamp) : 0,
+      expires_at: isSet(object.expiresAt)
+        ? globalThis.Number(object.expiresAt)
+        : isSet(object.expires_at)
+        ? globalThis.Number(object.expires_at)
+        : 0,
+    };
+  },
+
+  toJSON(message: TableReaction): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.player_id !== "") {
+      obj.playerId = message.player_id;
+    }
+    if (message.reaction_id !== "") {
+      obj.reactionId = message.reaction_id;
+    }
+    if (message.target_player_id !== "") {
+      obj.targetPlayerId = message.target_player_id;
+    }
+    if (message.timestamp !== 0) {
+      obj.timestamp = Math.round(message.timestamp);
+    }
+    if (message.expires_at !== 0) {
+      obj.expiresAt = Math.round(message.expires_at);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<TableReaction>, I>>(base?: I): TableReaction {
+    return TableReaction.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<TableReaction>, I>>(object: I): TableReaction {
+    const message = createBaseTableReaction();
+    message.id = object.id ?? "";
+    message.player_id = object.player_id ?? "";
+    message.reaction_id = object.reaction_id ?? "";
+    message.target_player_id = object.target_player_id ?? "";
+    message.timestamp = object.timestamp ?? 0;
+    message.expires_at = object.expires_at ?? 0;
+    return message;
+  },
+};
+
 function createBaseTableSnapshot(): TableSnapshot {
   return {
     stage: "",
@@ -1771,6 +2085,9 @@ function createBaseTableSnapshot(): TableSnapshot {
     protocol_version: 0,
     idle_removal_unix_ms: 0,
     action_base_deadline_unix_ms: 0,
+    chat_messages: [],
+    reactions: [],
+    action_preselection: "",
   };
 }
 
@@ -1844,6 +2161,15 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     }
     if (message.action_base_deadline_unix_ms !== 0) {
       writer.uint32(184).int64(message.action_base_deadline_unix_ms);
+    }
+    for (const v of message.chat_messages) {
+      ChatMessage.encode(v!, writer.uint32(194).fork()).join();
+    }
+    for (const v of message.reactions) {
+      TableReaction.encode(v!, writer.uint32(202).fork()).join();
+    }
+    if (message.action_preselection !== "") {
+      writer.uint32(210).string(message.action_preselection);
     }
     return writer;
   },
@@ -2042,6 +2368,30 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           message.action_base_deadline_unix_ms = longToNumber(reader.int64());
           continue;
         }
+        case 24: {
+          if (tag !== 194) {
+            break;
+          }
+
+          message.chat_messages.push(ChatMessage.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 25: {
+          if (tag !== 202) {
+            break;
+          }
+
+          message.reactions.push(TableReaction.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 26: {
+          if (tag !== 210) {
+            break;
+          }
+
+          message.action_preselection = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2150,6 +2500,19 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
         : isSet(object.action_base_deadline_unix_ms)
         ? globalThis.Number(object.action_base_deadline_unix_ms)
         : 0,
+      chat_messages: globalThis.Array.isArray(object?.chatMessages)
+        ? object.chatMessages.map((e: any) => ChatMessage.fromJSON(e))
+        : globalThis.Array.isArray(object?.chat_messages)
+        ? object.chat_messages.map((e: any) => ChatMessage.fromJSON(e))
+        : [],
+      reactions: globalThis.Array.isArray(object?.reactions)
+        ? object.reactions.map((e: any) => TableReaction.fromJSON(e))
+        : [],
+      action_preselection: isSet(object.actionPreselection)
+        ? globalThis.String(object.actionPreselection)
+        : isSet(object.action_preselection)
+        ? globalThis.String(object.action_preselection)
+        : "",
     };
   },
 
@@ -2230,6 +2593,15 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     if (message.action_base_deadline_unix_ms !== 0) {
       obj.actionBaseDeadlineUnixMs = Math.round(message.action_base_deadline_unix_ms);
     }
+    if (message.chat_messages?.length) {
+      obj.chatMessages = message.chat_messages.map((e) => ChatMessage.toJSON(e));
+    }
+    if (message.reactions?.length) {
+      obj.reactions = message.reactions.map((e) => TableReaction.toJSON(e));
+    }
+    if (message.action_preselection !== "") {
+      obj.actionPreselection = message.action_preselection;
+    }
     return obj;
   },
 
@@ -2271,6 +2643,9 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     message.protocol_version = object.protocol_version ?? 0;
     message.idle_removal_unix_ms = object.idle_removal_unix_ms ?? 0;
     message.action_base_deadline_unix_ms = object.action_base_deadline_unix_ms ?? 0;
+    message.chat_messages = object.chat_messages?.map((e) => ChatMessage.fromPartial(e)) || [];
+    message.reactions = object.reactions?.map((e) => TableReaction.fromPartial(e)) || [];
+    message.action_preselection = object.action_preselection ?? "";
     return message;
   },
 };

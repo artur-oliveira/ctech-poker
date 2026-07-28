@@ -2680,7 +2680,7 @@ h1 em {
     stroke-width: 2px;
     stroke-linecap: round;
     stroke-dasharray: 100;
-    stroke-dashoffset: 0;
+    stroke-dashoffset: var(--timer-start, 0);
     animation: perimeter-deplete linear forwards;
     will-change: stroke-dashoffset;
     pointer-events: none
@@ -7581,5 +7581,4 @@ h1 em {
     color: var(--felt-text-soft);
     line-height: 1.5;
 }
-
 

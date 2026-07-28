@@ -12,6 +12,7 @@ export interface Room {
   buy_in_min: number;
   buy_in_max: number;
   status: string;
+  turn_timeout_seconds?: number;
   // Persisted by the table actor as players join/leave (never computed live
   // from tablemanager). This is how the lobby knows a table has a free seat.
   seats_taken: number;

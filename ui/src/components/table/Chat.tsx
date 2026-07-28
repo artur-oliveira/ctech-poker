@@ -6,7 +6,7 @@ import {Input} from '@/components/ui/input';
 import type {SeatView} from '@/lib/api/table';
 import {playerName} from '@/lib/utils';
 
-type ChatItem = { player: string; message: string };
+type ChatItem = { id: string; player: string; message: string; timestamp?: number };
 
 export function Chat({items, onSend, connected = true, viewerId, seats = []}: {
   items: ChatItem[];
@@ -64,7 +64,7 @@ export function Chat({items, onSend, connected = true, viewerId, seats = []}: {
       <h3>Chat da mesa</h3>
       <div className="messages" role="log" aria-live="polite" aria-relevant="additions text" ref={messagesRef}>
         {items.length === 0 ? <p className="messages-empty">Nenhuma mensagem ainda. Diga um oi para a mesa.</p> :
-          items.map((message, index) => <p key={`${index}-${message.player}-${message.message}`}>
+          items.map(message => <p key={message.id}>
             <b>{nameOf(message.player)}</b>{message.message}
           </p>)}
       </div>

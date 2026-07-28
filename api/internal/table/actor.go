@@ -26,6 +26,12 @@ import (
 
 var timeNowFunc = time.Now
 
+const (
+	maxPersistedChatMessages = 40
+	maxPersistedReactions    = 8
+	reactionLifetime         = 2400 * time.Millisecond
+)
+
 // Actor is the local serialization point for one table's hand.Table.
 type Actor struct {
 	id         string
@@ -36,9 +42,10 @@ type Actor struct {
 
 	cmds chan Command
 
-	cached  *hand.Table // nil until first loaded; never trusted when !trustCache
-	version int
-	handID  string
+	cached   *hand.Table // nil until first loaded; never trusted when !trustCache
+	version  int
+	handID   string
+	activity tablestore.TableActivity
 
 	turnTimeout                  time.Duration
 	timeBankEnabled              bool
@@ -100,6 +107,12 @@ type Actor struct {
 	// removed player's chips are never credited back to any wallet and their
 	// sessionlog entry is never closed (buyin.SettleSystemRemoval does both).
 	onPlayerRemoved func(playerID, reason string, stack int64, holdID string)
+	// connCount mirrors the total size of activeConns across all players.
+	// Maintained only inside Run (handleConnect/handleDisconnect) but read via
+	// ActiveConnCount from any goroutine — same pattern as equityEnabled —
+	// so the manager can decide whether a lease-less actor is idle without
+	// dispatching a command to it.
+	connCount atomic.Int32
 }
 
 // New returns an Actor for tableID. trustCache should be true only when the
@@ -155,6 +168,12 @@ func (a *Actor) Dispatch(cmd Command) error {
 // (after a lease loss) and recreate a live one.
 func (a *Actor) Done() <-chan struct{} { return a.done }
 
+// ActiveConnCount reports the number of live WS connections currently
+// registered across all players at this table. Safe to call from any
+// goroutine (see connCount's doc comment) — used by the manager to decide
+// whether a lease-less actor is idle and can be evicted.
+func (a *Actor) ActiveConnCount() int32 { return a.connCount.Load() }
+
 // IsAlive reports whether Run is still serving commands.
 func (a *Actor) IsAlive() bool {
 	select {
@@ -184,6 +203,12 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleReady(ctx, c)
 	case ActCmd:
 		return a.handleAct(ctx, c)
+	case ChatCmd:
+		return a.handleChat(ctx, c)
+	case ReactionCmd:
+		return a.handleReaction(ctx, c)
+	case PreselectCmd:
+		return a.handlePreselect(ctx, c)
 	case ConnectCmd:
 		return a.handleConnect(c)
 	case DisconnectCmd:
@@ -248,6 +273,121 @@ func (a *Actor) handlePostBigBlind(ctx context.Context, c PostBigBlindCmd) error
 	return nil
 }
 
+func (a *Actor) handleChat(ctx context.Context, c ChatCmd) error {
+	if c.ActionID == "" {
+		return errors.New("table: action_id is required")
+	}
+	if c.Message == "" {
+		return errors.New("table: chat message is required")
+	}
+	return a.commitActivity(ctx, func() error {
+		if !a.isSeated(c.PlayerID) {
+			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+		}
+		a.markLastAction(c.PlayerID)
+		now := timeNowFunc().UnixMilli()
+		a.activity.Chat = append(a.activity.Chat, tablestore.ChatMessage{
+			ID: c.ActionID, PlayerID: c.PlayerID, Message: c.Message, Timestamp: now,
+		})
+		if len(a.activity.Chat) > maxPersistedChatMessages {
+			a.activity.Chat = append([]tablestore.ChatMessage(nil), a.activity.Chat[len(a.activity.Chat)-maxPersistedChatMessages:]...)
+		}
+		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "chat", Message: c.Message,
+		})
+	})
+}
+
+func (a *Actor) handleReaction(ctx context.Context, c ReactionCmd) error {
+	if c.ActionID == "" {
+		return errors.New("table: action_id is required")
+	}
+	if c.ReactionID == "" {
+		return errors.New("table: reaction_id is required")
+	}
+	return a.commitActivity(ctx, func() error {
+		if !a.isSeated(c.PlayerID) {
+			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+		}
+		if c.TargetPlayerID != "" && (c.TargetPlayerID == c.PlayerID || !a.isSeated(c.TargetPlayerID)) {
+			return errors.New("table: invalid reaction target")
+		}
+		a.markLastAction(c.PlayerID)
+		now := timeNowFunc().UnixMilli()
+		a.activity.Reactions = append(a.activity.Reactions, tablestore.Reaction{
+			ID: c.ActionID, PlayerID: c.PlayerID, ReactionID: c.ReactionID,
+			TargetPlayerID: c.TargetPlayerID, Timestamp: now, ExpiresAt: now + reactionLifetime.Milliseconds(),
+		})
+		if len(a.activity.Reactions) > maxPersistedReactions {
+			a.activity.Reactions = append([]tablestore.Reaction(nil), a.activity.Reactions[len(a.activity.Reactions)-maxPersistedReactions:]...)
+		}
+		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "reaction",
+			ReactionID: c.ReactionID, TargetPlayerID: c.TargetPlayerID,
+		})
+	})
+}
+
+func (a *Actor) handlePreselect(ctx context.Context, c PreselectCmd) error {
+	if c.ActionID == "" {
+		return errors.New("table: action_id is required")
+	}
+	if c.Selection != "" && c.Selection != "check_fold" && c.Selection != "fold" {
+		return errors.New("table: invalid action preselection")
+	}
+	return a.commitActivity(ctx, func() error {
+		if !a.isSeated(c.PlayerID) {
+			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+		}
+		if c.ExpectedSnapshotVersion == 0 || c.ExpectedHandID == "" ||
+			uint64(a.version) != c.ExpectedSnapshotVersion || a.handID != c.ExpectedHandID {
+			return errors.New("table: stale action state")
+		}
+		if a.activity.Preselections == nil {
+			a.activity.Preselections = make(map[string]tablestore.Preselection)
+		}
+		if c.Selection == "" {
+			delete(a.activity.Preselections, c.PlayerID)
+		} else {
+			a.activity.Preselections[c.PlayerID] = tablestore.Preselection{
+				Selection: c.Selection, HandID: a.handID, Stage: a.cached.ViewFor("").Stage,
+			}
+		}
+		a.markLastAction(c.PlayerID)
+		action := "preselect_action"
+		if c.Selection == "" {
+			action = "clear_preselection"
+		}
+		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: action, Selection: c.Selection,
+		})
+	})
+}
+
+func (a *Actor) commitActivity(ctx context.Context, apply func() error) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	err := apply()
+	if errors.Is(err, tablestore.ErrVersionConflict) {
+		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+			return reloadErr
+		}
+		err = apply()
+	}
+	if errors.Is(err, tablestore.ErrDuplicateAction) {
+		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+			return reloadErr
+		}
+		err = nil
+	}
+	if err != nil {
+		return err
+	}
+	a.broadcastAll()
+	return nil
+}
+
 // handleSnapshot loads the table (seeding on first touch) and returns the
 // viewer-specific snapshot. Built inside Run so it never races broadcastAll's
 // concurrent ViewFor calls over a.cached.
@@ -276,6 +416,7 @@ func (a *Actor) handleSnapshot(ctx context.Context, c SnapshotCmd) error {
 		}
 	}
 	a.applyPresence(snapshot.Seats)
+	a.applyActivity(c.PlayerID, &snapshot)
 	c.Snapshot <- snapshot
 	return nil
 }
@@ -342,6 +483,7 @@ func (a *Actor) ensureLoaded(ctx context.Context, force bool) error {
 	a.cached = hand.NewTableFromState(stored.State)
 	a.version = stored.Version
 	a.handID = stored.HandID
+	a.activity = stored.Activity
 	a.pendingPersistedDeadline = stored.TurnDeadlineUnixMs
 	a.rearmTimersFromCache()
 	return nil
@@ -589,6 +731,9 @@ func (a *Actor) applyActAndCommit(ctx context.Context, c ActCmd) (bool, error) {
 	if !applied {
 		return false, nil
 	}
+	if a.activity.Preselections != nil {
+		delete(a.activity.Preselections, c.PlayerID)
+	}
 	a.consumeTimeBank(c.PlayerID)
 	action := string(c.Action)
 	if a.cached.PlayerAllInForActor(c.PlayerID) {
@@ -677,7 +822,7 @@ func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.A
 	entry.TableID, entry.HandID, entry.Version = a.id, a.handID, a.version+1
 	entry.Frame = replayFrameFor(a.cached.ViewFor(""))
 	deadline := a.turnDeadlineForPersist()
-	if err := a.store.CommitAction(ctx, a.id, a.handID, actionID, a.version, newState, deadline, *entry); err != nil {
+	if err := a.store.CommitAction(ctx, a.id, a.handID, actionID, a.version, newState, a.activity, deadline, *entry); err != nil {
 		return err
 	}
 	a.version++
@@ -790,6 +935,9 @@ func (a *Actor) handleConnect(c ConnectCmd) error {
 	if a.activeConns[c.PlayerID] == nil {
 		a.activeConns[c.PlayerID] = make(map[string]struct{})
 	}
+	if _, already := a.activeConns[c.PlayerID][c.ConnID]; !already {
+		a.connCount.Add(1)
+	}
 	a.activeConns[c.PlayerID][c.ConnID] = struct{}{}
 	if a.clearDisconnectMark(c.PlayerID) {
 		a.broadcastAll()
@@ -799,10 +947,12 @@ func (a *Actor) handleConnect(c ConnectCmd) error {
 
 func (a *Actor) handleDisconnect(c DisconnectCmd) error {
 	if conns := a.activeConns[c.PlayerID]; conns != nil {
-		if c.ConnID != "" {
-			if _, registered := conns[c.ConnID]; !registered {
+		if _, registered := conns[c.ConnID]; !registered {
+			if c.ConnID != "" {
 				return nil
 			}
+		} else {
+			a.connCount.Add(-1)
 		}
 		delete(conns, c.ConnID)
 		if len(conns) == 0 {
@@ -1067,7 +1217,12 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
-	if !a.cached.CurrentPlayerCanActForActor(c.PlayerID) {
+	// A canceled timer can already have queued its command while another
+	// action advances the turn. Merely being eligible to act later in this
+	// round is not enough: a raise may have reopened this player's action even
+	// though somebody else is currently on the clock. Only the authoritative
+	// current player may be folded by this particular deadline.
+	if a.cached.CurrentPlayerIDForActor() != c.PlayerID {
 		return nil
 	}
 	if since, disconnected := a.disconnectedSince[c.PlayerID]; disconnected {
@@ -1116,7 +1271,7 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 		// entirely — e.g. the other server's own disconnect-kick), and
 		// c.PlayerID's leftover roundIdx entry from a now-stale round must
 		// not be trusted (see currentPlayerCanAct's doc comment).
-		if !a.cached.CurrentPlayerCanActForActor(c.PlayerID) {
+		if a.cached.CurrentPlayerIDForActor() != c.PlayerID {
 			a.broadcastAll()
 			return nil
 		}
@@ -1433,6 +1588,7 @@ func (a *Actor) broadcastAll() {
 			snapshot.IdleRemovalUnixMs = p.LastActionAt + a.kickGrace.Milliseconds()
 		}
 		a.applyPresence(snapshot.Seats)
+		a.applyActivity(p.ID, &snapshot)
 		if doEquity {
 			if hole, board, ok := a.cached.HoleAndBoardForActor(p.ID); ok {
 				opponents := 0
@@ -1452,6 +1608,29 @@ func (a *Actor) broadcastAll() {
 		a.broadcast(p.ID, snapshot)
 	}
 	a.notifyHandComplete()
+}
+
+func (a *Actor) applyActivity(viewerID string, snapshot *hand.Snapshot) {
+	snapshot.ChatMessages = make([]hand.ChatMessageView, 0, len(a.activity.Chat))
+	for _, message := range a.activity.Chat {
+		snapshot.ChatMessages = append(snapshot.ChatMessages, hand.ChatMessageView{
+			ID: message.ID, PlayerID: message.PlayerID, Message: message.Message, Timestamp: message.Timestamp,
+		})
+	}
+	now := timeNowFunc().UnixMilli()
+	for _, reaction := range a.activity.Reactions {
+		if reaction.ExpiresAt <= now {
+			continue
+		}
+		snapshot.Reactions = append(snapshot.Reactions, hand.ReactionView{
+			ID: reaction.ID, PlayerID: reaction.PlayerID, ReactionID: reaction.ReactionID,
+			TargetPlayerID: reaction.TargetPlayerID, Timestamp: reaction.Timestamp, ExpiresAt: reaction.ExpiresAt,
+		})
+	}
+	if preselection, ok := a.activity.Preselections[viewerID]; ok &&
+		preselection.HandID == a.handID && preselection.Stage == snapshot.Stage {
+		snapshot.ActionPreselection = preselection.Selection
+	}
 }
 
 // applyPresence keeps transport presence separate from poker state: a folded

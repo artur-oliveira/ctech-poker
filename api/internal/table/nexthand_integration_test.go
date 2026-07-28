@@ -40,6 +40,6 @@ func TestHandCompleteAutoStartsNextHandAfterDelay(t *testing.T) {
 
 	stored, _ = store.LoadTable(ctx, tableID)
 	if stored.HandID == handIDAfterFold {
-		t.Fatal("expected a new hand to have started automatically after the 5s (here 20ms) delay")
+		t.Fatal("expected a new hand to have started automatically after the configured (here 20ms) delay")
 	}
 }

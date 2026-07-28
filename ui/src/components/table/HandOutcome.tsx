@@ -2,7 +2,7 @@
 import {useEffect, useState} from 'react';
 import {PartyPopper, Equal} from 'lucide-react';
 import {HAND_CATEGORY_LABELS} from '@/lib/utils';
-import {bestHandCategory, HAND_MATCH_SIZE} from '@/lib/pokerRules';
+import {bestHandCategory, HAND_MATCH_SIZE, wasDecidedByKicker} from '@/lib/pokerRules';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {ChipStack} from '@/components/table/ChipStack';
 import {useCountUp} from '@/lib/hooks/useCountUp';
@@ -163,7 +163,10 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
   const winningCombination = combinationCards(shown.winningCards, shown.opponentCategory);
   // Naming the same category for both sides ("Par" vs. "Par") hides why one
   // beat the other, so show the kicker(s) that actually broke the tie instead.
-  const decidedByKicker = shown.kind === 'lose' && ownCategory && ownCategory === winnerCategory;
+  const sameCategory = shown.kind === 'lose' && ownCategory && ownCategory === winnerCategory;
+  const decidedByKicker = Boolean(sameCategory && shown.viewerCards && shown.winningCards &&
+    wasDecidedByKicker(shown.viewerCards, shown.winningCards));
+  const higherCombination = Boolean(sameCategory && !decidedByKicker);
   const ownWithKickers = combinationWithKickers(shown.viewerCards, shown.handCategory);
   const winningWithKickers = combinationWithKickers(shown.winningCards, shown.opponentCategory);
   const chipChange = shown.stackBefore != null && shown.stackAfter != null &&
@@ -223,6 +226,7 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
           </div>
         </div>
         {decidedByKicker && <p className="hand-outcome-kicker-note">Mesma combinação, o kicker decidiu.</p>}
+        {higherCombination && <p className="hand-outcome-kicker-note">A combinação mais alta venceu.</p>}
         {chipChange}
         <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
       </>}

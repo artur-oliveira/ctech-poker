@@ -18,10 +18,22 @@ export interface SeatView {
   stack_at_hand_start?: number;
   equity?: number;
   hand_category?: string
+  hand_score?: number
   time_bank_ms?: number
 }
 
 export type PokerAction = 'fold' | 'check' | 'call' | 'raise'
+export type ActionPreselection = 'check_fold' | 'fold'
+
+export type ChatMessage = {id: string; player_id: string; message: string; timestamp: number}
+export type PersistedReaction = {
+  id: string;
+  player_id: string;
+  reaction_id: string;
+  target_player_id?: string;
+  timestamp: number;
+  expires_at: number;
+}
 
 export interface LegalActionState {
   actions: PokerAction[];
@@ -66,6 +78,9 @@ export interface TableSnapshot {
   rake?: number;
   action_deadline_unix_ms?: number;
   action_base_deadline_unix_ms?: number;
+  chat_messages?: ChatMessage[];
+  reactions?: PersistedReaction[];
+  action_preselection?: ActionPreselection;
   next_hand_unix_ms?: number;
   idle_removal_unix_ms?: number;
   won_without_showdown?: boolean;

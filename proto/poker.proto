@@ -37,6 +37,9 @@ message Seat {
   // Durable decision reserve in milliseconds. Zero is a valid exhausted
   // balance, so clients must not replace it with a default.
   int64 time_bank_ms = 14;
+  // Canonical server-side evaluator score. Higher wins; equal is a split.
+  // Only present when the same visibility rules allow hand_category.
+  uint32 hand_score = 15;
 }
 
 message BlindEscalation {
@@ -93,6 +96,22 @@ message PotResult {
   bool refund = 6; // true for uncalled/orphaned contribution returns
 }
 
+message ChatMessage {
+  string id = 1;
+  string player_id = 2;
+  string message = 3;
+  int64 timestamp = 4;
+}
+
+message TableReaction {
+  string id = 1;
+  string player_id = 2;
+  string reaction_id = 3;
+  string target_player_id = 4;
+  int64 timestamp = 5;
+  int64 expires_at = 6;
+}
+
 message TableSnapshot {
   string stage = 1;
   repeated string board = 2;
@@ -121,19 +140,23 @@ message TableSnapshot {
   // End of the normal room clock. The interval between this and
   // action_deadline_unix_ms belongs to the current player's time bank.
   int64 action_base_deadline_unix_ms = 23;
+  repeated ChatMessage chat_messages = 24;
+  repeated TableReaction reactions = 25;
+  // Viewer-scoped one-shot value: "check_fold" | "fold" | empty.
+  string action_preselection = 26;
 }
 
 // --- WEBSOCKET ENVELOPES ---
 
 // ClientMessage is sent from the client to the server.
 message ClientMessage {
-  string type = 1; // "auth" | "ping" | "sync_state" | "ready" | "act" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction"
+  string type = 1; // "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction"
   
   // payload fields
   string token = 2; // for auth frame
   string share_code = 3; // for auth frame
   bool ready = 4; // for ready command
-  string action = 5; // for act command
+  string action = 5; // poker action, or check_fold|fold|empty for preselect_action
   int64 amount = 6; // for act command
   string action_id = 7; // for act command
   string message = 8; // for chat command

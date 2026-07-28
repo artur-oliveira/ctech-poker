@@ -23,24 +23,27 @@ type Snapshot struct {
 	// all-in's excess or an orphaned side-pot refund (runShowdown), neither of
 	// which is a win. The client must use this, not "payout > 0", to decide
 	// who gets the win banner/pill.
-	Winners                  []string        `json:"winners,omitempty"`
-	Rake                     int64           `json:"rake,omitempty"`
-	CurrentPlayerID          string          `json:"current_player_id,omitempty"`
-	LegalActions             *LegalActions   `json:"legal_actions,omitempty"`
-	ActionDeadlineUnixMs     int64           `json:"action_deadline_unix_ms,omitempty"`
-	ActionBaseDeadlineUnixMs int64           `json:"action_base_deadline_unix_ms,omitempty"`
-	NextHandUnixMs           int64           `json:"next_hand_unix_ms,omitempty"`
-	IdleRemovalUnixMs        int64           `json:"idle_removal_unix_ms,omitempty"`
-	WonWithoutShowdown       bool            `json:"won_without_showdown,omitempty"`
-	ShuffleCommitHash        string          `json:"shuffle_commit_hash,omitempty"`
-	ShuffleServerSeedHex     string          `json:"shuffle_server_seed_hex,omitempty"`
-	SmallBlindPlayerID       string          `json:"small_blind_player_id,omitempty"`
-	BigBlindPlayerID         string          `json:"big_blind_player_id,omitempty"`
-	DealerPlayerID           string          `json:"dealer_player_id,omitempty"`
-	SnapshotVersion          uint64          `json:"snapshot_version,omitempty"`
-	Pots                     []PotView       `json:"pots,omitempty"`
-	PotResults               []PotResultView `json:"pot_results,omitempty"`
-	HandID                   string          `json:"hand_id,omitempty"`
+	Winners                  []string          `json:"winners,omitempty"`
+	Rake                     int64             `json:"rake,omitempty"`
+	CurrentPlayerID          string            `json:"current_player_id,omitempty"`
+	LegalActions             *LegalActions     `json:"legal_actions,omitempty"`
+	ActionDeadlineUnixMs     int64             `json:"action_deadline_unix_ms,omitempty"`
+	ActionBaseDeadlineUnixMs int64             `json:"action_base_deadline_unix_ms,omitempty"`
+	NextHandUnixMs           int64             `json:"next_hand_unix_ms,omitempty"`
+	IdleRemovalUnixMs        int64             `json:"idle_removal_unix_ms,omitempty"`
+	WonWithoutShowdown       bool              `json:"won_without_showdown,omitempty"`
+	ShuffleCommitHash        string            `json:"shuffle_commit_hash,omitempty"`
+	ShuffleServerSeedHex     string            `json:"shuffle_server_seed_hex,omitempty"`
+	SmallBlindPlayerID       string            `json:"small_blind_player_id,omitempty"`
+	BigBlindPlayerID         string            `json:"big_blind_player_id,omitempty"`
+	DealerPlayerID           string            `json:"dealer_player_id,omitempty"`
+	SnapshotVersion          uint64            `json:"snapshot_version,omitempty"`
+	Pots                     []PotView         `json:"pots,omitempty"`
+	PotResults               []PotResultView   `json:"pot_results,omitempty"`
+	HandID                   string            `json:"hand_id,omitempty"`
+	ChatMessages             []ChatMessageView `json:"chat_messages,omitempty"`
+	Reactions                []ReactionView    `json:"reactions,omitempty"`
+	ActionPreselection       string            `json:"action_preselection,omitempty"`
 
 	// EquityOnly is actor-internal metadata. An asynchronous equity estimate
 	// is transported as a versioned delta instead of replaying the complete
@@ -48,6 +51,22 @@ type Snapshot struct {
 	EquityOnly     bool     `json:"-"`
 	EquityPlayerID string   `json:"-"`
 	EquityValue    *float64 `json:"-"`
+}
+
+type ChatMessageView struct {
+	ID        string `json:"id"`
+	PlayerID  string `json:"player_id"`
+	Message   string `json:"message"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+type ReactionView struct {
+	ID             string `json:"id"`
+	PlayerID       string `json:"player_id"`
+	ReactionID     string `json:"reaction_id"`
+	TargetPlayerID string `json:"target_player_id,omitempty"`
+	Timestamp      int64  `json:"timestamp"`
+	ExpiresAt      int64  `json:"expires_at"`
 }
 
 // LegalActions is the authoritative set of moves the viewer may make right
@@ -98,7 +117,11 @@ type SeatView struct {
 	StackAtHandStart  *int64   `json:"stack_at_hand_start,omitempty"`
 	Equity            *float64 `json:"equity,omitempty"`
 	HandCategory      string   `json:"hand_category,omitempty"`
-	TimeBankMs        int64    `json:"time_bank_ms"`
+	// HandScore is the server evaluator's canonical comparable strength.
+	// Higher wins and equality is a real split; clients may render cards
+	// locally, but must use this value for outcome decisions.
+	HandScore  uint32 `json:"hand_score,omitempty"`
+	TimeBankMs int64  `json:"time_bank_ms"`
 }
 
 var stageNames = map[Stage]string{
@@ -219,7 +242,9 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 				var full [7]deck.Card
 				full[0], full[1] = p.HoleCards[0], p.HoleCards[1]
 				copy(full[2:], t.board)
-				sv.HandCategory = categoryNames[handeval.Best7(full).Category()]
+				score := handeval.Best7(full)
+				sv.HandCategory = categoryNames[score.Category()]
+				sv.HandScore = uint32(score)
 			}
 		}
 		seats = append(seats, sv)
@@ -352,6 +377,19 @@ func (t *Table) actionScanOrder() []string {
 	if t.stage == PreFlop {
 		_, bbIdx := t.blindSeats(active)
 		startIdx = (bbIdx + 1) % n
+	}
+	// Once the street has started, the next decision is always clockwise from
+	// the last actor. The fixed street anchor above is only correct for the
+	// first action. In particular, a full raise resets ActedSinceLastFullRaise
+	// for players that acted earlier; scanning again from the anchor would let
+	// one of them act twice before a later seat had answered the raise.
+	if t.round != nil && t.round.LastActorID != "" {
+		for i, p := range active {
+			if p.ID == t.round.LastActorID {
+				startIdx = (i + 1) % n
+				break
+			}
+		}
 	}
 	order := make([]string, n)
 	for i := 0; i < n; i++ {

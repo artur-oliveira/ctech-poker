@@ -1,6 +1,6 @@
-import type {PokerAction} from '@/lib/api/table';
+import type {ActionPreselection, PokerAction} from '@/lib/api/table';
 
-export type ActionPreselection = 'check_fold' | 'fold';
+export type {ActionPreselection};
 
 export function resolvePreselection(
   selection: ActionPreselection,

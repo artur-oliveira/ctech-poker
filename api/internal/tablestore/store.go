@@ -33,13 +33,49 @@ type ActionLogEntry struct {
 	// decorated as "all_in". It distinguishes an all-in call from an all-in
 	// raise for exact VPIP/PFR/3-bet accounting. Older rows omit it and are
 	// handled conservatively by pokerstats.
-	BettingAction string `dynamodbav:"betting_action,omitempty"`
-	Amount        int64  `dynamodbav:"amount"`
-	Timestamp     int64  `dynamodbav:"timestamp"` // unix millis, set by CommitAction
+	BettingAction  string `dynamodbav:"betting_action,omitempty"`
+	Amount         int64  `dynamodbav:"amount"`
+	Message        string `dynamodbav:"message,omitempty"`
+	ReactionID     string `dynamodbav:"reaction_id,omitempty"`
+	TargetPlayerID string `dynamodbav:"target_player_id,omitempty"`
+	Selection      string `dynamodbav:"selection,omitempty"`
+	Timestamp      int64  `dynamodbav:"timestamp"` // unix millis, set by CommitAction
 	// Frame is a public, hole-card-free projection of the authoritative table
 	// immediately after this action. It makes recent hands replayable without
 	// exposing the unredacted persisted hand.State.
 	Frame *ReplayFrame `dynamodbav:"frame,omitempty"`
+}
+
+// TableActivity is the bounded, durable non-card state delivered through the
+// table WebSocket. It lives beside hand.State because chat, reactions and a
+// viewer's one-shot action preselection must survive reconnects without
+// contaminating the poker engine itself.
+type TableActivity struct {
+	Chat          []ChatMessage           `dynamodbav:"chat,omitempty"`
+	Reactions     []Reaction              `dynamodbav:"reactions,omitempty"`
+	Preselections map[string]Preselection `dynamodbav:"preselections,omitempty"`
+}
+
+type ChatMessage struct {
+	ID        string `dynamodbav:"id"`
+	PlayerID  string `dynamodbav:"player_id"`
+	Message   string `dynamodbav:"message"`
+	Timestamp int64  `dynamodbav:"timestamp"`
+}
+
+type Reaction struct {
+	ID             string `dynamodbav:"id"`
+	PlayerID       string `dynamodbav:"player_id"`
+	ReactionID     string `dynamodbav:"reaction_id"`
+	TargetPlayerID string `dynamodbav:"target_player_id,omitempty"`
+	Timestamp      int64  `dynamodbav:"timestamp"`
+	ExpiresAt      int64  `dynamodbav:"expires_at"`
+}
+
+type Preselection struct {
+	Selection string `dynamodbav:"selection"`
+	HandID    string `dynamodbav:"hand_id"`
+	Stage     string `dynamodbav:"stage"`
 }
 
 type ReplayFrame struct {
@@ -67,10 +103,11 @@ type ReplaySeat struct {
 // StoredTable is the current authoritative state of one table, as read from
 // poker_table_state.
 type StoredTable struct {
-	TableID string     `dynamodbav:"pk"`
-	Version int        `dynamodbav:"version"`
-	HandID  string     `dynamodbav:"hand_id"`
-	State   hand.State `dynamodbav:"state"`
+	TableID  string        `dynamodbav:"pk"`
+	Version  int           `dynamodbav:"version"`
+	HandID   string        `dynamodbav:"hand_id"`
+	State    hand.State    `dynamodbav:"state"`
+	Activity TableActivity `dynamodbav:"activity,omitempty"`
 	// TurnDeadlineUnixMs is the current player's absolute action deadline
 	// (unix millis), committed atomically with the state that made them
 	// current. It lives here, not inside hand.State, because it is wall-clock

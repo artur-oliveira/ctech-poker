@@ -1,4 +1,4 @@
-import {HAND_CATEGORY_LABELS} from '@/lib/utils';
+import {HAND_CATEGORY_LABELS} from './handCategories.ts';
 
 export type HandRankingEntry = {
   key: string;
@@ -188,4 +188,18 @@ export function bestHandCategory(cards: string[]): string {
  * actually have won had they stayed in, not just that someone else did. */
 export function compareHands(cardsA: string[], cardsB: string[]): number {
   return compareScores(bestOf(cardsA).score, bestOf(cardsB).score);
+}
+
+/** True only when two hands share the same made combination and the first
+ * differing rank is outside that combination. Two different pairs/two-pair
+ * values are not a kicker decision merely because their category label is
+ * the same. */
+export function wasDecidedByKicker(cardsA: string[], cardsB: string[]): boolean {
+  if (cardsA.length !== 5 || cardsB.length !== 5) return false;
+  const a = scoreFiveCards(cardsA);
+  const b = scoreFiveCards(cardsB);
+  if (a.category !== b.category) return false;
+  const firstDifference = a.tiebreak.findIndex((value, index) => value !== b.tiebreak[index]);
+  if (firstDifference < 0) return false;
+  return firstDifference >= (HAND_MATCH_SIZE[a.category] ?? a.tiebreak.length);
 }

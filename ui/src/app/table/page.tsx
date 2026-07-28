@@ -31,7 +31,7 @@ import {TermsGate} from '@/components/TermsGate';
 import {Button} from '@/components/ui/button';
 import {pushNotification} from '@/lib/notify';
 import type {TableSnapshot} from '@/lib/api/table';
-import {bestFiveCardHand, compareHands} from '@/lib/pokerRules';
+import {bestFiveCardHand} from '@/lib/pokerRules';
 import {getHands, getSessions} from '@/lib/api/player';
 import {useTablePreferences} from '@/lib/tablePreferences';
 import {useDealerVoice} from '@/lib/hooks/useDealerVoice';
@@ -45,6 +45,7 @@ import {
 } from '@/lib/tableOutcome';
 import {type MockScenario, USE_MOCK} from '@/lib/mock';
 import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
+import {DEFAULT_TURN_TIMEOUT_SECONDS} from '@/lib/gameTiming';
 
 const ROOM_ID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 const CONNECTION_COPY = {
@@ -270,8 +271,11 @@ function TableContent() {
     // claiming "poderia ter ganhado" when the folded hand would truly have
     // beaten what got shown.
     const folded = seat.state === 'folded';
-    const couldHaveWon = folded && viewerCards?.length === 5 && winningCards?.length === 5 ?
-      compareHands(viewerCards, winningCards) > 0 : undefined;
+    // Outcome comparison is server-authoritative. The local five-card
+    // evaluator remains presentation-only (ordering the cards shown in the
+    // banner) and never decides whether this folded hand would have won.
+    const couldHaveWon = folded && seat.hand_score != null && winnerSeat?.hand_score != null ?
+      seat.hand_score > winnerSeat.hand_score : undefined;
     setScopedHandOutcome({
       tableID: id,
       value: {
@@ -395,12 +399,12 @@ function TableContent() {
             overlay can't reliably avoid the header once it wraps to two
             lines, which used to hide and block taps on Sentar fora/Sair da
             mesa for the whole time this notice was up. */}
-        {!connectionMessage && s.next_hand_unix_ms && <div className="reconnect-notice">
+        {!connectionMessage && Boolean(s.next_hand_unix_ms) && <div className="reconnect-notice">
             <p>{s.stage === 'complete' ? 'Mão encerrada.' : 'Aguardando jogadores.'}</p>
-          {s.next_hand_unix_ms &&
+          {Boolean(s.next_hand_unix_ms) &&
               <PerimeterTimer className="next-hand-ring"
                               durationMs={nextHandDurationMs}
-                              restartKey={s.next_hand_unix_ms}
+                              restartKey={s.next_hand_unix_ms ?? 0}
                               radius={12}/>}
         </div>}
       </div>
@@ -411,6 +415,7 @@ function TableContent() {
           racing the banner's own exit timer into dismissing it before
           `complete` ever arrived. */}
       <TableStage snapshot={s} viewer={viewer} pot={pot} bigBlind={bigBlind} nowMs={rt.snapshotAt}
+                  turnTimeoutMs={(room?.turn_timeout_seconds || DEFAULT_TURN_TIMEOUT_SECONDS) * 1000}
                   outcome={handOutcome} holdOutcomeOpen={Boolean(s.payouts && Object.keys(s.payouts).length > 0)}
                   viewerStackBefore={(s.payouts && Object.keys(s.payouts).length > 0) ? viewerStackBefore : undefined}
                   canRevealCards={canRevealCards} revealPending={rt.showCardsPending}
@@ -422,6 +427,8 @@ function TableContent() {
         {...actions}
         actionKey={actionKey}
         selectionScope={`${s.hand_id || 'waiting'}:${s.stage}`}
+        preselection={s.action_preselection || null}
+        onPreselectAction={rt.preselectAction}
         canPreselect={Boolean(viewerSeat?.dealt_in && viewerSeat.state === 'active' && !actions.isTurn &&
           s.stage !== 'showdown' && s.stage !== 'complete')}
         actionDeadlineMs={s.action_deadline_unix_ms}

@@ -8,6 +8,7 @@ import type {TableSnapshot} from '@/lib/api/table';
 import {playerPotBreakdown} from '@/lib/tableOutcome';
 import type {PlayerNote} from '@/lib/api/playerNotes';
 import {RabbitHunt} from '@/components/table/RabbitHunt';
+import {DEFAULT_TURN_TIMEOUT_MS} from '@/lib/gameTiming';
 
 // Portrait handhelds get a different experience, not a shrunk table: a tall
 // capsule ringed by compact opponents, with the viewer promoted to a hero HUD
@@ -34,6 +35,7 @@ type Props = {
   viewer?: string;
   pot: number;
   bigBlind: number;
+  turnTimeoutMs?: number;
   nowMs: number;
   outcome: HandOutcomeState | null;
   holdOutcomeOpen: boolean;
@@ -54,6 +56,7 @@ export function TableStage({
                              viewer,
                              pot,
                              bigBlind,
+                             turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS,
                              nowMs,
                              outcome,
                              holdOutcomeOpen,
@@ -75,7 +78,9 @@ export function TableStage({
           refundAmount={breakdown.refund}
           isWinner={snapshot.winners?.includes(seat.player_id) ?? false}
           deadlineMs={snapshot.action_deadline_unix_ms}
+          baseDeadlineMs={snapshot.action_base_deadline_unix_ms}
           nowMs={nowMs}
+          turnTimeoutMs={turnTimeoutMs}
           bigBlind={bigBlind}
           isViewer={seat.player_id === viewer}
           canRevealCards={seat.player_id === viewer && canRevealCards}

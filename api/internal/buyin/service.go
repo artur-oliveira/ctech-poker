@@ -195,9 +195,13 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 	reply := make(chan error, 1)
 	joinErr := actor.Dispatch(table.JoinCmd{PlayerID: playerID, Stack: amount, MaxSeats: maxSeats, MidHand: midHand, HoldID: holdID, Reply: reply})
 	if joinErr != nil {
-		if errors.Is(joinErr, hand.ErrAlreadySeated) {
-			return nil
-		}
+		// hand.ErrAlreadySeated here is NOT a same-request retry — the isSeated
+		// check above already short-circuits those before any debit happens.
+		// Reaching this means a concurrent BuyIn for the same player won the
+		// seat race after we passed isSeated but before this Dispatch landed:
+		// our own debit above moved real money that will never be seated, so
+		// it must be refunded like any other failed join, never silently
+		// dropped.
 		if mover == s.game {
 			if refundErr := mover.ReleaseHold(ctx, holdID); refundErr != nil {
 				return fmt.Errorf("buyin: seat failed AND release failed (manual reconciliation needed): seat=%v refund=%w", joinErr, refundErr)

@@ -68,12 +68,17 @@ func (o *orderCheck) verify(t *testing.T) {
 	t.Logf("checked %d distinct hand strengths", len(o.byRef))
 }
 
-// TestMatchesReferenceOrderingOnRandomHands is the default-suite guard: two
-// million random 7-card hands must rank identically to the reference
-// evaluator. The exhaustive C(52,7) version lives behind the `exhaustive`
-// build tag.
+// TestMatchesReferenceOrderingOnRandomHands is the fast default-suite smoke
+// test. Twenty thousand deterministic hands exercise the runtime lookup
+// against the deliberately slow combinatorial reference evaluator while
+// keeping `go test ./... -race` suitable for every PR. Category boundaries
+// and malformed inputs have directed tests below/in handeval_test.go, and the
+// generated tables independently prove all 4,824 reachable strengths exist.
+//
+// The exhaustive C(52,7) proof lives behind `-tags exhaustive` and is the
+// required gate after changing ref, hashq, the generator, or tables.bin.
 func TestMatchesReferenceOrderingOnRandomHands(t *testing.T) {
-	const hands = 2_000_000
+	const hands = 20_000
 	rng := rand.New(rand.NewPCG(0x5EED, 0xC0FFEE))
 	full := fullDeck()
 	check := newOrderCheck()

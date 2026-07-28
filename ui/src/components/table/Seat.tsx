@@ -55,7 +55,9 @@ export function Seat({
                        refundAmount = 0,
                        isWinner = false,
                        deadlineMs,
+                       baseDeadlineMs,
                        nowMs,
+                       turnTimeoutMs,
                        bigBlind,
                        stackBefore,
                        isDealer = false,
@@ -76,7 +78,9 @@ export function Seat({
   refundAmount?: number;
   isWinner?: boolean;
   deadlineMs?: number;
+  baseDeadlineMs?: number;
   nowMs?: number;
+  turnTimeoutMs?: number;
   bigBlind?: number;
   // Set only on the viewer's own seat, only while a loss's payout is still
   // on screen. Lets the stack count down the same way a payout counts it up
@@ -96,6 +100,10 @@ export function Seat({
   const pendingName = !isViewer && !seat.name;
   const isDisconnected = seat.connection_state === 'disconnected';
   const remainingMs = isTurn && deadlineMs && nowMs ? Math.max(0, deadlineMs - nowMs) : null;
+  const totalTurnMs = deadlineMs && baseDeadlineMs && turnTimeoutMs ?
+    turnTimeoutMs + Math.max(0, deadlineMs - baseDeadlineMs) : undefined;
+  const timerStartOffset = remainingMs != null && totalTurnMs ?
+    Math.min(100, Math.max(0, 100 * (1 - remainingMs / totalTurnMs))) : 0;
   const stackFrom = credit > 0 ? seat.stack - credit : stackBefore ?? seat.stack;
   const displayStack = useCountUp(stackFrom, seat.stack);
   // Heads-up has the dealer double as the small blind, so one combined badge
@@ -108,7 +116,7 @@ export function Seat({
               className={`game-seat seat-${index} ${seat.state} ${isDisconnected ? 'disconnected' : ''} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${isWinner ? 'is-winner' : ''} ${pendingName ? 'is-pending-name' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
     {remainingMs != null &&
         <PerimeterTimer className="seat-turn-ring" durationMs={remainingMs}
-                        restartKey={deadlineMs ?? 0} radius={14}/>}
+                        startOffset={timerStartOffset} restartKey={deadlineMs ?? 0} radius={14}/>}
     {role && <span className={`seat-role ${isDealer ? 'is-dealer' : ''}`} title={ROLE_LABELS[role]}
                    aria-label={ROLE_LABELS[role]}>{role}</span>}
     <div className={`seat-cards ${isWinner && winAmount > 0 ? 'is-collecting' : ''}`}>{[0, 1].map(i => {

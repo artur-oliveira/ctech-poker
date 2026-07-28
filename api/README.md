@@ -30,6 +30,11 @@ Status section for the verified task-by-task state.
 - `make test` → `go test ./... -race -coverprofile=coverage.out`.
 - Integration tests (`tests/integration/tableflow_test.go`) run against **DynamoDB Local**
   via `docker-compose.test.yml` (in-memory local instance on `:8555`).
+- `handeval` keeps the normal CI fast with a deterministic 20,000-hand
+  differential sample plus directed category/tiebreak tests. After changing
+  `internal/engine/handeval/ref`, `hashq`, the generator, or `tables.bin`, run
+  the full 133,784,560-hand proof explicitly with
+  `go test -tags exhaustive -timeout 60m ./internal/engine/handeval`.
 - Dockerfile: `golang:1.26-alpine` builder → `distroless/static-debian12`, `EXPOSE 8003`.
 - Deploy: GitHub Actions `api.yml` builds the binary, uploads to the shared deployments S3 bucket, and does a rolling
   SSM deploy across the EC2 Auto-Scaling Group (see [`../cdk/README.md`](../cdk/README.md)).

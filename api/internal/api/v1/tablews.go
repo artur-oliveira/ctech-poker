@@ -103,7 +103,7 @@ func wsAllowedOrigin(ctx *fasthttp.RequestCtx, allowed []string) bool {
 
 func rateLimitedTableMessage(messageType string) bool {
 	switch messageType {
-	case "act", "chat", "reaction", "bot_challenge", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "ping":
+	case "act", "chat", "reaction", "preselect_action", "bot_challenge", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "ping":
 		return true
 	default:
 		return false
@@ -571,12 +571,20 @@ func RegisterTableWS(
 						send(&pokerproto.ServerMessage{Type: "error", Code: "message_too_long"})
 						continue
 					}
-					data, _ := goproto.Marshal(&pokerproto.ServerMessage{
-						Type:     "chat",
-						PlayerId: playerID,
-						Message:  tableChatFilter.Clean(message),
-					})
-					reg.Broadcast(ctx, tableID+"#chat", data)
+					ensureActionID()
+					message = tableChatFilter.Clean(message)
+					r := make(chan error, 1)
+					if err := dispatch(table.ChatCmd{PlayerID: playerID, ActionID: m.ActionId, Message: message, Reply: r}); err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+					} else {
+						// Compatibility event for clients predating protocol v6. The
+						// authoritative copy is also present in every state snapshot.
+						data, _ := goproto.Marshal(&pokerproto.ServerMessage{
+							Type: "chat", PlayerId: playerID, Message: message, ActionId: m.ActionId,
+						})
+						reg.Broadcast(ctx, tableID+"#chat", data)
+						ack()
+					}
 				case "reaction":
 					ensureActionID()
 					if !tableReactions[m.ReactionId] {
@@ -607,12 +615,36 @@ func RegisterTableWS(
 						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_reaction_target", ActionId: m.ActionId})
 						continue
 					}
-					data, _ := goproto.Marshal(&pokerproto.ServerMessage{
-						Type: "reaction", PlayerId: playerID, ReactionId: m.ReactionId,
-						TargetPlayerId: m.TargetPlayerId,
-					})
-					reg.Broadcast(ctx, tableID+"#chat", data)
-					ack()
+					r := make(chan error, 1)
+					if err := dispatch(table.ReactionCmd{
+						PlayerID: playerID, ActionID: m.ActionId, ReactionID: m.ReactionId,
+						TargetPlayerID: m.TargetPlayerId, Reply: r,
+					}); err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+					} else {
+						data, _ := goproto.Marshal(&pokerproto.ServerMessage{
+							Type: "reaction", PlayerId: playerID, ReactionId: m.ReactionId,
+							TargetPlayerId: m.TargetPlayerId, ActionId: m.ActionId,
+						})
+						reg.Broadcast(ctx, tableID+"#chat", data)
+						ack()
+					}
+				case "preselect_action":
+					ensureActionID()
+					r := make(chan error, 1)
+					if err := dispatch(table.PreselectCmd{
+						PlayerID: playerID, ActionID: m.ActionId, Selection: m.Action,
+						ExpectedSnapshotVersion: m.ExpectedSnapshotVersion,
+						ExpectedHandID:          m.ExpectedHandId, Reply: r,
+					}); err != nil {
+						code := "invalid_action"
+						if strings.Contains(err.Error(), "stale action state") {
+							code = "stale_state"
+						}
+						send(&pokerproto.ServerMessage{Type: "error", Code: code, Message: err.Error(), ActionId: m.ActionId})
+					} else {
+						ack()
+					}
 				}
 			}
 			close(done)
@@ -647,9 +679,19 @@ type wsConnAdapter struct {
 	conn *fws.Conn
 }
 
-func (w *wsConnAdapter) WriteMessage(messageType int, data []byte) error {
+func (w *wsConnAdapter) WriteMessage(_ int, data []byte) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	// Without a deadline, a peer that stops reading (full TCP receive window)
+	// blocks this write indefinitely. ws.Registry.Broadcast already unregisters
+	// a connection on any write error and moves on to the next one (memory.go),
+	// so bounding the write here is all that's needed to stop one stalled
+	// viewer from stalling every other broadcast this connection is part of —
+	// including, for table conns, the single actor Run goroutine that calls
+	// broadcastAll synchronously for every seated player.
+	if err := w.conn.SetWriteDeadline(time.Now().Add(wsWriteWait)); err != nil {
+		return err
+	}
 	return w.conn.WriteMessage(fws.BinaryMessage, data)
 }
 
@@ -757,6 +799,7 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 			TimeBankMs:        s.TimeBankMs,
 			Equity:            equity,
 			HandCategory:      s.HandCategory,
+			HandScore:         s.HandScore,
 		}
 	}
 
@@ -794,6 +837,19 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 			Refund:            result.Refund,
 		}
 	}
+	protoChat := make([]*pokerproto.ChatMessage, len(snap.ChatMessages))
+	for i, message := range snap.ChatMessages {
+		protoChat[i] = &pokerproto.ChatMessage{
+			Id: message.ID, PlayerId: message.PlayerID, Message: message.Message, Timestamp: message.Timestamp,
+		}
+	}
+	protoReactions := make([]*pokerproto.TableReaction, len(snap.Reactions))
+	for i, reaction := range snap.Reactions {
+		protoReactions[i] = &pokerproto.TableReaction{
+			Id: reaction.ID, PlayerId: reaction.PlayerID, ReactionId: reaction.ReactionID,
+			TargetPlayerId: reaction.TargetPlayerID, Timestamp: reaction.Timestamp, ExpiresAt: reaction.ExpiresAt,
+		}
+	}
 
 	return &pokerproto.TableSnapshot{
 		Stage:                    snap.Stage,
@@ -818,7 +874,10 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		Pots:                     protoPots,
 		HandId:                   snap.HandID,
 		PotResults:               protoPotResults,
-		ProtocolVersion:          5,
+		ProtocolVersion:          7,
+		ChatMessages:             protoChat,
+		Reactions:                protoReactions,
+		ActionPreselection:       snap.ActionPreselection,
 	}
 }
 

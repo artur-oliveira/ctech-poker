@@ -20,12 +20,16 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 			HoleCardsRevealed: []bool{true, false},
 			StackAtHandStart:  &startStack,
 			TimeBankMs:        27000,
+			HandScore:         4321,
 		}},
 		PotResults: []hand.PotResultView{{
 			Amount: 300, PayoutAmount: 293,
 			EligiblePlayerIDs: []string{"p1", "p2"}, WinnerPlayerIDs: []string{"p1"},
 			Payouts: map[string]int64{"p1": 293},
 		}},
+		ChatMessages:       []hand.ChatMessageView{{ID: "chat-1", PlayerID: "p1", Message: "oi", Timestamp: 100}},
+		Reactions:          []hand.ReactionView{{ID: "react-1", PlayerID: "p1", ReactionID: "wow", Timestamp: 101, ExpiresAt: 2501}},
+		ActionPreselection: "check_fold",
 	})
 	if converted.SnapshotVersion != 42 || converted.HandId != "hand-42" {
 		t.Fatalf("snapshot identity lost: %+v", converted)
@@ -48,16 +52,18 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 	if converted.Seats[0].StackAtHandStart == nil || converted.Seats[0].GetStackAtHandStart() != 500 {
 		t.Fatalf("pre-blind stack lost during protobuf conversion: %+v", converted.Seats[0])
 	}
-	if converted.ProtocolVersion != 5 || converted.IdleRemovalUnixMs != 123456 ||
-		converted.Seats[0].TimeBankMs != 27000 || len(converted.PotResults) != 1 ||
+	if converted.ProtocolVersion != 7 || converted.IdleRemovalUnixMs != 123456 ||
+		converted.Seats[0].TimeBankMs != 27000 || converted.Seats[0].HandScore != 4321 || len(converted.PotResults) != 1 ||
 		converted.PotResults[0].WinnerPlayerIds[0] != "p1" ||
-		converted.PotResults[0].Payouts["p1"] != 293 {
+		converted.PotResults[0].Payouts["p1"] != 293 || len(converted.ChatMessages) != 1 ||
+		converted.ChatMessages[0].Id != "chat-1" || len(converted.Reactions) != 1 ||
+		converted.Reactions[0].Id != "react-1" || converted.ActionPreselection != "check_fold" {
 		t.Fatalf("result protocol fields lost during conversion: %+v", converted)
 	}
 }
 
 func TestEveryStateChangingOrAmplifiableMessageIsRateLimited(t *testing.T) {
-	for _, messageType := range []string{"act", "chat", "reaction", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "ping"} {
+	for _, messageType := range []string{"act", "chat", "reaction", "preselect_action", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "ping"} {
 		if !rateLimitedTableMessage(messageType) {
 			t.Errorf("%q bypasses the per-seat limiter", messageType)
 		}

@@ -75,7 +75,7 @@ func TestActorRecoversFromVersionConflictAndRetriesOnce(t *testing.T) {
 	_ = a.Dispatch(ReadyCmd{PlayerID: "p2", Ready: true, Reply: reply2})
 
 	stored, _ := store.LoadTable(context.Background(), tableID)
-	_ = store.CommitAction(context.Background(), tableID, stored.HandID, "", stored.Version, stored.State, 0, tablestore.ActionLogEntry{TableID: tableID, HandID: stored.HandID, Version: stored.Version + 1})
+	_ = store.CommitAction(context.Background(), tableID, stored.HandID, "", stored.Version, stored.State, stored.Activity, 0, tablestore.ActionLogEntry{TableID: tableID, HandID: stored.HandID, Version: stored.Version + 1})
 
 	seat := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
 	reply3 := make(chan error, 1)

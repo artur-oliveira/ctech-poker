@@ -51,7 +51,18 @@ jobs:
 
       - name: Run integration tests
         working-directory: api
-        run: go test -tags integration ./... -race -count=1
+        run: |
+          # Do not use ./... here: that reruns every unit package under the
+          # integration tag, including handeval's differential suite. Discover
+          # the packages that actually contain integration-tagged tests so a
+          # newly added integration package is picked up automatically.
+          mapfile -t PACKAGES < <(
+            git grep -l '^//go:build integration$' -- '*_test.go' \
+              | xargs -n1 dirname \
+              | sort -u \
+              | sed 's#^#./#'
+          )
+          go test -tags integration "${PACKAGES[@]}" -race -count=1
 
   deploy:
     name: Build & Deploy

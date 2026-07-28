@@ -147,7 +147,7 @@ func (s *Store) LoadTable(ctx context.Context, tableID string) (*StoredTable, er
 // ctech-wallet/api/internal/repositories/wallet.go's mutate/resolveTxErr
 // shape: on a failed condition, re-read the guard to disambiguate a version
 // race from a duplicate submission.
-func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID string, expectedVersion int, newState hand.State, turnDeadlineUnixMs int64, entry ActionLogEntry) error {
+func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID string, expectedVersion int, newState hand.State, activity TableActivity, turnDeadlineUnixMs int64, entry ActionLogEntry) error {
 	entry.Timestamp = timeNowFunc().UnixMilli()
 	stateItem, err := dynamo.Encode(struct {
 		State hand.State `dynamodbav:"state"`
@@ -156,12 +156,19 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 		return fmt.Errorf("tablestore: encode state: %w", err)
 	}
 	stateAV := stateItem["state"]
+	activityItem, err := dynamo.Encode(struct {
+		Activity TableActivity `dynamodbav:"activity"`
+	}{Activity: activity})
+	if err != nil {
+		return fmt.Errorf("tablestore: encode activity: %w", err)
+	}
 
 	values := map[string]types.AttributeValue{
 		":newVersion":   mustN(expectedVersion + 1),
 		":expected":     mustN(expectedVersion),
 		":handID":       &types.AttributeValueMemberS{Value: handID},
 		":state":        stateAV,
+		":activity":     activityItem["activity"],
 		":turnDeadline": mustN(int(turnDeadlineUnixMs)),
 		":lastActionAt": mustN(int(timeNowFunc().Unix())),
 	}
@@ -170,7 +177,7 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 		"#state":   "state",
 	}
 	stateTx := s.state.BuildRawUpdateTxItem(tableID, nil,
-		"SET #version = :newVersion, hand_id = :handID, #state = :state, turn_deadline_unix_ms = :turnDeadline, last_action_at = :lastActionAt",
+		"SET #version = :newVersion, hand_id = :handID, #state = :state, activity = :activity, turn_deadline_unix_ms = :turnDeadline, last_action_at = :lastActionAt",
 		"attribute_exists(pk) AND #version = :expected", names, values)
 
 	logItem, err := dynamo.Encode(struct {

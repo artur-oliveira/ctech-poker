@@ -15,6 +15,7 @@ import type {
   ServerMessage,
   TableSnapshot
 } from '@/lib/api/table';
+import {DEFAULT_TURN_TIMEOUT_MS, NEXT_HAND_DELAY_MS} from '@/lib/gameTiming';
 
 export const USE_MOCK = process.env.NEXT_PUBLIC_MOCK_API === 'true';
 export const MOCK_PLAYER_ID = 'mock_player_ana';
@@ -860,7 +861,7 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
         payouts
       }],
       rake: 5,
-      next_hand_unix_ms: Date.now() + 5000,
+      next_hand_unix_ms: Date.now() + NEXT_HAND_DELAY_MS,
       won_without_showdown: scenario === 'fold_win',
       dealer_player_id: 'rafa_curitiba',
       small_blind_player_id: 'leo_rio',
@@ -934,7 +935,7 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
       }
     ],
     rake: 25,
-    next_hand_unix_ms: Date.now() + 5000,
+    next_hand_unix_ms: Date.now() + NEXT_HAND_DELAY_MS,
     dealer_player_id: 'joao_floripa',
     small_blind_player_id: 'nina_recife',
     big_blind_player_id: 'caio_goiânia'
@@ -1018,9 +1019,7 @@ const BOT_PROFILES: Record<string, BotProfile> = {
   'caio_goiânia': {style: 'volatile', aggression: .58, call: .6, shove: .2},
 };
 
-const TURN_TIMEOUT_MS = 12_000;
 const AUTO_FOLD_TIMEOUT_MS = 6_000;
-const NEXT_HAND_DELAY_MS = 5_000;
 // Clockwise poker order, independent of the array's visual seat order.
 const FULL_HAND_ORDER = ['bia_sp', MOCK_PLAYER_ID, 'leo_rio', 'nina_recife', 'joao_floripa', 'caio_goiânia'];
 
@@ -1299,7 +1298,7 @@ export class MockTableService {
       return;
     }
     const playerId = this.turnOrder[0];
-    const timeout = this.scenario === 'auto_fold' ? AUTO_FOLD_TIMEOUT_MS : TURN_TIMEOUT_MS;
+    const timeout = this.scenario === 'auto_fold' ? AUTO_FOLD_TIMEOUT_MS : DEFAULT_TURN_TIMEOUT_MS;
     const baseDeadline = Date.now() + timeout;
     const actingSeat = this.snapshot.seats.find(seat => seat.player_id === playerId);
     const timeBank = actingSeat?.time_bank_ms ?? 10_000;

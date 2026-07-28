@@ -3,6 +3,7 @@ package tablemanager
 import (
 	"context"
 	"testing"
+	"time"
 
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
@@ -23,6 +24,37 @@ func TestGetOrCreateActorReturnsSameActorOnSecondCall(t *testing.T) {
 	a2, err := m.GetOrCreateActor(ctx, "table-1", seed)
 	if err != nil || a2 != a1 {
 		t.Fatalf("expected the same Actor on the second call, got a1=%p a2=%p err=%v", a1, a2, err)
+	}
+}
+
+func TestLeaseLessActorIsEvictedAfterContinuousIdleWindow(t *testing.T) {
+	m := NewManager(nil, nil, nil, nil)
+	m.leaseLessIdleTimeout = 15 * time.Millisecond
+	m.idleCheckInterval = 5 * time.Millisecond
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	a, err := m.GetOrCreateActor(context.Background(), "idle-table", seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-a.Done():
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("lease-less actor was not stopped after its idle window")
+	}
+
+	deadline := time.Now().Add(250 * time.Millisecond)
+	for {
+		m.mu.Lock()
+		_, retained := m.actors["idle-table"]
+		m.mu.Unlock()
+		if !retained {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("stopped lease-less actor remained in manager registry")
+		}
+		time.Sleep(time.Millisecond)
 	}
 }
 

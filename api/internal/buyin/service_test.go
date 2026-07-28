@@ -5,6 +5,7 @@ package buyin
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -113,6 +114,70 @@ func TestBuyInDebitsThenSeats(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("expected user-1 seated with a 400-chip stack after buy-in")
+	}
+}
+
+// raceWallet lets a test force two BuyIn calls to interleave: the first
+// caller to Debit blocks until released, so a second, concurrent BuyIn for
+// the same seat can win the race and commit its JoinCmd first.
+type raceWallet struct {
+	fakeWallet
+	mu           sync.Mutex
+	debitN       int
+	firstStarted chan struct{}
+	release      chan struct{}
+}
+
+func (f *raceWallet) Debit(ctx context.Context, userID string, amount int64, key, reason string) error {
+	f.mu.Lock()
+	f.debitN++
+	first := f.debitN == 1
+	f.mu.Unlock()
+	if first {
+		close(f.firstStarted)
+		<-f.release
+	}
+	return f.fakeWallet.Debit(ctx, userID, amount, key, reason)
+}
+
+// TestBuyInRefundsLoserOfConcurrentSeatRace guards against the money-loss bug
+// found in the 2026-07-27 audit: two near-simultaneous BuyIn calls for the
+// same (room, player) — double-click, two devices — each carry a distinct
+// client nonce, so isSeated's early-return can't dedupe them and both debit
+// real money before either seats. Only one JoinCmd can win the seat; the
+// loser must be refunded, never silently swallowed as a no-op.
+func TestBuyInRefundsLoserOfConcurrentSeatRace(t *testing.T) {
+	wallet := &raceWallet{firstStarted: make(chan struct{}), release: make(chan struct{})}
+	mgr := testManager(t)
+	rooms := testRoomLookup()
+	svc := NewService(wallet, mgr, rooms)
+	ctx := context.Background()
+
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	if _, err := mgr.GetOrCreateActor(ctx, "room-1", seed); err != nil {
+		t.Fatalf("get or create actor: %v", err)
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- svc.BuyIn(ctx, "room-1", "user-1", 400, false, "nonce-a")
+	}()
+
+	<-wallet.firstStarted
+	if err := svc.BuyIn(ctx, "room-1", "user-1", 400, false, "nonce-b"); err != nil {
+		t.Fatalf("winning buyin should succeed: %v", err)
+	}
+	close(wallet.release)
+
+	if errA := <-errCh; errA == nil {
+		t.Fatal("losing buyin should return an error (refunded), not silent success")
+	}
+
+	if len(wallet.debits) != 2 {
+		t.Fatalf("expected 2 debits (one per concurrent attempt), got %+v", wallet.debits)
+	}
+	if len(wallet.credits) != 1 || wallet.credits[0].amount != 400 {
+		t.Fatalf("expected exactly one 400-chip refund credit for the race loser, got %+v", wallet.credits)
 	}
 }
 

@@ -33,9 +33,9 @@ Also unresolved: no ASG lifecycle hook exists in either `ctech-cdk`'s `PrivateIp
   that silently mis-rank every showdown — nothing fails to compile. `handeval/hashq` is shared by the runtime and the
   generator precisely so the perfect hash can't drift between them; keep it that way.
 - Tests: `go test ./... -race`. Integration tests use DynamoDB Local (`docker-compose.test.yml`). Engine logic is
-  unit-tested; keep it that way. `handeval` additionally has an exhaustive differential test over all
-  C(52,7) = 133,784,560 hands behind `-tags exhaustive` (~10 min) — run it after any change to `ref`, `hashq`, or the
-  generator.
+  unit-tested; keep it that way. The normal `handeval` suite uses a deterministic 20,000-hand differential sample;
+  its exhaustive proof over all C(52,7) = 133,784,560 hands is behind `-tags exhaustive` (~10 min) — run it after
+  any change to `ref`, `hashq`, the generator, or `tables.bin`.
 
 ## B9 authz — what is enforced (fixed 2026-07)
 

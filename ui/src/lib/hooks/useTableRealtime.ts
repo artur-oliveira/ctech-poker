@@ -5,7 +5,7 @@ import {doRefresh} from '@/lib/auth/oauth';
 import {cardLabel} from '@/lib/cards';
 import {useWebSocket, type WSStatus} from '@aoctech/ws-client';
 import {type MockScenario, MockTableService, USE_MOCK} from '@/lib/mock';
-import type {PokerAction, ServerMessage, TableSnapshot} from '@/lib/api/table';
+import type {ActionPreselection, PokerAction, ServerMessage, TableSnapshot} from '@/lib/api/table';
 import {playerName} from '@/lib/utils';
 import {playSound} from '@/lib/sound';
 import {decodeServerMessage, encodeClientMessage} from "@/lib/ws/utils";
@@ -109,7 +109,8 @@ function describeSnapshot(previous: TableSnapshot | null, next: TableSnapshot, v
 // bet beats a fold-to-one reveal, since at most one usually fires per frame
 // anyway.
 function playSoundForTransition(previous: TableSnapshot | null, next: TableSnapshot, viewerId?: string) {
-  if (!previous) return;
+  const scheduled: number[] = [];
+  if (!previous) return scheduled;
   // Table is busy with a lot going on at once. The turn ring alone is easy
   // to miss, so this fires independently of (and can co-occur with) whatever
   // else this transition triggers below (a bet, a fold-to-one reveal, etc).
@@ -125,24 +126,25 @@ function playSoundForTransition(previous: TableSnapshot | null, next: TableSnaps
     // with no stagger.
     for (let i = 0; i < added; i++) {
       if (i === 0) playSound('reveal');
-      else setTimeout(() => playSound('reveal'), i * 360);
+      else scheduled.push(window.setTimeout(() => playSound('reveal'), i * 360));
     }
-    return;
+    return scheduled;
   }
   const previousSeats = new Map(previous.seats.map(seat => [seat.player_id, seat]));
   const wentAllIn = next.seats.some(seat => seat.state === 'all_in' && previousSeats.get(seat.player_id)?.state !== 'all_in');
   if (wentAllIn) {
     playSound('all_in');
-    return;
+    return scheduled;
   }
   const pot = previous.seats.reduce((n, seat) => n + seat.contributed, 0);
   const bettor = next.seats.find(seat => seat.contributed > (previousSeats.get(seat.player_id)?.contributed || 0));
   if (bettor) {
     const added = bettor.contributed - (previousSeats.get(bettor.player_id)?.contributed || 0);
     playSound(pot > 0 && added >= pot / 2 ? 'half_pot' : 'bet');
-    return;
+    return scheduled;
   }
   if (next.stage === 'complete' && previous.stage !== 'complete' && !next.won_without_showdown) playSound('reveal');
+  return scheduled;
 }
 
 export function useTableRealtime(id: string, viewerId?: string, shareCode?: string, mockOptions?: {
@@ -201,9 +203,10 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   // props (deadlineMs - snapshotAt) instead of calling Date.now() itself.
   const [snapshotAt, setSnapshotAt] = useState(0);
   const [unlock, setUnlock] = useState<{ key: string; stars: number } | null>(null);
-  const [chat, setChat] = useState<{ player: string; message: string }[]>([]);
+  const [chat, setChat] = useState<{ id: string; player: string; message: string; timestamp?: number }[]>([]);
   const [reactions, setReactions] = useState<TableReactionEvent[]>([]);
-  const reactionTimersRef = useRef<Set<number>>(new Set());
+  const reactionTimersRef = useRef<Map<string, number>>(new Map());
+  const soundTimersRef = useRef<Set<number>>(new Set());
   const [pendingAction, setPendingAction] = useState<PokerAction | null>(null);
   const [lastActionError, setLastActionError] = useState<ActionError | null>(null);
   const [announcement, setAnnouncement] = useState('');
@@ -212,6 +215,20 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const [mockStatus, setMockStatus] = useState<WSStatus>('connecting');
   const [mockReconnectAttempt, setMockReconnectAttempt] = useState(0);
   const mockService = useRef<MockTableService | null>(null);
+
+  const showReaction = useCallback((reaction: TableReactionEvent, expiresAt = Date.now() + 2400) => {
+    if (!reactionTimersRef.current.has(reaction.id)) {
+      setReactions(value => [...value.filter(item => item.id !== reaction.id).slice(-7), reaction]);
+    }
+    const existing = reactionTimersRef.current.get(reaction.id);
+    if (existing) window.clearTimeout(existing);
+    const remaining = Math.max(0, expiresAt - Date.now());
+    const timer = window.setTimeout(() => {
+      setReactions(value => value.filter(item => item.id !== reaction.id));
+      reactionTimersRef.current.delete(reaction.id);
+    }, remaining);
+    reactionTimersRef.current.set(reaction.id, timer);
+  }, []);
 
   const clearPending = useCallback((expectedId?: string) => {
     if (expectedId && pendingActionRef.current?.id !== expectedId) return;
@@ -277,12 +294,37 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       latestHandIDRef.current = message.snapshot.hand_id ?? '';
       latestProtocolVersionRef.current = message.snapshot.protocol_version ?? 0;
       const liveMessage = describeSnapshot(previousSnapshot.current, message.snapshot, viewerId);
-      playSoundForTransition(previousSnapshot.current, message.snapshot, viewerId);
+      for (const timer of soundTimersRef.current) window.clearTimeout(timer);
+      soundTimersRef.current.clear();
+      for (const timer of playSoundForTransition(previousSnapshot.current, message.snapshot, viewerId)) {
+        soundTimersRef.current.add(timer);
+      }
       previousSnapshot.current = message.snapshot;
       if (liveMessage) setAnnouncement(liveMessage);
       setSnapshot(message.snapshot);
       setSnapshotTableID(activeTableIDRef.current);
       setSnapshotAt(Date.now());
+      if ((message.snapshot.protocol_version ?? 0) >= 6) {
+        setChat((message.snapshot.chat_messages ?? []).map(item => ({
+          id: item.id, player: item.player_id, message: item.message, timestamp: item.timestamp
+        })));
+        const liveReactionIDs = new Set((message.snapshot.reactions ?? []).map(item => item.id));
+        for (const [reactionID, timer] of reactionTimersRef.current) {
+          if (liveReactionIDs.has(reactionID)) continue;
+          window.clearTimeout(timer);
+          reactionTimersRef.current.delete(reactionID);
+        }
+        setReactions(value => value.filter(item => liveReactionIDs.has(item.id)));
+        for (const item of message.snapshot.reactions ?? []) {
+          if (!isTableReaction(item.reaction_id) || item.expires_at <= Date.now()) continue;
+          showReaction({
+            id: item.id,
+            playerId: item.player_id,
+            reactionId: item.reaction_id,
+            targetPlayerId: item.target_player_id || undefined
+          }, item.expires_at);
+        }
+      }
       // ACK is authoritative. This version check is the recovery path for a
       // lost ACK: once a newer state arrives, the old decision cannot still
       // be pending against the snapshot it was sent from.
@@ -393,24 +435,21 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     });
     if (message.type === 'chat' && message.message) {
       const chatMessage = message.message;
-      setChat(value => [...value.slice(-39), {player: message.player_id || '?', message: chatMessage}]);
+      const id = message.action_id || `${Date.now()}-${message.player_id || '?'}-${chatMessage}`;
+      setChat(value => value.some(item => item.id === id) ? value :
+        [...value.slice(-39), {id, player: message.player_id || '?', message: chatMessage, timestamp: Date.now()}]);
     }
     if (message.type === 'reaction' && message.player_id && message.reaction_id &&
       isTableReaction(message.reaction_id)) {
       const reaction: TableReactionEvent = {
-        id: `${Date.now()}-${message.player_id}-${message.reaction_id}-${Math.random()}`,
+        id: message.action_id || `${Date.now()}-${message.player_id}-${message.reaction_id}-${Math.random()}`,
         playerId: message.player_id,
         reactionId: message.reaction_id,
         targetPlayerId: message.target_player_id || undefined
       };
-      setReactions(value => [...value.slice(-7), reaction]);
-      const timer = window.setTimeout(() => {
-        setReactions(value => value.filter(item => item.id !== reaction.id));
-        reactionTimersRef.current.delete(timer);
-      }, 2400);
-      reactionTimersRef.current.add(timer);
+      showReaction(reaction);
     }
-  }, [clearPending, failPending, finishAuxiliaryCommand, recoverSession, viewerId]);
+  }, [clearPending, failPending, finishAuxiliaryCommand, recoverSession, showReaction, viewerId]);
   const receiveForTable = useCallback((message: ServerMessage) => {
     if (activeTableIDRef.current === id) receive(message);
   }, [id, receive]);
@@ -433,6 +472,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       setAnnouncement('');
       setRemoved(null);
       setChat([]);
+      setReactions([]);
     }
     sendRef.current({type: 'ping'});
   }, []);
@@ -521,6 +561,10 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     showCardsTimerRef.current = undefined;
     postBigBlindTimerRef.current = undefined;
     pendingActionRef.current = null;
+    for (const timer of reactionTimersRef.current.values()) window.clearTimeout(timer);
+    reactionTimersRef.current.clear();
+    for (const timer of soundTimersRef.current) window.clearTimeout(timer);
+    soundTimersRef.current.clear();
     resetOnOpenRef.current = true;
   }, [id]);
 
@@ -529,8 +573,10 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     if (readyTimerRef.current) clearTimeout(readyTimerRef.current);
     if (showCardsTimerRef.current) clearTimeout(showCardsTimerRef.current);
     if (postBigBlindTimerRef.current) clearTimeout(postBigBlindTimerRef.current);
-    for (const timer of reactionTimersRef.current) window.clearTimeout(timer);
+    for (const timer of reactionTimersRef.current.values()) window.clearTimeout(timer);
     reactionTimersRef.current.clear();
+    for (const timer of soundTimersRef.current) window.clearTimeout(timer);
+    soundTimersRef.current.clear();
   }, []);
 
   useEffect(() => {
@@ -664,10 +710,15 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       return ok;
     },
     keepSeat: () => emit({type: 'keep_seat', action_id: crypto.randomUUID()}),
-    sendChat: (message: string) => emit({type: 'chat', message}),
+    sendChat: (message: string) => emit({type: 'chat', message, action_id: crypto.randomUUID()}),
     sendReaction: (reactionId: TableReactionID, targetPlayerId?: string) =>
       emit({type: 'reaction', reaction_id: reactionId, target_player_id: targetPlayerId || '',
         action_id: crypto.randomUUID()}),
+    preselectAction: (selection: ActionPreselection | null) => emit({
+      type: 'preselect_action', action: selection || '', action_id: crypto.randomUUID(),
+      expected_snapshot_version: latestVersionRef.current,
+      expected_hand_id: latestHandIDRef.current
+    }),
     submitBotChallenge
   };
 }

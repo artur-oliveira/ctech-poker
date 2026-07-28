@@ -31,6 +31,8 @@ type Props = {
   onDismissErrorAction: () => void
   canPreselect: boolean;
   selectionScope: string;
+  preselection: ActionPreselection | null;
+  onPreselectAction: (selection: ActionPreselection | null) => boolean;
   actionDeadlineMs?: number;
   actionBaseDeadlineMs?: number;
   timeBankMs: number;
@@ -93,21 +95,20 @@ function TimeBankStatus({isTurn, baseDeadline, actionDeadline, balance}: {
   </span>;
 }
 
-function PreselectionControls({canPreselect, isTurn, connected, pending, available, onAct}: {
+function PreselectionControls({canPreselect, isTurn, connected, pending, available, selection, onSelect, onAct}: {
   canPreselect: boolean;
   isTurn: boolean;
   connected: boolean;
   pending: PokerAction | null;
   available: ActionAvailability;
+  selection: ActionPreselection | null;
+  onSelect: (selection: ActionPreselection | null) => boolean;
   onAct: (action: PokerAction) => boolean;
 }) {
-  const [selection, setSelection] = useState<ActionPreselection | null>(null);
-
   useEffect(() => {
     if (!selection || !isTurn || !connected || pending) return;
     const legal = (Object.keys(available) as PokerAction[]).filter(action => available[action]);
     const action = resolvePreselection(selection, legal);
-    queueMicrotask(() => setSelection(null));
     if (action) onAct(action);
   }, [selection, isTurn, connected, pending, available, onAct]);
 
@@ -116,7 +117,7 @@ function PreselectionControls({canPreselect, isTurn, connected, pending, availab
     <button type="button" className={selection === value ? 'selected' : ''}
             aria-pressed={selection === value} title={description}
             disabled={!connected || pending !== null}
-            onClick={() => setSelection(current => current === value ? null : value)}>
+            onClick={() => onSelect(selection === value ? null : value)}>
       <span>{label}<small>{description}</small></span>
     </button>;
   return <div className="action-preselectors" role="group" aria-label="Preparar próxima ação">
@@ -236,6 +237,8 @@ export function ActionBar({
                             onDismissErrorAction,
                             canPreselect,
                             selectionScope,
+                            preselection,
+                            onPreselectAction,
                             actionDeadlineMs,
                             actionBaseDeadlineMs,
                             timeBankMs,
@@ -286,7 +289,8 @@ export function ActionBar({
                          onAct={onActAction}/>
     </div>
     <PreselectionControls key={selectionScope} canPreselect={canPreselect} isTurn={isTurn}
-                           connected={connected} pending={pending} available={available} onAct={onActAction}/>
+                           connected={connected} pending={pending} available={available}
+                           selection={preselection} onSelect={onPreselectAction} onAct={onActAction}/>
     {!noLegalActions && <div className="action-choices" role="group" aria-label="Ações rápidas">
         <Button type="button" variant="outline" disabled={unavailable || !available.fold}
                 aria-describedby="action-context" aria-keyshortcuts="f"

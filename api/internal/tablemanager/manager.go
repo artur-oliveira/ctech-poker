@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/metrics"
@@ -20,6 +21,11 @@ import (
 )
 
 type Actor = table.Actor
+
+const (
+	defaultLeaseLessIdleTimeout = 5 * time.Minute
+	defaultIdleCheckInterval    = time.Minute
+)
 
 // ErrTableArchived means tableID was archived by cmd/tablecleanup for
 // inactivity (StoredTable.Archived, api/internal/tablestore) — its seated
@@ -42,6 +48,10 @@ type Manager struct {
 	mu       sync.Mutex
 	actors   map[string]*Actor
 	releases map[string]func()
+	cancels  map[string]context.CancelFunc
+
+	leaseLessIdleTimeout time.Duration
+	idleCheckInterval    time.Duration
 }
 
 func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast func(string, string, hand.Snapshot), roomLoader func(string) (*roomstore.Room, bool, error), completion ...func(string, string, hand.HandOutcome, map[string]string)) *Manager {
@@ -50,13 +60,16 @@ func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast f
 		onHandComplete = completion[0]
 	}
 	return &Manager{
-		leases:         leases,
-		store:          store,
-		broadcast:      broadcast,
-		onHandComplete: onHandComplete,
-		roomLoader:     roomLoader,
-		actors:         make(map[string]*Actor),
-		releases:       make(map[string]func()),
+		leases:               leases,
+		store:                store,
+		broadcast:            broadcast,
+		onHandComplete:       onHandComplete,
+		roomLoader:           roomLoader,
+		actors:               make(map[string]*Actor),
+		releases:             make(map[string]func()),
+		cancels:              make(map[string]context.CancelFunc),
+		leaseLessIdleTimeout: defaultLeaseLessIdleTimeout,
+		idleCheckInterval:    defaultIdleCheckInterval,
 	}
 }
 
@@ -152,20 +165,19 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 			m.onPlayerRemoved(tableID, playerID, reason, stack, holdID)
 		}
 	})
+	runCtx, cancel := context.WithCancel(context.Background())
+	m.cancels[tableID] = cancel
 	if trustCache {
-		// Only cancelable when there's a real cancellation trigger (losing
-		// the lease); an Actor without cache-affinity runs for the process
-		// lifetime regardless, same as this branch's counterpart below.
-		runCtx, cancel := context.WithCancel(context.Background())
 		m.leases.StartHeartbeat(runCtx, tableID, func() {
 			metrics.EmitTableMetric(m.env, "LeaseFailovers", 1, map[string]string{"table_id": tableID})
 			cancel()
-			m.removeActor(tableID)
+			<-actor.Done()
+			m.removeActor(tableID, actor)
 		})
-		go actor.Run(runCtx)
 	} else {
-		go actor.Run(context.Background())
+		go m.evictLeaseLessActorWhenIdle(runCtx, tableID, actor, cancel)
 	}
+	go actor.Run(runCtx)
 
 	m.actors[tableID] = actor
 
@@ -189,11 +201,45 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 
 // removeActor drops a (dead) actor from the registry. Safe to call from the
 // lease-loss callback (runs off the Run goroutine) — it takes m.mu.
-func (m *Manager) removeActor(tableID string) {
+func (m *Manager) removeActor(tableID string, expected *Actor) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	if a, ok := m.actors[tableID]; ok && !a.IsAlive() {
+	if a, ok := m.actors[tableID]; ok && a == expected && !a.IsAlive() {
 		delete(m.actors, tableID)
+		delete(m.cancels, tableID)
+		delete(m.releases, tableID)
+	}
+	m.mu.Unlock()
+}
+
+// evictLeaseLessActorWhenIdle bounds the per-instance registry even when
+// this node only proxied a table and never acquired its cache-affinity lease.
+// A continuous zero-connection window is required: seeing any live socket
+// resets the clock, so a busy table is never evicted between polling ticks.
+func (m *Manager) evictLeaseLessActorWhenIdle(ctx context.Context, tableID string, actor *Actor, cancel context.CancelFunc) {
+	ticker := time.NewTicker(m.idleCheckInterval)
+	defer ticker.Stop()
+	idleSince := time.Now()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-ticker.C:
+			if actor.ActiveConnCount() > 0 {
+				idleSince = time.Time{}
+				continue
+			}
+			if idleSince.IsZero() {
+				idleSince = now
+				continue
+			}
+			if now.Sub(idleSince) < m.leaseLessIdleTimeout {
+				continue
+			}
+			cancel()
+			<-actor.Done()
+			m.removeActor(tableID, actor)
+			return
+		}
 	}
 }
 
@@ -209,9 +255,14 @@ func (m *Manager) broadcastFor(tableID string) func(string, hand.Snapshot) {
 func (m *Manager) Release(tableID string) {
 	m.mu.Lock()
 	delete(m.actors, tableID)
+	cancel := m.cancels[tableID]
+	delete(m.cancels, tableID)
 	rel, hasRel := m.releases[tableID]
 	delete(m.releases, tableID)
 	m.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 	if hasRel && rel != nil {
 		rel()
 	}

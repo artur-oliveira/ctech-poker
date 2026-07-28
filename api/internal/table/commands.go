@@ -31,6 +31,36 @@ type ActCmd struct {
 
 func (c ActCmd) reply() chan error { return c.Reply }
 
+type ChatCmd struct {
+	PlayerID string
+	ActionID string
+	Message  string
+	Reply    chan error
+}
+
+func (c ChatCmd) reply() chan error { return c.Reply }
+
+type ReactionCmd struct {
+	PlayerID       string
+	ActionID       string
+	ReactionID     string
+	TargetPlayerID string
+	Reply          chan error
+}
+
+func (c ReactionCmd) reply() chan error { return c.Reply }
+
+type PreselectCmd struct {
+	PlayerID                string
+	ActionID                string
+	Selection               string
+	ExpectedSnapshotVersion uint64
+	ExpectedHandID          string
+	Reply                   chan error
+}
+
+func (c PreselectCmd) reply() chan error { return c.Reply }
+
 // ConnectCmd is dispatched exactly once per physical WS connection, right
 // after the gateway registers it — so the actor can count concurrently open
 // connections per player (e.g. two browser tabs) and only treat the player
