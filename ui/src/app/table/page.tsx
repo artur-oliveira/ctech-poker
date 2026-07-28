@@ -485,6 +485,12 @@ function TableContent() {
 }
 
 export default function TablePage() {
-  return <TermsGate><Suspense
-    fallback={<main className="game-loading"><span className="loader"/></main>}><TableContent/></Suspense></TermsGate>;
+  return (
+      <TermsGate>
+          <Suspense
+              fallback={<main className="game-loading"><span className="loader"/></main>}>
+              <TableContent/>
+          </Suspense>
+      </TermsGate>
+  );
 }
