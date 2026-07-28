@@ -1,5 +1,5 @@
-import {describe, expect, test} from 'vitest';
-import {MOCK_PLAYER_ID, snapshotForScenario, type MockScenario} from './mock';
+import {afterEach, describe, expect, test, vi} from 'vitest';
+import {MOCK_PLAYER_ID, MockTableService, snapshotForScenario, type MockScenario} from './mock';
 
 const scenarios: MockScenario[] = [
   'full_hand', 'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
@@ -67,5 +67,146 @@ describe('mock table state contract', () => {
     const snapshot = snapshotForScenario('side_pot');
     expect(snapshot.pot_results?.length).toBeGreaterThan(1);
     expect(snapshot.pot_results?.every(pot => pot.amount > 0 && pot.eligible_player_ids.length > 0)).toBe(true);
+  });
+});
+
+describe('mock realtime service contract', () => {
+  afterEach(() => vi.useRealTimers());
+
+  function serviceFor(scenario: MockScenario, delay = 10) {
+    const messages: Array<Record<string, unknown>> = [];
+    const statuses: Array<[string, number]> = [];
+    const service = new MockTableService(scenario, delay, {
+      onMessage: message => messages.push(message as unknown as Record<string, unknown>),
+      onStatus: (status, attempt) => statuses.push([status, attempt]),
+    });
+    return {service, messages, statuses};
+  }
+
+  test('connects, responds to ping/sync and reconnects with an incremented attempt', () => {
+    vi.useFakeTimers();
+    const {service, messages, statuses} = serviceFor('flop');
+    expect(service.send({type: 'ping'})).toBe(false);
+
+    service.connect();
+    vi.runOnlyPendingTimers();
+    expect(statuses).toContainEqual(['connected', 0]);
+    expect(messages.some(message => message.type === 'state')).toBe(true);
+
+    messages.length = 0;
+    expect(service.send({type: 'ping'})).toBe(true);
+    expect(service.send({type: 'sync_state', action_id: 'sync-1'})).toBe(true);
+    vi.runOnlyPendingTimers();
+    expect(messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({type: 'state'}),
+      expect.objectContaining({type: 'state', action_id: 'sync-1'}),
+    ]));
+
+    service.reconnect();
+    vi.runOnlyPendingTimers();
+    expect(statuses).toContainEqual(['reconnecting', 1]);
+    expect(statuses).toContainEqual(['connected', 1]);
+    service.close();
+  });
+
+  test('acknowledges ready and selective reveals and publishes their updated state', () => {
+    vi.useFakeTimers();
+    const {service, messages} = serviceFor('fold_win');
+    service.connect();
+    vi.runAllTimers();
+    messages.length = 0;
+
+    service.send({type: 'ready', ready: false, action_id: 'ready-1'});
+    service.send({type: 'show_cards', card_index: 1, action_id: 'show-1'});
+    vi.runOnlyPendingTimers();
+
+    expect(messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({type: 'action_ack', action_id: 'ready-1'}),
+      expect.objectContaining({type: 'action_ack', action_id: 'show-1'}),
+    ]));
+    const states = messages.filter(message => message.type === 'state');
+    const latest = states.at(-1)?.snapshot as ReturnType<typeof snapshotForScenario>;
+    const hero = latest.seats.find(seat => seat.player_id === MOCK_PLAYER_ID);
+    expect(hero?.ready).toBe(false);
+    expect(hero?.hole_cards_revealed).toEqual([false, true]);
+    service.close();
+  });
+
+  test('echoes chat/reactions and validates exact call preselection amount', () => {
+    vi.useFakeTimers();
+    const {service, messages} = serviceFor('flop');
+    service.connect();
+    vi.runOnlyPendingTimers();
+    messages.length = 0;
+
+    service.send({type: 'chat', message: 'olá'});
+    service.send({type: 'reaction', reaction_id: 'angry', target_player_id: 'bia_sp'});
+    service.send({type: 'preselect_action', action: 'call', amount: 999, action_id: 'bad-call'});
+    vi.runOnlyPendingTimers();
+
+    expect(messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({type: 'chat', player_id: MOCK_PLAYER_ID, message: 'olá'}),
+      expect.objectContaining({type: 'chat', player_id: 'bia_sp'}),
+      expect.objectContaining({type: 'reaction', reaction_id: 'angry', target_player_id: 'bia_sp'}),
+      expect.objectContaining({type: 'error', code: 'invalid_action', action_id: 'bad-call'}),
+    ]));
+    service.close();
+  });
+
+  test('applies a normal action and emits the resulting snapshot and achievement', () => {
+    vi.useFakeTimers();
+    const {service, messages} = serviceFor('flop');
+    service.connect();
+    vi.runOnlyPendingTimers();
+    messages.length = 0;
+
+    expect(service.send({type: 'act', action: 'raise', amount: 300, action_id: 'raise-1'})).toBe(true);
+    vi.runAllTimers();
+
+    expect(messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({type: 'action_ack', action_id: 'raise-1'}),
+      expect.objectContaining({type: 'achievement_unlocked', key: 'primeiro_aumento'}),
+    ]));
+    const state = messages.find(message => message.type === 'state');
+    const hero = (state?.snapshot as ReturnType<typeof snapshotForScenario>).seats
+      .find(seat => seat.player_id === MOCK_PLAYER_ID);
+    expect(hero?.contributed).toBe(300);
+    expect(hero?.stack).toBe(4600);
+    service.close();
+  });
+
+  test('models explicit server rejection and a server that never responds', () => {
+    vi.useFakeTimers();
+    const rejected = serviceFor('action_error');
+    rejected.service.connect();
+    vi.runOnlyPendingTimers();
+    rejected.messages.length = 0;
+    rejected.service.send({type: 'act', action: 'fold', action_id: 'bad-1'});
+    vi.runOnlyPendingTimers();
+    expect(rejected.messages).toContainEqual(expect.objectContaining({
+      type: 'error', code: 'invalid_action', action_id: 'bad-1',
+    }));
+
+    const timeout = serviceFor('timeout');
+    timeout.service.connect();
+    vi.runOnlyPendingTimers();
+    timeout.messages.length = 0;
+    expect(timeout.service.send({type: 'act', action: 'fold', action_id: 'hang'})).toBe(true);
+    vi.runOnlyPendingTimers();
+    expect(timeout.messages).toEqual([]);
+    rejected.service.close();
+    timeout.service.close();
+  });
+
+  test('runs the reconnecting scenario through disconnect and recovery', () => {
+    vi.useFakeTimers();
+    const {service, statuses, messages} = serviceFor('reconnecting');
+    service.connect();
+    vi.runAllTimers();
+    expect(statuses.map(([status]) => status)).toEqual([
+      'connecting', 'connected', 'disconnected', 'reconnecting', 'connected',
+    ]);
+    expect(messages.filter(message => message.type === 'state')).toHaveLength(2);
+    service.close();
   });
 });
