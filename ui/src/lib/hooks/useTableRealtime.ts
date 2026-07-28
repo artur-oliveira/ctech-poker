@@ -32,6 +32,12 @@ const ACTION_TIMEOUT_MS = 8000;
 // the latest authToken prop. Subscribing the socket to token changes would
 // deliberately close a healthy connection after every silent refresh.
 const TOKEN_REFRESH_INTERVAL_MS = 4 * 60 * 1000;
+// Rejections that mean "your view of the table is not the server's view".
+// invalid_action belongs here even though it is also the code for a genuinely
+// illegal move: a resync costs one snapshot, while not resyncing leaves a
+// player who hit a server-side desync stuck until they reload the page.
+const RESYNC_ERROR_CODES = new Set(['stale_state', 'rate_limited', 'invalid_action', 'unavailable']);
+const RESYNC_TIMEOUT_MS = 2500;
 
 const ERROR_MESSAGES: Record<string, string> = {
   unauthorized: 'Sua sessão expirou. Entre novamente para continuar.',
@@ -181,6 +187,15 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const awaitingReconnectSnapshotRef = useRef(false);
   const resetOnOpenRef = useRef(true);
   const sendRef = useRef<(value: object) => boolean>(() => false);
+  const retryNowRef = useRef<() => void>(() => {
+  });
+  // Armed whenever a rejection makes us ask for the authoritative snapshot.
+  // If that snapshot never lands, the socket itself is the broken part (the
+  // server can be answering frames while serving a table it cannot load), so
+  // the only recovery is a fresh connection — which is exactly what a manual
+  // F5 used to do for the player.
+  const resyncWatchdog = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // A mid-hand joiner is seated as pending_entry and stays that way forever
   // unless the client opts them in (PostBigBlindCmd). The product intent is
   // an automatic buy-in for the next hand's big blind, no manual click, so
@@ -294,8 +309,21 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     });
   }, []);
 
+  const armResyncWatchdog = useCallback(() => {
+    if (resyncWatchdog.current) clearTimeout(resyncWatchdog.current);
+    resyncWatchdog.current = setTimeout(() => {
+      resyncWatchdog.current = null;
+      awaitingReconnectSnapshotRef.current = true;
+      retryNowRef.current();
+    }, RESYNC_TIMEOUT_MS);
+  }, []);
+
   const receive = useCallback((message: ServerMessage) => {
     if (message.type === 'state' && message.snapshot) {
+      if (resyncWatchdog.current) {
+        clearTimeout(resyncWatchdog.current);
+        resyncWatchdog.current = null;
+      }
       const legacyUnversioned = !message.snapshot.snapshot_version;
       const version = message.snapshot.snapshot_version ?? 0;
       if (latestVersionRef.current >= 0 && version < latestVersionRef.current) return;
@@ -413,17 +441,28 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     if (message.type === 'error') {
       const code = message.code || 'unknown';
       if (code === 'unauthorized') recoverSession();
-      if ((code === 'stale_state' || code === 'rate_limited') && message.action_id &&
-        pendingActionRef.current?.id === message.action_id) {
-        setLastActionError(actionError(code));
+      const keepsPending = (code === 'stale_state' || code === 'rate_limited') && message.action_id &&
+        pendingActionRef.current?.id === message.action_id;
+      if (RESYNC_ERROR_CODES.has(code)) {
+        // The server rejected against a state this client does not have.
+        // Pull the authoritative snapshot instead of leaving the player
+        // guessing; armResyncWatchdog escalates to a reconnect if even that
+        // gets no answer.
         const actionId = message.action_id;
+        // The action timeout is redundant once we know the server answered.
+        // The resync runs on its own timer so failPending's clearPending
+        // cannot cancel it.
         if (pendingTimer.current) clearTimeout(pendingTimer.current);
+        if (resyncTimer.current) clearTimeout(resyncTimer.current);
         const jitterMs = Math.floor(Math.random() * 400) + (code === 'rate_limited' ? 800 : 50);
-        pendingTimer.current = setTimeout(() => {
-          if (pendingActionRef.current?.id === actionId) {
-            sendRef.current({type: 'sync_state', action_id: actionId});
-          }
+        resyncTimer.current = setTimeout(() => {
+          if (keepsPending && pendingActionRef.current?.id !== actionId) return;
+          sendRef.current({type: 'sync_state', action_id: actionId || crypto.randomUUID()});
+          armResyncWatchdog();
         }, jitterMs);
+      }
+      if (keepsPending) {
+        setLastActionError(actionError(code));
       } else if (message.action_id && pendingActionRef.current?.id === message.action_id) {
         failPending(code, message.action_id);
       }
@@ -459,7 +498,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       };
       showReaction(reaction);
     }
-  }, [clearPending, failPending, finishAuxiliaryCommand, recoverSession, showReaction, viewerId]);
+  }, [armResyncWatchdog, clearPending, failPending, finishAuxiliaryCommand, recoverSession, showReaction, viewerId]);
   const receiveForTable = useCallback((message: ServerMessage) => {
     if (activeTableIDRef.current === id) receive(message);
   }, [id, receive]);
@@ -547,7 +586,13 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const reconnectAttempt = USE_MOCK ? mockReconnectAttempt : wsReconnectAttempt;
   useEffect(() => {
     sendRef.current = send;
-  }, [send]);
+    retryNowRef.current = retryNow;
+  }, [retryNow, send]);
+
+  useEffect(() => () => {
+    if (resyncWatchdog.current) clearTimeout(resyncWatchdog.current);
+    if (resyncTimer.current) clearTimeout(resyncTimer.current);
+  }, []);
 
   // Query-param navigation reuses this hook instance. Every realtime ref is
   // table-scoped; carrying version 100 from table A into table B version 10

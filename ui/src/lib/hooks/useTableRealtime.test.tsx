@@ -224,6 +224,40 @@ describe('useTableRealtime', () => {
     expect(result.current.actionError).toBeNull();
   });
 
+  test('resyncs after invalid_action and reconnects when the snapshot never arrives', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot()});
+    act(() => result.current.act('raise', 100));
+
+    receive({type: 'error', code: 'invalid_action', action_id: 'action-1'});
+    expect(result.current.actionError).toMatchObject({code: 'invalid_action'});
+
+    act(() => vi.advanceTimersByTime(50));
+    expect(ws.send).toHaveBeenLastCalledWith({type: 'sync_state', action_id: 'action-1'});
+
+    // A server that answers frames but cannot load the table never sends the
+    // snapshot back — the socket must be replaced without a page reload.
+    expect(ws.reconnect).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(2500));
+    expect(ws.reconnect).toHaveBeenCalled();
+  });
+
+  test('a snapshot answer to a resync cancels the reconnect escalation', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot()});
+    act(() => result.current.act('raise', 100));
+
+    receive({type: 'error', code: 'invalid_action', action_id: 'action-1'});
+    act(() => vi.advanceTimersByTime(50));
+    receive({type: 'state', snapshot: snapshot({snapshot_version: 2})});
+    act(() => vi.advanceTimersByTime(2500));
+    expect(ws.reconnect).not.toHaveBeenCalled();
+  });
+
   test('deduplicates chat, expires reactions and restores persisted realtime content', () => {
     vi.useFakeTimers();
     vi.setSystemTime(10_000);

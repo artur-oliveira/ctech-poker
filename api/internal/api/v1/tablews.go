@@ -231,8 +231,17 @@ func RegisterTableWS(
 		CheckOrigin:     func(ctx *fasthttp.RequestCtx) bool { return wsAllowedOrigin(ctx, allowedOrigins) },
 	}
 	router.Get("/tables/:id/ws", func(c fiber.Ctx) error {
-		tableID := c.Params("id")
-		remoteIP := c.IP()
+		// c.Params/c.IP hand back strings pointing straight into fasthttp's
+		// per-connection request buffer, which is recycled the moment this
+		// handler returns. The callback below runs on a hijacked goroutine for
+		// the whole life of the socket, so it must own its copies: an uncopied
+		// tableID silently mutates into a later request's bytes mid-hand
+		// ("check7H8PWBPBTZTT09ATFEGYN", "/me/handsWBPBTZTT09ATFEGYN"), and
+		// every command the actor then runs loads a table ID that has no item
+		// in DynamoDB — surfacing to players as "no state seeded for this
+		// table yet" until they reload the page.
+		tableID := strings.Clone(c.Params("id"))
+		remoteIP := strings.Clone(c.IP())
 		return upgrader.Upgrade(c.RequestCtx(), func(conn *fws.Conn) {
 			// Post-upgrade the handler runs on a hijacked goroutine outside
 			// Fiber's recover middleware — an unrecovered panic here kills the
@@ -243,7 +252,11 @@ func RegisterTableWS(
 					_ = conn.Close()
 				}
 			}()
-			ctx := c.Context()
+			// Same lifetime problem as tableID above: the request context dies
+			// with the request, while this goroutine keeps making DynamoDB and
+			// Redis calls for as long as the socket lives. Own the context.
+			ctx, cancelCtx := context.WithCancel(context.Background())
+			defer cancelCtx()
 			// Single adapter shared by this handler and the fan-out registry:
 			// its mutex is the only thing serializing data-frame writes, so
 			// every write path must go through it (fasthttp/websocket panics
@@ -725,7 +738,10 @@ func RegisterGeneralWS(
 					_ = conn.Close()
 				}
 			}()
-			ctx := c.Context()
+			// See RegisterTableWS: the request context is dead once the
+			// upgrade returns, this goroutine is not.
+			ctx, cancelCtx := context.WithCancel(context.Background())
+			defer cancelCtx()
 			safeConn := &wsConnAdapter{conn: conn}
 			send := func(msg *pokerproto.ServerMessage) {
 				data, err := goproto.Marshal(msg)
