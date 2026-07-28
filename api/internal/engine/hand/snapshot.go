@@ -50,13 +50,6 @@ type Snapshot struct {
 	ActionPreselection       string                   `json:"action_preselection,omitempty"`
 	ActionPreselectionAmount int64                    `json:"action_preselection_amount,omitempty"`
 	ProspectiveCallAmount    int64                    `json:"prospective_call_amount,omitempty"`
-
-	// EquityOnly is actor-internal metadata. An asynchronous equity estimate
-	// is transported as a versioned delta instead of replaying the complete
-	// snapshot captured before the calculation started.
-	EquityOnly     bool     `json:"-"`
-	EquityPlayerID string   `json:"-"`
-	EquityValue    *float64 `json:"-"`
 }
 
 type RevealedSaltView struct {

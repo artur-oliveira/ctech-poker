@@ -65,13 +65,13 @@ func TestEstimateRejectsInvalidInputs(t *testing.T) {
 	}
 }
 
-// BenchmarkEstimateProduction mirrors the call actor.computeAndSendEquity
-// makes on every street: 500 iterations at a full table.
+// BenchmarkEstimateProduction exercises a cached full-table estimate. The
+// actor requests 200 iterations and attaches the result to each snapshot.
 func BenchmarkEstimateProduction(b *testing.B) {
 	hole := [2]deck.Card{{Rank: deck.Ace, Suit: deck.Clubs}, {Rank: deck.King, Suit: deck.Clubs}}
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		if _, err := Estimate(hole, nil, nil, 8, 500); err != nil {
+		if _, err := Estimate(hole, nil, nil, 8, 200); err != nil {
 			b.Fatal(err)
 		}
 	}

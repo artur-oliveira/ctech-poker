@@ -16,7 +16,6 @@ import (
 
 	"github.com/oklog/ulid/v2"
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
-	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 	"gopkg.aoctech.app/poker/api/internal/engine/equity"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/metrics"
@@ -1679,10 +1678,15 @@ func (a *Actor) broadcastAll() {
 					}
 				}
 				if opponents > 0 {
-					// Offload equity from the Run goroutine: compute in a
-					// goroutine over captured values and push a follow-up
-					// state update when ready.
-					go a.computeAndSendEquity(p.ID, snapshot.SnapshotVersion, hole, board, opponents)
+					estimate, err := equity.Estimate(hole, board, nil, opponents, 200)
+					if err == nil {
+						for i := range snapshot.Seats {
+							if snapshot.Seats[i].PlayerID == p.ID {
+								snapshot.Seats[i].Equity = &estimate
+								break
+							}
+						}
+					}
 				}
 			}
 		}
@@ -1729,29 +1733,6 @@ func (a *Actor) applyPresence(seats []hand.SeatView) {
 
 func equityStage(stage hand.Stage) bool {
 	return stage == hand.PreFlop || stage == hand.Flop || stage == hand.Turn || stage == hand.River
-}
-
-// computeAndSendEquity runs off the Run goroutine. It never touches a.cached;
-// it works on a copy of the captured snapshot so there is no race with Run or
-// with the synchronous broadcast that already sent the same Snapshot. When
-// ready it pushes a follow-up state update carrying the equity.
-func (a *Actor) computeAndSendEquity(
-	viewerID string,
-	snapshotVersion uint64,
-	hole [2]deck.Card,
-	board []deck.Card,
-	opponents int,
-) {
-	estimate, err := equity.Estimate(hole, board, nil, opponents, 200)
-	if err != nil {
-		return
-	}
-	a.broadcast(viewerID, hand.Snapshot{
-		SnapshotVersion: snapshotVersion,
-		EquityOnly:      true,
-		EquityPlayerID:  viewerID,
-		EquityValue:     &estimate,
-	})
 }
 
 func (a *Actor) SetEquityEnabledForActor(enabled bool) { a.equityEnabled.Store(enabled) }

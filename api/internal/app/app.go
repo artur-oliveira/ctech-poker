@@ -223,14 +223,6 @@ func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *t
 func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
-		if snap.EquityOnly {
-			message = &pokerproto.ServerMessage{
-				Type:            "equity",
-				PlayerId:        snap.EquityPlayerID,
-				Equity:          snap.EquityValue,
-				SnapshotVersion: snap.SnapshotVersion,
-			}
-		}
 		data, err := goproto.Marshal(message)
 		if err == nil {
 			reg.Broadcast(context.Background(), tableID+"#"+viewerID, data)
