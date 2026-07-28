@@ -91,6 +91,13 @@ export interface HandItem {
   opponents?: OpponentSummary[];
   server_seed?: string;
   commit_hash?: string;
+  // Per-position deck proof, present when the hand ended without a full
+  // showdown so the seed had to stay secret: revealed positions carry their
+  // card + salt, the rest only their committed hash, and together they still
+  // recompute root_commit_hash.
+  root_commit_hash?: string;
+  revealed_card_salts?: Record<number, {card: string; salt_hex: string}>;
+  unrevealed_card_hashes?: Record<number, string>;
 }
 
 // Most-recent-first (server sorts descending), capped at 50 per page.

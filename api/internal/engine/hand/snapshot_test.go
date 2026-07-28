@@ -450,6 +450,66 @@ func TestViewForOmitsServerSeedWhenWonWithoutShowdown(t *testing.T) {
 	}
 }
 
+// The durable-history proof must hold the same guarantees as the live snapshot
+// one: every participant covered, no seed leaked, and the whole 52 positions
+// verifying against the root commit.
+func TestFairnessProofsForActorCoverEveryParticipantWithoutSeed(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	_ = table.StartHand()
+	_ = table.Act(table.playerToActForTest(), betting.ActionRaise, 100)
+	_ = table.Act(table.playerToActForTest(), betting.ActionFold, 0)
+
+	proofs := table.FairnessProofsForActor()
+	if len(proofs) != 2 {
+		t.Fatalf("expected one proof per dealt-in participant, got %d", len(proofs))
+	}
+	var root [32]byte
+	rootBytes, err := hex.DecodeString(table.ViewFor("p1").RootCommitHash)
+	if err != nil {
+		t.Fatalf("decode root: %v", err)
+	}
+	copy(root[:], rootBytes)
+	for id, proof := range proofs {
+		if proof.ServerSeedHex != "" {
+			t.Fatalf("%s: no-showdown proof must not carry the seed", id)
+		}
+		if len(proof.RevealedCardSalts)+len(proof.UnrevealedCardHashes) != 52 {
+			t.Fatalf("%s: proof must cover all 52 positions", id)
+		}
+		revealed := make(map[int]struct {
+			Card deck.Card
+			Salt [32]byte
+		})
+		for index, reveal := range proof.RevealedCardSalts {
+			var salt [32]byte
+			saltBytes, err := hex.DecodeString(reveal.SaltHex)
+			if err != nil {
+				t.Fatalf("decode salt: %v", err)
+			}
+			copy(salt[:], saltBytes)
+			revealed[index] = struct {
+				Card deck.Card
+				Salt [32]byte
+			}{Card: table.shuffle.Cards[index], Salt: salt}
+		}
+		unrevealed := make(map[int][32]byte)
+		for index, hashHex := range proof.UnrevealedCardHashes {
+			var hash [32]byte
+			hashBytes, err := hex.DecodeString(hashHex)
+			if err != nil {
+				t.Fatalf("decode hash: %v", err)
+			}
+			copy(hash[:], hashBytes)
+			unrevealed[index] = hash
+		}
+		if !deck.VerifyPartial(root, revealed, unrevealed) {
+			t.Fatalf("%s: history proof did not verify against the root commit", id)
+		}
+	}
+}
+
 func TestViewForOmitsHandCategoryWhenCardsAreHidden(t *testing.T) {
 	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
 	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}

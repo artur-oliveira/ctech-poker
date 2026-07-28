@@ -352,7 +352,7 @@ func handItemFor(outcome hand.HandOutcome, id string, names map[string]string) s
 		}
 		opponents = append(opponents, summary)
 	}
-	return sessionlog.HandItem{
+	item := sessionlog.HandItem{
 		Outcome: result, NetChange: net,
 		Board: outcome.Board, HoleCards: holeCards, Opponents: opponents,
 		CommitHash:     outcome.CommitHash,
@@ -366,6 +366,19 @@ func handItemFor(outcome hand.HandOutcome, id string, names map[string]string) s
 			return outcome.ServerSeed
 		}(),
 	}
+	// Without the seed, this per-position proof is the player's only way to
+	// verify the deck from their history — see sessionlog.HandItem's fields.
+	if proof, ok := outcome.FairnessProofs[id]; ok {
+		item.RevealedCardSalts = make(map[string]sessionlog.RevealedSalt, len(proof.RevealedCardSalts))
+		for index, reveal := range proof.RevealedCardSalts {
+			item.RevealedCardSalts[strconv.Itoa(index)] = sessionlog.RevealedSalt{Card: reveal.Card, SaltHex: reveal.SaltHex}
+		}
+		item.UnrevealedCardHashes = make(map[string]string, len(proof.UnrevealedCardHashes))
+		for index, hash := range proof.UnrevealedCardHashes {
+			item.UnrevealedCardHashes[strconv.Itoa(index)] = hash
+		}
+	}
+	return item
 }
 
 // wirePlayerRemovedHook installs table.Actor's system-removal notification —

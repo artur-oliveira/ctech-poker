@@ -63,6 +63,21 @@ type HandItem struct {
 	ServerSeed     string `dynamodbav:"server_seed,omitempty" json:"server_seed,omitempty"`
 	CommitHash     string `dynamodbav:"commit_hash,omitempty" json:"commit_hash,omitempty"`
 	RootCommitHash string `dynamodbav:"root_commit_hash,omitempty" json:"root_commit_hash,omitempty"`
+	// RevealedCardSalts / UnrevealedCardHashes are this player's per-position
+	// deck proof (hand.FairnessProof), keyed by deck position as a string.
+	// They are what makes a hand verifiable when ServerSeed is withheld —
+	// a hand that ended without a full showdown must never publish the seed
+	// (it would expose mucked hole cards), but the card+salt reveals plus the
+	// committed hashes still recompute RootCommitHash.
+	RevealedCardSalts    map[string]RevealedSalt `dynamodbav:"revealed_card_salts,omitempty" json:"revealed_card_salts,omitempty"`
+	UnrevealedCardHashes map[string]string       `dynamodbav:"unrevealed_card_hashes,omitempty" json:"unrevealed_card_hashes,omitempty"`
+}
+
+// RevealedSalt is one revealed deck position: the card and the salt its
+// committed hash was built from, mirroring hand.RevealedSaltView on the wire.
+type RevealedSalt struct {
+	Card    string `dynamodbav:"card" json:"card"`
+	SaltHex string `dynamodbav:"salt_hex" json:"salt_hex"`
 }
 
 // OpponentSummary is one other participant of a recorded hand, for a

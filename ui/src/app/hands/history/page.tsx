@@ -10,6 +10,7 @@ import {PlayingCard} from '@/components/table/PlayingCard';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
 import {ActionTimeline} from '@/components/hands/ActionTimeline';
 import {DeckReveal} from '@/components/hands/DeckReveal';
+import {PartialDeckProof} from '@/components/hands/PartialDeckProof';
 import {HandExportButton} from '@/components/hands/HandExportButton';
 import {ShareHandDialog} from '@/components/hands/ShareHandDialog';
 import {Button} from '@/components/ui/button';
@@ -136,7 +137,10 @@ function HandHistoryContent() {
       <h2><ShieldCheck aria-hidden="true"/> Prova de Integridade (Provably Fair)</h2>
       {h.server_seed && h.commit_hash
         ? <DeckReveal key={h.hand_id} serverSeed={h.server_seed} commitHash={h.commit_hash}/>
-        : <p className="deck-reveal-status mismatch">Prova de integridade criptográfica indisponível para esta mão.</p>}
+        : h.root_commit_hash && h.revealed_card_salts && h.unrevealed_card_hashes
+          ? <PartialDeckProof key={h.hand_id} rootCommitHash={h.root_commit_hash}
+                              revealed={h.revealed_card_salts} unrevealed={h.unrevealed_card_hashes}/>
+          : <p className="deck-reveal-status mismatch">Prova de integridade criptográfica indisponível para esta mão.</p>}
     </section>
   </div>;
 }

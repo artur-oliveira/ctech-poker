@@ -180,6 +180,22 @@ type HandOutcome struct {
 	ServerSeed     string
 	CommitHash     string
 	RootCommitHash string
+	// FairnessProofs is each participant's viewer-scoped deck proof, keyed by
+	// player ID (Table.FairnessProofsForActor). It is filled in by the actor on
+	// the copy handed to the hand-complete / hand-updated hooks — never stored
+	// on Table.lastOutcome, which is persisted with every table state write and
+	// has no need for 52 hashes per seat.
+	FairnessProofs map[string]FairnessProof
+}
+
+// FairnessProof lets a player rebuild RootCommitHash for one hand without
+// seeing cards they aren't entitled to: revealed positions carry the card plus
+// its salt, every other position carries only its committed hash. ServerSeedHex
+// is set only when the whole deck is public anyway (see fairnessProofFor).
+type FairnessProof struct {
+	ServerSeedHex        string
+	RevealedCardSalts    map[int]RevealedSaltView
+	UnrevealedCardHashes map[int]string
 }
 
 // PlayerHandInfo is one participant's hole cards from HandOutcome. Revealed

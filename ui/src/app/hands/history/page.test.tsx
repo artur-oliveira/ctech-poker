@@ -30,6 +30,9 @@ vi.mock('@/components/hands/ActionTimeline', () => ({
 vi.mock('@/components/hands/DeckReveal', () => ({
   DeckReveal: ({serverSeed}: {serverSeed: string}) => <div>proof:{serverSeed}</div>,
 }));
+vi.mock('@/components/hands/PartialDeckProof', () => ({
+  PartialDeckProof: ({rootCommitHash}: {rootCommitHash: string}) => <div>partial:{rootCommitHash}</div>,
+}));
 vi.mock('@/components/hands/HandExportButton', () => ({HandExportButton: () => <button>exportar</button>}));
 vi.mock('@/components/hands/ShareHandDialog', () => ({ShareHandDialog: () => <button>compartilhar</button>}));
 
@@ -99,6 +102,20 @@ describe('hand detail page', () => {
       'href', '/hands/replay?table_id=table%2Fone&hand_id=hand%20one'
     );
     expect(screen.getByRole('button', {name: 'exportar'})).toBeInTheDocument();
+  });
+
+  test('falls back to the per-position proof when the seed was withheld', () => {
+    queryState({
+      handData: {
+        ...hand, server_seed: undefined,
+        root_commit_hash: 'root-1',
+        revealed_card_salts: {0: {card: 'AH', salt_hex: 'aa'}},
+        unrevealed_card_hashes: {1: 'bb'},
+      },
+    });
+    render(<HandHistoryPage/>);
+    expect(screen.getByText('partial:root-1')).toBeInTheDocument();
+    expect(screen.queryByText(/Prova de integridade criptográfica indisponível/)).not.toBeInTheDocument();
   });
 
   test('shows independent history error and unavailable fairness proof', () => {

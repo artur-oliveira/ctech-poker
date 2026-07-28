@@ -687,7 +687,9 @@ func (a *Actor) notifyHandComplete() {
 					names[p.ID] = p.Name
 				}
 			}
-			a.onHandComplete(a.handID, *outcome, names)
+			hookOutcome := *outcome
+			hookOutcome.FairnessProofs = a.cached.FairnessProofsForActor()
+			a.onHandComplete(a.handID, hookOutcome, names)
 		}
 	}
 }
@@ -1217,7 +1219,9 @@ func (a *Actor) handleShowCards(ctx context.Context, c ShowCardsCmd) error {
 					names[p.ID] = p.Name
 				}
 			}
-			a.onHandUpdated(a.handID, *outcome, names)
+			hookOutcome := *outcome
+			hookOutcome.FairnessProofs = a.cached.FairnessProofsForActor()
+			a.onHandUpdated(a.handID, hookOutcome, names)
 		}
 	}
 	return nil

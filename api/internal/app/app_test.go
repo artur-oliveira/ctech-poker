@@ -116,6 +116,38 @@ func TestHandItemForDoesNotPersistSeedWithHiddenCards(t *testing.T) {
 	}
 }
 
+// A seed-less hand is still auditable: the per-position proof must survive into
+// the player's history item, otherwise "verify your deck" is dead on any hand
+// that ended without a showdown.
+func TestHandItemForPersistsFairnessProofWithoutSeed(t *testing.T) {
+	outcome := hand.HandOutcome{
+		Participants: []string{"viewer", "folder"},
+		PlayerHands: map[string]hand.PlayerHandInfo{
+			"viewer": {HoleCards: [2]string{"Ah", "Kh"}},
+			"folder": {HoleCards: [2]string{"Qs", "Qc"}},
+		},
+		FairnessProofs: map[string]hand.FairnessProof{
+			"viewer": {
+				RevealedCardSalts:    map[int]hand.RevealedSaltView{0: {Card: "Ah", SaltHex: "aa"}},
+				UnrevealedCardHashes: map[int]string{1: "bb"},
+			},
+		},
+	}
+	item := handItemFor(outcome, "viewer", nil)
+	if item.ServerSeed != "" {
+		t.Fatalf("no-showdown hand must not publish the seed, got %q", item.ServerSeed)
+	}
+	if item.RevealedCardSalts["0"].Card != "Ah" || item.RevealedCardSalts["0"].SaltHex != "aa" {
+		t.Fatalf("revealed salt not persisted: %+v", item.RevealedCardSalts)
+	}
+	if item.UnrevealedCardHashes["1"] != "bb" {
+		t.Fatalf("unrevealed hash not persisted: %+v", item.UnrevealedCardHashes)
+	}
+	if got := handItemFor(outcome, "folder", nil); got.RevealedCardSalts != nil || got.UnrevealedCardHashes != nil {
+		t.Fatalf("a player with no proof must not inherit another's: %+v", got)
+	}
+}
+
 func testRoutes(app *fiber.App, cfg *config.Config) {
 	verifier := jwtverify.NewVerifier("", "", "", cache.NewMemoryBackend(1))
 	manager := tablemanager.NewManager(nil, nil, nil, nil)

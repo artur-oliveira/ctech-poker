@@ -280,80 +280,115 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		out.RootCommitHash = hex.EncodeToString(rootCommit[:])
 
 		if t.stage == Complete {
-			showFinalCards := !wonWithoutShowdown
-			hasUnrevealedFold := wonWithoutShowdown
-			for _, p := range t.handOrder {
-				if p.State == Folded {
-					hasUnrevealedFold = true
-					break
-				}
-			}
-
-			if !hasUnrevealedFold {
-				out.ShuffleServerSeedHex = hex.EncodeToString(t.shuffle.ServerSeed[:])
-			}
-
-			revealedSalts := make(map[int]RevealedSaltView)
-			unrevealedHashes := make(map[int]string)
-
-			numActive := len(t.handOrder)
-			holeTotal := numActive * 2
-			dealerIdx := 0
-			if numActive > 0 {
-				dealerIdx = t.dealerIndexWithin(t.handOrder)
-			}
-			rabbitIndices := make(map[int]bool)
-			if wonWithoutShowdown && len(t.board) < 5 {
-				// Hole cards are followed by a burn+flop, burn+turn and
-				// burn+river. Reveal only missing community-card positions;
-				// burns and private cards remain committed hashes.
-				flopStart := holeTotal + 1
-				if len(t.board) < 3 {
-					for i := range 3 {
-						rabbitIndices[flopStart+i] = true
-					}
-				}
-				if len(t.board) < 4 {
-					rabbitIndices[holeTotal+5] = true
-				}
-				if len(t.board) < 5 {
-					rabbitIndices[holeTotal+7] = true
-				}
-			}
-
-			for i, c := range t.shuffle.Cards {
-				cCode := cardCode(c)
-				isRevealed := rabbitIndices[i]
-
-				if numActive > 0 && i < holeTotal {
-					pass := i / numActive
-					offset := (i % numActive) + 1
-					p := t.handOrder[(dealerIdx+offset)%numActive]
-
-					if p.ID == viewerID || (showFinalCards && p.State != Folded) || p.VoluntarilyShownCards[pass] {
-						isRevealed = true
-					}
-				} else if i < t.nextCard {
-					isRevealed = true
-				}
-
-				if isRevealed {
-					salt := deck.CardSalt(t.shuffle.ServerSeed, i)
-					revealedSalts[i] = RevealedSaltView{
-						Card:    cCode,
-						SaltHex: hex.EncodeToString(salt[:]),
-					}
-					if rabbitIndices[i] {
-						out.RunoutCards = append(out.RunoutCards, cCode)
-					}
-				} else {
-					h := deck.CardHash(t.shuffle.ServerSeed, i, c)
-					unrevealedHashes[i] = hex.EncodeToString(h[:])
-				}
-			}
-			out.RevealedCardSalts = revealedSalts
-			out.UnrevealedCardHashes = unrevealedHashes
+			proof, runout := t.fairnessProofFor(viewerID, wonWithoutShowdown)
+			out.ShuffleServerSeedHex = proof.ServerSeedHex
+			out.RevealedCardSalts = proof.RevealedCardSalts
+			out.UnrevealedCardHashes = proof.UnrevealedCardHashes
+			out.RunoutCards = runout
 		}
+	}
+	return out
+}
+
+// fairnessProofFor builds viewerID's provably-fair proof for the just-completed
+// hand. The full seed only comes out when nothing stays hidden (a real showdown
+// with no folded hand); otherwise the viewer gets card+salt reveals for the
+// positions they may see plus the committed hash of every position they may
+// not, which still rebuilds RootCommitHash without leaking mucked cards. Second
+// return is the rabbit-hunt runout (missing community cards) if any.
+//
+// Callers must hold t.stage == Complete and t.shuffle != nil.
+func (t *Table) fairnessProofFor(viewerID string, wonWithoutShowdown bool) (FairnessProof, []string) {
+	showFinalCards := !wonWithoutShowdown
+	hasUnrevealedFold := wonWithoutShowdown
+	for _, p := range t.handOrder {
+		if p.State == Folded {
+			hasUnrevealedFold = true
+			break
+		}
+	}
+
+	proof := FairnessProof{
+		RevealedCardSalts:    make(map[int]RevealedSaltView),
+		UnrevealedCardHashes: make(map[int]string),
+	}
+	if !hasUnrevealedFold {
+		proof.ServerSeedHex = hex.EncodeToString(t.shuffle.ServerSeed[:])
+	}
+	var runout []string
+
+	numActive := len(t.handOrder)
+	holeTotal := numActive * 2
+	dealerIdx := 0
+	if numActive > 0 {
+		dealerIdx = t.dealerIndexWithin(t.handOrder)
+	}
+	rabbitIndices := make(map[int]bool)
+	if wonWithoutShowdown && len(t.board) < 5 {
+		// Hole cards are followed by a burn+flop, burn+turn and
+		// burn+river. Reveal only missing community-card positions;
+		// burns and private cards remain committed hashes.
+		flopStart := holeTotal + 1
+		if len(t.board) < 3 {
+			for i := range 3 {
+				rabbitIndices[flopStart+i] = true
+			}
+		}
+		if len(t.board) < 4 {
+			rabbitIndices[holeTotal+5] = true
+		}
+		if len(t.board) < 5 {
+			rabbitIndices[holeTotal+7] = true
+		}
+	}
+
+	for i, c := range t.shuffle.Cards {
+		cCode := cardCode(c)
+		isRevealed := rabbitIndices[i]
+
+		if numActive > 0 && i < holeTotal {
+			pass := i / numActive
+			offset := (i % numActive) + 1
+			p := t.handOrder[(dealerIdx+offset)%numActive]
+
+			if p.ID == viewerID || (showFinalCards && p.State != Folded) || p.VoluntarilyShownCards[pass] {
+				isRevealed = true
+			}
+		} else if i < t.nextCard {
+			isRevealed = true
+		}
+
+		if isRevealed {
+			salt := deck.CardSalt(t.shuffle.ServerSeed, i)
+			proof.RevealedCardSalts[i] = RevealedSaltView{
+				Card:    cCode,
+				SaltHex: hex.EncodeToString(salt[:]),
+			}
+			if rabbitIndices[i] {
+				runout = append(runout, cCode)
+			}
+		} else {
+			h := deck.CardHash(t.shuffle.ServerSeed, i, c)
+			proof.UnrevealedCardHashes[i] = hex.EncodeToString(h[:])
+		}
+	}
+	return proof, runout
+}
+
+// FairnessProofsForActor returns one fairness proof per dealt-in participant of
+// the just-completed hand, keyed by player ID — the durable-history counterpart
+// of what ViewFor puts on the live snapshot, so a player can still verify the
+// deck from their match history after the table has moved on. Nil unless the
+// hand is complete and a shuffle exists.
+func (t *Table) FairnessProofsForActor() map[string]FairnessProof {
+	if t.shuffle == nil || t.stage != Complete {
+		return nil
+	}
+	wonWithoutShowdown := t.lastOutcome != nil && t.lastOutcome.WonWithoutShowdown
+	out := make(map[string]FairnessProof, len(t.handOrder))
+	for _, p := range t.handOrder {
+		proof, _ := t.fairnessProofFor(p.ID, wonWithoutShowdown)
+		out[p.ID] = proof
 	}
 	return out
 }
