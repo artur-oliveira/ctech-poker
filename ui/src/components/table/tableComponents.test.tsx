@@ -1,4 +1,4 @@
-import {render, screen} from '@testing-library/react';
+import {fireEvent, render, screen} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {describe, expect, test, vi} from 'vitest';
 import {ActionBar, type ActionAvailability} from './ActionBar';
@@ -91,6 +91,56 @@ describe('table controls', () => {
     });
     expect(onActAction).toHaveBeenCalledWith('check');
     expect(screen.getByText('Executando sua ação preparada…')).toBeInTheDocument();
+  });
+
+  test('supports action and bet-sizing keyboard shortcuts without stealing input keystrokes', async () => {
+    const {onActAction} = renderActionBar();
+    fireEvent.keyDown(window, {key: 'f'});
+    fireEvent.keyDown(window, {key: 'c'});
+    fireEvent.keyDown(window, {key: 'p'});
+    fireEvent.keyDown(window, {key: 'ArrowRight'});
+    fireEvent.keyDown(window, {key: 'r'});
+
+    expect(onActAction).toHaveBeenNthCalledWith(1, 'fold');
+    expect(onActAction).toHaveBeenNthCalledWith(2, 'check');
+    expect(onActAction).toHaveBeenNthCalledWith(3, 'call');
+    expect(onActAction).toHaveBeenNthCalledWith(4, 'raise', 175);
+
+    const input = document.createElement('input');
+    document.body.append(input);
+    input.focus();
+    fireEvent.keyDown(input, {key: 'f'});
+    expect(onActAction).toHaveBeenCalledTimes(4);
+    input.remove();
+  });
+
+  test('selects, deselects and executes supported pre-actions only when legal', async () => {
+    const onPreselectAction = vi.fn(() => true);
+    renderActionBar({
+      isTurn: false,
+      canPreselect: true,
+      supportsCallPreselection: true,
+      prospectiveCallAmount: 75,
+      onPreselectAction,
+    });
+
+    await userEvent.click(screen.getByRole('button', {name: /Call 75/}));
+    expect(onPreselectAction).toHaveBeenCalledWith('call', 75);
+    const selected = screen.getByRole('button', {name: /Check \/ Fold/});
+    await userEvent.click(selected);
+    expect(onPreselectAction).toHaveBeenCalledWith('check_fold', 0);
+  });
+
+  test('collapses controls when the backend reports no legal action', () => {
+    renderActionBar({available: {fold: false, check: false, call: false, raise: false}});
+    expect(screen.queryByRole('group', {name: 'Ações rápidas'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: /Aumentar/})).not.toBeInTheDocument();
+  });
+
+  test('shows pending action state and effective-stack context', () => {
+    renderActionBar({pending: 'call', effectiveStack: 12_345});
+    expect(screen.getAllByText('Pagando…')).toHaveLength(2);
+    expect(screen.getByRole('group', {name: 'Ações da rodada'})).toHaveAttribute('aria-busy', 'true');
   });
 });
 

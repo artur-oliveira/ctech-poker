@@ -9,7 +9,7 @@ const ws = vi.hoisted(() => ({
   },
   send: vi.fn(() => true),
   reconnect: vi.fn(),
-  status: 'connected' as const,
+  status: 'connected' as 'connected' | 'disconnected',
 }));
 
 const auth = vi.hoisted(() => ({
@@ -124,6 +124,13 @@ describe('useTableRealtime', () => {
     act(() => ws.options?.onOpen());
     expect(ws.send).toHaveBeenCalledWith({type: 'ping'});
     expect(result.current.status).toBe('connected');
+  });
+
+  test('keeps realtime disabled when no table was selected', () => {
+    const {unmount} = renderHook(() => useTableRealtime('', VIEWER));
+
+    expect(ws.options).toMatchObject({url: null, enabled: false});
+    unmount();
   });
 
   test('publishes a snapshot, announcement and turn sound, while rejecting stale state', () => {
@@ -323,5 +330,182 @@ describe('useTableRealtime', () => {
     expect(result.current.snapshot?.seats[0].equity).toBeUndefined();
     receive({type: 'equity', player_id: VIEWER, equity: 0.75, snapshot_version: 7});
     expect(result.current.snapshot?.seats[0].equity).toBe(0.75);
+  });
+
+  test('emits all lightweight table commands with their protocol preconditions', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot({snapshot_version: 9, hand_id: 'hand-9'})});
+
+    act(() => {
+      expect(result.current.keepSeat()).toBe(true);
+      expect(result.current.sendChat('boa mão')).toBe(true);
+      expect(result.current.sendReaction('angry', 'player-2')).toBe(true);
+      expect(result.current.preselectAction('call', 40)).toBe(true);
+      expect(result.current.submitBotChallenge('turnstile-token')).toBe(true);
+    });
+
+    expect(ws.send).toHaveBeenCalledWith({type: 'keep_seat', action_id: 'action-1'});
+    expect(ws.send).toHaveBeenCalledWith({
+      type: 'chat', message: 'boa mão', action_id: 'action-2',
+    });
+    expect(ws.send).toHaveBeenCalledWith({
+      type: 'reaction', reaction_id: 'angry', target_player_id: 'player-2', action_id: 'action-3',
+    });
+    expect(ws.send).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'preselect_action',
+      action: 'call',
+      amount: 40,
+      expected_snapshot_version: 9,
+      expected_hand_id: 'hand-9',
+    }));
+    expect(ws.send).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'bot_challenge', turnstile_token: 'turnstile-token',
+    }));
+  });
+
+  test('releases pending work from newer, correlated and reconnect snapshots', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot()});
+
+    act(() => result.current.act('call'));
+    receive({type: 'state', snapshot: snapshot({snapshot_version: 2})});
+    expect(result.current.pendingAction).toBeNull();
+
+    act(() => result.current.act('fold'));
+    receive({type: 'state', action_id: 'action-2', snapshot: snapshot({snapshot_version: 2})});
+    expect(result.current.pendingAction).toBeNull();
+
+    act(() => result.current.act('raise', 100));
+    receive({type: 'connected'});
+    receive({type: 'state', snapshot: snapshot({snapshot_version: 2})});
+    expect(result.current.pendingAction).toBeNull();
+  });
+
+  test('uses an unversioned snapshot as acknowledgement for legacy auxiliary commands', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    act(() => result.current.ready());
+    receive({
+      type: 'state',
+      snapshot: snapshot({snapshot_version: 0, protocol_version: 0, hand_id: undefined}),
+    });
+    expect(result.current.readyPending).toBe(false);
+  });
+
+  test('reports auxiliary command failures and timeouts, then permits retry', () => {
+    vi.useFakeTimers();
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+
+    act(() => result.current.ready(false));
+    receive({type: 'error', code: 'invalid_action', action_id: 'action-1'});
+    expect(result.current.readyPending).toBe(false);
+    expect(result.current.actionError).toMatchObject({code: 'invalid_action'});
+
+    act(() => result.current.showCards(1));
+    act(() => vi.advanceTimersByTime(8000));
+    expect(result.current.showCardsPending).toBe(false);
+    expect(result.current.actionError).toMatchObject({code: 'action_timeout'});
+
+    ws.send.mockReturnValue(false);
+    act(() => expect(result.current.ready()).toBe(false));
+    expect(result.current.readyPending).toBe(false);
+    expect(result.current.actionError).toMatchObject({code: 'not_connected'});
+    act(() => result.current.clearActionError());
+    expect(result.current.actionError).toBeNull();
+  });
+
+  test('retries a failed action connection and refreshes credentials without closing the socket', async () => {
+    vi.useFakeTimers();
+    auth.refresh.mockResolvedValue({accessToken: 'rotated-token', username: 'novo'});
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot()});
+    act(() => result.current.act('call'));
+
+    ws.send.mockReturnValue(false);
+    act(() => vi.advanceTimersByTime(8000));
+    expect(result.current.actionError).toMatchObject({code: 'connection_lost'});
+    expect(ws.reconnect).toHaveBeenCalledTimes(1);
+
+    ws.send.mockReturnValue(true);
+    await act(async () => {
+      vi.advanceTimersByTime(4 * 60 * 1000);
+      await Promise.resolve();
+    });
+    expect(auth.setAccessToken).toHaveBeenCalledWith('rotated-token');
+    expect(auth.setUsername).toHaveBeenCalledWith('novo');
+    expect(ws.reconnect).toHaveBeenCalledTimes(1);
+  });
+
+  test('reconnects a disconnected socket when the page becomes visible', () => {
+    ws.status = 'disconnected';
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    renderHook(() => useTableRealtime('table-1', VIEWER));
+
+    act(() => document.dispatchEvent(new Event('visibilitychange')));
+    expect(ws.reconnect).toHaveBeenCalledTimes(1);
+    visibility.mockRestore();
+    ws.status = 'connected';
+  });
+
+  test('resets table-scoped state when navigating between tables', () => {
+    const {result, rerender} = renderHook(
+      ({tableId}) => useTableRealtime(tableId, VIEWER),
+      {initialProps: {tableId: 'table-1'}},
+    );
+    receive({type: 'state', snapshot: snapshot({snapshot_version: 100})});
+    expect(result.current.snapshot?.snapshot_version).toBe(100);
+
+    rerender({tableId: 'table-2'});
+    act(() => ws.options?.onOpen());
+    expect(result.current.snapshot).toBeNull();
+    receive({type: 'state', snapshot: snapshot({snapshot_version: 1, hand_id: 'other-hand'})});
+    expect(result.current.snapshot?.snapshot_version).toBe(1);
+  });
+
+  test('announces payouts and selects sounds for bets, all-ins and showdown', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot({current_player_id: 'player-2'})});
+    receive({
+      type: 'state',
+      snapshot: snapshot({
+        snapshot_version: 2,
+        current_player_id: 'player-2',
+        seats: snapshot().seats.map(seat => seat.player_id === 'player-2'
+          ? {...seat, contributed: 80}
+          : seat),
+      }),
+    });
+    expect(playSound).toHaveBeenCalledWith('half_pot');
+
+    receive({
+      type: 'state',
+      snapshot: snapshot({
+        snapshot_version: 3,
+        current_player_id: 'player-2',
+        seats: snapshot().seats.map(seat => seat.player_id === 'player-2'
+          ? {...seat, contributed: 80, state: 'all_in'}
+          : seat),
+      }),
+    });
+    expect(playSound).toHaveBeenCalledWith('all_in');
+
+    receive({
+      type: 'state',
+      snapshot: snapshot({
+        snapshot_version: 4,
+        stage: 'complete',
+        current_player_id: undefined,
+        payouts: {[VIEWER]: 120},
+        winners: [VIEWER],
+        pot_results: [{
+          amount: 120,
+          eligible_player_ids: [VIEWER],
+          winner_player_ids: [VIEWER],
+          payout_amount: 120,
+          payouts: {[VIEWER]: 120},
+        }],
+      }),
+    });
+    expect(result.current.announcement).toContain('Você ganhou 120 fichas');
+    expect(playSound).toHaveBeenCalledWith('reveal');
   });
 });
