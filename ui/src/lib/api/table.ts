@@ -23,7 +23,7 @@ export interface SeatView {
 }
 
 export type PokerAction = 'fold' | 'check' | 'call' | 'raise'
-export type ActionPreselection = 'check_fold' | 'fold'
+export type ActionPreselection = 'check_fold' | 'fold' | 'call' | 'call_any'
 
 export type ChatMessage = {id: string; player_id: string; message: string; timestamp: number}
 export type PersistedReaction = {
@@ -81,6 +81,8 @@ export interface TableSnapshot {
   chat_messages?: ChatMessage[];
   reactions?: PersistedReaction[];
   action_preselection?: ActionPreselection;
+  action_preselection_amount?: number;
+  prospective_call_amount?: number;
   next_hand_unix_ms?: number;
   idle_removal_unix_ms?: number;
   won_without_showdown?: boolean;

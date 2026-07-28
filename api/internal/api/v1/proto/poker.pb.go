@@ -918,10 +918,15 @@ type TableSnapshot struct {
 	ActionBaseDeadlineUnixMs int64            `protobuf:"varint,23,opt,name=action_base_deadline_unix_ms,json=actionBaseDeadlineUnixMs,proto3" json:"action_base_deadline_unix_ms,omitempty"`
 	ChatMessages             []*ChatMessage   `protobuf:"bytes,24,rep,name=chat_messages,json=chatMessages,proto3" json:"chat_messages,omitempty"`
 	Reactions                []*TableReaction `protobuf:"bytes,25,rep,name=reactions,proto3" json:"reactions,omitempty"`
-	// Viewer-scoped one-shot value: "check_fold" | "fold" | empty.
+	// Viewer-scoped one-shot value: check_fold | fold | call | call_any | empty.
 	ActionPreselection string `protobuf:"bytes,26,opt,name=action_preselection,json=actionPreselection,proto3" json:"action_preselection,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// Frozen amount for a fixed "call" preselection; zero for every other mode.
+	ActionPreselectionAmount int64 `protobuf:"varint,27,opt,name=action_preselection_amount,json=actionPreselectionAmount,proto3" json:"action_preselection_amount,omitempty"`
+	// What this viewer would owe if action reached them now, even before their
+	// turn. Viewer-scoped so the UI can offer an exact fixed-call preselection.
+	ProspectiveCallAmount int64 `protobuf:"varint,28,opt,name=prospective_call_amount,json=prospectiveCallAmount,proto3" json:"prospective_call_amount,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *TableSnapshot) Reset() {
@@ -1136,6 +1141,20 @@ func (x *TableSnapshot) GetActionPreselection() string {
 	return ""
 }
 
+func (x *TableSnapshot) GetActionPreselectionAmount() int64 {
+	if x != nil {
+		return x.ActionPreselectionAmount
+	}
+	return 0
+}
+
+func (x *TableSnapshot) GetProspectiveCallAmount() int64 {
+	if x != nil {
+		return x.ProspectiveCallAmount
+	}
+	return 0
+}
+
 // ClientMessage is sent from the client to the server.
 type ClientMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1144,8 +1163,8 @@ type ClientMessage struct {
 	Token                   string `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`                                                                       // for auth frame
 	ShareCode               string `protobuf:"bytes,3,opt,name=share_code,json=shareCode,proto3" json:"share_code,omitempty"`                                              // for auth frame
 	Ready                   bool   `protobuf:"varint,4,opt,name=ready,proto3" json:"ready,omitempty"`                                                                      // for ready command
-	Action                  string `protobuf:"bytes,5,opt,name=action,proto3" json:"action,omitempty"`                                                                     // poker action, or check_fold|fold|empty for preselect_action
-	Amount                  int64  `protobuf:"varint,6,opt,name=amount,proto3" json:"amount,omitempty"`                                                                    // for act command
+	Action                  string `protobuf:"bytes,5,opt,name=action,proto3" json:"action,omitempty"`                                                                     // poker action, or check_fold|fold|call|call_any|empty for preselect_action
+	Amount                  int64  `protobuf:"varint,6,opt,name=amount,proto3" json:"amount,omitempty"`                                                                    // bet amount for act; frozen call amount for preselect_action
 	ActionId                string `protobuf:"bytes,7,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`                                                 // for act command
 	Message                 string `protobuf:"bytes,8,opt,name=message,proto3" json:"message,omitempty"`                                                                   // for chat command
 	ExpectedSnapshotVersion uint64 `protobuf:"varint,9,opt,name=expected_snapshot_version,json=expectedSnapshotVersion,proto3" json:"expected_snapshot_version,omitempty"` // optimistic precondition for act
@@ -1579,7 +1598,8 @@ const file_poker_proto_rawDesc = "" +
 	"\x10target_player_id\x18\x04 \x01(\tR\x0etargetPlayerId\x12\x1c\n" +
 	"\ttimestamp\x18\x05 \x01(\x03R\ttimestamp\x12\x1d\n" +
 	"\n" +
-	"expires_at\x18\x06 \x01(\x03R\texpiresAt\"\xc3\t\n" +
+	"expires_at\x18\x06 \x01(\x03R\texpiresAt\"\xb9\n" +
+	"\n" +
 	"\rTableSnapshot\x12\x14\n" +
 	"\x05stage\x18\x01 \x01(\tR\x05stage\x12\x14\n" +
 	"\x05board\x18\x02 \x03(\tR\x05board\x12!\n" +
@@ -1609,7 +1629,9 @@ const file_poker_proto_rawDesc = "" +
 	"\x1caction_base_deadline_unix_ms\x18\x17 \x01(\x03R\x18actionBaseDeadlineUnixMs\x127\n" +
 	"\rchat_messages\x18\x18 \x03(\v2\x12.poker.ChatMessageR\fchatMessages\x122\n" +
 	"\treactions\x18\x19 \x03(\v2\x14.poker.TableReactionR\treactions\x12/\n" +
-	"\x13action_preselection\x18\x1a \x01(\tR\x12actionPreselection\x1a:\n" +
+	"\x13action_preselection\x18\x1a \x01(\tR\x12actionPreselection\x12<\n" +
+	"\x1aaction_preselection_amount\x18\x1b \x01(\x03R\x18actionPreselectionAmount\x126\n" +
+	"\x17prospective_call_amount\x18\x1c \x01(\x03R\x15prospectiveCallAmount\x1a:\n" +
 	"\fPayoutsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"\xe2\x03\n" +

@@ -1,4 +1,4 @@
-import type {CSSProperties} from 'react';
+import {useState, type CSSProperties} from 'react';
 import {Avatar, AvatarFallback} from '@/components/ui/avatar';
 import {Progress} from '@/components/ui/progress';
 import {ChipStack} from '@/components/table/ChipStack';
@@ -45,6 +45,20 @@ const TOP_SEAT_INDICES = [3, 4, 5];
 // CSS nth-child, same trick as the center-table confetti in HandOutcome.
 const SEAT_CONFETTI_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
 
+function SeatTurnTimer({baseDeadlineMs, observedAtMs, durationMs}: {
+  baseDeadlineMs: number;
+  observedAtMs: number;
+  durationMs: number;
+}) {
+  // Capture the absolute turn position only when a genuinely new base
+  // deadline mounts this keyed component. Later snapshots (presence, equity,
+  // reconnects) must not rewrite a running CSS animation's duration/offset.
+  const [initialElapsedMs] = useState(() => Math.min(durationMs, Math.max(0,
+    observedAtMs - (baseDeadlineMs - durationMs))));
+  return <PerimeterTimer className="seat-turn-ring" durationMs={durationMs}
+                         elapsedMs={initialElapsedMs} restartKey={baseDeadlineMs} radius={14}/>;
+}
+
 export function Seat({
                        seat,
                        isViewer,
@@ -54,7 +68,6 @@ export function Seat({
                        winAmount = 0,
                        refundAmount = 0,
                        isWinner = false,
-                       deadlineMs,
                        baseDeadlineMs,
                        nowMs,
                        turnTimeoutMs,
@@ -77,7 +90,6 @@ export function Seat({
   winAmount?: number;
   refundAmount?: number;
   isWinner?: boolean;
-  deadlineMs?: number;
   baseDeadlineMs?: number;
   nowMs?: number;
   turnTimeoutMs?: number;
@@ -99,11 +111,10 @@ export function Seat({
   const chance = seat.equity == null ? null : Math.round(seat.equity * 100);
   const pendingName = !isViewer && !seat.name;
   const isDisconnected = seat.connection_state === 'disconnected';
-  const remainingMs = isTurn && deadlineMs && nowMs ? Math.max(0, deadlineMs - nowMs) : null;
-  const totalTurnMs = deadlineMs && baseDeadlineMs && turnTimeoutMs ?
-    turnTimeoutMs + Math.max(0, deadlineMs - baseDeadlineMs) : undefined;
-  const timerStartOffset = remainingMs != null && totalTurnMs ?
-    Math.min(100, Math.max(0, 100 * (1 - remainingMs / totalTurnMs))) : 0;
+  // The seat perimeter is the room's normal decision clock only. Once its
+  // base deadline expires, the separately labelled time-bank readout owns the
+  // remaining reserve; it must never lengthen or restart this rectangle.
+  const showNormalClock = Boolean(isTurn && baseDeadlineMs && nowMs && turnTimeoutMs && baseDeadlineMs > nowMs);
   const stackFrom = credit > 0 ? seat.stack - credit : stackBefore ?? seat.stack;
   const displayStack = useCountUp(stackFrom, seat.stack);
   // Heads-up has the dealer double as the small blind, so one combined badge
@@ -114,9 +125,9 @@ export function Seat({
               data-player-id={seat.player_id}
               aria-current={isTurn ? 'true' : undefined}
               className={`game-seat seat-${index} ${seat.state} ${isDisconnected ? 'disconnected' : ''} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${isWinner ? 'is-winner' : ''} ${pendingName ? 'is-pending-name' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
-    {remainingMs != null &&
-        <PerimeterTimer className="seat-turn-ring" durationMs={remainingMs}
-                        startOffset={timerStartOffset} restartKey={deadlineMs ?? 0} radius={14}/>}
+    {showNormalClock && baseDeadlineMs && nowMs && turnTimeoutMs &&
+        <SeatTurnTimer key={baseDeadlineMs} baseDeadlineMs={baseDeadlineMs}
+                       observedAtMs={nowMs} durationMs={turnTimeoutMs}/>}
     {role && <span className={`seat-role ${isDealer ? 'is-dealer' : ''}`} title={ROLE_LABELS[role]}
                    aria-label={ROLE_LABELS[role]}>{role}</span>}
     <div className={`seat-cards ${isWinner && winAmount > 0 ? 'is-collecting' : ''}`}>{[0, 1].map(i => {

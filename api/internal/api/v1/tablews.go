@@ -633,7 +633,7 @@ func RegisterTableWS(
 					ensureActionID()
 					r := make(chan error, 1)
 					if err := dispatch(table.PreselectCmd{
-						PlayerID: playerID, ActionID: m.ActionId, Selection: m.Action,
+						PlayerID: playerID, ActionID: m.ActionId, Selection: m.Action, Amount: m.Amount,
 						ExpectedSnapshotVersion: m.ExpectedSnapshotVersion,
 						ExpectedHandID:          m.ExpectedHandId, Reply: r,
 					}); err != nil {
@@ -874,10 +874,12 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		Pots:                     protoPots,
 		HandId:                   snap.HandID,
 		PotResults:               protoPotResults,
-		ProtocolVersion:          7,
+		ProtocolVersion:          8,
 		ChatMessages:             protoChat,
 		Reactions:                protoReactions,
 		ActionPreselection:       snap.ActionPreselection,
+		ActionPreselectionAmount: snap.ActionPreselectionAmount,
+		ProspectiveCallAmount:    snap.ProspectiveCallAmount,
 	}
 }
 

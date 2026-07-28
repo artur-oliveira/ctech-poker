@@ -3592,13 +3592,15 @@ h1 em {
 
 .action-preselectors {
     grid-column: 1 / -1;
-    display: flex;
+    display: grid;
+    grid-template-columns:repeat(4, max-content);
     align-items: center;
     justify-content: center;
     gap: 7px
 }
 
 .action-preselectors > span {
+    grid-column: 1 / -1;
     color: var(--muted);
     font-size: 11px
 }
@@ -5938,6 +5940,11 @@ h1 em {
         padding-top: 8px
     }
 
+    .action-preselectors {
+        width: 100%;
+        grid-template-columns:repeat(2, minmax(0, 1fr))
+    }
+
     .action-choices {
         grid-column: 1 / -1;
         grid-template-columns:repeat(3, minmax(0, 1fr))
@@ -7581,4 +7588,3 @@ h1 em {
     color: var(--felt-text-soft);
     line-height: 1.5;
 }
-

@@ -54,6 +54,7 @@ type PreselectCmd struct {
 	PlayerID                string
 	ActionID                string
 	Selection               string
+	Amount                  int64
 	ExpectedSnapshotVersion uint64
 	ExpectedHandID          string
 	Reply                   chan error

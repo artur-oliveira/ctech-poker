@@ -44,6 +44,8 @@ type Snapshot struct {
 	ChatMessages             []ChatMessageView `json:"chat_messages,omitempty"`
 	Reactions                []ReactionView    `json:"reactions,omitempty"`
 	ActionPreselection       string            `json:"action_preselection,omitempty"`
+	ActionPreselectionAmount int64             `json:"action_preselection_amount,omitempty"`
+	ProspectiveCallAmount    int64             `json:"prospective_call_amount,omitempty"`
 
 	// EquityOnly is actor-internal metadata. An asynchronous equity estimate
 	// is transported as a versioned delta instead of replaying the complete
@@ -251,17 +253,18 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 	}
 	current := t.currentPlayerToAct()
 	out := Snapshot{
-		Stage:              stageNames[t.stage],
-		Board:              boardCodes(t.board),
-		Seats:              seats,
-		Payouts:            t.payouts,
-		Winners:            winners,
-		Rake:               t.rakeCollected,
-		CurrentPlayerID:    current,
-		LegalActions:       t.legalActionsFor(viewerID, current),
-		WonWithoutShowdown: wonWithoutShowdown,
-		Pots:               t.potViews(),
-		PotResults:         potResults,
+		Stage:                 stageNames[t.stage],
+		Board:                 boardCodes(t.board),
+		Seats:                 seats,
+		Payouts:               t.payouts,
+		Winners:               winners,
+		Rake:                  t.rakeCollected,
+		CurrentPlayerID:       current,
+		LegalActions:          t.legalActionsFor(viewerID, current),
+		ProspectiveCallAmount: t.ProspectiveCallAmountForActor(viewerID),
+		WonWithoutShowdown:    wonWithoutShowdown,
+		Pots:                  t.potViews(),
+		PotResults:            potResults,
 	}
 	if len(t.handOrder) >= 2 {
 		sb, bb := t.blindSeats(t.handOrder)
@@ -276,6 +279,25 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		}
 	}
 	return out
+}
+
+// ProspectiveCallAmountForActor returns what playerID would owe if action
+// reached them in the current betting round. Unlike LegalActions it is
+// intentionally available before the player's turn, but only appears in that
+// player's viewer-scoped snapshot.
+func (t *Table) ProspectiveCallAmountForActor(playerID string) int64 {
+	if !isBettingStage(t.stage) || t.round == nil {
+		return 0
+	}
+	idx, ok := t.roundIdx[playerID]
+	if !ok {
+		return 0
+	}
+	player := t.round.Players[idx]
+	if player.Folded || player.AllIn {
+		return 0
+	}
+	return max(0, t.round.CurrentBet-player.Contributed)
 }
 
 func (t *Table) potViews() []PotView {

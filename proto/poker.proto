@@ -142,8 +142,13 @@ message TableSnapshot {
   int64 action_base_deadline_unix_ms = 23;
   repeated ChatMessage chat_messages = 24;
   repeated TableReaction reactions = 25;
-  // Viewer-scoped one-shot value: "check_fold" | "fold" | empty.
+  // Viewer-scoped one-shot value: check_fold | fold | call | call_any | empty.
   string action_preselection = 26;
+  // Frozen amount for a fixed "call" preselection; zero for every other mode.
+  int64 action_preselection_amount = 27;
+  // What this viewer would owe if action reached them now, even before their
+  // turn. Viewer-scoped so the UI can offer an exact fixed-call preselection.
+  int64 prospective_call_amount = 28;
 }
 
 // --- WEBSOCKET ENVELOPES ---
@@ -156,8 +161,8 @@ message ClientMessage {
   string token = 2; // for auth frame
   string share_code = 3; // for auth frame
   bool ready = 4; // for ready command
-  string action = 5; // poker action, or check_fold|fold|empty for preselect_action
-  int64 amount = 6; // for act command
+  string action = 5; // poker action, or check_fold|fold|call|call_any|empty for preselect_action
+  int64 amount = 6; // bet amount for act; frozen call amount for preselect_action
   string action_id = 7; // for act command
   string message = 8; // for chat command
   uint64 expected_snapshot_version = 9; // optimistic precondition for act

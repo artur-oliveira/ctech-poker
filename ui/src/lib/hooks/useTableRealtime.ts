@@ -714,8 +714,9 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     sendReaction: (reactionId: TableReactionID, targetPlayerId?: string) =>
       emit({type: 'reaction', reaction_id: reactionId, target_player_id: targetPlayerId || '',
         action_id: crypto.randomUUID()}),
-    preselectAction: (selection: ActionPreselection | null) => emit({
+    preselectAction: (selection: ActionPreselection | null, amount = 0) => emit({
       type: 'preselect_action', action: selection || '', action_id: crypto.randomUUID(),
+      amount,
       expected_snapshot_version: latestVersionRef.current,
       expected_hand_id: latestHandIDRef.current
     }),

@@ -74,6 +74,7 @@ type Reaction struct {
 
 type Preselection struct {
 	Selection string `dynamodbav:"selection"`
+	Amount    int64  `dynamodbav:"amount,omitempty"`
 	HandID    string `dynamodbav:"hand_id"`
 	Stage     string `dynamodbav:"stage"`
 }

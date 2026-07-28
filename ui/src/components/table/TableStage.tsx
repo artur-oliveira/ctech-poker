@@ -77,7 +77,6 @@ export function TableStage({
           winAmount={breakdown.won}
           refundAmount={breakdown.refund}
           isWinner={snapshot.winners?.includes(seat.player_id) ?? false}
-          deadlineMs={snapshot.action_deadline_unix_ms}
           baseDeadlineMs={snapshot.action_base_deadline_unix_ms}
           nowMs={nowMs}
           turnTimeoutMs={turnTimeoutMs}

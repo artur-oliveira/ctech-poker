@@ -186,8 +186,15 @@ export interface TableSnapshot {
   action_base_deadline_unix_ms: number;
   chat_messages: ChatMessage[];
   reactions: TableReaction[];
-  /** Viewer-scoped one-shot value: "check_fold" | "fold" | empty. */
+  /** Viewer-scoped one-shot value: check_fold | fold | call | call_any | empty. */
   action_preselection: string;
+  /** Frozen amount for a fixed "call" preselection; zero for every other mode. */
+  action_preselection_amount: number;
+  /**
+   * What this viewer would owe if action reached them now, even before their
+   * turn. Viewer-scoped so the UI can offer an exact fixed-call preselection.
+   */
+  prospective_call_amount: number;
 }
 
 export interface TableSnapshot_PayoutsEntry {
@@ -205,9 +212,9 @@ export interface ClientMessage {
   share_code: string;
   /** for ready command */
   ready: boolean;
-  /** poker action, or check_fold|fold|empty for preselect_action */
+  /** poker action, or check_fold|fold|call|call_any|empty for preselect_action */
   action: string;
-  /** for act command */
+  /** bet amount for act; frozen call amount for preselect_action */
   amount: number;
   /** for act command */
   action_id: string;
@@ -2088,6 +2095,8 @@ function createBaseTableSnapshot(): TableSnapshot {
     chat_messages: [],
     reactions: [],
     action_preselection: "",
+    action_preselection_amount: 0,
+    prospective_call_amount: 0,
   };
 }
 
@@ -2170,6 +2179,12 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     }
     if (message.action_preselection !== "") {
       writer.uint32(210).string(message.action_preselection);
+    }
+    if (message.action_preselection_amount !== 0) {
+      writer.uint32(216).int64(message.action_preselection_amount);
+    }
+    if (message.prospective_call_amount !== 0) {
+      writer.uint32(224).int64(message.prospective_call_amount);
     }
     return writer;
   },
@@ -2392,6 +2407,22 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           message.action_preselection = reader.string();
           continue;
         }
+        case 27: {
+          if (tag !== 216) {
+            break;
+          }
+
+          message.action_preselection_amount = longToNumber(reader.int64());
+          continue;
+        }
+        case 28: {
+          if (tag !== 224) {
+            break;
+          }
+
+          message.prospective_call_amount = longToNumber(reader.int64());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2513,6 +2544,16 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
         : isSet(object.action_preselection)
         ? globalThis.String(object.action_preselection)
         : "",
+      action_preselection_amount: isSet(object.actionPreselectionAmount)
+        ? globalThis.Number(object.actionPreselectionAmount)
+        : isSet(object.action_preselection_amount)
+        ? globalThis.Number(object.action_preselection_amount)
+        : 0,
+      prospective_call_amount: isSet(object.prospectiveCallAmount)
+        ? globalThis.Number(object.prospectiveCallAmount)
+        : isSet(object.prospective_call_amount)
+        ? globalThis.Number(object.prospective_call_amount)
+        : 0,
     };
   },
 
@@ -2602,6 +2643,12 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     if (message.action_preselection !== "") {
       obj.actionPreselection = message.action_preselection;
     }
+    if (message.action_preselection_amount !== 0) {
+      obj.actionPreselectionAmount = Math.round(message.action_preselection_amount);
+    }
+    if (message.prospective_call_amount !== 0) {
+      obj.prospectiveCallAmount = Math.round(message.prospective_call_amount);
+    }
     return obj;
   },
 
@@ -2646,6 +2693,8 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     message.chat_messages = object.chat_messages?.map((e) => ChatMessage.fromPartial(e)) || [];
     message.reactions = object.reactions?.map((e) => TableReaction.fromPartial(e)) || [];
     message.action_preselection = object.action_preselection ?? "";
+    message.action_preselection_amount = object.action_preselection_amount ?? 0;
+    message.prospective_call_amount = object.prospective_call_amount ?? 0;
     return message;
   },
 };

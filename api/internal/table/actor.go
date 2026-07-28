@@ -332,7 +332,8 @@ func (a *Actor) handlePreselect(ctx context.Context, c PreselectCmd) error {
 	if c.ActionID == "" {
 		return errors.New("table: action_id is required")
 	}
-	if c.Selection != "" && c.Selection != "check_fold" && c.Selection != "fold" {
+	if c.Selection != "" && c.Selection != "check_fold" && c.Selection != "fold" &&
+		c.Selection != "call" && c.Selection != "call_any" {
 		return errors.New("table: invalid action preselection")
 	}
 	return a.commitActivity(ctx, func() error {
@@ -343,6 +344,12 @@ func (a *Actor) handlePreselect(ctx context.Context, c PreselectCmd) error {
 			uint64(a.version) != c.ExpectedSnapshotVersion || a.handID != c.ExpectedHandID {
 			return errors.New("table: stale action state")
 		}
+		if c.Selection == "call" && (c.Amount <= 0 || c.Amount != a.cached.ProspectiveCallAmountForActor(c.PlayerID)) {
+			return errors.New("table: fixed call amount changed")
+		}
+		if c.Selection != "call" {
+			c.Amount = 0
+		}
 		if a.activity.Preselections == nil {
 			a.activity.Preselections = make(map[string]tablestore.Preselection)
 		}
@@ -350,7 +357,7 @@ func (a *Actor) handlePreselect(ctx context.Context, c PreselectCmd) error {
 			delete(a.activity.Preselections, c.PlayerID)
 		} else {
 			a.activity.Preselections[c.PlayerID] = tablestore.Preselection{
-				Selection: c.Selection, HandID: a.handID, Stage: a.cached.ViewFor("").Stage,
+				Selection: c.Selection, Amount: c.Amount, HandID: a.handID, Stage: a.cached.ViewFor("").Stage,
 			}
 		}
 		a.markLastAction(c.PlayerID)
@@ -359,7 +366,7 @@ func (a *Actor) handlePreselect(ctx context.Context, c PreselectCmd) error {
 			action = "clear_preselection"
 		}
 		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
-			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: action, Selection: c.Selection,
+			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: action, Selection: c.Selection, Amount: c.Amount,
 		})
 	})
 }
@@ -733,6 +740,15 @@ func (a *Actor) applyActAndCommit(ctx context.Context, c ActCmd) (bool, error) {
 	}
 	if a.activity.Preselections != nil {
 		delete(a.activity.Preselections, c.PlayerID)
+		// A fixed call means exactly the amount visible when it was selected.
+		// Any raise that changes what another player owes cancels it atomically
+		// with the action, so reconnecting clients never revive a stale call.
+		for playerID, preselection := range a.activity.Preselections {
+			if preselection.Selection == "call" &&
+				preselection.Amount != a.cached.ProspectiveCallAmountForActor(playerID) {
+				delete(a.activity.Preselections, playerID)
+			}
+		}
 	}
 	a.consumeTimeBank(c.PlayerID)
 	action := string(c.Action)
@@ -1630,6 +1646,7 @@ func (a *Actor) applyActivity(viewerID string, snapshot *hand.Snapshot) {
 	if preselection, ok := a.activity.Preselections[viewerID]; ok &&
 		preselection.HandID == a.handID && preselection.Stage == snapshot.Stage {
 		snapshot.ActionPreselection = preselection.Selection
+		snapshot.ActionPreselectionAmount = preselection.Amount
 	}
 }
 

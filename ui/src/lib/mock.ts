@@ -8,6 +8,7 @@ import type {Room} from '@/lib/api/rooms';
 import type {Page} from '@/lib/api/client';
 import type {PlayerNote} from '@/lib/api/playerNotes';
 import type {
+  ActionPreselection,
   HandHistoryAction,
   LegalActionState,
   PokerAction,
@@ -1139,6 +1140,25 @@ export class MockTableService {
       }));
       return true;
     }
+    if (value.type === 'preselect_action') {
+      const selection = String(value.action || '') as ActionPreselection | '';
+      const amount = Number(value.amount || 0);
+      const prospective = this.legalActionsFor(this.snapshot.seats, MOCK_PLAYER_ID).call_amount || 0;
+      if (selection === 'call' && (amount <= 0 || amount !== prospective)) {
+        this.later(() => this.handlers.onMessage({
+          type: 'error', code: 'invalid_action', action_id: String(value.action_id || '')
+        }));
+        return true;
+      }
+      this.snapshot = {
+        ...this.snapshot,
+        action_preselection: selection || undefined,
+        action_preselection_amount: selection === 'call' ? amount : 0
+      };
+      this.later(() => this.handlers.onMessage({type: 'action_ack', action_id: String(value.action_id || '')}));
+      this.later(() => this.emitState(), 2);
+      return true;
+    }
     if (value.type !== 'act') return true;
     if (this.scenario === 'action_error') {
       this.later(() => this.handlers.onMessage({
@@ -1306,6 +1326,7 @@ export class MockTableService {
       ...this.snapshot,
       current_player_id: playerId,
       legal_actions: playerId === MOCK_PLAYER_ID ? this.legalActionsFor(this.snapshot.seats, playerId) : {actions: []},
+      prospective_call_amount: this.legalActionsFor(this.snapshot.seats, MOCK_PLAYER_ID).call_amount || 0,
       action_base_deadline_unix_ms: baseDeadline,
       action_deadline_unix_ms: baseDeadline + timeBank
     };
@@ -1608,11 +1629,17 @@ export class MockTableService {
     const handInProgress = stage !== 'waiting_for_players' && stage !== 'complete';
     const viewer = this.snapshot.seats.find(s => s.player_id === MOCK_PLAYER_ID);
     mockPlayerDealtIn = handInProgress && (viewer?.state === 'active' || viewer?.state === 'all_in');
+    const prospectiveCallAmount = handInProgress ?
+      this.legalActionsFor(this.snapshot.seats, MOCK_PLAYER_ID).call_amount || 0 : 0;
+    const fixedCallInvalid = this.snapshot.action_preselection === 'call' &&
+      this.snapshot.action_preselection_amount !== prospectiveCallAmount;
     this.snapshotVersion += 1;
     this.snapshot = {
       ...this.snapshot,
       snapshot_version: this.snapshotVersion,
-      protocol_version: 5,
+      protocol_version: 8,
+      prospective_call_amount: prospectiveCallAmount,
+      ...(fixedCallInvalid ? {action_preselection: undefined, action_preselection_amount: 0} : {}),
       seats: this.snapshot.seats.map(seat => ({
         ...seat,
         time_bank_ms: seat.time_bank_ms ?? 10_000

@@ -30,6 +30,8 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 		ChatMessages:       []hand.ChatMessageView{{ID: "chat-1", PlayerID: "p1", Message: "oi", Timestamp: 100}},
 		Reactions:          []hand.ReactionView{{ID: "react-1", PlayerID: "p1", ReactionID: "wow", Timestamp: 101, ExpiresAt: 2501}},
 		ActionPreselection: "check_fold",
+		ActionPreselectionAmount: 40,
+		ProspectiveCallAmount:    80,
 	})
 	if converted.SnapshotVersion != 42 || converted.HandId != "hand-42" {
 		t.Fatalf("snapshot identity lost: %+v", converted)
@@ -52,12 +54,13 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 	if converted.Seats[0].StackAtHandStart == nil || converted.Seats[0].GetStackAtHandStart() != 500 {
 		t.Fatalf("pre-blind stack lost during protobuf conversion: %+v", converted.Seats[0])
 	}
-	if converted.ProtocolVersion != 7 || converted.IdleRemovalUnixMs != 123456 ||
+	if converted.ProtocolVersion != 8 || converted.IdleRemovalUnixMs != 123456 ||
 		converted.Seats[0].TimeBankMs != 27000 || converted.Seats[0].HandScore != 4321 || len(converted.PotResults) != 1 ||
 		converted.PotResults[0].WinnerPlayerIds[0] != "p1" ||
 		converted.PotResults[0].Payouts["p1"] != 293 || len(converted.ChatMessages) != 1 ||
 		converted.ChatMessages[0].Id != "chat-1" || len(converted.Reactions) != 1 ||
-		converted.Reactions[0].Id != "react-1" || converted.ActionPreselection != "check_fold" {
+		converted.Reactions[0].Id != "react-1" || converted.ActionPreselection != "check_fold" ||
+		converted.ActionPreselectionAmount != 40 || converted.ProspectiveCallAmount != 80 {
 		t.Fatalf("result protocol fields lost during conversion: %+v", converted)
 	}
 }

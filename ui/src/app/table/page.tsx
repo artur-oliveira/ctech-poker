@@ -428,7 +428,10 @@ function TableContent() {
         actionKey={actionKey}
         selectionScope={`${s.hand_id || 'waiting'}:${s.stage}`}
         preselection={s.action_preselection || null}
+        preselectionAmount={s.action_preselection_amount || 0}
+        prospectiveCallAmount={s.prospective_call_amount || 0}
         onPreselectAction={rt.preselectAction}
+        supportsCallPreselection={(s.protocol_version ?? 0) >= 8}
         canPreselect={Boolean(viewerSeat?.dealt_in && viewerSeat.state === 'active' && !actions.isTurn &&
           s.stage !== 'showdown' && s.stage !== 'complete')}
         actionDeadlineMs={s.action_deadline_unix_ms}

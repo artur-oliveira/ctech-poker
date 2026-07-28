@@ -1,5 +1,5 @@
 'use client';
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {CircleAlert, Clock3, LoaderCircle, X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
@@ -30,9 +30,12 @@ type Props = {
   error: ActionError | null;
   onDismissErrorAction: () => void
   canPreselect: boolean;
+  supportsCallPreselection: boolean;
   selectionScope: string;
   preselection: ActionPreselection | null;
-  onPreselectAction: (selection: ActionPreselection | null) => boolean;
+  preselectionAmount: number;
+  prospectiveCallAmount: number;
+  onPreselectAction: (selection: ActionPreselection | null, amount?: number) => boolean;
   actionDeadlineMs?: number;
   actionBaseDeadlineMs?: number;
   timeBankMs: number;
@@ -95,35 +98,52 @@ function TimeBankStatus({isTurn, baseDeadline, actionDeadline, balance}: {
   </span>;
 }
 
-function PreselectionControls({canPreselect, isTurn, connected, pending, available, selection, onSelect, onAct}: {
+function PreselectionControls({canPreselect, supportsCallPreselection, isTurn, connected, pending, available, callAmount,
+                                prospectiveCallAmount, selection, selectionAmount, onSelect, onAct}: {
   canPreselect: boolean;
+  supportsCallPreselection: boolean;
   isTurn: boolean;
   connected: boolean;
   pending: PokerAction | null;
   available: ActionAvailability;
+  callAmount: number;
+  prospectiveCallAmount: number;
   selection: ActionPreselection | null;
-  onSelect: (selection: ActionPreselection | null) => boolean;
+  selectionAmount: number;
+  onSelect: (selection: ActionPreselection | null, amount?: number) => boolean;
   onAct: (action: PokerAction) => boolean;
 }) {
+  const executedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!selection || !isTurn || !connected || pending) return;
+    if (!selection || !isTurn) {
+      executedRef.current = null;
+      return;
+    }
+    if (!connected || pending) return;
     const legal = (Object.keys(available) as PokerAction[]).filter(action => available[action]);
-    const action = resolvePreselection(selection, legal);
-    if (action) onAct(action);
-  }, [selection, isTurn, connected, pending, available, onAct]);
+    const action = resolvePreselection(selection, legal, callAmount, selectionAmount);
+    const executionKey = action ? `${selection}:${selectionAmount}:${callAmount}:${action}` : null;
+    if (action && executedRef.current !== executionKey) {
+      executedRef.current = executionKey;
+      onAct(action);
+    }
+  }, [selection, selectionAmount, isTurn, connected, pending, available, callAmount, onAct]);
 
   if (!canPreselect && !selection) return null;
-  const option = (value: ActionPreselection, label: string, description: string) =>
+  const option = (value: ActionPreselection, label: string, description: string, amount = 0) =>
     <button type="button" className={selection === value ? 'selected' : ''}
             aria-pressed={selection === value} title={description}
             disabled={!connected || pending !== null}
-            onClick={() => onSelect(selection === value ? null : value)}>
+            onClick={() => onSelect(selection === value ? null : value, selection === value ? 0 : amount)}>
       <span>{label}<small>{description}</small></span>
     </button>;
   return <div className="action-preselectors" role="group" aria-label="Preparar próxima ação">
     <span>Próxima ação</span>
     {option('check_fold', 'Check / Fold', 'Check se for grátis; caso contrário, fold')}
     {option('fold', 'Fold', 'Desistir quando chegar sua vez')}
+    {supportsCallPreselection && prospectiveCallAmount > 0 && option('call', `Call ${prospectiveCallAmount.toLocaleString('pt-BR')}`,
+      'Pagar somente este valor; cancela se a aposta aumentar', prospectiveCallAmount)}
+    {supportsCallPreselection && option('call_any', 'Call Any', 'Pagar qualquer valor quando chegar sua vez')}
   </div>;
 }
 
@@ -236,16 +256,27 @@ export function ActionBar({
                             error,
                             onDismissErrorAction,
                             canPreselect,
+                            supportsCallPreselection,
                             selectionScope,
                             preselection,
+                            preselectionAmount,
+                            prospectiveCallAmount,
                             onPreselectAction,
                             actionDeadlineMs,
                             actionBaseDeadlineMs,
                             timeBankMs,
                             voiceCommands
                           }: Props) {
-  const unavailable = !connected || !isTurn || pending !== null;
-  const context = !connected ? 'Reconectando antes de liberar as ações…' : pending ? actionLabel[pending] : !isTurn ?
+  const legalActions = (Object.keys(available) as PokerAction[]).filter(action => available[action]);
+  const preparedAction = selectionScope && preselection && isTurn ?
+    resolvePreselection(preselection, legalActions, callAmount, preselectionAmount) : null;
+  // Suppress the ordinary controls in the very first paint of the viewer's
+  // turn, before the effect above submits the prepared action. If submission
+  // is rejected, the visible error releases the controls for a manual choice.
+  const executingPreparedAction = preparedAction !== null && error === null;
+  const unavailable = !connected || !isTurn || pending !== null || executingPreparedAction;
+  const context = !connected ? 'Reconectando antes de liberar as ações…' : pending ? actionLabel[pending] :
+    executingPreparedAction ? 'Executando sua ação preparada…' : !isTurn ?
     'Aguarde sua vez.' : effectiveStack > 0 ?
       `Sua vez de agir. Stack efetivo: ${effectiveStack.toLocaleString('pt-BR')} fichas.` : 'Sua vez de agir.';
   const label = (action: PokerAction, idle: string, key?: string) => {
@@ -288,10 +319,13 @@ export function ActionBar({
                          available={available} minRaise={minRaise} maxRaise={maxRaise}
                          onAct={onActAction}/>
     </div>
-    <PreselectionControls key={selectionScope} canPreselect={canPreselect} isTurn={isTurn}
+    <PreselectionControls key={selectionScope} canPreselect={canPreselect}
+                           supportsCallPreselection={supportsCallPreselection} isTurn={isTurn}
                            connected={connected} pending={pending} available={available}
-                           selection={preselection} onSelect={onPreselectAction} onAct={onActAction}/>
-    {!noLegalActions && <div className="action-choices" role="group" aria-label="Ações rápidas">
+                           callAmount={callAmount} prospectiveCallAmount={prospectiveCallAmount}
+                           selection={preselection} selectionAmount={preselectionAmount}
+                           onSelect={onPreselectAction} onAct={onActAction}/>
+    {!noLegalActions && !executingPreparedAction && <div className="action-choices" role="group" aria-label="Ações rápidas">
         <Button type="button" variant="outline" disabled={unavailable || !available.fold}
                 aria-describedby="action-context" aria-keyshortcuts="f"
                 onClick={() => onActAction('fold')}>{label('fold', 'Fold', 'F')}</Button>
@@ -303,7 +337,7 @@ export function ActionBar({
                 onClick={() => onActAction('call')}
                 className="call">{label('call', callAmount > 0 ? `Pagar ${callAmount.toLocaleString('pt-BR')}` : 'Pagar', 'P')}</Button>
     </div>}
-    {!noLegalActions && <RaiseControl key={actionKey} minRaise={minRaise} maxRaise={maxRaise} raiseStep={raiseStep}
+    {!noLegalActions && !executingPreparedAction && <RaiseControl key={actionKey} minRaise={minRaise} maxRaise={maxRaise} raiseStep={raiseStep}
                                       disabled={unavailable || !available.raise} presets={raisePresets}
                                       pending={pending === 'raise'} onRaise={onRaise}/>}
     {error && <div className="action-error" role="alert">

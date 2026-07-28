@@ -64,6 +64,27 @@ func TestLegalRaisePresetsAreAuthoritativeAndBounded(t *testing.T) {
 	}
 }
 
+func TestViewForExposesOnlyViewersProspectiveCall(t *testing.T) {
+	table := NewTable([]*Player{
+		{ID: "p1", Stack: 1000, Ready: true},
+		{ID: "p2", Stack: 1000, Ready: true},
+		{ID: "p3", Stack: 1000, Ready: true},
+	}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatal(err)
+	}
+	current := table.currentPlayerToAct()
+	for _, playerID := range []string{"p1", "p2", "p3"} {
+		view := table.ViewFor(playerID)
+		if got, want := view.ProspectiveCallAmount, table.ProspectiveCallAmountForActor(playerID); got != want {
+			t.Fatalf("viewer %s prospective call=%d, want %d", playerID, got, want)
+		}
+		if playerID != current && view.LegalActions == nil {
+			t.Fatalf("viewer %s should still receive an explicit empty legal-action set", playerID)
+		}
+	}
+}
+
 func TestOddChipStartsLeftOfDealer(t *testing.T) {
 	players := []*Player{{ID: "dealer"}, {ID: "left"}, {ID: "right"}}
 	table := NewTable(players, 10, 20)
