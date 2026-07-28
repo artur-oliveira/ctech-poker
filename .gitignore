@@ -9,6 +9,7 @@ cdk.out/
 api/archiver
 out/
 .next/
+coverage/
 api/dist/
 .env
 .env.local

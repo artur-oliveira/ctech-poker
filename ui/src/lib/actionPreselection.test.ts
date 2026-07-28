@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import {expect, test} from 'vitest';
 import {resolvePreselection} from './actionPreselection.ts';
 
 test('check/fold checks when checking is free', () => {
-  assert.equal(resolvePreselection('check_fold', ['check', 'raise']), 'check');
+  expect(resolvePreselection('check_fold', ['check', 'raise'])).toBe('check');
 });
 
 test('check/fold folds instead of calling a bet', () => {
-  assert.equal(resolvePreselection('check_fold', ['fold', 'call', 'raise']), 'fold');
+  expect(resolvePreselection('check_fold', ['fold', 'call', 'raise'])).toBe('fold');
 });
 
 test('fold never falls through to another action', () => {

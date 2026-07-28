@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import {test} from 'vitest';
 import {serializeHand} from './handExport.ts';
 
 test('text export includes authorized cards, actions and fairness proof', () => {

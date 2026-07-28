@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import {test} from 'vitest';
 import {wasDecidedByKicker} from './pokerRules.ts';
 
 test('different two-pair values are not mislabeled as a kicker decision', () => {
