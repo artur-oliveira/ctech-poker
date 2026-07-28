@@ -26,7 +26,7 @@ const Size = 49205
 // start with a value strictly less than v. Summing it position by position
 // yields the lexicographic index of a vector. It is 520 small integers, built
 // once at init in microseconds — no generated data needed.
-var dp [5][Cards][Hand + 1]int32
+var dp [Cards][5][Hand + 1]int32
 
 func init() {
 	// n[j][k]: ways to fill j positions, each 0..4, summing to exactly k.
@@ -46,7 +46,7 @@ func init() {
 				for u := 0; u < v && u <= k; u++ {
 					sum += n[j][k-u]
 				}
-				dp[v][j][k] = sum
+				dp[Cards-1-j][v][k] = sum
 			}
 		}
 	}
@@ -64,7 +64,7 @@ func Hash(q *[Cards]uint8) int {
 		if v == 0 {
 			continue
 		}
-		sum += dp[v][Cards-1-i][remaining]
+		sum += dp[i][v][remaining]
 		remaining -= int(v)
 		if remaining == 0 {
 			break

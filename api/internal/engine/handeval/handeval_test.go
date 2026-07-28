@@ -157,3 +157,42 @@ func TestAceLowNonWheelIsNotMisdetectedAsStraight(t *testing.T) {
 		t.Fatal("A-2-3-4-6 must not be scored as a straight — it is not the wheel (A-2-3-4-5)")
 	}
 }
+
+func TestBoardStateMatchesBest7(t *testing.T) {
+	board := [5]deck.Card{
+		c(deck.Ace, deck.Clubs), c(deck.King, deck.Diamonds), c(deck.Ten, deck.Hearts),
+		c(deck.Eight, deck.Spades), c(deck.Two, deck.Clubs),
+	}
+	hole := [2]deck.Card{c(deck.Queen, deck.Spades), c(deck.Jack, deck.Diamonds)}
+
+	var hand [7]deck.Card
+	copy(hand[0:5], board[:])
+	hand[5] = hole[0]
+	hand[6] = hole[1]
+
+	want := Best7(hand)
+
+	var bs BoardState
+	for _, card := range board {
+		bs.AddCard(card)
+	}
+	bs.Finalize()
+
+	got := bs.Eval2(hole[0], hole[1])
+	if got != want {
+		t.Fatalf("BoardState.Eval2 got %v, want %v", got, want)
+	}
+
+	gotIDs := bs.Eval2IDs(CardID(hole[0]), CardID(hole[1]))
+	if gotIDs != want {
+		t.Fatalf("BoardState.Eval2IDs got %v, want %v", gotIDs, want)
+	}
+
+	for id := uint8(0); id < 52; id++ {
+		reconstructed := CardFromID(id)
+		if CardID(reconstructed) != id {
+			t.Fatalf("CardID/CardFromID roundtrip failed for ID %d", id)
+		}
+	}
+}
+

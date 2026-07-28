@@ -70,6 +70,8 @@ func NewShuffle() (*ShuffleResult, error) {
 	}, nil
 }
 
+var standardDeck = orderedDeck()
+
 func orderedDeck() [52]Card {
 	var d [52]Card
 	i := 0
@@ -87,7 +89,7 @@ func orderedDeck() [52]Card {
 // permutation (required so Verify can recompute it), while the seed itself
 // only ever comes from crypto/rand (unpredictable to anyone without it).
 func shuffleWithSeed(seed [32]byte) [52]Card {
-	d := orderedDeck()
+	d := standardDeck
 	var counter uint32
 	nextIndex := func(max uint32) uint32 {
 		for {
@@ -116,12 +118,12 @@ func shuffleWithSeed(seed [32]byte) [52]Card {
 }
 
 func commitHash(seed [32]byte, cards [52]Card) [32]byte {
-	h := sha256.New()
-	h.Write(seed[:])
-	for _, c := range cards {
-		h.Write([]byte{byte(c.Rank), byte(c.Suit)})
+	var buf [32 + 52*2]byte
+	copy(buf[:32], seed[:])
+	for i, c := range cards {
+		buf[32+i*2] = byte(c.Rank)
+		buf[32+i*2+1] = byte(c.Suit)
 	}
-	var out [32]byte
-	copy(out[:], h.Sum(nil))
-	return out
+	return sha256.Sum256(buf[:])
 }
+

@@ -37,7 +37,7 @@ func init() {
 func loadTables(blob []byte) error {
 	const headerLen = len(tablesMagic) + 3*4
 	if len(blob) < headerLen || string(blob[:len(tablesMagic)]) != tablesMagic {
-		return fmt.Errorf("tables.bin is missing or not a %s blob — run go generate ./internal/engine/handeval/...", tablesMagic)
+		return fmt.Errorf("tables.bin is missing or not a %s blob — run go generate ./internal/engine/handeval/", tablesMagic)
 	}
 	header := blob[len(tablesMagic):headerLen]
 	nFlush := int(binary.LittleEndian.Uint32(header[0:4]))

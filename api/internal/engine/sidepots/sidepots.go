@@ -3,7 +3,7 @@
 // poker engines have historically had payout bugs.
 package sidepots
 
-import "sort"
+import "slices"
 
 // Contribution is the total amount one player put into the pot this hand
 // (win-or-lose — folded players' chips still count, they're simply never in
@@ -30,14 +30,16 @@ type PotLayer struct {
 // that layer's upper bound.
 func ComputeSidePots(contributions []Contribution) []PotLayer {
 	levels := make([]int64, 0, len(contributions))
-	seen := map[int64]bool{}
 	for _, c := range contributions {
-		if c.Amount > 0 && !seen[c.Amount] {
-			seen[c.Amount] = true
+		if c.Amount > 0 {
 			levels = append(levels, c.Amount)
 		}
 	}
-	sort.Slice(levels, func(i, j int) bool { return levels[i] < levels[j] })
+	if len(levels) == 0 {
+		return nil
+	}
+	slices.Sort(levels)
+	levels = slices.Compact(levels)
 
 	layers := make([]PotLayer, 0, len(levels))
 	var prev int64

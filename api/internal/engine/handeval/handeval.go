@@ -85,3 +85,88 @@ func Best7(cards [7]deck.Card) Score {
 	}
 	return Score(noFlushTable[hashq.Hash(&quinary)])
 }
+
+// BoardState holds pre-computed quinary and suit information for up to 5 board cards.
+type BoardState struct {
+	quinary   [hashq.Cards]uint8
+	suitMask  [4]uint16
+	suitCount [4]uint8
+	flushSuit int8 // -1 if no suit on board has >= 3 cards; 0..3 if a suit has >= 3 cards
+}
+
+// CardID returns a compact uint8 identifier in [0, 51] for a deck.Card.
+func CardID(c deck.Card) uint8 {
+	return uint8(c.Rank-deck.Two)*4 + uint8(c.Suit)
+}
+
+// CardFromID reconstructs a deck.Card from a compact CardID in [0, 51].
+func CardFromID(id uint8) deck.Card {
+	return deck.Card{
+		Rank: deck.Rank(id>>2) + deck.Two,
+		Suit: deck.Suit(id & 3),
+	}
+}
+
+// AddCard adds a single deck.Card to the BoardState.
+func (b *BoardState) AddCard(c deck.Card) {
+	b.AddCardID(CardID(c))
+}
+
+// AddCardID adds a compact card ID (0..51) to the BoardState.
+func (b *BoardState) AddCardID(id uint8) {
+	r := id >> 2
+	s := id & 3
+	b.quinary[r]++
+	b.suitMask[s] |= 1 << r
+	b.suitCount[s]++
+}
+
+// Finalize calculates the flushSuit flag after all 5 board cards are set.
+func (b *BoardState) Finalize() {
+	b.flushSuit = -1
+	for s := range 4 {
+		if b.suitCount[s] >= 3 {
+			b.flushSuit = int8(s)
+			break
+		}
+	}
+}
+
+// Eval2 evaluates 2 hole cards combined with this BoardState.
+func (b *BoardState) Eval2(c1, c2 deck.Card) Score {
+	return b.Eval2IDs(CardID(c1), CardID(c2))
+}
+
+// Eval2IDs evaluates 2 compact card IDs combined with this BoardState.
+func (b *BoardState) Eval2IDs(c1ID, c2ID uint8) Score {
+	q := b.quinary
+
+	r1, s1 := c1ID>>2, c1ID&3
+	q[r1]++
+
+	r2, s2 := c2ID>>2, c2ID&3
+	q[r2]++
+
+	if b.flushSuit >= 0 {
+		fs := uint8(b.flushSuit)
+		sc := b.suitCount[fs]
+		if s1 == fs {
+			sc++
+		}
+		if s2 == fs {
+			sc++
+		}
+		if sc >= 5 {
+			sm := b.suitMask[fs]
+			if s1 == fs {
+				sm |= 1 << r1
+			}
+			if s2 == fs {
+				sm |= 1 << r2
+			}
+			return Score(flushTable[sm])
+		}
+	}
+
+	return Score(noFlushTable[hashq.Hash(&q)])
+}

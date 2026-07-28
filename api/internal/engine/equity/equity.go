@@ -9,6 +9,38 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/handeval"
 )
 
+// rng64 is a 64-bit XorShift64Star PRNG with 32-bit caching.
+// It generates two 32-bit pseudo-random values per 64-bit step (~0.5ns per output).
+type rng64 struct {
+	state uint64
+	cache uint32
+	has   bool
+}
+
+func (r *rng64) next32() uint32 {
+	if r.has {
+		r.has = false
+		return r.cache
+	}
+	x := r.state
+	if x == 0 {
+		x = 0x853c49e6748fea9b
+	}
+	x ^= x >> 12
+	x ^= x << 25
+	x ^= x >> 27
+	r.state = x
+	val := x * 0x2545F4914F6CDD1D
+	r.cache = uint32(val >> 32)
+	r.has = true
+	return uint32(val)
+}
+
+func (r *rng64) intn(k uint32) uint32 {
+	m := uint64(r.next32()) * uint64(k)
+	return uint32(m >> 32)
+}
+
 func Estimate(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, iterations int) (float64, error) {
 	if numOpponents < 1 || iterations < 1 {
 		return 0, fmt.Errorf("equity: opponents and iterations must be positive")
@@ -16,92 +48,112 @@ func Estimate(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, ite
 	if len(board) > 5 {
 		return 0, fmt.Errorf("equity: board has %d cards, maximum is 5", len(board))
 	}
-	pool, err := remainingDeck(hole, board, deadCards)
+
+	var pool [52]uint8
+	poolLen, err := buildPool(hole, board, deadCards, &pool)
 	if err != nil {
 		return 0, err
 	}
+
 	boardNeeded := 5 - len(board)
 	need := boardNeeded + numOpponents*2
-	if need > len(pool) {
+	if need > poolLen {
 		return 0, fmt.Errorf("equity: not enough cards to sample %d opponents", numOpponents)
 	}
 
-	// pool is freshly built for this call, so the sampler can permute it in
-	// place. It only ever touches the first `need` slots, which leaves a
-	// validly shuffled deck behind for the next iteration — so the whole loop
-	// allocates nothing.
-	var fullBoard [5]deck.Card
-	copy(fullBoard[:], board)
+	hero1ID := handeval.CardID(hole[0])
+	hero2ID := handeval.CardID(hole[1])
+
+	var baseBoardState handeval.BoardState
+	for _, c := range board {
+		baseBoardState.AddCard(c)
+	}
+
+	rng := rng64{state: rand.Uint64()}
+
+	var cards [52]uint8
+	copy(cards[:poolLen], pool[:poolLen])
 
 	var shares float64
+
 	for range iterations {
-		draw := sample(pool, need)
-		copy(fullBoard[len(board):], draw[:boardNeeded])
-		myScore := best7(hole, fullBoard)
+		for i := 0; i < need; i++ {
+			j := i + int(rng.intn(uint32(poolLen-i)))
+			cards[i], cards[j] = cards[j], cards[i]
+		}
+
+		boardState := baseBoardState
+		for i := range boardNeeded {
+			boardState.AddCardID(cards[i])
+		}
+		boardState.Finalize()
+
+		myScore := boardState.Eval2IDs(hero1ID, hero2ID)
 		bestScore := myScore
 		tiedWinners := 1
+
 		for opponent := range numOpponents {
 			offset := boardNeeded + opponent*2
-			score := best7([2]deck.Card{draw[offset], draw[offset+1]}, fullBoard)
-			switch {
-			case score > bestScore:
-				bestScore, tiedWinners = score, 0
-			case score == bestScore && score == myScore:
+			score := boardState.Eval2IDs(cards[offset], cards[offset+1])
+			if score > myScore {
+				bestScore = score
+				break
+			}
+			if score == myScore {
 				tiedWinners++
 			}
 		}
+
 		if bestScore == myScore {
-			shares += 1 / float64(tiedWinners)
-		}
-	}
-	return shares / float64(iterations), nil
-}
-
-func best7(hole [2]deck.Card, board [5]deck.Card) handeval.Score {
-	var cards [7]deck.Card
-	cards[0], cards[1] = hole[0], hole[1]
-	copy(cards[2:], board[:])
-	return handeval.Best7(cards)
-}
-
-func remainingDeck(hole [2]deck.Card, board, dead []deck.Card) ([]deck.Card, error) {
-	excluded := make(map[deck.Card]bool, 2+len(board)+len(dead))
-	known := append([]deck.Card{hole[0], hole[1]}, board...)
-	known = append(known, dead...)
-	for _, card := range known {
-		if card.Rank < deck.Two || card.Rank > deck.Ace || card.Suit < deck.Clubs || card.Suit > deck.Spades {
-			return nil, fmt.Errorf("equity: invalid card %+v", card)
-		}
-		if excluded[card] {
-			return nil, fmt.Errorf("equity: duplicate known card %+v", card)
-		}
-		excluded[card] = true
-	}
-	pool := make([]deck.Card, 0, 52-len(excluded))
-	for suit := deck.Clubs; suit <= deck.Spades; suit++ {
-		for rank := deck.Two; rank <= deck.Ace; rank++ {
-			card := deck.Card{Rank: rank, Suit: suit}
-			if !excluded[card] {
-				pool = append(pool, card)
+			if tiedWinners == 1 {
+				shares += 1.0
+			} else {
+				shares += 1.0 / float64(tiedWinners)
 			}
 		}
 	}
-	return pool, nil
+
+	return shares / float64(iterations), nil
 }
 
-// sample partially Fisher-Yates shuffles cards in place and returns its first
-// n as the drawn subset.
-//
-// It draws from math/rand/v2 rather than crypto/rand. This is a Monte Carlo
-// estimate shown to a player as a UI hint — it never picks a card that is
-// dealt, never touches the shuffle commit-reveal, and never moves a chip, so
-// unpredictability buys nothing here while a CSPRNG read per card dominated
-// the whole estimate's cost. Anything that actually deals cards still goes
-// through deck.NewShuffle.
-func sample(cards []deck.Card, n int) []deck.Card {
-	for i := 0; i < n; i++ {
-		j := i + rand.IntN(len(cards)-i)
-		cards[i], cards[j] = cards[j], cards[i]
+func buildPool(hole [2]deck.Card, board, dead []deck.Card, pool *[52]uint8) (int, error) {
+	var seen uint64
+	checkAndAdd := func(c deck.Card) error {
+		if c.Rank < deck.Two || c.Rank > deck.Ace || c.Suit < deck.Clubs || c.Suit > deck.Spades {
+			return fmt.Errorf("equity: invalid card %+v", c)
+		}
+		id := handeval.CardID(c)
+		mask := uint64(1) << id
+		if (seen & mask) != 0 {
+			return fmt.Errorf("equity: duplicate known card %+v", c)
+		}
+		seen |= mask
+		return nil
 	}
-	return cards[:n]
+
+	if err := checkAndAdd(hole[0]); err != nil {
+		return 0, err
+	}
+	if err := checkAndAdd(hole[1]); err != nil {
+		return 0, err
+	}
+	for _, c := range board {
+		if err := checkAndAdd(c); err != nil {
+			return 0, err
+		}
+	}
+	for _, c := range dead {
+		if err := checkAndAdd(c); err != nil {
+			return 0, err
+		}
+	}
+
+	poolLen := 0
+	for id := uint8(0); id < 52; id++ {
+		if (seen & (uint64(1) << id)) == 0 {
+			pool[poolLen] = id
+			poolLen++
+		}
+	}
+	return poolLen, nil
 }
