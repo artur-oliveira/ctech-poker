@@ -3832,7 +3832,8 @@ h1 em {
 .game-chat.open .chat-body {
     display: flex;
     flex-direction: column;
-    animation: rise .25s
+    transform-origin: bottom right;
+    animation: table-panel-in 220ms var(--ease-out-quart) both
 }
 
 .chat-body h3 {
@@ -3935,7 +3936,31 @@ h1 em {
     border: 1px solid var(--seat-border);
     border-radius: 16px;
     background: var(--surface-seat);
-    animation: rise 180ms var(--ease-out-quart)
+    transform-origin: bottom right;
+    animation: table-panel-in 220ms var(--ease-out-quart) both
+}
+
+@keyframes table-panel-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(.96)
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1)
+    }
+}
+
+@media (min-width: 1000px) and (min-height: 650px) {
+    .hand-outcome {
+        place-items: end end;
+        padding: 24px
+    }
+
+    .hand-outcome-card {
+        max-width: 410px;
+        box-shadow: 0 12px 36px var(--black-08)
+    }
 }
 
 .reaction-panel header {

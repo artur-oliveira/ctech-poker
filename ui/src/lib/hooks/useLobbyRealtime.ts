@@ -1,5 +1,5 @@
 'use client';
-import {useCallback, useEffect, useRef} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {useQueryClient} from '@tanstack/react-query';
 import {getAccessToken, subscribeAccessToken} from '@/lib/api/client';
 import {useWebSocket} from '@aoctech/ws-client';
@@ -20,6 +20,8 @@ interface LobbyMessage {
 export function useLobbyRealtime() {
   const queryClient = useQueryClient();
   const sendRef = useRef<(value: object) => boolean>(() => false);
+  const [socketAuthToken, setSocketAuthToken] = useState(() => getAccessToken());
+  useEffect(() => subscribeAccessToken(setSocketAuthToken), []);
 
   const receive = useCallback((message: LobbyMessage) => {
     if (message.type === 'room_created' && message.room) {
@@ -55,10 +57,6 @@ export function useLobbyRealtime() {
   const origin = (process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/^http/, 'ws');
   const wsUrl = `${origin}/v1.0/ws`;
 
-  const subscribeToken = useCallback((callback: (token: string) => void) => subscribeAccessToken(token => {
-    if (token) callback(token);
-  }), []);
-
   const handleOpen = useCallback(() => {
     sendRef.current({type: 'ping'});
   }, []);
@@ -70,8 +68,7 @@ export function useLobbyRealtime() {
     decode: decodeServerMessage,
     onMessage: data => receive(data as LobbyMessage),
     enabled: !USE_MOCK,
-    authToken: getAccessToken() || undefined,
-    subscribeToken,
+    authToken: socketAuthToken || undefined,
     onOpen: handleOpen
   });
 

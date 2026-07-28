@@ -8,14 +8,15 @@ import {playerName} from '@/lib/utils';
 
 type ChatItem = { id: string; player: string; message: string; timestamp?: number };
 
-export function Chat({items, onSend, connected = true, viewerId, seats = []}: {
+export function Chat({items, onSend, connected = true, viewerId, seats = [], open, onOpenChange}: {
   items: ChatItem[];
   onSend: (message: string) => boolean;
   connected?: boolean;
   viewerId?: string;
-  seats?: SeatView[]
+  seats?: SeatView[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [sendError, setSendError] = useState('');
   const panelId = useId();
@@ -56,7 +57,7 @@ export function Chat({items, onSend, connected = true, viewerId, seats = []}: {
     </div>
     <Button type="button" variant="ghost" size="icon" aria-label={open ? 'Fechar chat' : 'Abrir chat'}
             aria-expanded={open} aria-controls={panelId} className="chat-toggle"
-            onClick={() => setOpen(value => !value)}>
+            onClick={() => onOpenChange(!open)}>
       {open ? <X/> : <MessageCircle/>}
       {unread > 0 && <span className="chat-unread-dot" aria-hidden="true"/>}
     </Button>

@@ -37,14 +37,15 @@ function ReactionEffect({item}: {item: TableReactionEvent}) {
                role="img" aria-label={definition.label}>{definition.glyph}</span>;
 }
 
-export function TableReactions({items, seats, viewerId, connected, onSend}: {
+export function TableReactions({items, seats, viewerId, connected, onSend, open, onOpenChange}: {
   items: TableReactionEvent[];
   seats: SeatView[];
   viewerId?: string;
   connected: boolean;
   onSend: (reaction: TableReactionID, targetPlayerId?: string) => boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [muted, setMuted] = useState(() =>
     typeof window !== 'undefined' && window.localStorage.getItem(REACTION_MUTE_KEY) === 'true');
   const [coolingDown, setCoolingDown] = useState(false);
@@ -76,7 +77,7 @@ export function TableReactions({items, seats, viewerId, connected, onSend}: {
     <aside className={`table-reactions${open ? ' open' : ''}`} aria-label="Reações da mesa">
       <Button type="button" variant="ghost" size="icon" className="reaction-toggle"
               aria-label={open ? 'Fechar reações' : 'Abrir reações'}
-              aria-expanded={open} onClick={() => setOpen(value => !value)}>
+              aria-expanded={open} onClick={() => onOpenChange(!open)}>
         {open ? <X/> : <SmilePlus/>}
       </Button>
       {open && <div className="reaction-panel">

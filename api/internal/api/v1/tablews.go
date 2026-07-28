@@ -41,11 +41,14 @@ var tableChatFilter = chatfilter.New([]string{"idiota", "burro"})
 
 var tableReactions = map[string]bool{
 	"clap": true, "laugh": true, "wow": true,
+	"angry": true, "cry": true, "nervous": true,
 	"chip": true, "coffee": true, "clover": true,
+	"horseshoe": true, "tear": true, "tomato": true,
 }
 
 var targetedTableReactions = map[string]bool{
 	"chip": true, "coffee": true, "clover": true,
+	"horseshoe": true, "tear": true, "tomato": true,
 }
 
 // readAuthToken reads the first WebSocket frame after the upgrade and

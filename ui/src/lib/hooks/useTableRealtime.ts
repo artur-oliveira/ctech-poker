@@ -1,6 +1,12 @@
 'use client';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {getAccessToken, setAccessToken, setPlayerId, setUsername, subscribeAccessToken} from '@/lib/api/client';
+import {
+  getAccessToken,
+  setAccessToken,
+  setPlayerId,
+  setUsername,
+  subscribeAccessToken
+} from '@/lib/api/client';
 import {doRefresh} from '@/lib/auth/oauth';
 import {cardLabel} from '@/lib/cards';
 import {useWebSocket, type WSStatus} from '@aoctech/ws-client';
@@ -20,10 +26,10 @@ const ACTION_TIMEOUT_MS = 8000;
 // is about to expire, so the socket would reconnect-loop with the same stale
 // token until @aoctech/ws-client's retry budget runs out and gives up for
 // good. Refreshing well inside any realistic access-token lifetime keeps
-// subscribeAccessToken's listener (already wired into useWebSocket below)
-// firing with a live token before that ever happens; ws-client force-
-// reconnects on a genuinely new token regardless of how many attempts it has
-// already burned.
+// the in-memory credential current before that ever happens. The active
+// socket remains authenticated for its lifetime and a real reconnect reads
+// the latest authToken prop. Subscribing the socket to token changes would
+// deliberately close a healthy connection after every silent refresh.
 const TOKEN_REFRESH_INTERVAL_MS = 4 * 60 * 1000;
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -151,6 +157,8 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   scenario?: MockScenario;
   delay?: number
 }) {
+  const [socketAuthToken, setSocketAuthToken] = useState(() => getAccessToken());
+  useEffect(() => subscribeAccessToken(setSocketAuthToken), []);
   const activeTableIDRef = useRef(id);
   useEffect(() => {
     activeTableIDRef.current = id;
@@ -457,9 +465,6 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
 
   const origin = (process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/^http/, 'ws');
   const wsUrl = id ? `${origin}/v1.0/tables/${encodeURIComponent(id)}/ws` : null;
-  const subscribeToken = useCallback((callback: (token: string) => void) => subscribeAccessToken(token => {
-    if (token) callback(token);
-  }), []);
   const handleOpen = useCallback(() => {
     if (resetOnOpenRef.current) {
       resetOnOpenRef.current = false;
@@ -484,9 +489,8 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     decode: decodeServerMessage,
     onMessage: data => receiveForTable(data as ServerMessage),
     enabled: Boolean(wsUrl) && !USE_MOCK,
-    authToken: getAccessToken() || undefined,
+    authToken: socketAuthToken || undefined,
     shareCode,
-    subscribeToken,
     onOpen: handleOpen
   });
   const mockScenario = mockOptions?.scenario || 'flop';

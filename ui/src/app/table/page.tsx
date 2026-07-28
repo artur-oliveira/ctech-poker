@@ -206,6 +206,8 @@ function TableContent() {
     useState<{tableID: string; handID: string; stack: number} | null>(null);
   const [scopedHandOutcome, setScopedHandOutcome] =
     useState<{tableID: string; value: HandOutcomeState} | null>(null);
+  const [activeTablePanel, setActiveTablePanel] =
+    useState<'chat' | 'reactions' | 'rankings' | null>(null);
   // Protocol v3 publishes the exact pre-blind stack. During a rolling deploy,
   // remember the earliest live snapshot as stack+contributed; unlike the old
   // stage-based state this is scoped to both table and hand and also works
@@ -274,7 +276,11 @@ function TableContent() {
     // Outcome comparison is server-authoritative. The local five-card
     // evaluator remains presentation-only (ordering the cards shown in the
     // banner) and never decides whether this folded hand would have won.
-    const couldHaveWon = folded && seat.hand_score != null && winnerSeat?.hand_score != null ?
+    const winnerWasPubliclyRevealed = Boolean(winnerHole &&
+      winnerSeat?.hole_cards_revealed?.length === 2 &&
+      winnerSeat.hole_cards_revealed.every(Boolean));
+    const couldHaveWon = folded && winnerWasPubliclyRevealed &&
+      seat.hand_score != null && winnerSeat?.hand_score != null ?
       seat.hand_score > winnerSeat.hand_score : undefined;
     setScopedHandOutcome({
       tableID: id,
@@ -361,7 +367,8 @@ function TableContent() {
               <Wifi aria-hidden="true"/>
               <span className="connection-label">{rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}</span>
             </span>
-            <HandRankingsDialog/>
+            <HandRankingsDialog open={activeTablePanel === 'rankings'}
+                                onOpenChange={open => setActiveTablePanel(open ? 'rankings' : null)}/>
             <TablePreferencesDialog/>
             {canInvite && <InviteDialog url={inviteUrl}/>}
             {viewerSeat && !isPaused &&
@@ -450,9 +457,13 @@ function TableContent() {
             onSend={rt.sendChat}
             connected={rt.status === 'connected'}
             viewerId={viewer}
-            seats={s.seats}/>
+            seats={s.seats}
+            open={activeTablePanel === 'chat'}
+            onOpenChange={open => setActiveTablePanel(open ? 'chat' : null)}/>
       <TableReactions items={rt.reactions} seats={s.seats} viewerId={viewer}
-                      connected={rt.status === 'connected'} onSend={rt.sendReaction}/>
+                      connected={rt.status === 'connected'} onSend={rt.sendReaction}
+                      open={activeTablePanel === 'reactions'}
+                      onOpenChange={open => setActiveTablePanel(open ? 'reactions' : null)}/>
       <BotChallenge required={rt.botChallengeRequired} onTokenAction={rt.submitBotChallenge}/>
       <LastWinners items={tableHands}/>
       <PlayerNoteDialog key={noteOpponent?.player_id || 'closed'} opponent={noteOpponent}

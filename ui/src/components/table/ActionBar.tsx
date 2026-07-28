@@ -90,11 +90,11 @@ function TimeBankStatus({isTurn, baseDeadline, actionDeadline, balance}: {
   }, [isTurn, actionDeadline]);
 
   const seconds = Math.ceil(remaining / 1000);
-  return <span className={`time-bank-status${bankActive ? ' active' : ''}`} role="timer"
+  return <span className={`time-bank-status${bankActive ? ' active' : ''}${!isTurn ? ' inactive' : ''}`} role="timer"
                aria-label={`${bankActive ? 'Time bank em uso' : 'Time bank disponível'}: ${seconds} segundos`}
                title="Reserva de decisão: recarrega 5 segundos por mão, até 30">
     <Clock3 aria-hidden="true"/>
-    <span>{bankActive ? 'Time bank' : 'Reserva'} <b>{seconds}s</b></span>
+    <span>{bankActive ? 'Time bank em uso' : isTurn ? 'Reserva pronta' : 'Sua reserva'} <b>{seconds}s</b></span>
   </span>;
 }
 
