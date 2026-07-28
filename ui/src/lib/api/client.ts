@@ -1,6 +1,6 @@
 import axios from 'axios';
 import {doRefresh} from '@/lib/auth/oauth';
-import {mockAdapter, USE_MOCK} from '@/lib/mock';
+import {USE_MOCK} from '@/lib/mockConfig';
 import {notifyApiError} from '@/lib/notify';
 
 declare module 'axios' {
@@ -91,7 +91,9 @@ export function isNotFound(error: unknown) {
 
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || '',
-  adapter: USE_MOCK ? mockAdapter : undefined
+  adapter: USE_MOCK
+    ? async config => (await import('@/dev/mockRuntime')).mockAdapter(config)
+    : undefined
 });
 apiClient.interceptors.request.use(c => {
   if (token) c.headers.Authorization = `Bearer ${token}`;

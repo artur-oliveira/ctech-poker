@@ -1,7 +1,7 @@
 import {type ClassValue, clsx} from 'clsx';
 import {twMerge} from 'tailwind-merge';
 import {getPlayerId} from '@/lib/api/client';
-import {MOCK_PLAYER_ID, USE_MOCK} from '@/lib/mock';
+import {MOCK_PLAYER_ID, USE_MOCK} from '@/lib/mockConfig';
 export {HAND_CATEGORY_LABELS} from './handCategories';
 
 export function cn(...values: ClassValue[]) {

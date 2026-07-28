@@ -3,7 +3,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {useQueryClient} from '@tanstack/react-query';
 import {getAccessToken, subscribeAccessToken} from '@/lib/api/client';
 import {useWebSocket} from '@aoctech/ws-client';
-import {USE_MOCK} from '@/lib/mock';
+import {USE_MOCK} from '@/lib/mockConfig';
 import type {Room} from '@/lib/api/rooms';
 import {pushNotification} from '@/lib/notify';
 import {decodeServerMessage, encodeClientMessage} from "@/lib/ws/utils";

@@ -3,7 +3,16 @@ import path from 'path';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const nextConfig: NextConfig = {
-  turbopack: {root: path.join(__dirname)},
+  turbopack: {
+    root: path.join(__dirname),
+    ...(isProduction ? {
+      resolveAlias: {
+        '@/dev/mockRuntime': './src/dev/production/mockRuntime.ts',
+        '@/components/table/MockControls': './src/dev/production/MockControls.tsx',
+        '@/lib/mockConfig': './src/dev/production/mockConfig.ts'
+      }
+    } : {})
+  },
   experimental: {optimizePackageImports: ['lucide-react']},
   images: {unoptimized: true}, ...(isProduction ? {output: 'export' as const} : {
     async rewrites() {

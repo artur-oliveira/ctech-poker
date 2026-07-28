@@ -32,7 +32,7 @@ vi.mock('axios', () => ({
   },
 }));
 vi.mock('@/lib/auth/oauth', () => ({doRefresh: mocks.refresh}));
-vi.mock('@/lib/mock', () => ({mockAdapter: vi.fn(), USE_MOCK: false}));
+vi.mock('@/lib/mockConfig', () => ({USE_MOCK: false}));
 vi.mock('@/lib/notify', () => ({notifyApiError: mocks.notify}));
 
 import {

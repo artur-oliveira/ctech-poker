@@ -6,7 +6,7 @@
 import {useEffect, useState} from "react";
 import {useQuery} from "@tanstack/react-query";
 import {getAccessToken, setAccessToken, setPlayerId, setUsername, subscribeAccessToken} from "@/lib/api/client";
-import {USE_MOCK} from "@/lib/mock";
+import {USE_MOCK} from "@/lib/mockConfig";
 import {doRefresh} from "@/lib/auth/oauth";
 import {getMe} from "@/lib/api/player";
 

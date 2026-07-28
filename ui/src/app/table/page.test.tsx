@@ -39,7 +39,7 @@ vi.mock('@/lib/tablePreferences', () => ({
 }));
 vi.mock('@/lib/hooks/useDealerVoice', () => ({useDealerVoice: vi.fn()}));
 vi.mock('@/lib/notify', () => ({pushNotification: mocks.notification}));
-vi.mock('@/lib/mock', () => ({USE_MOCK: false}));
+vi.mock('@/lib/mockConfig', () => ({USE_MOCK: false}));
 vi.mock('@/components/TermsGate', () => ({TermsGate: ({children}: {children: React.ReactNode}) => children}));
 
 vi.mock('@/components/table/BuyInPanel', () => ({

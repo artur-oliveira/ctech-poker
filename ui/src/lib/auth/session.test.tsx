@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@tanstack/react-query', () => ({useQuery: mocks.query}));
-vi.mock('@/lib/mock', () => ({USE_MOCK: false}));
+vi.mock('@/lib/mockConfig', () => ({USE_MOCK: false}));
 vi.mock('@/lib/api/player', () => ({getMe: vi.fn()}));
 vi.mock('@/lib/auth/oauth', () => ({doRefresh: mocks.refresh}));
 vi.mock('@/lib/api/client', () => ({

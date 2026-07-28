@@ -1,19 +1,23 @@
 'use client';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import {Award, BookOpen, Club, Gift, History, LoaderCircle, Trophy} from 'lucide-react';
 import {StakesGrid} from '@/components/lobby/StakesGrid';
 import {ActiveTableBanner} from '@/components/lobby/ActiveTableBanner';
 import {CreateRoomDialog} from '@/components/lobby/CreateRoomDialog';
 import {OnboardingIntro} from '@/components/lobby/OnboardingIntro';
 import {ProfileMenu} from '@/components/lobby/ProfileMenu';
-import {MockControls} from '@/components/table/MockControls';
 import {TermsGate} from '@/components/TermsGate';
 import {useEffect, useState} from 'react';
 import {useQueryClient} from '@tanstack/react-query';
 import {remainingTime, spin} from '@/lib/api/gamification';
 import {pushNotification} from '@/lib/notify';
-import {USE_MOCK} from '@/lib/mock';
+import {USE_MOCK} from '@/lib/mockConfig';
 import {Button} from "@/components/ui/button";
+
+const MockControls = USE_MOCK
+  ? dynamic(() => import('@/components/table/MockControls').then(module => module.MockControls))
+  : () => null;
 
 function formatCooldown(seconds: number) {
   const h = Math.floor(seconds / 3600);

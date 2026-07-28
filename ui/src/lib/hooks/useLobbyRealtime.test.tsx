@@ -21,7 +21,7 @@ vi.mock('@aoctech/ws-client', () => ({
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({setQueryData: state.setQueryData}),
 }));
-vi.mock('@/lib/mock', () => ({USE_MOCK: false}));
+vi.mock('@/lib/mockConfig', () => ({USE_MOCK: false}));
 vi.mock('@/lib/api/client', () => ({
   getAccessToken: () => 'token',
   subscribeAccessToken: () => vi.fn(),

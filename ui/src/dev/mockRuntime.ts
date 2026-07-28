@@ -1,5 +1,5 @@
-// Development-only in-process API and realtime simulation. The environment
-// flag selects the adapter; no mock HTTP or WebSocket server is started.
+// Development-only in-process API and realtime simulation. Production code
+// may only reach this module through a USE_MOCK-guarded dynamic import.
 import {AxiosError, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
 import type {Achievement, PlayerAchievementProgress, Tier} from '@/lib/api/achievements';
 import type {HandItem} from '@/lib/api/player';
@@ -17,9 +17,9 @@ import type {
   TableSnapshot
 } from '@/lib/api/table';
 import {DEFAULT_TURN_TIMEOUT_MS, NEXT_HAND_DELAY_MS} from '@/lib/gameTiming';
+import {MOCK_PLAYER_ID, type MockScenario} from '@/lib/mockConfig';
 
-export const USE_MOCK = process.env.NEXT_PUBLIC_MOCK_API === 'true';
-export const MOCK_PLAYER_ID = 'mock_player_ana';
+export {MOCK_PLAYER_ID, type MockScenario} from '@/lib/mockConfig';
 let mockPlayerNotes: PlayerNote[] = [{
   opponent_id: 'bia_sp',
   tag: 'purple',
@@ -573,26 +573,6 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   return ok({}, config);
 }
 
-export type MockScenario =
-  'full_hand'
-  | 'full_hand_loss'
-  | 'full_hand_tie'
-  | 'all_in'
-  | 'auto_fold'
-  | 'waiting'
-  | 'pre_flop'
-  | 'flop'
-  | 'turn'
-  | 'river'
-  | 'showdown'
-  | 'side_pot'
-  | 'reconnecting'
-  | 'action_error'
-  | 'timeout'
-  | 'complete_loss'
-  | 'complete_tie'
-  | 'fold_win'
-  | 'complete';
 export type MockConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
 
 const baseSeats = () => [

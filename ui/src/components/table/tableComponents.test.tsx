@@ -6,7 +6,7 @@ import {Board} from './Board';
 import {Chat} from './Chat';
 import {HandOutcomeBanner, type HandOutcomeState} from './HandOutcome';
 import {TableStage} from './TableStage';
-import {snapshotForScenario, MOCK_PLAYER_ID} from '@/lib/mock';
+import {snapshotForScenario, MOCK_PLAYER_ID} from '@/dev/mockRuntime';
 
 vi.mock('@/lib/hooks/useDeckVariant', () => ({
   useDeckVariant: () => 'four-color',

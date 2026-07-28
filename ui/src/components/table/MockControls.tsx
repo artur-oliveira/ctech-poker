@@ -2,7 +2,7 @@
 import {useState} from 'react';
 import {FlaskConical} from 'lucide-react';
 import {useRouter, useSearchParams} from 'next/navigation';
-import type {MockScenario} from '@/lib/mock';
+import type {MockScenario} from '@/lib/mockConfig';
 
 const scenarios: { value: MockScenario; label: string }[] = [
   {value: 'full_hand', label: 'Mesa-bot · vitória'},
@@ -50,7 +50,7 @@ function readGlobalMockError(): string {
   }
 }
 
-/** Every REST call goes through this rule first (see forcedError in lib/mock.ts).
+/** Every REST call goes through this rule first (see forcedError in dev/mockRuntime.ts).
  * A blunt, global way to check every screen's error handling without per-endpoint plumbing. */
 function writeGlobalMockError(value: string) {
   if (!value) {

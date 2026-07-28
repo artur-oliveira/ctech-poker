@@ -16,7 +16,7 @@ vi.mock('@/lib/api/gamification', () => ({
   spin: mocks.spin,
 }));
 vi.mock('@/lib/notify', () => ({pushNotification: mocks.notify}));
-vi.mock('@/lib/mock', () => ({USE_MOCK: true, mockAdapter: vi.fn()}));
+vi.mock('@/lib/mockConfig', () => ({USE_MOCK: true}));
 vi.mock('@/components/TermsGate', () => ({TermsGate: ({children}: {children: React.ReactNode}) => children}));
 vi.mock('@/components/lobby/StakesGrid', () => ({StakesGrid: () => <div>stakes-grid</div>}));
 vi.mock('@/components/lobby/ActiveTableBanner', () => ({ActiveTableBanner: () => <div>active-table</div>}));
@@ -38,7 +38,7 @@ describe('lobby page', () => {
     expect(screen.getByRole('heading', {name: 'Escolha sua mesa.'})).toBeInTheDocument();
     expect(screen.getByText('stakes-grid')).toBeInTheDocument();
     expect(screen.getByText('active-table')).toBeInTheDocument();
-    expect(screen.getByText('mock-controls')).toBeInTheDocument();
+    expect(await screen.findByText('mock-controls')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', {name: /Recompensa Diária/})).toBeEnabled());
   });
 
@@ -57,6 +57,7 @@ describe('lobby page', () => {
     mocks.spin.mockResolvedValue({amount: 1500, remaining_time_seconds: 86400});
     render(<Lobby/>);
     const reward = await screen.findByRole('button', {name: /Recompensa Diária/});
+    await waitFor(() => expect(reward).toBeEnabled());
     fireEvent.click(reward);
     expect(await screen.findByText('24h 00min')).toBeInTheDocument();
     expect(mocks.notify).toHaveBeenCalledWith('Você ganhou +1.500 fichas sandbox!', 'info');

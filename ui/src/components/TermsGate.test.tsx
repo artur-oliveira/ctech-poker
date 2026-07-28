@@ -39,7 +39,7 @@ vi.mock('@/lib/api/client', () => ({
   setPlayerId: mocks.setPlayerId,
   subscribeAccessToken: mocks.subscribe,
 }));
-vi.mock('@/lib/mock', () => ({MOCK_PLAYER_ID: 'mock-player', USE_MOCK: false}));
+vi.mock('@/lib/mockConfig', () => ({MOCK_PLAYER_ID: 'mock-player', USE_MOCK: false}));
 
 import {TermsGate} from './TermsGate';
 import {useMutation} from '@tanstack/react-query';

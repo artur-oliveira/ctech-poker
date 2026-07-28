@@ -28,10 +28,7 @@ vi.mock('@aoctech/ws-client', () => ({
   }),
 }));
 
-vi.mock('@/lib/mock', async importOriginal => {
-  const original = await importOriginal<typeof import('@/lib/mock')>();
-  return {...original, USE_MOCK: false};
-});
+vi.mock('@/lib/mockConfig', () => ({USE_MOCK: false}));
 
 vi.mock('@/lib/api/client', () => ({
   getAccessToken: () => auth.token,

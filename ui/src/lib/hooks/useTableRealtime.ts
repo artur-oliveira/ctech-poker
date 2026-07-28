@@ -10,7 +10,8 @@ import {
 import {doRefresh} from '@/lib/auth/oauth';
 import {cardLabel} from '@/lib/cards';
 import {useWebSocket, type WSStatus} from '@aoctech/ws-client';
-import {type MockScenario, MockTableService, USE_MOCK} from '@/lib/mock';
+import type {MockTableService} from '@/dev/mockRuntime';
+import {type MockScenario, USE_MOCK} from '@/lib/mockConfig';
 import type {ActionPreselection, PokerAction, ServerMessage, TableSnapshot} from '@/lib/api/table';
 import {playerName} from '@/lib/utils';
 import {playSound} from '@/lib/sound';
@@ -506,30 +507,36 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     // completed hand frozen on screen.
     latestVersionRef.current = -1;
     previousSnapshot.current = null;
-    const service = new MockTableService(mockScenario, mockDelay, {
-      onMessage: receiveForTable,
-      onStatus: (next, attempt) => {
-        if (next === 'connecting') {
-          setSnapshot(null);
-          setSnapshotTableID('');
-          setSnapshotAt(0);
-          setAnnouncement('');
-          setLastActionError(null);
-          setRemoved(null);
-          clearPending();
-          for (const actionId of [readyActionRef.current, showCardsActionRef.current, postBigBlindActionRef.current]) {
-            if (actionId) finishAuxiliaryCommand(actionId);
+    let service: MockTableService | null = null;
+    let cancelled = false;
+    void import('@/dev/mockRuntime').then(({MockTableService}) => {
+      if (cancelled) return;
+      service = new MockTableService(mockScenario, mockDelay, {
+        onMessage: receiveForTable,
+        onStatus: (next, attempt) => {
+          if (next === 'connecting') {
+            setSnapshot(null);
+            setSnapshotTableID('');
+            setSnapshotAt(0);
+            setAnnouncement('');
+            setLastActionError(null);
+            setRemoved(null);
+            clearPending();
+            for (const actionId of [readyActionRef.current, showCardsActionRef.current, postBigBlindActionRef.current]) {
+              if (actionId) finishAuxiliaryCommand(actionId);
+            }
+            postedBigBlindRef.current = false;
           }
-          postedBigBlindRef.current = false;
+          setMockStatus(next);
+          setMockReconnectAttempt(attempt);
         }
-        setMockStatus(next);
-        setMockReconnectAttempt(attempt);
-      }
+      });
+      mockService.current = service;
+      service.connect();
     });
-    mockService.current = service;
-    service.connect();
     return () => {
-      service.close();
+      cancelled = true;
+      service?.close();
       if (mockService.current === service) mockService.current = null;
     };
   }, [clearPending, finishAuxiliaryCommand, id, mockDelay, mockScenario, receiveForTable]);

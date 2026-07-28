@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import {Suspense, useEffect, useRef, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
@@ -17,7 +18,6 @@ import {Chat} from '@/components/table/Chat';
 import {InviteDialog} from '@/components/table/InviteDialog';
 import {LeaveDialog} from '@/components/table/LeaveDialog';
 import {RebuyDialog} from '@/components/table/RebuyDialog';
-import {MockControls} from '@/components/table/MockControls';
 import type {HandOutcomeState} from '@/components/table/HandOutcome';
 import {LastWinners} from '@/components/table/LastWinners';
 import {HandRankingsDialog} from '@/components/table/HandRankingsDialog';
@@ -43,11 +43,14 @@ import {
   shouldShowOutcome,
   tableOutcomeKind
 } from '@/lib/tableOutcome';
-import {type MockScenario, USE_MOCK} from '@/lib/mock';
+import {type MockScenario, USE_MOCK} from '@/lib/mockConfig';
 import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
 import {DEFAULT_TURN_TIMEOUT_SECONDS} from '@/lib/gameTiming';
 
 const ROOM_ID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
+const MockControls = USE_MOCK
+  ? dynamic(() => import('@/components/table/MockControls').then(module => module.MockControls))
+  : () => null;
 const CONNECTION_COPY = {
   connecting: 'Conectando à mesa…',
   reconnecting: 'Reconectando à mesa…',

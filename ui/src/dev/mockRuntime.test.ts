@@ -1,5 +1,5 @@
 import {afterEach, describe, expect, test, vi} from 'vitest';
-import {MOCK_PLAYER_ID, MockTableService, snapshotForScenario, type MockScenario} from './mock';
+import {MOCK_PLAYER_ID, MockTableService, snapshotForScenario, type MockScenario} from './mockRuntime';
 
 const scenarios: MockScenario[] = [
   'full_hand', 'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',

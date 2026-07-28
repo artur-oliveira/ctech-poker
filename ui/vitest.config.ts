@@ -21,6 +21,7 @@ export default defineConfig({
         'src/**/*.test.{ts,tsx}',
         'src/test/**',
         'src/lib/api/proto/**',
+        'src/dev/**',
         'src/app/layout.tsx',
         'src/app/share/layout.tsx',
         'src/lib/providers/QueryProvider.tsx',

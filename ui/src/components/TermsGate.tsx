@@ -12,7 +12,7 @@ import {
   setUsername,
   subscribeAccessToken
 } from '@/lib/api/client';
-import {MOCK_PLAYER_ID, USE_MOCK} from '@/lib/mock';
+import {MOCK_PLAYER_ID, USE_MOCK} from '@/lib/mockConfig';
 import {Button} from '@/components/ui/button';
 import {Checkbox} from '@/components/ui/checkbox';
 
