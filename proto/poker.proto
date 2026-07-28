@@ -149,6 +149,15 @@ message TableSnapshot {
   // What this viewer would owe if action reached them now, even before their
   // turn. Viewer-scoped so the UI can offer an exact fixed-call preselection.
   int64 prospective_call_amount = 28;
+  string root_commit_hash = 29;
+  map<int32, RevealedSalt> revealed_card_salts = 30;
+  map<int32, string> unrevealed_card_hashes = 31;
+  repeated string runout_cards = 32;
+}
+
+message RevealedSalt {
+  string card = 1;
+  string salt_hex = 2;
 }
 
 // --- WEBSOCKET ENVELOPES ---

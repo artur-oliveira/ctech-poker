@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"time"
 
@@ -312,12 +313,9 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 // table/actor. Caller fills in PK/TableID/HandID/EndedAt.
 func handItemFor(outcome hand.HandOutcome, id string, names map[string]string) sessionlog.HandItem {
 	net := outcome.Payouts[id] - outcome.Contributions[id]
-	result := "lost"
-	for _, w := range outcome.Winners {
-		if w == id {
-			result = "won"
-			break
-		}
+	var result = "lost"
+	if slices.Contains(outcome.Winners, id) {
+		result = "won"
 	}
 	if sr, ok := outcome.ShowdownResults[id]; ok && sr.Tied {
 		result = "tied"
@@ -357,7 +355,16 @@ func handItemFor(outcome hand.HandOutcome, id string, names map[string]string) s
 	return sessionlog.HandItem{
 		Outcome: result, NetChange: net,
 		Board: outcome.Board, HoleCards: holeCards, Opponents: opponents,
-		ServerSeed: outcome.ServerSeed, CommitHash: outcome.CommitHash,
+		CommitHash:     outcome.CommitHash,
+		RootCommitHash: outcome.RootCommitHash,
+		ServerSeed: func() string {
+			for _, info := range outcome.PlayerHands {
+				if !info.Revealed {
+					return ""
+				}
+			}
+			return outcome.ServerSeed
+		}(),
 	}
 }
 

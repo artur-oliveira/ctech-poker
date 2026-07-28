@@ -2,12 +2,102 @@
 package equity
 
 import (
+	"container/list"
 	"fmt"
 	"math/rand/v2"
+	"sort"
+	"sync"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 	"gopkg.aoctech.app/poker/api/internal/engine/handeval"
 )
+
+type cacheKey struct {
+	hole       [2]uint8
+	board      [5]uint8
+	boardLen   uint8
+	opponents  uint8
+	iterations int
+}
+
+type cacheEntry struct {
+	key   cacheKey
+	value float64
+}
+
+type lruCache struct {
+	mu       sync.RWMutex
+	capacity int
+	items    map[cacheKey]*list.Element
+	evict    *list.List
+}
+
+func newLRUCache(capacity int) *lruCache {
+	return &lruCache{
+		capacity: capacity,
+		items:    make(map[cacheKey]*list.Element),
+		evict:    list.New(),
+	}
+}
+
+func (c *lruCache) Get(key cacheKey) (float64, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if elem, ok := c.items[key]; ok {
+		c.evict.MoveToFront(elem)
+		return elem.Value.(*cacheEntry).value, true
+	}
+	return 0, false
+}
+
+func (c *lruCache) Put(key cacheKey, value float64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if elem, ok := c.items[key]; ok {
+		c.evict.MoveToFront(elem)
+		elem.Value.(*cacheEntry).value = value
+		return
+	}
+
+	if c.evict.Len() >= c.capacity {
+		oldest := c.evict.Back()
+		if oldest != nil {
+			c.evict.Remove(oldest)
+			delete(c.items, oldest.Value.(*cacheEntry).key)
+		}
+	}
+
+	entry := &cacheEntry{key: key, value: value}
+	elem := c.evict.PushFront(entry)
+	c.items[key] = elem
+}
+
+var globalEquityCache = newLRUCache(20000)
+
+func makeCacheKey(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, iterations int) (cacheKey, bool) {
+	if len(deadCards) > 0 || len(board) > 5 || numOpponents > 255 || iterations > 20000 {
+		return cacheKey{}, false
+	}
+	h1 := handeval.CardID(hole[0])
+	h2 := handeval.CardID(hole[1])
+	if h1 > h2 {
+		h1, h2 = h2, h1
+	}
+	var k cacheKey
+	k.hole = [2]uint8{h1, h2}
+	k.boardLen = uint8(len(board))
+	for i, c := range board {
+		k.board[i] = handeval.CardID(c)
+	}
+	// Sort board card IDs to normalize key
+	sort.Slice(k.board[:k.boardLen], func(i, j int) bool {
+		return k.board[i] < k.board[j]
+	})
+	k.opponents = uint8(numOpponents)
+	k.iterations = iterations
+	return k, true
+}
 
 // rng64 is a 64-bit XorShift64Star PRNG with 32-bit caching.
 // It generates two 32-bit pseudo-random values per 64-bit step (~0.5ns per output).
@@ -47,6 +137,13 @@ func Estimate(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, ite
 	}
 	if len(board) > 5 {
 		return 0, fmt.Errorf("equity: board has %d cards, maximum is 5", len(board))
+	}
+
+	key, cacheable := makeCacheKey(hole, board, deadCards, numOpponents, iterations)
+	if cacheable {
+		if val, ok := globalEquityCache.Get(key); ok {
+			return val, nil
+		}
 	}
 
 	var pool [52]uint8
@@ -113,7 +210,11 @@ func Estimate(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, ite
 		}
 	}
 
-	return shares / float64(iterations), nil
+	res := shares / float64(iterations)
+	if cacheable {
+		globalEquityCache.Put(key, res)
+	}
+	return res, nil
 }
 
 func buildPool(hole [2]deck.Card, board, dead []deck.Card, pool *[52]uint8) (int, error) {

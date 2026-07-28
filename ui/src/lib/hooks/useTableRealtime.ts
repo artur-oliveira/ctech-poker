@@ -409,11 +409,12 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
         setLastActionError(actionError(code));
         const actionId = message.action_id;
         if (pendingTimer.current) clearTimeout(pendingTimer.current);
+        const jitterMs = Math.floor(Math.random() * 400) + (code === 'rate_limited' ? 800 : 50);
         pendingTimer.current = setTimeout(() => {
           if (pendingActionRef.current?.id === actionId) {
             sendRef.current({type: 'sync_state', action_id: actionId});
           }
-        }, code === 'rate_limited' ? 1000 : 0);
+        }, jitterMs);
       } else if (message.action_id && pendingActionRef.current?.id === message.action_id) {
         failPending(code, message.action_id);
       }

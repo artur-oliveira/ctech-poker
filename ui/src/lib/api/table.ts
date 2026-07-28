@@ -97,7 +97,11 @@ export interface TableSnapshot {
   protocol_version?: number;
   hand_id?: string;
   shuffle_commit_hash?: string;
-  shuffle_server_seed_hex?: string
+  shuffle_server_seed_hex?: string;
+  runout_cards?: string[];
+  root_commit_hash?: string;
+  revealed_card_salts?: Record<number, {card: string; salt_hex: string}>;
+  unrevealed_card_hashes?: Record<number, string>;
 }
 
 export type ServerMessage = {

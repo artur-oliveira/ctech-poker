@@ -1,6 +1,7 @@
 package hand
 
 import (
+	"encoding/hex"
 	"testing"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
@@ -382,7 +383,70 @@ func TestViewForRevealsServerSeedOnlyOnceComplete(t *testing.T) {
 	}
 	view := table.ViewFor("p1")
 	if view.ShuffleServerSeedHex == "" {
-		t.Fatal("expected the server seed revealed once the hand is Complete")
+		t.Fatal("expected the server seed revealed once the hand is Complete with showdown")
+	}
+}
+
+func TestViewForOmitsServerSeedWhenWonWithoutShowdown(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	_ = table.StartHand()
+	// p1 bets, p2 folds -> wonWithoutShowdown
+	toAct := table.playerToActForTest()
+	_ = table.Act(toAct, betting.ActionRaise, 100)
+	nextAct := table.playerToActForTest()
+	_ = table.Act(nextAct, betting.ActionFold, 0)
+
+	if table.Stage() != Complete {
+		t.Fatalf("expected hand complete after fold, got %v", table.Stage())
+	}
+
+	view := table.ViewFor("p1")
+	if view.ShuffleServerSeedHex != "" {
+		t.Fatal("must not reveal server seed when hand ends without showdown, to protect mucked hole cards")
+	}
+	if len(view.RunoutCards) != 5 {
+		t.Fatalf("expected five rabbit runout cards after a preflop fold, got %v", view.RunoutCards)
+	}
+	if len(view.RevealedCardSalts)+len(view.UnrevealedCardHashes) != 52 {
+		t.Fatalf("partial proof must cover all 52 positions: revealed=%d hidden=%d",
+			len(view.RevealedCardSalts), len(view.UnrevealedCardHashes))
+	}
+	var root [32]byte
+	rootBytes, err := hex.DecodeString(view.RootCommitHash)
+	if err != nil {
+		t.Fatalf("decode root: %v", err)
+	}
+	copy(root[:], rootBytes)
+	revealed := make(map[int]struct {
+		Card deck.Card
+		Salt [32]byte
+	})
+	for index, reveal := range view.RevealedCardSalts {
+		var salt [32]byte
+		saltBytes, err := hex.DecodeString(reveal.SaltHex)
+		if err != nil {
+			t.Fatalf("decode salt: %v", err)
+		}
+		copy(salt[:], saltBytes)
+		revealed[index] = struct {
+			Card deck.Card
+			Salt [32]byte
+		}{Card: table.shuffle.Cards[index], Salt: salt}
+	}
+	unrevealed := make(map[int][32]byte)
+	for index, hashHex := range view.UnrevealedCardHashes {
+		var hash [32]byte
+		hashBytes, err := hex.DecodeString(hashHex)
+		if err != nil {
+			t.Fatalf("decode hash: %v", err)
+		}
+		copy(hash[:], hashBytes)
+		unrevealed[index] = hash
+	}
+	if !deck.VerifyPartial(root, revealed, unrevealed) {
+		t.Fatal("viewer-scoped rabbit proof did not verify")
 	}
 }
 

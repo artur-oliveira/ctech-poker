@@ -177,8 +177,9 @@ type HandOutcome struct {
 	// recompute the full 52-card shuffle (shuffleWithSeed is a deterministic
 	// function of it) and CommitHash lets them verify it matches what the
 	// server committed to before dealing (ARCHITECTURE.md § 3.5 / B32).
-	ServerSeed string
-	CommitHash string
+	ServerSeed     string
+	CommitHash     string
+	RootCommitHash string
 }
 
 // PlayerHandInfo is one participant's hole cards from HandOutcome. Revealed
@@ -1384,6 +1385,8 @@ func (t *Table) runShowdown() {
 	if t.shuffle != nil {
 		outcome.ServerSeed = hex.EncodeToString(t.shuffle.ServerSeed[:])
 		outcome.CommitHash = hex.EncodeToString(t.shuffle.CommitHash[:])
+		rootCommit := deck.RootCommitHash(t.shuffle.ServerSeed, t.shuffle.Cards)
+		outcome.RootCommitHash = hex.EncodeToString(rootCommit[:])
 	}
 	if !wonWithoutShowdown {
 		outcome.WinningCategory = categoryNames[winningScore.Category()]

@@ -27,9 +27,9 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 			EligiblePlayerIDs: []string{"p1", "p2"}, WinnerPlayerIDs: []string{"p1"},
 			Payouts: map[string]int64{"p1": 293},
 		}},
-		ChatMessages:       []hand.ChatMessageView{{ID: "chat-1", PlayerID: "p1", Message: "oi", Timestamp: 100}},
-		Reactions:          []hand.ReactionView{{ID: "react-1", PlayerID: "p1", ReactionID: "wow", Timestamp: 101, ExpiresAt: 2501}},
-		ActionPreselection: "check_fold",
+		ChatMessages:             []hand.ChatMessageView{{ID: "chat-1", PlayerID: "p1", Message: "oi", Timestamp: 100}},
+		Reactions:                []hand.ReactionView{{ID: "react-1", PlayerID: "p1", ReactionID: "wow", Timestamp: 101, ExpiresAt: 2501}},
+		ActionPreselection:       "check_fold",
 		ActionPreselectionAmount: 40,
 		ProspectiveCallAmount:    80,
 	})
@@ -54,7 +54,7 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 	if converted.Seats[0].StackAtHandStart == nil || converted.Seats[0].GetStackAtHandStart() != 500 {
 		t.Fatalf("pre-blind stack lost during protobuf conversion: %+v", converted.Seats[0])
 	}
-	if converted.ProtocolVersion != 8 || converted.IdleRemovalUnixMs != 123456 ||
+	if converted.ProtocolVersion != 9 || converted.IdleRemovalUnixMs != 123456 ||
 		converted.Seats[0].TimeBankMs != 27000 || converted.Seats[0].HandScore != 4321 || len(converted.PotResults) != 1 ||
 		converted.PotResults[0].WinnerPlayerIds[0] != "p1" ||
 		converted.PotResults[0].Payouts["p1"] != 293 || len(converted.ChatMessages) != 1 ||
@@ -62,6 +62,23 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 		converted.Reactions[0].Id != "react-1" || converted.ActionPreselection != "check_fold" ||
 		converted.ActionPreselectionAmount != 40 || converted.ProspectiveCallAmount != 80 {
 		t.Fatalf("result protocol fields lost during conversion: %+v", converted)
+	}
+}
+
+func TestConvertSnapshotPreservesPartialDeckProof(t *testing.T) {
+	converted := ConvertSnapshot(hand.Snapshot{
+		RootCommitHash: "root",
+		RevealedCardSalts: map[int]hand.RevealedSaltView{
+			5: {Card: "As", SaltHex: "salt"},
+		},
+		UnrevealedCardHashes: map[int]string{6: "hash"},
+		RunoutCards:          []string{"As"},
+	})
+	if converted.RootCommitHash != "root" ||
+		converted.RevealedCardSalts[5].Card != "As" ||
+		converted.UnrevealedCardHashes[6] != "hash" ||
+		len(converted.RunoutCards) != 1 {
+		t.Fatalf("partial proof lost during protobuf conversion: %+v", converted)
 	}
 }
 

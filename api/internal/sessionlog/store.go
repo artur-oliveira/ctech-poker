@@ -60,8 +60,9 @@ type HandItem struct {
 	// ServerSeed and CommitHash are the hand's shuffle fairness proof
 	// (hand.HandOutcome.ServerSeed/CommitHash), hex-encoded — lets the
 	// player independently verify the deck they were dealt (B32).
-	ServerSeed string `dynamodbav:"server_seed,omitempty" json:"server_seed,omitempty"`
-	CommitHash string `dynamodbav:"commit_hash,omitempty" json:"commit_hash,omitempty"`
+	ServerSeed     string `dynamodbav:"server_seed,omitempty" json:"server_seed,omitempty"`
+	CommitHash     string `dynamodbav:"commit_hash,omitempty" json:"commit_hash,omitempty"`
+	RootCommitHash string `dynamodbav:"root_commit_hash,omitempty" json:"root_commit_hash,omitempty"`
 }
 
 // OpponentSummary is one other participant of a recorded hand, for a

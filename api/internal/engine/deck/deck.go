@@ -117,6 +117,7 @@ func shuffleWithSeed(seed [32]byte) [52]Card {
 	return d
 }
 
+// commitHash produces the legacy global commit hash for backwards compatibility.
 func commitHash(seed [32]byte, cards [52]Card) [32]byte {
 	var buf [32 + 52*2]byte
 	copy(buf[:32], seed[:])
@@ -127,3 +128,57 @@ func commitHash(seed [32]byte, cards [52]Card) [32]byte {
 	return sha256.Sum256(buf[:])
 }
 
+// CardSalt derives a position-specific salt for card index i using HMAC-SHA256(seed, i).
+// This allows revealing individual card salts at hand end without exposing unrevealed mucked cards.
+func CardSalt(seed [32]byte, index int) [32]byte {
+	mac := hmac.New(sha256.New, seed[:])
+	var idxBytes [4]byte
+	binary.BigEndian.PutUint32(idxBytes[:], uint32(index))
+	mac.Write(idxBytes[:])
+	var out [32]byte
+	copy(out[:], mac.Sum(nil))
+	return out
+}
+
+// CardHash computes the cryptographic hash commitment for card at index i: SHA256(CardSalt(seed, i) || Rank || Suit).
+func CardHash(seed [32]byte, index int, c Card) [32]byte {
+	salt := CardSalt(seed, index)
+	var buf [32 + 2]byte
+	copy(buf[:32], salt[:])
+	buf[32] = byte(c.Rank)
+	buf[33] = byte(c.Suit)
+	return sha256.Sum256(buf[:])
+}
+
+// RootCommitHash computes the root commitment hash over all 52 individual card hashes: SHA256(CardHash_0 || ... || CardHash_51).
+func RootCommitHash(seed [32]byte, cards [52]Card) [32]byte {
+	var buf [52 * 32]byte
+	for i, c := range cards {
+		h := CardHash(seed, i, c)
+		copy(buf[i*32:(i+1)*32], h[:])
+	}
+	return sha256.Sum256(buf[:])
+}
+
+// VerifyPartial verifies that a set of revealed cards and unrevealed card commitments match rootCommit.
+func VerifyPartial(rootCommit [32]byte, revealed map[int]struct {
+	Card Card
+	Salt [32]byte
+}, unrevealedHashes map[int][32]byte) bool {
+	var buf [52 * 32]byte
+	for i := range 52 {
+		if rev, ok := revealed[i]; ok {
+			var cardBuf [32 + 2]byte
+			copy(cardBuf[:32], rev.Salt[:])
+			cardBuf[32] = byte(rev.Card.Rank)
+			cardBuf[33] = byte(rev.Card.Suit)
+			h := sha256.Sum256(cardBuf[:])
+			copy(buf[i*32:(i+1)*32], h[:])
+		} else if unrevHash, ok := unrevealedHashes[i]; ok {
+			copy(buf[i*32:(i+1)*32], unrevHash[:])
+		} else {
+			return false // missing commitment for position i
+		}
+	}
+	return sha256.Sum256(buf[:]) == rootCommit
+}

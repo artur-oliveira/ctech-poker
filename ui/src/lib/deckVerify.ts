@@ -88,3 +88,96 @@ export async function verifyDeck(serverSeedHex: string, commitHashHex: string): 
   const computedHash = await commitHash(serverSeedHex, deck);
   return {deck, computedHash, matches: computedHash.toLowerCase() === commitHashHex.trim().toLowerCase()};
 }
+
+export interface PartialCardReveal {
+  rank: number;
+  suit: number;
+  saltHex: string;
+}
+
+export interface WireCardReveal {
+  card: string;
+  salt_hex: string;
+}
+
+export function parseCardCode(code: string): Pick<DeckCard, 'rank' | 'suit' | 'code'> {
+  const normalized = code.trim();
+  if (normalized.length !== 2) throw new Error(`invalid card code: ${code}`);
+  const rank = RANK_CHARS.indexOf(normalized[0].toUpperCase());
+  const suit = SUITS.indexOf(normalized[1].toLowerCase() as typeof SUITS[number]);
+  if (rank < 0 || suit < 0) throw new Error(`invalid card code: ${code}`);
+  return {rank: rank + 2, suit, code: `${RANK_CHARS[rank]}${SUITS[suit]}`};
+}
+
+// Derives a position-specific salt for index i using HMAC-SHA256(seed, index).
+export async function cardSaltHex(serverSeedHex: string, index: number): Promise<string> {
+  const keyfmt: KeyFormat = 'raw';
+  const key = await crypto.subtle.importKey(keyfmt, hexToBytes(serverSeedHex) as BufferSource, {name: 'HMAC', hash: 'SHA-256'}, false, ['sign']);
+  const idxBytes = new Uint8Array(4);
+  new DataView(idxBytes.buffer).setUint32(0, index, false);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, idxBytes));
+  return bytesToHex(sig);
+}
+
+// Computes SHA256(Salt_i || Rank || Suit) for a card at position i.
+export async function cardHashHex(saltHex: string, rank: number, suit: number): Promise<string> {
+  const bytes = new Uint8Array(34);
+  bytes.set(hexToBytes(saltHex), 0);
+  bytes[32] = rank;
+  bytes[33] = suit;
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as BufferSource));
+  return bytesToHex(digest);
+}
+
+// Computes RootCommitHash = SHA256(CardHash_0 || ... || CardHash_51).
+export async function rootCommitHash(cardHashes: string[]): Promise<string> {
+  if (cardHashes.length !== 52) throw new Error('rootCommitHash requires 52 card hashes');
+  const bytes = new Uint8Array(52 * 32);
+  cardHashes.forEach((h, i) => {
+    bytes.set(hexToBytes(h), i * 32);
+  });
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as BufferSource));
+  return bytesToHex(digest);
+}
+
+export interface VerifyPartialResult {
+  rootCommit: string;
+  matches: boolean;
+}
+
+// Verifies revealed cards + salts and unrevealed position hashes against the root commit hash.
+export async function verifyPartialDeck(
+  expectedRootCommitHex: string,
+  revealed: Map<number, PartialCardReveal>,
+  unrevealedHashes: Map<number, string>
+): Promise<VerifyPartialResult> {
+  const cardHashes: string[] = new Array(52);
+  for (let i = 0; i < 52; i++) {
+    if (revealed.has(i)) {
+      const rev = revealed.get(i)!;
+      cardHashes[i] = await cardHashHex(rev.saltHex, rev.rank, rev.suit);
+    } else if (unrevealedHashes.has(i)) {
+      cardHashes[i] = unrevealedHashes.get(i)!;
+    } else {
+      return {rootCommit: '', matches: false};
+    }
+  }
+  const computed = await rootCommitHash(cardHashes);
+  return {rootCommit: computed, matches: computed.toLowerCase() === expectedRootCommitHex.trim().toLowerCase()};
+}
+
+export async function verifyWirePartialDeck(
+  expectedRootCommitHex: string,
+  revealedRecord: Record<number, WireCardReveal>,
+  unrevealedRecord: Record<number, string>
+): Promise<VerifyPartialResult> {
+  const revealed = new Map<number, PartialCardReveal>();
+  for (const [index, value] of Object.entries(revealedRecord)) {
+    const card = parseCardCode(value.card);
+    revealed.set(Number(index), {rank: card.rank, suit: card.suit, saltHex: value.salt_hex});
+  }
+  const unrevealed = new Map<number, string>(
+    Object.entries(unrevealedRecord).map(([index, hash]) => [Number(index), hash])
+  );
+  return verifyPartialDeck(expectedRootCommitHex, revealed, unrevealed);
+}

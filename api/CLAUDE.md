@@ -53,8 +53,9 @@ to the catalog.
 - B10 fixed: archiver stream failures now go to an SQS DLQ with a CloudWatch alarm (`cdk/lib/archiver-stack.ts`).
 - B31 fixed by rejection: `leaderboard.Top("achievement_points")` returns an unsupported-metric error instead of
   silently ranking via `gsi_hands_won`; add a `gsi_achievement_points` GSI before re-enabling the metric.
-- B32 fixed: `ShuffleCommitHash` published in every WS snapshot from `StartHand` on, `ShuffleServerSeedHex`
-  revealed at `Stage == Complete` (`snapshot.go:160-165`) — commit-reveal is now client-verifiable.
+- B32 fixed: `ShuffleCommitHash` and the per-card `RootCommitHash` are published from
+  `StartHand` on. Complete hands reveal either the full seed (no hidden private cards) or
+  viewer-scoped card+salt proofs with hashes for hidden positions and rabbit runout cards.
 - A separate audit (`docs/plans/2026-07-19-api-audit-remediation.md`) covers H1–H4 / M1–M7 / L1–L6 / E1–E3 / S1–S7. Some
   fixes are already in code (actor re-resolve `tablews.go:185-198`, prod Valkey fail-fast, HTTP rate limiters
   `router.go:39-41`); others are not — verify before relying on them.

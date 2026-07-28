@@ -23,29 +23,33 @@ type Snapshot struct {
 	// all-in's excess or an orphaned side-pot refund (runShowdown), neither of
 	// which is a win. The client must use this, not "payout > 0", to decide
 	// who gets the win banner/pill.
-	Winners                  []string          `json:"winners,omitempty"`
-	Rake                     int64             `json:"rake,omitempty"`
-	CurrentPlayerID          string            `json:"current_player_id,omitempty"`
-	LegalActions             *LegalActions     `json:"legal_actions,omitempty"`
-	ActionDeadlineUnixMs     int64             `json:"action_deadline_unix_ms,omitempty"`
-	ActionBaseDeadlineUnixMs int64             `json:"action_base_deadline_unix_ms,omitempty"`
-	NextHandUnixMs           int64             `json:"next_hand_unix_ms,omitempty"`
-	IdleRemovalUnixMs        int64             `json:"idle_removal_unix_ms,omitempty"`
-	WonWithoutShowdown       bool              `json:"won_without_showdown,omitempty"`
-	ShuffleCommitHash        string            `json:"shuffle_commit_hash,omitempty"`
-	ShuffleServerSeedHex     string            `json:"shuffle_server_seed_hex,omitempty"`
-	SmallBlindPlayerID       string            `json:"small_blind_player_id,omitempty"`
-	BigBlindPlayerID         string            `json:"big_blind_player_id,omitempty"`
-	DealerPlayerID           string            `json:"dealer_player_id,omitempty"`
-	SnapshotVersion          uint64            `json:"snapshot_version,omitempty"`
-	Pots                     []PotView         `json:"pots,omitempty"`
-	PotResults               []PotResultView   `json:"pot_results,omitempty"`
-	HandID                   string            `json:"hand_id,omitempty"`
-	ChatMessages             []ChatMessageView `json:"chat_messages,omitempty"`
-	Reactions                []ReactionView    `json:"reactions,omitempty"`
-	ActionPreselection       string            `json:"action_preselection,omitempty"`
-	ActionPreselectionAmount int64             `json:"action_preselection_amount,omitempty"`
-	ProspectiveCallAmount    int64             `json:"prospective_call_amount,omitempty"`
+	Winners                  []string                 `json:"winners,omitempty"`
+	Rake                     int64                    `json:"rake,omitempty"`
+	CurrentPlayerID          string                   `json:"current_player_id,omitempty"`
+	LegalActions             *LegalActions            `json:"legal_actions,omitempty"`
+	ActionDeadlineUnixMs     int64                    `json:"action_deadline_unix_ms,omitempty"`
+	ActionBaseDeadlineUnixMs int64                    `json:"action_base_deadline_unix_ms,omitempty"`
+	NextHandUnixMs           int64                    `json:"next_hand_unix_ms,omitempty"`
+	IdleRemovalUnixMs        int64                    `json:"idle_removal_unix_ms,omitempty"`
+	WonWithoutShowdown       bool                     `json:"won_without_showdown,omitempty"`
+	ShuffleCommitHash        string                   `json:"shuffle_commit_hash,omitempty"`
+	ShuffleServerSeedHex     string                   `json:"shuffle_server_seed_hex,omitempty"`
+	RootCommitHash           string                   `json:"root_commit_hash,omitempty"`
+	RevealedCardSalts        map[int]RevealedSaltView `json:"revealed_card_salts,omitempty"`
+	UnrevealedCardHashes     map[int]string           `json:"unrevealed_card_hashes,omitempty"`
+	RunoutCards              []string                 `json:"runout_cards,omitempty"`
+	SmallBlindPlayerID       string                   `json:"small_blind_player_id,omitempty"`
+	BigBlindPlayerID         string                   `json:"big_blind_player_id,omitempty"`
+	DealerPlayerID           string                   `json:"dealer_player_id,omitempty"`
+	SnapshotVersion          uint64                   `json:"snapshot_version,omitempty"`
+	Pots                     []PotView                `json:"pots,omitempty"`
+	PotResults               []PotResultView          `json:"pot_results,omitempty"`
+	HandID                   string                   `json:"hand_id,omitempty"`
+	ChatMessages             []ChatMessageView        `json:"chat_messages,omitempty"`
+	Reactions                []ReactionView           `json:"reactions,omitempty"`
+	ActionPreselection       string                   `json:"action_preselection,omitempty"`
+	ActionPreselectionAmount int64                    `json:"action_preselection_amount,omitempty"`
+	ProspectiveCallAmount    int64                    `json:"prospective_call_amount,omitempty"`
 
 	// EquityOnly is actor-internal metadata. An asynchronous equity estimate
 	// is transported as a versioned delta instead of replaying the complete
@@ -53,6 +57,11 @@ type Snapshot struct {
 	EquityOnly     bool     `json:"-"`
 	EquityPlayerID string   `json:"-"`
 	EquityValue    *float64 `json:"-"`
+}
+
+type RevealedSaltView struct {
+	Card    string `json:"card"`
+	SaltHex string `json:"salt_hex"`
 }
 
 type ChatMessageView struct {
@@ -274,8 +283,83 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 	}
 	if t.shuffle != nil {
 		out.ShuffleCommitHash = hex.EncodeToString(t.shuffle.CommitHash[:])
+		rootCommit := deck.RootCommitHash(t.shuffle.ServerSeed, t.shuffle.Cards)
+		out.RootCommitHash = hex.EncodeToString(rootCommit[:])
+
 		if t.stage == Complete {
-			out.ShuffleServerSeedHex = hex.EncodeToString(t.shuffle.ServerSeed[:])
+			showFinalCards := !wonWithoutShowdown
+			hasUnrevealedFold := wonWithoutShowdown
+			for _, p := range t.handOrder {
+				if p.State == Folded {
+					hasUnrevealedFold = true
+					break
+				}
+			}
+
+			if !hasUnrevealedFold {
+				out.ShuffleServerSeedHex = hex.EncodeToString(t.shuffle.ServerSeed[:])
+			}
+
+			revealedSalts := make(map[int]RevealedSaltView)
+			unrevealedHashes := make(map[int]string)
+
+			numActive := len(t.handOrder)
+			holeTotal := numActive * 2
+			dealerIdx := 0
+			if numActive > 0 {
+				dealerIdx = t.dealerIndexWithin(t.handOrder)
+			}
+			rabbitIndices := make(map[int]bool)
+			if wonWithoutShowdown && len(t.board) < 5 {
+				// Hole cards are followed by a burn+flop, burn+turn and
+				// burn+river. Reveal only missing community-card positions;
+				// burns and private cards remain committed hashes.
+				flopStart := holeTotal + 1
+				if len(t.board) < 3 {
+					for i := range 3 {
+						rabbitIndices[flopStart+i] = true
+					}
+				}
+				if len(t.board) < 4 {
+					rabbitIndices[holeTotal+5] = true
+				}
+				if len(t.board) < 5 {
+					rabbitIndices[holeTotal+7] = true
+				}
+			}
+
+			for i, c := range t.shuffle.Cards {
+				cCode := cardCode(c)
+				isRevealed := rabbitIndices[i]
+
+				if numActive > 0 && i < holeTotal {
+					pass := i / numActive
+					offset := (i % numActive) + 1
+					p := t.handOrder[(dealerIdx+offset)%numActive]
+
+					if p.ID == viewerID || (showFinalCards && p.State != Folded) || p.VoluntarilyShownCards[pass] {
+						isRevealed = true
+					}
+				} else if i < t.nextCard {
+					isRevealed = true
+				}
+
+				if isRevealed {
+					salt := deck.CardSalt(t.shuffle.ServerSeed, i)
+					revealedSalts[i] = RevealedSaltView{
+						Card:    cCode,
+						SaltHex: hex.EncodeToString(salt[:]),
+					}
+					if rabbitIndices[i] {
+						out.RunoutCards = append(out.RunoutCards, cCode)
+					}
+				} else {
+					h := deck.CardHash(t.shuffle.ServerSeed, i, c)
+					unrevealedHashes[i] = hex.EncodeToString(h[:])
+				}
+			}
+			out.RevealedCardSalts = revealedSalts
+			out.UnrevealedCardHashes = unrevealedHashes
 		}
 	}
 	return out

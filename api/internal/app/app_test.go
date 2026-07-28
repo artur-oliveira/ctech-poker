@@ -96,6 +96,26 @@ func TestHandItemForPreservesPartialOpponentReveal(t *testing.T) {
 	}
 }
 
+func TestHandItemForDoesNotPersistSeedWithHiddenCards(t *testing.T) {
+	outcome := hand.HandOutcome{
+		ServerSeed:   "secret-seed",
+		Participants: []string{"viewer", "folder"},
+		PlayerHands: map[string]hand.PlayerHandInfo{
+			"viewer": {HoleCards: [2]string{"Ah", "Kh"}, Revealed: true},
+			"folder": {HoleCards: [2]string{"Qs", "Qc"}, Revealed: false},
+		},
+	}
+	if seed := handItemFor(outcome, "viewer", nil).ServerSeed; seed != "" {
+		t.Fatalf("hidden opponent cards must suppress persisted server seed, got %q", seed)
+	}
+	outcome.PlayerHands["folder"] = hand.PlayerHandInfo{
+		HoleCards: [2]string{"Qs", "Qc"}, Revealed: true,
+	}
+	if seed := handItemFor(outcome, "viewer", nil).ServerSeed; seed != "secret-seed" {
+		t.Fatalf("fully revealed showdown should retain server seed, got %q", seed)
+	}
+}
+
 func testRoutes(app *fiber.App, cfg *config.Config) {
 	verifier := jwtverify.NewVerifier("", "", "", cache.NewMemoryBackend(1))
 	manager := tablemanager.NewManager(nil, nil, nil, nil)

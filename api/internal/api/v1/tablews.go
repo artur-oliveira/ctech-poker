@@ -857,6 +857,18 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		}
 	}
 
+	protoRevealedSalts := make(map[int32]*pokerproto.RevealedSalt, len(snap.RevealedCardSalts))
+	for idx, saltView := range snap.RevealedCardSalts {
+		protoRevealedSalts[int32(idx)] = &pokerproto.RevealedSalt{
+			Card:    saltView.Card,
+			SaltHex: saltView.SaltHex,
+		}
+	}
+	protoUnrevealedHashes := make(map[int32]string, len(snap.UnrevealedCardHashes))
+	for idx, hashHex := range snap.UnrevealedCardHashes {
+		protoUnrevealedHashes[int32(idx)] = hashHex
+	}
+
 	return &pokerproto.TableSnapshot{
 		Stage:                    snap.Stage,
 		Board:                    snap.Board,
@@ -880,12 +892,16 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		Pots:                     protoPots,
 		HandId:                   snap.HandID,
 		PotResults:               protoPotResults,
-		ProtocolVersion:          8,
+		ProtocolVersion:          9,
 		ChatMessages:             protoChat,
 		Reactions:                protoReactions,
 		ActionPreselection:       snap.ActionPreselection,
 		ActionPreselectionAmount: snap.ActionPreselectionAmount,
 		ProspectiveCallAmount:    snap.ProspectiveCallAmount,
+		RootCommitHash:           snap.RootCommitHash,
+		RevealedCardSalts:        protoRevealedSalts,
+		UnrevealedCardHashes:     protoUnrevealedHashes,
+		RunoutCards:              snap.RunoutCards,
 	}
 }
 

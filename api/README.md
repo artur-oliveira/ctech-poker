@@ -202,13 +202,11 @@ Auth group wiring: `RegisterRooms/Players/sandbox credits` all receive `auth` (`
   `hands_played`, and `win_rate` (`cdk/lib/dynamodb-stack.ts:78-95`) — **there is no
   `achievement_points` GSI** — so the call silently returns a *hands-won* ranking, not an achievement-points ranking.
 - **B32 fixed** — commit-reveal fairness is verifiable by clients via the WS snapshot
-  (`internal/engine/hand/snapshot.go:160-165`): `ShuffleCommitHash` is published in every
-  snapshot as soon as `StartHand` sets `t.shuffle` (before any hole card is dealt), and
-  `ShuffleServerSeedHex` is added once `Stage == Complete` (the reveal). A player can hash
-  their own copy of `ServerSeed` client-side and compare it against the `CommitHash` they
-  received before the hand started. Persisted long-term too, hex-encoded, on
-  `hand.HandOutcome`/`sessionlog.HandItem` (`ServerSeed`/`CommitHash`). Covered by
-  `snapshot_test.go:245-265`.
+  (`internal/engine/hand/snapshot.go`): `ShuffleCommitHash` and `RootCommitHash` are
+  published before dealing. At completion the full seed is revealed only when no private
+  cards remain hidden. Otherwise the viewer receives card+salt proofs for visible cards
+  and rabbit-runout cards, plus hashes for every hidden position. The full seed is also
+  omitted from persisted hand history whenever any participant's cards remain hidden.
 - **Remediation context:** `docs/plans/2026-07-19-api-audit-remediation.md` (and its spec)
   is a separate audit covering H1–H4, M1–M7, L1–L6, E1–E3, S1–S7. Several fixes are **already in the code** (T1 actor
   re-resolve `tablews.go:185-198`; T2 prod fail-fast on missing Valkey via `start.sh` in `cdk/lib/api-stack.ts`; M6 rate
