@@ -5470,10 +5470,14 @@ h1 em {
 
 /* --- Opponents: avatar chips on the rail band --- */
 .stage-v-ring .game-seat {
+    /* Single source for the avatar chip's diameter: the badges pinned to it
+       (role, note) size off this instead of holding a fixed px that reads
+       oversized once the chip shrinks to phone width. */
+    --seat-size: 38px;
     display: grid;
     place-items: center;
-    width: 38px;
-    height: 38px;
+    width: var(--seat-size);
+    height: var(--seat-size);
     min-width: 0;
     left: var(--seat-x);
     top: var(--seat-y);
@@ -5518,12 +5522,36 @@ h1 em {
 }
 
 .stage-v-ring .seat-note-trigger {
-    top: -7px;
-    right: -7px;
-    width: 24px;
-    height: 24px;
+    /* Badge, not a second control: under half the chip it reads as attached to
+       the avatar. The floor keeps the pen legible on the shortest landscape
+       ring, where the chip drops to 34px. */
+    --note-size: max(16px, var(--seat-size) * .46);
+    top: calc(var(--seat-size) * -.1);
+    right: calc(var(--seat-size) * -.1);
+    width: var(--note-size);
+    height: var(--note-size);
     opacity: 1;
     background: var(--surface-seat)
+}
+
+.stage-v-ring .seat-note-trigger svg {
+    width: calc(var(--note-size) * .6);
+    height: calc(var(--note-size) * .6)
+}
+
+.stage-v-ring .seat-note-trigger .player-note-dot {
+    top: 0;
+    right: 0;
+    width: calc(var(--note-size) * .37);
+    height: calc(var(--note-size) * .37)
+}
+
+/* The chip scales down with the avatar, the finger doesn't: a transparent
+   pseudo pads the hit area back out to 40px without drawing anything. */
+.stage-v-ring .seat-note-trigger::before {
+    content: '';
+    position: absolute;
+    inset: calc((var(--note-size) - 40px) / 2)
 }
 
 /* folded already grayscales globally; sitting-out, disconnected and
@@ -5807,8 +5835,7 @@ h1 em {
     }
 
     .stage-v-ring .game-seat {
-        width: 46px;
-        height: 46px
+        --seat-size: 46px
     }
 
     .stage-v-ring .seat-cards > .playing-card {
@@ -5830,8 +5857,7 @@ h1 em {
     }
 
     .stage-v-ring .game-seat {
-        width: 52px;
-        height: 52px
+        --seat-size: 52px
     }
 
     .stage-v-ring .seat-cards > .playing-card {
@@ -6351,8 +6377,7 @@ h1 em {
     }
 
     .stage-v-ring .game-seat {
-        width: 34px;
-        height: 34px
+        --seat-size: 34px
     }
 
     .stage-v-ring .seat-cards > .playing-card {
