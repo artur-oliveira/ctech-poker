@@ -1742,7 +1742,7 @@ func (a *Actor) computeAndSendEquity(
 	board []deck.Card,
 	opponents int,
 ) {
-	estimate, err := equity.Estimate(hole, board, nil, opponents, 500)
+	estimate, err := equity.Estimate(hole, board, nil, opponents, 200)
 	if err != nil {
 		return
 	}

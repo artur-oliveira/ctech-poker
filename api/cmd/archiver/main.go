@@ -37,34 +37,51 @@ func (p *realS3Putter) PutObject(ctx context.Context, bucket, key string, body [
 // buildBatch renders every INSERT record's NewImage as one JSON line (JSON
 // Lines format, so a later consumer processes the archive without loading a
 // whole batch into memory as a single document) and derives an S3 key
-// partitioned by table_id/hand_id (poker_action_log's pk is
-// "table_id#hand_id" — see tablestore.CommitAction). Non-INSERT records
+type archiveFile struct {
+	key     string
+	payload []byte
+}
+
+// buildBatches groups INSERT stream records by partition key (poker_action_log's
+// pk is "table_id#hand_id") into separate S3 objects. Non-INSERT records
 // (TTL-expiry emits REMOVE) are skipped: an expiring item already reached S3
 // on its own INSERT, so archiving its REMOVE would just duplicate it.
-func buildBatch(e events.DynamoDBEvent) (batch []byte, key string, err error) {
-	var buf bytes.Buffer
-	var firstPK, lastEventID string
+func buildBatches(e events.DynamoDBEvent) ([]archiveFile, error) {
+	groups := make(map[string]*bytes.Buffer)
+	lastEventIDs := make(map[string]string)
 	for _, r := range e.Records {
 		if r.EventName != "INSERT" {
 			continue
 		}
-		if firstPK == "" {
-			firstPK = r.Change.NewImage["pk"].String()
+		pkAttr, ok := r.Change.NewImage["pk"]
+		if !ok || pkAttr.String() == "" {
+			continue
 		}
-		lastEventID = r.EventID
+		pk := pkAttr.String()
+		buf, exists := groups[pk]
+		if !exists {
+			buf = &bytes.Buffer{}
+			groups[pk] = buf
+		}
+		lastEventIDs[pk] = r.EventID
 		rendered, err := attributeMapToJSON(r.Change.NewImage)
 		if err != nil {
-			return nil, "", fmt.Errorf("archiver: encode record: %w", err)
+			return nil, fmt.Errorf("archiver: encode record: %w", err)
 		}
 		buf.Write(rendered)
 		buf.WriteByte('\n')
 	}
-	if buf.Len() == 0 {
-		return nil, "", nil
+
+	files := make([]archiveFile, 0, len(groups))
+	for pk, buf := range groups {
+		if buf.Len() == 0 {
+			continue
+		}
+		partition := strings.ReplaceAll(pk, "#", "/")
+		key := fmt.Sprintf("%s/%d-%s.jsonl", partition, time.Now().UnixNano(), lastEventIDs[pk])
+		files = append(files, archiveFile{key: key, payload: buf.Bytes()})
 	}
-	partition := strings.ReplaceAll(firstPK, "#", "/")
-	key = fmt.Sprintf("%s/%d-%s.jsonl", partition, time.Now().UnixNano(), lastEventID)
-	return buf.Bytes(), key, nil
+	return files, nil
 }
 
 // attributeMapToJSON converts one DynamoDB Stream NewImage into a compact
@@ -113,14 +130,16 @@ func mapToInterface(m map[string]events.DynamoDBAttributeValue) map[string]any {
 
 func handle(putter s3Putter, bucket string) func(context.Context, events.DynamoDBEvent) error {
 	return func(ctx context.Context, e events.DynamoDBEvent) error {
-		batch, key, err := buildBatch(e)
+		files, err := buildBatches(e)
 		if err != nil {
 			return err
 		}
-		if len(batch) == 0 {
-			return nil
+		for _, f := range files {
+			if err := putter.PutObject(ctx, bucket, f.key, f.payload); err != nil {
+				return fmt.Errorf("archiver: put %s: %w", f.key, err)
+			}
 		}
-		return putter.PutObject(ctx, bucket, key, batch)
+		return nil
 	}
 }
 

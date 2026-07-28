@@ -35,10 +35,15 @@ func TestBuildBatchRendersOneJSONLinePerInsert(t *testing.T) {
 		},
 	}
 
-	batch, key, err := buildBatch(e)
+	files, err := buildBatches(e)
 	if err != nil {
-		t.Fatalf("buildBatch: %v", err)
+		t.Fatalf("buildBatches: %v", err)
 	}
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+	batch := files[0].payload
+	key := files[0].key
 	lines := strings.Split(strings.TrimRight(string(batch), "\n"), "\n")
 	if len(lines) != 1 {
 		t.Fatalf("expected exactly 1 line (INSERT only), got %d: %q", len(lines), string(batch))
@@ -53,8 +58,8 @@ func TestBuildBatchRendersOneJSONLinePerInsert(t *testing.T) {
 
 func TestBuildBatchReturnsEmptyWhenNothingToInsert(t *testing.T) {
 	e := events.DynamoDBEvent{Records: []events.DynamoDBEventRecord{{EventName: "REMOVE"}}}
-	batch, key, err := buildBatch(e)
-	if err != nil || batch != nil || key != "" {
-		t.Fatalf("expected no-op for an all-REMOVE batch, got batch=%q key=%q err=%v", batch, key, err)
+	files, err := buildBatches(e)
+	if err != nil || len(files) != 0 {
+		t.Fatalf("expected no-op for an all-REMOVE batch, got files=%v err=%v", files, err)
 	}
 }

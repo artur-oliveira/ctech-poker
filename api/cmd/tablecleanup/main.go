@@ -73,6 +73,7 @@ func run(ctx context.Context, stale staleQuerier, rooms roomLookup, wallet sandb
 			continue
 		}
 
+		refundFailed := false
 		for _, p := range st.State.Players {
 			if p.Stack <= 0 {
 				continue
@@ -80,8 +81,14 @@ func run(ctx context.Context, stale staleQuerier, rooms roomLookup, wallet sandb
 			key := fmt.Sprintf("%s#%s#stale_archive_refund", st.TableID, p.ID)
 			if err := wallet.Credit(ctx, p.ID, p.Stack, key, "poker_stale_table_refund"); err != nil {
 				slog.Error("ALARM: tablecleanup refund failed, table left active for retry", "table_id", st.TableID, "player", p.ID, "amount", p.Stack, "err", err)
+				refundFailed = true
 				continue
 			}
+		}
+
+		if refundFailed {
+			slog.Error("tablecleanup: skipping archive for table with failed player refund(s)", "table_id", st.TableID)
+			continue
 		}
 
 		if err := stale.MarkArchived(ctx, st.TableID, st.Version); err != nil {

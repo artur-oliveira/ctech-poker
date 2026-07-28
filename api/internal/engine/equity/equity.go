@@ -77,7 +77,7 @@ func Estimate(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, ite
 	var shares float64
 
 	for range iterations {
-		for i := 0; i < need; i++ {
+		for i := range need {
 			j := i + int(rng.intn(uint32(poolLen-i)))
 			cards[i], cards[j] = cards[j], cards[i]
 		}

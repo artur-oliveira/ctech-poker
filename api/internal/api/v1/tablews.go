@@ -397,7 +397,7 @@ func RegisterTableWS(
 			botRiskScore := 0
 			challengeRequired := false
 			done := make(chan struct{})
-			go startHeartbeat(conn, done, wsPingInterval, wsPongWait)
+			go startHeartbeat(safeConn, done, wsPingInterval, wsPongWait)
 
 			for {
 				_, msg, e := conn.ReadMessage()
@@ -653,15 +653,15 @@ func RegisterTableWS(
 	})
 }
 
-func startHeartbeat(conn *fws.Conn, done <-chan struct{}, pingInterval, pongWait time.Duration) {
-	conn.SetPongHandler(func(string) error { return conn.SetReadDeadline(time.Now().Add(pongWait)) })
-	_ = conn.SetReadDeadline(time.Now().Add(pongWait))
+func startHeartbeat(adapter *wsConnAdapter, done <-chan struct{}, pingInterval, pongWait time.Duration) {
+	adapter.conn.SetPongHandler(func(string) error { return adapter.conn.SetReadDeadline(time.Now().Add(pongWait)) })
+	_ = adapter.conn.SetReadDeadline(time.Now().Add(pongWait))
 	t := time.NewTicker(pingInterval)
 	defer t.Stop()
 	for {
 		select {
 		case <-t.C:
-			if e := conn.WriteControl(fws.PingMessage, nil, time.Now().Add(wsWriteWait)); e != nil {
+			if e := adapter.WriteControl(fws.PingMessage, nil, time.Now().Add(wsWriteWait)); e != nil {
 				return
 			}
 		case <-done:
@@ -677,6 +677,12 @@ func startHeartbeat(conn *fws.Conn, done <-chan struct{}, pingInterval, pongWait
 type wsConnAdapter struct {
 	mu   sync.Mutex
 	conn *fws.Conn
+}
+
+func (w *wsConnAdapter) WriteControl(messageType int, data []byte, deadline time.Time) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.conn.WriteControl(messageType, data, deadline)
 }
 
 func (w *wsConnAdapter) WriteMessage(_ int, data []byte) error {
@@ -754,7 +760,7 @@ func RegisterGeneralWS(
 			slog.Info("general ws connected", "player", playerID, "conn", connID)
 
 			done := make(chan struct{})
-			go startHeartbeat(conn, done, wsPingInterval, wsPongWait)
+			go startHeartbeat(safeConn, done, wsPingInterval, wsPongWait)
 
 			for {
 				_, msg, e := conn.ReadMessage()

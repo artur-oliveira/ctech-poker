@@ -268,16 +268,27 @@ func (m *Manager) Release(tableID string) {
 	}
 }
 
-// DrainAndRelease releases every table lease held by this instance on graceful shutdown.
+// DrainAndRelease releases every table lease held by this instance on graceful shutdown
+// and waits for all table actor goroutines to finish processing in-flight operations.
 func (m *Manager) DrainAndRelease(ctx context.Context) {
 	m.mu.Lock()
 	ids := make([]string, 0, len(m.actors))
-	for id := range m.actors {
+	actors := make([]*table.Actor, 0, len(m.actors))
+	for id, a := range m.actors {
 		ids = append(ids, id)
+		actors = append(actors, a)
 	}
 	m.mu.Unlock()
 
 	for _, id := range ids {
 		m.Release(id)
+	}
+
+	for _, a := range actors {
+		select {
+		case <-a.Done():
+		case <-ctx.Done():
+			return
+		}
 	}
 }
