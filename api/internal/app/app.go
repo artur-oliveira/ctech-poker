@@ -402,7 +402,7 @@ func handItemForWithAvatars(outcome hand.HandOutcome, id string, names, avatarUR
 	}
 	item := sessionlog.HandItem{
 		Outcome: result, NetChange: net,
-		Board: outcome.Board, HoleCards: holeCards, Opponents: opponents,
+		Board: outcome.Board, BoardTwo: outcome.BoardTwo, HoleCards: holeCards, Opponents: opponents,
 		CommitHash:     outcome.CommitHash,
 		RootCommitHash: outcome.RootCommitHash,
 		ServerSeed: func() string {

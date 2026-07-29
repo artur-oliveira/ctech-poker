@@ -104,6 +104,14 @@ type ShowCardsCmd struct {
 	Reply     chan error
 }
 
+type SetRunItTwiceCmd struct {
+	PlayerID string
+	Enabled  bool
+	Reply    chan error
+}
+
+func (c SetRunItTwiceCmd) reply() chan error { return c.Reply }
+
 func (c ShowCardsCmd) reply() chan error { return c.Reply }
 
 // KeepSeatCmd is an explicit human-presence signal used by the idle-removal

@@ -24,6 +24,10 @@ type State struct {
 	DealerDrawn   bool
 	Stage         Stage
 	Board         []deck.Card
+	BoardTwo      []deck.Card
+	BoardSplitAt  int
+	RunItTwice    bool
+	RunoutPhase   int
 	Shuffle       *deck.ShuffleResult
 	NextCard      int
 	Round         *betting.Round
@@ -50,6 +54,10 @@ func (t *Table) ExportState() State {
 		DealerDrawn:   t.dealerDrawn,
 		Stage:         t.stage,
 		Board:         t.board,
+		BoardTwo:      t.boardTwo,
+		BoardSplitAt:  t.boardSplitAt,
+		RunItTwice:    t.runItTwice,
+		RunoutPhase:   t.runoutPhase,
 		Shuffle:       t.shuffle,
 		NextCard:      t.nextCard,
 		Round:         t.round,
@@ -114,6 +122,10 @@ func NewTableFromState(s State) *Table {
 		dealerDrawn:   s.DealerDrawn || s.Stage != WaitingForPlayers,
 		stage:         s.Stage,
 		board:         s.Board,
+		boardTwo:      s.BoardTwo,
+		boardSplitAt:  s.BoardSplitAt,
+		runItTwice:    s.RunItTwice,
+		runoutPhase:   s.RunoutPhase,
 		shuffle:       s.Shuffle,
 		nextCard:      s.NextCard,
 		round:         s.Round,

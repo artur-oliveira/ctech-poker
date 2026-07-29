@@ -17,6 +17,7 @@ const scenarios: { value: MockScenario; label: string }[] = [
   {value: 'river', label: 'River · vez do rival'},
   {value: 'showdown', label: 'Showdown · vitória'},
   {value: 'side_pot', label: 'Showdown · pote lateral (2 vencedores)'},
+  {value: 'run_it_twice', label: 'Showdown · rodar duas vezes'},
   {value: 'complete', label: 'Resultado · vitória'},
   {value: 'complete_loss', label: 'Resultado · derrota'},
   {value: 'complete_tie', label: 'Resultado · empate'},

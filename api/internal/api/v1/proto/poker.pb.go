@@ -106,6 +106,7 @@ type Seat struct {
 	HandScore      uint32  `protobuf:"varint,15,opt,name=hand_score,json=handScore,proto3" json:"hand_score,omitempty"`
 	AvatarUrl      *string `protobuf:"bytes,16,opt,name=avatar_url,json=avatarUrl,proto3,oneof" json:"avatar_url,omitempty"`
 	PlaystyleBadge *string `protobuf:"bytes,17,opt,name=playstyle_badge,json=playstyleBadge,proto3,oneof" json:"playstyle_badge,omitempty"`
+	RunItTwice     *bool   `protobuf:"varint,18,opt,name=run_it_twice,json=runItTwice,proto3,oneof" json:"run_it_twice,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -259,6 +260,13 @@ func (x *Seat) GetPlaystyleBadge() string {
 	return ""
 }
 
+func (x *Seat) GetRunItTwice() bool {
+	if x != nil && x.RunItTwice != nil {
+		return *x.RunItTwice
+	}
+	return false
+}
+
 type BlindEscalation struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	IntervalMinutes int32                  `protobuf:"varint,1,opt,name=interval_minutes,json=intervalMinutes,proto3" json:"interval_minutes,omitempty"`
@@ -338,6 +346,7 @@ type Room struct {
 	SeatsTaken           int32                  `protobuf:"varint,15,opt,name=seats_taken,json=seatsTaken,proto3" json:"seats_taken,omitempty"`
 	CreatedBy            string                 `protobuf:"bytes,16,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
 	CreatedAt            string                 `protobuf:"bytes,17,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	RunItTwiceEnabled    bool                   `protobuf:"varint,18,opt,name=run_it_twice_enabled,json=runItTwiceEnabled,proto3" json:"run_it_twice_enabled,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -489,6 +498,13 @@ func (x *Room) GetCreatedAt() string {
 		return x.CreatedAt
 	}
 	return ""
+}
+
+func (x *Room) GetRunItTwiceEnabled() bool {
+	if x != nil {
+		return x.RunItTwiceEnabled
+	}
+	return false
 }
 
 type LegalActions struct {
@@ -675,6 +691,7 @@ type PotResult struct {
 	WinnerPlayerIds   []string               `protobuf:"bytes,4,rep,name=winner_player_ids,json=winnerPlayerIds,proto3" json:"winner_player_ids,omitempty"`                                   // empty for refunds
 	Payouts           map[string]int64       `protobuf:"bytes,5,rep,name=payouts,proto3" json:"payouts,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // exact per-player credits, including odd chips
 	Refund            bool                   `protobuf:"varint,6,opt,name=refund,proto3" json:"refund,omitempty"`                                                                             // true for uncalled/orphaned contribution returns
+	Runout            int32                  `protobuf:"varint,7,opt,name=runout,proto3" json:"runout,omitempty"`                                                                             // 1 or 2 for RIT; 0 for a normal hand/refund
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -749,6 +766,13 @@ func (x *PotResult) GetRefund() bool {
 		return x.Refund
 	}
 	return false
+}
+
+func (x *PotResult) GetRunout() int32 {
+	if x != nil {
+		return x.Runout
+	}
+	return 0
 }
 
 type ChatMessage struct {
@@ -945,6 +969,8 @@ type TableSnapshot struct {
 	RevealedCardSalts     map[int32]*RevealedSalt `protobuf:"bytes,30,rep,name=revealed_card_salts,json=revealedCardSalts,proto3" json:"revealed_card_salts,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	UnrevealedCardHashes  map[int32]string        `protobuf:"bytes,31,rep,name=unrevealed_card_hashes,json=unrevealedCardHashes,proto3" json:"unrevealed_card_hashes,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	RunoutCards           []string                `protobuf:"bytes,32,rep,name=runout_cards,json=runoutCards,proto3" json:"runout_cards,omitempty"`
+	BoardTwo              []string                `protobuf:"bytes,33,rep,name=board_two,json=boardTwo,proto3" json:"board_two,omitempty"`
+	BoardSplitAt          int32                   `protobuf:"varint,34,opt,name=board_split_at,json=boardSplitAt,proto3" json:"board_split_at,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -1203,6 +1229,20 @@ func (x *TableSnapshot) GetRunoutCards() []string {
 	return nil
 }
 
+func (x *TableSnapshot) GetBoardTwo() []string {
+	if x != nil {
+		return x.BoardTwo
+	}
+	return nil
+}
+
+func (x *TableSnapshot) GetBoardSplitAt() int32 {
+	if x != nil {
+		return x.BoardSplitAt
+	}
+	return 0
+}
+
 type RevealedSalt struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Card          string                 `protobuf:"bytes,1,opt,name=card,proto3" json:"card,omitempty"`
@@ -1258,7 +1298,7 @@ func (x *RevealedSalt) GetSaltHex() string {
 // ClientMessage is sent from the client to the server.
 type ClientMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction"
+	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice"
 	// payload fields
 	Token                   string `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`                                                                       // for auth frame
 	ShareCode               string `protobuf:"bytes,3,opt,name=share_code,json=shareCode,proto3" json:"share_code,omitempty"`                                              // for auth frame
@@ -1273,6 +1313,7 @@ type ClientMessage struct {
 	ReactionId              string `protobuf:"bytes,12,opt,name=reaction_id,json=reactionId,proto3" json:"reaction_id,omitempty"`                                          // catalog key; never arbitrary display text
 	TargetPlayerId          string `protobuf:"bytes,13,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`                            // required only by thrown-object reactions
 	TurnstileToken          string `protobuf:"bytes,14,opt,name=turnstile_token,json=turnstileToken,proto3" json:"turnstile_token,omitempty"`                              // response token for an adaptive bot challenge
+	RunItTwice              *bool  `protobuf:"varint,15,opt,name=run_it_twice,json=runItTwice,proto3,oneof" json:"run_it_twice,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -1403,6 +1444,13 @@ func (x *ClientMessage) GetTurnstileToken() string {
 		return x.TurnstileToken
 	}
 	return ""
+}
+
+func (x *ClientMessage) GetRunItTwice() bool {
+	if x != nil && x.RunItTwice != nil {
+		return *x.RunItTwice
+	}
+	return false
 }
 
 // ServerMessage is sent from the server to the client.
@@ -1595,7 +1643,7 @@ const file_poker_proto_rawDesc = "" +
 	"\vpoker.proto\x12\x05poker\".\n" +
 	"\x04Card\x12\x12\n" +
 	"\x04rank\x18\x01 \x01(\tR\x04rank\x12\x12\n" +
-	"\x04suit\x18\x02 \x01(\tR\x04suit\"\xa0\x05\n" +
+	"\x04suit\x18\x02 \x01(\tR\x04suit\"\xd8\x05\n" +
 	"\x04Seat\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
@@ -1618,19 +1666,22 @@ const file_poker_proto_rawDesc = "" +
 	"hand_score\x18\x0f \x01(\rR\thandScore\x12\"\n" +
 	"\n" +
 	"avatar_url\x18\x10 \x01(\tH\x04R\tavatarUrl\x88\x01\x01\x12,\n" +
-	"\x0fplaystyle_badge\x18\x11 \x01(\tH\x05R\x0eplaystyleBadge\x88\x01\x01B\t\n" +
+	"\x0fplaystyle_badge\x18\x11 \x01(\tH\x05R\x0eplaystyleBadge\x88\x01\x01\x12%\n" +
+	"\frun_it_twice\x18\x12 \x01(\bH\x06R\n" +
+	"runItTwice\x88\x01\x01B\t\n" +
 	"\a_equityB\v\n" +
 	"\t_dealt_inB\b\n" +
 	"\x06_readyB\x16\n" +
 	"\x14_stack_at_hand_startB\r\n" +
 	"\v_avatar_urlB\x12\n" +
-	"\x10_playstyle_badge\"n\n" +
+	"\x10_playstyle_badgeB\x0f\n" +
+	"\r_run_it_twice\"n\n" +
 	"\x0fBlindEscalation\x12)\n" +
 	"\x10interval_minutes\x18\x01 \x01(\x05R\x0fintervalMinutes\x12\x1e\n" +
 	"\n" +
 	"multiplier\x18\x02 \x01(\x05R\n" +
 	"multiplier\x12\x10\n" +
-	"\x03max\x18\x03 \x01(\x03R\x03max\"\xe4\x04\n" +
+	"\x03max\x18\x03 \x01(\x03R\x03max\"\x95\x05\n" +
 	"\x04Room\x12\x17\n" +
 	"\aroom_id\x18\x01 \x01(\tR\x06roomId\x12\x1e\n" +
 	"\n" +
@@ -1658,7 +1709,8 @@ const file_poker_proto_rawDesc = "" +
 	"\n" +
 	"created_by\x18\x10 \x01(\tR\tcreatedBy\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x11 \x01(\tR\tcreatedAt\"\xac\x03\n" +
+	"created_at\x18\x11 \x01(\tR\tcreatedAt\x12/\n" +
+	"\x14run_it_twice_enabled\x18\x12 \x01(\bR\x11runItTwiceEnabled\"\xac\x03\n" +
 	"\fLegalActions\x12\x18\n" +
 	"\aactions\x18\x01 \x03(\tR\aactions\x12\x1f\n" +
 	"\vcall_amount\x18\x02 \x01(\x03R\n" +
@@ -1679,14 +1731,15 @@ const file_poker_proto_rawDesc = "" +
 	"potRaiseTo\"M\n" +
 	"\x03Pot\x12\x16\n" +
 	"\x06amount\x18\x01 \x01(\x03R\x06amount\x12.\n" +
-	"\x13eligible_player_ids\x18\x02 \x03(\tR\x11eligiblePlayerIds\"\xb1\x02\n" +
+	"\x13eligible_player_ids\x18\x02 \x03(\tR\x11eligiblePlayerIds\"\xc9\x02\n" +
 	"\tPotResult\x12\x16\n" +
 	"\x06amount\x18\x01 \x01(\x03R\x06amount\x12#\n" +
 	"\rpayout_amount\x18\x02 \x01(\x03R\fpayoutAmount\x12.\n" +
 	"\x13eligible_player_ids\x18\x03 \x03(\tR\x11eligiblePlayerIds\x12*\n" +
 	"\x11winner_player_ids\x18\x04 \x03(\tR\x0fwinnerPlayerIds\x127\n" +
 	"\apayouts\x18\x05 \x03(\v2\x1d.poker.PotResult.PayoutsEntryR\apayouts\x12\x16\n" +
-	"\x06refund\x18\x06 \x01(\bR\x06refund\x1a:\n" +
+	"\x06refund\x18\x06 \x01(\bR\x06refund\x12\x16\n" +
+	"\x06runout\x18\a \x01(\x05R\x06runout\x1a:\n" +
 	"\fPayoutsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\"r\n" +
@@ -1703,7 +1756,7 @@ const file_poker_proto_rawDesc = "" +
 	"\x10target_player_id\x18\x04 \x01(\tR\x0etargetPlayerId\x12\x1c\n" +
 	"\ttimestamp\x18\x05 \x01(\x03R\ttimestamp\x12\x1d\n" +
 	"\n" +
-	"expires_at\x18\x06 \x01(\x03R\texpiresAt\"\xed\r\n" +
+	"expires_at\x18\x06 \x01(\x03R\texpiresAt\"\xb0\x0e\n" +
 	"\rTableSnapshot\x12\x14\n" +
 	"\x05stage\x18\x01 \x01(\tR\x05stage\x12\x14\n" +
 	"\x05board\x18\x02 \x03(\tR\x05board\x12!\n" +
@@ -1739,7 +1792,9 @@ const file_poker_proto_rawDesc = "" +
 	"\x10root_commit_hash\x18\x1d \x01(\tR\x0erootCommitHash\x12[\n" +
 	"\x13revealed_card_salts\x18\x1e \x03(\v2+.poker.TableSnapshot.RevealedCardSaltsEntryR\x11revealedCardSalts\x12d\n" +
 	"\x16unrevealed_card_hashes\x18\x1f \x03(\v2..poker.TableSnapshot.UnrevealedCardHashesEntryR\x14unrevealedCardHashes\x12!\n" +
-	"\frunout_cards\x18  \x03(\tR\vrunoutCards\x1a:\n" +
+	"\frunout_cards\x18  \x03(\tR\vrunoutCards\x12\x1b\n" +
+	"\tboard_two\x18! \x03(\tR\bboardTwo\x12$\n" +
+	"\x0eboard_split_at\x18\" \x01(\x05R\fboardSplitAt\x1a:\n" +
 	"\fPayoutsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1aY\n" +
@@ -1751,7 +1806,7 @@ const file_poker_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"=\n" +
 	"\fRevealedSalt\x12\x12\n" +
 	"\x04card\x18\x01 \x01(\tR\x04card\x12\x19\n" +
-	"\bsalt_hex\x18\x02 \x01(\tR\asaltHex\"\xe2\x03\n" +
+	"\bsalt_hex\x18\x02 \x01(\tR\asaltHex\"\x9a\x04\n" +
 	"\rClientMessage\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x14\n" +
 	"\x05token\x18\x02 \x01(\tR\x05token\x12\x1d\n" +
@@ -1770,8 +1825,11 @@ const file_poker_proto_rawDesc = "" +
 	"\vreaction_id\x18\f \x01(\tR\n" +
 	"reactionId\x12(\n" +
 	"\x10target_player_id\x18\r \x01(\tR\x0etargetPlayerId\x12'\n" +
-	"\x0fturnstile_token\x18\x0e \x01(\tR\x0eturnstileTokenB\r\n" +
-	"\v_card_index\"\xa3\x04\n" +
+	"\x0fturnstile_token\x18\x0e \x01(\tR\x0eturnstileToken\x12%\n" +
+	"\frun_it_twice\x18\x0f \x01(\bH\x01R\n" +
+	"runItTwice\x88\x01\x01B\r\n" +
+	"\v_card_indexB\x0f\n" +
+	"\r_run_it_twice\"\xa3\x04\n" +
 	"\rServerMessage\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x17\n" +
 	"\aconn_id\x18\x02 \x01(\tR\x06connId\x120\n" +

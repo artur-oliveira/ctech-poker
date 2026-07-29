@@ -113,7 +113,7 @@ func wsAllowedOrigin(ctx *fasthttp.RequestCtx, allowed []string) bool {
 
 func rateLimitedTableMessage(messageType string) bool {
 	switch messageType {
-	case "act", "chat", "reaction", "preselect_action", "bot_challenge", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "ping":
+	case "act", "chat", "reaction", "preselect_action", "bot_challenge", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "set_run_it_twice", "ping":
 		return true
 	default:
 		return false
@@ -327,6 +327,7 @@ func RegisterTableWS(
 			}
 			if room != nil {
 				actor.SetEquityEnabledForActor(room.EquityDisplayEnabled)
+				actor.SetRunItTwiceEnabledForActor(room.RunItTwiceEnabled)
 			}
 			connID := uuid.NewString()
 			connectionRegistered := false
@@ -347,6 +348,7 @@ func RegisterTableWS(
 					actor = fresh
 					if room != nil {
 						actor.SetEquityEnabledForActor(room.EquityDisplayEnabled)
+						actor.SetRunItTwiceEnabledForActor(room.RunItTwiceEnabled)
 					}
 					if connectionRegistered {
 						for _, live := range connectionTracker.listTable(tableID) {
@@ -587,6 +589,12 @@ func RegisterTableWS(
 						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()
+					}
+				case "set_run_it_twice":
+					r := make(chan error, 1)
+					enabled := m.RunItTwice != nil && *m.RunItTwice
+					if err := dispatch(table.SetRunItTwiceCmd{PlayerID: playerID, Enabled: enabled, Reply: r}); err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error()})
 					}
 				case "keep_seat":
 					ensureActionID()
@@ -836,11 +844,17 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		if s.PlaystyleBadge != "" {
 			playstyleBadge = &s.PlaystyleBadge
 		}
+		var runItTwice *bool
+		if s.RunItTwice {
+			enabled := true
+			runItTwice = &enabled
+		}
 		protoSeats[i] = &pokerproto.Seat{
 			PlayerId:          s.PlayerID,
 			Name:              s.Name,
 			AvatarUrl:         avatarURL,
 			PlaystyleBadge:    playstyleBadge,
+			RunItTwice:        runItTwice,
 			ConnectionState:   s.ConnectionState,
 			Stack:             s.Stack,
 			State:             s.State,
@@ -889,6 +903,7 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 			WinnerPlayerIds:   result.WinnerPlayerIDs,
 			Payouts:           result.Payouts,
 			Refund:            result.Refund,
+			Runout:            int32(result.Runout),
 		}
 	}
 	protoChat := make([]*pokerproto.ChatMessage, len(snap.ChatMessages))
@@ -940,7 +955,7 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		Pots:                     protoPots,
 		HandId:                   snap.HandID,
 		PotResults:               protoPotResults,
-		ProtocolVersion:          9,
+		ProtocolVersion:          10,
 		ChatMessages:             protoChat,
 		Reactions:                protoReactions,
 		ActionPreselection:       snap.ActionPreselection,
@@ -950,6 +965,8 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		RevealedCardSalts:        protoRevealedSalts,
 		UnrevealedCardHashes:     protoUnrevealedHashes,
 		RunoutCards:              snap.RunoutCards,
+		BoardTwo:                 snap.BoardTwo,
+		BoardSplitAt:             int32(snap.BoardSplitAt),
 	}
 }
 
@@ -981,5 +998,6 @@ func ConvertRoom(r roomstore.Room) *pokerproto.Room {
 		SeatsTaken:           int32(r.SeatsTaken),
 		CreatedBy:            r.CreatedBy,
 		CreatedAt:            r.CreatedAt,
+		RunItTwiceEnabled:    r.RunItTwiceEnabled,
 	}
 }

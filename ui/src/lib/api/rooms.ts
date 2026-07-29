@@ -24,6 +24,7 @@ export interface Room {
   // (join/rebuy), zero/absent for sandbox rooms. Set once at room creation,
   // never a function of the pot (see docs/plans/2026-07-25-realmoney-fixed-fee-and-sandbox-rake.md).
   entry_fee_cents?: number;
+  run_it_twice_enabled?: boolean;
 }
 
 export interface Stake {

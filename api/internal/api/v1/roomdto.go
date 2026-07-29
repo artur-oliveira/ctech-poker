@@ -11,6 +11,7 @@ type CreateRoomRequest struct {
 	BuyInMin             int64                      `json:"buy_in_min"`
 	BuyInMax             int64                      `json:"buy_in_max"`
 	EquityDisplayEnabled *bool                      `json:"equity_display_enabled,omitempty"`
+	RunItTwiceEnabled    *bool                      `json:"run_it_twice_enabled,omitempty"`
 	BlindEscalation      *roomstore.BlindEscalation `json:"blind_escalation,omitempty"`
 	TurnTimeoutSeconds   *int                       `json:"turn_timeout_seconds,omitempty"`
 }

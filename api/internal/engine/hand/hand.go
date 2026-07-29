@@ -51,6 +51,7 @@ type Player struct {
 	Name           string       `dynamodbav:"name,omitempty"`
 	AvatarURL      string       `dynamodbav:"avatar_url,omitempty"`
 	PlaystyleBadge string       `dynamodbav:"playstyle_badge,omitempty"`
+	RunItTwice     bool         `dynamodbav:"run_it_twice,omitempty"`
 	Stack          int64        `dynamodbav:"stack"`
 	Ready          bool         `dynamodbav:"ready"`
 	State          PlayerState  `dynamodbav:"state"`
@@ -98,17 +99,22 @@ func initializeTimeBank(p *Player) {
 }
 
 type Table struct {
-	players     []*Player
-	smallBlind  int64
-	bigBlind    int64
-	dealerSeat  int
-	dealerDrawn bool
-	stage       Stage
-	board       []deck.Card
-	shuffle     *deck.ShuffleResult
-	nextCard    int
-	round       *betting.Round
-	roundIdx    map[string]int // playerID -> index into round.Players, for the active betting round
+	players           []*Player
+	smallBlind        int64
+	bigBlind          int64
+	dealerSeat        int
+	dealerDrawn       bool
+	stage             Stage
+	board             []deck.Card
+	boardTwo          []deck.Card
+	boardSplitAt      int
+	runItTwiceEnabled bool
+	runItTwice        bool
+	runoutPhase       int
+	shuffle           *deck.ShuffleResult
+	nextCard          int
+	round             *betting.Round
+	roundIdx          map[string]int // playerID -> index into round.Players, for the active betting round
 
 	// roundBaseline records, for each player in the current round, the value
 	// round.Players[idx].Contributed held at the moment this round began
@@ -165,6 +171,7 @@ type HandOutcome struct {
 	// durable copy a caller (sessionlog's per-player match history) ever
 	// gets. Card codes use Snapshot's 2-char notation ("Ah", "Tc", ...).
 	Board       []string
+	BoardTwo    []string `json:"board_two,omitempty"`
 	PlayerHands map[string]PlayerHandInfo
 	// ShowdownResults holds each non-folded participant's OWN best-hand
 	// category and result. Unlike PlayerHands/Revealed, this is never
@@ -221,6 +228,7 @@ type PotResult struct {
 	Winners           []string
 	Payouts           map[string]int64
 	Refund            bool
+	Runout            int
 }
 
 // ShowdownResult is one participant's own showdown outcome, see
@@ -282,6 +290,41 @@ func (t *Table) ConfigureRake(currencyMode string) {
 	t.rakeBPS = 0
 }
 
+// ConfigureRunItTwice enables the room-level gate. The per-hand decision is
+// still unanimous and is frozen when betting closes.
+func (t *Table) ConfigureRunItTwice(enabled bool) { t.runItTwiceEnabled = enabled }
+
+// SetPlayerRunItTwiceForActor updates the viewer-private, table-scoped
+// preference and reports whether persistence is necessary.
+func (t *Table) SetPlayerRunItTwiceForActor(playerID string, enabled bool) bool {
+	p := t.playerByID(playerID)
+	if p == nil || p.RunItTwice == enabled {
+		return false
+	}
+	p.RunItTwice = enabled
+	return true
+}
+
+func (t *Table) shouldRunItTwice() bool {
+	if !t.runItTwiceEnabled {
+		return false
+	}
+	remaining := 0
+	for _, p := range t.handOrder {
+		if p.State != Active && p.State != AllIn {
+			continue
+		}
+		remaining++
+		if !p.RunItTwice {
+			return false
+		}
+	}
+	return remaining >= 2
+}
+
+// RunoutPhaseForActor participates in the actor timer's idempotency key.
+func (t *Table) RunoutPhaseForActor() int { return t.runoutPhase }
+
 // PlayersForActor exposes the live player slice for Phase 2's table.Actor,
 // which needs to toggle Ready before a hand starts (StartHand only reads it,
 // nothing in this package previously needed to write it from outside).
@@ -311,7 +354,11 @@ func (t *Table) HoleAndBoardForActor(playerID string) ([2]deck.Card, []deck.Card
 	if p == nil || !t.dealtIntoCurrentHand(playerID) || (p.State != Active && p.State != AllIn) {
 		return [2]deck.Card{}, nil, false
 	}
-	return p.HoleCards, append([]deck.Card(nil), t.board...), true
+	board := t.board
+	if t.runItTwice && t.runoutPhase == 2 {
+		board = append(append([]deck.Card(nil), t.board[:t.boardSplitAt]...), t.boardTwo...)
+	}
+	return p.HoleCards, append([]deck.Card(nil), board...), true
 }
 
 // CurrentPlayerCanActForActor exposes currentPlayerCanAct to Phase 2's
@@ -602,6 +649,10 @@ func (t *Table) StartHand() error {
 		t.payouts = nil
 		t.lastOutcome = nil
 		t.board = nil
+		t.boardTwo = nil
+		t.boardSplitAt = 0
+		t.runItTwice = false
+		t.runoutPhase = 0
 		t.shuffle = nil
 		t.nextCard = 0
 		t.stage = WaitingForPlayers
@@ -618,6 +669,10 @@ func (t *Table) StartHand() error {
 	t.shuffle = shuffle
 	t.nextCard = 0
 	t.board = nil
+	t.boardTwo = nil
+	t.boardSplitAt = 0
+	t.runItTwice = false
+	t.runoutPhase = 0
 	t.payouts = nil
 	t.lastOutcome = nil
 	t.wasEverAllIn = make(map[string]bool)
@@ -1136,6 +1191,11 @@ func (t *Table) advanceStage() {
 	// any further streets one at a time via AdvanceRunoutStreetForActor —
 	// see IsAwaitingRunoutForActor.
 	if canStillAct <= 1 {
+		if t.runoutPhase == 0 && t.stage != River {
+			t.runItTwice = t.shouldRunItTwice()
+			t.boardSplitAt = len(t.board)
+			t.runoutPhase = 1
+		}
 		t.AdvanceRunoutStreetForActor()
 		return
 	}
@@ -1185,6 +1245,26 @@ func (t *Table) countRemainingAndActable() (remaining, canStillAct int) {
 // every further street, checking IsAwaitingRunoutForActor between calls to
 // know whether another call is still needed.
 func (t *Table) AdvanceRunoutStreetForActor() {
+	if t.runItTwice && t.runoutPhase == 2 {
+		switch t.stage {
+		case PreFlop:
+			t.burnCard()
+			t.boardTwo = append(t.boardTwo, t.dealCard(), t.dealCard(), t.dealCard())
+			t.stage = Flop
+		case Flop, Turn:
+			t.burnCard()
+			t.boardTwo = append(t.boardTwo, t.dealCard())
+			if t.stage == Flop {
+				t.stage = Turn
+			} else {
+				t.stage = River
+			}
+		}
+		if t.stage == River {
+			t.runShowdown()
+		}
+		return
+	}
 	switch t.stage {
 	case PreFlop:
 		t.dealFlop()
@@ -1197,6 +1277,20 @@ func (t *Table) AdvanceRunoutStreetForActor() {
 		t.stage = River
 	}
 	if t.stage == River {
+		if t.runItTwice {
+			t.runoutPhase = 2
+			switch t.boardSplitAt {
+			case 0:
+				t.stage = PreFlop
+			case 3:
+				t.stage = Flop
+			case 4:
+				t.stage = Turn
+			default:
+				t.runShowdown()
+			}
+			return
+		}
 		t.runShowdown()
 	}
 }
@@ -1211,7 +1305,7 @@ func (t *Table) AdvanceRunoutStreetForActor() {
 // Recomputed from player state on every call — no persisted flag needed,
 // since dealing a street is the only thing that can change the answer.
 func (t *Table) IsAwaitingRunoutForActor() bool {
-	if t.stage != Flop && t.stage != Turn {
+	if t.stage != Flop && t.stage != Turn && !(t.runItTwice && t.runoutPhase == 2 && t.stage == PreFlop) {
 		return false
 	}
 	// canStillAct <= 1 alone isn't enough: it goes true the instant a player
@@ -1283,32 +1377,7 @@ func (t *Table) runShowdown() {
 			})
 			continue
 		}
-		var winners []string
-		eligible := make([]string, 0, len(layer.Eligible))
-		var bestScore handeval.Score
-		for _, id := range layer.Eligible {
-			p := t.playerByID(id)
-			// p should always be found (handOrder is pointer-aliased to
-			// players — see NewTableFromState), but a removed-mid-hand player
-			// (a since-fixed actor-level race could still theoretically
-			// produce this) must never crash a showdown that seats real
-			// money: treat them as ineligible to win rather than panic.
-			if p == nil || p.State == Folded {
-				continue
-			}
-			eligible = append(eligible, id)
-			var full [7]deck.Card
-			full[0], full[1] = p.HoleCards[0], p.HoleCards[1]
-			copy(full[2:], t.board)
-			score := handeval.Best7(full)
-			switch {
-			case score > bestScore:
-				bestScore = score
-				winners = []string{id}
-			case score == bestScore:
-				winners = append(winners, id)
-			}
-		}
+		winners, eligible, bestScore := t.evaluateLayer(layer, t.board)
 		if len(winners) == 0 {
 			// Every player who reached this layer's contribution level has
 			// since folded — there's no one left to award it to at
@@ -1344,33 +1413,42 @@ func (t *Table) runShowdown() {
 		remainingRakeCap -= layerRake
 		t.rakeCollected += layerRake
 		netAmount := layer.Amount - layerRake
-		if netAmount > 0 {
-			winningIDs = append(winningIDs, winners...)
-			if bestScore > winningScore {
-				winningScore = bestScore
+		award := func(amount int64, runout int, runoutWinners, runoutEligible []string, score handeval.Score) {
+			if amount > 0 {
+				winningIDs = append(winningIDs, runoutWinners...)
+				if score > winningScore {
+					winningScore = score
+				}
 			}
+			share := amount / int64(len(runoutWinners))
+			layerPayouts := make(map[string]int64, len(runoutWinners))
+			for _, w := range runoutWinners {
+				payouts[w] += share
+				layerPayouts[w] += share
+			}
+			remainder := amount - share*int64(len(runoutWinners))
+			if remainder > 0 {
+				oddChipWinner := t.oddChipWinner(runoutWinners)
+				payouts[oddChipWinner] += remainder
+				layerPayouts[oddChipWinner] += remainder
+			}
+			potResults = append(potResults, PotResult{
+				Amount: layer.Amount, PayoutAmount: amount, Runout: runout,
+				EligiblePlayerIDs: append([]string(nil), runoutEligible...),
+				Winners:           append([]string(nil), runoutWinners...), Payouts: layerPayouts,
+			})
 		}
-		share := netAmount / int64(len(winners))
-		layerPayouts := make(map[string]int64, len(winners))
-		for _, w := range winners {
-			payouts[w] += share
-			layerPayouts[w] += share
+		if t.runItTwice && len(t.boardTwo) > 0 {
+			// The odd chip created by halving belongs to runout one. Rake has
+			// already been charged once against the full layer above.
+			firstAmount := netAmount/2 + netAmount%2
+			award(firstAmount, 1, winners, eligible, bestScore)
+			secondBoard := append(append([]deck.Card(nil), t.board[:t.boardSplitAt]...), t.boardTwo...)
+			secondWinners, secondEligible, secondScore := t.evaluateLayer(layer, secondBoard)
+			award(netAmount/2, 2, secondWinners, secondEligible, secondScore)
+		} else {
+			award(netAmount, 0, winners, eligible, bestScore)
 		}
-		// Odd chips start left of the dealer and move clockwise. Raw table
-		// order is not enough because the button moves between hands.
-		remainder := netAmount - share*int64(len(winners))
-		if remainder > 0 {
-			oddChipWinner := t.oddChipWinner(winners)
-			payouts[oddChipWinner] += remainder
-			layerPayouts[oddChipWinner] += remainder
-		}
-		potResults = append(potResults, PotResult{
-			Amount:            layer.Amount,
-			PayoutAmount:      netAmount,
-			EligiblePlayerIDs: eligible,
-			Winners:           append([]string(nil), winners...),
-			Payouts:           layerPayouts,
-		})
 	}
 	for id, amount := range payouts {
 		// A payout recipient who left t.players entirely before showdown
@@ -1423,6 +1501,14 @@ func (t *Table) runShowdown() {
 			var full [7]deck.Card
 			full[0], full[1] = p.HoleCards[0], p.HoleCards[1]
 			copy(full[2:], t.board)
+			playerScore := handeval.Best7(full)
+			if t.runItTwice && len(t.boardTwo) > 0 {
+				secondBoard := append(append([]deck.Card(nil), t.board[:t.boardSplitAt]...), t.boardTwo...)
+				copy(full[2:], secondBoard)
+				if secondScore := handeval.Best7(full); secondScore > playerScore {
+					playerScore = secondScore
+				}
+			}
 			won := winnerSet[p.ID]
 			wonOutright, splitPot := false, false
 			for _, result := range potResults {
@@ -1438,7 +1524,7 @@ func (t *Table) runShowdown() {
 				}
 			}
 			outcome.ShowdownResults[p.ID] = ShowdownResult{
-				Category: categoryNames[handeval.Best7(full).Category()],
+				Category: categoryNames[playerScore.Category()],
 				Won:      won,
 				Tied:     won && splitPot && !wonOutright,
 				SplitPot: splitPot,
@@ -1454,6 +1540,9 @@ func (t *Table) runShowdown() {
 		outcome.AllInPlayers = append(outcome.AllInPlayers, id)
 	}
 	outcome.Board = boardCodes(t.board)
+	if t.runItTwice && len(t.boardTwo) > 0 {
+		outcome.BoardTwo = boardCodes(append(append([]deck.Card(nil), t.board[:t.boardSplitAt]...), t.boardTwo...))
+	}
 	outcome.PlayerHands = make(map[string]PlayerHandInfo, len(t.handOrder))
 	for _, p := range t.handOrder {
 		revealed := (!wonWithoutShowdown && p.State != Folded) || p.VoluntarilyShown
@@ -1466,6 +1555,31 @@ func (t *Table) runShowdown() {
 	t.lastOutcome = &outcome
 	t.stage = Complete
 	t.rotateDealer()
+}
+
+func (t *Table) evaluateLayer(layer sidepots.PotLayer, board []deck.Card) ([]string, []string, handeval.Score) {
+	winners := make([]string, 0, len(layer.Eligible))
+	eligible := make([]string, 0, len(layer.Eligible))
+	var bestScore handeval.Score
+	for _, id := range layer.Eligible {
+		p := t.playerByID(id)
+		if p == nil || p.State == Folded {
+			continue
+		}
+		eligible = append(eligible, id)
+		var full [7]deck.Card
+		full[0], full[1] = p.HoleCards[0], p.HoleCards[1]
+		copy(full[2:], board)
+		score := handeval.Best7(full)
+		switch {
+		case score > bestScore:
+			bestScore = score
+			winners = []string{id}
+		case score == bestScore:
+			winners = append(winners, id)
+		}
+	}
+	return winners, eligible, bestScore
 }
 
 func (t *Table) oddChipWinner(winners []string) string {

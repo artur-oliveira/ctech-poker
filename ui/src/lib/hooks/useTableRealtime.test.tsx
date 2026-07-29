@@ -369,6 +369,7 @@ describe('useTableRealtime', () => {
 
     act(() => {
       expect(result.current.keepSeat()).toBe(true);
+      expect(result.current.setRunItTwice(true)).toBe(true);
       expect(result.current.sendChat('boa mão')).toBe(true);
       expect(result.current.sendReaction('angry', 'player-2')).toBe(true);
       expect(result.current.preselectAction('call', 40)).toBe(true);
@@ -376,6 +377,7 @@ describe('useTableRealtime', () => {
     });
 
     expect(ws.send).toHaveBeenCalledWith({type: 'keep_seat', action_id: 'action-1'});
+    expect(ws.send).toHaveBeenCalledWith({type: 'set_run_it_twice', run_it_twice: true});
     expect(ws.send).toHaveBeenCalledWith({
       type: 'chat', message: 'boa mão', action_id: 'action-2',
     });

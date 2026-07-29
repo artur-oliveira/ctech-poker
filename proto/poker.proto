@@ -42,6 +42,7 @@ message Seat {
   uint32 hand_score = 15;
   optional string avatar_url = 16;
   optional string playstyle_badge = 17;
+  optional bool run_it_twice = 18;
 }
 
 message BlindEscalation {
@@ -68,6 +69,7 @@ message Room {
   int32 seats_taken = 15;
   string created_by = 16;
   string created_at = 17;
+  bool run_it_twice_enabled = 18;
 }
 
 message LegalActions {
@@ -96,6 +98,7 @@ message PotResult {
   repeated string winner_player_ids = 4; // empty for refunds
   map<string, int64> payouts = 5; // exact per-player credits, including odd chips
   bool refund = 6; // true for uncalled/orphaned contribution returns
+  int32 runout = 7; // 1 or 2 for RIT; 0 for a normal hand/refund
 }
 
 message ChatMessage {
@@ -155,6 +158,8 @@ message TableSnapshot {
   map<int32, RevealedSalt> revealed_card_salts = 30;
   map<int32, string> unrevealed_card_hashes = 31;
   repeated string runout_cards = 32;
+  repeated string board_two = 33;
+  int32 board_split_at = 34;
 }
 
 message RevealedSalt {
@@ -166,7 +171,7 @@ message RevealedSalt {
 
 // ClientMessage is sent from the client to the server.
 message ClientMessage {
-  string type = 1; // "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction"
+  string type = 1; // "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice"
   
   // payload fields
   string token = 2; // for auth frame
@@ -182,6 +187,7 @@ message ClientMessage {
   string reaction_id = 12; // catalog key; never arbitrary display text
   string target_player_id = 13; // required only by thrown-object reactions
   string turnstile_token = 14; // response token for an adaptive bot challenge
+  optional bool run_it_twice = 15;
 }
 
 // ServerMessage is sent from the server to the client.

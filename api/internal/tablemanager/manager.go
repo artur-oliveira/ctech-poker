@@ -201,6 +201,7 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 				actor.StartEscalation(*room.BlindEscalation)
 			}
 			actor.SetTurnTimeoutForActor(table.TurnTimeoutFor(room.TurnTimeoutSeconds))
+			actor.SetRunItTwiceEnabledForActor(room.RunItTwiceEnabled)
 		}
 	}
 

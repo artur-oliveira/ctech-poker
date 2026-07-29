@@ -39,7 +39,8 @@ const rooms: Room[] = [
     buy_in_min: 1000,
     buy_in_max: 10000,
     status: 'playing',
-    seats_taken: 6
+    seats_taken: 6,
+    run_it_twice_enabled: true
   },
   {
     room_id: '01BX5ZZKBKACTAV9WEVGEMMVRZ',
@@ -840,7 +841,7 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
       ...(scenario === 'timeout' ? {action_deadline_unix_ms: Date.now() + 15000} : {})
     };
   }
-  if (scenario === 'complete' || scenario === 'complete_loss' || scenario === 'complete_tie' || scenario === 'fold_win') {
+  if (scenario === 'complete' || scenario === 'complete_loss' || scenario === 'complete_tie' || scenario === 'fold_win' || scenario === 'run_it_twice') {
     const variant = scenario === 'complete_loss' ? HAND_VARIANTS.full_hand_loss :
       scenario === 'complete_tie' ? HAND_VARIANTS.full_hand_tie : HAND_VARIANTS.full_hand;
     const resolvedSeats = fullHandSeats().map(seat => {
@@ -861,6 +862,7 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
     return {
       stage: 'complete',
       board: scenario === 'fold_win' ? [] : variant.board,
+      ...(scenario === 'run_it_twice' ? {board_two: ['4C', '5D'], board_split_at: 3} : {}),
       seats: resolvedSeats,
       payouts,
       winners,
@@ -1139,6 +1141,16 @@ export class MockTableService {
         message: String(value.message || '')
       }));
       this.later(() => this.handlers.onMessage({type: 'chat', player_id: 'bia_sp', message: 'Boa! Vamos nessa 👋'}), 2);
+      return true;
+    }
+    if (value.type === 'set_run_it_twice') {
+      this.snapshot = {
+        ...this.snapshot,
+        seats: this.snapshot.seats.map(seat => seat.player_id === MOCK_PLAYER_ID ? {
+          ...seat, run_it_twice: Boolean(value.run_it_twice)
+        } : seat)
+      };
+      this.later(() => this.emitState());
       return true;
     }
     if (value.type === 'reaction') {

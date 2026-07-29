@@ -95,6 +95,7 @@ export interface HandItem {
   net_change: number;
   ended_at: number;
   board?: string[];
+  board_two?: string[];
   hole_cards?: string[];
   opponents?: OpponentSummary[];
   server_seed?: string;

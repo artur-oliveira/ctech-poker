@@ -107,6 +107,10 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 	if req.Visibility == "public" {
 		equity = true
 	}
+	runItTwice := false
+	if req.RunItTwiceEnabled != nil {
+		runItTwice = *req.RunItTwiceEnabled
+	}
 	entryFeeCents := int64(0)
 	if currencyMode == "real" {
 		entryFeeCents, _ = realStakeFeeCents(req.SmallBlind, req.BigBlind)
@@ -122,6 +126,7 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 		BuyInMax:             req.BuyInMax,
 		EntryFeeCents:        entryFeeCents,
 		EquityDisplayEnabled: equity,
+		RunItTwiceEnabled:    runItTwice,
 		Status:               "waiting",
 		CreatedBy:            userID,
 		CreatedAt:            dynamo.NowStr(),

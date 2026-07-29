@@ -55,9 +55,21 @@ describe('CreateRoomDialog', () => {
       max_seats: 9,
       buy_in_min: 2_000,
       buy_in_max: 5_000,
+      run_it_twice_enabled: false,
     }));
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['rooms']});
     expect(mocks.push).toHaveBeenCalledWith('/table?id=room%20%2F%20private');
+  });
+
+  test('can enable run it twice while creating the room', async () => {
+    mocks.createRoom.mockResolvedValue({room_id: 'rit-room'});
+    render(<CreateRoomDialog/>);
+    await userEvent.click(screen.getByRole('button', {name: /Mesa privada/}));
+    await userEvent.click(screen.getByText('Permitir rodar duas vezes'));
+    await userEvent.click(screen.getByRole('button', {name: 'Criar mesa privada'}));
+    await waitFor(() => expect(mocks.createRoom).toHaveBeenCalledWith(expect.objectContaining({
+      run_it_twice_enabled: true,
+    })));
   });
 
   test('offers real-money mode only to an eligible wallet and resets the stake selection', async () => {

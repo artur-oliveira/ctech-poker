@@ -21,6 +21,7 @@ export type MockScenario =
   | 'river'
   | 'showdown'
   | 'side_pot'
+  | 'run_it_twice'
   | 'reconnecting'
   | 'action_error'
   | 'timeout'

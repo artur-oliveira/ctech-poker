@@ -72,7 +72,7 @@ describe('TablePreferencesDialog', () => {
 
     expect(screen.getByRole('button', {name: 'Preferências da mesa'})).toBeInTheDocument();
     expect(screen.getByRole('heading', {name: 'Preferências da mesa'})).toBeInTheDocument();
-    expect(screen.getByText('Ajustes salvos somente neste navegador.')).toBeInTheDocument();
+    expect(screen.getByText('Personalize a experiência e escolha como prefere jogar nesta mesa.')).toBeInTheDocument();
     expect(screen.getAllByText('Clássico').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', {name: 'Meia-noite'})).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Bordô'})).toBeInTheDocument();
@@ -82,6 +82,20 @@ describe('TablePreferencesDialog', () => {
     expect(screen.getAllByRole('switch')).toHaveLength(2);
     expect(screen.getAllByRole('switch')[0]).toHaveAttribute('aria-checked', 'false');
     expect(screen.getAllByRole('switch')[1]).toHaveAttribute('aria-checked', 'true');
+  });
+
+  test('shows the run-it-twice choice only when the room allows it', async () => {
+    const onChange = vi.fn(() => true);
+    const hidden = render(<TablePreferencesDialog/>);
+    expect(screen.queryByText('Rodar duas vezes')).not.toBeInTheDocument();
+    hidden.unmount();
+
+    render(<TablePreferencesDialog runItTwiceAvailable runItTwice={false}
+                                   onRunItTwiceChange={onChange}/>);
+    expect(screen.getByText(/todos os jogadores envolvidos também ativaram/)).toBeInTheDocument();
+    const toggle = screen.getByRole('switch', {name: 'Rodar duas vezes'});
+    await userEvent.click(toggle);
+    expect(onChange).toHaveBeenCalledWith(true);
   });
 
   test('updates theme, voice settings, and session reminder independently', async () => {

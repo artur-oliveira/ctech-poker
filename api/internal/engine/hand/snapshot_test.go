@@ -528,6 +528,26 @@ func TestViewForOmitsHandCategoryWhenCardsAreHidden(t *testing.T) {
 	}
 }
 
+func TestRunItTwicePreferenceIsViewerPrivate(t *testing.T) {
+	table := NewTable([]*Player{
+		{ID: "p1", Stack: 1000, RunItTwice: true},
+		{ID: "p2", Stack: 1000, RunItTwice: true},
+	}, 10, 20)
+	view := table.ViewFor("p1")
+	for _, seat := range view.Seats {
+		switch seat.PlayerID {
+		case "p1":
+			if !seat.RunItTwice {
+				t.Fatal("viewer must receive their own preference")
+			}
+		case "p2":
+			if seat.RunItTwice {
+				t.Fatal("opponent preference must not be exposed")
+			}
+		}
+	}
+}
+
 // TestViewForExposesBlindSeatsHeadsUp mirrors TestHeadsUpDealerPostsSmallBlind's
 // dealer-posts-small-blind rule, but asserts on the wire snapshot instead of
 // Contributed, since that's what the client actually has to work with.

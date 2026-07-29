@@ -9,6 +9,7 @@ import (
 func TestReplayFrameKeepsPublicStateAndNoCards(t *testing.T) {
 	frame := replayFrameFor(hand.Snapshot{
 		Stage: "flop", Board: []string{"Ah", "Kd", "2c"},
+		BoardTwo: []string{"4h", "5d"}, BoardSplitAt: 3,
 		CurrentPlayerID: "p2",
 		Pots:            []hand.PotView{{Amount: 120}, {Amount: 40}},
 		Seats: []hand.SeatView{{
@@ -16,7 +17,8 @@ func TestReplayFrameKeepsPublicStateAndNoCards(t *testing.T) {
 			Contributed: 100, DealtIn: true, HoleCards: []string{"As", "Ad"},
 		}},
 	})
-	if frame.Pot != 160 || frame.Stage != "flop" || len(frame.Board) != 3 {
+	if frame.Pot != 160 || frame.Stage != "flop" || len(frame.Board) != 3 ||
+		len(frame.BoardTwo) != 2 || frame.BoardSplitAt != 3 {
 		t.Fatalf("unexpected replay frame: %+v", frame)
 	}
 	if len(frame.Seats) != 1 || frame.Seats[0].PlayerID != "p1" {

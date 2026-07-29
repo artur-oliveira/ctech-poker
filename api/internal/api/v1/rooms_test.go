@@ -155,6 +155,29 @@ func TestCreateRoomDefaultsToSandbox(t *testing.T) {
 	if room.CurrencyMode != "sandbox" {
 		t.Fatalf("expected CurrencyMode sandbox, got %q", room.CurrencyMode)
 	}
+	if room.RunItTwiceEnabled {
+		t.Fatal("run it twice must default to disabled")
+	}
+}
+
+func TestCreateRoomCanEnableRunItTwice(t *testing.T) {
+	app := fiber.New()
+	h := &roomHandlers{}
+	app.Post("/rooms", func(c fiber.Ctx) error { c.Locals(localsUserID, "u1"); return c.Next() }, h.createRoom)
+	body := []byte(`{"visibility":"private","small_blind":10,"big_blind":20,"max_seats":6,"buy_in_min":400,"buy_in_max":2000,"run_it_twice_enabled":true}`)
+	req := httptest.NewRequest(fiber.MethodPost, "/rooms", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var room roomstore.Room
+	if err := json.NewDecoder(resp.Body).Decode(&room); err != nil {
+		t.Fatal(err)
+	}
+	if !room.RunItTwiceEnabled {
+		t.Fatal("explicit room setting was not preserved")
+	}
 }
 
 func TestCreateRoomStoresFixedEntryFeeForRealMoney(t *testing.T) {

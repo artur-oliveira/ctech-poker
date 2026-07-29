@@ -14,10 +14,12 @@ import (
 // player's hole cards" a single-source-of-truth guarantee instead of a
 // convention every caller has to remember.
 type Snapshot struct {
-	Stage   string           `json:"stage"`
-	Board   []string         `json:"board"`
-	Seats   []SeatView       `json:"seats"`
-	Payouts map[string]int64 `json:"payouts,omitempty"`
+	Stage        string           `json:"stage"`
+	Board        []string         `json:"board"`
+	BoardTwo     []string         `json:"board_two,omitempty"`
+	BoardSplitAt int              `json:"board_split_at,omitempty"`
+	Seats        []SeatView       `json:"seats"`
+	Payouts      map[string]int64 `json:"payouts,omitempty"`
 	// Winners lists who actually won a contested pot this hand, as opposed to
 	// merely appearing in Payouts — a payout also fires for an uncalled
 	// all-in's excess or an orphaned side-pot refund (runShowdown), neither of
@@ -102,6 +104,7 @@ type PotResultView struct {
 	WinnerPlayerIDs   []string         `json:"winner_player_ids,omitempty"`
 	Payouts           map[string]int64 `json:"payouts,omitempty"`
 	Refund            bool             `json:"refund,omitempty"`
+	Runout            int              `json:"runout,omitempty"`
 }
 
 type SeatView struct {
@@ -128,6 +131,7 @@ type SeatView struct {
 	// locally, but must use this value for outcome decisions.
 	HandScore  uint32 `json:"hand_score,omitempty"`
 	TimeBankMs int64  `json:"time_bank_ms"`
+	RunItTwice bool   `json:"run_it_twice,omitempty"`
 }
 
 var stageNames = map[Stage]string{
@@ -206,6 +210,7 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 				WinnerPlayerIDs:   append([]string(nil), result.Winners...),
 				Payouts:           cloneInt64Map(result.Payouts),
 				Refund:            result.Refund,
+				Runout:            result.Runout,
 			}
 		}
 	}
@@ -231,6 +236,9 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 			StackAtHandStart: p.HandStartStack,
 			TimeBankMs:       t.TimeBankForActor(p.ID),
 		}
+		if p.ID == viewerID {
+			sv.RunItTwice = p.RunItTwice
+		}
 		publicReveal := []bool{
 			p.VoluntarilyShown || p.VoluntarilyShownCards[0],
 			p.VoluntarilyShown || p.VoluntarilyShownCards[1],
@@ -246,11 +254,21 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 					sv.HoleCards[i] = cardCode(p.HoleCards[i])
 				}
 			}
-			if len(t.board) == 5 && (p.ID == viewerID || (publicReveal[0] && publicReveal[1])) {
+			evaluationBoard := t.board
+			if t.runItTwice && t.runoutPhase == 2 {
+				evaluationBoard = append(append([]deck.Card(nil), t.board[:t.boardSplitAt]...), t.boardTwo...)
+			}
+			if len(evaluationBoard) == 5 && (p.ID == viewerID || (publicReveal[0] && publicReveal[1])) {
 				var full [7]deck.Card
 				full[0], full[1] = p.HoleCards[0], p.HoleCards[1]
-				copy(full[2:], t.board)
+				copy(full[2:], evaluationBoard)
 				score := handeval.Best7(full)
+				if t.stage == Complete && t.runItTwice && len(t.board) == 5 {
+					copy(full[2:], t.board)
+					if firstScore := handeval.Best7(full); firstScore > score {
+						score = firstScore
+					}
+				}
 				sv.HandCategory = categoryNames[score.Category()]
 				sv.HandScore = uint32(score)
 			}
@@ -261,6 +279,8 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 	out := Snapshot{
 		Stage:                 stageNames[t.stage],
 		Board:                 boardCodes(t.board),
+		BoardTwo:              boardCodes(t.boardTwo),
+		BoardSplitAt:          t.boardSplitAt,
 		Seats:                 seats,
 		Payouts:               t.payouts,
 		Winners:               winners,

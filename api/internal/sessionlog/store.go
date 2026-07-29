@@ -55,6 +55,7 @@ type HandItem struct {
 	NetChange int64             `dynamodbav:"net_change" json:"net_change"`
 	EndedAt   int64             `dynamodbav:"ended_at" json:"ended_at"`
 	Board     []string          `dynamodbav:"board,omitempty" json:"board,omitempty"`
+	BoardTwo  []string          `dynamodbav:"board_two,omitempty" json:"board_two,omitempty"`
 	HoleCards []string          `dynamodbav:"hole_cards,omitempty" json:"hole_cards,omitempty"`
 	Opponents []OpponentSummary `dynamodbav:"opponents,omitempty" json:"opponents,omitempty"`
 	// ServerSeed and CommitHash are the hand's shuffle fairness proof

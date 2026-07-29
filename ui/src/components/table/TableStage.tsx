@@ -92,7 +92,8 @@ export function TableStage({
           isSmallBlind={snapshot.small_blind_player_id === seat.player_id}
           isBigBlind={snapshot.big_blind_player_id === seat.player_id}/>;
   };
-  const board = <Board cards={snapshot.board} pot={pot} pots={snapshot.pots}
+  const board = <Board cards={snapshot.board} boardTwo={snapshot.board_two}
+                       splitAt={snapshot.board_split_at} pot={pot} pots={snapshot.pots}
                        rake={snapshot.rake} bigBlind={bigBlind}/>;
 
   if (!vertical) return (

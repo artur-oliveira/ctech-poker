@@ -5,6 +5,7 @@ export interface SeatView {
   name?: string;
   avatar_url?: string;
   playstyle_badge?: string;
+  run_it_twice?: boolean;
   connection_state?: 'connected' | 'disconnected';
   stack: number;
   state: string;
@@ -63,11 +64,14 @@ export interface PotResultView {
   winner_player_ids: string[];
   payouts?: Record<string, number>;
   refund?: boolean
+  runout?: number
 }
 
 export interface TableSnapshot {
   stage: string;
   board: string[];
+  board_two?: string[];
+  board_split_at?: number;
   seats: SeatView[];
   current_player_id?: string;
   legal_actions?: LegalActionState;
@@ -124,6 +128,7 @@ export type ServerMessage = {
 export type Action = (
   'post_big_blind' | 'escalate_blinds' | 'not_ready' | 'ready' | 'sit_out' | 'show_cards' | 'disconnect_sit_out' | 'join' |
   'leave' | 'keep_seat' | 'next_hand' | 'runout_step' | 'check' | 'fold' | 'call' | 'bet' | 'raise' | 'all_in' | 'won' | 'tie'
+  | 'set_run_it_twice'
   )
 
 export interface HandHistoryAction {
@@ -147,6 +152,8 @@ export interface ReplaySeat {
 export interface ReplayFrame {
   stage: string;
   board?: string[];
+  board_two?: string[];
+  board_split_at?: number;
   seats?: ReplaySeat[];
   current_player_id?: string;
   dealer_player_id?: string;

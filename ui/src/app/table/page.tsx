@@ -78,7 +78,7 @@ function connectionCopyFor(status: keyof typeof CONNECTION_COPY, attempt: number
 const MOCK_SCENARIOS = new Set<MockScenario>([
   'full_hand', 'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
   'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot',
-  'complete', 'complete_loss', 'complete_tie', 'fold_win',
+  'complete', 'complete_loss', 'complete_tie', 'fold_win', 'run_it_twice',
   'reconnecting', 'action_error', 'timeout'
 ]);
 
@@ -373,7 +373,9 @@ function TableContent() {
             </span>
             <HandRankingsDialog open={activeTablePanel === 'rankings'}
                                 onOpenChange={open => setActiveTablePanel(open ? 'rankings' : null)}/>
-            <TablePreferencesDialog/>
+            <TablePreferencesDialog runItTwiceAvailable={Boolean(room?.run_it_twice_enabled)}
+                                    runItTwice={Boolean(viewerSeat?.run_it_twice)}
+                                    onRunItTwiceChange={rt.setRunItTwice}/>
             {canInvite && <InviteDialog url={inviteUrl}/>}
             {viewerSeat && !isPaused &&
                 <Button type="button" variant="ghost" size="icon" aria-label="Sentar fora" disabled={rt.readyPending}

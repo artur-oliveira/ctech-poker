@@ -12,6 +12,7 @@ import {
   LucideIcon,
   Pause,
   Play,
+  Repeat2,
   TrendingUp,
   Trophy,
   WifiOff,
@@ -50,6 +51,10 @@ const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
   keep_seat: {
     label: 'Confirmou presença',
     Icon: Clock3,
+  },
+  set_run_it_twice: {
+    label: 'Ajustou Rodar Duas Vezes',
+    Icon: Repeat2,
   },
 
   // Fluxo da partida

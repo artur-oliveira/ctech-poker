@@ -65,6 +65,7 @@ export interface Seat {
   hand_score: number;
   avatar_url?: string | undefined;
   playstyle_badge?: string | undefined;
+  run_it_twice?: boolean | undefined;
 }
 
 export interface BlindEscalation {
@@ -91,6 +92,7 @@ export interface Room {
   seats_taken: number;
   created_by: string;
   created_at: string;
+  run_it_twice_enabled: boolean;
 }
 
 export interface LegalActions {
@@ -131,6 +133,8 @@ export interface PotResult {
   payouts: { [key: string]: number };
   /** true for uncalled/orphaned contribution returns */
   refund: boolean;
+  /** 1 or 2 for RIT; 0 for a normal hand/refund */
+  runout: number;
 }
 
 export interface PotResult_PayoutsEntry {
@@ -201,6 +205,8 @@ export interface TableSnapshot {
   revealed_card_salts: { [key: number]: RevealedSalt };
   unrevealed_card_hashes: { [key: number]: string };
   runout_cards: string[];
+  board_two: string[];
+  board_split_at: number;
 }
 
 export interface TableSnapshot_PayoutsEntry {
@@ -225,7 +231,7 @@ export interface RevealedSalt {
 
 /** ClientMessage is sent from the client to the server. */
 export interface ClientMessage {
-  /** "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" */
+  /** "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice" */
   type: string;
   /** payload fields */
   token: string;
@@ -255,6 +261,7 @@ export interface ClientMessage {
   target_player_id: string;
   /** response token for an adaptive bot challenge */
   turnstile_token: string;
+  run_it_twice?: boolean | undefined;
 }
 
 /** ServerMessage is sent from the server to the client. */
@@ -398,6 +405,7 @@ function createBaseSeat(): Seat {
     hand_score: 0,
     avatar_url: undefined,
     playstyle_badge: undefined,
+    run_it_twice: undefined,
   };
 }
 
@@ -455,6 +463,9 @@ export const Seat: MessageFns<Seat> = {
     }
     if (message.playstyle_badge !== undefined) {
       writer.uint32(138).string(message.playstyle_badge);
+    }
+    if (message.run_it_twice !== undefined) {
+      writer.uint32(144).bool(message.run_it_twice);
     }
     return writer;
   },
@@ -612,6 +623,14 @@ export const Seat: MessageFns<Seat> = {
           message.playstyle_badge = reader.string();
           continue;
         }
+        case 18: {
+          if (tag !== 144) {
+            break;
+          }
+
+          message.run_it_twice = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -684,6 +703,11 @@ export const Seat: MessageFns<Seat> = {
         : isSet(object.playstyle_badge)
         ? globalThis.String(object.playstyle_badge)
         : undefined,
+      run_it_twice: isSet(object.runItTwice)
+        ? globalThis.Boolean(object.runItTwice)
+        : isSet(object.run_it_twice)
+        ? globalThis.Boolean(object.run_it_twice)
+        : undefined,
     };
   },
 
@@ -740,6 +764,9 @@ export const Seat: MessageFns<Seat> = {
     if (message.playstyle_badge !== undefined) {
       obj.playstyleBadge = message.playstyle_badge;
     }
+    if (message.run_it_twice !== undefined) {
+      obj.runItTwice = message.run_it_twice;
+    }
     return obj;
   },
 
@@ -765,6 +792,7 @@ export const Seat: MessageFns<Seat> = {
     message.hand_score = object.hand_score ?? 0;
     message.avatar_url = object.avatar_url ?? undefined;
     message.playstyle_badge = object.playstyle_badge ?? undefined;
+    message.run_it_twice = object.run_it_twice ?? undefined;
     return message;
   },
 };
@@ -884,6 +912,7 @@ function createBaseRoom(): Room {
     seats_taken: 0,
     created_by: "",
     created_at: "",
+    run_it_twice_enabled: false,
   };
 }
 
@@ -939,6 +968,9 @@ export const Room: MessageFns<Room> = {
     }
     if (message.created_at !== "") {
       writer.uint32(138).string(message.created_at);
+    }
+    if (message.run_it_twice_enabled !== false) {
+      writer.uint32(144).bool(message.run_it_twice_enabled);
     }
     return writer;
   },
@@ -1086,6 +1118,14 @@ export const Room: MessageFns<Room> = {
           message.created_at = reader.string();
           continue;
         }
+        case 18: {
+          if (tag !== 144) {
+            break;
+          }
+
+          message.run_it_twice_enabled = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1174,6 +1214,11 @@ export const Room: MessageFns<Room> = {
         : isSet(object.created_at)
         ? globalThis.String(object.created_at)
         : "",
+      run_it_twice_enabled: isSet(object.runItTwiceEnabled)
+        ? globalThis.Boolean(object.runItTwiceEnabled)
+        : isSet(object.run_it_twice_enabled)
+        ? globalThis.Boolean(object.run_it_twice_enabled)
+        : false,
     };
   },
 
@@ -1230,6 +1275,9 @@ export const Room: MessageFns<Room> = {
     if (message.created_at !== "") {
       obj.createdAt = message.created_at;
     }
+    if (message.run_it_twice_enabled !== false) {
+      obj.runItTwiceEnabled = message.run_it_twice_enabled;
+    }
     return obj;
   },
 
@@ -1257,6 +1305,7 @@ export const Room: MessageFns<Room> = {
     message.seats_taken = object.seats_taken ?? 0;
     message.created_by = object.created_by ?? "";
     message.created_at = object.created_at ?? "";
+    message.run_it_twice_enabled = object.run_it_twice_enabled ?? false;
     return message;
   },
 };
@@ -1610,7 +1659,15 @@ export const Pot: MessageFns<Pot> = {
 };
 
 function createBasePotResult(): PotResult {
-  return { amount: 0, payout_amount: 0, eligible_player_ids: [], winner_player_ids: [], payouts: {}, refund: false };
+  return {
+    amount: 0,
+    payout_amount: 0,
+    eligible_player_ids: [],
+    winner_player_ids: [],
+    payouts: {},
+    refund: false,
+    runout: 0,
+  };
 }
 
 export const PotResult: MessageFns<PotResult> = {
@@ -1632,6 +1689,9 @@ export const PotResult: MessageFns<PotResult> = {
     });
     if (message.refund !== false) {
       writer.uint32(48).bool(message.refund);
+    }
+    if (message.runout !== 0) {
+      writer.uint32(56).int32(message.runout);
     }
     return writer;
   },
@@ -1694,6 +1754,14 @@ export const PotResult: MessageFns<PotResult> = {
           message.refund = reader.bool();
           continue;
         }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.runout = reader.int32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1731,6 +1799,7 @@ export const PotResult: MessageFns<PotResult> = {
         )
         : {},
       refund: isSet(object.refund) ? globalThis.Boolean(object.refund) : false,
+      runout: isSet(object.runout) ? globalThis.Number(object.runout) : 0,
     };
   },
 
@@ -1760,6 +1829,9 @@ export const PotResult: MessageFns<PotResult> = {
     if (message.refund !== false) {
       obj.refund = message.refund;
     }
+    if (message.runout !== 0) {
+      obj.runout = Math.round(message.runout);
+    }
     return obj;
   },
 
@@ -1782,6 +1854,7 @@ export const PotResult: MessageFns<PotResult> = {
       {},
     );
     message.refund = object.refund ?? false;
+    message.runout = object.runout ?? 0;
     return message;
   },
 };
@@ -2164,6 +2237,8 @@ function createBaseTableSnapshot(): TableSnapshot {
     revealed_card_salts: {},
     unrevealed_card_hashes: {},
     runout_cards: [],
+    board_two: [],
+    board_split_at: 0,
   };
 }
 
@@ -2264,6 +2339,12 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     });
     for (const v of message.runout_cards) {
       writer.uint32(258).string(v!);
+    }
+    for (const v of message.board_two) {
+      writer.uint32(266).string(v!);
+    }
+    if (message.board_split_at !== 0) {
+      writer.uint32(272).int32(message.board_split_at);
     }
     return writer;
   },
@@ -2540,6 +2621,22 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           message.runout_cards.push(reader.string());
           continue;
         }
+        case 33: {
+          if (tag !== 266) {
+            break;
+          }
+
+          message.board_two.push(reader.string());
+          continue;
+        }
+        case 34: {
+          if (tag !== 272) {
+            break;
+          }
+
+          message.board_split_at = reader.int32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2715,6 +2812,16 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
         : globalThis.Array.isArray(object?.runout_cards)
         ? object.runout_cards.map((e: any) => globalThis.String(e))
         : [],
+      board_two: globalThis.Array.isArray(object?.boardTwo)
+        ? object.boardTwo.map((e: any) => globalThis.String(e))
+        : globalThis.Array.isArray(object?.board_two)
+        ? object.board_two.map((e: any) => globalThis.String(e))
+        : [],
+      board_split_at: isSet(object.boardSplitAt)
+        ? globalThis.Number(object.boardSplitAt)
+        : isSet(object.board_split_at)
+        ? globalThis.Number(object.board_split_at)
+        : 0,
     };
   },
 
@@ -2834,6 +2941,12 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     if (message.runout_cards?.length) {
       obj.runoutCards = message.runout_cards;
     }
+    if (message.board_two?.length) {
+      obj.boardTwo = message.board_two;
+    }
+    if (message.board_split_at !== 0) {
+      obj.boardSplitAt = Math.round(message.board_split_at);
+    }
     return obj;
   },
 
@@ -2902,6 +3015,8 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
         {},
       );
     message.runout_cards = object.runout_cards?.map((e) => e) || [];
+    message.board_two = object.board_two?.map((e) => e) || [];
+    message.board_split_at = object.board_split_at ?? 0;
     return message;
   },
 };
@@ -3240,6 +3355,7 @@ function createBaseClientMessage(): ClientMessage {
     reaction_id: "",
     target_player_id: "",
     turnstile_token: "",
+    run_it_twice: undefined,
   };
 }
 
@@ -3286,6 +3402,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     }
     if (message.turnstile_token !== "") {
       writer.uint32(114).string(message.turnstile_token);
+    }
+    if (message.run_it_twice !== undefined) {
+      writer.uint32(120).bool(message.run_it_twice);
     }
     return writer;
   },
@@ -3409,6 +3528,14 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           message.turnstile_token = reader.string();
           continue;
         }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.run_it_twice = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -3466,6 +3593,11 @@ export const ClientMessage: MessageFns<ClientMessage> = {
         : isSet(object.turnstile_token)
         ? globalThis.String(object.turnstile_token)
         : "",
+      run_it_twice: isSet(object.runItTwice)
+        ? globalThis.Boolean(object.runItTwice)
+        : isSet(object.run_it_twice)
+        ? globalThis.Boolean(object.run_it_twice)
+        : undefined,
     };
   },
 
@@ -3513,6 +3645,9 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     if (message.turnstile_token !== "") {
       obj.turnstileToken = message.turnstile_token;
     }
+    if (message.run_it_twice !== undefined) {
+      obj.runItTwice = message.run_it_twice;
+    }
     return obj;
   },
 
@@ -3535,6 +3670,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     message.reaction_id = object.reaction_id ?? "";
     message.target_player_id = object.target_player_id ?? "";
     message.turnstile_token = object.turnstile_token ?? "";
+    message.run_it_twice = object.run_it_twice ?? undefined;
     return message;
   },
 };

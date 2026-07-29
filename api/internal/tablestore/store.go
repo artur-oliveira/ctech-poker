@@ -82,6 +82,8 @@ type Preselection struct {
 type ReplayFrame struct {
 	Stage              string           `dynamodbav:"stage" json:"stage"`
 	Board              []string         `dynamodbav:"board,omitempty" json:"board,omitempty"`
+	BoardTwo           []string         `dynamodbav:"board_two,omitempty" json:"board_two,omitempty"`
+	BoardSplitAt       int              `dynamodbav:"board_split_at,omitempty" json:"board_split_at,omitempty"`
 	Seats              []ReplaySeat     `dynamodbav:"seats,omitempty" json:"seats,omitempty"`
 	CurrentPlayerID    string           `dynamodbav:"current_player_id,omitempty" json:"current_player_id,omitempty"`
 	DealerPlayerID     string           `dynamodbav:"dealer_player_id,omitempty" json:"dealer_player_id,omitempty"`

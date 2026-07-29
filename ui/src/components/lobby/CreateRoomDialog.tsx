@@ -2,7 +2,7 @@
 
 import {zodResolver} from '@hookform/resolvers/zod';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
-import {Lock} from 'lucide-react';
+import {Lock, Repeat2} from 'lucide-react';
 import {useRouter} from 'next/navigation';
 import {useState} from 'react';
 import {Controller, useForm, useWatch} from 'react-hook-form';
@@ -18,6 +18,7 @@ import {
   DialogTrigger
 } from '@/components/ui/dialog';
 import {Label} from '@/components/ui/label';
+import {Checkbox} from '@/components/ui/checkbox';
 import {getMe} from '@/lib/api/player';
 import {createRoom, listStakes} from '@/lib/api/rooms';
 
@@ -27,6 +28,7 @@ const schema = z.object({
   stakeIndex: z.number().int().min(0),
   maxSeats: z.union([z.literal(6), z.literal(9)]),
   currencyMode: z.union([z.literal('sandbox'), z.literal('real')]),
+  runItTwiceEnabled: z.boolean(),
 });
 type Values = z.infer<typeof schema>
 
@@ -60,7 +62,7 @@ export function CreateRoomDialog() {
   const queryClient = useQueryClient();
   const form = useForm<Values>({
     resolver: zodResolver(schema),
-    defaultValues: {stakeIndex: 0, maxSeats: 6, currencyMode: 'sandbox'}
+    defaultValues: {stakeIndex: 0, maxSeats: 6, currencyMode: 'sandbox', runItTwiceEnabled: false}
   });
   const currencyMode = useWatch({control: form.control, name: 'currencyMode'});
   const stakes = currencyMode === 'real' ? realStakes : sandboxStakes;
@@ -79,7 +81,8 @@ export function CreateRoomDialog() {
         big_blind: stake.big_blind,
         max_seats: values.maxSeats,
         buy_in_min: stake.big_blind * 40,
-        buy_in_max: stake.big_blind * 100
+        buy_in_max: stake.big_blind * 100,
+        run_it_twice_enabled: values.runItTwiceEnabled
       });
       await queryClient.invalidateQueries({queryKey: ['rooms']});
       setOpen(false);
@@ -158,6 +161,14 @@ export function CreateRoomDialog() {
                                                                                                   onClick={() => field.onChange(option)}
                                                                                                   onKeyDown={e => radioGroupKeyDown(e, index, MAX_SEATS_OPTIONS.length, next => field.onChange(MAX_SEATS_OPTIONS[next]))}>{option} lugares</button>)}
                                                                                       </div>}/></div>
+        <Controller control={form.control} name="runItTwiceEnabled" render={({field}) =>
+          <label className="create-room-option">
+            <Checkbox checked={field.value} onCheckedChange={value => field.onChange(value === true)}/>
+            <Repeat2 aria-hidden="true"/>
+            <span><b>Permitir rodar duas vezes</b>
+              <small>Cada jogador decide por si. Em um all-in, todos os envolvidos precisam ter ativado.</small>
+            </span>
+          </label>}/>
         {form.formState.errors.root && <p className="form-error">{form.formState.errors.root.message}</p>}
         <DialogFooter><Button type="submit" size="lg"
                               disabled={form.formState.isSubmitting || !stakes.length}>{form.formState.isSubmitting ? 'Criando…' : 'Criar mesa privada'}</Button></DialogFooter>

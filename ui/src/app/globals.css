@@ -1196,6 +1196,50 @@ h1 em {
     font-size: 11px
 }
 
+.table-preference-toggle > button {
+    flex: none
+}
+
+.table-preference-gameplay {
+    padding-block: 12px;
+    border-block: 1px solid var(--white-12)
+}
+
+.table-preference-gameplay small {
+    max-width: 42ch
+}
+
+.create-room-option {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    padding-block: 14px;
+    border-block: 1px solid var(--white-12);
+    cursor: pointer
+}
+
+.create-room-option > svg {
+    width: 18px;
+    color: var(--gold)
+}
+
+.create-room-option b,
+.create-room-option small {
+    display: block
+}
+
+.create-room-option b {
+    font-size: 13px
+}
+
+.create-room-option small {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.45
+}
+
 /* Private opponent notes stay visually secondary to the hand. The marker is
    always visible once tagged; the edit affordance appears on hover/focus for
    untagged players and remains a full-size touch target on portrait layouts. */
@@ -2604,6 +2648,43 @@ h1 em {
     gap: 7px
 }
 
+.board > .board-runouts {
+    display: grid;
+    justify-items: center;
+    gap: 8px
+}
+
+.board-common {
+    display: flex;
+    align-items: center;
+    gap: 7px
+}
+
+.board-common > small,
+.board-runout-label {
+    width: 34px;
+    color: var(--felt-text-muted);
+    font: 600 9px var(--font-mono);
+    letter-spacing: .08em;
+    text-align: right
+}
+
+.board-runout-pair {
+    display: grid;
+    gap: 7px
+}
+
+.board-runout-row {
+    display: flex;
+    align-items: center;
+    gap: 7px
+}
+
+.board-runout-row > div {
+    display: flex;
+    gap: 7px
+}
+
 .playing-card {
     display: block;
     flex: none;
@@ -2701,7 +2782,8 @@ h1 em {
     animation: pot-count 180ms var(--ease-out-quart)
 }
 
-.board > div > span:not(.playing-card) {
+.board > div > span:not(.playing-card),
+.board-runout-row > div > span:not(.playing-card) {
     width: 68px;
     height: 95px;
     border: 1px dashed var(--white-2a);
@@ -5526,7 +5608,14 @@ h1 em {
     gap: 4px
 }
 
-.stage-v .board-card, .stage-v .board > div > span {
+.stage-v .board-runout-row,
+.stage-v .board-runout-row > div,
+.stage-v .board-common {
+    gap: 4px
+}
+
+.stage-v .board-card, .stage-v .board > div > span,
+.stage-v .board-runout-row > div > span:not(.playing-card) {
     width: 40px;
     height: 56px
 }
@@ -5900,7 +5989,8 @@ h1 em {
 /* Roomier portrait surfaces (tablets, large phones): board and seats step up
    one size so the capped ring doesn't dwarf them. */
 @media (min-width: 560px) {
-    .stage-v .board-card, .stage-v .board > div > span {
+    .stage-v .board-card, .stage-v .board > div > span,
+    .stage-v .board-runout-row > div > span:not(.playing-card) {
         width: 48px;
         height: 68px
     }
@@ -5922,7 +6012,8 @@ h1 em {
 
 /* Largest portrait surfaces (Surface Pro class): one more size step. */
 @media (min-width: 840px) {
-    .stage-v .board-card, .stage-v .board > div > span {
+    .stage-v .board-card, .stage-v .board > div > span,
+    .stage-v .board-runout-row > div > span:not(.playing-card) {
         width: 56px;
         height: 79px
     }
@@ -6075,7 +6166,8 @@ h1 em {
         margin-inline: auto
     }
 
-    .board-card, .board > div > span {
+    .board-card, .board > div > span,
+    .board-runout-row > div > span:not(.playing-card) {
         width: 48px;
         height: 68px
     }
@@ -6419,7 +6511,8 @@ h1 em {
         flex-direction: column
     }
 
-    .board-card, .board > div > span {
+    .board-card, .board > div > span,
+    .board-runout-row > div > span:not(.playing-card) {
         width: 42px;
         height: 59px
     }
@@ -6438,7 +6531,14 @@ h1 em {
         gap: 3px
     }
 
-    .stage-v .board-card, .stage-v .board > div > span {
+    .stage-v .board-runout-row,
+    .stage-v .board-runout-row > div,
+    .stage-v .board-common {
+        gap: 3px
+    }
+
+    .stage-v .board-card, .stage-v .board > div > span,
+    .stage-v .board-runout-row > div > span:not(.playing-card) {
         width: 34px;
         height: 48px
     }

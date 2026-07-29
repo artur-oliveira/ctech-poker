@@ -16,7 +16,8 @@ const STAGE_LABELS: Record<string, string> = {
 const ACTION_LABELS: Record<string, string> = {
   check: 'deu check', fold: 'foldou', call: 'pagou', bet: 'apostou',
   raise: 'aumentou para', all_in: 'foi all-in com', won: 'venceu',
-  tie: 'empatou', show_cards: 'mostrou cartas', runout_step: 'abriu o board'
+  tie: 'empatou', show_cards: 'mostrou cartas', runout_step: 'abriu o board',
+  set_run_it_twice: 'ajustou a preferência de rodar duas vezes'
 };
 
 // Matches .board-card-reveal's animation in globals.css: each new card
@@ -99,6 +100,8 @@ export function HandReplayer({
   const replaySnapshot: TableSnapshot = {
     stage: frame.stage,
     board: frame.board || [],
+    board_two: frame.board_two,
+    board_split_at: frame.board_split_at,
     current_player_id: frame.current_player_id,
     dealer_player_id: frame.dealer_player_id,
     small_blind_player_id: frame.small_blind_player_id,

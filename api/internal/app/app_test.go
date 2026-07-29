@@ -31,6 +31,7 @@ func TestHandItemForMarksWinnerAmongMultipleOpponents(t *testing.T) {
 		Contributions: map[string]int64{
 			"p1": 100, "p2": 100, "p3": 100,
 		},
+		Board: []string{"Ah", "Kd", "Qc", "2s", "3h"}, BoardTwo: []string{"Ah", "Kd", "Qc", "4c", "5d"},
 		PlayerHands: map[string]hand.PlayerHandInfo{
 			"p1": {HoleCards: [2]string{"Ah", "Kh"}, Revealed: true},
 			"p2": {HoleCards: [2]string{"2c", "2d"}, Revealed: true},
@@ -41,6 +42,9 @@ func TestHandItemForMarksWinnerAmongMultipleOpponents(t *testing.T) {
 	item := handItemFor(outcome, "p1", nil)
 	if item.Outcome != "lost" {
 		t.Fatalf("expected p1 outcome lost, got %q", item.Outcome)
+	}
+	if len(item.Board) != 5 || len(item.BoardTwo) != 5 {
+		t.Fatalf("both runout boards must reach hand history: %+v", item)
 	}
 	if len(item.Opponents) != 2 {
 		t.Fatalf("expected 2 opponents, got %d", len(item.Opponents))

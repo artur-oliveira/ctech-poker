@@ -81,6 +81,7 @@ type Actor struct {
 	runoutTimer              *time.Timer
 	runoutTimerHandID        string
 	runoutTimerStage         hand.Stage
+	runoutTimerPhase         int
 	runoutStreetDelay        time.Duration
 	escalationInterval       time.Duration
 	escalationCfg            roomstore.BlindEscalation
@@ -88,6 +89,7 @@ type Actor struct {
 	afkSweepInterval         time.Duration
 	done                     chan struct{}
 	equityEnabled            atomic.Bool
+	runItTwiceEnabled        atomic.Bool
 	onHandComplete           func(string, hand.HandOutcome, map[string]string)
 	onHandUpdated            func(string, hand.HandOutcome, map[string]string)
 	completedHandNotified    string
@@ -218,6 +220,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleSitOut(ctx, c)
 	case ShowCardsCmd:
 		return a.handleShowCards(ctx, c)
+	case SetRunItTwiceCmd:
+		return a.handleSetRunItTwice(ctx, c)
 	case KeepSeatCmd:
 		return a.handleKeepSeat(ctx, c)
 	case JoinCmd:
@@ -474,6 +478,7 @@ func (a *Actor) handleEscalate(ctx context.Context) error {
 // permanent downgrade or upgrade of that grant.
 func (a *Actor) ensureLoaded(ctx context.Context, force bool) error {
 	if a.cached != nil && a.trustCache && !force {
+		a.cached.ConfigureRunItTwice(a.runItTwiceEnabled.Load())
 		return nil
 	}
 	if a.store == nil {
@@ -487,6 +492,7 @@ func (a *Actor) ensureLoaded(ctx context.Context, force bool) error {
 		return errors.New("table: no state seeded for this table yet")
 	}
 	a.cached = hand.NewTableFromState(stored.State)
+	a.cached.ConfigureRunItTwice(a.runItTwiceEnabled.Load())
 	a.version = stored.Version
 	a.handID = stored.HandID
 	a.activity = stored.Activity
@@ -496,9 +502,10 @@ func (a *Actor) ensureLoaded(ctx context.Context, force bool) error {
 }
 
 // rearmTimersFromCache re-derives and re-arms the turn/runout/next-hand
-// timers from whatever is now cached. All three are idempotent per
-// (handID, stage) — see armTurnTimer/armRunoutTimer/armNextHandTimer — so
-// calling this on every fresh load is safe and cheap. This is what lets a
+// timers from whatever is now cached. Runout timers are idempotent per
+// (handID, phase, stage); the other timers use their corresponding hand/stage
+// keys (see armTurnTimer/armRunoutTimer/armNextHandTimer), so calling this on
+// every fresh load is safe and cheap. This is what lets a
 // hand self-heal from the fleet's core failure mode: these timers are bare
 // in-process time.AfterFunc calls with no persisted counterpart, so if the
 // actor instance that armed one dies before it fires (node restart, lease
@@ -853,6 +860,7 @@ func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.A
 func replayFrameFor(snapshot hand.Snapshot) *tablestore.ReplayFrame {
 	frame := &tablestore.ReplayFrame{
 		Stage: snapshot.Stage, Board: append([]string(nil), snapshot.Board...),
+		BoardTwo: append([]string(nil), snapshot.BoardTwo...), BoardSplitAt: snapshot.BoardSplitAt,
 		CurrentPlayerID:    snapshot.CurrentPlayerID,
 		DealerPlayerID:     snapshot.DealerPlayerID,
 		SmallBlindPlayerID: snapshot.SmallBlindPlayerID,
@@ -1227,6 +1235,32 @@ func (a *Actor) handleShowCards(ctx context.Context, c ShowCardsCmd) error {
 	return nil
 }
 
+func (a *Actor) handleSetRunItTwice(ctx context.Context, c SetRunItTwiceCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	changed := false
+	apply := func() error {
+		if !a.isSeated(c.PlayerID) {
+			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+		}
+		if !a.cached.SetPlayerRunItTwiceForActor(c.PlayerID, c.Enabled) {
+			return nil
+		}
+		changed = true
+		return a.commit(ctx, "", &tablestore.ActionLogEntry{
+			PlayerID: c.PlayerID, Action: "set_run_it_twice",
+		})
+	}
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		return err
+	}
+	if changed {
+		a.broadcastAll()
+	}
+	return nil
+}
+
 // handleTurnTimeout runs inside Run (dispatched by the universal per-turn
 // timer) so it can safely read/write the actor's disconnect bookkeeping maps.
 // It fires for whoever currently must act, regardless of connection state. A
@@ -1521,7 +1555,7 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 }
 
 // armRunoutTimer (re-)arms the paced all-in-runout timer while
-// IsAwaitingRunoutForActor is true. Idempotent per (handID, stage) pair —
+// IsAwaitingRunoutForActor is true. Idempotent per (handID, phase, stage) —
 // re-arming for the same point in the runout does not restart the delay,
 // matching armTurnTimer/armNextHandTimer's convention. stage is passed in by
 // broadcastAll (already knows the current stage) so this stays a plain
@@ -1534,7 +1568,8 @@ func (a *Actor) armRunoutTimer(awaiting bool, stage hand.Stage) {
 		a.runoutTimerHandID = ""
 		return
 	}
-	if a.handID == a.runoutTimerHandID && stage == a.runoutTimerStage {
+	phase := a.cached.RunoutPhaseForActor()
+	if a.handID == a.runoutTimerHandID && stage == a.runoutTimerStage && phase == a.runoutTimerPhase {
 		return
 	}
 	if a.runoutTimer != nil {
@@ -1542,6 +1577,7 @@ func (a *Actor) armRunoutTimer(awaiting bool, stage hand.Stage) {
 	}
 	a.runoutTimerHandID = a.handID
 	a.runoutTimerStage = stage
+	a.runoutTimerPhase = phase
 	a.runoutTimer = time.AfterFunc(a.runoutStreetDelay, func() {
 		reply := make(chan error, 1)
 		_ = a.Dispatch(runoutStepCmd{Reply: reply})
@@ -1740,6 +1776,8 @@ func equityStage(stage hand.Stage) bool {
 }
 
 func (a *Actor) SetEquityEnabledForActor(enabled bool) { a.equityEnabled.Store(enabled) }
+
+func (a *Actor) SetRunItTwiceEnabledForActor(enabled bool) { a.runItTwiceEnabled.Store(enabled) }
 
 // SetTurnTimeoutForActor sets the per-turn action deadline from the room's
 // configured turn_timeout_seconds (0 handled by table.TurnTimeoutFor before

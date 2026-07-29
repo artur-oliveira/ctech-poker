@@ -1,5 +1,5 @@
 'use client';
-import {Mic, Settings2, Volume2} from 'lucide-react';
+import {Mic, Repeat2, Settings2, Volume2} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {
   Dialog,
@@ -26,7 +26,11 @@ const REALITY_OPTIONS = [
   {value: '120', label: 'A cada 2 horas'}
 ];
 
-export function TablePreferencesDialog() {
+export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice = false, onRunItTwiceChange}: {
+  runItTwiceAvailable?: boolean;
+  runItTwice?: boolean;
+  onRunItTwiceChange?: (enabled: boolean) => boolean
+}) {
   const {preferences, update} = useTablePreferences();
   return <Dialog>
     <DialogTrigger render={<Button type="button" variant="ghost" size="icon" aria-label="Preferências da mesa"/>}>
@@ -35,7 +39,7 @@ export function TablePreferencesDialog() {
     <DialogContent>
       <DialogHeader>
         <DialogTitle>Preferências da mesa</DialogTitle>
-        <DialogDescription>Ajustes salvos somente neste navegador.</DialogDescription>
+        <DialogDescription>Personalize a experiência e escolha como prefere jogar nesta mesa.</DialogDescription>
       </DialogHeader>
       <div className="table-preferences">
         <div>
@@ -64,6 +68,13 @@ export function TablePreferencesDialog() {
           <Switch aria-labelledby="dealer-voice-label" checked={preferences.dealerVoice}
                   onCheckedChange={checked => update({dealerVoice: checked})}/>
         </div>
+        {runItTwiceAvailable && <div className="table-preference-toggle table-preference-gameplay">
+          <span><Repeat2 aria-hidden="true"/><span><Label id="run-it-twice-label">Rodar duas vezes</Label>
+            <small>Em all-ins, divide cada pote entre dois boards. Só acontece quando todos os jogadores envolvidos também ativaram.</small>
+          </span></span>
+          <Switch aria-labelledby="run-it-twice-label" checked={runItTwice}
+                  onCheckedChange={checked => onRunItTwiceChange?.(checked)}/>
+        </div>}
         <div className="table-preference-toggle">
           <span><Mic aria-hidden="true"/><span><Label id="voice-actions-label">Comandos por voz</Label>
             <small>Push-to-talk. O jogo recebe somente a ação reconhecida, nunca o áudio.</small></span></span>

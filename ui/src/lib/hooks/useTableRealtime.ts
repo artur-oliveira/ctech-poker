@@ -709,6 +709,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       return ok;
     },
     keepSeat: () => emit({type: 'keep_seat', action_id: crypto.randomUUID()}),
+    setRunItTwice: (enabled: boolean) => emit({type: 'set_run_it_twice', run_it_twice: enabled}),
     sendChat: (message: string) => emit({type: 'chat', message, action_id: crypto.randomUUID()}),
     sendReaction: (reactionId: TableReactionID, targetPlayerId?: string) =>
       emit({type: 'reaction', reaction_id: reactionId, target_player_id: targetPlayerId || '',
