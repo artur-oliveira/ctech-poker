@@ -185,7 +185,18 @@ body {
     margin: 0;
     background: var(--ink);
     color: var(--paper);
-    font-family: var(--font-sans), sans-serif
+    font-family: var(--font-sans), sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility
+}
+
+::selection {
+    color: var(--paper);
+    background: var(--brand)
+}
+
+:where(a, button, input, select, textarea) {
+    -webkit-tap-highlight-color: transparent
 }
 
 .system-state {
@@ -322,6 +333,11 @@ button, a {
     font: inherit
 }
 
+:where(a, button):focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 3px
+}
+
 .sr-only {
     position: absolute;
     width: 1px;
@@ -387,10 +403,12 @@ button, a {
     color: var(--text-muted-soft);
     text-decoration: none;
     font-size: var(--font-size-body);
-    transition: .25s
+    border-radius: var(--rounded-xs);
+    transition: color 180ms var(--ease-out-quart)
 }
 
-.nav-links > a:hover {
+.nav-links > a:hover,
+.nav-links > a:focus-visible {
     color: white
 }
 
@@ -1135,29 +1153,47 @@ h1 em {
 }
 
 @media (max-width: 600px) {
+    .shell {
+        width: min(100% - 32px, 1160px)
+    }
+
     .nav {
         height: 72px
     }
 
     .hero {
-        padding-top: 48px;
-        gap: 20px;
+        padding-block: 38px 64px;
+        gap: 8px;
         min-height: auto
     }
 
+    .hero-copy h1 {
+        max-width: 11ch;
+        margin-inline: auto;
+        font-size: clamp(2.75rem, 12vw, 3.25rem);
+        line-height: 1
+    }
+
+    .hero-copy > p {
+        font-size: 1rem;
+        line-height: 1.65
+    }
+
     .hero-actions {
-        flex-direction: column
+        flex-direction: column;
+        margin-top: 28px
     }
 
     .trust {
-        gap: 9px;
-        flex-wrap: wrap
+        gap: 8px 10px;
+        flex-wrap: wrap;
+        margin-top: 24px
     }
 
     .hero-visual {
-        height: 370px;
-        transform: scale(.88);
-        margin-inline: -30px
+        height: 320px;
+        transform: scale(.9);
+        margin: -4px -30px 0
     }
 
     .poker-table {
@@ -1182,7 +1218,7 @@ h1 em {
     }
 
     .experience {
-        padding-block: 75px
+        padding-block: 68px
     }
 
     .cta {
@@ -4861,7 +4897,10 @@ h1 em {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-width: min(360px, calc(100vw - 40px))
+    max-width: min(360px, calc(100vw - 40px));
+    max-height: calc(100dvh - 90px);
+    overflow-y: auto;
+    overscroll-behavior: contain
 }
 
 .api-toast {
@@ -4891,6 +4930,11 @@ h1 em {
     flex: 1;
     font-size: 14px;
     line-height: 1.4
+}
+
+.wrap-anywhere {
+    min-width: 0;
+    overflow-wrap: anywhere
 }
 
 .api-toast button {

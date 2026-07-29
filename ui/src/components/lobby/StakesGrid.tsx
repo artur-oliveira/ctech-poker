@@ -24,11 +24,17 @@ export function StakesGrid() {
   const {data: stakes = [], isLoading: stakesLoading, isError: stakesError, refetch: refetchStakes} = useQuery({
     queryKey: ['stakes'], queryFn: () => listStakes()
   });
-  const {data: rooms = [], isLoading: roomsLoading} = useQuery({
+  const {
+    data: rooms = [],
+    isLoading: roomsLoading,
+    isError: roomsError,
+    refetch: refetchRooms
+  } = useQuery({
     queryKey: ['rooms'], queryFn: () => listRooms()
   });
   
   async function joinOrCreate(smallBlind: number, bigBlind: number, maxSeats: number) {
+    if (joiningKey) return;
     const key = bucketKey(smallBlind, bigBlind, maxSeats);
     setJoiningKey(key);
     try {
@@ -43,7 +49,8 @@ export function StakesGrid() {
         id = room.room_id || room.id || '';
         await queryClient.invalidateQueries({queryKey: ['rooms']});
       }
-      if (id) router.push(`/table?id=${encodeURIComponent(id)}`);
+      if (!id) throw new Error('A API criou uma mesa sem identificador.');
+      router.push(`/table?id=${encodeURIComponent(id)}`);
     } catch {
       pushNotification('Não foi possível entrar na mesa. Tente novamente.', 'error');
     } finally {
@@ -57,10 +64,12 @@ export function StakesGrid() {
       Buscando mesas…
     </div>
   );
-  if (stakesError) return (
-    <div className="lobby-empty">
-      Não foi possível carregar os stakes.
-      <Button variant="outline" size="sm" onClick={() => refetchStakes()}>Tentar novamente</Button>
+  if (stakesError || roomsError) return (
+    <div className="lobby-empty" role="alert">
+      Não foi possível carregar as mesas agora. Nenhuma nova mesa será criada até confirmarmos as vagas disponíveis.
+      <Button variant="outline" size="sm" onClick={() => void Promise.all([refetchStakes(), refetchRooms()])}>
+        Tentar novamente
+      </Button>
     </div>
   );
   if (!stakes.length) return (
@@ -85,7 +94,8 @@ export function StakesGrid() {
           const key = bucketKey(stake.small_blind, stake.big_blind, maxSeats);
           const active = rooms.filter(r => r.visibility === 'public' && r.small_blind === stake.small_blind
             && r.big_blind === stake.big_blind && r.max_seats === maxSeats && r.seats_taken < maxSeats).length;
-          return <Button variant="ghost" key={key} className="room-card h-auto" disabled={joiningKey === key}
+          return <Button variant="ghost" key={key} className="room-card h-auto" disabled={joiningKey !== null}
+                         aria-busy={joiningKey === key}
                          style={{'--delay': `${i * 60}ms`} as React.CSSProperties}
                          onClick={() => joinOrCreate(stake.small_blind, stake.big_blind, maxSeats)}>
             {active > 0 && <span className="status-dot"/>}

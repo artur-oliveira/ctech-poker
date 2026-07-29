@@ -47,6 +47,34 @@ describe('notification store', () => {
     pushNotification('Repita');
     expect(listener.mock.lastCall?.[0]).toHaveLength(1);
   });
+
+  test('bounds notification bursts to the three newest messages', async () => {
+    const {pushNotification, subscribeNotifications} = await import('./notify');
+    const listener = vi.fn();
+    subscribeNotifications(listener);
+
+    for (let index = 1; index <= 5; index++) {
+      pushNotification(`Aviso ${index}`);
+    }
+
+    expect(listener.mock.lastCall?.[0].map((item: {message: string}) => item.message))
+      .toEqual(['Aviso 3', 'Aviso 4', 'Aviso 5']);
+  });
+
+  test.each([
+    [{name: 'ApiError', original: {request: {}, message: 'Network Error'}},
+      'Sem conexão com o servidor. Verifique sua internet e tente novamente.'],
+    [{name: 'ApiError', original: {request: {}, code: 'ECONNABORTED', message: 'timeout of 10000ms exceeded'}},
+      'O servidor demorou para responder. Verifique sua conexão e tente novamente.'],
+  ])('maps normalized transport failures to an actionable message', async (error, expected) => {
+    const {notifyApiError, subscribeNotifications} = await import('./notify');
+    const listener = vi.fn();
+    subscribeNotifications(listener);
+
+    notifyApiError(error);
+
+    expect(listener.mock.lastCall?.[0][0]).toMatchObject({message: expected, variant: 'error'});
+  });
   
   test.each([
     [{}, 'Algo deu errado. Tente novamente.'],

@@ -13,7 +13,7 @@ function SelectValue({className, ...props}: SelectPrimitive.Value.Props) {
 
 function SelectTrigger({className, children, ...props}: SelectPrimitive.Trigger.Props) {
   return <SelectPrimitive.Trigger data-slot="select-trigger"
-                                  className={cn('flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-white/15 bg-[var(--surface-control)] px-3 text-sm text-[var(--on-brand)] outline-none transition-colors focus-visible:border-[var(--brand-bright)] focus-visible:ring-2 focus-visible:ring-[var(--brand)]/30 disabled:cursor-not-allowed disabled:opacity-50', className)} {...props}>
+                                  className={cn('flex h-10 w-full touch-manipulation items-center justify-between gap-2 rounded-xl border border-white/15 bg-[var(--surface-control)] px-3 text-sm text-[var(--on-brand)] outline-none transition-[border-color,box-shadow,background-color] duration-200 focus-visible:border-[var(--brand-bright)] focus-visible:ring-3 focus-visible:ring-[var(--focus-ring)]/45 disabled:cursor-not-allowed disabled:opacity-50', className)} {...props}>
     {children}
     <SelectPrimitive.Icon render={<ChevronDown className="size-4 text-[var(--muted-rose)]"/>}/>
   </SelectPrimitive.Trigger>;
@@ -39,7 +39,7 @@ function SelectContent({
 
 function SelectItem({className, children, ...props}: SelectPrimitive.Item.Props) {
   return <SelectPrimitive.Item data-slot="select-item"
-                               className={cn('relative flex w-full cursor-default items-center rounded-lg py-2 pr-8 pl-2 text-sm outline-none select-none focus:bg-white/10 data-disabled:pointer-events-none data-disabled:opacity-50', className)} {...props}>
+                               className={cn('relative flex min-h-10 w-full cursor-default items-center rounded-lg py-2 pr-8 pl-2 text-sm outline-none select-none focus:bg-white/10 focus:text-white data-disabled:pointer-events-none data-disabled:opacity-50', className)} {...props}>
     <SelectPrimitive.ItemText className="flex-1">{children}</SelectPrimitive.ItemText>
     <SelectPrimitive.ItemIndicator
       render={<span className="absolute right-2 flex size-4 items-center justify-center"/>}><Check

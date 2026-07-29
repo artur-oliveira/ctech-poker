@@ -129,4 +129,15 @@ describe('CreateRoomDialog', () => {
     expect(await screen.findByText('Não foi possível criar a mesa. Tente novamente.')).toBeInTheDocument();
     expect(mocks.push).not.toHaveBeenCalled();
   });
+
+  test('keeps the dialog open when a malformed create response has no room id', async () => {
+    mocks.createRoom.mockResolvedValue({});
+    render(<CreateRoomDialog/>);
+    await userEvent.click(screen.getByRole('button', {name: /Mesa privada/}));
+    await userEvent.click(screen.getByRole('button', {name: 'Criar mesa privada'}));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível criar a mesa');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
 });

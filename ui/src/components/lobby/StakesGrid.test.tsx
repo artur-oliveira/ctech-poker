@@ -41,16 +41,32 @@ describe('lobby stakes integration', () => {
     expect(screen.getByText(/Buscando mesas/)).toBeInTheDocument();
     
     const refetch = vi.fn();
+    const refetchRooms = vi.fn();
     stakesQuery = {data: [], isLoading: false, isError: true, refetch};
-    roomsQuery = {data: [], isLoading: false};
+    roomsQuery = {data: [], isLoading: false, refetch: refetchRooms};
     rerender(<StakesGrid/>);
     await userEvent.click(screen.getByRole('button', {name: 'Tentar novamente'}));
     expect(refetch).toHaveBeenCalledOnce();
+    expect(refetchRooms).toHaveBeenCalledOnce();
     
     stakesQuery = {data: [], isLoading: false};
     roomsQuery = {data: [], isLoading: false};
     rerender(<StakesGrid/>);
     expect(screen.getByText('Nenhum stake disponível no momento.')).toBeInTheDocument();
+  });
+
+  test('does not create a duplicate room when the room inventory is unavailable', async () => {
+    const refetchStakes = vi.fn();
+    const refetchRooms = vi.fn();
+    stakesQuery = {
+      data: [{small_blind: 10, big_blind: 20}], isLoading: false, refetch: refetchStakes
+    };
+    roomsQuery = {data: [], isLoading: false, isError: true, refetch: refetchRooms};
+    render(<StakesGrid/>);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Nenhuma nova mesa será criada');
+    expect(screen.queryByRole('button', {name: /HEADS-UP/})).not.toBeInTheDocument();
+    expect(createRoom).not.toHaveBeenCalled();
   });
   
   test('joins an existing compatible room', async () => {

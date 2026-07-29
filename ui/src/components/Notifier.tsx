@@ -1,6 +1,6 @@
 'use client';
 import {useEffect, useState} from 'react';
-import {CircleAlert, X} from 'lucide-react';
+import {CircleAlert, Info, X} from 'lucide-react';
 import {type AppNotification, dismissNotification, subscribeNotifications} from '@/lib/notify';
 
 export function Notifier() {
@@ -11,8 +11,8 @@ export function Notifier() {
     <div className="api-notifier" role="region" aria-label="Avisos" aria-live="assertive">
       {items.map(n => (
         <div key={n.id} className={`api-toast ${n.variant}`} role="alert">
-          <CircleAlert aria-hidden="true"/>
-          <p>{n.message}</p>
+          {n.variant === 'error' ? <CircleAlert aria-hidden="true"/> : <Info aria-hidden="true"/>}
+          <p className="wrap-anywhere">{n.message}</p>
           <button type="button" aria-label="Fechar aviso" onClick={() => dismissNotification(n.id)}><X/></button>
         </div>
       ))}

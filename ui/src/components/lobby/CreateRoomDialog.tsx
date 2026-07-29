@@ -85,10 +85,11 @@ export function CreateRoomDialog() {
         run_it_twice_enabled: values.runItTwiceEnabled
       });
       await queryClient.invalidateQueries({queryKey: ['rooms']});
+      const roomID = room.room_id || room.id || '';
+      if (!roomID) throw new Error('A API criou uma mesa sem identificador.');
       setOpen(false);
       form.reset();
-      const roomID = room.room_id || room.id || '';
-      if (roomID) router.push(`/table?id=${encodeURIComponent(roomID)}`);
+      router.push(`/table?id=${encodeURIComponent(roomID)}`);
     } catch {
       form.setError('root', {message: 'Não foi possível criar a mesa. Tente novamente.'});
     }
@@ -177,8 +178,9 @@ export function CreateRoomDialog() {
               <small>Cada jogador decide por si. Em um all-in, todos os envolvidos precisam ter ativado.</small>
             </span>
           </label>}/>
-        {form.formState.errors.root && <p className="form-error">{form.formState.errors.root.message}</p>}
+        {form.formState.errors.root && <p className="form-error" role="alert">{form.formState.errors.root.message}</p>}
         <DialogFooter><Button type="submit" size="lg"
+                              aria-busy={form.formState.isSubmitting}
                               disabled={form.formState.isSubmitting || !stakes.length}>{form.formState.isSubmitting ? 'Criando…' : 'Criar mesa privada'}</Button></DialogFooter>
       </form>
     </DialogContent>

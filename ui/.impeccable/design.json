@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-07-19T00:00:00-03:00",
+  "generatedAt": "2026-07-29T16:20:00-03:00",
   "title": "Design System: CTech Poker",
   "extensions": {
     "colorMeta": {
@@ -125,7 +125,7 @@
       "refersTo": "button-primary",
       "description": "Table Red fill, white label, 12px radius, 40px tall. One main decision per group.",
       "html": "<button class=\"ds-btn-primary\">Entrar</button>",
-      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #af2a2f; color: #fff; border: 0; border-radius: 12px; height: 40px; padding: 0 16px; font: 600 14px/1 'Geist', system-ui, sans-serif; cursor: pointer; transition: background-color 180ms cubic-bezier(.25,1,.5,1), transform 120ms cubic-bezier(.25,1,.5,1); } .ds-btn-primary:hover { background: #d9464d; } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: 3px solid #ed777c; outline-offset: 2px; } .ds-btn-primary:disabled { opacity: .5; pointer-events: none; }"
+      "css": ".ds-btn-primary { display: inline-flex; touch-action: manipulation; align-items: center; justify-content: center; gap: 8px; background: var(--brand, #af2a2f); color: var(--on-brand, #fff); border: 0; border-radius: 12px; height: 40px; padding: 0 16px; font: 600 14px/1 'Geist', system-ui, sans-serif; cursor: pointer; transition: color 200ms cubic-bezier(.25,1,.5,1), background-color 200ms cubic-bezier(.25,1,.5,1), border-color 200ms cubic-bezier(.25,1,.5,1), box-shadow 200ms cubic-bezier(.25,1,.5,1), transform 200ms cubic-bezier(.25,1,.5,1); box-shadow: 0 10px 15px color-mix(in srgb, var(--brand, #af2a2f) 20%, transparent); } .ds-btn-primary:hover { background: var(--brand-bright, #d9464d); } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring, #ed777c), 0 0 0 5px var(--ink, #120d0e); } .ds-btn-primary:disabled { opacity: .5; pointer-events: none; transform: none; }"
     },
     {
       "name": "Outline Button",
@@ -133,7 +133,7 @@
       "refersTo": "button-outline",
       "description": "Translucent white well, white text, 1px hairline. Secondary table actions.",
       "html": "<button class=\"ds-btn-outline\">Desistir</button>",
-      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #ffffff0d; color: #fff; border: 1px solid #ffffff24; border-radius: 12px; height: 40px; padding: 0 16px; font: 600 14px/1 'Geist', system-ui, sans-serif; cursor: pointer; transition: background-color 180ms cubic-bezier(.25,1,.5,1); } .ds-btn-outline:hover { background: #ffffff1a; } .ds-btn-outline:focus-visible { outline: 3px solid #ed777c; outline-offset: 2px; } .ds-btn-outline:disabled { opacity: .5; pointer-events: none; }"
+      "css": ".ds-btn-outline { display: inline-flex; touch-action: manipulation; align-items: center; justify-content: center; gap: 8px; background: #ffffff0d; color: var(--on-brand, #fff); border: 1px solid #ffffff33; border-radius: 12px; height: 40px; padding: 0 16px; font: 600 14px/1 'Geist', system-ui, sans-serif; cursor: pointer; transition: color 200ms cubic-bezier(.25,1,.5,1), background-color 200ms cubic-bezier(.25,1,.5,1), border-color 200ms cubic-bezier(.25,1,.5,1), box-shadow 200ms cubic-bezier(.25,1,.5,1), transform 200ms cubic-bezier(.25,1,.5,1); } .ds-btn-outline:hover { background: #ffffff1a; } .ds-btn-outline:active { transform: translateY(1px); } .ds-btn-outline:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring, #ed777c), 0 0 0 5px var(--ink, #120d0e); } .ds-btn-outline:disabled { opacity: .5; pointer-events: none; transform: none; }"
     },
     {
       "name": "Raise Action",
@@ -165,15 +165,22 @@
       "refersTo": "input",
       "description": "Translucent control surface, white text, 12px radius, 40px tall. Focus shifts to a red ring.",
       "html": "<input class=\"ds-input\" placeholder=\"Diga algo…\" />",
-      "css": ".ds-input { width: 100%; box-sizing: border-box; background: #211416; color: #fff; border: 1px solid #ffffff24; border-radius: 12px; height: 40px; padding: 0 12px; font: 400 14px/1 'Geist', system-ui, sans-serif; } .ds-input::placeholder { color: #ad9fa0; } .ds-input:focus-visible { outline: 3px solid #ed777c; outline-offset: 1px; border-color: transparent; }"
+      "css": ".ds-input { width: 100%; background: #ffffff0d; color: var(--on-brand, #fff); border: 1px solid #ffffff26; border-radius: 12px; height: 40px; padding: 0 12px; font: 400 14px/1 'Geist', system-ui, sans-serif; outline: none; transition: border-color 200ms, box-shadow 200ms, background-color 200ms; } .ds-input::placeholder { color: var(--muted-rose, #ad9fa0); } .ds-input:focus { border-color: var(--brand-bright, #d9464d); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring, #ed777c) 45%, transparent); } .ds-input[aria-invalid='true'] { border-color: var(--danger, #dc2626); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger, #dc2626) 25%, transparent); }"
     },
     {
       "name": "Chat Toggle",
       "kind": "button",
       "refersTo": "button-ghost",
       "description": "Circular Table Red FAB that opens the table chat.",
-      "html": "<button class=\"ds-chat-toggle\" aria-label=\"Abrir chat\">💬</button>",
-      "css": ".ds-chat-toggle { width: 45px; height: 45px; border-radius: 50%; border: 0; background: #af2a2f; color: #fff; display: grid; place-items: center; cursor: pointer; transition: background-color 180ms cubic-bezier(.25,1,.5,1); } .ds-chat-toggle:hover { background: #d9464d; } .ds-chat-toggle:focus-visible { outline: 3px solid #ed777c; outline-offset: 2px; }"
+      "html": "<button class=\"ds-chat-toggle\" aria-label=\"Abrir chat\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z\"/></svg></button>",
+      "css": ".ds-chat-toggle { width: 45px; height: 45px; border-radius: 50%; border: 0; background: var(--brand, #af2a2f); color: var(--on-brand, #fff); display: grid; place-items: center; cursor: pointer; transition: background-color 200ms cubic-bezier(.25,1,.5,1), box-shadow 200ms cubic-bezier(.25,1,.5,1), transform 200ms cubic-bezier(.25,1,.5,1); } .ds-chat-toggle:hover { background: var(--brand-bright, #d9464d); } .ds-chat-toggle:active { transform: translateY(1px); } .ds-chat-toggle:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring, #ed777c), 0 0 0 5px var(--ink, #120d0e); }"
+    },
+    {
+      "name": "Application Navigation",
+      "kind": "nav",
+      "description": "Sparse brand-first navigation with compact destinations and visible keyboard focus.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-brand\" href=\"#\"><span class=\"ds-brand-mark\">♣</span>CTech <strong>Poker</strong></a><div class=\"ds-nav-links\"><a href=\"#\">Guia</a><a href=\"#\">Ranking</a></div></nav>",
+      "css": ".ds-nav { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 0 24px; background: var(--ink, #120d0e); color: var(--on-brand, #fff); font: 600 14px/1.2 'Geist', system-ui, sans-serif; } .ds-brand, .ds-nav-links a { color: inherit; text-decoration: none; border-radius: 8px; } .ds-brand { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; } .ds-brand-mark { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; background: var(--brand, #af2a2f); } .ds-nav-links { display: flex; align-items: center; gap: 20px; color: var(--muted-rose, #ad9fa0); } .ds-nav-links a { padding: 10px 2px; transition: color 200ms, background-color 200ms, box-shadow 200ms; } .ds-nav-links a:hover { color: var(--on-brand, #fff); } .ds-brand:focus-visible, .ds-nav-links a:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring, #ed777c); }"
     }
   ],
   "narrative": {
@@ -201,7 +208,8 @@
       "Do reserve Table Red (#af2a2f) for the primary decision, active player context, and focus signal.",
       "Do reserve Felt (#0d5b45), Card Paper (#f6f0e7), and Chip Gold (#e6b85c) for their named physical meanings.",
       "Do pair suit, turn, win, error, and connection colors with text, iconography, shape, or position.",
-      "Do provide keyboard play, reduced-motion alternatives, reconnection feedback, and responsive table structure."
+      "Do provide keyboard play, reduced-motion alternatives, reconnection feedback, and responsive table structure from mobile web through desktop.",
+      "Do keep money and sandbox semantics unmistakable and surface fairness/audit information in plain language."
     ],
     "donts": [
       "Don't create PokerStars-style static or frozen-feeling play; an unchanged table during latency must show an honest state.",
@@ -210,7 +218,9 @@
       "Don't use childish gamification that weakens trust in real-money play.",
       "Don't drift into crypto aesthetics: no neon speculation, token hype, terminal styling, or volatility theater.",
       "Don't use border-left / border-right greater than 1px as an accent on a card, seat, callout, or alert.",
+      "Don't combine a decorative 1px border with a wide soft shadow on the same ordinary card or button.",
       "Don't use gradient text, decorative grid/stripe backgrounds, default glassmorphism, or 32px-plus card radii.",
+      "Don't use tiny uppercase tracked eyebrows as repeated page scaffolding; mono labels are reserved for real game/readout state.",
       "Don't rely on hue alone to distinguish red/black suits, active turns, winners, errors, or connection status.",
       "Don't animate layout properties or use bounce/elastic motion; never make a user wait for choreography before acting.",
       "Don't hard-code brand colors as literals in components; reference the --brand / --paper / --wine tokens so theming stays single-source."

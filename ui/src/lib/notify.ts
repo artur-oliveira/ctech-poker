@@ -17,13 +17,15 @@ const recent = new Map<string, number>();
 
 const DEDUPE_MS = 600;
 const AUTO_DISMISS_MS = 6000;
+const MAX_VISIBLE = 3;
+let nextID = 0;
 
 export function pushNotification(message: string, variant: NotificationVariant = 'error'): void {
   const now = Date.now();
   if (now - (recent.get(message) || 0) < DEDUPE_MS) return;
   recent.set(message, now);
-  const id = `${now}-${items.length}`;
-  items = [...items, {id, message, variant}];
+  const id = `${now}-${nextID++}`;
+  items = [...items, {id, message, variant}].slice(-MAX_VISIBLE);
   listeners.forEach(f => f(items));
   setTimeout(() => dismissNotification(id), AUTO_DISMISS_MS);
 }
@@ -60,6 +62,19 @@ function messageForStatus(status?: number): string {
 export function notifyApiError(error: unknown): void {
   const normalized = error as { name?: string; status?: number; problem?: { detail?: string; title?: string } };
   if (normalized?.name === 'ApiError') {
+    const original = (error as {original?: {
+      code?: string;
+      message?: string;
+      response?: unknown;
+      request?: unknown;
+    }}).original;
+    if (!normalized.status && original && !original.response) {
+      const timedOut = original.code === 'ECONNABORTED' || /timeout/i.test(original.message || '');
+      pushNotification(timedOut
+        ? 'O servidor demorou para responder. Verifique sua conexão e tente novamente.'
+        : 'Sem conexão com o servidor. Verifique sua internet e tente novamente.');
+      return;
+    }
     const safeDetail = normalized.problem?.detail?.trim();
     pushNotification(safeDetail || messageForStatus(normalized.status));
     return;
