@@ -7,10 +7,14 @@ const mocks = vi.hoisted(() => ({
   joinRoom: vi.fn(),
   leaveRoom: vi.fn(),
   refetch: vi.fn(),
+  invalidateQueries: vi.fn(),
   isNotFound: vi.fn(),
 }));
 
-vi.mock('@tanstack/react-query', () => ({useQuery: mocks.query}));
+vi.mock('@tanstack/react-query', () => ({
+  useQuery: mocks.query,
+  useQueryClient: () => ({invalidateQueries: mocks.invalidateQueries}),
+}));
 vi.mock('@/lib/api/rooms', () => ({
   getRoom: vi.fn(),
   joinRoom: mocks.joinRoom,
@@ -107,6 +111,21 @@ describe('BuyInPanel', () => {
     await userEvent.click(screen.getByRole('button', {name: /Entrar com/}));
     expect(await screen.findByRole('alert')).toHaveTextContent('carteira ainda não tem apostas ativadas');
     expect(seated).not.toHaveBeenCalled();
+  });
+
+  test('explains a full-table race and refreshes room state after the refund', async () => {
+    mocks.joinRoom.mockRejectedValue({
+      axios: true,
+      response: {status: 409, data: {type: '/problems/table-full'}},
+    });
+    render(<BuyInPanel roomId="room-1" onSeatedAction={vi.fn()}/>);
+
+    await userEvent.click(screen.getByRole('button', {name: /Entrar com/}));
+    expect(await screen.findByRole('alert')).toHaveTextContent('última vaga foi ocupada');
+    await waitFor(() => expect(mocks.invalidateQueries).toHaveBeenCalledTimes(3));
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['rooms']});
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['room', 'room-1']});
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['seated', 'room-1']});
   });
 });
 

@@ -2,13 +2,15 @@
 import Link from 'next/link';
 import {useId, useState} from 'react';
 import {ChevronLeft} from 'lucide-react';
-import {useQuery} from '@tanstack/react-query';
+import {useQuery, useQueryClient} from '@tanstack/react-query';
 import axios from 'axios';
 import {Button} from '@/components/ui/button';
 import {getRoom, joinRoom} from '@/lib/api/rooms';
 import {isNotFound} from '@/lib/api/client';
 
 const GENERIC_JOIN_ERROR = 'Não foi possível sentar na mesa. Verifique suas fichas e tente novamente.';
+const TABLE_FULL_TYPE = '/problems/table-full';
+const TABLE_FULL_ERROR = 'A última vaga foi ocupada. Se houve débito, suas fichas já foram devolvidas.';
 
 // The API's real-money buy-in gate (buyin.walletFor) reports "has not
 // activated gambling on ctech-wallet" as a plain RFC 9457 `detail` string.
@@ -17,6 +19,8 @@ const GENERIC_JOIN_ERROR = 'Não foi possível sentar na mesa. Verifique suas fi
 function joinErrorMessage(err: unknown) {
   if (axios.isAxiosError(err)) {
     const detail = (err.response?.data as {detail?: string} | undefined)?.detail;
+    const type = (err.response?.data as {type?: string} | undefined)?.type;
+    if (type === TABLE_FULL_TYPE) return TABLE_FULL_ERROR;
     if (detail?.includes('gambling')) return 'Sua carteira ainda não tem apostas ativadas. Ative em ctech-wallet e tente novamente.';
   }
   return GENERIC_JOIN_ERROR;
@@ -41,6 +45,7 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
   onSeatedAction: () => void
 }) {
   const sliderId = useId();
+  const queryClient = useQueryClient();
   const [amount, setAmount] = useState<number | null>(null);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState('');
@@ -88,6 +93,14 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
       onSeatedAction();
     } catch (err) {
       setError(joinErrorMessage(err));
+      if (axios.isAxiosError(err) &&
+        (err.response?.data as {type?: string} | undefined)?.type === TABLE_FULL_TYPE) {
+        await Promise.all([
+          queryClient.invalidateQueries({queryKey: ['rooms']}),
+          queryClient.invalidateQueries({queryKey: ['room', roomId]}),
+          queryClient.invalidateQueries({queryKey: ['seated', roomId]}),
+        ]);
+      }
       setJoining(false);
     }
   }

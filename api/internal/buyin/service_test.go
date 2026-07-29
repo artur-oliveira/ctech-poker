@@ -4,6 +4,7 @@ package buyin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
+	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
@@ -178,6 +180,55 @@ func TestBuyInRefundsLoserOfConcurrentSeatRace(t *testing.T) {
 	}
 	if len(wallet.credits) != 1 || wallet.credits[0].amount != 400 {
 		t.Fatalf("expected exactly one 400-chip refund credit for the race loser, got %+v", wallet.credits)
+	}
+}
+
+func TestBuyInFastFailsAlreadyFullTableBeforeDebit(t *testing.T) {
+	wallet := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := &fakeRoomLookup{room: &roomstore.Room{
+		ID: "room-full", CurrencyMode: "sandbox", BigBlind: 20,
+		BuyInMin: 40, BuyInMax: 400, MaxSeats: 1,
+	}}
+	svc := NewService(wallet, mgr, rooms)
+	ctx := context.Background()
+
+	if err := svc.BuyIn(ctx, "room-full", "player-1", 100, false, "first"); err != nil {
+		t.Fatalf("first buy-in: %v", err)
+	}
+	err := svc.BuyIn(ctx, "room-full", "player-2", 100, false, "second")
+	if !errors.Is(err, table.ErrNoSeatsAvailable) {
+		t.Fatalf("second buy-in error=%v, want ErrNoSeatsAvailable", err)
+	}
+	if len(wallet.debits) != 1 {
+		t.Fatalf("full-table fast fail made an avoidable debit: %+v", wallet.debits)
+	}
+}
+
+func TestBuyInAllowsBustedSeatedPlayerToRebuyAtFullTable(t *testing.T) {
+	wallet := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := &fakeRoomLookup{room: &roomstore.Room{
+		ID: "room-full-rebuy", CurrencyMode: "sandbox", BigBlind: 20,
+		BuyInMin: 40, BuyInMax: 400, MaxSeats: 1,
+	}}
+	svc := NewService(wallet, mgr, rooms)
+	ctx := context.Background()
+
+	seed := func() *hand.Table {
+		return hand.NewTable([]*hand.Player{{
+			ID: "player-1", Stack: 0, State: hand.SittingOut,
+		}}, 10, 20)
+	}
+	if _, err := mgr.GetOrCreateActor(ctx, "room-full-rebuy", seed); err != nil {
+		t.Fatalf("seed full table: %v", err)
+	}
+
+	if err := svc.BuyIn(ctx, "room-full-rebuy", "player-1", 100, false, "rebuy"); err != nil {
+		t.Fatalf("busted seated player rebuy: %v", err)
+	}
+	if len(wallet.debits) != 1 || wallet.debits[0].amount != 100 {
+		t.Fatalf("expected one rebuy debit, got %+v", wallet.debits)
 	}
 }
 

@@ -278,6 +278,9 @@ func (h *roomHandlers) join(c fiber.Ctx) error {
 		if errors.Is(err, buyin.ErrTermsNotAccepted) {
 			return problem.Forbidden(err.Error()).Send(c)
 		}
+		if errors.Is(err, table.ErrNoSeatsAvailable) {
+			return problem.TableFull().Send(c)
+		}
 		return problem.Conflict(err.Error()).Send(c)
 	}
 	return c.SendStatus(fiber.StatusOK)

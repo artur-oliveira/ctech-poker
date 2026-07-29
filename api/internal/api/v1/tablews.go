@@ -677,7 +677,8 @@ func RegisterTableWS(
 					if err := dispatch(table.PreselectCmd{
 						PlayerID: playerID, ActionID: m.ActionId, Selection: m.Action, Amount: m.Amount,
 						ExpectedSnapshotVersion: m.ExpectedSnapshotVersion,
-						ExpectedHandID:          m.ExpectedHandId, Reply: r,
+						ExpectedHandID:          m.ExpectedHandId,
+						ExpectedStage:           m.ExpectedStage, Reply: r,
 					}); err != nil {
 						code := "invalid_action"
 						if strings.Contains(err.Error(), "stale action state") {

@@ -10,6 +10,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -73,6 +74,8 @@ type Actor struct {
 	// (re)loaded actor resumes the true remaining time on the current turn
 	// instead of computing a brand new turnTimeout window from now.
 	pendingPersistedDeadline int64
+	pendingDeadlineFor       string
+	pendingDeadlineForStage  hand.Stage
 	nextHandTimer            *time.Timer
 	nextHandDeadline         time.Time
 	nextHandArmedFor         string
@@ -147,6 +150,11 @@ func New(id string, store *tablestore.Store, trustCache bool, broadcast func(str
 // (e.g. it lost its table lease and Run exited) and will never read the
 // command. Callers re-resolve a live actor via the manager.
 var ErrActorStopped = errors.New("table: actor stopped")
+
+// ErrNoSeatsAvailable lets the HTTP boundary return a stable, actionable
+// problem type without parsing an internal error string. Buy-in wraps it after
+// successfully compensating the wallet debit, so errors.Is remains usable.
+var ErrNoSeatsAvailable = errors.New("table: no seats available")
 
 func (a *Actor) Dispatch(cmd Command) error {
 	select {
@@ -343,8 +351,20 @@ func (a *Actor) handlePreselect(ctx context.Context, c PreselectCmd) error {
 		if !a.isSeated(c.PlayerID) {
 			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
 		}
-		if c.ExpectedSnapshotVersion == 0 || c.ExpectedHandID == "" ||
-			uint64(a.version) != c.ExpectedSnapshotVersion || a.handID != c.ExpectedHandID {
+		stage := a.cached.ViewFor("").Stage
+		if c.ExpectedHandID == "" || a.handID != c.ExpectedHandID {
+			return errors.New("table: stale action state")
+		}
+		// New clients scope this harmless future intent to hand+street instead
+		// of the whole table version. Activity, presence and another player's
+		// action may legitimately advance version while the frame is in flight.
+		// Keep exact-version validation only as a rolling-deploy fallback for
+		// older clients that do not send expected_stage yet.
+		if c.ExpectedStage != "" {
+			if c.ExpectedStage != stage {
+				return errors.New("table: stale action state")
+			}
+		} else if c.ExpectedSnapshotVersion == 0 || uint64(a.version) != c.ExpectedSnapshotVersion {
 			return errors.New("table: stale action state")
 		}
 		if c.Selection == "call" && (c.Amount <= 0 || c.Amount != a.cached.ProspectiveCallAmountForActor(c.PlayerID)) {
@@ -360,7 +380,7 @@ func (a *Actor) handlePreselect(ctx context.Context, c PreselectCmd) error {
 			delete(a.activity.Preselections, c.PlayerID)
 		} else {
 			a.activity.Preselections[c.PlayerID] = tablestore.Preselection{
-				Selection: c.Selection, Amount: c.Amount, HandID: a.handID, Stage: a.cached.ViewFor("").Stage,
+				Selection: c.Selection, Amount: c.Amount, HandID: a.handID, Stage: stage,
 			}
 		}
 		a.markLastAction(c.PlayerID)
@@ -372,6 +392,23 @@ func (a *Actor) handlePreselect(ctx context.Context, c PreselectCmd) error {
 			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: action, Selection: c.Selection, Amount: c.Amount,
 		})
 	})
+}
+
+// prunePreselections enforces the lifetime promised on the wire: a prepared
+// action belongs to exactly one hand and one betting street. Keeping stale
+// entries hidden only at snapshot time is insufficient because the inline
+// executor would otherwise find and execute them when that player becomes
+// current on a later street or hand.
+func (a *Actor) prunePreselections() {
+	if a.cached == nil || a.activity.Preselections == nil {
+		return
+	}
+	stage := a.cached.ViewFor("").Stage
+	for playerID, preselection := range a.activity.Preselections {
+		if preselection.HandID != a.handID || preselection.Stage != stage {
+			delete(a.activity.Preselections, playerID)
+		}
+	}
 }
 
 func (a *Actor) commitActivity(ctx context.Context, apply func() error) error {
@@ -497,6 +534,8 @@ func (a *Actor) ensureLoaded(ctx context.Context, force bool) error {
 	a.handID = stored.HandID
 	a.activity = stored.Activity
 	a.pendingPersistedDeadline = stored.TurnDeadlineUnixMs
+	a.pendingDeadlineFor = a.cached.CurrentPlayerIDForActor()
+	a.pendingDeadlineForStage = a.cached.Stage()
 	a.rearmTimersFromCache()
 	return nil
 }
@@ -587,6 +626,7 @@ func (a *Actor) tryStartHand(ctx context.Context) {
 	if a.cached.Stage() == hand.WaitingForPlayers {
 		if err := a.cached.StartHand(); err == nil {
 			a.handID = newHandID()
+			a.prunePreselections()
 		}
 	}
 }
@@ -757,6 +797,7 @@ func (a *Actor) applyActAndCommit(ctx context.Context, c ActCmd) (bool, error) {
 				delete(a.activity.Preselections, playerID)
 			}
 		}
+		a.prunePreselections()
 	}
 	a.consumeTimeBank(c.PlayerID)
 	action := string(c.Action)
@@ -925,7 +966,14 @@ func (a *Actor) consumeTimeBank(playerID string) {
 	}
 	elapsed := timeNowFunc().Sub(a.turnBaseDeadline).Milliseconds()
 	if elapsed > 0 {
-		a.cached.ConsumeTimeBankForActor(playerID, elapsed)
+		before := a.cached.TimeBankForActor(playerID)
+		after := a.cached.ConsumeTimeBankForActor(playerID, elapsed)
+		slog.Info("table time bank consumed",
+			"table", a.id, "hand", a.handID, "stage", a.cached.ViewFor("").Stage,
+			"turn_player", a.turnDeadlineFor, "charged_player", playerID,
+			"bank_before_ms", before, "bank_elapsed_ms", elapsed, "bank_after_ms", after,
+			"base_deadline_unix_ms", a.turnBaseDeadline.UnixMilli(),
+			"action_deadline_unix_ms", a.turnDeadline.UnixMilli())
 	}
 }
 
@@ -1364,7 +1412,7 @@ func (a *Actor) handleJoin(ctx context.Context, c JoinCmd) error {
 
 func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 	if c.MaxSeats > 0 && len(a.cached.PlayersForActor()) >= c.MaxSeats {
-		return errors.New("table: no seats available")
+		return ErrNoSeatsAvailable
 	}
 	p := &hand.Player{ID: c.PlayerID, Stack: c.Stack, HoldID: c.HoldID, LastActionAt: timeNowFunc().UnixMilli()}
 	stage := a.cached.Stage()
@@ -1445,6 +1493,12 @@ func (a *Actor) applyLeaveAndCommit(ctx context.Context, c LeaveCmd) (int64, str
 // into Flop/Turn/River, and 0 otherwise.
 func (a *Actor) armTurnTimer(current string, stage hand.Stage, grace time.Duration) {
 	if current == a.turnDeadlineFor && stage == a.turnDeadlineForStage {
+		// A reload on the same actor may carry the persisted deadline for the
+		// already-armed turn. It has served its synchronization purpose; never
+		// leave it pending where the next player's arm could inherit it.
+		a.pendingPersistedDeadline = 0
+		a.pendingDeadlineFor = ""
+		a.pendingDeadlineForStage = hand.WaitingForPlayers
 		return
 	}
 	if a.turnTimer != nil {
@@ -1467,11 +1521,14 @@ func (a *Actor) armTurnTimer(current string, stage hand.Stage, grace time.Durati
 	// then fires ~immediately, correctly enforcing an overdue auto-fold)
 	// instead of granting a brand new full window just because this
 	// instance's own bookkeeping started from zero values.
-	if a.pendingPersistedDeadline > 0 {
+	if a.pendingPersistedDeadline > 0 &&
+		a.pendingDeadlineFor == current && a.pendingDeadlineForStage == stage {
 		deadline = time.UnixMilli(a.pendingPersistedDeadline)
 		a.turnBaseDeadline = deadline.Add(-bank)
 	}
 	a.pendingPersistedDeadline = 0
+	a.pendingDeadlineFor = ""
+	a.pendingDeadlineForStage = hand.WaitingForPlayers
 	a.turnDeadline = deadline
 	remaining := time.Until(deadline)
 	if remaining < 0 {
@@ -1536,6 +1593,7 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 	a.saveHandHistorySnapshot(ctx)
 	if err := a.cached.StartHand(); err == nil {
 		a.handID = newHandID()
+		a.prunePreselections()
 	}
 	if err := a.commit(ctx, "", &tablestore.ActionLogEntry{Action: "next_hand"}); err != nil {
 		if !errors.Is(err, tablestore.ErrVersionConflict) {
@@ -1616,6 +1674,7 @@ func (a *Actor) handleRunoutStep(ctx context.Context, c runoutStepCmd) error {
 }
 
 func (a *Actor) processInlinePreselections(ctx context.Context) {
+	a.prunePreselections()
 	for a.activity.Preselections != nil && len(a.activity.Preselections) > 0 &&
 		a.cached != nil && a.cached.Stage() != hand.Complete {
 		current := a.cached.CurrentPlayerIDForActor()

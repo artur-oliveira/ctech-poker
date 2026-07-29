@@ -6,6 +6,7 @@ import (
 
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
 
 func TestRaiseCancelsFixedCallWhenAmountChanges(t *testing.T) {
@@ -104,5 +105,44 @@ func TestInlinePreselectionExecution(t *testing.T) {
 	// p2's preselection should have executed inline, moving the turn past p2.
 	if current := game.CurrentPlayerIDForActor(); current == p2 {
 		t.Fatalf("turn is still p2 after processInlinePreselections")
+	}
+}
+
+func TestPreselectionAcceptsUnrelatedVersionChangeWithinSameStreet(t *testing.T) {
+	actor, game, _ := newTimeBankActor(t)
+	actor.version = 8
+	waiting := "p1"
+	if waiting == game.CurrentPlayerIDForActor() {
+		waiting = "p2"
+	}
+
+	if err := actor.handlePreselect(context.Background(), PreselectCmd{
+		PlayerID: waiting, ActionID: "preselect-after-reaction", Selection: "check_fold",
+		ExpectedSnapshotVersion: 7, ExpectedHandID: actor.handID, ExpectedStage: game.ViewFor("").Stage,
+	}); err != nil {
+		t.Fatalf("same-street preselection should ignore unrelated version change: %v", err)
+	}
+}
+
+func TestPreselectionCannotCrossStreetOrHand(t *testing.T) {
+	actor, game, current := newTimeBankActor(t)
+	actor.activity.Preselections = map[string]tablestore.Preselection{
+		current: {Selection: "fold", HandID: actor.handID, Stage: string(hand.Flop)},
+	}
+
+	actor.processInlinePreselections(context.Background())
+	if _, ok := actor.activity.Preselections[current]; ok {
+		t.Fatal("preselection from another street survived pruning")
+	}
+	if game.CurrentPlayerIDForActor() != current {
+		t.Fatal("stale preselection executed on the current player")
+	}
+
+	actor.activity.Preselections[current] = tablestore.Preselection{
+		Selection: "fold", HandID: "previous-hand", Stage: string(hand.PreFlop),
+	}
+	actor.processInlinePreselections(context.Background())
+	if _, ok := actor.activity.Preselections[current]; ok {
+		t.Fatal("preselection from another hand survived pruning")
 	}
 }

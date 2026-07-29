@@ -57,6 +57,7 @@ type PreselectCmd struct {
 	Amount                  int64
 	ExpectedSnapshotVersion uint64
 	ExpectedHandID          string
+	ExpectedStage           string
 	Reply                   chan error
 }
 

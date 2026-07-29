@@ -188,6 +188,10 @@ message ClientMessage {
   string target_player_id = 13; // required only by thrown-object reactions
   string turnstile_token = 14; // response token for an adaptive bot challenge
   optional bool run_it_twice = 15;
+  // Preselections are scoped to one betting street. Unlike a real action they
+  // do not require an exact snapshot version: chat, reactions and unrelated
+  // player actions may advance it without invalidating the viewer's intent.
+  string expected_stage = 16;
 }
 
 // ServerMessage is sent from the server to the client.

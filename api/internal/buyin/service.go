@@ -174,7 +174,7 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 		return fmt.Errorf("buyin: table unavailable: %w", err)
 	}
 
-	seated, stack, err := s.isSeated(actor, playerID)
+	seated, stack, occupiedSeats, err := s.isSeated(actor, playerID)
 	if err != nil {
 		return fmt.Errorf("buyin: seat check: %w", err)
 	}
@@ -184,6 +184,14 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 	// through to debit + dispatch below, or the credit never happens.
 	if seated && stack > 0 {
 		return nil
+	}
+	// This is a fast-fail optimization, not the correctness mechanism: another
+	// player can still win the final seat after this snapshot. The actor's
+	// conditional join remains authoritative and the debit is compensated on
+	// that race, but already-full tables no longer cause an avoidable
+	// debit/refund round trip.
+	if !seated && maxSeats > 0 && occupiedSeats >= maxSeats {
+		return table.ErrNoSeatsAvailable
 	}
 
 	nonce := idemKey
@@ -288,22 +296,22 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 // the current viewer snapshot from the actor's Run goroutine (hand.Table has
 // no lock), so it is safe to call concurrently with the actor's own
 // broadcastAll.
-func (s *Service) isSeated(actor *table.Actor, playerID string) (bool, int64, error) {
+func (s *Service) isSeated(actor *table.Actor, playerID string) (bool, int64, int, error) {
 	snapCh := make(chan hand.Snapshot, 1)
 	reply := make(chan error, 1)
 	if err := actor.Dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: reply}); err != nil {
-		return false, 0, err
+		return false, 0, 0, err
 	}
 	select {
 	case snap := <-snapCh:
 		for _, seat := range snap.Seats {
 			if seat.PlayerID == playerID {
-				return true, seat.Stack, nil
+				return true, seat.Stack, len(snap.Seats), nil
 			}
 		}
-		return false, 0, nil
+		return false, 0, len(snap.Seats), nil
 	default:
-		return false, 0, nil
+		return false, 0, 0, nil
 	}
 }
 

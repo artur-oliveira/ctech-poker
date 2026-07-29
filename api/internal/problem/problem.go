@@ -35,6 +35,9 @@ func Unauthorized(detail string) *Problem { return wrap(common.Unauthorized(deta
 func Forbidden(detail string) *Problem    { return wrap(common.Forbidden(detail)) }
 func NotFound(detail string) *Problem     { return wrap(common.NotFound(detail)) }
 func Conflict(detail string) *Problem     { return wrap(common.Conflict(detail)) }
+func TableFull() *Problem {
+	return New(http.StatusConflict, "/problems/table-full", "Table Full", "the last available seat was taken")
+}
 func InternalServer(detail string, c fiber.Ctx, err error) *Problem {
 	slog.Error("unhandled error", "request_id", requestid.FromContext(c), "path", c.Path(), "err", err)
 	return wrap(common.InternalServer(detail))

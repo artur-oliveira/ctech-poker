@@ -2,6 +2,7 @@ package problem
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -27,5 +28,12 @@ func TestSendUsesRFC9457ContentTypeAndShape(t *testing.T) {
 	}
 	if _, legacy := body["error"]; legacy {
 		t.Fatalf("legacy error field present: %+v", body)
+	}
+}
+
+func TestTableFullHasStableProblemType(t *testing.T) {
+	p := TableFull()
+	if p.Type != "/problems/table-full" || p.Status != http.StatusConflict {
+		t.Fatalf("table-full problem=%+v", p)
 	}
 }

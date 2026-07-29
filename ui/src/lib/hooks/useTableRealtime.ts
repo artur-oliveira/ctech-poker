@@ -718,7 +718,8 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       type: 'preselect_action', action: selection || '', action_id: crypto.randomUUID(),
       amount,
       expected_snapshot_version: latestVersionRef.current,
-      expected_hand_id: latestHandIDRef.current
+      expected_hand_id: latestHandIDRef.current,
+      expected_stage: snapshot?.stage || ''
     }),
     submitBotChallenge
   };
