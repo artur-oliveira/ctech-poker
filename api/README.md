@@ -164,12 +164,12 @@ Auth column: **JWT** means `authMiddleware` (bearer token, `sub` + `sid` require
 | `POST /players/:playerId/avatar/report` | JWT | record an avatar abuse report; 5/hour/player |
 | `GET /players/me/sessions` | JWT | per-table session P&L, paginated (50) |
 | `GET /players/me/hands` | JWT | hand history, `?table_id`, paginated (50) |
-| `GET /players/me/hands/:handId` | JWT | one hand incl. its fairness proof |
+| `GET /players/me/hand/:id?mode=...` | JWT | one hand incl. its fairness proof |
 | `GET /players/me/achievements` | JWT | own progress, paginated (100) |
 | `GET /players/me/notes/` | JWT | private opponent notes |
 | `POST /players/me/notes/:opponentId` | JWT | save/delete a note (`{tag, note}`, ≤500 chars) |
 | `GET /players/me/poker-stats` | JWT | own VPIP/PFR/3-bet |
-| `POST /players/me/hands/:handId/share` | JWT | create a public share link |
+| `POST /players/me/hand/:id/share` | JWT | create a public share link (`mode` in request body) |
 | `DELETE /players/me/hand-shares/:token` | JWT | revoke a share link |
 | `GET /hand-shares/:token` | **none** | public shared hand, opponents aliased |
 | `GET /tables/:tableId/hands/:handId/history` | JWT | action-log replay for one hand |

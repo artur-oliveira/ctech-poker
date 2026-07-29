@@ -291,7 +291,7 @@ func (a *Actor) handleChat(ctx context.Context, c ChatCmd) error {
 	if c.Message == "" {
 		return errors.New("table: chat message is required")
 	}
-	return a.commitActivity(ctx, func() error {
+	return a.commitActivity(ctx, true, func() error {
 		if !a.isSeated(c.PlayerID) {
 			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
 		}
@@ -316,7 +316,10 @@ func (a *Actor) handleReaction(ctx context.Context, c ReactionCmd) error {
 	if c.ReactionID == "" {
 		return errors.New("table: reaction_id is required")
 	}
-	return a.commitActivity(ctx, func() error {
+	// Reactions already have a dedicated fan-out frame. Persist them so a
+	// reconnect can restore the short-lived effect, but do not also broadcast
+	// a full table snapshot for the same cosmetic action.
+	return a.commitActivity(ctx, false, func() error {
 		if !a.isSeated(c.PlayerID) {
 			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
 		}
@@ -347,7 +350,7 @@ func (a *Actor) handlePreselect(ctx context.Context, c PreselectCmd) error {
 		c.Selection != "call" && c.Selection != "call_any" {
 		return errors.New("table: invalid action preselection")
 	}
-	return a.commitActivity(ctx, func() error {
+	return a.commitActivity(ctx, true, func() error {
 		if !a.isSeated(c.PlayerID) {
 			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
 		}
@@ -411,7 +414,7 @@ func (a *Actor) prunePreselections() {
 	}
 }
 
-func (a *Actor) commitActivity(ctx context.Context, apply func() error) error {
+func (a *Actor) commitActivity(ctx context.Context, broadcast bool, apply func() error) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
@@ -431,7 +434,9 @@ func (a *Actor) commitActivity(ctx context.Context, apply func() error) error {
 	if err != nil {
 		return err
 	}
-	a.broadcastAll()
+	if broadcast {
+		a.broadcastAll()
+	}
 	return nil
 }
 
@@ -1102,21 +1107,28 @@ func (a *Actor) handleKickTimeout(ctx context.Context, c kickTimeoutCmd) error {
 		return nil
 	}
 	delete(a.kickTimers, c.PlayerID)
-	// ponytail: RemovePlayerForActor rejects removal while the player is
-	// still dealt into a hand in progress (any state, including Folded — see
-	// RemovePlayerForActor's doc comment). In practice that can't coincide
-	// with 5 minutes disconnected — handleTurnTimeout's 45s/3-hand disconnect
-	// grace already forces them to SittingOut long before this fires. If it
-	// ever races anyway, skip silently; nothing to retry from here.
+	// RemovePlayerForActor rejects removal while the player is still dealt
+	// into a hand in progress (including after they folded). This is a normal
+	// race at a busy table, so a failed removal must not consume the only kick
+	// attempt. The durable between-hands sweep in handleNextHand is the primary
+	// guarantee across actor replacement; this retry covers the same actor.
 	stackCh := make(chan int64, 1)
 	holdIDCh := make(chan string, 1)
 	if err := a.handleLeave(ctx, LeaveCmd{PlayerID: c.PlayerID, Stack: stackCh, HoldID: holdIDCh}); err != nil {
+		a.armKickRetry(c.PlayerID)
 		return err
 	}
 	if a.onPlayerRemoved != nil {
 		a.onPlayerRemoved(c.PlayerID, "disconnected", <-stackCh, <-holdIDCh)
 	}
 	return nil
+}
+
+func (a *Actor) armKickRetry(playerID string) {
+	a.kickTimers[playerID] = time.AfterFunc(a.afkSweepInterval, func() {
+		reply := make(chan error, 1)
+		_ = a.Dispatch(kickTimeoutCmd{PlayerID: playerID, Reply: reply})
+	})
 }
 
 // markLastAction stamps playerID's LastActionAt with now — called only from
@@ -1194,6 +1206,31 @@ func (a *Actor) handleAFKSweep(ctx context.Context, c afkSweepCmd) error {
 		}
 	}
 	return nil
+}
+
+// removeIdlePlayersBetweenHands closes the gap left by timer-based removal:
+// a player cannot be removed safely while dealt into a live hand, and a
+// periodic timer can repeatedly land inside live hands. LastActionAt is
+// persisted, so checking it immediately before the next deal also survives
+// actor replacement and guarantees a stale seat cannot enter another hand.
+func (a *Actor) removeIdlePlayersBetweenHands(ctx context.Context) {
+	now := timeNowFunc()
+	var stale []string
+	for _, p := range a.cached.PlayersForActor() {
+		if p.LastActionAt > 0 && now.Sub(time.UnixMilli(p.LastActionAt)) >= a.kickGrace {
+			stale = append(stale, p.ID)
+		}
+	}
+	for _, id := range stale {
+		stackCh := make(chan int64, 1)
+		holdIDCh := make(chan string, 1)
+		if err := a.handleLeave(ctx, LeaveCmd{PlayerID: id, Stack: stackCh, HoldID: holdIDCh}); err != nil {
+			continue
+		}
+		if a.onPlayerRemoved != nil {
+			a.onPlayerRemoved(id, "idle", <-stackCh, <-holdIDCh)
+		}
+	}
 }
 
 func (a *Actor) handleSitOut(ctx context.Context, c SitOutCmd) error {
@@ -1603,6 +1640,13 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 		return nil
 	}
 	a.saveHandHistorySnapshot(ctx)
+	a.removeIdlePlayersBetweenHands(ctx)
+	// A concurrent actor may have advanced the table while an idle-player
+	// removal retried/reloaded. Never start from a stage that is no longer the
+	// completed hand this timer was responsible for.
+	if a.cached.Stage() != hand.Complete {
+		return nil
+	}
 	if err := a.cached.StartHand(); err == nil {
 		a.handID = newHandID()
 		a.prunePreselections()

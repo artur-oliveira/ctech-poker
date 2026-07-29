@@ -115,12 +115,16 @@ export interface HandItem {
 // Returns the whole envelope, not just the items: the history page pages
 // through it (has_next / next_cursor) instead of showing one page as if it
 // were the complete history.
-export async function getHands({cursor, tableId}: { cursor?: string; tableId?: string } = {}) {
+export async function getHands({cursor, tableId, mode = 'sandbox'}: {
+  cursor?: string; tableId?: string; mode?: WalletMode
+} = {}) {
   return (await apiClient.get<Page<HandItem>>('/v1.0/players/me/hands', {
-    params: {cursor, table_id: tableId}, silentError: true
+    params: {cursor, table_id: tableId, mode}, silentError: true
   })).data;
 }
 
-export async function getHand(handId: string) {
-  return (await apiClient.get<HandItem>(`/v1.0/players/me/hands/${encodeURIComponent(handId)}`, {silentError: true})).data;
+export async function getHand(handId: string, mode: WalletMode = 'sandbox') {
+  return (await apiClient.get<HandItem>(`/v1.0/players/me/hand/${encodeURIComponent(handId)}`, {
+    params: {mode}, silentError: true
+  })).data;
 }

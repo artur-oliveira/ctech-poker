@@ -18,6 +18,7 @@ import {Button} from '@/components/ui/button';
 import {TermsGate} from '@/components/TermsGate';
 import {getViewerId, HAND_CATEGORY_LABELS, playerName} from '@/lib/utils';
 import {bestHandCategory} from '@/lib/pokerRules';
+import type {WalletMode} from '@/lib/api/player';
 
 function formatDate(unixSeconds: number) {
   return new Date(unixSeconds * 1000).toLocaleString('pt-BR', {
@@ -29,8 +30,9 @@ function HandHistoryContent() {
   const params = useSearchParams();
   const tableId = params.get('table_id') || '';
   const handId = params.get('hand_id') || '';
+  const mode: WalletMode = params.get('mode') === 'real' ? 'real' : 'sandbox';
   
-  const hand = useQuery({queryKey: ['hand', handId], queryFn: () => getHand(handId), enabled: Boolean(handId)});
+  const hand = useQuery({queryKey: ['hand', mode, handId], queryFn: () => getHand(handId, mode), enabled: Boolean(handId)});
   const history = useQuery({
     queryKey: ['hand-history', tableId, handId],
     queryFn: () => getHandHistory(tableId, handId),
@@ -77,7 +79,7 @@ function HandHistoryContent() {
       {!history.isLoading && !history.isError &&
           <div className="hand-history-tools">
               <HandExportButton hand={h} actions={actions} viewerId={viewerId}/>
-              <ShareHandDialog handId={h.hand_id} outcome={h.outcome}/>
+              <ShareHandDialog handId={h.hand_id} outcome={h.outcome} mode={mode}/>
           </div>}
     </header>
     
@@ -91,7 +93,7 @@ function HandHistoryContent() {
           </span>
             </div>
             <Button render={<Link
-              href={`/hands/replay?table_id=${encodeURIComponent(tableId)}&hand_id=${encodeURIComponent(handId)}`}
+              href={`/hands/replay?table_id=${encodeURIComponent(tableId)}&hand_id=${encodeURIComponent(handId)}&mode=${mode}`}
               target="_blank" rel="noreferrer"/>}>
                 Assistir replay <ExternalLink aria-hidden="true"/>
             </Button>

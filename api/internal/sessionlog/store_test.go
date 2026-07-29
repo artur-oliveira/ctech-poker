@@ -57,3 +57,11 @@ func TestFakeSessionLogStore(t *testing.T) {
 		t.Fatalf("expected 1 hand, got %d, err %v", len(hands), err)
 	}
 }
+
+func TestHandSKSeparatesCurrencyModes(t *testing.T) {
+	if sandbox, real := handSK("sandbox", "h1"), handSK("real", "h1"); sandbox == real {
+		t.Fatalf("currency modes shared a hand key: %q", sandbox)
+	} else if sandbox != "sandbox#h1" || real != "real#h1" {
+		t.Fatalf("unexpected scoped keys: %q %q", sandbox, real)
+	}
+}

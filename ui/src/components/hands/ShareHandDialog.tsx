@@ -11,8 +11,11 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import {createHandShare} from '@/lib/api/handShares';
+import type {WalletMode} from '@/lib/api/player';
 
-export function ShareHandDialog({handId, outcome}: { handId: string; outcome: string }) {
+export function ShareHandDialog({handId, outcome, mode = 'sandbox'}: {
+  handId: string; outcome: string; mode?: WalletMode
+}) {
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<'brag' | 'bad_beat'>(outcome === 'lost' ? 'bad_beat' : 'brag');
   const [includeCards, setIncludeCards] = useState(true);
@@ -27,7 +30,7 @@ export function ShareHandDialog({handId, outcome}: { handId: string; outcome: st
     try {
       const share = await createHandShare(handId, {
         kind, include_hero_cards: includeCards, expiry_days: expiryDays
-      });
+      }, mode);
       setURL(`${window.location.origin}/share?id=${encodeURIComponent(share.token)}`);
     } finally {
       setPending(false);

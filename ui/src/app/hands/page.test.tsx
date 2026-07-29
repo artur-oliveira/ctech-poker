@@ -75,7 +75,7 @@ describe('hands list page', () => {
     expect(screen.getByText(/Royal flush/)).toBeInTheDocument();
     expect(screen.getAllByTestId('card')).toHaveLength(9);
     expect(screen.getByRole('link', {name: /won/})).toHaveAttribute(
-      'href', '/hands/history?table_id=table-one&hand_id=hand%231'
+      'href', '/hands/history?table_id=table-one&hand_id=h1&mode=sandbox'
     );
     expect(screen.getByTitle('1234567890abcdef')).toHaveTextContent('seed 12345678…');
     expect(screen.queryByRole('button', {name: /Carregar mais/})).not.toBeInTheDocument();

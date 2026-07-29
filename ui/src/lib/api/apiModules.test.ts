@@ -71,10 +71,12 @@ describe('API domain modules', () => {
     await getMyPokerStats();
     
     expect(client.get).toHaveBeenCalledWith('/v1.0/players/a%2Fb/showcase', {silentError: true});
-    expect(client.get).toHaveBeenCalledWith('/v1.0/players/me/hands/h%2F1', {silentError: true});
+    expect(client.get).toHaveBeenCalledWith('/v1.0/players/me/hand/h%2F1', {
+      params: {mode: 'sandbox'}, silentError: true
+    });
     expect(client.post).toHaveBeenCalledWith(
-      '/v1.0/players/me/hands/h%2F1/share',
-      {kind: 'brag', include_hero_cards: true, expiry_days: 7},
+      '/v1.0/players/me/hand/h%2F1/share',
+      {kind: 'brag', include_hero_cards: true, expiry_days: 7, mode: 'sandbox'},
     );
     expect(client.delete).toHaveBeenCalledWith('/v1.0/players/me/hand-shares/a%2Fb');
   });

@@ -1,6 +1,7 @@
 import {apiClient} from '@/lib/api/client';
 import type {HandHistoryAction} from '@/lib/api/table';
 import type {HandOutcome} from '@/lib/api/player';
+import type {WalletMode} from '@/lib/api/player';
 
 export interface PublicHandShare {
   token: string;
@@ -20,9 +21,9 @@ export async function createHandShare(handId: string, input: {
   kind: 'brag' | 'bad_beat';
   include_hero_cards: boolean;
   expiry_days: number;
-}) {
+}, mode: WalletMode = 'sandbox') {
   return (await apiClient.post<PublicHandShare>(
-    `/v1.0/players/me/hands/${encodeURIComponent(handId)}/share`, input
+    `/v1.0/players/me/hand/${encodeURIComponent(handId)}/share`, {...input, mode}
   )).data;
 }
 

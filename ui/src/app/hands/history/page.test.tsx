@@ -107,7 +107,7 @@ describe('hand detail page', () => {
     expect(screen.getByTestId('timeline')).toHaveTextContent('1:Você|2:Bia');
     expect(screen.getByText('proof:seed-1')).toBeInTheDocument();
     expect(screen.getByRole('button', {name: /Assistir replay/})).toHaveAttribute(
-      'href', '/hands/replay?table_id=table%2Fone&hand_id=hand%20one'
+      'href', '/hands/replay?table_id=table%2Fone&hand_id=hand%20one&mode=sandbox'
     );
     expect(screen.getByRole('button', {name: 'exportar'})).toBeInTheDocument();
   });

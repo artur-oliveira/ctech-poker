@@ -289,7 +289,7 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 			reg.Broadcast(context.Background(), tableID+"#"+viewerID, data)
 		}
 	}
-	persistHandHistory := func(tableID, handID string, outcome hand.HandOutcome, names map[string]string) {
+	persistHandHistory := func(tableID, handID, mode string, outcome hand.HandOutcome, names map[string]string) {
 		if sessionStore == nil {
 			return
 		}
@@ -301,7 +301,7 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		}
 		for _, id := range outcome.Participants {
 			item := handItemForWithAvatars(outcome, id, names, avatarURLs)
-			item.PK, item.TableID, item.HandID, item.EndedAt = id, tableID, handID, time.Now().UnixMilli()
+			item.PK, item.TableID, item.HandID, item.CurrencyMode, item.EndedAt = id, tableID, handID, mode, time.Now().UnixMilli()
 			if err := sessionStore.RecordHand(context.Background(), item); err != nil {
 				slog.Error("sessionlog: record hand failed", "table", tableID, "hand", handID, "player", id, "err", err)
 			}
@@ -312,7 +312,6 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		mode, err := tableCurrencyMode(ctx, rooms, tableID)
 		if err != nil {
 			slog.Error("gamification: load room mode failed", "table", tableID, "err", err)
-			persistHandHistory(tableID, handID, outcome, names)
 			return
 		}
 		var metrics []pokerstats.HandMetric
@@ -355,7 +354,7 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 				slog.Error("pokerstats: record hand failed", "table", tableID, "hand", handID, "err", err)
 			}
 		}
-		persistHandHistory(tableID, handID, outcome, names)
+		persistHandHistory(tableID, handID, mode, outcome, names)
 	}
 	// roomLoader re-arms blind escalation and the per-turn action timeout from
 	// the room's authoritative config on every actor creation (T6), so both
@@ -371,7 +370,14 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		return r, true, nil
 	}
 	mgr := tablemanager.NewManager(leases, store, broadcast, roomLoader, onHandComplete)
-	mgr.SetOnHandUpdated(persistHandHistory)
+	mgr.SetOnHandUpdated(func(tableID, handID string, outcome hand.HandOutcome, names map[string]string) {
+		mode, err := tableCurrencyMode(context.Background(), rooms, tableID)
+		if err != nil {
+			slog.Error("sessionlog: load room mode for hand update failed", "table", tableID, "hand", handID, "err", err)
+			return
+		}
+		persistHandHistory(tableID, handID, mode, outcome, names)
+	})
 	mgr.SetOnSeatsChanged(func(tableID string, seatsTaken int) {
 		if err := rooms.SetSeatsTaken(context.Background(), tableID, seatsTaken); err != nil {
 			slog.Error("roomstore: seats taken write-through failed", "table", tableID, "err", err)

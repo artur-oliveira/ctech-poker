@@ -84,3 +84,70 @@ func TestAFKSweepKicksOnlyStalePlayers(t *testing.T) {
 		t.Fatal("fresh player should not have been removed")
 	}
 }
+
+func TestNextHandRemovesIdlePlayerBeforeDeal(t *testing.T) {
+	now := time.Now()
+	game := hand.NewTableFromState(hand.State{
+		Players: []*hand.Player{
+			{ID: "stale", Stack: 1000, Ready: true, LastActionAt: now.Add(-10 * time.Minute).UnixMilli()},
+			{ID: "fresh-1", Stack: 1000, Ready: true, LastActionAt: now.UnixMilli()},
+			{ID: "fresh-2", Stack: 1000, Ready: true, LastActionAt: now.UnixMilli()},
+		},
+		SmallBlind: 10,
+		BigBlind:   20,
+		Stage:      hand.Complete,
+	})
+	actor := New("table-1", nil, true, func(string, hand.Snapshot) {})
+	defer actor.afkSweepTimer.Stop()
+	actor.cached = game
+	actor.kickGrace = 5 * time.Minute
+	var removed string
+	actor.SetOnPlayerRemovedForActor(func(playerID, reason string, _ int64, _ string) {
+		if reason == "idle" {
+			removed = playerID
+		}
+	})
+
+	if err := actor.handleNextHand(context.Background(), nextHandCmd{Reply: make(chan error, 1)}); err != nil {
+		t.Fatalf("handleNextHand: %v", err)
+	}
+	if removed != "stale" {
+		t.Fatalf("removed player = %q, want stale", removed)
+	}
+	for _, p := range game.PlayersForActor() {
+		if p.ID == "stale" {
+			t.Fatal("stale player was dealt into the next hand")
+		}
+	}
+	if game.Stage() != hand.PreFlop {
+		t.Fatalf("stage = %v, want pre_flop", game.Stage())
+	}
+}
+
+func TestKickTimeoutRearmsWhenPlayerIsStillDealtIn(t *testing.T) {
+	game := hand.NewTable([]*hand.Player{
+		{ID: "stale", Stack: 1000, Ready: true},
+		{ID: "other", Stack: 1000, Ready: true},
+	}, 10, 20)
+	if err := game.StartHand(); err != nil {
+		t.Fatal(err)
+	}
+	actor := New("table-1", nil, true, func(string, hand.Snapshot) {})
+	defer actor.afkSweepTimer.Stop()
+	actor.cached = game
+	actor.afkSweepInterval = time.Hour
+	actor.disconnectedSince["stale"] = time.Now().Add(-10 * time.Minute)
+
+	err := actor.handleKickTimeout(context.Background(), kickTimeoutCmd{
+		PlayerID: "stale",
+		Reply:    make(chan error, 1),
+	})
+	if err == nil {
+		t.Fatal("expected removal to be rejected while stale is still dealt in")
+	}
+	retry := actor.kickTimers["stale"]
+	if retry == nil {
+		t.Fatal("expected failed kick to arm a retry")
+	}
+	retry.Stop()
+}

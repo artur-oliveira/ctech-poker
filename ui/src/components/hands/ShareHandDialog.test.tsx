@@ -29,7 +29,7 @@ describe('ShareHandDialog', () => {
       kind: 'brag',
       include_hero_cards: false,
       expiry_days: 30,
-    }));
+    }, 'sandbox'));
     expect(screen.getByLabelText('Link compartilhável')).toHaveValue(
       `${window.location.origin}/share?id=token%20with%20spaces`,
     );

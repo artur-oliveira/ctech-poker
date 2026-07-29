@@ -62,7 +62,7 @@ describe('hand replay page', () => {
     render(<ReplayPage/>);
     expect(screen.getByTestId('replayer')).toHaveTextContent('viewer:1,2,3');
     expect(screen.getByRole('link', {name: /Voltar para Detalhes/})).toHaveAttribute(
-      'href', '/hands/history?table_id=table%2F1&hand_id=hand%201'
+      'href', '/hands/history?table_id=table%2F1&hand_id=hand%201&mode=sandbox'
     );
   });
   

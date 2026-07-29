@@ -10,12 +10,14 @@ import {TermsGate} from '@/components/TermsGate';
 import {getHand} from '@/lib/api/player';
 import {getHandHistory} from '@/lib/api/table';
 import {getViewerId} from '@/lib/utils';
+import type {WalletMode} from '@/lib/api/player';
 
 function ReplayContent() {
   const params = useSearchParams();
   const tableId = params.get('table_id') || '';
   const handId = params.get('hand_id') || '';
-  const hand = useQuery({queryKey: ['hand', handId], queryFn: () => getHand(handId), enabled: Boolean(handId)});
+  const mode: WalletMode = params.get('mode') === 'real' ? 'real' : 'sandbox';
+  const hand = useQuery({queryKey: ['hand', mode, handId], queryFn: () => getHand(handId, mode), enabled: Boolean(handId)});
   const history = useQuery({
     queryKey: ['hand-history', tableId, handId],
     queryFn: () => getHandHistory(tableId, handId),
@@ -40,7 +42,7 @@ function ReplayContent() {
   const actions = [...(history.data?.actions || [])].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   return <main className="replay-page">
     <nav>
-      <Link href={`/hands/history?table_id=${encodeURIComponent(tableId)}&hand_id=${encodeURIComponent(handId)}`}>
+      <Link href={`/hands/history?table_id=${encodeURIComponent(tableId)}&hand_id=${encodeURIComponent(handId)}&mode=${mode}`}>
         <ChevronLeft/> Voltar para Detalhes da Mão
       </Link>
     </nav>

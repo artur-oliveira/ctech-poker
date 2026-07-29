@@ -33,13 +33,13 @@ func (m *mockHistoryReader) ListSessions(_ context.Context, playerID string, _ i
 	return []sessionlog.SessionItem{{PK: playerID, TableID: "tbl-1", NetPnL: 100}}, nil, nil
 }
 
-func (m *mockHistoryReader) ListHands(_ context.Context, playerID string, _ int, _ map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error) {
+func (m *mockHistoryReader) ListHands(_ context.Context, playerID, mode string, _ int, _ map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error) {
 	return []sessionlog.HandItem{{PK: playerID, HandID: "h-1", NetChange: 50}}, nil, nil
 }
-func (m *mockHistoryReader) ListHandsByTable(_ context.Context, playerID, tableID string, _ int, _ map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error) {
+func (m *mockHistoryReader) ListHandsByTable(_ context.Context, playerID, mode, tableID string, _ int, _ map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error) {
 	return []sessionlog.HandItem{{PK: playerID, HandID: "h-1", NetChange: 50, TableID: tableID}}, nil, nil
 }
-func (m *mockHistoryReader) GetHand(_ context.Context, playerID, handID string) (*sessionlog.HandItem, error) {
+func (m *mockHistoryReader) GetHand(_ context.Context, playerID, mode, handID string) (*sessionlog.HandItem, error) {
 	return &sessionlog.HandItem{PK: playerID, HandID: handID, NetChange: 50}, nil
 }
 

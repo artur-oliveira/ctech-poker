@@ -3,10 +3,12 @@ package v1
 import (
 	"errors"
 	"fmt"
+	"net/url"
 
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/handshare"
 	"gopkg.aoctech.app/poker/api/internal/problem"
+	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
@@ -17,6 +19,7 @@ type createHandShareRequest struct {
 	Kind             string `json:"kind"`
 	IncludeHeroCards bool   `json:"include_hero_cards"`
 	ExpiryDays       int    `json:"expiry_days"`
+	Mode             string `json:"mode"`
 }
 
 type handShareHandlers struct {
@@ -29,7 +32,7 @@ func RegisterHandShares(router fiber.Router, auth fiber.Handler, hands sessionLo
 	h := &handShareHandlers{hands: hands, logs: logs, shares: shares}
 	router.Get("/hand-shares/:token", h.public)
 	g := router.Group("/players/me", auth)
-	g.Post("/hands/:handId/share", h.create)
+	g.Post("/hand/:id/share", h.create)
 	g.Delete("/hand-shares/:token", h.revoke)
 }
 
@@ -41,8 +44,18 @@ func (h *handShareHandlers) create(c fiber.Ctx) error {
 	if req.ExpiryDays == 0 {
 		req.ExpiryDays = 7
 	}
+	if req.Mode == "" {
+		req.Mode = roomstore.CurrencyModeSandbox
+	}
+	if req.Mode != roomstore.CurrencyModeSandbox && req.Mode != roomstore.CurrencyModeReal {
+		return problem.BadRequest("mode must be sandbox or real").Send(c)
+	}
 	ownerID := c.Locals(localsUserID).(string)
-	source, err := h.hands.GetHand(c.Context(), ownerID, c.Params("handId"))
+	handID, err := url.PathUnescape(c.Params("id"))
+	if err != nil || handID == "" {
+		return problem.BadRequest("hand id is invalid").Send(c)
+	}
+	source, err := h.hands.GetHand(c.Context(), ownerID, req.Mode, handID)
 	if err != nil {
 		return problem.InternalServer("failed to load hand", c, err).Send(c)
 	}

@@ -11,6 +11,8 @@ import {TermsGate} from '@/components/TermsGate';
 import {bestHandCategory} from '@/lib/pokerRules';
 import {HAND_CATEGORY_LABELS} from '@/lib/utils';
 import {Button} from '@/components/ui/button';
+import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
+import type {WalletMode} from '@/lib/api/player';
 
 type HandFilter = 'all' | 'wins' | 'losses';
 
@@ -32,9 +34,10 @@ function handCategoryLabel(holeCards?: string[], board?: string[]): string | nul
 }
 
 export default function HandsHistory() {
+  const [mode, setMode] = useState<WalletMode>('sandbox');
   const {data, isLoading, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage} = useInfiniteQuery({
-    queryKey: ['hands'],
-    queryFn: ({pageParam}) => getHands({cursor: pageParam}),
+    queryKey: ['hands', mode],
+    queryFn: ({pageParam}) => getHands({cursor: pageParam, mode}),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: page => (page.has_next && page.next_cursor) || undefined
   });
@@ -102,6 +105,7 @@ export default function HandsHistory() {
           <h1>Mãos jogadas</h1>
           <p>Histórico recente das suas mãos com cartas, board comunitário e prova de integridade criptográfica.</p>
         </header>
+        <CurrencyModeTabs mode={mode} onChange={setMode}/>
         
         {stats && (
           <div className="hands-stats-bar">
@@ -171,7 +175,7 @@ export default function HandsHistory() {
               ) : (
                 <div className="hands-list">
                   {filteredHands.map(({hand, delay}) => <Link key={hand.hand_id}
-                                                              href={`/hands/history?table_id=${hand.table_id}&hand_id=${encodeURIComponent(hand.sk)}`}
+                                                              href={`/hands/history?table_id=${hand.table_id}&hand_id=${encodeURIComponent(hand.hand_id)}&mode=${mode}`}
                                                               className="hand-row"
                                                               style={{'--delay': `${delay}ms`} as React.CSSProperties}>
                     <div className="hand-row-top">

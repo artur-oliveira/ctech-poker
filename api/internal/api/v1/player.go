@@ -33,9 +33,9 @@ type UpdatePlayerRequest struct {
 
 type sessionLogReader interface {
 	ListSessions(ctx context.Context, playerID string, limit int, startKey map[string]types.AttributeValue) ([]sessionlog.SessionItem, map[string]types.AttributeValue, error)
-	ListHands(ctx context.Context, playerID string, limit int, startKey map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error)
-	ListHandsByTable(ctx context.Context, playerID, tableID string, limit int, startKey map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error)
-	GetHand(ctx context.Context, playerID, handID string) (*sessionlog.HandItem, error)
+	ListHands(ctx context.Context, playerID, mode string, limit int, startKey map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error)
+	ListHandsByTable(ctx context.Context, playerID, mode, tableID string, limit int, startKey map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error)
+	GetHand(ctx context.Context, playerID, mode, handID string) (*sessionlog.HandItem, error)
 }
 
 type playerAchievementStore interface {
@@ -67,7 +67,7 @@ func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Se
 	g.Post("/:playerId/avatar/report", rateLimit(avatarLimiter, playerKey("avatar-report")), h.avatarReport)
 	g.Get("/me/sessions", h.sessionHistory)
 	g.Get("/me/hands", h.handHistory)
-	g.Get("/me/hands/:handId", h.handByID)
+	g.Get("/me/hand/:id", h.handByID)
 	g.Get("/me/achievements", h.achievementProgress)
 }
 
@@ -258,15 +258,16 @@ func (h *playerHandlers) handHistory(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
 	cursor := c.Query("cursor")
 	limit := limitParam(c)
+	mode := currencyModeParam(c)
 
 	if tableID := c.Query("table_id"); tableID != "" {
-		hands, lastKey, err := h.sessions.ListHandsByTable(c.Context(), userID, tableID, limit, decodeCursor(cursor))
+		hands, lastKey, err := h.sessions.ListHandsByTable(c.Context(), userID, mode, tableID, limit, decodeCursor(cursor))
 		if err != nil {
 			return problem.InternalServer("failed to list hands", c, err).Send(c)
 		}
 		return sendPage(c, hands, lastKey, cursor)
 	}
-	hands, lastKey, err := h.sessions.ListHands(c.Context(), userID, limit, decodeCursor(cursor))
+	hands, lastKey, err := h.sessions.ListHands(c.Context(), userID, mode, limit, decodeCursor(cursor))
 	if err != nil {
 		return problem.InternalServer("failed to list hands", c, err).Send(c)
 	}
@@ -275,14 +276,14 @@ func (h *playerHandlers) handHistory(c fiber.Ctx) error {
 
 func (h *playerHandlers) handByID(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
-	handID, err := url.PathUnescape(c.Params("handId"))
+	handID, err := url.PathUnescape(c.Params("id"))
 	if err != nil {
 		return problem.BadRequest("hand id is invalid").Send(c)
 	}
 	if handID == "" {
 		return problem.BadRequest("hand id is required").Send(c)
 	}
-	hand, err := h.sessions.GetHand(c.Context(), userID, handID)
+	hand, err := h.sessions.GetHand(c.Context(), userID, currencyModeParam(c), handID)
 	if err != nil {
 		return problem.InternalServer("failed to list hands", c, err).Send(c)
 	}
@@ -329,7 +330,7 @@ func (h *playerHandlers) showcase(c fiber.Ctx) error {
 
 	var bestHand fiber.Map
 	var bestNet int64
-	if hands, _, listErr := h.sessions.ListHands(c.Context(), playerID, 50, nil); listErr == nil {
+	if hands, _, listErr := h.sessions.ListHands(c.Context(), playerID, roomstore.CurrencyModeSandbox, 50, nil); listErr == nil {
 		for i := range hands {
 			if hands[i].NetChange > bestNet {
 				bestNet = hands[i].NetChange

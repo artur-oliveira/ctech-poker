@@ -47,17 +47,18 @@ type SessionItem struct {
 }
 
 type HandItem struct {
-	PK        string            `dynamodbav:"pk" json:"pk"` // player_id
-	SK        string            `dynamodbav:"sk" json:"sk"` // timestamp / hand_id
-	TableID   string            `dynamodbav:"table_id" json:"table_id"`
-	HandID    string            `dynamodbav:"hand_id" json:"hand_id"`
-	Outcome   string            `dynamodbav:"outcome" json:"outcome"` // won | lost | tied
-	NetChange int64             `dynamodbav:"net_change" json:"net_change"`
-	EndedAt   int64             `dynamodbav:"ended_at" json:"ended_at"`
-	Board     []string          `dynamodbav:"board,omitempty" json:"board,omitempty"`
-	BoardTwo  []string          `dynamodbav:"board_two,omitempty" json:"board_two,omitempty"`
-	HoleCards []string          `dynamodbav:"hole_cards,omitempty" json:"hole_cards,omitempty"`
-	Opponents []OpponentSummary `dynamodbav:"opponents,omitempty" json:"opponents,omitempty"`
+	PK           string            `dynamodbav:"pk" json:"pk"` // player_id
+	SK           string            `dynamodbav:"sk" json:"sk"` // currency_mode#hand_id
+	CurrencyMode string            `dynamodbav:"currency_mode" json:"currency_mode"`
+	TableID      string            `dynamodbav:"table_id" json:"table_id"`
+	HandID       string            `dynamodbav:"hand_id" json:"hand_id"`
+	Outcome      string            `dynamodbav:"outcome" json:"outcome"` // won | lost | tied
+	NetChange    int64             `dynamodbav:"net_change" json:"net_change"`
+	EndedAt      int64             `dynamodbav:"ended_at" json:"ended_at"`
+	Board        []string          `dynamodbav:"board,omitempty" json:"board,omitempty"`
+	BoardTwo     []string          `dynamodbav:"board_two,omitempty" json:"board_two,omitempty"`
+	HoleCards    []string          `dynamodbav:"hole_cards,omitempty" json:"hole_cards,omitempty"`
+	Opponents    []OpponentSummary `dynamodbav:"opponents,omitempty" json:"opponents,omitempty"`
 	// ServerSeed and CommitHash are the hand's shuffle fairness proof
 	// (hand.HandOutcome.ServerSeed/CommitHash), hex-encoded — lets the
 	// player independently verify the deck they were dealt (B32).
@@ -184,10 +185,7 @@ func (s *Store) CloseSession(ctx context.Context, item SessionItem) error {
 
 func (s *Store) RecordHand(ctx context.Context, item HandItem) error {
 	if item.SK == "" {
-		// HandID is a ULID: lexically sortable by creation time and globally
-		// unique on its own, so it doubles as the sort key directly — no
-		// timestamp prefix needed. GetHand looks up by this exact SK.
-		item.SK = item.HandID
+		item.SK = handSK(item.CurrencyMode, item.HandID)
 	}
 	encoded, err := dynamo.Encode(item)
 	if err != nil {
@@ -196,11 +194,14 @@ func (s *Store) RecordHand(ctx context.Context, item HandItem) error {
 	return s.hands.PutItem(ctx, encoded)
 }
 
-func (s *Store) ListHands(ctx context.Context, playerID string, limit int, startKey map[string]dynamotypes.AttributeValue) ([]HandItem, map[string]dynamotypes.AttributeValue, error) {
+func (s *Store) ListHands(ctx context.Context, playerID, mode string, limit int, startKey map[string]dynamotypes.AttributeValue) ([]HandItem, map[string]dynamotypes.AttributeValue, error) {
 	if limit <= 0 {
 		limit = 50
 	}
-	res, err := s.hands.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: limit, ScanIndexForward: false, ExclusiveStartKey: startKey})
+	res, err := s.hands.Query(ctx, dynamo.QueryOpts{
+		PK: playerID, SKPrefix: mode + "#", Limit: limit,
+		ScanIndexForward: false, ExclusiveStartKey: startKey,
+	})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -214,13 +215,14 @@ func (s *Store) ListHands(ctx context.Context, playerID string, limit int, start
 	return outHands, res.LastEvaluatedKey, nil
 }
 
-func (s *Store) ListHandsByTable(ctx context.Context, playerID, tableID string, limit int, startKey map[string]dynamotypes.AttributeValue) ([]HandItem, map[string]dynamotypes.AttributeValue, error) {
+func (s *Store) ListHandsByTable(ctx context.Context, playerID, mode, tableID string, limit int, startKey map[string]dynamotypes.AttributeValue) ([]HandItem, map[string]dynamotypes.AttributeValue, error) {
 	res, err := s.hands.QueryComposite(ctx, dynamo.CompositeQueryOpts{
 		PK:        playerID,
 		IndexName: tableHandsGsiTable,
 		SKEq: []dynamo.KV{
 			{Field: "table_id", Value: tableID},
 		},
+		SKLastField: "sk", SKLastOp: "begins_with", SKLastValue: mode + "#",
 		Limit:             limit,
 		ScanIndexForward:  false,
 		ExclusiveStartKey: startKey,
@@ -238,8 +240,8 @@ func (s *Store) ListHandsByTable(ctx context.Context, playerID, tableID string, 
 	return outHands, res.LastEvaluatedKey, nil
 }
 
-func (s *Store) GetHand(ctx context.Context, playerID, handID string) (*HandItem, error) {
-	res, err := s.hands.GetItem(ctx, playerID, handID)
+func (s *Store) GetHand(ctx context.Context, playerID, mode, handID string) (*HandItem, error) {
+	res, err := s.hands.GetItem(ctx, playerID, handSK(mode, handID))
 	if err != nil {
 		return nil, err
 	} else if res == nil {
@@ -251,4 +253,8 @@ func (s *Store) GetHand(ctx context.Context, playerID, handID string) (*HandItem
 		return nil, err
 	}
 	return loaded, nil
+}
+
+func handSK(mode, handID string) string {
+	return mode + "#" + handID
 }
