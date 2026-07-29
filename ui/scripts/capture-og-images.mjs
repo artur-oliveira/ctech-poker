@@ -7,7 +7,7 @@ const outputDir = resolve('public/og');
 const routes = [
   'home', 'guide', 'poker-rules', 'profile', 'lobby', 'table', 'hands', 'hand-history',
   'hand-replay', 'shared-hand', 'leaderboard', 'achievements'
-].map(slug => [slug, `/og-preview/${slug}`]);
+].map(slug => [slug, `/${slug}`]);
 
 const chrome = spawn('google-chrome', [
   '--headless=new',
