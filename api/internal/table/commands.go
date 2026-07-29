@@ -167,10 +167,11 @@ func (c SnapshotCmd) reply() chan error { return c.Reply }
 // sub) stays the sole identity (IDOR safety is unaffected since Name never
 // gates any action).
 type SetIdentityCmd struct {
-	PlayerID  string
-	Name      string
-	AvatarURL string
-	Reply     chan error
+	PlayerID       string
+	Name           string
+	AvatarURL      string
+	PlaystyleBadge string
+	Reply          chan error
 }
 
 func (c SetIdentityCmd) reply() chan error { return c.Reply }

@@ -15,7 +15,7 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 		HandID:            "hand-42",
 		IdleRemovalUnixMs: 123456,
 		Seats: []hand.SeatView{{
-			PlayerID: "p1", Name: "Ana", State: "folded",
+			PlayerID: "p1", Name: "Ana", PlaystyleBadge: "selective", State: "folded",
 			ConnectionState: "disconnected", DealtIn: true, Ready: false,
 			HoleCardsRevealed: []bool{true, false},
 			StackAtHandStart:  &startStack,
@@ -41,6 +41,9 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 	}
 	if converted.Seats[0].State != "folded" {
 		t.Fatal("transport presence must not overwrite poker state")
+	}
+	if converted.Seats[0].GetPlaystyleBadge() != "selective" {
+		t.Fatal("playstyle badge lost during protobuf conversion")
 	}
 	if !converted.Seats[0].GetDealtIn() {
 		t.Fatal("hand membership lost during protobuf conversion")

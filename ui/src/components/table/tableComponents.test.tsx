@@ -145,6 +145,16 @@ describe('table controls', () => {
 });
 
 describe('table presentation', () => {
+  test('shows one public playstyle badge and leaves unbadged seats unchanged', () => {
+    const snapshot = snapshotForScenario('pre_flop');
+    snapshot.seats.forEach(seat => { seat.playstyle_badge = undefined; });
+    snapshot.seats[0].playstyle_badge = 'initiative';
+    const {container} = render(<TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID}
+      pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}/>);
+    expect(screen.getByText('Iniciativa')).toHaveAttribute('title', 'PFR representa pelo menos 70% do VPIP');
+    expect(container.querySelectorAll('.seat-playstyle')).toHaveLength(1);
+  });
+
   test('board renders pot, rake, side pots and missing card slots', () => {
     const {container} = render(<Board cards={['AH', 'KD', '2C']} pot={1_250}
       rake={25} bigBlind={50} pots={[

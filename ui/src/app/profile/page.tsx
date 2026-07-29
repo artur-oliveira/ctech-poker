@@ -11,6 +11,7 @@ import {achievementLabel} from '@/lib/achievements';
 import {useOptionalSession} from "@/lib/auth/session";
 import {ProfileMenu} from "@/components/lobby/ProfileMenu";
 import {PlayerAvatar} from '@/components/ui/player-avatar';
+import {playstyleMeta} from '@/lib/playstyle';
 
 function ProfileContent() {
   const params = useSearchParams();
@@ -49,6 +50,12 @@ function ProfileContent() {
             <div>
               <small>VITRINE DO JOGADOR</small>
               <h1>{showcase.data.name || 'Jogador'}</h1>
+              {showcase.data.playstyle?.length ? <div className="poker-style-badges profile-playstyle-badges">
+                {showcase.data.playstyle.map(badge => {
+                  const meta = playstyleMeta(badge.key);
+                  return meta ? <span key={badge.key} title={meta.reason}>{meta.label}</span> : null;
+                })}
+              </div> : null}
             </div>
           </header>
           <div className="profile-showcase-content">

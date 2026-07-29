@@ -18,6 +18,11 @@ func RegisterPokerStats(router fiber.Router, auth fiber.Handler, store pokerStat
 		if err != nil {
 			return problem.InternalServer("failed to load poker stats", c, err).Send(c)
 		}
-		return c.JSON(stats)
+		return c.JSON(fiber.Map{
+			"hands": stats.Hands, "vpip_hands": stats.VPIPHands, "pfr_hands": stats.PFRHands,
+			"three_bet_hands": stats.ThreeBetHands, "three_bet_chances": stats.ThreeBetChances,
+			"vpip_rate": stats.VPIPRate, "pfr_rate": stats.PFRRate, "three_bet_rate": stats.ThreeBetRate,
+			"playstyle": pokerstats.StyleFor(stats, pokerstats.MinHandsSelf),
+		})
 	})
 }

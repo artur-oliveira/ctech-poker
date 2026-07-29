@@ -4,6 +4,7 @@ export interface SeatView {
   player_id: string;
   name?: string;
   avatar_url?: string;
+  playstyle_badge?: string;
   connection_state?: 'connected' | 'disconnected';
   stack: number;
   state: string;

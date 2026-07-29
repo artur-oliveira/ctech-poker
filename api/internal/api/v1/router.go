@@ -59,7 +59,7 @@ func Register(
 	// probes (it accepts 200 and 207).
 	RegisterHealth(router, cfg, db)
 
-	RegisterTableWS(router, verifier, manager, reg, cfg.CorsAllowedOrigins, seed, rooms, cfg, players)
+	RegisterTableWS(router, verifier, manager, reg, cfg.CorsAllowedOrigins, seed, rooms, cfg, players, pokerStatsStore)
 	RegisterGeneralWS(router, verifier, reg, cfg.CorsAllowedOrigins)
 	auth := authMiddleware(verifier)
 	RegisterHandHistory(router, auth, &tablestoreAdapter{store: tableStore})
@@ -73,7 +73,7 @@ func Register(
 	avatarLimiter := NewRateLimiter(cacheBackend, 5, time.Hour)
 
 	RegisterRooms(router, auth, rooms, buyinSvc, manager, reg, cfg, createLimiter, joinLimiter)
-	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter)
+	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter, pokerStatsStore)
 	RegisterPlayerNotes(router, auth, playerNoteStore)
 	RegisterHandShares(router, auth, sessionStore, tableStore, handShareStore)
 	RegisterPokerStats(router, auth, pokerStatsStore)

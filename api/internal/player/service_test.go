@@ -31,8 +31,9 @@ func (s *memoryStore) SetDeckVariant(_ context.Context, _ string, variant string
 	s.profile.DeckVariant = variant
 	return nil
 }
-func (s *memoryStore) SetShowcase(_ context.Context, _ string, public bool, featured []string) error {
+func (s *memoryStore) SetShowcase(_ context.Context, _ string, public, playstylePublic bool, featured []string) error {
 	s.profile.ShowcasePublic = public
+	s.profile.PlaystylePublic = playstylePublic
 	s.profile.FeaturedAchievements = featured
 	return nil
 }
@@ -130,14 +131,14 @@ func TestBalancesDefaultsToZeroWithoutWallet(t *testing.T) {
 func TestSetShowcaseValidatesSelection(t *testing.T) {
 	store := &memoryStore{profile: PlayerProfile{UserID: "u1"}}
 	svc := NewService(store)
-	profile, err := svc.SetShowcase(context.Background(), "u1", true, []string{"wins", "hands_played"})
+	profile, err := svc.SetShowcase(context.Background(), "u1", true, true, []string{"wins", "hands_played"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !profile.ShowcasePublic || len(profile.FeaturedAchievements) != 2 {
 		t.Fatalf("unexpected showcase: %+v", profile)
 	}
-	if _, err := svc.SetShowcase(context.Background(), "u1", true, []string{"not-real"}); !errors.Is(err, ErrInvalidShowcase) {
+	if _, err := svc.SetShowcase(context.Background(), "u1", true, true, []string{"not-real"}); !errors.Is(err, ErrInvalidShowcase) {
 		t.Fatalf("got %v, want ErrInvalidShowcase", err)
 	}
 }

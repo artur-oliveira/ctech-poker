@@ -22,6 +22,7 @@ type PlayerProfile struct {
 	WalletMode           string   `dynamodbav:"wallet_mode,omitempty" json:"wallet_mode,omitempty"`
 	DeckVariant          string   `dynamodbav:"deck_variant,omitempty" json:"deck_variant,omitempty"`
 	ShowcasePublic       bool     `dynamodbav:"showcase_public,omitempty" json:"showcase_public"`
+	PlaystylePublic      bool     `dynamodbav:"playstyle_public,omitempty" json:"playstyle_public"`
 	FeaturedAchievements []string `dynamodbav:"featured_achievements,omitempty" json:"featured_achievements,omitempty"`
 	PokerTermsVersion    string   `dynamodbav:"poker_terms_version,omitempty" json:"-"`
 	TermsAcceptedAt      string   `dynamodbav:"poker_terms_accepted_at,omitempty" json:"poker_terms_accepted_at,omitempty"`

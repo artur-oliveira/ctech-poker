@@ -14,6 +14,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/avatar"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/player"
+	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 )
@@ -25,6 +26,7 @@ type UpdatePlayerRequest struct {
 	WalletMode           *string   `json:"wallet_mode"`
 	DeckVariant          *string   `json:"deck_variant"`
 	ShowcasePublic       *bool     `json:"showcase_public"`
+	PlaystylePublic      *bool     `json:"playstyle_public"`
 	FeaturedAchievements *[]string `json:"featured_achievements"`
 }
 
@@ -45,13 +47,14 @@ type playerHandlers struct {
 	sessions     sessionLogReader
 	achievements playerAchievementStore
 	avatars      *avatar.Service
+	stats        pokerStatsReader
 }
 
 // RegisterPlayers mounts every /players/me/* route: profile, wallet-mode,
 // terms acceptance, session/hand history, and achievement progress all live
 // under the same resource and share the same auth-derived playerID.
-func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Service, sessions sessionLogReader, achievementStore playerAchievementStore, cfg *config.Config, avatars *avatar.Service, avatarLimiter *RateLimiter) {
-	h := &playerHandlers{players: players, sessions: sessions, achievements: achievementStore, cfg: cfg, avatars: avatars}
+func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Service, sessions sessionLogReader, achievementStore playerAchievementStore, cfg *config.Config, avatars *avatar.Service, avatarLimiter *RateLimiter, stats pokerStatsReader) {
+	h := &playerHandlers{players: players, sessions: sessions, achievements: achievementStore, cfg: cfg, avatars: avatars, stats: stats}
 	router.Get("/players/:playerId/showcase", h.showcase)
 	g := router.Group("/players", auth)
 	g.Get("/me", h.me)
@@ -200,20 +203,24 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			return problem.InternalServer("failed to update player profile", c, err).Send(c)
 		}
 	}
-	if req.ShowcasePublic != nil || req.FeaturedAchievements != nil {
+	if req.ShowcasePublic != nil || req.PlaystylePublic != nil || req.FeaturedAchievements != nil {
 		current, err := h.players.GetOrCreate(c.Context(), userID)
 		if err != nil {
 			return problem.InternalServer("failed to load player profile", c, err).Send(c)
 		}
 		public := current.ShowcasePublic
+		playstylePublic := current.PlaystylePublic
 		featured := current.FeaturedAchievements
 		if req.ShowcasePublic != nil {
 			public = *req.ShowcasePublic
 		}
+		if req.PlaystylePublic != nil {
+			playstylePublic = *req.PlaystylePublic
+		}
 		if req.FeaturedAchievements != nil {
 			featured = *req.FeaturedAchievements
 		}
-		if _, err := h.players.SetShowcase(c.Context(), userID, public, featured); err != nil {
+		if _, err := h.players.SetShowcase(c.Context(), userID, public, playstylePublic, featured); err != nil {
 			if errors.Is(err, player.ErrInvalidShowcase) {
 				return problem.BadRequest("featured_achievements must contain up to three valid unique keys").Send(c)
 			}
@@ -335,13 +342,23 @@ func (h *playerHandlers) showcase(c fiber.Ctx) error {
 			}
 		}
 	}
-	return c.JSON(fiber.Map{
+	response := fiber.Map{
 		"player_id":             profile.UserID,
 		"name":                  profile.Name,
 		"avatar_url":            player.AvatarURL(profile, h.avatarBaseURL()),
 		"featured_achievements": featured,
 		"best_hand":             bestHand,
-	})
+	}
+	if profile.PlaystylePublic && h.stats != nil {
+		stats, statsErr := h.stats.Get(c.Context(), playerID)
+		if statsErr != nil {
+			return problem.InternalServer("failed to load profile playstyle", c, statsErr).Send(c)
+		}
+		if badges := pokerstats.StyleFor(stats, pokerstats.MinHandsPublic); len(badges) > 0 {
+			response["playstyle"] = badges
+		}
+	}
+	return c.JSON(response)
 }
 
 // responseWithBalance adds the wallet balance to the profile response.
@@ -373,6 +390,7 @@ func playerResponse(profile *player.PlayerProfile, avatarBaseURL string) fiber.M
 		"wallet_mode":             profile.EffectiveWalletMode(),
 		"deck_variant":            profile.EffectiveDeckVariant(),
 		"showcase_public":         profile.ShowcasePublic,
+		"playstyle_public":        profile.PlaystylePublic,
 		"featured_achievements":   profile.FeaturedAchievements,
 		"poker_terms_accepted":    profile.TermsAccepted(),
 		"poker_terms_accepted_at": profile.TermsAcceptedAt,

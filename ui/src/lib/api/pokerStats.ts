@@ -1,4 +1,5 @@
 import {apiClient} from './client';
+import type {PlaystyleBadge} from '@/lib/playstyle';
 
 export interface PokerStats {
   hands: number;
@@ -9,6 +10,7 @@ export interface PokerStats {
   vpip_rate: number;
   pfr_rate: number;
   three_bet_rate: number;
+  playstyle?: PlaystyleBadge[];
 }
 
 export async function getMyPokerStats() {

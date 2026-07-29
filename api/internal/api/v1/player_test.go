@@ -9,11 +9,25 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gofiber/fiber/v3"
+	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/player"
+	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 )
 
 type mockHistoryReader struct{}
+
+type mockAchievementReader struct{}
+
+func (mockAchievementReader) ListAchievements(context.Context, string, int, map[string]types.AttributeValue) ([]achievements.PlayerAchievementProgress, map[string]types.AttributeValue, error) {
+	return nil, nil, nil
+}
+
+type mockPokerStatsReader struct{ stats pokerstats.Stats }
+
+func (m mockPokerStatsReader) Get(context.Context, string) (pokerstats.Stats, error) {
+	return m.stats, nil
+}
 
 func (m *mockHistoryReader) ListSessions(_ context.Context, playerID string, _ int, _ map[string]types.AttributeValue) ([]sessionlog.SessionItem, map[string]types.AttributeValue, error) {
 	return []sessionlog.SessionItem{{PK: playerID, TableID: "tbl-1", NetPnL: 100}}, nil, nil
@@ -32,7 +46,7 @@ func (m *mockHistoryReader) GetHand(_ context.Context, playerID, handID string) 
 func TestPlayerHistoryEndpoints(t *testing.T) {
 	app := fiber.New()
 	auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "user-123"); return c.Next() }
-	RegisterPlayers(app.Group("/v1.0"), auth, player.NewService(&fakePlayerStore{}), &mockHistoryReader{}, nil, nil, nil, nil)
+	RegisterPlayers(app.Group("/v1.0"), auth, player.NewService(&fakePlayerStore{}), &mockHistoryReader{}, nil, nil, nil, nil, nil)
 
 	t.Run("GET /players/me/sessions", func(t *testing.T) {
 		req := httptest.NewRequest(fiber.MethodGet, "/v1.0/players/me/sessions", nil)
@@ -82,9 +96,10 @@ func (s *fakePlayerStore) SetDeckVariant(_ context.Context, id string, variant s
 	s.profile.DeckVariant = variant
 	return nil
 }
-func (s *fakePlayerStore) SetShowcase(_ context.Context, id string, public bool, featured []string) error {
+func (s *fakePlayerStore) SetShowcase(_ context.Context, id string, public, playstylePublic bool, featured []string) error {
 	s.profile.UserID = id
 	s.profile.ShowcasePublic = public
+	s.profile.PlaystylePublic = playstylePublic
 	s.profile.FeaturedAchievements = featured
 	return nil
 }
@@ -191,5 +206,44 @@ func TestUpdateMeSetsWalletModeWithoutTouchingName(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestShowcasePlaystyleRequiresOptInAndPublicSample(t *testing.T) {
+	tests := []struct {
+		name      string
+		optedIn   bool
+		hands     int64
+		wantBadge bool
+	}{
+		{name: "opted out", optedIn: false, hands: 5000},
+		{name: "below floor", optedIn: true, hands: pokerstats.MinHandsPublic - 1},
+		{name: "at floor", optedIn: true, hands: pokerstats.MinHandsPublic, wantBadge: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &fakePlayerStore{profile: player.PlayerProfile{
+				ShowcasePublic: true, PlaystylePublic: tt.optedIn,
+			}}
+			h := &playerHandlers{
+				players: player.NewService(store), sessions: &mockHistoryReader{},
+				achievements: mockAchievementReader{},
+				stats:        mockPokerStatsReader{stats: pokerstats.Stats{Hands: tt.hands, VPIPRate: .2}},
+			}
+			app := fiber.New()
+			app.Get("/players/:playerId/showcase", h.showcase)
+			resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/players/u1/showcase", nil))
+			if err != nil || resp.StatusCode != fiber.StatusOK {
+				t.Fatalf("status = %d, err = %v", resp.StatusCode, err)
+			}
+			var body map[string]json.RawMessage
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			_, hasBadge := body["playstyle"]
+			if hasBadge != tt.wantBadge {
+				t.Fatalf("playstyle present = %v, want %v; body = %v", hasBadge, tt.wantBadge, body)
+			}
+		})
 	}
 }

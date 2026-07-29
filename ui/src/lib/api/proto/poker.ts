@@ -64,6 +64,7 @@ export interface Seat {
    */
   hand_score: number;
   avatar_url?: string | undefined;
+  playstyle_badge?: string | undefined;
 }
 
 export interface BlindEscalation {
@@ -396,6 +397,7 @@ function createBaseSeat(): Seat {
     time_bank_ms: 0,
     hand_score: 0,
     avatar_url: undefined,
+    playstyle_badge: undefined,
   };
 }
 
@@ -450,6 +452,9 @@ export const Seat: MessageFns<Seat> = {
     }
     if (message.avatar_url !== undefined) {
       writer.uint32(130).string(message.avatar_url);
+    }
+    if (message.playstyle_badge !== undefined) {
+      writer.uint32(138).string(message.playstyle_badge);
     }
     return writer;
   },
@@ -599,6 +604,14 @@ export const Seat: MessageFns<Seat> = {
           message.avatar_url = reader.string();
           continue;
         }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.playstyle_badge = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -666,6 +679,11 @@ export const Seat: MessageFns<Seat> = {
         : isSet(object.avatar_url)
         ? globalThis.String(object.avatar_url)
         : undefined,
+      playstyle_badge: isSet(object.playstyleBadge)
+        ? globalThis.String(object.playstyleBadge)
+        : isSet(object.playstyle_badge)
+        ? globalThis.String(object.playstyle_badge)
+        : undefined,
     };
   },
 
@@ -719,6 +737,9 @@ export const Seat: MessageFns<Seat> = {
     if (message.avatar_url !== undefined) {
       obj.avatarUrl = message.avatar_url;
     }
+    if (message.playstyle_badge !== undefined) {
+      obj.playstyleBadge = message.playstyle_badge;
+    }
     return obj;
   },
 
@@ -743,6 +764,7 @@ export const Seat: MessageFns<Seat> = {
     message.time_bank_ms = object.time_bank_ms ?? 0;
     message.hand_score = object.hand_score ?? 0;
     message.avatar_url = object.avatar_url ?? undefined;
+    message.playstyle_badge = object.playstyle_badge ?? undefined;
     return message;
   },
 };

@@ -13,6 +13,7 @@ import (
 
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/player"
+	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
@@ -52,6 +53,9 @@ type Service struct {
 		GetOrCreate(context.Context, string) (*player.PlayerProfile, error)
 	}
 	avatarBaseURL string
+	stats         interface {
+		Get(context.Context, string) (pokerstats.Stats, error)
+	}
 }
 
 // ErrTermsNotAccepted is re-exported at the buy-in boundary so callers do
@@ -85,6 +89,13 @@ func (s *Service) WithPlayers(players *player.Service) *Service {
 
 func (s *Service) WithAvatarBaseURL(baseURL string) *Service {
 	s.avatarBaseURL = baseURL
+	return s
+}
+
+func (s *Service) WithPokerStats(stats interface {
+	Get(context.Context, string) (pokerstats.Stats, error)
+}) *Service {
+	s.stats = stats
 	return s
 }
 
@@ -225,10 +236,18 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 	// other viewer sees this seat as "Visitante" for however long it takes
 	// this player's client to actually open its socket after buying in.
 	if s.players != nil {
-		if profile, perr := s.players.GetOrCreate(ctx, playerID); perr == nil && profile != nil && profile.Name != "" {
+		if profile, perr := s.players.GetOrCreate(ctx, playerID); perr == nil && profile != nil {
+			playstyleBadge := ""
+			if profile.PlaystylePublic && s.stats != nil {
+				if playerStats, statsErr := s.stats.Get(ctx, playerID); statsErr == nil {
+					if badges := pokerstats.StyleFor(playerStats, pokerstats.MinHandsPublic); len(badges) > 0 {
+						playstyleBadge = badges[0].Key
+					}
+				}
+			}
 			nameReply := make(chan error, 1)
 			_ = actor.Dispatch(table.SetIdentityCmd{PlayerID: playerID, Name: profile.Name,
-				AvatarURL: player.AvatarURL(profile, s.avatarBaseURL), Reply: nameReply})
+				AvatarURL: player.AvatarURL(profile, s.avatarBaseURL), PlaystyleBadge: playstyleBadge, Reply: nameReply})
 		}
 	}
 

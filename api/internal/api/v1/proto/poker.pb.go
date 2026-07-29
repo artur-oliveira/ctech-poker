@@ -103,10 +103,11 @@ type Seat struct {
 	TimeBankMs int64 `protobuf:"varint,14,opt,name=time_bank_ms,json=timeBankMs,proto3" json:"time_bank_ms,omitempty"`
 	// Canonical server-side evaluator score. Higher wins; equal is a split.
 	// Only present when the same visibility rules allow hand_category.
-	HandScore     uint32  `protobuf:"varint,15,opt,name=hand_score,json=handScore,proto3" json:"hand_score,omitempty"`
-	AvatarUrl     *string `protobuf:"bytes,16,opt,name=avatar_url,json=avatarUrl,proto3,oneof" json:"avatar_url,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	HandScore      uint32  `protobuf:"varint,15,opt,name=hand_score,json=handScore,proto3" json:"hand_score,omitempty"`
+	AvatarUrl      *string `protobuf:"bytes,16,opt,name=avatar_url,json=avatarUrl,proto3,oneof" json:"avatar_url,omitempty"`
+	PlaystyleBadge *string `protobuf:"bytes,17,opt,name=playstyle_badge,json=playstyleBadge,proto3,oneof" json:"playstyle_badge,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Seat) Reset() {
@@ -247,6 +248,13 @@ func (x *Seat) GetHandScore() uint32 {
 func (x *Seat) GetAvatarUrl() string {
 	if x != nil && x.AvatarUrl != nil {
 		return *x.AvatarUrl
+	}
+	return ""
+}
+
+func (x *Seat) GetPlaystyleBadge() string {
+	if x != nil && x.PlaystyleBadge != nil {
+		return *x.PlaystyleBadge
 	}
 	return ""
 }
@@ -1587,7 +1595,7 @@ const file_poker_proto_rawDesc = "" +
 	"\vpoker.proto\x12\x05poker\".\n" +
 	"\x04Card\x12\x12\n" +
 	"\x04rank\x18\x01 \x01(\tR\x04rank\x12\x12\n" +
-	"\x04suit\x18\x02 \x01(\tR\x04suit\"\xde\x04\n" +
+	"\x04suit\x18\x02 \x01(\tR\x04suit\"\xa0\x05\n" +
 	"\x04Seat\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
@@ -1609,12 +1617,14 @@ const file_poker_proto_rawDesc = "" +
 	"\n" +
 	"hand_score\x18\x0f \x01(\rR\thandScore\x12\"\n" +
 	"\n" +
-	"avatar_url\x18\x10 \x01(\tH\x04R\tavatarUrl\x88\x01\x01B\t\n" +
+	"avatar_url\x18\x10 \x01(\tH\x04R\tavatarUrl\x88\x01\x01\x12,\n" +
+	"\x0fplaystyle_badge\x18\x11 \x01(\tH\x05R\x0eplaystyleBadge\x88\x01\x01B\t\n" +
 	"\a_equityB\v\n" +
 	"\t_dealt_inB\b\n" +
 	"\x06_readyB\x16\n" +
 	"\x14_stack_at_hand_startB\r\n" +
-	"\v_avatar_url\"n\n" +
+	"\v_avatar_urlB\x12\n" +
+	"\x10_playstyle_badge\"n\n" +
 	"\x0fBlindEscalation\x12)\n" +
 	"\x10interval_minutes\x18\x01 \x01(\x05R\x0fintervalMinutes\x12\x1e\n" +
 	"\n" +

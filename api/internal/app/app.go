@@ -259,11 +259,11 @@ func newRouletteService(wallet *walletclient.Client, store *dailyreward.Store) *
 func newSessionStore(db *dynamodb.Client, cfg *config.Config) *sessionlog.Store {
 	return sessionlog.NewStore(db, cfg.Env)
 }
-func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service, sessionStore *sessionlog.Store) *buyin.Service {
+func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store) *buyin.Service {
 	if cfg.RealMoneyEnabled {
-		return buyin.NewServiceWithGame(wallet, wallet, manager, rooms, wallet).WithSessionStore(sessionStore).WithPlayers(players).WithAvatarBaseURL(cfg.AvatarBaseURL)
+		return buyin.NewServiceWithGame(wallet, wallet, manager, rooms, wallet).WithSessionStore(sessionStore).WithPlayers(players).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore)
 	}
-	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players).WithSessionStore(sessionStore).WithAvatarBaseURL(cfg.AvatarBaseURL)
+	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players).WithSessionStore(sessionStore).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore)
 }
 
 func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, players *player.Service, cfg *config.Config) *tablemanager.Manager {

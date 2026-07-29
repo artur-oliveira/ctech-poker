@@ -47,15 +47,16 @@ const (
 )
 
 type Player struct {
-	ID          string       `dynamodbav:"id"`
-	Name        string       `dynamodbav:"name,omitempty"`
-	AvatarURL   string       `dynamodbav:"avatar_url,omitempty"`
-	Stack       int64        `dynamodbav:"stack"`
-	Ready       bool         `dynamodbav:"ready"`
-	State       PlayerState  `dynamodbav:"state"`
-	HoleCards   [2]deck.Card `dynamodbav:"hole_cards"`
-	Contributed int64        `dynamodbav:"contributed"` // this hand's total contribution across all rounds, for side-pot math
-	HoldID      string       `dynamodbav:"hold_id,omitempty"`
+	ID             string       `dynamodbav:"id"`
+	Name           string       `dynamodbav:"name,omitempty"`
+	AvatarURL      string       `dynamodbav:"avatar_url,omitempty"`
+	PlaystyleBadge string       `dynamodbav:"playstyle_badge,omitempty"`
+	Stack          int64        `dynamodbav:"stack"`
+	Ready          bool         `dynamodbav:"ready"`
+	State          PlayerState  `dynamodbav:"state"`
+	HoleCards      [2]deck.Card `dynamodbav:"hole_cards"`
+	Contributed    int64        `dynamodbav:"contributed"` // this hand's total contribution across all rounds, for side-pot math
+	HoldID         string       `dynamodbav:"hold_id,omitempty"`
 	// HandStartStack is captured before StartHand posts any blind. A pointer
 	// preserves presence across rolling deployments and distinguishes a real
 	// zero-chip all-in entry from older persisted state that never recorded it.
@@ -289,13 +290,15 @@ func (t *Table) PlayersForActor() []*Player { return t.players }
 // SetPlayerIdentityForActor persists display identity with the seat so snapshots
 // built by any actor instance carry the same name/avatar. It reports whether the
 // value changed, allowing connection setup to avoid a no-op table commit.
-func (t *Table) SetPlayerIdentityForActor(playerID, name, avatarURL string) bool {
+func (t *Table) SetPlayerIdentityForActor(playerID, name, avatarURL, playstyleBadge string) bool {
 	p := t.playerByID(playerID)
-	if p == nil || (name == "" && avatarURL == "") || (p.Name == name && p.AvatarURL == avatarURL) {
+	if p == nil || (name == "" && avatarURL == "" && playstyleBadge == "") ||
+		(p.Name == name && p.AvatarURL == avatarURL && p.PlaystyleBadge == playstyleBadge) {
 		return false
 	}
 	p.Name = name
 	p.AvatarURL = avatarURL
+	p.PlaystyleBadge = playstyleBadge
 	return true
 }
 

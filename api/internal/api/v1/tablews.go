@@ -17,6 +17,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/player"
+	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
@@ -228,6 +229,7 @@ func RegisterTableWS(
 	rooms *roomstore.Store,
 	cfg *config.Config,
 	players *player.Service,
+	stats pokerStatsReader,
 ) {
 	connectionTracker := newTableConnectionTracker()
 	checker := botcheck.New(cfg.TurnstileSecret, cfg.TurnstileExpectedHostname)
@@ -365,10 +367,18 @@ func RegisterTableWS(
 			// now server-authoritative (GET/POST /players/me), so the server
 			// looks it up itself instead of trusting a client message.
 			if players != nil {
-				if profile, perr := players.GetOrCreate(ctx, playerID); perr == nil && profile != nil && profile.Name != "" {
+				if profile, perr := players.GetOrCreate(ctx, playerID); perr == nil && profile != nil {
+					playstyleBadge := ""
+					if profile.PlaystylePublic && stats != nil {
+						if playerStats, statsErr := stats.Get(ctx, playerID); statsErr == nil {
+							if badges := pokerstats.StyleFor(playerStats, pokerstats.MinHandsPublic); len(badges) > 0 {
+								playstyleBadge = badges[0].Key
+							}
+						}
+					}
 					r := make(chan error, 1)
 					_ = dispatch(table.SetIdentityCmd{PlayerID: playerID, Name: profile.Name,
-						AvatarURL: player.AvatarURL(profile, cfg.AvatarBaseURL), Reply: r})
+						AvatarURL: player.AvatarURL(profile, cfg.AvatarBaseURL), PlaystyleBadge: playstyleBadge, Reply: r})
 				}
 			}
 
@@ -822,10 +832,15 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		if s.AvatarURL != "" {
 			avatarURL = &s.AvatarURL
 		}
+		var playstyleBadge *string
+		if s.PlaystyleBadge != "" {
+			playstyleBadge = &s.PlaystyleBadge
+		}
 		protoSeats[i] = &pokerproto.Seat{
 			PlayerId:          s.PlayerID,
 			Name:              s.Name,
 			AvatarUrl:         avatarURL,
+			PlaystyleBadge:    playstyleBadge,
 			ConnectionState:   s.ConnectionState,
 			Stack:             s.Stack,
 			State:             s.State,

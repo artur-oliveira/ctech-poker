@@ -21,12 +21,14 @@ import {pushNotification} from '@/lib/notify';
 
 function ShowcaseEditor({me, onSaved}: {me: PlayerProfile; onSaved: (profile: PlayerProfile) => void}) {
   const [isPublic, setIsPublic] = useState(me.showcase_public);
+  const [isPlaystylePublic, setIsPlaystylePublic] = useState(me.playstyle_public);
   const [selected, setSelected] = useState<string[]>(me.featured_achievements || []);
   const catalog = useQuery({queryKey: ['achievements', 'catalog'], queryFn: getAchievementCatalog});
   const mine = useQuery({queryKey: ['achievements', 'me'], queryFn: () => getMyAchievements()});
   const counts = new Map((mine.data || []).map(item => [item.key, item.count]));
   const save = useMutation({
-    mutationFn: () => updateMe({showcase_public: isPublic, featured_achievements: selected}),
+    mutationFn: () => updateMe({showcase_public: isPublic, playstyle_public: isPlaystylePublic,
+      featured_achievements: selected}),
     onSuccess: profile => {
       onSaved(profile);
       pushNotification('Vitrine do perfil atualizada.', 'info');
@@ -51,6 +53,11 @@ function ShowcaseEditor({me, onSaved}: {me: PlayerProfile; onSaved: (profile: Pl
     <div className="showcase-privacy-row">
       <span><b>Perfil público</b><small>Permite abrir a vitrine por link.</small></span>
       <Switch checked={isPublic} onCheckedChange={setIsPublic} aria-label="Perfil público"/>
+    </div>
+    <div className="showcase-privacy-row showcase-playstyle-row">
+      <span><b>Estilo de jogo público</b><small>Após 200 mãos, exibe um rótulo de tendência na mesa e na vitrine. Em uma vitrine pública, essa informação pode ser vista sem login.</small></span>
+      <Switch checked={isPlaystylePublic} onCheckedChange={setIsPlaystylePublic}
+              aria-label="Estilo de jogo público"/>
     </div>
     <fieldset className="showcase-achievements">
       <legend>Conquistas em destaque <span>{selected.length}/3</span></legend>
@@ -88,7 +95,7 @@ export function ProfileShowcaseDialog({open, onOpenChange}: {open: boolean; onOp
         <DialogTitle>Sua vitrine</DialogTitle>
         <DialogDescription>Escolha o que outros jogadores podem ver. A vitrine começa privada.</DialogDescription>
       </DialogHeader>
-      {me && <ShowcaseEditor key={`${me.showcase_public}:${(me.featured_achievements || []).join(',')}`}
+      {me && <ShowcaseEditor key={`${me.showcase_public}:${me.playstyle_public}:${(me.featured_achievements || []).join(',')}`}
                              me={me} onSaved={profile => queryClient.setQueryData(['player', 'me'], profile)}/>}
     </DialogContent>
   </Dialog>;

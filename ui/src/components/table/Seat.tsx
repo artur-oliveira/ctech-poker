@@ -9,6 +9,7 @@ import {HAND_CATEGORY_LABELS, playerName} from '@/lib/utils';
 import {useCountUp} from '@/lib/hooks/useCountUp';
 import {NotebookPen} from 'lucide-react';
 import type {PlayerNote} from '@/lib/api/playerNotes';
+import {playstyleMeta} from '@/lib/playstyle';
 
 // chance <= 20% red, <= 60% yellow (reusing the --gold token already used for
 // bet amounts on this same seat card), > 60% green.
@@ -121,6 +122,7 @@ export function Seat({
   // replaces two overlapping pills.
   const role = isDealer && isSmallBlind ? 'D/SB' : isDealer ? 'D' : isSmallBlind ? 'SB' : isBigBlind ? 'BB' : null;
   const pausedAfterHand = seat.ready === false && seat.state !== 'sitting_out';
+  const playstyle = seat.playstyle_badge ? playstyleMeta(seat.playstyle_badge) : undefined;
   return <div data-state={seat.state} data-connection-state={seat.connection_state}
               data-player-id={seat.player_id}
               aria-current={isTurn ? 'true' : undefined}
@@ -153,6 +155,7 @@ export function Seat({
       <NotebookPen aria-hidden="true"/>
     </button>}
     <div className="seat-info">
+      {playstyle && <span className="seat-playstyle" title={playstyle.reason}>{playstyle.label}</span>}
       <b
         title={seat.name || undefined}>{playerName(seat.player_id, isViewer ? seat.player_id : undefined, seat.name)}</b><span>{displayStack.toLocaleString('pt-BR')} fichas</span>{chance != null && isViewer &&
         <div className="seat-equity" aria-label={`Chance estimada de vitória: ${chance}%`}>

@@ -80,6 +80,9 @@ describe('lobby player components', () => {
       data: {
         hands: 100, vpip_hands: 45, pfr_hands: 32, three_bet_hands: 12, three_bet_chances: 50,
         vpip_rate: .45, pfr_rate: .32, three_bet_rate: .24,
+        playstyle: [
+          {key: 'explorer'}, {key: 'initiative'}, {key: 'counter'},
+        ],
       },
     });
     render(<SelfHudDialog open onOpenChange={vi.fn()}/>);

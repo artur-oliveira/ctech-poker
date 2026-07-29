@@ -2111,6 +2111,14 @@ h1 em {
     font-size: 11px
 }
 
+.showcase-playstyle-row {
+    padding-top: 16px
+}
+
+.showcase-playstyle-row > span {
+    max-width: 44ch
+}
+
 .showcase-achievements {
     display: grid;
     max-height: min(360px, 44vh);
@@ -2209,6 +2217,10 @@ h1 em {
     margin-top: 2px;
     font-size: clamp(28px, 5vw, 48px);
     letter-spacing: -.03em
+}
+
+.profile-playstyle-badges {
+    margin-top: 10px
 }
 
 .profile-showcase-avatar {
@@ -2924,6 +2936,21 @@ h1 em {
 .seat-info span {
     color: var(--gold);
     margin-top: 3px
+}
+
+.seat-info .seat-playstyle {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    max-width: 92px;
+    margin: 0 0 3px;
+    padding: 2px 5px;
+    border: 1px solid color-mix(in srgb, var(--gold) 34%, transparent);
+    border-radius: var(--rounded-pill);
+    background: color-mix(in srgb, var(--gold) 10%, transparent);
+    color: var(--gold);
+    font: 700 8px var(--font-mono);
+    cursor: help
 }
 
 .seat-info small {
@@ -5634,6 +5661,14 @@ h1 em {
     text-overflow: ellipsis;
     font-size: var(--font-size-tiny);
     white-space: nowrap
+}
+
+.stage-v-ring .seat-info .seat-playstyle {
+    width: max-content;
+    max-width: 64px;
+    margin: 0 auto 2px;
+    padding: 1px 4px;
+    font-size: 7px
 }
 
 .stage-v-ring .seat-info .seat-equity, .stage-v-ring .seat-info .seat-hand-category {

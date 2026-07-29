@@ -6,6 +6,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle
 } from '@/components/ui/dialog';
 import {getMyPokerStats, type PokerStats} from '@/lib/api/pokerStats';
+import {playstyleMeta} from '@/lib/playstyle';
 
 function percentage(value: number) {
   return `${(value * 100).toLocaleString('pt-BR', {maximumFractionDigits: 1})}%`;
@@ -22,20 +23,6 @@ function points(values: number[], radius = 82) {
   return values.map((value, index) => radarPoint(index, value, radius).join(',')).join(' ');
 }
 
-function styleBadges(stats: PokerStats) {
-  const badges: Array<{label: string; reason: string}> = [];
-  if (stats.vpip_rate <= .22) badges.push({label: 'Seletivo', reason: 'VPIP de até 22%'});
-  if (stats.vpip_rate >= .38) badges.push({label: 'Explorador', reason: 'VPIP a partir de 38%'});
-  if (stats.vpip_rate > 0 && stats.pfr_rate / stats.vpip_rate >= .7) {
-    badges.push({label: 'Iniciativa', reason: 'PFR representa pelo menos 70% do VPIP'});
-  }
-  if (stats.three_bet_chances >= 10 && stats.three_bet_rate >= .1) {
-    badges.push({label: 'Contra-ataque', reason: '3-bet de pelo menos 10%'});
-  }
-  if (badges.length === 0) badges.push({label: 'Equilibrado', reason: 'Sem tendência dominante nesta amostra'});
-  return badges.slice(0, 3);
-}
-
 function PokerStyle({stats}: {stats: PokerStats}) {
   const pressure = stats.vpip_rate > 0 ? stats.pfr_rate / stats.vpip_rate : 0;
   const values = [
@@ -50,7 +37,11 @@ function PokerStyle({stats}: {stats: PokerStats}) {
       <small>Leitura da amostra</small>
       <h3 id="poker-style-title">Seu estilo pré-flop</h3>
       <div className="poker-style-badges">
-        {styleBadges(stats).map(badge => <span key={badge.label} title={badge.reason}>{badge.label}</span>)}
+        {stats.playstyle?.map(badge => {
+          const meta = playstyleMeta(badge.key);
+          if (!meta) return null;
+          return <span key={badge.key} title={meta.reason}>{meta.label}</span>;
+        })}
       </div>
       <p>Os eixos são derivados de VPIP, PFR e 3-bet. Passe ou toque nos badges para ver o critério.</p>
     </div>
@@ -123,8 +114,8 @@ function HudContent({stats}: {stats: PokerStats}) {
         <small>Base: {metric.sample(stats).toLocaleString('pt-BR')}</small>
       </article>)}
     </div>
-    {stats.hands >= 30 && <PokerStyle stats={stats}/>}
-    {stats.hands < 30 && <p className="self-hud-notice"><Info aria-hidden="true"/>
+    {Boolean(stats.playstyle?.length) && <PokerStyle stats={stats}/>}
+    {!stats.playstyle?.length && <p className="self-hud-notice"><Info aria-hidden="true"/>
       Amostra inicial: as porcentagens ficam mais representativas conforme você joga.
     </p>}
   </>;

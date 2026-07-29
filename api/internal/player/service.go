@@ -32,7 +32,7 @@ type profileStore interface {
 	SetName(context.Context, string, string) error
 	SetWalletMode(context.Context, string, string) error
 	SetDeckVariant(context.Context, string, string) error
-	SetShowcase(context.Context, string, bool, []string) error
+	SetShowcase(context.Context, string, bool, bool, []string) error
 }
 
 func (s *Service) ReportAvatar(ctx context.Context, targetID, reporterID string) error {
@@ -143,7 +143,7 @@ func (s *Service) PublicShowcase(ctx context.Context, userID string) (*PlayerPro
 	return profile, nil
 }
 
-func (s *Service) SetShowcase(ctx context.Context, userID string, public bool, featured []string) (*PlayerProfile, error) {
+func (s *Service) SetShowcase(ctx context.Context, userID string, public, playstylePublic bool, featured []string) (*PlayerProfile, error) {
 	if len(featured) > 3 {
 		return nil, ErrInvalidShowcase
 	}
@@ -161,7 +161,7 @@ func (s *Service) SetShowcase(ctx context.Context, userID string, public bool, f
 		seen[key] = true
 		normalized = append(normalized, key)
 	}
-	if err := s.store.SetShowcase(ctx, userID, public, normalized); err != nil {
+	if err := s.store.SetShowcase(ctx, userID, public, playstylePublic, normalized); err != nil {
 		return nil, err
 	}
 	return s.store.GetOrCreate(ctx, userID)

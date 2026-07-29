@@ -40,6 +40,7 @@ const me = {
   user_id: 'player / one',
   name: 'Ada',
   showcase_public: false,
+  playstyle_public: false,
   featured_achievements: ['first_hand'],
 };
 const catalog = [
@@ -87,6 +88,7 @@ describe('ProfileShowcaseDialog', () => {
   test('makes a public profile shareable and copies its encoded URL', async () => {
     render(<ProfileShowcaseDialog open onOpenChange={vi.fn()}/>);
     fireEvent.click(screen.getByRole('switch', {name: 'Perfil público'}));
+    fireEvent.click(screen.getByRole('switch', {name: 'Estilo de jogo público'}));
     fireEvent.click(screen.getByRole('button', {name: /Copiar link/}));
     await waitFor(() => expect(mocks.writeText)
       .toHaveBeenCalledWith(`${window.location.origin}/profile?id=player%20%2F%20one`));
@@ -96,14 +98,17 @@ describe('ProfileShowcaseDialog', () => {
   });
 
   test('saves privacy and selections into the shared profile cache', async () => {
-    const updated = {...me, showcase_public: true, featured_achievements: ['first_hand', 'hands_10']};
+    const updated = {...me, showcase_public: true, playstyle_public: true,
+      featured_achievements: ['first_hand', 'hands_10']};
     mocks.updateMe.mockResolvedValue(updated);
     render(<ProfileShowcaseDialog open onOpenChange={vi.fn()}/>);
     fireEvent.click(screen.getByRole('switch', {name: 'Perfil público'}));
+    fireEvent.click(screen.getByRole('switch', {name: 'Estilo de jogo público'}));
     fireEvent.click(screen.getByRole('checkbox', {name: 'hands 102 registrados'}));
     fireEvent.click(screen.getByRole('button', {name: 'Salvar vitrine'}));
     expect(mocks.updateMe).toHaveBeenCalledWith({
       showcase_public: true,
+      playstyle_public: true,
       featured_achievements: ['first_hand', 'hands_10'],
     });
     await waitFor(() => expect(mocks.setQueryData).toHaveBeenCalledWith(['player', 'me'], updated));

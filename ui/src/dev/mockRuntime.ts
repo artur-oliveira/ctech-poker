@@ -237,6 +237,7 @@ const mockProfile = {
   deck_variant: 'four-color' as DeckVariantId,
   poker_terms_accepted: true,
   showcase_public: true,
+  playstyle_public: true,
   featured_achievements: ['wins', 'hands_played', 'bad_beat'] as string[],
   game_balance: 12500,
   sandbox_balance: 4850
@@ -403,7 +404,8 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     three_bet_chances: 67,
     vpip_rate: 47 / 184,
     pfr_rate: 31 / 184,
-    three_bet_rate: 9 / 67
+    three_bet_rate: 9 / 67,
+    playstyle: [{key: 'initiative'}]
   }, config);
   if (method === 'GET' && path === '/v1.0/players/me/sessions') return ok(page([]), config);
   if (method === 'GET' && path === '/v1.0/players/me/notes/') return ok({data: mockPlayerNotes}, config);
@@ -440,6 +442,7 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       mockProfile.deck_variant = body.deck_variant;
     }
     if (typeof body.showcase_public === 'boolean') mockProfile.showcase_public = body.showcase_public;
+    if (typeof body.playstyle_public === 'boolean') mockProfile.playstyle_public = body.playstyle_public;
     if (Array.isArray(body.featured_achievements)) {
       if (body.featured_achievements.length > 3) fail(400, 'too many featured achievements', config);
       mockProfile.featured_achievements = [...body.featured_achievements];
@@ -455,6 +458,7 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     return ok({
       player_id: mockProfile.user_id,
       name: mockProfile.name,
+      playstyle: mockProfile.playstyle_public ? [{key: 'initiative'}] : undefined,
       featured_achievements: mockProfile.featured_achievements.map(key => ({key, count: counts.get(key) || 0})),
       best_hand: mockHands[0]
     }, config);
@@ -612,7 +616,7 @@ const baseSeats = () => [
     hole_cards: ['AH', 'KD'],
     equity: .64
   },
-  {player_id: 'bia_sp', name: 'Bia', stack: 3925, state: 'active', dealt_in: true, contributed: 75, hole_cards: ['back', 'back']},
+  {player_id: 'bia_sp', name: 'Bia', playstyle_badge: 'explorer', stack: 3925, state: 'active', dealt_in: true, contributed: 75, hole_cards: ['back', 'back']},
   {player_id: 'leo_rio', name: 'Léo', stack: 6100, state: 'folded', dealt_in: true, contributed: 25, hole_cards: ['back', 'back']},
   {player_id: 'nina_recife', name: 'Nina', stack: 2775, state: 'active', dealt_in: true, contributed: 75, hole_cards: ['back', 'back']},
   // Nameless on purpose — exercises the is-pending-name placeholder in dev.
@@ -680,7 +684,7 @@ function fullHandSeats(): SeatView[] {
       hole_cards: ['AH', 'KD'],
       equity: .64
     },
-    {player_id: 'bia_sp', name: 'Bia', stack: 3925, state: 'active', dealt_in: true, contributed: 25, hole_cards: ['back', 'back']},
+    {player_id: 'bia_sp', name: 'Bia', playstyle_badge: 'explorer', stack: 3925, state: 'active', dealt_in: true, contributed: 25, hole_cards: ['back', 'back']},
     {player_id: 'leo_rio', name: 'Léo', stack: 6100, state: 'active', dealt_in: true, contributed: 0, hole_cards: ['back', 'back']},
     {
       player_id: 'nina_recife',

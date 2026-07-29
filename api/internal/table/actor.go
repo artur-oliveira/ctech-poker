@@ -430,14 +430,14 @@ func (a *Actor) handleSnapshot(ctx context.Context, c SnapshotCmd) error {
 // handleSetIdentity persists display identity with the seat so every actor in the
 // fleet produces the same snapshot. A no-op name does not bump table version.
 func (a *Actor) handleSetIdentity(ctx context.Context, c SetIdentityCmd) error {
-	if c.Name == "" && c.AvatarURL == "" {
+	if c.Name == "" && c.AvatarURL == "" && c.PlaystyleBadge == "" {
 		return nil
 	}
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
 	apply := func() error {
-		if !a.cached.SetPlayerIdentityForActor(c.PlayerID, c.Name, c.AvatarURL) {
+		if !a.cached.SetPlayerIdentityForActor(c.PlayerID, c.Name, c.AvatarURL, c.PlaystyleBadge) {
 			return nil
 		}
 		return a.commit(ctx, "", &tablestore.ActionLogEntry{

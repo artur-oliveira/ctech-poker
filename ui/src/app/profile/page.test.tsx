@@ -38,6 +38,7 @@ describe('public player profile page', () => {
     mocks.query = queryState({
       player_id: 'player-42',
       name: 'Ás da Mesa',
+      playstyle: [{key: 'selective'}],
       featured_achievements: [{key: 'wins', count: 1234}],
       best_hand: {
         hand_id: 'hand-1',
@@ -61,6 +62,7 @@ describe('public player profile page', () => {
     expect(screen.getByRole('heading', {name: 'Ás da Mesa'})).toBeInTheDocument();
     expect(screen.getByText('1.234 registradas')).toBeInTheDocument();
     expect(screen.getByText('+2.500 fichas')).toBeInTheDocument();
+    expect(screen.getByText('Seletivo')).toHaveAttribute('title', 'VPIP de até 22%');
     expect(screen.getAllByTestId('card').map(card => card.textContent)).toEqual(['AH', 'KH']);
     expect(screen.getByText('profile-menu')).toBeInTheDocument();
     expect(screen.getByRole('link', {name: /Lobby/})).toHaveAttribute('href', '/lobby');

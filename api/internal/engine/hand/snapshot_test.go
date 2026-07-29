@@ -9,7 +9,7 @@ import (
 )
 
 func TestViewForHidesOtherHoleCards(t *testing.T) {
-	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true, PlaystyleBadge: "selective"}
 	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
 	table := NewTable([]*Player{p1, p2}, 10, 20)
 	if err := table.StartHand(); err != nil {
@@ -31,6 +31,9 @@ func TestViewForHidesOtherHoleCards(t *testing.T) {
 	}
 	if len(seatP2.HoleCards) != 0 {
 		t.Fatalf("expected viewer NOT to see opponent hole cards, got %v", seatP2.HoleCards)
+	}
+	if seatP1.PlaystyleBadge != "selective" || seatP2.PlaystyleBadge != "" {
+		t.Fatalf("playstyle projection = p1 %q, p2 %q", seatP1.PlaystyleBadge, seatP2.PlaystyleBadge)
 	}
 }
 

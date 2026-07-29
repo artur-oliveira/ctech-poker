@@ -1,6 +1,7 @@
 import type {Page} from './client';
 import {apiClient} from './client';
 import type {DeckVariantId} from '../cardVariants';
+import type {PlaystyleBadge} from '../playstyle';
 
 export type WalletMode = 'sandbox' | 'real';
 
@@ -17,7 +18,9 @@ export interface PlayerProfile {
   // wired in without another PlayerProfile shape change.
   deck_variant?: DeckVariantId;
   showcase_public: boolean;
+  playstyle_public: boolean;
   featured_achievements?: string[];
+  playstyle?: PlaystyleBadge[];
 }
 
 export async function getMe() {
@@ -33,6 +36,7 @@ export async function updateMe(input: {
   wallet_mode?: WalletMode;
   deck_variant?: DeckVariantId;
   showcase_public?: boolean;
+  playstyle_public?: boolean;
   featured_achievements?: string[];
 }) {
   return (await apiClient.post<PlayerProfile>('/v1.0/players/me', input, {silentError: false})).data;
@@ -43,6 +47,7 @@ export interface ProfileShowcase {
   name?: string;
   avatar_url?: string;
   featured_achievements: Array<{key: string; count: number}>;
+  playstyle?: PlaystyleBadge[];
   best_hand?: Pick<HandItem, 'hand_id' | 'table_id' | 'net_change' | 'ended_at' | 'board' | 'hole_cards'>;
 }
 
