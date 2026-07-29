@@ -17,5 +17,5 @@ const variants = cva('inline-flex items-center justify-center gap-2 rounded-xl t
 function Button({className, variant, size, nativeButton, ...props}: Primitive.Props & VariantProps<typeof variants>) {
   return <Primitive nativeButton={nativeButton ?? !props.render}
                     className={cn(variants({variant, size}), className)} {...props}/>;
-};
+}
 export {Button, variants as buttonVariants};

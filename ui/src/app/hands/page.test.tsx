@@ -116,14 +116,14 @@ describe('hands list page', () => {
   test('marks counts as partial, appends pages and loads more on scroll or click', () => {
     const observed: IntersectionObserverCallback[] = [];
     vi.stubGlobal('IntersectionObserver', class {
-      constructor(callback: IntersectionObserverCallback) {
-        observed.push(callback);
-      }
-      
       observe = vi.fn();
       unobserve = vi.fn();
       disconnect = vi.fn();
       takeRecords = vi.fn(() => []);
+
+      constructor(callback: IntersectionObserverCallback) {
+        observed.push(callback);
+      }
     });
     
     mocks.query.mockReturnValue(queryResult([pageOf(hands, true)]));

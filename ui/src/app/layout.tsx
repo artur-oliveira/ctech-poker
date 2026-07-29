@@ -33,17 +33,22 @@ export const metadata: Metadata = {
     title: 'CTech Poker · a mesa está pronta',
     description: 'Texas Hold’em prático, social e responsivo, onde você estiver.',
     images: [{
-      url: '/og-image.png',
+      url: '/og/home.png',
       width: 1200,
       height: 630,
       alt: 'CTech Poker · o jeito mais simples de jogar poker com amigos.'
+    }, {
+      url: '/og-image.png',
+      width: 1200,
+      height: 630,
+      alt: 'CTech Poker · sua mesa de poker com amigos.'
     }]
   },
   twitter: {
     card: 'summary_large_image',
     title: 'CTech Poker · a mesa está pronta',
     description: 'Texas Hold’em prático, social e responsivo, onde você estiver.',
-    images: ['/og-image.png']
+    images: ['/og/home.png']
   },
   robots: {
     index: true,

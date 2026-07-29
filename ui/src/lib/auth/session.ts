@@ -1,3 +1,5 @@
+'use client';
+
 // Unlike TermsGate, this page never forces a login redirect. It has a real
 // public variant. It only checks whether a session already exists (silent
 // refresh, same call TermsGate makes) so a returning player sees their own
@@ -6,7 +8,7 @@
 import {useEffect, useState} from "react";
 import {useQuery} from "@tanstack/react-query";
 import {getAccessToken, setAccessToken, setPlayerId, setUsername, subscribeAccessToken} from "@/lib/api/client";
-import {USE_MOCK} from "@/lib/mockConfig";
+import {MOCK_PLAYER_ID, USE_MOCK} from "@/lib/mockConfig";
 import {doRefresh} from "@/lib/auth/oauth";
 import {getMe} from "@/lib/api/player";
 
@@ -43,12 +45,12 @@ export function getOrRefreshSession(): Promise<SessionResult> {
   if (!refreshPromise) {
     refreshPromise = doRefresh()
       .then(result => {
-      if (result) {
-        setAccessToken(result.accessToken);
-        setUsername(result.username);
-      } else {
-        clearSession();
-      }
+        if (result) {
+          setAccessToken(result.accessToken);
+          setUsername(result.username);
+        } else {
+          clearSession();
+        }
         return result;
       })
       // A network failure is not proof that the refresh token was revoked.
@@ -91,12 +93,14 @@ export function useSessionKeepAlive() {
 }
 
 export function useOptionalSession() {
-  const [token, setToken] = useState<string | null>(() => getAccessToken());
+  const [token, setToken] = useState<string | null>(() => USE_MOCK ? MOCK_PLAYER_ID : getAccessToken());
   const [checking, setChecking] = useState(() => !USE_MOCK && !getAccessToken());
   
   useEffect(() => {
     const unsubscribe = subscribeAccessToken(setToken);
-    if (!USE_MOCK && !getAccessToken()) {
+    if (USE_MOCK) {
+      setAccessToken(MOCK_PLAYER_ID);
+    } else if (!getAccessToken()) {
       void getOrRefreshSession().catch(() => undefined).finally(() => setChecking(false));
     }
     return unsubscribe;

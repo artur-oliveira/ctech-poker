@@ -10,7 +10,7 @@ const EXIT_MS = 350;
 export function AchievementToast({unlock}: { unlock: { key: string; stars: number } | null }) {
   const [shown, setShown] = useState(unlock);
   const [leaving, setLeaving] = useState(false);
-
+  
   useEffect(() => {
     if (!unlock) return;
     // Retain the last unlock while its exit animation finishes.

@@ -4,6 +4,7 @@ import {Suspense} from 'react';
 import {useSearchParams} from 'next/navigation';
 import {useQuery} from '@tanstack/react-query';
 import {ChevronLeft, Crown, ExternalLink, Play, ShieldCheck} from 'lucide-react';
+import type {WalletMode} from '@/lib/api/player';
 import {getHand} from '@/lib/api/player';
 import {getHandHistory} from '@/lib/api/table';
 import {PlayingCard} from '@/components/table/PlayingCard';
@@ -18,7 +19,6 @@ import {Button} from '@/components/ui/button';
 import {TermsGate} from '@/components/TermsGate';
 import {getViewerId, HAND_CATEGORY_LABELS, playerName} from '@/lib/utils';
 import {bestHandCategory} from '@/lib/pokerRules';
-import type {WalletMode} from '@/lib/api/player';
 
 function formatDate(unixSeconds: number) {
   return new Date(unixSeconds * 1000).toLocaleString('pt-BR', {
@@ -32,7 +32,11 @@ function HandHistoryContent() {
   const handId = params.get('hand_id') || '';
   const mode: WalletMode = params.get('mode') === 'real' ? 'real' : 'sandbox';
   
-  const hand = useQuery({queryKey: ['hand', mode, handId], queryFn: () => getHand(handId, mode), enabled: Boolean(handId)});
+  const hand = useQuery({
+    queryKey: ['hand', mode, handId],
+    queryFn: () => getHand(handId, mode),
+    enabled: Boolean(handId)
+  });
   const history = useQuery({
     queryKey: ['hand-history', tableId, handId],
     queryFn: () => getHandHistory(tableId, handId),

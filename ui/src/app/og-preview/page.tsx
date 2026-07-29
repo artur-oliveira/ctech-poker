@@ -1,0 +1,21 @@
+import Link from 'next/link';
+import Image from 'next/image';
+import {OG_PREVIEWS} from '@/lib/ogPreviews';
+
+export default function OgPreviewStudio() {
+  return <main className="og-studio">
+    <header>
+      <p>Ferramenta de produção · não publicar</p>
+      <h1>Imagens sociais por rota</h1>
+      <span>Capture cada quadro em 1200 × 630 e salve no caminho indicado.</span>
+    </header>
+    <section>
+      {OG_PREVIEWS.map(preview => <figure key={preview.slug}>
+        <Link href={`/og-preview/${preview.slug}`} aria-label={`Abrir ${preview.title} para captura`}>
+          <Image src={`/og/${preview.slug}.png`} width={1200} height={630} alt={`Prévia: ${preview.title}`}/>
+        </Link>
+        <figcaption><code>public/og/{preview.slug}.png</code><span>{preview.route}</span></figcaption>
+      </figure>)}
+    </section>
+  </main>;
+}

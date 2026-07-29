@@ -3,6 +3,7 @@ import path from 'path';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const nextConfig: NextConfig = {
+  devIndicators: false,
   turbopack: {
     root: path.join(__dirname),
     ...(isProduction ? {

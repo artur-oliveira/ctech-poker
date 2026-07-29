@@ -123,6 +123,12 @@ export function normalizeApiError(error: unknown): ApiError {
     status, problem, retryAfterMs, error);
 }
 
+export function redirectOnServiceUnavailable(status?: number) {
+  if (status !== 503 || typeof window === 'undefined' || window.location.pathname === '/unavailable') return false;
+  window.location.replace('/unavailable');
+  return true;
+}
+
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || '',
   timeout: 10_000,
@@ -145,6 +151,7 @@ apiClient.interceptors.response.use(r => r, async e => {
       return apiClient.request(e.config);
     }
   }
+  redirectOnServiceUnavailable(e.response?.status);
   const normalized = normalizeApiError(e);
   if (!e.config?.silentError) notifyApiError(normalized);
   return Promise.reject(normalized);

@@ -3,6 +3,7 @@ import React, {useEffect, useMemo, useRef, useState} from 'react';
 import Link from 'next/link';
 import {useInfiniteQuery} from '@tanstack/react-query';
 import {Award, BookOpen, ChevronLeft, ChevronRight, Club, History, Sparkles, Trophy} from 'lucide-react';
+import type {WalletMode} from '@/lib/api/player';
 import {getHands} from '@/lib/api/player';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
@@ -12,7 +13,6 @@ import {bestHandCategory} from '@/lib/pokerRules';
 import {HAND_CATEGORY_LABELS} from '@/lib/utils';
 import {Button} from '@/components/ui/button';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
-import type {WalletMode} from '@/lib/api/player';
 
 type HandFilter = 'all' | 'wins' | 'losses';
 

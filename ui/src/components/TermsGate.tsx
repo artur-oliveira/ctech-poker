@@ -5,13 +5,7 @@ import {ShieldCheck} from 'lucide-react';
 import {acceptPokerTerms, getMe, updateMe} from '@/lib/api/player';
 import {startOAuthFlow} from '@/lib/auth/oauth';
 import {getOrRefreshSession} from '@/lib/auth/session';
-import {
-  getAccessToken,
-  getUsername,
-  setAccessToken,
-  setPlayerId,
-  subscribeAccessToken
-} from '@/lib/api/client';
+import {getAccessToken, getUsername, setAccessToken, setPlayerId, subscribeAccessToken} from '@/lib/api/client';
 import {MOCK_PLAYER_ID, USE_MOCK} from '@/lib/mockConfig';
 import {Button} from '@/components/ui/button';
 import {Checkbox} from '@/components/ui/checkbox';

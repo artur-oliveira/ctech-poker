@@ -140,7 +140,7 @@ function ChipCountUp({from, to}: { from: number; to: number }) {
  * It closes once the next hand actually starts. */
 export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeState | null; holdOpen: boolean }) {
   const [shown, setShown] = useState(outcome);
-
+  
   useEffect(() => {
     if (outcome) {
       // Retain the last outcome while its exit animation finishes.

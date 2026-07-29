@@ -126,7 +126,10 @@ describe('API client session and interceptors', () => {
     expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({name: 'ApiError', original: error}));
     
     const alreadyRetried = {response: {status: 401}, config: {_retried: true}};
-    await expect(mocks.errorHandlers[0](alreadyRetried)).rejects.toMatchObject({name: 'ApiError', original: alreadyRetried});
+    await expect(mocks.errorHandlers[0](alreadyRetried)).rejects.toMatchObject({
+      name: 'ApiError',
+      original: alreadyRetried
+    });
     expect(mocks.refresh).toHaveBeenCalledOnce();
   });
   

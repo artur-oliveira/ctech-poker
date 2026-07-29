@@ -5,7 +5,7 @@
 // source: poker.proto
 
 /* eslint-disable */
-import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
+import {BinaryReader, BinaryWriter} from "@bufbuild/protobuf/wire";
 
 export const protobufPackage = "poker";
 
@@ -319,7 +319,7 @@ export interface ServerMessage {
 }
 
 function createBaseCard(): Card {
-  return { rank: "", suit: "" };
+  return {rank: "", suit: ""};
 }
 
 export const Card: MessageFns<Card> = {
@@ -332,7 +332,7 @@ export const Card: MessageFns<Card> = {
     }
     return writer;
   },
-
+  
   decode(input: BinaryReader | Uint8Array, length?: number): Card {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
@@ -344,7 +344,7 @@ export const Card: MessageFns<Card> = {
           if (tag !== 10) {
             break;
           }
-
+          
           message.rank = reader.string();
           continue;
         }
@@ -352,7 +352,7 @@ export const Card: MessageFns<Card> = {
           if (tag !== 18) {
             break;
           }
-
+          
           message.suit = reader.string();
           continue;
         }
@@ -364,14 +364,14 @@ export const Card: MessageFns<Card> = {
     }
     return message;
   },
-
+  
   fromJSON(object: any): Card {
     return {
       rank: isSet(object.rank) ? globalThis.String(object.rank) : "",
       suit: isSet(object.suit) ? globalThis.String(object.suit) : "",
     };
   },
-
+  
   toJSON(message: Card): unknown {
     const obj: any = {};
     if (message.rank !== "") {
@@ -382,7 +382,7 @@ export const Card: MessageFns<Card> = {
     }
     return obj;
   },
-
+  
   create<I extends Exact<DeepPartial<Card>, I>>(base?: I): Card {
     return Card.fromPartial(base ?? ({} as any));
   },
@@ -477,7 +477,7 @@ export const Seat: MessageFns<Seat> = {
     }
     return writer;
   },
-
+  
   decode(input: BinaryReader | Uint8Array, length?: number): Seat {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
@@ -489,7 +489,7 @@ export const Seat: MessageFns<Seat> = {
           if (tag !== 10) {
             break;
           }
-
+          
           message.player_id = reader.string();
           continue;
         }
@@ -497,7 +497,7 @@ export const Seat: MessageFns<Seat> = {
           if (tag !== 18) {
             break;
           }
-
+          
           message.name = reader.string();
           continue;
         }
@@ -505,7 +505,7 @@ export const Seat: MessageFns<Seat> = {
           if (tag !== 24) {
             break;
           }
-
+          
           message.stack = longToNumber(reader.int64());
           continue;
         }
@@ -513,7 +513,7 @@ export const Seat: MessageFns<Seat> = {
           if (tag !== 34) {
             break;
           }
-
+          
           message.state = reader.string();
           continue;
         }
@@ -521,7 +521,7 @@ export const Seat: MessageFns<Seat> = {
           if (tag !== 40) {
             break;
           }
-
+          
           message.contributed = longToNumber(reader.int64());
           continue;
         }
@@ -529,7 +529,7 @@ export const Seat: MessageFns<Seat> = {
           if (tag !== 50) {
             break;
           }
-
+          
           message.hole_cards.push(reader.string());
           continue;
         }
@@ -537,7 +537,7 @@ export const Seat: MessageFns<Seat> = {
           if (tag !== 57) {
             break;
           }
-
+          
           message.equity = reader.double();
           continue;
         }
@@ -545,7 +545,7 @@ export const Seat: MessageFns<Seat> = {
           if (tag !== 66) {
             break;
           }
-
+          
           message.hand_category = reader.string();
           continue;
         }
@@ -553,7 +553,7 @@ export const Seat: MessageFns<Seat> = {
           if (tag !== 74) {
             break;
           }
-
+          
           message.connection_state = reader.string();
           continue;
         }
@@ -561,7 +561,7 @@ export const Seat: MessageFns<Seat> = {
           if (tag !== 80) {
             break;
           }
-
+          
           message.dealt_in = reader.bool();
           continue;
         }
@@ -569,33 +569,33 @@ export const Seat: MessageFns<Seat> = {
           if (tag !== 88) {
             break;
           }
-
+          
           message.ready = reader.bool();
           continue;
         }
         case 12: {
           if (tag === 96) {
             message.hole_cards_revealed.push(reader.bool());
-
+            
             continue;
           }
-
+          
           if (tag === 98) {
             const end2 = reader.uint32() + reader.pos;
             while (reader.pos < end2) {
               message.hole_cards_revealed.push(reader.bool());
             }
-
+            
             continue;
           }
-
+          
           break;
         }
         case 13: {
           if (tag !== 104) {
             break;
           }
-
+          
           message.stack_at_hand_start = longToNumber(reader.int64());
           continue;
         }
@@ -603,7 +603,7 @@ export const Seat: MessageFns<Seat> = {
           if (tag !== 112) {
             break;
           }
-
+          
           message.time_bank_ms = longToNumber(reader.int64());
           continue;
         }
@@ -611,7 +611,7 @@ export const Seat: MessageFns<Seat> = {
           if (tag !== 120) {
             break;
           }
-
+          
           message.hand_score = reader.uint32();
           continue;
         }
@@ -619,7 +619,7 @@ export const Seat: MessageFns<Seat> = {
           if (tag !== 130) {
             break;
           }
-
+          
           message.avatar_url = reader.string();
           continue;
         }
@@ -627,7 +627,7 @@ export const Seat: MessageFns<Seat> = {
           if (tag !== 138) {
             break;
           }
-
+          
           message.playstyle_badge = reader.string();
           continue;
         }
@@ -635,7 +635,7 @@ export const Seat: MessageFns<Seat> = {
           if (tag !== 144) {
             break;
           }
-
+          
           message.run_it_twice = reader.bool();
           continue;
         }
@@ -647,14 +647,14 @@ export const Seat: MessageFns<Seat> = {
     }
     return message;
   },
-
+  
   fromJSON(object: any): Seat {
     return {
       player_id: isSet(object.playerId)
         ? globalThis.String(object.playerId)
         : isSet(object.player_id)
-        ? globalThis.String(object.player_id)
-        : "",
+          ? globalThis.String(object.player_id)
+          : "",
       name: isSet(object.name) ? globalThis.String(object.name) : "",
       stack: isSet(object.stack) ? globalThis.Number(object.stack) : 0,
       state: isSet(object.state) ? globalThis.String(object.state) : "",
@@ -662,63 +662,63 @@ export const Seat: MessageFns<Seat> = {
       hole_cards: globalThis.Array.isArray(object?.holeCards)
         ? object.holeCards.map((e: any) => globalThis.String(e))
         : globalThis.Array.isArray(object?.hole_cards)
-        ? object.hole_cards.map((e: any) => globalThis.String(e))
-        : [],
+          ? object.hole_cards.map((e: any) => globalThis.String(e))
+          : [],
       equity: isSet(object.equity) ? globalThis.Number(object.equity) : undefined,
       hand_category: isSet(object.handCategory)
         ? globalThis.String(object.handCategory)
         : isSet(object.hand_category)
-        ? globalThis.String(object.hand_category)
-        : "",
+          ? globalThis.String(object.hand_category)
+          : "",
       connection_state: isSet(object.connectionState)
         ? globalThis.String(object.connectionState)
         : isSet(object.connection_state)
-        ? globalThis.String(object.connection_state)
-        : "",
+          ? globalThis.String(object.connection_state)
+          : "",
       dealt_in: isSet(object.dealtIn)
         ? globalThis.Boolean(object.dealtIn)
         : isSet(object.dealt_in)
-        ? globalThis.Boolean(object.dealt_in)
-        : undefined,
+          ? globalThis.Boolean(object.dealt_in)
+          : undefined,
       ready: isSet(object.ready) ? globalThis.Boolean(object.ready) : undefined,
       hole_cards_revealed: globalThis.Array.isArray(object?.holeCardsRevealed)
         ? object.holeCardsRevealed.map((e: any) => globalThis.Boolean(e))
         : globalThis.Array.isArray(object?.hole_cards_revealed)
-        ? object.hole_cards_revealed.map((e: any) => globalThis.Boolean(e))
-        : [],
+          ? object.hole_cards_revealed.map((e: any) => globalThis.Boolean(e))
+          : [],
       stack_at_hand_start: isSet(object.stackAtHandStart)
         ? globalThis.Number(object.stackAtHandStart)
         : isSet(object.stack_at_hand_start)
-        ? globalThis.Number(object.stack_at_hand_start)
-        : undefined,
+          ? globalThis.Number(object.stack_at_hand_start)
+          : undefined,
       time_bank_ms: isSet(object.timeBankMs)
         ? globalThis.Number(object.timeBankMs)
         : isSet(object.time_bank_ms)
-        ? globalThis.Number(object.time_bank_ms)
-        : 0,
+          ? globalThis.Number(object.time_bank_ms)
+          : 0,
       hand_score: isSet(object.handScore)
         ? globalThis.Number(object.handScore)
         : isSet(object.hand_score)
-        ? globalThis.Number(object.hand_score)
-        : 0,
+          ? globalThis.Number(object.hand_score)
+          : 0,
       avatar_url: isSet(object.avatarUrl)
         ? globalThis.String(object.avatarUrl)
         : isSet(object.avatar_url)
-        ? globalThis.String(object.avatar_url)
-        : undefined,
+          ? globalThis.String(object.avatar_url)
+          : undefined,
       playstyle_badge: isSet(object.playstyleBadge)
         ? globalThis.String(object.playstyleBadge)
         : isSet(object.playstyle_badge)
-        ? globalThis.String(object.playstyle_badge)
-        : undefined,
+          ? globalThis.String(object.playstyle_badge)
+          : undefined,
       run_it_twice: isSet(object.runItTwice)
         ? globalThis.Boolean(object.runItTwice)
         : isSet(object.run_it_twice)
-        ? globalThis.Boolean(object.run_it_twice)
-        : undefined,
+          ? globalThis.Boolean(object.run_it_twice)
+          : undefined,
     };
   },
-
+  
   toJSON(message: Seat): unknown {
     const obj: any = {};
     if (message.player_id !== "") {
@@ -777,7 +777,7 @@ export const Seat: MessageFns<Seat> = {
     }
     return obj;
   },
-
+  
   create<I extends Exact<DeepPartial<Seat>, I>>(base?: I): Seat {
     return Seat.fromPartial(base ?? ({} as any));
   },
@@ -806,7 +806,7 @@ export const Seat: MessageFns<Seat> = {
 };
 
 function createBaseBlindEscalation(): BlindEscalation {
-  return { interval_minutes: 0, multiplier: 0, max: 0 };
+  return {interval_minutes: 0, multiplier: 0, max: 0};
 }
 
 export const BlindEscalation: MessageFns<BlindEscalation> = {
@@ -822,7 +822,7 @@ export const BlindEscalation: MessageFns<BlindEscalation> = {
     }
     return writer;
   },
-
+  
   decode(input: BinaryReader | Uint8Array, length?: number): BlindEscalation {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
@@ -834,7 +834,7 @@ export const BlindEscalation: MessageFns<BlindEscalation> = {
           if (tag !== 8) {
             break;
           }
-
+          
           message.interval_minutes = reader.int32();
           continue;
         }
@@ -842,7 +842,7 @@ export const BlindEscalation: MessageFns<BlindEscalation> = {
           if (tag !== 16) {
             break;
           }
-
+          
           message.multiplier = reader.int32();
           continue;
         }
@@ -850,7 +850,7 @@ export const BlindEscalation: MessageFns<BlindEscalation> = {
           if (tag !== 24) {
             break;
           }
-
+          
           message.max = longToNumber(reader.int64());
           continue;
         }
@@ -862,19 +862,19 @@ export const BlindEscalation: MessageFns<BlindEscalation> = {
     }
     return message;
   },
-
+  
   fromJSON(object: any): BlindEscalation {
     return {
       interval_minutes: isSet(object.intervalMinutes)
         ? globalThis.Number(object.intervalMinutes)
         : isSet(object.interval_minutes)
-        ? globalThis.Number(object.interval_minutes)
-        : 0,
+          ? globalThis.Number(object.interval_minutes)
+          : 0,
       multiplier: isSet(object.multiplier) ? globalThis.Number(object.multiplier) : 0,
       max: isSet(object.max) ? globalThis.Number(object.max) : 0,
     };
   },
-
+  
   toJSON(message: BlindEscalation): unknown {
     const obj: any = {};
     if (message.interval_minutes !== 0) {
@@ -888,7 +888,7 @@ export const BlindEscalation: MessageFns<BlindEscalation> = {
     }
     return obj;
   },
-
+  
   create<I extends Exact<DeepPartial<BlindEscalation>, I>>(base?: I): BlindEscalation {
     return BlindEscalation.fromPartial(base ?? ({} as any));
   },
@@ -982,7 +982,7 @@ export const Room: MessageFns<Room> = {
     }
     return writer;
   },
-
+  
   decode(input: BinaryReader | Uint8Array, length?: number): Room {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
@@ -994,7 +994,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 10) {
             break;
           }
-
+          
           message.room_id = reader.string();
           continue;
         }
@@ -1002,7 +1002,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 18) {
             break;
           }
-
+          
           message.visibility = reader.string();
           continue;
         }
@@ -1010,7 +1010,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 26) {
             break;
           }
-
+          
           message.currency_mode = reader.string();
           continue;
         }
@@ -1018,7 +1018,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 32) {
             break;
           }
-
+          
           message.small_blind = longToNumber(reader.int64());
           continue;
         }
@@ -1026,7 +1026,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 40) {
             break;
           }
-
+          
           message.big_blind = longToNumber(reader.int64());
           continue;
         }
@@ -1034,7 +1034,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 48) {
             break;
           }
-
+          
           message.max_seats = reader.int32();
           continue;
         }
@@ -1042,7 +1042,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 56) {
             break;
           }
-
+          
           message.buy_in_min = longToNumber(reader.int64());
           continue;
         }
@@ -1050,7 +1050,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 64) {
             break;
           }
-
+          
           message.buy_in_max = longToNumber(reader.int64());
           continue;
         }
@@ -1058,7 +1058,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 72) {
             break;
           }
-
+          
           message.entry_fee_cents = longToNumber(reader.int64());
           continue;
         }
@@ -1066,7 +1066,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 82) {
             break;
           }
-
+          
           message.share_code = reader.string();
           continue;
         }
@@ -1074,7 +1074,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 90) {
             break;
           }
-
+          
           message.blind_escalation = BlindEscalation.decode(reader, reader.uint32());
           continue;
         }
@@ -1082,7 +1082,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 96) {
             break;
           }
-
+          
           message.turn_timeout_seconds = reader.int32();
           continue;
         }
@@ -1090,7 +1090,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 104) {
             break;
           }
-
+          
           message.equity_display_enabled = reader.bool();
           continue;
         }
@@ -1098,7 +1098,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 114) {
             break;
           }
-
+          
           message.status = reader.string();
           continue;
         }
@@ -1106,7 +1106,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 120) {
             break;
           }
-
+          
           message.seats_taken = reader.int32();
           continue;
         }
@@ -1114,7 +1114,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 130) {
             break;
           }
-
+          
           message.created_by = reader.string();
           continue;
         }
@@ -1122,7 +1122,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 138) {
             break;
           }
-
+          
           message.created_at = reader.string();
           continue;
         }
@@ -1130,7 +1130,7 @@ export const Room: MessageFns<Room> = {
           if (tag !== 144) {
             break;
           }
-
+          
           message.run_it_twice_enabled = reader.bool();
           continue;
         }
@@ -1142,94 +1142,94 @@ export const Room: MessageFns<Room> = {
     }
     return message;
   },
-
+  
   fromJSON(object: any): Room {
     return {
       room_id: isSet(object.roomId)
         ? globalThis.String(object.roomId)
         : isSet(object.room_id)
-        ? globalThis.String(object.room_id)
-        : "",
+          ? globalThis.String(object.room_id)
+          : "",
       visibility: isSet(object.visibility) ? globalThis.String(object.visibility) : "",
       currency_mode: isSet(object.currencyMode)
         ? globalThis.String(object.currencyMode)
         : isSet(object.currency_mode)
-        ? globalThis.String(object.currency_mode)
-        : "",
+          ? globalThis.String(object.currency_mode)
+          : "",
       small_blind: isSet(object.smallBlind)
         ? globalThis.Number(object.smallBlind)
         : isSet(object.small_blind)
-        ? globalThis.Number(object.small_blind)
-        : 0,
+          ? globalThis.Number(object.small_blind)
+          : 0,
       big_blind: isSet(object.bigBlind)
         ? globalThis.Number(object.bigBlind)
         : isSet(object.big_blind)
-        ? globalThis.Number(object.big_blind)
-        : 0,
+          ? globalThis.Number(object.big_blind)
+          : 0,
       max_seats: isSet(object.maxSeats)
         ? globalThis.Number(object.maxSeats)
         : isSet(object.max_seats)
-        ? globalThis.Number(object.max_seats)
-        : 0,
+          ? globalThis.Number(object.max_seats)
+          : 0,
       buy_in_min: isSet(object.buyInMin)
         ? globalThis.Number(object.buyInMin)
         : isSet(object.buy_in_min)
-        ? globalThis.Number(object.buy_in_min)
-        : 0,
+          ? globalThis.Number(object.buy_in_min)
+          : 0,
       buy_in_max: isSet(object.buyInMax)
         ? globalThis.Number(object.buyInMax)
         : isSet(object.buy_in_max)
-        ? globalThis.Number(object.buy_in_max)
-        : 0,
+          ? globalThis.Number(object.buy_in_max)
+          : 0,
       entry_fee_cents: isSet(object.entryFeeCents)
         ? globalThis.Number(object.entryFeeCents)
         : isSet(object.entry_fee_cents)
-        ? globalThis.Number(object.entry_fee_cents)
-        : 0,
+          ? globalThis.Number(object.entry_fee_cents)
+          : 0,
       share_code: isSet(object.shareCode)
         ? globalThis.String(object.shareCode)
         : isSet(object.share_code)
-        ? globalThis.String(object.share_code)
-        : "",
+          ? globalThis.String(object.share_code)
+          : "",
       blind_escalation: isSet(object.blindEscalation)
         ? BlindEscalation.fromJSON(object.blindEscalation)
         : isSet(object.blind_escalation)
-        ? BlindEscalation.fromJSON(object.blind_escalation)
-        : undefined,
+          ? BlindEscalation.fromJSON(object.blind_escalation)
+          : undefined,
       turn_timeout_seconds: isSet(object.turnTimeoutSeconds)
         ? globalThis.Number(object.turnTimeoutSeconds)
         : isSet(object.turn_timeout_seconds)
-        ? globalThis.Number(object.turn_timeout_seconds)
-        : 0,
+          ? globalThis.Number(object.turn_timeout_seconds)
+          : 0,
       equity_display_enabled: isSet(object.equityDisplayEnabled)
         ? globalThis.Boolean(object.equityDisplayEnabled)
         : isSet(object.equity_display_enabled)
-        ? globalThis.Boolean(object.equity_display_enabled)
-        : false,
+          ? globalThis.Boolean(object.equity_display_enabled)
+          : false,
       status: isSet(object.status) ? globalThis.String(object.status) : "",
       seats_taken: isSet(object.seatsTaken)
         ? globalThis.Number(object.seatsTaken)
         : isSet(object.seats_taken)
-        ? globalThis.Number(object.seats_taken)
-        : 0,
+          ? globalThis.Number(object.seats_taken)
+          : 0,
       created_by: isSet(object.createdBy)
         ? globalThis.String(object.createdBy)
         : isSet(object.created_by)
-        ? globalThis.String(object.created_by)
-        : "",
+          ? globalThis.String(object.created_by)
+          : "",
       created_at: isSet(object.createdAt)
         ? globalThis.String(object.createdAt)
         : isSet(object.created_at)
-        ? globalThis.String(object.created_at)
-        : "",
+          ? globalThis.String(object.created_at)
+          : "",
       run_it_twice_enabled: isSet(object.runItTwiceEnabled)
         ? globalThis.Boolean(object.runItTwiceEnabled)
         : isSet(object.run_it_twice_enabled)
-        ? globalThis.Boolean(object.run_it_twice_enabled)
-        : false,
+          ? globalThis.Boolean(object.run_it_twice_enabled)
+          : false,
     };
   },
-
+  
   toJSON(message: Room): unknown {
     const obj: any = {};
     if (message.room_id !== "") {
@@ -1288,7 +1288,7 @@ export const Room: MessageFns<Room> = {
     }
     return obj;
   },
-
+  
   create<I extends Exact<DeepPartial<Room>, I>>(base?: I): Room {
     return Room.fromPartial(base ?? ({} as any));
   },
@@ -1371,7 +1371,7 @@ export const LegalActions: MessageFns<LegalActions> = {
     }
     return writer;
   },
-
+  
   decode(input: BinaryReader | Uint8Array, length?: number): LegalActions {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
@@ -1383,7 +1383,7 @@ export const LegalActions: MessageFns<LegalActions> = {
           if (tag !== 10) {
             break;
           }
-
+          
           message.actions.push(reader.string());
           continue;
         }
@@ -1391,7 +1391,7 @@ export const LegalActions: MessageFns<LegalActions> = {
           if (tag !== 16) {
             break;
           }
-
+          
           message.call_amount = longToNumber(reader.int64());
           continue;
         }
@@ -1399,7 +1399,7 @@ export const LegalActions: MessageFns<LegalActions> = {
           if (tag !== 24) {
             break;
           }
-
+          
           message.min_raise_to = longToNumber(reader.int64());
           continue;
         }
@@ -1407,7 +1407,7 @@ export const LegalActions: MessageFns<LegalActions> = {
           if (tag !== 32) {
             break;
           }
-
+          
           message.max_raise_to = longToNumber(reader.int64());
           continue;
         }
@@ -1415,7 +1415,7 @@ export const LegalActions: MessageFns<LegalActions> = {
           if (tag !== 40) {
             break;
           }
-
+          
           message.step = longToNumber(reader.int64());
           continue;
         }
@@ -1423,7 +1423,7 @@ export const LegalActions: MessageFns<LegalActions> = {
           if (tag !== 48) {
             break;
           }
-
+          
           message.current_contribution = longToNumber(reader.int64());
           continue;
         }
@@ -1431,7 +1431,7 @@ export const LegalActions: MessageFns<LegalActions> = {
           if (tag !== 56) {
             break;
           }
-
+          
           message.current_bet = longToNumber(reader.int64());
           continue;
         }
@@ -1439,7 +1439,7 @@ export const LegalActions: MessageFns<LegalActions> = {
           if (tag !== 64) {
             break;
           }
-
+          
           message.one_third_pot_raise_to = longToNumber(reader.int64());
           continue;
         }
@@ -1447,7 +1447,7 @@ export const LegalActions: MessageFns<LegalActions> = {
           if (tag !== 72) {
             break;
           }
-
+          
           message.half_pot_raise_to = longToNumber(reader.int64());
           continue;
         }
@@ -1455,7 +1455,7 @@ export const LegalActions: MessageFns<LegalActions> = {
           if (tag !== 80) {
             break;
           }
-
+          
           message.two_thirds_pot_raise_to = longToNumber(reader.int64());
           continue;
         }
@@ -1463,7 +1463,7 @@ export const LegalActions: MessageFns<LegalActions> = {
           if (tag !== 88) {
             break;
           }
-
+          
           message.pot_raise_to = longToNumber(reader.int64());
           continue;
         }
@@ -1475,59 +1475,59 @@ export const LegalActions: MessageFns<LegalActions> = {
     }
     return message;
   },
-
+  
   fromJSON(object: any): LegalActions {
     return {
       actions: globalThis.Array.isArray(object?.actions) ? object.actions.map((e: any) => globalThis.String(e)) : [],
       call_amount: isSet(object.callAmount)
         ? globalThis.Number(object.callAmount)
         : isSet(object.call_amount)
-        ? globalThis.Number(object.call_amount)
-        : 0,
+          ? globalThis.Number(object.call_amount)
+          : 0,
       min_raise_to: isSet(object.minRaiseTo)
         ? globalThis.Number(object.minRaiseTo)
         : isSet(object.min_raise_to)
-        ? globalThis.Number(object.min_raise_to)
-        : 0,
+          ? globalThis.Number(object.min_raise_to)
+          : 0,
       max_raise_to: isSet(object.maxRaiseTo)
         ? globalThis.Number(object.maxRaiseTo)
         : isSet(object.max_raise_to)
-        ? globalThis.Number(object.max_raise_to)
-        : 0,
+          ? globalThis.Number(object.max_raise_to)
+          : 0,
       step: isSet(object.step) ? globalThis.Number(object.step) : 0,
       current_contribution: isSet(object.currentContribution)
         ? globalThis.Number(object.currentContribution)
         : isSet(object.current_contribution)
-        ? globalThis.Number(object.current_contribution)
-        : 0,
+          ? globalThis.Number(object.current_contribution)
+          : 0,
       current_bet: isSet(object.currentBet)
         ? globalThis.Number(object.currentBet)
         : isSet(object.current_bet)
-        ? globalThis.Number(object.current_bet)
-        : 0,
+          ? globalThis.Number(object.current_bet)
+          : 0,
       one_third_pot_raise_to: isSet(object.oneThirdPotRaiseTo)
         ? globalThis.Number(object.oneThirdPotRaiseTo)
         : isSet(object.one_third_pot_raise_to)
-        ? globalThis.Number(object.one_third_pot_raise_to)
-        : 0,
+          ? globalThis.Number(object.one_third_pot_raise_to)
+          : 0,
       half_pot_raise_to: isSet(object.halfPotRaiseTo)
         ? globalThis.Number(object.halfPotRaiseTo)
         : isSet(object.half_pot_raise_to)
-        ? globalThis.Number(object.half_pot_raise_to)
-        : 0,
+          ? globalThis.Number(object.half_pot_raise_to)
+          : 0,
       two_thirds_pot_raise_to: isSet(object.twoThirdsPotRaiseTo)
         ? globalThis.Number(object.twoThirdsPotRaiseTo)
         : isSet(object.two_thirds_pot_raise_to)
-        ? globalThis.Number(object.two_thirds_pot_raise_to)
-        : 0,
+          ? globalThis.Number(object.two_thirds_pot_raise_to)
+          : 0,
       pot_raise_to: isSet(object.potRaiseTo)
         ? globalThis.Number(object.potRaiseTo)
         : isSet(object.pot_raise_to)
-        ? globalThis.Number(object.pot_raise_to)
-        : 0,
+          ? globalThis.Number(object.pot_raise_to)
+          : 0,
     };
   },
-
+  
   toJSON(message: LegalActions): unknown {
     const obj: any = {};
     if (message.actions?.length) {
@@ -1565,7 +1565,7 @@ export const LegalActions: MessageFns<LegalActions> = {
     }
     return obj;
   },
-
+  
   create<I extends Exact<DeepPartial<LegalActions>, I>>(base?: I): LegalActions {
     return LegalActions.fromPartial(base ?? ({} as any));
   },
@@ -1587,7 +1587,7 @@ export const LegalActions: MessageFns<LegalActions> = {
 };
 
 function createBasePot(): Pot {
-  return { amount: 0, eligible_player_ids: [] };
+  return {amount: 0, eligible_player_ids: []};
 }
 
 export const Pot: MessageFns<Pot> = {
@@ -1600,7 +1600,7 @@ export const Pot: MessageFns<Pot> = {
     }
     return writer;
   },
-
+  
   decode(input: BinaryReader | Uint8Array, length?: number): Pot {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
@@ -1612,7 +1612,7 @@ export const Pot: MessageFns<Pot> = {
           if (tag !== 8) {
             break;
           }
-
+          
           message.amount = longToNumber(reader.int64());
           continue;
         }
@@ -1620,7 +1620,7 @@ export const Pot: MessageFns<Pot> = {
           if (tag !== 18) {
             break;
           }
-
+          
           message.eligible_player_ids.push(reader.string());
           continue;
         }
@@ -1632,18 +1632,18 @@ export const Pot: MessageFns<Pot> = {
     }
     return message;
   },
-
+  
   fromJSON(object: any): Pot {
     return {
       amount: isSet(object.amount) ? globalThis.Number(object.amount) : 0,
       eligible_player_ids: globalThis.Array.isArray(object?.eligiblePlayerIds)
         ? object.eligiblePlayerIds.map((e: any) => globalThis.String(e))
         : globalThis.Array.isArray(object?.eligible_player_ids)
-        ? object.eligible_player_ids.map((e: any) => globalThis.String(e))
-        : [],
+          ? object.eligible_player_ids.map((e: any) => globalThis.String(e))
+          : [],
     };
   },
-
+  
   toJSON(message: Pot): unknown {
     const obj: any = {};
     if (message.amount !== 0) {
@@ -1654,7 +1654,7 @@ export const Pot: MessageFns<Pot> = {
     }
     return obj;
   },
-
+  
   create<I extends Exact<DeepPartial<Pot>, I>>(base?: I): Pot {
     return Pot.fromPartial(base ?? ({} as any));
   },
@@ -1693,7 +1693,7 @@ export const PotResult: MessageFns<PotResult> = {
       writer.uint32(34).string(v!);
     }
     globalThis.Object.entries(message.payouts).forEach(([key, value]: [string, number]) => {
-      PotResult_PayoutsEntry.encode({ key: key as any, value }, writer.uint32(42).fork()).join();
+      PotResult_PayoutsEntry.encode({key: key as any, value}, writer.uint32(42).fork()).join();
     });
     if (message.refund !== false) {
       writer.uint32(48).bool(message.refund);
@@ -1703,7 +1703,7 @@ export const PotResult: MessageFns<PotResult> = {
     }
     return writer;
   },
-
+  
   decode(input: BinaryReader | Uint8Array, length?: number): PotResult {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
@@ -1715,7 +1715,7 @@ export const PotResult: MessageFns<PotResult> = {
           if (tag !== 8) {
             break;
           }
-
+          
           message.amount = longToNumber(reader.int64());
           continue;
         }
@@ -1723,7 +1723,7 @@ export const PotResult: MessageFns<PotResult> = {
           if (tag !== 16) {
             break;
           }
-
+          
           message.payout_amount = longToNumber(reader.int64());
           continue;
         }
@@ -1731,7 +1731,7 @@ export const PotResult: MessageFns<PotResult> = {
           if (tag !== 26) {
             break;
           }
-
+          
           message.eligible_player_ids.push(reader.string());
           continue;
         }
@@ -1739,7 +1739,7 @@ export const PotResult: MessageFns<PotResult> = {
           if (tag !== 34) {
             break;
           }
-
+          
           message.winner_player_ids.push(reader.string());
           continue;
         }
@@ -1747,7 +1747,7 @@ export const PotResult: MessageFns<PotResult> = {
           if (tag !== 42) {
             break;
           }
-
+          
           const entry5 = PotResult_PayoutsEntry.decode(reader, reader.uint32());
           if (entry5.value !== undefined) {
             message.payouts[entry5.key] = entry5.value;
@@ -1758,7 +1758,7 @@ export const PotResult: MessageFns<PotResult> = {
           if (tag !== 48) {
             break;
           }
-
+          
           message.refund = reader.bool();
           continue;
         }
@@ -1766,7 +1766,7 @@ export const PotResult: MessageFns<PotResult> = {
           if (tag !== 56) {
             break;
           }
-
+          
           message.runout = reader.int32();
           continue;
         }
@@ -1778,25 +1778,25 @@ export const PotResult: MessageFns<PotResult> = {
     }
     return message;
   },
-
+  
   fromJSON(object: any): PotResult {
     return {
       amount: isSet(object.amount) ? globalThis.Number(object.amount) : 0,
       payout_amount: isSet(object.payoutAmount)
         ? globalThis.Number(object.payoutAmount)
         : isSet(object.payout_amount)
-        ? globalThis.Number(object.payout_amount)
-        : 0,
+          ? globalThis.Number(object.payout_amount)
+          : 0,
       eligible_player_ids: globalThis.Array.isArray(object?.eligiblePlayerIds)
         ? object.eligiblePlayerIds.map((e: any) => globalThis.String(e))
         : globalThis.Array.isArray(object?.eligible_player_ids)
-        ? object.eligible_player_ids.map((e: any) => globalThis.String(e))
-        : [],
+          ? object.eligible_player_ids.map((e: any) => globalThis.String(e))
+          : [],
       winner_player_ids: globalThis.Array.isArray(object?.winnerPlayerIds)
         ? object.winnerPlayerIds.map((e: any) => globalThis.String(e))
         : globalThis.Array.isArray(object?.winner_player_ids)
-        ? object.winner_player_ids.map((e: any) => globalThis.String(e))
-        : [],
+          ? object.winner_player_ids.map((e: any) => globalThis.String(e))
+          : [],
       payouts: isObject(object.payouts)
         ? (globalThis.Object.entries(object.payouts) as [string, any][]).reduce(
           (acc: { [key: string]: number }, [key, value]: [string, any]) => {
@@ -1810,7 +1810,7 @@ export const PotResult: MessageFns<PotResult> = {
       runout: isSet(object.runout) ? globalThis.Number(object.runout) : 0,
     };
   },
-
+  
   toJSON(message: PotResult): unknown {
     const obj: any = {};
     if (message.amount !== 0) {
@@ -1842,7 +1842,7 @@ export const PotResult: MessageFns<PotResult> = {
     }
     return obj;
   },
-
+  
   create<I extends Exact<DeepPartial<PotResult>, I>>(base?: I): PotResult {
     return PotResult.fromPartial(base ?? ({} as any));
   },
@@ -1868,7 +1868,7 @@ export const PotResult: MessageFns<PotResult> = {
 };
 
 function createBasePotResult_PayoutsEntry(): PotResult_PayoutsEntry {
-  return { key: "", value: 0 };
+  return {key: "", value: 0};
 }
 
 export const PotResult_PayoutsEntry: MessageFns<PotResult_PayoutsEntry> = {
@@ -1881,7 +1881,7 @@ export const PotResult_PayoutsEntry: MessageFns<PotResult_PayoutsEntry> = {
     }
     return writer;
   },
-
+  
   decode(input: BinaryReader | Uint8Array, length?: number): PotResult_PayoutsEntry {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
@@ -1893,7 +1893,7 @@ export const PotResult_PayoutsEntry: MessageFns<PotResult_PayoutsEntry> = {
           if (tag !== 10) {
             break;
           }
-
+          
           message.key = reader.string();
           continue;
         }
@@ -1901,7 +1901,7 @@ export const PotResult_PayoutsEntry: MessageFns<PotResult_PayoutsEntry> = {
           if (tag !== 16) {
             break;
           }
-
+          
           message.value = longToNumber(reader.int64());
           continue;
         }
@@ -1913,14 +1913,14 @@ export const PotResult_PayoutsEntry: MessageFns<PotResult_PayoutsEntry> = {
     }
     return message;
   },
-
+  
   fromJSON(object: any): PotResult_PayoutsEntry {
     return {
       key: isSet(object.key) ? globalThis.String(object.key) : "",
       value: isSet(object.value) ? globalThis.Number(object.value) : 0,
     };
   },
-
+  
   toJSON(message: PotResult_PayoutsEntry): unknown {
     const obj: any = {};
     if (message.key !== "") {
@@ -1931,7 +1931,7 @@ export const PotResult_PayoutsEntry: MessageFns<PotResult_PayoutsEntry> = {
     }
     return obj;
   },
-
+  
   create<I extends Exact<DeepPartial<PotResult_PayoutsEntry>, I>>(base?: I): PotResult_PayoutsEntry {
     return PotResult_PayoutsEntry.fromPartial(base ?? ({} as any));
   },
@@ -1944,7 +1944,7 @@ export const PotResult_PayoutsEntry: MessageFns<PotResult_PayoutsEntry> = {
 };
 
 function createBaseChatMessage(): ChatMessage {
-  return { id: "", player_id: "", message: "", timestamp: 0 };
+  return {id: "", player_id: "", message: "", timestamp: 0};
 }
 
 export const ChatMessage: MessageFns<ChatMessage> = {
@@ -1963,7 +1963,7 @@ export const ChatMessage: MessageFns<ChatMessage> = {
     }
     return writer;
   },
-
+  
   decode(input: BinaryReader | Uint8Array, length?: number): ChatMessage {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
@@ -1975,7 +1975,7 @@ export const ChatMessage: MessageFns<ChatMessage> = {
           if (tag !== 10) {
             break;
           }
-
+          
           message.id = reader.string();
           continue;
         }
@@ -1983,7 +1983,7 @@ export const ChatMessage: MessageFns<ChatMessage> = {
           if (tag !== 18) {
             break;
           }
-
+          
           message.player_id = reader.string();
           continue;
         }
@@ -1991,7 +1991,7 @@ export const ChatMessage: MessageFns<ChatMessage> = {
           if (tag !== 26) {
             break;
           }
-
+          
           message.message = reader.string();
           continue;
         }
@@ -1999,7 +1999,7 @@ export const ChatMessage: MessageFns<ChatMessage> = {
           if (tag !== 32) {
             break;
           }
-
+          
           message.timestamp = longToNumber(reader.int64());
           continue;
         }
@@ -2011,20 +2011,20 @@ export const ChatMessage: MessageFns<ChatMessage> = {
     }
     return message;
   },
-
+  
   fromJSON(object: any): ChatMessage {
     return {
       id: isSet(object.id) ? globalThis.String(object.id) : "",
       player_id: isSet(object.playerId)
         ? globalThis.String(object.playerId)
         : isSet(object.player_id)
-        ? globalThis.String(object.player_id)
-        : "",
+          ? globalThis.String(object.player_id)
+          : "",
       message: isSet(object.message) ? globalThis.String(object.message) : "",
       timestamp: isSet(object.timestamp) ? globalThis.Number(object.timestamp) : 0,
     };
   },
-
+  
   toJSON(message: ChatMessage): unknown {
     const obj: any = {};
     if (message.id !== "") {
@@ -2041,7 +2041,7 @@ export const ChatMessage: MessageFns<ChatMessage> = {
     }
     return obj;
   },
-
+  
   create<I extends Exact<DeepPartial<ChatMessage>, I>>(base?: I): ChatMessage {
     return ChatMessage.fromPartial(base ?? ({} as any));
   },
@@ -2056,7 +2056,7 @@ export const ChatMessage: MessageFns<ChatMessage> = {
 };
 
 function createBaseTableReaction(): TableReaction {
-  return { id: "", player_id: "", reaction_id: "", target_player_id: "", timestamp: 0, expires_at: 0 };
+  return {id: "", player_id: "", reaction_id: "", target_player_id: "", timestamp: 0, expires_at: 0};
 }
 
 export const TableReaction: MessageFns<TableReaction> = {
@@ -2081,7 +2081,7 @@ export const TableReaction: MessageFns<TableReaction> = {
     }
     return writer;
   },
-
+  
   decode(input: BinaryReader | Uint8Array, length?: number): TableReaction {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
@@ -2093,7 +2093,7 @@ export const TableReaction: MessageFns<TableReaction> = {
           if (tag !== 10) {
             break;
           }
-
+          
           message.id = reader.string();
           continue;
         }
@@ -2101,7 +2101,7 @@ export const TableReaction: MessageFns<TableReaction> = {
           if (tag !== 18) {
             break;
           }
-
+          
           message.player_id = reader.string();
           continue;
         }
@@ -2109,7 +2109,7 @@ export const TableReaction: MessageFns<TableReaction> = {
           if (tag !== 26) {
             break;
           }
-
+          
           message.reaction_id = reader.string();
           continue;
         }
@@ -2117,7 +2117,7 @@ export const TableReaction: MessageFns<TableReaction> = {
           if (tag !== 34) {
             break;
           }
-
+          
           message.target_player_id = reader.string();
           continue;
         }
@@ -2125,7 +2125,7 @@ export const TableReaction: MessageFns<TableReaction> = {
           if (tag !== 40) {
             break;
           }
-
+          
           message.timestamp = longToNumber(reader.int64());
           continue;
         }
@@ -2133,7 +2133,7 @@ export const TableReaction: MessageFns<TableReaction> = {
           if (tag !== 48) {
             break;
           }
-
+          
           message.expires_at = longToNumber(reader.int64());
           continue;
         }
@@ -2145,34 +2145,34 @@ export const TableReaction: MessageFns<TableReaction> = {
     }
     return message;
   },
-
+  
   fromJSON(object: any): TableReaction {
     return {
       id: isSet(object.id) ? globalThis.String(object.id) : "",
       player_id: isSet(object.playerId)
         ? globalThis.String(object.playerId)
         : isSet(object.player_id)
-        ? globalThis.String(object.player_id)
-        : "",
+          ? globalThis.String(object.player_id)
+          : "",
       reaction_id: isSet(object.reactionId)
         ? globalThis.String(object.reactionId)
         : isSet(object.reaction_id)
-        ? globalThis.String(object.reaction_id)
-        : "",
+          ? globalThis.String(object.reaction_id)
+          : "",
       target_player_id: isSet(object.targetPlayerId)
         ? globalThis.String(object.targetPlayerId)
         : isSet(object.target_player_id)
-        ? globalThis.String(object.target_player_id)
-        : "",
+          ? globalThis.String(object.target_player_id)
+          : "",
       timestamp: isSet(object.timestamp) ? globalThis.Number(object.timestamp) : 0,
       expires_at: isSet(object.expiresAt)
         ? globalThis.Number(object.expiresAt)
         : isSet(object.expires_at)
-        ? globalThis.Number(object.expires_at)
-        : 0,
+          ? globalThis.Number(object.expires_at)
+          : 0,
     };
   },
-
+  
   toJSON(message: TableReaction): unknown {
     const obj: any = {};
     if (message.id !== "") {
@@ -2195,7 +2195,7 @@ export const TableReaction: MessageFns<TableReaction> = {
     }
     return obj;
   },
-
+  
   create<I extends Exact<DeepPartial<TableReaction>, I>>(base?: I): TableReaction {
     return TableReaction.fromPartial(base ?? ({} as any));
   },
@@ -2262,7 +2262,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
       Seat.encode(v!, writer.uint32(26).fork()).join();
     }
     globalThis.Object.entries(message.payouts).forEach(([key, value]: [string, number]) => {
-      TableSnapshot_PayoutsEntry.encode({ key: key as any, value }, writer.uint32(34).fork()).join();
+      TableSnapshot_PayoutsEntry.encode({key: key as any, value}, writer.uint32(34).fork()).join();
     });
     for (const v of message.winners) {
       writer.uint32(42).string(v!);
@@ -2340,10 +2340,10 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
       writer.uint32(234).string(message.root_commit_hash);
     }
     globalThis.Object.entries(message.revealed_card_salts).forEach(([key, value]: [string, RevealedSalt]) => {
-      TableSnapshot_RevealedCardSaltsEntry.encode({ key: key as any, value }, writer.uint32(242).fork()).join();
+      TableSnapshot_RevealedCardSaltsEntry.encode({key: key as any, value}, writer.uint32(242).fork()).join();
     });
     globalThis.Object.entries(message.unrevealed_card_hashes).forEach(([key, value]: [string, string]) => {
-      TableSnapshot_UnrevealedCardHashesEntry.encode({ key: key as any, value }, writer.uint32(250).fork()).join();
+      TableSnapshot_UnrevealedCardHashesEntry.encode({key: key as any, value}, writer.uint32(250).fork()).join();
     });
     for (const v of message.runout_cards) {
       writer.uint32(258).string(v!);
@@ -2356,7 +2356,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     }
     return writer;
   },
-
+  
   decode(input: BinaryReader | Uint8Array, length?: number): TableSnapshot {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
@@ -2368,7 +2368,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 10) {
             break;
           }
-
+          
           message.stage = reader.string();
           continue;
         }
@@ -2376,7 +2376,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 18) {
             break;
           }
-
+          
           message.board.push(reader.string());
           continue;
         }
@@ -2384,7 +2384,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 26) {
             break;
           }
-
+          
           message.seats.push(Seat.decode(reader, reader.uint32()));
           continue;
         }
@@ -2392,7 +2392,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 34) {
             break;
           }
-
+          
           const entry4 = TableSnapshot_PayoutsEntry.decode(reader, reader.uint32());
           if (entry4.value !== undefined) {
             message.payouts[entry4.key] = entry4.value;
@@ -2403,7 +2403,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 42) {
             break;
           }
-
+          
           message.winners.push(reader.string());
           continue;
         }
@@ -2411,7 +2411,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 48) {
             break;
           }
-
+          
           message.rake = longToNumber(reader.int64());
           continue;
         }
@@ -2419,7 +2419,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 58) {
             break;
           }
-
+          
           message.current_player_id = reader.string();
           continue;
         }
@@ -2427,7 +2427,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 66) {
             break;
           }
-
+          
           message.legal_actions = LegalActions.decode(reader, reader.uint32());
           continue;
         }
@@ -2435,7 +2435,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 72) {
             break;
           }
-
+          
           message.action_deadline_unix_ms = longToNumber(reader.int64());
           continue;
         }
@@ -2443,7 +2443,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 80) {
             break;
           }
-
+          
           message.next_hand_unix_ms = longToNumber(reader.int64());
           continue;
         }
@@ -2451,7 +2451,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 88) {
             break;
           }
-
+          
           message.won_without_showdown = reader.bool();
           continue;
         }
@@ -2459,7 +2459,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 98) {
             break;
           }
-
+          
           message.shuffle_commit_hash = reader.string();
           continue;
         }
@@ -2467,7 +2467,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 106) {
             break;
           }
-
+          
           message.shuffle_server_seed_hex = reader.string();
           continue;
         }
@@ -2475,7 +2475,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 114) {
             break;
           }
-
+          
           message.small_blind_player_id = reader.string();
           continue;
         }
@@ -2483,7 +2483,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 122) {
             break;
           }
-
+          
           message.big_blind_player_id = reader.string();
           continue;
         }
@@ -2491,7 +2491,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 130) {
             break;
           }
-
+          
           message.dealer_player_id = reader.string();
           continue;
         }
@@ -2499,7 +2499,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 136) {
             break;
           }
-
+          
           message.snapshot_version = longToNumber(reader.uint64());
           continue;
         }
@@ -2507,7 +2507,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 146) {
             break;
           }
-
+          
           message.pots.push(Pot.decode(reader, reader.uint32()));
           continue;
         }
@@ -2515,7 +2515,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 154) {
             break;
           }
-
+          
           message.hand_id = reader.string();
           continue;
         }
@@ -2523,7 +2523,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 162) {
             break;
           }
-
+          
           message.pot_results.push(PotResult.decode(reader, reader.uint32()));
           continue;
         }
@@ -2531,7 +2531,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 168) {
             break;
           }
-
+          
           message.protocol_version = reader.uint32();
           continue;
         }
@@ -2539,7 +2539,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 176) {
             break;
           }
-
+          
           message.idle_removal_unix_ms = longToNumber(reader.int64());
           continue;
         }
@@ -2547,7 +2547,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 184) {
             break;
           }
-
+          
           message.action_base_deadline_unix_ms = longToNumber(reader.int64());
           continue;
         }
@@ -2555,7 +2555,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 194) {
             break;
           }
-
+          
           message.chat_messages.push(ChatMessage.decode(reader, reader.uint32()));
           continue;
         }
@@ -2563,7 +2563,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 202) {
             break;
           }
-
+          
           message.reactions.push(TableReaction.decode(reader, reader.uint32()));
           continue;
         }
@@ -2571,7 +2571,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 210) {
             break;
           }
-
+          
           message.action_preselection = reader.string();
           continue;
         }
@@ -2579,7 +2579,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 216) {
             break;
           }
-
+          
           message.action_preselection_amount = longToNumber(reader.int64());
           continue;
         }
@@ -2587,7 +2587,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 224) {
             break;
           }
-
+          
           message.prospective_call_amount = longToNumber(reader.int64());
           continue;
         }
@@ -2595,7 +2595,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 234) {
             break;
           }
-
+          
           message.root_commit_hash = reader.string();
           continue;
         }
@@ -2603,7 +2603,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 242) {
             break;
           }
-
+          
           const entry30 = TableSnapshot_RevealedCardSaltsEntry.decode(reader, reader.uint32());
           if (entry30.value !== undefined) {
             message.revealed_card_salts[entry30.key] = entry30.value;
@@ -2614,7 +2614,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 250) {
             break;
           }
-
+          
           const entry31 = TableSnapshot_UnrevealedCardHashesEntry.decode(reader, reader.uint32());
           if (entry31.value !== undefined) {
             message.unrevealed_card_hashes[entry31.key] = entry31.value;
@@ -2625,7 +2625,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 258) {
             break;
           }
-
+          
           message.runout_cards.push(reader.string());
           continue;
         }
@@ -2633,7 +2633,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 266) {
             break;
           }
-
+          
           message.board_two.push(reader.string());
           continue;
         }
@@ -2641,7 +2641,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           if (tag !== 272) {
             break;
           }
-
+          
           message.board_split_at = reader.int32();
           continue;
         }
@@ -2653,7 +2653,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     }
     return message;
   },
-
+  
   fromJSON(object: any): TableSnapshot {
     return {
       stage: isSet(object.stage) ? globalThis.String(object.stage) : "",
@@ -2673,114 +2673,114 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
       current_player_id: isSet(object.currentPlayerId)
         ? globalThis.String(object.currentPlayerId)
         : isSet(object.current_player_id)
-        ? globalThis.String(object.current_player_id)
-        : "",
+          ? globalThis.String(object.current_player_id)
+          : "",
       legal_actions: isSet(object.legalActions)
         ? LegalActions.fromJSON(object.legalActions)
         : isSet(object.legal_actions)
-        ? LegalActions.fromJSON(object.legal_actions)
-        : undefined,
+          ? LegalActions.fromJSON(object.legal_actions)
+          : undefined,
       action_deadline_unix_ms: isSet(object.actionDeadlineUnixMs)
         ? globalThis.Number(object.actionDeadlineUnixMs)
         : isSet(object.action_deadline_unix_ms)
-        ? globalThis.Number(object.action_deadline_unix_ms)
-        : 0,
+          ? globalThis.Number(object.action_deadline_unix_ms)
+          : 0,
       next_hand_unix_ms: isSet(object.nextHandUnixMs)
         ? globalThis.Number(object.nextHandUnixMs)
         : isSet(object.next_hand_unix_ms)
-        ? globalThis.Number(object.next_hand_unix_ms)
-        : 0,
+          ? globalThis.Number(object.next_hand_unix_ms)
+          : 0,
       won_without_showdown: isSet(object.wonWithoutShowdown)
         ? globalThis.Boolean(object.wonWithoutShowdown)
         : isSet(object.won_without_showdown)
-        ? globalThis.Boolean(object.won_without_showdown)
-        : false,
+          ? globalThis.Boolean(object.won_without_showdown)
+          : false,
       shuffle_commit_hash: isSet(object.shuffleCommitHash)
         ? globalThis.String(object.shuffleCommitHash)
         : isSet(object.shuffle_commit_hash)
-        ? globalThis.String(object.shuffle_commit_hash)
-        : "",
+          ? globalThis.String(object.shuffle_commit_hash)
+          : "",
       shuffle_server_seed_hex: isSet(object.shuffleServerSeedHex)
         ? globalThis.String(object.shuffleServerSeedHex)
         : isSet(object.shuffle_server_seed_hex)
-        ? globalThis.String(object.shuffle_server_seed_hex)
-        : "",
+          ? globalThis.String(object.shuffle_server_seed_hex)
+          : "",
       small_blind_player_id: isSet(object.smallBlindPlayerId)
         ? globalThis.String(object.smallBlindPlayerId)
         : isSet(object.small_blind_player_id)
-        ? globalThis.String(object.small_blind_player_id)
-        : "",
+          ? globalThis.String(object.small_blind_player_id)
+          : "",
       big_blind_player_id: isSet(object.bigBlindPlayerId)
         ? globalThis.String(object.bigBlindPlayerId)
         : isSet(object.big_blind_player_id)
-        ? globalThis.String(object.big_blind_player_id)
-        : "",
+          ? globalThis.String(object.big_blind_player_id)
+          : "",
       dealer_player_id: isSet(object.dealerPlayerId)
         ? globalThis.String(object.dealerPlayerId)
         : isSet(object.dealer_player_id)
-        ? globalThis.String(object.dealer_player_id)
-        : "",
+          ? globalThis.String(object.dealer_player_id)
+          : "",
       snapshot_version: isSet(object.snapshotVersion)
         ? globalThis.Number(object.snapshotVersion)
         : isSet(object.snapshot_version)
-        ? globalThis.Number(object.snapshot_version)
-        : 0,
+          ? globalThis.Number(object.snapshot_version)
+          : 0,
       pots: globalThis.Array.isArray(object?.pots)
         ? object.pots.map((e: any) => Pot.fromJSON(e))
         : [],
       hand_id: isSet(object.handId)
         ? globalThis.String(object.handId)
         : isSet(object.hand_id)
-        ? globalThis.String(object.hand_id)
-        : "",
+          ? globalThis.String(object.hand_id)
+          : "",
       pot_results: globalThis.Array.isArray(object?.potResults)
         ? object.potResults.map((e: any) => PotResult.fromJSON(e))
         : globalThis.Array.isArray(object?.pot_results)
-        ? object.pot_results.map((e: any) => PotResult.fromJSON(e))
-        : [],
+          ? object.pot_results.map((e: any) => PotResult.fromJSON(e))
+          : [],
       protocol_version: isSet(object.protocolVersion)
         ? globalThis.Number(object.protocolVersion)
         : isSet(object.protocol_version)
-        ? globalThis.Number(object.protocol_version)
-        : 0,
+          ? globalThis.Number(object.protocol_version)
+          : 0,
       idle_removal_unix_ms: isSet(object.idleRemovalUnixMs)
         ? globalThis.Number(object.idleRemovalUnixMs)
         : isSet(object.idle_removal_unix_ms)
-        ? globalThis.Number(object.idle_removal_unix_ms)
-        : 0,
+          ? globalThis.Number(object.idle_removal_unix_ms)
+          : 0,
       action_base_deadline_unix_ms: isSet(object.actionBaseDeadlineUnixMs)
         ? globalThis.Number(object.actionBaseDeadlineUnixMs)
         : isSet(object.action_base_deadline_unix_ms)
-        ? globalThis.Number(object.action_base_deadline_unix_ms)
-        : 0,
+          ? globalThis.Number(object.action_base_deadline_unix_ms)
+          : 0,
       chat_messages: globalThis.Array.isArray(object?.chatMessages)
         ? object.chatMessages.map((e: any) => ChatMessage.fromJSON(e))
         : globalThis.Array.isArray(object?.chat_messages)
-        ? object.chat_messages.map((e: any) => ChatMessage.fromJSON(e))
-        : [],
+          ? object.chat_messages.map((e: any) => ChatMessage.fromJSON(e))
+          : [],
       reactions: globalThis.Array.isArray(object?.reactions)
         ? object.reactions.map((e: any) => TableReaction.fromJSON(e))
         : [],
       action_preselection: isSet(object.actionPreselection)
         ? globalThis.String(object.actionPreselection)
         : isSet(object.action_preselection)
-        ? globalThis.String(object.action_preselection)
-        : "",
+          ? globalThis.String(object.action_preselection)
+          : "",
       action_preselection_amount: isSet(object.actionPreselectionAmount)
         ? globalThis.Number(object.actionPreselectionAmount)
         : isSet(object.action_preselection_amount)
-        ? globalThis.Number(object.action_preselection_amount)
-        : 0,
+          ? globalThis.Number(object.action_preselection_amount)
+          : 0,
       prospective_call_amount: isSet(object.prospectiveCallAmount)
         ? globalThis.Number(object.prospectiveCallAmount)
         : isSet(object.prospective_call_amount)
-        ? globalThis.Number(object.prospective_call_amount)
-        : 0,
+          ? globalThis.Number(object.prospective_call_amount)
+          : 0,
       root_commit_hash: isSet(object.rootCommitHash)
         ? globalThis.String(object.rootCommitHash)
         : isSet(object.root_commit_hash)
-        ? globalThis.String(object.root_commit_hash)
-        : "",
+          ? globalThis.String(object.root_commit_hash)
+          : "",
       revealed_card_salts: isObject(object.revealedCardSalts)
         ? (globalThis.Object.entries(object.revealedCardSalts) as [string, any][]).reduce(
           (acc: { [key: number]: RevealedSalt }, [key, value]: [string, any]) => {
@@ -2790,14 +2790,14 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           {},
         )
         : isObject(object.revealed_card_salts)
-        ? (globalThis.Object.entries(object.revealed_card_salts) as [string, any][]).reduce(
-          (acc: { [key: number]: RevealedSalt }, [key, value]: [string, any]) => {
-            acc[globalThis.Number(key)] = RevealedSalt.fromJSON(value);
-            return acc;
-          },
-          {},
-        )
-        : {},
+          ? (globalThis.Object.entries(object.revealed_card_salts) as [string, any][]).reduce(
+            (acc: { [key: number]: RevealedSalt }, [key, value]: [string, any]) => {
+              acc[globalThis.Number(key)] = RevealedSalt.fromJSON(value);
+              return acc;
+            },
+            {},
+          )
+          : {},
       unrevealed_card_hashes: isObject(object.unrevealedCardHashes)
         ? (globalThis.Object.entries(object.unrevealedCardHashes) as [string, any][]).reduce(
           (acc: { [key: number]: string }, [key, value]: [string, any]) => {
@@ -2807,32 +2807,32 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           {},
         )
         : isObject(object.unrevealed_card_hashes)
-        ? (globalThis.Object.entries(object.unrevealed_card_hashes) as [string, any][]).reduce(
-          (acc: { [key: number]: string }, [key, value]: [string, any]) => {
-            acc[globalThis.Number(key)] = globalThis.String(value);
-            return acc;
-          },
-          {},
-        )
-        : {},
+          ? (globalThis.Object.entries(object.unrevealed_card_hashes) as [string, any][]).reduce(
+            (acc: { [key: number]: string }, [key, value]: [string, any]) => {
+              acc[globalThis.Number(key)] = globalThis.String(value);
+              return acc;
+            },
+            {},
+          )
+          : {},
       runout_cards: globalThis.Array.isArray(object?.runoutCards)
         ? object.runoutCards.map((e: any) => globalThis.String(e))
         : globalThis.Array.isArray(object?.runout_cards)
-        ? object.runout_cards.map((e: any) => globalThis.String(e))
-        : [],
+          ? object.runout_cards.map((e: any) => globalThis.String(e))
+          : [],
       board_two: globalThis.Array.isArray(object?.boardTwo)
         ? object.boardTwo.map((e: any) => globalThis.String(e))
         : globalThis.Array.isArray(object?.board_two)
-        ? object.board_two.map((e: any) => globalThis.String(e))
-        : [],
+          ? object.board_two.map((e: any) => globalThis.String(e))
+          : [],
       board_split_at: isSet(object.boardSplitAt)
         ? globalThis.Number(object.boardSplitAt)
         : isSet(object.board_split_at)
-        ? globalThis.Number(object.board_split_at)
-        : 0,
+          ? globalThis.Number(object.board_split_at)
+          : 0,
     };
   },
-
+  
   toJSON(message: TableSnapshot): unknown {
     const obj: any = {};
     if (message.stage !== "") {
@@ -2957,7 +2957,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     }
     return obj;
   },
-
+  
   create<I extends Exact<DeepPartial<TableSnapshot>, I>>(base?: I): TableSnapshot {
     return TableSnapshot.fromPartial(base ?? ({} as any));
   },
@@ -3030,7 +3030,7 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
 };
 
 function createBaseTableSnapshot_PayoutsEntry(): TableSnapshot_PayoutsEntry {
-  return { key: "", value: 0 };
+  return {key: "", value: 0};
 }
 
 export const TableSnapshot_PayoutsEntry: MessageFns<TableSnapshot_PayoutsEntry> = {
@@ -3043,7 +3043,7 @@ export const TableSnapshot_PayoutsEntry: MessageFns<TableSnapshot_PayoutsEntry> 
     }
     return writer;
   },
-
+  
   decode(input: BinaryReader | Uint8Array, length?: number): TableSnapshot_PayoutsEntry {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
@@ -3055,7 +3055,7 @@ export const TableSnapshot_PayoutsEntry: MessageFns<TableSnapshot_PayoutsEntry> 
           if (tag !== 10) {
             break;
           }
-
+          
           message.key = reader.string();
           continue;
         }
@@ -3063,7 +3063,7 @@ export const TableSnapshot_PayoutsEntry: MessageFns<TableSnapshot_PayoutsEntry> 
           if (tag !== 16) {
             break;
           }
-
+          
           message.value = longToNumber(reader.int64());
           continue;
         }
@@ -3075,14 +3075,14 @@ export const TableSnapshot_PayoutsEntry: MessageFns<TableSnapshot_PayoutsEntry> 
     }
     return message;
   },
-
+  
   fromJSON(object: any): TableSnapshot_PayoutsEntry {
     return {
       key: isSet(object.key) ? globalThis.String(object.key) : "",
       value: isSet(object.value) ? globalThis.Number(object.value) : 0,
     };
   },
-
+  
   toJSON(message: TableSnapshot_PayoutsEntry): unknown {
     const obj: any = {};
     if (message.key !== "") {
@@ -3093,7 +3093,7 @@ export const TableSnapshot_PayoutsEntry: MessageFns<TableSnapshot_PayoutsEntry> 
     }
     return obj;
   },
-
+  
   create<I extends Exact<DeepPartial<TableSnapshot_PayoutsEntry>, I>>(base?: I): TableSnapshot_PayoutsEntry {
     return TableSnapshot_PayoutsEntry.fromPartial(base ?? ({} as any));
   },
@@ -3106,7 +3106,7 @@ export const TableSnapshot_PayoutsEntry: MessageFns<TableSnapshot_PayoutsEntry> 
 };
 
 function createBaseTableSnapshot_RevealedCardSaltsEntry(): TableSnapshot_RevealedCardSaltsEntry {
-  return { key: 0, value: undefined };
+  return {key: 0, value: undefined};
 }
 
 export const TableSnapshot_RevealedCardSaltsEntry: MessageFns<TableSnapshot_RevealedCardSaltsEntry> = {
@@ -3119,7 +3119,7 @@ export const TableSnapshot_RevealedCardSaltsEntry: MessageFns<TableSnapshot_Reve
     }
     return writer;
   },
-
+  
   decode(input: BinaryReader | Uint8Array, length?: number): TableSnapshot_RevealedCardSaltsEntry {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
@@ -3131,7 +3131,7 @@ export const TableSnapshot_RevealedCardSaltsEntry: MessageFns<TableSnapshot_Reve
           if (tag !== 8) {
             break;
           }
-
+          
           message.key = reader.int32();
           continue;
         }
@@ -3139,7 +3139,7 @@ export const TableSnapshot_RevealedCardSaltsEntry: MessageFns<TableSnapshot_Reve
           if (tag !== 18) {
             break;
           }
-
+          
           message.value = RevealedSalt.decode(reader, reader.uint32());
           continue;
         }
@@ -3151,14 +3151,14 @@ export const TableSnapshot_RevealedCardSaltsEntry: MessageFns<TableSnapshot_Reve
     }
     return message;
   },
-
+  
   fromJSON(object: any): TableSnapshot_RevealedCardSaltsEntry {
     return {
       key: isSet(object.key) ? globalThis.Number(object.key) : 0,
       value: isSet(object.value) ? RevealedSalt.fromJSON(object.value) : undefined,
     };
   },
-
+  
   toJSON(message: TableSnapshot_RevealedCardSaltsEntry): unknown {
     const obj: any = {};
     if (message.key !== 0) {
@@ -3169,7 +3169,7 @@ export const TableSnapshot_RevealedCardSaltsEntry: MessageFns<TableSnapshot_Reve
     }
     return obj;
   },
-
+  
   create<I extends Exact<DeepPartial<TableSnapshot_RevealedCardSaltsEntry>, I>>(
     base?: I,
   ): TableSnapshot_RevealedCardSaltsEntry {
@@ -3188,7 +3188,7 @@ export const TableSnapshot_RevealedCardSaltsEntry: MessageFns<TableSnapshot_Reve
 };
 
 function createBaseTableSnapshot_UnrevealedCardHashesEntry(): TableSnapshot_UnrevealedCardHashesEntry {
-  return { key: 0, value: "" };
+  return {key: 0, value: ""};
 }
 
 export const TableSnapshot_UnrevealedCardHashesEntry: MessageFns<TableSnapshot_UnrevealedCardHashesEntry> = {
@@ -3201,7 +3201,7 @@ export const TableSnapshot_UnrevealedCardHashesEntry: MessageFns<TableSnapshot_U
     }
     return writer;
   },
-
+  
   decode(input: BinaryReader | Uint8Array, length?: number): TableSnapshot_UnrevealedCardHashesEntry {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
@@ -3213,7 +3213,7 @@ export const TableSnapshot_UnrevealedCardHashesEntry: MessageFns<TableSnapshot_U
           if (tag !== 8) {
             break;
           }
-
+          
           message.key = reader.int32();
           continue;
         }
@@ -3221,7 +3221,7 @@ export const TableSnapshot_UnrevealedCardHashesEntry: MessageFns<TableSnapshot_U
           if (tag !== 18) {
             break;
           }
-
+          
           message.value = reader.string();
           continue;
         }
@@ -3233,14 +3233,14 @@ export const TableSnapshot_UnrevealedCardHashesEntry: MessageFns<TableSnapshot_U
     }
     return message;
   },
-
+  
   fromJSON(object: any): TableSnapshot_UnrevealedCardHashesEntry {
     return {
       key: isSet(object.key) ? globalThis.Number(object.key) : 0,
       value: isSet(object.value) ? globalThis.String(object.value) : "",
     };
   },
-
+  
   toJSON(message: TableSnapshot_UnrevealedCardHashesEntry): unknown {
     const obj: any = {};
     if (message.key !== 0) {
@@ -3251,7 +3251,7 @@ export const TableSnapshot_UnrevealedCardHashesEntry: MessageFns<TableSnapshot_U
     }
     return obj;
   },
-
+  
   create<I extends Exact<DeepPartial<TableSnapshot_UnrevealedCardHashesEntry>, I>>(
     base?: I,
   ): TableSnapshot_UnrevealedCardHashesEntry {
@@ -3268,7 +3268,7 @@ export const TableSnapshot_UnrevealedCardHashesEntry: MessageFns<TableSnapshot_U
 };
 
 function createBaseRevealedSalt(): RevealedSalt {
-  return { card: "", salt_hex: "" };
+  return {card: "", salt_hex: ""};
 }
 
 export const RevealedSalt: MessageFns<RevealedSalt> = {
@@ -3281,7 +3281,7 @@ export const RevealedSalt: MessageFns<RevealedSalt> = {
     }
     return writer;
   },
-
+  
   decode(input: BinaryReader | Uint8Array, length?: number): RevealedSalt {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
@@ -3293,7 +3293,7 @@ export const RevealedSalt: MessageFns<RevealedSalt> = {
           if (tag !== 10) {
             break;
           }
-
+          
           message.card = reader.string();
           continue;
         }
@@ -3301,7 +3301,7 @@ export const RevealedSalt: MessageFns<RevealedSalt> = {
           if (tag !== 18) {
             break;
           }
-
+          
           message.salt_hex = reader.string();
           continue;
         }
@@ -3313,18 +3313,18 @@ export const RevealedSalt: MessageFns<RevealedSalt> = {
     }
     return message;
   },
-
+  
   fromJSON(object: any): RevealedSalt {
     return {
       card: isSet(object.card) ? globalThis.String(object.card) : "",
       salt_hex: isSet(object.saltHex)
         ? globalThis.String(object.saltHex)
         : isSet(object.salt_hex)
-        ? globalThis.String(object.salt_hex)
-        : "",
+          ? globalThis.String(object.salt_hex)
+          : "",
     };
   },
-
+  
   toJSON(message: RevealedSalt): unknown {
     const obj: any = {};
     if (message.card !== "") {
@@ -3335,7 +3335,7 @@ export const RevealedSalt: MessageFns<RevealedSalt> = {
     }
     return obj;
   },
-
+  
   create<I extends Exact<DeepPartial<RevealedSalt>, I>>(base?: I): RevealedSalt {
     return RevealedSalt.fromPartial(base ?? ({} as any));
   },
@@ -3420,7 +3420,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     }
     return writer;
   },
-
+  
   decode(input: BinaryReader | Uint8Array, length?: number): ClientMessage {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
@@ -3432,7 +3432,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           if (tag !== 10) {
             break;
           }
-
+          
           message.type = reader.string();
           continue;
         }
@@ -3440,7 +3440,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           if (tag !== 18) {
             break;
           }
-
+          
           message.token = reader.string();
           continue;
         }
@@ -3448,7 +3448,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           if (tag !== 26) {
             break;
           }
-
+          
           message.share_code = reader.string();
           continue;
         }
@@ -3456,7 +3456,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           if (tag !== 32) {
             break;
           }
-
+          
           message.ready = reader.bool();
           continue;
         }
@@ -3464,7 +3464,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           if (tag !== 42) {
             break;
           }
-
+          
           message.action = reader.string();
           continue;
         }
@@ -3472,7 +3472,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           if (tag !== 48) {
             break;
           }
-
+          
           message.amount = longToNumber(reader.int64());
           continue;
         }
@@ -3480,7 +3480,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           if (tag !== 58) {
             break;
           }
-
+          
           message.action_id = reader.string();
           continue;
         }
@@ -3488,7 +3488,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           if (tag !== 66) {
             break;
           }
-
+          
           message.message = reader.string();
           continue;
         }
@@ -3496,7 +3496,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           if (tag !== 72) {
             break;
           }
-
+          
           message.expected_snapshot_version = longToNumber(reader.uint64());
           continue;
         }
@@ -3504,7 +3504,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           if (tag !== 82) {
             break;
           }
-
+          
           message.expected_hand_id = reader.string();
           continue;
         }
@@ -3512,7 +3512,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           if (tag !== 88) {
             break;
           }
-
+          
           message.card_index = reader.int32();
           continue;
         }
@@ -3520,7 +3520,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           if (tag !== 98) {
             break;
           }
-
+          
           message.reaction_id = reader.string();
           continue;
         }
@@ -3528,7 +3528,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           if (tag !== 106) {
             break;
           }
-
+          
           message.target_player_id = reader.string();
           continue;
         }
@@ -3536,7 +3536,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           if (tag !== 114) {
             break;
           }
-
+          
           message.turnstile_token = reader.string();
           continue;
         }
@@ -3544,7 +3544,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           if (tag !== 120) {
             break;
           }
-
+          
           message.run_it_twice = reader.bool();
           continue;
         }
@@ -3552,7 +3552,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
           if (tag !== 130) {
             break;
           }
-
+          
           message.expected_stage = reader.string();
           continue;
         }
@@ -3564,7 +3564,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     }
     return message;
   },
-
+  
   fromJSON(object: any): ClientMessage {
     return {
       type: isSet(object.type) ? globalThis.String(object.type) : "",
@@ -3572,60 +3572,60 @@ export const ClientMessage: MessageFns<ClientMessage> = {
       share_code: isSet(object.shareCode)
         ? globalThis.String(object.shareCode)
         : isSet(object.share_code)
-        ? globalThis.String(object.share_code)
-        : "",
+          ? globalThis.String(object.share_code)
+          : "",
       ready: isSet(object.ready) ? globalThis.Boolean(object.ready) : false,
       action: isSet(object.action) ? globalThis.String(object.action) : "",
       amount: isSet(object.amount) ? globalThis.Number(object.amount) : 0,
       action_id: isSet(object.actionId)
         ? globalThis.String(object.actionId)
         : isSet(object.action_id)
-        ? globalThis.String(object.action_id)
-        : "",
+          ? globalThis.String(object.action_id)
+          : "",
       message: isSet(object.message) ? globalThis.String(object.message) : "",
       expected_snapshot_version: isSet(object.expectedSnapshotVersion)
         ? globalThis.Number(object.expectedSnapshotVersion)
         : isSet(object.expected_snapshot_version)
-        ? globalThis.Number(object.expected_snapshot_version)
-        : 0,
+          ? globalThis.Number(object.expected_snapshot_version)
+          : 0,
       expected_hand_id: isSet(object.expectedHandId)
         ? globalThis.String(object.expectedHandId)
         : isSet(object.expected_hand_id)
-        ? globalThis.String(object.expected_hand_id)
-        : "",
+          ? globalThis.String(object.expected_hand_id)
+          : "",
       card_index: isSet(object.cardIndex)
         ? globalThis.Number(object.cardIndex)
         : isSet(object.card_index)
-        ? globalThis.Number(object.card_index)
-        : undefined,
+          ? globalThis.Number(object.card_index)
+          : undefined,
       reaction_id: isSet(object.reactionId)
         ? globalThis.String(object.reactionId)
         : isSet(object.reaction_id)
-        ? globalThis.String(object.reaction_id)
-        : "",
+          ? globalThis.String(object.reaction_id)
+          : "",
       target_player_id: isSet(object.targetPlayerId)
         ? globalThis.String(object.targetPlayerId)
         : isSet(object.target_player_id)
-        ? globalThis.String(object.target_player_id)
-        : "",
+          ? globalThis.String(object.target_player_id)
+          : "",
       turnstile_token: isSet(object.turnstileToken)
         ? globalThis.String(object.turnstileToken)
         : isSet(object.turnstile_token)
-        ? globalThis.String(object.turnstile_token)
-        : "",
+          ? globalThis.String(object.turnstile_token)
+          : "",
       run_it_twice: isSet(object.runItTwice)
         ? globalThis.Boolean(object.runItTwice)
         : isSet(object.run_it_twice)
-        ? globalThis.Boolean(object.run_it_twice)
-        : undefined,
+          ? globalThis.Boolean(object.run_it_twice)
+          : undefined,
       expected_stage: isSet(object.expectedStage)
         ? globalThis.String(object.expectedStage)
         : isSet(object.expected_stage)
-        ? globalThis.String(object.expected_stage)
-        : "",
+          ? globalThis.String(object.expected_stage)
+          : "",
     };
   },
-
+  
   toJSON(message: ClientMessage): unknown {
     const obj: any = {};
     if (message.type !== "") {
@@ -3678,7 +3678,7 @@ export const ClientMessage: MessageFns<ClientMessage> = {
     }
     return obj;
   },
-
+  
   create<I extends Exact<DeepPartial<ClientMessage>, I>>(base?: I): ClientMessage {
     return ClientMessage.fromPartial(base ?? ({} as any));
   },
@@ -3785,7 +3785,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
     }
     return writer;
   },
-
+  
   decode(input: BinaryReader | Uint8Array, length?: number): ServerMessage {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
@@ -3797,7 +3797,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 10) {
             break;
           }
-
+          
           message.type = reader.string();
           continue;
         }
@@ -3805,7 +3805,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 18) {
             break;
           }
-
+          
           message.conn_id = reader.string();
           continue;
         }
@@ -3813,7 +3813,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 26) {
             break;
           }
-
+          
           message.snapshot = TableSnapshot.decode(reader, reader.uint32());
           continue;
         }
@@ -3821,7 +3821,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 34) {
             break;
           }
-
+          
           message.player_id = reader.string();
           continue;
         }
@@ -3829,7 +3829,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 42) {
             break;
           }
-
+          
           message.message = reader.string();
           continue;
         }
@@ -3837,7 +3837,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 50) {
             break;
           }
-
+          
           message.code = reader.string();
           continue;
         }
@@ -3845,7 +3845,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 58) {
             break;
           }
-
+          
           message.key = reader.string();
           continue;
         }
@@ -3853,7 +3853,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 64) {
             break;
           }
-
+          
           message.stars = reader.int32();
           continue;
         }
@@ -3861,7 +3861,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 74) {
             break;
           }
-
+          
           message.room = Room.decode(reader, reader.uint32());
           continue;
         }
@@ -3869,7 +3869,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 82) {
             break;
           }
-
+          
           message.room_id = reader.string();
           continue;
         }
@@ -3877,7 +3877,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 88) {
             break;
           }
-
+          
           message.seats_taken = reader.int32();
           continue;
         }
@@ -3885,7 +3885,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 96) {
             break;
           }
-
+          
           message.amount = longToNumber(reader.int64());
           continue;
         }
@@ -3893,7 +3893,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 106) {
             break;
           }
-
+          
           message.text = reader.string();
           continue;
         }
@@ -3901,7 +3901,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 114) {
             break;
           }
-
+          
           message.action_id = reader.string();
           continue;
         }
@@ -3909,7 +3909,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 120) {
             break;
           }
-
+          
           message.snapshot_version = longToNumber(reader.uint64());
           continue;
         }
@@ -3917,7 +3917,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 129) {
             break;
           }
-
+          
           message.equity = reader.double();
           continue;
         }
@@ -3925,7 +3925,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 138) {
             break;
           }
-
+          
           message.reaction_id = reader.string();
           continue;
         }
@@ -3933,7 +3933,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           if (tag !== 146) {
             break;
           }
-
+          
           message.target_player_id = reader.string();
           continue;
         }
@@ -3945,21 +3945,21 @@ export const ServerMessage: MessageFns<ServerMessage> = {
     }
     return message;
   },
-
+  
   fromJSON(object: any): ServerMessage {
     return {
       type: isSet(object.type) ? globalThis.String(object.type) : "",
       conn_id: isSet(object.connId)
         ? globalThis.String(object.connId)
         : isSet(object.conn_id)
-        ? globalThis.String(object.conn_id)
-        : "",
+          ? globalThis.String(object.conn_id)
+          : "",
       snapshot: isSet(object.snapshot) ? TableSnapshot.fromJSON(object.snapshot) : undefined,
       player_id: isSet(object.playerId)
         ? globalThis.String(object.playerId)
         : isSet(object.player_id)
-        ? globalThis.String(object.player_id)
-        : "",
+          ? globalThis.String(object.player_id)
+          : "",
       message: isSet(object.message) ? globalThis.String(object.message) : "",
       code: isSet(object.code) ? globalThis.String(object.code) : "",
       key: isSet(object.key) ? globalThis.String(object.key) : "",
@@ -3968,39 +3968,39 @@ export const ServerMessage: MessageFns<ServerMessage> = {
       room_id: isSet(object.roomId)
         ? globalThis.String(object.roomId)
         : isSet(object.room_id)
-        ? globalThis.String(object.room_id)
-        : "",
+          ? globalThis.String(object.room_id)
+          : "",
       seats_taken: isSet(object.seatsTaken)
         ? globalThis.Number(object.seatsTaken)
         : isSet(object.seats_taken)
-        ? globalThis.Number(object.seats_taken)
-        : 0,
+          ? globalThis.Number(object.seats_taken)
+          : 0,
       amount: isSet(object.amount) ? globalThis.Number(object.amount) : 0,
       text: isSet(object.text) ? globalThis.String(object.text) : "",
       action_id: isSet(object.actionId)
         ? globalThis.String(object.actionId)
         : isSet(object.action_id)
-        ? globalThis.String(object.action_id)
-        : "",
+          ? globalThis.String(object.action_id)
+          : "",
       snapshot_version: isSet(object.snapshotVersion)
         ? globalThis.Number(object.snapshotVersion)
         : isSet(object.snapshot_version)
-        ? globalThis.Number(object.snapshot_version)
-        : 0,
+          ? globalThis.Number(object.snapshot_version)
+          : 0,
       equity: isSet(object.equity) ? globalThis.Number(object.equity) : undefined,
       reaction_id: isSet(object.reactionId)
         ? globalThis.String(object.reactionId)
         : isSet(object.reaction_id)
-        ? globalThis.String(object.reaction_id)
-        : "",
+          ? globalThis.String(object.reaction_id)
+          : "",
       target_player_id: isSet(object.targetPlayerId)
         ? globalThis.String(object.targetPlayerId)
         : isSet(object.target_player_id)
-        ? globalThis.String(object.target_player_id)
-        : "",
+          ? globalThis.String(object.target_player_id)
+          : "",
     };
   },
-
+  
   toJSON(message: ServerMessage): unknown {
     const obj: any = {};
     if (message.type !== "") {
@@ -4059,7 +4059,7 @@ export const ServerMessage: MessageFns<ServerMessage> = {
     }
     return obj;
   },
-
+  
   create<I extends Exact<DeepPartial<ServerMessage>, I>>(base?: I): ServerMessage {
     return ServerMessage.fromPartial(base ?? ({} as any));
   },
@@ -4093,9 +4093,9 @@ type Builtin = Date | Function | Uint8Array | string | number | boolean | undefi
 
 export type DeepPartial<T> = T extends Builtin ? T
   : T extends globalThis.Array<infer U> ? globalThis.Array<DeepPartial<U>>
-  : T extends ReadonlyArray<infer U> ? ReadonlyArray<DeepPartial<U>>
-  : T extends {} ? { [K in keyof T]?: DeepPartial<T[K]> }
-  : Partial<T>;
+    : T extends ReadonlyArray<infer U> ? ReadonlyArray<DeepPartial<U>>
+      : T extends {} ? { [K in keyof T]?: DeepPartial<T[K]> }
+        : Partial<T>;
 
 type KeysOfUnion<T> = T extends T ? keyof T : never;
 export type Exact<P, I extends P> = P extends Builtin ? P
@@ -4122,9 +4122,14 @@ function isSet(value: any): boolean {
 
 export interface MessageFns<T> {
   encode(message: T, writer?: BinaryWriter): BinaryWriter;
+  
   decode(input: BinaryReader | Uint8Array, length?: number): T;
+  
   fromJSON(object: any): T;
+  
   toJSON(message: T): unknown;
+  
   create<I extends Exact<DeepPartial<T>, I>>(base?: I): T;
+  
   fromPartial<I extends Exact<DeepPartial<T>, I>>(object: I): T;
 }

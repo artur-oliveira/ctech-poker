@@ -13,15 +13,15 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@aoctech/auth-client', () => ({
   OAuthClient: class {
-    constructor(options: unknown) {
-      mocks.constructor(options);
-    }
-    
     startOAuthFlow = mocks.start;
     exchangeCode = mocks.exchange;
     refresh = mocks.refresh;
     revoke = mocks.revoke;
     endSessionRedirect = mocks.endSession;
+
+    constructor(options: unknown) {
+      mocks.constructor(options);
+    }
   },
   decodeIdToken: mocks.decode,
 }));

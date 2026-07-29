@@ -28,7 +28,7 @@ export function Chat({items, onSend, connected = true, viewerId, seats = [], ope
   const nameOf = (id: string) => playerName(id, viewerId, seats.find(seat => seat.player_id === id)?.name);
   const [seenCount, setSeenCount] = useState(items.length);
   const unread = open ? 0 : Math.max(0, items.length - seenCount);
-
+  
   useEffect(() => {
     // Opening the drawer is the explicit acknowledgement boundary.
     // eslint-disable-next-line react-hooks/set-state-in-effect

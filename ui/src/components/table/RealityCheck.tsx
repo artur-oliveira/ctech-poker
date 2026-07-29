@@ -39,7 +39,7 @@ export function RealityCheck({
   const shownAt = useRef(0);
   const [completedHands, setCompletedHands] = useState<Set<string>>(() => new Set());
   const intervalMs = preferences.realityCheckMinutes * 60_000;
-
+  
   useEffect(() => {
     if (!handComplete || !handId) return;
     // Record each completed hand once; the set spans subsequent live snapshots.

@@ -21,3 +21,6 @@ api/server
 *.har
 *.d.ts
 cdk/*/*.js
+.claude/
+.codex/
+.impeccable/config.local.json

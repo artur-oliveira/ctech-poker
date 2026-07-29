@@ -79,9 +79,9 @@ describe('session keep-alive', () => {
     unmount();
     vi.useRealTimers();
   });
-
+  
   test('shares one refresh promise across concurrent callers', async () => {
-    let resolveRefresh: (value: {accessToken: string; username: string}) => void = () => undefined;
+    let resolveRefresh: (value: { accessToken: string; username: string }) => void = () => undefined;
     mocks.refresh.mockReturnValue(new Promise(resolve => {
       resolveRefresh = resolve;
     }));

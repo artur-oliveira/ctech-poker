@@ -1,7 +1,6 @@
 import {apiClient} from '@/lib/api/client';
 import type {HandHistoryAction} from '@/lib/api/table';
-import type {HandOutcome} from '@/lib/api/player';
-import type {WalletMode} from '@/lib/api/player';
+import type {HandOutcome, WalletMode} from '@/lib/api/player';
 
 export interface PublicHandShare {
   token: string;
