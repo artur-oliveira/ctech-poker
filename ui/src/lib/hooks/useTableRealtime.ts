@@ -222,7 +222,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const [mockStatus, setMockStatus] = useState<WSStatus>('connecting');
   const [mockReconnectAttempt, setMockReconnectAttempt] = useState(0);
   const mockService = useRef<MockTableService | null>(null);
-
+  
   const showReaction = useCallback((reaction: TableReactionEvent, expiresAt = Date.now() + 2400) => {
     if (!reactionTimersRef.current.has(reaction.id)) {
       setReactions(value => [...value.filter(item => item.id !== reaction.id).slice(-7), reaction]);
@@ -236,7 +236,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     }, remaining);
     reactionTimersRef.current.set(reaction.id, timer);
   }, []);
-
+  
   const clearPending = useCallback((expectedId?: string) => {
     if (expectedId && pendingActionRef.current?.id !== expectedId) return;
     if (pendingTimer.current) clearTimeout(pendingTimer.current);
@@ -244,12 +244,12 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     pendingActionRef.current = null;
     setPendingAction(null);
   }, []);
-
+  
   const failPending = useCallback((code: string, expectedId?: string) => {
     clearPending(expectedId);
     setLastActionError(actionError(code));
   }, [clearPending]);
-
+  
   const finishAuxiliaryCommand = useCallback((actionId: string, failedCode?: string) => {
     if (readyActionRef.current === actionId) {
       if (readyTimerRef.current) clearTimeout(readyTimerRef.current);
@@ -270,7 +270,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     }
     if (failedCode) setLastActionError(actionError(failedCode));
   }, []);
-
+  
   const armResyncWatchdog = useCallback(() => {
     if (resyncWatchdog.current) clearTimeout(resyncWatchdog.current);
     resyncWatchdog.current = setTimeout(() => {
@@ -279,7 +279,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       retryNowRef.current();
     }, RESYNC_TIMEOUT_MS);
   }, []);
-
+  
   const receive = useCallback((message: ServerMessage) => {
     if (message.type === 'state' && message.snapshot) {
       if (resyncWatchdog.current) {
@@ -427,8 +427,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
         setLastActionError(actionError(code));
       } else if (message.action_id && pendingActionRef.current?.id === message.action_id) {
         failPending(code, message.action_id);
-      }
-      else if (message.action_id) finishAuxiliaryCommand(message.action_id, code);
+      } else if (message.action_id) finishAuxiliaryCommand(message.action_id, code);
       else setLastActionError(actionError(code));
     }
     if (message.type === 'connected') {
@@ -464,7 +463,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const receiveForTable = useCallback((message: ServerMessage) => {
     if (activeTableIDRef.current === id) receive(message);
   }, [id, receive]);
-
+  
   const origin = (process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/^http/, 'ws');
   const wsUrl = id ? `${origin}/v1.0/tables/${encodeURIComponent(id)}/ws` : null;
   const handleOpen = useCallback(() => {
@@ -502,7 +501,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const mockDelay = Math.min(15000, Math.max(0, mockOptions?.delay ?? 650));
   useEffect(() => {
     if (!USE_MOCK || !id) return () => {
-
+    
     };
     // A scenario change creates a brand-new in-memory server whose snapshot
     // versions start at one again. Reset every client-side value tied to the
@@ -544,7 +543,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       if (mockService.current === service) mockService.current = null;
     };
   }, [clearPending, finishAuxiliaryCommand, id, mockDelay, mockScenario, receiveForTable]);
-
+  
   const send = useCallback((value: object) => USE_MOCK ? Boolean(mockService.current?.send(value as Record<string, unknown>)) : wsSend(value), [wsSend]);
   const retryNow = useCallback(() => USE_MOCK ? mockService.current?.reconnect() : wsRetryNow(), [wsRetryNow]);
   const status = USE_MOCK ? mockStatus : wsStatus;
@@ -553,12 +552,12 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     sendRef.current = send;
     retryNowRef.current = retryNow;
   }, [retryNow, send]);
-
+  
   useEffect(() => () => {
     if (resyncWatchdog.current) clearTimeout(resyncWatchdog.current);
     if (resyncTimer.current) clearTimeout(resyncTimer.current);
   }, []);
-
+  
   // Query-param navigation reuses this hook instance. Every realtime ref is
   // table-scoped; carrying version 100 from table A into table B version 10
   // would otherwise reject B forever as "stale".
@@ -589,7 +588,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     soundTimersRef.current.clear();
     resetOnOpenRef.current = true;
   }, [id]);
-
+  
   useEffect(() => () => {
     if (pendingTimer.current) clearTimeout(pendingTimer.current);
     if (readyTimerRef.current) clearTimeout(readyTimerRef.current);
@@ -600,7 +599,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     for (const timer of soundTimersRef.current) window.clearTimeout(timer);
     soundTimersRef.current.clear();
   }, []);
-
+  
   // A backgrounded tab (screen lock, app switch) can have its WS silently
   // killed by the OS without a clean close event. The client-side heartbeat
   // only notices once it wakes up, and by then the socket may have already
@@ -616,7 +615,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, [status, retryNow]);
-
+  
   const emit = useCallback((value: object) => {
     if (!send(value)) {
       setLastActionError(actionError('not_connected'));
@@ -624,10 +623,10 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     }
     return true;
   }, [send]);
-
+  
   const submitBotChallenge = useCallback((token: string) =>
     emit({type: 'bot_challenge', turnstile_token: token, action_id: crypto.randomUUID()}), [emit]);
-
+  
   const act = useCallback((action: PokerAction, amount = 0) => {
     if (pendingActionRef.current) return false;
     setLastActionError(null);
@@ -662,7 +661,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     }, ACTION_TIMEOUT_MS);
     return true;
   }, [clearPending, emit, retryNow, send]);
-
+  
   return {
     status,
     snapshot: snapshotTableID === id ? snapshot : null,
@@ -712,8 +711,10 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     setRunItTwice: (enabled: boolean) => emit({type: 'set_run_it_twice', run_it_twice: enabled}),
     sendChat: (message: string) => emit({type: 'chat', message, action_id: crypto.randomUUID()}),
     sendReaction: (reactionId: TableReactionID, targetPlayerId?: string) =>
-      emit({type: 'reaction', reaction_id: reactionId, target_player_id: targetPlayerId || '',
-        action_id: crypto.randomUUID()}),
+      emit({
+        type: 'reaction', reaction_id: reactionId, target_player_id: targetPlayerId || '',
+        action_id: crypto.randomUUID()
+      }),
     preselectAction: (selection: ActionPreselection | null, amount = 0) => emit({
       type: 'preselect_action', action: selection || '', action_id: crypto.randomUUID(),
       amount,

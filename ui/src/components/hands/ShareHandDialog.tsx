@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import {createHandShare} from '@/lib/api/handShares';
 
-export function ShareHandDialog({handId, outcome}: {handId: string; outcome: string}) {
+export function ShareHandDialog({handId, outcome}: { handId: string; outcome: string }) {
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<'brag' | 'bad_beat'>(outcome === 'lost' ? 'bad_beat' : 'brag');
   const [includeCards, setIncludeCards] = useState(true);
@@ -20,7 +20,7 @@ export function ShareHandDialog({handId, outcome}: {handId: string; outcome: str
   const [pending, setPending] = useState(false);
   const [url, setURL] = useState('');
   const [copied, setCopied] = useState(false);
-
+  
   async function create() {
     if (pending) return;
     setPending(true);
@@ -33,12 +33,12 @@ export function ShareHandDialog({handId, outcome}: {handId: string; outcome: str
       setPending(false);
     }
   }
-
+  
   async function copy() {
     await navigator.clipboard.writeText(url);
     setCopied(true);
   }
-
+  
   return <>
     <Button type="button" variant="outline" onClick={() => setOpen(true)}>
       <Share2 aria-hidden="true"/> Compartilhar
@@ -55,9 +55,11 @@ export function ShareHandDialog({handId, outcome}: {handId: string; outcome: str
           <fieldset>
             <legend>Como apresentar</legend>
             <label><input type="radio" name="share-kind" checked={kind === 'brag'}
-                          onChange={() => setKind('brag')}/> Brag <small>Uma vitória ou jogada para celebrar.</small></label>
+                          onChange={() => setKind('brag')}/> Brag <small>Uma vitória ou jogada para
+              celebrar.</small></label>
             <label><input type="radio" name="share-kind" checked={kind === 'bad_beat'}
-                          onChange={() => setKind('bad_beat')}/> Bad beat <small>Uma derrota improvável para contar.</small></label>
+                          onChange={() => setKind('bad_beat')}/> Bad beat <small>Uma derrota improvável para
+              contar.</small></label>
           </fieldset>
           <label className="share-hand-check">
             <input type="checkbox" checked={includeCards} onChange={event => setIncludeCards(event.target.checked)}/>
@@ -65,7 +67,9 @@ export function ShareHandDialog({handId, outcome}: {handId: string; outcome: str
           </label>
           <label className="share-hand-expiry">Expirar em
             <select value={expiryDays} onChange={event => setExpiryDays(Number(event.target.value))}>
-              <option value={1}>24 horas</option><option value={7}>7 dias</option><option value={30}>30 dias</option>
+              <option value={1}>24 horas</option>
+              <option value={7}>7 dias</option>
+              <option value={30}>30 dias</option>
             </select>
           </label>
           <p className="share-hand-privacy"><ShieldCheck aria-hidden="true"/>

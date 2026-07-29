@@ -1,4 +1,12 @@
 import {beforeEach, describe, expect, test, vi} from 'vitest';
+import {getAchievementCatalog, getMyAchievements} from './achievements';
+import {leaderboard, remainingTime, spin} from './gamification';
+import {createHandShare, getHandShare, revokeHandShare} from './handShares';
+import {acceptPokerTerms, getHand, getHands, getMe, getProfileShowcase, getSessions, updateMe,} from './player';
+import {getPlayerNotes, savePlayerNote} from './playerNotes';
+import {getMyPokerStats} from './pokerStats';
+import {createRoom, getRoom, getSeated, joinRoom, leaveRoom, listRooms, listStakes} from './rooms';
+import {getHandHistory} from './table';
 
 const client = vi.hoisted(() => ({
   get: vi.fn(),
@@ -6,17 +14,6 @@ const client = vi.hoisted(() => ({
   delete: vi.fn(),
 }));
 vi.mock('./client', () => ({apiClient: client}));
-
-import {getAchievementCatalog, getMyAchievements} from './achievements';
-import {leaderboard, remainingTime, spin} from './gamification';
-import {createHandShare, getHandShare, revokeHandShare} from './handShares';
-import {
-  acceptPokerTerms, getHand, getHands, getMe, getProfileShowcase, getSessions, updateMe,
-} from './player';
-import {getPlayerNotes, savePlayerNote} from './playerNotes';
-import {getMyPokerStats} from './pokerStats';
-import {createRoom, getRoom, getSeated, joinRoom, leaveRoom, listRooms, listStakes} from './rooms';
-import {getHandHistory} from './table';
 
 describe('API domain modules', () => {
   beforeEach(() => {
@@ -26,7 +23,7 @@ describe('API domain modules', () => {
     client.delete.mockResolvedValue({data: undefined});
     vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue('idem-key');
   });
-
+  
   test('maps achievement and gamification calls to their backend contracts', async () => {
     client.get
       .mockResolvedValueOnce({data: ['catalog']})
@@ -34,19 +31,19 @@ describe('API domain modules', () => {
       .mockResolvedValueOnce({data: {data: ['leader']}})
       .mockResolvedValueOnce({data: {remaining_time_seconds: 5}});
     client.post.mockResolvedValueOnce({data: {amount: 100, remaining_time_seconds: 60}});
-
+    
     await expect(getAchievementCatalog()).resolves.toEqual(['catalog']);
     await expect(getMyAchievements('real', 'next')).resolves.toEqual(['progress']);
     await expect(leaderboard('real', 'rank-next')).resolves.toEqual(['leader']);
     await expect(spin()).resolves.toEqual({amount: 100, remaining_time_seconds: 60});
     await expect(remainingTime()).resolves.toEqual({remaining_time_seconds: 5});
-
+    
     expect(client.get).toHaveBeenNthCalledWith(2, '/v1.0/players/me/achievements', {
       params: {mode: 'real', cursor: 'next'}, silentError: true,
     });
     expect(client.post).toHaveBeenCalledWith('/v1.0/sandbox-credits', {}, {silentError: true});
   });
-
+  
   test('encodes identifiers for player profile, hands and public shares', async () => {
     client.get
       .mockResolvedValueOnce({data: {user_id: 'me'}})
@@ -60,7 +57,7 @@ describe('API domain modules', () => {
       .mockResolvedValueOnce({data: {accepted: true}})
       .mockResolvedValueOnce({data: {name: 'Novo'}})
       .mockResolvedValueOnce({data: {token: 'created'}});
-
+    
     await getMe();
     await acceptPokerTerms();
     await updateMe({name: 'Novo'});
@@ -72,7 +69,7 @@ describe('API domain modules', () => {
     await getHandShare('a/b');
     await revokeHandShare('a/b');
     await getMyPokerStats();
-
+    
     expect(client.get).toHaveBeenCalledWith('/v1.0/players/a%2Fb/showcase', {silentError: true});
     expect(client.get).toHaveBeenCalledWith('/v1.0/players/me/hands/h%2F1', {silentError: true});
     expect(client.post).toHaveBeenCalledWith(
@@ -81,7 +78,7 @@ describe('API domain modules', () => {
     );
     expect(client.delete).toHaveBeenCalledWith('/v1.0/players/me/hand-shares/a%2Fb');
   });
-
+  
   test('covers room listing, creation, seat lifecycle and idempotency keys', async () => {
     client.get
       .mockResolvedValueOnce({data: {data: ['room']}})
@@ -92,7 +89,7 @@ describe('API domain modules', () => {
       .mockResolvedValueOnce({data: {id: 'created'}})
       .mockResolvedValueOnce({data: undefined})
       .mockResolvedValueOnce({data: {amount: 500}});
-
+    
     await expect(listRooms('next')).resolves.toEqual(['room']);
     await expect(listStakes('real')).resolves.toEqual(['1/2']);
     await getRoom('table-1');
@@ -107,7 +104,7 @@ describe('API domain modules', () => {
     await joinRoom('table-1', 500, 'secret');
     await expect(getSeated('table-1')).resolves.toEqual({seated: true, stack: 500});
     await expect(leaveRoom('table-1')).resolves.toEqual({amount: 500});
-
+    
     expect(client.post).toHaveBeenCalledWith('/v1.0/rooms/table-1/join', {
       amount: 500, share_code: 'secret', idem_key: 'idem-key',
     }, {silentError: true});
@@ -115,17 +112,17 @@ describe('API domain modules', () => {
       idem_key: 'idem-key',
     }, {silentError: true});
   });
-
+  
   test('covers notes and hand-history endpoints with encoded opponent ids', async () => {
     client.get
       .mockResolvedValueOnce({data: {data: ['note']}})
       .mockResolvedValueOnce({data: {hand_id: 'hand-1'}});
     client.post.mockResolvedValueOnce({data: {opponent_id: 'a/b'}});
-
+    
     await expect(getPlayerNotes()).resolves.toEqual(['note']);
     await savePlayerNote('a/b', {tag: 'red', note: 'agressivo'});
     await getHandHistory('table-1', 'hand-1');
-
+    
     expect(client.post).toHaveBeenCalledWith(
       '/v1.0/players/me/notes/a%2Fb',
       {tag: 'red', note: 'agressivo'},

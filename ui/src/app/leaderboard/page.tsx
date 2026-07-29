@@ -12,14 +12,17 @@ import type {WalletMode} from '@/lib/api/player';
 
 export default function Ranking() {
   const [mode, setMode] = useState<WalletMode>('sandbox');
-  const {data = [], isLoading, isError, refetch} = useQuery({queryKey: ['leaderboard', mode], queryFn: () => leaderboard(mode)});
+  const {data = [], isLoading, isError, refetch} = useQuery({
+    queryKey: ['leaderboard', mode],
+    queryFn: () => leaderboard(mode)
+  });
   const viewer = getViewerId();
   const {authed} = useOptionalSession();
-
+  
   const topThree = data.slice(0, 3);
   const remaining = data.slice(3);
   const viewerEntry = data.find(p => p.player_id === viewer);
-
+  
   return (
     <main className="app-page">
       <nav className="app-nav shell">
@@ -40,7 +43,7 @@ export default function Ranking() {
           <p>Desempenho auditável baseado em vitórias e mãos jogadas nas mesas do CTech Poker.</p>
         </header>
         <CurrencyModeTabs mode={mode} onChange={setMode}/>
-
+        
         {viewerEntry && (
           <div className="viewer-ranking-card" aria-label="Sua posição atual">
             <Sparkles aria-hidden="true"/>
@@ -54,12 +57,13 @@ export default function Ranking() {
             </div>
           </div>
         )}
-
+        
         {isLoading ? <div className="lobby-empty"><span className="loader"/>Buscando o ranking da comunidade…</div> :
           isError ? <div className="lobby-empty">Não foi possível carregar o ranking agora.
               <button type="button" className="link-retry" onClick={() => void refetch()}>Tentar novamente</button>
             </div> :
-            !data.length ? <div className="lobby-empty">Nenhum jogador pontuou ainda. A primeira mesa inicia o Hall da Fama.</div> :
+            !data.length ?
+              <div className="lobby-empty">Nenhum jogador pontuou ainda. A primeira mesa inicia o Hall da Fama.</div> :
               <>
                 {topThree.length >= 3 && (
                   <div className="leaderboard-podium" aria-label="Pódio do ranking">
@@ -67,7 +71,8 @@ export default function Ranking() {
                       const rank = index + 1;
                       const isViewer = player.player_id === viewer;
                       return (
-                        <article key={player.player_id} className={`podium-card rank-${rank}${isViewer ? ' viewer' : ''}`}>
+                        <article key={player.player_id}
+                                 className={`podium-card rank-${rank}${isViewer ? ' viewer' : ''}`}>
                           {rank === 1 && <Crown className="podium-crown" aria-hidden="true"/>}
                           <span className="podium-badge">{rank}º Lugar</span>
                           <strong className="podium-name">
@@ -83,7 +88,7 @@ export default function Ranking() {
                     })}
                   </div>
                 )}
-
+                
                 <div className="ranking-list">
                   {(topThree.length >= 3 ? remaining : data).map((e, i) => {
                     const rankNumber = topThree.length >= 3 ? i + 4 : i + 1;

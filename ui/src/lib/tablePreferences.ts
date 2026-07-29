@@ -10,7 +10,7 @@ export type TablePreferences = {
   realityCheckMinutes: number;
 };
 
-export const TABLE_THEMES: Record<TableThemeId, {label: string; colors: [string, string]}> = {
+export const TABLE_THEMES: Record<TableThemeId, { label: string; colors: [string, string] }> = {
   classic: {label: 'Clássico', colors: ['#18765b', '#084b38']},
   midnight: {label: 'Meia-noite', colors: ['#244b65', '#102b3d']},
   burgundy: {label: 'Bordô', colors: ['#71323b', '#35151b']},

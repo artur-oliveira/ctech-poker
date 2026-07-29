@@ -16,7 +16,7 @@ vi.mock('@/lib/rabbitHunt', () => ({
   rabbitRunout: (...args: unknown[]) => rabbitRunout(...args),
 }));
 vi.mock('@/components/table/PlayingCard', () => ({
-  PlayingCard: ({card}: {card: string}) => <span data-testid="rabbit-card">{card}</span>,
+  PlayingCard: ({card}: { card: string }) => <span data-testid="rabbit-card">{card}</span>,
 }));
 
 function snapshot(overrides: Partial<TableSnapshot> = {}): TableSnapshot {
@@ -51,7 +51,7 @@ describe('RabbitHunt', () => {
     const {container} = render(<RabbitHunt snapshot={snapshot(overrides)} viewer="viewer"/>);
     expect(container).toBeEmptyDOMElement();
   });
-
+  
   test('derives the remaining runout from the revealed shuffle seed', async () => {
     render(<RabbitHunt snapshot={snapshot()} viewer="viewer"/>);
     await userEvent.click(screen.getByRole('button', {name: /Ver o que viria/}));
@@ -59,7 +59,7 @@ describe('RabbitHunt', () => {
     expect(shuffleWithSeed).toHaveBeenCalledWith('seed');
     expect(rabbitRunout).toHaveBeenCalledWith(['deck'], 2, 3);
   });
-
+  
   test('accepts a server runout only after its partial-deck proof matches', async () => {
     const value = snapshot({
       shuffle_server_seed_hex: undefined,
@@ -76,7 +76,7 @@ describe('RabbitHunt', () => {
     );
     expect(shuffleWithSeed).not.toHaveBeenCalled();
   });
-
+  
   test.each<[string, Partial<TableSnapshot>]>([
     ['missing proof', {runout_cards: ['JC'], shuffle_server_seed_hex: undefined}],
     ['invalid proof', {

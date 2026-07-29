@@ -1,5 +1,5 @@
-import {apiClient} from './client';
 import type {Page} from './client';
+import {apiClient} from './client';
 import type {WalletMode} from './player';
 
 export interface Entry {

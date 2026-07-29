@@ -12,7 +12,7 @@ export function DeckReveal({serverSeed, commitHash}: { serverSeed: string; commi
   const [result, setResult] = useState<VerifyResult | null>(null);
   const [error, setError] = useState(false);
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
-
+  
   useEffect(() => {
     let cancelled = false;
     verifyDeck(serverSeed, commitHash).then(r => {
@@ -22,7 +22,7 @@ export function DeckReveal({serverSeed, commitHash}: { serverSeed: string; commi
       cancelled = true;
     };
   }, [serverSeed, commitHash]);
-
+  
   function toggle(index: number) {
     setRevealed(prev => {
       const next = new Set(prev);
@@ -30,11 +30,12 @@ export function DeckReveal({serverSeed, commitHash}: { serverSeed: string; commi
       return next;
     });
   }
-
+  
   return <div className="deck-reveal">
     <div className="deck-reveal-proof">
       <div className="deck-reveal-hash"><span>Commit hash (publicado antes da mão)</span><code>{commitHash}</code></div>
-      <div className="deck-reveal-hash"><span>Seed do servidor (revelada após a mão)</span><code>{serverSeed}</code></div>
+      <div className="deck-reveal-hash"><span>Seed do servidor (revelada após a mão)</span><code>{serverSeed}</code>
+      </div>
       {!result && !error && <p className="deck-reveal-status pending"><LoaderCircle
           className="spin"/>Recalculando o baralho a partir da seed…</p>}
       {error && <p className="deck-reveal-status mismatch"><CircleX/>Não foi possível recalcular o baralho no seu
@@ -58,9 +59,9 @@ export function DeckReveal({serverSeed, commitHash}: { serverSeed: string; commi
         </div>
         <div className="deck-grid">
           {result.deck.map((card, i) => <button key={i} type="button" className="deck-grid-slot"
-                                                 aria-pressed={revealed.has(i)}
-                                                 aria-label={revealed.has(i) ? `Posição ${i + 1}: revelada` : `Posição ${i + 1}: revelar carta`}
-                                                 onClick={() => toggle(i)}>
+                                                aria-pressed={revealed.has(i)}
+                                                aria-label={revealed.has(i) ? `Posição ${i + 1}: revelada` : `Posição ${i + 1}: revelar carta`}
+                                                onClick={() => toggle(i)}>
             <PlayingCard card={revealed.has(i) ? card.code : undefined} index={0} size="hole"/>
             <small>{i + 1}</small>
           </button>)}

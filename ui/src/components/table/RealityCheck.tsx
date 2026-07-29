@@ -19,13 +19,13 @@ function durationLabel(seconds: number) {
 }
 
 export function RealityCheck({
-  joinedAt,
-  buyIn,
-  currentStack,
-  handId,
-  handComplete,
-  isTurn
-}: {
+                               joinedAt,
+                               buyIn,
+                               currentStack,
+                               handId,
+                               handComplete,
+                               isTurn
+                             }: {
   joinedAt: number;
   buyIn: number;
   currentStack: number;
@@ -42,14 +42,14 @@ export function RealityCheck({
     setCompletedHands(previous => new Set(previous).add(handId));
   }
   const intervalMs = preferences.realityCheckMinutes * 60_000;
-
+  
   useEffect(() => {
     if (!intervalMs) return undefined;
     const tick = () => setNow(Date.now());
     const timer = window.setInterval(tick, 15_000);
     return () => window.clearInterval(timer);
   }, [intervalMs]);
-
+  
   useEffect(() => {
     if (!intervalMs || isTurn || open) return;
     const sessionStart = joinedAt > 0 ? joinedAt * 1000 : now;
@@ -60,21 +60,35 @@ export function RealityCheck({
       setOpen(true);
     }
   }, [intervalMs, isTurn, joinedAt, now, open]);
-
+  
   const sessionSeconds = Math.max(0, Math.floor((now - joinedAt * 1000) / 1000));
   const result = currentStack - buyIn;
   return <Dialog open={open} onOpenChange={setOpen}>
     <DialogContent>
       <DialogHeader>
-        <DialogTitle><span className="reality-check-title"><Clock3 aria-hidden="true"/> Pausa consciente</span></DialogTitle>
+        <DialogTitle><span className="reality-check-title"><Clock3
+          aria-hidden="true"/> Pausa consciente</span></DialogTitle>
         <DialogDescription>Um resumo neutro da sua sessão. O lembrete nunca abre durante sua vez.</DialogDescription>
       </DialogHeader>
       <dl className="reality-check-stats">
-        <div><dt>Tempo na mesa</dt><dd>{durationLabel(sessionSeconds)}</dd></div>
-        <div><dt>Mãos concluídas</dt><dd>{completedHands.size}</dd></div>
-        <div><dt>Entrada acumulada</dt><dd>{buyIn.toLocaleString('pt-BR')}</dd></div>
-        <div><dt>Stack atual</dt><dd>{currentStack.toLocaleString('pt-BR')}</dd></div>
-        <div><dt>Resultado da sessão</dt>
+        <div>
+          <dt>Tempo na mesa</dt>
+          <dd>{durationLabel(sessionSeconds)}</dd>
+        </div>
+        <div>
+          <dt>Mãos concluídas</dt>
+          <dd>{completedHands.size}</dd>
+        </div>
+        <div>
+          <dt>Entrada acumulada</dt>
+          <dd>{buyIn.toLocaleString('pt-BR')}</dd>
+        </div>
+        <div>
+          <dt>Stack atual</dt>
+          <dd>{currentStack.toLocaleString('pt-BR')}</dd>
+        </div>
+        <div>
+          <dt>Resultado da sessão</dt>
           <dd className={result > 0 ? 'positive' : result < 0 ? 'negative' : ''}>
             {result > 0 ? '+' : ''}{result.toLocaleString('pt-BR')}
           </dd>

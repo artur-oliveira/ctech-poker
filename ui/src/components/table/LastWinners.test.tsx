@@ -5,7 +5,7 @@ import type {HandItem} from '@/lib/api/player';
 import {deriveWinners, LastWinners} from './LastWinners';
 
 vi.mock('./PlayingCard', () => ({
-  PlayingCard: ({card}: {card?: string}) => <span data-testid={card ? 'card' : 'card-back'}>{card || '?'}</span>,
+  PlayingCard: ({card}: { card?: string }) => <span data-testid={card ? 'card' : 'card-back'}>{card || '?'}</span>,
 }));
 
 const hand = (overrides: Partial<HandItem>): HandItem => ({
@@ -29,7 +29,7 @@ describe('deriveWinners', () => {
     expect(winner.category).toBe('full_house');
     expect(winner.cards).toHaveLength(5);
   });
-
+  
   test('lists split-pot opponents, fallback names, and uses revealed opponent cards', () => {
     const [winner] = deriveWinners([hand({
       outcome: 'lost',
@@ -43,7 +43,7 @@ describe('deriveWinners', () => {
     expect(winner.names).toEqual(['Bia', 'Visitante']);
     expect(winner.category).toBe('straight');
   });
-
+  
   test('filters losses without known winners and applies the limit before filtering', () => {
     const entries = deriveWinners([
       hand({hand_id: 'lost', outcome: 'lost'}),
@@ -59,23 +59,23 @@ describe('LastWinners', () => {
     const {container} = render(<LastWinners items={[hand({outcome: 'lost'})]}/>);
     expect(container).toBeEmptyDOMElement();
   });
-
+  
   test('opens and closes the panel, rendering known cards and concealed placeholders', async () => {
     const user = userEvent.setup();
     render(<LastWinners items={[
       hand({hand_id: 'visible', hole_cards: ['AH', 'AD']}),
       hand({hand_id: 'hidden', outcome: 'tied'}),
     ]}/>);
-
+    
     const toggle = screen.getByRole('button', {name: 'Ver últimos vencedores'});
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getAllByTestId('card')).toHaveLength(2);
     expect(screen.getAllByTestId('card-back')).toHaveLength(2);
-
+    
     await user.click(toggle);
     expect(screen.getByRole('button', {name: 'Fechar últimos vencedores'})).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getAllByText('Você')).toHaveLength(2);
-
+    
     await user.click(screen.getByRole('button', {name: 'Fechar últimos vencedores'}));
     expect(screen.getByRole('button', {name: 'Ver últimos vencedores'})).toHaveAttribute('aria-expanded', 'false');
   });

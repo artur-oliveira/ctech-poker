@@ -12,11 +12,7 @@ import {
 import {Label} from '@/components/ui/label';
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
 import {Switch} from '@/components/ui/switch';
-import {
-  TABLE_THEMES,
-  type TableThemeId,
-  useTablePreferences
-} from '@/lib/tablePreferences';
+import {TABLE_THEMES, type TableThemeId, useTablePreferences} from '@/lib/tablePreferences';
 
 const REALITY_OPTIONS = [
   {value: '0', label: 'Desativado'},
@@ -55,7 +51,8 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
               {Object.entries(TABLE_THEMES).map(([id, theme]) =>
                 <SelectItem key={id} value={id as TableThemeId} label={theme.label}>
                   <span className="table-theme-option">
-                    <span aria-hidden="true" style={{'--theme-a': theme.colors[0], '--theme-b': theme.colors[1]} as React.CSSProperties}/>
+                    <span aria-hidden="true"
+                          style={{'--theme-a': theme.colors[0], '--theme-b': theme.colors[1]} as React.CSSProperties}/>
                     {theme.label}
                   </span>
                 </SelectItem>)}
@@ -72,8 +69,8 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
           <span><Repeat2 aria-hidden="true"/><span><Label id="run-it-twice-label">Rodar duas vezes</Label>
             <small>Em all-ins, divide cada pote entre dois boards. Só acontece quando todos os jogadores envolvidos também ativaram.</small>
           </span></span>
-          <Switch aria-labelledby="run-it-twice-label" checked={runItTwice}
-                  onCheckedChange={checked => onRunItTwiceChange?.(checked)}/>
+            <Switch aria-labelledby="run-it-twice-label" checked={runItTwice}
+                    onCheckedChange={checked => onRunItTwiceChange?.(checked)}/>
         </div>}
         <div className="table-preference-toggle">
           <span><Mic aria-hidden="true"/><span><Label id="voice-actions-label">Comandos por voz</Label>

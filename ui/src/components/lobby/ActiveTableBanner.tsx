@@ -10,7 +10,7 @@ export function ActiveTableBanner() {
   const {data: sessions = []} = useQuery({queryKey: ['sessions', 'me'], queryFn: () => getSessions()});
   const open = sessions.find(s => s.ended_at === 0);
   if (!open) return null;
-
+  
   return <Button variant="ghost" className="room-card h-auto"
                  onClick={() => router.push(`/table?id=${encodeURIComponent(open.table_id)}`)}>
     <span className="status-dot"/>

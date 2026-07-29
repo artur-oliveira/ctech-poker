@@ -1411,7 +1411,19 @@ func (a *Actor) handleJoin(ctx context.Context, c JoinCmd) error {
 }
 
 func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
-	if c.MaxSeats > 0 && len(a.cached.PlayersForActor()) >= c.MaxSeats {
+	players := a.cached.PlayersForActor()
+	alreadySeated := false
+	for _, player := range players {
+		if player.ID == c.PlayerID {
+			alreadySeated = true
+			break
+		}
+	}
+	// A busted player still occupies their original seat. Capacity only
+	// rejects a genuinely new player; an existing player must reach the hand
+	// engine below, which restores a Stack<=0 seat and rejects a duplicate
+	// join when chips are still present.
+	if !alreadySeated && c.MaxSeats > 0 && len(players) >= c.MaxSeats {
 		return ErrNoSeatsAvailable
 	}
 	p := &hand.Player{ID: c.PlayerID, Stack: c.Stack, HoldID: c.HoldID, LastActionAt: timeNowFunc().UnixMilli()}

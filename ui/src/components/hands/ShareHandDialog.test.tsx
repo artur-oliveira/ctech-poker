@@ -18,13 +18,13 @@ describe('ShareHandDialog', () => {
     const user = userEvent.setup();
     render(<ShareHandDialog handId="hand/1" outcome="lost"/>);
     await user.click(screen.getByRole('button', {name: 'Compartilhar'}));
-
+    
     expect(screen.getByRole('radio', {name: /Bad beat/})).toBeChecked();
     await user.click(screen.getByRole('radio', {name: /Brag/}));
     await user.click(screen.getByRole('checkbox', {name: /Mostrar minhas cartas/}));
     await user.selectOptions(screen.getByRole('combobox'), '30');
     await user.click(screen.getByRole('button', {name: /Criar link/}));
-
+    
     await waitFor(() => expect(createHandShare).toHaveBeenCalledWith('hand/1', {
       kind: 'brag',
       include_hero_cards: false,
@@ -34,7 +34,7 @@ describe('ShareHandDialog', () => {
       `${window.location.origin}/share?id=token%20with%20spaces`,
     );
   });
-
+  
   test('copies a created URL and exposes visual confirmation', async () => {
     const user = userEvent.setup();
     render(<ShareHandDialog handId="h2" outcome="won"/>);
@@ -47,9 +47,9 @@ describe('ShareHandDialog', () => {
     expect(writeText).toHaveBeenCalledWith((url as HTMLInputElement).value);
     expect(screen.getByRole('button', {name: /Copiado/})).toBeInTheDocument();
   });
-
+  
   test('prevents duplicate creation while the request is pending', async () => {
-    let resolve!: (share: {token: string}) => void;
+    let resolve!: (share: { token: string }) => void;
     createHandShare.mockReturnValue(new Promise(resolvePromise => {
       resolve = resolvePromise;
     }));
@@ -61,7 +61,7 @@ describe('ShareHandDialog', () => {
     expect(createButton).toBeDisabled();
     await user.click(createButton);
     expect(createHandShare).toHaveBeenCalledOnce();
-
+    
     resolve({token: 'eventual'});
     expect(await screen.findByLabelText('Link compartilhável')).toBeInTheDocument();
   });

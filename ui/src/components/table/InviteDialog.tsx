@@ -14,7 +14,7 @@ import {
 
 export function InviteDialog({url}: { url: string }) {
   const [copied, setCopied] = useState(false);
-
+  
   async function copy() {
     try {
       await navigator.clipboard.writeText(url);
@@ -24,7 +24,7 @@ export function InviteDialog({url}: { url: string }) {
       // Clipboard API unavailable/blocked. The input stays visible and selectable for a manual copy.
     }
   }
-
+  
   async function share() {
     if (navigator.share) {
       try {
@@ -36,7 +36,7 @@ export function InviteDialog({url}: { url: string }) {
     }
     await copy();
   }
-
+  
   return <Dialog>
     <DialogTrigger render={<Button type="button" variant="ghost" size="icon" aria-label="Convidar para a mesa"/>}>
       <Share2/>

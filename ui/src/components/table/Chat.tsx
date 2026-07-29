@@ -29,16 +29,16 @@ export function Chat({items, onSend, connected = true, viewerId, seats = [], ope
   const [seenCount, setSeenCount] = useState(items.length);
   if (open && items.length !== seenCount) setSeenCount(items.length);
   const unread = open ? 0 : Math.max(0, items.length - seenCount);
-
+  
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
-
+  
   useEffect(() => {
     const node = messagesRef.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [items.length, open]);
-
+  
   function submit(event: FormEvent) {
     event.preventDefault();
     const message = text.trim();
@@ -50,7 +50,7 @@ export function Chat({items, onSend, connected = true, viewerId, seats = [], ope
     setText('');
     setSendError('');
   }
-
+  
   return <aside className={`game-chat ${open ? 'open' : ''}`} aria-label="Chat da mesa">
     <div className="sr-only" role="status" aria-live={open ? 'off' : 'polite'} aria-atomic="true">
       {latest ? `${nameOf(latest.player)} disse: ${latest.message}` : ''}

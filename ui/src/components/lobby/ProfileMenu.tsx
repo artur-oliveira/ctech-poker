@@ -37,7 +37,7 @@ export function ProfileMenu() {
   const [showcaseOpen, setShowcaseOpen] = useState(false);
   const [selfHudOpen, setSelfHudOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
-
+  
   const save = useMutation({
     mutationFn: updateMe,
     onSuccess: data => {
@@ -60,11 +60,11 @@ export function ProfileMenu() {
       pushNotification('Foto de perfil removida.', 'info');
     },
   });
-
+  
   const walletMode: WalletMode = me?.wallet_mode || 'sandbox';
   const deckVariant: DeckVariantId = me?.deck_variant || DEFAULT_DECK_VARIANT;
   const balanceLabel = walletMode === 'real' ? formatReal(me?.game_balance) : formatSandbox(me?.sandbox_balance);
-
+  
   return <><Popover onOpenChange={(open, details) => {
     if (!open && editingName && details.reason === 'escape-key') {
       details.cancel();
@@ -87,10 +87,10 @@ export function ProfileMenu() {
           </div>
           <input ref={fileInput} className="sr-only" type="file" accept="image/jpeg,image/png"
                  aria-label="Selecionar foto de perfil" onChange={event => {
-                   const file = event.target.files?.[0];
-                   if (file) avatar.mutate(file);
-                   event.target.value = '';
-                 }}/>
+            const file = event.target.files?.[0];
+            if (file) avatar.mutate(file);
+            event.target.value = '';
+          }}/>
           <div className="profile-avatar-actions">
             <Button type="button" size="sm" variant="outline" disabled={avatar.isPending}
                     onClick={() => fileInput.current?.click()}>
@@ -99,7 +99,7 @@ export function ProfileMenu() {
             </Button>
             {me?.avatar_url && <Button type="button" size="icon" variant="ghost" disabled={removeAvatar.isPending}
                                        aria-label="Remover foto de perfil" onClick={() => removeAvatar.mutate()}>
-              <Trash2 aria-hidden="true"/>
+                <Trash2 aria-hidden="true"/>
             </Button>}
           </div>
         </div>

@@ -37,7 +37,7 @@ export async function uploadAvatar(file: File): Promise<PlayerProfile> {
 }
 
 export async function uploadAvatarJPEG(jpeg: Blob): Promise<PlayerProfile> {
-  const presign = (await apiClient.post<{url: string; fields: Record<string, string>; version: number}>(
+  const presign = (await apiClient.post<{ url: string; fields: Record<string, string>; version: number }>(
     '/v1.0/players/me/avatar/upload-url', {}, {silentError: false}
   )).data;
   const form = new FormData();

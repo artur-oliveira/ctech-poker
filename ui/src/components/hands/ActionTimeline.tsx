@@ -56,7 +56,7 @@ const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
     label: 'Ajustou Rodar Duas Vezes',
     Icon: Repeat2,
   },
-
+  
   // Fluxo da partida
   next_hand: {
     label: 'Nova mão',
@@ -74,7 +74,7 @@ const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
     label: 'Postou o Big Blind',
     Icon: CircleDollarSign,
   },
-
+  
   // Ações do jogador
   check: {
     label: 'Check',
@@ -104,7 +104,7 @@ const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
     label: 'Mostrou as cartas',
     Icon: Eye,
   },
-
+  
   // Resultado da mão
   won: {
     label: 'Venceu',
@@ -125,7 +125,7 @@ export function ActionTimeline({actions, resolveName}: {
   resolveName: (playerId: string) => string;
 }) {
   if (!actions.length) return <p className="action-timeline-empty">Nenhuma ação registrada para esta mão.</p>;
-
+  
   return <ol className="action-timeline">
     {actions.map((a, i) => {
       const meta = ACTION_META[a.action] || {label: a.action, Icon: HelpCircle};

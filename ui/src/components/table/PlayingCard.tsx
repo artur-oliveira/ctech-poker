@@ -26,7 +26,7 @@ export function PlayingCard({card, index, size, owner, slow, onReveal, revealPen
   }
   if (!revealed) return <Image className={`playing-card ${size}-card`} src={back} alt="Carta fechada" {...dimensions}
                                style={style}/>;
-
+  
   const label = size === 'board'
     ? `Carta comunitária: ${cardLabel(card!)}`
     : owner === 'viewer'

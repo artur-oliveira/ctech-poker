@@ -7,10 +7,7 @@ import type {PokerAction} from '@/lib/api/table';
 import type {ActionError} from '@/lib/hooks/useTableRealtime';
 import {betShortcutAmount} from '@/lib/betShortcuts';
 import {VoiceActionButton} from '@/components/table/VoiceActionButton';
-import {
-  resolvePreselection,
-  type ActionPreselection
-} from '@/lib/actionPreselection';
+import {type ActionPreselection, resolvePreselection} from '@/lib/actionPreselection';
 
 export type ActionAvailability = Record<PokerAction, boolean>
 
@@ -22,7 +19,7 @@ type Props = {
   maxRaise: number;
   raiseStep: number;
   effectiveStack: number;
-  raisePresets: {label: string; value: number}[];
+  raisePresets: { label: string; value: number }[];
   actionKey: string;
   isTurn: boolean;
   connected: boolean;
@@ -82,13 +79,13 @@ function TimeBankStatus({isTurn, baseDeadline, actionDeadline, balance}: {
   const [now, setNow] = useState(() => Date.now());
   const bankActive = Boolean(isTurn && baseDeadline && actionDeadline && now >= baseDeadline);
   const remaining = bankActive && actionDeadline ? Math.max(0, actionDeadline - now) : Math.max(0, balance);
-
+  
   useEffect(() => {
     if (!isTurn || !actionDeadline) return undefined;
     const timer = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(timer);
   }, [isTurn, actionDeadline]);
-
+  
   const seconds = Math.ceil(remaining / 1000);
   return <span className={`time-bank-status${bankActive ? ' active' : ''}${!isTurn ? ' inactive' : ''}`} role="timer"
                aria-label={`${bankActive ? 'Time bank em uso' : 'Time bank disponível'}: ${seconds} segundos`}
@@ -98,8 +95,20 @@ function TimeBankStatus({isTurn, baseDeadline, actionDeadline, balance}: {
   </span>;
 }
 
-function PreselectionControls({canPreselect, supportsCallPreselection, isTurn, connected, pending, available, callAmount,
-                                prospectiveCallAmount, selection, selectionAmount, onSelect, onAct}: {
+function PreselectionControls({
+                                canPreselect,
+                                supportsCallPreselection,
+                                isTurn,
+                                connected,
+                                pending,
+                                available,
+                                callAmount,
+                                prospectiveCallAmount,
+                                selection,
+                                selectionAmount,
+                                onSelect,
+                                onAct
+                              }: {
   canPreselect: boolean;
   supportsCallPreselection: boolean;
   isTurn: boolean;
@@ -128,7 +137,7 @@ function PreselectionControls({canPreselect, supportsCallPreselection, isTurn, c
       onAct(action);
     }
   }, [selection, selectionAmount, isTurn, connected, pending, available, callAmount, onAct]);
-
+  
   if (!canPreselect && !selection) return null;
   const option = (value: ActionPreselection, label: string, description: string, amount = 0) =>
     <button type="button" className={selection === value ? 'selected' : ''}
@@ -151,7 +160,7 @@ function PreselectionControls({canPreselect, supportsCallPreselection, isTurn, c
  * resets to the street minimum on every new decision without an effect. */
 function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending, onRaise}: {
   minRaise: number; maxRaise: number; raiseStep: number; disabled: boolean; pending: boolean;
-  presets: {label: string; value: number}[];
+  presets: { label: string; value: number }[];
   onRaise: (amount: number) => void;
 }) {
   const [amount, setAmount] = useState(minRaise);
@@ -164,10 +173,10 @@ function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending
   const uniquePresets = presets
     .map(preset => ({...preset, value: Math.min(maxRaise, Math.max(minRaise, preset.value))}))
     .filter((preset, index, all) => all.findIndex(item => item.value === preset.value) === index);
-
+  
   useEffect(() => {
     if (inactive) return undefined;
-
+    
     function onKey(event: KeyboardEvent) {
       const key = event.key.toLowerCase();
       if (isPlainKey(event)) {
@@ -201,11 +210,11 @@ function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending
           event.ctrlKey) ?? value);
       }
     }
-
+    
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [inactive, safeAmount, onRaise, minRaise, maxRaise, raiseStep, presets]);
-
+  
   function handleRaiseClick() {
     if (!expanded && window.matchMedia(COMPACT_QUERY).matches) {
       setExpanded(true);
@@ -213,13 +222,13 @@ function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending
     }
     onRaise(safeAmount);
   }
-
+  
   return <>
     <label className={`bet-control${expanded ? '' : ' bet-control-collapsed'}`} htmlFor="raise-amount">
       <span className="sr-only">Valor total do aumento</span>
       <div className="bet-presets" role="group" aria-label="Valores rápidos de aumento">
         {uniquePresets.map(preset => <button key={preset.label} type="button" disabled={inactive}
-                                       onClick={() => setAmount(preset.value)}>{preset.label}</button>)}
+                                             onClick={() => setAmount(preset.value)}>{preset.label}</button>)}
       </div>
       <Input id="raise-amount" aria-describedby="action-context" type="range"
              aria-keyshortcuts="a h ArrowUp ArrowDown ArrowLeft ArrowRight"
@@ -233,7 +242,8 @@ function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending
             aria-describedby="action-context" onClick={handleRaiseClick}
             className={`raise${expanded ? '' : ' raise-collapsed'}`}>
       {pending ? <><LoaderCircle className="action-spinner"/> {isAllIn ? 'Indo All In…' : actionLabel.raise}</> :
-        <span>{expanded ? (isAllIn ? `All In ${safeAmount.toLocaleString('pt-BR')}` : `Aumentar ${safeAmount.toLocaleString('pt-BR')}`) : (isAllIn ? 'All In' : 'Aumentar')} <kbd aria-hidden="true">R</kbd></span>}
+        <span>{expanded ? (isAllIn ? `All In ${safeAmount.toLocaleString('pt-BR')}` : `Aumentar ${safeAmount.toLocaleString('pt-BR')}`) : (isAllIn ? 'All In' : 'Aumentar')}
+          <kbd aria-hidden="true">R</kbd></span>}
     </Button>
     {expanded && <Button type="button" variant="ghost" className="raise-cancel"
                          onClick={() => setExpanded(false)}>Cancelar</Button>}
@@ -277,8 +287,8 @@ export function ActionBar({
   const unavailable = !connected || !isTurn || pending !== null || executingPreparedAction;
   const context = !connected ? 'Reconectando antes de liberar as ações…' : pending ? actionLabel[pending] :
     executingPreparedAction ? 'Executando sua ação preparada…' : !isTurn ?
-    'Aguarde sua vez.' : effectiveStack > 0 ?
-      `Sua vez de agir. Stack efetivo: ${effectiveStack.toLocaleString('pt-BR')} fichas.` : 'Sua vez de agir.';
+      'Aguarde sua vez.' : effectiveStack > 0 ?
+        `Sua vez de agir. Stack efetivo: ${effectiveStack.toLocaleString('pt-BR')} fichas.` : 'Sua vez de agir.';
   const label = (action: PokerAction, idle: string, key?: string) => {
     if (pending === action) {
       return <><LoaderCircle className="action-spinner"/> {actionLabel[action]}</>;
@@ -291,12 +301,12 @@ export function ActionBar({
   // complete), so collapse the choice row + raise slider instead of painting
   // the full disabled control surface a spectating player has no use for.
   const noLegalActions = !canFold && !canCheck && !canCall && !available.raise;
-
+  
   useEffect(() => {
     if (unavailable) return undefined;
     const keyActions: Record<string, PokerAction> = {f: 'fold', c: 'check', p: 'call'};
     const legal: Record<string, boolean> = {f: canFold, c: canCheck, p: canCall};
-
+    
     function onKey(event: KeyboardEvent) {
       if (!isPlainKey(event)) return;
       const key = event.key.toLowerCase();
@@ -305,11 +315,11 @@ export function ActionBar({
       event.preventDefault();
       onActAction(action);
     }
-
+    
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [unavailable, canFold, canCheck, canCall, onActAction]);
-
+  
   return <div className="action-bar" role="group" aria-label="Ações da rodada" aria-busy={pending !== null}>
     <div className="action-context-row">
       <p id="action-context" className="action-context" aria-live="polite">{context}</p>
@@ -320,26 +330,28 @@ export function ActionBar({
                          onAct={onActAction}/>
     </div>
     <PreselectionControls key={selectionScope} canPreselect={canPreselect}
-                           supportsCallPreselection={supportsCallPreselection} isTurn={isTurn}
-                           connected={connected} pending={pending} available={available}
-                           callAmount={callAmount} prospectiveCallAmount={prospectiveCallAmount}
-                           selection={preselection} selectionAmount={preselectionAmount}
-                           onSelect={onPreselectAction} onAct={onActAction}/>
-    {!noLegalActions && !executingPreparedAction && <div className="action-choices" role="group" aria-label="Ações rápidas">
-        <Button type="button" variant="outline" disabled={unavailable || !available.fold}
-                aria-describedby="action-context" aria-keyshortcuts="f"
-                onClick={() => onActAction('fold')}>{label('fold', 'Fold', 'F')}</Button>
-        <Button type="button" variant="outline" disabled={unavailable || !available.check}
-                aria-describedby="action-context" aria-keyshortcuts="c"
-                onClick={() => onActAction('check')}>{label('check', 'Check', 'C')}</Button>
-        <Button type="button" variant="outline" disabled={unavailable || !available.call}
-                aria-describedby="action-context" aria-keyshortcuts="p"
-                onClick={() => onActAction('call')}
-                className="call">{label('call', callAmount > 0 ? `Pagar ${callAmount.toLocaleString('pt-BR')}` : 'Pagar', 'P')}</Button>
-    </div>}
-    {!noLegalActions && !executingPreparedAction && <RaiseControl key={actionKey} minRaise={minRaise} maxRaise={maxRaise} raiseStep={raiseStep}
-                                      disabled={unavailable || !available.raise} presets={raisePresets}
-                                      pending={pending === 'raise'} onRaise={onRaise}/>}
+                          supportsCallPreselection={supportsCallPreselection} isTurn={isTurn}
+                          connected={connected} pending={pending} available={available}
+                          callAmount={callAmount} prospectiveCallAmount={prospectiveCallAmount}
+                          selection={preselection} selectionAmount={preselectionAmount}
+                          onSelect={onPreselectAction} onAct={onActAction}/>
+    {!noLegalActions && !executingPreparedAction &&
+        <div className="action-choices" role="group" aria-label="Ações rápidas">
+            <Button type="button" variant="outline" disabled={unavailable || !available.fold}
+                    aria-describedby="action-context" aria-keyshortcuts="f"
+                    onClick={() => onActAction('fold')}>{label('fold', 'Fold', 'F')}</Button>
+            <Button type="button" variant="outline" disabled={unavailable || !available.check}
+                    aria-describedby="action-context" aria-keyshortcuts="c"
+                    onClick={() => onActAction('check')}>{label('check', 'Check', 'C')}</Button>
+            <Button type="button" variant="outline" disabled={unavailable || !available.call}
+                    aria-describedby="action-context" aria-keyshortcuts="p"
+                    onClick={() => onActAction('call')}
+                    className="call">{label('call', callAmount > 0 ? `Pagar ${callAmount.toLocaleString('pt-BR')}` : 'Pagar', 'P')}</Button>
+        </div>}
+    {!noLegalActions && !executingPreparedAction &&
+        <RaiseControl key={actionKey} minRaise={minRaise} maxRaise={maxRaise} raiseStep={raiseStep}
+                      disabled={unavailable || !available.raise} presets={raisePresets}
+                      pending={pending === 'raise'} onRaise={onRaise}/>}
     {error && <div className="action-error" role="alert">
         <CircleAlert aria-hidden="true"/><p>{error.message}</p>
         <Button type="button" variant="ghost" size="icon" aria-label="Fechar aviso"

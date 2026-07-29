@@ -8,12 +8,12 @@ import {hasSeenOnboarding, markOnboardingSeen} from '@/lib/onboarding';
 export function OnboardingIntro() {
   const [dismissed, setDismissed] = useState(() => hasSeenOnboarding());
   if (dismissed) return null;
-
+  
   function dismiss() {
     markOnboardingSeen();
     setDismissed(true);
   }
-
+  
   return <div className="onboarding-intro" role="note">
     <div className="onboarding-intro-icon" aria-hidden="true"><Compass/></div>
     <div className="onboarding-intro-copy">

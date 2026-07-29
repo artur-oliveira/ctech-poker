@@ -41,16 +41,16 @@ export function Board({cards, boardTwo, splitAt = 0, pot, pots, rake, bigBlind}:
     </span>}</span>}
     {boardTwo?.length ? <div className="board-runouts" aria-label="Duas distribuições do board">
       {splitAt > 0 && <div className="board-common">
-        <small>Comum</small>
-        <CardRow cards={cards.slice(0, splitAt)} slots={splitAt}/>
+          <small>Comum</small>
+          <CardRow cards={cards.slice(0, splitAt)} slots={splitAt}/>
       </div>}
       <div className="board-runout-pair">
         <CardRow label="1ª" cards={cards.slice(splitAt)} slots={5 - splitAt} offset={splitAt}/>
         <CardRow label="2ª" cards={boardTwo} slots={5 - splitAt} offset={splitAt}/>
       </div>
     </div> : <div>{cards.map((card, index) => <PlayingCard key={`${index}-${card}`} card={card}
-                                                  index={index < 3 ? index : 0} size="board"
-                                                  slow={index === 4}/>)}
+                                                           index={index < 3 ? index : 0} size="board"
+                                                           slow={index === 4}/>)}
       {Array.from({length: 5 - cards.length}, (_, index) => <span key={index}/>)}</div>}
   </div>;
 }

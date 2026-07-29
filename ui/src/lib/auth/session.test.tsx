@@ -1,5 +1,6 @@
 import {act, renderHook, waitFor} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
+import {recoverSession, TOKEN_REFRESH_INTERVAL_MS, useOptionalSession, useSessionKeepAlive} from './session';
 
 const mocks = vi.hoisted(() => ({
   token: null as string | null,
@@ -27,25 +28,23 @@ vi.mock('@/lib/api/client', () => ({
   },
 }));
 
-import {recoverSession, TOKEN_REFRESH_INTERVAL_MS, useOptionalSession, useSessionKeepAlive} from './session';
-
 describe('session keep-alive', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.refresh.mockResolvedValue({accessToken: 'fresh', username: 'Ana'});
   });
-
+  
   test('renews the token on a timer for as long as the app is mounted', async () => {
     vi.useFakeTimers();
     const {unmount} = renderHook(() => useSessionKeepAlive());
     expect(mocks.refresh).not.toHaveBeenCalled();
-
+    
     await act(async () => {
       vi.advanceTimersByTime(TOKEN_REFRESH_INTERVAL_MS);
       await Promise.resolve();
     });
     expect(mocks.setToken).toHaveBeenCalledWith('fresh');
-
+    
     unmount();
     await act(async () => {
       vi.advanceTimersByTime(TOKEN_REFRESH_INTERVAL_MS);
@@ -54,14 +53,14 @@ describe('session keep-alive', () => {
     expect(mocks.refresh).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
   });
-
+  
   test('an unauthorized socket clears the session when the refresh is refused', async () => {
     mocks.refresh.mockResolvedValue(null);
     recoverSession();
     await waitFor(() => expect(mocks.setToken).toHaveBeenCalledWith(null));
     expect(mocks.setPlayerId).toHaveBeenCalledWith(null);
   });
-
+  
   test('keeps the session when a refresh fails on a network error', async () => {
     mocks.refresh.mockRejectedValue(new Error('offline'));
     vi.useFakeTimers();
@@ -84,7 +83,7 @@ describe('useOptionalSession', () => {
     mocks.refresh.mockResolvedValue(null);
     mocks.query.mockReturnValue({data: undefined});
   });
-
+  
   test('checks a missing session and finishes unauthenticated when refresh fails', async () => {
     const {result, unmount} = renderHook(() => useOptionalSession());
     expect(result.current).toEqual({authed: false, checking: true});
@@ -93,20 +92,20 @@ describe('useOptionalSession', () => {
     unmount();
     expect(mocks.unsubscribe).toHaveBeenCalledOnce();
   });
-
+  
   test('restores identity and reacts to future access-token events', async () => {
     mocks.refresh.mockResolvedValue({accessToken: 'fresh', username: 'Ana'});
     const {result} = renderHook(() => useOptionalSession());
     await waitFor(() => expect(mocks.setToken).toHaveBeenCalledWith('fresh'));
     expect(mocks.setUsername).toHaveBeenCalledWith('Ana');
     expect(result.current.checking).toBe(false);
-
+    
     act(() => mocks.listener?.('fresh'));
     expect(result.current.authed).toBe(true);
     act(() => mocks.listener?.(null));
     expect(result.current.authed).toBe(false);
   });
-
+  
   test('uses an existing session immediately and syncs the backend player id', () => {
     mocks.token = 'existing';
     mocks.query.mockReturnValue({data: {user_id: 'player-7'}});
@@ -115,7 +114,7 @@ describe('useOptionalSession', () => {
     expect(mocks.refresh).not.toHaveBeenCalled();
     expect(mocks.query).toHaveBeenCalledWith(expect.objectContaining({enabled: true}));
     expect(mocks.setPlayerId).toHaveBeenCalledWith('player-7');
-
+    
     mocks.query.mockReturnValue({data: undefined});
     rerender();
     expect(mocks.setPlayerId).toHaveBeenLastCalledWith(null);

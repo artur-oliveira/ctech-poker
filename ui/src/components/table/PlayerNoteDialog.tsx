@@ -11,12 +11,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import {Label} from '@/components/ui/label';
-import {
-  PLAYER_NOTE_TAGS,
-  type PlayerNote,
-  type PlayerNoteTag,
-  savePlayerNote
-} from '@/lib/api/playerNotes';
+import {PLAYER_NOTE_TAGS, type PlayerNote, type PlayerNoteTag, savePlayerNote} from '@/lib/api/playerNotes';
 import {pushNotification} from '@/lib/notify';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 
@@ -29,7 +24,7 @@ const TAG_LABELS: Record<PlayerNoteTag, string> = {
   purple: 'Roxo'
 };
 
-type Opponent = {player_id: string; name?: string; avatar_url?: string};
+type Opponent = { player_id: string; name?: string; avatar_url?: string };
 
 export function PlayerNoteDialog({
                                    opponent,
@@ -47,7 +42,7 @@ export function PlayerNoteDialog({
   const [tag, setTag] = useState<PlayerNoteTag | ''>(existing?.tag || '');
   const [text, setText] = useState(existing?.note || '');
   const [pending, setPending] = useState(false);
-
+  
   const save = async () => {
     if (!opponent || pending) return;
     setPending(true);
@@ -60,7 +55,7 @@ export function PlayerNoteDialog({
       setPending(false);
     }
   };
-
+  
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent>
       <DialogHeader>

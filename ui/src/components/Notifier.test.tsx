@@ -9,36 +9,36 @@ describe('Notifier', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-07-28T12:00:00Z'));
   });
-
+  
   afterEach(() => {
     vi.useRealTimers();
   });
-
+  
   test('renders queued notices with live-region semantics and closes one independently', () => {
     render(<Notifier/>);
     expect(screen.queryByRole('region')).not.toBeInTheDocument();
-
+    
     act(() => {
       pushNotification('Servidor indisponível');
       vi.advanceTimersByTime(601);
       pushNotification('Manutenção programada', 'info');
     });
-
+    
     expect(screen.getByRole('region', {name: 'Avisos'})).toHaveAttribute('aria-live', 'assertive');
     expect(screen.getAllByRole('alert')).toHaveLength(2);
     fireEvent.click(screen.getAllByRole('button', {name: 'Fechar aviso'})[0]);
-
+    
     expect(screen.queryByText('Servidor indisponível')).not.toBeInTheDocument();
     expect(screen.getByText('Manutenção programada')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', {name: 'Fechar aviso'}));
     expect(screen.queryByRole('region')).not.toBeInTheDocument();
   });
-
+  
   test('removes an alert after its automatic timeout', () => {
     render(<Notifier/>);
     act(() => pushNotification('Aviso passageiro'));
     expect(screen.getByText('Aviso passageiro')).toBeInTheDocument();
-
+    
     act(() => vi.advanceTimersByTime(6000));
     expect(screen.queryByRole('region')).not.toBeInTheDocument();
   });

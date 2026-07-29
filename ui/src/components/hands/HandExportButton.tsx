@@ -19,5 +19,6 @@ export function HandExportButton({hand, actions, viewerId}: {
     anchor.click();
     URL.revokeObjectURL(url);
   }
+  
   return <Button type="button" variant="outline" onClick={download}><Download/> Exportar .txt</Button>;
 }

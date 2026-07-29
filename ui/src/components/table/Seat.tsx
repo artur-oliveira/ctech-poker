@@ -1,4 +1,4 @@
-import {useState, type CSSProperties} from 'react';
+import {type CSSProperties, useState} from 'react';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {Progress} from '@/components/ui/progress';
 import {ChipStack} from '@/components/table/ChipStack';
@@ -141,18 +141,20 @@ export function Seat({
                           revealPending={revealPending}/>;
     })}</div>
     {isWinner && winAmount > 0 && <span key={`confetti-${winAmount}`} className="seat-confetti" aria-hidden="true">
-      {SEAT_CONFETTI_ANGLES.map((rot, i) => <span key={i} style={{'--rot': `${rot}deg`,
-        animationDelay: `${(i % 4) * 20}ms`} as CSSProperties}/>)}
+      {SEAT_CONFETTI_ANGLES.map((rot, i) => <span key={i} style={{
+        '--rot': `${rot}deg`,
+        animationDelay: `${(i % 4) * 20}ms`
+      } as CSSProperties}/>)}
     </span>}
     <PlayerAvatar className="seat-avatar" name={seat.name} avatarUrl={seat.avatar_url}
                   isViewer={isViewer} decorative/>
     {!isViewer && onEditNote && <button type="button"
-        className={`seat-note-trigger ${playerNote ? 'has-note' : ''}`}
-        aria-label={playerNote ? `Editar nota privada sobre ${seat.name || 'jogador'}` : `Adicionar nota privada sobre ${seat.name || 'jogador'}`}
-        title={playerNote ? 'Editar nota privada' : 'Adicionar nota privada'}
-        onClick={onEditNote}>
+                                        className={`seat-note-trigger ${playerNote ? 'has-note' : ''}`}
+                                        aria-label={playerNote ? `Editar nota privada sobre ${seat.name || 'jogador'}` : `Adicionar nota privada sobre ${seat.name || 'jogador'}`}
+                                        title={playerNote ? 'Editar nota privada' : 'Adicionar nota privada'}
+                                        onClick={onEditNote}>
       {playerNote?.tag && <span className={`player-note-dot tag-${playerNote.tag}`} aria-hidden="true"/>}
-      <NotebookPen aria-hidden="true"/>
+        <NotebookPen aria-hidden="true"/>
     </button>}
     <div className="seat-info">
       {playstyle && <span className="seat-playstyle" title={playstyle.reason}>{playstyle.label}</span>}
@@ -163,7 +165,8 @@ export function Seat({
             <small>Chance {chance}%</small>
         </div>}{STATE_LABELS[seat.state] &&
         <small className="seat-state">{STATE_LABELS[seat.state]}</small>}{pausedAfterHand &&
-        <small className="seat-state seat-next-state">Pausa na próxima mão</small>}{isDisconnected && seat.state !== 'disconnected' &&
+        <small className="seat-state seat-next-state">Pausa na próxima
+            mão</small>}{isDisconnected && seat.state !== 'disconnected' &&
         <small className="seat-state">Desconectado</small>}{seat.hand_category &&
         <small className="seat-hand-category">{HAND_CATEGORY_LABELS[seat.hand_category] || seat.hand_category}</small>}
     </div>

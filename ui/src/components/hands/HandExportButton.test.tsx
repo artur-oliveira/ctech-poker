@@ -3,11 +3,10 @@ import userEvent from '@testing-library/user-event';
 import {describe, expect, test, vi} from 'vitest';
 import type {HandItem} from '@/lib/api/player';
 import type {HandHistoryAction} from '@/lib/api/table';
+import {HandExportButton} from './HandExportButton';
 
 const serializeHand = vi.hoisted(() => vi.fn(() => 'exported hand'));
 vi.mock('@/lib/handExport', () => ({serializeHand}));
-
-import {HandExportButton} from './HandExportButton';
 
 describe('HandExportButton', () => {
   test('serializes and downloads the selected hand, then releases the object URL', async () => {
@@ -18,10 +17,10 @@ describe('HandExportButton', () => {
     Object.defineProperty(URL, 'createObjectURL', {configurable: true, value: createObjectURL});
     Object.defineProperty(URL, 'revokeObjectURL', {configurable: true, value: revokeObjectURL});
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
-
+    
     render(<HandExportButton hand={hand} actions={actions} viewerId="viewer"/>);
     await userEvent.click(screen.getByRole('button', {name: /Exportar/}));
-
+    
     expect(serializeHand).toHaveBeenCalledWith(hand, actions, 'viewer');
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
     expect(click).toHaveBeenCalledOnce();

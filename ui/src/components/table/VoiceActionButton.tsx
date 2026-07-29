@@ -5,7 +5,7 @@ import {Mic, MicOff} from 'lucide-react';
 import type {PokerAction} from '@/lib/api/table';
 import {parseVoiceAction} from '@/lib/voiceActions';
 
-type RecognitionEvent = Event & {results: ArrayLike<{0: {transcript: string}}>}
+type RecognitionEvent = Event & { results: ArrayLike<{ 0: { transcript: string } }> }
 type Recognition = {
   lang: string;
   continuous: boolean;
@@ -26,7 +26,8 @@ function constructor() {
   return speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
 }
 
-const subscribeSupport = () => () => {};
+const subscribeSupport = () => () => {
+};
 
 export function VoiceActionButton({enabled, disabled, available, minRaise, maxRaise, onAct}: {
   enabled: boolean;
@@ -44,11 +45,11 @@ export function VoiceActionButton({enabled, disabled, available, minRaise, maxRa
   );
   const [listening, setListening] = useState(false);
   const [feedback, setFeedback] = useState('');
-
+  
   useEffect(() => {
     return () => recognition.current?.abort();
   }, []);
-
+  
   if (!enabled || !supported) return null;
   const listen = () => {
     const RecognitionAPI = constructor();

@@ -8,7 +8,7 @@ const DEFAULT_MS = 700;
 export function useCountUp(from: number, to: number, durationMs = DEFAULT_MS): number {
   const [reduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const [display, setDisplay] = useState(() => (reduced ? to : from));
-
+  
   useEffect(() => {
     if (from === to || reduced) {
       setDisplay(to);
@@ -25,6 +25,6 @@ export function useCountUp(from: number, to: number, durationMs = DEFAULT_MS): n
     });
     return () => cancelAnimationFrame(raf);
   }, [from, to, durationMs, reduced]);
-
+  
   return display;
 }

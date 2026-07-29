@@ -2,9 +2,7 @@
 
 import {useQuery} from '@tanstack/react-query';
 import {Activity, Info} from 'lucide-react';
-import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle
-} from '@/components/ui/dialog';
+import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle} from '@/components/ui/dialog';
 import {getMyPokerStats, type PokerStats} from '@/lib/api/pokerStats';
 import {playstyleMeta} from '@/lib/playstyle';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
@@ -26,7 +24,7 @@ function points(values: number[], radius = 82) {
   return values.map((value, index) => radarPoint(index, value, radius).join(',')).join(' ');
 }
 
-function PokerStyle({stats}: {stats: PokerStats}) {
+function PokerStyle({stats}: { stats: PokerStats }) {
   const pressure = stats.vpip_rate > 0 ? stats.pfr_rate / stats.vpip_rate : 0;
   const values = [
     Math.min(1, stats.vpip_rate / .5),
@@ -49,7 +47,8 @@ function PokerStyle({stats}: {stats: PokerStats}) {
       <p>Os eixos são derivados de VPIP, PFR e 3-bet. Passe ou toque nos badges para ver o critério.</p>
     </div>
     <div className="poker-style-radar">
-      <svg viewBox="0 0 200 200" role="img" aria-label={`Radar de estilo: ${RADAR_AXES.map((axis, index) => `${axis} ${Math.round(values[index] * 100)}%`).join(', ')}`}>
+      <svg viewBox="0 0 200 200" role="img"
+           aria-label={`Radar de estilo: ${RADAR_AXES.map((axis, index) => `${axis} ${Math.round(values[index] * 100)}%`).join(', ')}`}>
         {[.25, .5, .75, 1].map(level =>
           <polygon key={level} points={points(RADAR_AXES.map(() => level))} className="poker-radar-grid"/>)}
         {RADAR_AXES.map((axis, index) => {
@@ -57,7 +56,8 @@ function PokerStyle({stats}: {stats: PokerStats}) {
           const [labelX, labelY] = radarPoint(index, 1.16);
           return <g key={axis}>
             <line x1="100" y1="100" x2={x} y2={y} className="poker-radar-axis"/>
-            <text x={labelX} y={labelY} textAnchor={labelX < 94 ? 'end' : labelX > 106 ? 'start' : 'middle'}>{axis}</text>
+            <text x={labelX} y={labelY}
+                  textAnchor={labelX < 94 ? 'end' : labelX > 106 ? 'start' : 'middle'}>{axis}</text>
           </g>;
         })}
         <polygon points={points(values)} className="poker-radar-value"/>
@@ -96,7 +96,7 @@ const METRICS: Array<{
   sample: stats => stats.three_bet_chances
 }];
 
-function HudContent({stats}: {stats: PokerStats}) {
+function HudContent({stats}: { stats: PokerStats }) {
   if (stats.hands === 0) {
     return <div className="self-hud-empty">
       <Activity aria-hidden="true"/>
@@ -119,12 +119,12 @@ function HudContent({stats}: {stats: PokerStats}) {
     </div>
     {Boolean(stats.playstyle?.length) && <PokerStyle stats={stats}/>}
     {!stats.playstyle?.length && <p className="self-hud-notice"><Info aria-hidden="true"/>
-      Amostra inicial: as porcentagens ficam mais representativas conforme você joga.
+        Amostra inicial: as porcentagens ficam mais representativas conforme você joga.
     </p>}
   </>;
 }
 
-export function SelfHudDialog({open, onOpenChange}: {open: boolean; onOpenChange: (open: boolean) => void}) {
+export function SelfHudDialog({open, onOpenChange}: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [mode, setMode] = useState<WalletMode>('sandbox');
   const query = useQuery({
     queryKey: ['poker-stats', 'me', mode],
@@ -138,9 +138,11 @@ export function SelfHudDialog({open, onOpenChange}: {open: boolean; onOpenChange
         <DialogDescription>Estatísticas privadas calculadas a partir das suas mãos concluídas.</DialogDescription>
       </DialogHeader>
       <CurrencyModeTabs mode={mode} onChange={setMode}/>
-      {query.isLoading ? <div className="self-hud-loading"><span className="loader"/><span>Calculando tendências…</span></div> :
+      {query.isLoading ?
+        <div className="self-hud-loading"><span className="loader"/><span>Calculando tendências…</span></div> :
         query.data ? <HudContent stats={query.data}/> :
-          <div className="self-hud-empty"><b>Não foi possível carregar agora.</b><span>Tente novamente em instantes.</span></div>}
+          <div className="self-hud-empty"><b>Não foi possível carregar
+            agora.</b><span>Tente novamente em instantes.</span></div>}
     </DialogContent>
   </Dialog>;
 }

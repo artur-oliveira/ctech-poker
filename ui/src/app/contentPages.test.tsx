@@ -1,5 +1,7 @@
 import {render, screen} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
+import Guide from './guide/page';
+import PokerRules from './poker-rules/page';
 
 const mocks = vi.hoisted(() => ({authed: false}));
 
@@ -8,18 +10,15 @@ vi.mock('@/lib/auth/session', () => ({
 }));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
 vi.mock('next/image', () => ({
-  default: ({alt}: {alt: string}) => <div role="img" aria-label={alt}/>,
+  default: ({alt}: { alt: string }) => <div role="img" aria-label={alt}/>,
 }));
 vi.mock('@/components/HandRankings', () => ({HandRankings: () => <ol aria-label="ranking de mãos"/>}));
-
-import Guide from './guide/page';
-import PokerRules from './poker-rules/page';
 
 describe('static learning pages', () => {
   beforeEach(() => {
     mocks.authed = false;
   });
-
+  
   test('renders the complete guide and public calls to action', () => {
     render(<Guide/>);
     expect(screen.getByRole('heading', {name: 'Como funciona o CTech Poker'})).toBeInTheDocument();
@@ -29,7 +28,7 @@ describe('static learning pages', () => {
     expect(screen.getByRole('button', {name: 'Começar a Jogar'})).toHaveAttribute('href', '/');
     expect(screen.queryByText('profile-menu')).not.toBeInTheDocument();
   });
-
+  
   test('shows authenticated navigation and sends players back to the lobby', () => {
     mocks.authed = true;
     render(<Guide/>);
@@ -37,7 +36,7 @@ describe('static learning pages', () => {
     expect(screen.getAllByRole('link', {name: /Lobby/})[0]).toHaveAttribute('href', '/lobby');
     expect(screen.getByRole('button', {name: 'Ir para o Lobby'})).toHaveAttribute('href', '/lobby');
   });
-
+  
   test('renders poker rules, hand rankings and provably-fair explanation', () => {
     render(<PokerRules/>);
     expect(screen.getByRole('heading', {name: "Regras do Texas Hold'em"})).toBeInTheDocument();
@@ -46,7 +45,7 @@ describe('static learning pages', () => {
     expect(screen.getByText(/Embaralhamento Provably Fair/)).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Ir para o Início'})).toHaveAttribute('href', '/');
   });
-
+  
   test('uses private navigation and lobby CTA in rules for authenticated players', () => {
     mocks.authed = true;
     render(<PokerRules/>);

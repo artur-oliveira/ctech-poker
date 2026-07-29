@@ -41,11 +41,14 @@ const MAX_U32 = 0xffffffff;
 export async function shuffleWithSeed(seedHex: string): Promise<DeckCard[]> {
   const d = orderedDeck();
   const keyfmt: KeyFormat = 'raw';
-  const key = await crypto.subtle.importKey(keyfmt, hexToBytes(seedHex) as BufferSource, {name: 'HMAC', hash: 'SHA-256'}, false, ['sign']);
+  const key = await crypto.subtle.importKey(keyfmt, hexToBytes(seedHex) as BufferSource, {
+    name: 'HMAC',
+    hash: 'SHA-256'
+  }, false, ['sign']);
   let counter = 0;
-
+  
   async function nextIndex(max: number): Promise<number> {
-    for (;;) {
+    for (; ;) {
       const ctrBytes = new Uint8Array(4);
       new DataView(ctrBytes.buffer).setUint32(0, counter, false);
       counter++;
@@ -56,7 +59,7 @@ export async function shuffleWithSeed(seedHex: string): Promise<DeckCard[]> {
       if (rem === 0 || v < limit) return v % max;
     }
   }
-
+  
   for (let i = d.length - 1; i > 0; i--) {
     const j = await nextIndex(i + 1);
     [d[i], d[j]] = [d[j], d[i]];
@@ -112,7 +115,10 @@ export function parseCardCode(code: string): Pick<DeckCard, 'rank' | 'suit' | 'c
 // Derives a position-specific salt for index i using HMAC-SHA256(seed, index).
 export async function cardSaltHex(serverSeedHex: string, index: number): Promise<string> {
   const keyfmt: KeyFormat = 'raw';
-  const key = await crypto.subtle.importKey(keyfmt, hexToBytes(serverSeedHex) as BufferSource, {name: 'HMAC', hash: 'SHA-256'}, false, ['sign']);
+  const key = await crypto.subtle.importKey(keyfmt, hexToBytes(serverSeedHex) as BufferSource, {
+    name: 'HMAC',
+    hash: 'SHA-256'
+  }, false, ['sign']);
   const idxBytes = new Uint8Array(4);
   new DataView(idxBytes.buffer).setUint32(0, index, false);
   const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, idxBytes));

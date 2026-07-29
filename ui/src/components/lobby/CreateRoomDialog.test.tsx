@@ -1,6 +1,7 @@
 import {fireEvent, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
+import {CreateRoomDialog} from './CreateRoomDialog';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -20,8 +21,6 @@ vi.mock('@/lib/api/rooms', () => ({
   listStakes: vi.fn(),
 }));
 
-import {CreateRoomDialog} from './CreateRoomDialog';
-
 const sandboxStakes = [
   {small_blind: 10, big_blind: 20},
   {small_blind: 25, big_blind: 50},
@@ -31,22 +30,22 @@ const realStakes = [{small_blind: 100, big_blind: 200, fee_cents: 75}];
 describe('CreateRoomDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.query.mockImplementation(({queryKey}: {queryKey: string[]}) => {
+    mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) => {
       if (queryKey[0] === 'player') return {data: {wallet_mode: 'sandbox'}};
       if (queryKey[1] === 'real') return {data: []};
       return {data: sandboxStakes};
     });
   });
-
+  
   test('creates a private sandbox table with the selected stake and seat count', async () => {
     mocks.createRoom.mockResolvedValue({room_id: 'room / private'});
     render(<CreateRoomDialog/>);
     await userEvent.click(screen.getByRole('button', {name: /Mesa privada/}));
-
+    
     await userEvent.click(screen.getByRole('radio', {name: '25 / 50'}));
     await userEvent.click(screen.getByRole('radio', {name: '9 lugares'}));
     await userEvent.click(screen.getByRole('button', {name: 'Criar mesa privada'}));
-
+    
     await waitFor(() => expect(mocks.createRoom).toHaveBeenCalledWith({
       visibility: 'private',
       currency_mode: 'sandbox',
@@ -60,7 +59,7 @@ describe('CreateRoomDialog', () => {
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['rooms']});
     expect(mocks.push).toHaveBeenCalledWith('/table?id=room%20%2F%20private');
   });
-
+  
   test('can enable run it twice while creating the room', async () => {
     mocks.createRoom.mockResolvedValue({room_id: 'rit-room'});
     render(<CreateRoomDialog/>);
@@ -71,9 +70,9 @@ describe('CreateRoomDialog', () => {
       run_it_twice_enabled: true,
     })));
   });
-
+  
   test('offers real-money mode only to an eligible wallet and resets the stake selection', async () => {
-    mocks.query.mockImplementation(({queryKey}: {queryKey: string[]}) => {
+    mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) => {
       if (queryKey[0] === 'player') return {data: {wallet_mode: 'real'}};
       if (queryKey[1] === 'real') return {data: realStakes};
       return {data: sandboxStakes};
@@ -83,7 +82,7 @@ describe('CreateRoomDialog', () => {
     await userEvent.click(screen.getByRole('button', {name: /Mesa privada/}));
     await userEvent.click(screen.getByRole('radio', {name: '25 / 50'}));
     await userEvent.click(screen.getByRole('radio', {name: 'Dinheiro real'}));
-
+    
     expect(screen.getByRole('alert')).toHaveTextContent('Jogue com responsabilidade');
     expect(screen.getByRole('radio', {name: /R\$\s*1,00\s*\/\s*R\$\s*2,00/}))
       .toHaveAttribute('aria-checked', 'true');
@@ -97,7 +96,7 @@ describe('CreateRoomDialog', () => {
       buy_in_max: 20_000,
     })));
   });
-
+  
   test('supports roving keyboard selection for stakes and seats', async () => {
     render(<CreateRoomDialog/>);
     await userEvent.click(screen.getByRole('button', {name: /Mesa privada/}));
@@ -105,22 +104,22 @@ describe('CreateRoomDialog', () => {
     firstStake.focus();
     fireEvent.keyDown(firstStake, {key: 'ArrowLeft'});
     expect(screen.getByRole('radio', {name: '25 / 50'})).toHaveAttribute('aria-checked', 'true');
-
+    
     const sixSeats = screen.getByRole('radio', {name: '6 lugares'});
     fireEvent.keyDown(sixSeats, {key: 'ArrowDown'});
     expect(screen.getByRole('radio', {name: '9 lugares'})).toHaveAttribute('aria-checked', 'true');
   });
-
+  
   test('disables creation with no stakes and exposes API errors without navigating', async () => {
-    mocks.query.mockImplementation(({queryKey}: {queryKey: string[]}) =>
+    mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) =>
       queryKey[0] === 'player' ? {data: {wallet_mode: 'sandbox'}} : {data: []});
     const empty = render(<CreateRoomDialog/>);
     await userEvent.click(screen.getByRole('button', {name: /Mesa privada/}));
     expect(screen.getByText('Nenhum stake disponível no momento.')).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Criar mesa privada'})).toBeDisabled();
     empty.unmount();
-
-    mocks.query.mockImplementation(({queryKey}: {queryKey: string[]}) =>
+    
+    mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) =>
       queryKey[0] === 'player' ? {data: {wallet_mode: 'sandbox'}} :
         queryKey[1] === 'real' ? {data: []} : {data: sandboxStakes});
     mocks.createRoom.mockRejectedValue(new Error('offline'));

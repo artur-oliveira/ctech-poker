@@ -97,14 +97,14 @@ function scoreFiveCards(cards: string[]): FiveCardScore {
   // for comparison purposes is the 5, not the Ace.
   if (!straightHigh && uniqueDesc.includes(14) && [5, 4, 3, 2].every(v => uniqueDesc.includes(v))) straightHigh = 5;
   const isStraight = straightHigh > 0;
-
+  
   const counts = new Map<number, number>();
   for (const v of values) counts.set(v, (counts.get(v) || 0) + 1);
   const groups = [...counts.entries()]
     .map(([value, count]) => ({value, count}))
     .sort((a, b) => b.count - a.count || b.value - a.value);
   const kickers = groups.flatMap(g => Array(g.count).fill(g.value));
-
+  
   if (isStraight && isFlush) return {
     category: straightHigh === 14 ? 'royal_flush' : 'straight_flush',
     tiebreak: [straightHigh]
@@ -149,7 +149,7 @@ function canonicalOrder(cards: string[]): string[] {
   return [...groups.entries()]
     .sort((a, b) => b[1].length - a[1].length || (isWheel ? valueForOrder(b[0]) - valueForOrder(a[0]) : b[0] - a[0]))
     .flatMap(([, group]) => group);
-
+  
   function valueForOrder(value: number): number {
     return value === 14 ? 1 : value;
   }

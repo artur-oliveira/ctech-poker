@@ -20,7 +20,7 @@ describe('shared presentation contracts', () => {
     expect(achievementExample('win_category_straight_flush')).toHaveLength(5);
     expect(achievementExample('unknown')).toEqual([]);
   });
-
+  
   test('achievement progress is independent of tier order and detects max', () => {
     const tiers = [{stars: 3, threshold: 10}, {stars: 1, threshold: 1}, {stars: 2, threshold: 5}];
     expect(achievementProgress(tiers, 6)).toEqual({
@@ -28,7 +28,7 @@ describe('shared presentation contracts', () => {
     });
     expect(achievementProgress(tiers, 20)).toMatchObject({starsFilled: 3, nextTier: null, maxed: true});
   });
-
+  
   test('card, chip and reaction helpers tolerate wire variants', () => {
     expect(cardPath('As')).toContain('/spade-ace.svg');
     expect(cardPath('back')).toContain('card-back');
@@ -39,7 +39,7 @@ describe('shared presentation contracts', () => {
     expect(Object.keys(TABLE_REACTIONS).every(isTableReaction)).toBe(true);
     expect(isTableReaction('not-allowed')).toBe(false);
   });
-
+  
   test('name, initials, class and seat rotation helpers handle edge cases', () => {
     expect(playerName('me', 'me', 'Ana')).toBe('Você');
     expect(playerName('other', 'me', 'Bia')).toBe('Bia');
@@ -51,13 +51,13 @@ describe('shared presentation contracts', () => {
     expect(rotateSeats(seats, 'b').map(s => s.player_id)).toEqual(['b', 'c', 'a']);
     expect(rotateSeats(seats, 'missing')).toBe(seats);
   });
-
+  
   test('table preferences persist only normalized values', () => {
     const {result} = renderHook(() => useTablePreferences());
     expect(result.current.preferences.theme).toBe('classic');
     act(() => result.current.update({theme: 'ocean', dealerVoice: true, realityCheckMinutes: 30}));
     expect(result.current.preferences).toMatchObject({theme: 'ocean', dealerVoice: true, realityCheckMinutes: 30});
-
+    
     act(() => {
       localStorage.setItem('ctech-poker:table-preferences:v1', '{"theme":"invalid","realityCheckMinutes":13}');
       window.dispatchEvent(new Event('ctech-poker:table-preferences'));

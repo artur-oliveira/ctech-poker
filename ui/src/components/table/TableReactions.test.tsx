@@ -31,25 +31,25 @@ describe('TableReactions', () => {
     vi.clearAllMocks();
     vi.useRealTimers();
   });
-
+  
   test('opens and closes through the controlled toggle', async () => {
     const closed = renderReactions({open: false});
     expect(screen.queryByText('Reagir')).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', {name: 'Abrir reações'}));
     expect(closed.props.onOpenChange).toHaveBeenCalledWith(true);
     closed.unmount();
-
+    
     const opened = renderReactions();
     await userEvent.click(screen.getByRole('button', {name: 'Fechar reações'}));
     expect(opened.props.onOpenChange).toHaveBeenCalledWith(false);
   });
-
+  
   test('sends quick reactions without a target and targeted objects to the selected opponent', async () => {
     vi.useFakeTimers();
     const {props} = renderReactions();
     fireEvent.click(screen.getByTitle('Aplausos'));
     expect(props.onSend).toHaveBeenCalledWith('clap', undefined);
-
+    
     // A successful send starts a short anti-spam cooldown.
     act(() => vi.advanceTimersByTime(2_000));
     fireEvent.change(screen.getByRole('combobox'), {target: {value: 'opponent-2'}});
@@ -57,13 +57,13 @@ describe('TableReactions', () => {
     expect(props.onSend).toHaveBeenLastCalledWith('tomato', 'opponent-2');
     vi.useRealTimers();
   });
-
+  
   test('blocks sends while disconnected, during cooldown, and when no target exists', async () => {
     const disconnected = renderReactions({connected: false});
     expect(screen.getByTitle('Risada')).toBeDisabled();
     expect(screen.getByTitle('Jogar ficha')).toBeDisabled();
     disconnected.unmount();
-
+    
     vi.useFakeTimers();
     const cooldown = renderReactions();
     fireEvent.click(screen.getByTitle('Uau'));
@@ -74,12 +74,12 @@ describe('TableReactions', () => {
     expect(cooldown.props.onSend).toHaveBeenCalledTimes(2);
     cooldown.unmount();
     vi.useRealTimers();
-
+    
     renderReactions({seats: [seats[0]]});
     expect(screen.getByRole('combobox')).toBeDisabled();
     expect(screen.getByTitle('Mandar café')).toBeDisabled();
   });
-
+  
   test('does not enter cooldown when transport rejects the reaction', async () => {
     const onSend = vi.fn(() => false);
     renderReactions({onSend});
@@ -87,7 +87,7 @@ describe('TableReactions', () => {
     await userEvent.click(screen.getByTitle('Nervoso'));
     expect(onSend).toHaveBeenCalledTimes(2);
   });
-
+  
   test('persists mute and hides incoming effects without hiding controls', async () => {
     const item: TableReactionEvent = {id: 'reaction-1', playerId: 'opponent-1', reactionId: 'angry'};
     const first = renderReactions({items: [item]});
@@ -97,14 +97,14 @@ describe('TableReactions', () => {
     expect(screen.queryByRole('img', {name: 'Raiva'})).not.toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Ativar animações de reações'})).toBeInTheDocument();
     first.unmount();
-
+    
     renderReactions({items: [item]});
     expect(screen.queryByRole('img', {name: 'Raiva'})).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', {name: 'Ativar animações de reações'}));
     expect(localStorage.getItem('poker:table-reactions-muted')).toBe('false');
     expect(screen.getByRole('img', {name: 'Raiva'})).toBeInTheDocument();
   });
-
+  
   test('positions emotes from the source seat and thrown objects toward their target', () => {
     const source = document.createElement('div');
     source.className = 'game-seat';
@@ -121,17 +121,19 @@ describe('TableReactions', () => {
       toJSON: () => ({}),
     }));
     document.body.append(source, target);
-
-    renderReactions({items: [
-      {id: 'emote', playerId: 'opponent-1', reactionId: 'laugh'},
-      {id: 'object', playerId: 'opponent-1', targetPlayerId: 'viewer', reactionId: 'chip'},
-    ]});
-
+    
+    renderReactions({
+      items: [
+        {id: 'emote', playerId: 'opponent-1', reactionId: 'laugh'},
+        {id: 'object', playerId: 'opponent-1', targetPlayerId: 'viewer', reactionId: 'chip'},
+      ]
+    });
+    
     const emote = screen.getByRole('img', {name: 'Risada'});
     expect(emote.style.getPropertyValue('--reaction-x')).toBe('60px');
     expect(emote.style.getPropertyValue('--reaction-dy')).toBe('-72px');
     expect(emote.style.visibility).toBe('visible');
-
+    
     const object = screen.getByRole('img', {name: 'Jogar ficha'});
     expect(object.style.getPropertyValue('--reaction-dx')).toBe('190px');
     expect(object.style.getPropertyValue('--reaction-dy')).toBe('95px');

@@ -7,7 +7,7 @@ describe('PlayerAvatar', () => {
     render(<PlayerAvatar name="Ana Beatriz"/>);
     expect(screen.getByRole('img', {name: 'Avatar de Ana Beatriz'})).toHaveTextContent('AB');
   });
-
+  
   test('keeps the initials fallback when the image fails', () => {
     const {container} = render(<PlayerAvatar name="Ana Beatriz" avatarUrl="/missing.jpg"/>);
     const image = container.querySelector('img');

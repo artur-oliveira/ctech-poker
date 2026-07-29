@@ -1,5 +1,6 @@
 import {fireEvent, render, screen} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
+import Home from './page';
 
 const mocks = vi.hoisted(() => ({
   startOAuthFlow: vi.fn(),
@@ -7,23 +8,21 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/auth/oauth', () => ({startOAuthFlow: mocks.startOAuthFlow}));
 vi.mock('next/image', () => ({
-  default: ({src, alt}: {src: string; alt: string}) =>
+  default: ({src, alt}: { src: string; alt: string }) =>
     <span role="img" aria-label={alt || 'decorative image'} data-src={src}/>,
 }));
 vi.mock('@/components/table/PlayingCard', () => ({
-  PlayingCard: ({card}: {card: string}) => <span data-testid="achievement-card">{card}</span>,
+  PlayingCard: ({card}: { card: string }) => <span data-testid="achievement-card">{card}</span>,
 }));
-
-import Home from './page';
 
 describe('landing page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
-
+  
   test('renders the complete public navigation and product proposition', () => {
     render(<Home/>);
-
+    
     expect(screen.getByRole('heading', {name: /Sua mesa de poker/})).toBeInTheDocument();
     expect(screen.getByRole('link', {name: 'Recursos'})).toHaveAttribute('href', '#experience');
     expect(screen.getByRole('link', {name: 'Conquistas'})).toHaveAttribute('href', '#achievements');
@@ -33,23 +32,23 @@ describe('landing page', () => {
     expect(screen.getByText('Sandbox 100% Grátis')).toBeInTheDocument();
     expect(screen.getByText('2–9 jogadores')).toBeInTheDocument();
   });
-
+  
   test('starts authentication with the correct destination from every call to action', () => {
     render(<Home/>);
-
+    
     fireEvent.click(screen.getByRole('button', {name: 'Entrar'}));
     const playButtons = screen.getAllByRole('button', {name: /Jogar agora/});
     fireEvent.click(playButtons[0]);
     fireEvent.click(playButtons[1]);
-
+    
     expect(mocks.startOAuthFlow).toHaveBeenNthCalledWith(1);
     expect(mocks.startOAuthFlow).toHaveBeenNthCalledWith(2, '/lobby');
     expect(mocks.startOAuthFlow).toHaveBeenNthCalledWith(3, '/lobby');
   });
-
+  
   test('shows all feature, achievement and table preview content without API data', () => {
     render(<Home/>);
-
+    
     expect(screen.getAllByRole('article')).toHaveLength(10);
     expect(screen.getByText('Ação em Tempo Real')).toBeInTheDocument();
     expect(screen.getByText('Conquistas Progressivas')).toBeInTheDocument();
@@ -62,10 +61,10 @@ describe('landing page', () => {
     expect(screen.getByRole('img', {name: /Lobby do CTech Poker/}))
       .toHaveAttribute('data-src', '/guide/lobby.png');
   });
-
+  
   test('exposes the catalog, guide and legal destinations', () => {
     render(<Home/>);
-
+    
     expect(screen.getByRole('link', {name: /Ver catálogo/})).toHaveAttribute('href', '/achievements');
     expect(screen.getByRole('link', {name: /Ver o guia completo/})).toHaveAttribute('href', '/guide');
     expect(screen.getByRole('link', {name: 'Termos de Uso'})).toHaveAttribute(

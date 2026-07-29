@@ -1,6 +1,7 @@
 import {render, screen} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import type {ProfileShowcase} from '@/lib/api/player';
+import ProfilePage from './page';
 
 const mocks = vi.hoisted(() => ({
   playerID: 'player-42',
@@ -21,10 +22,8 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
 vi.mock('@/components/table/PlayingCard', () => ({
-  PlayingCard: ({card}: {card: string}) => <span data-testid="card">{card}</span>,
+  PlayingCard: ({card}: { card: string }) => <span data-testid="card">{card}</span>,
 }));
-
-import ProfilePage from './page';
 
 function queryState(data?: ProfileShowcase, overrides: Record<string, unknown> = {}) {
   return {data, isLoading: false, isError: false, ...overrides};
@@ -50,10 +49,10 @@ describe('public player profile page', () => {
       },
     });
   });
-
+  
   test('loads the requested showcase and renders its achievements and best hand', () => {
     render(<ProfilePage/>);
-
+    
     expect(mocks.queryOptions).toMatchObject({
       queryKey: ['profile-showcase', 'player-42'],
       enabled: true,
@@ -67,13 +66,13 @@ describe('public player profile page', () => {
     expect(screen.getByText('profile-menu')).toBeInTheDocument();
     expect(screen.getByRole('link', {name: /Lobby/})).toHaveAttribute('href', '/lobby');
   });
-
+  
   test('disables the request without an id and exposes the public navigation', () => {
     mocks.playerID = '';
     mocks.session = {authed: false, checking: false};
     mocks.query = queryState(undefined, {isError: true});
     render(<ProfilePage/>);
-
+    
     expect(mocks.queryOptions).toMatchObject({
       queryKey: ['profile-showcase', ''],
       enabled: false,
@@ -83,25 +82,25 @@ describe('public player profile page', () => {
     expect(screen.getByRole('button', {name: 'Ir para o Lobby'})).toHaveAttribute('href', '/lobby');
     expect(screen.queryByText('profile-menu')).not.toBeInTheDocument();
   });
-
+  
   test('handles loading and an unavailable backend response', () => {
     mocks.query = queryState(undefined, {isLoading: true});
     const view = render(<ProfilePage/>);
     expect(screen.getByText(/Carregando vitrine do jogador/)).toBeInTheDocument();
-
+    
     mocks.query = queryState(undefined);
     view.rerender(<ProfilePage/>);
     expect(screen.getByText('Este perfil não existe ou não foi encontrado.')).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Ir para o Lobby'})).toHaveAttribute('href', '/lobby');
   });
-
+  
   test('uses safe fallbacks when optional showcase content is absent', () => {
     mocks.query = queryState({
       player_id: 'player-42',
       featured_achievements: [],
     });
     render(<ProfilePage/>);
-
+    
     expect(screen.getByRole('heading', {name: 'Jogador'})).toBeInTheDocument();
     expect(screen.getByText('Nenhuma conquista selecionada para exibição.')).toBeInTheDocument();
     expect(screen.getByText('Nenhuma vitória recente registrada nesta vitrine.')).toBeInTheDocument();

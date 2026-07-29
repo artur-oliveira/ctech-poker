@@ -1,5 +1,6 @@
 import {fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
+import {ProfileShowcaseDialog} from './ProfileShowcaseDialog';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -34,8 +35,6 @@ vi.mock('@/lib/api/achievements', () => ({
 }));
 vi.mock('@/lib/notify', () => ({pushNotification: mocks.notify}));
 
-import {ProfileShowcaseDialog} from './ProfileShowcaseDialog';
-
 const me = {
   user_id: 'player / one',
   name: 'Ada',
@@ -60,13 +59,13 @@ describe('ProfileShowcaseDialog', () => {
       value: {writeText: mocks.writeText},
     });
     mocks.writeText.mockResolvedValue(undefined);
-    mocks.query.mockImplementation(({queryKey}: {queryKey: string[]}) => {
+    mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) => {
       if (queryKey[0] === 'player') return {data: me};
       if (queryKey[1] === 'catalog') return {data: catalog, isLoading: false};
       return {data: mine, isLoading: false};
     });
   });
-
+  
   test('renders only earned achievements and the current selection', () => {
     render(<ProfileShowcaseDialog open onOpenChange={vi.fn()}/>);
     expect(screen.getByText('Sua vitrine')).toBeInTheDocument();
@@ -74,7 +73,7 @@ describe('ProfileShowcaseDialog', () => {
     expect(screen.queryByText('locked')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', {name: /Copiar link/})).not.toBeInTheDocument();
   });
-
+  
   test('enforces the three-achievement maximum', () => {
     render(<ProfileShowcaseDialog open onOpenChange={vi.fn()}/>);
     fireEvent.click(screen.getByRole('checkbox', {name: 'hands 102 registrados'}));
@@ -84,7 +83,7 @@ describe('ProfileShowcaseDialog', () => {
     expect(mocks.notify).toHaveBeenCalledWith('Escolha no máximo três conquistas.', 'info');
     expect(screen.getByText('3/3')).toBeInTheDocument();
   });
-
+  
   test('makes a public profile shareable and copies its encoded URL', async () => {
     render(<ProfileShowcaseDialog open onOpenChange={vi.fn()}/>);
     fireEvent.click(screen.getByRole('switch', {name: 'Perfil público'}));
@@ -96,10 +95,12 @@ describe('ProfileShowcaseDialog', () => {
     expect(screen.getByRole('button', {name: /Ver perfil/}))
       .toHaveAttribute('href', '/profile?id=player%20%2F%20one');
   });
-
+  
   test('saves privacy and selections into the shared profile cache', async () => {
-    const updated = {...me, showcase_public: true, playstyle_public: true,
-      featured_achievements: ['first_hand', 'hands_10']};
+    const updated = {
+      ...me, showcase_public: true, playstyle_public: true,
+      featured_achievements: ['first_hand', 'hands_10']
+    };
     mocks.updateMe.mockResolvedValue(updated);
     render(<ProfileShowcaseDialog open onOpenChange={vi.fn()}/>);
     fireEvent.click(screen.getByRole('switch', {name: 'Perfil público'}));
@@ -114,9 +115,9 @@ describe('ProfileShowcaseDialog', () => {
     await waitFor(() => expect(mocks.setQueryData).toHaveBeenCalledWith(['player', 'me'], updated));
     expect(mocks.notify).toHaveBeenCalledWith('Vitrine do perfil atualizada.', 'info');
   });
-
+  
   test('shows a loader while achievement sources are unresolved', () => {
-    mocks.query.mockImplementation(({queryKey}: {queryKey: string[]}) =>
+    mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) =>
       queryKey[0] === 'player' ? {data: me} : {isLoading: true});
     render(<ProfileShowcaseDialog open onOpenChange={vi.fn()}/>);
     expect(document.querySelector('.loader')).toBeInTheDocument();

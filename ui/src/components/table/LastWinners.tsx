@@ -1,6 +1,6 @@
 'use client';
-import {useState} from 'react';
 import type {CSSProperties} from 'react';
+import {useState} from 'react';
 import {Trophy} from 'lucide-react';
 import type {HandItem} from '@/lib/api/player';
 import {bestFiveCardHand, bestHandCategory} from '@/lib/pokerRules';
@@ -8,7 +8,13 @@ import {HAND_CATEGORY_LABELS} from '@/lib/utils';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 
-export type WinnerLogEntry = { key: string; names: string[]; avatarUrls: Array<string | undefined>; category?: string; cards?: string[] };
+export type WinnerLogEntry = {
+  key: string;
+  names: string[];
+  avatarUrls: Array<string | undefined>;
+  category?: string;
+  cards?: string[]
+};
 
 // `/players/me/hands` only ever carries the viewer's own perspective, so a
 // hand's "winner(s)" are the viewer (outcome won/tied) plus whichever
@@ -21,12 +27,22 @@ export function deriveWinners(items: HandItem[], limit = 5): WinnerLogEntry[] {
   return items.slice(0, limit).map(item => {
     const winners: { name: string; hole?: string[]; avatarUrl?: string }[] = [];
     if (item.outcome !== 'lost') winners.push({name: 'Você', hole: item.hole_cards});
-    for (const opp of item.opponents || []) if (opp.won) winners.push({name: opp.name || 'Visitante', hole: opp.hole_cards, avatarUrl: opp.avatar_url});
+    for (const opp of item.opponents || []) if (opp.won) winners.push({
+      name: opp.name || 'Visitante',
+      hole: opp.hole_cards,
+      avatarUrl: opp.avatar_url
+    });
     const board = item.board?.length === 5 ? item.board : undefined;
     const withHole = winners.find(w => w.hole?.length === 2);
     const cards = withHole?.hole && board ? bestFiveCardHand([...withHole.hole, ...board]) : withHole?.hole;
     const category = cards?.length === 5 ? bestHandCategory(cards) : undefined;
-    return {key: item.hand_id, names: winners.map(w => w.name), avatarUrls: winners.map(w => w.avatarUrl), category, cards};
+    return {
+      key: item.hand_id,
+      names: winners.map(w => w.name),
+      avatarUrls: winners.map(w => w.avatarUrl),
+      category,
+      cards
+    };
   }).filter(entry => entry.names.length > 0);
 }
 
@@ -57,7 +73,9 @@ export function LastWinners({items}: { items: HandItem[] }) {
           </span>
           <span className="last-winners-info">
             {entry.avatarUrls.map((avatarUrl, wi) => avatarUrl && <PlayerAvatar key={avatarUrl}
-              name={entry.names[wi]} avatarUrl={avatarUrl} size={24} decorative/>)}
+                                                                                name={entry.names[wi]}
+                                                                                avatarUrl={avatarUrl} size={24}
+                                                                                decorative/>)}
             <b>{entry.names.join(' e ')}</b>
             {entry.category && <small>{HAND_CATEGORY_LABELS[entry.category] || entry.category}</small>}
           </span>

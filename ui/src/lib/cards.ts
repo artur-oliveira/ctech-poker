@@ -1,4 +1,4 @@
-import {DEFAULT_DECK_VARIANT, type DeckVariantId} from './cardVariants';
+import {type DeckVariantId, DEFAULT_DECK_VARIANT} from './cardVariants';
 
 const ranks: Record<string, string> = {T: '10', J: 'jack', Q: 'queen', K: 'king', A: 'ace'};
 const suits: Record<string, string> = {c: 'club', d: 'diamond', h: 'heart', s: 'spade'};

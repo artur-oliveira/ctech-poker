@@ -1,5 +1,6 @@
 import {fireEvent, render, screen} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
+import {OnboardingIntro} from './OnboardingIntro';
 
 const mocks = vi.hoisted(() => ({
   hasSeen: vi.fn(),
@@ -11,20 +12,18 @@ vi.mock('@/lib/onboarding', () => ({
   markOnboardingSeen: mocks.markSeen,
 }));
 
-import {OnboardingIntro} from './OnboardingIntro';
-
 describe('OnboardingIntro', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.hasSeen.mockReturnValue(false);
   });
-
+  
   test('does not render for a returning player', () => {
     mocks.hasSeen.mockReturnValue(true);
     const {container} = render(<OnboardingIntro/>);
     expect(container).toBeEmptyDOMElement();
   });
-
+  
   test.each([
     ['Fechar introdução'],
     ['Regras do poker'],

@@ -5,7 +5,7 @@ import {HAND_RANKINGS} from '@/lib/pokerRules';
 import {HandRankings} from './HandRankings';
 
 vi.mock('@/components/table/PlayingCard', () => ({
-  PlayingCard: ({card, index, size}: {card: string; index: number; size: string}) =>
+  PlayingCard: ({card, index, size}: { card: string; index: number; size: string }) =>
     <i data-testid="ranking-card" data-card={card} data-index={index} data-size={size}/>,
 }));
 
@@ -13,7 +13,7 @@ describe('HandRankings', () => {
   test('renders every hand in strongest-to-weakest order with examples', () => {
     render(<HandRankings/>);
     const entries = screen.getAllByRole('listitem');
-
+    
     expect(entries).toHaveLength(HAND_RANKINGS.length);
     expect(entries[0]).toHaveTextContent('1');
     expect(entries[0]).toHaveTextContent(HAND_RANKINGS[0].label);
@@ -23,7 +23,7 @@ describe('HandRankings', () => {
     );
     expect(screen.getAllByTestId('ranking-card')[0]).toHaveAttribute('data-size', 'hole');
   });
-
+  
   test('adds the compact presentation used by the table dialog', () => {
     const {container} = render(<HandRankings compact/>);
     expect(container.querySelector('ol')).toHaveClass('hand-ranking-list', 'compact');

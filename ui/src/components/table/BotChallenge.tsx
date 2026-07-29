@@ -23,7 +23,7 @@ export function BotChallenge({required, onTokenAction}: {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef('');
   const [status, setStatus] = useState<'loading' | 'ready' | 'checking' | 'error'>('loading');
-
+  
   useEffect(() => {
     if (!required || !siteKey) return undefined;
     let cancelled = false;
@@ -65,7 +65,7 @@ export function BotChallenge({required, onTokenAction}: {
       widgetRef.current = '';
     };
   }, [onTokenAction, required, siteKey]);
-
+  
   if (!required) return null;
   return <Dialog open onOpenChange={() => undefined}>
     <DialogContent className="bot-challenge-dialog">

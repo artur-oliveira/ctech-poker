@@ -1,5 +1,6 @@
-import {renderHook, act} from '@testing-library/react';
+import {act, renderHook} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
+import {useLobbyRealtime} from './useLobbyRealtime';
 
 const state = vi.hoisted(() => ({
   options: null as null | {
@@ -28,14 +29,12 @@ vi.mock('@/lib/api/client', () => ({
 }));
 vi.mock('@/lib/notify', () => ({pushNotification: state.notify}));
 
-import {useLobbyRealtime} from './useLobbyRealtime';
-
 describe('useLobbyRealtime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.options = null;
   });
-
+  
   test('opens an authenticated lobby socket and exposes reconnect', () => {
     const {result} = renderHook(() => useLobbyRealtime());
     expect(state.options).toMatchObject({
@@ -49,7 +48,7 @@ describe('useLobbyRealtime', () => {
     act(() => result.current.reconnect());
     expect(state.reconnect).toHaveBeenCalled();
   });
-
+  
   test('adds a new room once and updates occupancy without losing other rooms', () => {
     renderHook(() => useLobbyRealtime());
     act(() => state.options?.onMessage({
@@ -59,7 +58,7 @@ describe('useLobbyRealtime', () => {
     const add = state.setQueryData.mock.calls[0][1] as (rooms?: Array<Record<string, unknown>>) => Array<Record<string, unknown>>;
     expect(add()).toEqual([{room_id: 'new-room', seats_taken: 1}]);
     expect(add([{room_id: 'new-room'}])).toEqual([{room_id: 'new-room'}]);
-
+    
     act(() => state.options?.onMessage({
       type: 'room_updated',
       room_id: 'room-1',
@@ -70,12 +69,12 @@ describe('useLobbyRealtime', () => {
     expect(update([{id: 'room-1', seats_taken: 2}, {id: 'room-2', seats_taken: 3}]))
       .toEqual([{id: 'room-1', seats_taken: 5}, {id: 'room-2', seats_taken: 3}]);
   });
-
+  
   test('turns payment and system messages into localized notifications', () => {
     renderHook(() => useLobbyRealtime());
     act(() => state.options?.onMessage({type: 'payment_received', amount: 12345}));
     expect(state.notify).toHaveBeenCalledWith('Pagamento recebido: R$ 123,45', 'info');
-
+    
     act(() => state.options?.onMessage({type: 'system_broadcast', text: 'Manutenção em breve'}));
     expect(state.notify).toHaveBeenCalledWith('Manutenção em breve', 'info');
   });

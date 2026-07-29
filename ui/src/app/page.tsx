@@ -65,7 +65,8 @@ export default function Home() {
     <section className="hero shell">
       <div className="hero-copy">
         <h1>Sua mesa de poker, <em>sempre pronta no navegador.</em></h1>
-        <p>Texas Hold&apos;em em tempo real com fichas sandbox. Entre em mesas públicas, crie salas privadas de 2 a 9 lugares para jogar com amigos e acompanhe seu desempenho no ranking.</p>
+        <p>Texas Hold&apos;em em tempo real com fichas sandbox. Entre em mesas públicas, crie salas privadas de 2 a 9
+          lugares para jogar com amigos e acompanhe seu desempenho no ranking.</p>
         <div className="hero-actions">
           <Button size="lg" onClick={() => startOAuthFlow('/lobby')}>Jogar agora <ArrowRight/></Button>
           <Button variant="outline" size="lg" render={<Link href="#experience"/>}>Conhecer recursos</Button>
@@ -82,7 +83,8 @@ export default function Home() {
     <section id="experience" className="experience shell">
       <header>
         <h2>Uma experiência completa de poker</h2>
-        <p>Desenvolvido para oferecer partidas fluidas, transparência total e uma interface rica que coloca você no centro da ação.</p>
+        <p>Desenvolvido para oferecer partidas fluidas, transparência total e uma interface rica que coloca você no
+          centro da ação.</p>
       </header>
       <div className="feature-grid">
         {features.map(({icon: Icon, title, body}, i) => <article key={title}
@@ -96,7 +98,8 @@ export default function Home() {
     <section id="achievements" className="achievements-teaser shell">
       <div className="achievements-teaser-copy">
         <h2>Suba de nível a cada mão.</h2>
-        <p>Blefes que funcionam, all-ins decisivos, combinações raras na mesa: cada conquista premia seu estilo de jogo com até 5 estrelas de maestria.</p>
+        <p>Blefes que funcionam, all-ins decisivos, combinações raras na mesa: cada conquista premia seu estilo de jogo
+          com até 5 estrelas de maestria.</p>
         <Link href="/achievements">Ver catálogo de conquistas <ArrowRight/></Link>
       </div>
       <div className="achievements-teaser-grid">
@@ -115,7 +118,8 @@ export default function Home() {
     <section id="showcase" className="showcase shell">
       <div className="showcase-copy">
         <h2>O poker de verdade, sem instalar nada.</h2>
-        <p>Direto no seu navegador: cartas comunitárias, cronômetro de ação, atalhos de teclado (F, C, P, R), força da mão estimada e histórico com prova de integridade. Sem cliente pesado para atualizar.</p>
+        <p>Direto no seu navegador: cartas comunitárias, cronômetro de ação, atalhos de teclado (F, C, P, R), força da
+          mão estimada e histórico com prova de integridade. Sem cliente pesado para atualizar.</p>
         <Link href="/guide">Ver o guia completo da mesa <ArrowRight/></Link>
       </div>
       <div className="showcase-frame">
@@ -151,7 +155,8 @@ export default function Home() {
         <p>Jogue com responsabilidade. © {new Date().getFullYear()} A O CARVALHO TECH</p>
         <nav>
           <a href="https://accounts.aoctech.app/products/poker" target="_blank" rel="noreferrer">Termos de Uso</a>
-          <a href="https://accounts.aoctech.app/products/poker-privacy" target="_blank" rel="noreferrer">Política de privacidade</a>
+          <a href="https://accounts.aoctech.app/products/poker-privacy" target="_blank" rel="noreferrer">Política de
+            privacidade</a>
           <a href="https://accounts.aoctech.app/legal" target="_blank" rel="noreferrer">Central Jurídica</a>
         </nav>
       </div>
@@ -167,10 +172,10 @@ function HeroTable() {
       <div className="rail"/>
       <div className="felt"><span className="pot">POTE <b>2.450</b></span>
         <div className="community">{['Th', 'Js', 'Qd'].map((c, i) => <Image key={c}
-                                                                             src={cardPath(c)}
-                                                                             alt="" width={70}
-                                                                             height={98}
-                                                                             style={{'--i': i} as React.CSSProperties}/>)}<span
+                                                                            src={cardPath(c)}
+                                                                            alt="" width={70}
+                                                                            height={98}
+                                                                            style={{'--i': i} as React.CSSProperties}/>)}<span
           className="card-placeholder"/><span className="card-placeholder"/></div>
         <div className="table-logo"><Club/> CTECH</div>
       </div>

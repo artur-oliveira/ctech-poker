@@ -1,6 +1,7 @@
 import {render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
+import {ProfileMenu} from './ProfileMenu';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -12,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@tanstack/react-query', () => ({
   useQuery: mocks.query,
   useQueryClient: () => ({setQueryData: mocks.setQueryData}),
-  useMutation: ({onSuccess}: {onSuccess: (data: unknown) => void}) => ({
+  useMutation: ({onSuccess}: { onSuccess: (data: unknown) => void }) => ({
     mutate: (input: unknown) => {
       mocks.mutate(input);
       onSuccess({...mocks.query().data, ...(input as object)});
@@ -22,16 +23,14 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 vi.mock('@/lib/auth/oauth', () => ({logout: mocks.logout}));
 vi.mock('next/image', () => ({
-  default: (props: {src: string; alt: string}) => <span role="img" aria-label={props.alt} data-src={props.src}/>,
+  default: (props: { src: string; alt: string }) => <span role="img" aria-label={props.alt} data-src={props.src}/>,
 }));
 vi.mock('@/components/lobby/ProfileShowcaseDialog', () => ({
-  ProfileShowcaseDialog: ({open}: {open: boolean}) => open ? <div>showcase-open</div> : null,
+  ProfileShowcaseDialog: ({open}: { open: boolean }) => open ? <div>showcase-open</div> : null,
 }));
 vi.mock('@/components/lobby/SelfHudDialog', () => ({
-  SelfHudDialog: ({open}: {open: boolean}) => open ? <div>hud-open</div> : null,
+  SelfHudDialog: ({open}: { open: boolean }) => open ? <div>hud-open</div> : null,
 }));
-
-import {ProfileMenu} from './ProfileMenu';
 
 const player = {
   user_id: 'player-1',
@@ -53,18 +52,18 @@ describe('ProfileMenu', () => {
     vi.clearAllMocks();
     mocks.query.mockReturnValue({data: player});
   });
-
+  
   test('summarizes the active wallet and exposes both balances in the menu', async () => {
     render(<ProfileMenu/>);
     expect(screen.getByText('12.345 fichas')).toBeInTheDocument();
     expect(screen.getByText('AS')).toBeInTheDocument();
-
+    
     await openProfile();
     expect(screen.getByText('Sandbox')).toBeInTheDocument();
     expect(screen.getAllByText('12.345 fichas')).toHaveLength(2);
     expect(screen.getByText(/R\$\s*987,60/)).toBeInTheDocument();
   });
-
+  
   test('trims and saves a changed display name into the player cache', async () => {
     render(<ProfileMenu/>);
     await openProfile();
@@ -73,7 +72,7 @@ describe('ProfileMenu', () => {
     await userEvent.clear(input);
     await userEvent.type(input, '  Nova Ana  ');
     await userEvent.click(screen.getByRole('button', {name: 'Salvar'}));
-
+    
     expect(mocks.mutate).toHaveBeenCalledWith({name: 'Nova Ana'});
     expect(mocks.setQueryData).toHaveBeenCalledWith(
       ['player', 'me'],
@@ -81,7 +80,7 @@ describe('ProfileMenu', () => {
     );
     await waitFor(() => expect(screen.queryByRole('textbox')).not.toBeInTheDocument());
   });
-
+  
   test('cancels name editing with Escape and prevents an empty save', async () => {
     render(<ProfileMenu/>);
     await openProfile();
@@ -93,13 +92,13 @@ describe('ProfileMenu', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(mocks.mutate).not.toHaveBeenCalled();
   });
-
+  
   test('switches to real money, opens profile tools, and logs out', async () => {
     render(<ProfileMenu/>);
     await openProfile();
     await userEvent.click(screen.getByRole('switch', {name: 'Sandbox'}));
     expect(mocks.mutate).toHaveBeenCalledWith({wallet_mode: 'real'});
-
+    
     await userEvent.click(screen.getByRole('button', {name: 'Vitrine do perfil'}));
     expect(screen.getByText('showcase-open')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', {name: /Seu jogo/}));
@@ -107,7 +106,7 @@ describe('ProfileMenu', () => {
     await userEvent.click(screen.getByRole('button', {name: /Sair da conta/}));
     expect(mocks.logout).toHaveBeenCalledOnce();
   });
-
+  
   test('formats the real-money wallet in the collapsed summary', () => {
     mocks.query.mockReturnValue({data: {...player, wallet_mode: 'real'}});
     render(<ProfileMenu/>);

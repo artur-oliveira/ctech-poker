@@ -72,30 +72,30 @@ export function TableStage({
   const seatNode = (seat: TableSnapshot['seats'][number], index: number) => {
     const breakdown = playerPotBreakdown(snapshot, seat.player_id);
     return <Seat key={seat.player_id} seat={seat} index={index}
-          isTurn={snapshot.current_player_id === seat.player_id}
-          credit={snapshot.payouts?.[seat.player_id] || 0}
-          winAmount={breakdown.won}
-          refundAmount={breakdown.refund}
-          isWinner={snapshot.winners?.includes(seat.player_id) ?? false}
-          baseDeadlineMs={snapshot.action_base_deadline_unix_ms}
-          nowMs={nowMs}
-          turnTimeoutMs={turnTimeoutMs}
-          bigBlind={bigBlind}
-          isViewer={seat.player_id === viewer}
-          canRevealCards={seat.player_id === viewer && canRevealCards}
-          revealPending={revealPending}
-          onRevealCardAction={onRevealCardAction}
-          playerNote={playerNotes?.[seat.player_id]}
-          onEditNote={seat.player_id !== viewer && onEditPlayerNoteAction ? () => onEditPlayerNoteAction(seat) : undefined}
-          stackBefore={seat.player_id === viewer ? viewerStackBefore : undefined}
-          isDealer={snapshot.dealer_player_id === seat.player_id}
-          isSmallBlind={snapshot.small_blind_player_id === seat.player_id}
-          isBigBlind={snapshot.big_blind_player_id === seat.player_id}/>;
+                 isTurn={snapshot.current_player_id === seat.player_id}
+                 credit={snapshot.payouts?.[seat.player_id] || 0}
+                 winAmount={breakdown.won}
+                 refundAmount={breakdown.refund}
+                 isWinner={snapshot.winners?.includes(seat.player_id) ?? false}
+                 baseDeadlineMs={snapshot.action_base_deadline_unix_ms}
+                 nowMs={nowMs}
+                 turnTimeoutMs={turnTimeoutMs}
+                 bigBlind={bigBlind}
+                 isViewer={seat.player_id === viewer}
+                 canRevealCards={seat.player_id === viewer && canRevealCards}
+                 revealPending={revealPending}
+                 onRevealCardAction={onRevealCardAction}
+                 playerNote={playerNotes?.[seat.player_id]}
+                 onEditNote={seat.player_id !== viewer && onEditPlayerNoteAction ? () => onEditPlayerNoteAction(seat) : undefined}
+                 stackBefore={seat.player_id === viewer ? viewerStackBefore : undefined}
+                 isDealer={snapshot.dealer_player_id === seat.player_id}
+                 isSmallBlind={snapshot.small_blind_player_id === seat.player_id}
+                 isBigBlind={snapshot.big_blind_player_id === seat.player_id}/>;
   };
   const board = <Board cards={snapshot.board} boardTwo={snapshot.board_two}
                        splitAt={snapshot.board_split_at} pot={pot} pots={snapshot.pots}
                        rake={snapshot.rake} bigBlind={bigBlind}/>;
-
+  
   if (!vertical) return (
     <div className="game-table">
       <div className="game-rail"/>
@@ -105,7 +105,7 @@ export function TableStage({
       <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer}/>
     </div>
   );
-
+  
   // rotateSeats guarantees the viewer (when seated) is first; that seat leaves
   // the ring entirely and becomes the hero HUD at the stage's bottom edge.
   const viewerFirst = seats[0]?.player_id === viewer;

@@ -70,6 +70,7 @@ const STAGE_LABELS: Record<string, string> = {
   waiting_for_players: 'Aguardando jogadores', pre_flop: 'Pré-flop', flop: 'Flop', turn: 'Turn', river: 'River',
   showdown: 'Showdown', complete: 'Mão encerrada'
 };
+
 function connectionCopyFor(status: keyof typeof CONNECTION_COPY, attempt: number) {
   if (status === 'disconnected' && attempt > MAX_RECONNECT_ATTEMPTS) return RECONNECT_GIVEN_UP_COPY;
   return CONNECTION_COPY[status];
@@ -111,7 +112,7 @@ function actionState(snapshot: TableSnapshot, viewer?: string) {
   };
 }
 
-function IdleWarning({deadline, onKeepSeat}: {deadline?: number; onKeepSeat: () => boolean}) {
+function IdleWarning({deadline, onKeepSeat}: { deadline?: number; onKeepSeat: () => boolean }) {
   const [now, setNow] = useState(0);
   useEffect(() => {
     if (!deadline) return undefined;
@@ -177,7 +178,7 @@ function TableContent() {
   const {data: playerNotes = []} = useQuery({
     queryKey: ['player-notes'], queryFn: getPlayerNotes, enabled: valid && seated
   });
-  const [noteOpponent, setNoteOpponent] = useState<{player_id: string; name?: string} | null>(null);
+  const [noteOpponent, setNoteOpponent] = useState<{ player_id: string; name?: string } | null>(null);
   const rt = useTableRealtime(valid && seated ? id : '', viewer, inviteCode, USE_MOCK ? {scenario, delay} : undefined);
   useDealerVoice(rt.announcement, preferences.dealerVoice);
   // The server never closes a removed player's socket (it just stops
@@ -204,12 +205,12 @@ function TableContent() {
   // that same `complete` snapshot (show_cards, pings, ...), so comparing
   // against the previous render's payouts (not the current one) is what
   // keeps this from re-firing on those repeats.
-  const previousPayoutsRef = useRef<{tableID: string; payouts?: TableSnapshot['payouts']}>({tableID: ''});
+  const previousPayoutsRef = useRef<{ tableID: string; payouts?: TableSnapshot['payouts'] }>({tableID: ''});
   const outcomeKeyRef = useRef(0);
   const [rememberedStart, setRememberedStart] =
-    useState<{tableID: string; handID: string; stack: number} | null>(null);
+    useState<{ tableID: string; handID: string; stack: number } | null>(null);
   const [scopedHandOutcome, setScopedHandOutcome] =
-    useState<{tableID: string; value: HandOutcomeState} | null>(null);
+    useState<{ tableID: string; value: HandOutcomeState } | null>(null);
   const [activeTablePanel, setActiveTablePanel] =
     useState<'chat' | 'reactions' | 'rankings' | null>(null);
   // Protocol v3 publishes the exact pre-blind stack. During a rolling deploy,
@@ -284,7 +285,7 @@ function TableContent() {
       winnerSeat?.hole_cards_revealed?.length === 2 &&
       winnerSeat.hole_cards_revealed.every(Boolean));
     const couldHaveWon = folded && winnerWasPubliclyRevealed &&
-      seat.hand_score != null && winnerSeat?.hand_score != null ?
+    seat.hand_score != null && winnerSeat?.hand_score != null ?
       seat.hand_score > winnerSeat.hand_score : undefined;
     setScopedHandOutcome({
       tableID: id,
@@ -483,7 +484,7 @@ function TableContent() {
                             return note ? [...rest, note] : rest;
                           });
                         }}/>
-
+      
       <AchievementToast unlock={rt.unlock}/>
       {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
     </main>
@@ -492,11 +493,11 @@ function TableContent() {
 
 export default function TablePage() {
   return (
-      <TermsGate>
-          <Suspense
-              fallback={<main className="game-loading"><span className="loader"/></main>}>
-              <TableContent/>
-          </Suspense>
-      </TermsGate>
+    <TermsGate>
+      <Suspense
+        fallback={<main className="game-loading"><span className="loader"/></main>}>
+        <TableContent/>
+      </Suspense>
+    </TermsGate>
   );
 }

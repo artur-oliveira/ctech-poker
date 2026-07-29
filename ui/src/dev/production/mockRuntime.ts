@@ -11,15 +11,15 @@ export class MockTableService {
   connect(): never {
     throw new Error('Development realtime is unavailable in production.');
   }
-
+  
   close() {
     // No resources can be opened by this production replacement.
   }
-
+  
   send() {
     return false;
   }
-
+  
   reconnect() {
     // No connection exists in production.
   }

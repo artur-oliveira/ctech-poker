@@ -59,7 +59,7 @@ export function HandReplayer({
   const [speed, setSpeed] = useState(1);
   const lastIndex = Math.max(0, replayActions.length - 1);
   const safeIndex = Math.min(index, lastIndex);
-
+  
   useEffect(() => {
     if (!playing || replayActions.length < 2) return undefined;
     const timer = window.setTimeout(() => {
@@ -73,7 +73,7 @@ export function HandReplayer({
     }, stepDelayMs(replayActions[safeIndex]?.frame?.board?.length, replayActions[safeIndex + 1]?.frame?.board?.length) / speed);
     return () => window.clearTimeout(timer);
   }, [playing, safeIndex, lastIndex, replayActions, speed]);
-
+  
   if (!replayActions.length) return <section className="hand-replayer unavailable">
     <div>
       <h2>Replay da mão</h2>
@@ -81,7 +81,7 @@ export function HandReplayer({
         ação por ação.</p>
     </div>
   </section>;
-
+  
   const current = replayActions[safeIndex];
   const frame = current.frame!;
   const opponents = new Map((hand.opponents || []).map(opponent => [opponent.player_id, opponent]));
@@ -91,7 +91,7 @@ export function HandReplayer({
   const actionLabel = ACTION_LABELS[current.action] || current.action.replaceAll('_', ' ');
   const actor = playerName(current.player_id, viewerId, opponents.get(current.player_id)?.name ||
     frame.seats?.find(seat => seat.player_id === current.player_id)?.name);
-
+  
   const holeCardsFor = (playerId: string) => {
     if (playerId === viewerId) return hand.hole_cards;
     if (!showFinalCards && !shownPlayers.has(playerId)) return undefined;
@@ -118,7 +118,7 @@ export function HandReplayer({
       hole_cards_revealed: holeCardsFor(seat.player_id)?.map(card => card.toLowerCase() !== 'back')
     }))
   };
-
+  
   return <section className="hand-replayer" aria-label="Replay interativo da mão">
     <header>
       <div>

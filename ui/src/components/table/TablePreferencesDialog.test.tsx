@@ -18,7 +18,7 @@ vi.mock('@/lib/tablePreferences', async importOriginal => ({
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({children}: React.PropsWithChildren) => <div>{children}</div>,
   DialogTrigger: ({children, render}: React.PropsWithChildren<{
-    render?: React.ReactElement<{['aria-label']?: string}>;
+    render?: React.ReactElement<{ ['aria-label']?: string }>;
   }>) => <button type="button" aria-label={render?.props['aria-label']}>{children}</button>,
   DialogContent: ({children}: React.PropsWithChildren) => <section>{children}</section>,
   DialogHeader: ({children}: React.PropsWithChildren) => <header>{children}</header>,
@@ -29,15 +29,15 @@ vi.mock('@/components/ui/dialog', () => ({
 vi.mock('@/components/ui/select', () => {
   const ChangeContext = createContext<(value: string | null) => void>(() => undefined);
   return {
-    Select: ({children, onValueChange}: React.PropsWithChildren<{onValueChange: (value: never) => void}>) =>
+    Select: ({children, onValueChange}: React.PropsWithChildren<{ onValueChange: (value: never) => void }>) =>
       <ChangeContext.Provider value={onValueChange as unknown as (value: string | null) => void}>
         {children}
       </ChangeContext.Provider>,
     SelectTrigger: ({children, ...props}: React.PropsWithChildren) => <div {...props}>{children}</div>,
-    SelectValue: ({children}: {children: (value: never) => React.ReactNode}) =>
+    SelectValue: ({children}: { children: (value: never) => React.ReactNode }) =>
       <>{children('classic' as never)}</>,
     SelectContent: ({children}: React.PropsWithChildren) => <div>{children}</div>,
-    SelectItem: ({children, value}: React.PropsWithChildren<{value: string}>) => {
+    SelectItem: ({children, value}: React.PropsWithChildren<{ value: string }>) => {
       const change = useContext(ChangeContext);
       return <button type="button" onClick={() => change(value)}>{children}</button>;
     },
@@ -66,10 +66,10 @@ describe('TablePreferencesDialog', () => {
       update,
     });
   });
-
+  
   test('renders the current preferences and all supported choices', () => {
     render(<TablePreferencesDialog/>);
-
+    
     expect(screen.getByRole('button', {name: 'Preferências da mesa'})).toBeInTheDocument();
     expect(screen.getByRole('heading', {name: 'Preferências da mesa'})).toBeInTheDocument();
     expect(screen.getByText('Personalize a experiência e escolha como prefere jogar nesta mesa.')).toBeInTheDocument();
@@ -83,13 +83,13 @@ describe('TablePreferencesDialog', () => {
     expect(screen.getAllByRole('switch')[0]).toHaveAttribute('aria-checked', 'false');
     expect(screen.getAllByRole('switch')[1]).toHaveAttribute('aria-checked', 'true');
   });
-
+  
   test('shows the run-it-twice choice only when the room allows it', async () => {
     const onChange = vi.fn(() => true);
     const hidden = render(<TablePreferencesDialog/>);
     expect(screen.queryByText('Rodar duas vezes')).not.toBeInTheDocument();
     hidden.unmount();
-
+    
     render(<TablePreferencesDialog runItTwiceAvailable runItTwice={false}
                                    onRunItTwiceChange={onChange}/>);
     expect(screen.getByText(/todos os jogadores envolvidos também ativaram/)).toBeInTheDocument();
@@ -97,15 +97,15 @@ describe('TablePreferencesDialog', () => {
     await userEvent.click(toggle);
     expect(onChange).toHaveBeenCalledWith(true);
   });
-
+  
   test('updates theme, voice settings, and session reminder independently', async () => {
     render(<TablePreferencesDialog/>);
-
+    
     await userEvent.click(screen.getByRole('button', {name: 'Meia-noite'}));
     await userEvent.click(screen.getAllByRole('switch')[0]);
     await userEvent.click(screen.getAllByRole('switch')[1]);
     await userEvent.click(screen.getByRole('button', {name: 'A cada 30 minutos'}));
-
+    
     expect(update).toHaveBeenCalledWith({theme: 'midnight'});
     expect(update).toHaveBeenCalledWith({dealerVoice: true});
     expect(update).toHaveBeenCalledWith({voiceCommands: false});

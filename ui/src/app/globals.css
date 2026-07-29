@@ -1355,12 +1355,29 @@ h1 em {
     border: 1px dashed var(--muted)
 }
 
-.player-note-dot.tag-red { background: #ef4444 }
-.player-note-dot.tag-orange { background: #f97316 }
-.player-note-dot.tag-yellow { background: #eab308 }
-.player-note-dot.tag-green { background: #22c55e }
-.player-note-dot.tag-blue { background: #3b82f6 }
-.player-note-dot.tag-purple { background: #a855f7 }
+.player-note-dot.tag-red {
+    background: #ef4444
+}
+
+.player-note-dot.tag-orange {
+    background: #f97316
+}
+
+.player-note-dot.tag-yellow {
+    background: #eab308
+}
+
+.player-note-dot.tag-green {
+    background: #22c55e
+}
+
+.player-note-dot.tag-blue {
+    background: #3b82f6
+}
+
+.player-note-dot.tag-purple {
+    background: #a855f7
+}
 
 .player-note-form textarea {
     width: 100%;
@@ -7213,11 +7230,16 @@ h1 em {
 }
 
 @keyframes replay-action-enter {
-    from { opacity: 0 }
+    from {
+        opacity: 0
+    }
 }
 
 @keyframes replay-pot-pulse {
-    45% { color: var(--paper); transform: scale(1.18) }
+    45% {
+        color: var(--paper);
+        transform: scale(1.18)
+    }
 }
 
 .hand-history h2 {

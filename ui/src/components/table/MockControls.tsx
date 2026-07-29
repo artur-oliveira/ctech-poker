@@ -70,7 +70,7 @@ export function MockControls({scenario, delay}: { scenario?: MockScenario; delay
     next.set(key, value);
     router.replace(`?${next.toString()}`, {scroll: false});
   };
-
+  
   return <details className="mock-controls">
     <summary><FlaskConical aria-hidden="true"/><span>Cenários de teste</span></summary>
     <div>

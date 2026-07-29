@@ -32,7 +32,7 @@ export default function Lobby() {
   const [claiming, setClaiming] = useState(false);
   // null = cooldown still unknown (loading); 0 = claimable
   const [cooldown, setCooldown] = useState<number | null>(null);
-
+  
   useEffect(() => {
     let cancelled = false;
     remainingTime()
@@ -42,14 +42,14 @@ export default function Lobby() {
       cancelled = true;
     };
   }, []);
-
+  
   useEffect(() => {
     if (!cooldown) return () => {
     };
     const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
     return () => clearTimeout(timer);
   }, [cooldown]);
-
+  
   async function claimReward() {
     setClaiming(true);
     try {
@@ -68,9 +68,9 @@ export default function Lobby() {
       setClaiming(false);
     }
   }
-
+  
   const onCooldown = cooldown === null || cooldown > 0;
-
+  
   return <TermsGate>
     <main className="app-page">
       <nav className="app-nav shell"><Link href="/" className="brand"><span

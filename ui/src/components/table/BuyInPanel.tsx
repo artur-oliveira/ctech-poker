@@ -18,8 +18,8 @@ const TABLE_FULL_ERROR = 'A última vaga foi ocupada. Se houve débito, suas fic
 // instead of the generic sandbox message.
 function joinErrorMessage(err: unknown) {
   if (axios.isAxiosError(err)) {
-    const detail = (err.response?.data as {detail?: string} | undefined)?.detail;
-    const type = (err.response?.data as {type?: string} | undefined)?.type;
+    const detail = (err.response?.data as { detail?: string } | undefined)?.detail;
+    const type = (err.response?.data as { type?: string } | undefined)?.type;
     if (type === TABLE_FULL_TYPE) return TABLE_FULL_ERROR;
     if (detail?.includes('gambling')) return 'Sua carteira ainda não tem apostas ativadas. Ative em ctech-wallet e tente novamente.';
   }
@@ -54,7 +54,7 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
     queryFn: () => getRoom(roomId),
     retry: (count, err) => !isNotFound(err) && count < 3
   });
-
+  
   if (isLoading) return (
     <main className="game-loading">
       <h1 className="sr-only">Mesa de poker</h1>
@@ -78,13 +78,13 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
       <Button variant="ghost" render={<Link href="/lobby"/>}><ChevronLeft/> Voltar ao lobby</Button>
     </main>
   );
-
+  
   const step = room.big_blind > 0 ? room.big_blind : 1;
   const value = amount ?? midBuyIn(room.buy_in_min, room.buy_in_max, room.big_blind);
   const isReal = room.currency_mode === 'real';
   const unit = isReal ? 'reais' : 'fichas';
   const fmt = (n: number) => formatBuyIn(n, isReal);
-
+  
   async function confirm() {
     setJoining(true);
     setError('');
@@ -94,7 +94,7 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
     } catch (err) {
       setError(joinErrorMessage(err));
       if (axios.isAxiosError(err) &&
-        (err.response?.data as {type?: string} | undefined)?.type === TABLE_FULL_TYPE) {
+        (err.response?.data as { type?: string } | undefined)?.type === TABLE_FULL_TYPE) {
         await Promise.all([
           queryClient.invalidateQueries({queryKey: ['rooms']}),
           queryClient.invalidateQueries({queryKey: ['room', roomId]}),
@@ -104,7 +104,7 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
       setJoining(false);
     }
   }
-
+  
   return (
     <main className="game-loading buyin">
       <h1 className="sr-only">Mesa de poker</h1>
@@ -112,8 +112,8 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
       <h2>Sente-se à mesa</h2>
       <p>Escolha {isReal ? 'quanto dinheiro' : 'quantas fichas'} levar. Nada é debitado antes de você confirmar.</p>
       {isReal && !!room.entry_fee_cents &&
-        <p className="buyin-fee-notice">Taxa fixa de mesa: {formatBuyIn(room.entry_fee_cents, true)} (cobrada
-          junto com o buy-in, não é uma comissão sobre o pote).</p>}
+          <p className="buyin-fee-notice">Taxa fixa de mesa: {formatBuyIn(room.entry_fee_cents, true)} (cobrada
+              junto com o buy-in, não é uma comissão sobre o pote).</p>}
       <div className="buyin-control">
         <label htmlFor={sliderId}>Buy-in</label>
         <input id={sliderId} type="range" min={room.buy_in_min} max={room.buy_in_max} step={step} value={value}

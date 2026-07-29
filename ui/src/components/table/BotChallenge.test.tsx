@@ -3,11 +3,11 @@ import {afterEach, describe, expect, test, vi} from 'vitest';
 import {BotChallenge} from './BotChallenge';
 
 vi.mock('@/components/ui/dialog', () => ({
-  Dialog: ({children}: {children: React.ReactNode}) => <>{children}</>,
-  DialogContent: ({children}: {children: React.ReactNode}) => <section>{children}</section>,
-  DialogHeader: ({children}: {children: React.ReactNode}) => <header>{children}</header>,
-  DialogTitle: ({children}: {children: React.ReactNode}) => <h2>{children}</h2>,
-  DialogDescription: ({children}: {children: React.ReactNode}) => <p>{children}</p>,
+  Dialog: ({children}: { children: React.ReactNode }) => <>{children}</>,
+  DialogContent: ({children}: { children: React.ReactNode }) => <section>{children}</section>,
+  DialogHeader: ({children}: { children: React.ReactNode }) => <header>{children}</header>,
+  DialogTitle: ({children}: { children: React.ReactNode }) => <h2>{children}</h2>,
+  DialogDescription: ({children}: { children: React.ReactNode }) => <p>{children}</p>,
 }));
 
 type Options = {
@@ -19,7 +19,7 @@ type Options = {
 afterEach(() => {
   vi.unstubAllEnvs();
   document.getElementById('cloudflare-turnstile-script')?.remove();
-  delete (window as typeof window & {turnstile?: unknown}).turnstile;
+  delete (window as typeof window & { turnstile?: unknown }).turnstile;
 });
 
 describe('BotChallenge', () => {
@@ -29,14 +29,14 @@ describe('BotChallenge', () => {
     expect(container).toBeEmptyDOMElement();
     expect(document.getElementById('cloudflare-turnstile-script')).toBeNull();
   });
-
+  
   test('explains a missing site key without loading the external script', () => {
     vi.stubEnv('NEXT_PUBLIC_TURNSTILE_SITE_KEY', '');
     render(<BotChallenge required onTokenAction={() => true}/>);
     expect(screen.getByRole('alert')).toHaveTextContent('não foi configurada');
     expect(document.getElementById('cloudflare-turnstile-script')).toBeNull();
   });
-
+  
   test('loads Turnstile, validates a token and removes its widget on cleanup', () => {
     vi.stubEnv('NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'site-key');
     let options: Options | undefined;
@@ -45,24 +45,24 @@ describe('BotChallenge', () => {
       return 'widget-1';
     });
     const remove = vi.fn();
-    (window as typeof window & {turnstile: unknown}).turnstile = {render: renderWidget, remove};
+    (window as typeof window & { turnstile: unknown }).turnstile = {render: renderWidget, remove};
     const onTokenAction = vi.fn(() => true);
-
+    
     const view = render(<BotChallenge required onTokenAction={onTokenAction}/>);
     const script = document.getElementById('cloudflare-turnstile-script') as HTMLScriptElement;
     expect(script.src).toContain('challenges.cloudflare.com/turnstile');
     fireEvent.load(script);
-
+    
     expect(renderWidget).toHaveBeenCalledOnce();
     expect(options).toMatchObject({sitekey: 'site-key', action: 'poker_bot_check', language: 'pt-BR'});
     act(() => options?.callback('verified-token'));
     expect(onTokenAction).toHaveBeenCalledWith('verified-token');
     expect(screen.getByText('Validando…')).toBeInTheDocument();
-
+    
     view.unmount();
     expect(remove).toHaveBeenCalledWith('widget-1');
   });
-
+  
   test('shows failures from script, provider, expiration and rejected tokens', () => {
     vi.stubEnv('NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'site-key');
     const onTokenAction = vi.fn(() => false);
@@ -70,9 +70,9 @@ describe('BotChallenge', () => {
     fireEvent.error(document.getElementById('cloudflare-turnstile-script')!);
     expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível validar');
     view.unmount();
-
+    
     let options: Options | undefined;
-    (window as typeof window & {turnstile: unknown}).turnstile = {
+    (window as typeof window & { turnstile: unknown }).turnstile = {
       render: (_element: HTMLElement, received: Options) => {
         options = received;
         return 'widget-2';

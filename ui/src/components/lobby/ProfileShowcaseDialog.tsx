@@ -19,7 +19,7 @@ import {getMe, type PlayerProfile, updateMe} from '@/lib/api/player';
 import {achievementLabel} from '@/lib/achievements';
 import {pushNotification} from '@/lib/notify';
 
-function ShowcaseEditor({me, onSaved}: {me: PlayerProfile; onSaved: (profile: PlayerProfile) => void}) {
+function ShowcaseEditor({me, onSaved}: { me: PlayerProfile; onSaved: (profile: PlayerProfile) => void }) {
   const [isPublic, setIsPublic] = useState(me.showcase_public);
   const [isPlaystylePublic, setIsPlaystylePublic] = useState(me.playstyle_public);
   const [selected, setSelected] = useState<string[]>(me.featured_achievements || []);
@@ -27,8 +27,10 @@ function ShowcaseEditor({me, onSaved}: {me: PlayerProfile; onSaved: (profile: Pl
   const mine = useQuery({queryKey: ['achievements', 'me'], queryFn: () => getMyAchievements()});
   const counts = new Map((mine.data || []).map(item => [item.key, item.count]));
   const save = useMutation({
-    mutationFn: () => updateMe({showcase_public: isPublic, playstyle_public: isPlaystylePublic,
-      featured_achievements: selected}),
+    mutationFn: () => updateMe({
+      showcase_public: isPublic, playstyle_public: isPlaystylePublic,
+      featured_achievements: selected
+    }),
     onSuccess: profile => {
       onSaved(profile);
       pushNotification('Vitrine do perfil atualizada.', 'info');
@@ -36,7 +38,7 @@ function ShowcaseEditor({me, onSaved}: {me: PlayerProfile; onSaved: (profile: Pl
   });
   const profileUrl = typeof window === 'undefined' ? `/profile?id=${encodeURIComponent(me.user_id)}` :
     `${window.location.origin}/profile?id=${encodeURIComponent(me.user_id)}`;
-
+  
   const toggle = (key: string, checked: boolean) => {
     if (checked) {
       if (selected.length >= 3) {
@@ -48,7 +50,7 @@ function ShowcaseEditor({me, onSaved}: {me: PlayerProfile; onSaved: (profile: Pl
       setSelected(current => current.filter(item => item !== key));
     }
   };
-
+  
   return <>
     <div className="showcase-privacy-row">
       <span><b>Perfil público</b><small>Permite abrir a vitrine por link.</small></span>
@@ -72,13 +74,13 @@ function ShowcaseEditor({me, onSaved}: {me: PlayerProfile; onSaved: (profile: Pl
         })}
     </fieldset>
     {isPublic && <div className="showcase-share-row">
-      <Button type="button" variant="outline" onClick={async () => {
-        await navigator.clipboard.writeText(profileUrl);
-        pushNotification('Link do perfil copiado.', 'info');
-      }}><Copy/> Copiar link</Button>
-      <Button variant="ghost" render={<Link href={`/profile?id=${encodeURIComponent(me.user_id)}`} target="_blank"/>}>
-        Ver perfil <ExternalLink/>
-      </Button>
+        <Button type="button" variant="outline" onClick={async () => {
+          await navigator.clipboard.writeText(profileUrl);
+          pushNotification('Link do perfil copiado.', 'info');
+        }}><Copy/> Copiar link</Button>
+        <Button variant="ghost" render={<Link href={`/profile?id=${encodeURIComponent(me.user_id)}`} target="_blank"/>}>
+            Ver perfil <ExternalLink/>
+        </Button>
     </div>}
     <DialogFooter>
       <Button type="button" disabled={save.isPending} onClick={() => save.mutate()}>Salvar vitrine</Button>
@@ -86,7 +88,7 @@ function ShowcaseEditor({me, onSaved}: {me: PlayerProfile; onSaved: (profile: Pl
   </>;
 }
 
-export function ProfileShowcaseDialog({open, onOpenChange}: {open: boolean; onOpenChange: (open: boolean) => void}) {
+export function ProfileShowcaseDialog({open, onOpenChange}: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const queryClient = useQueryClient();
   const {data: me} = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
   return <Dialog open={open} onOpenChange={onOpenChange}>
@@ -95,8 +97,9 @@ export function ProfileShowcaseDialog({open, onOpenChange}: {open: boolean; onOp
         <DialogTitle>Sua vitrine</DialogTitle>
         <DialogDescription>Escolha o que outros jogadores podem ver. A vitrine começa privada.</DialogDescription>
       </DialogHeader>
-      {me && <ShowcaseEditor key={`${me.showcase_public}:${me.playstyle_public}:${(me.featured_achievements || []).join(',')}`}
-                             me={me} onSaved={profile => queryClient.setQueryData(['player', 'me'], profile)}/>}
+      {me && <ShowcaseEditor
+          key={`${me.showcase_public}:${me.playstyle_public}:${(me.featured_achievements || []).join(',')}`}
+          me={me} onSaved={profile => queryClient.setQueryData(['player', 'me'], profile)}/>}
     </DialogContent>
   </Dialog>;
 }

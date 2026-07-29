@@ -27,7 +27,7 @@ export function TermsGate({children}: { children: React.ReactNode }) {
   const [checked, setChecked] = useState(false);
   const [booting, setBooting] = useState(() => !USE_MOCK && !getAccessToken());
   const queryClient = useQueryClient();
-
+  
   useEffect(() => {
     const unsubscribe = subscribeAccessToken(setToken);
     if (USE_MOCK) {
@@ -42,7 +42,7 @@ export function TermsGate({children}: { children: React.ReactNode }) {
     }
     return unsubscribe;
   }, []);
-
+  
   const me = useQuery({queryKey: ['player', 'me'], queryFn: getMe, enabled: Boolean(token)});
   const accept = useMutation({
     mutationFn: acceptPokerTerms,
@@ -52,7 +52,7 @@ export function TermsGate({children}: { children: React.ReactNode }) {
     mutationFn: updateMe,
     onSuccess: data => queryClient.setQueryData(['player', 'me'], data)
   });
-
+  
   // One-time sync: a brand new profile has no name yet, so seed it from the
   // OIDC id_token's username the first time we see both. nameSyncAttempted
   // guards against re-firing on every render (nameSync's identity changes
@@ -67,11 +67,11 @@ export function TermsGate({children}: { children: React.ReactNode }) {
       }
     }
   }, [me.data, nameSync]);
-
+  
   useEffect(() => {
     setPlayerId(me.data?.user_id ?? null);
   }, [me.data?.user_id]);
-
+  
   if (booting || me.isLoading) return <div className="loading-screen"><span className="loader"/>Verificando sua conta…
   </div>;
   if (!token) return <div className="terms-gate">

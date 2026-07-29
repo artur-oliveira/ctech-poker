@@ -11,10 +11,10 @@ export function AchievementCard({achievement, count}: { achievement: Achievement
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const progress: AchievementProgress | null = count === undefined ? null : achievementProgress(achievement.tiers, count);
   const example = achievementExample(achievement.key);
-
+  
   const previewing = hoverIndex !== null;
   const previewTier = previewing ? achievement.tiers[hoverIndex] : null;
-
+  
   return <article className="achievement-card">
     {example.length > 0 && <div className="achievement-card-art" aria-hidden="true">
       {example.map((card, i) => <PlayingCard key={`${card}-${i}`} card={card} index={i} size="hole"/>)}

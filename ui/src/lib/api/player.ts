@@ -46,7 +46,7 @@ export interface ProfileShowcase {
   player_id: string;
   name?: string;
   avatar_url?: string;
-  featured_achievements: Array<{key: string; count: number}>;
+  featured_achievements: Array<{ key: string; count: number }>;
   playstyle?: PlaystyleBadge[];
   best_hand?: Pick<HandItem, 'hand_id' | 'table_id' | 'net_change' | 'ended_at' | 'board' | 'hole_cards'>;
 }
@@ -105,7 +105,7 @@ export interface HandItem {
   // card + salt, the rest only their committed hash, and together they still
   // recompute root_commit_hash.
   root_commit_hash?: string;
-  revealed_card_salts?: Record<number, {card: string; salt_hex: string}>;
+  revealed_card_salts?: Record<number, { card: string; salt_hex: string }>;
   unrevealed_card_hashes?: Record<number, string>;
 }
 

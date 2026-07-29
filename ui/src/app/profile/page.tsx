@@ -23,7 +23,7 @@ function ProfileContent() {
     enabled: Boolean(playerID),
     retry: false
   });
-
+  
   return <main className="app-page profile-showcase-page">
     <nav className="app-nav shell">
       <Link href="/" className="brand"><span className="brand-mark"><Club/></span>CTech <b>Poker</b></Link>
@@ -37,7 +37,8 @@ function ProfileContent() {
     </nav>
     <section className="profile-showcase shell">
       {authed && <Link href="/lobby"><ChevronLeft/> Lobby</Link>}
-      {showcase.isLoading ? <div className="lobby-empty"><span className="loader"/>Carregando vitrine do jogador…</div> :
+      {showcase.isLoading ?
+        <div className="lobby-empty"><span className="loader"/>Carregando vitrine do jogador…</div> :
         showcase.isError || !showcase.data ? <div className="lobby-empty">
           <Sparkles aria-hidden="true"/>
           <h1>Vitrine indisponível</h1>

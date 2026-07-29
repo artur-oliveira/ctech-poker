@@ -18,7 +18,7 @@ export function PartialDeckProof({rootCommitHash, revealed, unrevealed}: {
   const [matches, setMatches] = useState<boolean | null>(null);
   const [error, setError] = useState(false);
   const [flipped, setFlipped] = useState<Set<number>>(new Set());
-
+  
   useEffect(() => {
     let cancelled = false;
     verifyWirePartialDeck(rootCommitHash, revealed, unrevealed).then(r => {
@@ -28,9 +28,9 @@ export function PartialDeckProof({rootCommitHash, revealed, unrevealed}: {
       cancelled = true;
     };
   }, [rootCommitHash, revealed, unrevealed]);
-
+  
   const revealedIndexes = Object.keys(revealed).map(Number);
-
+  
   function toggle(index: number) {
     setFlipped(prev => {
       const next = new Set(prev);
@@ -38,10 +38,11 @@ export function PartialDeckProof({rootCommitHash, revealed, unrevealed}: {
       return next;
     });
   }
-
+  
   return <div className="deck-reveal">
     <div className="deck-reveal-proof">
-      <div className="deck-reveal-hash"><span>Root commit hash (publicado antes da mão)</span><code>{rootCommitHash}</code>
+      <div className="deck-reveal-hash">
+        <span>Root commit hash (publicado antes da mão)</span><code>{rootCommitHash}</code>
       </div>
       {matches === null && !error && <p className="deck-reveal-status pending"><LoaderCircle
           className="spin"/>Recalculando os hashes das 52 posições…</p>}

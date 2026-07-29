@@ -20,14 +20,14 @@ export function StakesGrid() {
   const [joiningKey, setJoiningKey] = useState<string | null>(null);
   
   useLobbyRealtime();
-
+  
   const {data: stakes = [], isLoading: stakesLoading, isError: stakesError, refetch: refetchStakes} = useQuery({
     queryKey: ['stakes'], queryFn: () => listStakes()
   });
   const {data: rooms = [], isLoading: roomsLoading} = useQuery({
     queryKey: ['rooms'], queryFn: () => listRooms()
   });
-
+  
   async function joinOrCreate(smallBlind: number, bigBlind: number, maxSeats: number) {
     const key = bucketKey(smallBlind, bigBlind, maxSeats);
     setJoiningKey(key);
@@ -50,7 +50,7 @@ export function StakesGrid() {
       setJoiningKey(null);
     }
   }
-
+  
   if (stakesLoading || roomsLoading) return (
     <div className="lobby-empty">
       <span className="loader"/>

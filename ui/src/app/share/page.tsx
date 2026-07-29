@@ -15,15 +15,16 @@ function SharedHandContent() {
   const share = useQuery({
     queryKey: ['hand-share', token], queryFn: () => getHandShare(token), enabled: Boolean(token), retry: false
   });
-
+  
   if (!token || share.isError) return <section className="public-hand unavailable">
     <h1>Link indisponível</h1>
     <p>Esta mão compartilhada pode ter sido revogada ou ter expirado.</p>
     <Button render={<Link href="/"/>}>Conhecer o CTech Poker</Button>
   </section>;
-
-  if (share.isLoading || !share.data) return <section className="public-hand loading"><span className="loader"/>Carregando mão compartilhada…</section>;
-
+  
+  if (share.isLoading || !share.data) return <section className="public-hand loading"><span className="loader"/>Carregando
+    mão compartilhada…</section>;
+  
   const item = share.data;
   const hand: HandItem = {
     pk: '', sk: '', table_id: 'shared', hand_id: item.token, outcome: item.outcome,
@@ -32,18 +33,20 @@ function SharedHandContent() {
       player_id: `player_${index + 1}`, name: opponent.alias, hole_cards: opponent.hole_cards, won: opponent.won
     }))
   };
-
+  
   return <section className="public-hand">
     <header>
       <span>{item.kind === 'bad_beat' ? 'Bad Beat Compartilhado' : 'Mão Compartilhada'}</span>
       <h1>{item.net_change >= 0 ? '+' : ''}{item.net_change.toLocaleString('pt-BR')} fichas</h1>
-      <p><ShieldCheck aria-hidden="true"/> Jogadores anonimizados · expira em {new Date(item.expires_at).toLocaleDateString('pt-BR')}</p>
+      <p><ShieldCheck aria-hidden="true"/> Jogadores anonimizados · expira
+        em {new Date(item.expires_at).toLocaleDateString('pt-BR')}</p>
     </header>
     <div className="public-hand-cards">
       <article>
         <b>Herói</b>
         <div>{item.hero_cards?.length ? item.hero_cards.map((card, index) =>
-          <PlayingCard key={card} card={card} index={index} size="hole" owner="viewer"/>) : <span>Cartas ocultas</span>}</div>
+            <PlayingCard key={card} card={card} index={index} size="hole" owner="viewer"/>) :
+          <span>Cartas ocultas</span>}</div>
       </article>
       <article>
         <b>Board Comunitário</b>
@@ -52,7 +55,7 @@ function SharedHandContent() {
       </article>
     </div>
     {(item.actions || []).some(action => action.frame) &&
-      <HandReplayer hand={hand} actions={item.actions || []} viewerId="hero"/>}
+        <HandReplayer hand={hand} actions={item.actions || []} viewerId="hero"/>}
     <footer className="public-hand-footer">
       <p>Gostou dessa jogada? Venha jogar Texas Hold&apos;em no CTech Poker!</p>
       <Button render={<Link href="/"/>}>Jogar no CTech Poker</Button>

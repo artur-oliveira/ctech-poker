@@ -11,13 +11,13 @@ export function AchievementToast({unlock}: { unlock: { key: string; stars: numbe
   const [shown, setShown] = useState(unlock);
   const [leaving, setLeaving] = useState(false);
   const [seen, setSeen] = useState(unlock);
-
+  
   if (unlock && unlock !== seen) {
     setSeen(unlock);
     setShown(unlock);
     setLeaving(false);
   }
-
+  
   useEffect(() => {
     if (!shown) return () => {
     };
@@ -28,7 +28,7 @@ export function AchievementToast({unlock}: { unlock: { key: string; stars: numbe
       clearTimeout(clear);
     };
   }, [shown]);
-
+  
   if (!shown) return null;
   return <div key={`${shown.key}-${shown.stars}`} className={`achievement-toast${leaving ? ' leaving' : ''}`}>
     <Star/>

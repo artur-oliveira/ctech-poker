@@ -1,5 +1,6 @@
 import {render, screen} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
+import SharedHandPage from './page';
 
 const mocks = vi.hoisted(() => ({
   token: 'share-token',
@@ -17,20 +18,18 @@ vi.mock('@tanstack/react-query', () => ({
   },
 }));
 vi.mock('@/components/table/PlayingCard', () => ({
-  PlayingCard: ({card}: {card: string}) => <span data-testid="card">{card}</span>,
+  PlayingCard: ({card}: { card: string }) => <span data-testid="card">{card}</span>,
 }));
 vi.mock('@/components/hands/HandReplayer', () => ({
-  HandReplayer: ({viewerId}: {viewerId: string}) => <div data-testid="replayer">{viewerId}</div>,
+  HandReplayer: ({viewerId}: { viewerId: string }) => <div data-testid="replayer">{viewerId}</div>,
 }));
-
-import SharedHandPage from './page';
 
 describe('shared hand page', () => {
   beforeEach(() => {
     mocks.token = 'share-token';
     mocks.query = {isLoading: true, isError: false};
   });
-
+  
   test('configures and presents the loading query', () => {
     render(<SharedHandPage/>);
     expect(mocks.options).toMatchObject({
@@ -40,20 +39,20 @@ describe('shared hand page', () => {
     });
     expect(screen.getByText(/Carregando mão compartilhada/)).toBeInTheDocument();
   });
-
+  
   test('rejects absent and expired share links', () => {
     mocks.token = '';
     mocks.query = {isLoading: false, isError: false};
     const view = render(<SharedHandPage/>);
     expect(mocks.options).toMatchObject({enabled: false});
     expect(screen.getByRole('heading', {name: 'Link indisponível'})).toBeInTheDocument();
-
+    
     mocks.token = 'expired';
     mocks.query = {isLoading: false, isError: true};
     view.rerender(<SharedHandPage/>);
     expect(screen.getByText(/revogada ou ter expirado/)).toBeInTheDocument();
   });
-
+  
   test('renders a bad beat, anonymized cards and action replay', () => {
     mocks.query = {
       isLoading: false,
@@ -78,7 +77,7 @@ describe('shared hand page', () => {
     expect(screen.getAllByTestId('card')).toHaveLength(5);
     expect(screen.getByTestId('replayer')).toHaveTextContent('hero');
   });
-
+  
   test('supports a positive hand with hidden cards and no replay', () => {
     mocks.query = {
       isLoading: false,

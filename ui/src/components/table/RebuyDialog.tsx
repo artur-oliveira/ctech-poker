@@ -11,8 +11,8 @@ import {
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog';
-import {joinRoom} from '@/lib/api/rooms';
 import type {Room} from '@/lib/api/rooms';
+import {joinRoom} from '@/lib/api/rooms';
 import {formatBuyIn, midBuyIn} from './BuyInPanel';
 
 const GENERIC_ERROR = 'Não foi possível comprar mais fichas agora. Tente novamente.';
@@ -31,13 +31,13 @@ export function RebuyDialog({roomId, room, onRebuyAction}: {
   const [amount, setAmount] = useState<number | null>(null);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState('');
-
+  
   const step = room.big_blind > 0 ? room.big_blind : 1;
   const value = amount ?? midBuyIn(room.buy_in_min, room.buy_in_max, room.big_blind);
   const isReal = room.currency_mode === 'real';
   const unit = isReal ? 'reais' : 'fichas';
   const fmt = (n: number) => formatBuyIn(n, isReal);
-
+  
   async function confirm() {
     setJoining(true);
     setError('');
@@ -50,7 +50,7 @@ export function RebuyDialog({roomId, room, onRebuyAction}: {
       setJoining(false);
     }
   }
-
+  
   return <Dialog open={open} onOpenChange={next => {
     setOpen(next);
     if (!next) setError('');
@@ -64,8 +64,8 @@ export function RebuyDialog({roomId, room, onRebuyAction}: {
         <DialogDescription>Compre mais {unit} para continuar jogando nesta mesa.</DialogDescription>
       </DialogHeader>
       {isReal && !!room.entry_fee_cents &&
-        <p className="buyin-fee-notice">Taxa fixa de mesa: {formatBuyIn(room.entry_fee_cents, true)} (cobrada
-          de novo a cada vez que você compra fichas).</p>}
+          <p className="buyin-fee-notice">Taxa fixa de mesa: {formatBuyIn(room.entry_fee_cents, true)} (cobrada
+              de novo a cada vez que você compra fichas).</p>}
       <div className="buyin-control">
         <label htmlFor={sliderId}>Recompra</label>
         <input id={sliderId} type="range" min={room.buy_in_min} max={room.buy_in_max} step={step} value={value}

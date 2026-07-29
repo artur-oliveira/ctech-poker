@@ -28,7 +28,7 @@ export interface SeatView {
 export type PokerAction = 'fold' | 'check' | 'call' | 'raise'
 export type ActionPreselection = 'check_fold' | 'fold' | 'call' | 'call_any'
 
-export type ChatMessage = {id: string; player_id: string; message: string; timestamp: number}
+export type ChatMessage = { id: string; player_id: string; message: string; timestamp: number }
 export type PersistedReaction = {
   id: string;
   player_id: string;
@@ -106,7 +106,7 @@ export interface TableSnapshot {
   shuffle_server_seed_hex?: string;
   runout_cards?: string[];
   root_commit_hash?: string;
-  revealed_card_salts?: Record<number, {card: string; salt_hex: string}>;
+  revealed_card_salts?: Record<number, { card: string; salt_hex: string }>;
   unrevealed_card_hashes?: Record<number, string>;
 }
 

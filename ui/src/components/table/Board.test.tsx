@@ -1,9 +1,8 @@
 import {render, screen} from '@testing-library/react';
 import {describe, expect, test, vi} from 'vitest';
+import {Board} from './Board';
 
 vi.mock('@/lib/hooks/useDeckVariant', () => ({useDeckVariant: () => 'classic'}));
-
-import {Board} from './Board';
 
 describe('Board', () => {
   test('keeps the single-board presentation unchanged without a second board', () => {
@@ -12,7 +11,7 @@ describe('Board', () => {
     expect(container.querySelector('.board-runouts')).not.toBeInTheDocument();
     expect(container.querySelectorAll('.board > div > span:not(.playing-card)')).toHaveLength(2);
   });
-
+  
   test('renders the shared prefix once and labels both divergent runouts', () => {
     render(<Board cards={['Ah', 'Kd', 'Qc', '2s', '3h']} boardTwo={['4c', '5d']}
                   splitAt={3} pot={100}/>);

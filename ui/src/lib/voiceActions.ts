@@ -1,6 +1,6 @@
 import type {PokerAction} from '@/lib/api/table';
 
-export type VoiceAction = {action: PokerAction; allIn?: boolean};
+export type VoiceAction = { action: PokerAction; allIn?: boolean };
 
 export function parseVoiceAction(transcript: string): VoiceAction | null {
   const normalized = transcript.toLocaleLowerCase('pt-BR').normalize('NFD').replace(/\p{Diacritic}/gu, '').trim();

@@ -66,7 +66,7 @@ export function CreateRoomDialog() {
   });
   const currencyMode = useWatch({control: form.control, name: 'currencyMode'});
   const stakes = currencyMode === 'real' ? realStakes : sandboxStakes;
-
+  
   async function submit(values: Values) {
     const stake = stakes[values.stakeIndex];
     if (!stake) {
@@ -93,55 +93,63 @@ export function CreateRoomDialog() {
       form.setError('root', {message: 'Não foi possível criar a mesa. Tente novamente.'});
     }
   }
-
+  
   return <Dialog open={open} onOpenChange={setOpen}>
     <DialogTrigger render={<Button size="lg" variant="outline"/>}><Lock/>Mesa privada</DialogTrigger>
     <DialogContent>
       <DialogHeader><p className="font-mono text-xs tracking-widest text-(--brand-bright)">MESA PRIVADA</p><DialogTitle>Configure
         sua mesa</DialogTitle><DialogDescription>Convide amigos por link. {currencyMode === 'real'
-          ? 'Os valores abaixo são em dinheiro real, debitados da sua carteira ctech-wallet.'
-          : 'Os valores abaixo são fichas virtuais do sandbox.'}</DialogDescription></DialogHeader>
+        ? 'Os valores abaixo são em dinheiro real, debitados da sua carteira ctech-wallet.'
+        : 'Os valores abaixo são fichas virtuais do sandbox.'}</DialogDescription></DialogHeader>
       <form onSubmit={form.handleSubmit(submit)} className="space-y-5">
         {realStakes.length > 0 &&
-          <div className="space-y-2"><Label id="currency-label">Modo</Label><Controller control={form.control}
-            name="currencyMode"
-            render={({field}) => <div className="flex flex-wrap gap-2" role="radiogroup"
-                                       aria-labelledby="currency-label">
-              {(['sandbox', 'real'] as const).map((option, index) =>
-                <button type="button" key={option} role="radio" aria-checked={field.value === option}
-                        tabIndex={field.value === option ? 0 : -1}
-                        className={`rounded-xl border px-4 py-2 min-h-11 text-sm font-semibold transition-colors ${field.value === option ? 'border-[var(--brand-bright)] bg-[var(--brand)] text-[var(--on-brand)]' : 'border-white/15 bg-(--surface-control) text-[var(--on-brand)] hover:bg-white/10'}`}
-                        onClick={() => {
-                          field.onChange(option);
-                          form.setValue('stakeIndex', 0);
-                        }}
-                        onKeyDown={e => radioGroupKeyDown(e, index, 2, next => {
-                          field.onChange((['sandbox', 'real'] as const)[next]);
-                          form.setValue('stakeIndex', 0);
-                        })}>{option === 'real' ? 'Dinheiro real' : 'Sandbox'}</button>)}
-            </div>}/></div>}
+            <div className="space-y-2"><Label id="currency-label">Modo</Label><Controller control={form.control}
+                                                                                          name="currencyMode"
+                                                                                          render={({field}) => <div
+                                                                                            className="flex flex-wrap gap-2"
+                                                                                            role="radiogroup"
+                                                                                            aria-labelledby="currency-label">
+                                                                                            {(['sandbox', 'real'] as const).map((option, index) =>
+                                                                                              <button type="button"
+                                                                                                      key={option}
+                                                                                                      role="radio"
+                                                                                                      aria-checked={field.value === option}
+                                                                                                      tabIndex={field.value === option ? 0 : -1}
+                                                                                                      className={`rounded-xl border px-4 py-2 min-h-11 text-sm font-semibold transition-colors ${field.value === option ? 'border-[var(--brand-bright)] bg-[var(--brand)] text-[var(--on-brand)]' : 'border-white/15 bg-(--surface-control) text-[var(--on-brand)] hover:bg-white/10'}`}
+                                                                                                      onClick={() => {
+                                                                                                        field.onChange(option);
+                                                                                                        form.setValue('stakeIndex', 0);
+                                                                                                      }}
+                                                                                                      onKeyDown={e => radioGroupKeyDown(e, index, 2, next => {
+                                                                                                        field.onChange((['sandbox', 'real'] as const)[next]);
+                                                                                                        form.setValue('stakeIndex', 0);
+                                                                                                      })}>{option === 'real' ? 'Dinheiro real' : 'Sandbox'}</button>)}
+                                                                                          </div>}/></div>}
         {currencyMode === 'real' &&
-          <p className="form-error" role="alert">Dinheiro real exige ativação de apostas na sua carteira
-            ctech-wallet. Jogue com responsabilidade.</p>}
-        <div className="space-y-2"><Label id="stake-label">Stakes {currencyMode === 'real' ? 'em dinheiro real' : 'sandbox'}</Label><Controller control={form.control}
-                                                                                             name="stakeIndex"
-                                                                                             render={({field}) => <div
-                                                                                               className="flex flex-wrap gap-2"
-                                                                                               role="radiogroup"
-                                                                                               aria-labelledby="stake-label">
-                                                                                               {stakes.map((stake, index) =>
-                                                                                                 <button type="button"
-                                                                                                         key={`${stake.small_blind}-${stake.big_blind}`}
-                                                                                                         role="radio"
-                                                                                                         aria-checked={field.value === index}
-                                                                                                         tabIndex={field.value === index ? 0 : -1}
-                                                                                                         className={`rounded-xl border px-4 py-2 min-h-11 text-sm font-semibold transition-colors ${field.value === index ? 'border-[var(--brand-bright)] bg-[var(--brand)] text-[var(--on-brand)]' : 'border-white/15 bg-(--surface-control) text-[var(--on-brand)] hover:bg-white/10'}`}
-                                                                                                         onClick={() => field.onChange(index)}
-                                                                                                         onKeyDown={e => radioGroupKeyDown(e, index, stakes.length, field.onChange)}>
-                                                                                                   {formatStake(stake.small_blind, currencyMode)} / {formatStake(stake.big_blind, currencyMode)}
-                                                                                                   {currencyMode === 'real' && stake.fee_cents ? <><br/><small className="opacity-80">taxa {formatStake(stake.fee_cents, 'real')}</small></> : null}
-                                                                                                 </button>)}
-                                                                                             </div>}/>{!stakes.length &&
+            <p className="form-error" role="alert">Dinheiro real exige ativação de apostas na sua carteira
+                ctech-wallet. Jogue com responsabilidade.</p>}
+        <div className="space-y-2"><Label
+          id="stake-label">Stakes {currencyMode === 'real' ? 'em dinheiro real' : 'sandbox'}</Label><Controller
+          control={form.control}
+          name="stakeIndex"
+          render={({field}) => <div
+            className="flex flex-wrap gap-2"
+            role="radiogroup"
+            aria-labelledby="stake-label">
+            {stakes.map((stake, index) =>
+              <button type="button"
+                      key={`${stake.small_blind}-${stake.big_blind}`}
+                      role="radio"
+                      aria-checked={field.value === index}
+                      tabIndex={field.value === index ? 0 : -1}
+                      className={`rounded-xl border px-4 py-2 min-h-11 text-sm font-semibold transition-colors ${field.value === index ? 'border-[var(--brand-bright)] bg-[var(--brand)] text-[var(--on-brand)]' : 'border-white/15 bg-(--surface-control) text-[var(--on-brand)] hover:bg-white/10'}`}
+                      onClick={() => field.onChange(index)}
+                      onKeyDown={e => radioGroupKeyDown(e, index, stakes.length, field.onChange)}>
+                {formatStake(stake.small_blind, currencyMode)} / {formatStake(stake.big_blind, currencyMode)}
+                {currencyMode === 'real' && stake.fee_cents ? <><br/><small
+                  className="opacity-80">taxa {formatStake(stake.fee_cents, 'real')}</small></> : null}
+              </button>)}
+          </div>}/>{!stakes.length &&
             <p className="form-error">Nenhum stake disponível no momento.</p>}
           {form.formState.errors.stakeIndex &&
               <p className="form-error">{form.formState.errors.stakeIndex.message}</p>}</div>

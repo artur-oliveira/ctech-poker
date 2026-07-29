@@ -21,21 +21,22 @@ function ReplayContent() {
     queryFn: () => getHandHistory(tableId, handId),
     enabled: Boolean(tableId && handId)
   });
-
+  
   if (!tableId || !handId) return <div className="replay-page-error">
     <h1>Replay inválido</h1>
     <p>O parâmetro de mesa ou mão está ausente ou malformatado.</p>
     <Button render={<Link href="/hands"/>}>Minhas Mãos</Button>
   </div>;
-
-  if (hand.isLoading || history.isLoading) return <div className="loading-screen"><span className="loader"/>Preparando a mesa de replay…</div>;
-
+  
+  if (hand.isLoading || history.isLoading) return <div className="loading-screen"><span className="loader"/>Preparando a
+    mesa de replay…</div>;
+  
   if (hand.isError || history.isError || !hand.data) return <div className="replay-page-error">
     <h1>Não foi possível carregar o replay</h1>
     <p>A mão pode não pertencer à sua conta ou o histórico não está mais disponível.</p>
     <Button render={<Link href="/hands"/>}>Minhas Mãos</Button>
   </div>;
-
+  
   const actions = [...(history.data?.actions || [])].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   return <main className="replay-page">
     <nav>

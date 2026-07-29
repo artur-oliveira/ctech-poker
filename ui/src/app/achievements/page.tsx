@@ -17,26 +17,30 @@ export default function Achievements() {
   const {authed, checking} = useOptionalSession();
   const [mode, setMode] = useState<WalletMode>('sandbox');
   const catalog = useQuery({queryKey: ['achievements', 'catalog'], queryFn: getAchievementCatalog});
-  const mine = useQuery({queryKey: ['achievements', 'me', mode], queryFn: () => getMyAchievements(mode), enabled: authed});
+  const mine = useQuery({
+    queryKey: ['achievements', 'me', mode],
+    queryFn: () => getMyAchievements(mode),
+    enabled: authed
+  });
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
-
+  
   const progressMap = useMemo(() => new Map((mine.data || []).map(p => [p.key, p.count])), [mine.data]);
   const visibleCatalog = useMemo(() => (catalog.data || []).filter(item => {
     if (!item.secret) return true;
     const firstTier = Math.min(...item.tiers.map(tier => tier.threshold));
     return authed && !mine.isLoading && (progressMap.get(item.key) ?? 0) >= firstTier;
   }), [authed, catalog.data, mine.isLoading, progressMap]);
-
+  
   // While mine is still loading, leave count undefined (renders neutral tier ladder)
   const countFor = useCallback((key: string) => authed && !mine.isLoading ? progressMap.get(key) ?? 0 : undefined, [authed, mine.isLoading, progressMap]);
-
+  
   const stats = useMemo(() => {
     if (!authed || !catalog.data || mine.isLoading) return null;
     let starsEarned = 0;
     let completedCount = 0;
     let unlockedCount = 0;
     const maxStars = visibleCatalog.reduce((sum, item) => sum + Math.max(...item.tiers.map(tier => tier.stars)), 0);
-
+    
     for (const item of visibleCatalog) {
       const cnt = progressMap.get(item.key) ?? 0;
       const p = achievementProgress(item.tiers, cnt);
@@ -44,16 +48,16 @@ export default function Achievements() {
       if (p.starsFilled > 0) unlockedCount++;
       if (p.maxed) completedCount++;
     }
-
+    
     const completionRate = maxStars > 0 ? Math.round((starsEarned / maxStars) * 100) : 0;
-
+    
     return {starsEarned, maxStars, completedCount, unlockedCount, completionRate};
   }, [authed, catalog.data, mine.isLoading, progressMap, visibleCatalog]);
-
+  
   const filteredCatalog = useMemo(() => {
     if (!catalog.data) return [];
     if (!authed || activeTab === 'all') return visibleCatalog;
-
+    
     return visibleCatalog.filter(item => {
       const cnt = countFor(item.key) ?? 0;
       const p = achievementProgress(item.tiers, cnt);
@@ -63,9 +67,9 @@ export default function Achievements() {
       return true;
     });
   }, [catalog.data, visibleCatalog, authed, activeTab, countFor]);
-
+  
   if (checking) return <div className="loading-screen"><span className="loader"/>Carregando conquistas…</div>;
-
+  
   return <main className="app-page">
     <nav className="app-nav shell">
       <Link href="/" className="brand"><span className="brand-mark"><Club/></span>CTech <b>Poker</b></Link>
@@ -90,7 +94,7 @@ export default function Achievements() {
       {authed && <><CurrencyModeTabs mode={mode} onChange={setMode}/>
         {mode === 'real' && <p className="self-hud-notice">Este progresso só conta mãos jogadas com dinheiro real.</p>}
       </>}
-
+      
       {stats && (
         <div className="achievements-stats-bar">
           <div className="stat-card">
@@ -111,7 +115,7 @@ export default function Achievements() {
           </div>
         </div>
       )}
-
+      
       {authed && !mine.isLoading && !mine.isError && catalog.data && (
         <div className="filter-tabs" role="tablist" aria-label="Filtro de conquistas">
           <button
@@ -152,10 +156,12 @@ export default function Achievements() {
           </button>
         </div>
       )}
-
+      
       {authed && mine.isError &&
-          <p className="form-error">Não foi possível carregar seu progresso no momento. O catálogo abaixo exibe as metas gerais.</p>}
-      {catalog.isLoading ? <div className="lobby-empty"><span className="loader"/>Carregando catálogo de conquistas…</div>
+          <p className="form-error">Não foi possível carregar seu progresso no momento. O catálogo abaixo exibe as metas
+              gerais.</p>}
+      {catalog.isLoading ?
+        <div className="lobby-empty"><span className="loader"/>Carregando catálogo de conquistas…</div>
         : catalog.isError ? <div className="lobby-empty">Não foi possível carregar o catálogo de conquistas.
             <Button variant="outline" size="sm" onClick={() => void catalog.refetch()}>Tentar novamente</Button>
           </div>

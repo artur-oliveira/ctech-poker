@@ -7,7 +7,7 @@ export const PLAYSTYLE = {
 } as const;
 
 export type PlaystyleKey = keyof typeof PLAYSTYLE;
-export type PlaystyleBadge = {key: string; label?: string; reason?: string};
+export type PlaystyleBadge = { key: string; label?: string; reason?: string };
 
 export function playstyleMeta(key: string) {
   return PLAYSTYLE[key as PlaystyleKey];

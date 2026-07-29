@@ -2,6 +2,7 @@ import {type ClassValue, clsx} from 'clsx';
 import {twMerge} from 'tailwind-merge';
 import {getPlayerId} from '@/lib/api/client';
 import {MOCK_PLAYER_ID, USE_MOCK} from '@/lib/mockConfig';
+
 export {HAND_CATEGORY_LABELS} from './handCategories';
 
 export function cn(...values: ClassValue[]) {
@@ -14,20 +15,20 @@ export const ACHIEVEMENT_LABELS: Record<string, string> = {
   comeback: "De Volta ao Jogo",
   bluff: "Mestre do Blefe",
   survivor: "Sobrevivente",
-
+  
   looser: "Não Foi Dessa Vez",
   almost_winner: "Por Um Detalhe",
   tied: "Dividindo o Pote",
-
+  
   bad_beat: "Que Azar!",
   cooler: "Sem Escapatória",
   cracked_aces: "Maldito Ás",
   fallen_king: "KKKKKKKKK",
-
+  
   giant_slayer: "Virou o Jogo",
   showdown_warrior: "Paga pra Ver",
   all_in: "Tudo ou Nada",
-
+  
   win_category_high_card: "Carta Alta",
   win_category_pair: "Um Par",
   win_category_two_pair: "Dois Pares",

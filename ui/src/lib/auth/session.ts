@@ -78,7 +78,7 @@ export function useSessionKeepAlive() {
 export function useOptionalSession() {
   const [token, setToken] = useState<string | null>(() => getAccessToken());
   const [checking, setChecking] = useState(() => !USE_MOCK && !getAccessToken());
-
+  
   useEffect(() => {
     const unsubscribe = subscribeAccessToken(setToken);
     if (!USE_MOCK && !getAccessToken()) {
@@ -91,7 +91,7 @@ export function useOptionalSession() {
     }
     return unsubscribe;
   }, []);
-
+  
   // Pages using this hook (leaderboard, guide, etc.) never mount TermsGate,
   // so nothing else here ever calls setPlayerId. Without this, getViewerId()
   // silently returns undefined for a real session and viewer highlighting
@@ -100,6 +100,6 @@ export function useOptionalSession() {
   useEffect(() => {
     setPlayerId(me.data?.user_id ?? null);
   }, [me.data?.user_id]);
-
+  
   return {authed: Boolean(token), checking};
 }

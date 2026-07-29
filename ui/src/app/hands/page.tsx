@@ -39,7 +39,7 @@ export default function HandsHistory() {
     getNextPageParam: page => (page.has_next && page.next_cursor) || undefined
   });
   const [filter, setFilter] = useState<HandFilter>('all');
-
+  
   // The entrance stagger is per page, not per flattened index: appended rows
   // should cascade like the first batch did instead of all landing on the
   // clamped 400 ms delay.
@@ -50,7 +50,7 @@ export default function HandsHistory() {
   // Counts only cover what's been fetched so far; "+" keeps that honest
   // instead of presenting a page as the full history.
   const more = hasNextPage ? '+' : '';
-
+  
   const stats = useMemo(() => {
     if (!hands.length) return null;
     let netSum = 0;
@@ -62,13 +62,13 @@ export default function HandsHistory() {
     const winRate = Math.round((winsCount / hands.length) * 100);
     return {totalHands: hands.length, netSum, winsCount, winRate};
   }, [hands]);
-
+  
   const filteredHands = useMemo(() => {
     if (filter === 'wins') return hands.filter(({hand}) => hand.outcome === 'won' || hand.outcome === 'tied');
     if (filter === 'losses') return hands.filter(({hand}) => hand.outcome === 'lost');
     return hands;
   }, [hands, filter]);
-
+  
   const sentinel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const node = sentinel.current;
@@ -82,7 +82,7 @@ export default function HandsHistory() {
     observer.observe(node);
     return () => observer.disconnect();
   }, [hasNextPage, fetchNextPage, filteredHands.length]);
-
+  
   return <TermsGate>
     <main className="app-page">
       <nav className="app-nav shell">
@@ -102,7 +102,7 @@ export default function HandsHistory() {
           <h1>Mãos jogadas</h1>
           <p>Histórico recente das suas mãos com cartas, board comunitário e prova de integridade criptográfica.</p>
         </header>
-
+        
         {stats && (
           <div className="hands-stats-bar">
             <div className="stat-card">
@@ -122,7 +122,7 @@ export default function HandsHistory() {
             </div>
           </div>
         )}
-
+        
         {!isLoading && !isError && hands.length > 0 && (
           <div className="filter-tabs" role="tablist" aria-label="Filtro de mãos">
             <button
@@ -154,7 +154,7 @@ export default function HandsHistory() {
             </button>
           </div>
         )}
-
+        
         {isLoading ? <div className="lobby-empty"><span className="loader"/>Buscando seu histórico de mãos…</div> :
           isError ? <div className="lobby-empty">Não foi possível carregar seu histórico agora.
               <button type="button" className="link-retry" onClick={() => void refetch()}>Tentar novamente</button>
@@ -213,7 +213,7 @@ export default function HandsHistory() {
                   </Link>)}
                 </div>
               )}
-
+        
         {hasNextPage && !isLoading && !isError && (
           <div className="hands-more" ref={sentinel}>
             {/* The observer above auto-loads on scroll; the button is the

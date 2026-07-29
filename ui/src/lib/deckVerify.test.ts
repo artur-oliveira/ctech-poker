@@ -1,12 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
-import {
-  cardHashHex,
-  parseCardCode,
-  rootCommitHash,
-  verifyWirePartialDeck,
-  type WireCardReveal
-} from './deckVerify.ts';
+import {cardHashHex, parseCardCode, rootCommitHash, verifyWirePartialDeck, type WireCardReveal} from './deckVerify.ts';
 
 test('parseCardCode uses the same rank and suit encoding as Go', () => {
   assert.deepEqual(parseCardCode('As'), {rank: 14, suit: 3, code: 'As'});

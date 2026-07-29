@@ -10,7 +10,7 @@ export interface PublicHandShare {
   ended_at: number;
   board?: string[];
   hero_cards?: string[];
-  opponents?: Array<{alias: string; hole_cards?: string[]; won?: boolean}>;
+  opponents?: Array<{ alias: string; hole_cards?: string[]; won?: boolean }>;
   actions?: HandHistoryAction[];
   created_at: number;
   expires_at: number;

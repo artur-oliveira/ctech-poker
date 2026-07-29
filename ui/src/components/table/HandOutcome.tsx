@@ -1,6 +1,6 @@
 'use client';
 import {useEffect, useState} from 'react';
-import {PartyPopper, Equal} from 'lucide-react';
+import {Equal, PartyPopper} from 'lucide-react';
 import {HAND_CATEGORY_LABELS} from '@/lib/utils';
 import {bestHandCategory, HAND_MATCH_SIZE, wasDecidedByKicker} from '@/lib/pokerRules';
 import {PlayingCard} from '@/components/table/PlayingCard';
@@ -64,7 +64,7 @@ function combinationCards(cards?: string[], fallbackCategory?: string): string[]
 // after it, for a showdown lost or won by kicker within the same hand
 // category, where naming just "Par" for both sides hides the actual reason
 // one beat the other.
-function combinationWithKickers(cards?: string[], fallbackCategory?: string): {cards: string[]; kickerFrom: number} {
+function combinationWithKickers(cards?: string[], fallbackCategory?: string): { cards: string[]; kickerFrom: number } {
   const combination = combinationCards(cards, fallbackCategory);
   if (!combination.length || cards?.length !== 5) return {cards: combination, kickerFrom: combination.length};
   return {cards, kickerFrom: combination.length};
@@ -100,7 +100,7 @@ function ChipCountUp({from, to}: { from: number; to: number }) {
   const delta = to - from;
   const [reduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const [phase, setPhase] = useState<'base' | 'delta' | 'counting'>(reduced ? 'counting' : 'base');
-
+  
   // No dependency on from/to to reset `phase`: this component lives under a
   // parent keyed by the outcome's hand key, so a new hand remounts it fresh
   // (phase starts over at its initial value) instead of needing a manual
@@ -115,7 +115,7 @@ function ChipCountUp({from, to}: { from: number; to: number }) {
       clearTimeout(toCounting);
     };
   }, [reduced]);
-
+  
   const display = useCountUp(from, phase === 'counting' ? to : from, CHIP_COUNT_MS);
   const sign = delta > 0 ? '+' : '−';
   return <span className={`hand-outcome-chips ${delta > 0 ? 'gain' : 'loss'}`}>
@@ -141,21 +141,21 @@ function ChipCountUp({from, to}: { from: number; to: number }) {
 export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeState | null; holdOpen: boolean }) {
   const [shown, setShown] = useState(outcome);
   const [seenKey, setSeenKey] = useState(outcome?.key);
-
+  
   if (outcome && outcome.key !== seenKey) {
     setSeenKey(outcome.key);
     setShown(outcome);
   }
-
+  
   const leaving = !!shown && !holdOpen;
-
+  
   useEffect(() => {
     if (!leaving) return () => {
     };
     const clear = setTimeout(() => setShown(null), EXIT_MS);
     return () => clearTimeout(clear);
   }, [leaving]);
-
+  
   if (!shown) return null;
   const ownCategory = categoryFor(shown.viewerCards || shown.winningCards, shown.handCategory);
   const winnerCategory = categoryFor(shown.winningCards, shown.opponentCategory);
@@ -170,7 +170,7 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
   const ownWithKickers = combinationWithKickers(shown.viewerCards, shown.handCategory);
   const winningWithKickers = combinationWithKickers(shown.winningCards, shown.opponentCategory);
   const chipChange = shown.stackBefore != null && shown.stackAfter != null &&
-    shown.stackBefore !== shown.stackAfter
+  shown.stackBefore !== shown.stackAfter
     ? <ChipCountUp from={shown.stackBefore} to={shown.stackAfter}/>
     : null;
   const amountDetails = [
@@ -186,97 +186,98 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
         : shown.kind === 'fold'
           ? shown.couldHaveWon ? 'Você desistiu, mas sua mão venceria a mão revelada.' : 'Você desistiu desta mão.'
           : `Resultado misto: você ganhou ao menos um pote e perdeu outro${amountDetails ? `. ${amountDetails}` : ''}.`;
-
+  
   return <>
     <span className="sr-only" role="status" aria-live="polite">{announcement}</span>
     <div className="hand-outcome" aria-hidden="true">
       <div key={shown.key} className={`hand-outcome-card ${shown.kind}${leaving ? ' leaving' : ''}`}>
-      {shown.kind === 'win' && <>
-        <span className="hand-outcome-confetti">{CONFETTI_PIECES.map(i => <span key={i}/>)}</span>
-        <div className="hand-outcome-heading">
-          <PartyPopper/>
-          <span><b>Você venceu!</b><small>{categoryLabel(ownCategory) || 'Pote conquistado'}</small></span>
-        </div>
-        <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>
-        {chipChange}
-      </>}
-
-      {shown.kind === 'lose' && <>
-        <div className="hand-outcome-heading">
-          <span><b>Não foi dessa vez.</b><small>Veja o confronto final</small></span>
-        </div>
-        <div className="hand-outcome-comparison">
-          <div className="hand-outcome-comparison-row winner">
+        {shown.kind === 'win' && <>
+            <span className="hand-outcome-confetti">{CONFETTI_PIECES.map(i => <span key={i}/>)}</span>
+            <div className="hand-outcome-heading">
+                <PartyPopper/>
+                <span><b>Você venceu!</b><small>{categoryLabel(ownCategory) || 'Pote conquistado'}</small></span>
+            </div>
+            <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>
+          {chipChange}
+        </>}
+        
+        {shown.kind === 'lose' && <>
+            <div className="hand-outcome-heading">
+                <span><b>Não foi dessa vez.</b><small>Veja o confronto final</small></span>
+            </div>
+            <div className="hand-outcome-comparison">
+                <div className="hand-outcome-comparison-row winner">
             <span className="hand-outcome-hand-name">
               <small>{shown.winnerName || 'Vencedor'}</small>
               <strong>{categoryLabel(winnerCategory) || 'Mão vencedora'}</strong>
             </span>
-            <OutcomeCards cards={decidedByKicker ? winningWithKickers.cards : winningCombination}
-                          kickerFrom={decidedByKicker ? winningWithKickers.kickerFrom : undefined} startIndex={0}/>
-          </div>
-          <span className="hand-outcome-versus">venceu</span>
-          <div className="hand-outcome-comparison-row viewer">
+                    <OutcomeCards cards={decidedByKicker ? winningWithKickers.cards : winningCombination}
+                                  kickerFrom={decidedByKicker ? winningWithKickers.kickerFrom : undefined}
+                                  startIndex={0}/>
+                </div>
+                <span className="hand-outcome-versus">venceu</span>
+                <div className="hand-outcome-comparison-row viewer">
             <span className="hand-outcome-hand-name">
               <small>Você</small>
               <strong>{categoryLabel(ownCategory) || 'Sua mão'}</strong>
             </span>
-            <OutcomeCards cards={decidedByKicker ? ownWithKickers.cards : ownCombination}
-                          kickerFrom={decidedByKicker ? ownWithKickers.kickerFrom : undefined}
-                          viewerHoleCards={shown.viewerHoleCards} startIndex={5}/>
-          </div>
-        </div>
-        {decidedByKicker && <p className="hand-outcome-kicker-note">Mesma combinação, o kicker decidiu.</p>}
-        {higherCombination && <p className="hand-outcome-kicker-note">A combinação mais alta venceu.</p>}
-        {chipChange}
-        <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
-      </>}
-
-      {shown.kind === 'tie' && <>
-        <div className="hand-outcome-heading">
-          <Equal/>
-          <span><b>Pote dividido</b><small>{categoryLabel(ownCategory) || 'Combinação empatada'}</small></span>
-        </div>
-        <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>
-        <p className="hand-outcome-tie-note">Mesma combinação. Os naipes não desempatam.</p>
-        {chipChange}
-        <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
-      </>}
-
-      {shown.kind === 'mixed' && <>
-        <div className="hand-outcome-heading">
-          <Equal/>
-          <span><b>Resultado misto</b><small>Você ganhou um pote e perdeu outro</small></span>
-        </div>
-        <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>
-        {amountDetails && <p className="hand-outcome-tie-note">{amountDetails}</p>}
-        {chipChange}
-        <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
-      </>}
-
-      {shown.kind === 'fold' && <>
-        <div className="hand-outcome-heading">
+                    <OutcomeCards cards={decidedByKicker ? ownWithKickers.cards : ownCombination}
+                                  kickerFrom={decidedByKicker ? ownWithKickers.kickerFrom : undefined}
+                                  viewerHoleCards={shown.viewerHoleCards} startIndex={5}/>
+                </div>
+            </div>
+          {decidedByKicker && <p className="hand-outcome-kicker-note">Mesma combinação, o kicker decidiu.</p>}
+          {higherCombination && <p className="hand-outcome-kicker-note">A combinação mais alta venceu.</p>}
+          {chipChange}
+            <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
+        </>}
+        
+        {shown.kind === 'tie' && <>
+            <div className="hand-outcome-heading">
+                <Equal/>
+                <span><b>Pote dividido</b><small>{categoryLabel(ownCategory) || 'Combinação empatada'}</small></span>
+            </div>
+            <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>
+            <p className="hand-outcome-tie-note">Mesma combinação. Os naipes não desempatam.</p>
+          {chipChange}
+            <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
+        </>}
+        
+        {shown.kind === 'mixed' && <>
+            <div className="hand-outcome-heading">
+                <Equal/>
+                <span><b>Resultado misto</b><small>Você ganhou um pote e perdeu outro</small></span>
+            </div>
+            <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>
+          {amountDetails && <p className="hand-outcome-tie-note">{amountDetails}</p>}
+          {chipChange}
+            <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
+        </>}
+        
+        {shown.kind === 'fold' && <>
+            <div className="hand-outcome-heading">
           <span><b>{shown.couldHaveWon ? 'Você poderia ter ganhado!' : 'Você desistiu.'}</b>
             <small>{shown.couldHaveWon ? 'Sua mão batia a mão revelada' : 'Aguardando a próxima mão'}</small></span>
-        </div>
-        {shown.couldHaveWon && <div className="hand-outcome-comparison">
-          <div className="hand-outcome-comparison-row winner">
+            </div>
+          {shown.couldHaveWon && <div className="hand-outcome-comparison">
+              <div className="hand-outcome-comparison-row winner">
             <span className="hand-outcome-hand-name">
               <small>{shown.winnerName || 'Vencedor'}</small>
               <strong>{categoryLabel(winnerCategory) || 'Mão revelada'}</strong>
             </span>
-            <OutcomeCards cards={winningCombination} startIndex={0}/>
-          </div>
-          <span className="hand-outcome-versus">perdia de</span>
-          <div className="hand-outcome-comparison-row viewer">
+                  <OutcomeCards cards={winningCombination} startIndex={0}/>
+              </div>
+              <span className="hand-outcome-versus">perdia de</span>
+              <div className="hand-outcome-comparison-row viewer">
             <span className="hand-outcome-hand-name">
               <small>Sua mão (desistida)</small>
               <strong>{categoryLabel(ownCategory) || 'Sua mão'}</strong>
             </span>
-            <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards} startIndex={5}/>
-          </div>
-        </div>}
-        <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
-      </>}
+                  <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards} startIndex={5}/>
+              </div>
+          </div>}
+            <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
+        </>}
       </div>
     </div>
   </>;

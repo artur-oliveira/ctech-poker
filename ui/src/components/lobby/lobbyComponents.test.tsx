@@ -1,5 +1,7 @@
 import {fireEvent, render, screen} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
+import {ActiveTableBanner} from './ActiveTableBanner';
+import {SelfHudDialog} from './SelfHudDialog';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -13,18 +15,15 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 vi.mock('next/navigation', () => ({useRouter: () => ({push: mocks.push})}));
 
-import {ActiveTableBanner} from './ActiveTableBanner';
-import {SelfHudDialog} from './SelfHudDialog';
-
 describe('lobby player components', () => {
   beforeEach(() => vi.clearAllMocks());
-
+  
   test('hides the active-table banner without an open session', () => {
     mocks.query.mockReturnValue({data: [{table_id: 'old', ended_at: 10}]});
     const {container} = render(<ActiveTableBanner/>);
     expect(container).toBeEmptyDOMElement();
   });
-
+  
   test('routes the player back to their still-open table', () => {
     mocks.query.mockReturnValue({
       data: [
@@ -36,18 +35,18 @@ describe('lobby player components', () => {
     fireEvent.click(screen.getByRole('button', {name: /voltar à mesa/i}));
     expect(mocks.push).toHaveBeenCalledWith('/table?id=table%20%2F%201');
   });
-
+  
   test('renders HUD loading, failure and zero-hand states', () => {
     mocks.query.mockReturnValueOnce({isLoading: true});
     const loading = render(<SelfHudDialog open onOpenChange={vi.fn()}/>);
     expect(screen.getByText('Calculando tendências…')).toBeInTheDocument();
     loading.unmount();
-
+    
     mocks.query.mockReturnValueOnce({isLoading: false, data: undefined});
     const failed = render(<SelfHudDialog open onOpenChange={vi.fn()}/>);
     expect(screen.getByText('Não foi possível carregar agora.')).toBeInTheDocument();
     failed.unmount();
-
+    
     mocks.query.mockReturnValueOnce({
       isLoading: false,
       data: {
@@ -58,7 +57,7 @@ describe('lobby player components', () => {
     render(<SelfHudDialog open onOpenChange={vi.fn()}/>);
     expect(screen.getByText('Suas tendências aparecem depois da primeira mão.')).toBeInTheDocument();
   });
-
+  
   test('formats an initial HUD sample and explains that it is not representative yet', () => {
     mocks.query.mockReturnValue({
       isLoading: false,
@@ -73,7 +72,7 @@ describe('lobby player components', () => {
     expect(screen.getByText(/Amostra inicial/)).toBeInTheDocument();
     expect(screen.queryByText('Seu estilo pré-flop')).not.toBeInTheDocument();
   });
-
+  
   test('shows style classification and accessible radar for a mature sample', () => {
     mocks.query.mockReturnValue({
       isLoading: false,

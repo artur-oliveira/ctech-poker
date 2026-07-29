@@ -27,7 +27,7 @@ export function LeaveDialog({roomId, stack, onLeftAction}: {
   const [open, setOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [error, setError] = useState('');
-
+  
   async function confirm() {
     setLeaving(true);
     setError('');
@@ -48,7 +48,7 @@ export function LeaveDialog({roomId, stack, onLeftAction}: {
       setLeaving(false);
     }
   }
-
+  
   return <Dialog open={open} onOpenChange={next => {
     setOpen(next);
     if (!next) setError('');

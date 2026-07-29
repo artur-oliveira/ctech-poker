@@ -1,5 +1,5 @@
 import {afterEach, describe, expect, test, vi} from 'vitest';
-import {MOCK_PLAYER_ID, MockTableService, snapshotForScenario, type MockScenario} from './mockRuntime';
+import {MOCK_PLAYER_ID, type MockScenario, MockTableService, snapshotForScenario} from './mockRuntime';
 
 const scenarios: MockScenario[] = [
   'full_hand', 'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
@@ -11,7 +11,7 @@ const scenarios: MockScenario[] = [
 describe('mock table state contract', () => {
   test.each(scenarios)('%s always returns a renderable backend snapshot', scenario => {
     const snapshot = snapshotForScenario(scenario);
-
+    
     expect(snapshot.stage).toBeTruthy();
     expect(snapshot.seats.length).toBeGreaterThan(0);
     expect(snapshot.board.length).toBeLessThanOrEqual(5);
@@ -21,14 +21,14 @@ describe('mock table state contract', () => {
       expect(snapshot.seats.some(seat => seat.player_id === snapshot.current_player_id)).toBe(true);
     }
   });
-
+  
   test('waiting has no board, pot contribution or active decision', () => {
     const snapshot = snapshotForScenario('waiting');
     expect(snapshot).toMatchObject({stage: 'waiting_for_players', board: []});
     expect(snapshot.seats.every(seat => seat.contributed === 0)).toBe(true);
     expect(snapshot.current_player_id).toBeUndefined();
   });
-
+  
   test('every street exposes the expected number of community cards', () => {
     expect(snapshotForScenario('pre_flop').board).toHaveLength(0);
     expect(snapshotForScenario('flop').board).toHaveLength(3);
@@ -36,14 +36,14 @@ describe('mock table state contract', () => {
     expect(snapshotForScenario('river').board).toHaveLength(5);
     expect(snapshotForScenario('showdown').board).toHaveLength(5);
   });
-
+  
   test('normal decision exposes coherent call and raise limits', () => {
     const snapshot = snapshotForScenario('pre_flop');
     expect(snapshot.current_player_id).toBe(MOCK_PLAYER_ID);
     expect(snapshot.legal_actions?.actions).toEqual(['fold', 'call', 'raise']);
     expect(snapshot.legal_actions!.min_raise_to).toBeLessThan(snapshot.legal_actions!.max_raise_to!);
   });
-
+  
   test.each([
     ['complete', [MOCK_PLAYER_ID], 1275],
     ['complete_loss', ['bia_sp'], 1275],
@@ -54,7 +54,7 @@ describe('mock table state contract', () => {
     expect(Object.values(snapshot.payouts || {}).reduce((sum, value) => sum + value, 0)).toBe(total);
     expect(snapshot.stage).toBe('complete');
   });
-
+  
   test('fold win does not leak any private cards', () => {
     const snapshot = snapshotForScenario('fold_win');
     expect(snapshot.board).toEqual([]);
@@ -62,7 +62,7 @@ describe('mock table state contract', () => {
       .flatMap(seat => seat.hole_cards || []).every(card => card === 'back')).toBe(true);
     expect(snapshot.seats.flatMap(seat => seat.hole_cards_revealed || []).every(Boolean)).toBe(false);
   });
-
+  
   test('side pots list eligible players and reconcile their amounts', () => {
     const snapshot = snapshotForScenario('side_pot');
     expect(snapshot.pot_results?.length).toBeGreaterThan(1);
@@ -72,7 +72,7 @@ describe('mock table state contract', () => {
 
 describe('mock realtime service contract', () => {
   afterEach(() => vi.useRealTimers());
-
+  
   function serviceFor(scenario: MockScenario, delay = 10) {
     const messages: Array<Record<string, unknown>> = [];
     const statuses: Array<[string, number]> = [];
@@ -82,17 +82,17 @@ describe('mock realtime service contract', () => {
     });
     return {service, messages, statuses};
   }
-
+  
   test('connects, responds to ping/sync and reconnects with an incremented attempt', () => {
     vi.useFakeTimers();
     const {service, messages, statuses} = serviceFor('flop');
     expect(service.send({type: 'ping'})).toBe(false);
-
+    
     service.connect();
     vi.runOnlyPendingTimers();
     expect(statuses).toContainEqual(['connected', 0]);
     expect(messages.some(message => message.type === 'state')).toBe(true);
-
+    
     messages.length = 0;
     expect(service.send({type: 'ping'})).toBe(true);
     expect(service.send({type: 'sync_state', action_id: 'sync-1'})).toBe(true);
@@ -101,25 +101,25 @@ describe('mock realtime service contract', () => {
       expect.objectContaining({type: 'state'}),
       expect.objectContaining({type: 'state', action_id: 'sync-1'}),
     ]));
-
+    
     service.reconnect();
     vi.runOnlyPendingTimers();
     expect(statuses).toContainEqual(['reconnecting', 1]);
     expect(statuses).toContainEqual(['connected', 1]);
     service.close();
   });
-
+  
   test('acknowledges ready and selective reveals and publishes their updated state', () => {
     vi.useFakeTimers();
     const {service, messages} = serviceFor('fold_win');
     service.connect();
     vi.runAllTimers();
     messages.length = 0;
-
+    
     service.send({type: 'ready', ready: false, action_id: 'ready-1'});
     service.send({type: 'show_cards', card_index: 1, action_id: 'show-1'});
     vi.runOnlyPendingTimers();
-
+    
     expect(messages).toEqual(expect.arrayContaining([
       expect.objectContaining({type: 'action_ack', action_id: 'ready-1'}),
       expect.objectContaining({type: 'action_ack', action_id: 'show-1'}),
@@ -131,19 +131,19 @@ describe('mock realtime service contract', () => {
     expect(hero?.hole_cards_revealed).toEqual([false, true]);
     service.close();
   });
-
+  
   test('echoes chat/reactions and validates exact call preselection amount', () => {
     vi.useFakeTimers();
     const {service, messages} = serviceFor('flop');
     service.connect();
     vi.runOnlyPendingTimers();
     messages.length = 0;
-
+    
     service.send({type: 'chat', message: 'olá'});
     service.send({type: 'reaction', reaction_id: 'angry', target_player_id: 'bia_sp'});
     service.send({type: 'preselect_action', action: 'call', amount: 999, action_id: 'bad-call'});
     vi.runOnlyPendingTimers();
-
+    
     expect(messages).toEqual(expect.arrayContaining([
       expect.objectContaining({type: 'chat', player_id: MOCK_PLAYER_ID, message: 'olá'}),
       expect.objectContaining({type: 'chat', player_id: 'bia_sp'}),
@@ -152,17 +152,17 @@ describe('mock realtime service contract', () => {
     ]));
     service.close();
   });
-
+  
   test('applies a normal action and emits the resulting snapshot and achievement', () => {
     vi.useFakeTimers();
     const {service, messages} = serviceFor('flop');
     service.connect();
     vi.runOnlyPendingTimers();
     messages.length = 0;
-
+    
     expect(service.send({type: 'act', action: 'raise', amount: 300, action_id: 'raise-1'})).toBe(true);
     vi.runAllTimers();
-
+    
     expect(messages).toEqual(expect.arrayContaining([
       expect.objectContaining({type: 'action_ack', action_id: 'raise-1'}),
       expect.objectContaining({type: 'achievement_unlocked', key: 'primeiro_aumento'}),
@@ -174,7 +174,7 @@ describe('mock realtime service contract', () => {
     expect(hero?.stack).toBe(4600);
     service.close();
   });
-
+  
   test('models explicit server rejection and a server that never responds', () => {
     vi.useFakeTimers();
     const rejected = serviceFor('action_error');
@@ -186,7 +186,7 @@ describe('mock realtime service contract', () => {
     expect(rejected.messages).toContainEqual(expect.objectContaining({
       type: 'error', code: 'invalid_action', action_id: 'bad-1',
     }));
-
+    
     const timeout = serviceFor('timeout');
     timeout.service.connect();
     vi.runOnlyPendingTimers();
@@ -197,7 +197,7 @@ describe('mock realtime service contract', () => {
     rejected.service.close();
     timeout.service.close();
   });
-
+  
   test('runs the reconnecting scenario through disconnect and recovery', () => {
     vi.useFakeTimers();
     const {service, statuses, messages} = serviceFor('reconnecting');

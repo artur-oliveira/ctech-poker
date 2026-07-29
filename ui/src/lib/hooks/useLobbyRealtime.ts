@@ -24,7 +24,7 @@ export function useLobbyRealtime() {
   const sendRef = useRef<(value: object) => boolean>(() => false);
   const [socketAuthToken, setSocketAuthToken] = useState(() => getAccessToken());
   useEffect(() => subscribeAccessToken(setSocketAuthToken), []);
-
+  
   const receive = useCallback((message: LobbyMessage) => {
     if (message.type === 'error' && message.code === 'unauthorized') {
       // The server accepts the upgrade and only then rejects the auth frame,
@@ -61,14 +61,14 @@ export function useLobbyRealtime() {
       pushNotification(message.text || '', 'info');
     }
   }, [queryClient]);
-
+  
   const origin = (process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/^http/, 'ws');
   const wsUrl = `${origin}/v1.0/ws`;
-
+  
   const handleOpen = useCallback(() => {
     sendRef.current({type: 'ping'});
   }, []);
-
+  
   const {status, send, reconnect} = useWebSocket({
     url: wsUrl,
     binaryType: 'arraybuffer',
@@ -81,10 +81,10 @@ export function useLobbyRealtime() {
     authToken: socketAuthToken || undefined,
     onOpen: handleOpen
   });
-
+  
   useEffect(() => {
     sendRef.current = send;
   }, [send]);
-
+  
   return {status, reconnect};
 }

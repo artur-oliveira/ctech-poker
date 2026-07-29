@@ -1,5 +1,5 @@
-import {apiClient} from './client';
 import type {Page} from './client';
+import {apiClient} from './client';
 
 export interface Room {
   room_id?: string;
@@ -48,7 +48,9 @@ export async function getRoom(id: string) {
   return (await apiClient.get<Room>(`/v1.0/rooms/${id}`)).data;
 }
 
-export async function createRoom(input: Omit<Room, 'room_id' | 'id' | 'currency_mode' | 'status' | 'seats_taken'> & {currency_mode?: 'sandbox' | 'real'}) {
+export async function createRoom(input: Omit<Room, 'room_id' | 'id' | 'currency_mode' | 'status' | 'seats_taken'> & {
+  currency_mode?: 'sandbox' | 'real'
+}) {
   return (await apiClient.post<Room>('/v1.0/rooms', input, {silentError: true})).data;
 }
 
