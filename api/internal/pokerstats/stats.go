@@ -46,7 +46,7 @@ func NewStore(db *dynamodb.Client, env string) *Store {
 
 // RecordHand atomically creates one hand guard and increments every
 // participant. A duplicate completion callback therefore changes no counter.
-func (s *Store) RecordHand(ctx context.Context, tableID, handID string, metrics []HandMetric) error {
+func (s *Store) RecordHand(ctx context.Context, mode, tableID, handID string, metrics []HandMetric) error {
 	if tableID == "" || handID == "" || len(metrics) == 0 {
 		return nil
 	}
@@ -74,7 +74,7 @@ func (s *Store) RecordHand(ctx context.Context, tableID, handID string, metrics 
 			":now":    &types.AttributeValueMemberS{Value: dynamo.NowStr()},
 		}
 		items = append(items, s.base.BuildRawUpdateTxItem(
-			"stats#"+metric.PlayerID, nil,
+			"stats#"+mode+"#"+metric.PlayerID, nil,
 			"ADD hands :hands, vpip_hands :vpip, pfr_hands :pfr, three_bet_hands :three, three_bet_chances :chance SET updated_at = :now",
 			"", nil, values,
 		))
@@ -91,8 +91,8 @@ func (s *Store) RecordHand(ctx context.Context, tableID, handID string, metrics 
 	return nil
 }
 
-func (s *Store) Get(ctx context.Context, playerID string) (Stats, error) {
-	item, err := s.base.GetItem(ctx, "stats#"+playerID)
+func (s *Store) Get(ctx context.Context, playerID, mode string) (Stats, error) {
+	item, err := s.base.GetItem(ctx, "stats#"+mode+"#"+playerID)
 	if err != nil {
 		return Stats{}, fmt.Errorf("pokerstats: get: %w", err)
 	}

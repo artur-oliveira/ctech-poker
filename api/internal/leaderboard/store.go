@@ -30,14 +30,14 @@ func NewStore(db *dynamodb.Client, env string) *Store {
 // cheaper than eagerly cascading a rename everywhere the player_id appears.
 // Skipped entirely when name is unknown, so a caller that can't resolve it
 // never blanks out a name written by a previous hand.
-func (s *Store) IncrementStats(ctx context.Context, playerID, name string, playedDelta, wonDelta int) error {
-	sk := statsSK
+func (s *Store) IncrementStats(ctx context.Context, playerID, name, mode string, playedDelta, wonDelta int) error {
+	sk := statsSK + "#" + mode
 	key := map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: playerID}, "sk": &types.AttributeValueMemberS{Value: sk}}
 	updateExpr := "ADD #played :played, #won :won SET #updated = :now, #wonpk = :all, #playedpk = :all, #ratepk = :all"
 	names := map[string]string{"#played": "hands_played", "#won": "hands_won", "#updated": "updated_at", "#wonpk": "gsi_hands_won_pk", "#playedpk": "gsi_hands_played_pk", "#ratepk": "gsi_win_rate_pk"}
 	values := map[string]types.AttributeValue{
 		":played": &types.AttributeValueMemberN{Value: strconv.Itoa(playedDelta)}, ":won": &types.AttributeValueMemberN{Value: strconv.Itoa(wonDelta)},
-		":now": &types.AttributeValueMemberS{Value: dynamo.NowStr()}, ":all": &types.AttributeValueMemberS{Value: "all"},
+		":now": &types.AttributeValueMemberS{Value: dynamo.NowStr()}, ":all": &types.AttributeValueMemberS{Value: mode},
 	}
 	if name != "" {
 		updateExpr += ", #name = :name"
@@ -55,7 +55,7 @@ func (s *Store) IncrementStats(ctx context.Context, playerID, name string, playe
 		return fmt.Errorf("leaderboard: increment stats: %w", err)
 	}
 	played, won := number(out.Attributes["hands_played"]), number(out.Attributes["hands_won"])
-	return s.materializeWinRate(ctx, playerID, played, won)
+	return s.materializeWinRate(ctx, playerID, mode, played, won)
 }
 
 func awsString(v string) *string { return &v }
@@ -71,8 +71,8 @@ func number(value types.AttributeValue) int64 {
 // materializeWinRate conditionally writes the ratio for the exact counter
 // version observed. If another hand updates the counters first, it reloads
 // and recomputes so an older writer can never overwrite a newer rate.
-func (s *Store) materializeWinRate(ctx context.Context, playerID string, played, won int64) error {
-	sk := statsSK
+func (s *Store) materializeWinRate(ctx context.Context, playerID, mode string, played, won int64) error {
+	sk := statsSK + "#" + mode
 	for attempt := 0; attempt < 5; attempt++ {
 		rate := 0.0
 		if played > 0 {
@@ -103,20 +103,20 @@ func (s *Store) materializeWinRate(ctx context.Context, playerID string, played,
 	return fmt.Errorf("leaderboard: win rate update remained contended")
 }
 
-func (s *Store) IncrementAchievementPoints(ctx context.Context, playerID string, points int) error {
-	sk := statsSK
+func (s *Store) IncrementAchievementPoints(ctx context.Context, playerID, mode string, points int) error {
+	sk := statsSK + "#" + mode
 	for i := 0; i < points; i++ {
 		if _, err := s.base.AtomicIncrement(ctx, playerID, &sk, "achievement_points"); err != nil {
 			return fmt.Errorf("leaderboard: increment achievement points: %w", err)
 		}
 	}
-	if err := s.base.UpsertAttrs(ctx, playerID, &sk, map[string]any{"gsi_hands_won_pk": "all", "gsi_hands_played_pk": "all"}); err != nil {
+	if err := s.base.UpsertAttrs(ctx, playerID, &sk, map[string]any{"gsi_hands_won_pk": mode, "gsi_hands_played_pk": mode, "gsi_win_rate_pk": mode}); err != nil {
 		return fmt.Errorf("leaderboard: index achievement row: %w", err)
 	}
 	return nil
 }
 
-func (s *Store) Top(ctx context.Context, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
+func (s *Store) Top(ctx context.Context, mode, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
 	index, key := gsiHandsWon, "gsi_hands_won_pk"
 	if metric == "hands_played" {
 		index, key = gsiHandsPlayed, "gsi_hands_played_pk"
@@ -124,7 +124,7 @@ func (s *Store) Top(ctx context.Context, metric string, limit int, startKey map[
 		index, key = gsiWinRate, "gsi_win_rate_pk"
 	}
 	result, err := s.base.Query(ctx, dynamo.QueryOpts{
-		PK: "all", PKField: key, IndexName: index,
+		PK: mode, PKField: key, IndexName: index,
 		ScanIndexForward: false, Limit: limit, ExclusiveStartKey: startKey,
 	})
 	if err != nil {

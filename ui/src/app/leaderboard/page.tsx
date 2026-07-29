@@ -1,5 +1,5 @@
 'use client';
-import React from 'react';
+import React, {useState} from 'react';
 import Link from 'next/link';
 import {useQuery} from '@tanstack/react-query';
 import {Award, BookOpen, ChevronLeft, Club, Crown, History, Sparkles, Trophy} from 'lucide-react';
@@ -7,9 +7,12 @@ import {leaderboard} from '@/lib/api/gamification';
 import {getViewerId, playerName} from '@/lib/utils';
 import {ProfileMenu} from "@/components/lobby/ProfileMenu";
 import {useOptionalSession} from "@/lib/auth/session";
+import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
+import type {WalletMode} from '@/lib/api/player';
 
 export default function Ranking() {
-  const {data = [], isLoading, isError, refetch} = useQuery({queryKey: ['leaderboard'], queryFn: () => leaderboard()});
+  const [mode, setMode] = useState<WalletMode>('sandbox');
+  const {data = [], isLoading, isError, refetch} = useQuery({queryKey: ['leaderboard', mode], queryFn: () => leaderboard(mode)});
   const viewer = getViewerId();
   const {authed} = useOptionalSession();
 
@@ -36,6 +39,7 @@ export default function Ranking() {
           <h1>Ranking da comunidade</h1>
           <p>Desempenho auditável baseado em vitórias e mãos jogadas nas mesas do CTech Poker.</p>
         </header>
+        <CurrencyModeTabs mode={mode} onChange={setMode}/>
 
         {viewerEntry && (
           <div className="viewer-ranking-card" aria-label="Sua posição atual">

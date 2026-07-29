@@ -36,15 +36,15 @@ func TestRecordHandIsIdempotent(t *testing.T) {
 		{PlayerID: "b", VPIP: true, ThreeBetChance: true},
 	}
 	for range 2 {
-		if err := store.RecordHand(context.Background(), "table", "hand", metrics); err != nil {
+		if err := store.RecordHand(context.Background(), "sandbox", "table", "hand", metrics); err != nil {
 			t.Fatal(err)
 		}
 	}
-	a, err := store.Get(context.Background(), "a")
+	a, err := store.Get(context.Background(), "a", "sandbox")
 	if err != nil || a.Hands != 1 || a.VPIPHands != 1 || a.PFRHands != 1 || a.VPIPRate != 1 {
 		t.Fatalf("a=%+v err=%v", a, err)
 	}
-	b, err := store.Get(context.Background(), "b")
+	b, err := store.Get(context.Background(), "b", "sandbox")
 	if err != nil || b.Hands != 1 || b.ThreeBetChances != 1 || b.ThreeBetRate != 0 {
 		t.Fatalf("b=%+v err=%v", b, err)
 	}

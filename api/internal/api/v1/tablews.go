@@ -372,7 +372,7 @@ func RegisterTableWS(
 				if profile, perr := players.GetOrCreate(ctx, playerID); perr == nil && profile != nil {
 					playstyleBadge := ""
 					if profile.PlaystylePublic && stats != nil {
-						if playerStats, statsErr := stats.Get(ctx, playerID); statsErr == nil {
+						if playerStats, statsErr := stats.Get(ctx, playerID, roomstore.CurrencyModeSandbox); statsErr == nil {
 							if badges := pokerstats.StyleFor(playerStats, pokerstats.MinHandsPublic); len(badges) > 0 {
 								playstyleBadge = badges[0].Key
 							}

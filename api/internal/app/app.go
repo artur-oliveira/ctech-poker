@@ -266,6 +266,21 @@ func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *t
 	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players).WithSessionStore(sessionStore).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore)
 }
 
+type roomModeReader interface {
+	Get(context.Context, string) (*roomstore.Room, error)
+}
+
+func tableCurrencyMode(ctx context.Context, rooms roomModeReader, tableID string) (string, error) {
+	room, err := rooms.Get(ctx, tableID)
+	if err != nil {
+		return "", err
+	}
+	if room == nil {
+		return "", fmt.Errorf("room %s not found", tableID)
+	}
+	return room.CurrencyMode, nil
+}
+
 func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, players *player.Service, cfg *config.Config) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
@@ -294,7 +309,13 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 	}
 	onHandComplete := func(tableID, handID string, outcome hand.HandOutcome, names map[string]string) {
 		ctx := context.Background()
-		unlocks, err := achv.RecordHand(ctx, tableID, outcome)
+		mode, err := tableCurrencyMode(ctx, rooms, tableID)
+		if err != nil {
+			slog.Error("gamification: load room mode failed", "table", tableID, "err", err)
+			persistHandHistory(tableID, handID, outcome, names)
+			return
+		}
+		unlocks, err := achv.RecordHand(ctx, tableID, mode, outcome)
 		if err != nil {
 			slog.Error("achievements record hand failed", "table", tableID, "err", err)
 		}
@@ -308,16 +329,16 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 				reg.Broadcast(ctx, tableID+"#"+unlock.PlayerID, data)
 			}
 		}
-		if err := leaderboardSvc.RecordUnlocks(ctx, unlocks); err != nil {
+		if err := leaderboardSvc.RecordUnlocks(ctx, mode, unlocks); err != nil {
 			slog.Error("leaderboard achievement points failed", "table", tableID, "err", err)
 		}
-		if err := leaderboardSvc.RecordHand(ctx, outcome, names); err != nil {
+		if err := leaderboardSvc.RecordHand(ctx, mode, outcome, names); err != nil {
 			slog.Error("leaderboard record hand failed", "table", tableID, "err", err)
 		}
 		actions, err := store.LoadActionsSince(ctx, tableID, handID, 0)
 		if err != nil {
 			slog.Error("pokerstats: load hand actions failed", "table", tableID, "hand", handID, "err", err)
-		} else if err := pokerStatsStore.RecordHand(ctx, tableID, handID, pokerstats.Analyze(outcome.Participants, actions)); err != nil {
+		} else if err := pokerStatsStore.RecordHand(ctx, mode, tableID, handID, pokerstats.Analyze(outcome.Participants, actions)); err != nil {
 			slog.Error("pokerstats: record hand failed", "table", tableID, "hand", handID, "err", err)
 		}
 		persistHandHistory(tableID, handID, outcome, names)

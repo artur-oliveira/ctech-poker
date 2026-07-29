@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -15,8 +16,22 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
+	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 )
+
+type fakeRoomModeReader struct{ room *roomstore.Room }
+
+func (f fakeRoomModeReader) Get(context.Context, string) (*roomstore.Room, error) { return f.room, nil }
+
+func TestTableCurrencyModeUsesRoomMode(t *testing.T) {
+	mode, err := tableCurrencyMode(context.Background(), fakeRoomModeReader{
+		room: &roomstore.Room{CurrencyMode: roomstore.CurrencyModeReal},
+	}, "table-real")
+	if err != nil || mode != roomstore.CurrencyModeReal {
+		t.Fatalf("mode=%q err=%v", mode, err)
+	}
+}
 
 // TestHandItemForMarksWinnerAmongMultipleOpponents pins down that a 3+-way
 // hand's history reports each opponent's own Won flag explicitly — before

@@ -16,6 +16,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/problem"
+	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 )
 
@@ -38,7 +39,7 @@ type sessionLogReader interface {
 }
 
 type playerAchievementStore interface {
-	ListAchievements(ctx context.Context, playerID string, limit int, startKey map[string]types.AttributeValue) ([]achievements.PlayerAchievementProgress, map[string]types.AttributeValue, error)
+	ListAchievements(ctx context.Context, playerID, mode string, limit int, startKey map[string]types.AttributeValue) ([]achievements.PlayerAchievementProgress, map[string]types.AttributeValue, error)
 }
 
 type playerHandlers struct {
@@ -294,7 +295,7 @@ func (h *playerHandlers) handByID(c fiber.Ctx) error {
 func (h *playerHandlers) achievementProgress(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
 	cursor := c.Query("cursor")
-	progress, lastKey, err := h.achievements.ListAchievements(c.Context(), userID, 100, decodeCursor(cursor))
+	progress, lastKey, err := h.achievements.ListAchievements(c.Context(), userID, currencyModeParam(c), 100, decodeCursor(cursor))
 	if err != nil {
 		return problem.InternalServer("failed to list achievements", c, err).Send(c)
 	}
@@ -313,7 +314,7 @@ func (h *playerHandlers) showcase(c fiber.Ctx) error {
 	if err != nil {
 		return problem.InternalServer("failed to load profile showcase", c, err).Send(c)
 	}
-	progress, _, err := h.achievements.ListAchievements(c.Context(), playerID, 100, nil)
+	progress, _, err := h.achievements.ListAchievements(c.Context(), playerID, roomstore.CurrencyModeSandbox, 100, nil)
 	if err != nil {
 		return problem.InternalServer("failed to load showcase achievements", c, err).Send(c)
 	}
@@ -350,7 +351,7 @@ func (h *playerHandlers) showcase(c fiber.Ctx) error {
 		"best_hand":             bestHand,
 	}
 	if profile.PlaystylePublic && h.stats != nil {
-		stats, statsErr := h.stats.Get(c.Context(), playerID)
+		stats, statsErr := h.stats.Get(c.Context(), playerID, roomstore.CurrencyModeSandbox)
 		if statsErr != nil {
 			return problem.InternalServer("failed to load profile playstyle", c, statsErr).Send(c)
 		}

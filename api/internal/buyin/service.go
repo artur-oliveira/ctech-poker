@@ -54,7 +54,7 @@ type Service struct {
 	}
 	avatarBaseURL string
 	stats         interface {
-		Get(context.Context, string) (pokerstats.Stats, error)
+		Get(context.Context, string, string) (pokerstats.Stats, error)
 	}
 }
 
@@ -93,7 +93,7 @@ func (s *Service) WithAvatarBaseURL(baseURL string) *Service {
 }
 
 func (s *Service) WithPokerStats(stats interface {
-	Get(context.Context, string) (pokerstats.Stats, error)
+	Get(context.Context, string, string) (pokerstats.Stats, error)
 }) *Service {
 	s.stats = stats
 	return s
@@ -239,7 +239,7 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 		if profile, perr := s.players.GetOrCreate(ctx, playerID); perr == nil && profile != nil {
 			playstyleBadge := ""
 			if profile.PlaystylePublic && s.stats != nil {
-				if playerStats, statsErr := s.stats.Get(ctx, playerID); statsErr == nil {
+				if playerStats, statsErr := s.stats.Get(ctx, playerID, room.CurrencyMode); statsErr == nil {
 					if badges := pokerstats.StyleFor(playerStats, pokerstats.MinHandsPublic); len(badges) > 0 {
 						playstyleBadge = badges[0].Key
 					}

@@ -10,18 +10,20 @@ import (
 
 type memStore struct{ progress map[string]map[string]int }
 
-func (m *memStore) Increment(_ context.Context, playerID, key string, by int) (int, int, error) {
-	if m.progress[playerID] == nil {
-		m.progress[playerID] = map[string]int{}
+func (m *memStore) Increment(_ context.Context, playerID, mode, key string, by int) (int, int, error) {
+	row := mode + "#" + playerID
+	if m.progress[row] == nil {
+		m.progress[row] = map[string]int{}
 	}
-	previous := m.progress[playerID][key]
-	m.progress[playerID][key] += by
-	return previous, m.progress[playerID][key], nil
+	previous := m.progress[row][key]
+	m.progress[row][key] += by
+	return previous, m.progress[row][key], nil
 }
 
-func (m *memStore) ListAchievements(_ context.Context, playerID string, _ int, _ map[string]types.AttributeValue) ([]PlayerAchievementProgress, map[string]types.AttributeValue, error) {
-	out := make([]PlayerAchievementProgress, 0, len(m.progress[playerID]))
-	for key, count := range m.progress[playerID] {
+func (m *memStore) ListAchievements(_ context.Context, playerID, mode string, _ int, _ map[string]types.AttributeValue) ([]PlayerAchievementProgress, map[string]types.AttributeValue, error) {
+	row := mode + "#" + playerID
+	out := make([]PlayerAchievementProgress, 0, len(m.progress[row]))
+	for key, count := range m.progress[row] {
 		out = append(out, PlayerAchievementProgress{Key: key, Count: count})
 	}
 	return out, nil, nil
@@ -31,18 +33,33 @@ func TestRecordHandUpdatesProgressAndUnlocks(t *testing.T) {
 	store := &memStore{progress: map[string]map[string]int{}}
 	service := NewServiceWithStore(store)
 	outcome := hand.HandOutcome{Winners: []string{"p1"}, WinningCategory: "flush", ComebackWinners: []string{"p1"}, Participants: []string{"p1", "p2"}}
-	unlocks, err := service.RecordHand(context.Background(), "table-1", outcome)
+	unlocks, err := service.RecordHand(context.Background(), "table-1", "sandbox", outcome)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if store.progress["p1"][KeyWins] != 1 || store.progress["p1"][KeyWinByCategory("flush")] != 1 || store.progress["p1"][KeyComeback] != 1 {
-		t.Fatalf("winner progress: %+v", store.progress["p1"])
+	if store.progress["sandbox#p1"][KeyWins] != 1 || store.progress["sandbox#p1"][KeyWinByCategory("flush")] != 1 || store.progress["sandbox#p1"][KeyComeback] != 1 {
+		t.Fatalf("winner progress: %+v", store.progress["sandbox#p1"])
 	}
-	if store.progress["p1"][KeyHandsPlayed] != 1 || store.progress["p2"][KeyHandsPlayed] != 1 {
+	if store.progress["sandbox#p1"][KeyHandsPlayed] != 1 || store.progress["sandbox#p2"][KeyHandsPlayed] != 1 {
 		t.Fatal("participants not counted")
 	}
 	if len(unlocks) != 3 {
 		t.Fatalf("got %d first-tier unlocks, want 3", len(unlocks))
+	}
+}
+
+func TestRecordHandSeparatesCurrencyModes(t *testing.T) {
+	store := &memStore{progress: map[string]map[string]int{}}
+	service := NewServiceWithStore(store)
+	outcome := hand.HandOutcome{Participants: []string{"p1"}}
+	if _, err := service.RecordHand(context.Background(), "sandbox-table", "sandbox", outcome); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.RecordHand(context.Background(), "real-table", "real", outcome); err != nil {
+		t.Fatal(err)
+	}
+	if store.progress["sandbox#p1"][KeyHandsPlayed] != 1 || store.progress["real#p1"][KeyHandsPlayed] != 1 {
+		t.Fatalf("progress was blended: %+v", store.progress)
 	}
 }
 
@@ -66,30 +83,30 @@ func TestRecordHandTracksShowdownLossesAndGiantSlayer(t *testing.T) {
 			"p4": {Category: "full_house", Won: false}, // outranked flush despite full_house: bad_beat + cooler
 		},
 	}
-	if _, err := service.RecordHand(context.Background(), "table-1", outcome); err != nil {
+	if _, err := service.RecordHand(context.Background(), "table-1", "sandbox", outcome); err != nil {
 		t.Fatal(err)
 	}
-	if store.progress["p1"][KeyTied] != 1 || store.progress["p2"][KeyTied] != 1 {
-		t.Fatalf("tied winners not counted: p1=%+v p2=%+v", store.progress["p1"], store.progress["p2"])
+	if store.progress["sandbox#p1"][KeyTied] != 1 || store.progress["sandbox#p2"][KeyTied] != 1 {
+		t.Fatalf("tied winners not counted: p1=%+v p2=%+v", store.progress["sandbox#p1"], store.progress["sandbox#p2"])
 	}
-	if store.progress["p1"][KeyGiantSlayer] != 1 {
-		t.Fatalf("p1 beat bigger stacks (p2/p3/p4) while all-in, want giant_slayer: %+v", store.progress["p1"])
+	if store.progress["sandbox#p1"][KeyGiantSlayer] != 1 {
+		t.Fatalf("p1 beat bigger stacks (p2/p3/p4) while all-in, want giant_slayer: %+v", store.progress["sandbox#p1"])
 	}
-	if store.progress["p3"][KeyLooser] != 1 || store.progress["p3"][KeyAlmostWinner] != 1 || store.progress["p3"][KeyCrackedAces] != 1 {
-		t.Fatalf("p3 (lost flush vs flush with pocket aces) progress: %+v", store.progress["p3"])
+	if store.progress["sandbox#p3"][KeyLooser] != 1 || store.progress["sandbox#p3"][KeyAlmostWinner] != 1 || store.progress["sandbox#p3"][KeyCrackedAces] != 1 {
+		t.Fatalf("p3 (lost flush vs flush with pocket aces) progress: %+v", store.progress["sandbox#p3"])
 	}
-	if store.progress["p3"][KeyBadBeat] != 1 {
-		t.Fatalf("p3 lost with a flush (>= three_of_a_kind), want bad_beat=1: %+v", store.progress["p3"])
+	if store.progress["sandbox#p3"][KeyBadBeat] != 1 {
+		t.Fatalf("p3 lost with a flush (>= three_of_a_kind), want bad_beat=1: %+v", store.progress["sandbox#p3"])
 	}
-	if store.progress["p3"][KeyCooler] != 0 {
-		t.Fatalf("p3's flush is below full_house's floor, must not count as cooler: %+v", store.progress["p3"])
+	if store.progress["sandbox#p3"][KeyCooler] != 0 {
+		t.Fatalf("p3's flush is below full_house's floor, must not count as cooler: %+v", store.progress["sandbox#p3"])
 	}
-	if store.progress["p4"][KeyBadBeat] != 1 || store.progress["p4"][KeyCooler] != 1 || store.progress["p4"][KeyAlmostWinner] != 0 {
-		t.Fatalf("p4 (lost with full_house, different category) progress: %+v", store.progress["p4"])
+	if store.progress["sandbox#p4"][KeyBadBeat] != 1 || store.progress["sandbox#p4"][KeyCooler] != 1 || store.progress["sandbox#p4"][KeyAlmostWinner] != 0 {
+		t.Fatalf("p4 (lost with full_house, different category) progress: %+v", store.progress["sandbox#p4"])
 	}
 	for _, id := range []string{"p1", "p2", "p3", "p4"} {
-		if store.progress[id][KeyShowdownWarrior] != 1 {
-			t.Fatalf("%s reached showdown, want showdown_warrior=1, got %d", id, store.progress[id][KeyShowdownWarrior])
+		if store.progress["sandbox#"+id][KeyShowdownWarrior] != 1 {
+			t.Fatalf("%s reached showdown, want showdown_warrior=1, got %d", id, store.progress["sandbox#"+id][KeyShowdownWarrior])
 		}
 	}
 }
@@ -106,17 +123,17 @@ func TestRecordHandUsesEachSidePotWinnersOwnCategory(t *testing.T) {
 			"side": {Category: "three_of_a_kind", Won: true},
 		},
 	}
-	if _, err := service.RecordHand(context.Background(), "table-side-pot", outcome); err != nil {
+	if _, err := service.RecordHand(context.Background(), "table-side-pot", "sandbox", outcome); err != nil {
 		t.Fatal(err)
 	}
-	if store.progress["main"][KeyWinByCategory("full_house")] != 1 {
-		t.Fatalf("main-pot winner category missing: %+v", store.progress["main"])
+	if store.progress["sandbox#main"][KeyWinByCategory("full_house")] != 1 {
+		t.Fatalf("main-pot winner category missing: %+v", store.progress["sandbox#main"])
 	}
-	if store.progress["side"][KeyWinByCategory("three_of_a_kind")] != 1 ||
-		store.progress["side"][KeyWinByCategory("full_house")] != 0 {
-		t.Fatalf("side-pot winner inherited the global category: %+v", store.progress["side"])
+	if store.progress["sandbox#side"][KeyWinByCategory("three_of_a_kind")] != 1 ||
+		store.progress["sandbox#side"][KeyWinByCategory("full_house")] != 0 {
+		t.Fatalf("side-pot winner inherited the global category: %+v", store.progress["sandbox#side"])
 	}
-	if store.progress["main"][KeyTied] != 0 || store.progress["side"][KeyTied] != 0 {
+	if store.progress["sandbox#main"][KeyTied] != 0 || store.progress["sandbox#side"][KeyTied] != 0 {
 		t.Fatal("distinct pot winners must not earn the tied achievement")
 	}
 }

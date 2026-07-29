@@ -20,9 +20,9 @@ type Entry struct {
 }
 
 type statsStore interface {
-	IncrementStats(ctx context.Context, playerID, name string, playedDelta, wonDelta int) error
-	IncrementAchievementPoints(context.Context, string, int) error
-	Top(ctx context.Context, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error)
+	IncrementStats(ctx context.Context, playerID, name, mode string, playedDelta, wonDelta int) error
+	IncrementAchievementPoints(context.Context, string, string, int) error
+	Top(ctx context.Context, mode, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error)
 }
 type Service struct{ store statsStore }
 
@@ -32,7 +32,7 @@ func NewServiceWithStore(store statsStore) *Service { return &Service{store: sto
 // already-known display name for each player_id (the table actor resolves it
 // once at join, from the canonical poker_player_profiles record) — no extra
 // lookup here, just carrying it along to the write that's happening anyway.
-func (s *Service) RecordHand(ctx context.Context, outcome hand.HandOutcome, names map[string]string) error {
+func (s *Service) RecordHand(ctx context.Context, mode string, outcome hand.HandOutcome, names map[string]string) error {
 	winners := make(map[string]bool, len(outcome.Winners))
 	for _, id := range outcome.Winners {
 		winners[id] = true
@@ -47,17 +47,17 @@ func (s *Service) RecordHand(ctx context.Context, outcome hand.HandOutcome, name
 		if winners[id] {
 			won = 1
 		}
-		if err := s.store.IncrementStats(ctx, id, names[id], 1, won); err != nil {
+		if err := s.store.IncrementStats(ctx, id, names[id], mode, 1, won); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *Service) RecordUnlocks(ctx context.Context, unlocks []achievements.TierUnlock) error {
+func (s *Service) RecordUnlocks(ctx context.Context, mode string, unlocks []achievements.TierUnlock) error {
 	for _, unlock := range unlocks {
 		if unlock.Stars > 0 {
-			if err := s.store.IncrementAchievementPoints(ctx, unlock.PlayerID, unlock.Stars); err != nil {
+			if err := s.store.IncrementAchievementPoints(ctx, unlock.PlayerID, mode, unlock.Stars); err != nil {
 				return err
 			}
 		}
@@ -65,7 +65,7 @@ func (s *Service) RecordUnlocks(ctx context.Context, unlocks []achievements.Tier
 	return nil
 }
 
-func (s *Service) Top(ctx context.Context, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
+func (s *Service) Top(ctx context.Context, mode, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
 	if metric == "" {
 		metric = "hands_won"
 	}
@@ -81,7 +81,7 @@ func (s *Service) Top(ctx context.Context, metric string, limit int, startKey ma
 	if limit > 100 {
 		limit = 100
 	}
-	entries, lastKey, err := s.store.Top(ctx, metric, limit, startKey)
+	entries, lastKey, err := s.store.Top(ctx, mode, metric, limit, startKey)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -35,10 +35,10 @@ func TestWinRateUsesMaterializedGSI(t *testing.T) {
 	svc := NewServiceWithStore(NewStore(db, env))
 	ctx := context.Background()
 	names := map[string]string{"winner": "Winner Name"}
-	if err := svc.RecordHand(ctx, hand.HandOutcome{Winners: []string{"winner"}, Participants: []string{"winner", "other"}}, names); err != nil {
+	if err := svc.RecordHand(ctx, "sandbox", hand.HandOutcome{Winners: []string{"winner"}, Participants: []string{"winner", "other"}}, names); err != nil {
 		t.Fatal(err)
 	}
-	top, _, err := svc.Top(ctx, "win_rate", 10, nil)
+	top, _, err := svc.Top(ctx, "sandbox", "win_rate", 10, nil)
 	if err != nil || len(top) != 2 || top[0].PlayerID != "winner" || top[0].WinRate != 1 {
 		t.Fatalf("top=%+v err=%v", top, err)
 	}

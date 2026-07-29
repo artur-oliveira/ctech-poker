@@ -16,7 +16,7 @@ func RegisterLeaderboard(router fiber.Router, auth fiber.Handler, svc *leaderboa
 func (h *leaderboardHandlers) top(c fiber.Ctx) error {
 	limit := limitParam(c)
 	cursor := c.Query("cursor")
-	entries, lastKey, err := h.svc.Top(c.Context(), c.Query("metric", "hands_won"), limit, decodeCursor(cursor))
+	entries, lastKey, err := h.svc.Top(c.Context(), currencyModeParam(c), c.Query("metric", "hands_won"), limit, decodeCursor(cursor))
 	if err != nil {
 		return problem.BadRequest(err.Error()).Send(c)
 	}

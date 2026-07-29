@@ -6,15 +6,18 @@ import {Award, BookOpen, ChevronLeft, Club, History, Sparkles, Trophy} from 'luc
 import {ProfileMenu} from '@/components/lobby/ProfileMenu';
 import {AchievementCard} from '@/components/achievements/AchievementCard';
 import {Button} from '@/components/ui/button';
+import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {achievementProgress, getAchievementCatalog, getMyAchievements} from '@/lib/api/achievements';
+import type {WalletMode} from '@/lib/api/player';
 import {useOptionalSession} from "@/lib/auth/session";
 
 type FilterTab = 'all' | 'unlocked' | 'in_progress' | 'completed';
 
 export default function Achievements() {
   const {authed, checking} = useOptionalSession();
+  const [mode, setMode] = useState<WalletMode>('sandbox');
   const catalog = useQuery({queryKey: ['achievements', 'catalog'], queryFn: getAchievementCatalog});
-  const mine = useQuery({queryKey: ['achievements', 'me'], queryFn: () => getMyAchievements(), enabled: authed});
+  const mine = useQuery({queryKey: ['achievements', 'me', mode], queryFn: () => getMyAchievements(mode), enabled: authed});
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
   const progressMap = useMemo(() => new Map((mine.data || []).map(p => [p.key, p.count])), [mine.data]);
@@ -79,6 +82,9 @@ export default function Achievements() {
           ? 'Cada estrela representa uma meta vencida. Passe o mouse em uma estrela para conferir o requisito de cada nível.'
           : 'Entre com sua conta CTech para registrar seu progresso e desbloquear conquistas a cada mão.'}</p>
       </header>
+      {authed && <><CurrencyModeTabs mode={mode} onChange={setMode}/>
+        {mode === 'real' && <p className="self-hud-notice">Este progresso só conta mãos jogadas com dinheiro real.</p>}
+      </>}
 
       {stats && (
         <div className="achievements-stats-bar">

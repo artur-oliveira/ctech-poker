@@ -19,13 +19,13 @@ type mockHistoryReader struct{}
 
 type mockAchievementReader struct{}
 
-func (mockAchievementReader) ListAchievements(context.Context, string, int, map[string]types.AttributeValue) ([]achievements.PlayerAchievementProgress, map[string]types.AttributeValue, error) {
+func (mockAchievementReader) ListAchievements(context.Context, string, string, int, map[string]types.AttributeValue) ([]achievements.PlayerAchievementProgress, map[string]types.AttributeValue, error) {
 	return nil, nil, nil
 }
 
 type mockPokerStatsReader struct{ stats pokerstats.Stats }
 
-func (m mockPokerStatsReader) Get(context.Context, string) (pokerstats.Stats, error) {
+func (m mockPokerStatsReader) Get(context.Context, string, string) (pokerstats.Stats, error) {
 	return m.stats, nil
 }
 

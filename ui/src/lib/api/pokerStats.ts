@@ -1,5 +1,6 @@
 import {apiClient} from './client';
 import type {PlaystyleBadge} from '@/lib/playstyle';
+import type {WalletMode} from './player';
 
 export interface PokerStats {
   hands: number;
@@ -13,8 +14,8 @@ export interface PokerStats {
   playstyle?: PlaystyleBadge[];
 }
 
-export async function getMyPokerStats() {
+export async function getMyPokerStats(mode: WalletMode = 'sandbox') {
   return (await apiClient.get<PokerStats>('/v1.0/players/me/poker-stats', {
-    silentError: true
+    params: {mode}, silentError: true
   })).data;
 }

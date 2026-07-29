@@ -9,8 +9,8 @@ import (
 )
 
 type progressStore interface {
-	Increment(context.Context, string, string, int) (previous, current int, err error)
-	ListAchievements(ctx context.Context, playerID string, limit int, startKey map[string]types.AttributeValue) ([]PlayerAchievementProgress, map[string]types.AttributeValue, error)
+	Increment(context.Context, string, string, string, int) (previous, current int, err error)
+	ListAchievements(ctx context.Context, playerID, mode string, limit int, startKey map[string]types.AttributeValue) ([]PlayerAchievementProgress, map[string]types.AttributeValue, error)
 }
 
 type Service struct{ store progressStore }
@@ -24,13 +24,13 @@ type TierUnlock struct {
 func NewService(store *Store) *Service                 { return &Service{store: store} }
 func NewServiceWithStore(store progressStore) *Service { return &Service{store: store} }
 
-func (s *Service) RecordHand(ctx context.Context, tableID string, outcome hand.HandOutcome) ([]TierUnlock, error) {
+func (s *Service) RecordHand(ctx context.Context, tableID, mode string, outcome hand.HandOutcome) ([]TierUnlock, error) {
 	if s == nil || s.store == nil {
 		return nil, fmt.Errorf("achievements: progress store is required")
 	}
 	var unlocks []TierUnlock
 	bump := func(playerID, key string) error {
-		previous, current, err := s.store.Increment(ctx, playerID, key, 1)
+		previous, current, err := s.store.Increment(ctx, playerID, mode, key, 1)
 		if err != nil {
 			return fmt.Errorf("achievements: table %s player %s key %s: %w", tableID, playerID, key, err)
 		}

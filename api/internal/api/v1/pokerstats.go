@@ -9,12 +9,12 @@ import (
 )
 
 type pokerStatsReader interface {
-	Get(ctx context.Context, playerID string) (pokerstats.Stats, error)
+	Get(ctx context.Context, playerID, mode string) (pokerstats.Stats, error)
 }
 
 func RegisterPokerStats(router fiber.Router, auth fiber.Handler, store pokerStatsReader) {
 	router.Get("/players/me/poker-stats", auth, func(c fiber.Ctx) error {
-		stats, err := store.Get(c.Context(), c.Locals(localsUserID).(string))
+		stats, err := store.Get(c.Context(), c.Locals(localsUserID).(string), currencyModeParam(c))
 		if err != nil {
 			return problem.InternalServer("failed to load poker stats", c, err).Send(c)
 		}

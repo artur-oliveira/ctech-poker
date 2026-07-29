@@ -1,6 +1,11 @@
 // api/internal/roomstore/room.go
 package roomstore
 
+const (
+	CurrencyModeSandbox = "sandbox"
+	CurrencyModeReal    = "real"
+)
+
 // Room is the lobby directory entry — metadata only. Live seat/stack state
 // during play lives in Phase 2's table.Actor + snapshot/action-log, not here.
 type Room struct {

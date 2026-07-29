@@ -7,6 +7,9 @@ import {
 } from '@/components/ui/dialog';
 import {getMyPokerStats, type PokerStats} from '@/lib/api/pokerStats';
 import {playstyleMeta} from '@/lib/playstyle';
+import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
+import {useState} from 'react';
+import type {WalletMode} from '@/lib/api/player';
 
 function percentage(value: number) {
   return `${(value * 100).toLocaleString('pt-BR', {maximumFractionDigits: 1})}%`;
@@ -122,9 +125,10 @@ function HudContent({stats}: {stats: PokerStats}) {
 }
 
 export function SelfHudDialog({open, onOpenChange}: {open: boolean; onOpenChange: (open: boolean) => void}) {
+  const [mode, setMode] = useState<WalletMode>('sandbox');
   const query = useQuery({
-    queryKey: ['poker-stats', 'me'],
-    queryFn: getMyPokerStats,
+    queryKey: ['poker-stats', 'me', mode],
+    queryFn: () => getMyPokerStats(mode),
     enabled: open
   });
   return <Dialog open={open} onOpenChange={onOpenChange}>
@@ -133,6 +137,7 @@ export function SelfHudDialog({open, onOpenChange}: {open: boolean; onOpenChange
         <DialogTitle>Seu jogo</DialogTitle>
         <DialogDescription>Estatísticas privadas calculadas a partir das suas mãos concluídas.</DialogDescription>
       </DialogHeader>
+      <CurrencyModeTabs mode={mode} onChange={setMode}/>
       {query.isLoading ? <div className="self-hud-loading"><span className="loader"/><span>Calculando tendências…</span></div> :
         query.data ? <HudContent stats={query.data}/> :
           <div className="self-hud-empty"><b>Não foi possível carregar agora.</b><span>Tente novamente em instantes.</span></div>}

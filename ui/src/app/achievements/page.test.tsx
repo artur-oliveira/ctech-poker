@@ -63,7 +63,7 @@ describe('achievements page', () => {
     expect(screen.getByRole('link', {name: /Voltar/})).toHaveAttribute('href', '/');
     expect(screen.getByText(/Entre com sua conta CTech/)).toBeInTheDocument();
     expect(screen.queryByText('profile-menu')).not.toBeInTheDocument();
-    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tablist', {name: 'Filtro de conquistas'})).not.toBeInTheDocument();
     expect(screen.getAllByTestId('achievement')).toHaveLength(4);
     screen.getAllByTestId('achievement').forEach(card =>
       expect(card).toHaveAttribute('data-count', 'unknown')
@@ -123,7 +123,7 @@ describe('achievements page', () => {
     const view = render(<Achievements/>);
     expect(screen.getByText(/Não foi possível carregar seu progresso/)).toBeInTheDocument();
     expect(screen.getAllByTestId('achievement')).toHaveLength(4);
-    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tablist', {name: 'Filtro de conquistas'})).not.toBeInTheDocument();
 
     mocks.mine = queryState(undefined, {isLoading: true});
     view.rerender(<Achievements/>);

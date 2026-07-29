@@ -36,13 +36,13 @@ describe('API domain modules', () => {
     client.post.mockResolvedValueOnce({data: {amount: 100, remaining_time_seconds: 60}});
 
     await expect(getAchievementCatalog()).resolves.toEqual(['catalog']);
-    await expect(getMyAchievements('next')).resolves.toEqual(['progress']);
-    await expect(leaderboard('rank-next')).resolves.toEqual(['leader']);
+    await expect(getMyAchievements('real', 'next')).resolves.toEqual(['progress']);
+    await expect(leaderboard('real', 'rank-next')).resolves.toEqual(['leader']);
     await expect(spin()).resolves.toEqual({amount: 100, remaining_time_seconds: 60});
     await expect(remainingTime()).resolves.toEqual({remaining_time_seconds: 5});
 
     expect(client.get).toHaveBeenNthCalledWith(2, '/v1.0/players/me/achievements', {
-      params: {cursor: 'next'}, silentError: true,
+      params: {mode: 'real', cursor: 'next'}, silentError: true,
     });
     expect(client.post).toHaveBeenCalledWith('/v1.0/sandbox-credits', {}, {silentError: true});
   });
