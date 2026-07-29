@@ -315,7 +315,22 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 			persistHandHistory(tableID, handID, outcome, names)
 			return
 		}
-		unlocks, err := achv.RecordHand(ctx, tableID, mode, outcome)
+		var metrics []pokerstats.HandMetric
+		actions, metricsErr := store.LoadActionsSince(ctx, tableID, handID, 0)
+		if metricsErr != nil {
+			slog.Error("pokerstats: load hand actions failed", "table", tableID, "hand", handID, "err", metricsErr)
+		} else {
+			metrics = pokerstats.Analyze(outcome.Participants, actions)
+		}
+		achievementMetrics := make([]achievements.HandMetric, len(metrics))
+		for i, metric := range metrics {
+			achievementMetrics[i] = achievements.HandMetric{
+				PlayerID: metric.PlayerID,
+				VPIP:     metric.VPIP,
+				ThreeBet: metric.ThreeBet,
+			}
+		}
+		unlocks, err := achv.RecordHand(ctx, tableID, mode, outcome, achievementMetrics)
 		if err != nil {
 			slog.Error("achievements record hand failed", "table", tableID, "err", err)
 		}
@@ -335,11 +350,10 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		if err := leaderboardSvc.RecordHand(ctx, mode, outcome, names); err != nil {
 			slog.Error("leaderboard record hand failed", "table", tableID, "err", err)
 		}
-		actions, err := store.LoadActionsSince(ctx, tableID, handID, 0)
-		if err != nil {
-			slog.Error("pokerstats: load hand actions failed", "table", tableID, "hand", handID, "err", err)
-		} else if err := pokerStatsStore.RecordHand(ctx, mode, tableID, handID, pokerstats.Analyze(outcome.Participants, actions)); err != nil {
-			slog.Error("pokerstats: record hand failed", "table", tableID, "hand", handID, "err", err)
+		if metricsErr == nil {
+			if err := pokerStatsStore.RecordHand(ctx, mode, tableID, handID, metrics); err != nil {
+				slog.Error("pokerstats: record hand failed", "table", tableID, "hand", handID, "err", err)
+			}
 		}
 		persistHandHistory(tableID, handID, outcome, names)
 	}

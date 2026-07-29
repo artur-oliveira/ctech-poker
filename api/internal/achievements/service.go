@@ -3,6 +3,8 @@ package achievements
 import (
 	"context"
 	"fmt"
+	"slices"
+	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
@@ -10,10 +12,21 @@ import (
 
 type progressStore interface {
 	Increment(context.Context, string, string, string, int) (previous, current int, err error)
+	IncrementStreak(context.Context, string, string, string, bool, int) (current int, err error)
 	ListAchievements(ctx context.Context, playerID, mode string, limit int, startKey map[string]types.AttributeValue) ([]PlayerAchievementProgress, map[string]types.AttributeValue, error)
 }
 
-type Service struct{ store progressStore }
+type Service struct {
+	store          progressStore
+	mu             sync.Mutex
+	lastPocketPair map[string]byte
+}
+
+type HandMetric struct {
+	PlayerID string
+	VPIP     bool
+	ThreeBet bool
+}
 
 type TierUnlock struct {
 	PlayerID string
@@ -21,16 +34,19 @@ type TierUnlock struct {
 	Stars    int
 }
 
-func NewService(store *Store) *Service                 { return &Service{store: store} }
-func NewServiceWithStore(store progressStore) *Service { return &Service{store: store} }
+func NewService(store *Store) *Service                 { return newService(store) }
+func NewServiceWithStore(store progressStore) *Service { return newService(store) }
+func newService(store progressStore) *Service {
+	return &Service{store: store, lastPocketPair: make(map[string]byte)}
+}
 
-func (s *Service) RecordHand(ctx context.Context, tableID, mode string, outcome hand.HandOutcome) ([]TierUnlock, error) {
+func (s *Service) RecordHand(ctx context.Context, tableID, mode string, outcome hand.HandOutcome, metricSets ...[]HandMetric) ([]TierUnlock, error) {
 	if s == nil || s.store == nil {
 		return nil, fmt.Errorf("achievements: progress store is required")
 	}
 	var unlocks []TierUnlock
-	bump := func(playerID, key string) error {
-		previous, current, err := s.store.Increment(ctx, playerID, mode, key, 1)
+	bumpBy := func(playerID, key string, by int) error {
+		previous, current, err := s.store.Increment(ctx, playerID, mode, key, by)
 		if err != nil {
 			return fmt.Errorf("achievements: table %s player %s key %s: %w", tableID, playerID, key, err)
 		}
@@ -39,11 +55,39 @@ func (s *Service) RecordHand(ctx context.Context, tableID, mode string, outcome 
 		}
 		return nil
 	}
+	bump := func(playerID, key string) error { return bumpBy(playerID, key, 1) }
+	streak := func(playerID, key string, reset bool, resetTo int) error {
+		previous := 0
+		if !reset {
+			previous = -1 // only exact threshold crossing is needed below
+		}
+		current, err := s.store.IncrementStreak(ctx, playerID, mode, key, reset, resetTo)
+		if err != nil {
+			return fmt.Errorf("achievements: table %s player %s key %s: %w", tableID, playerID, key, err)
+		}
+		if reset {
+			previous = resetTo
+		} else {
+			previous = current - 1
+		}
+		if stars, crossed := TierCrossed(key, previous, current); crossed {
+			unlocks = append(unlocks, TierUnlock{PlayerID: playerID, Key: key, Stars: stars})
+		}
+		return nil
+	}
+	handsTotals := make(map[string]int)
 	for _, id := range dedupe(outcome.Participants) {
-		if err := bump(id, KeyHandsPlayed); err != nil {
+		previous, current, err := s.store.Increment(ctx, id, mode, KeyHandsPlayed, 1)
+		if err != nil {
 			return nil, err
 		}
+		handsTotals[id] = current
+		if stars, crossed := TierCrossed(KeyHandsPlayed, previous, current); crossed {
+			unlocks = append(unlocks, TierUnlock{PlayerID: id, Key: KeyHandsPlayed, Stars: stars})
+		}
 	}
+	winnerSet := stringSet(outcome.Winners)
+	allInSet := stringSet(outcome.AllInPlayers)
 	for _, id := range dedupe(outcome.Winners) {
 		if err := bump(id, KeyWins); err != nil {
 			return nil, err
@@ -55,6 +99,62 @@ func (s *Service) RecordHand(ctx context.Context, tableID, mode string, outcome 
 		if category != "" {
 			if err := bump(id, KeyWinByCategory(category)); err != nil {
 				return nil, err
+			}
+		}
+		if payout := int(outcome.Payouts[id]); payout > 0 {
+			key := KeySandboxChipsEarned
+			if mode == "real" {
+				key = KeyRealMoneyEarned
+			}
+			if err := bumpBy(id, key, payout); err != nil {
+				return nil, err
+			}
+		}
+		if hi, ok := outcome.PlayerHands[id]; ok && isPocketPair(hi.HoleCards) {
+			if err := bump(id, KeyWonWithPocketPair); err != nil {
+				return nil, err
+			}
+		}
+		if len(dedupe(outcome.Participants)) == 9 {
+			if err := bump(id, KeyWonFullTable); err != nil {
+				return nil, err
+			}
+		}
+		if len(dedupe(outcome.Participants)) == 2 {
+			if err := bump(id, KeyWonHeadsUp); err != nil {
+				return nil, err
+			}
+		}
+		if allInSet[id] && handsTotals[id] == 1 {
+			if err := bump(id, KeyFirstHandAllInWin); err != nil {
+				return nil, err
+			}
+		}
+		if beatOpponent(outcome, id, func(opp string, result hand.ShowdownResult) bool {
+			hi, ok := outcome.PlayerHands[opp]
+			return ok && isPocketAces(hi.HoleCards)
+		}) {
+			if err := bump(id, KeyBeatPocketAces); err != nil {
+				return nil, err
+			}
+		}
+		if beatOpponent(outcome, id, func(_ string, result hand.ShowdownResult) bool {
+			return categoryAtLeast(result.Category, "three_of_a_kind")
+		}) {
+			if err := bump(id, KeyBeatTripsOrBetter); err != nil {
+				return nil, err
+			}
+		}
+		if hasCompleteCards(outcome, id) {
+			if isNuts(outcome, id) {
+				if err := bump(id, KeyWonWithNuts); err != nil {
+					return nil, err
+				}
+			}
+			if wonRunnerRunner(outcome, id) {
+				if err := bump(id, KeyWonRunnerRunner); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -85,6 +185,16 @@ func (s *Service) RecordHand(ctx context.Context, tableID, mode string, outcome 
 			}
 			continue
 		}
+		if result.Category == "straight_flush" && winnerHasCategory(outcome, "royal_flush") {
+			if err := bump(id, KeyLostStraightFlushToRoyal); err != nil {
+				return nil, err
+			}
+		}
+		if hasCompleteCards(outcome, id) && lostRiverAfterLeadingTurn(outcome, id) {
+			if err := bump(id, KeyLostRiverAfterLeadingTurn); err != nil {
+				return nil, err
+			}
+		}
 		if err := bump(id, KeyLooser); err != nil {
 			return nil, err
 		}
@@ -114,6 +224,63 @@ func (s *Service) RecordHand(ctx context.Context, tableID, mode string, outcome 
 			}
 		}
 	}
+	var metrics []HandMetric
+	if len(metricSets) > 0 {
+		metrics = metricSets[0]
+	}
+	for _, metric := range metrics {
+		if metric.PlayerID == "" {
+			continue
+		}
+		if outcome.WonWithoutShowdown && winnerSet[metric.PlayerID] && metric.ThreeBet {
+			if err := bump(metric.PlayerID, KeyThreeBetWonNoShowdown); err != nil {
+				return nil, err
+			}
+		}
+		if err := streak(metric.PlayerID, KeyFoldedStreak, metric.VPIP, 0); err != nil {
+			return nil, err
+		}
+	}
+	for _, id := range dedupe(outcome.Participants) {
+		if !hasCompleteCards(outcome, id) {
+			continue
+		}
+		cards, _ := playerCards(outcome, id)
+		if fourToRoyalMissed(cards) {
+			if err := bump(id, KeyFourToRoyalMissed); err != nil {
+				return nil, err
+			}
+		}
+		if fourToStraightFlushMissed(cards) {
+			if err := bump(id, KeyFourToStraightFlushMissed); err != nil {
+				return nil, err
+			}
+		}
+		if _, ok := outcome.ShowdownResults[id]; ok && riverDrawMissed(cards[:6], cards[6]) {
+			if err := bump(id, KeyPaidRiverDrawMissed); err != nil {
+				return nil, err
+			}
+		}
+		rank, paired := pocketPairRank(outcome.PlayerHands[id].HoleCards)
+		stateKey := mode + "#" + id
+		s.mu.Lock()
+		last := s.lastPocketPair[stateKey]
+		qualifies := winnerSet[id] && paired
+		reset, resetTo := true, 0
+		if qualifies {
+			resetTo = 1
+			if last == rank {
+				reset = false
+			}
+			s.lastPocketPair[stateKey] = rank
+		} else {
+			delete(s.lastPocketPair, stateKey)
+		}
+		s.mu.Unlock()
+		if err := streak(id, KeySamePocketPairStreak, reset, resetTo); err != nil {
+			return nil, err
+		}
+	}
 	return unlocks, nil
 }
 
@@ -122,13 +289,7 @@ func lostToSameCategory(outcome hand.HandOutcome, playerID, category string) boo
 		return category != "" && category == outcome.WinningCategory
 	}
 	for _, pot := range outcome.PotResults {
-		eligible := false
-		for _, id := range pot.EligiblePlayerIDs {
-			if id == playerID {
-				eligible = true
-				break
-			}
-		}
+		eligible := slices.Contains(pot.EligiblePlayerIDs, playerID)
 		if !eligible {
 			continue
 		}
@@ -164,6 +325,41 @@ func isPocketAces(holeCards [2]string) bool {
 func isPocketKings(holeCards [2]string) bool {
 	return len(holeCards[0]) == 2 && len(holeCards[1]) == 2 &&
 		holeCards[0][0] == 'K' && holeCards[1][0] == 'K'
+}
+
+func isPocketPair(cards [2]string) bool {
+	_, ok := pocketPairRank(cards)
+	return ok
+}
+
+func pocketPairRank(cards [2]string) (byte, bool) {
+	return cards[0][0], len(cards[0]) == 2 && len(cards[1]) == 2 && cards[0][0] == cards[1][0]
+}
+
+func stringSet(ids []string) map[string]bool {
+	out := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out
+}
+
+func winnerHasCategory(outcome hand.HandOutcome, category string) bool {
+	for _, id := range outcome.Winners {
+		if outcome.ShowdownResults[id].Category == category {
+			return true
+		}
+	}
+	return false
+}
+
+func beatOpponent(outcome hand.HandOutcome, winner string, predicate func(string, hand.ShowdownResult) bool) bool {
+	for id, result := range outcome.ShowdownResults {
+		if id != winner && !result.Won && predicate(id, result) {
+			return true
+		}
+	}
+	return false
 }
 
 // wonAgainstBiggerStack reports whether playerID (already known to be a

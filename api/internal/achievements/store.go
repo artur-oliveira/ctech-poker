@@ -3,8 +3,10 @@ package achievements
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamotypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	dynamo "gopkg.aoctech.app/api-commons/dynamo"
@@ -19,17 +21,65 @@ func NewStore(db *dynamodb.Client, env string) *Store {
 }
 
 func (s *Store) Increment(ctx context.Context, playerID, mode, key string, by int) (int, int, error) {
-	if by != 1 {
-		return 0, 0, fmt.Errorf("achievements: store supports unit increments only")
+	if by <= 0 {
+		return 0, 0, fmt.Errorf("achievements: increment must be positive")
 	}
-	// AtomicIncrement adds one and returns the linearized value. Deriving the
-	// previous value from it avoids the racy read-before-write in the plan.
 	sk := mode + "#" + key
-	current, err := s.base.AtomicIncrement(ctx, playerID, &sk, "counter")
+	out, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(s.base.TableName),
+		Key: map[string]dynamotypes.AttributeValue{
+			"pk": &dynamotypes.AttributeValueMemberS{Value: playerID},
+			"sk": &dynamotypes.AttributeValueMemberS{Value: sk},
+		},
+		UpdateExpression:          aws.String("ADD #counter :by"),
+		ExpressionAttributeNames:  map[string]string{"#counter": "counter"},
+		ExpressionAttributeValues: map[string]dynamotypes.AttributeValue{":by": &dynamotypes.AttributeValueMemberN{Value: strconv.Itoa(by)}},
+		ReturnValues:              dynamotypes.ReturnValueAllNew,
+	})
 	if err != nil {
 		return 0, 0, fmt.Errorf("achievements: increment: %w", err)
 	}
-	return int(current) - 1, int(current), nil
+	currentValue, ok := out.Attributes["counter"].(*dynamotypes.AttributeValueMemberN)
+	if !ok {
+		return 0, 0, fmt.Errorf("achievements: increment returned no counter")
+	}
+	current, err := strconv.Atoi(currentValue.Value)
+	if err != nil {
+		return 0, 0, fmt.Errorf("achievements: parse counter: %w", err)
+	}
+	return current - by, current, nil
+}
+
+func (s *Store) IncrementStreak(ctx context.Context, playerID, mode, key string, reset bool, resetTo int) (int, error) {
+	sk := mode + "#" + key
+	expression := "ADD #counter :one"
+	value := 1
+	if reset {
+		expression, value = "SET #counter = :value", resetTo
+	}
+	out, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(s.base.TableName),
+		Key: map[string]dynamotypes.AttributeValue{
+			"pk": &dynamotypes.AttributeValueMemberS{Value: playerID},
+			"sk": &dynamotypes.AttributeValueMemberS{Value: sk},
+		},
+		UpdateExpression:         aws.String(expression),
+		ExpressionAttributeNames: map[string]string{"#counter": "counter"},
+		ExpressionAttributeValues: map[string]dynamotypes.AttributeValue{
+			":one":   &dynamotypes.AttributeValueMemberN{Value: "1"},
+			":value": &dynamotypes.AttributeValueMemberN{Value: strconv.Itoa(value)},
+		},
+		ReturnValues: dynamotypes.ReturnValueAllNew,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("achievements: streak: %w", err)
+	}
+	v, ok := out.Attributes["counter"].(*dynamotypes.AttributeValueMemberN)
+	if !ok {
+		return 0, fmt.Errorf("achievements: streak returned no counter")
+	}
+	current, err := strconv.Atoi(v.Value)
+	return current, err
 }
 
 // PlayerAchievementProgress is one player's progress row for a single
@@ -57,7 +107,33 @@ func (s *Store) ListAchievements(ctx context.Context, playerID, mode string, lim
 			return nil, nil, fmt.Errorf("achievements: decode: %w", err)
 		}
 		e.Key = strings.TrimPrefix(e.Key, prefix)
+		if achievement, ok := achievementForKey(e.Key); ok && achievement.Secret &&
+			e.Count < minimumThreshold(achievement.Tiers) {
+			continue
+		}
 		out = append(out, *e)
 	}
 	return out, result.LastEvaluatedKey, nil
+}
+
+func achievementForKey(key string) (Achievement, bool) {
+	for _, achievement := range Catalog {
+		if achievement.Key == key {
+			return achievement, true
+		}
+	}
+	return Achievement{}, false
+}
+
+func minimumThreshold(tiers []Tier) int {
+	if len(tiers) == 0 {
+		return 0
+	}
+	minimum := tiers[0].Threshold
+	for _, tier := range tiers[1:] {
+		if tier.Threshold < minimum {
+			minimum = tier.Threshold
+		}
+	}
+	return minimum
 }

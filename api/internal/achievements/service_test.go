@@ -20,6 +20,19 @@ func (m *memStore) Increment(_ context.Context, playerID, mode, key string, by i
 	return previous, m.progress[row][key], nil
 }
 
+func (m *memStore) IncrementStreak(_ context.Context, playerID, mode, key string, reset bool, resetTo int) (int, error) {
+	row := mode + "#" + playerID
+	if m.progress[row] == nil {
+		m.progress[row] = map[string]int{}
+	}
+	if reset {
+		m.progress[row][key] = resetTo
+	} else {
+		m.progress[row][key]++
+	}
+	return m.progress[row][key], nil
+}
+
 func (m *memStore) ListAchievements(_ context.Context, playerID, mode string, _ int, _ map[string]types.AttributeValue) ([]PlayerAchievementProgress, map[string]types.AttributeValue, error) {
 	row := mode + "#" + playerID
 	out := make([]PlayerAchievementProgress, 0, len(m.progress[row]))

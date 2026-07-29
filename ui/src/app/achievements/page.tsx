@@ -21,6 +21,11 @@ export default function Achievements() {
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
   const progressMap = useMemo(() => new Map((mine.data || []).map(p => [p.key, p.count])), [mine.data]);
+  const visibleCatalog = useMemo(() => (catalog.data || []).filter(item => {
+    if (!item.secret) return true;
+    const firstTier = Math.min(...item.tiers.map(tier => tier.threshold));
+    return authed && !mine.isLoading && (progressMap.get(item.key) ?? 0) >= firstTier;
+  }), [authed, catalog.data, mine.isLoading, progressMap]);
 
   // While mine is still loading, leave count undefined (renders neutral tier ladder)
   const countFor = useCallback((key: string) => authed && !mine.isLoading ? progressMap.get(key) ?? 0 : undefined, [authed, mine.isLoading, progressMap]);
@@ -30,9 +35,9 @@ export default function Achievements() {
     let starsEarned = 0;
     let completedCount = 0;
     let unlockedCount = 0;
-    const maxStars = catalog.data.length * 5;
+    const maxStars = visibleCatalog.reduce((sum, item) => sum + Math.max(...item.tiers.map(tier => tier.stars)), 0);
 
-    for (const item of catalog.data) {
+    for (const item of visibleCatalog) {
       const cnt = progressMap.get(item.key) ?? 0;
       const p = achievementProgress(item.tiers, cnt);
       starsEarned += p.starsFilled;
@@ -43,13 +48,13 @@ export default function Achievements() {
     const completionRate = maxStars > 0 ? Math.round((starsEarned / maxStars) * 100) : 0;
 
     return {starsEarned, maxStars, completedCount, unlockedCount, completionRate};
-  }, [authed, catalog.data, mine.isLoading, progressMap]);
+  }, [authed, catalog.data, mine.isLoading, progressMap, visibleCatalog]);
 
   const filteredCatalog = useMemo(() => {
     if (!catalog.data) return [];
-    if (!authed || activeTab === 'all') return catalog.data;
+    if (!authed || activeTab === 'all') return visibleCatalog;
 
-    return catalog.data.filter(item => {
+    return visibleCatalog.filter(item => {
       const cnt = countFor(item.key) ?? 0;
       const p = achievementProgress(item.tiers, cnt);
       if (activeTab === 'completed') return p.maxed;
@@ -57,7 +62,7 @@ export default function Achievements() {
       if (activeTab === 'unlocked') return p.starsFilled > 0;
       return true;
     });
-  }, [catalog.data, authed, activeTab, countFor]);
+  }, [catalog.data, visibleCatalog, authed, activeTab, countFor]);
 
   if (checking) return <div className="loading-screen"><span className="loader"/>Carregando conquistas…</div>;
 
@@ -94,7 +99,7 @@ export default function Achievements() {
           </div>
           <div className="stat-card">
             <span className="stat-label">Desbloqueadas</span>
-            <strong className="stat-value">{stats.unlockedCount} <small>/ {catalog.data?.length ?? 0}</small></strong>
+            <strong className="stat-value">{stats.unlockedCount} <small>/ {visibleCatalog.length}</small></strong>
           </div>
           <div className="stat-card">
             <span className="stat-label">Completas</span>
@@ -116,7 +121,7 @@ export default function Achievements() {
             className={`filter-tab${activeTab === 'all' ? ' active' : ''}`}
             onClick={() => setActiveTab('all')}
           >
-            Todas ({catalog.data.length})
+            Todas ({visibleCatalog.length})
           </button>
           <button
             type="button"

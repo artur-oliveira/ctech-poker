@@ -10,7 +10,8 @@ export interface Tier {
 export interface Achievement {
   key: string;
   metric: string;
-  tiers: Tier[]
+  tiers: Tier[];
+  secret?: boolean
 }
 
 export interface PlayerAchievementProgress {

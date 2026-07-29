@@ -12,24 +12,43 @@ type Achievement struct {
 	Key    string `json:"key"`
 	Metric string `json:"metric"`
 	Tiers  []Tier `json:"tiers"`
+	Secret bool   `json:"secret,omitempty"`
 }
 
 const (
-	KeyWins            = "wins"
-	KeyHandsPlayed     = "hands_played"
-	KeyComeback        = "comeback"
-	KeyBluff           = "bluff"
-	KeySurvivor        = "survivor"
-	KeyLooser          = "looser"
-	KeyFallenKing      = "fallen_king"
-	KeyAlmostWinner    = "almost_winner"
-	KeyTied            = "tied"
-	KeyBadBeat         = "bad_beat"
-	KeyCooler          = "cooler"
-	KeyCrackedAces     = "cracked_aces"
-	KeyGiantSlayer     = "giant_slayer"
-	KeyShowdownWarrior = "showdown_warrior"
-	KeyAllIn           = "all_in"
+	KeyWins                      = "wins"
+	KeyHandsPlayed               = "hands_played"
+	KeyComeback                  = "comeback"
+	KeyBluff                     = "bluff"
+	KeySurvivor                  = "survivor"
+	KeyLooser                    = "looser"
+	KeyFallenKing                = "fallen_king"
+	KeyAlmostWinner              = "almost_winner"
+	KeyTied                      = "tied"
+	KeyBadBeat                   = "bad_beat"
+	KeyCooler                    = "cooler"
+	KeyCrackedAces               = "cracked_aces"
+	KeyGiantSlayer               = "giant_slayer"
+	KeyShowdownWarrior           = "showdown_warrior"
+	KeyAllIn                     = "all_in"
+	KeyRealMoneyEarned           = "real_money_earned"
+	KeySandboxChipsEarned        = "sandbox_chips_earned"
+	KeyWonWithPocketPair         = "won_with_pocket_pair"
+	KeyWonFullTable              = "won_full_table"
+	KeyWonHeadsUp                = "won_heads_up"
+	KeyLostStraightFlushToRoyal  = "lost_straight_flush_to_royal"
+	KeyFirstHandAllInWin         = "first_hand_allin_win"
+	KeyBeatPocketAces            = "beat_pocket_aces"
+	KeyBeatTripsOrBetter         = "beat_trips_or_better"
+	KeyThreeBetWonNoShowdown     = "three_bet_won_no_showdown"
+	KeyFoldedStreak              = "folded_streak"
+	KeyFourToRoyalMissed         = "four_to_royal_missed"
+	KeyFourToStraightFlushMissed = "four_to_straight_flush_missed"
+	KeyPaidRiverDrawMissed       = "paid_river_draw_missed"
+	KeyLostRiverAfterLeadingTurn = "lost_river_after_leading_turn"
+	KeyWonRunnerRunner           = "won_runner_runner"
+	KeyWonWithNuts               = "won_with_nuts"
+	KeySamePocketPairStreak      = "same_pocket_pair_streak"
 )
 
 func KeyWinByCategory(category string) string { return fmt.Sprintf("win_category_%s", category) }
@@ -45,7 +64,7 @@ var Catalog = []Achievement{
 	{
 		Key:    KeyHandsPlayed,
 		Metric: "hand_played",
-		Tiers:  []Tier{{1, 100}, {2, 1000}, {3, 10000}, {4, 50000}, {5, 100000}}},
+		Tiers:  []Tier{{1, 100}, {2, 1000}, {3, 5000}, {4, 10000}, {5, 100000}}},
 	{
 		Key:    KeyComeback,
 		Metric: "won_after_all_in",
@@ -108,6 +127,24 @@ var Catalog = []Achievement{
 		Metric: "went_all_in",
 		Tiers:  commonTiers,
 	},
+	{Key: KeyRealMoneyEarned, Metric: "real_money_won", Tiers: []Tier{{1, 1000}, {2, 10000}, {3, 100000}, {4, 1000000}, {5, 10000000}}},
+	{Key: KeySandboxChipsEarned, Metric: "sandbox_chips_won", Tiers: []Tier{{1, 1000}, {2, 10000}, {3, 100000}, {4, 1000000}, {5, 10000000}}},
+	{Key: KeyWonWithPocketPair, Metric: "hand_won_with_pocket_pair", Tiers: []Tier{{1, 1}, {2, 10}, {3, 50}, {4, 100}, {5, 500}}},
+	{Key: KeyWonFullTable, Metric: "hand_won_full_table", Tiers: []Tier{{1, 1}, {2, 5}, {3, 10}, {4, 25}, {5, 50}}},
+	{Key: KeyWonHeadsUp, Metric: "hand_won_heads_up", Tiers: []Tier{{1, 10}, {2, 50}, {3, 100}, {4, 500}}},
+	{Key: KeyLostStraightFlushToRoyal, Metric: "hand_lost_straight_flush_to_royal", Tiers: []Tier{{1, 1}, {2, 2}, {3, 5}}, Secret: true},
+	{Key: KeyFirstHandAllInWin, Metric: "first_hand_won_allin", Tiers: []Tier{{1, 1}}, Secret: true},
+	{Key: KeyBeatPocketAces, Metric: "beat_opponent_pocket_aces", Tiers: []Tier{{1, 1}, {2, 5}, {3, 25}, {4, 100}, {5, 500}}},
+	{Key: KeyBeatTripsOrBetter, Metric: "beat_opponent_trips_or_better", Tiers: []Tier{{1, 1}, {2, 5}, {3, 25}, {4, 100}, {5, 500}}},
+	{Key: KeyThreeBetWonNoShowdown, Metric: "three_bet_win_no_showdown", Tiers: []Tier{{1, 5}, {2, 25}, {3, 100}, {4, 500}}},
+	{Key: KeyFoldedStreak, Metric: "consecutive_hands_no_vpip", Tiers: []Tier{{1, 100}, {2, 500}, {3, 1000}}},
+	{Key: KeyFourToRoyalMissed, Metric: "near_miss_royal_flush", Tiers: []Tier{{1, 5}, {2, 10}, {3, 25}, {4, 50}}},
+	{Key: KeyFourToStraightFlushMissed, Metric: "near_miss_straight_flush", Tiers: []Tier{{1, 10}, {2, 50}, {3, 100}, {4, 500}}},
+	{Key: KeyPaidRiverDrawMissed, Metric: "river_draw_missed", Tiers: []Tier{{1, 10}, {2, 50}, {3, 100}}},
+	{Key: KeyLostRiverAfterLeadingTurn, Metric: "lost_river_after_leading_turn", Tiers: []Tier{{1, 5}, {2, 25}, {3, 100}, {4, 500}}},
+	{Key: KeyWonRunnerRunner, Metric: "won_runner_runner", Tiers: []Tier{{1, 1}, {2, 5}, {3, 10}, {4, 25}}},
+	{Key: KeyWonWithNuts, Metric: "hand_won_with_nuts", Tiers: []Tier{{1, 1}, {2, 5}, {3, 25}, {4, 100}, {5, 500}}},
+	{Key: KeySamePocketPairStreak, Metric: "same_pocket_pair_win_streak", Tiers: []Tier{{1, 3}}, Secret: true},
 }
 
 // categoryOrder ranks hand categories weakest to strongest, used both to seed
