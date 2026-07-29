@@ -23,7 +23,7 @@ jobs:
     if: github.event_name == 'pull_request'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Resolve environment
         id: env
@@ -116,7 +116,7 @@ jobs:
     if: ${{ github.event_name != 'pull_request' }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Resolve environment
         id: env
