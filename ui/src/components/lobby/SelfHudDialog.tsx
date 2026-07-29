@@ -2,9 +2,9 @@
 
 import {useQuery} from '@tanstack/react-query';
 import {Activity, Info} from 'lucide-react';
+import {PlaystyleBadges} from '@/components/PlaystyleBadges';
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle} from '@/components/ui/dialog';
 import {getMyPokerStats, type PokerStats} from '@/lib/api/pokerStats';
-import {playstyleMeta} from '@/lib/playstyle';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {useState} from 'react';
 import type {WalletMode} from '@/lib/api/player';
@@ -37,14 +37,8 @@ function PokerStyle({stats}: { stats: PokerStats }) {
     <div className="poker-style-copy">
       <small>Leitura da amostra</small>
       <h3 id="poker-style-title">Seu estilo pré-flop</h3>
-      <div className="poker-style-badges">
-        {stats.playstyle?.map(badge => {
-          const meta = playstyleMeta(badge.key);
-          if (!meta) return null;
-          return <span key={badge.key} title={meta.reason}>{meta.label}</span>;
-        })}
-      </div>
-      <p>Os eixos são derivados de VPIP, PFR e 3-bet. Passe ou toque nos badges para ver o critério.</p>
+      <PlaystyleBadges badges={stats.playstyle || []}/>
+      <p>Os eixos são derivados de VPIP, PFR e 3-bet. Abra um badge para conferir o critério.</p>
     </div>
     <div className="poker-style-radar">
       <svg viewBox="0 0 200 200" role="img"

@@ -24,8 +24,9 @@ describe('Notifier', () => {
       pushNotification('Manutenção programada', 'info');
     });
     
-    expect(screen.getByRole('region', {name: 'Avisos'})).toHaveAttribute('aria-live', 'assertive');
-    expect(screen.getAllByRole('alert')).toHaveLength(2);
+    expect(screen.getByRole('region', {name: 'Avisos'})).not.toHaveAttribute('aria-live');
+    expect(screen.getByRole('alert')).toHaveTextContent('Servidor indisponível');
+    expect(screen.getByRole('status')).toHaveTextContent('Manutenção programada');
     fireEvent.click(screen.getAllByRole('button', {name: 'Fechar aviso'})[0]);
     
     expect(screen.queryByText('Servidor indisponível')).not.toBeInTheDocument();

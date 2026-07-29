@@ -83,12 +83,12 @@ describe('hands list page', () => {
   
   test('filters wins, losses and restores all results from an empty filter', () => {
     const {rerender} = render(<HandsHistory/>);
-    fireEvent.click(screen.getByRole('tab', {name: 'Vitórias (2)'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Vitórias (2)'}));
     expect(screen.getByText('won')).toBeInTheDocument();
     expect(screen.getByText('tied')).toBeInTheDocument();
     expect(screen.queryByText('lost')).not.toBeInTheDocument();
     
-    fireEvent.click(screen.getByRole('tab', {name: 'Derrotas (1)'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Derrotas (1)'}));
     expect(screen.getByText('lost')).toBeInTheDocument();
     
     mocks.query.mockReturnValue(queryResult([pageOf([hands[0]])]));
@@ -128,8 +128,8 @@ describe('hands list page', () => {
     
     mocks.query.mockReturnValue(queryResult([pageOf(hands, true)]));
     const view = render(<HandsHistory/>);
-    expect(screen.getByRole('tab', {name: 'Todas (3+)'})).toBeInTheDocument();
-    expect(screen.getByRole('tab', {name: 'Vitórias (2+)'})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Todas (3+)'})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Vitórias (2+)'})).toBeInTheDocument();
     expect(screen.getByText('3+', {selector: '.stat-value'})).toBeInTheDocument();
     
     act(() => observed[0]([{isIntersecting: true} as IntersectionObserverEntry], {} as IntersectionObserver));
@@ -142,7 +142,7 @@ describe('hands list page', () => {
     mocks.query.mockReturnValue(queryResult([pageOf(hands, true), pageOf(secondPage)]));
     view.rerender(<HandsHistory/>);
     expect(screen.getAllByText('won')).toHaveLength(2);
-    expect(screen.getByRole('tab', {name: 'Todas (4)'})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Todas (4)'})).toBeInTheDocument();
     expect(screen.queryByRole('button', {name: /Carregar mais/})).not.toBeInTheDocument();
   });
 });

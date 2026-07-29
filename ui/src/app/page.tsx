@@ -130,12 +130,12 @@ export default function Home() {
             <span/>
             <small>poker.aoctech.app/table</small>
           </div>
-          <Image src="/guide/table-flop.png"
+          <Image src="/guide/table-flop.webp"
                  alt="Mesa real do CTech Poker em andamento, com cartas comunitárias e barra de ações"
                  width={1280} height={800}/>
         </div>
         <figure className="showcase-peek">
-          <Image src="/guide/lobby.png" alt="Lobby do CTech Poker com mesas agrupadas por stake" width={640}
+          <Image src="/guide/lobby.webp" alt="Lobby do CTech Poker com mesas agrupadas por stake" width={640}
                  height={400}/>
         </figure>
       </div>

@@ -53,7 +53,7 @@ export default function Guide() {
               lobby que você resgata seu bônus diário de fichas e acessa o ranking da comunidade.</p>
           </div>
           <figure className="guide-shot">
-            <Image src="/guide/lobby.png" alt="Lobby do CTech Poker com stakes agrupados por blinds" width={1280}
+            <Image src="/guide/lobby.webp" alt="Lobby do CTech Poker com stakes agrupados por blinds" width={1280}
                    height={800}/>
           </figure>
         </article>
@@ -70,7 +70,7 @@ export default function Guide() {
             </ol>
           </div>
           <figure className="guide-shot">
-            <Image src="/guide/buyin.png" alt="Painel de compra de fichas antes de sentar na mesa" width={1280}
+            <Image src="/guide/buyin.webp" alt="Painel de compra de fichas antes de sentar na mesa" width={1280}
                    height={800}/>
           </figure>
         </article>
@@ -87,7 +87,7 @@ export default function Guide() {
             </ol>
           </div>
           <figure className="guide-shot">
-            <Image src="/guide/create-room.png" alt="Diálogo de criação de mesa privada com stakes e lugares"
+            <Image src="/guide/create-room.webp" alt="Diálogo de criação de mesa privada com stakes e lugares"
                    width={1280} height={800}/>
           </figure>
         </article>
@@ -102,7 +102,7 @@ export default function Guide() {
               passada ou descartada automaticamente para manter a partida fluida.</p>
           </div>
           <figure className="guide-shot">
-            <Image src="/guide/table-preflop.png"
+            <Image src="/guide/table-preflop.webp"
                    alt="Mesa no pré-flop com a barra de ações e a força da mão do jogador"
                    width={1280} height={800}/>
           </figure>
@@ -123,7 +123,7 @@ export default function Guide() {
               completo de combinações sem sair do jogo.</p>
           </div>
           <figure className="guide-shot">
-            <Image src="/guide/table-flop.png" alt="Mesa no flop mostrando indicadores e controles"
+            <Image src="/guide/table-flop.webp" alt="Mesa no flop mostrando indicadores e controles"
                    width={1280} height={800}/>
           </figure>
         </article>
@@ -136,7 +136,7 @@ export default function Guide() {
               da mesa.</p>
           </div>
           <figure className="guide-shot">
-            <Image src="/guide/table-flop.png" alt="Mesa no flop com três cartas comunitárias reveladas"
+            <Image src="/guide/table-flop.webp" alt="Mesa no flop com três cartas comunitárias reveladas"
                    width={1280} height={800}/>
           </figure>
         </article>
@@ -150,7 +150,7 @@ export default function Guide() {
               conferir o código SHA-256 de verificação <b>Provably Fair</b>.</p>
           </div>
           <figure className="guide-shot">
-            <Image src="/guide/table-showdown.png" alt="Showdown com as cartas de todos os jogadores reveladas"
+            <Image src="/guide/table-showdown.webp" alt="Showdown com as cartas de todos os jogadores reveladas"
                    width={1280} height={800}/>
           </figure>
         </article>

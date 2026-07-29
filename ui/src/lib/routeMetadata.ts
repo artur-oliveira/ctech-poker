@@ -17,7 +17,7 @@ export function routeMetadata({
                                 image,
                                 index = false
                               }: RouteMetadataOptions): Metadata {
-  const imagePath = `/og/${image}.png`;
+  const imagePath = `/og/${image}.webp`;
   return {
     title,
     description,

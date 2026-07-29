@@ -2152,14 +2152,76 @@ h1 em {
     gap: 7px
 }
 
-.poker-style-badges span {
-    padding: 6px 9px;
+.playstyle-disclosure {
+    position: relative
+}
+
+.playstyle-disclosure summary {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
     border: 1px solid color-mix(in srgb, var(--gold) 34%, transparent);
     border-radius: 999px;
     background: color-mix(in srgb, var(--gold) 10%, transparent);
     color: var(--gold);
     font: 700 11px var(--font-mono);
-    cursor: help
+    cursor: pointer;
+    list-style: none
+}
+
+.playstyle-disclosure summary::-webkit-details-marker {
+    display: none
+}
+
+.playstyle-disclosure summary::after {
+    content: '+';
+    margin-inline-start: 7px;
+    font-size: 14px;
+    line-height: 1
+}
+
+.playstyle-disclosure[open] {
+    z-index: 2
+}
+
+.playstyle-disclosure[open] summary {
+    background: color-mix(in srgb, var(--gold) 18%, transparent);
+    border-color: color-mix(in srgb, var(--gold) 58%, transparent)
+}
+
+.playstyle-disclosure[open] summary::after {
+    content: '−'
+}
+
+.playstyle-disclosure summary:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 3px
+}
+
+.playstyle-disclosure > p {
+    position: absolute;
+    top: calc(100% + 7px);
+    inset-inline-start: 0;
+    width: max-content;
+    max-width: min(260px, calc(100vw - 32px));
+    margin: 0;
+    padding: 9px 11px;
+    border: 1px solid var(--white-13);
+    border-radius: var(--rounded-xs);
+    background: var(--ink);
+    box-shadow: var(--shadow-soft);
+    color: var(--paper);
+    font: 600 var(--font-size-compact) / 1.45 var(--font-sans)
+}
+
+@media (max-width: 600px) {
+    .playstyle-disclosure > p {
+        position: relative;
+        top: auto;
+        width: min(260px, calc(100vw - 32px));
+        margin-top: 7px
+    }
 }
 
 .poker-style-radar svg {
@@ -5612,7 +5674,11 @@ h1 em {
 
 .achievement-star {
     display: inline-flex;
-    padding: 3px;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px;
     border: none;
     background: none;
     color: var(--neutral-rose-4);
@@ -7768,7 +7834,7 @@ h1 em {
 
 .filter-tab {
     padding: 8px 16px;
-    min-height: 36px;
+    min-height: 44px;
     display: inline-flex;
     align-items: center;
     border: 1px solid var(--control-border);
@@ -7810,7 +7876,6 @@ h1 em {
     border: 1px solid var(--control-border);
     border-radius: var(--rounded-panel);
     text-align: center;
-    backdrop-filter: blur(8px);
 }
 
 .stat-card .stat-label {
@@ -7866,7 +7931,6 @@ h1 em {
     border: 1px solid var(--control-border);
     text-align: center;
     position: relative;
-    backdrop-filter: blur(8px);
     transition: transform 200ms var(--ease-out-quart);
 }
 
@@ -8003,7 +8067,6 @@ h1 em {
     border-radius: var(--rounded-panel);
     margin-bottom: 24px;
     color: var(--paper);
-    backdrop-filter: blur(8px);
 }
 
 .viewer-ranking-card svg {

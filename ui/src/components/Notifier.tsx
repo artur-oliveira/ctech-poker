@@ -8,9 +8,10 @@ export function Notifier() {
   useEffect(() => subscribeNotifications(setItems), []);
   if (!items.length) return null;
   return (
-    <div className="api-notifier" role="region" aria-label="Avisos" aria-live="assertive">
+    <div className="api-notifier" role="region" aria-label="Avisos">
       {items.map(n => (
-        <div key={n.id} className={`api-toast ${n.variant}`} role="alert">
+        <div key={n.id} className={`api-toast ${n.variant}`}
+             role={n.variant === 'error' ? 'alert' : 'status'} aria-atomic="true">
           {n.variant === 'error' ? <CircleAlert aria-hidden="true"/> : <Info aria-hidden="true"/>}
           <p className="wrap-anywhere">{n.message}</p>
           <button type="button" aria-label="Fechar aviso" onClick={() => dismissNotification(n.id)}><X/></button>

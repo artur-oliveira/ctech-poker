@@ -84,21 +84,21 @@ describe('achievements page', () => {
   test('filters unlocked, in-progress and completed achievements and restores an empty filter', () => {
     const populated = render(<Achievements/>);
     
-    fireEvent.click(screen.getByRole('tab', {name: 'Desbloqueadas (2)'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Desbloqueadas (2)'}));
     expect(screen.getAllByTestId('achievement')).toHaveLength(2);
     expect(screen.queryByText('all_in')).not.toBeInTheDocument();
     
-    fireEvent.click(screen.getByRole('tab', {name: 'Em progresso (1)'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Em progresso (1)'}));
     expect(screen.getByText('bluff')).toBeInTheDocument();
     expect(screen.queryByText('wins')).not.toBeInTheDocument();
     
-    fireEvent.click(screen.getByRole('tab', {name: 'Completas (1)'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Completas (1)'}));
     expect(screen.getByText('wins')).toBeInTheDocument();
     
     populated.unmount();
     mocks.mine = queryState([]);
     const view = render(<Achievements/>);
-    fireEvent.click(screen.getByRole('tab', {name: 'Completas (0)'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Completas (0)'}));
     expect(screen.getByText('Nenhuma conquista nesta categoria.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', {name: 'Ver todas'}));
     expect(screen.getAllByTestId('achievement')).toHaveLength(4);

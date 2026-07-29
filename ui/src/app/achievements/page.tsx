@@ -7,6 +7,7 @@ import {ProfileMenu} from '@/components/lobby/ProfileMenu';
 import {AchievementCard} from '@/components/achievements/AchievementCard';
 import {Button} from '@/components/ui/button';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
+import {FilterGroup} from '@/components/FilterGroup';
 import {achievementProgress, getAchievementCatalog, getMyAchievements} from '@/lib/api/achievements';
 import type {WalletMode} from '@/lib/api/player';
 import {useOptionalSession} from "@/lib/auth/session";
@@ -88,7 +89,7 @@ export default function Achievements() {
         <Trophy aria-hidden="true"/>
         <h1>Conquistas</h1>
         <p>{authed
-          ? 'Cada estrela representa uma meta vencida. Passe o mouse em uma estrela para conferir o requisito de cada nível.'
+          ? 'Cada estrela representa uma meta vencida. Passe, toque ou use o teclado para conferir o requisito de cada nível.'
           : 'Entre com sua conta CTech para registrar seu progresso e desbloquear conquistas a cada mão.'}</p>
       </header>
       {authed && <><CurrencyModeTabs mode={mode} onChange={setMode}/>
@@ -117,44 +118,20 @@ export default function Achievements() {
       )}
       
       {authed && !mine.isLoading && !mine.isError && catalog.data && (
-        <div className="filter-tabs" role="tablist" aria-label="Filtro de conquistas">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'all'}
-            className={`filter-tab${activeTab === 'all' ? ' active' : ''}`}
-            onClick={() => setActiveTab('all')}
-          >
-            Todas ({visibleCatalog.length})
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'unlocked'}
-            className={`filter-tab${activeTab === 'unlocked' ? ' active' : ''}`}
-            onClick={() => setActiveTab('unlocked')}
-          >
-            Desbloqueadas ({stats?.unlockedCount ?? 0})
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'in_progress'}
-            className={`filter-tab${activeTab === 'in_progress' ? ' active' : ''}`}
-            onClick={() => setActiveTab('in_progress')}
-          >
-            Em progresso ({(stats?.unlockedCount ?? 0) - (stats?.completedCount ?? 0)})
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'completed'}
-            className={`filter-tab${activeTab === 'completed' ? ' active' : ''}`}
-            onClick={() => setActiveTab('completed')}
-          >
-            Completas ({stats?.completedCount ?? 0})
-          </button>
-        </div>
+        <FilterGroup
+          label="Filtro de conquistas"
+          value={activeTab}
+          options={[
+            {value: 'all', label: `Todas (${visibleCatalog.length})`},
+            {value: 'unlocked', label: `Desbloqueadas (${stats?.unlockedCount ?? 0})`},
+            {
+              value: 'in_progress',
+              label: `Em progresso (${(stats?.unlockedCount ?? 0) - (stats?.completedCount ?? 0)})`
+            },
+            {value: 'completed', label: `Completas (${stats?.completedCount ?? 0})`}
+          ]}
+          onChange={setActiveTab}
+        />
       )}
       
       {authed && mine.isError &&

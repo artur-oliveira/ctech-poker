@@ -1,4 +1,4 @@
-import {render, screen} from '@testing-library/react';
+import {fireEvent, render, screen} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import type {ProfileShowcase} from '@/lib/api/player';
 import ProfilePage from './page';
@@ -61,7 +61,10 @@ describe('public player profile page', () => {
     expect(screen.getByRole('heading', {name: 'Ás da Mesa'})).toBeInTheDocument();
     expect(screen.getByText('1.234 registradas')).toBeInTheDocument();
     expect(screen.getByText('+2.500 fichas')).toBeInTheDocument();
-    expect(screen.getByText('Seletivo')).toHaveAttribute('title', 'VPIP de até 22%');
+    const playstyle = screen.getByText('Seletivo');
+    expect(screen.getByText('VPIP de até 22%')).not.toBeVisible();
+    fireEvent.click(playstyle);
+    expect(screen.getByText('VPIP de até 22%')).toBeVisible();
     expect(screen.getAllByTestId('card').map(card => card.textContent)).toEqual(['AH', 'KH']);
     expect(screen.getByText('profile-menu')).toBeInTheDocument();
     expect(screen.getByRole('link', {name: /Lobby/})).toHaveAttribute('href', '/lobby');

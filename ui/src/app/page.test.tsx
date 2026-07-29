@@ -57,9 +57,9 @@ describe('landing page', () => {
     expect(screen.getByText('Você')).toBeInTheDocument();
     expect(screen.getAllByTestId('achievement-card')).toHaveLength(11);
     expect(screen.getByRole('img', {name: /Mesa real do CTech Poker/}))
-      .toHaveAttribute('data-src', '/guide/table-flop.png');
+      .toHaveAttribute('data-src', '/guide/table-flop.webp');
     expect(screen.getByRole('img', {name: /Lobby do CTech Poker/}))
-      .toHaveAttribute('data-src', '/guide/lobby.png');
+      .toHaveAttribute('data-src', '/guide/lobby.webp');
   });
   
   test('exposes the catalog, guide and legal destinations', () => {

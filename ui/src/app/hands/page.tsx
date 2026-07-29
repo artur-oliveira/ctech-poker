@@ -13,6 +13,7 @@ import {bestHandCategory} from '@/lib/pokerRules';
 import {HAND_CATEGORY_LABELS} from '@/lib/utils';
 import {Button} from '@/components/ui/button';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
+import {FilterGroup} from '@/components/FilterGroup';
 
 type HandFilter = 'all' | 'wins' | 'losses';
 
@@ -128,35 +129,16 @@ export default function HandsHistory() {
         )}
         
         {!isLoading && !isError && hands.length > 0 && (
-          <div className="filter-tabs" role="tablist" aria-label="Filtro de mãos">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={filter === 'all'}
-              className={`filter-tab${filter === 'all' ? ' active' : ''}`}
-              onClick={() => setFilter('all')}
-            >
-              Todas ({hands.length}{more})
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={filter === 'wins'}
-              className={`filter-tab${filter === 'wins' ? ' active' : ''}`}
-              onClick={() => setFilter('wins')}
-            >
-              Vitórias ({stats?.winsCount ?? 0}{more})
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={filter === 'losses'}
-              className={`filter-tab${filter === 'losses' ? ' active' : ''}`}
-              onClick={() => setFilter('losses')}
-            >
-              Derrotas ({hands.length - (stats?.winsCount ?? 0)}{more})
-            </button>
-          </div>
+          <FilterGroup
+            label="Filtro de mãos"
+            value={filter}
+            options={[
+              {value: 'all', label: `Todas (${hands.length}${more})`},
+              {value: 'wins', label: `Vitórias (${stats?.winsCount ?? 0}${more})`},
+              {value: 'losses', label: `Derrotas (${hands.length - (stats?.winsCount ?? 0)}${more})`}
+            ]}
+            onChange={setFilter}
+          />
         )}
         
         {isLoading ? <div className="lobby-empty"><span className="loader"/>Buscando seu histórico de mãos…</div> :
