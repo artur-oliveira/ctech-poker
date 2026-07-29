@@ -35,6 +35,42 @@ type profileStore interface {
 	SetShowcase(context.Context, string, bool, []string) error
 }
 
+func (s *Service) ReportAvatar(ctx context.Context, targetID, reporterID string) error {
+	store, ok := s.store.(interface {
+		ReportAvatar(context.Context, string, string) error
+	})
+	if !ok {
+		return errors.New("player: avatar reports unavailable")
+	}
+	return store.ReportAvatar(ctx, targetID, reporterID)
+}
+
+func (s *Service) SetAvatar(ctx context.Context, userID, key string, version int) (*PlayerProfile, error) {
+	store, ok := s.store.(interface {
+		SetAvatar(context.Context, string, string, int) error
+	})
+	if !ok {
+		return nil, errors.New("player: avatar updates unavailable")
+	}
+	if err := store.SetAvatar(ctx, userID, key, version); err != nil {
+		return nil, err
+	}
+	return s.store.GetOrCreate(ctx, userID)
+}
+
+func (s *Service) ClearAvatar(ctx context.Context, userID string) (*PlayerProfile, error) {
+	store, ok := s.store.(interface {
+		ClearAvatar(context.Context, string) error
+	})
+	if !ok {
+		return nil, errors.New("player: avatar updates unavailable")
+	}
+	if err := store.ClearAvatar(ctx, userID); err != nil {
+		return nil, err
+	}
+	return s.store.GetOrCreate(ctx, userID)
+}
+
 // balanceFetcher is the subset of *walletclient.Client the profile endpoint
 // needs to show a balance alongside the profile — narrowed so tests can fake
 // it without a live wallet.

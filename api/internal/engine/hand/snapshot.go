@@ -107,6 +107,7 @@ type PotResultView struct {
 type SeatView struct {
 	PlayerID        string `json:"player_id"`
 	Name            string `json:"name,omitempty"`
+	AvatarURL       string `json:"avatar_url,omitempty"`
 	ConnectionState string `json:"connection_state,omitempty"`
 	Stack           int64  `json:"stack"`
 	State           string `json:"state"`
@@ -219,6 +220,7 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		sv := SeatView{
 			PlayerID:         p.ID,
 			Name:             p.Name,
+			AvatarURL:        p.AvatarURL,
 			Stack:            p.Stack,
 			State:            playerStateNames[p.State],
 			DealtIn:          dealtIn[p.ID],

@@ -32,7 +32,7 @@ func (m *mockHistoryReader) GetHand(_ context.Context, playerID, handID string) 
 func TestPlayerHistoryEndpoints(t *testing.T) {
 	app := fiber.New()
 	auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "user-123"); return c.Next() }
-	RegisterPlayers(app.Group("/v1.0"), auth, player.NewService(&fakePlayerStore{}), &mockHistoryReader{}, nil, nil)
+	RegisterPlayers(app.Group("/v1.0"), auth, player.NewService(&fakePlayerStore{}), &mockHistoryReader{}, nil, nil, nil, nil)
 
 	t.Run("GET /players/me/sessions", func(t *testing.T) {
 		req := httptest.NewRequest(fiber.MethodGet, "/v1.0/players/me/sessions", nil)

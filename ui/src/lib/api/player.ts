@@ -7,6 +7,7 @@ export type WalletMode = 'sandbox' | 'real';
 export interface PlayerProfile {
   user_id: string;
   name?: string;
+  avatar_url?: string;
   wallet_mode: WalletMode;
   poker_terms_accepted: boolean;
   poker_terms_accepted_at?: string;
@@ -40,6 +41,7 @@ export async function updateMe(input: {
 export interface ProfileShowcase {
   player_id: string;
   name?: string;
+  avatar_url?: string;
   featured_achievements: Array<{key: string; count: number}>;
   best_hand?: Pick<HandItem, 'hand_id' | 'table_id' | 'net_change' | 'ended_at' | 'board' | 'hole_cards'>;
 }
@@ -74,6 +76,7 @@ export type HandOutcome = 'won' | 'lost' | 'tied';
 export interface OpponentSummary {
   player_id: string;
   name?: string;
+  avatar_url?: string;
   hole_cards?: string[];
   won?: boolean;
 }

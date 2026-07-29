@@ -291,7 +291,9 @@ A dark wine room supports three physical materials — green felt, warm card sto
 
 **Character:** One CTech sans keeps the product familiar and fast to scan. Geist Mono acts as the table readout for pots, stakes, timers, equity, and compact state labels; never a crypto or terminal affectation.
 
-> **Token-drift warning (real gap):** the code references `var(--font-sans)` and `var(--font-mono)` but neither is currently bound — no `next/font` import and no `@theme` definition exist. In practice the app renders the system `sans-serif` / `monospace` fallback, not Geist. Wire Geist (and Geist Mono) via `next/font` in `layout.tsx` and expose `--font-sans` / `--font-mono` so this spec becomes true. The family above is the intended target, not the current render.
+> **Resolved (2026-07-28):** Geist and Geist Mono are bound via `next/font/google` in
+> `src/app/layout.tsx:8-9`, exposing `--font-sans` and `--font-mono`. Earlier revisions of this
+> doc flagged them as unwired; that gap is closed and the family above is what actually renders.
 
 ### Hierarchy
 - **Display** (700, `clamp(2.375rem, 5vw, 3.875rem)`, 1.05, `-0.04em`): lobby / landing titles only. In gameplay, fixed compact sizes preserve table space.
@@ -355,6 +357,7 @@ The component vocabulary is tactile and immediate: controls look pressable, ackn
 
 ### Player Seat
 - **Shape:** 14px container, absolute-positioned around the rail (9 seats, `--seat-0` … `--seat-8`), with a `:after` ring for turn state.
+- **Identity:** a 28px avatar is always visible on desktop/tablet; the portrait ring scales it with `--seat-size`. A failed or absent image falls back to the same shared initials on every surface.
 - **Turn:** `is-turn` paints the ring Bright Table Red and pulses it (`turn-signal`, 1.5s). Reduced motion freezes it visible.
 - **Viewer:** `viewer` shifts the full border to Bright Table Red and adds the 3px viewer-signal ring.
 - **Folded:** grayscale + dashed border, cards dimmed — identity stays readable.
@@ -403,3 +406,23 @@ The signature composition: a brown physical rail around green felt, cards at the
 - **Don't** rely on hue alone to distinguish red and black suits, active turns, winners, errors, or connection status.
 - **Don't** animate layout properties or use bounce/elastic motion; never make a user wait for choreography before acting.
 - **Don't** hard-code brand colors as literals in components (`bg-[#af2a2f]`); reference the `--brand` / `--paper` / `--wine` tokens so theming stays single-source.
+
+## 7. Coverage note (2026-07-28)
+
+Sections 2–4 (colors, typography, elevation) are current and authoritative. Section 5's component
+vocabulary predates roughly fifteen table components added in the 2026-07-26→28 work and does not
+specify them: `PerimeterTimer`, `ChipStack`, `RabbitHunt`, `RealityCheck`, `BotChallenge`,
+`PlayerNoteDialog`, `LastWinners`, `TablePreferencesDialog`, `VoiceActionButton`, `HandOutcome`,
+`HandReplayer`, `ShareHandDialog`, `DeckReveal`, `PartialDeckProof`, `AchievementCard`. They were
+built against the tokens and the do/don't rules above rather than against per-component specs.
+
+Two layout facts that section 5 does not cover:
+
+- **`TableStage` has two distinct layouts** — an oval for desktop and a vertical `stage-v` ring for
+  portrait handhelds. `.seat-avatar` is 28px alongside the name on desktop and becomes the primary,
+  `--seat-size`-scaled identity in the portrait ring.
+- **Deck variants** are user-selectable (`lib/cardVariants.ts`, default `four-color`), so card
+  colour is not a fixed design constant.
+
+When adding a component, follow the tokens and the do/don't list; a per-component spec here is not
+a prerequisite.

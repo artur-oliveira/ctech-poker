@@ -20,6 +20,8 @@ import {
   GITHUB_REPO_DEFAULT,
   instanceProfileName,
   SSM_POKER,
+  avatarsBucketName,
+  avatarsS3Origins,
 } from '../lib/constants';
 import {OidcStack} from "../lib/oidc-stack";
 
@@ -81,6 +83,8 @@ new PokerApiStack(app, id('API'), {
   instanceProfileName: instanceProfileName(ENVIRONMENT),
   deploymentsBucketName: CTECH_DEPLOYMENTS_BUCKET,
   logsBucketName: CTECH_LOGS_BUCKET,
+  avatarsBucketName: avatarsBucketName(ENVIRONMENT),
+  avatarBaseUrlParam: pokerParameters.avatarBaseUrl,
   tableStateArn: dynamoStack.tables.get('poker_table_state')!.tableArn,
   tableStateHistoryArn: dynamoStack.tables.get('poker_table_state_history')!.tableArn,
   actionLogArn: dynamoStack.tables.get('poker_action_log')!.tableArn,
@@ -111,7 +115,7 @@ new FrontendStack(app, id('Frontend'), {
   domainName: domainForEnv(ENVIRONMENT, APP_DOMAIN_PREFIX),
   apiDomainName: domainForEnv(ENVIRONMENT, API_DOMAIN_PREFIX),
   authDomainName: domainForEnv(ENVIRONMENT, ACCOUNTS_DOMAIN_PREFIX),
-  extraConnectSrc: [CLOUDFLARE_CHALLENGE_SRC],
+  extraConnectSrc: [CLOUDFLARE_CHALLENGE_SRC, ...avatarsS3Origins(ENVIRONMENT)],
   description: `CTech Poker Frontend (S3 + CloudFront) - ${ENVIRONMENT}`,
 });
 

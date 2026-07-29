@@ -9,6 +9,7 @@ import (
 	"gopkg.aoctech.app/api-commons/jwtverify"
 	"gopkg.aoctech.app/api-commons/ws"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
+	"gopkg.aoctech.app/poker/api/internal/avatar"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/dailyreward"
@@ -49,6 +50,7 @@ func Register(
 	playerNoteStore *playernotes.Store,
 	handShareStore *handshare.Store,
 	pokerStatsStore *pokerstats.Store,
+	avatars *avatar.Service,
 ) {
 	router := app.Group("/v1.0")
 
@@ -68,9 +70,10 @@ func Register(
 	createLimiter := NewRateLimiter(cacheBackend, 10, time.Minute)
 	joinLimiter := NewRateLimiter(cacheBackend, 30, time.Minute)
 	spinLimiter := NewRateLimiter(cacheBackend, 60, time.Minute)
+	avatarLimiter := NewRateLimiter(cacheBackend, 5, time.Hour)
 
 	RegisterRooms(router, auth, rooms, buyinSvc, manager, reg, cfg, createLimiter, joinLimiter)
-	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg)
+	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter)
 	RegisterPlayerNotes(router, auth, playerNoteStore)
 	RegisterHandShares(router, auth, sessionStore, tableStore, handShareStore)
 	RegisterPokerStats(router, auth, pokerStatsStore)

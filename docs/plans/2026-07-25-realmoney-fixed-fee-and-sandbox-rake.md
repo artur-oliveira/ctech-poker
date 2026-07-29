@@ -1,40 +1,66 @@
 # Real-Money Fixed Fee + Sandbox Rake Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:
+> executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Flip the poker business model to be Brazil-legal: sandbox tables now take a rake (unchanged legally — virtual currency), real-money tables never take rake and instead charge a flat, non-percentage table-entry fee (an "aluguel de mesa") to every player who takes a seat, including the room's creator.
+**Goal:** Flip the poker business model to be Brazil-legal: sandbox tables now take a rake (unchanged legally — virtual
+currency), real-money tables never take rake and instead charge a flat, non-percentage table-entry fee (an "aluguel de
+mesa") to every player who takes a seat, including the room's creator.
 
-**Architecture:** `hand.Table.ConfigureRake` flips which currency mode gets the existing 2.5% rake engine (sandbox now, not real). A new fixed fee (BRL cents, one of 4 risk tiers, never a % of blind) is computed once at room creation from a static catalog and stored on `roomstore.Room`. `buyin.Service.BuyIn` — the single choke point every seat-entry (create-and-join, join, and rebuy-after-bust all funnel through this one call) already passes through — charges that fee via a new `ctech-wallet` call (`DebitReal`, hits the player's real/withdrawable wallet, *not* the ring-fenced game wallet used for stakes) after the seat is committed, logging + queuing a reconciliation retry on failure rather than unwinding the seat, mirroring this codebase's existing tolerance for post-commit wallet-call failures (see `CashOut`'s "reconciliation job will retry" convention).
+**Architecture:** `hand.Table.ConfigureRake` flips which currency mode gets the existing 2.5% rake engine (sandbox now,
+not real). A new fixed fee (BRL cents, one of 4 risk tiers, never a % of blind) is computed once at room creation from a
+static catalog and stored on `roomstore.Room`. `buyin.Service.BuyIn` — the single choke point every seat-entry (
+create-and-join, join, and rebuy-after-bust all funnel through this one call) already passes through — charges that fee
+via a new `ctech-wallet` call (`DebitReal`, hits the player's real/withdrawable wallet, *not* the ring-fenced game
+wallet used for stakes) after the seat is committed, logging + queuing a reconciliation retry on failure rather than
+unwinding the seat, mirroring this codebase's existing tolerance for post-commit wallet-call failures (see `CashOut`'s "
+reconciliation job will retry" convention).
 
-**Tech Stack:** Go 1.x (Fiber v3, DynamoDB on-demand), Next.js 16 (App Router) UI, ctech-wallet's existing `POST /internal/wallet/real/debit` endpoint (already deployed, scope `internal:wallet:debit-real` already exists in ctech-account's catalog — see Global Constraints).
+**Tech Stack:** Go 1.x (Fiber v3, DynamoDB on-demand), Next.js 16 (App Router) UI, ctech-wallet's existing
+`POST /internal/wallet/real/debit` endpoint (already deployed, scope `internal:wallet:debit-real` already exists in
+ctech-account's catalog — see Global Constraints).
 
 ## Global Constraints
 
-- Fee is **flat per risk tier, never a formula against the blind** (Brazilian law: a cut of the pot/blind on a public real-money game is a bet and requires SPA authorization; a flat rental-style seat/table fee does not). Never write `fee = f(bigBlind)` — only table lookups.
-- Real-money tables never collect rake (`ConfigureRake` must set `rakeBPS = 0` for `currencyMode == "real"`, unconditionally).
-- Every seat-entry (create, join, rebuy) pays the fee — no special-casing "the creator" or "a rebuy": `buyin.Service.BuyIn` is already the one place all three paths converge, so one code path covers all three by construction.
+- Fee is **flat per risk tier, never a formula against the blind** (Brazilian law: a cut of the pot/blind on a public
+  real-money game is a bet and requires SPA authorization; a flat rental-style seat/table fee does not). Never write
+  `fee = f(bigBlind)` — only table lookups.
+- Real-money tables never collect rake (`ConfigureRake` must set `rakeBPS = 0` for `currencyMode == "real"`,
+  unconditionally).
+- Every seat-entry (create, join, rebuy) pays the fee — no special-casing "the creator" or "a rebuy":
+  `buyin.Service.BuyIn` is already the one place all three paths converge, so one code path covers all three by
+  construction.
 - Fee tiers (BRL cents), fixed by business decision, do not change without a product/legal decision:
 
   | Bucket | Stakes (small/big, cents) | Fee (cents) |
-  |---|---|---|
+    |---|---|---|
   | Micro | 5/10, 10/20, 25/50, 50/100 | 100 |
   | Low | 100/200, 200/500 | 200 |
   | Mid | 500/1000, 1000/2000 | 400 |
   | High | 2500/5000, 5000/10000 | 800 |
 
-- **Cross-repo blocker (not part of this plan's tasks, must happen before this ships to prod):** `internal:wallet:debit-real` already exists in `ctech-account`'s scope catalog (`api/internal/scopes/catalog.go:152`) and is already wired end-to-end in `ctech-wallet` (`POST /internal/wallet/real/debit`, `WalletService.DebitReal`) for `ctech-billing`'s use — but poker's own M2M client has never been granted that scope. This is the same category of gap as the already-known missing `internal:wallet:game-status` grant (see `api/CLAUDE.md`): a data/config action in `ctech-account`, not a code change, and out of scope for this plan.
-- No CDK changes anywhere in this plan — EC2/DynamoDB/wallet-client wiring is unaffected; `POKER_CLIENT_ID`/`POKER_CLIENT_SECRET` already flow into `walletclient.New`.
+- **Cross-repo blocker (not part of this plan's tasks, must happen before this ships to prod):**
+  `internal:wallet:debit-real` already exists in `ctech-account`'s scope catalog (`api/internal/scopes/catalog.go:152`)
+  and is already wired end-to-end in `ctech-wallet` (`POST /internal/wallet/real/debit`, `WalletService.DebitReal`) for
+  `ctech-billing`'s use — but poker's own M2M client has never been granted that scope. This is the same category of gap
+  as the already-known missing `internal:wallet:game-status` grant (see `api/CLAUDE.md`): a data/config action in
+  `ctech-account`, not a code change, and out of scope for this plan.
+- No CDK changes anywhere in this plan — EC2/DynamoDB/wallet-client wiring is unaffected; `POKER_CLIENT_ID`/
+  `POKER_CLIENT_SECRET` already flow into `walletclient.New`.
 
 ---
 
 ### Task 1: Real-money stake catalog + fixed fee table
 
 **Files:**
+
 - Modify: `api/internal/api/v1/stakes.go`
 - Test: `api/internal/api/v1/stakes_test.go` (new)
 
 **Interfaces:**
-- Produces: `publicStake.FeeCents int64` (json `fee_cents,omitempty`), `realStakeFeeCents(smallBlind, bigBlind int64) (int64, bool)` — used by Task 2's `createRoom`.
+
+- Produces: `publicStake.FeeCents int64` (json `fee_cents,omitempty`),
+  `realStakeFeeCents(smallBlind, bigBlind int64) (int64, bool)` — used by Task 2's `createRoom`.
 
 - [ ] **Step 1: Replace the real-money stake list and add the fee lookup**
 
@@ -192,15 +218,21 @@ git commit -m "feat(api): replace real-money stakes with 10-tier catalog + fixed
 ### Task 2: Room creation stores the fixed entry fee; catalog validation applies to private real-money rooms too
 
 **Files:**
+
 - Modify: `api/internal/roomstore/room.go`
 - Modify: `api/internal/api/v1/rooms.go`
 - Modify: `api/internal/api/v1/rooms_test.go`
 
 **Interfaces:**
+
 - Consumes: `realStakeFeeCents(smallBlind, bigBlind int64) (int64, bool)` (Task 1).
 - Produces: `roomstore.Room.EntryFeeCents int64` — consumed by Task 6's `buyin.Service.BuyIn`.
 
-**Why private rooms need the catalog restriction too:** `createRoom` currently only runs `isAllowedPublicStake` for `Visibility == "public"` — a private room can pick arbitrary blinds. If that stayed true for `currency_mode: "real"`, a private real-money room could have blinds matching no fee tier at all, and there would be nothing correct to charge. Real-money rooms (public or private) must always use one of the fixed catalog stakes; only sandbox private rooms keep free-form blinds.
+**Why private rooms need the catalog restriction too:** `createRoom` currently only runs `isAllowedPublicStake` for
+`Visibility == "public"` — a private room can pick arbitrary blinds. If that stayed true for `currency_mode: "real"`, a
+private real-money room could have blinds matching no fee tier at all, and there would be nothing correct to charge.
+Real-money rooms (public or private) must always use one of the fixed catalog stakes; only sandbox private rooms keep
+free-form blinds.
 
 - [ ] **Step 1: Add the field**
 
@@ -282,8 +314,12 @@ func TestPublicSandboxStakesAreCurated(t *testing.T) {
 
 - [ ] **Step 3: Run the tests, verify they fail**
 
-Run: `cd api && go test ./internal/api/v1/... -run 'TestCreateRoomStoresFixedEntryFee|TestCreateRoomRejectsPrivateRealMoneyRoomOffCatalog|TestPublicSandboxStakesAreCurated' -v`
-Expected: `TestCreateRoomStoresFixedEntryFeeForRealMoney` FAILs (`EntryFeeCents` always 0, field doesn't exist yet in the create path), `TestCreateRoomRejectsPrivateRealMoneyRoomOffCatalog` FAILs (currently accepted — got 201 not 400), `TestPublicSandboxStakesAreCurated` FAILs (10,20 no longer "uncurated" — wait, this one now asserts against `7,14` so it should already pass once Task 1 landed; if it still fails here it means Task 1 wasn't committed — check that first).
+Run:
+`cd api && go test ./internal/api/v1/... -run 'TestCreateRoomStoresFixedEntryFee|TestCreateRoomRejectsPrivateRealMoneyRoomOffCatalog|TestPublicSandboxStakesAreCurated' -v`
+Expected: `TestCreateRoomStoresFixedEntryFeeForRealMoney` FAILs (`EntryFeeCents` always 0, field doesn't exist yet in
+the create path), `TestCreateRoomRejectsPrivateRealMoneyRoomOffCatalog` FAILs (currently accepted — got 201 not 400),
+`TestPublicSandboxStakesAreCurated` FAILs (10,20 no longer "uncurated" — wait, this one now asserts against `7,14` so it
+should already pass once Task 1 landed; if it still fails here it means Task 1 wasn't committed — check that first).
 
 - [ ] **Step 4: Wire validation + fee storage in `createRoom`**
 
@@ -339,12 +375,16 @@ git commit -m "feat(api): store fixed real-money entry fee on room creation, req
 ### Task 3: Flip rake — sandbox gets it, real-money never does
 
 **Files:**
+
 - Modify: `api/internal/engine/hand/hand.go:208-216`
 - Modify: `api/internal/engine/hand/rake_test.go`
 - Modify: `api/internal/engine/hand/phase4_test.go`
 
 **Interfaces:**
-- No signature changes — `ConfigureRake(currencyMode string)` keeps the same signature; only which mode gets `rakeBPS = 250` flips. `table.SeedForRoom` (`api/internal/table/seed.go`) calls this unconditionally already and needs no change.
+
+- No signature changes — `ConfigureRake(currencyMode string)` keeps the same signature; only which mode gets
+  `rakeBPS = 250` flips. `table.SeedForRoom` (`api/internal/table/seed.go`) calls this unconditionally already and needs
+  no change.
 
 - [ ] **Step 1: Update the failing tests first**
 
@@ -412,12 +452,17 @@ func TestRakeConfigurationSurvivesPersistence(t *testing.T) {
 }
 ```
 
-In `api/internal/engine/hand/phase4_test.go`, in `TestHandOutcomeUsesNetOfRakeWinnerAndExcludesRefunds`, change `table.ConfigureRake("real")` to `table.ConfigureRake("sandbox")` (line 27) — the test's actual assertions (rake=5, payout=195) are mode-agnostic, only the trigger mode needs to flip.
+In `api/internal/engine/hand/phase4_test.go`, in `TestHandOutcomeUsesNetOfRakeWinnerAndExcludesRefunds`, change
+`table.ConfigureRake("real")` to `table.ConfigureRake("sandbox")` (line 27) — the test's actual assertions (rake=5,
+payout=195) are mode-agnostic, only the trigger mode needs to flip.
 
 - [ ] **Step 2: Run the tests, verify they fail**
 
-Run: `cd api && go test ./internal/engine/hand/... -run 'TestSandboxRakeUsesPercentageAndPlayerCaps|TestRealMoneyAndPreflopPotsHaveNoRake|TestRakeConfigurationSurvivesPersistence|TestHandOutcomeUsesNetOfRakeWinnerAndExcludesRefunds' -v`
-Expected: FAIL — `ConfigureRake` still gives `real` the 250bps, so `TestRealMoneyAndPreflopPotsHaveNoRake`'s first assertion (`cap != 0` for `"real"`) fails, and `TestSandboxRakeUsesPercentageAndPlayerCaps` fails since `"sandbox"` currently gives 0bps.
+Run:
+`cd api && go test ./internal/engine/hand/... -run 'TestSandboxRakeUsesPercentageAndPlayerCaps|TestRealMoneyAndPreflopPotsHaveNoRake|TestRakeConfigurationSurvivesPersistence|TestHandOutcomeUsesNetOfRakeWinnerAndExcludesRefunds' -v`
+Expected: FAIL — `ConfigureRake` still gives `real` the 250bps, so `TestRealMoneyAndPreflopPotsHaveNoRake`'s first
+assertion (`cap != 0` for `"real"`) fails, and `TestSandboxRakeUsesPercentageAndPlayerCaps` fails since `"sandbox"`
+currently gives 0bps.
 
 - [ ] **Step 3: Flip `ConfigureRake`**
 
@@ -470,15 +515,22 @@ git commit -m "feat(engine): sandbox tables now take rake, real-money tables nev
 ### Task 4: `walletclient.DebitReal` — charge the fixed fee against the player's real wallet
 
 **Files:**
+
 - Modify: `api/internal/walletclient/client.go`
 - Modify: `api/internal/walletclient/client_test.go`
 
 **Interfaces:**
-- Produces: `(*Client).DebitReal(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error` — consumed by Task 6 (`buyin.Service`) and Task 7 (`cmd/reconcile`).
+
+- Produces:
+  `(*Client).DebitReal(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error` —
+  consumed by Task 6 (`buyin.Service`) and Task 7 (`cmd/reconcile`).
 
 - [ ] **Step 1: Write the failing test**
 
-`client_test.go` already has two helpers used by every existing test: `fakeWalletServer(t, onMovement)` (a mux serving `/v1.0/token` plus the sandbox credit/debit paths) and `fakeAuthServer(t)`. Neither mux registers `/v1.0/internal/wallet/real/debit`, so this test stands up its own tiny mux instead of extending `fakeWalletServer` (which is also used by sandbox-only tests and shouldn't grow a real-money path). Add:
+`client_test.go` already has two helpers used by every existing test: `fakeWalletServer(t, onMovement)` (a mux serving
+`/v1.0/token` plus the sandbox credit/debit paths) and `fakeAuthServer(t)`. Neither mux registers
+`/v1.0/internal/wallet/real/debit`, so this test stands up its own tiny mux instead of extending `fakeWalletServer` (
+which is also used by sandbox-only tests and shouldn't grow a real-money path). Add:
 
 ```go
 func TestDebitRealSendsExpectedRequestBody(t *testing.T) {
@@ -573,10 +625,14 @@ git commit -m "feat(walletclient): add DebitReal for the real-money table-entry 
 ### Task 5: `reconcile.PendingCashout` gains a `Kind` so the same pending-retry table can also track a failed fee debit
 
 **Files:**
+
 - Modify: `api/internal/reconcile/pending.go`
 
 **Interfaces:**
-- Produces: `reconcile.PendingCashout.Kind string`, `reconcile.KindCashout = "cashout"`, `reconcile.KindFeeDebit = "fee_debit"` — consumed by Task 6 (`buyin.Service`, writes `KindFeeDebit` entries) and Task 7 (`cmd/reconcile`, branches on `Kind`).
+
+- Produces: `reconcile.PendingCashout.Kind string`, `reconcile.KindCashout = "cashout"`,
+  `reconcile.KindFeeDebit = "fee_debit"` — consumed by Task 6 (`buyin.Service`, writes `KindFeeDebit` entries) and Task
+  7 (`cmd/reconcile`, branches on `Kind`).
 
 - [ ] **Step 1: Add the field and constants**
 
@@ -603,11 +659,15 @@ Add the field to `PendingCashout` (after `CurrencyMode`):
 	Kind           string   `dynamodbav:"kind,omitempty" json:"kind,omitempty"`
 ```
 
-This task has no new test of its own — `pending.go`'s existing `Record`/`ListUnresolved`/`MarkResolved` logic doesn't branch on any field value, so adding an optional field needs no new coverage here; Tasks 6 and 7 each add tests that exercise `Kind` through their own call sites.
+This task has no new test of its own — `pending.go`'s existing `Record`/`ListUnresolved`/`MarkResolved` logic doesn't
+branch on any field value, so adding an optional field needs no new coverage here; Tasks 6 and 7 each add tests that
+exercise `Kind` through their own call sites.
 
 - [ ] **Step 2: Run the existing package tests, verify they still pass**
 
-Run: `cd api && go test ./internal/reconcile/... -v` (the `pending_test.go` file is `//go:build integration` — this will report "no test files" without `-tags integration`; that's expected and fine, it means nothing in this package needs a live DynamoDB to compile-check).
+Run: `cd api && go test ./internal/reconcile/... -v` (the `pending_test.go` file is `//go:build integration` — this will
+report "no test files" without `-tags integration`; that's expected and fine, it means nothing in this package needs a
+live DynamoDB to compile-check).
 Run: `cd api && go build ./...` to confirm the whole module still compiles.
 Expected: build succeeds.
 
@@ -623,12 +683,15 @@ git commit -m "feat(reconcile): add Kind to PendingCashout so fee-debit failures
 ### Task 6: `buyin.Service.BuyIn` charges the fixed entry fee after every successful seat
 
 **Files:**
+
 - Modify: `api/internal/buyin/service.go`
 - Modify: `api/internal/buyin/service_test.go`
 - Modify: `api/internal/buyin/terms_test.go`
 
 **Interfaces:**
-- Consumes: `roomstore.Room.EntryFeeCents` (Task 2), `walletMover.DebitReal` (Task 4, added to the interface here), `reconcile.KindFeeDebit` (Task 5).
+
+- Consumes: `roomstore.Room.EntryFeeCents` (Task 2), `walletMover.DebitReal` (Task 4, added to the interface here),
+  `reconcile.KindFeeDebit` (Task 5).
 
 - [ ] **Step 1: Add `DebitReal` to the `walletMover` interface**
 
@@ -748,12 +811,16 @@ func TestBuyInSkipsFeeForSandboxRooms(t *testing.T) {
 }
 ```
 
-Note: `TestBuyInUsesGameWalletForRealRooms` (existing test, room has no `EntryFeeCents` set, so it defaults to 0) must keep passing unchanged — it's an implicit regression check that a real room with `EntryFeeCents == 0` never calls `DebitReal` either, same as sandbox.
+Note: `TestBuyInUsesGameWalletForRealRooms` (existing test, room has no `EntryFeeCents` set, so it defaults to 0) must
+keep passing unchanged — it's an implicit regression check that a real room with `EntryFeeCents == 0` never calls
+`DebitReal` either, same as sandbox.
 
 - [ ] **Step 4: Run the tests, verify they fail**
 
-Run: `cd api && go test ./internal/buyin/... -run 'TestBuyInChargesFixedEntryFeeForRealRoomsAfterSeating|TestBuyInChargesFeeAgainOnRebuyAfterLeaving|TestBuyInSkipsFeeForSandboxRooms' -v`
-Expected: FAIL — `game.feeDebits` stays empty since nothing calls `DebitReal` yet. (`terms_test.go` and `service_test.go` must already compile at this point given Steps 1–2; if they don't, fix the fakes first.)
+Run:
+`cd api && go test ./internal/buyin/... -run 'TestBuyInChargesFixedEntryFeeForRealRoomsAfterSeating|TestBuyInChargesFeeAgainOnRebuyAfterLeaving|TestBuyInSkipsFeeForSandboxRooms' -v`
+Expected: FAIL — `game.feeDebits` stays empty since nothing calls `DebitReal` yet. (`terms_test.go` and
+`service_test.go` must already compile at this point given Steps 1–2; if they don't, fix the fakes first.)
 
 - [ ] **Step 5: Implement the charge in `BuyIn`**
 
@@ -801,7 +868,8 @@ Then, at the very end of `BuyIn` — after the existing session-log recording bl
 }
 ```
 
-(`room.CurrencyMode == "real"` guarantees `s.game` is non-nil here — `walletFor` already required and used it earlier in this same call for the stake hold, or this function would have already returned.)
+(`room.CurrencyMode == "real"` guarantees `s.game` is non-nil here — `walletFor` already required and used it earlier in
+this same call for the stake hold, or this function would have already returned.)
 
 - [ ] **Step 6: Run the tests, verify they pass**
 
@@ -820,10 +888,13 @@ git commit -m "feat(buyin): charge the fixed real-money table-entry fee on every
 ### Task 7: `cmd/reconcile` retries a failed fee debit the same way it retries a failed cash-out credit
 
 **Files:**
+
 - Modify: `api/cmd/reconcile/main.go`
 
 **Interfaces:**
-- Consumes: `walletclient.Client.DebitReal` (Task 4), `reconcile.PendingCashout.Kind` / `reconcile.KindFeeDebit` (Task 5).
+
+- Consumes: `walletclient.Client.DebitReal` (Task 4), `reconcile.PendingCashout.Kind` / `reconcile.KindFeeDebit` (Task
+  5).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -840,7 +911,8 @@ func (f *fakeFeeDebiter) DebitReal(_ context.Context, userID string, amount int6
 }
 ```
 
-Change `TestRunResolvesUnresolvedCashouts`'s call from `run(context.Background(), pending, game, sandbox)` to `run(context.Background(), pending, game, sandbox, &fakeFeeDebiter{})`.
+Change `TestRunResolvesUnresolvedCashouts`'s call from `run(context.Background(), pending, game, sandbox)` to
+`run(context.Background(), pending, game, sandbox, &fakeFeeDebiter{})`.
 
 Add:
 
@@ -868,7 +940,8 @@ func TestRunRetriesFeeDebit(t *testing.T) {
 - [ ] **Step 2: Run the tests, verify they fail**
 
 Run: `cd api && go test ./cmd/reconcile/... -v`
-Expected: compile error (`run` still takes 3 args, `fakeFeeDebiter` unused test won't build) — this is expected, fix in the next step.
+Expected: compile error (`run` still takes 3 args, `fakeFeeDebiter` unused test won't build) — this is expected, fix in
+the next step.
 
 - [ ] **Step 3: Update `run` to branch on `Kind`**
 
@@ -924,7 +997,8 @@ Update `handler()`'s call site:
 	return run(ctx, pendingStore, wallet, wallet, wallet)
 ```
 
-(`wallet` is a single `*walletclient.Client` — it already satisfies `gameCredit`, `sandboxCredit`, and now `feeDebiter` simultaneously, same as today.)
+(`wallet` is a single `*walletclient.Client` — it already satisfies `gameCredit`, `sandboxCredit`, and now `feeDebiter`
+simultaneously, same as today.)
 
 - [ ] **Step 4: Run the tests, verify they pass**
 
@@ -943,6 +1017,7 @@ git commit -m "feat(reconcile): retry a failed real-money table-entry fee debit 
 ### Task 8: UI — disclose the fee before it's charged, correct the rake copy
 
 **Files:**
+
 - Modify: `ui/src/lib/api/rooms.ts`
 - Modify: `ui/src/components/lobby/CreateRoomDialog.tsx`
 - Modify: `ui/src/components/table/BuyInPanel.tsx`
@@ -950,7 +1025,9 @@ git commit -m "feat(reconcile): retry a failed real-money table-entry fee debit 
 - Modify: `ui/src/app/poker-rules/page.tsx`
 
 **Interfaces:**
-- Consumes: API's new `fee_cents` (stakes catalog) and `entry_fee_cents` (room) fields — both already flow through existing generic JSON decoding, no new endpoint needed.
+
+- Consumes: API's new `fee_cents` (stakes catalog) and `entry_fee_cents` (room) fields — both already flow through
+  existing generic JSON decoding, no new endpoint needed.
 
 - [ ] **Step 1: Add the new fields to the TypeScript types**
 
@@ -975,7 +1052,8 @@ export interface Stake {
 
 - [ ] **Step 2: Show the fee per tier in `CreateRoomDialog`**
 
-In `ui/src/components/lobby/CreateRoomDialog.tsx`, change the stake button's label (inside the `stakes.map(...)` render, currently just `{formatStake(stake.small_blind, currencyMode)} / {formatStake(stake.big_blind, currencyMode)}`) to:
+In `ui/src/components/lobby/CreateRoomDialog.tsx`, change the stake button's label (inside the `stakes.map(...)` render,
+currently just `{formatStake(stake.small_blind, currencyMode)} / {formatStake(stake.big_blind, currencyMode)}`) to:
 
 ```tsx
 {formatStake(stake.small_blind, currencyMode)} / {formatStake(stake.big_blind, currencyMode)}
@@ -1001,7 +1079,8 @@ with:
 
 - [ ] **Step 4: Show the fee in `RebuyDialog`**
 
-In `ui/src/components/table/RebuyDialog.tsx`, add the same disclosure inside `DialogContent`, right after `DialogDescription`:
+In `ui/src/components/table/RebuyDialog.tsx`, add the same disclosure inside `DialogContent`, right after
+`DialogDescription`:
 
 ```tsx
       </DialogHeader>
@@ -1038,11 +1117,16 @@ with:
 - [ ] **Step 6: Type-check and lint**
 
 Run: `cd ui && npx tsc --noEmit && npx eslint src --max-warnings 0`
-Expected: no errors, no warnings (per `ui/CLAUDE.md`'s quality gate — there is no test script for this repo, this is the gate).
+Expected: no errors, no warnings (per `ui/CLAUDE.md`'s quality gate — there is no test script for this repo, this is the
+gate).
 
 - [ ] **Step 7: Manually verify in the browser**
 
-Start the dev server (`cd ui && npm run dev`), open the lobby, open "Mesa privada", switch to "Dinheiro real", and confirm each stake button shows its fee. Then create a real-money room and confirm the buy-in screen shows the fixed-fee disclosure line before confirming. This requires `REAL_MONEY_ENABLED=true` on the API the UI points at — if that's not available locally, at minimum verify the sandbox path renders unaffected (no fee line appears) and `npx tsc --noEmit` is the fallback verification per the "if you can't test the UI, say so explicitly" rule.
+Start the dev server (`cd ui && npm run dev`), open the lobby, open "Mesa privada", switch to "Dinheiro real", and
+confirm each stake button shows its fee. Then create a real-money room and confirm the buy-in screen shows the fixed-fee
+disclosure line before confirming. This requires `REAL_MONEY_ENABLED=true` on the API the UI points at — if that's not
+available locally, at minimum verify the sandbox path renders unaffected (no fee line appears) and `npx tsc --noEmit` is
+the fallback verification per the "if you can't test the UI, say so explicitly" rule.
 
 - [ ] **Step 8: Commit**
 
@@ -1055,5 +1139,8 @@ git commit -m "feat(ui): disclose the fixed real-money table fee before charging
 
 ## Post-plan cleanup (not a task — do after all 8 land)
 
-- Update `api/CLAUDE.md`'s Phase 5 status paragraph and `ui/CLAUDE.md`'s stale "real-money UI is DESIGNED-ONLY" line (it already isn't — `CreateRoomDialog.tsx`/`BuyInPanel.tsx`/`RebuyDialog.tsx` all handle `currency_mode: "real"` today) to describe the fixed-fee model instead of the old rake-based one.
-- File/track the cross-repo `internal:wallet:debit-real` scope grant for poker's M2M client in `ctech-account` — this plan cannot land in prod without it (same blocking category as the existing `internal:wallet:game-status` gap).
+- Update `api/CLAUDE.md`'s Phase 5 status paragraph and `ui/CLAUDE.md`'s stale "real-money UI is DESIGNED-ONLY" line (it
+  already isn't — `CreateRoomDialog.tsx`/`BuyInPanel.tsx`/`RebuyDialog.tsx` all handle `currency_mode: "real"` today) to
+  describe the fixed-fee model instead of the old rake-based one.
+- File/track the cross-repo `internal:wallet:debit-real` scope grant for poker's M2M client in `ctech-account` — this
+  plan cannot land in prod without it (same blocking category as the existing `internal:wallet:game-status` gap).

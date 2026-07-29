@@ -18,6 +18,7 @@ import {
   savePlayerNote
 } from '@/lib/api/playerNotes';
 import {pushNotification} from '@/lib/notify';
+import {PlayerAvatar} from '@/components/ui/player-avatar';
 
 const TAG_LABELS: Record<PlayerNoteTag, string> = {
   red: 'Vermelho',
@@ -28,7 +29,7 @@ const TAG_LABELS: Record<PlayerNoteTag, string> = {
   purple: 'Roxo'
 };
 
-type Opponent = {player_id: string; name?: string};
+type Opponent = {player_id: string; name?: string; avatar_url?: string};
 
 export function PlayerNoteDialog({
                                    opponent,
@@ -63,7 +64,10 @@ export function PlayerNoteDialog({
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent>
       <DialogHeader>
-        <DialogTitle>Nota sobre {opponent?.name || 'jogador'}</DialogTitle>
+        <DialogTitle className="player-note-title">
+          <PlayerAvatar name={opponent?.name} avatarUrl={opponent?.avatar_url} size={32} decorative/>
+          Nota sobre {opponent?.name || 'jogador'}
+        </DialogTitle>
         <DialogDescription className="player-note-privacy">
           <LockKeyhole aria-hidden="true"/> Só você pode ver esta anotação.
         </DialogDescription>

@@ -49,6 +49,7 @@ const (
 type Player struct {
 	ID          string       `dynamodbav:"id"`
 	Name        string       `dynamodbav:"name,omitempty"`
+	AvatarURL   string       `dynamodbav:"avatar_url,omitempty"`
 	Stack       int64        `dynamodbav:"stack"`
 	Ready       bool         `dynamodbav:"ready"`
 	State       PlayerState  `dynamodbav:"state"`
@@ -285,15 +286,16 @@ func (t *Table) ConfigureRake(currencyMode string) {
 // nothing in this package previously needed to write it from outside).
 func (t *Table) PlayersForActor() []*Player { return t.players }
 
-// SetPlayerNameForActor persists display identity with the seat so snapshots
-// built by any actor instance carry the same name. It reports whether the
+// SetPlayerIdentityForActor persists display identity with the seat so snapshots
+// built by any actor instance carry the same name/avatar. It reports whether the
 // value changed, allowing connection setup to avoid a no-op table commit.
-func (t *Table) SetPlayerNameForActor(playerID, name string) bool {
+func (t *Table) SetPlayerIdentityForActor(playerID, name, avatarURL string) bool {
 	p := t.playerByID(playerID)
-	if p == nil || name == "" || p.Name == name {
+	if p == nil || (name == "" && avatarURL == "") || (p.Name == name && p.AvatarURL == avatarURL) {
 		return false
 	}
 	p.Name = name
+	p.AvatarURL = avatarURL
 	return true
 }
 

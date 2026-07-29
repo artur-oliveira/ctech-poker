@@ -1,41 +1,63 @@
 # ui/ — CLAUDE.md
 
-Next.js 16 (App Router) SPA for the poker lobby, tables, and game client. **Both sandbox (virtual currency) and real-money (Brazil-legal fixed-fee model) modes are fully supported in the UI.**
+Next.js 16 (App Router) SPA for the poker lobby, tables, and game client. Sandbox play is live;
+the wallet-mode switch for real money exists here, but the backend gate (`REAL_MONEY_ENABLED`) is
+off by default — do not build UI that assumes real money is on.
 
 ## Conventions
 
 - **Reuse shared CTech client libraries:** `@aoctech/auth-client` (OAuth) and
   `@aoctech/ws-client` (WebSocket). Do NOT hand-roll auth or socket clients. (The design
   docs mention `ctech-oauth-client`; the code uses `@aoctech/auth-client` — trust the code.)
-- **Static export.** `output: 'export'` in prod (`next.config.ts:7`); the SPA route manifest
-  is published to a CloudFront KeyValueStore by `scripts/publish-routes.sh`. Do not add
-  server-only routes/APIs.
-- **Named constants over literals.** Reuse `lib/api/*`, `lib/auth/*`, `lib/table.ts`,
-  `lib/gamification.ts` instead of inlining URLs/paths/event strings.
-- **One realtime hook.** `lib/hooks/useTableRealtime.ts` owns the entire table surface
-  (socket, snapshot, chat, achievements, reconnect). Extend it rather than adding a second
-  socket hook.
-- **State:** token is a module singleton in `lib/api/client.ts` (not React Context, not
-  persisted); table data flows through `QueryProvider` (TanStack Query). No other providers.
-- **Animations are CSS** (`src/app/globals.css` keyframes) — no animation library. Keep it
-  that way; honor `prefers-reduced-motion`.
+- **Static export.** `output: 'export'` in prod (`next.config.ts`); the SPA route manifest is
+  published to a CloudFront KeyValueStore by `scripts/publish-routes.sh`. **There is no server
+  at runtime** — no API routes, no server actions, no image optimizer. Anything needing a server
+  belongs in `api/`.
+- **The wire is binary protobuf**, not JSON. Encode/decode through `lib/ws/utils.ts` against
+  `lib/api/proto/poker.ts`; regenerate from `../proto/poker.proto` rather than hand-editing.
+- **Named constants over literals.** Reuse `lib/api/*`, `lib/utils.ts`, `lib/pokerRules.ts`,
+  `lib/tableOutcome.ts` etc. instead of inlining URLs, paths or event strings.
+- **Two realtime hooks, no more.** `lib/hooks/useTableRealtime.ts` owns the table surface;
+  `lib/hooks/useLobbyRealtime.ts` owns the lobby/user gateway. Extend them rather than opening a
+  third socket.
+- **State:** the token is a module singleton in `lib/api/client.ts` (not React Context, not
+  persisted); server data flows through `QueryProvider` (TanStack Query). No other providers.
+- **Animations are CSS** (`src/app/globals.css` keyframes) — no animation library. Keep it that
+  way; honor `prefers-reduced-motion`.
 - **Type safety:** `zod` for form/API shapes, `react-hook-form` for forms.
-- **Quality gate:** `eslint src --max-warnings 0` plus `next build` must pass with **zero
-  errors AND zero warnings**. There is no test script — lint + build are the gate.
+- **Quality gate:** `npx vitest run`, `npx tsc --noEmit`, `npx eslint src --max-warnings 0` and
+  `npm run build` must all pass with **zero errors and zero warnings**. Coverage thresholds are
+  enforced in `vitest.config.ts` (lines/functions/statements 80, branches 70).
 
-## DESIGNED-ONLY (do not assume present)
+## Security invariants — do not regress
 
-Lobby stake/mode filters · crypto fairness/audit surfaces · player reactions · chat moderation · achievements
-catalog screen · roulette wheel visual · physical chip travel · Geist font binding
-(`--font-sans`/`--font-mono` not yet wired via `next/font`). All confirmed absent in `src/`.
-
-## Auth flow
-
-`@aoctech/auth-client` → `lib/auth/oauth.ts`. Landing CTAs → `startOAuthFlow`; `/callback`
-exchanges code + stores token; `TermsGate` gates on `GET /v1.0/players/me` +
-`poker_terms_accepted`.
+- **Never render or derive hidden information client-side.** The server masks unseen hole cards
+  as the literal `"back"` before sending; the client's job is to display what it got, never to
+  reconstruct what it didn't.
+- **Fairness verification happens in the browser.** `lib/deckVerify.ts` recomputes hashes with
+  WebCrypto. Never replace that with a server-provided boolean — the whole point is that the
+  player does not have to trust us.
+- **The seed-less partial proof must stay seed-less.** `PartialDeckProof` may only flip positions
+  present in `revealed`; "Revelar tudo" must never turn a mucked card face-up. There is a test
+  asserting exactly this.
 
 ## Layout
 
-`src/app/{page,lobby,table,leaderboard,roulette,callback}` · `src/components/{lobby,table,ui}`
-· `src/lib/{api,auth,hooks,providers}`.
+`src/app/{page,lobby,table,hands,hands/history,hands/replay,leaderboard,achievements,profile,share,guide,poker-rules,callback}`
+· `src/components/{achievements,hands,lobby,table,ui}` (+ root: `TermsGate`, `Notifier`,
+`AchievementToast`, `HandRankings`) · `src/lib/{api,api/proto,auth,hooks,providers,ws}` + domain
+modules at `src/lib/*.ts` · `src/dev` (mock runtime, aliased away in prod) · `src/test/setup.ts`.
+
+Profile **editing** is `components/lobby/ProfileMenu.tsx` + `ProfileShowcaseDialog.tsx`, not
+`app/profile/` — that route is the public read-only showcase of another player.
+
+## Auth flow
+
+`@aoctech/auth-client` → `lib/auth/oauth.ts` (+ `lib/auth/session.ts` for keep-alive/recovery).
+Landing CTAs → `startOAuthFlow`; `/callback` exchanges the code and stores the token; `TermsGate`
+gates on `GET /v1.0/players/me` + `poker_terms_accepted`.
+
+## Not built (do not assume present)
+
+Lobby stake/mode filters · multi-table grid · tournaments · spectator mode · physical chip travel
+· avatar images use `PlayerAvatar`, with `initials()` in `lib/utils.ts` as the shared fallback.

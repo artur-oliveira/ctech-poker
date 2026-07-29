@@ -12,4 +12,8 @@ function AvatarFallback({className, ...props}: Primitive.Fallback.Props) {
     className={cn('flex size-full items-center justify-center uppercase', className)} {...props}/>;
 }
 
-export {Avatar, AvatarFallback};
+function AvatarImage({className, ...props}: Primitive.Image.Props) {
+  return <Primitive.Image className={cn('size-full object-cover', className)} {...props}/>;
+}
+
+export {Avatar, AvatarFallback, AvatarImage};

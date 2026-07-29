@@ -1744,6 +1744,40 @@ h1 em {
     transition: background .2s
 }
 
+.profile-avatar-editor {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    align-items: start;
+    gap: 8px 12px
+}
+
+.profile-avatar-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 3px;
+    padding-top: 4px
+}
+
+.profile-avatar-copy span {
+    color: var(--muted);
+    font-size: var(--font-size-tiny);
+    line-height: 1.35
+}
+
+.profile-avatar-actions {
+    grid-column: 2;
+    display: flex;
+    align-items: center;
+    gap: 6px
+}
+
+.player-note-title {
+    display: flex;
+    align-items: center;
+    gap: 10px
+}
+
 .profile-name-display:hover {
     background: var(--white-13)
 }
@@ -2807,10 +2841,12 @@ h1 em {
     font-style: italic
 }
 
-/* Desktop/tablet read seats as name cards; only the phone-width redesign
-   below (avatar + chips, color instead of name) turns this on. */
 .seat-avatar {
-    display: none
+    display: flex;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    font-size: var(--font-size-tiny)
 }
 
 .seat-cards {

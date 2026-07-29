@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/dynamo"
@@ -74,6 +75,72 @@ func (s *Store) SetName(ctx context.Context, userID, name string) error {
 	}
 	if !ok {
 		return fmt.Errorf("player: profile disappeared while setting name")
+	}
+	return nil
+}
+
+func (s *Store) SetAvatar(ctx context.Context, userID, key string, version int) error {
+	if _, err := s.GetOrCreate(ctx, userID); err != nil {
+		return err
+	}
+	ok, err := s.base.UpdateItem(ctx, userID, nil, map[string]any{
+		"avatar_key": key, "avatar_version": version, "avatar_blocked": false, "updated_at": dynamo.NowStr(),
+	})
+	if err != nil {
+		return fmt.Errorf("player: set avatar: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("player: profile disappeared while setting avatar")
+	}
+	return nil
+}
+
+func (s *Store) ClearAvatar(ctx context.Context, userID string) error {
+	if _, err := s.GetOrCreate(ctx, userID); err != nil {
+		return err
+	}
+	_, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
+		Key:              map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: userID}},
+		UpdateExpression: aws.String("REMOVE #key SET #blocked = :blocked, #updated = :updated"),
+		ExpressionAttributeNames: map[string]string{
+			"#key": "avatar_key", "#blocked": "avatar_blocked", "#updated": "updated_at",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":blocked": &types.AttributeValueMemberBOOL{Value: false},
+			":updated": &types.AttributeValueMemberS{Value: dynamo.NowStr()},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("player: clear avatar: %w", err)
+	}
+	return nil
+}
+
+// ReportAvatar durably records distinct reporters on the target profile. The
+// set is an atomic DynamoDB ADD, so concurrent reports cannot overwrite one
+// another and a retry by the same player stays idempotent.
+func (s *Store) ReportAvatar(ctx context.Context, targetID, reporterID string) error {
+	if targetID == "" || reporterID == "" || targetID == reporterID {
+		return fmt.Errorf("player: invalid avatar report")
+	}
+	profile, err := s.Get(ctx, targetID)
+	if err != nil {
+		return err
+	}
+	if profile == nil {
+		return fmt.Errorf("player: avatar report target not found")
+	}
+	_, err = s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
+		Key:                      map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: targetID}},
+		UpdateExpression:         aws.String("ADD #reporters :reporter SET #updated = :updated"),
+		ExpressionAttributeNames: map[string]string{"#reporters": "avatar_reporters", "#updated": "updated_at"},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":reporter": &types.AttributeValueMemberSS{Value: []string{reporterID}},
+			":updated":  &types.AttributeValueMemberS{Value: dynamo.NowStr()},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("player: report avatar: %w", err)
 	}
 	return nil
 }

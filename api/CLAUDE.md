@@ -10,7 +10,11 @@ reconciliation retries. **Still blocking, found 2026-07-25 while verifying cross
 1. ctech-wallet's scope catalog (`ctech-account/api/internal/scopes/catalog.go`) has no `internal:wallet:game-status` entry, so no M2M client can ever be granted the scope `ctech-wallet`'s `GET /wallet/game/status/:user_id` requires.
 2. Poker's M2M client has never been granted the `internal:wallet:debit-real` scope in `ctech-account`'s catalog.
 Both are data/config actions in `ctech-account`, not code changes in this repo.
-Also unresolved: no ASG lifecycle hook exists in either `ctech-cdk`'s `PrivateIpv4Ec2Service` or this repo's `cdk/lib/api-stack.ts` — `tablemanager.DrainAndRelease` relies on the EC2 default shutdown grace period, not a guaranteed drain window.
+Also unresolved (re-verified 2026-07-28):
+- No ASG lifecycle hook exists in either `ctech-cdk`'s `PrivateIpv4Ec2Service` or this repo's `cdk/lib/api-stack.ts` — `tablemanager.DrainAndRelease` relies on the EC2 default shutdown grace period, not a guaranteed drain window.
+- The real-money buy-in path skips the poker-terms-acceptance check the sandbox path performs (`internal/app/app.go`).
+- No WAF at the CloudFront edge; application rate limits (`internal/api/v1/ratelimit.go`) and Turnstile are the only protection.
+- Neither EventBridge Scheduler target (`cmd/reconcile`, `cmd/tablecleanup`) has a DLQ.
 
 ## Conventions (follow these)
 
@@ -24,9 +28,21 @@ Also unresolved: no ASG lifecycle hook exists in either `ctech-cdk`'s `PrivateIp
 - **`tablelease` is latency-only**, not correctness. Never add lease-based correctness logic.
 - **Player identity comes from the JWT `sub`** — derive `playerID` from claims, never trust a client-supplied id
   (prevents IDOR).
-- **Sandbox isolation is load-bearing:** `buyin` must keep rejecting non-`sandbox`
-  `CurrencyMode` (`ErrUnsupportedCurrencyMode`). Do not add a real-money wallet path here without ctech-wallet's
-  hold/capture endpoints first.
+- **The `currency_mode` boundary is load-bearing.** `buyin` routes to exactly one ledger per room and must never let
+  sandbox chips reach the real wallet or vice versa — enforce it in `buyin`, not at the handler. The real path is
+  built; what gates it at runtime is `REAL_MONEY_ENABLED` + `LEGAL_SIGNOFF_REF`, checked fail-closed in
+  `config.Load`. (Earlier revisions of this file said to reject non-`sandbox` outright — that is no longer the rule.)
+- **Money ordering is deliberate**: debit-then-seat on buy-in, remove-then-credit on cash-out. Anything that can
+  fail after chips moved goes to `poker_pending_cashouts` for the `cmd/reconcile` sweeper. Keep new money paths in
+  that shape rather than inventing a compensating transaction per call site.
+- **Hidden information never leaves `ViewFor`.** `Table.ViewFor(viewerID)` is the single place that decides
+  per-viewer visibility, masking unseen hole cards as `"back"` before serialisation; fan-out is keyed
+  `<tableID>#<viewerID>` so two seats cannot share a snapshot. Add visibility rules there, never in a handler.
+- **The fairness reveal is asymmetric on purpose.** The server seed is published only when nothing stayed hidden
+  (a real showdown). Every other hand gets the seed-less per-position proof (`fairnessProofFor`). Widening seed
+  publication would retroactively expose mucked hole cards — treat it as a security change, not a feature.
+  `FairnessProofs` is set only on the copy handed to hooks, never on `Table.lastOutcome`, which is persisted with
+  every table-state write.
 - **`handeval` is table-driven — never edit `handeval/ref` without regenerating.** `ref` is the reference evaluator
   and the sole definition of the canonical hand ordering; `tables.bin` is compiled from it by
   `go generate ./internal/engine/handeval/...` and embedded. Changing `ref` without regenerating leaves stale tables
@@ -62,6 +78,14 @@ to the catalog.
 
 ## Layout
 
-`cmd/{server,archiver,handreplay}` · `internal/{api,app,engine,table,tablemanager,
-tablestore,roomstore,buyin,player,leaderboard,achievements,roulette,walletclient,
-tablelease,chatfilter,config,problem}` · `tests/integration`.
+`cmd/{server,archiver,reconcile,tablecleanup,handreplay}` ·
+`internal/api/v1` (+ `api/v1/proto`, generated from `../proto/poker.proto`) · `internal/app` (Fx wiring) ·
+`internal/engine/{hand,betting,deck,equity,handeval,sidepots}` ·
+`internal/{table,tablemanager,tablestore,tablelease,roomstore}` ·
+`internal/{buyin,walletclient,reconcile}` (money) ·
+`internal/{player,playernotes,pokerstats,sessionlog,handshare}` (player-scoped data) ·
+`internal/{leaderboard,achievements,dailyreward}` (gamification) ·
+`internal/{botcheck,chatfilter,metrics,config,problem}` · `tests/{integration,load}`.
+
+Transport is **binary protobuf** on both gateways (`GET /v1.0/tables/:id/ws`, `GET /v1.0/ws`), with the access token
+sent as the first frame after upgrade and a 32 KiB frame cap.

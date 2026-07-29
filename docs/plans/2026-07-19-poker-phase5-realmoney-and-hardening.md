@@ -2066,11 +2066,11 @@ type memStore struct {
 }
 
 func (m *memStore) PutSession(_ interface{}, s Session) error {
-	m.sessions = append(m.sessions, s);
+	m.sessions = append(m.sessions, s)
 	return nil
 }
 func (m *memStore) PutHandEntry(_ interface{}, h HandEntry) error {
-	m.hands = append(m.hands, h);
+	m.hands = append(m.hands, h)
 	return nil
 }
 func (m *memStore) ListSessions(_ interface{}, playerID string, limit int, cursor string) ([]Session, string, error) {

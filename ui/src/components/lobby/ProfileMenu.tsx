@@ -1,22 +1,23 @@
 'use client';
-import {useState} from 'react';
+import {useRef, useState} from 'react';
 import Image from 'next/image';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {Activity, LogOut} from 'lucide-react';
+import {Activity, Camera, LoaderCircle, LogOut, Trash2} from 'lucide-react';
 import {getMe, updateMe, type WalletMode} from '@/lib/api/player';
 import {logout} from '@/lib/auth/oauth';
-import {Avatar, AvatarFallback} from '@/components/ui/avatar';
+import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Label} from '@/components/ui/label';
 import {Switch} from '@/components/ui/switch';
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
 import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
-import {initials} from '@/lib/utils';
 import {cardPath} from '@/lib/cards';
 import {DECK_VARIANTS, type DeckVariantId, DEFAULT_DECK_VARIANT} from '@/lib/cardVariants';
 import {ProfileShowcaseDialog} from '@/components/lobby/ProfileShowcaseDialog';
 import {SelfHudDialog} from '@/components/lobby/SelfHudDialog';
+import {deleteAvatar, uploadAvatar} from '@/lib/avatar';
+import {pushNotification} from '@/lib/notify';
 
 const ACES = ['As', 'Ah', 'Ad', 'Ac'];
 
@@ -35,6 +36,7 @@ export function ProfileMenu() {
   const [editingName, setEditingName] = useState(false);
   const [showcaseOpen, setShowcaseOpen] = useState(false);
   const [selfHudOpen, setSelfHudOpen] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const save = useMutation({
     mutationFn: updateMe,
@@ -42,6 +44,21 @@ export function ProfileMenu() {
       queryClient.setQueryData(['player', 'me'], data);
       setEditingName(false);
     }
+  });
+  const avatar = useMutation({
+    mutationFn: uploadAvatar,
+    onSuccess: data => {
+      queryClient.setQueryData(['player', 'me'], data);
+      pushNotification('Foto de perfil atualizada.', 'info');
+    },
+    onError: () => pushNotification('Não foi possível atualizar a foto. Tente outra imagem.'),
+  });
+  const removeAvatar = useMutation({
+    mutationFn: deleteAvatar,
+    onSuccess: data => {
+      queryClient.setQueryData(['player', 'me'], data);
+      pushNotification('Foto de perfil removida.', 'info');
+    },
   });
 
   const walletMode: WalletMode = me?.wallet_mode || 'sandbox';
@@ -57,11 +74,35 @@ export function ProfileMenu() {
     <div className="profile-summary">
       <span className="balance-pill">{balanceLabel}</span>
       <PopoverTrigger render={<Button variant="ghost" size="icon" className="rounded-full" aria-label="Abrir perfil"/>}>
-        <Avatar><AvatarFallback>{initials(me?.name)}</AvatarFallback></Avatar>
+        <PlayerAvatar name={me?.name} avatarUrl={me?.avatar_url}/>
       </PopoverTrigger>
     </div>
     <PopoverContent>
       <div className="space-y-4">
+        <div className="profile-avatar-editor">
+          <PlayerAvatar name={me?.name} avatarUrl={me?.avatar_url} size={56}/>
+          <div className="profile-avatar-copy">
+            <b>Foto do perfil</b>
+            <span>JPG ou PNG · corte quadrado</span>
+          </div>
+          <input ref={fileInput} className="sr-only" type="file" accept="image/jpeg,image/png"
+                 aria-label="Selecionar foto de perfil" onChange={event => {
+                   const file = event.target.files?.[0];
+                   if (file) avatar.mutate(file);
+                   event.target.value = '';
+                 }}/>
+          <div className="profile-avatar-actions">
+            <Button type="button" size="sm" variant="outline" disabled={avatar.isPending}
+                    onClick={() => fileInput.current?.click()}>
+              {avatar.isPending ? <LoaderCircle className="spin" aria-hidden="true"/> : <Camera aria-hidden="true"/>}
+              {avatar.isPending ? 'Enviando…' : me?.avatar_url ? 'Trocar' : 'Adicionar'}
+            </Button>
+            {me?.avatar_url && <Button type="button" size="icon" variant="ghost" disabled={removeAvatar.isPending}
+                                       aria-label="Remover foto de perfil" onClick={() => removeAvatar.mutate()}>
+              <Trash2 aria-hidden="true"/>
+            </Button>}
+          </div>
+        </div>
         <div className="space-y-2">
           <Label id="profile-name-label">Nome de exibição</Label>
           {editingName ? (

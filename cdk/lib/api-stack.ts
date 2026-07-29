@@ -41,6 +41,8 @@ interface ApiStackProps extends cdk.StackProps {
   instanceProfileName: string;
   deploymentsBucketName: string;
   logsBucketName: string;
+  avatarsBucketName: string;
+  avatarBaseUrlParam: string;
   tableStateArn: string;
   tableStateHistoryArn: string;
   actionLogArn: string;
@@ -78,6 +80,7 @@ export class PokerApiStack extends cdk.Stack {
       instanceProfileName,
       deploymentsBucketName,
       logsBucketName,
+      avatarsBucketName,
       tableStateArn,
       tableStateHistoryArn,
       actionLogArn,
@@ -93,6 +96,7 @@ export class PokerApiStack extends cdk.Stack {
       turnstileSecretParam,
       realMoneyEnabledParam,
       legalSignoffRefParam,
+      avatarBaseUrlParam,
       achievementProgressTableArn,
       leaderboardStatsTableArn,
       playerSessionsTableArn,
@@ -101,6 +105,12 @@ export class PokerApiStack extends cdk.Stack {
     } = props;
     
     const shared = SSM_SHARED(environment);
+
+    new ssm.StringParameter(this, 'AvatarBaseUrlParameter', {
+      parameterName: avatarBaseUrlParam,
+      stringValue: `https://${appDomainName}/avatars`,
+      description: 'Public same-origin base URL for versioned poker avatars',
+    });
     
     const instanceRole = new iam.Role(this, 'ApiInstanceRole', {
       roleName: instanceRoleName(environment),
@@ -138,6 +148,7 @@ export class PokerApiStack extends cdk.Stack {
       resources: [
         shared.valkeyUrl, walletUrlParam, pokerClientIdParam, pokerClientSecretParam, turnstileSecretParam,
         realMoneyEnabledParam, legalSignoffRefParam,
+        avatarBaseUrlParam,
       ].map(
         (path) => `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${path}`,
       ),
@@ -149,6 +160,18 @@ export class PokerApiStack extends cdk.Stack {
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: ['s3:PutObject'],
       resources: [`arn:${cdk.Aws.PARTITION}:s3:::${logsBucketName}/${S3_PREFIX}/*`],
+    }));
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['s3:PutObject'],
+      resources: [`arn:${cdk.Aws.PARTITION}:s3:::${avatarsBucketName}/up/*`],
+    }));
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['s3:GetObject', 's3:DeleteObject'],
+      resources: [`arn:${cdk.Aws.PARTITION}:s3:::${avatarsBucketName}/up/*`],
+    }));
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['s3:PutObject', 's3:DeleteObject'],
+      resources: [`arn:${cdk.Aws.PARTITION}:s3:::${avatarsBucketName}/av/*`],
     }));
     
     // ── Shared infrastructure from ctech-cdk ──────────────────────────────────
@@ -223,6 +246,7 @@ export class PokerApiStack extends cdk.Stack {
       `TRUSTED_PROXIES=${vpc.vpcCidrBlock}`,
       `CORS_ALLOWED_ORIGINS=https://${appDomainName}`,
       `TURNSTILE_EXPECTED_HOSTNAME=${appDomainName}`,
+      `AVATAR_BUCKET=${avatarsBucketName}`,
       `ENV`,
       
       // ── start.sh: fetches runtime configuration and M2M credentials from SSM.
@@ -252,6 +276,8 @@ export class PokerApiStack extends cdk.Stack {
       `export REAL_MONEY_ENABLED`,
       `LEGAL_SIGNOFF_REF=$(aws ssm get-parameter --name "${legalSignoffRefParam}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
       `export LEGAL_SIGNOFF_REF`,
+      `AVATAR_BASE_URL=$(aws ssm get-parameter --name "${avatarBaseUrlParam}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+      `export AVATAR_BASE_URL`,
       `exec /opt/app/current/app`,
       `START`,
       `chmod +x /opt/app/start.sh`,

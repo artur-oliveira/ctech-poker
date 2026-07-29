@@ -10,6 +10,7 @@ import {getProfileShowcase} from '@/lib/api/player';
 import {achievementLabel} from '@/lib/achievements';
 import {useOptionalSession} from "@/lib/auth/session";
 import {ProfileMenu} from "@/components/lobby/ProfileMenu";
+import {PlayerAvatar} from '@/components/ui/player-avatar';
 
 function ProfileContent() {
   const params = useSearchParams();
@@ -43,9 +44,8 @@ function ProfileContent() {
           <Button render={<Link href="/lobby"/>}>Ir para o Lobby</Button>
         </div> : <>
           <header>
-            <span className="profile-showcase-avatar" aria-hidden="true">
-              {(showcase.data.name || '?').slice(0, 2).toUpperCase()}
-            </span>
+            <PlayerAvatar className="profile-showcase-avatar" name={showcase.data.name}
+                          avatarUrl={showcase.data.avatar_url} size={68}/>
             <div>
               <small>VITRINE DO JOGADOR</small>
               <h1>{showcase.data.name || 'Jogador'}</h1>

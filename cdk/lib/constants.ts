@@ -65,6 +65,11 @@ export const API_CURRENT_ARTIFACT_KEY = `${S3_PREFIX}/current.zip`;
 export const asgName = (env: Environment) => `${env}-${SERVICE}-api`;
 export const instanceProfileName = (env: Environment) => `${env}-${SERVICE}-api-instance-profile`;
 export const frontendBucketName = (env: Environment) => `${env}-${SERVICE}-frontend`;
+export const avatarsBucketName = (env: Environment) => `${env}-${SERVICE}-avatars`;
+export const avatarsS3Origins = (env: Environment) => [
+  `https://${avatarsBucketName(env)}.s3.${AWS_REGION}.amazonaws.com`,
+  `https://${avatarsBucketName(env)}.s3.dualstack.${AWS_REGION}.amazonaws.com`,
+];
 export const routeStoreName = (env: Environment) => `${env}-${SERVICE}-routes`;
 export const instanceRoleName = (env: Environment) => `${env}-${SERVICE}-api-role`;
 
@@ -111,6 +116,7 @@ export const SSM_POKER = (env: Environment) => ({
   // empty (api/internal/config/config.go).
   realMoneyEnabled: `/ctech/${env}/poker/real-money-enabled`,
   legalSignoffRef: `/ctech/${env}/poker/legal-signoff-ref`,
+  avatarBaseUrl: `/ctech/${env}/poker/avatar-base-url`,
 });
 
 // ── Domain helper (identical to ctech-wallet's / ctech-dfe's) ───────────────

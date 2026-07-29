@@ -3,12 +3,15 @@ package v1
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"net/url"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
+	"gopkg.aoctech.app/poker/api/internal/avatar"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/problem"
@@ -41,22 +44,114 @@ type playerHandlers struct {
 	cfg          *config.Config
 	sessions     sessionLogReader
 	achievements playerAchievementStore
+	avatars      *avatar.Service
 }
 
 // RegisterPlayers mounts every /players/me/* route: profile, wallet-mode,
 // terms acceptance, session/hand history, and achievement progress all live
 // under the same resource and share the same auth-derived playerID.
-func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Service, sessions sessionLogReader, achievementStore playerAchievementStore, cfg *config.Config) {
-	h := &playerHandlers{players: players, sessions: sessions, achievements: achievementStore, cfg: cfg}
+func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Service, sessions sessionLogReader, achievementStore playerAchievementStore, cfg *config.Config, avatars *avatar.Service, avatarLimiter *RateLimiter) {
+	h := &playerHandlers{players: players, sessions: sessions, achievements: achievementStore, cfg: cfg, avatars: avatars}
 	router.Get("/players/:playerId/showcase", h.showcase)
 	g := router.Group("/players", auth)
 	g.Get("/me", h.me)
 	g.Post("/me", h.updateMe)
 	g.Post("/me/terms/accept", h.acceptTerms)
+	g.Post("/me/avatar/upload-url", rateLimit(avatarLimiter, playerKey("avatar-upload")), h.avatarUploadURL)
+	g.Post("/me/avatar/confirm", h.avatarConfirm)
+	g.Delete("/me/avatar", h.avatarDelete)
+	g.Post("/:playerId/avatar/report", rateLimit(avatarLimiter, playerKey("avatar-report")), h.avatarReport)
 	g.Get("/me/sessions", h.sessionHistory)
 	g.Get("/me/hands", h.handHistory)
 	g.Get("/me/hands/:handId", h.handByID)
 	g.Get("/me/achievements", h.achievementProgress)
+}
+
+type confirmAvatarRequest struct {
+	Version int `json:"version"`
+}
+
+func (h *playerHandlers) avatarUploadURL(c fiber.Ctx) error {
+	if h.avatars == nil || !h.avatars.Enabled() {
+		return problem.New(http.StatusServiceUnavailable, "/problems/avatar-disabled", "Avatar unavailable", "avatar uploads are disabled").Send(c)
+	}
+	userID := c.Locals(localsUserID).(string)
+	profile, err := h.players.GetOrCreate(c.Context(), userID)
+	if err != nil {
+		return problem.InternalServer("failed to load player profile", c, err).Send(c)
+	}
+	version := profile.AvatarVersion + 1
+	upload, err := h.avatars.Presign(c.Context(), fmt.Sprintf("up/%s/%d.jpg", userID, version))
+	if err != nil {
+		return problem.InternalServer("failed to authorize avatar upload", c, err).Send(c)
+	}
+	return c.JSON(fiber.Map{"url": upload.URL, "fields": upload.Fields, "version": version})
+}
+
+func (h *playerHandlers) avatarConfirm(c fiber.Ctx) error {
+	if h.avatars == nil || !h.avatars.Enabled() {
+		return problem.New(http.StatusServiceUnavailable, "/problems/avatar-disabled", "Avatar unavailable", "avatar uploads are disabled").Send(c)
+	}
+	var req confirmAvatarRequest
+	if err := c.Bind().Body(&req); err != nil || req.Version < 1 {
+		return problem.BadRequest("version is required").Send(c)
+	}
+	userID := c.Locals(localsUserID).(string)
+	profile, err := h.players.GetOrCreate(c.Context(), userID)
+	if err != nil {
+		return problem.InternalServer("failed to load player profile", c, err).Send(c)
+	}
+	if req.Version != profile.AvatarVersion+1 {
+		return problem.Conflict("avatar version is stale").Send(c)
+	}
+	uploadKey := fmt.Sprintf("up/%s/%d.jpg", userID, req.Version)
+	publishedKey := fmt.Sprintf("av/%s/%d.jpg", userID, req.Version)
+	if err := h.avatars.ValidateAndPublish(c.Context(), uploadKey, publishedKey); err != nil {
+		switch {
+		case errors.Is(err, avatar.ErrNotFound):
+			return problem.NotFound("avatar upload not found").Send(c)
+		case errors.Is(err, avatar.ErrEXIF):
+			return problem.New(http.StatusUnprocessableEntity, "/problems/avatar-exif", "Invalid avatar", "a imagem contém metadados; selecione-a novamente").Send(c)
+		case errors.Is(err, avatar.ErrInvalidImage), errors.Is(err, avatar.ErrImageTooLarge):
+			return problem.New(http.StatusUnprocessableEntity, "/problems/avatar-invalid", "Invalid avatar", "a imagem não é um JPEG/PNG válido ou excede os limites").Send(c)
+		default:
+			return problem.InternalServer("failed to validate avatar", c, err).Send(c)
+		}
+	}
+	updated, err := h.players.SetAvatar(c.Context(), userID, publishedKey, req.Version)
+	if err != nil {
+		return problem.InternalServer("failed to update avatar", c, err).Send(c)
+	}
+	h.avatars.DeleteBestEffort(c.Context(), uploadKey, profile.AvatarKey)
+	return c.JSON(h.responseWithBalance(c, updated))
+}
+
+func (h *playerHandlers) avatarDelete(c fiber.Ctx) error {
+	if h.avatars == nil || !h.avatars.Enabled() {
+		return problem.New(http.StatusServiceUnavailable, "/problems/avatar-disabled", "Avatar unavailable", "avatar uploads are disabled").Send(c)
+	}
+	userID := c.Locals(localsUserID).(string)
+	profile, err := h.players.GetOrCreate(c.Context(), userID)
+	if err != nil {
+		return problem.InternalServer("failed to load player profile", c, err).Send(c)
+	}
+	updated, err := h.players.ClearAvatar(c.Context(), userID)
+	if err != nil {
+		return problem.InternalServer("failed to remove avatar", c, err).Send(c)
+	}
+	h.avatars.DeleteBestEffort(c.Context(), profile.AvatarKey)
+	return c.JSON(h.responseWithBalance(c, updated))
+}
+
+func (h *playerHandlers) avatarReport(c fiber.Ctx) error {
+	targetID, err := url.PathUnescape(c.Params("playerId"))
+	if err != nil || targetID == "" {
+		return problem.BadRequest("player id is invalid").Send(c)
+	}
+	if err := h.players.ReportAvatar(c.Context(), targetID, c.Locals(localsUserID).(string)); err != nil {
+		return problem.InternalServer("failed to report avatar", c, err).Send(c)
+	}
+	return c.SendStatus(http.StatusNoContent)
 }
 
 func (h *playerHandlers) me(c fiber.Ctx) error {
@@ -138,7 +233,7 @@ func (h *playerHandlers) acceptTerms(c fiber.Ctx) error {
 	if err != nil {
 		return problem.InternalServer("failed to accept poker terms", c, err).Send(c)
 	}
-	return c.JSON(playerResponse(profile))
+	return c.JSON(playerResponse(profile, h.avatarBaseURL()))
 }
 
 func (h *playerHandlers) sessionHistory(c fiber.Ctx) error {
@@ -243,6 +338,7 @@ func (h *playerHandlers) showcase(c fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"player_id":             profile.UserID,
 		"name":                  profile.Name,
+		"avatar_url":            player.AvatarURL(profile, h.avatarBaseURL()),
 		"featured_achievements": featured,
 		"best_hand":             bestHand,
 	})
@@ -252,7 +348,7 @@ func (h *playerHandlers) showcase(c fiber.Ctx) error {
 // A wallet lookup failure (e.g. ctech-wallet briefly down) does not fail the
 // whole request — the profile itself is still valid without a balance.
 func (h *playerHandlers) responseWithBalance(c fiber.Ctx, profile *player.PlayerProfile) fiber.Map {
-	resp := playerResponse(profile)
+	resp := playerResponse(profile, h.avatarBaseURL())
 	if balances, err := h.players.Balances(c.Context(), profile.UserID); err == nil {
 		resp["game_balance"] = balances.GameBalance
 		resp["sandbox_balance"] = balances.SandboxBalance
@@ -262,10 +358,18 @@ func (h *playerHandlers) responseWithBalance(c fiber.Ctx, profile *player.Player
 	return resp
 }
 
-func playerResponse(profile *player.PlayerProfile) fiber.Map {
+func (h *playerHandlers) avatarBaseURL() string {
+	if h.cfg == nil {
+		return ""
+	}
+	return h.cfg.AvatarBaseURL
+}
+
+func playerResponse(profile *player.PlayerProfile, avatarBaseURL string) fiber.Map {
 	return fiber.Map{
 		"user_id":                 profile.UserID,
 		"name":                    profile.Name,
+		"avatar_url":              player.AvatarURL(profile, avatarBaseURL),
 		"wallet_mode":             profile.EffectiveWalletMode(),
 		"deck_variant":            profile.EffectiveDeckVariant(),
 		"showcase_public":         profile.ShowcasePublic,

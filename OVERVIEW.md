@@ -4,19 +4,18 @@
 
 A real-time, multi-table Texas Hold'em poker product. Two currency modes:
 **sandbox** (play money, no relation to real funds) and **real** (backed by `ctech-wallet`
-balance). MVP ships sandbox-complete; real-money mode ships only once its two hard
-prerequisites are met — see § 11.
+balance). Both are built; real money stays switched off until the § 11 regulatory opinion lands.
 
-**Real-money implementation status (re-verified 2026-07-25):** Sandbox mode is implemented
-end-to-end. Of Phase 5 (Tasks 1–12), Tasks 1, 2, 4–12 are implemented (wallet client, config
-gate, reconciliation job, metrics/alarms, graceful drain, WAF, hand-history endpoint, load
-test, session log). Task 3 (real-money buy-in/cash-out routing) is implemented in
-`buyin.Service` but **not reachable**: `POST /rooms` has no field to request a `real`
-`currency_mode` room (`api/internal/api/v1/rooms.go:93`), so `REAL_MONEY_ENABLED=true` +
-`LEGAL_SIGNOFF_REF` (`api/internal/config/config.go:50-51`) gates a path nothing can enter.
-`ui/` has no real-money UI beyond a currency-mode label. See `PLAN.md`'s Phase 5 status list
-and `docs/plans/2026-07-19-poker-phase5-realmoney-and-hardening.md`'s Status section for the
-full punch list.
+**Real-money implementation status (re-verified 2026-07-28):** Sandbox mode is live end to
+end. Real-money mode is **implemented and reachable, and disabled by default**: `POST
+/v1.0/rooms/` takes `currency_mode` and `entry_fee_cents` and rejects `real` unless
+`REAL_MONEY_ENABLED` is on (`api/internal/api/v1/rooms.go:58-66`, `:117`, `:123`, `:262`;
+config at `api/internal/config/config.go`), and the SPA exposes a wallet-mode switch
+(`ui/src/components/lobby/ProfileMenu.tsx`). Brazil's fixed-fee model shipped in
+`docs/plans/2026-07-25-realmoney-fixed-fee-and-sandbox-rake.md`. What remains is the § 11
+regulatory opinion and one residual gap — the real-money buy-in path skips the
+terms-acceptance check the sandbox path performs. Of the Phase 5 hardening tasks, **the WAF
+was never built** despite an older claim to the contrary; see `docs/README.md`.
 
 ## 2. Rooms
 
@@ -95,14 +94,23 @@ of bug that only surfaces as "a player is quietly being paid wrong" in productio
 
 - Server-authoritative shuffle using a CSPRNG (never `math/rand` unseeded or seeded
   predictably).
-- **Commit-reveal (partially implemented — B32):** the engine computes a commit hash over the
-  shuffled deck + a server seed for every hand (`deck.ShuffleResult{CommitHash, ServerSeed}`),
-  but **no endpoint publishes the commit or reveals the seed yet**, so the shuffle is *not*
-  independently verifiable by players today. The primitives exist internally; the
-  publish/reveal verification surface is future work that must ship before any
-  "provably fair" claim is made to players — especially for *real-money* poker, where
-  "trust us, the shuffle was fair" is a weak position the first time a player disputes
-  a bad beat.
+- **Commit-reveal (implemented, B32 closed).** Every hand commits before dealing:
+  `CommitHash = SHA256(seed ‖ cards)`, per-card `Salt_i = HMAC(seed, i)`,
+  `CardHash_i = SHA256(Salt_i ‖ rank ‖ suit)`, and `RootCommitHash` over all 52 card hashes
+  (`api/internal/engine/deck`). Both commits go out on the table snapshot before the hand and
+  are persisted with hand history (`api/internal/sessionlog`).
+- **Reveal rules, deliberately asymmetric.** The server seed is published **only** when the
+  hand ended in a full showdown with nothing left hidden — publishing it otherwise would
+  expose mucked hole cards nobody paid to see. Every other hand gets a **seed-less partial
+  proof**: each deck position ships either `card + salt` (positions the viewer was entitled
+  to see) or its committed hash alone. Both forms recompute `RootCommitHash`, so the deck is
+  provably unaltered either way (`Table.fairnessProofFor` /
+  `Table.FairnessProofsForActor` in `api/internal/engine/hand/snapshot.go`).
+- **Client-side verification.** The browser recomputes the hashes with WebCrypto and shows the
+  result — it never trusts a server-side "verified" flag (`ui/src/lib/deckVerify.ts`,
+  `ui/src/components/hands/DeckReveal.tsx`, `ui/src/components/hands/PartialDeckProof.tsx`).
+  Hands recorded before the partial proof shipped have no stored proof and still render as
+  unverifiable; there is no backfill, because the seed is not retained anywhere.
 
 ## 4. Resilience & real-time
 
@@ -133,13 +141,14 @@ of bug that only surfaces as "a player is quietly being paid wrong" in productio
   or vice versa. This separation must be enforced at the data-model level (different tables /
   a `currency_mode` field that every wallet-interaction code path checks and rejects mixing
   on), not just by convention.
-- **As of the current `ctech-wallet` audit**: the sandbox credit/debit surface already exists
-  and is implemented/tested — safe to build the sandbox mode against today. The real-money
-  hold/capture pattern above has **no corresponding wallet endpoint yet** (only sandbox
-  routes exist on the wallet side today) and `ctech-wallet`'s DynamoDB tables are currently
-  hard-capped at 5 RCU/WCU, which would not survive real poker table traffic. **Real-money
-  mode is blocked on both of these being fixed on the `ctech-wallet` side first** — do not
-  schedule real-money-mode engineering until they are.
+- **Current state (2026-07-28)**: both surfaces are wired. `api/internal/walletclient` speaks
+  sandbox credit/debit *and* real-money `HoldGame` / `ReleaseHold` / `CashoutGame` /
+  `DebitReal` / `IsGamblingActivated`, over M2M client-credentials. Anything that can fail
+  after chips moved is recorded in `poker_pending_cashouts` and retried every 5 minutes by
+  the `cmd/reconcile` Lambda, so a crash between "chips awarded" and "balance settled"
+  self-heals instead of losing funds. `ctech-wallet`'s DynamoDB throughput cap was a stated
+  blocker in earlier revisions of this doc — re-confirm it against the wallet repo before
+  turning real money on at volume.
 
 ## 6. Frontend
 
@@ -150,7 +159,7 @@ of bug that only surfaces as "a player is quietly being paid wrong" in productio
 - Lobby (table list, filters by stakes/mode), table view, buy-in/cash-out flow, basic in-table
   chat.
 - Ready toggle at the table, own-hand equity % readout (§ 9.4), achievement-unlock toast
-  (§ 9.2), leaderboard screen (§ 9.1), sandbox roulette wheel with spin animation (§ 9.3).
+  (§ 9.2), leaderboard screen (§ 9.1), daily sandbox-credit spin (§ 9.3).
 - Look and feel: this must read as a **game**, not a SaaS dashboard — playful, high-contrast
   table felt/chip/card visuals, motion-first feedback on every action, not a forms-and-tables UI.
 
@@ -161,23 +170,26 @@ of bug that only surfaces as "a player is quietly being paid wrong" in productio
   evaluation, dealer rotation, optional blind escalation on private rooms (§ 2).
 - Resilient real-time updates (disconnect/reconnect, crash-recoverable table state).
 - Gamified frontend with card animations (SVGs provided externally), hand equity display,
-  achievements, leaderboard, sandbox credit roulette (§ 9).
+  achievements, leaderboard, daily sandbox-credit spin (§ 9).
 - Resilient wallet integration.
 - Sandbox and real modes.
 
-## 8. Suggested features (not in the original brief — flagged as suggestions)
+## 8. Suggested features (not in the original brief) — all but one shipped
 
-1. **Rake/monetization mechanism.** The brief doesn't say how `ctech-poker` makes money. The
-   standard model is a rake (a small % of each real-money pot, capped at a max per hand) taken
-   into a house account. Without this designed in from the start, real-money mode has no
-   revenue model — flagging this as an open product question, not assuming an answer.
-2. **Hand history log**, queryable per player, independent of the live table state — needed
-   for dispute resolution ("I got a bad beat, prove the shuffle was fair") and is cheap to add
-   if commit-reveal (§ 3.5) is already in place.
-3. **Provable-fair shuffle (commit-reveal)** — see § 3.5.
-4. **Chat moderation** (basic profanity filter + report/mute) — real-money player-vs-player
-   chat without any moderation is a support-ticket generator from week one.
-5. **Table themes / cosmetics** — post-MVP delighter, explicitly not a priority now.
+1. **Monetization: resolved as a fixed entry fee**, not a percentage rake. A flat
+   `entry_fee_cents` per real-money tier is the Brazil-legal shape; sandbox tables carry a
+   nominal rake for gameplay parity only.
+2. **Hand history log — shipped.** `internal/sessionlog`, `GET /v1.0/players/me/hands`, plus an
+   interactive replayer and per-hand export in the SPA.
+3. **Provably-fair shuffle (commit-reveal) — shipped.** See § 3.5.
+4. **Chat moderation — partial.** `internal/chatfilter` masks banned words and chat is capped at
+   500 chars; there is **no report/mute flow**.
+5. **Table themes / cosmetics — partial.** `ui/src/lib/tablePreferences.ts` ships table themes and
+   `cardVariants.ts` ships deck variants; broader cosmetics remain open.
+
+Beyond the original suggestions, these also shipped: time banks, action pre-selection, rabbit hunt,
+reality check, private opponent notes, self-HUD stats, profile showcase, public hand sharing,
+reactions, dealer voice and voice-driven actions, and a Turnstile bot challenge.
 
 ## 9. Gamification & engagement features
 
@@ -208,7 +220,7 @@ Initial catalog:
 - **Grinder**: total hands played.
 - **Sobrevivente**: hands played without leaving the table.
 
-### 9.3 Sandbox credit roulette
+### 9.3 Sandbox credit daily reward
 
 Free sandbox credits, once per player per 24h (cooldown resets at a fixed time, e.g. midnight
 BRT). Fixed prize tiers (e.g. 100/200/500/1000) with probability inversely proportional to
@@ -233,8 +245,11 @@ already going to that player) and sent privately — never reveals opponent hole
   optional timer-based blind escalation on private rooms (§ 2) is a lighter cash-table feature,
   not a tournament, and is in scope.
 - Spectator mode.
-- Run-it-twice / rabbit hunting.
+- Run-it-twice — still deferred; specced in
+  `docs/specs/2026-07-28-player-avatars-and-next-features.md`. **Rabbit hunting shipped** and is no
+  longer out of scope (`internal/table`, `ui/src/components/table/RabbitHunt.tsx`).
 - Mobile native apps (responsive web only).
+- Player avatars — specced, not built (same spec as above).
 
 ## 11. P0 non-technical risk — read before building real-money mode
 

@@ -175,23 +175,27 @@ performance, máxima resiliência operacional e redução de custos em nuvem.
 
 ## 📊 Resumo de Impacto Estimado
 
-| Fase                     | Esforço | Impacto na Performance               | Impacto na Resiliência                      | Impacto Financeiro                    |
-|--------------------------|---------|--------------------------------------|---------------------------------------------|---------------------------------------|
-| **Fase 1 (Resiliência)** | ~2 dias | Elimina travamentos na mesa          | 🛡️ Alta (Zero perda de dados e dinheiro)    | Previne prejuízos e indisponibilidade |
-| **Fase 2 (Performance)** | ~3 dias | ⚡ >80% redução de CPU / UI a 60 FPS | 🛡️ Isolamento de goroutines                 | Permite reduzir tamanho de EC2        |
-| **Fase 3 (Custos)**      | ~1 dia  | ⚡ Roteamento interno sem latência   | 🛡️ Alertas em falhas de cron                | 💰 -60% custos Dynamo/CloudWatch      |
+| Fase                     | Esforço | Impacto na Performance              | Impacto na Resiliência                    | Impacto Financeiro                    |
+|--------------------------|---------|-------------------------------------|-------------------------------------------|---------------------------------------|
+| **Fase 1 (Resiliência)** | ~2 dias | Elimina travamentos na mesa         | 🛡️ Alta (Zero perda de dados e dinheiro) | Previne prejuízos e indisponibilidade |
+| **Fase 2 (Performance)** | ~3 dias | ⚡ >80% redução de CPU / UI a 60 FPS | 🛡️ Isolamento de goroutines              | Permite reduzir tamanho de EC2        |
+| **Fase 3 (Custos)**      | ~1 dia  | ⚡ Roteamento interno sem latência   | 🛡️ Alertas em falhas de cron             | 💰 -60% custos Dynamo/CloudWatch      |
 
 ---
 
 ## 🔮 TODO Futuro (Backlog de Escala & Alta Disponibilidade)
 
 ### T-FUTURO — Alta Disponibilidade Multi-AZ & Auto-Scaling (`cdk/lib/api-stack.ts`)
-- **Status**: **Adiado / TODO Futuro** (A infraestrutura atual opera de forma estável com 1 instância EC2/ASG; aumentar a capacidade mínima para 2 instâncias adicionaria custo fixo desnecessário no momento).
-- **Gatilho para Implementação**: Quando o volume de concorrência simultânea de jogadores ultrapassar a capacidade de 1 instância ou quando for exigido SLA com garantia Multi-AZ contratual.
+
+- **Status**: **Adiado / TODO Futuro** (A infraestrutura atual opera de forma estável com 1 instância EC2/ASG; aumentar
+  a capacidade mínima para 2 instâncias adicionaria custo fixo desnecessário no momento).
+- **Gatilho para Implementação**: Quando o volume de concorrência simultânea de jogadores ultrapassar a capacidade de 1
+  instância ou quando for exigido SLA com garantia Multi-AZ contratual.
 - **Passos para Quando For Implementar**:
-  1. Alterar a capacidade mínima no ASG: `minCapacity: isProd ? 2 : 1` em [`cdk/lib/api-stack.ts:388`](file:///home/artur/Documents/Projects/Ctech/ctech-poker/cdk/lib/api-stack.ts#L388).
-  2. Configurar a política de Target Tracking por CPU no CDK:
-     ```typescript
-     service.autoScalingGroup.scaleOnCpuUtilization('CpuScaling', { targetUtilizationPercent: 70 });
-     ```
+    1. Alterar a capacidade mínima no ASG: `minCapacity: isProd ? 2 : 1` em [
+       `cdk/lib/api-stack.ts:388`](file:///home/artur/Documents/Projects/Ctech/ctech-poker/cdk/lib/api-stack.ts#L388).
+    2. Configurar a política de Target Tracking por CPU no CDK:
+       ```typescript
+       service.autoScalingGroup.scaleOnCpuUtilization('CpuScaling', { targetUtilizationPercent: 70 });
+       ```
 

@@ -228,8 +228,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handlePostBigBlind(ctx, c)
 	case SnapshotCmd:
 		return a.handleSnapshot(ctx, c)
-	case SetNameCmd:
-		return a.handleSetName(ctx, c)
+	case SetIdentityCmd:
+		return a.handleSetIdentity(ctx, c)
 	case turnTimeoutCmd:
 		return a.handleTurnTimeout(ctx, c)
 	case nextHandCmd:
@@ -427,21 +427,21 @@ func (a *Actor) handleSnapshot(ctx context.Context, c SnapshotCmd) error {
 	return nil
 }
 
-// handleSetName persists display identity with the seat so every actor in the
+// handleSetIdentity persists display identity with the seat so every actor in the
 // fleet produces the same snapshot. A no-op name does not bump table version.
-func (a *Actor) handleSetName(ctx context.Context, c SetNameCmd) error {
-	if c.Name == "" {
+func (a *Actor) handleSetIdentity(ctx context.Context, c SetIdentityCmd) error {
+	if c.Name == "" && c.AvatarURL == "" {
 		return nil
 	}
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
 	apply := func() error {
-		if !a.cached.SetPlayerNameForActor(c.PlayerID, c.Name) {
+		if !a.cached.SetPlayerIdentityForActor(c.PlayerID, c.Name, c.AvatarURL) {
 			return nil
 		}
 		return a.commit(ctx, "", &tablestore.ActionLogEntry{
-			PlayerID: c.PlayerID, Action: "set_name",
+			PlayerID: c.PlayerID, Action: "set_identity",
 		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {

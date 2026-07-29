@@ -1,18 +1,13 @@
 # ctech-poker — Development Plan
 
-> Phased roadmap, not a bite-sized TDD task list. **Status (re-verified against the code,
-2026-07-25):** Phases 0–4 (foundations, engine, sandbox end-to-end, frontend/gamification)
-are **implemented and live** in `api/`, `ui/`, `cdk/`. **Phase 5 (real-money mode) backend
-logic is implemented (Tasks 1, 2, 4–12 done) but Task 3 is only partial and blocks all of
-it end-to-end: `POST /rooms` hardcodes `CurrencyMode: "sandbox"` with no field to request
-`real`, so no room can ever exercise the real-money path regardless of
-`REAL_MONEY_ENABLED`.** Frontend has no real-money surface at all (see the status list below
-and `docs/plans/2026-07-19-poker-phase5-realmoney-and-hardening.md`'s Status section). Also
-gated on ctech-wallet hold/capture endpoint availability + throughput, and on a Brazilian
-regulatory opinion (see OVERVIEW.md §11).
-The OVERVIEW/ARCHITECTURE specs may describe features not yet built (e.g. commit-reveal
-fairness surface B32, hand history); see `docs/README.md` for the implemented-vs-designed
-breakdown.
+> Phased roadmap and build history, not a bite-sized TDD task list. **Status (re-verified
+against the code, 2026-07-28):** Phases 0–5 are **implemented and live** in `api/`, `ui/`,
+`cdk/`, plus a Phase 6 of post-launch gameplay/UX work (see below). Real-money mode is
+**reachable and off by default**: `POST /v1.0/rooms/` accepts `currency_mode: "real"` and
+> rejects it unless `REAL_MONEY_ENABLED` is set (`internal/api/v1/rooms.go:58-66`, `:262`),
+> which the API stack fetches from SSM (`cdk/lib/api-stack.ts:251-254`). What still gates
+> switching it on is the Brazilian regulatory opinion (OVERVIEW.md §11), not code.
+> See `docs/README.md` for the current feature-status index.
 
 ## Phase 0 — Foundations
 
@@ -58,46 +53,80 @@ breakdown.
 
 - Card animations (deal, flip, flop reveal, chip movement, pot award) using the provided SVGs.
 - Lobby UX, table UX, buy-in/cash-out flow, basic chat (+ moderation, OVERVIEW.md § 8.4).
-- Hand equity display, achievements (star-tier catalog), leaderboard, sandbox credit roulette
+- Hand equity display, achievements (star-tier catalog), leaderboard, daily sandbox-credit spin
   (OVERVIEW.md § 9).
 - Deliverable: the gamified experience the brief asks for, on top of an already-correct engine
   — deliberately sequenced after correctness, not before.
 
-## Phase 5 — Real-money mode (gated — do not start until prerequisites below are met)
+## Phase 5 — Real-money mode (built; runtime gate stays off until legal signs off)
 
-- Prerequisite A: `ctech-wallet` exposes a hold/capture (or equivalent) endpoint for real
-  funds (confirmed absent as of the current wallet audit).
-- Prerequisite B: `ctech-wallet`'s DynamoDB throughput cap is fixed (confirmed as a hard 5
-  RCU/WCU cap as of the current wallet audit — would throttle under real table load).
-- Prerequisite C: a legal opinion on real-money poker's regulatory status in Brazil
-  (OVERVIEW.md § 11) — a business decision, tracked here because it gates engineering start,
-  not because engineering can resolve it.
-- Hold/capture wallet integration (ARCHITECTURE.md § 4).
-- Rake mechanism, if the monetization question (OVERVIEW.md § 8.1) is resolved in favor of one.
+- Prerequisite A — `ctech-wallet` real-funds surface: **met.** `walletclient` calls `HoldGame`,
+  `ReleaseHold`, `CashoutGame`, `DebitReal`, `IsGamblingActivated`.
+- Prerequisite B — `ctech-wallet` DynamoDB throughput: **re-confirm before volume.** The 5
+  RCU/WCU cap was the blocker recorded here; verify against the wallet repo, it is not
+  observable from this one.
+- Prerequisite C — Brazilian legal opinion: **still open.** This is what keeps
+  `REAL_MONEY_ENABLED` off, and it is a business decision engineering cannot resolve.
+- Hold/cash-out wallet integration (ARCHITECTURE.md § 4).
+- Monetization: shipped as a **fixed entry fee** (`entry_fee_cents`), not a percentage rake —
+  the Brazil-legal shape, see `docs/plans/2026-07-25-realmoney-fixed-fee-and-sandbox-rake.md`.
+  Sandbox tables keep a nominal rake for gameplay parity only.
 
-**Implementation status (re-verified 2026-07-25):**
-- Task 1: GameWallet client (`walletclient.Client`) with `HoldGame`, `ReleaseHold`, `CashoutGame`, `IsGamblingActivated` — **DONE**
+**Implementation status (re-verified 2026-07-28):**
+
+- Task 1: GameWallet client (`walletclient.Client`) with `HoldGame`, `ReleaseHold`, `CashoutGame`,
+  `IsGamblingActivated` — **DONE**
 - Task 2: Fail-closed config gate (`REAL_MONEY_ENABLED` + `LEGAL_SIGNOFF_REF` in `config.Load`) — **DONE**
-- Task 3: Real-money buy-in/cash-out routing in `buyin.Service` (walletFor selector, hold_id plumbing) — **PARTIAL, blocking**: the service-layer routing is done and unit-tested, but `POST /rooms` has no way to create a `real` room (`internal/api/v1/rooms.go:93`), so it's unreachable via the API; also the real-money `buyin.Service` wiring skips the terms-acceptance check sandbox gets (`internal/app/app.go:198-203`)
+- Task 3: Real-money buy-in/cash-out routing in `buyin.Service` (walletFor selector, hold_id plumbing) — **DONE**:
+  `POST /v1.0/rooms/` takes `currency_mode` and an `entry_fee_cents` (`internal/api/v1/rooms.go:58-66,117,123,262`), the
+  fixed-fee model shipped in `docs/plans/2026-07-25-realmoney-fixed-fee-and-sandbox-rake.md`, and the UI exposes a
+  wallet-mode switch (`ui/src/components/lobby/ProfileMenu.tsx`). **Residual gap:** the real-money `buyin.Service`
+  wiring still skips the terms-acceptance check the sandbox path performs (`internal/app/app.go`)
 - Task 4: Durable pending-cashout tracking (`reconcile.PendingStore`) — **DONE**
 - Task 5: Reconciliation Lambda job (`cmd/reconcile` + EventBridge schedule stack) — **DONE**
 - Task 6: EMF structured metrics (`metrics` package emitting JSON lines for CW) — **DONE**
 - Task 7: CloudWatch alarms (ALARM log lines, lease failover spike in CDK) — **DONE**
 - Task 8: Graceful ASG scale-in drain (`DrainAndRelease` in `tablemanager` + Fx hook) — **DONE**
-- Task 9: WAF on CloudFront distribution (AWSManagedRulesCommonRuleSet + IP rate limit) — **DONE**
+- Task 9: WAF on CloudFront distribution (AWSManagedRulesCommonRuleSet + IP rate limit) — **NOT DONE** (this line
+  previously claimed DONE and was wrong): there is no `aws-wafv2` import and no `webAclId` anywhere in `cdk/` (
+  `cdk/lib/frontend-stack.ts:103-121`). Application-level rate limits do exist (`internal/api/v1/ratelimit.go`), and
+  Turnstile guards bot traffic at the table, but the edge is unprotected
 - Task 10: Hand-history audit endpoint (`GET /v1.0/tables/:tableId/hands/:handId/history`) — **DONE**
 - Task 11: Load + multi-table chaos test harness (`tests/load` with build tag `load`) — **DONE**
-- Task 12: Player-scoped session P&L + hand index (`GET /v1.0/players/me/sessions`, `GET /v1.0/players/me/hands`) — **DONE**
+- Task 12: Player-scoped session P&L + hand index (`GET /v1.0/players/me/sessions`, `GET /v1.0/players/me/hands`) — *
+  *DONE**
 
-## Explicitly deferred (post-MVP, do not build now)
+## Phase 6 — Post-launch gameplay, pacing and integrity (2026-07-26 → 07-28, shipped)
 
-- Tournaments.
+Not part of the original brief; delivered after Phase 5 in response to live play sessions.
+
+- Binary protobuf WebSocket for both gateways, replacing JSON, plus a Valkey-backed lobby
+  fan-out (`docs/plans/2026-07-26-lobby-websocket-binary-and-valkey.md`).
+- Provably-fair surface end to end: commit + root commit published pre-hand, seed revealed
+  only on a full showdown, and a **seed-less per-position proof** for hands that end without
+  one, persisted with hand history and verified in the browser.
+- Pacing and decision UX: decision time banks, action pre-selection, per-card reveal timing,
+  rabbit hunt, reality check, dealer voice and voice-driven actions.
+- Player tooling: private opponent notes with colour tags, self-HUD (VPIP/PFR/3-bet), profile
+  showcase, hand export, public hand sharing, interactive hand replayer.
+- Integrity: Cloudflare Turnstile bot challenge over the table socket.
+- A full `vitest` suite for the SPA (`ui/src/**/*.test.tsx`), with coverage thresholds enforced
+  in `ui/vitest.config.ts`.
+
+## Explicitly deferred (still not built)
+
+- Tournaments / Sit & Go.
 - Spectator mode.
-- Run-it-twice / rabbit hunting.
+- Run-it-twice.
+- Multi-table grid.
 - Native mobile apps.
+- Player avatars — see `docs/specs/2026-07-28-player-avatars-and-next-features.md`.
 
-## Open decisions that should be resolved before Phase 5
+Rabbit hunting was on this list and shipped in Phase 6.
 
-1. Rake/monetization model, or explicit decision to launch real-money mode without one.
-2. Real-money legal/regulatory sign-off.
-3. Confirm `ctech-wallet`'s real-fund API contract (this doc's § 4 is a proposal).
+## Open decisions
+
+1. Real-money legal/regulatory sign-off (blocks flipping `REAL_MONEY_ENABLED`).
+2. Whether the identity-level avatar/display name lives in `ctech-account` or stays
+   poker-local — see the spec above.
+3. Edge protection: accept the missing WAF, or build Task 9 for real.

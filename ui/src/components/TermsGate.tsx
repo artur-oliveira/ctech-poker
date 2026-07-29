@@ -20,7 +20,10 @@ const POKER_TERMS_URL = 'https://accounts.aoctech.app/products/poker';
 const POKER_PRIVACY_URL = 'https://accounts.aoctech.app/products/poker-privacy';
 
 export function TermsGate({children}: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => getAccessToken());
+  // Mock auth is available on the very first render. This keeps local mock
+  // mode independent from ctech-account and avoids rendering an OAuth gate
+  // whose callback is intentionally registered only for the official port.
+  const [token, setToken] = useState<string | null>(() => USE_MOCK ? MOCK_PLAYER_ID : getAccessToken());
   const [checked, setChecked] = useState(false);
   const [booting, setBooting] = useState(() => !USE_MOCK && !getAccessToken());
   const queryClient = useQueryClient();

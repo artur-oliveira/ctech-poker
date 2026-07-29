@@ -161,18 +161,19 @@ type SnapshotCmd struct {
 
 func (c SnapshotCmd) reply() chan error { return c.Reply }
 
-// SetNameCmd caches a player's persisted display name (looked up from
+// SetIdentityCmd caches a player's persisted display identity (looked up from
 // player.Service by the WS gateway on connect, not client-supplied) for
 // broadcastAll to attach to their SeatView. Cosmetic only — playerID (JWT
 // sub) stays the sole identity (IDOR safety is unaffected since Name never
 // gates any action).
-type SetNameCmd struct {
-	PlayerID string
-	Name     string
-	Reply    chan error
+type SetIdentityCmd struct {
+	PlayerID  string
+	Name      string
+	AvatarURL string
+	Reply     chan error
 }
 
-func (c SetNameCmd) reply() chan error { return c.Reply }
+func (c SetIdentityCmd) reply() chan error { return c.Reply }
 
 // turnTimeoutCmd is dispatched by the universal per-turn timer (a
 // time.AfterFunc goroutine) so that all actor-map/state mutations happen

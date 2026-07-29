@@ -1,108 +1,162 @@
 # ctech-poker — CDK (infrastructure)
 
 AWS CDK (TypeScript) for the poker service. **All stacks are implemented and live.**
-Deploys in the order **CDK → API → Frontend** via `.github/workflows/deploy.yml`. Every
-claim below is anchored to `cdk/lib/`.
+Deploys in the order **CDK → API → Frontend** via `.github/workflows/deploy.yml`. Every claim below is
+anchored to `cdk/lib/` and re-verified on **2026-07-28**.
 
-## Stacks (`cdk/lib/`)
+## Stacks (7)
 
-| Stack                | File                | What it provisions                                      |
-|----------------------|---------------------|---------------------------------------------------------|
-| `PokerDynamoDBStack` | `dynamodb-stack.ts` | 8 DynamoDB tables + GSIs                                |
-| `PokerApiStack`      | `api-stack.ts`      | EC2 ASG game server + ALB wiring + IAM                  |
-| `PokerArchiverStack` | `archiver-stack.ts` | Action-log archive Lambda (DynamoDB Streams → S3)       |
-| `PokerFrontendStack` | `frontend-stack.ts` | S3 + CloudFront static host + route KeyValueStore       |
-| `PokerOidcStack`     | `oidc-stack.ts`     | OIDC / auth integration                                 |
-| (bin)                | `bin/poker.ts`      | App entrypoint; `cdk.json` → `npx ts-node bin/poker.ts` |
+Named `CtechPoker-<Env>-<Name>`, except the global OIDC stack. Entry: `bin/poker.ts`.
 
-Shared constants (no magic strings): `lib/constants.ts`. Account `868899309401`,
-region `us-east-1` (`constants.ts:13-14`).
+| Stack | File | What it provisions |
+|---|---|---|
+| `CtechPoker-Global-OIDC` | `oidc-stack.ts` | GitHub OIDC deploy roles (frontend / api / infra) |
+| `…-DynamoDB` | `dynamodb-stack.ts` | **15** DynamoDB tables + GSIs |
+| `…-Archiver` | `archiver-stack.ts` | Action-log archive Lambda (DynamoDB Stream → S3) + SQS DLQ |
+| `…-API` | `api-stack.ts` | EC2 ASG game server, ALB wiring, IAM, userdata, alarms |
+| `…-Frontend` | `frontend-stack.ts` | S3 + CloudFront, route KeyValueStore, URL-rewrite Function, CSP |
+| `…-Reconcile` | `reconcile-stack.ts` | Cash-out reconcile Lambda, EventBridge Scheduler `rate(5 minutes)` |
+| `…-TableCleanup` | `tablecleanup-stack.ts` | Stale-table cleanup Lambda, Scheduler `rate(30 minutes)` |
+
+Shared constants (no magic strings): `lib/constants.ts`. Account `868899309401`, region `us-east-1`.
+Go Lambdas are bundled by `lib/bundle.ts` (`localGoBundling` — local `go build`, Docker fallback).
 
 ## Compute — game server is an **EC2 Auto-Scaling Group** (not Lambda/Fargate)
 
-- `api-stack.ts` uses `@aoctech/cdk`'s `PrivateIpv4Ec2Service` (`api-stack.ts:317`) — the
-  shared no-NAT-gateway EC2/ASG pattern used across CTech. **Confirmed: this is a stateful
-  game server on EC2, matching `ARCHITECTURE.md §1`, NOT a Lambda fleet.**
-- Capacity: `minCapacity: 1`, `maxCapacity: isProd ? 3 : 1` (`api-stack.ts:334-335`).
-- The `app` binary runs via systemd (`app.service` written in user data, `api-stack.ts:206-228`),
-  behind the shared ctech-cdk ALB at **listener priority 45** (`constants.ts:42`, `api-stack.ts:337`),
-  port **8003** (`APP_PORT`, `constants.ts:50`), health check `/v1.0/health-check`
-  (`constants.ts:57`). **No nginx** in front (the Go binary is the ALB target directly).
-- Continuous deployment: GitHub Actions `api.yml` builds `dist/app` (linux/arm64), uploads to
-  the shared deployments S3 bucket, and rolls via SSM `RunCommand` calling `/opt/app/deploy.sh`.
-- **Valkey is mandatory in prod**: `start.sh` fetches `VALKEY_URL` from SSM; if it is empty in
-  prod, `config.Load()` fails closed (in-memory fallback is dev/stage only) — this is the
-  remediation T2 fail-fast behavior.
+- `api-stack.ts` uses `@aoctech/cdk`'s `PrivateIpv4Ec2Service` — the shared no-NAT-gateway EC2/ASG
+  pattern used across CTech. This is a stateful game server on EC2, matching `ARCHITECTURE.md §1`.
+- Capacity: `minCapacity: 1`, `maxCapacity: isProd ? 3 : 1`.
+- **The ALB is imported, not created**: its security group and HTTPS listener come from SSM
+  (`/ctech/<env>/network/alb-sg-id`, `/ctech/<env>/alb/https-listener-arn`), and the VPC via
+  `Vpc.fromLookup`. Listener priority **45**, app port **8003**, health check `/v1.0/health-check`.
+  **No nginx** — the Go binary is the ALB target directly.
+- Continuous deployment: `api.yml` builds `dist/app` (linux/arm64), uploads to the shared deployments
+  bucket, and rolls via SSM `RunCommand` calling `/opt/app/deploy.sh`.
+- **Valkey is mandatory in prod**: `start.sh` fetches `VALKEY_URL` from SSM; empty in prod means
+  `config.Load()` fails closed. The in-memory registry fallback is dev/stage only.
+- Alarms: a metric filter on log lines containing `ALARM:` → `AlarmLogLines`, plus a `LeaseFailovers`
+  spike alarm (threshold 5 over 2 periods).
+- ⚠️ **No ASG lifecycle hook** exists here or in `PrivateIpv4Ec2Service`, so
+  `tablemanager.DrainAndRelease` runs on the default EC2 shutdown grace period rather than a
+  guaranteed drain window.
 
 ## WebSocket
 
-- Served by the **same Go binary** on the EC2 ASG (`GET /v1.0/tables/:id/ws`), fronted by the
-  ALB (ALB supports WS upgrade). It is **not** an API Gateway WebSocket API.
-- Fan-out uses the Redis/Valkey-backed `ws.Registry` from `api-commons` (see
-  [`../api/README.md`](../api/README.md#real-time-transport-websocket)).
+Served by the **same Go binary** on the ASG — `GET /v1.0/tables/:id/ws` (table) and `GET /v1.0/ws`
+(lobby/user), fronted by the ALB, which handles the upgrade. **Not** an API Gateway WebSocket API.
+Frames are binary protobuf. Fan-out uses the Valkey-backed `ws.Registry` from `api-commons`.
 
-## DynamoDB (`dynamodb-stack.ts`)
+## DynamoDB (`dynamodb-stack.ts`) — 15 tables
 
-On-demand billing with `maxReadRequestUnits/maxWriteRequestUnits: 1000`
-(`dynamodb-stack.ts:38`) — note this is **1000**, far above the `ctech-wallet` 5 WCU cap
-flagged in `OVERVIEW.md §5` (a separate service). PITR enabled in prod; encryption AWS-managed.
+All `TableV2`, partition key `pk` (S), on-demand billing with
+`maxRead/maxWriteRequestUnits: 1000`, AWS-managed encryption, PITR in prod only, names prefixed
+`<env>_`. Removal policy `DESTROY` in dev, `RETAIN` otherwise.
 
-| Table (prefixed `<env>_`)    | Sort key | TTL   | Stream        | Notes                                                    |
-|------------------------------|----------|-------|---------------|----------------------------------------------------------|
-| `poker_table_state`          | no       | –     | –             | single authoritative item per table, `version`ed         |
-| `poker_action_log`           | yes      | 90d   | **NEW_IMAGE** | feeds the archiver Lambda                                |
-| `poker_action_guards`        | no       | 7d    | –             | idempotency guard per action                             |
-| `poker_rooms`                | yes      | –     | –             | GSIs `gsi_public`, `gsi_share_code`                      |
-| `poker_player_profiles`      | no       | –     | –             | poker-local shadow of ctech-account user                 |
-| `poker_achievement_progress` | yes      | –     | –             |                                                          |
-| `poker_leaderboard_stats`    | yes      | –     | –             | GSIs `gsi_hands_won`, `gsi_hands_played`, `gsi_win_rate` |
-| `poker_daily_reward`         | yes      | daily | –             | one item per player/day (24h cooldown)                   |
+| Table | Sort key | TTL | Stream | GSIs / notes |
+|---|---|---|---|---|
+| `poker_table_state` | – | – | – | `gsi_active_last_action` (sparse, KEYS_ONLY) — drives `cmd/tablecleanup` |
+| `poker_table_state_history` | ✓ | – | – | best-effort audit copy |
+| `poker_action_log` | ✓ | 90d | **NEW_IMAGE** | feeds the archiver Lambda |
+| `poker_action_guards` | – | 7d | – | per-action idempotency guard |
+| `poker_rooms` | ✓ | – | – | `gsi_public` (sparse), `gsi_share_code` |
+| `poker_player_profiles` | – | – | – | poker-local shadow of the ctech-account user |
+| `poker_player_sessions` | ✓ | ✓ | – | per-table session P&L |
+| `poker_player_hands` | ✓ | – | – | hand history incl. fairness proofs; `gsi_table_id` |
+| `poker_player_notes` | ✓ | – | – | private per-viewer opponent notes |
+| `poker_player_poker_stats` | – | ✓ | – | materialised VPIP/PFR/3-bet + per-hand guard rows |
+| `poker_achievement_progress` | ✓ | – | – | `counter` via atomic increment |
+| `poker_leaderboard_stats` | ✓ | – | – | `gsi_hands_won`, `gsi_hands_played`, `gsi_win_rate` |
+| `poker_daily_reward` | ✓ | 48h | – | one item per player/day, pending → completed |
+| `poker_pending_cashouts` | ✓ | – | – | reconcile queue; `kind` = cashout \| fee_debit |
+| `poker_hand_shares` | – | ✓ | – | public shared-hand tokens, ≤30d |
 
-> **B31 relevance:** `poker_leaderboard_stats` has **no `achievement_points` GSI** — only
-> hands-won / hands-played / win-rate. The API's `Top("achievement_points")` therefore
-> silently falls through to `gsi_hands_won` (see [
-`../api/README.md`](../api/README.md#known-issues-documented-honestly--do-not-fix-code-here)).
+There is deliberately **no `achievement_points` GSI** — the API rejects that metric rather than
+silently ranking by another index. Adding a ranking metric means adding its GSI here first.
+
+## Frontend (`frontend-stack.ts`)
+
+- Private S3 bucket `<env>-ctech-poker-frontend` (`BLOCK_ALL`, S3-managed encryption, versioned in
+  prod), read by CloudFront through an **Origin Access Control** — never public.
+- CloudFront distribution: `CACHING_OPTIMIZED` default behavior, HTTP2+3, `PRICE_CLASS_100`, TLS
+  1.2_2021, wildcard cert imported by ARN, domain `poker[-env].aoctech.app`.
+- A **KeyValueStore** (`<env>-ctech-poker-routes`) plus a CloudFront **Function** (viewer-request)
+  rewrite SPA paths to `.html` / `/404.html`. Extensionless keys go through the rewrite; keys with an
+  extension pass unmodified.
+- `/v1.0/*` is a second behavior pointing at the API origin: HTTPS_ONLY, `CACHING_DISABLED`,
+  `ALL_VIEWER_EXCEPT_HOST_HEADER`, all methods allowed.
+- `ResponseHeadersPolicy`: CSP `default-src 'self'` (with `img-src 'self' data:` and `connect-src`
+  allowing ctech-account + `challenges.cloudflare.com` for Turnstile), HSTS 2y preload,
+  `X-Frame-Options: DENY`, nosniff, and `Permissions-Policy: on-device-speech-recognition=self`.
+- ⚠️ **No WAF.** There is no `aws-wafv2` import and no `webAclId`. `PLAN.md` Task 9 previously
+  claimed otherwise; it was wrong.
+- ⚠️ The deploy step is `aws s3 sync out/ s3://$S3_BUCKET/ --delete`, so **anything else stored in
+  that bucket under a synced prefix is deleted on every frontend deploy** — relevant if user-uploaded
+  assets are ever hosted there. Only the GHA frontend role can write to it; the EC2 instance role
+  cannot.
 
 ## IAM
 
-`PokerApiStack` (`api-stack.ts:71-108`):
+Instance role `<env>-ctech-poker-api-role` (`api-stack.ts`), managed policies
+`AmazonSSMManagedInstanceCore` + `CloudWatchAgentServerPolicy`, plus inline:
 
-- Instance role with `AmazonSSMManagedInstanceCore` + `CloudWatchAgentServerPolicy`.
-- DynamoDB: `GetItem/PutItem/UpdateItem/Query/TransactWriteItems/DescribeTable` on the 8
-  tables **and** their indexes (`api-stack.ts:88-94`).
-- SSM `GetParameter` for `valkeyUrl`, `walletUrl`, `pokerClientId`, `pokerClientSecret`
-  (`api-stack.ts:95-100`).
-- S3 `GetObject` on the deployments bucket, `PutObject` on the logs bucket.
-- No real-money wallet (hold/capture) permissions — consistent with sandbox-only mode.
+- DynamoDB — 8 actions (incl. `DeleteItem` and `ConditionCheckItem`) over the **14** table ARNs the
+  server touches and their `/index/*`.
+- SSM `GetParameter` over **7** parameters: `valkeyUrl`, `walletUrl`, `pokerClientId`,
+  `pokerClientSecret`, `turnstileSecret`, `realMoneyEnabled`, `legalSignoffRef`.
+- S3 `GetObject` on `<deployments>/ctech-poker/*`, `PutObject` on `<logs>/ctech-poker/*`.
 
-## Archiver Lambda — ⚠️ B10 known risk
+OIDC roles (`oidc-stack.ts`): `ctech-poker-gha-frontend` (S3 frontend RW, CloudFront invalidation +
+KeyValueStore writes), `ctech-poker-gha-api` (deployments prefix, `ssm:GetParameter` on `/ctech/*`,
+`ssm:SendCommand`, ASG describe + `StartInstanceRefresh`), `ctech-poker-gha-infra`
+(**AdministratorAccess**).
 
-- `archiver-stack.ts`: `ArchiverFn` (PROVIDED_AL2023, arm64, 30s timeout) subscribed to the
-  `poker_action_log` DynamoDB Stream via `DynamoEventSource` (`archiver-stack.ts:71-75`).
-- **No dead-letter queue / `onFailure`:** `retryAttempts: 3` with no DLQ means a poison
-  record that fails 3× is **dropped**. (The archiver code itself: `cmd/archiver/main.go`.)
-- The archive bucket (`poker-action-log-archive-<env>`) is private, S3-managed encrypted,
-  RETAIN in prod / DESTROY in dev.
+## Secrets & config
+
+**No Secrets Manager and no Cognito.** All configuration comes from **SSM Parameter Store** (paths in
+`constants.ts`); `POKER_CLIENT_SECRET` and `TURNSTILE_SECRET` are fetched `--with-decryption`. The
+parameters themselves are **not created by CDK** — they are provisioned out of band. Auth is external
+ctech-account OIDC.
+
+`REAL_MONEY_ENABLED` and `LEGAL_SIGNOFF_REF` **are** wired (`api-stack.ts` fetches both in
+`start.sh`, defaulting to `false`), so enabling real money is an SSM change plus an instance refresh.
+
+## Lambdas
+
+| Lambda | Trigger | Notes |
+|---|---|---|
+| `<env>-poker-action-log-archiver` | `poker_action_log` DynamoDB Stream | TRIM_HORIZON, batch 100, `retryAttempts: 3`, `bisectBatchOnError`, `onFailure: SqsDlq` → 14-day DLQ + depth alarm. **B10 is fixed.** |
+| `<env>-ctech-poker-reconcile` | EventBridge Scheduler `rate(5 minutes)` | Sweeps `poker_pending_cashouts`; needs 3 SSM params. ⚠️ no DLQ on the schedule |
+| `<env>-ctech-poker-tablecleanup` | EventBridge Scheduler `rate(30 minutes)` | Archives tables idle >15 min, refunds sandbox chips, deletes the room. ⚠️ no DLQ on the schedule |
+
+All three are PROVIDED_AL2023 / arm64.
+
+## `@aoctech/cdk` usage
+
+Imported symbols: `PrivateIpv4Ec2Service`, `addSwapCommands`, `addDualStackSsmAgentCommands`,
+`addCloudWatchAgentDualStackOverride`, and the `Environment` type. Consumed indirectly by ARN/name/SSM
+path (because ctech-cdk does not export them as constructs): the shared VPC, the ALB + HTTPS listener
++ security group, the wildcard ACM cert, the GitHub OIDC provider, the shared deployments/logs
+buckets, and Valkey.
 
 ## Cost-relevant notes
 
-- Game server: EC2 ASG (1–3 instances), dual-stack, no NAT gateway (egress via the shared
-  VPC pattern) → compute + ALB the main cost.
-- DynamoDB: **on-demand** (pay-per-request) with 1000-RU cap — scales to zero, cheap at
-  sandbox traffic.
-- Frontend: static S3 + CloudFront (no always-on server).
-- Archiver: Lambda invocations only on action-log stream writes (low volume).
-- Logs: CloudWatch Logs (1 month prod / 1 week else), rotated to S3.
+- Game server: EC2 ASG (1–3 instances), dual-stack, **no NAT gateway** → compute + ALB dominate.
+- DynamoDB: on-demand with a 1000-RU cap — scales to zero, cheap at sandbox traffic.
+- Frontend: static S3 + CloudFront, no always-on server.
+- Lambdas: stream-driven (archiver) plus two low-frequency schedules.
+- Logs: CloudWatch Logs (1 month prod / 1 week otherwise), rotated to S3.
 
-## CI
+## CI & tests
 
-- `cdk.json` context pins modern CDK feature flags.
-- `infra.yml`: `cdk diff` on PR (posts to PR), `cdk deploy "CtechPoker-${ENV^}-*"` on push to
+- `infra.yml`: `cdk diff` on PR, `cdk deploy "CtechPoker-${ENV^}-*"` on push to
   `main`/`staging`/`dev`. A CI guard greps for hand-rolled `AssociatePublicIpAddress` and for
-  suspiciously low DynamoDB throughput caps (`infra.yml:57-65`).
-- Node 24, `npm ci`, deploys named `CtechPoker-<Env>-*`.
+  suspiciously low DynamoDB throughput caps. Node 24, `npm ci`.
+- `test/`: Jest + `aws-cdk-lib/assertions` for the api, archiver, dynamodb, frontend and tablecleanup
+  stacks. ⚠️ **No test for `reconcile-stack.ts` or `oidc-stack.ts`.** Note that compiled `.d.ts`/`.js`
+  artifacts are checked in alongside sources in `lib/` and `test/`.
 
 ## Cross-links
 
 - Server this infra runs: [`../api/README.md`](../api/README.md)
 - SPA this infra serves: [`../ui/README.md`](../ui/README.md)
+- Feature-status index: [`../docs/README.md`](../docs/README.md)

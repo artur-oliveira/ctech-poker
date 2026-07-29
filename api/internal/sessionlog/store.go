@@ -87,6 +87,7 @@ type RevealedSalt struct {
 type OpponentSummary struct {
 	PlayerID  string   `dynamodbav:"player_id" json:"player_id"`
 	Name      string   `dynamodbav:"name,omitempty" json:"name,omitempty"`
+	AvatarURL string   `dynamodbav:"avatar_url,omitempty" json:"avatar_url,omitempty"`
 	HoleCards []string `dynamodbav:"hole_cards,omitempty" json:"hole_cards,omitempty"`
 	// Won is explicit so a 3+-way hand's history is readable without
 	// inferring the winner from the viewer's own Outcome — that inference

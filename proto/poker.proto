@@ -40,6 +40,7 @@ message Seat {
   // Canonical server-side evaluator score. Higher wins; equal is a split.
   // Only present when the same visibility rules allow hand_category.
   uint32 hand_score = 15;
+  optional string avatar_url = 16;
 }
 
 message BlindEscalation {

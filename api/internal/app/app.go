@@ -10,7 +10,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/logger"
@@ -24,6 +26,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	v1 "gopkg.aoctech.app/poker/api/internal/api/v1"
 	pokerproto "gopkg.aoctech.app/poker/api/internal/api/v1/proto"
+	"gopkg.aoctech.app/poker/api/internal/avatar"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/dailyreward"
@@ -55,6 +58,7 @@ var Module = fx.Options(
 		newWsRegistry,
 		newTableLeaseService,
 		newDynamoClient,
+		newAvatarService,
 		newTableStore,
 		newRoomStore,
 		newPlayerStore,
@@ -179,6 +183,40 @@ func newDynamoClient(cfg *config.Config) (*dynamodb.Client, error) {
 	return awsconfig.NewDynamoDBClient(awsCfg, cfg.DynamoDBEndpoint), nil
 }
 
+type avatarS3API struct {
+	client  *s3.Client
+	presign *s3.PresignClient
+}
+
+func (a *avatarS3API) PresignPostObject(ctx context.Context, input *s3.PutObjectInput, options ...func(*s3.PresignPostOptions)) (*s3.PresignedPostRequest, error) {
+	return a.presign.PresignPostObject(ctx, input, options...)
+}
+func (a *avatarS3API) GetObject(ctx context.Context, input *s3.GetObjectInput, options ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	return a.client.GetObject(ctx, input, options...)
+}
+func (a *avatarS3API) CopyObject(ctx context.Context, input *s3.CopyObjectInput, options ...func(*s3.Options)) (*s3.CopyObjectOutput, error) {
+	return a.client.CopyObject(ctx, input, options...)
+}
+func (a *avatarS3API) DeleteObject(ctx context.Context, input *s3.DeleteObjectInput, options ...func(*s3.Options)) (*s3.DeleteObjectOutput, error) {
+	return a.client.DeleteObject(ctx, input, options...)
+}
+
+func newAvatarService(cfg *config.Config) (*avatar.Service, error) {
+	if cfg.AvatarBucket == "" {
+		return avatar.New(nil, ""), nil
+	}
+	awsCfg, err := awsconfig.Load(context.Background(), cfg.AWSRegion)
+	if err != nil {
+		return nil, err
+	}
+	client := s3.NewFromConfig(awsCfg, func(options *s3.Options) {
+		// Poker instances have IPv6 egress only. Force all server-side S3 calls,
+		// including the presigned browser URL, onto the dualstack endpoint.
+		options.EndpointOptions.UseDualStackEndpoint = aws.DualStackEndpointStateEnabled
+	})
+	return avatar.New(&avatarS3API{client: client, presign: s3.NewPresignClient(client)}, cfg.AvatarBucket), nil
+}
+
 func newTableStore(db *dynamodb.Client, cfg *config.Config) *tablestore.Store {
 	return tablestore.NewStore(db, cfg.Env)
 }
@@ -223,12 +261,12 @@ func newSessionStore(db *dynamodb.Client, cfg *config.Config) *sessionlog.Store 
 }
 func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service, sessionStore *sessionlog.Store) *buyin.Service {
 	if cfg.RealMoneyEnabled {
-		return buyin.NewServiceWithGame(wallet, wallet, manager, rooms, wallet).WithSessionStore(sessionStore).WithPlayers(players)
+		return buyin.NewServiceWithGame(wallet, wallet, manager, rooms, wallet).WithSessionStore(sessionStore).WithPlayers(players).WithAvatarBaseURL(cfg.AvatarBaseURL)
 	}
-	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players).WithSessionStore(sessionStore)
+	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players).WithSessionStore(sessionStore).WithAvatarBaseURL(cfg.AvatarBaseURL)
 }
 
-func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store) *tablemanager.Manager {
+func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, players *player.Service, cfg *config.Config) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
 		data, err := goproto.Marshal(message)
@@ -240,8 +278,14 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		if sessionStore == nil {
 			return
 		}
+		avatarURLs := make(map[string]string, len(outcome.Participants))
 		for _, id := range outcome.Participants {
-			item := handItemFor(outcome, id, names)
+			if profile, err := players.GetOrCreate(context.Background(), id); err == nil {
+				avatarURLs[id] = player.AvatarURL(profile, cfg.AvatarBaseURL)
+			}
+		}
+		for _, id := range outcome.Participants {
+			item := handItemForWithAvatars(outcome, id, names, avatarURLs)
 			item.PK, item.TableID, item.HandID, item.EndedAt = id, tableID, handID, time.Now().UnixMilli()
 			if err := sessionStore.RecordHand(context.Background(), item); err != nil {
 				slog.Error("sessionlog: record hand failed", "table", tableID, "hand", handID, "player", id, "err", err)
@@ -312,6 +356,10 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 // result, opponent hole cards, opponent Won) is unit-testable without a live
 // table/actor. Caller fills in PK/TableID/HandID/EndedAt.
 func handItemFor(outcome hand.HandOutcome, id string, names map[string]string) sessionlog.HandItem {
+	return handItemForWithAvatars(outcome, id, names, nil)
+}
+
+func handItemForWithAvatars(outcome hand.HandOutcome, id string, names, avatarURLs map[string]string) sessionlog.HandItem {
 	net := outcome.Payouts[id] - outcome.Contributions[id]
 	var result = "lost"
 	if slices.Contains(outcome.Winners, id) {
@@ -333,7 +381,7 @@ func handItemFor(outcome hand.HandOutcome, id string, names map[string]string) s
 		if !ok {
 			continue
 		}
-		summary := sessionlog.OpponentSummary{PlayerID: opp, Name: names[opp]}
+		summary := sessionlog.OpponentSummary{PlayerID: opp, Name: names[opp], AvatarURL: avatarURLs[opp]}
 		if info.Revealed {
 			summary.HoleCards = info.HoleCards[:]
 		} else if info.RevealedCards[0] || info.RevealedCards[1] {
@@ -443,8 +491,9 @@ func registerRoutes(
 	playerNoteStore *playernotes.Store,
 	handShareStore *handshare.Store,
 	pokerStatsStore *pokerstats.Store,
+	avatars *avatar.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars)
 }
 
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {

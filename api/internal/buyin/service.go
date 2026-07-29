@@ -51,6 +51,7 @@ type Service struct {
 		RequireAccepted(context.Context, string) error
 		GetOrCreate(context.Context, string) (*player.PlayerProfile, error)
 	}
+	avatarBaseURL string
 }
 
 // ErrTermsNotAccepted is re-exported at the buy-in boundary so callers do
@@ -79,6 +80,11 @@ func (s *Service) WithSessionStore(sessions *sessionlog.Store) *Service {
 
 func (s *Service) WithPlayers(players *player.Service) *Service {
 	s.players = players
+	return s
+}
+
+func (s *Service) WithAvatarBaseURL(baseURL string) *Service {
+	s.avatarBaseURL = baseURL
 	return s
 }
 
@@ -221,7 +227,8 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 	if s.players != nil {
 		if profile, perr := s.players.GetOrCreate(ctx, playerID); perr == nil && profile != nil && profile.Name != "" {
 			nameReply := make(chan error, 1)
-			_ = actor.Dispatch(table.SetNameCmd{PlayerID: playerID, Name: profile.Name, Reply: nameReply})
+			_ = actor.Dispatch(table.SetIdentityCmd{PlayerID: playerID, Name: profile.Name,
+				AvatarURL: player.AvatarURL(profile, s.avatarBaseURL), Reply: nameReply})
 		}
 	}
 

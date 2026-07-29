@@ -78,6 +78,9 @@ func (r *RateLimiter) allowMem(key string) bool {
 // play — rate limiting is abuse mitigation, not a correctness gate.
 func rateLimit(rl *RateLimiter, keyFn func(c fiber.Ctx) string) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		if rl == nil {
+			return c.Next()
+		}
 		allow, err := rl.Allow(c.Context(), keyFn(c))
 		if err != nil {
 			slog.Warn("rate limiter backend error; allowing request", "err", err)
@@ -97,5 +100,12 @@ func rateLimit(rl *RateLimiter, keyFn func(c fiber.Ctx) string) fiber.Handler {
 func ipKey(route string) func(c fiber.Ctx) string {
 	return func(c fiber.Ctx) string {
 		return "rl:" + route + ":" + c.IP()
+	}
+}
+
+func playerKey(route string) func(c fiber.Ctx) string {
+	return func(c fiber.Ctx) string {
+		playerID, _ := c.Locals(localsUserID).(string)
+		return "rl:" + route + ":player:" + playerID
 	}
 }

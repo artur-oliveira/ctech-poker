@@ -1,11 +1,11 @@
 import {useState, type CSSProperties} from 'react';
-import {Avatar, AvatarFallback} from '@/components/ui/avatar';
+import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {Progress} from '@/components/ui/progress';
 import {ChipStack} from '@/components/table/ChipStack';
 import {PerimeterTimer} from '@/components/table/PerimeterTimer';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import type {SeatView} from '@/lib/api/table';
-import {HAND_CATEGORY_LABELS, initials, playerName} from '@/lib/utils';
+import {HAND_CATEGORY_LABELS, playerName} from '@/lib/utils';
 import {useCountUp} from '@/lib/hooks/useCountUp';
 import {NotebookPen} from 'lucide-react';
 import type {PlayerNote} from '@/lib/api/playerNotes';
@@ -142,8 +142,8 @@ export function Seat({
       {SEAT_CONFETTI_ANGLES.map((rot, i) => <span key={i} style={{'--rot': `${rot}deg`,
         animationDelay: `${(i % 4) * 20}ms`} as CSSProperties}/>)}
     </span>}
-    <Avatar className="seat-avatar"
-            aria-hidden="true"><AvatarFallback>{isViewer ? 'EU' : initials(seat.name)}</AvatarFallback></Avatar>
+    <PlayerAvatar className="seat-avatar" name={seat.name} avatarUrl={seat.avatar_url}
+                  isViewer={isViewer} decorative/>
     {!isViewer && onEditNote && <button type="button"
         className={`seat-note-trigger ${playerNote ? 'has-note' : ''}`}
         aria-label={playerNote ? `Editar nota privada sobre ${seat.name || 'jogador'}` : `Adicionar nota privada sobre ${seat.name || 'jogador'}`}

@@ -40,6 +40,7 @@ Confirmado por leitura direta:
 ## Bugs reais (ranqueados)
 
 ### 1. CRÍTICO — corrida de buy-in perde dinheiro real silenciosamente
+
 `internal/buyin/service.go:160-211`
 
 `isSeated` (linha 160) é um TOCTOU: duas requisições quase simultâneas de `BuyIn` para o mesmo
@@ -48,11 +49,13 @@ de qualquer uma ter commitado. Cada uma gera uma **nonce distinta** (client-supp
 clique" segundo o comentário da própria idempotency key), então o wallet **não dedupe** as duas — as
 duas debitam de verdade. O `Actor` serializa os dois `JoinCmd`s; o segundo bate no guard
 `Stack>0` de `ErrAlreadySeated` (`hand.go:410-413`) e o handler (linha 198-199) faz:
+
 ```go
 if errors.Is(joinErr, hand.ErrAlreadySeated) {
     return nil   // sucesso — SEM reembolso
 }
 ```
+
 O dinheiro do segundo débito nunca volta, nunca vira pending record, não gera erro pro cliente.
 Isso é dinheiro real desaparecendo sem rastro, no exato caminho que Fase 5 (dinheiro real) usa.
 **Prioridade máxima antes de dinheiro real escalar em produção.**
@@ -62,6 +65,7 @@ do débito), ou tratar `ErrAlreadySeated` retornando refund igual ao branch de e
 (linhas 201-210) em vez de `return nil`.
 
 ### 2. ALTO — uma conexão travada trava a mesa inteira (DoS trivial)
+
 `internal/api/v1/tablews.go:650-654`
 
 ```go
@@ -69,6 +73,7 @@ func (w *wsConnAdapter) WriteMessage(messageType int, data []byte) error {
     return w.conn.WriteMessage(fws.BinaryMessage, data)
 }
 ```
+
 `wsWriteWait` (linha 37) só é usado no `WriteControl` de ping (linha 632) — **nunca** em
 `WriteMessage`. `broadcastAll` (`actor.go:1406-1455`) escreve pra cada jogador sincronamente, dentro
 da única goroutine `Run` da mesa. Um cliente que abre o WS e simplesmente para de ler (enche o
@@ -80,6 +85,7 @@ Fix: `conn.SetWriteDeadline(time.Now().Add(wsWriteWait))` antes de todo `WriteMe
 timeout como desconexão do destinatário (nunca bloquear os outros).
 
 ### 3. ALTO — Actor de instância sem lease nunca é liberado (vazamento de memória/goroutine)
+
 `internal/tablemanager/manager.go:166-168`, `manager.go:220-232`
 
 Quando a instância **não** ganha a lease (`trustCache=false`), roda `go actor.Run(context.Background())`
@@ -93,6 +99,7 @@ Fix: eviction por ociosidade — se um actor sem lease ficar N minutos com 0 con
 cancelar o `runCtx` e chamar `removeActor`, mesmo sem perda de lease.
 
 ### 4. MÉDIO — analytics de fim de mão bloqueiam o hot path (mesma classe de bug que T9 corrigiu, mas não pra tudo)
+
 `internal/table/actor.go:1454` → `app.go:250-279`
 
 `onHandComplete` roda **síncrono** dentro de `Run`: achievements, `RecordUnlocks`, `RecordHand`
@@ -101,19 +108,23 @@ cancelar o `runCtx` e chamar `removeActor`, mesmo sem perda de lease.
 como a equity fazia antes do T9 — só que ninguém corrigiu esse caminho.
 
 ### 5. MÉDIO — `IncrementAchievementPoints` faz N escritas em vez de 1
+
 `internal/leaderboard/store.go` — `for i := 0; i < points; i++ { AtomicIncrement(...) }`. Um unlock
 de 50 pontos = 50 `UpdateItem` sequenciais em vez de um único `ADD :points`.
 
 ### 6. MÉDIO — scan de reconciliação sem paginação e sem TTL
+
 `cmd/reconcile/pending.go:81-108` faz `db.Scan` cru, sem loop de `LastEvaluatedKey`.
 `PendingCashout` não tem campo TTL (diferente de toda outra tabela do repo) — entradas resolvidas
 nunca são apagadas, o scan só cresce e pode truncar silenciosamente ao passar de 1MB por página.
 
 ### 7. BAIXO — vazamento de mensagem de erro interna pro cliente
+
 `rooms.go:276` e `leaderboard.go:21` repassam `err.Error()` cru de `buyin`/wallet-client direto na
 resposta HTTP. Baixo risco hoje, mas qualquer erro futuro de DB/wallet embrulhado vaza texto verbatim.
 
 ### 8. BAIXO — timers de som de reveal não cancelados
+
 `ui/src/lib/hooks/useTableRealtime.ts:126-129` — `setTimeout` de `playSound('reveal')` por carta
 extra, sem ref, sem cleanup no unmount nem quando chega um novo snapshot no meio da animação.
 
@@ -170,13 +181,13 @@ neles:
   usá-lo pra priorizar o próximo sprint, porque hoje ele está recomendando trabalho já feito.
 - **3 ideias novas, amarradas nos bugs reais encontrados aqui** (não no brainstorm genérico do
   `future.md`):
-  1. Toggle opt-in de equity por jogador — já que o cálculo é caro (ver Performance acima) e nem
-     todo jogador olha esse número, desligar por padrão pra quem não usa corta custo real de CPU.
-  2. Métrica de backpressure por mesa (tempo de escrita WS, conexões lentas) — pra pegar o achado #2
-     em produção antes que vire um DoS explorado, não só depois de corrigido.
-  3. Auditoria/dedupe de idempotência no `walletclient` — o padrão de corrida do achado #1
-     provavelmente se repete em qualquer outro caminho que gere nonce no cliente; vale uma camada
-     central de dedupe em vez de confiar em cada call site fazer certo.
+    1. Toggle opt-in de equity por jogador — já que o cálculo é caro (ver Performance acima) e nem
+       todo jogador olha esse número, desligar por padrão pra quem não usa corta custo real de CPU.
+    2. Métrica de backpressure por mesa (tempo de escrita WS, conexões lentas) — pra pegar o achado #2
+       em produção antes que vire um DoS explorado, não só depois de corrigido.
+    3. Auditoria/dedupe de idempotência no `walletclient` — o padrão de corrida do achado #1
+       provavelmente se repete em qualquer outro caminho que gere nonce no cliente; vale uma camada
+       central de dedupe em vez de confiar em cada call site fazer certo.
 
 ---
 

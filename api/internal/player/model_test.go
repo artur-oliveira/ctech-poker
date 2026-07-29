@@ -18,3 +18,14 @@ func TestTermsAcceptedIsComputedFromCurrentVersion(t *testing.T) {
 		t.Fatal("nil profile must not have accepted terms")
 	}
 }
+
+func TestAvatarURL(t *testing.T) {
+	profile := &PlayerProfile{AvatarKey: "av/user/3.jpg", AvatarVersion: 3}
+	if got := AvatarURL(profile, "https://poker.aoctech.app/avatars/"); got != "https://poker.aoctech.app/avatars/user/3.jpg" {
+		t.Fatalf("got %q", got)
+	}
+	profile.AvatarBlocked = true
+	if got := AvatarURL(profile, "https://poker.aoctech.app/avatars"); got != "" {
+		t.Fatalf("blocked avatar leaked: %q", got)
+	}
+}

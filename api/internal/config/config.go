@@ -33,6 +33,8 @@ type Config struct {
 	// DynamoDB (tablestore) — mirrors ctech-wallet's config fields exactly.
 	AWSRegion        string `env:"AWS_REGION" envDefault:"us-east-1"`
 	DynamoDBEndpoint string `env:"DYNAMODB_ENDPOINT"` // local override (DynamoDB Local), empty in prod
+	AvatarBucket     string `env:"AVATAR_BUCKET"`
+	AvatarBaseURL    string `env:"AVATAR_BASE_URL"`
 
 	// ctech-wallet M2M client (sandbox credit/debit — see internal/walletclient).
 	// See this plan's Global Constraints: ctech-account must seed this client

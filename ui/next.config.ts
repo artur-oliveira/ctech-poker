@@ -14,6 +14,7 @@ const nextConfig: NextConfig = {
     } : {})
   },
   experimental: {optimizePackageImports: ['lucide-react']},
+  ...(!isProduction ? {allowedDevOrigins: ['127.0.0.1']} : {}),
   images: {unoptimized: true}, ...(isProduction ? {output: 'export' as const} : {
     async rewrites() {
       return [{

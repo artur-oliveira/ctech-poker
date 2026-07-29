@@ -17,23 +17,44 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
 
 ## Architecture facts (verified in code)
 
-- **Game server = EC2 Auto-Scaling Group** via `@aoctech/cdk`'s `PrivateIpv4Ec2Service`
-  (`api-stack.ts:317`), capacity 1–3, behind the shared ctech-cdk ALB (listener priority 45,
-  port 8003). **Not Lambda/Fargate.** The Go binary is the ALB target directly (no nginx).
-- **WebSocket is served by the Go binary** on the ASG (not API Gateway).
+- **7 stacks**: OIDC (global), DynamoDB, Archiver, API, Frontend, Reconcile, TableCleanup.
+- **Game server = EC2 Auto-Scaling Group** via `@aoctech/cdk`'s `PrivateIpv4Ec2Service`, capacity
+  1–3, behind the shared ctech-cdk ALB (listener priority 45, port 8003). **Not Lambda/Fargate.**
+  The Go binary is the ALB target directly (no nginx). The **ALB, its listener, its security group
+  and the VPC are all imported** from SSM/lookup, never created here.
+- **15 DynamoDB tables** (`dynamodb-stack.ts`), not 8 — an older revision of this file undercounted.
+- **WebSocket is served by the Go binary** on the ASG (not API Gateway); binary protobuf frames on
+  two gateways (`/v1.0/tables/:id/ws`, `/v1.0/ws`).
 - **Valkey is mandatory in prod** (in-memory fallback is dev/stage only; prod fails closed).
-- **Archiver:** DynamoDB Stream (`poker_action_log`) → S3 Lambda (`archiver-stack.ts`).
-  B10 fixed: failures bisect + land in an SQS DLQ with a CloudWatch alarm on visible messages.
+- **`REAL_MONEY_ENABLED` / `LEGAL_SIGNOFF_REF` are wired** from SSM in the instance `start.sh`,
+  defaulting to `false` — enabling real money is a parameter change plus an instance refresh.
+- **Three Lambdas**: the archiver (DynamoDB Stream → S3, with an SQS DLQ and alarm), plus
+  `reconcile` (`rate(5 minutes)`) and `tablecleanup` (`rate(30 minutes)`) on EventBridge Scheduler.
+- **Frontend**: private S3 + CloudFront via OAC, a route KeyValueStore with a viewer-request
+  rewrite Function, and a `ResponseHeadersPolicy` carrying the CSP, HSTS and Permissions-Policy.
+
+- **Secrets live in SSM Parameter Store, not Secrets Manager**, and the parameters are provisioned
+  out of band — CDK reads them, never creates them. No Cognito; auth is external ctech-account OIDC.
+- **The frontend bucket is private + OAC-only** and the deploy is `s3 sync --delete`. Do not put
+  anything in it that a frontend deploy must not wipe, and do not grant the instance role write
+  access to it.
 
 ## ⚠️ Known issues
 
-- **B10 (fixed)** — archiver `DynamoEventSource` now has `bisectBatchOnError` +
-  `onFailure: SqsDlq`, and a CloudWatch alarm fires on any visible DLQ message.
-- **B31 relevance** — `poker_leaderboard_stats` has GSIs only for `hands_won` /
-  `hands_played` / `win_rate`. The API rejects any other metric (incl. `achievement_points`);
-  adding a new ranking metric requires its own GSI here first.
+- **No WAF** on the CloudFront distribution — no `aws-wafv2` import, no `webAclId`. `PLAN.md`'s
+  Task 9 claimed this shipped; it did not.
+- **No ASG lifecycle hook** here or in `PrivateIpv4Ec2Service`, so `tablemanager.DrainAndRelease`
+  gets only the default EC2 shutdown grace period.
+- **No DLQ on either EventBridge Scheduler target** (`reconcile-stack.ts`, `tablecleanup-stack.ts`).
+- **No test** for `reconcile-stack.ts` or `oidc-stack.ts`.
+- **B10 (fixed)** — archiver `DynamoEventSource` has `bisectBatchOnError` + `onFailure: SqsDlq`, and
+  a CloudWatch alarm fires on any visible DLQ message.
+- **B31 relevance** — `poker_leaderboard_stats` has GSIs only for `hands_won` / `hands_played` /
+  `win_rate`. The API rejects any other metric (incl. `achievement_points`); adding a new ranking
+  metric requires its own GSI here first.
 
 ## Layout
 
-`bin/poker.ts` (entry) · `lib/{constants,api-stack,dynamodb-stack,archiver-stack,
-frontend-stack,oidc-stack}.ts` · `test/*` (Jest/CDK assertions).
+`bin/poker.ts` (entry) · `lib/{constants,api-stack,dynamodb-stack,archiver-stack,frontend-stack,
+oidc-stack,reconcile-stack,tablecleanup-stack,bundle}.ts` · `test/*` (Jest/CDK assertions).
+Compiled `.d.ts`/`.js` artifacts are checked in alongside sources — edit the `.ts`.

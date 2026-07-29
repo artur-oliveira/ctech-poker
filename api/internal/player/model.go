@@ -25,6 +25,9 @@ type PlayerProfile struct {
 	FeaturedAchievements []string `dynamodbav:"featured_achievements,omitempty" json:"featured_achievements,omitempty"`
 	PokerTermsVersion    string   `dynamodbav:"poker_terms_version,omitempty" json:"-"`
 	TermsAcceptedAt      string   `dynamodbav:"poker_terms_accepted_at,omitempty" json:"poker_terms_accepted_at,omitempty"`
+	AvatarKey            string   `dynamodbav:"avatar_key,omitempty" json:"-"`
+	AvatarVersion        int      `dynamodbav:"avatar_version,omitempty" json:"-"`
+	AvatarBlocked        bool     `dynamodbav:"avatar_blocked,omitempty" json:"-"`
 	CreatedAt            string   `dynamodbav:"created_at" json:"-"`
 	UpdatedAt            string   `dynamodbav:"updated_at" json:"-"`
 }

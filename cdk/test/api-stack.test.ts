@@ -21,6 +21,8 @@ test('synthesizes without error and declares exactly one ASG', () => {
     instanceProfileName: 'dev-ctech-poker-api-instance-profile',
     deploymentsBucketName: 'dev-ctech-deployments',
     logsBucketName: 'dev-ctech-application-logs',
+    avatarsBucketName: 'dev-ctech-poker-avatars',
+    avatarBaseUrlParam: '/ctech/dev/poker/avatar-base-url',
     tableStateArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_table_state',
     tableStateHistoryArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_table_state_history',
     actionLogArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_action_log',
@@ -47,4 +49,8 @@ test('synthesizes without error and declares exactly one ASG', () => {
   template.resourceCountIs('AWS::IAM::Role', 1);
   template.resourceCountIs('AWS::IAM::InstanceProfile', 1);
   template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
+  const rendered = JSON.stringify(template.toJSON());
+  expect(rendered).toContain('dev-ctech-poker-avatars/up/*');
+  expect(rendered).toContain('dev-ctech-poker-avatars/av/*');
+  expect(rendered).not.toContain('dev-ctech-poker-frontend');
 });

@@ -367,7 +367,8 @@ func RegisterTableWS(
 			if players != nil {
 				if profile, perr := players.GetOrCreate(ctx, playerID); perr == nil && profile != nil && profile.Name != "" {
 					r := make(chan error, 1)
-					_ = dispatch(table.SetNameCmd{PlayerID: playerID, Name: profile.Name, Reply: r})
+					_ = dispatch(table.SetIdentityCmd{PlayerID: playerID, Name: profile.Name,
+						AvatarURL: player.AvatarURL(profile, cfg.AvatarBaseURL), Reply: r})
 				}
 			}
 
@@ -817,9 +818,14 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 			equity = new(*s.Equity)
 		}
 		dealtIn, ready := s.DealtIn, s.Ready
+		var avatarURL *string
+		if s.AvatarURL != "" {
+			avatarURL = &s.AvatarURL
+		}
 		protoSeats[i] = &pokerproto.Seat{
 			PlayerId:          s.PlayerID,
 			Name:              s.Name,
+			AvatarUrl:         avatarURL,
 			ConnectionState:   s.ConnectionState,
 			Stack:             s.Stack,
 			State:             s.State,

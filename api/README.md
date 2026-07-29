@@ -1,15 +1,13 @@
 # ctech-poker — API (game server)
 
-Go real-time poker game server. **Sandbox (play-money) mode is implemented end-to-end.**
-Real-money mode (Phase 5) has its buy-in/cash-out/reconciliation logic implemented (`internal/buyin`,
-`internal/walletclient`, `cmd/reconcile`), gated behind `REAL_MONEY_ENABLED=true` + `LEGAL_SIGNOFF_REF`
-(see Configuration below) — **but is unreachable in production**: `POST /rooms` hardcodes
-`CurrencyMode: "sandbox"` with no way to request `real`, so the gate never actually opens. See
-[`../docs/plans/2026-07-19-poker-phase5-realmoney-and-hardening.md`](../docs/plans/2026-07-19-poker-phase5-realmoney-and-hardening.md)'s
-Status section for the verified task-by-task state.
+Go real-time poker game server. **Sandbox (play-money) mode is live end to end.** Real-money mode is
+also **implemented and reachable** (`internal/buyin`, `internal/walletclient`, `cmd/reconcile`) under
+the Brazil-legal fixed-fee model: `POST /v1.0/rooms/` accepts `currency_mode: "real"` plus a fixed
+`entry_fee_cents`, and the request is rejected unless `REAL_MONEY_ENABLED` is on — a runtime gate that
+is **off by default** and blocked on legal sign-off, not on missing code.
 
-> All claims below are anchored to the implementation (`api/`), not to the design docs
-> (`ARCHITECTURE.md`/`OVERVIEW.md`), which are proposals and may describe features not yet built.
+> Re-verified against the implementation on **2026-07-28**. All claims here are anchored to `api/`,
+> not to `ARCHITECTURE.md`/`OVERVIEW.md`. `../docs/README.md` carries the feature-status index.
 
 ## Stack
 
@@ -68,9 +66,14 @@ unless noted otherwise. `*` = fails closed (server refuses to start) if unset/em
 Lambda entrypoints use `config.LoadForLambda()`, which only enforces the `CTECH_URL`/`CTECH_JWKS_URL`
 checks.
 
-**⚠️ `REAL_MONEY_ENABLED` and `LEGAL_SIGNOFF_REF` are not wired in any `cdk/` stack.** Every other key
-above is set by `cdk/lib/api-stack.ts`'s instance userdata; these two are not — turning on real-money
-mode in prod today requires editing the ASG launch template/userdata by hand, outside CDK.
+`REAL_MONEY_ENABLED` and `LEGAL_SIGNOFF_REF` **are** wired: `cdk/lib/api-stack.ts:251-254` fetches both
+from SSM (`/ctech/<env>/poker/real-money-enabled`, `/ctech/<env>/poker/legal-signoff-ref`,
+`cdk/lib/constants.ts:112-113`) in the instance `start.sh`, defaulting to `false` when the parameter is
+absent. Turning real money on is an SSM parameter change plus an instance refresh — no userdata edit.
+(An earlier revision of this file claimed they were unwired; that was wrong.)
+
+Two keys this table also omitted: `TURNSTILE_SECRET` and `TURNSTILE_EXPECTED_HOSTNAME`, both set by
+`cdk/lib/api-stack.ts` for `internal/botcheck`.
 
 Per-binary keys read outside `Config` (not in the struct above):
 
@@ -80,32 +83,36 @@ Per-binary keys read outside `Config` (not in the struct above):
 | `WALLET_URL_PARAM` | `cmd/tablecleanup`, `cmd/reconcile` | **SSM parameter name** (not the value) holding the wallet URL |
 | `POKER_CLIENT_ID_PARAM` / `POKER_CLIENT_SECRET_PARAM` | `cmd/tablecleanup`, `cmd/reconcile` | SSM parameter names for M2M creds |
 
-## Real-time transport (WebSocket)
+## Real-time transport (WebSocket, binary protobuf)
 
-- Endpoint: `GET /v1.0/tables/:id/ws` (`internal/api/v1/tablews.go:133`).
-- Upgraded by `fasthttp/websocket` `FastHTTPUpgrader`; origin check mirrors HTTP CORS (`wsAllowedOrigin`,
-  `tablews.go:75`).
-- **Auth over the socket is a first frame**, not a header: the client sends
-  `{"token":"…","share_code":"…"}` (or a raw bearer token) immediately after upgrade (`readAuthToken`, `tablews.go:49`).
-  A missing/invalid frame fails closed (`tablews.go:143-153`).
+**The wire format is protobuf, not JSON.** Schema: `../proto/poker.proto`, generated into
+`internal/api/v1/proto` (Go) and `../ui/src/lib/api/proto/poker.ts` (ts-proto). Frames are sent as
+binary; `ClientMessage` / `ServerMessage` are the two envelopes.
+
+- **Two gateways.** `GET /v1.0/tables/:id/ws` is the table socket; `GET /v1.0/ws` is the lobby/user
+  socket, which registers the `lobby` and `user#<playerID>` channels and accepts only `ping`.
+- Upgraded by `fasthttp/websocket` `FastHTTPUpgrader`; origin check mirrors HTTP CORS.
+- **Auth over the socket is the first frame**, not a header or query param: the client sends its token
+  (plus `share_code` for a private room) immediately after upgrade (`readAuthToken`). A missing or
+  invalid frame fails closed. Same claim rules as HTTP — `sub` and `sid` both required, M2M rejected.
+- ⚠️ **Fiber hijacks the connection**, so any string taken from the request context (`c.Params`,
+  locals) must be **copied before** the WebSocket goroutine uses it — the underlying buffer is reused
+  once the handler returns. This was the cause of a real "no state seeded" bug.
 - **Private rooms are invite-only end-to-end**: the WS gate re-checks
-  `privateRoomAccessAllowed(room, playerID, shareCode)` with a constant-time share-code compare (`tablews.go:166`),
+  `privateRoomAccessAllowed(room, playerID, shareCode)` with a constant-time share-code compare,
   mirroring the HTTP join gate.
-- Fan-out: the actor broadcasts via `ws.Registry` (`reg.Broadcast`, `tablews.go:273`). The registry is
-  **Redis/Valkey-backed in prod**; an in-memory fallback exists for `dev`
-  only (absence of Valkey in non-dev must fail fast — remediation T2).
-- **Client → server** message types (`tablews.go:33-40`, handler `:247-274`):
-  `ping`, `ready{ready}`, `act{action,amount,action_id}`, `post_big_blind`, `chat{message}`.
-- **Server → client** message types: `connected{conn_id}`, `state{snapshot}`
-  (full authoritative snapshot pushed on join and on every mutation — no replay-based resync), `pong`,
-  `chat{player_id,message}`, `error{code}` (`unauthorized` /
-  `unavailable` / `forbidden` / `rate_limited` / `invalid_action` / `invalid_post` /
-  `message_too_long`), and `achievement_unlocked{key,stars}` delivered through the same broadcast channel from the
-  actor.
-- Abuse control: per-seat fixed-window limiter, **10 actions/sec/seat** (`seatLimiter`,
-  `tablews.go:225`); chat is truncated to 500 chars and run through a trivial 2-word filter (`tableChatFilter`,
-  `tablews.go:42` — see Known Issues).
-- Heartbeat: 30s ping / pong-wait 45s (`tablews.go:26-29`).
+- Fan-out keys: `<tableID>#<viewerID>` (per-viewer, because each seat receives a differently masked
+  snapshot), `lobby`, `user#<playerID>`. The registry is **Valkey-backed in prod**; the in-memory
+  fallback is `dev` only and non-dev fails fast without Valkey.
+- **Client → server**: `ping`, `sync_state`, `ready`, `act`, `preselect_action`, `bot_challenge`,
+  `post_big_blind`, `show_cards`, `keep_seat`, `chat`, `reaction`.
+- **Server → client**: `connected`, `pong`, `state` (full authoritative snapshot on join and on every
+  mutation — no delta replay), `chat`, `error`, `removed`, `achievement_unlocked`, `room_created`,
+  `room_updated`, `payment_received`, `system_broadcast`.
+- Abuse control: per-seat fixed-window limiter (10 actions/sec/seat), **32 KiB frame cap**, chat
+  truncated to 500 chars and masked by `internal/chatfilter`, and an adaptive Turnstile challenge
+  (`internal/botcheck`) issued over the socket.
+- Heartbeat: 30s ping / 45s pong wait.
 
 ## Game-server model (per-table actor + DynamoDB conditional writes)
 
@@ -123,51 +130,71 @@ This matches the **revised** model in `ARCHITECTURE.md §2` — *not* a Redis-le
   (`tablews.go:185-198`) so a lease-killed actor cannot hang a request (remediation T1 is already in code).
 - **Crash recovery is trivial**: state is durable after every single action, so a crashed instance loses at most the
   in-flight request; the next action (any instance) re-reads DynamoDB and proceeds.
-- Engine (pure logic, no networking): `internal/engine/{hand,betting,sidepots,equity,deck}`.
+- Engine (pure logic, no networking): `internal/engine/{hand,betting,sidepots,equity,deck,handeval}`.
   `sidepots.ComputeSidePots`, 7-card evaluator, and HMAC-SHA256 Fisher–Yates shuffle with rejection sampling are present
   and unit-tested. A scripted **hand-replay harness** lives at `cmd/handreplay` (`script.example.json`,
   `script.fold.json`) — the Phase-1 deliverable.
 
 ## HTTP endpoints (`/v1.0`)
 
-| Method & path                   | Auth            | Notes                                                                       |
-|---------------------------------|-----------------|-----------------------------------------------------------------------------|
-| `GET /health`                   | none            | liveness (`health.go:106`)                                                  |
-| `GET /health-check`             | none            | detailed dep report; ALB target group (accepts 200/207) (`health.go:110`)   |
-| `GET /tables/:id/ws`            | first-frame JWT | WebSocket (above) (`tablews.go:133`)                                        |
-| `POST /rooms/`                  | JWT             | create room; rate-limited (10/min/IP) (`rooms.go:29`)                       |
-| `GET /rooms/`                   | JWT             | list public rooms (`rooms.go:30`)                                           |
-| `GET /rooms/stakes`             | JWT             | curated stake list (`rooms.go:31`)                                          |
-| `GET /rooms/code/:code`         | JWT             | lookup by share code (`rooms.go:32`)                                        |
-| `GET /rooms/:id`                | JWT             | room detail (sanitized for non-creators) (`rooms.go:33`)                    |
-| `POST /rooms/:id/join`          | JWT             | join + buy-in; rate-limited (30/min/IP) (`rooms.go:34`)                     |
-| `POST /rooms/:id/leave`         | JWT             | leave (`rooms.go:35`)                                                       |
-| `POST /rooms/:id/ready`         | JWT             | ready toggle (`rooms.go:36`)                                                |
-| `GET /players/me`               | JWT             | player profile + terms state (`player.go:14`)                               |
-| `POST /players/me/terms/accept` | JWT             | accept poker ToS addendum (`player.go:15`)                                  |
-| `GET /leaderboard`              | **none**        | see Known Issues B9 (`leaderboard.go:11`)                                   |
-| `POST /sandbox-credits`         | JWT             | daily sandbox-chip spin; rate-limited (60/min/IP) (`sandbox credits.go:10`) |
+Auth column: **JWT** means `authMiddleware` (bearer token, `sub` + `sid` required, M2M rejected).
 
-Auth group wiring: `RegisterRooms/Players/sandbox credits` all receive `auth` (`router.go:43-46`);
-`RegisterLeaderboard` is registered **without** `auth` (`router.go:45`) — intentional per the audit but see B9.
+| Method & path | Auth | Notes |
+|---|---|---|
+| `GET /health` | none | liveness |
+| `GET /health-check` | none | RFC-health detail (uptime, CPU, memory, `DescribeTable`); ALB target group accepts 200/207 |
+| `GET /tables/:id/ws` | first-frame JWT | table WebSocket (above) |
+| `GET /ws` | first-frame JWT | lobby/user WebSocket; registers `lobby` + `user#<id>` |
+| `POST /rooms/` | JWT | create room; takes `currency_mode` + `entry_fee_cents`; rate-limited 10/min/IP |
+| `GET /rooms/` | JWT | list public rooms (paginated, 50) |
+| `GET /rooms/stakes` | JWT | stake catalog; `?currency_mode=sandbox\|real` |
+| `GET /rooms/code/:code` | JWT | lookup by share code |
+| `GET /rooms/:id` | JWT | room detail (`share_code` stripped for non-creators) |
+| `GET /rooms/:id/seated` | JWT | `{seated, stack}` — server-authoritative seat check |
+| `POST /rooms/:id/join` | JWT | join + buy-in; rate-limited 30/min/IP |
+| `POST /rooms/:id/leave` | JWT | leave → `{amount}` cashed out |
+| `POST /rooms/:id/ready` | JWT | **501** — use the table WebSocket's `ready` message |
+| `GET /players/:playerId/showcase` | **none** | public profile showcase; 404 when `showcase_public` is false |
+| `GET /players/me` | JWT | profile + sandbox/real balances |
+| `POST /players/me` | JWT | update name, wallet mode, deck variant, showcase settings |
+| `POST /players/me/terms/accept` | JWT | accept the poker ToS addendum |
+| `POST /players/me/avatar/upload-url` | JWT | presigned S3 POST; 5/hour/player |
+| `POST /players/me/avatar/confirm` | JWT | validate quarantine object and publish avatar |
+| `DELETE /players/me/avatar` | JWT | remove the current avatar |
+| `POST /players/:playerId/avatar/report` | JWT | record an avatar abuse report; 5/hour/player |
+| `GET /players/me/sessions` | JWT | per-table session P&L, paginated (50) |
+| `GET /players/me/hands` | JWT | hand history, `?table_id`, paginated (50) |
+| `GET /players/me/hands/:handId` | JWT | one hand incl. its fairness proof |
+| `GET /players/me/achievements` | JWT | own progress, paginated (100) |
+| `GET /players/me/notes/` | JWT | private opponent notes |
+| `POST /players/me/notes/:opponentId` | JWT | save/delete a note (`{tag, note}`, ≤500 chars) |
+| `GET /players/me/poker-stats` | JWT | own VPIP/PFR/3-bet |
+| `POST /players/me/hands/:handId/share` | JWT | create a public share link |
+| `DELETE /players/me/hand-shares/:token` | JWT | revoke a share link |
+| `GET /hand-shares/:token` | **none** | public shared hand, opponents aliased |
+| `GET /tables/:tableId/hands/:handId/history` | JWT | action-log replay for one hand |
+| `GET /achievements` | **none** | static achievement catalog |
+| `GET /leaderboard` | JWT | `?metric=hands_won\|hands_played\|win_rate`, `?limit`, `?cursor` |
+| `POST /sandbox-credits/` | JWT | daily spin; rate-limited 60/min/IP |
+| `GET /sandbox-credits/` | JWT | `{remaining_time_seconds}` cooldown |
 
-## Authentication & authorization — ⚠️ B9 known risk
+`achievement_points` is **rejected** as a leaderboard metric — no `gsi_achievement_points` exists, and
+returning an error beats silently ranking by a different GSI.
 
-- `authMiddleware` (`internal/api/v1/auth.go:13-25`) verifies the bearer JWT and sets
-  `c.Locals("user_id", claims.Sub)`. The **only** authorization check is
-  `claims.Sub == ""` → reject (`auth.go:20`). There is **no scope, KYC, or role check**.
-- The WebSocket gate derives `playerID` from `claims.Sub` (not the client body), so a player cannot act for another —
-  good. But the *same* `sub`-only guard is the entire authz surface for every player/room endpoint.
-- **`GET /leaderboard` is unauthenticated** (`leaderboard.go:11`, `router.go:45`). Public read-only leaderboard is a
-  deliberate product choice, but it means the endpoint performs no auth at all.
-- **Machine (M2M) credentials are not distinguished from user credentials.** The server itself uses an M2M client
-  (`SSM_POKER` client-id/secret, `cdk/lib/constants.ts:103-107`)
-  to call `ctech-wallet`. A token that carries any non-empty `sub` (including an M2M client credential with no
-  session/sid) satisfies the `sub`-only guard and could call player/room endpoints. **Hypothesis to confirm against the
-  token issuer (ctech-account):**
-  M2M tokens populate `sub` with the client id and lack a user `sid`, so they pass today. Not yet exploitable for real
-  funds (sandbox-only), but must be fixed before real-money.
-- **Tracked as a known risk to fix, not accepted.** See [`api/CLAUDE.md`](./CLAUDE.md).
+## Authentication & authorization
+
+- `authMiddleware` (`internal/api/v1/auth.go`) verifies the bearer JWT against ctech-account's JWKS
+  (`jwtverify`) and requires **both** a non-empty `sub` and a non-empty `sid`. An empty `sid` marks an
+  M2M `client_credentials` token (ecosystem convention) and is rejected **403** — machine credentials
+  can never act as a player. The WS gateway applies the same check on the first frame.
+- `playerID` always comes from `claims.Sub`, never from a request body or path (IDOR safety).
+- Three routes are intentionally public: the achievement catalog, a player's opt-in showcase, and a
+  shared-hand token. The showcase 404s unless the player set `showcase_public`; the shared hand aliases
+  opponents and carries a ≤30-day TTL.
+- There is still **no scope / KYC / role check** on the player surface, because none is defined for
+  poker in ctech-account's scope catalog. Revisit if scopes are added — see `CLAUDE.md`'s blocker list,
+  which includes two missing wallet scopes that still gate real-money verification calls.
+- **B9 (`sub`-only authz) is fixed.** Older revisions of this file described it as an open risk.
 
 ## Sandbox & real-money ledgers
 
@@ -180,45 +207,50 @@ Auth group wiring: `RegisterRooms/Players/sandbox credits` all receive `auth` (`
   credit/debit (`NewServiceWithPlayers`); `real` uses the hold-based `GameWallet` path
   (`NewServiceWithGame`, wired only when `REAL_MONEY_ENABLED=true`, `internal/app/app.go:198-203`).
   Any other value returns `ErrUnsupportedCurrencyMode`.
-- **The real-money path is implemented but currently unreachable**: `POST /rooms` always creates
-  `CurrencyMode: "sandbox"` rooms (`internal/api/v1/rooms.go:93`) — there is no request field to ask for
-  a real-money room, so the `real` branch above never executes outside tests. Also, the real-money wiring
-  in `app.go` doesn't pass a `players` service into `NewServiceWithGame`, so it skips the
-  terms-of-service acceptance check sandbox buy-ins get (`buyin/service.go:140-144`) — fix before exposing
-  real-money room creation. Full status: see the Phase 5 plan's Status section referenced above.
+- **Ordering is deliberate and asymmetric**: debit-then-seat on buy-in (never hand out chips nobody paid
+  for), remove-then-credit on cash-out (never pay out a stack still in play). Anything that can fail
+  *after* chips moved is written to `poker_pending_cashouts` and retried by `cmd/reconcile` every 5
+  minutes; `Kind` separates a stuck cash-out from a stuck fee debit.
+- **Real money is reachable and gated at runtime.** `POST /v1.0/rooms/` accepts
+  `currency_mode: "real"` with a fixed `entry_fee_cents` validated against the tier catalog, and returns
+  400 unless `REAL_MONEY_ENABLED` is on. `LEGAL_SIGNOFF_REF` must be non-empty when it is, checked
+  fail-closed in `config.Load`.
+- **Residual gap:** the real-money wiring in `app.go` doesn't pass a `players` service into
+  `NewServiceWithGame`, so it skips the poker-terms-acceptance check sandbox buy-ins get. Fix before
+  real money faces users.
 
-## Known issues (documented honestly — do NOT fix code here)
+## Known issues
 
-- **B9 — authz is `sub`-only** (above). `auth.go:20`; leaderboard unauthenticated
-  `leaderboard.go:11`; M2M not distinguished.
-- **B10 — archiver Lambda has no DLQ** (`cdk/lib/archiver-stack.ts:71-75`):
-  `DynamoEventSource` sets `retryAttempts: 3` but **no `onFailure` / dead-letter queue**. A poison record that fails 3×
-  is dropped. Archiver Lambda: `cmd/archiver/main.go`
-  (30s timeout, default memory).
-- **B31 — `leaderboard.Top("achievement_points")` returns the wrong ranking**
-  (`internal/leaderboard/store.go:105-133`): for `achievement_points` the code sets only
-  `queryLimit=1000` but still queries the **`gsi_hands_won`** index (the function default at
-  `store.go:106`). The `poker_leaderboard_stats` table has GSIs only for `hands_won`,
-  `hands_played`, and `win_rate` (`cdk/lib/dynamodb-stack.ts:78-95`) — **there is no
-  `achievement_points` GSI** — so the call silently returns a *hands-won* ranking, not an achievement-points ranking.
-- **B32 fixed** — commit-reveal fairness is verifiable by clients via the WS snapshot
-  (`internal/engine/hand/snapshot.go`): `ShuffleCommitHash` and `RootCommitHash` are
-  published before dealing. At completion the full seed is revealed only when no private
-  cards remain hidden. Otherwise the viewer receives card+salt proofs for visible cards
-  and rabbit-runout cards, plus hashes for every hidden position. The full seed is also
-  omitted from persisted hand history whenever any participant's cards remain hidden.
-- **Remediation context:** `docs/plans/2026-07-19-api-audit-remediation.md` (and its spec)
-  is a separate audit covering H1–H4, M1–M7, L1–L6, E1–E3, S1–S7. Several fixes are **already in the code** (T1 actor
-  re-resolve `tablews.go:185-198`; T2 prod fail-fast on missing Valkey via `start.sh` in `cdk/lib/api-stack.ts`; M6 rate
-  limiters
-  `router.go:39-41`). Others (stable buy-in idempotency H3/M7, escalation-from-config M2, equity off the hot path M5,
-  SitOut version-retry M1) are **not yet** applied — verify against the current tree before relying on them.
+- **No WAF at the edge.** `cdk/lib/frontend-stack.ts` builds the CloudFront distribution with no
+  `webAclId`. Application-level protection is the per-IP HTTP limiters, the 32 KiB WS frame cap, and
+  Turnstile. PLAN.md's Task 9 previously claimed this shipped; it did not.
+- **No ASG lifecycle hook.** `tablemanager.DrainAndRelease` runs on the default EC2 shutdown grace
+  period, not a guaranteed drain window — scale-in can cut a table mid-hand.
+- **No DLQ on either EventBridge Scheduler target** (`cmd/reconcile`, `cmd/tablecleanup`).
+- **Real-money buy-in skips the terms check** (above).
+- **Two missing ctech-account scopes** block real-money verification calls — see `CLAUDE.md`. Both are
+  config actions in ctech-account, not code changes here.
+
+Fixed, for the record, since older revisions of this file listed them as open: **B9** (authz is now
+`sub` + `sid`, M2M rejected, leaderboard authenticated), **B10** (archiver has an SQS DLQ and a
+depth alarm), **B31** (`achievement_points` is rejected rather than mis-ranked), **B32** (commit-reveal
+is published and client-verifiable, with the seed-less partial proof for no-showdown hands).
+
+`docs/plans/2026-07-19-api-audit-remediation.md` remains a useful cross-check: some of its items
+(T1 actor re-resolve, T2 prod fail-fast on missing Valkey, M6 rate limiters, stable buy-in idempotency)
+are in code, others are not — verify against the tree before relying on any of them.
 
 ## Other binaries
 
 - `cmd/server` — the game server (described above).
-- `cmd/archiver` — DynamoDB Stream → S3 archive Lambda (see B10).
-- `cmd/handreplay` — offline hand-replay harness (engine test/debug).
+- `cmd/archiver` — DynamoDB Stream (`poker_action_log`) → S3 JSON Lines audit archive, grouped by
+  partition. Failures go to an SQS DLQ with a depth alarm.
+- `cmd/reconcile` — scheduled Lambda (every 5 min) sweeping `poker_pending_cashouts` past a 2-minute
+  grace period; retries `CashoutGame`, sandbox `Credit`, or `DebitReal` depending on `Kind`.
+- `cmd/tablecleanup` — scheduled Lambda (every 30 min) archiving tables idle >15 min via the
+  `gsi_active_last_action` GSI, refunding seated players' sandbox chips and deleting the room.
+- `cmd/handreplay` — offline CLI replaying a scripted hand through the pure engine; deterministic
+  reconciliation and debugging tool.
 
 ## Cross-links
 

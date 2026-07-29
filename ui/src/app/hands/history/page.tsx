@@ -7,6 +7,7 @@ import {ChevronLeft, Crown, ExternalLink, Play, ShieldCheck} from 'lucide-react'
 import {getHand} from '@/lib/api/player';
 import {getHandHistory} from '@/lib/api/table';
 import {PlayingCard} from '@/components/table/PlayingCard';
+import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
 import {ActionTimeline} from '@/components/hands/ActionTimeline';
 import {DeckReveal} from '@/components/hands/DeckReveal';
@@ -107,6 +108,7 @@ function HandHistoryContent() {
         const category = categoryFor(o.hole_cards);
         return <article key={o.player_id} className={`hand-history-seat${o.won ? ' is-winner' : ''}`}>
           {o.won && <Crown aria-hidden="true" className="winner-crown"/>}
+          <PlayerAvatar name={o.name} avatarUrl={o.avatar_url} size={36}/>
           <b>{o.name || 'Adversário'}</b>
           <div className="hand-history-seat-cards">
             {o.hole_cards?.length ? o.hole_cards.map((c, i) => <PlayingCard key={i} card={c} index={i} size="hole"/>) :

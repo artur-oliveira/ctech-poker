@@ -1,59 +1,63 @@
 # ctech-poker — Docs index
 
-Implementation-anchored documentation for the `ctech-poker` service. **The code is the source of truth; the top-level
-`OVERVIEW.md` / `ARCHITECTURE.md` / `PLAN.md` are design proposals and may describe features not yet built.**
-Per-directory READMEs below are written against the actual code.
+Implementation-anchored documentation for the `ctech-poker` service. **The code is the source of truth.** This index was
+re-verified against the tree on **2026-07-28**; the top-level `OVERVIEW.md` / `ARCHITECTURE.md` / `PLAN.md` are design and
+history documents and lag the code by design.
 
 ## Per-directory docs
 
-- [`api/README.md`](../api/README.md) — Go game server: WebSocket transport, per-table actor model, endpoints/events,
-  `sub`-only authz (B9), sandbox ledger.
+- [`api/README.md`](../api/README.md) — Go game server: protobuf WebSocket transport, per-table actor model,
+  endpoints/events, authz, sandbox and real-money ledgers.
 - [`ui/README.md`](../ui/README.md) — Next.js SPA: routes, lobby, table client, realtime hook, auth flow, gamification.
-- [`cdk/README.md`](../cdk/README.md) — AWS CDK: EC2 ASG compute, DynamoDB tables/GSIs, IAM, archiver Lambda (B10), cost
-  notes.
-- [`CLAUDE.md` / `AGENTS.md`](../CLAUDE.md) — repo-wide conventions (see also the per-dir
-  `CLAUDE.md`/`AGENTS.md` in `api/`, `ui/`, `cdk/`).
+- [`cdk/README.md`](../cdk/README.md) — AWS CDK: 7 stacks, EC2 ASG compute, 15 DynamoDB tables, CloudFront frontend,
+  archiver/reconcile/tablecleanup Lambdas.
+- Per-directory `CLAUDE.md` / `AGENTS.md` live in `api/`, `ui/`, `cdk/`. There is no repo-root `CLAUDE.md`.
 
-## IMPLEMENTED (sandbox mode) vs DESIGNED-ONLY
+## Feature status
 
-| Area                                                                        | Status                                                            | Evidence                                                                                         |
-|-----------------------------------------------------------------------------|-------------------------------------------------------------------|--------------------------------------------------------------------------------------------------|
-| Sandbox play-money poker (rooms, lobby, ready, game engine, WS realtime)    | **IMPLEMENTED**                                                   | `api/`, `ui/`                                                                                    |
-| Engine: betting, side pots, 7-card eval, CSPRNG shuffle                     | **IMPLEMENTED + tested**                                          | `api/internal/engine/*`                                                                          |
-| Sandbox ledger, isolated from ctech-wallet real ledger                      | **IMPLEMENTED**                                                   | `api/internal/walletclient`, `buyin` `CurrencyMode` guard                                        |
-| Frontend lobby/table/leaderboard/sandbox credits-spin/achievements-toast    | **IMPLEMENTED**                                                   | `ui/src/app/*`                                                                                   |
-| Infra: EC2 ASG, DynamoDB, S3+CloudFront frontend, archiver Lambda           | **IMPLEMENTED + live**                                            | `cdk/lib/*`                                                                                      |
-| Real-money mode & Hardening (Phase 5 Tasks 1–12)                            | **IMPLEMENTED (Gated by REAL_MONEY_ENABLED + LEGAL_SIGNOFF_REF)** | `walletclient`, `buyin`, `reconcile`, `metrics`, ASG drain, WAF, hand history, load test harness |
-| Hand history audit endpoint                                                 | **IMPLEMENTED**                                                   | `GET /v1.0/tables/:tableId/hands/:handId/history`, player sessions/hands history endpoints       |
-| Commit-reveal fairness surface (publish `CommitHash` / reveal `ServerSeed`) | **DESIGNED-ONLY**                                                 | primes exist (`deck.go`) but no endpoint — **B32**                                               |
-| Lobby stake/mode filters; private-room share-link UI                        | **DESIGNED-ONLY**                                                 | `ui/` RoomList has no filters                                                                    |
-| sandbox credits wheel visual; achievements catalog screen; chat moderation  | **DESIGNED-ONLY**                                                 | not in `ui/src`                                                                                  |
+| Area                                                                     | Status                  | Evidence                                                                                     |
+|--------------------------------------------------------------------------|-------------------------|----------------------------------------------------------------------------------------------|
+| Sandbox play-money poker (rooms, lobby, ready, engine, realtime)          | **LIVE**                | `api/`, `ui/`                                                                                |
+| Engine: betting, side pots, 7-card eval, CSPRNG shuffle, equity           | **LIVE + tested**       | `api/internal/engine/*`                                                                      |
+| Binary protobuf WebSocket (table + lobby/user gateways)                   | **LIVE**                | `proto/poker.proto`, `api/internal/api/v1/tablews.go`, `ui/src/lib/ws/utils.ts`               |
+| Provably-fair: commit, root commit, seed reveal, seed-less partial proof  | **LIVE**                | `engine/hand/snapshot.go`, `ui/src/lib/deckVerify.ts`, `PartialDeckProof.tsx`                 |
+| Hand history, hand replayer, hand export, public hand sharing             | **LIVE**                | `sessionlog`, `handshare`, `ui/src/app/hands/*`, `ui/src/app/share`                           |
+| Gamification: leaderboard, achievements, daily sandbox-credit spin        | **LIVE**                | `leaderboard`, `achievements`, `dailyreward`, `ui/src/app/{leaderboard,achievements}`         |
+| Player tooling: private notes, self-HUD stats, profile showcase           | **LIVE**                | `playernotes`, `pokerstats`, `ProfileShowcaseDialog.tsx`, `SelfHudDialog.tsx`                 |
+| Table UX: time banks, action pre-selection, reactions, rabbit hunt        | **LIVE**                | `engine/hand/timebank*.go`, `lib/actionPreselection.ts`, `reactions.ts`, `RabbitHunt.tsx`     |
+| Voice: dealer speech synthesis + voice-driven actions                     | **LIVE**                | `ui/src/lib/hooks/useDealerVoice.ts`, `ui/src/lib/voiceActions.ts`                            |
+| Bot prevention (Cloudflare Turnstile challenge over WS)                   | **LIVE**                | `api/internal/botcheck`, `ui/src/components/table/BotChallenge.tsx`                           |
+| Real-money mode (fixed-fee model, wallet hold/cash-out, reconcile sweep)  | **LIVE, gated off**     | `walletclient`, `buyin`, `reconcile`, `REAL_MONEY_ENABLED` + `LEGAL_SIGNOFF_REF`              |
+| Infra: EC2 ASG, DynamoDB, S3+CloudFront frontend, 3 Lambdas               | **LIVE**                | `cdk/lib/*`                                                                                   |
+| WAF on the CloudFront distribution                                        | **NOT BUILT**           | no `aws-wafv2` / `webAclId` anywhere in `cdk/`                                                |
+| ASG lifecycle hook for graceful scale-in drain                            | **NOT BUILT**           | `DrainAndRelease` exists in `tablemanager`; no `lifecycleHook` in `cdk/lib`                   |
+| Multi-AZ / HA beyond a single ASG                                         | **NOT BUILT**           | see `plans/2026-07-28-audit-implementation-plan.md`                                           |
 
-## Known issues (documented honestly — do NOT fix code in docs)
+## Known open issues
 
-- **B9 — authz is `sub`-only.** `api/internal/api/v1/auth.go:20`; `GET /leaderboard`
-  unauthenticated (`api/internal/api/v1/leaderboard.go:11`); M2M credentials not distinguished from user credentials.
-  Tracked as a **risk to fix**, not accepted.
-- **B10 — archiver Lambda has no DLQ.** `cdk/lib/archiver-stack.ts:71-75` (`retryAttempts: 3`, no `onFailure`) → poison
-  records dropped.
-- **B31 — `leaderboard.Top("achievement_points")` returns wrong ranking.** Falls through to
-  `gsi_hands_won` (`api/internal/leaderboard/store.go:105-133`); no `achievement_points` GSI exists
-  (`cdk/lib/dynamodb-stack.ts:78-95`).
-- **B32 — commit-reveal fairness unverifiable by clients.** `ServerSeed`/`CommitHash` exist
-  (`api/internal/engine/deck/deck.go:50-69`) but no endpoint publishes/reveals them.
+- **No WAF.** `cdk/lib/frontend-stack.ts:103-121` builds the Distribution with no `webAclId`. PLAN.md previously
+  claimed this shipped; it did not.
+- **No ASG lifecycle hook.** Scale-in can terminate an instance before `DrainAndRelease` finishes.
+- **No DLQ on either EventBridge Scheduler target** (`reconcile-stack.ts`, `tablecleanup-stack.ts`) — tracked as T13 in
+  `plans/2026-07-28-audit-implementation-plan.md`.
+- **Real-money buy-in skips the terms-acceptance check** that the sandbox path performs (`api/internal/app/app.go`).
+- **No CDK test** for `reconcile-stack.ts` or `oidc-stack.ts`.
+
+Issues **B9** (`sub`-only authz), **B10** (archiver DLQ), **B31** (leaderboard ranking) and **B32** (fairness surface)
+are all **fixed**; older docs that still list them as open are stale.
 
 ## Other reference material
 
-- `plans/` — phased build plans. **`2026-07-19-api-audit-remediation.md`** is a concrete remediation plan (H1–H4, M1–M7,
-  L1–L6, E1–E3, S1–S7). Note: some fixes are **already in code** (actor re-resolve `tablews.go:185-198`; prod Valkey
-  fail-fast; HTTP rate limiters
-  `router.go:39-41`) while others are **not yet** applied — verify against the current tree.
-- `specs/` — `2026-07-19-api-audit-remediation.md` (the spec behind the plan above).
-- Top-level `OVERVIEW.md` (product/functional), `ARCHITECTURE.md` (technical design),
-  `PLAN.md` (phased roadmap), `README.md` (status).
+- `plans/` — 20 phased/feature plans, `2026-07-18` through `2026-07-28`. The two newest
+  (`2026-07-28-architecture-state-audit-and-provably-fair.md`, `2026-07-28-audit-implementation-plan.md`, both pt-BR)
+  carry the current architecture punch list.
+- `specs/` — `2026-07-19-api-audit-remediation.md`, `2026-07-23-poker-reveal-timing-and-runout-pacing.md`,
+  `2026-07-28-player-avatars-and-next-features.md` (proposed next features).
+- Top-level `OVERVIEW.md` (product/game rules), `ARCHITECTURE.md` (technical design), `PLAN.md` (build history),
+  `README.md` (status). Untracked `future.md` / `future_analysis.md` are brainstorm/feasibility notes — much of their
+  Fase 1–2 backlog has since shipped.
 
 ## Read-this-first
 
-Start at the repo [`README.md`](../README.md) for status, the P0 legal risk (real-money mode under Brazilian
-regulation), and the relationship to `ctech-account` / `ctech-wallet` /
-`ctech-billing`.
+Start at the repo [`README.md`](../README.md) for status, the P0 legal risk (real-money poker under Brazilian
+regulation), and the relationship to `ctech-account` / `ctech-wallet` / `ctech-cdk`.
