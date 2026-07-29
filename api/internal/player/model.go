@@ -1,6 +1,6 @@
 package player
 
-const CurrentPokerTermsVersion = "1.0"
+const CurrentPokerTermsVersion = "2.0"
 
 // Wallet modes a player can pick in their profile — which balance the lobby
 // should show/filter by. Enforced at the buy-in boundary already lives on
