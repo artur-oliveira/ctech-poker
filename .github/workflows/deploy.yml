@@ -60,9 +60,13 @@ jobs:
               - '.github/workflows/infra.yml'
             api:
               - 'api/**'
+              - 'proto/**'
+              - 'scripts/generate-proto.sh'
               - '.github/workflows/api.yml'
             frontend:
               - 'ui/**'
+              - 'proto/**'
+              - 'scripts/generate-proto.sh'
               - '.github/workflows/frontend.yml'
 
       # On workflow_dispatch the checkboxes decide; on push, the path filter does.

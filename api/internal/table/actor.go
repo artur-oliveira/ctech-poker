@@ -157,6 +157,11 @@ var ErrActorStopped = errors.New("table: actor stopped")
 var ErrNoSeatsAvailable = errors.New("table: no seats available")
 
 func (a *Actor) Dispatch(cmd Command) error {
+	if len(a.cmds) >= (cap(a.cmds)*3)/4 {
+		// The mailbox is deliberately blocking rather than lossy. This signal
+		// detects sustained pressure without emitting one metric per command.
+		metrics.EmitTableMetric(a.env, "MailboxBackpressure", 1, nil)
+	}
 	select {
 	case a.cmds <- cmd:
 		// Sent (channel is buffered). Wait for the reply, but bail if the
@@ -648,7 +653,7 @@ func (a *Actor) saveHandHistorySnapshot(ctx context.Context) {
 		return
 	}
 	if err := a.store.SaveTableStateHistory(ctx, a.id, timeNowFunc().Unix(), a.cached.ExportState()); err != nil {
-		metrics.EmitTableMetric(a.env, "TableStateHistorySaveError", 1, map[string]string{"table_id": a.id})
+		metrics.EmitTableMetric(a.env, "TableStateHistorySaveError", 1, nil)
 	}
 }
 
@@ -680,11 +685,19 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 		//     if it's genuinely invalid, re-running it against freshly
 		//     loaded state reproduces the identical rejection.
 		if errors.Is(err, tablestore.ErrVersionConflict) || a.trustCache {
+			if errors.Is(err, tablestore.ErrVersionConflict) {
+				metrics.EmitTableMetric(a.env, "DynamoDBVersionConflicts", 1, nil)
+			}
 			if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
 				return reloadErr
 			}
 			a.markLastAction(c.PlayerID)
 			_, err = a.applyActAndCommit(ctx, c)
+			if errors.Is(err, tablestore.ErrVersionConflict) {
+				metrics.EmitTableMetric(a.env, "ConflictRetryFailure", 1, nil)
+			} else {
+				metrics.EmitTableMetric(a.env, "ConflictRetrySuccess", 1, nil)
+			}
 		}
 	}
 	if errors.Is(err, tablestore.ErrDuplicateAction) {
@@ -697,7 +710,8 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 	if err != nil && !errors.Is(err, tablestore.ErrDuplicateAction) {
 		return err
 	}
-	metrics.EmitTableMetric(a.env, "ActionLatencyMs", float64(timeNowFunc().Sub(start).Milliseconds()), map[string]string{"table_id": a.id})
+	metrics.EmitTableMetric(a.env, "ActionLatencyMs", float64(timeNowFunc().Sub(start).Milliseconds()), nil)
+	metrics.EmitTableMetric(a.env, "ActionsSucceeded", 1, nil)
 	if err := a.commitOutcomeLogEntries(ctx); err != nil {
 		return err
 	}
@@ -731,7 +745,7 @@ func (a *Actor) notifyHandComplete() {
 	}
 	if outcome := a.cached.LastOutcomeForActor(); outcome != nil {
 		a.completedHandNotified = a.handID
-		metrics.EmitTableMetric(a.env, "HandsCompleted", 1, map[string]string{"table_id": a.id})
+		metrics.EmitTableMetric(a.env, "HandsCompleted", 1, nil)
 		if a.onHandComplete != nil {
 			names := make(map[string]string)
 			for _, p := range a.cached.PlayersForActor() {
@@ -992,10 +1006,18 @@ func (a *Actor) retryOnConflict(ctx context.Context, apply func() error) error {
 	} else if !errors.Is(err, tablestore.ErrVersionConflict) {
 		return err
 	}
+	metrics.EmitTableMetric(a.env, "DynamoDBVersionConflicts", 1, nil)
 	if err := a.ensureLoaded(ctx, true); err != nil {
+		metrics.EmitTableMetric(a.env, "ConflictRetryFailure", 1, nil)
 		return err
 	}
-	return apply()
+	err := apply()
+	if err != nil {
+		metrics.EmitTableMetric(a.env, "ConflictRetryFailure", 1, nil)
+	} else {
+		metrics.EmitTableMetric(a.env, "ConflictRetrySuccess", 1, nil)
+	}
+	return err
 }
 
 func (a *Actor) SetEnv(env string) { a.env = env }
@@ -1015,6 +1037,7 @@ func (a *Actor) handleConnect(c ConnectCmd) error {
 	}
 	if _, already := a.activeConns[c.PlayerID][c.ConnID]; !already {
 		a.connCount.Add(1)
+		metrics.EmitTableMetric(a.env, "ConnectionsOpened", 1, nil)
 	}
 	a.activeConns[c.PlayerID][c.ConnID] = struct{}{}
 	if a.clearDisconnectMark(c.PlayerID) {
@@ -1031,6 +1054,7 @@ func (a *Actor) handleDisconnect(c DisconnectCmd) error {
 			}
 		} else {
 			a.connCount.Add(-1)
+			metrics.EmitTableMetric(a.env, "ConnectionsClosed", 1, nil)
 		}
 		delete(conns, c.ConnID)
 		if len(conns) == 0 {
@@ -1042,7 +1066,7 @@ func (a *Actor) handleDisconnect(c DisconnectCmd) error {
 	if len(a.activeConns[c.PlayerID]) > 0 {
 		return nil // another connection (another tab) for this player is still live
 	}
-	metrics.EmitTableMetric(a.env, "Disconnects", 1, map[string]string{"table_id": a.id})
+	metrics.EmitTableMetric(a.env, "Disconnects", 1, nil)
 	a.disconnectedSince[c.PlayerID] = timeNowFunc()
 	a.armKickTimer(c.PlayerID)
 	a.broadcastAll()
@@ -1833,7 +1857,18 @@ func (a *Actor) broadcastAll() {
 					}
 				}
 				if opponents > 0 {
-					estimate, err := equity.Estimate(hole, board, nil, opponents, 200)
+					equityStarted := timeNowFunc()
+					estimate, stats, err := equity.EstimateWithStats(hole, board, nil, opponents, 200)
+					metrics.EmitTableMetric(a.env, "EquityDurationMs",
+						float64(timeNowFunc().Sub(equityStarted).Microseconds())/1000, nil)
+					if stats.CacheHit {
+						metrics.EmitTableMetric(a.env, "EquityCacheHits", 1, nil)
+					} else {
+						metrics.EmitTableMetric(a.env, "EquityCacheMisses", 1, nil)
+					}
+					if stats.Evicted {
+						metrics.EmitTableMetric(a.env, "EquityCacheEvictions", 1, nil)
+					}
 					if err == nil {
 						for i := range snapshot.Seats {
 							if snapshot.Seats[i].PlayerID == p.ID {

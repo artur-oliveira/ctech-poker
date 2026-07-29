@@ -58,6 +58,12 @@ function messageForStatus(status?: number): string {
 // type ApiErrorBody = { detail?: string; title?: string }
 
 export function notifyApiError(error: unknown): void {
+  const normalized = error as {name?: string; status?: number; problem?: {detail?: string; title?: string}};
+  if (normalized?.name === 'ApiError') {
+    const safeDetail = normalized.problem?.detail?.trim();
+    pushNotification(safeDetail || messageForStatus(normalized.status));
+    return;
+  }
   const axiosErr = error as { isAxiosError?: boolean; response?: { status?: number }; request?: unknown };
   if (!axiosErr?.isAxiosError) {
     pushNotification('Algo deu errado. Tente novamente.');

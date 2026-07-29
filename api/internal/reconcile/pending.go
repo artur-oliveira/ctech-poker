@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/dynamo"
 )
 
@@ -23,10 +24,10 @@ const (
 )
 
 type PendingCashout struct {
-	ID             string   `dynamodbav:"id" json:"id"`
-	PlayerID       string   `dynamodbav:"player_id" json:"player_id"`
-	Amount         int64    `dynamodbav:"amount" json:"amount"`
-	CurrencyMode   string   `dynamodbav:"currency_mode" json:"currency_mode"` // "sandbox" | "real"
+	ID           string `dynamodbav:"id" json:"id"`
+	PlayerID     string `dynamodbav:"player_id" json:"player_id"`
+	Amount       int64  `dynamodbav:"amount" json:"amount"`
+	CurrencyMode string `dynamodbav:"currency_mode" json:"currency_mode"` // "sandbox" | "real"
 	// Kind distinguishes what this pending entry retries. Empty/KindCashout:
 	// credit a player's final stack back to their wallet (the original use of
 	// this store). KindFeeDebit: charge the fixed real-money table-entry fee
@@ -41,9 +42,10 @@ type PendingCashout struct {
 }
 
 type PendingStore struct {
-	db   *dynamodb.Client
-	env  string
-	base dynamo.Base
+	db            *dynamodb.Client
+	env           string
+	base          dynamo.Base
+	scanPageLimit int32
 }
 
 func NewPendingStore(db *dynamodb.Client, env string) *PendingStore {
@@ -71,7 +73,11 @@ func (s *PendingStore) Record(ctx context.Context, p PendingCashout) error {
 
 func (s *PendingStore) MarkResolved(ctx context.Context, id string) error {
 	sk := pendingSK
-	_, err := s.base.UpdateItem(ctx, id, &sk, map[string]any{"resolved": true})
+	_, err := s.base.UpdateItem(ctx, id, &sk, map[string]any{
+		"resolved":    true,
+		"resolved_at": dynamo.NowStr(),
+		"ttl":         time.Now().Add(30 * 24 * time.Hour).Unix(),
+	})
 	if err != nil {
 		return fmt.Errorf("reconcile: mark resolved: %w", err)
 	}
@@ -80,29 +86,35 @@ func (s *PendingStore) MarkResolved(ctx context.Context, id string) error {
 
 func (s *PendingStore) ListUnresolved(ctx context.Context, olderThan time.Duration) ([]PendingCashout, error) {
 	tableName := dynamo.TableName(s.env, tablePending)
-	out, err := s.db.Scan(ctx, &dynamodb.ScanInput{
-		TableName: aws.String(tableName),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("reconcile: scan: %w", err)
-	}
 	cutoff := time.Now().Add(-olderThan)
-	res := make([]PendingCashout, 0, len(out.Items))
-	for _, item := range out.Items {
-		p, err := dynamo.Decode[PendingCashout](item)
-		if err != nil || p == nil {
-			continue
+	res := make([]PendingCashout, 0)
+	var startKey map[string]types.AttributeValue
+	for {
+		input := &dynamodb.ScanInput{TableName: aws.String(tableName), ExclusiveStartKey: startKey}
+		if s.scanPageLimit > 0 {
+			input.Limit = aws.Int32(s.scanPageLimit)
 		}
-		if p.Resolved {
-			continue
+		out, err := s.db.Scan(ctx, input)
+		if err != nil {
+			return nil, fmt.Errorf("reconcile: scan: %w", err)
 		}
-		if olderThan > 0 && p.RecordedAt != "" {
-			recordedAt, err := time.Parse(time.RFC3339Nano, p.RecordedAt)
-			if err == nil && recordedAt.After(cutoff) {
+		for _, item := range out.Items {
+			p, err := dynamo.Decode[PendingCashout](item)
+			if err != nil || p == nil || p.Resolved {
 				continue
 			}
+			if olderThan > 0 && p.RecordedAt != "" {
+				recordedAt, err := time.Parse(time.RFC3339Nano, p.RecordedAt)
+				if err == nil && recordedAt.After(cutoff) {
+					continue
+				}
+			}
+			res = append(res, *p)
 		}
-		res = append(res, *p)
+		if len(out.LastEvaluatedKey) == 0 {
+			break
+		}
+		startKey = out.LastEvaluatedKey
 	}
 	return res, nil
 }

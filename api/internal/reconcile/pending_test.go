@@ -66,10 +66,18 @@ func TestRecordThenListUnresolvedThenMarkResolved(t *testing.T) {
 	if err := store.Record(ctx, p); err != nil {
 		t.Fatalf("record: %v", err)
 	}
+	for _, id := range []string{"co-2", "co-3"} {
+		if err := store.Record(ctx, PendingCashout{ID: id, PlayerID: "user-2", Amount: 100}); err != nil {
+			t.Fatalf("record %s: %v", id, err)
+		}
+	}
+	// Force DynamoDB pagination so the test guards LastEvaluatedKey handling
+	// without needing a 1 MiB fixture.
+	store.scanPageLimit = 1
 
 	unresolved, err := store.ListUnresolved(ctx, 0)
-	if err != nil || len(unresolved) != 1 || unresolved[0].ID != "co-1" {
-		t.Fatalf("expected 1 unresolved entry, got %+v, err=%v", unresolved, err)
+	if err != nil || len(unresolved) != 3 {
+		t.Fatalf("expected all 3 unresolved entries across pages, got %+v, err=%v", unresolved, err)
 	}
 
 	if err := store.MarkResolved(ctx, "co-1"); err != nil {
@@ -77,7 +85,7 @@ func TestRecordThenListUnresolvedThenMarkResolved(t *testing.T) {
 	}
 
 	unresolved, err = store.ListUnresolved(ctx, 0)
-	if err != nil || len(unresolved) != 0 {
-		t.Fatalf("expected 0 unresolved entries after MarkResolved, got %+v", unresolved)
+	if err != nil || len(unresolved) != 2 {
+		t.Fatalf("expected only the resolved entry removed, got %+v", unresolved)
 	}
 }

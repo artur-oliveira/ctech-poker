@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"sort"
 	"time"
 )
 
@@ -27,6 +28,10 @@ func EmitTableMetricTo(w io.Writer, env, name string, value float64, dims map[st
 		dimKeys = append(dimKeys, k)
 		fields[k] = v
 	}
+	// Maps deliberately have randomized iteration order. Stable dimension
+	// ordering prevents identical observations from becoming distinct
+	// CloudWatch metric identities.
+	sort.Strings(dimKeys)
 
 	fields["_aws"] = map[string]any{
 		"Timestamp": timeNowMillis(),

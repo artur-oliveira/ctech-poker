@@ -122,17 +122,17 @@ describe('API client session and interceptors', () => {
   test('rejects and reports failures when refresh is unavailable, without recursive retry', async () => {
     const error = {response: {status: 401}, config: {headers: {}}};
     mocks.refresh.mockResolvedValue(null);
-    await expect(mocks.errorHandlers[0](error)).rejects.toBe(error);
-    expect(mocks.notify).toHaveBeenCalledWith(error);
+    await expect(mocks.errorHandlers[0](error)).rejects.toMatchObject({name: 'ApiError', original: error});
+    expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({name: 'ApiError', original: error}));
     
     const alreadyRetried = {response: {status: 401}, config: {_retried: true}};
-    await expect(mocks.errorHandlers[0](alreadyRetried)).rejects.toBe(alreadyRetried);
+    await expect(mocks.errorHandlers[0](alreadyRetried)).rejects.toMatchObject({name: 'ApiError', original: alreadyRetried});
     expect(mocks.refresh).toHaveBeenCalledOnce();
   });
   
   test('honors silentError even for errors without a response', async () => {
     const silent = {config: {silentError: true}};
-    await expect(mocks.errorHandlers[0](silent)).rejects.toBe(silent);
+    await expect(mocks.errorHandlers[0](silent)).rejects.toMatchObject({name: 'ApiError', original: silent});
     expect(mocks.notify).not.toHaveBeenCalled();
   });
 });

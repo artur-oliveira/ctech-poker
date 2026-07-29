@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/gofiber/fiber/v3"
@@ -202,6 +203,60 @@ func TestLivenessEndpointReturnsOK(t *testing.T) {
 	}
 	if body.ServiceID == "" {
 		t.Fatal("expected non-empty serviceId")
+	}
+}
+
+func TestHTTPResponseMetricsUsesRouteTemplateFor401And429(t *testing.T) {
+	cfg := &config.Config{Env: "prod", AppVersion: "1.2.3"}
+	var observations []map[string]string
+	app := fiber.New()
+	app.Use(httpResponseMetrics(cfg, func(_ string, name string, value float64, dims map[string]string) {
+		if name != "HTTPResponses" || value != 1 {
+			t.Fatalf("unexpected metric %s=%v", name, value)
+		}
+		observations = append(observations, dims)
+	}))
+	app.Get("/v1.0/rooms/:id", func(c fiber.Ctx) error {
+		if c.Params("id") == "rate-limited-room-id" {
+			return c.SendStatus(fiber.StatusTooManyRequests)
+		}
+		return c.SendStatus(fiber.StatusUnauthorized)
+	})
+	app.Get("/ok", func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) })
+
+	for _, path := range []string{"/v1.0/rooms/private-room-id", "/v1.0/rooms/rate-limited-room-id", "/ok"} {
+		req, _ := http.NewRequest(http.MethodGet, path, nil)
+		if _, err := app.Test(req); err != nil {
+			t.Fatalf("request %s: %v", path, err)
+		}
+	}
+	if len(observations) != 2 {
+		t.Fatalf("expected only 401/429 observations, got %+v", observations)
+	}
+	for i, wantStatus := range []string{"401", "429"} {
+		if got := observations[i]["route"]; got != "/v1.0/rooms/:id" {
+			t.Fatalf("raw resource ID leaked into metric route: %q", got)
+		}
+		if observations[i]["status"] != wantStatus || observations[i]["app_version"] != "1.2.3" {
+			t.Fatalf("unexpected dimensions: %+v", observations[i])
+		}
+	}
+}
+
+func TestFiberRejectsOversizedHTTPBodies(t *testing.T) {
+	app := newFiberApp(&config.Config{Env: "test", AppVersion: "test", ReadTimeout: 10, WriteTimeout: 10, IdleTimeout: 10})
+	app.Post("/upload", func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNoContent) })
+	req, _ := http.NewRequest(http.MethodPost, "/upload", strings.NewReader(strings.Repeat("x", (1<<20)+1)))
+	req.Header.Set("Content-Type", "application/octet-stream")
+	resp, err := app.Test(req)
+	if err != nil {
+		if !strings.Contains(err.Error(), "body size exceeds") {
+			t.Fatalf("unexpected request error: %v", err)
+		}
+		return
+	}
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d", resp.StatusCode)
 	}
 }
 

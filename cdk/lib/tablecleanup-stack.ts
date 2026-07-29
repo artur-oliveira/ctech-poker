@@ -2,9 +2,12 @@ import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as scheduler from 'aws-cdk-lib/aws-scheduler';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import {Construct} from 'constructs';
 import {Environment} from '@aoctech/cdk';
 import {localGoBundling} from './bundle';
+import {tableCleanupDlqName, tableCleanupJobName} from './constants';
 
 const TABLE_CLEANUP_RATE_MINUTES = 30;
 
@@ -59,7 +62,7 @@ export class TableCleanupStack extends cdk.Stack {
     }));
 
     const fn = new lambda.Function(this, 'TableCleanupFunction', {
-      functionName: `${environment}-ctech-poker-tablecleanup`,
+      functionName: tableCleanupJobName(environment),
       runtime: lambda.Runtime.PROVIDED_AL2023,
       architecture: lambda.Architecture.ARM_64,
       handler: 'bootstrap',
@@ -86,10 +89,47 @@ export class TableCleanupStack extends cdk.Stack {
     });
     fn.grantInvoke(schedulerRole);
 
+    const dlq = new sqs.Queue(this, 'TableCleanupDLQ', {
+      queueName: tableCleanupDlqName(environment),
+      encryption: sqs.QueueEncryption.SQS_MANAGED,
+      retentionPeriod: cdk.Duration.days(14),
+    });
+    dlq.grantSendMessages(schedulerRole);
+
     new scheduler.CfnSchedule(this, 'TableCleanupSchedule', {
+      name: tableCleanupJobName(environment),
       flexibleTimeWindow: {mode: 'OFF'},
       scheduleExpression: `rate(${TABLE_CLEANUP_RATE_MINUTES} minutes)`,
-      target: {arn: fn.functionArn, roleArn: schedulerRole.roleArn},
+      target: {
+        arn: fn.functionArn,
+        roleArn: schedulerRole.roleArn,
+        deadLetterConfig: {arn: dlq.queueArn},
+        retryPolicy: {maximumEventAgeInSeconds: 7200, maximumRetryAttempts: 3},
+      },
+    });
+    new cloudwatch.Alarm(this, 'TableCleanupDLQAlarm', {
+      alarmName: `${tableCleanupJobName(environment)}-dlq-messages`,
+      metric: dlq.metricApproximateNumberOfMessagesVisible({period: cdk.Duration.minutes(5)}),
+      threshold: 1, evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    new cloudwatch.Alarm(this, 'TableCleanupErrorsAlarm', {
+      alarmName: `${tableCleanupJobName(environment)}-errors`,
+      metric: fn.metricErrors({period: cdk.Duration.minutes(30)}),
+      threshold: 1, evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    new cloudwatch.Alarm(this, 'TableCleanupThrottlesAlarm', {
+      alarmName: `${tableCleanupJobName(environment)}-throttles`,
+      metric: fn.metricThrottles({period: cdk.Duration.minutes(30)}),
+      threshold: 1, evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    new cloudwatch.Alarm(this, 'TableCleanupMissedRunAlarm', {
+      alarmName: `${tableCleanupJobName(environment)}-missed-run`,
+      metric: fn.metricInvocations({period: cdk.Duration.hours(1), statistic: 'Sum'}),
+      threshold: 1, comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      evaluationPeriods: 1, treatMissingData: cloudwatch.TreatMissingData.BREACHING,
     });
   }
 }

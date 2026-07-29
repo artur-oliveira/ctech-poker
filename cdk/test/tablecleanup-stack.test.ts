@@ -27,8 +27,18 @@ test('creates the tablecleanup Lambda on the provided.al2023 runtime', () => {
 test('schedules the sweep every 30 minutes', () => {
   const template = buildStack();
   template.hasResourceProperties('AWS::Scheduler::Schedule', {
+    Name: 'dev-ctech-poker-tablecleanup',
     ScheduleExpression: 'rate(30 minutes)',
+    Target: Match.objectLike({
+      DeadLetterConfig: {Arn: {'Fn::GetAtt': [Match.stringLikeRegexp('TableCleanupDLQ'), 'Arn']}},
+      RetryPolicy: {MaximumEventAgeInSeconds: 7200, MaximumRetryAttempts: 3},
+    }),
   });
+  template.hasResourceProperties('AWS::SQS::Queue', {
+    QueueName: 'dev-ctech-poker-tablecleanup-dlq',
+    MessageRetentionPeriod: 1209600,
+  });
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 4);
 });
 
 test('the Lambda role can Query the table-state index but never Scan it', () => {

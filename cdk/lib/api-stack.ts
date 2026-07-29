@@ -3,6 +3,9 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
+import * as hooktargets from 'aws-cdk-lib/aws-autoscaling-hooktargets';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import {Construct} from 'constructs';
@@ -20,6 +23,7 @@ import {
   asgName,
   HEALTH_CHECK_PATH,
   instanceRoleName,
+  operationsDashboardName,
   S3_PREFIX,
   SERVICE,
   SSM_SHARED,
@@ -64,6 +68,8 @@ interface ApiStackProps extends cdk.StackProps {
   playerSessionsTableArn: string;
   playerHandsTableArn: string;
 }
+
+export const minimumApiCapacity = (environment: Environment) => environment === 'prod' ? 2 : 1;
 
 export class PokerApiStack extends cdk.Stack {
   public readonly asgName: string;
@@ -411,12 +417,86 @@ export class PokerApiStack extends cdk.Stack {
       targetGroupName: `${this.asgName}-tg`,
       healthCheckPath: HEALTH_CHECK_PATH,
       asgName: this.asgName,
-      minCapacity: 1,
+      minCapacity: minimumApiCapacity(environment),
       maxCapacity: isProd ? 3 : 1,
       domainName,
       listenerRulePriority: ALB_LISTENER_PRIORITY,
     });
+    if (isProd) {
+      service.autoScalingGroup.scaleOnCpuUtilization('CpuTargetTracking', {
+        targetUtilizationPercent: 60,
+        cooldown: cdk.Duration.minutes(3),
+      });
+    }
     service.autoScalingGroup.node.addDependency(profile);
+    service.targetGroup.setAttribute('deregistration_delay.timeout_seconds', '60');
+
+    // ASG termination pauses before EC2 shutdown, asks systemd to stop the
+    // process (which runs Fx OnStop -> DrainAndRelease), then explicitly
+    // completes the lifecycle action. The finally block fails open so a
+    // broken SSM agent can never strand an instance in Terminating:Wait.
+    const drainFunction = new lambda.Function(this, 'TerminationDrainFunction', {
+      functionName: `${environment}-${SERVICE}-termination-drain`,
+      runtime: lambda.Runtime.PYTHON_3_13,
+      handler: 'index.handler',
+      timeout: cdk.Duration.seconds(90),
+      code: lambda.Code.fromInline(`
+import boto3, json, time
+asg = boto3.client("autoscaling")
+ssm = boto3.client("ssm")
+
+def handler(event, context):
+    message = json.loads(event["Records"][0]["Sns"]["Message"])
+    instance_id = message["EC2InstanceId"]
+    try:
+        result = ssm.send_command(
+            InstanceIds=[instance_id],
+            DocumentName="AWS-RunShellScript",
+            Parameters={"commands": ["systemctl stop app"]},
+            TimeoutSeconds=55,
+        )
+        command_id = result["Command"]["CommandId"]
+        deadline = time.time() + 55
+        while time.time() < deadline:
+            try:
+                status = ssm.get_command_invocation(
+                    CommandId=command_id, InstanceId=instance_id)["Status"]
+                if status in ("Success", "Cancelled", "Failed", "TimedOut"):
+                    break
+            except ssm.exceptions.InvocationDoesNotExist:
+                pass
+            time.sleep(2)
+    finally:
+        asg.complete_lifecycle_action(
+            LifecycleHookName=message["LifecycleHookName"],
+            AutoScalingGroupName=message["AutoScalingGroupName"],
+            LifecycleActionToken=message["LifecycleActionToken"],
+            LifecycleActionResult="CONTINUE",
+        )
+`),
+    });
+    drainFunction.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['ssm:SendCommand'],
+      resources: [
+        `arn:${cdk.Aws.PARTITION}:ssm:${this.region}::document/AWS-RunShellScript`,
+        `arn:${cdk.Aws.PARTITION}:ec2:${this.region}:${this.account}:instance/*`,
+      ],
+    }));
+    drainFunction.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['ssm:GetCommandInvocation'],
+      resources: ['*'],
+    }));
+    drainFunction.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['autoscaling:CompleteLifecycleAction'],
+      resources: [service.autoScalingGroup.autoScalingGroupArn],
+    }));
+    service.autoScalingGroup.addLifecycleHook('TerminationDrainHook', {
+      lifecycleHookName: `${environment}-${SERVICE}-termination-drain`,
+      lifecycleTransition: autoscaling.LifecycleTransition.INSTANCE_TERMINATING,
+      defaultResult: autoscaling.DefaultResult.CONTINUE,
+      heartbeatTimeout: cdk.Duration.seconds(120),
+      notificationTarget: new hooktargets.FunctionHook(drainFunction),
+    });
     
     const alarmMetricFilter = service.appLogGroup.addMetricFilter('AlarmLogFilter', {
       filterPattern: logs.FilterPattern.literal('"ALARM:"'),
@@ -447,6 +527,87 @@ export class PokerApiStack extends cdk.Stack {
       evaluationPeriods: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
+
+    // One low-cost operational view for the gameplay SLOs. SEARCH expressions
+    // intentionally aggregate bounded dimensions (route/status/version) and
+    // legacy table_id series; no per-table widget or alarm is created.
+    const namespace = `CtechPoker/${environment}`;
+    const search = (metricName: string, statistic: string = 'Sum') => new cloudwatch.MathExpression({
+      expression: `SEARCH('{${namespace}} MetricName="${metricName}"', '${statistic}', 300)`,
+      period: cdk.Duration.minutes(5),
+    });
+    const dashboard = new cloudwatch.Dashboard(this, 'OperationsDashboard', {
+      dashboardName: operationsDashboardName(environment),
+      defaultInterval: cdk.Duration.hours(6),
+    });
+    dashboard.addWidgets(
+      new cloudwatch.TextWidget({
+        width: 24,
+        height: 2,
+        markdown: '# CTech Poker — gameplay, transport and money-movement SLOs',
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'Action → ACK latency (p95) and successful actions',
+        width: 12,
+        left: [search('ActionLatencyMs', 'p95')],
+        right: [search('ActionsSucceeded')],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'Reconnects and time to authoritative snapshot (p95)',
+        width: 12,
+        left: [search('SnapshotLatencyMs', 'p95')],
+        right: [search('Disconnects')],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'DynamoDB conflicts and persistence errors',
+        width: 12,
+        left: [search('DynamoDBVersionConflicts'), search('TableStateHistorySaveError')],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'Pending money movements (count and oldest age)',
+        width: 12,
+        left: [search('PendingCashouts', 'Maximum')],
+        right: [search('OldestPendingCashoutAgeSeconds', 'Maximum')],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'Actors, connections, mailbox pressure and lease failovers',
+        width: 12,
+        left: [search('ConnectionsOpened'), search('ConnectionsClosed'), search('ActorsCreated'), search('ActorsRemoved')],
+        right: [search('MailboxBackpressure'), search('LeaseFailovers')],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'HTTP auth and throttling responses by route/version',
+        width: 12,
+        left: [search('HTTPResponses')],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'ALB target health and response latency',
+        width: 12,
+        left: [
+          service.targetGroup.metricHealthyHostCount({statistic: 'Minimum'}),
+          service.targetGroup.metricUnhealthyHostCount({statistic: 'Maximum'}),
+        ],
+        right: [service.targetGroup.metricTargetResponseTime({statistic: 'p95'})],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'ALB traffic and target 5xx',
+        width: 12,
+        left: [service.targetGroup.metricRequestCount({statistic: 'Sum'})],
+        right: [service.targetGroup.metricHttpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, {statistic: 'Sum'})],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'Wallet dependency: latency, retries and circuit breaker',
+        width: 12,
+        left: [search('WalletLatencyMs', 'p95')],
+        right: [search('WalletRetries'), search('WalletCircuitOpened'), search('WalletCircuitOpenRejected')],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'Equity compute duration and cache behavior',
+        width: 12,
+        left: [search('EquityDurationMs', 'p95')],
+        right: [search('EquityCacheHits'), search('EquityCacheMisses'), search('EquityCacheEvictions')],
+      }),
+    );
     
     // DynamoDB access for internal/tablestore.Store — TransactWriteItems is
     // required because every commit (CommitAction) writes the state item,

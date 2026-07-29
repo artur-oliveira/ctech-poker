@@ -4,9 +4,15 @@ name: API
 # CDK → API → Frontend ordering. Never triggered on push directly.
 on:
   workflow_call:
+  pull_request:
+    branches: [ main, staging, dev ]
+    paths:
+      - 'api/**'
+      - 'proto/**'
+      - 'scripts/generate-proto.sh'
+      - '.github/workflows/api.yml'
 
 permissions:
-  id-token: write
   contents: read
 
 jobs:
@@ -49,6 +55,20 @@ jobs:
         working-directory: api
         run: go test ./... -race -count=1
 
+      - name: Static analysis
+        working-directory: api
+        run: |
+          go vet ./...
+          go build ./cmd/...
+
+      - name: Staticcheck
+        working-directory: api
+        run: go run honnef.co/go/tools/cmd/staticcheck@2025.1.1 ./...
+
+      - name: Vulnerability scan
+        working-directory: api
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+
       - name: Run integration tests
         working-directory: api
         run: |
@@ -68,6 +88,10 @@ jobs:
     name: Build & Deploy
     runs-on: ubuntu-24.04-arm
     needs: test
+    if: ${{ github.event_name != 'pull_request' }}
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
       - uses: actions/checkout@v6
@@ -87,7 +111,7 @@ jobs:
           esac
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@11b1c58b24724e66aa52a847862a0c1b0c4b0c7b # v6.1.0
         with:
           role-to-assume: arn:aws:iam::868899309401:role/ctech-poker-gha-api
           aws-region: us-east-1
@@ -129,6 +153,14 @@ jobs:
           # Versioned artifact (expires via the bucket lifecycle rule)
           aws s3 cp "$ARCHIVE_FILE" "s3://${DEPLOYMENTS_BUCKET}/ctech-poker/${ARCHIVE_FILE}"
 
+          # Keep the artifact that current.zip pointed to so a failed smoke
+          # test can restore the last release automatically.
+          ROLLBACK_KEY="ctech-poker/rollback-${GITHUB_RUN_ID}.zip"
+          aws s3 cp \
+            "s3://${DEPLOYMENTS_BUCKET}/ctech-poker/current.zip" \
+            "s3://${DEPLOYMENTS_BUCKET}/${ROLLBACK_KEY}" || true
+          echo "ROLLBACK_KEY=${ROLLBACK_KEY}" >> "$GITHUB_ENV"
+
           # Overwrite current.zip so new ASG instances bootstrap this version
           aws s3 cp "$ARCHIVE_FILE" "s3://${DEPLOYMENTS_BUCKET}/ctech-poker/current.zip"
 
@@ -141,9 +173,10 @@ jobs:
 
           if [ -z "$INSTANCE_IDS" ] || [ "$INSTANCE_IDS" = "None" ]; then
             echo "No running instances found in ASG $ASG_NAME"
-            exit 0
+            exit 1
           fi
 
+          echo "INSTANCE_IDS=$INSTANCE_IDS" >> "$GITHUB_ENV"
           echo "Deploying to instances: $INSTANCE_IDS"
 
           COMMAND_ID=$(aws ssm send-command \
@@ -177,4 +210,48 @@ jobs:
               exit 1
             fi
             echo "$INSTANCE_ID deployed successfully"
+          done
+
+      - name: Verify deployed release
+        id: smoke
+        run: |
+          case "${{ steps.env.outputs.name }}" in
+            prod)  API_HOST="poker-api.aoctech.app" ;;
+            stage) API_HOST="poker-api-stage.aoctech.app" ;;
+            *)     API_HOST="poker-api-dev.aoctech.app" ;;
+          esac
+          for ATTEMPT in $(seq 1 12); do
+            BODY=$(curl --fail --silent --show-error \
+              --connect-timeout 3 --max-time 8 \
+              "https://${API_HOST}/v1.0/health") || true
+            RELEASE=$(jq -r '.releaseId // empty' <<< "$BODY")
+            if [ "$RELEASE" = "$VERSION" ]; then
+              echo "Release $VERSION is live"
+              exit 0
+            fi
+            echo "Attempt $ATTEMPT: expected $VERSION, received ${RELEASE:-no healthy response}"
+            sleep 5
+          done
+          exit 1
+
+      - name: Roll back failed release
+        if: ${{ failure() && steps.smoke.outcome == 'failure' }}
+        run: |
+          if ! aws s3api head-object \
+            --bucket "$DEPLOYMENTS_BUCKET" --key "$ROLLBACK_KEY" >/dev/null 2>&1; then
+            echo "::error::Previous artifact was unavailable; automatic rollback cannot continue"
+            exit 1
+          fi
+          aws s3 cp \
+            "s3://${DEPLOYMENTS_BUCKET}/${ROLLBACK_KEY}" \
+            "s3://${DEPLOYMENTS_BUCKET}/ctech-poker/current.zip"
+          COMMAND_ID=$(aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=instanceids,Values=$INSTANCE_IDS" \
+            --parameters "commands=['/opt/app/deploy.sh ctech-poker/current.zip']" \
+            --timeout-seconds 300 \
+            --query "Command.CommandId" --output text)
+          for INSTANCE_ID in $(echo "$INSTANCE_IDS" | tr ',' ' '); do
+            aws ssm wait command-executed \
+              --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID"
           done

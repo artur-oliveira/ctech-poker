@@ -65,6 +65,17 @@ func TestEstimateRejectsInvalidInputs(t *testing.T) {
 	}
 }
 
+func TestEstimateWithStatsReportsCacheMissThenHit(t *testing.T) {
+	globalEquityCache = newLRUCache(2)
+	hole := [2]deck.Card{{Rank: deck.Queen, Suit: deck.Hearts}, {Rank: deck.Jack, Suit: deck.Hearts}}
+	if _, stats, err := EstimateWithStats(hole, nil, nil, 2, 25); err != nil || stats.CacheHit {
+		t.Fatalf("first estimate must miss cache: stats=%+v err=%v", stats, err)
+	}
+	if _, stats, err := EstimateWithStats(hole, nil, nil, 2, 25); err != nil || !stats.CacheHit {
+		t.Fatalf("second estimate must hit cache: stats=%+v err=%v", stats, err)
+	}
+}
+
 // BenchmarkEstimateProduction exercises a cached full-table estimate. The
 // actor requests 200 iterations and attaches the result to each snapshot.
 func BenchmarkEstimateProduction(b *testing.B) {

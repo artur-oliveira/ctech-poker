@@ -50,14 +50,14 @@ func (c *lruCache) Get(key cacheKey) (float64, bool) {
 	return 0, false
 }
 
-func (c *lruCache) Put(key cacheKey, value float64) {
+func (c *lruCache) Put(key cacheKey, value float64) (evicted bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if elem, ok := c.items[key]; ok {
 		c.evict.MoveToFront(elem)
 		elem.Value.(*cacheEntry).value = value
-		return
+		return false
 	}
 
 	if c.evict.Len() >= c.capacity {
@@ -65,12 +65,14 @@ func (c *lruCache) Put(key cacheKey, value float64) {
 		if oldest != nil {
 			c.evict.Remove(oldest)
 			delete(c.items, oldest.Value.(*cacheEntry).key)
+			evicted = true
 		}
 	}
 
 	entry := &cacheEntry{key: key, value: value}
 	elem := c.evict.PushFront(entry)
 	c.items[key] = elem
+	return evicted
 }
 
 var globalEquityCache = newLRUCache(20000)
@@ -131,31 +133,41 @@ func (r *rng64) intn(k uint32) uint32 {
 	return uint32(m >> 32)
 }
 
+type EstimateStats struct {
+	CacheHit bool
+	Evicted  bool
+}
+
 func Estimate(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, iterations int) (float64, error) {
+	value, _, err := EstimateWithStats(hole, board, deadCards, numOpponents, iterations)
+	return value, err
+}
+
+func EstimateWithStats(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, iterations int) (float64, EstimateStats, error) {
 	if numOpponents < 1 || iterations < 1 {
-		return 0, fmt.Errorf("equity: opponents and iterations must be positive")
+		return 0, EstimateStats{}, fmt.Errorf("equity: opponents and iterations must be positive")
 	}
 	if len(board) > 5 {
-		return 0, fmt.Errorf("equity: board has %d cards, maximum is 5", len(board))
+		return 0, EstimateStats{}, fmt.Errorf("equity: board has %d cards, maximum is 5", len(board))
 	}
 
 	key, cacheable := makeCacheKey(hole, board, deadCards, numOpponents, iterations)
 	if cacheable {
 		if val, ok := globalEquityCache.Get(key); ok {
-			return val, nil
+			return val, EstimateStats{CacheHit: true}, nil
 		}
 	}
 
 	var pool [52]uint8
 	poolLen, err := buildPool(hole, board, deadCards, &pool)
 	if err != nil {
-		return 0, err
+		return 0, EstimateStats{}, err
 	}
 
 	boardNeeded := 5 - len(board)
 	need := boardNeeded + numOpponents*2
 	if need > poolLen {
-		return 0, fmt.Errorf("equity: not enough cards to sample %d opponents", numOpponents)
+		return 0, EstimateStats{}, fmt.Errorf("equity: not enough cards to sample %d opponents", numOpponents)
 	}
 
 	hero1ID := handeval.CardID(hole[0])
@@ -211,10 +223,11 @@ func Estimate(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, ite
 	}
 
 	res := shares / float64(iterations)
+	stats := EstimateStats{}
 	if cacheable {
-		globalEquityCache.Put(key, res)
+		stats.Evicted = globalEquityCache.Put(key, res)
 	}
-	return res, nil
+	return res, stats, nil
 }
 
 func buildPool(hole [2]deck.Card, board, dead []deck.Card, pool *[52]uint8) (int, error) {

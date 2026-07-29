@@ -1,0 +1,42 @@
+name: Protobuf contract
+
+on:
+  pull_request:
+    branches: [main, staging, dev]
+    paths:
+      - 'proto/**'
+      - 'scripts/generate-proto.sh'
+      - '.github/workflows/proto.yml'
+  push:
+    branches: [main, staging, dev]
+    paths:
+      - 'proto/**'
+      - 'scripts/generate-proto.sh'
+      - '.github/workflows/proto.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  generated-contract:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: api/go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Install protobuf compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Install pinned generators
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          npm ci --prefix ui
+      - name: Regenerate contract
+        run: ./scripts/generate-proto.sh
+      - name: Verify generated files are committed
+        run: git diff --exit-code -- api/internal/api/v1/proto/poker.pb.go ui/src/lib/api/proto/poker.ts

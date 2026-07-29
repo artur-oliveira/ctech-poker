@@ -8,10 +8,11 @@ on:
     branches: [ main, staging, dev ]
     paths:
       - 'ui/**'
+      - 'proto/**'
+      - 'scripts/generate-proto.sh'
       - '.github/workflows/frontend.yml'
 
 permissions:
-  id-token: write
   contents: read
 
 jobs:
@@ -37,6 +38,9 @@ jobs:
       - name: Lint
         run: npx eslint src --ext .ts,.tsx --max-warnings 0
 
+      - name: Type check
+        run: npx tsc --noEmit
+
       # Vitest exits non-zero when tests fail or the coverage thresholds in
       # vitest.config.ts are not met, preventing the deployment job below.
       - name: Run tests with coverage
@@ -58,6 +62,9 @@ jobs:
     runs-on: ubuntu-24.04-arm
     needs: test
     if: ${{ github.event_name != 'pull_request' }}
+    permissions:
+      id-token: write
+      contents: read
     defaults:
       run:
         working-directory: ui
@@ -112,7 +119,7 @@ jobs:
         run: npm run build
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@11b1c58b24724e66aa52a847862a0c1b0c4b0c7b # v6.1.0
         with:
           role-to-assume: arn:aws:iam::868899309401:role/ctech-poker-gha-frontend
           aws-region: us-east-1

@@ -38,10 +38,14 @@ export function RealityCheck({
   const [now, setNow] = useState(() => Date.now());
   const shownAt = useRef(0);
   const [completedHands, setCompletedHands] = useState<Set<string>>(() => new Set());
-  if (handComplete && handId && !completedHands.has(handId)) {
-    setCompletedHands(previous => new Set(previous).add(handId));
-  }
   const intervalMs = preferences.realityCheckMinutes * 60_000;
+
+  useEffect(() => {
+    if (!handComplete || !handId) return;
+    // Record each completed hand once; the set spans subsequent live snapshots.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCompletedHands(previous => previous.has(handId) ? previous : new Set(previous).add(handId));
+  }, [handComplete, handId]);
   
   useEffect(() => {
     if (!intervalMs) return undefined;

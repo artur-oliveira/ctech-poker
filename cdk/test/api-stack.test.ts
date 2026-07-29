@@ -1,6 +1,12 @@
 import {App} from 'aws-cdk-lib';
-import {Template} from 'aws-cdk-lib/assertions';
-import {PokerApiStack} from '../lib/api-stack';
+import {Match, Template} from 'aws-cdk-lib/assertions';
+import {minimumApiCapacity, PokerApiStack} from '../lib/api-stack';
+
+test('keeps two API instances in production and one outside production', () => {
+  expect(minimumApiCapacity('prod')).toBe(2);
+  expect(minimumApiCapacity('stage')).toBe(1);
+  expect(minimumApiCapacity('dev')).toBe(1);
+});
 
 // The brief's template snippet instantiates PokerApiStack with only `env` —
 // adapted here to supply the props the real construct actually requires
@@ -46,11 +52,40 @@ test('synthesizes without error and declares exactly one ASG', () => {
   });
   const template = Template.fromStack(stack);
   template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
-  template.resourceCountIs('AWS::IAM::Role', 1);
+  template.hasResourceProperties('AWS::IAM::Role', {RoleName: 'dev-ctech-poker-api-role'});
   template.resourceCountIs('AWS::IAM::InstanceProfile', 1);
   template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
+  template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+    DashboardName: 'dev-ctech-poker-operations',
+  });
   const rendered = JSON.stringify(template.toJSON());
   expect(rendered).toContain('dev-ctech-poker-avatars/up/*');
   expect(rendered).toContain('dev-ctech-poker-avatars/av/*');
   expect(rendered).not.toContain('dev-ctech-poker-frontend');
+  for (const signal of [
+    'ActionLatencyMs',
+    'ActionsSucceeded',
+    'SnapshotLatencyMs',
+    'DynamoDBVersionConflicts',
+    'PendingCashouts',
+    'OldestPendingCashoutAgeSeconds',
+    'ConnectionsOpened',
+    'HTTPResponses',
+  ]) {
+    expect(rendered).toContain(signal);
+  }
+  expect(rendered).not.toContain('AWS::WAFv2');
+  template.hasResourceProperties('AWS::AutoScaling::LifecycleHook', {
+    LifecycleHookName: 'dev-ctech-poker-termination-drain',
+    LifecycleTransition: 'autoscaling:EC2_INSTANCE_TERMINATING',
+    DefaultResult: 'CONTINUE',
+    HeartbeatTimeout: 120,
+  });
+  template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+    TargetGroupAttributes: Match.arrayWith([
+      {Key: 'deregistration_delay.timeout_seconds', Value: '60'},
+    ]),
+  });
+  expect(rendered).toContain('autoscaling:CompleteLifecycleAction');
+  expect(rendered).toContain('ssm:SendCommand');
 });

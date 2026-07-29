@@ -54,6 +54,8 @@ export function useLobbyRealtime() {
           return r;
         });
       });
+      queryClient.setQueryData<Room | undefined>(['room', room_id], oldRoom =>
+        oldRoom ? {...oldRoom, seats_taken} : oldRoom);
     } else if (message.type === 'payment_received') {
       const amount = message.amount || 0;
       pushNotification(`Pagamento recebido: R$ ${(amount / 100).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 'info');
@@ -67,7 +69,13 @@ export function useLobbyRealtime() {
   
   const handleOpen = useCallback(() => {
     sendRef.current({type: 'ping'});
-  }, []);
+    // Deltas sent while offline are not replayed. Reconcile the durable
+    // queries on every open; this is cheap and prevents an indefinitely stale
+    // lobby after sleep/network changes.
+    void queryClient.invalidateQueries({queryKey: ['rooms']});
+    void queryClient.invalidateQueries({queryKey: ['player', 'me']});
+    void queryClient.invalidateQueries({queryKey: ['wallet', 'balance']});
+  }, [queryClient]);
   
   const {status, send, reconnect} = useWebSocket({
     url: wsUrl,

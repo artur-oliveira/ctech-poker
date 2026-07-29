@@ -13,12 +13,21 @@ import {getMe} from "@/lib/api/player";
 /** Access tokens live 15 minutes; refresh well inside that window. */
 export const TOKEN_REFRESH_INTERVAL_MS = 4 * 60 * 1000;
 
-let refreshInFlight = false;
+export type SessionResult = Awaited<ReturnType<typeof doRefresh>>;
+
+let refreshPromise: Promise<SessionResult> | null = null;
+const expiredListeners = new Set<() => void>();
 
 function clearSession() {
   setAccessToken(null);
   setUsername(null);
   setPlayerId(null);
+  expiredListeners.forEach(listener => listener());
+}
+
+export function subscribeSessionExpired(listener: () => void) {
+  expiredListeners.add(listener);
+  return () => expiredListeners.delete(listener);
 }
 
 /**
@@ -29,24 +38,30 @@ function clearSession() {
  * `unauthorized` has already told us the credentials are dead. A refresh that
  * resolves with no result means the session is over either way.
  */
-export function refreshSession({clearOnNetworkError = false} = {}) {
-  if (USE_MOCK || refreshInFlight) return;
-  refreshInFlight = true;
-  void doRefresh()
-    .then(result => {
+export function getOrRefreshSession(): Promise<SessionResult> {
+  if (USE_MOCK) return Promise.resolve(null);
+  if (!refreshPromise) {
+    refreshPromise = doRefresh()
+      .then(result => {
       if (result) {
         setAccessToken(result.accessToken);
         setUsername(result.username);
       } else {
         clearSession();
       }
-    })
-    .catch(() => {
-      if (clearOnNetworkError) clearSession();
-    })
-    .finally(() => {
-      refreshInFlight = false;
-    });
+        return result;
+      })
+      // A network failure is not proof that the refresh token was revoked.
+      // Preserve the in-memory identity and let callers render an offline state.
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
+export function refreshSession() {
+  void getOrRefreshSession().catch(() => undefined);
 }
 
 /**
@@ -57,7 +72,7 @@ export function refreshSession({clearOnNetworkError = false} = {}) {
  * trips in ten minutes off a token that had expired.
  */
 export function recoverSession() {
-  refreshSession({clearOnNetworkError: true});
+  refreshSession();
 }
 
 /**
@@ -82,12 +97,7 @@ export function useOptionalSession() {
   useEffect(() => {
     const unsubscribe = subscribeAccessToken(setToken);
     if (!USE_MOCK && !getAccessToken()) {
-      void doRefresh().then(result => {
-        if (result) {
-          setAccessToken(result.accessToken);
-          setUsername(result.username);
-        }
-      }).finally(() => setChecking(false));
+      void getOrRefreshSession().catch(() => undefined).finally(() => setChecking(false));
     }
     return unsubscribe;
   }, []);

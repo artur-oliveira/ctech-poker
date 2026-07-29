@@ -94,6 +94,15 @@ test('creates private poker stats with expiring hand guards', () => {
   });
 });
 
+test('expires only resolved pending cashout records through the shared ttl attribute', () => {
+  const app = new App();
+  const stack = new DynamoDBStack(app, 'TestPendingCashoutsStack', {environment: 'dev'});
+  Template.fromStack(stack).hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'dev_poker_pending_cashouts',
+    TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},
+  });
+});
+
 test('creates poker_rooms table with public and share-code GSIs', () => {
   const app = new App();
   const stack = new DynamoDBStack(app, 'TestDynamoDBStack2', {environment: 'dev'});

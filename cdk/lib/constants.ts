@@ -75,6 +75,11 @@ export const avatarsS3Origins = (env: Environment) => [
 export const routeStoreName = (env: Environment) => `${env}-${SERVICE}-routes`;
 export const avatarRewriteFunctionName = (env: Environment) => `${env}-${SERVICE}-avatar-rewrite`;
 export const instanceRoleName = (env: Environment) => `${env}-${SERVICE}-api-role`;
+export const operationsDashboardName = (env: Environment) => `${env}-${SERVICE}-operations`;
+export const reconcileJobName = (env: Environment) => `${env}-${SERVICE}-reconcile`;
+export const reconcileDlqName = (env: Environment) => `${reconcileJobName(env)}-dlq`;
+export const tableCleanupJobName = (env: Environment) => `${env}-${SERVICE}-tablecleanup`;
+export const tableCleanupDlqName = (env: Environment) => `${tableCleanupJobName(env)}-dlq`;
 
 // ── GitHub Actions role names (global, not per-env) ─────────────────────────
 export const GHA_API_ROLE = `${SERVICE}-gha-api`;

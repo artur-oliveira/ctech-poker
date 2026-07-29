@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   send: vi.fn(() => true),
   reconnect: vi.fn(),
   setQueryData: vi.fn(),
+  invalidateQueries: vi.fn(),
   notify: vi.fn(),
 }));
 
@@ -20,7 +21,7 @@ vi.mock('@aoctech/ws-client', () => ({
   }),
 }));
 vi.mock('@tanstack/react-query', () => ({
-  useQueryClient: () => ({setQueryData: state.setQueryData}),
+  useQueryClient: () => ({setQueryData: state.setQueryData, invalidateQueries: state.invalidateQueries}),
 }));
 vi.mock('@/lib/mockConfig', () => ({USE_MOCK: false}));
 vi.mock('@/lib/api/client', () => ({
@@ -45,6 +46,7 @@ describe('useLobbyRealtime', () => {
     });
     act(() => state.options?.onOpen());
     expect(state.send).toHaveBeenCalledWith({type: 'ping'});
+    expect(state.invalidateQueries).toHaveBeenCalledTimes(3);
     act(() => result.current.reconnect());
     expect(state.reconnect).toHaveBeenCalled();
   });

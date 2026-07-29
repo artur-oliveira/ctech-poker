@@ -180,7 +180,7 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	m.cancels[tableID] = cancel
 	if trustCache {
 		m.leases.StartHeartbeat(runCtx, tableID, func() {
-			metrics.EmitTableMetric(m.env, "LeaseFailovers", 1, map[string]string{"table_id": tableID})
+			metrics.EmitTableMetric(m.env, "LeaseFailovers", 1, nil)
 			cancel()
 			<-actor.Done()
 			m.removeActor(tableID, actor)
@@ -191,6 +191,7 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	go actor.Run(runCtx)
 
 	m.actors[tableID] = actor
+	metrics.EmitTableMetric(m.env, "ActorsCreated", 1, nil)
 
 	// Re-arm blind escalation and the per-turn action timeout from the room's
 	// authoritative config so both survive instance/lease moves (T6). Any
@@ -217,6 +218,7 @@ func (m *Manager) removeActor(tableID string, expected *Actor) {
 	m.mu.Lock()
 	if a, ok := m.actors[tableID]; ok && a == expected && !a.IsAlive() {
 		delete(m.actors, tableID)
+		metrics.EmitTableMetric(m.env, "ActorsRemoved", 1, nil)
 		delete(m.cancels, tableID)
 		delete(m.releases, tableID)
 	}
@@ -266,12 +268,16 @@ func (m *Manager) broadcastFor(tableID string) func(string, hand.Snapshot) {
 // Release releases tableID's lease and removes the actor from local registry.
 func (m *Manager) Release(tableID string) {
 	m.mu.Lock()
+	_, existed := m.actors[tableID]
 	delete(m.actors, tableID)
 	cancel := m.cancels[tableID]
 	delete(m.cancels, tableID)
 	rel, hasRel := m.releases[tableID]
 	delete(m.releases, tableID)
 	m.mu.Unlock()
+	if existed {
+		metrics.EmitTableMetric(m.env, "ActorsRemoved", 1, nil)
+	}
 	if cancel != nil {
 		cancel()
 	}

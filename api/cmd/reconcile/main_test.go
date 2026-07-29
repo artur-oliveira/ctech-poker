@@ -1,12 +1,44 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"os"
 	"testing"
 	"time"
 
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
 )
+
+func TestEmitPendingMetricsReportsCountAndOldestAge(t *testing.T) {
+	now := time.Date(2026, 7, 29, 12, 0, 0, 0, time.UTC)
+	previousNow := timeNow
+	timeNow = func() time.Time { return now }
+	t.Cleanup(func() { timeNow = previousNow })
+
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	previousStdout := os.Stdout
+	os.Stdout = write
+	t.Cleanup(func() { os.Stdout = previousStdout })
+
+	emitPendingMetrics("prod", []reconcile.PendingCashout{
+		{RecordedAt: now.Add(-3 * time.Minute).Format(time.RFC3339Nano)},
+		{RecordedAt: now.Add(-10 * time.Minute).Format(time.RFC3339Nano)},
+	})
+	_ = write.Close()
+	var out bytes.Buffer
+	if _, err := io.Copy(&out, read); err != nil {
+		t.Fatalf("read metrics: %v", err)
+	}
+	if got := out.String(); !bytes.Contains([]byte(got), []byte(`"PendingCashouts":2`)) ||
+		!bytes.Contains([]byte(got), []byte(`"OldestPendingCashoutAgeSeconds":600`)) {
+		t.Fatalf("unexpected pending metrics:\n%s", got)
+	}
+}
 
 type fakePendingLister struct {
 	unresolved []reconcile.PendingCashout

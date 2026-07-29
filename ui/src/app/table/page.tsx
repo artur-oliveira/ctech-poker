@@ -191,6 +191,13 @@ function TableContent() {
     queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
     router.push('/lobby');
   }, [rt.removed, id, queryClient, router]);
+  useEffect(() => {
+    if (!rt.terminalError) return;
+    pushNotification(rt.terminalError === 'forbidden' ? 'Você não tem acesso a esta mesa.' :
+      'Essa sala não está mais disponível.', 'info');
+    queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
+    router.push('/lobby');
+  }, [rt.terminalError, id, queryClient, router]);
   // The next-hand deadline is fixed server-side once armed, but a state
   // broadcast can still arrive mid-countdown (e.g. another player revealing
   // cards) and shift rt.snapshotAt forward. Recomputing animationDuration
@@ -218,15 +225,26 @@ function TableContent() {
   // stage-based state this is scoped to both table and hand and also works
   // when the first frame arrives on flop/turn after a reconnect.
   const liveSeat = rt.snapshot?.seats.find(item => item.player_id === viewer);
-  if (rt.snapshot?.hand_id && liveSeat && seatParticipated(liveSeat) &&
-    !Object.keys(rt.snapshot.payouts || {}).length &&
-    (rememberedStart?.tableID !== id || rememberedStart.handID !== rt.snapshot.hand_id)) {
-    setRememberedStart({
-      tableID: id,
-      handID: rt.snapshot.hand_id,
-      stack: liveSeat.stack_at_hand_start ?? liveSeat.stack + liveSeat.contributed
-    });
-  }
+  useEffect(() => {
+    const handID = rt.snapshot?.hand_id;
+    if (!handID || !liveSeat || !seatParticipated(liveSeat) || Object.keys(rt.snapshot?.payouts || {}).length) return;
+    const next = {
+      tableID: id, handID,
+      stack: liveSeat.stack_at_hand_start ?? liveSeat.stack + liveSeat.contributed,
+    };
+    // This state intentionally retains the starting stack after payouts remove
+    // it from the live snapshot; it cannot be derived from the current frame.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRememberedStart(previous => previous?.tableID === id && previous.handID === handID ? previous : next);
+  }, [id, liveSeat, rt.snapshot?.hand_id, rt.snapshot?.payouts]);
+  useEffect(() => {
+    const deadline = rt.snapshot?.next_hand_unix_ms;
+    if (!deadline) return;
+    // Preserve the timestamp of the first frame carrying this deadline.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNextHandArmed(previous => previous?.deadline === deadline ? previous :
+      {deadline, snapshotAt: rt.snapshotAt});
+  }, [rt.snapshot?.next_hand_unix_ms, rt.snapshotAt]);
   useEffect(() => {
     const snap = rt.snapshot;
     const hasPayouts = Boolean(snap?.payouts && Object.keys(snap.payouts).length > 0);
@@ -344,9 +362,6 @@ function TableContent() {
   // A room's share_code is only ever present for its own creator (the server
   // strips it from every other viewer), so its presence alone gates the
   // invite affordance for private tables; public tables need no code at all.
-  if (s.next_hand_unix_ms && nextHandArmed?.deadline !== s.next_hand_unix_ms) {
-    setNextHandArmed({deadline: s.next_hand_unix_ms, snapshotAt: rt.snapshotAt});
-  }
   const nextHandDurationMs = s.next_hand_unix_ms && nextHandArmed?.deadline === s.next_hand_unix_ms ?
     Math.max(0, s.next_hand_unix_ms - nextHandArmed.snapshotAt) : 0;
   const canInvite = room && (room.visibility === 'public' || room.share_code);

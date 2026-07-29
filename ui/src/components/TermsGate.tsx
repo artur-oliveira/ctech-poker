@@ -3,13 +3,13 @@ import {useEffect, useRef, useState} from 'react';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {ShieldCheck} from 'lucide-react';
 import {acceptPokerTerms, getMe, updateMe} from '@/lib/api/player';
-import {doRefresh, startOAuthFlow} from '@/lib/auth/oauth';
+import {startOAuthFlow} from '@/lib/auth/oauth';
+import {getOrRefreshSession} from '@/lib/auth/session';
 import {
   getAccessToken,
   getUsername,
   setAccessToken,
   setPlayerId,
-  setUsername,
   subscribeAccessToken
 } from '@/lib/api/client';
 import {MOCK_PLAYER_ID, USE_MOCK} from '@/lib/mockConfig';
@@ -33,12 +33,7 @@ export function TermsGate({children}: { children: React.ReactNode }) {
     if (USE_MOCK) {
       setAccessToken(MOCK_PLAYER_ID);
     } else if (!getAccessToken()) {
-      void doRefresh().then(result => {
-        if (result) {
-          setAccessToken(result.accessToken);
-          setUsername(result.username);
-        }
-      }).finally(() => setBooting(false));
+      void getOrRefreshSession().catch(() => undefined).finally(() => setBooting(false));
     }
     return unsubscribe;
   }, []);

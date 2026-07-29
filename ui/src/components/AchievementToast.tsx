@@ -10,13 +10,14 @@ const EXIT_MS = 350;
 export function AchievementToast({unlock}: { unlock: { key: string; stars: number } | null }) {
   const [shown, setShown] = useState(unlock);
   const [leaving, setLeaving] = useState(false);
-  const [seen, setSeen] = useState(unlock);
-  
-  if (unlock && unlock !== seen) {
-    setSeen(unlock);
-    setShown(unlock);
+
+  useEffect(() => {
+    if (!unlock) return;
+    // Retain the last unlock while its exit animation finishes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setShown(previous => previous?.key === unlock.key && previous.stars === unlock.stars ? previous : unlock);
     setLeaving(false);
-  }
+  }, [unlock]);
   
   useEffect(() => {
     if (!shown) return () => {

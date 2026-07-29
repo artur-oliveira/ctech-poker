@@ -121,7 +121,10 @@ export class DynamoDBStack extends cdk.Stack {
     });
     // One item per player/day and a TTL for automatic cooldown history cleanup.
     table('poker_daily_reward', true, true);
-    table('poker_pending_cashouts', true);
+    // Resolved money-movement safety records are retained for 30 days for
+    // audit/debugging, then reaped by DynamoDB TTL. Unresolved entries never
+    // receive ttl and therefore cannot expire before reconciliation.
+    table('poker_pending_cashouts', true, true);
     // poker_player_sessions: TTL'd — only tracks which table a player is
     // currently at (or was recently at); the durable per-hand history lives
     // in poker_player_hands instead.

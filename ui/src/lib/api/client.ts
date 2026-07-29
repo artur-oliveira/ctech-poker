@@ -1,11 +1,32 @@
 import axios from 'axios';
-import {doRefresh} from '@/lib/auth/oauth';
+import {getOrRefreshSession} from '@/lib/auth/session';
 import {USE_MOCK} from '@/lib/mockConfig';
 import {notifyApiError} from '@/lib/notify';
 
 declare module 'axios' {
   export interface AxiosRequestConfig {
     silentError?: boolean
+    _retried?: boolean
+  }
+}
+
+export interface ApiProblem {
+  type?: string;
+  title?: string;
+  detail?: string;
+  request_id?: string;
+}
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status?: number,
+    public readonly problem?: ApiProblem,
+    public readonly retryAfterMs?: number,
+    public readonly original?: unknown,
+  ) {
+    super(message);
+    this.name = 'ApiError';
   }
 }
 
@@ -86,11 +107,25 @@ export function subscribePlayerId(f: (v: string | null) => void) {
 // just hammers the API. Query configs use this to skip TanStack's default
 // retry for that one status while still retrying real network hiccups.
 export function isNotFound(error: unknown) {
-  return axios.isAxiosError(error) && error.response?.status === 404;
+  return error instanceof ApiError ? error.status === 404 :
+    axios.isAxiosError(error) && error.response?.status === 404;
+}
+
+export function normalizeApiError(error: unknown): ApiError {
+  if (error instanceof ApiError) return error;
+  if (!axios.isAxiosError<ApiProblem>(error)) return new ApiError('Unexpected client error', undefined, undefined, undefined, error);
+  const status = error.response?.status;
+  const problem = error.response?.data;
+  const retryAfter = error.response?.headers?.['retry-after'];
+  const seconds = retryAfter == null ? Number.NaN : Number(retryAfter);
+  const retryAfterMs = Number.isFinite(seconds) ? Math.max(0, seconds * 1000) : undefined;
+  return new ApiError(problem?.detail || problem?.title || error.message || 'API request failed',
+    status, problem, retryAfterMs, error);
 }
 
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || '',
+  timeout: 10_000,
   adapter: USE_MOCK
     ? async config => (await import('@/dev/mockRuntime')).mockAdapter(config)
     : undefined
@@ -102,7 +137,7 @@ apiClient.interceptors.request.use(c => {
 apiClient.interceptors.response.use(r => r, async e => {
   if (e.response?.status === 401 && !e.config._retried) {
     e.config._retried = true;
-    const r = await doRefresh();
+    const r = await getOrRefreshSession();
     if (r) {
       setAccessToken(r.accessToken);
       setUsername(r.username);
@@ -110,6 +145,7 @@ apiClient.interceptors.response.use(r => r, async e => {
       return apiClient.request(e.config);
     }
   }
-  if (!e.config?.silentError) notifyApiError(e);
-  return Promise.reject(e);
+  const normalized = normalizeApiError(e);
+  if (!e.config?.silentError) notifyApiError(normalized);
+  return Promise.reject(normalized);
 });

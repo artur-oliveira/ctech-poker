@@ -16,11 +16,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/metrics"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
 
 const gracePeriod = 2 * time.Minute
+
+var timeNow = time.Now
 
 type pendingLister interface {
 	ListUnresolved(ctx context.Context, olderThan time.Duration) ([]reconcile.PendingCashout, error)
@@ -44,6 +47,7 @@ func run(ctx context.Context, pending pendingLister, game gameCredit, sandbox sa
 	if err != nil {
 		return fmt.Errorf("reconcile: list unresolved: %w", err)
 	}
+	emitPendingMetrics(os.Getenv("ENVIRONMENT"), entries)
 	for _, e := range entries {
 		var opErr error
 		switch e.Kind {
@@ -75,6 +79,22 @@ func run(ctx context.Context, pending pendingLister, game gameCredit, sandbox sa
 		}
 	}
 	return nil
+}
+
+func emitPendingMetrics(env string, entries []reconcile.PendingCashout) {
+	metrics.EmitTableMetric(env, "PendingCashouts", float64(len(entries)), nil)
+	var oldestSeconds float64
+	now := timeNow()
+	for _, entry := range entries {
+		recordedAt, err := time.Parse(time.RFC3339Nano, entry.RecordedAt)
+		if err != nil {
+			continue
+		}
+		if age := now.Sub(recordedAt).Seconds(); age > oldestSeconds {
+			oldestSeconds = age
+		}
+	}
+	metrics.EmitTableMetric(env, "OldestPendingCashoutAgeSeconds", oldestSeconds, nil)
 }
 
 type resolvedParams struct {

@@ -21,6 +21,7 @@ const ACTION_TIMEOUT_MS = 8000;
 // illegal move: a resync costs one snapshot, while not resyncing leaves a
 // player who hit a server-side desync stuck until they reload the page.
 const RESYNC_ERROR_CODES = new Set(['stale_state', 'rate_limited', 'invalid_action', 'unavailable']);
+const TERMINAL_ERROR_CODES = new Set(['forbidden', 'not_found']);
 const RESYNC_TIMEOUT_MS = 2500;
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -219,6 +220,8 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const [announcement, setAnnouncement] = useState('');
   const [botChallengeRequired, setBotChallengeRequired] = useState(false);
   const [removed, setRemoved] = useState<{ code?: string } | null>(null);
+  const [terminalFailure, setTerminalFailure] = useState<{ tableID: string; code: string } | null>(null);
+  const terminalError = terminalFailure?.tableID === id ? terminalFailure.code : null;
   const [mockStatus, setMockStatus] = useState<WSStatus>('connecting');
   const [mockReconnectAttempt, setMockReconnectAttempt] = useState(0);
   const mockService = useRef<MockTableService | null>(null);
@@ -403,7 +406,8 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     if (message.type === 'error') {
       const code = message.code || 'unknown';
       if (code === 'unauthorized') recoverSession();
-      const keepsPending = (code === 'stale_state' || code === 'rate_limited') && message.action_id &&
+      if (TERMINAL_ERROR_CODES.has(code)) setTerminalFailure({tableID: id, code});
+      const keepsPending = code === 'stale_state' && message.action_id &&
         pendingActionRef.current?.id === message.action_id;
       if (RESYNC_ERROR_CODES.has(code)) {
         // The server rejected against a state this client does not have.
@@ -459,7 +463,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       };
       showReaction(reaction);
     }
-  }, [armResyncWatchdog, clearPending, failPending, finishAuxiliaryCommand, showReaction, viewerId]);
+  }, [armResyncWatchdog, clearPending, failPending, finishAuxiliaryCommand, id, showReaction, viewerId]);
   const receiveForTable = useCallback((message: ServerMessage) => {
     if (activeTableIDRef.current === id) receive(message);
   }, [id, receive]);
@@ -478,6 +482,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       setLastActionError(null);
       setAnnouncement('');
       setRemoved(null);
+      setTerminalFailure(null);
       setChat([]);
       setReactions([]);
     }
@@ -492,7 +497,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     // Without a token the server answers unauthorized and closes right after
     // the upgrade, which resets ws-client's backoff — an endless loop rather
     // than a bounded retry. Wait for a session instead.
-    enabled: Boolean(wsUrl) && !USE_MOCK && Boolean(socketAuthToken),
+    enabled: Boolean(wsUrl) && !USE_MOCK && Boolean(socketAuthToken) && !terminalError,
     authToken: socketAuthToken || undefined,
     shareCode,
     onOpen: handleOpen
@@ -675,6 +680,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     announcement,
     botChallengeRequired,
     removed,
+    terminalError,
     clearActionError: () => setLastActionError(null),
     retryNow,
     readyPending,

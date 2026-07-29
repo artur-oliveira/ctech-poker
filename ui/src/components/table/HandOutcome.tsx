@@ -140,12 +140,14 @@ function ChipCountUp({from, to}: { from: number; to: number }) {
  * It closes once the next hand actually starts. */
 export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeState | null; holdOpen: boolean }) {
   const [shown, setShown] = useState(outcome);
-  const [seenKey, setSeenKey] = useState(outcome?.key);
-  
-  if (outcome && outcome.key !== seenKey) {
-    setSeenKey(outcome.key);
-    setShown(outcome);
-  }
+
+  useEffect(() => {
+    if (outcome) {
+      // Retain the last outcome while its exit animation finishes.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShown(previous => previous?.key === outcome.key ? previous : outcome);
+    }
+  }, [outcome]);
   
   const leaving = !!shown && !holdOpen;
   

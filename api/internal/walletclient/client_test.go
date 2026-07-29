@@ -5,11 +5,64 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/config"
 )
+
+func TestIdempotentMovementRetriesTransientFailure(t *testing.T) {
+	var attempts atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1.0/token", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "fake-token", "expires_in": 3600})
+	})
+	mux.HandleFunc("/v1.0/internal/wallet/sandbox/credit", func(w http.ResponseWriter, _ *http.Request) {
+		if attempts.Add(1) < 3 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "entry-after-retry"})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	client := New(&config.Config{Env: "test", WalletURL: srv.URL, CtechURL: srv.URL,
+		PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
+	client.retryDelay = func(time.Duration) {}
+
+	if err := client.Credit(t.Context(), "user-1", 100, "stable-key", "test"); err != nil {
+		t.Fatalf("credit after retry: %v", err)
+	}
+	if attempts.Load() != 3 {
+		t.Fatalf("expected 3 attempts, got %d", attempts.Load())
+	}
+}
+
+func TestMovementWithoutIdempotencyKeyDoesNotRetry(t *testing.T) {
+	var attempts atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1.0/token", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "fake-token", "expires_in": 3600})
+	})
+	mux.HandleFunc("/v1.0/internal/wallet/sandbox/debit", func(w http.ResponseWriter, _ *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	client := New(&config.Config{WalletURL: srv.URL, CtechURL: srv.URL,
+		PokerClientID: "poker", PokerClientSecret: "secret"}, cache.NewMemoryBackend(10))
+
+	if err := client.Debit(t.Context(), "user-1", 100, "", "test"); err == nil {
+		t.Fatal("expected transient wallet failure")
+	}
+	if attempts.Load() != 1 {
+		t.Fatalf("unsafe movement retried %d times", attempts.Load())
+	}
+}
 
 func fakeWalletServer(t *testing.T, onMovement func(path string, body MovementRequest)) *httptest.Server {
 	t.Helper()

@@ -1,6 +1,12 @@
 import {act, renderHook, waitFor} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
-import {recoverSession, TOKEN_REFRESH_INTERVAL_MS, useOptionalSession, useSessionKeepAlive} from './session';
+import {
+  getOrRefreshSession,
+  recoverSession,
+  TOKEN_REFRESH_INTERVAL_MS,
+  useOptionalSession,
+  useSessionKeepAlive
+} from './session';
 
 const mocks = vi.hoisted(() => ({
   token: null as string | null,
@@ -72,6 +78,22 @@ describe('session keep-alive', () => {
     expect(mocks.setToken).not.toHaveBeenCalled();
     unmount();
     vi.useRealTimers();
+  });
+
+  test('shares one refresh promise across concurrent callers', async () => {
+    let resolveRefresh: (value: {accessToken: string; username: string}) => void = () => undefined;
+    mocks.refresh.mockReturnValue(new Promise(resolve => {
+      resolveRefresh = resolve;
+    }));
+    const first = getOrRefreshSession();
+    const second = getOrRefreshSession();
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+    resolveRefresh({accessToken: 'one-token', username: 'Ana'});
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      {accessToken: 'one-token', username: 'Ana'},
+      {accessToken: 'one-token', username: 'Ana'},
+    ]);
+    expect(mocks.setToken).toHaveBeenCalledOnce();
   });
 });
 
