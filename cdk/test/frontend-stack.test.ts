@@ -34,4 +34,6 @@ test('creates private S3 hosting and a CloudFront distribution', () => {
   expect(rendered).toContain('dev-ctech-poker-avatars.s3.us-east-1.amazonaws.com');
   expect(rendered).toContain('dev-ctech-poker-avatars.s3.dualstack.us-east-1.amazonaws.com');
   expect(rendered).toContain('"OriginPath":"/av"');
+  expect(rendered).toContain('dev-ctech-poker-avatar-rewrite');
+  expect(rendered).toContain('event.request.uri.slice(8)');
 });

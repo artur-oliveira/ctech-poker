@@ -7,7 +7,16 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import {Environment} from '@aoctech/cdk';
 import {Construct} from 'constructs';
-import {API_PATH_PATTERNS, avatarsBucketName, frontendBucketName, routeStoreName, SERVICE} from './constants';
+import {
+  API_PATH_PATTERNS,
+  AVATAR_PUBLIC_PATH_PREFIX,
+  AVATAR_STORAGE_PATH_PREFIX,
+  avatarRewriteFunctionName,
+  avatarsBucketName,
+  frontendBucketName,
+  routeStoreName,
+  SERVICE,
+} from './constants';
 
 interface FrontendStackProps extends cdk.StackProps {
   environment: Environment;
@@ -119,16 +128,29 @@ async function handler(event) {
       responseHeadersPolicyName: `${environment}-${SERVICE}-avatar-headers`,
       securityHeadersBehavior: {contentTypeOptions: {override: true}},
     });
+    const avatarRewrite = new cloudfront.Function(this, 'AvatarRewrite', {
+      functionName: avatarRewriteFunctionName(environment),
+      runtime: cloudfront.FunctionRuntime.JS_2_0,
+      code: cloudfront.FunctionCode.fromInline(`
+function handler(event) {
+  event.request.uri = event.request.uri.slice(${AVATAR_PUBLIC_PATH_PREFIX.length});
+  return event.request;
+}`),
+    });
     const avatarBehavior: cloudfront.BehaviorOptions = {
       origin: origins.S3BucketOrigin.withOriginAccessControl(this.avatarsBucket, {
         originAccessControl: oac,
-        originPath: '/av',
+        originPath: AVATAR_STORAGE_PATH_PREFIX,
       }),
       viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
       allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
       compress: true,
       responseHeadersPolicy: avatarHeaders,
+      functionAssociations: [{
+        function: avatarRewrite,
+        eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+      }],
     };
 
     this.distribution = new cloudfront.Distribution(this, 'Distribution', {
@@ -145,7 +167,7 @@ async function handler(event) {
       },
       additionalBehaviors: {
         ...Object.fromEntries(API_PATH_PATTERNS.map((pattern) => [pattern, apiBehavior])),
-        '/avatars/*': avatarBehavior,
+        [`${AVATAR_PUBLIC_PATH_PREFIX}/*`]: avatarBehavior,
       },
       httpVersion: HttpVersion.HTTP2_AND_3,
       certificate: domainName ? acm.Certificate.fromCertificateArn(this, 'Cert', certificateArn) : undefined,

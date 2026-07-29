@@ -29,6 +29,8 @@ export const APP_DOMAIN_PREFIX = 'poker';
 export const ACCOUNTS_API_DOMAIN_PREFIX = 'accounts-api';
 export const ACCOUNTS_DOMAIN_PREFIX = 'accounts';
 export const API_PATH_PATTERNS = ['/v1.0/*'];
+export const AVATAR_PUBLIC_PATH_PREFIX = '/avatars';
+export const AVATAR_STORAGE_PATH_PREFIX = '/av';
 
 /**
  * Shared HTTPS listener rule priorities on the ctech-cdk ALB (confirmed by
@@ -71,6 +73,7 @@ export const avatarsS3Origins = (env: Environment) => [
   `https://${avatarsBucketName(env)}.s3.dualstack.${AWS_REGION}.amazonaws.com`,
 ];
 export const routeStoreName = (env: Environment) => `${env}-${SERVICE}-routes`;
+export const avatarRewriteFunctionName = (env: Environment) => `${env}-${SERVICE}-avatar-rewrite`;
 export const instanceRoleName = (env: Environment) => `${env}-${SERVICE}-api-role`;
 
 // ── GitHub Actions role names (global, not per-env) ─────────────────────────
