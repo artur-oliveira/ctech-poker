@@ -63,11 +63,11 @@ jobs:
 
       - name: Staticcheck
         working-directory: api
-        run: go run honnef.co/go/tools/cmd/staticcheck@2025.1.1 ./...
+        run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
 
       - name: Vulnerability scan
         working-directory: api
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
       - name: Run integration tests
         working-directory: api

@@ -1755,7 +1755,7 @@ func (a *Actor) handleRunoutStep(ctx context.Context, c runoutStepCmd) error {
 
 func (a *Actor) processInlinePreselections(ctx context.Context) {
 	a.prunePreselections()
-	for a.activity.Preselections != nil && len(a.activity.Preselections) > 0 &&
+	for len(a.activity.Preselections) > 0 &&
 		a.cached != nil && a.cached.Stage() != hand.Complete {
 		current := a.cached.CurrentPlayerIDForActor()
 		if current == "" {

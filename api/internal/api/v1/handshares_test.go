@@ -1,32 +1,13 @@
 package v1
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
-
-type handShareHistoryReader struct {
-	item *sessionlog.HandItem
-}
-
-func (h handShareHistoryReader) ListSessions(context.Context, string, int, map[string]types.AttributeValue) ([]sessionlog.SessionItem, map[string]types.AttributeValue, error) {
-	return nil, nil, nil
-}
-func (h handShareHistoryReader) ListHands(context.Context, string, string, int, map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error) {
-	return nil, nil, nil
-}
-func (h handShareHistoryReader) ListHandsByTable(context.Context, string, string, string, int, map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error) {
-	return nil, nil, nil
-}
-func (h handShareHistoryReader) GetHand(context.Context, string, string, string) (*sessionlog.HandItem, error) {
-	return h.item, nil
-}
 
 func TestAnonymizedActionsRemovePlayerIDsAndNames(t *testing.T) {
 	source := &sessionlog.HandItem{Opponents: []sessionlog.OpponentSummary{{PlayerID: "secret-opponent", Name: "Ana"}}}

@@ -58,8 +58,6 @@ func (s *Store) IncrementStats(ctx context.Context, playerID, name, mode string,
 	return s.materializeWinRate(ctx, playerID, mode, played, won)
 }
 
-func awsString(v string) *string { return &v }
-
 func number(value types.AttributeValue) int64 {
 	if n, ok := value.(*types.AttributeValueMemberN); ok {
 		parsed, _ := strconv.ParseInt(n.Value, 10, 64)

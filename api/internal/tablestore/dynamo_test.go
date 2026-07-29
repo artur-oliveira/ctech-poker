@@ -13,9 +13,59 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/dynamo"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
+
+func createTable(ctx context.Context, t testingT, db *dynamodb.Client, name string, withSK bool, gsis []types.GlobalSecondaryIndex) {
+	attrs := []types.AttributeDefinition{{AttributeName: new("pk"), AttributeType: types.ScalarAttributeTypeS}}
+	keys := []types.KeySchemaElement{{AttributeName: new("pk"), KeyType: types.KeyTypeHash}}
+	if withSK {
+		attrs = append(attrs, types.AttributeDefinition{AttributeName: new("sk"), AttributeType: types.ScalarAttributeTypeS})
+		keys = append(keys, types.KeySchemaElement{AttributeName: new("sk"), KeyType: types.KeyTypeRange})
+	}
+	if len(gsis) > 0 {
+		attrs = append(attrs,
+			types.AttributeDefinition{AttributeName: new("gsi_active"), AttributeType: types.ScalarAttributeTypeS},
+			types.AttributeDefinition{AttributeName: new("last_action_at"), AttributeType: types.ScalarAttributeTypeN},
+		)
+	}
+	tableName := name
+	input := &dynamodb.CreateTableInput{
+		TableName: &tableName, AttributeDefinitions: attrs, KeySchema: keys, BillingMode: types.BillingModePayPerRequest,
+	}
+	if len(gsis) > 0 {
+		input.GlobalSecondaryIndexes = gsis
+	}
+	_, err := db.CreateTable(ctx, input)
+	if err != nil {
+		var inUse *types.ResourceInUseException
+		if !errors.As(err, &inUse) {
+			t.Fatalf("create table %s: %v", name, err)
+		}
+	}
+}
+
+// testingT is the minimal *testing.T surface these helpers need, kept as an
+// unexported interface so this file (non-test code) never imports "testing".
+type testingT interface{ Fatalf(string, ...any) }
+
+// mustCreateTestTables provisions all four tables against DynamoDB Local —
+// production tables are provisioned by CDK, never by app code.
+func mustCreateTestTables(ctx context.Context, t testingT, db *dynamodb.Client, env string) {
+	createTable(ctx, t, db, env+"_"+tableActionGuards, false, nil)
+	createTable(ctx, t, db, env+"_"+tableActionLog, true, nil)
+	createTable(ctx, t, db, env+"_"+tableStateHistory, true, nil)
+	createTable(ctx, t, db, env+"_"+tableState, false, []types.GlobalSecondaryIndex{{
+		IndexName: new(gsiActiveLastAction),
+		KeySchema: []types.KeySchemaElement{
+			{AttributeName: new("gsi_active"), KeyType: types.KeyTypeHash},
+			{AttributeName: new("last_action_at"), KeyType: types.KeyTypeRange},
+		},
+		Projection: &types.Projection{ProjectionType: types.ProjectionTypeKeysOnly},
+	}})
+}
 
 func testClient(t *testing.T) *dynamodb.Client {
 	t.Helper()
