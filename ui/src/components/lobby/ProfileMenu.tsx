@@ -1,8 +1,9 @@
 'use client';
 import {useRef, useState} from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {Activity, Camera, LoaderCircle, LogOut, Trash2} from 'lucide-react';
+import {Activity, Camera, LoaderCircle, LogOut, ShoppingBag, Trash2} from 'lucide-react';
 import {getMe, updateMe, type WalletMode} from '@/lib/api/player';
 import {logout} from '@/lib/auth/oauth';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
@@ -163,6 +164,9 @@ export function ProfileMenu() {
           <span>Fichas sandbox <b>{formatSandbox(me?.sandbox_balance)}</b></span>
           <span>Dinheiro real <b>{formatReal(me?.game_balance)}</b></span>
         </div>
+        <Button type="button" variant="outline" className="w-full" render={<Link href="/store"/>}>
+          <ShoppingBag/> Comprar créditos
+        </Button>
         <Button type="button" variant="outline" className="w-full" onClick={() => setShowcaseOpen(true)}>
           Vitrine do perfil
         </Button>

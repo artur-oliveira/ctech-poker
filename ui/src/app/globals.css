@@ -5797,6 +5797,273 @@ h1 em {
     letter-spacing: .02em
 }
 
+.store {
+    padding-block: 35px 90px
+}
+
+.store > a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--neutral-rose-3);
+    text-decoration: none;
+    font-size: var(--font-size-body)
+}
+
+.store > a svg {
+    width: 16px
+}
+
+.store header {
+    text-align: center;
+    max-width: 620px;
+    margin: 40px auto 48px
+}
+
+.store header small {
+    display: block;
+    color: var(--gold);
+    font: 600 var(--font-size-mono) var(--font-mono);
+    letter-spacing: .12em;
+    margin-bottom: 10px
+}
+
+.store header > svg {
+    width: 32px;
+    height: 32px;
+    color: var(--gold);
+    margin-bottom: 6px
+}
+
+.store header p {
+    color: var(--muted);
+    line-height: 1.65
+}
+
+.store-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 40px
+}
+
+.store-reward {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    max-width: 420px;
+    margin: 0 auto;
+    padding: 32px 28px;
+    text-align: center;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-panel);
+    background: var(--surface-control)
+}
+
+.store-reward-icon {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--brand-13);
+    color: var(--gold)
+}
+
+.store-reward-icon svg {
+    width: 26px;
+    height: 26px
+}
+
+.store-reward h2 {
+    margin: 0;
+    font-size: var(--font-size-subtitle)
+}
+
+.store-reward p {
+    margin: 0;
+    color: var(--text-muted-soft);
+    line-height: 1.55
+}
+
+.store-reward-countdown {
+    font: 600 var(--font-size-mono) var(--font-mono);
+    letter-spacing: .06em;
+    color: var(--muted)
+}
+
+.store-reward-result {
+    color: var(--success);
+    font-weight: 600
+}
+
+.store-sku-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px
+}
+
+.store-sku-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 20px;
+    text-align: left;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-panel);
+    background: var(--surface-control);
+    color: var(--on-brand);
+    cursor: pointer;
+    transition: border-color 180ms var(--ease-out-quart), transform 180ms var(--ease-out-quart)
+}
+
+.store-sku-card:hover, .store-sku-card:focus-visible {
+    border-color: var(--gold);
+    transform: translateY(-2px)
+}
+
+.store-sku-card:disabled {
+    opacity: .55;
+    cursor: default;
+    transform: none
+}
+
+.store-sku-bonus {
+    align-self: flex-start;
+    padding: 3px 10px;
+    border-radius: var(--rounded-pill);
+    background: var(--felt);
+    color: var(--felt-text);
+    font: 600 var(--font-size-compact) var(--font-mono);
+    letter-spacing: .04em
+}
+
+.store-sku-credits {
+    font-size: var(--font-size-large);
+    font-weight: 700;
+    color: var(--gold)
+}
+
+.store-sku-credits small {
+    color: var(--text-muted-soft);
+    font-weight: 400;
+    font-size: var(--font-size-compact)
+}
+
+.store-sku-price {
+    margin-top: auto;
+    color: var(--text-muted-soft);
+    font-size: var(--font-size-body)
+}
+
+.store-qr {
+    display: flex;
+    justify-content: center;
+    padding: 16px;
+    border-radius: var(--rounded-panel);
+    background: var(--paper)
+}
+
+.store-qr img {
+    display: block;
+    width: 200px;
+    height: 200px
+}
+
+.store-pix-code {
+    display: block;
+    padding: 10px 12px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-xs);
+    background: var(--surface-seat);
+    color: var(--text-muted-soft);
+    font: 600 var(--font-size-compact) var(--font-mono);
+    word-break: break-all
+}
+
+.store-countdown {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: 0;
+    font: 600 var(--font-size-mono) var(--font-mono);
+    letter-spacing: .06em;
+    color: var(--gold)
+}
+
+.store-countdown.is-expiring {
+    color: var(--danger)
+}
+
+.store-history {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none
+}
+
+.store-history-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-panel);
+    background: var(--surface-control)
+}
+
+.store-history-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px
+}
+
+.store-history-info strong {
+    font-size: var(--font-size-body)
+}
+
+.store-history-info small {
+    color: var(--text-muted-soft);
+    font-size: var(--font-size-compact)
+}
+
+.store-history-empty {
+    color: var(--text-muted-soft);
+    text-align: center
+}
+
+.store-status {
+    padding: 3px 10px;
+    border-radius: var(--rounded-pill);
+    font: 600 var(--font-size-compact) var(--font-mono);
+    letter-spacing: .04em;
+    white-space: nowrap
+}
+
+.store-status.pending {
+    background: var(--brand-13);
+    color: var(--gold)
+}
+
+.store-status.confirmed {
+    background: color-mix(in srgb, var(--success) 20%, transparent);
+    color: var(--success)
+}
+
+.store-status.refunded, .store-status.expired {
+    background: var(--surface-seat);
+    color: var(--muted)
+}
+
+.store-status.failed {
+    background: var(--surface-error);
+    color: var(--danger)
+}
+
 .achievements-teaser {
     padding-block: 90px;
     display: grid;
