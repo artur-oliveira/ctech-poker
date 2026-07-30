@@ -11,7 +11,7 @@ export type TableName =
   'poker_table_state' | 'poker_table_state_history' | 'poker_action_log' | 'poker_action_guards' |
   'poker_rooms' | 'poker_player_profiles' | 'poker_achievement_progress' | 'poker_leaderboard_stats' |
   'poker_daily_reward' | 'poker_pending_cashouts' | 'poker_player_sessions' | 'poker_player_hands' |
-  'poker_player_notes' | 'poker_hand_shares' | 'poker_player_poker_stats';
+  'poker_player_notes' | 'poker_hand_shares' | 'poker_player_poker_stats' | 'poker_sandbox_purchases';
 
 interface DynamoDBStackProps extends cdk.StackProps {
   environment: Environment;
@@ -121,6 +121,9 @@ export class DynamoDBStack extends cdk.Stack {
     });
     // One item per player/day and a TTL for automatic cooldown history cleanup.
     table('poker_daily_reward', true, true);
+    // One row per purchase, pk=player_id sk=purchase_id — permanent history
+    // (no TTL), unlike ctech-wallet's own pending-purchase row.
+    table('poker_sandbox_purchases', true);
     // Resolved money-movement safety records are retained for 30 days for
     // audit/debugging, then reaped by DynamoDB TTL. Unresolved entries never
     // receive ttl and therefore cannot expire before reconciliation.
