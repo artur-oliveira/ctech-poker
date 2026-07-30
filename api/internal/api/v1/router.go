@@ -20,6 +20,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/playernotes"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
+	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
@@ -51,6 +52,7 @@ func Register(
 	handShareStore *handshare.Store,
 	pokerStatsStore *pokerstats.Store,
 	avatars *avatar.Service,
+	sandboxPurchaseSvc *sandboxpurchase.Service,
 ) {
 	router := app.Group("/v1.0")
 
@@ -64,6 +66,7 @@ func Register(
 	auth := authMiddleware(verifier)
 	RegisterHandHistory(router, auth, &tablestoreAdapter{store: tableStore})
 	RegisterAchievementCatalog(router)
+	RegisterWalletWebhook(router, cfg.WalletWebhookHMACSecret, sandboxPurchaseSvc, reg)
 
 	// Fixed-window rate limits on the mutating endpoints (M6/S2). Keyed per
 	// caller IP; Redis (mandatory in prod, T2) makes the counter fleet-wide.
@@ -71,6 +74,7 @@ func Register(
 	joinLimiter := NewRateLimiter(cacheBackend, 30, time.Minute)
 	spinLimiter := NewRateLimiter(cacheBackend, 60, time.Minute)
 	avatarLimiter := NewRateLimiter(cacheBackend, 5, time.Hour)
+	purchaseLimiter := NewRateLimiter(cacheBackend, 10, time.Minute)
 
 	RegisterRooms(router, auth, rooms, buyinSvc, manager, reg, cfg, createLimiter, joinLimiter)
 	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter, pokerStatsStore)
@@ -79,4 +83,5 @@ func Register(
 	RegisterPokerStats(router, auth, pokerStatsStore)
 	RegisterLeaderboard(router, auth, leaderboardSvc)
 	RegisterDailyReward(router, auth, dailyRewardSvc, spinLimiter)
+	RegisterSandboxPurchase(router, auth, sandboxPurchaseSvc, purchaseLimiter)
 }

@@ -39,6 +39,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
+	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
@@ -73,6 +74,8 @@ var Module = fx.Options(
 		newLeaderboardService,
 		newRouletteStore,
 		newRouletteService,
+		newSandboxPurchaseStore,
+		newSandboxPurchaseService,
 		newSessionStore,
 		walletclient.New,
 		newBuyinService,
@@ -285,6 +288,12 @@ func newRouletteStore(db *dynamodb.Client, cfg *config.Config) *dailyreward.Stor
 }
 func newRouletteService(wallet *walletclient.Client, store *dailyreward.Store) *dailyreward.Service {
 	return dailyreward.NewService(wallet, store)
+}
+func newSandboxPurchaseStore(db *dynamodb.Client, cfg *config.Config) *sandboxpurchase.Store {
+	return sandboxpurchase.NewStore(db, cfg.Env)
+}
+func newSandboxPurchaseService(wallet *walletclient.Client, store *sandboxpurchase.Store) *sandboxpurchase.Service {
+	return sandboxpurchase.NewService(wallet, store)
 }
 func newSessionStore(db *dynamodb.Client, cfg *config.Config) *sessionlog.Store {
 	return sessionlog.NewStore(db, cfg.Env)
@@ -563,8 +572,9 @@ func registerRoutes(
 	handShareStore *handshare.Store,
 	pokerStatsStore *pokerstats.Store,
 	avatars *avatar.Service,
+	sandboxPurchaseSvc *sandboxpurchase.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc)
 }
 
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {
