@@ -57,6 +57,12 @@ type Config struct {
 	// risk in this codebase (OVERVIEW.md §11).
 	RealMoneyEnabled bool   `env:"REAL_MONEY_ENABLED" envDefault:"false"`
 	LegalSignoffRef  string `env:"LEGAL_SIGNOFF_REF"`
+
+	// WalletWebhookHMACSecret verifies inbound POST /v1.0/webhooks/wallet calls
+	// (X-Wallet-Signature: sha256=<hex>) — must match the secret registered for
+	// poker's client_id in ctech-wallet's SSM M2M-clients param (see this
+	// plan's Global Constraints — a cross-repo/config blocker, not a code gap).
+	WalletWebhookHMACSecret string `env:"WALLET_WEBHOOK_HMAC_SECRET"`
 }
 
 // Load reads config from environment variables.
@@ -89,6 +95,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.RealMoneyEnabled && cfg.LegalSignoffRef == "" {
 		return nil, fmt.Errorf("config: REAL_MONEY_ENABLED=true requires a non-empty LEGAL_SIGNOFF_REF (OVERVIEW.md §11 — this is a business decision, not an engineering toggle)")
+	}
+	if cfg.WalletWebhookHMACSecret == "" && cfg.Env == "prod" {
+		return nil, fmt.Errorf("config: WALLET_WEBHOOK_HMAC_SECRET must be set in production so wallet webhooks can be verified")
 	}
 	if cfg.ReadTimeout <= 0 || cfg.WriteTimeout <= 0 || cfg.IdleTimeout <= 0 {
 		return nil, fmt.Errorf("config: server timeouts must be positive")

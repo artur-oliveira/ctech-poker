@@ -11,6 +11,19 @@ func TestLoadFailsClosedWithoutValkeyURLInProd(t *testing.T) {
 	}
 }
 
+func TestLoadRequiresWalletWebhookHMACSecretInProd(t *testing.T) {
+	t.Setenv("ENVIRONMENT", "prod")
+	t.Setenv("VALKEY_URL", "redis://x")
+	t.Setenv("SERVICE_AUDIENCE", "https://poker.aoctech.app")
+	t.Setenv("CTECH_URL", "https://accounts.aoctech.app")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "https://poker.aoctech.app")
+	t.Setenv("WALLET_WEBHOOK_HMAC_SECRET", "")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("expected an error when WALLET_WEBHOOK_HMAC_SECRET is empty in prod")
+	}
+}
+
 func TestLoadDefaultsToDevWithoutValkeyURL(t *testing.T) {
 	t.Setenv("VALKEY_URL", "")
 
