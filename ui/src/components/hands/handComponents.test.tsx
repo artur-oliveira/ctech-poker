@@ -67,7 +67,7 @@ describe('hand history components', () => {
     expect(screen.getByText('future action')).toBeInTheDocument();
     expect(screen.getByText('50')).toBeInTheDocument();
   });
-
+  
   test('timeline translates the social actions and shows the reaction emoji', () => {
     render(<ActionTimeline actions={[
       {seq: 1, player_id: 'viewer', action: 'reaction', amount: 0, timestamp: 0, reaction_id: 'clap'},
@@ -103,12 +103,12 @@ describe('hand history components', () => {
     expect(screen.getByText('entrou na mesa')).toBeInTheDocument();
     expect(screen.getByText('👏')).toBeInTheDocument();
     expect(screen.getByText(/Bia · Aplausos/)).toBeInTheDocument();
-
+    
     await user.click(screen.getByRole('button', {name: 'Próxima ação'}));
     expect(screen.queryByText('👏')).not.toBeInTheDocument();
     expect(screen.getByText('🍅')).toBeInTheDocument();
   });
-
+  
   test('shows an explicit fallback when old hands have no replay frames', () => {
     render(<HandReplayer hand={hand} actions={[]} viewerId="viewer"/>);
     expect(screen.getByText(/antes dos frames de replay/)).toBeInTheDocument();

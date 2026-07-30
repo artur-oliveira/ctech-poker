@@ -228,8 +228,8 @@ func TestResultIsIndependentOfInputOrder(t *testing.T) {
 	got := sortedEligible(ComputeSidePots(shuffled))
 	want := []PotLayer{
 		{Amount: 300, Eligible: []string{"A", "B", "C"}}, // 100 * 3
-		{Amount: 200, Eligible: []string{"B", "C"}},       // 100 * 2
-		{Amount: 100, Eligible: []string{"B"}},            // 100 * 1
+		{Amount: 200, Eligible: []string{"B", "C"}},      // 100 * 2
+		{Amount: 100, Eligible: []string{"B"}},           // 100 * 1
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, want %+v", got, want)

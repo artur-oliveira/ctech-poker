@@ -47,20 +47,20 @@ describe('notification store', () => {
     pushNotification('Repita');
     expect(listener.mock.lastCall?.[0]).toHaveLength(1);
   });
-
+  
   test('bounds notification bursts to the three newest messages', async () => {
     const {pushNotification, subscribeNotifications} = await import('./notify');
     const listener = vi.fn();
     subscribeNotifications(listener);
-
+    
     for (let index = 1; index <= 5; index++) {
       pushNotification(`Aviso ${index}`);
     }
-
-    expect(listener.mock.lastCall?.[0].map((item: {message: string}) => item.message))
+    
+    expect(listener.mock.lastCall?.[0].map((item: { message: string }) => item.message))
       .toEqual(['Aviso 3', 'Aviso 4', 'Aviso 5']);
   });
-
+  
   test.each([
     [{name: 'ApiError', original: {request: {}, message: 'Network Error'}},
       'Sem conexão com o servidor. Verifique sua internet e tente novamente.'],
@@ -70,9 +70,9 @@ describe('notification store', () => {
     const {notifyApiError, subscribeNotifications} = await import('./notify');
     const listener = vi.fn();
     subscribeNotifications(listener);
-
+    
     notifyApiError(error);
-
+    
     expect(listener.mock.lastCall?.[0][0]).toMatchObject({message: expected, variant: 'error'});
   });
   

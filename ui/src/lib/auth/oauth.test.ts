@@ -18,7 +18,7 @@ vi.mock('@aoctech/auth-client', () => ({
     refresh = mocks.refresh;
     revoke = mocks.revoke;
     endSessionRedirect = mocks.endSession;
-
+    
     constructor(options: unknown) {
       mocks.constructor(options);
     }

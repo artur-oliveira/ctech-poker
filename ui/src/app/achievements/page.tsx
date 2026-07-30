@@ -100,7 +100,7 @@ export default function Achievements() {
           repeating it sat off the page's centred axis and told the player nothing
           they had not just chosen. */}
       {authed && <CurrencyModeTabs mode={mode} onChange={setMode}/>}
-
+      
       {authed && !stats && !catalog.isError && !mine.isError
         ? <StatCardsSkeleton label="Calculando seu progresso…" count={4}/>
         : stats && (
@@ -123,7 +123,7 @@ export default function Achievements() {
           </div>
         </div>
       )}
-
+      
       {authed && !mine.isLoading && !mine.isError && catalog.data && (
         <FilterGroup
           label="Filtro de conquistas"

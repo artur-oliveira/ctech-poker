@@ -62,12 +62,14 @@ function messageForStatus(status?: number): string {
 export function notifyApiError(error: unknown): void {
   const normalized = error as { name?: string; status?: number; problem?: { detail?: string; title?: string } };
   if (normalized?.name === 'ApiError') {
-    const original = (error as {original?: {
-      code?: string;
-      message?: string;
-      response?: unknown;
-      request?: unknown;
-    }}).original;
+    const original = (error as {
+      original?: {
+        code?: string;
+        message?: string;
+        response?: unknown;
+        request?: unknown;
+      }
+    }).original;
     if (!normalized.status && original && !original.response) {
       const timedOut = original.code === 'ECONNABORTED' || /timeout/i.test(original.message || '');
       pushNotification(timedOut

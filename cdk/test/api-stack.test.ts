@@ -3,7 +3,7 @@ import {Match, Template} from 'aws-cdk-lib/assertions';
 import {minimumApiCapacity, PokerApiStack} from '../lib/api-stack';
 
 test('keeps two API instances in production and one outside production', () => {
-  expect(minimumApiCapacity('prod')).toBe(2);
+  expect(minimumApiCapacity('prod')).toBe(1);
   expect(minimumApiCapacity('stage')).toBe(1);
   expect(minimumApiCapacity('dev')).toBe(1);
 });

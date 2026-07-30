@@ -159,4 +159,3 @@ func (r *Round) IsComplete() bool {
 	}
 	return notFolded <= 1 || allMatched
 }
-

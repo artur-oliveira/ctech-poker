@@ -10,7 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	dynamo "gopkg.aoctech.app/api-commons/dynamo"
+	"gopkg.aoctech.app/api-commons/dynamo"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
 

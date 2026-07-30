@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamotypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	dynamo "gopkg.aoctech.app/api-commons/dynamo"
+	"gopkg.aoctech.app/api-commons/dynamo"
 )
 
 const tableProgress = "poker_achievement_progress"

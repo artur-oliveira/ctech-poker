@@ -27,7 +27,8 @@ function DialogDescription(p: Primitive.Description.Props) {
 }
 
 function DialogFooter(p: React.ComponentProps<'div'>) {
-  return <div {...p} className={cn('mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end [&_button]:w-full sm:[&_button]:w-auto', p.className)}/>;
+  return <div {...p}
+              className={cn('mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end [&_button]:w-full sm:[&_button]:w-auto', p.className)}/>;
 }
 
 export {Dialog, DialogTrigger, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter};

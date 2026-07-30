@@ -20,7 +20,7 @@ describe('shared presentation contracts', () => {
     expect(achievementExample('win_category_straight_flush')).toHaveLength(5);
     expect(achievementExample('unknown')).toEqual([]);
   });
-
+  
   // Mirrors api/internal/achievements/catalog.go. The point of duplicating the
   // keys here is to fail loudly the next time the backend grows the catalog and
   // the copy is not written, instead of shipping a raw snake_case key on screen.
@@ -35,18 +35,18 @@ describe('shared presentation contracts', () => {
     ...['high_card', 'pair', 'two_pair', 'three_of_a_kind', 'straight', 'flush', 'full_house',
       'four_of_a_kind', 'straight_flush', 'royal_flush'].map(c => `win_category_${c}`)
   ];
-
+  
   test.each(BACKEND_KEYS)('%s has a written label and description', key => {
     expect(achievementLabel(key)).not.toBe(key.replaceAll('_', ' '));
     expect(achievementDescription(key)).not.toBe('');
   });
-
+  
   test('the earned counters are scoped to the wallet that can produce them', () => {
     expect(achievementWalletMode('real_money_earned')).toBe('real');
     expect(achievementWalletMode('sandbox_chips_earned')).toBe('sandbox');
     expect(achievementWalletMode('wins')).toBeUndefined();
   });
-
+  
   test('achievement progress is independent of tier order and detects max', () => {
     const tiers = [{stars: 3, threshold: 10}, {stars: 1, threshold: 1}, {stars: 2, threshold: 5}];
     expect(achievementProgress(tiers, 6)).toEqual({

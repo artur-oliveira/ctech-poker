@@ -122,7 +122,7 @@ describe('hands list page', () => {
       unobserve = vi.fn();
       disconnect = vi.fn();
       takeRecords = vi.fn(() => []);
-
+      
       constructor(callback: IntersectionObserverCallback) {
         observed.push(callback);
       }

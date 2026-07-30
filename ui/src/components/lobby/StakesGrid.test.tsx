@@ -54,7 +54,7 @@ describe('lobby stakes integration', () => {
     rerender(<StakesGrid/>);
     expect(screen.getByText('Nenhum stake disponível no momento.')).toBeInTheDocument();
   });
-
+  
   test('does not create a duplicate room when the room inventory is unavailable', async () => {
     const refetchStakes = vi.fn();
     const refetchRooms = vi.fn();
@@ -63,7 +63,7 @@ describe('lobby stakes integration', () => {
     };
     roomsQuery = {data: [], isLoading: false, isError: true, refetch: refetchRooms};
     render(<StakesGrid/>);
-
+    
     expect(screen.getByRole('alert')).toHaveTextContent('Nenhuma nova mesa será criada');
     expect(screen.queryByRole('button', {name: /HEADS-UP/})).not.toBeInTheDocument();
     expect(createRoom).not.toHaveBeenCalled();

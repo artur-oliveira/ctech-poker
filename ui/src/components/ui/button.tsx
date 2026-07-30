@@ -18,4 +18,5 @@ function Button({className, variant, size, nativeButton, ...props}: Primitive.Pr
   return <Primitive nativeButton={nativeButton ?? !props.render}
                     className={cn(variants({variant, size}), className)} {...props}/>;
 }
+
 export {Button, variants as buttonVariants};

@@ -14,11 +14,11 @@ describe('FilterGroup', () => {
       ]}
       onChange={onChange}
     />);
-
+    
     expect(screen.getByRole('group', {name: 'Filtro de exemplo'})).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Todas'})).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', {name: 'Vitórias'})).toHaveAttribute('aria-pressed', 'false');
-
+    
     fireEvent.click(screen.getByRole('button', {name: 'Vitórias'}));
     expect(onChange).toHaveBeenCalledWith('wins');
   });

@@ -101,7 +101,7 @@ function HandHistoryContent() {
         {h.net_change > 0 ? '+' : ''}{h.net_change.toLocaleString('pt-BR')} fichas
       </span>
     </header>
-
+    
     {!history.isLoading && !history.isError && actions.some(action => action.frame) &&
         <div className="hand-replay-launch">
             <div>
@@ -111,7 +111,7 @@ function HandHistoryContent() {
             <small>O replayer abre nesta mesma aba; o botão de voltar traz você de volta para cá.</small>
           </span>
             </div>
-            {/* Same tab on purpose: the replayer's own "Voltar para Detalhes da
+          {/* Same tab on purpose: the replayer's own "Voltar para Detalhes da
                 Mão" is a back link, and a new tab left the player with two
                 windows on the same hand and no way back in either. */}
             <Button render={<Link

@@ -195,4 +195,3 @@ func TestBoardStateMatchesBest7(t *testing.T) {
 		}
 	}
 }
-

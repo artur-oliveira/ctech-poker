@@ -108,7 +108,7 @@ const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
     label: 'Mostrou as cartas',
     Icon: Eye,
   },
-
+  
   // Mesa social
   chat: {
     label: 'Falou no chat',
@@ -122,7 +122,7 @@ const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
     label: 'Atualizou o perfil',
     Icon: UserPen,
   },
-
+  
   // Resultado da mão
   won: {
     label: 'Venceu',
