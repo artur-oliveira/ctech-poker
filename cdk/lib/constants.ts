@@ -125,6 +125,10 @@ export const SSM_POKER = (env: Environment) => ({
   realMoneyEnabled: `/ctech/${env}/poker/real-money-enabled`,
   legalSignoffRef: `/ctech/${env}/poker/legal-signoff-ref`,
   avatarBaseUrl: `/ctech/${env}/poker/avatar-base-url`,
+  // Verifies inbound ctech-wallet webhooks (X-Wallet-Signature). Must match
+  // the secret registered for poker's client_id in ctech-wallet's own SSM
+  // M2M-clients param — that registration is manual, done outside CDK.
+  walletWebhookHmacSecret: `/ctech/${env}/poker/wallet-webhook-hmac-secret`,
 });
 
 // ── Domain helper (identical to ctech-wallet's / ctech-dfe's) ───────────────

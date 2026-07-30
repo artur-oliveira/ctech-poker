@@ -67,6 +67,8 @@ interface ApiStackProps extends cdk.StackProps {
   dailyRewardTableArn: string;
   playerSessionsTableArn: string;
   playerHandsTableArn: string;
+  walletWebhookHmacSecretParam: string;
+  sandboxPurchasesTableArn: string;
 }
 
 export const minimumApiCapacity = (_environment: Environment) => 1;
@@ -108,6 +110,8 @@ export class PokerApiStack extends cdk.Stack {
       playerSessionsTableArn,
       playerHandsTableArn,
       dailyRewardTableArn,
+      walletWebhookHmacSecretParam,
+      sandboxPurchasesTableArn,
     } = props;
     
     const shared = SSM_SHARED(environment);
@@ -134,7 +138,7 @@ export class PokerApiStack extends cdk.Stack {
     const tableArns = [
       tableStateArn, tableStateHistoryArn, actionLogArn, actionGuardsArn, roomsTableArn, playerProfilesTableArn,
       achievementProgressTableArn, leaderboardStatsTableArn, dailyRewardTableArn, playerSessionsTableArn,
-      playerHandsTableArn, playerNotesTableArn, handSharesTableArn, pokerStatsTableArn,
+      playerHandsTableArn, playerNotesTableArn, handSharesTableArn, pokerStatsTableArn, sandboxPurchasesTableArn,
     ];
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: [
@@ -154,7 +158,7 @@ export class PokerApiStack extends cdk.Stack {
       resources: [
         shared.valkeyUrl, walletUrlParam, pokerClientIdParam, pokerClientSecretParam, turnstileSecretParam,
         realMoneyEnabledParam, legalSignoffRefParam,
-        avatarBaseUrlParam,
+        avatarBaseUrlParam, walletWebhookHmacSecretParam,
       ].map(
         (path) => `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${path}`,
       ),
@@ -275,6 +279,8 @@ export class PokerApiStack extends cdk.Stack {
       `export POKER_CLIENT_SECRET`,
       `TURNSTILE_SECRET=$(aws ssm get-parameter --name "${turnstileSecretParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
       `export TURNSTILE_SECRET`,
+      `WALLET_WEBHOOK_HMAC_SECRET=$(aws ssm get-parameter --name "${walletWebhookHmacSecretParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+      `export WALLET_WEBHOOK_HMAC_SECRET`,
       // Real-money kill switch: both fetched fresh on every boot/restart so
       // ops can flip them via SSM without a redeploy. Falls back to
       // false/empty → config.Load() keeps real-money mode off (fails closed).

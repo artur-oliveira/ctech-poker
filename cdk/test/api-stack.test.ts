@@ -49,6 +49,8 @@ test('synthesizes without error and declares exactly one ASG', () => {
     dailyRewardTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_daily_reward',
     playerSessionsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_player_sessions',
     playerHandsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_player_hands',
+    walletWebhookHmacSecretParam: '/ctech/dev/poker/wallet-webhook-hmac-secret',
+    sandboxPurchasesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_sandbox_purchases',
   });
   const template = Template.fromStack(stack);
   template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
