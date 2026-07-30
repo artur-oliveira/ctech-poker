@@ -196,26 +196,27 @@ message ClientMessage {
 
 // ServerMessage is sent from the server to the client.
 message ServerMessage {
-  string type = 1; // "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast"
-  
+  string type = 1; // "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast" | "sandbox_purchase_update"
+
   // payload fields
   string conn_id = 2; // for connected frame
   TableSnapshot snapshot = 3; // for state frame
-  string player_id = 4; // for chat frame
+  string player_id = 4; // for chat frame, and destination for sandbox_purchase_update
   string message = 5; // for chat frame, error message, or removed reason
-  string code = 6; // for error frame or removed frame
+  string code = 6; // for error frame, removed frame, or sandbox_purchase_update status (confirmed|refunded|expired|failed)
   string key = 7; // for achievement unlocked frame
   int32 stars = 8; // for achievement unlocked frame
-  
+
   // lobby payload fields
   Room room = 9; // for room_created
   string room_id = 10; // for room_updated
   int32 seats_taken = 11; // for room_updated
-  int64 amount = 12; // for payment_received
+  int64 amount = 12; // for payment_received, or credits_granted for sandbox_purchase_update
   string text = 13; // for system_broadcast
   string action_id = 14; // correlation id for action_ack/error
   uint64 snapshot_version = 15; // for equity delta
   optional double equity = 16; // for equity delta (player_id identifies owner)
   string reaction_id = 17; // ephemeral table reaction catalog key
   string target_player_id = 18; // destination for thrown objects
+  string purchase_id = 19; // for sandbox_purchase_update
 }
