@@ -8,7 +8,9 @@ import {AchievementCard} from '@/components/achievements/AchievementCard';
 import {Button} from '@/components/ui/button';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {FilterGroup} from '@/components/FilterGroup';
+import {SkeletonList, StatCardsSkeleton} from '@/components/ui/skeleton';
 import {achievementProgress, getAchievementCatalog, getMyAchievements} from '@/lib/api/achievements';
+import {achievementWalletMode} from '@/lib/achievements';
 import type {WalletMode} from '@/lib/api/player';
 import {useOptionalSession} from "@/lib/auth/session";
 
@@ -27,10 +29,12 @@ export default function Achievements() {
   
   const progressMap = useMemo(() => new Map((mine.data || []).map(p => [p.key, p.count])), [mine.data]);
   const visibleCatalog = useMemo(() => (catalog.data || []).filter(item => {
+    const walletMode = achievementWalletMode(item.key);
+    if (walletMode && walletMode !== mode) return false;
     if (!item.secret) return true;
     const firstTier = Math.min(...item.tiers.map(tier => tier.threshold));
     return authed && !mine.isLoading && (progressMap.get(item.key) ?? 0) >= firstTier;
-  }), [authed, catalog.data, mine.isLoading, progressMap]);
+  }), [authed, catalog.data, mine.isLoading, mode, progressMap]);
   
   // While mine is still loading, leave count undefined (renders neutral tier ladder)
   const countFor = useCallback((key: string) => authed && !mine.isLoading ? progressMap.get(key) ?? 0 : undefined, [authed, mine.isLoading, progressMap]);
@@ -92,11 +96,14 @@ export default function Achievements() {
           ? 'Cada estrela representa uma meta vencida. Passe, toque ou use o teclado para conferir o requisito de cada nível.'
           : 'Entre com sua conta CTech para registrar seu progresso e desbloquear conquistas a cada mão.'}</p>
       </header>
-      {authed && <><CurrencyModeTabs mode={mode} onChange={setMode}/>
-        {mode === 'real' && <p className="self-hud-notice">Este progresso só conta mãos jogadas com dinheiro real.</p>}
-      </>}
-      
-      {stats && (
+      {/* The wallet tabs already say which wallet is selected; a second sentence
+          repeating it sat off the page's centred axis and told the player nothing
+          they had not just chosen. */}
+      {authed && <CurrencyModeTabs mode={mode} onChange={setMode}/>}
+
+      {authed && !stats && !catalog.isError && !mine.isError
+        ? <StatCardsSkeleton label="Calculando seu progresso…" count={4}/>
+        : stats && (
         <div className="achievements-stats-bar">
           <div className="stat-card">
             <span className="stat-label">Estrelas conquistadas</span>
@@ -116,7 +123,7 @@ export default function Achievements() {
           </div>
         </div>
       )}
-      
+
       {authed && !mine.isLoading && !mine.isError && catalog.data && (
         <FilterGroup
           label="Filtro de conquistas"
@@ -138,7 +145,8 @@ export default function Achievements() {
           <p className="form-error">Não foi possível carregar seu progresso no momento. O catálogo abaixo exibe as metas
               gerais.</p>}
       {catalog.isLoading ?
-        <div className="lobby-empty"><span className="loader"/>Carregando catálogo de conquistas…</div>
+        <SkeletonList label="Carregando catálogo de conquistas…" count={6} height={218}
+                      className="achievements-grid"/>
         : catalog.isError ? <div className="lobby-empty">Não foi possível carregar o catálogo de conquistas.
             <Button variant="outline" size="sm" onClick={() => void catalog.refetch()}>Tentar novamente</Button>
           </div>

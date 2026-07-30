@@ -28,7 +28,28 @@ export const ACHIEVEMENT_LABELS: Record<string, string> = {
   giant_slayer: "Virou o Jogo",
   showdown_warrior: "Paga pra Ver",
   all_in: "Tudo ou Nada",
-  
+
+  sandbox_chips_earned: "Montanha de Fichas",
+  real_money_earned: "Banca de Verdade",
+
+  won_with_pocket_pair: "Par na Mão",
+  won_full_table: "Dono da Mesa",
+  won_heads_up: "Duelo Vencido",
+  won_with_nuts: "Mão Imbatível",
+  won_runner_runner: "Turn e River Perfeitos",
+  three_bet_won_no_showdown: "Pressão no 3-bet",
+  beat_pocket_aces: "Quebrou os Ases",
+  beat_trips_or_better: "Passou por Cima",
+  first_hand_allin_win: "Chegou Chegando",
+  same_pocket_pair_streak: "Par de Estimação",
+
+  folded_streak: "Paciência de Pedra",
+  four_to_royal_missed: "Quase Royal",
+  four_to_straight_flush_missed: "Quase Straight Flush",
+  paid_river_draw_missed: "Pagou e Não Veio",
+  lost_river_after_leading_turn: "Perdeu no River",
+  lost_straight_flush_to_royal: "Azar Histórico",
+
   win_category_high_card: "Carta Alta",
   win_category_pair: "Um Par",
   win_category_two_pair: "Dois Pares",

@@ -47,11 +47,9 @@ type Actor struct {
 	handID   string
 	activity tablestore.TableActivity
 
-	turnTimeout                  time.Duration
-	timeBankEnabled              bool
-	disconnectGrace              time.Duration
-	disconnectedSince            map[string]time.Time
-	consecutiveDisconnectedHands map[string]int
+	turnTimeout       time.Duration
+	timeBankEnabled   bool
+	disconnectedSince map[string]time.Time
 	// activeConns tracks physical connection IDs, not just a count. Connect
 	// and Disconnect are therefore idempotent when a live WS is re-registered
 	// after actor replacement, and one tab closing cannot disconnect another.
@@ -128,18 +126,16 @@ type Actor struct {
 func New(id string, store *tablestore.Store, trustCache bool, broadcast func(string, hand.Snapshot)) *Actor {
 	a := &Actor{
 		id: id, store: store, trustCache: trustCache, broadcast: broadcast, cmds: make(chan Command, 64),
-		done:                         make(chan struct{}),
-		turnTimeout:                  DefaultTurnTimeout,
-		timeBankEnabled:              true,
-		nextHandDelay:                NextHandDelay,
-		runoutStreetDelay:            RunoutStreetDelay,
-		disconnectGrace:              45 * time.Second,
-		disconnectedSince:            make(map[string]time.Time),
-		consecutiveDisconnectedHands: make(map[string]int),
-		activeConns:                  make(map[string]map[string]struct{}),
-		kickGrace:                    5 * time.Minute,
-		kickTimers:                   make(map[string]*time.Timer),
-		afkSweepInterval:             AFKSweepInterval,
+		done:              make(chan struct{}),
+		turnTimeout:       DefaultTurnTimeout,
+		timeBankEnabled:   true,
+		nextHandDelay:     NextHandDelay,
+		runoutStreetDelay: RunoutStreetDelay,
+		disconnectedSince: make(map[string]time.Time),
+		activeConns:       make(map[string]map[string]struct{}),
+		kickGrace:         5 * time.Minute,
+		kickTimers:        make(map[string]*time.Timer),
+		afkSweepInterval:  AFKSweepInterval,
 	}
 	a.equityEnabled.Store(true)
 	a.armAFKSweepTimer()
@@ -1095,7 +1091,6 @@ func (a *Actor) handleReconnect(ctx context.Context, c ReconnectCmd) error {
 // reports whether anything was actually cleared, so callers only broadcast
 // (or otherwise react) when this genuinely changed something.
 func (a *Actor) clearDisconnectMark(playerID string) bool {
-	delete(a.consecutiveDisconnectedHands, playerID)
 	if t, armed := a.kickTimers[playerID]; armed {
 		t.Stop()
 		delete(a.kickTimers, playerID)
@@ -1387,37 +1382,39 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 	if a.cached.CurrentPlayerIDForActor() != c.PlayerID {
 		return nil
 	}
-	if since, disconnected := a.disconnectedSince[c.PlayerID]; disconnected {
-		a.consecutiveDisconnectedHands[c.PlayerID]++ // safe: runs in Run goroutine
-		if timeNowFunc().Sub(since) >= a.disconnectGrace || a.consecutiveDisconnectedHands[c.PlayerID] >= 3 {
-			// SitOutForActor folds the player out of the live round itself
-			// (not just a bare state flip), so the round can actually
-			// complete and, if this was the last decision pending, advance
-			// the hand to Complete — broadcastAll's notifyHandComplete call
-			// picks that up same as a normal Act would.
-			a.consumeTimeBank(c.PlayerID)
-			a.cached.SitOutForActor(c.PlayerID)
-			if err := a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "disconnect_sit_out"}); err != nil {
-				if !errors.Is(err, tablestore.ErrVersionConflict) {
-					return err
-				}
-				// a.cached now holds an uncommitted SitOutForActor mutation
-				// layered on stale state -- discard it by reloading fresh,
-				// authoritative state instead of leaving this fabricated,
-				// never-persisted table in memory for whatever this actor
-				// does next (e.g. a later kick-timeout removal computing
-				// handInProgress/dealtIntoCurrentHand off of it, which could
-				// wrongly allow removing a player still dealt into the REAL
-				// hand and leave a stale handOrder entry for a since-removed
-				// player — runShowdown's playerByID lookup on that entry
-				// would then panic).
-				if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
-					return reloadErr
-				}
+	// A disconnected player who lets the clock run out is out of the game
+	// immediately: auto-checking on their behalf keeps them in every street of
+	// every hand at the full turn timeout, which stalls the whole table (worst
+	// at a checked-down table, where nothing ever folds them out). SitOutForActor
+	// folds them out of the live round itself (not just a bare state flip), so
+	// the round can actually complete and, if this was the last decision
+	// pending, advance the hand to Complete — broadcastAll's notifyHandComplete
+	// call picks that up same as a normal Act would. They keep their seat and
+	// chips until the kick timer, and reconnecting plus "sit in" brings them
+	// straight back.
+	if _, disconnected := a.disconnectedSince[c.PlayerID]; disconnected {
+		a.consumeTimeBank(c.PlayerID)
+		a.cached.SitOutForActor(c.PlayerID)
+		if err := a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "disconnect_sit_out"}); err != nil {
+			if !errors.Is(err, tablestore.ErrVersionConflict) {
+				return err
 			}
-			a.broadcastAll()
-			return nil
+			// a.cached now holds an uncommitted SitOutForActor mutation
+			// layered on stale state -- discard it by reloading fresh,
+			// authoritative state instead of leaving this fabricated,
+			// never-persisted table in memory for whatever this actor
+			// does next (e.g. a later kick-timeout removal computing
+			// handInProgress/dealtIntoCurrentHand off of it, which could
+			// wrongly allow removing a player still dealt into the REAL
+			// hand and leave a stale handOrder entry for a since-removed
+			// player — runShowdown's playerByID lookup on that entry
+			// would then panic).
+			if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+				return reloadErr
+			}
 		}
+		a.broadcastAll()
+		return nil
 	}
 	timeoutActionID := fmt.Sprintf("turn-timeout-%s-%d", c.PlayerID, a.version)
 	timeoutAction := betting.ActionFold
@@ -1523,7 +1520,6 @@ func (a *Actor) handleLeave(ctx context.Context, c LeaveCmd) error {
 		return err
 	}
 	delete(a.disconnectedSince, c.PlayerID)
-	delete(a.consecutiveDisconnectedHands, c.PlayerID)
 	delete(a.activeConns, c.PlayerID)
 	if t, armed := a.kickTimers[c.PlayerID]; armed {
 		t.Stop()
@@ -1941,15 +1937,6 @@ func (a *Actor) SetTurnTimeoutForActor(d time.Duration) {
 		if d < 5*time.Second {
 			a.timeBankEnabled = false
 		}
-	}
-}
-
-// SetDisconnectGraceForActor overrides how long a disconnected player is
-// given before their turn-timeout auto-fold escalates to auto-sit-out
-// (handleTurnTimeout). Test-only knob — no room config exposes this today.
-func (a *Actor) SetDisconnectGraceForActor(d time.Duration) {
-	if d > 0 {
-		a.disconnectGrace = d
 	}
 }
 

@@ -8,6 +8,7 @@ import {getHandShare} from '@/lib/api/handShares';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {HandReplayer} from '@/components/hands/HandReplayer';
 import {Button} from '@/components/ui/button';
+import {LoadingRegion, Skeleton} from '@/components/ui/skeleton';
 import type {HandItem} from '@/lib/api/player';
 
 function SharedHandContent() {
@@ -22,8 +23,13 @@ function SharedHandContent() {
     <Button render={<Link href="/"/>}>Conhecer o CTech Poker</Button>
   </section>;
   
-  if (share.isLoading || !share.data) return <section className="public-hand loading"><span className="loader"/>Carregando
-    mão compartilhada…</section>;
+  if (share.isLoading || !share.data) return <section className="public-hand">
+    <LoadingRegion label="Carregando mão compartilhada…" className="skeleton-panel">
+      <Skeleton style={{height: '26px', width: 'min(240px, 70%)'}}/>
+      <Skeleton style={{height: '104px'}}/>
+      <Skeleton style={{height: '170px'}}/>
+    </LoadingRegion>
+  </section>;
   
   const item = share.data;
   const hand: HandItem = {
@@ -66,7 +72,12 @@ function SharedHandContent() {
 export default function SharedHandPage() {
   return <main className="public-hand-page">
     <nav><Link href="/" className="brand"><span className="brand-mark"><Club/></span>CTech <b>Poker</b></Link></nav>
-    <Suspense fallback={<section className="public-hand loading"><span className="loader"/>Carregando…</section>}>
+    <Suspense fallback={<section className="public-hand">
+      <LoadingRegion label="Carregando…" className="skeleton-panel">
+        <Skeleton style={{height: '26px', width: 'min(240px, 70%)'}}/>
+        <Skeleton style={{height: '104px'}}/>
+      </LoadingRegion>
+    </section>}>
       <SharedHandContent/>
     </Suspense>
   </main>;

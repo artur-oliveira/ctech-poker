@@ -20,5 +20,7 @@ export function HandExportButton({hand, actions, viewerId}: {
     URL.revokeObjectURL(url);
   }
   
-  return <Button type="button" variant="outline" onClick={download}><Download/> Exportar .txt</Button>;
+  // Icon-only: exporting is a utility beside the hand, not one of its headlines.
+  return <Button type="button" variant="outline" size="icon" onClick={download}
+                 aria-label="Exportar .txt" title="Exportar .txt"><Download/></Button>;
 }

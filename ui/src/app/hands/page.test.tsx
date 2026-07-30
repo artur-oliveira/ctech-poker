@@ -73,7 +73,9 @@ describe('hands list page', () => {
     expect(screen.getByText('+800')).toBeInTheDocument();
     expect(screen.getByText(/67%/)).toHaveTextContent('67% (2V / 1D)');
     expect(screen.getByText(/Royal flush/)).toBeInTheDocument();
-    expect(screen.getAllByTestId('card')).toHaveLength(9);
+    // 3 hole cards in the fixtures + 5 board positions per row: undealt board
+    // positions now render a card back instead of an empty outline.
+    expect(screen.getAllByTestId('card')).toHaveLength(3 + 15);
     expect(screen.getByRole('link', {name: /won/})).toHaveAttribute(
       'href', '/hands/history?table_id=table-one&hand_id=h1&mode=sandbox'
     );

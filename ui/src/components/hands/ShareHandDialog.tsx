@@ -43,8 +43,9 @@ export function ShareHandDialog({handId, outcome, mode = 'sandbox'}: {
   }
   
   return <>
-    <Button type="button" variant="outline" onClick={() => setOpen(true)}>
-      <Share2 aria-hidden="true"/> Compartilhar
+    <Button type="button" variant="outline" size="icon" onClick={() => setOpen(true)}
+            aria-label="Compartilhar" title="Compartilhar esta mão">
+      <Share2 aria-hidden="true"/>
     </Button>
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="share-hand-dialog">

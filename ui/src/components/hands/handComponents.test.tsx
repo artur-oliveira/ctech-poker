@@ -63,8 +63,26 @@ describe('hand history components', () => {
       {...actions[0], seq: 9, action: 'future_action' as HandHistoryAction['action'], amount: 0, timestamp: 0},
     ]} resolveName={id => id === 'viewer' ? 'Você' : id}/>);
     expect(screen.getByText('Call')).toBeInTheDocument();
-    expect(screen.getByText('future_action')).toBeInTheDocument();
+    // Unknown keys degrade to a humanized form rather than raw snake_case.
+    expect(screen.getByText('future action')).toBeInTheDocument();
     expect(screen.getByText('50')).toBeInTheDocument();
+  });
+
+  test('timeline translates the social actions and shows the reaction emoji', () => {
+    render(<ActionTimeline actions={[
+      {seq: 1, player_id: 'viewer', action: 'reaction', amount: 0, timestamp: 0, reaction_id: 'clap'},
+      {
+        seq: 2, player_id: 'viewer', action: 'reaction', amount: 0, timestamp: 0,
+        reaction_id: 'tomato', target_player_id: 'rival'
+      },
+      {seq: 3, player_id: 'viewer', action: 'chat', amount: 0, timestamp: 0},
+      {seq: 4, player_id: 'viewer', action: 'set_identity', amount: 0, timestamp: 0},
+    ]} resolveName={id => id === 'viewer' ? 'Você' : 'Rival'}/>);
+    expect(screen.getByRole('img', {name: 'Aplausos'})).toHaveTextContent('👏');
+    expect(screen.getByRole('img', {name: 'Jogar tomate'})).toBeInTheDocument();
+    expect(screen.getByText(/para Rival/)).toBeInTheDocument();
+    expect(screen.getByText('Falou no chat')).toBeInTheDocument();
+    expect(screen.getByText('Atualizou o perfil')).toBeInTheDocument();
   });
   
   test.each(['won', 'lost', 'tied'] as const)('renders %s outcome badge', outcome => {
@@ -72,6 +90,25 @@ describe('hand history components', () => {
     expect(screen.getByText(outcome === 'won' ? 'Vitória' : outcome === 'lost' ? 'Derrota' : 'Empate')).toBeInTheDocument();
   });
   
+  test('replay translates frameless system actions and shows reactions on their beat', async () => {
+    const user = userEvent.setup();
+    render(<HandReplayer hand={hand} viewerId="viewer" actions={[
+      // A reaction has no frame of its own, so it must attach to the action it
+      // followed rather than disappearing from the replay entirely.
+      {...actions[0], action: 'join', amount: 0},
+      {seq: 4, player_id: 'p2', action: 'reaction', amount: 0, timestamp: 1500, reaction_id: 'clap'},
+      actions[1],
+      {seq: 5, player_id: 'p2', action: 'reaction', amount: 0, timestamp: 2500, reaction_id: 'tomato'},
+    ]}/>);
+    expect(screen.getByText('entrou na mesa')).toBeInTheDocument();
+    expect(screen.getByText('👏')).toBeInTheDocument();
+    expect(screen.getByText(/Bia · Aplausos/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', {name: 'Próxima ação'}));
+    expect(screen.queryByText('👏')).not.toBeInTheDocument();
+    expect(screen.getByText('🍅')).toBeInTheDocument();
+  });
+
   test('shows an explicit fallback when old hands have no replay frames', () => {
     render(<HandReplayer hand={hand} actions={[]} viewerId="viewer"/>);
     expect(screen.getByText(/antes dos frames de replay/)).toBeInTheDocument();

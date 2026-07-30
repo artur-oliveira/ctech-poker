@@ -1,6 +1,6 @@
 import {act, renderHook} from '@testing-library/react';
 import {describe, expect, test} from 'vitest';
-import {achievementDescription, achievementExample, achievementLabel} from './achievements';
+import {achievementDescription, achievementExample, achievementLabel, achievementWalletMode} from './achievements';
 import {achievementProgress} from './api/achievements';
 import {cardLabel, cardPath} from './cards';
 import {chipTier} from './chips';
@@ -20,7 +20,33 @@ describe('shared presentation contracts', () => {
     expect(achievementExample('win_category_straight_flush')).toHaveLength(5);
     expect(achievementExample('unknown')).toEqual([]);
   });
-  
+
+  // Mirrors api/internal/achievements/catalog.go. The point of duplicating the
+  // keys here is to fail loudly the next time the backend grows the catalog and
+  // the copy is not written, instead of shipping a raw snake_case key on screen.
+  const BACKEND_KEYS = [
+    'wins', 'hands_played', 'comeback', 'bluff', 'survivor', 'looser', 'fallen_king', 'almost_winner',
+    'tied', 'bad_beat', 'cooler', 'cracked_aces', 'giant_slayer', 'showdown_warrior', 'all_in',
+    'real_money_earned', 'sandbox_chips_earned', 'won_with_pocket_pair', 'won_full_table', 'won_heads_up',
+    'lost_straight_flush_to_royal', 'first_hand_allin_win', 'beat_pocket_aces', 'beat_trips_or_better',
+    'three_bet_won_no_showdown', 'folded_streak', 'four_to_royal_missed', 'four_to_straight_flush_missed',
+    'paid_river_draw_missed', 'lost_river_after_leading_turn', 'won_runner_runner', 'won_with_nuts',
+    'same_pocket_pair_streak',
+    ...['high_card', 'pair', 'two_pair', 'three_of_a_kind', 'straight', 'flush', 'full_house',
+      'four_of_a_kind', 'straight_flush', 'royal_flush'].map(c => `win_category_${c}`)
+  ];
+
+  test.each(BACKEND_KEYS)('%s has a written label and description', key => {
+    expect(achievementLabel(key)).not.toBe(key.replaceAll('_', ' '));
+    expect(achievementDescription(key)).not.toBe('');
+  });
+
+  test('the earned counters are scoped to the wallet that can produce them', () => {
+    expect(achievementWalletMode('real_money_earned')).toBe('real');
+    expect(achievementWalletMode('sandbox_chips_earned')).toBe('sandbox');
+    expect(achievementWalletMode('wins')).toBeUndefined();
+  });
+
   test('achievement progress is independent of tier order and detects max', () => {
     const tiers = [{stars: 3, threshold: 10}, {stars: 1, threshold: 1}, {stars: 2, threshold: 5}];
     expect(achievementProgress(tiers, 6)).toEqual({

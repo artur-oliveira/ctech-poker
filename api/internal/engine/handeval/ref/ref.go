@@ -2,9 +2,15 @@
 //
 // It is the original combinatorial implementation that handeval used before
 // the perfect-hash tables replaced it. It is kept as the single source of
-// truth for two consumers only — the table generator (handeval/gen) and the
-// differential tests — so the canonical 7462-way hand ordering is defined in
-// exactly one place. It is never linked into the server binary.
+// truth for the canonical hand ordering, which is defined here in exactly one
+// place: the table generator (handeval/gen) and the differential tests both
+// read it from here.
+//
+// Showdowns must always use handeval — this evaluator is orders of magnitude
+// slower and its Score encoding is not the canonical 7462-way one. The one
+// runtime caller is hand.partialCategory, which needs the best hand out of 5
+// or 6 cards (a count the 7-card tables cannot index) and uses only the
+// Category, never the Score.
 package ref
 
 import (

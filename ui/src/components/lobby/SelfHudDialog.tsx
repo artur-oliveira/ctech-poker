@@ -6,6 +6,7 @@ import {PlaystyleBadges} from '@/components/PlaystyleBadges';
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle} from '@/components/ui/dialog';
 import {getMyPokerStats, type PokerStats} from '@/lib/api/pokerStats';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
+import {SkeletonList} from '@/components/ui/skeleton';
 import {useState} from 'react';
 import type {WalletMode} from '@/lib/api/player';
 
@@ -133,7 +134,7 @@ export function SelfHudDialog({open, onOpenChange}: { open: boolean; onOpenChang
       </DialogHeader>
       <CurrencyModeTabs mode={mode} onChange={setMode}/>
       {query.isLoading ?
-        <div className="self-hud-loading"><span className="loader"/><span>Calculando tendências…</span></div> :
+        <SkeletonList label="Calculando tendências…" count={4} height={52} className="skeleton-panel"/> :
         query.data ? <HudContent stats={query.data}/> :
           <div className="self-hud-empty"><b>Não foi possível carregar
             agora.</b><span>Tente novamente em instantes.</span></div>}

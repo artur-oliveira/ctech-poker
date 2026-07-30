@@ -3,14 +3,16 @@ import Link from 'next/link';
 import {Suspense} from 'react';
 import {useSearchParams} from 'next/navigation';
 import {useQuery} from '@tanstack/react-query';
-import {ChevronLeft, Crown, ExternalLink, Play, ShieldCheck} from 'lucide-react';
+import {ChevronLeft, ChevronRight, Crown, Play, ShieldCheck} from 'lucide-react';
 import type {WalletMode} from '@/lib/api/player';
 import {getHand} from '@/lib/api/player';
 import {getHandHistory} from '@/lib/api/table';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
+import {BoardSlots} from '@/components/hands/BoardSlots';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
 import {ActionTimeline} from '@/components/hands/ActionTimeline';
+import {LoadingRegion, Skeleton, SkeletonList} from '@/components/ui/skeleton';
 import {DeckReveal} from '@/components/hands/DeckReveal';
 import {PartialDeckProof} from '@/components/hands/PartialDeckProof';
 import {HandExportButton} from '@/components/hands/HandExportButton';
@@ -53,7 +55,15 @@ function HandHistoryContent() {
     <Link href="/hands"><ChevronLeft/> Voltar para Minhas Mãos</Link>
   </div>;
   
-  if (hand.isLoading) return <div className="loading-screen"><span className="loader"/>Carregando detalhes da mão…
+  // Shaped like the loaded page (tool row, result header, seats, board, timeline)
+  // so nothing jumps when the hand arrives.
+  if (hand.isLoading) return <div className="hand-history shell">
+    <LoadingRegion label="Carregando detalhes da mão…" className="skeleton-panel hand-history-skeleton">
+      <Skeleton style={{height: '20px', width: '190px'}}/>
+      <Skeleton style={{height: '104px'}}/>
+      <Skeleton style={{height: '170px'}}/>
+      <Skeleton style={{height: '140px'}}/>
+    </LoadingRegion>
   </div>;
   
   if (hand.isError || !hand.data) return <div className="hand-history shell">
@@ -72,7 +82,17 @@ function HandHistoryContent() {
   const viewerCategory = categoryFor(h.hole_cards);
   
   return <div className="hand-history shell">
-    <Link href="/hands"><ChevronLeft/> Voltar para Minhas Mãos</Link>
+    {/* Export and share are utilities: they belong on the page's tool row beside
+        the way out, not stacked down the centre line where the result and the
+        winners are what the player came to read. */}
+    <div className="hand-history-topbar">
+      <Link href="/hands"><ChevronLeft/> Voltar para Minhas Mãos</Link>
+      {!history.isLoading && !history.isError &&
+          <div className="hand-history-tools">
+              <HandExportButton hand={h} actions={actions} viewerId={viewerId}/>
+              <ShareHandDialog handId={h.hand_id} outcome={h.outcome} mode={mode}/>
+          </div>}
+    </div>
     <header className="hand-history-header">
       <OutcomeBadge outcome={h.outcome}/>
       <h1>Detalhes da Mão</h1>
@@ -80,26 +100,23 @@ function HandHistoryContent() {
       <span className={`hand-net large ${h.net_change > 0 ? 'gain' : h.net_change < 0 ? 'loss' : 'even'}`}>
         {h.net_change > 0 ? '+' : ''}{h.net_change.toLocaleString('pt-BR')} fichas
       </span>
-      {!history.isLoading && !history.isError &&
-          <div className="hand-history-tools">
-              <HandExportButton hand={h} actions={actions} viewerId={viewerId}/>
-              <ShareHandDialog handId={h.hand_id} outcome={h.outcome} mode={mode}/>
-          </div>}
     </header>
-    
+
     {!history.isLoading && !history.isError && actions.some(action => action.frame) &&
         <div className="hand-replay-launch">
             <div>
                 <Play aria-hidden="true"/>
                 <span>
             <b>Reviva esta mão ação por ação</b>
-            <small>Abre o replayer de mesa interativo em tela cheia.</small>
+            <small>O replayer abre nesta mesma aba; o botão de voltar traz você de volta para cá.</small>
           </span>
             </div>
+            {/* Same tab on purpose: the replayer's own "Voltar para Detalhes da
+                Mão" is a back link, and a new tab left the player with two
+                windows on the same hand and no way back in either. */}
             <Button render={<Link
-              href={`/hands/replay?table_id=${encodeURIComponent(tableId)}&hand_id=${encodeURIComponent(handId)}&mode=${mode}`}
-              target="_blank" rel="noreferrer"/>}>
-                Assistir replay <ExternalLink aria-hidden="true"/>
+              href={`/hands/replay?table_id=${encodeURIComponent(tableId)}&hand_id=${encodeURIComponent(handId)}&mode=${mode}`}/>}>
+                Assistir replay <ChevronRight aria-hidden="true"/>
             </Button>
         </div>}
     
@@ -119,8 +136,12 @@ function HandHistoryContent() {
           <PlayerAvatar name={o.name} avatarUrl={o.avatar_url} size={36}/>
           <b>{o.name || 'Adversário'}</b>
           <div className="hand-history-seat-cards">
-            {o.hole_cards?.length ? o.hole_cards.map((c, i) => <PlayingCard key={i} card={c} index={i} size="hole"/>) :
-              <span className="hand-history-seat-hidden">Cartas não reveladas</span>}
+            {o.hole_cards?.length
+              ? o.hole_cards.map((c, i) => <PlayingCard key={i} card={c} index={i} size="hole"/>)
+              : <><span className="board-slot-undealt" aria-hidden="true">
+                  <PlayingCard index={0} size="hole"/><PlayingCard index={1} size="hole"/>
+                </span>
+                <span className="hand-history-seat-hidden">Cartas não reveladas</span></>}
           </div>
           {category && <small className="hand-category">{category}</small>}
         </article>;
@@ -130,15 +151,14 @@ function HandHistoryContent() {
     <section className="hand-history-board">
       <h2>Board Comunitário</h2>
       <div className="hand-board">
-        {Array.from({length: 5}, (_, i) => h.board?.[i]).map((c, i) => c
-          ? <PlayingCard key={i} card={c} index={i} size="board"/>
-          : <span key={i} className="board-empty-slot large"/>)}
+        <BoardSlots board={h.board}/>
       </div>
     </section>
     
     <section className="hand-history-actions">
       <h2>Histórico de Ações</h2>
-      {history.isLoading ? <div className="lobby-empty"><span className="loader"/>Carregando histórico de ações…</div> :
+      {history.isLoading ?
+        <SkeletonList label="Carregando histórico de ações…" count={5} height={44} className="skeleton-panel"/> :
         history.isError ? <p className="form-error">Não foi possível carregar a sequência de ações desta mão.</p> :
           <ActionTimeline actions={actions} resolveName={resolveName}/>}
     </section>
@@ -159,7 +179,13 @@ function HandHistoryContent() {
 export default function HandHistoryPage() {
   return <TermsGate>
     <main className="app-page">
-      <Suspense fallback={<div className="loading-screen"><span className="loader"/>Carregando mão…</div>}>
+      <Suspense fallback={<div className="hand-history shell">
+        <LoadingRegion label="Carregando mão…" className="skeleton-panel hand-history-skeleton">
+          <Skeleton style={{height: '20px', width: '190px'}}/>
+          <Skeleton style={{height: '104px'}}/>
+          <Skeleton style={{height: '170px'}}/>
+        </LoadingRegion>
+      </div>}>
         <HandHistoryContent/>
       </Suspense>
     </main>

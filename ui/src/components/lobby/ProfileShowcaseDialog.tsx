@@ -18,6 +18,7 @@ import {getAchievementCatalog, getMyAchievements} from '@/lib/api/achievements';
 import {getMe, type PlayerProfile, updateMe} from '@/lib/api/player';
 import {achievementLabel} from '@/lib/achievements';
 import {pushNotification} from '@/lib/notify';
+import {SkeletonList} from '@/components/ui/skeleton';
 
 function ShowcaseEditor({me, onSaved}: { me: PlayerProfile; onSaved: (profile: PlayerProfile) => void }) {
   const [isPublic, setIsPublic] = useState(me.showcase_public);
@@ -64,7 +65,8 @@ function ShowcaseEditor({me, onSaved}: { me: PlayerProfile; onSaved: (profile: P
     <fieldset className="showcase-achievements">
       <legend>Conquistas em destaque <span>{selected.length}/3</span></legend>
       <p>Somente conquistas com progresso podem ser escolhidas.</p>
-      {catalog.isLoading || mine.isLoading ? <span className="loader"/> :
+      {catalog.isLoading || mine.isLoading ?
+        <SkeletonList label="Carregando suas conquistas…" count={3} height={38} className="skeleton-panel"/> :
         catalog.data?.filter(item => (counts.get(item.key) || 0) > 0).map(item => {
           const checked = selected.includes(item.key);
           return <label key={item.key}>

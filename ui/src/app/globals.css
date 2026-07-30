@@ -910,6 +910,9 @@ h1 em {
     max-width: 44ch
 }
 
+/* The spinner survives only where the wait has no shape to promise: the OAuth
+   exchange, the terms gate, and the table socket handshake. Every surface whose
+   layout is already known loads as a skeleton instead (see `.skeleton` below). */
 .loader {
     width: 32px;
     height: 32px;
@@ -917,6 +920,79 @@ h1 em {
     border-top-color: var(--brand-bright);
     border-radius: 50%;
     animation: spin .7s linear infinite
+}
+
+/* Skeleton loading. One primitive: a block tinted a step above its surface,
+   swept by a soft highlight. Sizes come from the caller so each skeleton claims
+   exactly the space its real content will, which is the whole point — no
+   layout shift when the data lands. */
+.skeleton {
+    display: block;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    border-radius: var(--rounded-control);
+    background: var(--white-0c);
+    animation: skeleton-pulse 1.6s var(--ease-out-quart) infinite
+}
+
+.skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, var(--white-1c), transparent);
+    animation: skeleton-sweep 1.6s var(--ease-out-quart) infinite;
+    animation-delay: inherit
+}
+
+@keyframes skeleton-pulse {
+    0%, 100% {
+        background-color: var(--white-0c)
+    }
+    50% {
+        background-color: var(--white-13)
+    }
+}
+
+@keyframes skeleton-sweep {
+    from {
+        transform: translateX(-100%)
+    }
+    to {
+        transform: translateX(100%)
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    /* the global reduce rule freezes the sweep mid-track; settle it into a
+       steady tint so the block still reads as "content pending" */
+    .skeleton {
+        background: var(--white-12)
+    }
+
+    .skeleton::after {
+        display: none
+    }
+}
+
+.skeleton-stat-label {
+    width: 60%;
+    height: 11px;
+    margin-bottom: 10px
+}
+
+.skeleton-stat-value {
+    width: 45%;
+    height: 20px
+}
+
+/* A skeleton region inherits the loaded container's own geometry, so the only
+   thing these rules add is the dashed-panel framing `.lobby-empty` gave the
+   plain-text states they replace. */
+.skeleton-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px
 }
 
 @keyframes board-deal {
@@ -2097,7 +2173,6 @@ h1 em {
 }
 
 .self-hud-notice,
-.self-hud-loading,
 .self-hud-empty {
     color: var(--muted)
 }
@@ -2333,7 +2408,6 @@ h1 em {
     }
 }
 
-.self-hud-loading,
 .self-hud-empty {
     min-height: 180px;
     display: flex;
@@ -4712,11 +4786,9 @@ h1 em {
 }
 
 .public-hand.unavailable,
-.public-hand.loading {
-    align-items: center;
-    justify-content: center;
-    min-height: 70dvh;
-    text-align: center
+.profile-showcase-skeleton {
+    gap: 22px;
+    padding-block: 12px
 }
 
 @media (max-width: 700px) {
@@ -6947,25 +7019,34 @@ h1 em {
     outline-offset: 2px
 }
 
+/* One column per element a row can hold: hole cards, rule, board, hand name,
+   result. Card counts are fixed (2 and 5) so tracks 1 and 3 are the same width
+   on every row, which puts the hand name and the result at the same x down the
+   whole list — the alignment the old flow layout could not hold once a category
+   label changed length. */
 .hand-row-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 12px 20px
+    display: grid;
+    grid-template-columns: auto 1px auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    align-items: end;
+    gap: 8px 18px
 }
 
-.hand-row-cards {
-    display: flex;
-    align-items: flex-end;
-    gap: 16px;
-    flex-wrap: wrap
-}
-
+/* subgrid puts both captions on one line and both card rows on another, even
+   though hole cards (46px) and board cards (95px) are different heights */
 .hand-row-card-group {
-    display: flex;
-    flex-direction: column;
-    gap: 6px
+    display: grid;
+    grid-template-rows: subgrid;
+    grid-row: span 2;
+    align-items: end
+}
+
+.hand-row-sep, .hand-row-category, .hand-row-result {
+    grid-row: span 2
+}
+
+.hand-row-category, .hand-row-result {
+    align-self: center
 }
 
 .hand-row-card-group > small {
@@ -6999,22 +7080,40 @@ h1 em {
     gap: 4px
 }
 
-.board-empty-slot {
-    width: 68px;
-    height: 95px;
-    border-radius: 6px;
-    border: 1px dashed var(--control-border)
+/* A back-facing card that was never dealt: same silhouette as the rest of the
+   board, held back so it reads as "the hand ended here", not "hidden from you". */
+.board-slot-undealt {
+    display: inline-flex;
+    gap: 6px;
+    opacity: .42
 }
 
-.board-empty-slot.large {
-    width: 68px;
-    height: 95px
-}
-
-.hand-row-result {
+.hand-row-category {
     display: flex;
     align-items: center;
+    min-width: 0
+}
+
+.hand-row-category .hand-category {
+    font: 600 var(--font-size-mono) var(--font-sans)
+}
+
+.hand-category.is-unknown {
+    color: var(--muted)
+}
+
+/* Fixed badge track: "Vitória", "Derrota" and "Empate" are different widths, so
+   without it the net amount starts at a different x on every row. */
+.hand-row-result {
+    display: grid;
+    grid-template-columns: minmax(104px, auto) minmax(78px, auto);
+    align-items: center;
+    justify-content: end;
     gap: 14px
+}
+
+.hand-row-result .outcome-badge {
+    justify-self: start
 }
 
 .hand-row-bottom {
@@ -7029,9 +7128,14 @@ h1 em {
 }
 
 .hand-row-seed {
-    font: 600 11px var(--font-mono);
+    font: 600 var(--font-size-compact) var(--font-mono);
     letter-spacing: .04em;
     color: var(--muted)
+}
+
+.hand-row-seed.is-pending {
+    color: var(--muted-rose);
+    opacity: .75
 }
 
 .hand-row-chevron {
@@ -7042,6 +7146,8 @@ h1 em {
 
 .hand-net {
     font: 800 15px var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
     white-space: nowrap
 }
 
@@ -7106,18 +7212,26 @@ h1 em {
     background: var(--surface-control)
 }
 
-@media (max-width: 600px) {
+/* Below the width where five board cards plus a name plus a result still fit,
+   the two card groups keep their row and the name/result drop to full-width rows
+   of their own. The tracks stay shared, so rows still align with each other. */
+@media (max-width: 860px) {
     .hand-row-top {
-        flex-direction: column;
-        align-items: flex-start
+        grid-template-columns: auto 1px minmax(0, 1fr)
+    }
+
+    .hand-row-category, .hand-row-result {
+        grid-column: 1 / -1;
+        grid-row: auto
     }
 
     .hand-row-result {
-        align-self: stretch;
         justify-content: space-between
     }
+}
 
-    .hand-row-board .playing-card.board-card, .board-empty-slot {
+@media (max-width: 600px) {
+    .hand-row-board .playing-card.board-card {
         width: 46px;
         height: 64px
     }
@@ -7129,14 +7243,31 @@ h1 em {
     max-width: 820px
 }
 
-.hand-history > a:first-child {
+.hand-history > a:first-child,
+.hand-history-topbar > a {
     display: flex;
     gap: 7px;
     align-items: center;
     color: var(--neutral-rose-3);
     text-decoration: none;
-    font-size: 14px;
+    font-size: var(--font-size-body)
+}
+
+.hand-history > a:first-child {
     margin-bottom: 30px
+}
+
+.hand-history-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 30px
+}
+
+.hand-history-skeleton {
+    gap: 26px;
+    padding-block: 6px
 }
 
 .hand-history-header {
@@ -7156,8 +7287,8 @@ h1 em {
 
 .hand-history-tools {
     display: flex;
-    justify-content: center;
-    margin-top: 16px
+    gap: 8px;
+    flex: 0 0 auto
 }
 
 .hand-history-players {
@@ -7193,13 +7324,15 @@ h1 em {
 .hand-history-seat-cards {
     display: flex;
     justify-content: center;
+    flex-wrap: wrap;
     gap: 6px
 }
 
 .hand-history-seat-hidden {
+    flex: 0 0 100%;
     color: var(--muted);
-    font-size: 12px;
-    padding-block: 20px
+    font-size: var(--font-size-mono);
+    padding-top: 6px
 }
 
 .hand-history-seat > .hand-category {
@@ -7345,6 +7478,13 @@ h1 em {
     overflow: hidden
 }
 
+.replay-skeleton {
+    gap: 20px;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: max(56px, env(safe-area-inset-top)) 20px 28px
+}
+
 .replay-page > nav {
     position: absolute;
     z-index: 20;
@@ -7417,6 +7557,44 @@ h1 em {
 
 .replay-action b {
     color: var(--paper)
+}
+
+/* Reactions thrown during this beat. They sit under the action line rather than
+   over the felt: in a replay the point is who reacted and when, not reproducing
+   the two-second float the live table already does. */
+.replay-reactions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin: 8px auto 0;
+    padding: 0;
+    list-style: none;
+    animation: replay-action-enter 320ms var(--ease-out-quart)
+}
+
+.replay-reactions li {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 11px 5px 8px;
+    border-radius: var(--rounded-pill);
+    background: var(--surface-seat);
+    border: 1px solid var(--seat-border)
+}
+
+.replay-reactions li > span {
+    font-size: var(--font-size-subtitle);
+    line-height: 1
+}
+
+.replay-reactions li > small {
+    color: var(--muted-rose);
+    font-size: var(--font-size-compact)
+}
+
+.action-row-emoji {
+    font-size: var(--font-size-body)
 }
 
 .replay-action strong {
@@ -7858,9 +8036,11 @@ h1 em {
     font-weight: 600;
 }
 
+/* 150px, not 160px: at 160 four cards plus three 16px gaps overflowed the
+   680px cap by 8px and the fourth card wrapped to a lonely second row. */
 .achievements-stats-bar, .hands-stats-bar {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 16px;
     max-width: 680px;
     margin: 0 auto 32px;

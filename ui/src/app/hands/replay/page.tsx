@@ -5,6 +5,7 @@ import {useSearchParams} from 'next/navigation';
 import {useQuery} from '@tanstack/react-query';
 import {ChevronLeft} from 'lucide-react';
 import {Button} from '@/components/ui/button';
+import {LoadingRegion, Skeleton} from '@/components/ui/skeleton';
 import {HandReplayer} from '@/components/hands/HandReplayer';
 import {TermsGate} from '@/components/TermsGate';
 import type {WalletMode} from '@/lib/api/player';
@@ -34,8 +35,13 @@ function ReplayContent() {
     <Button render={<Link href="/hands"/>}>Minhas Mãos</Button>
   </div>;
   
-  if (hand.isLoading || history.isLoading) return <div className="loading-screen"><span className="loader"/>Preparando a
-    mesa de replay…</div>;
+  if (hand.isLoading || history.isLoading) return <main className="replay-page">
+    <LoadingRegion label="Preparando a mesa de replay…" className="skeleton-panel replay-skeleton">
+      <Skeleton style={{height: '18px', width: '210px'}}/>
+      <Skeleton style={{height: 'min(52vh, 420px)'}}/>
+      <Skeleton style={{height: '46px'}}/>
+    </LoadingRegion>
+  </main>;
   
   if (hand.isError || history.isError || !hand.data) return <div className="replay-page-error">
     <h1>Não foi possível carregar o replay</h1>
@@ -57,7 +63,12 @@ function ReplayContent() {
 
 export default function ReplayPage() {
   return <TermsGate>
-    <Suspense fallback={<div className="loading-screen"><span className="loader"/>Carregando replay…</div>}>
+    <Suspense fallback={<main className="replay-page">
+      <LoadingRegion label="Carregando replay…" className="skeleton-panel replay-skeleton">
+        <Skeleton style={{height: '18px', width: '210px'}}/>
+        <Skeleton style={{height: 'min(52vh, 420px)'}}/>
+      </LoadingRegion>
+    </main>}>
       <ReplayContent/>
     </Suspense>
   </TermsGate>;

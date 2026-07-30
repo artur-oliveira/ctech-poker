@@ -411,14 +411,21 @@ func (t *Table) CurrentPlayerIDForActor() string {
 // never completes, and CurrentPlayerIDForActor never changes, so the
 // universal turn timer's idempotent re-arm treats it as a no-op — the hand
 // wedges permanently). A player already AllIn has no decision left to make
-// and stays AllIn through showdown; Ready is already false by the time a
-// caller reaches here for a voluntary sit-out, which alone excludes them from
-// the next hand via eligibleForNextHand.
+// and stays AllIn through showdown.
+//
+// Ready is cleared here rather than left to the caller: the fold path below
+// leaves State==Folded, and a Folded+Ready seat is eligibleForNextHand — so
+// without this the player is dealt right back into the next hand and burns
+// another full turn timeout, which is exactly what sitting them out is meant
+// to stop. StartHand flips them to SittingOut on the next deal, and a ready
+// toggle (RequestReturnFromSitOut) brings them back paying the same
+// out-of-position big blind as any other returning player.
 func (t *Table) SitOutForActor(playerID string) {
 	p := t.playerByID(playerID)
 	if p == nil {
 		return
 	}
+	p.Ready = false
 	// Once resolution is over, AllIn is only a residue of the finished hand,
 	// not a reason to keep the seat eligible for the next deal.
 	if t.stage == Complete || t.stage == WaitingForPlayers {

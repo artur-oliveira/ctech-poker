@@ -10,16 +10,20 @@ import {
   LogIn,
   LogOut,
   LucideIcon,
+  MessageSquare,
   Pause,
   Play,
   Repeat2,
+  Smile,
   TrendingUp,
   Trophy,
+  UserPen,
   WifiOff,
   X,
 } from 'lucide-react';
 
 import {Action, HandHistoryAction} from '@/lib/api/table';
+import {isTableReaction, TABLE_REACTIONS} from '@/lib/reactions';
 import React from "react";
 
 const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
@@ -37,11 +41,11 @@ const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
     Icon: Play,
   },
   not_ready: {
-    label: 'Sit out',
+    label: 'Não está pronto',
     Icon: Pause,
   },
   sit_out: {
-    label: 'Sit Out',
+    label: 'Fora da rodada',
     Icon: Pause,
   },
   disconnect_sit_out: {
@@ -63,7 +67,7 @@ const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
     Icon: ChevronRight,
   },
   runout_step: {
-    label: 'Runout',
+    label: 'Abriu o board',
     Icon: ArrowRight,
   },
   escalate_blinds: {
@@ -104,7 +108,21 @@ const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
     label: 'Mostrou as cartas',
     Icon: Eye,
   },
-  
+
+  // Mesa social
+  chat: {
+    label: 'Falou no chat',
+    Icon: MessageSquare,
+  },
+  reaction: {
+    label: 'Reagiu',
+    Icon: Smile,
+  },
+  set_identity: {
+    label: 'Atualizou o perfil',
+    Icon: UserPen,
+  },
+
   // Resultado da mão
   won: {
     label: 'Venceu',
@@ -128,14 +146,21 @@ export function ActionTimeline({actions, resolveName}: {
   
   return <ol className="action-timeline">
     {actions.map((a, i) => {
-      const meta = ACTION_META[a.action] || {label: a.action, Icon: HelpCircle};
+      const meta = ACTION_META[a.action] || {label: a.action.replaceAll('_', ' '), Icon: HelpCircle};
       const Icon = meta.Icon;
+      const reaction = a.reaction_id && isTableReaction(a.reaction_id) ? TABLE_REACTIONS[a.reaction_id] : null;
       return <li key={a.seq} className={`action-row action-${a.action}`}
                  style={{'--delay': `${Math.min(i, 12) * 30}ms`} as React.CSSProperties}>
         <span className="action-row-icon" aria-hidden="true"><Icon/></span>
         <span className="action-row-who">{resolveName(a.player_id)}</span>
-        <span className="action-row-what">{meta.label}{a.amount > 0 &&
-            <b>{a.amount.toLocaleString('pt-BR')}</b>}</span>
+        <span className="action-row-what">
+          {meta.label}
+          {reaction && <>
+            {' '}<span className="action-row-emoji" role="img" aria-label={reaction.label}>{reaction.glyph}</span>
+            {a.target_player_id && <> para {resolveName(a.target_player_id)}</>}
+          </>}
+          {a.amount > 0 && <b>{a.amount.toLocaleString('pt-BR')}</b>}
+        </span>
         <span className="action-row-when">{a.timestamp ? formatTime(a.timestamp) : '—'}</span>
       </li>;
     })}

@@ -6,6 +6,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 	"gopkg.aoctech.app/poker/api/internal/engine/handeval"
+	"gopkg.aoctech.app/poker/api/internal/engine/handeval/ref"
 	"gopkg.aoctech.app/poker/api/internal/engine/sidepots"
 )
 
@@ -258,19 +259,31 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 			if t.runItTwice && t.runoutPhase == 2 {
 				evaluationBoard = append(append([]deck.Card(nil), t.board[:t.boardSplitAt]...), t.boardTwo...)
 			}
-			if len(evaluationBoard) == 5 && (p.ID == viewerID || (publicReveal[0] && publicReveal[1])) {
-				var full [7]deck.Card
-				full[0], full[1] = p.HoleCards[0], p.HoleCards[1]
-				copy(full[2:], evaluationBoard)
-				score := handeval.Best7(full)
-				if t.stage == Complete && t.runItTwice && len(t.board) == 5 {
-					copy(full[2:], t.board)
-					if firstScore := handeval.Best7(full); firstScore > score {
-						score = firstScore
+			if p.ID == viewerID || (publicReveal[0] && publicReveal[1]) {
+				if len(evaluationBoard) == 5 {
+					var full [7]deck.Card
+					full[0], full[1] = p.HoleCards[0], p.HoleCards[1]
+					copy(full[2:], evaluationBoard)
+					score := handeval.Best7(full)
+					if t.stage == Complete && t.runItTwice && len(t.board) == 5 {
+						copy(full[2:], t.board)
+						if firstScore := handeval.Best7(full); firstScore > score {
+							score = firstScore
+						}
 					}
+					sv.HandCategory = categoryNames[score.Category()]
+					sv.HandScore = uint32(score)
+				} else if isBettingStage(t.stage) {
+					// Pre-river the hand is still made of fewer than 7 cards,
+					// which the perfect-hash tables cannot index — see
+					// partialCategory. HandScore stays unset: only the 7-card
+					// Score is comparable, and clients decide outcomes with it.
+					// Only live betting stages get this: a hand that ENDED on a
+					// short board (everyone folded) has no made hand worth
+					// naming, and the client reads the absence of a category as
+					// exactly that.
+					sv.HandCategory = categoryNames[partialCategory(p.HoleCards, evaluationBoard)]
 				}
-				sv.HandCategory = categoryNames[score.Category()]
-				sv.HandScore = uint32(score)
 			}
 		}
 		seats = append(seats, sv)
@@ -639,6 +652,28 @@ func (t *Table) potFractionRaiseTo(
 		target = maxRaiseTo
 	}
 	return target
+}
+
+// partialCategory names the best five-card hand a viewer holds before the
+// river, so the client can label it on every street instead of only at
+// showdown. handeval's tables are indexed by 7-card rank multisets and cannot
+// answer for 5 or 6 cards, so this goes through the reference evaluator's
+// combinatorial BestN. Only the Category crosses over: ref.Score is a
+// different encoding from handeval.Score and the two must never be compared
+// (the categories themselves are one enum by construction — ref defines the
+// ordering the tables are generated from). Preflop there is no board and the
+// only made hand two cards can be is a pocket pair.
+func partialCategory(hole [2]deck.Card, board []deck.Card) handeval.Category {
+	if len(board) < 3 {
+		if hole[0].Rank == hole[1].Rank {
+			return handeval.Pair
+		}
+		return handeval.HighCard
+	}
+	cards := make([]deck.Card, 0, 2+len(board))
+	cards = append(cards, hole[0], hole[1])
+	cards = append(cards, board...)
+	return handeval.Category(ref.BestN(cards).Category())
 }
 
 // playerToActForTest returns the ID of whoever must act now — test-only

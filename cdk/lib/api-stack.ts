@@ -69,7 +69,7 @@ interface ApiStackProps extends cdk.StackProps {
   playerHandsTableArn: string;
 }
 
-export const minimumApiCapacity = (environment: Environment) => environment === 'prod' ? 2 : 1;
+export const minimumApiCapacity = (_environment: Environment) => 1;
 
 export class PokerApiStack extends cdk.Stack {
   public readonly asgName: string;

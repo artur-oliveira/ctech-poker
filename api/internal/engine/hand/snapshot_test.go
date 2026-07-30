@@ -6,6 +6,7 @@ import (
 
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/deck"
+	"gopkg.aoctech.app/poker/api/internal/engine/handeval"
 )
 
 func TestViewForHidesOtherHoleCards(t *testing.T) {
@@ -265,6 +266,60 @@ func TestViewForIncludesHandCategoryWhenBoardIsComplete(t *testing.T) {
 	for _, s := range view.Seats {
 		if s.HandCategory == "" || s.HandScore == 0 {
 			t.Fatalf("expected an authoritative hand category and score for seat %s once the board is complete and cards are revealed", s.PlayerID)
+		}
+	}
+}
+
+func TestPartialCategoryNamesTheMadeHandBeforeTheRiver(t *testing.T) {
+	card := func(r deck.Rank, s deck.Suit) deck.Card { return deck.Card{Rank: r, Suit: s} }
+	cases := []struct {
+		name  string
+		hole  [2]deck.Card
+		board []deck.Card
+		want  handeval.Category
+	}{
+		{"preflop pocket pair", [2]deck.Card{card(deck.Ace, deck.Spades), card(deck.Ace, deck.Hearts)}, nil, handeval.Pair},
+		{"preflop unpaired", [2]deck.Card{card(deck.Ace, deck.Spades), card(deck.Seven, deck.Hearts)}, nil, handeval.HighCard},
+		{"flop trips", [2]deck.Card{card(deck.Ace, deck.Spades), card(deck.Ace, deck.Hearts)},
+			[]deck.Card{card(deck.Ace, deck.Clubs), card(deck.Seven, deck.Clubs), card(deck.Two, deck.Diamonds)}, handeval.ThreeOfAKind},
+		{"turn straight", [2]deck.Card{card(deck.Two, deck.Hearts), card(deck.Three, deck.Diamonds)},
+			[]deck.Card{card(deck.Four, deck.Spades), card(deck.Five, deck.Clubs), card(deck.Nine, deck.Hearts), card(deck.Six, deck.Diamonds)}, handeval.Straight},
+		{"turn flush beats the pair", [2]deck.Card{card(deck.Two, deck.Clubs), card(deck.Three, deck.Clubs)},
+			[]deck.Card{card(deck.Seven, deck.Clubs), card(deck.Nine, deck.Clubs), card(deck.King, deck.Clubs), card(deck.Three, deck.Diamonds)}, handeval.Flush},
+	}
+	for _, tc := range cases {
+		if got := partialCategory(tc.hole, tc.board); got != tc.want {
+			t.Errorf("%s: partialCategory = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestViewForIncludesHandCategoryOnEveryStreetButOnlyScoresTheRiver(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	_ = table.StartHand()
+	for _, stage := range []Stage{PreFlop, Flop, Turn} {
+		for table.Stage() != stage {
+			toAct := table.playerToActForTest()
+			if err := table.Act(toAct, betting.ActionCall, 0); err != nil {
+				_ = table.Act(toAct, betting.ActionCheck, 0)
+			}
+		}
+		for _, s := range table.ViewFor("p1").Seats {
+			switch s.PlayerID {
+			case "p1":
+				if s.HandCategory == "" {
+					t.Fatalf("%v: viewer has no hand category", stage)
+				}
+				if s.HandScore != 0 {
+					t.Fatalf("%v: hand score %d leaked a non-canonical (pre-river) score", stage, s.HandScore)
+				}
+			default:
+				if s.HandCategory != "" {
+					t.Fatalf("%v: opponent hand category %q leaked to the viewer", stage, s.HandCategory)
+				}
+			}
 		}
 	}
 }

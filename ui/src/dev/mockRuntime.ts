@@ -172,8 +172,27 @@ function replayActions(
   });
 }
 
+// Reactions carry no replay frame in prod either, so they are spliced in after
+// the frames are built — the replayer buckets them onto the action they follow.
+function withReactions(
+  built: HandHistoryAction[],
+  reactions: { after: number; player_id: string; reaction_id: string; target_player_id?: string }[]
+): HandHistoryAction[] {
+  const out = [...built];
+  for (const [i, reaction] of reactions.entries()) {
+    const anchor = out.find(action => action.seq === reaction.after);
+    if (!anchor) continue;
+    out.splice(out.indexOf(anchor) + 1, 0, {
+      seq: 1000 + i, player_id: reaction.player_id, action: 'reaction', amount: 0,
+      reaction_id: reaction.reaction_id, target_player_id: reaction.target_player_id,
+      timestamp: anchor.timestamp + 1200
+    });
+  }
+  return out;
+}
+
 const mockHandActions: Record<string, HandHistoryAction[]> = {
-  hand_0003: replayActions(mockHands[0], [2, 5, 7], [
+  hand_0003: withReactions(replayActions(mockHands[0], [2, 5, 7], [
     {seq: 1, player_id: 'bia_sp', action: 'raise', amount: 150},
     {seq: 2, player_id: MOCK_PLAYER_ID, action: 'call', amount: 150},
     {seq: 3, player_id: 'bia_sp', action: 'check', amount: 0},
@@ -182,6 +201,10 @@ const mockHandActions: Record<string, HandHistoryAction[]> = {
     {seq: 6, player_id: 'bia_sp', action: 'check', amount: 0},
     {seq: 7, player_id: MOCK_PLAYER_ID, action: 'raise', amount: 1200},
     {seq: 8, player_id: 'bia_sp', action: 'fold', amount: 0}
+  ]), [
+    {after: 4, player_id: 'bia_sp', reaction_id: 'wow'},
+    {after: 7, player_id: MOCK_PLAYER_ID, reaction_id: 'chip', target_player_id: 'bia_sp'},
+    {after: 8, player_id: 'bia_sp', reaction_id: 'cry'}
   ]),
   hand_0002: replayActions(mockHands[1], [2, 5, 7], [
     {seq: 1, player_id: MOCK_PLAYER_ID, action: 'raise', amount: 100},
@@ -580,7 +603,9 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       created_at: Date.now(), expires_at: Date.now() + 7 * 86_400_000
     }, config);
   }
-  const handMatch = method === 'GET' ? path.match(/^\/v1\.0\/players\/me\/hands\/([^/]+)$/) : null;
+  // getHand() calls the singular `/hand/{id}`; matching only the plural made
+  // every /hands/history open on the error boundary in mock mode.
+  const handMatch = method === 'GET' ? path.match(/^\/v1\.0\/players\/me\/hands?\/([^/]+)$/) : null;
   if (handMatch) {
     const hand = mockHands.find(h => h.hand_id === handMatch[1]);
     if (!hand) fail(404, 'hand not found', config);

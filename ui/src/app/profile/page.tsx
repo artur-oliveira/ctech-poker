@@ -12,6 +12,7 @@ import {useOptionalSession} from "@/lib/auth/session";
 import {ProfileMenu} from "@/components/lobby/ProfileMenu";
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {PlaystyleBadges} from '@/components/PlaystyleBadges';
+import {LoadingRegion, Skeleton} from '@/components/ui/skeleton';
 
 function ProfileContent() {
   const params = useSearchParams();
@@ -38,7 +39,12 @@ function ProfileContent() {
     <section className="profile-showcase shell">
       {authed && <Link href="/lobby"><ChevronLeft/> Lobby</Link>}
       {showcase.isLoading ?
-        <div className="lobby-empty"><span className="loader"/>Carregando vitrine do jogador…</div> :
+        <LoadingRegion label="Carregando vitrine do jogador…" className="skeleton-panel profile-showcase-skeleton">
+          <Skeleton style={{height: '68px', width: '68px', borderRadius: '50%'}}/>
+          <Skeleton style={{height: '26px', width: 'min(260px, 70%)'}}/>
+          <Skeleton style={{height: '150px'}}/>
+          <Skeleton style={{height: '150px'}}/>
+        </LoadingRegion> :
         showcase.isError || !showcase.data ? <div className="lobby-empty">
           <Sparkles aria-hidden="true"/>
           <h1>Vitrine indisponível</h1>
@@ -88,7 +94,15 @@ function ProfileContent() {
 }
 
 export default function ProfilePage() {
-  return <Suspense fallback={<main className="loading-screen"><span className="loader"/>Carregando perfil…</main>}>
+  return <Suspense fallback={<main className="app-page">
+    <section className="profile-showcase shell">
+      <LoadingRegion label="Carregando perfil…" className="skeleton-panel profile-showcase-skeleton">
+        <Skeleton style={{height: '68px', width: '68px', borderRadius: '50%'}}/>
+        <Skeleton style={{height: '26px', width: 'min(260px, 70%)'}}/>
+        <Skeleton style={{height: '150px'}}/>
+      </LoadingRegion>
+    </section>
+  </main>}>
     <ProfileContent/>
   </Suspense>;
 }

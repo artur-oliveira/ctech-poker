@@ -365,6 +365,16 @@ func TestSitOutForActorFoldsTheCurrentPlayerInsteadOfWedgingTheRound(t *testing.
 	if table.Payouts()[other] == 0 {
 		t.Fatalf("the player who did not sit out must win the pot uncontested, got payouts %+v", table.Payouts())
 	}
+	// Folded is a state the next deal resets, so the sit-out only sticks if
+	// Ready was cleared too — otherwise the player (typically a disconnected
+	// one the turn timer sat out) is dealt right back in and stalls the table
+	// again on the very next hand.
+	if p := table.playerByID(current); p.Ready {
+		t.Fatal("a sat-out player must not stay ready for the next hand")
+	}
+	if err := table.StartHand(); err == nil {
+		t.Fatal("expected StartHand to reject: only one player is left ready")
+	}
 }
 
 func TestReadyGateBlocksHandStartWithFewerThanTwoReady(t *testing.T) {

@@ -8,6 +8,7 @@ import {getViewerId, playerName} from '@/lib/utils';
 import {ProfileMenu} from "@/components/lobby/ProfileMenu";
 import {useOptionalSession} from "@/lib/auth/session";
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
+import {SkeletonList} from '@/components/ui/skeleton';
 import type {WalletMode} from '@/lib/api/player';
 
 export default function Ranking() {
@@ -58,7 +59,8 @@ export default function Ranking() {
           </div>
         )}
         
-        {isLoading ? <div className="lobby-empty"><span className="loader"/>Buscando o ranking da comunidade…</div> :
+        {isLoading ?
+          <SkeletonList label="Buscando o ranking da comunidade…" count={6} height={62} className="ranking-list skeleton-panel"/> :
           isError ? <div className="lobby-empty">Não foi possível carregar o ranking agora.
               <button type="button" className="link-retry" onClick={() => void refetch()}>Tentar novamente</button>
             </div> :

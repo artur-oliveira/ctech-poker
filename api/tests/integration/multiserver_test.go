@@ -541,10 +541,10 @@ func TestAutoFoldOnTurnTimeoutAcrossServers(t *testing.T) {
 // player's WS connection (server B), while the other server (A) only ever
 // observes the effect through DynamoDB. This is the "kickout" the user asked
 // for: a genuinely-gone player's seat is freed and their stack cashed out,
-// with no action required from the other server at all. disconnectGrace and
-// kickGrace are both shortened (SetDisconnectGraceForActor/
-// SetKickGraceForActor -- test-only knobs, no room config exposes them
-// today) so the test doesn't wait out the real 45s/5min production defaults.
+// with no action required from the other server at all. turnTimeout and
+// kickGrace are both shortened (SetTurnTimeoutForActor/SetKickGraceForActor
+// -- test-only knobs, no room config exposes them today) so the test doesn't
+// wait out the real 15s/5min production defaults.
 func TestDisconnectKickRemovesSeatAcrossServers(t *testing.T) {
 	db := testDynamoClient(t)
 	store := tablestore.NewStore(db, "flow_test")
@@ -565,13 +565,13 @@ func TestDisconnectKickRemovesSeatAcrossServers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("server B: acquire actor: %v", err)
 	}
-	// Ordering matches production: turnTimeout+disconnectGrace must clear
-	// (folding p2 out of any live hand into SittingOut) well before kickGrace
-	// fires, or handleKickTimeout's removal would race a hand p2 is still
-	// dealt into (RemovePlayerForActor rejects that -- see its doc comment).
+	// Ordering matches production: the first turn timeout p2 misses while
+	// disconnected must sit them out (folding them out of any live hand) well
+	// before kickGrace fires, or handleKickTimeout's removal would race a hand
+	// p2 is still dealt into (RemovePlayerForActor rejects that -- see its doc
+	// comment).
 	actorA.SetTurnTimeoutForActor(1 * time.Second)
 	actorB.SetTurnTimeoutForActor(1 * time.Second)
-	actorB.SetDisconnectGraceForActor(1 * time.Second)
 	actorB.SetKickGraceForActor(4 * time.Second)
 
 	if err := actorA.Dispatch(table.ReadyCmd{PlayerID: "p1", Ready: true, Reply: make(chan error, 1)}); err != nil {

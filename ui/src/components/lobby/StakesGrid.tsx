@@ -7,6 +7,7 @@ import {Button} from '@/components/ui/button';
 import {createRoom, listRooms, listStakes} from '@/lib/api/rooms';
 import {pushNotification} from '@/lib/notify';
 import {useLobbyRealtime} from '@/lib/hooks/useLobbyRealtime';
+import {SkeletonList} from '@/components/ui/skeleton';
 
 const MAX_SEATS_OPTIONS = [[2, 'HEADS-UP'], [6, '6-MAX'], [9, 'FULL-RING']] as const;
 
@@ -59,10 +60,7 @@ export function StakesGrid() {
   }
   
   if (stakesLoading || roomsLoading) return (
-    <div className="lobby-empty">
-      <span className="loader"/>
-      Buscando mesas…
-    </div>
+    <SkeletonList label="Buscando mesas…" count={3} height={128} className="skeleton-panel"/>
   );
   if (stakesError || roomsError) return (
     <div className="lobby-empty" role="alert">

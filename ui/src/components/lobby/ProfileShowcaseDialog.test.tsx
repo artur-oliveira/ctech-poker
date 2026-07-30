@@ -116,10 +116,11 @@ describe('ProfileShowcaseDialog', () => {
     expect(mocks.notify).toHaveBeenCalledWith('Vitrine do perfil atualizada.', 'info');
   });
   
-  test('shows a loader while achievement sources are unresolved', () => {
+  test('shows a skeleton while achievement sources are unresolved', () => {
     mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) =>
       queryKey[0] === 'player' ? {data: me} : {isLoading: true});
     render(<ProfileShowcaseDialog open onOpenChange={vi.fn()}/>);
-    expect(document.querySelector('.loader')).toBeInTheDocument();
+    expect(screen.getByText('Carregando suas conquistas…')).toBeInTheDocument();
+    expect(document.querySelectorAll('.skeleton')).toHaveLength(3);
   });
 });

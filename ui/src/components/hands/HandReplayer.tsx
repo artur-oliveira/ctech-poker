@@ -4,8 +4,9 @@ import {ChevronLeft, ChevronRight, Pause, Play, RotateCcw} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {TableStage} from '@/components/table/TableStage';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
-import type {HandHistoryAction, TableSnapshot} from '@/lib/api/table';
+import type {Action, HandHistoryAction, TableSnapshot} from '@/lib/api/table';
 import type {HandItem} from '@/lib/api/player';
+import {isTableReaction, TABLE_REACTIONS} from '@/lib/reactions';
 import {playerName} from '@/lib/utils';
 
 const STAGE_LABELS: Record<string, string> = {
@@ -13,11 +14,20 @@ const STAGE_LABELS: Record<string, string> = {
   turn: 'Turn', river: 'River', showdown: 'Showdown', complete: 'Resultado'
 };
 
-const ACTION_LABELS: Record<string, string> = {
+// Every action the server can log, phrased as the predicate of "<player> …".
+// Missing entries used to fall through to the raw snake_case key, which is how
+// join/leave/next_hand/blind actions reached the screen untranslated.
+const ACTION_LABELS: Record<Action, string> = {
   check: 'deu check', fold: 'foldou', call: 'pagou', bet: 'apostou',
   raise: 'aumentou para', all_in: 'foi all-in com', won: 'venceu',
-  tie: 'empatou', show_cards: 'mostrou cartas', runout_step: 'abriu o board',
-  set_run_it_twice: 'ajustou a preferência de rodar duas vezes'
+  tie: 'empatou', show_cards: 'mostrou as cartas', runout_step: 'abriu o board',
+  set_run_it_twice: 'ajustou a preferência de rodar duas vezes',
+  join: 'entrou na mesa', leave: 'saiu da mesa',
+  ready: 'ficou pronto para jogar', not_ready: 'não está pronto',
+  sit_out: 'ficou fora da rodada', disconnect_sit_out: 'caiu a conexão e ficou fora',
+  keep_seat: 'confirmou presença na mesa', next_hand: 'começou a próxima mão',
+  escalate_blinds: 'viu os blinds aumentarem', post_big_blind: 'postou o big blind',
+  chat: 'falou no chat', reaction: 'reagiu', set_identity: 'atualizou o perfil'
 };
 
 // Matches .board-card-reveal's animation in globals.css: each new card
@@ -54,6 +64,23 @@ export function HandReplayer({
     }
     return filteredActions;
   }, [actions]);
+  // Reactions are cosmetic, so the server never attaches a replay frame to them
+  // and the stepper above skips them entirely. Bucket each one under the frame
+  // it followed, and the emojis reappear at the beat where they were thrown.
+  const reactionsByStep = useMemo(() => {
+    const byStep = new Map<number, HandHistoryAction[]>();
+    let step = actions.find(action => action.frame)?.seq;
+    if (step === undefined) return byStep;
+    for (const action of actions) {
+      if (action.frame) {
+        step = action.seq;
+        continue;
+      }
+      if (action.action !== 'reaction' || !action.reaction_id || !isTableReaction(action.reaction_id)) continue;
+      byStep.set(step, [...(byStep.get(step) || []), action]);
+    }
+    return byStep;
+  }, [actions]);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -89,6 +116,7 @@ export function HandReplayer({
     .filter(action => action.action === 'show_cards').map(action => action.player_id));
   const showFinalCards = frame.stage === 'complete' || frame.stage === 'showdown';
   const actionLabel = ACTION_LABELS[current.action] || current.action.replaceAll('_', ' ');
+  const stepReactions = reactionsByStep.get(current.seq) || [];
   const actor = playerName(current.player_id, viewerId, opponents.get(current.player_id)?.name ||
     frame.seats?.find(seat => seat.player_id === current.player_id)?.name);
   
@@ -138,6 +166,17 @@ export function HandReplayer({
         <b>{actor}</b> {actionLabel}
         {current.amount > 0 && <> <strong>{current.amount.toLocaleString('pt-BR')}</strong></>}
       </p>
+      {stepReactions.length > 0 && <ul key={`reactions-${current.seq}`} className="replay-reactions">
+        {stepReactions.map(reaction => {
+          const meta = TABLE_REACTIONS[reaction.reaction_id as keyof typeof TABLE_REACTIONS];
+          const from = playerName(reaction.player_id, viewerId, opponents.get(reaction.player_id)?.name ||
+            frame.seats?.find(seat => seat.player_id === reaction.player_id)?.name);
+          return <li key={reaction.seq}>
+            <span aria-hidden="true">{meta.glyph}</span>
+            <small>{from} · {meta.label}</small>
+          </li>;
+        })}
+      </ul>}
     </div>
     <div className="replay-controls">
       <Button type="button" variant="ghost" size="icon" aria-label="Voltar ao início"

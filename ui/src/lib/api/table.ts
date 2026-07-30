@@ -128,7 +128,7 @@ export type ServerMessage = {
 export type Action = (
   'post_big_blind' | 'escalate_blinds' | 'not_ready' | 'ready' | 'sit_out' | 'show_cards' | 'disconnect_sit_out' | 'join' |
   'leave' | 'keep_seat' | 'next_hand' | 'runout_step' | 'check' | 'fold' | 'call' | 'bet' | 'raise' | 'all_in' | 'won' | 'tie'
-  | 'set_run_it_twice'
+  | 'set_run_it_twice' | 'chat' | 'reaction' | 'set_identity'
   )
 
 export interface HandHistoryAction {
@@ -137,6 +137,10 @@ export interface HandHistoryAction {
   action: Action;
   amount: number;
   timestamp: number; // unix millis
+  // Only on `reaction` rows: which emoji was thrown, and at whom when the
+  // reaction is a targeted one (see TABLE_REACTIONS in lib/reactions.ts).
+  reaction_id?: string;
+  target_player_id?: string;
   frame?: ReplayFrame
 }
 

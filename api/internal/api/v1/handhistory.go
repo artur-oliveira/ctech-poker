@@ -9,12 +9,18 @@ import (
 )
 
 type HistoryAction struct {
-	Seq       int                     `json:"seq"`
-	PlayerID  string                  `json:"player_id"`
-	Action    string                  `json:"action"`
-	Amount    int64                   `json:"amount"`
-	Timestamp int64                   `json:"timestamp"` // unix millis, from ActionLogEntry.Timestamp
-	Frame     *tablestore.ReplayFrame `json:"frame,omitempty"`
+	Seq      int    `json:"seq"`
+	PlayerID string `json:"player_id"`
+	Action   string `json:"action"`
+	Amount   int64  `json:"amount"`
+	// Reaction rows only. Cosmetic and already public at the table, so replaying
+	// them exposes nothing new; without these the replay could name the action
+	// but not show which emoji was thrown. Chat Message is deliberately NOT
+	// projected here: table talk is not part of a hand's public record.
+	ReactionID     string                  `json:"reaction_id,omitempty"`
+	TargetPlayerID string                  `json:"target_player_id,omitempty"`
+	Timestamp      int64                   `json:"timestamp"` // unix millis, from ActionLogEntry.Timestamp
+	Frame          *tablestore.ReplayFrame `json:"frame,omitempty"`
 }
 
 type historyStore interface {
@@ -34,6 +40,7 @@ func (a *tablestoreAdapter) LoadActionsSince(ctx context.Context, tableID, handI
 	for i, e := range entries {
 		out[i] = HistoryAction{
 			Seq: e.Seq, PlayerID: e.PlayerID, Action: e.Action, Amount: e.Amount,
+			ReactionID: e.ReactionID, TargetPlayerID: e.TargetPlayerID,
 			Timestamp: e.Timestamp, Frame: e.Frame,
 		}
 	}
