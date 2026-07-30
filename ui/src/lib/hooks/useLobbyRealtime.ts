@@ -17,6 +17,7 @@ interface LobbyMessage {
   seats_taken?: number;
   amount?: number;
   text?: string;
+  purchase_id?: string;
 }
 
 export function useLobbyRealtime() {
@@ -56,6 +57,16 @@ export function useLobbyRealtime() {
       });
       queryClient.setQueryData<Room | undefined>(['room', room_id], oldRoom =>
         oldRoom ? {...oldRoom, seats_taken} : oldRoom);
+    } else if (message.type === 'sandbox_purchase_update') {
+      queryClient.invalidateQueries({queryKey: ['wallet', 'balance']});
+      queryClient.invalidateQueries({queryKey: ['wallet', 'sandbox-purchases']});
+      const statusLabel: Record<string, string> = {
+        confirmed: 'Compra confirmada — créditos adicionados!',
+        refunded: 'Compra estornada.',
+        expired: 'Compra expirou sem pagamento.',
+        failed: 'Falha na compra.',
+      };
+      pushNotification(statusLabel[message.code || ''] || 'Atualização na sua compra de créditos.', 'info');
     } else if (message.type === 'payment_received') {
       const amount = message.amount || 0;
       pushNotification(`Pagamento recebido: R$ ${(amount / 100).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 'info');

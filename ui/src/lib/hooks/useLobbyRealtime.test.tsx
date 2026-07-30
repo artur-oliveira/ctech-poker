@@ -80,4 +80,12 @@ describe('useLobbyRealtime', () => {
     act(() => state.options?.onMessage({type: 'system_broadcast', text: 'Manutenção em breve'}));
     expect(state.notify).toHaveBeenCalledWith('Manutenção em breve', 'info');
   });
+
+  test('invalidates wallet queries and notifies on sandbox_purchase_update', () => {
+    renderHook(() => useLobbyRealtime());
+    act(() => state.options?.onMessage({type: 'sandbox_purchase_update', purchase_id: 'sbxp-1', code: 'confirmed', amount: 110000}));
+    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'balance']});
+    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'sandbox-purchases']});
+    expect(state.notify).toHaveBeenCalledWith(expect.stringContaining('confirmada'), 'info');
+  });
 });
