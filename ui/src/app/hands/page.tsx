@@ -15,7 +15,7 @@ import {HAND_CATEGORY_LABELS} from '@/lib/utils';
 import {Button} from '@/components/ui/button';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {FilterGroup} from '@/components/FilterGroup';
-import {AppPageHeader, AppPageNav} from '@/components/AppPageChrome';
+import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 
 type HandFilter = 'all' | 'wins' | 'losses';
 
@@ -87,9 +87,8 @@ export default function HandsHistory() {
   }, [hasNextPage, fetchNextPage, filteredHands.length]);
 
   return <TermsGate>
-    <main className="app-page">
-      <AppPageNav authed current="hands"/>
-      <section className="content-page ranking hands shell">
+    <AppPage authed current="hands">
+      <AppPageBody className="ranking hands">
         <AppPageHeader
           icon={History}
           eyebrow="SEU HISTÓRICO"
@@ -231,7 +230,7 @@ export default function HandsHistory() {
             />
           </div>
         )}
-      </section>
-    </main>
+      </AppPageBody>
+    </AppPage>
   </TermsGate>;
 }

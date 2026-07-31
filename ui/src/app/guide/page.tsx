@@ -5,7 +5,7 @@ import {
   ArrowRight, Award, BookOpen, CircleDollarSign, Compass, History, ShieldCheck, ShoppingBag, Sparkles,
   Spade, Trophy, UserRound
 } from 'lucide-react';
-import {AppPageHeader, AppPageNav} from '@/components/AppPageChrome';
+import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 import {Button} from '@/components/ui/button';
 import {useOptionalSession} from '@/lib/auth/session';
 
@@ -49,9 +49,8 @@ const TOPICS = [
 
 export default function Guide() {
   const {authed} = useOptionalSession();
-  return <main className="app-page">
-    <AppPageNav authed={authed} current="guide"/>
-    <section className="content-page guide guide-home shell">
+  return <AppPage authed={authed} current="guide">
+    <AppPageBody className="guide guide-home">
       <AppPageHeader
         icon={BookOpen}
         eyebrow="CENTRAL DE AJUDA"
@@ -94,6 +93,6 @@ export default function Guide() {
         <div><h2>Sobre fichas e dinheiro real</h2>
           <p>O ambiente disponível é sandbox: fichas servem apenas para jogar e não podem ser sacadas. A interface pode exibir a opção de carteira real, mas ela depende de liberação do serviço e nunca deve ser presumida como ativa.</p></div>
       </section>
-    </section>
-  </main>;
+    </AppPageBody>
+  </AppPage>;
 }

@@ -12339,3 +12339,120 @@ button.deck-grid-slot:hover {
         grid-template-columns: 1fr
     }
 }
+
+/* Shared navigation-page structure: one header/body/footer rhythm for lobby,
+   guides, rankings, achievements, store and hand history. Table-like routes
+   intentionally do not use this shell. */
+.page-heading-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center
+}
+
+.page-heading-actions {
+    display: flex;
+    justify-content: center;
+    margin: -24px auto 48px
+}
+
+.page-heading-actions > * {
+    min-height: 44px
+}
+
+.app-page-footer {
+    min-height: 112px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding-block: 28px;
+    border-top: 1px solid var(--white-12);
+    color: var(--text-secondary)
+}
+
+.app-page-footer > div {
+    display: flex;
+    align-items: center;
+    gap: 12px
+}
+
+.app-page-footer p {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 0;
+    font-size: var(--font-size-compact)
+}
+
+.app-page-footer strong {
+    color: var(--paper);
+    font-size: var(--font-size-body)
+}
+
+.app-page-footer nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px 18px
+}
+
+.app-page-footer a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-secondary);
+    font-size: var(--font-size-body);
+    text-decoration: none;
+    transition: color 180ms var(--ease-out-quart)
+}
+
+.app-page-footer a:hover,
+.app-page-footer a:focus-visible {
+    color: var(--paper)
+}
+
+/* Lobby is a navigation page too; its table chooser keeps its bespoke content
+   while inheriting the same centered arrival hierarchy as its neighbors. */
+.content-page.lobby {
+    padding-block: 32px 96px
+}
+
+.content-page.lobby .page-heading {
+    margin-bottom: 48px
+}
+
+@media (max-width: 600px) {
+    .page-heading-actions {
+        width: 100%;
+        margin: -18px auto 38px
+    }
+
+    .page-heading-actions > * {
+        width: 100%
+    }
+
+    .app-page-footer {
+        min-height: 0;
+        align-items: flex-start;
+        padding-block: 24px 32px
+    }
+
+    .app-page-footer > div p span {
+        display: none
+    }
+
+    .app-page-footer nav {
+        max-width: 190px;
+        gap: 0 14px
+    }
+
+    .content-page.lobby {
+        padding-block: 20px 72px
+    }
+}
+
+@media (max-width: 420px) {
+    .app-page-footer > div p {
+        display: none
+    }
+}

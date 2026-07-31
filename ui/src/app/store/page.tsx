@@ -13,7 +13,7 @@ import {
 } from '@/lib/api/wallet';
 import {pushNotification} from '@/lib/notify';
 import {useLobbyRealtime} from '@/lib/hooks/useLobbyRealtime';
-import {AppPageHeader, AppPageNav} from '@/components/AppPageChrome';
+import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 import {getMe} from '@/lib/api/player';
 
 type StoreTab = 'rewards' | 'purchases';
@@ -75,9 +75,8 @@ export default function Store() {
   }, []);
 
   return <TermsGate>
-    <main className="app-page">
-      <AppPageNav authed current="store"/>
-      <section className="content-page store shell">
+    <AppPage authed current="store">
+      <AppPageBody className="store">
         <AppPageHeader
           icon={ShoppingBag}
           eyebrow="FICHAS SANDBOX"
@@ -138,8 +137,8 @@ export default function Store() {
                                   onResume={id => void resume(id)} resumingId={resumingId}/>
             </section>
           </div>}
-      </section>
-    </main>
+      </AppPageBody>
+    </AppPage>
     <PurchaseModal key={activePurchase?.purchase_id ?? 'closed'} purchase={activePurchase}
                    onClose={() => setActivePurchase(null)} onUpdate={setActivePurchase}/>
   </TermsGate>;

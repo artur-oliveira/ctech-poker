@@ -5,7 +5,7 @@ import {ArrowLeft, ArrowRight, BookOpen, CircleAlert, Info, Lightbulb, ShieldChe
 import Image from 'next/image';
 import Link from 'next/link';
 import type {ReactNode} from 'react';
-import {AppPageHeader, AppPageNav} from '@/components/AppPageChrome';
+import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 import {useOptionalSession} from '@/lib/auth/session';
 
 export const GUIDE_TOPICS = [
@@ -36,9 +36,8 @@ export function GuidePage({icon, eyebrow, title, description, sections, currentH
   next?: {href: string; label: string};
 }) {
   const {authed} = useOptionalSession();
-  return <main className="app-page">
-    <AppPageNav authed={authed} current="guide"/>
-    <section className="content-page guide guide-topic shell">
+  return <AppPage authed={authed} current="guide">
+    <AppPageBody className="guide guide-topic">
       <AppPageHeader icon={icon} eyebrow={eyebrow} title={title} description={description}
                      backHref="/guide" backLabel="Todos os guias"/>
       <nav className="guide-topic-nav" aria-label="Tópicos do guia">
@@ -65,8 +64,8 @@ export function GuidePage({icon, eyebrow, title, description, sections, currentH
         <Link href="/guide"><ArrowLeft aria-hidden="true"/> Todos os guias</Link>
         {next && <Link href={next.href}>{next.label}<ArrowRight aria-hidden="true"/></Link>}
       </footer>
-    </section>
-  </main>;
+    </AppPageBody>
+  </AppPage>;
 }
 
 export function GuideSteps({children}: {children: ReactNode}) {

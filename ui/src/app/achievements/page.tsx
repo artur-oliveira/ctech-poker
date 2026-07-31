@@ -11,7 +11,7 @@ import {achievementProgress, getAchievementCatalog, getMyAchievements} from '@/l
 import {achievementLabel, achievementWalletMode} from '@/lib/achievements';
 import type {WalletMode} from '@/lib/api/player';
 import {useOptionalSession} from "@/lib/auth/session";
-import {AppPageHeader, AppPageNav} from '@/components/AppPageChrome';
+import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 
 type FilterTab = 'all' | 'unlocked' | 'in_progress' | 'completed';
 
@@ -88,9 +88,8 @@ export default function Achievements() {
   
   if (checking) return <div className="loading-screen"><span className="loader"/>Carregando conquistas…</div>;
   
-  return <main className="app-page">
-    <AppPageNav authed={authed} current="achievements"/>
-    <section className="content-page achievements shell">
+  return <AppPage authed={authed} current="achievements">
+    <AppPageBody className="achievements">
       <AppPageHeader
         icon={Trophy}
         eyebrow="PROGRESSO DO JOGADOR"
@@ -184,6 +183,6 @@ export default function Achievements() {
               {filteredCatalog.map(a => <AchievementCard key={a.key} achievement={a} count={countFor(a.key)}/>)}
             </div>
           )}
-    </section>
-  </main>;
+    </AppPageBody>
+  </AppPage>;
 }

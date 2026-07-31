@@ -8,7 +8,7 @@ import {useOptionalSession} from "@/lib/auth/session";
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {SkeletonList} from '@/components/ui/skeleton';
 import type {WalletMode} from '@/lib/api/player';
-import {AppPageHeader, AppPageNav} from '@/components/AppPageChrome';
+import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 
 export default function Ranking() {
   const [mode, setMode] = useState<WalletMode>('sandbox');
@@ -24,9 +24,8 @@ export default function Ranking() {
   const viewerEntry = data.find(p => p.player_id === viewer);
   
   return (
-    <main className="app-page">
-      <AppPageNav authed={authed} current="leaderboard"/>
-      <section className="content-page ranking shell">
+    <AppPage authed={authed} current="leaderboard">
+      <AppPageBody className="ranking">
         <AppPageHeader
           icon={Crown}
           eyebrow="HALL DA FAMA"
@@ -99,7 +98,7 @@ export default function Ranking() {
                   })}
                 </div>
               </>}
-      </section>
-    </main>
+      </AppPageBody>
+    </AppPage>
   );
 }

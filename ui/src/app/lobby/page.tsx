@@ -1,13 +1,14 @@
 'use client';
 import dynamic from 'next/dynamic';
 import {useEffect, useState} from 'react';
+import {LayoutGrid} from 'lucide-react';
 import {StakesGrid} from '@/components/lobby/StakesGrid';
 import {ActiveTableBanner} from '@/components/lobby/ActiveTableBanner';
 import {CreateRoomDialog} from '@/components/lobby/CreateRoomDialog';
 import {OnboardingIntro} from '@/components/lobby/OnboardingIntro';
 import {TermsGate} from '@/components/TermsGate';
 import {USE_MOCK} from '@/lib/mockConfig';
-import {AppPageNav} from '@/components/AppPageChrome';
+import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 import {getCooldown} from '@/lib/api/dailyReward';
 
 const MockControls = USE_MOCK
@@ -26,26 +27,15 @@ export default function Lobby() {
   }, []);
 
   return <TermsGate>
-    <main className="app-page">
-      <AppPageNav authed rewardReady={rewardReady}/>
-      <section className="lobby shell">
+    <AppPage authed rewardReady={rewardReady}>
+      <AppPageBody className="lobby">
         <OnboardingIntro/>
-        <header>
-          <div>
-            <small>LOBBY SANDBOX</small>
-            <h1>Escolha sua mesa.</h1>
-            <p>
-              Fichas virtuais, emoção de verdade.
-            </p>
-          </div>
-          <div className="lobby-actions">
-            <CreateRoomDialog/>
-          </div>
-        </header>
+        <AppPageHeader icon={LayoutGrid} eyebrow="LOBBY SANDBOX" title="Escolha sua mesa."
+          description="Fichas virtuais, emoção de verdade." actions={<CreateRoomDialog/>}/>
         <ActiveTableBanner/>
         <StakesGrid/>
-      </section>
+      </AppPageBody>
       {USE_MOCK && <MockControls/>}
-    </main>
+    </AppPage>
   </TermsGate>;
 }

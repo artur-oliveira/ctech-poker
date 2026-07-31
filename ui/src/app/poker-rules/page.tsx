@@ -1,9 +1,9 @@
 'use client';
 import Link from 'next/link';
-import {Award, BookOpen, ChevronLeft, Club, History, ShieldCheck, Trophy} from 'lucide-react';
+import {BookOpen, ShieldCheck} from 'lucide-react';
 import {HandRankings} from '@/components/HandRankings';
 import {useOptionalSession} from "@/lib/auth/session";
-import {ProfileMenu} from "@/components/lobby/ProfileMenu";
+import {AppPage, AppPageBody, AppPageHeader} from "@/components/AppPageChrome";
 import {Button} from "@/components/ui/button";
 
 const SECTIONS = [
@@ -19,25 +19,10 @@ export default function PokerRules() {
   const {authed} = useOptionalSession();
   
   return (
-    <main className="app-page">
-      <nav className="app-nav shell">
-        <Link href="/" className="brand"><span className="brand-mark"><Club/></span>CTech <b>Poker</b></Link>
-        {authed ? <div className="header-right">
-          <Link href="/guide"><BookOpen/> <span className="header-right-label">Guia</span></Link>
-          <Link href="/leaderboard"><Trophy/> <span className="header-right-label">Ranking</span></Link>
-          <Link href="/achievements"><Award/> <span className="header-right-label">Conquistas</span></Link>
-          <Link href="/hands"><History/> <span className="header-right-label">Mãos</span></Link>
-          <ProfileMenu/>
-        </div> : <Link href="/"><ChevronLeft/> Voltar</Link>}
-      </nav>
-      <section className="rules shell">
-        <header>
-          <small>REFERÊNCIA RÁPIDA</small>
-          <BookOpen aria-hidden="true"/>
-          <h1>Regras do Texas Hold&apos;em</h1>
-          <p>O essencial para sentar em qualquer mesa com confiança, da hierarquia das mãos às regras de aposta e
-            transparência do jogo.</p>
-        </header>
+    <AppPage authed={authed} current="guide">
+      <AppPageBody className="rules">
+        <AppPageHeader icon={BookOpen} eyebrow="REFERÊNCIA RÁPIDA" title="Regras do Texas Hold&apos;em"
+          description="O essencial para sentar em qualquer mesa com confiança, da hierarquia das mãos às regras de aposta e transparência do jogo." backHref="/guide" backLabel="Guia"/>
         <nav className="rules-toc" aria-label="Seções desta página">
           {SECTIONS.map(s => <a key={s.id} href={`#${s.id}`}>{s.label}</a>)}
         </nav>
@@ -113,7 +98,7 @@ export default function PokerRules() {
             </Button>
           </div>
         </div>
-      </section>
-    </main>
+      </AppPageBody>
+    </AppPage>
   );
 }
