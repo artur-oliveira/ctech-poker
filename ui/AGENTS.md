@@ -52,3 +52,11 @@ Lobby stake/mode filters · multi-table grid · tournaments · spectator mode ·
 
 Endpoints and socket messages are documented in `../api/README.md`. Every `/v1.0` call carries the
 bearer token; the API requires both `sub` and `sid` claims and rejects M2M tokens.
+
+## Mandatory Documentation Policy
+
+**Every code change MUST be documented.**
+
+There are NO exceptions.
+
+Any modification affecting behavior, architecture, APIs, integrations, configuration, deployment, security, business rules, or developer workflow MUST include the corresponding documentation update in the same change.

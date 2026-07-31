@@ -61,3 +61,11 @@ gates on `GET /v1.0/players/me` + `poker_terms_accepted`.
 
 Lobby stake/mode filters · multi-table grid · tournaments · spectator mode · physical chip travel
 · avatar images use `PlayerAvatar`, with `initials()` in `lib/utils.ts` as the shared fallback.
+
+## Mandatory Documentation Policy
+
+**Every code change MUST be documented.**
+
+There are NO exceptions.
+
+Any modification affecting behavior, architecture, APIs, integrations, configuration, deployment, security, business rules, or developer workflow MUST include the corresponding documentation update in the same change.

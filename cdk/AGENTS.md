@@ -32,3 +32,11 @@ runs two CI guards (no hand-rolled NAT, no tiny DynamoDB throughput cap). Tests:
 `lib/api-stack.ts` (compute+IAM), `lib/dynamodb-stack.ts` (tables/GSIs),
 `lib/archiver-stack.ts` (stream→S3 Lambda), `lib/frontend-stack.ts` (S3+CloudFront+KV store),
 `lib/oidc-stack.ts`, `lib/constants.ts`.
+
+## Mandatory Documentation Policy
+
+**Every code change MUST be documented.**
+
+There are NO exceptions.
+
+Any modification affecting behavior, architecture, APIs, integrations, configuration, deployment, security, business rules, or developer workflow MUST include the corresponding documentation update in the same change.

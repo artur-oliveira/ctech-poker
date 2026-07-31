@@ -93,3 +93,11 @@ catalog.
 
 Transport is **binary protobuf** on both gateways (`GET /v1.0/tables/:id/ws`, `GET /v1.0/ws`), with the access token
 sent as the first frame after upgrade and a 32 KiB frame cap.
+
+## Mandatory Documentation Policy
+
+**Every code change MUST be documented.**
+
+There are NO exceptions.
+
+Any modification affecting behavior, architecture, APIs, integrations, configuration, deployment, security, business rules, or developer workflow MUST include the corresponding documentation update in the same change.

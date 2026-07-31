@@ -58,3 +58,11 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
 `bin/poker.ts` (entry) · `lib/{constants,api-stack,dynamodb-stack,archiver-stack,frontend-stack,
 oidc-stack,reconcile-stack,tablecleanup-stack,bundle}.ts` · `test/*` (Jest/CDK assertions).
 Compiled `.d.ts`/`.js` artifacts are checked in alongside sources — edit the `.ts`.
+
+## Mandatory Documentation Policy
+
+**Every code change MUST be documented.**
+
+There are NO exceptions.
+
+Any modification affecting behavior, architecture, APIs, integrations, configuration, deployment, security, business rules, or developer workflow MUST include the corresponding documentation update in the same change.

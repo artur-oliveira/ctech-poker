@@ -57,3 +57,11 @@ missing for wallet verification calls.
 
 B9, B10, B31 and B32 are **fixed** — older notes calling them open are stale. See `README.md` and
 `../docs/README.md`.
+
+## Mandatory Documentation Policy
+
+**Every code change MUST be documented.**
+
+There are NO exceptions.
+
+Any modification affecting behavior, architecture, APIs, integrations, configuration, deployment, security, business rules, or developer workflow MUST include the corresponding documentation update in the same change.
