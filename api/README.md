@@ -260,3 +260,17 @@ are in code, others are not — verify against the tree before relying on any of
 - Source-of-truth status & product spec: [`../README.md`](../README.md),
   [`../OVERVIEW.md`](../OVERVIEW.md), [`../ARCHITECTURE.md`](../ARCHITECTURE.md),
   [`../PLAN.md`](../PLAN.md)
+
+
+### Real-money entry fees
+
+For a real-money room with an entry fee, Poker commits an immutable fee-debit recovery intent in the same DynamoDB transaction as seat admission. The wallet debit happens after that durable admission; if it fails, reconciliation retries the durable intent rather than losing the obligation.
+
+### Reconciliation index
+
+Unresolved settlement records are indexed by sparse `gsi_status=open`; resolved records remove that key. Deploy the GSI before this code and backfill pre-existing unresolved records with `gsi_status=open`.
+
+
+### Real-money entry fees and reconciliation
+
+Poker co-writes an immutable fee-debit recovery intent with real-money seat admission. Failed fee collection is retried from that durable intent. Unresolved settlement records use sparse gsi_status=open; deploy the GSI and backfill existing unresolved rows before enabling this release.

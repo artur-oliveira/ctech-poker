@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/dynamo"
@@ -14,6 +13,8 @@ import (
 const (
 	tablePending = "poker_pending_cashouts"
 	pendingSK    = "pending"
+	pendingGSI   = "gsi_status"
+	pendingOpen  = "open"
 )
 
 // Kind values for PendingCashout.Kind. Empty string means KindCashout, for
@@ -39,6 +40,7 @@ type PendingCashout struct {
 	IdempotencyKey string   `dynamodbav:"idempotency_key" json:"idempotency_key"`
 	RecordedAt     string   `dynamodbav:"recorded_at" json:"recorded_at"`
 	Resolved       bool     `dynamodbav:"resolved" json:"resolved"`
+	GSIStatus      string   `dynamodbav:"gsi_status,omitempty" json:"-"`
 }
 
 type PendingStore struct {
@@ -60,6 +62,7 @@ func (s *PendingStore) BuildRecordTx(p PendingCashout) (types.TransactWriteItem,
 	if p.RecordedAt == "" {
 		p.RecordedAt = dynamo.NowStr()
 	}
+	p.GSIStatus = pendingOpen
 	item, err := dynamo.Encode(struct {
 		PK string `dynamodbav:"pk"`
 		SK string `dynamodbav:"sk"`
@@ -94,6 +97,7 @@ func (s *PendingStore) MarkResolved(ctx context.Context, id string) error {
 		"resolved":    true,
 		"resolved_at": dynamo.NowStr(),
 		"ttl":         time.Now().Add(30 * 24 * time.Hour).Unix(),
+		"gsi_status":  nil,
 	})
 	if err != nil {
 		return fmt.Errorf("reconcile: mark resolved: %w", err)
@@ -102,18 +106,17 @@ func (s *PendingStore) MarkResolved(ctx context.Context, id string) error {
 }
 
 func (s *PendingStore) ListUnresolved(ctx context.Context, olderThan time.Duration) ([]PendingCashout, error) {
-	tableName := dynamo.TableName(s.env, tablePending)
 	cutoff := time.Now().Add(-olderThan)
 	res := make([]PendingCashout, 0)
 	var startKey map[string]types.AttributeValue
 	for {
-		input := &dynamodb.ScanInput{TableName: aws.String(tableName), ExclusiveStartKey: startKey}
-		if s.scanPageLimit > 0 {
-			input.Limit = aws.Int32(s.scanPageLimit)
+		limit := int(s.scanPageLimit)
+		if limit <= 0 {
+			limit = 100
 		}
-		out, err := s.db.Scan(ctx, input)
+		out, err := s.base.QueryGSI(ctx, pendingGSI, "gsi_status", pendingOpen, limit, startKey)
 		if err != nil {
-			return nil, fmt.Errorf("reconcile: scan: %w", err)
+			return nil, fmt.Errorf("reconcile: query unresolved: %w", err)
 		}
 		for _, item := range out.Items {
 			p, err := dynamo.Decode[PendingCashout](item)

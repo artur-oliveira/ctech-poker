@@ -225,8 +225,19 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 		}
 	}
 
+	var feeKey string
+	var feeIntent func() (types.TransactWriteItem, error)
+	if room != nil && room.CurrencyMode == "real" && room.EntryFeeCents > 0 {
+		if s.pending == nil {
+			return errors.New("buyin: settlement store unavailable; refusing real-money admission with an entry fee")
+		}
+		feeKey = fmt.Sprintf("%s#%s#buyinfee#%s", roomID, playerID, nonce)
+		feeIntent = func() (types.TransactWriteItem, error) {
+			return s.pending.BuildRecordTx(reconcile.PendingCashout{ID: feeKey, PlayerID: playerID, Amount: room.EntryFeeCents, CurrencyMode: "real", Kind: reconcile.KindFeeDebit, TableRef: roomID, IdempotencyKey: feeKey})
+		}
+	}
 	reply := make(chan error, 1)
-	joinErr := actor.Dispatch(table.JoinCmd{PlayerID: playerID, Stack: amount, MaxSeats: maxSeats, MidHand: midHand, HoldID: holdID, Reply: reply})
+	joinErr := actor.Dispatch(table.JoinCmd{PlayerID: playerID, Stack: amount, MaxSeats: maxSeats, MidHand: midHand, HoldID: holdID, SettlementIntent: feeIntent, Reply: reply})
 	if joinErr != nil {
 		// hand.ErrAlreadySeated here is NOT a same-request retry — the isSeated
 		// check above already short-circuits those before any debit happens.
@@ -282,21 +293,13 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 		}
 	}
 
-	if room != nil && room.CurrencyMode == "real" && room.EntryFeeCents > 0 {
-		feeKey := fmt.Sprintf("%s#%s#buyinfee#%s", roomID, playerID, nonce)
+	if feeKey != "" {
 		if err := s.game.DebitReal(ctx, playerID, room.EntryFeeCents, feeKey, "poker_table_fee"); err != nil {
-			slog.Error("ALARM: poker table entry fee charge failed after seating, needs manual review",
-				"player", playerID, "room", roomID, "amount", room.EntryFeeCents, "err", err)
-			if s.pending == nil {
-				return fmt.Errorf("buyin: table fee charge failed and settlement store is unavailable: %w", err)
-			}
-			if recordErr := s.pending.Record(ctx, reconcile.PendingCashout{
-				ID: feeKey, PlayerID: playerID, Amount: room.EntryFeeCents, CurrencyMode: "real",
-				Kind: reconcile.KindFeeDebit, TableRef: roomID, IdempotencyKey: feeKey,
-			}); recordErr != nil {
-				return fmt.Errorf("buyin: table fee charge failed and recovery intent persistence failed: charge=%v persistence=%w", err, recordErr)
-			}
-			return fmt.Errorf("buyin: table fee charge failed after seating — reconciliation job will retry: %w", err)
+			slog.Error("ALARM: durable poker table-entry fee charge failed; reconciliation will retry", "player", playerID, "room", roomID, "amount", room.EntryFeeCents, "err", err)
+			return fmt.Errorf("buyin: table fee charge failed after durable admission — reconciliation job will retry: %w", err)
+		}
+		if err := s.pending.MarkResolved(ctx, feeKey); err != nil {
+			slog.Error("ALARM: poker table fee charged but recovery intent was not resolved", "fee_key", feeKey, "err", err)
 		}
 	}
 

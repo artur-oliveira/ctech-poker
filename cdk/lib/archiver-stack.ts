@@ -46,11 +46,11 @@ export class ArchiverStack extends cdk.Stack {
       runtime: lambda.Runtime.PROVIDED_AL2023,
       architecture: lambda.Architecture.ARM_64,
       handler: 'bootstrap',
-      code: lambda.Code.fromAsset('../api/cmd/archiver', {
+      code: lambda.Code.fromAsset('../api', {
         bundling: {
-          local: localGoBundling('../api/cmd/archiver'),
+          local: localGoBundling('../api', './cmd/archiver'),
           image: lambda.Runtime.PROVIDED_AL2023.bundlingImage,
-          command: ['bash', '-c', 'GOOS=linux GOARCH=arm64 go build -o /asset-output/bootstrap .'],
+          command: ['bash', '-c', 'GOOS=linux GOARCH=arm64 go build -o /asset-output/bootstrap ./cmd/archiver'],
         },
       }),
       environment: {ARCHIVE_BUCKET: bucket.bucketName},

@@ -134,9 +134,10 @@ type JoinCmd struct {
 	// MidHand is retained for wire compatibility with the Phase 3 service.
 	// The actor derives pending-entry status from its authoritative hand state
 	// instead of trusting this potentially stale lobby hint.
-	MidHand bool
-	HoldID  string
-	Reply   chan error
+	MidHand          bool
+	HoldID           string
+	SettlementIntent func() (types.TransactWriteItem, error)
+	Reply            chan error
 }
 
 func (c JoinCmd) reply() chan error { return c.Reply }

@@ -269,11 +269,11 @@ export class PokerApiStack extends cdk.Stack {
       `if [ -f /opt/app/current/release.env ]; then set -a; . /opt/app/current/release.env; set +a; fi`,
       // Falls back to empty → config.Load() fails closed in prod (VALKEY_URL
       // required there); in dev/stage the app falls back to an in-memory backend.
-      `VALKEY_URL=$(aws ssm get-parameter --name "${shared.valkeyUrl}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+      `VALKEY_URL=$(aws ssm get-parameter --name "${shared.valkeyUrl}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
       `export VALKEY_URL`,
-      `WALLET_URL=$(aws ssm get-parameter --name "${walletUrlParam}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+      `WALLET_URL=$(aws ssm get-parameter --name "${walletUrlParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
       `export WALLET_URL`,
-      `POKER_CLIENT_ID=$(aws ssm get-parameter --name "${pokerClientIdParam}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+      `POKER_CLIENT_ID=$(aws ssm get-parameter --name "${pokerClientIdParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
       `export POKER_CLIENT_ID`,
       `POKER_CLIENT_SECRET=$(aws ssm get-parameter --name "${pokerClientSecretParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
       `export POKER_CLIENT_SECRET`,
@@ -284,11 +284,11 @@ export class PokerApiStack extends cdk.Stack {
       // Real-money kill switch: both fetched fresh on every boot/restart so
       // ops can flip them via SSM without a redeploy. Falls back to
       // false/empty → config.Load() keeps real-money mode off (fails closed).
-      `REAL_MONEY_ENABLED=$(aws ssm get-parameter --name "${realMoneyEnabledParam}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "false")`,
+      `REAL_MONEY_ENABLED=$(aws ssm get-parameter --name "${realMoneyEnabledParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "false")`,
       `export REAL_MONEY_ENABLED`,
-      `LEGAL_SIGNOFF_REF=$(aws ssm get-parameter --name "${legalSignoffRefParam}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+      `LEGAL_SIGNOFF_REF=$(aws ssm get-parameter --name "${legalSignoffRefParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
       `export LEGAL_SIGNOFF_REF`,
-      `AVATAR_BASE_URL=$(aws ssm get-parameter --name "${avatarBaseUrlParam}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+      `AVATAR_BASE_URL=$(aws ssm get-parameter --name "${avatarBaseUrlParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
       `export AVATAR_BASE_URL`,
       `exec /opt/app/current/app`,
       `START`,
@@ -428,12 +428,6 @@ export class PokerApiStack extends cdk.Stack {
       domainName,
       listenerRulePriority: ALB_LISTENER_PRIORITY,
     });
-    if (isProd) {
-      service.autoScalingGroup.scaleOnCpuUtilization('CpuTargetTracking', {
-        targetUtilizationPercent: 60,
-        cooldown: cdk.Duration.minutes(3),
-      });
-    }
     service.autoScalingGroup.node.addDependency(profile);
     service.targetGroup.setAttribute('deregistration_delay.timeout_seconds', '60');
 

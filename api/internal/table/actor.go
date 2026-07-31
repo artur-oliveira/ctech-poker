@@ -1502,7 +1502,15 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 	if stage == hand.WaitingForPlayers {
 		a.tryStartHand(ctx)
 	}
-	return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "join"})
+	var extra []types.TransactWriteItem
+	if c.SettlementIntent != nil {
+		intent, err := c.SettlementIntent()
+		if err != nil {
+			return err
+		}
+		extra = append(extra, intent)
+	}
+	return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "join"}, extra...)
 }
 
 func (a *Actor) systemLeaveCmd(ctx context.Context, playerID, reason string, stack chan int64, holdID chan string) LeaveCmd {
