@@ -51,8 +51,8 @@ describe('landing page', () => {
     render(<Home/>);
     
     expect(screen.getAllByRole('article')).toHaveLength(12);
-    expect(screen.getByText('Ação em Tempo Real')).toBeInTheDocument();
-    expect(screen.getByText('Progresso sem pressão')).toBeInTheDocument();
+    expect(screen.getByText('Mesa ao Vivo')).toBeInTheDocument();
+    expect(screen.getByText('Conquistas e recompensas')).toBeInTheDocument();
     expect(screen.getByLabelText('Prévia de uma mesa de poker')).toBeInTheDocument();
     expect(screen.getByText('POTE')).toHaveTextContent('2.450');
     expect(screen.getByText('Você')).toBeInTheDocument();

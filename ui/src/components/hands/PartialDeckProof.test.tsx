@@ -24,12 +24,14 @@ describe('PartialDeckProof', () => {
     render(<PartialDeckProof rootCommitHash="root" revealed={revealed} unrevealed={unrevealed}/>);
     expect(screen.getByText(/Recalculando os hashes/)).toBeInTheDocument();
     expect(await screen.findByText(/baralho não foi alterado/)).toBeInTheDocument();
+    expect(screen.getByText('0 de 2 cartas permitidas reveladas')).toBeInTheDocument();
     expect(verifyWirePartialDeck).toHaveBeenCalledWith('root', revealed, unrevealed);
     
     await userEvent.click(screen.getByRole('button', {name: 'Posição 1: revelar carta'}));
     expect(screen.getByText('AH')).toBeInTheDocument();
     
     await userEvent.click(screen.getByRole('button', {name: 'Revelar tudo'}));
+    expect(screen.getByText('2 de 2 cartas permitidas reveladas')).toBeInTheDocument();
     expect(screen.getByText('AH')).toBeInTheDocument();
     expect(screen.getByText('KD')).toBeInTheDocument();
     // The other 50 stay committed hashes — "revelar tudo" must never turn a

@@ -78,6 +78,8 @@ describe('achievements page', () => {
     expect(screen.getByText('2', {selector: '.stat-value'})).toHaveTextContent('2 / 4');
     expect(screen.getByText('1', {selector: '.stat-value'})).toBeInTheDocument();
     expect(screen.getByText('35%')).toBeInTheDocument();
+    expect(screen.getByText('Sua próxima estrela')).toBeInTheDocument();
+    expect(screen.getByText(/Faltam 1 para o nível 3/)).toBeInTheDocument();
     expect(screen.getByText('hands_played')).toHaveAttribute('data-count', '0');
   });
   

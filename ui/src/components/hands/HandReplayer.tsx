@@ -1,6 +1,6 @@
 'use client';
-import {useEffect, useMemo, useState} from 'react';
-import {ChevronLeft, ChevronRight, Pause, Play, RotateCcw} from 'lucide-react';
+import {useEffect, useMemo, useState, type CSSProperties} from 'react';
+import {ChevronLeft, ChevronRight, Coins, Pause, Play, RotateCcw, Sparkles} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {TableStage} from '@/components/table/TableStage';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
@@ -147,15 +147,22 @@ export function HandReplayer({
     }))
   };
   
-  return <section className="hand-replayer" aria-label="Replay interativo da mão">
+  const replayPosition = (safeIndex + 1) / replayActions.length;
+
+  return <section className={`hand-replayer${frame.stage === 'complete' ? ' is-complete' : ''}`}
+                  aria-label="Replay interativo da mão">
     <header>
-      <div>
-        <h2>Replay da mão</h2>
-        <p>Ação {safeIndex + 1} de {replayActions.length} · {STAGE_LABELS[frame.stage] || frame.stage}</p>
+      <div className="replay-heading">
+        <span className="replay-mark" aria-hidden="true"><Sparkles/></span>
+        <div>
+          <h2>Replay da mão</h2>
+          <p><span className="replay-stage">{STAGE_LABELS[frame.stage] || frame.stage}</span>
+            <span>Ação {safeIndex + 1} de {replayActions.length}</span></p>
+        </div>
       </div>
       <div className="replay-header-end">
         {frame.stage === 'complete' && <OutcomeBadge outcome={hand.outcome}/>}
-        <span className="replay-pot">Pote <b
+        <span className="replay-pot"><Coins aria-hidden="true"/> <span>Pote</span> <b
           key={`${current.seq}-${frame.pot}`}>{frame.pot.toLocaleString('pt-BR')}</b></span>
       </div>
     </header>
@@ -179,45 +186,50 @@ export function HandReplayer({
       </ul>}
     </div>
     <div className="replay-controls">
-      <Button type="button" variant="ghost" size="icon" aria-label="Voltar ao início"
-              onClick={() => {
-                setPlaying(false);
-                setIndex(0);
-              }}><RotateCcw/></Button>
-      <Button type="button" variant="ghost" size="icon" aria-label="Ação anterior"
-              disabled={safeIndex === 0} onClick={() => {
-        setPlaying(false);
-        setIndex(value => Math.max(0, value - 1));
-      }}>
-        <ChevronLeft/>
-      </Button>
-      <Button type="button" aria-label={playing ? 'Pausar replay' : 'Reproduzir replay'}
-              onClick={() => {
-                if (safeIndex === lastIndex) setIndex(0);
-                setPlaying(value => !value);
-              }}>{playing ? <Pause/> : <Play/>}<span>{playing ? 'Pausar' : 'Reproduzir'}</span></Button>
-      <Button type="button" variant="ghost" size="icon" aria-label="Próxima ação"
-              disabled={safeIndex === lastIndex}
-              onClick={() => {
-                setPlaying(false);
-                setIndex(value => Math.min(lastIndex, value + 1));
-              }}>
-        <ChevronRight/>
-      </Button>
-      <button type="button" className="replay-speed" onClick={() => setSpeed(value => value === 1 ? 2 : 1)}
-              aria-label={`Velocidade ${speed} vezes`}>{speed}×
-      </button>
-      <label>
-        <span className="sr-only">Posição do replay</span>
+      <div className="replay-transport" role="group" aria-label="Controles de reprodução">
+        <Button type="button" variant="ghost" size="icon" aria-label="Voltar ao início"
+                onClick={() => {
+                  setPlaying(false);
+                  setIndex(0);
+                }}><RotateCcw/></Button>
+        <Button type="button" variant="ghost" size="icon" aria-label="Ação anterior"
+                disabled={safeIndex === 0} onClick={() => {
+          setPlaying(false);
+          setIndex(value => Math.max(0, value - 1));
+        }}>
+          <ChevronLeft/>
+        </Button>
+        <Button type="button" className="replay-play"
+                aria-label={playing ? 'Pausar replay' : 'Reproduzir replay'}
+                onClick={() => {
+                  if (safeIndex === lastIndex) setIndex(0);
+                  setPlaying(value => !value);
+                }}>{playing ? <Pause/> : <Play/>}<span>{playing ? 'Pausar' : 'Reproduzir'}</span></Button>
+        <Button type="button" variant="ghost" size="icon" aria-label="Próxima ação"
+                disabled={safeIndex === lastIndex}
+                onClick={() => {
+                  setPlaying(false);
+                  setIndex(value => Math.min(lastIndex, value + 1));
+                }}>
+          <ChevronRight/>
+        </Button>
+      </div>
+      <label className="replay-scrubber">
+        <span><b>{STAGE_LABELS[frame.stage] || frame.stage}</b> · ação {safeIndex + 1} de {replayActions.length}</span>
         <input type="range" min={0} max={lastIndex} value={safeIndex}
                aria-valuetext={`Ação ${safeIndex + 1} de ${replayActions.length}`}
+               style={{'--replay-position': `${replayPosition * 100}%`} as CSSProperties}
                onChange={event => {
                  setPlaying(false);
                  setIndex(Number(event.target.value));
                }}/>
       </label>
+      <button type="button" className="replay-speed" onClick={() => setSpeed(value => value === 1 ? 2 : 1)}
+              aria-label={`Velocidade ${speed} vezes`}>
+        <span>Velocidade</span><b>{speed}×</b>
+      </button>
     </div>
     <span className="replay-progress" aria-hidden="true"
-          style={{transform: `scaleX(${(safeIndex + 1) / replayActions.length})`}}/>
+          style={{transform: `scaleX(${replayPosition})`}}/>
   </section>;
 }

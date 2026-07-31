@@ -25,6 +25,7 @@ describe('DeckReveal', () => {
     render(<DeckReveal serverSeed="seed" commitHash="commit"/>);
     expect(screen.getByText(/Recalculando o baralho/)).toBeInTheDocument();
     expect(await screen.findByText(/baralho não foi alterado/)).toBeInTheDocument();
+    expect(screen.getByText('0 de 52 cartas reveladas')).toBeInTheDocument();
     expect(verifyDeck).toHaveBeenCalledWith('seed', 'commit');
     
     await userEvent.click(screen.getByRole('button', {name: 'Posição 1: revelar carta'}));
@@ -34,6 +35,7 @@ describe('DeckReveal', () => {
     expect(screen.getByRole('button', {name: 'Posição 1: revelar carta'})).toBeInTheDocument();
     
     await userEvent.click(screen.getByRole('button', {name: 'Revelar tudo'}));
+    expect(screen.getByText('52 de 52 cartas reveladas')).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Ocultar tudo'})).toBeInTheDocument();
     expect(screen.getAllByText(/^card-/)).toHaveLength(52);
     await userEvent.click(screen.getByRole('button', {name: 'Ocultar tudo'}));

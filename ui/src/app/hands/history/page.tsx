@@ -3,7 +3,17 @@ import Link from 'next/link';
 import {Suspense} from 'react';
 import {useSearchParams} from 'next/navigation';
 import {useQuery} from '@tanstack/react-query';
-import {ChevronLeft, ChevronRight, Crown, Play, ShieldCheck} from 'lucide-react';
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Coins,
+  Crown,
+  ListChecks,
+  Play,
+  ShieldCheck,
+  Table2
+} from 'lucide-react';
 import type {WalletMode} from '@/lib/api/player';
 import {getHand} from '@/lib/api/player';
 import {getHandHistory} from '@/lib/api/table';
@@ -33,7 +43,7 @@ function HandHistoryContent() {
   const tableId = params.get('table_id') || '';
   const handId = params.get('hand_id') || '';
   const mode: WalletMode = params.get('mode') === 'real' ? 'real' : 'sandbox';
-  
+
   const hand = useQuery({
     queryKey: ['hand', mode, handId],
     queryFn: () => getHand(handId, mode),
@@ -44,17 +54,17 @@ function HandHistoryContent() {
     queryFn: () => getHandHistory(tableId, handId),
     enabled: Boolean(tableId && handId)
   });
-  
+
   const actions = (history.data?.actions || []).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   const viewerId = getViewerId();
   const opponentNames = new Map((hand.data?.opponents || []).map(o => [o.player_id, o.name]));
   const resolveName = (playerId: string) => playerName(playerId, viewerId, opponentNames.get(playerId));
-  
+
   if (!tableId || !handId) return <div className="hand-history shell">
     <p className="form-error">Link de mão inválido ou incompleto.</p>
     <Link href="/hands"><ChevronLeft/> Voltar para Minhas Mãos</Link>
   </div>;
-  
+
   // Shaped like the loaded page (tool row, result header, seats, board, timeline)
   // so nothing jumps when the hand arrives.
   if (hand.isLoading) return <div className="hand-history shell">
@@ -65,22 +75,22 @@ function HandHistoryContent() {
       <Skeleton style={{height: '140px'}}/>
     </LoadingRegion>
   </div>;
-  
+
   if (hand.isError || !hand.data) return <div className="hand-history shell">
     <Link href="/hands"><ChevronLeft/> Voltar para Minhas Mãos</Link>
     <p className="form-error">Não foi possível carregar esta mão. Verifique se você está conectado na conta correta.</p>
   </div>;
-  
+
   const h = hand.data;
   const viewerIsWinner = h.outcome === 'won' || h.outcome === 'tied';
-  
+
   function categoryFor(holeCards?: string[]): string | null {
     if (holeCards?.length !== 2 || h.board?.length !== 5) return null;
     return HAND_CATEGORY_LABELS[bestHandCategory([...holeCards, ...h.board])] || null;
   }
-  
+
   const viewerCategory = categoryFor(h.hole_cards);
-  
+
   return <div className="hand-history shell">
     {/* Export and share are utilities: they belong on the page's tool row beside
         the way out, not stacked down the centre line where the result and the
@@ -93,15 +103,22 @@ function HandHistoryContent() {
               <ShareHandDialog handId={h.hand_id} outcome={h.outcome} mode={mode}/>
           </div>}
     </div>
-    <header className="hand-history-header">
+    <header className={`hand-history-header is-${h.outcome}`}>
       <OutcomeBadge outcome={h.outcome}/>
-      <h1>Detalhes da Mão</h1>
-      <p>{formatDate(h.ended_at / 1000)} · Mesa {h.table_id.slice(0, 8)}…</p>
-      <span className={`hand-net large ${h.net_change > 0 ? 'gain' : h.net_change < 0 ? 'loss' : 'even'}`}>
-        {h.net_change > 0 ? '+' : ''}{h.net_change.toLocaleString('pt-BR')} fichas
-      </span>
+      <h1>Detalhes da mão</h1>
+      <div className="hand-history-meta">
+        <span><CalendarDays aria-hidden="true"/>{formatDate(h.ended_at / 1000)}</span>
+        <span><Table2 aria-hidden="true"/>Mesa {h.table_id.slice(0, 8)}…</span>
+        <span><Coins aria-hidden="true"/>{mode === 'real' ? 'Dinheiro real' : 'Sandbox'}</span>
+      </div>
+      <div className="hand-history-net">
+        <small>Resultado líquido</small>
+        <strong className={`hand-net large ${h.net_change > 0 ? 'gain' : h.net_change < 0 ? 'loss' : 'even'}`}>
+          {h.net_change > 0 ? '+' : ''}{h.net_change.toLocaleString('pt-BR')} fichas
+        </strong>
+      </div>
     </header>
-    
+
     {!history.isLoading && !history.isError && actions.some(action => action.frame) &&
         <div className="hand-replay-launch">
             <div>
@@ -119,7 +136,7 @@ function HandHistoryContent() {
                 Assistir replay <ChevronRight aria-hidden="true"/>
             </Button>
         </div>}
-    
+
     <section className="hand-history-players">
       <article className={`hand-history-seat viewer${viewerIsWinner ? ' is-winner' : ''}`}>
         {viewerIsWinner && <Crown aria-hidden="true" className="winner-crown"/>}
@@ -147,24 +164,24 @@ function HandHistoryContent() {
         </article>;
       })}
     </section>
-    
-    <section className="hand-history-board">
-      <h2>Board Comunitário</h2>
-      <div className="hand-board">
+
+    <section className="hand-history-board" aria-label="Board final da mão">
+      <h2><Table2 aria-hidden="true"/> Cartas comunitárias</h2>
+      <div className="hand-board" aria-label="Cartas comunitárias">
         <BoardSlots board={h.board}/>
       </div>
     </section>
-    
+
     <section className="hand-history-actions">
-      <h2>Histórico de Ações</h2>
+      <h2><ListChecks aria-hidden="true"/> Histórico de ações</h2>
       {history.isLoading ?
         <SkeletonList label="Carregando histórico de ações…" count={5} height={44} className="skeleton-panel"/> :
         history.isError ? <p className="form-error">Não foi possível carregar a sequência de ações desta mão.</p> :
           <ActionTimeline actions={actions} resolveName={resolveName}/>}
     </section>
-    
+
     <section className="hand-history-fairness">
-      <h2><ShieldCheck aria-hidden="true"/> Prova de Integridade (Provably Fair)</h2>
+      <h2><ShieldCheck aria-hidden="true"/> Prova de integridade</h2>
       {h.server_seed && h.commit_hash
         ? <DeckReveal key={h.hand_id} serverSeed={h.server_seed} commitHash={h.commit_hash}/>
         : h.root_commit_hash && h.revealed_card_salts && h.unrevealed_card_hashes

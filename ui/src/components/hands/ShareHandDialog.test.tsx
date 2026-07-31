@@ -65,4 +65,28 @@ describe('ShareHandDialog', () => {
     resolve({token: 'eventual'});
     expect(await screen.findByLabelText('Link compartilhável')).toBeInTheDocument();
   });
+
+  test('keeps creation failures recoverable', async () => {
+    createHandShare.mockRejectedValueOnce(new Error('offline'));
+    const user = userEvent.setup();
+    render(<ShareHandDialog handId="h4" outcome="won"/>);
+    await user.click(screen.getByRole('button', {name: 'Compartilhar'}));
+    await user.click(screen.getByRole('button', {name: 'Criar link'}));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível criar o link');
+    expect(screen.getByRole('button', {name: 'Criar link'})).toBeEnabled();
+  });
+
+  test('offers manual copying when clipboard access fails', async () => {
+    const user = userEvent.setup();
+    render(<ShareHandDialog handId="h5" outcome="won"/>);
+    await user.click(screen.getByRole('button', {name: 'Compartilhar'}));
+    await user.click(screen.getByRole('button', {name: 'Criar link'}));
+    await screen.findByLabelText('Link compartilhável');
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValueOnce(new Error('denied'));
+    await user.click(screen.getByRole('button', {name: 'Copiar'}));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Selecione o link e copie manualmente');
+    expect(screen.getByLabelText('Link compartilhável')).toBeInTheDocument();
+  });
 });

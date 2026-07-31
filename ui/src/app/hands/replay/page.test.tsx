@@ -38,7 +38,7 @@ describe('hand replay page', () => {
   test('rejects incomplete replay links and disables their queries', () => {
     mocks.params = new Map([['table_id', 'table-1']]);
     render(<ReplayPage/>);
-    expect(screen.getByRole('heading', {name: 'Replay inválido'})).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name: 'Este replay perdeu o endereço'})).toBeInTheDocument();
     expect(mocks.query).toHaveBeenCalledWith(expect.objectContaining({enabled: false}));
   });
   
@@ -61,7 +61,7 @@ describe('hand replay page', () => {
     });
     render(<ReplayPage/>);
     expect(screen.getByTestId('replayer')).toHaveTextContent('viewer:1,2,3');
-    expect(screen.getByRole('link', {name: /Voltar para Detalhes/})).toHaveAttribute(
+    expect(screen.getByRole('link', {name: /Detalhes da mão/})).toHaveAttribute(
       'href', '/hands/history?table_id=table%2F1&hand_id=hand%201&mode=sandbox'
     );
   });

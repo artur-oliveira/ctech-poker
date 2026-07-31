@@ -52,6 +52,7 @@ export function DeckReveal({serverSeed, commitHash}: { serverSeed: string; commi
             <ShieldCheck aria-hidden="true"/>
             <p>Baralho completo, na ordem embaralhada. Clique em cada carta para revelar a posição, inclusive as que
                 nunca chegaram a ser mostradas na mesa.</p>
+            <span className="deck-reveal-count" aria-live="polite">{revealed.size} de 52 cartas reveladas</span>
             <button type="button" className="deck-reveal-toggle-all"
                     onClick={() => setRevealed(revealed.size === 52 ? new Set() : new Set(result.deck.map((_, i) => i)))}>
                 <Eye aria-hidden="true"/>{revealed.size === 52 ? 'Ocultar tudo' : 'Revelar tudo'}

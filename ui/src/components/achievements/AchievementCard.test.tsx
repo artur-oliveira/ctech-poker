@@ -37,11 +37,14 @@ describe('AchievementCard', () => {
     expect(screen.getByLabelText('3 de 5 estrelas, 25 registrados')).toBeInTheDocument();
     expect(screen.getByText('25/100')).toBeInTheDocument();
     expect(document.querySelectorAll('.achievement-star.is-filled')).toHaveLength(3);
+    expect(screen.getByRole('progressbar', {name: 'Progresso de Vitórias'})).toHaveAttribute('aria-valuenow', '0');
   });
   
   test('marks a fully completed achievement', () => {
     render(<AchievementCard achievement={achievement} count={1200}/>);
     expect(screen.getByText('Completo')).toBeInTheDocument();
+    expect(screen.getByText('Dominada')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', {name: 'Progresso de Vitórias'})).toHaveAttribute('aria-valuenow', '100');
     expect(document.querySelectorAll('.achievement-star.is-filled')).toHaveLength(5);
   });
   

@@ -43,6 +43,19 @@ describe('mock store REST contract', () => {
     expect(reward.data).toEqual({amount: 250, remaining_time_seconds: 90});
     expect(sessionStorage.getItem('mock_next_credit_at')).not.toBeNull();
   });
+
+  test('creates hand shares through the production singular hand route', async () => {
+    localStorage.setItem('ctech_poker_mock_delay', '0');
+    const history = await request('GET', '/v1.0/players/me/hands');
+    const handId = history.data.data[0].hand_id;
+    const share = await request('POST', `/v1.0/players/me/hand/${handId}/share`, {
+      kind: 'brag', include_hero_cards: true, expiry_days: 7, mode: 'sandbox',
+    });
+
+    expect(share.data).toMatchObject({
+      token: 'mock-share-demo', kind: 'brag', hero_cards: expect.any(Array),
+    });
+  });
 });
 
 describe('mock table state contract', () => {

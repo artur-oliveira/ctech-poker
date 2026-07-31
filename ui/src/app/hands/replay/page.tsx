@@ -3,7 +3,7 @@ import Link from 'next/link';
 import {Suspense} from 'react';
 import {useSearchParams} from 'next/navigation';
 import {useQuery} from '@tanstack/react-query';
-import {ChevronLeft} from 'lucide-react';
+import {ChevronLeft, CircleAlert, History} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {LoadingRegion, Skeleton} from '@/components/ui/skeleton';
 import {HandReplayer} from '@/components/hands/HandReplayer';
@@ -30,9 +30,10 @@ function ReplayContent() {
   });
   
   if (!tableId || !handId) return <div className="replay-page-error">
-    <h1>Replay inválido</h1>
-    <p>O parâmetro de mesa ou mão está ausente ou malformatado.</p>
-    <Button render={<Link href="/hands"/>}>Minhas Mãos</Button>
+    <div className="replay-error-mark" aria-hidden="true"><CircleAlert/></div>
+    <h1>Este replay perdeu o endereço</h1>
+    <p>O link não informa qual mesa e mão devemos abrir. Volte às suas mãos para escolher outra jogada.</p>
+    <Button render={<Link href="/hands"/>}><History/> Ver minhas mãos</Button>
   </div>;
   
   if (hand.isLoading || history.isLoading) return <main className="replay-page">
@@ -44,9 +45,10 @@ function ReplayContent() {
   </main>;
   
   if (hand.isError || history.isError || !hand.data) return <div className="replay-page-error">
+    <div className="replay-error-mark" aria-hidden="true"><CircleAlert/></div>
     <h1>Não foi possível carregar o replay</h1>
     <p>A mão pode não pertencer à sua conta ou o histórico não está mais disponível.</p>
-    <Button render={<Link href="/hands"/>}>Minhas Mãos</Button>
+    <Button render={<Link href="/hands"/>}><History/> Ver minhas mãos</Button>
   </div>;
   
   const actions = [...(history.data?.actions || [])].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
@@ -54,7 +56,7 @@ function ReplayContent() {
     <nav>
       <Link
         href={`/hands/history?table_id=${encodeURIComponent(tableId)}&hand_id=${encodeURIComponent(handId)}&mode=${mode}`}>
-        <ChevronLeft/> Voltar para Detalhes da Mão
+        <ChevronLeft/> Detalhes da mão
       </Link>
     </nav>
     <HandReplayer hand={hand.data} actions={actions} viewerId={getViewerId()}/>

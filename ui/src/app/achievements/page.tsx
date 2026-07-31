@@ -1,14 +1,14 @@
 'use client';
 import {useCallback, useMemo, useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
-import {Sparkles, Trophy} from 'lucide-react';
+import {Sparkles, Star, Trophy} from 'lucide-react';
 import {AchievementCard} from '@/components/achievements/AchievementCard';
 import {Button} from '@/components/ui/button';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {FilterGroup} from '@/components/FilterGroup';
 import {SkeletonList, StatCardsSkeleton} from '@/components/ui/skeleton';
 import {achievementProgress, getAchievementCatalog, getMyAchievements} from '@/lib/api/achievements';
-import {achievementWalletMode} from '@/lib/achievements';
+import {achievementLabel, achievementWalletMode} from '@/lib/achievements';
 import type {WalletMode} from '@/lib/api/player';
 import {useOptionalSession} from "@/lib/auth/session";
 import {AppPageHeader, AppPageNav} from '@/components/AppPageChrome';
@@ -57,6 +57,20 @@ export default function Achievements() {
     
     return {starsEarned, maxStars, completedCount, unlockedCount, completionRate};
   }, [authed, catalog.data, mine.isLoading, progressMap, visibleCatalog]);
+
+  const nextMilestone = useMemo(() => {
+    if (!authed || mine.isLoading) return null;
+    const candidates = visibleCatalog.flatMap(item => {
+      const progress = achievementProgress(item.tiers, progressMap.get(item.key) ?? 0);
+      if (!progress.nextTier) return [];
+      const previousThreshold = Math.max(0, ...item.tiers
+        .filter(tier => tier.threshold <= progress.count)
+        .map(tier => tier.threshold));
+      const span = progress.nextTier.threshold - previousThreshold;
+      return [{item, progress, closeness: span > 0 ? (progress.count - previousThreshold) / span : 0}];
+    });
+    return candidates.sort((a, b) => b.closeness - a.closeness)[0] ?? null;
+  }, [authed, mine.isLoading, progressMap, visibleCatalog]);
   
   const filteredCatalog = useMemo(() => {
     if (!catalog.data) return [];
@@ -94,24 +108,43 @@ export default function Achievements() {
       {authed && !stats && !catalog.isError && !mine.isError
         ? <StatCardsSkeleton label="Calculando seu progresso…" count={4}/>
         : stats && (
-        <div className="achievements-stats-bar">
-          <div className="stat-card">
-            <span className="stat-label">Estrelas conquistadas</span>
-            <strong className="stat-value">{stats.starsEarned} <small>/ {stats.maxStars}</small></strong>
+        <section className="achievement-overview" aria-label="Resumo das conquistas">
+          <div className="achievement-overview-main">
+            <div className="achievement-overview-heading">
+              <div>
+                <span>Maestria geral</span>
+                <strong>{stats.completionRate}%</strong>
+              </div>
+              <span>{stats.starsEarned} de {stats.maxStars} estrelas</span>
+            </div>
+            <div className="achievement-overview-track" role="progressbar" aria-label="Maestria geral"
+                 aria-valuemin={0} aria-valuemax={100} aria-valuenow={stats.completionRate}>
+              <span style={{width: `${stats.completionRate}%`}}/>
+            </div>
+            <div className="achievements-stats-bar">
+              <div className="stat-card">
+                <span className="stat-label">Estrelas conquistadas</span>
+                <strong className="stat-value">{stats.starsEarned} <small>/ {stats.maxStars}</small></strong>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">Desbloqueadas</span>
+                <strong className="stat-value">{stats.unlockedCount} <small>/ {visibleCatalog.length}</small></strong>
+              </div>
+              <div className="stat-card">
+                <span className="stat-label">Completas</span>
+                <strong className="stat-value">{stats.completedCount}</strong>
+              </div>
+            </div>
           </div>
-          <div className="stat-card">
-            <span className="stat-label">Desbloqueadas</span>
-            <strong className="stat-value">{stats.unlockedCount} <small>/ {visibleCatalog.length}</small></strong>
-          </div>
-          <div className="stat-card">
-            <span className="stat-label">Completas</span>
-            <strong className="stat-value">{stats.completedCount}</strong>
-          </div>
-          <div className="stat-card">
-            <span className="stat-label">Maestria geral</span>
-            <strong className="stat-value">{stats.completionRate}%</strong>
-          </div>
-        </div>
+          {nextMilestone && <div className="achievement-next-star">
+            <span className="achievement-next-star-icon"><Star fill="currentColor" aria-hidden="true"/></span>
+            <div>
+              <span>Sua próxima estrela</span>
+              <strong>{achievementLabel(nextMilestone.item.key)}</strong>
+              <small>Faltam {(nextMilestone.progress.nextTier!.threshold - nextMilestone.progress.count).toLocaleString('pt-BR')} para o nível {nextMilestone.progress.nextTier!.stars}.</small>
+            </div>
+          </div>}
+        </section>
       )}
       
       {authed && !mine.isLoading && !mine.isError && catalog.data && (

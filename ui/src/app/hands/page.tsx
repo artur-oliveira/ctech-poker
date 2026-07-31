@@ -2,7 +2,7 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import Link from 'next/link';
 import {useInfiniteQuery} from '@tanstack/react-query';
-import {ChevronRight, History, Sparkles} from 'lucide-react';
+import {AlertCircle, ArrowRight, ChevronRight, History, LockKeyhole, SearchX, ShieldCheck} from 'lucide-react';
 import type {WalletMode} from '@/lib/api/player';
 import {getHands} from '@/lib/api/player';
 import {PlayingCard} from '@/components/table/PlayingCard';
@@ -46,11 +46,8 @@ export default function HandsHistory() {
   });
   const [filter, setFilter] = useState<HandFilter>('all');
 
-  // The entrance stagger is per page, not per flattened index: appended rows
-  // should cascade like the first batch did instead of all landing on the
-  // clamped 400 ms delay.
   const hands = useMemo(
-    () => (data?.pages ?? []).flatMap(page => page.data.map((hand, i) => ({hand, delay: Math.min(i, 10) * 40}))),
+    () => (data?.pages ?? []).flatMap(page => page.data),
     [data]
   );
   // Counts only cover what's been fetched so far; "+" keeps that honest
@@ -61,7 +58,7 @@ export default function HandsHistory() {
     if (!hands.length) return null;
     let netSum = 0;
     let winsCount = 0;
-    for (const {hand} of hands) {
+    for (const hand of hands) {
       netSum += hand.net_change;
       if (hand.outcome === 'won' || hand.outcome === 'tied') winsCount++;
     }
@@ -70,8 +67,8 @@ export default function HandsHistory() {
   }, [hands]);
 
   const filteredHands = useMemo(() => {
-    if (filter === 'wins') return hands.filter(({hand}) => hand.outcome === 'won' || hand.outcome === 'tied');
-    if (filter === 'losses') return hands.filter(({hand}) => hand.outcome === 'lost');
+    if (filter === 'wins') return hands.filter(hand => hand.outcome === 'won' || hand.outcome === 'tied');
+    if (filter === 'losses') return hands.filter(hand => hand.outcome === 'lost');
     return hands;
   }, [hands, filter]);
 
@@ -97,13 +94,13 @@ export default function HandsHistory() {
           icon={History}
           eyebrow="SEU HISTÓRICO"
           title="Mãos jogadas"
-          description="Histórico recente das suas mãos com cartas, board comunitário e prova de integridade criptográfica."
+          description="Reveja cada mesa, acompanhe seus resultados e abra a prova criptográfica de qualquer mão."
           backHref="/lobby"
         />
         <CurrencyModeTabs mode={mode} onChange={setMode}/>
 
         {isLoading ? <StatCardsSkeleton label="Somando suas mãos…" count={3}/> : stats && (
-          <div className="hands-stats-bar">
+          <div className="hands-stats-bar" aria-label="Resumo das mãos carregadas">
             <div className="stat-card">
               <span className="stat-label">Mãos jogadas</span>
               <strong className="stat-value">{stats.totalHands}{more}</strong>
@@ -136,25 +133,43 @@ export default function HandsHistory() {
         )}
 
         {isLoading ?
-          <SkeletonList label="Buscando seu histórico de mãos…" count={4} height={168} className="hands-list"/> :
-          isError ? <div className="lobby-empty">Não foi possível carregar seu histórico agora.
-              <button type="button" className="link-retry" onClick={() => void refetch()}>Tentar novamente</button>
+          <SkeletonList label="Reunindo cartas, resultados e provas…" count={4} height={168} className="hands-list"/> :
+          isError ? <div className="lobby-empty hands-state hands-state-error">
+              <AlertCircle aria-hidden="true"/>
+              <div>
+                <strong>Seu histórico não abriu desta vez</strong>
+                <p>As mãos continuam salvas. Tente carregar novamente.</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => void refetch()}>Tentar novamente</Button>
             </div> :
             !hands.length ?
-              <div className="lobby-empty">Você ainda não jogou nenhuma mão. As rodadas concluídas aparecerão aqui
-                automaticamente.</div> :
+              <div className="lobby-empty hands-state hands-state-first-hand">
+                <div className="hands-empty-cards" aria-hidden="true">
+                  <PlayingCard card="back" index={0} size="hole"/>
+                  <PlayingCard card="back" index={1} size="hole"/>
+                </div>
+                <div>
+                  <strong>Sua primeira mão começa no lobby</strong>
+                  <p>Quando uma rodada terminar, cartas, resultado e prova aparecerão aqui.</p>
+                </div>
+                <Button render={<Link href="/lobby"/>} variant="outline" size="sm">
+                  Encontrar uma mesa <ArrowRight aria-hidden="true"/>
+                </Button>
+              </div> :
               !filteredHands.length ? (
-                <div className="lobby-empty">
-                  <Sparkles aria-hidden="true"/>
-                  <p>Nenhuma mão encontrada neste filtro entre as {hands.length} carregadas.</p>
+                <div className="lobby-empty hands-state">
+                  <SearchX aria-hidden="true"/>
+                  <div>
+                    <strong>Nada por aqui neste filtro</strong>
+                    <p>Nenhuma das {hands.length} mãos carregadas corresponde a esta seleção.</p>
+                  </div>
                   <Button variant="outline" size="sm" onClick={() => setFilter('all')}>Ver todas</Button>
                 </div>
               ) : (
                 <div className="hands-list">
-                  {filteredHands.map(({hand, delay}) => <Link key={hand.hand_id}
+                  {filteredHands.map(hand => <Link key={hand.hand_id}
                                                               href={`/hands/history?table_id=${hand.table_id}&hand_id=${encodeURIComponent(hand.hand_id)}&mode=${mode}`}
-                                                              className="hand-row"
-                                                              style={{'--delay': `${delay}ms`} as React.CSSProperties}>
+                                                              className={`hand-row is-${hand.outcome}`}>
                     {/* Fixed grid tracks, not flow: every row has at most two hole
                         cards, five board slots, one category and one result, so
                         each of those gets its own column and lands at the same x
@@ -194,8 +209,8 @@ export default function HandsHistory() {
                           and is honest about which proof this hand carries. */}
                       {hand.server_seed
                         ? <span className="hand-row-seed"
-                                title={hand.server_seed}>seed {truncateSeed(hand.server_seed)}</span>
-                        : <span className="hand-row-seed is-pending">seed não revelada</span>}
+                                title={hand.server_seed}><ShieldCheck aria-hidden="true"/> seed {truncateSeed(hand.server_seed)}</span>
+                        : <span className="hand-row-seed is-pending"><LockKeyhole aria-hidden="true"/> seed não revelada</span>}
                       <ChevronRight className="hand-row-chevron" aria-hidden="true"/>
                     </div>
                   </Link>)}

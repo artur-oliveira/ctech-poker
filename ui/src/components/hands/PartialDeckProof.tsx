@@ -60,6 +60,7 @@ export function PartialDeckProof({rootCommitHash, revealed, unrevealed}: {
       <p>Esta mão terminou sem showdown, então a seed do servidor não é publicada — ela revelaria cartas que ninguém
         pagou para ver. Cada posição do baralho vem como carta + salt (o que você podia ver) ou apenas como hash
         comprometido, e o conjunto continua provando que o baralho é o mesmo desde antes da distribuição.</p>
+      <span className="deck-reveal-count" aria-live="polite">{flipped.size} de {revealedIndexes.length} cartas permitidas reveladas</span>
       <button type="button" className="deck-reveal-toggle-all"
               onClick={() => setFlipped(flipped.size === revealedIndexes.length ? new Set() : new Set(revealedIndexes))}>
         <Eye aria-hidden="true"/>{flipped.size === revealedIndexes.length ? 'Ocultar tudo' : 'Revelar tudo'}

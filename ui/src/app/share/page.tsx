@@ -55,7 +55,7 @@ function SharedHandContent() {
           <span>Cartas ocultas</span>}</div>
       </article>
       <article>
-        <b>Board Comunitário</b>
+        <b>Cartas comunitárias</b>
         <div>{(item.board || []).map((card, index) =>
           <PlayingCard key={`${card}-${index}`} card={card} index={index} size="board"/>)}</div>
       </article>

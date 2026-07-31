@@ -696,7 +696,7 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       previous_cursor: start > 0 ? String(Math.max(0, start - MOCK_HANDS_PAGE)) : null
     }, config);
   }
-  const createShareMatch = method === 'POST' ? path.match(/^\/v1\.0\/players\/me\/hands\/([^/]+)\/share$/) : null;
+  const createShareMatch = method === 'POST' ? path.match(/^\/v1\.0\/players\/me\/hand\/([^/]+)\/share$/) : null;
   if (createShareMatch) {
     const hand = mockHands.find(h => h.hand_id === createShareMatch[1]);
     if (!hand) fail(404, 'hand not found', config);

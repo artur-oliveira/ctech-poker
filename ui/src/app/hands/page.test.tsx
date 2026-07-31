@@ -95,7 +95,7 @@ describe('hands list page', () => {
     
     mocks.query.mockReturnValue(queryResult([pageOf([hands[0]])]));
     rerender(<HandsHistory/>);
-    expect(screen.getByText(/Nenhuma mão encontrada neste filtro/)).toBeInTheDocument();
+    expect(screen.getByText(/Nada por aqui neste filtro/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', {name: 'Ver todas'}));
     expect(screen.getByText('won')).toBeInTheDocument();
   });
@@ -103,7 +103,7 @@ describe('hands list page', () => {
   test('handles loading, failure with retry, and an empty account', () => {
     mocks.query.mockReturnValueOnce(queryResult([], {isLoading: true}));
     const view = render(<HandsHistory/>);
-    expect(screen.getByText(/Buscando seu histórico/)).toBeInTheDocument();
+    expect(screen.getByText(/Reunindo cartas, resultados e provas/)).toBeInTheDocument();
     
     mocks.query.mockReturnValueOnce(queryResult([], {isError: true}));
     view.rerender(<HandsHistory/>);
@@ -112,7 +112,8 @@ describe('hands list page', () => {
     
     mocks.query.mockReturnValueOnce(queryResult([pageOf([])]));
     view.rerender(<HandsHistory/>);
-    expect(screen.getByText(/ainda não jogou nenhuma mão/)).toBeInTheDocument();
+    expect(screen.getByText(/Sua primeira mão começa no lobby/)).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: /Encontrar uma mesa/})).toHaveAttribute('href', '/lobby');
   });
   
   test('marks counts as partial, appends pages and loads more on scroll or click', () => {

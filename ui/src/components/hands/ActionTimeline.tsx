@@ -24,7 +24,6 @@ import {
 
 import {Action, HandHistoryAction} from '@/lib/api/table';
 import {isTableReaction, TABLE_REACTIONS} from '@/lib/reactions';
-import React from "react";
 
 const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
   // Sistema
@@ -145,12 +144,11 @@ export function ActionTimeline({actions, resolveName}: {
   if (!actions.length) return <p className="action-timeline-empty">Nenhuma ação registrada para esta mão.</p>;
   
   return <ol className="action-timeline">
-    {actions.map((a, i) => {
+    {actions.map(a => {
       const meta = ACTION_META[a.action] || {label: a.action.replaceAll('_', ' '), Icon: HelpCircle};
       const Icon = meta.Icon;
       const reaction = a.reaction_id && isTableReaction(a.reaction_id) ? TABLE_REACTIONS[a.reaction_id] : null;
-      return <li key={a.seq} className={`action-row action-${a.action}`}
-                 style={{'--delay': `${Math.min(i, 12) * 30}ms`} as React.CSSProperties}>
+      return <li key={a.seq} className={`action-row action-${a.action}`}>
         <span className="action-row-icon" aria-hidden="true"><Icon/></span>
         <span className="action-row-who">{resolveName(a.player_id)}</span>
         <span className="action-row-what">

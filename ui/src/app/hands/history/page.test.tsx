@@ -101,11 +101,14 @@ describe('hand detail page', () => {
   test('integrates hand and chronologically sorted history responses', () => {
     render(<HandHistoryPage/>);
     expect(screen.getByText('outcome:won')).toBeInTheDocument();
+    expect(screen.getByText('Resultado líquido')).toBeInTheDocument();
     expect(screen.getByText('+500 fichas')).toBeInTheDocument();
+    expect(screen.getByText('Sandbox')).toBeInTheDocument();
     expect(screen.getAllByText('Royal flush').length).toBeGreaterThan(0);
     expect(screen.getByText('Cartas não reveladas')).toBeInTheDocument();
     expect(screen.getByTestId('timeline')).toHaveTextContent('1:Você|2:Bia');
     expect(screen.getByText('proof:seed-1')).toBeInTheDocument();
+    expect(screen.getByRole('region', {name: 'Board final da mão'})).toBeInTheDocument();
     expect(screen.getByRole('button', {name: /Assistir replay/})).toHaveAttribute(
       'href', '/hands/replay?table_id=table%2Fone&hand_id=hand%20one&mode=sandbox'
     );
