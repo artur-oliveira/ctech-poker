@@ -146,7 +146,7 @@ func (s *Store) LoadTable(ctx context.Context, tableID string) (*StoredTable, er
 // ctech-wallet/api/internal/repositories/wallet.go's mutate/resolveTxErr
 // shape: on a failed condition, re-read the guard to disambiguate a version
 // race from a duplicate submission.
-func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID string, expectedVersion int, newState hand.State, activity TableActivity, turnDeadlineUnixMs int64, entry ActionLogEntry) error {
+func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID string, expectedVersion int, newState hand.State, activity TableActivity, turnDeadlineUnixMs int64, entry ActionLogEntry, extra ...types.TransactWriteItem) error {
 	entry.Timestamp = timeNowFunc().UnixMilli()
 	stateItem, err := dynamo.Encode(struct {
 		State hand.State `dynamodbav:"state"`
@@ -203,6 +203,7 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 		if err != nil {
 			return fmt.Errorf("tablestore: encode guard: %w", err)
 		}
+		items = append(items, extra...)
 		items = append(items, s.guards.BuildPutTxItemIfAbsent(guardItem))
 	}
 

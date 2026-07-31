@@ -1,6 +1,8 @@
 package table
 
 import (
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
@@ -140,10 +142,11 @@ type JoinCmd struct {
 func (c JoinCmd) reply() chan error { return c.Reply }
 
 type LeaveCmd struct {
-	PlayerID string
-	Stack    chan int64  // receives the player's final stack, only after the removal commits
-	HoldID   chan string // receives the player's holdID, only after the removal commits
-	Reply    chan error
+	PlayerID         string
+	Stack            chan int64 // receives the player's final stack, only after the removal commits
+	SettlementIntent func(stack int64, holdID string) (types.TransactWriteItem, error)
+	HoldID           chan string // receives the player's holdID, only after the removal commits
+	Reply            chan error
 }
 
 func (c LeaveCmd) reply() chan error { return c.Reply }

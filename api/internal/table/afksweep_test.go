@@ -2,10 +2,13 @@ package table
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
+
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
 
@@ -83,6 +86,38 @@ func TestAFKSweepKicksOnlyStalePlayers(t *testing.T) {
 	if !seated["fresh"] {
 		t.Fatal("fresh player should not have been removed")
 	}
+}
+
+func TestAFKSweepKeepsSeatWhenSettlementIntentCannotBeBuilt(t *testing.T) {
+	now := time.Now()
+	game := hand.NewTable([]*hand.Player{
+		{ID: "fresh", Stack: 1000, LastActionAt: now.UnixMilli()},
+		{ID: "stale", Stack: 1000, LastActionAt: now.Add(-10 * time.Minute).UnixMilli()},
+	}, 10, 20)
+
+	actor := New("table-1", nil, true, func(string, hand.Snapshot) {})
+	defer actor.afkSweepTimer.Stop()
+	actor.cached = game
+	actor.kickGrace = 5 * time.Minute
+	called := false
+	actor.SetSystemSettlementIntentForActor(func(context.Context, string, string, int64, string) (types.TransactWriteItem, error) {
+		called = true
+		return types.TransactWriteItem{}, errors.New("dynamodb unavailable")
+	})
+
+	if err := actor.handleAFKSweep(context.Background(), afkSweepCmd{Reply: make(chan error, 1)}); err != nil {
+		t.Fatalf("handleAFKSweep: %v", err)
+	}
+	defer actor.afkSweepTimer.Stop()
+	if !called {
+		t.Fatal("expected the durable settlement builder to run")
+	}
+	for _, p := range actor.cached.PlayersForActor() {
+		if p.ID == "stale" {
+			return
+		}
+	}
+	t.Fatal("stale player's seat disappeared despite settlement-intent failure")
 }
 
 func TestNextHandRemovesIdlePlayerBeforeDeal(t *testing.T) {

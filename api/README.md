@@ -204,10 +204,15 @@ error beats silently ranking by a different GSI.
 - `buyin` (`internal/buyin/service.go`) branches on `room.CurrencyMode`: `sandbox` uses plain credit/debit
   (`NewServiceWithPlayers`); `real` uses the hold-based `GameWallet` path (`NewServiceWithGame`, wired only when
   `REAL_MONEY_ENABLED=true`, `internal/app/app.go:198-203`). Any other value returns `ErrUnsupportedCurrencyMode`.
-- **Ordering is deliberate and asymmetric**: debit-then-seat on buy-in (never hand out chips nobody paid for),
-  remove-then-credit on cash-out (never pay out a stack still in play). Anything that can fail *after* chips moved is
-  written to `poker_pending_cashouts` and retried by `cmd/reconcile` every 5 minutes; `Kind` separates a stuck cash-out
-  from a stuck fee debit.
+- Buy-in remains debit-then-seat so unpaid chips never enter a table. Cash-out commits the player removal, table
+  snapshot/action log, and immutable `poker_pending_cashouts` settlement intent in the same DynamoDB transaction.
+  Building or committing that transaction must succeed before Wallet is called; an error restores the actor's
+  in-memory seat and stack. Production services are wired with the pending store and refuse cash-out if it is absent.
+  Wallet settlement runs only after the durable table commit. A Wallet failure leaves the intent pending for
+  `cmd/reconcile` (every 5 minutes); replay uses the settlement ID, and `Kind` separates a stuck cash-out from a stuck
+  fee debit. AFK and disconnect removals use the same invariant: the manager asks `buyin.Service` to build the stable
+  `system_leave` intent and the actor co-writes it with removal. If that builder or transaction fails, the system keeps
+  the seat; the post-commit hook only performs the already-durable Wallet settlement.
 - **Real money is reachable and gated at runtime.** `POST /v1.0/rooms/` accepts
   `currency_mode: "real"` with a fixed `entry_fee_cents` validated against the tier catalog, and returns 400 unless
   `REAL_MONEY_ENABLED` is on. `LEGAL_SIGNOFF_REF` must be non-empty when it is, checked fail-closed in `config.Load`.

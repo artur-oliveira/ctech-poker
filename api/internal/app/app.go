@@ -38,6 +38,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/playernotes"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/problem"
+	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
@@ -79,6 +80,7 @@ var Module = fx.Options(
 		newSessionStore,
 		walletclient.New,
 		newBuyinService,
+		newPendingStore,
 		newTableManager,
 	),
 	fx.Invoke(wirePlayerRemovedHook),
@@ -298,11 +300,14 @@ func newSandboxPurchaseService(wallet *walletclient.Client, store *sandboxpurcha
 func newSessionStore(db *dynamodb.Client, cfg *config.Config) *sessionlog.Store {
 	return sessionlog.NewStore(db, cfg.Env)
 }
-func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store) *buyin.Service {
+func newPendingStore(db *dynamodb.Client, cfg *config.Config) *reconcile.PendingStore {
+	return reconcile.NewPendingStore(db, cfg.Env)
+}
+func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service, sessionStore *sessionlog.Store, pending *reconcile.PendingStore, pokerStatsStore *pokerstats.Store) *buyin.Service {
 	if cfg.RealMoneyEnabled {
-		return buyin.NewServiceWithGame(wallet, wallet, manager, rooms, wallet).WithSessionStore(sessionStore).WithPlayers(players).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore)
+		return buyin.NewServiceWithGame(wallet, wallet, manager, rooms, wallet).WithPendingStore(pending).WithSessionStore(sessionStore).WithPlayers(players).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore)
 	}
-	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players).WithSessionStore(sessionStore).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore)
+	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players).WithPendingStore(pending).WithSessionStore(sessionStore).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore)
 }
 
 type roomModeReader interface {
@@ -518,6 +523,7 @@ func handItemForWithAvatars(outcome hand.HandOutcome, id string, names, avatarUR
 // call after actors already exist (tablemanager.Manager checks the hook
 // dynamically on every fire, not at actor-creation time).
 func wirePlayerRemovedHook(mgr *tablemanager.Manager, buyinSvc *buyin.Service, reg ws.Registry) {
+	mgr.SetSystemSettlementIntent(buyinSvc.BuildSystemSettlementIntent)
 	mgr.SetOnPlayerRemoved(func(tableID, playerID, reason string, stack int64, holdID string) {
 		ctx := context.Background()
 		// Pushes an explicit "removed" frame straight to the removed player's

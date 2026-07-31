@@ -56,7 +56,7 @@ func NewPendingStore(db *dynamodb.Client, env string) *PendingStore {
 	}
 }
 
-func (s *PendingStore) Record(ctx context.Context, p PendingCashout) error {
+func (s *PendingStore) BuildRecordTx(p PendingCashout) (types.TransactWriteItem, error) {
 	if p.RecordedAt == "" {
 		p.RecordedAt = dynamo.NowStr()
 	}
@@ -66,9 +66,26 @@ func (s *PendingStore) Record(ctx context.Context, p PendingCashout) error {
 		PendingCashout
 	}{PK: p.ID, SK: pendingSK, PendingCashout: p})
 	if err != nil {
-		return fmt.Errorf("reconcile: encode: %w", err)
+		return types.TransactWriteItem{}, fmt.Errorf("reconcile: encode: %w", err)
 	}
-	return s.base.PutItem(ctx, item)
+	return s.base.BuildPutTxItemIfAbsent(item), nil
+}
+
+// Record persists an immutable recovery obligation. Replays are idempotent;
+// unlike the old PutItem path, a later caller can never overwrite its amount,
+// wallet mode, hold IDs, or idempotency key.
+func (s *PendingStore) Record(ctx context.Context, p PendingCashout) error {
+	item, err := s.BuildRecordTx(p)
+	if err != nil {
+		return err
+	}
+	if err := s.base.TransactWrite(ctx, []types.TransactWriteItem{item}); err != nil {
+		if dynamo.IsConditionFailed(err) {
+			return nil
+		}
+		return fmt.Errorf("reconcile: record: %w", err)
+	}
+	return nil
 }
 
 func (s *PendingStore) MarkResolved(ctx context.Context, id string) error {

@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/metrics"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
@@ -36,15 +38,16 @@ const (
 var ErrTableArchived = errors.New("tablemanager: table archived")
 
 type Manager struct {
-	env             string
-	leases          *tablelease.Service
-	store           *tablestore.Store
-	broadcast       func(tableID, viewerID string, snap hand.Snapshot)
-	onHandComplete  func(tableID, handID string, outcome hand.HandOutcome, names map[string]string)
-	onHandUpdated   func(tableID, handID string, outcome hand.HandOutcome, names map[string]string)
-	onSeatsChanged  func(tableID string, seatsTaken int)
-	onPlayerRemoved func(tableID, playerID, reason string, stack int64, holdID string)
-	roomLoader      func(tableID string) (*roomstore.Room, bool, error)
+	env                    string
+	leases                 *tablelease.Service
+	store                  *tablestore.Store
+	broadcast              func(tableID, viewerID string, snap hand.Snapshot)
+	onHandComplete         func(tableID, handID string, outcome hand.HandOutcome, names map[string]string)
+	onHandUpdated          func(tableID, handID string, outcome hand.HandOutcome, names map[string]string)
+	onSeatsChanged         func(tableID string, seatsTaken int)
+	onPlayerRemoved        func(tableID, playerID, reason string, stack int64, holdID string)
+	systemSettlementIntent func(context.Context, string, string, string, int64, string) (types.TransactWriteItem, error)
+	roomLoader             func(tableID string) (*roomstore.Room, bool, error)
 
 	mu       sync.Mutex
 	actors   map[string]*Actor
@@ -175,6 +178,12 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 		if m.onPlayerRemoved != nil {
 			m.onPlayerRemoved(tableID, playerID, reason, stack, holdID)
 		}
+	})
+	actor.SetSystemSettlementIntentForActor(func(ctx context.Context, playerID, reason string, stack int64, holdID string) (types.TransactWriteItem, error) {
+		if m.systemSettlementIntent == nil {
+			return types.TransactWriteItem{}, errors.New("tablemanager: system settlement intent builder unavailable")
+		}
+		return m.systemSettlementIntent(ctx, tableID, playerID, reason, stack, holdID)
 	})
 	runCtx, cancel := context.WithCancel(context.Background())
 	m.cancels[tableID] = cancel
@@ -309,4 +318,11 @@ func (m *Manager) DrainAndRelease(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// SetSystemSettlementIntent installs the pre-commit builder used by AFK and
+// disconnect removals. A system removal fails closed if this dependency is
+// absent or cannot build its durable recovery obligation.
+func (m *Manager) SetSystemSettlementIntent(fn func(context.Context, string, string, string, int64, string) (types.TransactWriteItem, error)) {
+	m.systemSettlementIntent = fn
 }

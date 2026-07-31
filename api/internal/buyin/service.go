@@ -11,6 +11,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
@@ -40,13 +42,19 @@ type activationChecker interface {
 	IsGamblingActivated(ctx context.Context, userID string) (bool, error)
 }
 
+type pendingStore interface {
+	BuildRecordTx(reconcile.PendingCashout) (types.TransactWriteItem, error)
+	Record(context.Context, reconcile.PendingCashout) error
+	MarkResolved(context.Context, string) error
+}
+
 type Service struct {
 	wallet     walletMover
 	game       walletMover
 	manager    *tablemanager.Manager
 	rooms      roomLookup
 	activation activationChecker
-	pending    *reconcile.PendingStore
+	pending    pendingStore
 	sessions   *sessionlog.Store
 	players    interface {
 		RequireAccepted(context.Context, string) error
@@ -72,7 +80,7 @@ func NewServiceWithGame(wallet, game walletMover, manager *tablemanager.Manager,
 	return &Service{wallet: wallet, game: game, manager: manager, rooms: rooms, activation: activation}
 }
 
-func (s *Service) WithPendingStore(pending *reconcile.PendingStore) *Service {
+func (s *Service) WithPendingStore(pending pendingStore) *Service {
 	s.pending = pending
 	return s
 }
@@ -279,11 +287,14 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 		if err := s.game.DebitReal(ctx, playerID, room.EntryFeeCents, feeKey, "poker_table_fee"); err != nil {
 			slog.Error("ALARM: poker table entry fee charge failed after seating, needs manual review",
 				"player", playerID, "room", roomID, "amount", room.EntryFeeCents, "err", err)
-			if s.pending != nil {
-				_ = s.pending.Record(ctx, reconcile.PendingCashout{
-					ID: feeKey, PlayerID: playerID, Amount: room.EntryFeeCents, CurrencyMode: "real",
-					Kind: reconcile.KindFeeDebit, TableRef: roomID, IdempotencyKey: feeKey,
-				})
+			if s.pending == nil {
+				return fmt.Errorf("buyin: table fee charge failed and settlement store is unavailable: %w", err)
+			}
+			if recordErr := s.pending.Record(ctx, reconcile.PendingCashout{
+				ID: feeKey, PlayerID: playerID, Amount: room.EntryFeeCents, CurrencyMode: "real",
+				Kind: reconcile.KindFeeDebit, TableRef: roomID, IdempotencyKey: feeKey,
+			}); recordErr != nil {
+				return fmt.Errorf("buyin: table fee charge failed and recovery intent persistence failed: charge=%v persistence=%w", err, recordErr)
 			}
 			return fmt.Errorf("buyin: table fee charge failed after seating — reconciliation job will retry: %w", err)
 		}
@@ -355,6 +366,23 @@ func (s *Service) CashOut(ctx context.Context, roomID, playerID, idemKey string)
 	if err != nil {
 		return 0, fmt.Errorf("buyin: %w", err)
 	}
+	if s.pending == nil {
+		return 0, errors.New("buyin: settlement store unavailable; refusing to remove seat")
+	}
+
+	mode := "sandbox"
+	if room, err := s.rooms.Get(ctx, roomID); err != nil {
+		return 0, fmt.Errorf("buyin: room lookup for settlement: %w", err)
+	} else if room != nil {
+		mode = room.CurrencyMode
+	}
+
+	// Stable per (room, player) key by default; a fresh client nonce per
+	// cash-out click makes a rebuy-then-cashout distinct (and still retry-safe).
+	key := fmt.Sprintf("%s#%s#cashout", roomID, playerID)
+	if idemKey != "" {
+		key = fmt.Sprintf("%s#%s#cashout#%s", roomID, playerID, idemKey)
+	}
 
 	actor, err := s.manager.GetOrCreateActor(ctx, roomID, s.seedFor(ctx, roomID))
 	if err != nil || actor == nil {
@@ -364,20 +392,50 @@ func (s *Service) CashOut(ctx context.Context, roomID, playerID, idemKey string)
 	stackCh := make(chan int64, 1)
 	holdIDCh := make(chan string, 1)
 	reply := make(chan error, 1)
-	if err := actor.Dispatch(table.LeaveCmd{PlayerID: playerID, Stack: stackCh, HoldID: holdIDCh, Reply: reply}); err != nil {
+	buildIntent := func(stack int64, holdID string) (types.TransactWriteItem, error) {
+		var holdIDs []string
+		if holdID != "" {
+			holdIDs = []string{holdID}
+		}
+		return s.pending.BuildRecordTx(reconcile.PendingCashout{
+			ID: key, PlayerID: playerID, Amount: stack, CurrencyMode: mode,
+			HoldIDs: holdIDs, TableRef: roomID, IdempotencyKey: key,
+		})
+	}
+	if err := actor.Dispatch(table.LeaveCmd{
+		PlayerID: playerID, Stack: stackCh, HoldID: holdIDCh,
+		SettlementIntent: buildIntent, Reply: reply,
+	}); err != nil {
 		return 0, fmt.Errorf("buyin: leave: %w", err)
 	}
 	stack := <-stackCh
 	holdID := <-holdIDCh
-
-	// Stable per (room, player) key by default; a fresh client nonce per
-	// cash-out click makes a rebuy-then-cashout distinct (and still retry-safe).
-	key := fmt.Sprintf("%s#%s#cashout", roomID, playerID)
-	if idemKey != "" {
-		key = fmt.Sprintf("%s#%s#cashout#%s", roomID, playerID, idemKey)
-	}
-
 	return stack, s.settle(ctx, roomID, playerID, stack, holdID, mover, key)
+}
+
+// BuildSystemSettlementIntent creates the immutable recovery row that an
+// Actor co-writes with an AFK/disconnect seat removal.
+func (s *Service) BuildSystemSettlementIntent(ctx context.Context, roomID, playerID, reason string, stack int64, holdID string) (types.TransactWriteItem, error) {
+	if s.pending == nil {
+		return types.TransactWriteItem{}, errors.New("buyin: settlement store unavailable")
+	}
+	mode := "sandbox"
+	room, err := s.rooms.Get(ctx, roomID)
+	if err != nil {
+		return types.TransactWriteItem{}, fmt.Errorf("buyin: load room for settlement intent: %w", err)
+	}
+	if room != nil {
+		mode = room.CurrencyMode
+	}
+	key := fmt.Sprintf("%s#%s#system_leave#%s", roomID, playerID, reason)
+	var holdIDs []string
+	if holdID != "" {
+		holdIDs = []string{holdID}
+	}
+	return s.pending.BuildRecordTx(reconcile.PendingCashout{
+		ID: key, PlayerID: playerID, Amount: stack, CurrencyMode: mode,
+		HoldIDs: holdIDs, TableRef: roomID, IdempotencyKey: key,
+	})
 }
 
 // SettleSystemRemoval credits a player's final stack back to their wallet and
@@ -406,24 +464,22 @@ func (s *Service) SettleSystemRemoval(ctx context.Context, roomID, playerID stri
 // wallet can't be determined, while SettleSystemRemoval has no such seat to
 // protect (the removal already happened).
 func (s *Service) settle(ctx context.Context, roomID, playerID string, stack int64, holdID string, mover walletMover, key string) error {
-	if s.pending != nil {
-		mode := "sandbox"
-		if room, _ := s.rooms.Get(ctx, roomID); room != nil {
-			mode = room.CurrencyMode
-		}
-		var holdIDs []string
-		if holdID != "" {
-			holdIDs = []string{holdID}
-		}
-		_ = s.pending.Record(ctx, reconcile.PendingCashout{
-			ID:             key,
-			PlayerID:       playerID,
-			Amount:         stack,
-			CurrencyMode:   mode,
-			HoldIDs:        holdIDs,
-			TableRef:       roomID,
-			IdempotencyKey: key,
-		})
+	if s.pending == nil {
+		return errors.New("buyin: settlement store unavailable")
+	}
+	mode := "sandbox"
+	if room, _ := s.rooms.Get(ctx, roomID); room != nil {
+		mode = room.CurrencyMode
+	}
+	var holdIDs []string
+	if holdID != "" {
+		holdIDs = []string{holdID}
+	}
+	if err := s.pending.Record(ctx, reconcile.PendingCashout{
+		ID: key, PlayerID: playerID, Amount: stack, CurrencyMode: mode,
+		HoldIDs: holdIDs, TableRef: roomID, IdempotencyKey: key,
+	}); err != nil {
+		return fmt.Errorf("buyin: persist settlement recovery intent: %w", err)
 	}
 
 	// stack == 0 (player busted, nothing to return) — skip the wallet call
@@ -446,8 +502,8 @@ func (s *Service) settle(ctx context.Context, roomID, playerID string, stack int
 		}
 	}
 
-	if s.pending != nil {
-		_ = s.pending.MarkResolved(ctx, key)
+	if err := s.pending.MarkResolved(ctx, key); err != nil {
+		return fmt.Errorf("buyin: settlement completed but recovery intent finalization failed: %w", err)
 	}
 
 	if s.sessions != nil {

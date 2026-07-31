@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/oklog/ulid/v2"
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/equity"
@@ -108,7 +109,8 @@ type Actor struct {
 	// inside the Actor's own goroutine), so without forwarding them here the
 	// removed player's chips are never credited back to any wallet and their
 	// sessionlog entry is never closed (buyin.SettleSystemRemoval does both).
-	onPlayerRemoved func(playerID, reason string, stack int64, holdID string)
+	onPlayerRemoved        func(playerID, reason string, stack int64, holdID string)
+	systemSettlementIntent func(context.Context, string, string, int64, string) (types.TransactWriteItem, error)
 	// connCount mirrors the total size of activeConns across all players.
 	// Maintained only inside Run (handleConnect/handleDisconnect) but read via
 	// ActiveConnCount from any goroutine — same pattern as equityEnabled —
@@ -781,6 +783,10 @@ func (a *Actor) SetOnPlayerRemovedForActor(fn func(playerID, reason string, stac
 	a.onPlayerRemoved = fn
 }
 
+func (a *Actor) SetSystemSettlementIntentForActor(fn func(context.Context, string, string, int64, string) (types.TransactWriteItem, error)) {
+	a.systemSettlementIntent = fn
+}
+
 func (a *Actor) notifySeatsChanged() {
 	if a.onSeatsChanged != nil && a.cached != nil {
 		a.onSeatsChanged(len(a.cached.PlayersForActor()))
@@ -889,7 +895,7 @@ func (a *Actor) commitOutcomeLogEntries(ctx context.Context) error {
 	return nil
 }
 
-func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.ActionLogEntry) error {
+func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.ActionLogEntry, extra ...types.TransactWriteItem) error {
 	if a.store == nil {
 		// Mirrors ensureLoaded's nil-store no-op: unit tests construct an
 		// Actor with a nil store to exercise engine-level handler logic
@@ -902,7 +908,7 @@ func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.A
 	entry.TableID, entry.HandID, entry.Version = a.id, a.handID, a.version+1
 	entry.Frame = replayFrameFor(a.cached.ViewFor(""))
 	deadline := a.turnDeadlineForPersist()
-	if err := a.store.CommitAction(ctx, a.id, a.handID, actionID, a.version, newState, a.activity, deadline, *entry); err != nil {
+	if err := a.store.CommitAction(ctx, a.id, a.handID, actionID, a.version, newState, a.activity, deadline, *entry, extra...); err != nil {
 		return err
 	}
 	a.version++
@@ -1133,7 +1139,7 @@ func (a *Actor) handleKickTimeout(ctx context.Context, c kickTimeoutCmd) error {
 	// guarantee across actor replacement; this retry covers the same actor.
 	stackCh := make(chan int64, 1)
 	holdIDCh := make(chan string, 1)
-	if err := a.handleLeave(ctx, LeaveCmd{PlayerID: c.PlayerID, Stack: stackCh, HoldID: holdIDCh}); err != nil {
+	if err := a.handleLeave(ctx, a.systemLeaveCmd(ctx, c.PlayerID, "disconnected", stackCh, holdIDCh)); err != nil {
 		a.armKickRetry(c.PlayerID)
 		return err
 	}
@@ -1217,7 +1223,7 @@ func (a *Actor) handleAFKSweep(ctx context.Context, c afkSweepCmd) error {
 	for _, id := range stale {
 		stackCh := make(chan int64, 1)
 		holdIDCh := make(chan string, 1)
-		if err := a.handleLeave(ctx, LeaveCmd{PlayerID: id, Stack: stackCh, HoldID: holdIDCh}); err != nil {
+		if err := a.handleLeave(ctx, a.systemLeaveCmd(ctx, id, "idle", stackCh, holdIDCh)); err != nil {
 			continue // still dealt into a hand in progress; next sweep retries
 		}
 		if a.onPlayerRemoved != nil {
@@ -1243,7 +1249,7 @@ func (a *Actor) removeIdlePlayersBetweenHands(ctx context.Context) {
 	for _, id := range stale {
 		stackCh := make(chan int64, 1)
 		holdIDCh := make(chan string, 1)
-		if err := a.handleLeave(ctx, LeaveCmd{PlayerID: id, Stack: stackCh, HoldID: holdIDCh}); err != nil {
+		if err := a.handleLeave(ctx, a.systemLeaveCmd(ctx, id, "idle", stackCh, holdIDCh)); err != nil {
 			continue
 		}
 		if a.onPlayerRemoved != nil {
@@ -1499,6 +1505,16 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 	return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "join"})
 }
 
+func (a *Actor) systemLeaveCmd(ctx context.Context, playerID, reason string, stack chan int64, holdID chan string) LeaveCmd {
+	cmd := LeaveCmd{PlayerID: playerID, Stack: stack, HoldID: holdID}
+	if a.systemSettlementIntent != nil {
+		cmd.SettlementIntent = func(amount int64, hold string) (types.TransactWriteItem, error) {
+			return a.systemSettlementIntent(ctx, playerID, reason, amount, hold)
+		}
+	}
+	return cmd
+}
+
 // handleLeave removes the player and reports their final stack on c.Stack —
 // but only after the removal has actually committed, so a caller (buyin's
 // CashOut) never credits a wallet for a leave that a version conflict or
@@ -1537,11 +1553,22 @@ func (a *Actor) handleLeave(ctx context.Context, c LeaveCmd) error {
 }
 
 func (a *Actor) applyLeaveAndCommit(ctx context.Context, c LeaveCmd) (int64, string, error) {
+	before := a.cached.ExportState()
 	stack, holdID, err := a.cached.RemovePlayerForActor(c.PlayerID)
 	if err != nil {
 		return 0, "", err
 	}
-	if err := a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "leave"}); err != nil {
+	var extra []types.TransactWriteItem
+	if c.SettlementIntent != nil {
+		intent, err := c.SettlementIntent(stack, holdID)
+		if err != nil {
+			a.cached = hand.NewTableFromState(before)
+			return 0, "", fmt.Errorf("table: build settlement intent: %w", err)
+		}
+		extra = append(extra, intent)
+	}
+	if err := a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "leave"}, extra...); err != nil {
+		a.cached = hand.NewTableFromState(before)
 		return 0, "", err
 	}
 	return stack, holdID, nil

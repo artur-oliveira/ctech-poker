@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 )
 
@@ -69,4 +70,12 @@ func testSessionStore(t *testing.T) *sessionlog.Store {
 	createTestTable(t, db, env+"_poker_player_sessions", true)
 	createTestTable(t, db, env+"_poker_player_hands", true)
 	return sessionlog.NewStore(db, env)
+}
+
+func testPendingStore(t *testing.T) *reconcile.PendingStore {
+	t.Helper()
+	db := testClient(t)
+	env := fmt.Sprintf("buyin_pending_test_%d", time.Now().UnixNano())
+	createTestTable(t, db, env+"_poker_pending_cashouts", true)
+	return reconcile.NewPendingStore(db, env)
 }

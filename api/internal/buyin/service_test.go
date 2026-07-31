@@ -10,8 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 	"gopkg.aoctech.app/poker/api/internal/table"
@@ -48,6 +50,14 @@ type cashoutCall struct {
 	idempotencyKey string
 	reason         string
 }
+
+type failingPendingStore struct{ err error }
+
+func (s failingPendingStore) BuildRecordTx(reconcile.PendingCashout) (types.TransactWriteItem, error) {
+	return types.TransactWriteItem{}, s.err
+}
+func (s failingPendingStore) Record(context.Context, reconcile.PendingCashout) error { return s.err }
+func (s failingPendingStore) MarkResolved(context.Context, string) error             { return s.err }
 
 func (f *fakeWallet) Credit(_ context.Context, userID string, amount int64, key, _ string) error {
 	f.credits = append(f.credits, call{userID, amount, key})
@@ -236,7 +246,7 @@ func TestCashOutRemovesThenCredits(t *testing.T) {
 	wallet := &fakeWallet{}
 	mgr := testManager(t)
 	rooms := testRoomLookup()
-	svc := NewService(wallet, mgr, rooms)
+	svc := NewService(wallet, mgr, rooms).WithPendingStore(testPendingStore(t))
 	ctx := context.Background()
 
 	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
@@ -256,6 +266,38 @@ func TestCashOutRemovesThenCredits(t *testing.T) {
 	}
 	if len(wallet.credits) != 1 || wallet.credits[0].amount != 400 {
 		t.Fatalf("expected one 400-chip credit, got %+v", wallet.credits)
+	}
+}
+
+func TestCashOutKeepsSeatWhenSettlementIntentCannotBePersisted(t *testing.T) {
+	wallet := &fakeWallet{}
+	mgr := testManager(t)
+	svc := NewService(wallet, mgr, testRoomLookup()).WithPendingStore(failingPendingStore{err: errors.New("dynamodb unavailable")})
+	ctx := context.Background()
+
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	actor, err := mgr.GetOrCreateActor(ctx, "room-cashout-failure", seed)
+	if err != nil {
+		t.Fatalf("get or create actor: %v", err)
+	}
+	if err := svc.BuyIn(ctx, "room-cashout-failure", "user-1", 400, false, ""); err != nil {
+		t.Fatalf("buyin: %v", err)
+	}
+
+	if _, err := svc.CashOut(ctx, "room-cashout-failure", "user-1", "nonce"); err == nil {
+		t.Fatal("expected cashout to fail when the durable settlement intent cannot be built")
+	}
+	if len(wallet.credits) != 0 {
+		t.Fatalf("wallet must not be credited after failed seat transaction, got %+v", wallet.credits)
+	}
+	found := false
+	for _, seat := range actor.TableForTest().ViewFor("user-1").Seats {
+		if seat.PlayerID == "user-1" && seat.Stack == 400 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("player seat must be restored when the settlement intent cannot be committed")
 	}
 }
 
@@ -325,7 +367,7 @@ func TestCashOutClosesTheOpenSession(t *testing.T) {
 	wallet := &fakeWallet{}
 	mgr := testManager(t)
 	rooms := testRoomLookup()
-	svc := NewService(wallet, mgr, rooms)
+	svc := NewService(wallet, mgr, rooms).WithPendingStore(testPendingStore(t))
 	sessions := testSessionStore(t)
 	svc.WithSessionStore(sessions)
 	ctx := context.Background()
@@ -356,7 +398,7 @@ func TestSettleSkipsWalletCallForZeroStack(t *testing.T) {
 	wallet := &fakeWallet{}
 	mgr := testManager(t)
 	rooms := testRoomLookup()
-	svc := NewService(wallet, mgr, rooms)
+	svc := NewService(wallet, mgr, rooms).WithPendingStore(testPendingStore(t))
 	sessions := testSessionStore(t)
 	svc.WithSessionStore(sessions)
 	ctx := context.Background()
@@ -509,7 +551,7 @@ func TestBuyInChargesFeeAgainOnRebuyAfterLeaving(t *testing.T) {
 		ID: "room-real-rebuy", CurrencyMode: "real", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9,
 		EntryFeeCents: 100,
 	}}
-	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}})
+	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}}).WithPendingStore(testPendingStore(t))
 	ctx := context.Background()
 
 	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
