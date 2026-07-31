@@ -1,9 +1,7 @@
 'use client';
 import {useCallback, useMemo, useState} from 'react';
-import Link from 'next/link';
 import {useQuery} from '@tanstack/react-query';
-import {Award, BookOpen, ChevronLeft, Club, History, Sparkles, Trophy} from 'lucide-react';
-import {ProfileMenu} from '@/components/lobby/ProfileMenu';
+import {Sparkles, Trophy} from 'lucide-react';
 import {AchievementCard} from '@/components/achievements/AchievementCard';
 import {Button} from '@/components/ui/button';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
@@ -13,6 +11,7 @@ import {achievementProgress, getAchievementCatalog, getMyAchievements} from '@/l
 import {achievementWalletMode} from '@/lib/achievements';
 import type {WalletMode} from '@/lib/api/player';
 import {useOptionalSession} from "@/lib/auth/session";
+import {AppPageHeader, AppPageNav} from '@/components/AppPageChrome';
 
 type FilterTab = 'all' | 'unlocked' | 'in_progress' | 'completed';
 
@@ -76,26 +75,17 @@ export default function Achievements() {
   if (checking) return <div className="loading-screen"><span className="loader"/>Carregando conquistas…</div>;
   
   return <main className="app-page">
-    <nav className="app-nav shell">
-      <Link href="/" className="brand"><span className="brand-mark"><Club/></span>CTech <b>Poker</b></Link>
-      {authed ? <div className="header-right">
-        <Link href="/guide"><BookOpen/> <span className="header-right-label">Guia</span></Link>
-        <Link href="/leaderboard"><Trophy/> <span className="header-right-label">Ranking</span></Link>
-        <Link href="/achievements"><Award/> <span className="header-right-label">Conquistas</span></Link>
-        <Link href="/hands"><History/> <span className="header-right-label">Mãos</span></Link>
-        <ProfileMenu/>
-      </div> : <Link href="/"><ChevronLeft/> Voltar</Link>}
-    </nav>
-    <section className="achievements shell">
-      {authed && <Link href="/lobby"><ChevronLeft/> Lobby</Link>}
-      <header>
-        <small>PROGRESSO DO JOGADOR</small>
-        <Trophy aria-hidden="true"/>
-        <h1>Conquistas</h1>
-        <p>{authed
+    <AppPageNav authed={authed} current="achievements"/>
+    <section className="content-page achievements shell">
+      <AppPageHeader
+        icon={Trophy}
+        eyebrow="PROGRESSO DO JOGADOR"
+        title="Conquistas"
+        description={authed
           ? 'Cada estrela representa uma meta vencida. Passe, toque ou use o teclado para conferir o requisito de cada nível.'
-          : 'Entre com sua conta CTech para registrar seu progresso e desbloquear conquistas a cada mão.'}</p>
-      </header>
+          : 'Entre com sua conta CTech para registrar seu progresso e desbloquear conquistas a cada mão.'}
+        backHref={authed ? '/lobby' : undefined}
+      />
       {/* The wallet tabs already say which wallet is selected; a second sentence
           repeating it sat off the page's centred axis and told the player nothing
           they had not just chosen. */}

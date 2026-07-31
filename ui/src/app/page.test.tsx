@@ -23,13 +23,14 @@ describe('landing page', () => {
   test('renders the complete public navigation and product proposition', () => {
     render(<Home/>);
     
-    expect(screen.getByRole('heading', {name: /Sua mesa de poker/})).toBeInTheDocument();
-    expect(screen.getByRole('link', {name: 'Recursos'})).toHaveAttribute('href', '#experience');
+    expect(screen.getByRole('heading', {name: /A noite de poker/})).toBeInTheDocument();
+    expect(screen.getByRole('link', {name: 'Novidades'})).toHaveAttribute('href', '#novidades');
+    expect(screen.getByRole('link', {name: 'Por que jogar'})).toHaveAttribute('href', '#experience');
     expect(screen.getByRole('link', {name: 'Conquistas'})).toHaveAttribute('href', '#achievements');
     expect(screen.getByRole('link', {name: 'Regras'})).toHaveAttribute('href', '/poker-rules');
     expect(screen.getByRole('link', {name: 'Guia'})).toHaveAttribute('href', '/guide');
     expect(screen.getByRole('link', {name: 'Ranking'})).toHaveAttribute('href', '/leaderboard');
-    expect(screen.getByText('Sandbox 100% Grátis')).toBeInTheDocument();
+    expect(screen.getByText('Fichas sandbox')).toBeInTheDocument();
     expect(screen.getByText('2–9 jogadores')).toBeInTheDocument();
   });
   
@@ -49,14 +50,14 @@ describe('landing page', () => {
   test('shows all feature, achievement and table preview content without API data', () => {
     render(<Home/>);
     
-    expect(screen.getAllByRole('article')).toHaveLength(10);
+    expect(screen.getAllByRole('article')).toHaveLength(12);
     expect(screen.getByText('Ação em Tempo Real')).toBeInTheDocument();
-    expect(screen.getByText('Conquistas Progressivas')).toBeInTheDocument();
+    expect(screen.getByText('Progresso sem pressão')).toBeInTheDocument();
     expect(screen.getByLabelText('Prévia de uma mesa de poker')).toBeInTheDocument();
     expect(screen.getByText('POTE')).toHaveTextContent('2.450');
     expect(screen.getByText('Você')).toBeInTheDocument();
     expect(screen.getAllByTestId('achievement-card')).toHaveLength(11);
-    expect(screen.getByRole('img', {name: /Mesa real do CTech Poker/}))
+    expect(screen.getByRole('img', {name: 'Mesa real do CTech Poker em andamento, com cartas comunitárias e barra de ações'}))
       .toHaveAttribute('data-src', '/guide/table-flop.webp');
     expect(screen.getByRole('img', {name: /Lobby do CTech Poker/}))
       .toHaveAttribute('data-src', '/guide/lobby.webp');

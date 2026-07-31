@@ -6,6 +6,7 @@ import type {HandItem} from '@/lib/api/player';
 import type {DeckVariantId} from '@/lib/cardVariants';
 import type {Room} from '@/lib/api/rooms';
 import type {Page} from '@/lib/api/client';
+import type {SandboxPurchase, SandboxSKU} from '@/lib/api/wallet';
 import type {PlayerNote} from '@/lib/api/playerNotes';
 import type {
   ActionPreselection,
@@ -267,6 +268,67 @@ const mockProfile = {
   sandbox_balance: 4850
 };
 
+const mockSandboxSkus: SandboxSKU[] = [
+  {id: 'pack_1000', price_cents: 490, base_credits: 1000, bonus_percent: 0, total_credits: 1000},
+  {id: 'pack_5000', price_cents: 1990, base_credits: 5000, bonus_percent: 10, total_credits: 5500},
+  {id: 'pack_12000', price_cents: 3990, base_credits: 12000, bonus_percent: 20, total_credits: 14400},
+  {id: 'pack_30000', price_cents: 7990, base_credits: 30000, bonus_percent: 25, total_credits: 37500},
+];
+
+type MockSandboxPurchase = SandboxPurchase & {
+  resolves_at_ms: number;
+  balance_applied: boolean;
+  outcome: 'confirmed' | 'expired' | 'failed';
+};
+
+const mockSandboxPurchases: MockSandboxPurchase[] = [];
+
+function publicPurchase(purchase: MockSandboxPurchase): SandboxPurchase {
+  const result = {...purchase} as Partial<MockSandboxPurchase>;
+  delete result.resolves_at_ms;
+  delete result.balance_applied;
+  delete result.outcome;
+  return result as SandboxPurchase;
+}
+
+function settlePurchase(purchase: MockSandboxPurchase) {
+  if (purchase.status !== 'pending' || Date.now() < purchase.resolves_at_ms) return;
+  purchase.status = purchase.outcome;
+  purchase.updated_at = new Date().toISOString();
+  if (purchase.status === 'confirmed' && !purchase.balance_applied) {
+    mockProfile.sandbox_balance += purchase.total_credits || 0;
+    purchase.balance_applied = true;
+  }
+}
+
+// The mock Pix payload cannot be paid, but a QR-shaped SVG exercises the same
+// image/layout path as production without adding a QR dependency to the SPA.
+function mockQRCodeBase64(seed: string) {
+  let hash = 2166136261;
+  for (const char of seed) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  const finderCell = (x: number, y: number) => {
+    const inTop = y < 7 && (x < 7 || x >= 22);
+    const inBottom = y >= 22 && x < 7;
+    if (!inTop && !inBottom) return null;
+    const localX = x >= 22 ? x - 22 : x;
+    const localY = y >= 22 ? y - 22 : y;
+    return localX === 0 || localX === 6 || localY === 0 || localY === 6 ||
+      (localX >= 2 && localX <= 4 && localY >= 2 && localY <= 4);
+  };
+  const cells: string[] = [];
+  for (let y = 0; y < 29; y++) {
+    for (let x = 0; x < 29; x++) {
+      const finder = finderCell(x, y);
+      hash = Math.imul(hash ^ (x + y * 29), 16777619);
+      if (finder === true || (finder === null && (hash >>> 29) % 2 === 1)) {
+        cells.push(`<rect x="${x + 2}" y="${y + 2}" width="1" height="1"/>`);
+      }
+    }
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 33 33" shape-rendering="crispEdges"><rect width="33" height="33" fill="#fff"/><g fill="#120d0e">${cells.join('')}</g></svg>`;
+  return btoa(svg);
+}
+
 // Mirrors api/internal/achievements/catalog.go — same keys, metrics and tier
 // thresholds, so the mock exercises the exact shape the real catalog sends.
 const commonTiers: Tier[] = [{stars: 1, threshold: 1}, {stars: 2, threshold: 10}, {
@@ -339,7 +401,15 @@ const mockAchievementProgress: PlayerAchievementProgress[] = [
 const MOCK_CREDIT_COOLDOWN_S = 90;
 const CREDIT_KEY = 'mock_next_credit_at';
 let nextCreditAt = typeof window === 'undefined' ? 0 : Number(sessionStorage.getItem(CREDIT_KEY)) || 0;
-const creditCooldown = () => Math.max(0, Math.ceil((nextCreditAt - Date.now()) / 1000));
+const creditCooldown = () => {
+  // sessionStorage is authoritative in the browser. Reading it on demand
+  // also makes the mock resettable after a Next.js hot reload, where this
+  // module's in-memory deadline can otherwise outlive the cleared storage.
+  const deadline = typeof window === 'undefined'
+    ? nextCreditAt
+    : Number(sessionStorage.getItem(CREDIT_KEY)) || 0;
+  return Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+};
 
 function ok<T>(data: T, config: InternalAxiosRequestConfig): AxiosResponse<T> {
   return {data, status: 200, statusText: 'OK', headers: {}, config};
@@ -492,6 +562,63 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       best_hand: mockHands[0]
     }, config);
   }
+  if (method === 'GET' && /^\/v1\.0\/wallet\/sandbox-purchase\/skus\/?$/.test(path)) {
+    return ok(mockSandboxSkus.map(sku => ({...sku})), config);
+  }
+  if (method === 'GET' && /^\/v1\.0\/wallet\/sandbox-purchase\/?$/.test(path)) {
+    mockSandboxPurchases.forEach(settlePurchase);
+    return ok(mockSandboxPurchases.map(publicPurchase), config);
+  }
+  if (method === 'POST' && /^\/v1\.0\/wallet\/sandbox-purchase\/?$/.test(path)) {
+    const sku = mockSandboxSkus.find(item => item.id === body.sku);
+    if (!sku) fail(400, 'unknown sandbox SKU', config);
+    const outcomeValue = typeof window === 'undefined'
+      ? 'confirmed'
+      : window.localStorage.getItem('ctech_poker_mock_purchase_outcome');
+    const outcome = outcomeValue === 'expired' || outcomeValue === 'failed' ? outcomeValue : 'confirmed';
+    const now = Date.now();
+    const purchase: MockSandboxPurchase = {
+      player_id: MOCK_PLAYER_ID,
+      purchase_id: `mock-pix-${crypto.randomUUID()}`,
+      sku: sku.id,
+      price_cents: sku.price_cents,
+      base_credits: sku.base_credits,
+      bonus_percent: sku.bonus_percent,
+      total_credits: sku.total_credits,
+      status: 'pending',
+      pix_copia_e_cola: `00020126MOCK.CTECH.POKER.${sku.id}.${crypto.randomUUID()}`,
+      qr_code_base64: mockQRCodeBase64(`${sku.id}.${body.idem_key || now}`),
+      expires_at: new Date(now + (outcome === 'expired' ? 7000 : 120_000)).toISOString(),
+      created_at: new Date(now).toISOString(),
+      updated_at: new Date(now).toISOString(),
+      resolves_at_ms: now + 7000,
+      balance_applied: false,
+      outcome,
+    };
+    mockSandboxPurchases.unshift(purchase);
+    return ok(publicPurchase(purchase), config);
+  }
+  const sandboxPurchaseMatch = path.match(/^\/v1\.0\/wallet\/sandbox-purchase\/([^/]+)\/?$/);
+  if (method === 'GET' && sandboxPurchaseMatch) {
+    const purchase = mockSandboxPurchases.find(item => item.purchase_id === sandboxPurchaseMatch[1]);
+    if (!purchase) fail(404, 'sandbox purchase not found', config);
+    settlePurchase(purchase);
+    return ok(publicPurchase(purchase), config);
+  }
+  const refundPurchaseMatch = path.match(/^\/v1\.0\/wallet\/sandbox-purchase\/([^/]+)\/refund\/?$/);
+  if (method === 'POST' && refundPurchaseMatch) {
+    const purchase = mockSandboxPurchases.find(item => item.purchase_id === refundPurchaseMatch[1]);
+    if (!purchase) fail(404, 'sandbox purchase not found', config);
+    settlePurchase(purchase);
+    if (purchase.status !== 'confirmed') fail(409, 'only confirmed purchases can be refunded', config);
+    purchase.status = 'refunded';
+    purchase.updated_at = new Date().toISOString();
+    if (purchase.balance_applied) {
+      mockProfile.sandbox_balance = Math.max(0, mockProfile.sandbox_balance - (purchase.total_credits || 0));
+      purchase.balance_applied = false;
+    }
+    return ok(publicPurchase(purchase), config);
+  }
   if (method === 'GET' && path === '/v1.0/rooms') return ok(page(rooms), config);
   // Checked before the generic single-segment room-id match below, since
   // "stakes" would otherwise itself match `/rooms/:id` and never reach here.
@@ -624,11 +751,14 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   ]), config);
   if (method === 'GET' && path === '/v1.0/achievements') return ok(achievementCatalog, config);
   if (method === 'GET' && path === '/v1.0/players/me/achievements') return ok(page(mockAchievementProgress), config);
-  if (method === 'GET' && path === '/v1.0/sandbox-credits') return ok({remaining_time_seconds: creditCooldown()}, config);
-  if (method === 'POST' && path === '/v1.0/sandbox-credits') {
+  if (method === 'GET' && /^\/v1\.0\/sandbox-credits\/?$/.test(path)) {
+    return ok({remaining_time_seconds: creditCooldown()}, config);
+  }
+  if (method === 'POST' && /^\/v1\.0\/sandbox-credits\/?$/.test(path)) {
     if (creditCooldown() > 0) return ok({amount: 0, remaining_time_seconds: creditCooldown()}, config);
     nextCreditAt = Date.now() + MOCK_CREDIT_COOLDOWN_S * 1000;
     sessionStorage.setItem(CREDIT_KEY, String(nextCreditAt));
+    mockProfile.sandbox_balance += 250;
     return ok({amount: 250, remaining_time_seconds: MOCK_CREDIT_COOLDOWN_S}, config);
   }
   return ok({}, config);

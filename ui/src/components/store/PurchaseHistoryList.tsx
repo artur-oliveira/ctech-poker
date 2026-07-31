@@ -1,5 +1,5 @@
 'use client';
-import {RotateCcw} from 'lucide-react';
+import {QrCode, RotateCcw} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {SkeletonList} from '@/components/ui/skeleton';
 import type {SandboxPurchase} from '@/lib/api/wallet';
@@ -18,18 +18,23 @@ function formatBRL(cents?: number) {
 
 function formatDate(iso?: string) {
   if (!iso) return '';
-  return new Date(iso).toLocaleString('pt-BR', {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'Data indisponível';
+  return date.toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit'
   });
 }
 
-export function PurchaseHistoryList({purchases, isLoading, isError, onRetry, onRefund, refundingId}: {
+export function PurchaseHistoryList({purchases, isLoading, isError, onRetry, onRefund, refundingId,
+                                     onResume, resumingId}: {
   purchases: SandboxPurchase[];
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
   onRefund: (purchaseId: string) => void;
   refundingId: string | null;
+  onResume: (purchaseId: string) => void;
+  resumingId: string | null;
 }) {
   if (isLoading) {
     return <SkeletonList label="Carregando histórico de compras…" count={3} height={64} className="store-history"/>;
@@ -40,7 +45,7 @@ export function PurchaseHistoryList({purchases, isLoading, isError, onRetry, onR
     </div>;
   }
   if (purchases.length === 0) {
-    return <p className="store-history-empty">Você ainda não comprou créditos.</p>;
+    return <p className="store-history-empty">Suas compras via Pix aparecerão aqui.</p>;
   }
 
   return <ul className="store-history">
@@ -49,7 +54,14 @@ export function PurchaseHistoryList({purchases, isLoading, isError, onRetry, onR
         <strong>{(p.total_credits ?? 0).toLocaleString('pt-BR')} fichas · {formatBRL(p.price_cents)}</strong>
         <small>{formatDate(p.created_at)}</small>
       </div>
-      <span className={`store-status ${p.status}`}>{STATUS_LABEL[p.status] || p.status}</span>
+      <span className={`store-status ${STATUS_LABEL[p.status] ? p.status : 'unknown'}`}>
+        {STATUS_LABEL[p.status] || 'Desconhecida'}
+      </span>
+      {p.status === 'pending' && <Button type="button" variant="outline" size="sm"
+                                          disabled={resumingId === p.purchase_id}
+                                          onClick={() => onResume(p.purchase_id)}>
+        <QrCode/> {resumingId === p.purchase_id ? 'Abrindo…' : 'Continuar pagamento'}
+      </Button>}
       {p.status === 'confirmed' && <Button type="button" variant="outline" size="sm"
                                             disabled={refundingId === p.purchase_id}
                                             onClick={() => onRefund(p.purchase_id)}>

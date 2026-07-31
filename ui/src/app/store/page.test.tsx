@@ -5,6 +5,7 @@ import Store from './page';
 const mocks = vi.hoisted(() => ({
   queryState: {} as Record<string, { data: unknown; isLoading: boolean; isError: boolean; refetch: ReturnType<typeof vi.fn> }>,
   invalidateQueries: vi.fn(),
+  setQueryData: vi.fn(),
   createPurchase: vi.fn(),
   refundPurchase: vi.fn(),
   getPurchase: vi.fn(),
@@ -20,7 +21,7 @@ function queryState(data: unknown, overrides: Record<string, unknown> = {}) {
 vi.mock('@tanstack/react-query', () => ({
   useQuery: ({queryKey}: { queryKey: string[] }) =>
     mocks.queryState[queryKey.join('.')] ?? queryState(undefined),
-  useQueryClient: () => ({invalidateQueries: mocks.invalidateQueries}),
+  useQueryClient: () => ({invalidateQueries: mocks.invalidateQueries, setQueryData: mocks.setQueryData}),
 }));
 vi.mock('@/components/TermsGate', () => ({TermsGate: ({children}: { children: React.ReactNode }) => children}));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
@@ -61,14 +62,16 @@ describe('store page', () => {
       'wallet.skus': queryState(skus),
       'wallet.sandbox-purchases': queryState(purchases),
       'dailyReward.cooldown': queryState({remaining_time_seconds: 0}),
+      'player.me': queryState({sandbox_balance: 12_345}),
     };
   });
 
-  test('starts on the Recompensas tab with the daily reward widget ready to claim', () => {
+  test('starts on the free credits tab with the balance and daily reward ready to claim', () => {
     render(<Store/>);
     expect(screen.getByRole('heading', {name: 'Loja'})).toBeInTheDocument();
     expect(screen.getByText('profile-menu')).toBeInTheDocument();
-    expect(screen.getByRole('button', {name: 'Resgatar recompensa'})).toBeEnabled();
+    expect(screen.getByText('12.345 fichas')).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Resgatar fichas grátis'})).toBeEnabled();
     expect(screen.queryByText(/fichas/, {selector: '.store-sku-credits'})).not.toBeInTheDocument();
   });
 
@@ -76,23 +79,27 @@ describe('store page', () => {
     vi.useFakeTimers();
     mocks.queryState['dailyReward.cooldown'] = queryState({remaining_time_seconds: 3661});
     render(<Store/>);
-    expect(screen.getByText(/Próxima recompensa em 1:01:01/)).toBeInTheDocument();
-    expect(screen.getByRole('button', {name: 'Resgatar recompensa'})).toBeDisabled();
+    expect(screen.getByText('1:01:01')).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Recompensa já resgatada'})).toBeDisabled();
     vi.useRealTimers();
   });
 
   test('claims the daily reward and shows the amount won', async () => {
     mocks.spin.mockResolvedValue({amount: 500, remaining_time_seconds: 86400});
     render(<Store/>);
-    fireEvent.click(screen.getByRole('button', {name: 'Resgatar recompensa'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Resgatar fichas grátis'}));
     await waitFor(() => expect(screen.getByText('+500 fichas')).toBeInTheDocument());
     expect(mocks.notify).toHaveBeenCalledWith(expect.stringContaining('500'), 'info');
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'balance']});
+    expect(mocks.setQueryData).toHaveBeenCalledWith(
+      ['dailyReward', 'cooldown'],
+      {remaining_time_seconds: 86400},
+    );
   });
 
   test('switches to Compras and renders the SKU grid and purchase history', () => {
     render(<Store/>);
-    fireEvent.click(screen.getByRole('button', {name: 'Compras'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Comprar via Pix'}));
 
     expect(screen.getByText('1.000')).toBeInTheDocument();
     expect(screen.getByText('+10% bônus')).toBeInTheDocument();
@@ -109,19 +116,32 @@ describe('store page', () => {
       expires_at: new Date(Date.now() + 600_000).toISOString(),
     });
     render(<Store/>);
-    fireEvent.click(screen.getByRole('button', {name: 'Compras'}));
-    fireEvent.click(screen.getByText('1.000').closest('button')!);
+    fireEvent.click(screen.getByRole('button', {name: 'Comprar via Pix'}));
+    fireEvent.click(screen.getByRole('button', {name: /Escolher 1\.000 fichas/}));
 
     await waitFor(() => expect(mocks.createPurchase).toHaveBeenCalledWith('pack_100'));
     expect(await screen.findByText('Pague com Pix para concluir')).toBeInTheDocument();
-    expect(screen.getByText('00020126...')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('00020126...')).toBeInTheDocument();
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'sandbox-purchases']});
+  });
+
+  test('reopens a pending Pix payment from purchase history', async () => {
+    mocks.getPurchase.mockResolvedValue({
+      ...purchases[1], pix_copia_e_cola: '00020126-resumed',
+      expires_at: new Date(Date.now() + 600_000).toISOString(),
+    });
+    render(<Store/>);
+    fireEvent.click(screen.getByRole('button', {name: 'Comprar via Pix'}));
+    fireEvent.click(screen.getByRole('button', {name: /Continuar pagamento/}));
+
+    await waitFor(() => expect(mocks.getPurchase).toHaveBeenCalledWith('sbxp-2'));
+    expect(await screen.findByDisplayValue('00020126-resumed')).toBeInTheDocument();
   });
 
   test('refunding a confirmed purchase calls the API and invalidates wallet queries', async () => {
     mocks.refundPurchase.mockResolvedValue({purchase_id: 'sbxp-1', status: 'refunded'});
     render(<Store/>);
-    fireEvent.click(screen.getByRole('button', {name: 'Compras'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Comprar via Pix'}));
     fireEvent.click(screen.getByRole('button', {name: /Estornar/}));
 
     await waitFor(() => expect(mocks.refundPurchase).toHaveBeenCalledWith('sbxp-1'));
@@ -132,7 +152,7 @@ describe('store page', () => {
   test('shows an error state with retry when the SKU catalog fails to load', () => {
     mocks.queryState['wallet.skus'] = queryState(undefined, {isError: true});
     render(<Store/>);
-    fireEvent.click(screen.getByRole('button', {name: 'Compras'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Comprar via Pix'}));
     expect(screen.getByText(/Não foi possível carregar os pacotes/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', {name: 'Tentar novamente'}));
     expect(mocks.queryState['wallet.skus'].refetch).toHaveBeenCalledOnce();

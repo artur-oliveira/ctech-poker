@@ -10,6 +10,7 @@ import {useCountUp} from '@/lib/hooks/useCountUp';
 import {NotebookPen} from 'lucide-react';
 import type {PlayerNote} from '@/lib/api/playerNotes';
 import {playstyleMeta} from '@/lib/playstyle';
+import type {WinnerStanding} from '@/lib/tableOutcome';
 
 // chance <= 20% red, <= 60% yellow (reusing the --gold token already used for
 // bet amounts on this same seat card), > 60% green.
@@ -67,6 +68,7 @@ export function Seat({
                        index,
                        credit = 0,
                        winAmount = 0,
+                       winStanding,
                        refundAmount = 0,
                        isWinner = false,
                        baseDeadlineMs,
@@ -81,7 +83,9 @@ export function Seat({
                        revealPending = false,
                        onRevealCardAction,
                        playerNote,
-                       onEditNote
+                       onEditNote,
+                       reactionTargetLabel,
+                       onReactionTarget
                      }: {
   seat: SeatView;
   isViewer: boolean;
@@ -89,6 +93,7 @@ export function Seat({
   index: number;
   credit?: number;
   winAmount?: number;
+  winStanding?: WinnerStanding;
   refundAmount?: number;
   isWinner?: boolean;
   baseDeadlineMs?: number;
@@ -107,6 +112,8 @@ export function Seat({
   onRevealCardAction?: (index: number) => void
   playerNote?: PlayerNote;
   onEditNote?: () => void;
+  reactionTargetLabel?: string;
+  onReactionTarget?: () => void;
 }) {
   const cards = seat.hole_cards;
   const chance = seat.equity == null ? null : Math.round(seat.equity * 100);
@@ -126,7 +133,10 @@ export function Seat({
   return <div data-state={seat.state} data-connection-state={seat.connection_state}
               data-player-id={seat.player_id}
               aria-current={isTurn ? 'true' : undefined}
-              className={`game-seat seat-${index} ${seat.state} ${isDisconnected ? 'disconnected' : ''} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${isWinner ? 'is-winner' : ''} ${pendingName ? 'is-pending-name' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
+              className={`game-seat seat-${index} ${seat.state} ${isDisconnected ? 'disconnected' : ''} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${isWinner ? 'is-winner' : ''} ${reactionTargetLabel ? 'is-reaction-target' : ''} ${pendingName ? 'is-pending-name' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
+    {reactionTargetLabel && onReactionTarget && <button type="button" className="seat-reaction-target"
+                                                        aria-label={`${reactionTargetLabel} em ${playerName(seat.player_id, undefined, seat.name)}`}
+                                                        onClick={onReactionTarget}><span>Escolher</span></button>}
     {showNormalClock && baseDeadlineMs && nowMs && turnTimeoutMs &&
         <SeatTurnTimer key={baseDeadlineMs} baseDeadlineMs={baseDeadlineMs}
                        observedAtMs={nowMs} durationMs={turnTimeoutMs}/>}
@@ -175,7 +185,10 @@ export function Seat({
         <b aria-label={`Aposta de ${seat.contributed.toLocaleString('pt-BR')} fichas`}>{seat.contributed.toLocaleString('pt-BR')}</b>
       </span>}
     {isWinner && winAmount > 0 &&
-        <span key={`win-${winAmount}`} className="seat-win" role="status">+{winAmount.toLocaleString('pt-BR')}</span>
+        <span key={`win-${winAmount}`} className="seat-win" role="status">
+          <small>{winStanding?.tied ? 'Empate' : winStanding?.place ? `${winStanding.place}º lugar` : 'Venceu'}</small>
+          +{winAmount.toLocaleString('pt-BR')}
+        </span>
     }
     {refundAmount > 0 &&
         <span key={`refund-${refundAmount}`} className="seat-refund">

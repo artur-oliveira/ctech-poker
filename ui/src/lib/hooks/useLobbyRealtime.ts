@@ -59,6 +59,7 @@ export function useLobbyRealtime() {
         oldRoom ? {...oldRoom, seats_taken} : oldRoom);
     } else if (message.type === 'sandbox_purchase_update') {
       queryClient.invalidateQueries({queryKey: ['wallet', 'balance']});
+      queryClient.invalidateQueries({queryKey: ['player', 'me']});
       queryClient.invalidateQueries({queryKey: ['wallet', 'sandbox-purchases']});
       const statusLabel: Record<string, string> = {
         confirmed: 'Compra confirmada — créditos adicionados!',

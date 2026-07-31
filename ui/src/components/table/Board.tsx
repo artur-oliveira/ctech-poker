@@ -2,6 +2,16 @@ import {ChipStack} from '@/components/table/ChipStack';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import type {PotView} from '@/lib/api/table';
 
+const SLOT_SUITS = ['♠', '♥', '♣', '♦', '♠'];
+
+function EmptyCardSlots({count, offset = 0}: { count: number; offset?: number }) {
+  return Array.from({length: count}, (_, index) =>
+    <span key={`empty-${offset + index}`}
+          className={`board-slot${index === 0 ? ' is-next' : ''}`}
+          data-suit={SLOT_SUITS[(offset + index) % SLOT_SUITS.length]}
+          aria-hidden="true"/>);
+}
+
 function CardRow({cards, slots, offset = 0, label}: {
   cards: string[];
   slots: number;
@@ -14,8 +24,7 @@ function CardRow({cards, slots, offset = 0, label}: {
       {cards.map((card, index) => <PlayingCard key={`${offset + index}-${card}`} card={card}
                                                index={(offset + index) < 3 ? offset + index : 0}
                                                size="board" slow={offset + index === 4}/>)}
-      {Array.from({length: Math.max(0, slots - cards.length)}, (_, index) =>
-        <span key={`empty-${index}`}/>)}</div>
+      <EmptyCardSlots count={Math.max(0, slots - cards.length)} offset={offset + cards.length}/></div>
   </div>;
 }
 
@@ -51,6 +60,6 @@ export function Board({cards, boardTwo, splitAt = 0, pot, pots, rake, bigBlind}:
     </div> : <div>{cards.map((card, index) => <PlayingCard key={`${index}-${card}`} card={card}
                                                            index={index < 3 ? index : 0} size="board"
                                                            slow={index === 4}/>)}
-      {Array.from({length: 5 - cards.length}, (_, index) => <span key={index}/>)}</div>}
+      <EmptyCardSlots count={5 - cards.length} offset={cards.length}/></div>}
   </div>;
 }

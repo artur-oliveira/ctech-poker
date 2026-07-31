@@ -1,9 +1,12 @@
 import {notFound} from 'next/navigation';
-import {OG_IMAGE_DATA, OgRouteImage, type OgSlug} from '@/components/og/OgRouteImage';
+import Image from 'next/image';
+import {OG_PREVIEWS} from '@/lib/ogPreviews';
 
 export default async function OgPreviewPage({params}: {params: Promise<{slug: string}>}) {
   const {slug} = await params;
-  const preview = OG_IMAGE_DATA.find(item => item.slug === slug);
+  const preview = OG_PREVIEWS.find(item => item.slug === slug);
   if (!preview) notFound();
-  return <main className="og-capture"><OgRouteImage slug={slug as OgSlug}/></main>;
+  return <main className="og-capture">
+    <Image src={`/og/${preview.slug}.webp`} alt={`Captura real: ${preview.title}`} width={1200} height={630}/>
+  </main>;
 }

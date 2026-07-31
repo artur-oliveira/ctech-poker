@@ -1,15 +1,14 @@
 'use client';
 import React, {useState} from 'react';
-import Link from 'next/link';
 import {useQuery} from '@tanstack/react-query';
-import {Award, BookOpen, ChevronLeft, Club, Crown, History, Sparkles, Trophy} from 'lucide-react';
+import {Crown, Sparkles} from 'lucide-react';
 import {leaderboard} from '@/lib/api/gamification';
 import {getViewerId, playerName} from '@/lib/utils';
-import {ProfileMenu} from "@/components/lobby/ProfileMenu";
 import {useOptionalSession} from "@/lib/auth/session";
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {SkeletonList} from '@/components/ui/skeleton';
 import type {WalletMode} from '@/lib/api/player';
+import {AppPageHeader, AppPageNav} from '@/components/AppPageChrome';
 
 export default function Ranking() {
   const [mode, setMode] = useState<WalletMode>('sandbox');
@@ -26,23 +25,15 @@ export default function Ranking() {
   
   return (
     <main className="app-page">
-      <nav className="app-nav shell">
-        <Link href="/" className="brand"><span className="brand-mark"><Club/></span>CTech <b>Poker</b></Link>
-        {authed ? <div className="header-right">
-          <Link href="/guide"><BookOpen/> <span className="header-right-label">Guia</span></Link>
-          <Link href="/leaderboard"><Trophy/> <span className="header-right-label">Ranking</span></Link>
-          <Link href="/achievements"><Award/> <span className="header-right-label">Conquistas</span></Link>
-          <Link href="/hands"><History/> <span className="header-right-label">Mãos</span></Link>
-          <ProfileMenu/>
-        </div> : <Link href="/"><ChevronLeft/> Voltar</Link>}
-      </nav>
-      <section className="ranking shell">
-        {authed && <Link href="/lobby"><ChevronLeft/> Lobby</Link>}
-        <header>
-          <Crown aria-hidden="true"/><small>HALL DA FAMA</small>
-          <h1>Ranking da comunidade</h1>
-          <p>Desempenho auditável baseado em vitórias e mãos jogadas nas mesas do CTech Poker.</p>
-        </header>
+      <AppPageNav authed={authed} current="leaderboard"/>
+      <section className="content-page ranking shell">
+        <AppPageHeader
+          icon={Crown}
+          eyebrow="HALL DA FAMA"
+          title="Ranking da comunidade"
+          description="Desempenho auditável baseado em vitórias e mãos jogadas nas mesas do CTech Poker."
+          backHref={authed ? '/lobby' : undefined}
+        />
         <CurrencyModeTabs mode={mode} onChange={setMode}/>
         
         {viewerEntry && (

@@ -73,7 +73,9 @@ export function ProfileMenu() {
     }
   }}>
     <div className="profile-summary">
-      <span className="balance-pill">{balanceLabel}</span>
+      <Link href="/store" className="balance-pill" aria-label={`Abrir créditos e recompensas. Saldo: ${balanceLabel}`}>
+        {balanceLabel}
+      </Link>
       <PopoverTrigger render={<Button variant="ghost" size="icon" className="rounded-full" aria-label="Abrir perfil"/>}>
         <PlayerAvatar name={me?.name} avatarUrl={me?.avatar_url}/>
       </PopoverTrigger>
@@ -165,7 +167,7 @@ export function ProfileMenu() {
           <span>Dinheiro real <b>{formatReal(me?.game_balance)}</b></span>
         </div>
         <Button type="button" variant="outline" className="w-full" render={<Link href="/store"/>}>
-          <ShoppingBag/> Comprar créditos
+          <ShoppingBag/> Créditos e recompensas
         </Button>
         <Button type="button" variant="outline" className="w-full" onClick={() => setShowcaseOpen(true)}>
           Vitrine do perfil

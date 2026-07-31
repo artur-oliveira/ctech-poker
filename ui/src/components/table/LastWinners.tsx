@@ -50,17 +50,26 @@ export function deriveWinners(items: HandItem[], limit = 5): WinnerLogEntry[] {
  * bottom-right). Shows the last 5 resolved hands at this table, newest first,
  * sourced from the player's own hand-history endpoint rather than live
  * socket state, so it's populated the moment the table loads instead of
- * only after the viewer sits through a fresh resolution. Desktop/tablet
- * only: hidden under the phone breakpoint, where the header, hero HUD,
- * action bar and chat toggle already contest the same strip. */
-export function LastWinners({items}: { items: HandItem[] }) {
-  const [open, setOpen] = useState(false);
+ * only after the viewer sits through a fresh resolution. It can be
+ * controlled by the table page so opening it closes chat, reactions, or
+ * hand rankings instead of stacking multiple mobile overlays. */
+export function LastWinners({items, open: controlledOpen, onOpenChange}: {
+  items: HandItem[];
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = (nextOpen: boolean) => {
+    if (controlledOpen === undefined) setUncontrolledOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  };
   const winners = deriveWinners(items);
   if (!winners.length) return null;
   return <aside className={`last-winners ${open ? 'open' : ''}`} aria-label="Últimos vencedores da mesa">
     <button type="button" className="last-winners-toggle" aria-expanded={open} aria-controls="last-winners-panel"
             aria-label={open ? 'Fechar últimos vencedores' : 'Ver últimos vencedores'}
-            onClick={() => setOpen(value => !value)}>
+            onClick={() => setOpen(!open)}>
       <Trophy aria-hidden="true"/>
     </button>
     <div id="last-winners-panel" className="last-winners-panel">

@@ -2,20 +2,20 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import Link from 'next/link';
 import {useInfiniteQuery} from '@tanstack/react-query';
-import {Award, BookOpen, ChevronLeft, ChevronRight, Club, History, Sparkles, Trophy} from 'lucide-react';
+import {ChevronRight, History, Sparkles} from 'lucide-react';
 import type {WalletMode} from '@/lib/api/player';
 import {getHands} from '@/lib/api/player';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {BoardSlots} from '@/components/hands/BoardSlots';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
 import {SkeletonList, StatCardsSkeleton} from '@/components/ui/skeleton';
-import {ProfileMenu} from '@/components/lobby/ProfileMenu';
 import {TermsGate} from '@/components/TermsGate';
 import {bestHandCategory} from '@/lib/pokerRules';
 import {HAND_CATEGORY_LABELS} from '@/lib/utils';
 import {Button} from '@/components/ui/button';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {FilterGroup} from '@/components/FilterGroup';
+import {AppPageHeader, AppPageNav} from '@/components/AppPageChrome';
 
 type HandFilter = 'all' | 'wins' | 'losses';
 
@@ -45,7 +45,7 @@ export default function HandsHistory() {
     getNextPageParam: page => (page.has_next && page.next_cursor) || undefined
   });
   const [filter, setFilter] = useState<HandFilter>('all');
-  
+
   // The entrance stagger is per page, not per flattened index: appended rows
   // should cascade like the first batch did instead of all landing on the
   // clamped 400 ms delay.
@@ -56,7 +56,7 @@ export default function HandsHistory() {
   // Counts only cover what's been fetched so far; "+" keeps that honest
   // instead of presenting a page as the full history.
   const more = hasNextPage ? '+' : '';
-  
+
   const stats = useMemo(() => {
     if (!hands.length) return null;
     let netSum = 0;
@@ -68,13 +68,13 @@ export default function HandsHistory() {
     const winRate = Math.round((winsCount / hands.length) * 100);
     return {totalHands: hands.length, netSum, winsCount, winRate};
   }, [hands]);
-  
+
   const filteredHands = useMemo(() => {
     if (filter === 'wins') return hands.filter(({hand}) => hand.outcome === 'won' || hand.outcome === 'tied');
     if (filter === 'losses') return hands.filter(({hand}) => hand.outcome === 'lost');
     return hands;
   }, [hands, filter]);
-  
+
   const sentinel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const node = sentinel.current;
@@ -88,28 +88,20 @@ export default function HandsHistory() {
     observer.observe(node);
     return () => observer.disconnect();
   }, [hasNextPage, fetchNextPage, filteredHands.length]);
-  
+
   return <TermsGate>
     <main className="app-page">
-      <nav className="app-nav shell">
-        <Link href="/" className="brand"><span className="brand-mark"><Club/></span>CTech <b>Poker</b></Link>
-        <div className="header-right">
-          <Link href="/guide"><BookOpen/> <span className="header-right-label">Guia</span></Link>
-          <Link href="/leaderboard"><Trophy/> <span className="header-right-label">Ranking</span></Link>
-          <Link href="/achievements"><Award/> <span className="header-right-label">Conquistas</span></Link>
-          <Link href="/hands"><History/> <span className="header-right-label">Mãos</span></Link>
-          <ProfileMenu/>
-        </div>
-      </nav>
-      <section className="ranking hands shell">
-        <Link href="/lobby"><ChevronLeft/> Lobby</Link>
-        <header>
-          <History aria-hidden="true"/><small>SEU HISTÓRICO</small>
-          <h1>Mãos jogadas</h1>
-          <p>Histórico recente das suas mãos com cartas, board comunitário e prova de integridade criptográfica.</p>
-        </header>
+      <AppPageNav authed current="hands"/>
+      <section className="content-page ranking hands shell">
+        <AppPageHeader
+          icon={History}
+          eyebrow="SEU HISTÓRICO"
+          title="Mãos jogadas"
+          description="Histórico recente das suas mãos com cartas, board comunitário e prova de integridade criptográfica."
+          backHref="/lobby"
+        />
         <CurrencyModeTabs mode={mode} onChange={setMode}/>
-        
+
         {isLoading ? <StatCardsSkeleton label="Somando suas mãos…" count={3}/> : stats && (
           <div className="hands-stats-bar">
             <div className="stat-card">
@@ -129,7 +121,7 @@ export default function HandsHistory() {
             </div>
           </div>
         )}
-        
+
         {!isLoading && !isError && hands.length > 0 && (
           <FilterGroup
             label="Filtro de mãos"
@@ -142,7 +134,7 @@ export default function HandsHistory() {
             onChange={setFilter}
           />
         )}
-        
+
         {isLoading ?
           <SkeletonList label="Buscando seu histórico de mãos…" count={4} height={168} className="hands-list"/> :
           isError ? <div className="lobby-empty">Não foi possível carregar seu histórico agora.
@@ -209,7 +201,7 @@ export default function HandsHistory() {
                   </Link>)}
                 </div>
               )}
-        
+
         {hasNextPage && !isLoading && !isError && (
           <div className="hands-more" ref={sentinel}>
             {/* The observer above auto-loads on scroll; the button is the

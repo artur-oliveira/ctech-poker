@@ -12,9 +12,9 @@ export default function OgPreviewStudio() {
     <section>
       {OG_PREVIEWS.map(preview => <figure key={preview.slug}>
         <Link href={`/${preview.slug}`} aria-label={`Abrir ${preview.title} para captura`}>
-          <Image src={`/og/${preview.slug}.png`} width={1200} height={630} alt={`Prévia: ${preview.title}`}/>
+          <Image src={`/og/${preview.slug}.webp`} width={1200} height={630} alt={`Captura real: ${preview.title}`}/>
         </Link>
-        <figcaption><code>public/og/{preview.slug}.png</code><span>{preview.route}</span></figcaption>
+        <figcaption><code>public/og/{preview.slug}.webp</code><span>{preview.route}</span></figcaption>
       </figure>)}
     </section>
   </main>;

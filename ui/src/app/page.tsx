@@ -1,13 +1,29 @@
 'use client';
 import Image from 'next/image';
 import Link from 'next/link';
-import {ArrowRight, Award, Club, History, ShieldCheck, Trophy, Users, Zap} from 'lucide-react';
+import {
+  ArrowRight,
+  Award,
+  Club,
+  Coins,
+  Gift,
+  History,
+  MessageCircleMore,
+  NotebookPen,
+  Repeat2,
+  ShieldCheck,
+  Sparkles,
+  Trophy,
+  UserRoundSearch,
+  Users,
+  Zap
+} from 'lucide-react';
 import {startOAuthFlow} from '@/lib/auth/oauth';
 import {Button} from '@/components/ui/button';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {cardPath} from '@/lib/cards';
 import {achievementDescription, achievementExample, achievementLabel} from '@/lib/achievements';
-import React from "react";
+import React from 'react';
 
 // A curated, static preview, not fetched from the catalog. The landing page
 // is public and shouldn't take an API dependency just to tease four cards.
@@ -16,33 +32,33 @@ const LANDING_ACHIEVEMENTS = ['win_category_royal_flush', 'giant_slayer', 'bluff
 const features = [
   {
     icon: Zap,
-    title: 'Ação em Tempo Real',
-    body: 'Mesas rápidas via WebSockets com servidor autoritativo, sincronização de turnos e reconexão automática.'
-  },
-  {
-    icon: Users,
-    title: 'Salas Públicas e Privadas',
-    body: 'Crie salas personalizadas para 2 a 9 jogadores com link direto de convite ou jogue nas mesas públicas do lobby.'
+    title: 'Mesa ao Vivo',
+    body: 'Jogue em mesas rápidas com atualização em tempo real. Se sua internet cair, você volta de onde parou.'
   },
   {
     icon: ShieldCheck,
-    title: 'Provably Fair SHA-256',
-    body: 'Baralho auditável com commit hash criptográfico e revelação de seed após cada mão para transparência absoluta.'
+    title: 'Cada mão pode ser conferida',
+    body: 'O baralho usa um sistema que permite verificar se tudo foi justo. A conferência acontece no seu navegador.'
+  },
+  {
+    icon: Users,
+    title: 'Convide seus amigos',
+    body: 'Crie uma mesa privada para 2 a 9 pessoas, escolha os stakes e compartilhe o convite'
   },
   {
     icon: History,
-    title: 'Replay e Histórico de Mãos',
-    body: 'Reviva cada jogada ação por ação em tela cheia e exporte seus históricos nos formatos texto e JSON.'
+    title: 'Reviva qualquer mão',
+    body: 'Veja cada ação de novo, compartilhe aquela virada incrível ou exporte o histórico em texto.'
   },
   {
     icon: Trophy,
-    title: 'Ranking e Bônus Diário',
-    body: 'Suba no Hall da Fama da comunidade com base em suas vitórias e resgate seu bônus diário de fichas sandbox.'
+    title: 'Sua história nas mesas',
+    body: 'Estatísticas, estilo de jogo, ranking, vitórias e conquistas formam um perfil público que você controla.'
   },
   {
     icon: Award,
-    title: 'Conquistas Progressivas',
-    body: 'Sistema de progresso com 5 níveis de estrelas por categoria de mão, blefes, potes acumulados e sequência de vitórias.'
+    title: 'Conquistas e recompensas',
+    body: 'Ganhe um bônus diário e desbloqueie conquistas. São motivos para voltar, sem pegadinhas ou pressão.'
   }
 ];
 
@@ -54,7 +70,8 @@ export default function Home() {
         <span>CTech <b>Poker</b></span>
       </Link>
       <div className="nav-links">
-        <Link href="#experience">Recursos</Link>
+        <Link href="#novidades">Novidades</Link>
+        <Link href="#experience">Por que jogar</Link>
         <Link href="#achievements">Conquistas</Link>
         <Link href="/poker-rules">Regras</Link>
         <Link href="/guide">Guia</Link>
@@ -64,27 +81,81 @@ export default function Home() {
     </nav>
     <section className="hero shell">
       <div className="hero-copy">
-        <h1>Sua mesa de poker, <em>sempre pronta no navegador.</em></h1>
-        <p>Texas Hold&apos;em em tempo real com fichas sandbox. Entre em mesas públicas, crie salas privadas de 2 a 9
-          lugares para jogar com amigos e acompanhe seu desempenho no ranking.</p>
+        <span className="hero-kicker"><Sparkles aria-hidden="true"/>Sua próxima mesa já está pronta</span>
+        <h1>A noite de poker <em>começa aqui.</em></h1>
+        <p>Jogue Texas Hold&apos;em online com seus amigos, leia a mesa e guarde as histórias de cada mão. Não precisa
+          instalar nada e as fichas são só pela diversão.
+        </p>
         <div className="hero-actions">
           <Button size="lg" onClick={() => startOAuthFlow('/lobby')}>Jogar agora <ArrowRight/></Button>
-          <Button variant="outline" size="lg" render={<Link href="#experience"/>}>Conhecer recursos</Button>
+          <Button variant="outline" size="lg" render={<Link href="#novidades"/>}>Conhecer recursos</Button>
         </div>
         <div className="trust">
-          <span><i/> Sandbox 100% Grátis</span>
+          <span><i/> Fichas sandbox</span>
           <span>2–9 jogadores</span>
-          <span>Provably Fair SHA-256</span>
-          <span>Replay em HD</span>
+          <span>Sem download</span>
+          <span>Baralho auditável</span>
         </div>
       </div>
       <HeroTable/>
     </section>
+    <section id="novidades" className="landing-new shell">
+      <header className="landing-new-heading">
+        <h2>Mais recursos para suas partidas</h2>
+        <p>As novidades foram feitas para o que acontece entre as apostas: a leitura dos rivais, a resenha com os
+          amigos e aquela mão que merece ser vista mais uma vez.</p>
+      </header>
+
+      <article className="landing-story landing-story-social">
+        <div className="landing-story-copy">
+          <MessageCircleMore aria-hidden="true"/>
+          <h3>A mesa ficou mais divertida.</h3>
+          <p>Reaja no momento certo, mande um café ou uma ficha para alguém e registre notas privadas sobre os
+            adversários. Em mesas habilitadas, um all-in ainda pode ter dois desfechos com <em>Run it twice</em>.</p>
+          <ul className="landing-feature-list">
+            <li><MessageCircleMore aria-hidden="true"/> Reações ao vivo</li>
+            <li><NotebookPen aria-hidden="true"/> Notas só para você</li>
+            <li><Repeat2 aria-hidden="true"/> <em>Run it twice</em></li>
+          </ul>
+        </div>
+        <RealScreen src="/og/table.webp"
+                    alt="Mesa real do CTech Poker com jogadores, cartas comunitárias e controles de ação"
+                    label="Mesa ao vivo" className="landing-screen-table"/>
+      </article>
+
+      <article className="landing-story landing-story-insight">
+        <div className="landing-story-gallery" aria-label="Telas reais de perfil e replay">
+          <RealScreen src="/og/profile.webp" alt="Perfil público real com estilo de jogo e conquistas"
+                      label="Seu perfil"/>
+          <RealScreen src="/og/hand-replay.webp" alt="Replay real de uma mão de poker ação por ação"
+                      label="Replay completo"/>
+        </div>
+        <div className="landing-story-copy">
+          <UserRoundSearch aria-hidden="true"/>
+          <h3>Conheça seu estilo. Compartilhe a mão.</h3>
+          <p>O HUD mostra seu estilo de jogo. Depois, você escolhe o que aparece no perfil,
+            exibe conquistas e compartilha mãos com contexto, sem expor cartas que continuaram ocultas.</p>
+          <Link href="/hands">Ver histórico e replays<ArrowRight/></Link>
+        </div>
+      </article>
+
+      <aside className="landing-reward">
+        <span className="landing-reward-icon"><Gift aria-hidden="true"/></span>
+        <div>
+          <h3>Voltar amanhã também vale fichas.</h3>
+          <p>Resgate uma recompensa diária ou escolha um pacote via Pix. Tudo fica no sandbox: sem saque e sem
+            conversão em dinheiro.</p>
+        </div>
+        <Button variant="outline" onClick={() => startOAuthFlow('/store')}>
+          Ver fichas sandbox <Coins aria-hidden="true"/>
+        </Button>
+      </aside>
+    </section>
     <section id="experience" className="experience shell">
       <header>
-        <h2>Uma experiência completa de poker</h2>
-        <p>Desenvolvido para oferecer partidas fluidas, transparência total e uma interface rica que coloca você no
-          centro da ação.</p>
+        <h2>Tudo o que você precisa está na mesa.</h2>
+        <p>Entre e jogue, ação rápida e transparência em cada mão, sem transformar poker em
+          um painel de controle.</p>
       </header>
       <div className="feature-grid">
         {features.map(({icon: Icon, title, body}, i) => <article key={title}
@@ -97,7 +168,7 @@ export default function Home() {
     </section>
     <section id="achievements" className="achievements-teaser shell">
       <div className="achievements-teaser-copy">
-        <h2>Suba de nível a cada mão.</h2>
+        <h2>Algumas mãos terminam. Outras viram estrela.</h2>
         <p>Blefes que funcionam, all-ins decisivos, combinações raras na mesa: cada conquista premia seu estilo de jogo
           com até 5 estrelas de maestria.</p>
         <Link href="/achievements">Ver catálogo de conquistas <ArrowRight/></Link>
@@ -117,9 +188,9 @@ export default function Home() {
     </section>
     <section id="showcase" className="showcase shell">
       <div className="showcase-copy">
-        <h2>O poker de verdade, sem instalar nada.</h2>
-        <p>Direto no seu navegador: cartas comunitárias, cronômetro de ação, atalhos de teclado (F, C, P, R), força da
-          mão estimada e histórico com prova de integridade. Sem cliente pesado para atualizar.</p>
+        <h2>Do lobby ao river, direto no navegador.</h2>
+        <p>A mesa responde ao tamanho da tela e mantém cartas, cronômetro, atalhos, força da mão e histórico à mão.
+          Você chega pelo link; a interface cuida do resto.</p>
         <Link href="/guide">Ver o guia completo da mesa <ArrowRight/></Link>
       </div>
       <div className="showcase-frame">
@@ -186,6 +257,20 @@ function HeroTable() {
                 src={cardPath('Ah')} alt="Ás de copas" width={42} height={59}/></div>}</div>)}
       <div className="chip-orbit chip-a"/>
       <div className="chip-orbit chip-b"/>
+      <span className="hero-reaction" role="img" aria-label="Aplausos">👏</span>
+      <span className="hero-style"><UserRoundSearch aria-hidden="true"/> Equilibrado</span>
     </div>
   </div>;
+}
+
+function RealScreen({src, alt, label, className = ''}: {
+  src: string;
+  alt: string;
+  label: string;
+  className?: string;
+}) {
+  return <figure className={`landing-real-screen ${className}`}>
+    <div className="landing-screen-chrome" aria-hidden="true"><span/><span/><span/><small>{label}</small></div>
+    <Image src={src} alt={alt} width={1200} height={630}/>
+  </figure>;
 }

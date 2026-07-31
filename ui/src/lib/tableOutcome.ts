@@ -8,6 +8,13 @@ export type PlayerPotBreakdown = {
   refund: number;
 };
 
+export type WinnerStanding = {
+  playerId: string;
+  amount: number;
+  place?: number;
+  tied: boolean;
+};
+
 export function seatParticipated(seat?: SeatView) {
   if (!seat) return false;
   if (seat.dealt_in !== undefined) return seat.dealt_in;
@@ -64,4 +71,28 @@ export function playerPotBreakdown(snapshot: TableSnapshot, playerId: string): P
     else won += amount;
   }
   return {credit: won + refund, won, refund};
+}
+
+/** Display standings are based on contested chips won, not the number of
+ * winner IDs in the snapshot. Multiple winners of one pot are a tie; winners
+ * of different pot layers receive an ordered place by their total award. */
+export function winnerStandings(snapshot: TableSnapshot): WinnerStanding[] {
+  const ids = snapshot.pot_results?.length
+    ? [...new Set(snapshot.pot_results.filter(pot => !pot.refund)
+      .flatMap(pot => pot.winner_player_ids))]
+    : [...new Set(snapshot.winners || [])];
+  const splitWinners = new Set(snapshot.pot_results?.filter(pot => !pot.refund && pot.winner_player_ids.length > 1)
+    .flatMap(pot => pot.winner_player_ids) || []);
+  const standings = ids.map(playerId => ({
+    playerId,
+    amount: playerPotBreakdown(snapshot, playerId).won,
+    tied: splitWinners.has(playerId)
+  })).sort((a, b) => b.amount - a.amount);
+  let previousAmount: number | undefined;
+  let place = 0;
+  return standings.map((standing, index) => {
+    if (standing.amount !== previousAmount) place = index + 1;
+    previousAmount = standing.amount;
+    return {...standing, place: standing.tied ? undefined : place};
+  });
 }

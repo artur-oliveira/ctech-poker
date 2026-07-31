@@ -1,5 +1,5 @@
 'use client';
-import {Sparkles} from 'lucide-react';
+import {ArrowRight, Sparkles} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {SkeletonList} from '@/components/ui/skeleton';
 import type {SandboxSKU} from '@/lib/api/wallet';
@@ -31,12 +31,16 @@ export function SkuGrid({skus, isLoading, isError, onRetry, onSelect, pendingSku
     </div>;
   }
 
-  return <div className="store-sku-grid">
+  return <div className="store-sku-grid" aria-label="Pacotes de fichas sandbox">
     {skus.map(sku => <button key={sku.id} type="button" className="store-sku-card"
+                              aria-label={`Escolher ${sku.total_credits.toLocaleString('pt-BR')} fichas por ${formatBRL(sku.price_cents)}`}
                               disabled={pendingSku !== null} onClick={() => onSelect(sku)}>
       {sku.bonus_percent > 0 && <span className="store-sku-bonus">+{sku.bonus_percent}% bônus</span>}
       <span className="store-sku-credits">{sku.total_credits.toLocaleString('pt-BR')} <small>fichas</small></span>
-      <span className="store-sku-price">{pendingSku === sku.id ? 'Abrindo…' : formatBRL(sku.price_cents)}</span>
+      <span className="store-sku-price">
+        <span>{pendingSku === sku.id ? 'Preparando Pix…' : formatBRL(sku.price_cents)}</span>
+        <ArrowRight aria-hidden="true"/>
+      </span>
     </button>)}
   </div>;
 }

@@ -21,11 +21,13 @@ describe('static learning pages', () => {
   
   test('renders the complete guide and public calls to action', () => {
     render(<Guide/>);
-    expect(screen.getByRole('heading', {name: 'Como funciona o CTech Poker'})).toBeInTheDocument();
-    expect(screen.getByRole('navigation', {name: 'Seções do guia'}).querySelectorAll('a')).toHaveLength(7);
-    expect(screen.getByRole('heading', {name: /Atalhos de teclado/})).toBeInTheDocument();
-    expect(screen.getAllByRole('img')).toHaveLength(7);
-    expect(screen.getByRole('button', {name: 'Começar a Jogar'})).toHaveAttribute('href', '/');
+    expect(screen.getByRole('heading', {name: 'Aprenda no seu ritmo'})).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name: 'Sua primeira mão em três movimentos'})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Ver primeiros passos'})).toHaveAttribute('href', '/guide/basics');
+    expect(screen.getByRole('link', {name: /Tudo sobre a mesa/})).toHaveAttribute('href', '/guide/table');
+    expect(screen.getByRole('link', {name: /Mãos, replay e integridade/})).toHaveAttribute('href', '/guide/hands');
+    expect(screen.getByRole('link', {name: /Comunidade e jogo seguro/})).toHaveAttribute('href', '/guide/community');
+    expect(screen.getByText(/não podem ser sacadas/)).toBeInTheDocument();
     expect(screen.queryByText('profile-menu')).not.toBeInTheDocument();
   });
   
@@ -33,8 +35,8 @@ describe('static learning pages', () => {
     mocks.authed = true;
     render(<Guide/>);
     expect(screen.getByText('profile-menu')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', {name: /Lobby/})[0]).toHaveAttribute('href', '/lobby');
-    expect(screen.getByRole('button', {name: 'Ir para o Lobby'})).toHaveAttribute('href', '/lobby');
+    expect(screen.getByRole('link', {name: 'Lobby'})).toHaveAttribute('href', '/lobby');
+    expect(screen.getByRole('link', {name: 'Guia'})).toHaveAttribute('aria-current', 'page');
   });
   
   test('renders poker rules, hand rankings and provably-fair explanation', () => {

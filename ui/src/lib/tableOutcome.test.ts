@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
 import type {TableSnapshot} from './api/table.ts';
-import {playerPotBreakdown, seatParticipated, shouldShowOutcome, tableOutcomeKind} from './tableOutcome.ts';
+import {playerPotBreakdown, seatParticipated, shouldShowOutcome, tableOutcomeKind, winnerStandings} from './tableOutcome.ts';
 
 const snapshot: TableSnapshot = {
   stage: 'complete',
@@ -30,6 +30,13 @@ test('different side-pot winners are never mislabeled as a tie', () => {
   assert.equal(tableOutcomeKind(snapshot, 'loser'), 'lose');
 });
 
+test('orders side-pot winners by chips won instead of presenting a tie', () => {
+  assert.deepEqual(winnerStandings(snapshot), [
+    {playerId: 'main', amount: 150, place: 1, tied: false},
+    {playerId: 'side', amount: 100, place: 2, tied: false}
+  ]);
+});
+
 test('only winners sharing the same pot are tied', () => {
   const tied = {
     ...snapshot,
@@ -40,6 +47,9 @@ test('only winners sharing the same pot are tied', () => {
   };
   assert.equal(tableOutcomeKind(tied, 'main'), 'tie');
   assert.equal(tableOutcomeKind(tied, 'side'), 'tie');
+  assert.deepEqual(winnerStandings(tied).map(item => ({playerId: item.playerId, tied: item.tied})), [
+    {playerId: 'main', tied: true}, {playerId: 'side', tied: true}
+  ]);
 });
 
 test('winning one pot and losing another is a mixed result', () => {

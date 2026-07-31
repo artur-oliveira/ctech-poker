@@ -550,7 +550,9 @@ func (c *Client) PurchaseSandbox(ctx context.Context, userID, sku, idempotencyKe
 		return nil, fmt.Errorf("walletclient: token: %w", err)
 	}
 	body, err := json.Marshal(map[string]any{
-		"user_id": userID, "sku": sku, "idempotency_key": idempotencyKey,
+		"user_id":         userID,
+		"sku":             sku,
+		"idempotency_key": idempotencyKey,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("walletclient: encode: %w", err)

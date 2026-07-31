@@ -1,5 +1,6 @@
 import {afterEach, describe, expect, test, vi} from 'vitest';
-import {MOCK_PLAYER_ID, type MockScenario, MockTableService, snapshotForScenario} from './mockRuntime';
+import {MOCK_PLAYER_ID, mockAdapter, type MockScenario, MockTableService, snapshotForScenario} from './mockRuntime';
+import type {InternalAxiosRequestConfig} from 'axios';
 
 const scenarios: MockScenario[] = [
   'full_hand', 'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
@@ -7,6 +8,42 @@ const scenarios: MockScenario[] = [
   'reconnecting', 'action_error', 'timeout', 'complete_loss',
   'complete_tie', 'fold_win', 'complete',
 ];
+
+describe('mock store REST contract', () => {
+  const request = (method: string, url: string, data?: unknown) => mockAdapter({
+    method, url, data: data ? JSON.stringify(data) : undefined, headers: {},
+  } as InternalAxiosRequestConfig);
+
+  test('creates a pending Pix purchase with a QR image and exposes it in history', async () => {
+    localStorage.setItem('ctech_poker_mock_delay', '0');
+    const catalog = await request('GET', '/v1.0/wallet/sandbox-purchase/skus');
+    expect(catalog.data).toHaveLength(4);
+
+    const created = await request('POST', '/v1.0/wallet/sandbox-purchase/', {
+      sku: 'pack_1000', idem_key: 'store-test',
+    });
+    expect(created.data).toMatchObject({
+      sku: 'pack_1000', status: 'pending', total_credits: 1000,
+    });
+    expect(created.data.pix_copia_e_cola).toContain('MOCK.CTECH.POKER');
+    expect(created.data.qr_code_base64).toMatch(/^PHN2Zy/);
+
+    const history = await request('GET', '/v1.0/wallet/sandbox-purchase/');
+    expect(history.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({purchase_id: created.data.purchase_id, status: 'pending'}),
+    ]));
+  });
+
+  test('accepts the daily-reward trailing slash used by the store client', async () => {
+    sessionStorage.removeItem('mock_next_credit_at');
+    const cooldown = await request('GET', '/v1.0/sandbox-credits/');
+    expect(cooldown.data).toEqual({remaining_time_seconds: 0});
+
+    const reward = await request('POST', '/v1.0/sandbox-credits/');
+    expect(reward.data).toEqual({amount: 250, remaining_time_seconds: 90});
+    expect(sessionStorage.getItem('mock_next_credit_at')).not.toBeNull();
+  });
+});
 
 describe('mock table state contract', () => {
   test.each(scenarios)('%s always returns a renderable backend snapshot', scenario => {

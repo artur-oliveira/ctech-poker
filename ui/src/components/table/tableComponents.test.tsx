@@ -156,9 +156,13 @@ describe('table presentation', () => {
     snapshot.seats[0].playstyle_badge = 'initiative';
     const {container} = render(<TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID}
                                            pot={0} bigBlind={50} nowMs={Date.now()} outcome={null}
-                                           holdOutcomeOpen={false}/>);
+                                           holdOutcomeOpen={false}
+                                           announcement="Etapa: flop. Flop: ás de copas. Sua vez de agir"/>);
     expect(screen.getByText('Iniciativa')).toHaveAttribute('title', 'PFR representa pelo menos 70% do VPIP');
     expect(container.querySelectorAll('.seat-playstyle')).toHaveLength(1);
+    expect(container.querySelector('.table-callout')).toHaveTextContent('Flop: ás de copas');
+    expect(container.querySelector('.table-callout')).not.toHaveTextContent('Etapa: flop');
+    expect(container.querySelector('.street-progress .is-current')).toHaveTextContent('Pré');
   });
   
   test('board renders pot, rake, side pots and missing card slots', () => {

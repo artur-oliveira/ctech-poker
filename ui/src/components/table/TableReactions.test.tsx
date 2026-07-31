@@ -1,4 +1,4 @@
-import {act, fireEvent, render, screen} from '@testing-library/react';
+import {fireEvent, render, screen} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 
@@ -18,7 +18,10 @@ function renderReactions(overrides: Partial<Parameters<typeof TableReactions>[0]
     seats,
     viewerId: 'viewer',
     connected: true,
-    onSend: vi.fn(() => true),
+    coolingDown: false,
+    pendingReaction: null,
+    onQuickSend: vi.fn(),
+    onPendingReactionChange: vi.fn(),
     open: true,
     onOpenChange: vi.fn(),
     ...overrides,
@@ -44,18 +47,13 @@ describe('TableReactions', () => {
     expect(opened.props.onOpenChange).toHaveBeenCalledWith(false);
   });
   
-  test('sends quick reactions without a target and targeted objects to the selected opponent', async () => {
-    vi.useFakeTimers();
+  test('sends quick reactions immediately and closes the panel before seat targeting', async () => {
     const {props} = renderReactions();
     fireEvent.click(screen.getByTitle('Aplausos'));
-    expect(props.onSend).toHaveBeenCalledWith('clap', undefined);
-    
-    // A successful send starts a short anti-spam cooldown.
-    act(() => vi.advanceTimersByTime(2_000));
-    fireEvent.change(screen.getByRole('combobox'), {target: {value: 'opponent-2'}});
+    expect(props.onQuickSend).toHaveBeenCalledWith('clap');
     fireEvent.click(screen.getByTitle('Jogar tomate'));
-    expect(props.onSend).toHaveBeenLastCalledWith('tomato', 'opponent-2');
-    vi.useRealTimers();
+    expect(props.onPendingReactionChange).toHaveBeenCalledWith('tomato');
+    expect(props.onOpenChange).toHaveBeenCalledWith(false);
   });
   
   test('blocks sends while disconnected, during cooldown, and when no target exists', async () => {
@@ -64,28 +62,20 @@ describe('TableReactions', () => {
     expect(screen.getByTitle('Jogar ficha')).toBeDisabled();
     disconnected.unmount();
     
-    vi.useFakeTimers();
-    const cooldown = renderReactions();
-    fireEvent.click(screen.getByTitle('Uau'));
-    fireEvent.click(screen.getByTitle('Raiva'));
-    expect(cooldown.props.onSend).toHaveBeenCalledTimes(1);
-    act(() => vi.advanceTimersByTime(2_000));
-    fireEvent.click(screen.getByTitle('Raiva'));
-    expect(cooldown.props.onSend).toHaveBeenCalledTimes(2);
+    const cooldown = renderReactions({coolingDown: true});
+    expect(screen.getByTitle('Uau')).toBeDisabled();
+    expect(screen.getByTitle('Jogar tomate')).toBeDisabled();
     cooldown.unmount();
-    vi.useRealTimers();
     
     renderReactions({seats: [seats[0]]});
-    expect(screen.getByRole('combobox')).toBeDisabled();
     expect(screen.getByTitle('Mandar café')).toBeDisabled();
   });
   
-  test('does not enter cooldown when transport rejects the reaction', async () => {
-    const onSend = vi.fn(() => false);
-    renderReactions({onSend});
-    await userEvent.click(screen.getByTitle('Choro'));
-    await userEvent.click(screen.getByTitle('Nervoso'));
-    expect(onSend).toHaveBeenCalledTimes(2);
+  test('turns the toggle into a cancel action while choosing a seat', async () => {
+    const {props} = renderReactions({open: false, pendingReaction: 'coffee'});
+    expect(screen.getByText('Escolha um jogador')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: 'Cancelar arremesso'}));
+    expect(props.onPendingReactionChange).toHaveBeenCalledWith(null);
   });
   
   test('persists mute and hides incoming effects without hiding controls', async () => {

@@ -320,7 +320,8 @@ export function ActionBar({
     return () => window.removeEventListener('keydown', onKey);
   }, [unavailable, canFold, canCheck, canCall, onActAction]);
   
-  return <div className="action-bar" role="group" aria-label="Ações da rodada" aria-busy={pending !== null}>
+  return <div className={`action-bar${isTurn ? ' is-turn' : ''}`} role="group"
+              aria-label="Ações da rodada" aria-busy={pending !== null}>
     <div className="action-context-row">
       <p id="action-context" className="action-context" aria-live="polite">{context}</p>
       <TimeBankStatus isTurn={isTurn} baseDeadline={actionBaseDeadlineMs}

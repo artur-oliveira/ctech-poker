@@ -10,6 +10,8 @@ describe('Board', () => {
     expect(screen.getAllByRole('img', {name: /Carta comunitária/})).toHaveLength(3);
     expect(container.querySelector('.board-runouts')).not.toBeInTheDocument();
     expect(container.querySelectorAll('.board > div > span:not(.playing-card)')).toHaveLength(2);
+    expect(container.querySelectorAll('.board-slot.is-next')).toHaveLength(1);
+    expect(container.querySelector('.board-slot.is-next')).toHaveAttribute('data-suit', '♦');
   });
   
   test('renders the shared prefix once and labels both divergent runouts', () => {

@@ -1,13 +1,46 @@
 'use client';
-import {useMemo, useState} from 'react';
+import {type CSSProperties, useState} from 'react';
 import {SmilePlus, Volume2, VolumeX, X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import type {SeatView} from '@/lib/api/table';
 import {TABLE_REACTIONS, type TableReactionEvent, type TableReactionID} from '@/lib/reactions';
-import {playerName} from '@/lib/utils';
 
 const REACTION_MUTE_KEY = 'poker:table-reactions-muted';
-const REACTION_COOLDOWN_MS = 2000;
+const CHIP_PIECES = Array.from({length: 12}, (_, index) => index);
+const EFFECT_PIECES = Array.from({length: 8}, (_, index) => index);
+
+function ReactionChipStack({className = '', style}: {className?: string; style?: CSSProperties}) {
+  return <span className={`reaction-table-chip-stack ${className}`} style={style} aria-hidden="true">
+    {[0, 1, 2].map(index => <span key={index} className="chip"
+                                  style={{'--i': index} as CSSProperties}/>)}</span>;
+}
+
+function ReactionGlyph({reactionId, glyph}: {reactionId: TableReactionID; glyph: string}) {
+  return reactionId === 'chip'
+    ? <ReactionChipStack/>
+    : <span aria-hidden="true">{glyph}</span>;
+}
+
+function ReactionImpact({reactionId}: {reactionId: TableReactionID}) {
+  if (reactionId === 'chip') return <span className="reaction-impact reaction-impact-chip" aria-hidden="true">
+    {CHIP_PIECES.map(index => <ReactionChipStack key={index} className="reaction-jackpot-stack"
+                                      style={{'--piece': index, '--chip-x': `${(index % 6) * 20 + 7}px`,
+                                        '--chip-drift': `${((index * 7) % 11) - 5}px`,
+                                        '--chip-drift-end': `${5 - ((index * 7) % 11)}px`} as CSSProperties}/>)}</span>;
+  if (reactionId === 'tomato') return <span className="reaction-impact reaction-impact-tomato" aria-hidden="true">
+    {EFFECT_PIECES.map(index => <span key={index} style={{'--piece': index} as CSSProperties}/>)}</span>;
+  if (reactionId === 'coffee') return <span className="reaction-impact reaction-impact-coffee" aria-hidden="true">
+    <span>☕</span>{[0, 1, 2].map(index => <i key={index} style={{'--piece': index} as CSSProperties}/>)}</span>;
+  if (reactionId === 'clover') return <span className="reaction-impact reaction-impact-clover" aria-hidden="true">
+    <span>🍀</span>{EFFECT_PIECES.slice(0, 6).map(index => <i key={index} style={{'--piece': index} as CSSProperties}>
+      {index % 2 ? '✦' : '🍀'}</i>)}</span>;
+  if (reactionId === 'horseshoe') return <span className="reaction-impact reaction-impact-horseshoe" aria-hidden="true">
+    <span className="reaction-star-ring">{EFFECT_PIECES.map(index =>
+      <i key={index} style={{'--piece': index} as CSSProperties}>★</i>)}</span></span>;
+  if (reactionId === 'tear') return <span className="reaction-impact reaction-impact-tear" aria-hidden="true">
+    {EFFECT_PIECES.map(index => <i key={index} style={{'--piece': index} as CSSProperties}>💧</i>)}</span>;
+  return null;
+}
 
 function ReactionEffect({item}: { item: TableReactionEvent }) {
   const definition = TABLE_REACTIONS[item.reactionId];
@@ -29,25 +62,29 @@ function ReactionEffect({item}: { item: TableReactionEvent }) {
   };
   
   return <span ref={positionEffect}
-               className={`table-reaction-effect ${definition.targeted ? 'thrown' : 'emote'}`}
-               role="img" aria-label={definition.label}>{definition.glyph}</span>;
+               className={`table-reaction-effect ${definition.targeted ? `thrown reaction-${item.reactionId}` : 'emote'}`}
+               role="img" aria-label={definition.label}>
+    <span className="reaction-projectile"><ReactionGlyph reactionId={item.reactionId} glyph={definition.glyph}/></span>
+    {definition.targeted && <ReactionImpact reactionId={item.reactionId}/>}
+  </span>;
 }
 
-export function TableReactions({items, seats, viewerId, connected, onSend, open, onOpenChange}: {
+export function TableReactions({items, seats, viewerId, connected, coolingDown, pendingReaction, onQuickSend,
+                                 onPendingReactionChange, open, onOpenChange}: {
   items: TableReactionEvent[];
   seats: SeatView[];
   viewerId?: string;
   connected: boolean;
-  onSend: (reaction: TableReactionID, targetPlayerId?: string) => boolean;
+  coolingDown: boolean;
+  pendingReaction: TableReactionID | null;
+  onQuickSend: (reaction: TableReactionID) => void;
+  onPendingReactionChange: (reaction: TableReactionID | null) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const [muted, setMuted] = useState(() =>
     typeof window !== 'undefined' && window.localStorage.getItem(REACTION_MUTE_KEY) === 'true');
-  const [coolingDown, setCoolingDown] = useState(false);
-  const opponents = useMemo(() => seats.filter(seat => seat.player_id !== viewerId), [seats, viewerId]);
-  const [target, setTarget] = useState('');
-  const selectedTarget = opponents.some(seat => seat.player_id === target) ? target : opponents[0]?.player_id || '';
+  const hasOpponents = seats.some(seat => seat.player_id !== viewerId);
   
   function toggleMute() {
     setMuted(value => {
@@ -56,26 +93,18 @@ export function TableReactions({items, seats, viewerId, connected, onSend, open,
     });
   }
   
-  function send(reactionId: TableReactionID) {
-    if (!connected || coolingDown) return;
-    const definition = TABLE_REACTIONS[reactionId];
-    if (definition.targeted && !selectedTarget) return;
-    if (onSend(reactionId, definition.targeted ? selectedTarget : undefined)) {
-      setCoolingDown(true);
-      window.setTimeout(() => setCoolingDown(false), REACTION_COOLDOWN_MS);
-    }
-  }
-  
   return <>
     {!muted && <div className="table-reaction-layer" aria-live="off">
       {items.map(item => <ReactionEffect key={item.id} item={item}/>)}
     </div>}
-    <aside className={`table-reactions${open ? ' open' : ''}`} aria-label="Reações da mesa">
+    <aside className={`table-reactions${open ? ' open' : ''}${pendingReaction ? ' targeting' : ''}`} aria-label="Reações da mesa">
       <Button type="button" variant="ghost" size="icon" className="reaction-toggle"
-              aria-label={open ? 'Fechar reações' : 'Abrir reações'}
-              aria-expanded={open} onClick={() => onOpenChange(!open)}>
-        {open ? <X/> : <SmilePlus/>}
+              aria-label={pendingReaction ? 'Cancelar arremesso' : open ? 'Fechar reações' : 'Abrir reações'}
+              aria-expanded={open} aria-pressed={Boolean(pendingReaction)}
+              onClick={() => pendingReaction ? onPendingReactionChange(null) : onOpenChange(!open)}>
+        {open || pendingReaction ? <X/> : <SmilePlus/>}
       </Button>
+      {pendingReaction && <span className="reaction-target-hint" role="status">Escolha um jogador</span>}
       {open && <div className="reaction-panel">
           <header><b>Reagir</b>
               <Button type="button" variant="ghost" size="icon"
@@ -88,25 +117,21 @@ export function TableReactions({items, seats, viewerId, connected, onSend, open,
             {(Object.entries(TABLE_REACTIONS) as [TableReactionID, typeof TABLE_REACTIONS[TableReactionID]][])
               .filter(([, definition]) => !definition.targeted)
               .map(([id, definition]) => <button type="button" key={id} title={definition.label}
-                                                 disabled={!connected || coolingDown} onClick={() => send(id)}>
+                                                 disabled={!connected || coolingDown} onClick={() => onQuickSend(id)}>
                 <span aria-hidden="true">{definition.glyph}</span><span className="sr-only">{definition.label}</span>
               </button>)}
           </div>
-          <label>Enviar para
-              <select value={selectedTarget} onChange={event => setTarget(event.target.value)}
-                      disabled={!opponents.length}>
-                {opponents.map(seat => <option key={seat.player_id} value={seat.player_id}>
-                  {playerName(seat.player_id, viewerId, seat.name)}
-                </option>)}
-              </select>
-          </label>
+          <p className="reaction-object-instruction">Escolha um objeto e toque no jogador.</p>
           <div className="reaction-objects" role="group" aria-label="Objetos">
             {(Object.entries(TABLE_REACTIONS) as [TableReactionID, typeof TABLE_REACTIONS[TableReactionID]][])
               .filter(([, definition]) => definition.targeted)
               .map(([id, definition]) => <button type="button" key={id} title={definition.label}
-                                                 disabled={!connected || !selectedTarget || coolingDown}
-                                                 onClick={() => send(id)}>
-                <span aria-hidden="true">{definition.glyph}</span>{definition.label}
+                                                 disabled={!connected || !hasOpponents || coolingDown}
+                                                 onClick={() => {
+                                                   onPendingReactionChange(id);
+                                                   onOpenChange(false);
+                                                 }}>
+                <ReactionGlyph reactionId={id} glyph={definition.glyph}/>{definition.label}
               </button>)}
           </div>
       </div>}

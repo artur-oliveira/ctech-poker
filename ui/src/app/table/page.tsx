@@ -46,6 +46,7 @@ import {
 import {type MockScenario, USE_MOCK} from '@/lib/mockConfig';
 import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
 import {DEFAULT_TURN_TIMEOUT_SECONDS} from '@/lib/gameTiming';
+import {TABLE_REACTIONS, type TableReactionID} from '@/lib/reactions';
 
 const ROOM_ID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 const MockControls = USE_MOCK
@@ -66,6 +67,7 @@ const REMOVED_REASON_COPY: Record<string, string> = {
 // this button's retryNow() tries again. Telling the player "tentando
 // novamente" past that point would be a lie.
 const RECONNECT_GIVEN_UP_COPY = 'Conexão perdida. Toque para tentar novamente.';
+const REACTION_COOLDOWN_MS = 2000;
 const STAGE_LABELS: Record<string, string> = {
   waiting_for_players: 'Aguardando jogadores', pre_flop: 'Pré-flop', flop: 'Flop', turn: 'Turn', river: 'River',
   showdown: 'Showdown', complete: 'Mão encerrada'
@@ -219,7 +221,32 @@ function TableContent() {
   const [scopedHandOutcome, setScopedHandOutcome] =
     useState<{ tableID: string; value: HandOutcomeState } | null>(null);
   const [activeTablePanel, setActiveTablePanel] =
-    useState<'chat' | 'reactions' | 'rankings' | null>(null);
+    useState<'chat' | 'reactions' | 'rankings' | 'winners' | null>(null);
+  const [pendingReaction, setPendingReaction] = useState<TableReactionID | null>(null);
+  const [reactionCoolingDown, setReactionCoolingDown] = useState(false);
+  const reactionCooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (reactionCooldownRef.current) clearTimeout(reactionCooldownRef.current);
+  }, []);
+
+  function startReactionCooldown() {
+    setReactionCoolingDown(true);
+    if (reactionCooldownRef.current) clearTimeout(reactionCooldownRef.current);
+    reactionCooldownRef.current = setTimeout(() => setReactionCoolingDown(false), REACTION_COOLDOWN_MS);
+  }
+
+  function sendQuickReaction(reaction: TableReactionID) {
+    if (reactionCoolingDown || rt.status !== 'connected') return;
+    if (rt.sendReaction(reaction)) startReactionCooldown();
+  }
+
+  function sendTargetedReaction(playerId: string) {
+    if (!pendingReaction || reactionCoolingDown || rt.status !== 'connected') return;
+    if (rt.sendReaction(pendingReaction, playerId)) {
+      setPendingReaction(null);
+      startReactionCooldown();
+    }
+  }
   // Protocol v3 publishes the exact pre-blind stack. During a rolling deploy,
   // remember the earliest live snapshot as stack+contributed; unlike the old
   // stage-based state this is scoped to both table and hand and also works
@@ -450,7 +477,10 @@ function TableContent() {
                   canRevealCards={canRevealCards} revealPending={rt.showCardsPending}
                   onRevealCardAction={index => rt.showCards(index)}
                   playerNotes={playerNotesByID}
-                  onEditPlayerNoteAction={seat => setNoteOpponent({player_id: seat.player_id, name: seat.name})}/>
+                  onEditPlayerNoteAction={seat => setNoteOpponent({player_id: seat.player_id, name: seat.name})}
+                  targetedReactionLabel={pendingReaction ? TABLE_REACTIONS[pendingReaction].label : undefined}
+                  onTargetPlayerAction={pendingReaction ? sendTargetedReaction : undefined}
+                  announcement={rt.announcement}/>
       <ActionBar
         onActAction={rt.act}
         {...actions}
@@ -483,11 +513,14 @@ function TableContent() {
             open={activeTablePanel === 'chat'}
             onOpenChange={open => setActiveTablePanel(open ? 'chat' : null)}/>
       <TableReactions items={rt.reactions} seats={s.seats} viewerId={viewer}
-                      connected={rt.status === 'connected'} onSend={rt.sendReaction}
+                      connected={rt.status === 'connected'} coolingDown={reactionCoolingDown}
+                      pendingReaction={pendingReaction} onQuickSend={sendQuickReaction}
+                      onPendingReactionChange={setPendingReaction}
                       open={activeTablePanel === 'reactions'}
                       onOpenChange={open => setActiveTablePanel(open ? 'reactions' : null)}/>
       <BotChallenge required={rt.botChallengeRequired} onTokenAction={rt.submitBotChallenge}/>
-      <LastWinners items={tableHands}/>
+      <LastWinners items={tableHands} open={activeTablePanel === 'winners'}
+                   onOpenChange={open => setActiveTablePanel(open ? 'winners' : null)}/>
       <PlayerNoteDialog key={noteOpponent?.player_id || 'closed'} opponent={noteOpponent}
                         existing={noteOpponent ? playerNotesByID[noteOpponent.player_id] : undefined}
                         open={Boolean(noteOpponent)}

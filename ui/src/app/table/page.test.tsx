@@ -1,4 +1,4 @@
-import {render, screen, waitFor} from '@testing-library/react';
+import {act, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import type {TableSnapshot} from '@/lib/api/table';
@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   realtimeHook: vi.fn(),
   actionProps: null as Record<string, unknown> | null,
   stageProps: null as Record<string, unknown> | null,
+  reactionProps: null as Record<string, unknown> | null,
   notification: vi.fn(),
 }));
 
@@ -67,8 +68,11 @@ vi.mock('@/components/table/Chat', () => ({
     <button aria-pressed={open} onClick={() => onOpenChange(!open)}>chat</button>,
 }));
 vi.mock('@/components/table/TableReactions', () => ({
-  TableReactions: ({open, onOpenChange}: { open: boolean; onOpenChange: (open: boolean) => void }) =>
-    <button aria-pressed={open} onClick={() => onOpenChange(!open)}>reactions</button>,
+  TableReactions: (props: Record<string, unknown>) => {
+    mocks.reactionProps = props;
+    return <button aria-pressed={Boolean(props.open)}
+                   onClick={() => (props.onOpenChange as (open: boolean) => void)(!props.open)}>reactions</button>;
+  },
 }));
 vi.mock('@/components/table/HandRankingsDialog', () => ({
   HandRankingsDialog: ({open, onOpenChange}: { open: boolean; onOpenChange: (open: boolean) => void }) =>
@@ -92,7 +96,10 @@ vi.mock('@/components/table/PerimeterTimer', () => ({PerimeterTimer: () => <span
 vi.mock('@/components/table/TablePreferencesDialog', () => ({TablePreferencesDialog: () => null}));
 vi.mock('@/components/table/RealityCheck', () => ({RealityCheck: () => null}));
 vi.mock('@/components/table/BotChallenge', () => ({BotChallenge: () => null}));
-vi.mock('@/components/table/LastWinners', () => ({LastWinners: () => null}));
+vi.mock('@/components/table/LastWinners', () => ({
+  LastWinners: ({open, onOpenChange}: { open: boolean; onOpenChange: (open: boolean) => void }) =>
+    <button aria-pressed={open} onClick={() => onOpenChange(!open)}>winners</button>,
+}));
 vi.mock('@/components/table/MockControls', () => ({MockControls: () => null}));
 vi.mock('@/components/AchievementToast', () => ({AchievementToast: () => null}));
 
@@ -151,6 +158,7 @@ describe('table page integration', () => {
     mocks.params = new Map([['id', ROOM_ID]]);
     mocks.actionProps = null;
     mocks.stageProps = null;
+    mocks.reactionProps = null;
     setQueries();
     realtime();
   });
@@ -201,12 +209,13 @@ describe('table page integration', () => {
     expect(mocks.actionProps).toEqual(expect.objectContaining({isTurn: false, canPreselect: true}));
   });
   
-  test('keeps chat, reactions and rankings mutually exclusive', async () => {
+  test('keeps chat, reactions, rankings and recent winners mutually exclusive', async () => {
     const user = userEvent.setup();
     render(<TablePage/>);
     const chat = screen.getByRole('button', {name: 'chat'});
     const reactions = screen.getByRole('button', {name: 'reactions'});
     const rankings = screen.getByRole('button', {name: 'rankings'});
+    const winners = screen.getByRole('button', {name: 'winners'});
     
     await user.click(chat);
     expect(chat).toHaveAttribute('aria-pressed', 'true');
@@ -216,6 +225,21 @@ describe('table page integration', () => {
     await user.click(rankings);
     expect(reactions).toHaveAttribute('aria-pressed', 'false');
     expect(rankings).toHaveAttribute('aria-pressed', 'true');
+    await user.click(winners);
+    expect(rankings).toHaveAttribute('aria-pressed', 'false');
+    expect(winners).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('selects a reaction, targets a seat, and clears targeting after a successful throw', async () => {
+    realtime({sendReaction: vi.fn(() => true)});
+    const {rerender} = render(<TablePage/>);
+    act(() => (mocks.reactionProps?.onPendingReactionChange as (reaction: string) => void)('tomato'));
+    rerender(<TablePage/>);
+    expect(mocks.stageProps).toEqual(expect.objectContaining({targetedReactionLabel: 'Jogar tomate'}));
+    act(() => (mocks.stageProps?.onTargetPlayerAction as (playerId: string) => void)('opponent'));
+    rerender(<TablePage/>);
+    expect(mocks.realtime.sendReaction).toHaveBeenCalledWith('tomato', 'opponent');
+    expect(mocks.stageProps?.targetedReactionLabel).toBeUndefined();
   });
   
   test('handles pause, leave and player notes through their backend callbacks', async () => {
