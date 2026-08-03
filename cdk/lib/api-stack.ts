@@ -69,6 +69,7 @@ interface ApiStackProps extends cdk.StackProps {
   playerHandsTableArn: string;
   walletWebhookHmacSecretParam: string;
   sandboxPurchasesTableArn: string;
+  pendingCashoutsTableArn: string;
 }
 
 export const minimumApiCapacity = (_environment: Environment) => 1;
@@ -112,6 +113,7 @@ export class PokerApiStack extends cdk.Stack {
       dailyRewardTableArn,
       walletWebhookHmacSecretParam,
       sandboxPurchasesTableArn,
+      pendingCashoutsTableArn,
     } = props;
     
     const shared = SSM_SHARED(environment);
@@ -139,6 +141,7 @@ export class PokerApiStack extends cdk.Stack {
       tableStateArn, tableStateHistoryArn, actionLogArn, actionGuardsArn, roomsTableArn, playerProfilesTableArn,
       achievementProgressTableArn, leaderboardStatsTableArn, dailyRewardTableArn, playerSessionsTableArn,
       playerHandsTableArn, playerNotesTableArn, handSharesTableArn, pokerStatsTableArn, sandboxPurchasesTableArn,
+      pendingCashoutsTableArn,
     ];
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: [
