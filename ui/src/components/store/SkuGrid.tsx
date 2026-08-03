@@ -14,7 +14,7 @@ export function SkuGrid({skus, isLoading, isError, onRetryAction, onSelectAction
   isLoading: boolean;
   isError: boolean;
   onRetryAction: () => void;
-  onSelectAction: (sku: SandboxSKU) => void;
+  onSelectAction: (sku: SandboxSKU, trigger: HTMLButtonElement) => void;
   pendingSku: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -46,7 +46,7 @@ export function SkuGrid({skus, isLoading, isError, onRetryAction, onSelectAction
         const bonusLabel = bonusCredits.toLocaleString('pt-BR');
         return <button key={sku.id} type="button" className="store-sku-card"
                        aria-label={`Escolher ${totalLabel} fichas: ${baseLabel} base${bonusCredits > 0 ? ` mais ${bonusLabel} de bônus` : ', sem bônus'}, por ${formatBRL(sku.price_cents)}`}
-                       disabled={pendingSku !== null} onClick={() => onSelectAction(sku)}>
+                       disabled={pendingSku !== null} onClick={event => onSelectAction(sku, event.currentTarget)}>
           <span className="store-sku-credits">{totalLabel} <small>fichas no total</small></span>
           <span className="store-sku-composition">
             <span>{baseLabel} base</span>

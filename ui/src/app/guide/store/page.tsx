@@ -33,7 +33,7 @@ export default function StoreGuide() {
         id: 'status', title: 'Entender os estados da compra', summary: 'O histórico diferencia uma cobrança aberta de uma compra concluída.',
         body: <GuideTerms><GuideTerm term="Aguardando pagamento">O Pix ainda está válido. Use <b>Continuar pagamento</b> para reabrir QR e código.</GuideTerm>
           <GuideTerm term="Confirmada">O pagamento foi reconhecido e as fichas foram adicionadas ao saldo.</GuideTerm>
-          <GuideTerm term="Expirada">O prazo terminou; o código fica desabilitado. Inicie outra compra se ainda quiser o pacote.</GuideTerm>
+          <GuideTerm term="Expirada">O prazo terminou e o código fica desabilitado. Use <b>Gerar novo Pix para este pacote</b> para criar uma nova cobrança sem refazer a escolha; ao fechar, o foco volta ao pacote original.</GuideTerm>
           <GuideTerm term="Falhou">A tentativa não foi concluída. Nenhuma ficha deve ser creditada.</GuideTerm>
           <GuideTerm term="Estornada">Uma compra confirmada foi revertida e as fichas correspondentes foram retiradas.</GuideTerm></GuideTerms>
       },

@@ -138,6 +138,9 @@ unverifiable — there is no backfill, because the seed is not retained anywhere
 - **Package comparison** — the store initially keeps the Pix catalog to four choices. Every option
   exposes total credits, base credits, the exact bonus-credit contribution (and percentage), and
   price without inferred urgency or “best value” claims; larger catalogs are disclosed on request.
+- **Expired Pix recovery** — an expired sandbox charge can create a fresh purchase for its original
+  SKU directly from the payment dialog. The action has pending and retryable error states; closing
+  the dialog restores focus to the package that started the flow.
 - **Equity** — `Seat` renders `seat.equity` from the server snapshot. There is no client-side
   equity calculator; the client cannot be given the remaining-deck composition.
 - **Store refund safety** — confirmed sandbox purchases open a consequence dialog before mutation. It shows the exact Pix amount, package credits, projected sandbox balance, and the server-enforced eligibility rule: no sandbox-wallet debit may have occurred after the purchase credit. The dialog owns pending, success, and recoverable error states. This flow only reverses sandbox purchases; it is architecturally separate from gated real-money deposits.

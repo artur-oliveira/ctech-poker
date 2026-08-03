@@ -4,25 +4,29 @@ import Image from 'next/image';
 import {Check, Copy, ShieldCheck} from 'lucide-react';
 import {useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
-import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle} from '@/components/ui/dialog';
+import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog';
 import {getPurchase, type SandboxPurchase} from '@/lib/api/wallet';
 import {formatDuration, useCountdownMs} from './useCountdown';
 
 const POLL_MS = 5000;
 
-export function PurchaseModal({purchase, onCloseAction, onUpdate}: {
+export function PurchaseModal({purchase, onCloseAction, onUpdateAction, onRegenerateAction}: {
   purchase: SandboxPurchase | null;
   onCloseAction: () => void;
-  onUpdate: (purchase: SandboxPurchase) => void;
+  onUpdateAction: (purchase: SandboxPurchase) => void;
+  onRegenerateAction: (sku: string) => Promise<void>;
 }) {
   const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [regenerateFailed, setRegenerateFailed] = useState(false);
   const open = purchase !== null;
   const expiresMs = purchase?.expires_at ? new Date(purchase.expires_at).getTime() : null;
   const qrImageType = purchase?.qr_code_base64?.startsWith('PHN2Zy') ? 'image/svg+xml' : 'image/png';
   const remainingMs = useCountdownMs(open ? expiresMs : null);
   const expired = expiresMs !== null && remainingMs <= 0;
+  const recoverableExpired = expired || purchase?.status === 'expired';
 
   useEffect(() => {
     if (!copied) return undefined;
@@ -42,10 +46,10 @@ export function PurchaseModal({purchase, onCloseAction, onUpdate}: {
   useEffect(() => {
     if (!open || !purchase || purchase.status !== 'pending') return undefined;
     const id = window.setInterval(() => {
-      getPurchase(purchase.purchase_id).then(onUpdate).catch(() => undefined);
+      getPurchase(purchase.purchase_id).then(onUpdateAction).catch(() => undefined);
     }, POLL_MS);
     return () => window.clearInterval(id);
-  }, [open, purchase, onUpdate]);
+  }, [open, purchase, onUpdateAction]);
 
   async function copy() {
     if (!purchase?.pix_copia_e_cola) return;
@@ -59,17 +63,29 @@ export function PurchaseModal({purchase, onCloseAction, onUpdate}: {
     }
   }
 
+  async function regenerate() {
+    if (!purchase?.sku || regenerating) return;
+    setRegenerating(true);
+    setRegenerateFailed(false);
+    try {
+      await onRegenerateAction(purchase.sku);
+    } catch {
+      setRegenerateFailed(true);
+      setRegenerating(false);
+    }
+  }
+
   return <Dialog open={open} onOpenChange={next => {
     if (!next) onCloseAction();
   }}>
     <DialogContent>
       <DialogHeader>
         <DialogTitle>{purchase?.status === 'confirmed' ? 'Fichas adicionadas'
-          : expired ? 'Código Pix expirado'
+          : recoverableExpired ? 'Código Pix expirado'
             : purchase?.status && purchase.status !== 'pending' ? 'Compra encerrada' : 'Pague com Pix para concluir'}</DialogTitle>
         <DialogDescription>{purchase?.status === 'confirmed'
           ? 'O pagamento foi confirmado e seu saldo sandbox está atualizado.'
-          : expired ? 'Este código não pode mais ser usado. Feche esta janela e escolha um pacote novamente.'
+          : recoverableExpired ? 'Este código não pode mais ser usado. Gere um novo Pix para manter o mesmo pacote.'
             : purchase?.status && purchase.status !== 'pending'
             ? 'Este pagamento não pode mais ser concluído.'
             : 'Escaneie o QR code ou copie o código Pix no aplicativo do seu banco.'}</DialogDescription>
@@ -83,7 +99,7 @@ export function PurchaseModal({purchase, onCloseAction, onUpdate}: {
             : 'Suas fichas sandbox já estão no saldo.'}</p>
           <span className="store-purchase-chips" aria-hidden="true"><i/><i/><i/><i/><i/></span>
         </div>
-        : purchase?.status && purchase.status !== 'pending'
+        : purchase?.status && purchase.status !== 'pending' && !recoverableExpired
           ? <p className="buyin-error" role="alert">Esta compra não está mais disponível ({STATUS_LABEL[purchase.status] || 'status desconhecido'}).</p>
           : <>
             {purchase?.qr_code_base64 && <div className="store-qr">
@@ -110,6 +126,15 @@ export function PurchaseModal({purchase, onCloseAction, onUpdate}: {
             </p>}
             <p className="store-payment-note"><ShieldCheck aria-hidden="true"/> As fichas são apenas do modo sandbox e não têm valor em dinheiro.</p>
           </>}
+      {recoverableExpired && <>
+        {regenerateFailed && <p className="buyin-error" role="alert">Não foi possível gerar um novo Pix. Tente novamente ou feche para voltar ao pacote.</p>}
+        <DialogFooter>
+          <Button type="button" variant="ghost" disabled={regenerating} onClick={onCloseAction}>Voltar aos pacotes</Button>
+          <Button type="button" disabled={regenerating || !purchase?.sku} onClick={() => void regenerate()}>
+            {regenerating ? 'Gerando novo Pix…' : 'Gerar novo Pix para este pacote'}
+          </Button>
+        </DialogFooter>
+      </>}
     </DialogContent>
   </Dialog>;
 }

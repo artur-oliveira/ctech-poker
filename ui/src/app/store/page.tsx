@@ -1,5 +1,5 @@
 'use client';
-import {useCallback, useState} from 'react';
+import {useCallback, useRef, useState} from 'react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {Clock3, Coins, ShoppingBag} from 'lucide-react';
 import {TermsGate} from '@/components/TermsGate';
@@ -23,6 +23,7 @@ export default function Store() {
   const [pendingSku, setPendingSku] = useState<string | null>(null);
   const [refundPurchaseTarget, setRefundPurchaseTarget] = useState<SandboxPurchase | null>(null);
   const [resumingId, setResumingId] = useState<string | null>(null);
+  const purchaseTriggerRef = useRef<HTMLButtonElement | null>(null);
   const player = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
 
   const skus = useQuery({
@@ -43,6 +44,17 @@ export default function Store() {
     } finally {
       setPendingSku(null);
     }
+  }, [queryClient]);
+
+  const closePurchase = useCallback(() => {
+    setActivePurchase(null);
+    window.requestAnimationFrame(() => purchaseTriggerRef.current?.focus());
+  }, []);
+
+  const regeneratePurchase = useCallback(async (sku: string) => {
+    const purchase = await createPurchase(sku);
+    setActivePurchase(purchase);
+    void queryClient.invalidateQueries({queryKey: ['wallet', 'sandbox-purchases']});
   }, [queryClient]);
 
   const refund = useCallback(async (purchaseId: string) => {
@@ -98,7 +110,10 @@ export default function Store() {
                 <p>Compare o total, a quantidade base e o bônus de cada pacote. O pagamento é feito por Pix.</p></div>
             </div>
             <SkuGrid skus={skus.data ?? []} isLoading={skus.isLoading} isError={skus.isError}
-                     onRetryAction={() => void skus.refetch()} onSelectAction={sku => void selectSku(sku)}
+                     onRetryAction={() => void skus.refetch()} onSelectAction={(sku, trigger) => {
+                       purchaseTriggerRef.current = trigger;
+                       void selectSku(sku);
+                     }}
                      pendingSku={pendingSku}/>
           </section>
 
@@ -117,7 +132,8 @@ export default function Store() {
       </AppPageBody>
     </AppPage>
     <PurchaseModal key={activePurchase?.purchase_id ?? 'closed'} purchase={activePurchase}
-                   onCloseAction={() => setActivePurchase(null)} onUpdate={setActivePurchase}/>
+                   onCloseAction={closePurchase} onUpdateAction={setActivePurchase}
+                   onRegenerateAction={regeneratePurchase}/>
     <RefundConfirmationDialog key={refundPurchaseTarget?.purchase_id ?? 'closed'} purchase={refundPurchaseTarget}
                               sandboxBalance={player.data?.sandbox_balance}
                               onCloseAction={() => setRefundPurchaseTarget(null)} onConfirmAction={refund}/>

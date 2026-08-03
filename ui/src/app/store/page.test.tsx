@@ -143,6 +143,29 @@ describe('store page', () => {
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'sandbox-purchases']});
   });
 
+  test('regenerates an expired Pix for the same package and restores package focus on close', async () => {
+    mocks.createPurchase
+      .mockResolvedValueOnce({
+        purchase_id: 'sbxp-expired', sku: 'pack_100', status: 'pending',
+        pix_copia_e_cola: 'expired-code', expires_at: new Date(Date.now() - 1_000).toISOString(),
+      })
+      .mockResolvedValueOnce({
+        purchase_id: 'sbxp-fresh', sku: 'pack_100', status: 'pending',
+        pix_copia_e_cola: 'fresh-code', expires_at: new Date(Date.now() + 600_000).toISOString(),
+      });
+    render(<Store/>);
+    const packageButton = screen.getByRole('button', {name: /Escolher 1\.000 fichas/});
+    fireEvent.click(packageButton);
+
+    expect(await screen.findByRole('heading', {name: 'Código Pix expirado'})).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name: 'Gerar novo Pix para este pacote'}));
+
+    await waitFor(() => expect(mocks.createPurchase).toHaveBeenNthCalledWith(2, 'pack_100'));
+    expect(await screen.findByDisplayValue('fresh-code')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name: 'Fechar'}));
+    await waitFor(() => expect(packageButton).toHaveFocus());
+  });
+
   test('reopens a pending Pix payment from purchase history', async () => {
     mocks.getPurchase.mockResolvedValue({
       ...purchases[1], pix_copia_e_cola: '00020126-resumed',
