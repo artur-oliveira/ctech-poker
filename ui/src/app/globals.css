@@ -1912,31 +1912,92 @@ h1 em {
     line-height: 1.55
 }
 
-.stake-select {
-    display: grid;
-    gap: 7px;
-    min-width: 180px
+.stake-picker {
+    min-width: 180px;
+    margin: 0;
+    padding: 0;
+    border: 0
 }
 
-.stake-select > span, .room-format-group > legend {
+.stake-picker > legend, .room-format-group > legend {
+    margin-bottom: 7px;
     font: 600 0.7rem var(--font-mono);
     letter-spacing: .1em;
     text-transform: uppercase;
     color: var(--text-secondary)
 }
 
-.stake-select select {
+.stake-options {
+    display: flex;
+    gap: 8px;
+    max-width: min(460px, 42vw);
+    overflow-x: auto;
+    padding: 6px 3px;
+    scroll-snap-type: x proximity;
+    scrollbar-color: var(--white-22) var(--surface-seat);
+    scrollbar-width: thin
+}
+
+.stake-options::-webkit-scrollbar {
+    height: 8px
+}
+
+.stake-options::-webkit-scrollbar-track {
+    background: var(--surface-seat);
+    border-radius: var(--rounded-pill)
+}
+
+.stake-options::-webkit-scrollbar-thumb {
+    background: var(--white-22);
+    border: 2px solid var(--surface-seat);
+    border-radius: var(--rounded-pill)
+}
+
+.stake-options::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary)
+}
+
+.stake-option {
+    position: relative;
+    display: flex;
+    flex: 0 0 auto;
     min-height: 42px;
-    color: var(--text);
+    cursor: pointer;
+    scroll-snap-align: start;
+}
+
+.stake-option input {
+    position: absolute;
+    opacity: 0;
+}
+
+.stake-option span {
+    display: flex;
+    align-items: center;
+    min-height: 42px;
+    padding: 0 13px;
+    color: var(--text-secondary);
     background: var(--surface-seat);
     border: 1px solid var(--white-13);
     border-radius: 12px;
-    padding: 0 38px 0 13px;
     font: 600 14px var(--font-mono);
-    cursor: pointer
+    transition: background-color .2s, border-color .2s, color .2s;
+    white-space: nowrap;
 }
 
-.stake-select select:focus-visible {
+.stake-option:hover span {
+    background: var(--white-0b);
+    border-color: var(--white-22);
+    color: var(--text)
+}
+
+.stake-option input:checked + span {
+    color: var(--on-brand);
+    background: var(--brand);
+    border-color: var(--brand-bright)
+}
+
+.stake-option input:focus-visible + span {
     outline: 2px solid var(--brand-bright-6);
     outline-offset: 3px
 }
@@ -1963,8 +2024,12 @@ h1 em {
         gap: 18px
     }
 
-    .stake-select {
+    .stake-picker {
         width: 100%
+    }
+
+    .stake-options {
+        max-width: 100%
     }
 }
 

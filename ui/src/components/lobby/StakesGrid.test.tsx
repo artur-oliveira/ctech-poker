@@ -113,12 +113,12 @@ describe('lobby stakes integration', () => {
     };
     render(<StakesGrid/>);
 
-    const blindSelector = screen.getByRole('combobox', {name: 'Blinds'});
-    expect(blindSelector).toHaveValue('25-50');
+    const blindSelector = screen.getByRole('radio', {name: '25 / 50'});
+    expect(blindSelector).toBeChecked();
     expect(screen.getAllByRole('button')).toHaveLength(3);
     expect(screen.getAllByText('Entrada sandbox: 1.000–5.000 fichas (20–100 BB)')).toHaveLength(3);
 
-    await userEvent.selectOptions(blindSelector, '100-200');
+    await userEvent.click(screen.getByRole('radio', {name: '100 / 200'}));
     expect(screen.getAllByRole('button')).toHaveLength(3);
     expect(screen.getAllByText('Entrada sandbox: 4.000–20.000 fichas (20–100 BB)')).toHaveLength(3);
     expect(screen.getAllByText('Criar mesa')).toHaveLength(3);

@@ -66,8 +66,10 @@ the `ProfileMenu` popover in the lobby header (display name, wallet mode, deck v
 
 ## Lobby
 
-- `StakesGrid.tsx` keeps the lobby compact as inventory grows: one blind-level selector controls three
-  format choices (heads-up, 6-max, full-ring), preferring a stake with an open public table by default.
+- `StakesGrid.tsx` keeps the lobby compact as inventory grows: a visible-focus, keyboard-accessible blind-level radio rail with
+  dark, token-aligned horizontal overflow treatment controls three format choices (heads-up, 6-max, full-ring), preferring a stake with an
+  open public table by default. It intentionally keeps every stake directly discoverable rather than hiding them
+  behind carousel navigation.
   The page frames the decision as blinds plus table size and explains once that matchmaking joins a compatible
   public table or creates one when no seat is available. Each size states the resulting action and sandbox buy-in;
   `ActiveTableBanner.tsx` surfaces an open seat.

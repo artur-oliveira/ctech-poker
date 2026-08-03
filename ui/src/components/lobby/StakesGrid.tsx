@@ -91,20 +91,22 @@ export function StakesGrid() {
           <h2 id="room-picker-title">Escolha os blinds</h2>
           <p>Blinds são as apostas obrigatórias de cada mão. O primeiro número é o small blind; o segundo, o big blind.</p>
         </div>
-        <label className="stake-select">
-          <span>Blinds</span>
-          <select value={selectedBlindKey} onChange={event => {
-            setSelectedStakeKey(event.target.value);
-            setFailedKey(null);
-          }}>
+        <fieldset className="stake-picker">
+          <legend>Blinds</legend>
+          <div className="stake-options">
             {stakes.map(stake => {
               const value = `${stake.small_blind}-${stake.big_blind}`;
-              return <option key={value} value={value}>
-                {stake.small_blind.toLocaleString('pt-BR')} / {stake.big_blind.toLocaleString('pt-BR')}
-              </option>;
+              return <label className="stake-option" key={value}>
+                <input type="radio" name="lobby-stake" value={value} checked={selectedBlindKey === value}
+                       onChange={() => {
+                         setSelectedStakeKey(value);
+                         setFailedKey(null);
+                       }}/>
+                <span>{stake.small_blind.toLocaleString('pt-BR')} / {stake.big_blind.toLocaleString('pt-BR')}</span>
+              </label>;
             })}
-          </select>
-        </label>
+          </div>
+        </fieldset>
       </div>
       <fieldset className="room-format-group">
         <legend>Agora escolha o tamanho da mesa</legend>

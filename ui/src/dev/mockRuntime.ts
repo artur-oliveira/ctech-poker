@@ -629,10 +629,19 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       fail(404, 'real-money mode is not available', config);
     }
     return ok({
-      stakes: [{
-        small_blind: 10,
-        big_blind: 20
-      }, {small_blind: 25, big_blind: 50}, {small_blind: 50, big_blind: 100}]
+      stakes: [
+        {small_blind: 10, big_blind: 20},
+        {small_blind: 25, big_blind: 50},
+        {small_blind: 50, big_blind: 100},
+        {small_blind: 100, big_blind: 200},
+        {small_blind: 200, big_blind: 500},
+        {small_blind: 500, big_blind: 1000},
+        {small_blind: 1000, big_blind: 2000},
+        {small_blind: 2500, big_blind: 5000},
+        {small_blind: 5000, big_blind: 10000},
+        {small_blind: 25000, big_blind: 50000},
+        {small_blind: 50000, big_blind: 100000},
+      ]
     }, config);
   }
   const roomMatch = method === 'GET' ? path.match(/^\/v1\.0\/rooms\/([^/]+)$/) : null;
