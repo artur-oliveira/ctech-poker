@@ -12,13 +12,16 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
@@ -554,6 +557,23 @@ func TestDisconnectKickRemovesSeatAcrossServers(t *testing.T) {
 
 	mgrA := tablemanager.NewManager(tablelease.NewService(sharedLeaseBackend), store, nil, nil)
 	mgrB := tablemanager.NewManager(tablelease.NewService(sharedLeaseBackend), store, nil, nil)
+	// handleKickTimeout fails closed (by design, see SetSystemSettlementIntent's
+	// doc comment) when the manager has no settlement-intent builder wired, so
+	// p2's kick would retry forever without this -- wire the same recovery-row
+	// write buyin.Service.BuildSystemSettlementIntent performs in production,
+	// against the real pending-cashouts table this test's DynamoDB Local seeds.
+	pending := reconcile.NewPendingStore(db, "flow_test")
+	mgrB.SetSystemSettlementIntent(func(ctx context.Context, tableID, playerID, reason string, stack int64, holdID string) (types.TransactWriteItem, error) {
+		key := fmt.Sprintf("%s#%s#system_leave#%s", tableID, playerID, reason)
+		var holdIDs []string
+		if holdID != "" {
+			holdIDs = []string{holdID}
+		}
+		return pending.BuildRecordTx(reconcile.PendingCashout{
+			ID: key, PlayerID: playerID, Amount: stack, CurrencyMode: "sandbox",
+			HoldIDs: holdIDs, TableRef: tableID, IdempotencyKey: key,
+		})
+	})
 	seed := func() *hand.Table {
 		return hand.NewTable([]*hand.Player{{ID: "p1", Stack: 1000, Ready: true}, {ID: "p2", Stack: 1000, Ready: true}}, 10, 20)
 	}

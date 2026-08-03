@@ -437,7 +437,7 @@ export class PokerApiStack extends cdk.Stack {
     // broken SSM agent can never strand an instance in Terminating:Wait.
     const drainFunction = new lambda.Function(this, 'TerminationDrainFunction', {
       functionName: `${environment}-${SERVICE}-termination-drain`,
-      runtime: lambda.Runtime.PYTHON_3_13,
+      runtime: lambda.Runtime.PYTHON_3_14,
       handler: 'index.handler',
       timeout: cdk.Duration.seconds(90),
       code: lambda.Code.fromInline(`

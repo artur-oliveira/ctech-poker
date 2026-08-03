@@ -50,7 +50,7 @@ func testDynamoClient(t *testing.T) *dynamodb.Client {
 func mustCreatePokerTables(t *testing.T, db *dynamodb.Client, env string) {
 	t.Helper()
 	pkOnly := []string{env + "_poker_table_state", env + "_poker_action_guards"}
-	pkSk := []string{env + "_poker_action_log"}
+	pkSk := []string{env + "_poker_action_log", env + "_poker_pending_cashouts"}
 	create := func(name string, withSK bool) {
 		attrs := []types.AttributeDefinition{{AttributeName: aws.String("pk"), AttributeType: types.ScalarAttributeTypeS}}
 		keys := []types.KeySchemaElement{{AttributeName: aws.String("pk"), KeyType: types.KeyTypeHash}}

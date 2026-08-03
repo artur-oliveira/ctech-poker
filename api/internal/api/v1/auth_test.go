@@ -86,14 +86,14 @@ func TestAuthMiddleware(t *testing.T) {
 	})
 
 	t.Run("M2M token (empty sid) → 403", func(t *testing.T) {
-		m2m := signToken(t, key, jwt.MapClaims{"sub": "client_poker", "scope": "internal:wallet:credit", "exp": exp})
+		m2m := signToken(t, key, jwt.MapClaims{"sub": "client_poker", "scope": "internal:wallet:credit", "token_use": "access", "exp": exp})
 		if resp := do(t, "Bearer "+m2m); resp.StatusCode != fiber.StatusForbidden {
 			t.Fatalf("expected 403, got %d", resp.StatusCode)
 		}
 	})
 
 	t.Run("user token (sub + sid) → 200, playerID from sub", func(t *testing.T) {
-		user := signToken(t, key, jwt.MapClaims{"sub": "user_1", "sid": "sess_1", "exp": exp})
+		user := signToken(t, key, jwt.MapClaims{"sub": "user_1", "sid": "sess_1", "token_use": "access", "exp": exp})
 		resp := do(t, "Bearer "+user)
 		if resp.StatusCode != fiber.StatusOK {
 			t.Fatalf("expected 200, got %d", resp.StatusCode)

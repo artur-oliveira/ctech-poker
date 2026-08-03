@@ -27,7 +27,10 @@ default** and blocked on legal sign-off, not on missing code.
   (the CDK user-data expects `/opt/app/current/app`; see `Makefile:1`).
 - `make test` → `go test ./... -race -coverprofile=coverage.out`.
 - Integration tests (`tests/integration/tableflow_test.go`) run against **DynamoDB Local**
-  via `docker-compose.test.yml` (in-memory local instance on `:8555`).
+  via `docker-compose.test.yml` (in-memory local instance on `:8555`). `mustCreatePokerTables` seeds
+  `<env>_poker_pending_cashouts` alongside the table-state/action tables — any manager exercising a system removal
+  (AFK/disconnect kick) must call `SetSystemSettlementIntent`, since `handleKickTimeout`/`handleAFKSweep` fail closed
+  without one (see `TestDisconnectKickRemovesSeatAcrossServers`).
 - `handeval` keeps the normal CI fast with a deterministic 20,000-hand differential sample plus directed
   category/tiebreak tests. After changing
   `internal/engine/handeval/ref`, `hashq`, the generator, or `tables.bin`, run the full 133,784,560-hand proof
@@ -194,6 +197,9 @@ error beats silently ranking by a different GSI.
   ctech-account's scope catalog. Revisit if scopes are added — see `CLAUDE.md`'s blocker list, which includes two
   missing wallet scopes that still gate real-money verification calls.
 - **B9 (`sub`-only authz) is fixed.** Older revisions of this file described it as an open risk.
+- `api-commons` v1.4.1's `jwtverify.Verify` now rejects any token missing a `token_use: "access"` claim (also tightens
+  JWK `use`/`alg` matching). ctech-account's issued access tokens already carry it; only hand-crafted test JWTs
+  (`internal/api/v1/auth_test.go`) needed updating after the bump.
 
 ## Sandbox & real-money ledgers
 
