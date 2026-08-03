@@ -45,7 +45,7 @@ Every page is `'use client'`; only `layout.tsx` and `share/layout.tsx` are serve
 | Route | File | Purpose |
 |---|---|---|
 | `/` | `page.tsx` | Landing: hero demo table, features, achievement teaser, OAuth CTAs |
-| `/lobby` | `lobby/page.tsx` | Stakes grid with explicit join/create states and sandbox buy-in ranges, active-table banner, create-room dialog, daily spin, onboarding |
+| `/lobby` | `lobby/page.tsx` | Stakes grid with explicit join/create states and sandbox buy-in ranges, compact active-session resume strip, create-room dialog, daily spin, onboarding |
 | `/table?id=<id>` | `table/page.tsx` | The live table (room id is a **query param**, not a segment) |
 | `/hands` | `hands/page.tsx` | Infinite-scroll hand history with won/lost filter |
 | `/hands/history?table_id=&hand_id=` | `hands/history/page.tsx` | One hand: seats, board, action timeline, fairness proof, export, share |
@@ -66,12 +66,15 @@ the `ProfileMenu` popover in the lobby header (display name, wallet mode, deck v
 
 ## Lobby
 
-- `StakesGrid.tsx` drives joining by stake tier; `ActiveTableBanner.tsx` surfaces an open seat.
+- `StakesGrid.tsx` keeps the lobby compact as inventory grows: one blind-level selector controls three
+  format choices (heads-up, 6-max, full-ring), preferring a stake with an open public table by default.
+  Each format states whether it will join or create a sandbox table; `ActiveTableBanner.tsx` surfaces an open seat.
 - `CreateRoomDialog.tsx` (react-hook-form + zod) sets visibility, stake and seat count.
 - `InviteDialog.tsx` (at the table) copies the private-room share URL.
 - `ProfileMenu.tsx` is the account popover: avatar upload/removal with initials fallback, name edit, wallet-mode switch,
   deck-variant picker, balances, showcase dialog, self-HUD, logout.
-- `OnboardingIntro.tsx` first-visit intro, gated by `src/lib/onboarding.ts`.
+- `OnboardingIntro.tsx` is a compact, dismissible first-visit note below the lobby header. It keeps table entry
+  immediately available while the live chooser explains blinds, table formats, and sandbox buy-ins in context.
 
 ## Table / game client
 

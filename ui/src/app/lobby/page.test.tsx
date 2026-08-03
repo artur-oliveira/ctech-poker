@@ -18,7 +18,10 @@ describe('lobby page', () => {
     render(<Lobby/>);
     const heading = screen.getByRole('heading', {name: 'Escolha sua mesa.'});
     expect(heading).toBeInTheDocument();
-    expect(heading.compareDocumentPosition(screen.getByText('onboarding')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const activeTable = screen.getByText('active-table');
+    const onboarding = screen.getByText('onboarding');
+    expect(heading.compareDocumentPosition(activeTable) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(activeTable.compareDocumentPosition(onboarding) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText('stakes-grid')).toBeInTheDocument();
     expect(screen.getByText('active-table')).toBeInTheDocument();
     expect(await screen.findByRole('link', {name: /Fichas.*recompensa diária disponível/})).toHaveAttribute('href', '/store');

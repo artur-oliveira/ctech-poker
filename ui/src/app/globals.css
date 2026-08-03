@@ -1829,6 +1829,62 @@ h1 em {
     gap: 14px
 }
 
+.active-table-strip {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    margin: -18px 0 22px;
+    padding: 12px 14px;
+    border-radius: var(--rounded-control);
+    background: var(--white-08);
+    border: 1px solid var(--white-13)
+}
+
+.active-table-strip-icon {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    color: var(--paper);
+    background: var(--surface-control)
+}
+
+.active-table-strip-icon svg {
+    width: 17px;
+    height: 17px
+}
+
+.active-table-strip-copy {
+    min-width: 0
+}
+
+.active-table-strip-copy h2 {
+    margin: 0 0 2px;
+    font-size: 14px;
+    line-height: 1.25
+}
+
+.active-table-strip-copy p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-secondary)
+}
+
+@media (max-width: 560px) {
+    .active-table-strip {
+        grid-template-columns: auto minmax(0, 1fr);
+        margin-top: -12px
+    }
+
+    .active-table-strip > button {
+        grid-column: 1 / -1;
+        width: 100%
+    }
+}
+
 @media (max-width: 560px) {
     .stake-grid {
         grid-template-columns: 1fr

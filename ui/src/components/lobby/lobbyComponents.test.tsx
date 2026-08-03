@@ -27,12 +27,15 @@ describe('lobby player components', () => {
   test('routes the player back to their still-open table', () => {
     mocks.query.mockReturnValue({
       data: [
-        {table_id: 'table / 1', ended_at: 0},
+        {table_id: 'table / 1', buyin_amount: 100, ended_at: 0},
         {table_id: 'old', ended_at: 10},
       ],
     });
     render(<ActiveTableBanner/>);
-    fireEvent.click(screen.getByRole('button', {name: /voltar à mesa/i}));
+    expect(screen.getByRole('heading', {name: 'Sua mesa continua aberta'})).toBeInTheDocument();
+    expect(screen.getByText('Você ainda está sentado · entrada de 100 fichas sandbox')).toBeInTheDocument();
+    expect(screen.queryByText('MESA EM ANDAMENTO')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name: 'Retomar mesa'}));
     expect(mocks.push).toHaveBeenCalledWith('/table?id=table%20%2F%201');
   });
   

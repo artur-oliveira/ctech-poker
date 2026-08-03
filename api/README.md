@@ -249,6 +249,12 @@ Fixed, for the record, since older revisions of this file listed them as open: *
 (`achievement_points` is rejected rather than mis-ranked), **B32** (commit-reveal is published and client-verifiable,
 with the seed-less partial proof for no-showdown hands).
 
+Fixed 2026-08-03: **`CommitAction`'s `extra` transact items (buyin's settlement/pending-cashout row) were
+silently dropped from every `Leave` commit** — `extra` was only appended inside the `actionID != ""` branch, but
+`LeaveCmd` never carries an `ActionID`, so a seat removal (manual cash-out or system kick/AFK) could commit with
+no recovery row ever written if the follow-up wallet-credit call then failed. See
+`docs/plans/2026-08-03-leave-settlement-atomicity.md`.
+
 `docs/plans/2026-07-19-api-audit-remediation.md` remains a useful cross-check: some of its items (T1 actor re-resolve,
 T2 prod fail-fast on missing Valkey, M6 rate limiters, stable buy-in idempotency)
 are in code, others are not — verify against the tree before relying on any of them.

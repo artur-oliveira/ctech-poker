@@ -330,3 +330,46 @@ func TestCommitActionRejectsDuplicateActionID(t *testing.T) {
 		t.Fatalf("expected ErrDuplicateAction on a replayed action_id, got %v", err)
 	}
 }
+
+// TestCommitActionIncludesExtraItemsWithoutActionID guards against the
+// leave/kick settlement bug fixed 2026-08-03: buyin.Service's
+// pending-cashout row rides in as an `extra` TransactWriteItem, but
+// LeaveCmd (internal/table/commands.go) never carries an ActionID — a
+// version of CommitAction that only appended extra inside the
+// `actionID != ""` branch silently dropped it from every single leave
+// (manual cash-out or system kick/AFK), committing the seat removal with
+// no recovery row ever written. See
+// docs/plans/2026-08-03-leave-settlement-atomicity.md.
+func TestCommitActionIncludesExtraItemsWithoutActionID(t *testing.T) {
+	db := testClient(t)
+	env := isolatedEnv()
+	s := NewStore(db, env)
+	ctx := context.Background()
+	mustCreateTestTables(ctx, t, db, env)
+	createTable(ctx, t, db, env+"_extra_scratch", false, nil)
+	extra := dynamo.NewBase(db, env, "extra_scratch")
+
+	_ = s.SeedTable(ctx, "table-6", hand.State{Stage: hand.WaitingForPlayers})
+
+	extraItem, err := dynamo.Encode(struct {
+		PK string `dynamodbav:"pk"`
+	}{PK: "settlement-1"})
+	if err != nil {
+		t.Fatalf("encode extra item: %v", err)
+	}
+	extraTx := extra.BuildPutTxItem(extraItem)
+
+	entry := ActionLogEntry{TableID: "table-6", HandID: "hand-1", Version: 2}
+	// actionID is "" on purpose here — mirrors every real Leave commit.
+	if err := s.CommitAction(ctx, "table-6", "hand-1", "", 1, hand.State{Stage: hand.WaitingForPlayers}, TableActivity{}, 0, entry, extraTx); err != nil {
+		t.Fatalf("CommitAction: %v", err)
+	}
+
+	item, err := extra.GetItem(ctx, "settlement-1")
+	if err != nil {
+		t.Fatalf("GetItem: %v", err)
+	}
+	if item == nil {
+		t.Fatal("expected the extra transact item to be written alongside the state commit even with an empty actionID")
+	}
+}

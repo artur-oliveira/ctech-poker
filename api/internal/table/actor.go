@@ -1402,21 +1402,26 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 		a.consumeTimeBank(c.PlayerID)
 		a.cached.SitOutForActor(c.PlayerID)
 		if err := a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "disconnect_sit_out"}); err != nil {
-			if !errors.Is(err, tablestore.ErrVersionConflict) {
-				return err
-			}
 			// a.cached now holds an uncommitted SitOutForActor mutation
 			// layered on stale state -- discard it by reloading fresh,
 			// authoritative state instead of leaving this fabricated,
-			// never-persisted table in memory for whatever this actor
-			// does next (e.g. a later kick-timeout removal computing
+			// never-persisted table in memory for whatever this actor does
+			// next (e.g. a later kick-timeout removal computing
 			// handInProgress/dealtIntoCurrentHand off of it, which could
 			// wrongly allow removing a player still dealt into the REAL
 			// hand and leave a stale handOrder entry for a since-removed
-			// player — runShowdown's playerByID lookup on that entry
-			// would then panic).
+			// player — runShowdown's playerByID lookup on that entry would
+			// then panic). Unconditional: an ErrVersionConflict genuinely
+			// means someone else already advanced and this reload is enough
+			// to reconcile, but any OTHER commit error (a dropped extra
+			// item, a throttle) left the exact same kind of uncommitted
+			// mutation behind and must be purged the same way — the error
+			// itself still propagates for anything but ErrVersionConflict.
 			if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
 				return reloadErr
+			}
+			if !errors.Is(err, tablestore.ErrVersionConflict) {
+				return err
 			}
 		}
 		a.broadcastAll()
@@ -1490,6 +1495,15 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 	if !alreadySeated && c.MaxSeats > 0 && len(players) >= c.MaxSeats {
 		return ErrNoSeatsAvailable
 	}
+	// Snapshot before any in-place mutation, mirroring applyLeaveAndCommit —
+	// AddMidHandJoiner/AddWaitingPlayer append straight into a.cached.players,
+	// so a commit failure below (a transient store error, not just a version
+	// conflict retryOnConflict already reloads on) must not leave a phantom
+	// seated player — already carrying their debited buy-in stack — trusted
+	// in this actor's cache with no matching poker_action_log entry. Without
+	// this, the next unrelated successful commit persists the ghost seat for
+	// real the first time any other player's action commits.
+	before := a.cached.ExportState()
 	p := &hand.Player{ID: c.PlayerID, Stack: c.Stack, HoldID: c.HoldID, LastActionAt: timeNowFunc().UnixMilli()}
 	stage := a.cached.Stage()
 	if stage != hand.WaitingForPlayers && stage != hand.Complete {
@@ -1506,11 +1520,16 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 	if c.SettlementIntent != nil {
 		intent, err := c.SettlementIntent()
 		if err != nil {
+			a.cached = hand.NewTableFromState(before)
 			return err
 		}
 		extra = append(extra, intent)
 	}
-	return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "join"}, extra...)
+	if err := a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "join"}, extra...); err != nil {
+		a.cached = hand.NewTableFromState(before)
+		return err
+	}
+	return nil
 }
 
 func (a *Actor) systemLeaveCmd(ctx context.Context, playerID, reason string, stack chan int64, holdID chan string) LeaveCmd {
@@ -1707,16 +1726,18 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 		a.prunePreselections()
 	}
 	if err := a.commit(ctx, "", &tablestore.ActionLogEntry{Action: "next_hand"}); err != nil {
-		if !errors.Is(err, tablestore.ErrVersionConflict) {
-			return err
-		}
 		// a.cached now holds an uncommitted tryStartHand mutation (possibly a
 		// whole fabricated next hand, dealt from a stale player roster) layered
 		// on stale state -- discard it by reloading fresh, authoritative state
 		// instead of leaving it in memory for this actor's next command to
 		// trust (see handleTurnTimeout's identical fix for the full story).
+		// Unconditional, same reasoning: any commit error leaves this exact
+		// kind of fabricated state behind, not just ErrVersionConflict.
 		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
 			return reloadErr
+		}
+		if !errors.Is(err, tablestore.ErrVersionConflict) {
+			return err
 		}
 	}
 	a.broadcastAll()
@@ -1767,14 +1788,15 @@ func (a *Actor) handleRunoutStep(ctx context.Context, c runoutStepCmd) error {
 	}
 	a.cached.AdvanceRunoutStreetForActor()
 	if err := a.commit(ctx, "", &tablestore.ActionLogEntry{Action: "runout_step"}); err != nil {
-		if !errors.Is(err, tablestore.ErrVersionConflict) {
-			return err
-		}
 		// Same discard-and-reload fix as handleTurnTimeout/handleNextHand:
 		// a.cached currently holds an uncommitted AdvanceRunoutStreetForActor
-		// mutation layered on stale state.
+		// mutation layered on stale state. Unconditional for the same reason
+		// — any commit error leaves it behind, not just ErrVersionConflict.
 		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
 			return reloadErr
+		}
+		if !errors.Is(err, tablestore.ErrVersionConflict) {
+			return err
 		}
 	}
 	if err := a.commitOutcomeLogEntries(ctx); err != nil {

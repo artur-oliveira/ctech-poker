@@ -31,8 +31,8 @@ export default function Lobby() {
       <AppPageBody className="lobby">
         <AppPageHeader icon={LayoutGrid} eyebrow="LOBBY SANDBOX" title="Escolha sua mesa."
           description="Fichas virtuais, emoção de verdade." actions={<CreateRoomDialog/>}/>
-        <OnboardingIntro/>
         <ActiveTableBanner/>
+        <OnboardingIntro/>
         <StakesGrid/>
       </AppPageBody>
       {USE_MOCK && <MockControls/>}

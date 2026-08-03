@@ -140,9 +140,14 @@ func (s *Store) LoadTable(ctx context.Context, tableID string) (*StoredTable, er
 }
 
 // CommitAction atomically bumps tableID's version (guarded by
-// expectedVersion), records entry in the audit log, and — when actionID is
+// expectedVersion), records entry in the audit log, unconditionally includes
+// every item in extra (e.g. buyin's settlement/pending-cashout row — it must
+// land with the state change or not at all), and — when actionID is
 // non-empty — writes an idempotency guard so a replayed action_id fails the
-// transaction instead of being re-applied. Mirrors
+// transaction instead of being re-applied. extra's inclusion is deliberately
+// independent of actionID: LeaveCmd never carries one, so gating extra behind
+// the actionID branch silently dropped it from every leave (see
+// docs/plans/2026-08-03-leave-settlement-atomicity.md). Mirrors
 // ctech-wallet/api/internal/repositories/wallet.go's mutate/resolveTxErr
 // shape: on a failed condition, re-read the guard to disambiguate a version
 // race from a duplicate submission.
@@ -194,7 +199,18 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 	}
 	logTx := s.log.BuildPutTxItem(logItem)
 
+	// extra (e.g. buyin's settlement/pending-cashout row) must land in the
+	// same transaction unconditionally — it has nothing to do with the
+	// actionID idempotency guard below. A prior version of this function
+	// only appended extra inside the `actionID != ""` branch, but LeaveCmd
+	// (internal/table/commands.go) never carries an ActionID, so every
+	// leave — manual cash-out or system kick/AFK — silently dropped its
+	// settlement row from the transaction: the seat was removed but the
+	// poker_pending_cashouts safety net never got written, leaving no
+	// recovery trail if buyin.Service's own follow-up credit call then
+	// failed. See docs/plans/2026-08-03-leave-settlement-atomicity.md.
 	items := []types.TransactWriteItem{stateTx, logTx}
+	items = append(items, extra...)
 	if actionID != "" {
 		guardItem, err := dynamo.Encode(struct {
 			PK  string `dynamodbav:"pk"`
@@ -203,7 +219,6 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 		if err != nil {
 			return fmt.Errorf("tablestore: encode guard: %w", err)
 		}
-		items = append(items, extra...)
 		items = append(items, s.guards.BuildPutTxItemIfAbsent(guardItem))
 	}
 
