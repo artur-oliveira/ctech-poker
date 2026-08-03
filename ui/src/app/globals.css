@@ -1882,11 +1882,6 @@ h1 em {
     background: var(--brand-08)
 }
 
-.room-card > svg {
-    width: 18px;
-    color: var(--brand-bright-6)
-}
-
 .room-card h3 {
     font-size: 24px;
     margin: 9px 0
@@ -1901,6 +1896,32 @@ h1 em {
 
 .room-card div > span svg {
     width: 14px
+}
+
+.room-card div > .room-card-buy-in {
+    margin-top: 8px;
+    color: var(--text-secondary)
+}
+
+.room-card-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 16px;
+    color: var(--brand-bright-6);
+    font-size: 13px;
+    font-weight: 700
+}
+
+.room-card-action svg {
+    width: 16px;
+    height: 16px
+}
+
+.room-card div > .room-card-error {
+    margin-top: 8px;
+    color: var(--danger-soft);
+    line-height: 1.4
 }
 
 .status-dot {

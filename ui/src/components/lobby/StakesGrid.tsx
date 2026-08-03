@@ -5,7 +5,6 @@ import {useRouter} from 'next/navigation';
 import {ArrowRight, Users} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {createRoom, listRooms, listStakes} from '@/lib/api/rooms';
-import {pushNotification} from '@/lib/notify';
 import {useLobbyRealtime} from '@/lib/hooks/useLobbyRealtime';
 import {SkeletonList} from '@/components/ui/skeleton';
 
@@ -19,6 +18,7 @@ export function StakesGrid() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [joiningKey, setJoiningKey] = useState<string | null>(null);
+  const [failedKey, setFailedKey] = useState<string | null>(null);
   
   useLobbyRealtime();
   
@@ -37,6 +37,7 @@ export function StakesGrid() {
   async function joinOrCreate(smallBlind: number, bigBlind: number, maxSeats: number) {
     if (joiningKey) return;
     const key = bucketKey(smallBlind, bigBlind, maxSeats);
+    setFailedKey(null);
     setJoiningKey(key);
     try {
       const openRoom = rooms.find(r => r.visibility === 'public' && r.small_blind === smallBlind
@@ -53,7 +54,7 @@ export function StakesGrid() {
       if (!id) throw new Error('A API criou uma mesa sem identificador.');
       router.push(`/table?id=${encodeURIComponent(id)}`);
     } catch {
-      pushNotification('Não foi possível entrar na mesa. Tente novamente.', 'error');
+      setFailedKey(key);
     } finally {
       setJoiningKey(null);
     }
@@ -92,6 +93,10 @@ export function StakesGrid() {
           const key = bucketKey(stake.small_blind, stake.big_blind, maxSeats);
           const active = rooms.filter(r => r.visibility === 'public' && r.small_blind === stake.small_blind
             && r.big_blind === stake.big_blind && r.max_seats === maxSeats && r.seats_taken < maxSeats).length;
+          const isJoining = joiningKey === key;
+          const actionLabel = active > 0 ? 'Entrar agora' : 'Criar mesa';
+          const buyInMin = stake.big_blind * 20;
+          const buyInMax = stake.big_blind * 100;
           return <Button variant="ghost" key={key} className="room-card h-auto" disabled={joiningKey !== null}
                          aria-busy={joiningKey === key}
                          style={{'--delay': `${i * 60}ms`} as React.CSSProperties}
@@ -104,8 +109,19 @@ export function StakesGrid() {
                 <Users/>
                 {active > 0 ? `${active} mesa${active > 1 ? 's' : ''} ativa${active > 1 ? 's' : ''}` : 'Nenhuma mesa ativa'} · até {maxSeats} jogadores
               </span>
+              <span className="room-card-buy-in">
+                Entrada sandbox: {buyInMin.toLocaleString('pt-BR')}–{buyInMax.toLocaleString('pt-BR')} fichas (20–100 BB)
+              </span>
+              <strong className="room-card-action">
+                {isJoining ? (active > 0 ? 'Entrando…' : 'Criando mesa…') : actionLabel}
+                {!isJoining && <ArrowRight aria-hidden="true"/>}
+              </strong>
+              {failedKey === key && (
+                <span className="room-card-error" role="alert">
+                  Não foi possível {active > 0 ? 'entrar' : 'criar a mesa'}. Tente novamente.
+                </span>
+              )}
             </div>
-            <ArrowRight/>
           </Button>;
         })}</div>
       </section>

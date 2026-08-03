@@ -8,7 +8,6 @@ const invalidateQueries = vi.fn();
 const createRoom = vi.fn();
 const listStakes = vi.fn();
 const listRooms = vi.fn();
-const notify = vi.fn();
 let stakesQuery: Record<string, unknown> = {};
 let roomsQuery: Record<string, unknown> = {};
 
@@ -23,7 +22,6 @@ vi.mock('@/lib/api/rooms', () => ({
   listStakes: (...args: unknown[]) => listStakes(...args),
   listRooms: (...args: unknown[]) => listRooms(...args),
 }));
-vi.mock('@/lib/notify', () => ({pushNotification: (...args: unknown[]) => notify(...args)}));
 
 describe('lobby stakes integration', () => {
   beforeEach(() => {
@@ -82,6 +80,8 @@ describe('lobby stakes integration', () => {
       }], isLoading: false
     };
     render(<StakesGrid/>);
+    expect(screen.getByText('Entrar agora')).toBeInTheDocument();
+    expect(screen.getAllByText('Entrada sandbox: 1.000–5.000 fichas (20–100 BB)')).toHaveLength(3);
     await userEvent.click(screen.getByRole('button', {name: /6-MAX/}));
     expect(push).toHaveBeenCalledWith('/table?id=open-room');
     expect(createRoom).not.toHaveBeenCalled();
@@ -92,6 +92,8 @@ describe('lobby stakes integration', () => {
     stakesQuery = {data: [{small_blind: 10, big_blind: 20}], isLoading: false};
     roomsQuery = {data: [], isLoading: false};
     const {unmount} = render(<StakesGrid/>);
+    expect(screen.getAllByText('Criar mesa')).toHaveLength(3);
+    expect(screen.getAllByText('Entrada sandbox: 400–2.000 fichas (20–100 BB)')).toHaveLength(3);
     await userEvent.click(screen.getByRole('button', {name: /HEADS-UP/}));
     expect(createRoom).toHaveBeenCalledWith(expect.objectContaining({
       small_blind: 10, big_blind: 20, max_seats: 2, buy_in_min: 400, buy_in_max: 2000,
@@ -105,6 +107,6 @@ describe('lobby stakes integration', () => {
     roomsQuery = {data: [], isLoading: false};
     render(<StakesGrid/>);
     await userEvent.click(screen.getByRole('button', {name: /FULL-RING/}));
-    expect(notify).toHaveBeenCalledWith('Não foi possível entrar na mesa. Tente novamente.', 'error');
+    expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível criar a mesa. Tente novamente.');
   });
 });

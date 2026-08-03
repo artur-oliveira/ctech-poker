@@ -45,7 +45,7 @@ Every page is `'use client'`; only `layout.tsx` and `share/layout.tsx` are serve
 | Route | File | Purpose |
 |---|---|---|
 | `/` | `page.tsx` | Landing: hero demo table, features, achievement teaser, OAuth CTAs |
-| `/lobby` | `lobby/page.tsx` | Stakes grid, active-table banner, create-room dialog, daily spin, onboarding |
+| `/lobby` | `lobby/page.tsx` | Stakes grid with explicit join/create states and sandbox buy-in ranges, active-table banner, create-room dialog, daily spin, onboarding |
 | `/table?id=<id>` | `table/page.tsx` | The live table (room id is a **query param**, not a segment) |
 | `/hands` | `hands/page.tsx` | Infinite-scroll hand history with won/lost filter |
 | `/hands/history?table_id=&hand_id=` | `hands/history/page.tsx` | One hand: seats, board, action timeline, fairness proof, export, share |
