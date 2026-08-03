@@ -26,12 +26,12 @@ function formatDate(iso?: string) {
   });
 }
 
-export function PurchaseHistoryList({purchases, isLoading, isError, onRetry, onRefund,
+export function PurchaseHistoryList({purchases, isLoading, isError, onRetryAction, onRefund,
                                      onResume, resumingId}: {
   purchases: SandboxPurchase[];
   isLoading: boolean;
   isError: boolean;
-  onRetry: () => void;
+  onRetryAction: () => void;
   onRefund: (purchase: SandboxPurchase) => void;
   onResume: (purchaseId: string) => void;
   resumingId: string | null;
@@ -43,7 +43,7 @@ export function PurchaseHistoryList({purchases, isLoading, isError, onRetry, onR
   }
   if (isError) {
     return <div className="lobby-empty">Não foi possível carregar seu histórico agora.
-      <Button variant="outline" size="sm" onClick={onRetry}>Tentar novamente</Button>
+      <Button variant="outline" size="sm" onClick={onRetryAction}>Tentar novamente</Button>
     </div>;
   }
   if (purchases.length === 0) {

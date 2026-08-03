@@ -106,7 +106,7 @@ function PreselectionControls({
                                 prospectiveCallAmount,
                                 selection,
                                 selectionAmount,
-                                onSelect,
+                                onSelectAction,
                                 onAct
                               }: {
   canPreselect: boolean;
@@ -119,7 +119,7 @@ function PreselectionControls({
   prospectiveCallAmount: number;
   selection: ActionPreselection | null;
   selectionAmount: number;
-  onSelect: (selection: ActionPreselection | null, amount?: number) => boolean;
+  onSelectAction: (selection: ActionPreselection | null, amount?: number) => boolean;
   onAct: (action: PokerAction) => boolean;
 }) {
   const executedRef = useRef<string | null>(null);
@@ -143,7 +143,7 @@ function PreselectionControls({
     <button type="button" className={selection === value ? 'selected' : ''}
             aria-pressed={selection === value} title={description}
             disabled={!connected || pending !== null}
-            onClick={() => onSelect(selection === value ? null : value, selection === value ? 0 : amount)}>
+            onClick={() => onSelectAction(selection === value ? null : value, selection === value ? 0 : amount)}>
       <span>{label}<small>{description}</small></span>
     </button>;
   return <div className="action-preselectors" role="group" aria-label="Preparar próxima ação">
@@ -335,7 +335,7 @@ export function ActionBar({
                           connected={connected} pending={pending} available={available}
                           callAmount={callAmount} prospectiveCallAmount={prospectiveCallAmount}
                           selection={preselection} selectionAmount={preselectionAmount}
-                          onSelect={onPreselectAction} onAct={onActAction}/>
+                          onSelectAction={onPreselectAction} onAct={onActAction}/>
     {!noLegalActions && !executingPreparedAction &&
         <div className="action-choices" role="group" aria-label="Ações rápidas">
             <Button type="button" variant="outline" disabled={unavailable || !available.fold}

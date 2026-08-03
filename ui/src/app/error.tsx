@@ -13,6 +13,6 @@ export default function ErrorPage({error, reset}: { error: Error & { digest?: st
     title="Não conseguimos concluir esta jogada."
     description="Algo inesperado interrompeu a tela, mas nenhuma ação deve ser repetida sem confirmação da mesa."
     detail={error.digest ? `Referência do erro: ${error.digest}` : 'Tente carregar esta tela novamente.'}
-    onRetry={reset}
+    onRetryAction={reset}
   />;
 }

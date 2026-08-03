@@ -9,7 +9,7 @@ export default function GlobalError({reset}: { error: Error & { digest?: string 
     title="O CTech Poker encontrou um erro."
     description="A aplicação não conseguiu continuar com segurança."
     detail="Atualize a experiência. Se o problema persistir, volte em alguns instantes."
-    onRetry={reset}
+    onRetryAction={reset}
   /></body>
   </html>;
 }

@@ -7,12 +7,12 @@ type SystemStateProps = {
   title: string;
   description: string;
   detail: string;
-  onRetry?: () => void;
+  onRetryAction?: () => void;
 };
 
 const icons = {404: Club, 500: ShieldAlert, 503: Wrench};
 
-export function SystemState({code, title, description, detail, onRetry}: SystemStateProps) {
+export function SystemState({code, title, description, detail, onRetryAction}: SystemStateProps) {
   const Icon = icons[code];
   return <main className="system-state">
     <nav>
@@ -29,8 +29,8 @@ export function SystemState({code, title, description, detail, onRetry}: SystemS
         <p>{description}</p>
         <span>{detail}</span>
         <div className="system-state-actions">
-          {onRetry && <Button size="lg" onClick={onRetry}><RefreshCw/> Tentar novamente</Button>}
-          <Button size="lg" variant={onRetry ? 'outline' : 'default'} render={<Link href="/"/>}>
+          {onRetryAction && <Button size="lg" onClick={onRetryAction}><RefreshCw/> Tentar novamente</Button>}
+          <Button size="lg" variant={onRetryAction ? 'outline' : 'default'} render={<Link href="/"/>}>
             <House/> Ir para o início
           </Button>
           {code === '404' && <Button size="lg" variant="ghost" render={<Link href="/lobby"/>}>

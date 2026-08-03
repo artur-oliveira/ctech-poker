@@ -23,7 +23,7 @@ export default function StoreGuide() {
       },
       {
         id: 'pix', title: 'Comprar um pacote via Pix', summary: 'O pagamento adiciona fichas sandbox, nunca saldo sacável.',
-        body: <><GuideSteps><li><span>Abra <b>Comprar via Pix</b> e escolha o total de fichas e preço desejados.</span></li>
+        body: <><GuideSteps><li><span>Na seção de pacotes, compare o total, as fichas base, o bônus e o preço. A Loja mostra até quatro opções primeiro; use <b>Ver mais pacotes</b> quando o catálogo tiver opções adicionais.</span></li>
           <li><span>No diálogo, escaneie o QR code ou copie o código Pix discreto pelo ícone ao lado do campo.</span></li>
           <li><span>Conclua no aplicativo do banco antes da expiração indicada.</span></li>
           <li><span>Mantenha o diálogo aberto ou volte depois: a confirmação é consultada periodicamente e também chega em tempo real quando disponível.</span></li></GuideSteps>

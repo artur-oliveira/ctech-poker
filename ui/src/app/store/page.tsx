@@ -95,10 +95,10 @@ export default function Store() {
             <div className="store-section-heading">
               <Coins aria-hidden="true"/>
               <div><h2 id="credit-packs-title">Escolha quanto levar para a mesa</h2>
-                <p>O total já inclui o bônus. Pague pelo Pix para receber as fichas.</p></div>
+                <p>Compare o total, a quantidade base e o bônus de cada pacote. O pagamento é feito por Pix.</p></div>
             </div>
             <SkuGrid skus={skus.data ?? []} isLoading={skus.isLoading} isError={skus.isError}
-                     onRetry={() => void skus.refetch()} onSelect={sku => void selectSku(sku)}
+                     onRetryAction={() => void skus.refetch()} onSelectAction={sku => void selectSku(sku)}
                      pendingSku={pendingSku}/>
           </section>
 
@@ -109,7 +109,7 @@ export default function Store() {
                 <p>Acompanhe pagamentos e estornos.</p></div>
             </div>
             <PurchaseHistoryList purchases={purchases.data ?? []} isLoading={purchases.isLoading}
-                                  isError={purchases.isError} onRetry={() => void purchases.refetch()}
+                                  isError={purchases.isError} onRetryAction={() => void purchases.refetch()}
                                   onRefund={setRefundPurchaseTarget}
                                   onResume={id => void resume(id)} resumingId={resumingId}/>
           </section>

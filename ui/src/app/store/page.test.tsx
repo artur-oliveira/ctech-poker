@@ -103,11 +103,29 @@ describe('store page', () => {
     render(<Store/>);
 
     expect(screen.getByText('1.000')).toBeInTheDocument();
-    expect(screen.getByText('+10% bônus')).toBeInTheDocument();
+    expect(screen.getByText('5.000 base')).toBeInTheDocument();
+    expect(screen.getByText('500 bônus')).toBeInTheDocument();
+    expect(screen.getByText('(10%)')).toBeInTheDocument();
+    expect(screen.getByText('sem bônus')).toBeInTheDocument();
     expect(screen.getByText(/1\.000 fichas · R\$\s*1,00/)).toBeInTheDocument();
     expect(screen.getByText('Confirmada')).toBeInTheDocument();
     expect(screen.getByText('Pendente')).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Ver estorno'})).toBeInTheDocument();
+  });
+
+  test('keeps the initial package decision group to four and discloses additional options', () => {
+    mocks.queryState['wallet.skus'] = queryState([
+      ...skus,
+      {id: 'pack_3', price_cents: 900, base_credits: 9000, bonus_percent: 0, total_credits: 9000},
+      {id: 'pack_4', price_cents: 1200, base_credits: 12000, bonus_percent: 0, total_credits: 12000},
+      {id: 'pack_5', price_cents: 1500, base_credits: 15000, bonus_percent: 20, total_credits: 18000},
+    ]);
+    render(<Store/>);
+
+    expect(screen.queryByRole('button', {name: /Escolher 18\.000 fichas/})).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name: 'Ver mais 1 pacote'}));
+    expect(screen.getByRole('button', {name: /Escolher 18\.000 fichas: 15\.000 base mais 3\.000 de bônus/})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Mostrar 4 opções'})).toHaveAttribute('aria-expanded', 'true');
   });
 
   test('buying a pack opens the purchase modal with the PIX payload', async () => {
