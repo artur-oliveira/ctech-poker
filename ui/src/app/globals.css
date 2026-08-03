@@ -7634,6 +7634,132 @@ h1 em {
     color: var(--danger)
 }
 
+.store-refund-dialog {
+    max-width: 520px
+}
+
+.store-refund-summary {
+    display: grid;
+    gap: 0;
+    margin: 0;
+    border-block: 1px solid var(--control-border)
+}
+
+.store-refund-summary > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+    padding-block: 13px
+}
+
+.store-refund-summary > div + div {
+    border-block-start: 1px solid var(--control-border)
+}
+
+.store-refund-summary dt {
+    color: var(--muted-rose);
+    font-size: var(--font-size-compact)
+}
+
+.store-refund-summary dd {
+    min-width: 0;
+    margin: 0;
+    color: var(--on-brand);
+    font-weight: 700;
+    text-align: end;
+    overflow-wrap: anywhere
+}
+
+.store-refund-eligibility {
+    display: flex;
+    gap: 12px;
+    margin-block-start: 18px;
+    color: var(--on-brand)
+}
+
+.store-refund-eligibility > svg {
+    flex: none;
+    width: 20px;
+    color: var(--gold)
+}
+
+.store-refund-eligibility p,
+.store-refund-result p {
+    margin: 4px 0 0;
+    color: var(--muted-rose);
+    font-size: var(--font-size-compact);
+    line-height: 1.55
+}
+
+.store-refund-boundary,
+.store-refund-error {
+    display: flex;
+    gap: 9px;
+    align-items: flex-start;
+    margin: 16px 0 0;
+    font-size: var(--font-size-compact);
+    line-height: 1.5
+}
+
+.store-refund-boundary {
+    color: var(--muted-rose)
+}
+
+.store-refund-boundary svg {
+    flex: none;
+    width: 18px
+}
+
+.store-refund-error {
+    padding: 12px;
+    border-radius: var(--radius-control);
+    background: var(--surface-error);
+    color: var(--danger)
+}
+
+.store-refund-result {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    padding-block: 10px 18px
+}
+
+.store-refund-result-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--success) 20%, transparent);
+    color: var(--success)
+}
+
+.store-refund-spinner {
+    animation: store-refund-spin .8s linear infinite
+}
+
+@keyframes store-refund-spin {
+    to { transform: rotate(360deg) }
+}
+
+@media (max-width: 520px) {
+    .store-refund-summary > div {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 4px
+    }
+
+    .store-refund-summary dd {
+        text-align: start
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .store-refund-spinner { animation: none }
+}
+
 /* Credits hub: the balance is the orientation point, followed by one linear
    reward → packages → activity flow. Gold remains tied to value rather than ambient
    decoration, and the sandbox note stays visible before any Pix action. */

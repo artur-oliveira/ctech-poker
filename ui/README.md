@@ -137,6 +137,7 @@ unverifiable — there is no backfill, because the seed is not retained anywhere
   recent purchases before progressively disclosing the full purchase list.
 - **Equity** — `Seat` renders `seat.equity` from the server snapshot. There is no client-side
   equity calculator; the client cannot be given the remaining-deck composition.
+- **Store refund safety** — confirmed sandbox purchases open a consequence dialog before mutation. It shows the exact Pix amount, package credits, projected sandbox balance, and the server-enforced eligibility rule: no sandbox-wallet debit may have occurred after the purchase credit. The dialog owns pending, success, and recoverable error states. This flow only reverses sandbox purchases; it is architecturally separate from gated real-money deposits.
 - **Self-HUD** (`SelfHudDialog`) — own VPIP/PFR/3-bet from `GET /v1.0/players/me/poker-stats`.
 - **Hand export** (`src/lib/handExport.ts`) and **hand sharing** (`ShareHandDialog`).
 

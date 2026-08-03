@@ -7,6 +7,7 @@ import {DailyRewardPanel} from '@/components/store/DailyRewardPanel';
 import {SkuGrid} from '@/components/store/SkuGrid';
 import {PurchaseModal} from '@/components/store/PurchaseModal';
 import {PurchaseHistoryList} from '@/components/store/PurchaseHistoryList';
+import {RefundConfirmationDialog} from '@/components/store/RefundConfirmationDialog';
 import {
   createPurchase, getPurchase, listPurchases, listSkus, refundPurchase, type SandboxPurchase, type SandboxSKU
 } from '@/lib/api/wallet';
@@ -20,7 +21,7 @@ export default function Store() {
   const queryClient = useQueryClient();
   const [activePurchase, setActivePurchase] = useState<SandboxPurchase | null>(null);
   const [pendingSku, setPendingSku] = useState<string | null>(null);
-  const [refundingId, setRefundingId] = useState<string | null>(null);
+  const [refundPurchaseTarget, setRefundPurchaseTarget] = useState<SandboxPurchase | null>(null);
   const [resumingId, setResumingId] = useState<string | null>(null);
   const player = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
 
@@ -45,18 +46,12 @@ export default function Store() {
   }, [queryClient]);
 
   const refund = useCallback(async (purchaseId: string) => {
-    setRefundingId(purchaseId);
-    try {
-      await refundPurchase(purchaseId);
-      void queryClient.invalidateQueries({queryKey: ['wallet', 'sandbox-purchases']});
-      void queryClient.invalidateQueries({queryKey: ['wallet', 'balance']});
-      void queryClient.invalidateQueries({queryKey: ['player', 'me']});
-      pushNotification('Compra estornada.', 'info');
-    } catch {
-      pushNotification('Não foi possível estornar esta compra agora.');
-    } finally {
-      setRefundingId(null);
-    }
+    await refundPurchase(purchaseId);
+    await Promise.all([
+      queryClient.invalidateQueries({queryKey: ['wallet', 'sandbox-purchases']}),
+      queryClient.invalidateQueries({queryKey: ['wallet', 'balance']}),
+      queryClient.invalidateQueries({queryKey: ['player', 'me']}),
+    ]);
   }, [queryClient]);
 
   const resume = useCallback(async (purchaseId: string) => {
@@ -115,13 +110,16 @@ export default function Store() {
             </div>
             <PurchaseHistoryList purchases={purchases.data ?? []} isLoading={purchases.isLoading}
                                   isError={purchases.isError} onRetry={() => void purchases.refetch()}
-                                  onRefund={id => void refund(id)} refundingId={refundingId}
+                                  onRefund={setRefundPurchaseTarget}
                                   onResume={id => void resume(id)} resumingId={resumingId}/>
           </section>
         </div>
       </AppPageBody>
     </AppPage>
     <PurchaseModal key={activePurchase?.purchase_id ?? 'closed'} purchase={activePurchase}
-                   onClose={() => setActivePurchase(null)} onUpdate={setActivePurchase}/>
+                   onCloseAction={() => setActivePurchase(null)} onUpdate={setActivePurchase}/>
+    <RefundConfirmationDialog key={refundPurchaseTarget?.purchase_id ?? 'closed'} purchase={refundPurchaseTarget}
+                              sandboxBalance={player.data?.sandbox_balance}
+                              onCloseAction={() => setRefundPurchaseTarget(null)} onConfirmAction={refund}/>
   </TermsGate>;
 }

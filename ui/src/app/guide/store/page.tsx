@@ -41,7 +41,8 @@ export default function StoreGuide() {
         id: 'historico', title: 'Retomar, conferir e estornar', summary: 'Compras recentes permanecem na mesma aba dos pacotes.',
         body: <><GuideBullets><li><span>Use <b>Continuar pagamento</b> em compras pendentes.</span></li>
           <li><span>Compare data, total de fichas, preço e status antes de tomar uma ação.</span></li>
-          <li><span>Quando o ambiente oferecer estorno, a ação aparece somente para compras confirmadas elegíveis.</span></li>
+          <li><span>Em compras confirmadas, <b>Ver estorno</b> abre uma confirmação com valor em reais, fichas removidas e saldo projetado. O servidor só aceita a ação quando nenhuma ficha foi usada desde o crédito.</span></li>
+          <li><span>O estorno reverte exclusivamente uma compra sandbox; ele não movimenta saldo de dinheiro real nem converte fichas em dinheiro.</span></li>
           <li><span>Falhas de catálogo ou histórico exibem uma tentativa manual sem esconder as demais partes da Loja.</span></li></GuideBullets>
           <GuideLink href="/store">Abrir a Loja</GuideLink></>
       }

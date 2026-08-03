@@ -26,14 +26,13 @@ function formatDate(iso?: string) {
   });
 }
 
-export function PurchaseHistoryList({purchases, isLoading, isError, onRetry, onRefund, refundingId,
+export function PurchaseHistoryList({purchases, isLoading, isError, onRetry, onRefund,
                                      onResume, resumingId}: {
   purchases: SandboxPurchase[];
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
-  onRefund: (purchaseId: string) => void;
-  refundingId: string | null;
+  onRefund: (purchase: SandboxPurchase) => void;
   onResume: (purchaseId: string) => void;
   resumingId: string | null;
 }) {
@@ -69,9 +68,8 @@ export function PurchaseHistoryList({purchases, isLoading, isError, onRetry, onR
         <QrCode/> {resumingId === p.purchase_id ? 'Abrindo…' : 'Continuar pagamento'}
       </Button>}
       {p.status === 'confirmed' && <Button type="button" variant="outline" size="sm"
-                                            disabled={refundingId === p.purchase_id}
-                                            onClick={() => onRefund(p.purchase_id)}>
-        <RotateCcw/> {refundingId === p.purchase_id ? 'Estornando…' : 'Estornar'}
+                                            onClick={() => onRefund(p)}>
+        <RotateCcw/> Ver estorno
       </Button>}
     </li>)}
     </ul>

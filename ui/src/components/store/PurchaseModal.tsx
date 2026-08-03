@@ -10,9 +10,9 @@ import {formatDuration, useCountdownMs} from './useCountdown';
 
 const POLL_MS = 5000;
 
-export function PurchaseModal({purchase, onClose, onUpdate}: {
+export function PurchaseModal({purchase, onCloseAction, onUpdate}: {
   purchase: SandboxPurchase | null;
-  onClose: () => void;
+  onCloseAction: () => void;
   onUpdate: (purchase: SandboxPurchase) => void;
 }) {
   const queryClient = useQueryClient();
@@ -60,7 +60,7 @@ export function PurchaseModal({purchase, onClose, onUpdate}: {
   }
 
   return <Dialog open={open} onOpenChange={next => {
-    if (!next) onClose();
+    if (!next) onCloseAction();
   }}>
     <DialogContent>
       <DialogHeader>
