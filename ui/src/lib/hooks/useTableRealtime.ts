@@ -16,6 +16,13 @@ export type ConnectionStatus = WSStatus
 export type ActionError = { code: string; message: string }
 
 const ACTION_TIMEOUT_MS = 8000;
+// A stale_state rejection means the actor's own snapshot/hand precondition
+// didn't match the server's — the same action resubmitted against the fresh
+// version the resync just fetched is legal again (see actor.go's
+// validateActionPrecondition). Cap the auto-resubmits so a genuinely illegal
+// action (or a table stuck racing another player) fails visibly instead of
+// looping forever.
+const MAX_ACTION_RETRIES = 3;
 // Rejections that mean "your view of the table is not the server's view".
 // invalid_action belongs here even though it is also the code for a genuinely
 // illegal move: a resync costs one snapshot, while not resyncing leaves a
@@ -162,8 +169,14 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const pendingActionRef = useRef<{
     id: string;
     action: PokerAction;
+    amount: number;
     snapshotVersion: number;
     handId: string;
+    // Auto-retry bookkeeping for stale_state: retries counts resubmits already
+    // used, awaitingRetry marks "the next authoritative snapshot should
+    // resubmit this action" rather than clear it as abandoned.
+    retries: number;
+    awaitingRetry: boolean;
   } | null>(null);
   const latestVersionRef = useRef(-1);
   const latestHandIDRef = useRef('');
@@ -273,7 +286,34 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     }
     if (failedCode) setLastActionError(actionError(failedCode));
   }, []);
-  
+
+  // Sends (or resends) the 'act' frame and (re)arms its own timeout. Used both
+  // for the first submit and for a stale_state auto-retry, so it goes through
+  // sendRef/retryNowRef (not send/emit/retryNow) to stay callable from
+  // receive(), which is declared before those exist.
+  const sendActFrame = useCallback((actionId: string, action: PokerAction, amount: number,
+    snapshotVersion: number, handId: string) => {
+    if (pendingTimer.current) clearTimeout(pendingTimer.current);
+    if (!sendRef.current({
+      type: 'act', action, amount, action_id: actionId,
+      expected_snapshot_version: snapshotVersion, expected_hand_id: handId
+    })) {
+      setLastActionError(actionError('not_connected'));
+      clearPending(actionId);
+      return false;
+    }
+    pendingTimer.current = setTimeout(() => {
+      if (pendingActionRef.current?.id !== actionId) return;
+      setLastActionError(actionError('action_timeout'));
+      if (!sendRef.current({type: 'sync_state', action_id: actionId})) {
+        setLastActionError(actionError('connection_lost'));
+        awaitingReconnectSnapshotRef.current = true;
+        retryNowRef.current();
+      }
+    }, ACTION_TIMEOUT_MS);
+    return true;
+  }, [clearPending]);
+
   const armResyncWatchdog = useCallback(() => {
     if (resyncWatchdog.current) clearTimeout(resyncWatchdog.current);
     resyncWatchdog.current = setTimeout(() => {
@@ -329,15 +369,31 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       }
       // ACK is authoritative. This version check is the recovery path for a
       // lost ACK: once a newer state arrives, the old decision cannot still
-      // be pending against the snapshot it was sent from.
-      if (pendingActionRef.current && version > pendingActionRef.current.snapshotVersion) {
+      // be pending against the snapshot it was sent from. Skip it when a
+      // stale_state retry is armed — the correlated reply below (matched by
+      // action_id) is what resubmits it, not this generic bump.
+      if (pendingActionRef.current && version > pendingActionRef.current.snapshotVersion &&
+        !pendingActionRef.current.awaitingRetry) {
         clearPending(pendingActionRef.current.id);
       }
       // A sync_state response is serialized after the action frame on the
       // same socket. Even at the same version it is authoritative proof that
-      // the timed-out action was not committed.
+      // the timed-out action was not committed. If it was armed for a
+      // stale_state retry, resubmit against this fresh version/hand instead
+      // of giving up — same action_id, since the rejected attempt never
+      // reached the idempotency guard (validateActionPrecondition rejects
+      // before commit), so resubmitting it is safe.
       if (message.action_id && pendingActionRef.current?.id === message.action_id) {
-        clearPending(message.action_id);
+        const pending = pendingActionRef.current;
+        if (pending.awaitingRetry && pending.retries < MAX_ACTION_RETRIES) {
+          pending.retries += 1;
+          pending.awaitingRetry = false;
+          pending.snapshotVersion = version;
+          pending.handId = message.snapshot.hand_id ?? '';
+          sendActFrame(pending.id, pending.action, pending.amount, pending.snapshotVersion, pending.handId);
+        } else {
+          clearPending(message.action_id);
+        }
       }
       // A reconnect's initial snapshot is built with a forced store read.
       if (awaitingReconnectSnapshotRef.current) {
@@ -407,8 +463,13 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       const code = message.code || 'unknown';
       if (code === 'unauthorized') recoverSession();
       if (TERMINAL_ERROR_CODES.has(code)) setTerminalFailure({tableID: id, code});
+      // stale_state is retryable (not just resync-and-give-up) while under
+      // MAX_ACTION_RETRIES; once exhausted it falls through to the normal
+      // failPending path below like any other rejection.
+      const retriesUsed = pendingActionRef.current?.retries ?? 0;
       const keepsPending = code === 'stale_state' && message.action_id &&
-        pendingActionRef.current?.id === message.action_id;
+        pendingActionRef.current?.id === message.action_id && retriesUsed < MAX_ACTION_RETRIES;
+      if (keepsPending && pendingActionRef.current) pendingActionRef.current.awaitingRetry = true;
       if (RESYNC_ERROR_CODES.has(code)) {
         // The server rejected against a state this client does not have.
         // Pull the authoritative snapshot instead of leaving the player
@@ -420,7 +481,12 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
         // cannot cancel it.
         if (pendingTimer.current) clearTimeout(pendingTimer.current);
         if (resyncTimer.current) clearTimeout(resyncTimer.current);
-        const jitterMs = Math.floor(Math.random() * 400) + (code === 'rate_limited' ? 800 : 50);
+        // Backoff grows with each stale_state retry already spent on this
+        // action (50ms, 100ms, 200ms, ...), plus up to 400ms of jitter so
+        // simultaneous clients resyncing off the same broadcast don't all
+        // hammer the table actor in lockstep.
+        const backoffMs = code === 'rate_limited' ? 800 : Math.min(1600, 50 * 2 ** retriesUsed);
+        const jitterMs = backoffMs + Math.floor(Math.random() * 400);
         resyncTimer.current = setTimeout(() => {
           if (keepsPending && pendingActionRef.current?.id !== actionId) return;
           sendRef.current({type: 'sync_state', action_id: actionId || crypto.randomUUID()});
@@ -463,7 +529,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       };
       showReaction(reaction);
     }
-  }, [armResyncWatchdog, clearPending, failPending, finishAuxiliaryCommand, id, showReaction, viewerId]);
+  }, [armResyncWatchdog, clearPending, failPending, finishAuxiliaryCommand, id, sendActFrame, showReaction, viewerId]);
   const receiveForTable = useCallback((message: ServerMessage) => {
     if (activeTableIDRef.current === id) receive(message);
   }, [id, receive]);
@@ -642,30 +708,10 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       return false;
     }
     const actionId = crypto.randomUUID();
-    pendingActionRef.current = {id: actionId, action, snapshotVersion, handId};
+    pendingActionRef.current = {id: actionId, action, amount, snapshotVersion, handId, retries: 0, awaitingRetry: false};
     setPendingAction(action);
-    if (!emit({
-      type: 'act',
-      action,
-      amount,
-      action_id: actionId,
-      expected_snapshot_version: snapshotVersion,
-      expected_hand_id: handId
-    })) {
-      clearPending(actionId);
-      return false;
-    }
-    pendingTimer.current = setTimeout(() => {
-      if (pendingActionRef.current?.id !== actionId) return;
-      setLastActionError(actionError('action_timeout'));
-      if (!send({type: 'sync_state', action_id: actionId})) {
-        setLastActionError(actionError('connection_lost'));
-        awaitingReconnectSnapshotRef.current = true;
-        retryNow();
-      }
-    }, ACTION_TIMEOUT_MS);
-    return true;
-  }, [clearPending, emit, retryNow, send]);
+    return sendActFrame(actionId, action, amount, snapshotVersion, handId);
+  }, [sendActFrame]);
   
   return {
     status,

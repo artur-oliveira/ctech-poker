@@ -223,6 +223,35 @@ describe('useTableRealtime', () => {
     expect(result.current.actionError).toBeNull();
   });
   
+  test('auto-retries a stale_state action against each fresh resync up to the retry cap', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot()});
+    act(() => result.current.act('call'));
+    expect(ws.send).toHaveBeenLastCalledWith(expect.objectContaining({type: 'act', expected_snapshot_version: 1}));
+
+    // Backoff doubles per retry already spent (50ms, 100ms, 200ms) since
+    // Math.random is pinned to 0 here.
+    for (const [delayMs, nextVersion] of [[50, 2], [100, 3], [200, 4]] as const) {
+      receive({type: 'error', code: 'stale_state', action_id: 'action-1'});
+      expect(result.current.pendingAction).toBe('call');
+      act(() => vi.advanceTimersByTime(delayMs));
+      expect(ws.send).toHaveBeenLastCalledWith({type: 'sync_state', action_id: 'action-1'});
+
+      receive({type: 'state', snapshot: snapshot({snapshot_version: nextVersion}), action_id: 'action-1'});
+      expect(result.current.pendingAction).toBe('call');
+      expect(ws.send).toHaveBeenLastCalledWith(expect.objectContaining({
+        type: 'act', expected_snapshot_version: nextVersion
+      }));
+    }
+
+    // The 4th stale_state has exhausted MAX_ACTION_RETRIES: give up for real.
+    receive({type: 'error', code: 'stale_state', action_id: 'action-1'});
+    expect(result.current.pendingAction).toBeNull();
+    expect(result.current.actionError).toMatchObject({code: 'stale_state'});
+  });
+
   test('resyncs after invalid_action and reconnects when the snapshot never arrives', () => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0);
