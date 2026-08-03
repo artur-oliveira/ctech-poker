@@ -1835,28 +1835,81 @@ h1 em {
     }
 }
 
-.stake-hint {
-    margin: 0 0 24px;
-    font-size: 14px
+.room-picker-heading {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 28px
 }
 
-.room-groups {
+.room-picker-heading h2 {
+    margin: 0 0 6px;
+    font-size: 22px;
+    letter-spacing: -.02em
+}
+
+.room-picker-heading p {
+    margin: 0;
+    max-width: 68ch;
+    font-size: 14px;
+    line-height: 1.55
+}
+
+.stake-select {
     display: grid;
-    gap: 40px
+    gap: 7px;
+    min-width: 180px
 }
 
-.room-group > h2 {
-    font: 600 0.75rem var(--font-mono);
+.stake-select > span, .room-format-group > legend {
+    font: 600 0.7rem var(--font-mono);
     letter-spacing: .1em;
     text-transform: uppercase;
-    color: var(--text-secondary);
-    margin: 0 0 12px;
-    border-bottom: 1px solid var(--white-12);
-    padding-bottom: 8px
+    color: var(--text-secondary)
 }
 
-.room-group > h2 > span {
-    color: var(--muted)
+.stake-select select {
+    min-height: 42px;
+    color: var(--text);
+    background: var(--surface-seat);
+    border: 1px solid var(--white-13);
+    border-radius: 12px;
+    padding: 0 38px 0 13px;
+    font: 600 14px var(--font-mono);
+    cursor: pointer
+}
+
+.stake-select select:focus-visible {
+    outline: 2px solid var(--brand-bright-6);
+    outline-offset: 3px
+}
+
+.room-format-group {
+    margin: 0;
+    padding: 0;
+    border: 0
+}
+
+.room-format-group > legend {
+    margin-bottom: 12px
+}
+
+.room-format-hint {
+    margin: -5px 0 14px;
+    font-size: 13px
+}
+
+@media (max-width: 560px) {
+    .room-picker-heading {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 18px
+    }
+
+    .stake-select {
+        width: 100%
+    }
 }
 
 .room-card {
@@ -1901,6 +1954,12 @@ h1 em {
 .room-card div > .room-card-buy-in {
     margin-top: 8px;
     color: var(--text-secondary)
+}
+
+.room-card div > .room-card-buy-in-hint {
+    margin-top: 4px;
+    color: var(--text-muted-soft);
+    line-height: 1.4
 }
 
 .room-card-action {
@@ -6050,28 +6109,27 @@ h1 em {
     position: relative;
     display: flex;
     align-items: flex-start;
-    gap: 18px;
-    padding: 22px 56px 22px 22px;
-    margin-bottom: 32px;
+    gap: 12px;
+    padding: 14px 52px 14px 16px;
+    margin: -24px 0 32px;
     border: 1px solid var(--control-border);
     border-radius: var(--rounded-panel);
     background: var(--surface-control);
-    animation: rise 420ms var(--ease-out-quart) both
+    animation: rise 320ms var(--ease-out-quart) both
 }
 
 .onboarding-intro-icon {
     display: grid;
     flex: none;
     place-items: center;
-    width: 42px;
-    height: 42px;
-    border-radius: 12px;
-    background: var(--brand-13);
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
     color: var(--brand-bright-4)
 }
 
 .onboarding-intro-icon svg {
-    width: 20px
+    width: 18px
 }
 
 .onboarding-intro-copy {
@@ -6081,21 +6139,14 @@ h1 em {
 
 .onboarding-intro-copy b {
     display: block;
-    font-size: var(--font-size-subtitle)
+    font-size: var(--font-size-body)
 }
 
 .onboarding-intro-copy p {
-    margin: 6px 0 0;
-    max-width: 56ch;
+    margin: 3px 0 0;
+    max-width: 72ch;
+    font-size: var(--font-size-compact);
     color: var(--text-muted-soft)
-}
-
-.onboarding-intro-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-    align-self: center
 }
 
 .onboarding-intro-close {
@@ -8839,8 +8890,8 @@ h1 em {
 
 @media (max-width: 720px) {
     .onboarding-intro {
-        flex-direction: column;
-        padding: 20px
+        padding: 14px 48px 14px 14px;
+        margin-top: -18px
     }
 
     .onboarding-intro-close {

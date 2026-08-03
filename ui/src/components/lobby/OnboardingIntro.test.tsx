@@ -24,13 +24,11 @@ describe('OnboardingIntro', () => {
     expect(container).toBeEmptyDOMElement();
   });
   
-  test.each([
-    ['Fechar introdução'],
-    ['Regras do poker'],
-    ['Como funciona a mesa'],
-  ])('persists dismissal through %s', name => {
+  test('keeps table entry primary and persists dismissal', () => {
     const {container} = render(<OnboardingIntro/>);
-    fireEvent.click(screen.getByRole('button', {name}));
+    expect(screen.getByText('Escolha os blinds e o formato abaixo. Você joga com fichas sandbox e pode entrar sem tutorial.')).toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name: 'Fechar introdução'}));
     expect(mocks.markSeen).toHaveBeenCalledOnce();
     expect(container).toBeEmptyDOMElement();
   });

@@ -16,7 +16,9 @@ vi.mock('@/components/table/MockControls', () => ({MockControls: () => <div>mock
 describe('lobby page', () => {
   test('keeps the lobby focused on tables and links to the dedicated credits hub', async () => {
     render(<Lobby/>);
-    expect(screen.getByRole('heading', {name: 'Escolha sua mesa.'})).toBeInTheDocument();
+    const heading = screen.getByRole('heading', {name: 'Escolha sua mesa.'});
+    expect(heading).toBeInTheDocument();
+    expect(heading.compareDocumentPosition(screen.getByText('onboarding')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText('stakes-grid')).toBeInTheDocument();
     expect(screen.getByText('active-table')).toBeInTheDocument();
     expect(await screen.findByRole('link', {name: /Fichas.*recompensa diária disponível/})).toHaveAttribute('href', '/store');

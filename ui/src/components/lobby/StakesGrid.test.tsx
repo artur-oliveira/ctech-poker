@@ -86,7 +86,42 @@ describe('lobby stakes integration', () => {
     expect(push).toHaveBeenCalledWith('/table?id=open-room');
     expect(createRoom).not.toHaveBeenCalled();
   });
-  
+
+  test('keeps three format choices while blind inventory grows', async () => {
+    stakesQuery = {
+      data: [
+        {small_blind: 5, big_blind: 10},
+        {small_blind: 10, big_blind: 20},
+        {small_blind: 25, big_blind: 50},
+        {small_blind: 50, big_blind: 100},
+        {small_blind: 100, big_blind: 200},
+      ],
+      isLoading: false
+    };
+    roomsQuery = {
+      data: [{
+        id: 'active-stake-room',
+        visibility: 'public',
+        small_blind: 25,
+        big_blind: 50,
+        max_seats: 6,
+        seats_taken: 2
+      }],
+      isLoading: false
+    };
+    render(<StakesGrid/>);
+
+    const blindSelector = screen.getByRole('combobox', {name: 'Blinds'});
+    expect(blindSelector).toHaveValue('25-50');
+    expect(screen.getAllByRole('button')).toHaveLength(3);
+    expect(screen.getAllByText('Entrada sandbox: 1.000–5.000 fichas (20–100 BB)')).toHaveLength(3);
+
+    await userEvent.selectOptions(blindSelector, '100-200');
+    expect(screen.getAllByRole('button')).toHaveLength(3);
+    expect(screen.getAllByText('Entrada sandbox: 4.000–20.000 fichas (20–100 BB)')).toHaveLength(3);
+    expect(screen.getAllByText('Criar mesa')).toHaveLength(3);
+  });
+
   test('creates a room when none is open and reports failures', async () => {
     createRoom.mockResolvedValueOnce({room_id: 'new room'});
     stakesQuery = {data: [{small_blind: 10, big_blind: 20}], isLoading: false};
