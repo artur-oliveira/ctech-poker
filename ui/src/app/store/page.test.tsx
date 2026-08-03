@@ -81,8 +81,8 @@ describe('store page', () => {
     vi.useFakeTimers();
     mocks.queryState['dailyReward.cooldown'] = queryState({remaining_time_seconds: 3661});
     render(<Store/>);
-    expect(screen.getByText('1:01:01')).toBeInTheDocument();
-    expect(screen.getByText('Recompensa diária resgatada')).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name: 'Recompensa diária'})).toBeInTheDocument();
+    expect(screen.getByText('Resgatada · próxima em 1:01:01')).toBeInTheDocument();
     vi.useRealTimers();
   });
 
@@ -90,7 +90,7 @@ describe('store page', () => {
     mocks.spin.mockResolvedValue({amount: 500, remaining_time_seconds: 86400});
     render(<Store/>);
     fireEvent.click(screen.getByRole('button', {name: 'Resgatar fichas grátis'}));
-    await waitFor(() => expect(screen.getByText('+500 fichas recebidas')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/^\+500 fichas recebidas · próxima em/)).toBeInTheDocument());
     expect(mocks.notify).toHaveBeenCalledWith(expect.stringContaining('500'), 'info');
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'balance']});
     expect(mocks.setQueryData).toHaveBeenCalledWith(

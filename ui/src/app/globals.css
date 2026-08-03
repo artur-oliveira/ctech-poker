@@ -7906,15 +7906,18 @@ h1 em {
 }
 
 .store-reward {
-    align-items: stretch;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 18px;
     max-width: none;
-    padding: 28px;
+    padding: 22px 24px;
     text-align: left;
     transition: border-color 220ms var(--ease-out-quart), background-color 220ms var(--ease-out-quart)
 }
 
 .store-reward-icon {
-    align-self: flex-start
+    align-self: center
 }
 
 .store-reward-copy h2 {
@@ -7934,11 +7937,10 @@ h1 em {
 
 
 .store-reward.is-compact {
-    display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 14px;
-    padding: 16px 18px;
+    padding: 13px 16px;
     background: transparent
 }
 
@@ -7958,12 +7960,9 @@ h1 em {
 }
 
 .store-reward.is-compact .store-reward-copy p {
-    font-size: var(--font-size-compact)
-}
-
-.store-reward.is-compact .store-reward-countdown {
-    margin-left: auto;
-    white-space: nowrap
+    color: var(--muted);
+    font-size: var(--font-size-compact);
+    font-variant-numeric: tabular-nums
 }
 
 
@@ -8134,10 +8133,12 @@ h1 em {
     }
 
     .store-reward {
+        grid-template-columns: auto minmax(0, 1fr);
         padding: 22px 20px
     }
 
     .store-reward > button {
+        grid-column: 1 / -1;
         width: 100%
     }
 
@@ -8145,10 +8146,6 @@ h1 em {
         grid-template-columns: auto minmax(0, 1fr)
     }
 
-    .store-reward.is-compact .store-reward-countdown {
-        grid-column: 2;
-        margin: 0
-    }
 
     .store-history-item {
         align-items: flex-start;

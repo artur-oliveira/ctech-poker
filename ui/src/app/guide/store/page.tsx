@@ -15,10 +15,10 @@ export default function StoreGuide() {
       },
       {
         id: 'diaria', title: 'Resgatar a recompensa diária', summary: 'Um resgate por ciclo adiciona fichas diretamente ao saldo sandbox.',
-        body: <><GuideSteps><li><span>Abra a aba <b>Ganhar grátis</b>.</span></li>
-          <li><span>Quando disponível, escolha <b>Receber fichas</b>.</span></li>
+        body: <><GuideSteps><li><span>Encontre <b>Recompensa diária</b> logo abaixo do saldo.</span></li>
+          <li><span>Quando disponível, escolha <b>Resgatar fichas grátis</b>.</span></li>
           <li><span>A animação revela o valor e o saldo é atualizado.</span></li>
-          <li><span>O painel passa a mostrar o tempo restante até a próxima oportunidade.</span></li></GuideSteps>
+          <li><span>Após o resgate, o destaque recua para uma linha compacta com o valor recebido e o tempo até a próxima oportunidade.</span></li></GuideSteps>
           <p>Se a consulta falhar, o painel mantém uma ação para tentar novamente. Recarregar a página não antecipa o próximo ciclo, pois a disponibilidade vem do serviço.</p></>
       },
       {

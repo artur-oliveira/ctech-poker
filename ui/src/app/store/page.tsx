@@ -131,10 +131,10 @@ export default function Store() {
         </div>
       </AppPageBody>
     </AppPage>
-    <PurchaseModal key={activePurchase?.purchase_id ?? 'closed'} purchase={activePurchase}
+    <PurchaseModal key={activePurchase?.purchase_id ?? 'closed_purchase'} purchase={activePurchase}
                    onCloseAction={closePurchase} onUpdateAction={setActivePurchase}
                    onRegenerateAction={regeneratePurchase}/>
-    <RefundConfirmationDialog key={refundPurchaseTarget?.purchase_id ?? 'closed'} purchase={refundPurchaseTarget}
+    <RefundConfirmationDialog key={refundPurchaseTarget?.purchase_id ?? 'closed_refund'} purchase={refundPurchaseTarget}
                               sandboxBalance={player.data?.sandbox_balance}
                               onCloseAction={() => setRefundPurchaseTarget(null)} onConfirmAction={refund}/>
   </TermsGate>;

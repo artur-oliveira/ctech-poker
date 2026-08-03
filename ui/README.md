@@ -133,8 +133,10 @@ unverifiable — there is no backfill, because the seed is not retained anywhere
 - **Achievements** — full catalog screen with progress tabs, plus the `AchievementToast` fired
   by the socket's `achievement_unlocked`.
 - **Daily reward** — the spin is available in the store (`POST /v1.0/sandbox-credits/`), with
-  cooldown from the matching GET. The store also loads Pix packages and shows the three most
-  recent purchases before progressively disclosing the full purchase list.
+  cooldown from the matching GET. Its ready state uses one prominent heading, availability line,
+  and claim action; after a claim, it recedes to a compact status row with the next available time.
+  The store also loads Pix packages and shows the three most recent purchases before progressively
+  disclosing the full purchase list.
 - **Package comparison** — the store initially keeps the Pix catalog to four choices. Every option
   exposes total credits, base credits, the exact bonus-credit contribution (and percentage), and
   price without inferred urgency or “best value” claims; larger catalogs are disclosed on request.

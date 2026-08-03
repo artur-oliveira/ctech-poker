@@ -57,8 +57,10 @@ export function DailyRewardPanel() {
   if (cooldown.isError) {
     return <div className="store-reward store-reward-error">
       <span className="store-reward-icon"><Gift aria-hidden="true"/></span>
-      <h2>A recompensa ficou fora da mesa</h2>
-      <p>Não conseguimos consultar seu resgate agora. Suas fichas continuam seguras.</p>
+      <div className="store-reward-copy">
+        <h2>Recompensa diária</h2>
+        <p>Não foi possível consultar a disponibilidade agora.</p>
+      </div>
       <Button type="button" variant="outline" onClick={() => void cooldown.refetch()}>
         <RotateCcw aria-hidden="true"/> Tentar novamente
       </Button>
@@ -69,18 +71,19 @@ export function DailyRewardPanel() {
     return <div className="store-reward is-compact">
       <span className="store-reward-icon"><Gift aria-hidden="true"/></span>
       <div className="store-reward-copy">
-        <h2>{wonAmount !== null ? `+${wonAmount.toLocaleString('pt-BR')} fichas recebidas` : 'Recompensa diária resgatada'}</h2>
-        <p>{wonAmount !== null ? 'Seu saldo já foi atualizado.' : 'A próxima recompensa estará disponível em breve.'}</p>
+        <h2>Recompensa diária</h2>
+        <p>{wonAmount !== null
+          ? `+${wonAmount.toLocaleString('pt-BR')} fichas recebidas · próxima em ${formatDuration(remainingMs)}`
+          : `Resgatada · próxima em ${formatDuration(remainingMs)}`}</p>
       </div>
-      <p className="store-reward-countdown">Próxima em <strong>{formatDuration(remainingMs)}</strong></p>
     </div>;
   }
 
   return <div className="store-reward">
     <span className="store-reward-icon"><Gift aria-hidden="true"/></span>
     <div className="store-reward-copy">
-      <h2>Fichas por conta da casa</h2>
-      <p>Uma recompensa sandbox grátis por dia. O valor é revelado no resgate.</p>
+      <h2>Recompensa diária</h2>
+      <p>Disponível agora. O valor em fichas sandbox é revelado no resgate.</p>
     </div>
     <Button type="button" disabled={spinning || cooldown.isLoading} onClick={() => void claim()}>
       {spinning ? 'Revelando…' : 'Resgatar fichas grátis'}
