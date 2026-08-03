@@ -1,7 +1,7 @@
 'use client';
 import {useState} from 'react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
-import {Coins, Gift, RotateCcw} from 'lucide-react';
+import {Gift, RotateCcw} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {getCooldown, spin} from '@/lib/api/dailyReward';
 import {pushNotification} from '@/lib/notify';
@@ -22,7 +22,7 @@ export function DailyRewardPanel() {
   const [spinning, setSpinning] = useState(false);
   const [wonAmount, setWonAmount] = useState<number | null>(null);
 
-  if (cooldown.data && cooldown.data.remaining_time_seconds !== syncedFrom) {
+  if (cooldown.data && wonAmount === null && cooldown.data.remaining_time_seconds !== syncedFrom) {
     setSyncedFrom(cooldown.data.remaining_time_seconds);
     setDeadline(deadlineFromSeconds(cooldown.data.remaining_time_seconds));
   }
@@ -65,23 +65,25 @@ export function DailyRewardPanel() {
     </div>;
   }
 
-  return <div className={`store-reward${wonAmount !== null ? ' is-claimed' : ''}`}>
+  if (!ready) {
+    return <div className="store-reward is-compact">
+      <span className="store-reward-icon"><Gift aria-hidden="true"/></span>
+      <div className="store-reward-copy">
+        <h2>{wonAmount !== null ? `+${wonAmount.toLocaleString('pt-BR')} fichas recebidas` : 'Recompensa diária resgatada'}</h2>
+        <p>{wonAmount !== null ? 'Seu saldo já foi atualizado.' : 'A próxima recompensa estará disponível em breve.'}</p>
+      </div>
+      <p className="store-reward-countdown">Próxima em <strong>{formatDuration(remainingMs)}</strong></p>
+    </div>;
+  }
+
+  return <div className="store-reward">
     <span className="store-reward-icon"><Gift aria-hidden="true"/></span>
     <div className="store-reward-copy">
       <h2>Fichas por conta da casa</h2>
       <p>Uma recompensa sandbox grátis por dia. O valor é revelado no resgate.</p>
     </div>
-    {wonAmount !== null && <div className="store-reward-result" role="status" aria-live="polite">
-      <Coins aria-hidden="true"/>
-      <span><strong>+{wonAmount.toLocaleString('pt-BR')} fichas</strong>Seu saldo já foi atualizado.</span>
-    </div>}
-    {ready
-      ? <Button type="button" disabled={spinning || cooldown.isLoading} onClick={() => void claim()}>
-        {spinning ? 'Revelando…' : 'Resgatar fichas grátis'}
-      </Button>
-      : <>
-        <p className="store-reward-countdown">Volte em <strong>{formatDuration(remainingMs)}</strong></p>
-        <Button type="button" disabled>Recompensa já resgatada</Button>
-      </>}
+    <Button type="button" disabled={spinning || cooldown.isLoading} onClick={() => void claim()}>
+      {spinning ? 'Revelando…' : 'Resgatar fichas grátis'}
+    </Button>
   </div>;
 }

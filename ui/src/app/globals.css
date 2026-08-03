@@ -7422,10 +7422,6 @@ h1 em {
     color: var(--muted)
 }
 
-.store-reward-result {
-    color: var(--success);
-    font-weight: 600
-}
 
 .store-sku-grid {
     display: grid;
@@ -7638,8 +7634,8 @@ h1 em {
     color: var(--danger)
 }
 
-/* Credits hub: the balance is the orientation point, then each tab owns one
-   clear task. Gold remains tied to earned/purchased value rather than ambient
+/* Credits hub: the balance is the orientation point, followed by one linear
+   reward → packages → activity flow. Gold remains tied to value rather than ambient
    decoration, and the sandbox note stays visible before any Pix action. */
 .store-wallet {
     display: flex;
@@ -7741,6 +7737,17 @@ h1 em {
     border-top: 1px solid var(--control-border)
 }
 
+.store-history-toggle {
+    display: flex;
+    margin: 12px auto 0;
+    color: var(--text-secondary)
+}
+
+.store-history-toggle svg {
+    width: 16px;
+    height: 16px
+}
+
 .store-reward {
     align-items: stretch;
     max-width: none;
@@ -7768,42 +7775,40 @@ h1 em {
     min-width: 190px
 }
 
-.store-reward.is-claimed {
-    border-color: color-mix(in srgb, var(--gold) 55%, transparent);
-    background: color-mix(in srgb, var(--gold) 5%, var(--surface-control))
-}
 
-.store-reward-result {
-    display: flex;
+.store-reward.is-compact {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: 12px;
-    padding: 13px 14px;
-    border-radius: var(--rounded-control);
-    background: color-mix(in srgb, var(--felt) 42%, var(--surface-seat));
-    color: var(--felt-text);
-    animation: reward-arrive 420ms var(--ease-out-expo) both
+    gap: 14px;
+    padding: 16px 18px;
+    background: transparent
 }
 
-.store-reward-result > svg {
-    width: 22px;
-    height: 22px;
-    flex: none;
-    color: var(--gold)
+.store-reward.is-compact .store-reward-icon {
+    width: 42px;
+    height: 42px
 }
 
-.store-reward-result span {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    color: var(--felt-text-soft);
+.store-reward.is-compact .store-reward-icon svg {
+    width: 20px;
+    height: 20px
+}
+
+.store-reward.is-compact .store-reward-copy h2 {
+    margin-bottom: 2px;
+    font-size: var(--font-size-body)
+}
+
+.store-reward.is-compact .store-reward-copy p {
     font-size: var(--font-size-compact)
 }
 
-.store-reward-result strong {
-    color: var(--felt-text);
-    font: 700 var(--font-size-body) var(--font-mono);
-    font-variant-numeric: tabular-nums
+.store-reward.is-compact .store-reward-countdown {
+    margin-left: auto;
+    white-space: nowrap
 }
+
 
 .store-reward-countdown {
     display: flex;
@@ -7942,10 +7947,6 @@ h1 em {
 .store-purchase-chips i:nth-child(4) { --chip-x: 70%; animation-delay: 30ms }
 .store-purchase-chips i:nth-child(5) { --chip-x: 86%; animation-delay: 100ms }
 
-@keyframes reward-arrive {
-    from { opacity: 0; transform: translateY(6px) scale(.98) }
-    to { opacity: 1; transform: translateY(0) scale(1) }
-}
 
 @keyframes purchase-confirm {
     from { opacity: 0; transform: scale(.72) }
@@ -7983,6 +7984,15 @@ h1 em {
         width: 100%
     }
 
+    .store-reward.is-compact {
+        grid-template-columns: auto minmax(0, 1fr)
+    }
+
+    .store-reward.is-compact .store-reward-countdown {
+        grid-column: 2;
+        margin: 0
+    }
+
     .store-history-item {
         align-items: flex-start;
         flex-wrap: wrap
@@ -8008,7 +8018,6 @@ h1 em {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .store-reward-result,
     .store-purchase-success-icon,
     .store-purchase-chips i {
         animation: none

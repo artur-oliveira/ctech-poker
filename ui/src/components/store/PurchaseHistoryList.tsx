@@ -1,5 +1,6 @@
 'use client';
-import {QrCode, RotateCcw} from 'lucide-react';
+import {useState} from 'react';
+import {ChevronDown, ChevronUp, QrCode, RotateCcw} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {SkeletonList} from '@/components/ui/skeleton';
 import type {SandboxPurchase} from '@/lib/api/wallet';
@@ -36,6 +37,8 @@ export function PurchaseHistoryList({purchases, isLoading, isError, onRetry, onR
   onResume: (purchaseId: string) => void;
   resumingId: string | null;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   if (isLoading) {
     return <SkeletonList label="Carregando histórico de compras…" count={3} height={64} className="store-history"/>;
   }
@@ -48,8 +51,11 @@ export function PurchaseHistoryList({purchases, isLoading, isError, onRetry, onR
     return <p className="store-history-empty">Suas compras via Pix aparecerão aqui.</p>;
   }
 
-  return <ul className="store-history">
-    {purchases.map(p => <li key={p.purchase_id} className="store-history-item">
+  const visiblePurchases = expanded ? purchases : purchases.slice(0, 3);
+
+  return <>
+    <ul className="store-history">
+    {visiblePurchases.map(p => <li key={p.purchase_id} className="store-history-item">
       <div className="store-history-info">
         <strong>{(p.total_credits ?? 0).toLocaleString('pt-BR')} fichas · {formatBRL(p.price_cents)}</strong>
         <small>{formatDate(p.created_at)}</small>
@@ -68,5 +74,11 @@ export function PurchaseHistoryList({purchases, isLoading, isError, onRetry, onR
         <RotateCcw/> {refundingId === p.purchase_id ? 'Estornando…' : 'Estornar'}
       </Button>}
     </li>)}
-  </ul>;
+    </ul>
+    {purchases.length > 3 && <Button type="button" variant="ghost" size="sm"
+      className="store-history-toggle" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>
+      {expanded ? <ChevronUp aria-hidden="true"/> : <ChevronDown aria-hidden="true"/>}
+      {expanded ? 'Mostrar menos' : `Ver todas as ${purchases.length} compras`}
+    </Button>}
+  </>;
 }

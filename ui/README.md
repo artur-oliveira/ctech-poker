@@ -52,6 +52,7 @@ Every page is `'use client'`; only `layout.tsx` and `share/layout.tsx` are serve
 | `/hands/replay?table_id=&hand_id=` | `hands/replay/page.tsx` | Frame-by-frame `HandReplayer` |
 | `/leaderboard` | `leaderboard/page.tsx` | Podium + ranking list, highlights the viewer's row |
 | `/achievements` | `achievements/page.tsx` | Catalog + own progress, all/unlocked/in-progress/completed tabs |
+| `/store` | `store/page.tsx` | Sandbox balance, daily reward, Pix chip packages, and expandable recent purchase activity in one continuous flow |
 | `/profile?id=<playerId>` | `profile/page.tsx` | **Public read-only showcase** of another player |
 | `/share?id=<token>` | `share/page.tsx` | Public anonymized shared hand (`robots: noindex`) |
 | `/guide` | `guide/page.tsx` | Illustrated how-to-play |
@@ -131,8 +132,9 @@ unverifiable — there is no backfill, because the seed is not retained anywhere
   is rejected server-side (no GSI), so it is not offered as a metric.
 - **Achievements** — full catalog screen with progress tabs, plus the `AchievementToast` fired
   by the socket's `achievement_unlocked`.
-- **Daily reward** — the spin lives in the lobby (`POST /v1.0/sandbox-credits/`), with cooldown
-  from the matching GET.
+- **Daily reward** — the spin is available in the store (`POST /v1.0/sandbox-credits/`), with
+  cooldown from the matching GET. The store also loads Pix packages and shows the three most
+  recent purchases before progressively disclosing the full purchase list.
 - **Equity** — `Seat` renders `seat.equity` from the server snapshot. There is no client-side
   equity calculator; the client cannot be given the remaining-deck composition.
 - **Self-HUD** (`SelfHudDialog`) — own VPIP/PFR/3-bet from `GET /v1.0/players/me/poker-stats`.

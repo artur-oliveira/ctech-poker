@@ -66,21 +66,23 @@ describe('store page', () => {
     };
   });
 
-  test('starts on the free credits tab with the balance and daily reward ready to claim', () => {
+  test('shows reward, packages, and recent purchases in one continuous page', () => {
     render(<Store/>);
     expect(screen.getByRole('heading', {name: 'Loja'})).toBeInTheDocument();
     expect(screen.getByText('profile-menu')).toBeInTheDocument();
     expect(screen.getByText('12.345 fichas')).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Resgatar fichas grátis'})).toBeEnabled();
-    expect(screen.queryByText(/fichas/, {selector: '.store-sku-credits'})).not.toBeInTheDocument();
+    expect(screen.getByText('1.000')).toBeInTheDocument();
+    expect(screen.getByText('Confirmada')).toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: 'Comprar via Pix'})).not.toBeInTheDocument();
   });
 
-  test('shows a countdown and a disabled claim button when the reward is on cooldown', () => {
+  test('collapses the reward to a countdown when it is on cooldown', () => {
     vi.useFakeTimers();
     mocks.queryState['dailyReward.cooldown'] = queryState({remaining_time_seconds: 3661});
     render(<Store/>);
     expect(screen.getByText('1:01:01')).toBeInTheDocument();
-    expect(screen.getByRole('button', {name: 'Recompensa já resgatada'})).toBeDisabled();
+    expect(screen.getByText('Recompensa diária resgatada')).toBeInTheDocument();
     vi.useRealTimers();
   });
 
@@ -88,7 +90,7 @@ describe('store page', () => {
     mocks.spin.mockResolvedValue({amount: 500, remaining_time_seconds: 86400});
     render(<Store/>);
     fireEvent.click(screen.getByRole('button', {name: 'Resgatar fichas grátis'}));
-    await waitFor(() => expect(screen.getByText('+500 fichas')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('+500 fichas recebidas')).toBeInTheDocument());
     expect(mocks.notify).toHaveBeenCalledWith(expect.stringContaining('500'), 'info');
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'balance']});
     expect(mocks.setQueryData).toHaveBeenCalledWith(
@@ -97,9 +99,8 @@ describe('store page', () => {
     );
   });
 
-  test('switches to Compras and renders the SKU grid and purchase history', () => {
+  test('renders the SKU grid and purchase history without navigation', () => {
     render(<Store/>);
-    fireEvent.click(screen.getByRole('button', {name: 'Comprar via Pix'}));
 
     expect(screen.getByText('1.000')).toBeInTheDocument();
     expect(screen.getByText('+10% bônus')).toBeInTheDocument();
@@ -116,7 +117,6 @@ describe('store page', () => {
       expires_at: new Date(Date.now() + 600_000).toISOString(),
     });
     render(<Store/>);
-    fireEvent.click(screen.getByRole('button', {name: 'Comprar via Pix'}));
     fireEvent.click(screen.getByRole('button', {name: /Escolher 1\.000 fichas/}));
 
     await waitFor(() => expect(mocks.createPurchase).toHaveBeenCalledWith('pack_100'));
@@ -131,7 +131,6 @@ describe('store page', () => {
       expires_at: new Date(Date.now() + 600_000).toISOString(),
     });
     render(<Store/>);
-    fireEvent.click(screen.getByRole('button', {name: 'Comprar via Pix'}));
     fireEvent.click(screen.getByRole('button', {name: /Continuar pagamento/}));
 
     await waitFor(() => expect(mocks.getPurchase).toHaveBeenCalledWith('sbxp-2'));
@@ -141,7 +140,6 @@ describe('store page', () => {
   test('refunding a confirmed purchase calls the API and invalidates wallet queries', async () => {
     mocks.refundPurchase.mockResolvedValue({purchase_id: 'sbxp-1', status: 'refunded'});
     render(<Store/>);
-    fireEvent.click(screen.getByRole('button', {name: 'Comprar via Pix'}));
     fireEvent.click(screen.getByRole('button', {name: /Estornar/}));
 
     await waitFor(() => expect(mocks.refundPurchase).toHaveBeenCalledWith('sbxp-1'));
@@ -152,9 +150,22 @@ describe('store page', () => {
   test('shows an error state with retry when the SKU catalog fails to load', () => {
     mocks.queryState['wallet.skus'] = queryState(undefined, {isError: true});
     render(<Store/>);
-    fireEvent.click(screen.getByRole('button', {name: 'Comprar via Pix'}));
     expect(screen.getByText(/Não foi possível carregar os pacotes/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', {name: 'Tentar novamente'}));
     expect(mocks.queryState['wallet.skus'].refetch).toHaveBeenCalledOnce();
+  });
+
+  test('limits recent purchases to three until the user expands the history', () => {
+    mocks.queryState['wallet.sandbox-purchases'] = queryState([
+      ...purchases,
+      {...purchases[0], purchase_id: 'sbxp-3', total_credits: 3000},
+      {...purchases[0], purchase_id: 'sbxp-4', total_credits: 4000},
+    ]);
+    render(<Store/>);
+
+    expect(screen.queryByText(/4\.000 fichas/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name: 'Ver todas as 4 compras'}));
+    expect(screen.getByText(/4\.000 fichas/)).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Mostrar menos'})).toHaveAttribute('aria-expanded', 'true');
   });
 });

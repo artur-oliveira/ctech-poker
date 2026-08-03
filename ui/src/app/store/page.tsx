@@ -1,9 +1,8 @@
 'use client';
 import {useCallback, useState} from 'react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
-import {Clock3, Coins, Gift, ShoppingBag} from 'lucide-react';
+import {Clock3, Coins, ShoppingBag} from 'lucide-react';
 import {TermsGate} from '@/components/TermsGate';
-import {FilterGroup} from '@/components/FilterGroup';
 import {DailyRewardPanel} from '@/components/store/DailyRewardPanel';
 import {SkuGrid} from '@/components/store/SkuGrid';
 import {PurchaseModal} from '@/components/store/PurchaseModal';
@@ -16,12 +15,9 @@ import {useLobbyRealtime} from '@/lib/hooks/useLobbyRealtime';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 import {getMe} from '@/lib/api/player';
 
-type StoreTab = 'rewards' | 'purchases';
-
 export default function Store() {
   useLobbyRealtime();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<StoreTab>('rewards');
   const [activePurchase, setActivePurchase] = useState<SandboxPurchase | null>(null);
   const [pendingSku, setPendingSku] = useState<string | null>(null);
   const [refundingId, setRefundingId] = useState<string | null>(null);
@@ -29,10 +25,10 @@ export default function Store() {
   const player = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
 
   const skus = useQuery({
-    queryKey: ['wallet', 'skus'], queryFn: listSkus, enabled: tab === 'purchases', retry: 1,
+    queryKey: ['wallet', 'skus'], queryFn: listSkus, retry: 1,
   });
   const purchases = useQuery({
-    queryKey: ['wallet', 'sandbox-purchases'], queryFn: listPurchases, enabled: tab === 'purchases', retry: 1,
+    queryKey: ['wallet', 'sandbox-purchases'], queryFn: listPurchases, retry: 1,
   });
 
   const selectSku = useCallback(async (sku: SandboxSKU) => {
@@ -95,48 +91,34 @@ export default function Store() {
           <span className="store-wallet-note">Só para jogar. Sem saque ou conversão em dinheiro.</span>
         </div>
 
-        <FilterGroup
-          label="Seção da loja"
-          value={tab}
-          options={[
-            {value: 'rewards', label: 'Ganhar grátis'},
-            {value: 'purchases', label: 'Comprar via Pix'},
-          ]}
-          onChange={setTab}
-        />
-
-        {tab === 'rewards'
-          ? <section className="store-section store-reward-section" aria-labelledby="daily-reward-title">
-            <div className="store-section-heading">
-              <Gift aria-hidden="true"/>
-              <div><h2 id="daily-reward-title">Sua visita de hoje vale fichas</h2>
-                <p>Resgate uma vez por dia e volte amanhã para outra surpresa.</p></div>
-            </div>
+        <div className="store-panel">
+          <section className="store-section store-reward-section" aria-label="Recompensa diária">
             <DailyRewardPanel/>
           </section>
-          : <div className="store-panel">
-            <section className="store-section" aria-labelledby="credit-packs-title">
-              <div className="store-section-heading">
-                <Coins aria-hidden="true"/>
-                <div><h2 id="credit-packs-title">Escolha quanto levar para a mesa</h2>
-                  <p>O total mostrado já inclui o bônus. Você confirma o pagamento no Pix.</p></div>
-              </div>
+
+          <section className="store-section" aria-labelledby="credit-packs-title">
+            <div className="store-section-heading">
+              <Coins aria-hidden="true"/>
+              <div><h2 id="credit-packs-title">Escolha quanto levar para a mesa</h2>
+                <p>O total já inclui o bônus. Pague pelo Pix para receber as fichas.</p></div>
+            </div>
             <SkuGrid skus={skus.data ?? []} isLoading={skus.isLoading} isError={skus.isError}
                      onRetry={() => void skus.refetch()} onSelect={sku => void selectSku(sku)}
                      pendingSku={pendingSku}/>
-            </section>
-            <section className="store-section store-history-section" aria-labelledby="purchase-history-title">
-              <div className="store-section-heading">
-                <Clock3 aria-hidden="true"/>
-                <div><h2 id="purchase-history-title">Compras recentes</h2>
-                  <p>Acompanhe confirmações, expirações e estornos.</p></div>
-              </div>
+          </section>
+
+          <section className="store-section store-history-section" aria-labelledby="purchase-history-title">
+            <div className="store-section-heading">
+              <Clock3 aria-hidden="true"/>
+              <div><h2 id="purchase-history-title">Compras recentes</h2>
+                <p>Acompanhe pagamentos e estornos.</p></div>
+            </div>
             <PurchaseHistoryList purchases={purchases.data ?? []} isLoading={purchases.isLoading}
                                   isError={purchases.isError} onRetry={() => void purchases.refetch()}
                                   onRefund={id => void refund(id)} refundingId={refundingId}
                                   onResume={id => void resume(id)} resumingId={resumingId}/>
-            </section>
-          </div>}
+          </section>
+        </div>
       </AppPageBody>
     </AppPage>
     <PurchaseModal key={activePurchase?.purchase_id ?? 'closed'} purchase={activePurchase}
