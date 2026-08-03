@@ -524,7 +524,7 @@ func TestBuyInChargesFixedEntryFeeForRealRoomsAfterSeating(t *testing.T) {
 		ID: "room-real-fee", CurrencyMode: "real", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9,
 		EntryFeeCents: 100,
 	}}
-	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}})
+	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}}).WithPendingStore(testPendingStore(t))
 	ctx := context.Background()
 
 	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }

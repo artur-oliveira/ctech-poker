@@ -37,11 +37,19 @@ func mustCreateTestTable(ctx context.Context, t *testing.T, db *dynamodb.Client,
 		AttributeDefinitions: []types.AttributeDefinition{
 			{AttributeName: aws.String("pk"), AttributeType: types.ScalarAttributeTypeS},
 			{AttributeName: aws.String("sk"), AttributeType: types.ScalarAttributeTypeS},
+			{AttributeName: aws.String("gsi_status"), AttributeType: types.ScalarAttributeTypeS},
 		},
 		KeySchema: []types.KeySchemaElement{
 			{AttributeName: aws.String("pk"), KeyType: types.KeyTypeHash},
 			{AttributeName: aws.String("sk"), KeyType: types.KeyTypeRange},
 		},
+		// Mirrors cdk/lib/dynamodb-stack.ts's pendingCashouts GSI: ListUnresolved
+		// (pending.go) queries this index instead of scanning the whole table.
+		GlobalSecondaryIndexes: []types.GlobalSecondaryIndex{{
+			IndexName:  aws.String(pendingGSI),
+			KeySchema:  []types.KeySchemaElement{{AttributeName: aws.String("gsi_status"), KeyType: types.KeyTypeHash}},
+			Projection: &types.Projection{ProjectionType: types.ProjectionTypeAll},
+		}},
 		BillingMode: types.BillingModePayPerRequest,
 	})
 	if err != nil {

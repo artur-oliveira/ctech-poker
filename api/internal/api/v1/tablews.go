@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -104,12 +105,7 @@ func wsAllowedOrigin(ctx *fasthttp.RequestCtx, allowed []string) bool {
 	if origin == "" {
 		return true
 	}
-	for _, a := range allowed {
-		if a == origin {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowed, origin)
 }
 
 func rateLimitedTableMessage(messageType string) bool {

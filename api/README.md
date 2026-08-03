@@ -31,6 +31,12 @@ default** and blocked on legal sign-off, not on missing code.
   `<env>_poker_pending_cashouts` alongside the table-state/action tables — any manager exercising a system removal
   (AFK/disconnect kick) must call `SetSystemSettlementIntent`, since `handleKickTimeout`/`handleAFKSweep` fail closed
   without one (see `TestDisconnectKickRemovesSeatAcrossServers`).
+- `ListUnresolved` (`internal/reconcile/pending.go`) queries the `gsi_status` GSI instead of scanning the whole table
+  (added in the same change that made real-money buy-in fee debits durable) — any local table your test creates for
+  `PendingStore` needs that GSI too, mirroring `cdk/lib/dynamodb-stack.ts`'s `pendingCashouts.addGlobalSecondaryIndex`
+  (see `internal/reconcile/pending_test.go`'s `mustCreateTestTable`). The same change also made real-money `BuyIn`
+  fail closed when `EntryFeeCents > 0` and no pending store is wired (`internal/buyin/service.go`) — every real-money
+  test needs `.WithPendingStore(...)`.
 - `handeval` keeps the normal CI fast with a deterministic 20,000-hand differential sample plus directed
   category/tiebreak tests. After changing
   `internal/engine/handeval/ref`, `hashq`, the generator, or `tables.bin`, run the full 133,784,560-hand proof
