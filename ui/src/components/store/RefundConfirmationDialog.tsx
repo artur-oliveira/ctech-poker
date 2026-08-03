@@ -53,7 +53,7 @@ export function RefundConfirmationDialog({purchase, sandboxBalance, onCloseActio
   }}>
     <DialogContent className="store-refund-dialog">
       <DialogHeader>
-        <DialogTitle>{state === 'success' ? 'Estorno solicitado' : 'Estornar compra sandbox?'}</DialogTitle>
+        <DialogTitle>{state === 'success' ? 'Compra estornada' : 'Solicitar estorno desta compra?'}</DialogTitle>
         <DialogDescription>{state === 'success'
           ? `O estorno de ${formatBRL(purchase.price_cents)} foi confirmado e as fichas foram removidas.`
           : 'Confira o valor e o efeito no seu saldo antes de confirmar.'}</DialogDescription>
@@ -74,8 +74,8 @@ export function RefundConfirmationDialog({purchase, sandboxBalance, onCloseActio
 
         <div className="store-refund-eligibility">
           <Coins aria-hidden="true"/>
-          <div><strong>Elegibilidade verificada ao confirmar</strong>
-            <p>O estorno só é permitido se nenhuma ficha tiver sido usada desde esta compra. Se houve qualquer débito sandbox depois do crédito, o pedido será recusado e nada será removido.</p></div>
+          <div><strong>Disponível somente antes de usar as fichas</strong>
+            <p>Ao confirmar, o servidor verifica se houve algum débito sandbox depois deste crédito. Se as fichas já foram usadas em uma mesa, o estorno será recusado e seu saldo permanecerá igual.</p></div>
         </div>
         <p className="store-refund-boundary"><CircleAlert aria-hidden="true"/>
           Esta ação trata apenas desta compra de fichas sandbox. Não movimenta saldo de dinheiro real e não transforma fichas em dinheiro.</p>
@@ -88,7 +88,7 @@ export function RefundConfirmationDialog({purchase, sandboxBalance, onCloseActio
           : <><Button type="button" variant="ghost" disabled={pending} onClick={onCloseAction}>Manter compra</Button>
             <Button type="button" variant="destructive" disabled={pending} onClick={() => void confirm()}>
               {pending ? <LoaderCircle className="store-refund-spinner" aria-hidden="true"/> : <RotateCcw aria-hidden="true"/>}
-              {pending ? 'Solicitando estorno…' : `Estornar ${formatBRL(purchase.price_cents)}`}
+              {pending ? 'Verificando elegibilidade…' : `Solicitar estorno de ${formatBRL(purchase.price_cents)}`}
             </Button></>}
       </DialogFooter>
     </DialogContent>

@@ -68,7 +68,7 @@ describe('store page', () => {
 
   test('shows reward, packages, and recent purchases in one continuous page', () => {
     render(<Store/>);
-    expect(screen.getByRole('heading', {name: 'Loja'})).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name: 'Fichas'})).toBeInTheDocument();
     expect(screen.getByText('profile-menu')).toBeInTheDocument();
     expect(screen.getByText('12.345 fichas')).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Resgatar fichas grátis'})).toBeEnabled();
@@ -110,7 +110,7 @@ describe('store page', () => {
     expect(screen.getByText(/1\.000 fichas · R\$\s*1,00/)).toBeInTheDocument();
     expect(screen.getByText('Confirmada')).toBeInTheDocument();
     expect(screen.getByText('Pendente')).toBeInTheDocument();
-    expect(screen.getByRole('button', {name: 'Ver estorno'})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Solicitar estorno'})).toBeInTheDocument();
   });
 
   test('keeps the initial package decision group to four and discloses additional options', () => {
@@ -181,19 +181,19 @@ describe('store page', () => {
   test('confirms exact sandbox consequences before refunding and shows success', async () => {
     mocks.refundPurchase.mockResolvedValue({purchase_id: 'sbxp-1', status: 'refunded'});
     render(<Store/>);
-    fireEvent.click(screen.getByRole('button', {name: 'Ver estorno'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Solicitar estorno'}));
 
-    expect(screen.getByRole('heading', {name: 'Estornar compra sandbox?'})).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name: 'Solicitar estorno desta compra?'})).toBeInTheDocument();
     expect(screen.getByText(/1.000 fichas$/)).toBeInTheDocument();
     expect(screen.getByText('11.345 fichas')).toBeInTheDocument();
-    expect(screen.getByText(/nenhuma ficha tiver sido usada/)).toBeInTheDocument();
+    expect(screen.getByText(/fichas já foram usadas em uma mesa/)).toBeInTheDocument();
     expect(screen.getByText(/Não movimenta saldo de dinheiro real/)).toBeInTheDocument();
     expect(mocks.refundPurchase).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', {name: /Estornar R/}));
+    fireEvent.click(screen.getByRole('button', {name: /Solicitar estorno de R/}));
     await waitFor(() => expect(mocks.refundPurchase).toHaveBeenCalledWith('sbxp-1'));
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'balance']});
-    expect(await screen.findByRole('heading', {name: 'Estorno solicitado'})).toBeInTheDocument();
+    expect(await screen.findByRole('heading', {name: 'Compra estornada'})).toBeInTheDocument();
     expect(screen.getByText(/1.000 fichas sandbox removidas/)).toBeInTheDocument();
   });
 
@@ -201,11 +201,11 @@ describe('store page', () => {
     const {ApiError} = await import('@/lib/api/client');
     mocks.refundPurchase.mockRejectedValue(new ApiError('sandbox purchase credits already used', 409));
     render(<Store/>);
-    fireEvent.click(screen.getByRole('button', {name: 'Ver estorno'}));
-    fireEvent.click(screen.getByRole('button', {name: /Estornar R/}));
+    fireEvent.click(screen.getByRole('button', {name: 'Solicitar estorno'}));
+    fireEvent.click(screen.getByRole('button', {name: /Solicitar estorno de R/}));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('O estorno não é mais elegível');
-    expect(screen.getByRole('button', {name: /Estornar R/})).toBeEnabled();
+    expect(screen.getByRole('button', {name: /Solicitar estorno de R/})).toBeEnabled();
   });
 
   test('shows an error state with retry when the SKU catalog fails to load', () => {

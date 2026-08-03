@@ -69,7 +69,7 @@ export function PurchaseHistoryList({purchases, isLoading, isError, onRetryActio
       </Button>}
       {p.status === 'confirmed' && <Button type="button" variant="outline" size="sm"
                                             onClick={() => onRefund(p)}>
-        <RotateCcw/> Ver estorno
+        <RotateCcw/> Solicitar estorno
       </Button>}
     </li>)}
     </ul>

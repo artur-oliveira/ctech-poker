@@ -10,7 +10,7 @@ export default function ProfileGuide() {
       {
         id: 'menu', title: 'Abrir e entender o menu', summary: 'O avatar no topo reúne identidade, baralho, carteiras e atalhos pessoais.',
         image: {src: '/guide/profile-live.webp', alt: 'Menu do perfil com foto, nome, baralho, saldos e atalhos'},
-        body: <><GuideBullets><li><span>O saldo ao lado do avatar abre diretamente a Loja.</span></li>
+        body: <><GuideBullets><li><span>O saldo ao lado do avatar abre diretamente Fichas.</span></li>
           <li><span><b>Fichas sandbox</b> e <b>Dinheiro real</b> ficam separados; trocar o modo não converte valores.</span></li>
           <li><span><b>Créditos e recompensas</b>, <b>Vitrine do perfil</b> e <b>Seu jogo</b> levam a funções diferentes.</span></li>
           <li><span><b>Sair da conta</b> encerra a sessão de autenticação atual.</span></li></GuideBullets></>

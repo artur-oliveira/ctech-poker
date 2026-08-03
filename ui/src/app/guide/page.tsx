@@ -31,7 +31,7 @@ const TOPICS = [
     features: ['Metas', 'Estrelas', 'Progresso']
   },
   {
-    href: '/guide/store', icon: ShoppingBag, title: 'Loja e fichas sandbox', time: '4 min',
+    href: '/guide/store', icon: ShoppingBag, title: 'Fichas sandbox', time: '4 min',
     description: 'Recompensa diária, pacotes via Pix, confirmação, histórico e estorno de compras sandbox.',
     features: ['Grátis', 'Pix', 'Histórico']
   },

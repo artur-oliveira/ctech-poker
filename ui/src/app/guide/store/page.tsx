@@ -1,16 +1,16 @@
 'use client';
 
-import {ShoppingBag} from 'lucide-react';
+import {Coins} from 'lucide-react';
 import {GuideBullets, GuideCallout, GuideLink, GuidePage, GuideSteps, GuideTerm, GuideTerms} from '@/components/guide/GuidePage';
 
 export default function StoreGuide() {
-  return <GuidePage icon={ShoppingBag} eyebrow="FICHAS SANDBOX" title="Recompensas e compras na Loja"
-    description="A Loja reúne a recompensa gratuita, pacotes pagos via Pix e o histórico de cada tentativa de compra."
+  return <GuidePage icon={Coins} eyebrow="FICHAS SANDBOX" title="Saldo, recompensas e compras"
+    description="O hub Fichas reúne seu saldo sandbox, a recompensa gratuita, pacotes via Pix e o histórico de compras."
     currentHref="/guide/store" next={{href: '/guide/profile', label: 'Configurar meu perfil'}} sections={[
       {
-        id: 'acesso', title: 'Saldo e indicação de recompensa', summary: 'A Loja é o destino único para ganhar ou adicionar fichas sandbox.',
-        image: {src: '/guide/store-live.webp', alt: 'Loja com saldo sandbox, recompensa diária e aba de compras via Pix'},
-        body: <><p>Abra <b>Loja</b> na navegação ou toque no saldo ao lado do avatar. Quando a recompensa diária está pronta, um ponto dourado destaca a Loja sem resgatar nada automaticamente.</p>
+        id: 'acesso', title: 'Saldo e indicação de recompensa', summary: 'Fichas é o destino único para ganhar ou adicionar saldo sandbox.',
+        image: {src: '/guide/store-live.webp', alt: 'Hub Fichas com saldo sandbox, recompensa diária, pacotes via Pix e compras recentes'},
+        body: <><p>Abra <b>Fichas</b> na navegação ou toque no saldo ao lado do avatar. Quando a recompensa diária está pronta, um ponto dourado destaca esse destino sem resgatar nada automaticamente.</p>
           <GuideCallout kind="safe" title="Fichas não são dinheiro">Todo saldo descrito aqui é sandbox: serve para buy-ins do jogo, não pode ser sacado e não representa moeda real.</GuideCallout></>
       },
       {
@@ -23,7 +23,7 @@ export default function StoreGuide() {
       },
       {
         id: 'pix', title: 'Comprar um pacote via Pix', summary: 'O pagamento adiciona fichas sandbox, nunca saldo sacável.',
-        body: <><GuideSteps><li><span>Na seção de pacotes, compare o total, as fichas base, o bônus e o preço. A Loja mostra até quatro opções primeiro; use <b>Ver mais pacotes</b> quando o catálogo tiver opções adicionais.</span></li>
+        body: <><GuideSteps><li><span>Na seção de pacotes, compare o total, as fichas base, o bônus e o preço. O hub mostra até quatro opções primeiro; use <b>Ver mais pacotes</b> quando o catálogo tiver opções adicionais.</span></li>
           <li><span>No diálogo, escaneie o QR code ou copie o código Pix discreto pelo ícone ao lado do campo.</span></li>
           <li><span>Conclua no aplicativo do banco antes da expiração indicada.</span></li>
           <li><span>Mantenha o diálogo aberto ou volte depois: a confirmação é consultada periodicamente e também chega em tempo real quando disponível.</span></li></GuideSteps>
@@ -41,10 +41,10 @@ export default function StoreGuide() {
         id: 'historico', title: 'Retomar, conferir e estornar', summary: 'Compras recentes permanecem na mesma aba dos pacotes.',
         body: <><GuideBullets><li><span>Use <b>Continuar pagamento</b> em compras pendentes.</span></li>
           <li><span>Compare data, total de fichas, preço e status antes de tomar uma ação.</span></li>
-          <li><span>Em compras confirmadas, <b>Ver estorno</b> abre uma confirmação com valor em reais, fichas removidas e saldo projetado. O servidor só aceita a ação quando nenhuma ficha foi usada desde o crédito.</span></li>
+          <li><span>Em compras confirmadas, <b>Solicitar estorno</b> abre uma confirmação com valor em reais, fichas removidas e saldo projetado. O servidor recusa a solicitação se qualquer ficha desse crédito já tiver sido usada.</span></li>
           <li><span>O estorno reverte exclusivamente uma compra sandbox; ele não movimenta saldo de dinheiro real nem converte fichas em dinheiro.</span></li>
-          <li><span>Falhas de catálogo ou histórico exibem uma tentativa manual sem esconder as demais partes da Loja.</span></li></GuideBullets>
-          <GuideLink href="/store">Abrir a Loja</GuideLink></>
+          <li><span>Falhas de catálogo ou histórico exibem uma tentativa manual sem esconder as demais partes de Fichas.</span></li></GuideBullets>
+          <GuideLink href="/store">Abrir Fichas</GuideLink></>
       }
     ]}/>;
 }

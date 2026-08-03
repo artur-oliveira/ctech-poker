@@ -19,7 +19,7 @@ describe('lobby page', () => {
     expect(screen.getByRole('heading', {name: 'Escolha sua mesa.'})).toBeInTheDocument();
     expect(screen.getByText('stakes-grid')).toBeInTheDocument();
     expect(screen.getByText('active-table')).toBeInTheDocument();
-    expect(await screen.findByRole('link', {name: /Loja.*recompensa diária disponível/})).toHaveAttribute('href', '/store');
+    expect(await screen.findByRole('link', {name: /Fichas.*recompensa diária disponível/})).toHaveAttribute('href', '/store');
     expect(screen.queryByRole('button', {name: /Recompensa Diária/})).not.toBeInTheDocument();
     expect(await screen.findByText('mock-controls')).toBeInTheDocument();
   });

@@ -13,7 +13,7 @@ export const GUIDE_TOPICS = [
   {href: '/guide/table', label: 'Na mesa'},
   {href: '/guide/hands', label: 'Mãos e provas'},
   {href: '/guide/achievements', label: 'Conquistas'},
-  {href: '/guide/store', label: 'Loja e fichas'},
+  {href: '/guide/store', label: 'Fichas'},
   {href: '/guide/profile', label: 'Perfil e estatísticas'},
   {href: '/guide/community', label: 'Comunidade e segurança'},
 ] as const;

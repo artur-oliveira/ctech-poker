@@ -52,7 +52,7 @@ Every page is `'use client'`; only `layout.tsx` and `share/layout.tsx` are serve
 | `/hands/replay?table_id=&hand_id=` | `hands/replay/page.tsx` | Frame-by-frame `HandReplayer` |
 | `/leaderboard` | `leaderboard/page.tsx` | Podium + ranking list, highlights the viewer's row |
 | `/achievements` | `achievements/page.tsx` | Catalog + own progress, all/unlocked/in-progress/completed tabs |
-| `/store` | `store/page.tsx` | Sandbox balance, daily reward, Pix chip packages, and expandable recent purchase activity in one continuous flow |
+| `/store` | `store/page.tsx` | Durable Fichas hub: sandbox balance, daily reward, Pix chip packages, and expandable recent purchase activity |
 | `/profile?id=<playerId>` | `profile/page.tsx` | **Public read-only showcase** of another player |
 | `/share?id=<token>` | `share/page.tsx` | Public anonymized shared hand (`robots: noindex`) |
 | `/guide` | `guide/page.tsx` | Illustrated how-to-play |
@@ -132,7 +132,8 @@ unverifiable — there is no backfill, because the seed is not retained anywhere
   is rejected server-side (no GSI), so it is not offered as a metric.
 - **Achievements** — full catalog screen with progress tabs, plus the `AchievementToast` fired
   by the socket's `achievement_unlocked`.
-- **Daily reward** — the spin is available in the store (`POST /v1.0/sandbox-credits/`), with
+- **Fichas hub** — `/store` keeps its exportable route for compatibility, but the durable user-facing destination is **Fichas**, broad enough to organize sandbox balance, rewards, packages, and activity without implying that gated real-money deposits are enabled.
+- **Daily reward** — the spin is available in Fichas (`POST /v1.0/sandbox-credits/`), with
   cooldown from the matching GET. Its ready state uses one prominent heading, availability line,
   and claim action; after a claim, it recedes to a compact status row with the next available time.
   The store also loads Pix packages and shows the three most recent purchases before progressively
@@ -145,7 +146,7 @@ unverifiable — there is no backfill, because the seed is not retained anywhere
   the dialog restores focus to the package that started the flow.
 - **Equity** — `Seat` renders `seat.equity` from the server snapshot. There is no client-side
   equity calculator; the client cannot be given the remaining-deck composition.
-- **Store refund safety** — confirmed sandbox purchases open a consequence dialog before mutation. It shows the exact Pix amount, package credits, projected sandbox balance, and the server-enforced eligibility rule: no sandbox-wallet debit may have occurred after the purchase credit. The dialog owns pending, success, and recoverable error states. This flow only reverses sandbox purchases; it is architecturally separate from gated real-money deposits.
+- **Sandbox refund safety** — confirmed sandbox purchases expose a **Solicitar estorno** review, not an unconditional reversal. The dialog shows the exact Pix amount, package credits, projected sandbox balance, and the server-enforced eligibility rule: any sandbox-wallet debit after the purchase credit makes it ineligible. The server remains authoritative; the dialog owns verification, pending, success, and recoverable error states. This flow only reverses unused sandbox purchases and remains architecturally separate from gated real-money deposits.
 - **Self-HUD** (`SelfHudDialog`) — own VPIP/PFR/3-bet from `GET /v1.0/players/me/poker-stats`.
 - **Hand export** (`src/lib/handExport.ts`) and **hand sharing** (`ShareHandDialog`).
 

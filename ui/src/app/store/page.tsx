@@ -1,7 +1,7 @@
 'use client';
 import {useCallback, useRef, useState} from 'react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
-import {Clock3, Coins, ShoppingBag} from 'lucide-react';
+import {Clock3, Coins} from 'lucide-react';
 import {TermsGate} from '@/components/TermsGate';
 import {DailyRewardPanel} from '@/components/store/DailyRewardPanel';
 import {SkuGrid} from '@/components/store/SkuGrid';
@@ -81,10 +81,10 @@ export default function Store() {
     <AppPage authed current="store">
       <AppPageBody className="store">
         <AppPageHeader
-          icon={ShoppingBag}
+          icon={Coins}
           eyebrow="FICHAS SANDBOX"
-          title="Loja"
-          description="Ganhe fichas todos os dias ou escolha um pacote via Pix. Elas servem apenas para jogar no modo sandbox."
+          title="Fichas"
+          description="Acompanhe seu saldo, resgate a recompensa diária ou adicione fichas via Pix para jogar no modo sandbox."
           backHref="/lobby"
         />
 
