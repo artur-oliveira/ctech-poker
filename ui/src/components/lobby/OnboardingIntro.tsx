@@ -16,8 +16,8 @@ export function OnboardingIntro() {
   return <div className="onboarding-intro" role="note">
     <div className="onboarding-intro-icon" aria-hidden="true"><Compass/></div>
     <div className="onboarding-intro-copy">
-      <b>Sua primeira mesa começa aqui.</b>
-      <p>Escolha os blinds e o formato abaixo. Você joga com fichas sandbox e pode entrar sem tutorial.</p>
+      <b>Primeira vez por aqui?</b>
+      <p>Blinds, lotação e faixa de entrada são explicados junto às opções.</p>
     </div>
     <Button type="button" variant="ghost" size="icon" aria-label="Fechar introdução"
             className="onboarding-intro-close" onClick={dismiss}><X/></Button>

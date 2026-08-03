@@ -26,7 +26,8 @@ describe('OnboardingIntro', () => {
   
   test('keeps table entry primary and persists dismissal', () => {
     const {container} = render(<OnboardingIntro/>);
-    expect(screen.getByText('Escolha os blinds e o formato abaixo. Você joga com fichas sandbox e pode entrar sem tutorial.')).toBeInTheDocument();
+    expect(screen.getByText('Primeira vez por aqui?')).toBeInTheDocument();
+    expect(screen.getByText('Blinds, lotação e faixa de entrada são explicados junto às opções.')).toBeInTheDocument();
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', {name: 'Fechar introdução'}));
     expect(mocks.markSeen).toHaveBeenCalledOnce();

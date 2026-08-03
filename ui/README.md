@@ -68,13 +68,15 @@ the `ProfileMenu` popover in the lobby header (display name, wallet mode, deck v
 
 - `StakesGrid.tsx` keeps the lobby compact as inventory grows: one blind-level selector controls three
   format choices (heads-up, 6-max, full-ring), preferring a stake with an open public table by default.
-  Each format states whether it will join or create a sandbox table; `ActiveTableBanner.tsx` surfaces an open seat.
+  The page frames the decision as blinds plus table size and explains once that matchmaking joins a compatible
+  public table or creates one when no seat is available. Each size states the resulting action and sandbox buy-in;
+  `ActiveTableBanner.tsx` surfaces an open seat.
 - `CreateRoomDialog.tsx` (react-hook-form + zod) sets visibility, stake and seat count.
 - `InviteDialog.tsx` (at the table) copies the private-room share URL.
 - `ProfileMenu.tsx` is the account popover: avatar upload/removal with initials fallback, name edit, wallet-mode switch,
   deck-variant picker, balances, showcase dialog, self-HUD, logout.
 - `OnboardingIntro.tsx` is a compact, dismissible first-visit note below the lobby header. It keeps table entry
-  immediately available while the live chooser explains blinds, table formats, and sandbox buy-ins in context.
+  immediately available and points newcomers to the inline explanations for blinds, capacity, and buy-in.
 
 ## Table / game client
 

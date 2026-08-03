@@ -80,6 +80,8 @@ describe('lobby stakes integration', () => {
       }], isLoading: false
     };
     render(<StakesGrid/>);
+    expect(screen.getByText('Agora escolha o tamanho da mesa')).toBeInTheDocument();
+    expect(screen.getByText('O tamanho define quantos jogadores podem ocupar a mesa.')).toBeInTheDocument();
     expect(screen.getByText('Entrar agora')).toBeInTheDocument();
     expect(screen.getAllByText('Entrada sandbox: 1.000–5.000 fichas (20–100 BB)')).toHaveLength(3);
     await userEvent.click(screen.getByRole('button', {name: /6-MAX/}));

@@ -107,8 +107,8 @@ export function StakesGrid() {
         </label>
       </div>
       <fieldset className="room-format-group">
-        <legend>Agora escolha o formato</legend>
-        <p className="room-format-hint">O formato define quantos jogadores podem ocupar a mesa.</p>
+        <legend>Agora escolha o tamanho da mesa</legend>
+        <p className="room-format-hint">O tamanho define quantos jogadores podem ocupar a mesa.</p>
         <div className="stake-grid">{MAX_SEATS_OPTIONS.map((opt, i) => {
           const maxSeats = opt[0];
           const displayName = opt[1];

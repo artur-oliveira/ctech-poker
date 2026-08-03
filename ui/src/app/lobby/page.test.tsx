@@ -16,8 +16,9 @@ vi.mock('@/components/table/MockControls', () => ({MockControls: () => <div>mock
 describe('lobby page', () => {
   test('keeps the lobby focused on tables and links to the dedicated credits hub', async () => {
     render(<Lobby/>);
-    const heading = screen.getByRole('heading', {name: 'Escolha sua mesa.'});
+    const heading = screen.getByRole('heading', {name: 'Escolha os blinds e o tamanho da mesa.'});
     expect(heading).toBeInTheDocument();
+    expect(screen.getByText('Buscamos uma mesa pública com vaga para sua escolha; se não houver, criamos uma nova. Tudo com fichas sandbox.')).toBeInTheDocument();
     const activeTable = screen.getByText('active-table');
     const onboarding = screen.getByText('onboarding');
     expect(heading.compareDocumentPosition(activeTable) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
