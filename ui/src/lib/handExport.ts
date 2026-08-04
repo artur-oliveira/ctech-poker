@@ -7,7 +7,7 @@ const ACTIONS: Record<string, string> = {
   all_in: 'All-in', show_cards: 'Mostrou cartas', won: 'Venceu', tie: 'Empatou'
 };
 
-export function serializeHand(hand: HandItem, actions: HandHistoryAction[], viewerId?: string) {
+export function serializeHand(hand: HandItem, actions: HandHistoryAction[], viewerId?: string, actionsAvailable = true) {
   const names = new Map((hand.opponents || []).map(opponent => [opponent.player_id, opponent.name || 'Adversário']));
   const nameOf = (id: string) => id === viewerId ? 'Você' : names.get(id) || (id ? `Jogador ${id.slice(0, 8)}` : 'Mesa');
   const lines = [
@@ -23,10 +23,16 @@ export function serializeHand(hand: HandItem, actions: HandHistoryAction[], view
     lines.push(`${opponent.name || 'Adversário'}: ${opponent.hole_cards?.join(' ') || 'cartas não reveladas'}${opponent.won ? ' (vencedor)' : ''}`);
   }
   lines.push('', 'Ações:');
-  for (const action of actions) {
-    const time = action.timestamp ? new Date(action.timestamp).toLocaleTimeString('pt-BR') : '--:--:--';
-    const amount = action.amount > 0 ? ` ${action.amount.toLocaleString('pt-BR')}` : '';
-    lines.push(`${time}  ${nameOf(action.player_id)}: ${ACTIONS[action.action] || action.action}${amount}`);
+  if (!actionsAvailable) {
+    lines.push('Indisponíveis no momento da exportação. O resumo da mão acima continua válido.');
+  } else if (!actions.length) {
+    lines.push('Nenhuma ação registrada.');
+  } else {
+    for (const action of actions) {
+      const time = action.timestamp ? new Date(action.timestamp).toLocaleTimeString('pt-BR') : '--:--:--';
+      const amount = action.amount > 0 ? ` ${action.amount.toLocaleString('pt-BR')}` : '';
+      lines.push(`${time}  ${nameOf(action.player_id)}: ${ACTIONS[action.action] || action.action}${amount}`);
+    }
   }
   if (hand.commit_hash) lines.push('', `Commit hash: ${hand.commit_hash}`);
   return `${lines.join('\n')}\n`;

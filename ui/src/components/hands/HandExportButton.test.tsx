@@ -21,7 +21,7 @@ describe('HandExportButton', () => {
     render(<HandExportButton hand={hand} actions={actions} viewerId="viewer"/>);
     await userEvent.click(screen.getByRole('button', {name: /Exportar/}));
     
-    expect(serializeHand).toHaveBeenCalledWith(hand, actions, 'viewer');
+    expect(serializeHand).toHaveBeenCalledWith(hand, actions, 'viewer', true);
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
     expect(click).toHaveBeenCalledOnce();
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:hand');

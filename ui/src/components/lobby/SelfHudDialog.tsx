@@ -132,7 +132,7 @@ export function SelfHudDialog({open, onOpenChange}: { open: boolean; onOpenChang
         <DialogTitle>Seu jogo</DialogTitle>
         <DialogDescription>Estatísticas privadas calculadas a partir das suas mãos concluídas.</DialogDescription>
       </DialogHeader>
-      <CurrencyModeTabs mode={mode} onChange={setMode}/>
+      <CurrencyModeTabs mode={mode} onChangeAction={setMode}/>
       {query.isLoading ?
         <SkeletonList label="Calculando tendências…" count={4} height={52} className="skeleton-panel"/> :
         query.data ? <HudContent stats={query.data}/> :

@@ -40,10 +40,7 @@ export function PartialDeckProof({rootCommitHash, revealed, unrevealed}: {
   }
   
   return <div className="deck-reveal">
-    <div className="deck-reveal-proof">
-      <div className="deck-reveal-hash">
-        <span>Root commit hash (publicado antes da mão)</span><code>{rootCommitHash}</code>
-      </div>
+    <div className="deck-reveal-summary" aria-live="polite">
       {matches === null && !error && <p className="deck-reveal-status pending"><LoaderCircle
           className="spin"/>Recalculando os hashes das 52 posições…</p>}
       {error && <p className="deck-reveal-status mismatch"><CircleX/>Não foi possível verificar o baralho no seu
@@ -55,33 +52,40 @@ export function PartialDeckProof({rootCommitHash, revealed, unrevealed}: {
           : 'Os hashes recalculados não conferem com o root commit publicado.'}
       </p>}
     </div>
-    <div className="deck-reveal-actions">
-      <ShieldCheck aria-hidden="true"/>
-      <p>Esta mão terminou sem showdown, então a seed do servidor não é publicada — ela revelaria cartas que ninguém
-        pagou para ver. Cada posição do baralho vem como carta + salt (o que você podia ver) ou apenas como hash
-        comprometido, e o conjunto continua provando que o baralho é o mesmo desde antes da distribuição.</p>
-      <span className="deck-reveal-count" aria-live="polite">{flipped.size} de {revealedIndexes.length} cartas permitidas reveladas</span>
-      <button type="button" className="deck-reveal-toggle-all"
-              onClick={() => setFlipped(flipped.size === revealedIndexes.length ? new Set() : new Set(revealedIndexes))}>
-        <Eye aria-hidden="true"/>{flipped.size === revealedIndexes.length ? 'Ocultar tudo' : 'Revelar tudo'}
-      </button>
-    </div>
-    <div className="deck-grid">
-      {Array.from({length: 52}, (_, i) => {
-        const reveal = revealed[i];
-        return reveal
-          ? <button key={i} type="button" className="deck-grid-slot" aria-pressed={flipped.has(i)}
-                    aria-label={flipped.has(i) ? `Posição ${i + 1}: revelada` : `Posição ${i + 1}: revelar carta`}
-                    onClick={() => toggle(i)}>
-            <PlayingCard card={flipped.has(i) ? reveal.card : undefined} index={0} size="hole"/>
-            <small>{i + 1}</small>
-          </button>
-          : <span key={i} className="deck-grid-slot" title={unrevealed[i]}
-                  aria-label={`Posição ${i + 1}: carta não revelada, apenas hash comprometido`}>
-            <PlayingCard card={undefined} index={0} size="hole"/>
-            <small>{i + 1}</small>
-          </span>;
-      })}
-    </div>
+    <details className="deck-reveal-details">
+      <summary>Ver detalhes técnicos e posições permitidas</summary>
+      <div className="deck-reveal-proof">
+        <div className="deck-reveal-hash">
+          <span>Root commit hash (publicado antes da mão)</span><code>{rootCommitHash}</code>
+        </div>
+      </div>
+      <div className="deck-reveal-actions">
+        <ShieldCheck aria-hidden="true"/>
+        <p>Esta mão terminou sem showdown, então a seed do servidor não é publicada — ela revelaria cartas que ninguém
+          pagou para ver. Cada posição vem como carta + salt permitido ou somente como hash comprometido.</p>
+        <span className="deck-reveal-count" aria-live="polite">{flipped.size} de {revealedIndexes.length} cartas permitidas reveladas</span>
+        <button type="button" className="deck-reveal-toggle-all"
+                onClick={() => setFlipped(flipped.size === revealedIndexes.length ? new Set() : new Set(revealedIndexes))}>
+          <Eye aria-hidden="true"/>{flipped.size === revealedIndexes.length ? 'Ocultar tudo' : 'Revelar tudo'}
+        </button>
+      </div>
+      <div className="deck-grid">
+        {Array.from({length: 52}, (_, i) => {
+          const reveal = revealed[i];
+          return reveal
+            ? <button key={i} type="button" className="deck-grid-slot" aria-pressed={flipped.has(i)}
+                      aria-label={flipped.has(i) ? `Posição ${i + 1}: revelada` : `Posição ${i + 1}: revelar carta`}
+                      onClick={() => toggle(i)}>
+              <PlayingCard card={flipped.has(i) ? reveal.card : undefined} index={0} size="hole"/>
+              <small>{i + 1}</small>
+            </button>
+            : <span key={i} className="deck-grid-slot" title={unrevealed[i]}
+                    aria-label={`Posição ${i + 1}: carta não revelada, apenas hash comprometido`}>
+              <PlayingCard card={undefined} index={0} size="hole"/>
+              <small>{i + 1}</small>
+            </span>;
+        })}
+      </div>
+    </details>
   </div>;
 }

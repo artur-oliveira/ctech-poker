@@ -32,10 +32,7 @@ export function DeckReveal({serverSeed, commitHash}: { serverSeed: string; commi
   }
   
   return <div className="deck-reveal">
-    <div className="deck-reveal-proof">
-      <div className="deck-reveal-hash"><span>Commit hash (publicado antes da mão)</span><code>{commitHash}</code></div>
-      <div className="deck-reveal-hash"><span>Seed do servidor (revelada após a mão)</span><code>{serverSeed}</code>
-      </div>
+    <div className="deck-reveal-summary" aria-live="polite">
       {!result && !error && <p className="deck-reveal-status pending"><LoaderCircle
           className="spin"/>Recalculando o baralho a partir da seed…</p>}
       {error && <p className="deck-reveal-status mismatch"><CircleX/>Não foi possível recalcular o baralho no seu
@@ -47,7 +44,13 @@ export function DeckReveal({serverSeed, commitHash}: { serverSeed: string; commi
           : `Hash recalculado não confere: ${truncateHash(result.computedHash)}`}
       </p>}
     </div>
-    {result && <>
+    <details className="deck-reveal-details">
+      <summary>Ver detalhes técnicos e posições do baralho</summary>
+      <div className="deck-reveal-proof">
+        <div className="deck-reveal-hash"><span>Commit hash (publicado antes da mão)</span><code>{commitHash}</code></div>
+        <div className="deck-reveal-hash"><span>Seed do servidor (revelada após a mão)</span><code>{serverSeed}</code></div>
+      </div>
+      {result && <>
         <div className="deck-reveal-actions">
             <ShieldCheck aria-hidden="true"/>
             <p>Baralho completo, na ordem embaralhada. Clique em cada carta para revelar a posição, inclusive as que
@@ -67,6 +70,7 @@ export function DeckReveal({serverSeed, commitHash}: { serverSeed: string; commi
             <small>{i + 1}</small>
           </button>)}
         </div>
-    </>}
+      </>}
+    </details>
   </div>;
 }

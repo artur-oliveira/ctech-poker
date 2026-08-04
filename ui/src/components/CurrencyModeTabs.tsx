@@ -2,15 +2,21 @@
 
 import type {WalletMode} from '@/lib/api/player';
 import {FilterGroup} from '@/components/FilterGroup';
+import {REAL_MONEY_UI_ENABLED} from '@/lib/capabilities';
 
-const MODES = [
-  {value: 'sandbox', label: 'Sandbox'},
-  {value: 'real', label: 'Dinheiro real'}
-] as const;
-
-export function CurrencyModeTabs({mode, onChange}: {
+export function CurrencyModeTabs({mode, onChangeAction}: {
   mode: WalletMode;
-  onChange: (mode: WalletMode) => void;
+  onChangeAction: (mode: WalletMode) => void;
 }) {
-  return <FilterGroup label="Modo das estatísticas" value={mode} options={MODES} onChange={onChange}/>;
+  const modes = [
+    {value: 'sandbox', label: 'Sandbox'},
+    {
+      value: 'real',
+      label: REAL_MONEY_UI_ENABLED ? 'Dinheiro real' : 'Dinheiro real · Indisponível',
+      disabled: !REAL_MONEY_UI_ENABLED,
+      title: REAL_MONEY_UI_ENABLED ? undefined : 'Este modo ainda não está disponível.'
+    }
+  ] as const;
+
+  return <FilterGroup label="Modo das estatísticas" value={mode} options={modes} onChangeAction={onChangeAction}/>;
 }

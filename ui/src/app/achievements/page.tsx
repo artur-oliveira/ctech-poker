@@ -102,7 +102,7 @@ export default function Achievements() {
       {/* The wallet tabs already say which wallet is selected; a second sentence
           repeating it sat off the page's centred axis and told the player nothing
           they had not just chosen. */}
-      {authed && <CurrencyModeTabs mode={mode} onChange={setMode}/>}
+      {authed && <CurrencyModeTabs mode={mode} onChangeAction={setMode}/>}
       
       {authed && !stats && !catalog.isError && !mine.isError
         ? <StatCardsSkeleton label="Calculando seu progresso…" count={4}/>
@@ -159,7 +159,7 @@ export default function Achievements() {
             },
             {value: 'completed', label: `Completas (${stats?.completedCount ?? 0})`}
           ]}
-          onChange={setActiveTab}
+          onChangeAction={setActiveTab}
         />
       )}
       

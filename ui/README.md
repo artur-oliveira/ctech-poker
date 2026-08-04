@@ -31,6 +31,7 @@ backend gate (`REAL_MONEY_ENABLED`) is off by default.
 | `NEXT_PUBLIC_API_URL` | `src/lib/api/client.ts` | poker API base URL (HTTP + derives WS origin); dev default `http://localhost:8003` via proxy |
 | `NEXT_PUBLIC_APP_URL` | `src/app/layout.tsx` | `metadataBase` for OG/meta tags |
 | `NEXT_PUBLIC_MOCK_API` | `src/lib/mockConfig.ts` | `true` runs the in-memory mock realtime engine instead of a live API |
+| `NEXT_PUBLIC_REAL_MONEY_ENABLED` | `src/lib/capabilities.ts` | `true` exposes real-money statistics/history; absent or any other value keeps the UI sandbox-only and coerces real-money hand URLs to sandbox |
 | `NEXT_PUBLIC_CTECH_URL` | `src/lib/auth/oauth.ts` | ctech-account base URL for `OAuthClient` |
 | `NEXT_PUBLIC_CTECH_CLIENT_ID` | `src/lib/auth/oauth.ts` | poker's OAuth client id |
 | `DEV_API_ORIGIN` | `next.config.ts` | dev-only rewrite target for `/v1.0/*` |
@@ -47,8 +48,8 @@ Every page is `'use client'`; only `layout.tsx` and `share/layout.tsx` are serve
 | `/` | `page.tsx` | Landing: hero demo table, features, achievement teaser, OAuth CTAs |
 | `/lobby` | `lobby/page.tsx` | Stakes grid with explicit join/create states and sandbox buy-in ranges, compact active-session resume strip, create-room dialog, daily spin, onboarding |
 | `/table?id=<id>` | `table/page.tsx` | The live table (room id is a **query param**, not a segment) |
-| `/hands` | `hands/page.tsx` | Infinite-scroll hand history with won/lost filter |
-| `/hands/history?table_id=&hand_id=` | `hands/history/page.tsx` | One hand: seats, board, action timeline, fairness proof, export, share |
+| `/hands` | `hands/page.tsx` | Immediate infinite-scroll hand history in the API's paginated order; no technical-ID or client-only filter surface |
+| `/hands/history?table_id=&hand_id=` | `hands/history/page.tsx` | One hand: seats, board, street-grouped actions, progressive fairness proof, resilient export/share, and action retry |
 | `/hands/replay?table_id=&hand_id=` | `hands/replay/page.tsx` | Frame-by-frame `HandReplayer` |
 | `/leaderboard` | `leaderboard/page.tsx` | Podium + ranking list, highlights the viewer's row |
 | `/achievements` | `achievements/page.tsx` | Catalog + own progress, all/unlocked/in-progress/completed tabs |
@@ -129,9 +130,24 @@ trusts a server-side "verified" flag:
   that ended without one (`components/hands/PartialDeckProof.tsx`): revealed positions carry
   card + salt, the rest only their committed hash, and together they recompute the root commit.
   "Revelar tudo" deliberately never flips a position the viewer was not entitled to see.
+- Both proof views lead with the browser-calculated verification result. Hashes and the 52-position
+  deck sit inside a native disclosure so technical controls are traversed only when requested.
 
 Hands recorded before the partial proof shipped have no stored proof and still render as
 unverifiable — there is no backfill, because the seed is not retained anywhere.
+
+## Hand-history semantics and recovery
+
+- `/hands` aggregates only the records currently loaded, or the record returned by direct hand-ID
+  lookup. Labels explicitly say **carregadas**; ties are separate from wins and never inflate the
+  victory rate.
+- The list intentionally exposes no ID, date, outcome, or sort controls. IDs are implementation
+  details for most players, and the API has no full-history date/outcome/sort parameters; the UI
+  therefore opens directly on paginated history and never applies global-looking operations to a
+  partial client page.
+- The action timeline groups poker actions by street and collapses system/social events. If action
+  history fails, the summary, fairness proof, sharing, and a summary-only text export remain usable;
+  the timeline provides an independent retry.
 
 ## Gamification & player tooling
 

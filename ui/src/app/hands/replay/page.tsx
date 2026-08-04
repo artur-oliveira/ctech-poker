@@ -12,12 +12,13 @@ import type {WalletMode} from '@/lib/api/player';
 import {getHand} from '@/lib/api/player';
 import {getHandHistory} from '@/lib/api/table';
 import {getViewerId} from '@/lib/utils';
+import {availableWalletMode} from '@/lib/capabilities';
 
 function ReplayContent() {
   const params = useSearchParams();
   const tableId = params.get('table_id') || '';
   const handId = params.get('hand_id') || '';
-  const mode: WalletMode = params.get('mode') === 'real' ? 'real' : 'sandbox';
+  const mode: WalletMode = availableWalletMode(params.get('mode'));
   const hand = useQuery({
     queryKey: ['hand', mode, handId],
     queryFn: () => getHand(handId, mode),

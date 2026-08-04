@@ -33,7 +33,7 @@ export default function Ranking() {
           description="Desempenho auditável baseado em vitórias e mãos jogadas nas mesas do CTech Poker."
           backHref={authed ? '/lobby' : undefined}
         />
-        <CurrencyModeTabs mode={mode} onChange={setMode}/>
+        <CurrencyModeTabs mode={mode} onChangeAction={setMode}/>
         
         {viewerEntry && (
           <div className="viewer-ranking-card" aria-label="Sua posição atual">

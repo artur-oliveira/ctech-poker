@@ -12,7 +12,7 @@ describe('FilterGroup', () => {
         {value: 'all', label: 'Todas'},
         {value: 'wins', label: 'Vitórias'}
       ]}
-      onChange={onChange}
+      onChangeAction={onChange}
     />);
     
     expect(screen.getByRole('group', {name: 'Filtro de exemplo'})).toBeInTheDocument();

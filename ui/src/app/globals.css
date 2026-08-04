@@ -9665,6 +9665,14 @@ h1 em {
     gap: 10px
 }
 
+.hand-row-table {
+    max-width: min(36ch, 45%);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono)
+}
+
 .hands-state {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -10169,6 +10177,43 @@ h1 em {
     gap: 6px
 }
 
+.hand-history-table-id {
+    min-width: 0;
+    max-width: 100%
+}
+
+.hand-history-table-id code {
+    max-width: 28ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-secondary)
+}
+
+.hand-history-table-id button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 28px;
+    min-height: 28px;
+    padding: 3px 6px;
+    border: 0;
+    border-radius: var(--rounded-sm);
+    background: var(--surface-control);
+    color: var(--paper);
+    cursor: pointer
+}
+
+.hand-history-table-id button:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px
+}
+
+.hand-history-table-id button svg {
+    width: 13px;
+    height: 13px
+}
+
 .hand-history-meta svg {
     width: 14px;
     height: 14px;
@@ -10302,6 +10347,27 @@ h1 em {
     width: 22px;
     color: var(--gold);
     animation: winner-crown-settle 420ms var(--ease-out-quint) both
+}
+
+.winner-crown.tie-mark {
+    color: var(--text-secondary)
+}
+
+.hand-history-partial-error {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 16px;
+    border: 1px solid color-mix(in srgb, var(--danger) 42%, transparent);
+    border-radius: var(--rounded-control);
+    background: color-mix(in srgb, var(--danger) 8%, transparent)
+}
+
+.hand-history-partial-error .form-error {
+    margin: 0;
+    max-width: 62ch
 }
 
 .hand-history-board, .hand-history-actions, .hand-history-fairness {
@@ -10801,6 +10867,55 @@ h1 em {
     overflow: hidden
 }
 
+.action-timeline-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 20px
+}
+
+.action-street h3 {
+    margin: 0 0 8px;
+    color: var(--text-secondary);
+    font: 700 var(--font-size-body) var(--font-sans)
+}
+
+.action-secondary {
+    border-block-start: 1px solid var(--control-border);
+    padding-block-start: 12px
+}
+
+.action-secondary summary,
+.deck-reveal-details > summary {
+    width: fit-content;
+    color: var(--text-secondary);
+    font-size: var(--font-size-body);
+    font-weight: 700;
+    cursor: pointer
+}
+
+.action-secondary summary:focus-visible,
+.deck-reveal-details > summary:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 4px;
+    border-radius: var(--rounded-xs)
+}
+
+.action-secondary summary span {
+    display: inline-grid;
+    place-items: center;
+    min-width: 22px;
+    min-height: 22px;
+    margin-inline-start: 5px;
+    border-radius: var(--rounded-pill);
+    background: var(--surface-control);
+    color: var(--muted-rose);
+    font-size: var(--font-size-compact)
+}
+
+.action-secondary[open] .action-timeline {
+    margin-top: 10px
+}
+
 .action-row {
     display: grid;
     grid-template-columns: 28px 1fr auto auto;
@@ -10866,6 +10981,23 @@ h1 em {
 }
 
 /* Provably-fair deck reveal */
+.deck-reveal-summary {
+    margin-bottom: 14px
+}
+
+.deck-reveal-summary .deck-reveal-status {
+    margin: 0
+}
+
+.deck-reveal-details {
+    border-block-start: 1px solid var(--control-border);
+    padding-block-start: 14px
+}
+
+.deck-reveal-details[open] > summary {
+    margin-bottom: 16px
+}
+
 .deck-reveal-proof {
     background: var(--surface-seat);
     border: 1px solid var(--seat-border);
@@ -11258,6 +11390,14 @@ button.deck-grid-slot:hover {
     color: #fff;
     border-color: var(--brand-bright);
     font-weight: 600;
+}
+
+.filter-tab:disabled {
+    cursor: not-allowed;
+    color: var(--muted-rose);
+    border-color: var(--control-border);
+    background: transparent;
+    opacity: .64
 }
 
 /* 150px, not 160px: at 160 four cards plus three 16px gaps overflowed the

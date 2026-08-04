@@ -145,6 +145,16 @@ var Catalog = []Achievement{
 	{Key: KeyWonRunnerRunner, Metric: "won_runner_runner", Tiers: []Tier{{1, 1}, {2, 5}, {3, 10}, {4, 25}}},
 	{Key: KeyWonWithNuts, Metric: "hand_won_with_nuts", Tiers: []Tier{{1, 1}, {2, 5}, {3, 25}, {4, 100}, {5, 500}}},
 	{Key: KeySamePocketPairStreak, Metric: "same_pocket_pair_win_streak", Tiers: []Tier{{1, 3}}, Secret: true},
+	{Key: KeyWinByCategory("royal_flush"), Metric: "hand_won_with_category", Tiers: []Tier{{1, 1}, {2, 2}, {3, 3}, {4, 5}, {5, 10}}},
+	{Key: KeyWinByCategory("straight_flush"), Metric: "hand_won_with_category", Tiers: []Tier{{1, 1}, {2, 5}, {3, 10}, {4, 25}, {5, 50}}},
+	{Key: KeyWinByCategory("four_of_a_kind"), Metric: "hand_won_with_category", Tiers: []Tier{{1, 1}, {2, 25}, {3, 50}, {4, 100}, {5, 500}}},
+	{Key: KeyWinByCategory("full_house"), Metric: "hand_won_with_category", Tiers: commonTiers},
+	{Key: KeyWinByCategory("flush"), Metric: "hand_won_with_category", Tiers: commonTiers},
+	{Key: KeyWinByCategory("straight"), Metric: "hand_won_with_category", Tiers: commonTiers},
+	{Key: KeyWinByCategory("three_of_a_kind"), Metric: "hand_won_with_category", Tiers: commonTiers},
+	{Key: KeyWinByCategory("two_pair"), Metric: "hand_won_with_category", Tiers: commonTiers},
+	{Key: KeyWinByCategory("pair"), Metric: "hand_won_with_category", Tiers: commonTiers},
+	{Key: KeyWinByCategory("high_card"), Metric: "hand_won_with_category", Tiers: commonTiers},
 }
 
 // categoryOrder ranks hand categories weakest to strongest, used both to seed
@@ -161,18 +171,4 @@ var categoryOrder = []string{
 	"four_of_a_kind",
 	"straight_flush",
 	"royal_flush",
-}
-
-func init() {
-	for _, category := range categoryOrder {
-		tiers := commonTiers
-		if category == "royal_flush" {
-			tiers = []Tier{{1, 1}, {2, 5}, {3, 10}, {4, 25}, {5, 50}}
-		}
-		Catalog = append(Catalog, Achievement{
-			Key:    KeyWinByCategory(category),
-			Metric: "hand_won_with_category",
-			Tiers:  tiers},
-		)
-	}
 }

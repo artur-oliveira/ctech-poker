@@ -62,7 +62,8 @@ describe('hand history components', () => {
       actions[0],
       {...actions[0], seq: 9, action: 'future_action' as HandHistoryAction['action'], amount: 0, timestamp: 0},
     ]} resolveName={id => id === 'viewer' ? 'Você' : id}/>);
-    expect(screen.getByText('Call')).toBeInTheDocument();
+    expect(screen.getByText('Pagou (call)')).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name: 'Pré-flop'})).toBeInTheDocument();
     // Unknown keys degrade to a humanized form rather than raw snake_case.
     expect(screen.getByText('future action')).toBeInTheDocument();
     expect(screen.getByText('50')).toBeInTheDocument();

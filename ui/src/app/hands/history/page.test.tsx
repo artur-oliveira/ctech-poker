@@ -34,7 +34,10 @@ vi.mock('@/components/hands/DeckReveal', () => ({
 vi.mock('@/components/hands/PartialDeckProof', () => ({
   PartialDeckProof: ({rootCommitHash}: { rootCommitHash: string }) => <div>partial:{rootCommitHash}</div>,
 }));
-vi.mock('@/components/hands/HandExportButton', () => ({HandExportButton: () => <button>exportar</button>}));
+vi.mock('@/components/hands/HandExportButton', () => ({
+  HandExportButton: ({actionsAvailable}: {actionsAvailable: boolean}) =>
+    <button>{actionsAvailable ? 'exportar' : 'exportar resumo'}</button>
+}));
 vi.mock('@/components/hands/ShareHandDialog', () => ({ShareHandDialog: () => <button>compartilhar</button>}));
 
 const hand: HandItem = {
@@ -128,6 +131,13 @@ describe('hand detail page', () => {
     expect(screen.getByText('partial:root-1')).toBeInTheDocument();
     expect(screen.queryByText(/Prova de integridade criptográfica indisponível/)).not.toBeInTheDocument();
   });
+
+  test('does not honor a real-money URL while the UI capability is disabled', () => {
+    mocks.params.set('mode', 'real');
+    render(<HandHistoryPage/>);
+    expect(screen.getByText('Sandbox')).toBeInTheDocument();
+    expect(mocks.query).toHaveBeenCalledWith(expect.objectContaining({queryKey: ['hand', 'sandbox', 'hand one']}));
+  });
   
   test('shows independent history error and unavailable fairness proof', () => {
     queryState({
@@ -137,6 +147,8 @@ describe('hand detail page', () => {
     render(<HandHistoryPage/>);
     expect(screen.getByText(/sequência de ações/)).toBeInTheDocument();
     expect(screen.getByText(/Prova de integridade criptográfica indisponível/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', {name: 'exportar'})).not.toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'exportar resumo'})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'compartilhar'})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Tentar ações novamente'})).toBeInTheDocument();
   });
 });

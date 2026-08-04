@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import {Suspense} from 'react';
+import {Suspense, useState} from 'react';
 import {useSearchParams} from 'next/navigation';
 import {useQuery} from '@tanstack/react-query';
 import {
@@ -8,7 +8,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Coins,
+  Copy,
   Crown,
+  Handshake,
   ListChecks,
   Play,
   ShieldCheck,
@@ -31,6 +33,7 @@ import {Button} from '@/components/ui/button';
 import {TermsGate} from '@/components/TermsGate';
 import {getViewerId, HAND_CATEGORY_LABELS, playerName} from '@/lib/utils';
 import {bestHandCategory} from '@/lib/pokerRules';
+import {availableWalletMode} from '@/lib/capabilities';
 
 function formatDate(unixSeconds: number) {
   return new Date(unixSeconds * 1000).toLocaleString('pt-BR', {
@@ -42,7 +45,8 @@ function HandHistoryContent() {
   const params = useSearchParams();
   const tableId = params.get('table_id') || '';
   const handId = params.get('hand_id') || '';
-  const mode: WalletMode = params.get('mode') === 'real' ? 'real' : 'sandbox';
+  const mode: WalletMode = availableWalletMode(params.get('mode'));
+  const [tableCopied, setTableCopied] = useState(false);
 
   const hand = useQuery({
     queryKey: ['hand', mode, handId],
@@ -55,7 +59,7 @@ function HandHistoryContent() {
     enabled: Boolean(tableId && handId)
   });
 
-  const actions = (history.data?.actions || []).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  const actions = [...(history.data?.actions || [])].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   const viewerId = getViewerId();
   const opponentNames = new Map((hand.data?.opponents || []).map(o => [o.player_id, o.name]));
   const resolveName = (playerId: string) => playerName(playerId, viewerId, opponentNames.get(playerId));
@@ -91,24 +95,38 @@ function HandHistoryContent() {
 
   const viewerCategory = categoryFor(h.hole_cards);
 
+  async function copyTableId() {
+    try {
+      await navigator.clipboard.writeText(h.table_id);
+      setTableCopied(true);
+    } catch {
+      setTableCopied(false);
+    }
+  }
+
   return <div className="hand-history shell">
     {/* Export and share are utilities: they belong on the page's tool row beside
         the way out, not stacked down the centre line where the result and the
         winners are what the player came to read. */}
     <div className="hand-history-topbar">
       <Link href="/hands"><ChevronLeft/> Voltar para Minhas Mãos</Link>
-      {!history.isLoading && !history.isError &&
-          <div className="hand-history-tools">
-              <HandExportButton hand={h} actions={actions} viewerId={viewerId}/>
-              <ShareHandDialog handId={h.hand_id} outcome={h.outcome} mode={mode}/>
-          </div>}
+      <div className="hand-history-tools">
+        <HandExportButton hand={h} actions={actions} viewerId={viewerId}
+                          actionsAvailable={!history.isLoading && !history.isError}/>
+        <ShareHandDialog handId={h.hand_id} outcome={h.outcome} mode={mode}/>
+      </div>
     </div>
     <header className={`hand-history-header is-${h.outcome}`}>
       <OutcomeBadge outcome={h.outcome}/>
       <h1>Detalhes da mão</h1>
       <div className="hand-history-meta">
         <span><CalendarDays aria-hidden="true"/>{formatDate(h.ended_at / 1000)}</span>
-        <span><Table2 aria-hidden="true"/>Mesa {h.table_id.slice(0, 8)}…</span>
+        <span className="hand-history-table-id"><Table2 aria-hidden="true"/>Mesa <code>{h.table_id}</code>
+          <button type="button" onClick={() => void copyTableId()}
+                  aria-label={tableCopied ? 'ID da mesa copiado' : 'Copiar ID da mesa'} title="Copiar ID da mesa">
+            <Copy aria-hidden="true"/>{tableCopied && <span>Copiado</span>}
+          </button>
+        </span>
         <span><Coins aria-hidden="true"/>{mode === 'real' ? 'Dinheiro real' : 'Sandbox'}</span>
       </div>
       <div className="hand-history-net">
@@ -139,7 +157,9 @@ function HandHistoryContent() {
 
     <section className="hand-history-players">
       <article className={`hand-history-seat viewer${viewerIsWinner ? ' is-winner' : ''}`}>
-        {viewerIsWinner && <Crown aria-hidden="true" className="winner-crown"/>}
+        {h.outcome === 'tied'
+          ? <Handshake aria-hidden="true" className="winner-crown tie-mark"/>
+          : viewerIsWinner && <Crown aria-hidden="true" className="winner-crown"/>}
         <b>Você</b>
         <div className="hand-history-seat-cards">
           {(h.hole_cards || []).map((c, i) => <PlayingCard key={i} card={c} index={i} size="hole" owner="viewer"/>)}
@@ -149,7 +169,9 @@ function HandHistoryContent() {
       {(h.opponents || []).map(o => {
         const category = categoryFor(o.hole_cards);
         return <article key={o.player_id} className={`hand-history-seat${o.won ? ' is-winner' : ''}`}>
-          {o.won && <Crown aria-hidden="true" className="winner-crown"/>}
+          {o.won && (h.outcome === 'tied'
+            ? <Handshake aria-hidden="true" className="winner-crown tie-mark"/>
+            : <Crown aria-hidden="true" className="winner-crown"/>)}
           <PlayerAvatar name={o.name} avatarUrl={o.avatar_url} size={36}/>
           <b>{o.name || 'Adversário'}</b>
           <div className="hand-history-seat-cards">
@@ -176,7 +198,10 @@ function HandHistoryContent() {
       <h2><ListChecks aria-hidden="true"/> Histórico de ações</h2>
       {history.isLoading ?
         <SkeletonList label="Carregando histórico de ações…" count={5} height={44} className="skeleton-panel"/> :
-        history.isError ? <p className="form-error">Não foi possível carregar a sequência de ações desta mão.</p> :
+        history.isError ? <div className="hand-history-partial-error" role="alert">
+          <p className="form-error">Não foi possível carregar a sequência de ações. O resumo, a prova e as ferramentas continuam disponíveis.</p>
+          <Button variant="outline" size="sm" onClick={() => void history.refetch()}>Tentar ações novamente</Button>
+        </div> :
           <ActionTimeline actions={actions} resolveName={resolveName}/>}
     </section>
 

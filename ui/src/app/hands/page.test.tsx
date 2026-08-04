@@ -69,9 +69,13 @@ describe('hands list page', () => {
   
   test('summarizes backend outcomes and renders safe hand links and incomplete cards', () => {
     render(<HandsHistory/>);
+    expect(screen.getByRole('button', {name: 'Dinheiro real · Indisponível'})).toBeDisabled();
+    expect(screen.queryByLabelText('ID da mão')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Ordenar')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', {name: 'Resultado da mão'})).not.toBeInTheDocument();
     expect(screen.getByText('3', {selector: '.stat-value'})).toBeInTheDocument();
     expect(screen.getByText('+800')).toBeInTheDocument();
-    expect(screen.getByText(/67%/)).toHaveTextContent('67% (2V / 1D)');
+    expect(screen.getByText(/33%/)).toHaveTextContent('33% (1V · 1E · 1D)');
     expect(screen.getByText(/Royal flush/)).toBeInTheDocument();
     // 3 hole cards in the fixtures + 5 board positions per row: undealt board
     // positions now render a card back instead of an empty outline.
@@ -81,23 +85,6 @@ describe('hands list page', () => {
     );
     expect(screen.getByTitle('1234567890abcdef')).toHaveTextContent('seed 12345678…');
     expect(screen.queryByRole('button', {name: /Carregar mais/})).not.toBeInTheDocument();
-  });
-  
-  test('filters wins, losses and restores all results from an empty filter', () => {
-    const {rerender} = render(<HandsHistory/>);
-    fireEvent.click(screen.getByRole('button', {name: 'Vitórias (2)'}));
-    expect(screen.getByText('won')).toBeInTheDocument();
-    expect(screen.getByText('tied')).toBeInTheDocument();
-    expect(screen.queryByText('lost')).not.toBeInTheDocument();
-    
-    fireEvent.click(screen.getByRole('button', {name: 'Derrotas (1)'}));
-    expect(screen.getByText('lost')).toBeInTheDocument();
-    
-    mocks.query.mockReturnValue(queryResult([pageOf([hands[0]])]));
-    rerender(<HandsHistory/>);
-    expect(screen.getByText(/Nada por aqui neste filtro/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', {name: 'Ver todas'}));
-    expect(screen.getByText('won')).toBeInTheDocument();
   });
   
   test('handles loading, failure with retry, and an empty account', () => {
@@ -116,7 +103,7 @@ describe('hands list page', () => {
     expect(screen.getByRole('button', {name: /Encontrar uma mesa/})).toHaveAttribute('href', '/lobby');
   });
   
-  test('marks counts as partial, appends pages and loads more on scroll or click', () => {
+  test('reports loaded counts, appends API pages and loads more on scroll or click', () => {
     const observed: IntersectionObserverCallback[] = [];
     vi.stubGlobal('IntersectionObserver', class {
       observe = vi.fn();
@@ -131,9 +118,7 @@ describe('hands list page', () => {
     
     mocks.query.mockReturnValue(queryResult([pageOf(hands, true)]));
     const view = render(<HandsHistory/>);
-    expect(screen.getByRole('button', {name: 'Todas (3+)'})).toBeInTheDocument();
-    expect(screen.getByRole('button', {name: 'Vitórias (2+)'})).toBeInTheDocument();
-    expect(screen.getByText('3+', {selector: '.stat-value'})).toBeInTheDocument();
+    expect(screen.getByText('3', {selector: '.stat-value'})).toBeInTheDocument();
     
     act(() => observed[0]([{isIntersecting: true} as IntersectionObserverEntry], {} as IntersectionObserver));
     expect(mocks.fetchNextPage).toHaveBeenCalledOnce();
@@ -145,7 +130,8 @@ describe('hands list page', () => {
     mocks.query.mockReturnValue(queryResult([pageOf(hands, true), pageOf(secondPage)]));
     view.rerender(<HandsHistory/>);
     expect(screen.getAllByText('won')).toHaveLength(2);
-    expect(screen.getByRole('button', {name: 'Todas (4)'})).toBeInTheDocument();
+    expect(screen.getByText('4', {selector: '.stat-value'})).toBeInTheDocument();
     expect(screen.queryByRole('button', {name: /Carregar mais/})).not.toBeInTheDocument();
   });
+
 });

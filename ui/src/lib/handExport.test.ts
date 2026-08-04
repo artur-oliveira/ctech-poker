@@ -13,3 +13,12 @@ test('text export includes authorized cards, actions and fairness proof', () => 
   assert.match(text, /Bia: cartas não reveladas/);
   assert.match(text, /Commit hash: abc/);
 });
+
+test('text export labels a partial file when action history is unavailable', () => {
+  const text = serializeHand({
+    pk: 'viewer', sk: 'h2', table_id: 't2', hand_id: 'h2', outcome: 'tied',
+    net_change: 0, ended_at: 1_700_000_000_000
+  }, [], 'viewer', false);
+  assert.match(text, /Resultado: Empate/);
+  assert.match(text, /Ações:\nIndisponíveis no momento da exportação/);
+});
