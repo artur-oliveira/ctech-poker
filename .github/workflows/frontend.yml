@@ -119,7 +119,7 @@ jobs:
         run: npm run build
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@11b1c58b24724e66aa52a847862a0c1b0c4b0c7b # v6.1.0
+        uses: aws-actions/configure-aws-credentials@0802eece3e41d56906971d94b32d33e05fc4a14c # v6.1.0
         with:
           role-to-assume: arn:aws:iam::868899309401:role/ctech-poker-gha-frontend
           aws-region: us-east-1
