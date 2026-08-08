@@ -33,8 +33,8 @@ export class ReconcileStack extends cdk.Stack {
       managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')],
     });
     role.addToPolicy(new iam.PolicyStatement({
-      actions: ['dynamodb:Scan', 'dynamodb:UpdateItem'],
-      resources: [pendingCashoutsTableArn],
+      actions: ['dynamodb:Scan', 'dynamodb:Query', 'dynamodb:UpdateItem'],
+      resources: [pendingCashoutsTableArn, `${pendingCashoutsTableArn}/index/*`],
     }));
     role.addToPolicy(new iam.PolicyStatement({
       actions: ['ssm:GetParameter'],
