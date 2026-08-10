@@ -53,9 +53,10 @@ func (s *Store) Increment(ctx context.Context, playerID, mode, key string, by in
 func (s *Store) IncrementStreak(ctx context.Context, playerID, mode, key string, reset bool, resetTo int) (int, error) {
 	sk := mode + "#" + key
 	expression := "ADD #counter :one"
-	value := 1
+	values := map[string]dynamotypes.AttributeValue{":one": &dynamotypes.AttributeValueMemberN{Value: "1"}}
 	if reset {
-		expression, value = "SET #counter = :value", resetTo
+		expression = "SET #counter = :value"
+		values = map[string]dynamotypes.AttributeValue{":value": &dynamotypes.AttributeValueMemberN{Value: strconv.Itoa(resetTo)}}
 	}
 	out, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(s.base.TableName),
@@ -63,13 +64,10 @@ func (s *Store) IncrementStreak(ctx context.Context, playerID, mode, key string,
 			"pk": &dynamotypes.AttributeValueMemberS{Value: playerID},
 			"sk": &dynamotypes.AttributeValueMemberS{Value: sk},
 		},
-		UpdateExpression:         aws.String(expression),
-		ExpressionAttributeNames: map[string]string{"#counter": "counter"},
-		ExpressionAttributeValues: map[string]dynamotypes.AttributeValue{
-			":one":   &dynamotypes.AttributeValueMemberN{Value: "1"},
-			":value": &dynamotypes.AttributeValueMemberN{Value: strconv.Itoa(value)},
-		},
-		ReturnValues: dynamotypes.ReturnValueAllNew,
+		UpdateExpression:          aws.String(expression),
+		ExpressionAttributeNames:  map[string]string{"#counter": "counter"},
+		ExpressionAttributeValues: values,
+		ReturnValues:              dynamotypes.ReturnValueAllNew,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("achievements: streak: %w", err)
