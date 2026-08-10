@@ -51,7 +51,7 @@ var tableChatFilter = chatfilter.New([]string{"idiota", "burro"})
 var tableReactions = map[string]bool{
 	"clap": true, "laugh": true, "wow": true,
 	"angry": true, "cry": true, "nervous": true,
-	"cold": true, "fire": true,
+	"cold": true, "fire": true, "respect": true, "sleepy": true,
 	"chip": true, "coffee": true, "clover": true,
 	"horseshoe": true, "tear": true, "tomato": true,
 	"poop": true, "rofl": true, "duck": true, "turtle": true,

@@ -7,6 +7,8 @@ export const TABLE_REACTIONS = {
   nervous: {label: 'Nervoso', glyph: '😰', targeted: false},
   cold: {label: 'Frio na mesa', glyph: '🥶', targeted: false},
   fire: {label: 'Sequência quente', glyph: '🔥', targeted: false},
+  respect: {label: 'Respeito', glyph: '🫡', targeted: false},
+  sleepy: {label: 'Sono', glyph: '🥱', targeted: false},
 
   chip: {label: 'Jogar ficha', glyph: '🟠', targeted: true},
   coffee: {label: 'Mandar café', glyph: '☕', targeted: true},

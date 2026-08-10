@@ -5364,6 +5364,45 @@ h1 em {
     animation: reaction-ember-rise 1s ease-out calc(var(--piece) * 180ms) infinite
 }
 
+.reaction-impact-respect,
+.reaction-impact-sleepy {
+    width: 56px;
+    height: 56px;
+    margin: -28px;
+    opacity: inherit
+}
+
+.reaction-respect-glow {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--gold-pale), color-mix(in srgb, var(--gold) 55%, transparent) 55%, transparent 78%);
+    opacity: 0;
+    animation: reaction-flash-pop 900ms var(--ease-out-quart) infinite
+}
+
+.reaction-impact-respect i {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    font-size: 10px;
+    color: var(--gold-bright);
+    transform: rotate(calc(var(--piece) * 120deg)) translateY(0) scale(.4);
+    animation: reaction-respect-sparkle 900ms var(--ease-out-quart) calc(var(--piece) * 90ms) infinite
+}
+
+.reaction-impact-sleepy i {
+    position: absolute;
+    left: calc(50% + var(--piece) * 8px);
+    bottom: 40%;
+    font-size: calc(11px + var(--piece) * 3px);
+    font-style: normal;
+    font-weight: 700;
+    color: var(--felt-text);
+    opacity: 0;
+    animation: reaction-sleepy-doze 1.8s ease-in-out calc(var(--piece) * 260ms) infinite
+}
+
 @media (prefers-reduced-motion: reduce) {
     .table-reaction-effect,
     .table-reaction-effect.emote,
@@ -5391,6 +5430,9 @@ h1 em {
     .reaction-impact-turtle i,
     .reaction-impact-cold i,
     .reaction-impact-fire i,
+    .reaction-respect-glow,
+    .reaction-impact-respect i,
+    .reaction-impact-sleepy i,
     .reaction-chip-flash {
         animation-duration: 1ms !important;
         animation-iteration-count: 1 !important;
@@ -6076,6 +6118,18 @@ h1 em {
     0% { opacity: 0; transform: translateY(0) scale(.6) }
     35% { opacity: .9; transform: translateY(-10px) scale(1) }
     100% { opacity: 0; transform: translateY(-22px) scale(.4) }
+}
+
+@keyframes reaction-respect-sparkle {
+    0% { opacity: 0; transform: rotate(calc(var(--piece) * 120deg)) translateY(0) scale(.4) }
+    35% { opacity: 1; transform: rotate(calc(var(--piece) * 120deg)) translateY(-26px) scale(1) }
+    100% { opacity: 0; transform: rotate(calc(var(--piece) * 120deg)) translateY(-34px) scale(.6) }
+}
+
+@keyframes reaction-sleepy-doze {
+    0% { opacity: 0; transform: translate(0, 4px) rotate(-6deg) scale(.6) }
+    25%, 55% { opacity: .95; transform: translate(2px, -12px) rotate(4deg) scale(1) }
+    100% { opacity: 0; transform: translate(6px, -30px) rotate(10deg) scale(1.25) }
 }
 
 @keyframes reaction-shiver {

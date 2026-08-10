@@ -10,7 +10,7 @@ const CHIP_PIECES = Array.from({length: 12}, (_, index) => index);
 const EFFECT_PIECES = Array.from({length: 8}, (_, index) => index);
 // Self reactions (cold, fire) decorate the floating emote itself rather than
 // hitting an opponent, so they get a satellite effect with no throw delay.
-const SELF_IMPACT_REACTIONS = new Set<TableReactionID>(['cold', 'fire']);
+const SELF_IMPACT_REACTIONS = new Set<TableReactionID>(['cold', 'fire', 'respect', 'sleepy']);
 
 function ReactionChipStack({className = '', style}: {className?: string; style?: CSSProperties}) {
   return <span className={`reaction-table-chip-stack ${className}`} style={style} aria-hidden="true">
@@ -75,6 +75,11 @@ function ReactionImpact({reactionId}: {reactionId: TableReactionID}) {
     {[0, 1, 2].map(index => <i key={index} style={{'--piece': index} as CSSProperties}>❄</i>)}</span>;
   if (reactionId === 'fire') return <span className="reaction-impact reaction-impact-fire" aria-hidden="true">
     {[0, 1, 2].map(index => <i key={index} style={{'--piece': index} as CSSProperties}/>)}</span>;
+  if (reactionId === 'respect') return <span className="reaction-impact reaction-impact-respect" aria-hidden="true">
+    <i className="reaction-respect-glow"/>
+    {[0, 1, 2].map(index => <i key={index} style={{'--piece': index} as CSSProperties}>✦</i>)}</span>;
+  if (reactionId === 'sleepy') return <span className="reaction-impact reaction-impact-sleepy" aria-hidden="true">
+    {[0, 1, 2].map(index => <i key={index} style={{'--piece': index} as CSSProperties}>z</i>)}</span>;
   return null;
 }
 

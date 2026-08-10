@@ -139,6 +139,21 @@ describe('TableReactions', () => {
     expect(cold.querySelector('.reaction-impact-cold')).not.toBeNull();
   });
 
+  test('renders an impact effect for self reactions like respect and sleepy', () => {
+    renderReactions({
+      items: [
+        {id: 'self-respect', playerId: 'viewer', reactionId: 'respect'},
+        {id: 'self-sleepy', playerId: 'viewer', reactionId: 'sleepy'},
+      ],
+    });
+    const respect = screen.getByRole('img', {name: 'Respeito'});
+    expect(respect).toHaveClass('emote');
+    expect(respect.querySelector('.reaction-impact-respect')).not.toBeNull();
+    const sleepy = screen.getByRole('img', {name: 'Sono'});
+    expect(sleepy).toHaveClass('emote');
+    expect(sleepy.querySelector('.reaction-impact-sleepy')).not.toBeNull();
+  });
+
   test('renders the new targeted reactions with their own impact markup', () => {
     const items: TableReactionEvent[] = [
       {id: 'r-poop', playerId: 'opponent-1', targetPlayerId: 'viewer', reactionId: 'poop'},
@@ -157,6 +172,8 @@ describe('TableReactions', () => {
     renderReactions();
     expect(screen.getByTitle('Frio na mesa')).toBeInTheDocument();
     expect(screen.getByTitle('Sequência quente')).toBeInTheDocument();
+    expect(screen.getByTitle('Respeito')).toBeInTheDocument();
+    expect(screen.getByTitle('Sono')).toBeInTheDocument();
     expect(screen.getByTitle('Jogar cocô')).toBeInTheDocument();
     expect(screen.getByTitle('Rir da cara')).toBeInTheDocument();
     expect(screen.getByTitle('Jogar pato')).toBeInTheDocument();
