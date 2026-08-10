@@ -20,10 +20,10 @@ function renderReactions(overrides: Partial<Parameters<typeof TableReactions>[0]
     connected: true,
     coolingDown: false,
     pendingReaction: null,
-    onQuickSend: vi.fn(),
-    onPendingReactionChange: vi.fn(),
+    onQuickSendAction: vi.fn(),
+    onPendingReactionChangeAction: vi.fn(),
     open: true,
-    onOpenChange: vi.fn(),
+    onOpenChangeAction: vi.fn(),
     ...overrides,
   };
   return {props, ...render(<TableReactions {...props}/>)};
@@ -39,21 +39,21 @@ describe('TableReactions', () => {
     const closed = renderReactions({open: false});
     expect(screen.queryByText('Reagir')).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', {name: 'Abrir reações'}));
-    expect(closed.props.onOpenChange).toHaveBeenCalledWith(true);
+    expect(closed.props.onOpenChangeAction).toHaveBeenCalledWith(true);
     closed.unmount();
     
     const opened = renderReactions();
     await userEvent.click(screen.getByRole('button', {name: 'Fechar reações'}));
-    expect(opened.props.onOpenChange).toHaveBeenCalledWith(false);
+    expect(opened.props.onOpenChangeAction).toHaveBeenCalledWith(false);
   });
   
   test('sends quick reactions immediately and closes the panel before seat targeting', async () => {
     const {props} = renderReactions();
     fireEvent.click(screen.getByTitle('Aplausos'));
-    expect(props.onQuickSend).toHaveBeenCalledWith('clap');
+    expect(props.onQuickSendAction).toHaveBeenCalledWith('clap');
     fireEvent.click(screen.getByTitle('Jogar tomate'));
-    expect(props.onPendingReactionChange).toHaveBeenCalledWith('tomato');
-    expect(props.onOpenChange).toHaveBeenCalledWith(false);
+    expect(props.onPendingReactionChangeAction).toHaveBeenCalledWith('tomato');
+    expect(props.onOpenChangeAction).toHaveBeenCalledWith(false);
   });
   
   test('blocks sends while disconnected, during cooldown, and when no target exists', async () => {
@@ -75,7 +75,7 @@ describe('TableReactions', () => {
     const {props} = renderReactions({open: false, pendingReaction: 'coffee'});
     expect(screen.getByText('Escolha um jogador')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', {name: 'Cancelar arremesso'}));
-    expect(props.onPendingReactionChange).toHaveBeenCalledWith(null);
+    expect(props.onPendingReactionChangeAction).toHaveBeenCalledWith(null);
   });
   
   test('persists mute and hides incoming effects without hiding controls', async () => {
@@ -128,5 +128,38 @@ describe('TableReactions', () => {
     expect(object.style.getPropertyValue('--reaction-dx')).toBe('190px');
     expect(object.style.getPropertyValue('--reaction-dy')).toBe('95px');
     expect(object).toHaveClass('thrown');
+    expect(object).toHaveClass('reaction-chip');
+  });
+
+  test('renders an impact effect for self reactions like cold and fire', () => {
+    renderReactions({items: [{id: 'self-cold', playerId: 'viewer', reactionId: 'cold'}]});
+    const cold = screen.getByRole('img', {name: 'Frio na mesa'});
+    expect(cold).toHaveClass('emote');
+    expect(cold).toHaveClass('reaction-cold');
+    expect(cold.querySelector('.reaction-impact-cold')).not.toBeNull();
+  });
+
+  test('renders the new targeted reactions with their own impact markup', () => {
+    const items: TableReactionEvent[] = [
+      {id: 'r-poop', playerId: 'opponent-1', targetPlayerId: 'viewer', reactionId: 'poop'},
+      {id: 'r-rofl', playerId: 'opponent-1', targetPlayerId: 'viewer', reactionId: 'rofl'},
+      {id: 'r-duck', playerId: 'opponent-1', targetPlayerId: 'viewer', reactionId: 'duck'},
+      {id: 'r-turtle', playerId: 'opponent-1', targetPlayerId: 'viewer', reactionId: 'turtle'},
+    ];
+    renderReactions({items});
+    expect(screen.getByRole('img', {name: 'Jogar cocô'}).querySelector('.reaction-impact-poop')).not.toBeNull();
+    expect(screen.getByRole('img', {name: 'Rir da cara'}).querySelector('.reaction-impact-rofl')).not.toBeNull();
+    expect(screen.getByRole('img', {name: 'Jogar pato'}).querySelector('.reaction-impact-duck')).not.toBeNull();
+    expect(screen.getByRole('img', {name: 'Chamar de lento'}).querySelector('.reaction-impact-turtle')).not.toBeNull();
+  });
+
+  test('lists cold/fire among quick emotes and the new objects among thrown reactions', () => {
+    renderReactions();
+    expect(screen.getByTitle('Frio na mesa')).toBeInTheDocument();
+    expect(screen.getByTitle('Sequência quente')).toBeInTheDocument();
+    expect(screen.getByTitle('Jogar cocô')).toBeInTheDocument();
+    expect(screen.getByTitle('Rir da cara')).toBeInTheDocument();
+    expect(screen.getByTitle('Jogar pato')).toBeInTheDocument();
+    expect(screen.getByTitle('Chamar de lento')).toBeInTheDocument();
   });
 });

@@ -81,13 +81,13 @@ describe('LastWinners', () => {
   });
 
   test('reports toggle intent without overriding controlled state', async () => {
-    const onOpenChange = vi.fn();
-    const {rerender} = render(<LastWinners items={[hand({})]} open={false} onOpenChange={onOpenChange}/>);
+    const onOpenChangeAction = vi.fn();
+    const {rerender} = render(<LastWinners items={[hand({})]} open={false} onOpenChangeAction={onOpenChangeAction}/>);
     await userEvent.click(screen.getByRole('button', {name: 'Ver últimos vencedores'}));
-    expect(onOpenChange).toHaveBeenCalledWith(true);
+    expect(onOpenChangeAction).toHaveBeenCalledWith(true);
     expect(screen.getByRole('button', {name: 'Ver últimos vencedores'})).toHaveAttribute('aria-expanded', 'false');
 
-    rerender(<LastWinners items={[hand({})]} open onOpenChange={onOpenChange}/>);
+    rerender(<LastWinners items={[hand({})]} open onOpenChangeAction={onOpenChangeAction}/>);
     expect(screen.getByRole('button', {name: 'Fechar últimos vencedores'})).toHaveAttribute('aria-expanded', 'true');
   });
 });

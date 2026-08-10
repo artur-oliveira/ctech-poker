@@ -30,13 +30,13 @@ export function PlayerNoteDialog({
                                    opponent,
                                    existing,
                                    open,
-                                   onOpenChange,
+                                   onOpenChangeAction,
                                    onSaved
                                  }: {
   opponent: Opponent | null;
   existing?: PlayerNote;
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChangeAction: (open: boolean) => void;
   onSaved: (note: PlayerNote | null) => void;
 }) {
   const [tag, setTag] = useState<PlayerNoteTag | ''>(existing?.tag || '');
@@ -50,13 +50,13 @@ export function PlayerNoteDialog({
       const result = await savePlayerNote(opponent.player_id, {tag: tag || undefined, note: text});
       onSaved('deleted' in result ? null : result);
       pushNotification('Anotação privada atualizada.', 'info');
-      onOpenChange(false);
+      onOpenChangeAction(false);
     } finally {
       setPending(false);
     }
   };
   
-  return <Dialog open={open} onOpenChange={onOpenChange}>
+  return <Dialog open={open} onOpenChangeAction={onOpenChangeAction}>
     <DialogContent>
       <DialogHeader>
         <DialogTitle className="player-note-title">
@@ -90,7 +90,7 @@ export function PlayerNoteDialog({
         </div>
       </div>
       <DialogFooter>
-        <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
+        <Button type="button" variant="ghost" onClick={() => onOpenChangeAction(false)}>Cancelar</Button>
         <Button type="button" disabled={pending} onClick={save}>
           {pending && <LoaderCircle className="spin" aria-hidden="true"/>} Salvar
         </Button>

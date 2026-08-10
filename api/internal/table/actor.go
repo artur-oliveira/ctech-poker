@@ -30,7 +30,7 @@ var timeNowFunc = time.Now
 const (
 	maxPersistedChatMessages = 40
 	maxPersistedReactions    = 8
-	reactionLifetime         = 2400 * time.Millisecond
+	reactionLifetime         = 3400 * time.Millisecond
 )
 
 // Actor is the local serialization point for one table's hand.Table.

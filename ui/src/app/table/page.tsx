@@ -415,7 +415,7 @@ function TableContent() {
               <span className="connection-label">{rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}</span>
             </span>
             <HandRankingsDialog open={activeTablePanel === 'rankings'}
-                                onOpenChange={open => setActiveTablePanel(open ? 'rankings' : null)}/>
+                                onOpenChangeAction={open => setActiveTablePanel(open ? 'rankings' : null)}/>
             <TablePreferencesDialog runItTwiceAvailable={Boolean(room?.run_it_twice_enabled)}
                                     runItTwice={Boolean(viewerSeat?.run_it_twice)}
                                     onRunItTwiceChange={rt.setRunItTwice}/>
@@ -511,20 +511,20 @@ function TableContent() {
             viewerId={viewer}
             seats={s.seats}
             open={activeTablePanel === 'chat'}
-            onOpenChange={open => setActiveTablePanel(open ? 'chat' : null)}/>
+            onOpenChangeAction={open => setActiveTablePanel(open ? 'chat' : null)}/>
       <TableReactions items={rt.reactions} seats={s.seats} viewerId={viewer}
                       connected={rt.status === 'connected'} coolingDown={reactionCoolingDown}
-                      pendingReaction={pendingReaction} onQuickSend={sendQuickReaction}
-                      onPendingReactionChange={setPendingReaction}
+                      pendingReaction={pendingReaction} onQuickSendAction={sendQuickReaction}
+                      onPendingReactionChangeAction={setPendingReaction}
                       open={activeTablePanel === 'reactions'}
-                      onOpenChange={open => setActiveTablePanel(open ? 'reactions' : null)}/>
+                      onOpenChangeAction={open => setActiveTablePanel(open ? 'reactions' : null)}/>
       <BotChallenge required={rt.botChallengeRequired} onTokenAction={rt.submitBotChallenge}/>
       <LastWinners items={tableHands} open={activeTablePanel === 'winners'}
-                   onOpenChange={open => setActiveTablePanel(open ? 'winners' : null)}/>
+                   onOpenChangeAction={open => setActiveTablePanel(open ? 'winners' : null)}/>
       <PlayerNoteDialog key={noteOpponent?.player_id || 'closed'} opponent={noteOpponent}
                         existing={noteOpponent ? playerNotesByID[noteOpponent.player_id] : undefined}
                         open={Boolean(noteOpponent)}
-                        onOpenChange={open => !open && setNoteOpponent(null)}
+                        onOpenChangeAction={open => !open && setNoteOpponent(null)}
                         onSaved={(note: PlayerNote | null) => {
                           if (!noteOpponent) return;
                           queryClient.setQueryData<PlayerNote[]>(['player-notes'], current => {

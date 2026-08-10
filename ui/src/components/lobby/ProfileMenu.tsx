@@ -75,7 +75,7 @@ export function ProfileMenu() {
   const deckVariant: DeckVariantId = me?.deck_variant || DEFAULT_DECK_VARIANT;
   const balanceLabel = walletMode === 'real' ? formatReal(me?.game_balance) : formatSandbox(me?.sandbox_balance);
   
-  return <><Popover onOpenChange={(open, details) => {
+  return <><Popover onOpenChangeAction={(open, details) => {
     if (!open && editingName && details.reason === 'escape-key') {
       details.cancel();
       setEditingName(false);
@@ -212,7 +212,7 @@ export function ProfileMenu() {
       </div>
     </PopoverContent>
   </Popover>
-    <ProfileShowcaseDialog open={showcaseOpen} onOpenChange={setShowcaseOpen}/>
-    <SelfHudDialog open={selfHudOpen} onOpenChange={setSelfHudOpen}/>
+    <ProfileShowcaseDialog open={showcaseOpen} onOpenChangeAction={setShowcaseOpen}/>
+    <SelfHudDialog open={selfHudOpen} onOpenChangeAction={setSelfHudOpen}/>
   </>;
 }

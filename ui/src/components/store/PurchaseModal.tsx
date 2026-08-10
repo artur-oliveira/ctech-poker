@@ -75,7 +75,7 @@ export function PurchaseModal({purchase, onCloseAction, onUpdateAction, onRegene
     }
   }
 
-  return <Dialog open={open} onOpenChange={next => {
+  return <Dialog open={open} onOpenChangeAction={next => {
     if (!next) onCloseAction();
   }}>
     <DialogContent>

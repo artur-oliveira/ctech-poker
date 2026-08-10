@@ -239,7 +239,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const [mockReconnectAttempt, setMockReconnectAttempt] = useState(0);
   const mockService = useRef<MockTableService | null>(null);
   
-  const showReaction = useCallback((reaction: TableReactionEvent, expiresAt = Date.now() + 2400) => {
+  const showReaction = useCallback((reaction: TableReactionEvent, expiresAt = Date.now() + 3400) => {
     if (!reactionTimersRef.current.has(reaction.id)) {
       setReactions(value => [...value.filter(item => item.id !== reaction.id).slice(-7), reaction]);
     }

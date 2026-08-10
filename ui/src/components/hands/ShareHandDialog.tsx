@@ -60,7 +60,7 @@ export function ShareHandDialog({handId, outcome, mode = 'sandbox'}: {
             aria-label="Compartilhar" title="Compartilhar esta mão">
       <Share2 aria-hidden="true"/>
     </Button>
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChangeAction={setOpen}>
       <DialogContent className="share-hand-dialog">
         <DialogHeader className="share-hand-header">
           <span className="share-hand-mark" aria-hidden="true"><Share2/></span>

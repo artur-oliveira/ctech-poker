@@ -29,13 +29,13 @@ describe('PlayerNoteDialog', () => {
     };
     savePlayerNote.mockResolvedValue(saved);
     const onSaved = vi.fn();
-    const onOpenChange = vi.fn();
+    const onOpenChangeAction = vi.fn();
     
     render(<PlayerNoteDialog
       opponent={{player_id: 'opponent-1', name: 'Ana'}}
       existing={{...saved, tag: 'red', note: 'Nota antiga'}}
       open
-      onOpenChange={onOpenChange}
+      onOpenChangeAction={onOpenChangeAction}
       onSaved={onSaved}
     />);
     
@@ -54,7 +54,7 @@ describe('PlayerNoteDialog', () => {
     }));
     expect(onSaved).toHaveBeenCalledWith(saved);
     expect(pushNotification).toHaveBeenCalledWith('Anotação privada atualizada.', 'info');
-    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onOpenChangeAction).toHaveBeenCalledWith(false);
   });
   
   test('maps an empty response to note deletion and prevents duplicate saves while pending', async () => {
@@ -65,7 +65,7 @@ describe('PlayerNoteDialog', () => {
     const onSaved = vi.fn();
     
     render(<PlayerNoteDialog opponent={{player_id: 'opponent-2'}} open
-                             onOpenChange={vi.fn()} onSaved={onSaved}/>);
+                             onOpenChangeAction={vi.fn()} onSaved={onSaved}/>);
     await userEvent.click(screen.getByRole('button', {name: 'Verde'}));
     await userEvent.click(screen.getByRole('button', {name: 'Sem tag'}));
     const save = screen.getByRole('button', {name: 'Salvar'});
@@ -82,13 +82,13 @@ describe('PlayerNoteDialog', () => {
   });
   
   test('does not save without an opponent and supports cancelling', async () => {
-    const onOpenChange = vi.fn();
-    render(<PlayerNoteDialog opponent={null} open onOpenChange={onOpenChange} onSaved={vi.fn()}/>);
+    const onOpenChangeAction = vi.fn();
+    render(<PlayerNoteDialog opponent={null} open onOpenChangeAction={onOpenChangeAction} onSaved={vi.fn()}/>);
     
     expect(screen.getByRole('heading', {name: 'Nota sobre jogador'})).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', {name: 'Salvar'}));
     expect(savePlayerNote).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole('button', {name: 'Cancelar'}));
-    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onOpenChangeAction).toHaveBeenCalledWith(false);
   });
 });

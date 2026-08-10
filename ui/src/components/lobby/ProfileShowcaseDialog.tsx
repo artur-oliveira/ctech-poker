@@ -90,10 +90,10 @@ function ShowcaseEditor({me, onSaved}: { me: PlayerProfile; onSaved: (profile: P
   </>;
 }
 
-export function ProfileShowcaseDialog({open, onOpenChange}: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function ProfileShowcaseDialog({open, onOpenChangeAction}: { open: boolean; onOpenChangeAction: (open: boolean) => void }) {
   const queryClient = useQueryClient();
   const {data: me} = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
-  return <Dialog open={open} onOpenChange={onOpenChange}>
+  return <Dialog open={open} onOpenChangeAction={onOpenChangeAction}>
     <DialogContent>
       <DialogHeader>
         <DialogTitle>Sua vitrine</DialogTitle>

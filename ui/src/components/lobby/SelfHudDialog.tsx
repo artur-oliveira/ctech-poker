@@ -119,14 +119,14 @@ function HudContent({stats}: { stats: PokerStats }) {
   </>;
 }
 
-export function SelfHudDialog({open, onOpenChange}: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function SelfHudDialog({open, onOpenChangeAction}: { open: boolean; onOpenChangeAction: (open: boolean) => void }) {
   const [mode, setMode] = useState<WalletMode>('sandbox');
   const query = useQuery({
     queryKey: ['poker-stats', 'me', mode],
     queryFn: () => getMyPokerStats(mode),
     enabled: open
   });
-  return <Dialog open={open} onOpenChange={onOpenChange}>
+  return <Dialog open={open} onOpenChangeAction={onOpenChangeAction}>
     <DialogContent className="self-hud-dialog">
       <DialogHeader>
         <DialogTitle>Seu jogo</DialogTitle>

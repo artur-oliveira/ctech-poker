@@ -51,7 +51,7 @@ export function RebuyDialog({roomId, room, onRebuyAction}: {
     }
   }
   
-  return <Dialog open={open} onOpenChange={next => {
+  return <Dialog open={open} onOpenChangeAction={next => {
     setOpen(next);
     if (!next) setError('');
   }}>

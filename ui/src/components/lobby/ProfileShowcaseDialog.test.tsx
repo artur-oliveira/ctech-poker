@@ -67,7 +67,7 @@ describe('ProfileShowcaseDialog', () => {
   });
   
   test('renders only earned achievements and the current selection', () => {
-    render(<ProfileShowcaseDialog open onOpenChange={vi.fn()}/>);
+    render(<ProfileShowcaseDialog open onOpenChangeAction={vi.fn()}/>);
     expect(screen.getByText('Sua vitrine')).toBeInTheDocument();
     expect(screen.getByText('1/3')).toBeInTheDocument();
     expect(screen.queryByText('locked')).not.toBeInTheDocument();
@@ -75,7 +75,7 @@ describe('ProfileShowcaseDialog', () => {
   });
   
   test('enforces the three-achievement maximum', () => {
-    render(<ProfileShowcaseDialog open onOpenChange={vi.fn()}/>);
+    render(<ProfileShowcaseDialog open onOpenChangeAction={vi.fn()}/>);
     fireEvent.click(screen.getByRole('checkbox', {name: 'hands 102 registrados'}));
     fireEvent.click(screen.getByRole('checkbox', {name: 'hands 1003 registrados'}));
     expect(screen.getByText('3/3')).toBeInTheDocument();
@@ -85,7 +85,7 @@ describe('ProfileShowcaseDialog', () => {
   });
   
   test('makes a public profile shareable and copies its encoded URL', async () => {
-    render(<ProfileShowcaseDialog open onOpenChange={vi.fn()}/>);
+    render(<ProfileShowcaseDialog open onOpenChangeAction={vi.fn()}/>);
     fireEvent.click(screen.getByRole('switch', {name: 'Perfil público'}));
     fireEvent.click(screen.getByRole('switch', {name: 'Estilo de jogo público'}));
     fireEvent.click(screen.getByRole('button', {name: /Copiar link/}));
@@ -102,7 +102,7 @@ describe('ProfileShowcaseDialog', () => {
       featured_achievements: ['first_hand', 'hands_10']
     };
     mocks.updateMe.mockResolvedValue(updated);
-    render(<ProfileShowcaseDialog open onOpenChange={vi.fn()}/>);
+    render(<ProfileShowcaseDialog open onOpenChangeAction={vi.fn()}/>);
     fireEvent.click(screen.getByRole('switch', {name: 'Perfil público'}));
     fireEvent.click(screen.getByRole('switch', {name: 'Estilo de jogo público'}));
     fireEvent.click(screen.getByRole('checkbox', {name: 'hands 102 registrados'}));
@@ -119,7 +119,7 @@ describe('ProfileShowcaseDialog', () => {
   test('shows a skeleton while achievement sources are unresolved', () => {
     mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) =>
       queryKey[0] === 'player' ? {data: me} : {isLoading: true});
-    render(<ProfileShowcaseDialog open onOpenChange={vi.fn()}/>);
+    render(<ProfileShowcaseDialog open onOpenChangeAction={vi.fn()}/>);
     expect(screen.getByText('Carregando suas conquistas…')).toBeInTheDocument();
     expect(document.querySelectorAll('.skeleton')).toHaveLength(3);
   });

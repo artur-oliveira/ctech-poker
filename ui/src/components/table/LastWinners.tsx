@@ -53,16 +53,16 @@ export function deriveWinners(items: HandItem[], limit = 5): WinnerLogEntry[] {
  * only after the viewer sits through a fresh resolution. It can be
  * controlled by the table page so opening it closes chat, reactions, or
  * hand rankings instead of stacking multiple mobile overlays. */
-export function LastWinners({items, open: controlledOpen, onOpenChange}: {
+export function LastWinners({items, open: controlledOpen, onOpenChangeAction}: {
   items: HandItem[];
   open?: boolean;
-  onOpenChange?: (open: boolean) => void;
+  onOpenChangeAction?: (open: boolean) => void;
 }) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
   const setOpen = (nextOpen: boolean) => {
     if (controlledOpen === undefined) setUncontrolledOpen(nextOpen);
-    onOpenChange?.(nextOpen);
+    onOpenChangeAction?.(nextOpen);
   };
   const winners = deriveWinners(items);
   if (!winners.length) return null;

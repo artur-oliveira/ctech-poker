@@ -193,11 +193,11 @@ describe('table presentation', () => {
 describe('chat', () => {
   test('opens, resolves player names and sends a trimmed message', async () => {
     const user = userEvent.setup();
-    const onOpenChange = vi.fn();
+    const onOpenChangeAction = vi.fn();
     const onSend = vi.fn(() => true);
     render(<Chat open items={[{id: '1', player: 'p2', message: 'Boa mão'}]}
                  seats={[{player_id: 'p2', name: 'Bia', stack: 10, state: 'active', contributed: 0}]}
-                 onOpenChange={onOpenChange} onSend={onSend}/>);
+                 onOpenChangeAction={onOpenChangeAction} onSend={onSend}/>);
     expect(screen.getByRole('log')).toHaveTextContent('BiaBoa mão');
     await user.type(screen.getByLabelText('Mensagem para a mesa'), '  olá  ');
     await user.click(screen.getByRole('button', {name: 'Enviar mensagem'}));
@@ -206,13 +206,13 @@ describe('chat', () => {
   });
   
   test('reports send failure and toggles the controlled panel', async () => {
-    const onOpenChange = vi.fn();
-    render(<Chat open connected items={[]} onOpenChange={onOpenChange} onSend={() => false}/>);
+    const onOpenChangeAction = vi.fn();
+    render(<Chat open connected items={[]} onOpenChangeAction={onOpenChangeAction} onSend={() => false}/>);
     await userEvent.type(screen.getByLabelText('Mensagem para a mesa'), 'teste');
     await userEvent.click(screen.getByRole('button', {name: 'Enviar mensagem'}));
     expect(screen.getByRole('alert')).toHaveTextContent('Mensagem não enviada');
     await userEvent.click(screen.getByRole('button', {name: 'Fechar chat'}));
-    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onOpenChangeAction).toHaveBeenCalledWith(false);
   });
 });
 

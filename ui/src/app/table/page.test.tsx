@@ -64,19 +64,19 @@ vi.mock('@/components/table/ActionBar', () => ({
   },
 }));
 vi.mock('@/components/table/Chat', () => ({
-  Chat: ({open, onOpenChange}: { open: boolean; onOpenChange: (open: boolean) => void }) =>
-    <button aria-pressed={open} onClick={() => onOpenChange(!open)}>chat</button>,
+  Chat: ({open, onOpenChangeAction}: { open: boolean; onOpenChangeAction: (open: boolean) => void }) =>
+    <button aria-pressed={open} onClick={() => onOpenChangeAction(!open)}>chat</button>,
 }));
 vi.mock('@/components/table/TableReactions', () => ({
   TableReactions: (props: Record<string, unknown>) => {
     mocks.reactionProps = props;
     return <button aria-pressed={Boolean(props.open)}
-                   onClick={() => (props.onOpenChange as (open: boolean) => void)(!props.open)}>reactions</button>;
+                   onClick={() => (props.onOpenChangeAction as (open: boolean) => void)(!props.open)}>reactions</button>;
   },
 }));
 vi.mock('@/components/table/HandRankingsDialog', () => ({
-  HandRankingsDialog: ({open, onOpenChange}: { open: boolean; onOpenChange: (open: boolean) => void }) =>
-    <button aria-pressed={open} onClick={() => onOpenChange(!open)}>rankings</button>,
+  HandRankingsDialog: ({open, onOpenChangeAction}: { open: boolean; onOpenChangeAction: (open: boolean) => void }) =>
+    <button aria-pressed={open} onClick={() => onOpenChangeAction(!open)}>rankings</button>,
 }));
 vi.mock('@/components/table/InviteDialog', () => ({
   InviteDialog: ({url}: { url: string }) => <span>invite:{url}</span>,
@@ -97,8 +97,8 @@ vi.mock('@/components/table/TablePreferencesDialog', () => ({TablePreferencesDia
 vi.mock('@/components/table/RealityCheck', () => ({RealityCheck: () => null}));
 vi.mock('@/components/table/BotChallenge', () => ({BotChallenge: () => null}));
 vi.mock('@/components/table/LastWinners', () => ({
-  LastWinners: ({open, onOpenChange}: { open: boolean; onOpenChange: (open: boolean) => void }) =>
-    <button aria-pressed={open} onClick={() => onOpenChange(!open)}>winners</button>,
+  LastWinners: ({open, onOpenChangeAction}: { open: boolean; onOpenChangeAction: (open: boolean) => void }) =>
+    <button aria-pressed={open} onClick={() => onOpenChangeAction(!open)}>winners</button>,
 }));
 vi.mock('@/components/table/MockControls', () => ({MockControls: () => null}));
 vi.mock('@/components/AchievementToast', () => ({AchievementToast: () => null}));
@@ -233,7 +233,7 @@ describe('table page integration', () => {
   test('selects a reaction, targets a seat, and clears targeting after a successful throw', async () => {
     realtime({sendReaction: vi.fn(() => true)});
     const {rerender} = render(<TablePage/>);
-    act(() => (mocks.reactionProps?.onPendingReactionChange as (reaction: string) => void)('tomato'));
+    act(() => (mocks.reactionProps?.onPendingReactionChangeAction as (reaction: string) => void)('tomato'));
     rerender(<TablePage/>);
     expect(mocks.stageProps).toEqual(expect.objectContaining({targetedReactionLabel: 'Jogar tomate'}));
     act(() => (mocks.stageProps?.onTargetPlayerAction as (playerId: string) => void)('opponent'));

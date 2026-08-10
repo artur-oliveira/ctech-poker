@@ -41,12 +41,12 @@ describe('lobby player components', () => {
   
   test('renders HUD loading, failure and zero-hand states', () => {
     mocks.query.mockReturnValueOnce({isLoading: true});
-    const loading = render(<SelfHudDialog open onOpenChange={vi.fn()}/>);
+    const loading = render(<SelfHudDialog open onOpenChangeAction={vi.fn()}/>);
     expect(screen.getByText('Calculando tendências…')).toBeInTheDocument();
     loading.unmount();
     
     mocks.query.mockReturnValueOnce({isLoading: false, data: undefined});
-    const failed = render(<SelfHudDialog open onOpenChange={vi.fn()}/>);
+    const failed = render(<SelfHudDialog open onOpenChangeAction={vi.fn()}/>);
     expect(screen.getByText('Não foi possível carregar agora.')).toBeInTheDocument();
     failed.unmount();
     
@@ -57,7 +57,7 @@ describe('lobby player components', () => {
         vpip_rate: 0, pfr_rate: 0, three_bet_rate: 0,
       },
     });
-    render(<SelfHudDialog open onOpenChange={vi.fn()}/>);
+    render(<SelfHudDialog open onOpenChangeAction={vi.fn()}/>);
     expect(screen.getByText('Suas tendências aparecem depois da primeira mão.')).toBeInTheDocument();
   });
   
@@ -69,7 +69,7 @@ describe('lobby player components', () => {
         vpip_rate: 1 / 3, pfr_rate: 1 / 6, three_bet_rate: .125,
       },
     });
-    render(<SelfHudDialog open onOpenChange={vi.fn()}/>);
+    render(<SelfHudDialog open onOpenChangeAction={vi.fn()}/>);
     expect(screen.getByText('12 mãos')).toBeInTheDocument();
     expect(screen.getByText('33,3%')).toBeInTheDocument();
     expect(screen.getByText(/Amostra inicial/)).toBeInTheDocument();
@@ -87,7 +87,7 @@ describe('lobby player components', () => {
         ],
       },
     });
-    render(<SelfHudDialog open onOpenChange={vi.fn()}/>);
+    render(<SelfHudDialog open onOpenChangeAction={vi.fn()}/>);
     expect(screen.getByText('Explorador')).toBeInTheDocument();
     expect(screen.getAllByText('Iniciativa')).toHaveLength(2);
     expect(screen.getByText('Contra-ataque')).toBeInTheDocument();

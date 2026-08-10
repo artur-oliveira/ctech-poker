@@ -4886,9 +4886,11 @@ h1 em {
     bottom: 53px;
     display: flex;
     width: min(300px, calc(100vw - 24px));
+    max-height: min(440px, calc(100dvh - 140px));
     flex-direction: column;
     gap: 12px;
     padding: 14px;
+    overflow-y: auto;
     border: 1px solid var(--seat-border);
     border-radius: 16px;
     background: var(--surface-seat);
@@ -5030,12 +5032,12 @@ h1 em {
 }
 
 .table-reaction-effect.emote {
-    animation: reaction-emote 2.2s var(--ease-out-quart) both
+    animation: reaction-emote 3.1s var(--ease-out-quart) both
 }
 
 .table-reaction-effect.thrown {
     background: transparent;
-    animation: reaction-throw 2.35s var(--ease-out-quart) both
+    animation: reaction-throw 3.3s var(--ease-out-quart) both
 }
 
 .reaction-projectile {
@@ -5046,7 +5048,15 @@ h1 em {
 }
 
 .table-reaction-effect.thrown .reaction-projectile {
-    animation: reaction-projectile-fade 2.35s var(--ease-out-quart) both
+    animation: reaction-projectile-fade 3.3s var(--ease-out-quart) both
+}
+
+.reaction-cold .reaction-projectile {
+    animation: reaction-shiver 240ms var(--ease-out-quart) 120ms 3
+}
+
+.reaction-fire .reaction-projectile {
+    animation: reaction-flame-pulse 900ms var(--ease-out-quart) infinite
 }
 
 .reaction-impact {
@@ -5057,39 +5067,57 @@ h1 em {
     pointer-events: none
 }
 
+.reaction-chip-flash {
+    position: absolute;
+    inset: 0;
+    width: 34px;
+    height: 34px;
+    margin: -17px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--gold-pale), color-mix(in srgb, var(--gold) 60%, transparent) 55%, transparent 78%);
+    opacity: 0;
+    animation: reaction-flash-pop 520ms var(--ease-out-quart) 900ms both
+}
+
 .reaction-impact-chip {
-    width: 126px;
-    height: 150px;
-    margin: -75px -63px;
+    width: 132px;
+    height: 132px;
+    margin: -66px;
     overflow: visible
 }
 
 .reaction-jackpot-stack {
     position: absolute;
-    left: var(--chip-x);
-    top: -62px;
+    left: 50%;
+    top: 50%;
     width: 22px;
     height: 29px;
+    margin: -14px -11px;
     opacity: 0;
-    animation: reaction-chip-rain 1.35s var(--ease-out-quart) 620ms both;
-    animation-delay: calc(600ms + var(--piece) * 16ms)
+    transform: translate(0, 0) rotate(var(--chip-rot0)) scale(.35);
+    animation: reaction-chip-pop 1.9s var(--ease-out-quart) both;
+    animation-delay: calc(900ms + var(--piece) * 10ms)
 }
 
 .reaction-jackpot-stack .chip {
     border-width: 2px
 }
 
-.reaction-impact-tomato {
+.reaction-impact-tomato,
+.reaction-impact-poop {
     width: 90px;
     height: 62px;
     margin: -31px -45px;
     border-radius: 46% 54% 51% 49%;
+    opacity: 0;
+    animation: reaction-tomato-splat 2.3s var(--ease-out-quart) 900ms both
+}
+
+.reaction-impact-tomato {
     background: color-mix(in srgb, var(--danger) 82%, transparent);
     box-shadow: -22px 6px 0 -7px color-mix(in srgb, var(--danger) 76%, transparent),
                 24px -3px 0 -9px color-mix(in srgb, var(--danger) 70%, transparent),
-                9px 20px 0 -11px color-mix(in srgb, var(--danger) 72%, transparent);
-    opacity: 0;
-    animation: reaction-tomato-splat 1.6s var(--ease-out-quart) 620ms both
+                9px 20px 0 -11px color-mix(in srgb, var(--danger) 72%, transparent)
 }
 
 .reaction-impact-tomato span {
@@ -5103,27 +5131,73 @@ h1 em {
     transform: rotate(calc(var(--piece) * 45deg)) translateX(49px)
 }
 
+.reaction-impact-poop {
+    background: color-mix(in srgb, var(--table-rail) 85%, transparent);
+    box-shadow: -20px 7px 0 -8px color-mix(in srgb, var(--rail-shadow) 80%, transparent),
+                22px -4px 0 -9px color-mix(in srgb, var(--table-rail-edge) 75%, transparent),
+                8px 18px 0 -10px color-mix(in srgb, var(--rail-shadow) 78%, transparent)
+}
+
+.reaction-impact-poop span {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--rail-shadow);
+    transform: rotate(calc(var(--piece) * 52deg)) translateX(44px)
+}
+
+.reaction-poop-stink {
+    position: absolute;
+    left: calc(26px + var(--piece) * 20px);
+    top: -6px;
+    width: 10px;
+    height: 34px;
+    border: 3px solid color-mix(in srgb, var(--paper) 55%, transparent);
+    border-width: 0 0 0 3px;
+    border-radius: 50% 10% 50% 10%;
+    filter: blur(1px);
+    animation: reaction-stink 1.5s var(--ease-out-quart) calc(920ms + var(--piece) * 140ms) both
+}
+
 .reaction-impact-coffee {
     width: 70px;
     height: 92px;
     margin: -46px -35px;
     opacity: 0;
-    animation: reaction-impact-show 1.6s var(--ease-out-quart) 620ms both
+    animation: reaction-impact-show 2.3s var(--ease-out-quart) 900ms both
 }
 
-.reaction-impact-coffee > span { font-size: 38px }
+.reaction-impact-coffee > span {
+    font-size: 38px;
+    display: inline-block;
+    animation: reaction-cup-nod 480ms var(--ease-out-quart) 900ms both
+}
+
+.reaction-impact-coffee > b {
+    position: absolute;
+    left: 62%;
+    top: 6px;
+    font-size: 13px;
+    font-style: normal;
+    opacity: 0;
+    animation: reaction-sparkle-rise 1.4s var(--ease-out-quart) 1050ms both
+}
 
 .reaction-impact-coffee i {
     position: absolute;
-    left: calc(18px + var(--piece) * 13px);
+    left: calc(16px + var(--piece) * 14px);
     top: 4px;
     width: 9px;
-    height: 36px;
+    height: 38px;
     border: 3px solid color-mix(in srgb, var(--paper) 75%, transparent);
     border-width: 0 0 0 3px;
     border-radius: 50%;
     filter: blur(1px);
-    animation: reaction-steam 1.25s var(--ease-out-quart) calc(640ms + var(--piece) * 70ms) both
+    transform-origin: bottom center;
+    animation: reaction-steam 1.8s var(--ease-out-quart) calc(940ms + var(--piece) * 90ms) both
 }
 
 .reaction-impact-clover,
@@ -5132,7 +5206,15 @@ h1 em {
     height: 116px;
     margin: -58px;
     opacity: 0;
-    animation: reaction-seat-shine 1.6s var(--ease-out-quart) 620ms both
+    animation: reaction-seat-shine 2.3s var(--ease-out-quart) 900ms both
+}
+
+.reaction-clover-glow {
+    position: absolute;
+    inset: 22px;
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in srgb, var(--success) 45%, transparent), transparent 72%);
+    animation: reaction-flash-pop 1.6s var(--ease-out-quart) 900ms both
 }
 
 .reaction-impact-clover > span {
@@ -5148,7 +5230,8 @@ h1 em {
     top: 50%;
     color: var(--gold-pale);
     font-style: normal;
-    transform: rotate(calc(var(--piece) * 60deg)) translateY(-52px)
+    transform: rotate(calc(var(--piece) * 60deg)) translateY(-52px);
+    animation: reaction-twinkle 1.1s var(--ease-out-quart) calc(950ms + var(--piece) * 90ms) infinite
 }
 
 .reaction-impact-clover i:nth-of-type(even) {
@@ -5160,20 +5243,24 @@ h1 em {
     font-size: 17px
 }
 
+.reaction-horseshoe-flash {
+    animation-delay: 1540ms
+}
+
 .reaction-impact-horseshoe {
     animation-name: reaction-horseshoe-hit
 }
 
 .reaction-impact-horseshoe i {
     color: var(--gold);
-    font-size: 11px;
-    transform: rotate(calc(var(--piece) * 45deg)) translateY(-34px)
+    font-size: 12px;
+    transform: rotate(calc(var(--piece) * 45deg)) translateY(-38px)
 }
 
 .reaction-star-ring {
     position: absolute;
-    inset: 18px;
-    animation: reaction-star-spin 1.55s var(--ease-out-quart) 650ms both
+    inset: 6px;
+    animation: reaction-star-spin 2.2s linear 950ms both
 }
 
 .reaction-impact-tear {
@@ -5181,7 +5268,7 @@ h1 em {
     height: 118px;
     margin: -45px -54px;
     opacity: 0;
-    animation: reaction-impact-show 1.6s var(--ease-out-quart) 620ms both
+    animation: reaction-impact-show 2.3s var(--ease-out-quart) 900ms both
 }
 
 .reaction-impact-tear i {
@@ -5190,11 +5277,142 @@ h1 em {
     top: 0;
     font-size: 17px;
     font-style: normal;
-    animation: reaction-tears 1.25s ease-in calc(620ms + var(--piece) * 30ms) both
+    transform-origin: center top;
+    animation: reaction-tears 1.8s ease-in calc(900ms + var(--piece) * 40ms) both
 }
 
 .reaction-impact-tear i:nth-child(3n + 2) { top: -10px }
 .reaction-impact-tear i:nth-child(3n) { top: 8px }
+
+.reaction-impact-rofl {
+    width: 90px;
+    height: 50px;
+    margin: -60px -45px 0
+}
+
+.reaction-impact-rofl i {
+    position: absolute;
+    left: calc(50% + (var(--piece) - 1) * 26px);
+    top: 45%;
+    font-size: 19px;
+    font-style: normal;
+    opacity: 0;
+    transform: translate(-50%, 0) scale(.4);
+    animation: reaction-rofl-roll 2.3s var(--ease-out-quart) calc(900ms + var(--piece) * 110ms) both
+}
+
+.reaction-impact-duck {
+    width: 110px;
+    height: 110px;
+    margin: -55px
+}
+
+.reaction-impact-duck i {
+    position: absolute;
+    left: 50%;
+    top: 40%;
+    font-size: 16px;
+    font-style: normal;
+    opacity: 0;
+    transform: rotate(calc(var(--piece) * 60deg - 30deg));
+    animation: reaction-feather-fall 2.2s var(--ease-out-quart) calc(900ms + var(--piece) * 70ms) both
+}
+
+.reaction-impact-turtle {
+    width: 70px;
+    height: 96px;
+    margin: -80px -35px 0
+}
+
+.reaction-impact-turtle i {
+    position: absolute;
+    left: calc(20px + var(--piece) * 12px);
+    bottom: 0;
+    font-size: 15px;
+    font-style: normal;
+    opacity: 0;
+    animation: reaction-zzz-rise 2.1s var(--ease-out-quart) calc(900ms + var(--piece) * 340ms) both
+}
+
+.reaction-impact-cold,
+.reaction-impact-fire {
+    width: 56px;
+    height: 56px;
+    margin: -28px;
+    opacity: inherit
+}
+
+.reaction-impact-cold i {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    font-size: 11px;
+    font-style: normal;
+    color: var(--felt-text);
+    transform: rotate(calc(var(--piece) * 120deg)) translateY(-24px);
+    animation: reaction-snow-drift 1.6s ease-in-out calc(var(--piece) * 220ms) infinite
+}
+
+.reaction-impact-fire i {
+    position: absolute;
+    left: calc(50% - 6px + var(--piece) * 6px);
+    bottom: 46%;
+    width: 5px;
+    height: 5px;
+    border-radius: 50% 50% 50% 0;
+    background: color-mix(in srgb, var(--gold-bright) 85%, transparent);
+    animation: reaction-ember-rise 1s ease-out calc(var(--piece) * 180ms) infinite
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .table-reaction-effect,
+    .table-reaction-effect.emote,
+    .table-reaction-effect.thrown,
+    .table-reaction-effect .reaction-projectile,
+    .reaction-cold .reaction-projectile,
+    .reaction-fire .reaction-projectile,
+    .reaction-jackpot-stack,
+    .reaction-impact-tomato,
+    .reaction-impact-poop,
+    .reaction-poop-stink,
+    .reaction-impact-coffee,
+    .reaction-impact-coffee > span,
+    .reaction-impact-coffee > b,
+    .reaction-impact-coffee i,
+    .reaction-impact-clover,
+    .reaction-impact-horseshoe,
+    .reaction-clover-glow,
+    .reaction-impact-clover i,
+    .reaction-impact-horseshoe i,
+    .reaction-star-ring,
+    .reaction-impact-tear i,
+    .reaction-impact-rofl i,
+    .reaction-impact-duck i,
+    .reaction-impact-turtle i,
+    .reaction-impact-cold i,
+    .reaction-impact-fire i,
+    .reaction-chip-flash {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        animation-delay: 0ms !important
+    }
+
+    .table-reaction-effect.emote,
+    .table-reaction-effect.thrown,
+    .reaction-jackpot-stack,
+    .reaction-impact-tomato,
+    .reaction-impact-poop,
+    .reaction-impact-coffee,
+    .reaction-impact-clover,
+    .reaction-impact-horseshoe,
+    .reaction-impact-tear i,
+    .reaction-impact-rofl i,
+    .reaction-impact-duck i,
+    .reaction-impact-turtle i {
+        opacity: 1;
+        visibility: visible
+    }
+}
 
 .bot-challenge-dialog > button {
     display: none
@@ -5726,56 +5944,149 @@ h1 em {
     32%, 100% { opacity: 0; transform: scale(.45) }
 }
 
-@keyframes reaction-chip-rain {
-    0% { opacity: 0; transform: translate(var(--chip-drift), 0) scale(.82) }
-    12%, 72% { opacity: 1 }
+@keyframes reaction-chip-pop {
+    0% { opacity: 0; transform: translate(0, 0) rotate(var(--chip-rot0)) scale(.35) }
+    12% { opacity: 1 }
+    26% {
+        opacity: 1;
+        transform: translate(var(--chip-burst-x), var(--chip-burst-y)) rotate(var(--chip-rot1)) scale(1.18)
+    }
+    40%, 74% {
+        opacity: 1;
+        transform: translate(var(--chip-burst-x), var(--chip-burst-y)) rotate(var(--chip-rot1)) scale(1)
+    }
     100% {
         opacity: 0;
-        transform: translate(var(--chip-drift-end), 168px) scale(1)
+        transform: translate(var(--chip-fall-x), var(--chip-fall-y)) rotate(var(--chip-rot1)) scale(.9)
     }
+}
+
+@keyframes reaction-flash-pop {
+    0% { opacity: 0; transform: scale(.4) }
+    35% { opacity: .9; transform: scale(1.3) }
+    100% { opacity: 0; transform: scale(1.7) }
 }
 
 @keyframes reaction-tomato-splat {
     0% { opacity: 0; transform: scale(.18) rotate(-8deg) }
-    18%, 72% { opacity: .92; transform: scale(1) rotate(0) }
+    18%, 78% { opacity: .92; transform: scale(1) rotate(0) }
     100% { opacity: 0; transform: scale(1.04) }
+}
+
+@keyframes reaction-stink {
+    0% { opacity: 0; transform: translate(0, 22px) scaleX(.7) }
+    30% { opacity: .75; transform: translate(-4px, 4px) scaleX(.9) }
+    60% { transform: translate(4px, -10px) scaleX(1.1) }
+    100% { opacity: 0; transform: translate(-3px, -26px) scaleX(1.3) }
 }
 
 @keyframes reaction-impact-show {
     0% { opacity: 0; transform: scale(.55) }
-    18%, 76% { opacity: 1; transform: scale(1) }
+    18%, 80% { opacity: 1; transform: scale(1) }
     100% { opacity: 0; transform: scale(.96) }
 }
 
+@keyframes reaction-cup-nod {
+    0% { transform: rotate(-9deg) scale(.85) }
+    100% { transform: rotate(0) scale(1) }
+}
+
+@keyframes reaction-sparkle-rise {
+    0% { opacity: 0; transform: translateY(6px) scale(.6) }
+    30%, 70% { opacity: 1; transform: translateY(-6px) scale(1) }
+    100% { opacity: 0; transform: translateY(-16px) scale(.8) }
+}
+
 @keyframes reaction-steam {
-    0% { opacity: 0; transform: translateY(22px) scaleX(.7) }
-    35% { opacity: .9 }
-    100% { opacity: 0; transform: translateY(-24px) scaleX(1.35) }
+    0% { opacity: 0; transform: translate(0, 24px) scaleX(.7) }
+    25% { opacity: .9; transform: translate(-4px, 8px) scaleX(.85) }
+    50% { transform: translate(5px, -6px) scaleX(1.05) }
+    75% { transform: translate(-4px, -18px) scaleX(1.2) }
+    100% { opacity: 0; transform: translate(3px, -30px) scaleX(1.35) }
 }
 
 @keyframes reaction-seat-shine {
     0% { opacity: 0; transform: scale(.65) rotate(-12deg) }
-    28%, 68% { opacity: 1; transform: scale(1) rotate(0) }
+    28%, 72% { opacity: 1; transform: scale(1) rotate(0) }
     100% { opacity: 0; transform: scale(1.08) rotate(8deg) }
 }
 
+@keyframes reaction-twinkle {
+    0%, 100% { opacity: .55 }
+    50% { opacity: 1 }
+}
+
 @keyframes reaction-horseshoe-hit {
-    0% { opacity: 0; transform: translateY(-28px) rotate(-18deg) scale(1.25) }
-    28% { opacity: 1; transform: translateY(0) rotate(4deg) scale(1) }
-    42% { transform: translateY(5px) rotate(0) scale(.96) }
+    0% { opacity: 0; transform: translateY(-30px) rotate(-18deg) scale(1.25) }
+    26% { opacity: 1; transform: translateY(0) rotate(4deg) scale(1.06) }
+    34% { transform: translateY(3px) rotate(0) scaleY(.9) scaleX(1.05) }
+    46% { transform: translateY(0) rotate(0) scale(1) }
     100% { opacity: 0; transform: translateY(2px) scale(1) }
 }
 
 @keyframes reaction-star-spin {
-    0% { transform: rotate(-55deg) scale(.7) }
-    30% { transform: rotate(20deg) scale(1) }
-    100% { transform: rotate(255deg) scale(.88) }
+    0% { opacity: 0; transform: scaleY(.55) rotate(0deg) scale(.6) }
+    8% { opacity: 1; transform: scaleY(.55) rotate(70deg) scale(1) }
+    88% { opacity: 1; transform: scaleY(.55) rotate(910deg) scale(1) }
+    100% { opacity: 0; transform: scaleY(.55) rotate(950deg) scale(.9) }
 }
 
 @keyframes reaction-tears {
-    0% { opacity: 0; transform: translateY(-18px) scale(.7) }
-    25% { opacity: 1 }
-    100% { opacity: 0; transform: translateY(92px) scale(1.15) }
+    0% { opacity: 0; transform: translate(0, -18px) scale(.7) }
+    20% { opacity: 1; transform: translate(3px, 10px) scale(1) }
+    45% { transform: translate(-4px, 38px) scale(1.02) }
+    70% { transform: translate(3px, 66px) scale(1.04) }
+    88% { opacity: 1; transform: translate(0, 90px) scale(1.1) }
+    100% { opacity: 0; transform: translate(0, 92px) scaleX(1.6) scaleY(.4) }
+}
+
+@keyframes reaction-rofl-roll {
+    0% { opacity: 0; transform: translate(-50%, 6px) scale(.4) }
+    14% { opacity: 1; transform: translate(-50%, -7px) scale(1.2) }
+    26% { transform: translate(-50%, 2px) scale(1) }
+    38% { transform: translate(-50%, -6px) scale(1.08) }
+    50% { transform: translate(-50%, 2px) scale(1) }
+    62% { transform: translate(-50%, -6px) scale(1.08) }
+    74%, 80% { opacity: 1; transform: translate(-50%, 0) scale(1) }
+    100% { opacity: 0; transform: translate(-50%, 4px) scale(.85) }
+}
+
+@keyframes reaction-feather-fall {
+    0% { opacity: 0; transform: translate(0, -10px) rotate(calc(var(--piece) * 60deg - 30deg)) scale(.7) }
+    18%, 30% { opacity: 1; transform: translate(0, 4px) rotate(calc(var(--piece) * 60deg - 30deg + 14deg)) scale(1) }
+    65% { transform: translate(calc((var(--piece) - 3) * 6px), 34px) rotate(calc(var(--piece) * 60deg - 60deg)) scale(1) }
+    100% {
+        opacity: 0;
+        transform: translate(calc((var(--piece) - 3) * 10px), 58px) rotate(calc(var(--piece) * 60deg - 90deg)) scale(.9)
+    }
+}
+
+@keyframes reaction-zzz-rise {
+    0% { opacity: 0; transform: translate(0, 0) scale(.5) }
+    20%, 60% { opacity: .9; transform: translate(calc(var(--piece) * 3px), -18px) scale(1) }
+    100% { opacity: 0; transform: translate(calc(var(--piece) * 6px), -44px) scale(1.35) }
+}
+
+@keyframes reaction-snow-drift {
+    0%, 100% { opacity: .55; transform: rotate(calc(var(--piece) * 120deg)) translateY(-24px) scale(.85) }
+    50% { opacity: 1; transform: rotate(calc(var(--piece) * 120deg + 20deg)) translateY(-28px) scale(1) }
+}
+
+@keyframes reaction-ember-rise {
+    0% { opacity: 0; transform: translateY(0) scale(.6) }
+    35% { opacity: .9; transform: translateY(-10px) scale(1) }
+    100% { opacity: 0; transform: translateY(-22px) scale(.4) }
+}
+
+@keyframes reaction-shiver {
+    0%, 100% { transform: translateX(0) rotate(0) }
+    25% { transform: translateX(-3px) rotate(-6deg) }
+    75% { transform: translateX(3px) rotate(6deg) }
+}
+
+@keyframes reaction-flame-pulse {
+    0%, 100% { transform: scale(1) }
+    50% { transform: scale(1.08) }
 }
 
 /* Mirrors .game-chat's fixed toggle/panel vocabulary. Desktop docks it

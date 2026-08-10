@@ -5,12 +5,19 @@ export const TABLE_REACTIONS = {
   angry: {label: 'Raiva', glyph: '😤', targeted: false},
   cry: {label: 'Choro', glyph: '😭', targeted: false},
   nervous: {label: 'Nervoso', glyph: '😰', targeted: false},
+  cold: {label: 'Frio na mesa', glyph: '🥶', targeted: false},
+  fire: {label: 'Sequência quente', glyph: '🔥', targeted: false},
+
   chip: {label: 'Jogar ficha', glyph: '🟠', targeted: true},
   coffee: {label: 'Mandar café', glyph: '☕', targeted: true},
   clover: {label: 'Dar sorte', glyph: '🍀', targeted: true},
   horseshoe: {label: 'Jogar ferradura', glyph: '🧲', targeted: true},
   tear: {label: 'Jogar lágrima', glyph: '💧', targeted: true},
-  tomato: {label: 'Jogar tomate', glyph: '🍅', targeted: true}
+  tomato: {label: 'Jogar tomate', glyph: '🍅', targeted: true},
+  poop: {label: 'Jogar cocô', glyph: '💩', targeted: true},
+  rofl: {label: 'Rir da cara', glyph: '🤣', targeted: true},
+  duck: {label: 'Jogar pato', glyph: '🦆', targeted: true},
+  turtle: {label: 'Chamar de lento', glyph: '🐢', targeted: true}
 } as const;
 
 export type TableReactionID = keyof typeof TABLE_REACTIONS;
