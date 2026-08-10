@@ -77,6 +77,7 @@ export class ReconcileStack extends cdk.Stack {
       queueName: reconcileDlqName(environment),
       encryption: sqs.QueueEncryption.SQS_MANAGED,
       retentionPeriod: cdk.Duration.days(14),
+      receiveMessageWaitTime: cdk.Duration.seconds(20),
     });
     dlq.grantSendMessages(schedulerRole);
     

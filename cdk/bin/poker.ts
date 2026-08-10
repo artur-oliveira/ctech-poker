@@ -45,6 +45,12 @@ const CTECH_LOGS_BUCKET = process.env.CTECH_LOGS_BUCKET || `${ENVIRONMENT}-ctech
 const env = {account: AWS_ACCOUNT, region: AWS_REGION};
 const pokerParameters = SSM_POKER(ENVIRONMENT);
 
+// Cost allocation tags — applied to every resource in every stack.
+// Requires manual activation as a cost allocation tag in the Billing console
+// (Billing > Cost Allocation Tags) before it appears as a Cost Explorer group-by key.
+cdk.Tags.of(app).add('Project', 'ctech-poker');
+cdk.Tags.of(app).add('Environment', ENVIRONMENT);
+
 const id = (name: string) =>
   `CtechPoker-${ENVIRONMENT.charAt(0).toUpperCase() + ENVIRONMENT.slice(1)}-${name}`;
 

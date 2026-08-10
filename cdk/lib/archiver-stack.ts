@@ -66,6 +66,7 @@ export class ArchiverStack extends cdk.Stack {
       queueName: `${environment}-poker-action-log-archiver-dlq`,
       retentionPeriod: cdk.Duration.days(14),
       enforceSSL: true,
+      receiveMessageWaitTime: cdk.Duration.seconds(20),
     });
     fn.addEventSource(new DynamoEventSource(actionLogTable, {
       startingPosition: StartingPosition.TRIM_HORIZON,
