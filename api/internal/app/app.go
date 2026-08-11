@@ -562,7 +562,14 @@ func autoRebuySweep(ctx context.Context, buyinSvc autoRebuyBuyinService, rooms a
 		if balance < seat.BuyInAmount {
 			continue
 		}
-		nonce := handID + "-auto-" + playerID
+		// playerID is not repeated here — buyIn's key already prepends it
+		// (roomID#playerID#buyin#nonce). Doing so anyway pushed the compound
+		// idempotency key over ctech-wallet's MovementOpRequest.IdempotencyKey
+		// max=128, so every sandbox debit came back 422 and no auto-rebuy ever
+		// succeeded in production (root-caused 2026-08-11 from player.har +
+		// prod logs, never caught by unit tests since those mock the wallet
+		// client instead of enforcing its field-length validation).
+		nonce := handID + "-auto"
 		if err := buyinSvc.BuyIn(ctx, tableID, playerID, seat.BuyInAmount, false, nonce); err != nil {
 			slog.Error("auto-rebuy: buy-in failed", "table", tableID, "player", playerID, "err", err)
 		}

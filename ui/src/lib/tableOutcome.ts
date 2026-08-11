@@ -48,6 +48,22 @@ export function relevantWinner(snapshot: TableSnapshot, viewer: string) {
     snapshot.seats.find(seat => snapshot.winners?.includes(seat.player_id));
 }
 
+/** The mirror of relevantWinner for a viewer who won: the best-scoring other
+ * player eligible for a pot the viewer took, so a win can also explain
+ * "same combination, the kicker decided" instead of only ever showing that
+ * note to the loser. Undefined whenever no other eligible seat had its cards
+ * revealed (e.g. everyone else folded, or an older protocol instance never
+ * sent hand_score). */
+export function relevantRunnerUp(snapshot: TableSnapshot, viewer: string) {
+  const runnerUpIds = new Set(snapshot.pot_results?.filter(pot =>
+    !pot.refund && pot.winner_player_ids.includes(viewer))
+    .flatMap(pot => pot.eligible_player_ids.filter(id => id !== viewer)) ?? []);
+  return snapshot.seats
+    .filter(seat => runnerUpIds.has(seat.player_id) && seat.hand_score != null &&
+      seat.hole_cards_revealed?.length === 2 && seat.hole_cards_revealed.every(Boolean))
+    .sort((a, b) => (b.hand_score ?? 0) - (a.hand_score ?? 0))[0];
+}
+
 function potCreditFor(pot: NonNullable<TableSnapshot['pot_results']>[number], playerId: string) {
   if (pot.payouts && playerId in pot.payouts) return pot.payouts[playerId] || 0;
   if (!pot.winner_player_ids.includes(playerId) || !pot.winner_player_ids.length) return 0;

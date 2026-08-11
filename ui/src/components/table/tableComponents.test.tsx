@@ -268,4 +268,23 @@ describe('hand outcome', () => {
     expect(screen.getByText('Mesma combinação, o kicker decidiu.')).toBeInTheDocument();
     expect(screen.getAllByText(/Bia/)[0]).toBeInTheDocument();
   });
+
+  test('explains a showdown win decided by kicker too, not just a loss', () => {
+    renderOutcome({
+      key: 6,
+      kind: 'win',
+      viewerCards: ['AH', 'AD', 'KC', 'QS', '2D'],
+      beatenCards: ['AS', 'AC', 'KH', 'QD', '3D'],
+    });
+    expect(screen.getByText('Mesma combinação, o kicker decidiu.')).toBeInTheDocument();
+  });
+
+  test('does not claim a kicker decision on a win with no revealed opponent hand', () => {
+    renderOutcome({
+      key: 7,
+      kind: 'win',
+      viewerCards: ['AH', 'AD', 'KC', 'QS', '2D'],
+    });
+    expect(screen.queryByText('Mesma combinação, o kicker decidiu.')).not.toBeInTheDocument();
+  });
 });

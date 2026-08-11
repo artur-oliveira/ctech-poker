@@ -36,7 +36,7 @@ export function AchievementToast({unlock}: { unlock: { key: string; stars: numbe
     <span>
       <small>CONQUISTA DESBLOQUEADA</small>
       <b>{ACHIEVEMENT_LABELS[shown.key] || shown.key.replaceAll('_', ' ')}</b>
-      <span className="achievement-stars" aria-hidden="true">{Array.from({length: shown.stars}, (_, i) =>
+      <span className="achievement-toast-stars" aria-hidden="true">{Array.from({length: shown.stars}, (_, i) =>
         <span key={i} style={{'--delay': `${Math.min(i, 5) * 70}ms`} as React.CSSProperties}>★</span>)}</span>
       <span className="sr-only">{shown.stars} estrela{shown.stars === 1 ? '' : 's'}</span>
     </span>

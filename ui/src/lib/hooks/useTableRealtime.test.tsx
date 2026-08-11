@@ -212,10 +212,12 @@ describe('useTableRealtime', () => {
     act(() => result.current.act('call'));
     
     receive({type: 'error', code: 'stale_state', action_id: 'action-1'});
-    expect(result.current.actionError).toMatchObject({code: 'stale_state'});
+    // Still within the retry budget — auto-retry is in flight, so no alert
+    // yet (see the auto-retry-cap test below for the exhausted case).
+    expect(result.current.actionError).toBeNull();
     act(() => vi.advanceTimersByTime(50));
     expect(ws.send).toHaveBeenLastCalledWith({type: 'sync_state', action_id: 'action-1'});
-    
+
     receive({type: 'bot_challenge'});
     expect(result.current.botChallengeRequired).toBe(true);
     receive({type: 'bot_challenge_passed'});

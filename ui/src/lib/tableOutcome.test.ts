@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import {test} from 'vitest';
 import type {TableSnapshot} from './api/table.ts';
-import {playerPotBreakdown, seatParticipated, shouldShowOutcome, tableOutcomeKind, winnerStandings} from './tableOutcome.ts';
+import {
+  playerPotBreakdown,
+  relevantRunnerUp,
+  seatParticipated,
+  shouldShowOutcome,
+  tableOutcomeKind,
+  winnerStandings
+} from './tableOutcome.ts';
 
 const snapshot: TableSnapshot = {
   stage: 'complete',
@@ -61,6 +68,58 @@ test('winning one pot and losing another is a mixed result', () => {
     ]
   };
   assert.equal(tableOutcomeKind(mixed, 'main'), 'mixed');
+});
+
+test('losing the contested pot while your own uncalled excess is refunded is still a clean loss, not mixed', () => {
+  // The exact shape of an all-in that gets fully called for less than
+  // shoved: one contested pot (you vs. the caller, you lose it) plus a
+  // refund-only layer no one else ever staked (your own excess chips
+  // coming back). `tableOutcomeKind` must not count that refund layer as a
+  // pot you "won" — the player put no one else's money at risk in it.
+  const shortCallLoss: TableSnapshot = {
+    ...snapshot,
+    winners: ['side'],
+    pot_results: [
+      {
+        amount: 100, payout_amount: 100,
+        eligible_player_ids: ['main', 'side'], winner_player_ids: ['side'], payouts: {side: 100}
+      },
+      {
+        amount: 40, payout_amount: 40, eligible_player_ids: ['main'],
+        winner_player_ids: [], payouts: {main: 40}, refund: true
+      }
+    ]
+  };
+  assert.equal(tableOutcomeKind(shortCallLoss, 'main'), 'lose');
+});
+
+test('relevantRunnerUp picks the best-scoring revealed opponent from a pot the viewer won', () => {
+  const withScores: TableSnapshot = {
+    ...snapshot,
+    seats: [
+      {
+        player_id: 'main', stack: 100, state: 'all_in', dealt_in: true, contributed: 50,
+        hand_score: 500, hole_cards_revealed: [true, true]
+      },
+      {
+        player_id: 'side', stack: 200, state: 'all_in', dealt_in: true, contributed: 100,
+        hand_score: 300, hole_cards_revealed: [true, true]
+      },
+      {
+        player_id: 'loser', stack: 0, state: 'sitting_out', dealt_in: true, contributed: 100,
+        hand_score: 100, hole_cards_revealed: [true, true]
+      }
+    ]
+  };
+  assert.equal(relevantRunnerUp(withScores, 'main')?.player_id, 'side');
+});
+
+test('relevantRunnerUp is undefined when the runner-up never revealed their cards', () => {
+  const unrevealed: TableSnapshot = {
+    ...snapshot,
+    seats: snapshot.seats.map(seat => ({...seat, hand_score: seat.player_id === 'loser' ? 100 : undefined}))
+  };
+  assert.equal(relevantRunnerUp(unrevealed, 'main'), undefined);
 });
 
 test('contested winnings and refunds remain separate', () => {

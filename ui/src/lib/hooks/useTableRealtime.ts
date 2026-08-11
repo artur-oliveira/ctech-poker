@@ -519,7 +519,11 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
         }, jitterMs);
       }
       if (keepsPending) {
-        setLastActionError(actionError(code));
+        // Auto-retry is already in flight (armed above via awaitingRetry) —
+        // don't surface the "sincronizando o estado" alert for a retry that
+        // will very likely resolve on its own within a couple hundred ms.
+        // failPending (below) still surfaces it once MAX_ACTION_RETRIES is
+        // actually exhausted.
       } else if (message.action_id && pendingActionRef.current?.id === message.action_id) {
         failPending(code, message.action_id);
       } else if (message.action_id) finishAuxiliaryCommand(message.action_id, code);

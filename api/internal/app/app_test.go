@@ -38,6 +38,7 @@ func TestTableCurrencyModeUsesRoomMode(t *testing.T) {
 type autoRebuyBuyInCall struct {
 	roomID, playerID string
 	amount           int64
+	nonce            string
 }
 
 type fakeAutoRebuyBuyin struct {
@@ -52,8 +53,8 @@ func (f *fakeAutoRebuyBuyin) SeatedSummary(_ context.Context, _, playerID string
 func (f *fakeAutoRebuyBuyin) SandboxBalance(_ context.Context, playerID string) (int64, error) {
 	return f.balances[playerID], nil
 }
-func (f *fakeAutoRebuyBuyin) BuyIn(_ context.Context, roomID, playerID string, amount int64, _ bool, _ string) error {
-	f.buyIns = append(f.buyIns, autoRebuyBuyInCall{roomID, playerID, amount})
+func (f *fakeAutoRebuyBuyin) BuyIn(_ context.Context, roomID, playerID string, amount int64, _ bool, nonce string) error {
+	f.buyIns = append(f.buyIns, autoRebuyBuyInCall{roomID, playerID, amount, nonce})
 	return nil
 }
 
@@ -68,6 +69,40 @@ func TestAutoRebuySweepRebuysBustedAutoRebuySeatWithSufficientBalance(t *testing
 
 	if len(buyinSvc.buyIns) != 1 || buyinSvc.buyIns[0].amount != 100 {
 		t.Fatalf("expected one 100-chip auto-rebuy, got %+v", buyinSvc.buyIns)
+	}
+}
+
+// TestAutoRebuySweepNonceFitsWalletIdempotencyKeyLimit guards against a
+// regression that shipped to production 2026-08-11: buyin.Service.buyIn
+// builds the wallet idempotency key as "roomID#playerID#buyin#nonce". With
+// realistic ULID table/hand IDs (26 chars) and a UUID player ID (36 chars),
+// a nonce that repeats playerID pushed the compound key to 138 characters —
+// over ctech-wallet's MovementOpRequest.IdempotencyKey max=128 — so every
+// sandbox debit came back HTTP 422 and auto-rebuy silently never worked.
+// Root-caused from a player.har capture plus prod wallet/poker logs; not
+// caught by the other tests here because the fake BuyIn never enforces the
+// real wallet's field-length validation.
+func TestAutoRebuySweepNonceFitsWalletIdempotencyKeyLimit(t *testing.T) {
+	const walletIdempotencyKeyMax = 128
+	const roomID = "01KZRP3S675Y6RGT1W21M1K4MV"    // 26-char ULID
+	const handID = "01KZRQ25994SJBRCKXEF6TGNVB"     // 26-char ULID
+	const playerID = "78fd4d57-88a7-4eec-a997-7d7c09f58a1b" // 36-char UUID
+
+	buyinSvc := &fakeAutoRebuyBuyin{
+		seats:    map[string]buyin.SeatSummary{playerID: {Seated: true, Stack: 0, AutoRebuy: true, BuyInAmount: 100}},
+		balances: map[string]int64{playerID: 500},
+	}
+	rooms := fakeRoomModeReader{room: &roomstore.Room{CurrencyMode: roomstore.CurrencyModeSandbox}}
+
+	autoRebuySweep(context.Background(), buyinSvc, rooms, roomID, handID, hand.HandOutcome{Participants: []string{playerID}})
+
+	if len(buyinSvc.buyIns) != 1 {
+		t.Fatalf("expected one auto-rebuy call, got %+v", buyinSvc.buyIns)
+	}
+	nonce := buyinSvc.buyIns[0].nonce
+	compoundKey := roomID + "#" + playerID + "#buyin#" + nonce
+	if len(compoundKey) > walletIdempotencyKeyMax {
+		t.Fatalf("compound idempotency key %q is %d chars, exceeds wallet's max=%d", compoundKey, len(compoundKey), walletIdempotencyKeyMax)
 	}
 }
 

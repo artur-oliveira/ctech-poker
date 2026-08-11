@@ -242,6 +242,14 @@ checks each participant: if their seat busted (`Stack == 0`), has `AutoRebuy` se
 covers the original `BuyInAmount`, it calls `buyin.Service.BuyIn` again with a `handID`-derived nonce. Insufficient
 balance (including exactly zero) leaves the player sitting out for the client's manual/PIX rebuy flow instead.
 
+The nonce is `handID + "-auto"` — deliberately *not* `handID + "-auto-" + playerID`. `buyin.Service.buyIn` builds the
+wallet idempotency key as `roomID#playerID#buyin#nonce`, already prepending `playerID` once; repeating it in the nonce
+pushed the compound key past ctech-wallet's `MovementOpRequest.IdempotencyKey` `max=128` validation for any real ULID
+table/hand ID + UUID player ID (138 chars), so every sandbox debit came back HTTP 422 and auto-rebuy never actually
+rebought anyone in production (fixed 2026-08-11, root-caused from a HAR capture plus prod wallet/poker logs — none of
+`autoRebuySweep`'s own unit tests caught it, since their fake `BuyIn` never enforces the real wallet's field-length
+rule; see `TestAutoRebuySweepNonceFitsWalletIdempotencyKeyLimit`).
+
 The sweep runs in a **detached goroutine**, never inline: `onHandComplete`-style hooks fire synchronously on the
 table actor's own single-goroutine command loop, and both the seat read (`buyin.Service.SeatedSummary`) and the
 rebuy itself (`BuyIn`) dispatch back into that same loop — calling either synchronously from the hook deadlocks the

@@ -27,6 +27,12 @@ export type HandOutcomeState = {
   viewerCards?: string[];
   viewerHoleCards?: string[];
   winnerName?: string;
+  // The hand the viewer beat to take this pot, and its category — only set
+  // on a win, and only when that opponent's cards were actually revealed at
+  // showdown. Lets a win explain "same combination, the kicker decided" too,
+  // not just a loss.
+  beatenCards?: string[];
+  beatenCategory?: string;
   // The viewer's stack right before this hand resolved and right after. The
   // chip counter below animates between the two, up when they gained chips,
   // down when they lost some, and stays hidden when neither changed (e.g. a
@@ -169,6 +175,12 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
   const decidedByKicker = Boolean(sameCategory && shown.viewerCards && shown.winningCards &&
     wasDecidedByKicker(shown.viewerCards, shown.winningCards));
   const higherCombination = Boolean(sameCategory && !decidedByKicker);
+  // Mirror of the above for a win: did the viewer's own kicker beat an
+  // opponent who made the very same combination?
+  const beatenCategory = categoryFor(shown.beatenCards, shown.beatenCategory);
+  const sameCategoryWin = shown.kind === 'win' && ownCategory && ownCategory === beatenCategory;
+  const wonByKicker = Boolean(sameCategoryWin && shown.viewerCards && shown.beatenCards &&
+    wasDecidedByKicker(shown.viewerCards, shown.beatenCards));
   const ownWithKickers = combinationWithKickers(shown.viewerCards, shown.handCategory);
   const winningWithKickers = combinationWithKickers(shown.winningCards, shown.opponentCategory);
   const chipChange = shown.stackBefore != null && shown.stackAfter != null &&
@@ -200,9 +212,10 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
                 <span><b>Você venceu!</b><small>{categoryLabel(ownCategory) || 'Pote conquistado'}</small></span>
             </div>
             <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>
+          {wonByKicker && <p className="hand-outcome-kicker-note">Mesma combinação, o kicker decidiu.</p>}
           {chipChange}
         </>}
-        
+
         {shown.kind === 'lose' && <>
             <div className="hand-outcome-heading">
                 <span><b>Não foi dessa vez.</b><small>Veja o confronto final</small></span>

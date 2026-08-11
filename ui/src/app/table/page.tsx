@@ -38,6 +38,7 @@ import {useDealerVoice} from '@/lib/hooks/useDealerVoice';
 import {getPlayerNotes, type PlayerNote} from '@/lib/api/playerNotes';
 import {
   playerPotBreakdown,
+  relevantRunnerUp,
   relevantWinner,
   seatParticipated,
   shouldShowOutcome,
@@ -314,6 +315,14 @@ function TableContent() {
     seat.hole_cards.every(card => card.toLowerCase() !== 'back') ? seat.hole_cards : undefined;
     const viewerCards = viewerHole && snap.board.length === 5 ?
       bestFiveCardHand([...viewerHole, ...snap.board]) : viewerHole;
+    // The best other hand the viewer actually beat, so a win can also read
+    // "same combination, the kicker decided" instead of only ever showing
+    // that explanation to the loser.
+    const beatenSeat = kind === 'win' ? relevantRunnerUp(snap, viewer) : undefined;
+    const beatenHole = beatenSeat?.hole_cards?.length === 2 &&
+    beatenSeat.hole_cards.every(card => card.toLowerCase() !== 'back') ? beatenSeat.hole_cards : undefined;
+    const beatenCards = beatenHole && snap.board.length === 5 ?
+      bestFiveCardHand([...beatenHole, ...snap.board]) : beatenHole;
     const stackBefore = seat.stack_at_hand_start ??
       (rememberedStart?.tableID === id && rememberedStart.handID === snap.hand_id ? rememberedStart.stack : undefined);
     const breakdown = playerPotBreakdown(snap, viewer);
@@ -338,6 +347,7 @@ function TableContent() {
         key: outcomeKeyRef.current, kind: folded ? 'fold' : kind, couldHaveWon,
         handCategory: seat.hand_category, opponentCategory,
         winningCards, winningHoleCards: winnerHole, viewerCards, viewerHoleCards: viewerHole,
+        beatenCards, beatenCategory: beatenSeat?.hand_category,
         winnerName: winnerSeat?.name, stackBefore, stackAfter: seat.stack,
         wonAmount: breakdown.won, refundAmount: breakdown.refund
       }

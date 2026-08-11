@@ -6407,12 +6407,12 @@ h1 em {
     text-transform: capitalize
 }
 
-.achievement-stars {
+.achievement-toast-stars {
     display: inline-flex;
     gap: 1px
 }
 
-.achievement-stars span {
+.achievement-toast-stars span {
     display: inline-block;
     animation: achievement-pop .35s var(--ease-out-quint) both;
     animation-delay: calc(220ms + var(--delay, 0ms))
