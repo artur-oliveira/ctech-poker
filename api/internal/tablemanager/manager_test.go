@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"gopkg.aoctech.app/api-commons/cache"
+	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
 )
 
@@ -74,6 +76,49 @@ func TestGetOrCreateActorSucceedsEvenWhenLeaseIsHeldElsewhere(t *testing.T) {
 	a, err := m.GetOrCreateActor(ctx, "table-2", seed)
 	if err != nil || a == nil {
 		t.Fatalf("expected GetOrCreateActor to still succeed without the lease, got actor=%v err=%v", a, err)
+	}
+}
+
+func TestOnAutoRebuySweepFiresAfterHandCompletes(t *testing.T) {
+	m := NewManager(nil, nil, nil, nil)
+
+	var gotTableID, gotHandID string
+	var gotOutcome hand.HandOutcome
+	m.SetOnAutoRebuySweep(func(tableID, handID string, outcome hand.HandOutcome) {
+		gotTableID, gotHandID, gotOutcome = tableID, handID, outcome
+	})
+
+	seed := func() *hand.Table {
+		return hand.NewTable([]*hand.Player{
+			{ID: "p1", Stack: 1000, Ready: true},
+			{ID: "p2", Stack: 1000, Ready: true},
+		}, 10, 20)
+	}
+	actor, err := m.GetOrCreateActor(context.Background(), "table-1", seed)
+	if err != nil {
+		t.Fatalf("get or create actor: %v", err)
+	}
+
+	reply1 := make(chan error, 1)
+	if err := actor.Dispatch(table.ReadyCmd{PlayerID: "p1", Ready: true, Reply: reply1}); err != nil {
+		t.Fatalf("ready p1: %v", err)
+	}
+	reply2 := make(chan error, 1)
+	if err := actor.Dispatch(table.ReadyCmd{PlayerID: "p2", Ready: true, Reply: reply2}); err != nil {
+		t.Fatalf("ready p2: %v", err)
+	}
+
+	toAct := actor.TableForTest().CurrentPlayerIDForActor()
+	reply3 := make(chan error, 1)
+	if err := actor.Dispatch(table.ActCmd{PlayerID: toAct, ActionID: "a1", Action: betting.ActionFold, Reply: reply3}); err != nil {
+		t.Fatalf("fold: %v", err)
+	}
+
+	if gotTableID != "table-1" || gotHandID == "" {
+		t.Fatalf("expected sweep to fire with tableID=table-1 non-empty handID, got tableID=%q handID=%q", gotTableID, gotHandID)
+	}
+	if len(gotOutcome.Participants) == 0 {
+		t.Fatal("expected a non-empty outcome.Participants")
 	}
 }
 

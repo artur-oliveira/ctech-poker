@@ -46,6 +46,7 @@ type Manager struct {
 	onHandUpdated          func(tableID, handID string, outcome hand.HandOutcome, names map[string]string)
 	onSeatsChanged         func(tableID string, seatsTaken int)
 	onPlayerRemoved        func(tableID, playerID, reason string, stack int64, holdID string)
+	autoRebuySweep         func(tableID, handID string, outcome hand.HandOutcome)
 	systemSettlementIntent func(context.Context, string, string, string, int64, string) (types.TransactWriteItem, error)
 	roomLoader             func(tableID string) (*roomstore.Room, bool, error)
 
@@ -96,6 +97,17 @@ func (m *Manager) SetOnSeatsChanged(fn func(tableID string, seatsTaken int)) { m
 // wallet and close their sessionlog entry.
 func (m *Manager) SetOnPlayerRemoved(fn func(tableID, playerID, reason string, stack int64, holdID string)) {
 	m.onPlayerRemoved = fn
+}
+
+// SetOnAutoRebuySweep installs the post-hand auto-rebuy hook, invoked with
+// (tableID, handID, outcome) right after the achievements/history
+// onHandComplete hook, for every actor this manager creates (including ones
+// created before this call). The callback fires synchronously on the table
+// actor's own goroutine — same as onHandComplete — so it must never call
+// anything that dispatches back into the actor without detaching first (see
+// app.wireAutoRebuyHook).
+func (m *Manager) SetOnAutoRebuySweep(fn func(tableID, handID string, outcome hand.HandOutcome)) {
+	m.autoRebuySweep = fn
 }
 
 // GetOrCreateActor returns this instance's Actor for tableID, seeding the
@@ -162,6 +174,9 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	actor.SetOnHandCompleteForActor(func(handID string, outcome hand.HandOutcome, names map[string]string) {
 		if m.onHandComplete != nil {
 			m.onHandComplete(tableID, handID, outcome, names)
+		}
+		if m.autoRebuySweep != nil {
+			m.autoRebuySweep(tableID, handID, outcome)
 		}
 	})
 	actor.SetOnHandUpdatedForActor(func(handID string, outcome hand.HandOutcome, names map[string]string) {
