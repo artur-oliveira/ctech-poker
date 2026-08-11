@@ -106,9 +106,13 @@ describe('API domain modules', () => {
     await joinRoom('table-1', 500, 'secret');
     await expect(getSeated('table-1')).resolves.toEqual({seated: true, stack: 500});
     await expect(leaveRoom('table-1')).resolves.toEqual({amount: 500});
-    
+    await joinRoom('table-1', 500, undefined, true);
+
     expect(client.post).toHaveBeenCalledWith('/v1.0/rooms/table-1/join', {
       amount: 500, share_code: 'secret', idem_key: 'idem-key',
+    }, {silentError: true});
+    expect(client.post).toHaveBeenCalledWith('/v1.0/rooms/table-1/join', {
+      amount: 500, share_code: undefined, auto_rebuy: true, idem_key: 'idem-key',
     }, {silentError: true});
     expect(client.post).toHaveBeenCalledWith('/v1.0/rooms/table-1/leave', {
       idem_key: 'idem-key',
