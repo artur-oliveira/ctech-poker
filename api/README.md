@@ -160,7 +160,7 @@ Auth column: **JWT** means `authMiddleware` (bearer token, `sub` + `sid` require
 | `GET /rooms/code/:code`                      | JWT             | lookup by share code                                                                       |
 | `GET /rooms/:id`                             | JWT             | room detail (`share_code` stripped for non-creators)                                       |
 | `GET /rooms/:id/seated`                      | JWT             | `{seated, stack}` — server-authoritative seat check                                        |
-| `POST /rooms/:id/join`                       | JWT             | join + buy-in; rate-limited 30/min/IP                                                      |
+| `POST /rooms/:id/join`                       | JWT             | join + buy-in; optional `auto_rebuy` (sandbox only, see below); rate-limited 30/min/IP     |
 | `POST /rooms/:id/leave`                      | JWT             | leave → `{amount}` cashed out                                                              |
 | `POST /rooms/:id/ready`                      | JWT             | **501** — use the table WebSocket's `ready` message                                        |
 | `GET /players/:playerId/showcase`            | **none**        | public profile showcase; 404 when `showcase_public` is false                               |
@@ -232,6 +232,22 @@ error beats silently ranking by a different GSI.
 - **Residual gap:** the real-money wiring in `app.go` doesn't pass a `players` service into
   `NewServiceWithGame`, so it skips the poker-terms-acceptance check sandbox buy-ins get. Fix before real money faces
   users.
+
+### Auto rebuy (sandbox only)
+
+A player can opt into `auto_rebuy` on `POST /rooms/:id/join` (fresh seats only — a rebuy of an existing seat ignores
+it; `hand.Player.AutoRebuy`/`BuyInAmount` are set exactly once, at seat creation). After every completed hand,
+`app.autoRebuySweep` (installed via `tablemanager.Manager.SetOnAutoRebuySweep`, wired in `app.wireAutoRebuyHook`)
+checks each participant: if their seat busted (`Stack == 0`), has `AutoRebuy` set, and their sandbox wallet balance
+covers the original `BuyInAmount`, it calls `buyin.Service.BuyIn` again with a `handID`-derived nonce. Insufficient
+balance (including exactly zero) leaves the player sitting out for the client's manual/PIX rebuy flow instead.
+
+The sweep runs in a **detached goroutine**, never inline: `onHandComplete`-style hooks fire synchronously on the
+table actor's own single-goroutine command loop, and both the seat read (`buyin.Service.SeatedSummary`) and the
+rebuy itself (`BuyIn`) dispatch back into that same loop — calling either synchronously from the hook deadlocks the
+table. Real-money rooms are excluded entirely (`room.CurrencyMode != "sandbox"` short-circuits the sweep), because
+the real-money buy-in path re-charges `EntryFeeCents` on every buy-in/rebuy — auto-rebuying there would silently
+repeat that charge with no way to opt out per attempt.
 
 ## Known issues
 

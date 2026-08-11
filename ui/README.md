@@ -93,6 +93,11 @@ vertical `stage-v` ring for portrait handhelds.
   `RealityCheck` (session-length nudge), `BotChallenge` (Turnstile), `PlayerNoteDialog` (private
   opponent notes + colour tag), `LastWinners`, `ChipStack`, `TablePreferencesDialog` (theme,
   sound, voice), `VoiceActionButton` (speech recognition), `HandOutcome` (win banner + confetti).
+- `BuyInPanel` has an "Auto rebuy" toggle (sandbox rooms only), sent as `auto_rebuy` on
+  `joinRoom`. When a busted seat has it on, `RebuyDialog` waits a short grace window (server auto-
+  rebuy runs async right after the bust snapshot) before falling back to the manual slider, or —
+  if the player's sandbox balance is exactly zero — an embedded PIX top-up (`SkuGrid` +
+  `PixPaymentView`, extracted from the store's `PurchaseModal`) instead of a dead-end error.
 - **Animations are pure CSS** (`src/app/globals.css` keyframes) — no animation library. Deal,
   flip, street reveals, wager-in, pot count, turn signal, winner, reconnect progress, and
   `prefers-reduced-motion` are all handled there.
