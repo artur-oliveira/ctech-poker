@@ -76,6 +76,7 @@ type Props = {
   targetedReactionLabel?: string;
   onTargetPlayerAction?: (playerId: string) => void;
   announcement?: string;
+  chatBubbles?: Record<string, { id: string; message: string }>;
 };
 
 export function TableStage({
@@ -95,7 +96,8 @@ export function TableStage({
                              onEditPlayerNoteAction,
                              targetedReactionLabel,
                              onTargetPlayerAction,
-                             announcement
+                             announcement,
+                             chatBubbles
                            }: Props) {
   const vertical = useVerticalStage();
   const seats = rotateSeats(snapshot.seats, viewer);
@@ -125,7 +127,8 @@ export function TableStage({
                  stackBefore={seat.player_id === viewer ? viewerStackBefore : undefined}
                  isDealer={snapshot.dealer_player_id === seat.player_id}
                  isSmallBlind={snapshot.small_blind_player_id === seat.player_id}
-                 isBigBlind={snapshot.big_blind_player_id === seat.player_id}/>;
+                 isBigBlind={snapshot.big_blind_player_id === seat.player_id}
+                 chatBubble={chatBubbles?.[seat.player_id]}/>;
   };
   const board = <Board cards={snapshot.board} boardTwo={snapshot.board_two}
                        splitAt={snapshot.board_split_at} pot={pot} pots={snapshot.pots}

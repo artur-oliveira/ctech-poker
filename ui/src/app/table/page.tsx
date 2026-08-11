@@ -480,7 +480,8 @@ function TableContent() {
                   onEditPlayerNoteAction={seat => setNoteOpponent({player_id: seat.player_id, name: seat.name})}
                   targetedReactionLabel={pendingReaction ? TABLE_REACTIONS[pendingReaction].label : undefined}
                   onTargetPlayerAction={pendingReaction ? sendTargetedReaction : undefined}
-                  announcement={rt.announcement}/>
+                  announcement={rt.announcement}
+                  chatBubbles={rt.chatBubbles}/>
       <ActionBar
         onActAction={rt.act}
         {...actions}
@@ -506,7 +507,7 @@ function TableContent() {
                                    currentStack={viewerSeat.stack} handId={s.hand_id}
                                    handComplete={s.stage === 'complete'} isTurn={actions.isTurn}/>}
       <Chat items={rt.chat}
-            onSend={rt.sendChat}
+            onSendAction={rt.sendChat}
             connected={rt.status === 'connected'}
             viewerId={viewer}
             seats={s.seats}

@@ -305,12 +305,18 @@ describe('useTableRealtime', () => {
     });
     expect(result.current.chat).toHaveLength(1);
     expect(result.current.reactions).toMatchObject([{id: 'reaction-1', reactionId: 'angry'}]);
-    
+    // The history a snapshot hydrates on connect must never pop a seat bubble.
+    expect(result.current.chatBubbles).toEqual({});
+
     receive({type: 'chat', action_id: 'chat-1', player_id: 'player-2', message: 'oi'});
     expect(result.current.chat).toHaveLength(1);
+    // A replay of an already-known id (the legacy compat event for a message
+    // the snapshot already carried) must not surface a stale bubble either.
+    expect(result.current.chatBubbles).toEqual({});
     receive({type: 'chat', action_id: 'chat-2', player_id: VIEWER, message: 'olá'});
     expect(result.current.chat).toHaveLength(2);
-    
+    expect(result.current.chatBubbles).toEqual({[VIEWER]: {id: 'chat-2', message: 'olá'}});
+
     act(() => vi.advanceTimersByTime(2_000));
     expect(result.current.reactions).toEqual([]);
   });

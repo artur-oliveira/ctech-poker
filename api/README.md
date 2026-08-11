@@ -118,8 +118,9 @@ Per-binary keys read outside `Config` (not in the struct above):
 - **Server → client**: `connected`, `pong`, `state` (full authoritative snapshot on join and on every mutation — no
   delta replay), `chat`, `error`, `removed`, `achievement_unlocked`, `room_created`,
   `room_updated`, `payment_received`, `system_broadcast`.
-- Abuse control: per-seat fixed-window limiter (10 actions/sec/seat), **32 KiB frame cap**, chat truncated to 500 chars
-  and masked by `internal/chatfilter`, and an adaptive Turnstile challenge (`internal/botcheck`) issued over the socket.
+- Abuse control: per-seat fixed-window limiter (10 actions/sec/seat), **32 KiB frame cap**, chat truncated to
+  `chatMessageMaxLength` (50 chars, mirrored client-side as `CHAT_MESSAGE_MAX_LENGTH`) and masked by
+  `internal/chatfilter`, and an adaptive Turnstile challenge (`internal/botcheck`) issued over the socket.
 - Heartbeat: 30s ping / 45s pong wait.
 
 ## Game-server model (per-table actor + DynamoDB conditional writes)

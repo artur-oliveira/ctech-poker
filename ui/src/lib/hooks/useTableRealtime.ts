@@ -11,6 +11,7 @@ import {playerName} from '@/lib/utils';
 import {playSound} from '@/lib/sound';
 import {decodeServerMessage, encodeClientMessage} from "@/lib/ws/utils";
 import {isTableReaction, type TableReactionEvent, type TableReactionID} from '@/lib/reactions';
+import {CHAT_MESSAGE_MAX_LENGTH} from '@/lib/chat';
 
 export type ConnectionStatus = WSStatus
 export type ActionError = { code: string; message: string }
@@ -42,7 +43,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   missing_precondition: 'O estado da mesa ainda não está pronto para receber essa ação.',
   stale_state: 'A mesa mudou antes da sua ação. Sincronizando o estado mais recente.',
   invalid_post: 'Não foi possível confirmar o blind. Tente novamente.',
-  message_too_long: 'A mensagem ultrapassa o limite de 500 caracteres.',
+  message_too_long: `A mensagem ultrapassa o limite de ${CHAT_MESSAGE_MAX_LENGTH} caracteres.`,
   not_connected: 'Sem conexão com a mesa. Reconecte antes de agir.',
   action_timeout: 'A mesa demorou para confirmar a ação. O estado será atualizado antes de uma nova tentativa.',
   bot_challenge_required: 'Conclua a verificação para continuar jogando.',
@@ -225,6 +226,28 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const [snapshotAt, setSnapshotAt] = useState(0);
   const [unlock, setUnlock] = useState<{ key: string; stars: number } | null>(null);
   const [chat, setChat] = useState<{ id: string; player: string; message: string; timestamp?: number }[]>([]);
+  // The seat speech-bubble is only for messages actually delivered while this
+  // hook is mounted, never for the chat history a fresh snapshot hydrates on
+  // connect/reconnect (that would burst every seat with a bubble on join).
+  // null means "no snapshot has hydrated chat yet"; the first hydration seeds
+  // this set silently, and only ids that show up afterward earn a bubble.
+  const seenChatIdsRef = useRef<Set<string> | null>(null);
+  const [chatBubbles, setChatBubbles] = useState<Record<string, { id: string; message: string }>>({});
+  const noteFreshChatArrivals = useCallback((items: { id: string; player: string; message: string }[]) => {
+    const seen = seenChatIdsRef.current;
+    if (seen === null) {
+      seenChatIdsRef.current = new Set(items.map(item => item.id));
+      return;
+    }
+    const fresh = items.filter(item => !seen.has(item.id));
+    if (!fresh.length) return;
+    for (const item of fresh) seen.add(item.id);
+    setChatBubbles(value => {
+      const next = {...value};
+      for (const item of fresh) next[item.player] = {id: item.id, message: item.message};
+      return next;
+    });
+  }, []);
   const [reactions, setReactions] = useState<TableReactionEvent[]>([]);
   const reactionTimersRef = useRef<Map<string, number>>(new Map());
   const soundTimersRef = useRef<Set<number>>(new Set());
@@ -347,9 +370,11 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       setSnapshotTableID(activeTableIDRef.current);
       setSnapshotAt(Date.now());
       if ((message.snapshot.protocol_version ?? 0) >= 6) {
-        setChat((message.snapshot.chat_messages ?? []).map(item => ({
+        const nextChat = (message.snapshot.chat_messages ?? []).map(item => ({
           id: item.id, player: item.player_id, message: item.message, timestamp: item.timestamp
-        })));
+        }));
+        noteFreshChatArrivals(nextChat);
+        setChat(nextChat);
         const liveReactionIDs = new Set((message.snapshot.reactions ?? []).map(item => item.id));
         for (const [reactionID, timer] of reactionTimersRef.current) {
           if (liveReactionIDs.has(reactionID)) continue;
@@ -515,9 +540,11 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     });
     if (message.type === 'chat' && message.message) {
       const chatMessage = message.message;
-      const id = message.action_id || `${Date.now()}-${message.player_id || '?'}-${chatMessage}`;
+      const player = message.player_id || '?';
+      const id = message.action_id || `${Date.now()}-${player}-${chatMessage}`;
+      noteFreshChatArrivals([{id, player, message: chatMessage}]);
       setChat(value => value.some(item => item.id === id) ? value :
-        [...value.slice(-39), {id, player: message.player_id || '?', message: chatMessage, timestamp: Date.now()}]);
+        [...value.slice(-39), {id, player, message: chatMessage, timestamp: Date.now()}]);
     }
     if (message.type === 'reaction' && message.player_id && message.reaction_id &&
       isTableReaction(message.reaction_id)) {
@@ -529,7 +556,8 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       };
       showReaction(reaction);
     }
-  }, [armResyncWatchdog, clearPending, failPending, finishAuxiliaryCommand, id, sendActFrame, showReaction, viewerId]);
+  }, [armResyncWatchdog, clearPending, failPending, finishAuxiliaryCommand, id, noteFreshChatArrivals, sendActFrame,
+    showReaction, viewerId]);
   const receiveForTable = useCallback((message: ServerMessage) => {
     if (activeTableIDRef.current === id) receive(message);
   }, [id, receive]);
@@ -550,6 +578,8 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       setRemoved(null);
       setTerminalFailure(null);
       setChat([]);
+      seenChatIdsRef.current = null;
+      setChatBubbles({});
       setReactions([]);
     }
     sendRef.current({type: 'ping'});
@@ -719,6 +749,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     snapshotAt,
     unlock,
     chat,
+    chatBubbles,
     reactions,
     pendingAction,
     actionError: lastActionError,

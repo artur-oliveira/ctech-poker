@@ -42,8 +42,13 @@ const (
 	// applies no limit of its own, so without this one authenticated client
 	// can make the server allocate an arbitrarily large frame. Every client
 	// message this protocol defines is a small protobuf (the largest, a chat
-	// line, is capped at 500 characters), so 32 KiB is already generous.
+	// line, is capped at chatMessageMaxLength characters), so 32 KiB is
+	// already generous.
 	wsMaxMessageBytes = 32 * 1024
+	// Short enough to read at a glance in the seat speech bubble the UI
+	// renders it in (ui/src/components/table/Seat.tsx); mirrored client-side
+	// as CHAT_MESSAGE_MAX_LENGTH (ui/src/lib/chat.ts).
+	chatMessageMaxLength = 50
 )
 
 var tableChatFilter = chatfilter.New([]string{"idiota", "burro"})
@@ -611,7 +616,7 @@ func RegisterTableWS(
 					if message == "" {
 						continue
 					}
-					if len(message) > 500 {
+					if len(message) > chatMessageMaxLength {
 						send(&pokerproto.ServerMessage{Type: "error", Code: "message_too_long"})
 						continue
 					}

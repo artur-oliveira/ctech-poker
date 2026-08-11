@@ -96,6 +96,10 @@ vertical `stage-v` ring for portrait handhelds.
 - **Animations are pure CSS** (`src/app/globals.css` keyframes) — no animation library. Deal,
   flip, street reveals, wager-in, pot count, turn signal, winner, reconnect progress, and
   `prefers-reduced-motion` are all handled there.
+- Chat messages are capped at `CHAT_MESSAGE_MAX_LENGTH` (`lib/chat.ts`, 50 chars, mirrored
+  server-side). A message actually delivered live (never chat history hydrated from a snapshot on
+  connect/reconnect) pops a speech bubble on the sender's `Seat` — `useTableRealtime`'s
+  `chatBubbles` map, keyed by player id, drives it.
 
 ## Real-time hooks & providers
 

@@ -85,7 +85,8 @@ export function Seat({
                        playerNote,
                        onEditNote,
                        reactionTargetLabel,
-                       onReactionTarget
+                       onReactionTarget,
+                       chatBubble
                      }: {
   seat: SeatView;
   isViewer: boolean;
@@ -114,6 +115,9 @@ export function Seat({
   onEditNote?: () => void;
   reactionTargetLabel?: string;
   onReactionTarget?: () => void;
+  // Keyed by message id: a new id (even from the same player) remounts the
+  // bubble and restarts its CSS lifecycle instead of jumping mid-animation.
+  chatBubble?: { id: string; message: string };
 }) {
   const cards = seat.hole_cards;
   const chance = seat.equity == null ? null : Math.round(seat.equity * 100);
@@ -142,6 +146,12 @@ export function Seat({
                        observedAtMs={nowMs} durationMs={turnTimeoutMs}/>}
     {role && <span className={`seat-role ${isDealer ? 'is-dealer' : ''}`} title={ROLE_LABELS[role]}
                    aria-label={ROLE_LABELS[role]}>{role}</span>}
+    {chatBubble && <div key={chatBubble.id} className="seat-chat-bubble" aria-hidden="true">
+      {chatBubble.message.split(' ').flatMap((word, i) => {
+        const piece = <span key={i} style={{'--i': i} as CSSProperties}>{word}</span>;
+        return i === 0 ? [piece] : [' ', piece];
+      })}
+    </div>}
     <div className={`seat-cards ${isWinner && winAmount > 0 ? 'is-collecting' : ''}`}>{[0, 1].map(i => {
       const card = cards?.[i];
       const publiclyRevealed = seat.hole_cards_revealed?.[i] ?? false;

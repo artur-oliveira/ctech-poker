@@ -3909,6 +3909,72 @@ h1 em {
     text-align: center
 }
 
+.seat-chat-bubble {
+    position: absolute;
+    z-index: 6;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    /* Explicit width, not just max-width: overflow-wrap: anywhere collapses
+       an absolutely positioned box's shrink-to-fit width to a single
+       character when nothing else constrains it, wrapping every word one
+       letter per line. */
+    width: max-content;
+    max-width: 140px;
+    padding: 6px 10px;
+    border-radius: var(--rounded-seat);
+    background: var(--surface-control);
+    border: 1px solid var(--control-border);
+    color: var(--paper);
+    font: 600 11px var(--font-sans);
+    line-height: 1.4;
+    text-align: center;
+    overflow-wrap: anywhere;
+    pointer-events: none;
+    transform: translateX(-50%);
+    animation: chat-bubble-life 5s var(--ease-out-quart) both
+}
+
+.seat-chat-bubble:after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    border: 6px solid transparent;
+    border-top-color: var(--surface-control);
+    transform: translateX(-50%)
+}
+
+.seat-chat-bubble span {
+    display: inline-block;
+    opacity: 0;
+    animation: chat-word-in 240ms var(--ease-out-quart) forwards;
+    animation-delay: calc(140ms + var(--i) * 55ms)
+}
+
+.game-seat.top-seat .seat-chat-bubble {
+    top: calc(100% + 8px);
+    bottom: auto
+}
+
+.game-seat.top-seat .seat-chat-bubble:after {
+    top: auto;
+    bottom: 100%;
+    border-top-color: transparent;
+    border-bottom-color: var(--surface-control)
+}
+
+@keyframes chat-bubble-life {
+    0% { opacity: 0 }
+    6% { opacity: 1 }
+    90% { opacity: 1 }
+    100% { opacity: 0 }
+}
+
+@keyframes chat-word-in {
+    from { opacity: 0; transform: translateY(3px) }
+    to { opacity: 1; transform: translateY(0) }
+}
+
 .game-seat.is-reaction-target {
     border-color: var(--gold);
     filter: saturate(1.15);
@@ -4834,6 +4900,14 @@ h1 em {
 
 .chat-body form svg {
     width: 17px
+}
+
+.chat-char-count {
+    align-self: center;
+    padding: 0 6px;
+    color: var(--muted);
+    font: 600 10px var(--font-mono);
+    white-space: nowrap
 }
 
 .chat-error {
@@ -9062,6 +9136,22 @@ h1 em {
     bottom: 100%;
     margin-top: 0;
     margin-bottom: 3px
+}
+
+/* The shared top-seat class (desktop oval indices 3/4/5) matches ring seat-3
+   too, but the ring's actual cramped-top pair is 4/5 (see the seat-cards/
+   seat-info flip above) — seat-3 has enough headroom above it and must keep
+   the same above-seat placement as seats 1/2/6/7/8. */
+.stage-v-ring .seat-3 .seat-chat-bubble {
+    top: auto;
+    bottom: calc(100% + 8px)
+}
+
+.stage-v-ring .seat-3 .seat-chat-bubble:after {
+    top: 100%;
+    bottom: auto;
+    border-top-color: var(--surface-control);
+    border-bottom-color: transparent
 }
 
 /* Bets point inward toward the pot: sideways for the two columns, downward

@@ -165,6 +165,18 @@ describe('table presentation', () => {
     expect(container.querySelector('.street-progress .is-current')).toHaveTextContent('Pré');
   });
   
+  test('renders a speech bubble on the seat with the latest chat message', () => {
+    const snapshot = snapshotForScenario('pre_flop');
+    const speaker = snapshot.seats.find(seat => seat.player_id !== MOCK_PLAYER_ID);
+    const {container} = render(<TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID}
+                                           pot={0} bigBlind={50} nowMs={Date.now()} outcome={null}
+                                           holdOutcomeOpen={false}
+                                           chatBubbles={{[speaker!.player_id]: {id: 'chat-1', message: 'boa sorte'}}}/>);
+    const bubble = container.querySelector(`[data-player-id="${speaker!.player_id}"] .seat-chat-bubble`);
+    expect(bubble).toHaveTextContent('boa sorte');
+    expect(container.querySelector(`[data-player-id="${MOCK_PLAYER_ID}"] .seat-chat-bubble`)).not.toBeInTheDocument();
+  });
+
   test('board renders pot, rake, side pots and missing card slots', () => {
     const {container} = render(<Board cards={['AH', 'KD', '2C']} pot={1_250}
                                       rake={25} bigBlind={50} pots={[
@@ -197,17 +209,24 @@ describe('chat', () => {
     const onSend = vi.fn(() => true);
     render(<Chat open items={[{id: '1', player: 'p2', message: 'Boa mão'}]}
                  seats={[{player_id: 'p2', name: 'Bia', stack: 10, state: 'active', contributed: 0}]}
-                 onOpenChangeAction={onOpenChangeAction} onSend={onSend}/>);
+                 onOpenChangeAction={onOpenChangeAction} onSendAction={onSend}/>);
     expect(screen.getByRole('log')).toHaveTextContent('BiaBoa mão');
     await user.type(screen.getByLabelText('Mensagem para a mesa'), '  olá  ');
+    expect(screen.getByText('7/50')).toBeInTheDocument();
     await user.click(screen.getByRole('button', {name: 'Enviar mensagem'}));
     expect(onSend).toHaveBeenCalledWith('olá');
     expect(screen.getByLabelText('Mensagem para a mesa')).toHaveValue('');
+    expect(screen.getByText('0/50')).toBeInTheDocument();
+  });
+
+  test('caps the message field at 50 characters', () => {
+    render(<Chat open items={[]} onOpenChangeAction={vi.fn()} onSendAction={vi.fn()}/>);
+    expect(screen.getByLabelText('Mensagem para a mesa')).toHaveAttribute('maxLength', '50');
   });
   
   test('reports send failure and toggles the controlled panel', async () => {
     const onOpenChangeAction = vi.fn();
-    render(<Chat open connected items={[]} onOpenChangeAction={onOpenChangeAction} onSend={() => false}/>);
+    render(<Chat open connected items={[]} onOpenChangeAction={onOpenChangeAction} onSendAction={() => false}/>);
     await userEvent.type(screen.getByLabelText('Mensagem para a mesa'), 'teste');
     await userEvent.click(screen.getByRole('button', {name: 'Enviar mensagem'}));
     expect(screen.getByRole('alert')).toHaveTextContent('Mensagem não enviada');
