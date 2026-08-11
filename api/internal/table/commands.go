@@ -136,6 +136,7 @@ type JoinCmd struct {
 	// instead of trusting this potentially stale lobby hint.
 	MidHand          bool
 	HoldID           string
+	AutoRebuy        bool
 	SettlementIntent func() (types.TransactWriteItem, error)
 	Reply            chan error
 }

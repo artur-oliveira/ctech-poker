@@ -202,6 +202,44 @@ func TestAddWaitingPlayerRebuysBustedSeatInsteadOfRejecting(t *testing.T) {
 	}
 }
 
+// TestAddWaitingPlayerSetsAutoRebuyAndBuyInAmountOnFreshSeat guards the only
+// place these two fields are ever written: a brand-new seat.
+func TestAddWaitingPlayerSetsAutoRebuyAndBuyInAmountOnFreshSeat(t *testing.T) {
+	table := NewTable(nil, 10, 20)
+	p := &Player{ID: "p1", Stack: 500, AutoRebuy: true, BuyInAmount: 500}
+	if err := table.AddWaitingPlayer(p); err != nil {
+		t.Fatalf("AddWaitingPlayer: %v", err)
+	}
+	seated := table.playerByID("p1")
+	if !seated.AutoRebuy || seated.BuyInAmount != 500 {
+		t.Fatalf("expected AutoRebuy=true BuyInAmount=500, got AutoRebuy=%v BuyInAmount=%d", seated.AutoRebuy, seated.BuyInAmount)
+	}
+}
+
+// TestAddWaitingPlayerRebuyKeepsOriginalAutoRebuyAndBuyInAmount is the
+// invariant the whole feature depends on: a later rebuy (manual or the
+// server's own auto-rebuy) must never change what "the original buy-in" was,
+// even if the rebuy amount differs.
+func TestAddWaitingPlayerRebuyKeepsOriginalAutoRebuyAndBuyInAmount(t *testing.T) {
+	busted := &Player{ID: "p1", Stack: 0, Ready: true, State: SittingOut, AutoRebuy: true, BuyInAmount: 500}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	p3 := &Player{ID: "p3", Stack: 1000, Ready: true}
+	p4 := &Player{ID: "p4", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{busted, p2, p3, p4}, 10, 20)
+	table.dealerDrawn = true
+
+	rebuy := &Player{ID: "p1", Stack: 1000} // a manual rebuy for a DIFFERENT amount, AutoRebuy unset
+	if err := table.AddWaitingPlayer(rebuy); err != nil {
+		t.Fatalf("AddWaitingPlayer rebuy: %v", err)
+	}
+	if busted.Stack != 1000 {
+		t.Fatalf("expected stack credited to 1000, got %d", busted.Stack)
+	}
+	if !busted.AutoRebuy || busted.BuyInAmount != 500 {
+		t.Fatalf("rebuy must not change AutoRebuy/BuyInAmount, got AutoRebuy=%v BuyInAmount=%d", busted.AutoRebuy, busted.BuyInAmount)
+	}
+}
+
 // TestAddWaitingPlayerRejectsRebuyWithChipsRemaining guards the idempotency
 // side of the same fix: a player who still has chips must still hit
 // ErrAlreadySeated, so a retried join request can't double-spend.

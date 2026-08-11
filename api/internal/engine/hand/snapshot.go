@@ -133,6 +133,12 @@ type SeatView struct {
 	HandScore  uint32 `json:"hand_score,omitempty"`
 	TimeBankMs int64  `json:"time_bank_ms"`
 	RunItTwice bool   `json:"run_it_twice,omitempty"`
+	// AutoRebuy mirrors Player.AutoRebuy, viewer-private like RunItTwice.
+	// BuyInAmount is not wire-facing (never converted to the proto Seat in
+	// tablews.go) — it exists on SeatView only so buyin.Service.SeatedSummary
+	// can read it off the same snapshot machinery Seated already uses.
+	AutoRebuy   bool  `json:"auto_rebuy,omitempty"`
+	BuyInAmount int64 `json:"buy_in_amount,omitempty"`
 }
 
 var stageNames = map[Stage]string{
@@ -239,6 +245,8 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		}
 		if p.ID == viewerID {
 			sv.RunItTwice = p.RunItTwice
+			sv.AutoRebuy = p.AutoRebuy
+			sv.BuyInAmount = p.BuyInAmount
 		}
 		publicReveal := []bool{
 			p.VoluntarilyShown || p.VoluntarilyShownCards[0],

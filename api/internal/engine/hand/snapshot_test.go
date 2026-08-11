@@ -603,6 +603,26 @@ func TestRunItTwicePreferenceIsViewerPrivate(t *testing.T) {
 	}
 }
 
+func TestAutoRebuyPreferenceIsViewerPrivate(t *testing.T) {
+	table := NewTable([]*Player{
+		{ID: "p1", Stack: 1000, AutoRebuy: true, BuyInAmount: 1000},
+		{ID: "p2", Stack: 1000, AutoRebuy: true, BuyInAmount: 1000},
+	}, 10, 20)
+	view := table.ViewFor("p1")
+	for _, seat := range view.Seats {
+		switch seat.PlayerID {
+		case "p1":
+			if !seat.AutoRebuy {
+				t.Fatal("viewer must receive their own auto-rebuy preference")
+			}
+		case "p2":
+			if seat.AutoRebuy {
+				t.Fatal("opponent's auto-rebuy preference must not be exposed")
+			}
+		}
+	}
+}
+
 // TestViewForExposesBlindSeatsHeadsUp mirrors TestHeadsUpDealerPostsSmallBlind's
 // dealer-posts-small-blind rule, but asserts on the wire snapshot instead of
 // Contributed, since that's what the client actually has to work with.

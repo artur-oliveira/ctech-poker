@@ -1504,7 +1504,7 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 	// this, the next unrelated successful commit persists the ghost seat for
 	// real the first time any other player's action commits.
 	before := a.cached.ExportState()
-	p := &hand.Player{ID: c.PlayerID, Stack: c.Stack, HoldID: c.HoldID, LastActionAt: timeNowFunc().UnixMilli()}
+	p := &hand.Player{ID: c.PlayerID, Stack: c.Stack, HoldID: c.HoldID, LastActionAt: timeNowFunc().UnixMilli(), AutoRebuy: c.AutoRebuy, BuyInAmount: c.Stack}
 	stage := a.cached.Stage()
 	if stage != hand.WaitingForPlayers && stage != hand.Complete {
 		if err := a.cached.AddMidHandJoiner(p); err != nil {
