@@ -1,10 +1,12 @@
 'use client';
 import Link from 'next/link';
 import {useId, useState} from 'react';
-import {ChevronLeft} from 'lucide-react';
+import {ChevronLeft, RefreshCw} from 'lucide-react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import axios from 'axios';
 import {Button} from '@/components/ui/button';
+import {Label} from '@/components/ui/label';
+import {Switch} from '@/components/ui/switch';
 import {getRoom, joinRoom} from '@/lib/api/rooms';
 import {isNotFound} from '@/lib/api/client';
 
@@ -45,8 +47,10 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
   onSeatedAction: () => void
 }) {
   const sliderId = useId();
+  const autoRebuyId = useId();
   const queryClient = useQueryClient();
   const [amount, setAmount] = useState<number | null>(null);
+  const [autoRebuy, setAutoRebuy] = useState(false);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState('');
   const {data: room, isLoading, error: roomError, isError, refetch} = useQuery({
@@ -89,7 +93,11 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
     setJoining(true);
     setError('');
     try {
-      await joinRoom(roomId, value, shareCode);
+      if (autoRebuy) {
+        await joinRoom(roomId, value, shareCode, true);
+      } else {
+        await joinRoom(roomId, value, shareCode);
+      }
       onSeatedAction();
     } catch (err) {
       setError(joinErrorMessage(err));
@@ -122,6 +130,15 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
         <output htmlFor={sliderId}>{fmt(value)} <span>{unit}</span></output>
         <small>mín. {fmt(room.buy_in_min)} · máx. {fmt(room.buy_in_max)}</small>
       </div>
+      {!isReal && <div className="buyin-control table-preference-toggle">
+        <span><RefreshCw aria-hidden="true"/><span><Label id={`${autoRebuyId}-label`} htmlFor={autoRebuyId}>Auto
+          rebuy</Label>
+          <small>Se suas fichas acabarem, compramos automaticamente o mesmo valor para você continuar jogando sem
+            esperar.</small>
+        </span></span>
+        <Switch id={autoRebuyId} aria-labelledby={`${autoRebuyId}-label`} checked={autoRebuy} disabled={joining}
+                onCheckedChange={setAutoRebuy}/>
+      </div>}
       {error && <p className="buyin-error" role="alert">{error}</p>}
       <Button size="lg" onClick={confirm} disabled={joining}>
         {joining ? 'Entrando…' : `Entrar com ${fmt(value)}`}

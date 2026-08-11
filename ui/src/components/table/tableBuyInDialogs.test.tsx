@@ -99,6 +99,18 @@ describe('BuyInPanel', () => {
     expect(seated).toHaveBeenCalledOnce();
   });
   
+  test('opts into auto-rebuy and passes it through on confirm', async () => {
+    const seated = vi.fn();
+    mocks.joinRoom.mockResolvedValue(undefined);
+    render(<BuyInPanel roomId="room-1" onSeatedAction={seated}/>);
+
+    await userEvent.click(screen.getByRole('switch', {name: /auto.?rebuy|recompra automática/i}));
+    await userEvent.click(screen.getByRole('button', {name: /Entrar com/}));
+
+    await waitFor(() => expect(mocks.joinRoom).toHaveBeenCalledWith('room-1', 3_500, undefined, true));
+    expect(seated).toHaveBeenCalledOnce();
+  });
+
   test('shows wallet activation guidance and real-money fee without seating on failure', async () => {
     const seated = vi.fn();
     mocks.query.mockReturnValue({
