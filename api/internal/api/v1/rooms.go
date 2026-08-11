@@ -274,7 +274,7 @@ func (h *roomHandlers) join(c fiber.Ctx) error {
 	if !privateRoomAccessAllowed(room, userID, req.ShareCode) {
 		return problem.Forbidden("share code required to join a private room").Send(c)
 	}
-	if err := h.buyin.BuyIn(c.Context(), room.ID, userID, req.Amount, room.Status == "active", req.IdempotencyKey); err != nil {
+	if err := h.buyin.BuyInWithAutoRebuy(c.Context(), room.ID, userID, req.Amount, room.Status == "active", req.AutoRebuy, req.IdempotencyKey); err != nil {
 		if errors.Is(err, buyin.ErrTermsNotAccepted) {
 			return problem.Forbidden(err.Error()).Send(c)
 		}

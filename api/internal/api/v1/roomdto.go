@@ -20,6 +20,7 @@ type JoinRoomRequest struct {
 	Amount         int64  `json:"amount"`
 	ShareCode      string `json:"share_code,omitempty"` // required to join a private room (unless creator)
 	IdempotencyKey string `json:"idem_key,omitempty"`   // stable per buy-in click; reused across network retries so a retry can't double-debit
+	AutoRebuy      bool   `json:"auto_rebuy,omitempty"` // only meaningful on a fresh join; ignored on a rebuy of an existing seat
 }
 
 type LeaveRoomRequest struct {
