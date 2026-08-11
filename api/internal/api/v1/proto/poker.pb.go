@@ -107,6 +107,7 @@ type Seat struct {
 	AvatarUrl      *string `protobuf:"bytes,16,opt,name=avatar_url,json=avatarUrl,proto3,oneof" json:"avatar_url,omitempty"`
 	PlaystyleBadge *string `protobuf:"bytes,17,opt,name=playstyle_badge,json=playstyleBadge,proto3,oneof" json:"playstyle_badge,omitempty"`
 	RunItTwice     *bool   `protobuf:"varint,18,opt,name=run_it_twice,json=runItTwice,proto3,oneof" json:"run_it_twice,omitempty"`
+	AutoRebuy      *bool   `protobuf:"varint,19,opt,name=auto_rebuy,json=autoRebuy,proto3,oneof" json:"auto_rebuy,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -263,6 +264,13 @@ func (x *Seat) GetPlaystyleBadge() string {
 func (x *Seat) GetRunItTwice() bool {
 	if x != nil && x.RunItTwice != nil {
 		return *x.RunItTwice
+	}
+	return false
+}
+
+func (x *Seat) GetAutoRebuy() bool {
+	if x != nil && x.AutoRebuy != nil {
+		return *x.AutoRebuy
 	}
 	return false
 }
@@ -1662,7 +1670,7 @@ const file_poker_proto_rawDesc = "" +
 	"\vpoker.proto\x12\x05poker\".\n" +
 	"\x04Card\x12\x12\n" +
 	"\x04rank\x18\x01 \x01(\tR\x04rank\x12\x12\n" +
-	"\x04suit\x18\x02 \x01(\tR\x04suit\"\xd8\x05\n" +
+	"\x04suit\x18\x02 \x01(\tR\x04suit\"\x8b\x06\n" +
 	"\x04Seat\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
@@ -1687,14 +1695,17 @@ const file_poker_proto_rawDesc = "" +
 	"avatar_url\x18\x10 \x01(\tH\x04R\tavatarUrl\x88\x01\x01\x12,\n" +
 	"\x0fplaystyle_badge\x18\x11 \x01(\tH\x05R\x0eplaystyleBadge\x88\x01\x01\x12%\n" +
 	"\frun_it_twice\x18\x12 \x01(\bH\x06R\n" +
-	"runItTwice\x88\x01\x01B\t\n" +
+	"runItTwice\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"auto_rebuy\x18\x13 \x01(\bH\aR\tautoRebuy\x88\x01\x01B\t\n" +
 	"\a_equityB\v\n" +
 	"\t_dealt_inB\b\n" +
 	"\x06_readyB\x16\n" +
 	"\x14_stack_at_hand_startB\r\n" +
 	"\v_avatar_urlB\x12\n" +
 	"\x10_playstyle_badgeB\x0f\n" +
-	"\r_run_it_twice\"n\n" +
+	"\r_run_it_twiceB\r\n" +
+	"\v_auto_rebuy\"n\n" +
 	"\x0fBlindEscalation\x12)\n" +
 	"\x10interval_minutes\x18\x01 \x01(\x05R\x0fintervalMinutes\x12\x1e\n" +
 	"\n" +

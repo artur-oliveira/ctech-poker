@@ -857,12 +857,18 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 			enabled := true
 			runItTwice = &enabled
 		}
+		var autoRebuy *bool
+		if s.AutoRebuy {
+			enabled := true
+			autoRebuy = &enabled
+		}
 		protoSeats[i] = &pokerproto.Seat{
 			PlayerId:          s.PlayerID,
 			Name:              s.Name,
 			AvatarUrl:         avatarURL,
 			PlaystyleBadge:    playstyleBadge,
 			RunItTwice:        runItTwice,
+			AutoRebuy:         autoRebuy,
 			ConnectionState:   s.ConnectionState,
 			Stack:             s.Stack,
 			State:             s.State,

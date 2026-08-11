@@ -66,6 +66,7 @@ export interface Seat {
   avatar_url?: string | undefined;
   playstyle_badge?: string | undefined;
   run_it_twice?: boolean | undefined;
+  auto_rebuy?: boolean | undefined;
 }
 
 export interface BlindEscalation {
@@ -416,6 +417,7 @@ function createBaseSeat(): Seat {
     avatar_url: undefined,
     playstyle_badge: undefined,
     run_it_twice: undefined,
+    auto_rebuy: undefined,
   };
 }
 
@@ -476,6 +478,9 @@ export const Seat: MessageFns<Seat> = {
     }
     if (message.run_it_twice !== undefined) {
       writer.uint32(144).bool(message.run_it_twice);
+    }
+    if (message.auto_rebuy !== undefined) {
+      writer.uint32(152).bool(message.auto_rebuy);
     }
     return writer;
   },
@@ -641,6 +646,14 @@ export const Seat: MessageFns<Seat> = {
           message.run_it_twice = reader.bool();
           continue;
         }
+        case 19: {
+          if (tag !== 152) {
+            break;
+          }
+
+          message.auto_rebuy = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -718,6 +731,11 @@ export const Seat: MessageFns<Seat> = {
         : isSet(object.run_it_twice)
         ? globalThis.Boolean(object.run_it_twice)
         : undefined,
+      auto_rebuy: isSet(object.autoRebuy)
+        ? globalThis.Boolean(object.autoRebuy)
+        : isSet(object.auto_rebuy)
+        ? globalThis.Boolean(object.auto_rebuy)
+        : undefined,
     };
   },
 
@@ -777,6 +795,9 @@ export const Seat: MessageFns<Seat> = {
     if (message.run_it_twice !== undefined) {
       obj.runItTwice = message.run_it_twice;
     }
+    if (message.auto_rebuy !== undefined) {
+      obj.autoRebuy = message.auto_rebuy;
+    }
     return obj;
   },
 
@@ -803,6 +824,7 @@ export const Seat: MessageFns<Seat> = {
     message.avatar_url = object.avatar_url ?? undefined;
     message.playstyle_badge = object.playstyle_badge ?? undefined;
     message.run_it_twice = object.run_it_twice ?? undefined;
+    message.auto_rebuy = object.auto_rebuy ?? undefined;
     return message;
   },
 };

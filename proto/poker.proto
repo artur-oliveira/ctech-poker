@@ -43,6 +43,7 @@ message Seat {
   optional string avatar_url = 16;
   optional string playstyle_badge = 17;
   optional bool run_it_twice = 18;
+  optional bool auto_rebuy = 19;
 }
 
 message BlindEscalation {

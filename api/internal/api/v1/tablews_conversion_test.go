@@ -72,6 +72,20 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 	}
 }
 
+func TestConvertSnapshotMapsAutoRebuyToOptionalBool(t *testing.T) {
+	snap := hand.Snapshot{Seats: []hand.SeatView{
+		{PlayerID: "p1", AutoRebuy: true},
+		{PlayerID: "p2", AutoRebuy: false},
+	}}
+	proto := ConvertSnapshot(snap)
+	if proto.Seats[0].AutoRebuy == nil || !*proto.Seats[0].AutoRebuy {
+		t.Fatal("expected p1's auto_rebuy to be set true")
+	}
+	if proto.Seats[1].AutoRebuy != nil {
+		t.Fatal("expected p2's auto_rebuy to be nil (unset), matching run_it_twice's false-is-absent convention")
+	}
+}
+
 func TestConvertSnapshotPreservesPartialDeckProof(t *testing.T) {
 	converted := ConvertSnapshot(hand.Snapshot{
 		RootCommitHash: "root",
