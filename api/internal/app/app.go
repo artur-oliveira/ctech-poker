@@ -84,6 +84,7 @@ var Module = fx.Options(
 		newTableManager,
 	),
 	fx.Invoke(wirePlayerRemovedHook),
+	fx.Invoke(wireAutoRebuyHook),
 	fx.Invoke(registerRoutes),
 	fx.Invoke(startServer),
 )
@@ -512,6 +513,77 @@ func handItemForWithAvatars(outcome hand.HandOutcome, id string, names, avatarUR
 		}
 	}
 	return item
+}
+
+// autoRebuyRoomLookup and autoRebuyBuyinService narrow *roomstore.Store and
+// *buyin.Service down to exactly what autoRebuySweep needs, so it's testable
+// with plain fakes instead of the DynamoDB-backed integration harness
+// buyin's own tests require.
+type autoRebuyRoomLookup interface {
+	Get(ctx context.Context, roomID string) (*roomstore.Room, error)
+}
+
+type autoRebuyBuyinService interface {
+	SeatedSummary(ctx context.Context, roomID, playerID string) (buyin.SeatSummary, error)
+	SandboxBalance(ctx context.Context, playerID string) (int64, error)
+	BuyIn(ctx context.Context, roomID, playerID string, amount int64, midHand bool, idemKey string) error
+}
+
+// autoRebuySweep checks every one of a just-completed hand's participants
+// and auto-rebuys anyone who busted (Stack==0) with auto-rebuy on and enough
+// sandbox balance to cover their original buy-in. Sandbox rooms only — see
+// docs/specs/2026-08-10-auto-buyin-design.md's Scope section for why
+// real-money is excluded. Errors are logged and skipped per player, never
+// retried: a skipped player just stays sitting out, same as insufficient
+// balance.
+func autoRebuySweep(ctx context.Context, buyinSvc autoRebuyBuyinService, rooms autoRebuyRoomLookup, tableID, handID string, outcome hand.HandOutcome) {
+	room, err := rooms.Get(ctx, tableID)
+	if err != nil {
+		slog.Error("auto-rebuy: load room failed", "table", tableID, "err", err)
+		return
+	}
+	if room == nil || room.CurrencyMode != roomstore.CurrencyModeSandbox {
+		return
+	}
+	for _, playerID := range outcome.Participants {
+		seat, err := buyinSvc.SeatedSummary(ctx, tableID, playerID)
+		if err != nil {
+			slog.Error("auto-rebuy: seat lookup failed", "table", tableID, "player", playerID, "err", err)
+			continue
+		}
+		if !seat.Seated || seat.Stack != 0 || !seat.AutoRebuy || seat.BuyInAmount <= 0 {
+			continue
+		}
+		balance, err := buyinSvc.SandboxBalance(ctx, playerID)
+		if err != nil {
+			slog.Error("auto-rebuy: balance check failed", "table", tableID, "player", playerID, "err", err)
+			continue
+		}
+		if balance < seat.BuyInAmount {
+			continue
+		}
+		nonce := handID + "-auto-" + playerID
+		if err := buyinSvc.BuyIn(ctx, tableID, playerID, seat.BuyInAmount, false, nonce); err != nil {
+			slog.Error("auto-rebuy: buy-in failed", "table", tableID, "player", playerID, "err", err)
+		}
+	}
+}
+
+// wireAutoRebuyHook installs the post-hand auto-rebuy sweep. Same
+// construction-cycle reason as wirePlayerRemovedHook below: buyin.Service
+// depends on *tablemanager.Manager, so this can only be wired after Fx
+// builds both.
+//
+// autoRebuySweep is dispatched in a detached goroutine, never called inline:
+// this callback fires synchronously from inside the table actor's own
+// single-goroutine command loop (table/actor.go's notifyHandComplete, called
+// from broadcastAll before the actor's Run loop reads its next command), and
+// both SeatedSummary and BuyIn dispatch back into that same loop. Calling
+// either synchronously here would deadlock the whole table.
+func wireAutoRebuyHook(mgr *tablemanager.Manager, buyinSvc *buyin.Service, rooms *roomstore.Store) {
+	mgr.SetOnAutoRebuySweep(func(tableID, handID string, outcome hand.HandOutcome) {
+		go autoRebuySweep(context.Background(), buyinSvc, rooms, tableID, handID, outcome)
+	})
 }
 
 // wirePlayerRemovedHook installs table.Actor's system-removal notification —

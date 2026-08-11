@@ -35,6 +35,98 @@ func TestTableCurrencyModeUsesRoomMode(t *testing.T) {
 	}
 }
 
+type autoRebuyBuyInCall struct {
+	roomID, playerID string
+	amount           int64
+}
+
+type fakeAutoRebuyBuyin struct {
+	seats    map[string]buyin.SeatSummary
+	balances map[string]int64
+	buyIns   []autoRebuyBuyInCall
+}
+
+func (f *fakeAutoRebuyBuyin) SeatedSummary(_ context.Context, _, playerID string) (buyin.SeatSummary, error) {
+	return f.seats[playerID], nil
+}
+func (f *fakeAutoRebuyBuyin) SandboxBalance(_ context.Context, playerID string) (int64, error) {
+	return f.balances[playerID], nil
+}
+func (f *fakeAutoRebuyBuyin) BuyIn(_ context.Context, roomID, playerID string, amount int64, _ bool, _ string) error {
+	f.buyIns = append(f.buyIns, autoRebuyBuyInCall{roomID, playerID, amount})
+	return nil
+}
+
+func TestAutoRebuySweepRebuysBustedAutoRebuySeatWithSufficientBalance(t *testing.T) {
+	buyinSvc := &fakeAutoRebuyBuyin{
+		seats:    map[string]buyin.SeatSummary{"player-1": {Seated: true, Stack: 0, AutoRebuy: true, BuyInAmount: 100}},
+		balances: map[string]int64{"player-1": 500},
+	}
+	rooms := fakeRoomModeReader{room: &roomstore.Room{CurrencyMode: roomstore.CurrencyModeSandbox}}
+
+	autoRebuySweep(context.Background(), buyinSvc, rooms, "table-1", "hand-1", hand.HandOutcome{Participants: []string{"player-1"}})
+
+	if len(buyinSvc.buyIns) != 1 || buyinSvc.buyIns[0].amount != 100 {
+		t.Fatalf("expected one 100-chip auto-rebuy, got %+v", buyinSvc.buyIns)
+	}
+}
+
+func TestAutoRebuySweepSkipsInsufficientBalance(t *testing.T) {
+	buyinSvc := &fakeAutoRebuyBuyin{
+		seats:    map[string]buyin.SeatSummary{"player-1": {Seated: true, Stack: 0, AutoRebuy: true, BuyInAmount: 100}},
+		balances: map[string]int64{"player-1": 50},
+	}
+	rooms := fakeRoomModeReader{room: &roomstore.Room{CurrencyMode: roomstore.CurrencyModeSandbox}}
+
+	autoRebuySweep(context.Background(), buyinSvc, rooms, "table-1", "hand-1", hand.HandOutcome{Participants: []string{"player-1"}})
+
+	if len(buyinSvc.buyIns) != 0 {
+		t.Fatalf("expected no auto-rebuy for insufficient balance, got %+v", buyinSvc.buyIns)
+	}
+}
+
+func TestAutoRebuySweepSkipsRealMoneyRooms(t *testing.T) {
+	buyinSvc := &fakeAutoRebuyBuyin{
+		seats:    map[string]buyin.SeatSummary{"player-1": {Seated: true, Stack: 0, AutoRebuy: true, BuyInAmount: 100}},
+		balances: map[string]int64{"player-1": 500},
+	}
+	rooms := fakeRoomModeReader{room: &roomstore.Room{CurrencyMode: roomstore.CurrencyModeReal}}
+
+	autoRebuySweep(context.Background(), buyinSvc, rooms, "table-1", "hand-1", hand.HandOutcome{Participants: []string{"player-1"}})
+
+	if len(buyinSvc.buyIns) != 0 {
+		t.Fatalf("expected no auto-rebuy sweep for real-money rooms, got %+v", buyinSvc.buyIns)
+	}
+}
+
+func TestAutoRebuySweepSkipsSeatWithoutAutoRebuy(t *testing.T) {
+	buyinSvc := &fakeAutoRebuyBuyin{
+		seats:    map[string]buyin.SeatSummary{"player-1": {Seated: true, Stack: 0, AutoRebuy: false, BuyInAmount: 100}},
+		balances: map[string]int64{"player-1": 500},
+	}
+	rooms := fakeRoomModeReader{room: &roomstore.Room{CurrencyMode: roomstore.CurrencyModeSandbox}}
+
+	autoRebuySweep(context.Background(), buyinSvc, rooms, "table-1", "hand-1", hand.HandOutcome{Participants: []string{"player-1"}})
+
+	if len(buyinSvc.buyIns) != 0 {
+		t.Fatalf("expected no auto-rebuy when AutoRebuy is false, got %+v", buyinSvc.buyIns)
+	}
+}
+
+func TestAutoRebuySweepSkipsSeatThatDidNotBust(t *testing.T) {
+	buyinSvc := &fakeAutoRebuyBuyin{
+		seats:    map[string]buyin.SeatSummary{"player-1": {Seated: true, Stack: 300, AutoRebuy: true, BuyInAmount: 100}},
+		balances: map[string]int64{"player-1": 500},
+	}
+	rooms := fakeRoomModeReader{room: &roomstore.Room{CurrencyMode: roomstore.CurrencyModeSandbox}}
+
+	autoRebuySweep(context.Background(), buyinSvc, rooms, "table-1", "hand-1", hand.HandOutcome{Participants: []string{"player-1"}})
+
+	if len(buyinSvc.buyIns) != 0 {
+		t.Fatalf("expected no auto-rebuy for a seat that still has chips, got %+v", buyinSvc.buyIns)
+	}
+}
+
 // TestHandItemForMarksWinnerAmongMultipleOpponents pins down that a 3+-way
 // hand's history reports each opponent's own Won flag explicitly — before
 // OpponentSummary.Won existed, a player's match history only let a client
