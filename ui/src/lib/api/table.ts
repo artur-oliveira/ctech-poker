@@ -6,6 +6,7 @@ export interface SeatView {
   avatar_url?: string;
   playstyle_badge?: string;
   run_it_twice?: boolean;
+  auto_rebuy?: boolean;
   connection_state?: 'connected' | 'disconnected';
   stack: number;
   state: string;

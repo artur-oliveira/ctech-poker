@@ -1,10 +1,11 @@
-import {fireEvent, render, screen, waitFor} from '@testing-library/react';
+import {act, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {beforeEach, describe, expect, test, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {BuyInPanel, formatBuyIn, midBuyIn} from './BuyInPanel';
 import {LeaveDialog} from './LeaveDialog';
 import {RebuyDialog} from './RebuyDialog';
 import type {Room} from '@/lib/api/rooms';
+import type {SandboxPurchase, SandboxSKU} from '@/lib/api/wallet';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   refetch: vi.fn(),
   invalidateQueries: vi.fn(),
   isNotFound: vi.fn(),
+  createPurchase: vi.fn(),
 }));
 
 vi.mock('@tanstack/react-query', () => ({
@@ -25,6 +27,11 @@ vi.mock('@/lib/api/rooms', () => ({
   leaveRoom: mocks.leaveRoom,
 }));
 vi.mock('@/lib/api/client', () => ({isNotFound: mocks.isNotFound}));
+vi.mock('@/lib/api/wallet', () => ({
+  listSkus: vi.fn(),
+  createPurchase: mocks.createPurchase,
+}));
+vi.mock('@/lib/api/player', () => ({getMe: vi.fn()}));
 vi.mock('axios', () => ({
   default: {isAxiosError: (error: { axios?: boolean }) => Boolean(error?.axios)},
   isAxiosError: (error: { axios?: boolean }) => Boolean(error?.axios),
@@ -146,8 +153,21 @@ describe('BuyInPanel', () => {
 });
 
 describe('table bankroll dialogs', () => {
-  beforeEach(() => vi.clearAllMocks());
-  
+  let playerData: { sandbox_balance?: number } | undefined;
+  let skusData: SandboxSKU[];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    playerData = undefined;
+    skusData = [];
+    mocks.query.mockImplementation((options: { queryKey: unknown[] }) => {
+      const key = (options.queryKey as string[]).join(':');
+      if (key === 'player:me') return {data: playerData};
+      if (key === 'wallet:skus') return {data: skusData, isLoading: false, isError: false, refetch: vi.fn()};
+      return {data: undefined, isLoading: false, isError: false, refetch: vi.fn()};
+    });
+  });
+
   test('cash-outs the returned stack and closes the leave dialog', async () => {
     const left = vi.fn();
     mocks.leaveRoom.mockResolvedValue({amount: 1_750});
@@ -186,5 +206,63 @@ describe('table bankroll dialogs', () => {
     
     await waitFor(() => expect(mocks.joinRoom).toHaveBeenLastCalledWith('room-1', 4_000));
     expect(rebought).toHaveBeenCalledOnce();
+  });
+
+  describe('auto-rebuy grace window', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    test('shows nothing during the grace window when auto_rebuy is on', () => {
+      render(<RebuyDialog roomId="room-1" room={sandboxRoom} autoRebuy onRebuyAction={vi.fn()}/>);
+      expect(screen.queryByText('Você ficou sem fichas')).not.toBeInTheDocument();
+    });
+
+    test('falls back to the manual rebuy dialog after the grace window if still busted with balance', async () => {
+      playerData = {sandbox_balance: 300};
+      render(<RebuyDialog roomId="room-1" room={sandboxRoom} autoRebuy onRebuyAction={vi.fn()}/>);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1600);
+      });
+
+      expect(screen.getByText('Você ficou sem fichas')).toBeInTheDocument();
+      expect(screen.getByRole('slider', {name: 'Recompra'})).toBeInTheDocument();
+    });
+
+    test('offers an embedded PIX top-up after the grace window when balance is exactly zero', async () => {
+      playerData = {sandbox_balance: 0};
+      skusData = [{id: 'pack_100', price_cents: 100, base_credits: 1_000, bonus_percent: 0, total_credits: 1_000}];
+      render(<RebuyDialog roomId="room-1" room={sandboxRoom} autoRebuy onRebuyAction={vi.fn()}/>);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1600);
+      });
+
+      expect(screen.getByRole('button', {name: /1.000 fichas/})).toBeInTheDocument();
+      expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+    });
+
+    test('renders the manual dialog immediately (no grace window) when auto_rebuy is off', () => {
+      render(<RebuyDialog roomId="room-1" room={sandboxRoom} onRebuyAction={vi.fn()}/>);
+      expect(screen.getByText('Você ficou sem fichas')).toBeInTheDocument();
+    });
+
+    test('embedded PIX top-up creates a purchase and shows the pix payment view', async () => {
+      playerData = {sandbox_balance: 0};
+      skusData = [{id: 'pack_100', price_cents: 100, base_credits: 1_000, bonus_percent: 0, total_credits: 1_000}];
+      const purchase: SandboxPurchase = {
+        purchase_id: 'sbxp-1', sku: 'pack_100', status: 'pending', pix_copia_e_cola: '00020126...',
+      };
+      mocks.createPurchase.mockResolvedValue(purchase);
+      render(<RebuyDialog roomId="room-1" room={sandboxRoom} autoRebuy onRebuyAction={vi.fn()}/>);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1600);
+      });
+      vi.useRealTimers();
+
+      await userEvent.click(screen.getByRole('button', {name: /1.000 fichas/}));
+      expect(await screen.findByLabelText(/pix copia e cola/i)).toHaveValue('00020126...');
+    });
   });
 });

@@ -428,7 +428,8 @@ function TableContent() {
                         onClick={() => rt.ready(true)}><Play/></Button>}
             {viewerSeat && isPaused && viewerSeat.stack === 0 && room &&
               s.stage !== 'showdown' && s.stage !== 'complete' &&
-                <RebuyDialog roomId={id} room={room} onRebuyAction={() => rt.ready(true)}/>}
+                <RebuyDialog roomId={id} room={room} autoRebuy={Boolean(viewerSeat.auto_rebuy)}
+                             onRebuyAction={() => rt.ready(true)}/>}
             <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} onLeftAction={amount => {
               pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
               queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
