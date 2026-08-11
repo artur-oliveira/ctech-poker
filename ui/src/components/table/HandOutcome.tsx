@@ -41,6 +41,13 @@ export type HandOutcomeState = {
   stackAfter?: number;
   wonAmount?: number;
   refundAmount?: number;
+  // Only set when kind is 'mixed': every pot the viewer contested, in the
+  // order the server resolved them. A won entry carries no extra data since
+  // the viewer's own hand (above, `viewerCards`) is the same hand for every
+  // pot; a lost entry names the actual winner of that specific pot, which
+  // can differ pot to pot (e.g. two different rivals each win a side pot the
+  // viewer wasn't eligible for the other's).
+  pots?: ({ won: true } | { won: false; winnerName?: string; category?: string; winningCards?: string[] })[];
 };
 
 const EXIT_MS = 320;
@@ -211,7 +218,9 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
                 <PartyPopper/>
                 <span><b>Você venceu!</b><small>{categoryLabel(ownCategory) || 'Pote conquistado'}</small></span>
             </div>
-            <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>
+            <OutcomeCards cards={wonByKicker ? ownWithKickers.cards : ownCombination}
+                          kickerFrom={wonByKicker ? ownWithKickers.kickerFrom : undefined}
+                          viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>
           {wonByKicker && <p className="hand-outcome-kicker-note">Mesma combinação, o kicker decidiu.</p>}
           {chipChange}
         </>}
@@ -263,7 +272,31 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
                 <Equal/>
                 <span><b>Resultado misto</b><small>Você ganhou um pote e perdeu outro</small></span>
             </div>
-            <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>
+            <div className="hand-outcome-comparison">
+              {shown.pots?.map((potOutcome, index) => {
+                const label = shown.pots && shown.pots.length > 1 ? `Pote ${index + 1}` : undefined;
+                if (potOutcome.won) return (
+                  <div key={index} className="hand-outcome-comparison-row viewer">
+                    <span className="hand-outcome-hand-name">
+                      <small>{[label, 'Você'].filter(Boolean).join(' · ')}</small>
+                      <strong>{categoryLabel(ownCategory) || 'Sua mão'}</strong>
+                    </span>
+                    <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards} startIndex={index * 5}/>
+                  </div>
+                );
+                const potCategory = categoryFor(potOutcome.winningCards, potOutcome.category);
+                return (
+                  <div key={index} className="hand-outcome-comparison-row winner">
+                    <span className="hand-outcome-hand-name">
+                      <small>{[label, potOutcome.winnerName || 'Vencedor'].filter(Boolean).join(' · ')}</small>
+                      <strong>{categoryLabel(potCategory) || 'Mão vencedora'}</strong>
+                    </span>
+                    <OutcomeCards cards={combinationCards(potOutcome.winningCards, potOutcome.category)}
+                                  startIndex={index * 5}/>
+                  </div>
+                );
+              })}
+            </div>
           {amountDetails && <p className="hand-outcome-tie-note">{amountDetails}</p>}
           {chipChange}
             <small className="hand-outcome-next">A próxima mão já está a caminho.</small>

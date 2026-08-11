@@ -64,6 +64,20 @@ export function relevantRunnerUp(snapshot: TableSnapshot, viewer: string) {
     .sort((a, b) => (b.hand_score ?? 0) - (a.hand_score ?? 0))[0];
 }
 
+/** Every pot the viewer had a stake in, in the order the server resolved
+ * them, so a 'mixed' result (won one pot, lost another) can show each pot's
+ * actual outcome instead of collapsing a multi-pot showdown into a single
+ * winner/loser pair. */
+export function contestedPots(snapshot: TableSnapshot, viewer: string) {
+  return (snapshot.pot_results ?? [])
+    .filter(pot => !pot.refund && pot.winner_player_ids.length > 0 && pot.eligible_player_ids.includes(viewer))
+    .map(pot => {
+      const won = pot.winner_player_ids.includes(viewer);
+      const winnerSeat = won ? undefined : snapshot.seats.find(seat => pot.winner_player_ids.includes(seat.player_id));
+      return {won, winnerSeat};
+    });
+}
+
 function potCreditFor(pot: NonNullable<TableSnapshot['pot_results']>[number], playerId: string) {
   if (pot.payouts && playerId in pot.payouts) return pot.payouts[playerId] || 0;
   if (!pot.winner_player_ids.includes(playerId) || !pot.winner_player_ids.length) return 0;

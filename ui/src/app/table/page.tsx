@@ -37,6 +37,7 @@ import {useTablePreferences} from '@/lib/tablePreferences';
 import {useDealerVoice} from '@/lib/hooks/useDealerVoice';
 import {getPlayerNotes, type PlayerNote} from '@/lib/api/playerNotes';
 import {
+  contestedPots,
   playerPotBreakdown,
   relevantRunnerUp,
   relevantWinner,
@@ -323,6 +324,24 @@ function TableContent() {
     beatenSeat.hole_cards.every(card => card.toLowerCase() !== 'back') ? beatenSeat.hole_cards : undefined;
     const beatenCards = beatenHole && snap.board.length === 5 ?
       bestFiveCardHand([...beatenHole, ...snap.board]) : beatenHole;
+    // A 'mixed' result means the viewer won at least one contested pot and
+    // lost at least one other; per-pot detail is required because the pot
+    // the viewer lost may have a different winner (and hand) than the pot
+    // they won, so a single flattened winner/hand pair can't represent it.
+    const pots = kind === 'mixed' ? contestedPots(snap, viewer).map(potOutcome => {
+      if (potOutcome.won) return {won: true as const};
+      const potWinnerHole = potOutcome.winnerSeat?.hole_cards?.length === 2 &&
+      potOutcome.winnerSeat.hole_cards.every(card => card.toLowerCase() !== 'back') ?
+        potOutcome.winnerSeat.hole_cards : undefined;
+      const potWinningCards = potWinnerHole && snap.board.length === 5 ?
+        bestFiveCardHand([...potWinnerHole, ...snap.board]) : potWinnerHole;
+      return {
+        won: false as const,
+        winnerName: potOutcome.winnerSeat?.name,
+        category: potOutcome.winnerSeat?.hand_category,
+        winningCards: potWinningCards
+      };
+    }) : undefined;
     const stackBefore = seat.stack_at_hand_start ??
       (rememberedStart?.tableID === id && rememberedStart.handID === snap.hand_id ? rememberedStart.stack : undefined);
     const breakdown = playerPotBreakdown(snap, viewer);
@@ -347,7 +366,7 @@ function TableContent() {
         key: outcomeKeyRef.current, kind: folded ? 'fold' : kind, couldHaveWon,
         handCategory: seat.hand_category, opponentCategory,
         winningCards, winningHoleCards: winnerHole, viewerCards, viewerHoleCards: viewerHole,
-        beatenCards, beatenCategory: beatenSeat?.hand_category,
+        beatenCards, beatenCategory: beatenSeat?.hand_category, pots,
         winnerName: winnerSeat?.name, stackBefore, stackAfter: seat.stack,
         wonAmount: breakdown.won, refundAmount: breakdown.refund
       }

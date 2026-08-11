@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 import type {TableSnapshot} from './api/table.ts';
 import {
+  contestedPots,
   playerPotBreakdown,
   relevantRunnerUp,
   seatParticipated,
@@ -68,6 +69,20 @@ test('winning one pot and losing another is a mixed result', () => {
     ]
   };
   assert.equal(tableOutcomeKind(mixed, 'main'), 'mixed');
+});
+
+test('contestedPots reports the actual winner of each pot in a mixed result, not one flattened rival', () => {
+  const mixed = {
+    ...snapshot,
+    pot_results: [
+      snapshot.pot_results![0],
+      {...snapshot.pot_results![1], eligible_player_ids: ['main', 'side', 'loser']}
+    ]
+  };
+  assert.deepEqual(
+    contestedPots(mixed, 'main').map(pot => ({won: pot.won, winnerId: pot.winnerSeat?.player_id})),
+    [{won: true, winnerId: undefined}, {won: false, winnerId: 'side'}]
+  );
 });
 
 test('losing the contested pot while your own uncalled excess is refunded is still a clean loss, not mixed', () => {

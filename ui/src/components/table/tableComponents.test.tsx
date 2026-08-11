@@ -287,4 +287,22 @@ describe('hand outcome', () => {
     });
     expect(screen.queryByText('Mesma combinação, o kicker decidiu.')).not.toBeInTheDocument();
   });
+
+  test('names each side pot\'s actual winner in a mixed result, not the viewer twice', () => {
+    renderOutcome({
+      key: 8,
+      kind: 'mixed',
+      handCategory: 'two_pair',
+      viewerCards: ['AH', 'AD', 'KC', 'KD', '2D'],
+      viewerHoleCards: ['AH', 'AD'],
+      pots: [
+        {won: true},
+        {won: false, winnerName: 'Bia', category: 'straight', winningCards: ['9H', 'TD', 'JC', 'QS', 'KH']},
+      ],
+    });
+    expect(screen.getByText(/Pote 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Pote 2/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Bia/)[0]).toBeInTheDocument();
+    expect(screen.getByText('Sequência')).toBeInTheDocument();
+  });
 });
