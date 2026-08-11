@@ -49,7 +49,7 @@ export function LeaveDialog({roomId, stack, onLeftAction}: {
     }
   }
   
-  return <Dialog open={open} onOpenChangeAction={next => {
+  return <Dialog open={open} onOpenChange={next => {
     setOpen(next);
     if (!next) setError('');
   }}>

@@ -12,7 +12,7 @@ import {
 import {HandRankings} from '@/components/HandRankings';
 
 export function HandRankingsDialog({open, onOpenChangeAction}: { open: boolean; onOpenChangeAction: (open: boolean) => void }) {
-  return <Dialog open={open} onOpenChangeAction={onOpenChangeAction}>
+  return <Dialog open={open} onOpenChange={onOpenChangeAction}>
     <DialogTrigger render={<Button type="button" variant="ghost" size="icon" aria-label="Ver ranking de mãos"/>}>
       <CircleHelp/>
     </DialogTrigger>

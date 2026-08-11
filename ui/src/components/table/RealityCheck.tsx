@@ -67,7 +67,7 @@ export function RealityCheck({
   
   const sessionSeconds = Math.max(0, Math.floor((now - joinedAt * 1000) / 1000));
   const result = currentStack - buyIn;
-  return <Dialog open={open} onOpenChangeAction={setOpen}>
+  return <Dialog open={open} onOpenChange={setOpen}>
     <DialogContent>
       <DialogHeader>
         <DialogTitle><span className="reality-check-title"><Clock3

@@ -67,7 +67,7 @@ export function BotChallenge({required, onTokenAction}: {
   }, [onTokenAction, required, siteKey]);
   
   if (!required) return null;
-  return <Dialog open onOpenChangeAction={() => undefined}>
+  return <Dialog open onOpenChange={() => undefined}>
     <DialogContent className="bot-challenge-dialog">
       <DialogHeader>
         <DialogTitle><ShieldCheck aria-hidden="true"/> Verificação rápida</DialogTitle>

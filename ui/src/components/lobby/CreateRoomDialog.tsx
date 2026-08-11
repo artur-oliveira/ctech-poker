@@ -95,7 +95,7 @@ export function CreateRoomDialog() {
     }
   }
   
-  return <Dialog open={open} onOpenChangeAction={setOpen}>
+  return <Dialog open={open} onOpenChange={setOpen}>
     <DialogTrigger render={<Button size="lg" variant="outline"/>}><Lock/>Mesa privada</DialogTrigger>
     <DialogContent>
       <DialogHeader><p className="font-mono text-xs tracking-widest text-(--brand-bright)">MESA PRIVADA</p><DialogTitle>Configure

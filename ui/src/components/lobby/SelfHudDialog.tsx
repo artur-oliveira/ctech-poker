@@ -126,7 +126,7 @@ export function SelfHudDialog({open, onOpenChangeAction}: { open: boolean; onOpe
     queryFn: () => getMyPokerStats(mode),
     enabled: open
   });
-  return <Dialog open={open} onOpenChangeAction={onOpenChangeAction}>
+  return <Dialog open={open} onOpenChange={onOpenChangeAction}>
     <DialogContent className="self-hud-dialog">
       <DialogHeader>
         <DialogTitle>Seu jogo</DialogTitle>

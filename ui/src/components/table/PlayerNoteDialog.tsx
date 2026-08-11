@@ -56,7 +56,7 @@ export function PlayerNoteDialog({
     }
   };
   
-  return <Dialog open={open} onOpenChangeAction={onOpenChangeAction}>
+  return <Dialog open={open} onOpenChange={onOpenChangeAction}>
     <DialogContent>
       <DialogHeader>
         <DialogTitle className="player-note-title">

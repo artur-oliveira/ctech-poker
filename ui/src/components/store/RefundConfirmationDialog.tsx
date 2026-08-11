@@ -48,7 +48,7 @@ export function RefundConfirmationDialog({purchase, sandboxBalance, onCloseActio
     }
   }
 
-  return <Dialog open onOpenChangeAction={open => {
+  return <Dialog open onOpenChange={open => {
     if (!open && !pending) onCloseAction();
   }}>
     <DialogContent className="store-refund-dialog">
