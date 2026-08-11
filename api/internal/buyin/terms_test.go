@@ -7,6 +7,7 @@ import (
 
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
+	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
 
 type gateWallet struct{ debits int }
@@ -24,6 +25,9 @@ func (w *gateWallet) CashoutGame(context.Context, string, int64, string, []strin
 	return nil
 }
 func (w *gateWallet) DebitReal(context.Context, string, int64, string, string) error { return nil }
+func (w *gateWallet) Balances(context.Context, string) (*walletclient.Balances, error) {
+	return &walletclient.Balances{}, nil
+}
 
 type unacceptedProfiles struct{}
 

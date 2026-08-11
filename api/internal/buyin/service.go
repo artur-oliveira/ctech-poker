@@ -21,6 +21,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
+	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
 
 // walletMover is the subset of *walletclient.Client this service needs —
@@ -32,6 +33,7 @@ type walletMover interface {
 	ReleaseHold(ctx context.Context, holdID string) error
 	CashoutGame(ctx context.Context, userID string, amount int64, tableRef string, holdIDs []string, idempotencyKey, reason string) error
 	DebitReal(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
+	Balances(ctx context.Context, userID string) (*walletclient.Balances, error)
 }
 
 type roomLookup interface {
@@ -155,6 +157,19 @@ func (s *Service) walletFor(ctx context.Context, roomID, playerID string) (walle
 // with a distinct idempotency key (":refund" suffix) so the reversal can
 // never collide with — or be mistaken as a retry of — the original debit.
 func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int64, midHand bool, idemKey string) error {
+	return s.buyIn(ctx, roomID, playerID, amount, midHand, false, idemKey)
+}
+
+// BuyInWithAutoRebuy is BuyIn plus the one-time auto-rebuy opt-in. Only
+// meaningful for a brand-new seat: hand.Table.rebuyExisting ignores the
+// incoming Player's AutoRebuy field entirely, so calling this on an
+// already-seated player's rebuy is a harmless no-op, never a way to
+// retroactively flip auto-rebuy on for an existing seat.
+func (s *Service) BuyInWithAutoRebuy(ctx context.Context, roomID, playerID string, amount int64, midHand, autoRebuy bool, idemKey string) error {
+	return s.buyIn(ctx, roomID, playerID, amount, midHand, autoRebuy, idemKey)
+}
+
+func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int64, midHand, autoRebuy bool, idemKey string) error {
 	maxSeats := 0
 	var room *roomstore.Room
 	if s.rooms != nil {
@@ -237,7 +252,7 @@ func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int
 		}
 	}
 	reply := make(chan error, 1)
-	joinErr := actor.Dispatch(table.JoinCmd{PlayerID: playerID, Stack: amount, MaxSeats: maxSeats, MidHand: midHand, HoldID: holdID, SettlementIntent: feeIntent, Reply: reply})
+	joinErr := actor.Dispatch(table.JoinCmd{PlayerID: playerID, Stack: amount, MaxSeats: maxSeats, MidHand: midHand, HoldID: holdID, AutoRebuy: autoRebuy, SettlementIntent: feeIntent, Reply: reply})
 	if joinErr != nil {
 		// hand.ErrAlreadySeated here is NOT a same-request retry — the isSeated
 		// check above already short-circuits those before any debit happens.
@@ -357,6 +372,56 @@ func (s *Service) Seated(ctx context.Context, roomID, playerID string) (bool, in
 		return false, 0, nil
 	default:
 		return false, 0, nil
+	}
+}
+
+// SandboxBalance reports playerID's current sandbox wallet balance. Always
+// reads the sandbox wallet (s.wallet), never the real-money one (s.game) —
+// its only caller, the post-hand auto-rebuy sweep, is sandbox-only by design
+// (see docs/specs/2026-08-10-auto-buyin-design.md's Scope section).
+func (s *Service) SandboxBalance(ctx context.Context, playerID string) (int64, error) {
+	balances, err := s.wallet.Balances(ctx, playerID)
+	if err != nil {
+		return 0, fmt.Errorf("buyin: balances: %w", err)
+	}
+	return balances.SandboxBalance, nil
+}
+
+// SeatSummary is deliberately narrower than a full hand.SeatView — only what
+// app.autoRebuySweep needs to decide whether a busted seat should
+// self-resolve.
+type SeatSummary struct {
+	Seated      bool
+	Stack       int64
+	AutoRebuy   bool
+	BuyInAmount int64
+}
+
+// SeatedSummary is Seated plus the seat's auto-rebuy configuration. Kept
+// separate from Seated (the read path for GET /rooms/:id/seated) so that
+// endpoint's response shape never has to grow fields meant only for the
+// internal sweep.
+func (s *Service) SeatedSummary(ctx context.Context, roomID, playerID string) (SeatSummary, error) {
+	actor, err := s.manager.GetOrCreateActor(ctx, roomID, s.seedFor(ctx, roomID))
+	if err != nil || actor == nil {
+		return SeatSummary{}, fmt.Errorf("buyin: table unavailable: %w", err)
+	}
+
+	snapCh := make(chan hand.Snapshot, 1)
+	reply := make(chan error, 1)
+	if err := actor.Dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: reply}); err != nil {
+		return SeatSummary{}, err
+	}
+	select {
+	case snap := <-snapCh:
+		for _, seat := range snap.Seats {
+			if seat.PlayerID == playerID {
+				return SeatSummary{Seated: true, Stack: seat.Stack, AutoRebuy: seat.AutoRebuy, BuyInAmount: seat.BuyInAmount}, nil
+			}
+		}
+		return SeatSummary{}, nil
+	default:
+		return SeatSummary{}, nil
 	}
 }
 

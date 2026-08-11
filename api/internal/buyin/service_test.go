@@ -20,6 +20,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
+	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
 
 type fakeWallet struct {
@@ -28,6 +29,7 @@ type fakeWallet struct {
 	feeDebits []call
 	holds     []holdCall
 	cashouts  []cashoutCall
+	balances  map[string]int64 // playerID -> sandbox balance, for the auto-rebuy tests
 }
 type call struct {
 	userID string
@@ -82,6 +84,10 @@ func (f *fakeWallet) CashoutGame(_ context.Context, userID string, amount int64,
 func (f *fakeWallet) DebitReal(_ context.Context, userID string, amount int64, key, _ string) error {
 	f.feeDebits = append(f.feeDebits, call{userID, amount, key})
 	return nil
+}
+
+func (f *fakeWallet) Balances(_ context.Context, userID string) (*walletclient.Balances, error) {
+	return &walletclient.Balances{SandboxBalance: f.balances[userID]}, nil
 }
 
 func testManager(t *testing.T) *tablemanager.Manager {
@@ -467,6 +473,99 @@ func TestSeatedReportsFalseForNeverJoinedPlayer(t *testing.T) {
 	}
 	if seated || stack != 0 {
 		t.Fatalf("expected seated=false stack=0 for a player who never joined, got seated=%v stack=%d", seated, stack)
+	}
+}
+
+func TestSandboxBalanceReturnsWalletBalance(t *testing.T) {
+	wallet := &fakeWallet{balances: map[string]int64{"player-1": 500}}
+	mgr := testManager(t)
+	rooms := testRoomLookup()
+	svc := NewService(wallet, mgr, rooms)
+
+	balance, err := svc.SandboxBalance(context.Background(), "player-1")
+	if err != nil {
+		t.Fatalf("SandboxBalance: %v", err)
+	}
+	if balance != 500 {
+		t.Fatalf("expected balance=500, got %d", balance)
+	}
+}
+
+func TestSeatedSummaryReportsAutoRebuyAndBuyInAmount(t *testing.T) {
+	wallet := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := testRoomLookup()
+	svc := NewService(wallet, mgr, rooms)
+	ctx := context.Background()
+
+	if err := svc.BuyInWithAutoRebuy(ctx, "test-room", "player-1", 100, false, true, "idem-1"); err != nil {
+		t.Fatalf("BuyInWithAutoRebuy: %v", err)
+	}
+
+	seat, err := svc.SeatedSummary(ctx, "test-room", "player-1")
+	if err != nil {
+		t.Fatalf("SeatedSummary: %v", err)
+	}
+	if !seat.Seated || seat.Stack != 100 || !seat.AutoRebuy || seat.BuyInAmount != 100 {
+		t.Fatalf("expected seated=true stack=100 autoRebuy=true buyInAmount=100, got %+v", seat)
+	}
+}
+
+func TestSeatedSummaryReportsFalseAutoRebuyWhenNotOptedIn(t *testing.T) {
+	wallet := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := testRoomLookup()
+	svc := NewService(wallet, mgr, rooms)
+	ctx := context.Background()
+
+	if err := svc.BuyIn(ctx, "test-room", "player-1", 100, false, "idem-1"); err != nil {
+		t.Fatalf("BuyIn: %v", err)
+	}
+
+	seat, err := svc.SeatedSummary(ctx, "test-room", "player-1")
+	if err != nil {
+		t.Fatalf("SeatedSummary: %v", err)
+	}
+	if seat.AutoRebuy {
+		t.Fatalf("expected AutoRebuy=false for a plain BuyIn, got %+v", seat)
+	}
+}
+
+// TestSeatedSummaryKeepsOriginalBuyInAmountAcrossManualRebuy exercises the
+// same invariant as hand_test.go's
+// TestAddWaitingPlayerRebuyKeepsOriginalAutoRebuyAndBuyInAmount, but through
+// the buyin.Service seam the auto-rebuy sweep actually calls.
+func TestSeatedSummaryKeepsOriginalBuyInAmountAcrossManualRebuy(t *testing.T) {
+	wallet := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := &fakeRoomLookup{room: &roomstore.Room{
+		ID: "room-rebuy-amount", CurrencyMode: "sandbox", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9,
+	}}
+	svc := NewService(wallet, mgr, rooms)
+	ctx := context.Background()
+
+	seed := func() *hand.Table {
+		return hand.NewTable([]*hand.Player{{
+			ID: "player-1", Stack: 0, State: hand.SittingOut, AutoRebuy: true, BuyInAmount: 100,
+		}}, 10, 20)
+	}
+	if _, err := mgr.GetOrCreateActor(ctx, "room-rebuy-amount", seed); err != nil {
+		t.Fatalf("seed busted seat: %v", err)
+	}
+
+	if err := svc.BuyIn(ctx, "room-rebuy-amount", "player-1", 200, false, "rebuy"); err != nil {
+		t.Fatalf("manual rebuy: %v", err)
+	}
+
+	seat, err := svc.SeatedSummary(ctx, "room-rebuy-amount", "player-1")
+	if err != nil {
+		t.Fatalf("SeatedSummary: %v", err)
+	}
+	if seat.Stack != 200 {
+		t.Fatalf("expected post-rebuy stack=200, got %d", seat.Stack)
+	}
+	if !seat.AutoRebuy || seat.BuyInAmount != 100 {
+		t.Fatalf("expected AutoRebuy/BuyInAmount pinned to original join (true/100), got auto_rebuy=%v buy_in_amount=%d", seat.AutoRebuy, seat.BuyInAmount)
 	}
 }
 
