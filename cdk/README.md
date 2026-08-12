@@ -1,5 +1,9 @@
 # ctech-poker — CDK (infrastructure)
 
+> HAProxy migration: the API ASG no longer creates an ALB target group or listener
+> rule. `ctech-lbalancer` discovers it through its `poker` route; the retained
+> `/ctech/{env}/network/alb-sg-id` identifies the shared edge trusted by the API SG.
+
 AWS CDK (TypeScript) for the poker service. **All stacks are implemented and live.**
 Deploys in the order **CDK → API → Frontend** via `.github/workflows/deploy.yml`. Every claim below is
 anchored to `cdk/lib/` and re-verified on **2026-07-28**.

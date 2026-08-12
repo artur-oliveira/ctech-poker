@@ -1,6 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
@@ -14,10 +13,8 @@ import {
   addDualStackSsmAgentCommands,
   addSwapCommands,
   Environment,
-  PrivateIpv4Ec2Service,
 } from '@aoctech/cdk';
 import {
-  ALB_LISTENER_PRIORITY,
   API_CURRENT_ARTIFACT_KEY,
   APP_PORT,
   asgName,
@@ -191,15 +188,7 @@ export class PokerApiStack extends cdk.Stack {
     const vpc = ec2.Vpc.fromLookup(this, 'Vpc', {vpcId});
     
     const albSgId = ssm.StringParameter.valueForStringParameter(this, shared.albSgId);
-    const albSg = ec2.SecurityGroup.fromSecurityGroupId(this, 'AlbSg', albSgId);
-    
-    const httpsListenerArn = ssm.StringParameter.valueForStringParameter(
-      this, shared.httpsListenerArn,
-    );
-    const httpsListener = elbv2.ApplicationListener.fromApplicationListenerAttributes(
-      this, 'HttpsListener',
-      {listenerArn: httpsListenerArn, securityGroup: albSg},
-    );
+    const edgeSg = ec2.SecurityGroup.fromSecurityGroupId(this, 'EdgeSg', albSgId);
     
     const isProd = environment === 'prod';
     this.asgName = asgName(environment);
@@ -411,32 +400,26 @@ export class PokerApiStack extends cdk.Stack {
       `aws s3api head-object --bucket "${deploymentsBucketName}" --key "${API_CURRENT_ARTIFACT_KEY}" 2>/dev/null && /opt/app/deploy.sh ${API_CURRENT_ARTIFACT_KEY} || echo "No bootstrap artifact, waiting for first deploy"`,
     );
     
-    // ── Shared no-NAT-Gateway EC2/ASG pattern (@aoctech/cdk) ───────────────────
-    // Priority must be unique across services: 15=dfe, 25=account, 35=wallet, 45=poker.
-    const service = new PrivateIpv4Ec2Service(this, 'ApiService', {
+    // HAProxy discovers this ASG through its ctech-lbalancer bootstrap route.
+    const serviceSg = new ec2.SecurityGroup(this, 'ApiServiceSg', {
       vpc,
-      albSg,
-      httpsListener,
       securityGroupName: `${environment}-${SERVICE}-api-sg`,
-      securityGroupDescription: 'ctech-poker API instances',
-      appPort: APP_PORT,
-      instanceProfileName,
-      userData,
-      logGroupAppName: logGroupApp,
-      logGroupNginxName: logGroupNginx,
-      logRetention,
-      logRemovalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-      metricNamespace: `CtechPoker/${environment}`,
-      targetGroupName: `${this.asgName}-tg`,
-      healthCheckPath: HEALTH_CHECK_PATH,
-      asgName: this.asgName,
+      description: 'ctech-poker API instances', allowAllOutbound: true, allowAllIpv6Outbound: true,
+    });
+    serviceSg.addIngressRule(edgeSg, ec2.Port.tcp(APP_PORT), 'HAProxy edge to app');
+    const appLogGroup = new logs.LogGroup(this, 'ApiServiceAppLogGroup', {logGroupName: logGroupApp, retention: logRetention, removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY});
+    const nginxLogGroup = new logs.LogGroup(this, 'ApiServiceNginxLogGroup', {logGroupName: logGroupNginx, retention: logRetention, removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY});
+    const launchTemplate = new ec2.LaunchTemplate(this, 'ApiServiceLaunchTemplate', {launchTemplateName: `${this.asgName}-lt`, instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO), machineImage: ec2.MachineImage.latestAmazonLinux2023({cpuType: ec2.AmazonLinuxCpuType.ARM_64, edition: ec2.AmazonLinuxEdition.MINIMAL}), blockDevices: [{deviceName: '/dev/xvda', volume: ec2.BlockDeviceVolume.ebs(3, {volumeType: ec2.EbsDeviceVolumeType.GP3, deleteOnTermination: true})}], userData, instanceProfile: iam.InstanceProfile.fromInstanceProfileName(this, 'ApiServiceInstanceProfile', instanceProfileName), requireImdsv2: true, securityGroup: serviceSg});
+    const cfnLaunchTemplate = launchTemplate.node.defaultChild as ec2.CfnLaunchTemplate;
+    cfnLaunchTemplate.addPropertyDeletionOverride('LaunchTemplateData.SecurityGroupIds');
+    cfnLaunchTemplate.addPropertyOverride('LaunchTemplateData.NetworkInterfaces', [{DeviceIndex: 0, Groups: [serviceSg.securityGroupId], AssociatePublicIpAddress: false, Ipv6AddressCount: 1}]);
+    const asg = new autoscaling.AutoScalingGroup(this, 'ApiServiceASG', {autoScalingGroupName: this.asgName, vpc, vpcSubnets: {subnetType: ec2.SubnetType.PUBLIC}, launchTemplate,
       minCapacity: minimumApiCapacity(environment),
       maxCapacity: isProd ? 3 : 1,
-      domainName,
-      listenerRulePriority: ALB_LISTENER_PRIORITY,
+      cooldown: cdk.Duration.seconds(120), healthChecks: autoscaling.HealthChecks.ec2({gracePeriod: cdk.Duration.seconds(120)}),
     });
-    service.autoScalingGroup.node.addDependency(profile);
-    service.targetGroup.setAttribute('deregistration_delay.timeout_seconds', '60');
+    asg.node.addDependency(profile);
+    if (isProd) asg.scaleOnCpuUtilization('ApiServiceCpuTargetTracking', {targetUtilizationPercent: 60, cooldown: cdk.Duration.minutes(3)});
 
     // ASG termination pauses before EC2 shutdown, asks systemd to stop the
     // process (which runs Fx OnStop -> DrainAndRelease), then explicitly
@@ -495,9 +478,9 @@ def handler(event, context):
     }));
     drainFunction.addToRolePolicy(new iam.PolicyStatement({
       actions: ['autoscaling:CompleteLifecycleAction'],
-      resources: [service.autoScalingGroup.autoScalingGroupArn],
+      resources: [asg.autoScalingGroupArn],
     }));
-    service.autoScalingGroup.addLifecycleHook('TerminationDrainHook', {
+    asg.addLifecycleHook('TerminationDrainHook', {
       lifecycleHookName: `${environment}-${SERVICE}-termination-drain`,
       lifecycleTransition: autoscaling.LifecycleTransition.INSTANCE_TERMINATING,
       defaultResult: autoscaling.DefaultResult.CONTINUE,
@@ -505,7 +488,7 @@ def handler(event, context):
       notificationTarget: new hooktargets.FunctionHook(drainFunction),
     });
     
-    const alarmMetricFilter = service.appLogGroup.addMetricFilter('AlarmLogFilter', {
+    const alarmMetricFilter = appLogGroup.addMetricFilter('AlarmLogFilter', {
       filterPattern: logs.FilterPattern.literal('"ALARM:"'),
       metricNamespace: `CtechPoker/${environment}`,
       metricName: 'AlarmLogLines',
@@ -588,21 +571,6 @@ def handler(event, context):
         left: [search('HTTPResponses')],
       }),
       new cloudwatch.GraphWidget({
-        title: 'ALB target health and response latency',
-        width: 12,
-        left: [
-          service.targetGroup.metricHealthyHostCount({statistic: 'Minimum'}),
-          service.targetGroup.metricUnhealthyHostCount({statistic: 'Maximum'}),
-        ],
-        right: [service.targetGroup.metricTargetResponseTime({statistic: 'p95'})],
-      }),
-      new cloudwatch.GraphWidget({
-        title: 'ALB traffic and target 5xx',
-        width: 12,
-        left: [service.targetGroup.metricRequestCount({statistic: 'Sum'})],
-        right: [service.targetGroup.metricHttpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, {statistic: 'Sum'})],
-      }),
-      new cloudwatch.GraphWidget({
         title: 'Wallet dependency: latency, retries and circuit breaker',
         width: 12,
         left: [search('WalletLatencyMs', 'p95')],
@@ -650,13 +618,13 @@ def handler(event, context):
     });
     
     // ── Outputs ───────────────────────────────────────────────────────────────
-    new cdk.CfnOutput(this, 'AsgName', {value: service.asgName, exportName: `${id}-asg-name`});
+    new cdk.CfnOutput(this, 'AsgName', {value: asg.autoScalingGroupName, exportName: `${id}-asg-name`});
     new cdk.CfnOutput(this, 'AppLogGroupName', {
-      value: service.appLogGroup.logGroupName,
+      value: appLogGroup.logGroupName,
       exportName: `${id}-app-log-group`,
     });
     new cdk.CfnOutput(this, 'NginxLogGroupName', {
-      value: service.nginxLogGroup.logGroupName,
+      value: nginxLogGroup.logGroupName,
       exportName: `${id}-nginx-log-group`,
     });
   }

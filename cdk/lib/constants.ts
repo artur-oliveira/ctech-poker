@@ -64,7 +64,7 @@ export const S3_PREFIX = SERVICE;
 export const API_CURRENT_ARTIFACT_KEY = `${S3_PREFIX}/current.zip`;
 
 // ── Per-environment names ───────────────────────────────────────────────────
-export const asgName = (env: Environment) => `${env}-${SERVICE}-v2`;
+export const asgName = (env: Environment) => `${env}-${SERVICE}`;
 export const instanceProfileName = (env: Environment) => `${env}-${SERVICE}-api-instance-profile`;
 export const frontendBucketName = (env: Environment) => `${env}-${SERVICE}-frontend`;
 export const avatarsBucketName = (env: Environment) => `${env}-${SERVICE}-avatars`;
