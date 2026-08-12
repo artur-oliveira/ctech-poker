@@ -4950,6 +4950,10 @@ h1 em {
     z-index: var(--z-chrome);
     right: 70px;
     bottom: var(--action-bar-clear);
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: flex-end;
+    gap: 8px;
     transition: opacity 150ms var(--ease-out-quart)
 }
 
@@ -4999,9 +5003,6 @@ h1 em {
 }
 
 .reaction-panel {
-    position: absolute;
-    right: 0;
-    bottom: 53px;
     display: flex;
     width: min(300px, calc(100vw - 24px));
     max-height: min(440px, calc(100dvh - 140px));
@@ -9499,14 +9500,9 @@ h1 em {
         right: auto;
         left: max(8px, env(safe-area-inset-left));
         top: calc(env(safe-area-inset-top) + 113px);
-        bottom: auto
-    }
-
-    .reaction-panel {
-        top: 53px;
-        right: auto;
-        left: 0;
-        bottom: auto
+        bottom: auto;
+        flex-direction: column;
+        align-items: flex-start
     }
 
     .reaction-target-hint {
