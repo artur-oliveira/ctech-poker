@@ -82,6 +82,10 @@ function ReactionImpact({reactionId}: {reactionId: TableReactionID}) {
     {[0, 1, 2].map(index => <i key={index} style={{'--piece': index} as CSSProperties}>✦</i>)}</span>;
   if (reactionId === 'sleepy') return <span className="reaction-impact reaction-impact-sleepy" aria-hidden="true">
     {[0, 1, 2].map(index => <i key={index} style={{'--piece': index} as CSSProperties}>z</i>)}</span>;
+  if (reactionId === 'knife') return <span className="reaction-impact reaction-impact-knife" aria-hidden="true">
+    {EFFECT_PIECES.map(index => <i key={index} style={{'--piece': index} as CSSProperties}/>)}</span>;
+  if (reactionId === 'flowers') return <span className="reaction-impact reaction-impact-flowers" aria-hidden="true">
+    {EFFECT_PIECES.map(index => <i key={index} style={{'--piece': index} as CSSProperties}>🌸</i>)}</span>;
   return null;
 }
 

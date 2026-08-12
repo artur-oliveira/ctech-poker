@@ -5522,6 +5522,67 @@ h1 em {
     animation: reaction-sleepy-doze 1.8s ease-in-out calc(var(--piece) * 260ms) infinite
 }
 
+.reaction-impact-knife {
+    width: 46px;
+    height: 46px;
+    margin: -4px -23px;
+    opacity: inherit
+}
+
+.reaction-impact-knife::before {
+    content: '';
+    position: absolute;
+    inset: 50%;
+    width: 26px;
+    height: 26px;
+    margin: -13px;
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in srgb, var(--danger) 55%, transparent), transparent 70%);
+    opacity: 0;
+    animation: reaction-flash-pop 420ms var(--ease-out-quart) 900ms both
+}
+
+.reaction-impact-knife i {
+    --rot: 0deg;
+    position: absolute;
+    top: 0;
+    width: 5px;
+    height: 34px;
+    border-radius: 50% 50% 50% 50% / 55% 55% 100% 100%;
+    background: linear-gradient(to bottom, transparent 8%,
+                color-mix(in srgb, var(--danger) 55%, transparent) 40%,
+                color-mix(in srgb, var(--danger) 92%, transparent) 78%);
+    transform-origin: top center;
+    opacity: 0;
+    animation: reaction-blood-drip 2.7s var(--ease-out-quart) calc(940ms + var(--piece) * 130ms) both
+}
+
+.reaction-impact-knife i:nth-child(1) { left: calc(50% - 21px); height: 26px; --rot: -8deg }
+.reaction-impact-knife i:nth-child(2) { left: calc(50% - 10px); height: 42px; --rot: 5deg }
+.reaction-impact-knife i:nth-child(3) { left: calc(50% + 1px); height: 30px; width: 6px; --rot: -3deg }
+.reaction-impact-knife i:nth-child(4) { left: calc(50% + 15px); height: 22px; --rot: 9deg }
+.reaction-impact-knife i:nth-child(5) { left: calc(50% - 30px); height: 20px; width: 4px; --rot: 11deg }
+.reaction-impact-knife i:nth-child(6) { left: calc(50% + 24px); height: 36px; --rot: -10deg }
+.reaction-impact-knife i:nth-child(7) { left: calc(50% - 4px); height: 18px; width: 4px; --rot: 3deg }
+.reaction-impact-knife i:nth-child(8) { left: calc(50% + 8px); height: 40px; --rot: -5deg }
+
+.reaction-impact-flowers {
+    width: 110px;
+    height: 110px;
+    margin: -55px
+}
+
+.reaction-impact-flowers i {
+    position: absolute;
+    left: 50%;
+    top: 40%;
+    font-size: 15px;
+    font-style: normal;
+    opacity: 0;
+    transform: rotate(calc(var(--piece) * 60deg - 30deg));
+    animation: reaction-feather-fall 2.2s var(--ease-out-quart) calc(900ms + var(--piece) * 70ms) both
+}
+
 @media (prefers-reduced-motion: reduce) {
     .table-reaction-effect,
     .table-reaction-effect.emote,
@@ -5552,7 +5613,10 @@ h1 em {
     .reaction-respect-glow,
     .reaction-impact-respect i,
     .reaction-impact-sleepy i,
-    .reaction-chip-flash {
+    .reaction-chip-flash,
+    .reaction-impact-knife::before,
+    .reaction-impact-knife i,
+    .reaction-impact-flowers i {
         animation-duration: 1ms !important;
         animation-iteration-count: 1 !important;
         animation-delay: 0ms !important
@@ -5569,7 +5633,9 @@ h1 em {
     .reaction-impact-tear i,
     .reaction-impact-rofl i,
     .reaction-impact-duck i,
-    .reaction-impact-turtle i {
+    .reaction-impact-turtle i,
+    .reaction-impact-knife i,
+    .reaction-impact-flowers i {
         opacity: 1;
         visibility: visible
     }
@@ -6261,6 +6327,15 @@ h1 em {
     0%, 100% { transform: scale(1) }
     50% { transform: scale(1.08) }
 }
+
+@keyframes reaction-blood-drip {
+    0% { opacity: 0; transform: rotate(var(--rot)) scaleY(.08) }
+    16% { opacity: .95; transform: rotate(var(--rot)) scaleY(.24) }
+    55% { opacity: .85; transform: rotate(var(--rot)) scaleY(.7) }
+    82% { opacity: .5; transform: rotate(var(--rot)) scaleY(.92) }
+    100% { opacity: 0; transform: rotate(var(--rot)) scaleY(1) }
+}
+
 
 /* Mirrors .game-chat's fixed toggle/panel vocabulary. Desktop docks it
    bottom-left; portrait and short-landscape rules below move it into a safe

@@ -19,7 +19,9 @@ export const TABLE_REACTIONS = {
   poop: {label: 'Jogar cocô', glyph: '💩', targeted: true},
   rofl: {label: 'Rir da cara', glyph: '🤣', targeted: true},
   duck: {label: 'Jogar pato', glyph: '🦆', targeted: true},
-  turtle: {label: 'Chamar de lento', glyph: '🐢', targeted: true}
+  turtle: {label: 'Chamar de lento', glyph: '🐢', targeted: true},
+  knife: {label: 'Jogar faca', glyph: '🗡️', targeted: true},
+  flowers: {label: 'Mandar flores', glyph: '💐', targeted: true}
 } as const;
 
 export type TableReactionID = keyof typeof TABLE_REACTIONS;

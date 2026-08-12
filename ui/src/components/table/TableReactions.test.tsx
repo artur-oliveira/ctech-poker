@@ -173,12 +173,16 @@ describe('TableReactions', () => {
       {id: 'r-rofl', playerId: 'opponent-1', targetPlayerId: 'viewer', reactionId: 'rofl'},
       {id: 'r-duck', playerId: 'opponent-1', targetPlayerId: 'viewer', reactionId: 'duck'},
       {id: 'r-turtle', playerId: 'opponent-1', targetPlayerId: 'viewer', reactionId: 'turtle'},
+      {id: 'r-knife', playerId: 'opponent-1', targetPlayerId: 'viewer', reactionId: 'knife'},
+      {id: 'r-flowers', playerId: 'opponent-1', targetPlayerId: 'viewer', reactionId: 'flowers'},
     ];
     renderReactions({items});
     expect(screen.getByRole('img', {name: 'Jogar cocô'}).querySelector('.reaction-impact-poop')).not.toBeNull();
     expect(screen.getByRole('img', {name: 'Rir da cara'}).querySelector('.reaction-impact-rofl')).not.toBeNull();
     expect(screen.getByRole('img', {name: 'Jogar pato'}).querySelector('.reaction-impact-duck')).not.toBeNull();
     expect(screen.getByRole('img', {name: 'Chamar de lento'}).querySelector('.reaction-impact-turtle')).not.toBeNull();
+    expect(screen.getByRole('img', {name: 'Jogar faca'}).querySelector('.reaction-impact-knife')).not.toBeNull();
+    expect(screen.getByRole('img', {name: 'Mandar flores'}).querySelector('.reaction-impact-flowers')).not.toBeNull();
   });
 
   test('lists cold/fire among quick emotes and the new objects among thrown reactions', () => {
@@ -191,5 +195,7 @@ describe('TableReactions', () => {
     expect(screen.getByTitle('Rir da cara')).toBeInTheDocument();
     expect(screen.getByTitle('Jogar pato')).toBeInTheDocument();
     expect(screen.getByTitle('Chamar de lento')).toBeInTheDocument();
+    expect(screen.getByTitle('Jogar faca')).toBeInTheDocument();
+    expect(screen.getByTitle('Mandar flores')).toBeInTheDocument();
   });
 });
