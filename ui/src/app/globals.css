@@ -70,6 +70,13 @@
        this scale and don't belong in it. Dialogs (@base-ui) use Tailwind's
        z-50, already above every tier here. */
     --z-chrome: 20;
+    /* .game-table (position:relative, no z-index) never forms a stacking
+       context of its own, so a child positioned against it compares its
+       z-index directly against --z-chrome siblings (.game-chat,
+       .table-reactions) rather than against .game-table's local scope. Any
+       such child that must win that fight (currently just .hand-outcome)
+       uses this token instead of a small local int. */
+    --z-table: 21;
     --z-notice: 25;
     --z-toast: 30;
     --z-dev: 40;
@@ -552,11 +559,11 @@ h1 em {
     transform: translateX(-50%);
     font: 600 9px var(--font-mono);
     letter-spacing: .12em;
-    color: var(--felt-text-soft)
+    color: var(--felt-text)
 }
 
 .pot b {
-    color: var(--gold)
+    color: var(--gold-pale)
 }
 
 .community {
@@ -2155,6 +2162,13 @@ h1 em {
     min-width: 0
 }
 
+/* containing block for .reconnect-notice: anchors it to the header's real
+   rendered height instead of a guessed pixel offset, so it can never drift
+   onto the seat ring below regardless of header height at a given breakpoint */
+.game-chrome {
+    position: relative
+}
+
 .game-chrome > header {
     min-height: 55px;
     display: flex;
@@ -2994,9 +3008,9 @@ h1 em {
 }
 
 .reconnect-notice {
-    position: fixed;
+    position: absolute;
     z-index: var(--z-notice);
-    top: max(58px, calc(env(safe-area-inset-top) + 48px));
+    top: calc(100% + 6px);
     left: 50%;
     width: min(420px, calc(100vw - 24px));
     overflow: hidden;
@@ -4055,7 +4069,7 @@ h1 em {
 .hand-outcome {
     position: absolute;
     inset: 0;
-    z-index: 6;
+    z-index: var(--z-table);
     display: grid;
     place-items: center;
     padding: 12px;
@@ -4851,7 +4865,7 @@ h1 em {
     animation: table-panel-in 220ms var(--ease-out-quart) both
 }
 
-.chat-body h3 {
+.chat-body h2 {
     font-size: 14px;
     margin: 0 0 10px
 }
@@ -4935,7 +4949,23 @@ h1 em {
     position: fixed;
     z-index: var(--z-chrome);
     right: 70px;
-    bottom: var(--action-bar-clear)
+    bottom: var(--action-bar-clear);
+    transition: opacity 150ms var(--ease-out-quart)
+}
+
+/* the open chat body grows leftward past the reactions toggle's spot (same
+   bottom anchor, overlapping x-range); chat and reactions can't both be open
+   at once anyway, so step the toggle out of the way instead of fighting it
+   for stacking order */
+.game:has(.game-chat.open) .table-reactions {
+    opacity: 0;
+    pointer-events: none
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .table-reactions {
+        transition: none
+    }
 }
 
 .reaction-toggle {
@@ -6280,7 +6310,7 @@ h1 em {
     animation: rise .25s
 }
 
-.last-winners-panel h3 {
+.last-winners-panel h2 {
     font-size: 14px;
     margin: 0
 }
@@ -6292,11 +6322,29 @@ h1 em {
 }
 
 .last-winners-panel li {
+    animation: winner-row-in .3s var(--ease-out-quart) both;
+    animation-delay: calc(var(--stagger-index, 0) * 60ms)
+}
+
+.last-winners-row {
     display: flex;
     align-items: center;
     gap: 10px;
-    animation: winner-row-in .3s var(--ease-out-quart) both;
-    animation-delay: calc(var(--stagger-index, 0) * 60ms)
+    margin: -6px -8px;
+    padding: 6px 8px;
+    border-radius: 10px;
+    transition: background-color 150ms var(--ease-out-quart)
+}
+
+.last-winners-row:hover,
+.last-winners-row:focus-visible {
+    background: var(--seat-border)
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .last-winners-row {
+        transition: none
+    }
 }
 
 @keyframes winner-row-in {
@@ -6345,7 +6393,10 @@ h1 em {
    opposite chat/reactions on the right, and stays inside the safe area. */
 @media (orientation: portrait) and (max-width: 1023px) {
     .last-winners {
-        top: calc(env(safe-area-inset-top) + 60px);
+        /* +90px, not +60px: seat-3's avatar sits in this same upper-left
+           curve on the vertical stage (see TableStage's stage-v ring), and
+           60px brushed it */
+        top: calc(env(safe-area-inset-top) + 90px);
         bottom: auto;
         left: max(12px, env(safe-area-inset-left));
         flex-direction: column

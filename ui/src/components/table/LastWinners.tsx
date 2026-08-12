@@ -1,10 +1,12 @@
 'use client';
 import type {CSSProperties} from 'react';
-import {useState} from 'react';
+import {useRef, useState} from 'react';
+import Link from 'next/link';
 import {Trophy} from 'lucide-react';
 import type {HandItem} from '@/lib/api/player';
 import {bestFiveCardHand, bestHandCategory} from '@/lib/pokerRules';
-import {HAND_CATEGORY_LABELS} from '@/lib/utils';
+import {HAND_CATEGORY_LABELS, isHoverCapable} from '@/lib/utils';
+import {useDismiss} from '@/lib/hooks/useDismiss';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 
@@ -53,8 +55,9 @@ export function deriveWinners(items: HandItem[], limit = 5): WinnerLogEntry[] {
  * only after the viewer sits through a fresh resolution. It can be
  * controlled by the table page so opening it closes chat, reactions, or
  * hand rankings instead of stacking multiple mobile overlays. */
-export function LastWinners({items, open: controlledOpen, onOpenChangeAction}: {
+export function LastWinners({items, tableId, open: controlledOpen, onOpenChangeAction}: {
   items: HandItem[];
+  tableId: string;
   open?: boolean;
   onOpenChangeAction?: (open: boolean) => void;
 }) {
@@ -65,29 +68,37 @@ export function LastWinners({items, open: controlledOpen, onOpenChangeAction}: {
     onOpenChangeAction?.(nextOpen);
   };
   const winners = deriveWinners(items);
+  const asideRef = useRef<HTMLElement>(null);
+  useDismiss(asideRef, open, () => setOpen(false));
   if (!winners.length) return null;
-  return <aside className={`last-winners ${open ? 'open' : ''}`} aria-label="Últimos vencedores da mesa">
+  return <aside ref={asideRef} className={`last-winners ${open ? 'open' : ''}`} aria-label="Últimos vencedores da mesa"
+                onMouseEnter={() => isHoverCapable() && setOpen(true)}
+                onMouseLeave={() => isHoverCapable() && setOpen(false)}>
     <button type="button" className="last-winners-toggle" aria-expanded={open} aria-controls="last-winners-panel"
             aria-label={open ? 'Fechar últimos vencedores' : 'Ver últimos vencedores'}
             onClick={() => setOpen(!open)}>
       <Trophy aria-hidden="true"/>
     </button>
     <div id="last-winners-panel" className="last-winners-panel">
-      <h3>Últimos vencedores</h3>
+      <h2>Últimos vencedores</h2>
       <ul>
         {winners.map((entry, i) => <li key={entry.key} style={{'--stagger-index': i} as CSSProperties}>
-          <span className="last-winners-cards">
-            {entry.cards ? entry.cards.map((card, ci) => <PlayingCard key={card} card={card} index={ci} size="hole"/>) :
-              [0, 1].map(ci => <PlayingCard key={ci} index={ci} size="hole"/>)}
-          </span>
-          <span className="last-winners-info">
-            {entry.avatarUrls.map((avatarUrl, wi) => avatarUrl && <PlayerAvatar key={avatarUrl}
-                                                                                name={entry.names[wi]}
-                                                                                avatarUrl={avatarUrl} size={24}
-                                                                                decorative/>)}
-            <b>{entry.names.join(' e ')}</b>
-            {entry.category && <small>{HAND_CATEGORY_LABELS[entry.category] || entry.category}</small>}
-          </span>
+          <Link href={`/hands/replay?table_id=${encodeURIComponent(tableId)}&hand_id=${encodeURIComponent(entry.key)}&mode=sandbox`}
+                target="_blank" className="last-winners-row"
+                aria-label={`Assistir replay: ${entry.names.join(' e ')}`}>
+            <span className="last-winners-cards">
+              {entry.cards ? entry.cards.map((card, ci) => <PlayingCard key={card} card={card} index={ci} size="hole"/>) :
+                [0, 1].map(ci => <PlayingCard key={ci} index={ci} size="hole"/>)}
+            </span>
+            <span className="last-winners-info">
+              {entry.avatarUrls.map((avatarUrl, wi) => avatarUrl && <PlayerAvatar key={avatarUrl}
+                                                                                  name={entry.names[wi]}
+                                                                                  avatarUrl={avatarUrl} size={24}
+                                                                                  decorative/>)}
+              <b>{entry.names.join(' e ')}</b>
+              {entry.category && <small>{HAND_CATEGORY_LABELS[entry.category] || entry.category}</small>}
+            </span>
+          </Link>
         </li>)}
       </ul>
     </div>

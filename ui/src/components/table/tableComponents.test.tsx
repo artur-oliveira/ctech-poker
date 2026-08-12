@@ -233,6 +233,23 @@ describe('chat', () => {
     await userEvent.click(screen.getByRole('button', {name: 'Fechar chat'}));
     expect(onOpenChangeAction).toHaveBeenCalledWith(false);
   });
+
+  test('dismisses on Escape and on an outside click, but not an inside one', async () => {
+    const user = userEvent.setup();
+    const onOpenChangeAction = vi.fn();
+    render(<Chat open items={[]} onOpenChangeAction={onOpenChangeAction} onSendAction={vi.fn()}/>);
+
+    await user.click(screen.getByLabelText('Mensagem para a mesa'));
+    expect(onOpenChangeAction).not.toHaveBeenCalled();
+
+    await user.keyboard('{Escape}');
+    expect(onOpenChangeAction).toHaveBeenCalledWith(false);
+    expect(screen.getByRole('button', {name: 'Fechar chat'})).toHaveFocus();
+
+    onOpenChangeAction.mockClear();
+    await user.click(document.body);
+    expect(onOpenChangeAction).toHaveBeenCalledWith(false);
+  });
 });
 
 describe('hand outcome', () => {

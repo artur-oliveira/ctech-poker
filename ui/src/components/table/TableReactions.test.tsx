@@ -46,6 +46,19 @@ describe('TableReactions', () => {
     await userEvent.click(screen.getByRole('button', {name: 'Fechar reações'}));
     expect(opened.props.onOpenChangeAction).toHaveBeenCalledWith(false);
   });
+
+  test('dismisses on Escape and on an outside click', async () => {
+    const user = userEvent.setup();
+    const escaped = renderReactions();
+    await user.keyboard('{Escape}');
+    expect(escaped.props.onOpenChangeAction).toHaveBeenCalledWith(false);
+    expect(screen.getByRole('button', {name: 'Fechar reações'})).toHaveFocus();
+    escaped.unmount();
+
+    const clicked = renderReactions();
+    await user.click(document.body);
+    expect(clicked.props.onOpenChangeAction).toHaveBeenCalledWith(false);
+  });
   
   test('sends quick reactions immediately and closes the panel before seat targeting', async () => {
     const {props} = renderReactions();

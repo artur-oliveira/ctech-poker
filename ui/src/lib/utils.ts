@@ -9,6 +9,12 @@ export function cn(...values: ClassValue[]) {
   return twMerge(clsx(values));
 }
 
+/** True on devices with a real hover-capable, fine pointer (mouse/trackpad),
+ * false on touch — gates hover-to-open affordances so tap doesn't misfire them. */
+export function isHoverCapable(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+}
+
 export const ACHIEVEMENT_LABELS: Record<string, string> = {
   wins: "Vitórias",
   hands_played: "Mãos Jogadas",

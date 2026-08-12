@@ -1,8 +1,10 @@
 'use client';
-import {type CSSProperties, useState} from 'react';
+import {type CSSProperties, useRef, useState} from 'react';
 import {SmilePlus, Volume2, VolumeX, X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import type {SeatView} from '@/lib/api/table';
+import {isHoverCapable} from '@/lib/utils';
+import {useDismiss} from '@/lib/hooks/useDismiss';
 import {TABLE_REACTIONS, type TableReactionEvent, type TableReactionID} from '@/lib/reactions';
 
 const REACTION_MUTE_KEY = 'poker:table-reactions-muted';
@@ -127,7 +129,9 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
   const [muted, setMuted] = useState(() =>
     typeof window !== 'undefined' && window.localStorage.getItem(REACTION_MUTE_KEY) === 'true');
   const hasOpponents = seats.some(seat => seat.player_id !== viewerId);
-  
+  const asideRef = useRef<HTMLElement>(null);
+  useDismiss(asideRef, open, () => onOpenChangeAction(false));
+
   function toggleMute() {
     setMuted(value => {
       window.localStorage.setItem(REACTION_MUTE_KEY, String(!value));
@@ -139,7 +143,9 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
     {!muted && <div className="table-reaction-layer" aria-live="off">
       {items.map(item => <ReactionEffect key={item.id} item={item}/>)}
     </div>}
-    <aside className={`table-reactions${open ? ' open' : ''}${pendingReaction ? ' targeting' : ''}`} aria-label="Reações da mesa">
+    <aside ref={asideRef} className={`table-reactions${open ? ' open' : ''}${pendingReaction ? ' targeting' : ''}`} aria-label="Reações da mesa"
+           onMouseEnter={() => isHoverCapable() && !pendingReaction && onOpenChangeAction(true)}
+           onMouseLeave={() => isHoverCapable() && !pendingReaction && onOpenChangeAction(false)}>
       <Button type="button" variant="ghost" size="icon" className="reaction-toggle"
               aria-label={pendingReaction ? 'Cancelar arremesso' : open ? 'Fechar reações' : 'Abrir reações'}
               aria-expanded={open} aria-pressed={Boolean(pendingReaction)}

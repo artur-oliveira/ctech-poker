@@ -562,7 +562,7 @@ function TableContent() {
                       open={activeTablePanel === 'reactions'}
                       onOpenChangeAction={open => setActiveTablePanel(open ? 'reactions' : null)}/>
       <BotChallenge required={rt.botChallengeRequired} onTokenAction={rt.submitBotChallenge}/>
-      <LastWinners items={tableHands} open={activeTablePanel === 'winners'}
+      <LastWinners items={tableHands} tableId={id} open={activeTablePanel === 'winners'}
                    onOpenChangeAction={open => setActiveTablePanel(open ? 'winners' : null)}/>
       <PlayerNoteDialog key={noteOpponent?.player_id || 'closed'} opponent={noteOpponent}
                         existing={noteOpponent ? playerNotesByID[noteOpponent.player_id] : undefined}

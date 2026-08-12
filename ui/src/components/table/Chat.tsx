@@ -4,7 +4,8 @@ import {MessageCircle, Send, X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import type {SeatView} from '@/lib/api/table';
-import {playerName} from '@/lib/utils';
+import {isHoverCapable, playerName} from '@/lib/utils';
+import {useDismiss} from '@/lib/hooks/useDismiss';
 import {CHAT_MESSAGE_MAX_LENGTH} from '@/lib/chat';
 
 type ChatItem = { id: string; player: string; message: string; timestamp?: number };
@@ -26,6 +27,7 @@ export function Chat({items, onSendAction, connected = true, viewerId, seats = [
   const charCountId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
   const latest = items.at(-1);
   const nameOf = (id: string) => playerName(id, viewerId, seats.find(seat => seat.player_id === id)?.name);
   const [seenCount, setSeenCount] = useState(items.length);
@@ -58,7 +60,11 @@ export function Chat({items, onSendAction, connected = true, viewerId, seats = [
     setSendError('');
   }
 
-  return <aside className={`game-chat ${open ? 'open' : ''}`} aria-label="Chat da mesa">
+  useDismiss(asideRef, open, () => onOpenChangeAction(false));
+
+  return <aside ref={asideRef} className={`game-chat ${open ? 'open' : ''}`} aria-label="Chat da mesa"
+                onMouseEnter={() => isHoverCapable() && onOpenChangeAction(true)}
+                onMouseLeave={() => isHoverCapable() && onOpenChangeAction(false)}>
     <div className="sr-only" role="status" aria-live={open ? 'off' : 'polite'} aria-atomic="true">
       {latest ? `${nameOf(latest.player)} disse: ${latest.message}` : ''}
     </div>
@@ -69,7 +75,7 @@ export function Chat({items, onSendAction, connected = true, viewerId, seats = [
       {unread > 0 && <span className="chat-unread-dot" aria-hidden="true"/>}
     </Button>
     <div id={panelId} className="chat-body" aria-hidden={!open}>
-      <h3>Chat da mesa</h3>
+      <h2>Chat da mesa</h2>
       <div className="messages" role="log" aria-live="polite" aria-relevant="additions text" ref={messagesRef}>
         {items.length === 0 ? <p className="messages-empty">Nenhuma mensagem ainda. Diga um oi para a mesa.</p> :
           items.map(message => <p key={message.id}>

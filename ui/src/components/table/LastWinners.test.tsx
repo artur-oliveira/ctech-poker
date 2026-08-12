@@ -56,38 +56,64 @@ describe('deriveWinners', () => {
 
 describe('LastWinners', () => {
   test('renders nothing without a known winner', () => {
-    const {container} = render(<LastWinners items={[hand({outcome: 'lost'})]}/>);
+    const {container} = render(<LastWinners items={[hand({outcome: 'lost'})]} tableId="table-1"/>);
     expect(container).toBeEmptyDOMElement();
   });
-  
+
   test('opens and closes the panel, rendering known cards and concealed placeholders', async () => {
     const user = userEvent.setup();
-    render(<LastWinners items={[
+    render(<LastWinners tableId="table-1" items={[
       hand({hand_id: 'visible', hole_cards: ['AH', 'AD']}),
       hand({hand_id: 'hidden', outcome: 'tied'}),
     ]}/>);
-    
+
     const toggle = screen.getByRole('button', {name: 'Ver últimos vencedores'});
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getAllByTestId('card')).toHaveLength(2);
     expect(screen.getAllByTestId('card-back')).toHaveLength(2);
-    
+
     await user.click(toggle);
     expect(screen.getByRole('button', {name: 'Fechar últimos vencedores'})).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getAllByText('Você')).toHaveLength(2);
-    
+
     await user.click(screen.getByRole('button', {name: 'Fechar últimos vencedores'}));
     expect(screen.getByRole('button', {name: 'Ver últimos vencedores'})).toHaveAttribute('aria-expanded', 'false');
   });
 
   test('reports toggle intent without overriding controlled state', async () => {
     const onOpenChangeAction = vi.fn();
-    const {rerender} = render(<LastWinners items={[hand({})]} open={false} onOpenChangeAction={onOpenChangeAction}/>);
+    const {rerender} = render(<LastWinners tableId="table-1" items={[hand({})]} open={false}
+                                            onOpenChangeAction={onOpenChangeAction}/>);
     await userEvent.click(screen.getByRole('button', {name: 'Ver últimos vencedores'}));
     expect(onOpenChangeAction).toHaveBeenCalledWith(true);
     expect(screen.getByRole('button', {name: 'Ver últimos vencedores'})).toHaveAttribute('aria-expanded', 'false');
 
-    rerender(<LastWinners items={[hand({})]} open onOpenChangeAction={onOpenChangeAction}/>);
+    rerender(<LastWinners tableId="table-1" items={[hand({})]} open onOpenChangeAction={onOpenChangeAction}/>);
     expect(screen.getByRole('button', {name: 'Fechar últimos vencedores'})).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  test('dismisses on Escape and on an outside click', async () => {
+    const user = userEvent.setup();
+    render(<LastWinners tableId="table-1" items={[hand({hole_cards: ['AH', 'AD']})]}/>);
+    const toggle = () => screen.getByRole('button', {name: /últimos vencedores/});
+
+    await user.click(toggle());
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    await user.keyboard('{Escape}');
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle()).toHaveFocus();
+
+    await user.click(toggle());
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    await user.click(document.body);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('links each entry to its replay in a new tab', () => {
+    render(<LastWinners tableId="table-1" items={[hand({hand_id: 'hand-9'})]} open/>);
+
+    const link = screen.getByRole('link', {name: /Assistir replay/});
+    expect(link).toHaveAttribute('href', '/hands/replay?table_id=table-1&hand_id=hand-9&mode=sandbox');
+    expect(link).toHaveAttribute('target', '_blank');
   });
 });
