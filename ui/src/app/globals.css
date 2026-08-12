@@ -4171,6 +4171,11 @@ h1 em {
     margin: 0
 }
 
+.hand-outcome-card.win .hand-outcome-kicker-note,
+.hand-outcome-card.win .hand-outcome-tie-note {
+    color: color-mix(in srgb, var(--toast-ink) 75%, transparent)
+}
+
 .hand-outcome-comparison {
     display: grid;
     gap: 5px;
@@ -4279,12 +4284,21 @@ h1 em {
     color: var(--paper)
 }
 
+.hand-outcome-card.win .hand-outcome-chips-base,
+.hand-outcome-card.win .hand-outcome-chips-delta {
+    color: color-mix(in srgb, var(--toast-ink) 75%, transparent)
+}
+
 .hand-outcome-chips.loss .hand-outcome-chips-total {
     color: var(--danger-soft)
 }
 
 .hand-outcome-next {
     color: var(--text-secondary)
+}
+
+.hand-outcome-card.win .hand-outcome-next {
+    color: color-mix(in srgb, var(--toast-ink) 75%, transparent)
 }
 
 .hand-outcome-card > .hand-outcome-next {

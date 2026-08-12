@@ -43,7 +43,8 @@ import {
   relevantWinner,
   seatParticipated,
   shouldShowOutcome,
-  tableOutcomeKind
+  tableOutcomeKind,
+  tiedWinners
 } from '@/lib/tableOutcome';
 import {type MockScenario, USE_MOCK} from '@/lib/mockConfig';
 import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
@@ -342,6 +343,17 @@ function TableContent() {
         winningCards: potWinningCards
       };
     }) : undefined;
+    // A tie means every contested pot the viewer won was split; name the
+    // other hand(s) in that split (2-way or 3+-way chop) instead of only
+    // showing the viewer's own combination.
+    const tiedWith = kind === 'tie' ? tiedWinners(snap, viewer).map(tiedSeat => {
+      const tiedHole = tiedSeat.hole_cards?.length === 2 &&
+      tiedSeat.hole_cards.every(card => card.toLowerCase() !== 'back') ? tiedSeat.hole_cards : undefined;
+      return {
+        name: tiedSeat.name,
+        cards: tiedHole && snap.board.length === 5 ? bestFiveCardHand([...tiedHole, ...snap.board]) : tiedHole
+      };
+    }) : undefined;
     const stackBefore = seat.stack_at_hand_start ??
       (rememberedStart?.tableID === id && rememberedStart.handID === snap.hand_id ? rememberedStart.stack : undefined);
     const breakdown = playerPotBreakdown(snap, viewer);
@@ -366,7 +378,7 @@ function TableContent() {
         key: outcomeKeyRef.current, kind: folded ? 'fold' : kind, couldHaveWon,
         handCategory: seat.hand_category, opponentCategory,
         winningCards, winningHoleCards: winnerHole, viewerCards, viewerHoleCards: viewerHole,
-        beatenCards, beatenCategory: beatenSeat?.hand_category, pots,
+        beatenCards, beatenCategory: beatenSeat?.hand_category, pots, tiedWith,
         winnerName: winnerSeat?.name, stackBefore, stackAfter: seat.stack,
         wonAmount: breakdown.won, refundAmount: breakdown.refund
       }

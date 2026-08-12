@@ -8,6 +8,7 @@ import {
   seatParticipated,
   shouldShowOutcome,
   tableOutcomeKind,
+  tiedWinners,
   winnerStandings
 } from './tableOutcome.ts';
 
@@ -106,6 +107,34 @@ test('losing the contested pot while your own uncalled excess is refunded is sti
     ]
   };
   assert.equal(tableOutcomeKind(shortCallLoss, 'main'), 'lose');
+});
+
+test('tiedWinners names only the other players sharing a split pot, 2-way and 3+-way', () => {
+  const twoWay = {
+    ...snapshot,
+    pot_results: [{
+      amount: 150, payout_amount: 150,
+      eligible_player_ids: ['main', 'side'], winner_player_ids: ['main', 'side']
+    }]
+  };
+  assert.deepEqual(tiedWinners(twoWay, 'main').map(seat => seat.player_id), ['side']);
+
+  const threeWay = {
+    ...snapshot,
+    pot_results: [{
+      amount: 150, payout_amount: 150,
+      eligible_player_ids: ['main', 'side', 'loser'], winner_player_ids: ['main', 'side', 'loser']
+    }]
+  };
+  assert.deepEqual(tiedWinners(threeWay, 'main').map(seat => seat.player_id).sort(), ['loser', 'side']);
+});
+
+test('tiedWinners excludes a pot the viewer won outright and refund-only layers', () => {
+  const soleWinner = {
+    ...snapshot,
+    pot_results: [snapshot.pot_results![0]]
+  };
+  assert.deepEqual(tiedWinners(soleWinner, 'main'), []);
 });
 
 test('relevantRunnerUp picks the best-scoring revealed opponent from a pot the viewer won', () => {

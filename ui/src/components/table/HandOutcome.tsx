@@ -48,6 +48,11 @@ export type HandOutcomeState = {
   // can differ pot to pot (e.g. two different rivals each win a side pot the
   // viewer wasn't eligible for the other's).
   pots?: ({ won: true } | { won: false; winnerName?: string; category?: string; winningCards?: string[] })[];
+  // Only set when kind is 'tie': the other player(s) who split this pot with
+  // the viewer, so a 2-way or 3+-way chop can show every tied hand instead
+  // of only the viewer's own combination. `cards` is undefined whenever that
+  // player's hole cards weren't revealed.
+  tiedWith?: { name?: string; cards?: string[] }[];
 };
 
 const EXIT_MS = 320;
@@ -199,11 +204,16 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
     shown.refundAmount ? `${shown.refundAmount.toLocaleString('pt-BR')} fichas devolvidas` : ''
   ].filter(Boolean).join(' e ');
   const announcement = shown.kind === 'win'
-    ? `Você venceu${amountDetails ? `: ${amountDetails}` : ''}.`
+    ? `Você venceu com ${categoryLabel(ownCategory) || 'a mão mais forte'}` +
+    `${wonByKicker ? ', decidido pelo kicker' : ''}${amountDetails ? `: ${amountDetails}` : ''}.`
     : shown.kind === 'lose'
-      ? `Você perdeu esta mão${shown.winnerName ? `. Vencedor: ${shown.winnerName}` : ''}.`
+      ? `Você perdeu esta mão${shown.winnerName ? `. Vencedor: ${shown.winnerName}` : ''}` +
+      `${categoryLabel(winnerCategory) ? ` com ${categoryLabel(winnerCategory)}` : ''}` +
+      `${decidedByKicker ? ', decidido pelo kicker' : higherCombination ? ', combinação mais alta venceu' : ''}` +
+      `${amountDetails ? `. ${amountDetails}` : ''}.`
       : shown.kind === 'tie'
-        ? `Pote dividido${amountDetails ? `: ${amountDetails}` : ''}.`
+        ? `Pote dividido${categoryLabel(ownCategory) ? ` com ${categoryLabel(ownCategory)}` : ''}` +
+        `${amountDetails ? `: ${amountDetails}` : ''}.`
         : shown.kind === 'fold'
           ? shown.couldHaveWon ? 'Você desistiu, mas sua mão venceria a mão revelada.' : 'Você desistiu desta mão.'
           : `Resultado misto: você ganhou ao menos um pote e perdeu outro${amountDetails ? `. ${amountDetails}` : ''}.`;
@@ -222,7 +232,9 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
                           kickerFrom={wonByKicker ? ownWithKickers.kickerFrom : undefined}
                           viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>
           {wonByKicker && <p className="hand-outcome-kicker-note">Mesma combinação, o kicker decidiu.</p>}
+          {amountDetails && <p className="hand-outcome-tie-note">{amountDetails}</p>}
           {chipChange}
+            <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
         </>}
 
         {shown.kind === 'lose' && <>
@@ -252,6 +264,7 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
             </div>
           {decidedByKicker && <p className="hand-outcome-kicker-note">Mesma combinação, o kicker decidiu.</p>}
           {higherCombination && <p className="hand-outcome-kicker-note">A combinação mais alta venceu.</p>}
+          {amountDetails && <p className="hand-outcome-tie-note">{amountDetails}</p>}
           {chipChange}
             <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
         </>}
@@ -261,8 +274,26 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
                 <Equal/>
                 <span><b>Pote dividido</b><small>{categoryLabel(ownCategory) || 'Combinação empatada'}</small></span>
             </div>
-            <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>
+          {shown.tiedWith?.length ? <div className="hand-outcome-comparison">
+              <div className="hand-outcome-comparison-row viewer">
+            <span className="hand-outcome-hand-name">
+              <small>Você</small>
+              <strong>{categoryLabel(ownCategory) || 'Sua mão'}</strong>
+            </span>
+                  <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}
+                                startIndex={0}/>
+              </div>
+            {shown.tiedWith.map((tied, index) => <div key={index} className="hand-outcome-comparison-row tied">
+              <span className="hand-outcome-hand-name">
+                <small>{tied.name || 'Jogador'}</small>
+                <strong>{categoryLabel(ownCategory) || 'Mesma combinação'}</strong>
+              </span>
+                <OutcomeCards cards={combinationCards(tied.cards)} startIndex={(index + 1) * 5}/>
+              </div>)}
+          </div> :
+            <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>}
             <p className="hand-outcome-tie-note">Mesma combinação. Os naipes não desempatam.</p>
+          {amountDetails && <p className="hand-outcome-tie-note">{amountDetails}</p>}
           {chipChange}
             <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
         </>}

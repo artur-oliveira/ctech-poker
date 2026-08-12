@@ -277,6 +277,10 @@ describe('hand outcome', () => {
       beatenCards: ['AS', 'AC', 'KH', 'QD', '3D'],
     });
     expect(screen.getByText('Mesma combinação, o kicker decidiu.')).toBeInTheDocument();
+    // Pair alone is 2 cards; the deciding kicker(s) must render too, or the
+    // note above has nothing on screen to point at.
+    expect(document.querySelectorAll('.hand-outcome-card-slot').length).toBe(5);
+    expect(document.querySelectorAll('.is-kicker').length).toBe(3);
   });
 
   test('does not claim a kicker decision on a win with no revealed opponent hand', () => {
@@ -304,5 +308,94 @@ describe('hand outcome', () => {
     expect(screen.getByText(/Pote 2/)).toBeInTheDocument();
     expect(screen.getAllByText(/Bia/)[0]).toBeInTheDocument();
     expect(screen.getByText('Sequência')).toBeInTheDocument();
+  });
+
+  test('shows a 2-way chop as a comparison between the viewer and the other tied hand', () => {
+    renderOutcome({
+      key: 9,
+      kind: 'tie',
+      viewerCards: ['AH', 'KD', 'QS', 'JC', 'TH'],
+      viewerHoleCards: ['AH', 'KD'],
+      tiedWith: [{name: 'Bia', cards: ['AS', 'KH', 'QD', 'JS', 'TC']}],
+    });
+    expect(screen.getByText('Você')).toBeInTheDocument();
+    expect(screen.getByText('Bia')).toBeInTheDocument();
+    expect(document.querySelectorAll('.hand-outcome-comparison-row').length).toBe(2);
+  });
+
+  test('shows a 3+-way chop with one row per tied hand', () => {
+    renderOutcome({
+      key: 10,
+      kind: 'tie',
+      viewerCards: ['AH', 'KD', 'QS', 'JC', 'TH'],
+      viewerHoleCards: ['AH', 'KD'],
+      tiedWith: [
+        {name: 'Bia', cards: ['AS', 'KH', 'QD', 'JS', 'TC']},
+        {name: 'Caio', cards: ['AC', 'KS', 'QH', 'JD', 'TS']},
+      ],
+    });
+    expect(screen.getByText('Bia')).toBeInTheDocument();
+    expect(screen.getByText('Caio')).toBeInTheDocument();
+    expect(document.querySelectorAll('.hand-outcome-comparison-row').length).toBe(3);
+  });
+
+  test('falls back to the single combination when the tied opponent never revealed', () => {
+    renderOutcome({key: 11, kind: 'tie', handCategory: 'straight',
+      winningCards: ['AH', 'KD', 'QS', 'JC', 'TH']});
+    expect(document.querySelectorAll('.hand-outcome-comparison-row').length).toBe(0);
+    expect(document.querySelectorAll('.hand-outcome-card-slot').length).toBe(5);
+  });
+
+  test('sr-only announcement names the hand category and a kicker decision on a win', () => {
+    renderOutcome({
+      key: 12,
+      kind: 'win',
+      viewerCards: ['AH', 'AD', 'KC', 'QS', '2D'],
+      beatenCards: ['AS', 'AC', 'KH', 'QD', '3D'],
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Você venceu com Par, decidido pelo kicker.');
+  });
+
+  test('sr-only announcement names the winner\'s category and kicker decision on a loss', () => {
+    renderOutcome({
+      key: 13,
+      kind: 'lose',
+      winnerName: 'Bia',
+      viewerCards: ['AH', 'AD', 'KC', 'QS', '2D'],
+      winningCards: ['AS', 'AC', 'KH', 'QD', '3D'],
+      viewerHoleCards: ['AH', 'KC'],
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Vencedor: Bia com Par, decidido pelo kicker.');
+  });
+
+  test('sr-only announcement names the tied hand category', () => {
+    renderOutcome({key: 14, kind: 'tie', handCategory: 'straight',
+      winningCards: ['AH', 'KD', 'QS', 'JC', 'TH']});
+    expect(screen.getByRole('status')).toHaveTextContent('Pote dividido com Sequência.');
+  });
+
+  test('shows the refund amount on a win, not just tie/mixed', () => {
+    renderOutcome({
+      key: 15, kind: 'win', handCategory: 'pair',
+      winningCards: ['AH', 'AD', 'KC', 'QS', '2D'],
+      wonAmount: 100, refundAmount: 25,
+    });
+    expect(screen.getByText('100 fichas ganhas e 25 fichas devolvidas')).toBeInTheDocument();
+  });
+
+  test('shows the refund amount on a loss, not just tie/mixed', () => {
+    renderOutcome({
+      key: 16, kind: 'lose', winnerName: 'Bia', refundAmount: 40,
+    });
+    expect(screen.getByText('40 fichas devolvidas')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('40 fichas devolvidas');
+  });
+
+  test('a win also tells the player the next hand is coming, like every other outcome', () => {
+    renderOutcome({
+      key: 17, kind: 'win', handCategory: 'pair',
+      winningCards: ['AH', 'AD', 'KC', 'QS', '2D'],
+    });
+    expect(screen.getByText('A próxima mão já está a caminho.')).toBeInTheDocument();
   });
 });

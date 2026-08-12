@@ -78,6 +78,16 @@ export function contestedPots(snapshot: TableSnapshot, viewer: string) {
     });
 }
 
+/** The other player(s) sharing a pot the viewer tied for, so a 2-way or
+ * 3+-way chop can name every hand in the split instead of only the
+ * viewer's own combination. */
+export function tiedWinners(snapshot: TableSnapshot, viewer: string) {
+  const otherIds = new Set((snapshot.pot_results ?? [])
+    .filter(pot => !pot.refund && pot.winner_player_ids.length > 1 && pot.winner_player_ids.includes(viewer))
+    .flatMap(pot => pot.winner_player_ids.filter(id => id !== viewer)));
+  return snapshot.seats.filter(seat => otherIds.has(seat.player_id));
+}
+
 function potCreditFor(pot: NonNullable<TableSnapshot['pot_results']>[number], playerId: string) {
   if (pot.payouts && playerId in pot.payouts) return pot.payouts[playerId] || 0;
   if (!pot.winner_player_ids.includes(playerId) || !pot.winner_player_ids.length) return 0;
