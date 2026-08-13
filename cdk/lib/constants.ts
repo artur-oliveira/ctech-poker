@@ -69,8 +69,8 @@ export const instanceProfileName = (env: Environment) => `${env}-${SERVICE}-api-
 export const frontendBucketName = (env: Environment) => `${env}-${SERVICE}-frontend`;
 export const avatarsBucketName = (env: Environment) => `${env}-${SERVICE}-avatars`;
 export const avatarsS3Origins = (env: Environment) => [
-  `https://${avatarsBucketName(env)}.s3.${AWS_REGION}.amazonaws.com`,
-  `https://${avatarsBucketName(env)}.s3.dualstack.${AWS_REGION}.amazonaws.com`,
+  `${avatarsBucketName(env)}.s3.${AWS_REGION}.amazonaws.com`,
+  `${avatarsBucketName(env)}.s3.dualstack.${AWS_REGION}.amazonaws.com`,
 ];
 export const routeStoreName = (env: Environment) => `${env}-${SERVICE}-routes`;
 export const avatarRewriteFunctionName = (env: Environment) => `${env}-${SERVICE}-avatar-rewrite`;

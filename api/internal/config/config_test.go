@@ -15,7 +15,7 @@ func TestLoadRequiresWalletWebhookHMACSecretInProd(t *testing.T) {
 	t.Setenv("ENVIRONMENT", "prod")
 	t.Setenv("VALKEY_URL", "redis://x")
 	t.Setenv("SERVICE_AUDIENCE", "https://poker.aoctech.app")
-	t.Setenv("CTECH_URL", "https://accounts.aoctech.app")
+	t.Setenv("CTECH_URL", "https://accounts-api.aoctech.app")
 	t.Setenv("CORS_ALLOWED_ORIGINS", "https://poker.aoctech.app")
 	t.Setenv("WALLET_WEBHOOK_HMAC_SECRET", "")
 

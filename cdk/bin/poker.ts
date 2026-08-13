@@ -13,6 +13,8 @@ import {
   ACCOUNTS_DOMAIN_PREFIX,
   API_DOMAIN_PREFIX,
   APP_DOMAIN_PREFIX,
+  avatarsBucketName,
+  avatarsS3Origins,
   AWS_ACCOUNT,
   AWS_REGION,
   CERT_ARN,
@@ -20,14 +22,12 @@ import {
   GITHUB_REPO_DEFAULT,
   instanceProfileName,
   SSM_POKER,
-  avatarsBucketName,
-  avatarsS3Origins,
 } from '../lib/constants';
 import {OidcStack} from "../lib/oidc-stack";
 
 const app = new cdk.App();
 
-const CLOUDFLARE_CHALLENGE_SRC = 'https://challenges.cloudflare.com'
+const CLOUDFLARE_CHALLENGE_SRC = 'challenges.cloudflare.com'
 const ENVIRONMENT = (process.env.ENVIRONMENT || 'dev') as Environment;
 const GITHUB_REPO = (process.env.GITHUB_REPO || GITHUB_REPO_DEFAULT);
 // VPC is managed by ctech-cdk (shared across every CTech service in this

@@ -25,7 +25,7 @@ type Config struct {
 
 	// ctech-account auth (see internal/api/v1/tablews.go) — poker's first
 	// user-facing auth surface; mirrors ctech-wallet's config fields exactly.
-	CtechURL           string   `env:"CTECH_URL" envDefault:"https://accounts.aoctech.app"`
+	CtechURL           string   `env:"CTECH_URL" envDefault:"https://accounts-api.aoctech.app"`
 	CtechJWKSURL       string   `env:"CTECH_JWKS_URL"`
 	ServiceAudience    string   `env:"SERVICE_AUDIENCE" envDefault:"https://poker.aoctech.app"`
 	CorsAllowedOrigins []string `env:"CORS_ALLOWED_ORIGINS" envSeparator:","`
