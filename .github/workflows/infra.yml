@@ -23,7 +23,7 @@ jobs:
     if: github.event_name == 'pull_request'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Resolve environment
         id: env
@@ -35,7 +35,7 @@ jobs:
           esac
 
       # Go is required: the Reconcile stack bundles api/cmd/reconcile at synth time.
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v7
         with:
           go-version-file: api/go.mod
           cache-dependency-path: api/go.sum
@@ -71,7 +71,7 @@ jobs:
           exit $FAIL
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@11b1c58b24724e66aa52a847862a0c1b0c4b0c7b # v6.1.0
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::868899309401:role/ctech-poker-gha-infra
           aws-region: us-east-1
@@ -116,7 +116,7 @@ jobs:
     if: ${{ github.event_name != 'pull_request' }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Resolve environment
         id: env
@@ -128,7 +128,7 @@ jobs:
           esac
 
       # Go is required: the Reconcile stack bundles api/cmd/reconcile at synth time.
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v7
         with:
           go-version-file: api/go.mod
           cache-dependency-path: api/go.sum
@@ -164,7 +164,7 @@ jobs:
           exit $FAIL
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@11b1c58b24724e66aa52a847862a0c1b0c4b0c7b # v6.1.0
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::868899309401:role/ctech-poker-gha-infra
           aws-region: us-east-1
