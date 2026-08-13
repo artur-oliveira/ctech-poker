@@ -17,6 +17,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
+	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
@@ -84,8 +85,8 @@ func TestAutoRebuySweepRebuysBustedAutoRebuySeatWithSufficientBalance(t *testing
 // real wallet's field-length validation.
 func TestAutoRebuySweepNonceFitsWalletIdempotencyKeyLimit(t *testing.T) {
 	const walletIdempotencyKeyMax = 128
-	const roomID = "01KZRP3S675Y6RGT1W21M1K4MV"    // 26-char ULID
-	const handID = "01KZRQ25994SJBRCKXEF6TGNVB"     // 26-char ULID
+	const roomID = "01KZRP3S675Y6RGT1W21M1K4MV"             // 26-char ULID
+	const handID = "01KZRQ25994SJBRCKXEF6TGNVB"             // 26-char ULID
 	const playerID = "78fd4d57-88a7-4eec-a997-7d7c09f58a1b" // 36-char UUID
 
 	buyinSvc := &fakeAutoRebuyBuyin{
@@ -299,7 +300,7 @@ func TestHandItemForPersistsFairnessProofWithoutSeed(t *testing.T) {
 func testRoutes(app *fiber.App, cfg *config.Config) {
 	verifier := jwtverify.NewVerifier("", "", "", cache.NewMemoryBackend(1))
 	manager := tablemanager.NewManager(nil, nil, nil, nil)
-	registerRoutes(app, cfg, nil, verifier, manager, ws.NewMemoryRegistry(), nil, nil, (*buyin.Service)(nil), (*player.Service)(nil), (*leaderboard.Service)(nil), (*dailyreward.Service)(nil), nil, nil, nil, nil, nil, nil, nil, (*sandboxpurchase.Service)(nil))
+	registerRoutes(app, cfg, nil, verifier, manager, ws.NewMemoryRegistry(), nil, nil, (*buyin.Service)(nil), (*player.Service)(nil), (*leaderboard.Service)(nil), (*dailyreward.Service)(nil), nil, nil, nil, nil, nil, nil, nil, (*sandboxpurchase.Service)(nil), (*reactionpurchase.Service)(nil))
 }
 
 func TestLivenessEndpointReturnsOK(t *testing.T) {

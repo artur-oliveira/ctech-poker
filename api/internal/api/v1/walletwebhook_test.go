@@ -15,9 +15,19 @@ import (
 	goproto "google.golang.org/protobuf/proto"
 	"gopkg.aoctech.app/api-commons/ws"
 	pokerproto "gopkg.aoctech.app/poker/api/internal/api/v1/proto"
+	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
 	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
+
+// noopReactionSvc is a reactionpurchase.Service that no test in this file
+// ever dispatches to (every purchase_id here lacks the "prdp" prefix) — real
+// prdp-prefixed dispatch coverage lives in walletwebhook_reaction_test.go,
+// which needs DynamoDB Local (build tag integration) since
+// reactionpurchase.Service's stores aren't fakeable interfaces.
+func noopReactionSvc() *reactionpurchase.Service {
+	return reactionpurchase.NewService(&fakeReactionWallet{}, reactionpurchase.NewEntitlementStore(nil, "test"), reactionpurchase.NewStore(nil, "test"))
+}
 
 func sign(secret string, body []byte) string {
 	mac := hmac.New(sha256.New, []byte(secret))
@@ -68,7 +78,7 @@ func TestWalletWebhookBroadcastsOnConfirm(t *testing.T) {
 	reg.Register("user#player-1", "conn-1", conn)
 
 	app := fiber.New()
-	RegisterWalletWebhook(app.Group("/v1.0"), "secret", svc, reg)
+	RegisterWalletWebhook(app.Group("/v1.0"), "secret", svc, noopReactionSvc(), reg)
 
 	body, _ := json.Marshal(map[string]string{"purchase_id": "sbxp-1"})
 	req := httptest.NewRequest(http.MethodPost, "/v1.0/webhooks/wallet", bytes.NewReader(body))
@@ -105,7 +115,7 @@ func TestWalletWebhookBroadcastsOnConfirm(t *testing.T) {
 func TestWalletWebhookRejectsBadSignature(t *testing.T) {
 	svc := sandboxpurchase.NewService(&fakeSandboxWallet{}, newFakeStoreForWebhookTest())
 	app := fiber.New()
-	RegisterWalletWebhook(app.Group("/v1.0"), "secret", svc, ws.NewMemoryRegistry())
+	RegisterWalletWebhook(app.Group("/v1.0"), "secret", svc, noopReactionSvc(), ws.NewMemoryRegistry())
 
 	body, _ := json.Marshal(map[string]string{"purchase_id": "sbxp-1"})
 	req := httptest.NewRequest(http.MethodPost, "/v1.0/webhooks/wallet", bytes.NewReader(body))

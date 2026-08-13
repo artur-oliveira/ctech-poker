@@ -38,6 +38,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/playernotes"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/problem"
+	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
@@ -77,6 +78,9 @@ var Module = fx.Options(
 		newRouletteService,
 		newSandboxPurchaseStore,
 		newSandboxPurchaseService,
+		newReactionEntitlementStore,
+		newReactionPurchaseStore,
+		newReactionPurchaseService,
 		newSessionStore,
 		walletclient.New,
 		newBuyinService,
@@ -297,6 +301,15 @@ func newSandboxPurchaseStore(db *dynamodb.Client, cfg *config.Config) *sandboxpu
 }
 func newSandboxPurchaseService(wallet *walletclient.Client, store *sandboxpurchase.Store) *sandboxpurchase.Service {
 	return sandboxpurchase.NewService(wallet, store)
+}
+func newReactionEntitlementStore(db *dynamodb.Client, cfg *config.Config) *reactionpurchase.EntitlementStore {
+	return reactionpurchase.NewEntitlementStore(db, cfg.Env)
+}
+func newReactionPurchaseStore(db *dynamodb.Client, cfg *config.Config) *reactionpurchase.Store {
+	return reactionpurchase.NewStore(db, cfg.Env)
+}
+func newReactionPurchaseService(wallet *walletclient.Client, entitlements *reactionpurchase.EntitlementStore, store *reactionpurchase.Store) *reactionpurchase.Service {
+	return reactionpurchase.NewService(wallet, entitlements, store)
 }
 func newSessionStore(db *dynamodb.Client, cfg *config.Config) *sessionlog.Store {
 	return sessionlog.NewStore(db, cfg.Env)
@@ -658,8 +671,9 @@ func registerRoutes(
 	pokerStatsStore *pokerstats.Store,
 	avatars *avatar.Service,
 	sandboxPurchaseSvc *sandboxpurchase.Service,
+	reactionPurchaseSvc *reactionpurchase.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc)
 }
 
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {

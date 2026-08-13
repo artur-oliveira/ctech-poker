@@ -12,6 +12,7 @@ import (
 	goproto "google.golang.org/protobuf/proto"
 	"gopkg.aoctech.app/api-commons/ws"
 	pokerproto "gopkg.aoctech.app/poker/api/internal/api/v1/proto"
+	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
 	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
 )
 
@@ -19,12 +20,15 @@ const walletWebhookSignatureHeader = "X-Wallet-Signature"
 
 // RegisterWalletWebhook mounts POST /v1.0/webhooks/wallet, unauthenticated by
 // JWT — HMAC-SHA256 over the raw body against hmacSecret is the auth here,
-// matching ctech-wallet's own outbound M2M webhook signing.
-func RegisterWalletWebhook(router fiber.Router, hmacSecret string, svc *sandboxpurchase.Service, reg ws.Registry) {
-	router.Post("/webhooks/wallet", walletWebhookHandler(hmacSecret, svc, reg))
+// matching ctech-wallet's own outbound M2M webhook signing. purchase_id
+// prefix routes the callback: "prdp" (generic product purchase) goes to
+// reactionSvc, anything else goes to the sandbox-credits svc
+// (docs/specs/2026-08-12-premium-reactions.md).
+func RegisterWalletWebhook(router fiber.Router, hmacSecret string, sandboxSvc *sandboxpurchase.Service, reactionSvc *reactionpurchase.Service, reg ws.Registry) {
+	router.Post("/webhooks/wallet", walletWebhookHandler(hmacSecret, sandboxSvc, reactionSvc, reg))
 }
 
-func walletWebhookHandler(hmacSecret string, svc *sandboxpurchase.Service, reg ws.Registry) fiber.Handler {
+func walletWebhookHandler(hmacSecret string, sandboxSvc *sandboxpurchase.Service, reactionSvc *reactionpurchase.Service, reg ws.Registry) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		body := c.Body()
 		if !validWalletWebhookSignature(hmacSecret, body, c.Get(walletWebhookSignatureHeader)) {
@@ -37,7 +41,27 @@ func walletWebhookHandler(hmacSecret string, svc *sandboxpurchase.Service, reg w
 			return c.SendStatus(fiber.StatusBadRequest)
 		}
 
-		record, changed, err := svc.ConfirmFromWebhook(c.Context(), payload.PurchaseID)
+		if strings.HasPrefix(payload.PurchaseID, "prdp") {
+			record, changed, err := reactionSvc.ConfirmFromWebhook(c.Context(), payload.PurchaseID)
+			if err != nil {
+				slog.Error("wallet webhook: reaction reverify failed", "purchase_id", payload.PurchaseID, "err", err)
+				return c.SendStatus(fiber.StatusInternalServerError)
+			}
+			if changed {
+				data, err := goproto.Marshal(&pokerproto.ServerMessage{
+					Type:       "reaction_purchase_update",
+					PlayerId:   record.PlayerID,
+					PurchaseId: record.PurchaseID,
+					Code:       record.Status,
+				})
+				if err == nil {
+					reg.Broadcast(c.Context(), "user#"+record.PlayerID, data)
+				}
+			}
+			return c.SendStatus(fiber.StatusOK)
+		}
+
+		record, changed, err := sandboxSvc.ConfirmFromWebhook(c.Context(), payload.PurchaseID)
 		if err != nil {
 			// Non-2xx makes ctech-wallet retry via its own reconcile sweep.
 			slog.Error("wallet webhook: reverify failed", "purchase_id", payload.PurchaseID, "err", err)
