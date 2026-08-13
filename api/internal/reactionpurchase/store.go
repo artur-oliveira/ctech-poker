@@ -130,7 +130,7 @@ func (s *EntitlementStore) MarkUsed(ctx context.Context, playerID, reactionID st
 			"sk": &types.AttributeValueMemberS{Value: reactionID},
 		},
 		UpdateExpression:         aws.String("SET used_at = :now"),
-		ConditionExpression:      aws.String("(attribute_not_exists(#status) OR #status = :active) AND (attribute_not_exists(used_at) OR used_at = :empty)"),
+		ConditionExpression:      aws.String("attribute_exists(pk) AND (attribute_not_exists(#status) OR #status = :active) AND (attribute_not_exists(used_at) OR used_at = :empty)"),
 		ExpressionAttributeNames: map[string]string{"#status": "status"},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":now":    &types.AttributeValueMemberS{Value: dynamo.NowStr()},

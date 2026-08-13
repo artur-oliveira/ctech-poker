@@ -377,7 +377,7 @@ func (s *Service) CreateSandbox(ctx context.Context, playerID, reactionID, idemK
 			return Record{}, ErrPurchasePending
 		}
 		rec = *existingRec
-		idemKey, requestKey, purchaseID = rec.IdemKey, existingEnt.RequestKey, rec.PurchaseID
+		idemKey, requestKey, _ = rec.IdemKey, existingEnt.RequestKey, rec.PurchaseID
 		priceFichas = rec.PriceFichas
 	}
 	if err := s.wallet.Debit(ctx, playerID, priceFichas, idemKey, "reaction_purchase:"+reactionID); err != nil {
@@ -538,17 +538,28 @@ func (s *Service) Refresh(ctx context.Context, playerID, purchaseID string) (Rec
 		return Record{}, err
 	}
 	if rec == nil {
-		return Record{}, ErrNotFound
+		purchase, err := s.wallet.GetProductPurchase(ctx, purchaseID)
+		if err != nil {
+			return Record{}, err
+		}
+		if purchase == nil || purchase.PurchaseID == "" {
+			return Record{}, errors.New("reactionpurchase: wallet returned an incomplete product purchase")
+		}
+		if purchase.PurchaseID != purchaseID || purchase.UserID != playerID {
+			return Record{}, ErrNotFound
+		}
+		updated, _, err := s.syncProductPurchase(ctx, purchase)
+		return updated, err
 	}
 	if rec.Method == methodPIX {
 		purchase, err := s.wallet.GetProductPurchase(ctx, purchaseID)
 		if err != nil {
 			return Record{}, err
 		}
-		if purchase == nil {
+		if purchase == nil || purchase.PurchaseID == "" {
 			return Record{}, errors.New("reactionpurchase: wallet returned an incomplete product purchase")
 		}
-		if purchase.UserID != playerID {
+		if purchase.PurchaseID != purchaseID || purchase.UserID != playerID {
 			return Record{}, ErrNotFound
 		}
 		updated, _, err := s.syncProductPurchase(ctx, purchase)
