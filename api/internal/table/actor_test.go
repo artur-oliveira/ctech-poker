@@ -289,3 +289,69 @@ func TestOnHandCompleteReceivesNonEmptyHandID(t *testing.T) {
 		t.Fatal("expected onHandComplete to receive a non-empty handID")
 	}
 }
+
+func TestHandleReactionRejectsUnknownReactionBeforeSeatCheck(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+	a, _ := newTestActor(t, store)
+
+	reply := make(chan error, 1)
+	err := a.Dispatch(ReactionCmd{PlayerID: "not-seated", ActionID: "a1", ReactionID: "not-a-reaction", Reply: reply})
+	if err == nil || err.Error() != "table: unknown reaction_id" {
+		t.Fatalf("expected unknown reaction_id rejection (not a not-seated error), got %v", err)
+	}
+}
+
+func TestHandleReactionPremiumNotOwnedRejected(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+	a, _ := newTestActor(t, store)
+	a.SetReactionOwnershipForActor(func(context.Context, string, string) (bool, error) { return false, nil })
+
+	reply := make(chan error, 1)
+	err := a.Dispatch(ReactionCmd{PlayerID: "p1", ActionID: "a1", ReactionID: "cold", Reply: reply})
+	if err == nil || err.Error() != "table: reaction not owned" {
+		t.Fatalf("expected reaction-not-owned rejection, got %v", err)
+	}
+}
+
+func TestHandleReactionPremiumOwnedAcceptedAndMarksUsed(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+	a, _ := newTestActor(t, store)
+	a.SetReactionOwnershipForActor(func(context.Context, string, string) (bool, error) { return true, nil })
+	markUsedCalls := make(chan string, 1)
+	a.SetReactionMarkUsedForActor(func(_ context.Context, playerID, reactionID string) error {
+		markUsedCalls <- playerID + ":" + reactionID
+		return nil
+	})
+
+	reply := make(chan error, 1)
+	if err := a.Dispatch(ReactionCmd{PlayerID: "p1", ActionID: "a1", ReactionID: "cold", Reply: reply}); err != nil {
+		t.Fatalf("expected owned premium reaction to succeed, got %v", err)
+	}
+	select {
+	case got := <-markUsedCalls:
+		if got != "p1:cold" {
+			t.Fatalf("unexpected markUsed call: %q", got)
+		}
+	default:
+		t.Fatal("expected reactionMarkUsed to have been called")
+	}
+}
+
+func TestHandleReactionFreeReactionWorksWithoutOwnershipHook(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+	a, _ := newTestActor(t, store)
+	// reactionOwnership left nil on purpose — a free reaction must never call it.
+
+	reply := make(chan error, 1)
+	if err := a.Dispatch(ReactionCmd{PlayerID: "p1", ActionID: "a1", ReactionID: "clap", Reply: reply}); err != nil {
+		t.Fatalf("expected free reaction to succeed without an ownership hook, got %v", err)
+	}
+}

@@ -21,6 +21,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/equity"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/metrics"
+	"gopkg.aoctech.app/poker/api/internal/reactions"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
@@ -111,6 +112,11 @@ type Actor struct {
 	// sessionlog entry is never closed (buyin.SettleSystemRemoval does both).
 	onPlayerRemoved        func(playerID, reason string, stack int64, holdID string)
 	systemSettlementIntent func(context.Context, string, string, int64, string) (types.TransactWriteItem, error)
+	// reactionOwnership/reactionMarkUsed are nil-checked no-ops until wired by
+	// the manager — mirrors every other optional hook on Actor (onHandComplete,
+	// systemSettlementIntent, etc).
+	reactionOwnership func(ctx context.Context, playerID, reactionID string) (bool, error)
+	reactionMarkUsed  func(ctx context.Context, playerID, reactionID string) error
 	// connCount mirrors the total size of activeConns across all players.
 	// Maintained only inside Run (handleConnect/handleDisconnect) but read via
 	// ActiveConnCount from any goroutine — same pattern as equityEnabled —
@@ -319,6 +325,21 @@ func (a *Actor) handleReaction(ctx context.Context, c ReactionCmd) error {
 	if c.ReactionID == "" {
 		return errors.New("table: reaction_id is required")
 	}
+	if !reactions.IsKnown(c.ReactionID) {
+		return errors.New("table: unknown reaction_id")
+	}
+	if reactions.IsPremium(c.ReactionID) {
+		if a.reactionOwnership == nil {
+			return errors.New("table: reaction ownership check unavailable")
+		}
+		owned, err := a.reactionOwnership(ctx, c.PlayerID, c.ReactionID)
+		if err != nil {
+			return err
+		}
+		if !owned {
+			return errors.New("table: reaction not owned")
+		}
+	}
 	// Reactions already have a dedicated fan-out frame. Persist them so a
 	// reconnect can restore the short-lived effect, but do not also broadcast
 	// a full table snapshot for the same cosmetic action.
@@ -337,6 +358,9 @@ func (a *Actor) handleReaction(ctx context.Context, c ReactionCmd) error {
 		})
 		if len(a.activity.Reactions) > maxPersistedReactions {
 			a.activity.Reactions = append([]tablestore.Reaction(nil), a.activity.Reactions[len(a.activity.Reactions)-maxPersistedReactions:]...)
+		}
+		if reactions.IsPremium(c.ReactionID) && a.reactionMarkUsed != nil {
+			_ = a.reactionMarkUsed(ctx, c.PlayerID, c.ReactionID) // best-effort, never blocks the reaction itself
 		}
 		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
 			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "reaction",
@@ -785,6 +809,14 @@ func (a *Actor) SetOnPlayerRemovedForActor(fn func(playerID, reason string, stac
 
 func (a *Actor) SetSystemSettlementIntentForActor(fn func(context.Context, string, string, int64, string) (types.TransactWriteItem, error)) {
 	a.systemSettlementIntent = fn
+}
+
+func (a *Actor) SetReactionOwnershipForActor(fn func(ctx context.Context, playerID, reactionID string) (bool, error)) {
+	a.reactionOwnership = fn
+}
+
+func (a *Actor) SetReactionMarkUsedForActor(fn func(ctx context.Context, playerID, reactionID string) error) {
+	a.reactionMarkUsed = fn
 }
 
 func (a *Actor) notifySeatsChanged() {

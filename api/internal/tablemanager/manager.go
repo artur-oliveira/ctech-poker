@@ -49,6 +49,8 @@ type Manager struct {
 	autoRebuySweep         func(tableID, handID string, outcome hand.HandOutcome)
 	systemSettlementIntent func(context.Context, string, string, string, int64, string) (types.TransactWriteItem, error)
 	roomLoader             func(tableID string) (*roomstore.Room, bool, error)
+	reactionOwnership      func(ctx context.Context, playerID, reactionID string) (bool, error)
+	reactionMarkUsed       func(ctx context.Context, playerID, reactionID string) error
 
 	mu       sync.Mutex
 	actors   map[string]*Actor
@@ -200,6 +202,18 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 		}
 		return m.systemSettlementIntent(ctx, tableID, playerID, reason, stack, holdID)
 	})
+	actor.SetReactionOwnershipForActor(func(ctx context.Context, playerID, reactionID string) (bool, error) {
+		if m.reactionOwnership == nil {
+			return false, errors.New("tablemanager: reaction ownership check unavailable")
+		}
+		return m.reactionOwnership(ctx, playerID, reactionID)
+	})
+	actor.SetReactionMarkUsedForActor(func(ctx context.Context, playerID, reactionID string) error {
+		if m.reactionMarkUsed == nil {
+			return nil
+		}
+		return m.reactionMarkUsed(ctx, playerID, reactionID)
+	})
 	runCtx, cancel := context.WithCancel(context.Background())
 	m.cancels[tableID] = cancel
 	if trustCache {
@@ -340,4 +354,12 @@ func (m *Manager) DrainAndRelease(ctx context.Context) {
 // absent or cannot build its durable recovery obligation.
 func (m *Manager) SetSystemSettlementIntent(fn func(context.Context, string, string, string, int64, string) (types.TransactWriteItem, error)) {
 	m.systemSettlementIntent = fn
+}
+
+func (m *Manager) SetReactionOwnership(fn func(ctx context.Context, playerID, reactionID string) (bool, error)) {
+	m.reactionOwnership = fn
+}
+
+func (m *Manager) SetReactionMarkUsed(fn func(ctx context.Context, playerID, reactionID string) error) {
+	m.reactionMarkUsed = fn
 }
