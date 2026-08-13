@@ -193,6 +193,9 @@ unverifiable — there is no backfill, because the seed is not retained anywhere
   S3 sync + route-manifest publish + CloudFront invalidation.
 - Quality bar: lint, typecheck, tests and build must all pass with **zero errors and zero
   warnings**.
+- ESLint is pinned to the 9.x line because Next 16.3's bundled `eslint-plugin-import`,
+  `eslint-plugin-jsx-a11y`, and `eslint-plugin-react` declare peer support through ESLint 9.
+  Keep ESLint on that line until all of those plugin peer ranges support a newer major.
 - ⚠️ The deploy step is `aws s3 sync out/ s3://$S3_BUCKET/ --delete` — anything else stored in
   that bucket under a synced prefix is deleted on every frontend deploy. Relevant if
   user-uploaded assets are ever put there.
