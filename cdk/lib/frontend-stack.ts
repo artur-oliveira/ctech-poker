@@ -84,10 +84,13 @@ async function handler(event) {
     });
 
     const extraConnectSrcStr: string = [
-      apiDomainName,
-      authDomainName,
-      ...extraConnectSrc
-    ].map(it => `https://${it}`).join(' ')
+      ...[
+        apiDomainName,
+        authDomainName,
+        ...extraConnectSrc
+      ].map(it => `https://${it}`),
+      `wss://${apiDomainName}`
+    ].join(' ')
 
     const securityHeaders = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeaders', {
       responseHeadersPolicyName: `${environment}-${SERVICE}-security-headers`,
