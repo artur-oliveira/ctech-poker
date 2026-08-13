@@ -10,7 +10,6 @@ import {ReconcileStack} from '../lib/reconcile-stack';
 import {TableCleanupStack} from '../lib/tablecleanup-stack';
 import {
   ACCOUNTS_API_DOMAIN_PREFIX,
-  ACCOUNTS_DOMAIN_PREFIX,
   API_DOMAIN_PREFIX,
   APP_DOMAIN_PREFIX,
   avatarsBucketName,
@@ -125,7 +124,7 @@ new FrontendStack(app, id('Frontend'), {
   certificateArn: CERT_ARN,
   domainName: domainForEnv(ENVIRONMENT, APP_DOMAIN_PREFIX),
   apiDomainName: domainForEnv(ENVIRONMENT, API_DOMAIN_PREFIX),
-  authDomainName: domainForEnv(ENVIRONMENT, ACCOUNTS_DOMAIN_PREFIX),
+  authDomainName: domainForEnv(ENVIRONMENT, ACCOUNTS_API_DOMAIN_PREFIX),
   extraConnectSrc: [CLOUDFLARE_CHALLENGE_SRC, ...avatarsS3Origins(ENVIRONMENT)],
   description: `CTech Poker Frontend (S3 + CloudFront) - ${ENVIRONMENT}`,
 });
