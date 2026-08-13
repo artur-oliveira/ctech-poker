@@ -100,4 +100,5 @@ sent as the first frame after upgrade and a 32 KiB frame cap.
 
 There are NO exceptions.
 
-Any modification affecting behavior, architecture, APIs, integrations, configuration, deployment, security, business rules, or developer workflow MUST include the corresponding documentation update in the same change.
+Any modification affecting behavior, architecture, APIs, integrations, configuration, deployment, security, business
+rules, or developer workflow MUST include the corresponding documentation update in the same change.

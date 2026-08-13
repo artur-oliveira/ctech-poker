@@ -47,23 +47,23 @@ const (
 )
 
 type Player struct {
-	ID             string       `dynamodbav:"id"`
-	Name           string       `dynamodbav:"name,omitempty"`
-	AvatarURL      string       `dynamodbav:"avatar_url,omitempty"`
-	PlaystyleBadge string       `dynamodbav:"playstyle_badge,omitempty"`
-	RunItTwice     bool         `dynamodbav:"run_it_twice,omitempty"`
+	ID             string `dynamodbav:"id"`
+	Name           string `dynamodbav:"name,omitempty"`
+	AvatarURL      string `dynamodbav:"avatar_url,omitempty"`
+	PlaystyleBadge string `dynamodbav:"playstyle_badge,omitempty"`
+	RunItTwice     bool   `dynamodbav:"run_it_twice,omitempty"`
 	// AutoRebuy and BuyInAmount are set exactly once, at fresh-seat creation
 	// (AddWaitingPlayer/AddMidHandJoiner's new-Player branch) — rebuyExisting
 	// never touches either, so a later manual rebuy at a different amount
 	// can't change what the server auto-rebuys back to.
-	AutoRebuy      bool         `dynamodbav:"auto_rebuy,omitempty"`
-	BuyInAmount    int64        `dynamodbav:"buy_in_amount,omitempty"`
-	Stack          int64        `dynamodbav:"stack"`
-	Ready          bool         `dynamodbav:"ready"`
-	State          PlayerState  `dynamodbav:"state"`
-	HoleCards      [2]deck.Card `dynamodbav:"hole_cards"`
-	Contributed    int64        `dynamodbav:"contributed"` // this hand's total contribution across all rounds, for side-pot math
-	HoldID         string       `dynamodbav:"hold_id,omitempty"`
+	AutoRebuy   bool         `dynamodbav:"auto_rebuy,omitempty"`
+	BuyInAmount int64        `dynamodbav:"buy_in_amount,omitempty"`
+	Stack       int64        `dynamodbav:"stack"`
+	Ready       bool         `dynamodbav:"ready"`
+	State       PlayerState  `dynamodbav:"state"`
+	HoleCards   [2]deck.Card `dynamodbav:"hole_cards"`
+	Contributed int64        `dynamodbav:"contributed"` // this hand's total contribution across all rounds, for side-pot math
+	HoldID      string       `dynamodbav:"hold_id,omitempty"`
 	// HandStartStack is captured before StartHand posts any blind. A pointer
 	// preserves presence across rolling deployments and distinguishes a real
 	// zero-chip all-in entry from older persisted state that never recorded it.
