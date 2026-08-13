@@ -233,6 +233,20 @@ func (s *Service) IsOwned(ctx context.Context, playerID, reactionID string) (boo
 	return e != nil, nil
 }
 
+// Get is the plain history read used by the HTTP GET route — unlike
+// ConfirmFromWebhook it never re-verifies against wallet; that reconciliation
+// happens only on the webhook/sweep path.
+func (s *Service) Get(ctx context.Context, playerID, purchaseID string) (Record, error) {
+	rec, err := s.store.Get(ctx, playerID, purchaseID)
+	if err != nil {
+		return Record{}, err
+	}
+	if rec == nil {
+		return Record{}, ErrNotFound
+	}
+	return *rec, nil
+}
+
 func (s *Service) List(ctx context.Context, playerID string) ([]Record, error) {
 	records, err := s.store.List(ctx, playerID)
 	if err != nil {
