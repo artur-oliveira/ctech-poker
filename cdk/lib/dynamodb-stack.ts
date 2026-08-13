@@ -11,7 +11,8 @@ export type TableName =
   'poker_table_state' | 'poker_table_state_history' | 'poker_action_log' | 'poker_action_guards' |
   'poker_rooms' | 'poker_player_profiles' | 'poker_achievement_progress' | 'poker_leaderboard_stats' |
   'poker_daily_reward' | 'poker_pending_cashouts' | 'poker_player_sessions' | 'poker_player_hands' |
-  'poker_player_notes' | 'poker_hand_shares' | 'poker_player_poker_stats' | 'poker_sandbox_purchases';
+  'poker_player_notes' | 'poker_hand_shares' | 'poker_player_poker_stats' | 'poker_sandbox_purchases' |
+  'poker_reaction_entitlements' | 'poker_reaction_purchases';
 
 interface DynamoDBStackProps extends cdk.StackProps {
   environment: Environment;
@@ -124,6 +125,16 @@ export class DynamoDBStack extends cdk.Stack {
     // One row per purchase, pk=player_id sk=purchase_id — permanent history
     // (no TTL), unlike ctech-wallet's own pending-purchase row.
     table('poker_sandbox_purchases', true);
+    // poker_reaction_entitlements: pk = player_id, sk = reaction_id — one row
+    // per owned premium reaction. No TTL (permanent), no GSI
+    // (Actor.handleReaction reads it by exact key, cached in Valkey — see
+    // docs/specs/2026-08-12-premium-reactions.md).
+    table('poker_reaction_entitlements', true);
+    // poker_reaction_purchases: pk = player_id, sk = purchase_id — permanent
+    // purchase history, mirrors poker_sandbox_purchases. No GSI: pix
+    // confirmation is webhook-driven (no local pending sweep), fichas
+    // purchases are synchronous.
+    table('poker_reaction_purchases', true);
     // Resolved money-movement safety records are retained for 30 days for
     // audit/debugging, then reaped by DynamoDB TTL. Unresolved entries never
     // receive ttl and therefore cannot expire before reconciliation.

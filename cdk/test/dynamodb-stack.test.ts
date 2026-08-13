@@ -8,7 +8,7 @@ test('creates poker_table_state, poker_action_log, poker_action_guards tables', 
   const template = Template.fromStack(stack);
   // dynamodb.TableV2 always synthesizes as AWS::DynamoDB::GlobalTable (even
   // with zero extra replicas) — not AWS::DynamoDB::Table.
-  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 16);
+  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 18);
   template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_table_state',
     GlobalSecondaryIndexes: Match.arrayWith([
@@ -101,6 +101,21 @@ test('expires only resolved pending cashout records through the shared ttl attri
     TableName: 'dev_poker_pending_cashouts',
     TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},
   });
+});
+
+test('creates poker_reaction_entitlements and poker_reaction_purchases tables with player/purchase composite keys', () => {
+  const app = new App();
+  const stack = new DynamoDBStack(app, 'TestReactionPurchaseStack', {environment: 'dev'});
+  const template = Template.fromStack(stack);
+  for (const name of ['poker_reaction_entitlements', 'poker_reaction_purchases']) {
+    template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+      TableName: `dev_${name}`,
+      KeySchema: Match.arrayWith([
+        Match.objectLike({AttributeName: 'pk', KeyType: 'HASH'}),
+        Match.objectLike({AttributeName: 'sk', KeyType: 'RANGE'}),
+      ]),
+    });
+  }
 });
 
 test('creates poker_rooms table with public and share-code GSIs', () => {
