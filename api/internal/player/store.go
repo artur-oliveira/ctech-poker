@@ -198,6 +198,23 @@ func (s *Store) SetShowcase(ctx context.Context, userID string, public, playstyl
 	return nil
 }
 
+func (s *Store) SetFavoriteReactions(ctx context.Context, userID string, favorites []string) error {
+	if _, err := s.GetOrCreate(ctx, userID); err != nil {
+		return err
+	}
+	ok, err := s.base.UpdateItem(ctx, userID, nil, map[string]any{
+		"favorite_reactions": favorites,
+		"updated_at":         dynamo.NowStr(),
+	})
+	if err != nil {
+		return fmt.Errorf("player: set favorite reactions: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("player: profile disappeared while setting favorite reactions")
+	}
+	return nil
+}
+
 func (s *Store) AcceptTerms(ctx context.Context, userID string) error {
 	if _, err := s.GetOrCreate(ctx, userID); err != nil {
 		return err

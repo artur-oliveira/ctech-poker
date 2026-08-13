@@ -48,6 +48,9 @@ func (unacceptedProfiles) SetDeckVariant(context.Context, string, string) error 
 func (unacceptedProfiles) SetShowcase(context.Context, string, bool, bool, []string) error {
 	return nil
 }
+func (unacceptedProfiles) SetFavoriteReactions(context.Context, string, []string) error {
+	return nil
+}
 
 func TestBuyInRequiresPokerTermsBeforeWalletDebit(t *testing.T) {
 	wallet := &gateWallet{}

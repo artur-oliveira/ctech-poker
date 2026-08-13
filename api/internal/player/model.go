@@ -24,6 +24,7 @@ type PlayerProfile struct {
 	ShowcasePublic       bool     `dynamodbav:"showcase_public,omitempty" json:"showcase_public"`
 	PlaystylePublic      bool     `dynamodbav:"playstyle_public,omitempty" json:"playstyle_public"`
 	FeaturedAchievements []string `dynamodbav:"featured_achievements,omitempty" json:"featured_achievements,omitempty"`
+	FavoriteReactions    []string `dynamodbav:"favorite_reactions,omitempty" json:"favorite_reactions,omitempty"`
 	PokerTermsVersion    string   `dynamodbav:"poker_terms_version,omitempty" json:"-"`
 	TermsAcceptedAt      string   `dynamodbav:"poker_terms_accepted_at,omitempty" json:"poker_terms_accepted_at,omitempty"`
 	AvatarKey            string   `dynamodbav:"avatar_key,omitempty" json:"-"`

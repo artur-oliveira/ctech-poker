@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"gopkg.aoctech.app/poker/api/internal/achievements"
+	"gopkg.aoctech.app/poker/api/internal/reactions"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
 
@@ -15,6 +16,7 @@ var ErrInvalidWalletMode = errors.New("player: wallet_mode must be sandbox or re
 var ErrInvalidDeckVariant = errors.New("player: deck_variant must not be empty")
 var ErrInvalidShowcase = errors.New("player: invalid showcase")
 var ErrShowcasePrivate = errors.New("player: showcase is private")
+var ErrInvalidFavoriteReactions = errors.New("player: invalid favorite reactions")
 
 // maxDisplayNameLen bounds a player's display name — it is broadcast as-is to
 // every other seat at a table, so it gets the same length ceiling as chat.
@@ -33,6 +35,7 @@ type profileStore interface {
 	SetWalletMode(context.Context, string, string) error
 	SetDeckVariant(context.Context, string, string) error
 	SetShowcase(context.Context, string, bool, bool, []string) error
+	SetFavoriteReactions(context.Context, string, []string) error
 }
 
 func (s *Service) ReportAvatar(ctx context.Context, targetID, reporterID string) error {
@@ -162,6 +165,31 @@ func (s *Service) SetShowcase(ctx context.Context, userID string, public, playst
 		normalized = append(normalized, key)
 	}
 	if err := s.store.SetShowcase(ctx, userID, public, playstylePublic, normalized); err != nil {
+		return nil, err
+	}
+	return s.store.GetOrCreate(ctx, userID)
+}
+
+// SetFavoriteReactions mirrors SetShowcase's validation shape exactly.
+// Favoriting a premium reaction the player doesn't yet own is allowed — it's
+// a UI shortcut to the buy flow, not a claim of ownership;
+// Actor.handleReaction's ownership check is what actually gates use
+// (docs/specs/2026-08-12-premium-reactions.md).
+func (s *Service) SetFavoriteReactions(ctx context.Context, userID string, favorites []string) (*PlayerProfile, error) {
+	if len(favorites) > 3 {
+		return nil, ErrInvalidFavoriteReactions
+	}
+	seen := make(map[string]bool, len(favorites))
+	normalized := make([]string, 0, len(favorites))
+	for _, id := range favorites {
+		id = strings.TrimSpace(id)
+		if id == "" || !reactions.IsKnown(id) || seen[id] {
+			return nil, ErrInvalidFavoriteReactions
+		}
+		seen[id] = true
+		normalized = append(normalized, id)
+	}
+	if err := s.store.SetFavoriteReactions(ctx, userID, normalized); err != nil {
 		return nil, err
 	}
 	return s.store.GetOrCreate(ctx, userID)

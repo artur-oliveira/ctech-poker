@@ -103,6 +103,11 @@ func (s *fakePlayerStore) SetShowcase(_ context.Context, id string, public, play
 	s.profile.FeaturedAchievements = featured
 	return nil
 }
+func (s *fakePlayerStore) SetFavoriteReactions(_ context.Context, id string, favorites []string) error {
+	s.profile.UserID = id
+	s.profile.FavoriteReactions = favorites
+	return nil
+}
 
 func TestPlayerTermsLifecycle(t *testing.T) {
 	store := &fakePlayerStore{}

@@ -37,6 +37,10 @@ func (s *memoryStore) SetShowcase(_ context.Context, _ string, public, playstyle
 	s.profile.FeaturedAchievements = featured
 	return nil
 }
+func (s *memoryStore) SetFavoriteReactions(_ context.Context, _ string, favorites []string) error {
+	s.profile.FavoriteReactions = favorites
+	return nil
+}
 
 func TestRequireAccepted(t *testing.T) {
 	store := &memoryStore{profile: PlayerProfile{UserID: "u1"}}
@@ -140,5 +144,37 @@ func TestSetShowcaseValidatesSelection(t *testing.T) {
 	}
 	if _, err := svc.SetShowcase(context.Background(), "u1", true, true, []string{"not-real"}); !errors.Is(err, ErrInvalidShowcase) {
 		t.Fatalf("got %v, want ErrInvalidShowcase", err)
+	}
+}
+
+func TestSetFavoriteReactionsValidatesCountAndCatalog(t *testing.T) {
+	store := &memoryStore{profile: PlayerProfile{UserID: "user-1"}}
+	svc := NewService(store)
+
+	if _, err := svc.SetFavoriteReactions(context.Background(), "user-1", []string{"clap", "cold", "fire", "poop"}); !errors.Is(err, ErrInvalidFavoriteReactions) {
+		t.Fatalf("expected rejection of a 4th favorite, got %v", err)
+	}
+	if _, err := svc.SetFavoriteReactions(context.Background(), "user-1", []string{"not-a-reaction"}); !errors.Is(err, ErrInvalidFavoriteReactions) {
+		t.Fatalf("expected rejection of an unknown reaction id, got %v", err)
+	}
+
+	profile, err := svc.SetFavoriteReactions(context.Background(), "user-1", []string{"clap", "cold"})
+	if err != nil {
+		t.Fatalf("SetFavoriteReactions: %v", err)
+	}
+	if len(profile.FavoriteReactions) != 2 {
+		t.Fatalf("unexpected favorites: %+v", profile.FavoriteReactions)
+	}
+}
+
+func TestSetFavoriteReactionsAllowsUnownedPremium(t *testing.T) {
+	// Favoriting a premium reaction the player doesn't own yet is allowed —
+	// it's a UI shortcut to the buy flow, not a claim of ownership
+	// (docs/specs/2026-08-12-premium-reactions.md). handleReaction's
+	// ownership check is what actually gates use.
+	store := &memoryStore{profile: PlayerProfile{UserID: "user-1"}}
+	svc := NewService(store)
+	if _, err := svc.SetFavoriteReactions(context.Background(), "user-1", []string{"cold"}); err != nil {
+		t.Fatalf("expected favoriting an unowned premium reaction to succeed, got %v", err)
 	}
 }

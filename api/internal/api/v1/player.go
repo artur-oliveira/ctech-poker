@@ -29,6 +29,7 @@ type UpdatePlayerRequest struct {
 	ShowcasePublic       *bool     `json:"showcase_public"`
 	PlaystylePublic      *bool     `json:"playstyle_public"`
 	FeaturedAchievements *[]string `json:"featured_achievements"`
+	FavoriteReactions    *[]string `json:"favorite_reactions"`
 }
 
 type sessionLogReader interface {
@@ -226,6 +227,14 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 				return problem.BadRequest("featured_achievements must contain up to three valid unique keys").Send(c)
 			}
 			return problem.InternalServer("failed to update profile showcase", c, err).Send(c)
+		}
+	}
+	if req.FavoriteReactions != nil {
+		if _, err := h.players.SetFavoriteReactions(c.Context(), userID, *req.FavoriteReactions); err != nil {
+			if errors.Is(err, player.ErrInvalidFavoriteReactions) {
+				return problem.BadRequest("favorite_reactions must contain up to three valid unique reaction ids").Send(c)
+			}
+			return problem.InternalServer("failed to update favorite reactions", c, err).Send(c)
 		}
 	}
 
