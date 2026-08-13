@@ -134,6 +134,105 @@ func (s *Service) ConfirmFromWebhook(ctx context.Context, purchaseID string) (Re
 	return *local, true, nil
 }
 
+// CreateSandbox debits priceFichas synchronously (no PIX involved) and, on
+// success, writes both the history Record (status "confirmed") and the
+// Entitlement row in one call — the sandbox debit is itself the
+// confirmation, there is nothing async to wait for
+// (docs/specs/2026-08-12-premium-reactions.md).
+func (s *Service) CreateSandbox(ctx context.Context, playerID, reactionID, idemKey string) (Record, error) {
+	_, priceFichas, ok := reactions.SKUFor(reactionID)
+	if !ok {
+		if !reactions.IsKnown(reactionID) {
+			return Record{}, ErrUnknownReaction
+		}
+		return Record{}, ErrNotPremium
+	}
+	if err := s.wallet.Debit(ctx, playerID, priceFichas, idemKey, "reaction_purchase:"+reactionID); err != nil {
+		return Record{}, err
+	}
+	now := s.now().UTC().Format(time.RFC3339Nano)
+	purchaseID := "rp-" + idemKey // poker-minted id — no wallet purchase object exists for this leg
+	rec, err := s.store.Create(ctx, Record{
+		PlayerID: playerID, PurchaseID: purchaseID, ReactionID: reactionID, Method: "fichas",
+		PriceFichas: priceFichas, Status: "confirmed", CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		return Record{}, err
+	}
+	if err := s.entitlements.Put(ctx, Entitlement{
+		PlayerID: playerID, ReactionID: reactionID, PurchaseMethod: "fichas",
+		PurchaseID: purchaseID, CreatedAt: now,
+	}); err != nil {
+		return Record{}, fmt.Errorf("reactionpurchase: grant entitlement: %w", err)
+	}
+	return rec, nil
+}
+
+// Refund loads the Record to get ReactionID/Method, then the Entitlement to
+// check UsedAt, and branches on Method: pix reverses via wallet's
+// product-purchase refund; fichas credits the price back directly. Either
+// branch deletes the Entitlement and marks the Record refunded.
+func (s *Service) Refund(ctx context.Context, playerID, purchaseID, idemKey string) (Record, error) {
+	rec, err := s.store.Get(ctx, playerID, purchaseID)
+	if err != nil {
+		return Record{}, err
+	}
+	if rec == nil {
+		return Record{}, ErrNotFound
+	}
+	entitlement, err := s.entitlements.Get(ctx, playerID, rec.ReactionID)
+	if err != nil {
+		return Record{}, err
+	}
+	if entitlement != nil && entitlement.UsedAt != "" {
+		return Record{}, ErrAlreadyUsed
+	}
+
+	switch rec.Method {
+	case "pix":
+		if _, err := s.wallet.RefundProductPurchase(ctx, playerID, purchaseID, idemKey); err != nil {
+			return Record{}, err
+		}
+	case "fichas":
+		if err := s.wallet.Credit(ctx, playerID, rec.PriceFichas, idemKey, "reaction_refund:"+rec.ReactionID); err != nil {
+			return Record{}, err
+		}
+	default:
+		return Record{}, fmt.Errorf("reactionpurchase: unknown purchase method %q", rec.Method)
+	}
+
+	if err := s.entitlements.Delete(ctx, playerID, rec.ReactionID); err != nil {
+		return Record{}, fmt.Errorf("reactionpurchase: revoke entitlement: %w", err)
+	}
+	now := s.now().UTC().Format(time.RFC3339Nano)
+	if _, err := s.store.UpdateStatus(ctx, playerID, purchaseID, "refunded", now); err != nil {
+		return Record{}, fmt.Errorf("reactionpurchase: update status: %w", err)
+	}
+	rec.Status, rec.UpdatedAt = "refunded", now
+	return *rec, nil
+}
+
+// MarkUsed is a no-op for a free reaction (no entitlement row exists) —
+// callers only invoke it when reactions.IsPremium(id) is true; kept
+// tolerant here too so a caller mistake never breaks a reaction send.
+func (s *Service) MarkUsed(ctx context.Context, playerID, reactionID string) error {
+	if !reactions.IsPremium(reactionID) {
+		return nil
+	}
+	return s.entitlements.MarkUsed(ctx, playerID, reactionID)
+}
+
+// IsOwned is the uncached ownership check — Actor.handleReaction consults it
+// through a Valkey-backed cache wrapper (Task 6), never directly on the hot
+// path.
+func (s *Service) IsOwned(ctx context.Context, playerID, reactionID string) (bool, error) {
+	e, err := s.entitlements.Get(ctx, playerID, reactionID)
+	if err != nil {
+		return false, err
+	}
+	return e != nil, nil
+}
+
 func (s *Service) List(ctx context.Context, playerID string) ([]Record, error) {
 	records, err := s.store.List(ctx, playerID)
 	if err != nil {

@@ -5,7 +5,9 @@ package reactionpurchase
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -15,7 +17,14 @@ import (
 	"gopkg.aoctech.app/api-commons/dynamo"
 )
 
-const testEnv = "reactionpurchase_test"
+// testEnv is unique per call (mirrors dailyreward's store_integration_test.go)
+// so a fresh table backs every test — DynamoDB Local persists in-memory
+// across test-binary invocations within the same container uptime, and this
+// package's tests assert on the absence of rows (no entitlement yet, no
+// purchase yet), which a fixed/shared table name would falsify on a rerun.
+func testEnv() string {
+	return fmt.Sprintf("reactionpurchase_test_%d", time.Now().UnixNano())
+}
 
 func testDynamoClient(t *testing.T) *dynamodb.Client {
 	t.Helper()
@@ -53,13 +62,15 @@ func strPtr(s string) *string { return &s }
 func newTestEntitlementStore(t *testing.T) *EntitlementStore {
 	t.Helper()
 	db := testDynamoClient(t)
-	createTestTable(t, db, dynamo.TableName(testEnv, tableEntitlements))
-	return NewEntitlementStore(db, testEnv)
+	env := testEnv()
+	createTestTable(t, db, dynamo.TableName(env, tableEntitlements))
+	return NewEntitlementStore(db, env)
 }
 
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
 	db := testDynamoClient(t)
-	createTestTable(t, db, dynamo.TableName(testEnv, tablePurchases))
-	return NewStore(db, testEnv)
+	env := testEnv()
+	createTestTable(t, db, dynamo.TableName(env, tablePurchases))
+	return NewStore(db, env)
 }
