@@ -33,7 +33,7 @@ interface ApiStackProps extends cdk.StackProps {
   // from SSM into CTECH_VPC_ID before running cdk deploy (see ctech-cdk/CLAUDE.md
   // "Known Constraints").
   vpcId: string;
-  /** ALB host header, e.g. poker-api-dev.aoctech.app. */
+  /** HAProxy route hostname, e.g. poker-api-dev.aoctech.app. */
   domainName: string;
   /** Browser app host, used for CORS and the JWT audience. */
   appDomainName: string;
@@ -67,6 +67,8 @@ interface ApiStackProps extends cdk.StackProps {
   walletWebhookHmacSecretParam: string;
   sandboxPurchasesTableArn: string;
   pendingCashoutsTableArn: string;
+  reactionEntitlementsTableArn: string;
+  reactionPurchasesTableArn: string;
 }
 
 export const minimumApiCapacity = (_environment: Environment) => 1;
@@ -111,6 +113,8 @@ export class PokerApiStack extends cdk.Stack {
       walletWebhookHmacSecretParam,
       sandboxPurchasesTableArn,
       pendingCashoutsTableArn,
+      reactionEntitlementsTableArn,
+      reactionPurchasesTableArn,
     } = props;
     
     const shared = SSM_SHARED(environment);
@@ -138,7 +142,7 @@ export class PokerApiStack extends cdk.Stack {
       tableStateArn, tableStateHistoryArn, actionLogArn, actionGuardsArn, roomsTableArn, playerProfilesTableArn,
       achievementProgressTableArn, leaderboardStatsTableArn, dailyRewardTableArn, playerSessionsTableArn,
       playerHandsTableArn, playerNotesTableArn, handSharesTableArn, pokerStatsTableArn, sandboxPurchasesTableArn,
-      pendingCashoutsTableArn,
+      pendingCashoutsTableArn, reactionEntitlementsTableArn, reactionPurchasesTableArn,
     ];
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: [
@@ -194,10 +198,8 @@ export class PokerApiStack extends cdk.Stack {
     this.asgName = asgName(environment);
     const logRetention: logs.RetentionDays = isProd ? logs.RetentionDays.ONE_MONTH : logs.RetentionDays.ONE_WEEK;
     const logGroupApp = `/${SERVICE}/${environment}/app`;
-    // No nginx in this skeleton (see APP_PORT doc comment in constants.ts) — this
-    // log group stays empty until a future task ships JSON access logs to it, but
-    // PrivateIpv4Ec2Service requires a name regardless (its HTTP2XX-5XX metric
-    // filters attach here).
+    // No nginx in this stack (see APP_PORT doc comment in constants.ts). Keep the
+    // existing log group/output stable for deployment and monitoring compatibility.
     const logGroupNginx = `/${SERVICE}/${environment}/nginx`;
     
     // ── User Data ─────────────────────────────────────────────────────────────
@@ -247,7 +249,7 @@ export class PokerApiStack extends cdk.Stack {
       `PORT=${APP_PORT}`,
       `SERVICE_AUDIENCE=https://${appDomainName}`,
       `CTECH_URL=https://${authDomainName}`,
-      // Poker is reached directly from the ALB, with no localhost nginx hop.
+      // Poker is reached directly from HAProxy, with no localhost nginx hop.
       // Trust only peers inside this VPC before honoring X-Forwarded-For.
       `TRUSTED_PROXIES=${vpc.vpcCidrBlock}`,
       `CORS_ALLOWED_ORIGINS=https://${appDomainName}`,

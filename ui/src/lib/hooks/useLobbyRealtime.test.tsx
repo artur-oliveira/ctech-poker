@@ -88,4 +88,12 @@ describe('useLobbyRealtime', () => {
     expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'sandbox-purchases']});
     expect(state.notify).toHaveBeenCalledWith(expect.stringContaining('confirmada'), 'info');
   });
+
+  test('refreshes reaction ownership and notifies on reaction_purchase_update', () => {
+    renderHook(() => useLobbyRealtime());
+    act(() => state.options?.onMessage({type: 'reaction_purchase_update', purchase_id: 'prdp-1', code: 'confirmed'}));
+    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'reaction-purchases']});
+    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'reaction-catalog']});
+    expect(state.notify).toHaveBeenCalledWith('Reação premium liberada!', 'info');
+  });
 });

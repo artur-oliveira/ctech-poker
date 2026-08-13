@@ -81,7 +81,7 @@ func (h *reactionPurchaseHandlers) list(c fiber.Ctx) error {
 
 func (h *reactionPurchaseHandlers) get(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
-	rec, err := h.svc.Get(c.Context(), userID, c.Params("id"))
+	rec, err := h.svc.Refresh(c.Context(), userID, c.Params("id"))
 	if errors.Is(err, reactionpurchase.ErrNotFound) {
 		return problem.NotFound("purchase not found").Send(c)
 	}
@@ -114,6 +114,14 @@ func reactionPurchaseProblem(err error, c fiber.Ctx) *problem.Problem {
 		return problem.NotFound("purchase not found")
 	case errors.Is(err, reactionpurchase.ErrAlreadyUsed):
 		return problem.Conflict("reaction already used, cannot refund")
+	case errors.Is(err, reactionpurchase.ErrAlreadyOwned):
+		return problem.Conflict("reaction already owned")
+	case errors.Is(err, reactionpurchase.ErrPurchasePending):
+		return problem.Conflict("another purchase for this reaction is in progress")
+	case errors.Is(err, reactionpurchase.ErrAlreadyRefunded):
+		return problem.Conflict("purchase already refunded")
+	case errors.Is(err, reactionpurchase.ErrNotConfirmed), errors.Is(err, reactionpurchase.ErrMissingEntitlement):
+		return problem.Conflict(err.Error())
 	case errors.Is(err, reactionpurchase.ErrUnknownReaction), errors.Is(err, reactionpurchase.ErrNotPremium):
 		return problem.BadRequest(err.Error())
 	default:

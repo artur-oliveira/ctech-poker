@@ -68,6 +68,16 @@ export function useLobbyRealtime() {
         failed: 'Falha na compra.',
       };
       pushNotification(statusLabel[message.code || ''] || 'Atualização na sua compra de créditos.', 'info');
+    } else if (message.type === 'reaction_purchase_update') {
+      queryClient.invalidateQueries({queryKey: ['wallet', 'reaction-purchases']});
+      queryClient.invalidateQueries({queryKey: ['wallet', 'reaction-catalog']});
+      const statusLabel: Record<string, string> = {
+        confirmed: 'Reação premium liberada!',
+        refunded: 'Compra da reação estornada.',
+        expired: 'Compra da reação expirou sem pagamento.',
+        failed: 'Falha na compra da reação.',
+      };
+      pushNotification(statusLabel[message.code || ''] || 'Atualização na compra da sua reação.', 'info');
     } else if (message.type === 'payment_received') {
       const amount = message.amount || 0;
       pushNotification(`Pagamento recebido: R$ ${(amount / 100).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 'info');

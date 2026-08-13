@@ -3,10 +3,13 @@
 > HAProxy migration: the API ASG no longer creates an ALB target group or listener
 > rule. `ctech-lbalancer` discovers it through its `poker` route; the retained
 > `/ctech/{env}/network/alb-sg-id` identifies the shared edge trusted by the API SG.
+> `PrivateIpv4Ec2Service` cannot be used for this stack because its current contract
+> always creates the retired ALB target group and listener rule. CI permits the
+> private-IPv4 launch-template override only in `lib/api-stack.ts`.
 
 AWS CDK (TypeScript) for the poker service. **All stacks are implemented and live.**
 Deploys in the order **CDK → API → Frontend** via `.github/workflows/deploy.yml`. Every claim below is
-anchored to `cdk/lib/` and re-verified on **2026-07-28**.
+anchored to `cdk/lib/` and re-verified on **2026-08-12**.
 
 ## Stacks (7)
 
@@ -15,9 +18,9 @@ Named `CtechPoker-<Env>-<Name>`, except the global OIDC stack. Entry: `bin/poker
 | Stack | File | What it provisions |
 |---|---|---|
 | `CtechPoker-Global-OIDC` | `oidc-stack.ts` | GitHub OIDC deploy roles (frontend / api / infra) |
-| `…-DynamoDB` | `dynamodb-stack.ts` | **15** DynamoDB tables + GSIs |
+| `…-DynamoDB` | `dynamodb-stack.ts` | **18** DynamoDB tables + GSIs |
 | `…-Archiver` | `archiver-stack.ts` | Action-log archive Lambda (DynamoDB Stream → S3) + SQS DLQ |
-| `…-API` | `api-stack.ts` | EC2 ASG game server, ALB wiring, IAM, userdata, alarms |
+| `…-API` | `api-stack.ts` | EC2 ASG game server, HAProxy route, IAM, userdata, alarms |
 | `…-Frontend` | `frontend-stack.ts` | S3 + CloudFront, route KeyValueStore, URL-rewrite Function, CSP |
 | `…-Reconcile` | `reconcile-stack.ts` | Cash-out reconcile Lambda, EventBridge Scheduler `rate(5 minutes)` |
 | `…-TableCleanup` | `tablecleanup-stack.ts` | Stale-table cleanup Lambda, Scheduler `rate(30 minutes)` |
@@ -27,30 +30,30 @@ Go Lambdas are bundled by `lib/bundle.ts` (`localGoBundling` — local `go build
 
 ## Compute — game server is an **EC2 Auto-Scaling Group** (not Lambda/Fargate)
 
-- `api-stack.ts` uses `@aoctech/cdk`'s `PrivateIpv4Ec2Service` — the shared no-NAT-gateway EC2/ASG
-  pattern used across CTech. This is a stateful game server on EC2, matching `ARCHITECTURE.md §1`.
+- `api-stack.ts` defines the private-IPv4/no-NAT EC2 ASG locally because the shared
+  `PrivateIpv4Ec2Service` still owns ALB routing. This remains a stateful game server on EC2,
+  matching `ARCHITECTURE.md §1`.
 - Capacity: `minCapacity: 1`, `maxCapacity: isProd ? 3 : 1`.
-- **The ALB is imported, not created**: its security group and HTTPS listener come from SSM
-  (`/ctech/<env>/network/alb-sg-id`, `/ctech/<env>/alb/https-listener-arn`), and the VPC via
-  `Vpc.fromLookup`. Listener priority **45**, app port **8003**, health check `/v1.0/health-check`.
-  **No nginx** — the Go binary is the ALB target directly.
+- **No ALB target group or listener rule is synthesized.** The retained edge security group comes
+  from `/ctech/<env>/network/alb-sg-id`, and HAProxy discovers the ASG through its `poker` route.
+  The Go binary listens directly on port **8080** and serves `/v1.0/health-check`; there is no nginx.
 - Continuous deployment: `api.yml` builds `dist/app` (linux/arm64), uploads to the shared deployments
   bucket, and rolls via SSM `RunCommand` calling `/opt/app/deploy.sh`.
 - **Valkey is mandatory in prod**: `start.sh` fetches `VALKEY_URL` from SSM; empty in prod means
   `config.Load()` fails closed. The in-memory registry fallback is dev/stage only.
 - Alarms: a metric filter on log lines containing `ALARM:` → `AlarmLogLines`, plus a `LeaseFailovers`
   spike alarm (threshold 5 over 2 periods).
-- ⚠️ **No ASG lifecycle hook** exists here or in `PrivateIpv4Ec2Service`, so
-  `tablemanager.DrainAndRelease` runs on the default EC2 shutdown grace period rather than a
-  guaranteed drain window.
+- An ASG termination lifecycle hook gives `tablemanager.DrainAndRelease` up to 120 seconds to
+  stop the app through SSM before completing termination; its Lambda fails open so a broken SSM
+  agent cannot strand an instance in `Terminating:Wait`.
 
 ## WebSocket
 
 Served by the **same Go binary** on the ASG — `GET /v1.0/tables/:id/ws` (table) and `GET /v1.0/ws`
-(lobby/user), fronted by the ALB, which handles the upgrade. **Not** an API Gateway WebSocket API.
+(lobby/user), fronted by HAProxy, which handles the upgrade. **Not** an API Gateway WebSocket API.
 Frames are binary protobuf. Fan-out uses the Valkey-backed `ws.Registry` from `api-commons`.
 
-## DynamoDB (`dynamodb-stack.ts`) — 15 tables
+## DynamoDB (`dynamodb-stack.ts`) — 18 tables
 
 All `TableV2`, partition key `pk` (S), on-demand billing with
 `maxRead/maxWriteRequestUnits: 1000`, AWS-managed encryption, PITR in prod only, names prefixed
@@ -71,6 +74,9 @@ All `TableV2`, partition key `pk` (S), on-demand billing with
 | `poker_achievement_progress` | ✓ | – | – | `counter` via atomic increment |
 | `poker_leaderboard_stats` | ✓ | – | – | `gsi_hands_won`, `gsi_hands_played`, `gsi_win_rate` |
 | `poker_daily_reward` | ✓ | 48h | – | one item per player/day, pending → completed |
+| `poker_sandbox_purchases` | ✓ | – | – | permanent PIX→fichas purchase history |
+| `poker_reaction_entitlements` | ✓ | – | – | premium-reaction ownership and first-use refund gate |
+| `poker_reaction_purchases` | ✓ | – | – | permanent PIX/fichas reaction purchase history |
 | `poker_pending_cashouts` | ✓ | – | – | reconcile queue; `kind` = cashout \| fee_debit |
 | `poker_hand_shares` | – | ✓ | – | public shared-hand tokens, ≤30d |
 
@@ -103,10 +109,11 @@ silently ranking by another index. Adding a ranking metric means adding its GSI 
 Instance role `<env>-ctech-poker-api-role` (`api-stack.ts`), managed policies
 `AmazonSSMManagedInstanceCore` + `CloudWatchAgentServerPolicy`, plus inline:
 
-- DynamoDB — 8 actions (incl. `DeleteItem` and `ConditionCheckItem`) over the **14** table ARNs the
+- DynamoDB — 8 actions (incl. `DeleteItem` and `ConditionCheckItem`) over the **18** table ARNs the
   server touches and their `/index/*`.
-- SSM `GetParameter` over **7** parameters: `valkeyUrl`, `walletUrl`, `pokerClientId`,
-  `pokerClientSecret`, `turnstileSecret`, `realMoneyEnabled`, `legalSignoffRef`.
+- SSM `GetParameter` over **9** parameters: `valkeyUrl`, `walletUrl`, `pokerClientId`,
+  `pokerClientSecret`, `turnstileSecret`, `realMoneyEnabled`, `legalSignoffRef`, `avatarBaseUrl`,
+  `walletWebhookHmacSecret`.
 - S3 `GetObject` on `<deployments>/ctech-poker/*`, `PutObject` on `<logs>/ctech-poker/*`.
 
 OIDC roles (`oidc-stack.ts`): `ctech-poker-gha-frontend` (S3 frontend RW, CloudFront invalidation +
@@ -136,15 +143,15 @@ All three are PROVIDED_AL2023 / arm64.
 
 ## `@aoctech/cdk` usage
 
-Imported symbols: `PrivateIpv4Ec2Service`, `addSwapCommands`, `addDualStackSsmAgentCommands`,
+Imported symbols: `addSwapCommands`, `addDualStackSsmAgentCommands`,
 `addCloudWatchAgentDualStackOverride`, and the `Environment` type. Consumed indirectly by ARN/name/SSM
-path (because ctech-cdk does not export them as constructs): the shared VPC, the ALB + HTTPS listener
-+ security group, the wildcard ACM cert, the GitHub OIDC provider, the shared deployments/logs
+path (because ctech-cdk does not export them as constructs): the shared VPC, the retained edge
+security group, the wildcard ACM cert, the GitHub OIDC provider, the shared deployments/logs
 buckets, and Valkey.
 
 ## Cost-relevant notes
 
-- Game server: EC2 ASG (1–3 instances), dual-stack, **no NAT gateway** → compute + ALB dominate.
+- Game server: EC2 ASG (1–3 instances), dual-stack, **no NAT gateway**; shared HAProxy replaces the ALB cost.
 - DynamoDB: on-demand with a 1000-RU cap — scales to zero, cheap at sandbox traffic.
 - Frontend: static S3 + CloudFront, no always-on server.
 - Lambdas: stream-driven (archiver) plus two low-frequency schedules.
@@ -153,11 +160,11 @@ buckets, and Valkey.
 ## CI & tests
 
 - `infra.yml`: `cdk diff` on PR, `cdk deploy "CtechPoker-${ENV^}-*"` on push to
-  `main`/`staging`/`dev`. A CI guard greps for hand-rolled `AssociatePublicIpAddress` and for
-  suspiciously low DynamoDB throughput caps. Node 24, `npm ci`.
-- `test/`: Jest + `aws-cdk-lib/assertions` for the api, archiver, dynamodb, frontend and tablecleanup
-  stacks. ⚠️ **No test for `reconcile-stack.ts` or `oidc-stack.ts`.** Note that compiled `.d.ts`/`.js`
-  artifacts are checked in alongside sources in `lib/` and `test/`.
+  `main`/`staging`/`dev`. The private-IPv4 override is allowed only in `lib/api-stack.ts`; CI rejects
+  copies elsewhere and suspiciously low DynamoDB throughput caps. Node 24, `npm ci`.
+- `test/`: Jest + `aws-cdk-lib/assertions` for the api, archiver, dynamodb, frontend, reconcile and
+  tablecleanup stacks. ⚠️ **No test for `oidc-stack.ts`.** Run `npm run build` before
+  Jest: ignored local `.js` outputs can otherwise shadow the `.ts` modules with stale code.
 
 ## Cross-links
 

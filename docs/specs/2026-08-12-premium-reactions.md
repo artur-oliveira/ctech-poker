@@ -97,8 +97,9 @@ the same string set the frontend ships (see Testing).
 
 ### `poker_reaction_entitlements` — ownership, pk `player_id`, sk `reaction_id`
 
-The fast-path table `Actor.handleReaction` checks against. One row per **owned** premium reaction
-(free reactions never get a row — ownership of a free reaction is universal and needs no record).
+The fast-path table `Actor.handleReaction` checks against. One row per claimed premium reaction:
+`pending` reserves the one-time purchase slot and `active` grants ownership. Free reactions never
+get a row because their ownership is universal.
 
 ```go
 type Entitlement struct {
@@ -106,6 +107,9 @@ PlayerID       string `dynamodbav:"pk"`
 ReactionID     string `dynamodbav:"sk"`
 PurchaseMethod string `dynamodbav:"purchase_method"`   // "pix" | "fichas"
 PurchaseID     string `dynamodbav:"purchase_id"`       // wallet purchase_id (pix) or this row's own history sk (fichas)
+Status         string `dynamodbav:"status,omitempty"`  // pending | active; empty is legacy-active
+RequestKey     string `dynamodbav:"request_key,omitempty"` // deterministic reservation owner
+IdemKey        string `dynamodbav:"idem_key,omitempty"`    // private recovery key
 UsedAt         string `dynamodbav:"used_at,omitempty"` // first time this reaction was ever sent — refund gate
 CreatedAt      string `dynamodbav:"created_at"`
 }
@@ -124,7 +128,11 @@ ReactionID   string `dynamodbav:"reaction_id"`
 Method       string `dynamodbav:"method"` // "pix" | "fichas"
 PriceCents   int64  `dynamodbav:"price_cents,omitempty"`
 PriceFichas  int64  `dynamodbav:"price_fichas,omitempty"`
-Status       string `dynamodbav:"status"` // pending | confirmed | refunded (fichas purchases skip "pending" — see below)
+Status       string `dynamodbav:"status"` // processing | pending | confirmed | refunding | refunded | failed | expired
+IdemKey      string `dynamodbav:"idem_key,omitempty"` // private recovery data, never returned
+PixCopiaECola string `dynamodbav:"pix_copia_e_cola,omitempty"`
+QRCodeBase64 string `dynamodbav:"qr_code_base64,omitempty"`
+ExpiresAt    string `dynamodbav:"expires_at,omitempty"`
 CreatedAt    string `dynamodbav:"created_at"`
 UpdatedAt    string `dynamodbav:"updated_at"`
 }
@@ -132,45 +140,50 @@ UpdatedAt    string `dynamodbav:"updated_at"`
 
 ## Service (`internal/reactionpurchase`, new package)
 
-Mirrors `internal/sandboxpurchase`'s shape (service.go + store.go, `dynamo.Base`, conditional-put
-idempotent create) with two create paths instead of one, converging on the same entitlement write.
+Uses `dynamo.Base` conditional writes and cross-table `TransactWriteItems`. Both create paths first
+claim the single entitlement key as `pending`; only a confirmed wallet operation makes it `active`.
+This reservation is the enforcement point for “purchasable once”, including concurrent requests.
 
 - `ListCatalog(ctx) ([]CatalogEntry, error)` — merges `reactions.catalog` (premium flag, `PriceFichas`)
   with `walletclient.ListProductSKUs()` (`PriceCents` per SKU), same proxy-at-request-time posture as
   `sandboxpurchase.Service.ListSKUs` — prices are never cached/hardcoded locally.
-- `CreateReal(ctx, playerID, reactionID, idemKey) (Record, PixPayload, error)` — looks up
+- `CreateReal(ctx, playerID, reactionID, idemKey) (Record, PixPayload, error)` — reserves ownership,
+  looks up
   `reactions.SKUFor(reactionID)`, calls `walletclient.PurchaseProduct(ctx, playerID, sku, idemKey)`
-  (new `walletclient` method, mirrors `PurchaseSandbox`), persists a `pending` `Record` with
-  `method="pix"`. **No entitlement row yet** — same "confirm before granting" posture as sandbox
-  credits; the entitlement is written by the webhook handler, mirrored below.
+  and atomically links the wallet purchase to a `pending` history record. The QR code, PIX
+  copy-and-paste value and expiry are persisted and returned. The pending reservation does not grant
+  ownership. An ambiguous retry also resumes with the original persisted idempotency key, even when
+  the route had generated that key for a client that omitted it.
 - `CreateSandbox(ctx, playerID, reactionID, idemKey) (Record, error)` — looks up `PriceFichas`,
-  calls `walletclient.Debit(ctx, playerID, priceFichas, idemKey, "reaction_purchase:"+reactionID)`
-  (existing generic method, no new wallet endpoint needed for this leg — it never touches PIX).
-  On success, synchronously writes **both** the `Record` (`method="fichas"`, `status="confirmed"`)
-  and the `Entitlement` row in one call, no pending stage, no webhook: sandbox debit is itself the
-  confirmation, there is nothing async to wait for.
+  atomically persists a `processing` intent plus pending reservation, calls the idempotent
+  `walletclient.Debit`, then atomically activates both rows. A retry resumes the same intent.
+  Definitive wallet 4xx errors remove both rows; transport/5xx ambiguity preserves them for recovery.
+  If the next HTTP request carries a different/generated key, the persisted original key is used so
+  an omitted client key can never strand the reservation or cause another debit.
 - `ConfirmFromWebhook(ctx, purchaseID) (Record, bool, error)` — mirrors
-  `sandboxpurchase.Service.ConfirmFromWebhook` exactly: re-`GetProductPurchase` from wallet (never
-  trust the webhook body), and on a new `confirmed` status, writes the `Entitlement` row (this is the
-  only place a `pix`-method entitlement is created) and updates the `Record`.
+  `sandboxpurchase.Service.ConfirmFromWebhook`: re-`GetProductPurchase` from wallet (never trust the
+  webhook body), and atomically activates entitlement + history on `confirmed`. It can reconstruct a
+  missing history row when the webhook races ahead of the create path.
 - `Refund(ctx, playerID, purchaseID, idemKey) (Record, error)` — loads the `Record` by
   `(playerID, purchaseID)` to get `ReactionID`/`Method`, then loads the `Entitlement` by
   `(playerID, ReactionID)` and rejects with `409` if `UsedAt != ""`.
-  Then branches on `Method`: `pix` → `walletclient.RefundProduct(...)` (new method, mirrors
-  `RefundSandboxPurchase`); `fichas` → `walletclient.Credit(ctx, playerID, priceFichas, idemKey,
-  "reaction_refund:"+reactionID)`. Either branch, on success, deletes the `Entitlement` row and marks
-  the `Record` `refunded`.
-- `MarkUsed(ctx, playerID, reactionID) error` — conditional update setting `UsedAt` only if empty
-  (first-use-wins, idempotent on replay). Called from `Actor.handleReaction`, see below. A no-op for
-  a free reaction (no entitlement row exists to update) — callers only invoke it when
-  `reactions.IsPremium(id)` is true.
+  It atomically transitions `confirmed → refunding` and deletes the unused entitlement before the
+  external refund. Then it branches on `Method`: `pix` → `walletclient.RefundProductPurchase(...)`;
+  `fichas` → `walletclient.Credit(...)`. Both use a server-derived key
+  `reaction-refund:<purchase_id>`, so resuming `refunding` cannot issue a second refund. Success moves
+  the record to `refunded`; subsequent refund requests return `409`.
+- `BuildMarkUsedIntent(ctx, playerID, reactionID)` — builds a conditional `used_at =
+  if_not_exists(used_at, now)` transaction item. `Actor.handleReaction` includes it in the same
+  DynamoDB transaction as the table action. A missing/revoked entitlement aborts that transaction,
+  making it the serialization point against concurrent refunds without recording use for a failed
+  action. `MarkUsed` remains an idempotent store/service primitive and free reactions are no-ops.
 - `IsOwned(ctx, playerID, reactionID) (bool, error)` — the ownership check itself, DynamoDB
   `GetItem` on `poker_reaction_entitlements`. This is the function the cache in front of
   `Actor.handleReaction` wraps (see "Server-side validation").
 
 ## `walletclient` additions
 
-New methods `PurchaseProduct`, `GetProductPurchase`, `RefundProduct` — literal structural copies of
+New methods `PurchaseProduct`, `GetProductPurchase`, `RefundProductPurchase` — structural copies of
 `PurchaseSandbox`/`GetSandboxPurchase`/`RefundSandboxPurchase` against the new
 `/wallet/product-purchase/*` M2M routes, new `TokenManager` scoped to
 `internal:wallet:product-purchase`. No new `Debit`/`Credit` method needed — `CreateSandbox`/`Refund`
@@ -178,7 +191,8 @@ above call the ones that already exist.
 
 ## Server-side validation (`Actor.handleReaction`, `internal/table/actor.go`)
 
-Today (`actor.go:315-346`) accepts any string as `c.ReactionID`. New shape:
+Before this change, `Actor.handleReaction` accepted any string as `c.ReactionID`. The implemented
+shape is:
 
 ```go
 func (a *Actor) handleReaction(ctx context.Context, c ReactionCmd) error {
@@ -195,10 +209,13 @@ return errors.New("table: reaction not owned")
 }
 return a.commitActivity(ctx, false, func () error {
 // ... existing body, unchanged ...
+var extra []types.TransactWriteItem
 if reactions.IsPremium(c.ReactionID) {
-_ = a.reactionPurchases.MarkUsed(ctx, c.PlayerID, c.ReactionID) // best-effort, never blocks the reaction itself
+intent, err := a.reactionPurchases.BuildMarkUsedIntent(ctx, c.PlayerID, c.ReactionID)
+if err != nil { return err }
+extra = append(extra, *intent)
 }
-return a.commit(...)
+return a.commit(..., extra...) // table action + first use are atomic
 })
 }
 ```
@@ -220,16 +237,10 @@ _ = cache.Set(ctx, key, []byte(boolByte(owned)), 30) // 30s TTL
 return owned, err
 ```
 
-Steady state: **one Valkey GET per reaction send**, sub-millisecond, no DynamoDB traffic. A
-DynamoDB read only happens on cache miss — first premium reaction after a purchase, or after the
-30s TTL expires with no traffic in between. This is latency-only caching, same category as
-`tablelease` (never a correctness mechanism) — a stale "not owned" for up to 30s after a purchase
-just means the player's first attempt right after buying can 30s-delay-fail once; the purchase flow
-already returns success from the entitlement write, so the frontend can locally treat "just bought"
-as owned without waiting on this cache to catch up (optimistic UI, matches how `PurchaseModal`
-already works for sandbox credits). `MarkUsed`'s explicit cache invalidation is not needed for this
-reason — the property being cached (ownership) monotonically becomes true and stays true; there is
-no "used" flag being cached, only ownership.
+Steady state: **one Valkey GET per reaction send**, sub-millisecond, no DynamoDB traffic. A DynamoDB
+read only happens on cache miss. Every activation, terminal PIX transition and refund deletes the
+exact ownership-cache key, preventing stale false after purchase and stale true after refund. The
+30-second TTL is a fallback for a failed best-effort invalidation, not the expected UX.
 
 ## Webhook (`internal/api/v1/walletwebhook.go`)
 
@@ -276,7 +287,7 @@ Mirrors `sandboxpurchase.go`'s route registration under `/v1.0/wallet/reaction-p
 | `GET /catalog`                                    | `ListCatalog` — merged premium flag + both prices                           |
 | `POST /` `{reaction_id, method: "pix"\|"fichas"}` | Dispatches to `CreateReal`/`CreateSandbox`                                  |
 | `GET /`                                           | List mine                                                                   |
-| `GET /:id`                                        | Re-verify against wallet (pix only — fichas purchases are already terminal) |
+| `GET /:id`                                        | Re-verify/reconstruct from wallet (PIX); resume a processing fichas intent   |
 | `POST /:id/refund`                                | `Refund`                                                                    |
 
 ## CDK
@@ -286,9 +297,10 @@ as the existing tables (on-demand billing, pk/sk string keys).
 
 ## Error handling
 
-- `CreateSandbox` debit fails (insufficient fichas) → passthrough error, no rows written (mirrors
-  buy-in's debit-then-seat ordering: nothing commits until the debit succeeds).
-- `CreateReal` and wallet unreachable → existing breaker trips, 503, no local row.
+- `CreateSandbox` debit fails definitively (for example insufficient fichas) → passthrough error and
+  transactional removal of intent + reservation. An ambiguous failure keeps both for safe retry.
+- `CreateReal` and wallet unreachable → existing breaker trips, 503; its pending reservation is kept
+  so retrying the same idempotency key cannot create a second purchase. Definitive 4xx removes it.
 - Refund attempted on a `UsedAt != ""` entitlement → `409`, same status code the wallet's own
   `SandboxPurchaseUsed` problem uses for the analogous case.
 - Webhook HMAC/dispatch failure → identical to the existing sandbox path (5xx so wallet retries).
@@ -308,7 +320,8 @@ as the existing tables (on-demand billing, pk/sk string keys).
   entitlement lookup at all).
 - Cache: a small test double for `cache.Backend` verifying `IsOwned` hits the store only once across
   repeated calls inside the TTL window.
-- Frontend: covered under `/impeccable`'s own testing pass once built.
+- Frontend: lobby realtime handles `reaction_purchase_update`, invalidates reaction catalog/history
+  queries and emits localized status feedback; covered by `useLobbyRealtime.test.tsx`.
 
 ## Manual provisioning (outside this change)
 

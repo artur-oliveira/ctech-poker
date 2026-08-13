@@ -275,7 +275,7 @@ export interface ClientMessage {
 
 /** ServerMessage is sent from the server to the client. */
 export interface ServerMessage {
-  /** "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast" | "sandbox_purchase_update" */
+  /** "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast" | "sandbox_purchase_update" | "reaction_purchase_update" */
   type: string;
   /** payload fields */
   conn_id: string;
@@ -283,11 +283,11 @@ export interface ServerMessage {
   snapshot?:
     | TableSnapshot
     | undefined;
-  /** for chat frame, and destination for sandbox_purchase_update */
+  /** for chat frame, and destination for purchase update frames */
   player_id: string;
   /** for chat frame, error message, or removed reason */
   message: string;
-  /** for error frame, removed frame, or sandbox_purchase_update status (confirmed|refunded|expired|failed) */
+  /** for error/removed frames, or purchase update status (confirmed|refunded|expired|failed) */
   code: string;
   /** for achievement unlocked frame */
   key: string;
@@ -317,7 +317,7 @@ export interface ServerMessage {
   reaction_id: string;
   /** destination for thrown objects */
   target_player_id: string;
-  /** for sandbox_purchase_update */
+  /** for sandbox_purchase_update or reaction_purchase_update */
   purchase_id: string;
 }
 

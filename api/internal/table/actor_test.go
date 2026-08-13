@@ -4,9 +4,12 @@ package table
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
@@ -324,9 +327,9 @@ func TestHandleReactionPremiumOwnedAcceptedAndMarksUsed(t *testing.T) {
 	a, _ := newTestActor(t, store)
 	a.SetReactionOwnershipForActor(func(context.Context, string, string) (bool, error) { return true, nil })
 	markUsedCalls := make(chan string, 1)
-	a.SetReactionMarkUsedForActor(func(_ context.Context, playerID, reactionID string) error {
+	a.SetReactionMarkUsedForActor(func(_ context.Context, playerID, reactionID string) (*types.TransactWriteItem, error) {
 		markUsedCalls <- playerID + ":" + reactionID
-		return nil
+		return nil, nil
 	})
 
 	reply := make(chan error, 1)
@@ -340,6 +343,23 @@ func TestHandleReactionPremiumOwnedAcceptedAndMarksUsed(t *testing.T) {
 		}
 	default:
 		t.Fatal("expected reactionMarkUsed to have been called")
+	}
+}
+
+func TestHandleReactionPremiumRejectedWhenConcurrentRefundWins(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+	a, _ := newTestActor(t, store)
+	a.SetReactionOwnershipForActor(func(context.Context, string, string) (bool, error) { return true, nil })
+	a.SetReactionMarkUsedForActor(func(context.Context, string, string) (*types.TransactWriteItem, error) {
+		return nil, errors.New("entitlement was revoked")
+	})
+
+	reply := make(chan error, 1)
+	err := a.Dispatch(ReactionCmd{PlayerID: "p1", ActionID: "a-refund-race", ReactionID: "cold", Reply: reply})
+	if err == nil || !strings.Contains(err.Error(), "build premium reaction usage") {
+		t.Fatalf("expected concurrent refund to block reaction, got %v", err)
 	}
 }
 

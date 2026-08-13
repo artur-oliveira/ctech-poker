@@ -112,11 +112,9 @@ type Actor struct {
 	// sessionlog entry is never closed (buyin.SettleSystemRemoval does both).
 	onPlayerRemoved        func(playerID, reason string, stack int64, holdID string)
 	systemSettlementIntent func(context.Context, string, string, int64, string) (types.TransactWriteItem, error)
-	// reactionOwnership/reactionMarkUsed are nil-checked no-ops until wired by
-	// the manager — mirrors every other optional hook on Actor (onHandComplete,
-	// systemSettlementIntent, etc).
+	// Premium reactions fail closed until both hooks are wired by the manager.
 	reactionOwnership func(ctx context.Context, playerID, reactionID string) (bool, error)
-	reactionMarkUsed  func(ctx context.Context, playerID, reactionID string) error
+	reactionMarkUsed  func(ctx context.Context, playerID, reactionID string) (*types.TransactWriteItem, error)
 	// connCount mirrors the total size of activeConns across all players.
 	// Maintained only inside Run (handleConnect/handleDisconnect) but read via
 	// ActiveConnCount from any goroutine — same pattern as equityEnabled —
@@ -350,6 +348,21 @@ func (a *Actor) handleReaction(ctx context.Context, c ReactionCmd) error {
 		if c.TargetPlayerID != "" && (c.TargetPlayerID == c.PlayerID || !a.isSeated(c.TargetPlayerID)) {
 			return errors.New("table: invalid reaction target")
 		}
+		var extra []types.TransactWriteItem
+		if reactions.IsPremium(c.ReactionID) {
+			if a.reactionMarkUsed == nil {
+				return errors.New("table: reaction usage recorder unavailable")
+			}
+			// This conditional write commits atomically with the reaction and is
+			// the serialization point against refunds: exactly one can win.
+			usedIntent, err := a.reactionMarkUsed(ctx, c.PlayerID, c.ReactionID)
+			if err != nil {
+				return fmt.Errorf("table: build premium reaction usage: %w", err)
+			}
+			if usedIntent != nil {
+				extra = append(extra, *usedIntent)
+			}
+		}
 		a.markLastAction(c.PlayerID)
 		now := timeNowFunc().UnixMilli()
 		a.activity.Reactions = append(a.activity.Reactions, tablestore.Reaction{
@@ -359,13 +372,10 @@ func (a *Actor) handleReaction(ctx context.Context, c ReactionCmd) error {
 		if len(a.activity.Reactions) > maxPersistedReactions {
 			a.activity.Reactions = append([]tablestore.Reaction(nil), a.activity.Reactions[len(a.activity.Reactions)-maxPersistedReactions:]...)
 		}
-		if reactions.IsPremium(c.ReactionID) && a.reactionMarkUsed != nil {
-			_ = a.reactionMarkUsed(ctx, c.PlayerID, c.ReactionID) // best-effort, never blocks the reaction itself
-		}
 		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
 			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "reaction",
 			ReactionID: c.ReactionID, TargetPlayerID: c.TargetPlayerID,
-		})
+		}, extra...)
 	})
 }
 
@@ -815,7 +825,7 @@ func (a *Actor) SetReactionOwnershipForActor(fn func(ctx context.Context, player
 	a.reactionOwnership = fn
 }
 
-func (a *Actor) SetReactionMarkUsedForActor(fn func(ctx context.Context, playerID, reactionID string) error) {
+func (a *Actor) SetReactionMarkUsedForActor(fn func(ctx context.Context, playerID, reactionID string) (*types.TransactWriteItem, error)) {
 	a.reactionMarkUsed = fn
 }
 

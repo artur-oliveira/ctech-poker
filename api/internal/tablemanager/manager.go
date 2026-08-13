@@ -50,7 +50,7 @@ type Manager struct {
 	systemSettlementIntent func(context.Context, string, string, string, int64, string) (types.TransactWriteItem, error)
 	roomLoader             func(tableID string) (*roomstore.Room, bool, error)
 	reactionOwnership      func(ctx context.Context, playerID, reactionID string) (bool, error)
-	reactionMarkUsed       func(ctx context.Context, playerID, reactionID string) error
+	reactionMarkUsed       func(ctx context.Context, playerID, reactionID string) (*types.TransactWriteItem, error)
 
 	mu       sync.Mutex
 	actors   map[string]*Actor
@@ -208,9 +208,9 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 		}
 		return m.reactionOwnership(ctx, playerID, reactionID)
 	})
-	actor.SetReactionMarkUsedForActor(func(ctx context.Context, playerID, reactionID string) error {
+	actor.SetReactionMarkUsedForActor(func(ctx context.Context, playerID, reactionID string) (*types.TransactWriteItem, error) {
 		if m.reactionMarkUsed == nil {
-			return nil
+			return nil, errors.New("tablemanager: reaction usage intent builder unavailable")
 		}
 		return m.reactionMarkUsed(ctx, playerID, reactionID)
 	})
@@ -360,6 +360,6 @@ func (m *Manager) SetReactionOwnership(fn func(ctx context.Context, playerID, re
 	m.reactionOwnership = fn
 }
 
-func (m *Manager) SetReactionMarkUsed(fn func(ctx context.Context, playerID, reactionID string) error) {
+func (m *Manager) SetReactionMarkUsed(fn func(ctx context.Context, playerID, reactionID string) (*types.TransactWriteItem, error)) {
 	m.reactionMarkUsed = fn
 }

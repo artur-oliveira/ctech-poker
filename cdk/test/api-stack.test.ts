@@ -1,8 +1,8 @@
 import {App} from 'aws-cdk-lib';
-import {Match, Template} from 'aws-cdk-lib/assertions';
+import {Template} from 'aws-cdk-lib/assertions';
 import {minimumApiCapacity, PokerApiStack} from '../lib/api-stack';
 
-test('keeps two API instances in production and one outside production', () => {
+test('keeps one minimum API instance in every environment', () => {
   expect(minimumApiCapacity('prod')).toBe(1);
   expect(minimumApiCapacity('stage')).toBe(1);
   expect(minimumApiCapacity('dev')).toBe(1);
@@ -52,6 +52,8 @@ test('synthesizes without error and declares exactly one ASG', () => {
     walletWebhookHmacSecretParam: '/ctech/dev/poker/wallet-webhook-hmac-secret',
     sandboxPurchasesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_sandbox_purchases',
     pendingCashoutsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_pending_cashouts',
+    reactionEntitlementsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_reaction_entitlements',
+    reactionPurchasesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_reaction_purchases',
   });
   const template = Template.fromStack(stack);
   template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
@@ -65,6 +67,8 @@ test('synthesizes without error and declares exactly one ASG', () => {
   expect(rendered).toContain('dev-ctech-poker-avatars/up/*');
   expect(rendered).toContain('dev-ctech-poker-avatars/av/*');
   expect(rendered).not.toContain('dev-ctech-poker-frontend');
+  expect(rendered).toContain('dev_poker_reaction_entitlements');
+  expect(rendered).toContain('dev_poker_reaction_purchases');
   for (const signal of [
     'ActionLatencyMs',
     'ActionsSucceeded',
@@ -84,11 +88,11 @@ test('synthesizes without error and declares exactly one ASG', () => {
     DefaultResult: 'CONTINUE',
     HeartbeatTimeout: 120,
   });
-  template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
-    TargetGroupAttributes: Match.arrayWith([
-      {Key: 'deregistration_delay.timeout_seconds', Value: '60'},
-    ]),
+  template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
+    HealthCheckType: 'EC2',
   });
+  template.resourceCountIs('AWS::ElasticLoadBalancingV2::TargetGroup', 0);
+  template.resourceCountIs('AWS::ElasticLoadBalancingV2::ListenerRule', 0);
   expect(rendered).toContain('autoscaling:CompleteLifecycleAction');
   expect(rendered).toContain('ssm:SendCommand');
 });

@@ -1,5 +1,9 @@
 # Premium Table Reactions Implementation Plan
 
+> **Status (2026-08-12): implemented and hardened.** The unchecked boxes below preserve the original
+> TDD execution script; they are not a current completion tracker. The final implementation includes
+> the consistency corrections recorded in “Post-implementation hardening” at the end of this file.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make 6 `TABLE_REACTIONS` entries (`cold`, `fire`, `poop`, `rofl`, `knife`, `turtle`)
@@ -2037,5 +2041,34 @@ git commit -m "feat(api): wire reaction-purchase service and ownership cache"
   `walletclient.Client`'s real method signatures from Task 3 exactly, plus the pre-existing
   `Debit`/`Credit`. `OwnershipCache.svc` (Task 6) is typed as the minimal `isOwnedChecker` interface
   so `*Service` satisfies it without a wrapper. `Actor.reactionOwnership`/`reactionMarkUsed` (Task 6)
-  match `Manager.reactionOwnership`/`reactionMarkUsed`'s function signatures exactly, both matching
-  `OwnershipCache.IsOwned`/`Service.MarkUsed`'s real signatures from Tasks 4-6.
+  match `Manager.reactionOwnership`/`reactionMarkUsed`'s function signatures exactly, matching
+  `OwnershipCache.IsOwned` and the final transactional `Service.BuildMarkUsedIntent` contract.
+
+## Post-implementation hardening (2026-08-12)
+
+The final review found failure windows that the original sequential pseudocode did not cover. The
+implemented contract is now:
+
+- one conditional entitlement reservation per `(player_id, reaction_id)` enforces “purchasable
+  once” before either wallet operation;
+- fichas uses a persisted `processing` intent, an idempotent debit and one DynamoDB transaction to
+  activate both history and ownership; definitive 4xx debit failures remove both reservation rows,
+  while a later request resumes an ambiguous operation with its persisted original idempotency key;
+- PIX confirmation atomically converges history and ownership and can reconstruct a missing local
+  record when a webhook beats the create response; `GET /:id` re-verifies PIX with wallet;
+- refunds move `confirmed → refunding` while atomically revoking the unused entitlement, use a
+  server-derived wallet idempotency key, and then move `refunding → refunded`; a repeated refund
+  cannot credit fichas twice;
+- premium reaction send includes the conditional `used_at` write in the same DynamoDB transaction
+  as the table action, so a concurrent send/refund race has exactly one winner without falsely
+  marking a reaction that failed to commit;
+- PIX QR/copy-and-paste/expiry fields are persisted and returned by `POST /`;
+- purchase, confirmation, terminal PIX states and refund explicitly invalidate the ownership cache;
+- the API EC2 role includes both reaction-table ARNs; the proto contract and lobby frontend handle
+  `reaction_purchase_update`;
+- regression coverage includes duplicate purchase/refund, insufficient fichas cleanup, PIX refund,
+  webhook reconstruction, payment payload, cache invalidation and realtime query refresh.
+
+The only remaining prerequisite is the already documented external provisioning grant
+`internal:wallet:product-purchase` in `ctech-account`; it is not represented by a writable resource
+in this repository.

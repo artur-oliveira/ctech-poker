@@ -621,7 +621,8 @@ func wireAutoRebuyHook(mgr *tablemanager.Manager, buyinSvc *buyin.Service, rooms
 func wirePlayerRemovedHook(mgr *tablemanager.Manager, buyinSvc *buyin.Service, reg ws.Registry, reactionOwnershipCache *reactionpurchase.OwnershipCache, reactionSvc *reactionpurchase.Service) {
 	mgr.SetSystemSettlementIntent(buyinSvc.BuildSystemSettlementIntent)
 	mgr.SetReactionOwnership(reactionOwnershipCache.IsOwned)
-	mgr.SetReactionMarkUsed(reactionSvc.MarkUsed)
+	mgr.SetReactionMarkUsed(reactionSvc.BuildMarkUsedIntent)
+	reactionSvc.SetOwnershipInvalidator(reactionOwnershipCache.Invalidate)
 	mgr.SetOnPlayerRemoved(func(tableID, playerID, reason string, stack int64, holdID string) {
 		ctx := context.Background()
 		// Pushes an explicit "removed" frame straight to the removed player's

@@ -1475,13 +1475,13 @@ func (x *ClientMessage) GetExpectedStage() string {
 // ServerMessage is sent from the server to the client.
 type ServerMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast" | "sandbox_purchase_update"
+	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast" | "sandbox_purchase_update" | "reaction_purchase_update"
 	// payload fields
 	ConnId   string         `protobuf:"bytes,2,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`       // for connected frame
 	Snapshot *TableSnapshot `protobuf:"bytes,3,opt,name=snapshot,proto3" json:"snapshot,omitempty"`                 // for state frame
-	PlayerId string         `protobuf:"bytes,4,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"` // for chat frame, and destination for sandbox_purchase_update
+	PlayerId string         `protobuf:"bytes,4,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"` // for chat frame, and destination for purchase update frames
 	Message  string         `protobuf:"bytes,5,opt,name=message,proto3" json:"message,omitempty"`                   // for chat frame, error message, or removed reason
-	Code     string         `protobuf:"bytes,6,opt,name=code,proto3" json:"code,omitempty"`                         // for error frame, removed frame, or sandbox_purchase_update status (confirmed|refunded|expired|failed)
+	Code     string         `protobuf:"bytes,6,opt,name=code,proto3" json:"code,omitempty"`                         // for error/removed frames, or purchase update status (confirmed|refunded|expired|failed)
 	Key      string         `protobuf:"bytes,7,opt,name=key,proto3" json:"key,omitempty"`                           // for achievement unlocked frame
 	Stars    int32          `protobuf:"varint,8,opt,name=stars,proto3" json:"stars,omitempty"`                      // for achievement unlocked frame
 	// lobby payload fields
@@ -1495,7 +1495,7 @@ type ServerMessage struct {
 	Equity          *float64 `protobuf:"fixed64,16,opt,name=equity,proto3,oneof" json:"equity,omitempty"`                                   // for equity delta (player_id identifies owner)
 	ReactionId      string   `protobuf:"bytes,17,opt,name=reaction_id,json=reactionId,proto3" json:"reaction_id,omitempty"`                 // ephemeral table reaction catalog key
 	TargetPlayerId  string   `protobuf:"bytes,18,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`   // destination for thrown objects
-	PurchaseId      string   `protobuf:"bytes,19,opt,name=purchase_id,json=purchaseId,proto3" json:"purchase_id,omitempty"`                 // for sandbox_purchase_update
+	PurchaseId      string   `protobuf:"bytes,19,opt,name=purchase_id,json=purchaseId,proto3" json:"purchase_id,omitempty"`                 // for sandbox_purchase_update or reaction_purchase_update
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }

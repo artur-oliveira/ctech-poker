@@ -33,6 +33,16 @@ func TestSKUForFreeReactionNotOK(t *testing.T) {
 	}
 }
 
+func TestReactionForSKU(t *testing.T) {
+	id, priceFichas, ok := ReactionForSKU("poker_reaction_cold")
+	if !ok || id != "cold" || priceFichas != 100_000 {
+		t.Fatalf("ReactionForSKU = %q, %d, %v", id, priceFichas, ok)
+	}
+	if _, _, ok := ReactionForSKU("not-a-product"); ok {
+		t.Fatal("unknown SKU must not resolve to a reaction")
+	}
+}
+
 func TestEveryFreeTableReactionIsKnown(t *testing.T) {
 	// Mirrors ui/src/lib/reactions.ts's TABLE_REACTIONS keys — keep this list in
 	// sync by hand on any change to that file (see docs/specs/2026-08-12-

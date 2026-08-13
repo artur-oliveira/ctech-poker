@@ -17,6 +17,14 @@ type fakeReactionWallet struct {
 	skus []walletclient.ProductSKU
 }
 
+func allReactionProductSKUs() []walletclient.ProductSKU {
+	return []walletclient.ProductSKU{
+		{ID: "poker_reaction_cold", PriceCents: 100}, {ID: "poker_reaction_fire", PriceCents: 100},
+		{ID: "poker_reaction_poop", PriceCents: 500}, {ID: "poker_reaction_rofl", PriceCents: 500},
+		{ID: "poker_reaction_knife", PriceCents: 500}, {ID: "poker_reaction_turtle", PriceCents: 500},
+	}
+}
+
 func (f *fakeReactionWallet) ListProductSKUs(context.Context) ([]walletclient.ProductSKU, error) {
 	return f.skus, nil
 }
@@ -43,7 +51,7 @@ func newReactionPurchaseApp(svc *reactionpurchase.Service) *fiber.App {
 }
 
 func TestReactionPurchaseCatalogRouteRegistered(t *testing.T) {
-	wallet := &fakeReactionWallet{skus: []walletclient.ProductSKU{{ID: "poker_reaction_cold", PriceCents: 100}}}
+	wallet := &fakeReactionWallet{skus: allReactionProductSKUs()}
 	svc := reactionpurchase.NewService(wallet, reactionpurchase.NewEntitlementStore(nil, "test"), reactionpurchase.NewStore(nil, "test"))
 	app := newReactionPurchaseApp(svc)
 

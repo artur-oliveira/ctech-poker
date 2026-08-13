@@ -52,3 +52,24 @@ func TestOwnershipCacheHitsBackendOnceWithinTTL(t *testing.T) {
 		t.Fatalf("expected exactly 1 underlying IsOwned call, got %d", svc.calls)
 	}
 }
+
+func TestOwnershipCacheInvalidateForcesFreshRead(t *testing.T) {
+	backend := newFakeCacheBackend()
+	svc := &countingIsOwnedService{owned: false}
+	c := NewOwnershipCache(svc, backend)
+	ctx := context.Background()
+
+	if owned, err := c.IsOwned(ctx, "player-1", "cold"); err != nil || owned {
+		t.Fatalf("initial read: owned=%v err=%v", owned, err)
+	}
+	svc.owned = true
+	if err := c.Invalidate(ctx, "player-1", "cold"); err != nil {
+		t.Fatalf("Invalidate: %v", err)
+	}
+	if owned, err := c.IsOwned(ctx, "player-1", "cold"); err != nil || !owned {
+		t.Fatalf("read after invalidation: owned=%v err=%v", owned, err)
+	}
+	if svc.calls != 2 {
+		t.Fatalf("underlying calls = %d, want 2", svc.calls)
+	}
+}

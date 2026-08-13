@@ -35,6 +35,16 @@ var byID = func() map[string]ReactionCatalogEntry {
 	return m
 }()
 
+var bySKU = func() map[string]ReactionCatalogEntry {
+	m := make(map[string]ReactionCatalogEntry)
+	for _, e := range catalog {
+		if e.SKU != "" {
+			m[e.SKU] = e
+		}
+	}
+	return m
+}()
+
 func IsKnown(id string) bool {
 	_, ok := byID[id]
 	return ok
@@ -53,6 +63,17 @@ func SKUFor(id string) (sku string, priceFichas int64, ok bool) {
 		return "", 0, false
 	}
 	return e.SKU, e.PriceFichas, true
+}
+
+// ReactionForSKU maps a wallet-owned product purchase back to the game-owned
+// reaction. Webhook recovery uses this instead of depending on a local history
+// row that may not have been persisted before the callback arrived.
+func ReactionForSKU(sku string) (id string, priceFichas int64, ok bool) {
+	e, found := bySKU[sku]
+	if !found {
+		return "", 0, false
+	}
+	return e.ID, e.PriceFichas, true
 }
 
 // All returns every catalog entry — used by ListCatalog (Task 4) to build the

@@ -108,6 +108,8 @@ new PokerApiStack(app, id('API'), {
   walletWebhookHmacSecretParam: pokerParameters.walletWebhookHmacSecret,
   sandboxPurchasesTableArn: dynamoStack.tables.get('poker_sandbox_purchases')!.tableArn,
   pendingCashoutsTableArn: dynamoStack.tables.get('poker_pending_cashouts')!.tableArn,
+  reactionEntitlementsTableArn: dynamoStack.tables.get('poker_reaction_entitlements')!.tableArn,
+  reactionPurchasesTableArn: dynamoStack.tables.get('poker_reaction_purchases')!.tableArn,
   walletUrlParam: pokerParameters.walletUrl,
   pokerClientIdParam: pokerParameters.clientId,
   pokerClientSecretParam: pokerParameters.clientSecret,

@@ -5,8 +5,9 @@ Frontend).
 
 ## Hard rules
 
-1. **Reuse `@aoctech/cdk`** (`PrivateIpv4Ec2Service`, `Environment`, dual-stack helpers).
-   Never hand-roll `AssociatePublicIpAddress` or NAT. CI fails the build if it finds either.
+1. **Reuse `@aoctech/cdk`** (`Environment`, dual-stack helpers). The HAProxy API stack keeps its
+   private-IPv4 launch-template override locally because `PrivateIpv4Ec2Service` still creates
+   retired ALB resources. CI allows that override only in `lib/api-stack.ts`; NAT remains forbidden.
 2. **No magic strings** — everything naming-related lives in `lib/constants.ts`.
 3. **DynamoDB on-demand** with an explicit `maxRead/WriteRequestUnits` (≥100). Single-digit
    caps fail CI.
@@ -25,7 +26,8 @@ Frontend).
 ## Verify
 
 `npm ci` then `npx cdk diff --all` / `npx cdk deploy`. `infra.yml` posts a diff on PR and
-runs two CI guards (no hand-rolled NAT, no tiny DynamoDB throughput cap). Tests: `test/*`.
+runs two CI guards (private-IPv4 override only in the HAProxy API stack, no tiny DynamoDB
+throughput cap). Tests: `test/*`.
 
 ## Where things live
 

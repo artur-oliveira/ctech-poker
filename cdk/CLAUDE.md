@@ -5,9 +5,10 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
 
 ## Conventions
 
-- **Reuse `@aoctech/cdk`** shared constructs (`PrivateIpv4Ec2Service`, `Environment`,
-  dual-stack helpers). Do NOT hand-roll `AssociatePublicIpAddress` or NAT gateways — use the
-  shared no-NAT EC2/ASG pattern (CI guards this: `infra.yml:57-65`).
+- **Reuse `@aoctech/cdk`** shared helpers (`Environment`, dual-stack user-data helpers).
+  `PrivateIpv4Ec2Service` still creates retired ALB resources, so the HAProxy API stack owns the
+  private-IPv4 launch-template override locally. CI permits it only in `lib/api-stack.ts` and
+  rejects copies elsewhere; NAT gateways remain forbidden.
 - **Named constants in `lib/constants.ts`** — no magic strings for names, ports, domains,
   SSM paths, role names, or ARNs. AWS resource names must never be inlined at a call site.
 - **DynamoDB:** on-demand (`Billing.onDemand`) with an explicit `maxRead/WriteRequestUnits`
@@ -18,10 +19,10 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
 ## Architecture facts (verified in code)
 
 - **7 stacks**: OIDC (global), DynamoDB, Archiver, API, Frontend, Reconcile, TableCleanup.
-- **Game server = EC2 Auto-Scaling Group** via `@aoctech/cdk`'s `PrivateIpv4Ec2Service`, capacity
-  1–3, behind the shared ctech-cdk ALB (listener priority 45, port 8003). **Not Lambda/Fargate.**
-  The Go binary is the ALB target directly (no nginx). The **ALB, its listener, its security group
-  and the VPC are all imported** from SSM/lookup, never created here.
+- **Game server = EC2 Auto-Scaling Group**, capacity 1–3, routed by the shared HAProxy edge.
+  **Not Lambda/Fargate.** The Go binary is the HAProxy target directly on port 8080 (no nginx).
+  The retained edge security group and VPC are imported from SSM/lookup; no ALB target group or
+  listener rule is created.
 - **15 DynamoDB tables** (`dynamodb-stack.ts`), not 8 — an older revision of this file undercounted.
 - **WebSocket is served by the Go binary** on the ASG (not API Gateway); binary protobuf frames on
   two gateways (`/v1.0/tables/:id/ws`, `/v1.0/ws`).
@@ -43,10 +44,10 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
 
 - **No WAF** on the CloudFront distribution — no `aws-wafv2` import, no `webAclId`. `PLAN.md`'s
   Task 9 claimed this shipped; it did not.
-- **No ASG lifecycle hook** here or in `PrivateIpv4Ec2Service`, so `tablemanager.DrainAndRelease`
-  gets only the default EC2 shutdown grace period.
+- **Termination drain is explicit:** the ASG lifecycle hook invokes a Lambda that stops the app
+  through SSM and always completes termination, with a 120-second heartbeat timeout.
 - **No DLQ on either EventBridge Scheduler target** (`reconcile-stack.ts`, `tablecleanup-stack.ts`).
-- **No test** for `reconcile-stack.ts` or `oidc-stack.ts`.
+- **No test** for `oidc-stack.ts`.
 - **B10 (fixed)** — archiver `DynamoEventSource` has `bisectBatchOnError` + `onFailure: SqsDlq`, and
   a CloudWatch alarm fires on any visible DLQ message.
 - **B31 relevance** — `poker_leaderboard_stats` has GSIs only for `hands_won` / `hands_played` /
@@ -57,7 +58,8 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
 
 `bin/poker.ts` (entry) · `lib/{constants,api-stack,dynamodb-stack,archiver-stack,frontend-stack,
 oidc-stack,reconcile-stack,tablecleanup-stack,bundle}.ts` · `test/*` (Jest/CDK assertions).
-Compiled `.d.ts`/`.js` artifacts are checked in alongside sources — edit the `.ts`.
+Compiled `.d.ts`/`.js` artifacts are ignored build outputs. Edit the `.ts` and run `npm run build`
+before Jest so stale local JavaScript cannot shadow the TypeScript modules.
 
 ## Mandatory Documentation Policy
 

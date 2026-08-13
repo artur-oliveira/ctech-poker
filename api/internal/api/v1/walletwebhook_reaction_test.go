@@ -55,14 +55,45 @@ func webhookCreateTestTable(t *testing.T, db *dynamodb.Client, name string) {
 // fakeReactionWebhookWallet fixes GetProductPurchase's result — the webhook
 // path only ever calls GetProductPurchase, never Purchase/Refund.
 type fakeReactionWebhookWallet struct {
-	getResult *walletclient.ProductPurchase
+	createResult *walletclient.ProductPurchase
+	getResult    *walletclient.ProductPurchase
 }
 
 func (f *fakeReactionWebhookWallet) ListProductSKUs(context.Context) ([]walletclient.ProductSKU, error) {
 	return nil, nil
 }
 func (f *fakeReactionWebhookWallet) PurchaseProduct(context.Context, string, string, string) (*walletclient.ProductPurchase, error) {
-	return nil, nil
+	return f.createResult, nil
+}
+
+func TestCreateReactionPurchasePIXReturnsPaymentPayload(t *testing.T) {
+	db := webhookTestDynamoClient(t)
+	env := fmt.Sprintf("route_reaction_test_%d", time.Now().UnixNano())
+	webhookCreateTestTable(t, db, dynamo.TableName(env, "poker_reaction_entitlements"))
+	webhookCreateTestTable(t, db, dynamo.TableName(env, "poker_reaction_purchases"))
+	wallet := &fakeReactionWebhookWallet{createResult: &walletclient.ProductPurchase{
+		PurchaseID: "prdp-route-1", SKU: "poker_reaction_cold", Amount: 100, Status: "pending",
+		PixCopiaECola: "000201-route-pix", QRCodeBase64: "route-qr", ExpiresAt: "2026-08-13T00:00:00Z",
+	}}
+	svc := reactionpurchase.NewService(wallet, reactionpurchase.NewEntitlementStore(db, env), reactionpurchase.NewStore(db, env))
+	app := newReactionPurchaseApp(svc)
+	body := []byte(`{"reaction_id":"cold","method":"pix","idem_key":"route-idem"}`)
+	req := httptest.NewRequest(http.MethodPost, "/v1.0/wallet/reaction-purchase/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status=%d, want 201", resp.StatusCode)
+	}
+	var rec reactionpurchase.Record
+	if err := json.NewDecoder(resp.Body).Decode(&rec); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if rec.PurchaseID != "prdp-route-1" || rec.PixCopiaECola != "000201-route-pix" || rec.QRCodeBase64 != "route-qr" || rec.ExpiresAt == "" {
+		t.Fatalf("response omitted PIX payment payload: %+v", rec)
+	}
 }
 func (f *fakeReactionWebhookWallet) GetProductPurchase(context.Context, string) (*walletclient.ProductPurchase, error) {
 	return f.getResult, nil
