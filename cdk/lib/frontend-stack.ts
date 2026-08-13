@@ -82,6 +82,13 @@ async function handler(event) {
   return event.request;
 }`),
     });
+
+    const extraConnectSrcStr: string = [
+      apiDomainName,
+      authDomainName,
+      ...extraConnectSrc
+    ].map(it => `https://${it}`).join(' ')
+
     const securityHeaders = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeaders', {
       responseHeadersPolicyName: `${environment}-${SERVICE}-security-headers`,
       customHeadersBehavior: {
@@ -106,7 +113,7 @@ async function handler(event) {
           contentSecurityPolicy: [
             "default-src 'self'", "base-uri 'self'", "object-src 'none'", "frame-ancestors 'none'",
             "img-src 'self' data:", "style-src 'self' 'unsafe-inline'", "script-src 'self' 'unsafe-inline'",
-            `connect-src 'self' https://${authDomainName} ${extraConnectSrc.join(' ')}`,
+            `connect-src 'self' ${extraConnectSrcStr}`,
           ].join('; '),
           override: true,
         },
