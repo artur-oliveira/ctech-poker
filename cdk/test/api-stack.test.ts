@@ -24,6 +24,7 @@ test('synthesizes without error and declares exactly one ASG', () => {
     domainName: 'poker-api-dev.aoctech.app',
     appDomainName: 'poker-dev.aoctech.app',
     authDomainName: 'accounts-dev.aoctech.app',
+    authApiDomainName: 'accounts-dev-api.aoctech.app',
     instanceProfileName: 'dev-ctech-poker-api-instance-profile',
     deploymentsBucketName: 'dev-ctech-deployments',
     logsBucketName: 'dev-ctech-application-logs',
