@@ -51,6 +51,13 @@ const (
 	pathSandboxPurchaseRefund = "/v1.0/internal/wallet/sandbox-purchase/%s/refund"
 
 	scopeSandboxPurchase = "internal:wallet:sandbox-purchase"
+
+	pathProductPurchaseSkus   = "/v1.0/internal/wallet/product-purchase/skus"
+	pathProductPurchaseCreate = "/v1.0/internal/wallet/product-purchase"
+	pathProductPurchaseGet    = "/v1.0/internal/wallet/product-purchase/%s"
+	pathProductPurchaseRefund = "/v1.0/internal/wallet/product-purchase/%s/refund"
+
+	scopeProductPurchase = "internal:wallet:product-purchase"
 )
 
 // Error is a passthrough of ctech-wallet's own RFC 9457 problem+json body —
@@ -105,6 +112,7 @@ type Client struct {
 	gameStatusTokens      *oauth2client.TokenManager
 	balanceTokens         *oauth2client.TokenManager
 	sandboxPurchaseTokens *oauth2client.TokenManager
+	productPurchaseTokens *oauth2client.TokenManager
 	env                   string
 	breakersMu            sync.Mutex
 	breakers              map[string]breakerState
@@ -160,6 +168,7 @@ func New(cfg *config.Config, cacheB cache.Backend) *Client {
 		gameStatusTokens:      oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeGameStatus),
 		balanceTokens:         oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeBalance),
 		sandboxPurchaseTokens: oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeSandboxPurchase),
+		productPurchaseTokens: oauth2client.New(httpClient, cacheB, baseAuth+pathToken, cfg.PokerClientID, cfg.PokerClientSecret, scopeProductPurchase),
 		env:                   cfg.Env,
 		breakers:              make(map[string]breakerState),
 		retryDelay:            time.Sleep,
@@ -643,6 +652,166 @@ func (c *Client) RefundSandboxPurchase(ctx context.Context, userID, purchaseID, 
 		return nil, walletError(resp.StatusCode, raw)
 	}
 	var p SandboxPurchase
+	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+		return nil, fmt.Errorf("walletclient: decode: %w", err)
+	}
+	p.normalizeAmount()
+	return &p, nil
+}
+
+// ProductSKU mirrors ctech-wallet's M2M GET .../product-purchase/skus response.
+type ProductSKU struct {
+	ID         string `json:"id"`
+	PriceCents int64  `json:"price_cents"`
+}
+
+// ProductPurchase mirrors ctech-wallet's M2M product-purchase response shapes.
+type ProductPurchase struct {
+	PurchaseID     string `json:"purchase_id"`
+	UserID         string `json:"user_id"`
+	SKU            string `json:"sku"`
+	Amount         int64  `json:"amount"`
+	AmountExpected int64  `json:"amount_expected"`
+	Status         string `json:"status"`
+	PixCopiaECola  string `json:"pix_copia_e_cola,omitempty"`
+	QRCodeBase64   string `json:"qr_code_base64,omitempty"`
+	ExpiresAt      string `json:"expires_at,omitempty"`
+}
+
+func (p *ProductPurchase) normalizeAmount() {
+	if p.Amount == 0 {
+		p.Amount = p.AmountExpected
+	}
+}
+
+// ListProductSKUs fetches the purchasable generic-product catalog.
+func (c *Client) ListProductSKUs(ctx context.Context) ([]ProductSKU, error) {
+	token, err := c.productPurchaseTokens.Get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("walletclient: token: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+pathProductPurchaseSkus, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := c.do(req, true)
+	if err != nil {
+		return nil, fmt.Errorf("walletclient: request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		raw, _ := io.ReadAll(resp.Body)
+		return nil, walletError(resp.StatusCode, raw)
+	}
+	var skus []ProductSKU
+	if err := json.NewDecoder(resp.Body).Decode(&skus); err != nil {
+		return nil, fmt.Errorf("walletclient: decode: %w", err)
+	}
+	return skus, nil
+}
+
+// PurchaseProduct opens a direct PIX product sale on userID's behalf.
+func (c *Client) PurchaseProduct(ctx context.Context, userID, sku, idempotencyKey string) (*ProductPurchase, error) {
+	token, err := c.productPurchaseTokens.Get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("walletclient: token: %w", err)
+	}
+	body, err := json.Marshal(map[string]any{
+		"user_id":         userID,
+		"sku":             sku,
+		"idempotency_key": idempotencyKey,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("walletclient: encode: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+pathProductPurchaseCreate, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.do(req, idempotencyKey != "")
+	if err != nil {
+		return nil, fmt.Errorf("walletclient: request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		raw, _ := io.ReadAll(resp.Body)
+		return nil, walletError(resp.StatusCode, raw)
+	}
+	var p ProductPurchase
+	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+		return nil, fmt.Errorf("walletclient: decode: %w", err)
+	}
+	p.normalizeAmount()
+	return &p, nil
+}
+
+// GetProductPurchase re-fetches a purchase's current status from wallet — the
+// source of truth callers must consult before crediting or broadcasting
+// anything (never the webhook body).
+func (c *Client) GetProductPurchase(ctx context.Context, purchaseID string) (*ProductPurchase, error) {
+	token, err := c.productPurchaseTokens.Get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("walletclient: token: %w", err)
+	}
+	url := fmt.Sprintf(c.base+pathProductPurchaseGet, purchaseID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := c.do(req, true)
+	if err != nil {
+		return nil, fmt.Errorf("walletclient: request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		raw, _ := io.ReadAll(resp.Body)
+		return nil, walletError(resp.StatusCode, raw)
+	}
+	var p ProductPurchase
+	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+		return nil, fmt.Errorf("walletclient: decode: %w", err)
+	}
+	p.normalizeAmount()
+	return &p, nil
+}
+
+// RefundProductPurchase reverses a confirmed product purchase.
+func (c *Client) RefundProductPurchase(ctx context.Context, userID, purchaseID, idempotencyKey string) (*ProductPurchase, error) {
+	token, err := c.productPurchaseTokens.Get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("walletclient: token: %w", err)
+	}
+	body, err := json.Marshal(map[string]any{
+		"user_id": userID, "idempotency_key": idempotencyKey,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("walletclient: encode: %w", err)
+	}
+	url := fmt.Sprintf(c.base+pathProductPurchaseRefund, purchaseID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.do(req, idempotencyKey != "")
+	if err != nil {
+		return nil, fmt.Errorf("walletclient: request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		raw, _ := io.ReadAll(resp.Body)
+		return nil, walletError(resp.StatusCode, raw)
+	}
+	var p ProductPurchase
 	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
 		return nil, fmt.Errorf("walletclient: decode: %w", err)
 	}
