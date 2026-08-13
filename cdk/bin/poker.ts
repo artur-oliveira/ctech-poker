@@ -9,7 +9,7 @@ import {FrontendStack} from '../lib/frontend-stack';
 import {ReconcileStack} from '../lib/reconcile-stack';
 import {TableCleanupStack} from '../lib/tablecleanup-stack';
 import {
-  ACCOUNTS_API_DOMAIN_PREFIX,
+  ACCOUNTS_API_DOMAIN_PREFIX, ACCOUNTS_DOMAIN_PREFIX,
   API_DOMAIN_PREFIX,
   APP_DOMAIN_PREFIX,
   avatarsBucketName,
@@ -84,7 +84,8 @@ new PokerApiStack(app, id('API'), {
   vpcId: CTECH_VPC_ID,
   domainName: domainForEnv(ENVIRONMENT, API_DOMAIN_PREFIX),
   appDomainName: domainForEnv(ENVIRONMENT, APP_DOMAIN_PREFIX),
-  authDomainName: domainForEnv(ENVIRONMENT, ACCOUNTS_API_DOMAIN_PREFIX),
+  authDomainName: domainForEnv(ENVIRONMENT, ACCOUNTS_DOMAIN_PREFIX),
+  authApiDomainName: domainForEnv(ENVIRONMENT, ACCOUNTS_API_DOMAIN_PREFIX),
   instanceProfileName: instanceProfileName(ENVIRONMENT),
   deploymentsBucketName: CTECH_DEPLOYMENTS_BUCKET,
   logsBucketName: CTECH_LOGS_BUCKET,

@@ -39,6 +39,7 @@ interface ApiStackProps extends cdk.StackProps {
   appDomainName: string;
   /** CTech Account issuer host. */
   authDomainName: string;
+  authApiDomainName: string;
   instanceProfileName: string;
   deploymentsBucketName: string;
   logsBucketName: string;
@@ -85,6 +86,7 @@ export class PokerApiStack extends cdk.Stack {
       domainName,
       appDomainName,
       authDomainName,
+      authApiDomainName,
       instanceProfileName,
       deploymentsBucketName,
       logsBucketName,
@@ -248,7 +250,8 @@ export class PokerApiStack extends cdk.Stack {
       `AWS_USE_DUALSTACK_ENDPOINT=true`,
       `PORT=${APP_PORT}`,
       `SERVICE_AUDIENCE=https://${appDomainName}`,
-      `CTECH_URL=https://${authDomainName}`,
+      `CTECH_URL=https://${authApiDomainName}`,
+      `CTECH_ISSUER_URL=https://${authDomainName}`,
       // Poker is reached directly from HAProxy, with no localhost nginx hop.
       // Trust only peers inside this VPC before honoring X-Forwarded-For.
       `TRUSTED_PROXIES=${vpc.vpcCidrBlock}`,

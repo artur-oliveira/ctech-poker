@@ -195,7 +195,7 @@ func newCacheBackend(cfg *config.Config) (cache.Backend, error) {
 }
 
 func newVerifier(c cache.Backend, cfg *config.Config) *jwtverify.Verifier {
-	return jwtverify.NewVerifier(cfg.CtechJWKSURL, cfg.ServiceAudience, cfg.CtechURL, c)
+	return jwtverify.NewVerifier(cfg.CtechJWKSURL, cfg.ServiceAudience, cfg.CtechIssuerURL, c)
 }
 
 func newWsRegistry(lc fx.Lifecycle, c cache.Backend, cfg *config.Config) (ws.Registry, error) {

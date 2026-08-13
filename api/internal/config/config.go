@@ -26,6 +26,7 @@ type Config struct {
 	// ctech-account auth (see internal/api/v1/tablews.go) — poker's first
 	// user-facing auth surface; mirrors ctech-wallet's config fields exactly.
 	CtechURL           string   `env:"CTECH_URL" envDefault:"https://accounts-api.aoctech.app"`
+	CtechIssuerURL     string   `env:"CTECH_ISSUER_URL" envDefault:"https://accounts.aoctech.app"`
 	CtechJWKSURL       string   `env:"CTECH_JWKS_URL"`
 	ServiceAudience    string   `env:"SERVICE_AUDIENCE" envDefault:"https://poker.aoctech.app"`
 	CorsAllowedOrigins []string `env:"CORS_ALLOWED_ORIGINS" envSeparator:","`
@@ -39,7 +40,7 @@ type Config struct {
 	// ctech-wallet M2M client (sandbox credit/debit — see internal/walletclient).
 	// See this plan's Global Constraints: ctech-account must seed this client
 	// with scopes internal:wallet:credit and internal:wallet:debit.
-	WalletURL         string `env:"WALLET_URL" envDefault:"https://wallet.aoctech.app"`
+	WalletURL         string `env:"WALLET_URL" envDefault:"https://wallet-api.aoctech.app"`
 	PokerClientID     string `env:"POKER_CLIENT_ID"`
 	PokerClientSecret string `env:"POKER_CLIENT_SECRET"`
 
