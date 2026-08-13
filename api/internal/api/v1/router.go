@@ -86,4 +86,5 @@ func Register(
 	RegisterLeaderboard(router, auth, leaderboardSvc)
 	RegisterDailyReward(router, auth, dailyRewardSvc, spinLimiter)
 	RegisterSandboxPurchase(router, auth, sandboxPurchaseSvc, purchaseLimiter)
+	RegisterReactionPurchase(router, auth, reactionPurchaseSvc, purchaseLimiter)
 }

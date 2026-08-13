@@ -81,6 +81,7 @@ var Module = fx.Options(
 		newReactionEntitlementStore,
 		newReactionPurchaseStore,
 		newReactionPurchaseService,
+		newReactionOwnershipCache,
 		newSessionStore,
 		walletclient.New,
 		newBuyinService,
@@ -310,6 +311,9 @@ func newReactionPurchaseStore(db *dynamodb.Client, cfg *config.Config) *reaction
 }
 func newReactionPurchaseService(wallet *walletclient.Client, entitlements *reactionpurchase.EntitlementStore, store *reactionpurchase.Store) *reactionpurchase.Service {
 	return reactionpurchase.NewService(wallet, entitlements, store)
+}
+func newReactionOwnershipCache(svc *reactionpurchase.Service, cacheB cache.Backend) *reactionpurchase.OwnershipCache {
+	return reactionpurchase.NewOwnershipCache(svc, cacheB)
 }
 func newSessionStore(db *dynamodb.Client, cfg *config.Config) *sessionlog.Store {
 	return sessionlog.NewStore(db, cfg.Env)
@@ -614,8 +618,10 @@ func wireAutoRebuyHook(mgr *tablemanager.Manager, buyinSvc *buyin.Service, rooms
 // the only way to avoid a construction cycle. SetOnPlayerRemoved is safe to
 // call after actors already exist (tablemanager.Manager checks the hook
 // dynamically on every fire, not at actor-creation time).
-func wirePlayerRemovedHook(mgr *tablemanager.Manager, buyinSvc *buyin.Service, reg ws.Registry) {
+func wirePlayerRemovedHook(mgr *tablemanager.Manager, buyinSvc *buyin.Service, reg ws.Registry, reactionOwnershipCache *reactionpurchase.OwnershipCache, reactionSvc *reactionpurchase.Service) {
 	mgr.SetSystemSettlementIntent(buyinSvc.BuildSystemSettlementIntent)
+	mgr.SetReactionOwnership(reactionOwnershipCache.IsOwned)
+	mgr.SetReactionMarkUsed(reactionSvc.MarkUsed)
 	mgr.SetOnPlayerRemoved(func(tableID, playerID, reason string, stack int64, holdID string) {
 		ctx := context.Background()
 		// Pushes an explicit "removed" frame straight to the removed player's
