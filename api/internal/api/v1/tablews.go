@@ -20,6 +20,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/metrics"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
+	"gopkg.aoctech.app/poker/api/internal/reactions"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
@@ -52,21 +53,6 @@ const (
 )
 
 var tableChatFilter = chatfilter.New([]string{"idiota", "burro"})
-
-var tableReactions = map[string]bool{
-	"clap": true, "laugh": true, "wow": true,
-	"angry": true, "cry": true, "nervous": true,
-	"cold": true, "fire": true, "respect": true, "sleepy": true,
-	"chip": true, "coffee": true, "clover": true,
-	"horseshoe": true, "tear": true, "tomato": true,
-	"poop": true, "rofl": true, "duck": true, "turtle": true,
-}
-
-var targetedTableReactions = map[string]bool{
-	"chip": true, "coffee": true, "clover": true,
-	"horseshoe": true, "tear": true, "tomato": true,
-	"poop": true, "rofl": true, "duck": true, "turtle": true,
-}
 
 // readAuthToken reads the first WebSocket frame after the upgrade and
 // extracts the bearer JWT plus an optional private-room share code. The
@@ -636,7 +622,7 @@ func RegisterTableWS(
 					}
 				case "reaction":
 					ensureActionID()
-					if !tableReactions[m.ReactionId] {
+					if !reactions.IsKnown(m.ReactionId) {
 						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_reaction", ActionId: m.ActionId})
 						continue
 					}
@@ -651,7 +637,7 @@ func RegisterTableWS(
 						continue
 					}
 					snap := <-snapCh
-					senderSeated, targetSeated := false, !targetedTableReactions[m.ReactionId]
+					senderSeated, targetSeated := false, !reactions.IsTargeted(m.ReactionId)
 					for _, seat := range snap.Seats {
 						if seat.PlayerID == playerID {
 							senderSeated = true

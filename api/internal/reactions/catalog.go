@@ -9,6 +9,7 @@ package reactions
 type ReactionCatalogEntry struct {
 	ID          string
 	Premium     bool
+	Targeted    bool   // whether the client must supply TargetPlayerId (docs/specs/2026-08-12-premium-reactions.md)
 	PriceFichas int64  // 0 if !Premium
 	SKU         string // wallet ProductSKU ID. "" if !Premium.
 }
@@ -16,15 +17,16 @@ type ReactionCatalogEntry struct {
 var catalog = []ReactionCatalogEntry{
 	{ID: "clap"}, {ID: "laugh"}, {ID: "wow"}, {ID: "angry"}, {ID: "cry"},
 	{ID: "nervous"}, {ID: "respect"}, {ID: "sleepy"},
-	{ID: "chip"}, {ID: "coffee"}, {ID: "clover"}, {ID: "horseshoe"}, {ID: "tear"},
-	{ID: "tomato"}, {ID: "duck"}, {ID: "flowers"},
+	{ID: "chip", Targeted: true}, {ID: "coffee", Targeted: true}, {ID: "clover", Targeted: true},
+	{ID: "horseshoe", Targeted: true}, {ID: "tear", Targeted: true}, {ID: "tomato", Targeted: true},
+	{ID: "duck", Targeted: true}, {ID: "flowers", Targeted: true},
 
 	{ID: "cold", Premium: true, PriceFichas: 100_000, SKU: "poker_reaction_cold"},
 	{ID: "fire", Premium: true, PriceFichas: 100_000, SKU: "poker_reaction_fire"},
-	{ID: "poop", Premium: true, PriceFichas: 500_000, SKU: "poker_reaction_poop"},
-	{ID: "rofl", Premium: true, PriceFichas: 500_000, SKU: "poker_reaction_rofl"},
-	{ID: "knife", Premium: true, PriceFichas: 500_000, SKU: "poker_reaction_knife"},
-	{ID: "turtle", Premium: true, PriceFichas: 500_000, SKU: "poker_reaction_turtle"},
+	{ID: "poop", Premium: true, Targeted: true, PriceFichas: 500_000, SKU: "poker_reaction_poop"},
+	{ID: "rofl", Premium: true, Targeted: true, PriceFichas: 500_000, SKU: "poker_reaction_rofl"},
+	{ID: "knife", Premium: true, Targeted: true, PriceFichas: 500_000, SKU: "poker_reaction_knife"},
+	{ID: "turtle", Premium: true, Targeted: true, PriceFichas: 500_000, SKU: "poker_reaction_turtle"},
 }
 
 var byID = func() map[string]ReactionCatalogEntry {
@@ -53,6 +55,13 @@ func IsKnown(id string) bool {
 func IsPremium(id string) bool {
 	e, ok := byID[id]
 	return ok && e.Premium
+}
+
+// IsTargeted reports whether id requires a TargetPlayerId, per its shape in
+// ui/src/lib/reactions.ts's TABLE_REACTIONS. Unknown ids return false.
+func IsTargeted(id string) bool {
+	e, ok := byID[id]
+	return ok && e.Targeted
 }
 
 // SKUFor returns the wallet SKU and fichas price for a premium reaction, or

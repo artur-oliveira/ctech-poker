@@ -43,6 +43,28 @@ func TestReactionForSKU(t *testing.T) {
 	}
 }
 
+func TestIsTargetedMatchesFrontend(t *testing.T) {
+	// Mirrors ui/src/lib/reactions.ts's TABLE_REACTIONS `targeted` flags. Regression
+	// for the tablews.go WS gateway hand-maintaining its own tableReactions /
+	// targetedTableReactions maps: "knife" and "flowers" were added here and to
+	// TABLE_REACTIONS but never to those maps, so every WS reaction send for either
+	// id was rejected as invalid_reaction even when owned/free. The gate now calls
+	// IsKnown/IsTargeted directly, so this test is the only place the two lists can
+	// drift.
+	targeted := map[string]bool{
+		"clap": false, "laugh": false, "wow": false, "angry": false, "cry": false,
+		"nervous": false, "cold": false, "fire": false, "respect": false, "sleepy": false,
+		"chip": true, "coffee": true, "clover": true, "horseshoe": true, "tear": true,
+		"tomato": true, "poop": true, "rofl": true, "duck": true, "turtle": true,
+		"knife": true, "flowers": true,
+	}
+	for id, want := range targeted {
+		if got := IsTargeted(id); got != want {
+			t.Errorf("IsTargeted(%q) = %v, want %v", id, got, want)
+		}
+	}
+}
+
 func TestEveryFreeTableReactionIsKnown(t *testing.T) {
 	// Mirrors ui/src/lib/reactions.ts's TABLE_REACTIONS keys — keep this list in
 	// sync by hand on any change to that file (see docs/specs/2026-08-12-
