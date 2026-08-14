@@ -1,5 +1,5 @@
 'use client';
-import {type CSSProperties, useRef, useState} from 'react';
+import {type CSSProperties, useEffect, useRef, useState} from 'react';
 import {LockKeyhole, SmilePlus, Sparkles, Star, Volume2, VolumeX, X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {ReactionFavoritesDialog} from '@/components/reactions/ReactionFavoritesDialog';
@@ -94,14 +94,13 @@ function ReactionImpact({reactionId}: {reactionId: TableReactionID}) {
   return null;
 }
 
-function ReactionEffect({item}: { item: TableReactionEvent }) {
+function ReactionEffect({item, seatEls}: { item: TableReactionEvent; seatEls: Map<string, HTMLElement> }) {
   const definition = TABLE_REACTIONS[item.reactionId];
   const showImpact = definition.targeted || SELF_IMPACT_REACTIONS.has(item.reactionId);
   const positionEffect = (node: HTMLSpanElement | null) => {
     if (!node) return;
-    const seats = Array.from(document.querySelectorAll<HTMLElement>('.game-seat[data-player-id]'));
-    const source = seats.find(node => node.dataset.playerId === item.playerId);
-    const target = item.targetPlayerId ? seats.find(node => node.dataset.playerId === item.targetPlayerId) : undefined;
+    const source = seatEls.get(item.playerId);
+    const target = item.targetPlayerId ? seatEls.get(item.targetPlayerId) : undefined;
     if (!source || (definition.targeted && !target)) return;
     const from = source.getBoundingClientRect();
     const to = target?.getBoundingClientRect();
@@ -151,6 +150,20 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const asideRef = useRef<HTMLElement>(null);
   useDismiss(asideRef, open, () => onOpenChangeAction(false));
+  // Seat DOM nodes only change when players join/leave, not per reaction —
+  // caching this keyed on seat ids avoids a full-document query on every
+  // reaction mount (previously the hot path for the seat position lookup).
+  const [seatEls, setSeatEls] = useState<Map<string, HTMLElement>>(() => new Map());
+  const seatIdsKey = seats.map(seat => seat.player_id).join(',');
+  useEffect(() => {
+    const map = new Map<string, HTMLElement>();
+    document.querySelectorAll<HTMLElement>('.game-seat[data-player-id]').forEach(node => {
+      if (node.dataset.playerId) map.set(node.dataset.playerId, node);
+    });
+    // Reads the seats DOM built by other components; not synchronizable any other way.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSeatEls(map);
+  }, [seatIdsKey]);
   const entries = new Map(catalog.map(entry => [entry.id, entry]));
   const owned = ownedReactionIDs(purchases);
 
@@ -191,7 +204,7 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
   
   return <>
     {!muted && <div className="table-reaction-layer" aria-live="off">
-      {items.map(item => <ReactionEffect key={item.id} item={item}/>)}
+      {items.map(item => <ReactionEffect key={item.id} item={item} seatEls={seatEls}/>)}
     </div>}
     <aside ref={asideRef} className={`table-reactions${open ? ' open' : ''}${pendingReaction ? ' targeting' : ''}`} aria-label="Reações da mesa"
            onMouseEnter={() => isHoverCapable() && !pendingReaction && onOpenChangeAction(true)}

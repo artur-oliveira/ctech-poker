@@ -11,7 +11,7 @@ import {playerName} from '@/lib/utils';
 import {playSound} from '@/lib/sound';
 import {decodeServerMessage, encodeClientMessage} from "@/lib/ws/utils";
 import {isTableReaction, type TableReactionEvent, type TableReactionID} from '@/lib/reactions';
-import {CHAT_MESSAGE_MAX_LENGTH} from '@/lib/chat';
+import {CHAT_HISTORY_LIMIT, CHAT_MESSAGE_MAX_LENGTH} from '@/lib/chat';
 
 export type ConnectionStatus = WSStatus
 export type ActionError = { code: string; message: string }
@@ -372,7 +372,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       if ((message.snapshot.protocol_version ?? 0) >= 6) {
         const nextChat = (message.snapshot.chat_messages ?? []).map(item => ({
           id: item.id, player: item.player_id, message: item.message, timestamp: item.timestamp
-        }));
+        })).slice(-CHAT_HISTORY_LIMIT);
         noteFreshChatArrivals(nextChat);
         setChat(nextChat);
         const liveReactionIDs = new Set((message.snapshot.reactions ?? []).map(item => item.id));
@@ -548,7 +548,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       const id = message.action_id || `${Date.now()}-${player}-${chatMessage}`;
       noteFreshChatArrivals([{id, player, message: chatMessage}]);
       setChat(value => value.some(item => item.id === id) ? value :
-        [...value.slice(-39), {id, player, message: chatMessage, timestamp: Date.now()}]);
+        [...value.slice(-(CHAT_HISTORY_LIMIT - 1)), {id, player, message: chatMessage, timestamp: Date.now()}]);
     }
     if (message.type === 'reaction' && message.player_id && message.reaction_id &&
       isTableReaction(message.reaction_id)) {

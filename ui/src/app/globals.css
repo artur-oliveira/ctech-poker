@@ -357,6 +357,17 @@ button, a {
     transform: translate(20px, -50%)
 }
 
+/* The visible track is 24px tall; padding here pads the invisible hit box
+   out to the 44px touch-target floor without growing the track itself. */
+.switch-hit {
+    padding-block: 10px;
+    margin-block: -10px
+}
+
+.switch-hit[data-checked] .switch-track {
+    background: var(--brand)
+}
+
 .sr-only {
     position: absolute;
     width: 1px;
@@ -1352,9 +1363,9 @@ h1 em {
     }
 
     .seat-cards > .playing-card {
-        width: 40px;
+        width: 44px;
         height: 56px;
-        margin-right: -20px
+        margin-right: -21px
     }
 
     /* keep the two mid-side seats off the clipped viewport edge */
@@ -2582,6 +2593,7 @@ h1 em {
     display: flex;
     align-items: center;
     gap: 9px;
+    min-height: 44px;
     cursor: pointer
 }
 
@@ -4818,8 +4830,8 @@ h1 em {
 .voice-action button {
     display: grid;
     place-items: center;
-    width: 34px;
-    height: 34px;
+    width: 44px;
+    height: 44px;
     border: 1px solid var(--white-13);
     border-radius: 50%;
     background: var(--white-05);
@@ -4868,7 +4880,7 @@ h1 em {
 }
 
 .action-bar .action-preselectors button {
-    min-height: 38px;
+    min-height: 44px;
     padding: 5px 12px;
     border-radius: var(--rounded-pill);
     font-size: 12px
@@ -5105,6 +5117,7 @@ h1 em {
     display: none;
     width: 285px;
     height: 320px;
+    max-height: min(320px, calc(100dvh - 140px));
     background: var(--surface-seat);
     border: 1px solid var(--seat-border);
     border-radius: 16px;
@@ -7053,6 +7066,16 @@ h1 em {
     border-radius: 12px;
     padding: 8px 16px;
     max-width: 44ch
+}
+
+.buyin-fee-notice {
+    color: var(--text-secondary);
+    background: var(--surface-notice);
+    border: 1px solid var(--control-border);
+    border-radius: 12px;
+    padding: 8px 16px;
+    max-width: 44ch;
+    line-height: 1.45
 }
 
 .ranking {
@@ -9965,10 +9988,16 @@ h1 em {
         max-height: min(360px, 50dvh)
     }
 
+    /* Same rail-move problem as .reaction-panel above: the toggle sits in
+       the top rail here, not near the bottom, so the desktop dvh-140
+       formula overestimates available space. Same fix: cap to half the
+       dynamic viewport so an open keyboard can't push the message input
+       off-screen. */
     .game-chat .chat-body {
         margin-bottom: 0;
         margin-top: 8px;
         width: min(285px, calc(100vw - 24px));
+        max-height: min(320px, 50dvh);
         float: right;
         clear: right
     }

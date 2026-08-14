@@ -2,6 +2,7 @@
 import {useEffect, useRef, useState} from 'react';
 import {LoaderCircle, ShieldCheck} from 'lucide-react';
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle} from '@/components/ui/dialog';
+import {Button} from '@/components/ui/button';
 
 const TURNSTILE_SCRIPT_ID = 'cloudflare-turnstile-script';
 const TURNSTILE_SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
@@ -75,9 +76,12 @@ export function BotChallenge({required, onTokenAction}: {
           Detectamos uma sequência incomum de ações muito rápidas. Confirme que é você para continuar jogando.
         </DialogDescription>
       </DialogHeader>
-      {!siteKey ? <p className="bot-challenge-error" role="alert">
-        A verificação ainda não foi configurada neste ambiente.
-      </p> : <>
+      {!siteKey ? <>
+        <p className="bot-challenge-error" role="alert">
+          A verificação ainda não foi configurada neste ambiente.
+        </p>
+        <Button type="button" onClick={() => window.location.reload()}>Recarregar página</Button>
+      </> : <>
         <div ref={containerRef} className="turnstile-slot"/>
         {(status === 'loading' || status === 'checking') && <p className="bot-challenge-status">
             <LoaderCircle className="spin" aria-hidden="true"/>

@@ -16,10 +16,13 @@ type Options = {
   'expired-callback': () => void;
 };
 
+const originalLocation = window.location;
+
 afterEach(() => {
   vi.unstubAllEnvs();
   document.getElementById('cloudflare-turnstile-script')?.remove();
   delete (window as typeof window & { turnstile?: unknown }).turnstile;
+  Object.defineProperty(window, 'location', {value: originalLocation, writable: true});
 });
 
 describe('BotChallenge', () => {
@@ -30,11 +33,15 @@ describe('BotChallenge', () => {
     expect(document.getElementById('cloudflare-turnstile-script')).toBeNull();
   });
   
-  test('explains a missing site key without loading the external script', () => {
+  test('explains a missing site key without loading the external script, and offers a way out', () => {
     vi.stubEnv('NEXT_PUBLIC_TURNSTILE_SITE_KEY', '');
+    const reload = vi.fn();
+    Object.defineProperty(window, 'location', {value: {...window.location, reload}, writable: true});
     render(<BotChallenge required onTokenAction={() => true}/>);
     expect(screen.getByRole('alert')).toHaveTextContent('não foi configurada');
     expect(document.getElementById('cloudflare-turnstile-script')).toBeNull();
+    fireEvent.click(screen.getByRole('button', {name: 'Recarregar página'}));
+    expect(reload).toHaveBeenCalledOnce();
   });
   
   test('loads Turnstile, validates a token and removes its widget on cleanup', () => {

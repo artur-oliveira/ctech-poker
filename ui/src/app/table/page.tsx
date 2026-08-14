@@ -16,15 +16,11 @@ import {ActionBar} from '@/components/table/ActionBar';
 import {Chat} from '@/components/table/Chat';
 import {InviteDialog} from '@/components/table/InviteDialog';
 import {LeaveDialog} from '@/components/table/LeaveDialog';
-import {RebuyDialog} from '@/components/table/RebuyDialog';
 import type {HandOutcomeState} from '@/components/table/HandOutcome';
 import {LastWinners} from '@/components/table/LastWinners';
-import {HandRankingsDialog} from '@/components/table/HandRankingsDialog';
 import {TablePreferencesDialog} from '@/components/table/TablePreferencesDialog';
 import {RealityCheck} from '@/components/table/RealityCheck';
-import {PlayerNoteDialog} from '@/components/table/PlayerNoteDialog';
 import {TableReactions} from '@/components/table/TableReactions';
-import {ReactionPurchaseDialog} from '@/components/reactions/ReactionPurchaseDialog';
 import {BotChallenge} from '@/components/table/BotChallenge';
 import {AchievementToast} from '@/components/AchievementToast';
 import {TermsGate} from '@/components/TermsGate';
@@ -58,6 +54,13 @@ const ROOM_ID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 const MockControls = USE_MOCK
   ? dynamic(() => import('@/components/table/MockControls').then(module => module.MockControls))
   : () => null;
+const RebuyDialog = dynamic(() => import('@/components/table/RebuyDialog').then(module => module.RebuyDialog));
+const HandRankingsDialog = dynamic(() => import('@/components/table/HandRankingsDialog')
+  .then(module => module.HandRankingsDialog));
+const PlayerNoteDialog = dynamic(() => import('@/components/table/PlayerNoteDialog')
+  .then(module => module.PlayerNoteDialog));
+const ReactionPurchaseDialog = dynamic(() => import('@/components/reactions/ReactionPurchaseDialog')
+  .then(module => module.ReactionPurchaseDialog));
 const CONNECTION_COPY = {
   connecting: 'Conectando à mesa…',
   reconnecting: 'Reconectando à mesa…',

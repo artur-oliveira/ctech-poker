@@ -3,7 +3,7 @@
 import {useEffect, useState} from 'react';
 import {Rabbit} from 'lucide-react';
 import {PlayingCard} from '@/components/table/PlayingCard';
-import {shuffleWithSeed, verifyWirePartialDeck} from '@/lib/deckVerify';
+import {verifyDeck, verifyWirePartialDeck} from '@/lib/deckVerify';
 import type {TableSnapshot} from '@/lib/api/table';
 import {rabbitRunout} from '@/lib/rabbitHunt';
 
@@ -32,9 +32,11 @@ export function RabbitHunt({snapshot, viewer}: { snapshot: TableSnapshot; viewer
         if (!verification.matches) throw new Error('invalid partial deck proof');
         if (live) setCards(snapshot.runout_cards);
       } else if (snapshot.shuffle_server_seed_hex) {
-        const deck = await shuffleWithSeed(snapshot.shuffle_server_seed_hex);
+        if (!snapshot.shuffle_commit_hash) throw new Error('missing shuffle commit hash');
+        const verification = await verifyDeck(snapshot.shuffle_server_seed_hex, snapshot.shuffle_commit_hash);
+        if (!verification.matches) throw new Error('invalid shuffle commit hash');
         const dealtPlayers = snapshot.seats.filter(seat => seat.dealt_in).length;
-        if (live) setCards(rabbitRunout(deck, dealtPlayers, snapshot.board.length));
+        if (live) setCards(rabbitRunout(verification.deck, dealtPlayers, snapshot.board.length));
       }
     };
     void load().catch(() => {
@@ -44,8 +46,8 @@ export function RabbitHunt({snapshot, viewer}: { snapshot: TableSnapshot; viewer
       live = false;
     };
   }, [available, requested, serverRunoutAvailable, snapshot.board.length, snapshot.revealed_card_salts,
-    snapshot.root_commit_hash, snapshot.runout_cards, snapshot.seats, snapshot.shuffle_server_seed_hex,
-    snapshot.unrevealed_card_hashes]);
+    snapshot.root_commit_hash, snapshot.runout_cards, snapshot.seats, snapshot.shuffle_commit_hash,
+    snapshot.shuffle_server_seed_hex, snapshot.unrevealed_card_hashes]);
   
   if (!available) return null;
   return <aside className="rabbit-hunt" aria-live="polite">

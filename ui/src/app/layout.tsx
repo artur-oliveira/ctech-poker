@@ -2,6 +2,7 @@ import type {Metadata, Viewport} from 'next';
 import {Geist, Geist_Mono} from 'next/font/google';
 import {QueryProvider} from '@/lib/providers/QueryProvider';
 import {Notifier} from '@/components/Notifier';
+import {RouteAnnouncer} from '@/components/RouteAnnouncer';
 import './globals.css';
 import React from "react";
 
@@ -66,7 +67,7 @@ export default function Layout({children}: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning data-scroll-behavior="smooth">
     <body suppressHydrationWarning className={`${sans.variable} ${mono.variable}`}>
-    <QueryProvider>{children}</QueryProvider><Notifier/></body>
+    <QueryProvider>{children}</QueryProvider><Notifier/><RouteAnnouncer/></body>
     </html>
   );
 }
