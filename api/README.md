@@ -11,7 +11,7 @@ default** and blocked on legal sign-off, not on missing code.
 
 ## Stack
 
-- Go `1.26.5`, module `gopkg.aoctech.app/poker/api` (`go.mod:1`).
+- Go `1.26.6`, module `gopkg.aoctech.app/poker/api` (`go.mod:1`).
 - HTTP: **Fiber v3** (`go.mod:14`); WebSocket: **`fasthttp/websocket`** (`go.mod:13`).
 - State/cache/registry: **Valkey** (`valkey-io/valkey-go`, `go.mod:16`) — used for the
   `ws.Registry` fan-out, the JWT-verify cache, and the `tablelease` latency hint.

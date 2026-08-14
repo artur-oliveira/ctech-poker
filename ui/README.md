@@ -7,7 +7,7 @@ backend gate (`REAL_MONEY_ENABLED`) is off by default.
 
 ## Stack
 
-- Next.js **16.2.10** (App Router, `src/app/`), React **19.2.7**, TypeScript 5 (`package.json`).
+- Next.js **16.3.1** (App Router, `src/app/`), React **19.2.8**, TypeScript 6 (`package.json`).
 - **Static export** in prod (`output: 'export'`, `next.config.ts:18`); served from S3 +
   CloudFront. SPA route manifest published to a CloudFront **KeyValueStore**
   (`scripts/publish-routes.sh`). `images: {unoptimized: true}` — there is no Next image
@@ -186,6 +186,18 @@ unverifiable — there is no backfill, because the seed is not retained anywhere
 - **Hand export** (`src/lib/handExport.ts`) and **hand sharing** (`ShareHandDialog`).
 
 ## Tests & CI
+
+The local quality gate includes the production supply-chain audit:
+
+```bash
+npm ci
+npm test
+npm run lint
+npm run build
+npm audit --omit=dev
+```
+
+The production dependency audit must remain at zero known vulnerabilities.
 
 - **`vitest` + `@testing-library/react`**, jsdom, config in `vitest.config.ts` (`@`→`src` alias,
   v8 coverage with thresholds **90 lines / 90 statements / 90 functions / 90 branches**). Setup

@@ -43,6 +43,9 @@ Go Lambdas are bundled by `lib/bundle.ts` (`localGoBundling` — local `go build
   `config.Load()` fails closed. The in-memory registry fallback is dev/stage only.
 - Alarms: a metric filter on log lines containing `ALARM:` → `AlarmLogLines`, plus a `LeaseFailovers`
   spike alarm (threshold 5 over 2 periods).
+- CloudWatch Agent publishes four bounded 60-second host series under
+  `CtechPoker/<env>/Host`: memory %, swap %, root-disk %, and application RSS.
+  EC2's native `CPUUtilization`/`CPUCreditBalance` remain the CPU source.
 - An ASG termination lifecycle hook gives `tablemanager.DrainAndRelease` up to 120 seconds to
   stop the app through SSM before completing termination; its Lambda fails open so a broken SSM
   agent cannot strand an instance in `Terminating:Wait`.
@@ -148,6 +151,11 @@ Imported symbols: `addSwapCommands`, `addDualStackSsmAgentCommands`,
 path (because ctech-cdk does not export them as constructs): the shared VPC, the retained edge
 security group, the wildcard ACM cert, the GitHub OIDC provider, the shared deployments/logs
 buckets, and Valkey.
+
+`@aoctech/cdk` 0.2.0 adds `HaproxyEc2Service`, the bounded CloudWatch Agent
+config builder, and the static-frontend factory. This stack has not migrated to
+those APIs yet: adoption requires publishing 0.2.0 and reviewing a template diff
+so existing physical resources are not replaced.
 
 ## Cost-relevant notes
 

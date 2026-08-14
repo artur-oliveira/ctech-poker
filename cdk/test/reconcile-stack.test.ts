@@ -6,6 +6,7 @@ function buildStack() {
   const app = new App();
   return Template.fromStack(new ReconcileStack(app, 'TestReconcileStack', {
     environment: 'dev',
+    authDomainName: 'accounts-dev.aoctech.app',
     pendingCashoutsTableArn: 'arn:aws:dynamodb:us-east-1:868899309401:table/dev_poker_pending_cashouts',
     walletUrlParam: '/ctech/dev/poker/wallet-url',
     pokerClientIdParam: '/ctech/dev/poker/client-id',
