@@ -18,7 +18,7 @@ export default function BasicsGuide() {
       {
         id: 'lobby', title: 'Entenda o lobby', summary: 'Cada opção representa uma faixa de blinds e as mesas disponíveis nela.',
         image: {src: '/guide/lobby.webp', alt: 'Lobby do CTech Poker com mesas organizadas por blinds'},
-        body: <><p>O lobby é o ponto de partida depois do login. O saldo no topo leva a Fichas; a navegação abre Guia, Ranking, Conquistas e Mãos. Se você já está sentado, o aviso <b>Voltar à mesa</b> recupera a partida ativa sem criar outro assento.</p>
+        body: <><p>O lobby é o ponto de partida depois do login. O saldo no topo leva à Loja; a navegação abre Guia, Ranking, Conquistas e Mãos. Se você já está sentado, o aviso <b>Voltar à mesa</b> recupera a partida ativa sem criar outro assento.</p>
           <GuideTerms><GuideTerm term="Blinds">Apostas obrigatórias que iniciam cada mão. A mesa mostra o par small blind / big blind, por exemplo 10 / 20.</GuideTerm>
             <GuideTerm term="Lugares">Quantidade máxima de jogadores. A ocupação atual aparece na opção da mesa.</GuideTerm>
             <GuideTerm term="Sandbox">Modo de treino com fichas fictícias, sem saque e sem valor monetário.</GuideTerm></GuideTerms></>
@@ -35,7 +35,7 @@ export default function BasicsGuide() {
         id: 'buyin', title: 'Confirmar o buy-in', summary: 'O buy-in transfere fichas da sua carteira sandbox para a pilha da mesa.',
         image: {src: '/guide/buyin.webp', alt: 'Painel de buy-in com faixa de fichas e botão para sentar'},
         body: <><p>O painel informa blinds, faixa aceita e saldo disponível. Nada é debitado antes da confirmação. Ao sair da mesa, as fichas restantes da sua pilha voltam para a carteira correspondente.</p>
-          <GuideCallout kind="warning" title="Saldo insuficiente">Se o saldo não atingir o buy-in mínimo, abra Fichas para resgatar a recompensa diária ou obter saldo sandbox.</GuideCallout></>
+          <GuideCallout kind="warning" title="Saldo insuficiente">Se o saldo não atingir o buy-in mínimo, abra a Loja para resgatar a recompensa diária ou obter saldo sandbox.</GuideCallout></>
       },
       {
         id: 'privada', title: 'Criar ou abrir uma mesa privada', summary: 'Salas privadas usam um link de convite e não aparecem como entrada pública comum.',

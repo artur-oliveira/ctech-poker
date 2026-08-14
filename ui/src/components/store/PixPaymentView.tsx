@@ -3,10 +3,18 @@ import {useState} from 'react';
 import Image from 'next/image';
 import {Check, Copy, ShieldCheck} from 'lucide-react';
 import {Button} from '@/components/ui/button';
-import type {SandboxPurchase} from '@/lib/api/wallet';
 import {formatDuration, useCountdownMs} from './useCountdown';
 
-export function PixPaymentView({purchase}: { purchase: SandboxPurchase }) {
+interface PixPayable {
+  pix_copia_e_cola?: string;
+  qr_code_base64?: string;
+  expires_at?: string;
+}
+
+export function PixPaymentView({purchase, paymentNote = 'As fichas são apenas do modo sandbox e não têm valor em dinheiro.'}: {
+  purchase: PixPayable;
+  paymentNote?: string;
+}) {
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
   const expiresMs = purchase.expires_at ? new Date(purchase.expires_at).getTime() : null;
@@ -49,6 +57,6 @@ export function PixPaymentView({purchase}: { purchase: SandboxPurchase }) {
     {expiresMs !== null && <p className={`store-countdown${expired ? ' is-expiring' : ''}`}>
       {expired ? 'Código expirado' : `Expira em ${formatDuration(remainingMs)}`}
     </p>}
-    <p className="store-payment-note"><ShieldCheck aria-hidden="true"/> As fichas são apenas do modo sandbox e não têm valor em dinheiro.</p>
+    <p className="store-payment-note"><ShieldCheck aria-hidden="true"/> {paymentNote}</p>
   </>;
 }

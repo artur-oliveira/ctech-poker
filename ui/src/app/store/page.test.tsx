@@ -1,4 +1,4 @@
-import {fireEvent, render, screen, waitFor} from '@testing-library/react';
+import {fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import Store from './page';
 
@@ -68,7 +68,12 @@ describe('store page', () => {
 
   test('shows reward, packages, and recent purchases in one continuous page', () => {
     render(<Store/>);
-    expect(screen.getByRole('heading', {name: 'Fichas'})).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name: 'Loja'})).toBeInTheDocument();
+    expect(screen.getByRole('navigation', {name: 'Seções da loja'})).toBeInTheDocument();
+    const reactionDepartment = screen.getByRole('heading', {name: 'Reações premium'}).closest('section');
+    const chipDepartment = screen.getByRole('heading', {name: 'Fichas sandbox'}).closest('section');
+    expect(within(reactionDepartment!).getByRole('heading', {name: 'Compras e estornos de reações'})).toBeInTheDocument();
+    expect(within(chipDepartment!).getByRole('heading', {name: 'Compras e estornos de fichas'})).toBeInTheDocument();
     expect(screen.getByText('profile-menu')).toBeInTheDocument();
     expect(screen.getByText('12.345 fichas')).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Resgatar fichas grátis'})).toBeEnabled();
@@ -107,25 +112,34 @@ describe('store page', () => {
     expect(screen.getByText('500 bônus')).toBeInTheDocument();
     expect(screen.getByText('(10%)')).toBeInTheDocument();
     expect(screen.getByText('sem bônus')).toBeInTheDocument();
-    expect(screen.getByText(/1\.000 fichas · R\$\s*1,00/)).toBeInTheDocument();
+    const confirmedPurchase = screen.getByText('1.000 fichas').closest('.store-history-item') as HTMLElement;
+    expect(within(confirmedPurchase).getByText(/R\$\s*1,00/)).toBeInTheDocument();
     expect(screen.getByText('Confirmada')).toBeInTheDocument();
     expect(screen.getByText('Pendente')).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Solicitar estorno'})).toBeInTheDocument();
   });
 
-  test('keeps the initial package decision group to four and discloses additional options', () => {
+  test('shows every package ordered by price regardless of API order', () => {
     mocks.queryState['wallet.skus'] = queryState([
-      ...skus,
-      {id: 'pack_3', price_cents: 900, base_credits: 9000, bonus_percent: 0, total_credits: 9000},
-      {id: 'pack_4', price_cents: 1200, base_credits: 12000, bonus_percent: 0, total_credits: 12000},
-      {id: 'pack_5', price_cents: 1500, base_credits: 15000, bonus_percent: 20, total_credits: 18000},
+      {id: 'pack_10000', price_cents: 10000, base_credits: 1000000, bonus_percent: 100, total_credits: 2000000},
+      {id: 'pack_100', price_cents: 100, base_credits: 10000, bonus_percent: 0, total_credits: 10000},
+      {id: 'pack_500', price_cents: 500, base_credits: 50000, bonus_percent: 10, total_credits: 55000},
+      {id: 'pack_1000', price_cents: 1000, base_credits: 100000, bonus_percent: 20, total_credits: 120000},
+      {id: 'pack_2000', price_cents: 2000, base_credits: 200000, bonus_percent: 35, total_credits: 270000},
+      {id: 'pack_5000', price_cents: 5000, base_credits: 500000, bonus_percent: 50, total_credits: 750000},
     ]);
     render(<Store/>);
 
-    expect(screen.queryByRole('button', {name: /Escolher 18\.000 fichas/})).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', {name: 'Ver mais 1 pacote'}));
-    expect(screen.getByRole('button', {name: /Escolher 18\.000 fichas: 15\.000 base mais 3\.000 de bônus/})).toBeInTheDocument();
-    expect(screen.getByRole('button', {name: 'Mostrar 4 opções'})).toHaveAttribute('aria-expanded', 'true');
+    const packageButtons = screen.getAllByRole('button', {name: /^Escolher .* fichas:/});
+    expect(packageButtons.map(button => button.getAttribute('aria-label'))).toEqual([
+      expect.stringMatching(/^Escolher 10\.000 fichas:/),
+      expect.stringMatching(/^Escolher 55\.000 fichas:/),
+      expect.stringMatching(/^Escolher 120\.000 fichas:/),
+      expect.stringMatching(/^Escolher 270\.000 fichas:/),
+      expect.stringMatching(/^Escolher 750\.000 fichas:/),
+      expect.stringMatching(/^Escolher 2\.000\.000 fichas:/),
+    ]);
+    expect(screen.queryByRole('button', {name: /Ver mais|Mostrar .* opções/})).not.toBeInTheDocument();
   });
 
   test('buying a pack opens the purchase modal with the PIX payload', async () => {
@@ -184,7 +198,7 @@ describe('store page', () => {
     fireEvent.click(screen.getByRole('button', {name: 'Solicitar estorno'}));
 
     expect(screen.getByRole('heading', {name: 'Solicitar estorno desta compra?'})).toBeInTheDocument();
-    expect(screen.getByText(/1.000 fichas$/)).toBeInTheDocument();
+    expect(within(screen.getByRole('dialog')).getByText(/1.000 fichas$/)).toBeInTheDocument();
     expect(screen.getByText('11.345 fichas')).toBeInTheDocument();
     expect(screen.getByText(/fichas já foram usadas em uma mesa/)).toBeInTheDocument();
     expect(screen.getByText(/Não movimenta saldo de dinheiro real/)).toBeInTheDocument();

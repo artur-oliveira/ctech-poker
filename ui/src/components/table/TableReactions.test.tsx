@@ -198,4 +198,33 @@ describe('TableReactions', () => {
     expect(screen.getByTitle('Jogar faca')).toBeInTheDocument();
     expect(screen.getByTitle('Mandar flores')).toBeInTheDocument();
   });
+
+  test('opens the buy flow for locked premium reactions and sends owned ones normally', async () => {
+    const catalog = [{id: 'cold', premium: true, price_cents: 100, price_fichas: 100_000}];
+    const locked = renderReactions({premiumEnabled: true, catalog, purchases: [], onLockedReactionAction: vi.fn()});
+    await userEvent.click(screen.getByTitle('Frio na mesa'));
+    expect(locked.props.onLockedReactionAction).toHaveBeenCalledWith(catalog[0]);
+    expect(locked.props.onQuickSendAction).not.toHaveBeenCalled();
+    locked.unmount();
+
+    const owned = renderReactions({
+      premiumEnabled: true,
+      catalog,
+      purchases: [{purchase_id: 'rp-1', reaction_id: 'cold', method: 'fichas', status: 'confirmed'}],
+      onLockedReactionAction: vi.fn(),
+    });
+    await userEvent.click(screen.getByTitle('Frio na mesa'));
+    expect(owned.props.onQuickSendAction).toHaveBeenCalledWith('cold');
+    expect(owned.props.onLockedReactionAction).not.toHaveBeenCalled();
+  });
+
+  test('edits up to three favorites from the table picker', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    renderReactions({favorites: ['clap'], onFavoriteReactionsChangeAction: save});
+    await userEvent.click(screen.getByRole('button', {name: 'Editar reações favoritas'}));
+    expect(screen.getByRole('heading', {name: 'Atalhos de reação'})).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: /Risada/}));
+    await userEvent.click(screen.getByRole('button', {name: 'Salvar atalhos'}));
+    expect(save).toHaveBeenCalledWith(['clap', 'laugh']);
+  });
 });

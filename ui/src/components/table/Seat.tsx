@@ -7,7 +7,8 @@ import {PlayingCard} from '@/components/table/PlayingCard';
 import type {SeatView} from '@/lib/api/table';
 import {HAND_CATEGORY_LABELS, playerName} from '@/lib/utils';
 import {useCountUp} from '@/lib/hooks/useCountUp';
-import {NotebookPen} from 'lucide-react';
+import {useReducedMotionCountdown} from '@/lib/hooks/useReducedMotionCountdown';
+import {Hourglass, NotebookPen} from 'lucide-react';
 import type {PlayerNote} from '@/lib/api/playerNotes';
 import {playstyleMeta} from '@/lib/playstyle';
 import type {WinnerStanding} from '@/lib/tableOutcome';
@@ -57,8 +58,36 @@ function SeatTurnTimer({baseDeadlineMs, observedAtMs, durationMs}: {
   // reconnects) must not rewrite a running CSS animation's duration/offset.
   const [initialElapsedMs] = useState(() => Math.min(durationMs, Math.max(0,
     observedAtMs - (baseDeadlineMs - durationMs))));
-  return <PerimeterTimer className="seat-turn-ring" durationMs={durationMs}
-                         elapsedMs={initialElapsedMs} restartKey={baseDeadlineMs} radius={14}/>;
+  const secondsLeft = useReducedMotionCountdown(baseDeadlineMs);
+  return <>
+    <PerimeterTimer className="seat-turn-ring" durationMs={durationMs}
+                    elapsedMs={initialElapsedMs} restartKey={baseDeadlineMs} radius={14}/>
+    {secondsLeft != null && <span className="seat-timer-seconds" aria-hidden="true">{secondsLeft}</span>}
+  </>;
+}
+
+// Once the normal decision clock (SeatTurnTimer above) runs out, the room
+// falls back to the player's time bank reserve. Every seat, not only the
+// viewer's own (see ActionBar's TimeBankStatus), needs to show that a player
+// is now burning their reserve instead of just going dark with no ring at
+// all, or the rest of the table has no way to tell a stalled opponent from a
+// dropped connection.
+function SeatTimeBank({baseDeadlineMs, actionDeadlineMs, observedAtMs}: {
+  baseDeadlineMs: number;
+  actionDeadlineMs: number;
+  observedAtMs: number;
+}) {
+  const durationMs = Math.max(0, actionDeadlineMs - baseDeadlineMs);
+  const [initialElapsedMs] = useState(() => Math.min(durationMs, Math.max(0, observedAtMs - baseDeadlineMs)));
+  const secondsLeft = useReducedMotionCountdown(actionDeadlineMs);
+  return <>
+    <PerimeterTimer className="seat-timebank-ring" durationMs={durationMs}
+                    elapsedMs={initialElapsedMs} restartKey={actionDeadlineMs} radius={14}/>
+    {secondsLeft != null && <span className="seat-timer-seconds" aria-hidden="true">{secondsLeft}</span>}
+    <span className="seat-timebank-badge" role="status" aria-label="Jogador usando o time bank">
+      <Hourglass aria-hidden="true"/>
+    </span>
+  </>;
 }
 
 export function Seat({
@@ -72,6 +101,7 @@ export function Seat({
                        refundAmount = 0,
                        isWinner = false,
                        baseDeadlineMs,
+                       actionDeadlineMs,
                        nowMs,
                        turnTimeoutMs,
                        bigBlind,
@@ -98,6 +128,7 @@ export function Seat({
   refundAmount?: number;
   isWinner?: boolean;
   baseDeadlineMs?: number;
+  actionDeadlineMs?: number;
   nowMs?: number;
   turnTimeoutMs?: number;
   bigBlind?: number;
@@ -127,6 +158,8 @@ export function Seat({
   // base deadline expires, the separately labelled time-bank readout owns the
   // remaining reserve; it must never lengthen or restart this rectangle.
   const showNormalClock = Boolean(isTurn && baseDeadlineMs && nowMs && turnTimeoutMs && baseDeadlineMs > nowMs);
+  const showTimeBank = Boolean(isTurn && baseDeadlineMs && actionDeadlineMs && nowMs &&
+    nowMs >= baseDeadlineMs && actionDeadlineMs > nowMs);
   const stackFrom = credit > 0 ? seat.stack - credit : stackBefore ?? seat.stack;
   const displayStack = useCountUp(stackFrom, seat.stack);
   // Heads-up has the dealer double as the small blind, so one combined badge
@@ -144,6 +177,9 @@ export function Seat({
     {showNormalClock && baseDeadlineMs && nowMs && turnTimeoutMs &&
         <SeatTurnTimer key={baseDeadlineMs} baseDeadlineMs={baseDeadlineMs}
                        observedAtMs={nowMs} durationMs={turnTimeoutMs}/>}
+    {showTimeBank && baseDeadlineMs && actionDeadlineMs && nowMs &&
+        <SeatTimeBank key={actionDeadlineMs} baseDeadlineMs={baseDeadlineMs}
+                     actionDeadlineMs={actionDeadlineMs} observedAtMs={nowMs}/>}
     {role && <span className={`seat-role ${isDealer ? 'is-dealer' : ''}`} title={ROLE_LABELS[role]}
                    aria-label={ROLE_LABELS[role]}>{role}</span>}
     {chatBubble && <div key={chatBubble.id} className="seat-chat-bubble" aria-hidden="true">

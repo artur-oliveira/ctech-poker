@@ -1,7 +1,7 @@
 'use client';
 
 import type {LucideIcon} from 'lucide-react';
-import {Award, BookOpen, ChevronLeft, Club, Coins, History, Trophy} from 'lucide-react';
+import {Award, BookOpen, ChevronLeft, Club, History, ShoppingBag, Trophy} from 'lucide-react';
 import Link from 'next/link';
 import type {ReactNode} from 'react';
 import {ProfileMenu} from '@/components/lobby/ProfileMenu';
@@ -13,7 +13,7 @@ const MAIN_ROUTES: {href: string; label: string; route: MainRoute; icon: LucideI
   {href: '/leaderboard', label: 'Ranking', route: 'leaderboard', icon: Trophy},
   {href: '/achievements', label: 'Conquistas', route: 'achievements', icon: Award},
   {href: '/hands', label: 'Mãos', route: 'hands', icon: History},
-  {href: '/store', label: 'Fichas', route: 'store', icon: Coins},
+  {href: '/store', label: 'Loja', route: 'store', icon: ShoppingBag},
 ];
 
 export function AppPage({authed, current, rewardReady = false, children, footer = true}: {
@@ -48,7 +48,7 @@ export function AppPageNav({authed, current, rewardReady = false}: {
       {MAIN_ROUTES.map(({href, label, route, icon: Icon}) => <Link key={route} href={href}
         aria-current={current === route ? 'page' : undefined}
         className={route === 'store' ? 'app-nav-store-link' : undefined}
-        title={route === 'store' && rewardReady ? 'Fichas — recompensa diária disponível' : label}>
+        title={route === 'store' && rewardReady ? 'Loja — recompensa diária disponível' : label}>
         <Icon aria-hidden="true"/><span className="header-right-label">{label}</span>
         {route === 'store' && rewardReady && <><span className="app-nav-reward-dot" aria-hidden="true"/>
           <span className="sr-only"> — recompensa diária disponível</span></>}

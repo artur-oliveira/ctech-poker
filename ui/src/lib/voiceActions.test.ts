@@ -13,3 +13,6 @@ for (const [speech, expected] of [
 }
 
 test('rejects unrelated speech', () => assert.equal(parseVoiceAction('boa mão'), null));
+
+test('captures a specific voiced raise total', () =>
+  assert.deepEqual(parseVoiceAction('aumentar para 1.500'), {action: 'raise', amount: 1500}));

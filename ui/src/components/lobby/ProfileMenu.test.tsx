@@ -56,14 +56,14 @@ describe('ProfileMenu', () => {
   test('summarizes the active wallet and exposes both balances in the menu', async () => {
     render(<ProfileMenu/>);
     expect(screen.getByText('12.345 fichas')).toBeInTheDocument();
-    expect(screen.getByRole('link', {name: /Abrir créditos e recompensas/})).toHaveAttribute('href', '/store');
+    expect(screen.getByRole('link', {name: /Abrir loja/})).toHaveAttribute('href', '/store');
     expect(screen.getByText('AS')).toBeInTheDocument();
     
     await openProfile();
     expect(screen.getByText('Sandbox')).toBeInTheDocument();
     expect(screen.getAllByText('12.345 fichas')).toHaveLength(2);
     expect(screen.getByText(/R\$\s*987,60/)).toBeInTheDocument();
-    expect(screen.getByRole('button', {name: /Créditos e recompensas/})).toHaveAttribute('href', '/store');
+    expect(screen.getByRole('button', {name: /Loja/})).toHaveAttribute('href', '/store');
   });
   
   test('trims and saves a changed display name into the player cache', async () => {

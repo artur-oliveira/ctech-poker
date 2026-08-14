@@ -25,6 +25,7 @@ import {TablePreferencesDialog} from '@/components/table/TablePreferencesDialog'
 import {RealityCheck} from '@/components/table/RealityCheck';
 import {PlayerNoteDialog} from '@/components/table/PlayerNoteDialog';
 import {TableReactions} from '@/components/table/TableReactions';
+import {ReactionPurchaseDialog} from '@/components/reactions/ReactionPurchaseDialog';
 import {BotChallenge} from '@/components/table/BotChallenge';
 import {AchievementToast} from '@/components/AchievementToast';
 import {TermsGate} from '@/components/TermsGate';
@@ -32,7 +33,10 @@ import {Button} from '@/components/ui/button';
 import {pushNotification} from '@/lib/notify';
 import type {TableSnapshot} from '@/lib/api/table';
 import {bestFiveCardHand} from '@/lib/pokerRules';
-import {getHands, getSessions} from '@/lib/api/player';
+import {getHands, getMe, getSessions, updateMe} from '@/lib/api/player';
+import {
+  currentReactionPurchase, listReactionCatalog, listReactionPurchases, type ReactionCatalogEntry
+} from '@/lib/api/reactionPurchases';
 import {useTablePreferences} from '@/lib/tablePreferences';
 import {useDealerVoice} from '@/lib/hooks/useDealerVoice';
 import {getPlayerNotes, type PlayerNote} from '@/lib/api/playerNotes';
@@ -49,7 +53,7 @@ import {
 import {type MockScenario, USE_MOCK} from '@/lib/mockConfig';
 import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
 import {DEFAULT_TURN_TIMEOUT_SECONDS} from '@/lib/gameTiming';
-import {TABLE_REACTIONS, type TableReactionID} from '@/lib/reactions';
+import {isTableReaction, TABLE_REACTIONS, type TableReactionID} from '@/lib/reactions';
 
 const ROOM_ID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 const MockControls = USE_MOCK
@@ -183,7 +187,18 @@ function TableContent() {
   const {data: playerNotes = []} = useQuery({
     queryKey: ['player-notes'], queryFn: getPlayerNotes, enabled: valid && seated
   });
+  const {data: reactionCatalog = [], isLoading: reactionCatalogLoading} = useQuery({
+    queryKey: ['wallet', 'reaction-catalog'], queryFn: listReactionCatalog, enabled: valid && seated
+  });
+  const {data: reactionPurchases = [], isLoading: reactionPurchasesLoading} = useQuery({
+    queryKey: ['wallet', 'reaction-purchases'], queryFn: listReactionPurchases, enabled: valid && seated
+  });
+  const {data: profile} = useQuery({
+    queryKey: ['player', 'me'], queryFn: getMe, enabled: valid && seated
+  });
   const [noteOpponent, setNoteOpponent] = useState<{ player_id: string; name?: string } | null>(null);
+  const [reactionPurchaseTarget, setReactionPurchaseTarget] = useState<ReactionCatalogEntry | null>(null);
+  const [favoritesSaving, setFavoritesSaving] = useState(false);
   const rt = useTableRealtime(valid && seated ? id : '', viewer, inviteCode, USE_MOCK ? {scenario, delay} : undefined);
   useDealerVoice(rt.announcement, preferences.dealerVoice);
   // The server never closes a removed player's socket (it just stops
@@ -559,6 +574,24 @@ function TableContent() {
                       connected={rt.status === 'connected'} coolingDown={reactionCoolingDown}
                       pendingReaction={pendingReaction} onQuickSendAction={sendQuickReaction}
                       onPendingReactionChangeAction={setPendingReaction}
+                      premiumEnabled premiumLoading={reactionCatalogLoading || reactionPurchasesLoading}
+                      catalog={reactionCatalog} purchases={reactionPurchases}
+                      favorites={(profile?.favorite_reactions || []).filter(isTableReaction)}
+                      favoritesSaving={favoritesSaving}
+                      onLockedReactionAction={entry => {
+                        setActiveTablePanel(null);
+                        setReactionPurchaseTarget(entry);
+                      }}
+                      onFavoriteReactionsChangeAction={async favorites => {
+                        setFavoritesSaving(true);
+                        try {
+                          const updated = await updateMe({favorite_reactions: favorites});
+                          queryClient.setQueryData(['player', 'me'], updated);
+                          pushNotification('Atalhos de reação atualizados.', 'info');
+                        } finally {
+                          setFavoritesSaving(false);
+                        }
+                      }}
                       open={activeTablePanel === 'reactions'}
                       onOpenChangeAction={open => setActiveTablePanel(open ? 'reactions' : null)}/>
       <BotChallenge required={rt.botChallengeRequired} onTokenAction={rt.submitBotChallenge}/>
@@ -575,6 +608,16 @@ function TableContent() {
                             return note ? [...rest, note] : rest;
                           });
                         }}/>
+      <ReactionPurchaseDialog key={reactionPurchaseTarget?.id || 'closed-reaction-purchase'}
+                              entry={reactionPurchaseTarget}
+                              initialPurchase={reactionPurchaseTarget
+                                ? currentReactionPurchase(reactionPurchases, reactionPurchaseTarget.id)
+                                : undefined}
+                              sandboxBalance={profile?.sandbox_balance}
+                              onCloseAction={() => setReactionPurchaseTarget(null)}
+                              onConfirmedAction={() => {
+                                void queryClient.invalidateQueries({queryKey: ['wallet', 'reaction-purchases']});
+                              }}/>
       
       <AchievementToast unlock={rt.unlock}/>
       {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}

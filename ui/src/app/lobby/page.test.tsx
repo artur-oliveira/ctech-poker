@@ -25,7 +25,7 @@ describe('lobby page', () => {
     expect(activeTable.compareDocumentPosition(onboarding) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText('stakes-grid')).toBeInTheDocument();
     expect(screen.getByText('active-table')).toBeInTheDocument();
-    expect(await screen.findByRole('link', {name: /Fichas.*recompensa diária disponível/})).toHaveAttribute('href', '/store');
+    expect(await screen.findByRole('link', {name: /Loja.*recompensa diária disponível/})).toHaveAttribute('href', '/store');
     expect(screen.queryByRole('button', {name: /Recompensa Diária/})).not.toBeInTheDocument();
     expect(await screen.findByText('mock-controls')).toBeInTheDocument();
   });

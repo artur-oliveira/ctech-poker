@@ -1,11 +1,16 @@
 'use client';
 import {type CSSProperties, useRef, useState} from 'react';
-import {SmilePlus, Volume2, VolumeX, X} from 'lucide-react';
+import {LockKeyhole, SmilePlus, Sparkles, Star, Volume2, VolumeX, X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
+import {ReactionFavoritesDialog} from '@/components/reactions/ReactionFavoritesDialog';
 import type {SeatView} from '@/lib/api/table';
+import type {ReactionCatalogEntry, ReactionPurchase} from '@/lib/api/reactionPurchases';
+import {ownedReactionIDs} from '@/lib/api/reactionPurchases';
 import {isHoverCapable} from '@/lib/utils';
 import {useDismiss} from '@/lib/hooks/useDismiss';
-import {TABLE_REACTIONS, type TableReactionEvent, type TableReactionID} from '@/lib/reactions';
+import {
+  PREMIUM_REACTION_IDS, TABLE_REACTIONS, type TableReactionEvent, type TableReactionID
+} from '@/lib/reactions';
 
 const REACTION_MUTE_KEY = 'poker:table-reactions-muted';
 const CHIP_PIECES = Array.from({length: 12}, (_, index) => index);
@@ -118,7 +123,9 @@ function ReactionEffect({item}: { item: TableReactionEvent }) {
 }
 
 export function TableReactions({items, seats, viewerId, connected, coolingDown, pendingReaction, onQuickSendAction,
-                                 onPendingReactionChangeAction, open, onOpenChangeAction}: {
+                                 onPendingReactionChangeAction, open, onOpenChangeAction, premiumEnabled = false,
+                                 premiumLoading = false, catalog = [], purchases = [], favorites = [],
+                                 favoritesSaving = false, onLockedReactionAction, onFavoriteReactionsChangeAction}: {
   items: TableReactionEvent[];
   seats: SeatView[];
   viewerId?: string;
@@ -129,18 +136,56 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
   onPendingReactionChangeAction: (reaction: TableReactionID | null) => void;
   open: boolean;
   onOpenChangeAction: (open: boolean) => void;
+  premiumEnabled?: boolean;
+  premiumLoading?: boolean;
+  catalog?: ReactionCatalogEntry[];
+  purchases?: ReactionPurchase[];
+  favorites?: TableReactionID[];
+  favoritesSaving?: boolean;
+  onLockedReactionAction?: (entry: ReactionCatalogEntry) => void;
+  onFavoriteReactionsChangeAction?: (favorites: TableReactionID[]) => Promise<void> | void;
 }) {
   const [muted, setMuted] = useState(() =>
     typeof window !== 'undefined' && window.localStorage.getItem(REACTION_MUTE_KEY) === 'true');
   const hasOpponents = seats.some(seat => seat.player_id !== viewerId);
+  const [favoritesOpen, setFavoritesOpen] = useState(false);
   const asideRef = useRef<HTMLElement>(null);
   useDismiss(asideRef, open, () => onOpenChangeAction(false));
+  const entries = new Map(catalog.map(entry => [entry.id, entry]));
+  const owned = ownedReactionIDs(purchases);
 
   function toggleMute() {
     setMuted(value => {
       window.localStorage.setItem(REACTION_MUTE_KEY, String(!value));
       return !value;
     });
+  }
+
+  function premiumState(id: TableReactionID) {
+    if (!premiumEnabled || !PREMIUM_REACTION_IDS.has(id)) return 'free' as const;
+    if (premiumLoading) return 'loading' as const;
+    if (owned.has(id)) return 'owned' as const;
+    if (purchases.some(item => item.reaction_id === id && item.status === 'refunding')) return 'unavailable' as const;
+    return entries.has(id) ? 'locked' as const : 'unavailable' as const;
+  }
+
+  function chooseReaction(id: TableReactionID) {
+    const state = premiumState(id);
+    if (state === 'loading' || state === 'unavailable') return;
+    if (state === 'locked') {
+      const entry = entries.get(id);
+      if (entry) {
+        onOpenChangeAction(false);
+        onLockedReactionAction?.(entry);
+      }
+      return;
+    }
+    if (TABLE_REACTIONS[id].targeted) {
+      onPendingReactionChangeAction(id);
+      onOpenChangeAction(false);
+    } else {
+      onQuickSendAction(id);
+    }
   }
   
   return <>
@@ -158,35 +203,67 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
       </Button>
       {pendingReaction && <span className="reaction-target-hint" role="status">Escolha um jogador</span>}
       {open && <div className="reaction-panel">
-          <header><b>Reagir</b>
+          <header><b>Reagir</b><span>
+              {onFavoriteReactionsChangeAction && <Button type="button" variant="ghost" size="icon"
+                      aria-label="Editar reações favoritas" onClick={() => setFavoritesOpen(true)}>
+                <Star aria-hidden="true"/>
+              </Button>}
               <Button type="button" variant="ghost" size="icon"
                       aria-label={muted ? 'Ativar animações de reações' : 'Silenciar animações de reações'}
                       aria-pressed={muted} onClick={toggleMute}>
                 {muted ? <VolumeX/> : <Volume2/>}
-              </Button>
+              </Button></span>
           </header>
+          {favorites.length > 0 && <div className="reaction-favorites" role="group" aria-label="Reações favoritas">
+            <span><Star aria-hidden="true"/> Atalhos</span>
+            <div>{favorites.map(id => {
+              const definition = TABLE_REACTIONS[id];
+              if (!definition) return null;
+              const state = premiumState(id);
+              return <button type="button" key={id} title={definition.label}
+                             className={`${state}${state === 'owned' ? ' premium-owned' : ''}`}
+                             disabled={!connected || coolingDown || state === 'loading' || state === 'unavailable' ||
+                               (definition.targeted && !hasOpponents)} onClick={() => chooseReaction(id)}>
+                <span aria-hidden="true">{definition.glyph}</span>
+                {state === 'locked' && <LockKeyhole aria-label="Premium bloqueada"/>}
+                {state === 'owned' && <Sparkles aria-label="Premium liberada"/>}
+              </button>;
+            })}</div>
+          </div>}
           <div className="reaction-quick" role="group" aria-label="Emotes rápidos">
             {(Object.entries(TABLE_REACTIONS) as [TableReactionID, typeof TABLE_REACTIONS[TableReactionID]][])
               .filter(([, definition]) => !definition.targeted)
-              .map(([id, definition]) => <button type="button" key={id} title={definition.label}
-                                                 disabled={!connected || coolingDown} onClick={() => onQuickSendAction(id)}>
-                <span aria-hidden="true">{definition.glyph}</span><span className="sr-only">{definition.label}</span>
-              </button>)}
+              .map(([id, definition]) => {
+                const state = premiumState(id);
+                return <button type="button" key={id} title={definition.label} className={`reaction-choice ${state}`}
+                               disabled={!connected || coolingDown || state === 'loading' || state === 'unavailable'}
+                               onClick={() => chooseReaction(id)}>
+                  <span aria-hidden="true">{definition.glyph}</span><span className="sr-only">{definition.label}</span>
+                  {state === 'locked' && <LockKeyhole className="reaction-choice-state" aria-label="Premium bloqueada"/>}
+                  {state === 'owned' && <Sparkles className="reaction-choice-state" aria-label="Premium liberada"/>}
+                </button>;
+              })}
           </div>
           <p className="reaction-object-instruction">Escolha um objeto e toque no jogador.</p>
           <div className="reaction-objects" role="group" aria-label="Objetos">
             {(Object.entries(TABLE_REACTIONS) as [TableReactionID, typeof TABLE_REACTIONS[TableReactionID]][])
               .filter(([, definition]) => definition.targeted)
-              .map(([id, definition]) => <button type="button" key={id} title={definition.label}
-                                                 disabled={!connected || !hasOpponents || coolingDown}
-                                                 onClick={() => {
-                                                   onPendingReactionChangeAction(id);
-                                                   onOpenChangeAction(false);
-                                                 }}>
-                <ReactionGlyph reactionId={id} glyph={definition.glyph}/>{definition.label}
-              </button>)}
+              .map(([id, definition]) => {
+                const state = premiumState(id);
+                return <button type="button" key={id} title={definition.label} className={`reaction-choice ${state}`}
+                               disabled={!connected || !hasOpponents || coolingDown || state === 'loading' || state === 'unavailable'}
+                               onClick={() => chooseReaction(id)}>
+                  <ReactionGlyph reactionId={id} glyph={definition.glyph}/>{definition.label}
+                  {state === 'locked' && <LockKeyhole className="reaction-choice-state" aria-label="Premium bloqueada"/>}
+                  {state === 'owned' && <Sparkles className="reaction-choice-state" aria-label="Premium liberada"/>}
+                </button>;
+              })}
           </div>
       </div>}
     </aside>
+    {onFavoriteReactionsChangeAction && favoritesOpen && <ReactionFavoritesDialog
+      key={favorites.join(':') || 'no-favorites'} open favorites={favorites}
+      owned={owned} saving={favoritesSaving} onOpenChangeAction={setFavoritesOpen}
+      onSaveAction={onFavoriteReactionsChangeAction}/>}
   </>;
 }

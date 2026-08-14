@@ -56,8 +56,9 @@ export function PurchaseHistoryList({purchases, isLoading, isError, onRetryActio
     <ul className="store-history">
     {visiblePurchases.map(p => <li key={p.purchase_id} className="store-history-item">
       <div className="store-history-info">
-        <strong>{(p.total_credits ?? 0).toLocaleString('pt-BR')} fichas · {formatBRL(p.price_cents)}</strong>
-        <small>{formatDate(p.created_at)}</small>
+        <strong className="store-history-credits">{(p.total_credits ?? 0).toLocaleString('pt-BR')} fichas</strong>
+        <span className="store-history-value">{formatBRL(p.price_cents)}</span>
+        <time className="store-history-date" dateTime={p.created_at}>{formatDate(p.created_at)}</time>
       </div>
       <span className={`store-status ${STATUS_LABEL[p.status] ? p.status : 'unknown'}`}>
         {STATUS_LABEL[p.status] || 'Desconhecida'}

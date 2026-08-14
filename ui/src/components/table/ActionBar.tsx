@@ -170,9 +170,19 @@ function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending
   // Raising to the max is shoving the whole stack, so call it what it is
   // instead of a "Pay" label with a number that happens to equal the stack.
   const isAllIn = safeAmount >= maxRaise;
+  // A short stack clamps several fractions (½ pote, ⅔ pote, Pote...) down to
+  // the same all-in total. Keeping the LAST match instead of the first means
+  // the surviving button is the highest-named preset for that value (ideally
+  // Máx), not e.g. "Mín" silently standing in for an all-in it doesn't read
+  // as — the raise button already says "All In" once clicked, but the preset
+  // itself shouldn't lie about which one it is.
   const uniquePresets = presets
-    .map(preset => ({...preset, value: Math.min(maxRaise, Math.max(minRaise, preset.value))}))
-    .filter((preset, index, all) => all.findIndex(item => item.value === preset.value) === index);
+    .map(preset => ({...preset, raw: preset.value, value: Math.min(maxRaise, Math.max(minRaise, preset.value))}))
+    .filter((preset, index, all) => all.findLastIndex(item => item.value === preset.value) === index);
+  // Presets carry their pre-clamp `raw` value into `amount` (not the already-
+  // clamped `value` used for button dedup/display) so a short stack clamp
+  // shows up as amount !== safeAmount below, instead of vanishing silently.
+  const wasClamped = amount !== safeAmount;
   
   useEffect(() => {
     if (inactive) return undefined;
@@ -228,21 +238,30 @@ function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending
       <span className="sr-only">Valor total do aumento</span>
       <div className="bet-presets" role="group" aria-label="Valores rápidos de aumento">
         {uniquePresets.map(preset => <button key={preset.label} type="button" disabled={inactive}
-                                             onClick={() => setAmount(preset.value)}>{preset.label}</button>)}
+                                             onClick={() => setAmount(preset.raw)}>{preset.label}</button>)}
       </div>
       <Input id="raise-amount" aria-describedby="action-context" type="range"
              aria-keyshortcuts="a h ArrowUp ArrowDown ArrowLeft ArrowRight"
              min={minRaise} max={maxRaise} step={raiseStep} value={safeAmount}
              disabled={inactive}
              onChange={event => setAmount(Number(event.target.value))}
-             aria-valuetext={`${safeAmount.toLocaleString('pt-BR')} fichas`}/>
-      <output id="raise-amount-output" htmlFor="raise-amount">{safeAmount.toLocaleString('pt-BR')}</output>
+             aria-valuetext={`Total ${safeAmount.toLocaleString('pt-BR')} fichas${isAllIn ? ', All In' : ''}`}/>
+      <output id="raise-amount-output" htmlFor="raise-amount">
+        <small>{isAllIn ? 'All In' : 'Total'}</small>
+        {safeAmount.toLocaleString('pt-BR')}
+        {wasClamped && <small className="bet-clamped-note" role="status">
+          {safeAmount >= maxRaise ? 'ajustado ao máximo' : 'ajustado ao mínimo'}
+        </small>}
+      </output>
     </label>
     <Button type="button" disabled={inactive} aria-keyshortcuts="r"
             aria-describedby="action-context" onClick={handleRaiseClick}
             className={`raise${expanded ? '' : ' raise-collapsed'}`}>
       {pending ? <><LoaderCircle className="action-spinner"/> {isAllIn ? 'Indo All In…' : actionLabel.raise}</> :
-        <span>{expanded ? (isAllIn ? `All In ${safeAmount.toLocaleString('pt-BR')}` : `Aumentar ${safeAmount.toLocaleString('pt-BR')}`) : (isAllIn ? 'All In' : 'Aumentar')}
+        // "para" makes explicit this is a raise-to-total, not an amount added on top
+        // of the current bet (unlike Pagar's amount above, which is additive). Same
+        // Verb + Amount shape as Pagar otherwise read as the same kind of number.
+        <span>{expanded ? (isAllIn ? `All In ${safeAmount.toLocaleString('pt-BR')}` : `Aumentar para ${safeAmount.toLocaleString('pt-BR')}`) : (isAllIn ? 'All In' : 'Aumentar')}
           <kbd aria-hidden="true">R</kbd></span>}
     </Button>
     {expanded && <Button type="button" variant="ghost" className="raise-cancel"

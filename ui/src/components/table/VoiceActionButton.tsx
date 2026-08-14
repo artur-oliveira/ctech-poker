@@ -65,7 +65,9 @@ export function VoiceActionButton({enabled, disabled, available, minRaise, maxRa
         setFeedback('Comando não disponível agora.');
         return;
       }
-      const amount = command.action === 'raise' ? command.allIn ? maxRaise : minRaise : undefined;
+      const amount = command.action === 'raise'
+        ? command.allIn ? maxRaise : command.amount ? Math.min(maxRaise, Math.max(minRaise, command.amount)) : minRaise
+        : undefined;
       if (onAct(command.action, amount)) setFeedback('Comando enviado.');
     };
     next.onerror = () => setFeedback('Não foi possível ouvir.');

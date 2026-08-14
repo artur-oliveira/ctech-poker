@@ -7,6 +7,10 @@ import {getPlayerNotes, savePlayerNote} from './playerNotes';
 import {getMyPokerStats} from './pokerStats';
 import {createRoom, getRoom, getSeated, joinRoom, leaveRoom, listRooms, listStakes} from './rooms';
 import {getHandHistory} from './table';
+import {
+  createReactionPurchase, getReactionPurchase, listReactionCatalog, listReactionPurchases,
+  refundReactionPurchase
+} from './reactionPurchases';
 
 const client = vi.hoisted(() => ({
   get: vi.fn(),
@@ -137,5 +141,29 @@ describe('API domain modules', () => {
       '/v1.0/tables/table-1/hands/hand-1/history',
       {silentError: true},
     );
+  });
+
+  test('maps premium reaction catalog, purchase, refresh and refund contracts', async () => {
+    client.get
+      .mockResolvedValueOnce({data: [{id: 'cold', premium: true}]})
+      .mockResolvedValueOnce({data: [{purchase_id: 'rp-1'}]})
+      .mockResolvedValueOnce({data: {purchase_id: 'rp/1', status: 'confirmed'}});
+    client.post
+      .mockResolvedValueOnce({data: {purchase_id: 'rp-1', status: 'pending'}})
+      .mockResolvedValueOnce({data: {purchase_id: 'rp/1', status: 'refunded'}});
+
+    await listReactionCatalog();
+    await listReactionPurchases();
+    await createReactionPurchase('cold', 'pix');
+    await getReactionPurchase('rp/1');
+    await refundReactionPurchase('rp/1');
+
+    expect(client.post).toHaveBeenCalledWith('/v1.0/wallet/reaction-purchase/', {
+      reaction_id: 'cold', method: 'pix', idem_key: 'idem-key'
+    }, {silentError: true});
+    expect(client.get).toHaveBeenCalledWith('/v1.0/wallet/reaction-purchase/rp%2F1', {silentError: true});
+    expect(client.post).toHaveBeenCalledWith('/v1.0/wallet/reaction-purchase/rp%2F1/refund', {
+      idem_key: 'idem-key'
+    }, {silentError: true});
   });
 });

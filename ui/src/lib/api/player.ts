@@ -20,6 +20,7 @@ export interface PlayerProfile {
   showcase_public: boolean;
   playstyle_public: boolean;
   featured_achievements?: string[];
+  favorite_reactions?: string[];
   playstyle?: PlaystyleBadge[];
 }
 
@@ -38,6 +39,7 @@ export async function updateMe(input: {
   showcase_public?: boolean;
   playstyle_public?: boolean;
   featured_achievements?: string[];
+  favorite_reactions?: string[];
 }) {
   return (await apiClient.post<PlayerProfile>('/v1.0/players/me', input, {silentError: false})).data;
 }

@@ -3,6 +3,8 @@
 > **Status (2026-08-12): implemented and hardened.** The unchecked boxes below preserve the original
 > TDD execution script; they are not a current completion tracker. The final implementation includes
 > the consistency corrections recorded in “Post-implementation hardening” at the end of this file.
+> **Frontend completion (2026-08-13):** the separately deferred `/impeccable` pass is now implemented;
+> see “Frontend implementation” at the end of this file.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -2072,3 +2074,21 @@ implemented contract is now:
 The only remaining prerequisite is the already documented external provisioning grant
 `internal:wallet:product-purchase` in `ctech-account`; it is not represented by a writable resource
 in this repository.
+
+## Frontend implementation (2026-08-13)
+
+The deferred frontend pass is complete:
+
+- `/store` now loads the server-owned premium catalog and purchase history, shows locked, pending,
+  owned, refunding, refunded, expired and failed states, and supports both PIX and sandbox-fichas
+  purchase paths without client-supplied prices;
+- pending PIX purchases can be resumed and polled, while synchronous fichas purchases immediately
+  refresh ownership and the player balance;
+- confirmed purchases can request a refund with explicit first-use eligibility copy and clear PIX
+  versus fichas consequences;
+- the table picker fails closed for the six premium IDs while entitlement data loads, opens the buy
+  flow for locked reactions, and keeps every free reaction on its existing hot path;
+- players can persist up to three favorite reaction shortcuts from the table, including a locked
+  premium reaction as a shortcut into its purchase flow;
+- mock mode covers catalog, dual-currency purchase, PIX settlement, refund and favorite persistence;
+  responsive browser QA covers the store, purchase confirmation and desktop/mobile table picker.

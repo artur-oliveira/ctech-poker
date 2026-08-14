@@ -7,6 +7,8 @@ import type {DeckVariantId} from '@/lib/cardVariants';
 import type {Room} from '@/lib/api/rooms';
 import type {Page} from '@/lib/api/client';
 import type {SandboxPurchase, SandboxSKU} from '@/lib/api/wallet';
+import type {ReactionCatalogEntry, ReactionPurchase} from '@/lib/api/reactionPurchases';
+import {TABLE_REACTIONS} from '@/lib/reactions';
 import type {PlayerNote} from '@/lib/api/playerNotes';
 import type {
   ActionPreselection,
@@ -264,8 +266,9 @@ const mockProfile = {
   showcase_public: true,
   playstyle_public: true,
   featured_achievements: ['wins', 'hands_played', 'bad_beat'] as string[],
+  favorite_reactions: ['clap', 'cold', 'tomato'] as string[],
   game_balance: 12500,
-  sandbox_balance: 4850
+  sandbox_balance: 1_250_000
 };
 
 const mockSandboxSkus: SandboxSKU[] = [
@@ -282,6 +285,26 @@ type MockSandboxPurchase = SandboxPurchase & {
 };
 
 const mockSandboxPurchases: MockSandboxPurchase[] = [];
+
+const mockReactionPrices: Record<string, {price_cents: number; price_fichas: number}> = {
+  cold: {price_cents: 100, price_fichas: 100_000},
+  fire: {price_cents: 100, price_fichas: 100_000},
+  poop: {price_cents: 500, price_fichas: 500_000},
+  rofl: {price_cents: 500, price_fichas: 500_000},
+  knife: {price_cents: 500, price_fichas: 500_000},
+  turtle: {price_cents: 500, price_fichas: 500_000},
+};
+const mockReactionCatalog: ReactionCatalogEntry[] = Object.keys(TABLE_REACTIONS).map(id => ({
+  id, premium: id in mockReactionPrices, ...mockReactionPrices[id]
+}));
+type MockReactionPurchase = ReactionPurchase & {resolves_at_ms?: number; outcome?: 'confirmed' | 'expired' | 'failed'};
+const mockReactionPurchases: MockReactionPurchase[] = [];
+
+function settleReactionPurchase(purchase: MockReactionPurchase) {
+  if (purchase.status !== 'pending' || !purchase.resolves_at_ms || Date.now() < purchase.resolves_at_ms) return;
+  purchase.status = purchase.outcome || 'confirmed';
+  purchase.updated_at = new Date().toISOString();
+}
 
 function publicPurchase(purchase: MockSandboxPurchase): SandboxPurchase {
   const result = {...purchase} as Partial<MockSandboxPurchase>;
@@ -546,6 +569,13 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       if (body.featured_achievements.length > 3) fail(400, 'too many featured achievements', config);
       mockProfile.featured_achievements = [...body.featured_achievements];
     }
+    if (Array.isArray(body.favorite_reactions)) {
+      if (body.favorite_reactions.length > 3 || new Set(body.favorite_reactions).size !== body.favorite_reactions.length ||
+        body.favorite_reactions.some((id: unknown) => typeof id !== 'string' || !(id in TABLE_REACTIONS))) {
+        fail(400, 'invalid favorite reactions', config);
+      }
+      mockProfile.favorite_reactions = [...body.favorite_reactions];
+    }
     return ok({...mockProfile}, config);
   }
   const showcaseMatch = method === 'GET' ? path.match(/^\/v1\.0\/players\/([^/]+)\/showcase$/) : null;
@@ -618,6 +648,64 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       purchase.balance_applied = false;
     }
     return ok(publicPurchase(purchase), config);
+  }
+  if (method === 'GET' && /^\/v1\.0\/wallet\/reaction-purchase\/catalog\/?$/.test(path)) {
+    return ok(mockReactionCatalog.map(entry => ({...entry})), config);
+  }
+  if (method === 'GET' && /^\/v1\.0\/wallet\/reaction-purchase\/?$/.test(path)) {
+    mockReactionPurchases.forEach(settleReactionPurchase);
+    return ok(mockReactionPurchases.map(item => ({...item})), config);
+  }
+  if (method === 'POST' && /^\/v1\.0\/wallet\/reaction-purchase\/?$/.test(path)) {
+    const prices = mockReactionPrices[body.reaction_id];
+    if (!prices) fail(400, 'reaction is not premium', config);
+    if (body.method !== 'pix' && body.method !== 'fichas') fail(400, 'invalid purchase method', config);
+    mockReactionPurchases.forEach(settleReactionPurchase);
+    if (mockReactionPurchases.some(item => item.reaction_id === body.reaction_id &&
+      (item.status === 'confirmed' || item.status === 'pending' || item.status === 'processing'))) {
+      fail(409, 'reaction already owned or pending', config);
+    }
+    const now = Date.now();
+    const purchase: MockReactionPurchase = {
+      player_id: MOCK_PLAYER_ID,
+      purchase_id: `mock-reaction-${crypto.randomUUID()}`,
+      reaction_id: body.reaction_id,
+      method: body.method,
+      ...prices,
+      status: body.method === 'fichas' ? 'confirmed' : 'pending',
+      created_at: new Date(now).toISOString(),
+      updated_at: new Date(now).toISOString(),
+    };
+    if (body.method === 'fichas') {
+      if (mockProfile.sandbox_balance < prices.price_fichas) fail(400, 'insufficient sandbox balance', config);
+      mockProfile.sandbox_balance -= prices.price_fichas;
+    } else {
+      purchase.pix_copia_e_cola = `00020126MOCK.CTECH.POKER.REACTION.${body.reaction_id}.${crypto.randomUUID()}`;
+      purchase.qr_code_base64 = mockQRCodeBase64(`${body.reaction_id}.${body.idem_key || now}`);
+      purchase.expires_at = new Date(now + 120_000).toISOString();
+      purchase.resolves_at_ms = now + 7000;
+      purchase.outcome = 'confirmed';
+    }
+    mockReactionPurchases.unshift(purchase);
+    return ok({...purchase}, config);
+  }
+  const reactionPurchaseMatch = path.match(/^\/v1\.0\/wallet\/reaction-purchase\/([^/]+)\/?$/);
+  if (method === 'GET' && reactionPurchaseMatch) {
+    const purchase = mockReactionPurchases.find(item => item.purchase_id === decodeURIComponent(reactionPurchaseMatch[1]));
+    if (!purchase) fail(404, 'reaction purchase not found', config);
+    settleReactionPurchase(purchase);
+    return ok({...purchase}, config);
+  }
+  const reactionRefundMatch = path.match(/^\/v1\.0\/wallet\/reaction-purchase\/([^/]+)\/refund\/?$/);
+  if (method === 'POST' && reactionRefundMatch) {
+    const purchase = mockReactionPurchases.find(item => item.purchase_id === decodeURIComponent(reactionRefundMatch[1]));
+    if (!purchase) fail(404, 'reaction purchase not found', config);
+    settleReactionPurchase(purchase);
+    if (purchase.status !== 'confirmed') fail(409, 'reaction purchase is not refundable', config);
+    purchase.status = 'refunded';
+    purchase.updated_at = new Date().toISOString();
+    if (purchase.method === 'fichas') mockProfile.sandbox_balance += purchase.price_fichas || 0;
+    return ok({...purchase}, config);
   }
   if (method === 'GET' && path === '/v1.0/rooms') return ok(page(rooms), config);
   // Checked before the generic single-segment room-id match below, since

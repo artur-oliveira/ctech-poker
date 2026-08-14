@@ -4,8 +4,19 @@ import Image from 'next/image';
 import Link from 'next/link';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {
-  Activity, Camera, Check, ChevronRight, Eye, LoaderCircle, LogOut, Pencil, ShoppingBag, Sparkles, Trash2,
-  WalletCards, X
+  Activity,
+  Camera,
+  Check,
+  ChevronRight,
+  Eye,
+  LoaderCircle,
+  LogOut,
+  Pencil,
+  ShoppingBag,
+  Sparkles,
+  Trash2,
+  WalletCards,
+  X
 } from 'lucide-react';
 import {getMe, updateMe, type WalletMode} from '@/lib/api/player';
 import {logout} from '@/lib/auth/oauth';
@@ -41,7 +52,7 @@ export function ProfileMenu() {
   const [showcaseOpen, setShowcaseOpen] = useState(false);
   const [selfHudOpen, setSelfHudOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
-  
+
   const save = useMutation({
     mutationFn: updateMe,
     onSuccess: (data, input) => {
@@ -70,11 +81,11 @@ export function ProfileMenu() {
       pushNotification('Foto de perfil removida.', 'info');
     },
   });
-  
+
   const walletMode: WalletMode = me?.wallet_mode || 'sandbox';
   const deckVariant: DeckVariantId = me?.deck_variant || DEFAULT_DECK_VARIANT;
   const balanceLabel = walletMode === 'real' ? formatReal(me?.game_balance) : formatSandbox(me?.sandbox_balance);
-  
+
   return <><Popover onOpenChange={(open, details) => {
     if (!open && editingName && details.reason === 'escape-key') {
       details.cancel();
@@ -82,7 +93,7 @@ export function ProfileMenu() {
     }
   }}>
     <div className="profile-summary">
-      <Link href="/store" className="balance-pill" aria-label={`Abrir créditos e recompensas. Saldo: ${balanceLabel}`}>
+      <Link href="/store" className="balance-pill" aria-label={`Abrir loja. Saldo: ${balanceLabel}`}>
         {balanceLabel}
       </Link>
       <PopoverTrigger render={<Button variant="ghost" size="icon" className="rounded-full" aria-label="Abrir perfil"/>}>
@@ -150,8 +161,10 @@ export function ProfileMenu() {
           <div className="profile-menu-setting">
             <span><Label id="wallet-mode-label">{walletMode === 'real' ? 'Dinheiro real' : 'Sandbox'}</Label>
               <small>Modo de jogo</small></span>
-            <Switch aria-labelledby="wallet-mode-label" checked={walletMode === 'real'} disabled={save.isPending}
-                  onCheckedChange={checked => save.mutate({wallet_mode: checked ? 'real' : 'sandbox'})}/>
+            <Switch aria-labelledby="wallet-mode-label"
+                    checked={walletMode === 'real'}
+                    disabled={true}
+                    onCheckedChange={checked => save.mutate({wallet_mode: checked ? 'real' : 'sandbox'})}/>
           </div>
           <div className="profile-deck-setting">
             <div className="profile-deck-label">
@@ -191,7 +204,8 @@ export function ProfileMenu() {
             <span>Dinheiro real <b>{formatReal(me?.game_balance)}</b></span>
           </div>
           <Button type="button" variant="ghost" className="profile-wallet-link" render={<Link href="/store"/>}>
-            <ShoppingBag aria-hidden="true"/> Créditos e recompensas <ChevronRight aria-hidden="true"/>
+            <ShoppingBag aria-hidden="true"/> <span><b>Loja</b><small>Reações e fichas sandbox</small></span>
+            <ChevronRight aria-hidden="true"/>
           </Button>
         </section>
 

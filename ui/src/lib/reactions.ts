@@ -26,6 +26,10 @@ export const TABLE_REACTIONS = {
 
 export type TableReactionID = keyof typeof TABLE_REACTIONS;
 
+export const PREMIUM_REACTION_IDS = new Set<TableReactionID>([
+  'cold', 'fire', 'poop', 'rofl', 'knife', 'turtle'
+]);
+
 export function isTableReaction(value: string): value is TableReactionID {
   return value in TABLE_REACTIONS;
 }

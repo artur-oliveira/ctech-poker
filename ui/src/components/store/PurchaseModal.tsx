@@ -1,6 +1,6 @@
 'use client';
 import {useEffect, useState} from 'react';
-import {Check} from 'lucide-react';
+import {Check, LoaderCircle, RefreshCw} from 'lucide-react';
 import {useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog';
@@ -19,7 +19,11 @@ export function PurchaseModal({purchase, onCloseAction, onUpdateAction, onRegene
   const queryClient = useQueryClient();
   const [regenerating, setRegenerating] = useState(false);
   const [regenerateFailed, setRegenerateFailed] = useState(false);
+  const [pollFailed, setPollFailed] = useState(false);
+  const [pollChecking, setPollChecking] = useState(false);
   const open = purchase !== null;
+  const purchaseId = purchase?.purchase_id;
+  const purchaseStatus = purchase?.status;
   const expiresMs = purchase?.expires_at ? new Date(purchase.expires_at).getTime() : null;
   const remainingMs = useCountdownMs(open ? expiresMs : null);
   const expired = expiresMs !== null && remainingMs <= 0;
@@ -35,12 +39,40 @@ export function PurchaseModal({purchase, onCloseAction, onUpdateAction, onRegene
   // Websocket confirmation (useLobbyRealtime) is the primary path; this poll
   // is only a safety net for a missed/dropped ws frame while the modal is open.
   useEffect(() => {
-    if (!open || !purchase || purchase.status !== 'pending') return undefined;
+    if (!open || !purchaseId || purchaseStatus !== 'pending') return undefined;
+    let disposed = false;
+    const refresh = async () => {
+      try {
+        const next = await getPurchase(purchaseId);
+        if (!disposed) {
+          setPollFailed(false);
+          onUpdateAction(next);
+        }
+      } catch {
+        if (!disposed) setPollFailed(true);
+      }
+    };
     const id = window.setInterval(() => {
-      getPurchase(purchase.purchase_id).then(onUpdateAction).catch(() => undefined);
+      void refresh();
     }, POLL_MS);
-    return () => window.clearInterval(id);
-  }, [open, purchase, onUpdateAction]);
+    return () => {
+      disposed = true;
+      window.clearInterval(id);
+    };
+  }, [open, purchaseId, purchaseStatus, onUpdateAction]);
+
+  async function refreshPendingPurchase() {
+    if (!purchaseId) return;
+    setPollFailed(false);
+    setPollChecking(true);
+    try {
+      onUpdateAction(await getPurchase(purchaseId));
+    } catch {
+      setPollFailed(true);
+    } finally {
+      setPollChecking(false);
+    }
+  }
 
   async function regenerate() {
     if (!purchase?.sku || regenerating) return;
@@ -50,6 +82,7 @@ export function PurchaseModal({purchase, onCloseAction, onUpdateAction, onRegene
       await onRegenerateAction(purchase.sku);
     } catch {
       setRegenerateFailed(true);
+    } finally {
       setRegenerating(false);
     }
   }
@@ -81,6 +114,13 @@ export function PurchaseModal({purchase, onCloseAction, onUpdateAction, onRegene
         : purchase?.status && purchase.status !== 'pending' && !recoverableExpired
           ? <p className="buyin-error" role="alert">Esta compra não está mais disponível ({STATUS_LABEL[purchase.status] || 'status desconhecido'}).</p>
           : <PixPaymentView purchase={purchase!}/>}
+      {purchase?.status === 'pending' && pollFailed && <div className="store-poll-recovery" role="alert">
+        <span>Não foi possível atualizar a confirmação. Seu pagamento não foi alterado.</span>
+        <Button type="button" variant="ghost" disabled={pollChecking} onClick={() => void refreshPendingPurchase()}>
+          {pollChecking ? <LoaderCircle className="spin" aria-hidden="true"/> : <RefreshCw aria-hidden="true"/>}
+          {pollChecking ? 'Verificando…' : 'Verificar pagamento'}
+        </Button>
+      </div>}
       {recoverableExpired && <>
         {regenerateFailed && <p className="buyin-error" role="alert">Não foi possível gerar um novo Pix. Tente novamente ou feche para voltar ao pacote.</p>}
         <DialogFooter>

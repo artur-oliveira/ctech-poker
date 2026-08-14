@@ -67,6 +67,18 @@ describe('VoiceActionButton', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Comando enviado.');
   });
   
+  test('uses a voiced raise total, clamped to the legal range', async () => {
+    (window as typeof window & { SpeechRecognition: unknown }).SpeechRecognition = RecognitionMock;
+    const {onAct} = renderButton();
+    await userEvent.click(screen.getByRole('button', {name: 'Usar comando por voz'}));
+    const instance = RecognitionMock.instances[0];
+
+    act(() => instance.result('aumentar para 800'));
+    expect(onAct).toHaveBeenCalledWith('raise', 800);
+    act(() => instance.result('aumentar para 5000'));
+    expect(onAct).toHaveBeenCalledWith('raise', 1_500);
+  });
+
   test('uses maximum raise for all-in and reports unavailable or rejected commands', async () => {
     (window as typeof window & { webkitSpeechRecognition: unknown }).webkitSpeechRecognition = RecognitionMock;
     const onAct = vi.fn(() => false);
