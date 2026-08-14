@@ -44,6 +44,10 @@ message Seat {
   optional string playstyle_badge = 17;
   optional bool run_it_twice = 18;
   optional bool auto_rebuy = 19;
+  // Running per-table win/loss streak: positive counts consecutive hand
+  // wins, negative counts consecutive losses, zero means no streak (no
+  // badge). Public, like the D/SB/BB role badge — every viewer sees it.
+  int32 current_streak = 20;
 }
 
 message BlindEscalation {
@@ -172,7 +176,7 @@ message RevealedSalt {
 
 // ClientMessage is sent from the client to the server.
 message ClientMessage {
-  string type = 1; // "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice"
+  string type = 1; // "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice" | "peek_cards"
   
   // payload fields
   string token = 2; // for auth frame

@@ -88,6 +88,7 @@ type Props = {
   canRevealCards?: boolean;
   revealPending?: boolean;
   onRevealCardAction?: (index: number) => void;
+  onPeekCardsAction?: () => void;
   playerNotes?: Record<string, PlayerNote>;
   onEditPlayerNoteAction?: (seat: TableSnapshot['seats'][number]) => void;
   targetedReactionLabel?: string;
@@ -111,6 +112,7 @@ export function TableStage({
                              canRevealCards,
                              revealPending,
                              onRevealCardAction,
+                             onPeekCardsAction,
                              playerNotes,
                              onEditPlayerNoteAction,
                              targetedReactionLabel,
@@ -140,6 +142,9 @@ export function TableStage({
                  canRevealCards={seat.player_id === viewer && canRevealCards}
                  revealPending={revealPending}
                  onRevealCardAction={onRevealCardAction}
+                 handComplete={snapshot.stage === 'complete'}
+                 handId={snapshot.hand_id}
+                 onPeekCards={seat.player_id === viewer ? onPeekCardsAction : undefined}
                  playerNote={playerNotes?.[seat.player_id]}
                  onEditNote={seat.player_id !== viewer && onEditPlayerNoteAction ? () => onEditPlayerNoteAction(seat) : undefined}
                  reactionTargetLabel={seat.player_id !== viewer ? targetedReactionLabel : undefined}

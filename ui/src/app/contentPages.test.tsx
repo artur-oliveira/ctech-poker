@@ -1,4 +1,4 @@
-import {render, screen} from '@testing-library/react';
+import {render, screen, within} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import Guide from './guide/page';
 import PokerRules from './poker-rules/page';
@@ -28,6 +28,8 @@ describe('static learning pages', () => {
     expect(screen.getByRole('link', {name: /Mãos, replay e integridade/})).toHaveAttribute('href', '/guide/hands');
     expect(screen.getByRole('link', {name: /Comunidade e jogo seguro/})).toHaveAttribute('href', '/guide/community');
     expect(screen.getByText(/não podem ser sacadas/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', {name: 'Lobby'})).not.toBeInTheDocument();
+    expect(document.querySelector('.page-heading-shell a')).not.toBeInTheDocument();
     expect(screen.queryByText('profile-menu')).not.toBeInTheDocument();
   });
   
@@ -35,7 +37,8 @@ describe('static learning pages', () => {
     mocks.authed = true;
     render(<Guide/>);
     expect(screen.getByText('profile-menu')).toBeInTheDocument();
-    expect(screen.getByRole('link', {name: 'Lobby'})).toHaveAttribute('href', '/lobby');
+    const nav = screen.getByRole('navigation', {name: 'Navegação principal'});
+    expect(within(nav).getByRole('link', {name: 'Lobby'})).toHaveAttribute('href', '/lobby');
     expect(screen.getByRole('link', {name: 'Guia'})).toHaveAttribute('aria-current', 'page');
   });
   

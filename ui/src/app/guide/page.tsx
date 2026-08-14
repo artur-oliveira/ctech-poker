@@ -56,7 +56,6 @@ export default function Guide() {
         eyebrow="CENTRAL DE AJUDA"
         title="Aprenda no seu ritmo"
         description="Comece uma partida em poucos minutos ou consulte uma função específica. Cada guia explica o que você vê na tela, o que acontece depois do clique e quais dados ficam públicos."
-        backHref={authed ? '/lobby' : undefined}
       />
 
       <section className="guide-quickstart" aria-labelledby="quickstart-title">

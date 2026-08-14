@@ -24,6 +24,9 @@ export interface SeatView {
   hand_category?: string
   hand_score?: number
   time_bank_ms?: number
+  // Running per-table win/loss streak: positive is consecutive wins,
+  // negative is consecutive losses, absent/zero means no badge.
+  current_streak?: number
 }
 
 export type PokerAction = 'fold' | 'check' | 'call' | 'raise'

@@ -14,6 +14,7 @@ type progressStore interface {
 	Increment(context.Context, string, string, string, int) (previous, current int, err error)
 	IncrementStreak(context.Context, string, string, string, bool, int) (current int, err error)
 	ListAchievements(ctx context.Context, playerID, mode string, limit int, startKey map[string]types.AttributeValue) ([]PlayerAchievementProgress, map[string]types.AttributeValue, error)
+	UpdateTableStreak(ctx context.Context, playerID, mode, tableID string, won bool) (current int, err error)
 }
 
 type Service struct {
@@ -26,6 +27,10 @@ type HandMetric struct {
 	PlayerID string
 	VPIP     bool
 	ThreeBet bool
+	// Peeked is true when this player looked at their own hole cards at any
+	// point this hand (client-reported "peek_cards" action; see PeekCardsCmd
+	// in api/internal/table). Gates KeyAllInBlind/KeyBlindMagic below.
+	Peeked bool
 }
 
 type TierUnlock struct {
@@ -88,9 +93,30 @@ func (s *Service) RecordHand(ctx context.Context, tableID, mode string, outcome 
 	}
 	winnerSet := stringSet(outcome.Winners)
 	allInSet := stringSet(outcome.AllInPlayers)
+	// reportedPeek is deliberately separate from "not present in peekedSet":
+	// when pokerstats.Analyze had no action log to read, metricSets carries no
+	// entry for anyone, and treating that as "definitely didn't peek" would
+	// wrongly grant KeyBlindMagic/KeyAllInBlind on missing data instead of
+	// just skipping them, the same safe failure mode KeyFoldedStreak already
+	// has (it only bumps for players actually present in metricSets).
+	reportedPeek := make(map[string]bool)
+	peekedSet := make(map[string]bool)
+	if len(metricSets) > 0 {
+		for _, metric := range metricSets[0] {
+			reportedPeek[metric.PlayerID] = true
+			if metric.Peeked {
+				peekedSet[metric.PlayerID] = true
+			}
+		}
+	}
 	for _, id := range dedupe(outcome.Winners) {
 		if err := bump(id, KeyWins); err != nil {
 			return nil, err
+		}
+		if reportedPeek[id] && !peekedSet[id] {
+			if err := bump(id, KeyBlindMagic); err != nil {
+				return nil, err
+			}
 		}
 		category := outcome.WinningCategory
 		if result, ok := outcome.ShowdownResults[id]; ok && result.Category != "" {
@@ -161,6 +187,11 @@ func (s *Service) RecordHand(ctx context.Context, tableID, mode string, outcome 
 	for _, id := range dedupe(outcome.AllInPlayers) {
 		if err := bump(id, KeyAllIn); err != nil {
 			return nil, err
+		}
+		if reportedPeek[id] && !peekedSet[id] {
+			if err := bump(id, KeyAllInBlind); err != nil {
+				return nil, err
+			}
 		}
 	}
 	for _, id := range dedupe(outcome.ComebackWinners) {
@@ -282,6 +313,27 @@ func (s *Service) RecordHand(ctx context.Context, tableID, mode string, outcome 
 		}
 	}
 	return unlocks, nil
+}
+
+// RecordTableStreak advances every participant's running per-table win/loss
+// streak (positive = consecutive wins, negative = consecutive losses) and
+// returns each player's new value. Unlike RecordHand this is not a
+// tiered/starred achievement — it is display state the Seat badge reads
+// directly (Table.CurrentStreak), so there is no TierCrossed/unlock here.
+func (s *Service) RecordTableStreak(ctx context.Context, tableID, mode string, outcome hand.HandOutcome) (map[string]int, error) {
+	if s == nil || s.store == nil {
+		return nil, fmt.Errorf("achievements: progress store is required")
+	}
+	winnerSet := stringSet(outcome.Winners)
+	streaks := make(map[string]int, len(outcome.Participants))
+	for _, id := range dedupe(outcome.Participants) {
+		current, err := s.store.UpdateTableStreak(ctx, id, mode, tableID, winnerSet[id])
+		if err != nil {
+			return nil, fmt.Errorf("achievements: table %s player %s streak: %w", tableID, id, err)
+		}
+		streaks[id] = current
+	}
+	return streaks, nil
 }
 
 func lostToSameCategory(outcome hand.HandOutcome, playerID, category string) bool {

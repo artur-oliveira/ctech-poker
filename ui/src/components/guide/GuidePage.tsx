@@ -38,8 +38,7 @@ export function GuidePage({icon, eyebrow, title, description, sections, currentH
   const {authed} = useOptionalSession();
   return <AppPage authed={authed} current="guide">
     <AppPageBody className="guide guide-topic">
-      <AppPageHeader icon={icon} eyebrow={eyebrow} title={title} description={description}
-                     backHref="/guide" backLabel="Todos os guias"/>
+      <AppPageHeader icon={icon} eyebrow={eyebrow} title={title} description={description}/>
       <nav className="guide-topic-nav" aria-label="Tópicos do guia">
         {GUIDE_TOPICS.map(topic => <Link key={topic.href} href={topic.href}
           aria-current={currentHref === topic.href ? 'page' : undefined}>{topic.label}</Link>)}

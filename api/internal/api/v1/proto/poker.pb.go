@@ -108,8 +108,12 @@ type Seat struct {
 	PlaystyleBadge *string `protobuf:"bytes,17,opt,name=playstyle_badge,json=playstyleBadge,proto3,oneof" json:"playstyle_badge,omitempty"`
 	RunItTwice     *bool   `protobuf:"varint,18,opt,name=run_it_twice,json=runItTwice,proto3,oneof" json:"run_it_twice,omitempty"`
 	AutoRebuy      *bool   `protobuf:"varint,19,opt,name=auto_rebuy,json=autoRebuy,proto3,oneof" json:"auto_rebuy,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Running per-table win/loss streak: positive counts consecutive hand
+	// wins, negative counts consecutive losses, zero means no streak (no
+	// badge). Public, like the D/SB/BB role badge — every viewer sees it.
+	CurrentStreak int32 `protobuf:"varint,20,opt,name=current_streak,json=currentStreak,proto3" json:"current_streak,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Seat) Reset() {
@@ -273,6 +277,13 @@ func (x *Seat) GetAutoRebuy() bool {
 		return *x.AutoRebuy
 	}
 	return false
+}
+
+func (x *Seat) GetCurrentStreak() int32 {
+	if x != nil {
+		return x.CurrentStreak
+	}
+	return 0
 }
 
 type BlindEscalation struct {
@@ -1306,7 +1317,7 @@ func (x *RevealedSalt) GetSaltHex() string {
 // ClientMessage is sent from the client to the server.
 type ClientMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice"
+	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice" | "peek_cards"
 	// payload fields
 	Token                   string `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`                                                                       // for auth frame
 	ShareCode               string `protobuf:"bytes,3,opt,name=share_code,json=shareCode,proto3" json:"share_code,omitempty"`                                              // for auth frame
@@ -1670,7 +1681,7 @@ const file_poker_proto_rawDesc = "" +
 	"\vpoker.proto\x12\x05poker\".\n" +
 	"\x04Card\x12\x12\n" +
 	"\x04rank\x18\x01 \x01(\tR\x04rank\x12\x12\n" +
-	"\x04suit\x18\x02 \x01(\tR\x04suit\"\x8b\x06\n" +
+	"\x04suit\x18\x02 \x01(\tR\x04suit\"\xb2\x06\n" +
 	"\x04Seat\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
@@ -1697,7 +1708,8 @@ const file_poker_proto_rawDesc = "" +
 	"\frun_it_twice\x18\x12 \x01(\bH\x06R\n" +
 	"runItTwice\x88\x01\x01\x12\"\n" +
 	"\n" +
-	"auto_rebuy\x18\x13 \x01(\bH\aR\tautoRebuy\x88\x01\x01B\t\n" +
+	"auto_rebuy\x18\x13 \x01(\bH\aR\tautoRebuy\x88\x01\x01\x12%\n" +
+	"\x0ecurrent_streak\x18\x14 \x01(\x05R\rcurrentStreakB\t\n" +
 	"\a_equityB\v\n" +
 	"\t_dealt_inB\b\n" +
 	"\x06_readyB\x16\n" +

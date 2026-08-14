@@ -104,7 +104,7 @@ func wsAllowedOrigin(ctx *fasthttp.RequestCtx, allowed []string) bool {
 
 func rateLimitedTableMessage(messageType string) bool {
 	switch messageType {
-	case "act", "chat", "reaction", "preselect_action", "bot_challenge", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "set_run_it_twice", "ping":
+	case "act", "chat", "reaction", "preselect_action", "bot_challenge", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "set_run_it_twice", "peek_cards", "ping":
 		return true
 	default:
 		return false
@@ -597,6 +597,16 @@ func RegisterTableWS(
 					} else {
 						ack()
 					}
+				case "peek_cards":
+					// Fire-and-forget breadcrumb: no game state changes, only an
+					// action-log entry so pokerstats.Analyze-adjacent code can tell,
+					// after the hand ends, whether this player looked at their own
+					// cards before going all-in or winning (achievements/service.go).
+					ensureActionID()
+					r := make(chan error, 1)
+					if err := dispatch(table.PeekCardsCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+					}
 				case "chat":
 					message := strings.TrimSpace(m.Message)
 					if message == "" {
@@ -868,6 +878,7 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 			Equity:            equity,
 			HandCategory:      s.HandCategory,
 			HandScore:         s.HandScore,
+			CurrentStreak:     s.CurrentStreak,
 		}
 	}
 

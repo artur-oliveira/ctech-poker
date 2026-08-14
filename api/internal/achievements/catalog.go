@@ -49,6 +49,8 @@ const (
 	KeyWonRunnerRunner           = "won_runner_runner"
 	KeyWonWithNuts               = "won_with_nuts"
 	KeySamePocketPairStreak      = "same_pocket_pair_streak"
+	KeyAllInBlind                = "all_in_blind"
+	KeyBlindMagic                = "blind_magic"
 )
 
 func KeyWinByCategory(category string) string { return fmt.Sprintf("win_category_%s", category) }
@@ -145,6 +147,8 @@ var Catalog = []Achievement{
 	{Key: KeyWonRunnerRunner, Metric: "won_runner_runner", Tiers: []Tier{{1, 1}, {2, 5}, {3, 10}, {4, 25}}},
 	{Key: KeyWonWithNuts, Metric: "hand_won_with_nuts", Tiers: []Tier{{1, 1}, {2, 5}, {3, 25}, {4, 100}, {5, 500}}},
 	{Key: KeySamePocketPairStreak, Metric: "same_pocket_pair_win_streak", Tiers: []Tier{{1, 3}}, Secret: true},
+	{Key: KeyAllInBlind, Metric: "went_all_in_without_peeking", Tiers: []Tier{{1, 1}, {2, 5}, {3, 25}, {4, 100}, {5, 500}}},
+	{Key: KeyBlindMagic, Metric: "hand_won_without_peeking", Tiers: []Tier{{1, 1}, {2, 5}, {3, 25}, {4, 100}, {5, 500}}},
 	{Key: KeyWinByCategory("royal_flush"), Metric: "hand_won_with_category", Tiers: []Tier{{1, 1}, {2, 2}, {3, 3}, {4, 5}, {5, 10}}},
 	{Key: KeyWinByCategory("straight_flush"), Metric: "hand_won_with_category", Tiers: []Tier{{1, 1}, {2, 5}, {3, 10}, {4, 25}, {5, 50}}},
 	{Key: KeyWinByCategory("four_of_a_kind"), Metric: "hand_won_with_category", Tiers: []Tier{{1, 1}, {2, 25}, {3, 50}, {4, 100}, {5, 500}}},

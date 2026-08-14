@@ -1,4 +1,5 @@
 import {type CSSProperties, useState} from 'react';
+import {useHoverCapable} from '@/lib/hooks/useHoverCapable';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {Progress} from '@/components/ui/progress';
 import {ChipStack} from '@/components/table/ChipStack';
@@ -112,6 +113,9 @@ export function Seat({
                        canRevealCards = false,
                        revealPending = false,
                        onRevealCardAction,
+                       handComplete = false,
+                       handId,
+                       onPeekCards,
                        playerNote,
                        onEditNote,
                        reactionTargetLabel,
@@ -142,6 +146,12 @@ export function Seat({
   canRevealCards?: boolean;
   revealPending?: boolean;
   onRevealCardAction?: (index: number) => void
+  // handComplete lifts the private peek gate on the viewer's own hole cards:
+  // once the hand resolves they're auto-revealed to their owner, same as
+  // before this feature existed. handId resets the per-hand peek state.
+  handComplete?: boolean;
+  handId?: string;
+  onPeekCards?: () => void;
   playerNote?: PlayerNote;
   onEditNote?: () => void;
   reactionTargetLabel?: string;
@@ -151,6 +161,45 @@ export function Seat({
   chatBubble?: { id: string; message: string };
 }) {
   const cards = seat.hole_cards;
+  const hoverCapable = useHoverCapable();
+  const [clicked, setClicked] = useState<[boolean, boolean]>([false, false]);
+  const [hovering, setHovering] = useState<[boolean, boolean]>([false, false]);
+  // peekReported gates the achievement breadcrumb to once per hand, from
+  // whichever interaction (click or hover) shows a card first.
+  const [peekReported, setPeekReported] = useState(false);
+  // Reset the peek gate when a new hand deals in, following React's
+  // "adjusting state when a prop changes" pattern (setState during render,
+  // not inside an effect) rather than an effect that would cascade an extra
+  // render on every hand transition.
+  const [handIdSeen, setHandIdSeen] = useState(handId);
+  if (handId !== handIdSeen) {
+    setHandIdSeen(handId);
+    setClicked([false, false]);
+    setHovering([false, false]);
+    setPeekReported(false);
+  }
+  const peeked: [boolean, boolean] = [clicked[0] || hovering[0], clicked[1] || hovering[1]];
+  const reportPeekOnce = () => {
+    if (peekReported) return;
+    setPeekReported(true);
+    onPeekCards?.();
+  };
+  const togglePeek = (i: 0 | 1) => {
+    setClicked(prev => {
+      const next: [boolean, boolean] = [...prev];
+      next[i] = !next[i];
+      return next;
+    });
+    reportPeekOnce();
+  };
+  const setHover = (i: 0 | 1) => (hover: boolean) => {
+    setHovering(prev => {
+      const next: [boolean, boolean] = [...prev];
+      next[i] = hover;
+      return next;
+    });
+    if (hover) reportPeekOnce();
+  };
   const chance = seat.equity == null ? null : Math.round(seat.equity * 100);
   const pendingName = !isViewer && !seat.name;
   const isDisconnected = seat.connection_state === 'disconnected';
@@ -165,6 +214,7 @@ export function Seat({
   // Heads-up has the dealer double as the small blind, so one combined badge
   // replaces two overlapping pills.
   const role = isDealer && isSmallBlind ? 'D/SB' : isDealer ? 'D' : isSmallBlind ? 'SB' : isBigBlind ? 'BB' : null;
+  const streak = seat.current_streak || 0;
   const pausedAfterHand = seat.ready === false && seat.state !== 'sitting_out';
   const playstyle = seat.playstyle_badge ? playstyleMeta(seat.playstyle_badge) : undefined;
   return <div data-state={seat.state} data-connection-state={seat.connection_state}
@@ -182,6 +232,11 @@ export function Seat({
                      actionDeadlineMs={actionDeadlineMs} observedAtMs={nowMs}/>}
     {role && <span className={`seat-role ${isDealer ? 'is-dealer' : ''}`} title={ROLE_LABELS[role]}
                    aria-label={ROLE_LABELS[role]}>{role}</span>}
+    {streak !== 0 && <span className={`seat-streak ${streak > 0 ? 'is-hot' : 'is-cold'}`}
+                           title={`${Math.abs(streak)} ${streak > 0 ? 'vitória' : 'derrota'}${Math.abs(streak) > 1 ? 's' : ''} seguida${Math.abs(streak) > 1 ? 's' : ''}`}
+                           aria-label={`${Math.abs(streak)} ${streak > 0 ? 'vitória' : 'derrota'}${Math.abs(streak) > 1 ? 's' : ''} seguida${Math.abs(streak) > 1 ? 's' : ''}`}>
+      {streak > 0 ? 'V' : 'D'}{Math.abs(streak)}
+    </span>}
     {chatBubble && <div key={chatBubble.id} className="seat-chat-bubble" aria-hidden="true">
       {chatBubble.message.split(' ').flatMap((word, i) => {
         const piece = <span key={i} style={{'--i': i} as CSSProperties}>{word}</span>;
@@ -191,10 +246,18 @@ export function Seat({
     <div className={`seat-cards ${isWinner && winAmount > 0 ? 'is-collecting' : ''}`}>{[0, 1].map(i => {
       const card = cards?.[i];
       const publiclyRevealed = seat.hole_cards_revealed?.[i] ?? false;
+      // onPeekCards is only ever wired on the live table page; hand-history
+      // replay reuses this same Seat/TableStage pair to show already-resolved
+      // hole cards and must never gate them behind a live-only interaction.
+      const peekableCard = isViewer && !handComplete && Boolean(onPeekCards);
       return <PlayingCard key={`${i}-${card || 'back'}`} card={card} index={i} size="hole"
                           owner={isViewer ? 'viewer' : 'opponent'}
                           onReveal={canRevealCards && !publiclyRevealed ? () => onRevealCardAction?.(i) : undefined}
-                          revealPending={revealPending}/>;
+                          revealPending={revealPending}
+                          peekable={peekableCard}
+                          peeked={peeked[i]}
+                          onPeekToggle={peekableCard ? () => togglePeek(i as 0 | 1) : undefined}
+                          onPeekHover={peekableCard && hoverCapable ? setHover(i as 0 | 1) : undefined}/>;
     })}</div>
     {isWinner && winAmount > 0 && <span key={`confetti-${winAmount}`} className="seat-confetti" aria-hidden="true">
       {SEAT_CONFETTI_ANGLES.map((rot, i) => <span key={i} style={{

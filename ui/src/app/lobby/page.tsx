@@ -27,7 +27,7 @@ export default function Lobby() {
   }, []);
 
   return <TermsGate>
-    <AppPage authed rewardReady={rewardReady}>
+    <AppPage authed current="lobby" rewardReady={rewardReady}>
       <AppPageBody className="lobby">
         <AppPageHeader icon={LayoutGrid} eyebrow="LOBBY SANDBOX"
           title="Escolha os blinds e o tamanho da mesa."

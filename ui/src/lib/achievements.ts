@@ -41,7 +41,9 @@ const DESCRIPTIONS: Record<string, string> = {
   four_to_straight_flush_missed: 'Chegou a quatro cartas do straight flush e a quinta não veio.',
   paid_river_draw_missed: 'Pagou para ver o river atrás de um projeto que não fechou.',
   lost_river_after_leading_turn: 'Estava na frente no turn e perdeu no river.',
-  lost_straight_flush_to_royal: 'Perdeu com straight flush para um royal flush.'
+  lost_straight_flush_to_royal: 'Perdeu com straight flush para um royal flush.',
+  all_in_blind: 'Foi all-in sem ver nenhuma das suas cartas.',
+  blind_magic: 'Venceu a mão sem ver nenhuma das suas cartas.'
 };
 
 // The two "earned" counters are wallet-scoped by definition: the server keeps
@@ -83,7 +85,9 @@ const EXAMPLES: Record<string, string[]> = {
   four_to_straight_flush_missed: ['5C', '6C', '7C', '8C'],
   paid_river_draw_missed: ['AH', '4H'],
   lost_river_after_leading_turn: ['KS', 'QS'],
-  lost_straight_flush_to_royal: ['9H', 'TH', 'JH', 'QH', 'KH']
+  lost_straight_flush_to_royal: ['9H', 'TH', 'JH', 'QH', 'KH'],
+  all_in_blind: ['back', 'back'],
+  blind_magic: ['back', 'back']
 };
 
 export function achievementLabel(key: string): string {

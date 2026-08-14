@@ -47,6 +47,13 @@ reconciliation retries. **Still blocking, found 2026-07-25 while verifying cross
   would retroactively expose mucked hole cards — treat it as a security change, not a feature.
   `FairnessProofs` is set only on the copy handed to hooks, never on `Table.lastOutcome`, which is persisted with every
   table-state write.
+- **Post-hand hooks that need to write back into the same table's live cache must call the Actor directly, never
+  `Dispatch`.** `tablemanager.Manager.SetOnHandCompleteForActor`'s wrapper (and every hook chained onto it —
+  `autoRebuySweep`, `SetOnTableStreak`, ...) runs synchronously on that table's own actor goroutine; a `Dispatch` back
+  into the same actor from there deadlocks (its `Run` loop is the very call stack already blocked processing this
+  hook). `Actor.SetStreaksForActor` (backing the hot/cold streak badge, `Seat.CurrentStreak`) is the pattern to copy:
+  a plain exported method that mutates actor-owned cache state directly, applied onto `ViewFor`'s output the same way
+  `applyPresence` already does for `ConnectionState`.
 - **`handeval` is table-driven — never edit `handeval/ref` without regenerating.** `ref` is the reference evaluator and
   the sole definition of the canonical hand ordering; `tables.bin` is compiled from it by
   `go generate ./internal/engine/handeval/...` and embedded. Changing `ref` without regenerating leaves stale tables

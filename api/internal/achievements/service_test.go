@@ -33,6 +33,27 @@ func (m *memStore) IncrementStreak(_ context.Context, playerID, mode, key string
 	return m.progress[row][key], nil
 }
 
+func (m *memStore) UpdateTableStreak(_ context.Context, playerID, mode, tableID string, won bool) (int, error) {
+	row := mode + "#" + playerID
+	if m.progress[row] == nil {
+		m.progress[row] = map[string]int{}
+	}
+	key := streakKeyPrefix + tableID
+	current := m.progress[row][key]
+	switch {
+	case won && current >= 0:
+		current++
+	case won:
+		current = 1
+	case !won && current <= 0:
+		current--
+	default:
+		current = -1
+	}
+	m.progress[row][key] = current
+	return current, nil
+}
+
 func (m *memStore) ListAchievements(_ context.Context, playerID, mode string, _ int, _ map[string]types.AttributeValue) ([]PlayerAchievementProgress, map[string]types.AttributeValue, error) {
 	row := mode + "#" + playerID
 	out := make([]PlayerAchievementProgress, 0, len(m.progress[row]))
@@ -73,6 +94,71 @@ func TestRecordHandSeparatesCurrencyModes(t *testing.T) {
 	}
 	if store.progress["sandbox#p1"][KeyHandsPlayed] != 1 || store.progress["real#p1"][KeyHandsPlayed] != 1 {
 		t.Fatalf("progress was blended: %+v", store.progress)
+	}
+}
+
+func TestRecordHandGrantsBlindAchievementsOnlyWhenReportedUnpeeked(t *testing.T) {
+	store := &memStore{progress: map[string]map[string]int{}}
+	service := NewServiceWithStore(store)
+	outcome := hand.HandOutcome{
+		Winners: []string{"p1"}, AllInPlayers: []string{"p1", "p2"},
+		Participants: []string{"p1", "p2"},
+	}
+	metrics := []HandMetric{{PlayerID: "p1", Peeked: false}, {PlayerID: "p2", Peeked: true}}
+	if _, err := service.RecordHand(context.Background(), "table-1", "sandbox", outcome, metrics); err != nil {
+		t.Fatal(err)
+	}
+	if store.progress["sandbox#p1"][KeyBlindMagic] != 1 {
+		t.Fatalf("p1 won blind and should have KeyBlindMagic: %+v", store.progress["sandbox#p1"])
+	}
+	if store.progress["sandbox#p1"][KeyAllInBlind] != 1 {
+		t.Fatalf("p1 went all-in blind and should have KeyAllInBlind: %+v", store.progress["sandbox#p1"])
+	}
+	if store.progress["sandbox#p2"][KeyAllInBlind] != 0 {
+		t.Fatalf("p2 peeked before going all-in, should not have KeyAllInBlind: %+v", store.progress["sandbox#p2"])
+	}
+}
+
+func TestRecordHandSkipsBlindAchievementsWithoutPeekData(t *testing.T) {
+	store := &memStore{progress: map[string]map[string]int{}}
+	service := NewServiceWithStore(store)
+	outcome := hand.HandOutcome{Winners: []string{"p1"}, AllInPlayers: []string{"p1"}, Participants: []string{"p1"}}
+	// No metricSets at all: the action log couldn't be analyzed. Missing
+	// peek data must never be treated as "definitely didn't peek".
+	if _, err := service.RecordHand(context.Background(), "table-1", "sandbox", outcome); err != nil {
+		t.Fatal(err)
+	}
+	if store.progress["sandbox#p1"][KeyBlindMagic] != 0 || store.progress["sandbox#p1"][KeyAllInBlind] != 0 {
+		t.Fatalf("blind achievements must not be granted on missing peek data: %+v", store.progress["sandbox#p1"])
+	}
+}
+
+func TestRecordTableStreakFlipsSignOnBreak(t *testing.T) {
+	store := &memStore{progress: map[string]map[string]int{}}
+	service := NewServiceWithStore(store)
+	win := hand.HandOutcome{Winners: []string{"p1"}, Participants: []string{"p1", "p2"}}
+	lose := hand.HandOutcome{Winners: []string{"p2"}, Participants: []string{"p1", "p2"}}
+
+	streaks, err := service.RecordTableStreak(context.Background(), "table-1", "sandbox", win)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if streaks["p1"] != 1 || streaks["p2"] != -1 {
+		t.Fatalf("first hand streaks: %+v", streaks)
+	}
+	streaks, err = service.RecordTableStreak(context.Background(), "table-1", "sandbox", win)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if streaks["p1"] != 2 || streaks["p2"] != -2 {
+		t.Fatalf("continuing streaks: %+v", streaks)
+	}
+	streaks, err = service.RecordTableStreak(context.Background(), "table-1", "sandbox", lose)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if streaks["p1"] != -1 || streaks["p2"] != 1 {
+		t.Fatalf("streak should flip sign on break, not just reset to zero: %+v", streaks)
 	}
 }
 

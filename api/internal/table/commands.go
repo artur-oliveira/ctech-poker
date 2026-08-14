@@ -127,6 +127,18 @@ type KeepSeatCmd struct {
 
 func (c KeepSeatCmd) reply() chan error { return c.Reply }
 
+// PeekCardsCmd records that a player looked at their own hole cards this
+// hand. It changes no game state — it exists only so the post-hand action
+// log (achievements.Service.RecordHand) can tell a genuinely blind all-in or
+// win from one the client simply never reported.
+type PeekCardsCmd struct {
+	PlayerID string
+	ActionID string
+	Reply    chan error
+}
+
+func (c PeekCardsCmd) reply() chan error { return c.Reply }
+
 type JoinCmd struct {
 	PlayerID string
 	Stack    int64

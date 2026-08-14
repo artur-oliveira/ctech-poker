@@ -139,6 +139,11 @@ type SeatView struct {
 	// can read it off the same snapshot machinery Seated already uses.
 	AutoRebuy   bool  `json:"auto_rebuy,omitempty"`
 	BuyInAmount int64 `json:"buy_in_amount,omitempty"`
+	// CurrentStreak is never set by ViewFor itself — it lives outside Table's
+	// persisted state entirely and is overlaid by the actor (see
+	// Actor.applyStreaks), the same way ConnectionState is overlaid by
+	// Actor.applyPresence.
+	CurrentStreak int32 `json:"current_streak,omitempty"`
 }
 
 var stageNames = map[Stage]string{

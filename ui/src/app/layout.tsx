@@ -39,7 +39,7 @@ export const metadata: Metadata = {
       height: 630,
       alt: 'CTech Poker · o jeito mais simples de jogar poker com amigos.'
     }, {
-      url: '/og-image.png',
+      url: '/og-image.webp',
       width: 1200,
       height: 630,
       alt: 'CTech Poker · sua mesa de poker com amigos.'

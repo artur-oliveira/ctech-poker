@@ -1,14 +1,16 @@
 'use client';
 
 import type {LucideIcon} from 'lucide-react';
-import {Award, BookOpen, ChevronLeft, Club, History, ShoppingBag, Trophy} from 'lucide-react';
+import {Award, BookOpen, ChevronLeft, History, LayoutGrid, ShoppingBag, Trophy} from 'lucide-react';
 import Link from 'next/link';
 import type {ReactNode} from 'react';
 import {ProfileMenu} from '@/components/lobby/ProfileMenu';
+import {PokerLogo} from '@/components/PokerLogo';
 
-type MainRoute = 'guide' | 'leaderboard' | 'achievements' | 'hands' | 'store';
+type MainRoute = 'lobby' | 'guide' | 'leaderboard' | 'achievements' | 'hands' | 'store';
 
 const MAIN_ROUTES: {href: string; label: string; route: MainRoute; icon: LucideIcon}[] = [
+  {href: '/lobby', label: 'Lobby', route: 'lobby', icon: LayoutGrid},
   {href: '/guide', label: 'Guia', route: 'guide', icon: BookOpen},
   {href: '/leaderboard', label: 'Ranking', route: 'leaderboard', icon: Trophy},
   {href: '/achievements', label: 'Conquistas', route: 'achievements', icon: Award},
@@ -41,7 +43,7 @@ export function AppPageNav({authed, current, rewardReady = false}: {
 }) {
   return <nav className="app-nav shell" aria-label="Navegação principal">
     <Link href="/" className="brand" aria-label="CTech Poker — início">
-      <span className="brand-mark"><Club/></span>
+      <span className="brand-mark"><PokerLogo priority/></span>
       <span className="brand-name">CTech <b>Poker</b></span>
     </Link>
     {authed ? <div className="header-right">
@@ -58,19 +60,14 @@ export function AppPageNav({authed, current, rewardReady = false}: {
   </nav>;
 }
 
-export function AppPageHeader({icon: Icon, eyebrow, title, description, backHref, backLabel = 'Lobby', actions}: {
+export function AppPageHeader({icon: Icon, eyebrow, title, description, actions}: {
   icon: LucideIcon;
   eyebrow: string;
   title: string;
   description: ReactNode;
-  backHref?: string;
-  backLabel?: string;
   actions?: ReactNode;
 }) {
   return <div className="page-heading-shell">
-    {backHref && <Link href={backHref} className="page-back-link">
-      <ChevronLeft aria-hidden="true"/> {backLabel}
-    </Link>}
     <div className="page-heading-row">
       <header className="page-heading">
         <span className="page-heading-icon"><Icon aria-hidden="true"/></span>
@@ -85,7 +82,7 @@ export function AppPageHeader({icon: Icon, eyebrow, title, description, backHref
 
 export function AppPageFooter({authed}: {authed: boolean}) {
   return <footer className="app-page-footer shell">
-    <div><span className="brand-mark" aria-hidden="true"><Club/></span>
+    <div><span className="brand-mark" aria-hidden="true"><PokerLogo/></span>
       <p><strong>CTech Poker</strong><span>Jogo social, transparente e responsável.</span></p></div>
     <nav aria-label="Links do rodapé">
       <Link href="/guide">Como jogar</Link>

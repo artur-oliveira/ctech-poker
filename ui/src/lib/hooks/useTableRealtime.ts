@@ -795,6 +795,10 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       return ok;
     },
     keepSeat: () => emit({type: 'keep_seat', action_id: crypto.randomUUID()}),
+    // Fire-and-forget, once per hand: lets achievements.Service tell a
+    // genuinely blind all-in/win from one the client just never reported.
+    // No pending/lock state — nothing in the UI waits on the server's ack.
+    peekCards: () => emit({type: 'peek_cards', action_id: crypto.randomUUID()}),
     setRunItTwice: (enabled: boolean) => emit({type: 'set_run_it_twice', run_it_twice: enabled}),
     sendChat: (message: string) => emit({type: 'chat', message, action_id: crypto.randomUUID()}),
     sendReaction: (reactionId: TableReactionID, targetPlayerId?: string) =>

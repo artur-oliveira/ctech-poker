@@ -369,9 +369,11 @@ The component vocabulary is tactile and immediate: controls look pressable, ackn
 - **Error / Disabled:** errors use semantic red and linked error copy; disabled controls retain readable labels. Placeholder text meets 4.5:1 (uses `--muted-rose`, verified 7.38:1 on the seat surface).
 
 ### Navigation
-- **Style:** sparse top navigation, Geist 14px, brand identity on the left and one or two destination/action links on the right.
+
+- **Style:** sparse top navigation, Geist 14px, brand identity on the left and authenticated destinations on the right. `public/svgs/logo.svg` is the canonical product mark: a “P” built from two nested monoline strokes, echoing the geometric family logic of Account without depending on cards, ranks, or suits. Its oxblood, white, and soft-red geometry replaces generic suit glyphs across landing, app chrome, public shares, state pages, footers, and the table signature.
+- **Ownership:** route navigation belongs to the shared `app-nav`; `AppPageHeader` contains page identity and contextual actions only. Lobby is the first authenticated destination and is omitted from public navigation.
 - **States:** hover moves muted text to white; current location communicated through text and state, not color alone.
-- **Mobile:** secondary links may collapse, but lobby, back, account, and responsible-play exits stay available and keyboard reachable. Table header keeps a 44px-min Lobby link and a connection-state indicator.
+- **Mobile:** destination labels may collapse to icons, but authenticated Lobby and account controls stay available and keyboard reachable. Public pages keep their return link in `app-nav`; the table header keeps a 44px-min Lobby link and a connection-state indicator.
 
 ### Dialogs
 - **Surface:** `#211416`, 16px radius, 24px padding, white/15 hairline, 75% black backdrop.

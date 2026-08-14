@@ -25,6 +25,7 @@ describe('lobby page', () => {
     expect(activeTable.compareDocumentPosition(onboarding) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText('stakes-grid')).toBeInTheDocument();
     expect(screen.getByText('active-table')).toBeInTheDocument();
+    expect(screen.getByRole('link', {name: 'Lobby'})).toHaveAttribute('aria-current', 'page');
     expect(await screen.findByRole('link', {name: /Loja.*recompensa diária disponível/})).toHaveAttribute('href', '/store');
     expect(screen.queryByRole('button', {name: /Recompensa Diária/})).not.toBeInTheDocument();
     expect(await screen.findByText('mock-controls')).toBeInTheDocument();

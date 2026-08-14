@@ -3,7 +3,7 @@ import {Suspense} from 'react';
 import Link from 'next/link';
 import {useSearchParams} from 'next/navigation';
 import {useQuery} from '@tanstack/react-query';
-import {Award, BookOpen, ChevronLeft, Club, History, Sparkles, Trophy} from 'lucide-react';
+import {Award, BookOpen, ChevronLeft, History, Sparkles, Trophy} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {getProfileShowcase} from '@/lib/api/player';
@@ -13,6 +13,7 @@ import {ProfileMenu} from "@/components/lobby/ProfileMenu";
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {PlaystyleBadges} from '@/components/PlaystyleBadges';
 import {LoadingRegion, Skeleton} from '@/components/ui/skeleton';
+import {PokerLogo} from '@/components/PokerLogo';
 
 function ProfileContent() {
   const params = useSearchParams();
@@ -27,7 +28,7 @@ function ProfileContent() {
   
   return <main className="app-page profile-showcase-page">
     <nav className="app-nav shell">
-      <Link href="/" className="brand"><span className="brand-mark"><Club/></span>CTech <b>Poker</b></Link>
+      <Link href="/" className="brand"><span className="brand-mark"><PokerLogo priority/></span>CTech <b>Poker</b></Link>
       {authed ? <div className="header-right">
         <Link href="/guide"><BookOpen/> <span className="header-right-label">Guia</span></Link>
         <Link href="/leaderboard"><Trophy/> <span className="header-right-label">Ranking</span></Link>

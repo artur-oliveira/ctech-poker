@@ -52,6 +52,13 @@ type Actor struct {
 	turnTimeout       time.Duration
 	timeBankEnabled   bool
 	disconnectedSince map[string]time.Time
+	// streaks caches each seated player's current per-table win/loss streak
+	// (positive = consecutive wins, negative = consecutive losses), overlaid
+	// onto every ViewFor snapshot exactly like disconnectedSince/applyPresence.
+	// DynamoDB (achievements.Store) is the durable copy; this is a display
+	// cache only, refreshed by SetStreaksForActor after every completed hand,
+	// and empty (no badge) until this table's actor processes its first hand.
+	streaks map[string]int
 	// activeConns tracks physical connection IDs, not just a count. Connect
 	// and Disconnect are therefore idempotent when a live WS is re-registered
 	// after actor replacement, and one tab closing cannot disconnect another.
@@ -138,6 +145,7 @@ func New(id string, store *tablestore.Store, trustCache bool, broadcast func(str
 		nextHandDelay:     NextHandDelay,
 		runoutStreetDelay: RunoutStreetDelay,
 		disconnectedSince: make(map[string]time.Time),
+		streaks:           make(map[string]int),
 		activeConns:       make(map[string]map[string]struct{}),
 		kickGrace:         5 * time.Minute,
 		kickTimers:        make(map[string]*time.Timer),
@@ -239,6 +247,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleSetRunItTwice(ctx, c)
 	case KeepSeatCmd:
 		return a.handleKeepSeat(ctx, c)
+	case PeekCardsCmd:
+		return a.handlePeekCards(ctx, c)
 	case JoinCmd:
 		return a.handleJoin(ctx, c)
 	case LeaveCmd:
@@ -505,6 +515,7 @@ func (a *Actor) handleSnapshot(ctx context.Context, c SnapshotCmd) error {
 		}
 	}
 	a.applyPresence(snapshot.Seats)
+	a.applyStreaks(snapshot.Seats)
 	a.applyActivity(c.PlayerID, &snapshot)
 	c.Snapshot <- snapshot
 	return nil
@@ -1344,6 +1355,32 @@ func (a *Actor) handleKeepSeat(ctx context.Context, c KeepSeatCmd) error {
 	return nil
 }
 
+// handlePeekCards logs a breadcrumb only — no seat or hand state changes, so
+// unlike its siblings it never broadcasts (nothing any viewer's snapshot
+// depends on actually changed).
+func (a *Actor) handlePeekCards(ctx context.Context, c PeekCardsCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	apply := func() error {
+		if !a.isSeated(c.PlayerID) {
+			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+		}
+		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "peek_cards",
+		})
+	}
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		if !errors.Is(err, tablestore.ErrDuplicateAction) {
+			return err
+		}
+		if err := a.ensureLoaded(ctx, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (a *Actor) handleShowCards(ctx context.Context, c ShowCardsCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
@@ -1942,6 +1979,7 @@ func (a *Actor) broadcastAll() {
 			snapshot.IdleRemovalUnixMs = p.LastActionAt + a.kickGrace.Milliseconds()
 		}
 		a.applyPresence(snapshot.Seats)
+		a.applyStreaks(snapshot.Seats)
 		a.applyActivity(p.ID, &snapshot)
 		if doEquity {
 			if hole, board, ok := a.cached.HoleAndBoardForActor(p.ID); ok {
@@ -2013,6 +2051,24 @@ func (a *Actor) applyPresence(seats []hand.SeatView) {
 		if _, disconnected := a.disconnectedSince[seats[i].PlayerID]; disconnected {
 			seats[i].ConnectionState = "disconnected"
 		}
+	}
+}
+
+// applyStreaks overlays the cached per-table win/loss streak onto every seat,
+// same idiom as applyPresence above.
+func (a *Actor) applyStreaks(seats []hand.SeatView) {
+	for i := range seats {
+		seats[i].CurrentStreak = int32(a.streaks[seats[i].PlayerID])
+	}
+}
+
+// SetStreaksForActor merges freshly persisted streak values into the cache.
+// Called synchronously from the same table-actor goroutine that just ran the
+// post-hand hooks (tablemanager.Manager's onHandComplete wrapper) — never
+// via Dispatch, which would deadlock against that same in-flight call.
+func (a *Actor) SetStreaksForActor(streaks map[string]int) {
+	for playerID, streak := range streaks {
+		a.streaks[playerID] = streak
 	}
 }
 

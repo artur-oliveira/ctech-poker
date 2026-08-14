@@ -47,6 +47,7 @@ type Manager struct {
 	onSeatsChanged         func(tableID string, seatsTaken int)
 	onPlayerRemoved        func(tableID, playerID, reason string, stack int64, holdID string)
 	autoRebuySweep         func(tableID, handID string, outcome hand.HandOutcome)
+	tableStreak            func(tableID, handID string, outcome hand.HandOutcome) map[string]int
 	systemSettlementIntent func(context.Context, string, string, string, int64, string) (types.TransactWriteItem, error)
 	roomLoader             func(tableID string) (*roomstore.Room, bool, error)
 	reactionOwnership      func(ctx context.Context, playerID, reactionID string) (bool, error)
@@ -110,6 +111,16 @@ func (m *Manager) SetOnPlayerRemoved(fn func(tableID, playerID, reason string, s
 // app.wireAutoRebuyHook).
 func (m *Manager) SetOnAutoRebuySweep(fn func(tableID, handID string, outcome hand.HandOutcome)) {
 	m.autoRebuySweep = fn
+}
+
+// SetOnTableStreak installs the post-hand hot/cold streak hook. It returns
+// the freshly persisted per-player streak values (achievements.Service is
+// the durable writer), which the wrapper below writes straight into this
+// actor's own display cache via SetStreaksForActor — a direct call, not a
+// Dispatch, since this too fires synchronously on the actor's own goroutine
+// (same constraint as autoRebuySweep above).
+func (m *Manager) SetOnTableStreak(fn func(tableID, handID string, outcome hand.HandOutcome) map[string]int) {
+	m.tableStreak = fn
 }
 
 // GetOrCreateActor returns this instance's Actor for tableID, seeding the
@@ -179,6 +190,9 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 		}
 		if m.autoRebuySweep != nil {
 			m.autoRebuySweep(tableID, handID, outcome)
+		}
+		if m.tableStreak != nil {
+			actor.SetStreaksForActor(m.tableStreak(tableID, handID, outcome))
 		}
 	})
 	actor.SetOnHandUpdatedForActor(func(handID string, outcome hand.HandOutcome, names map[string]string) {

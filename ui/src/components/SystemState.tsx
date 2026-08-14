@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import {ArrowLeft, Club, House, RefreshCw, ShieldAlert, Wrench} from 'lucide-react';
 import {Button} from '@/components/ui/button';
+import {PokerLogo} from '@/components/PokerLogo';
 
 type SystemStateProps = {
   code: '404' | '500' | '503';
@@ -16,7 +17,7 @@ export function SystemState({code, title, description, detail, onRetryAction}: S
   const Icon = icons[code];
   return <main className="system-state">
     <nav>
-      <Link href="/" className="brand"><span className="brand-mark"><Club/></span>CTech <b>Poker</b></Link>
+      <Link href="/" className="brand"><span className="brand-mark"><PokerLogo priority/></span>CTech <b>Poker</b></Link>
     </nav>
     <section>
       <div className="system-state-mark" aria-hidden="true">

@@ -66,7 +66,15 @@ export interface Seat {
   avatar_url?: string | undefined;
   playstyle_badge?: string | undefined;
   run_it_twice?: boolean | undefined;
-  auto_rebuy?: boolean | undefined;
+  auto_rebuy?:
+    | boolean
+    | undefined;
+  /**
+   * Running per-table win/loss streak: positive counts consecutive hand
+   * wins, negative counts consecutive losses, zero means no streak (no
+   * badge). Public, like the D/SB/BB role badge — every viewer sees it.
+   */
+  current_streak: number;
 }
 
 export interface BlindEscalation {
@@ -232,7 +240,7 @@ export interface RevealedSalt {
 
 /** ClientMessage is sent from the client to the server. */
 export interface ClientMessage {
-  /** "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice" */
+  /** "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice" | "peek_cards" */
   type: string;
   /** payload fields */
   token: string;
@@ -418,6 +426,7 @@ function createBaseSeat(): Seat {
     playstyle_badge: undefined,
     run_it_twice: undefined,
     auto_rebuy: undefined,
+    current_streak: 0,
   };
 }
 
@@ -481,6 +490,9 @@ export const Seat: MessageFns<Seat> = {
     }
     if (message.auto_rebuy !== undefined) {
       writer.uint32(152).bool(message.auto_rebuy);
+    }
+    if (message.current_streak !== 0) {
+      writer.uint32(160).int32(message.current_streak);
     }
     return writer;
   },
@@ -654,6 +666,14 @@ export const Seat: MessageFns<Seat> = {
           message.auto_rebuy = reader.bool();
           continue;
         }
+        case 20: {
+          if (tag !== 160) {
+            break;
+          }
+
+          message.current_streak = reader.int32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -736,6 +756,11 @@ export const Seat: MessageFns<Seat> = {
         : isSet(object.auto_rebuy)
         ? globalThis.Boolean(object.auto_rebuy)
         : undefined,
+      current_streak: isSet(object.currentStreak)
+        ? globalThis.Number(object.currentStreak)
+        : isSet(object.current_streak)
+        ? globalThis.Number(object.current_streak)
+        : 0,
     };
   },
 
@@ -798,6 +823,9 @@ export const Seat: MessageFns<Seat> = {
     if (message.auto_rebuy !== undefined) {
       obj.autoRebuy = message.auto_rebuy;
     }
+    if (message.current_streak !== 0) {
+      obj.currentStreak = Math.round(message.current_streak);
+    }
     return obj;
   },
 
@@ -825,6 +853,7 @@ export const Seat: MessageFns<Seat> = {
     message.playstyle_badge = object.playstyle_badge ?? undefined;
     message.run_it_twice = object.run_it_twice ?? undefined;
     message.auto_rebuy = object.auto_rebuy ?? undefined;
+    message.current_streak = object.current_streak ?? 0;
     return message;
   },
 };

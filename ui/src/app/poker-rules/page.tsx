@@ -22,7 +22,7 @@ export default function PokerRules() {
     <AppPage authed={authed} current="guide">
       <AppPageBody className="rules">
         <AppPageHeader icon={BookOpen} eyebrow="REFERÊNCIA RÁPIDA" title="Regras do Texas Hold&apos;em"
-          description="O essencial para sentar em qualquer mesa com confiança, da hierarquia das mãos às regras de aposta e transparência do jogo." backHref="/guide" backLabel="Guia"/>
+          description="O essencial para sentar em qualquer mesa com confiança, da hierarquia das mãos às regras de aposta e transparência do jogo."/>
         <nav className="rules-toc" aria-label="Seções desta página">
           {SECTIONS.map(s => <a key={s.id} href={`#${s.id}`}>{s.label}</a>)}
         </nav>

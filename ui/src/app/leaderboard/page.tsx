@@ -31,7 +31,6 @@ export default function Ranking() {
           eyebrow="HALL DA FAMA"
           title="Ranking da comunidade"
           description="Desempenho auditável baseado em vitórias e mãos jogadas nas mesas do CTech Poker."
-          backHref={authed ? '/lobby' : undefined}
         />
         <CurrencyModeTabs mode={mode} onChangeAction={setMode}/>
         

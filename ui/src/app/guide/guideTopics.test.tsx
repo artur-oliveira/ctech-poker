@@ -12,7 +12,9 @@ import {GUIDE_TOPICS} from '@/components/guide/GuidePage';
 vi.mock('@/lib/auth/session', () => ({useOptionalSession: () => ({authed: true, checking: false})}));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
 vi.mock('next/image', () => ({
-  default: ({alt}: {alt: string}) => <div role="img" aria-label={alt}/>,
+  default: ({alt}: {alt: string}) => alt
+    ? <div role="img" aria-label={alt}/>
+    : <div aria-hidden="true"/>,
 }));
 
 const topics = [

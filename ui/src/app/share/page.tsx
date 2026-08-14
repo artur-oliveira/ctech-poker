@@ -3,13 +3,14 @@ import Link from 'next/link';
 import {Suspense} from 'react';
 import {useSearchParams} from 'next/navigation';
 import {useQuery} from '@tanstack/react-query';
-import {Club, ShieldCheck} from 'lucide-react';
+import {ShieldCheck} from 'lucide-react';
 import {getHandShare} from '@/lib/api/handShares';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {HandReplayer} from '@/components/hands/HandReplayer';
 import {Button} from '@/components/ui/button';
 import {LoadingRegion, Skeleton} from '@/components/ui/skeleton';
 import type {HandItem} from '@/lib/api/player';
+import {PokerLogo} from '@/components/PokerLogo';
 
 function SharedHandContent() {
   const token = useSearchParams().get('id') || '';
@@ -71,7 +72,7 @@ function SharedHandContent() {
 
 export default function SharedHandPage() {
   return <main className="public-hand-page">
-    <nav><Link href="/" className="brand"><span className="brand-mark"><Club/></span>CTech <b>Poker</b></Link></nav>
+    <nav><Link href="/" className="brand"><span className="brand-mark"><PokerLogo priority/></span>CTech <b>Poker</b></Link></nav>
     <Suspense fallback={<section className="public-hand">
       <LoadingRegion label="Carregando…" className="skeleton-panel">
         <Skeleton style={{height: '26px', width: 'min(240px, 70%)'}}/>

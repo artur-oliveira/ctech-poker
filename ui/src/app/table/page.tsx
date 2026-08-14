@@ -523,6 +523,7 @@ function TableContent() {
                   viewerStackBefore={(s.payouts && Object.keys(s.payouts).length > 0) ? viewerStackBefore : undefined}
                   canRevealCards={canRevealCards} revealPending={rt.showCardsPending}
                   onRevealCardAction={index => rt.showCards(index)}
+                  onPeekCardsAction={rt.peekCards}
                   playerNotes={playerNotesByID}
                   onEditPlayerNoteAction={seat => setNoteOpponent({player_id: seat.player_id, name: seat.name})}
                   targetedReactionLabel={pendingReaction ? TABLE_REACTIONS[pendingReaction].label : undefined}

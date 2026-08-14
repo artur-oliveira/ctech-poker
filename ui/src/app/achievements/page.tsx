@@ -97,7 +97,6 @@ export default function Achievements() {
         description={authed
           ? 'Cada estrela representa uma meta vencida. Passe, toque ou use o teclado para conferir o requisito de cada nível.'
           : 'Entre com sua conta CTech para registrar seu progresso e desbloquear conquistas a cada mão.'}
-        backHref={authed ? '/lobby' : undefined}
       />
       {/* The wallet tabs already say which wallet is selected; a second sentence
           repeating it sat off the page's centred axis and told the player nothing

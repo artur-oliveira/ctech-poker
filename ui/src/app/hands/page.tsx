@@ -135,7 +135,6 @@ export default function HandsHistory() {
         eyebrow="HISTÓRICO"
         title="Minhas mãos"
         description="Reveja suas jogadas e confira a prova criptográfica calculada no navegador."
-        backHref="/lobby"
       />
       <CurrencyModeTabs mode={mode} onChangeAction={setMode}/>
 

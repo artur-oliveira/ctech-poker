@@ -112,7 +112,6 @@ export default function Store() {
           eyebrow="REAÇÕES E FICHAS"
           title="Loja"
           description="Personalize suas jogadas com reações permanentes ou prepare seu saldo sandbox para a próxima mesa."
-          backHref="/lobby"
         />
 
         <nav className="store-directory" aria-label="Seções da loja">

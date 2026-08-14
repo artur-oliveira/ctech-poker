@@ -4,7 +4,6 @@ import Link from 'next/link';
 import {
   ArrowRight,
   Award,
-  Club,
   Coins,
   Gift,
   History,
@@ -23,6 +22,7 @@ import {Button} from '@/components/ui/button';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {cardPath} from '@/lib/cards';
 import {achievementDescription, achievementExample, achievementLabel} from '@/lib/achievements';
+import {PokerLogo} from '@/components/PokerLogo';
 import React from 'react';
 
 // A curated, static preview, not fetched from the catalog. The landing page
@@ -66,7 +66,7 @@ export default function Home() {
   return <main className="landing">
     <nav className="nav shell">
       <Link href="/" className="brand">
-        <span className="brand-mark"><Club/></span>
+        <span className="brand-mark"><PokerLogo priority/></span>
         <span>CTech <b>Poker</b></span>
       </Link>
       <div className="nav-links">
@@ -221,7 +221,7 @@ export default function Home() {
       </Button>
     </section>
     <footer className="footer shell">
-      <div className="brand"><span className="brand-mark"><Club/></span><span>CTech <b>Poker</b></span></div>
+      <div className="brand"><span className="brand-mark"><PokerLogo/></span><span>CTech <b>Poker</b></span></div>
       <div className="footer-content">
         <p>Jogue com responsabilidade. © {new Date().getFullYear()} A O CARVALHO TECH</p>
         <nav>
@@ -248,7 +248,7 @@ function HeroTable() {
                                                                             height={98}
                                                                             style={{'--i': i} as React.CSSProperties}/>)}<span
           className="card-placeholder"/><span className="card-placeholder"/></div>
-        <div className="table-logo"><Club/> CTECH</div>
+        <div className="table-logo"><PokerLogo size={14}/> CTECH</div>
       </div>
       {[['Kely', '1.820', 'top'], ['Você', '3.240', 'bottom'], ['Wellington', '980', 'left'], ['Thiago', '2.100', 'right']].map(([name, chips, pos]) =>
         <div className={`demo-seat ${pos}`} key={name}><span

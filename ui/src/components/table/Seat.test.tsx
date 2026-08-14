@@ -6,6 +6,8 @@ import type {SeatView} from '@/lib/api/table';
 
 vi.mock('@/lib/hooks/useReducedMotionCountdown', () => ({useReducedMotionCountdown: () => 7}));
 vi.mock('@/lib/hooks/useDeckVariant', () => ({useDeckVariant: () => 'four-color'}));
+let hoverCapable = false;
+vi.mock('@/lib/hooks/useHoverCapable', () => ({useHoverCapable: () => hoverCapable}));
 
 const seat = (overrides: Partial<SeatView> = {}): SeatView => ({
   player_id: 'player-1', name: 'Bia', stack: 1000, state: 'active', dealt_in: true, contributed: 0, ...overrides,
@@ -136,7 +138,7 @@ describe('Seat', () => {
     const onRevealCardAction = vi.fn();
     render_({
       seat: seat({hole_cards: ['AH', 'KD'], hole_cards_revealed: [true, false]}),
-      isViewer: true, canRevealCards: true, onRevealCardAction,
+      isViewer: true, canRevealCards: true, handComplete: true, onRevealCardAction,
     });
     const reveals = screen.getAllByRole('button', {name: /mostrar/i});
     expect(reveals).toHaveLength(1);
@@ -147,6 +149,76 @@ describe('Seat', () => {
   test('offers no reveal when the seat is not allowed to show cards', () => {
     render_({seat: seat({hole_cards: ['AH', 'KD']}), isViewer: true, canRevealCards: false});
     expect(screen.queryByRole('button', {name: /mostrar/i})).not.toBeInTheDocument();
+  });
+
+  describe('private card peek', () => {
+    test('gates the viewer own cards behind a peek toggle only on the live table (onPeekCards wired)', () => {
+      render_({seat: seat({hole_cards: ['AH', 'KD']}), isViewer: true, onPeekCards: vi.fn()});
+      expect(screen.getAllByRole('button', {name: /^Ver sua/})).toHaveLength(2);
+      expect(screen.queryByText('AS')).not.toBeInTheDocument();
+    });
+
+    test('never gates cards when there is nowhere to report a peek (e.g. hand-history replay)', () => {
+      render_({seat: seat({hole_cards: ['AH', 'KD']}), isViewer: true});
+      expect(screen.queryByRole('button', {name: /^Ver sua/})).not.toBeInTheDocument();
+    });
+
+    test('clicking Ver reveals the card and reports the peek once, clicking again only hides it locally', async () => {
+      const onPeekCards = vi.fn();
+      render_({seat: seat({hole_cards: ['AH', 'KD']}), isViewer: true, onPeekCards});
+      const [firstCard] = screen.getAllByRole('button', {name: /^Ver sua/});
+      await userEvent.click(firstCard);
+      expect(screen.getByRole('button', {name: /Ocultar sua 1ª carta/})).toBeInTheDocument();
+      expect(onPeekCards).toHaveBeenCalledOnce();
+
+      await userEvent.click(screen.getByRole('button', {name: /Ocultar sua 1ª carta/}));
+      expect(screen.getByRole('button', {name: 'Ver sua 1ª carta'})).toBeInTheDocument();
+      expect(onPeekCards).toHaveBeenCalledOnce();
+    });
+
+    test('auto-reveals the viewer own cards once the hand completes, with no peek gate at all', () => {
+      render_({seat: seat({hole_cards: ['AH', 'KD']}), isViewer: true, onPeekCards: vi.fn(), handComplete: true});
+      expect(screen.queryByRole('button', {name: /^Ver sua/})).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', {name: /^Ocultar sua/})).not.toBeInTheDocument();
+    });
+
+    test('hovering reveals on desktop and reports the peek, mouse leave hides it again', async () => {
+      hoverCapable = true;
+      try {
+        const onPeekCards = vi.fn();
+        render_({seat: seat({hole_cards: ['AH', 'KD']}), isViewer: true, onPeekCards});
+        const [firstCard] = screen.getAllByRole('button', {name: /^Ver sua/});
+        await userEvent.hover(firstCard);
+        expect(screen.getByRole('button', {name: /Ocultar sua 1ª carta/})).toBeInTheDocument();
+        expect(onPeekCards).toHaveBeenCalledOnce();
+
+        await userEvent.unhover(screen.getByRole('button', {name: /Ocultar sua 1ª carta/}));
+        expect(screen.getByRole('button', {name: 'Ver sua 1ª carta'})).toBeInTheDocument();
+      } finally {
+        hoverCapable = false;
+      }
+    });
+  });
+
+  describe('hot/cold streak badge', () => {
+    test('shows no badge without a streak', () => {
+      const {container} = render_({seat: seat({current_streak: 0})});
+      expect(container.querySelector('.seat-streak')).not.toBeInTheDocument();
+    });
+
+    test('shows a hot win-streak badge', () => {
+      const {container} = render_({seat: seat({current_streak: 3})});
+      const badge = container.querySelector('.seat-streak');
+      expect(badge).toHaveClass('is-hot');
+      expect(badge).toHaveTextContent('V3');
+    });
+
+    test('shows a cold loss-streak badge', () => {
+      const {container} = render_({seat: seat({current_streak: -2})});
+      const badge = container.querySelector('.seat-streak');
+      expect(badge).toHaveClass('is-cold');
+      expect(badge).toHaveTextContent('D2');
+    });
   });
 
   test('opens the private note editor for an opponent and reflects an existing note', async () => {

@@ -383,12 +383,22 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		} else {
 			metrics = pokerstats.Analyze(outcome.Participants, actions)
 		}
+		// peeked scans the whole hand's action log (unlike pokerstats.Analyze,
+		// which intentionally stops at the flop) since a player can peek at
+		// their own cards at any street, not just preflop.
+		peeked := make(map[string]bool)
+		for _, entry := range actions {
+			if entry.Action == "peek_cards" {
+				peeked[entry.PlayerID] = true
+			}
+		}
 		achievementMetrics := make([]achievements.HandMetric, len(metrics))
 		for i, metric := range metrics {
 			achievementMetrics[i] = achievements.HandMetric{
 				PlayerID: metric.PlayerID,
 				VPIP:     metric.VPIP,
 				ThreeBet: metric.ThreeBet,
+				Peeked:   peeked[metric.PlayerID],
 			}
 		}
 		unlocks, err := achv.RecordHand(ctx, tableID, mode, outcome, achievementMetrics)
@@ -432,6 +442,19 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		return r, true, nil
 	}
 	mgr := tablemanager.NewManager(leases, store, broadcast, roomLoader, onHandComplete)
+	mgr.SetOnTableStreak(func(tableID, handID string, outcome hand.HandOutcome) map[string]int {
+		mode, err := tableCurrencyMode(context.Background(), rooms, tableID)
+		if err != nil {
+			slog.Error("achievements: load room mode for table streak failed", "table", tableID, "hand", handID, "err", err)
+			return nil
+		}
+		streaks, err := achv.RecordTableStreak(context.Background(), tableID, mode, outcome)
+		if err != nil {
+			slog.Error("achievements: record table streak failed", "table", tableID, "hand", handID, "err", err)
+			return nil
+		}
+		return streaks
+	})
 	mgr.SetOnHandUpdated(func(tableID, handID string, outcome hand.HandOutcome, names map[string]string) {
 		mode, err := tableCurrencyMode(context.Background(), rooms, tableID)
 		if err != nil {

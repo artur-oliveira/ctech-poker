@@ -14,6 +14,12 @@ import (
 
 const tableProgress = "poker_achievement_progress"
 
+// streakKeyPrefix namespaces the hot/cold table-streak counter inside the
+// same DynamoDB table as starred achievement progress (no new table, no CDK
+// change), keyed apart from any real achievement so ListAchievements below
+// can exclude it from a player's achievement list.
+const streakKeyPrefix = "streak#"
+
 type Store struct{ base dynamo.Base }
 
 func NewStore(db *dynamodb.Client, env string) *Store {
@@ -80,6 +86,64 @@ func (s *Store) IncrementStreak(ctx context.Context, playerID, mode, key string,
 	return current, err
 }
 
+// UpdateTableStreak advances playerID's running win/loss streak for one
+// table: continuing the same sign is a plain ADD, crossing zero resets to
+// ±1. Two conditional writes (never read-then-write) keep this correct under
+// concurrent calls, the same correctness convention every other table
+// mutation in this codebase follows.
+func (s *Store) UpdateTableStreak(ctx context.Context, playerID, mode, tableID string, won bool) (int, error) {
+	sk := mode + "#" + streakKeyPrefix + tableID
+	key := map[string]dynamotypes.AttributeValue{
+		"pk": &dynamotypes.AttributeValueMemberS{Value: playerID},
+		"sk": &dynamotypes.AttributeValueMemberS{Value: sk},
+	}
+	delta, condition := "1", "attribute_not_exists(#counter) OR #counter >= :zero"
+	if !won {
+		delta, condition = "-1", "attribute_not_exists(#counter) OR #counter <= :zero"
+	}
+	out, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
+		TableName:                aws.String(s.base.TableName),
+		Key:                      key,
+		UpdateExpression:         aws.String("ADD #counter :delta"),
+		ConditionExpression:      aws.String(condition),
+		ExpressionAttributeNames: map[string]string{"#counter": "counter"},
+		ExpressionAttributeValues: map[string]dynamotypes.AttributeValue{
+			":delta": &dynamotypes.AttributeValueMemberN{Value: delta},
+			":zero":  &dynamotypes.AttributeValueMemberN{Value: "0"},
+		},
+		ReturnValues: dynamotypes.ReturnValueAllNew,
+	})
+	if err != nil {
+		if !dynamo.IsConditionFailed(err) {
+			return 0, fmt.Errorf("achievements: table streak: %w", err)
+		}
+		resetTo := "1"
+		if !won {
+			resetTo = "-1"
+		}
+		out, err = s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
+			TableName:                 aws.String(s.base.TableName),
+			Key:                       key,
+			UpdateExpression:          aws.String("SET #counter = :value"),
+			ExpressionAttributeNames:  map[string]string{"#counter": "counter"},
+			ExpressionAttributeValues: map[string]dynamotypes.AttributeValue{":value": &dynamotypes.AttributeValueMemberN{Value: resetTo}},
+			ReturnValues:              dynamotypes.ReturnValueAllNew,
+		})
+		if err != nil {
+			return 0, fmt.Errorf("achievements: table streak reset: %w", err)
+		}
+	}
+	v, ok := out.Attributes["counter"].(*dynamotypes.AttributeValueMemberN)
+	if !ok {
+		return 0, fmt.Errorf("achievements: table streak returned no counter")
+	}
+	current, err := strconv.Atoi(v.Value)
+	if err != nil {
+		return 0, fmt.Errorf("achievements: parse table streak: %w", err)
+	}
+	return current, nil
+}
+
 // PlayerAchievementProgress is one player's progress row for a single
 // achievement key (pk: playerID, sk: achievement key, counter: current
 // count) — distinct from Achievement, which describes the catalog
@@ -105,6 +169,9 @@ func (s *Store) ListAchievements(ctx context.Context, playerID, mode string, lim
 			return nil, nil, fmt.Errorf("achievements: decode: %w", err)
 		}
 		e.Key = strings.TrimPrefix(e.Key, prefix)
+		if strings.HasPrefix(e.Key, streakKeyPrefix) {
+			continue
+		}
 		if achievement, ok := achievementForKey(e.Key); ok && achievement.Secret &&
 			e.Count < minimumThreshold(achievement.Tiers) {
 			continue
