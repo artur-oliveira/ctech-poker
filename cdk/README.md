@@ -3,13 +3,13 @@
 > HAProxy migration: the API ASG no longer creates an ALB target group or listener
 > rule. `ctech-lbalancer` discovers it through its `poker` route; the retained
 > `/ctech/{env}/network/alb-sg-id` identifies the shared edge trusted by the API SG.
-> `PrivateIpv4Ec2Service` cannot be used for this stack because its current contract
-> always creates the retired ALB target group and listener rule. CI permits the
-> private-IPv4 launch-template override only in `lib/api-stack.ts`.
+> `HaproxyEc2Service` from `@aoctech/cdk` now owns the common ASG resources.
+> Route creation remains disabled because the existing `poker` route parameter is
+> owned by `ctech-lbalancer`.
 
 AWS CDK (TypeScript) for the poker service. **All stacks are implemented and live.**
 Deploys in the order **CDK → API → Frontend** via `.github/workflows/deploy.yml`. Every claim below is
-anchored to `cdk/lib/` and re-verified on **2026-08-12**.
+anchored to `cdk/lib/` and re-verified on **2026-08-14**.
 
 ## Stacks (7)
 
@@ -30,9 +30,10 @@ Go Lambdas are bundled by `lib/bundle.ts` (`localGoBundling` — local `go build
 
 ## Compute — game server is an **EC2 Auto-Scaling Group** (not Lambda/Fargate)
 
-- `api-stack.ts` defines the private-IPv4/no-NAT EC2 ASG locally because the shared
-  `PrivateIpv4Ec2Service` still owns ALB routing. This remains a stateful game server on EC2,
-  matching `ARCHITECTURE.md §1`.
+- `api-stack.ts` uses the shared `HaproxyEc2Service` for its private-IPv4/no-NAT
+  security group, encrypted launch template, log groups, ASG and CPU target
+  tracking. Poker-specific user data, alarms and termination draining remain local.
+  This remains a stateful game server on EC2, matching `ARCHITECTURE.md §1`.
 - Capacity: `minCapacity: 1`, `maxCapacity: isProd ? 3 : 1`.
 - **No ALB target group or listener rule is synthesized.** The retained edge security group comes
   from `/ctech/<env>/network/alb-sg-id`, and HAProxy discovers the ASG through its `poker` route.
@@ -41,6 +42,9 @@ Go Lambdas are bundled by `lib/bundle.ts` (`localGoBundling` — local `go build
   bucket, and rolls via SSM `RunCommand` calling `/opt/app/deploy.sh`.
 - **Valkey is mandatory in prod**: `start.sh` fetches `VALKEY_URL` from SSM; empty in prod means
   `config.Load()` fails closed. The in-memory registry fallback is dev/stage only.
+- User data downloads only the official Cloudflare Origin CA RSA root, verifies
+  its pinned SHA-256 and installs it, so internal TLS calls to
+  `*.internal.aoctech.app` retain full certificate verification.
 - Alarms: a metric filter on log lines containing `ALARM:` → `AlarmLogLines`, plus a `LeaseFailovers`
   spike alarm (threshold 5 over 2 periods).
 - CloudWatch Agent publishes four bounded 60-second host series under
@@ -88,8 +92,9 @@ silently ranking by another index. Adding a ranking metric means adding its GSI 
 
 ## Frontend (`frontend-stack.ts`)
 
-- Private S3 bucket `<env>-ctech-poker-frontend` (`BLOCK_ALL`, S3-managed encryption, versioned in
-  prod), read by CloudFront through an **Origin Access Control** — never public.
+- `createNextjsStaticFrontend` from `@aoctech/cdk` creates the private/versioned S3
+  bucket, OAC, route KVS, base rewrite, security headers and distribution. The
+  poker stack adds avatar storage/rewrites and its application-specific CSP.
 - CloudFront distribution: `CACHING_OPTIMIZED` default behavior, HTTP2+3, `PRICE_CLASS_100`, TLS
   1.2_2021, wildcard cert imported by ARN, domain `poker[-env].aoctech.app`.
 - A **KeyValueStore** (`<env>-ctech-poker-routes`) plus a CloudFront **Function** (viewer-request)
@@ -114,9 +119,9 @@ Instance role `<env>-ctech-poker-api-role` (`api-stack.ts`), managed policies
 
 - DynamoDB — 8 actions (incl. `DeleteItem` and `ConditionCheckItem`) over the **18** table ARNs the
   server touches and their `/index/*`.
-- SSM `GetParameter` over **9** parameters: `valkeyUrl`, `walletUrl`, `pokerClientId`,
-  `pokerClientSecret`, `turnstileSecret`, `realMoneyEnabled`, `legalSignoffRef`, `avatarBaseUrl`,
-  `walletWebhookHmacSecret`.
+- SSM `GetParameter` covers the existing game configuration plus account internal
+  transport/JWKS, the public account issuer, poker audience and the wallet internal
+  transport URL.
 - S3 `GetObject` on `<deployments>/ctech-poker/*`, `PutObject` on `<logs>/ctech-poker/*`.
 
 OIDC roles (`oidc-stack.ts`): `ctech-poker-gha-frontend` (S3 frontend RW, CloudFront invalidation +
@@ -130,6 +135,18 @@ KeyValueStore writes), `ctech-poker-gha-api` (deployments prefix, `ssm:GetParame
 `constants.ts`); `POKER_CLIENT_SECRET` and `TURNSTILE_SECRET` are fetched `--with-decryption`. The
 parameters themselves are **not created by CDK** — they are provisioned out of band. Auth is external
 ctech-account OIDC.
+
+Run `CTECH_AWS_PROFILE=ctech ./scripts/configure-service-url-parameters.sh {env}`
+from `ctech-cdk` before deployment. The EC2 API reads account, poker and wallet URLs
+from SSM at each service start, so URL changes require only an SSM update and service
+restart/instance refresh, not a template change. EC2-to-EC2 transport and JWKS use
+`*.internal.aoctech.app`; the OIDC issuer remains public. Reconcile/cleanup Lambdas
+remain on public service URLs because they run outside the shared VPC/private zone.
+
+One-time migration note: the currently deployed old API stack owns
+`/ctech/{env}/poker/avatar-base-url`. Destroying that stack deletes the parameter.
+Run the shared helper again after the old Poker API stack is destroyed and before
+deploying the new API stack; the new template only reads it and no longer owns it.
 
 `REAL_MONEY_ENABLED` and `LEGAL_SIGNOFF_REF` **are** wired (`api-stack.ts` fetches both in
 `start.sh`, defaulting to `false`), so enabling real money is an SSM change plus an instance refresh.
@@ -146,16 +163,11 @@ All three are PROVIDED_AL2023 / arm64.
 
 ## `@aoctech/cdk` usage
 
-Imported symbols: `addSwapCommands`, `addDualStackSsmAgentCommands`,
-`addCloudWatchAgentDualStackOverride`, and the `Environment` type. Consumed indirectly by ARN/name/SSM
-path (because ctech-cdk does not export them as constructs): the shared VPC, the retained edge
-security group, the wildcard ACM cert, the GitHub OIDC provider, the shared deployments/logs
-buckets, and Valkey.
-
-`@aoctech/cdk` 0.2.0 adds `HaproxyEc2Service`, the bounded CloudWatch Agent
-config builder, and the static-frontend factory. This stack has not migrated to
-those APIs yet: adoption requires publishing 0.2.0 and reviewing a template diff
-so existing physical resources are not replaced.
+Direct shared APIs: `HaproxyEc2Service`, `buildCloudWatchAgentConfig`,
+`createNextjsStaticFrontend`, `addSwapCommands`, dual-stack agent fragments,
+`addCloudflareOriginCaCommands`, and `Environment`. The shared VPC, edge SG,
+wildcard ACM certificate, OIDC provider, buckets and Valkey are still imported by
+their established ARN/name/SSM contracts.
 
 ## Cost-relevant notes
 
@@ -168,8 +180,8 @@ so existing physical resources are not replaced.
 ## CI & tests
 
 - `infra.yml`: `cdk diff` on PR, `cdk deploy "CtechPoker-${ENV^}-*"` on push to
-  `main`/`staging`/`dev`. The private-IPv4 override is allowed only in `lib/api-stack.ts`; CI rejects
-  copies elsewhere and suspiciously low DynamoDB throughput caps. Node 24, `npm ci`.
+  `main`/`staging`/`dev`; CI also rejects suspiciously low DynamoDB throughput caps.
+  Node 24, `npm ci`.
 - `test/`: Jest + `aws-cdk-lib/assertions` for the api, archiver, dynamodb, frontend, reconcile and
   tablecleanup stacks. ⚠️ **No test for `oidc-stack.ts`.** Run `npm run build` before
   Jest: ignored local `.js` outputs can otherwise shadow the `.ts` modules with stale code.

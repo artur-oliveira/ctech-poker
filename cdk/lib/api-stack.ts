@@ -9,10 +9,13 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import {Construct} from 'constructs';
 import {
+  addCloudflareOriginCaCommands,
   addCloudWatchAgentDualStackOverride,
   addDualStackSsmAgentCommands,
   addSwapCommands,
+  buildCloudWatchAgentConfig,
   Environment,
+  HaproxyEc2Service,
 } from '@aoctech/cdk';
 import {
   API_CURRENT_ARTIFACT_KEY,
@@ -23,6 +26,8 @@ import {
   operationsDashboardName,
   S3_PREFIX,
   SERVICE,
+  SSM_ACCOUNT,
+  SSM_POKER,
   SSM_SHARED,
 } from './constants';
 
@@ -33,13 +38,6 @@ interface ApiStackProps extends cdk.StackProps {
   // from SSM into CTECH_VPC_ID before running cdk deploy (see ctech-cdk/CLAUDE.md
   // "Known Constraints").
   vpcId: string;
-  /** HAProxy route hostname, e.g. poker-api-dev.aoctech.app. */
-  domainName: string;
-  /** Browser app host, used for CORS and the JWT audience. */
-  appDomainName: string;
-  /** CTech Account issuer host. */
-  authDomainName: string;
-  authApiDomainName: string;
   instanceProfileName: string;
   deploymentsBucketName: string;
   logsBucketName: string;
@@ -83,10 +81,6 @@ export class PokerApiStack extends cdk.Stack {
     const {
       environment,
       vpcId,
-      domainName,
-      appDomainName,
-      authDomainName,
-      authApiDomainName,
       instanceProfileName,
       deploymentsBucketName,
       logsBucketName,
@@ -120,13 +114,9 @@ export class PokerApiStack extends cdk.Stack {
     } = props;
     
     const shared = SSM_SHARED(environment);
+    const account = SSM_ACCOUNT(environment);
+    const poker = SSM_POKER(environment);
 
-    new ssm.StringParameter(this, 'AvatarBaseUrlParameter', {
-      parameterName: avatarBaseUrlParam,
-      stringValue: `https://${appDomainName}/avatars`,
-      description: 'Public same-origin base URL for versioned poker avatars',
-    });
-    
     const instanceRole = new iam.Role(this, 'ApiInstanceRole', {
       roleName: instanceRoleName(environment),
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
@@ -165,6 +155,7 @@ export class PokerApiStack extends cdk.Stack {
         shared.valkeyUrl, walletUrlParam, pokerClientIdParam, pokerClientSecretParam, turnstileSecretParam,
         realMoneyEnabledParam, legalSignoffRefParam,
         avatarBaseUrlParam, walletWebhookHmacSecretParam,
+        account.internalBaseUrl, account.appUrl, account.internalJwksUrl, poker.appUrl,
       ].map(
         (path) => `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${path}`,
       ),
@@ -221,33 +212,19 @@ export class PokerApiStack extends cdk.Stack {
     
     addSwapCommands(userData);
     addDualStackSsmAgentCommands(userData);
+    addCloudflareOriginCaCommands(userData);
     addCloudWatchAgentDualStackOverride(userData);
     
     userData.addCommands(
       // {instance_id} is resolved by the CW agent at runtime, not by bash.
       `cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWA'`,
-      `{`,
-      `  "agent": {"metrics_collection_interval": 60},`,
-      `  "metrics": {`,
-      `    "namespace": "CtechPoker/${environment}/Host",`,
-      '    "append_dimensions": {"InstanceId": "${aws:InstanceId}"},',
-      `    "metrics_collected": {`,
-      `      "mem": {"measurement":["used_percent"],"metrics_collection_interval":60},`,
-      `      "swap": {"measurement":["used_percent"],"metrics_collection_interval":60},`,
-      `      "disk": {"measurement":["used_percent"],"resources":["/"],"drop_device":true,"metrics_collection_interval":60},`,
-      `      "procstat": [{"pattern":"/opt/app/current/(app|bootstrap)","measurement":["memory_rss"],"metrics_collection_interval":60}]`,
-      `    }`,
-      `  },`,
-      `  "logs": {`,
-      `    "logs_collected": {`,
-      `      "files": {`,
-      `        "collect_list": [`,
-      `          {"file_path":"/var/log/app/app.log","log_group_name":"${logGroupApp}","log_stream_name":"{instance_id}"}`,
-      `        ]`,
-      `      }`,
-      `    }`,
-      `  }`,
-      `}`,
+      buildCloudWatchAgentConfig({
+        metricNamespace: `CtechPoker/${environment}/Host`,
+        appProcessPattern: '/opt/app/current/(app|bootstrap)',
+        logFiles: [
+          {filePath: '/var/log/app/app.log', logGroupName: logGroupApp, logStreamName: '{instance_id}'},
+        ],
+      }),
       `CWA`,
       `/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s`,
       
@@ -260,14 +237,9 @@ export class PokerApiStack extends cdk.Stack {
       `AWS_REGION=${this.region}`,
       `AWS_USE_DUALSTACK_ENDPOINT=true`,
       `PORT=${APP_PORT}`,
-      `SERVICE_AUDIENCE=https://${appDomainName}`,
-      `CTECH_URL=https://${authApiDomainName}`,
-      `CTECH_ISSUER_URL=https://${authDomainName}`,
       // Poker is reached directly from HAProxy, with no localhost nginx hop.
       // Trust only peers inside this VPC before honoring X-Forwarded-For.
       `TRUSTED_PROXIES=${vpc.vpcCidrBlock}`,
-      `CORS_ALLOWED_ORIGINS=https://${appDomainName}`,
-      `TURNSTILE_EXPECTED_HOSTNAME=${appDomainName}`,
       `AVATAR_BUCKET=${avatarsBucketName}`,
       `ENV`,
       
@@ -283,6 +255,14 @@ export class PokerApiStack extends cdk.Stack {
       // required there); in dev/stage the app falls back to an in-memory backend.
       `VALKEY_URL=$(aws ssm get-parameter --name "${shared.valkeyUrl}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
       `export VALKEY_URL`,
+      `CTECH_URL=$(aws ssm get-parameter --name "${account.internalBaseUrl}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+      `CTECH_ISSUER_URL=$(aws ssm get-parameter --name "${account.appUrl}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+      `CTECH_JWKS_URL=$(aws ssm get-parameter --name "${account.internalJwksUrl}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+      `SERVICE_AUDIENCE=$(aws ssm get-parameter --name "${poker.appUrl}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+      `CORS_ALLOWED_ORIGINS="$SERVICE_AUDIENCE"`,
+      `TURNSTILE_EXPECTED_HOSTNAME="\${SERVICE_AUDIENCE#*://}"`,
+      `TURNSTILE_EXPECTED_HOSTNAME="\${TURNSTILE_EXPECTED_HOSTNAME%%/*}"`,
+      `export CTECH_URL CTECH_ISSUER_URL CTECH_JWKS_URL SERVICE_AUDIENCE CORS_ALLOWED_ORIGINS TURNSTILE_EXPECTED_HOSTNAME`,
       `WALLET_URL=$(aws ssm get-parameter --name "${walletUrlParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
       `export WALLET_URL`,
       `POKER_CLIENT_ID=$(aws ssm get-parameter --name "${pokerClientIdParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
@@ -416,26 +396,26 @@ export class PokerApiStack extends cdk.Stack {
       `aws s3api head-object --bucket "${deploymentsBucketName}" --key "${API_CURRENT_ARTIFACT_KEY}" 2>/dev/null && /opt/app/deploy.sh ${API_CURRENT_ARTIFACT_KEY} || echo "No bootstrap artifact, waiting for first deploy"`,
     );
     
-    // HAProxy discovers this ASG through its ctech-lbalancer bootstrap route.
-    const serviceSg = new ec2.SecurityGroup(this, 'ApiServiceSg', {
+    // ctech-lbalancer still owns the bootstrap route and private CNAME.
+    const service = new HaproxyEc2Service(this, 'ApiService', {
       vpc,
+      edgeSecurityGroup: edgeSg,
+      appPort: APP_PORT,
+      userData,
+      instanceProfileName,
       securityGroupName: `${environment}-${SERVICE}-api-sg`,
-      description: 'ctech-poker API instances', allowAllOutbound: true, allowAllIpv6Outbound: true,
-    });
-    serviceSg.addIngressRule(edgeSg, ec2.Port.tcp(APP_PORT), 'HAProxy edge to app');
-    const appLogGroup = new logs.LogGroup(this, 'ApiServiceAppLogGroup', {logGroupName: logGroupApp, retention: logRetention, removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY});
-    const nginxLogGroup = new logs.LogGroup(this, 'ApiServiceNginxLogGroup', {logGroupName: logGroupNginx, retention: logRetention, removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY});
-    const launchTemplate = new ec2.LaunchTemplate(this, 'ApiServiceLaunchTemplate', {launchTemplateName: `${this.asgName}-lt`, instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO), machineImage: ec2.MachineImage.latestAmazonLinux2023({cpuType: ec2.AmazonLinuxCpuType.ARM_64, edition: ec2.AmazonLinuxEdition.MINIMAL}), blockDevices: [{deviceName: '/dev/xvda', volume: ec2.BlockDeviceVolume.ebs(3, {volumeType: ec2.EbsDeviceVolumeType.GP3, deleteOnTermination: true})}], userData, instanceProfile: iam.InstanceProfile.fromInstanceProfileName(this, 'ApiServiceInstanceProfile', instanceProfileName), requireImdsv2: true, securityGroup: serviceSg});
-    const cfnLaunchTemplate = launchTemplate.node.defaultChild as ec2.CfnLaunchTemplate;
-    cfnLaunchTemplate.addPropertyDeletionOverride('LaunchTemplateData.SecurityGroupIds');
-    cfnLaunchTemplate.addPropertyOverride('LaunchTemplateData.NetworkInterfaces', [{DeviceIndex: 0, Groups: [serviceSg.securityGroupId], AssociatePublicIpAddress: false, Ipv6AddressCount: 1}]);
-    const asg = new autoscaling.AutoScalingGroup(this, 'ApiServiceASG', {autoScalingGroupName: this.asgName, vpc, vpcSubnets: {subnetType: ec2.SubnetType.PUBLIC}, launchTemplate,
+      securityGroupDescription: 'ctech-poker API instances',
+      appLogGroupName: logGroupApp,
+      // Kept for output/deployment compatibility even though poker has no nginx.
+      nginxLogGroupName: logGroupNginx,
+      logRetention,
+      logRemovalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      asgName: this.asgName,
       minCapacity: minimumApiCapacity(environment),
       maxCapacity: isProd ? 3 : 1,
-      cooldown: cdk.Duration.seconds(120), healthChecks: autoscaling.HealthChecks.ec2({gracePeriod: cdk.Duration.seconds(120)}),
     });
+    const asg = service.autoScalingGroup;
     asg.node.addDependency(profile);
-    if (isProd) asg.scaleOnCpuUtilization('ApiServiceCpuTargetTracking', {targetUtilizationPercent: 60, cooldown: cdk.Duration.minutes(3)});
 
     // ASG termination pauses before EC2 shutdown, asks systemd to stop the
     // process (which runs Fx OnStop -> DrainAndRelease), then explicitly
@@ -504,7 +484,7 @@ def handler(event, context):
       notificationTarget: new hooktargets.FunctionHook(drainFunction),
     });
     
-    const alarmMetricFilter = appLogGroup.addMetricFilter('AlarmLogFilter', {
+    const alarmMetricFilter = service.appLogGroup.addMetricFilter('AlarmLogFilter', {
       filterPattern: logs.FilterPattern.literal('"ALARM:"'),
       metricNamespace: `CtechPoker/${environment}`,
       metricName: 'AlarmLogLines',
@@ -636,11 +616,11 @@ def handler(event, context):
     // ── Outputs ───────────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'AsgName', {value: asg.autoScalingGroupName, exportName: `${id}-asg-name`});
     new cdk.CfnOutput(this, 'AppLogGroupName', {
-      value: appLogGroup.logGroupName,
+      value: service.appLogGroup.logGroupName,
       exportName: `${id}-app-log-group`,
     });
     new cdk.CfnOutput(this, 'NginxLogGroupName', {
-      value: nginxLogGroup.logGroupName,
+      value: service.nginxLogGroup!.logGroupName,
       exportName: `${id}-nginx-log-group`,
     });
   }

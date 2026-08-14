@@ -1,11 +1,8 @@
 import * as cdk from 'aws-cdk-lib';
-import {Duration} from 'aws-cdk-lib';
-import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
-import {HttpVersion} from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import {Environment} from '@aoctech/cdk';
+import {createNextjsStaticFrontend, Environment} from '@aoctech/cdk';
 import {Construct} from 'constructs';
 import {
   API_PATH_PATTERNS,
@@ -35,166 +32,85 @@ export class FrontendStack extends cdk.Stack {
 
   constructor(scope: Construct, id: string, props: FrontendStackProps) {
     super(scope, id, props);
-    const {environment, certificateArn, domainName, apiDomainName, authDomainName, extraConnectSrc} = props;
-    const isProd = environment === 'prod';
+    const isProd = props.environment === 'prod';
 
-    this.bucket = new s3.Bucket(this, 'Bucket', {
-      bucketName: frontendBucketName(environment),
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      versioned: isProd,
-      removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: !isProd,
-    });
     this.avatarsBucket = new s3.Bucket(this, 'AvatarsBucket', {
-      bucketName: avatarsBucketName(environment),
+      bucketName: avatarsBucketName(props.environment),
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: isProd,
       removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: !isProd,
-      cors: domainName ? [{
+      cors: props.domainName ? [{
         allowedMethods: [s3.HttpMethods.POST],
-        allowedOrigins: [`https://${domainName}`],
+        allowedOrigins: [`https://${props.domainName}`],
         allowedHeaders: ['*'],
         maxAge: 3000,
       }] : [],
-      lifecycleRules: [{id: 'ExpireAvatarQuarantine', prefix: 'up/', expiration: Duration.days(1)}],
-    });
-    const oac = new cloudfront.S3OriginAccessControl(this, 'OAC', {
-      originAccessControlName: `${environment}-${SERVICE}-oac`,
-    });
-    this.routeStore = new cloudfront.KeyValueStore(this, 'RouteStore', {
-      keyValueStoreName: routeStoreName(environment),
-    });
-    const rewrite = new cloudfront.Function(this, 'UrlRewrite', {
-      functionName: `${environment}-${SERVICE}-url-rewrite`,
-      runtime: cloudfront.FunctionRuntime.JS_2_0,
-      keyValueStore: this.routeStore,
-      code: cloudfront.FunctionCode.fromInline(`
-import cf from 'cloudfront';
-const kvs = cf.kvs();
-async function handler(event) {
-  var uri = event.request.uri;
-  if (uri === '/' || /\\.[^/]+$/.test(uri)) return event.request;
-  var route = uri.endsWith('/') ? uri.slice(0, -1) : uri;
-  event.request.uri = (await kvs.exists(route)) ? route + '.html' : '/404.html';
-  return event.request;
-}`),
+      lifecycleRules: [{
+        id: 'ExpireAvatarQuarantine',
+        prefix: 'up/',
+        expiration: cdk.Duration.days(1),
+      }],
     });
 
-    const extraConnectSrcStr: string = [
-      ...[
-        apiDomainName,
-        authDomainName,
-        ...extraConnectSrc
-      ].map(it => `https://${it}`),
-      `wss://${apiDomainName}`
-    ].join(' ')
-
-    const securityHeaders = new cloudfront.ResponseHeadersPolicy(this, 'SecurityHeaders', {
-      responseHeadersPolicyName: `${environment}-${SERVICE}-security-headers`,
-      customHeadersBehavior: {
-        customHeaders: [
-          {
-            header: 'Permissions-Policy',
-            value: 'on-device-speech-recognition=self', // Correto: sem aspas simples
-            override: true,
-          },
-        ],
-      },
-      securityHeadersBehavior: {
-        contentTypeOptions: {override: true},
-        frameOptions: {frameOption: cloudfront.HeadersFrameOption.DENY, override: true},
-        strictTransportSecurity: {
-          accessControlMaxAge: Duration.seconds(63072000), includeSubdomains: true, preload: true, override: true,
-        },
-        referrerPolicy: {
-          referrerPolicy: cloudfront.HeadersReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN, override: true,
-        },
-        contentSecurityPolicy: {
-          contentSecurityPolicy: [
-            "default-src 'self'", "base-uri 'self'", "object-src 'none'", "frame-ancestors 'none'",
-            "img-src 'self' data:", "style-src 'self' 'unsafe-inline'", "script-src 'self' 'unsafe-inline'",
-            `connect-src 'self' ${extraConnectSrcStr}`,
-          ].join('; '),
-          override: true,
-        },
-      },
-    });
-    const apiBehavior: cloudfront.BehaviorOptions = {
-      origin: new origins.HttpOrigin(apiDomainName, {
-        protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
-        readTimeout: cdk.Duration.seconds(60),
-        keepaliveTimeout: cdk.Duration.seconds(60),
-      }),
-      viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
-      cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-      originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-      allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-      compress: true,
-    };
-    const avatarHeaders = new cloudfront.ResponseHeadersPolicy(this, 'AvatarHeaders', {
-      responseHeadersPolicyName: `${environment}-${SERVICE}-avatar-headers`,
-      securityHeadersBehavior: {contentTypeOptions: {override: true}},
-    });
-    const avatarRewrite = new cloudfront.Function(this, 'AvatarRewrite', {
-      functionName: avatarRewriteFunctionName(environment),
-      runtime: cloudfront.FunctionRuntime.JS_2_0,
-      code: cloudfront.FunctionCode.fromInline(`
+    const connectSrc = [
+      `https://${props.apiDomainName}`,
+      `https://${props.authDomainName}`,
+      ...props.extraConnectSrc.map((host) => `https://${host}`),
+      `wss://${props.apiDomainName}`,
+    ];
+    const {bucket, distribution, routeStore} = createNextjsStaticFrontend(this, {
+      environment: props.environment,
+      serviceName: SERVICE,
+      bucketName: frontendBucketName(props.environment),
+      routeStoreName: routeStoreName(props.environment),
+      apiDomainName: props.apiDomainName,
+      apiPathPatterns: API_PATH_PATTERNS,
+      connectSrc,
+      domainName: props.domainName,
+      certificateArn: props.domainName ? props.certificateArn : undefined,
+      distributionComment: `CTech Poker Frontend - ${props.environment}`,
+      permissionsPolicy: 'on-device-speech-recognition=self',
+      additionalBehaviors: ({originAccessControl}) => {
+        const avatarHeaders = new cloudfront.ResponseHeadersPolicy(this, 'AvatarHeaders', {
+          responseHeadersPolicyName: `${props.environment}-${SERVICE}-avatar-headers`,
+          securityHeadersBehavior: {contentTypeOptions: {override: true}},
+        });
+        const avatarRewrite = new cloudfront.Function(this, 'AvatarRewrite', {
+          functionName: avatarRewriteFunctionName(props.environment),
+          runtime: cloudfront.FunctionRuntime.JS_2_0,
+          code: cloudfront.FunctionCode.fromInline(`
 function handler(event) {
   event.request.uri = event.request.uri.slice(${AVATAR_PUBLIC_PATH_PREFIX.length});
   return event.request;
 }`),
+        });
+        return {
+          [`${AVATAR_PUBLIC_PATH_PREFIX}/*`]: {
+            origin: origins.S3BucketOrigin.withOriginAccessControl(this.avatarsBucket, {
+              originAccessControl,
+              originPath: AVATAR_STORAGE_PATH_PREFIX,
+            }),
+            viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+            cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+            allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+            compress: true,
+            responseHeadersPolicy: avatarHeaders,
+            functionAssociations: [{
+              function: avatarRewrite,
+              eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+            }],
+          },
+        };
+      },
+      outputExportNamePrefix: id,
     });
-    const avatarBehavior: cloudfront.BehaviorOptions = {
-      origin: origins.S3BucketOrigin.withOriginAccessControl(this.avatarsBucket, {
-        originAccessControl: oac,
-        originPath: AVATAR_STORAGE_PATH_PREFIX,
-      }),
-      viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-      cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-      allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
-      compress: true,
-      responseHeadersPolicy: avatarHeaders,
-      functionAssociations: [{
-        function: avatarRewrite,
-        eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
-      }],
-    };
 
-    this.distribution = new cloudfront.Distribution(this, 'Distribution', {
-      comment: `CTech Poker Frontend - ${environment}`,
-      defaultRootObject: 'index.html',
-      defaultBehavior: {
-        origin: origins.S3BucketOrigin.withOriginAccessControl(this.bucket, {originAccessControl: oac}),
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-        allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
-        compress: true,
-        responseHeadersPolicy: securityHeaders,
-        functionAssociations: [{function: rewrite, eventType: cloudfront.FunctionEventType.VIEWER_REQUEST}],
-      },
-      additionalBehaviors: {
-        ...Object.fromEntries(API_PATH_PATTERNS.map((pattern) => [pattern, apiBehavior])),
-        [`${AVATAR_PUBLIC_PATH_PREFIX}/*`]: avatarBehavior,
-      },
-      httpVersion: HttpVersion.HTTP2_AND_3,
-      certificate: domainName ? acm.Certificate.fromCertificateArn(this, 'Cert', certificateArn) : undefined,
-      domainNames: domainName ? [domainName] : undefined,
-      priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
-      minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
-    });
-    new cdk.CfnOutput(this, 'BucketName', {value: this.bucket.bucketName, exportName: `${id}-bucket-name`});
+    this.bucket = bucket;
+    this.distribution = distribution;
+    this.routeStore = routeStore;
+
     new cdk.CfnOutput(this, 'AvatarsBucketName', {value: this.avatarsBucket.bucketName});
-    new cdk.CfnOutput(this, 'DistributionId', {
-      value: this.distribution.distributionId, exportName: `${id}-dist-id`,
-    });
-    new cdk.CfnOutput(this, 'DistributionDomain', {
-      value: this.distribution.distributionDomainName, exportName: `${id}-dist-domain`,
-    });
-    new cdk.CfnOutput(this, 'RouteStoreArn', {
-      value: this.routeStore.keyValueStoreArn, exportName: `${id}-route-store-arn`,
-    });
   }
 }

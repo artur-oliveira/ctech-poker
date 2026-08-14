@@ -115,6 +115,9 @@ export const SSM_SHARED = (env: Environment) => ({
  */
 export const SSM_POKER = (env: Environment) => ({
   walletUrl: `/ctech/${env}/poker/wallet-url`,
+  walletInternalUrl: `/ctech/${env}/poker/wallet-internal-url`,
+  appUrl: `/ctech/${env}/poker/app-url`,
+  internalBaseUrl: `/ctech/${env}/poker/internal-base-url`,
   clientId: `/ctech/${env}/poker/poker-client-id`,
   clientSecret: `/ctech/${env}/poker/poker-client-secret`,
   turnstileSecret: `/ctech/${env}/poker/turnstile-secret`,
@@ -129,6 +132,12 @@ export const SSM_POKER = (env: Environment) => ({
   // the secret registered for poker's client_id in ctech-wallet's own SSM
   // M2M-clients param — that registration is manual, done outside CDK.
   walletWebhookHmacSecret: `/ctech/${env}/poker/wallet-webhook-hmac-secret`,
+});
+
+export const SSM_ACCOUNT = (env: Environment) => ({
+  internalBaseUrl: `/ctech-account/${env}/internal-base-url`,
+  appUrl: `/ctech-account/${env}/app-url`,
+  internalJwksUrl: `/ctech-account/${env}/internal-jwks-url`,
 });
 
 // ── Domain helper (identical to ctech-wallet's / ctech-dfe's) ───────────────

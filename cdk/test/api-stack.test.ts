@@ -10,7 +10,7 @@ test('keeps one minimum API instance in every environment', () => {
 
 // The brief's template snippet instantiates PokerApiStack with only `env` —
 // adapted here to supply the props the real construct actually requires
-// (environment/vpcId/domainName/instanceProfileName/bucket names), confirmed
+// (environment/vpcId/instanceProfileName/bucket names), confirmed
 // against ctech-wallet/cdk/lib/api-stack.ts's ApiStackProps shape. Dummy
 // values throughout; ec2.Vpc.fromLookup falls back to CDK's built-in dummy
 // VPC data when no cdk.context.json cache entry exists, so this does not
@@ -21,10 +21,6 @@ test('synthesizes without error and declares exactly one ASG', () => {
     env: {account: '123456789012', region: 'us-east-1'},
     environment: 'dev',
     vpcId: 'vpc-0123456789abcdef0',
-    domainName: 'poker-api-dev.aoctech.app',
-    appDomainName: 'poker-dev.aoctech.app',
-    authDomainName: 'accounts-dev.aoctech.app',
-    authApiDomainName: 'accounts-dev-api.aoctech.app',
     instanceProfileName: 'dev-ctech-poker-api-instance-profile',
     deploymentsBucketName: 'dev-ctech-deployments',
     logsBucketName: 'dev-ctech-application-logs',
