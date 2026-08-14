@@ -185,6 +185,7 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
       onOpenChangeAction(false);
     } else {
       onQuickSendAction(id);
+      onOpenChangeAction(false);
     }
   }
   

@@ -58,7 +58,7 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
     queryFn: () => getRoom(roomId),
     retry: (count, err) => !isNotFound(err) && count < 3
   });
-  
+
   if (isLoading) return (
     <main className="game-loading">
       <h1 className="sr-only">Mesa de poker</h1>
@@ -82,13 +82,13 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
       <Button variant="ghost" render={<Link href="/lobby"/>}><ChevronLeft/> Voltar ao lobby</Button>
     </main>
   );
-  
+
   const step = room.big_blind > 0 ? room.big_blind : 1;
   const value = amount ?? midBuyIn(room.buy_in_min, room.buy_in_max, room.big_blind);
   const isReal = room.currency_mode === 'real';
   const unit = isReal ? 'reais' : 'fichas';
   const fmt = (n: number) => formatBuyIn(n, isReal);
-  
+
   async function confirm() {
     setJoining(true);
     setError('');
@@ -112,7 +112,7 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
       setJoining(false);
     }
   }
-  
+
   return (
     <main className="game-loading buyin">
       <h1 className="sr-only">Mesa de poker</h1>
@@ -130,15 +130,16 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
         <output htmlFor={sliderId}>{fmt(value)} <span>{unit}</span></output>
         <small>mín. {fmt(room.buy_in_min)} · máx. {fmt(room.buy_in_max)}</small>
       </div>
-      {!isReal && <div className="buyin-control table-preference-toggle">
-        <span><RefreshCw aria-hidden="true"/><span><Label id={`${autoRebuyId}-label`} htmlFor={autoRebuyId}>Auto
-          rebuy</Label>
-          <small>Se suas fichas acabarem, compramos automaticamente o mesmo valor para você continuar jogando sem
-            esperar.</small>
-        </span></span>
-        <Switch id={autoRebuyId} aria-labelledby={`${autoRebuyId}-label`} checked={autoRebuy} disabled={joining}
-                onCheckedChange={setAutoRebuy}/>
-      </div>}
+      {!isReal &&
+          <div className="buyin-control table-preference-toggle">
+              <span><RefreshCw aria-hidden="true"/><span>
+            <Label id={`${autoRebuyId}-label`} htmlFor={autoRebuyId}>Auto rebuy</Label>
+          <small>Se suas fichas acabarem, compramos automaticamente o mesmo valor para você continuar jogando sem esperar.</small>
+        </span>
+        </span>
+              <Switch id={autoRebuyId} aria-labelledby={`${autoRebuyId}-label`} checked={autoRebuy} disabled={joining}
+                      onCheckedChange={setAutoRebuy}/>
+          </div>}
       {error && <p className="buyin-error" role="alert">{error}</p>}
       <Button size="lg" onClick={confirm} disabled={joining}>
         {joining ? 'Entrando…' : `Entrar com ${fmt(value)}`}

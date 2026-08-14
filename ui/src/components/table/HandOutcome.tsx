@@ -1,10 +1,11 @@
 'use client';
 import {useEffect, useState} from 'react';
-import {Equal, PartyPopper} from 'lucide-react';
+import {Equal, Flag, PartyPopper, Swords, X} from 'lucide-react';
 import {HAND_CATEGORY_LABELS} from '@/lib/utils';
 import {bestHandCategory, HAND_MATCH_SIZE, wasDecidedByKicker} from '@/lib/pokerRules';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {ChipStack} from '@/components/table/ChipStack';
+import {PerimeterTimer} from '@/components/table/PerimeterTimer';
 import {useCountUp} from '@/lib/hooks/useCountUp';
 
 export type HandOutcomeState = {
@@ -58,6 +59,17 @@ export type HandOutcomeState = {
 const EXIT_MS = 320;
 const CONFETTI_PIECES = Array.from({length: 8}, (_, i) => i);
 const CHIP_COUNT_MS = 700;
+// Icon/label for the collapsed badge, one per outcome kind, so a dismissed
+// win still reads as a win at a glance instead of a bare "something happened"
+// dot. Mirrors the icons the full card already uses for win/tie/mixed;
+// lose and fold have none on the full card (their heading is text-only), so
+// these are new but chosen to fit: crossed hands lost the showdown, a raised
+// flag reads as "folded" without needing new copy.
+const BADGE_ICON = {win: PartyPopper, lose: Swords, tie: Equal, mixed: Equal, fold: Flag} as const;
+const BADGE_LABEL: Record<HandOutcomeState['kind'], string> = {
+  win: 'Ver resultado: você venceu', lose: 'Ver resultado: você perdeu',
+  tie: 'Ver resultado: pote dividido', mixed: 'Ver resultado misto', fold: 'Ver resultado: você desistiu'
+};
 
 function categoryFor(cards?: string[], fallback?: string): string | undefined {
   return cards?.length === 5 ? bestHandCategory(cards) : fallback;
@@ -108,6 +120,33 @@ function OutcomeCards({cards, viewerHoleCards, startIndex = 0, kickerFrom}: {
   </span>;
 }
 
+/** Wraps PerimeterTimer with the same "capture elapsed time once, at mount"
+ * pattern Seat.tsx's SeatTurnTimer uses. Needed here because the ring's host
+ * (dismiss button / badge / standalone dot) swaps in and out as the card is
+ * dismissed and reopened — each swap is a fresh DOM mount, and without a
+ * captured elapsed offset the CSS animation would restart from full every
+ * time, instead of continuing the same countdown. Callers must key this by
+ * `deadlineMs` so a genuinely new deadline (not just a dismiss toggle) also
+ * re-captures a fresh elapsed offset.
+ *
+ * Reads Date.now() directly rather than taking a `nowMs` prop: the seat
+ * timers this pattern is copied from only remount when the deadline itself
+ * changes, so their caller's `nowMs` (the last snapshot's arrival time) is
+ * still fresh at that instant. This ring also remounts on every dismiss/
+ * reopen toggle, a moment with no snapshot of its own — a snapshot-cadence
+ * `nowMs` would be stale by however long the player waited before clicking,
+ * which is what made every dismiss recapture elapsed as if just-armed. */
+function HandOutcomeRing({className, radius, deadlineMs, durationMs}: {
+  className: string;
+  radius: number;
+  deadlineMs: number;
+  durationMs: number;
+}) {
+  const [elapsedMs] = useState(() => Math.max(0, Date.now() - (deadlineMs - durationMs)));
+  return <PerimeterTimer className={className} durationMs={durationMs} elapsedMs={elapsedMs}
+                         restartKey={deadlineMs} radius={radius}/>;
+}
+
 /** Three-beat reveal of a stack change: the stack as it was, the delta that's
  * about to land, then the two merging into one counted total. Counts up
  * on a gain, down on a loss, since the same sequence reads honestly either
@@ -156,9 +195,23 @@ function ChipCountUp({from, to}: { from: number; to: number }) {
  * away mid-hand and looks back a few seconds later still finds their
  * win/loss on screen, not a banner that already auto-dismissed under them.
  * It closes once the next hand actually starts. */
-export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeState | null; holdOpen: boolean }) {
+export function HandOutcomeBanner({outcome, holdOpen, nextHandDeadlineMs, nextHandDurationMs}: {
+  outcome: HandOutcomeState | null;
+  holdOpen: boolean;
+  // Countdown to the next hand starting. Rendered as a ring on the dismiss
+  // button (full card) or around the badge (collapsed), instead of its old
+  // home floating over the felt's center (.street-progress): a winner's
+  // payout chips float up from their seat toward that same center point,
+  // and the two collided there on desktop. This corner is always clear.
+  nextHandDeadlineMs?: number;
+  nextHandDurationMs?: number;
+}) {
   const [shown, setShown] = useState(outcome);
-  
+  // Collapsed to the corner badge until the player dismisses the full card,
+  // or reopens it. Reset per hand (not per broadcast) so a dismissal never
+  // carries over and silently hides the next hand's result.
+  const [dismissed, setDismissed] = useState(false);
+
   useEffect(() => {
     if (outcome) {
       // Retain the last outcome while its exit animation finishes.
@@ -166,7 +219,12 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
       setShown(previous => previous?.key === outcome.key ? previous : outcome);
     }
   }, [outcome]);
-  
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDismissed(false);
+  }, [outcome?.key]);
+
   const leaving = !!shown && !holdOpen;
   
   useEffect(() => {
@@ -176,7 +234,20 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
     return () => clearTimeout(clear);
   }, [leaving]);
   
-  if (!shown) return null;
+  if (!shown) {
+    // No personalized outcome to show yet (e.g. a reload landing mid
+    // `complete` stage before the client can locally diff the payout that
+    // produces one) but the next hand is still armed: keep the countdown
+    // visible in the same corner the badge would use, rather than dropping
+    // it entirely.
+    if (nextHandDeadlineMs == null) return null;
+    return <div className="hand-outcome">
+      <span className="hand-outcome-ring-standalone" aria-hidden="true">
+        <HandOutcomeRing key={nextHandDeadlineMs} className="hand-outcome-ring" radius={7}
+                         deadlineMs={nextHandDeadlineMs} durationMs={nextHandDurationMs ?? 0}/>
+      </span>
+    </div>;
+  }
   const ownCategory = categoryFor(shown.viewerCards || shown.winningCards, shown.handCategory);
   const winnerCategory = categoryFor(shown.winningCards, shown.opponentCategory);
   const ownCombination = combinationCards(shown.viewerCards || shown.winningCards, shown.handCategory);
@@ -217,15 +288,30 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
         : shown.kind === 'fold'
           ? shown.couldHaveWon ? 'Você desistiu, mas sua mão venceria a mão revelada.' : 'Você desistiu desta mão.'
           : `Resultado misto: você ganhou ao menos um pote e perdeu outro${amountDetails ? `. ${amountDetails}` : ''}.`;
-  
+  const BadgeIcon = BADGE_ICON[shown.kind];
+
   return <>
     <span className="sr-only" role="status" aria-live="polite">{announcement}</span>
-    <div className="hand-outcome" aria-hidden="true">
+    <div className="hand-outcome">
+      {dismissed ? (
+        <button type="button" className={`hand-outcome-badge ${shown.kind}${leaving ? ' leaving' : ''}`}
+                onClick={() => setDismissed(false)} aria-label={BADGE_LABEL[shown.kind]}>
+          {nextHandDeadlineMs != null && <HandOutcomeRing key={nextHandDeadlineMs} className="hand-outcome-ring"
+            radius={23} deadlineMs={nextHandDeadlineMs} durationMs={nextHandDurationMs ?? 0}/>}
+          <BadgeIcon aria-hidden="true"/>
+        </button>
+      ) : (
       <div key={shown.key} className={`hand-outcome-card ${shown.kind}${leaving ? ' leaving' : ''}`}>
+        <button type="button" className="hand-outcome-dismiss" onClick={() => setDismissed(true)}
+                aria-label="Minimizar resultado">
+          {nextHandDeadlineMs != null && <HandOutcomeRing key={nextHandDeadlineMs} className="hand-outcome-ring"
+            radius={14} deadlineMs={nextHandDeadlineMs} durationMs={nextHandDurationMs ?? 0}/>}
+          <X aria-hidden="true"/>
+        </button>
         {shown.kind === 'win' && <>
-            <span className="hand-outcome-confetti">{CONFETTI_PIECES.map(i => <span key={i}/>)}</span>
+            <span className="hand-outcome-confetti" aria-hidden="true">{CONFETTI_PIECES.map(i => <span key={i}/>)}</span>
             <div className="hand-outcome-heading">
-                <PartyPopper/>
+                <PartyPopper aria-hidden="true"/>
                 <span><b>Você venceu!</b><small>{categoryLabel(ownCategory) || 'Pote conquistado'}</small></span>
             </div>
             <OutcomeCards cards={wonByKicker ? ownWithKickers.cards : ownCombination}
@@ -271,7 +357,7 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
         
         {shown.kind === 'tie' && <>
             <div className="hand-outcome-heading">
-                <Equal/>
+                <Equal aria-hidden="true"/>
                 <span><b>Pote dividido</b><small>{categoryLabel(ownCategory) || 'Combinação empatada'}</small></span>
             </div>
           {shown.tiedWith?.length ? <div className="hand-outcome-comparison">
@@ -300,7 +386,7 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
         
         {shown.kind === 'mixed' && <>
             <div className="hand-outcome-heading">
-                <Equal/>
+                <Equal aria-hidden="true"/>
                 <span><b>Resultado misto</b><small>Você ganhou um pote e perdeu outro</small></span>
             </div>
             <div className="hand-outcome-comparison">
@@ -358,6 +444,7 @@ export function HandOutcomeBanner({outcome, holdOpen}: { outcome: HandOutcomeSta
             <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
         </>}
       </div>
+      )}
     </div>
   </>;
 }

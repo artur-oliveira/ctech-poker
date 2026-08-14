@@ -57,6 +57,11 @@ Profile **editing** is `components/lobby/ProfileMenu.tsx` + `ProfileShowcaseDial
 Landing CTAs → `startOAuthFlow`; `/callback` exchanges the code and stores the token; `TermsGate`
 gates on `GET /v1.0/players/me` + `poker_terms_accepted`.
 
+`lib/api/client.ts`'s request interceptor also gates: on first load, if there's no token yet, it
+awaits `getOrRefreshSession()` once before letting *any* API call through, so page-load requests
+never race the silent refresh (previously visible as unauthenticated calls in the network log).
+Resolves once per "no token" streak — resets when the token drops back to `null` (logout).
+
 ## Not built (do not assume present)
 
 Lobby stake/mode filters · multi-table grid · tournaments · spectator mode · physical chip travel

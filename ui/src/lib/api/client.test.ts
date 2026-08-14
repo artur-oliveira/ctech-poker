@@ -84,15 +84,22 @@ describe('API client session and interceptors', () => {
     expect(playerListener).toHaveBeenCalledOnce();
   });
   
-  test('adds the current bearer token only when one exists', () => {
+  test('gates an anonymous request behind one session check, then adds the bearer token once resolved', async () => {
     const applyRequest = mocks.requestHandlers[0];
+    mocks.refresh.mockResolvedValueOnce(null);
     const anonymous = {headers: {}};
-    expect(applyRequest(anonymous)).toBe(anonymous);
+    await expect(applyRequest(anonymous)).resolves.toBe(anonymous);
     expect(anonymous.headers).toEqual({});
-    
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+
+    // Confirmed guest: a second anonymous request must not re-check.
+    const stillAnonymous = {headers: {}};
+    await expect(applyRequest(stillAnonymous)).resolves.toBe(stillAnonymous);
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+
     setAccessToken('access');
     const authenticated = {headers: {} as Record<string, string>};
-    expect(applyRequest(authenticated)).toBe(authenticated);
+    await expect(applyRequest(authenticated)).resolves.toBe(authenticated);
     expect(authenticated.headers.Authorization).toBe('Bearer access');
   });
   

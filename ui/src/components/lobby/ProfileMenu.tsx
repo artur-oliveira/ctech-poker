@@ -163,7 +163,6 @@ export function ProfileMenu() {
               <small>Modo de jogo</small></span>
             <Switch aria-labelledby="wallet-mode-label"
                     checked={walletMode === 'real'}
-                    disabled={true}
                     onCheckedChange={checked => save.mutate({wallet_mode: checked ? 'real' : 'sandbox'})}/>
           </div>
           <div className="profile-deck-setting">

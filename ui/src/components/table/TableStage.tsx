@@ -18,16 +18,28 @@ import {DEFAULT_TURN_TIMEOUT_MS} from '@/lib/gameTiming';
 // the two stages is too different to patch across breakpoints.
 const VERTICAL_STAGE_QUERY = '(orientation: portrait) and (max-width: 1023px)';
 const STREET_STAGES = ['pre_flop', 'flop', 'turn', 'river'] as const;
+// Exported so the page's sr-only heading can name the current stage without
+// keeping a second copy of this copy in sync with the felt's own label.
+export const STAGE_LABELS: Record<string, string> = {
+  waiting_for_players: 'Aguardando jogadores', pre_flop: 'Pré-flop', flop: 'Flop', turn: 'Turn', river: 'River',
+  showdown: 'Showdown', complete: 'Mão encerrada'
+};
 
 function StreetProgress({stage}: { stage: string }) {
-  if (stage === 'waiting_for_players') return null;
+  const label = STAGE_LABELS[stage] || stage.replaceAll('_', ' ');
+  if (stage === 'waiting_for_players') return <div className="street-progress" aria-hidden="true">
+    <span className="street-progress-label">{label}</span>
+  </div>;
   const current = STREET_STAGES.indexOf(stage as typeof STREET_STAGES[number]);
   const resolved = stage === 'showdown' || stage === 'complete';
   return <div className="street-progress" aria-hidden="true">
-    {STREET_STAGES.map((street, index) => <span key={street}
-      className={resolved || index < current ? 'is-complete' : index === current ? 'is-current' : ''}>
-      <i/>{street === 'pre_flop' ? 'Pré' : street[0].toUpperCase() + street.slice(1)}
-    </span>)}
+    <span className="street-progress-label">{label}</span>
+    <div className="street-progress-pips">
+      {STREET_STAGES.map((street, index) => <span key={street}
+        className={resolved || index < current ? 'is-complete' : index === current ? 'is-current' : ''}>
+        <i/>{street === 'pre_flop' ? 'Pré' : street[0].toUpperCase() + street.slice(1)}
+      </span>)}
+    </div>
   </div>;
 }
 
@@ -63,6 +75,11 @@ type Props = {
   nowMs: number;
   outcome: HandOutcomeState | null;
   holdOutcomeOpen: boolean;
+  // Undefined/0 hides the ring; the page only supplies a deadline once one
+  // is armed and no connection notice is already claiming the player's
+  // attention (see the gating comment at the call site).
+  nextHandDeadlineMs?: number;
+  nextHandDurationMs?: number;
   // The viewer's stack right before the currently-showing resolution, so
   // their own seat can count a chip loss down the same way the win pill
   // already counts a payout up. Only meaningful (non-undefined) while that
@@ -88,6 +105,8 @@ export function TableStage({
                              nowMs,
                              outcome,
                              holdOutcomeOpen,
+                             nextHandDeadlineMs,
+                             nextHandDurationMs,
                              viewerStackBefore,
                              canRevealCards,
                              revealPending,
@@ -140,17 +159,18 @@ export function TableStage({
     {board}
     <StreetProgress stage={snapshot.stage}/>
   </>;
-  
+
   if (!vertical) return (
     <div className="game-table" data-stage={snapshot.stage}>
       <div className="game-rail"/>
       <div className="game-felt">{feltContent}</div>
       {seats.map(seatNode)}
-      <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}/>
+      <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}
+                         nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
       <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer}/>
     </div>
   );
-  
+
   // rotateSeats guarantees the viewer (when seated) is first; that seat leaves
   // the ring entirely and becomes the hero HUD at the stage's bottom edge.
   const viewerFirst = seats[0]?.player_id === viewer;
@@ -161,7 +181,8 @@ export function TableStage({
         <div className="game-rail"/>
         <div className="game-felt">{feltContent}</div>
         {opponents.map((seat, i) => seatNode(seat, i + 1))}
-        <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}/>
+        <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}
+                           nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
         <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer}/>
       </div>
       {viewerFirst && seatNode(seats[0], 0)}

@@ -164,7 +164,38 @@ describe('table presentation', () => {
     expect(container.querySelector('.table-callout')).not.toHaveTextContent('Etapa: flop');
     expect(container.querySelector('.street-progress .is-current')).toHaveTextContent('Pré');
   });
-  
+
+  test('the felt names the current stage and, once armed, the next-hand countdown', () => {
+    const waiting = render(<TableStage snapshot={snapshotForScenario('waiting')} viewer={MOCK_PLAYER_ID}
+                                       pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}/>);
+    expect(waiting.container.querySelector('.street-progress-label')).toHaveTextContent('Aguardando jogadores');
+    expect(waiting.container.querySelector('.hand-outcome-ring-standalone')).not.toBeInTheDocument();
+    waiting.unmount();
+
+    // No personalized outcome yet (outcome={null}), so the countdown ring
+    // falls back to the standalone corner dot instead of the felt center
+    // (see HandOutcomeBanner: that center spot is where a winner's payout
+    // chips float up from their seat, which is what pushed this ring out
+    // of .street-progress in the first place).
+    const snapshot = snapshotForScenario('complete');
+    const armed = render(<TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID}
+                                     pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}
+                                     nextHandDeadlineMs={Date.now() + 5_000} nextHandDurationMs={5_000}/>);
+    expect(armed.container.querySelector('.street-progress-label')).toHaveTextContent('Mão encerrada');
+    expect(armed.container.querySelector('.hand-outcome-ring-standalone')).toBeInTheDocument();
+  });
+
+  test('the next-hand countdown rides on the outcome badge once a personalized result exists', () => {
+    const outcome: HandOutcomeState = {key: 1, kind: 'win', handCategory: 'pair'};
+    const {container, getByRole} = render(<HandOutcomeBanner outcome={outcome} holdOpen
+      nextHandDeadlineMs={Date.now() + 5_000} nextHandDurationMs={5_000}/>);
+    // Full card: ring lives on the dismiss button.
+    expect(container.querySelector('.hand-outcome-dismiss .hand-outcome-ring')).toBeInTheDocument();
+    fireEvent.click(getByRole('button', {name: 'Minimizar resultado'}));
+    // Collapsed: ring moves with it onto the badge.
+    expect(container.querySelector('.hand-outcome-badge .hand-outcome-ring')).toBeInTheDocument();
+  });
+
   test('renders a speech bubble on the seat with the latest chat message', () => {
     const snapshot = snapshotForScenario('pre_flop');
     const speaker = snapshot.seats.find(seat => seat.player_id !== MOCK_PLAYER_ID);
@@ -414,5 +445,31 @@ describe('hand outcome', () => {
       winningCards: ['AH', 'AD', 'KC', 'QS', '2D'],
     });
     expect(screen.getByText('A próxima mão já está a caminho.')).toBeInTheDocument();
+  });
+
+  test('dismissing the card collapses it to a reopenable badge', async () => {
+    const user = userEvent.setup();
+    renderOutcome({key: 18, kind: 'win', handCategory: 'pair', winningCards: ['AH', 'AD', 'KC', 'QS', '2D']});
+
+    await user.click(screen.getByRole('button', {name: 'Minimizar resultado'}));
+    expect(document.querySelector('.hand-outcome-card')).not.toBeInTheDocument();
+    const badge = screen.getByRole('button', {name: 'Ver resultado: você venceu'});
+    expect(badge).toBeInTheDocument();
+
+    await user.click(badge);
+    expect(document.querySelector('.hand-outcome-card')).toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: /Ver resultado/})).not.toBeInTheDocument();
+  });
+
+  test('a dismissal does not carry over to the next hand\'s outcome', async () => {
+    const user = userEvent.setup();
+    const {rerender} = render(<HandOutcomeBanner
+      outcome={{key: 19, kind: 'lose', winnerName: 'Bia'}} holdOpen/>);
+    await user.click(screen.getByRole('button', {name: 'Minimizar resultado'}));
+    expect(document.querySelector('.hand-outcome-card')).not.toBeInTheDocument();
+
+    rerender(<HandOutcomeBanner outcome={{key: 20, kind: 'win', handCategory: 'pair'}} holdOpen/>);
+    expect(document.querySelector('.hand-outcome-card')).toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: /Ver resultado/})).not.toBeInTheDocument();
   });
 });

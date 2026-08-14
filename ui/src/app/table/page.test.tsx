@@ -56,6 +56,10 @@ vi.mock('@/components/table/TableStage', () => ({
       {player_id: 'opponent', name: 'Bia'}
     )}>table-stage</button>;
   },
+  STAGE_LABELS: {
+    waiting_for_players: 'Aguardando jogadores', pre_flop: 'Pré-flop', flop: 'Flop', turn: 'Turn', river: 'River',
+    showdown: 'Showdown', complete: 'Mão encerrada'
+  },
 }));
 vi.mock('@/components/table/ActionBar', () => ({
   ActionBar: (props: Record<string, unknown>) => {

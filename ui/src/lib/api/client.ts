@@ -42,8 +42,15 @@ export interface Page<T> {
 let token: string | null = null;
 const listeners = new Set<(v: string | null) => void>();
 
+// Whether we've already asked getOrRefreshSession() once for the current
+// "no token" streak. Reset to false whenever the token drops to null, so a
+// fresh logout gets one re-check but an already-confirmed guest doesn't have
+// every request re-triggering a silent refresh call.
+let hasCheckedSession = false;
+
 export function setAccessToken(v: string | null) {
   token = v;
+  if (v === null) hasCheckedSession = false;
   listeners.forEach(f => f(v));
 }
 
@@ -136,7 +143,15 @@ export const apiClient = axios.create({
     ? async config => (await import('@/dev/mockRuntime')).mockAdapter(config)
     : undefined
 });
-apiClient.interceptors.request.use(c => {
+apiClient.interceptors.request.use(async c => {
+  // On first load, other data requests can fire before the silent session
+  // refresh resolves (visible in the HAR as unauthenticated calls racing the
+  // token exchange). Gate once on the outcome of that check instead of
+  // letting every caller fire blind and eat a guaranteed 401 round trip.
+  if (!token && !hasCheckedSession && !USE_MOCK) {
+    await getOrRefreshSession().catch(() => undefined);
+    hasCheckedSession = true;
+  }
   if (token) c.headers.Authorization = `Bearer ${token}`;
   return c;
 });

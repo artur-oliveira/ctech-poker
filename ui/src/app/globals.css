@@ -2934,8 +2934,21 @@ h1 em {
     transition: color 180ms var(--ease-out-quart)
 }
 
-.connection-state:not(.connected) svg {
+/* connecting/reconnecting keep the existing gold: both mean "still trying",
+   same signal the header already trained players on. disconnected/error are
+   the two states that mean "actually broken" and need their own tones, not
+   a shared gold with the merely-transient ones. */
+.connection-state.connecting svg,
+.connection-state.reconnecting svg {
     color: var(--gold)
+}
+
+.connection-state.disconnected svg {
+    color: var(--muted)
+}
+
+.connection-state.error svg {
+    color: var(--danger)
 }
 
 .mock-controls {
@@ -3197,32 +3210,50 @@ h1 em {
     }
 }
 
-/* A quiet street rail gives the hand a sense of momentum without duplicating
-   the large chrome label. It lives on the felt, so orientation stays inside
-   the decision surface on both desktop and portrait layouts. */
+/* The felt is the one place that always knows the current stage, so it
+   carries the label directly (this used to be duplicated in the header
+   chrome, which then had to truncate/hide it at narrow widths purely to
+   make room for the header's action icons). The step rail sits underneath
+   it as a decoration, orientation stays inside the decision surface on
+   both desktop and portrait layouts. */
 .street-progress {
     position: absolute;
     left: 50%;
     bottom: 9%;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 14px;
+    gap: 6px;
     transform: translateX(-50%);
-    color: var(--felt-text-muted);
     font: 700 8px var(--font-mono);
     letter-spacing: .05em;
     text-transform: uppercase;
     white-space: nowrap
 }
 
-.street-progress span {
+.street-progress-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    color: var(--felt-text-muted)
+}
+
+.street-progress-pips {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    color: var(--felt-text-muted)
+}
+
+.street-progress-pips span {
     position: relative;
     display: flex;
     align-items: center;
     gap: 5px
 }
 
-.street-progress span:not(:last-child)::after {
+.street-progress-pips span:not(:last-child)::after {
     position: absolute;
     left: calc(100% + 4px);
     width: 6px;
@@ -3231,7 +3262,7 @@ h1 em {
     content: ""
 }
 
-.street-progress i {
+.street-progress-pips i {
     width: 5px;
     height: 5px;
     border-radius: 50%;
@@ -3575,7 +3606,11 @@ h1 em {
     pointer-events: none
 }
 
-.next-hand-ring {
+/* Fills whatever box it's given (the dismiss button, the badge, or the
+   standalone corner dot — see the hand-outcome-* rules near .hand-outcome
+   below), the same way .next-hand-ring used to fill .street-next-hand
+   before the countdown moved off the felt center. */
+.hand-outcome-ring {
     inset: 0;
     width: 100%;
     height: 100%
@@ -4137,6 +4172,20 @@ h1 em {
     pointer-events: none
 }
 
+/* .hand-outcome deliberately beats the asides' resting --z-chrome so a fresh
+   win/loss reads as the loudest thing on the table. But once a player
+   actually opens chat/reactions/winners, that panel needs to win the fight
+   instead, or it renders invisible underneath the card/badge. --z-notice
+   (not --z-table + 1) because .rabbit-hunt sits at z-index 24, above the old
+   value of 22: an open panel that overlaps rabbit-hunt's centered pill (both
+   live on the felt in the portrait hero layout) used to lose that fight, so
+   the pill visibly punched through the panel's own text underneath it. */
+.game-chat.open,
+.table-reactions.open,
+.last-winners.open {
+    z-index: var(--z-notice)
+}
+
 .hand-outcome-card {
     position: relative;
     display: grid;
@@ -4387,6 +4436,125 @@ h1 em {
     transition: opacity 260ms var(--ease-out-quart), transform 260ms var(--ease-out-quart)
 }
 
+.hand-outcome-dismiss {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: inherit;
+    opacity: .7;
+    pointer-events: auto;
+    transition: opacity 150ms var(--ease-out-quart), background 150ms var(--ease-out-quart)
+}
+
+.hand-outcome-dismiss:hover,
+.hand-outcome-dismiss:focus-visible {
+    opacity: 1;
+    background: var(--black-08)
+}
+
+/* :not() excludes the countdown ring: it's an svg too, but it needs to fill
+   the button (see .hand-outcome-ring), not shrink to icon size. */
+.hand-outcome-dismiss svg:not(.hand-outcome-ring) {
+    width: 16px;
+    height: 16px
+}
+
+/* Collapsed state: top-right corner by default, regardless of where
+   .hand-outcome's own place-items anchors the full card at wider
+   breakpoints, so a dismissed result never drifts toward the bottom-right
+   aside cluster. Portrait/stage-v overrides this (see that media query) to
+   dodge the mobile aside rail, which lives top-right there instead. */
+.hand-outcome-badge {
+    position: relative;
+    align-self: start;
+    justify-self: end;
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: var(--surface-control);
+    color: var(--paper);
+    box-shadow: 0 4px 14px var(--black-08), 0 0 0 2px color-mix(in srgb, var(--paper) 25%, transparent);
+    pointer-events: auto;
+    animation: hand-outcome-badge-in 260ms var(--ease-out-quint) both
+}
+
+.hand-outcome-badge:hover,
+.hand-outcome-badge:focus-visible {
+    box-shadow: 0 4px 14px var(--black-08), 0 0 0 3px color-mix(in srgb, var(--paper) 40%, transparent)
+}
+
+.hand-outcome-badge svg:not(.hand-outcome-ring) {
+    width: 20px;
+    height: 20px
+}
+
+.hand-outcome-badge.win {
+    color: var(--gold-deep);
+    box-shadow: 0 4px 14px var(--black-08), 0 0 0 2px var(--gold-deep), 0 0 16px var(--brand-27)
+}
+
+.hand-outcome-badge.win:hover,
+.hand-outcome-badge.win:focus-visible {
+    box-shadow: 0 4px 14px var(--black-08), 0 0 0 3px var(--gold-deep), 0 0 20px var(--brand-27)
+}
+
+/* The win card's own background (--toast-bg) is pale gold, the same family
+   as the ring's default --gold stroke: on that card only, swap to the dark
+   ink already paired with gold surfaces elsewhere (.seat-bet b) so the
+   countdown stays legible instead of vanishing into its own background. The
+   badge doesn't need this override: its surface is always the dark
+   --surface-control regardless of outcome kind. */
+.hand-outcome-card.win .hand-outcome-ring {
+    stroke: var(--gold-ink)
+}
+
+/* Standalone corner dot for the rare case where the countdown is armed but
+   there's no personalized card/badge to host it yet (see the early return
+   in HandOutcomeBanner). Same 14px footprint .street-next-hand used to have,
+   just relocated to this corner instead of the felt center. */
+.hand-outcome-ring-standalone {
+    position: relative;
+    align-self: start;
+    justify-self: end;
+    display: inline-block;
+    width: 14px;
+    height: 14px
+}
+
+.hand-outcome-badge.leaving {
+    animation: none;
+    opacity: 0;
+    transform: scale(.85);
+    transition: opacity 220ms var(--ease-out-quart), transform 220ms var(--ease-out-quart)
+}
+
+@keyframes hand-outcome-badge-in {
+    from {
+        opacity: 0;
+        transform: scale(.6)
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hand-outcome-badge {
+        animation: none
+    }
+
+    .hand-outcome-badge.leaving {
+        transition: opacity 1ms
+    }
+}
+
 .hand-outcome-confetti {
     position: absolute;
     inset: 0;
@@ -4571,15 +4739,19 @@ h1 em {
 @media (orientation: portrait) and (max-height: 760px),
        (orientation: landscape) and (max-height: 620px) {
     .street-progress {
+        gap: 4px
+    }
+
+    .street-progress-pips {
         gap: 12px
     }
 
-    .street-progress span {
+    .street-progress-pips span {
         gap: 0;
         font-size: 0
     }
 
-    .street-progress span:not(:last-child)::after {
+    .street-progress-pips span:not(:last-child)::after {
         left: calc(100% + 3px);
         width: 7px
     }
@@ -6629,19 +6801,20 @@ h1 em {
     font-size: var(--font-size-tiny)
 }
 
-/* Portrait tables have clear space in the upper-left capsule curve. Keeping
-   winners there makes the hand log available on phones without adding an
-   eighth control to the already dense table header. The panel opens down,
-   opposite chat/reactions on the right, and stays inside the safe area. */
+/* Portrait tables used to split this into a left rail (winners) and a right
+   rail (chat/reactions) — reads as three unrelated floating buttons rather
+   than one mobile affordance, and it's the layout a live check flagged.
+   Joining winners into the same right rail as chat/reactions (see that rail
+   below) makes all three read as one group in one corner. Third slot: below
+   reactions' toggle in the same 53px-per-row rhythm (60 + 53 + 53). */
 @media (orientation: portrait) and (max-width: 1023px) {
     .last-winners {
-        /* +90px, not +60px: seat-3's avatar sits in this same upper-left
-           curve on the vertical stage (see TableStage's stage-v ring), and
-           60px brushed it */
-        top: calc(env(safe-area-inset-top) + 90px);
+        top: calc(env(safe-area-inset-top) + 166px);
         bottom: auto;
-        left: max(12px, env(safe-area-inset-left));
-        flex-direction: column
+        right: max(12px, env(safe-area-inset-right));
+        left: auto;
+        flex-direction: column;
+        align-items: flex-end
     }
 
     .last-winners-panel {
@@ -9760,8 +9933,13 @@ h1 em {
 
 /* On the vertical stage the action zone (bar + hero HUD) changes height as
    the raise UI expands, so bottom-anchored table tools keep landing on it.
-   Use the capsule's empty corner gutters: winners/reactions form a short
-   left rail and chat owns the right. Controlled state ensures one opens. */
+   chat/reactions/winners now form ONE right-side rail (53px-per-row: toggle
+   height 45px + 8px gap) instead of splitting across two corners — that
+   split read as three unrelated floating buttons rather than a coordinated
+   mobile affordance. Controlled state (activeTablePanel in page.tsx) still
+   ensures only one panel opens at a time; the :has() rules below additionally
+   fade out the other two TOGGLES while one is open, since an open panel in
+   this rail drops down over whatever toggle sits below it in the stack. */
 @media (orientation: portrait) and (max-width: 1023px) {
     .game-chat.game-chat {
         right: 12px;
@@ -9769,22 +9947,22 @@ h1 em {
         bottom: auto
     }
 
-    /* Stacks below the last-winners toggle in the same left rail (its own
-       top offset + 45px button + 8px gap = 143px) instead of landing on top
-       of it: both toggles used the same ~113-135px band before this, a
-       consistent overlap on every portrait phone. */
     .table-reactions {
-        right: auto;
-        left: max(8px, env(safe-area-inset-left));
-        top: calc(env(safe-area-inset-top) + 143px);
+        right: max(12px, env(safe-area-inset-right));
+        left: auto;
+        top: calc(env(safe-area-inset-top) + 113px);
         bottom: auto;
         flex-direction: column;
-        align-items: flex-start
+        align-items: flex-end
     }
 
-    .reaction-target-hint {
-        right: auto;
-        left: 53px
+    /* The toggle moved up into the rail above, but the panel's own
+       max-height (calc(100dvh - 140px)) didn't move with it: on a tall
+       phone that lets the panel's bottom edge reach past the felt into the
+       rabbit-hunt pill / hero stack readout near the action bar. Capping to
+       half the viewport keeps it inside the rail's own real estate. */
+    .reaction-panel {
+        max-height: min(360px, 50dvh)
     }
 
     .game-chat .chat-body {
@@ -9795,10 +9973,38 @@ h1 em {
         clear: right
     }
 
-    /* Achievement toast ducks below the chat toggle that owns this corner. */
+    /* Same rail, same collision as chat->reactions on desktop (line ~5197):
+       whichever of the three is open drops a panel over the other two
+       toggles stacked below it, so hide those toggles while it's open. */
+    .game:has(.game-chat.open) .table-reactions,
+    .game:has(.game-chat.open) .last-winners,
+    .game:has(.table-reactions.open) .game-chat,
+    .game:has(.table-reactions.open) .last-winners,
+    .game:has(.last-winners.open) .game-chat,
+    .game:has(.last-winners.open) .table-reactions {
+        opacity: 0;
+        pointer-events: none
+    }
+
+    /* Achievement toast ducks below the full three-row rail. */
     .achievement-toast {
-        top: calc(env(safe-area-inset-top) + 114px);
+        top: calc(env(safe-area-inset-top) + 220px);
         right: 12px
+    }
+
+    /* .hand-outcome-badge's own rule (line ~4477) deliberately anchors it
+       top-right on every layout to dodge the bottom-right aside cluster —
+       but that cluster now lives top-right in this breakpoint (the rail
+       above), so the two collided. The felt's top-left corner is clear
+       here (winners moved off it into the rail), so dodge there instead. */
+    .hand-outcome-badge {
+        justify-self: start
+    }
+
+    /* Same dodge as the badge above: this corner is the mobile aside rail
+       here, not the felt's clear top-right. */
+    .hand-outcome-ring-standalone {
+        justify-self: start
     }
 }
 
@@ -10026,13 +10232,13 @@ h1 em {
         padding-left: max(12px, env(safe-area-inset-left))
     }
 
-    /* Lobby link + stage label can already eat most of a phone-width row;
+    /* The header-right icon row can already eat most of a phone-width row;
        without this the trailing icons (Convidar/Sentar fora/Sair da mesa)
        get pushed past the edge and .game's overflow-x:clip hides them
        entirely instead of just reflowing. */
     /* One header row on phones: the Lobby link collapses to its chevron
-       (label stays for assistive tech) so the stage label and every table
-       tool fit beside it without wrapping. */
+       (label stays for assistive tech) so every table tool fits beside it
+       without wrapping. */
     .header-lobby-label {
         position: absolute;
         width: 1px;
@@ -10045,13 +10251,6 @@ h1 em {
         flex-wrap: wrap;
         justify-content: flex-end;
         gap: 6px
-    }
-
-    .game-chrome > header > span {
-        max-width: 32vw;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap
     }
 
     /* icon-only status indicator: the "Ao vivo"/"Reconectando" label has no
@@ -10154,23 +10353,14 @@ h1 em {
     }
 }
 
-/* At the 320px content boundary, the stage word is the one header item that
-   can safely yield: the page heading and live announcements still carry it.
-   Keeping every actual control on one row prevents the grid track from
-   expanding past the viewport and keeps the floating table tools below the
-   header instead of on top of a wrapped second row. */
+/* At the 320px content boundary, keeping every actual header control on one
+   row prevents the grid track from expanding past the viewport and keeps
+   the floating table tools below the header instead of on top of a wrapped
+   second row. */
 @media (max-width: 360px) {
     .game-chrome > header {
         padding-right: max(8px, env(safe-area-inset-right));
         padding-left: max(8px, env(safe-area-inset-left))
-    }
-
-    .game-chrome > header > span {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%)
     }
 
     .game-chrome > header .header-right {

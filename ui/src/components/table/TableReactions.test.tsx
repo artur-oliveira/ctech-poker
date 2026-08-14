@@ -60,13 +60,14 @@ describe('TableReactions', () => {
     expect(clicked.props.onOpenChangeAction).toHaveBeenCalledWith(false);
   });
   
-  test('sends quick reactions immediately and closes the panel before seat targeting', async () => {
+  test('sends quick reactions immediately and closes the panel, same as seat targeting', async () => {
     const {props} = renderReactions();
     fireEvent.click(screen.getByTitle('Aplausos'));
     expect(props.onQuickSendAction).toHaveBeenCalledWith('clap');
+    expect(props.onOpenChangeAction).toHaveBeenNthCalledWith(1, false);
     fireEvent.click(screen.getByTitle('Jogar tomate'));
     expect(props.onPendingReactionChangeAction).toHaveBeenCalledWith('tomato');
-    expect(props.onOpenChangeAction).toHaveBeenCalledWith(false);
+    expect(props.onOpenChangeAction).toHaveBeenNthCalledWith(2, false);
   });
   
   test('blocks sends while disconnected, during cooldown, and when no target exists', async () => {

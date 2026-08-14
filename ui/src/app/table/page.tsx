@@ -10,8 +10,7 @@ import {useTableRealtime} from '@/lib/hooks/useTableRealtime';
 import {getRoom, getSeated} from '@/lib/api/rooms';
 import {isNotFound} from '@/lib/api/client';
 import {BuyInPanel} from '@/components/table/BuyInPanel';
-import {TableStage} from '@/components/table/TableStage';
-import {PerimeterTimer} from '@/components/table/PerimeterTimer';
+import {STAGE_LABELS, TableStage} from '@/components/table/TableStage';
 import type {ActionAvailability} from '@/components/table/ActionBar';
 import {ActionBar} from '@/components/table/ActionBar';
 import {Chat} from '@/components/table/Chat';
@@ -75,10 +74,6 @@ const REMOVED_REASON_COPY: Record<string, string> = {
 // novamente" past that point would be a lie.
 const RECONNECT_GIVEN_UP_COPY = 'Conexão perdida. Toque para tentar novamente.';
 const REACTION_COOLDOWN_MS = 2000;
-const STAGE_LABELS: Record<string, string> = {
-  waiting_for_players: 'Aguardando jogadores', pre_flop: 'Pré-flop', flop: 'Flop', turn: 'Turn', river: 'River',
-  showdown: 'Showdown', complete: 'Mão encerrada'
-};
 
 function connectionCopyFor(status: keyof typeof CONNECTION_COPY, attempt: number) {
   if (status === 'disconnected' && attempt > MAX_RECONNECT_ATTEMPTS) return RECONNECT_GIVEN_UP_COPY;
@@ -464,7 +459,6 @@ function TableContent() {
         <header>
           <Link href="/lobby" aria-label="Voltar ao lobby"><ChevronLeft/> <span
             className="header-lobby-label">Lobby</span></Link>
-          <span aria-hidden="true">{STAGE_LABELS[s.stage] || s.stage.replaceAll('_', ' ')}</span>
           <div className="header-right">
             <span className={`connection-state ${rt.status}`}>
               <Wifi aria-hidden="true"/>
@@ -497,28 +491,19 @@ function TableContent() {
           {[rt.announcement, rt.status === 'connected' ? 'Conexão com a mesa restaurada.' : connectionMessage]
             .filter(Boolean).join(' ')}
         </div>
+        {/* On phones, this notice renders in-flow right below the header (see
+            .game-chrome / .reconnect-notice mobile rules) instead of floating
+            fixed over it, since a floating overlay can't reliably avoid the
+            header once it wraps to two lines, which used to hide and block
+            taps on Sentar fora/Sair da mesa for the whole time this notice
+            was up. The next-hand countdown that used to share this slot now
+            lives on the felt with the stage label (see StreetProgress in
+            TableStage.tsx), since it applies to every viewer whether or not
+            this particular connection notice is showing. */}
         {connectionMessage && <div className={`reconnect-notice ${rt.status}`}>
             <span aria-hidden="true"/>
             <p>{connectionMessage}{rt.reconnectAttempt > 1 ? ` Tentativa ${rt.reconnectAttempt}.` : ''}</p>
             <Button type="button" variant="ghost" onClick={rt.retryNow}><RotateCw/> Tentar agora</Button>
-        </div>}
-        {/* The header's stage label already reads "aguardando jogadores" / "mão
-            encerrada", so this box only earns its place when it has something
-            the header doesn't: the next-hand countdown or the show-cards
-            action. An empty-room wait with neither would otherwise float a
-            duplicate label over the header. On phones, this notice renders
-            in-flow right below the header (see .game-chrome / .reconnect-notice
-            mobile rules) instead of floating fixed over it, since a floating
-            overlay can't reliably avoid the header once it wraps to two
-            lines, which used to hide and block taps on Sentar fora/Sair da
-            mesa for the whole time this notice was up. */}
-        {!connectionMessage && Boolean(s.next_hand_unix_ms) && <div className="reconnect-notice">
-            <p>{s.stage === 'complete' ? 'Mão encerrada.' : 'Aguardando jogadores.'}</p>
-          {Boolean(s.next_hand_unix_ms) &&
-              <PerimeterTimer className="next-hand-ring"
-                              durationMs={nextHandDurationMs}
-                              restartKey={s.next_hand_unix_ms ?? 0}
-                              radius={12}/>}
         </div>}
       </div>
       {/* `payouts`, not `stage === 'complete'`: a showdown hand shows payouts
@@ -530,6 +515,8 @@ function TableContent() {
       <TableStage snapshot={s} viewer={viewer} pot={pot} bigBlind={bigBlind} nowMs={rt.snapshotAt}
                   turnTimeoutMs={(room?.turn_timeout_seconds || DEFAULT_TURN_TIMEOUT_SECONDS) * 1000}
                   outcome={handOutcome} holdOutcomeOpen={Boolean(s.payouts && Object.keys(s.payouts).length > 0)}
+                  nextHandDeadlineMs={!connectionMessage ? s.next_hand_unix_ms : undefined}
+                  nextHandDurationMs={nextHandDurationMs}
                   viewerStackBefore={(s.payouts && Object.keys(s.payouts).length > 0) ? viewerStackBefore : undefined}
                   canRevealCards={canRevealCards} revealPending={rt.showCardsPending}
                   onRevealCardAction={index => rt.showCards(index)}
