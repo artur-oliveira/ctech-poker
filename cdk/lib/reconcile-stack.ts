@@ -13,6 +13,7 @@ const RECONCILE_RATE_MINUTES = 5;
 
 interface ReconcileStackProps extends cdk.StackProps {
   environment: Environment;
+  authDomainName: string;
   pendingCashoutsTableArn: string;
   walletUrlParam: string;
   pokerClientIdParam: string;
@@ -26,8 +27,8 @@ interface ReconcileStackProps extends cdk.StackProps {
 export class ReconcileStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ReconcileStackProps) {
     super(scope, id, props);
-    const {environment, pendingCashoutsTableArn, walletUrlParam, pokerClientIdParam, pokerClientSecretParam} = props;
-    
+    const {environment, authDomainName, pendingCashoutsTableArn, walletUrlParam, pokerClientIdParam, pokerClientSecretParam} = props;
+
     const role = new iam.Role(this, 'ReconcileRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')],
@@ -44,7 +45,7 @@ export class ReconcileStack extends cdk.Stack {
         `arn:aws:ssm:${this.region}:${this.account}:parameter${pokerClientSecretParam}`,
       ],
     }));
-    
+
     const fn = new lambda.Function(this, 'ReconcileFunction', {
       functionName: reconcileJobName(environment),
       runtime: lambda.Runtime.PROVIDED_AL2023,
@@ -65,9 +66,10 @@ export class ReconcileStack extends cdk.Stack {
         WALLET_URL_PARAM: walletUrlParam,
         POKER_CLIENT_ID_PARAM: pokerClientIdParam,
         POKER_CLIENT_SECRET_PARAM: pokerClientSecretParam,
+        CTECH_ISSUER_URL: `https://${authDomainName}`
       },
     });
-    
+
     const schedulerRole = new iam.Role(this, 'SchedulerInvokeRole', {
       assumedBy: new iam.ServicePrincipal('scheduler.amazonaws.com'),
     });
@@ -80,7 +82,7 @@ export class ReconcileStack extends cdk.Stack {
       receiveMessageWaitTime: cdk.Duration.seconds(20),
     });
     dlq.grantSendMessages(schedulerRole);
-    
+
     new scheduler.CfnSchedule(this, 'ReconcileSchedule', {
       name: reconcileJobName(environment),
       flexibleTimeWindow: {mode: 'OFF'},

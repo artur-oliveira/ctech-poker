@@ -134,6 +134,7 @@ new ReconcileStack(app, id('Reconcile'), {
   env,
   environment: ENVIRONMENT,
   pendingCashoutsTableArn: dynamoStack.tables.get('poker_pending_cashouts')!.tableArn,
+  authDomainName: domainForEnv(ENVIRONMENT, ACCOUNTS_DOMAIN_PREFIX),
   walletUrlParam: pokerParameters.walletUrl,
   pokerClientIdParam: pokerParameters.clientId,
   pokerClientSecretParam: pokerParameters.clientSecret,
