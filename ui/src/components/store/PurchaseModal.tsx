@@ -1,5 +1,5 @@
 'use client';
-import {useEffect, useState} from 'react';
+import {type RefObject, useEffect, useState} from 'react';
 import {Check, LoaderCircle, RefreshCw} from 'lucide-react';
 import {useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
@@ -10,8 +10,13 @@ import {PixPaymentView} from './PixPaymentView';
 
 const POLL_MS = 5000;
 
-export function PurchaseModal({purchase, onCloseAction, onUpdateAction, onRegenerateAction}: {
+export function PurchaseModal({purchase, finalFocusRef, onCloseAction, onUpdateAction, onRegenerateAction}: {
   purchase: SandboxPurchase | null;
+  // The modal is opened programmatically (no DialogTrigger), so base-ui has no
+  // element of its own to hand focus back to on close. Passing the package
+  // button that opened it lets base-ui restore focus as part of its own close
+  // teardown, instead of the page racing that teardown with a rAF of its own.
+  finalFocusRef?: RefObject<HTMLButtonElement | null>;
   onCloseAction: () => void;
   onUpdateAction: (purchase: SandboxPurchase) => void;
   onRegenerateAction: (sku: string) => Promise<void>;
@@ -90,7 +95,7 @@ export function PurchaseModal({purchase, onCloseAction, onUpdateAction, onRegene
   return <Dialog open={open} onOpenChange={next => {
     if (!next) onCloseAction();
   }}>
-    <DialogContent>
+    <DialogContent finalFocus={finalFocusRef}>
       <DialogHeader>
         <DialogTitle>{purchase?.status === 'confirmed' ? 'Fichas adicionadas'
           : recoverableExpired ? 'Código Pix expirado'

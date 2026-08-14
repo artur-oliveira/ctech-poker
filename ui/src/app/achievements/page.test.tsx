@@ -107,6 +107,50 @@ describe('achievements page', () => {
     view.unmount();
   });
   
+
+  test('hides achievements that belong to the other wallet mode', () => {
+    mocks.catalog = queryState([...catalog,
+      {key: 'real_money_earned', metric: 'real', tiers},
+      {key: 'sandbox_chips_earned', metric: 'sandbox', tiers},
+    ]);
+    render(<Achievements/>);
+    const keys = screen.getAllByTestId('achievement').map(node => node.textContent);
+    expect(keys).toContain('sandbox_chips_earned');
+    expect(keys).not.toContain('real_money_earned');
+  });
+
+  test('reveals a secret achievement only once its first tier is reached', () => {
+    mocks.catalog = queryState([...catalog, {key: 'secret_one', metric: 'secret', tiers, secret: true}]);
+    const view = render(<Achievements/>);
+    expect(screen.getAllByTestId('achievement').map(node => node.textContent)).not.toContain('secret_one');
+
+    mocks.mine = queryState([{key: 'secret_one', count: 3}]);
+    view.rerender(<Achievements/>);
+    expect(screen.getAllByTestId('achievement').map(node => node.textContent)).toContain('secret_one');
+  });
+
+  test('points at the milestone the player is closest to finishing', () => {
+    render(<Achievements/>);
+    const milestone = document.querySelector('.achievement-next-star');
+    expect(milestone).toBeInTheDocument();
+    expect(milestone).toHaveTextContent(/Faltam \d+ para o nível \d/);
+  });
+
+  test('drops the milestone hint once every visible achievement is maxed out', () => {
+    mocks.catalog = queryState([{key: 'wins', metric: 'wins', tiers}]);
+    mocks.mine = queryState([{key: 'wins', count: 99}]);
+    render(<Achievements/>);
+    expect(document.querySelector('.achievement-next-star')).toBeNull();
+    expect(screen.getByRole('button', {name: 'Completas (1)'})).toBeInTheDocument();
+  });
+
+  test('reports a zero completion rate when the catalog has no stars to earn', () => {
+    mocks.catalog = queryState([]);
+    mocks.mine = queryState([]);
+    render(<Achievements/>);
+    expect(screen.getByRole('button', {name: 'Todas (0)'})).toBeInTheDocument();
+  });
+
   test('handles catalog loading and failure with retry', () => {
     mocks.catalog = queryState(undefined, {isLoading: true, refetch: mocks.catalogRefetch});
     const view = render(<Achievements/>);

@@ -1,4 +1,5 @@
 import {render, screen} from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import type {HandItem} from '@/lib/api/player';
 import HandHistoryPage from './page';
@@ -139,6 +140,61 @@ describe('hand detail page', () => {
     expect(mocks.query).toHaveBeenCalledWith(expect.objectContaining({queryKey: ['hand', 'sandbox', 'hand one']}));
   });
   
+
+  test('copies the table id and confirms it, then reports a clipboard failure', async () => {
+    const writeText = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('denied'));
+    Object.defineProperty(navigator, 'clipboard', {configurable: true, value: {writeText}});
+    render(<HandHistoryPage/>);
+
+    await userEvent.click(screen.getByRole('button', {name: 'Copiar ID da mesa'}));
+    expect(writeText).toHaveBeenCalledWith('table-123456');
+    expect(await screen.findByRole('button', {name: 'ID da mesa copiado'})).toBeInTheDocument();
+  });
+
+  test('marks a tie with a handshake for the viewer and the sharing opponent', () => {
+    queryState({
+      handData: {
+        ...hand, outcome: 'tied', net_change: 0,
+        opponents: [{player_id: 'p2', name: 'Bia', hole_cards: ['AS', 'AD'], won: true}],
+      },
+    });
+    const {container} = render(<HandHistoryPage/>);
+    expect(container.querySelectorAll('.tie-mark')).toHaveLength(2);
+    expect(screen.getByText('0 fichas')).toBeInTheDocument();
+    expect(container.querySelector('.hand-net')).toHaveClass('even');
+  });
+
+  test('marks a loss without a crown and names an unidentified opponent', () => {
+    queryState({
+      handData: {
+        ...hand, outcome: 'lost', net_change: -250, board: undefined, hole_cards: undefined,
+        opponents: [{player_id: 'p3', won: true}],
+      },
+    });
+    const {container} = render(<HandHistoryPage/>);
+    expect(screen.getByText('-250 fichas')).toBeInTheDocument();
+    expect(container.querySelector('.hand-net')).toHaveClass('loss');
+    expect(screen.getByText('Adversário')).toBeInTheDocument();
+    expect(container.querySelectorAll('.hand-category')).toHaveLength(0);
+  });
+
+  test('hides the replay launcher while the action history is still loading or frameless', () => {
+    queryState({historyLoading: true});
+    const view = render(<HandHistoryPage/>);
+    expect(screen.queryByRole('button', {name: /Assistir replay/})).not.toBeInTheDocument();
+    expect(screen.getByText(/Carregando histórico de ações/)).toBeInTheDocument();
+
+    queryState({historyData: {actions: [{seq: 1, player_id: 'viewer', action: 'call', amount: 10, timestamp: 100}]}});
+    view.rerender(<HandHistoryPage/>);
+    expect(screen.queryByRole('button', {name: /Assistir replay/})).not.toBeInTheDocument();
+  });
+
+  test('tolerates a hand with no action list at all', () => {
+    queryState({historyData: {}});
+    render(<HandHistoryPage/>);
+    expect(screen.getByTestId('timeline')).toBeEmptyDOMElement();
+  });
+
   test('shows independent history error and unavailable fairness proof', () => {
     queryState({
       handData: {...hand, server_seed: undefined, commit_hash: undefined},

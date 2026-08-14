@@ -23,14 +23,20 @@ exists, but the backend gate is off by default — never ship UI that assumes re
    server-provided "verified" boolean, and never let `PartialDeckProof` flip a position that is
    not in `revealed`.
 9. **Quality gate:** `npx vitest run`, `npx tsc --noEmit`, `npx eslint src --max-warnings 0` and
-   `npm run build` must all be clean. Coverage thresholds are enforced in `vitest.config.ts`.
+   `npm run build` must all be clean. Coverage thresholds (**90% lines/statements/functions/
+   branches**) are enforced in `vitest.config.ts`.
+10. **Every new feature ships with its tests**, covering the error, empty and disabled paths, not
+    only the happy one. Never lower a coverage threshold to land a change — write the test. See
+    `docs/testing.md`.
 
 ## Tests / verification
 
-`vitest` + `@testing-library/react`, jsdom; 59 test files; setup at `src/test/setup.ts`. Mock
+`vitest` + `@testing-library/react`, jsdom; 81 test files; setup at `src/test/setup.ts`. Mock
 snapshots come from `src/dev/mockRuntime.ts` (`snapshotForScenario`, `MOCK_PLAYER_ID`) — prefer
 those over hand-built fixtures. `npm run dev:mock` runs a full in-memory realtime engine for
-manual testing without the backend.
+manual testing without the backend. Coverage is gated at 90% on all four metrics; conventions
+for realtime hooks, page tests, fake timers and the shared `matchMedia` mock are in
+`docs/testing.md`.
 
 ## Where things live
 

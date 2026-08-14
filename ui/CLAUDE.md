@@ -27,7 +27,11 @@ off by default — do not build UI that assumes real money is on.
 - **Type safety:** `zod` for form/API shapes, `react-hook-form` for forms.
 - **Quality gate:** `npx vitest run`, `npx tsc --noEmit`, `npx eslint src --max-warnings 0` and
   `npm run build` must all pass with **zero errors and zero warnings**. Coverage thresholds are
-  enforced in `vitest.config.ts` (lines/functions/statements 80, branches 70).
+  enforced in `vitest.config.ts` (**lines/functions/statements/branches 90**).
+- **Every new feature must ship with the tests that cover it** — including the error, empty and
+  disabled branches, not just the happy path. Uncovered `??`/optional-field branches are exactly
+  where type-shaped bugs survive `tsc`. Never lower a coverage threshold to land a change; write
+  the missing test. Conventions and per-area recipes: `docs/testing.md`.
 
 ## Security invariants — do not regress
 

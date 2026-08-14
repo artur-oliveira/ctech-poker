@@ -62,10 +62,7 @@ export default function Store() {
     }
   }, [queryClient]);
 
-  const closePurchase = useCallback(() => {
-    setActivePurchase(null);
-    window.requestAnimationFrame(() => purchaseTriggerRef.current?.focus());
-  }, []);
+  const closePurchase = useCallback(() => setActivePurchase(null), []);
 
   const regeneratePurchase = useCallback(async (sku: string) => {
     const purchase = await createPurchase(sku);
@@ -214,6 +211,7 @@ export default function Store() {
       </AppPageBody>
     </AppPage>
     <PurchaseModal key={activePurchase?.purchase_id ?? 'closed_purchase'} purchase={activePurchase}
+                   finalFocusRef={purchaseTriggerRef}
                    onCloseAction={closePurchase} onUpdateAction={setActivePurchase}
                    onRegenerateAction={regeneratePurchase}/>
     <RefundConfirmationDialog key={refundPurchaseTarget?.purchase_id ?? 'closed_refund'} purchase={refundPurchaseTarget}

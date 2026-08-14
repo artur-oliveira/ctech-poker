@@ -26,11 +26,14 @@ export default defineConfig({
         'src/app/share/layout.tsx',
         'src/lib/providers/QueryProvider.tsx',
       ],
+      // 90 across the board: every new feature ships with the tests that keep
+      // it there (see ui/docs/testing.md). Raising these is fine; lowering one
+      // to land a change is not — write the missing test instead.
       thresholds: {
-        lines: 80,
-        functions: 80,
-        statements: 80,
-        branches: 70,
+        lines: 90,
+        functions: 90,
+        statements: 90,
+        branches: 90,
       },
     },
   },

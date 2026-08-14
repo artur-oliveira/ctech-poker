@@ -1,4 +1,4 @@
-import {act, render, screen, waitFor} from '@testing-library/react';
+import {act, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import type {TableSnapshot} from '@/lib/api/table';
@@ -15,7 +15,10 @@ const mocks = vi.hoisted(() => ({
   actionProps: null as Record<string, unknown> | null,
   stageProps: null as Record<string, unknown> | null,
   reactionProps: null as Record<string, unknown> | null,
+  purchaseProps: null as Record<string, unknown> | null,
+  noteProps: null as Record<string, unknown> | null,
   notification: vi.fn(),
+  updateMe: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -94,7 +97,10 @@ vi.mock('@/components/table/RebuyDialog', () => ({
     <button onClick={onRebuyAction}>rebuy</button>,
 }));
 vi.mock('@/components/table/PlayerNoteDialog', () => ({
-  PlayerNoteDialog: ({open}: { open: boolean }) => open ? <span>note-dialog</span> : null,
+  PlayerNoteDialog: (props: Record<string, unknown>) => {
+    mocks.noteProps = props;
+    return props.open ? <span>note-dialog</span> : null;
+  },
 }));
 vi.mock('@/components/table/PerimeterTimer', () => ({PerimeterTimer: () => <span>next-hand-timer</span>}));
 vi.mock('@/components/table/TablePreferencesDialog', () => ({TablePreferencesDialog: () => null}));
@@ -106,6 +112,18 @@ vi.mock('@/components/table/LastWinners', () => ({
 }));
 vi.mock('@/components/table/MockControls', () => ({MockControls: () => null}));
 vi.mock('@/components/AchievementToast', () => ({AchievementToast: () => null}));
+vi.mock('@/components/reactions/ReactionPurchaseDialog', () => ({
+  ReactionPurchaseDialog: (props: Record<string, unknown>) => {
+    mocks.purchaseProps = props;
+    return props.entry ? <button onClick={() => {
+      (props.onConfirmedAction as () => void)();
+      (props.onCloseAction as () => void)();
+    }}>purchase-dialog</button> : null;
+  },
+}));
+vi.mock('@/lib/api/player', () => ({
+  getHands: vi.fn(), getMe: vi.fn(), getSessions: vi.fn(), updateMe: mocks.updateMe,
+}));
 
 const ROOM_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const room = {
@@ -135,10 +153,14 @@ function snapshot(overrides: Partial<TableSnapshot> = {}): TableSnapshot {
   };
 }
 
-function setQueries({seated = true, loading = false}: { seated?: boolean; loading?: boolean } = {}) {
+function setQueries({seated = true, loading = false, data = {}, roomData = room}: {
+  seated?: boolean; loading?: boolean; data?: Record<string, unknown>; roomData?: Record<string, unknown>;
+} = {}) {
   mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) => {
-    if (queryKey[0] === 'room') return {data: room};
+    if (queryKey[0] === 'room') return {data: roomData};
     if (queryKey[0] === 'seated') return {data: {seated, stack: 500}, isLoading: loading};
+    const key = queryKey.join(':');
+    if (key in data) return {data: data[key], isLoading: false};
     return {data: []};
   });
 }
@@ -293,5 +315,352 @@ describe('table page integration', () => {
       kind: 'fold', couldHaveWon: undefined,
     })));
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['hands', ROOM_ID]});
+  });
+
+  test.each([
+    ['forbidden', 'Você não tem acesso a esta mesa.'],
+    ['gone', 'Essa sala não está mais disponível.'],
+  ])('leaves the table for good on a %s terminal error', async (terminalError, message) => {
+    realtime({terminalError});
+    render(<TablePage/>);
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/lobby'));
+    expect(mocks.notification).toHaveBeenCalledWith(message, 'info');
+    expect(mocks.setQueryData).toHaveBeenCalledWith(['seated', ROOM_ID], {seated: false, stack: 0});
+  });
+
+  test('announces a win with the beaten runner-up hand and the pot breakdown', async () => {
+    realtime({
+      snapshot: snapshot({
+        stage: 'complete', board: ['2H', '3D', '4C', '5S', '9H'],
+        payouts: {viewer: 120}, winners: ['viewer'],
+        pot_results: [{
+          amount: 120, payout_amount: 120, eligible_player_ids: ['viewer', 'opponent'],
+          winner_player_ids: ['viewer'], payouts: {viewer: 120},
+        }],
+        seats: [
+          {
+            player_id: 'viewer', name: 'Você', stack: 600, stack_at_hand_start: 500, state: 'active',
+            dealt_in: true, contributed: 20, hole_cards: ['AH', 'KD'], hand_category: 'pair', hand_score: 200,
+          },
+          {
+            player_id: 'opponent', name: 'Bia', stack: 780, state: 'active', dealt_in: true,
+            contributed: 40, hole_cards: ['QS', 'JC'], hole_cards_revealed: [true, true],
+            hand_category: 'high_card', hand_score: 100,
+          },
+        ],
+      })
+    });
+    render(<TablePage/>);
+    await waitFor(() => expect(mocks.stageProps?.outcome).toEqual(expect.objectContaining({
+      kind: 'win', winnerName: 'Você', stackBefore: 500, stackAfter: 600, wonAmount: 120,
+      beatenCategory: 'high_card',
+    })));
+    expect((mocks.stageProps?.outcome as {viewerCards: string[]}).viewerCards).toHaveLength(5);
+    expect(mocks.stageProps).toEqual(expect.objectContaining({holdOutcomeOpen: true, viewerStackBefore: 500}));
+  });
+
+  test('details every contested pot when the viewer wins one and loses another', async () => {
+    realtime({
+      snapshot: snapshot({
+        stage: 'complete', board: ['2H', '3D', '4C', '5S', '9H'],
+        payouts: {viewer: 100, opponent: 300}, winners: ['viewer', 'opponent'],
+        pot_results: [
+          {
+            amount: 100, payout_amount: 100, eligible_player_ids: ['viewer', 'opponent'],
+            winner_player_ids: ['viewer'], payouts: {viewer: 100},
+          },
+          {
+            amount: 300, payout_amount: 300, eligible_player_ids: ['viewer', 'opponent'],
+            winner_player_ids: ['opponent'], payouts: {opponent: 300},
+          },
+        ],
+        seats: [
+          {
+            player_id: 'viewer', name: 'Você', stack: 600, stack_at_hand_start: 500, state: 'active',
+            dealt_in: true, contributed: 100, hole_cards: ['AH', 'KD'], hand_category: 'pair', hand_score: 200,
+          },
+          {
+            player_id: 'opponent', name: 'Bia', stack: 900, state: 'active', dealt_in: true,
+            contributed: 100, hole_cards: ['9S', '9C'], hand_category: 'three_of_a_kind', hand_score: 900,
+          },
+        ],
+      })
+    });
+    render(<TablePage/>);
+    await waitFor(() => expect((mocks.stageProps?.outcome as {kind: string}).kind).toBe('mixed'));
+    const pots = (mocks.stageProps?.outcome as {pots: {won: boolean; winnerName?: string}[]}).pots;
+    expect(pots.map(pot => pot.won)).toEqual([true, false]);
+    expect(pots[1]).toEqual(expect.objectContaining({winnerName: 'Bia', category: 'three_of_a_kind'}));
+  });
+
+  test('names the other hands in a split pot', async () => {
+    realtime({
+      snapshot: snapshot({
+        stage: 'complete', board: ['2H', '3D', '4C', '5S', '9H'],
+        payouts: {viewer: 100, opponent: 100}, winners: ['viewer', 'opponent'],
+        pot_results: [{
+          amount: 200, payout_amount: 200, eligible_player_ids: ['viewer', 'opponent'],
+          winner_player_ids: ['viewer', 'opponent'], payouts: {viewer: 100, opponent: 100},
+        }],
+        seats: [
+          {
+            player_id: 'viewer', name: 'Você', stack: 600, stack_at_hand_start: 600, state: 'active',
+            dealt_in: true, contributed: 100, hole_cards: ['AH', 'KD'], hand_category: 'pair', hand_score: 200,
+          },
+          {
+            player_id: 'opponent', name: 'Bia', stack: 600, state: 'active', dealt_in: true,
+            contributed: 100, hole_cards: ['AS', 'KC'], hand_category: 'pair', hand_score: 200,
+          },
+        ],
+      })
+    });
+    render(<TablePage/>);
+    await waitFor(() => expect((mocks.stageProps?.outcome as {kind: string}).kind).toBe('tie'));
+    const tiedWith = (mocks.stageProps?.outcome as {tiedWith: {name: string; cards: string[]}[]}).tiedWith;
+    expect(tiedWith).toHaveLength(1);
+    expect(tiedWith[0]).toEqual(expect.objectContaining({name: 'Bia'}));
+    expect(tiedWith[0].cards).toHaveLength(5);
+  });
+
+  test('remembers the pre-blind stack when the server does not publish it', async () => {
+    const live = snapshot({
+      seats: [
+        {player_id: 'viewer', name: 'Você', stack: 480, state: 'active', dealt_in: true, contributed: 20},
+        {player_id: 'opponent', name: 'Bia', stack: 800, state: 'active', dealt_in: true, contributed: 40},
+      ],
+    });
+    realtime({snapshot: live});
+    const {rerender} = render(<TablePage/>);
+    realtime({
+      snapshot: {
+        ...live, stage: 'complete', board: ['2H', '3D', '4C', '5S', '9H'],
+        payouts: {viewer: 100}, winners: ['viewer'],
+        seats: [{...live.seats[0], stack: 580}, live.seats[1]],
+      }
+    });
+    rerender(<TablePage/>);
+    await waitFor(() => expect((mocks.stageProps?.outcome as {stackBefore?: number}).stackBefore).toBe(500));
+  });
+
+  test('freezes the next-hand countdown against the snapshot that armed it', () => {
+    const deadline = Date.now() + 5000;
+    realtime({snapshot: snapshot({next_hand_unix_ms: deadline}), snapshotAt: deadline - 5000});
+    const {rerender} = render(<TablePage/>);
+    expect(mocks.stageProps?.nextHandDurationMs).toBe(5000);
+
+    realtime({snapshot: snapshot({next_hand_unix_ms: deadline}), snapshotAt: deadline - 1000});
+    rerender(<TablePage/>);
+    expect(mocks.stageProps?.nextHandDurationMs).toBe(5000);
+  });
+
+  test('hides the next-hand deadline while the connection is unstable', () => {
+    realtime({snapshot: snapshot({next_hand_unix_ms: Date.now() + 5000}), status: 'reconnecting', reconnectAttempt: 2});
+    render(<TablePage/>);
+    expect(mocks.stageProps?.nextHandDeadlineMs).toBeUndefined();
+    expect(screen.getByText(/Reconectando à mesa…\s*Tentativa 2\./)).toBeInTheDocument();
+  });
+
+  test('offers card reveal only for a participating seat still holding a hidden card', async () => {
+    realtime({
+      snapshot: snapshot({
+        stage: 'complete', protocol_version: 8, won_without_showdown: true,
+        seats: [
+          {
+            player_id: 'viewer', name: 'Você', stack: 500, state: 'active', dealt_in: true,
+            contributed: 20, hole_cards: ['AH', 'KD'], hole_cards_revealed: [true, false],
+          },
+          {player_id: 'opponent', name: 'Bia', stack: 800, state: 'active', dealt_in: true, contributed: 40},
+        ],
+      })
+    });
+    render(<TablePage/>);
+    expect(mocks.stageProps?.canRevealCards).toBe(true);
+    act(() => (mocks.stageProps?.onRevealCardAction as (index: number) => void)(1));
+    expect(mocks.realtime.showCards).toHaveBeenCalledWith(1);
+  });
+
+  test('a paused seat resumes play, and a busted one rebuys instead', async () => {
+    const user = userEvent.setup();
+    realtime({
+      snapshot: snapshot({
+        seats: [
+          {player_id: 'viewer', name: 'Você', stack: 500, state: 'sitting_out', dealt_in: false, contributed: 0},
+          {player_id: 'opponent', name: 'Bia', stack: 800, state: 'active', dealt_in: true, contributed: 40},
+        ],
+      })
+    });
+    const {rerender} = render(<TablePage/>);
+    await user.click(screen.getByRole('button', {name: 'Voltar a jogar'}));
+    expect(mocks.realtime.ready).toHaveBeenCalledWith(true);
+
+    realtime({
+      snapshot: snapshot({
+        seats: [
+          {player_id: 'viewer', name: 'Você', stack: 0, state: 'sitting_out', dealt_in: false, contributed: 0},
+          {player_id: 'opponent', name: 'Bia', stack: 800, state: 'active', dealt_in: true, contributed: 40},
+        ],
+      })
+    });
+    rerender(<TablePage/>);
+    expect(screen.queryByRole('button', {name: 'Voltar a jogar'})).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', {name: 'rebuy'}));
+    expect(mocks.realtime.ready).toHaveBeenLastCalledWith(true);
+  });
+
+  test('exposes a private table invite link built from the room share code', () => {
+    setQueries({roomData: {...room, visibility: 'private', share_code: 'ABC123'}});
+    render(<TablePage/>);
+    expect(screen.getByText(`invite:${window.location.origin}/table?id=${ROOM_ID}&invite=ABC123`))
+      .toBeInTheDocument();
+  });
+
+  test('hides the invite affordance on a private table the viewer did not create', () => {
+    setQueries({roomData: {...room, visibility: 'private'}});
+    render(<TablePage/>);
+    expect(screen.queryByText(/^invite:/)).not.toBeInTheDocument();
+  });
+
+  test('rate-limits quick reactions and refuses to send them while offline', async () => {
+    vi.useFakeTimers();
+    try {
+      const sendReaction = vi.fn(() => true);
+      realtime({sendReaction});
+      const {rerender} = render(<TablePage/>);
+      act(() => (mocks.reactionProps?.onQuickSendAction as (id: string) => void)('clap'));
+      expect(sendReaction).toHaveBeenCalledWith('clap');
+
+      rerender(<TablePage/>);
+      expect(mocks.reactionProps?.coolingDown).toBe(true);
+      act(() => (mocks.reactionProps?.onQuickSendAction as (id: string) => void)('laugh'));
+      expect(sendReaction).toHaveBeenCalledTimes(1);
+
+      act(() => void vi.advanceTimersByTime(2000));
+      rerender(<TablePage/>);
+      expect(mocks.reactionProps?.coolingDown).toBe(false);
+      act(() => (mocks.reactionProps?.onQuickSendAction as (id: string) => void)('laugh'));
+      expect(sendReaction).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('does not start a cooldown when the socket rejects the reaction', () => {
+    realtime({sendReaction: vi.fn(() => false)});
+    const {rerender} = render(<TablePage/>);
+    act(() => (mocks.reactionProps?.onQuickSendAction as (id: string) => void)('clap'));
+    rerender(<TablePage/>);
+    expect(mocks.reactionProps?.coolingDown).toBe(false);
+  });
+
+  test('never sends a reaction over a disconnected socket', () => {
+    const sendReaction = vi.fn(() => true);
+    realtime({status: 'reconnecting', sendReaction});
+    render(<TablePage/>);
+    act(() => (mocks.reactionProps?.onQuickSendAction as (id: string) => void)('clap'));
+    act(() => (mocks.reactionProps?.onPendingReactionChangeAction as (id: string) => void)('tomato'));
+    expect(sendReaction).not.toHaveBeenCalled();
+  });
+
+  test('saves reaction shortcuts and confirms them to the player', async () => {
+    const updated = {favorite_reactions: ['clap', 'fire']};
+    mocks.updateMe.mockResolvedValue(updated);
+    setQueries({data: {'player:me': {favorite_reactions: ['clap', 'not-a-reaction'], sandbox_balance: 900}}});
+    render(<TablePage/>);
+    expect(mocks.reactionProps?.favorites).toEqual(['clap']);
+
+    await act(() => (mocks.reactionProps?.onFavoriteReactionsChangeAction as (f: string[]) => Promise<void>)(
+      ['clap', 'fire']
+    ));
+    expect(mocks.updateMe).toHaveBeenCalledWith({favorite_reactions: ['clap', 'fire']});
+    expect(mocks.setQueryData).toHaveBeenCalledWith(['player', 'me'], updated);
+    expect(mocks.notification).toHaveBeenCalledWith('Atalhos de reação atualizados.', 'info');
+  });
+
+  test('opens the purchase dialog for a locked reaction with its in-flight purchase and balance', async () => {
+    const purchases = [{purchase_id: 'p1', reaction_id: 'fire', method: 'pix', status: 'pending'}];
+    setQueries({
+      data: {
+        'player:me': {sandbox_balance: 4200},
+        'wallet:reaction-purchases': purchases,
+      }
+    });
+    const {rerender} = render(<TablePage/>);
+    act(() => (mocks.reactionProps?.onLockedReactionAction as (entry: object) => void)({id: 'fire', premium: true}));
+    rerender(<TablePage/>);
+
+    expect(mocks.purchaseProps).toEqual(expect.objectContaining({
+      entry: {id: 'fire', premium: true}, initialPurchase: purchases[0], sandboxBalance: 4200,
+    }));
+    expect(mocks.reactionProps?.open).toBe(false);
+
+    await userEvent.click(screen.getByRole('button', {name: 'purchase-dialog'}));
+    rerender(<TablePage/>);
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'reaction-purchases']});
+    expect(mocks.purchaseProps?.entry).toBeNull();
+  });
+
+  test('keeps the local player-note cache in sync when a note is saved and cleared', async () => {
+    const note = {opponent_id: 'opponent', note: 'agressivo'};
+    setQueries({data: {'player-notes': [{opponent_id: 'other', note: 'passivo'}]}});
+    render(<TablePage/>);
+    await userEvent.click(screen.getByRole('button', {name: 'table-stage'}));
+
+    act(() => (mocks.noteProps?.onSaved as (note: object) => void)(note));
+    const [, updater] = mocks.setQueryData.mock.calls.at(-1)!;
+    expect((updater as (current: object[]) => object[])([{opponent_id: 'opponent', note: 'velho'}])).toEqual([note]);
+
+    act(() => (mocks.noteProps?.onSaved as (note: object | null) => void)(null));
+    const [, clearUpdater] = mocks.setQueryData.mock.calls.at(-1)!;
+    expect((clearUpdater as (current: object[]) => object[])([{opponent_id: 'opponent', note: 'velho'}])).toEqual([]);
+  });
+
+  test('sums the pot from server pots and falls back to seat contributions', () => {
+    realtime({snapshot: snapshot({pots: [
+      {amount: 60, eligible_player_ids: ['viewer', 'opponent']},
+      {amount: 40, eligible_player_ids: ['viewer']},
+    ]})});
+    const {rerender} = render(<TablePage/>);
+    expect(mocks.stageProps?.pot).toBe(100);
+
+    realtime({snapshot: snapshot()});
+    rerender(<TablePage/>);
+    expect(mocks.stageProps?.pot).toBe(60);
+  });
+
+  test('prefers the open session buy-in and joined_at over the local table clock', () => {
+    setQueries({
+      data: {
+        'sessions:me': [
+          {table_id: ROOM_ID, ended_at: 12, joined_at: 1, buyin_amount: 100},
+          {table_id: ROOM_ID, ended_at: 0, joined_at: 999, buyin_amount: 700},
+        ],
+      }
+    });
+    render(<TablePage/>);
+    expect(screen.getByRole('button', {name: 'action-bar'})).toBeInTheDocument();
+  });
+
+  test('warns before an idle removal and lets the player keep the seat', () => {
+    vi.useFakeTimers();
+    try {
+      realtime({snapshot: snapshot({idle_removal_unix_ms: Date.now() + 90_000})});
+      render(<TablePage/>);
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+      act(() => void vi.advanceTimersByTime(31_000));
+      const warning = screen.getByRole('alert');
+      expect(warning).toHaveTextContent(/Você será removido por inatividade em \d+s\./);
+
+      act(() => void vi.advanceTimersByTime(1000));
+      fireEvent.click(screen.getByRole('button', {name: 'Continuar na mesa'}));
+      expect(mocks.realtime.keepSeat).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('stays silent when no idle removal is armed', () => {
+    render(<TablePage/>);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

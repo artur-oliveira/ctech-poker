@@ -175,7 +175,10 @@ unverifiable — there is no backfill, because the seed is not retained anywhere
   price without inferred urgency or “best value” claims; larger catalogs are disclosed on request.
 - **Expired Pix recovery** — an expired sandbox charge can create a fresh purchase for its original
   SKU directly from the payment dialog. The action has pending and retryable error states; closing
-  the dialog restores focus to the package that started the flow.
+  the dialog restores focus to the package that started the flow. The modal is opened
+  programmatically (no `DialogTrigger`), so that restore is base-ui's `finalFocus` on
+  `PurchaseModal`'s `DialogContent`, fed the trigger ref the store keeps — not a `requestAnimationFrame`
+  callback, which raced base-ui's own close teardown and intermittently left focus on `<body>`.
 - **Equity** — `Seat` renders `seat.equity` from the server snapshot. There is no client-side
   equity calculator; the client cannot be given the remaining-deck composition.
 - **Sandbox refund safety** — confirmed sandbox purchases expose a **Solicitar estorno** review, not an unconditional reversal. The dialog shows the exact Pix amount, package credits, projected sandbox balance, and the server-enforced eligibility rule: any sandbox-wallet debit after the purchase credit makes it ineligible. The server remains authoritative; the dialog owns verification, pending, success, and recoverable error states. This flow only reverses unused sandbox purchases and remains architecturally separate from gated real-money deposits.
@@ -185,10 +188,13 @@ unverifiable — there is no backfill, because the seed is not retained anywhere
 ## Tests & CI
 
 - **`vitest` + `@testing-library/react`**, jsdom, config in `vitest.config.ts` (`@`→`src` alias,
-  v8 coverage with thresholds **lines/functions/statements 80, branches 70**). Setup in
-  `src/test/setup.ts` mocks `matchMedia`, `ResizeObserver` and `scrollTo`, and clears storage
-  between tests. **59 test files.** Mock snapshots come from `src/dev/mockRuntime.ts`
+  v8 coverage with thresholds **90 lines / 90 statements / 90 functions / 90 branches**). Setup
+  in `src/test/setup.ts` mocks `matchMedia`, `ResizeObserver` and `scrollTo`, and clears storage
+  between tests. **81 test files.** Mock snapshots come from `src/dev/mockRuntime.ts`
   (`snapshotForScenario`, `MOCK_PLAYER_ID`) so tests exercise realistic table state.
+- **Every new feature ships with the tests that cover it** — error, empty and disabled paths
+  included. The 90% thresholds may be raised, never lowered to land a change. Rules and
+  per-area recipes: [`docs/testing.md`](docs/testing.md).
 - `frontend.yml`: `npm ci` → `eslint src --max-warnings 0` → `npm run build` (static export) →
   S3 sync + route-manifest publish + CloudFront invalidation.
 - Quality bar: lint, typecheck, tests and build must all pass with **zero errors and zero

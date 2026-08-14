@@ -9,7 +9,7 @@ const ws = vi.hoisted(() => ({
     onMessage: (message: ServerMessage) => void;
     onOpen: () => void;
   },
-  send: vi.fn(() => true),
+  send: vi.fn((frame: object): boolean => Boolean(frame)),
   reconnect: vi.fn(),
   status: 'connected' as 'connected' | 'disconnected',
 }));
@@ -572,5 +572,128 @@ describe('useTableRealtime', () => {
     });
     expect(result.current.announcement).toContain('Você ganhou 120 fichas');
     expect(playSound).toHaveBeenCalledWith('reveal');
+  });
+
+  test('announces a refunded pot and a split pot in the same resolution', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot()});
+    receive({
+      type: 'state',
+      snapshot: snapshot({
+        snapshot_version: 2,
+        stage: 'complete',
+        current_player_id: undefined,
+        payouts: {[VIEWER]: 60, 'player-2': 100},
+        winners: [VIEWER, 'player-2'],
+        pot_results: [
+          {
+            amount: 40, payout_amount: 40, eligible_player_ids: [VIEWER],
+            winner_player_ids: [], refund: true, payouts: {[VIEWER]: 40},
+          },
+          {
+            amount: 200, payout_amount: 200, eligible_player_ids: [VIEWER, 'player-2'],
+            winner_player_ids: [VIEWER, 'player-2'], payouts: {[VIEWER]: 100, 'player-2': 100},
+          },
+        ],
+      }),
+    });
+    expect(result.current.announcement).toContain('Você recebeu 40 fichas devolvidas');
+    expect(result.current.announcement).toContain('dividiram um pote de 200 fichas');
+  });
+
+  test('falls back to aggregate payouts on a protocol without pot results', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot({protocol_version: 1})});
+    receive({
+      type: 'state',
+      snapshot: snapshot({
+        snapshot_version: 2, protocol_version: 1, stage: 'complete', current_player_id: undefined,
+        payouts: {[VIEWER]: 120, 'player-2': 0}, winners: [VIEWER],
+      }),
+    });
+    expect(result.current.announcement).toContain('Você recebeu 120 fichas');
+    expect(result.current.announcement).not.toContain('Bia');
+  });
+
+  test('plays one reveal per flop card, staggered to match the deal animation', () => {
+    vi.useFakeTimers();
+    renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot()});
+    vi.mocked(playSound).mockClear();
+    receive({type: 'state', snapshot: snapshot({snapshot_version: 2, stage: 'flop', board: ['2H', '5D', '9C']})});
+    expect(playSound).toHaveBeenCalledTimes(1);
+
+    act(() => void vi.advanceTimersByTime(800));
+    expect(playSound).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(playSound).mock.calls.every(([name]) => name === 'reveal')).toBe(true);
+  });
+
+  test('keeps retrying the automatic big blind post until it is acknowledged', () => {
+    vi.useFakeTimers();
+    renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({
+      type: 'state',
+      snapshot: snapshot({
+        protocol_version: 7,
+        seats: snapshot().seats.map(seat => seat.player_id === VIEWER
+          ? {...seat, state: 'pending_entry'} : seat),
+      }),
+    });
+    const posts = () => ws.send.mock.calls
+      .filter(call => (call[0] as {type: string} | undefined)?.type === 'post_big_blind').length;
+    expect(posts()).toBe(1);
+
+    act(() => void vi.advanceTimersByTime(2000));
+    expect(posts()).toBe(2);
+    act(() => void vi.advanceTimersByTime(4000));
+    expect(posts()).toBe(3);
+  });
+
+  test('stops posting the big blind when the socket refuses the frame', () => {
+    ws.send.mockReturnValue(false);
+    renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({
+      type: 'state',
+      snapshot: snapshot({
+        protocol_version: 7,
+        seats: snapshot().seats.map(seat => seat.player_id === VIEWER
+          ? {...seat, state: 'pending_entry'} : seat),
+      }),
+    });
+    expect(ws.send.mock.calls
+      .filter(call => (call[0] as {type: string} | undefined)?.type === 'post_big_blind')).toHaveLength(1);
+  });
+
+  test('backs off longer before resyncing after a rate limit', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot()});
+    ws.send.mockClear();
+    receive({type: 'error', code: 'rate_limited'});
+
+    act(() => void vi.advanceTimersByTime(700));
+    expect(ws.send).not.toHaveBeenCalled();
+    act(() => void vi.advanceTimersByTime(200));
+    expect(ws.send).toHaveBeenCalledWith(expect.objectContaining({type: 'sync_state'}));
+  });
+
+  test('accepts a broadcast chat message and reaction without a correlation id', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot()});
+    receive({type: 'chat', player_id: 'player-2', message: 'boa mão'});
+    receive({type: 'reaction', player_id: 'player-2', reaction_id: 'clap'});
+
+    expect(result.current.chat.at(-1)).toEqual(expect.objectContaining({player: 'player-2', message: 'boa mão'}));
+    expect(result.current.reactions.at(-1)).toEqual(expect.objectContaining({
+      playerId: 'player-2', reactionId: 'clap',
+    }));
+  });
+
+  test('ignores a reaction the client does not know how to draw', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot()});
+    receive({type: 'reaction', player_id: 'player-2', reaction_id: 'not-a-reaction'});
+    expect(result.current.reactions).toHaveLength(0);
   });
 });

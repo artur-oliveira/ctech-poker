@@ -103,6 +103,42 @@ describe('hands list page', () => {
     expect(screen.getByRole('button', {name: /Encontrar uma mesa/})).toHaveAttribute('href', '/lobby');
   });
   
+
+  test('signs the loaded balance and reports a losing run as such', () => {
+    const {container, rerender} = render(<HandsHistory/>);
+    expect(container.querySelector('.stat-value.gain')).toHaveTextContent('+800');
+
+    mocks.query.mockReturnValue(queryResult([pageOf([{...hands[1], net_change: -400}])]));
+    rerender(<HandsHistory/>);
+    expect(container.querySelector('.stat-value.loss')).toHaveTextContent('-400');
+
+    mocks.query.mockReturnValue(queryResult([pageOf([{...hands[2], net_change: 0}])]));
+    rerender(<HandsHistory/>);
+    expect(container.querySelector('.stat-value.gain')).toBeNull();
+    expect(container.querySelector('.stat-value.loss')).toBeNull();
+  });
+
+  test('announces the fetch of the next page while it is in flight', () => {
+    vi.stubGlobal('IntersectionObserver', class {
+      observe = vi.fn();
+      unobserve = vi.fn();
+      disconnect = vi.fn();
+      takeRecords = vi.fn(() => []);
+    });
+    mocks.query.mockReturnValue(queryResult([pageOf(hands, true)], {isFetchingNextPage: true}));
+    render(<HandsHistory/>);
+    expect(screen.getByRole('button', {name: 'Carregando mais mãos…'})).toBeDisabled();
+    expect(screen.getByRole('status', {name: 'Carregando mais mãos'})).toBeInTheDocument();
+  });
+
+  test('stops paginating when the API reports another page but no cursor', () => {
+    mocks.query.mockReturnValue(queryResult([{
+      data: hands, has_next: true, next_cursor: null, has_previous: false, previous_cursor: null,
+    }], {hasNextPage: false}));
+    render(<HandsHistory/>);
+    expect(screen.queryByRole('button', {name: /Carregar mais/})).not.toBeInTheDocument();
+  });
+
   test('reports loaded counts, appends API pages and loads more on scroll or click', () => {
     const observed: IntersectionObserverCallback[] = [];
     vi.stubGlobal('IntersectionObserver', class {

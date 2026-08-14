@@ -3,7 +3,10 @@ import {
   getAccessToken,
   getPlayerId,
   getUsername,
+  ApiError,
   isNotFound,
+  normalizeApiError,
+  redirectOnServiceUnavailable,
   setAccessToken,
   setPlayerId,
   setUsername,
@@ -112,6 +115,53 @@ describe('API client session and interceptors', () => {
     expect(isNotFound(new Error('404'))).toBe(false);
   });
   
+
+  test('normalizes an already-typed error, a non-Axios failure and an API problem document', () => {
+    const typed = new ApiError('boom', 400);
+    expect(normalizeApiError(typed)).toBe(typed);
+
+    mocks.isAxiosError.mockReturnValue(false);
+    const raw = new Error('socket hang up');
+    const wrapped = normalizeApiError(raw);
+    expect(wrapped).toBeInstanceOf(ApiError);
+    expect(wrapped.message).toBe('Unexpected client error');
+    expect(wrapped.original).toBe(raw);
+  });
+
+  test('keeps the problem detail, status and a usable Retry-After', () => {
+    mocks.isAxiosError.mockReturnValue(true);
+    const error = normalizeApiError({
+      response: {status: 429, data: {detail: 'Muitas tentativas', title: 'Rate limited'}, headers: {'retry-after': '2'}},
+      message: 'Request failed',
+    });
+    expect(error).toMatchObject({message: 'Muitas tentativas', status: 429, retryAfterMs: 2000});
+  });
+
+  test('falls back through title, axios message and a generic label, ignoring a bad Retry-After', () => {
+    mocks.isAxiosError.mockReturnValue(true);
+    expect(normalizeApiError({response: {status: 500, data: {title: 'Server error'}, headers: {}}}))
+      .toMatchObject({message: 'Server error', retryAfterMs: undefined});
+    expect(normalizeApiError({message: 'Network Error'})).toMatchObject({message: 'Network Error'});
+    expect(normalizeApiError({response: {status: 503, headers: {'retry-after': 'later'}}}))
+      .toMatchObject({message: 'API request failed', retryAfterMs: undefined});
+  });
+
+  test('sends the player to the maintenance page exactly once on a 503', () => {
+    const replace = vi.fn();
+    Object.defineProperty(window, 'location', {
+      configurable: true, value: {pathname: '/lobby', replace},
+    });
+    expect(redirectOnServiceUnavailable(503)).toBe(true);
+    expect(replace).toHaveBeenCalledWith('/unavailable');
+
+    expect(redirectOnServiceUnavailable(500)).toBe(false);
+    Object.defineProperty(window, 'location', {
+      configurable: true, value: {pathname: '/unavailable', replace},
+    });
+    expect(redirectOnServiceUnavailable(503)).toBe(false);
+    expect(replace).toHaveBeenCalledOnce();
+  });
+
   test('refreshes once after 401 and retries with the new identity', async () => {
     const config = {headers: {}, url: '/protected'};
     const error = {response: {status: 401}, config};

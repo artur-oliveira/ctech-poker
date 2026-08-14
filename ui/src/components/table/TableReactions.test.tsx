@@ -33,6 +33,10 @@ describe('TableReactions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useRealTimers();
+    vi.mocked(window.matchMedia).mockImplementation(query => ({
+      matches: false, media: query, onchange: null, addListener: vi.fn(), removeListener: vi.fn(),
+      addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+    } as unknown as MediaQueryList));
   });
   
   test('opens and closes through the controlled toggle', async () => {
@@ -217,6 +221,116 @@ describe('TableReactions', () => {
     await userEvent.click(screen.getByTitle('Frio na mesa'));
     expect(owned.props.onQuickSendAction).toHaveBeenCalledWith('cold');
     expect(owned.props.onLockedReactionAction).not.toHaveBeenCalled();
+  });
+
+
+  test('renders an impact effect for every thrown and premium reaction', () => {
+    const thrown = ['chip', 'tomato', 'coffee', 'clover', 'horseshoe', 'tear', 'poop', 'rofl',
+      'duck', 'turtle', 'knife', 'flowers'] as const;
+    for (const reactionId of thrown) {
+      const {container, unmount} = render(<TableReactions items={[
+        {id: `r-${reactionId}`, playerId: 'opponent-1', reactionId, targetPlayerId: 'viewer'},
+      ]} seats={seats} viewerId="viewer" connected coolingDown={false} pendingReaction={null}
+        onQuickSendAction={vi.fn()} onPendingReactionChangeAction={vi.fn()} open={false}
+        onOpenChangeAction={vi.fn()}/>);
+      expect(container.querySelector(`.reaction-impact-${reactionId}`)).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  test('shows the shortcut row and sends a favorite without opening the full picker', async () => {
+    const onQuickSendAction = vi.fn();
+    const onOpenChangeAction = vi.fn();
+    renderReactions({
+      favorites: ['clap', 'fire'], premiumEnabled: true,
+      catalog: [{id: 'fire', premium: true, price_cents: 990, price_fichas: 5000}],
+      purchases: [{purchase_id: 'p1', reaction_id: 'fire', method: 'pix', status: 'confirmed'}],
+      onQuickSendAction, onOpenChangeAction,
+    });
+    const shortcuts = screen.getByRole('group', {name: 'Reações favoritas'});
+    expect(shortcuts.querySelectorAll('button')).toHaveLength(2);
+    expect(screen.getAllByLabelText('Premium liberada').length).toBeGreaterThan(0);
+
+    await userEvent.click(shortcuts.querySelector<HTMLButtonElement>('button[title="Aplausos"]')!);
+    expect(onQuickSendAction).toHaveBeenCalledWith('clap');
+    expect(onOpenChangeAction).toHaveBeenCalledWith(false);
+  });
+
+  test('starts targeting from a favorite thrown object instead of sending it', async () => {
+    const onPendingReactionChangeAction = vi.fn();
+    renderReactions({favorites: ['tomato'], onPendingReactionChangeAction});
+    await userEvent.click(screen.getByRole('group', {name: 'Reações favoritas'})
+      .querySelector<HTMLButtonElement>('button[title="Jogar tomate"]')!);
+    expect(onPendingReactionChangeAction).toHaveBeenCalledWith('tomato');
+  });
+
+  test('ignores an unknown favorite instead of crashing the shortcut row', () => {
+    renderReactions({favorites: ['clap', 'not-a-reaction'] as never});
+    expect(screen.getByRole('group', {name: 'Reações favoritas'}).querySelectorAll('button')).toHaveLength(1);
+  });
+
+  test('disables premium reactions while the catalog is still loading', () => {
+    renderReactions({premiumEnabled: true, premiumLoading: true, catalog: [], purchases: []});
+    expect(screen.getByRole('button', {name: 'Sequência quente'})).toBeDisabled();
+  });
+
+  test('disables a premium reaction that is mid-refund or missing from the catalog', async () => {
+    const onLockedReactionAction = vi.fn();
+    renderReactions({
+      premiumEnabled: true,
+      catalog: [{id: 'fire', premium: true, price_cents: 990, price_fichas: 5000}],
+      purchases: [{purchase_id: 'p1', reaction_id: 'fire', method: 'pix', status: 'refunding'}],
+      onLockedReactionAction,
+    });
+    expect(screen.getByRole('button', {name: 'Sequência quente'})).toBeDisabled();
+    // Not in the catalog at all: unavailable rather than buyable.
+    expect(screen.getByRole('button', {name: 'Frio na mesa'})).toBeDisabled();
+    expect(onLockedReactionAction).not.toHaveBeenCalled();
+  });
+
+  test('keeps premium locking off entirely when the store is disabled', async () => {
+    const onQuickSendAction = vi.fn();
+    renderReactions({premiumEnabled: false, onQuickSendAction});
+    await userEvent.click(screen.getByRole('button', {name: 'Sequência quente'}));
+    expect(onQuickSendAction).toHaveBeenCalledWith('fire');
+  });
+
+
+  test('marks a locked thrown object and opens the store instead of throwing it', async () => {
+    const onLockedReactionAction = vi.fn();
+    const onPendingReactionChangeAction = vi.fn();
+    const onOpenChangeAction = vi.fn();
+    renderReactions({
+      premiumEnabled: true, favorites: ['knife'],
+      catalog: [{id: 'knife', premium: true, price_cents: 990, price_fichas: 5000}],
+      purchases: [],
+      onLockedReactionAction, onPendingReactionChangeAction, onOpenChangeAction,
+    });
+    expect(screen.getAllByLabelText('Premium bloqueada').length).toBeGreaterThan(1);
+
+    await userEvent.click(screen.getByRole('button', {name: /Jogar faca/}));
+    expect(onLockedReactionAction).toHaveBeenCalledWith(expect.objectContaining({id: 'knife'}));
+    expect(onPendingReactionChangeAction).not.toHaveBeenCalled();
+    expect(onOpenChangeAction).toHaveBeenCalledWith(false);
+  });
+
+  test('opens on hover only while no throw is being aimed', async () => {
+    const onOpenChangeAction = vi.fn();
+    const {container} = renderReactions({open: false, onOpenChangeAction});
+    vi.mocked(window.matchMedia).mockImplementation(query => ({
+      matches: true, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    } as unknown as MediaQueryList));
+
+    const aside = container.querySelector('.table-reactions')!;
+    fireEvent.mouseEnter(aside);
+    expect(onOpenChangeAction).toHaveBeenCalledWith(true);
+    fireEvent.mouseLeave(aside);
+    expect(onOpenChangeAction).toHaveBeenCalledWith(false);
+
+    onOpenChangeAction.mockClear();
+    const aiming = renderReactions({open: false, pendingReaction: 'tomato', onOpenChangeAction});
+    fireEvent.mouseEnter(aiming.container.querySelector('.table-reactions')!);
+    expect(onOpenChangeAction).not.toHaveBeenCalled();
   });
 
   test('edits up to three favorites from the table picker', async () => {

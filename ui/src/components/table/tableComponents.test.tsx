@@ -1,6 +1,6 @@
 import {fireEvent, render, screen} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {describe, expect, test, vi} from 'vitest';
+import {afterEach, describe, expect, test, vi} from 'vitest';
 import {type ActionAvailability, ActionBar} from './ActionBar';
 import {Board} from './Board';
 import {Chat} from './Chat';
@@ -147,6 +147,23 @@ describe('table controls', () => {
   });
 });
 
+
+const NON_MATCHING_MEDIA = (query: string) => ({
+  matches: false, media: query, onchange: null,
+  addListener: vi.fn(), removeListener: vi.fn(),
+  addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+} as unknown as MediaQueryList);
+
+// The vertical stage is a media-query decision; restore the default so the
+// hover-capable checks in the other suites keep seeing a desktop pointer.
+function useVerticalStage() {
+  vi.mocked(window.matchMedia).mockImplementation(query => ({
+    ...NON_MATCHING_MEDIA(query), matches: true,
+  } as unknown as MediaQueryList));
+}
+
+afterEach(() => vi.mocked(window.matchMedia).mockImplementation(NON_MATCHING_MEDIA));
+
 describe('table presentation', () => {
   test('shows one public playstyle badge and leaves unbadged seats unchanged', () => {
     const snapshot = snapshotForScenario('pre_flop');
@@ -208,6 +225,53 @@ describe('table presentation', () => {
     expect(container.querySelector(`[data-player-id="${MOCK_PLAYER_ID}"] .seat-chat-bubble`)).not.toBeInTheDocument();
   });
 
+
+  test('lays the stage out vertically with the viewer as a separate hero seat', () => {
+    useVerticalStage();
+    const snapshot = snapshotForScenario('pre_flop');
+    const {container} = render(<TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID}
+      pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}/>);
+
+    expect(container.querySelector('.game-table')).toHaveClass('stage-v');
+    expect(container.querySelectorAll('.stage-v-ring .game-seat')).toHaveLength(snapshot.seats.length - 1);
+    expect(container.querySelectorAll('.game-seat')).toHaveLength(snapshot.seats.length);
+  });
+
+  test('keeps every seat in the vertical ring when the viewer is only watching', () => {
+    useVerticalStage();
+    const snapshot = snapshotForScenario('pre_flop');
+    const {container} = render(<TableStage snapshot={snapshot} viewer="not-seated"
+      pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}/>);
+    expect(container.querySelectorAll('.stage-v-ring .game-seat')).toHaveLength(snapshot.seats.length);
+  });
+
+  test.each([
+    ['Mesa atualizada. Bia pagou 50', 'Bia pagou 50'],
+    ['Etapa: pré-flop. Vez de Bia', 'Vez de Bia'],
+    ['Bia colocou 100 fichas', 'Bia colocou 100 fichas'],
+    ['Algo diferente aconteceu', 'Algo diferente aconteceu'],
+  ])('reduces the announcement %s to its headline', (announcement, headline) => {
+    const {container} = render(<TableStage snapshot={snapshotForScenario('pre_flop')} viewer={MOCK_PLAYER_ID}
+      pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}
+      announcement={announcement}/>);
+    expect(container.querySelector('.table-callout')).toHaveTextContent(headline);
+  });
+
+  test('drops the dealer callout once the hand is over', () => {
+    const {container} = render(<TableStage snapshot={snapshotForScenario('complete')} viewer={MOCK_PLAYER_ID}
+      pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}
+      announcement="Etapa: mão encerrada. Você ganhou 120 fichas"/>);
+    expect(container.querySelector('.table-callout')).toBeNull();
+  });
+
+  test('names a stage the client does not know without crashing the pips', () => {
+    const snapshot = {...snapshotForScenario('pre_flop'), stage: 'run_it_twice_runout'};
+    const {container} = render(<TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID}
+      pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}/>);
+    expect(container.querySelector('.street-progress-label')).toHaveTextContent('run it twice runout');
+    expect(container.querySelector('.street-progress .is-current')).toBeNull();
+  });
+
   test('board renders pot, rake, side pots and missing card slots', () => {
     const {container} = render(<Board cards={['AH', 'KD', '2C']} pot={1_250}
                                       rake={25} bigBlind={50} pots={[
@@ -263,6 +327,49 @@ describe('chat', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Mensagem não enviada');
     await userEvent.click(screen.getByRole('button', {name: 'Fechar chat'}));
     expect(onOpenChangeAction).toHaveBeenCalledWith(false);
+  });
+
+  test('shows an empty state and the unread dot only while the panel is closed', () => {
+    const {container, rerender} = render(<Chat open items={[]} seats={[]} viewerId="viewer"
+      onOpenChangeAction={vi.fn()} onSendAction={vi.fn()}/>);
+    expect(screen.getByText('Nenhuma mensagem ainda. Diga um oi para a mesa.')).toBeInTheDocument();
+    expect(container.querySelector('.chat-unread-dot')).toBeNull();
+
+    rerender(<Chat open={false} items={[{id: '1', player: 'p2', message: 'oi'}]} seats={[]} viewerId="viewer"
+      onOpenChangeAction={vi.fn()} onSendAction={vi.fn()}/>);
+    expect(container.querySelector('.chat-unread-dot')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('disse: oi');
+
+    rerender(<Chat open items={[{id: '1', player: 'p2', message: 'oi'}]} seats={[]} viewerId="viewer"
+      onOpenChangeAction={vi.fn()} onSendAction={vi.fn()}/>);
+    expect(container.querySelector('.chat-unread-dot')).toBeNull();
+  });
+
+  test('refuses to send while disconnected and clears the error on the next keystroke', async () => {
+    const onSendAction = vi.fn(() => true);
+    render(<Chat open items={[]} connected={false} seats={[]} onOpenChangeAction={vi.fn()}
+      onSendAction={onSendAction}/>);
+    const input = screen.getByLabelText('Mensagem para a mesa');
+    expect(input).toBeDisabled();
+    expect(input).toHaveAttribute('placeholder', 'Reconectando…');
+
+    fireEvent.change(input, {target: {value: 'olá'}});
+    fireEvent.submit(input.closest('form')!);
+    expect(onSendAction).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+
+    fireEvent.change(input, {target: {value: 'olá!'}});
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  test('ignores a submit with nothing but whitespace', () => {
+    const onSendAction = vi.fn(() => true);
+    render(<Chat open connected items={[]} seats={[]} onOpenChangeAction={vi.fn()} onSendAction={onSendAction}/>);
+    const input = screen.getByLabelText('Mensagem para a mesa');
+    fireEvent.change(input, {target: {value: '   '}});
+    fireEvent.submit(input.closest('form')!);
+    expect(onSendAction).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   test('dismisses on Escape and on an outside click, but not an inside one', async () => {

@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   setQueryData: vi.fn(),
   invalidateQueries: vi.fn(),
   notify: vi.fn(),
+  recover: vi.fn(),
 }));
 
 vi.mock('@aoctech/ws-client', () => ({
@@ -29,6 +30,7 @@ vi.mock('@/lib/api/client', () => ({
   subscribeAccessToken: () => vi.fn(),
 }));
 vi.mock('@/lib/notify', () => ({pushNotification: state.notify}));
+vi.mock('@/lib/auth/session', () => ({recoverSession: state.recover}));
 
 describe('useLobbyRealtime', () => {
   beforeEach(() => {
@@ -95,5 +97,55 @@ describe('useLobbyRealtime', () => {
     expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'reaction-purchases']});
     expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'reaction-catalog']});
     expect(state.notify).toHaveBeenCalledWith('Reação premium liberada!', 'info');
+  });
+
+  test('renews the session instead of looping on an unauthorized frame', () => {
+    renderHook(() => useLobbyRealtime());
+    act(() => state.options?.onMessage({type: 'error', code: 'unauthorized'}));
+    expect(state.recover).toHaveBeenCalledOnce();
+
+    act(() => state.options?.onMessage({type: 'error', code: 'rate_limited'}));
+    expect(state.recover).toHaveBeenCalledOnce();
+  });
+
+  test('mirrors an occupancy change onto the single-room cache entry', () => {
+    renderHook(() => useLobbyRealtime());
+    act(() => state.options?.onMessage({type: 'room_updated', room_id: 'room-1', seats_taken: 5}));
+    const [key, updater] = state.setQueryData.mock.calls[1];
+    expect(key).toEqual(['room', 'room-1']);
+    const patch = updater as (room?: Record<string, unknown>) => Record<string, unknown> | undefined;
+    expect(patch({room_id: 'room-1', seats_taken: 2})).toEqual({room_id: 'room-1', seats_taken: 5});
+    expect(patch(undefined)).toBeUndefined();
+  });
+
+  test('ignores an incomplete room update', () => {
+    renderHook(() => useLobbyRealtime());
+    act(() => state.options?.onMessage({type: 'room_updated', room_id: 'room-1'}));
+    act(() => state.options?.onMessage({type: 'room_created'}));
+    expect(state.setQueryData).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['sandbox_purchase_update', 'refunded', 'Compra estornada.'],
+    ['sandbox_purchase_update', 'expired', 'Compra expirou sem pagamento.'],
+    ['sandbox_purchase_update', 'failed', 'Falha na compra.'],
+    ['sandbox_purchase_update', undefined, 'Atualização na sua compra de créditos.'],
+    ['reaction_purchase_update', 'refunded', 'Compra da reação estornada.'],
+    ['reaction_purchase_update', 'expired', 'Compra da reação expirou sem pagamento.'],
+    ['reaction_purchase_update', 'failed', 'Falha na compra da reação.'],
+    ['reaction_purchase_update', 'brand_new', 'Atualização na compra da sua reação.'],
+  ])('translates a %s with code %s', (type, code, message) => {
+    renderHook(() => useLobbyRealtime());
+    act(() => state.options?.onMessage({type, code}));
+    expect(state.notify).toHaveBeenCalledWith(message, 'info');
+  });
+
+  test('falls back to zero for a payment with no amount and an empty broadcast', () => {
+    renderHook(() => useLobbyRealtime());
+    act(() => state.options?.onMessage({type: 'payment_received'}));
+    expect(state.notify).toHaveBeenCalledWith('Pagamento recebido: R$ 0,00', 'info');
+
+    act(() => state.options?.onMessage({type: 'system_broadcast'}));
+    expect(state.notify).toHaveBeenCalledWith('', 'info');
   });
 });

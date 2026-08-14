@@ -22,3 +22,30 @@ test('text export labels a partial file when action history is unavailable', () 
   assert.match(text, /Resultado: Empate/);
   assert.match(text, /Ações:\nIndisponíveis no momento da exportação/);
 });
+
+test('text export names unknown players, empty history and a loss without a board', () => {
+  const text = serializeHand({
+    pk: 'viewer', sk: 'h3', table_id: 't3', hand_id: 'h3', outcome: 'lost',
+    net_change: -80, ended_at: 1_700_000_000_000,
+    opponents: [{player_id: 'p2', won: true}]
+  }, []);
+  assert.match(text, /Resultado: Derrota \(-80 fichas\)/);
+  assert.match(text, /Suas cartas: não disponíveis/);
+  assert.match(text, /Board: sem board/);
+  assert.match(text, /Adversário: cartas não reveladas \(vencedor\)/);
+  assert.match(text, /Ações:\nNenhuma ação registrada/);
+  assert.doesNotMatch(text, /Commit hash/);
+});
+
+test('text export falls back for an unlabelled action, a table event and a missing timestamp', () => {
+  const text = serializeHand({
+    pk: 'viewer', sk: 'h4', table_id: 't4', hand_id: 'h4', outcome: 'won',
+    net_change: 10, ended_at: 1_700_000_000_000,
+    opponents: [{player_id: 'abcdefgh1234', name: ''}]
+  }, [
+    {seq: 1, player_id: '', action: 'runout_step', amount: 0, timestamp: 0},
+    {seq: 2, player_id: 'abcdefgh1234', action: 'set_run_it_twice', amount: 0, timestamp: 1_700_000_000_000},
+  ], 'viewer');
+  assert.match(text, /--:--:--\s+Mesa: runout_step/);
+  assert.match(text, /Adversário: set_run_it_twice/);
+});

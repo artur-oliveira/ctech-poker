@@ -1,4 +1,4 @@
-import {fireEvent, render, screen} from '@testing-library/react';
+import {act, fireEvent, render, screen} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {describe, expect, test, vi} from 'vitest';
 import {ActionTimeline} from './ActionTimeline';
@@ -115,6 +115,63 @@ describe('hand history components', () => {
     expect(screen.getByText(/antes dos frames de replay/)).toBeInTheDocument();
   });
   
+
+  test('plays through the remaining steps and stops at the last action', () => {
+    vi.useFakeTimers();
+    try {
+      render(<HandReplayer hand={hand} actions={actions} viewerId="viewer"/>);
+      fireEvent.click(screen.getByRole('button', {name: 'Reproduzir replay'}));
+
+      // The flop deal is deliberately slower than a plain action step.
+      act(() => void vi.advanceTimersByTime(900));
+      expect(screen.getByText(/Ação 1 de 3/)).toBeInTheDocument();
+      act(() => void vi.advanceTimersByTime(800));
+      expect(screen.getByText(/Ação 2 de 3/)).toBeInTheDocument();
+      act(() => void vi.advanceTimersByTime(1400));
+      expect(screen.getByText(/Ação 3 de 3/)).toBeInTheDocument();
+
+      act(() => void vi.advanceTimersByTime(5000));
+      expect(screen.getByText(/Ação 3 de 3/)).toBeInTheDocument();
+      expect(screen.getByRole('button', {name: 'Reproduzir replay'})).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('reveals opponent cards only after a show_cards action or at showdown', () => {
+    const {rerender} = render(<HandReplayer hand={hand} viewerId="viewer" actions={[actions[0]]}/>);
+    expect(screen.getAllByAltText('Carta fechada').length).toBeGreaterThan(0);
+
+    rerender(<HandReplayer hand={hand} viewerId="viewer" actions={[
+      actions[0], {...actions[1], player_id: 'p2', action: 'show_cards'},
+    ]}/>);
+    fireEvent.click(screen.getByRole('button', {name: 'Próxima ação'}));
+    expect(screen.queryAllByAltText('Carta fechada')).toHaveLength(0);
+  });
+
+  test('names an actor from the frame when the hand carries no opponent record', () => {
+    render(<HandReplayer hand={{...hand, opponents: []}} viewerId="viewer" actions={[
+      actions[0], {...actions[1], action: 'bet', amount: 0},
+    ]}/>);
+    fireEvent.click(screen.getByRole('button', {name: 'Próxima ação'}));
+    expect(screen.getAllByText('Bia').length).toBeGreaterThan(0);
+    expect(screen.getByText('apostou')).toBeInTheDocument();
+  });
+
+  test('ignores a reaction the client cannot draw and a replay with no framed action at all', () => {
+    render(<HandReplayer hand={hand} viewerId="viewer" actions={[
+      actions[0], {seq: 9, player_id: 'p2', action: 'reaction', amount: 0, timestamp: 1500, reaction_id: 'unknown'},
+    ]}/>);
+    expect(document.querySelector('.replay-reactions')).toBeNull();
+  });
+
+  test('skips an empty pot instead of drawing a zero-chip pot', () => {
+    render(<HandReplayer hand={hand} viewerId="viewer" actions={[
+      {...actions[0], frame: {...actions[0].frame!, pot: 0}},
+    ]}/>);
+    expect(screen.getByText(/Ação 1 de 1/)).toBeInTheDocument();
+  });
+
   test('navigates replay manually, by range and with playback controls', async () => {
     const user = userEvent.setup();
     render(<HandReplayer hand={hand} actions={actions} viewerId="viewer"/>);
