@@ -51,6 +51,13 @@ func TestScopedPokerTokensAreReadOnlyAndResourceBound(t *testing.T) {
 	}{
 		{"room read", "GET", "/v1.0/rooms", ScopeRoomsRead, "api-key", 200},
 		{"wrong resource", "GET", "/v1.0/rooms", ScopePlayersRead, "api-key", 403},
+		{"daily reward cooldown", "GET", "/v1.0/sandbox-credits/", ScopeDailyRewardRead, firstPartyPokerClientID, 200},
+		{"daily reward cooldown without trailing slash", "GET", "/v1.0/sandbox-credits", ScopeDailyRewardRead, firstPartyPokerClientID, 200},
+		{"daily reward rejects purchase scope", "GET", "/v1.0/sandbox-credits/", ScopeSandboxPurchasesRead, firstPartyPokerClientID, 403},
+		{"player notes", "GET", "/v1.0/players/me/notes/", ScopePlayerNotesRead, firstPartyPokerClientID, 200},
+		{"player notes reject generic player scope", "GET", "/v1.0/players/me/notes/", ScopePlayersRead, firstPartyPokerClientID, 403},
+		{"sandbox purchase list", "GET", "/v1.0/wallet/sandbox-purchase/", ScopeSandboxPurchasesRead, firstPartyPokerClientID, 200},
+		{"reaction purchase catalog", "GET", "/v1.0/wallet/reaction-purchase/catalog", ScopeReactionPurchasesRead, firstPartyPokerClientID, 200},
 		{"API key cannot create room", "POST", "/v1.0/rooms", ScopeRoomsRead, "api-key", 403},
 		{"third-party client cannot buy", "POST", "/v1.0/sandbox-purchases", ScopeSandboxPurchasesRead, "third-party", 403},
 		{"scoped first-party UI can create room", "POST", "/v1.0/rooms", ScopeRoomsRead, firstPartyPokerClientID, 200},

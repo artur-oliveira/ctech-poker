@@ -82,17 +82,17 @@ func requiredReadScope(path string) string {
 		return ScopeAchievementsRead
 	case strings.HasPrefix(path, "/v1.0/players/me/poker-stats"):
 		return ScopeStatsRead
+	case strings.HasPrefix(path, "/v1.0/players/me/notes"):
+		return ScopePlayerNotesRead
 	case strings.HasPrefix(path, "/v1.0/players"):
 		return ScopePlayersRead
 	case strings.HasPrefix(path, "/v1.0/leaderboard"):
 		return ScopeLeaderboardRead
-	case strings.HasPrefix(path, "/v1.0/daily-reward"):
+	case strings.HasPrefix(path, "/v1.0/sandbox-credits"):
 		return ScopeDailyRewardRead
-	case strings.HasPrefix(path, "/v1.0/player-notes"):
-		return ScopePlayerNotesRead
-	case strings.HasPrefix(path, "/v1.0/sandbox-purchases"):
+	case strings.HasPrefix(path, "/v1.0/wallet/sandbox-purchase"):
 		return ScopeSandboxPurchasesRead
-	case strings.HasPrefix(path, "/v1.0/reaction-purchases"):
+	case strings.HasPrefix(path, "/v1.0/wallet/reaction-purchase"):
 		return ScopeReactionPurchasesRead
 	default:
 		return ""

@@ -178,7 +178,7 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /players/me/hands`                      | JWT             | hand history, `?table_id`, paginated (50)                                                  |
 | `GET /players/me/hand/:id?mode=...`          | JWT             | one hand incl. its fairness proof                                                          |
 | `GET /players/me/achievements`               | JWT             | own progress, paginated (100)                                                              |
-| `GET /players/me/notes/`                     | JWT             | private opponent notes                                                                     |
+| `GET /players/me/notes/`                     | JWT             | private opponent notes; `poker:player-notes:read`                                          |
 | `POST /players/me/notes/:opponentId`         | JWT             | save/delete a note (`{tag, note}`, ≤500 chars)                                             |
 | `GET /players/me/poker-stats`                | JWT             | own VPIP/PFR/3-bet                                                                         |
 | `POST /players/me/hand/:id/share`            | JWT             | create a public share link (`mode` in request body)                                        |
@@ -188,7 +188,9 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /achievements`                          | **none**        | static achievement catalog                                                                 |
 | `GET /leaderboard`                           | JWT             | `?metric=hands_won\|hands_played\|win_rate`, `?limit`, `?cursor`                           |
 | `POST /sandbox-credits/`                     | JWT             | daily spin; rate-limited 60/min/IP                                                         |
-| `GET /sandbox-credits/`                      | JWT             | `{remaining_time_seconds}` cooldown                                                        |
+| `GET /sandbox-credits/`                      | JWT             | `{remaining_time_seconds}` cooldown; scoped tokens require `poker:daily-reward:read`       |
+| `GET /wallet/sandbox-purchase/...`           | JWT             | catalog/history/detail reads; `poker:sandbox-purchases:read`                               |
+| `GET /wallet/reaction-purchase/...`          | JWT             | catalog/history/detail reads; `poker:reaction-purchases:read`                              |
 
 `achievement_points` is **rejected** as a leaderboard metric — no `gsi_achievement_points` exists, and returning an
 error beats silently ranking by a different GSI.
@@ -203,9 +205,10 @@ error beats silently ranking by a different GSI.
 - Three routes are intentionally public: the achievement catalog, a player's opt-in showcase, and a shared-hand token.
   The showcase 404s unless the player set `showcase_public`; the shared hand aliases opponents and carries a ≤30-day
   TTL.
-- There is still **no scope / KYC / role check** on the player surface, because none is defined for poker in
-  ctech-account's scope catalog. Revisit if scopes are added — see `CLAUDE.md`'s blocker list, which includes two
-  missing wallet scopes that still gate real-money verification calls.
+- Poker publishes public, read-only scopes through its resource-server manifest. Scoped `GET` requests are bound to
+  their route family; for example, the daily-reward cooldown at `/sandbox-credits/` requires
+  `poker:daily-reward:read`. Interactive mutations and WebSockets instead require a user session issued to the
+  first-party `poker` client (`azp=poker`). KYC and business-role checks remain separate from OAuth scope checks.
 - **B9 (`sub`-only authz) is fixed.** Older revisions of this file described it as an open risk.
 - `api-commons` v1.4.1's `jwtverify.Verify` now rejects any token missing a `token_use: "access"` claim (also tightens
   JWK `use`/`alg` matching). ctech-account's issued access tokens already carry it; only hand-crafted test JWTs

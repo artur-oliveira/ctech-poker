@@ -12,6 +12,10 @@ private player notes, and existing sandbox/reaction purchases. There are no
 scopes for creating or joining a table, playing, mutating data, claiming a
 reward, buying, refunding, or operating either WebSocket.
 
+The daily-reward read permission maps to the existing cooldown endpoint
+`GET /v1.0/sandbox-credits/`; its historical route name does not change the
+OAuth scope name `poker:daily-reward:read`.
+
 The Poker UI requests all 11 read scopes together with `openid profile`. On
 `GET`, a scoped token must carry the exact route-family permission. Mutations
 and both WebSockets deliberately have no public scope: they require a user
