@@ -8,7 +8,7 @@
 > owned by `ctech-lbalancer`.
 
 AWS CDK (TypeScript) for the poker service. **All stacks are implemented and live.**
-Deploys in the order **CDK → API → Frontend** via `.github/workflows/deploy.yml`. Every claim below is
+Deploys in the order **CDK → OAuth scopes → API → Frontend** via `.github/workflows/deploy.yml`. Every claim below is
 anchored to `cdk/lib/` and re-verified on **2026-08-14**.
 
 ## Stacks (7)
@@ -17,7 +17,7 @@ Named `CtechPoker-<Env>-<Name>`, except the global OIDC stack. Entry: `bin/poker
 
 | Stack | File | What it provisions |
 |---|---|---|
-| `CtechPoker-Global-OIDC` | `oidc-stack.ts` | GitHub OIDC deploy roles (frontend / api / infra) |
+| `CtechPoker-Global-OIDC` | `oidc-stack.ts` | GitHub OIDC deploy roles (frontend / api / infra / scope publisher) |
 | `…-DynamoDB` | `dynamodb-stack.ts` | **18** DynamoDB tables + GSIs |
 | `…-Archiver` | `archiver-stack.ts` | Action-log archive Lambda (DynamoDB Stream → S3) + SQS DLQ |
 | `…-API` | `api-stack.ts` | EC2 ASG game server, HAProxy route, IAM, userdata, alarms |
@@ -100,7 +100,7 @@ silently ranking by another index. Adding a ranking metric means adding its GSI 
 - A **KeyValueStore** (`<env>-ctech-poker-routes`) plus a CloudFront **Function** (viewer-request)
   rewrite SPA paths to `.html` / `/404.html`. Extensionless keys go through the rewrite; keys with an
   extension pass unmodified.
-- `/v1.0/*` is a second behavior pointing at the API origin: HTTPS_ONLY, `CACHING_DISABLED`,
+- `/v1.0/*` and `/.well-known/*` are API-origin behaviors: HTTPS_ONLY, `CACHING_DISABLED`,
   `ALL_VIEWER_EXCEPT_HOST_HEADER`, all methods allowed.
 - `ResponseHeadersPolicy`: CSP `default-src 'self'` (with `img-src 'self' data:` and `connect-src`
   allowing ctech-account + `challenges.cloudflare.com` for Turnstile), HSTS 2y preload,

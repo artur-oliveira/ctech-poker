@@ -1,5 +1,6 @@
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import {decodeIdToken, doRefresh, exchangeCode, logout, startOAuthFlow} from './oauth';
+import {OAUTH_SCOPE} from './scopes';
 
 const mocks = vi.hoisted(() => ({
   start: vi.fn(),
@@ -39,7 +40,7 @@ describe('OAuth integration', () => {
   test('configures the browser callback and delegates flow startup', async () => {
     expect(mocks.constructor).toHaveBeenCalledWith(expect.objectContaining({
       redirectUri: `${window.location.origin}/callback`,
-      scope: 'openid profile',
+      scope: OAUTH_SCOPE,
     }));
     mocks.start.mockResolvedValue(undefined);
     await startOAuthFlow('/table/t1');

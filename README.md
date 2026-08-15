@@ -3,6 +3,25 @@
 Online Texas Hold'em poker for the CTech ecosystem, with a real-money mode backed by
 `ctech-wallet` and a sandbox (play-money) mode that never touches it.
 
+## Read-only OAuth scopes
+
+Poker publishes 11 public `poker:*:read` scopes from
+`api/internal/oauthresource/scope-manifest.json`: rooms, player profile,
+sessions, hands, achievements, statistics, leaderboard, daily-reward status,
+private player notes, and existing sandbox/reaction purchases. There are no
+scopes for creating or joining a table, playing, mutating data, claiming a
+reward, buying, refunding, or operating either WebSocket.
+
+The Poker UI requests all 11 read scopes together with `openid profile`. On
+`GET`, a scoped token must carry the exact route-family permission. Mutations
+and both WebSockets deliberately have no public scope: they require a user
+session (`sub` + `sid`) issued to the first-party `poker` OAuth client
+(`azp=poker`). An API key or another OAuth client remains read-only. This
+client binding limits delegated clients; it does not make a browser token a
+secret. Contract tests keep the manifest, API policy, and UI request
+synchronized. Deploy reconciles the public grants in CTech Account between CDK
+and API; RFC 9728 metadata is at `GET /.well-known/oauth-protected-resource`.
+
 Status (re-verified against the code, **2026-07-28**): **sandbox mode is live end to end**
 (`api/`, `ui/`, `cdk/`), and the **real-money path is reachable** — `POST /v1.0/rooms/`
 accepts `currency_mode: "real"` and rejects it unless `REAL_MONEY_ENABLED` is on

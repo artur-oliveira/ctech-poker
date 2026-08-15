@@ -1,7 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import {Construct} from 'constructs';
-import {GHA_API_ROLE, GHA_FRONTEND_ROLE, GHA_INFRA_ROLE, S3_PREFIX, SERVICE,} from './constants';
+import {GHA_API_ROLE, GHA_FRONTEND_ROLE, GHA_INFRA_ROLE, GHA_SCOPES_ROLE, S3_PREFIX, SERVICE,} from './constants';
 
 interface OidcStackProps extends cdk.StackProps {
   githubRepo: string;
@@ -43,6 +43,19 @@ export class OidcStack extends cdk.Stack {
       `arn:aws:s3:::${deploymentsBucket}/${S3_PREFIX}`,
       `arn:aws:s3:::${deploymentsBucket}/${S3_PREFIX}/*`,
     ];
+
+    const scopesRole = new iam.Role(this, 'ScopePublisherRole', {
+      roleName: GHA_SCOPES_ROLE,
+      assumedBy: trust,
+    });
+    scopesRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['ssm:GetParameter'],
+      resources: [
+        'arn:aws:ssm:*:*:parameter/ctech-account/*/base-url',
+        'arn:aws:ssm:*:*:parameter/ctech-account/*/scope-publishers/poker/client-id',
+        'arn:aws:ssm:*:*:parameter/ctech-account/*/scope-publishers/poker/client-secret',
+      ],
+    }));
 
     // ── Frontend deploy role ────────────────────────────────────────────────
     const frontendRole = new iam.Role(this, 'FrontendDeployRole', {
@@ -129,5 +142,6 @@ export class OidcStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'FrontendRoleArn', {value: frontendRole.roleArn});
     new cdk.CfnOutput(this, 'ApiRoleArn', {value: apiRole.roleArn});
     new cdk.CfnOutput(this, 'InfraRoleArn', {value: infraRole.roleArn});
+    new cdk.CfnOutput(this, 'ScopePublisherRoleArn', {value: scopesRole.roleArn});
   }
 }

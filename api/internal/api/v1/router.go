@@ -16,6 +16,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/handshare"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
+	"gopkg.aoctech.app/poker/api/internal/oauthresource"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/playernotes"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
@@ -56,6 +57,7 @@ func Register(
 	sandboxPurchaseSvc *sandboxpurchase.Service,
 	reactionPurchaseSvc *reactionpurchase.Service,
 ) {
+	oauthresource.Register(app, cfg.ServiceAudience, cfg.CtechIssuerURL)
 	router := app.Group("/v1.0")
 
 	// Health (unauthenticated): /v1.0/health is a dependency-free liveness probe;

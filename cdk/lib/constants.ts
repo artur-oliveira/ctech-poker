@@ -28,7 +28,7 @@ export const API_DOMAIN_PREFIX = 'poker-api';
 export const APP_DOMAIN_PREFIX = 'poker';
 export const ACCOUNTS_API_DOMAIN_PREFIX = 'accounts-api';
 export const ACCOUNTS_DOMAIN_PREFIX = 'accounts';
-export const API_PATH_PATTERNS = ['/v1.0/*'];
+export const API_PATH_PATTERNS = ['/v1.0/*', '/.well-known/*'];
 export const AVATAR_PUBLIC_PATH_PREFIX = '/avatars';
 export const AVATAR_STORAGE_PATH_PREFIX = '/av';
 
@@ -85,6 +85,7 @@ export const tableCleanupDlqName = (env: Environment) => `${tableCleanupJobName(
 export const GHA_API_ROLE = `${SERVICE}-gha-api`;
 export const GHA_FRONTEND_ROLE = `${SERVICE}-gha-frontend`;
 export const GHA_INFRA_ROLE = `${SERVICE}-gha-infra`;
+export const GHA_SCOPES_ROLE = `${SERVICE}-gha-scopes`;
 
 // ── SSM parameter paths ─────────────────────────────────────────────────────
 /**

@@ -103,7 +103,8 @@ Per-binary keys read outside `Config` (not in the struct above):
 - Upgraded by `fasthttp/websocket` `FastHTTPUpgrader`; origin check mirrors HTTP CORS.
 - **Auth over the socket is the first frame**, not a header or query param: the client sends its token (plus
   `share_code` for a private room) immediately after upgrade (`readAuthToken`). A missing or invalid frame fails closed.
-  Same claim rules as HTTP — `sub` and `sid` both required, M2M rejected.
+  `sub` and `sid` are required, M2M is rejected, and the token must have `azp=poker`; WebSocket/game commands belong to
+  the first-party browser client and are never exposed through the public read-only scope catalog.
 - ⚠️ **Fiber hijacks the connection**, so any string taken from the request context (`c.Params`, locals) must be
   **copied before** the WebSocket goroutine uses it — the underlying buffer is reused once the handler returns. This was
   the cause of a real "no state seeded" bug.
@@ -146,7 +147,9 @@ This matches the **revised** model in `ARCHITECTURE.md §2` — *not* a Redis-le
 
 ## HTTP endpoints (`/v1.0`)
 
-Auth column: **JWT** means `authMiddleware` (bearer token, `sub` + `sid` required, M2M rejected).
+Auth column: **JWT** means `authMiddleware` (bearer token, `sub` + `sid` required, M2M rejected). Scoped `GET` requests
+require their exact public `poker:*:read` permission. HTTP mutations require `azp=poker`, so API-key and other OAuth
+clients stay read-only even though the first-party SPA requests those same read scopes.
 
 | Method & path                                | Auth            | Notes                                                                                      |
 |----------------------------------------------|-----------------|--------------------------------------------------------------------------------------------|

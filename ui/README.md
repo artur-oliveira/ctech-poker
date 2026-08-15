@@ -124,7 +124,13 @@ vertical `stage-v` ring for portrait handhelds.
 
 `src/lib/auth/oauth.ts` builds `OAuthClient` from `NEXT_PUBLIC_CTECH_URL` /
 `NEXT_PUBLIC_CTECH_CLIENT_ID` and exposes `startOAuthFlow`, `exchangeCode`, `doRefresh`,
-`logout`, `decodeIdToken`. `src/lib/auth/session.ts` adds `refreshSession`, `recoverSession`,
+`logout`, `decodeIdToken`. Its scope request is centralized in
+`src/lib/auth/scopes.ts`: `openid profile` plus all 11 public active
+`poker:*:read` scopes from the API manifest. A contract test rejects drift or
+an accidental `internal:*` browser grant. Creating/joining tables, gameplay,
+WebSockets, and purchases have no browser-confidential scope; the API binds
+those interactive operations to user tokens issued to the first-party
+`poker` client through `azp`. `src/lib/auth/session.ts` adds `refreshSession`, `recoverSession`,
 `useSessionKeepAlive`, `useOptionalSession`. `TermsGate` boots with `doRefresh()` when there is
 no token, fetches `GET /v1.0/players/me`, and blocks the UI until `poker_terms_accepted`.
 

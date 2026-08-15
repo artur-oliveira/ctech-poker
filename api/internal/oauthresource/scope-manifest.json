@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "resource_server_id": "poker",
+  "display_name": "CTech Poker",
+  "scopes": [
+    { "name": "poker:rooms:read", "descriptions": { "pt-BR": "Consultar salas, limites e assentos.", "en": "Read rooms, stakes, and seats." }, "visibility": "public", "status": "active" },
+    { "name": "poker:players:read", "descriptions": { "pt-BR": "Consultar o perfil do jogador e showcases publicos.", "en": "Read the player profile and public showcases." }, "visibility": "public", "status": "active" },
+    { "name": "poker:sessions:read", "descriptions": { "pt-BR": "Consultar o historico de sessoes do jogador.", "en": "Read the player's session history." }, "visibility": "public", "status": "active" },
+    { "name": "poker:hands:read", "descriptions": { "pt-BR": "Consultar o historico e detalhes das proprias maos.", "en": "Read the player's own hand history and details." }, "visibility": "public", "status": "active" },
+    { "name": "poker:achievements:read", "descriptions": { "pt-BR": "Consultar o progresso de conquistas.", "en": "Read achievement progress." }, "visibility": "public", "status": "active" },
+    { "name": "poker:stats:read", "descriptions": { "pt-BR": "Consultar estatisticas privadas de poker.", "en": "Read private poker statistics." }, "visibility": "public", "status": "active" },
+    { "name": "poker:leaderboard:read", "descriptions": { "pt-BR": "Consultar a classificacao de jogadores.", "en": "Read the player leaderboard." }, "visibility": "public", "status": "active" },
+    { "name": "poker:daily-reward:read", "descriptions": { "pt-BR": "Consultar a disponibilidade da recompensa diaria.", "en": "Read daily reward availability." }, "visibility": "public", "status": "active" },
+    { "name": "poker:player-notes:read", "descriptions": { "pt-BR": "Consultar anotacoes privadas sobre jogadores.", "en": "Read private notes about players." }, "visibility": "public", "status": "active" },
+    { "name": "poker:sandbox-purchases:read", "descriptions": { "pt-BR": "Consultar catalogo e compras sandbox existentes.", "en": "Read the catalog and existing sandbox purchases." }, "visibility": "public", "status": "active" },
+    { "name": "poker:reaction-purchases:read", "descriptions": { "pt-BR": "Consultar catalogo e compras de reacoes existentes.", "en": "Read the catalog and existing reaction purchases." }, "visibility": "public", "status": "active" }
+  ]
+}

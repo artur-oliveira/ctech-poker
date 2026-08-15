@@ -1,10 +1,11 @@
 import {decodeIdToken as sdkDecodeIdToken, OAuthClient} from '@aoctech/auth-client';
+import {OAUTH_SCOPE} from './scopes';
 
 const client = new OAuthClient({
   baseUrl: process.env.NEXT_PUBLIC_CTECH_URL || '',
   clientId: process.env.NEXT_PUBLIC_CTECH_CLIENT_ID || '',
   redirectUri: typeof window !== 'undefined' ? `${window.location.origin}/callback` : '',
-  scope: 'openid profile'
+  scope: OAUTH_SCOPE
 });
 export const decodeIdToken = sdkDecodeIdToken;
 

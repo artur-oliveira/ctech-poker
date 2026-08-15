@@ -277,7 +277,7 @@ func RegisterTableWS(
 			}
 			// Empty sid = M2M client_credentials token — never a player (B9).
 			claims, err := verifier.VerifyClaims(ctx, token)
-			if err != nil || claims == nil || claims.Sub == "" || claims.SID == "" {
+			if err != nil || claims == nil || claims.Sub == "" || !isFirstPartyPokerSession(claims) {
 				send(&pokerproto.ServerMessage{Type: "error", Code: "unauthorized"})
 				_ = conn.Close()
 				return
@@ -788,7 +788,7 @@ func RegisterGeneralWS(
 				return
 			}
 			claims, err := verifier.VerifyClaims(ctx, token)
-			if err != nil || claims == nil || claims.Sub == "" || claims.SID == "" {
+			if err != nil || claims == nil || claims.Sub == "" || !isFirstPartyPokerSession(claims) {
 				send(&pokerproto.ServerMessage{Type: "error", Code: "unauthorized"})
 				_ = conn.Close()
 				return

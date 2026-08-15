@@ -26,6 +26,9 @@ func authMiddleware(verifier *jwtverify.Verifier) fiber.Handler {
 		if claims.SID == "" {
 			return problem.Forbidden("m2m credentials cannot act as a player").Send(c)
 		}
+		if denied := enforceReadOnlyScope(c, claims); denied != nil {
+			return denied.Send(c)
+		}
 		c.Locals(localsUserID, claims.Sub)
 		return c.Next()
 	}
