@@ -3,6 +3,11 @@
 Online Texas Hold'em poker for the CTech ecosystem, with a real-money mode backed by
 `ctech-wallet` and a sandbox (play-money) mode that never touches it.
 
+**Documentação jurídica vigente:** os Termos do CTech Poker publicados pela
+Central Jurídica estão na versão **2.1**. `CurrentPokerTermsVersion` em
+`api/internal/player/model.go` reexige o aceite quando ela muda; a fonte pública
+de verdade é `https://accounts.aoctech.app/products/poker`.
+
 ## Read-only OAuth scopes
 
 Poker publishes 11 public `poker:*:read` scopes from
