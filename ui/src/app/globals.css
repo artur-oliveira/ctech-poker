@@ -14688,3 +14688,387 @@ button.deck-grid-slot:hover {
         animation: none
     }
 }
+
+/* ── Pessoas: nav badge, lobby drawer, dense lists ─────────────────────────
+   The drawer is the lobby's quick panel and the /people page is the full
+   surface; both render the same `.people-list` rows, so a row only has to be
+   styled once. The drawer is a side panel on desktop and a bottom sheet on
+   phones — geometry only, no separate component. */
+.app-nav-people-link {
+    position: relative
+}
+
+.app-nav-people-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--rounded-pill);
+    background: var(--brand-bright);
+    color: #fff;
+    font-size: var(--font-size-tiny);
+    font-weight: 700;
+    line-height: 1
+}
+
+.social-drawer {
+    top: 0;
+    left: auto;
+    right: 0;
+    width: min(420px, 100%);
+    max-width: none;
+    height: 100dvh;
+    transform: none;
+    border-radius: var(--rounded-panel) 0 0 var(--rounded-panel);
+    overflow-y: auto
+}
+
+.social-drawer h3 {
+    margin: 20px 0 8px;
+    font-size: var(--font-size-body);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--text-secondary)
+}
+
+.people-list-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 12px
+}
+
+.people-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none
+}
+
+.people-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control);
+    background: #ffffff08
+}
+
+.people-row.is-unread {
+    border-color: var(--brand-bright)
+}
+
+.people-row-identity {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1
+}
+
+.people-row-identity b {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+
+.people-row-identity small {
+    color: var(--text-secondary);
+    font-size: var(--font-size-compact)
+}
+
+.people-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0
+}
+
+.presence-dot:before {
+    content: '';
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 5px;
+    border-radius: var(--rounded-pill);
+    background: var(--muted-rose)
+}
+
+.presence-online:before {
+    background: var(--success-bright)
+}
+
+.presence-in_table:before {
+    background: var(--gold)
+}
+
+.people-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 16px;
+    border: 1px dashed var(--control-border);
+    border-radius: var(--rounded-control);
+    color: var(--text-secondary);
+    font-size: var(--font-size-body)
+}
+
+.people-stale, .social-error {
+    margin: 0;
+    font-size: var(--font-size-compact)
+}
+
+.people-stale {
+    color: var(--text-secondary)
+}
+
+.social-error {
+    color: var(--danger)
+}
+
+.friend-code-shell {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: flex-end;
+    margin: 0 0 24px;
+    padding: 16px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-panel)
+}
+
+.friend-code-own {
+    display: flex;
+    align-items: center;
+    gap: 8px
+}
+
+.friend-code-own span {
+    color: var(--text-secondary);
+    font-size: var(--font-size-compact);
+    text-transform: uppercase;
+    letter-spacing: .08em
+}
+
+.friend-code-own b {
+    font-family: var(--font-mono), monospace
+}
+
+.friend-code-search {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 260px
+}
+
+.friend-code-search-row {
+    display: flex;
+    gap: 8px
+}
+
+.friend-code-search small, .social-report-details small {
+    color: var(--text-secondary);
+    font-size: var(--font-size-compact)
+}
+
+.friend-code-result {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%
+}
+
+.social-actions-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px
+}
+
+.social-actions-name {
+    margin: 4px 8px 8px;
+    font-weight: 700
+}
+
+.social-actions-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px;
+    min-height: 40px;
+    border: 0;
+    border-radius: var(--rounded-sm);
+    background: transparent;
+    color: inherit;
+    font-size: var(--font-size-body);
+    text-align: left;
+    cursor: pointer
+}
+
+.social-actions-item:hover, .social-actions-item:focus-visible {
+    background: #ffffff14
+}
+
+.social-actions-item:disabled {
+    cursor: not-allowed;
+    opacity: .6
+}
+
+.social-actions-confirm {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px;
+    border-radius: var(--rounded-sm);
+    background: #ffffff0f
+}
+
+.social-actions-confirm p {
+    width: 100%;
+    margin: 0;
+    font-size: var(--font-size-compact);
+    color: var(--text-secondary)
+}
+
+.social-report-categories {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0 0 16px;
+    padding: 0;
+    border: 0
+}
+
+.social-report-categories legend {
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+    font-size: var(--font-size-compact);
+    text-transform: uppercase;
+    letter-spacing: .08em
+}
+
+.social-report-categories label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    font-size: var(--font-size-body)
+}
+
+.social-report-details {
+    display: flex;
+    flex-direction: column;
+    gap: 6px
+}
+
+.social-report-details textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control);
+    background: #00000030;
+    color: inherit;
+    font: inherit;
+    resize: vertical
+}
+
+/* Sits exactly where the old single-purpose note trigger did, but stays
+   visible: it now opens the whole player menu (profile, friendship, note,
+   mute, block, report), so it is not a hover-only affordance any more. */
+.seat-actions-trigger {
+    position: absolute;
+    z-index: 5;
+    top: -10px;
+    right: -10px;
+    display: grid;
+    place-items: center
+}
+
+.seat-actions-trigger .player-note-dot {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    width: 8px;
+    height: 8px;
+    z-index: 1
+}
+
+.seat-actions-trigger button {
+    width: 28px;
+    height: 28px;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border-radius: var(--rounded-pill);
+    background: var(--surface-control);
+    color: var(--muted-rose)
+}
+
+@media (max-width: 640px) {
+    /* Bottom sheet instead of a side panel: a 420px rail on a 360px viewport
+       is the whole screen anyway, and a sheet keeps the lobby visible above. */
+    .social-drawer {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        height: min(85dvh, 100%);
+        border-radius: var(--rounded-panel) var(--rounded-panel) 0 0
+    }
+
+    .people-row {
+        flex-wrap: wrap
+    }
+
+    .people-row-actions {
+        width: 100%;
+        justify-content: flex-end
+    }
+}
+
+/* Friends section inside the table's invite dialog: the same dense rows as
+   /people, scrollable so a 200-friend list can't push the copy field off. */
+.invite-friends {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 20px;
+    max-height: 40dvh;
+    overflow-y: auto
+}
+
+.invite-friends h3 {
+    margin: 0;
+    font-size: var(--font-size-body);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--text-secondary)
+}
+
+/* Bust dialog without a purchase: explanation plus the free-reward result.
+   Deliberately no SKU grid, QR code or store CTA lives in this dialog. */
+.buyin-hint {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: var(--font-size-body)
+}
+
+.buyin-reward-result {
+    margin: 0 0 12px;
+    color: var(--success);
+    font-size: var(--font-size-body);
+    font-weight: 600
+}

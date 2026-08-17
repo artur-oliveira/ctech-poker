@@ -247,6 +247,7 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /social/blocked`                        | first-party JWT | players blocked by the caller; paginated                                                   |
 | `GET /social/lookup/:friendCode`             | first-party JWT | exact `PKR-XXXX-XXXX-XXXX` lookup; no fuzzy/name search                                    |
 | `GET /social/relationships/:playerId`        | first-party JWT | caller-visible relationship, mute and block state                                          |
+| `GET /social/relationships?player_ids=`      | first-party JWT | batch of up to 25 ids for one seat list; edge state only, no profiles                       |
 | `GET /social/summary`                        | first-party JWT | current unread inbox count                                                                 |
 | `GET /social/inbox`                          | first-party JWT | durable in-app events, newest first; paginated                                             |
 | `GET /social/recent`                         | first-party JWT | recent opponents for 90 days; blocked pairs omitted; paginated to 50                      |
@@ -262,6 +263,11 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `POST /social/table-invites`                 | first-party JWT | invite a friend from the sender's open table session                                       |
 | `POST /social/table-invites/:id/accept`      | first-party JWT | accept an unexpired invite and create private-room access grant                            |
 | `POST /social/table-invites/:id/decline`     | first-party JWT | decline an unexpired invite                                                                |
+
+The batch relationship read is what the table surface uses: the client suppresses a muted or blocked player's chat and
+reactions before they enter its state, and one request per seat list beats one request per seat. `GET /social/summary`
+answers the unread badge only — the People drawer reads the friend, request, invite and recent lists directly instead of
+duplicating them into a summary payload.
 
 All social mutations require `Idempotency-Key` (maximum 128 characters). Table invites are limited to 20/minute per
 sender and 5/minute per recipient. A second pending invite for the same sender, recipient and room is rejected.

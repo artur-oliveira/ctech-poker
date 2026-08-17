@@ -194,6 +194,42 @@ func TestSocialRequestReturnsGenericConflictWhenTargetBlockedActor(t *testing.T)
 	}
 }
 
+func TestSocialRelationshipBatchReturnsSuppressionStateForSeatList(t *testing.T) {
+	app, store, _ := socialTestApp(true)
+	store.edges[apiEdgeKey("actor", "muted")] = social.Edge{OwnerPlayerID: "actor", OtherPlayerID: "muted", Muted: true, Version: 1}
+	store.edges[apiEdgeKey("actor", "blocked")] = social.Edge{OwnerPlayerID: "actor", OtherPlayerID: "blocked", Muted: true, Blocked: true, Version: 1}
+
+	response, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/social/relationships?player_ids=muted,blocked,stranger", nil))
+	if err != nil || response.StatusCode != fiber.StatusOK {
+		t.Fatalf("batch response=%v err=%v", response.StatusCode, err)
+	}
+	var payload struct {
+		Data []socialPlayerResponse `json:"data"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Data) != 2 {
+		t.Fatalf("expected only known edges, got %+v", payload.Data)
+	}
+	if payload.Data[0].PlayerID != "muted" || !payload.Data[0].Muted || payload.Data[0].Blocked {
+		t.Fatalf("unexpected muted entry: %+v", payload.Data[0])
+	}
+	if payload.Data[1].PlayerID != "blocked" || !payload.Data[1].Blocked {
+		t.Fatalf("unexpected blocked entry: %+v", payload.Data[1])
+	}
+
+	empty, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/social/relationships", nil))
+	if err != nil || empty.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("empty batch response=%v err=%v", empty.StatusCode, err)
+	}
+	oversized, err := app.Test(httptest.NewRequest(fiber.MethodGet,
+		"/v1.0/social/relationships?player_ids="+strings.TrimSuffix(strings.Repeat("p,", maxRelationshipBatch+1), ","), nil))
+	if err != nil || oversized.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("oversized batch response=%v err=%v", oversized.StatusCode, err)
+	}
+}
+
 func TestSocialReadsRejectDelegatedClients(t *testing.T) {
 	app := fiber.New()
 	auth := func(c fiber.Ctx) error {

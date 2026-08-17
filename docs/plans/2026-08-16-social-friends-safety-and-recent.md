@@ -1,7 +1,20 @@
 # Plano de implementação — Pessoas, amizade, segurança e jogadores recentes
 
 Data: 2026-08-16  
-Status: em implementação; PRs 1–5 (backend social, presença/recentes e denúncias/operação) concluídos localmente
+Status: implementado; PRs 1–8 concluídos localmente (backend social, presença/recentes, denúncias/operação, UI
+Pessoas, segurança na mesa e pós-derrota sem Pix)
+
+Desvios deliberados em relação ao plano original, aplicados na entrega:
+
+- `GET /social/summary` responde apenas o contador de não lidos. O painel rápido lê as listas já paginadas
+  (`friends`, `requests`, `inbox`, `recent`) em vez de duplicá-las em um payload de resumo.
+- Foi adicionado `GET /social/relationships?player_ids=` (lote de até 25 ids). É como a mesa obtém o estado de
+  mute/block de todos os assentos em uma requisição, atendendo à filtragem do item 7.1 sem N chamadas.
+- O aceite de convite navega para `/table?id=<room_id>`; o parâmetro `social_invite` não foi mantido porque o grant
+  em `poker_rooms` já autoriza GET/WebSocket/join e nenhuma tela consumiria o valor.
+- Erros de ação social aparecem como uma notificação única com texto pt-BR curado (`socialErrorMessage`), em vez de
+  um bloco de erro inline repetido em cada componente que compartilha o mesmo estado de ação.
+
 Escopo: `api/`, `ui/`, `proto/`, `cdk/` e documentação operacional
 
 ## 1. Resultado esperado

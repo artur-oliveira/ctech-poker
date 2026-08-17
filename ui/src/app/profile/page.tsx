@@ -14,6 +14,10 @@ import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {PlaystyleBadges} from '@/components/PlaystyleBadges';
 import {LoadingRegion, Skeleton} from '@/components/ui/skeleton';
 import {PokerLogo} from '@/components/PokerLogo';
+import {PlayerActionsMenu} from '@/components/social/PlayerActionsMenu';
+import {getRelationship} from '@/lib/api/social';
+import {useSocialActions} from '@/lib/hooks/useSocialActions';
+import {SOCIAL_KEYS} from '@/lib/social';
 
 function ProfileContent() {
   const params = useSearchParams();
@@ -23,6 +27,15 @@ function ProfileContent() {
     queryKey: ['profile-showcase', playerID],
     queryFn: () => getProfileShowcase(playerID),
     enabled: Boolean(playerID),
+    retry: false
+  });
+  const socialActions = useSocialActions();
+  // Fails (400) for the viewer's own profile, which is exactly when no safety
+  // or friendship action should be offered — so an absent result hides the menu.
+  const relationship = useQuery({
+    queryKey: SOCIAL_KEYS.relationship(playerID),
+    queryFn: () => getRelationship(playerID),
+    enabled: authed && Boolean(playerID),
     retry: false
   });
   
@@ -62,6 +75,8 @@ function ProfileContent() {
                 ? <PlaystyleBadges badges={showcase.data.playstyle} className="profile-playstyle-badges"/>
                 : null}
             </div>
+            {relationship.data && <PlayerActionsMenu target={relationship.data} actions={socialActions}
+                                                     surface="profile"/>}
           </header>
           <div className="profile-showcase-content">
             <section>

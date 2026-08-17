@@ -1,7 +1,8 @@
 'use client';
 import {useEffect, useId, useState} from 'react';
-import {Wallet} from 'lucide-react';
-import {useQuery} from '@tanstack/react-query';
+import Link from 'next/link';
+import {Gift, Wallet} from 'lucide-react';
+import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
 import {
   Dialog,
@@ -15,12 +16,11 @@ import {
 import type {Room} from '@/lib/api/rooms';
 import {joinRoom} from '@/lib/api/rooms';
 import {getMe} from '@/lib/api/player';
-import {createPurchase, listSkus, type SandboxPurchase, type SandboxSKU} from '@/lib/api/wallet';
-import {SkuGrid} from '@/components/store/SkuGrid';
-import {PixPaymentView} from '@/components/store/PixPaymentView';
+import {getCooldown, spin} from '@/lib/api/dailyReward';
 import {formatBuyIn, midBuyIn} from './BuyInPanel';
 
 const GENERIC_ERROR = 'Não foi possível comprar mais fichas agora. Tente novamente.';
+const REWARD_ERROR = 'Não foi possível resgatar a recompensa agora. Tente novamente.';
 // ponytail: fixed grace window, not an explicit server "auto-rebuy failed"
 // push — good enough for one local wallet HTTP round trip. If wallet latency
 // ever gets unpredictable enough to make this flaky, replace with an
@@ -31,6 +31,10 @@ const AUTO_REBUY_GRACE_MS = 1500;
  * end at that point, so this offers the same buy-in ceremony as first sitting
  * down instead. Stays reachable via its own trigger if dismissed, since
  * busting doesn't force a decision.
+ *
+ * There is deliberately no purchase here: busting is not a moment to sell
+ * chips. The recovery paths are the balance the player already has and the
+ * free daily reward; the store stays a separate, deliberate destination.
  *
  * When the seat opted into auto-rebuy at join time, the server's own
  * auto-rebuy attempt runs asynchronously right after this bust snapshot
@@ -44,12 +48,14 @@ export function RebuyDialog({roomId, room, autoRebuy = false, onRebuyAction}: {
   onRebuyAction: () => void
 }) {
   const sliderId = useId();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(true);
   const [amount, setAmount] = useState<number | null>(null);
   const [joining, setJoining] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const [claimedAmount, setClaimedAmount] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [graceElapsed, setGraceElapsed] = useState(!autoRebuy);
-  const [pixPurchase, setPixPurchase] = useState<SandboxPurchase | null>(null);
 
   useEffect(() => {
     if (!autoRebuy) return undefined;
@@ -57,15 +63,22 @@ export function RebuyDialog({roomId, room, autoRebuy = false, onRebuyAction}: {
     return () => window.clearTimeout(id);
   }, [autoRebuy]);
 
+  const isReal = room.currency_mode === 'real';
   const player = useQuery({queryKey: ['player', 'me'], queryFn: getMe, enabled: graceElapsed});
-  const balanceIsZero = player.data?.sandbox_balance === 0;
-  const skus = useQuery({
-    queryKey: ['wallet', 'skus'], queryFn: listSkus, enabled: graceElapsed && balanceIsZero,
+  // The balance that matters is the one this room can be re-entered with, not
+  // "is it exactly zero": a player with 40 chips and a 100-chip minimum cannot
+  // rebuy either.
+  const balance = (isReal ? player.data?.game_balance : player.data?.sandbox_balance) ?? 0;
+  const canAffordBuyIn = balance >= room.buy_in_min;
+  const reward = useQuery({
+    queryKey: ['dailyReward', 'cooldown'], queryFn: getCooldown,
+    enabled: graceElapsed && !isReal && !canAffordBuyIn
   });
+  const rewardReady = reward.data?.remaining_time_seconds === 0;
 
   const step = room.big_blind > 0 ? room.big_blind : 1;
-  const value = amount ?? midBuyIn(room.buy_in_min, room.buy_in_max, room.big_blind);
-  const isReal = room.currency_mode === 'real';
+  const max = Math.min(room.buy_in_max, Math.max(room.buy_in_min, balance));
+  const value = Math.min(max, amount ?? midBuyIn(room.buy_in_min, room.buy_in_max, room.big_blind));
   const unit = isReal ? 'reais' : 'fichas';
   const fmt = (n: number) => formatBuyIn(n, isReal);
 
@@ -82,12 +95,21 @@ export function RebuyDialog({roomId, room, autoRebuy = false, onRebuyAction}: {
     }
   }
 
-  async function selectSku(sku: SandboxSKU) {
+  async function claimReward() {
+    setClaiming(true);
     setError('');
     try {
-      setPixPurchase(await createPurchase(sku.id));
+      const result = await spin();
+      setClaimedAmount(result.amount);
+      queryClient.setQueryData(['dailyReward', 'cooldown'],
+        {remaining_time_seconds: result.remaining_time_seconds});
+      // The new balance decides whether a rebuy is now possible at all, so the
+      // profile is re-read instead of being patched locally.
+      await queryClient.invalidateQueries({queryKey: ['player', 'me']});
     } catch {
-      setError(GENERIC_ERROR);
+      setError(REWARD_ERROR);
+    } finally {
+      setClaiming(false);
     }
   }
 
@@ -103,36 +125,47 @@ export function RebuyDialog({roomId, room, autoRebuy = false, onRebuyAction}: {
     <DialogContent>
       <DialogHeader>
         <DialogTitle>Você ficou sem fichas</DialogTitle>
-        <DialogDescription>{balanceIsZero && !isReal
-          ? 'Seu saldo sandbox zerou. Compre mais fichas com Pix para continuar nesta mesa.'
-          : `Compre mais ${unit} para continuar jogando nesta mesa.`}</DialogDescription>
+        <DialogDescription>{canAffordBuyIn
+          ? `Compre mais ${unit} para continuar jogando nesta mesa.`
+          : isReal
+            ? 'Seu saldo disponível não cobre o buy-in mínimo desta mesa.'
+            : 'Seu saldo sandbox não cobre o buy-in mínimo desta mesa.'}</DialogDescription>
       </DialogHeader>
       {isReal && !!room.entry_fee_cents &&
           <p className="buyin-fee-notice">Taxa fixa de mesa: {formatBuyIn(room.entry_fee_cents, true)} (cobrada
               de novo a cada vez que você compra fichas).</p>}
       {error && <p className="buyin-error" role="alert">{error}</p>}
-      {balanceIsZero && !isReal
-        ? pixPurchase
-          ? <PixPaymentView purchase={pixPurchase}/>
-          : <SkuGrid skus={skus.data ?? []} isLoading={skus.isLoading} isError={skus.isError}
-                     onRetryAction={() => void skus.refetch()} onSelectAction={sku => void selectSku(sku)}
-                     pendingSku={null}/>
-        : <>
-          <div className="buyin-control">
-            <label htmlFor={sliderId}>Recompra</label>
-            <input id={sliderId} type="range" min={room.buy_in_min} max={room.buy_in_max} step={step} value={value}
-                   disabled={joining} onChange={event => setAmount(Number(event.target.value))}
-                   aria-valuetext={`${fmt(value)} ${unit}`}/>
-            <output htmlFor={sliderId}>{fmt(value)} <span>{unit}</span></output>
-            <small>mín. {fmt(room.buy_in_min)} · máx. {fmt(room.buy_in_max)}</small>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="ghost" disabled={joining} onClick={() => setOpen(false)}>Agora não</Button>
-            <Button type="button" disabled={joining} onClick={confirm}>
-              {joining ? 'Comprando…' : `Comprar ${fmt(value)}`}
-            </Button>
-          </DialogFooter>
-        </>}
+      {claimedAmount !== null && <p className="buyin-reward-result" role="status">
+        Você resgatou {claimedAmount.toLocaleString('pt-BR')} fichas grátis.
+      </p>}
+      {canAffordBuyIn ? <>
+        <div className="buyin-control">
+          <label htmlFor={sliderId}>Recompra</label>
+          <input id={sliderId} type="range" min={room.buy_in_min} max={max} step={step} value={value}
+                 disabled={joining} onChange={event => setAmount(Number(event.target.value))}
+                 aria-valuetext={`${fmt(value)} ${unit}`}/>
+          <output htmlFor={sliderId}>{fmt(value)} <span>{unit}</span></output>
+          <small>mín. {fmt(room.buy_in_min)} · máx. {fmt(max)}</small>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="ghost" disabled={joining} onClick={() => setOpen(false)}>Agora não</Button>
+          <Button type="button" disabled={joining} onClick={confirm}>
+            {joining ? 'Comprando…' : `Comprar ${fmt(value)}`}
+          </Button>
+        </DialogFooter>
+      </> : <>
+        <p className="buyin-hint">{isReal
+          ? 'Você pode voltar ao lobby e escolher uma mesa com buy-in menor. A carteira fica em uma rota separada, fora do jogo.'
+          : rewardReady
+            ? 'Resgate suas fichas grátis do dia para tentar continuar nesta mesa.'
+            : 'A recompensa diária ainda está em contagem. Sem pressa: você pode voltar ao lobby e escolher uma mesa com buy-in menor.'}</p>
+        <DialogFooter>
+          <Button variant="ghost" render={<Link href="/lobby"/>}>Voltar ao lobby</Button>
+          {!isReal && rewardReady && <Button type="button" disabled={claiming} onClick={claimReward}>
+            <Gift aria-hidden="true"/> {claiming ? 'Resgatando…' : 'Resgatar fichas grátis'}
+          </Button>}
+        </DialogFooter>
+      </>}
     </DialogContent>
   </Dialog>;
 }

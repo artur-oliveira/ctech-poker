@@ -4,6 +4,7 @@ import {describe, expect, test, vi} from 'vitest';
 import {AppPageHeader, AppPageNav} from './AppPageChrome';
 
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
+vi.mock('@/components/social/PeopleNavBadge', () => ({PeopleNavBadge: () => <span>people-badge</span>}));
 
 describe('shared app page chrome', () => {
   test('keeps Lobby in authenticated primary navigation and marks it as current', () => {
@@ -14,6 +15,8 @@ describe('shared app page chrome', () => {
     expect(lobby).toHaveAttribute('href', '/lobby');
     expect(lobby).toHaveAttribute('aria-current', 'page');
     expect(within(nav).getByText('profile-menu')).toBeInTheDocument();
+    expect(within(nav).getByRole('link', {name: /Pessoas/})).toHaveAttribute('href', '/people');
+    expect(within(nav).getByText('people-badge')).toBeInTheDocument();
   });
 
   test('omits Lobby and private navigation for anonymous visitors', () => {

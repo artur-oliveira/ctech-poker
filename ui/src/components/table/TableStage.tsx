@@ -1,5 +1,5 @@
 'use client';
-import {useSyncExternalStore} from 'react';
+import {type ReactNode, useSyncExternalStore} from 'react';
 import {Board} from '@/components/table/Board';
 import {Seat} from '@/components/table/Seat';
 import {HandOutcomeBanner, type HandOutcomeState} from '@/components/table/HandOutcome';
@@ -95,6 +95,8 @@ type Props = {
   onTargetPlayerAction?: (playerId: string) => void;
   announcement?: string;
   chatBubbles?: Record<string, { id: string; message: string }>;
+  // Live table only: builds the per-seat player menu. Replay passes nothing.
+  renderPlayerActionsAction?: (seat: TableSnapshot['seats'][number]) => ReactNode;
 };
 
 export function TableStage({
@@ -118,7 +120,8 @@ export function TableStage({
                              targetedReactionLabel,
                              onTargetPlayerAction,
                              announcement,
-                             chatBubbles
+                             chatBubbles,
+                             renderPlayerActionsAction
                            }: Props) {
   const vertical = useVerticalStage();
   const seats = rotateSeats(snapshot.seats, viewer);
@@ -153,7 +156,8 @@ export function TableStage({
                  isDealer={snapshot.dealer_player_id === seat.player_id}
                  isSmallBlind={snapshot.small_blind_player_id === seat.player_id}
                  isBigBlind={snapshot.big_blind_player_id === seat.player_id}
-                 chatBubble={chatBubbles?.[seat.player_id]}/>;
+                 chatBubble={chatBubbles?.[seat.player_id]}
+                 actionsMenu={seat.player_id !== viewer ? renderPlayerActionsAction?.(seat) : undefined}/>;
   };
   const board = <Board cards={snapshot.board} boardTwo={snapshot.board_two}
                        splitAt={snapshot.board_split_at} pot={pot} pots={snapshot.pots}

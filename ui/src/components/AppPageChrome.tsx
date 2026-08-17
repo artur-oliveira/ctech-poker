@@ -1,16 +1,18 @@
 'use client';
 
 import type {LucideIcon} from 'lucide-react';
-import {Award, BookOpen, ChevronLeft, History, LayoutGrid, ShoppingBag, Trophy} from 'lucide-react';
+import {Award, BookOpen, ChevronLeft, History, LayoutGrid, ShoppingBag, Trophy, Users} from 'lucide-react';
 import Link from 'next/link';
 import type {ReactNode} from 'react';
 import {ProfileMenu} from '@/components/lobby/ProfileMenu';
 import {PokerLogo} from '@/components/PokerLogo';
+import {PeopleNavBadge} from '@/components/social/PeopleNavBadge';
 
-type MainRoute = 'lobby' | 'guide' | 'leaderboard' | 'achievements' | 'hands' | 'store';
+type MainRoute = 'lobby' | 'people' | 'guide' | 'leaderboard' | 'achievements' | 'hands' | 'store';
 
 const MAIN_ROUTES: {href: string; label: string; route: MainRoute; icon: LucideIcon}[] = [
   {href: '/lobby', label: 'Lobby', route: 'lobby', icon: LayoutGrid},
+  {href: '/people', label: 'Pessoas', route: 'people', icon: Users},
   {href: '/guide', label: 'Guia', route: 'guide', icon: BookOpen},
   {href: '/leaderboard', label: 'Ranking', route: 'leaderboard', icon: Trophy},
   {href: '/achievements', label: 'Conquistas', route: 'achievements', icon: Award},
@@ -49,11 +51,12 @@ export function AppPageNav({authed, current, rewardReady = false}: {
     {authed ? <div className="header-right">
       {MAIN_ROUTES.map(({href, label, route, icon: Icon}) => <Link key={route} href={href}
         aria-current={current === route ? 'page' : undefined}
-        className={route === 'store' ? 'app-nav-store-link' : undefined}
+        className={route === 'store' ? 'app-nav-store-link' : route === 'people' ? 'app-nav-people-link' : undefined}
         title={route === 'store' && rewardReady ? 'Loja — recompensa diária disponível' : label}>
         <Icon aria-hidden="true"/><span className="header-right-label">{label}</span>
         {route === 'store' && rewardReady && <><span className="app-nav-reward-dot" aria-hidden="true"/>
           <span className="sr-only"> — recompensa diária disponível</span></>}
+        {route === 'people' && <PeopleNavBadge/>}
       </Link>)}
       <ProfileMenu/>
     </div> : <Link href="/" className="app-nav-public-back"><ChevronLeft aria-hidden="true"/> Voltar</Link>}

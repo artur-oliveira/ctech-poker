@@ -25,6 +25,22 @@ export default function CommunityGuide() {
           <GuideCallout kind="warning" title="Revogue pelo estado, não pelo segredo">Tornar a vitrine privada bloqueia a vitrine; links de mesa podem deixar de funcionar quando a sala encerra. Ainda assim, evite publicar convites privados.</GuideCallout></>
       },
       {
+        id: 'pessoas', title: 'Pessoas: amizade, presença e convites', summary: 'A amizade é mútua e a presença só aparece entre amigos.',
+        body: <><GuideSteps><li><span>Abra <b>Pessoas</b> no menu ou o painel rápido do lobby.</span></li>
+          <li><span>Compartilhe seu código <code>PKR-XXXX-XXXX-XXXX</code>: só o código exato encontra alguém, nunca o nome.</span></li>
+          <li><span>A solicitação precisa ser aceita pelos dois lados; só então vocês viram amigos.</span></li>
+          <li><span>Convites de mesa valem 15 minutos, aparecem nas suas atividades e não compram fichas nem reservam assento.</span></li></GuideSteps>
+          <GuideCallout kind="safe" title="Presença sem exposição">Amigos veem apenas <i>online</i>, <i>offline</i> ou <i>em uma mesa</i>. A sala, o código de uma mesa privada, os blinds e o seu saldo nunca aparecem.</GuideCallout>
+          <GuideLink href="/people">Abrir Pessoas</GuideLink></>
+      },
+      {
+        id: 'seguranca', title: 'Silenciar, bloquear e denunciar', summary: 'Segurança é do observador e nunca altera o jogo.',
+        body: <><GuideTerms><GuideTerm term="Silenciar">Esconde chat e reações daquele jogador para você, em qualquer dispositivo. Nada é avisado a ele.</GuideTerm>
+          <GuideTerm term="Bloquear">Inclui silenciar, desfaz a amizade e impede novas solicitações e convites. Desbloquear não reativa o conteúdo: o jogador continua silenciado até você reativar.</GuideTerm>
+          <GuideTerm term="Denunciar">Vai para uma fila revisada por pessoas, com a evidência coletada pelo servidor. Ninguém é punido automaticamente por volume de denúncias.</GuideTerm></GuideTerms>
+          <GuideCallout kind="warning" title="Bloqueio não escolhe adversário">Um jogador bloqueado ainda pode cair na mesma mesa pública, e todas as apostas e ações dele continuam visíveis. Só o conteúdo social é suprimido.</GuideCallout></>
+      },
+      {
         id: 'convivencia', title: 'Chat, reações e notas privadas', summary: 'O sistema diferencia expressão pública de anotações pessoais.',
         body: <><GuideTerms><GuideTerm term="Chat">Mensagens visíveis aos participantes da mesa e registradas no histórico de ações disponível.</GuideTerm>
           <GuideTerm term="Reações">Emotes rápidos ou objetos direcionados a um assento. Você pode silenciar as animações recebidas.</GuideTerm>

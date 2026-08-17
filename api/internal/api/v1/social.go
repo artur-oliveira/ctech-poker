@@ -33,7 +33,10 @@ const (
 	idempotencyKeyHeader        = "Idempotency-Key"
 	maxSocialIdempotencyKeySize = 128
 	maxSocialPlayerIDSize       = 128
-	publicRelationshipNone      = social.Relationship("none")
+	// One table holds at most nine seats; the batch is capped a little above
+	// that so a seat list is always one request instead of nine.
+	maxRelationshipBatch   = 25
+	publicRelationshipNone = social.Relationship("none")
 )
 
 type SocialLimiters struct {
@@ -100,6 +103,7 @@ func RegisterSocial(router fiber.Router, auth fiber.Handler, svc *social.Service
 	g.Get(socialRequestsPath, h.listRequests)
 	g.Get(socialBlockedPath, h.listBlocked)
 	g.Get(socialLookupPath+"/:friendCode", h.lookup)
+	g.Get(socialRelationshipsPath, h.relationshipBatch)
 	g.Get(socialRelationshipsPath+"/:playerId", h.relationship)
 	g.Get(socialSummaryPath, h.summary)
 	g.Get(socialInboxPath, h.listInbox)
@@ -299,6 +303,40 @@ func (h *socialHandlers) relationship(c fiber.Ctx) error {
 		return problem.NotFound("player not found").Send(c)
 	}
 	return c.JSON(h.response(profile, edge, false))
+}
+
+// relationshipBatch answers the table surface, which needs the mute/block
+// state of every seated player at once to suppress chat and reactions before
+// they reach the client's state. Profiles are not hydrated: the caller already
+// has the names it is rendering.
+func (h *socialHandlers) relationshipBatch(c fiber.Ctx) error {
+	ids := make([]string, 0, maxRelationshipBatch)
+	for _, raw := range strings.Split(c.Query("player_ids"), ",") {
+		id := strings.TrimSpace(raw)
+		if id == "" {
+			continue
+		}
+		if len(id) > maxSocialPlayerIDSize || strings.ContainsAny(id, "\x00\r\n") {
+			return problem.BadRequest("player id is invalid").Send(c)
+		}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 || len(ids) > maxRelationshipBatch {
+		return problem.BadRequest("player_ids must contain between 1 and 25 ids").Send(c)
+	}
+	edges, err := h.svc.Relationships(c.Context(), actorID(c), ids)
+	if err != nil {
+		return socialProblem(err, c).Send(c)
+	}
+	result := make([]socialPlayerResponse, 0, len(edges))
+	for _, id := range ids {
+		edge, ok := edges[id]
+		if !ok {
+			continue
+		}
+		result = append(result, edgeState(&edge))
+	}
+	return c.JSON(fiber.Map{"data": result})
 }
 
 func (h *socialHandlers) requestFriend(c fiber.Ctx) error {

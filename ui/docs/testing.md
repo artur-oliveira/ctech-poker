@@ -53,6 +53,11 @@ a file there needs a reason in the PR description; "hard to test" is not one.
   `src/lib/hooks/useTableRealtime.test.tsx`. For the in-memory engine path, mock
   `@/lib/mockConfig` with `USE_MOCK: true` (spread the original module — `MOCK_PLAYER_ID` and
   `MockScenario` still have to exist) as in `useTableRealtimeMock.test.tsx`.
+- **Social surfaces** (`/people`, the lobby drawer, the seat menu, the invite dialog): render inside a
+  real `QueryClientProvider` and mock `@/lib/api/social` instead of mocking TanStack Query. That is
+  what exercises `useSocialList`'s cursor paging and `useSocialActions`' invalidate-and-toast path.
+  Action failures assert on `pushNotification`, not an inline error node — the copy comes from
+  `socialErrorMessage`.
 - **Pages:** mock `next/navigation`, `@tanstack/react-query` and the heavy child components,
   capturing their props in a `vi.hoisted` object. That is what makes a page's callbacks
   (`onFavoriteReactionsChangeAction`, `onSaved`, …) directly assertable. See

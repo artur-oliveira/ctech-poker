@@ -15,7 +15,6 @@ import {
   createPurchase, getPurchase, listPurchases, listSkus, refundPurchase, type SandboxPurchase, type SandboxSKU
 } from '@/lib/api/wallet';
 import {pushNotification} from '@/lib/notify';
-import {useLobbyRealtime} from '@/lib/hooks/useLobbyRealtime';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 import {getMe} from '@/lib/api/player';
 import {
@@ -24,7 +23,6 @@ import {
 } from '@/lib/api/reactionPurchases';
 
 export default function Store() {
-  useLobbyRealtime();
   const queryClient = useQueryClient();
   const [activePurchase, setActivePurchase] = useState<SandboxPurchase | null>(null);
   const [pendingSku, setPendingSku] = useState<string | null>(null);

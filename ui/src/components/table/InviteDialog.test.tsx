@@ -1,7 +1,15 @@
-import {act, fireEvent, render, screen} from '@testing-library/react';
+import {act, fireEvent, render as renderBare, screen} from '@testing-library/react';
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 
 import {InviteDialog} from './InviteDialog';
+
+// The friends section (see InviteFriends.test.tsx) reads social state, so even
+// the link-only dialog now needs a query client.
+function render(ui: React.ReactElement) {
+  const client = new QueryClient({defaultOptions: {queries: {retry: false}}});
+  return renderBare(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({children}: React.PropsWithChildren) => <div>{children}</div>,

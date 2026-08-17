@@ -1,4 +1,4 @@
-import {type CSSProperties, useState} from 'react';
+import {type CSSProperties, type ReactNode, useState} from 'react';
 import {useHoverCapable} from '@/lib/hooks/useHoverCapable';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {Progress} from '@/components/ui/progress';
@@ -120,7 +120,8 @@ export function Seat({
                        onEditNote,
                        reactionTargetLabel,
                        onReactionTarget,
-                       chatBubble
+                       chatBubble,
+                       actionsMenu
                      }: {
   seat: SeatView;
   isViewer: boolean;
@@ -159,6 +160,11 @@ export function Seat({
   // Keyed by message id: a new id (even from the same player) remounts the
   // bubble and restarts its CSS lifecycle instead of jumping mid-animation.
   chatBubble?: { id: string; message: string };
+  // The live table's player menu (profile, friendship, note, mute, block,
+  // report). When present it replaces the bare note trigger, which was a
+  // single unlabelled affordance for what is now a whole set of actions.
+  // Hand-history replay reuses this seat without one.
+  actionsMenu?: ReactNode;
 }) {
   const cards = seat.hole_cards;
   const hoverCapable = useHoverCapable();
@@ -267,7 +273,11 @@ export function Seat({
     </span>}
     <PlayerAvatar className="seat-avatar" name={seat.name} avatarUrl={seat.avatar_url}
                   isViewer={isViewer} decorative/>
-    {!isViewer && onEditNote && <button type="button"
+    {!isViewer && actionsMenu && <span className="seat-actions-trigger">
+      {playerNote?.tag && <span className={`player-note-dot tag-${playerNote.tag}`} aria-hidden="true"/>}
+      {actionsMenu}
+    </span>}
+    {!isViewer && !actionsMenu && onEditNote && <button type="button"
                                         className={`seat-note-trigger ${playerNote ? 'has-note' : ''}`}
                                         aria-label={playerNote ? `Editar nota privada sobre ${seat.name || 'jogador'}` : `Adicionar nota privada sobre ${seat.name || 'jogador'}`}
                                         title={playerNote ? 'Editar nota privada' : 'Adicionar nota privada'}

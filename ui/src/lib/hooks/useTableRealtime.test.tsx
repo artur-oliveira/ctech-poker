@@ -690,6 +690,50 @@ describe('useTableRealtime', () => {
     }));
   });
 
+  test('suppresses a muted player without touching their seat or actions', () => {
+    const suppressed = new Set(['player-2']);
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER, undefined, undefined, suppressed));
+    receive({
+      type: 'state',
+      snapshot: snapshot({
+        chat_messages: [
+          {id: 'chat-1', player_id: 'player-2', message: 'oi', timestamp: 9_000},
+          {id: 'chat-2', player_id: VIEWER, message: 'olá', timestamp: 9_100},
+        ],
+        reactions: [{
+          id: 'reaction-1', player_id: 'player-2', reaction_id: 'angry', timestamp: 9_000,
+          expires_at: Date.now() + 10_000,
+        }],
+      }),
+    });
+    receive({type: 'chat', action_id: 'chat-3', player_id: 'player-2', message: 'de novo'});
+    receive({type: 'reaction', action_id: 'reaction-2', player_id: 'player-2', reaction_id: 'clap'});
+
+    expect(result.current.chat).toEqual([expect.objectContaining({player: VIEWER})]);
+    expect(result.current.chatBubbles['player-2']).toBeUndefined();
+    expect(result.current.reactions).toHaveLength(0);
+    // The poker surface is untouched: the seat, its stack and its bets remain.
+    expect(result.current.snapshot?.seats.some(seat => seat.player_id === 'player-2')).toBe(true);
+  });
+
+  test('drops content already on screen the moment a mute is confirmed', () => {
+    const {result, rerender} = renderHook(
+      ({suppressed}: {suppressed?: ReadonlySet<string>}) =>
+        useTableRealtime('table-1', VIEWER, undefined, undefined, suppressed),
+      {initialProps: {suppressed: undefined as ReadonlySet<string> | undefined}});
+    receive({type: 'state', snapshot: snapshot()});
+    receive({type: 'chat', action_id: 'chat-1', player_id: 'player-2', message: 'provocação'});
+    receive({type: 'reaction', action_id: 'reaction-1', player_id: 'player-2', reaction_id: 'clap'});
+    expect(result.current.chat).toHaveLength(1);
+    expect(result.current.chatBubbles['player-2']).toBeDefined();
+    expect(result.current.reactions).toHaveLength(1);
+
+    rerender({suppressed: new Set(['player-2'])});
+    expect(result.current.chat).toHaveLength(0);
+    expect(result.current.chatBubbles['player-2']).toBeUndefined();
+    expect(result.current.reactions).toHaveLength(0);
+  });
+
   test('ignores a reaction the client does not know how to draw', () => {
     const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
     receive({type: 'state', snapshot: snapshot()});
