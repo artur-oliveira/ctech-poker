@@ -84,6 +84,15 @@ describe('lobby people drawer', () => {
     expect(screen.getByRole('link', {name: /Ver todas as pessoas/})).toHaveAttribute('href', '/people');
   });
 
+  // The drawer sits over a live lobby, like the profile popover: no dimming
+  // layer, and the page behind stays scrollable.
+  test('opens without a backdrop', async () => {
+    const {baseElement} = renderDrawer();
+    await userEvent.click(screen.getByRole('button', {name: /Pessoas/}));
+    expect(await screen.findByText('Bia')).toBeInTheDocument();
+    expect(baseElement.querySelector('.bg-black\\/75')).toBeNull();
+  });
+
   test('enters a table from an invite and closes the drawer', async () => {
     renderDrawer();
     await userEvent.click(screen.getByRole('button', {name: /Pessoas/}));

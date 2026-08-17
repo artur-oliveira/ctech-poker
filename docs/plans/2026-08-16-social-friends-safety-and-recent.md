@@ -318,6 +318,18 @@ O badge de não lidos fica no gatilho “Pessoas” e é alimentado pelos evento
 só era limpo navegando até `/people` e abrindo a aba Atividades, e ficava preso em “1” depois que um amigo aceitava a
 solicitação (corrigido em 2026-08-17).
 
+Geometria do drawer (`.social-drawer`): o `DialogContent` se centraliza com `-translate-x-1/2 -translate-y-1/2`, que
+no Tailwind v4 compila para a propriedade `translate`. Um `transform: none`/`translate: none` escrito no `globals.css`
+não vence isso — o Lightning CSS funde as duas declarações em um único `transform`, e a `translate` do utilitário
+sobrevive. O cancelamento é feito pela classe `translate-none` no próprio elemento, que o `tailwind-merge` reconhece e
+usa para remover os utilitários conflitantes. Sem isso o drawer ficava deslocado metade do próprio tamanho para fora da
+tela, no desktop e no mobile (corrigido em 2026-08-17). Só `.social-drawer-body` rola; título e botão de fechar ficam
+fixos no painel, e o padding fica nos filhos (`p-0` no painel) para a barra de rolagem encostar na borda.
+
+O drawer não é modal: `<Dialog modal={false}>` + `<DialogContent backdrop={false}>` — mesma sensação do popover de
+perfil, sem camada escurecida e com o lobby atrás ainda rolável. `backdrop` é uma prop nova de `DialogContent`, com
+default `true`, então todos os outros diálogos seguem modais.
+
 Eventos `friend_accepted` são avisos, não pedidos: nascem com `status: accepted`. Apenas `friend_request` e
 `table_invite` ficam `pending` — o primeiro respondido pela aba Solicitações, o segundo pela própria linha do inbox.
 

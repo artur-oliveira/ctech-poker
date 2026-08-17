@@ -14787,13 +14787,34 @@ button.deck-grid-slot:hover {
     width: min(420px, 100%);
     max-width: none;
     height: 100dvh;
-    /* DialogContent centers itself with Tailwind v4's -translate-*, which
-       compiles to the `translate` property, not `transform` — cancelling only
-       `transform` left the drawer shifted half its size off the top-right. */
-    transform: none;
-    translate: none;
+    /* The centering DialogContent applies (-translate-x-1/2 -translate-y-1/2)
+       is cancelled by the `translate-none` utility on the element, not here:
+       Lightning CSS folds a plain `translate`/`transform` declaration into a
+       single `transform`, which loses to Tailwind's `translate` property. */
     border-radius: var(--rounded-panel) 0 0 var(--rounded-panel);
-    overflow-y: auto
+    display: flex;
+    flex-direction: column;
+    overflow: hidden
+}
+
+/* Only the list scrolls. The title and the absolutely positioned close button
+   belong to the panel, so they stay reachable however long the feed gets.
+   The panel itself carries no padding (`p-0`): the inset comes from its
+   children, so the scrollbar hugs the panel edge instead of floating 24px in. */
+.social-drawer > div {
+    padding-inline: 24px
+}
+
+.social-drawer > div:first-child {
+    padding-top: 24px
+}
+
+.social-drawer-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: 24px;
+    overscroll-behavior: contain
 }
 
 .social-drawer h3 {
@@ -14846,6 +14867,14 @@ button.deck-grid-slot:hover {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap
+}
+
+/* Activity rows carry a whole sentence, not a nickname: clipping it to one
+   line hides who did what. */
+.people-row-activity .people-row-identity b {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal
 }
 
 .people-row-identity small {

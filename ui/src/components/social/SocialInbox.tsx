@@ -62,7 +62,8 @@ export function SocialInbox({events, isLoading = false, isError = false, hasNext
     <ul className="people-list">
       {events.map(event => {
         const busy = actions.pending?.id === event.event_id;
-        return <li key={event.event_id} className={`people-row ${event.unread ? 'is-unread' : ''}`}>
+        return <li key={event.event_id}
+                   className={`people-row people-row-activity ${event.unread ? 'is-unread' : ''}`}>
           <div className="people-row-identity">
             <b>{socialEventCopy(event, nameOf(event.actor_id))}</b>
             <small>{new Date(event.created_at).toLocaleString('pt-BR')}</small>
