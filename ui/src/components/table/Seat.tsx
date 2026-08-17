@@ -1,5 +1,5 @@
 import {type CSSProperties, useState} from 'react';
-import {useHoverCapable} from '@/lib/hooks/useHoverCapable';
+import {useLiveNow} from '@/lib/hooks/useLiveNow';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {Progress} from '@/components/ui/progress';
 import {ChipStack} from '@/components/table/ChipStack';
@@ -161,11 +161,11 @@ export function Seat({
   chatBubble?: { id: string; message: string };
 }) {
   const cards = seat.hole_cards;
-  const hoverCapable = useHoverCapable();
-  const [clicked, setClicked] = useState<[boolean, boolean]>([false, false]);
-  const [hovering, setHovering] = useState<[boolean, boolean]>([false, false]);
-  // peekReported gates the achievement breadcrumb to once per hand, from
-  // whichever interaction (click or hover) shows a card first.
+  // Peeking is click-only: hover used to reveal too, which made the click that
+  // followed it a no-op (the card was already face-up) and made hiding again
+  // impossible while the pointer still sat on the card.
+  const [peeked, setPeeked] = useState<[boolean, boolean]>([false, false]);
+  // peekReported gates the achievement breadcrumb to once per hand.
   const [peekReported, setPeekReported] = useState(false);
   // Reset the peek gate when a new hand deals in, following React's
   // "adjusting state when a prop changes" pattern (setState during render,
@@ -174,41 +174,48 @@ export function Seat({
   const [handIdSeen, setHandIdSeen] = useState(handId);
   if (handId !== handIdSeen) {
     setHandIdSeen(handId);
-    setClicked([false, false]);
-    setHovering([false, false]);
+    setPeeked([false, false]);
     setPeekReported(false);
   }
-  const peeked: [boolean, boolean] = [clicked[0] || hovering[0], clicked[1] || hovering[1]];
-  const reportPeekOnce = () => {
-    if (peekReported) return;
-    setPeekReported(true);
-    onPeekCards?.();
-  };
   const togglePeek = (i: 0 | 1) => {
-    setClicked(prev => {
+    setPeeked(prev => {
       const next: [boolean, boolean] = [...prev];
       next[i] = !next[i];
       return next;
     });
-    reportPeekOnce();
+    if (!peekReported) {
+      setPeekReported(true);
+      onPeekCards?.();
+    }
   };
-  const setHover = (i: 0 | 1) => (hover: boolean) => {
-    setHovering(prev => {
-      const next: [boolean, boolean] = [...prev];
-      next[i] = hover;
-      return next;
-    });
-    if (hover) reportPeekOnce();
-  };
+  // onPeekCards is only ever wired on the live table page; hand-history replay
+  // reuses this same Seat/TableStage pair to show already-resolved hole cards
+  // and must never gate them behind a live-only interaction. handComplete lifts
+  // the gate too: the hand is over, the cards are the viewer's own again.
+  const peekGated = isViewer && !handComplete && Boolean(onPeekCards);
   const chance = seat.equity == null ? null : Math.round(seat.equity * 100);
+  // Equity is computed from the viewer's own hole cards, so publishing it
+  // before they have looked hands them the exact knowledge the "all-in without
+  // peeking" / "won without peeking" achievements require them not to have.
+  // One peeked card is not enough either — equity plus one card still narrows
+  // the other down. The server sends this unconditionally; the gate is here,
+  // alongside the rest of the client-side peek state.
+  const showEquity = chance != null && isViewer && (!peekGated || (peeked[0] && peeked[1]));
   const pendingName = !isViewer && !seat.name;
   const isDisconnected = seat.connection_state === 'disconnected';
+  // Both deadlines pass without any broadcast to mark them, so the handover
+  // from the decision clock to the time bank has to be driven by a live clock.
+  // `nowMs` (the last snapshot's arrival time) can only cross baseDeadlineMs
+  // when a snapshot happens to land mid-burn — which is why the hourglass used
+  // to appear on a reload and essentially never otherwise.
+  const liveNow = useLiveNow(Boolean(isTurn && actionDeadlineMs));
+  const clockNow = isTurn && actionDeadlineMs ? liveNow : nowMs;
   // The seat perimeter is the room's normal decision clock only. Once its
   // base deadline expires, the separately labelled time-bank readout owns the
   // remaining reserve; it must never lengthen or restart this rectangle.
-  const showNormalClock = Boolean(isTurn && baseDeadlineMs && nowMs && turnTimeoutMs && baseDeadlineMs > nowMs);
-  const showTimeBank = Boolean(isTurn && baseDeadlineMs && actionDeadlineMs && nowMs &&
-    nowMs >= baseDeadlineMs && actionDeadlineMs > nowMs);
+  const showNormalClock = Boolean(isTurn && baseDeadlineMs && clockNow && turnTimeoutMs && baseDeadlineMs > clockNow);
+  const showTimeBank = Boolean(isTurn && baseDeadlineMs && actionDeadlineMs && clockNow &&
+    clockNow >= baseDeadlineMs && actionDeadlineMs > clockNow);
   const stackFrom = credit > 0 ? seat.stack - credit : stackBefore ?? seat.stack;
   const displayStack = useCountUp(stackFrom, seat.stack);
   // Heads-up has the dealer double as the small blind, so one combined badge
@@ -224,12 +231,12 @@ export function Seat({
     {reactionTargetLabel && onReactionTarget && <button type="button" className="seat-reaction-target"
                                                         aria-label={`${reactionTargetLabel} em ${playerName(seat.player_id, undefined, seat.name)}`}
                                                         onClick={onReactionTarget}><span>Escolher</span></button>}
-    {showNormalClock && baseDeadlineMs && nowMs && turnTimeoutMs &&
+    {showNormalClock && baseDeadlineMs && clockNow && turnTimeoutMs &&
         <SeatTurnTimer key={baseDeadlineMs} baseDeadlineMs={baseDeadlineMs}
-                       observedAtMs={nowMs} durationMs={turnTimeoutMs}/>}
-    {showTimeBank && baseDeadlineMs && actionDeadlineMs && nowMs &&
+                       observedAtMs={clockNow} durationMs={turnTimeoutMs}/>}
+    {showTimeBank && baseDeadlineMs && actionDeadlineMs && clockNow &&
         <SeatTimeBank key={actionDeadlineMs} baseDeadlineMs={baseDeadlineMs}
-                     actionDeadlineMs={actionDeadlineMs} observedAtMs={nowMs}/>}
+                     actionDeadlineMs={actionDeadlineMs} observedAtMs={clockNow}/>}
     {role && <span className={`seat-role ${isDealer ? 'is-dealer' : ''}`} title={ROLE_LABELS[role]}
                    aria-label={ROLE_LABELS[role]}>{role}</span>}
     {streak !== 0 && <span className={`seat-streak ${streak > 0 ? 'is-hot' : 'is-cold'}`}
@@ -246,18 +253,13 @@ export function Seat({
     <div className={`seat-cards ${isWinner && winAmount > 0 ? 'is-collecting' : ''}`}>{[0, 1].map(i => {
       const card = cards?.[i];
       const publiclyRevealed = seat.hole_cards_revealed?.[i] ?? false;
-      // onPeekCards is only ever wired on the live table page; hand-history
-      // replay reuses this same Seat/TableStage pair to show already-resolved
-      // hole cards and must never gate them behind a live-only interaction.
-      const peekableCard = isViewer && !handComplete && Boolean(onPeekCards);
       return <PlayingCard key={`${i}-${card || 'back'}`} card={card} index={i} size="hole"
                           owner={isViewer ? 'viewer' : 'opponent'}
                           onReveal={canRevealCards && !publiclyRevealed ? () => onRevealCardAction?.(i) : undefined}
                           revealPending={revealPending}
-                          peekable={peekableCard}
+                          peekable={peekGated}
                           peeked={peeked[i]}
-                          onPeekToggle={peekableCard ? () => togglePeek(i as 0 | 1) : undefined}
-                          onPeekHover={peekableCard && hoverCapable ? setHover(i as 0 | 1) : undefined}/>;
+                          onPeekToggle={peekGated ? () => togglePeek(i as 0 | 1) : undefined}/>;
     })}</div>
     {isWinner && winAmount > 0 && <span key={`confetti-${winAmount}`} className="seat-confetti" aria-hidden="true">
       {SEAT_CONFETTI_ANGLES.map((rot, i) => <span key={i} style={{
@@ -278,7 +280,7 @@ export function Seat({
     <div className="seat-info">
       {playstyle && <span className="seat-playstyle" title={playstyle.reason}>{playstyle.label}</span>}
       <b
-        title={seat.name || undefined}>{playerName(seat.player_id, isViewer ? seat.player_id : undefined, seat.name)}</b><span>{displayStack.toLocaleString('pt-BR')} fichas</span>{chance != null && isViewer &&
+        title={seat.name || undefined}>{playerName(seat.player_id, isViewer ? seat.player_id : undefined, seat.name)}</b><span>{displayStack.toLocaleString('pt-BR')} fichas</span>{showEquity && chance != null &&
         <div className="seat-equity" aria-label={`Chance estimada de vitória: ${chance}%`}>
             <Progress value={chance} indicatorClassName={equityTone(chance)}/>
             <small>Chance {chance}%</small>

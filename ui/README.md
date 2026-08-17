@@ -186,7 +186,24 @@ unverifiable — there is no backfill, because the seed is not retained anywhere
   `PurchaseModal`'s `DialogContent`, fed the trigger ref the store keeps — not a `requestAnimationFrame`
   callback, which raced base-ui's own close teardown and intermittently left focus on `<body>`.
 - **Equity** — `Seat` renders `seat.equity` from the server snapshot. There is no client-side
-  equity calculator; the client cannot be given the remaining-deck composition.
+  equity calculator; the client cannot be given the remaining-deck composition. The readout is
+  additionally gated on the viewer having peeked **both** of their own hole cards (see below): the
+  server sends equity as soon as it has it, and showing it earlier would hand the player the exact
+  knowledge the "all-in/won without peeking" achievements require them not to have — with one card
+  peeked, equity narrows the other down too.
+- **Private card peek** — mid-hand, the viewer's own hole cards stay face-down behind a
+  click-to-flip gate (`PlayingCard`'s `peekable`/`peeked`, state owned per hand by `Seat`), and the
+  first flip reports one `peek_cards` breadcrumb over the socket for the "without peeking"
+  achievements. Click only, never hover: hover reveal made the following click a no-op and left no
+  way to hide a card while the pointer rested on it. Both faces stay mounted in both states so the
+  flip is a CSS transition off `.is-peeked` and animates in *both* directions; face-down cards
+  carry a bounded `peek-nudge` wobble so the affordance is discoverable without hover. The gate
+  lifts once the hand completes (or when `onPeekCards` is absent, e.g. hand-history replay).
+- **Turn clock vs. time bank** — the seat ring and the `ActionBar` reserve readout both switch at
+  `action_base_deadline_unix_ms`, an instant no broadcast coincides with, so both drive that gate
+  off `useLiveNow` rather than the frozen `snapshotAt`. Countdown *geometry* still comes from
+  snapshot props (a running CSS animation must not be rewritten by unrelated snapshots); only the
+  phase decision is live.
 - **Sandbox refund safety** — confirmed sandbox purchases expose a **Solicitar estorno** review, not an unconditional reversal. The dialog shows the exact Pix amount, package credits, projected sandbox balance, and the server-enforced eligibility rule: any sandbox-wallet debit after the purchase credit makes it ineligible. The server remains authoritative; the dialog owns verification, pending, success, and recoverable error states. This flow only reverses unused sandbox purchases and remains architecturally separate from gated real-money deposits.
 - **Self-HUD** (`SelfHudDialog`) — own VPIP/PFR/3-bet from `GET /v1.0/players/me/poker-stats`.
 - **Hand export** (`src/lib/handExport.ts`) and **hand sharing** (`ShareHandDialog`).

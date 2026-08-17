@@ -1110,6 +1110,27 @@ h1 em {
     }
 }
 
+/* "Look at me" wobble for a face-down hole card the viewer hasn't peeked yet.
+   Most of the cycle is rest so it reads as an occasional nudge rather than a
+   permanently vibrating card. */
+@keyframes peek-nudge {
+    0%, 62%, 100% {
+        transform: none
+    }
+    68% {
+        transform: translateY(-2px) rotate(-4deg)
+    }
+    74% {
+        transform: translateY(-2px) rotate(3.5deg)
+    }
+    80% {
+        transform: translateY(-1px) rotate(-2.5deg)
+    }
+    86% {
+        transform: rotate(1.5deg)
+    }
+}
+
 @keyframes wager-in {
     from {
         opacity: 0;
@@ -3797,9 +3818,9 @@ h1 em {
 /* Private "peek your own cards" gate: face-down by default, same button
    reset and hover lift as .revealable-card (the public-reveal-to-others
    button) since both sit in the same slot at different moments in a hand.
-   Once peeked, the button becomes an unstyled wrapper around the existing
-   .card-reveal flip visuals — overflow must go visible or the flip's
-   position:absolute layers clip against the face-down button's own bounds. */
+   The button wraps the .card-reveal flip layers in both states, so overflow
+   stays visible — the flip's position:absolute faces would otherwise clip
+   against the button's own bounds. */
 .peekable-card {
     position: relative;
     padding: 0;
@@ -3807,35 +3828,75 @@ h1 em {
     background: transparent;
     color: var(--paper);
     cursor: pointer;
-    overflow: hidden;
-    transition: transform 180ms var(--ease-out-quart), filter 180ms var(--ease-out-quart)
+    overflow: visible
 }
 
 .peekable-card:hover {
-    transform: translateY(-3px);
     filter: brightness(1.08)
 }
 
-.peekable-card > img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain
+/* Nudge the face-down cards so the peek affordance is discoverable without a
+   hover reveal. Bounded, and the node is keyed per hand in Seat.tsx, so it
+   plays once as the cards land; re-arming after a hide is intentional (the
+   card is face-down and asking to be looked at again). */
+.peekable-card:not(.is-peeked) {
+    animation: peek-nudge 2600ms var(--ease-out-quart) 3;
+    animation-delay: calc(var(--deal-index, 0) * 90ms)
 }
 
-.peekable-card:not(.is-peeked) > span {
+/* The peek flip must play in BOTH directions off one class toggle, which a
+   keyframe animation cannot do (it only ever runs on the way in). Transitions
+   read their timing from the state being transitioned *to*, so each direction
+   gets its own halves: the face on top shrinks over the first 220ms, the
+   opacity swap happens at the midpoint, the arriving face grows over the last
+   220ms. Mirrors @keyframes card-back-turn / card-front-turn. */
+.peekable-card .card-reveal-inner,
+.peekable-card .card-back,
+.peekable-card .card-front {
+    animation: none
+}
+
+.peekable-card .card-back {
+    opacity: 1;
+    transform: scaleX(1);
+    transition: transform 220ms var(--ease-out-quart) 220ms, opacity 0s linear 220ms
+}
+
+.peekable-card .card-front {
+    opacity: 0;
+    transform: scaleX(.04);
+    transition: transform 220ms var(--ease-out-quart), opacity 0s linear 220ms
+}
+
+.peekable-card.is-peeked .card-back {
+    opacity: 0;
+    transform: scaleX(.04);
+    transition: transform 220ms var(--ease-out-quart), opacity 0s linear 220ms
+}
+
+.peekable-card.is-peeked .card-front {
+    opacity: 1;
+    transform: scaleX(1);
+    transition: transform 220ms var(--ease-out-quart) 220ms, opacity 0s linear 220ms
+}
+
+.peekable-card > .peek-hint {
     position: absolute;
     inset: auto 2px 3px;
+    z-index: 3;
     padding: 2px;
     border-radius: var(--rounded-xs);
     background: var(--overlay-night-3);
     color: var(--paper);
     font: 700 7px var(--font-sans);
     line-height: 1.1;
-    text-align: center
+    text-align: center;
+    transition: opacity 160ms var(--ease-out-quart) 160ms
 }
 
-.peekable-card.is-peeked {
-    overflow: visible
+.peekable-card.is-peeked > .peek-hint {
+    opacity: 0;
+    transition-delay: 0s
 }
 
 .seat-info b, .seat-info span, .seat-info small {

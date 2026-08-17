@@ -1,13 +1,15 @@
-import {render, screen} from '@testing-library/react';
+import {act, render, screen} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {describe, expect, test, vi} from 'vitest';
+import {afterEach, describe, expect, test, vi} from 'vitest';
 import {Seat} from './Seat';
 import type {SeatView} from '@/lib/api/table';
 
 vi.mock('@/lib/hooks/useReducedMotionCountdown', () => ({useReducedMotionCountdown: () => 7}));
 vi.mock('@/lib/hooks/useDeckVariant', () => ({useDeckVariant: () => 'four-color'}));
-let hoverCapable = false;
-vi.mock('@/lib/hooks/useHoverCapable', () => ({useHoverCapable: () => hoverCapable}));
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const seat = (overrides: Partial<SeatView> = {}): SeatView => ({
   player_id: 'player-1', name: 'Bia', stack: 1000, state: 'active', dealt_in: true, contributed: 0, ...overrides,
@@ -84,9 +86,40 @@ describe('Seat', () => {
     expect(screen.queryByLabelText(/Chance estimada/)).not.toBeInTheDocument();
   });
 
+  describe('equity behind the peek gate', () => {
+    const peekSeat = seat({hole_cards: ['AH', 'KD'], equity: 0.9});
+
+    test('withholds equity until both of the viewer own cards have been peeked', async () => {
+      render_({seat: peekSeat, isViewer: true, onPeekCards: vi.fn()});
+      expect(screen.queryByLabelText(/Chance estimada/)).not.toBeInTheDocument();
+
+      const cards = screen.getAllByRole('button', {name: /^Ver sua/});
+      await userEvent.click(cards[0]);
+      expect(screen.queryByLabelText(/Chance estimada/)).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', {name: /^Ver sua 2ª/}));
+      expect(screen.getByLabelText('Chance estimada de vitória: 90%')).toBeInTheDocument();
+    });
+
+    test('hides equity again when a peeked card is put back face-down', async () => {
+      render_({seat: peekSeat, isViewer: true, onPeekCards: vi.fn()});
+      for (const card of screen.getAllByRole('button', {name: /^Ver sua/})) await userEvent.click(card);
+      expect(screen.getByLabelText('Chance estimada de vitória: 90%')).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', {name: /^Ocultar sua 1ª/}));
+      expect(screen.queryByLabelText(/Chance estimada/)).not.toBeInTheDocument();
+    });
+
+    test('shows equity with no peek gate once the hand completes', () => {
+      render_({seat: peekSeat, isViewer: true, onPeekCards: vi.fn(), handComplete: true});
+      expect(screen.getByLabelText('Chance estimada de vitória: 90%')).toBeInTheDocument();
+    });
+  });
+
   test('runs the decision clock while the base deadline is still ahead', () => {
+    const now = Date.now();
     const {container} = render_({
-      isTurn: true, baseDeadlineMs: 2000, actionDeadlineMs: 5000, nowMs: 1000, turnTimeoutMs: 3000,
+      isTurn: true, baseDeadlineMs: now + 1000, actionDeadlineMs: now + 4000, nowMs: now, turnTimeoutMs: 3000,
     });
     expect(container.querySelector('.seat-turn-ring')).toBeInTheDocument();
     expect(container.querySelector('.seat-timebank-ring')).toBeNull();
@@ -94,8 +127,9 @@ describe('Seat', () => {
   });
 
   test('hands over to the labelled time bank once the decision clock expires', () => {
+    const now = Date.now();
     const {container} = render_({
-      isTurn: true, baseDeadlineMs: 2000, actionDeadlineMs: 5000, nowMs: 3000, turnTimeoutMs: 3000,
+      isTurn: true, baseDeadlineMs: now - 1000, actionDeadlineMs: now + 2000, nowMs: now, turnTimeoutMs: 3000,
     });
     expect(container.querySelector('.seat-turn-ring')).toBeNull();
     expect(container.querySelector('.seat-timebank-ring')).toBeInTheDocument();
@@ -103,10 +137,27 @@ describe('Seat', () => {
   });
 
   test('shows no ring at all once both deadlines are behind', () => {
+    const now = Date.now();
     const {container} = render_({
-      isTurn: true, baseDeadlineMs: 2000, actionDeadlineMs: 5000, nowMs: 9000, turnTimeoutMs: 3000,
+      isTurn: true, baseDeadlineMs: now - 7000, actionDeadlineMs: now - 4000, nowMs: now, turnTimeoutMs: 3000,
     });
     expect(container.querySelector('.seat-turn-ring')).toBeNull();
+    expect(container.querySelector('.seat-timebank-ring')).toBeNull();
+  });
+
+  test('starts the time bank readout off a live clock, with no fresh snapshot to mark the handover', () => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    const {container} = render_({
+      isTurn: true, baseDeadlineMs: now + 1000, actionDeadlineMs: now + 4000, nowMs: now, turnTimeoutMs: 3000,
+    });
+    expect(container.querySelector('.seat-timebank-ring')).toBeNull();
+
+    act(() => void vi.advanceTimersByTime(1500));
+    expect(container.querySelector('.seat-turn-ring')).toBeNull();
+    expect(screen.getByLabelText('Jogador usando o time bank')).toBeInTheDocument();
+
+    act(() => void vi.advanceTimersByTime(3000));
     expect(container.querySelector('.seat-timebank-ring')).toBeNull();
   });
 
@@ -176,27 +227,35 @@ describe('Seat', () => {
       expect(onPeekCards).toHaveBeenCalledOnce();
     });
 
+    test('keeps one flippable node across both peek states so the turn animates each way', async () => {
+      render_({seat: seat({hole_cards: ['AH', 'KD']}), isViewer: true, onPeekCards: vi.fn()});
+      const card = screen.getAllByRole('button', {name: /^Ver sua/})[0];
+      expect(card).toHaveClass('card-reveal');
+      expect(card).not.toHaveClass('is-peeked');
+      expect(card.querySelector('.card-back')).toBeInTheDocument();
+      expect(card.querySelector('.card-front')).toBeInTheDocument();
+
+      await userEvent.click(card);
+      expect(card).toHaveClass('is-peeked');
+      expect(card.querySelector('.card-back')).toBeInTheDocument();
+      expect(card.querySelector('.card-front')).toBeInTheDocument();
+
+      await userEvent.click(card);
+      expect(card).not.toHaveClass('is-peeked');
+    });
+
+    test('never reveals on hover alone', async () => {
+      render_({seat: seat({hole_cards: ['AH', 'KD']}), isViewer: true, onPeekCards: vi.fn()});
+      const [firstCard] = screen.getAllByRole('button', {name: /^Ver sua/});
+      await userEvent.hover(firstCard);
+      expect(firstCard).not.toHaveClass('is-peeked');
+      expect(screen.queryByRole('button', {name: /^Ocultar sua/})).not.toBeInTheDocument();
+    });
+
     test('auto-reveals the viewer own cards once the hand completes, with no peek gate at all', () => {
       render_({seat: seat({hole_cards: ['AH', 'KD']}), isViewer: true, onPeekCards: vi.fn(), handComplete: true});
       expect(screen.queryByRole('button', {name: /^Ver sua/})).not.toBeInTheDocument();
       expect(screen.queryByRole('button', {name: /^Ocultar sua/})).not.toBeInTheDocument();
-    });
-
-    test('hovering reveals on desktop and reports the peek, mouse leave hides it again', async () => {
-      hoverCapable = true;
-      try {
-        const onPeekCards = vi.fn();
-        render_({seat: seat({hole_cards: ['AH', 'KD']}), isViewer: true, onPeekCards});
-        const [firstCard] = screen.getAllByRole('button', {name: /^Ver sua/});
-        await userEvent.hover(firstCard);
-        expect(screen.getByRole('button', {name: /Ocultar sua 1ª carta/})).toBeInTheDocument();
-        expect(onPeekCards).toHaveBeenCalledOnce();
-
-        await userEvent.unhover(screen.getByRole('button', {name: /Ocultar sua 1ª carta/}));
-        expect(screen.getByRole('button', {name: 'Ver sua 1ª carta'})).toBeInTheDocument();
-      } finally {
-        hoverCapable = false;
-      }
     });
   });
 

@@ -8,6 +8,7 @@ import type {ActionError} from '@/lib/hooks/useTableRealtime';
 import {betShortcutAmount} from '@/lib/betShortcuts';
 import {VoiceActionButton} from '@/components/table/VoiceActionButton';
 import {type ActionPreselection, resolvePreselection} from '@/lib/actionPreselection';
+import {useLiveNow} from '@/lib/hooks/useLiveNow';
 
 export type ActionAvailability = Record<PokerAction, boolean>
 
@@ -76,16 +77,9 @@ function TimeBankStatus({isTurn, baseDeadline, actionDeadline, balance}: {
   actionDeadline?: number;
   balance: number;
 }) {
-  const [now, setNow] = useState(() => Date.now());
+  const now = useLiveNow(Boolean(isTurn && actionDeadline));
   const bankActive = Boolean(isTurn && baseDeadline && actionDeadline && now >= baseDeadline);
   const remaining = bankActive && actionDeadline ? Math.max(0, actionDeadline - now) : Math.max(0, balance);
-  
-  useEffect(() => {
-    if (!isTurn || !actionDeadline) return undefined;
-    const timer = window.setInterval(() => setNow(Date.now()), 250);
-    return () => window.clearInterval(timer);
-  }, [isTurn, actionDeadline]);
-  
   const seconds = Math.ceil(remaining / 1000);
   return <span className={`time-bank-status${bankActive ? ' active' : ''}${!isTurn ? ' inactive' : ''}`} role="timer"
                aria-label={`${bankActive ? 'Time bank em uso' : 'Time bank disponível'}: ${seconds} segundos`}
