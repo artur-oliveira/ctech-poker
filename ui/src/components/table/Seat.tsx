@@ -1,7 +1,5 @@
-import {type CSSProperties, useState} from 'react';
-import {useLiveNow} from '@/lib/hooks/useLiveNow';
 import {type CSSProperties, type ReactNode, useState} from 'react';
-import {useHoverCapable} from '@/lib/hooks/useHoverCapable';
+import {useLiveNow} from '@/lib/hooks/useLiveNow';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {Progress} from '@/components/ui/progress';
 import {ChipStack} from '@/components/table/ChipStack';
