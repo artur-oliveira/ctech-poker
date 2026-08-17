@@ -22,6 +22,7 @@ type Edge struct {
 	RequestedAt   int64        `dynamodbav:"requested_at,omitempty"`
 	FriendsSince  int64        `dynamodbav:"friends_since,omitempty"`
 	UpdatedAt     int64        `dynamodbav:"updated_at"`
+	Version       int64        `dynamodbav:"version"`
 }
 
 type TransitionKind string

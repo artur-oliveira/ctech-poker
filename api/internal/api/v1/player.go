@@ -397,6 +397,7 @@ func playerResponse(profile *player.PlayerProfile, avatarBaseURL string) fiber.M
 	return fiber.Map{
 		"user_id":                 profile.UserID,
 		"name":                    profile.Name,
+		"friend_code":             profile.FriendCode,
 		"avatar_url":              player.AvatarURL(profile, avatarBaseURL),
 		"wallet_mode":             profile.EffectiveWalletMode(),
 		"deck_variant":            profile.EffectiveDeckVariant(),

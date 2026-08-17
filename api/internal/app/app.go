@@ -43,6 +43,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
+	"gopkg.aoctech.app/poker/api/internal/social"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
@@ -83,6 +84,8 @@ var Module = fx.Options(
 		newReactionPurchaseService,
 		newReactionOwnershipCache,
 		newSessionStore,
+		newSocialStore,
+		newSocialService,
 		walletclient.New,
 		newBuyinService,
 		newPendingStore,
@@ -132,7 +135,7 @@ func newFiberApp(cfg *config.Config) *fiber.App {
 	// AllowCredentials requires explicit origins. Development intentionally
 	// leaves origins empty, which means wildcard/no credentials like Wallet.
 	corsCfg := cors.Config{
-		AllowMethods:  []string{"GET", "POST", "DELETE", "OPTIONS"},
+		AllowMethods:  []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:  []string{"Origin", "Content-Type", "Authorization", "X-Request-ID", "Idempotency-Key"},
 		ExposeHeaders: []string{"X-Request-ID"},
 		MaxAge:        3600,
@@ -317,6 +320,12 @@ func newReactionOwnershipCache(svc *reactionpurchase.Service, cacheB cache.Backe
 }
 func newSessionStore(db *dynamodb.Client, cfg *config.Config) *sessionlog.Store {
 	return sessionlog.NewStore(db, cfg.Env)
+}
+func newSocialStore(db *dynamodb.Client, cfg *config.Config) *social.Store {
+	return social.NewStore(db, cfg.Env)
+}
+func newSocialService(store *social.Store, cfg *config.Config) *social.Service {
+	return social.NewService(store, cfg.SocialGraphEnabled)
 }
 func newPendingStore(db *dynamodb.Client, cfg *config.Config) *reconcile.PendingStore {
 	return reconcile.NewPendingStore(db, cfg.Env)
@@ -702,8 +711,9 @@ func registerRoutes(
 	avatars *avatar.Service,
 	sandboxPurchaseSvc *sandboxpurchase.Service,
 	reactionPurchaseSvc *reactionpurchase.Service,
+	socialSvc *social.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, socialSvc)
 }
 
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {

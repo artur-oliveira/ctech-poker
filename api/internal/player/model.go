@@ -19,6 +19,7 @@ const DefaultDeckVariant = "four-color"
 type PlayerProfile struct {
 	UserID               string   `dynamodbav:"pk" json:"user_id"`
 	Name                 string   `dynamodbav:"name,omitempty" json:"name,omitempty"`
+	FriendCode           string   `dynamodbav:"friend_code,omitempty" json:"friend_code,omitempty"`
 	WalletMode           string   `dynamodbav:"wallet_mode,omitempty" json:"wallet_mode,omitempty"`
 	DeckVariant          string   `dynamodbav:"deck_variant,omitempty" json:"deck_variant,omitempty"`
 	ShowcasePublic       bool     `dynamodbav:"showcase_public,omitempty" json:"showcase_public"`

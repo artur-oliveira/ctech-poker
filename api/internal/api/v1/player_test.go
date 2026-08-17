@@ -65,7 +65,10 @@ func TestPlayerHistoryEndpoints(t *testing.T) {
 	})
 }
 
-type fakePlayerStore struct{ profile player.PlayerProfile }
+type fakePlayerStore struct {
+	profile  player.PlayerProfile
+	lookupID string
+}
 
 func (s *fakePlayerStore) GetOrCreate(_ context.Context, id string) (*player.PlayerProfile, error) {
 	s.profile.UserID = id
@@ -74,6 +77,18 @@ func (s *fakePlayerStore) GetOrCreate(_ context.Context, id string) (*player.Pla
 func (s *fakePlayerStore) Get(_ context.Context, id string) (*player.PlayerProfile, error) {
 	s.profile.UserID = id
 	return &s.profile, nil
+}
+func (s *fakePlayerStore) LookupByFriendCode(_ context.Context, code string) (*player.PlayerProfile, error) {
+	if normalized, ok := player.NormalizeFriendCode(code); !ok || normalized != s.profile.FriendCode {
+		return nil, nil
+	}
+	id := s.lookupID
+	if id == "" {
+		id = "friend-target"
+	}
+	profile := s.profile
+	profile.UserID = id
+	return &profile, nil
 }
 func (s *fakePlayerStore) AcceptTerms(_ context.Context, id string) error {
 	s.profile.UserID = id

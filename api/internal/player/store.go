@@ -2,7 +2,11 @@ package player
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base32"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -10,7 +14,12 @@ import (
 	"gopkg.aoctech.app/api-commons/dynamo"
 )
 
-const tablePlayerProfiles = "poker_player_profiles"
+const (
+	tablePlayerProfiles = "poker_player_profiles"
+	friendCodeIndex     = "gsi_friend_code"
+)
+
+var ErrFriendCodeCollision = errors.New("player: friend code collision")
 
 type Store struct{ base dynamo.Base }
 
@@ -22,11 +31,19 @@ func (s *Store) GetOrCreate(ctx context.Context, userID string) (*PlayerProfile,
 	if userID == "" {
 		return nil, fmt.Errorf("player: empty user id")
 	}
-	if profile, err := s.get(ctx, userID); err != nil || profile != nil {
-		return profile, err
+	if profile, err := s.get(ctx, userID); err != nil {
+		return nil, err
+	} else if profile != nil {
+		if profile.FriendCode != "" {
+			return profile, nil
+		}
+		if err := s.ensureFriendCode(ctx, userID); err != nil {
+			return nil, err
+		}
+		return s.get(ctx, userID)
 	}
 	now := dynamo.NowStr()
-	profile := PlayerProfile{UserID: userID, Name: RandomName(), CreatedAt: now, UpdatedAt: now}
+	profile := PlayerProfile{UserID: userID, Name: RandomName(), FriendCode: FriendCodeForUserID(userID), CreatedAt: now, UpdatedAt: now}
 	item, err := dynamo.Encode(profile)
 	if err != nil {
 		return nil, fmt.Errorf("player: encode: %w", err)
@@ -36,6 +53,86 @@ func (s *Store) GetOrCreate(ctx context.Context, userID string) (*PlayerProfile,
 		return nil, fmt.Errorf("player: create: %w", err)
 	}
 	return s.get(ctx, userID)
+}
+
+// FriendCodeForUserID returns a stable 60-bit identifier. It is intentionally
+// derived from the opaque account ID, never from mutable profile data.
+func FriendCodeForUserID(userID string) string {
+	digest := sha256.Sum256([]byte(userID))
+	encoded := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(digest[:])[:12]
+	return "PKR-" + encoded[:4] + "-" + encoded[4:8] + "-" + encoded[8:]
+}
+
+func NormalizeFriendCode(raw string) (string, bool) {
+	code := strings.ToUpper(strings.TrimSpace(raw))
+	if len(code) != len("PKR-XXXX-XXXX-XXXX") || !strings.HasPrefix(code, "PKR-") {
+		return "", false
+	}
+	for i, r := range code {
+		if i == 3 || i == 8 || i == 13 {
+			if r != '-' {
+				return "", false
+			}
+			continue
+		}
+		if i < 4 {
+			continue
+		}
+		if !(r >= 'A' && r <= 'Z') && !(r >= '2' && r <= '7') {
+			return "", false
+		}
+	}
+	return code, true
+}
+
+func (s *Store) ensureFriendCode(ctx context.Context, userID string) error {
+	_, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
+		Key:                 map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: userID}},
+		UpdateExpression:    aws.String("SET #code = :code, #updated = :updated"),
+		ConditionExpression: aws.String("attribute_exists(pk) AND attribute_not_exists(#code)"),
+		ExpressionAttributeNames: map[string]string{
+			"#code": "friend_code", "#updated": "updated_at",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":code":    &types.AttributeValueMemberS{Value: FriendCodeForUserID(userID)},
+			":updated": &types.AttributeValueMemberS{Value: dynamo.NowStr()},
+		},
+	})
+	if err != nil && !dynamo.IsConditionFailed(err) {
+		return fmt.Errorf("player: assign friend code: %w", err)
+	}
+	return nil
+}
+
+// LookupByFriendCode resolves only the canonical exact code. Returning a
+// collision error instead of an arbitrary account keeps discovery fail-safe.
+func (s *Store) LookupByFriendCode(ctx context.Context, raw string) (*PlayerProfile, error) {
+	code, ok := NormalizeFriendCode(raw)
+	if !ok {
+		return nil, nil
+	}
+	out, err := s.base.QueryRaw(ctx, &dynamodb.QueryInput{
+		IndexName:              aws.String(friendCodeIndex),
+		KeyConditionExpression: aws.String("friend_code = :code"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":code": &types.AttributeValueMemberS{Value: code},
+		},
+		Limit: aws.Int32(2),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("player: lookup friend code: %w", err)
+	}
+	if len(out.Items) > 1 {
+		return nil, ErrFriendCodeCollision
+	}
+	if len(out.Items) == 0 {
+		return nil, nil
+	}
+	profile, err := dynamo.Decode[PlayerProfile](out.Items[0])
+	if err != nil {
+		return nil, fmt.Errorf("player: decode friend-code lookup: %w", err)
+	}
+	return profile, nil
 }
 
 func (s *Store) get(ctx context.Context, userID string) (*PlayerProfile, error) {
@@ -60,6 +157,44 @@ func (s *Store) Get(ctx context.Context, userID string) (*PlayerProfile, error) 
 		return nil, fmt.Errorf("player: empty user id")
 	}
 	return s.get(ctx, userID)
+}
+
+func (s *Store) GetMany(ctx context.Context, userIDs []string) (map[string]PlayerProfile, error) {
+	result := make(map[string]PlayerProfile, len(userIDs))
+	if len(userIDs) == 0 {
+		return result, nil
+	}
+	if len(userIDs) > 100 {
+		return nil, fmt.Errorf("player: batch profile limit exceeded")
+	}
+	keys := make([]map[string]types.AttributeValue, 0, len(userIDs))
+	seen := make(map[string]bool, len(userIDs))
+	for _, userID := range userIDs {
+		if userID == "" || seen[userID] {
+			continue
+		}
+		seen[userID] = true
+		keys = append(keys, map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: userID}})
+	}
+	request := map[string]types.KeysAndAttributes{s.base.TableName: {Keys: keys}}
+	for attempt := 0; attempt < 4 && len(request) > 0; attempt++ {
+		out, err := s.base.BatchGetItemRaw(ctx, &dynamodb.BatchGetItemInput{RequestItems: request})
+		if err != nil {
+			return nil, fmt.Errorf("player: batch get profiles: %w", err)
+		}
+		for _, item := range out.Responses[s.base.TableName] {
+			profile, err := dynamo.Decode[PlayerProfile](item)
+			if err != nil {
+				return nil, fmt.Errorf("player: decode batch profile: %w", err)
+			}
+			result[profile.UserID] = *profile
+		}
+		request = out.UnprocessedKeys
+	}
+	if len(request) > 0 {
+		return nil, fmt.Errorf("player: batch get profiles remained unprocessed")
+	}
+	return result, nil
 }
 
 func (s *Store) SetName(ctx context.Context, userID, name string) error {

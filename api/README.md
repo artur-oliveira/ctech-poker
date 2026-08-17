@@ -126,13 +126,19 @@ Per-binary keys read outside `Config` (not in the struct above):
   `internal/chatfilter`, and an adaptive Turnstile challenge (`internal/botcheck`) issued over the socket.
 - Heartbeat: 30s ping / 45s pong wait.
 
-## Social rollout foundation
+## Social graph rollout
 
 `SOCIAL_GRAPH_ENABLED` defaults to `false` and will gate friendship, presence and table invitations. It does not gate
 the independent player-safety controls (mute, block and report). EC2 reads the switch from
-`/ctech/<env>/poker/social-graph-enabled` on each application start. The first infrastructure slice adds the storage
-contracts and package interfaces only; no social HTTP route is exposed yet. Mutating social routes will use
-`Idempotency-Key`, which is already accepted by the first-party CORS policy.
+`/ctech/<env>/poker/social-graph-enabled` on each application start. The friendship graph and exact friend-code lookup
+are implemented over conditional, mirrored DynamoDB transactions. All `/social` routes require a first-party Poker
+session (`azp=poker`, `sub` and `sid`); they are never available through delegated read scopes. Mutations require an
+`Idempotency-Key` of at most 128 characters, accepted by the first-party CORS policy.
+
+Friendship is capped at 200 friends and 50 pending outgoing requests. New requests are rate-limited to 30/day/player
+and 100/day/IP; all social mutations also have 120/min/player and 240/min/IP limits. Block includes mute and removes
+requests/friendship in both directions. Unblock deliberately preserves mute. The public API never exposes whether the
+other player blocked the caller, and safety operations remain available when the friendship feature flag is off.
 
 ## Game-server model (per-table actor + DynamoDB conditional writes)
 
@@ -201,6 +207,18 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /sandbox-credits/`                      | JWT             | `{remaining_time_seconds}` cooldown; scoped tokens require `poker:daily-reward:read`       |
 | `GET /wallet/sandbox-purchase/...`           | JWT             | catalog/history/detail reads; `poker:sandbox-purchases:read`                               |
 | `GET /wallet/reaction-purchase/...`          | JWT             | catalog/history/detail reads; `poker:reaction-purchases:read`                              |
+| `GET /social/friends`                        | first-party JWT | paginated mutual friends                                                                   |
+| `GET /social/friend-requests`                | first-party JWT | pending `?direction=incoming\|outgoing`; paginated                                         |
+| `GET /social/blocked`                        | first-party JWT | players blocked by the caller; paginated                                                   |
+| `GET /social/lookup/:friendCode`             | first-party JWT | exact `PKR-XXXX-XXXX-XXXX` lookup; no fuzzy/name search                                    |
+| `GET /social/relationships/:playerId`        | first-party JWT | caller-visible relationship, mute and block state                                          |
+| `POST /social/friend-requests`               | first-party JWT | request by exactly one player ID or friend code                                            |
+| `POST /social/friend-requests/:id/accept`    | first-party JWT | accept an incoming request                                                                 |
+| `POST /social/friend-requests/:id/decline`   | first-party JWT | decline an incoming request                                                                |
+| `DELETE /social/friend-requests/:id`         | first-party JWT | cancel an outgoing request                                                                 |
+| `DELETE /social/friends/:id`                 | first-party JWT | remove mutual friendship                                                                   |
+| `PUT\|DELETE /social/mutes/:id`              | first-party JWT | mute or unmute locally                                                                      |
+| `PUT\|DELETE /social/blocks/:id`             | first-party JWT | block or unblock locally; unblock preserves mute                                           |
 
 `achievement_points` is **rejected** as a leaderboard metric — no `gsi_achievement_points` exists, and returning an
 error beats silently ranking by a different GSI.

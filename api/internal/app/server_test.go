@@ -26,7 +26,7 @@ func TestFiberServerAppliesCredentialedCorsForConfiguredOrigin(t *testing.T) {
 	app.Get("/probe", func(c fiber.Ctx) error { return c.SendStatus(http.StatusNoContent) })
 	req, _ := http.NewRequest(http.MethodOptions, "/probe", nil)
 	req.Header.Set("Origin", "https://poker.aoctech.app")
-	req.Header.Set("Access-Control-Request-Method", "GET")
+	req.Header.Set("Access-Control-Request-Method", "PUT")
 	req.Header.Set("Access-Control-Request-Headers", "Idempotency-Key")
 	resp, err := app.Test(req)
 	if err != nil {
@@ -37,5 +37,8 @@ func TestFiberServerAppliesCredentialedCorsForConfiguredOrigin(t *testing.T) {
 	}
 	if allowed := resp.Header.Get("Access-Control-Allow-Headers"); !strings.Contains(allowed, "Idempotency-Key") {
 		t.Fatalf("Idempotency-Key missing from CORS allow headers: %q", allowed)
+	}
+	if allowed := resp.Header.Get("Access-Control-Allow-Methods"); !strings.Contains(allowed, "PUT") {
+		t.Fatalf("PUT missing from CORS allow methods: %q", allowed)
 	}
 }
