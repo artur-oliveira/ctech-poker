@@ -1,7 +1,7 @@
 # Plano de implementação — Pessoas, amizade, segurança e jogadores recentes
 
 Data: 2026-08-16  
-Status: em implementação; PRs 1–4 (infraestrutura, grafo social, inbox/convites, presença e recentes) concluídos localmente
+Status: em implementação; PRs 1–5 (backend social, presença/recentes e denúncias/operação) concluídos localmente
 Escopo: `api/`, `ui/`, `proto/`, `cdk/` e documentação operacional
 
 ## 1. Resultado esperado

@@ -61,7 +61,7 @@ test('synthesizes without error and declares exactly one ASG', () => {
   template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
   template.hasResourceProperties('AWS::IAM::Role', {RoleName: 'dev-ctech-poker-api-role'});
   template.resourceCountIs('AWS::IAM::InstanceProfile', 1);
-  template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 4);
   template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
     DashboardName: 'dev-ctech-poker-operations',
   });
@@ -87,8 +87,13 @@ test('synthesizes without error and declares exactly one ASG', () => {
     'OldestPendingCashoutAgeSeconds',
     'ConnectionsOpened',
     'HTTPResponses',
+    'PlayerReported',
+    'SocialRateLimited',
   ]) {
     expect(rendered).toContain(signal);
+  }
+  for (const alarm of ['dev-ctech-poker-player-report-spike', 'dev-ctech-poker-social-rate-limit-spike']) {
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {AlarmName: alarm});
   }
   expect(rendered).not.toContain('AWS::WAFv2');
   template.hasResourceProperties('AWS::AutoScaling::LifecycleHook', {

@@ -163,6 +163,18 @@ not change the committed hand. The first empty `GET /social/recent` lazily reads
 hand history (no global scan). Results are capped at 50, hydrate profiles with `BatchGetItem`, and omit a pair when
 either direction contains a block.
 
+Player reports are accepted only from first-party Poker sessions at `POST /social/reports`, require an
+`Idempotency-Key`, and are limited to 10/hour/player and 50/hour/IP. Categories and surfaces are enumerated; optional
+details are capped at 500 Unicode characters. For table chat and reactions the client supplies only table, hand and
+action IDs: the server resolves the action inside that hand's DynamoDB partition, verifies the reported actor and
+copies the already-sanitized message or catalog reaction ID. Neither free text nor copied evidence is returned by HTTP,
+logged, or used as a metric dimension. The legacy avatar-report route writes the new moderation queue and retains its
+existing profile reporter set during migration.
+
+Open reports have no TTL. `cmd/moderation` is the credential-gated operator interface for `list`, `show`, `review` and
+`resolve`; only `show` reveals details/evidence. Resolution adds a 180-day TTL and accepts only the runbook's four
+resolution codes. See `../docs/runbooks/poker-social-moderation.md` for triage, escalation and least-access procedures.
+
 ## Game-server model (per-table actor + DynamoDB conditional writes)
 
 This matches the **revised** model in `ARCHITECTURE.md §2` — *not* a Redis-lease authority.
@@ -238,6 +250,7 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /social/summary`                        | first-party JWT | current unread inbox count                                                                 |
 | `GET /social/inbox`                          | first-party JWT | durable in-app events, newest first; paginated                                             |
 | `GET /social/recent`                         | first-party JWT | recent opponents for 90 days; blocked pairs omitted; paginated to 50                      |
+| `POST /social/reports`                       | first-party JWT | idempotent player-safety report; authoritative evidence; returns `202`                    |
 | `POST /social/friend-requests`               | first-party JWT | request by exactly one player ID or friend code                                            |
 | `POST /social/friend-requests/:id/accept`    | first-party JWT | accept an incoming request                                                                 |
 | `POST /social/friend-requests/:id/decline`   | first-party JWT | decline an incoming request                                                                |

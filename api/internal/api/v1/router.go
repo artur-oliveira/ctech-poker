@@ -23,6 +23,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/presence"
 	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
 	"gopkg.aoctech.app/poker/api/internal/recentplayers"
+	"gopkg.aoctech.app/poker/api/internal/reports"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
@@ -62,6 +63,7 @@ func Register(
 	socialSvc *social.Service,
 	presenceSvc *presence.Service,
 	recentSvc *recentplayers.Service,
+	reportSvc *reports.Service,
 ) {
 	oauthresource.Register(app, cfg.ServiceAudience, cfg.CtechIssuerURL)
 	router := app.Group("/v1.0")
@@ -91,9 +93,11 @@ func Register(
 	friendRequestIPLimiter := NewRateLimiter(cacheBackend, 100, 24*time.Hour)
 	inviteSenderLimiter := NewRateLimiter(cacheBackend, 20, time.Minute)
 	inviteRecipientLimiter := NewRateLimiter(cacheBackend, 5, time.Minute)
+	reportPlayerLimiter := NewRateLimiter(cacheBackend, 10, time.Hour)
+	reportIPLimiter := NewRateLimiter(cacheBackend, 50, time.Hour)
 
 	RegisterRooms(router, auth, rooms, buyinSvc, manager, reg, cfg, createLimiter, joinLimiter)
-	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter, pokerStatsStore)
+	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter, pokerStatsStore, reportSvc)
 	RegisterPlayerNotes(router, auth, playerNoteStore)
 	RegisterHandShares(router, auth, sessionStore, tableStore, handShareStore)
 	RegisterPokerStats(router, auth, pokerStatsStore)
@@ -109,4 +113,5 @@ func Register(
 		InviteSender:    inviteSenderLimiter,
 		InviteRecipient: inviteRecipientLimiter,
 	}, presenceSvc, recentSvc)
+	RegisterReports(router, auth, reportSvc, cfg, ReportLimiters{Player: reportPlayerLimiter, IP: reportIPLimiter})
 }

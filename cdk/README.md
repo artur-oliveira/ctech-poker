@@ -45,8 +45,10 @@ Go Lambdas are bundled by `lib/bundle.ts` (`localGoBundling` — local `go build
 - User data downloads only the official Cloudflare Origin CA RSA root, verifies
   its pinned SHA-256 and installs it, so internal TLS calls to
   `*.internal.aoctech.app` retain full certificate verification.
-- Alarms: a metric filter on log lines containing `ALARM:` → `AlarmLogLines`, plus a `LeaseFailovers`
-  spike alarm (threshold 5 over 2 periods).
+- Alarms: a metric filter on log lines containing `ALARM:` → `AlarmLogLines`, `LeaseFailovers` spike,
+  `PlayerReported` above the initial moderation baseline, and sustained `SocialRateLimited`. The operations dashboard
+  charts report volume and social throttling without player, room or free-text dimensions; open backlog is checked via
+  the moderation runbook rather than a per-player metric.
 - CloudWatch Agent publishes four bounded 60-second host series under
   `CtechPoker/<env>/Host`: memory %, swap %, root-disk %, and application RSS.
   EC2's native `CPUUtilization`/`CPUCreditBalance` remain the CPU source.

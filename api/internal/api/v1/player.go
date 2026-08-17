@@ -16,6 +16,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/problem"
+	"gopkg.aoctech.app/poker/api/internal/reports"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 )
@@ -50,13 +51,20 @@ type playerHandlers struct {
 	achievements playerAchievementStore
 	avatars      *avatar.Service
 	stats        pokerStatsReader
+	reports      *reports.Service
 }
 
 // RegisterPlayers mounts every /players/me/* route: profile, wallet-mode,
 // terms acceptance, session/hand history, and achievement progress all live
 // under the same resource and share the same auth-derived playerID.
-func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Service, sessions sessionLogReader, achievementStore playerAchievementStore, cfg *config.Config, avatars *avatar.Service, avatarLimiter *RateLimiter, stats pokerStatsReader) {
-	h := &playerHandlers{players: players, sessions: sessions, achievements: achievementStore, cfg: cfg, avatars: avatars, stats: stats}
+func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Service, sessions sessionLogReader, achievementStore playerAchievementStore, cfg *config.Config, avatars *avatar.Service, avatarLimiter *RateLimiter, stats pokerStatsReader, extras ...any) {
+	var reportSvc *reports.Service
+	for _, extra := range extras {
+		if value, ok := extra.(*reports.Service); ok {
+			reportSvc = value
+		}
+	}
+	h := &playerHandlers{players: players, sessions: sessions, achievements: achievementStore, cfg: cfg, avatars: avatars, stats: stats, reports: reportSvc}
 	router.Get("/players/:playerId/showcase", h.showcase)
 	g := router.Group("/players", auth)
 	g.Get("/me", h.me)
@@ -153,7 +161,15 @@ func (h *playerHandlers) avatarReport(c fiber.Ctx) error {
 	if err != nil || targetID == "" {
 		return problem.BadRequest("player id is invalid").Send(c)
 	}
-	if err := h.players.ReportAvatar(c.Context(), targetID, c.Locals(localsUserID).(string)); err != nil {
+	reporterID := c.Locals(localsUserID).(string)
+	if h.reports != nil {
+		if _, err := h.reports.Create(c.Context(), reporterID, "legacy-avatar-report-v1", reports.CreateInput{
+			TargetPlayerID: targetID, Category: reports.CategoryInappropriateProfile, Surface: reports.SurfaceProfile,
+		}); err != nil {
+			return reportProblem(err, c).Send(c)
+		}
+	}
+	if err := h.players.ReportAvatar(c.Context(), targetID, reporterID); err != nil {
 		return problem.InternalServer("failed to report avatar", c, err).Send(c)
 	}
 	return c.SendStatus(http.StatusNoContent)

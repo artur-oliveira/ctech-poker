@@ -112,6 +112,29 @@ func TestSeedThenCommitThenLoad(t *testing.T) {
 	}
 }
 
+func TestFindActionByIDStaysWithinHandPartition(t *testing.T) {
+	db := testClient(t)
+	env := isolatedEnv()
+	s := NewStore(db, env)
+	ctx := context.Background()
+	mustCreateTestTables(ctx, t, db, env)
+	if err := s.SeedTable(ctx, "table-report", hand.State{Stage: hand.WaitingForPlayers}); err != nil {
+		t.Fatal(err)
+	}
+	entry := ActionLogEntry{TableID: "table-report", HandID: "hand-report", Version: 2, PlayerID: "target", ActionID: "chat-action", Action: "chat", Message: "sanitized"}
+	if err := s.CommitAction(ctx, "table-report", "hand-report", "chat-action", 1, hand.State{Stage: hand.PreFlop}, TableActivity{}, 0, entry); err != nil {
+		t.Fatal(err)
+	}
+	found, err := s.FindActionByID(ctx, "table-report", "hand-report", "chat-action")
+	if err != nil || found == nil || found.PlayerID != "target" || found.Message != "sanitized" {
+		t.Fatalf("found=%+v err=%v", found, err)
+	}
+	missing, err := s.FindActionByID(ctx, "table-report", "another-hand", "chat-action")
+	if err != nil || missing != nil {
+		t.Fatalf("cross-hand result=%+v err=%v", missing, err)
+	}
+}
+
 func TestCommitActionRejectsStaleVersion(t *testing.T) {
 	db := testClient(t)
 	env := isolatedEnv()

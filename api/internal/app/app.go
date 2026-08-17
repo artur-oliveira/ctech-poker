@@ -42,6 +42,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
 	"gopkg.aoctech.app/poker/api/internal/recentplayers"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
+	"gopkg.aoctech.app/poker/api/internal/reports"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
@@ -93,6 +94,8 @@ var Module = fx.Options(
 		newPresenceService,
 		newRecentPlayersStore,
 		newRecentPlayersService,
+		newReportStore,
+		newReportService,
 		walletclient.New,
 		newBuyinService,
 		newPendingStore,
@@ -382,6 +385,14 @@ func newRecentPlayersStore(db *dynamodb.Client, cfg *config.Config) *recentplaye
 }
 func newRecentPlayersService(store *recentplayers.DynamoStore, sessions *sessionlog.Store, socialSvc *social.Service) *recentplayers.Service {
 	return recentplayers.NewService(store, sessions, socialSvc)
+}
+func newReportStore(db *dynamodb.Client, cfg *config.Config) *reports.DynamoStore {
+	return reports.NewStore(db, cfg.Env)
+}
+func newReportService(store *reports.DynamoStore, tableStore *tablestore.Store, players *player.Service, cfg *config.Config) *reports.Service {
+	return reports.NewService(store, tableStore, players).WithMetric(func(category reports.Category, surface reports.Surface) {
+		metrics.EmitTableMetric(cfg.Env, "PlayerReported", 1, map[string]string{"category": string(category), "surface": string(surface)})
+	})
 }
 func newPendingStore(db *dynamodb.Client, cfg *config.Config) *reconcile.PendingStore {
 	return reconcile.NewPendingStore(db, cfg.Env)
@@ -775,8 +786,9 @@ func registerRoutesWithSocialRuntime(
 	socialSvc *social.Service,
 	presenceSvc *presence.Service,
 	recentSvc *recentplayers.Service,
+	reportSvc *reports.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, socialSvc, presenceSvc, recentSvc)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc)
 }
 
 // registerRoutes retains the narrow construction seam used by older unit
@@ -791,7 +803,7 @@ func registerRoutes(
 	avatars *avatar.Service, sandboxPurchaseSvc *sandboxpurchase.Service,
 	reactionPurchaseSvc *reactionpurchase.Service, socialSvc *social.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, socialSvc, nil, nil)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, socialSvc, nil, nil, nil)
 }
 
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {

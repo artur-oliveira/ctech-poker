@@ -530,6 +530,36 @@ def handler(event, context):
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
+    const playerReportedMetric = new cloudwatch.Metric({
+      namespace: `CtechPoker/${environment}`,
+      metricName: 'PlayerReported',
+      statistic: 'Sum',
+      period: cdk.Duration.minutes(5),
+    });
+    new cloudwatch.Alarm(this, 'PlayerReportSpikeAlarm', {
+      alarmName: `${environment}-${SERVICE}-player-report-spike`,
+      alarmDescription: 'Player reports exceeded the initial moderation baseline; triage the open queue.',
+      metric: playerReportedMetric,
+      threshold: 20,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    const socialRateLimitedMetric = new cloudwatch.Metric({
+      namespace: `CtechPoker/${environment}`,
+      metricName: 'SocialRateLimited',
+      statistic: 'Sum',
+      period: cdk.Duration.minutes(5),
+    });
+    new cloudwatch.Alarm(this, 'SocialRateLimitSpikeAlarm', {
+      alarmName: `${environment}-${SERVICE}-social-rate-limit-spike`,
+      alarmDescription: 'Social/report throttling exceeded the initial abuse baseline.',
+      metric: socialRateLimitedMetric,
+      threshold: 25,
+      evaluationPeriods: 2,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
     // One low-cost operational view for the gameplay SLOs. SEARCH expressions
     // intentionally aggregate bounded dimensions (route/status/version) and
     // legacy table_id series; no per-table widget or alarm is created.
@@ -581,6 +611,12 @@ def handler(event, context):
         title: 'HTTP auth and throttling responses by route/version',
         width: 12,
         left: [search('HTTPResponses')],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'Player-safety reports and social throttling',
+        width: 12,
+        left: [search('PlayerReported')],
+        right: [search('SocialRateLimited')],
       }),
       new cloudwatch.GraphWidget({
         title: 'Wallet dependency: latency, retries and circuit breaker',

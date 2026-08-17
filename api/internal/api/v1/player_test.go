@@ -12,6 +12,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
+	"gopkg.aoctech.app/poker/api/internal/reports"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 )
 
@@ -66,8 +67,9 @@ func TestPlayerHistoryEndpoints(t *testing.T) {
 }
 
 type fakePlayerStore struct {
-	profile  player.PlayerProfile
-	lookupID string
+	profile       player.PlayerProfile
+	lookupID      string
+	avatarReports int
 }
 
 func (s *fakePlayerStore) GetOrCreate(_ context.Context, id string) (*player.PlayerProfile, error) {
@@ -122,6 +124,29 @@ func (s *fakePlayerStore) SetFavoriteReactions(_ context.Context, id string, fav
 	s.profile.UserID = id
 	s.profile.FavoriteReactions = favorites
 	return nil
+}
+func (s *fakePlayerStore) ReportAvatar(context.Context, string, string) error {
+	s.avatarReports++
+	return nil
+}
+
+func TestLegacyAvatarReportAlsoCreatesModerationQueueItem(t *testing.T) {
+	playerStore := &fakePlayerStore{}
+	players := player.NewService(playerStore)
+	reportStore := &apiReportStore{}
+	h := &playerHandlers{players: players, reports: reports.NewService(reportStore, nil, players)}
+	app := fiber.New()
+	app.Post("/players/:playerId/avatar/report", func(c fiber.Ctx) error {
+		c.Locals(localsUserID, "reporter")
+		return c.Next()
+	}, h.avatarReport)
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodPost, "/players/target/avatar/report", nil))
+	if err != nil || resp.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("status=%d err=%v", resp.StatusCode, err)
+	}
+	if playerStore.avatarReports != 1 || reportStore.report.Category != reports.CategoryInappropriateProfile || reportStore.report.Surface != reports.SurfaceProfile {
+		t.Fatalf("legacy=%d queue=%+v", playerStore.avatarReports, reportStore.report.Summary())
+	}
 }
 
 func TestPlayerTermsLifecycle(t *testing.T) {
