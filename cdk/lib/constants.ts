@@ -81,6 +81,24 @@ export const reconcileDlqName = (env: Environment) => `${reconcileJobName(env)}-
 export const tableCleanupJobName = (env: Environment) => `${env}-${SERVICE}-tablecleanup`;
 export const tableCleanupDlqName = (env: Environment) => `${tableCleanupJobName(env)}-dlq`;
 
+// ── Poker social storage ───────────────────────────────────────────────────
+// Keep table and index identifiers centralized so the infrastructure and its
+// assertions cannot silently drift as the social modules are implemented.
+export const DYNAMO_TABLE = {
+  socialEdges: 'poker_social_edges',
+  recentPlayers: 'poker_recent_players',
+  socialEvents: 'poker_social_events',
+  playerReports: 'poker_player_reports',
+} as const;
+
+export const DYNAMO_INDEX = {
+  friendCode: 'gsi_friend_code',
+  recentPlayers: 'gsi_recent',
+  socialInbox: 'gsi_inbox',
+  socialUnread: 'gsi_unread',
+  reportStatus: 'gsi_status',
+} as const;
+
 // ── GitHub Actions role names (global, not per-env) ─────────────────────────
 export const GHA_API_ROLE = `${SERVICE}-gha-api`;
 export const GHA_FRONTEND_ROLE = `${SERVICE}-gha-frontend`;
@@ -127,6 +145,7 @@ export const SSM_POKER = (env: Environment) => ({
   // config.Load() fails closed if REAL_MONEY_ENABLED=true and this ref is
   // empty (api/internal/config/config.go).
   realMoneyEnabled: `/ctech/${env}/poker/real-money-enabled`,
+  socialGraphEnabled: `/ctech/${env}/poker/social-graph-enabled`,
   legalSignoffRef: `/ctech/${env}/poker/legal-signoff-ref`,
   avatarBaseUrl: `/ctech/${env}/poker/avatar-base-url`,
   // Verifies inbound ctech-wallet webhooks (X-Wallet-Signature). Must match

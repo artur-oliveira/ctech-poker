@@ -2,6 +2,7 @@ package app
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,11 +27,15 @@ func TestFiberServerAppliesCredentialedCorsForConfiguredOrigin(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodOptions, "/probe", nil)
 	req.Header.Set("Origin", "https://poker.aoctech.app")
 	req.Header.Set("Access-Control-Request-Method", "GET")
+	req.Header.Set("Access-Control-Request-Headers", "Idempotency-Key")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if resp.Header.Get("Access-Control-Allow-Origin") != "https://poker.aoctech.app" || resp.Header.Get("Access-Control-Allow-Credentials") != "true" {
 		t.Fatalf("cors headers=%v", resp.Header)
+	}
+	if allowed := resp.Header.Get("Access-Control-Allow-Headers"); !strings.Contains(allowed, "Idempotency-Key") {
+		t.Fatalf("Idempotency-Key missing from CORS allow headers: %q", allowed)
 	}
 }

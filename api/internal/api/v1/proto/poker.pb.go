@@ -1486,7 +1486,7 @@ func (x *ClientMessage) GetExpectedStage() string {
 // ServerMessage is sent from the server to the client.
 type ServerMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast" | "sandbox_purchase_update" | "reaction_purchase_update"
+	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast" | "sandbox_purchase_update" | "reaction_purchase_update" | "social_event" | "social_presence_changed" | "social_inbox_count"
 	// payload fields
 	ConnId   string         `protobuf:"bytes,2,opt,name=conn_id,json=connId,proto3" json:"conn_id,omitempty"`       // for connected frame
 	Snapshot *TableSnapshot `protobuf:"bytes,3,opt,name=snapshot,proto3" json:"snapshot,omitempty"`                 // for state frame
@@ -1496,17 +1496,19 @@ type ServerMessage struct {
 	Key      string         `protobuf:"bytes,7,opt,name=key,proto3" json:"key,omitempty"`                           // for achievement unlocked frame
 	Stars    int32          `protobuf:"varint,8,opt,name=stars,proto3" json:"stars,omitempty"`                      // for achievement unlocked frame
 	// lobby payload fields
-	Room            *Room    `protobuf:"bytes,9,opt,name=room,proto3" json:"room,omitempty"`                                                // for room_created
-	RoomId          string   `protobuf:"bytes,10,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`                             // for room_updated
-	SeatsTaken      int32    `protobuf:"varint,11,opt,name=seats_taken,json=seatsTaken,proto3" json:"seats_taken,omitempty"`                // for room_updated
-	Amount          int64    `protobuf:"varint,12,opt,name=amount,proto3" json:"amount,omitempty"`                                          // for payment_received, or credits_granted for sandbox_purchase_update
-	Text            string   `protobuf:"bytes,13,opt,name=text,proto3" json:"text,omitempty"`                                               // for system_broadcast
-	ActionId        string   `protobuf:"bytes,14,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`                       // correlation id for action_ack/error
-	SnapshotVersion uint64   `protobuf:"varint,15,opt,name=snapshot_version,json=snapshotVersion,proto3" json:"snapshot_version,omitempty"` // for equity delta
-	Equity          *float64 `protobuf:"fixed64,16,opt,name=equity,proto3,oneof" json:"equity,omitempty"`                                   // for equity delta (player_id identifies owner)
-	ReactionId      string   `protobuf:"bytes,17,opt,name=reaction_id,json=reactionId,proto3" json:"reaction_id,omitempty"`                 // ephemeral table reaction catalog key
-	TargetPlayerId  string   `protobuf:"bytes,18,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`   // destination for thrown objects
-	PurchaseId      string   `protobuf:"bytes,19,opt,name=purchase_id,json=purchaseId,proto3" json:"purchase_id,omitempty"`                 // for sandbox_purchase_update or reaction_purchase_update
+	Room            *Room        `protobuf:"bytes,9,opt,name=room,proto3" json:"room,omitempty"`                                                // for room_created
+	RoomId          string       `protobuf:"bytes,10,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`                             // for room_updated
+	SeatsTaken      int32        `protobuf:"varint,11,opt,name=seats_taken,json=seatsTaken,proto3" json:"seats_taken,omitempty"`                // for room_updated
+	Amount          int64        `protobuf:"varint,12,opt,name=amount,proto3" json:"amount,omitempty"`                                          // for payment_received, or credits_granted for sandbox_purchase_update
+	Text            string       `protobuf:"bytes,13,opt,name=text,proto3" json:"text,omitempty"`                                               // for system_broadcast
+	ActionId        string       `protobuf:"bytes,14,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`                       // correlation id for action_ack/error
+	SnapshotVersion uint64       `protobuf:"varint,15,opt,name=snapshot_version,json=snapshotVersion,proto3" json:"snapshot_version,omitempty"` // for equity delta
+	Equity          *float64     `protobuf:"fixed64,16,opt,name=equity,proto3,oneof" json:"equity,omitempty"`                                   // for equity delta (player_id identifies owner)
+	ReactionId      string       `protobuf:"bytes,17,opt,name=reaction_id,json=reactionId,proto3" json:"reaction_id,omitempty"`                 // ephemeral table reaction catalog key
+	TargetPlayerId  string       `protobuf:"bytes,18,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`   // destination for thrown objects
+	PurchaseId      string       `protobuf:"bytes,19,opt,name=purchase_id,json=purchaseId,proto3" json:"purchase_id,omitempty"`                 // for sandbox_purchase_update or reaction_purchase_update
+	SocialEvent     *SocialEvent `protobuf:"bytes,20,opt,name=social_event,json=socialEvent,proto3" json:"social_event,omitempty"`              // for social_event or social_presence_changed
+	UnreadCount     int32        `protobuf:"varint,21,opt,name=unread_count,json=unreadCount,proto3" json:"unread_count,omitempty"`             // for social_inbox_count
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1672,6 +1674,176 @@ func (x *ServerMessage) GetPurchaseId() string {
 		return x.PurchaseId
 	}
 	return ""
+}
+
+func (x *ServerMessage) GetSocialEvent() *SocialEvent {
+	if x != nil {
+		return x.SocialEvent
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetUnreadCount() int32 {
+	if x != nil {
+		return x.UnreadCount
+	}
+	return 0
+}
+
+// Friend-visible presence deliberately carries no table or room identifier.
+// status is one of offline | online | in_table.
+type PlayerPresence struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      string                 `protobuf:"bytes,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlayerPresence) Reset() {
+	*x = PlayerPresence{}
+	mi := &file_poker_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerPresence) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerPresence) ProtoMessage() {}
+
+func (x *PlayerPresence) ProtoReflect() protoreflect.Message {
+	mi := &file_poker_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerPresence.ProtoReflect.Descriptor instead.
+func (*PlayerPresence) Descriptor() ([]byte, []int) {
+	return file_poker_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *PlayerPresence) GetPlayerId() string {
+	if x != nil {
+		return x.PlayerId
+	}
+	return ""
+}
+
+func (x *PlayerPresence) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+// Push notification/invalidation payload for the in-app social inbox. HTTP
+// remains authoritative for mutations and full list pagination.
+type SocialEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	EventId       string                 `protobuf:"bytes,1,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
+	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"` // friend_request | friend_accepted | table_invite
+	ActorId       string                 `protobuf:"bytes,3,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
+	RoomId        string                 `protobuf:"bytes,4,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
+	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
+	CreatedAt     int64                  `protobuf:"varint,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	ExpiresAt     int64                  `protobuf:"varint,7,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	Presence      *PlayerPresence        `protobuf:"bytes,8,opt,name=presence,proto3" json:"presence,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SocialEvent) Reset() {
+	*x = SocialEvent{}
+	mi := &file_poker_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SocialEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SocialEvent) ProtoMessage() {}
+
+func (x *SocialEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_poker_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SocialEvent.ProtoReflect.Descriptor instead.
+func (*SocialEvent) Descriptor() ([]byte, []int) {
+	return file_poker_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *SocialEvent) GetEventId() string {
+	if x != nil {
+		return x.EventId
+	}
+	return ""
+}
+
+func (x *SocialEvent) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *SocialEvent) GetActorId() string {
+	if x != nil {
+		return x.ActorId
+	}
+	return ""
+}
+
+func (x *SocialEvent) GetRoomId() string {
+	if x != nil {
+		return x.RoomId
+	}
+	return ""
+}
+
+func (x *SocialEvent) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *SocialEvent) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *SocialEvent) GetExpiresAt() int64 {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return 0
+}
+
+func (x *SocialEvent) GetPresence() *PlayerPresence {
+	if x != nil {
+		return x.Presence
+	}
+	return nil
 }
 
 var File_poker_proto protoreflect.FileDescriptor
@@ -1872,7 +2044,7 @@ const file_poker_proto_rawDesc = "" +
 	"runItTwice\x88\x01\x01\x12%\n" +
 	"\x0eexpected_stage\x18\x10 \x01(\tR\rexpectedStageB\r\n" +
 	"\v_card_indexB\x0f\n" +
-	"\r_run_it_twice\"\xc4\x04\n" +
+	"\r_run_it_twice\"\x9e\x05\n" +
 	"\rServerMessage\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x17\n" +
 	"\aconn_id\x18\x02 \x01(\tR\x06connId\x120\n" +
@@ -1896,8 +2068,24 @@ const file_poker_proto_rawDesc = "" +
 	"reactionId\x12(\n" +
 	"\x10target_player_id\x18\x12 \x01(\tR\x0etargetPlayerId\x12\x1f\n" +
 	"\vpurchase_id\x18\x13 \x01(\tR\n" +
-	"purchaseIdB\t\n" +
-	"\a_equityB>Z<gopkg.aoctech.app/poker/api/internal/api/v1/proto;pokerprotob\x06proto3"
+	"purchaseId\x125\n" +
+	"\fsocial_event\x18\x14 \x01(\v2\x12.poker.SocialEventR\vsocialEvent\x12!\n" +
+	"\funread_count\x18\x15 \x01(\x05R\vunreadCountB\t\n" +
+	"\a_equity\"E\n" +
+	"\x0ePlayerPresence\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\"\xf9\x01\n" +
+	"\vSocialEvent\x12\x19\n" +
+	"\bevent_id\x18\x01 \x01(\tR\aeventId\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12\x19\n" +
+	"\bactor_id\x18\x03 \x01(\tR\aactorId\x12\x17\n" +
+	"\aroom_id\x18\x04 \x01(\tR\x06roomId\x12\x16\n" +
+	"\x06status\x18\x05 \x01(\tR\x06status\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x06 \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"expires_at\x18\a \x01(\x03R\texpiresAt\x121\n" +
+	"\bpresence\x18\b \x01(\v2\x15.poker.PlayerPresenceR\bpresenceB>Z<gopkg.aoctech.app/poker/api/internal/api/v1/proto;pokerprotob\x06proto3"
 
 var (
 	file_poker_proto_rawDescOnce sync.Once
@@ -1911,7 +2099,7 @@ func file_poker_proto_rawDescGZIP() []byte {
 	return file_poker_proto_rawDescData
 }
 
-var file_poker_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_poker_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_poker_proto_goTypes = []any{
 	(*Card)(nil),            // 0: poker.Card
 	(*Seat)(nil),            // 1: poker.Seat
@@ -1926,31 +2114,35 @@ var file_poker_proto_goTypes = []any{
 	(*RevealedSalt)(nil),    // 10: poker.RevealedSalt
 	(*ClientMessage)(nil),   // 11: poker.ClientMessage
 	(*ServerMessage)(nil),   // 12: poker.ServerMessage
-	nil,                     // 13: poker.PotResult.PayoutsEntry
-	nil,                     // 14: poker.TableSnapshot.PayoutsEntry
-	nil,                     // 15: poker.TableSnapshot.RevealedCardSaltsEntry
-	nil,                     // 16: poker.TableSnapshot.UnrevealedCardHashesEntry
+	(*PlayerPresence)(nil),  // 13: poker.PlayerPresence
+	(*SocialEvent)(nil),     // 14: poker.SocialEvent
+	nil,                     // 15: poker.PotResult.PayoutsEntry
+	nil,                     // 16: poker.TableSnapshot.PayoutsEntry
+	nil,                     // 17: poker.TableSnapshot.RevealedCardSaltsEntry
+	nil,                     // 18: poker.TableSnapshot.UnrevealedCardHashesEntry
 }
 var file_poker_proto_depIdxs = []int32{
 	2,  // 0: poker.Room.blind_escalation:type_name -> poker.BlindEscalation
-	13, // 1: poker.PotResult.payouts:type_name -> poker.PotResult.PayoutsEntry
+	15, // 1: poker.PotResult.payouts:type_name -> poker.PotResult.PayoutsEntry
 	1,  // 2: poker.TableSnapshot.seats:type_name -> poker.Seat
-	14, // 3: poker.TableSnapshot.payouts:type_name -> poker.TableSnapshot.PayoutsEntry
+	16, // 3: poker.TableSnapshot.payouts:type_name -> poker.TableSnapshot.PayoutsEntry
 	4,  // 4: poker.TableSnapshot.legal_actions:type_name -> poker.LegalActions
 	5,  // 5: poker.TableSnapshot.pots:type_name -> poker.Pot
 	6,  // 6: poker.TableSnapshot.pot_results:type_name -> poker.PotResult
 	7,  // 7: poker.TableSnapshot.chat_messages:type_name -> poker.ChatMessage
 	8,  // 8: poker.TableSnapshot.reactions:type_name -> poker.TableReaction
-	15, // 9: poker.TableSnapshot.revealed_card_salts:type_name -> poker.TableSnapshot.RevealedCardSaltsEntry
-	16, // 10: poker.TableSnapshot.unrevealed_card_hashes:type_name -> poker.TableSnapshot.UnrevealedCardHashesEntry
+	17, // 9: poker.TableSnapshot.revealed_card_salts:type_name -> poker.TableSnapshot.RevealedCardSaltsEntry
+	18, // 10: poker.TableSnapshot.unrevealed_card_hashes:type_name -> poker.TableSnapshot.UnrevealedCardHashesEntry
 	9,  // 11: poker.ServerMessage.snapshot:type_name -> poker.TableSnapshot
 	3,  // 12: poker.ServerMessage.room:type_name -> poker.Room
-	10, // 13: poker.TableSnapshot.RevealedCardSaltsEntry.value:type_name -> poker.RevealedSalt
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	14, // 13: poker.ServerMessage.social_event:type_name -> poker.SocialEvent
+	13, // 14: poker.SocialEvent.presence:type_name -> poker.PlayerPresence
+	10, // 15: poker.TableSnapshot.RevealedCardSaltsEntry.value:type_name -> poker.RevealedSalt
+	16, // [16:16] is the sub-list for method output_type
+	16, // [16:16] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_poker_proto_init() }
@@ -1967,7 +2159,7 @@ func file_poker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_poker_proto_rawDesc), len(file_poker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

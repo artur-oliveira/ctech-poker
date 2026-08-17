@@ -9,7 +9,7 @@
 
 AWS CDK (TypeScript) for the poker service. **All stacks are implemented and live.**
 Deploys in the order **CDK → OAuth scopes → API → Frontend** via `.github/workflows/deploy.yml`. Every claim below is
-anchored to `cdk/lib/` and re-verified on **2026-08-14**.
+anchored to `cdk/lib/` and re-verified on **2026-08-16**.
 
 ## Stacks (7)
 
@@ -18,7 +18,7 @@ Named `CtechPoker-<Env>-<Name>`, except the global OIDC stack. Entry: `bin/poker
 | Stack | File | What it provisions |
 |---|---|---|
 | `CtechPoker-Global-OIDC` | `oidc-stack.ts` | GitHub OIDC deploy roles (frontend / api / infra / scope publisher) |
-| `…-DynamoDB` | `dynamodb-stack.ts` | **18** DynamoDB tables + GSIs |
+| `…-DynamoDB` | `dynamodb-stack.ts` | **22** DynamoDB tables + GSIs |
 | `…-Archiver` | `archiver-stack.ts` | Action-log archive Lambda (DynamoDB Stream → S3) + SQS DLQ |
 | `…-API` | `api-stack.ts` | EC2 ASG game server, HAProxy route, IAM, userdata, alarms |
 | `…-Frontend` | `frontend-stack.ts` | S3 + CloudFront, route KeyValueStore, URL-rewrite Function, CSP |
@@ -60,7 +60,7 @@ Served by the **same Go binary** on the ASG — `GET /v1.0/tables/:id/ws` (table
 (lobby/user), fronted by HAProxy, which handles the upgrade. **Not** an API Gateway WebSocket API.
 Frames are binary protobuf. Fan-out uses the Valkey-backed `ws.Registry` from `api-commons`.
 
-## DynamoDB (`dynamodb-stack.ts`) — 18 tables
+## DynamoDB (`dynamodb-stack.ts`) — 22 tables
 
 All `TableV2`, partition key `pk` (S), on-demand billing with
 `maxRead/maxWriteRequestUnits: 1000`, AWS-managed encryption, PITR in prod only, names prefixed
@@ -72,8 +72,8 @@ All `TableV2`, partition key `pk` (S), on-demand billing with
 | `poker_table_state_history` | ✓ | – | – | best-effort audit copy |
 | `poker_action_log` | ✓ | 90d | **NEW_IMAGE** | feeds the archiver Lambda |
 | `poker_action_guards` | – | 7d | – | per-action idempotency guard |
-| `poker_rooms` | ✓ | – | – | `gsi_public` (sparse), `gsi_share_code` |
-| `poker_player_profiles` | – | – | – | poker-local shadow of the ctech-account user |
+| `poker_rooms` | ✓ | ✓ | – | `gsi_public` (sparse), `gsi_share_code`; TTL only on temporary invite grants |
+| `poker_player_profiles` | – | – | – | poker-local shadow; `gsi_friend_code` exact lookup |
 | `poker_player_sessions` | ✓ | ✓ | – | per-table session P&L |
 | `poker_player_hands` | ✓ | – | – | hand history incl. fairness proofs; `gsi_table_id` |
 | `poker_player_notes` | ✓ | – | – | private per-viewer opponent notes |
@@ -86,6 +86,10 @@ All `TableV2`, partition key `pk` (S), on-demand billing with
 | `poker_reaction_purchases` | ✓ | – | – | permanent PIX/fichas reaction purchase history |
 | `poker_pending_cashouts` | ✓ | – | – | reconcile queue; `kind` = cashout \| fee_debit |
 | `poker_hand_shares` | – | ✓ | – | public shared-hand tokens, ≤30d |
+| `poker_social_edges` | ✓ | – | – | directed friendship/mute/block rows; mirrored mutations are transactional |
+| `poker_recent_players` | ✓ | ✓ | – | 90d opponent history; `gsi_recent` chronological pagination |
+| `poker_social_events` | ✓ | ✓ | – | 90d in-app inbox; `gsi_inbox`, sparse `gsi_unread` |
+| `poker_player_reports` | ✓ | ✓ | – | unresolved rows omit TTL; `gsi_status` moderation queue |
 
 There is deliberately **no `achievement_points` GSI** — the API rejects that metric rather than
 silently ranking by another index. Adding a ranking metric means adding its GSI here first.
@@ -117,7 +121,7 @@ silently ranking by another index. Adding a ranking metric means adding its GSI 
 Instance role `<env>-ctech-poker-api-role` (`api-stack.ts`), managed policies
 `AmazonSSMManagedInstanceCore` + `CloudWatchAgentServerPolicy`, plus inline:
 
-- DynamoDB — 8 actions (incl. `DeleteItem` and `ConditionCheckItem`) over the **18** table ARNs the
+- DynamoDB — 9 actions (incl. `BatchGetItem`, `DeleteItem` and `ConditionCheckItem`) over the **22** table ARNs the
   server touches and their `/index/*`.
 - SSM `GetParameter` covers the existing game configuration plus account internal
   transport/JWKS, the public account issuer, poker audience and the wallet internal

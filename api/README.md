@@ -118,11 +118,21 @@ Per-binary keys read outside `Config` (not in the struct above):
   `post_big_blind`, `show_cards`, `keep_seat`, `chat`, `reaction`.
 - **Server → client**: `connected`, `pong`, `state` (full authoritative snapshot on join and on every mutation — no
   delta replay), `chat`, `error`, `removed`, `achievement_unlocked`, `room_created`,
-  `room_updated`, `payment_received`, `system_broadcast`.
+  `room_updated`, `payment_received`, `system_broadcast`. The additive wire contract also reserves
+  `social_event`, `social_presence_changed` and `social_inbox_count`; their producers remain disabled until the
+  corresponding social services are wired.
 - Abuse control: per-seat fixed-window limiter (10 actions/sec/seat), **32 KiB frame cap**, chat truncated to
   `chatMessageMaxLength` (50 chars, mirrored client-side as `CHAT_MESSAGE_MAX_LENGTH`) and masked by
   `internal/chatfilter`, and an adaptive Turnstile challenge (`internal/botcheck`) issued over the socket.
 - Heartbeat: 30s ping / 45s pong wait.
+
+## Social rollout foundation
+
+`SOCIAL_GRAPH_ENABLED` defaults to `false` and will gate friendship, presence and table invitations. It does not gate
+the independent player-safety controls (mute, block and report). EC2 reads the switch from
+`/ctech/<env>/poker/social-graph-enabled` on each application start. The first infrastructure slice adds the storage
+contracts and package interfaces only; no social HTTP route is exposed yet. Mutating social routes will use
+`Idempotency-Key`, which is already accepted by the first-party CORS policy.
 
 ## Game-server model (per-table actor + DynamoDB conditional writes)
 

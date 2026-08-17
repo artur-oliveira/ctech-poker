@@ -133,7 +133,7 @@ func newFiberApp(cfg *config.Config) *fiber.App {
 	// leaves origins empty, which means wildcard/no credentials like Wallet.
 	corsCfg := cors.Config{
 		AllowMethods:  []string{"GET", "POST", "DELETE", "OPTIONS"},
-		AllowHeaders:  []string{"Origin", "Content-Type", "Authorization", "X-Request-ID"},
+		AllowHeaders:  []string{"Origin", "Content-Type", "Authorization", "X-Request-ID", "Idempotency-Key"},
 		ExposeHeaders: []string{"X-Request-ID"},
 		MaxAge:        3600,
 	}

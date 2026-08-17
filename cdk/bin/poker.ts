@@ -17,6 +17,7 @@ import {
   AWS_ACCOUNT,
   AWS_REGION,
   CERT_ARN,
+  DYNAMO_TABLE,
   domainForEnv,
   GITHUB_REPO_DEFAULT,
   instanceProfileName,
@@ -112,6 +113,11 @@ new PokerApiStack(app, id('API'), {
   turnstileSecretParam: pokerParameters.turnstileSecret,
   realMoneyEnabledParam: pokerParameters.realMoneyEnabled,
   legalSignoffRefParam: pokerParameters.legalSignoffRef,
+  socialGraphEnabledParam: pokerParameters.socialGraphEnabled,
+  socialEdgesTableArn: dynamoStack.tables.get(DYNAMO_TABLE.socialEdges)!.tableArn,
+  recentPlayersTableArn: dynamoStack.tables.get(DYNAMO_TABLE.recentPlayers)!.tableArn,
+  socialEventsTableArn: dynamoStack.tables.get(DYNAMO_TABLE.socialEvents)!.tableArn,
+  playerReportsTableArn: dynamoStack.tables.get(DYNAMO_TABLE.playerReports)!.tableArn,
   description: `CTech Poker API (EC2 + ASG + ALB) - ${ENVIRONMENT}`,
 });
 

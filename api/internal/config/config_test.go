@@ -78,3 +78,25 @@ func TestLoadSucceedsWithRealMoneyDisabledAndNoSignoff(t *testing.T) {
 		t.Fatalf("expected Load to succeed with real money disabled, got %v", err)
 	}
 }
+
+func TestLoadDefaultsSocialGraphToDisabled(t *testing.T) {
+	t.Setenv("SOCIAL_GRAPH_ENABLED", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SocialGraphEnabled {
+		t.Fatal("expected social graph rollout to default to disabled")
+	}
+}
+
+func TestLoadParsesSocialGraphEnabled(t *testing.T) {
+	t.Setenv("SOCIAL_GRAPH_ENABLED", "true")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.SocialGraphEnabled {
+		t.Fatal("expected SOCIAL_GRAPH_ENABLED=true to enable the rollout gate")
+	}
+}
