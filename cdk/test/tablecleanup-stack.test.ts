@@ -38,7 +38,12 @@ test('schedules the sweep every 30 minutes', () => {
     QueueName: 'dev-ctech-poker-tablecleanup-dlq',
     MessageRetentionPeriod: 1209600,
   });
-  template.resourceCountIs('AWS::CloudWatch::Alarm', 4);
+  // dlq-messages/throttles/missed-run alarms removed 2026-08-17: unmonitored,
+  // no SNS subscriber, billed past the CloudWatch free tier.
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 1);
+  template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+    AlarmName: 'dev-ctech-poker-tablecleanup-errors',
+  });
 });
 
 test('the Lambda role can Query the table-state index but never Scan it', () => {

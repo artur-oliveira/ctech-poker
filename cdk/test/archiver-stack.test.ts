@@ -21,15 +21,12 @@ test('creates an archive bucket and a Lambda subscribed to the action log stream
   template.hasResourceProperties('AWS::Lambda::Function', {FunctionName: 'dev-poker-action-log-archiver'});
   template.resourceCountIs('AWS::Lambda::EventSourceMapping', 1);
 
-  // B10: poison records must land in a DLQ (not be dropped) and alarm.
+  // B10: poison records must land in a DLQ (not be dropped). No alarm (removed
+  // 2026-08-17: unmonitored, no SNS subscriber, billed past the CloudWatch free tier).
   template.hasResourceProperties('AWS::SQS::Queue', {QueueName: 'dev-poker-action-log-archiver-dlq'});
   template.hasResourceProperties('AWS::Lambda::EventSourceMapping', {
     BisectBatchOnFunctionError: true,
     DestinationConfig: {OnFailure: {Destination: {'Fn::GetAtt': [Match.stringLikeRegexp('ArchiverDLQ'), 'Arn']}}},
   });
-  template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-    AlarmName: 'dev-poker-action-log-archiver-dlq-messages',
-    MetricName: 'ApproximateNumberOfMessagesVisible',
-    Threshold: 1,
-  });
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
 });

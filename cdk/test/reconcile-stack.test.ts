@@ -14,7 +14,7 @@ function buildStack() {
   }));
 }
 
-test('protects scheduled reconciliation with retry, DLQ and alarms', () => {
+test('protects scheduled reconciliation with retry, DLQ and an errors alarm', () => {
   const template = buildStack();
   template.hasResourceProperties('AWS::Scheduler::Schedule', {
     Name: 'dev-ctech-poker-reconcile',
@@ -35,10 +35,10 @@ test('protects scheduled reconciliation with retry, DLQ and alarms', () => {
       })]),
     }),
   });
-  template.resourceCountIs('AWS::CloudWatch::Alarm', 4);
-  for (const alarm of ['dlq-messages', 'errors', 'throttles', 'missed-run']) {
-    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-      AlarmName: `dev-ctech-poker-reconcile-${alarm}`,
-    });
-  }
+  // dlq-messages/throttles/missed-run alarms removed 2026-08-17: unmonitored,
+  // no SNS subscriber, billed past the CloudWatch free tier.
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 1);
+  template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+    AlarmName: 'dev-ctech-poker-reconcile-errors',
+  });
 });
