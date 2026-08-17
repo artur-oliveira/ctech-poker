@@ -20,6 +20,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/metrics"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
+	"gopkg.aoctech.app/poker/api/internal/presence"
 	"gopkg.aoctech.app/poker/api/internal/reactions"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/table"
@@ -299,10 +300,21 @@ func RegisterTableWS(
 					return
 				}
 			}
-			if room != nil && !privateRoomAccessAllowed(room, playerID, shareCode) {
-				send(&pokerproto.ServerMessage{Type: "error", Code: "forbidden"})
-				_ = conn.Close()
-				return
+			if room != nil {
+				accessAllowed := privateRoomAccessAllowed(room, playerID, shareCode, false)
+				if !accessAllowed && rooms != nil {
+					accessAllowed, err = rooms.HasInviteGrant(ctx, room.ID, playerID)
+					if err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "unavailable"})
+						_ = conn.Close()
+						return
+					}
+				}
+				if !accessAllowed {
+					send(&pokerproto.ServerMessage{Type: "error", Code: "forbidden"})
+					_ = conn.Close()
+					return
+				}
 			}
 			if room != nil && room.CurrencyMode != "sandbox" && !cfg.RealMoneyEnabled {
 				send(&pokerproto.ServerMessage{Type: "error", Code: "unsupported_currency_mode"})
@@ -754,6 +766,7 @@ func RegisterGeneralWS(
 	verifier *jwtverify.Verifier,
 	reg ws.Registry,
 	allowedOrigins []string,
+	presenceSvc *presence.Service,
 ) {
 	upgrader := fws.FastHTTPUpgrader{
 		ReadBufferSize:  1024,
@@ -795,6 +808,17 @@ func RegisterGeneralWS(
 			}
 			playerID := claims.Sub
 			connID := uuid.NewString()
+			if presenceSvc != nil {
+				if err := presenceSvc.Open(ctx, playerID, connID); err != nil {
+					slog.Warn("presence: websocket open failed", "player", playerID, "err", err)
+				} else {
+					defer func() {
+						if err := presenceSvc.Close(context.Background(), playerID, connID); err != nil {
+							slog.Warn("presence: websocket close failed", "player", playerID, "err", err)
+						}
+					}()
+				}
+			}
 
 			// Register for user-specific broadcasts
 			userChan := "user#" + playerID
@@ -811,6 +835,9 @@ func RegisterGeneralWS(
 
 			done := make(chan struct{})
 			go startHeartbeat(safeConn, done, wsPingInterval, wsPongWait)
+			if presenceSvc != nil {
+				go startPresenceHeartbeat(ctx, done, presenceSvc, playerID, connID)
+			}
 
 			for {
 				_, msg, e := conn.ReadMessage()
@@ -829,6 +856,21 @@ func RegisterGeneralWS(
 			slog.Info("general ws disconnected", "player", playerID, "conn", connID)
 		})
 	})
+}
+
+func startPresenceHeartbeat(ctx context.Context, done <-chan struct{}, svc *presence.Service, playerID, connectionID string) {
+	ticker := time.NewTicker(presence.HeartbeatInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			if err := svc.Heartbeat(ctx, playerID, connectionID); err != nil {
+				slog.Warn("presence: websocket heartbeat failed", "player", playerID, "err", err)
+			}
+		case <-done:
+			return
+		}
+	}
 }
 
 // ConvertSnapshot converts the engine's hand.Snapshot structure to the Protobuf TableSnapshot type.

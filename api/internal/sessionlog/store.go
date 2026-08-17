@@ -3,6 +3,7 @@ package sessionlog
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -172,6 +173,29 @@ func (s *Store) FindOpenSession(ctx context.Context, playerID, tableID string) (
 	}
 }
 
+// FindLatestOpenSession reports whether the player has any unclosed table
+// session. It is used to reconcile friend-visible in_table presence after a
+// process restart or a WebSocket reconnect, without exposing the table ID.
+func (s *Store) FindLatestOpenSession(ctx context.Context, playerID string) (bool, error) {
+	var startKey map[string]dynamotypes.AttributeValue
+	for {
+		res, err := s.sessions.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: 50, ScanIndexForward: false, ExclusiveStartKey: startKey})
+		if err != nil {
+			return false, err
+		}
+		for _, raw := range res.Items {
+			item, decodeErr := dynamo.Decode[SessionItem](raw)
+			if decodeErr == nil && item != nil && item.EndedAt == 0 {
+				return true, nil
+			}
+		}
+		if len(res.LastEvaluatedKey) == 0 {
+			return false, nil
+		}
+		startKey = res.LastEvaluatedKey
+	}
+}
+
 // CloseSession overwrites the same session item (same PK/SK) with its final
 // EndedAt/CashoutAmount/NetPnL — a plain PutItem, since this is an audit trail,
 // not the wallet balance's source of truth (that stays ctech-wallet). TTL is
@@ -213,6 +237,28 @@ func (s *Store) ListHands(ctx context.Context, playerID, mode string, limit int,
 		}
 	}
 	return outHands, res.LastEvaluatedKey, nil
+}
+
+// ListRecentHandsAcrossModes supplies the bounded lazy bootstrap for recent
+// opponents. The history table has no chronological GSI, so it reads at most
+// limit player-scoped rows and sorts that bounded set by EndedAt in memory.
+func (s *Store) ListRecentHandsAcrossModes(ctx context.Context, playerID string, limit int) ([]HandItem, error) {
+	if limit < 1 || limit > 100 {
+		limit = 100
+	}
+	res, err := s.hands.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: limit, ScanIndexForward: false})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]HandItem, 0, len(res.Items))
+	for _, raw := range res.Items {
+		item, decodeErr := dynamo.Decode[HandItem](raw)
+		if decodeErr == nil && item != nil {
+			items = append(items, *item)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].EndedAt > items[j].EndedAt })
+	return items, nil
 }
 
 func (s *Store) ListHandsByTable(ctx context.Context, playerID, mode, tableID string, limit int, startKey map[string]dynamotypes.AttributeValue) ([]HandItem, map[string]dynamotypes.AttributeValue, error) {

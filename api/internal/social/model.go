@@ -55,21 +55,29 @@ const (
 	EventTableInvite    EventType = "table_invite"
 )
 
+type EventStatus string
+
+const (
+	EventStatusPending  EventStatus = "pending"
+	EventStatusAccepted EventStatus = "accepted"
+	EventStatusDeclined EventStatus = "declined"
+)
+
 type Event struct {
-	RecipientPlayerID string    `dynamodbav:"pk"`
-	EventID           string    `dynamodbav:"sk"`
-	Type              EventType `dynamodbav:"type"`
-	ActorPlayerID     string    `dynamodbav:"actor_id"`
-	Status            string    `dynamodbav:"status"`
-	RoomID            string    `dynamodbav:"room_id,omitempty"`
-	Unread            bool      `dynamodbav:"unread,omitempty"`
-	CreatedAt         int64     `dynamodbav:"created_at"`
-	ExpiresAt         int64     `dynamodbav:"expires_at,omitempty"`
-	InboxPartition    string    `dynamodbav:"gsi_inbox_pk"`
-	InboxSort         string    `dynamodbav:"gsi_inbox_sk"`
-	UnreadPartition   string    `dynamodbav:"gsi_unread_pk,omitempty"`
-	UnreadSort        string    `dynamodbav:"gsi_unread_sk,omitempty"`
-	TTL               int64     `dynamodbav:"ttl"`
+	RecipientPlayerID string      `dynamodbav:"pk" json:"-"`
+	EventID           string      `dynamodbav:"sk" json:"event_id"`
+	Type              EventType   `dynamodbav:"type" json:"type"`
+	ActorPlayerID     string      `dynamodbav:"actor_id" json:"actor_id"`
+	Status            EventStatus `dynamodbav:"status" json:"status"`
+	RoomID            string      `dynamodbav:"room_id,omitempty" json:"room_id,omitempty"`
+	Unread            bool        `dynamodbav:"unread,omitempty" json:"unread"`
+	CreatedAt         int64       `dynamodbav:"created_at" json:"created_at"`
+	ExpiresAt         int64       `dynamodbav:"expires_at,omitempty" json:"expires_at,omitempty"`
+	InboxPartition    string      `dynamodbav:"gsi_inbox_pk" json:"-"`
+	InboxSort         string      `dynamodbav:"gsi_inbox_sk" json:"-"`
+	UnreadPartition   string      `dynamodbav:"gsi_unread_pk,omitempty" json:"-"`
+	UnreadSort        string      `dynamodbav:"gsi_unread_sk,omitempty" json:"-"`
+	TTL               int64       `dynamodbav:"ttl" json:"-"`
 }
 
 type Page[T any] struct {

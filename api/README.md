@@ -118,9 +118,8 @@ Per-binary keys read outside `Config` (not in the struct above):
   `post_big_blind`, `show_cards`, `keep_seat`, `chat`, `reaction`.
 - **Server → client**: `connected`, `pong`, `state` (full authoritative snapshot on join and on every mutation — no
   delta replay), `chat`, `error`, `removed`, `achievement_unlocked`, `room_created`,
-  `room_updated`, `payment_received`, `system_broadcast`. The additive wire contract also reserves
-  `social_event`, `social_presence_changed` and `social_inbox_count`; their producers remain disabled until the
-  corresponding social services are wired.
+  `room_updated`, `payment_received`, `system_broadcast`, `social_event`, `social_presence_changed` and
+  `social_inbox_count`. Social frames are emitted only on the authenticated `user#<playerID>` channel.
 - Abuse control: per-seat fixed-window limiter (10 actions/sec/seat), **32 KiB frame cap**, chat truncated to
   `chatMessageMaxLength` (50 chars, mirrored client-side as `CHAT_MESSAGE_MAX_LENGTH`) and masked by
   `internal/chatfilter`, and an adaptive Turnstile challenge (`internal/botcheck`) issued over the socket.
@@ -128,7 +127,7 @@ Per-binary keys read outside `Config` (not in the struct above):
 
 ## Social graph rollout
 
-`SOCIAL_GRAPH_ENABLED` defaults to `false` and will gate friendship, presence and table invitations. It does not gate
+`SOCIAL_GRAPH_ENABLED` defaults to `false` and gates friendship, presence and table invitations. It does not gate
 the independent player-safety controls (mute, block and report). EC2 reads the switch from
 `/ctech/<env>/poker/social-graph-enabled` on each application start. The friendship graph and exact friend-code lookup
 are implemented over conditional, mirrored DynamoDB transactions. All `/social` routes require a first-party Poker
@@ -139,6 +138,30 @@ Friendship is capped at 200 friends and 50 pending outgoing requests. New reques
 and 100/day/IP; all social mutations also have 120/min/player and 240/min/IP limits. Block includes mute and removes
 requests/friendship in both directions. Unblock deliberately preserves mute. The public API never exposes whether the
 other player blocked the caller, and safety operations remain available when the friendship feature flag is off.
+
+The durable in-app inbox stores friend requests, friendship acceptances and table invitations for 90 days. Unread
+items use the sparse `gsi_unread` index; marking an item read removes it from that index without deleting history.
+Each mutation also fans out a protobuf `social_event` or `social_inbox_count` frame on `user#<player_id>` so all open
+first-party Poker sessions converge without push notifications, e-mail or direct messages.
+
+Table invitations are friend-only, expire after 15 minutes and require the sender to have an open session at that
+table. Acceptance never buys chips or reserves a seat. For private rooms it atomically changes the inbox event and
+creates `poker_rooms(pk=<room>, sk=invite#<player>)`; GET, table WebSocket auth and join accept that unexpired grant
+without returning the room's `share_code`. Room status and capacity are checked before the grant transaction and the
+normal buy-in path revalidates capacity before any wallet debit.
+
+Friend presence is ephemeral and fleet-shared in Valkey. Each player owns a sorted set of connection IDs renewed every
+30 seconds and expired after 75 seconds; opening and closing sockets use atomic scripts so multiple tabs and API
+replicas cannot produce a false offline transition. The latest open `poker_player_sessions` row reconciles `in_table`
+on login, while buy-in and settlement update it immediately. Friend-facing protobuf frames contain only `player_id`
+and `online`, `offline` or `in_table`—never room, table, stakes, balance or currency. The in-memory adapter is limited
+to development and tests.
+
+Completed hands materialize directed opponent pairs in `poker_recent_players` after the authoritative hand commit. A
+conditional seven-day hand guard makes retries idempotent; pair rows expire after 90 days. Failures are logged and do
+not change the committed hand. The first empty `GET /social/recent` lazily reads at most 100 rows from that caller's own
+hand history (no global scan). Results are capped at 50, hydrate profiles with `BatchGetItem`, and omit a pair when
+either direction contains a block.
 
 ## Game-server model (per-table actor + DynamoDB conditional writes)
 
@@ -212,6 +235,9 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /social/blocked`                        | first-party JWT | players blocked by the caller; paginated                                                   |
 | `GET /social/lookup/:friendCode`             | first-party JWT | exact `PKR-XXXX-XXXX-XXXX` lookup; no fuzzy/name search                                    |
 | `GET /social/relationships/:playerId`        | first-party JWT | caller-visible relationship, mute and block state                                          |
+| `GET /social/summary`                        | first-party JWT | current unread inbox count                                                                 |
+| `GET /social/inbox`                          | first-party JWT | durable in-app events, newest first; paginated                                             |
+| `GET /social/recent`                         | first-party JWT | recent opponents for 90 days; blocked pairs omitted; paginated to 50                      |
 | `POST /social/friend-requests`               | first-party JWT | request by exactly one player ID or friend code                                            |
 | `POST /social/friend-requests/:id/accept`    | first-party JWT | accept an incoming request                                                                 |
 | `POST /social/friend-requests/:id/decline`   | first-party JWT | decline an incoming request                                                                |
@@ -219,6 +245,13 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `DELETE /social/friends/:id`                 | first-party JWT | remove mutual friendship                                                                   |
 | `PUT\|DELETE /social/mutes/:id`              | first-party JWT | mute or unmute locally                                                                      |
 | `PUT\|DELETE /social/blocks/:id`             | first-party JWT | block or unblock locally; unblock preserves mute                                           |
+| `POST /social/inbox/read`                    | first-party JWT | mark up to 100 known event IDs read                                                        |
+| `POST /social/table-invites`                 | first-party JWT | invite a friend from the sender's open table session                                       |
+| `POST /social/table-invites/:id/accept`      | first-party JWT | accept an unexpired invite and create private-room access grant                            |
+| `POST /social/table-invites/:id/decline`     | first-party JWT | decline an unexpired invite                                                                |
+
+All social mutations require `Idempotency-Key` (maximum 128 characters). Table invites are limited to 20/minute per
+sender and 5/minute per recipient. A second pending invite for the same sender, recipient and room is rejected.
 
 `achievement_points` is **rejected** as a leaderboard metric — no `gsi_achievement_points` exists, and returning an
 error beats silently ranking by a different GSI.

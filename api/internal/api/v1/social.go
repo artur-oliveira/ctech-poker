@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -10,7 +11,9 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/player"
+	"gopkg.aoctech.app/poker/api/internal/presence"
 	"gopkg.aoctech.app/poker/api/internal/problem"
+	"gopkg.aoctech.app/poker/api/internal/recentplayers"
 	"gopkg.aoctech.app/poker/api/internal/social"
 )
 
@@ -23,6 +26,10 @@ const (
 	socialBlocksPath            = "/blocks"
 	socialBlockedPath           = "/blocked"
 	socialLookupPath            = "/lookup"
+	socialInboxPath             = "/inbox"
+	socialSummaryPath           = "/summary"
+	socialTableInvitesPath      = "/table-invites"
+	socialRecentPath            = "/recent"
 	idempotencyKeyHeader        = "Idempotency-Key"
 	maxSocialIdempotencyKeySize = 128
 	maxSocialPlayerIDSize       = 128
@@ -30,27 +37,35 @@ const (
 )
 
 type SocialLimiters struct {
-	MutationPlayer *RateLimiter
-	MutationIP     *RateLimiter
-	RequestPlayer  *RateLimiter
-	RequestIP      *RateLimiter
+	MutationPlayer  *RateLimiter
+	MutationIP      *RateLimiter
+	RequestPlayer   *RateLimiter
+	RequestIP       *RateLimiter
+	InviteSender    *RateLimiter
+	InviteRecipient *RateLimiter
 }
 
 type socialHandlers struct {
-	svc           *social.Service
-	players       *player.Service
-	avatarBaseURL string
-	graphEnabled  bool
+	svc                    *social.Service
+	presence               *presence.Service
+	recent                 *recentplayers.Service
+	players                *player.Service
+	avatarBaseURL          string
+	graphEnabled           bool
+	inviteRecipientLimiter *RateLimiter
 }
 
 type socialPlayerResponse struct {
-	PlayerID     string              `json:"player_id"`
-	Name         string              `json:"name,omitempty"`
-	AvatarURL    string              `json:"avatar_url,omitempty"`
-	FriendCode   string              `json:"friend_code,omitempty"`
-	Relationship social.Relationship `json:"relationship"`
-	Muted        bool                `json:"muted"`
-	Blocked      bool                `json:"blocked"`
+	PlayerID      string              `json:"player_id"`
+	Name          string              `json:"name,omitempty"`
+	AvatarURL     string              `json:"avatar_url,omitempty"`
+	FriendCode    string              `json:"friend_code,omitempty"`
+	Relationship  social.Relationship `json:"relationship"`
+	Muted         bool                `json:"muted"`
+	Blocked       bool                `json:"blocked"`
+	Presence      *presence.Status    `json:"presence,omitempty"`
+	LastPlayedAt  int64               `json:"last_played_at,omitempty"`
+	HandsTogether int64               `json:"hands_together,omitempty"`
 }
 
 type friendRequestBody struct {
@@ -58,8 +73,27 @@ type friendRequestBody struct {
 	FriendCode     string `json:"friend_code"`
 }
 
-func RegisterSocial(router fiber.Router, auth fiber.Handler, svc *social.Service, players *player.Service, cfg *config.Config, limiters SocialLimiters) {
-	h := &socialHandlers{svc: svc, players: players, avatarBaseURL: cfg.AvatarBaseURL, graphEnabled: cfg.SocialGraphEnabled}
+type tableInviteBody struct {
+	TargetPlayerID string `json:"target_player_id"`
+	RoomID         string `json:"room_id"`
+}
+
+type inboxReadBody struct {
+	EventIDs []string `json:"event_ids"`
+}
+
+func RegisterSocial(router fiber.Router, auth fiber.Handler, svc *social.Service, players *player.Service, cfg *config.Config, limiters SocialLimiters, extras ...any) {
+	var presenceSvc *presence.Service
+	var recentSvc *recentplayers.Service
+	for _, extra := range extras {
+		switch value := extra.(type) {
+		case *presence.Service:
+			presenceSvc = value
+		case *recentplayers.Service:
+			recentSvc = value
+		}
+	}
+	h := &socialHandlers{svc: svc, presence: presenceSvc, recent: recentSvc, players: players, avatarBaseURL: cfg.AvatarBaseURL, graphEnabled: cfg.SocialGraphEnabled, inviteRecipientLimiter: limiters.InviteRecipient}
 	g := router.Group(socialBasePath, auth, firstPartyOnly)
 
 	g.Get(socialFriendsPath, h.listFriends)
@@ -67,6 +101,9 @@ func RegisterSocial(router fiber.Router, auth fiber.Handler, svc *social.Service
 	g.Get(socialBlockedPath, h.listBlocked)
 	g.Get(socialLookupPath+"/:friendCode", h.lookup)
 	g.Get(socialRelationshipsPath+"/:playerId", h.relationship)
+	g.Get(socialSummaryPath, h.summary)
+	g.Get(socialInboxPath, h.listInbox)
+	g.Get(socialRecentPath, h.listRecent)
 
 	mutationPlayer := rateLimit(limiters.MutationPlayer, playerKey("social:mutation"))
 	mutationIP := rateLimit(limiters.MutationIP, ipKey("social:mutation"))
@@ -81,6 +118,104 @@ func RegisterSocial(router fiber.Router, auth fiber.Handler, svc *social.Service
 	g.Delete(socialMutesPath+"/:playerId", mutationPlayer, mutationIP, h.unmute)
 	g.Put(socialBlocksPath+"/:playerId", mutationPlayer, mutationIP, h.block)
 	g.Delete(socialBlocksPath+"/:playerId", mutationPlayer, mutationIP, h.unblock)
+	inviteSender := rateLimit(limiters.InviteSender, playerKey("social:table-invite"))
+	g.Post(socialInboxPath+"/read", mutationPlayer, mutationIP, h.markInboxRead)
+	g.Post(socialTableInvitesPath, mutationPlayer, mutationIP, inviteSender, h.sendTableInvite)
+	g.Post(socialTableInvitesPath+"/:eventId/accept", mutationPlayer, mutationIP, h.acceptTableInvite)
+	g.Post(socialTableInvitesPath+"/:eventId/decline", mutationPlayer, mutationIP, h.declineTableInvite)
+}
+
+func (h *socialHandlers) summary(c fiber.Ctx) error {
+	count, err := h.svc.UnreadCount(c.Context(), actorID(c))
+	if err != nil {
+		return socialProblem(err, c).Send(c)
+	}
+	return c.JSON(fiber.Map{"unread_count": count})
+}
+
+func (h *socialHandlers) listInbox(c fiber.Ctx) error {
+	cursor := c.Query("cursor")
+	events, lastKey, err := h.svc.ListInbox(c.Context(), actorID(c), limitParam(c), decodeCursor(cursor))
+	if err != nil {
+		return socialProblem(err, c).Send(c)
+	}
+	return sendPage(c, events, lastKey, cursor)
+}
+
+func (h *socialHandlers) markInboxRead(c fiber.Ctx) error {
+	if _, p := socialIdempotencyKey(c); p != nil {
+		return p.Send(c)
+	}
+	var body inboxReadBody
+	if err := c.Bind().Body(&body); err != nil || len(body.EventIDs) == 0 || len(body.EventIDs) > 100 {
+		return problem.BadRequest("event_ids must contain between 1 and 100 ids").Send(c)
+	}
+	for _, id := range body.EventIDs {
+		if strings.TrimSpace(id) == "" || len(id) > maxSocialIdempotencyKeySize {
+			return problem.BadRequest("event id is invalid").Send(c)
+		}
+	}
+	if err := h.svc.MarkInboxRead(c.Context(), actorID(c), body.EventIDs); err != nil {
+		return socialProblem(err, c).Send(c)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *socialHandlers) sendTableInvite(c fiber.Ctx) error {
+	key, p := socialIdempotencyKey(c)
+	if p != nil {
+		return p.Send(c)
+	}
+	var body tableInviteBody
+	if err := c.Bind().Body(&body); err != nil {
+		return problem.BadRequest("invalid body").Send(c)
+	}
+	body.TargetPlayerID, body.RoomID = strings.TrimSpace(body.TargetPlayerID), strings.TrimSpace(body.RoomID)
+	if body.TargetPlayerID == "" || body.RoomID == "" || len(body.TargetPlayerID) > maxSocialPlayerIDSize || len(body.RoomID) > maxSocialPlayerIDSize {
+		return problem.BadRequest("target_player_id and room_id are required").Send(c)
+	}
+	if h.inviteRecipientLimiter != nil {
+		allowed, err := h.inviteRecipientLimiter.Allow(c.Context(), "rl:social:table-invite:recipient:"+body.TargetPlayerID)
+		if err != nil {
+			slog.Warn("invite recipient rate limiter failed open", "err", err)
+		} else if !allowed {
+			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{"error": "rate_limit_exceeded", "message": "too many invitations for this player"})
+		}
+	}
+	event, err := h.svc.SendTableInvite(c.Context(), actorID(c), body.TargetPlayerID, body.RoomID, key)
+	if err != nil {
+		return socialProblem(err, c).Send(c)
+	}
+	return c.Status(fiber.StatusCreated).JSON(event)
+}
+
+func (h *socialHandlers) acceptTableInvite(c fiber.Ctx) error {
+	if _, p := socialIdempotencyKey(c); p != nil {
+		return p.Send(c)
+	}
+	eventID := strings.TrimSpace(c.Params("eventId"))
+	if eventID == "" || len(eventID) > maxSocialIdempotencyKeySize {
+		return problem.BadRequest("event id is invalid").Send(c)
+	}
+	event, room, err := h.svc.AcceptTableInvite(c.Context(), actorID(c), eventID)
+	if err != nil {
+		return socialProblem(err, c).Send(c)
+	}
+	return c.JSON(fiber.Map{"event": event, "room": sanitizeRoom(room, actorID(c))})
+}
+
+func (h *socialHandlers) declineTableInvite(c fiber.Ctx) error {
+	if _, p := socialIdempotencyKey(c); p != nil {
+		return p.Send(c)
+	}
+	eventID := strings.TrimSpace(c.Params("eventId"))
+	if eventID == "" || len(eventID) > maxSocialIdempotencyKeySize {
+		return problem.BadRequest("event id is invalid").Send(c)
+	}
+	if _, err := h.svc.DeclineTableInvite(c.Context(), actorID(c), eventID); err != nil {
+		return socialProblem(err, c).Send(c)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 func (h *socialHandlers) listFriends(c fiber.Ctx) error {
@@ -89,7 +224,7 @@ func (h *socialHandlers) listFriends(c fiber.Ctx) error {
 	if err != nil {
 		return socialProblem(err, c).Send(c)
 	}
-	players, err := h.hydrate(c, edges, false)
+	players, err := h.hydrate(c, edges, false, true)
 	if err != nil {
 		return problem.InternalServer("failed to hydrate friends", c, err).Send(c)
 	}
@@ -106,7 +241,7 @@ func (h *socialHandlers) listRequests(c fiber.Ctx) error {
 	if err != nil {
 		return socialProblem(err, c).Send(c)
 	}
-	players, err := h.hydrate(c, edges, false)
+	players, err := h.hydrate(c, edges, false, false)
 	if err != nil {
 		return problem.InternalServer("failed to hydrate friend requests", c, err).Send(c)
 	}
@@ -119,7 +254,7 @@ func (h *socialHandlers) listBlocked(c fiber.Ctx) error {
 	if err != nil {
 		return socialProblem(err, c).Send(c)
 	}
-	players, err := h.hydrate(c, edges, false)
+	players, err := h.hydrate(c, edges, false, false)
 	if err != nil {
 		return problem.InternalServer("failed to hydrate blocked players", c, err).Send(c)
 	}
@@ -244,7 +379,7 @@ func (h *socialHandlers) mutatePath(c fiber.Ctx, mutation socialMutation, includ
 	return c.JSON(edgeState(edge))
 }
 
-func (h *socialHandlers) hydrate(c fiber.Ctx, edges []social.Edge, includeFriendCode bool) ([]socialPlayerResponse, error) {
+func (h *socialHandlers) hydrate(c fiber.Ctx, edges []social.Edge, includeFriendCode, includePresence bool) ([]socialPlayerResponse, error) {
 	result := make([]socialPlayerResponse, 0, len(edges))
 	ids := make([]string, 0, len(edges))
 	for i := range edges {
@@ -254,14 +389,81 @@ func (h *socialHandlers) hydrate(c fiber.Ctx, edges []social.Edge, includeFriend
 	if err != nil {
 		return nil, err
 	}
+	statuses := map[string]presence.Status{}
+	if includePresence && h.presence != nil {
+		statuses, err = h.presence.GetMany(c.Context(), ids)
+		if err != nil {
+			return nil, err
+		}
+	}
 	for i := range edges {
 		profile, ok := profiles[edges[i].OtherPlayerID]
 		if !ok {
 			continue
 		}
-		result = append(result, h.response(&profile, &edges[i], includeFriendCode))
+		response := h.response(&profile, &edges[i], includeFriendCode)
+		if includePresence && h.presence != nil {
+			status := statuses[edges[i].OtherPlayerID]
+			response.Presence = &status
+		}
+		result = append(result, response)
 	}
 	return result, nil
+}
+
+func (h *socialHandlers) listRecent(c fiber.Ctx) error {
+	if h.recent == nil {
+		return problem.InternalServer("recent players are unavailable", c, errors.New("recent players service unavailable")).Send(c)
+	}
+	cursor := c.Query("cursor")
+	page, err := h.recent.List(c.Context(), actorID(c), decodeCursor(cursor), limitParam(c))
+	if err != nil {
+		return problem.InternalServer("failed to list recent players", c, err).Send(c)
+	}
+	ids := make([]string, 0, len(page.Players))
+	for _, item := range page.Players {
+		ids = append(ids, item.OpponentPlayerID)
+	}
+	profiles, err := h.players.GetMany(c.Context(), ids)
+	if err != nil {
+		return problem.InternalServer("failed to hydrate recent players", c, err).Send(c)
+	}
+	edges, err := h.svc.Relationships(c.Context(), actorID(c), ids)
+	if err != nil {
+		return socialProblem(err, c).Send(c)
+	}
+	friendIDs := make([]string, 0)
+	for id, edge := range edges {
+		if edge.Relationship == social.RelationshipFriend {
+			friendIDs = append(friendIDs, id)
+		}
+	}
+	statuses := map[string]presence.Status{}
+	if len(friendIDs) > 0 && h.presence != nil {
+		statuses, err = h.presence.GetMany(c.Context(), friendIDs)
+		if err != nil {
+			return problem.InternalServer("failed to hydrate recent presence", c, err).Send(c)
+		}
+	}
+	result := make([]socialPlayerResponse, 0, len(page.Players))
+	for _, item := range page.Players {
+		profile, ok := profiles[item.OpponentPlayerID]
+		if !ok {
+			continue
+		}
+		var edge *social.Edge
+		if value, exists := edges[item.OpponentPlayerID]; exists {
+			edge = &value
+		}
+		response := h.response(&profile, edge, false)
+		response.LastPlayedAt, response.HandsTogether = item.LastPlayedAt, item.HandsTogether
+		if edge != nil && edge.Relationship == social.RelationshipFriend && h.presence != nil {
+			status := statuses[item.OpponentPlayerID]
+			response.Presence = &status
+		}
+		result = append(result, response)
+	}
+	return sendPage(c, result, page.LastKey, cursor)
 }
 
 func (h *socialHandlers) response(profile *player.PlayerProfile, edge *social.Edge, includeFriendCode bool) socialPlayerResponse {
@@ -316,6 +518,18 @@ func socialProblem(err error, c fiber.Ctx) *problem.Problem {
 		return problem.New(http.StatusConflict, "/problems/friend-limit-reached", "Friend Limit Reached", "friend limit reached")
 	case errors.Is(err, social.ErrRequestLimitReached):
 		return problem.New(http.StatusConflict, "/problems/request-limit-reached", "Request Limit Reached", "pending friend request limit reached")
+	case errors.Is(err, social.ErrInviteExpired):
+		return problem.New(http.StatusConflict, "/problems/invite-expired", "Invite Expired", "the table invite has expired")
+	case errors.Is(err, social.ErrRoomFull):
+		return problem.TableFull()
+	case errors.Is(err, social.ErrRoomClosed):
+		return problem.New(http.StatusConflict, "/problems/room-closed", "Room Closed", "the room is no longer available")
+	case errors.Is(err, social.ErrInviteAlreadySent):
+		return problem.New(http.StatusConflict, "/problems/invite-already-pending", "Invite Already Pending", "an invitation is already pending")
+	case errors.Is(err, social.ErrInviteForbidden), errors.Is(err, social.ErrInviteNotPending):
+		return problem.New(http.StatusConflict, "/problems/relationship-conflict", "Relationship Conflict", "the social action cannot be completed")
+	case errors.Is(err, social.ErrEventNotFound):
+		return problem.NotFound("social event not found")
 	case errors.Is(err, social.ErrRelationshipConflict), errors.Is(err, social.ErrConcurrentTransition):
 		return problem.New(http.StatusConflict, "/problems/relationship-conflict", "Relationship Conflict", "the relationship cannot be changed")
 	case errors.Is(err, social.ErrSelfRelationship):

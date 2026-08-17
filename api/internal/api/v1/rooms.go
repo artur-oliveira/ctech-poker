@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"errors"
@@ -193,6 +194,13 @@ func (h *roomHandlers) getRoom(c fiber.Ctx) error {
 		return problem.NotFound("room not found").Send(c)
 	}
 	userID, _ := c.Locals(localsUserID).(string)
+	allowed, err := h.privateAccessAllowed(c.Context(), room, userID, "")
+	if err != nil {
+		return problem.InternalServer("failed to validate private room access", c, err).Send(c)
+	}
+	if !allowed {
+		return problem.Forbidden("private room access required").Send(c)
+	}
 	return c.JSON(sanitizeRoom(room, userID))
 }
 
@@ -244,12 +252,22 @@ func sanitizeRoom(room *roomstore.Room, viewerID string) roomstore.Room {
 // privateRoomAccessAllowed gates joining a private room: the creator is always
 // allowed; anyone else must present the share code (constant-time compare).
 // Public rooms are always allowed.
-func privateRoomAccessAllowed(room *roomstore.Room, viewerID, shareCode string) bool {
+func privateRoomAccessAllowed(room *roomstore.Room, viewerID, shareCode string, inviteGranted bool) bool {
 	if room.Visibility != "private" || room.CreatedBy == viewerID {
+		return true
+	}
+	if inviteGranted {
 		return true
 	}
 	return room.ShareCode != "" &&
 		subtle.ConstantTimeCompare([]byte(room.ShareCode), []byte(shareCode)) == 1
+}
+
+func (h *roomHandlers) privateAccessAllowed(ctx context.Context, room *roomstore.Room, viewerID, shareCode string) (bool, error) {
+	if privateRoomAccessAllowed(room, viewerID, shareCode, false) {
+		return true, nil
+	}
+	return h.rooms.HasInviteGrant(ctx, room.ID, viewerID)
 }
 
 func (h *roomHandlers) join(c fiber.Ctx) error {
@@ -271,7 +289,11 @@ func (h *roomHandlers) join(c fiber.Ctx) error {
 		return problem.BadRequest("amount must be within range and a multiple of big_blind").Send(c)
 	}
 	userID, _ := c.Locals(localsUserID).(string)
-	if !privateRoomAccessAllowed(room, userID, req.ShareCode) {
+	allowed, err := h.privateAccessAllowed(c.Context(), room, userID, req.ShareCode)
+	if err != nil {
+		return problem.InternalServer("failed to validate private room access", c, err).Send(c)
+	}
+	if !allowed {
 		return problem.Forbidden("share code required to join a private room").Send(c)
 	}
 	if err := h.buyin.BuyInWithAutoRebuy(c.Context(), room.ID, userID, req.Amount, room.Status == "active", req.AutoRebuy, req.IdempotencyKey); err != nil {

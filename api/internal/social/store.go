@@ -45,6 +45,81 @@ func (s *Store) Get(ctx context.Context, ownerPlayerID, otherPlayerID string) (*
 	return edge, nil
 }
 
+func (s *Store) BlockedInEitherDirection(ctx context.Context, actorID string, opponentIDs []string) (map[string]bool, error) {
+	blocked := make(map[string]bool, len(opponentIDs))
+	keys := make([]map[string]types.AttributeValue, 0, len(opponentIDs)*2)
+	seen := make(map[string]bool, len(opponentIDs))
+	for _, opponentID := range opponentIDs {
+		if opponentID == "" || opponentID == actorID || seen[opponentID] {
+			continue
+		}
+		seen[opponentID] = true
+		keys = append(keys, edgeKey(actorID, opponentID), edgeKey(opponentID, actorID))
+	}
+	if len(keys) == 0 {
+		return blocked, nil
+	}
+	request := map[string]types.KeysAndAttributes{s.base.TableName: {Keys: keys}}
+	for attempt := 0; attempt < 4 && len(request) > 0; attempt++ {
+		out, err := s.base.BatchGetItemRaw(ctx, &dynamodb.BatchGetItemInput{RequestItems: request})
+		if err != nil {
+			return nil, fmt.Errorf("social: batch read block pairs: %w", err)
+		}
+		for _, raw := range out.Responses[s.base.TableName] {
+			edge, decodeErr := dynamo.Decode[Edge](raw)
+			if decodeErr != nil {
+				return nil, fmt.Errorf("social: decode block pair: %w", decodeErr)
+			}
+			if edge.Blocked {
+				otherID := edge.OtherPlayerID
+				if edge.OwnerPlayerID != actorID {
+					otherID = edge.OwnerPlayerID
+				}
+				blocked[otherID] = true
+			}
+		}
+		request = out.UnprocessedKeys
+	}
+	if len(request) > 0 {
+		return nil, fmt.Errorf("social: block pair reads remained unprocessed")
+	}
+	return blocked, nil
+}
+
+func (s *Store) GetManyFromOwner(ctx context.Context, ownerID string, otherIDs []string) (map[string]Edge, error) {
+	result := make(map[string]Edge, len(otherIDs))
+	keys := make([]map[string]types.AttributeValue, 0, len(otherIDs))
+	seen := make(map[string]bool, len(otherIDs))
+	for _, otherID := range otherIDs {
+		if otherID != "" && otherID != ownerID && !seen[otherID] {
+			seen[otherID] = true
+			keys = append(keys, edgeKey(ownerID, otherID))
+		}
+	}
+	if len(keys) == 0 {
+		return result, nil
+	}
+	request := map[string]types.KeysAndAttributes{s.base.TableName: {Keys: keys}}
+	for attempt := 0; attempt < 4 && len(request) > 0; attempt++ {
+		out, err := s.base.BatchGetItemRaw(ctx, &dynamodb.BatchGetItemInput{RequestItems: request})
+		if err != nil {
+			return nil, fmt.Errorf("social: batch read owner edges: %w", err)
+		}
+		for _, raw := range out.Responses[s.base.TableName] {
+			edge, decodeErr := dynamo.Decode[Edge](raw)
+			if decodeErr != nil {
+				return nil, fmt.Errorf("social: decode owner edge: %w", decodeErr)
+			}
+			result[edge.OtherPlayerID] = *edge
+		}
+		request = out.UnprocessedKeys
+	}
+	if len(request) > 0 {
+		return nil, fmt.Errorf("social: owner edge reads remained unprocessed")
+	}
+	return result, nil
+}
+
 func (s *Store) readPair(ctx context.Context, actorID, targetID string) (*Edge, *Edge, error) {
 	responses, err := s.base.TransactGetItems(ctx, []types.TransactGetItem{
 		{Get: &types.Get{TableName: aws.String(s.base.TableName), Key: edgeKey(actorID, targetID)}},

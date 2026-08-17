@@ -1,7 +1,11 @@
 // Package recentplayers defines the bounded, per-viewer opponent history.
 package recentplayers
 
-import "time"
+import (
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+)
 
 type Player struct {
 	ViewerPlayerID   string `dynamodbav:"pk"`
@@ -23,6 +27,6 @@ type HandCompletion struct {
 }
 
 type Page struct {
-	Players    []Player
-	NextCursor string
+	Players []Player
+	LastKey map[string]types.AttributeValue
 }

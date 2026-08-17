@@ -66,6 +66,10 @@ type Service struct {
 	stats         interface {
 		Get(context.Context, string, string) (pokerstats.Stats, error)
 	}
+	presence interface {
+		SetInTable(context.Context, string, bool) error
+		Reconcile(context.Context, string) error
+	}
 }
 
 // ErrTermsNotAccepted is re-exported at the buy-in boundary so callers do
@@ -106,6 +110,14 @@ func (s *Service) WithPokerStats(stats interface {
 	Get(context.Context, string, string) (pokerstats.Stats, error)
 }) *Service {
 	s.stats = stats
+	return s
+}
+
+func (s *Service) WithPresence(presence interface {
+	SetInTable(context.Context, string, bool) error
+	Reconcile(context.Context, string) error
+}) *Service {
+	s.presence = presence
 	return s
 }
 
@@ -305,6 +317,11 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 			}); err != nil {
 				slog.Error("sessionlog: record session open failed", "player", playerID, "table", roomID, "err", err)
 			}
+		}
+	}
+	if s.presence != nil {
+		if err := s.presence.SetInTable(ctx, playerID, true); err != nil {
+			slog.Warn("presence: mark player in table failed", "player", playerID, "table", roomID, "err", err)
 		}
 	}
 
@@ -582,6 +599,11 @@ func (s *Service) settle(ctx context.Context, roomID, playerID string, stack int
 			if err := s.sessions.CloseSession(ctx, *open); err != nil {
 				slog.Error("sessionlog: close session failed", "player", playerID, "table", roomID, "err", err)
 			}
+		}
+	}
+	if s.presence != nil {
+		if err := s.presence.Reconcile(ctx, playerID); err != nil {
+			slog.Warn("presence: reconcile after table exit failed", "player", playerID, "table", roomID, "err", err)
 		}
 	}
 

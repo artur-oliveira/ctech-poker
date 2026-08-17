@@ -20,7 +20,9 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/playernotes"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
+	"gopkg.aoctech.app/poker/api/internal/presence"
 	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
+	"gopkg.aoctech.app/poker/api/internal/recentplayers"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
@@ -58,6 +60,8 @@ func Register(
 	sandboxPurchaseSvc *sandboxpurchase.Service,
 	reactionPurchaseSvc *reactionpurchase.Service,
 	socialSvc *social.Service,
+	presenceSvc *presence.Service,
+	recentSvc *recentplayers.Service,
 ) {
 	oauthresource.Register(app, cfg.ServiceAudience, cfg.CtechIssuerURL)
 	router := app.Group("/v1.0")
@@ -68,7 +72,7 @@ func Register(
 	RegisterHealth(router, cfg, db)
 
 	RegisterTableWS(router, verifier, manager, reg, cfg.CorsAllowedOrigins, seed, rooms, cfg, players, pokerStatsStore)
-	RegisterGeneralWS(router, verifier, reg, cfg.CorsAllowedOrigins)
+	RegisterGeneralWS(router, verifier, reg, cfg.CorsAllowedOrigins, presenceSvc)
 	auth := authMiddleware(verifier)
 	RegisterHandHistory(router, auth, &tablestoreAdapter{store: tableStore})
 	RegisterAchievementCatalog(router)
@@ -85,6 +89,8 @@ func Register(
 	socialMutationIPLimiter := NewRateLimiter(cacheBackend, 240, time.Minute)
 	friendRequestPlayerLimiter := NewRateLimiter(cacheBackend, 30, 24*time.Hour)
 	friendRequestIPLimiter := NewRateLimiter(cacheBackend, 100, 24*time.Hour)
+	inviteSenderLimiter := NewRateLimiter(cacheBackend, 20, time.Minute)
+	inviteRecipientLimiter := NewRateLimiter(cacheBackend, 5, time.Minute)
 
 	RegisterRooms(router, auth, rooms, buyinSvc, manager, reg, cfg, createLimiter, joinLimiter)
 	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter, pokerStatsStore)
@@ -96,9 +102,11 @@ func Register(
 	RegisterSandboxPurchase(router, auth, sandboxPurchaseSvc, purchaseLimiter)
 	RegisterReactionPurchase(router, auth, reactionPurchaseSvc, purchaseLimiter)
 	RegisterSocial(router, auth, socialSvc, players, cfg, SocialLimiters{
-		MutationPlayer: socialMutationPlayerLimiter,
-		MutationIP:     socialMutationIPLimiter,
-		RequestPlayer:  friendRequestPlayerLimiter,
-		RequestIP:      friendRequestIPLimiter,
-	})
+		MutationPlayer:  socialMutationPlayerLimiter,
+		MutationIP:      socialMutationIPLimiter,
+		RequestPlayer:   friendRequestPlayerLimiter,
+		RequestIP:       friendRequestIPLimiter,
+		InviteSender:    inviteSenderLimiter,
+		InviteRecipient: inviteRecipientLimiter,
+	}, presenceSvc, recentSvc)
 }

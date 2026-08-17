@@ -4,6 +4,7 @@ package roomstore
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -15,11 +16,35 @@ const (
 	gsiPublic    = "gsi_public"
 	gsiShareCode = "gsi_share_code"
 
-	roomSK = "meta"
+	roomSK         = "meta"
+	inviteSKPrefix = "invite#"
 )
 
 type Store struct {
 	base dynamo.Base
+}
+
+func (s *Store) GetInviteGrant(ctx context.Context, roomID, playerID string) (*InviteGrant, error) {
+	item, err := s.base.GetItem(ctx, roomID, inviteSKPrefix+playerID)
+	if err != nil {
+		return nil, fmt.Errorf("roomstore: get invite grant: %w", err)
+	}
+	if item == nil {
+		return nil, nil
+	}
+	grant, err := dynamo.Decode[InviteGrant](item)
+	if err != nil {
+		return nil, fmt.Errorf("roomstore: decode invite grant: %w", err)
+	}
+	if grant.ExpiresAt <= time.Now().UTC().UnixMilli() {
+		return nil, nil
+	}
+	return grant, nil
+}
+
+func (s *Store) HasInviteGrant(ctx context.Context, roomID, playerID string) (bool, error) {
+	grant, err := s.GetInviteGrant(ctx, roomID, playerID)
+	return grant != nil, err
 }
 
 func NewStore(db *dynamodb.Client, env string) *Store {
