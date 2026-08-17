@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@tanstack/react-query', () => ({useInfiniteQuery: mocks.query}));
 vi.mock('@/components/TermsGate', () => ({TermsGate: ({children}: { children: React.ReactNode }) => children}));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
+vi.mock('@/components/social/PeopleNavBadge', () => ({PeopleNavBadge: () => <span>people-badge</span>}));
 vi.mock('@/components/table/PlayingCard', () => ({
   PlayingCard: ({card}: { card: string }) => <span data-testid="card">{card}</span>,
 }));

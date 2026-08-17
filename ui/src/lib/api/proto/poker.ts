@@ -283,7 +283,7 @@ export interface ClientMessage {
 
 /** ServerMessage is sent from the server to the client. */
 export interface ServerMessage {
-  /** "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast" | "sandbox_purchase_update" | "reaction_purchase_update" */
+  /** "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast" | "sandbox_purchase_update" | "reaction_purchase_update" | "social_event" | "social_presence_changed" | "social_inbox_count" */
   type: string;
   /** payload fields */
   conn_id: string;
@@ -327,6 +327,37 @@ export interface ServerMessage {
   target_player_id: string;
   /** for sandbox_purchase_update or reaction_purchase_update */
   purchase_id: string;
+  /** for social_event or social_presence_changed */
+  social_event?:
+    | SocialEvent
+    | undefined;
+  /** for social_inbox_count */
+  unread_count: number;
+}
+
+/**
+ * Friend-visible presence deliberately carries no table or room identifier.
+ * status is one of offline | online | in_table.
+ */
+export interface PlayerPresence {
+  player_id: string;
+  status: string;
+}
+
+/**
+ * Push notification/invalidation payload for the in-app social inbox. HTTP
+ * remains authoritative for mutations and full list pagination.
+ */
+export interface SocialEvent {
+  event_id: string;
+  /** friend_request | friend_accepted | table_invite */
+  type: string;
+  actor_id: string;
+  room_id: string;
+  status: string;
+  created_at: number;
+  expires_at: number;
+  presence?: PlayerPresence | undefined;
 }
 
 function createBaseCard(): Card {
@@ -3778,6 +3809,8 @@ function createBaseServerMessage(): ServerMessage {
     reaction_id: "",
     target_player_id: "",
     purchase_id: "",
+    social_event: undefined,
+    unread_count: 0,
   };
 }
 
@@ -3839,6 +3872,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
     }
     if (message.purchase_id !== "") {
       writer.uint32(154).string(message.purchase_id);
+    }
+    if (message.social_event !== undefined) {
+      SocialEvent.encode(message.social_event, writer.uint32(162).fork()).join();
+    }
+    if (message.unread_count !== 0) {
+      writer.uint32(168).int32(message.unread_count);
     }
     return writer;
   },
@@ -4002,6 +4041,22 @@ export const ServerMessage: MessageFns<ServerMessage> = {
           message.purchase_id = reader.string();
           continue;
         }
+        case 20: {
+          if (tag !== 162) {
+            break;
+          }
+
+          message.social_event = SocialEvent.decode(reader, reader.uint32());
+          continue;
+        }
+        case 21: {
+          if (tag !== 168) {
+            break;
+          }
+
+          message.unread_count = reader.int32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -4068,6 +4123,16 @@ export const ServerMessage: MessageFns<ServerMessage> = {
         : isSet(object.purchase_id)
         ? globalThis.String(object.purchase_id)
         : "",
+      social_event: isSet(object.socialEvent)
+        ? SocialEvent.fromJSON(object.socialEvent)
+        : isSet(object.social_event)
+        ? SocialEvent.fromJSON(object.social_event)
+        : undefined,
+      unread_count: isSet(object.unreadCount)
+        ? globalThis.Number(object.unreadCount)
+        : isSet(object.unread_count)
+        ? globalThis.Number(object.unread_count)
+        : 0,
     };
   },
 
@@ -4130,6 +4195,12 @@ export const ServerMessage: MessageFns<ServerMessage> = {
     if (message.purchase_id !== "") {
       obj.purchaseId = message.purchase_id;
     }
+    if (message.social_event !== undefined) {
+      obj.socialEvent = SocialEvent.toJSON(message.social_event);
+    }
+    if (message.unread_count !== 0) {
+      obj.unreadCount = Math.round(message.unread_count);
+    }
     return obj;
   },
 
@@ -4159,6 +4230,293 @@ export const ServerMessage: MessageFns<ServerMessage> = {
     message.reaction_id = object.reaction_id ?? "";
     message.target_player_id = object.target_player_id ?? "";
     message.purchase_id = object.purchase_id ?? "";
+    message.social_event = (object.social_event !== undefined && object.social_event !== null)
+      ? SocialEvent.fromPartial(object.social_event)
+      : undefined;
+    message.unread_count = object.unread_count ?? 0;
+    return message;
+  },
+};
+
+function createBasePlayerPresence(): PlayerPresence {
+  return { player_id: "", status: "" };
+}
+
+export const PlayerPresence: MessageFns<PlayerPresence> = {
+  encode(message: PlayerPresence, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.player_id !== "") {
+      writer.uint32(10).string(message.player_id);
+    }
+    if (message.status !== "") {
+      writer.uint32(18).string(message.status);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PlayerPresence {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePlayerPresence();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.player_id = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): PlayerPresence {
+    return {
+      player_id: isSet(object.playerId)
+        ? globalThis.String(object.playerId)
+        : isSet(object.player_id)
+        ? globalThis.String(object.player_id)
+        : "",
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+    };
+  },
+
+  toJSON(message: PlayerPresence): unknown {
+    const obj: any = {};
+    if (message.player_id !== "") {
+      obj.playerId = message.player_id;
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<PlayerPresence>, I>>(base?: I): PlayerPresence {
+    return PlayerPresence.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PlayerPresence>, I>>(object: I): PlayerPresence {
+    const message = createBasePlayerPresence();
+    message.player_id = object.player_id ?? "";
+    message.status = object.status ?? "";
+    return message;
+  },
+};
+
+function createBaseSocialEvent(): SocialEvent {
+  return {
+    event_id: "",
+    type: "",
+    actor_id: "",
+    room_id: "",
+    status: "",
+    created_at: 0,
+    expires_at: 0,
+    presence: undefined,
+  };
+}
+
+export const SocialEvent: MessageFns<SocialEvent> = {
+  encode(message: SocialEvent, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.event_id !== "") {
+      writer.uint32(10).string(message.event_id);
+    }
+    if (message.type !== "") {
+      writer.uint32(18).string(message.type);
+    }
+    if (message.actor_id !== "") {
+      writer.uint32(26).string(message.actor_id);
+    }
+    if (message.room_id !== "") {
+      writer.uint32(34).string(message.room_id);
+    }
+    if (message.status !== "") {
+      writer.uint32(42).string(message.status);
+    }
+    if (message.created_at !== 0) {
+      writer.uint32(48).int64(message.created_at);
+    }
+    if (message.expires_at !== 0) {
+      writer.uint32(56).int64(message.expires_at);
+    }
+    if (message.presence !== undefined) {
+      PlayerPresence.encode(message.presence, writer.uint32(66).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SocialEvent {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSocialEvent();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.event_id = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.type = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.actor_id = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.room_id = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.created_at = longToNumber(reader.int64());
+          continue;
+        }
+        case 7: {
+          if (tag !== 56) {
+            break;
+          }
+
+          message.expires_at = longToNumber(reader.int64());
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.presence = PlayerPresence.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SocialEvent {
+    return {
+      event_id: isSet(object.eventId)
+        ? globalThis.String(object.eventId)
+        : isSet(object.event_id)
+        ? globalThis.String(object.event_id)
+        : "",
+      type: isSet(object.type) ? globalThis.String(object.type) : "",
+      actor_id: isSet(object.actorId)
+        ? globalThis.String(object.actorId)
+        : isSet(object.actor_id)
+        ? globalThis.String(object.actor_id)
+        : "",
+      room_id: isSet(object.roomId)
+        ? globalThis.String(object.roomId)
+        : isSet(object.room_id)
+        ? globalThis.String(object.room_id)
+        : "",
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      created_at: isSet(object.createdAt)
+        ? globalThis.Number(object.createdAt)
+        : isSet(object.created_at)
+        ? globalThis.Number(object.created_at)
+        : 0,
+      expires_at: isSet(object.expiresAt)
+        ? globalThis.Number(object.expiresAt)
+        : isSet(object.expires_at)
+        ? globalThis.Number(object.expires_at)
+        : 0,
+      presence: isSet(object.presence) ? PlayerPresence.fromJSON(object.presence) : undefined,
+    };
+  },
+
+  toJSON(message: SocialEvent): unknown {
+    const obj: any = {};
+    if (message.event_id !== "") {
+      obj.eventId = message.event_id;
+    }
+    if (message.type !== "") {
+      obj.type = message.type;
+    }
+    if (message.actor_id !== "") {
+      obj.actorId = message.actor_id;
+    }
+    if (message.room_id !== "") {
+      obj.roomId = message.room_id;
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (message.created_at !== 0) {
+      obj.createdAt = Math.round(message.created_at);
+    }
+    if (message.expires_at !== 0) {
+      obj.expiresAt = Math.round(message.expires_at);
+    }
+    if (message.presence !== undefined) {
+      obj.presence = PlayerPresence.toJSON(message.presence);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<SocialEvent>, I>>(base?: I): SocialEvent {
+    return SocialEvent.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<SocialEvent>, I>>(object: I): SocialEvent {
+    const message = createBaseSocialEvent();
+    message.event_id = object.event_id ?? "";
+    message.type = object.type ?? "";
+    message.actor_id = object.actor_id ?? "";
+    message.room_id = object.room_id ?? "";
+    message.status = object.status ?? "";
+    message.created_at = object.created_at ?? 0;
+    message.expires_at = object.expires_at ?? 0;
+    message.presence = (object.presence !== undefined && object.presence !== null)
+      ? PlayerPresence.fromPartial(object.presence)
+      : undefined;
     return message;
   },
 };

@@ -37,12 +37,16 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/playernotes"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
+	"gopkg.aoctech.app/poker/api/internal/presence"
 	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
+	"gopkg.aoctech.app/poker/api/internal/recentplayers"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
+	"gopkg.aoctech.app/poker/api/internal/reports"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
+	"gopkg.aoctech.app/poker/api/internal/social"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
@@ -83,6 +87,15 @@ var Module = fx.Options(
 		newReactionPurchaseService,
 		newReactionOwnershipCache,
 		newSessionStore,
+		newSocialStore,
+		newSocialEventStore,
+		newSocialService,
+		newPresenceStore,
+		newPresenceService,
+		newRecentPlayersStore,
+		newRecentPlayersService,
+		newReportStore,
+		newReportService,
 		walletclient.New,
 		newBuyinService,
 		newPendingStore,
@@ -90,7 +103,7 @@ var Module = fx.Options(
 	),
 	fx.Invoke(wirePlayerRemovedHook),
 	fx.Invoke(wireAutoRebuyHook),
-	fx.Invoke(registerRoutes),
+	fx.Invoke(registerRoutesWithSocialRuntime),
 	fx.Invoke(startServer),
 )
 
@@ -132,8 +145,8 @@ func newFiberApp(cfg *config.Config) *fiber.App {
 	// AllowCredentials requires explicit origins. Development intentionally
 	// leaves origins empty, which means wildcard/no credentials like Wallet.
 	corsCfg := cors.Config{
-		AllowMethods:  []string{"GET", "POST", "DELETE", "OPTIONS"},
-		AllowHeaders:  []string{"Origin", "Content-Type", "Authorization", "X-Request-ID"},
+		AllowMethods:  []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:  []string{"Origin", "Content-Type", "Authorization", "X-Request-ID", "Idempotency-Key"},
 		ExposeHeaders: []string{"X-Request-ID"},
 		MaxAge:        3600,
 	}
@@ -318,14 +331,77 @@ func newReactionOwnershipCache(svc *reactionpurchase.Service, cacheB cache.Backe
 func newSessionStore(db *dynamodb.Client, cfg *config.Config) *sessionlog.Store {
 	return sessionlog.NewStore(db, cfg.Env)
 }
+func newSocialStore(db *dynamodb.Client, cfg *config.Config) *social.Store {
+	return social.NewStore(db, cfg.Env)
+}
+func newSocialEventStore(db *dynamodb.Client, cfg *config.Config) *social.DynamoEventStore {
+	return social.NewEventStore(db, cfg.Env)
+}
+func newSocialService(store *social.Store, events *social.DynamoEventStore, rooms *roomstore.Store, sessions *sessionlog.Store, reg ws.Registry, cfg *config.Config) *social.Service {
+	return social.NewService(store, cfg.SocialGraphEnabled).WithInbox(events).WithInvites(rooms, sessions).WithNotifier(newSocialNotifier(reg))
+}
+
+func newSocialNotifier(reg ws.Registry) social.NotifyFunc {
+	return func(ctx context.Context, event social.Event, unread int) {
+		messageType := "social_inbox_count"
+		var eventPayload *pokerproto.SocialEvent
+		if event.EventID != "" {
+			messageType = "social_event"
+			eventPayload = &pokerproto.SocialEvent{
+				EventId: event.EventID, Type: string(event.Type), ActorId: event.ActorPlayerID,
+				RoomId: event.RoomID, Status: string(event.Status), CreatedAt: event.CreatedAt, ExpiresAt: event.ExpiresAt,
+			}
+		}
+		data, err := goproto.Marshal(&pokerproto.ServerMessage{Type: messageType, SocialEvent: eventPayload, UnreadCount: int32(unread)})
+		if err == nil {
+			reg.Broadcast(ctx, "user#"+event.RecipientPlayerID, data)
+		}
+	}
+}
+func newPresenceStore(cacheBackend cache.Backend, cfg *config.Config) presence.Store {
+	if redis, ok := cacheBackend.(*cache.RedisBackend); ok {
+		return presence.NewValkeyStore(redis.Client())
+	}
+	if cfg.Env != "dev" {
+		panic("presence requires Valkey outside development")
+	}
+	return presence.NewMemoryStore()
+}
+func newPresenceService(store presence.Store, socialSvc *social.Service, sessions *sessionlog.Store, reg ws.Registry) *presence.Service {
+	return presence.NewService(store, socialSvc, sessions, newPresenceNotifier(reg))
+}
+func newPresenceNotifier(reg ws.Registry) presence.NotifyFunc {
+	return func(ctx context.Context, recipientID, playerID string, status presence.Status) {
+		data, err := goproto.Marshal(&pokerproto.ServerMessage{Type: "social_presence_changed", SocialEvent: &pokerproto.SocialEvent{
+			Type: "presence_changed", ActorId: playerID, Presence: &pokerproto.PlayerPresence{PlayerId: playerID, Status: string(status)},
+		}})
+		if err == nil {
+			reg.Broadcast(ctx, "user#"+recipientID, data)
+		}
+	}
+}
+func newRecentPlayersStore(db *dynamodb.Client, cfg *config.Config) *recentplayers.DynamoStore {
+	return recentplayers.NewStore(db, cfg.Env)
+}
+func newRecentPlayersService(store *recentplayers.DynamoStore, sessions *sessionlog.Store, socialSvc *social.Service) *recentplayers.Service {
+	return recentplayers.NewService(store, sessions, socialSvc)
+}
+func newReportStore(db *dynamodb.Client, cfg *config.Config) *reports.DynamoStore {
+	return reports.NewStore(db, cfg.Env)
+}
+func newReportService(store *reports.DynamoStore, tableStore *tablestore.Store, players *player.Service, cfg *config.Config) *reports.Service {
+	return reports.NewService(store, tableStore, players).WithMetric(func(category reports.Category, surface reports.Surface) {
+		metrics.EmitTableMetric(cfg.Env, "PlayerReported", 1, map[string]string{"category": string(category), "surface": string(surface)})
+	})
+}
 func newPendingStore(db *dynamodb.Client, cfg *config.Config) *reconcile.PendingStore {
 	return reconcile.NewPendingStore(db, cfg.Env)
 }
-func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service, sessionStore *sessionlog.Store, pending *reconcile.PendingStore, pokerStatsStore *pokerstats.Store) *buyin.Service {
+func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service, sessionStore *sessionlog.Store, pending *reconcile.PendingStore, pokerStatsStore *pokerstats.Store, presenceSvc *presence.Service) *buyin.Service {
 	if cfg.RealMoneyEnabled {
-		return buyin.NewServiceWithGame(wallet, wallet, manager, rooms, wallet).WithPendingStore(pending).WithSessionStore(sessionStore).WithPlayers(players).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore)
+		return buyin.NewServiceWithGame(wallet, wallet, manager, rooms, wallet).WithPendingStore(pending).WithSessionStore(sessionStore).WithPlayers(players).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore).WithPresence(presenceSvc)
 	}
-	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players).WithPendingStore(pending).WithSessionStore(sessionStore).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore)
+	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players).WithPendingStore(pending).WithSessionStore(sessionStore).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore).WithPresence(presenceSvc)
 }
 
 type roomModeReader interface {
@@ -343,7 +419,7 @@ func tableCurrencyMode(ctx context.Context, rooms roomModeReader, tableID string
 	return room.CurrencyMode, nil
 }
 
-func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, players *player.Service, cfg *config.Config) *tablemanager.Manager {
+func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
 		data, err := goproto.Marshal(message)
@@ -427,6 +503,11 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 			}
 		}
 		persistHandHistory(tableID, handID, mode, outcome, names)
+		if recentSvc != nil {
+			if err := recentSvc.RecordHand(ctx, tableID, handID, outcome.Participants, time.Now()); err != nil {
+				slog.Error("recent players: record hand failed", "table", tableID, "hand", handID, "err", err)
+			}
+		}
 	}
 	// roomLoader re-arms blind escalation and the per-turn action timeout from
 	// the room's authoritative config on every actor creation (T6), so both
@@ -680,7 +761,7 @@ func roomBackedSeed(rooms *roomstore.Store) func(string) func() *hand.Table {
 	}
 }
 
-func registerRoutes(
+func registerRoutesWithSocialRuntime(
 	app *fiber.App,
 	cfg *config.Config,
 	db *dynamodb.Client,
@@ -702,8 +783,27 @@ func registerRoutes(
 	avatars *avatar.Service,
 	sandboxPurchaseSvc *sandboxpurchase.Service,
 	reactionPurchaseSvc *reactionpurchase.Service,
+	socialSvc *social.Service,
+	presenceSvc *presence.Service,
+	recentSvc *recentplayers.Service,
+	reportSvc *reports.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc)
+}
+
+// registerRoutes retains the narrow construction seam used by older unit
+// tests; production invokes registerRoutesWithSocialRuntime above.
+func registerRoutes(
+	app *fiber.App, cfg *config.Config, db *dynamodb.Client, verifier *jwtverify.Verifier,
+	manager *tablemanager.Manager, reg ws.Registry, cacheBackend cache.Backend,
+	rooms *roomstore.Store, buyinSvc *buyin.Service, players *player.Service,
+	leaderboardSvc *leaderboard.Service, dailyRewardSvc *dailyreward.Service,
+	tableStore *tablestore.Store, sessionStore *sessionlog.Store, achievementStore *achievements.Store,
+	playerNoteStore *playernotes.Store, handShareStore *handshare.Store, pokerStatsStore *pokerstats.Store,
+	avatars *avatar.Service, sandboxPurchaseSvc *sandboxpurchase.Service,
+	reactionPurchaseSvc *reactionpurchase.Service, socialSvc *social.Service,
+) {
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, socialSvc, nil, nil, nil)
 }
 
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {

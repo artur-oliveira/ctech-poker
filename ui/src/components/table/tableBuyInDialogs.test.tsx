@@ -5,7 +5,6 @@ import {BuyInPanel, formatBuyIn, midBuyIn} from './BuyInPanel';
 import {LeaveDialog} from './LeaveDialog';
 import {RebuyDialog} from './RebuyDialog';
 import type {Room} from '@/lib/api/rooms';
-import type {SandboxPurchase, SandboxSKU} from '@/lib/api/wallet';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -13,13 +12,15 @@ const mocks = vi.hoisted(() => ({
   leaveRoom: vi.fn(),
   refetch: vi.fn(),
   invalidateQueries: vi.fn(),
+  setQueryData: vi.fn(),
   isNotFound: vi.fn(),
   createPurchase: vi.fn(),
+  spin: vi.fn(),
 }));
 
 vi.mock('@tanstack/react-query', () => ({
   useQuery: mocks.query,
-  useQueryClient: () => ({invalidateQueries: mocks.invalidateQueries}),
+  useQueryClient: () => ({invalidateQueries: mocks.invalidateQueries, setQueryData: mocks.setQueryData}),
 }));
 vi.mock('@/lib/api/rooms', () => ({
   getRoom: vi.fn(),
@@ -32,6 +33,7 @@ vi.mock('@/lib/api/wallet', () => ({
   createPurchase: mocks.createPurchase,
 }));
 vi.mock('@/lib/api/player', () => ({getMe: vi.fn()}));
+vi.mock('@/lib/api/dailyReward', () => ({getCooldown: vi.fn(), spin: mocks.spin}));
 vi.mock('axios', () => ({
   default: {isAxiosError: (error: { axios?: boolean }) => Boolean(error?.axios)},
   isAxiosError: (error: { axios?: boolean }) => Boolean(error?.axios),
@@ -153,17 +155,17 @@ describe('BuyInPanel', () => {
 });
 
 describe('table bankroll dialogs', () => {
-  let playerData: { sandbox_balance?: number } | undefined;
-  let skusData: SandboxSKU[];
+  let playerData: { sandbox_balance?: number; game_balance?: number } | undefined;
+  let cooldownData: { remaining_time_seconds: number } | undefined;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    playerData = undefined;
-    skusData = [];
+    playerData = {sandbox_balance: 6_000};
+    cooldownData = {remaining_time_seconds: 0};
     mocks.query.mockImplementation((options: { queryKey: unknown[] }) => {
       const key = (options.queryKey as string[]).join(':');
       if (key === 'player:me') return {data: playerData};
-      if (key === 'wallet:skus') return {data: skusData, isLoading: false, isError: false, refetch: vi.fn()};
+      if (key === 'dailyReward:cooldown') return {data: cooldownData};
       return {data: undefined, isLoading: false, isError: false, refetch: vi.fn()};
     });
   });
@@ -208,6 +210,69 @@ describe('table bankroll dialogs', () => {
     expect(rebought).toHaveBeenCalledOnce();
   });
 
+  describe('bust recovery without a purchase', () => {
+    test('never renders a SKU, QR code or store CTA', () => {
+      playerData = {sandbox_balance: 0};
+      render(<RebuyDialog roomId="room-1" room={sandboxRoom} onRebuyAction={vi.fn()}/>);
+      expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/pix copia e cola/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', {name: /Loja/})).not.toBeInTheDocument();
+      expect(screen.getByRole('button', {name: 'Voltar ao lobby'})).toHaveAttribute('href', '/lobby');
+    });
+
+    test('treats a balance below the minimum buy-in as busted, not only zero', () => {
+      playerData = {sandbox_balance: 1_999};
+      render(<RebuyDialog roomId="room-1" room={sandboxRoom} onRebuyAction={vi.fn()}/>);
+      expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+      expect(screen.getByText(/não cobre o buy-in mínimo/)).toBeInTheDocument();
+    });
+
+    test('claims the free daily reward and re-reads the balance', async () => {
+      playerData = {sandbox_balance: 0};
+      mocks.spin.mockResolvedValue({amount: 250, remaining_time_seconds: 3_600});
+      render(<RebuyDialog roomId="room-1" room={sandboxRoom} onRebuyAction={vi.fn()}/>);
+
+      await userEvent.click(screen.getByRole('button', {name: /Resgatar fichas grátis/}));
+      await waitFor(() => expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['player', 'me']}));
+      expect(await screen.findByRole('status')).toHaveTextContent('250 fichas grátis');
+    });
+
+    test('keeps explaining instead of pressuring when the reward is still not enough', async () => {
+      playerData = {sandbox_balance: 0};
+      mocks.spin.mockResolvedValue({amount: 250, remaining_time_seconds: 3_600});
+      render(<RebuyDialog roomId="room-1" room={sandboxRoom} onRebuyAction={vi.fn()}/>);
+      await userEvent.click(screen.getByRole('button', {name: /Resgatar fichas grátis/}));
+      await screen.findByRole('status');
+      expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', {name: 'Voltar ao lobby'})).toBeInTheDocument();
+    });
+
+    test('surfaces a failed reward claim', async () => {
+      playerData = {sandbox_balance: 0};
+      mocks.spin.mockRejectedValue(new Error('cooldown'));
+      render(<RebuyDialog roomId="room-1" room={sandboxRoom} onRebuyAction={vi.fn()}/>);
+      await userEvent.click(screen.getByRole('button', {name: /Resgatar fichas grátis/}));
+      expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível resgatar a recompensa');
+    });
+
+    test('offers no claim while the reward is cooling down', () => {
+      playerData = {sandbox_balance: 0};
+      cooldownData = {remaining_time_seconds: 3_600};
+      render(<RebuyDialog roomId="room-1" room={sandboxRoom} onRebuyAction={vi.fn()}/>);
+      expect(screen.queryByRole('button', {name: /Resgatar fichas grátis/})).not.toBeInTheDocument();
+      expect(screen.getByText(/recompensa diária ainda está em contagem/)).toBeInTheDocument();
+    });
+
+    test('sends an underfunded real-money player to the lobby, never to a purchase', () => {
+      playerData = {game_balance: 100};
+      render(<RebuyDialog roomId="room-1" room={{...sandboxRoom, currency_mode: 'real', entry_fee_cents: 500}}
+                          onRebuyAction={vi.fn()}/>);
+      expect(screen.getByText(/carteira fica em uma rota separada/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', {name: /Resgatar fichas grátis/})).not.toBeInTheDocument();
+      expect(screen.getByText(/Taxa fixa de mesa/)).toBeInTheDocument();
+    });
+  });
+
   describe('auto-rebuy grace window', () => {
     beforeEach(() => vi.useFakeTimers());
     afterEach(() => vi.useRealTimers());
@@ -218,7 +283,7 @@ describe('table bankroll dialogs', () => {
     });
 
     test('falls back to the manual rebuy dialog after the grace window if still busted with balance', async () => {
-      playerData = {sandbox_balance: 300};
+      playerData = {sandbox_balance: 3_000};
       render(<RebuyDialog roomId="room-1" room={sandboxRoom} autoRebuy onRebuyAction={vi.fn()}/>);
 
       await act(async () => {
@@ -229,40 +294,9 @@ describe('table bankroll dialogs', () => {
       expect(screen.getByRole('slider', {name: 'Recompra'})).toBeInTheDocument();
     });
 
-    test('offers an embedded PIX top-up after the grace window when balance is exactly zero', async () => {
-      playerData = {sandbox_balance: 0};
-      skusData = [{id: 'pack_100', price_cents: 100, base_credits: 1_000, bonus_percent: 0, total_credits: 1_000}];
-      render(<RebuyDialog roomId="room-1" room={sandboxRoom} autoRebuy onRebuyAction={vi.fn()}/>);
-
-      await act(async () => {
-        vi.advanceTimersByTime(1600);
-      });
-
-      expect(screen.getByRole('button', {name: /1.000 fichas/})).toBeInTheDocument();
-      expect(screen.queryByRole('slider')).not.toBeInTheDocument();
-    });
-
     test('renders the manual dialog immediately (no grace window) when auto_rebuy is off', () => {
       render(<RebuyDialog roomId="room-1" room={sandboxRoom} onRebuyAction={vi.fn()}/>);
       expect(screen.getByText('Você ficou sem fichas')).toBeInTheDocument();
-    });
-
-    test('embedded PIX top-up creates a purchase and shows the pix payment view', async () => {
-      playerData = {sandbox_balance: 0};
-      skusData = [{id: 'pack_100', price_cents: 100, base_credits: 1_000, bonus_percent: 0, total_credits: 1_000}];
-      const purchase: SandboxPurchase = {
-        purchase_id: 'sbxp-1', sku: 'pack_100', status: 'pending', pix_copia_e_cola: '00020126...',
-      };
-      mocks.createPurchase.mockResolvedValue(purchase);
-      render(<RebuyDialog roomId="room-1" room={sandboxRoom} autoRebuy onRebuyAction={vi.fn()}/>);
-
-      await act(async () => {
-        vi.advanceTimersByTime(1600);
-      });
-      vi.useRealTimers();
-
-      await userEvent.click(screen.getByRole('button', {name: /1.000 fichas/}));
-      expect(await screen.findByLabelText(/pix copia e cola/i)).toHaveValue('00020126...');
     });
   });
 });

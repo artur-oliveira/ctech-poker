@@ -51,12 +51,17 @@ test('synthesizes without error and declares exactly one ASG', () => {
     pendingCashoutsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_pending_cashouts',
     reactionEntitlementsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_reaction_entitlements',
     reactionPurchasesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_reaction_purchases',
+    socialEdgesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_social_edges',
+    recentPlayersTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_recent_players',
+    socialEventsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_social_events',
+    playerReportsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_player_reports',
+    socialGraphEnabledParam: '/ctech/dev/poker/social-graph-enabled',
   });
   const template = Template.fromStack(stack);
   template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
   template.hasResourceProperties('AWS::IAM::Role', {RoleName: 'dev-ctech-poker-api-role'});
   template.resourceCountIs('AWS::IAM::InstanceProfile', 1);
-  template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 4);
   template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
     DashboardName: 'dev-ctech-poker-operations',
   });
@@ -66,6 +71,13 @@ test('synthesizes without error and declares exactly one ASG', () => {
   expect(rendered).not.toContain('dev-ctech-poker-frontend');
   expect(rendered).toContain('dev_poker_reaction_entitlements');
   expect(rendered).toContain('dev_poker_reaction_purchases');
+  expect(rendered).toContain('dev_poker_social_edges');
+  expect(rendered).toContain('dev_poker_recent_players');
+  expect(rendered).toContain('dev_poker_social_events');
+  expect(rendered).toContain('dev_poker_player_reports');
+  expect(rendered).toContain('dynamodb:BatchGetItem');
+  expect(rendered).toContain('/ctech/dev/poker/social-graph-enabled');
+  expect(rendered).toContain('SOCIAL_GRAPH_ENABLED');
   for (const signal of [
     'ActionLatencyMs',
     'ActionsSucceeded',
@@ -75,8 +87,13 @@ test('synthesizes without error and declares exactly one ASG', () => {
     'OldestPendingCashoutAgeSeconds',
     'ConnectionsOpened',
     'HTTPResponses',
+    'PlayerReported',
+    'SocialRateLimited',
   ]) {
     expect(rendered).toContain(signal);
+  }
+  for (const alarm of ['dev-ctech-poker-player-report-spike', 'dev-ctech-poker-social-rate-limit-spike']) {
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {AlarmName: alarm});
   }
   expect(rendered).not.toContain('AWS::WAFv2');
   template.hasResourceProperties('AWS::AutoScaling::LifecycleHook', {

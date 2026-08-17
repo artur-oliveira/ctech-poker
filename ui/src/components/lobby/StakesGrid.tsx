@@ -5,7 +5,6 @@ import {useRouter} from 'next/navigation';
 import {ArrowRight, Users} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {createRoom, listRooms, listStakes} from '@/lib/api/rooms';
-import {useLobbyRealtime} from '@/lib/hooks/useLobbyRealtime';
 import {SkeletonList} from '@/components/ui/skeleton';
 
 const MAX_SEATS_OPTIONS = [[2, 'HEADS-UP'], [6, '6-MAX'], [9, 'FULL-RING']] as const;
@@ -20,8 +19,6 @@ export function StakesGrid() {
   const [joiningKey, setJoiningKey] = useState<string | null>(null);
   const [failedKey, setFailedKey] = useState<string | null>(null);
   const [selectedStakeKey, setSelectedStakeKey] = useState<string | null>(null);
-  
-  useLobbyRealtime();
   
   const {data: stakes = [], isLoading: stakesLoading, isError: stakesError, refetch: refetchStakes} = useQuery({
     queryKey: ['stakes'], queryFn: () => listStakes()

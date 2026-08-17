@@ -3,6 +3,7 @@ import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {useState} from 'react';
 import {useSessionKeepAlive} from '@/lib/auth/session';
 import {ApiError} from '@/lib/api/client';
+import {RealtimeBridge} from '@/lib/providers/RealtimeBridge';
 
 const NON_RETRYABLE = new Set([400, 401, 403, 404, 409]);
 const RETRYABLE = new Set([408, 425, 429, 500, 502, 503, 504]);
@@ -39,5 +40,5 @@ export function QueryProvider({children}: { children: React.ReactNode }) {
         },
       }),
   );
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return <QueryClientProvider client={client}><RealtimeBridge/>{children}</QueryClientProvider>;
 }

@@ -4,6 +4,7 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import {Billing} from 'aws-cdk-lib/aws-dynamodb';
 import {Construct} from 'constructs';
 import {Environment} from '@aoctech/cdk';
+import {DYNAMO_INDEX, DYNAMO_TABLE} from './constants';
 
 // Table names carry the `poker_` segment so they never collide with another
 // service's tables in the same AWS account.
@@ -12,7 +13,8 @@ export type TableName =
   'poker_rooms' | 'poker_player_profiles' | 'poker_achievement_progress' | 'poker_leaderboard_stats' |
   'poker_daily_reward' | 'poker_pending_cashouts' | 'poker_player_sessions' | 'poker_player_hands' |
   'poker_player_notes' | 'poker_hand_shares' | 'poker_player_poker_stats' | 'poker_sandbox_purchases' |
-  'poker_reaction_entitlements' | 'poker_reaction_purchases';
+  'poker_reaction_entitlements' | 'poker_reaction_purchases' |
+  (typeof DYNAMO_TABLE)[keyof typeof DYNAMO_TABLE];
 
 interface DynamoDBStackProps extends cdk.StackProps {
   environment: Environment;
@@ -78,7 +80,7 @@ export class DynamoDBStack extends cdk.Stack {
 
     // poker_rooms is lobby metadata only. The sparse indexes are populated by
     // roomstore for public rooms and private-room share codes respectively.
-    const rooms = table('poker_rooms', true);
+    const rooms = table('poker_rooms', true, true);
     rooms.addGlobalSecondaryIndex({
       indexName: 'gsi_public',
       partitionKey: {name: 'gsi_public', type: dynamodb.AttributeType.STRING},
@@ -89,7 +91,12 @@ export class DynamoDBStack extends cdk.Stack {
       partitionKey: {name: 'gsi_share_code', type: dynamodb.AttributeType.STRING},
       projectionType: dynamodb.ProjectionType.ALL,
     });
-    table('poker_player_profiles', false);
+    const playerProfiles = table('poker_player_profiles', false);
+    playerProfiles.addGlobalSecondaryIndex({
+      indexName: DYNAMO_INDEX.friendCode,
+      partitionKey: {name: 'friend_code', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
     // Private annotation namespace: pk is always the authenticated viewer and
     // sk is the opponent. Nothing reads this table while constructing public
     // table snapshots.
@@ -162,6 +169,46 @@ export class DynamoDBStack extends cdk.Stack {
           name: 'sk', type: dynamodb.AttributeType.STRING,
         }
       ],
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
+    // Directed relationship rows. Mirrored friendship transitions will be
+    // committed atomically by the social store introduced in the next slice.
+    table(DYNAMO_TABLE.socialEdges, true);
+
+    // Materialized opponent recency. TTL bounds retention to 90 days while
+    // the sparse chronological index supports cursor pagination per viewer.
+    const recentPlayers = table(DYNAMO_TABLE.recentPlayers, true, true);
+    recentPlayers.addGlobalSecondaryIndex({
+      indexName: DYNAMO_INDEX.recentPlayers,
+      partitionKey: {name: 'gsi_recent_pk', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'gsi_recent_sk', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
+    // Durable in-app inbox. The unread GSI is sparse: read events omit its
+    // partition key and disappear from the counter without deleting history.
+    const socialEvents = table(DYNAMO_TABLE.socialEvents, true, true);
+    socialEvents.addGlobalSecondaryIndex({
+      indexName: DYNAMO_INDEX.socialInbox,
+      partitionKey: {name: 'gsi_inbox_pk', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'gsi_inbox_sk', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+    socialEvents.addGlobalSecondaryIndex({
+      indexName: DYNAMO_INDEX.socialUnread,
+      partitionKey: {name: 'gsi_unread_pk', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'gsi_unread_sk', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+
+    // Open reports deliberately have no ttl attribute. Resolution adds one,
+    // allowing DynamoDB to reap the record after the documented audit window.
+    const playerReports = table(DYNAMO_TABLE.playerReports, true, true);
+    playerReports.addGlobalSecondaryIndex({
+      indexName: DYNAMO_INDEX.reportStatus,
+      partitionKey: {name: 'gsi_status_pk', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'gsi_status_sk', type: dynamodb.AttributeType.STRING},
       projectionType: dynamodb.ProjectionType.ALL,
     });
   }

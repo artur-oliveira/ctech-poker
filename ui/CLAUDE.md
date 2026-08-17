@@ -18,8 +18,14 @@ off by default — do not build UI that assumes real money is on.
 - **Named constants over literals.** Reuse `lib/api/*`, `lib/utils.ts`, `lib/pokerRules.ts`,
   `lib/tableOutcome.ts` etc. instead of inlining URLs, paths or event strings.
 - **Two realtime hooks, no more.** `lib/hooks/useTableRealtime.ts` owns the table surface;
-  `lib/hooks/useLobbyRealtime.ts` owns the lobby/user gateway. Extend them rather than opening a
-  third socket.
+  `lib/hooks/useLobbyRealtime.ts` owns the lobby/user gateway (rooms **and** all social pushes).
+  Extend them rather than opening a third socket. `useLobbyRealtime` is mounted once, by
+  `lib/providers/RealtimeBridge.tsx` inside `QueryProvider` — do not mount it from a page again.
+- **Social state is server state.** Every social read is a `['social', …]` query key
+  (`SOCIAL_KEYS` in `lib/social.ts`); mutations go through `lib/hooks/useSocialActions.ts`, which
+  invalidates that root instead of patching a mirrored relationship locally. Chat/reaction
+  suppression for muted or blocked players is applied inside `useTableRealtime` (before state),
+  never in a component, and never touches seats, bets or poker actions.
 - **State:** the token is a module singleton in `lib/api/client.ts` (not React Context, not
   persisted); server data flows through `QueryProvider` (TanStack Query). No other providers.
 - **Animations are CSS** (`src/app/globals.css` keyframes) — no animation library. Keep it that
@@ -47,8 +53,8 @@ off by default — do not build UI that assumes real money is on.
 
 ## Layout
 
-`src/app/{page,lobby,table,hands,hands/history,hands/replay,leaderboard,achievements,profile,share,guide,poker-rules,callback}`
-· `src/components/{achievements,hands,lobby,table,ui}` (+ root: `TermsGate`, `Notifier`,
+`src/app/{page,lobby,people,table,hands,hands/history,hands/replay,leaderboard,achievements,profile,share,guide,poker-rules,callback}`
+· `src/components/{achievements,hands,lobby,social,table,ui}` (+ root: `TermsGate`, `Notifier`,
 `AchievementToast`, `HandRankings`) · `src/lib/{api,api/proto,auth,hooks,providers,ws}` + domain
 modules at `src/lib/*.ts` · `src/dev` (mock runtime, aliased away in prod) · `src/test/setup.ts`.
 
@@ -68,6 +74,8 @@ Resolves once per "no token" streak — resets when the token drops back to `nul
 
 ## Not built (do not assume present)
 
+Direct messages · clubs/persistent groups · automatic bans from report volume · any purchase inside
+the bust dialog (deliberately removed; the store is its own route) ·
 Lobby stake/mode filters · multi-table grid · tournaments · spectator mode · physical chip travel
 · avatar images use `PlayerAvatar`, with `initials()` in `lib/utils.ts` as the shared fallback.
 

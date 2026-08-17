@@ -135,6 +135,39 @@ func (s *Service) GetOrCreate(ctx context.Context, userID string) (*PlayerProfil
 	return s.store.GetOrCreate(ctx, userID)
 }
 
+func (s *Service) Get(ctx context.Context, userID string) (*PlayerProfile, error) {
+	return s.store.Get(ctx, userID)
+}
+
+func (s *Service) GetMany(ctx context.Context, userIDs []string) (map[string]PlayerProfile, error) {
+	if store, ok := s.store.(interface {
+		GetMany(context.Context, []string) (map[string]PlayerProfile, error)
+	}); ok {
+		return store.GetMany(ctx, userIDs)
+	}
+	result := make(map[string]PlayerProfile, len(userIDs))
+	for _, userID := range userIDs {
+		profile, err := s.store.Get(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		if profile != nil {
+			result[userID] = *profile
+		}
+	}
+	return result, nil
+}
+
+func (s *Service) LookupByFriendCode(ctx context.Context, code string) (*PlayerProfile, error) {
+	store, ok := s.store.(interface {
+		LookupByFriendCode(context.Context, string) (*PlayerProfile, error)
+	})
+	if !ok {
+		return nil, errors.New("player: friend-code lookup unavailable")
+	}
+	return store.LookupByFriendCode(ctx, code)
+}
+
 func (s *Service) PublicShowcase(ctx context.Context, userID string) (*PlayerProfile, error) {
 	profile, err := s.store.Get(ctx, userID)
 	if err != nil {

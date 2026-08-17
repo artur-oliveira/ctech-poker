@@ -7,7 +7,9 @@ const mocks = vi.hoisted(() => ({
   playerID: 'player-42',
   session: {authed: true, checking: false},
   query: {} as Record<string, unknown>,
+  relationshipQuery: {} as Record<string, unknown>,
   queryOptions: undefined as unknown,
+  invalidateQueries: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -16,9 +18,11 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/auth/session', () => ({useOptionalSession: () => mocks.session}));
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (options: unknown) => {
+    if ((options as {queryKey: string[]}).queryKey[1] === 'relationship') return mocks.relationshipQuery;
     mocks.queryOptions = options;
     return mocks.query;
   },
+  useQueryClient: () => ({invalidateQueries: mocks.invalidateQueries}),
 }));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
 vi.mock('@/components/table/PlayingCard', () => ({
@@ -34,6 +38,7 @@ describe('public player profile page', () => {
     vi.clearAllMocks();
     mocks.playerID = 'player-42';
     mocks.session = {authed: true, checking: false};
+    mocks.relationshipQuery = {data: undefined, isLoading: false, isError: true};
     mocks.query = queryState({
       player_id: 'player-42',
       name: 'Ás da Mesa',
@@ -108,4 +113,16 @@ describe('public player profile page', () => {
     expect(screen.getByText('Nenhuma conquista selecionada para exibição.')).toBeInTheDocument();
     expect(screen.getByText('Nenhuma vitória recente registrada nesta vitrine.')).toBeInTheDocument();
   });
+  test('offers the shared player menu only for someone else profile', async () => {
+    const {rerender} = render(<ProfilePage/>);
+    expect(screen.queryByRole('button', {name: /Ações para/})).not.toBeInTheDocument();
+
+    mocks.relationshipQuery = {
+      data: {player_id: 'player-42', name: 'Ás da Mesa', relationship: 'none', muted: false, blocked: false},
+      isLoading: false, isError: false,
+    };
+    rerender(<ProfilePage/>);
+    expect(screen.getByRole('button', {name: 'Ações para Ás da Mesa'})).toBeInTheDocument();
+  });
+
 });

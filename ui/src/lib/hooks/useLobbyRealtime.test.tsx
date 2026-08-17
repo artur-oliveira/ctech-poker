@@ -48,7 +48,8 @@ describe('useLobbyRealtime', () => {
     });
     act(() => state.options?.onOpen());
     expect(state.send).toHaveBeenCalledWith({type: 'ping'});
-    expect(state.invalidateQueries).toHaveBeenCalledTimes(3);
+    expect(state.invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['social']});
     act(() => result.current.reconnect());
     expect(state.reconnect).toHaveBeenCalled();
   });
@@ -138,6 +139,39 @@ describe('useLobbyRealtime', () => {
     renderHook(() => useLobbyRealtime());
     act(() => state.options?.onMessage({type, code}));
     expect(state.notify).toHaveBeenCalledWith(message, 'info');
+  });
+
+  test.each([
+    ['friend_request', 'Você recebeu uma solicitação de amizade.'],
+    ['friend_accepted', 'Sua solicitação de amizade foi aceita.'],
+    ['table_invite', 'Você recebeu um convite para uma mesa.'],
+    ['something_new', 'Nova atividade em Pessoas.'],
+    [undefined, 'Nova atividade em Pessoas.'],
+  ])('invalidates the social surface and announces a %s push', (eventType, message) => {
+    renderHook(() => useLobbyRealtime());
+    act(() => state.options?.onMessage({
+      type: 'social_event', social_event: eventType ? {type: eventType} : undefined
+    }));
+    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['social']});
+    expect(state.notify).toHaveBeenCalledWith(message, 'info');
+  });
+
+  test('refreshes only presence-bearing lists on a presence change', () => {
+    renderHook(() => useLobbyRealtime());
+    act(() => state.options?.onMessage({type: 'social_presence_changed'}));
+    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['social', 'friends']});
+    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['social', 'recent']});
+    expect(state.notify).not.toHaveBeenCalled();
+  });
+
+  test('writes the unread badge straight from the counter push', () => {
+    renderHook(() => useLobbyRealtime());
+    act(() => state.options?.onMessage({type: 'social_inbox_count', unread_count: 3}));
+    expect(state.setQueryData).toHaveBeenCalledWith(['social', 'summary'], {unread_count: 3});
+
+    state.setQueryData.mockClear();
+    act(() => state.options?.onMessage({type: 'social_inbox_count'}));
+    expect(state.setQueryData).not.toHaveBeenCalled();
   });
 
   test('falls back to zero for a payment with no amount and an empty broadcast', () => {

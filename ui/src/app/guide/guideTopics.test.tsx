@@ -11,6 +11,7 @@ import {GUIDE_TOPICS} from '@/components/guide/GuidePage';
 
 vi.mock('@/lib/auth/session', () => ({useOptionalSession: () => ({authed: true, checking: false})}));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
+vi.mock('@/components/social/PeopleNavBadge', () => ({PeopleNavBadge: () => <span>people-badge</span>}));
 vi.mock('next/image', () => ({
   default: ({alt}: {alt: string}) => alt
     ? <div role="img" aria-label={alt}/>

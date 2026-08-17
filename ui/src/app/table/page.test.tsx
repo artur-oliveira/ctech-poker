@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   noteProps: null as Record<string, unknown> | null,
   notification: vi.fn(),
   updateMe: vi.fn(),
+  blockPlayer: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -44,6 +45,11 @@ vi.mock('@/lib/tablePreferences', () => ({
 }));
 vi.mock('@/lib/hooks/useDealerVoice', () => ({useDealerVoice: vi.fn()}));
 vi.mock('@/lib/notify', () => ({pushNotification: mocks.notification}));
+vi.mock('@/lib/api/social', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/api/social')>(),
+  getRelationships: vi.fn().mockResolvedValue([]),
+  blockPlayer: (...args: unknown[]) => mocks.blockPlayer(...args),
+}));
 vi.mock('@/lib/mockConfig', () => ({USE_MOCK: false}));
 vi.mock('@/components/TermsGate', () => ({TermsGate: ({children}: { children: React.ReactNode }) => children}));
 
@@ -55,9 +61,13 @@ vi.mock('@/components/table/BuyInPanel', () => ({
 vi.mock('@/components/table/TableStage', () => ({
   TableStage: (props: Record<string, unknown>) => {
     mocks.stageProps = props;
-    return <button onClick={() => (props.onEditPlayerNoteAction as (seat: object) => void)(
-      {player_id: 'opponent', name: 'Bia'}
-    )}>table-stage</button>;
+    const renderActions = props.renderPlayerActionsAction as ((seat: object) => React.ReactNode) | undefined;
+    return <>
+      <button onClick={() => (props.onEditPlayerNoteAction as (seat: object) => void)(
+        {player_id: 'opponent', name: 'Bia'}
+      )}>table-stage</button>
+      {renderActions?.({player_id: 'opponent', name: 'Bia'})}
+    </>;
   },
   STAGE_LABELS: {
     waiting_for_players: 'Aguardando jogadores', pre_flop: 'Pré-flop', flop: 'Flop', turn: 'Turn', river: 'River',
@@ -194,7 +204,7 @@ describe('table page integration', () => {
     render(<TablePage/>);
     expect(screen.getByRole('heading', {name: 'Mesa inválida'})).toBeInTheDocument();
     expect(mocks.query).toHaveBeenCalledWith(expect.objectContaining({enabled: false}));
-    expect(mocks.realtimeHook).toHaveBeenCalledWith('', 'viewer', undefined, undefined);
+    expect(mocks.realtimeHook).toHaveBeenCalledWith('', 'viewer', undefined, undefined, new Set());
   });
   
   test('waits for seat status and then offers the explicit buy-in ceremony', async () => {
@@ -206,7 +216,7 @@ describe('table page integration', () => {
     view.rerender(<TablePage/>);
     await userEvent.click(screen.getByRole('button', {name: `buy-in:${ROOM_ID}:`}));
     expect(mocks.setQueryData).toHaveBeenCalledWith(['seated', ROOM_ID], {seated: true, stack: 0});
-    expect(mocks.realtimeHook).toHaveBeenLastCalledWith('', 'viewer', undefined, undefined);
+    expect(mocks.realtimeHook).toHaveBeenLastCalledWith('', 'viewer', undefined, undefined, new Set());
   });
   
   test('shows truthful reconnect states, retry control and the exhausted retry copy', async () => {
@@ -663,4 +673,34 @@ describe('table page integration', () => {
     render(<TablePage/>);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
+  test('feeds the muted and blocked seats into the realtime suppression set', async () => {
+    setQueries({data: {'social:relationships:opponent': [
+      {player_id: 'opponent', relationship: 'friend', muted: true, blocked: false},
+    ]}});
+    render(<TablePage/>);
+    await waitFor(() => expect(mocks.realtimeHook).toHaveBeenLastCalledWith(ROOM_ID, 'viewer', undefined, undefined,
+      new Set(['opponent'])));
+  });
+
+  test('hides a blocked seat content immediately and restores it if the block fails', async () => {
+    mocks.blockPlayer.mockRejectedValue(new Error('offline'));
+    render(<TablePage/>);
+    await userEvent.click(screen.getByRole('button', {name: 'Ações para Bia'}));
+    await userEvent.click(await screen.findByRole('button', {name: 'Bloquear'}));
+    await userEvent.click(screen.getByRole('button', {name: 'Bloquear'}));
+
+    // Suppressed before the round-trip finished, then rolled back on failure.
+    expect(mocks.realtimeHook.mock.calls.some(call => (call[4] as Set<string>)?.has('opponent'))).toBe(true);
+    await waitFor(() => expect((mocks.realtimeHook.mock.calls.at(-1)?.[4] as Set<string>).has('opponent'))
+      .toBe(false));
+    expect(mocks.notification).toHaveBeenCalledWith('Não foi possível concluir essa ação. Tente novamente.');
+  });
+
+  test('opens the private note from the seat menu', async () => {
+    render(<TablePage/>);
+    await userEvent.click(screen.getByRole('button', {name: 'Ações para Bia'}));
+    await userEvent.click(await screen.findByRole('button', {name: 'Editar nota privada'}));
+    expect(mocks.noteProps?.opponent).toEqual({player_id: 'opponent', name: 'Bia'});
+  });
+
 });

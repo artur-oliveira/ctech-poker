@@ -287,19 +287,22 @@ func TestSanitizeRoomHidesShareCodeFromNonCreators(t *testing.T) {
 
 func TestPrivateRoomAccessRequiresShareCode(t *testing.T) {
 	room := &roomstore.Room{ID: "r1", Visibility: "private", ShareCode: "ABCD1234", CreatedBy: "owner"}
-	if privateRoomAccessAllowed(room, "guest", "") {
+	if privateRoomAccessAllowed(room, "guest", "", false) {
 		t.Fatal("guest without share code must be rejected")
 	}
-	if privateRoomAccessAllowed(room, "guest", "WRONG000") {
+	if privateRoomAccessAllowed(room, "guest", "WRONG000", false) {
 		t.Fatal("wrong share code must be rejected")
 	}
-	if !privateRoomAccessAllowed(room, "guest", "ABCD1234") {
+	if !privateRoomAccessAllowed(room, "guest", "ABCD1234", false) {
 		t.Fatal("correct share code must be accepted")
 	}
-	if !privateRoomAccessAllowed(room, "owner", "") {
+	if !privateRoomAccessAllowed(room, "owner", "", false) {
 		t.Fatal("creator must always be allowed")
 	}
-	if !privateRoomAccessAllowed(&roomstore.Room{Visibility: "public"}, "guest", "") {
+	if !privateRoomAccessAllowed(&roomstore.Room{Visibility: "public"}, "guest", "", false) {
 		t.Fatal("public rooms are always allowed")
+	}
+	if !privateRoomAccessAllowed(room, "guest", "", true) {
+		t.Fatal("accepted social invite grant should allow access")
 	}
 }

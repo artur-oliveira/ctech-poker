@@ -54,7 +54,8 @@ Every page is `'use client'`; only `layout.tsx` and `share/layout.tsx` are serve
 | `/leaderboard` | `leaderboard/page.tsx` | Podium + ranking list, highlights the viewer's row |
 | `/achievements` | `achievements/page.tsx` | Catalog + own progress, all/unlocked/in-progress/completed tabs |
 | `/store` | `store/page.tsx` | Durable Fichas hub: sandbox balance, daily reward, Pix chip packages, and expandable recent purchase activity |
-| `/profile?id=<playerId>` | `profile/page.tsx` | **Public read-only showcase** of another player |
+| `/people` | `people/page.tsx` | Friends, requests (in/out), recent players, blocked list and activity feed, plus the friend-code header |
+| `/profile?id=<playerId>` | `profile/page.tsx` | **Public read-only showcase** of another player, with the shared player menu |
 | `/share?id=<token>` | `share/page.tsx` | Public anonymized shared hand (`robots: noindex`) |
 | `/guide` | `guide/page.tsx` | Illustrated how-to-play |
 | `/poker-rules` | `poker-rules/page.tsx` | Rules + hand rankings reference |
@@ -113,7 +114,16 @@ vertical `stage-v` ring for portrait handhelds.
   watchdog, reconnect/backoff, `ConnectionStatus`, `ActionError`, and the action senders.
   Extend it rather than opening a second table socket.
 - **`useLobbyRealtime`** subscribes to the separate lobby/user gateway (`GET /v1.0/ws`) for live
-  room-list updates and user-scoped events.
+  room-list updates and user-scoped events, including the social pushes (`social_event`,
+  `social_presence_changed`, `social_inbox_count`). It is mounted **exactly once**, by
+  `RealtimeBridge` inside `QueryProvider` — never again from a page or a component, or the same
+  account opens two sockets. Social frames are invalidation-only: they refresh the `['social', …]`
+  query keys (`SOCIAL_KEYS` in `src/lib/social.ts`) and the unread badge; the durable state always
+  comes back over HTTP.
+- **Table-side suppression** is a `useTableRealtime` argument, not a filter in a component: the
+  page loads the muted/blocked ids for the seated players (`GET /social/relationships?player_ids=`)
+  and passes the set in, so suppressed chat and reactions never reach React state — no bubble, no
+  animation, no live-region announcement. Seats, stacks, bets and every poker action stay visible.
 - Other hooks: `useCountUp` (animated stack deltas), `useDeckVariant`, `useDealerVoice`.
 - **The only React provider is `QueryProvider`** (TanStack Query). The access token is a
   module-level singleton in `src/lib/api/client.ts` (set/get/subscribe), **not persisted** —
@@ -247,6 +257,21 @@ Two files: `src/app/globals.css` (~7.7k lines, imports Tailwind 4 and `forms-and
 imported once in `layout.tsx`. No CSS modules. Design tokens are CSS vars on `:root`; class names
 are hand-written and semantic (`game-seat`, `seat-info`, `deck-reveal`, `app-page`, `shell`).
 Tailwind utilities are used sparingly, mostly inside `src/components/ui/*`.
+
+## People, safety and the bust dialog
+
+- **`/people` and the lobby drawer share their components.** `PeopleList`, `PlayerActionsMenu`,
+  `SocialInbox` and `FriendCodeLookup` (`src/components/social/`) are used by both, plus by the
+  table seat menu, the public profile and the invite dialog, so the safety actions cannot drift
+  apart between surfaces. `useSocialActions` runs every mutation and reports failures as one
+  toast with curated pt-BR copy (`socialErrorMessage`); `useSocialList` owns cursor pagination.
+- **Discovery is exact-code only** (`PKR-XXXX-XXXX-XXXX`). There is no name search, and presence
+  is only ever a status — never the table, room code, blinds or balance of an `in_table` friend.
+- **Blocking is not matchmaking.** A blocked player can still be dealt into the same public table;
+  only chat, reactions and social interaction are suppressed.
+- **The bust dialog contains no purchase.** `RebuyDialog` compares the available balance against
+  `buy_in_min` (not "is it zero"), and offers a rebuy, the free daily reward, or a way back to the
+  lobby. No SKU grid, QR code or store CTA lives in that flow; the store stays a separate route.
 
 ## Not built
 

@@ -59,6 +59,10 @@ type Config struct {
 	RealMoneyEnabled bool   `env:"REAL_MONEY_ENABLED" envDefault:"false"`
 	LegalSignoffRef  string `env:"LEGAL_SIGNOFF_REF"`
 
+	// SocialGraphEnabled gates friendship, presence and table invitations for
+	// gradual rollout. Player-safety controls remain available independently.
+	SocialGraphEnabled bool `env:"SOCIAL_GRAPH_ENABLED" envDefault:"false"`
+
 	// WalletWebhookHMACSecret verifies inbound POST /v1.0/webhooks/wallet calls
 	// (X-Wallet-Signature: sha256=<hex>) — must match the secret registered for
 	// poker's client_id in ctech-wallet's SSM M2M-clients param (see this

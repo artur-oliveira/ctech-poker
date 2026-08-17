@@ -8,7 +8,7 @@ test('creates poker_table_state, poker_action_log, poker_action_guards tables', 
   const template = Template.fromStack(stack);
   // dynamodb.TableV2 always synthesizes as AWS::DynamoDB::GlobalTable (even
   // with zero extra replicas) — not AWS::DynamoDB::Table.
-  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 18);
+  template.resourceCountIs('AWS::DynamoDB::GlobalTable', 22);
   template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_table_state',
     GlobalSecondaryIndexes: Match.arrayWith([
@@ -56,11 +56,14 @@ test('creates gamification tables and hands-won leaderboard index', () => {
   });
 });
 
-test('creates poker_player_profiles table without secondary indexes', () => {
+test('creates poker_player_profiles table with exact friend-code lookup', () => {
   const app = new App();
   const stack = new DynamoDBStack(app, 'TestPlayerProfilesStack', {environment: 'dev'});
   Template.fromStack(stack).hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_player_profiles',
+    GlobalSecondaryIndexes: Match.arrayWith([
+      Match.objectLike({IndexName: 'gsi_friend_code'}),
+    ]),
   });
 });
 
@@ -127,6 +130,39 @@ test('creates poker_rooms table with public and share-code GSIs', () => {
     GlobalSecondaryIndexes: Match.arrayWith([
       Match.objectLike({IndexName: 'gsi_public'}),
       Match.objectLike({IndexName: 'gsi_share_code'}),
+    ]),
+    TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},
+  });
+});
+
+test('creates social graph, recent players, inbox and reports storage', () => {
+  const app = new App();
+  const stack = new DynamoDBStack(app, 'TestSocialStorageStack', {environment: 'dev'});
+  const template = Template.fromStack(stack);
+
+  template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'dev_poker_social_edges',
+  });
+  template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'dev_poker_recent_players',
+    TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},
+    GlobalSecondaryIndexes: Match.arrayWith([
+      Match.objectLike({IndexName: 'gsi_recent'}),
+    ]),
+  });
+  template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'dev_poker_social_events',
+    TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},
+    GlobalSecondaryIndexes: Match.arrayWith([
+      Match.objectLike({IndexName: 'gsi_inbox'}),
+      Match.objectLike({IndexName: 'gsi_unread'}),
+    ]),
+  });
+  template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'dev_poker_player_reports',
+    TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},
+    GlobalSecondaryIndexes: Match.arrayWith([
+      Match.objectLike({IndexName: 'gsi_status'}),
     ]),
   });
 });

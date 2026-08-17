@@ -201,7 +201,7 @@ message ClientMessage {
 
 // ServerMessage is sent from the server to the client.
 message ServerMessage {
-  string type = 1; // "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast" | "sandbox_purchase_update" | "reaction_purchase_update"
+  string type = 1; // "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast" | "sandbox_purchase_update" | "reaction_purchase_update" | "social_event" | "social_presence_changed" | "social_inbox_count"
 
   // payload fields
   string conn_id = 2; // for connected frame
@@ -224,4 +224,26 @@ message ServerMessage {
   string reaction_id = 17; // ephemeral table reaction catalog key
   string target_player_id = 18; // destination for thrown objects
   string purchase_id = 19; // for sandbox_purchase_update or reaction_purchase_update
+  SocialEvent social_event = 20; // for social_event or social_presence_changed
+  int32 unread_count = 21; // for social_inbox_count
+}
+
+// Friend-visible presence deliberately carries no table or room identifier.
+// status is one of offline | online | in_table.
+message PlayerPresence {
+  string player_id = 1;
+  string status = 2;
+}
+
+// Push notification/invalidation payload for the in-app social inbox. HTTP
+// remains authoritative for mutations and full list pagination.
+message SocialEvent {
+  string event_id = 1;
+  string type = 2; // friend_request | friend_accepted | table_invite
+  string actor_id = 3;
+  string room_id = 4;
+  string status = 5;
+  int64 created_at = 6;
+  int64 expires_at = 7;
+  PlayerPresence presence = 8;
 }

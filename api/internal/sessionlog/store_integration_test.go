@@ -23,6 +23,25 @@ func TestFindOpenSessionReturnsTheMostRecentUnclosedSessionForTable(t *testing.T
 	}
 }
 
+func TestFindLatestOpenSessionReconcilesAcrossTables(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	if err := store.RecordSession(ctx, SessionItem{PK: "presence-player", SK: "1", TableID: "closed", JoinedAt: 1, EndedAt: 2}); err != nil {
+		t.Fatal(err)
+	}
+	open, err := store.FindLatestOpenSession(ctx, "presence-player")
+	if err != nil || open {
+		t.Fatalf("open=%v err=%v", open, err)
+	}
+	if err := store.RecordSession(ctx, SessionItem{PK: "presence-player", SK: "2", TableID: "open", JoinedAt: 3}); err != nil {
+		t.Fatal(err)
+	}
+	open, err = store.FindLatestOpenSession(ctx, "presence-player")
+	if err != nil || !open {
+		t.Fatalf("open=%v err=%v", open, err)
+	}
+}
+
 // TestFindOpenSessionSurvivesFiftyPlusNewerSessionsElsewhere pins down the
 // multi-tabling bug: FindOpenSession used to cap its query at the 50 most
 // recent items across the player's ENTIRE history (all tables), so an old

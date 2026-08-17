@@ -260,6 +260,7 @@ function sharedMockActions(actions: HandHistoryAction[]) {
 const mockProfile = {
   user_id: MOCK_PLAYER_ID,
   name: 'Ana',
+  friend_code: 'PKR-ANA1-2345-6789',
   wallet_mode: 'sandbox' as 'sandbox' | 'real',
   deck_variant: 'four-color' as DeckVariantId,
   poker_terms_accepted: true,
@@ -450,6 +451,82 @@ function fail(status: number, detail: string, config: InternalAxiosRequestConfig
   });
 }
 
+// Social fixtures: one of each state the People surface has to render (friend
+// online, friend in a table, incoming request, outgoing request, blocked,
+// recent stranger) plus a pending invite in the inbox.
+interface MockSocialPlayer {
+  player_id: string;
+  name: string;
+  friend_code?: string;
+  relationship: 'none' | 'incoming' | 'outgoing' | 'friend';
+  muted: boolean;
+  blocked: boolean;
+  presence?: 'online' | 'offline' | 'in_table';
+  last_played_at?: number;
+  hands_together?: number;
+}
+
+const mockSocialPlayers: MockSocialPlayer[] = [
+  {
+    player_id: 'bia_sp', name: 'Bia', friend_code: 'PKR-BIA1-1111-2222', relationship: 'friend',
+    muted: false, blocked: false, presence: 'online', last_played_at: Date.now() - 3_600_000, hands_together: 42
+  },
+  {
+    player_id: 'leo_rio', name: 'Leo', friend_code: 'PKR-LEO1-3333-4444', relationship: 'friend',
+    muted: true, blocked: false, presence: 'in_table', last_played_at: Date.now() - 172_800_000, hands_together: 17
+  },
+  {
+    player_id: 'caio_bh', name: 'Caio', friend_code: 'PKR-CAIO-5555-6666', relationship: 'incoming',
+    muted: false, blocked: false
+  },
+  {
+    player_id: 'duda_poa', name: 'Duda', friend_code: 'PKR-DUDA-7777-8888', relationship: 'outgoing',
+    muted: false, blocked: false
+  },
+  {
+    player_id: 'spammer', name: 'Spammer', relationship: 'none', muted: true, blocked: true
+  },
+  {
+    player_id: 'vic_rec', name: 'Vic', friend_code: 'PKR-VICR-9999-0000', relationship: 'none',
+    muted: false, blocked: false, last_played_at: Date.now() - 86_400_000, hands_together: 5
+  }
+];
+
+interface MockSocialEvent {
+  event_id: string;
+  type: 'friend_request' | 'friend_accepted' | 'table_invite';
+  actor_id: string;
+  status: 'pending' | 'accepted' | 'declined';
+  room_id?: string;
+  unread: boolean;
+  created_at: number;
+  expires_at?: number;
+}
+
+let mockSocialEvents: MockSocialEvent[] = [
+  {
+    event_id: 'evt-invite-1', type: 'table_invite', actor_id: 'bia_sp', status: 'pending',
+    room_id: '01J8ZQ4T7M3E5K9V2B6C1D0AFG', unread: true, created_at: Date.now() - 60_000,
+    expires_at: Date.now() + 840_000
+  },
+  {
+    event_id: 'evt-request-1', type: 'friend_request', actor_id: 'caio_bh', status: 'pending',
+    unread: true, created_at: Date.now() - 600_000
+  },
+  {
+    event_id: 'evt-accepted-1', type: 'friend_accepted', actor_id: 'leo_rio', status: 'accepted',
+    unread: false, created_at: Date.now() - 7_200_000
+  }
+];
+
+function mockSocialPlayer(playerId: string) {
+  return mockSocialPlayers.find(player => player.player_id === playerId);
+}
+
+function mockSocialUnread() {
+  return mockSocialEvents.filter(event => event.unread).length;
+}
+
 // Set by MockTableService as the active hand progresses — lets the REST
 // `leave` mock mirror the real engine's rule (hand.go: RemovePlayerForActor)
 // that a player still dealt in (active/all-in, hand in progress) can't cash out.
@@ -499,6 +576,114 @@ function generateNativeULID() {
 
 function wait(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** The social surface, split out of mockAdapter so the People flows (friend
+ * code, requests, presence, blocks, invites, reports) can be walked in mock
+ * mode without a backend. Returns null when the path is not a social one. */
+function mockSocialRequest(method: string, path: string, body: Record<string, unknown>,
+  config: InternalAxiosRequestConfig): AxiosResponse | null {
+  const idempotencyKey = (config.headers?.['Idempotency-Key'] || config.headers?.['idempotency-key']) as string | undefined;
+  const mutating = method !== 'GET';
+  if (mutating && !idempotencyKey) fail(400, 'Idempotency-Key is required', config);
+  const target = path.match(/^\/v1\.0\/social\/(?:friend-requests|friends|mutes|blocks|relationships)\/(.+)$/);
+  const targetId = target ? decodeURIComponent(target[1].replace(/\/(accept|decline)$/, '')) : '';
+  const player = targetId ? mockSocialPlayer(targetId) : undefined;
+
+  if (method === 'GET' && path === '/v1.0/social/summary') return ok({unread_count: mockSocialUnread()}, config);
+  if (method === 'GET' && path === '/v1.0/social/friends') {
+    return ok(page(mockSocialPlayers.filter(item => item.relationship === 'friend')), config);
+  }
+  if (method === 'GET' && path === '/v1.0/social/requests') {
+    const direction = (config.params as {direction?: string} | undefined)?.direction === 'outgoing'
+      ? 'outgoing' : 'incoming';
+    return ok(page(mockSocialPlayers.filter(item => item.relationship === direction)), config);
+  }
+  if (method === 'GET' && path === '/v1.0/social/blocked') {
+    return ok(page(mockSocialPlayers.filter(item => item.blocked)), config);
+  }
+  if (method === 'GET' && path === '/v1.0/social/recent') {
+    return ok(page(mockSocialPlayers.filter(item => item.last_played_at && !item.blocked)), config);
+  }
+  if (method === 'GET' && path === '/v1.0/social/inbox') return ok(page(mockSocialEvents), config);
+  if (method === 'POST' && path === '/v1.0/social/inbox/read') {
+    const ids = Array.isArray(body.event_ids) ? body.event_ids as string[] : [];
+    mockSocialEvents = mockSocialEvents.map(event => ids.includes(event.event_id) ? {...event, unread: false} : event);
+    return ok({}, config);
+  }
+  if (method === 'GET' && path === '/v1.0/social/relationships') {
+    const ids = String((config.params as {player_ids?: string} | undefined)?.player_ids || '').split(',');
+    return ok({data: mockSocialPlayers.filter(item => ids.includes(item.player_id))}, config);
+  }
+  const lookup = method === 'GET' ? path.match(/^\/v1\.0\/social\/lookup\/(.+)$/) : null;
+  if (lookup) {
+    const code = decodeURIComponent(lookup[1]).toUpperCase();
+    const found = mockSocialPlayers.find(item => item.friend_code === code);
+    if (!found) fail(404, 'friend code not found', config);
+    return ok(found, config);
+  }
+  if (method === 'POST' && path === '/v1.0/social/friend-requests') {
+    const found = body.friend_code
+      ? mockSocialPlayers.find(item => item.friend_code === String(body.friend_code).toUpperCase())
+      : mockSocialPlayer(String(body.target_player_id || ''));
+    if (!found) fail(404, 'player not found', config);
+    if (found.blocked) fail(409, 'the relationship cannot be changed', config);
+    found.relationship = found.relationship === 'incoming' ? 'friend' : 'outgoing';
+    return ok(found, config);
+  }
+  if (method === 'GET' && target) return player ? ok(player, config) : fail(404, 'player not found', config);
+  if (!player && targetId) fail(404, 'player not found', config);
+  if (player) {
+    if (method === 'POST' && path.endsWith('/accept')) {
+      player.relationship = 'friend';
+      return ok(player, config);
+    }
+    if (method === 'POST' && path.endsWith('/decline')) {
+      player.relationship = 'none';
+      return ok({}, config);
+    }
+    if (method === 'DELETE') {
+      if (path.includes('/mutes/')) player.muted = false;
+      else if (path.includes('/blocks/')) player.blocked = false;
+      else player.relationship = 'none';
+      return ok({}, config);
+    }
+    if (method === 'PUT' && path.includes('/mutes/')) {
+      player.muted = true;
+      return ok(player, config);
+    }
+    if (method === 'PUT' && path.includes('/blocks/')) {
+      player.muted = true;
+      player.blocked = true;
+      player.relationship = 'none';
+      return ok(player, config);
+    }
+  }
+  if (method === 'POST' && path === '/v1.0/social/table-invites') {
+    const invited = mockSocialPlayer(String(body.target_player_id || ''));
+    if (!invited || invited.relationship !== 'friend') fail(409, 'the social action cannot be completed', config);
+    return ok({
+      event_id: `evt-invite-${generateNativeULID()}`, type: 'table_invite', actor_id: MOCK_PLAYER_ID, status: 'pending',
+      room_id: String(body.room_id || ''), unread: false, created_at: Date.now(), expires_at: Date.now() + 900_000
+    }, config);
+  }
+  const invite = path.match(/^\/v1\.0\/social\/table-invites\/([^/]+)\/(accept|decline)$/);
+  if (method === 'POST' && invite) {
+    const event = mockSocialEvents.find(item => item.event_id === decodeURIComponent(invite[1]));
+    if (!event) fail(404, 'social event not found', config);
+    if (event.status !== 'pending' || (event.expires_at && event.expires_at <= Date.now())) {
+      fail(409, 'the table invite has expired', config);
+    }
+    event.status = invite[2] === 'accept' ? 'accepted' : 'declined';
+    event.unread = false;
+    return ok(invite[2] === 'accept' ? {event, room: rooms[0]} : {}, config);
+  }
+  if (method === 'POST' && path === '/v1.0/social/reports') {
+    if (!body.target_player_id || !body.category || !body.surface) fail(400, 'report or evidence is invalid', config);
+    if (body.target_player_id === MOCK_PLAYER_ID) fail(400, 'report or evidence is invalid', config);
+    return ok({report_id: `rep-${generateNativeULID()}`, status: 'open'}, config);
+  }
+  return null;
 }
 
 /** Axios adapter matching the REST surface used by Poker's UI. */
@@ -840,6 +1025,10 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     const hand = mockHands.find(h => h.hand_id === handHistoryMatch[1]);
     if (!hand) fail(404, 'hand not found', config);
     return ok({table_id: hand.table_id, hand_id: hand.hand_id, actions: mockHandActions[hand.hand_id] || []}, config);
+  }
+  if (path.startsWith('/v1.0/social')) {
+    const social = mockSocialRequest(method, path, body, config);
+    if (social) return social;
   }
   if (method === 'GET' && path === '/v1.0/leaderboard') return ok(page([
     {player_id: 'bia_sp', player_name: 'Bia', hands_played: 248, hands_won: 71, win_rate: .286},

@@ -2,7 +2,7 @@
 
 Implementation-anchored documentation for the `ctech-poker` service. **The code is the source of truth.** This index was
 re-verified against the tree on **2026-07-28**; the top-level `OVERVIEW.md` / `ARCHITECTURE.md` / `PLAN.md` are design and
-history documents and lag the code by design.
+history documents and lag the code by design. O índice de planos foi atualizado em **2026-08-16**.
 
 ## Per-directory docs
 
@@ -48,7 +48,11 @@ are all **fixed**; older docs that still list them as open are stale.
 
 ## Other reference material
 
-- `plans/` — 20 phased/feature plans, `2026-07-18` through `2026-07-28`. The two newest
+- `plans/2026-08-16-social-friends-safety-and-recent.md` — plano full-stack de amizade mútua, presença, convites
+  in-app, jogadores recentes, mute/block/report e remoção do Pix do pós-derrota. **PRs 1–8 implementados**; o flag
+  `SOCIAL_GRAPH_ENABLED` continua controlando amizade/presença/convites no rollout (safety e denúncia não dependem
+  dele).
+- `plans/` — demais planos faseados/de features. Os planos de auditoria de 2026-07-28
   (`2026-07-28-architecture-state-audit-and-provably-fair.md`, `2026-07-28-audit-implementation-plan.md`, both pt-BR)
   carry the current architecture punch list.
 - `specs/` — `2026-07-19-api-audit-remediation.md`, `2026-07-23-poker-reveal-timing-and-runout-pacing.md`,

@@ -8,7 +8,10 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/problem"
 )
 
-const localsUserID = "user_id"
+const (
+	localsUserID     = "user_id"
+	localsFirstParty = "first_party_poker"
+)
 
 func authMiddleware(verifier *jwtverify.Verifier) fiber.Handler {
 	return func(c fiber.Ctx) error {
@@ -30,6 +33,15 @@ func authMiddleware(verifier *jwtverify.Verifier) fiber.Handler {
 			return denied.Send(c)
 		}
 		c.Locals(localsUserID, claims.Sub)
+		c.Locals(localsFirstParty, isFirstPartyPokerSession(claims))
 		return c.Next()
 	}
+}
+
+func firstPartyOnly(c fiber.Ctx) error {
+	firstParty, _ := c.Locals(localsFirstParty).(bool)
+	if !firstParty {
+		return problem.Forbidden("social data requires the first-party Poker client").Send(c)
+	}
+	return c.Next()
 }

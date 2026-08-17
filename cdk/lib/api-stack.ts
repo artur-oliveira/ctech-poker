@@ -68,6 +68,11 @@ interface ApiStackProps extends cdk.StackProps {
   pendingCashoutsTableArn: string;
   reactionEntitlementsTableArn: string;
   reactionPurchasesTableArn: string;
+  socialEdgesTableArn: string;
+  recentPlayersTableArn: string;
+  socialEventsTableArn: string;
+  playerReportsTableArn: string;
+  socialGraphEnabledParam: string;
 }
 
 export const minimumApiCapacity = (_environment: Environment) => 1;
@@ -111,6 +116,11 @@ export class PokerApiStack extends cdk.Stack {
       pendingCashoutsTableArn,
       reactionEntitlementsTableArn,
       reactionPurchasesTableArn,
+      socialEdgesTableArn,
+      recentPlayersTableArn,
+      socialEventsTableArn,
+      playerReportsTableArn,
+      socialGraphEnabledParam,
     } = props;
     
     const shared = SSM_SHARED(environment);
@@ -135,10 +145,12 @@ export class PokerApiStack extends cdk.Stack {
       achievementProgressTableArn, leaderboardStatsTableArn, dailyRewardTableArn, playerSessionsTableArn,
       playerHandsTableArn, playerNotesTableArn, handSharesTableArn, pokerStatsTableArn, sandboxPurchasesTableArn,
       pendingCashoutsTableArn, reactionEntitlementsTableArn, reactionPurchasesTableArn,
+      socialEdgesTableArn, recentPlayersTableArn, socialEventsTableArn, playerReportsTableArn,
     ];
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: [
         'dynamodb:GetItem',
+        'dynamodb:BatchGetItem',
         'dynamodb:PutItem',
         'dynamodb:UpdateItem',
         'dynamodb:DeleteItem',
@@ -153,7 +165,7 @@ export class PokerApiStack extends cdk.Stack {
       actions: ['ssm:GetParameter'],
       resources: [
         shared.valkeyUrl, walletUrlParam, pokerClientIdParam, pokerClientSecretParam, turnstileSecretParam,
-        realMoneyEnabledParam, legalSignoffRefParam,
+        realMoneyEnabledParam, socialGraphEnabledParam, legalSignoffRefParam,
         avatarBaseUrlParam, walletWebhookHmacSecretParam,
         account.internalBaseUrl, account.appUrl, account.internalJwksUrl, poker.appUrl,
       ].map(
@@ -278,6 +290,10 @@ export class PokerApiStack extends cdk.Stack {
       // false/empty → config.Load() keeps real-money mode off (fails closed).
       `REAL_MONEY_ENABLED=$(aws ssm get-parameter --name "${realMoneyEnabledParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "false")`,
       `export REAL_MONEY_ENABLED`,
+      // Social graph rollout switch. Safety endpoints (mute/block/report) do
+      // not consult this gate; it controls friendship, presence and invites.
+      `SOCIAL_GRAPH_ENABLED=$(aws ssm get-parameter --name "${socialGraphEnabledParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "false")`,
+      `export SOCIAL_GRAPH_ENABLED`,
       `LEGAL_SIGNOFF_REF=$(aws ssm get-parameter --name "${legalSignoffRefParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
       `export LEGAL_SIGNOFF_REF`,
       `AVATAR_BASE_URL=$(aws ssm get-parameter --name "${avatarBaseUrlParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
@@ -514,6 +530,36 @@ def handler(event, context):
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
+    const playerReportedMetric = new cloudwatch.Metric({
+      namespace: `CtechPoker/${environment}`,
+      metricName: 'PlayerReported',
+      statistic: 'Sum',
+      period: cdk.Duration.minutes(5),
+    });
+    new cloudwatch.Alarm(this, 'PlayerReportSpikeAlarm', {
+      alarmName: `${environment}-${SERVICE}-player-report-spike`,
+      alarmDescription: 'Player reports exceeded the initial moderation baseline; triage the open queue.',
+      metric: playerReportedMetric,
+      threshold: 20,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    const socialRateLimitedMetric = new cloudwatch.Metric({
+      namespace: `CtechPoker/${environment}`,
+      metricName: 'SocialRateLimited',
+      statistic: 'Sum',
+      period: cdk.Duration.minutes(5),
+    });
+    new cloudwatch.Alarm(this, 'SocialRateLimitSpikeAlarm', {
+      alarmName: `${environment}-${SERVICE}-social-rate-limit-spike`,
+      alarmDescription: 'Social/report throttling exceeded the initial abuse baseline.',
+      metric: socialRateLimitedMetric,
+      threshold: 25,
+      evaluationPeriods: 2,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
     // One low-cost operational view for the gameplay SLOs. SEARCH expressions
     // intentionally aggregate bounded dimensions (route/status/version) and
     // legacy table_id series; no per-table widget or alarm is created.
@@ -567,6 +613,12 @@ def handler(event, context):
         left: [search('HTTPResponses')],
       }),
       new cloudwatch.GraphWidget({
+        title: 'Player-safety reports and social throttling',
+        width: 12,
+        left: [search('PlayerReported')],
+        right: [search('SocialRateLimited')],
+      }),
+      new cloudwatch.GraphWidget({
         title: 'Wallet dependency: latency, retries and circuit breaker',
         width: 12,
         left: [search('WalletLatencyMs', 'p95')],
@@ -607,6 +659,10 @@ def handler(event, context):
     new cdk.CfnOutput(this, 'RealMoneyEnabledParameterArn', {
       value: `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${realMoneyEnabledParam}`,
       exportName: `${id}-real-money-enabled-parameter-arn`,
+    });
+    new cdk.CfnOutput(this, 'SocialGraphEnabledParameterArn', {
+      value: `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${socialGraphEnabledParam}`,
+      exportName: `${id}-social-graph-enabled-parameter-arn`,
     });
     new cdk.CfnOutput(this, 'LegalSignoffRefParameterArn', {
       value: `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${legalSignoffRefParam}`,

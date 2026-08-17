@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import {Suspense, useEffect, useRef, useState} from 'react';
+import {Suspense, useEffect, useMemo, useRef, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {ChevronLeft, ClockAlert, Pause, Play, RotateCw, Wifi} from 'lucide-react';
@@ -45,6 +45,10 @@ import {
   tableOutcomeKind,
   tiedWinners
 } from '@/lib/tableOutcome';
+import {getRelationships} from '@/lib/api/social';
+import {SOCIAL_KEYS, suppressedPlayerIds} from '@/lib/social';
+import {useSocialActions} from '@/lib/hooks/useSocialActions';
+import {PlayerActionsMenu} from '@/components/social/PlayerActionsMenu';
 import {type MockScenario, USE_MOCK} from '@/lib/mockConfig';
 import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
 import {DEFAULT_TURN_TIMEOUT_SECONDS} from '@/lib/gameTiming';
@@ -197,7 +201,30 @@ function TableContent() {
   const [noteOpponent, setNoteOpponent] = useState<{ player_id: string; name?: string } | null>(null);
   const [reactionPurchaseTarget, setReactionPurchaseTarget] = useState<ReactionCatalogEntry | null>(null);
   const [favoritesSaving, setFavoritesSaving] = useState(false);
-  const rt = useTableRealtime(valid && seated ? id : '', viewer, inviteCode, USE_MOCK ? {scenario, delay} : undefined);
+  const socialActions = useSocialActions();
+  // Seated opponents, kept in state (not derived mid-render) because the
+  // suppression set has to exist before useTableRealtime is called, while the
+  // seat list only exists after its first snapshot.
+  const [opponentIds, setOpponentIds] = useState<string[]>([]);
+  const {data: relationships = []} = useQuery({
+    queryKey: SOCIAL_KEYS.relationships(opponentIds), queryFn: () => getRelationships(opponentIds),
+    enabled: opponentIds.length > 0
+  });
+  // Blocking removes the target's content before the round-trip; a rejected
+  // block takes the id back out again.
+  const [pendingSuppressed, setPendingSuppressed] = useState<string[]>([]);
+  const suppressedKey = [...new Set([...suppressedPlayerIds(relationships), ...pendingSuppressed])].sort().join(',');
+  const suppressed = useMemo(() => new Set(suppressedKey ? suppressedKey.split(',') : []), [suppressedKey]);
+  const rt = useTableRealtime(valid && seated ? id : '', viewer, inviteCode,
+    USE_MOCK ? {scenario, delay} : undefined, suppressed);
+  useEffect(() => {
+    const ids = (rt.snapshot?.seats ?? []).map(seat => seat.player_id)
+      .filter(playerId => playerId && playerId !== viewer).sort();
+    // Seat membership is only knowable from the authoritative snapshot; this
+    // mirrors it into the query key instead of re-deriving it during render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOpponentIds(previous => previous.join(',') === ids.join(',') ? previous : ids);
+  }, [rt.snapshot?.seats, viewer]);
   useDealerVoice(rt.announcement, preferences.dealerVoice);
   // The server never closes a removed player's socket (it just stops
   // targeting it in future broadcasts). Without reacting to this message the
@@ -455,6 +482,7 @@ function TableContent() {
     `${window.location.origin}/table?id=${id}${room?.share_code ? `&invite=${room.share_code}` : ''}` : '';
   const openSession = sessions.find(session => session.table_id === id && session.ended_at === 0);
   const playerNotesByID = Object.fromEntries(playerNotes.map(note => [note.opponent_id, note]));
+  const relationshipsByID = Object.fromEntries(relationships.map(item => [item.player_id, item]));
   return (
     <main className="game" data-table-theme={preferences.theme}>
       <h1 className="sr-only">Mesa de poker: {STAGE_LABELS[s.stage] || s.stage.replaceAll('_', ' ')}</h1>
@@ -472,7 +500,7 @@ function TableContent() {
             <TablePreferencesDialog runItTwiceAvailable={Boolean(room?.run_it_twice_enabled)}
                                     runItTwice={Boolean(viewerSeat?.run_it_twice)}
                                     onRunItTwiceChange={rt.setRunItTwice}/>
-            {canInvite && <InviteDialog url={inviteUrl}/>}
+            {canInvite && <InviteDialog url={inviteUrl} roomId={id}/>}
             {viewerSeat && !isPaused &&
                 <Button type="button" variant="ghost" size="icon" aria-label="Sentar fora" disabled={rt.readyPending}
                         onClick={() => rt.ready(false)}><Pause/></Button>}
@@ -526,6 +554,21 @@ function TableContent() {
                   onPeekCardsAction={rt.peekCards}
                   playerNotes={playerNotesByID}
                   onEditPlayerNoteAction={seat => setNoteOpponent({player_id: seat.player_id, name: seat.name})}
+                  renderPlayerActionsAction={seat => <PlayerActionsMenu
+                    target={{
+                      player_id: seat.player_id, name: seat.name,
+                      relationship: relationshipsByID[seat.player_id]?.relationship,
+                      muted: relationshipsByID[seat.player_id]?.muted,
+                      blocked: relationshipsByID[seat.player_id]?.blocked
+                    }}
+                    actions={socialActions} surface="table_behavior" tableId={id} handId={s.hand_id}
+                    onEditNoteAction={() => setNoteOpponent({player_id: seat.player_id, name: seat.name})}
+                    onBlockedAction={blocked => {
+                      setPendingSuppressed(previous => blocked
+                        ? [...previous, seat.player_id]
+                        : previous.filter(playerId => playerId !== seat.player_id));
+                      return true;
+                    }}/>}
                   targetedReactionLabel={pendingReaction ? TABLE_REACTIONS[pendingReaction].label : undefined}
                   onTargetPlayerAction={pendingReaction ? sendTargetedReaction : undefined}
                   announcement={rt.announcement}

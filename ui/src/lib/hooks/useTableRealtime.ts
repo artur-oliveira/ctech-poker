@@ -153,12 +153,25 @@ function playSoundForTransition(previous: TableSnapshot | null, next: TableSnaps
   return scheduled;
 }
 
+/** `suppressedPlayerIds` are the players the viewer muted or blocked. Their
+ * chat and reactions are filtered *before* entering state, so a suppressed
+ * message never creates a bubble, an animation or a live-region announcement —
+ * while their seat, bets and poker actions stay completely untouched. Pass a
+ * memoized set: it is compared by identity. */
 export function useTableRealtime(id: string, viewerId?: string, shareCode?: string, mockOptions?: {
   scenario?: MockScenario;
   delay?: number
-}) {
+}, suppressedPlayerIds?: ReadonlySet<string>) {
   const [socketAuthToken, setSocketAuthToken] = useState(() => getAccessToken());
   useEffect(() => subscribeAccessToken(setSocketAuthToken), []);
+  // Read through a ref: receive() must see the current suppression set without
+  // being rebuilt (and re-subscribing the socket) every time it changes.
+  const suppressedRef = useRef(suppressedPlayerIds);
+  useEffect(() => {
+    suppressedRef.current = suppressedPlayerIds;
+  }, [suppressedPlayerIds]);
+  const isSuppressed = useCallback((playerId?: string) =>
+    Boolean(playerId && suppressedRef.current?.has(playerId)), []);
   const activeTableIDRef = useRef(id);
   useEffect(() => {
     activeTableIDRef.current = id;
@@ -370,9 +383,11 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       setSnapshotTableID(activeTableIDRef.current);
       setSnapshotAt(Date.now());
       if ((message.snapshot.protocol_version ?? 0) >= 6) {
-        const nextChat = (message.snapshot.chat_messages ?? []).map(item => ({
-          id: item.id, player: item.player_id, message: item.message, timestamp: item.timestamp
-        })).slice(-CHAT_HISTORY_LIMIT);
+        const nextChat = (message.snapshot.chat_messages ?? [])
+          .filter(item => !isSuppressed(item.player_id))
+          .map(item => ({
+            id: item.id, player: item.player_id, message: item.message, timestamp: item.timestamp
+          })).slice(-CHAT_HISTORY_LIMIT);
         noteFreshChatArrivals(nextChat);
         setChat(nextChat);
         const liveReactionIDs = new Set((message.snapshot.reactions ?? []).map(item => item.id));
@@ -384,6 +399,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
         setReactions(value => value.filter(item => liveReactionIDs.has(item.id)));
         for (const item of message.snapshot.reactions ?? []) {
           if (!isTableReaction(item.reaction_id) || item.expires_at <= Date.now()) continue;
+          if (isSuppressed(item.player_id)) continue;
           showReaction({
             id: item.id,
             playerId: item.player_id,
@@ -542,7 +558,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       key: message.key,
       stars: message.stars || 1
     });
-    if (message.type === 'chat' && message.message) {
+    if (message.type === 'chat' && message.message && !isSuppressed(message.player_id)) {
       const chatMessage = message.message;
       const player = message.player_id || '?';
       const id = message.action_id || `${Date.now()}-${player}-${chatMessage}`;
@@ -551,7 +567,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
         [...value.slice(-(CHAT_HISTORY_LIMIT - 1)), {id, player, message: chatMessage, timestamp: Date.now()}]);
     }
     if (message.type === 'reaction' && message.player_id && message.reaction_id &&
-      isTableReaction(message.reaction_id)) {
+      isTableReaction(message.reaction_id) && !isSuppressed(message.player_id)) {
       const reaction: TableReactionEvent = {
         id: message.action_id || `${Date.now()}-${message.player_id}-${message.reaction_id}-${Math.random()}`,
         playerId: message.player_id,
@@ -560,8 +576,9 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       };
       showReaction(reaction);
     }
-  }, [armResyncWatchdog, clearPending, failPending, finishAuxiliaryCommand, id, noteFreshChatArrivals, sendActFrame,
-    showReaction, viewerId]);
+  }, [armResyncWatchdog, clearPending, failPending, finishAuxiliaryCommand, id, isSuppressed,
+    noteFreshChatArrivals, sendActFrame, showReaction, viewerId]);
+
   const receiveForTable = useCallback((message: ServerMessage) => {
     if (activeTableIDRef.current === id) receive(message);
   }, [id, receive]);
@@ -747,14 +764,25 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     return sendActFrame(actionId, action, amount, snapshotVersion, handId);
   }, [sendActFrame]);
   
+  // Suppression is applied twice on purpose: incoming frames are dropped before
+  // they reach state (no bubble, no animation, no announcement), and what is
+  // already on screen disappears the moment a mute or block is confirmed.
+  const visibleChat = suppressedPlayerIds?.size
+    ? chat.filter(item => !suppressedPlayerIds.has(item.player)) : chat;
+  const visibleBubbles = suppressedPlayerIds?.size
+    ? Object.fromEntries(Object.entries(chatBubbles).filter(([playerId]) => !suppressedPlayerIds.has(playerId)))
+    : chatBubbles;
+  const visibleReactions = suppressedPlayerIds?.size
+    ? reactions.filter(item => !suppressedPlayerIds.has(item.playerId)) : reactions;
+
   return {
     status,
     snapshot: snapshotTableID === id ? snapshot : null,
     snapshotAt,
     unlock,
-    chat,
-    chatBubbles,
-    reactions,
+    chat: visibleChat,
+    chatBubbles: visibleBubbles,
+    reactions: visibleReactions,
     pendingAction,
     actionError: lastActionError,
     reconnectAttempt,

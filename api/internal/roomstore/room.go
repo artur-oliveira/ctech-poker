@@ -43,3 +43,15 @@ type BlindEscalation struct {
 	Multiplier      int   `dynamodbav:"multiplier" json:"multiplier"` // whole-number percent, e.g. 150 = ×1.5
 	Max             int64 `dynamodbav:"max" json:"max"`
 }
+
+// InviteGrant authorizes one player to open and join a private room without
+// ever learning its share code. ExpiresAt is checked by the API because
+// DynamoDB TTL removal is intentionally eventual.
+type InviteGrant struct {
+	RoomID    string `dynamodbav:"pk" json:"-"`
+	SK        string `dynamodbav:"sk" json:"-"`
+	PlayerID  string `dynamodbav:"player_id" json:"player_id"`
+	EventID   string `dynamodbav:"event_id" json:"event_id"`
+	ExpiresAt int64  `dynamodbav:"expires_at" json:"expires_at"`
+	TTL       int64  `dynamodbav:"ttl" json:"-"`
+}

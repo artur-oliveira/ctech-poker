@@ -41,9 +41,9 @@ const TOPICS = [
     features: ['Vitrine', 'HUD', 'Privacidade']
   },
   {
-    href: '/guide/community', icon: Trophy, title: 'Comunidade e jogo seguro', time: '4 min',
-    description: 'Ranking, notas privadas, reações, pausa consciente, conexão e limites do modo sandbox.',
-    features: ['Ranking', 'Social', 'Segurança']
+    href: '/guide/community', icon: Trophy, title: 'Comunidade e jogo seguro', time: '5 min',
+    description: 'Ranking, amizade e presença, convites, silenciar/bloquear/denunciar, notas privadas e pausa consciente.',
+    features: ['Ranking', 'Pessoas', 'Segurança']
   }
 ];
 

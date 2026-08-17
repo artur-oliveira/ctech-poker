@@ -258,6 +258,25 @@ func (s *Store) LoadActionsSince(ctx context.Context, tableID, handID string, af
 	return out, nil
 }
 
+// FindActionByID resolves evidence only inside the caller-supplied table and
+// hand partition. It never scans the global action log, and it returns the
+// server-persisted player/message/reaction rather than trusting report input.
+func (s *Store) FindActionByID(ctx context.Context, tableID, handID, actionID string) (*ActionLogEntry, error) {
+	if tableID == "" || handID == "" || actionID == "" {
+		return nil, nil
+	}
+	actions, err := s.LoadActionsSince(ctx, tableID, handID, 0)
+	if err != nil {
+		return nil, err
+	}
+	for i := range actions {
+		if actions[i].ActionID == actionID && actions[i].TableID == tableID && actions[i].HandID == handID {
+			return &actions[i], nil
+		}
+	}
+	return nil, nil
+}
+
 // QueryStaleActive returns every still-active table (gsi_active present)
 // whose last_action_at is older than olderThanUnix, oldest first — the read
 // side of cmd/tablecleanup's sweep. Queries gsi_active_last_action; never

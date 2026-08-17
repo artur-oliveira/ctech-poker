@@ -10,6 +10,9 @@ export interface PlayerProfile {
   name?: string;
   avatar_url?: string;
   wallet_mode: WalletMode;
+  // Stable, shareable identifier for friend requests (PKR-XXXX-XXXX-XXXX).
+  // Older profiles get one lazily on their next load, so it can be absent.
+  friend_code?: string;
   poker_terms_accepted: boolean;
   poker_terms_accepted_at?: string;
   game_balance?: number;

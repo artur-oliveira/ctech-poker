@@ -8,6 +8,8 @@ import {USE_MOCK} from '@/lib/mockConfig';
 import type {Room} from '@/lib/api/rooms';
 import {pushNotification} from '@/lib/notify';
 import {decodeServerMessage, encodeClientMessage} from "@/lib/ws/utils";
+import type {SocialEventType} from '@/lib/api/social';
+import {SOCIAL_KEYS} from '@/lib/social';
 
 interface LobbyMessage {
   type: string;
@@ -18,7 +20,17 @@ interface LobbyMessage {
   amount?: number;
   text?: string;
   purchase_id?: string;
+  // Social pushes are invalidation-only: the durable state always comes back
+  // over HTTP, never from the socket payload.
+  social_event?: {type?: SocialEventType | string};
+  unread_count?: number;
 }
+
+const SOCIAL_EVENT_COPY: Record<SocialEventType, string> = {
+  friend_request: 'Você recebeu uma solicitação de amizade.',
+  friend_accepted: 'Sua solicitação de amizade foi aceita.',
+  table_invite: 'Você recebeu um convite para uma mesa.'
+};
 
 export function useLobbyRealtime() {
   const queryClient = useQueryClient();
@@ -78,6 +90,18 @@ export function useLobbyRealtime() {
         failed: 'Falha na compra da reação.',
       };
       pushNotification(statusLabel[message.code || ''] || 'Atualização na compra da sua reação.', 'info');
+    } else if (message.type === 'social_event') {
+      void queryClient.invalidateQueries({queryKey: SOCIAL_KEYS.root});
+      const eventType = message.social_event?.type as SocialEventType | undefined;
+      pushNotification(eventType ? SOCIAL_EVENT_COPY[eventType] || 'Nova atividade em Pessoas.'
+        : 'Nova atividade em Pessoas.', 'info');
+    } else if (message.type === 'social_presence_changed') {
+      // Presence rides along with the friend and recent lists; nothing else
+      // on screen depends on it.
+      void queryClient.invalidateQueries({queryKey: SOCIAL_KEYS.friends});
+      void queryClient.invalidateQueries({queryKey: SOCIAL_KEYS.recent});
+    } else if (message.type === 'social_inbox_count' && message.unread_count !== undefined) {
+      queryClient.setQueryData(SOCIAL_KEYS.summary, {unread_count: message.unread_count});
     } else if (message.type === 'payment_received') {
       const amount = message.amount || 0;
       pushNotification(`Pagamento recebido: R$ ${(amount / 100).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, 'info');
@@ -97,6 +121,9 @@ export function useLobbyRealtime() {
     void queryClient.invalidateQueries({queryKey: ['rooms']});
     void queryClient.invalidateQueries({queryKey: ['player', 'me']});
     void queryClient.invalidateQueries({queryKey: ['wallet', 'balance']});
+    // Social deltas sent while the socket was down are never replayed either,
+    // and the unread badge is the most visible thing that goes stale.
+    void queryClient.invalidateQueries({queryKey: SOCIAL_KEYS.root});
   }, [queryClient]);
   
   const {status, send, reconnect} = useWebSocket({

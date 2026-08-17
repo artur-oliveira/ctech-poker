@@ -5,6 +5,7 @@ import {LayoutGrid} from 'lucide-react';
 import {StakesGrid} from '@/components/lobby/StakesGrid';
 import {ActiveTableBanner} from '@/components/lobby/ActiveTableBanner';
 import {CreateRoomDialog} from '@/components/lobby/CreateRoomDialog';
+import {PeopleDrawer} from '@/components/social/PeopleDrawer';
 import {OnboardingIntro} from '@/components/lobby/OnboardingIntro';
 import {TermsGate} from '@/components/TermsGate';
 import {USE_MOCK} from '@/lib/mockConfig';
@@ -32,7 +33,7 @@ export default function Lobby() {
         <AppPageHeader icon={LayoutGrid} eyebrow="LOBBY SANDBOX"
           title="Escolha os blinds e o tamanho da mesa."
           description="Buscamos uma mesa pública com vaga para sua escolha; se não houver, criamos uma nova. Tudo com fichas sandbox."
-          actions={<CreateRoomDialog/>}/>
+          actions={<><PeopleDrawer/><CreateRoomDialog/></>}/>
         <ActiveTableBanner/>
         <OnboardingIntro/>
         <StakesGrid/>
