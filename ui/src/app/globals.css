@@ -14002,7 +14002,9 @@ button.deck-grid-slot:hover {
 
 .page-heading-actions {
     display: flex;
+    align-items: center;
     justify-content: center;
+    gap: 12px;
     margin: -24px auto 48px
 }
 
@@ -14075,6 +14077,7 @@ button.deck-grid-slot:hover {
 @media (max-width: 600px) {
     .page-heading-actions {
         width: 100%;
+        flex-direction: column;
         margin: -18px auto 38px
     }
 
@@ -14784,7 +14787,11 @@ button.deck-grid-slot:hover {
     width: min(420px, 100%);
     max-width: none;
     height: 100dvh;
+    /* DialogContent centers itself with Tailwind v4's -translate-*, which
+       compiles to the `translate` property, not `transform` — cancelling only
+       `transform` left the drawer shifted half its size off the top-right. */
     transform: none;
+    translate: none;
     border-radius: var(--rounded-panel) 0 0 var(--rounded-panel);
     overflow-y: auto
 }

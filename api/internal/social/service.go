@@ -102,7 +102,7 @@ func (s *Service) Request(ctx context.Context, actorID, targetID, idempotencyKey
 		if edge.Relationship == RelationshipFriend {
 			eventType = EventFriendAccepted
 		}
-		if _, err := s.createEvent(ctx, Event{RecipientPlayerID: targetID, ActorPlayerID: actorID, Type: eventType}, idempotencyKey); err != nil {
+		if _, err := s.createEvent(ctx, Event{RecipientPlayerID: targetID, ActorPlayerID: actorID, Type: eventType, Status: friendEventStatus(eventType)}, idempotencyKey); err != nil {
 			return nil, err
 		}
 	}
@@ -127,7 +127,7 @@ func (s *Service) Accept(ctx context.Context, actorID, targetID, idempotencyKey 
 		return nil, err
 	}
 	if s.events != nil {
-		if _, err := s.createEvent(ctx, Event{RecipientPlayerID: targetID, ActorPlayerID: actorID, Type: EventFriendAccepted}, idempotencyKey); err != nil {
+		if _, err := s.createEvent(ctx, Event{RecipientPlayerID: targetID, ActorPlayerID: actorID, Type: EventFriendAccepted, Status: EventStatusAccepted}, idempotencyKey); err != nil {
 			return nil, err
 		}
 	}
@@ -292,6 +292,16 @@ func (s *Service) DeclineTableInvite(ctx context.Context, actorID, eventID strin
 	}
 	s.notifyUnread(ctx, actorID)
 	return declined, nil
+}
+
+// friend_accepted is a notice, not a prompt: nothing can be done to it, so it
+// is born terminal. Only friend_request stays pending, answered from the
+// requests tab rather than from the inbox row.
+func friendEventStatus(eventType EventType) EventStatus {
+	if eventType == EventFriendAccepted {
+		return EventStatusAccepted
+	}
+	return EventStatusPending
 }
 
 func (s *Service) createEvent(ctx context.Context, event Event, idempotencyKey string) (*Event, error) {

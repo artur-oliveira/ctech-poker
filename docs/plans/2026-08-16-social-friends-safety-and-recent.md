@@ -308,10 +308,18 @@ Adicionar `people` a `MainRoute` e à navegação de `AppPageChrome`. No lobby, 
 desktop e sheet de altura controlada no mobile. Exibe:
 
 1. solicitações pendentes;
-2. convites de mesa;
+2. atividade (o mesmo feed de `/people` → Atividades, incluindo convites de mesa acionáveis);
 3. amigos online;
 4. jogadores recentes;
 5. link “Ver todas as pessoas”.
+
+O badge de não lidos fica no gatilho “Pessoas” e é alimentado pelos eventos do inbox, então o drawer renderiza
+`SocialInbox` — que marca os eventos como lidos ao abrir — em vez de uma lista própria só de convites. Sem isso o badge
+só era limpo navegando até `/people` e abrindo a aba Atividades, e ficava preso em “1” depois que um amigo aceitava a
+solicitação (corrigido em 2026-08-17).
+
+Eventos `friend_accepted` são avisos, não pedidos: nascem com `status: accepted`. Apenas `friend_request` e
+`table_invite` ficam `pending` — o primeiro respondido pela aba Solicitações, o segundo pela própria linha do inbox.
 
 O badge usa o contador de eventos não lidos e possui texto acessível; não depende apenas de cor.
 

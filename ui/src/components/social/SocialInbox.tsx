@@ -13,7 +13,7 @@ import type {SocialActionState} from '@/lib/hooks/useSocialActions';
  * invite only authorises opening the room — capacity, terms, currency and
  * buy-in are revalidated by the normal join flow. */
 export function SocialInbox({events, isLoading = false, isError = false, hasNext = false, loadingMore = false,
-  onMoreAction, onRetryAction, actions, nameOf}: {
+  onMoreAction, onRetryAction, onNavigateAction, actions, nameOf}: {
   events: SocialInboxEvent[];
   isLoading?: boolean;
   isError?: boolean;
@@ -21,6 +21,9 @@ export function SocialInbox({events, isLoading = false, isError = false, hasNext
   loadingMore?: boolean;
   onMoreAction?: () => void;
   onRetryAction?: () => void;
+  /** Lets a host that is itself an overlay (the lobby drawer) close before the
+   * accepted invite navigates away. */
+  onNavigateAction?: () => void;
   actions: SocialActionState;
   nameOf: (playerId: string) => string;
 }) {
@@ -66,7 +69,10 @@ export function SocialInbox({events, isLoading = false, isError = false, hasNext
           </div>
           {inviteActionable(event) && event.room_id && <div className="people-row-actions">
             <Button type="button" disabled={busy} onClick={async () => {
-              if (await actions.run('accept-invite', event.event_id)) router.push(`/table?id=${event.room_id}`);
+              if (await actions.run('accept-invite', event.event_id)) {
+                onNavigateAction?.();
+                router.push(`/table?id=${event.room_id}`);
+              }
             }}>Entrar</Button>
             <Button type="button" variant="ghost" disabled={busy}
                     onClick={() => void actions.run('decline-invite', event.event_id)}>Recusar</Button>

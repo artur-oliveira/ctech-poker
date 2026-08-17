@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   listFriendRequests: vi.fn(),
   listRecentPlayers: vi.fn(),
   listSocialInbox: vi.fn(),
+  markInboxRead: vi.fn(),
   acceptTableInvite: vi.fn(),
   declineTableInvite: vi.fn(),
   getSocialSummary: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock('@/lib/api/social', async importOriginal => ({
   listFriendRequests: api.listFriendRequests,
   listRecentPlayers: api.listRecentPlayers,
   listSocialInbox: api.listSocialInbox,
+  markInboxRead: api.markInboxRead,
   acceptTableInvite: api.acceptTableInvite,
   declineTableInvite: api.declineTableInvite,
   getSocialSummary: api.getSocialSummary,
@@ -65,6 +67,7 @@ describe('lobby people drawer', () => {
     api.listRecentPlayers.mockResolvedValue(page([player({player_id: 'vic', name: 'Vic',
       last_played_at: Date.now()})]));
     api.listSocialInbox.mockResolvedValue(page([invite()]));
+    api.markInboxRead.mockResolvedValue(undefined);
     api.acceptTableInvite.mockResolvedValue({event: invite({status: 'accepted'}), room: {room_id: 'room-1'}});
     api.declineTableInvite.mockResolvedValue(undefined);
   });
@@ -96,14 +99,26 @@ describe('lobby people drawer', () => {
     expect(api.push).not.toHaveBeenCalled();
   });
 
-  test('says so when there is no invite and no online friend', async () => {
-    api.listSocialInbox.mockResolvedValue(page([invite({status: 'declined'})]));
+  test('says so when there is no activity and no online friend', async () => {
+    api.listSocialInbox.mockResolvedValue(page([]));
     api.listFriends.mockResolvedValue(page([player({player_id: 'zeh', relationship: 'friend',
       presence: 'offline'})]));
     renderDrawer();
     await userEvent.click(screen.getByRole('button', {name: /Pessoas/}));
-    expect(await screen.findByText('Nenhum convite ativo.')).toBeInTheDocument();
+    expect(await screen.findByText('Nenhuma atividade por aqui.')).toBeInTheDocument();
     expect(screen.getByText('Nenhum amigo online agora.')).toBeInTheDocument();
+  });
+
+  // The unread badge is driven by the same events, so a drawer that shows the
+  // feed without acknowledging it would leave the badge stuck forever.
+  test('marks the activity read on open, clearing the badge', async () => {
+    api.listSocialInbox.mockResolvedValue(page([
+      invite({event_id: 'e2', type: 'friend_accepted', status: 'accepted', unread: true, room_id: undefined})
+    ]));
+    renderDrawer();
+    await userEvent.click(screen.getByRole('button', {name: /Pessoas/}));
+    expect(await screen.findByText('Bia aceitou sua solicitação de amizade.')).toBeInTheDocument();
+    await waitFor(() => expect(api.markInboxRead).toHaveBeenCalledWith(['e2']));
   });
 });
 
