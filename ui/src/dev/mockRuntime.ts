@@ -594,7 +594,7 @@ function mockSocialRequest(method: string, path: string, body: Record<string, un
   if (method === 'GET' && path === '/v1.0/social/friends') {
     return ok(page(mockSocialPlayers.filter(item => item.relationship === 'friend')), config);
   }
-  if (method === 'GET' && path === '/v1.0/social/requests') {
+  if (method === 'GET' && path === '/v1.0/social/friend-requests') {
     const direction = (config.params as {direction?: string} | undefined)?.direction === 'outgoing'
       ? 'outgoing' : 'incoming';
     return ok(page(mockSocialPlayers.filter(item => item.relationship === direction)), config);

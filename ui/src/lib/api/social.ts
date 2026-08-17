@@ -61,7 +61,7 @@ export async function listFriends(cursor?: string) {
 }
 
 export async function listFriendRequests(direction: 'incoming' | 'outgoing', cursor?: string) {
-  return (await apiClient.get<Page<SocialPlayer>>(`${SOCIAL}/requests`, {
+  return (await apiClient.get<Page<SocialPlayer>>(`${SOCIAL}/friend-requests`, {
     params: {direction, cursor}, silentError: true
   })).data;
 }

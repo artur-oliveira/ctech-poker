@@ -29,7 +29,7 @@ describe('social API module', () => {
 
     expect(client.get).toHaveBeenNthCalledWith(2, '/v1.0/social/friends',
       {params: {cursor: 'cursor-1'}, silentError: true});
-    expect(client.get).toHaveBeenNthCalledWith(3, '/v1.0/social/requests',
+    expect(client.get).toHaveBeenNthCalledWith(3, '/v1.0/social/friend-requests',
       {params: {direction: 'outgoing', cursor: undefined}, silentError: true});
     expect(client.get).toHaveBeenNthCalledWith(4, '/v1.0/social/recent',
       {params: {cursor: undefined}, silentError: true});
