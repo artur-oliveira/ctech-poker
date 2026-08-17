@@ -289,6 +289,12 @@ error beats silently ranking by a different GSI.
   their route family; for example, the daily-reward cooldown at `/sandbox-credits/` requires
   `poker:daily-reward:read`. Interactive mutations and WebSockets instead require a user session issued to the
   first-party `poker` client (`azp=poker`). KYC and business-role checks remain separate from OAuth scope checks.
+- **`/social/*` is exempt from the read-scope table on purpose.** There is no grantable social scope (public or
+  delegated); the whole group is gated by `firstPartyOnly`. Because `requiredReadScope` denies unknown paths, a
+  first-party token that also carries any `poker:*` scope was getting
+  `403 scope does not grant this poker resource` on every social `GET` — `enforceReadOnlyScope` now short-circuits for
+  the `/v1.0/social` prefix and lets `firstPartyOnly` decide. Any new route family that should be readable with a
+  public scope must be added to `requiredReadScope`; anything first-party-only belongs behind `firstPartyOnly`.
 - **B9 (`sub`-only authz) is fixed.** Older revisions of this file described it as an open risk.
 - `api-commons` v1.4.1's `jwtverify.Verify` now rejects any token missing a `token_use: "access"` claim (also tightens
   JWK `use`/`alg` matching). ctech-account's issued access tokens already carry it; only hand-crafted test JWTs

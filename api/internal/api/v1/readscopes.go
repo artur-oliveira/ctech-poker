@@ -14,7 +14,9 @@ import (
 // anything. Those interactive operations are restricted to access tokens
 // issued to Poker's first-party public SPA client.
 const (
-	firstPartyPokerClientID    = "poker"
+	firstPartyPokerClientID = "poker"
+	socialReadPathPrefix    = "/v1.0" + socialBasePath
+
 	ScopeRoomsRead             = "poker:rooms:read"
 	ScopePlayersRead           = "poker:players:read"
 	ScopeSessionsRead          = "poker:sessions:read"
@@ -57,6 +59,12 @@ func enforceReadOnlyScope(c fiber.Ctx, claims *jwtverify.Claims) *problem.Proble
 			return nil
 		}
 		return problem.Forbidden("interactive poker operations require the first-party Poker client")
+	}
+	// Social reads have no grantable public scope: the /social group is gated by
+	// firstPartyOnly, so the read-scope table (which denies unknown paths) must
+	// not apply to them.
+	if strings.HasPrefix(c.Path(), socialReadPathPrefix) {
+		return nil
 	}
 	if !hasPokerScope(claims) {
 		return nil
