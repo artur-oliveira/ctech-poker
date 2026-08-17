@@ -29,8 +29,11 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
 - **Valkey is mandatory in prod** (in-memory fallback is dev/stage only; prod fails closed).
 - **`REAL_MONEY_ENABLED` / `LEGAL_SIGNOFF_REF` are wired** from SSM in the instance `start.sh`,
   defaulting to `false` — enabling real money is a parameter change plus an instance refresh.
-- **Three Lambdas**: the archiver (DynamoDB Stream → S3, with an SQS DLQ and alarm), plus
+- **Three Lambdas**: the archiver (DynamoDB Stream → S3, with an SQS DLQ), plus
   `reconcile` (`rate(5 minutes)`) and `tablecleanup` (`rate(30 minutes)`) on EventBridge Scheduler.
+  `reconcile`/`tablecleanup` keep only their `*ErrorsAlarm`; the archiver's DLQ alarm and all
+  three Lambdas' DLQ-count/throttle/missed-run alarms were removed 2026-08-17 (unmonitored, no
+  SNS subscriber, billed past the CloudWatch free tier).
 - **Frontend**: private S3 + CloudFront via OAC, a route KeyValueStore with a viewer-request
   rewrite Function, and a `ResponseHeadersPolicy` carrying the CSP, HSTS and Permissions-Policy.
 
@@ -48,8 +51,9 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   through SSM and always completes termination, with a 120-second heartbeat timeout.
 - **No DLQ on either EventBridge Scheduler target** (`reconcile-stack.ts`, `tablecleanup-stack.ts`).
 - **No test** for `oidc-stack.ts`.
-- **B10 (fixed)** — archiver `DynamoEventSource` has `bisectBatchOnError` + `onFailure: SqsDlq`, and
-  a CloudWatch alarm fires on any visible DLQ message.
+- **B10 (fixed)** — archiver `DynamoEventSource` has `bisectBatchOnError` + `onFailure: SqsDlq`.
+  The DLQ-visible-message alarm was removed 2026-08-17 (see alarm note above); the DLQ itself
+  is unchanged.
 - **B31 relevance** — `poker_leaderboard_stats` has GSIs only for `hands_won` / `hands_played` /
   `win_rate`. The API rejects any other metric (incl. `achievement_points`); adding a new ranking
   metric requires its own GSI here first.

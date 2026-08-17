@@ -95,30 +95,11 @@ export class ReconcileStack extends cdk.Stack {
       },
     });
 
-    new cloudwatch.Alarm(this, 'ReconcileDLQAlarm', {
-      alarmName: `${reconcileJobName(environment)}-dlq-messages`,
-      metric: dlq.metricApproximateNumberOfMessagesVisible({period: cdk.Duration.minutes(5)}),
-      threshold: 1, evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
     new cloudwatch.Alarm(this, 'ReconcileErrorsAlarm', {
       alarmName: `${reconcileJobName(environment)}-errors`,
       metric: fn.metricErrors({period: cdk.Duration.minutes(5)}),
       threshold: 1, evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-    new cloudwatch.Alarm(this, 'ReconcileThrottlesAlarm', {
-      alarmName: `${reconcileJobName(environment)}-throttles`,
-      metric: fn.metricThrottles({period: cdk.Duration.minutes(5)}),
-      threshold: 1, evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-    new cloudwatch.Alarm(this, 'ReconcileMissedRunAlarm', {
-      alarmName: `${reconcileJobName(environment)}-missed-run`,
-      alarmDescription: `No reconcile invocation in two ${RECONCILE_RATE_MINUTES}-minute windows.`,
-      metric: fn.metricInvocations({period: cdk.Duration.minutes(RECONCILE_RATE_MINUTES * 2), statistic: 'Sum'}),
-      threshold: 1, comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
-      evaluationPeriods: 1, treatMissingData: cloudwatch.TreatMissingData.BREACHING,
     });
   }
 }

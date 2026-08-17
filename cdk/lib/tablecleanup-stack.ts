@@ -108,29 +108,11 @@ export class TableCleanupStack extends cdk.Stack {
         retryPolicy: {maximumEventAgeInSeconds: 7200, maximumRetryAttempts: 3},
       },
     });
-    new cloudwatch.Alarm(this, 'TableCleanupDLQAlarm', {
-      alarmName: `${tableCleanupJobName(environment)}-dlq-messages`,
-      metric: dlq.metricApproximateNumberOfMessagesVisible({period: cdk.Duration.minutes(5)}),
-      threshold: 1, evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
     new cloudwatch.Alarm(this, 'TableCleanupErrorsAlarm', {
       alarmName: `${tableCleanupJobName(environment)}-errors`,
       metric: fn.metricErrors({period: cdk.Duration.minutes(30)}),
       threshold: 1, evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-    new cloudwatch.Alarm(this, 'TableCleanupThrottlesAlarm', {
-      alarmName: `${tableCleanupJobName(environment)}-throttles`,
-      metric: fn.metricThrottles({period: cdk.Duration.minutes(30)}),
-      threshold: 1, evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-    new cloudwatch.Alarm(this, 'TableCleanupMissedRunAlarm', {
-      alarmName: `${tableCleanupJobName(environment)}-missed-run`,
-      metric: fn.metricInvocations({period: cdk.Duration.hours(1), statistic: 'Sum'}),
-      threshold: 1, comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
-      evaluationPeriods: 1, treatMissingData: cloudwatch.TreatMissingData.BREACHING,
     });
   }
 }

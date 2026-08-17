@@ -4,7 +4,6 @@
 import {execFileSync} from 'child_process';
 import * as cdk from 'aws-cdk-lib';
 import {ILocalBundling, RemovalPolicy} from 'aws-cdk-lib';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -75,14 +74,5 @@ export class ArchiverStack extends cdk.Stack {
       bisectBatchOnError: true,
       onFailure: new SqsDlq(dlq),
     }));
-
-    new cloudwatch.Alarm(this, 'ArchiverDLQAlarm', {
-      alarmName: `${environment}-poker-action-log-archiver-dlq-messages`,
-      alarmDescription: 'Archiver Lambda dropped action-log stream records to the DLQ — the S3 archive is missing data until they are replayed.',
-      metric: dlq.metricApproximateNumberOfMessagesVisible({period: cdk.Duration.minutes(5)}),
-      threshold: 1,
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
   }
 }
