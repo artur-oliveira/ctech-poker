@@ -44,6 +44,12 @@ off by default — do not build UI that assumes real money is on.
 - **Never render or derive hidden information client-side.** The server masks unseen hole cards
   as the literal `"back"` before sending; the client's job is to display what it got, never to
   reconstruct what it didn't.
+- **The viewer's own `equity` and `hand_category` are sent unconditionally, gated only in the
+  client.** The server can't see the local "peek" toggle (`Seat.tsx`'s `peeked` state — a client-only
+  gate on the viewer's own hole cards, distinct from the public `onReveal`), so it always sends the
+  viewer's true numbers; `Seat.tsx`'s `showEquity`/`showHandCategory` are what withhold them until
+  both cards are peeked (or the hand is complete). Displaying either unconditionally leaks the exact
+  hidden state the "all-in/won without peeking" achievements require the player not to have.
 - **Fairness verification happens in the browser.** `lib/deckVerify.ts` recomputes hashes with
   WebCrypto. Never replace that with a server-provided boolean — the whole point is that the
   player does not have to trust us.

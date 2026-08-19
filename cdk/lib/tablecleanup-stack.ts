@@ -108,11 +108,11 @@ export class TableCleanupStack extends cdk.Stack {
         retryPolicy: {maximumEventAgeInSeconds: 7200, maximumRetryAttempts: 3},
       },
     });
-    new cloudwatch.Alarm(this, 'TableCleanupErrorsAlarm', {
-      alarmName: `${tableCleanupJobName(environment)}-errors`,
-      metric: fn.metricErrors({period: cdk.Duration.minutes(30)}),
-      threshold: 1, evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+    // new cloudwatch.Alarm(this, 'TableCleanupErrorsAlarm', {
+    //   alarmName: `${tableCleanupJobName(environment)}-errors`,
+    //   metric: fn.metricErrors({period: cdk.Duration.minutes(30)}),
+    //   threshold: 1, evaluationPeriods: 1,
+    //   treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    // });
   }
 }

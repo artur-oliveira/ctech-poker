@@ -318,7 +318,8 @@ export class PokerApiStack extends cdk.Stack {
       logRemovalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
       asgName: this.asgName,
       minCapacity: minimumApiCapacity(environment),
-      maxCapacity: isProd ? 3 : 1,
+      maxCapacity: minimumApiCapacity(environment),
+      schedule: {},
     });
     const asg = service.autoScalingGroup;
     asg.node.addDependency(profile);
@@ -389,66 +390,66 @@ def handler(event, context):
       heartbeatTimeout: cdk.Duration.seconds(120),
       notificationTarget: new hooktargets.FunctionHook(drainFunction),
     });
-    
-    const alarmMetricFilter = service.appLogGroup.addMetricFilter('AlarmLogFilter', {
-      filterPattern: logs.FilterPattern.literal('"ALARM:"'),
-      metricNamespace: `CtechPoker/${environment}`,
-      metricName: 'AlarmLogLines',
-      metricValue: '1',
-    });
-    new cloudwatch.Alarm(this, 'AlarmLogAlarm', {
-      alarmName: `${environment}-${SERVICE}-alarm-log-lines`,
-      alarmDescription: 'An ALARM log line was emitted (reconcile credit failure or manual review condition).',
-      metric: alarmMetricFilter.metric({statistic: 'Sum', period: cdk.Duration.minutes(5)}),
-      threshold: 1,
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-    
-    const leaseFailoverMetric = new cloudwatch.Metric({
-      namespace: `CtechPoker/${environment}`,
-      metricName: 'LeaseFailovers',
-      statistic: 'Sum',
-      period: cdk.Duration.minutes(5),
-    });
-    new cloudwatch.Alarm(this, 'LeaseFailoverSpikeAlarm', {
-      alarmName: `${environment}-${SERVICE}-lease-failover-spike`,
-      alarmDescription: 'Table lease failovers spiked — earliest signal of an instance going bad.',
-      metric: leaseFailoverMetric,
-      threshold: 5,
-      evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-
-    const playerReportedMetric = new cloudwatch.Metric({
-      namespace: `CtechPoker/${environment}`,
-      metricName: 'PlayerReported',
-      statistic: 'Sum',
-      period: cdk.Duration.minutes(5),
-    });
-    new cloudwatch.Alarm(this, 'PlayerReportSpikeAlarm', {
-      alarmName: `${environment}-${SERVICE}-player-report-spike`,
-      alarmDescription: 'Player reports exceeded the initial moderation baseline; triage the open queue.',
-      metric: playerReportedMetric,
-      threshold: 20,
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-
-    const socialRateLimitedMetric = new cloudwatch.Metric({
-      namespace: `CtechPoker/${environment}`,
-      metricName: 'SocialRateLimited',
-      statistic: 'Sum',
-      period: cdk.Duration.minutes(5),
-    });
-    new cloudwatch.Alarm(this, 'SocialRateLimitSpikeAlarm', {
-      alarmName: `${environment}-${SERVICE}-social-rate-limit-spike`,
-      alarmDescription: 'Social/report throttling exceeded the initial abuse baseline.',
-      metric: socialRateLimitedMetric,
-      threshold: 25,
-      evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+    //
+    // const alarmMetricFilter = service.appLogGroup.addMetricFilter('AlarmLogFilter', {
+    //   filterPattern: logs.FilterPattern.literal('"ALARM:"'),
+    //   metricNamespace: `CtechPoker/${environment}`,
+    //   metricName: 'AlarmLogLines',
+    //   metricValue: '1',
+    // });
+    // new cloudwatch.Alarm(this, 'AlarmLogAlarm', {
+    //   alarmName: `${environment}-${SERVICE}-alarm-log-lines`,
+    //   alarmDescription: 'An ALARM log line was emitted (reconcile credit failure or manual review condition).',
+    //   metric: alarmMetricFilter.metric({statistic: 'Sum', period: cdk.Duration.minutes(5)}),
+    //   threshold: 1,
+    //   evaluationPeriods: 1,
+    //   treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    // });
+    //
+    // const leaseFailoverMetric = new cloudwatch.Metric({
+    //   namespace: `CtechPoker/${environment}`,
+    //   metricName: 'LeaseFailovers',
+    //   statistic: 'Sum',
+    //   period: cdk.Duration.minutes(5),
+    // });
+    // new cloudwatch.Alarm(this, 'LeaseFailoverSpikeAlarm', {
+    //   alarmName: `${environment}-${SERVICE}-lease-failover-spike`,
+    //   alarmDescription: 'Table lease failovers spiked — earliest signal of an instance going bad.',
+    //   metric: leaseFailoverMetric,
+    //   threshold: 5,
+    //   evaluationPeriods: 2,
+    //   treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    // });
+    //
+    // const playerReportedMetric = new cloudwatch.Metric({
+    //   namespace: `CtechPoker/${environment}`,
+    //   metricName: 'PlayerReported',
+    //   statistic: 'Sum',
+    //   period: cdk.Duration.minutes(5),
+    // });
+    // new cloudwatch.Alarm(this, 'PlayerReportSpikeAlarm', {
+    //   alarmName: `${environment}-${SERVICE}-player-report-spike`,
+    //   alarmDescription: 'Player reports exceeded the initial moderation baseline; triage the open queue.',
+    //   metric: playerReportedMetric,
+    //   threshold: 20,
+    //   evaluationPeriods: 1,
+    //   treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    // });
+    //
+    // const socialRateLimitedMetric = new cloudwatch.Metric({
+    //   namespace: `CtechPoker/${environment}`,
+    //   metricName: 'SocialRateLimited',
+    //   statistic: 'Sum',
+    //   period: cdk.Duration.minutes(5),
+    // });
+    // new cloudwatch.Alarm(this, 'SocialRateLimitSpikeAlarm', {
+    //   alarmName: `${environment}-${SERVICE}-social-rate-limit-spike`,
+    //   alarmDescription: 'Social/report throttling exceeded the initial abuse baseline.',
+    //   metric: socialRateLimitedMetric,
+    //   threshold: 25,
+    //   evaluationPeriods: 2,
+    //   treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    // });
 
     // One low-cost operational view for the gameplay SLOs. SEARCH expressions
     // intentionally aggregate bounded dimensions (route/status/version) and

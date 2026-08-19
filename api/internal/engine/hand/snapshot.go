@@ -261,41 +261,58 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 			publicReveal[0], publicReveal[1] = true, true
 		}
 		sv.HoleCardsRevealed = publicReveal
-		if dealtIn[p.ID] && (p.ID == viewerID || publicReveal[0] || publicReveal[1]) {
-			sv.HoleCards = []string{"back", "back"}
-			for i := range sv.HoleCards {
-				if p.ID == viewerID || publicReveal[i] {
-					sv.HoleCards[i] = cardCode(p.HoleCards[i])
+		if dealtIn[p.ID] {
+			if p.ID == viewerID || publicReveal[0] || publicReveal[1] {
+				sv.HoleCards = []string{"back", "back"}
+				for i := range sv.HoleCards {
+					if p.ID == viewerID || publicReveal[i] {
+						sv.HoleCards[i] = cardCode(p.HoleCards[i])
+					}
 				}
 			}
 			evaluationBoard := t.board
 			if t.runItTwice && t.runoutPhase == 2 {
 				evaluationBoard = append(append([]deck.Card(nil), t.board[:t.boardSplitAt]...), t.boardTwo...)
 			}
-			if p.ID == viewerID || (publicReveal[0] && publicReveal[1]) {
-				if len(evaluationBoard) == 5 {
-					var full [7]deck.Card
-					full[0], full[1] = p.HoleCards[0], p.HoleCards[1]
-					copy(full[2:], evaluationBoard)
-					score := handeval.Best7(full)
-					if t.stage == Complete && t.runItTwice && len(t.board) == 5 {
-						copy(full[2:], t.board)
-						if firstScore := handeval.Best7(full); firstScore > score {
-							score = firstScore
-						}
+			fullyKnown := p.ID == viewerID || (publicReveal[0] && publicReveal[1])
+			switch {
+			case fullyKnown && len(evaluationBoard) == 5:
+				var full [7]deck.Card
+				full[0], full[1] = p.HoleCards[0], p.HoleCards[1]
+				copy(full[2:], evaluationBoard)
+				score := handeval.Best7(full)
+				if t.stage == Complete && t.runItTwice && len(t.board) == 5 {
+					copy(full[2:], t.board)
+					if firstScore := handeval.Best7(full); firstScore > score {
+						score = firstScore
 					}
-					sv.HandCategory = categoryNames[score.Category()]
-					sv.HandScore = uint32(score)
-				} else if isBettingStage(t.stage) {
-					// Pre-river the hand is still made of fewer than 7 cards,
-					// which the perfect-hash tables cannot index — see
-					// partialCategory. HandScore stays unset: only the 7-card
-					// Score is comparable, and clients decide outcomes with it.
-					// Only live betting stages get this: a hand that ENDED on a
-					// short board (everyone folded) has no made hand worth
-					// naming, and the client reads the absence of a category as
-					// exactly that.
-					sv.HandCategory = categoryNames[partialCategory(p.HoleCards, evaluationBoard)]
+				}
+				sv.HandCategory = categoryNames[score.Category()]
+				sv.HandScore = uint32(score)
+			case isBettingStage(t.stage) || (t.stage == Complete && len(evaluationBoard) == 5):
+				// Not everything is known here: an opponent who hasn't revealed
+				// (or has only revealed one card) must never leak the hidden
+				// card into what's shown — only the actually-revealed hole
+				// cards (0, 1, or 2 of them) plus the board go in. With nothing
+				// revealed this is a community-cards-only category, exactly
+				// what every player at the table can already see for
+				// themselves. HandScore stays unset: only the true 7-card
+				// Score is comparable, and clients decide outcomes with it.
+				// A hand that ENDED on a short board (everyone folded) still
+				// gets nothing, matching the pre-river "no made hand worth
+				// naming" rule below.
+				knownHole := make([]deck.Card, 0, 2)
+				if p.ID == viewerID || publicReveal[0] {
+					knownHole = append(knownHole, p.HoleCards[0])
+				}
+				if p.ID == viewerID || publicReveal[1] {
+					knownHole = append(knownHole, p.HoleCards[1])
+				}
+				// Preflop with nothing revealed there is literally nothing to
+				// name yet (no board, no known hole card) — showing "Carta
+				// Alta" there would imply information that doesn't exist.
+				if len(knownHole) > 0 || len(evaluationBoard) > 0 {
+					sv.HandCategory = categoryNames[partialCategory(knownHole, evaluationBoard)]
 				}
 			}
 		}
@@ -667,26 +684,58 @@ func (t *Table) potFractionRaiseTo(
 	return target
 }
 
-// partialCategory names the best five-card hand a viewer holds before the
-// river, so the client can label it on every street instead of only at
+// partialCategory names the best hand made from whatever hole cards are
+// actually known (0, 1, or 2 — callers pass only cards that belong to the
+// viewer or have been publicly revealed, never a still-hidden card) plus the
+// board, so the client can label it on every street instead of only at
 // showdown. handeval's tables are indexed by 7-card rank multisets and cannot
-// answer for 5 or 6 cards, so this goes through the reference evaluator's
+// answer for fewer cards, so this goes through the reference evaluator's
 // combinatorial BestN. Only the Category crosses over: ref.Score is a
 // different encoding from handeval.Score and the two must never be compared
 // (the categories themselves are one enum by construction — ref defines the
-// ordering the tables are generated from). Preflop there is no board and the
-// only made hand two cards can be is a pocket pair.
-func partialCategory(hole [2]deck.Card, board []deck.Card) handeval.Category {
-	if len(board) < 3 {
-		if hole[0].Rank == hole[1].Rank {
-			return handeval.Pair
+// ordering the tables are generated from). BestN itself needs 5-7 cards;
+// below that (early streets, or an opponent with nothing/one card revealed)
+// straights and flushes are impossible outright, so a plain rank count
+// decides it.
+func partialCategory(hole []deck.Card, board []deck.Card) handeval.Category {
+	cards := make([]deck.Card, 0, len(hole)+len(board))
+	cards = append(cards, hole...)
+	cards = append(cards, board...)
+	if len(cards) < 5 {
+		return categoryFromRankCounts(cards)
+	}
+	return handeval.Category(ref.BestN(cards).Category())
+}
+
+// categoryFromRankCounts handles the sub-5-card case partialCategory can't
+// hand to BestN. With fewer than 5 cards a straight, flush, or full house is
+// never possible, so the best category is decided by rank frequency alone.
+func categoryFromRankCounts(cards []deck.Card) handeval.Category {
+	counts := make(map[deck.Rank]int, len(cards))
+	for _, c := range cards {
+		counts[c.Rank]++
+	}
+	best, pairs := 0, 0
+	for _, n := range counts {
+		if n > best {
+			best = n
 		}
+		if n == 2 {
+			pairs++
+		}
+	}
+	switch {
+	case best >= 4:
+		return handeval.FourOfAKind
+	case best == 3:
+		return handeval.ThreeOfAKind
+	case pairs >= 2:
+		return handeval.TwoPair
+	case pairs == 1:
+		return handeval.Pair
+	default:
 		return handeval.HighCard
 	}
-	cards := make([]deck.Card, 0, 2+len(board))
-	cards = append(cards, hole[0], hole[1])
-	cards = append(cards, board...)
-	return handeval.Category(ref.BestN(cards).Category())
 }
 
 // playerToActForTest returns the ID of whoever must act now — test-only

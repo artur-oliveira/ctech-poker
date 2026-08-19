@@ -288,7 +288,7 @@ func TestPartialCategoryNamesTheMadeHandBeforeTheRiver(t *testing.T) {
 			[]deck.Card{card(deck.Seven, deck.Clubs), card(deck.Nine, deck.Clubs), card(deck.King, deck.Clubs), card(deck.Three, deck.Diamonds)}, handeval.Flush},
 	}
 	for _, tc := range cases {
-		if got := partialCategory(tc.hole, tc.board); got != tc.want {
+		if got := partialCategory(tc.hole[:], tc.board); got != tc.want {
 			t.Errorf("%s: partialCategory = %v, want %v", tc.name, got, tc.want)
 		}
 	}
@@ -316,8 +316,24 @@ func TestViewForIncludesHandCategoryOnEveryStreetButOnlyScoresTheRiver(t *testin
 					t.Fatalf("%v: hand score %d leaked a non-canonical (pre-river) score", stage, s.HandScore)
 				}
 			default:
-				if s.HandCategory != "" {
-					t.Fatalf("%v: opponent hand category %q leaked to the viewer", stage, s.HandCategory)
+				// An unrevealed opponent's hole cards must never leak into
+				// this: preflop there's neither a board nor a revealed card
+				// to name a hand from, so it stays empty. Once the board
+				// lands, the category is the community cards' own hand
+				// (public information every player already sees for
+				// themselves), never anything derived from the opponent's
+				// still-hidden hole cards.
+				if stage == PreFlop {
+					if s.HandCategory != "" {
+						t.Fatalf("%v: opponent hand category %q shown with no board and no reveal", stage, s.HandCategory)
+					}
+					continue
+				}
+				if s.HandCategory == "" {
+					t.Fatalf("%v: opponent has no community-cards-only hand category", stage)
+				}
+				if s.HandScore != 0 {
+					t.Fatalf("%v: opponent hand score %d leaked hidden-card information", stage, s.HandScore)
 				}
 			}
 		}

@@ -95,11 +95,11 @@ export class ReconcileStack extends cdk.Stack {
       },
     });
 
-    new cloudwatch.Alarm(this, 'ReconcileErrorsAlarm', {
-      alarmName: `${reconcileJobName(environment)}-errors`,
-      metric: fn.metricErrors({period: cdk.Duration.minutes(5)}),
-      threshold: 1, evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+    // new cloudwatch.Alarm(this, 'ReconcileErrorsAlarm', {
+    //   alarmName: `${reconcileJobName(environment)}-errors`,
+    //   metric: fn.metricErrors({period: cdk.Duration.minutes(5)}),
+    //   threshold: 1, evaluationPeriods: 1,
+    //   treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    // });
   }
 }

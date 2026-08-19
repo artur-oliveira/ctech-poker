@@ -207,6 +207,12 @@ export function Seat({
   // the other down. The server sends this unconditionally; the gate is here,
   // alongside the rest of the client-side peek state.
   const showEquity = chance != null && isViewer && (!peekGated || (peeked[0] && peeked[1]));
+  // Same leak, same gate: the viewer's own hand_category is computed from
+  // their real hole cards regardless of whether they've peeked, so the
+  // "all-in/won without peeking" achievements need this hidden until both
+  // cards are peeked too. Opponents need no client-side gate — the server
+  // already sends them a community-cards-only category until they reveal.
+  const showHandCategory = !isViewer || !peekGated || (peeked[0] && peeked[1]);
   const pendingName = !isViewer && !seat.name;
   const isDisconnected = seat.connection_state === 'disconnected';
   // Both deadlines pass without any broadcast to mark them, so the handover
@@ -229,6 +235,11 @@ export function Seat({
   const role = isDealer && isSmallBlind ? 'D/SB' : isDealer ? 'D' : isSmallBlind ? 'SB' : isBigBlind ? 'BB' : null;
   const streak = seat.current_streak || 0;
   const pausedAfterHand = seat.ready === false && seat.state !== 'sitting_out';
+  // A player can toggle ready while still owing the next hand's big blind
+  // (RequestReturnFromSitOut defers the actual return until StartHand charges
+  // it), so state stays 'sitting_out' with ready:true for that window. Plain
+  // "Ausente" there reads as if the ready click did nothing.
+  const sittingOutReady = seat.state === 'sitting_out' && seat.ready === true;
   const playstyle = seat.playstyle_badge ? playstyleMeta(seat.playstyle_badge) : undefined;
   return <div data-state={seat.state} data-connection-state={seat.connection_state}
               data-player-id={seat.player_id}
@@ -295,10 +306,10 @@ export function Seat({
             <Progress value={chance} indicatorClassName={equityTone(chance)}/>
             <small>Chance {chance}%</small>
         </div>}{STATE_LABELS[seat.state] &&
-        <small className="seat-state">{STATE_LABELS[seat.state]}</small>}{pausedAfterHand &&
+        <small className="seat-state">{sittingOutReady ? 'Ausente e pronto' : STATE_LABELS[seat.state]}</small>}{pausedAfterHand &&
         <small className="seat-state seat-next-state">Pausa na próxima
             mão</small>}{isDisconnected && seat.state !== 'disconnected' &&
-        <small className="seat-state">Desconectado</small>}{seat.hand_category &&
+        <small className="seat-state">Desconectado</small>}{showHandCategory && seat.hand_category &&
         <small className="seat-hand-category">{HAND_CATEGORY_LABELS[seat.hand_category] || seat.hand_category}</small>}
     </div>
     {seat.contributed > 0 && <span key={`bet-${seat.contributed}`} className="seat-bet">

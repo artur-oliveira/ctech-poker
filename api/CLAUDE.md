@@ -42,6 +42,12 @@ reconciliation retries. **Still blocking, found 2026-07-25 while verifying cross
 - **Hidden information never leaves `ViewFor`.** `Table.ViewFor(viewerID)` is the single place that decides per-viewer
   visibility, masking unseen hole cards as `"back"` before serialisation; fan-out is keyed
   `<tableID>#<viewerID>` so two seats cannot share a snapshot. Add visibility rules there, never in a handler.
+  `SeatView.HandCategory` follows the same rule: an opponent's category is built only from their actually-revealed
+  hole cards (0, 1, or 2 — `snapshot.go`'s `partialCategory`/`categoryFromRankCounts`) plus the board, never their
+  still-hidden card, falling back to a community-cards-only category with no reveal at all. The viewer's own seat is
+  the one exception — `Table.ViewFor` sends their true category unconditionally the same way it does `Equity` — so a
+  client showing it before the viewer has locally peeked their own cards leaks the "all-in/won without peeking"
+  achievements' exact hidden state (Seat.tsx's `showHandCategory`/`showEquity` gates are what withhold it there).
 - **The fairness reveal is asymmetric on purpose.** The server seed is published only when nothing stayed hidden (a real
   showdown). Every other hand gets the seed-less per-position proof (`fairnessProofFor`). Widening seed publication
   would retroactively expose mucked hole cards — treat it as a security change, not a feature.

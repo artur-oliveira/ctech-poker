@@ -56,6 +56,12 @@ describe('Seat', () => {
     expect(screen.getByText('Ausente')).toBeInTheDocument();
   });
 
+  test('distinguishes a sitting-out player who has readied up (owes the next big blind) from one who has not', () => {
+    render_({seat: seat({ready: true, state: 'sitting_out'})});
+    expect(screen.queryByText('Ausente')).not.toBeInTheDocument();
+    expect(screen.getByText('Ausente e pronto')).toBeInTheDocument();
+  });
+
   test.each([
     [{isDealer: true, isSmallBlind: true}, 'D/SB', 'Dealer e small blind'],
     [{isDealer: true}, 'D', 'Dealer'],
@@ -113,6 +119,32 @@ describe('Seat', () => {
     test('shows equity with no peek gate once the hand completes', () => {
       render_({seat: peekSeat, isViewer: true, onPeekCards: vi.fn(), handComplete: true});
       expect(screen.getByLabelText('Chance estimada de vitória: 90%')).toBeInTheDocument();
+    });
+  });
+
+  describe('hand category behind the peek gate', () => {
+    const categorySeat = seat({hole_cards: ['AH', 'KD'], hand_category: 'two_pair'});
+
+    test('withholds the viewer own hand name until both cards have been peeked', async () => {
+      render_({seat: categorySeat, isViewer: true, onPeekCards: vi.fn()});
+      expect(screen.queryByText('Dois pares')).not.toBeInTheDocument();
+
+      const cards = screen.getAllByRole('button', {name: /^Ver sua/});
+      await userEvent.click(cards[0]);
+      expect(screen.queryByText('Dois pares')).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', {name: /^Ver sua 2ª/}));
+      expect(screen.getByText('Dois pares')).toBeInTheDocument();
+    });
+
+    test('shows the hand name with no peek gate once the hand completes', () => {
+      render_({seat: categorySeat, isViewer: true, onPeekCards: vi.fn(), handComplete: true});
+      expect(screen.getByText('Dois pares')).toBeInTheDocument();
+    });
+
+    test('never gates an opponent hand name — the server already limits it to what is publicly known', () => {
+      render_({seat: categorySeat, isViewer: false});
+      expect(screen.getByText('Dois pares')).toBeInTheDocument();
     });
   });
 
