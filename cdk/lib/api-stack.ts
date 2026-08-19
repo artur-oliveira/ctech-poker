@@ -9,11 +9,8 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import {Construct} from 'constructs';
 import {
-  addCloudflareOriginCaCommands,
-  addCloudWatchAgentDualStackOverride,
-  addDualStackSsmAgentCommands,
-  addSwapCommands,
   buildCloudWatchAgentConfig,
+  Ec2ScriptRunner,
   Environment,
   HaproxyEc2Service,
 } from '@aoctech/cdk';
@@ -208,42 +205,30 @@ export class PokerApiStack extends cdk.Stack {
     const logGroupNginx = `/${SERVICE}/${environment}/nginx`;
     
     // ── User Data ─────────────────────────────────────────────────────────────
+    // Every shared bootstrap step lives in ctech-cdk's assets/ec2 and is fetched
+    // from S3 at boot. What stays inline is only what CloudFormation has to
+    // resolve: bucket names, SSM paths, log group names and the CloudWatch agent
+    // config.
+    //
+    // The S3 key prefix is the content hash of assets/ec2, read from SSM at
+    // deploy time, so editing a shared script changes this user data, versions
+    // the launch template and triggers an instance refresh.
+    const scripts = new Ec2ScriptRunner(this, 'Scripts', {environment});
+    scripts.grantRead(instanceRole);
+
     const userData = ec2.UserData.forLinux();
-    
+    scripts.install(userData);
+
+    // No nginx in this stack (see APP_PORT doc comment in constants.ts): no extra
+    // packages, no setup-nginx.sh and no setup-realip.sh.
+    scripts.run(userData, 'setup-base.sh', SERVICE);
+    scripts.run(userData, 'setup-swap.sh', '256');
+    scripts.run(userData, 'setup-dualstack.sh');
+    scripts.run(userData, 'setup-cloudflare-ca.sh');
+
+    // /etc/app-static.env: non-secret values systemd loads via EnvironmentFile.
+    // CDK tokens are substituted at synthesis; bash does not expand them.
     userData.addCommands(
-      // ── Packages + directories ───────────────────────────────────────────────
-      'dnf install -y amazon-cloudwatch-agent amazon-ssm-agent cronie unzip jq',
-      'useradd --system --no-create-home --shell /sbin/nologin webapp',
-      'mkdir -p /opt/app/releases /var/log/app',
-      'chown -R webapp:webapp /opt/app /var/log/app',
-      // AL2023 does not enable crond by default (unlike AL2) — without it
-      // /etc/cron.daily/logrotate never fires and rotated logs never reach S3.
-      'systemctl enable crond',
-      'systemctl start crond',
-    );
-    
-    addSwapCommands(userData);
-    addDualStackSsmAgentCommands(userData);
-    addCloudflareOriginCaCommands(userData);
-    addCloudWatchAgentDualStackOverride(userData);
-    
-    userData.addCommands(
-      // {instance_id} is resolved by the CW agent at runtime, not by bash.
-      `cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWA'`,
-      buildCloudWatchAgentConfig({
-        metricNamespace: `CtechPoker/${environment}/Host`,
-        appProcessPattern: '/opt/app/current/(app|bootstrap)',
-        logFiles: [
-          {filePath: '/var/log/app/app.log', logGroupName: logGroupApp, logStreamName: '{instance_id}'},
-        ],
-      }),
-      `CWA`,
-      `/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s`,
-      
-      // ── Static env file (loaded by systemd EnvironmentFile=) ─────────────────
-      // CDK tokens are substituted at synthesis time; bash does not expand them.
-      // Only non-secret values live here. Secrets (none yet) would come from SSM
-      // in start.sh, same convention as ctech-wallet/ctech-dfe.
       `cat > /etc/app-static.env << 'ENV'`,
       `ENVIRONMENT=${environment}`,
       `AWS_REGION=${this.region}`,
@@ -254,163 +239,68 @@ export class PokerApiStack extends cdk.Stack {
       `TRUSTED_PROXIES=${vpc.vpcCidrBlock}`,
       `AVATAR_BUCKET=${avatarsBucketName}`,
       `ENV`,
-      
-      // ── start.sh: fetches runtime configuration and M2M credentials from SSM.
-      // No DB-number suffix — see constants.ts SSM_SHARED doc comment: ctech-dfe and
-      // ctech-account both pass VALKEY_URL straight through unmodified, and
-      // tablelease keys are already namespaced by prefix (table:{id}).
-      `cat > /opt/app/start.sh << 'START'`,
-      `#!/bin/bash`,
-      // APP_VERSION ships inside the release artifact (release.env), written by CI.
-      `if [ -f /opt/app/current/release.env ]; then set -a; . /opt/app/current/release.env; set +a; fi`,
-      // Falls back to empty → config.Load() fails closed in prod (VALKEY_URL
-      // required there); in dev/stage the app falls back to an in-memory backend.
-      `VALKEY_URL=$(aws ssm get-parameter --name "${shared.valkeyUrl}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
-      `export VALKEY_URL`,
-      `CTECH_URL=$(aws ssm get-parameter --name "${account.internalBaseUrl}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
-      `CTECH_ISSUER_URL=$(aws ssm get-parameter --name "${account.appUrl}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
-      `CTECH_JWKS_URL=$(aws ssm get-parameter --name "${account.internalJwksUrl}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
-      `SERVICE_AUDIENCE=$(aws ssm get-parameter --name "${poker.appUrl}" --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
+    );
+
+    // Read by name on every service start, never embedded: the launch template is
+    // readable by anyone holding ec2:DescribeLaunchTemplateVersions. A parameter
+    // that does not exist yet leaves the variable empty, which is what keeps the
+    // kill switches fail-closed - REAL_MONEY_ENABLED and SOCIAL_GRAPH_ENABLED
+    // carry `envDefault:"false"`, and prod requires VALKEY_URL.
+    //
+    // No DB-number suffix on VALKEY_URL - see constants.ts SSM_SHARED: ctech-dfe
+    // and ctech-account both pass it through unmodified, and tablelease keys are
+    // already namespaced by prefix (table:{id}).
+    scripts.run(userData, 'setup-ssm-env.sh',
+      `VALKEY_URL=${shared.valkeyUrl}`,
+      `CTECH_URL=${account.internalBaseUrl}`,
+      `CTECH_ISSUER_URL=${account.appUrl}`,
+      `CTECH_JWKS_URL=${account.internalJwksUrl}`,
+      `SERVICE_AUDIENCE=${poker.appUrl}`,
+      `WALLET_URL=${walletUrlParam}`,
+      `POKER_CLIENT_ID=${pokerClientIdParam}`,
+      `POKER_CLIENT_SECRET=${pokerClientSecretParam}`,
+      `TURNSTILE_SECRET=${turnstileSecretParam}`,
+      `WALLET_WEBHOOK_HMAC_SECRET=${walletWebhookHmacSecretParam}`,
+      `REAL_MONEY_ENABLED=${realMoneyEnabledParam}`,
+      `SOCIAL_GRAPH_ENABLED=${socialGraphEnabledParam}`,
+      `LEGAL_SIGNOFF_REF=${legalSignoffRefParam}`,
+      `AVATAR_BASE_URL=${avatarBaseUrlParam}`,
+    );
+
+    // Derived from SERVICE_AUDIENCE rather than fetched - the escape hatch
+    // start.sh sources after load-ssm-env.sh.
+    userData.addCommands(
+      `cat > /opt/app/service-env.sh << 'SERVICEENV'`,
       `CORS_ALLOWED_ORIGINS="$SERVICE_AUDIENCE"`,
       `TURNSTILE_EXPECTED_HOSTNAME="\${SERVICE_AUDIENCE#*://}"`,
       `TURNSTILE_EXPECTED_HOSTNAME="\${TURNSTILE_EXPECTED_HOSTNAME%%/*}"`,
-      `export CTECH_URL CTECH_ISSUER_URL CTECH_JWKS_URL SERVICE_AUDIENCE CORS_ALLOWED_ORIGINS TURNSTILE_EXPECTED_HOSTNAME`,
-      `WALLET_URL=$(aws ssm get-parameter --name "${walletUrlParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
-      `export WALLET_URL`,
-      `POKER_CLIENT_ID=$(aws ssm get-parameter --name "${pokerClientIdParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
-      `export POKER_CLIENT_ID`,
-      `POKER_CLIENT_SECRET=$(aws ssm get-parameter --name "${pokerClientSecretParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
-      `export POKER_CLIENT_SECRET`,
-      `TURNSTILE_SECRET=$(aws ssm get-parameter --name "${turnstileSecretParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
-      `export TURNSTILE_SECRET`,
-      `WALLET_WEBHOOK_HMAC_SECRET=$(aws ssm get-parameter --name "${walletWebhookHmacSecretParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
-      `export WALLET_WEBHOOK_HMAC_SECRET`,
-      // Real-money kill switch: both fetched fresh on every boot/restart so
-      // ops can flip them via SSM without a redeploy. Falls back to
-      // false/empty → config.Load() keeps real-money mode off (fails closed).
-      `REAL_MONEY_ENABLED=$(aws ssm get-parameter --name "${realMoneyEnabledParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "false")`,
-      `export REAL_MONEY_ENABLED`,
-      // Social graph rollout switch. Safety endpoints (mute/block/report) do
-      // not consult this gate; it controls friendship, presence and invites.
-      `SOCIAL_GRAPH_ENABLED=$(aws ssm get-parameter --name "${socialGraphEnabledParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "false")`,
-      `export SOCIAL_GRAPH_ENABLED`,
-      `LEGAL_SIGNOFF_REF=$(aws ssm get-parameter --name "${legalSignoffRefParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
-      `export LEGAL_SIGNOFF_REF`,
-      `AVATAR_BASE_URL=$(aws ssm get-parameter --name "${avatarBaseUrlParam}" --with-decryption --query Parameter.Value --output text --region ${this.region} 2>/dev/null || echo "")`,
-      `export AVATAR_BASE_URL`,
-      `exec /opt/app/current/app`,
-      `START`,
-      `chmod +x /opt/app/start.sh`,
-      
-      // ── systemd app.service ──────────────────────────────────────────────────
-      `cat > /etc/systemd/system/app.service << 'SVC'`,
-      `[Unit]`,
-      `Description=CTech Poker API`,
-      `After=network.target`,
-      `StartLimitIntervalSec=300`,
-      `StartLimitBurst=5`,
-      ``,
-      `[Service]`,
-      `User=webapp`,
-      `Group=webapp`,
-      `WorkingDirectory=/opt/app/current`,
-      `Environment=HOME=/opt/app`,
-      `EnvironmentFile=/etc/app-static.env`,
-      `ExecStartPre=/bin/test -x /opt/app/current/app`,
-      `ExecStart=/opt/app/start.sh`,
-      `StandardOutput=append:/var/log/app/app.log`,
-      `StandardError=append:/var/log/app/app.log`,
-      `Restart=on-failure`,
-      `RestartSec=30`,
-      ``,
-      `[Install]`,
-      `WantedBy=multi-user.target`,
-      `SVC`,
-      `systemctl daemon-reload`,
-      `systemctl enable app`,
-      
-      // ── deploy.sh: called by SSM RunCommand from GitHub Actions ──────────────
-      // Expects a zip containing a pre-built `app` binary (linux/arm64).
-      // __BUCKET__ is replaced by sed so bash $variables are not expanded at write
-      // time (quoted 'DEPLOY' delimiter).
-      `cat > /opt/app/deploy.sh << 'DEPLOY'`,
-      `#!/bin/bash`,
-      `set -euo pipefail`,
-      `S3_KEY="$1"`,
-      `RELEASE_DIR="/opt/app/releases/$(date +%Y%m%d_%H%M%S)"`,
-      `mkdir -p "$RELEASE_DIR"`,
-      `echo "Downloading release: $S3_KEY"`,
-      `aws s3 cp "s3://__BUCKET__/$S3_KEY" /tmp/release.zip`,
-      `unzip -o /tmp/release.zip -d "$RELEASE_DIR"`,
-      `chmod +x "$RELEASE_DIR/app"`,
-      `chown -R webapp:webapp "$RELEASE_DIR"`,
-      `ln -sfT "$RELEASE_DIR" /opt/app/current`,
-      `systemctl restart app 2>/dev/null || systemctl start app`,
-      `for i in {1..60}; do`,
-      // No nginx in front — the health check hits the app's own port directly.
-      `  if curl -sf http://127.0.0.1:${APP_PORT}${HEALTH_CHECK_PATH} >/dev/null; then`,
-      `    echo "Health check passed"`,
-      `    break`,
-      `  fi`,
-      `  if systemctl is-failed --quiet app; then`,
-      `    echo "Application failed to start"`,
-      `    journalctl -u app --no-pager -n 100 || true`,
-      `    exit 1`,
-      `  fi`,
-      `  sleep 2`,
-      `done`,
-      `curl -sf http://127.0.0.1:${APP_PORT}${HEALTH_CHECK_PATH} >/dev/null || {`,
-      `  echo "Timed out waiting for health check"`,
-      `  exit 1`,
-      `}`,
-      `ls -dt /opt/app/releases/*/ 2>/dev/null | tail -n +2 | xargs rm -rf 2>/dev/null || true`,
-      `echo "Deployment successful"`,
-      `DEPLOY`,
-      `sed -i 's|__BUCKET__|${deploymentsBucketName}|g' /opt/app/deploy.sh`,
-      `chmod +x /opt/app/deploy.sh`,
-      
-      // ── upload-logs.sh: bundles rotated logs and ships to S3 ─────────────────
-      // IMDSv2 token required (requireImdsv2 is enforced on this instance).
-      `cat > /opt/app/upload-logs.sh << 'UPLOAD'`,
-      `#!/bin/bash`,
-      `TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" \\`,
-      `    -H "X-aws-ec2-metadata-token-ttl-seconds: 60")`,
-      `INSTANCE_ID=$(curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" \\`,
-      `    "http://169.254.169.254/latest/meta-data/instance-id" || echo "unknown")`,
-      `DATE=$(date +%Y%m%d)`,
-      `BUCKET="__LOG_BUCKET__"`,
-      `ARCHIVE="/tmp/\${DATE}-\${INSTANCE_ID}.tar.gz"`,
-      `ROTATED=$(find /var/log/app -name "*-\${DATE}.gz" 2>/dev/null)`,
-      `[ -z "$ROTATED" ] && exit 0`,
-      `tar czf "$ARCHIVE" $ROTATED 2>/dev/null || exit 0`,
-      `aws s3 cp "$ARCHIVE" "s3://\${BUCKET}/${S3_PREFIX}/\${DATE}-\${INSTANCE_ID}.tar.gz" --region ${this.region} || exit 0`,
-      `find /var/log/app -name "*-\${DATE}.gz" -delete`,
-      `rm -f "$ARCHIVE"`,
-      `UPLOAD`,
-      `sed -i 's|__LOG_BUCKET__|${logsBucketName}|g' /opt/app/upload-logs.sh`,
-      `chmod +x /opt/app/upload-logs.sh`,
-      
-      // ── logrotate: daily, gzip, copytruncate, ship to S3 ─────────────────────
-      `cat > /etc/logrotate.d/${SERVICE} << 'LOGROTATE'`,
-      `/var/log/app/app.log {`,
-      `    daily`,
-      `    compress`,
-      `    copytruncate`,
-      `    missingok`,
-      `    notifempty`,
-      `    dateext`,
-      `    dateformat -%Y%m%d`,
-      `    rotate 1`,
-      `    sharedscripts`,
-      `    postrotate`,
-      `        /opt/app/upload-logs.sh`,
-      `    endscript`,
-      `}`,
-      `LOGROTATE`,
-      
-      // ── Bootstrap: deploy current.zip if it already exists in S3 ─────────────
-      `aws s3api head-object --bucket "${deploymentsBucketName}" --key "${API_CURRENT_ARTIFACT_KEY}" 2>/dev/null && /opt/app/deploy.sh ${API_CURRENT_ARTIFACT_KEY} || echo "No bootstrap artifact, waiting for first deploy"`,
+      `export CORS_ALLOWED_ORIGINS TURNSTILE_EXPECTED_HOSTNAME`,
+      `SERVICEENV`,
+      `chmod 0755 /opt/app/service-env.sh`,
     );
+
+    // network.target only: there is no nginx unit to wait for.
+    scripts.run(userData, 'setup-app-service.sh', 'CTech Poker API', 'app');
+    scripts.run(userData, 'setup-deploy.sh', deploymentsBucketName, 'app',
+      `http://127.0.0.1:${APP_PORT}${HEALTH_CHECK_PATH}`);
+    scripts.run(userData, 'setup-logs.sh', logsBucketName, S3_PREFIX, SERVICE, '/var/log/app');
+
+    userData.addCommands(
+      // Generated rather than shipped: the log group name and metric namespace are
+      // CloudFormation values. {instance_id} is resolved by the CW agent at
+      // runtime, not by bash.
+      `cat > /tmp/cwagent.json << 'CWA'`,
+      buildCloudWatchAgentConfig({
+        metricNamespace: `CtechPoker/${environment}/Host`,
+        appProcessPattern: '/opt/app/current/(app|bootstrap)',
+        logFiles: [
+          {filePath: '/var/log/app/app.log', logGroupName: logGroupApp, logStreamName: '{instance_id}'},
+        ],
+      }),
+      `CWA`,
+    );
+    scripts.run(userData, 'setup-cloudwatch-agent.sh', '/tmp/cwagent.json');
+    scripts.run(userData, 'bootstrap-deploy.sh', deploymentsBucketName, API_CURRENT_ARTIFACT_KEY);
     
     // ctech-lbalancer still owns the bootstrap route and private CNAME.
     const service = new HaproxyEc2Service(this, 'ApiService', {

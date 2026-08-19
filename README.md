@@ -57,8 +57,11 @@ implemented-vs-designed index.
   Owns the identity-level display name/avatar; poker keeps its own table nickname.
 - **ctech-wallet** — real-money buy-ins/cash-outs and the sandbox play-money ledger, reached
   M2M via `api/internal/walletclient`. Sandbox chips are non-convertible — see OVERVIEW.md § 5.
-- **ctech-cdk** (`@aoctech/cdk`) — shared `PrivateIpv4Ec2Service` construct and the EC2
-  userdata helpers; also owns the VPC, ALB, wildcard cert and shared buckets this repo imports.
+- **ctech-cdk** (`@aoctech/cdk`) — the `HaproxyEc2Service` construct and `Ec2ScriptRunner`,
+  which fetches the shared `assets/ec2/*.sh` bootstrap scripts from
+  `{env}-ctech-ec2-scripts` at boot; also owns the VPC, shared edge SG, private zone and
+  shared buckets this repo imports. Editing a shared script versions this repo's launch
+  template on its next deploy.
 - **ctech-go-common** — `jwtverify`, `dynamo`, `cache`, `lock`, `problem`, `ratelimit`, `ws`.
 - **ctech-billing** — not used. Only relevant if the rake/table-fee model changes.
 

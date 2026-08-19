@@ -15,9 +15,9 @@ test('keeps one minimum API instance in every environment', () => {
 // values throughout; ec2.Vpc.fromLookup falls back to CDK's built-in dummy
 // VPC data when no cdk.context.json cache entry exists, so this does not
 // attempt a real AWS lookup.
-test('synthesizes without error and declares exactly one ASG', () => {
+function synthStack() {
   const app = new App();
-  const stack = new PokerApiStack(app, 'TestPokerApiStack', {
+  return new PokerApiStack(app, 'TestPokerApiStack', {
     env: {account: '123456789012', region: 'us-east-1'},
     environment: 'dev',
     vpcId: 'vpc-0123456789abcdef0',
@@ -57,7 +57,23 @@ test('synthesizes without error and declares exactly one ASG', () => {
     playerReportsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_player_reports',
     socialGraphEnabledParam: '/ctech/dev/poker/social-graph-enabled',
   });
-  const template = Template.fromStack(stack);
+}
+
+/** EC2's hard cap on user data, which a deploy discovers and not a review. */
+const USER_DATA_LIMIT_BYTES = 16384;
+
+/** The rendered user data, with unresolved tokens standing in for their values. */
+function userDataText(template: Template): string {
+  const launchTemplate = Object.values(template.findResources('AWS::EC2::LaunchTemplate'))[0] as any;
+  const encoded = launchTemplate.Properties.LaunchTemplateData.UserData['Fn::Base64'];
+  if (typeof encoded === 'string') return encoded;
+  return (encoded['Fn::Join'][1] as unknown[])
+    .map((part) => (typeof part === 'string' ? part : '<<token>>'))
+    .join('');
+}
+
+test('synthesizes without error and declares exactly one ASG', () => {
+  const template = Template.fromStack(synthStack());
   template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
   template.hasResourceProperties('AWS::IAM::Role', {RoleName: 'dev-ctech-poker-api-role'});
   template.resourceCountIs('AWS::IAM::InstanceProfile', 1);
@@ -109,4 +125,34 @@ test('synthesizes without error and declares exactly one ASG', () => {
   template.resourceCountIs('AWS::ElasticLoadBalancingV2::ListenerRule', 0);
   expect(rendered).toContain('autoscaling:CompleteLifecycleAction');
   expect(rendered).toContain('ssm:SendCommand');
+});
+
+test('user data only fetches and runs the shared ctech-cdk scripts', () => {
+  const text = userDataText(Template.fromStack(synthStack()));
+  expect(text).toContain('ctech_run');
+  expect(text).toContain('setup-base.sh');
+  expect(text).toContain('setup-app-service.sh');
+  expect(text).toContain('setup-deploy.sh');
+  // No nginx in this stack, so neither of the two nginx scripts belongs here.
+  expect(text).not.toContain('setup-nginx.sh');
+  expect(text).not.toContain('setup-realip.sh');
+  // Downloaded to a file and then executed: a pipe truncated mid-transfer runs a
+  // partial script and reports success.
+  expect(text).not.toMatch(/aws s3 cp [^\n]*\| *bash/);
+  // Only app-static.env, service-env.sh and the CloudWatch agent config are still
+  // written inline; everything else moved to the shared scripts.
+  expect((text.match(/cat > /g) ?? []).length).toBeLessThanOrEqual(3);
+});
+
+test('user data stays under the EC2 limit', () => {
+  expect(Buffer.byteLength(userDataText(Template.fromStack(synthStack())), 'utf8'))
+    .toBeLessThan(USER_DATA_LIMIT_BYTES);
+});
+
+test('no secret value is written into the launch template', () => {
+  // Secrets are read from SSM by name at service start, using the instance role.
+  const text = userDataText(Template.fromStack(synthStack()));
+  for (const secret of ['POKER_CLIENT_SECRET', 'TURNSTILE_SECRET', 'WALLET_WEBHOOK_HMAC_SECRET']) {
+    expect(text).toContain(`${secret}=/ctech/dev/poker/`);
+  }
 });
