@@ -316,15 +316,12 @@ func (m *Manager) broadcastFor(tableID string) func(string, hand.Snapshot) {
 // Release releases tableID's lease and removes the actor from local registry.
 func (m *Manager) Release(tableID string) {
 	m.mu.Lock()
-	_, existed := m.actors[tableID]
 	delete(m.actors, tableID)
 	cancel := m.cancels[tableID]
 	delete(m.cancels, tableID)
 	rel, hasRel := m.releases[tableID]
 	delete(m.releases, tableID)
 	m.mu.Unlock()
-	if existed {
-	}
 	if cancel != nil {
 		cancel()
 	}
