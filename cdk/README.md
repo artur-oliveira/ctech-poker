@@ -39,7 +39,10 @@ Go Lambdas are bundled by `lib/bundle.ts` (`localGoBundling` — local `go build
   from `/ctech/<env>/network/alb-sg-id`, and HAProxy discovers the ASG through its `poker` route.
   The Go binary listens directly on port **8080** and serves `/v1.0/health-check`; there is no nginx.
 - Continuous deployment: `api.yml` builds `dist/app` (linux/arm64), uploads to the shared deployments
-  bucket, and rolls via SSM `RunCommand` calling `/opt/app/deploy.sh`.
+  bucket, and starts an **ASG instance refresh** (`MinHealthyPercentage: 0`,
+  `SkipMatching: false`). No replacement instance is launched first, so the table server is
+  **down** for the length of the refresh — accepted while this is a development environment.
+  Rollback restores the previous `current.zip` and refreshes again.
 - **Valkey is mandatory in prod**: `start.sh` fetches `VALKEY_URL` from SSM; empty in prod means
   `config.Load()` fails closed. The in-memory registry fallback is dev/stage only.
 - User data downloads only the official Cloudflare Origin CA RSA root, verifies
@@ -52,13 +55,17 @@ Go Lambdas are bundled by `lib/bundle.ts` (`localGoBundling` — local `go build
   `<env>-ctech-poker-operations` dashboard are gone with it, along with the API's EMF emitter
   (`api/internal/metrics`), so the `CtechPoker/<env>` namespace is no longer written to at all.
   What remains is structured `slog` JSON in `/ctech-poker/<env>/app`, read with Logs Insights.
-- **SSM agent is a knob**, default on: `ENABLE_SSM_AGENT=false cdk deploy` stops it in user data and
-  reclaims ~70 MiB of RSS on a t4g.nano. Poker has the strongest reason of any service to leave it
-  on — the termination-drain hook below stops the app through SSM RunCommand, and `api.yml` deploys
-  the same way. Off means instances terminate without draining tables.
+- **SSM agent is off by default** (`ENABLE_SSM_AGENT=true cdk deploy` puts it back for a
+  debugging shell). Nothing needs RunCommand now that deploys are instance refreshes. One
+  consequence poker pays alone: the termination-drain hook below stops the app through
+  RunCommand, so with the agent off it fails open and instances terminate **without draining
+  tables** — players are dropped mid-hand on every deploy and every scheduled scale-down.
+- **The ASG runs 11:55 → 13:15 America/Sao_Paulo** and is scaled to zero outside that window.
 - An ASG termination lifecycle hook gives `tablemanager.DrainAndRelease` up to 120 seconds to
   stop the app through SSM before completing termination; its Lambda fails open so a broken SSM
-  agent cannot strand an instance in `Terminating:Wait`.
+  agent cannot strand an instance in `Terminating:Wait`. **With the agent disabled (the default
+  now) that fail-open path is the only path** — the drain never runs. Fix it or accept dropped
+  hands before this leaves development.
 
 ## WebSocket
 

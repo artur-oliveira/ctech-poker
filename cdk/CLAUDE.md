@@ -48,8 +48,12 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
 
 - **No WAF** on the CloudFront distribution — no `aws-wafv2` import, no `webAclId`. `PLAN.md`'s
   Task 9 claimed this shipped; it did not.
-- **Termination drain is explicit:** the ASG lifecycle hook invokes a Lambda that stops the app
-  through SSM and always completes termination, with a 120-second heartbeat timeout.
+- **Termination drain is explicit but currently inert:** the ASG lifecycle hook invokes a Lambda
+  that stops the app through SSM RunCommand and always completes termination (120-second
+  heartbeat). The SSM agent is disabled by default since deploys became instance refreshes, so
+  `send_command` fails and the hook completes without draining — players are dropped mid-hand.
+  Set `ENABLE_SSM_AGENT=true`, or replace the drain with something that does not need the agent,
+  before this leaves development.
 - **No DLQ on either EventBridge Scheduler target** (`reconcile-stack.ts`, `tablecleanup-stack.ts`).
 - **No test** for `oidc-stack.ts`.
 - **B10 (fixed)** — archiver `DynamoEventSource` has `bisectBatchOnError` + `onFailure: SqsDlq`.

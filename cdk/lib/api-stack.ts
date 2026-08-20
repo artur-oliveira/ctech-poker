@@ -67,12 +67,12 @@ interface ApiStackProps extends cdk.StackProps {
   socialEventsTableArn: string;
   playerReportsTableArn: string;
   socialGraphEnabledParam: string;
-  // Session Manager. Same knob as ctech-lbalancer and ctech-billing: the agent
-  // costs ~70 MiB of RSS on a t4g.nano, so it is a switch rather than a given.
-  // Poker pays more than the others for turning it off: the termination-drain
-  // lifecycle hook stops the app through SSM RunCommand, so without the agent
-  // instances terminate without draining tables and players are dropped
-  // mid-hand. It also removes the only shell onto the box.
+  // Session Manager. **Off by default**: deploys replace the instances through an
+  // ASG instance refresh, so nothing needs SSM RunCommand any more, and the
+  // agent costs ~70 MiB of RSS on a t4g.nano. Poker pays one extra price for
+  // that: the termination-drain lifecycle hook stops the app through RunCommand,
+  // so with the agent off it fails open and instances terminate without draining
+  // tables. Accepted while this is a development environment.
   enableSsmAgent?: boolean;
 }
 
@@ -122,7 +122,7 @@ export class PokerApiStack extends cdk.Stack {
       socialEventsTableArn,
       playerReportsTableArn,
       socialGraphEnabledParam,
-      enableSsmAgent = true,
+      enableSsmAgent = false,
     } = props;
     
     const shared = SSM_SHARED(environment);
@@ -337,7 +337,11 @@ export class PokerApiStack extends cdk.Stack {
       asgName: this.asgName,
       minCapacity: minimumApiCapacity(environment),
       maxCapacity: minimumApiCapacity(environment),
-      schedule: {},
+      // The ASG runs only inside a narrow daytime window: up at 11:55 and down
+      // at 13:15 America/Sao_Paulo. Outside it the service is off — inbound
+      // webhooks fail and nothing is reachable. Deliberate for a development
+      // environment on a single t4g.nano.
+      schedule: {enableCron: '55 11 * * *', disableCron: '15 13 * * *'},
     });
     const asg = service.autoScalingGroup;
     asg.node.addDependency(profile);

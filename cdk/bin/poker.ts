@@ -41,12 +41,11 @@ const CTECH_VPC_ID = process.env.CTECH_VPC_ID || 'vpc-0adfd86727d17445b';
 // and sets them as env vars before running cdk deploy.
 const CTECH_DEPLOYMENTS_BUCKET = process.env.CTECH_DEPLOYMENTS_BUCKET || `${ENVIRONMENT}-ctech-deployments`;
 const CTECH_LOGS_BUCKET = process.env.CTECH_LOGS_BUCKET || `${ENVIRONMENT}-ctech-application-logs`;
-// Session Manager on the API instances. Default on, and poker has the strongest
-// reason of any service to keep it: the termination-drain lifecycle hook stops
-// the app through SSM RunCommand, so without the agent instances terminate
-// without draining tables. It is also the only shell onto the box. Set
-// ENABLE_SSM_AGENT=false to reclaim the agent's ~70 MiB of RSS at that price.
-const ENABLE_SSM_AGENT = (process.env.ENABLE_SSM_AGENT || 'true') === 'true';
+// Session Manager on the API instances. **Off by default**: deploys replace the
+// instances through an ASG instance refresh, so nothing needs RunCommand any
+// more, and the agent costs ~70 MiB of RSS on a t4g.nano. Set
+// ENABLE_SSM_AGENT=true to get a shell back onto the box for debugging.
+const ENABLE_SSM_AGENT = process.env.ENABLE_SSM_AGENT === 'true';
 
 const env = {account: AWS_ACCOUNT, region: AWS_REGION};
 const pokerParameters = SSM_POKER(ENVIRONMENT);
