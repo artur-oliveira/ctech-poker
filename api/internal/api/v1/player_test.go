@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -210,6 +211,33 @@ func TestUpdateMeSetsName(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestUpdateMeSetsFavoriteReactionsAndReturnsThem(t *testing.T) {
+	store := &fakePlayerStore{}
+	h := &playerHandlers{players: player.NewService(store)}
+	app := fiber.New()
+	auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "u1"); return c.Next() }
+	app.Post("/players/me", auth, h.updateMe)
+
+	req := httptest.NewRequest(fiber.MethodPost, "/players/me", strings.NewReader(`{"favorite_reactions":["knife","flowers"]}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	var body struct {
+		FavoriteReactions []string `json:"favorite_reactions"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"knife", "flowers"}; !reflect.DeepEqual(body.FavoriteReactions, want) {
+		t.Fatalf("FavoriteReactions = %v, want %v (persisted but never echoed back is the regression this guards)", body.FavoriteReactions, want)
 	}
 }
 

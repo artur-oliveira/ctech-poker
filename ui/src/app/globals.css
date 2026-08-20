@@ -3867,8 +3867,13 @@ h1 em {
 /* Nudge the face-down cards so the peek affordance is discoverable without a
    hover reveal. Bounded, and the node is keyed per hand in Seat.tsx, so it
    plays once as the cards land; re-arming after a hide is intentional (the
-   card is face-down and asking to be looked at again). */
-.peekable-card:not(.is-peeked) {
+   card is face-down and asking to be looked at again). Runs on the inner
+   face/hint, never on the button itself: this button is also the overlap
+   boundary with its sibling card in .seat-cards (see the shared hover comment
+   above), so moving ITS box mid-animation would shift the boundary out from
+   under a stationary pointer and flicker forever between the two cards. */
+.peekable-card:not(.is-peeked) .card-reveal-inner,
+.peekable-card:not(.is-peeked) .peek-hint {
     animation: peek-nudge 2600ms var(--ease-out-quart) 3;
     animation-delay: calc(var(--deal-index, 0) * 90ms)
 }

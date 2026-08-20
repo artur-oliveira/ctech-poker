@@ -44,8 +44,8 @@ func TestAllInRunoutPacesEachStreetBehindATimer(t *testing.T) {
 	})
 	a.runoutStreetDelay = 200 * time.Millisecond
 	runCtx, cancel := context.WithCancel(ctx)
-	t.Cleanup(cancel)
 	go a.Run(runCtx)
+	stopActor(t, a, cancel)
 
 	mustDispatch(t, a, ReadyCmd{PlayerID: "p1", Ready: true, Reply: make(chan error, 1)})
 	mustDispatch(t, a, ReadyCmd{PlayerID: "p2", Ready: true, Reply: make(chan error, 1)})
@@ -137,6 +137,7 @@ func TestRunoutSelfHealsAfterActorDiesMidPace(t *testing.T) {
 	second := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
 	mustDispatch(t, gone, ActCmd{PlayerID: second, ActionID: "call", Action: betting.ActionCall, Reply: make(chan error, 1)})
 	cancelGone()
+	<-gone.Done()
 
 	stored, _ = store.LoadTable(ctx, tableID)
 	if stored.State.Stage != hand.Flop {
@@ -159,8 +160,8 @@ func TestRunoutSelfHealsAfterActorDiesMidPace(t *testing.T) {
 	})
 	revived.runoutStreetDelay = 50 * time.Millisecond
 	revivedCtx, cancelRevived := context.WithCancel(ctx)
-	t.Cleanup(cancelRevived)
 	go revived.Run(revivedCtx)
+	stopActor(t, revived, cancelRevived)
 
 	mustDispatch(t, revived, SnapshotCmd{PlayerID: "p1", Snapshot: make(chan hand.Snapshot, 1), Reply: make(chan error, 1)})
 

@@ -42,8 +42,8 @@ func TestReconnectingActorResumesPersistedDeadlineInsteadOfAFreshWindow(t *testi
 	// before that same call's a.commit persists TurnDeadlineUnixMs).
 	a := New(tableID, store, true, func(string, hand.Snapshot) {})
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 	go a.Run(ctx)
+	stopActor(t, a, cancel)
 
 	joinPlayer(t, a, "p1", 1000, 9)
 	joinPlayer(t, a, "p2", 1000, 9)
@@ -60,8 +60,8 @@ func TestReconnectingActorResumesPersistedDeadlineInsteadOfAFreshWindow(t *testi
 
 	b := New(tableID, store, false, func(string, hand.Snapshot) {})
 	bctx, bcancel := context.WithCancel(context.Background())
-	t.Cleanup(bcancel)
 	go b.Run(bctx)
+	stopActor(t, b, bcancel)
 
 	reply := make(chan error, 1)
 	if err := b.Dispatch(ReconnectCmd{PlayerID: "p1", Reply: reply}); err != nil {

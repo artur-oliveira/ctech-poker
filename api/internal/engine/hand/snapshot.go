@@ -293,14 +293,9 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 				// Not everything is known here: an opponent who hasn't revealed
 				// (or has only revealed one card) must never leak the hidden
 				// card into what's shown — only the actually-revealed hole
-				// cards (0, 1, or 2 of them) plus the board go in. With nothing
-				// revealed this is a community-cards-only category, exactly
-				// what every player at the table can already see for
-				// themselves. HandScore stays unset: only the true 7-card
-				// Score is comparable, and clients decide outcomes with it.
-				// A hand that ENDED on a short board (everyone folded) still
-				// gets nothing, matching the pre-river "no made hand worth
-				// naming" rule below.
+				// cards (0, 1, or 2 of them) plus the board go in. HandScore
+				// stays unset: only the true 7-card Score is comparable, and
+				// clients decide outcomes with it.
 				knownHole := make([]deck.Card, 0, 2)
 				if p.ID == viewerID || publicReveal[0] {
 					knownHole = append(knownHole, p.HoleCards[0])
@@ -308,10 +303,14 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 				if p.ID == viewerID || publicReveal[1] {
 					knownHole = append(knownHole, p.HoleCards[1])
 				}
-				// Preflop with nothing revealed there is literally nothing to
-				// name yet (no board, no known hole card) — showing "Carta
-				// Alta" there would imply information that doesn't exist.
-				if len(knownHole) > 0 || len(evaluationBoard) > 0 {
+				// An opponent with nothing revealed gets no category at all —
+				// a board-only category is identical for every unrevealed
+				// opponent (it carries none of their own information) and
+				// reads to a player as if hands were being shown before
+				// showdown. The viewer's own knownHole is always non-empty
+				// (both cards are appended unconditionally above), so this
+				// never withholds the viewer's own category.
+				if len(knownHole) > 0 {
 					sv.HandCategory = categoryNames[partialCategory(knownHole, evaluationBoard)]
 				}
 			}

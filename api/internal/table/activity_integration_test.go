@@ -26,8 +26,8 @@ func TestActivityAndPreselectionSurviveFreshActorSnapshot(t *testing.T) {
 
 	a := New(tableID, store, true, nil)
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 	go a.Run(ctx)
+	stopActor(t, a, cancel)
 	for _, playerID := range []string{"p1", "p2"} {
 		if err := a.Dispatch(ReadyCmd{PlayerID: playerID, ActionID: "ready-" + playerID, Ready: true, Reply: make(chan error, 1)}); err != nil {
 			t.Fatalf("ready %s: %v", playerID, err)
@@ -60,8 +60,8 @@ func TestActivityAndPreselectionSurviveFreshActorSnapshot(t *testing.T) {
 	// forced SnapshotCmd must rebuild all three from the authoritative item.
 	b := New(tableID, store, false, nil)
 	bctx, bcancel := context.WithCancel(context.Background())
-	t.Cleanup(bcancel)
 	go b.Run(bctx)
+	stopActor(t, b, bcancel)
 	restoredCh := make(chan hand.Snapshot, 1)
 	if err := b.Dispatch(SnapshotCmd{PlayerID: "p1", Snapshot: restoredCh, Reply: make(chan error, 1)}); err != nil {
 		t.Fatalf("restored snapshot: %v", err)

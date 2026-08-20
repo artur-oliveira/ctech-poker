@@ -420,6 +420,7 @@ func playerResponse(profile *player.PlayerProfile, avatarBaseURL string) fiber.M
 		"showcase_public":         profile.ShowcasePublic,
 		"playstyle_public":        profile.PlaystylePublic,
 		"featured_achievements":   profile.FeaturedAchievements,
+		"favorite_reactions":      profile.FavoriteReactions,
 		"poker_terms_accepted":    profile.TermsAccepted(),
 		"poker_terms_accepted_at": profile.TermsAcceptedAt,
 	}

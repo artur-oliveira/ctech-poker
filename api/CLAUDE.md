@@ -44,7 +44,8 @@ reconciliation retries. **Still blocking, found 2026-07-25 while verifying cross
   `<tableID>#<viewerID>` so two seats cannot share a snapshot. Add visibility rules there, never in a handler.
   `SeatView.HandCategory` follows the same rule: an opponent's category is built only from their actually-revealed
   hole cards (0, 1, or 2 — `snapshot.go`'s `partialCategory`/`categoryFromRankCounts`) plus the board, never their
-  still-hidden card, falling back to a community-cards-only category with no reveal at all. The viewer's own seat is
+  still-hidden card, and stays unset entirely with nothing revealed — a board-only category would be identical for
+  every unrevealed opponent and read as hands being shown before showdown. The viewer's own seat is
   the one exception — `Table.ViewFor` sends their true category unconditionally the same way it does `Equity` — so a
   client showing it before the viewer has locally peeked their own cards leaks the "all-in/won without peeking"
   achievements' exact hidden state (Seat.tsx's `showHandCategory`/`showEquity` gates are what withhold it there).

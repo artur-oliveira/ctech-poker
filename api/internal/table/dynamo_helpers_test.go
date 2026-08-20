@@ -17,6 +17,22 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
+// stopActor cancels an Actor's Run context and blocks until its goroutine has
+// actually exited (Done() closes in Run's deferred close(a.done)). Cancelling
+// alone only signals Run's select loop -- if Run is mid-handle() on a long
+// synchronous chain (e.g. a runout timer cascade), it keeps running for a
+// while after cancel() returns. A bare t.Cleanup(cancel) races: the next test
+// in this binary can start, and its own goroutine reads/writes package-level
+// test state (like timebank_test.go's timeNowFunc) while this one is still
+// live, producing a real, if rare, data race between unrelated tests.
+func stopActor(t *testing.T, a *Actor, cancel context.CancelFunc) {
+	t.Helper()
+	t.Cleanup(func() {
+		cancel()
+		<-a.Done()
+	})
+}
+
 var uniqueTableIDSeq atomic.Int64
 
 // uniqueTableID returns a tableID scoped to both this test's name AND this

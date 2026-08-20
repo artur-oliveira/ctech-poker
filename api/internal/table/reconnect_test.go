@@ -35,8 +35,8 @@ func TestReconnectBroadcastsOnlyAfterAGenuineDisconnect(t *testing.T) {
 	got := make(chan hand.Snapshot, 8)
 	a := New(tableID, store, true, func(_ string, snap hand.Snapshot) { got <- snap })
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 	go a.Run(ctx)
+	stopActor(t, a, cancel)
 
 	// A bare reconnect on a fresh actor -- this player was never marked
 	// disconnected here -- must NOT broadcast (the ping-flood guard).

@@ -250,8 +250,8 @@ func TestNineHandedTableGrowsPlaysPausesAndLeaves(t *testing.T) {
 	a.SetEquityEnabledForActor(false) // equity's Monte Carlo simulation is irrelevant here and would otherwise fire on every broadcast across 15+ hands
 	a.nextHandDelay = time.Hour
 	runCtx, cancel := context.WithCancel(ctx)
-	t.Cleanup(cancel)
 	go a.Run(runCtx)
+	stopActor(t, a, cancel)
 
 	nextActionID := actionIDGen("nine")
 	var totalBuyIn int64
@@ -434,8 +434,8 @@ func TestSidePotsSplitCorrectlyAcrossUnequalAllInStacks(t *testing.T) {
 	a.SetEquityEnabledForActor(false)
 	a.runoutStreetDelay = 15 * time.Millisecond
 	runCtx, cancel := context.WithCancel(ctx)
-	t.Cleanup(cancel)
 	go a.Run(runCtx)
+	stopActor(t, a, cancel)
 
 	nextActionID := actionIDGen("sidepot")
 	if err := setReady(t, a, shortStack, true); err != nil {

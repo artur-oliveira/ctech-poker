@@ -317,20 +317,13 @@ func TestViewForIncludesHandCategoryOnEveryStreetButOnlyScoresTheRiver(t *testin
 				}
 			default:
 				// An unrevealed opponent's hole cards must never leak into
-				// this: preflop there's neither a board nor a revealed card
-				// to name a hand from, so it stays empty. Once the board
-				// lands, the category is the community cards' own hand
-				// (public information every player already sees for
-				// themselves), never anything derived from the opponent's
-				// still-hidden hole cards.
-				if stage == PreFlop {
-					if s.HandCategory != "" {
-						t.Fatalf("%v: opponent hand category %q shown with no board and no reveal", stage, s.HandCategory)
-					}
-					continue
-				}
-				if s.HandCategory == "" {
-					t.Fatalf("%v: opponent has no community-cards-only hand category", stage)
+				// this, on any street: with nothing of theirs actually
+				// revealed there is no category to show at all — a
+				// board-only category would be identical for every
+				// unrevealed opponent and read as hands being shown before
+				// showdown.
+				if s.HandCategory != "" {
+					t.Fatalf("%v: opponent hand category %q shown with no reveal", stage, s.HandCategory)
 				}
 				if s.HandScore != 0 {
 					t.Fatalf("%v: opponent hand score %d leaked hidden-card information", stage, s.HandScore)

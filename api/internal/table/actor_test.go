@@ -29,8 +29,8 @@ func newTestActor(t *testing.T, store *tablestore.Store) (*Actor, string) {
 	}
 	a := New(tableID, store, true, func(string, hand.Snapshot) {})
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 	go a.Run(ctx)
+	stopActor(t, a, cancel)
 	return a, tableID
 }
 
@@ -104,9 +104,10 @@ func TestDuplicateActionReloadsAuthoritativeStateBeforeBroadcast(t *testing.T) {
 	a := New(tableID, store, true, func(string, hand.Snapshot) {})
 	b := New(tableID, store, true, func(_ string, snapshot hand.Snapshot) { broadcastB <- snapshot })
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 	go a.Run(ctx)
 	go b.Run(ctx)
+	stopActor(t, a, cancel)
+	stopActor(t, b, cancel)
 
 	if err := a.Dispatch(ReadyCmd{PlayerID: "p1", Ready: true, Reply: make(chan error, 1)}); err != nil {
 		t.Fatal(err)
@@ -157,11 +158,12 @@ func TestSnapshotForcesAuthoritativeReloadAcrossActors(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
 	a := New(tableID, store, true, nil)
 	b := New(tableID, store, true, nil)
 	go a.Run(ctx)
 	go b.Run(ctx)
+	stopActor(t, a, cancel)
+	stopActor(t, b, cancel)
 
 	first := make(chan hand.Snapshot, 1)
 	if err := b.Dispatch(SnapshotCmd{PlayerID: "p1", Snapshot: first, Reply: make(chan error, 1)}); err != nil {
@@ -206,8 +208,8 @@ func TestReadyFalseMarksSittingOutAndReadyTrueReturnsFree(t *testing.T) {
 	}
 	a := New(tableID, store, true, func(string, hand.Snapshot) {})
 	runCtx, cancel := context.WithCancel(ctx)
-	t.Cleanup(cancel)
 	go a.Run(runCtx)
+	stopActor(t, a, cancel)
 
 	reply := make(chan error, 1)
 	if err := a.Dispatch(ReadyCmd{PlayerID: "p4", Ready: false, Reply: reply}); err != nil {
