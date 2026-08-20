@@ -3,7 +3,6 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as scheduler from 'aws-cdk-lib/aws-scheduler';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import {Construct} from 'constructs';
 import {Environment} from '@aoctech/cdk';
 import {localGoBundling} from './bundle';
@@ -108,11 +107,5 @@ export class TableCleanupStack extends cdk.Stack {
         retryPolicy: {maximumEventAgeInSeconds: 7200, maximumRetryAttempts: 3},
       },
     });
-    // new cloudwatch.Alarm(this, 'TableCleanupErrorsAlarm', {
-    //   alarmName: `${tableCleanupJobName(environment)}-errors`,
-    //   metric: fn.metricErrors({period: cdk.Duration.minutes(30)}),
-    //   threshold: 1, evaluationPeriods: 1,
-    //   treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    // });
   }
 }

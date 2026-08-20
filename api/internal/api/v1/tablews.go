@@ -17,7 +17,6 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
-	"gopkg.aoctech.app/poker/api/internal/metrics"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/presence"
@@ -419,7 +418,6 @@ func RegisterTableWS(
 			// not via the fan-out registry, so it reaches the viewer even when
 			// they are not yet seated (spectator / pre-join).
 			sendSnapshot := func(actionID string) {
-				startedAt := time.Now()
 				snapCh := make(chan hand.Snapshot, 1)
 				snapReply := make(chan error, 1)
 				if err := dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: snapReply}); err == nil {
@@ -427,7 +425,6 @@ func RegisterTableWS(
 						send(&pokerproto.ServerMessage{
 							Type: "state", Snapshot: ConvertSnapshot(snap), ActionId: actionID,
 						})
-						metrics.EmitTableMetric(cfg.Env, "SnapshotLatencyMs", float64(time.Since(startedAt).Milliseconds()), nil)
 					}
 				}
 			}

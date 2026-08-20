@@ -16,7 +16,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/config"
-	"gopkg.aoctech.app/poker/api/internal/metrics"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
@@ -47,7 +46,7 @@ func run(ctx context.Context, pending pendingLister, game gameCredit, sandbox sa
 	if err != nil {
 		return fmt.Errorf("reconcile: list unresolved: %w", err)
 	}
-	emitPendingMetrics(os.Getenv("ENVIRONMENT"), entries)
+	logPendingCashouts(entries)
 	for _, e := range entries {
 		var opErr error
 		switch e.Kind {
@@ -81,8 +80,11 @@ func run(ctx context.Context, pending pendingLister, game gameCredit, sandbox sa
 	return nil
 }
 
-func emitPendingMetrics(env string, entries []reconcile.PendingCashout) {
-	metrics.EmitTableMetric(env, "PendingCashouts", float64(len(entries)), nil)
+// logPendingCashouts replaces the PendingCashouts / OldestPendingCashoutAgeSeconds
+// EMF metrics (removed 2026-08-19 along with every other custom metric). The
+// backlog and its oldest entry are the money-in-limbo signal, so they stay
+// visible — as a log line in /ctech-poker/<env>/app, which costs nothing extra.
+func logPendingCashouts(entries []reconcile.PendingCashout) {
 	var oldestSeconds float64
 	now := timeNow()
 	for _, entry := range entries {
@@ -94,7 +96,9 @@ func emitPendingMetrics(env string, entries []reconcile.PendingCashout) {
 			oldestSeconds = age
 		}
 	}
-	metrics.EmitTableMetric(env, "OldestPendingCashoutAgeSeconds", oldestSeconds, nil)
+	slog.Info("reconcile pending cashouts",
+		"pending_cashouts", len(entries),
+		"oldest_pending_cashout_age_seconds", oldestSeconds)
 }
 
 type resolvedParams struct {

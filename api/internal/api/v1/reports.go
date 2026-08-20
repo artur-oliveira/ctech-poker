@@ -8,7 +8,6 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/config"
-	"gopkg.aoctech.app/poker/api/internal/metrics"
 	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/reports"
 )
@@ -64,7 +63,6 @@ func reportRateLimit(limiter *RateLimiter, keyFn func(fiber.Ctx) string, cfg *co
 		if allowed {
 			return c.Next()
 		}
-		metrics.EmitTableMetric(cfg.Env, "SocialRateLimited", 1, map[string]string{"route": "reports"})
 		return problem.New(http.StatusTooManyRequests, "/problems/report-rate-limited", "Report Rate Limited", "too many reports; try again later").Send(c)
 	}
 }

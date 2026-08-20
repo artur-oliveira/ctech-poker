@@ -46,9 +46,10 @@ expiram.
 
 ## Monitoramento e incidentes
 
-O dashboard `CtechPoker/<env>` acompanha `PlayerReported` somente por categoria/superfície enumeradas e
-`SocialRateLimited` somente por template de rota. Os alarmes indicam desvio do baseline, não culpabilidade. Verifique o
-backlog com `list --status open`; não crie dimensão de métrica por jogador, sala, mão ou denúncia.
+O dashboard de operações, os alarmes e as métricas EMF `PlayerReported`/`SocialRateLimited` foram removidos em
+2026-08-19 — não há mais namespace `CtechPoker/<env>`. O sinal agora é log estruturado em `/ctech-poker/<env>/app`,
+consultado por Logs Insights; nada avisa sozinho. Verifique o backlog com `list --status open`. Se voltar a instrumentar,
+mantenha a regra: nunca crie dimensão por jogador, sala, mão ou denúncia.
 
 Se a criação de denúncias falhar de forma sustentada, confirme saúde/permissões da tabela e do GSI, preserve os logs
 estruturados sem adicionar corpo HTTP e escale para on-call. Não execute Scan global e não reduza os controles de acesso

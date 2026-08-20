@@ -33,7 +33,6 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/handshare"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
-	"gopkg.aoctech.app/poker/api/internal/metrics"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/playernotes"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
@@ -156,36 +155,10 @@ func newFiberApp(cfg *config.Config) *fiber.App {
 	}
 	app.Use(cors.New(corsCfg))
 	app.Use(requestid.New())
-	app.Use(httpResponseMetrics(cfg, metrics.EmitTableMetric))
 	app.Use(logger.New(logger.Config{
 		Format: `{"time":"${time}","status":${status},"latency":"${latency}","method":"${method}","path":"${path}","request-id":"${request-id}"}` + "\n",
 	}))
 	return app
-}
-
-type metricEmitter func(env, name string, value float64, dims map[string]string)
-
-// httpResponseMetrics records only the auth and throttling responses called
-// out by the operational SLO. Route templates are used instead of raw paths,
-// so room/player IDs cannot create unbounded CloudWatch dimensions.
-func httpResponseMetrics(cfg *config.Config, emit metricEmitter) fiber.Handler {
-	return func(c fiber.Ctx) error {
-		err := c.Next()
-		status := c.Response().StatusCode()
-		if status != fiber.StatusUnauthorized && status != fiber.StatusTooManyRequests {
-			return err
-		}
-		route := "unmatched"
-		if current := c.Route(); current != nil && current.Path != "" {
-			route = current.Path
-		}
-		emit(cfg.Env, "HTTPResponses", 1, map[string]string{
-			"app_version": cfg.AppVersion,
-			"route":       route,
-			"status":      strconv.Itoa(status),
-		})
-		return err
-	}
 }
 
 func newCacheBackend(cfg *config.Config) (cache.Backend, error) {
@@ -390,9 +363,7 @@ func newReportStore(db *dynamodb.Client, cfg *config.Config) *reports.DynamoStor
 	return reports.NewStore(db, cfg.Env)
 }
 func newReportService(store *reports.DynamoStore, tableStore *tablestore.Store, players *player.Service, cfg *config.Config) *reports.Service {
-	return reports.NewService(store, tableStore, players).WithMetric(func(category reports.Category, surface reports.Surface) {
-		metrics.EmitTableMetric(cfg.Env, "PlayerReported", 1, map[string]string{"category": string(category), "surface": string(surface)})
-	})
+	return reports.NewService(store, tableStore, players)
 }
 func newPendingStore(db *dynamodb.Client, cfg *config.Config) *reconcile.PendingStore {
 	return reconcile.NewPendingStore(db, cfg.Env)

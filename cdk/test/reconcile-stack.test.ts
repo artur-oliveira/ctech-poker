@@ -35,10 +35,8 @@ test('protects scheduled reconciliation with retry, DLQ and an errors alarm', ()
       })]),
     }),
   });
-  // dlq-messages/throttles/missed-run alarms removed 2026-08-17: unmonitored,
-  // no SNS subscriber, billed past the CloudWatch free tier.
-  template.resourceCountIs('AWS::CloudWatch::Alarm', 1);
-  template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-    AlarmName: 'dev-ctech-poker-reconcile-errors',
-  });
+  // All alarms removed (dlq-messages/throttles/missed-run 2026-08-17, the
+  // Lambda-errors alarm 2026-08-19): unmonitored, no SNS subscriber, billed
+  // past the CloudWatch free tier.
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
 });

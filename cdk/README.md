@@ -20,7 +20,7 @@ Named `CtechPoker-<Env>-<Name>`, except the global OIDC stack. Entry: `bin/poker
 | `CtechPoker-Global-OIDC` | `oidc-stack.ts` | GitHub OIDC deploy roles (frontend / api / infra / scope publisher) |
 | `…-DynamoDB` | `dynamodb-stack.ts` | **22** DynamoDB tables + GSIs |
 | `…-Archiver` | `archiver-stack.ts` | Action-log archive Lambda (DynamoDB Stream → S3) + SQS DLQ |
-| `…-API` | `api-stack.ts` | EC2 ASG game server, HAProxy route, IAM, userdata, alarms |
+| `…-API` | `api-stack.ts` | EC2 ASG game server, HAProxy route, IAM, userdata |
 | `…-Frontend` | `frontend-stack.ts` | S3 + CloudFront, route KeyValueStore, URL-rewrite Function, CSP |
 | `…-Reconcile` | `reconcile-stack.ts` | Cash-out reconcile Lambda, EventBridge Scheduler `rate(5 minutes)` |
 | `…-TableCleanup` | `tablecleanup-stack.ts` | Stale-table cleanup Lambda, Scheduler `rate(30 minutes)` |
@@ -32,9 +32,9 @@ Go Lambdas are bundled by `lib/bundle.ts` (`localGoBundling` — local `go build
 
 - `api-stack.ts` uses the shared `HaproxyEc2Service` for its private-IPv4/no-NAT
   security group, encrypted launch template, log groups, ASG and CPU target
-  tracking. Poker-specific user data, alarms and termination draining remain local.
+  tracking. Poker-specific user data and termination draining remain local.
   This remains a stateful game server on EC2, matching `ARCHITECTURE.md §1`.
-- Capacity: `minCapacity: 1`, `maxCapacity: isProd ? 3 : 1`.
+- Capacity: `minCapacity: 1`, `maxCapacity: 1` in every environment (`minimumApiCapacity`).
 - **No ALB target group or listener rule is synthesized.** The retained edge security group comes
   from `/ctech/<env>/network/alb-sg-id`, and HAProxy discovers the ASG through its `poker` route.
   The Go binary listens directly on port **8080** and serves `/v1.0/health-check`; there is no nginx.
@@ -45,13 +45,17 @@ Go Lambdas are bundled by `lib/bundle.ts` (`localGoBundling` — local `go build
 - User data downloads only the official Cloudflare Origin CA RSA root, verifies
   its pinned SHA-256 and installs it, so internal TLS calls to
   `*.internal.aoctech.app` retain full certificate verification.
-- Alarms: a metric filter on log lines containing `ALARM:` → `AlarmLogLines`, `LeaseFailovers` spike,
-  `PlayerReported` above the initial moderation baseline, and sustained `SocialRateLimited`. The operations dashboard
-  charts report volume and social throttling without player, room or free-text dimensions; open backlog is checked via
-  the moderation runbook rather than a per-player metric.
-- CloudWatch Agent publishes four bounded 60-second host series under
-  `CtechPoker/<env>/Host`: memory %, swap %, root-disk %, and application RSS.
-  EC2's native `CPUUtilization`/`CPUCreditBalance` remain the CPU source.
+- **No CloudWatch alarms, no operations dashboard, no custom host metrics** (2026-08-19). The
+  CloudWatch agent config is logs-only — no `metrics` block, no `CtechPoker/<env>/Host` namespace —
+  because EC2 already publishes `CPUUtilization`/`CPUCreditBalance` for free. The `ALARM:` metric
+  filter, the `LeaseFailovers`/`PlayerReported`/`SocialRateLimited` alarms and the
+  `<env>-ctech-poker-operations` dashboard are gone with it, along with the API's EMF emitter
+  (`api/internal/metrics`), so the `CtechPoker/<env>` namespace is no longer written to at all.
+  What remains is structured `slog` JSON in `/ctech-poker/<env>/app`, read with Logs Insights.
+- **SSM agent is a knob**, default on: `ENABLE_SSM_AGENT=false cdk deploy` stops it in user data and
+  reclaims ~70 MiB of RSS on a t4g.nano. Poker has the strongest reason of any service to leave it
+  on — the termination-drain hook below stops the app through SSM RunCommand, and `api.yml` deploys
+  the same way. Off means instances terminate without draining tables.
 - An ASG termination lifecycle hook gives `tablemanager.DrainAndRelease` up to 120 seconds to
   stop the app through SSM before completing termination; its Lambda fails open so a broken SSM
   agent cannot strand an instance in `Terminating:Wait`.

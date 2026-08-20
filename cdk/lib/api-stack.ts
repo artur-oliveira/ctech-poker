@@ -1,7 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as hooktargets from 'aws-cdk-lib/aws-autoscaling-hooktargets';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -9,7 +8,6 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import {Construct} from 'constructs';
 import {
-  buildCloudWatchAgentConfig,
   Ec2ScriptRunner,
   Environment,
   HaproxyEc2Service,
@@ -20,7 +18,6 @@ import {
   asgName,
   HEALTH_CHECK_PATH,
   instanceRoleName,
-  operationsDashboardName,
   S3_PREFIX,
   SERVICE,
   SSM_ACCOUNT,
@@ -70,6 +67,13 @@ interface ApiStackProps extends cdk.StackProps {
   socialEventsTableArn: string;
   playerReportsTableArn: string;
   socialGraphEnabledParam: string;
+  // Session Manager. Same knob as ctech-lbalancer and ctech-billing: the agent
+  // costs ~70 MiB of RSS on a t4g.nano, so it is a switch rather than a given.
+  // Poker pays more than the others for turning it off: the termination-drain
+  // lifecycle hook stops the app through SSM RunCommand, so without the agent
+  // instances terminate without draining tables and players are dropped
+  // mid-hand. It also removes the only shell onto the box.
+  enableSsmAgent?: boolean;
 }
 
 export const minimumApiCapacity = (_environment: Environment) => 1;
@@ -118,6 +122,7 @@ export class PokerApiStack extends cdk.Stack {
       socialEventsTableArn,
       playerReportsTableArn,
       socialGraphEnabledParam,
+      enableSsmAgent = true,
     } = props;
     
     const shared = SSM_SHARED(environment);
@@ -226,6 +231,13 @@ export class PokerApiStack extends cdk.Stack {
     scripts.run(userData, 'setup-dualstack.sh');
     scripts.run(userData, 'setup-cloudflare-ca.sh');
 
+    // setup-base.sh installs the SSM agent and setup-dualstack.sh starts it, so
+    // this is what stops it again. See enableSsmAgent above: off also disables
+    // the graceful table drain on termination.
+    if (!enableSsmAgent) {
+      userData.addCommands('systemctl disable --now amazon-ssm-agent 2>/dev/null || true');
+    }
+
     // /etc/app-static.env: non-secret values systemd loads via EnvironmentFile.
     // CDK tokens are substituted at synthesis; bash does not expand them.
     userData.addCommands(
@@ -285,17 +297,23 @@ export class PokerApiStack extends cdk.Stack {
       `http://127.0.0.1:${APP_PORT}${HEALTH_CHECK_PATH}`);
     scripts.run(userData, 'setup-logs.sh', logsBucketName, S3_PREFIX, SERVICE, '/var/log/app');
 
+    // Logs only. No `metrics` block: EC2 already publishes CPUUtilization and
+    // CPUCreditBalance for free, and every custom series this service used to
+    // publish was either that again or a number nobody alarmed on.
+    // {instance_id} is resolved by the CW agent at runtime, not by bash.
     userData.addCommands(
-      // Generated rather than shipped: the log group name and metric namespace are
-      // CloudFormation values. {instance_id} is resolved by the CW agent at
-      // runtime, not by bash.
       `cat > /tmp/cwagent.json << 'CWA'`,
-      buildCloudWatchAgentConfig({
-        metricNamespace: `CtechPoker/${environment}/Host`,
-        appProcessPattern: '/opt/app/current/(app|bootstrap)',
-        logFiles: [
-          {filePath: '/var/log/app/app.log', logGroupName: logGroupApp, logStreamName: '{instance_id}'},
-        ],
+      JSON.stringify({
+        agent: {metrics_collection_interval: 60},
+        logs: {
+          logs_collected: {
+            files: {
+              collect_list: [
+                {file_path: '/var/log/app/app.log', log_group_name: logGroupApp, log_stream_name: '{instance_id}'},
+              ],
+            },
+          },
+        },
       }),
       `CWA`,
     );
@@ -390,139 +408,7 @@ def handler(event, context):
       heartbeatTimeout: cdk.Duration.seconds(120),
       notificationTarget: new hooktargets.FunctionHook(drainFunction),
     });
-    //
-    // const alarmMetricFilter = service.appLogGroup.addMetricFilter('AlarmLogFilter', {
-    //   filterPattern: logs.FilterPattern.literal('"ALARM:"'),
-    //   metricNamespace: `CtechPoker/${environment}`,
-    //   metricName: 'AlarmLogLines',
-    //   metricValue: '1',
-    // });
-    // new cloudwatch.Alarm(this, 'AlarmLogAlarm', {
-    //   alarmName: `${environment}-${SERVICE}-alarm-log-lines`,
-    //   alarmDescription: 'An ALARM log line was emitted (reconcile credit failure or manual review condition).',
-    //   metric: alarmMetricFilter.metric({statistic: 'Sum', period: cdk.Duration.minutes(5)}),
-    //   threshold: 1,
-    //   evaluationPeriods: 1,
-    //   treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    // });
-    //
-    // const leaseFailoverMetric = new cloudwatch.Metric({
-    //   namespace: `CtechPoker/${environment}`,
-    //   metricName: 'LeaseFailovers',
-    //   statistic: 'Sum',
-    //   period: cdk.Duration.minutes(5),
-    // });
-    // new cloudwatch.Alarm(this, 'LeaseFailoverSpikeAlarm', {
-    //   alarmName: `${environment}-${SERVICE}-lease-failover-spike`,
-    //   alarmDescription: 'Table lease failovers spiked — earliest signal of an instance going bad.',
-    //   metric: leaseFailoverMetric,
-    //   threshold: 5,
-    //   evaluationPeriods: 2,
-    //   treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    // });
-    //
-    // const playerReportedMetric = new cloudwatch.Metric({
-    //   namespace: `CtechPoker/${environment}`,
-    //   metricName: 'PlayerReported',
-    //   statistic: 'Sum',
-    //   period: cdk.Duration.minutes(5),
-    // });
-    // new cloudwatch.Alarm(this, 'PlayerReportSpikeAlarm', {
-    //   alarmName: `${environment}-${SERVICE}-player-report-spike`,
-    //   alarmDescription: 'Player reports exceeded the initial moderation baseline; triage the open queue.',
-    //   metric: playerReportedMetric,
-    //   threshold: 20,
-    //   evaluationPeriods: 1,
-    //   treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    // });
-    //
-    // const socialRateLimitedMetric = new cloudwatch.Metric({
-    //   namespace: `CtechPoker/${environment}`,
-    //   metricName: 'SocialRateLimited',
-    //   statistic: 'Sum',
-    //   period: cdk.Duration.minutes(5),
-    // });
-    // new cloudwatch.Alarm(this, 'SocialRateLimitSpikeAlarm', {
-    //   alarmName: `${environment}-${SERVICE}-social-rate-limit-spike`,
-    //   alarmDescription: 'Social/report throttling exceeded the initial abuse baseline.',
-    //   metric: socialRateLimitedMetric,
-    //   threshold: 25,
-    //   evaluationPeriods: 2,
-    //   treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    // });
 
-    // One low-cost operational view for the gameplay SLOs. SEARCH expressions
-    // intentionally aggregate bounded dimensions (route/status/version) and
-    // legacy table_id series; no per-table widget or alarm is created.
-    const namespace = `CtechPoker/${environment}`;
-    const search = (metricName: string, statistic: string = 'Sum') => new cloudwatch.MathExpression({
-      expression: `SEARCH('{${namespace}} MetricName="${metricName}"', '${statistic}', 300)`,
-      period: cdk.Duration.minutes(5),
-    });
-    const dashboard = new cloudwatch.Dashboard(this, 'OperationsDashboard', {
-      dashboardName: operationsDashboardName(environment),
-      defaultInterval: cdk.Duration.hours(6),
-    });
-    dashboard.addWidgets(
-      new cloudwatch.TextWidget({
-        width: 24,
-        height: 2,
-        markdown: '# CTech Poker — gameplay, transport and money-movement SLOs',
-      }),
-      new cloudwatch.GraphWidget({
-        title: 'Action → ACK latency (p95) and successful actions',
-        width: 12,
-        left: [search('ActionLatencyMs', 'p95')],
-        right: [search('ActionsSucceeded')],
-      }),
-      new cloudwatch.GraphWidget({
-        title: 'Reconnects and time to authoritative snapshot (p95)',
-        width: 12,
-        left: [search('SnapshotLatencyMs', 'p95')],
-        right: [search('Disconnects')],
-      }),
-      new cloudwatch.GraphWidget({
-        title: 'DynamoDB conflicts and persistence errors',
-        width: 12,
-        left: [search('DynamoDBVersionConflicts'), search('TableStateHistorySaveError')],
-      }),
-      new cloudwatch.GraphWidget({
-        title: 'Pending money movements (count and oldest age)',
-        width: 12,
-        left: [search('PendingCashouts', 'Maximum')],
-        right: [search('OldestPendingCashoutAgeSeconds', 'Maximum')],
-      }),
-      new cloudwatch.GraphWidget({
-        title: 'Actors, connections, mailbox pressure and lease failovers',
-        width: 12,
-        left: [search('ConnectionsOpened'), search('ConnectionsClosed'), search('ActorsCreated'), search('ActorsRemoved')],
-        right: [search('MailboxBackpressure'), search('LeaseFailovers')],
-      }),
-      new cloudwatch.GraphWidget({
-        title: 'HTTP auth and throttling responses by route/version',
-        width: 12,
-        left: [search('HTTPResponses')],
-      }),
-      new cloudwatch.GraphWidget({
-        title: 'Player-safety reports and social throttling',
-        width: 12,
-        left: [search('PlayerReported')],
-        right: [search('SocialRateLimited')],
-      }),
-      new cloudwatch.GraphWidget({
-        title: 'Wallet dependency: latency, retries and circuit breaker',
-        width: 12,
-        left: [search('WalletLatencyMs', 'p95')],
-        right: [search('WalletRetries'), search('WalletCircuitOpened'), search('WalletCircuitOpenRejected')],
-      }),
-      new cloudwatch.GraphWidget({
-        title: 'Equity compute duration and cache behavior',
-        width: 12,
-        left: [search('EquityDurationMs', 'p95')],
-        right: [search('EquityCacheHits'), search('EquityCacheMisses'), search('EquityCacheEvictions')],
-      }),
-    );
-    
     // DynamoDB access for internal/tablestore.Store — TransactWriteItems is
     // required because every commit (CommitAction) writes the state item,
     // the audit-log entry, and (for player actions) the idempotency guard in

@@ -84,8 +84,8 @@ against the code, 2026-07-28):** Phases 0–5 are **implemented and live** in `a
   wiring still skips the terms-acceptance check the sandbox path performs (`internal/app/app.go`)
 - Task 4: Durable pending-cashout tracking (`reconcile.PendingStore`) — **DONE**
 - Task 5: Reconciliation Lambda job (`cmd/reconcile` + EventBridge schedule stack) — **DONE**
-- Task 6: EMF structured metrics (`metrics` package emitting JSON lines for CW) — **DONE**
-- Task 7: CloudWatch alarms (ALARM log lines, lease failover spike in CDK) — **DONE**
+- Task 6: EMF structured metrics (`metrics` package emitting JSON lines for CW) — **REVERTED 2026-08-19** (billed per extracted metric; structured logs remain)
+- Task 7: CloudWatch alarms (ALARM log lines, lease failover spike in CDK) — **REVERTED 2026-08-19** (unmonitored, no SNS subscriber, billed past the free tier)
 - Task 8: Graceful ASG scale-in drain (`DrainAndRelease` in `tablemanager` + Fx hook) — **DONE**
 - Task 9: WAF on CloudFront distribution (AWSManagedRulesCommonRuleSet + IP rate limit) — **NOT DONE** (this line
   previously claimed DONE and was wrong): there is no `aws-wafv2` import and no `webAclId` anywhere in `cdk/` (

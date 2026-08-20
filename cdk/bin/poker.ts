@@ -41,6 +41,12 @@ const CTECH_VPC_ID = process.env.CTECH_VPC_ID || 'vpc-0adfd86727d17445b';
 // and sets them as env vars before running cdk deploy.
 const CTECH_DEPLOYMENTS_BUCKET = process.env.CTECH_DEPLOYMENTS_BUCKET || `${ENVIRONMENT}-ctech-deployments`;
 const CTECH_LOGS_BUCKET = process.env.CTECH_LOGS_BUCKET || `${ENVIRONMENT}-ctech-application-logs`;
+// Session Manager on the API instances. Default on, and poker has the strongest
+// reason of any service to keep it: the termination-drain lifecycle hook stops
+// the app through SSM RunCommand, so without the agent instances terminate
+// without draining tables. It is also the only shell onto the box. Set
+// ENABLE_SSM_AGENT=false to reclaim the agent's ~70 MiB of RSS at that price.
+const ENABLE_SSM_AGENT = (process.env.ENABLE_SSM_AGENT || 'true') === 'true';
 
 const env = {account: AWS_ACCOUNT, region: AWS_REGION};
 const pokerParameters = SSM_POKER(ENVIRONMENT);
@@ -114,6 +120,7 @@ new PokerApiStack(app, id('API'), {
   realMoneyEnabledParam: pokerParameters.realMoneyEnabled,
   legalSignoffRefParam: pokerParameters.legalSignoffRef,
   socialGraphEnabledParam: pokerParameters.socialGraphEnabled,
+  enableSsmAgent: ENABLE_SSM_AGENT,
   socialEdgesTableArn: dynamoStack.tables.get(DYNAMO_TABLE.socialEdges)!.tableArn,
   recentPlayersTableArn: dynamoStack.tables.get(DYNAMO_TABLE.recentPlayers)!.tableArn,
   socialEventsTableArn: dynamoStack.tables.get(DYNAMO_TABLE.socialEvents)!.tableArn,

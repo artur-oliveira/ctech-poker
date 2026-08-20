@@ -22,7 +22,6 @@ import (
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/api-commons/oauth2client"
 	"gopkg.aoctech.app/poker/api/internal/config"
-	"gopkg.aoctech.app/poker/api/internal/metrics"
 )
 
 const (
@@ -217,7 +216,6 @@ func (c *Client) recordResult(endpoint string, transientFailure bool) {
 	state.failures++
 	if state.failures >= breakerThreshold {
 		state.openUntil = time.Now().Add(breakerCooldown)
-		metrics.EmitTableMetric(c.env, "WalletCircuitOpened", 1, map[string]string{"endpoint": endpoint})
 	}
 	c.breakers[endpoint] = state
 }
@@ -228,10 +226,8 @@ func (c *Client) recordResult(endpoint string, transientFailure bool) {
 func (c *Client) do(req *http.Request, retrySafe bool) (*http.Response, error) {
 	endpoint := req.URL.Path
 	if !c.breakerAllows(endpoint, time.Now()) {
-		metrics.EmitTableMetric(c.env, "WalletCircuitOpenRejected", 1, map[string]string{"endpoint": endpoint})
 		return nil, errCircuitOpen
 	}
-	start := time.Now()
 	for attempt := 0; attempt < maxWalletAttempts; attempt++ {
 		current := req
 		if attempt > 0 {
@@ -248,7 +244,6 @@ func (c *Client) do(req *http.Request, retrySafe bool) (*http.Response, error) {
 		transient := err != nil || (resp != nil && retryableStatus(resp.StatusCode))
 		if !transient {
 			c.recordResult(endpoint, false)
-			metrics.EmitTableMetric(c.env, "WalletLatencyMs", float64(time.Since(start).Milliseconds()), map[string]string{"endpoint": endpoint})
 			return resp, err
 		}
 		if !retrySafe || attempt == maxWalletAttempts-1 || req.Context().Err() != nil {
@@ -261,7 +256,6 @@ func (c *Client) do(req *http.Request, retrySafe bool) (*http.Response, error) {
 			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 			_ = resp.Body.Close()
 		}
-		metrics.EmitTableMetric(c.env, "WalletRetries", 1, map[string]string{"endpoint": endpoint})
 		c.retryDelay(delay)
 	}
 	return nil, errors.New("walletclient: retry loop exhausted")

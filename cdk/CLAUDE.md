@@ -31,9 +31,10 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   defaulting to `false` — enabling real money is a parameter change plus an instance refresh.
 - **Three Lambdas**: the archiver (DynamoDB Stream → S3, with an SQS DLQ), plus
   `reconcile` (`rate(5 minutes)`) and `tablecleanup` (`rate(30 minutes)`) on EventBridge Scheduler.
-  `reconcile`/`tablecleanup` keep only their `*ErrorsAlarm`; the archiver's DLQ alarm and all
-  three Lambdas' DLQ-count/throttle/missed-run alarms were removed 2026-08-17 (unmonitored, no
-  SNS subscriber, billed past the CloudWatch free tier).
+  **The CDK creates no CloudWatch alarms at all** (2026-08-19): the archiver's DLQ alarm and
+  the three Lambdas' DLQ-count/throttle/missed-run alarms went 2026-08-17, and `reconcile`/
+  `tablecleanup`'s `*ErrorsAlarm` followed — all unmonitored, no SNS subscriber, billed past
+  the CloudWatch free tier. Lambda errors are a console/Logs Insights check now.
 - **Frontend**: private S3 + CloudFront via OAC, a route KeyValueStore with a viewer-request
   rewrite Function, and a `ResponseHeadersPolicy` carrying the CSP, HSTS and Permissions-Policy.
 

@@ -169,11 +169,13 @@ rake — the Brazil-legal shape. Sandbox tables carry a nominal rake for gamepla
 
 ## 7. Observability
 
-- Metrics are emitted as **CloudWatch EMF JSON lines on stdout** (`api/internal/metrics`) — no
-  PutMetricData calls on the request path.
-- Two alarms in CDK: any log line containing `ALARM:` (metric filter → `AlarmLogLines`), and a
-  `LeaseFailovers` spike (threshold 5 over 2 periods) — the earliest signal of an instance going
-  bad. Plus a DLQ-depth alarm on the archiver.
+- **No custom CloudWatch metrics and no alarms** (2026-08-19). The `api/internal/metrics` EMF
+  emitter is gone — every `CtechPoker/<env>` series with it — and so are the `ALARM:` metric filter,
+  the `LeaseFailovers` spike alarm, the archiver's DLQ-depth alarm and the operations dashboard.
+  EMF lines were auto-extracted by CloudWatch and billed per metric; nobody was subscribed to the
+  alarms. **Observability is structured logs**: `slog` JSON to `/ctech-poker/<env>/app`, queried
+  with Logs Insights. An `ALARM:` line is something you look for, not something that pages you.
+  Reinstate an alarm before anyone depends on being told.
 - Every hand's full action sequence is durable in `poker_action_log` and archived to S3, which is
   what both the hand-history feature and dispute resolution read from.
 - Health: `GET /v1.0/health` (liveness) and `GET /v1.0/health-check` (RFC-health detail: uptime,

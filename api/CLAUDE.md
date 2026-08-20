@@ -102,7 +102,7 @@ catalog.
 `internal/{buyin,walletclient,reconcile}` (money) ·
 `internal/{player,playernotes,pokerstats,sessionlog,handshare}` (player-scoped data) ·
 `internal/{leaderboard,achievements,dailyreward}` (gamification) ·
-`internal/{botcheck,chatfilter,metrics,config,problem}` · `tests/{integration,load}`.
+`internal/{botcheck,chatfilter,config,problem}` · `tests/{integration,load}`.
 
 Transport is **binary protobuf** on both gateways (`GET /v1.0/tables/:id/ws`, `GET /v1.0/ws`), with the access token
 sent as the first frame after upgrade and a 32 KiB frame cap.

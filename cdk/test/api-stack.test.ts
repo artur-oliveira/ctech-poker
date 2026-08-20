@@ -77,10 +77,11 @@ test('synthesizes without error and declares exactly one ASG', () => {
   template.resourceCountIs('AWS::AutoScaling::AutoScalingGroup', 1);
   template.hasResourceProperties('AWS::IAM::Role', {RoleName: 'dev-ctech-poker-api-role'});
   template.resourceCountIs('AWS::IAM::InstanceProfile', 1);
-  template.resourceCountIs('AWS::CloudWatch::Alarm', 4);
-  template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-    DashboardName: 'dev-ctech-poker-operations',
-  });
+  // No custom CloudWatch metrics, alarms or dashboard (2026-08-19): the CW agent
+  // config is logs-only and the operations dashboard was SEARCH-ing a namespace
+  // the API never published to.
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
+  template.resourceCountIs('AWS::CloudWatch::Dashboard', 0);
   const rendered = JSON.stringify(template.toJSON());
   expect(rendered).toContain('dev-ctech-poker-avatars/up/*');
   expect(rendered).toContain('dev-ctech-poker-avatars/av/*');
@@ -94,23 +95,6 @@ test('synthesizes without error and declares exactly one ASG', () => {
   expect(rendered).toContain('dynamodb:BatchGetItem');
   expect(rendered).toContain('/ctech/dev/poker/social-graph-enabled');
   expect(rendered).toContain('SOCIAL_GRAPH_ENABLED');
-  for (const signal of [
-    'ActionLatencyMs',
-    'ActionsSucceeded',
-    'SnapshotLatencyMs',
-    'DynamoDBVersionConflicts',
-    'PendingCashouts',
-    'OldestPendingCashoutAgeSeconds',
-    'ConnectionsOpened',
-    'HTTPResponses',
-    'PlayerReported',
-    'SocialRateLimited',
-  ]) {
-    expect(rendered).toContain(signal);
-  }
-  for (const alarm of ['dev-ctech-poker-player-report-spike', 'dev-ctech-poker-social-rate-limit-spike']) {
-    template.hasResourceProperties('AWS::CloudWatch::Alarm', {AlarmName: alarm});
-  }
   expect(rendered).not.toContain('AWS::WAFv2');
   template.hasResourceProperties('AWS::AutoScaling::LifecycleHook', {
     LifecycleHookName: 'dev-ctech-poker-termination-drain',

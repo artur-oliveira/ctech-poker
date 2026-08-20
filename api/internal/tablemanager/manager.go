@@ -16,7 +16,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
-	"gopkg.aoctech.app/poker/api/internal/metrics"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
@@ -232,7 +231,6 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	m.cancels[tableID] = cancel
 	if trustCache {
 		m.leases.StartHeartbeat(runCtx, tableID, func() {
-			metrics.EmitTableMetric(m.env, "LeaseFailovers", 1, nil)
 			cancel()
 			<-actor.Done()
 			m.removeActor(tableID, actor)
@@ -243,7 +241,6 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	go actor.Run(runCtx)
 
 	m.actors[tableID] = actor
-	metrics.EmitTableMetric(m.env, "ActorsCreated", 1, nil)
 
 	// Re-arm blind escalation and the per-turn action timeout from the room's
 	// authoritative config so both survive instance/lease moves (T6). Any
@@ -270,7 +267,6 @@ func (m *Manager) removeActor(tableID string, expected *Actor) {
 	m.mu.Lock()
 	if a, ok := m.actors[tableID]; ok && a == expected && !a.IsAlive() {
 		delete(m.actors, tableID)
-		metrics.EmitTableMetric(m.env, "ActorsRemoved", 1, nil)
 		delete(m.cancels, tableID)
 		delete(m.releases, tableID)
 	}
@@ -328,7 +324,6 @@ func (m *Manager) Release(tableID string) {
 	delete(m.releases, tableID)
 	m.mu.Unlock()
 	if existed {
-		metrics.EmitTableMetric(m.env, "ActorsRemoved", 1, nil)
 	}
 	if cancel != nil {
 		cancel()
