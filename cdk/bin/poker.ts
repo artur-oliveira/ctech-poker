@@ -5,19 +5,15 @@ import {Environment} from '@aoctech/cdk';
 import {PokerApiStack} from '../lib/api-stack';
 import {DynamoDBStack} from '../lib/dynamodb-stack';
 import {ArchiverStack} from '../lib/archiver-stack';
-import {FrontendStack} from '../lib/frontend-stack';
 import {StorageStack} from '../lib/storage-stack';
 import {ReconcileStack} from '../lib/reconcile-stack';
 import {TableCleanupStack} from '../lib/tablecleanup-stack';
 import {
-  ACCOUNTS_API_DOMAIN_PREFIX, ACCOUNTS_DOMAIN_PREFIX,
-  API_DOMAIN_PREFIX,
+  ACCOUNTS_DOMAIN_PREFIX,
   APP_DOMAIN_PREFIX,
   avatarsBucketName,
-  avatarsS3Origins,
   AWS_ACCOUNT,
   AWS_REGION,
-  CERT_ARN,
   DYNAMO_TABLE,
   domainForEnv,
   GITHUB_REPO_DEFAULT,
@@ -28,7 +24,6 @@ import {OidcStack} from "../lib/oidc-stack";
 
 const app = new cdk.App();
 
-const CLOUDFLARE_CHALLENGE_SRC = 'challenges.cloudflare.com'
 const ENVIRONMENT = (process.env.ENVIRONMENT || 'dev') as Environment;
 const GITHUB_REPO = (process.env.GITHUB_REPO || GITHUB_REPO_DEFAULT);
 // VPC is managed by ctech-cdk (shared across every CTech service in this
@@ -136,17 +131,6 @@ new PokerApiStack(app, id('API'), {
   socialEventsTableArn: dynamoStack.tables.get(DYNAMO_TABLE.socialEvents)!.tableArn,
   playerReportsTableArn: dynamoStack.tables.get(DYNAMO_TABLE.playerReports)!.tableArn,
   description: `CTech Poker API (EC2 + ASG + ALB) - ${ENVIRONMENT}`,
-});
-
-new FrontendStack(app, id('Frontend'), {
-  env,
-  environment: ENVIRONMENT,
-  certificateArn: CERT_ARN,
-  domainName: domainForEnv(ENVIRONMENT, APP_DOMAIN_PREFIX),
-  apiDomainName: domainForEnv(ENVIRONMENT, API_DOMAIN_PREFIX),
-  authDomainName: domainForEnv(ENVIRONMENT, ACCOUNTS_API_DOMAIN_PREFIX),
-  extraConnectSrc: [CLOUDFLARE_CHALLENGE_SRC, ...avatarsS3Origins(ENVIRONMENT)],
-  description: `CTech Poker Frontend (S3 + CloudFront) - ${ENVIRONMENT}`,
 });
 
 new ReconcileStack(app, id('Reconcile'), {

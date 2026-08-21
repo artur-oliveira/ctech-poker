@@ -1,7 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import {Construct} from 'constructs';
-import {GHA_API_ROLE, GHA_FRONTEND_ROLE, GHA_INFRA_ROLE, GHA_SCOPES_ROLE, S3_PREFIX, SERVICE,} from './constants';
+import {GHA_API_ROLE, GHA_INFRA_ROLE, GHA_SCOPES_ROLE, S3_PREFIX,} from './constants';
 
 interface OidcStackProps extends cdk.StackProps {
   githubRepo: string;
@@ -57,38 +57,6 @@ export class OidcStack extends cdk.Stack {
       ],
     }));
 
-    // ── Frontend deploy role ────────────────────────────────────────────────
-    const frontendRole = new iam.Role(this, 'FrontendDeployRole', {
-      roleName: GHA_FRONTEND_ROLE,
-      assumedBy: trust,
-    });
-    frontendRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['s3:PutObject', 's3:DeleteObject', 's3:GetObject', 's3:ListBucket'],
-      resources: [
-        `arn:aws:s3:::*-${SERVICE}-frontend`,
-        `arn:aws:s3:::*-${SERVICE}-frontend/*`,
-      ],
-    }));
-    frontendRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['cloudfront:CreateInvalidation'],
-      resources: ['*'],
-    }));
-    // Route manifest for the URL-rewrite CloudFront Function. Published after
-    // the S3 sync so the key set matches the objects in the bucket.
-    frontendRole.addToPolicy(new iam.PolicyStatement({
-      actions: [
-        'cloudfront-keyvaluestore:DescribeKeyValueStore',
-        'cloudfront-keyvaluestore:ListKeys',
-        'cloudfront-keyvaluestore:UpdateKeys',
-      ],
-      resources: [`arn:aws:cloudfront::${this.account}:key-value-store/*`],
-    }));
-    // Reads the DistributionId output of CtechPoker-{Env}-Frontend.
-    frontendRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['cloudformation:DescribeStacks'],
-      resources: ['*'],
-    }));
-
     // ── API deploy role ─────────────────────────────────────────────────────
     const apiRole = new iam.Role(this, 'ApiDeployRole', {
       roleName: GHA_API_ROLE,
@@ -139,7 +107,6 @@ export class OidcStack extends cdk.Stack {
       iam.ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess'),
     );
 
-    new cdk.CfnOutput(this, 'FrontendRoleArn', {value: frontendRole.roleArn});
     new cdk.CfnOutput(this, 'ApiRoleArn', {value: apiRole.roleArn});
     new cdk.CfnOutput(this, 'InfraRoleArn', {value: infraRole.roleArn});
     new cdk.CfnOutput(this, 'ScopePublisherRoleArn', {value: scopesRole.roleArn});
