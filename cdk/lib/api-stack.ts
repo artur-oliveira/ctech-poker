@@ -344,7 +344,8 @@ export class PokerApiStack extends cdk.Stack {
       // at 13:15 America/Sao_Paulo. Outside it the service is off — inbound
       // webhooks fail and nothing is reachable. Deliberate for a development
       // environment on a single t4g.nano.
-      schedule: {enableCron: '55 11 * * *', disableCron: '15 13 * * *'},
+      // schedule: {enableCron: '55 11 * * *', disableCron: '15 13 * * *'},
+      spot: {}
     });
     const asg = service.autoScalingGroup;
     asg.node.addDependency(profile);
