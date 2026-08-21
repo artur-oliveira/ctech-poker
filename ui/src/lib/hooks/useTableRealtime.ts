@@ -1,6 +1,7 @@
 'use client';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {getAccessToken, subscribeAccessToken} from '@/lib/api/client';
+import {wsOrigin} from '@/lib/ws/origin';
 import {recoverSession} from '@/lib/auth/session';
 import {cardLabel} from '@/lib/cards';
 import {useWebSocket, type WSStatus} from '@aoctech/ws-client';
@@ -583,7 +584,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     if (activeTableIDRef.current === id) receive(message);
   }, [id, receive]);
   
-  const origin = (process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/^http/, 'ws');
+  const origin = wsOrigin();
   const wsUrl = id ? `${origin}/v1.0/tables/${encodeURIComponent(id)}/ws` : null;
   const handleOpen = useCallback(() => {
     if (resetOnOpenRef.current) {

@@ -1,5 +1,5 @@
 import {App} from 'aws-cdk-lib';
-import {Template} from 'aws-cdk-lib/assertions';
+import {Match, Template} from 'aws-cdk-lib/assertions';
 import {minimumApiCapacity, PokerApiStack} from '../lib/api-stack';
 
 test('keeps one minimum API instance in every environment', () => {
@@ -85,6 +85,18 @@ test('synthesizes without error and declares exactly one ASG', () => {
   const rendered = JSON.stringify(template.toJSON());
   expect(rendered).toContain('dev-ctech-poker-avatars/up/*');
   expect(rendered).toContain('dev-ctech-poker-avatars/av/*');
+  // The instance role must be able to READ av/: the API serves
+  // /v1.0/avatars/* itself now that no CloudFront OAC reads the bucket.
+  template.hasResourceProperties('AWS::IAM::Policy', {
+    PolicyDocument: {
+      Statement: Match.arrayWith([Match.objectLike({
+        Action: Match.arrayWith(['s3:GetObject']),
+        Resource: Match.objectLike({'Fn::Join': Match.arrayWith([
+          Match.arrayWith([':s3:::dev-ctech-poker-avatars/av/*']),
+        ])}),
+      })]),
+    },
+  });
   expect(rendered).not.toContain('dev-ctech-poker-frontend');
   expect(rendered).toContain('dev_poker_reaction_entitlements');
   expect(rendered).toContain('dev_poker_reaction_purchases');

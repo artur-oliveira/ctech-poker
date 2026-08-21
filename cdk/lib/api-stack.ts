@@ -190,8 +190,11 @@ export class PokerApiStack extends cdk.Stack {
       actions: ['s3:GetObject', 's3:DeleteObject'],
       resources: [`arn:${cdk.Aws.PARTITION}:s3:::${avatarsBucketName}/up/*`],
     }));
+    // GetObject on av/ is what lets the API serve /v1.0/avatars/* itself. It
+    // replaces the CloudFront origin access control that used to read the
+    // prefix — nothing but the API reaches the bucket now.
     instanceRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['s3:PutObject', 's3:DeleteObject'],
+      actions: ['s3:PutObject', 's3:DeleteObject', 's3:GetObject'],
       resources: [`arn:${cdk.Aws.PARTITION}:s3:::${avatarsBucketName}/av/*`],
     }));
     

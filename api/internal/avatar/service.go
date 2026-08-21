@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +26,16 @@ const (
 	MaxDimension        = 4096
 	HeaderRange         = "bytes=0-65535"
 	PublishedType       = "image/jpeg"
+
+	// Two prefixes in one bucket, and the difference is a security boundary.
+	// up/ is the quarantine a browser POSTs straight into with a presigned
+	// POST: arbitrary unvalidated bytes, expired by a 1-day lifecycle rule.
+	// av/ holds only what ValidateAndPublish copied there after decoding the
+	// header, checking the dimensions and rejecting EXIF. Only av/ is
+	// readable through the public HTTP route, which is why callers never
+	// build a key themselves — see PublishedKey/UploadKey.
+	publishedPrefix = "av/"
+	uploadPrefix    = "up/"
 )
 
 var (
@@ -32,7 +43,33 @@ var (
 	ErrInvalidImage  = errors.New("invalid avatar image")
 	ErrImageTooLarge = errors.New("avatar image is too large")
 	ErrEXIF          = errors.New("avatar image contains EXIF metadata")
+	ErrInvalidKey    = errors.New("avatar key is invalid")
 )
+
+// userIDPattern is the shape of the JWT `sub` ctech-account issues: a plain
+// UUID (api/internal/domain/user/repository.go builds every PK from
+// uuid.New().String()). Anchored and hex-only, so a user ID that reached us
+// from a URL path can never carry "/", "%" or ".." into an S3 key.
+var userIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// PublishedKey is the av/ key for a validated avatar. UploadKey is its up/
+// quarantine counterpart. Both refuse to build a key at all unless userID is a
+// UUID and version is positive, so the prefix is the only thing a caller can
+// choose and it can only choose between these two functions.
+func PublishedKey(userID string, version int) (string, error) {
+	return objectKey(publishedPrefix, userID, version)
+}
+
+func UploadKey(userID string, version int) (string, error) {
+	return objectKey(uploadPrefix, userID, version)
+}
+
+func objectKey(prefix, userID string, version int) (string, error) {
+	if version < 1 || !userIDPattern.MatchString(userID) {
+		return "", ErrInvalidKey
+	}
+	return fmt.Sprintf("%s%s/%d.jpg", prefix, userID, version), nil
+}
 
 type API interface {
 	PresignPostObject(context.Context, *s3.PutObjectInput, ...func(*s3.PresignPostOptions)) (*s3.PresignedPostRequest, error)
@@ -83,8 +120,7 @@ func (s *Service) ValidateAndPublish(ctx context.Context, uploadKey, publishedKe
 		Bucket: aws.String(s.bucket), Key: aws.String(uploadKey), Range: aws.String(HeaderRange),
 	})
 	if err != nil {
-		var notFound interface{ ErrorCode() string }
-		if errors.As(err, &notFound) && (notFound.ErrorCode() == "NoSuchKey" || notFound.ErrorCode() == "NotFound") {
+		if isNotFound(err) {
 			return ErrNotFound
 		}
 		return fmt.Errorf("avatar: get quarantine object: %w", err)
@@ -120,6 +156,41 @@ func (s *Service) ValidateAndPublish(ctx context.Context, uploadKey, publishedKe
 	return nil
 }
 
+// Object is a published avatar's bytes plus what the HTTP layer needs to serve
+// them. Body is the caller's to hand to a streaming writer; the content type is
+// not carried because it is always PublishedType — ValidateAndPublish rewrites
+// it on the copy into av/, so the stored value is never worth trusting.
+type Object struct {
+	Body          io.ReadCloser
+	ETag          string
+	ContentLength int64
+}
+
+// Get fetches a published avatar. The av/ prefix is applied here rather than by
+// the caller, so no request can address the up/ quarantine, and an
+// unparseable userID/version is ErrInvalidKey rather than an S3 round trip.
+func (s *Service) Get(ctx context.Context, userID string, version int) (*Object, error) {
+	if !s.Enabled() {
+		return nil, ErrNotFound
+	}
+	key, err := PublishedKey(userID, version)
+	if err != nil {
+		return nil, err
+	}
+	object, err := s.api.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
+	if err != nil {
+		if isNotFound(err) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("avatar: get published object: %w", err)
+	}
+	return &Object{
+		Body:          object.Body,
+		ETag:          aws.ToString(object.ETag),
+		ContentLength: aws.ToInt64(object.ContentLength),
+	}, nil
+}
+
 func (s *Service) DeleteBestEffort(ctx context.Context, keys ...string) {
 	for _, key := range keys {
 		if key == "" || !s.Enabled() {
@@ -129,6 +200,11 @@ func (s *Service) DeleteBestEffort(ctx context.Context, keys ...string) {
 			slog.Warn("avatar: object cleanup failed", "key", key, "err", err)
 		}
 	}
+}
+
+func isNotFound(err error) bool {
+	var coded interface{ ErrorCode() string }
+	return errors.As(err, &coded) && (coded.ErrorCode() == "NoSuchKey" || coded.ErrorCode() == "NotFound")
 }
 
 func totalSize(contentRange *string, fallback *int64) int64 {

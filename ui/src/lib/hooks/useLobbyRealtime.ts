@@ -2,6 +2,7 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {useQueryClient} from '@tanstack/react-query';
 import {getAccessToken, subscribeAccessToken} from '@/lib/api/client';
+import {wsOrigin} from '@/lib/ws/origin';
 import {recoverSession} from '@/lib/auth/session';
 import {useWebSocket} from '@aoctech/ws-client';
 import {USE_MOCK} from '@/lib/mockConfig';
@@ -110,7 +111,7 @@ export function useLobbyRealtime() {
     }
   }, [queryClient]);
   
-  const origin = (process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/^http/, 'ws');
+  const origin = wsOrigin();
   const wsUrl = `${origin}/v1.0/ws`;
   
   const handleOpen = useCallback(() => {

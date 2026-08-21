@@ -29,8 +29,6 @@ export const APP_DOMAIN_PREFIX = 'poker';
 export const ACCOUNTS_API_DOMAIN_PREFIX = 'accounts-api';
 export const ACCOUNTS_DOMAIN_PREFIX = 'accounts';
 export const API_PATH_PATTERNS = ['/v1.0/*', '/.well-known/*'];
-export const AVATAR_PUBLIC_PATH_PREFIX = '/avatars';
-export const AVATAR_STORAGE_PATH_PREFIX = '/av';
 
 /**
  * Shared HTTPS listener rule priorities on the ctech-cdk ALB (confirmed by
@@ -73,7 +71,6 @@ export const avatarsS3Origins = (env: Environment) => [
   `${avatarsBucketName(env)}.s3.dualstack.${AWS_REGION}.amazonaws.com`,
 ];
 export const routeStoreName = (env: Environment) => `${env}-${SERVICE}-routes`;
-export const avatarRewriteFunctionName = (env: Environment) => `${env}-${SERVICE}-avatar-rewrite`;
 export const instanceRoleName = (env: Environment) => `${env}-${SERVICE}-api-role`;
 export const reconcileJobName = (env: Environment) => `${env}-${SERVICE}-reconcile`;
 export const reconcileDlqName = (env: Environment) => `${reconcileJobName(env)}-dlq`;
@@ -146,6 +143,11 @@ export const SSM_POKER = (env: Environment) => ({
   realMoneyEnabled: `/ctech/${env}/poker/real-money-enabled`,
   socialGraphEnabled: `/ctech/${env}/poker/social-graph-enabled`,
   legalSignoffRef: `/ctech/${env}/poker/legal-signoff-ref`,
+  // Read by the API as AVATAR_BASE_URL and prefixed onto every avatar URL it
+  // serialises. Since the Cloudflare migration its value is the API's own
+  // public read route — https://poker-api[-env].aoctech.app/v1.0/avatars —
+  // not a CloudFront path. Provisioned out of band like every other parameter
+  // here; see docs/plans for the put-parameter command.
   avatarBaseUrl: `/ctech/${env}/poker/avatar-base-url`,
   // Verifies inbound ctech-wallet webhooks (X-Wallet-Signature). Must match
   // the secret registered for poker's client_id in ctech-wallet's own SSM

@@ -6,6 +6,7 @@ import {PokerApiStack} from '../lib/api-stack';
 import {DynamoDBStack} from '../lib/dynamodb-stack';
 import {ArchiverStack} from '../lib/archiver-stack';
 import {FrontendStack} from '../lib/frontend-stack';
+import {StorageStack} from '../lib/storage-stack';
 import {ReconcileStack} from '../lib/reconcile-stack';
 import {TableCleanupStack} from '../lib/tablecleanup-stack';
 import {
@@ -84,6 +85,16 @@ new ArchiverStack(app, id('Archiver'), {
 // =====================
 // API (EC2 + ASG, shared ALB from ctech-cdk)
 // =====================
+// Avatars bucket. Deployed before the API stack because the instance role's
+// policy names the bucket, and before FrontendStack is torn down because that
+// is where the bucket used to live.
+new StorageStack(app, id('Storage'), {
+  env,
+  environment: ENVIRONMENT,
+  appDomainName: domainForEnv(ENVIRONMENT, APP_DOMAIN_PREFIX),
+  description: `CTech Poker Storage (avatars) - ${ENVIRONMENT}`,
+});
+
 new PokerApiStack(app, id('API'), {
   env,
   environment: ENVIRONMENT,

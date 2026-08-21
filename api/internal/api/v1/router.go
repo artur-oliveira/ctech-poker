@@ -86,6 +86,11 @@ func Register(
 	joinLimiter := NewRateLimiter(cacheBackend, 30, time.Minute)
 	spinLimiter := NewRateLimiter(cacheBackend, 60, time.Minute)
 	avatarLimiter := NewRateLimiter(cacheBackend, 5, time.Hour)
+	// The public avatar READ path is limited separately and far more loosely:
+	// avatarLimiter's 5/hour guards uploads and reports, while a single table
+	// view legitimately fetches up to nine images. Keyed per IP, not per
+	// player — the route is unauthenticated.
+	avatarReadLimiter := NewRateLimiter(cacheBackend, 600, time.Minute)
 	purchaseLimiter := NewRateLimiter(cacheBackend, 10, time.Minute)
 	socialMutationPlayerLimiter := NewRateLimiter(cacheBackend, 120, time.Minute)
 	socialMutationIPLimiter := NewRateLimiter(cacheBackend, 240, time.Minute)
@@ -96,6 +101,8 @@ func Register(
 	reportPlayerLimiter := NewRateLimiter(cacheBackend, 10, time.Hour)
 	reportIPLimiter := NewRateLimiter(cacheBackend, 50, time.Hour)
 
+	// Unauthenticated, unlike every Register* call below it.
+	RegisterAvatars(router, avatars, avatarReadLimiter)
 	RegisterRooms(router, auth, rooms, buyinSvc, manager, reg, cfg, createLimiter, joinLimiter)
 	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter, pokerStatsStore, reportSvc)
 	RegisterPlayerNotes(router, auth, playerNoteStore)

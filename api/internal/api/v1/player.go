@@ -3,7 +3,6 @@ package v1
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -94,7 +93,11 @@ func (h *playerHandlers) avatarUploadURL(c fiber.Ctx) error {
 		return problem.InternalServer("failed to load player profile", c, err).Send(c)
 	}
 	version := profile.AvatarVersion + 1
-	upload, err := h.avatars.Presign(c.Context(), fmt.Sprintf("up/%s/%d.jpg", userID, version))
+	uploadKey, err := avatar.UploadKey(userID, version)
+	if err != nil {
+		return problem.InternalServer("failed to authorize avatar upload", c, err).Send(c)
+	}
+	upload, err := h.avatars.Presign(c.Context(), uploadKey)
 	if err != nil {
 		return problem.InternalServer("failed to authorize avatar upload", c, err).Send(c)
 	}
@@ -117,8 +120,11 @@ func (h *playerHandlers) avatarConfirm(c fiber.Ctx) error {
 	if req.Version != profile.AvatarVersion+1 {
 		return problem.Conflict("avatar version is stale").Send(c)
 	}
-	uploadKey := fmt.Sprintf("up/%s/%d.jpg", userID, req.Version)
-	publishedKey := fmt.Sprintf("av/%s/%d.jpg", userID, req.Version)
+	uploadKey, uploadErr := avatar.UploadKey(userID, req.Version)
+	publishedKey, publishErr := avatar.PublishedKey(userID, req.Version)
+	if uploadErr != nil || publishErr != nil {
+		return problem.InternalServer("failed to derive avatar keys", c, errors.Join(uploadErr, publishErr)).Send(c)
+	}
 	if err := h.avatars.ValidateAndPublish(c.Context(), uploadKey, publishedKey); err != nil {
 		switch {
 		case errors.Is(err, avatar.ErrNotFound):

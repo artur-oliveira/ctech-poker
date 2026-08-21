@@ -18,7 +18,10 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
 
 ## Architecture facts (verified in code)
 
-- **7 stacks**: OIDC (global), DynamoDB, Archiver, API, Frontend, Reconcile, TableCleanup.
+- **8 stacks**: OIDC (global), DynamoDB, Storage, Archiver, API, Frontend, Reconcile, TableCleanup.
+  `Storage` holds only the avatars bucket. It used to live in `FrontendStack` because CloudFront read from it;
+  the API serves `/v1.0/avatars/*` itself now, so the bucket moved to a stack whose lifecycle is player data
+  rather than a CDN — and, deliberately, not into `API`, which replaces instances on every release.
 - **Game server = EC2 Auto-Scaling Group**, capacity 1–3, routed by the shared HAProxy edge.
   **Not Lambda/Fargate.** The Go binary is the HAProxy target directly on port 8080 (no nginx).
   The retained edge security group and VPC are imported from SSM/lookup; no ALB target group or
@@ -37,6 +40,13 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   the CloudWatch free tier. Lambda errors are a console/Logs Insights check now.
 - **Frontend**: private S3 + CloudFront via OAC, a route KeyValueStore with a viewer-request
   rewrite Function, and a `ResponseHeadersPolicy` carrying the CSP, HSTS and Permissions-Policy.
+  **Being retired** — the app deploys to Cloudflare Workers Static Assets from
+  `ctech-cdk/.github/workflows/frontend-cloudflare.yml`; this whole stack goes in that migration's Phase 4.
+  Its `/avatars/*` behaviour, the `AvatarRewrite` CloudFront Function and the avatars bucket are already gone.
+- **Avatars**: the instance role has `s3:GetObject` on `av/*` (`api-stack.ts`) because the API is now the only
+  reader of the bucket. `up/*` keeps its separate put/get/delete grant and its 1-day quarantine lifecycle rule.
+  `/ctech/{env}/poker/avatar-base-url` must read `https://poker-api[-env].aoctech.app/v1.0/avatars`; like every
+  parameter here it is provisioned out of band, so a CDK deploy will not correct a stale value.
 
 - **Secrets live in SSM Parameter Store, not Secrets Manager**, and the parameters are provisioned
   out of band — CDK reads them, never creates them. No Cognito; auth is external ctech-account OIDC.
@@ -65,7 +75,7 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
 
 ## Layout
 
-`bin/poker.ts` (entry) · `lib/{constants,api-stack,dynamodb-stack,archiver-stack,frontend-stack,
+`bin/poker.ts` (entry) · `lib/{constants,api-stack,dynamodb-stack,storage-stack,archiver-stack,frontend-stack,
 oidc-stack,reconcile-stack,tablecleanup-stack,bundle}.ts` · `test/*` (Jest/CDK assertions).
 Compiled `.d.ts`/`.js` artifacts are ignored build outputs. Edit the `.ts` and run `npm run build`
 before Jest so stale local JavaScript cannot shadow the TypeScript modules.

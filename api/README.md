@@ -68,6 +68,8 @@ unless noted otherwise. `*` = fails closed (server refuses to start) if unset/em
 | `DYNAMODB_ENDPOINT`                               | —                                 | local-only override (DynamoDB Local); leave empty in prod                                                            |
 | `WALLET_URL`                                      | `https://wallet.aoctech.app`      | ctech-wallet base URL                                                                                                |
 | `POKER_CLIENT_ID` / `POKER_CLIENT_SECRET`         | —                                 | poker's M2M client credentials against ctech-wallet                                                                  |
+| `AVATAR_BUCKET`                                   | —                                 | avatar bucket; empty disables avatar upload **and** the public read route                                            |
+| `AVATAR_BASE_URL`                                 | —                                 | prefix of every avatar URL the API serialises; since the Cloudflare migration, this API's own `/v1.0/avatars`         |
 | `REAL_MONEY_ENABLED`                              | `false`                           | Phase 5 gate; see below                                                                                              |
 | `LEGAL_SIGNOFF_REF`                               | —                                 | required non-empty if `REAL_MONEY_ENABLED=true`, else `Load()` errors (business sign-off, not an engineering toggle) |
 
@@ -83,6 +85,10 @@ claimed they were unwired; that was wrong.)
 
 Two keys this table also omitted: `TURNSTILE_SECRET` and `TURNSTILE_EXPECTED_HOSTNAME`, both set by
 `cdk/lib/api-stack.ts` for `internal/botcheck`.
+
+`AVATAR_BASE_URL` is resolved from SSM (`/ctech/<env>/poker/avatar-base-url`) in the instance `start.sh`, like the two
+above. Its value is `https://poker-api[-<env>].aoctech.app/v1.0/avatars` — the API serves the bytes itself now, so
+pointing it anywhere else (an old CloudFront path, a bucket URL) produces 404s or exposes the bucket.
 
 Per-binary keys read outside `Config` (not in the struct above):
 
@@ -217,6 +223,7 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `POST /rooms/:id/join`                       | JWT             | join + buy-in; optional `auto_rebuy` (sandbox only, see below); rate-limited 30/min/IP     |
 | `POST /rooms/:id/leave`                      | JWT             | leave → `{amount}` cashed out                                                              |
 | `POST /rooms/:id/ready`                      | JWT             | **501** — use the table WebSocket's `ready` message                                        |
+| `GET /avatars/:userId/:version.jpg`          | **none**        | published avatar bytes, streamed from the bucket's `av/` prefix; 600/min/IP                |
 | `GET /players/:playerId/showcase`            | **none**        | public profile showcase; 404 when `showcase_public` is false                               |
 | `GET /players/me`                            | JWT             | profile + sandbox/real balances                                                            |
 | `POST /players/me`                           | JWT             | update name, wallet mode, deck variant, showcase settings                                  |
@@ -282,9 +289,9 @@ error beats silently ranking by a different GSI.
   (ecosystem convention) and is rejected **403** — machine credentials can never act as a player. The WS gateway applies
   the same check on the first frame.
 - `playerID` always comes from `claims.Sub`, never from a request body or path (IDOR safety).
-- Three routes are intentionally public: the achievement catalog, a player's opt-in showcase, and a shared-hand token.
-  The showcase 404s unless the player set `showcase_public`; the shared hand aliases opponents and carries a ≤30-day
-  TTL.
+- Four routes are intentionally public: the achievement catalog, a player's opt-in showcase, a shared-hand token, and
+  avatar reads. The showcase 404s unless the player set `showcase_public`; the shared hand aliases opponents and
+  carries a ≤30-day TTL. Avatars are covered below.
 - Poker publishes public, read-only scopes through its resource-server manifest. Scoped `GET` requests are bound to
   their route family; for example, the daily-reward cooldown at `/sandbox-credits/` requires
   `poker:daily-reward:read`. Interactive mutations and WebSockets instead require a user session issued to the
@@ -299,6 +306,31 @@ error beats silently ranking by a different GSI.
 - `api-commons` v1.4.1's `jwtverify.Verify` now rejects any token missing a `token_use: "access"` claim (also tightens
   JWK `use`/`alg` matching). ctech-account's issued access tokens already carry it; only hand-crafted test JWTs
   (`internal/api/v1/auth_test.go`) needed updating after the bump.
+
+### Avatars
+
+One private bucket, two prefixes, and the difference between them is a security boundary:
+
+- `up/` is the quarantine. `POST /players/me/avatar/upload-url` returns a presigned POST that the browser submits
+  **directly to S3** (the only request the app makes to a host other than the API, which is why the bucket's dualstack
+  origin is in the CSP's `connect-src`). Its contents are whatever the client sent: unvalidated bytes, expired by a
+  1-day lifecycle rule.
+- `av/` holds only what `avatar.Service.ValidateAndPublish` copied there after decoding the header, bounding the
+  dimensions and rejecting EXIF, with `Content-Type` and `Cache-Control` rewritten on the copy.
+
+`GET /avatars/:userId/:version.jpg` serves `av/` and nothing else. Callers never build a key: `avatar.PublishedKey` /
+`avatar.UploadKey` own the prefix, and both refuse unless the user ID is a UUID (the shape ctech-account issues as
+`sub`) and the version is positive — so a path segment from a URL cannot carry `/`, `%` or `..` into an S3 key, and the
+quarantine is unaddressable. The response is the object's bytes with an immutable `Cache-Control` and S3's `ETag`,
+**never** a redirect to a presigned URL: an avatar URL must not be tradeable for direct bucket access. Missing or
+invalid is 404; a storage failure is 502, because a broken image and an outage are worth telling apart.
+
+Reads are rate-limited separately from uploads — 600/min/IP against `avatarLimiter`'s 5/hour/player — because one table
+view legitimately fetches nine images and the route is unauthenticated.
+
+Until the Cloudflare frontend migration these bytes came from a CloudFront behaviour that rewrote `/avatars/*` onto the
+bucket over OAC. There is no distribution in front of the app any more, so `AVATAR_BASE_URL`
+(`/ctech/{env}/poker/avatar-base-url`) points at this route and the API is the only reader of the bucket.
 
 ## Sandbox & real-money ledgers
 

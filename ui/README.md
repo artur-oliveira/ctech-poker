@@ -28,7 +28,8 @@ backend gate (`REAL_MONEY_ENABLED`) is off by default.
 
 | Key | Where read | Purpose |
 |---|---|---|
-| `NEXT_PUBLIC_API_URL` | `src/lib/api/client.ts` | poker API base URL (HTTP + derives WS origin); dev default `http://localhost:8003` via proxy |
+| `NEXT_PUBLIC_API_URL` | `src/lib/api/client.ts` | poker API base URL (HTTP); dev default `http://localhost:8003` via proxy |
+| `NEXT_PUBLIC_WS_URL` | `src/lib/ws/origin.ts` | WebSocket origin for both gateways. Set explicitly in deployed builds and **must** be: the deploy workflow builds the CSP's `connect-src` from the origin literals in the build environment and `connect-src` is scheme-exact, so a `wss://` host derived at runtime never appears in the policy and every socket is blocked. Falls back to `NEXT_PUBLIC_API_URL` with the scheme swapped, which is the local-dev path |
 | `NEXT_PUBLIC_APP_URL` | `src/app/layout.tsx` | `metadataBase` for OG/meta tags |
 | `NEXT_PUBLIC_MOCK_API` | `src/lib/mockConfig.ts` | `true` runs the in-memory mock realtime engine instead of a live API |
 | `NEXT_PUBLIC_REAL_MONEY_ENABLED` | `src/lib/capabilities.ts` | `true` exposes real-money statistics/history; absent or any other value keeps the UI sandbox-only and coerces real-money hand URLs to sandbox |
@@ -38,6 +39,12 @@ backend gate (`REAL_MONEY_ENABLED`) is off by default.
 
 No `.env.example` exists in `ui/`. `NEXT_PUBLIC_*` values are injected at build time by
 `frontend.yml` per environment — static export bakes them in, there is no runtime env lookup.
+`frontend.yml` is a thin caller of `ctech-cdk/.github/workflows/frontend-cloudflare.yml`, which deploys
+the export to a Cloudflare Worker and derives `connect-src` from those same values; it also carries an
+`AVATAR_UPLOAD_ORIGIN` that no component reads, purely so the presigned S3 upload host reaches the policy.
+
+Avatar URLs are absolute and come from the API (`AVATAR_BASE_URL` → `https://poker-api[-env].aoctech.app/v1.0/avatars`),
+which is why `img-src` names the API host. `images: {unoptimized: true}`, so no `remotePatterns` entry is involved.
 
 ## Routes (App Router, `src/app/`)
 

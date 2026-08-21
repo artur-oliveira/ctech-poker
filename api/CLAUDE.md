@@ -16,7 +16,7 @@ reconciliation retries. **Still blocking, found 2026-07-25 while verifying cross
 - No ASG lifecycle hook exists in either `ctech-cdk`'s `PrivateIpv4Ec2Service` or this repo's `cdk/lib/api-stack.ts` —
   `tablemanager.DrainAndRelease` relies on the EC2 default shutdown grace period, not a guaranteed drain window.
 - The real-money buy-in path skips the poker-terms-acceptance check the sandbox path performs (`internal/app/app.go`).
-- No WAF at the CloudFront edge; application rate limits (`internal/api/v1/ratelimit.go`) and Turnstile are the only
+- No WAF at the CloudFront edge (and the distribution itself is being retired — the app is on Cloudflare Workers); application rate limits (`internal/api/v1/ratelimit.go`) and Turnstile are the only
   protection.
 - Neither EventBridge Scheduler target (`cmd/reconcile`, `cmd/tablecleanup`) has a DLQ.
 
