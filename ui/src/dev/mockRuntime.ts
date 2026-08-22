@@ -1061,6 +1061,28 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     mockProfile.sandbox_balance += 250;
     return ok({amount: 250, remaining_time_seconds: MOCK_CREDIT_COOLDOWN_S}, config);
   }
+  if (method === 'GET' && /^\/v1\.0\/wallet\/cosmetic-purchase\/(deck|felt)\/catalog$/.test(path)) {
+    const kind = path.includes('/deck/') ? 'deck' : 'felt';
+    const deckCatalog = [
+      {kind: 'deck', id: 'four-color', premium: false},
+      {kind: 'deck', id: 'two-color', premium: false},
+      {kind: 'deck', id: 'colorblind', premium: false},
+      {kind: 'deck', id: 'high-constrast', premium: false},
+      {kind: 'deck', id: 'casino', premium: true, price_cents: 500, price_fichas: 200000},
+      {kind: 'deck', id: 'bicycle', premium: true, price_cents: 500, price_fichas: 200000},
+      {kind: 'deck', id: 'vintage', premium: true, price_cents: 500, price_fichas: 200000},
+      {kind: 'deck', id: 'golden', premium: true, price_cents: 1000, price_fichas: 500000},
+      {kind: 'deck', id: 'pink', premium: true, price_cents: 1000, price_fichas: 500000},
+      {kind: 'deck', id: 'alt', premium: true, price_cents: 1000, price_fichas: 500000},
+    ];
+    const feltCatalog = [
+      {kind: 'felt', id: 'classic', premium: false},
+      {kind: 'felt', id: 'midnight', premium: true, price_cents: 500, price_fichas: 1000000},
+      {kind: 'felt', id: 'burgundy', premium: true, price_cents: 500, price_fichas: 1000000},
+      {kind: 'felt', id: 'ocean', premium: true, price_cents: 500, price_fichas: 1000000},
+    ];
+    return ok(kind === 'deck' ? deckCatalog : feltCatalog, config);
+  }
   if (method === 'GET' && path.startsWith('/v1.0/wallet/cosmetic-purchase')) return ok([], config);
   console.log(path);
   return ok({}, config);

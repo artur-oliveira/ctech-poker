@@ -10,6 +10,8 @@ import {cardPath} from '@/lib/cards';
 import {DECK_VARIANTS, type DeckVariantId} from '@/lib/cardVariants';
 import {TABLE_THEMES, type TableThemeId} from '@/lib/tablePreferences';
 
+const ACES = ['As', 'Ah', 'Ad', 'Ac'];
+
 const STATUS_LABEL: Record<string, string> = {
   processing: 'Processando', pending: 'Aguardando Pix', confirmed: 'Liberada', refunding: 'Estornando',
   refunded: 'Estornada', expired: 'Expirada', failed: 'Falhou'
@@ -79,7 +81,9 @@ function CosmeticGrid({kind, labelFor, renderPreview, ariaLabel, loadingLabel, e
 
 export function DeckStoreSection(props: CosmeticSectionProps) {
   return <CosmeticGrid {...props} kind="deck" labelFor={id => DECK_VARIANTS[id as DeckVariantId]?.label}
-    renderPreview={id => <Image src={cardPath('As', id as DeckVariantId)} alt="" width={40} height={56}/>}
+    renderPreview={id => <span className="cosmetic-store-deck-preview">
+      {ACES.map(card => <Image key={card} src={cardPath(card, id as DeckVariantId)} alt="" width={14} height={20}/>)}
+    </span>}
     ariaLabel="Catálogo de baralhos" loadingLabel="Carregando baralhos…"
     emptyLabel="Nenhum baralho disponível no momento."/>;
 }

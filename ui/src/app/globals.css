@@ -1478,6 +1478,17 @@ h1 em {
     background: radial-gradient(circle, var(--theme-a), var(--theme-b))
 }
 
+.table-theme-option.locked {
+    color: var(--text-secondary)
+}
+
+.table-theme-option.locked svg {
+    width: 13px;
+    height: 13px;
+    margin-inline-start: auto;
+    color: var(--text-secondary)
+}
+
 .table-preference-toggle {
     display: flex;
     align-items: center;
@@ -2991,6 +3002,17 @@ h1 em {
 .deck-variant-option-cards {
     display: flex;
     gap: 2px
+}
+
+.deck-variant-option.locked {
+    color: var(--text-secondary)
+}
+
+.deck-variant-option.locked svg {
+    width: 13px;
+    height: 13px;
+    margin-inline-start: auto;
+    color: var(--text-secondary)
 }
 
 .connection-state svg {
@@ -14577,6 +14599,138 @@ button.deck-grid-slot:hover {
     margin: 0;
     padding: 0;
     list-style: none
+}
+
+.cosmetic-store-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none
+}
+
+.cosmetic-store-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "preview copy state" "preview copy action";
+    align-items: center;
+    gap: 4px 12px;
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-panel);
+    background: var(--surface-control)
+}
+
+.cosmetic-store-item.owned {
+    border-color: color-mix(in srgb, var(--gold) 38%, transparent);
+    background: color-mix(in srgb, var(--gold) 5%, var(--surface-control))
+}
+
+.cosmetic-store-preview {
+    grid-area: preview;
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 64px;
+    border-radius: var(--rounded-control);
+    background: var(--surface-seat);
+    overflow: hidden
+}
+
+.cosmetic-store-deck-preview {
+    display: flex;
+    padding-left: 4px
+}
+
+.cosmetic-store-deck-preview img {
+    width: 14px;
+    height: 20px;
+    margin-left: -4px;
+    border-radius: 2px;
+    filter: drop-shadow(0 2px 2px var(--black-08));
+    transform: rotate(calc((var(--card-index, 0) - 1.5) * 2deg));
+    transform-origin: 50% 100%
+}
+
+.cosmetic-store-deck-preview img:first-child {
+    margin-left: 0
+}
+
+.cosmetic-store-deck-preview img:nth-child(1) { --card-index: 0 }
+.cosmetic-store-deck-preview img:nth-child(2) { --card-index: 1 }
+.cosmetic-store-deck-preview img:nth-child(3) { --card-index: 2 }
+.cosmetic-store-deck-preview img:nth-child(4) { --card-index: 3 }
+
+.cosmetic-store-copy {
+    grid-area: copy;
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px
+}
+
+.cosmetic-store-copy strong {
+    overflow: hidden;
+    color: var(--paper);
+    font-size: var(--font-size-body);
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+
+.cosmetic-store-copy small {
+    color: var(--text-secondary);
+    font: 600 var(--font-size-compact) var(--font-mono);
+    font-variant-numeric: tabular-nums
+}
+
+.cosmetic-store-free,
+.cosmetic-store-owned,
+.cosmetic-store-lock,
+.cosmetic-store-state {
+    grid-area: state;
+    display: inline-flex;
+    align-items: center;
+    justify-self: end;
+    gap: 4px;
+    color: var(--text-secondary);
+    font-size: var(--font-size-compact);
+    font-weight: 700;
+    white-space: nowrap
+}
+
+.cosmetic-store-owned {
+    color: var(--gold-pale)
+}
+
+.cosmetic-store-owned svg,
+.cosmetic-store-lock svg {
+    width: 13px;
+    height: 13px
+}
+
+.cosmetic-store-action {
+    grid-area: action;
+    justify-self: end
+}
+
+.cosmetic-store-action button {
+    min-height: 34px
+}
+
+.cosmetic-store-wait {
+    color: var(--muted-rose);
+    font-size: var(--font-size-compact)
+}
+
+.felt-swatch {
+    display: inline-block;
+    width: 40px;
+    height: 28px;
+    border: 2px solid var(--white-22);
+    border-radius: var(--rounded-control);
+    background: radial-gradient(circle, var(--theme-a), var(--theme-b))
 }
 
 .reaction-history-list li {
