@@ -14,7 +14,7 @@ import {playerName} from '@/lib/utils';
 
 /** Discovery is exact-code only: there is no fuzzy search by display name, so
  * a name can never be used to enumerate accounts. */
-export function FriendCodeLookup({actions}: {actions: SocialActionState}) {
+export function FriendCodeLookup({actions}: { actions: SocialActionState }) {
   const inputId = useId();
   const {data: me} = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
   const [code, setCode] = useState('');
@@ -53,7 +53,7 @@ export function FriendCodeLookup({actions}: {actions: SocialActionState}) {
   return <section className="friend-code-shell" aria-label="Código de amizade">
     <div className="friend-code-own">
       <span>Seu código</span>
-      <b>{me?.friend_code || '-'}</b>
+      <b>{me?.friend_code || '—'}</b>
       <Button type="button" variant="ghost" size="icon" disabled={!me?.friend_code}
               aria-label="Copiar meu código de amizade" onClick={copyOwnCode}>
         {copied ? <Check aria-hidden="true"/> : <Copy aria-hidden="true"/>}
@@ -73,8 +73,8 @@ export function FriendCodeLookup({actions}: {actions: SocialActionState}) {
     </div>
     {error && <p className="social-error" role="alert">{error}</p>}
     {found && <div className="friend-code-result">
-      <PlayerAvatar name={found.name} avatarUrl={found.avatar_url} size={40}/>
-      <b>{playerName(found.player_id, undefined, found.name)}</b>
+        <PlayerAvatar name={found.name} avatarUrl={found.avatar_url} size={40}/>
+        <b>{playerName(found.player_id, undefined, found.name)}</b>
       {sent || found.relationship === 'outgoing' ? <span role="status">Solicitação enviada</span>
         : found.relationship === 'friend' ? <span>Já é seu amigo</span>
           : <Button type="button" disabled={actions.pending?.id === found.player_id} onClick={async () => {
