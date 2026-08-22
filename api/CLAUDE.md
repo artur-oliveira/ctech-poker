@@ -69,7 +69,9 @@ reconciliation retries. **Still blocking, found 2026-07-25 while verifying cross
 - Tests: `go test ./... -race`. Integration tests use DynamoDB Local (`docker-compose.test.yml`). Engine logic is
   unit-tested; keep it that way. The normal `handeval` suite uses a deterministic 20,000-hand differential sample; its
   exhaustive proof over all C (52,7) = 133,784,560 hands is behind `-tags exhaustive` (~10 min) — run it after any
-  change to `ref`, `hashq`, the generator, or `tables.bin`.
+  change to `ref`, `hashq`, the generator, or `tables.bin`. Multi-server turn-order/timer changes must also run
+  `go test -tags integration -race ./tests/integration -run TestMultiServerFuzz`; retain the existing `-count=15`
+  stress run for changes to `internal/table/actor.go` timer paths.
 
 ## B9 authz — what is enforced (fixed 2026-07)
 

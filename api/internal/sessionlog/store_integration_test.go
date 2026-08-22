@@ -4,17 +4,24 @@ package sessionlog
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 )
 
+func uniqueSessionPlayerID(t *testing.T) string {
+	t.Helper()
+	return fmt.Sprintf("%s-%d", t.Name(), time.Now().UnixNano())
+}
+
 func TestFindOpenSessionReturnsTheMostRecentUnclosedSessionForTable(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()
-	_ = store.RecordSession(ctx, SessionItem{PK: "p1", TableID: "t1", JoinedAt: 1})
-	_ = store.RecordSession(ctx, SessionItem{PK: "p1", TableID: "t2", JoinedAt: 2})
+	playerID := uniqueSessionPlayerID(t)
+	_ = store.RecordSession(ctx, SessionItem{PK: playerID, TableID: "t1", JoinedAt: 1})
+	_ = store.RecordSession(ctx, SessionItem{PK: playerID, TableID: "t2", JoinedAt: 2})
 
-	open, err := store.FindOpenSession(ctx, "p1", "t2")
+	open, err := store.FindOpenSession(ctx, playerID, "t2")
 	if err != nil {
 		t.Fatalf("FindOpenSession: %v", err)
 	}
@@ -26,17 +33,18 @@ func TestFindOpenSessionReturnsTheMostRecentUnclosedSessionForTable(t *testing.T
 func TestFindLatestOpenSessionReconcilesAcrossTables(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()
-	if err := store.RecordSession(ctx, SessionItem{PK: "presence-player", SK: "1", TableID: "closed", JoinedAt: 1, EndedAt: 2}); err != nil {
+	playerID := uniqueSessionPlayerID(t)
+	if err := store.RecordSession(ctx, SessionItem{PK: playerID, SK: "1", TableID: "closed", JoinedAt: 1, EndedAt: 2}); err != nil {
 		t.Fatal(err)
 	}
-	open, err := store.FindLatestOpenSession(ctx, "presence-player")
+	open, err := store.FindLatestOpenSession(ctx, playerID)
 	if err != nil || open {
 		t.Fatalf("open=%v err=%v", open, err)
 	}
-	if err := store.RecordSession(ctx, SessionItem{PK: "presence-player", SK: "2", TableID: "open", JoinedAt: 3}); err != nil {
+	if err := store.RecordSession(ctx, SessionItem{PK: playerID, SK: "2", TableID: "open", JoinedAt: 3}); err != nil {
 		t.Fatal(err)
 	}
-	open, err = store.FindLatestOpenSession(ctx, "presence-player")
+	open, err = store.FindLatestOpenSession(ctx, playerID)
 	if err != nil || !open {
 		t.Fatalf("open=%v err=%v", open, err)
 	}
@@ -53,17 +61,18 @@ func TestFindLatestOpenSessionReconcilesAcrossTables(t *testing.T) {
 func TestFindOpenSessionSurvivesFiftyPlusNewerSessionsElsewhere(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()
+	playerID := uniqueSessionPlayerID(t)
 
-	_ = store.RecordSession(ctx, SessionItem{PK: "p3", TableID: "old-table", JoinedAt: 1})
+	_ = store.RecordSession(ctx, SessionItem{PK: playerID, TableID: "old-table", JoinedAt: 1})
 
 	for i := 0; i < 60; i++ {
-		item := SessionItem{PK: "p3", TableID: "other-table", JoinedAt: 2, EndedAt: 3}
+		item := SessionItem{PK: playerID, TableID: "other-table", JoinedAt: 2, EndedAt: 3}
 		if err := store.RecordSession(ctx, item); err != nil {
 			t.Fatalf("seed session %d: %v", i, err)
 		}
 	}
 
-	open, err := store.FindOpenSession(ctx, "p3", "old-table")
+	open, err := store.FindOpenSession(ctx, playerID, "old-table")
 	if err != nil {
 		t.Fatalf("FindOpenSession: %v", err)
 	}
@@ -75,9 +84,10 @@ func TestFindOpenSessionSurvivesFiftyPlusNewerSessionsElsewhere(t *testing.T) {
 func TestCloseSessionOverwritesTheSameItem(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()
-	_ = store.RecordSession(ctx, SessionItem{PK: "p2", SK: "fixed", TableID: "t1", JoinedAt: 1, BuyinAmount: 500})
+	playerID := uniqueSessionPlayerID(t)
+	_ = store.RecordSession(ctx, SessionItem{PK: playerID, SK: "fixed", TableID: "t1", JoinedAt: 1, BuyinAmount: 500})
 
-	open, _ := store.FindOpenSession(ctx, "p2", "t1")
+	open, _ := store.FindOpenSession(ctx, playerID, "t1")
 	open.EndedAt = 99
 	open.CashoutAmount = 700
 	open.NetPnL = 200
@@ -85,7 +95,7 @@ func TestCloseSessionOverwritesTheSameItem(t *testing.T) {
 		t.Fatalf("CloseSession: %v", err)
 	}
 
-	sessions, _, _ := store.ListSessions(ctx, "p2", 10, nil)
+	sessions, _, _ := store.ListSessions(ctx, playerID, 10, nil)
 	if len(sessions) != 1 {
 		t.Fatalf("expected the close to overwrite, not append — got %d items", len(sessions))
 	}
@@ -102,16 +112,17 @@ func TestCloseSessionOverwritesTheSameItem(t *testing.T) {
 func TestCloseSessionRefreshesTTL(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()
+	playerID := uniqueSessionPlayerID(t)
 	staleTTL := time.Now().Add(time.Hour).Unix()
-	_ = store.RecordSession(ctx, SessionItem{PK: "p4", SK: "fixed", TableID: "t1", JoinedAt: 1, TTL: staleTTL})
+	_ = store.RecordSession(ctx, SessionItem{PK: playerID, SK: "fixed", TableID: "t1", JoinedAt: 1, TTL: staleTTL})
 
-	open, _ := store.FindOpenSession(ctx, "p4", "t1")
+	open, _ := store.FindOpenSession(ctx, playerID, "t1")
 	open.EndedAt = 99
 	if err := store.CloseSession(ctx, *open); err != nil {
 		t.Fatalf("CloseSession: %v", err)
 	}
 
-	sessions, _, _ := store.ListSessions(ctx, "p4", 10, nil)
+	sessions, _, _ := store.ListSessions(ctx, playerID, 10, nil)
 	if len(sessions) != 1 {
 		t.Fatalf("expected 1 session, got %d", len(sessions))
 	}

@@ -32,8 +32,8 @@ func allCosmeticSKUs() []walletclient.ProductSKU {
 		{ID: "poker_deck_casino", PriceCents: 200}, {ID: "poker_deck_bicycle", PriceCents: 200},
 		{ID: "poker_deck_vintage", PriceCents: 200}, {ID: "poker_deck_golden", PriceCents: 500},
 		{ID: "poker_deck_pink", PriceCents: 500}, {ID: "poker_deck_alt", PriceCents: 500},
-		{ID: "poker_felt_midnight", PriceCents: 200}, {ID: "poker_felt_burgundy", PriceCents: 200},
-		{ID: "poker_felt_ocean", PriceCents: 200},
+		{ID: "poker_felt_midnight", PriceCents: 1000}, {ID: "poker_felt_burgundy", PriceCents: 1000},
+		{ID: "poker_felt_ocean", PriceCents: 1000},
 	}
 }
 
@@ -77,7 +77,7 @@ type premiumFixture struct {
 func premiumFixtures() []premiumFixture {
 	return []premiumFixture{
 		{kind: cosmetics.KindDeck, itemID: "golden", sku: "poker_deck_golden", priceFichas: 500_000, priceCents: 500},
-		{kind: cosmetics.KindFelt, itemID: "midnight", sku: "poker_felt_midnight", priceFichas: 200_000, priceCents: 200},
+		{kind: cosmetics.KindFelt, itemID: "midnight", sku: "poker_felt_midnight", priceFichas: 1_000_000, priceCents: 1000},
 	}
 }
 
