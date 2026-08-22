@@ -82,8 +82,8 @@ export default function Home() {
     <section className="hero shell">
       <div className="hero-copy">
         <span className="hero-kicker"><Sparkles aria-hidden="true"/>Sua próxima mesa já está pronta</span>
-        <h1>A noite de poker <em>começa aqui.</em></h1>
-        <p>Jogue Texas Hold&apos;em online com seus amigos, leia a mesa e guarde as histórias de cada mão. Não precisa
+        <h1>Chame seus amigos para jogar poker.</h1>
+        <p>Jogue Texas Hold&apos;em online com seus amigos, acompanhe seus adversários e reveja o histórico de cada mão. Não precisa
           instalar nada e as fichas são só pela diversão.
         </p>
         <div className="hero-actions">
@@ -94,7 +94,7 @@ export default function Home() {
           <span><i/> Fichas sandbox</span>
           <span>2–9 jogadores</span>
           <span>Sem download</span>
-          <span>Baralho auditável</span>
+          <span>Baralho verificável</span>
         </div>
       </div>
       <HeroTable/>
@@ -102,14 +102,14 @@ export default function Home() {
     <section id="novidades" className="landing-new shell">
       <header className="landing-new-heading">
         <h2>Mais recursos para suas partidas</h2>
-        <p>As novidades foram feitas para o que acontece entre as apostas: a leitura dos rivais, a resenha com os
-          amigos e aquela mão que merece ser vista mais uma vez.</p>
+        <p>As novidades foram feitas para o que acontece entre as apostas: entender os adversários, bater papo com os
+          amigos e rever aquela mão que merece ser vista de novo.</p>
       </header>
 
       <article className="landing-story landing-story-social">
         <div className="landing-story-copy">
           <MessageCircleMore aria-hidden="true"/>
-          <h3>A mesa ficou mais divertida.</h3>
+          <h3>Mais formas de interagir na mesa.</h3>
           <p>Reaja no momento certo, mande um café ou uma ficha para alguém e registre notas privadas sobre os
             adversários. Em mesas habilitadas, um all-in ainda pode ter dois desfechos com <em>Run it twice</em>.</p>
           <ul className="landing-feature-list">
@@ -168,7 +168,7 @@ export default function Home() {
     </section>
     <section id="achievements" className="achievements-teaser shell">
       <div className="achievements-teaser-copy">
-        <h2>Algumas mãos terminam. Outras viram estrela.</h2>
+        <h2>Conquistas para os momentos que valem a pena lembrar.</h2>
         <p>Blefes que funcionam, all-ins decisivos, combinações raras na mesa: cada conquista premia seu estilo de jogo
           com até 5 estrelas de maestria.</p>
         <Link href="/achievements">Ver catálogo de conquistas <ArrowRight/></Link>

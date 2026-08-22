@@ -2404,7 +2404,7 @@ h1 em {
 }
 
 .self-hud-metrics strong {
-    font: 750 24px var(--font-mono);
+    font: 700 24px var(--font-mono);
     color: var(--on-brand)
 }
 
@@ -8468,7 +8468,7 @@ h1 em {
 
 .achievement-overview-heading strong {
     color: var(--gold);
-    font: 750 24px var(--font-mono);
+    font: 700 24px var(--font-mono);
     letter-spacing: -.03em
 }
 
@@ -9294,7 +9294,7 @@ h1 em {
 }
 
 .store-sku-credits {
-    font: 750 var(--font-size-large) var(--font-mono);
+    font: 700 var(--font-size-large) var(--font-mono);
     font-variant-numeric: tabular-nums
 }
 

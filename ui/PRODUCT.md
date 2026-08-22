@@ -43,7 +43,7 @@ predatory; and friendly without becoming childish.
 4. **Speed is part of trust.** Input, dealing, betting, and reconnecting must feel immediate. Loading, latency, and
    recovery states should be visible and honest rather than leaving the table frozen.
 5. **One CTech family, a distinct game.** Preserve the CTech products' clarity, restrained component vocabulary,
-   explicit state semantics, Geist typography, and trust-first behavior while giving Poker its own vivid, dark,
+   explicit state semantics, IBM Plex typography, and trust-first behavior while giving Poker its own vivid, dark,
    table-focused identity.
 
 ## Accessibility & Inclusion

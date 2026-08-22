@@ -107,54 +107,54 @@ colors:
   surface-seat-92: "#171011eb"
 typography:
   display:
-    fontFamily: "Geist, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
     fontSize: "clamp(2.375rem, 5vw, 3.875rem)"
     fontWeight: 700
     lineHeight: 1.05
     letterSpacing: "-0.04em"
   title:
-    fontFamily: "Geist, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
     fontSize: "1.5rem"
     fontWeight: 700
     lineHeight: 1.2
   body:
-    fontFamily: "Geist, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
     fontSize: "0.875rem"
     fontWeight: 400
     lineHeight: 1.5
   label:
-    fontFamily: "Geist, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
     fontSize: "0.875rem"
     fontWeight: 600
     lineHeight: 1.2
   mono:
-    fontFamily: "Geist Mono, ui-monospace, SFMono-Regular, monospace"
+    fontFamily: "IBM Plex Mono, ui-monospace, SFMono-Regular, monospace"
     fontSize: "0.75rem"
     fontWeight: 600
     lineHeight: 1.2
     letterSpacing: "0.1em"
   tiny:
-    fontFamily: "Geist, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
     fontSize: "0.625rem"
     fontWeight: 600
     lineHeight: 1.2
   compact:
-    fontFamily: "Geist, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
     fontSize: "0.6875rem"
     fontWeight: 600
     lineHeight: 1.2
   subtitle:
-    fontFamily: "Geist, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
     fontSize: "1.125rem"
     fontWeight: 400
     lineHeight: 1.5
   large:
-    fontFamily: "Geist, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
     fontSize: "1.25rem"
     fontWeight: 700
     lineHeight: 1.2
   xl:
-    fontFamily: "Geist, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
     fontSize: "2rem"
     fontWeight: 700
     lineHeight: 1.15
@@ -239,7 +239,7 @@ components:
 
 CTech Poker feels like sitting at a responsive physical table with other people, not operating a static card diagram. Cards arrive with purpose, chips travel between meaningful positions, turns are unmistakable, and the table always acknowledges input. The dark room recedes so the felt, cards, people, and the current decision carry the scene.
 
-This is the vivid member of the CTech product family. It inherits Geist typography, direct pt-BR copy, clear state semantics, familiar controls, restrained radii, accessible focus, and trust-first behavior from Account, Wallet, and DFe — then departs through a dark, table-focused composition and richer state motion. Vivid never means noisy: motion reports play, color reports meaning, decoration never competes with a decision.
+This is the vivid member of the CTech product family. It inherits IBM Plex typography, direct pt-BR copy, clear state semantics, familiar controls, restrained radii, accessible focus, and trust-first behavior from Account, Wallet, and DFe — then departs through a dark, table-focused composition and richer state motion. Vivid never means noisy: motion reports play, color reports meaning, decoration never competes with a decision.
 
 The system explicitly rejects PokerStars-style frozen play, casino clutter, predatory prompts, childish gamification, and crypto aesthetics. It should feel social and competitive without manufacturing urgency, and physical without imitating a gaudy casino floor.
 
@@ -285,15 +285,15 @@ A dark wine room supports three physical materials — green felt, warm card sto
 
 ## 3. Typography
 
-**Display Font:** Geist (`ui-sans-serif, system-ui, sans-serif` fallback)
-**Body Font:** Geist (`ui-sans-serif, system-ui, sans-serif` fallback)
-**Label/Mono Font:** Geist Mono (`ui-monospace, SFMono-Regular, monospace` fallback)
+**Display Font:** IBM Plex Sans (`ui-sans-serif, system-ui, sans-serif` fallback)
+**Body Font:** IBM Plex Sans (`ui-sans-serif, system-ui, sans-serif` fallback)
+**Label/Mono Font:** IBM Plex Mono (`ui-monospace, SFMono-Regular, monospace` fallback)
 
-**Character:** One CTech sans keeps the product familiar and fast to scan. Geist Mono acts as the table readout for pots, stakes, timers, equity, and compact state labels; never a crypto or terminal affectation.
+**Character:** IBM Plex Sans keeps the product clear and quick to scan while its more distinctive terminals make the game feel less scaffolded. IBM Plex Mono acts as the table readout for pots, stakes, timers, equity, and compact state labels; never a crypto or terminal affectation.
 
-> **Resolved (2026-07-28):** Geist and Geist Mono are bound via `next/font/google` in
-> `src/app/layout.tsx:8-9`, exposing `--font-sans` and `--font-mono`. Earlier revisions of this
-> doc flagged them as unwired; that gap is closed and the family above is what actually renders.
+> **Resolved (2026-08-22):** IBM Plex Sans and IBM Plex Mono are bound via `next/font/google` in
+> `src/app/layout.tsx`, exposing `--font-sans` and `--font-mono`. The explicit 400–700 weight
+> cuts are self-hosted by Next.js; the former 750 mono readouts use 700.
 
 ### Hierarchy
 - **Display** (700, `clamp(2.375rem, 5vw, 3.875rem)`, 1.05, `-0.04em`): lobby / landing titles only. In gameplay, fixed compact sizes preserve table space.
@@ -303,7 +303,7 @@ A dark wine room supports three physical materials — green felt, warm card sto
 - **Mono** (600, `0.75rem`, `0.1em` tracking, sizes 9–12px in practice): pots, stakes, timers, chip values, brief system state. Use `tabular-nums` for changing values.
 
 ### Named Rules
-**The Readout Rule.** If a value changes during play or must align with another value, render it in Geist Mono with tabular numerals. Player names and conversational copy stay in Geist.
+**The Readout Rule.** If a value changes during play or must align with another value, render it in IBM Plex Mono with tabular numerals. Player names and conversational copy stay in IBM Plex Sans.
 
 **The Game-Space Rule.** Marketing titles may be fluid; table UI uses a fixed, tight type scale so responsive adaptation changes structure rather than shrinking critical labels.
 
@@ -370,7 +370,7 @@ The component vocabulary is tactile and immediate: controls look pressable, ackn
 
 ### Navigation
 
-- **Style:** sparse top navigation, Geist 14px, brand identity on the left and authenticated destinations on the right. `public/svgs/logo.svg` is the canonical product mark: a “P” built from two nested monoline strokes, echoing the geometric family logic of Account without depending on cards, ranks, or suits. Its oxblood, white, and soft-red geometry replaces generic suit glyphs across landing, app chrome, public shares, state pages, footers, and the table signature.
+- **Style:** sparse top navigation, IBM Plex Sans 14px, brand identity on the left and authenticated destinations on the right. `public/svgs/logo.svg` is the canonical product mark: a “P” built from two nested monoline strokes, echoing the geometric family logic of Account without depending on cards, ranks, or suits. Its oxblood, white, and soft-red geometry replaces generic suit glyphs across landing, app chrome, public shares, state pages, footers, and the table signature.
 - **Ownership:** route navigation belongs to the shared `app-nav`; `AppPageHeader` contains page identity and contextual actions only. Lobby is the first authenticated destination and is omitted from public navigation.
 - **States:** hover moves muted text to white; current location communicated through text and state, not color alone.
 - **Mobile:** below 600px the seven `MAIN_ROUTES` icons move out of `app-nav` entirely into a fixed
@@ -394,7 +394,7 @@ The signature composition: a brown physical rail around green felt, cards at the
 ### Do:
 - **Do** make every card, chip, turn, connection, and result transition communicate a real state change.
 - **Do** keep most interaction transitions between 150–250 ms with exponential ease-out curves; dealing may run up to 450 ms when sequence clarity benefits.
-- **Do** preserve the shared CTech family vocabulary: Geist, direct copy, 12–16px control/container radii, explicit states, clear focus, WCAG 2.2 AA.
+- **Do** preserve the shared CTech family vocabulary: IBM Plex, direct copy, 12–16px control/container radii, explicit states, clear focus, WCAG 2.2 AA.
 - **Do** reserve Table Red (`#af2a2f`) for the primary decision, active player context, and focus signal.
 - **Do** reserve Felt (`#0d5b45`), Card Paper (`#f6f0e7`), and Chip Gold (`#e6b85c`) for their named physical meanings.
 - **Do** pair suit, turn, win, error, and connection colors with text, iconography, shape, or position.

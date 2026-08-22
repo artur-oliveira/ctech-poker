@@ -18,7 +18,7 @@ backend gate (`REAL_MONEY_ENABLED`) is off by default.
 - Auth: **`@aoctech/auth-client`** (the design docs say `ctech-oauth-client`; trust the code).
 - Data: `@tanstack/react-query`; forms: `react-hook-form` + `zod`; UI: `@base-ui/react`/shadcn
   + Tailwind 4; icons: `lucide-react`.
-- Fonts: Geist / Geist Mono via `next/font/google`, bound to `--font-sans` / `--font-mono` in
+- Fonts: IBM Plex Sans / IBM Plex Mono via `next/font/google`, bound to `--font-sans` / `--font-mono` in
   `src/app/layout.tsx:8-9`. (Older docs claim this is unwired — it is wired.)
 - Dev proxy: `next.config.ts` rewrites `/v1.0/*` → `DEV_API_ORIGIN` (default
   `http://localhost:8003`). Mock mode: `NEXT_PUBLIC_MOCK_API=true` (`dev:mock`) runs a full

@@ -1,13 +1,13 @@
 import type {Metadata, Viewport} from 'next';
-import {Geist, Geist_Mono} from 'next/font/google';
+import {IBM_Plex_Mono, IBM_Plex_Sans} from 'next/font/google';
 import {QueryProvider} from '@/lib/providers/QueryProvider';
 import {Notifier} from '@/components/Notifier';
 import {RouteAnnouncer} from '@/components/RouteAnnouncer';
 import './globals.css';
 import React from "react";
 
-const sans = Geist({subsets: ['latin'], variable: '--font-sans'});
-const mono = Geist_Mono({subsets: ['latin'], variable: '--font-mono'});
+const sans = IBM_Plex_Sans({subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-sans'});
+const mono = IBM_Plex_Mono({subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-mono'});
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://poker.aoctech.app'),

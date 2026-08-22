@@ -23,7 +23,7 @@ describe('landing page', () => {
   test('renders the complete public navigation and product proposition', () => {
     render(<Home/>);
     
-    expect(screen.getByRole('heading', {name: /A noite de poker/})).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name: 'Chame seus amigos para jogar poker.'})).toBeInTheDocument();
     expect(screen.getByRole('link', {name: 'Novidades'})).toHaveAttribute('href', '#novidades');
     expect(screen.getByRole('link', {name: 'Por que jogar'})).toHaveAttribute('href', '#experience');
     expect(screen.getByRole('link', {name: 'Conquistas'})).toHaveAttribute('href', '#achievements');
