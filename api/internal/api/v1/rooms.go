@@ -113,8 +113,9 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 		runItTwice = *req.RunItTwiceEnabled
 	}
 	entryFeeCents := int64(0)
+	tier := ""
 	if currencyMode == "real" {
-		entryFeeCents, _ = realStakeFeeCents(req.SmallBlind, req.BigBlind)
+		entryFeeCents, tier, _ = realStakeLookup(req.SmallBlind, req.BigBlind)
 	}
 	room := roomstore.Room{
 		ID:                   newRoomID(),
@@ -126,6 +127,7 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 		BuyInMin:             req.BuyInMin,
 		BuyInMax:             req.BuyInMax,
 		EntryFeeCents:        entryFeeCents,
+		Tier:                 tier,
 		EquityDisplayEnabled: equity,
 		RunItTwiceEnabled:    runItTwice,
 		Status:               "waiting",
@@ -236,7 +238,21 @@ func (h *roomHandlers) seated(c fiber.Ctx) error {
 	if err != nil {
 		return problem.InternalServer("failed to check seat", c, err).Send(c)
 	}
-	return c.JSON(fiber.Map{"seated": seated, "stack": stack})
+	resp := fiber.Map{"seated": seated, "stack": stack}
+	if room.CurrencyMode == roomstore.CurrencyModeReal && room.EntryFeeCents > 0 {
+		feeDue, expiresAt, err := h.buyin.FeeStatus(c.Context(), room, userID)
+		if err != nil {
+			return problem.InternalServer("failed to check entry fee status", c, err).Send(c)
+		}
+		resp["entry_fee_cents"] = room.EntryFeeCents
+		resp["fee_due"] = feeDue
+		if !feeDue {
+			resp["entitlement_expires_at"] = expiresAt
+		} else {
+			resp["entitlement_expires_at"] = nil
+		}
+	}
+	return c.JSON(resp)
 }
 
 // sanitizeRoom strips the share code from any viewer other than the room's

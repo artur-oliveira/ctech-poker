@@ -26,7 +26,7 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   **Not Lambda/Fargate.** The Go binary is the HAProxy target directly on port 8080 (no nginx).
   The retained edge security group and VPC are imported from SSM/lookup; no ALB target group or
   listener rule is created.
-- **15 DynamoDB tables** (`dynamodb-stack.ts`), not 8 — an older revision of this file undercounted.
+- **25 DynamoDB tables** (`dynamodb-stack.ts`) — an older revision of this file undercounted (15, before it, 8).
 - **WebSocket is served by the Go binary** on the ASG (not API Gateway); binary protobuf frames on
   two gateways (`/v1.0/tables/:id/ws`, `/v1.0/ws`).
 - **Valkey is mandatory in prod** (in-memory fallback is dev/stage only; prod fails closed).

@@ -15,6 +15,7 @@ export type TableName =
   'poker_player_notes' | 'poker_hand_shares' | 'poker_player_poker_stats' | 'poker_sandbox_purchases' |
   'poker_reaction_entitlements' | 'poker_reaction_purchases' |
   'poker_cosmetic_entitlements' | 'poker_cosmetic_purchases' |
+  'poker_table_entitlements' |
   (typeof DYNAMO_TABLE)[keyof typeof DYNAMO_TABLE];
 
 interface DynamoDBStackProps extends cdk.StackProps {
@@ -154,6 +155,13 @@ export class DynamoDBStack extends cdk.Stack {
     // confirmation is webhook-driven (no local pending sweep), fichas
     // purchases are synchronous.
     table('poker_cosmetic_purchases', true);
+    // poker_table_entitlements: pk = player_id, sk = "ent#<origin_table_id>"
+    // — one row per paid table reservation (docs/plans/2026-08-21-entry-fee-entitlement.md).
+    // sk is fixed at the originally-paid table (the idempotency key that
+    // stops a concurrent buy-in from double-charging); bound_table_id is the
+    // separate, mutable attribute a rebind moves when that table becomes
+    // unavailable. TTL reaps rows well after their absolute expiry.
+    table('poker_table_entitlements', true, true);
     // Resolved money-movement safety records are retained for 30 days for
     // audit/debugging, then reaped by DynamoDB TTL. Unresolved entries never
     // receive ttl and therefore cannot expire before reconciliation.

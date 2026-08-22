@@ -22,7 +22,12 @@ type Room struct {
 	// recomputed after creation, so a later change to the fee catalog never
 	// retroactively changes an already-created room's fee. Always zero for
 	// sandbox rooms (sandbox funds itself via rake instead).
-	EntryFeeCents        int64            `dynamodbav:"entry_fee_cents,omitempty" json:"entry_fee_cents,omitempty"`
+	EntryFeeCents int64 `dynamodbav:"entry_fee_cents,omitempty" json:"entry_fee_cents,omitempty"`
+	// Tier is the fee-catalog tier ("micro" | "low" | "mid" | "high") this
+	// room's stake pair belongs to, recorded at creation so buyin's
+	// entitlement rebind never has to re-derive it from blinds. Empty for
+	// sandbox rooms (no entitlement).
+	Tier                 string           `dynamodbav:"tier,omitempty" json:"tier,omitempty"`
 	ShareCode            string           `dynamodbav:"share_code,omitempty" json:"share_code,omitempty"`                     // private rooms only
 	BlindEscalation      *BlindEscalation `dynamodbav:"blind_escalation,omitempty" json:"blind_escalation,omitempty"`         // private rooms only
 	TurnTimeoutSeconds   int              `dynamodbav:"turn_timeout_seconds,omitempty" json:"turn_timeout_seconds,omitempty"` // private rooms only, 0 = default

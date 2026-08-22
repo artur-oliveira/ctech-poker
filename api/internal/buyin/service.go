@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/entitlement"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
@@ -50,15 +51,25 @@ type pendingStore interface {
 	MarkResolved(context.Context, string) error
 }
 
+// entitlementStore is the subset of *entitlement.Store the real-money entry
+// fee needs — narrowed to an interface so tests can fake it.
+type entitlementStore interface {
+	ActiveFor(ctx context.Context, playerID string) ([]entitlement.Entitlement, error)
+	Claim(ctx context.Context, e entitlement.Entitlement) error
+	Rebind(ctx context.Context, playerID, originTableID, newTableID string) error
+}
+
 type Service struct {
-	wallet     walletMover
-	game       walletMover
-	manager    *tablemanager.Manager
-	rooms      roomLookup
-	activation activationChecker
-	pending    pendingStore
-	sessions   *sessionlog.Store
-	players    interface {
+	wallet       walletMover
+	game         walletMover
+	manager      *tablemanager.Manager
+	rooms        roomLookup
+	activation   activationChecker
+	pending      pendingStore
+	entitlements entitlementStore
+	now          func() time.Time
+	sessions     *sessionlog.Store
+	players      interface {
 		RequireAccepted(context.Context, string) error
 		GetOrCreate(context.Context, string) (*player.PlayerProfile, error)
 	}
@@ -79,15 +90,20 @@ var ErrTermsNotAccepted = player.ErrTermsNotAccepted
 var ErrUnsupportedCurrencyMode = errors.New("buyin: unsupported currency mode")
 
 func NewService(wallet walletMover, manager *tablemanager.Manager, rooms roomLookup) *Service {
-	return &Service{wallet: wallet, manager: manager, rooms: rooms}
+	return &Service{wallet: wallet, manager: manager, rooms: rooms, now: time.Now}
 }
 
 func NewServiceWithGame(wallet, game walletMover, manager *tablemanager.Manager, rooms roomLookup, activation activationChecker) *Service {
-	return &Service{wallet: wallet, game: game, manager: manager, rooms: rooms, activation: activation}
+	return &Service{wallet: wallet, game: game, manager: manager, rooms: rooms, activation: activation, now: time.Now}
 }
 
 func (s *Service) WithPendingStore(pending pendingStore) *Service {
 	s.pending = pending
+	return s
+}
+
+func (s *Service) WithEntitlements(entitlements entitlementStore) *Service {
+	s.entitlements = entitlements
 	return s
 }
 
@@ -122,7 +138,7 @@ func (s *Service) WithPresence(presence interface {
 }
 
 func NewServiceWithPlayers(wallet walletMover, manager *tablemanager.Manager, rooms roomLookup, players *player.Service) *Service {
-	return &Service{wallet: wallet, manager: manager, rooms: rooms, players: players}
+	return &Service{wallet: wallet, manager: manager, rooms: rooms, players: players, now: time.Now}
 }
 
 // seedFor builds the first-touch table seed for roomID, using the room's real
@@ -235,6 +251,16 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 	}
 	key := fmt.Sprintf("%s#%s#buyin#%s", roomID, playerID, nonce)
 
+	// The table-entry fee is resolved and charged before any stack money
+	// moves and before the player is seated (docs/plans/2026-08-21-entry-fee-entitlement.md):
+	// a failure here aborts the buy-in cleanly, with nobody seated and no
+	// stack debit to refund.
+	if room != nil && room.CurrencyMode == roomstore.CurrencyModeReal && room.EntryFeeCents > 0 {
+		if err := s.resolveEntitlement(ctx, room, playerID, nonce); err != nil {
+			return err
+		}
+	}
+
 	mover, err := s.walletFor(ctx, roomID, playerID)
 	if err != nil {
 		return fmt.Errorf("buyin: %w", err)
@@ -252,19 +278,8 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 		}
 	}
 
-	var feeKey string
-	var feeIntent func() (types.TransactWriteItem, error)
-	if room != nil && room.CurrencyMode == "real" && room.EntryFeeCents > 0 {
-		if s.pending == nil {
-			return errors.New("buyin: settlement store unavailable; refusing real-money admission with an entry fee")
-		}
-		feeKey = fmt.Sprintf("%s#%s#buyinfee#%s", roomID, playerID, nonce)
-		feeIntent = func() (types.TransactWriteItem, error) {
-			return s.pending.BuildRecordTx(reconcile.PendingCashout{ID: feeKey, PlayerID: playerID, Amount: room.EntryFeeCents, CurrencyMode: "real", Kind: reconcile.KindFeeDebit, TableRef: roomID, IdempotencyKey: feeKey})
-		}
-	}
 	reply := make(chan error, 1)
-	joinErr := actor.Dispatch(table.JoinCmd{PlayerID: playerID, Stack: amount, MaxSeats: maxSeats, MidHand: midHand, HoldID: holdID, AutoRebuy: autoRebuy, SettlementIntent: feeIntent, Reply: reply})
+	joinErr := actor.Dispatch(table.JoinCmd{PlayerID: playerID, Stack: amount, MaxSeats: maxSeats, MidHand: midHand, HoldID: holdID, AutoRebuy: autoRebuy, Reply: reply})
 	if joinErr != nil {
 		// hand.ErrAlreadySeated here is NOT a same-request retry — the isSeated
 		// check above already short-circuits those before any debit happens.
@@ -325,17 +340,147 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 		}
 	}
 
-	if feeKey != "" {
-		if err := s.game.DebitReal(ctx, playerID, room.EntryFeeCents, feeKey, "poker_table_fee"); err != nil {
-			slog.Error("ALARM: durable poker table-entry fee charge failed; reconciliation will retry", "player", playerID, "room", roomID, "amount", room.EntryFeeCents, "err", err)
-			return fmt.Errorf("buyin: table fee charge failed after durable admission — reconciliation job will retry: %w", err)
-		}
-		if err := s.pending.MarkResolved(ctx, feeKey); err != nil {
-			slog.Error("ALARM: poker table fee charged but recovery intent was not resolved", "fee_key", feeKey, "err", err)
+	return nil
+}
+
+// resolveEntitlement makes sure playerID may enter room for free (an
+// existing or newly-rebound reservation) or charges a fresh one — see
+// docs/plans/2026-08-21-entry-fee-entitlement.md's Fase 2. Called only for
+// real-money rooms with a non-zero entry fee; the caller must not have moved
+// any stack money yet.
+func (s *Service) resolveEntitlement(ctx context.Context, room *roomstore.Room, playerID, nonce string) error {
+	if s.entitlements == nil {
+		return errors.New("buyin: entitlement store unavailable; refusing real-money admission with an entry fee")
+	}
+	ents, err := s.entitlements.ActiveFor(ctx, playerID)
+	if err != nil {
+		return fmt.Errorf("buyin: load entitlements: %w", err)
+	}
+	for _, e := range ents {
+		if e.Tier == room.Tier && e.BoundTableID == room.ID {
+			return nil
 		}
 	}
+	for _, e := range ents {
+		if e.Tier != room.Tier || e.BoundTableID == room.ID {
+			continue
+		}
+		unavailable, err := s.tableUnavailable(ctx, e.BoundTableID)
+		if err != nil {
+			// A failed availability check on some OTHER table must never block
+			// this buy-in — skip this entitlement as a rebind candidate and let
+			// the loop (or a fresh charge below) decide.
+			slog.Warn("buyin: entitlement rebind availability check failed, skipping", "player", playerID, "table", e.BoundTableID, "err", err)
+			continue
+		}
+		if !unavailable {
+			continue
+		}
+		if err := s.entitlements.Rebind(ctx, playerID, e.OriginTableID, room.ID); err != nil {
+			if errors.Is(err, entitlement.ErrNotFound) {
+				continue // lost the race (expired, or moved by a concurrent buy-in) — try the next candidate
+			}
+			return fmt.Errorf("buyin: rebind entitlement: %w", err)
+		}
+		return nil
+	}
+	return s.chargeEntryFee(ctx, room, playerID, nonce)
+}
 
+// tableUnavailable reports whether tableID (some OTHER real-money table a
+// player's entitlement is currently bound to) is archived/deleted or full —
+// the two conditions under which a reservation may rebind to a different
+// table of the same tier (see the plan's "O rebind" section).
+func (s *Service) tableUnavailable(ctx context.Context, tableID string) (bool, error) {
+	room, err := s.rooms.Get(ctx, tableID)
+	if err != nil {
+		return false, fmt.Errorf("buyin: load bound table's room: %w", err)
+	}
+	if room == nil {
+		// cmd/tablecleanup deletes the room row only after confirming the
+		// table itself is archived — a missing room is a confirmed-unavailable
+		// table, not an ambiguous one.
+		return true, nil
+	}
+	actor, err := s.manager.GetOrCreateActor(ctx, tableID, s.seedFor(ctx, tableID))
+	if err != nil {
+		if errors.Is(err, tablemanager.ErrTableArchived) {
+			return true, nil
+		}
+		return false, fmt.Errorf("buyin: load bound table's actor: %w", err)
+	}
+	_, _, occupied, err := s.isSeated(actor, "")
+	if err != nil {
+		return false, fmt.Errorf("buyin: seat count for bound table: %w", err)
+	}
+	return room.MaxSeats > 0 && occupied >= room.MaxSeats, nil
+}
+
+// chargeEntryFee claims a fresh entitlement for room and charges its fixed
+// fee. Claim commits before DebitReal so a debit failure never leaves a
+// charge with no matching reservation; the entitlement itself is left in
+// place on a debit failure (never seating this player) so an idempotent
+// retry — this request's caller retrying the whole buy-in, or
+// cmd/reconcile's fee_debit sweep — can complete the same charge exactly
+// once, keyed by feeKey.
+func (s *Service) chargeEntryFee(ctx context.Context, room *roomstore.Room, playerID, nonce string) error {
+	if s.pending == nil {
+		return errors.New("buyin: settlement store unavailable; refusing real-money admission with an entry fee")
+	}
+	claim := entitlement.Entitlement{
+		PlayerID: playerID, OriginTableID: room.ID, BoundTableID: room.ID,
+		Tier: room.Tier, FeeCents: room.EntryFeeCents, ExpiresAt: s.now().Add(entitlement.Window),
+	}
+	if err := s.entitlements.Claim(ctx, claim); err != nil {
+		if errors.Is(err, entitlement.ErrAlreadyClaimed) {
+			// A concurrent BuyIn for this same (player, room) already claimed
+			// (and is charging, or has charged) it — treat as covered.
+			return nil
+		}
+		return fmt.Errorf("buyin: claim entitlement: %w", err)
+	}
+
+	feeKey := fmt.Sprintf("%s#%s#buyinfee#%s", room.ID, playerID, nonce)
+	if err := s.pending.Record(ctx, reconcile.PendingCashout{
+		ID: feeKey, PlayerID: playerID, Amount: room.EntryFeeCents, CurrencyMode: roomstore.CurrencyModeReal,
+		Kind: reconcile.KindFeeDebit, TableRef: room.ID, IdempotencyKey: feeKey,
+	}); err != nil {
+		return fmt.Errorf("buyin: persist fee recovery intent: %w", err)
+	}
+	if err := s.game.DebitReal(ctx, playerID, room.EntryFeeCents, feeKey, "poker_table_fee"); err != nil {
+		slog.Error("ALARM: poker table-entry fee charge failed before seating; reconciliation will retry", "player", playerID, "room", room.ID, "amount", room.EntryFeeCents, "err", err)
+		return fmt.Errorf("buyin: table fee charge failed, reconciliation will retry: %w", err)
+	}
+	if err := s.pending.MarkResolved(ctx, feeKey); err != nil {
+		slog.Error("ALARM: poker table fee charged but recovery intent was not resolved", "fee_key", feeKey, "err", err)
+	}
 	return nil
+}
+
+// FeeStatus reports what GET /rooms/:id/seated shows a player before they
+// buy in: whether room's fixed entry fee is still due, and when their
+// covering reservation expires if not. Read-only — never claims, charges, or
+// rebinds anything, so it does not attempt the heavier same-tier rebind
+// check chargeEntryFee/resolveEntitlement perform; a player whose only
+// coverage is a rebindable entitlement on a different (now unavailable)
+// table sees fee_due=true here even though BuyIn would let them in for free.
+func (s *Service) FeeStatus(ctx context.Context, room *roomstore.Room, playerID string) (feeDue bool, expiresAtUnix int64, err error) {
+	if room == nil || room.CurrencyMode != roomstore.CurrencyModeReal || room.EntryFeeCents <= 0 {
+		return false, 0, nil
+	}
+	if s.entitlements == nil {
+		return true, 0, nil
+	}
+	ents, err := s.entitlements.ActiveFor(ctx, playerID)
+	if err != nil {
+		return true, 0, fmt.Errorf("buyin: load entitlements: %w", err)
+	}
+	for _, e := range ents {
+		if e.Tier == room.Tier && e.BoundTableID == room.ID {
+			return false, e.ExpiresAt.Unix(), nil
+		}
+	}
+	return true, 0, nil
 }
 
 // isSeated reports whether playerID already has a seat at the table. It reads

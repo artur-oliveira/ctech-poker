@@ -32,11 +32,32 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # dorny/paths-filter's push-event diff mode needs the base commit
+          # present locally; workflow_call inherits the caller's (deploy.yml)
+          # push event, so this must cover history back to github.event.before
+          # too, not just this PR's commits.
+          fetch-depth: 0
 
       - uses: actions/setup-go@v7
         with:
           go-version-file: api/go.mod
           cache-dependency-path: api/go.sum
+
+      # tests/integration/TestMultiServerFuzz takes ~4-5 minutes on its own
+      # (real wall-clock timer waits x -race overhead) — most of this job's
+      # runtime. api/CLAUDE.md already scopes it to "multi-server turn-order/
+      # timer changes"; this makes that scoping the actual CI gate instead of
+      # running it unconditionally on every api/** change.
+      - name: Detect turn-order/timer changes
+        id: turnorder
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            slow:
+              - 'api/internal/table/**'
+              - 'api/internal/tablemanager/**'
+              - 'api/tests/integration/**'
 
       - name: Wait for DynamoDB Local
         run: |
@@ -76,13 +97,25 @@ jobs:
           # integration tag, including handeval's differential suite. Discover
           # the packages that actually contain integration-tagged tests so a
           # newly added integration package is picked up automatically.
+          # tests/integration is excluded here — it's the slow multi-server
+          # fuzz suite, gated separately below.
           mapfile -t PACKAGES < <(
             git grep -l '^//go:build integration$' -- '*_test.go' \
               | xargs -n1 dirname \
               | sort -u \
+              | grep -v '^tests/integration$' \
               | sed 's#^#./#'
           )
           go test -tags integration "${PACKAGES[@]}" -race -count=1
+
+      # Scoped to turn-order/timer changes (api/CLAUDE.md): this alone is
+      # ~4-5 minutes of real wall-clock timer waits under -race. Force it with
+      # an empty commit touching internal/table/ if you need it on an
+      # unrelated PR for some other reason.
+      - name: Run multi-server fuzz tests
+        if: steps.turnorder.outputs.slow == 'true'
+        working-directory: api
+        run: go test -tags integration ./tests/integration/... -race -count=1
 
   deploy:
     name: Build & Deploy

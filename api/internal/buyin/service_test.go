@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/entitlement"
 	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
@@ -92,11 +93,17 @@ func (f *fakeWallet) Balances(_ context.Context, userID string) (*walletclient.B
 
 func testManager(t *testing.T) *tablemanager.Manager {
 	t.Helper()
+	mgr, _ := testManagerAndStore(t)
+	return mgr
+}
+
+func testManagerAndStore(t *testing.T) (*tablemanager.Manager, *tablestore.Store) {
+	t.Helper()
 	db := testClient(t)
 	env := fmt.Sprintf("buyin_test_%d", time.Now().UnixNano())
 	mustCreateTestTables(t, db, env)
 	store := tablestore.NewStore(db, env)
-	return tablemanager.NewManager(tablelease.NewService(cache.NewMemoryBackend(16)), store, nil, nil, nil)
+	return tablemanager.NewManager(tablelease.NewService(cache.NewMemoryBackend(16)), store, nil, nil, nil), store
 }
 
 func testRoomLookup() *fakeRoomLookup {
@@ -436,6 +443,16 @@ func (f *fakeRoomLookup) Get(_ context.Context, _ string) (*roomstore.Room, erro
 	return f.room, nil
 }
 
+// multiRoomLookup is fakeRoomLookup's multi-table counterpart, for tests that
+// need distinct rooms (entitlement rebind across tables) instead of a single
+// fixture returned regardless of the requested ID. A nil result for an
+// unknown ID mirrors roomstore.Store.Get on a deleted/nonexistent room.
+type multiRoomLookup map[string]*roomstore.Room
+
+func (f multiRoomLookup) Get(_ context.Context, roomID string) (*roomstore.Room, error) {
+	return f[roomID], nil
+}
+
 func TestSeatedReportsExistingSeatAndStack(t *testing.T) {
 	wallet := &fakeWallet{}
 	mgr := testManager(t)
@@ -615,15 +632,16 @@ func TestBuyInUsesGameWalletForRealRooms(t *testing.T) {
 	}
 }
 
-func TestBuyInChargesFixedEntryFeeForRealRoomsAfterSeating(t *testing.T) {
+func TestBuyInChargesFixedEntryFeeForRealRoomsBeforeSeating(t *testing.T) {
 	sandbox := &fakeWallet{}
 	game := &fakeWallet{}
 	mgr := testManager(t)
 	rooms := &fakeRoomLookup{room: &roomstore.Room{
-		ID: "room-real-fee", CurrencyMode: "real", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9,
+		ID: "room-real-fee", CurrencyMode: "real", Tier: "micro", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9,
 		EntryFeeCents: 100,
 	}}
-	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}}).WithPendingStore(testPendingStore(t))
+	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}}).
+		WithPendingStore(testPendingStore(t)).WithEntitlements(testEntitlementStore(t))
 	ctx := context.Background()
 
 	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
@@ -642,15 +660,21 @@ func TestBuyInChargesFixedEntryFeeForRealRoomsAfterSeating(t *testing.T) {
 	}
 }
 
-func TestBuyInChargesFeeAgainOnRebuyAfterLeaving(t *testing.T) {
+// TestBuyInDoesNotChargeFeeAgainOnRebuyOrReentryWithinWindow is the
+// regression test for Problem 1 (docs/plans/2026-08-21-entry-fee-entitlement.md):
+// the fee is a table reservation good for entitlement.Window, not a
+// per-buy-in charge. Bust-and-rebuy and cash-out-and-return within the
+// window must both be free.
+func TestBuyInDoesNotChargeFeeAgainOnRebuyOrReentryWithinWindow(t *testing.T) {
 	sandbox := &fakeWallet{}
 	game := &fakeWallet{}
 	mgr := testManager(t)
 	rooms := &fakeRoomLookup{room: &roomstore.Room{
-		ID: "room-real-rebuy", CurrencyMode: "real", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9,
+		ID: "room-real-rebuy", CurrencyMode: "real", Tier: "micro", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9,
 		EntryFeeCents: 100,
 	}}
-	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}}).WithPendingStore(testPendingStore(t))
+	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}}).
+		WithPendingStore(testPendingStore(t)).WithEntitlements(testEntitlementStore(t))
 	ctx := context.Background()
 
 	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
@@ -669,8 +693,183 @@ func TestBuyInChargesFeeAgainOnRebuyAfterLeaving(t *testing.T) {
 	if err := svc.BuyIn(ctx, "room-real-rebuy", "user-1", 400, false, "nonce-2"); err != nil {
 		t.Fatalf("rebuy: %v", err)
 	}
+	if len(game.feeDebits) != 1 {
+		t.Fatalf("expected the fee to be charged exactly once within the reservation window, got %+v", game.feeDebits)
+	}
+}
+
+// TestBuyInChargesFeeAgainForADifferentTable is the multi-table counterpart:
+// an entitlement only covers the table it was bound to (or its rebind
+// target), so a second, still-live table of the same tier is a second
+// reservation.
+func TestBuyInChargesFeeAgainForADifferentTable(t *testing.T) {
+	sandbox := &fakeWallet{}
+	game := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := multiRoomLookup{
+		"room-a": {ID: "room-a", CurrencyMode: "real", Tier: "micro", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9, EntryFeeCents: 100},
+		"room-b": {ID: "room-b", CurrencyMode: "real", Tier: "micro", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9, EntryFeeCents: 100},
+	}
+	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}}).
+		WithPendingStore(testPendingStore(t)).WithEntitlements(testEntitlementStore(t))
+	ctx := context.Background()
+
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	if _, err := mgr.GetOrCreateActor(ctx, "room-a", seed); err != nil {
+		t.Fatalf("acquire room-a: %v", err)
+	}
+	if _, err := mgr.GetOrCreateActor(ctx, "room-b", seed); err != nil {
+		t.Fatalf("acquire room-b: %v", err)
+	}
+
+	if err := svc.BuyIn(ctx, "room-a", "user-1", 400, false, "nonce-a"); err != nil {
+		t.Fatalf("buyin room-a: %v", err)
+	}
+	if err := svc.BuyIn(ctx, "room-b", "user-1", 400, false, "nonce-b"); err != nil {
+		t.Fatalf("buyin room-b: %v", err)
+	}
 	if len(game.feeDebits) != 2 {
-		t.Fatalf("expected the fee to be charged again on rebuy after leaving, got %+v", game.feeDebits)
+		t.Fatalf("expected a separate fee for a second still-live table, got %+v", game.feeDebits)
+	}
+}
+
+// TestBuyInRebindsEntitlementWhenBoundTableIsFull covers the second half of
+// "O rebind": the originally-paid table is still live but full, so the
+// reservation moves to a same-tier table with room instead of charging again.
+func TestBuyInRebindsEntitlementWhenBoundTableIsFull(t *testing.T) {
+	sandbox := &fakeWallet{}
+	game := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := multiRoomLookup{
+		"room-full": {ID: "room-full", CurrencyMode: "real", Tier: "micro", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 1, EntryFeeCents: 100},
+		"room-open": {ID: "room-open", CurrencyMode: "real", Tier: "micro", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9, EntryFeeCents: 100},
+	}
+	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true, "user-2": true}}).
+		WithPendingStore(testPendingStore(t)).WithEntitlements(testEntitlementStore(t))
+	ctx := context.Background()
+
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	if _, err := mgr.GetOrCreateActor(ctx, "room-full", seed); err != nil {
+		t.Fatalf("acquire room-full: %v", err)
+	}
+	if _, err := mgr.GetOrCreateActor(ctx, "room-open", seed); err != nil {
+		t.Fatalf("acquire room-open: %v", err)
+	}
+
+	// user-1 pays for and occupies the only seat at room-full.
+	if err := svc.BuyIn(ctx, "room-full", "user-1", 400, false, "nonce-1"); err != nil {
+		t.Fatalf("buyin room-full: %v", err)
+	}
+	// user-2 tries to buy into room-full (now full — this call fast-fails
+	// before charging), then, holding no entitlement anywhere, buys into
+	// room-open fresh. Neither of these is the rebind under test; the rebind
+	// happens for user-1 below once room-full is genuinely occupied by
+	// someone else's stack. To isolate the rebind, user-1 leaves and a
+	// different player fills room-full's one seat, so room-full is
+	// unavailable to user-1 (full) without user-1 itself vacating it.
+	if _, err := svc.CashOut(ctx, "room-full", "user-1", ""); err != nil {
+		t.Fatalf("cashout user-1: %v", err)
+	}
+	if err := svc.BuyIn(ctx, "room-full", "user-2", 400, false, "nonce-2"); err != nil {
+		t.Fatalf("buyin room-full user-2: %v", err)
+	}
+
+	// user-1 still holds a valid (unexpired) entitlement bound to room-full,
+	// which is now full with user-2 in the one seat. Buying into room-open
+	// (same tier) must rebind for free instead of charging again.
+	if err := svc.BuyIn(ctx, "room-open", "user-1", 400, false, "nonce-3"); err != nil {
+		t.Fatalf("buyin room-open (rebind): %v", err)
+	}
+	if len(game.feeDebits) != 2 {
+		t.Fatalf("expected exactly 2 fee debits (user-1's original + user-2's), rebind must be free, got %+v", game.feeDebits)
+	}
+}
+
+// TestBuyInRebindsEntitlementWhenBoundTableIsArchived covers the first half
+// of "O rebind": the table cmd/tablecleanup archived (and deleted the room
+// row for) is unavailable regardless of how many seats it had.
+func TestBuyInRebindsEntitlementWhenBoundTableIsArchived(t *testing.T) {
+	sandbox := &fakeWallet{}
+	game := &fakeWallet{}
+	mgr, store := testManagerAndStore(t)
+	rooms := multiRoomLookup{
+		"room-live": {ID: "room-live", CurrencyMode: "real", Tier: "micro", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9, EntryFeeCents: 100},
+		// room-gone is intentionally absent from rooms: cmd/tablecleanup
+		// deletes the room row only after confirming the table archived.
+	}
+	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}}).
+		WithPendingStore(testPendingStore(t)).WithEntitlements(testEntitlementStore(t))
+	ctx := context.Background()
+
+	// Seed and claim an entitlement bound to room-gone, then archive it —
+	// mirroring cmd/tablecleanup's own sequence (archive the table, then
+	// delete the room row) without going through the real sandbox-only sweep.
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	if _, err := mgr.GetOrCreateActor(ctx, "room-gone", seed); err != nil {
+		t.Fatalf("seed room-gone: %v", err)
+	}
+	if err := svc.entitlements.Claim(ctx, entitlement.Entitlement{
+		PlayerID: "user-1", OriginTableID: "room-gone", BoundTableID: "room-gone",
+		Tier: "micro", FeeCents: 100, ExpiresAt: time.Now().Add(entitlement.Window),
+	}); err != nil {
+		t.Fatalf("seed entitlement: %v", err)
+	}
+	stored, err := store.LoadTable(ctx, "room-gone")
+	if err != nil || stored == nil {
+		t.Fatalf("load room-gone: %v", err)
+	}
+	if err := store.MarkArchived(ctx, "room-gone", stored.Version); err != nil {
+		t.Fatalf("archive room-gone: %v", err)
+	}
+
+	if _, err := mgr.GetOrCreateActor(ctx, "room-live", seed); err != nil {
+		t.Fatalf("acquire room-live: %v", err)
+	}
+	if err := svc.BuyIn(ctx, "room-live", "user-1", 400, false, "nonce-1"); err != nil {
+		t.Fatalf("buyin room-live (rebind): %v", err)
+	}
+	if len(game.feeDebits) != 0 {
+		t.Fatalf("expected the archived-table rebind to be free, got %+v", game.feeDebits)
+	}
+}
+
+// TestBuyInChargesAgainAfterEntitlementWindowExpires guards the "janela é
+// absoluta" rule: an entitlement past its ExpiresAt is invisible to
+// resolveEntitlement (ActiveFor filters it out), even at the exact table it
+// was bound to, and gets charged again rather than silently renewed.
+func TestBuyInChargesAgainAfterEntitlementWindowExpires(t *testing.T) {
+	sandbox := &fakeWallet{}
+	game := &fakeWallet{}
+	mgr := testManager(t)
+	rooms := &fakeRoomLookup{room: &roomstore.Room{
+		ID: "room-real-expiry", CurrencyMode: "real", Tier: "micro", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9,
+		EntryFeeCents: 100,
+	}}
+	ents := testEntitlementStore(t)
+	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}}).
+		WithPendingStore(testPendingStore(t)).WithEntitlements(ents)
+	ctx := context.Background()
+
+	// Seed an already-expired entitlement directly, bypassing BuyIn's normal
+	// now()+Window — nothing in resolveEntitlement ever extends ExpiresAt on
+	// later activity, so this is equivalent to (and faster than) actually
+	// waiting out the real 3-hour window.
+	if err := ents.Claim(ctx, entitlement.Entitlement{
+		PlayerID: "user-1", OriginTableID: "room-real-expiry", BoundTableID: "room-real-expiry",
+		Tier: "micro", FeeCents: 100, ExpiresAt: time.Now().Add(-time.Minute),
+	}); err != nil {
+		t.Fatalf("seed expired entitlement: %v", err)
+	}
+
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	if _, err := mgr.GetOrCreateActor(ctx, "room-real-expiry", seed); err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	if err := svc.BuyIn(ctx, "room-real-expiry", "user-1", 400, false, "nonce-1"); err != nil {
+		t.Fatalf("buyin: %v", err)
+	}
+	if len(game.feeDebits) != 1 {
+		t.Fatalf("expected the fee to be charged since the seeded entitlement had expired, got %+v", game.feeDebits)
 	}
 }
 

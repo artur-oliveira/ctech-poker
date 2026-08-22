@@ -3,10 +3,17 @@
 Go real-time poker game server (Fiber v3 + `fasthttp/websocket` + DynamoDB + Valkey). **Sandbox (play-money) mode is
 implemented end-to-end with a 2.5% rake engine. Real-money mode (Phase 5) is fully implemented end-to-end under the
 Brazil-legal fixed-fee model (no rake, flat entry fee per tier):** `POST /rooms` accepts `currency_mode: "real"`,
-validates blinds against the 10-tier fee catalog, and stores the fixed `EntryFeeCents` on the room. Every real-money
-buy-in and rebuy charges that entry fee to the player's real withdrawable wallet via `walletclient.DebitReal`. Failed
-fee debits are queued to the same retry table (`poker_pending_cashouts` with `Kind: "fee_debit"`) for Lambda
-reconciliation retries. **Still blocking, found 2026-07-25 while verifying cross-repo:**
+validates blinds against the 10-tier fee catalog, and stores the fixed `EntryFeeCents` and `Tier` on the room. The fee
+is a **per-table reservation entitlement (`internal/entitlement`, `poker_table_entitlements`), not a per-buy-in
+charge**: the first real-money buy-in at a table claims and pays a 3-hour, absolute (never sliding) entitlement before
+the player is seated; every rebuy or re-entry at that same table within the window is free. If the table becomes
+unavailable (archived, or full) while the entitlement is still valid, `buyin.Service` rebinds it to another table of
+the same tier instead of charging again — never across tiers. `GET /rooms/:id/seated` exposes `fee_due` /
+`entitlement_expires_at` so the client never surprises a player with a silent charge at buy-in. Failed fee debits are
+queued to the same retry table (`poker_pending_cashouts` with `Kind: "fee_debit"`) for Lambda reconciliation retries;
+the entitlement itself is left in place on a debit failure (nobody is ever seated on that path) so the retry — this
+request's caller, or `cmd/reconcile` — completes the same idempotent charge at most once.
+See `docs/plans/2026-08-21-entry-fee-entitlement.md`. **Still blocking, found 2026-07-25 while verifying cross-repo:**
 
 1. ctech-wallet's scope catalog (`ctech-account/api/internal/scopes/catalog.go`) has no `internal:wallet:game-status`
    entry, so no M2M client can ever be granted the scope `ctech-wallet`'s `GET /wallet/game/status/:user_id` requires.
@@ -104,7 +111,7 @@ catalog.
 `internal/api/v1` (+ `api/v1/proto`, generated from `../proto/poker.proto`) · `internal/app` (Fx wiring) ·
 `internal/engine/{hand,betting,deck,equity,handeval,sidepots}` ·
 `internal/{table,tablemanager,tablestore,tablelease,roomstore}` ·
-`internal/{buyin,walletclient,reconcile}` (money) ·
+`internal/{buyin,walletclient,reconcile,entitlement}` (money) ·
 `internal/{player,playernotes,pokerstats,sessionlog,handshare}` (player-scoped data) ·
 `internal/{leaderboard,achievements,dailyreward}` (gamification) ·
 `internal/{botcheck,chatfilter,config,problem}` · `tests/{integration,load}`.

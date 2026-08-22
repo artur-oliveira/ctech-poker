@@ -33,6 +33,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 	"gopkg.aoctech.app/poker/api/internal/dailyreward"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/entitlement"
 	"gopkg.aoctech.app/poker/api/internal/handshare"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
@@ -103,6 +104,7 @@ var Module = fx.Options(
 		walletclient.New,
 		newBuyinService,
 		newPendingStore,
+		newEntitlementStore,
 		newTableManager,
 	),
 	fx.Invoke(wirePlayerRemovedHook),
@@ -405,11 +407,14 @@ func newReportService(store *reports.DynamoStore, tableStore *tablestore.Store, 
 func newPendingStore(db *dynamodb.Client, cfg *config.Config) *reconcile.PendingStore {
 	return reconcile.NewPendingStore(db, cfg.Env)
 }
-func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service, sessionStore *sessionlog.Store, pending *reconcile.PendingStore, pokerStatsStore *pokerstats.Store, presenceSvc *presence.Service) *buyin.Service {
+func newEntitlementStore(db *dynamodb.Client, cfg *config.Config) *entitlement.Store {
+	return entitlement.NewStore(db, cfg.Env)
+}
+func newBuyinService(cfg *config.Config, wallet *walletclient.Client, manager *tablemanager.Manager, rooms *roomstore.Store, players *player.Service, sessionStore *sessionlog.Store, pending *reconcile.PendingStore, entitlements *entitlement.Store, pokerStatsStore *pokerstats.Store, presenceSvc *presence.Service) *buyin.Service {
 	if cfg.RealMoneyEnabled {
-		return buyin.NewServiceWithGame(wallet, wallet, manager, rooms, wallet).WithPendingStore(pending).WithSessionStore(sessionStore).WithPlayers(players).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore).WithPresence(presenceSvc)
+		return buyin.NewServiceWithGame(wallet, wallet, manager, rooms, wallet).WithPendingStore(pending).WithEntitlements(entitlements).WithSessionStore(sessionStore).WithPlayers(players).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore).WithPresence(presenceSvc)
 	}
-	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players).WithPendingStore(pending).WithSessionStore(sessionStore).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore).WithPresence(presenceSvc)
+	return buyin.NewServiceWithPlayers(wallet, manager, rooms, players).WithPendingStore(pending).WithEntitlements(entitlements).WithSessionStore(sessionStore).WithAvatarBaseURL(cfg.AvatarBaseURL).WithPokerStats(pokerStatsStore).WithPresence(presenceSvc)
 }
 
 type roomModeReader interface {
