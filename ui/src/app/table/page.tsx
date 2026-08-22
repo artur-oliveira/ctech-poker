@@ -552,6 +552,9 @@ function TableContent() {
                   canRevealCards={canRevealCards} revealPending={rt.showCardsPending}
                   onRevealCardAction={index => rt.showCards(index)}
                   onPeekCardsAction={rt.peekCards}
+                  rabbitHuntPending={rt.requestRabbitHuntPending}
+                  onRequestRabbitHuntAction={rt.requestRabbitHunt}
+                  onRabbitHuntVerifyFailedAction={rt.reportRabbitHuntVerifyFailed}
                   playerNotes={playerNotesByID}
                   onEditPlayerNoteAction={seat => setNoteOpponent({player_id: seat.player_id, name: seat.name})}
                   renderPlayerActionsAction={seat => <PlayerActionsMenu

@@ -117,6 +117,26 @@ func (c SetRunItTwiceCmd) reply() chan error { return c.Reply }
 
 func (c ShowCardsCmd) reply() chan error { return c.Reply }
 
+// RequestRabbitHuntCmd charges the player the table's big blind to reveal
+// the rabbit-hunt runout for the just-completed hand.
+type RequestRabbitHuntCmd struct {
+	PlayerID string
+	ActionID string
+	Reply    chan error
+}
+
+func (c RequestRabbitHuntCmd) reply() chan error { return c.Reply }
+
+// RabbitHuntVerifyFailedCmd refunds a RequestRabbitHuntCmd charge when the
+// client couldn't locally verify the revealed runout.
+type RabbitHuntVerifyFailedCmd struct {
+	PlayerID string
+	ActionID string
+	Reply    chan error
+}
+
+func (c RabbitHuntVerifyFailedCmd) reply() chan error { return c.Reply }
+
 // KeepSeatCmd is an explicit human-presence signal used by the idle-removal
 // warning. Transport heartbeats deliberately do not count as activity.
 type KeepSeatCmd struct {

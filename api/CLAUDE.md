@@ -89,7 +89,9 @@ catalog.
   silently ranking via `gsi_hands_won`; add a `gsi_achievement_points` GSI before re-enabling the metric.
 - B32 fixed: `ShuffleCommitHash` and the per-card `RootCommitHash` are published from
   `StartHand` on. Complete hands reveal either the full seed (no hidden private cards) or viewer-scoped card+salt proofs
-  with hashes for hidden positions and rabbit runout cards.
+  with hashes for hidden positions and rabbit runout cards. Rabbit-hunt runout cards specifically are withheld from a
+  viewer's `ViewFor` snapshot until `Table.RequestRabbitHunt` charges them the table's big blind (sandbox tables only —
+  `Table.currencyMode`); see `docs/specs/2026-08-21-paid-rabbit-hunt.md`.
 - A separate audit (`docs/plans/2026-07-19-api-audit-remediation.md`) covers H1–H4 / M1–M7 / L1–L6 / E1–E3 / S1–S7. Some
   fixes are already in code (actor re-resolve `tablews.go:185-198`, prod Valkey fail-fast, HTTP rate limiters
   `router.go:39-41`); others are not — verify before relying on them.

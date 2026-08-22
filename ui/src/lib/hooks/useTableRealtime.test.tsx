@@ -347,7 +347,39 @@ describe('useTableRealtime', () => {
     expect(result.current.showCardsPending).toBe(false);
     expect(playSound).toHaveBeenCalledWith('showing_card');
   });
-  
+
+  test('locks the rabbit hunt request until acknowledgement and surfaces a rejection', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+
+    act(() => {
+      expect(result.current.requestRabbitHunt()).toBe(true);
+      expect(result.current.requestRabbitHunt()).toBe(false);
+    });
+    expect(result.current.requestRabbitHuntPending).toBe(true);
+    expect(ws.send).toHaveBeenLastCalledWith({type: 'request_rabbit_hunt', action_id: 'action-1'});
+
+    receive({type: 'error', code: 'invalid_action', action_id: 'action-1'});
+    expect(result.current.requestRabbitHuntPending).toBe(false);
+    expect(result.current.actionError).toMatchObject({code: 'invalid_action'});
+  });
+
+  test('acknowledges a successful rabbit hunt request and unlocks it', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    act(() => {
+      expect(result.current.requestRabbitHunt()).toBe(true);
+    });
+    receive({type: 'action_ack', action_id: 'action-1'});
+    expect(result.current.requestRabbitHuntPending).toBe(false);
+  });
+
+  test('reports a rabbit hunt verification failure as a fire-and-forget frame', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    act(() => {
+      expect(result.current.reportRabbitHuntVerifyFailed()).toBe(true);
+    });
+    expect(ws.send).toHaveBeenLastCalledWith({type: 'rabbit_hunt_verify_failed', action_id: 'action-1'});
+  });
+
   test('automatically posts the big blind once for a pending entry', () => {
     vi.useFakeTimers();
     const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));

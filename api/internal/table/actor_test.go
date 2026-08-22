@@ -34,6 +34,24 @@ func newTestActor(t *testing.T, store *tablestore.Store) (*Actor, string) {
 	return a, tableID
 }
 
+// newTestActorSandbox is newTestActor with currencyMode explicitly set to
+// "sandbox" — needed for RequestRabbitHuntCmd, which rejects any table whose
+// currencyMode isn't "sandbox" (the zero-value newTestActor seeds is "").
+func newTestActorSandbox(t *testing.T, store *tablestore.Store) (*Actor, string) {
+	t.Helper()
+	tableID := uniqueTableID(t)
+	seed := hand.NewTable([]*hand.Player{{ID: "p1", Stack: 1000}, {ID: "p2", Stack: 1000}}, 10, 20)
+	seed.ConfigureRake("sandbox")
+	if err := store.SeedTable(context.Background(), tableID, seed.ExportState()); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	a := New(tableID, store, true, func(string, hand.Snapshot) {})
+	ctx, cancel := context.WithCancel(context.Background())
+	go a.Run(ctx)
+	stopActor(t, a, cancel)
+	return a, tableID
+}
+
 func TestActorCommitsReadyThenAct(t *testing.T) {
 	db := testClient(t)
 	store := tablestore.NewStore(db, "table_test")
@@ -268,6 +286,110 @@ func TestShowCardsCmdRevealsFoldedWinnerToEveryone(t *testing.T) {
 		if s.PlayerID == winnerID && len(s.HoleCards) != 2 {
 			t.Fatal("expected winner's cards visible to the other player after ShowCardsCmd")
 		}
+	}
+}
+
+func TestRequestRabbitHuntCmdRevealsOnlyToPayer(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+	a, tableID := newTestActorSandbox(t, store)
+	ctx := context.Background()
+
+	_ = a.Dispatch(ReadyCmd{PlayerID: "p1", Ready: true, Reply: make(chan error, 1)})
+	_ = a.Dispatch(ReadyCmd{PlayerID: "p2", Ready: true, Reply: make(chan error, 1)})
+
+	stored, _ := store.LoadTable(ctx, tableID)
+	toAct := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
+	winnerID := "p1"
+	if toAct == "p1" {
+		winnerID = "p2"
+	}
+	if err := a.Dispatch(ActCmd{PlayerID: toAct, ActionID: "a1", Action: betting.ActionFold, Reply: make(chan error, 1)}); err != nil {
+		t.Fatalf("fold: %v", err)
+	}
+
+	if err := a.Dispatch(RequestRabbitHuntCmd{PlayerID: winnerID, ActionID: "a2", Reply: make(chan error, 1)}); err != nil {
+		t.Fatalf("RequestRabbitHuntCmd: %v", err)
+	}
+
+	stored, _ = store.LoadTable(ctx, tableID)
+	table := hand.NewTableFromState(stored.State)
+	if len(table.ViewFor(winnerID).RunoutCards) == 0 {
+		t.Fatal("expected the payer's own view to reveal the runout")
+	}
+	if len(table.ViewFor(toAct).RunoutCards) != 0 {
+		t.Fatal("expected the non-paying viewer's view to stay masked")
+	}
+}
+
+func TestRequestRabbitHuntCmdRejectsDoublePaymentSameHand(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+	a, tableID := newTestActorSandbox(t, store)
+	ctx := context.Background()
+
+	_ = a.Dispatch(ReadyCmd{PlayerID: "p1", Ready: true, Reply: make(chan error, 1)})
+	_ = a.Dispatch(ReadyCmd{PlayerID: "p2", Ready: true, Reply: make(chan error, 1)})
+	stored, _ := store.LoadTable(ctx, tableID)
+	toAct := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
+	winnerID := "p1"
+	if toAct == "p1" {
+		winnerID = "p2"
+	}
+	_ = a.Dispatch(ActCmd{PlayerID: toAct, ActionID: "a1", Action: betting.ActionFold, Reply: make(chan error, 1)})
+
+	if err := a.Dispatch(RequestRabbitHuntCmd{PlayerID: winnerID, ActionID: "a2", Reply: make(chan error, 1)}); err != nil {
+		t.Fatalf("first RequestRabbitHuntCmd: %v", err)
+	}
+	if err := a.Dispatch(RequestRabbitHuntCmd{PlayerID: winnerID, ActionID: "a3", Reply: make(chan error, 1)}); err == nil {
+		t.Fatal("expected the second, distinctly-actioned request this hand to be rejected")
+	}
+}
+
+func TestRabbitHuntVerifyFailedCmdRefundsAndRemasks(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+	a, tableID := newTestActorSandbox(t, store)
+	ctx := context.Background()
+
+	_ = a.Dispatch(ReadyCmd{PlayerID: "p1", Ready: true, Reply: make(chan error, 1)})
+	_ = a.Dispatch(ReadyCmd{PlayerID: "p2", Ready: true, Reply: make(chan error, 1)})
+	stored, _ := store.LoadTable(ctx, tableID)
+	toAct := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
+	winnerID := "p1"
+	if toAct == "p1" {
+		winnerID = "p2"
+	}
+	_ = a.Dispatch(ActCmd{PlayerID: toAct, ActionID: "a1", Action: betting.ActionFold, Reply: make(chan error, 1)})
+	if err := a.Dispatch(RequestRabbitHuntCmd{PlayerID: winnerID, ActionID: "a2", Reply: make(chan error, 1)}); err != nil {
+		t.Fatalf("RequestRabbitHuntCmd: %v", err)
+	}
+
+	stored, _ = store.LoadTable(ctx, tableID)
+	var chargedStack int64
+	for _, s := range hand.NewTableFromState(stored.State).ViewFor(winnerID).Seats {
+		if s.PlayerID == winnerID {
+			chargedStack = s.Stack
+		}
+	}
+
+	if err := a.Dispatch(RabbitHuntVerifyFailedCmd{PlayerID: winnerID, ActionID: "a3", Reply: make(chan error, 1)}); err != nil {
+		t.Fatalf("RabbitHuntVerifyFailedCmd: %v", err)
+	}
+
+	stored, _ = store.LoadTable(ctx, tableID)
+	table := hand.NewTableFromState(stored.State)
+	view := table.ViewFor(winnerID)
+	for _, s := range view.Seats {
+		if s.PlayerID == winnerID && s.Stack != chargedStack+20 {
+			t.Fatalf("expected the fee refunded, stack = %d want %d", s.Stack, chargedStack+20)
+		}
+	}
+	if len(view.RunoutCards) != 0 {
+		t.Fatal("expected the refunded viewer's view to be masked again")
 	}
 }
 

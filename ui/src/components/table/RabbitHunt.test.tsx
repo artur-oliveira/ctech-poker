@@ -49,13 +49,13 @@ describe('RabbitHunt', () => {
     {shuffle_server_seed_hex: undefined},
     {seats: [{player_id: 'viewer', stack: 1, state: 'waiting', contributed: 0, dealt_in: false}]},
   ] satisfies Partial<TableSnapshot>[])('stays hidden when rabbit hunting is unavailable %#', overrides => {
-    const {container} = render(<RabbitHunt snapshot={snapshot(overrides)} viewer="viewer"/>);
+    const {container} = render(<RabbitHunt snapshot={snapshot(overrides)} viewer="viewer" bigBlind={50}/>);
     expect(container).toBeEmptyDOMElement();
   });
-  
+
   test('derives the remaining runout from the revealed shuffle seed after verifying it', async () => {
-    render(<RabbitHunt snapshot={snapshot()} viewer="viewer"/>);
-    await userEvent.click(screen.getByRole('button', {name: /Ver o que viria/}));
+    render(<RabbitHunt snapshot={snapshot()} viewer="viewer" bigBlind={50}/>);
+    await userEvent.click(screen.getByRole('button', {name: /Ver por 50 fichas/}));
     await waitFor(() => expect(screen.getAllByTestId('rabbit-card')).toHaveLength(2));
     expect(verifyDeck).toHaveBeenCalledWith('seed', 'commit');
     expect(rabbitRunout).toHaveBeenCalledWith(['deck'], 2, 3);
@@ -66,12 +66,12 @@ describe('RabbitHunt', () => {
     ['mismatched commit hash', {}],
   ])('reports verification failure for the shuffle seed path: %s', async (label, overrides) => {
     if (label === 'mismatched commit hash') verifyDeck.mockResolvedValue({deck: ['deck'], matches: false});
-    render(<RabbitHunt snapshot={snapshot(overrides)} viewer="viewer"/>);
-    await userEvent.click(screen.getByRole('button', {name: /Ver o que viria/}));
-    expect(await screen.findByText('Não foi possível verificar o runout.')).toBeInTheDocument();
+    render(<RabbitHunt snapshot={snapshot(overrides)} viewer="viewer" bigBlind={50}/>);
+    await userEvent.click(screen.getByRole('button', {name: /Ver por 50 fichas/}));
+    expect(await screen.findByText('Não foi possível verificar o runout. Taxa devolvida.')).toBeInTheDocument();
     expect(rabbitRunout).not.toHaveBeenCalled();
   });
-  
+
   test('accepts a server runout only after its partial-deck proof matches', async () => {
     const value = snapshot({
       shuffle_server_seed_hex: undefined,
@@ -80,15 +80,15 @@ describe('RabbitHunt', () => {
       revealed_card_salts: {0: {card: 'AH', salt_hex: 'salt'}},
       unrevealed_card_hashes: {1: 'hash'},
     });
-    render(<RabbitHunt snapshot={value} viewer="viewer"/>);
-    await userEvent.click(screen.getByRole('button', {name: /Ver o que viria/}));
+    render(<RabbitHunt snapshot={value} viewer="viewer" bigBlind={50}/>);
+    await userEvent.click(screen.getByRole('button', {name: /Ver por 50 fichas/}));
     await waitFor(() => expect(screen.getByText('JC')).toBeInTheDocument());
     expect(verifyWirePartialDeck).toHaveBeenCalledWith(
       'root', value.revealed_card_salts, value.unrevealed_card_hashes,
     );
     expect(verifyDeck).not.toHaveBeenCalled();
   });
-  
+
   test.each<[string, Partial<TableSnapshot>]>([
     ['missing proof', {runout_cards: ['JC'], shuffle_server_seed_hex: undefined}],
     ['invalid proof', {
@@ -97,8 +97,25 @@ describe('RabbitHunt', () => {
     }],
   ])('reports verification failure for %s', async (_label, overrides) => {
     verifyWirePartialDeck.mockResolvedValue({matches: false});
-    render(<RabbitHunt snapshot={snapshot(overrides)} viewer="viewer"/>);
-    await userEvent.click(screen.getByRole('button', {name: /Ver o que viria/}));
-    expect(await screen.findByText('Não foi possível verificar o runout.')).toBeInTheDocument();
+    render(<RabbitHunt snapshot={snapshot(overrides)} viewer="viewer" bigBlind={50}/>);
+    await userEvent.click(screen.getByRole('button', {name: /Ver por 50 fichas/}));
+    expect(await screen.findByText('Não foi possível verificar o runout. Taxa devolvida.')).toBeInTheDocument();
+  });
+
+  test('requests payment on click and reports a verification failure for a refund', async () => {
+    const onRequest = vi.fn();
+    const onVerifyFailed = vi.fn();
+    verifyDeck.mockResolvedValue({deck: ['deck'], matches: false});
+    render(<RabbitHunt snapshot={snapshot()} viewer="viewer" bigBlind={50}
+                       onRequestRabbitHuntAction={onRequest} onRabbitHuntVerifyFailedAction={onVerifyFailed}/>);
+    await userEvent.click(screen.getByRole('button', {name: /Ver por 50 fichas/}));
+    expect(onRequest).toHaveBeenCalledOnce();
+    expect(await screen.findByText('Não foi possível verificar o runout. Taxa devolvida.')).toBeInTheDocument();
+    expect(onVerifyFailed).toHaveBeenCalledOnce();
+  });
+
+  test('disables the button while the payment is pending', () => {
+    render(<RabbitHunt snapshot={snapshot()} viewer="viewer" bigBlind={50} pending/>);
+    expect(screen.getByRole('button', {name: /Ver por 50 fichas/})).toBeDisabled();
   });
 });

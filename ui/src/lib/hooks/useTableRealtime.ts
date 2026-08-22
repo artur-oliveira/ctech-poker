@@ -226,12 +226,16 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   // state only drives the button's disabled/pending visual.
   const readyLockRef = useRef(false);
   const showCardsLockRef = useRef(false);
+  const requestRabbitHuntLockRef = useRef(false);
   const readyActionRef = useRef<string | null>(null);
   const showCardsActionRef = useRef<string | null>(null);
+  const requestRabbitHuntActionRef = useRef<string | null>(null);
   const readyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const showCardsTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const requestRabbitHuntTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [readyPending, setReadyPending] = useState(false);
   const [showCardsPending, setShowCardsPending] = useState(false);
+  const [requestRabbitHuntPending, setRequestRabbitHuntPending] = useState(false);
   const [snapshot, setSnapshot] = useState<TableSnapshot | null>(null);
   const [snapshotTableID, setSnapshotTableID] = useState('');
   // Captured once per snapshot (in this event handler, never during render) so
@@ -315,6 +319,12 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       showCardsActionRef.current = null;
       showCardsLockRef.current = false;
       setShowCardsPending(false);
+    }
+    if (requestRabbitHuntActionRef.current === actionId) {
+      if (requestRabbitHuntTimerRef.current) clearTimeout(requestRabbitHuntTimerRef.current);
+      requestRabbitHuntActionRef.current = null;
+      requestRabbitHuntLockRef.current = false;
+      setRequestRabbitHuntPending(false);
     }
     if (postBigBlindActionRef.current === actionId) {
       if (postBigBlindTimerRef.current) clearTimeout(postBigBlindTimerRef.current);
@@ -447,7 +457,8 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       // remains the only available confirmation signal.
       if (legacyUnversioned) {
         clearPending();
-        for (const id of [readyActionRef.current, showCardsActionRef.current, postBigBlindActionRef.current]) {
+        for (const id of [readyActionRef.current, showCardsActionRef.current, postBigBlindActionRef.current,
+              requestRabbitHuntActionRef.current]) {
           if (id) finishAuxiliaryCommand(id);
         }
       }
@@ -595,6 +606,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       setPendingAction(null);
       setReadyPending(false);
       setShowCardsPending(false);
+      setRequestRabbitHuntPending(false);
       setLastActionError(null);
       setAnnouncement('');
       setRemoved(null);
@@ -648,7 +660,8 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
             setLastActionError(null);
             setRemoved(null);
             clearPending();
-            for (const actionId of [readyActionRef.current, showCardsActionRef.current, postBigBlindActionRef.current]) {
+            for (const actionId of [readyActionRef.current, showCardsActionRef.current, postBigBlindActionRef.current,
+              requestRabbitHuntActionRef.current]) {
               if (actionId) finishAuxiliaryCommand(actionId);
             }
             postedBigBlindRef.current = false;
@@ -694,16 +707,19 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     postBigBlindActionRef.current = null;
     readyActionRef.current = null;
     showCardsActionRef.current = null;
+    requestRabbitHuntActionRef.current = null;
     readyLockRef.current = false;
     showCardsLockRef.current = false;
+    requestRabbitHuntLockRef.current = false;
     for (const timer of [pendingTimer.current, readyTimerRef.current, showCardsTimerRef.current,
-      postBigBlindTimerRef.current]) {
+      postBigBlindTimerRef.current, requestRabbitHuntTimerRef.current]) {
       if (timer) clearTimeout(timer);
     }
     pendingTimer.current = undefined;
     readyTimerRef.current = undefined;
     showCardsTimerRef.current = undefined;
     postBigBlindTimerRef.current = undefined;
+    requestRabbitHuntTimerRef.current = undefined;
     pendingActionRef.current = null;
     for (const timer of reactionTimersRef.current.values()) window.clearTimeout(timer);
     reactionTimersRef.current.clear();
@@ -717,6 +733,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     if (readyTimerRef.current) clearTimeout(readyTimerRef.current);
     if (showCardsTimerRef.current) clearTimeout(showCardsTimerRef.current);
     if (postBigBlindTimerRef.current) clearTimeout(postBigBlindTimerRef.current);
+    if (requestRabbitHuntTimerRef.current) clearTimeout(requestRabbitHuntTimerRef.current);
     for (const timer of reactionTimersRef.current.values()) window.clearTimeout(timer);
     reactionTimersRef.current.clear();
     for (const timer of soundTimersRef.current) window.clearTimeout(timer);
@@ -795,6 +812,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     retryNow,
     readyPending,
     showCardsPending,
+    requestRabbitHuntPending,
     ready: (ready = true) => {
       if (readyLockRef.current) return false;
       const actionId = crypto.randomUUID();
@@ -823,6 +841,24 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       showCardsTimerRef.current = setTimeout(() => finishAuxiliaryCommand(actionId, 'action_timeout'), ACTION_TIMEOUT_MS);
       return ok;
     },
+    requestRabbitHunt: () => {
+      if (requestRabbitHuntLockRef.current) return false;
+      const actionId = crypto.randomUUID();
+      requestRabbitHuntLockRef.current = true;
+      requestRabbitHuntActionRef.current = actionId;
+      setRequestRabbitHuntPending(true);
+      const ok = emit({type: 'request_rabbit_hunt', action_id: actionId});
+      if (!ok) {
+        finishAuxiliaryCommand(actionId);
+        return false;
+      }
+      requestRabbitHuntTimerRef.current = setTimeout(() => finishAuxiliaryCommand(actionId, 'action_timeout'), ACTION_TIMEOUT_MS);
+      return ok;
+    },
+    // Fire-and-forget: RabbitHunt.tsx already shows its own "taxa devolvida"
+    // message locally the moment verification fails, independent of the
+    // server's response, so nothing in the UI waits on this ack.
+    reportRabbitHuntVerifyFailed: () => emit({type: 'rabbit_hunt_verify_failed', action_id: crypto.randomUUID()}),
     keepSeat: () => emit({type: 'keep_seat', action_id: crypto.randomUUID()}),
     // Fire-and-forget, once per hand: lets achievements.Service tell a
     // genuinely blind all-in/win from one the client just never reported.

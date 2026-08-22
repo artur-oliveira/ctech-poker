@@ -89,6 +89,9 @@ type Props = {
   revealPending?: boolean;
   onRevealCardAction?: (index: number) => void;
   onPeekCardsAction?: () => void;
+  rabbitHuntPending?: boolean;
+  onRequestRabbitHuntAction?: () => void;
+  onRabbitHuntVerifyFailedAction?: () => void;
   playerNotes?: Record<string, PlayerNote>;
   onEditPlayerNoteAction?: (seat: TableSnapshot['seats'][number]) => void;
   targetedReactionLabel?: string;
@@ -115,6 +118,9 @@ export function TableStage({
                              revealPending,
                              onRevealCardAction,
                              onPeekCardsAction,
+                             rabbitHuntPending,
+                             onRequestRabbitHuntAction,
+                             onRabbitHuntVerifyFailedAction,
                              playerNotes,
                              onEditPlayerNoteAction,
                              targetedReactionLabel,
@@ -176,7 +182,9 @@ export function TableStage({
       {seats.map(seatNode)}
       <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}
                          nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
-      <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer}/>
+      <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
+                  pending={rabbitHuntPending} onRequestRabbitHuntAction={onRequestRabbitHuntAction}
+                  onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
     </div>
   );
 
@@ -192,7 +200,9 @@ export function TableStage({
         {opponents.map((seat, i) => seatNode(seat, i + 1))}
         <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}
                            nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
-        <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer}/>
+        <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
+                  pending={rabbitHuntPending} onRequestRabbitHuntAction={onRequestRabbitHuntAction}
+                  onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
       </div>
       {viewerFirst && seatNode(seats[0], 0)}
     </div>

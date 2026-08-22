@@ -458,6 +458,7 @@ func TestViewForOmitsServerSeedWhenWonWithoutShowdown(t *testing.T) {
 	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
 	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
 	table := NewTable([]*Player{p1, p2}, 10, 20)
+	table.ConfigureRake("sandbox")
 	_ = table.StartHand()
 	// p1 bets, p2 folds -> wonWithoutShowdown
 	toAct := table.playerToActForTest()
@@ -469,6 +470,12 @@ func TestViewForOmitsServerSeedWhenWonWithoutShowdown(t *testing.T) {
 		t.Fatalf("expected hand complete after fold, got %v", table.Stage())
 	}
 
+	if len(table.ViewFor("p1").RunoutCards) != 0 {
+		t.Fatal("expected the rabbit hunt runout masked before payment")
+	}
+	if _, err := table.RequestRabbitHunt("p1"); err != nil {
+		t.Fatalf("RequestRabbitHunt: %v", err)
+	}
 	view := table.ViewFor("p1")
 	if view.ShuffleServerSeedHex != "" {
 		t.Fatal("must not reveal server seed when hand ends without showdown, to protect mucked hole cards")

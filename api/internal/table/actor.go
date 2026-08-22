@@ -241,6 +241,10 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleSitOut(ctx, c)
 	case ShowCardsCmd:
 		return a.handleShowCards(ctx, c)
+	case RequestRabbitHuntCmd:
+		return a.handleRequestRabbitHunt(ctx, c)
+	case RabbitHuntVerifyFailedCmd:
+		return a.handleRabbitHuntVerifyFailed(ctx, c)
 	case SetRunItTwiceCmd:
 		return a.handleSetRunItTwice(ctx, c)
 	case KeepSeatCmd:
@@ -1408,6 +1412,62 @@ func (a *Actor) handleShowCards(ctx context.Context, c ShowCardsCmd) error {
 			hookOutcome.FairnessProofs = a.cached.FairnessProofsForActor()
 			a.onHandUpdated(a.handID, hookOutcome, names)
 		}
+	}
+	return nil
+}
+
+func (a *Actor) handleRequestRabbitHunt(ctx context.Context, c RequestRabbitHuntCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	changed := false
+	apply := func() error {
+		if _, err := a.cached.RequestRabbitHunt(c.PlayerID); err != nil {
+			return err
+		}
+		changed = true
+		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "request_rabbit_hunt",
+		})
+	}
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		if !errors.Is(err, tablestore.ErrDuplicateAction) {
+			return err
+		}
+		if err := a.ensureLoaded(ctx, true); err != nil {
+			return err
+		}
+	}
+	if changed {
+		a.broadcastAll()
+	}
+	return nil
+}
+
+func (a *Actor) handleRabbitHuntVerifyFailed(ctx context.Context, c RabbitHuntVerifyFailedCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	changed := false
+	apply := func() error {
+		if err := a.cached.RefundRabbitHunt(c.PlayerID); err != nil {
+			return err
+		}
+		changed = true
+		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "rabbit_hunt_verify_failed",
+		})
+	}
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		if !errors.Is(err, tablestore.ErrDuplicateAction) {
+			return err
+		}
+		if err := a.ensureLoaded(ctx, true); err != nil {
+			return err
+		}
+	}
+	if changed {
+		a.broadcastAll()
 	}
 	return nil
 }

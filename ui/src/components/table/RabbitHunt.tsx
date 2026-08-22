@@ -7,7 +7,14 @@ import {verifyDeck, verifyWirePartialDeck} from '@/lib/deckVerify';
 import type {TableSnapshot} from '@/lib/api/table';
 import {rabbitRunout} from '@/lib/rabbitHunt';
 
-export function RabbitHunt({snapshot, viewer}: { snapshot: TableSnapshot; viewer?: string }) {
+export function RabbitHunt({snapshot, viewer, bigBlind, pending, onRequestRabbitHuntAction, onRabbitHuntVerifyFailedAction}: {
+  snapshot: TableSnapshot;
+  viewer?: string;
+  bigBlind: number;
+  pending?: boolean;
+  onRequestRabbitHuntAction?: () => void;
+  onRabbitHuntVerifyFailedAction?: () => void;
+}) {
   const [requested, setRequested] = useState(false);
   const [cards, setCards] = useState<string[]>([]);
   const [verificationFailed, setVerificationFailed] = useState(false);
@@ -40,27 +47,33 @@ export function RabbitHunt({snapshot, viewer}: { snapshot: TableSnapshot; viewer
       }
     };
     void load().catch(() => {
-      if (live) setVerificationFailed(true);
+      if (live) {
+        setVerificationFailed(true);
+        onRabbitHuntVerifyFailedAction?.();
+      }
     });
     return () => {
       live = false;
     };
   }, [available, requested, serverRunoutAvailable, snapshot.board.length, snapshot.revealed_card_salts,
     snapshot.root_commit_hash, snapshot.runout_cards, snapshot.seats, snapshot.shuffle_commit_hash,
-    snapshot.shuffle_server_seed_hex, snapshot.unrevealed_card_hashes]);
-  
+    snapshot.shuffle_server_seed_hex, snapshot.unrevealed_card_hashes, onRabbitHuntVerifyFailedAction]);
+
   if (!available) return null;
   return <aside className="rabbit-hunt" aria-live="polite">
-    {!requested ? <button type="button" onClick={() => setRequested(true)}>
+    {!requested ? <button type="button" disabled={pending} onClick={() => {
+      setRequested(true);
+      onRequestRabbitHuntAction?.();
+    }}>
       <Rabbit aria-hidden="true"/>
-      <span><b>Ver o que viria</b><small>Rabbit hunting · não altera o resultado</small></span>
+      <span><b>{`Ver por ${bigBlind.toLocaleString('pt-BR')} fichas`}</b><small>Rabbit hunting · não altera o resultado</small></span>
     </button> : cards.length ? <>
       <span className="rabbit-hunt-label"><Rabbit aria-hidden="true"/>O runout seria</span>
       <span className="rabbit-hunt-cards">
         {cards.map((card, index) => <PlayingCard key={`${card}:${index}`} card={card} index={index} size="hole"/>)}
       </span>
     </> : verificationFailed
-      ? <span className="rabbit-hunt-label">Não foi possível verificar o runout.</span>
+      ? <span className="rabbit-hunt-label">Não foi possível verificar o runout. Taxa devolvida.</span>
       : <span className="rabbit-hunt-label">Verificando o baralho…</span>}
   </aside>;
 }

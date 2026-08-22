@@ -240,7 +240,7 @@ export interface RevealedSalt {
 
 /** ClientMessage is sent from the client to the server. */
 export interface ClientMessage {
-  /** "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice" | "peek_cards" */
+  /** "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice" | "peek_cards" | "request_rabbit_hunt" | "rabbit_hunt_verify_failed" */
   type: string;
   /** payload fields */
   token: string;

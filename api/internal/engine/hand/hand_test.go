@@ -845,6 +845,160 @@ func TestRevealHoleCardsRejectsPlayerNotDealtIntoTheHand(t *testing.T) {
 	}
 }
 
+func TestRequestRabbitHuntChargesBigBlindAndGatesViewFor(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	table.ConfigureRake("sandbox")
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	toAct := table.playerToActForTest()
+	winner, winnerID := p1, "p1"
+	if toAct == "p1" {
+		winner, winnerID = p2, "p2"
+	}
+	if err := table.Act(toAct, betting.ActionFold, 0); err != nil {
+		t.Fatalf("%s folds: %v", toAct, err)
+	}
+
+	before := winner.Stack
+	fee, err := table.RequestRabbitHunt(winnerID)
+	if err != nil {
+		t.Fatalf("RequestRabbitHunt: %v", err)
+	}
+	if fee != 20 {
+		t.Fatalf("expected the big blind (20) charged, got %d", fee)
+	}
+	if winner.Stack != before-20 {
+		t.Fatalf("expected stack debited by the fee, got %d want %d", winner.Stack, before-20)
+	}
+
+	paidView := table.ViewFor(winnerID)
+	if len(paidView.RunoutCards) == 0 {
+		t.Fatal("expected the payer's own view to reveal the runout")
+	}
+	unpaidView := table.ViewFor(toAct)
+	if len(unpaidView.RunoutCards) != 0 {
+		t.Fatal("expected a non-paying viewer's view to stay masked")
+	}
+}
+
+func TestRequestRabbitHuntRejectsDoublePayment(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	table.ConfigureRake("sandbox")
+	_ = table.StartHand()
+	toAct := table.playerToActForTest()
+	winnerID := "p1"
+	if toAct == "p1" {
+		winnerID = "p2"
+	}
+	_ = table.Act(toAct, betting.ActionFold, 0)
+
+	if _, err := table.RequestRabbitHunt(winnerID); err != nil {
+		t.Fatalf("first RequestRabbitHunt: %v", err)
+	}
+	if _, err := table.RequestRabbitHunt(winnerID); err == nil {
+		t.Fatal("expected the second RequestRabbitHunt this hand to be rejected")
+	}
+}
+
+func TestRequestRabbitHuntRejectsInsufficientStack(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	table.ConfigureRake("sandbox")
+	_ = table.StartHand()
+	toAct := table.playerToActForTest()
+	winnerID, winner := "p1", p1
+	if toAct == "p1" {
+		winnerID, winner = "p2", p2
+	}
+	_ = table.Act(toAct, betting.ActionFold, 0)
+	winner.Stack = 10
+
+	if _, err := table.RequestRabbitHunt(winnerID); err == nil {
+		t.Fatal("expected an insufficient-stack rejection")
+	}
+	if winner.Stack != 10 {
+		t.Fatalf("expected no charge on rejection, stack changed to %d", winner.Stack)
+	}
+}
+
+func TestRequestRabbitHuntRejectsRealMoneyTables(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	table.ConfigureRake("real")
+	_ = table.StartHand()
+	toAct := table.playerToActForTest()
+	winnerID := "p1"
+	if toAct == "p1" {
+		winnerID = "p2"
+	}
+	_ = table.Act(toAct, betting.ActionFold, 0)
+
+	if _, err := table.RequestRabbitHunt(winnerID); err == nil {
+		t.Fatal("expected a real-money table to reject the rabbit hunt request")
+	}
+}
+
+func TestRefundRabbitHuntCreditsBackAndRemasksView(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	table.ConfigureRake("sandbox")
+	_ = table.StartHand()
+	toAct := table.playerToActForTest()
+	winnerID, winner := "p1", p1
+	if toAct == "p1" {
+		winnerID, winner = "p2", p2
+	}
+	_ = table.Act(toAct, betting.ActionFold, 0)
+
+	before := winner.Stack
+	if _, err := table.RequestRabbitHunt(winnerID); err != nil {
+		t.Fatalf("RequestRabbitHunt: %v", err)
+	}
+	if err := table.RefundRabbitHunt(winnerID); err != nil {
+		t.Fatalf("RefundRabbitHunt: %v", err)
+	}
+	if winner.Stack != before {
+		t.Fatalf("expected the fee refunded, stack = %d want %d", winner.Stack, before)
+	}
+	if len(table.ViewFor(winnerID).RunoutCards) != 0 {
+		t.Fatal("expected the refunded viewer's view to be masked again")
+	}
+	if err := table.RefundRabbitHunt(winnerID); err == nil {
+		t.Fatal("expected a second refund with nothing paid to be rejected")
+	}
+}
+
+func TestGenuineShowdownRevealIsNeverGatedByRabbitHuntPayment(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	table.ConfigureRake("sandbox")
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	for table.Stage() != Complete {
+		toAct := table.playerToActForTest()
+		if err := table.Act(toAct, betting.ActionCall, 0); err != nil {
+			_ = table.Act(toAct, betting.ActionCheck, 0)
+		}
+	}
+	outcome := table.LastOutcomeForActor()
+	if outcome == nil || outcome.WonWithoutShowdown {
+		t.Fatal("expected this hand to reach a genuine showdown")
+	}
+	if table.ViewFor("p1").ShuffleServerSeedHex == "" {
+		t.Fatal("expected the full seed published unconditionally after a genuine showdown, no payment needed")
+	}
+}
+
 // TestHandOutcomeCapturesBoardAndHoleCards pins down what sessionlog's
 // per-player match history needs: a folded player's hole cards must be
 // captured (Revealed=false, never shown to opponents) but the winner who

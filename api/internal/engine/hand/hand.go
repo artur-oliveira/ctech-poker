@@ -136,6 +136,18 @@ type Table struct {
 	rakeBPS       int64
 	rakeCollected int64
 
+	// currencyMode is set once by ConfigureRake and never changes for the
+	// table's lifetime. It gates RequestRabbitHunt: a per-hand real-money
+	// debit for a curiosity feature would move real chips outside any
+	// wallet transaction, so real-money tables are closed at this layer,
+	// not assumed closed by the UI never showing the button.
+	currencyMode string
+
+	// rabbitHuntPaid tracks, for the current hand, which players have paid
+	// the big-blind fee to reveal the rabbit-hunt runout. Reset every hand
+	// alongside rakeCollected/seenActionIDs (see StartHand).
+	rabbitHuntPaid map[string]bool
+
 	// handOrder is the seat order of players dealt into the current (or
 	// most recently completed) hand — the same slice built as `active` in
 	// StartHand. Used at hand-end to rotate dealerSeat forward to the next
@@ -289,6 +301,7 @@ func (t *Table) LastOutcomeForActor() *HandOutcome { return t.lastOutcome }
 // at buy-in instead (buyin.Service.BuyIn), never from the pot. The setting
 // is persisted with the table state.
 func (t *Table) ConfigureRake(currencyMode string) {
+	t.currencyMode = currencyMode
 	if currencyMode == "sandbox" {
 		t.rakeBPS = 250
 		return
@@ -690,6 +703,7 @@ func (t *Table) StartHand() error {
 	t.lastOutcome = nil
 	t.wasEverAllIn = make(map[string]bool)
 	t.rakeCollected = 0
+	t.rabbitHuntPaid = make(map[string]bool)
 	t.seenActionIDs = make(map[string]bool)
 	for _, p := range t.players {
 		p.VoluntarilyShown = false
@@ -972,6 +986,68 @@ func (t *Table) RevealHoleCard(playerID string, cardIndex *int32) (changed bool,
 func (t *Table) RevealHoleCards(playerID string) error {
 	_, err := t.RevealHoleCard(playerID, nil)
 	return err
+}
+
+// RequestRabbitHunt charges playerID the current hand's big blind to reveal
+// the runout that would have come after a hand ends without a showdown.
+// Returns the fee charged. Fails without charging anything if the table
+// isn't sandbox, the hand isn't eligible, the player wasn't dealt in, they
+// already paid this hand, or their stack can't cover the fee.
+func (t *Table) RequestRabbitHunt(playerID string) (fee int64, err error) {
+	if t.currencyMode != "sandbox" {
+		return 0, fmt.Errorf("hand: rabbit hunt is only available on sandbox tables")
+	}
+	if t.stage != Complete {
+		return 0, fmt.Errorf("hand: rabbit hunt is only available after the hand is complete")
+	}
+	if t.lastOutcome == nil || !t.lastOutcome.WonWithoutShowdown {
+		return 0, fmt.Errorf("hand: rabbit hunt is only available when the hand ended without a showdown")
+	}
+	if len(t.board) >= 5 {
+		return 0, fmt.Errorf("hand: rabbit hunt is not available once the full board is dealt")
+	}
+	dealtIn := false
+	for _, hp := range t.handOrder {
+		if hp.ID == playerID {
+			dealtIn = true
+			break
+		}
+	}
+	if !dealtIn {
+		return 0, fmt.Errorf("hand: player %s was not dealt into this hand", playerID)
+	}
+	if t.rabbitHuntPaid[playerID] {
+		return 0, fmt.Errorf("hand: player %s already paid for rabbit hunt this hand", playerID)
+	}
+	p := t.playerByID(playerID)
+	if p == nil {
+		return 0, fmt.Errorf("hand: player %s is no longer seated", playerID)
+	}
+	if p.Stack < t.bigBlind {
+		return 0, fmt.Errorf("hand: insufficient stack for the rabbit hunt fee")
+	}
+	p.Stack -= t.bigBlind
+	if t.rabbitHuntPaid == nil {
+		t.rabbitHuntPaid = make(map[string]bool)
+	}
+	t.rabbitHuntPaid[playerID] = true
+	return t.bigBlind, nil
+}
+
+// RefundRabbitHunt reverses a RequestRabbitHunt charge for playerID this
+// hand, used when the client reports it couldn't verify the revealed
+// runout. Fails if playerID never paid this hand (nothing to refund).
+func (t *Table) RefundRabbitHunt(playerID string) error {
+	if !t.rabbitHuntPaid[playerID] {
+		return fmt.Errorf("hand: player %s has no rabbit hunt payment to refund this hand", playerID)
+	}
+	p := t.playerByID(playerID)
+	if p == nil {
+		return fmt.Errorf("hand: player %s is no longer seated", playerID)
+	}
+	p.Stack += t.bigBlind
+	delete(t.rabbitHuntPaid, playerID)
+	return nil
 }
 
 func (t *Table) blindSeats(active []*Player) (sb, bb int) {

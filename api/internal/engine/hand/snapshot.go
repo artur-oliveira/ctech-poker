@@ -345,7 +345,7 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		rootCommit := deck.RootCommitHash(t.shuffle.ServerSeed, t.shuffle.Cards)
 		out.RootCommitHash = hex.EncodeToString(rootCommit[:])
 
-		if t.stage == Complete {
+		if t.stage == Complete && (!wonWithoutShowdown || t.rabbitHuntPaid[viewerID]) {
 			proof, runout := t.fairnessProofFor(viewerID, wonWithoutShowdown)
 			out.ShuffleServerSeedHex = proof.ServerSeedHex
 			out.RevealedCardSalts = proof.RevealedCardSalts

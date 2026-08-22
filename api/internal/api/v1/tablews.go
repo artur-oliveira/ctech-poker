@@ -104,7 +104,7 @@ func wsAllowedOrigin(ctx *fasthttp.RequestCtx, allowed []string) bool {
 
 func rateLimitedTableMessage(messageType string) bool {
 	switch messageType {
-	case "act", "chat", "reaction", "preselect_action", "bot_challenge", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "set_run_it_twice", "peek_cards", "ping":
+	case "act", "chat", "reaction", "preselect_action", "bot_challenge", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "set_run_it_twice", "peek_cards", "ping", "request_rabbit_hunt", "rabbit_hunt_verify_failed":
 		return true
 	default:
 		return false
@@ -588,6 +588,22 @@ func RegisterTableWS(
 					if err := dispatch(table.ShowCardsCmd{
 						PlayerID: playerID, ActionID: m.ActionId, CardIndex: m.CardIndex, Reply: r,
 					}); err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+					} else {
+						ack()
+					}
+				case "request_rabbit_hunt":
+					ensureActionID()
+					r := make(chan error, 1)
+					if err := dispatch(table.RequestRabbitHuntCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+					} else {
+						ack()
+					}
+				case "rabbit_hunt_verify_failed":
+					ensureActionID()
+					r := make(chan error, 1)
+					if err := dispatch(table.RabbitHuntVerifyFailedCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
 						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()

@@ -180,6 +180,8 @@ function realtime(overrides: Record<string, unknown> = {}) {
     snapshot: snapshot(), snapshotAt: Date.now(), status: 'connected', reconnectAttempt: 0,
     announcement: '', removed: null, retryNow: vi.fn(), act: vi.fn(() => true),
     ready: vi.fn(), readyPending: false, showCards: vi.fn(), showCardsPending: false,
+    requestRabbitHunt: vi.fn(() => true), requestRabbitHuntPending: false,
+    reportRabbitHuntVerifyFailed: vi.fn(() => true),
     preselectAction: vi.fn(() => true), pendingAction: null, actionError: null,
     clearActionError: vi.fn(), keepSeat: vi.fn(() => true), chat: [], sendChat: vi.fn(),
     reactions: [], sendReaction: vi.fn(), botChallengeRequired: false, submitBotChallenge: vi.fn(),
@@ -487,6 +489,17 @@ describe('table page integration', () => {
     expect(mocks.stageProps?.canRevealCards).toBe(true);
     act(() => (mocks.stageProps?.onRevealCardAction as (index: number) => void)(1));
     expect(mocks.realtime.showCards).toHaveBeenCalledWith(1);
+  });
+
+  test('wires the rabbit hunt price and request/refund callbacks into TableStage', async () => {
+    realtime({snapshot: snapshot({stage: 'complete', won_without_showdown: true})});
+    render(<TablePage/>);
+    expect(mocks.stageProps?.bigBlind).toBeGreaterThan(0);
+    act(() => (mocks.stageProps?.onRequestRabbitHuntAction as () => void)());
+    expect(mocks.realtime.requestRabbitHunt).toHaveBeenCalledOnce();
+    act(() => (mocks.stageProps?.onRabbitHuntVerifyFailedAction as () => void)());
+    expect(mocks.realtime.reportRabbitHuntVerifyFailed).toHaveBeenCalledOnce();
+    expect(mocks.stageProps?.rabbitHuntPending).toBe(false);
   });
 
   test('a paused seat resumes play, and a busted one rebuys instead', async () => {
