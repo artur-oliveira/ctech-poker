@@ -19,7 +19,12 @@ function usernameFrom(idToken?: string | null) {
 
 export async function exchangeCode(code: string, state: string) {
   const r = await client.exchangeCode(code, state);
-  return {accessToken: r.accessToken, username: usernameFrom(r.idToken), returnTo: r.returnTo};
+  console.log(`current code ${code} and state ${state}`);
+  return {
+    accessToken: r.accessToken,
+    username: usernameFrom(r.idToken),
+    returnTo: r.returnTo
+  };
 }
 
 export async function doRefresh() {

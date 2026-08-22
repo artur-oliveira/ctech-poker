@@ -35,6 +35,13 @@ describe('shared app page chrome', () => {
 
     expect(screen.getByRole('heading', {name: 'Guia'})).toBeInTheDocument();
     expect(container.querySelector('a')).not.toBeInTheDocument();
+    expect(container.querySelector('.page-heading-shell')).toHaveClass('is-compact');
+  });
+
+  test('reserves the feature heading for editorial arrival pages', () => {
+    const {container} = render(<AppPageHeader icon={BookOpen} eyebrow="AJUDA" title="Guia"
+      description="Aprenda a jogar." variant="feature"/>);
+    expect(container.querySelector('.page-heading-shell')).toHaveClass('is-feature');
   });
 
   describe('mobile tab bar', () => {

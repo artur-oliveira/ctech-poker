@@ -3,17 +3,16 @@ import {Suspense} from 'react';
 import Link from 'next/link';
 import {useSearchParams} from 'next/navigation';
 import {useQuery} from '@tanstack/react-query';
-import {Award, BookOpen, ChevronLeft, History, Sparkles, Trophy} from 'lucide-react';
+import {ChevronLeft, Sparkles, Trophy} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {getProfileShowcase} from '@/lib/api/player';
 import {achievementLabel} from '@/lib/achievements';
 import {useOptionalSession} from "@/lib/auth/session";
-import {ProfileMenu} from "@/components/lobby/ProfileMenu";
+import {AppPage} from '@/components/AppPageChrome';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {PlaystyleBadges} from '@/components/PlaystyleBadges';
 import {LoadingRegion, Skeleton} from '@/components/ui/skeleton';
-import {PokerLogo} from '@/components/PokerLogo';
 import {PlayerActionsMenu} from '@/components/social/PlayerActionsMenu';
 import {getRelationship} from '@/lib/api/social';
 import {useSocialActions} from '@/lib/hooks/useSocialActions';
@@ -39,17 +38,7 @@ function ProfileContent() {
     retry: false
   });
   
-  return <main className="app-page profile-showcase-page">
-    <nav className="app-nav shell">
-      <Link href="/" className="brand"><span className="brand-mark"><PokerLogo priority/></span>CTech <b>Poker</b></Link>
-      {authed ? <div className="header-right">
-        <Link href="/guide"><BookOpen/> <span className="header-right-label">Guia</span></Link>
-        <Link href="/leaderboard"><Trophy/> <span className="header-right-label">Ranking</span></Link>
-        <Link href="/achievements"><Award/> <span className="header-right-label">Conquistas</span></Link>
-        <Link href="/hands"><History/> <span className="header-right-label">Mãos</span></Link>
-        <ProfileMenu/>
-      </div> : <Link href="/lobby"><ChevronLeft/> Lobby</Link>}
-    </nav>
+  return <AppPage authed={authed} footer={false}>
     <section className="profile-showcase shell">
       {authed && <Link href="/lobby"><ChevronLeft/> Lobby</Link>}
       {showcase.isLoading ?
@@ -106,7 +95,7 @@ function ProfileContent() {
           </div>
         </>}
     </section>
-  </main>;
+  </AppPage>;
 }
 
 export default function ProfilePage() {

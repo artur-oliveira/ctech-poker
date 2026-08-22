@@ -112,14 +112,15 @@ function AppTabBar({current, rewardReady}: {current?: MainRoute; rewardReady: bo
   </nav>;
 }
 
-export function AppPageHeader({icon: Icon, eyebrow, title, description, actions}: {
+export function AppPageHeader({icon: Icon, eyebrow, title, description, actions, variant = 'compact'}: {
   icon: LucideIcon;
   eyebrow: string;
   title: string;
   description: ReactNode;
   actions?: ReactNode;
+  variant?: 'compact' | 'feature';
 }) {
-  return <div className="page-heading-shell">
+  return <div className={`page-heading-shell is-${variant}`}>
     <div className="page-heading-row">
       <header className="page-heading">
         <span className="page-heading-icon"><Icon aria-hidden="true"/></span>

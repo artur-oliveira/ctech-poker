@@ -34,6 +34,11 @@ describe('guide topic pages', () => {
     const topicNav = screen.getByRole('navigation', {name: 'Tópicos do guia'});
     expect(topicNav.querySelectorAll('a')).toHaveLength(GUIDE_TOPICS.length);
     expect(topicNav.querySelector(`a[href="${href}"]`)).toHaveAttribute('aria-current', 'page');
+    const mobileTopics = screen.getByRole('navigation', {name: 'Tópicos do guia em telas pequenas'});
+    expect(mobileTopics.querySelectorAll('a')).toHaveLength(GUIDE_TOPICS.length);
+    expect(mobileTopics.querySelector(`a[href="${href}"]`)).toHaveAttribute('aria-current', 'page');
+    expect(document.querySelector('.guide-page-index-mobile')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', {name: 'Nesta página'})).toBeInTheDocument();
     // Every "Nesta página" entry must anchor to a section actually rendered below it.
     const anchors = Array.from(document.querySelectorAll<HTMLAnchorElement>('.guide-on-this-page a'));
     expect(anchors.length).toBeGreaterThan(0);

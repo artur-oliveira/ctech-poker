@@ -11,11 +11,15 @@ import {
 } from '@/components/ui/dialog';
 import {HandRankings} from '@/components/HandRankings';
 
-export function HandRankingsDialog({open, onOpenChangeAction}: { open: boolean; onOpenChangeAction: (open: boolean) => void }) {
+export function HandRankingsDialog({open, onOpenChangeAction, trigger = true}: {
+  open: boolean;
+  onOpenChangeAction: (open: boolean) => void;
+  trigger?: boolean;
+}) {
   return <Dialog open={open} onOpenChange={onOpenChangeAction}>
-    <DialogTrigger render={<Button type="button" variant="ghost" size="icon" aria-label="Ver ranking de mãos"/>}>
+    {trigger && <DialogTrigger render={<Button type="button" variant="ghost" size="icon" aria-label="Ver ranking de mãos"/>}>
       <CircleHelp/>
-    </DialogTrigger>
+    </DialogTrigger>}
     <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Ranking de mãos</DialogTitle>

@@ -1,7 +1,8 @@
 'use client';
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React, {memo, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import Link from 'next/link';
 import {useInfiniteQuery} from '@tanstack/react-query';
+import {measureElement, useWindowVirtualizer} from '@tanstack/react-virtual';
 import {
   AlertCircle,
   ArrowRight,
@@ -40,12 +41,13 @@ function handCategoryLabel(holeCards?: string[], board?: string[]): string | nul
   return HAND_CATEGORY_LABELS[bestHandCategory([...holeCards, ...board])] || null;
 }
 
-function HandRow({hand, mode}: { hand: HandItem; mode: WalletMode }) {
+const HandRow = memo(function HandRow({hand, mode}: { hand: HandItem; mode: WalletMode }) {
   const historyParams = new URLSearchParams({
     table_id: hand.table_id,
     hand_id: hand.hand_id,
     mode
   });
+  const category = handCategoryLabel(hand.hole_cards, hand.board);
   return <Link href={`/hands/history?${historyParams.toString()}`} className={`hand-row is-${hand.outcome}`}>
     <div className="hand-row-top">
       <div className="hand-row-card-group">
@@ -63,8 +65,8 @@ function HandRow({hand, mode}: { hand: HandItem; mode: WalletMode }) {
         </div>
       </div>
       <div className="hand-row-category">
-        {handCategoryLabel(hand.hole_cards, hand.board)
-          ? <span className="hand-category">{handCategoryLabel(hand.hole_cards, hand.board)}</span>
+        {category
+          ? <span className="hand-category">{category}</span>
           : <span className="hand-category is-unknown" aria-hidden="true">—</span>}
       </div>
       <div className="hand-row-result">
@@ -83,6 +85,53 @@ function HandRow({hand, mode}: { hand: HandItem; mode: WalletMode }) {
       <ChevronRight className="hand-row-chevron" aria-hidden="true"/>
     </div>
   </Link>;
+});
+
+function VirtualHandsList({hands, mode}: { hands: HandItem[]; mode: WalletMode }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  useLayoutEffect(() => {
+    const updateScrollMargin = () => {
+      const top = listRef.current?.getBoundingClientRect().top;
+      setScrollMargin(top === undefined ? 0 : top + window.scrollY);
+    };
+    updateScrollMargin();
+    window.addEventListener('resize', updateScrollMargin, {passive: true});
+    return () => window.removeEventListener('resize', updateScrollMargin);
+  }, []);
+
+  const virtualizer = useWindowVirtualizer({
+    count: hands.length,
+    estimateSize: () => 184,
+    measureElement: (element, entry, instance) => measureElement(element, entry, instance) || 184,
+    overscan: 3,
+    scrollMargin
+  });
+
+  return <div
+    ref={listRef}
+    className="hands-list is-virtualized"
+    role="list"
+    aria-label={`${hands.length} mãos carregadas`}
+    style={{height: virtualizer.getTotalSize()}}
+  >
+    {virtualizer.getVirtualItems().map(virtualHand => {
+      const hand = hands[virtualHand.index];
+      return <div
+        key={hand.hand_id}
+        ref={virtualizer.measureElement}
+        className="hand-row-virtual"
+        data-index={virtualHand.index}
+        role="listitem"
+        aria-posinset={virtualHand.index + 1}
+        aria-setsize={hands.length}
+        style={{transform: `translateY(${virtualHand.start - scrollMargin}px)`}}
+      >
+        <HandRow hand={hand} mode={mode}/>
+      </div>;
+    })}
+  </div>;
 }
 
 export default function HandsHistory() {
@@ -183,9 +232,7 @@ export default function HandsHistory() {
               </Button>
             </div> :
             (
-              <div className="hands-list">
-                {hands.map(hand => <HandRow key={hand.hand_id} hand={hand} mode={mode}/>)}
-              </div>
+              <VirtualHandsList hands={hands} mode={mode}/>
             )}
 
       {history.hasNextPage && !history.isLoading && !history.isError && (

@@ -169,40 +169,44 @@ rounded:
 spacing:
   xs: "4px"
   sm: "8px"
+  compact: "12px"
   md: "16px"
   lg: "24px"
-  xl: "40px"
+  xl: "32px"
+  2xl: "48px"
+  3xl: "64px"
+  4xl: "96px"
 components:
   button-primary:
     backgroundColor: "{colors.brand}"
     textColor: "{colors.on-brand}"
     rounded: "{rounded.control}"
-    height: "40px"
+    height: "44px"
     padding: "0 16px"
     typography: "{typography.label}"
   button-primary-hover:
     backgroundColor: "{colors.brand-bright}"
     textColor: "{colors.on-brand}"
     rounded: "{rounded.control}"
-    height: "40px"
+    height: "44px"
     padding: "0 16px"
   button-outline:
     backgroundColor: "#ffffff0d"
     textColor: "{colors.on-brand}"
     rounded: "{rounded.control}"
-    height: "40px"
+    height: "44px"
     padding: "0 16px"
   button-light:
     backgroundColor: "{colors.paper}"
     textColor: "{colors.wine}"
     rounded: "{rounded.control}"
-    height: "40px"
+    height: "44px"
     padding: "0 16px"
   button-ghost:
     backgroundColor: "transparent"
     textColor: "{colors.on-brand}"
     rounded: "{rounded.control}"
-    height: "40px"
+    height: "44px"
     padding: "0 16px"
   action-call:
     backgroundColor: "{colors.paper}"
@@ -225,7 +229,7 @@ components:
     backgroundColor: "{colors.surface-control}"
     textColor: "{colors.paper}"
     rounded: "{rounded.control}"
-    height: "40px"
+    height: "44px"
     padding: "0 12px"
 ---
 
@@ -329,7 +333,7 @@ Elevation is structural and material. The table rail and felt use inset shadows 
 The component vocabulary is tactile and immediate: controls look pressable, acknowledge interaction within 150–250 ms, and keep the same shape across marketing, lobby, and play.
 
 ### Buttons
-- **Shape:** 12px radius, 40px default height, 32px compact, 48px large; semibold 14px labels.
+- **Shape:** 12px radius, 44px default and compact height, 48px large; semibold 14px labels. The 44px floor is shared with inputs, selects, chips, and coarse-pointer links.
 - **Primary:** Table Red fill, white label, 16px horizontal padding. One main decision per group: join, create, raise, accept.
 - **Hover / Focus:** hover shifts to Bright Table Red; keyboard focus uses a visible 3px red-derived ring; active may press down by 1px. Disabled uses 50% opacity and no pointer events.
 - **Outline / Ghost:** translucent white well or transparent surface with white text. Carry secondary table actions without competing with the primary decision.
@@ -364,7 +368,7 @@ The component vocabulary is tactile and immediate: controls look pressable, ackn
 - **Winner:** `is-winner` shifts the border to gold; a gold `seat-win` pill animates in.
 
 ### Inputs / Fields
-- **Style:** 40px height, 12px radius, translucent control surface, white text, `white/15` hairline.
+- **Style:** 44px height, 12px radius, translucent control surface, white text, `white/15` hairline.
 - **Focus:** border changes to Bright Table Red with a 3px focus-ring at low offset.
 - **Error / Disabled:** errors use semantic red and linked error copy; disabled controls retain readable labels. Placeholder text meets 4.5:1 (uses `--muted-rose`, verified 7.38:1 on the seat surface).
 
@@ -380,10 +384,18 @@ The component vocabulary is tactile and immediate: controls look pressable, ackn
   reachable without scrolling. Public pages keep their return link in `app-nav`; the table header
   (a separate surface, not `AppPageNav`) keeps a 44px-min Lobby link and a connection-state
   indicator instead.
+- **Public profile:** player showcases use the same `AppPage` chrome. Authenticated viewers retain the full desktop route set and mobile tab bar; anonymous viewers receive the standard public return action. Never build a route-local icon strip.
+- **Page headings:** `AppPageHeader` is compact by default: a 40–44px icon sits inline with a 28–36px title and description, with no repeated eyebrow. `variant="feature"` is reserved for a true editorial arrival page such as the guide hub.
+- **Guide topics:** topic pills wrap on tablet/desktop. At 720px and below, topic and in-page indexes become native disclosures with 44px rows; no route depends on a clipped horizontal label to remain discoverable.
+
+### Table utilities
+- **Desktop / landscape:** chat, reactions, winners, and hand rankings retain their direct controls outside seat geometry.
+- **Portrait:** one 44px header trigger opens a single tools menu. Closed chat, reaction, and winner triggers never occupy the right-side seat ring. The controlled `activeTablePanel` contract guarantees one open surface at a time.
+- **Blind selection:** lobby blind choices wrap without scroll chrome above 720px and use one deliberate, snap-aligned rail on smaller screens.
 
 ### Dialogs
 - **Surface:** `#211416`, 16px radius, 24px padding, white/15 hairline, 75% black backdrop.
-- **Behavior:** trap focus, close on Escape unless a mutation is pending, label the close button, stack actions on narrow screens when needed.
+- **Behavior:** trap focus, close on Escape unless a mutation is pending, label the close button, stack actions on narrow screens when needed. Every shared dialog is capped at `calc(100dvh - 2rem)`, scrolls internally, and uses overscroll containment so close and actions stay reachable on short phones, landscape, zoom, and localized copy.
 - **Motion:** fast fade/scale; reduced motion uses an instant change or crossfade.
 
 ### The Living Table
@@ -415,7 +427,7 @@ The signature composition: a brown physical rail around green felt, cards at the
 - **Don't** animate layout properties or use bounce/elastic motion; never make a user wait for choreography before acting.
 - **Don't** hard-code brand colors as literals in components (`bg-[#af2a2f]`); reference the `--brand` / `--paper` / `--wine` tokens so theming stays single-source.
 
-## 7. Coverage note (2026-07-28)
+### Implementation coverage note (updated 2026-08-22)
 
 Sections 2–4 (colors, typography, elevation) are current and authoritative. Section 5's component
 vocabulary predates roughly fifteen table components added in the 2026-07-26→28 work and does not

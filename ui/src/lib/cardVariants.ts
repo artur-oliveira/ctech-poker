@@ -47,7 +47,7 @@ export const DECK_VARIANTS: Record<DeckVariantId, DeckVariant> = {
     }
   },
   'high-constrast': {
-    label: 'Alto Contraste',
+    label: 'Contraste',
     colors: {
       spade: '#000000',
       heart: '#FF0000',

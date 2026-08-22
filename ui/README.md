@@ -55,7 +55,7 @@ Every page is `'use client'`; only `layout.tsx` and `share/layout.tsx` are serve
 | `/` | `page.tsx` | Landing: hero demo table, features, achievement teaser, OAuth CTAs |
 | `/lobby` | `lobby/page.tsx` | Stakes grid with explicit join/create states and sandbox buy-in ranges, compact active-session resume strip, create-room dialog, daily spin, onboarding |
 | `/table?id=<id>` | `table/page.tsx` | The live table (room id is a **query param**, not a segment) |
-| `/hands` | `hands/page.tsx` | Immediate infinite-scroll hand history in the API's paginated order; no technical-ID or client-only filter surface |
+| `/hands` | `hands/page.tsx` | Immediate infinite-scroll, window-virtualized hand history in the API's paginated order; no technical-ID or client-only filter surface |
 | `/hands/history?table_id=&hand_id=` | `hands/history/page.tsx` | One hand: seats, board, street-grouped actions, progressive fairness proof, resilient export/share, and action retry |
 | `/hands/replay?table_id=&hand_id=` | `hands/replay/page.tsx` | Frame-by-frame `HandReplayer` |
 | `/leaderboard` | `leaderboard/page.tsx` | Podium + ranking list, highlights the viewer's row |
@@ -173,6 +173,10 @@ unverifiable — there is no backfill, because the seed is not retained anywhere
 - `/hands` aggregates only the records currently loaded, or the record returned by direct hand-ID
   lookup. Labels explicitly say **carregadas**; ties are separate from wins and never inflate the
   victory rate.
+- The infinite list keeps every fetched record in memory for those aggregates, but virtualizes its
+  rows against the window: only the visible range plus a three-row overscan is mounted. Dynamic row
+  measurement preserves the responsive layouts without letting 500+ hands create thousands of DOM
+  nodes.
 - The list intentionally exposes no ID, date, outcome, or sort controls. IDs are implementation
   details for most players, and the API has no full-history date/outcome/sort parameters; the UI
   therefore opens directly on paginated history and never applies global-looking operations to a

@@ -118,6 +118,8 @@ new PokerApiStack(app, id('API'), {
   pendingCashoutsTableArn: dynamoStack.tables.get('poker_pending_cashouts')!.tableArn,
   reactionEntitlementsTableArn: dynamoStack.tables.get('poker_reaction_entitlements')!.tableArn,
   reactionPurchasesTableArn: dynamoStack.tables.get('poker_reaction_purchases')!.tableArn,
+  cosmeticEntitlementsTableArn: dynamoStack.tables.get('poker_cosmetic_entitlements')!.tableArn,
+  cosmeticPurchasesTableArn: dynamoStack.tables.get('poker_cosmetic_purchases')!.tableArn,
   walletUrlParam: pokerParameters.walletInternalUrl,
   pokerClientIdParam: pokerParameters.clientId,
   pokerClientSecretParam: pokerParameters.clientSecret,

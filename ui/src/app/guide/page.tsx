@@ -52,6 +52,7 @@ export default function Guide() {
   return <AppPage authed={authed} current="guide">
     <AppPageBody className="guide guide-home">
       <AppPageHeader
+        variant="feature"
         icon={BookOpen}
         eyebrow="CENTRAL DE AJUDA"
         title="Aprenda no seu ritmo"

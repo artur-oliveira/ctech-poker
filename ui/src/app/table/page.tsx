@@ -21,6 +21,7 @@ import {LastWinners} from '@/components/table/LastWinners';
 import {TablePreferencesDialog} from '@/components/table/TablePreferencesDialog';
 import {RealityCheck} from '@/components/table/RealityCheck';
 import {TableReactions} from '@/components/table/TableReactions';
+import {TableUtilityMenu, type TableUtility} from '@/components/table/TableUtilityMenu';
 import {BotChallenge} from '@/components/table/BotChallenge';
 import {AchievementToast} from '@/components/AchievementToast';
 import {TermsGate} from '@/components/TermsGate';
@@ -265,7 +266,7 @@ function TableContent() {
   const [scopedHandOutcome, setScopedHandOutcome] =
     useState<{ tableID: string; value: HandOutcomeState } | null>(null);
   const [activeTablePanel, setActiveTablePanel] =
-    useState<'chat' | 'reactions' | 'rankings' | 'winners' | null>(null);
+    useState<TableUtility | null>(null);
   const [pendingReaction, setPendingReaction] = useState<TableReactionID | null>(null);
   const [reactionCoolingDown, setReactionCoolingDown] = useState(false);
   const reactionCooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -496,8 +497,11 @@ function TableContent() {
               <Wifi aria-hidden="true"/>
               <span className="connection-label">{rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}</span>
             </span>
-            <HandRankingsDialog open={activeTablePanel === 'rankings'}
+            <span className="table-utility-menu-slot"><TableUtilityMenu active={activeTablePanel}
+              winnersAvailable={tableHands.length > 0} onSelectAction={utility => setActiveTablePanel(utility)}/></span>
+            <span className="table-rankings-standalone"><HandRankingsDialog open={activeTablePanel === 'rankings'}
                                 onOpenChangeAction={open => setActiveTablePanel(open ? 'rankings' : null)}/>
+            </span>
             <TablePreferencesDialog runItTwiceAvailable={Boolean(room?.run_it_twice_enabled)}
                                     runItTwice={Boolean(viewerSeat?.run_it_twice)}
                                     onRunItTwiceChange={rt.setRunItTwice}

@@ -63,7 +63,7 @@ describe('DeckStoreSection', () => {
 
   test('an unowned premium deck can be bought', async () => {
     renderSection();
-    expect(screen.getAllByText('Bloqueada').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Não liberada').length).toBeGreaterThan(0);
     await userEvent.click(screen.getAllByRole('button', {name: 'Liberar'})[0]);
     expect(actions.onBuyAction).toHaveBeenCalledWith(expect.objectContaining({id: 'golden'}));
   });

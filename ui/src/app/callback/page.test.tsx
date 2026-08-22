@@ -38,7 +38,7 @@ describe('OAuth callback page', () => {
   
   test('exchanges credentials, persists the session and restores the destination', async () => {
     render(<CallbackPage/>);
-    expect(screen.getByText(/Autenticando sua cadeira/)).toBeInTheDocument();
+    expect(screen.getByText(/Autenticando seu lugar/)).toBeInTheDocument();
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/table?id=1'));
     expect(mocks.exchangeCode).toHaveBeenCalledWith('code-1', 'state-1');
     expect(mocks.setAccessToken).toHaveBeenCalledWith('token');

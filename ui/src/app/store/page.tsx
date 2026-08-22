@@ -15,18 +15,33 @@ import {DeckStoreSection, FeltStoreSection} from '@/components/store/CosmeticSto
 import {CosmeticPurchaseDialog} from '@/components/store/CosmeticPurchaseDialog';
 import {CosmeticRefundDialog} from '@/components/store/CosmeticRefundDialog';
 import {
-  createPurchase, getPurchase, listPurchases, listSkus, refundPurchase, type SandboxPurchase, type SandboxSKU
+  createPurchase,
+  getPurchase,
+  listPurchases,
+  listSkus,
+  refundPurchase,
+  type SandboxPurchase,
+  type SandboxSKU
 } from '@/lib/api/wallet';
 import {pushNotification} from '@/lib/notify';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 import {getMe} from '@/lib/api/player';
 import {
-  getReactionPurchase, listReactionCatalog, listReactionPurchases, refundReactionPurchase,
-  type ReactionCatalogEntry, type ReactionPurchase
+  getReactionPurchase,
+  listReactionCatalog,
+  listReactionPurchases,
+  type ReactionCatalogEntry,
+  type ReactionPurchase,
+  refundReactionPurchase
 } from '@/lib/api/reactionPurchases';
 import {
-  type CosmeticCatalogEntry, getCosmeticPurchase, listCosmeticCatalog, listCosmeticPurchases,
-  ownedCosmeticIDs, refundCosmeticPurchase, type CosmeticPurchase
+  type CosmeticCatalogEntry,
+  type CosmeticPurchase,
+  getCosmeticPurchase,
+  listCosmeticCatalog,
+  listCosmeticPurchases,
+  ownedCosmeticIDs,
+  refundCosmeticPurchase
 } from '@/lib/api/cosmeticPurchases';
 
 export default function Store() {
@@ -195,33 +210,34 @@ export default function Store() {
             <div className="store-section-heading">
               <Sparkles aria-hidden="true"/>
               <div><h2 id="premium-reactions-title">Reações premium</h2>
-                <p>Libere uma vez, use para sempre. Pague com Pix ou fichas e escolha até três atalhos para a mesa.</p></div>
+                <p>Libere uma vez, use para sempre. Pague com Pix ou fichas e escolha até três atalhos para a mesa.</p>
+              </div>
             </div>
             <ReactionStoreSection catalog={reactionCatalog.data ?? []} purchases={reactionPurchases.data ?? []}
-              isLoading={reactionCatalog.isLoading || reactionPurchases.isLoading}
-              isError={reactionCatalog.isError || reactionPurchases.isError}
-              onRetryAction={() => {
-                void reactionCatalog.refetch();
-                void reactionPurchases.refetch();
-              }}
-              onBuyAction={entry => {
-                setActiveReactionPurchase(undefined);
-                setReactionTarget(entry);
-              }}
-              onResumeAction={async (entry, purchase) => {
-                setReactionTarget(entry);
-                try {
-                  setActiveReactionPurchase(await getReactionPurchase(purchase.purchase_id));
-                } catch {
-                  setActiveReactionPurchase(purchase);
-                }
-              }}
-              onRefundAction={setReactionRefundTarget}/>
+                                  isLoading={reactionCatalog.isLoading || reactionPurchases.isLoading}
+                                  isError={reactionCatalog.isError || reactionPurchases.isError}
+                                  onRetryAction={() => {
+                                    void reactionCatalog.refetch();
+                                    void reactionPurchases.refetch();
+                                  }}
+                                  onBuyAction={entry => {
+                                    setActiveReactionPurchase(undefined);
+                                    setReactionTarget(entry);
+                                  }}
+                                  onResumeAction={async (entry, purchase) => {
+                                    setReactionTarget(entry);
+                                    try {
+                                      setActiveReactionPurchase(await getReactionPurchase(purchase.purchase_id));
+                                    } catch {
+                                      setActiveReactionPurchase(purchase);
+                                    }
+                                  }}
+                                  onRefundAction={setReactionRefundTarget}/>
             <section id="activity" className="store-department-history" aria-labelledby="reaction-activity-title">
               <h3 id="reaction-activity-title"><Clock3 aria-hidden="true"/> Compras e estornos de reações</h3>
               <ReactionPurchaseHistory purchases={reactionPurchases.data ?? []}
-                isLoading={reactionPurchases.isLoading} isError={reactionPurchases.isError}
-                onRetryAction={() => void reactionPurchases.refetch()}/>
+                                       isLoading={reactionPurchases.isLoading} isError={reactionPurchases.isError}
+                                       onRetryAction={() => void reactionPurchases.refetch()}/>
             </section>
           </section>
 
@@ -232,26 +248,27 @@ export default function Store() {
               <div><h2 id="premium-decks-title">Baralhos</h2>
                 <p>Personalize as cores do baralho. Libere uma vez, use para sempre em qualquer mesa.</p></div>
             </div>
-            <DeckStoreSection catalog={deckCatalog.data ?? []} purchases={deckPurchases.data ?? []}
-              isLoading={deckCatalog.isLoading || deckPurchases.isLoading}
-              isError={deckCatalog.isError || deckPurchases.isError}
-              onRetryAction={() => {
-                void deckCatalog.refetch();
-                void deckPurchases.refetch();
-              }}
-              onBuyAction={entry => {
-                setActiveDeckPurchase(undefined);
-                setDeckTarget(entry);
-              }}
-              onResumeAction={async (entry, purchase) => {
-                setDeckTarget(entry);
-                try {
-                  setActiveDeckPurchase(await getCosmeticPurchase('deck', purchase.purchase_id));
-                } catch {
-                  setActiveDeckPurchase(purchase);
-                }
-              }}
-              onRefundAction={setDeckRefundTarget}/>
+            <DeckStoreSection catalog={deckCatalog.data ?? []}
+                              purchases={deckPurchases.data ?? []}
+                              isLoading={deckCatalog.isLoading || deckPurchases.isLoading}
+                              isError={deckCatalog.isError || deckPurchases.isError}
+                              onRetryAction={() => {
+                                void deckCatalog.refetch();
+                                void deckPurchases.refetch();
+                              }}
+                              onBuyAction={entry => {
+                                setActiveDeckPurchase(undefined);
+                                setDeckTarget(entry);
+                              }}
+                              onResumeAction={async (entry, purchase) => {
+                                setDeckTarget(entry);
+                                try {
+                                  setActiveDeckPurchase(await getCosmeticPurchase('deck', purchase.purchase_id));
+                                } catch {
+                                  setActiveDeckPurchase(purchase);
+                                }
+                              }}
+                              onRefundAction={setDeckRefundTarget}/>
           </section>
 
           <section id="felt" className="store-section store-department cosmetic-store-section"
@@ -262,25 +279,25 @@ export default function Store() {
                 <p>Escolha o tema da mesa. Libere uma vez, use para sempre em qualquer mesa.</p></div>
             </div>
             <FeltStoreSection catalog={feltCatalog.data ?? []} purchases={feltPurchases.data ?? []}
-              isLoading={feltCatalog.isLoading || feltPurchases.isLoading}
-              isError={feltCatalog.isError || feltPurchases.isError}
-              onRetryAction={() => {
-                void feltCatalog.refetch();
-                void feltPurchases.refetch();
-              }}
-              onBuyAction={entry => {
-                setActiveFeltPurchase(undefined);
-                setFeltTarget(entry);
-              }}
-              onResumeAction={async (entry, purchase) => {
-                setFeltTarget(entry);
-                try {
-                  setActiveFeltPurchase(await getCosmeticPurchase('felt', purchase.purchase_id));
-                } catch {
-                  setActiveFeltPurchase(purchase);
-                }
-              }}
-              onRefundAction={setFeltRefundTarget}/>
+                              isLoading={feltCatalog.isLoading || feltPurchases.isLoading}
+                              isError={feltCatalog.isError || feltPurchases.isError}
+                              onRetryAction={() => {
+                                void feltCatalog.refetch();
+                                void feltPurchases.refetch();
+                              }}
+                              onBuyAction={entry => {
+                                setActiveFeltPurchase(undefined);
+                                setFeltTarget(entry);
+                              }}
+                              onResumeAction={async (entry, purchase) => {
+                                setFeltTarget(entry);
+                                try {
+                                  setActiveFeltPurchase(await getCosmeticPurchase('felt', purchase.purchase_id));
+                                } catch {
+                                  setActiveFeltPurchase(purchase);
+                                }
+                              }}
+                              onRefundAction={setFeltRefundTarget}/>
           </section>
 
           <section id="chips" className="store-section store-department store-chips-department"
@@ -288,7 +305,8 @@ export default function Store() {
             <div className="store-section-heading">
               <Coins aria-hidden="true"/>
               <div><h2 id="sandbox-chips-title">Fichas sandbox</h2>
-                <p>Resgate sua recompensa ou adicione saldo para buy-ins. Fichas não têm saque nem conversão em dinheiro.</p></div>
+                <p>Resgate sua recompensa ou adicione saldo para buy-ins. Fichas não têm saque nem conversão em
+                  dinheiro.</p></div>
             </div>
 
             <div className="store-wallet" aria-label="Seu saldo sandbox">
@@ -307,16 +325,16 @@ export default function Store() {
             </div>
             <SkuGrid skus={skus.data ?? []} isLoading={skus.isLoading} isError={skus.isError}
                      onRetryAction={() => void skus.refetch()} onSelectAction={(sku, trigger) => {
-                       purchaseTriggerRef.current = trigger;
-                       void selectSku(sku);
-                     }}
+              purchaseTriggerRef.current = trigger;
+              void selectSku(sku);
+            }}
                      pendingSku={pendingSku}/>
             <section className="store-department-history" aria-labelledby="chip-activity-title">
               <h3 id="chip-activity-title"><Clock3 aria-hidden="true"/> Compras e estornos de fichas</h3>
               <PurchaseHistoryList purchases={purchases.data ?? []} isLoading={purchases.isLoading}
-                                    isError={purchases.isError} onRetryAction={() => void purchases.refetch()}
-                                    onRefund={setRefundPurchaseTarget}
-                                    onResume={id => void resume(id)} resumingId={resumingId}/>
+                                   isError={purchases.isError} onRetryAction={() => void purchases.refetch()}
+                                   onRefund={setRefundPurchaseTarget}
+                                   onResume={id => void resume(id)} resumingId={resumingId}/>
             </section>
           </section>
         </div>

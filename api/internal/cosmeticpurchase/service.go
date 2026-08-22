@@ -45,6 +45,7 @@ type wallet interface {
 type CatalogEntry struct {
 	ID          string `json:"id"`
 	Premium     bool   `json:"premium"`
+	Kind        string `json:"kind"`
 	PriceCents  int64  `json:"price_cents,omitempty"`
 	PriceFichas int64  `json:"price_fichas,omitempty"`
 }
@@ -121,7 +122,7 @@ func (s *Service) ListCatalog(ctx context.Context, kind cosmetics.Kind) ([]Catal
 	all := cosmetics.All(kind)
 	out := make([]CatalogEntry, 0, len(all))
 	for _, e := range all {
-		entry := CatalogEntry{ID: e.ID, Premium: e.Premium}
+		entry := CatalogEntry{ID: e.ID, Premium: e.Premium, Kind: string(e.Kind)}
 		if e.Premium {
 			entry.PriceFichas = e.PriceFichas
 			price, found := priceBySKU[e.SKU]

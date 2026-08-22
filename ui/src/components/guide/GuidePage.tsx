@@ -1,7 +1,7 @@
 'use client';
 
 import type {LucideIcon} from 'lucide-react';
-import {ArrowLeft, ArrowRight, BookOpen, CircleAlert, Info, Lightbulb, ShieldCheck} from 'lucide-react';
+import {ArrowLeft, ArrowRight, BookOpen, ChevronDown, CircleAlert, Info, Lightbulb, ShieldCheck} from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import type {ReactNode} from 'react';
@@ -39,6 +39,14 @@ export function GuidePage({icon, eyebrow, title, description, sections, currentH
   return <AppPage authed={authed} current="guide">
     <AppPageBody className="guide guide-topic">
       <AppPageHeader icon={icon} eyebrow={eyebrow} title={title} description={description}/>
+      <details className="guide-topic-picker">
+        <summary><span>Tópico</span><strong>{GUIDE_TOPICS.find(topic => topic.href === currentHref)?.label}</strong>
+          <ChevronDown aria-hidden="true"/></summary>
+        <nav aria-label="Tópicos do guia em telas pequenas">
+          {GUIDE_TOPICS.map(topic => <Link key={topic.href} href={topic.href}
+            aria-current={currentHref === topic.href ? 'page' : undefined}>{topic.label}</Link>)}
+        </nav>
+      </details>
       <nav className="guide-topic-nav" aria-label="Tópicos do guia">
         {GUIDE_TOPICS.map(topic => <Link key={topic.href} href={topic.href}
           aria-current={currentHref === topic.href ? 'page' : undefined}>{topic.label}</Link>)}
@@ -47,6 +55,12 @@ export function GuidePage({icon, eyebrow, title, description, sections, currentH
         <b id="guide-page-index-title">Nesta página</b>
         <ol>{sections.map(section => <li key={section.id}><a href={`#${section.id}`}>{section.title}</a></li>)}</ol>
       </aside>
+      <details className="guide-page-index-mobile">
+        <summary>Nesta página <ChevronDown aria-hidden="true"/></summary>
+        <nav aria-label="Nesta página">
+          {sections.map(section => <a key={section.id} href={`#${section.id}`}>{section.title}</a>)}
+        </nav>
+      </details>
       <div className="guide-topic-content">
         {sections.map(section => <article key={section.id} id={section.id} className="guide-topic-section">
           <header>

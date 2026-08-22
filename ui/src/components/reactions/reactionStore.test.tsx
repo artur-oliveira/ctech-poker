@@ -75,7 +75,7 @@ describe('ReactionStoreSection', () => {
 
   test('a locked reaction can be bought', async () => {
     renderSection();
-    expect(screen.getAllByText('Bloqueada')).toHaveLength(2);
+    expect(screen.getAllByText('Não liberada')).toHaveLength(2);
     await userEvent.click(screen.getAllByRole('button', {name: 'Liberar'})[0]);
     expect(actions.onBuyAction).toHaveBeenCalledWith(catalog[0]);
   });

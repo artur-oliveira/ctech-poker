@@ -171,4 +171,20 @@ describe('hands list page', () => {
     expect(screen.queryByRole('button', {name: /Carregar mais/})).not.toBeInTheDocument();
   });
 
+  test('keeps a 500-hand history bounded to the visible DOM window', () => {
+    const manyHands = Array.from({length: 500}, (_, index) => ({
+      ...hands[index % hands.length],
+      hand_id: `history-${index}`,
+      sk: `hand#${index}`,
+    }));
+    mocks.query.mockReturnValue(queryResult([pageOf(manyHands)]));
+
+    const {container} = render(<HandsHistory/>);
+
+    expect(screen.getByRole('list', {name: '500 mãos carregadas'})).toBeInTheDocument();
+    expect(container.querySelectorAll('.hand-row').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('.hand-row').length).toBeLessThan(20);
+    expect(container.querySelectorAll('[aria-setsize="500"]').length).toBeGreaterThan(0);
+  });
+
 });

@@ -12,7 +12,7 @@ const Dialog = Primitive.Root, DialogTrigger = Primitive.Trigger, DialogClose = 
 function DialogContent({className, children, backdrop = true, ...props}: Primitive.Popup.Props & {backdrop?: boolean}) {
   return <Primitive.Portal>{backdrop && <Primitive.Backdrop
     className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm data-open:animate-in data-closed:animate-out"/>}<Primitive.Popup
-    className={cn('fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/15 bg-[var(--surface-control)] p-6 text-[var(--on-brand)] shadow-2xl outline-none', className)} {...props}>{children}<Primitive.Close
+    className={cn('fixed left-1/2 top-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-2xl border border-white/15 bg-[var(--surface-control)] p-6 text-[var(--on-brand)] shadow-2xl outline-none', className)} {...props}>{children}<Primitive.Close
     render={<Button variant="ghost" size="icon" className="absolute right-3 top-3"/>}><X/><span
     className="sr-only">Fechar</span></Primitive.Close></Primitive.Popup></Primitive.Portal>;
 }

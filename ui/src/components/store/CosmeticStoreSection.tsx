@@ -47,6 +47,8 @@ function CosmeticGrid({kind, labelFor, renderPreview, ariaLabel, loadingLabel, e
 
   // Always-visible gallery: every catalog entry for this kind, owned and unowned, free and premium.
   const entries = catalog.filter(entry => entry.kind === kind && labelFor(entry.id));
+  console.log(catalog);
+  console.log(entries);
   if (!entries.length) return <div className="lobby-empty"><Sparkles aria-hidden="true"/><p>{emptyLabel}</p></div>;
 
   return <ul className="cosmetic-store-grid" aria-label={ariaLabel}>
@@ -63,7 +65,7 @@ function CosmeticGrid({kind, labelFor, renderPreview, ariaLabel, loadingLabel, e
         {!entry.premium ? <span className="cosmetic-store-free">Grátis</span>
           : owned ? <span className="cosmetic-store-owned"><Sparkles aria-hidden="true"/> Sua</span>
             : active || refunding ? <span className="cosmetic-store-state">{STATUS_LABEL[purchase!.status]}</span>
-              : <span className="cosmetic-store-lock"><LockKeyhole aria-hidden="true"/> Bloqueada</span>}
+              : <span className="cosmetic-store-lock"><LockKeyhole aria-hidden="true"/> Não liberada</span>}
         <span className="cosmetic-store-action">
           {!entry.premium ? null
             : owned ? <Button type="button" variant="ghost" size="sm" onClick={() => onRefundAction(purchase!)}>

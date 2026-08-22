@@ -10911,6 +10911,76 @@ h1 em {
     }
 }
 
+/* Live target audit: links that visually stay compact still expose the same
+   44px interaction floor as buttons. Inline prose links are intentionally not
+   captured by these component-scoped selectors. */
+.nav .brand,
+.nav-links > a,
+.achievements-teaser-copy > a,
+.showcase-copy > a,
+.landing-story-copy > a,
+.footer nav a,
+.app-nav .brand,
+.app-page-footer a,
+.balance-pill,
+.hand-history-topbar > a,
+.replay-page > nav a,
+.game-chrome > header > a,
+.state-page .brand,
+.share-page .brand {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center
+}
+
+.app-page-footer a,
+.game-chrome > header > a {
+    min-width: 44px
+}
+
+.guide-on-this-page a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center
+}
+
+.hand-history-table-id button,
+.deck-reveal-toggle-all,
+.replay-speed {
+    min-width: 44px;
+    min-height: 44px
+}
+
+.replay-scrubber input {
+    height: 44px
+}
+
+@media (max-width: 900px) {
+    /* The landing preview is perspective-rotated, so its painted bounds are
+       wider than its layout box. Reserve that transformed width explicitly. */
+    .hero-visual {
+        width: calc(100% - 72px);
+        margin-inline: auto
+    }
+
+    .nav-links > a {
+        display: none
+    }
+}
+
+@media (max-width: 600px) {
+    .hero-visual {
+        width: calc(100% - 48px);
+        margin: -4px auto 0;
+        transform: scale(.94)
+    }
+
+    .stake-options {
+        -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent 100%);
+        mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 24px), transparent 100%)
+    }
+}
+
 @media (forced-colors: active) {
     .game-seat,
     .game-seat.viewer,
@@ -10938,6 +11008,24 @@ h1 em {
     display: flex;
     flex-direction: column;
     gap: 10px
+}
+
+/* Keep all fetched hands available to summaries while only mounting the
+   viewport window. Measured wrappers include the list's visual gap. */
+.hands-list.is-virtualized {
+    position: relative;
+    display: block;
+    width: 100%;
+    min-height: 1px
+}
+
+.hand-row-virtual {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding-bottom: 10px;
+    contain: layout style
 }
 
 .hand-row-table {
@@ -15541,4 +15629,242 @@ button.deck-grid-slot:hover {
     color: var(--success);
     font-size: var(--font-size-body);
     font-weight: 600
+}
+
+/* Responsive structure audit (2026-08): task pages use a compact, scannable
+   header. Only editorial arrival pages opt into the larger feature treatment. */
+.page-heading-shell.is-compact .page-heading-row {
+    align-items: stretch
+}
+
+.content-page .page-heading-shell.is-compact .page-heading {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    align-items: center;
+    column-gap: 16px;
+    max-width: 840px;
+    margin: 16px 0 32px;
+    text-align: left
+}
+
+.page-heading-shell.is-compact .page-heading-icon {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    width: 44px;
+    height: 44px;
+    margin: 0
+}
+
+.content-page .page-heading-shell.is-compact .page-heading small {
+    display: none
+}
+
+.content-page .page-heading-shell.is-compact .page-heading h1 {
+    grid-column: 2;
+    order: initial;
+    max-width: none;
+    font-size: clamp(1.75rem, 4vw, 2.25rem);
+    line-height: 1.1
+}
+
+.content-page .page-heading-shell.is-compact .page-heading p {
+    grid-column: 2;
+    order: initial;
+    max-width: 72ch;
+    margin: 5px 0 0;
+    line-height: 1.5
+}
+
+.page-heading-shell.is-compact .page-heading-actions {
+    justify-content: flex-start;
+    margin: -16px 0 32px
+}
+
+/* Keep the blind label and all choices in one visual group. Desktop/tablet
+   wrap instead of exposing a clipped scrollbar; small phones retain a rail. */
+.room-picker-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px
+}
+
+.stake-picker {
+    width: 100%
+}
+
+.stake-options {
+    flex-wrap: wrap;
+    max-width: none;
+    overflow: visible;
+    padding-inline: 0
+}
+
+.stake-option,
+.stake-option span {
+    min-height: 44px
+}
+
+/* Topic navigation wraps when there is room, collapses to a native disclosure
+   on phones, and keeps the article index short above the first paragraph. */
+.guide-topic-picker,
+.guide-page-index-mobile {
+    display: none
+}
+
+.guide-topic-nav {
+    flex-wrap: wrap;
+    justify-content: center;
+    overflow: visible;
+    padding-bottom: 0
+}
+
+.guide-topic-nav a,
+.guide-topic-footer a,
+.guide-inline-link,
+.rules-toc a {
+    min-height: 44px
+}
+
+/* The narrow portrait layout gets one table-tools entry in the header. The
+   individual panel triggers remain available on larger layouts. */
+.table-utility-menu-slot {
+    display: none
+}
+
+.table-utility-menu {
+    width: min(280px, calc(100vw - 24px));
+    padding: 8px
+}
+
+.table-utility-menu > button {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 10px
+}
+
+@media (orientation: portrait) and (max-width: 1023px) {
+    .table-utility-menu-slot {
+        display: inline-flex
+    }
+
+    .table-rankings-standalone > button,
+    .game-chat .chat-toggle,
+    .table-reactions .reaction-toggle,
+    .last-winners .last-winners-toggle {
+        display: none
+    }
+
+    .game-chat.game-chat,
+    .table-reactions,
+    .last-winners {
+        right: max(12px, env(safe-area-inset-right));
+        top: calc(env(safe-area-inset-top) + 64px)
+    }
+
+    .game-chat:not(.open),
+    .table-reactions:not(.open),
+    .last-winners:not(.open) {
+        pointer-events: none
+    }
+}
+
+@media (max-width: 720px) {
+    .content-page .page-heading-shell.is-compact .page-heading {
+        grid-template-columns: 40px minmax(0, 1fr);
+        column-gap: 12px;
+        margin: 8px 0 24px
+    }
+
+    .page-heading-shell.is-compact .page-heading-icon {
+        width: 40px;
+        height: 40px
+    }
+
+    .content-page .page-heading-shell.is-compact .page-heading h1 {
+        font-size: 1.75rem
+    }
+
+    .page-heading-shell.is-compact .page-heading-actions {
+        margin: -8px 0 24px
+    }
+
+    .stake-options {
+        flex-wrap: nowrap;
+        max-width: 100%;
+        overflow-x: auto;
+        padding: 4px 2px 10px;
+        scroll-padding-inline: 2px
+    }
+
+    .guide-topic-nav,
+    .guide-on-this-page {
+        display: none
+    }
+
+    .guide-topic-picker,
+    .guide-page-index-mobile {
+        display: block;
+        max-width: 960px;
+        margin: 0 auto 24px;
+        border-block: 1px solid var(--control-border)
+    }
+
+    .guide-topic-picker summary,
+    .guide-page-index-mobile summary {
+        min-height: 52px;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+        color: var(--text-secondary)
+    }
+
+    .guide-topic-picker summary span {
+        font: 700 var(--font-size-tiny) var(--font-mono);
+        letter-spacing: .08em;
+        text-transform: uppercase
+    }
+
+    .guide-topic-picker summary strong {
+        color: var(--paper)
+    }
+
+    .guide-topic-picker[open] summary svg,
+    .guide-page-index-mobile[open] summary svg {
+        transform: rotate(180deg)
+    }
+
+    .guide-topic-picker nav,
+    .guide-page-index-mobile nav {
+        display: grid;
+        padding: 4px 0 12px
+    }
+
+    .guide-topic-picker nav a,
+    .guide-page-index-mobile nav a {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        padding: 8px 10px;
+        border-radius: var(--rounded-control);
+        color: var(--text-secondary);
+        text-decoration: none
+    }
+
+    .guide-topic-picker nav a[aria-current='page'] {
+        color: var(--paper);
+        background: var(--brand-13)
+    }
+}
+
+@media (pointer: coarse) {
+    .profile-avatar-camera,
+    .profile-avatar-remove,
+    .profile-name-display,
+    .profile-name-edit button,
+    .hand-meta-copy {
+        min-width: 44px;
+        min-height: 44px
+    }
 }

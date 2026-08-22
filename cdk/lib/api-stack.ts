@@ -7,11 +7,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import {Construct} from 'constructs';
-import {
-  Ec2ScriptRunner,
-  Environment,
-  HaproxyEc2Service,
-} from '@aoctech/cdk';
+import {Ec2ScriptRunner, Environment, HaproxyEc2Service,} from '@aoctech/cdk';
 import {
   API_CURRENT_ARTIFACT_KEY,
   APP_PORT,
@@ -62,6 +58,8 @@ interface ApiStackProps extends cdk.StackProps {
   pendingCashoutsTableArn: string;
   reactionEntitlementsTableArn: string;
   reactionPurchasesTableArn: string;
+  cosmeticEntitlementsTableArn: string;
+  cosmeticPurchasesTableArn: string;
   socialEdgesTableArn: string;
   recentPlayersTableArn: string;
   socialEventsTableArn: string;
@@ -80,10 +78,10 @@ export const minimumApiCapacity = (_environment: Environment) => 1;
 
 export class PokerApiStack extends cdk.Stack {
   public readonly asgName: string;
-  
+
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
-    
+
     const {
       environment,
       vpcId,
@@ -117,6 +115,8 @@ export class PokerApiStack extends cdk.Stack {
       pendingCashoutsTableArn,
       reactionEntitlementsTableArn,
       reactionPurchasesTableArn,
+      cosmeticPurchasesTableArn,
+      cosmeticEntitlementsTableArn,
       socialEdgesTableArn,
       recentPlayersTableArn,
       socialEventsTableArn,
@@ -124,7 +124,7 @@ export class PokerApiStack extends cdk.Stack {
       socialGraphEnabledParam,
       enableSsmAgent = false,
     } = props;
-    
+
     const shared = SSM_SHARED(environment);
     const account = SSM_ACCOUNT(environment);
     const poker = SSM_POKER(environment);
@@ -141,13 +141,13 @@ export class PokerApiStack extends cdk.Stack {
       instanceProfileName,
       roles: [instanceRole.roleName],
     });
-    
+
     const tableArns = [
       tableStateArn, tableStateHistoryArn, actionLogArn, actionGuardsArn, roomsTableArn, playerProfilesTableArn,
       achievementProgressTableArn, leaderboardStatsTableArn, dailyRewardTableArn, playerSessionsTableArn,
       playerHandsTableArn, playerNotesTableArn, handSharesTableArn, pokerStatsTableArn, sandboxPurchasesTableArn,
-      pendingCashoutsTableArn, reactionEntitlementsTableArn, reactionPurchasesTableArn,
-      socialEdgesTableArn, recentPlayersTableArn, socialEventsTableArn, playerReportsTableArn,
+      pendingCashoutsTableArn, reactionEntitlementsTableArn, reactionPurchasesTableArn, cosmeticEntitlementsTableArn,
+      cosmeticPurchasesTableArn, socialEdgesTableArn, recentPlayersTableArn, socialEventsTableArn, playerReportsTableArn,
     ];
     instanceRole.addToPolicy(new iam.PolicyStatement({
       actions: [
@@ -197,13 +197,13 @@ export class PokerApiStack extends cdk.Stack {
       actions: ['s3:PutObject', 's3:DeleteObject', 's3:GetObject'],
       resources: [`arn:${cdk.Aws.PARTITION}:s3:::${avatarsBucketName}/av/*`],
     }));
-    
+
     // ── Shared infrastructure from ctech-cdk ──────────────────────────────────
     const vpc = ec2.Vpc.fromLookup(this, 'Vpc', {vpcId});
-    
+
     const albSgId = ssm.StringParameter.valueForStringParameter(this, shared.albSgId);
     const edgeSg = ec2.SecurityGroup.fromSecurityGroupId(this, 'EdgeSg', albSgId);
-    
+
     const isProd = environment === 'prod';
     this.asgName = asgName(environment);
     const logRetention: logs.RetentionDays = isProd ? logs.RetentionDays.ONE_MONTH : logs.RetentionDays.ONE_WEEK;
@@ -211,7 +211,7 @@ export class PokerApiStack extends cdk.Stack {
     // No nginx in this stack (see APP_PORT doc comment in constants.ts). Keep the
     // existing log group/output stable for deployment and monitoring compatibility.
     const logGroupNginx = `/${SERVICE}/${environment}/nginx`;
-    
+
     // ── User Data ─────────────────────────────────────────────────────────────
     // Every shared bootstrap step lives in ctech-cdk's assets/ec2 and is fetched
     // from S3 at boot. What stays inline is only what CloudFormation has to
@@ -322,7 +322,7 @@ export class PokerApiStack extends cdk.Stack {
     );
     scripts.run(userData, 'setup-cloudwatch-agent.sh', '/tmp/cwagent.json');
     scripts.run(userData, 'bootstrap-deploy.sh', deploymentsBucketName, API_CURRENT_ARTIFACT_KEY);
-    
+
     // ctech-lbalancer still owns the bootstrap route and private CNAME.
     const service = new HaproxyEc2Service(this, 'ApiService', {
       vpc,
@@ -453,7 +453,7 @@ def handler(event, context):
       value: `arn:${cdk.Aws.PARTITION}:ssm:${this.region}:${this.account}:parameter${legalSignoffRefParam}`,
       exportName: `${id}-legal-signoff-ref-parameter-arn`,
     });
-    
+
     // ── Outputs ───────────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'AsgName', {value: asg.autoScalingGroupName, exportName: `${id}-asg-name`});
     new cdk.CfnOutput(this, 'AppLogGroupName', {

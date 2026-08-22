@@ -25,6 +25,7 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({invalidateQueries: mocks.invalidateQueries}),
 }));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
+vi.mock('@/components/social/PeopleNavBadge', () => ({PeopleNavBadge: () => null}));
 vi.mock('@/components/table/PlayingCard', () => ({
   PlayingCard: ({card}: { card: string }) => <span data-testid="card">{card}</span>,
 }));
@@ -72,7 +73,8 @@ describe('public player profile page', () => {
     expect(screen.getByText('VPIP de até 22%')).toBeVisible();
     expect(screen.getAllByTestId('card').map(card => card.textContent)).toEqual(['AH', 'KH']);
     expect(screen.getByText('profile-menu')).toBeInTheDocument();
-    expect(screen.getByRole('link', {name: /Lobby/})).toHaveAttribute('href', '/lobby');
+    expect(screen.getByRole('navigation', {name: 'Navegação rápida'})).toBeInTheDocument();
+    expect(screen.getAllByRole('link', {name: 'Lobby'}).some(link => link.getAttribute('href') === '/lobby')).toBe(true);
   });
   
   test('disables the request without an id and exposes the public navigation', () => {
@@ -86,7 +88,7 @@ describe('public player profile page', () => {
       enabled: false,
     });
     expect(screen.getByRole('heading', {name: 'Vitrine indisponível'})).toBeInTheDocument();
-    expect(screen.getByRole('link', {name: /Lobby/})).toHaveAttribute('href', '/lobby');
+    expect(screen.getByRole('link', {name: 'Voltar'})).toHaveAttribute('href', '/');
     expect(screen.getByRole('button', {name: 'Ir para o Lobby'})).toHaveAttribute('href', '/lobby');
     expect(screen.queryByText('profile-menu')).not.toBeInTheDocument();
   });

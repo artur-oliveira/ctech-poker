@@ -51,6 +51,8 @@ function synthStack() {
     pendingCashoutsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_pending_cashouts',
     reactionEntitlementsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_reaction_entitlements',
     reactionPurchasesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_reaction_purchases',
+    cosmeticEntitlementsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_cosmetic_entitlements',
+    cosmeticPurchasesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_cosmetic_purchases',
     socialEdgesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_social_edges',
     recentPlayersTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_recent_players',
     socialEventsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_social_events',

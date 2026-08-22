@@ -55,7 +55,7 @@ export function ReactionStoreSection({catalog, purchases, isLoading, isError, on
             <small>{formatBRL(entry.price_cents)} <span aria-hidden="true">·</span> {(entry.price_fichas ?? 0).toLocaleString('pt-BR')} fichas</small></span>
           {owned ? <span className="reaction-store-owned"><Sparkles aria-hidden="true"/> Sua</span>
             : active || refunding ? <span className="reaction-store-state">{STATUS_LABEL[purchase.status]}</span>
-              : <span className="reaction-store-lock"><LockKeyhole aria-hidden="true"/> Bloqueada</span>}
+              : <span className="reaction-store-lock"><LockKeyhole aria-hidden="true"/> Não liberada</span>}
           <span className="reaction-store-action">
             {owned ? <Button type="button" variant="ghost" size="sm" onClick={() => onRefundAction(purchase)}>
                 <RotateCcw aria-hidden="true"/> Estornar</Button>
