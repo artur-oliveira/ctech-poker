@@ -373,7 +373,13 @@ The component vocabulary is tactile and immediate: controls look pressable, ackn
 - **Style:** sparse top navigation, Geist 14px, brand identity on the left and authenticated destinations on the right. `public/svgs/logo.svg` is the canonical product mark: a “P” built from two nested monoline strokes, echoing the geometric family logic of Account without depending on cards, ranks, or suits. Its oxblood, white, and soft-red geometry replaces generic suit glyphs across landing, app chrome, public shares, state pages, footers, and the table signature.
 - **Ownership:** route navigation belongs to the shared `app-nav`; `AppPageHeader` contains page identity and contextual actions only. Lobby is the first authenticated destination and is omitted from public navigation.
 - **States:** hover moves muted text to white; current location communicated through text and state, not color alone.
-- **Mobile:** destination labels may collapse to icons, but authenticated Lobby and account controls stay available and keyboard reachable. Public pages keep their return link in `app-nav`; the table header keeps a 44px-min Lobby link and a connection-state indicator.
+- **Mobile:** below 600px the seven `MAIN_ROUTES` icons move out of `app-nav` entirely into a fixed
+  bottom `app-tab-bar` (Lobby, Pessoas, Loja always visible — Pessoas/Loja carry the same badges as
+  desktop — plus a "Mais" trigger that opens the remaining four routes, `.social-actions-item`
+  styled, in a popover). The top bar keeps only the brand mark and the profile avatar, both
+  reachable without scrolling. Public pages keep their return link in `app-nav`; the table header
+  (a separate surface, not `AppPageNav`) keeps a 44px-min Lobby link and a connection-state
+  indicator instead.
 
 ### Dialogs
 - **Surface:** `#211416`, 16px radius, 24px padding, white/15 hairline, 75% black backdrop.
@@ -425,6 +431,11 @@ Two layout facts that section 5 does not cover:
   `--seat-size`-scaled identity in the portrait ring.
 - **Deck variants** are user-selectable (`lib/cardVariants.ts`, default `four-color`), so card
   colour is not a fixed design constant.
+- **The two seat-corner triggers scale together.** `.seat-note-trigger` (opponent note only) and
+  `.seat-actions-trigger` (the fuller player menu that replaces it once one is wired up) both shrink
+  proportionally with `--seat-size` on the portrait ring, floored at 16px, with an invisible
+  `::before` padding the real hit target back out to 44px so the visible badge never inflates past
+  the avatar it sits on.
 
 When adding a component, follow the tokens and the do/don't list; a per-component spec here is not
 a prerequisite.

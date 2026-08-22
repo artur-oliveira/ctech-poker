@@ -1,9 +1,11 @@
 'use client';
 import {useEffect, useId, useState} from 'react';
 import Link from 'next/link';
-import {Gift, Wallet} from 'lucide-react';
+import {Gift, RefreshCw, Wallet} from 'lucide-react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
+import {Label} from '@/components/ui/label';
+import {Switch} from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -48,9 +50,11 @@ export function RebuyDialog({roomId, room, autoRebuy = false, onRebuyAction}: {
   onRebuyAction: () => void
 }) {
   const sliderId = useId();
+  const autoRebuyId = useId();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(true);
   const [amount, setAmount] = useState<number | null>(null);
+  const [keepAutoRebuy, setKeepAutoRebuy] = useState(autoRebuy);
   const [joining, setJoining] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [claimedAmount, setClaimedAmount] = useState<number | null>(null);
@@ -86,7 +90,7 @@ export function RebuyDialog({roomId, room, autoRebuy = false, onRebuyAction}: {
     setJoining(true);
     setError('');
     try {
-      await joinRoom(roomId, value);
+      await joinRoom(roomId, value, undefined, keepAutoRebuy);
       setOpen(false);
       onRebuyAction();
     } catch {
@@ -147,6 +151,17 @@ export function RebuyDialog({roomId, room, autoRebuy = false, onRebuyAction}: {
           <output htmlFor={sliderId}>{fmt(value)} <span>{unit}</span></output>
           <small>mín. {fmt(room.buy_in_min)} · máx. {fmt(max)}</small>
         </div>
+        {!isReal &&
+            <div className="buyin-control table-preference-toggle">
+                <span><RefreshCw aria-hidden="true"/><span>
+              <Label id={`${autoRebuyId}-label`} htmlFor={autoRebuyId}>Auto rebuy</Label>
+            <small>Se suas fichas acabarem de novo, compramos automaticamente o mesmo valor para você continuar
+                jogando sem esperar.</small>
+          </span>
+          </span>
+                <Switch id={autoRebuyId} aria-labelledby={`${autoRebuyId}-label`} checked={keepAutoRebuy}
+                        disabled={joining} onCheckedChange={setKeepAutoRebuy}/>
+            </div>}
         <DialogFooter>
           <Button type="button" variant="ghost" disabled={joining} onClick={() => setOpen(false)}>Agora não</Button>
           <Button type="button" disabled={joining} onClick={confirm}>

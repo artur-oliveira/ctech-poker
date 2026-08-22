@@ -206,8 +206,27 @@ describe('table bankroll dialogs', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível comprar mais fichas');
     await userEvent.click(screen.getByRole('button', {name: 'Comprar 4.000'}));
     
-    await waitFor(() => expect(mocks.joinRoom).toHaveBeenLastCalledWith('room-1', 4_000));
+    await waitFor(() => expect(mocks.joinRoom).toHaveBeenLastCalledWith('room-1', 4_000, undefined, false));
     expect(rebought).toHaveBeenCalledOnce();
+  });
+
+  test('opts into auto-rebuy from the rebuy dialog and passes it through on confirm', async () => {
+    const rebought = vi.fn();
+    mocks.joinRoom.mockResolvedValue(undefined);
+    render(<RebuyDialog roomId="room-1" room={sandboxRoom} onRebuyAction={rebought}/>);
+
+    await userEvent.click(screen.getByRole('switch', {name: /auto.?rebuy|recompra automática/i}));
+    await userEvent.click(screen.getByRole('button', {name: /Comprar/}));
+
+    await waitFor(() => expect(mocks.joinRoom).toHaveBeenCalledWith('room-1', 3_500, undefined, true));
+    expect(rebought).toHaveBeenCalledOnce();
+  });
+
+  test('does not offer the auto-rebuy toggle for real-money tables', () => {
+    playerData = {game_balance: 20_000};
+    render(<RebuyDialog roomId="room-1" room={{...sandboxRoom, currency_mode: 'real', buy_in_min: 10_000}}
+                        onRebuyAction={vi.fn()}/>);
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
   });
 
   describe('bust recovery without a purchase', () => {

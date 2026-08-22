@@ -2267,27 +2267,8 @@ h1 em {
     gap: 10px
 }
 
-@media (max-width: 600px) {
-    .app-nav {
-        flex-wrap: wrap;
-        height: auto;
-        row-gap: 10px;
-        padding-block: 14px
-    }
-
-    .app-nav .header-right {
-        gap: 16px;
-        flex-wrap: nowrap
-    }
-
-    .header-right-label {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%)
-    }
-}
+/* The real `.app-nav` mobile rules live near .content-page below — same
+   specificity, later in file, so they always won over this block anyway. */
 
 .connection-state {
     display: inline-flex;
@@ -4159,15 +4140,18 @@ h1 em {
     padding: 1px 5px
 }
 
-/* Mirrors .seat-role's corner-badge placement on the opposite side. The
-   normal decision-clock ring (.seat-turn-ring) and this one share the same
-   gold stroke (matching ActionBar's own "time bank active" color) since
-   they never show at once; the badge is what tells every seat at the table
-   apart from a normal countdown, not just the viewer's own ActionBar. */
+/* Bottom-right corner: top-right is .seat-actions-trigger's territory (it
+   sits above this badge, z-index 5), so sharing that corner hid the
+   hourglass behind the trigger entirely for every opponent seat. Bottom-left
+   is .seat-streak's; this is the only free corner left. The normal
+   decision-clock ring (.seat-turn-ring) and this one share the same gold
+   stroke (matching ActionBar's own "time bank active" color) since they
+   never show at once; the badge is what tells every seat at the table apart
+   from a normal countdown, not just the viewer's own ActionBar. */
 .seat-timebank-badge {
     position: absolute;
     z-index: 4;
-    top: -8px;
+    bottom: -8px;
     right: -8px;
     width: 18px;
     height: 18px;
@@ -9715,7 +9699,7 @@ h1 em {
 }
 
 .stage-v-ring .seat-timebank-badge {
-    top: -3px;
+    bottom: -3px;
     right: -3px;
     width: 13px;
     height: 13px
@@ -9781,6 +9765,36 @@ h1 em {
 
 .stage-v-ring .game-seat.all_in .seat-avatar {
     box-shadow: 0 0 0 3px var(--gold)
+}
+
+/* The player-actions trigger is a fixed 28px badge everywhere else, but that
+   reads as nearly the size of the avatar itself on the shrunk portrait ring
+   — scale it down with the chip like .seat-note-trigger already does. */
+.stage-v-ring .seat-actions-trigger {
+    --note-size: max(16px, var(--seat-size) * .46);
+    top: calc(var(--seat-size) * -.1);
+    right: calc(var(--seat-size) * -.1)
+}
+
+.stage-v-ring .seat-actions-trigger button {
+    width: var(--note-size);
+    height: var(--note-size)
+}
+
+.stage-v-ring .seat-actions-trigger button svg {
+    width: calc(var(--note-size) * .6);
+    height: calc(var(--note-size) * .6)
+}
+
+.stage-v-ring .seat-actions-trigger .player-note-dot {
+    top: 0;
+    right: 0;
+    width: calc(var(--note-size) * .37);
+    height: calc(var(--note-size) * .37)
+}
+
+.stage-v-ring .seat-actions-trigger button::before {
+    inset: calc((var(--note-size) - 44px) / 2)
 }
 
 /* Caption below the avatar (chip count only, the name lives in the avatar's
@@ -13103,19 +13117,88 @@ button.deck-grid-slot:hover {
         width: min(100% - 32px, 1160px)
     }
 
-    .app-nav {
-        height: 72px;
-        flex-wrap: nowrap;
-        gap: 8px;
-        padding-block: 0
-    }
-
+    /* Seven MAIN_ROUTES icons + profile avatar don't fit one row at 44px
+       touch targets each (a11y floor, can't shrink further) — the .app-tab-bar
+       below takes over as the mobile destination for these routes instead. */
     .app-nav .header-right {
         gap: 0
     }
 
-    .app-nav .header-right > a {
-        padding-inline: 8px
+    .app-nav-routes {
+        display: none
+    }
+
+    .app-tab-bar {
+        position: fixed;
+        z-index: var(--z-chrome);
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        padding: 6px max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+        background: color-mix(in srgb, var(--room-grad-2) 92%, transparent);
+        backdrop-filter: blur(14px);
+        border-top: 1px solid var(--white-08)
+    }
+
+    .app-tab-bar > a, .app-tab-bar button {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        min-height: 48px;
+        padding: 6px 4px;
+        position: relative;
+        border-radius: var(--rounded-control);
+        background: transparent;
+        color: var(--text-secondary);
+        font: 600 var(--font-size-tiny) var(--font-sans);
+        text-decoration: none;
+        transition: color 180ms var(--ease-out-quart), background-color 180ms var(--ease-out-quart)
+    }
+
+    .app-tab-bar > a svg, .app-tab-bar button svg {
+        width: 20px;
+        height: 20px;
+        stroke-width: 2
+    }
+
+    .app-tab-bar > a:hover, .app-tab-bar > a:focus-visible,
+    .app-tab-bar button:hover, .app-tab-bar button:focus-visible {
+        color: var(--paper);
+        background: var(--white-08)
+    }
+
+    .app-tab-bar > a[aria-current='page'], .app-tab-bar button.is-active {
+        color: var(--brand-bright-7);
+        background: var(--brand-13)
+    }
+
+    /* Anchors the reward dot / unread badge to the 20px icon itself, not the
+       whole icon+label column (which is much wider than the icon). */
+    .app-tab-bar-icon {
+        position: relative;
+        display: inline-flex
+    }
+
+    .app-tab-bar .app-nav-reward-dot {
+        top: -2px;
+        right: -4px
+    }
+
+    .app-tab-bar .app-nav-people-badge {
+        top: -6px;
+        right: -10px
+    }
+
+    .app-tab-bar-menu {
+        width: max(200px, min(calc(100vw - 24px), 260px))
+    }
+
+    .has-tab-bar {
+        padding-bottom: calc(60px + env(safe-area-inset-bottom))
     }
 
     .content-page {
@@ -15136,6 +15219,7 @@ button.deck-grid-slot:hover {
 }
 
 .seat-actions-trigger button {
+    position: relative;
     width: 28px;
     height: 28px;
     min-width: 0;
@@ -15144,6 +15228,14 @@ button.deck-grid-slot:hover {
     border-radius: var(--rounded-pill);
     background: var(--surface-control);
     color: var(--muted-rose)
+}
+
+/* Same invisible-padding trick as .seat-note-trigger: keep the 44px touch
+   target without inflating the visible badge. */
+.seat-actions-trigger button::before {
+    content: '';
+    position: absolute;
+    inset: -8px
 }
 
 @media (max-width: 640px) {

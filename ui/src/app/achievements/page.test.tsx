@@ -1,4 +1,4 @@
-import {fireEvent, render, screen} from '@testing-library/react';
+import {fireEvent, render, screen, within} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import type {Achievement} from '@/lib/api/achievements';
 import Achievements from './page';
@@ -73,7 +73,8 @@ describe('achievements page', () => {
     render(<Achievements/>);
     
     expect(screen.getByText('profile-menu')).toBeInTheDocument();
-    expect(screen.getByRole('link', {name: /Lobby/})).toHaveAttribute('href', '/lobby');
+    const nav = screen.getByRole('navigation', {name: 'Navegação principal'});
+    expect(within(nav).getByRole('link', {name: /Lobby/})).toHaveAttribute('href', '/lobby');
     expect(screen.getByText('7', {selector: '.stat-value'})).toHaveTextContent('7 / 20');
     expect(screen.getByText('2', {selector: '.stat-value'})).toHaveTextContent('2 / 4');
     expect(screen.getByText('1', {selector: '.stat-value'})).toBeInTheDocument();

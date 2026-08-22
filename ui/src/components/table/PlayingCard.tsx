@@ -22,7 +22,10 @@ export function PlayingCard({card, index, size, owner, slow, onReveal, revealPen
 }) {
   const variant = useDeckVariant();
   const revealed = Boolean(card && card.toLowerCase() !== 'back' && cardPath(card, variant) !== back);
-  const dimensions = size === 'board' ? {width: 68, height: 95} : {width: 46, height: 64};
+  // Requested well above CSS display size (which every breakpoint sets explicitly):
+  // Safari rasterizes an <img>-embedded SVG once at its width/height attributes,
+  // ignoring devicePixelRatio, so a 1x-sized source reads blurry on Retina iPhones.
+  const dimensions = size === 'board' ? {width: 204, height: 285} : {width: 138, height: 192};
   const style = {'--deal-index': index} as CSSProperties;
   if (!revealed) return <Image className={`playing-card ${size}-card`} src={back} alt="Carta fechada" {...dimensions}
                                style={style}/>;

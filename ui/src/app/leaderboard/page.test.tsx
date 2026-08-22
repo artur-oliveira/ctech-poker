@@ -1,4 +1,4 @@
-import {fireEvent, render, screen} from '@testing-library/react';
+import {fireEvent, render, screen, within} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import type {Entry} from '@/lib/api/gamification';
 import Ranking from './page';
@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/auth/session', () => ({useOptionalSession: () => mocks.session}));
-vi.mock('@/lib/utils', () => ({
+vi.mock('@/lib/utils', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/utils')>(),
   getViewerId: () => mocks.viewer,
   playerName: (id: string, viewer: string, name?: string) => name || (id === viewer ? 'Você' : id),
 }));
@@ -47,7 +48,8 @@ describe('community leaderboard page', () => {
     expect(screen.getByText('04')).toBeInTheDocument();
     expect(screen.getByText('Dani')).toBeInTheDocument();
     expect(screen.getByText('profile-menu')).toBeInTheDocument();
-    expect(screen.getByRole('link', {name: /Lobby/})).toHaveAttribute('href', '/lobby');
+    expect(within(screen.getByRole('navigation', {name: 'Navegação principal'}))
+      .getByRole('link', {name: /Lobby/})).toHaveAttribute('href', '/lobby');
   });
   
   test('uses a list without podium for fewer than three entries and singularizes one player', () => {

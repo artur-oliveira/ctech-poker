@@ -8,8 +8,10 @@ describe('PokerLogo', () => {
     const logo = container.querySelector('img');
 
     expect(logo).toHaveAttribute('src', '/svgs/logo.svg');
-    expect(logo).toHaveAttribute('width', '32');
-    expect(logo).toHaveAttribute('height', '32');
+    // Requested at 3x the display size so Safari's SVG-in-<img> raster cache
+    // stays crisp on Retina screens; CSS (not these attrs) sets the actual box.
+    expect(logo).toHaveAttribute('width', '96');
+    expect(logo).toHaveAttribute('height', '96');
     expect(logo).toHaveClass('product-mark');
     expect(logo).toHaveAttribute('aria-hidden', 'true');
   });

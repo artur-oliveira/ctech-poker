@@ -1,4 +1,4 @@
-import {render, screen} from '@testing-library/react';
+import {render, screen, within} from '@testing-library/react';
 import {describe, expect, test, vi} from 'vitest';
 import Lobby from './page';
 vi.mock('@/lib/mockConfig', () => ({USE_MOCK: true}));
@@ -28,8 +28,9 @@ describe('lobby page', () => {
     expect(screen.getByText('stakes-grid')).toBeInTheDocument();
     expect(screen.getByText('people-drawer')).toBeInTheDocument();
     expect(screen.getByText('active-table')).toBeInTheDocument();
-    expect(screen.getByRole('link', {name: 'Lobby'})).toHaveAttribute('aria-current', 'page');
-    expect(await screen.findByRole('link', {name: /Loja.*recompensa diária disponível/})).toHaveAttribute('href', '/store');
+    const nav = screen.getByRole('navigation', {name: 'Navegação principal'});
+    expect(within(nav).getByRole('link', {name: 'Lobby'})).toHaveAttribute('aria-current', 'page');
+    expect(await within(nav).findByRole('link', {name: /Loja.*recompensa diária disponível/})).toHaveAttribute('href', '/store');
     expect(screen.queryByRole('button', {name: /Recompensa Diária/})).not.toBeInTheDocument();
     expect(await screen.findByText('mock-controls')).toBeInTheDocument();
   });
