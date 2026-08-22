@@ -7,6 +7,10 @@ export type TablePreferences = {
   dealerVoice: boolean;
   voiceCommands: boolean;
   realityCheckMinutes: number;
+  // Sandbox-only teaching overlay (EquityTrainerPanel). Off by default: it's
+  // an opt-in learning tool, not something every sandbox player expects to
+  // see appear on the table.
+  equityTrainer: boolean;
 };
 
 export const TABLE_THEMES: Record<TableThemeId, { label: string; colors: [string, string] }> = {
@@ -23,7 +27,7 @@ export const PREMIUM_FELT_IDS = new Set<TableThemeId>(['midnight', 'burgundy', '
 const STORAGE_KEY = 'ctech-poker:table-preferences:v1';
 const CHANGE_EVENT = 'ctech-poker:table-preferences';
 const DEFAULTS: TablePreferences = {
-  dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60
+  dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false
 };
 const REALITY_INTERVALS = new Set([0, 30, 60, 90, 120]);
 
@@ -33,7 +37,8 @@ function normalize(value: unknown): TablePreferences {
     dealerVoice: input.dealerVoice === true,
     voiceCommands: input.voiceCommands === true,
     realityCheckMinutes: typeof input.realityCheckMinutes === 'number' &&
-    REALITY_INTERVALS.has(input.realityCheckMinutes) ? input.realityCheckMinutes : DEFAULTS.realityCheckMinutes
+    REALITY_INTERVALS.has(input.realityCheckMinutes) ? input.realityCheckMinutes : DEFAULTS.realityCheckMinutes,
+    equityTrainer: input.equityTrainer === true
   };
 }
 

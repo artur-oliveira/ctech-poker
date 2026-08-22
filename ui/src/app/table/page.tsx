@@ -18,11 +18,12 @@ import {InviteDialog} from '@/components/table/InviteDialog';
 import {LeaveDialog} from '@/components/table/LeaveDialog';
 import type {HandOutcomeState} from '@/components/table/HandOutcome';
 import {LastWinners} from '@/components/table/LastWinners';
+import {EquityTrainerPanel} from '@/components/table/EquityTrainerPanel';
 import {TablePreferencesDialog} from '@/components/table/TablePreferencesDialog';
 import {RealityCheck} from '@/components/table/RealityCheck';
 import {SessionRecap} from '@/components/table/SessionRecap';
 import {TableReactions} from '@/components/table/TableReactions';
-import {TableUtilityMenu, type TableUtility} from '@/components/table/TableUtilityMenu';
+import {type TableUtility, TableUtilityMenu} from '@/components/table/TableUtilityMenu';
 import {BotChallenge} from '@/components/table/BotChallenge';
 import {AchievementToast} from '@/components/AchievementToast';
 import {TermsGate} from '@/components/TermsGate';
@@ -32,7 +33,10 @@ import type {TableSnapshot} from '@/lib/api/table';
 import {bestFiveCardHand} from '@/lib/pokerRules';
 import {getHands, getMe, getSessions, updateMe} from '@/lib/api/player';
 import {
-  currentReactionPurchase, listReactionCatalog, listReactionPurchases, type ReactionCatalogEntry
+  currentReactionPurchase,
+  listReactionCatalog,
+  listReactionPurchases,
+  type ReactionCatalogEntry
 } from '@/lib/api/reactionPurchases';
 import {useTablePreferences} from '@/lib/tablePreferences';
 import {useDealerVoice} from '@/lib/hooks/useDealerVoice';
@@ -202,7 +206,11 @@ function TableContent() {
     queryKey: ['player', 'me'], queryFn: getMe, enabled: valid && seated
   });
   const [noteOpponent, setNoteOpponent] = useState<{ player_id: string; name?: string } | null>(null);
-  const [sessionRecap, setSessionRecap] = useState<{ joinedAt: number; buyIn: number; finalStack: number } | null>(null);
+  const [sessionRecap, setSessionRecap] = useState<{
+    joinedAt: number;
+    buyIn: number;
+    finalStack: number
+  } | null>(null);
   const [reactionPurchaseTarget, setReactionPurchaseTarget] = useState<ReactionCatalogEntry | null>(null);
   const [favoritesSaving, setFavoritesSaving] = useState(false);
   const socialActions = useSocialActions();
@@ -294,6 +302,7 @@ function TableContent() {
       startReactionCooldown();
     }
   }
+
   // Protocol v3 publishes the exact pre-blind stack. During a rolling deploy,
   // remember the earliest live snapshot as stack+contributed; unlike the old
   // stage-based state this is scoped to both table and hand and also works
@@ -499,10 +508,15 @@ function TableContent() {
               <Wifi aria-hidden="true"/>
               <span className="connection-label">{rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}</span>
             </span>
-            <span className="table-utility-menu-slot"><TableUtilityMenu active={activeTablePanel}
-              winnersAvailable={tableHands.length > 0} onSelectAction={utility => setActiveTablePanel(utility)}/></span>
+            <span className="table-utility-menu-slot">
+              <TableUtilityMenu active={activeTablePanel}
+                                winnersAvailable={tableHands.length > 0}
+                                equityTrainerVisible={room?.currency_mode === 'sandbox' && preferences.equityTrainer}
+                                equityTrainerAvailable={!actions.isTurn}
+                                onSelectAction={utility => setActiveTablePanel(utility)}/>
+            </span>
             <span className="table-rankings-standalone"><HandRankingsDialog open={activeTablePanel === 'rankings'}
-                                onOpenChangeAction={open => setActiveTablePanel(open ? 'rankings' : null)}/>
+                                                                            onOpenChangeAction={open => setActiveTablePanel(open ? 'rankings' : null)}/>
             </span>
             <TablePreferencesDialog runItTwiceAvailable={Boolean(room?.run_it_twice_enabled)}
                                     runItTwice={Boolean(viewerSeat?.run_it_twice)}
@@ -616,12 +630,12 @@ function TableContent() {
                                    currentStack={viewerSeat.stack} handId={s.hand_id}
                                    handComplete={s.stage === 'complete'} isTurn={actions.isTurn}/>}
       {sessionRecap && <SessionRecap joinedAt={sessionRecap.joinedAt} buyIn={sessionRecap.buyIn}
-                                      finalStack={sessionRecap.finalStack} tableId={id}
-                                      mode={room?.currency_mode === 'real' ? 'real' : 'sandbox'}
-                                      onCloseAction={() => {
-                                        queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
-                                        router.push('/lobby');
-                                      }}/>}
+                                     finalStack={sessionRecap.finalStack} tableId={id}
+                                     mode={room?.currency_mode === 'real' ? 'real' : 'sandbox'}
+                                     onCloseAction={() => {
+                                       queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
+                                       router.push('/lobby');
+                                     }}/>}
       <Chat items={rt.chat}
             onSendAction={rt.sendChat}
             connected={rt.status === 'connected'}
@@ -656,6 +670,11 @@ function TableContent() {
       <BotChallenge required={rt.botChallengeRequired} onTokenAction={rt.submitBotChallenge}/>
       <LastWinners items={tableHands} tableId={id} open={activeTablePanel === 'winners'}
                    onOpenChangeAction={open => setActiveTablePanel(open ? 'winners' : null)}/>
+      {viewerSeat && room?.currency_mode === 'sandbox' && preferences.equityTrainer &&
+          <EquityTrainerPanel seat={viewerSeat} isViewer board={s.board} stage={s.stage} handId={s.hand_id}
+                              handComplete={s.stage === 'complete'} isTurn={actions.isTurn}
+                              currencyMode={room?.currency_mode} open={activeTablePanel === 'equity'}
+                              onOpenChangeAction={open => setActiveTablePanel(open ? 'equity' : null)}/>}
       <PlayerNoteDialog key={noteOpponent?.player_id || 'closed'} opponent={noteOpponent}
                         existing={noteOpponent ? playerNotesByID[noteOpponent.player_id] : undefined}
                         open={Boolean(noteOpponent)}
@@ -677,7 +696,7 @@ function TableContent() {
                               onConfirmedAction={() => {
                                 void queryClient.invalidateQueries({queryKey: ['wallet', 'reaction-purchases']});
                               }}/>
-      
+
       <AchievementToast unlock={rt.unlock}/>
       {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
     </main>

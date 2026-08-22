@@ -7082,6 +7082,157 @@ h1 em {
     }
 }
 
+/* Sandbox-only teaching overlay, opt-in via TablePreferencesDialog. Mirrors
+   .last-winners' fixed toggle/panel vocabulary exactly, docked in the one
+   remaining desktop corner slot (table-reactions already owns right:70px;
+   last-winners owns left:16px). */
+.equity-trainer {
+    position: fixed;
+    z-index: var(--z-chrome);
+    left: 70px;
+    bottom: var(--action-bar-clear);
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: flex-start;
+    gap: 8px
+}
+
+.equity-trainer-toggle {
+    position: relative;
+    flex: none;
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    border: 0;
+    background: var(--surface-control);
+    color: var(--gold);
+    display: grid;
+    place-items: center
+}
+
+.equity-trainer-toggle:disabled {
+    color: var(--muted-rose);
+    cursor: not-allowed
+}
+
+.equity-trainer-toggle svg {
+    width: 19px
+}
+
+.equity-trainer-panel {
+    display: none;
+    width: 260px;
+    max-height: 360px;
+    overflow-y: auto;
+    background: var(--surface-seat);
+    border: 1px solid var(--seat-border);
+    border-radius: var(--rounded-panel);
+    padding: 17px
+}
+
+.equity-trainer.open .equity-trainer-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    animation: rise .25s
+}
+
+.equity-trainer-panel h2 {
+    font-size: 14px;
+    margin: 0
+}
+
+.equity-trainer-waiting {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: var(--font-size-body);
+    line-height: 1.5
+}
+
+.equity-trainer-category {
+    margin: 0;
+    align-self: flex-start;
+    padding: 3px 8px;
+    border-radius: var(--rounded-pill);
+    background: var(--white-12);
+    color: var(--felt-text);
+    font: 600 var(--font-size-mono) var(--font-mono);
+    letter-spacing: .04em
+}
+
+.equity-trainer-cards {
+    display: flex;
+    gap: 4px
+}
+
+.equity-trainer-cards .hole-card {
+    width: 34px;
+    height: 47px
+}
+
+.equity-trainer-chance {
+    margin: 0;
+    color: var(--muted-rose);
+    font-size: var(--font-size-compact)
+}
+
+.equity-trainer-chance b {
+    color: var(--paper)
+}
+
+.equity-trainer-reason {
+    margin: 0;
+    color: var(--paper);
+    font-size: var(--font-size-body);
+    line-height: 1.5
+}
+
+.equity-trainer-history {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+    gap: 1px;
+    overflow: hidden;
+    border-radius: var(--rounded-control);
+    background: var(--white-12)
+}
+
+.equity-trainer-history > div {
+    padding: 8px;
+    background: var(--surface-control);
+    text-align: center
+}
+
+.equity-trainer-history dt {
+    color: var(--muted-rose);
+    font-size: var(--font-size-tiny)
+}
+
+.equity-trainer-history dd {
+    margin: 2px 0 0;
+    color: var(--paper);
+    font: 700 var(--font-size-compact) var(--font-mono)
+}
+
+/* Same portrait consolidation as chat/reactions/last-winners: this becomes a
+   fourth row in the same top-right rail, selected through TableUtilityMenu
+   instead of its own always-visible toggle (hidden alongside the other
+   three at the shared selector list below). */
+@media (orientation: portrait) and (max-width: 1023px) {
+    .equity-trainer {
+        top: calc(env(safe-area-inset-top) + 219px);
+        bottom: auto;
+        right: max(12px, env(safe-area-inset-right));
+        left: auto;
+        flex-direction: column;
+        align-items: flex-end
+    }
+
+    .equity-trainer-panel {
+        width: min(260px, calc(100vw - 24px));
+        max-height: min(360px, 50dvh)
+    }
+}
+
 .achievement-toast {
     position: fixed;
     z-index: var(--z-toast);
@@ -10270,10 +10421,16 @@ h1 em {
        toggles stacked below it, so hide those toggles while it's open. */
     .game:has(.game-chat.open) .table-reactions,
     .game:has(.game-chat.open) .last-winners,
+    .game:has(.game-chat.open) .equity-trainer,
     .game:has(.table-reactions.open) .game-chat,
     .game:has(.table-reactions.open) .last-winners,
+    .game:has(.table-reactions.open) .equity-trainer,
     .game:has(.last-winners.open) .game-chat,
-    .game:has(.last-winners.open) .table-reactions {
+    .game:has(.last-winners.open) .table-reactions,
+    .game:has(.last-winners.open) .equity-trainer,
+    .game:has(.equity-trainer.open) .game-chat,
+    .game:has(.equity-trainer.open) .table-reactions,
+    .game:has(.equity-trainer.open) .last-winners {
         opacity: 0;
         pointer-events: none
     }
@@ -15750,20 +15907,23 @@ button.deck-grid-slot:hover {
     .table-rankings-standalone > button,
     .game-chat .chat-toggle,
     .table-reactions .reaction-toggle,
-    .last-winners .last-winners-toggle {
+    .last-winners .last-winners-toggle,
+    .equity-trainer .equity-trainer-toggle {
         display: none
     }
 
     .game-chat.game-chat,
     .table-reactions,
-    .last-winners {
+    .last-winners,
+    .equity-trainer {
         right: max(12px, env(safe-area-inset-right));
         top: calc(env(safe-area-inset-top) + 64px)
     }
 
     .game-chat:not(.open),
     .table-reactions:not(.open),
-    .last-winners:not(.open) {
+    .last-winners:not(.open),
+    .equity-trainer:not(.open) {
         pointer-events: none
     }
 }

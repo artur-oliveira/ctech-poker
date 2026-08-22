@@ -21,18 +21,18 @@ describe('useTablePreferences', () => {
   test('defaults with no theme field on the preferences type', () => {
     const {result} = renderHook(() => useTablePreferences());
     expect(result.current.preferences).toEqual({
-      dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60
+      dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false
     });
     expect(result.current.preferences).not.toHaveProperty('theme');
   });
 
   test('a pre-existing stored blob with a theme field round-trips harmlessly (extra key ignored)', () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      theme: 'midnight', dealerVoice: true, voiceCommands: false, realityCheckMinutes: 90
+      theme: 'midnight', dealerVoice: true, voiceCommands: false, realityCheckMinutes: 90, equityTrainer: true
     }));
     const {result} = renderHook(() => useTablePreferences());
     expect(result.current.preferences).toEqual({
-      dealerVoice: true, voiceCommands: false, realityCheckMinutes: 90
+      dealerVoice: true, voiceCommands: false, realityCheckMinutes: 90, equityTrainer: true
     });
   });
 

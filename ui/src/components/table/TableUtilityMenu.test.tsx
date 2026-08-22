@@ -15,4 +15,16 @@ describe('TableUtilityMenu', () => {
     expect(onSelectAction).toHaveBeenCalledWith('reactions');
     expect(screen.queryByRole('button', {name: 'Chat da mesa'})).not.toBeInTheDocument();
   });
+
+  test('hides the equity trainer entry until it is explicitly visible, and disables it mid-turn', async () => {
+    const onSelectAction = vi.fn();
+    const {rerender} = render(<TableUtilityMenu active={null} winnersAvailable
+      onSelectAction={onSelectAction}/>);
+    await userEvent.click(screen.getByRole('button', {name: 'Ferramentas da mesa'}));
+    expect(screen.queryByRole('button', {name: 'Treinador'})).not.toBeInTheDocument();
+
+    rerender(<TableUtilityMenu active={null} winnersAvailable equityTrainerVisible
+      equityTrainerAvailable={false} onSelectAction={onSelectAction}/>);
+    expect(screen.getByRole('button', {name: 'Treinador'})).toBeDisabled();
+  });
 });

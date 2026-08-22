@@ -1,5 +1,5 @@
 'use client';
-import {LockKeyhole, Mic, Repeat2, Settings2, Volume2} from 'lucide-react';
+import {Lightbulb, LockKeyhole, Mic, Repeat2, Settings2, Volume2} from 'lucide-react';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
 import {
@@ -106,6 +106,12 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
             <small>Push-to-talk. O jogo recebe somente a ação reconhecida, nunca o áudio.</small></span></span>
           <Switch aria-labelledby="voice-actions-label" checked={preferences.voiceCommands}
                   onCheckedChange={checked => update({voiceCommands: checked})}/>
+        </div>
+        <div className="table-preference-toggle">
+          <span><Lightbulb aria-hidden="true"/><span><Label id="equity-trainer-label">Treinador</Label>
+            <small>Explica sua mão após agir, só em mesas sandbox. Nunca aparece durante sua decisão nem em dinheiro real.</small></span></span>
+          <Switch aria-labelledby="equity-trainer-label" checked={preferences.equityTrainer}
+                  onCheckedChange={checked => update({equityTrainer: checked})}/>
         </div>
         <div>
           <Label id="reality-check-label">Lembrete de sessão</Label>
