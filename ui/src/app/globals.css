@@ -1810,7 +1810,7 @@ h1 em {
     border-bottom: 1px solid var(--white-08)
 }
 
-.app-nav > a:last-child, .app-nav .header-right > a, .ranking > a {
+.app-nav > a:last-child, .app-nav .app-nav-routes a, .ranking > a {
     display: flex;
     gap: 7px;
     align-items: center;
@@ -12975,7 +12975,21 @@ button.deck-grid-slot:hover {
     gap: 2px
 }
 
-.app-nav .header-right > a,
+.app-nav-routes {
+    display: flex;
+    align-items: center;
+    gap: inherit;
+    min-width: 0
+}
+
+/* Rendered unconditionally in JSX for any authed user; hidden by default so
+   it doesn't show as an unstyled block nav on desktop, and only switched to
+   display:grid inside the mobile media query below. */
+.app-tab-bar {
+    display: none
+}
+
+.app-nav .app-nav-routes a,
 .app-nav > .app-nav-public-back {
     min-width: 44px;
     min-height: 44px;
@@ -12987,15 +13001,15 @@ button.deck-grid-slot:hover {
     transition: color 180ms var(--ease-out-quart), background-color 180ms var(--ease-out-quart)
 }
 
-.app-nav .header-right > a:hover,
-.app-nav .header-right > a:focus-visible,
+.app-nav .app-nav-routes a:hover,
+.app-nav .app-nav-routes a:focus-visible,
 .app-nav > .app-nav-public-back:hover,
 .app-nav > .app-nav-public-back:focus-visible {
     color: var(--paper);
     background: var(--white-08)
 }
 
-.app-nav .header-right > a[aria-current='page'] {
+.app-nav .app-nav-routes a[aria-current='page'] {
     color: var(--brand-bright-7);
     background: var(--brand-13)
 }
@@ -13030,7 +13044,7 @@ button.deck-grid-slot:hover {
     72% { opacity: 0; transform: scale(1.45) }
 }
 
-.app-nav .header-right > a svg,
+.app-nav .app-nav-routes a svg,
 .app-nav > .app-nav-public-back svg {
     width: 18px;
     height: 18px;
@@ -13230,7 +13244,7 @@ button.deck-grid-slot:hover {
 }
 
 @media (max-width: 380px) {
-    .app-nav .header-right > a[aria-current='page'] {
+    .app-nav .app-nav-routes a[aria-current='page'] {
         display: none
     }
 }
