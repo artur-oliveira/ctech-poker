@@ -206,6 +206,72 @@ describe('ActionBar preselection', () => {
   });
 });
 
+describe('ActionBar preselection shortcuts', () => {
+  test.each([
+    ['x', 'check_fold'],
+    ['f', 'fold'],
+    ['a', 'all_in'],
+  ])('%s selects the matching preselection', (key, selection) => {
+    const {onPreselectAction} = renderActionBar({canPreselect: true, isTurn: false});
+    act(() => void fireEvent.keyDown(window, {key}));
+    expect(onPreselectAction).toHaveBeenCalledWith(selection, 0);
+  });
+
+  test('c selects call_any directly when there is nothing fixed to call', () => {
+    const {onPreselectAction} = renderActionBar({
+      canPreselect: true, isTurn: false, supportsCallPreselection: true, prospectiveCallAmount: 0,
+    });
+    act(() => void fireEvent.keyDown(window, {key: 'c'}));
+    expect(onPreselectAction).toHaveBeenCalledWith('call_any', 0);
+  });
+
+  test('c cycles call, then call_any, then clears when a fixed call exists', () => {
+    const {onPreselectAction, view} = renderActionBar({
+      canPreselect: true, isTurn: false, supportsCallPreselection: true, prospectiveCallAmount: 75,
+    });
+    act(() => void fireEvent.keyDown(window, {key: 'c'}));
+    expect(onPreselectAction).toHaveBeenLastCalledWith('call', 75);
+
+    view.rerender(<ActionBar {...renderActionBarProps({
+      canPreselect: true, isTurn: false, supportsCallPreselection: true, prospectiveCallAmount: 75,
+      preselection: 'call', preselectionAmount: 75, onPreselectAction,
+    })}/>);
+    act(() => void fireEvent.keyDown(window, {key: 'c'}));
+    expect(onPreselectAction).toHaveBeenLastCalledWith('call_any', 0);
+
+    view.rerender(<ActionBar {...renderActionBarProps({
+      canPreselect: true, isTurn: false, supportsCallPreselection: true, prospectiveCallAmount: 75,
+      preselection: 'call_any', onPreselectAction,
+    })}/>);
+    act(() => void fireEvent.keyDown(window, {key: 'c'}));
+    expect(onPreselectAction).toHaveBeenLastCalledWith(null, 0);
+  });
+
+  test('pressing the same key again clears the selection', () => {
+    const {onPreselectAction, view} = renderActionBar({canPreselect: true, isTurn: false, preselection: 'fold'});
+    view.rerender(<ActionBar {...renderActionBarProps({
+      canPreselect: true, isTurn: false, preselection: 'fold', onPreselectAction,
+    })}/>);
+    act(() => void fireEvent.keyDown(window, {key: 'f'}));
+    expect(onPreselectAction).toHaveBeenCalledWith(null, 0);
+  });
+
+  test('has no effect when preselection is unavailable', () => {
+    const {onPreselectAction} = renderActionBar({canPreselect: false, isTurn: false});
+    act(() => void fireEvent.keyDown(window, {key: 'x'}));
+    expect(onPreselectAction).not.toHaveBeenCalled();
+  });
+
+  test('has no effect while typing in an input', () => {
+    const {onPreselectAction} = renderActionBar({canPreselect: true, isTurn: false});
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    act(() => void fireEvent.keyDown(input, {key: 'x'}));
+    expect(onPreselectAction).not.toHaveBeenCalled();
+    document.body.removeChild(input);
+  });
+});
+
 function renderActionBarProps(overrides: Partial<React.ComponentProps<typeof ActionBar>>) {
   return {
     onActAction: vi.fn(() => true), available: allActions, callAmount: 75, minRaise: 150, maxRaise: 1000,

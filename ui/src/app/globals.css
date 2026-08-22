@@ -5028,7 +5028,7 @@ h1 em {
 .action-preselectors {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns:repeat(4, max-content);
+    grid-template-columns:repeat(5, max-content);
     align-items: center;
     justify-content: center;
     gap: 7px

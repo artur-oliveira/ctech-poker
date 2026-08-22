@@ -392,7 +392,7 @@ func (a *Actor) handlePreselect(ctx context.Context, c PreselectCmd) error {
 		return errors.New("table: action_id is required")
 	}
 	if c.Selection != "" && c.Selection != "check_fold" && c.Selection != "fold" &&
-		c.Selection != "call" && c.Selection != "call_any" {
+		c.Selection != "call" && c.Selection != "call_any" && c.Selection != "all_in" {
 		return errors.New("table: invalid action preselection")
 	}
 	return a.commitActivity(ctx, true, func() error {
@@ -418,7 +418,9 @@ func (a *Actor) handlePreselect(ctx context.Context, c PreselectCmd) error {
 		if c.Selection == "call" && (c.Amount <= 0 || c.Amount != a.cached.ProspectiveCallAmountForActor(c.PlayerID)) {
 			return errors.New("table: fixed call amount changed")
 		}
-		if c.Selection != "call" {
+		if c.Selection == "check_fold" {
+			c.Amount = a.cached.ProspectiveCallAmountForActor(c.PlayerID)
+		} else if c.Selection != "call" {
 			c.Amount = 0
 		}
 		if a.activity.Preselections == nil {
@@ -856,8 +858,11 @@ func (a *Actor) applyActAndCommit(ctx context.Context, c ActCmd) (bool, error) {
 		// Any raise that changes what another player owes cancels it atomically
 		// with the action, so reconnecting clients never revive a stale call.
 		for playerID, preselection := range a.activity.Preselections {
-			if preselection.Selection == "call" &&
-				preselection.Amount != a.cached.ProspectiveCallAmountForActor(playerID) {
+			current := a.cached.ProspectiveCallAmountForActor(playerID)
+			if preselection.Selection == "call" && preselection.Amount != current {
+				delete(a.activity.Preselections, playerID)
+			}
+			if preselection.Selection == "check_fold" && current > preselection.Amount {
 				delete(a.activity.Preselections, playerID)
 			}
 		}
@@ -1909,6 +1914,14 @@ func (a *Actor) processInlinePreselections(ctx context.Context) {
 			} else {
 				action = betting.ActionCall
 				amount = callAmount
+			}
+		case "all_in":
+			if amt, ok := a.cached.AllInAmountForActor(current); ok {
+				action = betting.ActionRaise
+				amount = amt
+			} else {
+				delete(a.activity.Preselections, current)
+				continue
 			}
 		default:
 			delete(a.activity.Preselections, current)

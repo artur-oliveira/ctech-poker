@@ -30,7 +30,7 @@ export interface SeatView {
 }
 
 export type PokerAction = 'fold' | 'check' | 'call' | 'raise'
-export type ActionPreselection = 'check_fold' | 'fold' | 'call' | 'call_any'
+export type ActionPreselection = 'check_fold' | 'fold' | 'call' | 'call_any' | 'all_in'
 
 export type ChatMessage = { id: string; player_id: string; message: string; timestamp: number }
 export type PersistedReaction = {

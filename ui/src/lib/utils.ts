@@ -15,6 +15,15 @@ export function isHoverCapable(): boolean {
   return typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 }
 
+/** True when the key press belongs to a text field (chat input, etc.), never the raise slider. */
+export function isTypingTarget(target: EventTarget | null) {
+  return target instanceof HTMLElement && !!target.closest('input:not([type=range]), textarea, select, [contenteditable]');
+}
+
+export function isPlainKey(event: KeyboardEvent) {
+  return !event.metaKey && !event.ctrlKey && !event.altKey && !event.repeat && !isTypingTarget(event.target);
+}
+
 export const ACHIEVEMENT_LABELS: Record<string, string> = {
   wins: "Vitórias",
   hands_played: "Mãos Jogadas",

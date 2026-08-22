@@ -478,6 +478,25 @@ func (t *Table) ProspectiveCallAmountForActor(playerID string) int64 {
 	return max(0, t.round.CurrentBet-player.Contributed)
 }
 
+// AllInAmountForActor returns the total bet playerID would be shoving to —
+// their current contribution plus their remaining stack — if they went all
+// in right now. The second return is false if playerID has no active round
+// seat to shove from (already folded/all-in, or no betting round open).
+func (t *Table) AllInAmountForActor(playerID string) (int64, bool) {
+	if !isBettingStage(t.stage) || t.round == nil {
+		return 0, false
+	}
+	idx, ok := t.roundIdx[playerID]
+	if !ok {
+		return 0, false
+	}
+	player := t.round.Players[idx]
+	if player.Folded || player.AllIn {
+		return 0, false
+	}
+	return player.Contributed + player.Stack, true
+}
+
 func (t *Table) potViews() []PotView {
 	contributions := make([]sidepots.Contribution, 0, len(t.handOrder))
 	folded := make(map[string]bool, len(t.handOrder))

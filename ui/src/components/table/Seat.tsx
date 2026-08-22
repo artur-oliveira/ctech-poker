@@ -1,4 +1,4 @@
-import {type CSSProperties, type ReactNode, useState} from 'react';
+import {type CSSProperties, type ReactNode, useCallback, useEffect, useState} from 'react';
 import {useLiveNow} from '@/lib/hooks/useLiveNow';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {Progress} from '@/components/ui/progress';
@@ -6,7 +6,7 @@ import {ChipStack} from '@/components/table/ChipStack';
 import {PerimeterTimer} from '@/components/table/PerimeterTimer';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import type {SeatView} from '@/lib/api/table';
-import {HAND_CATEGORY_LABELS, playerName} from '@/lib/utils';
+import {HAND_CATEGORY_LABELS, isPlainKey, playerName} from '@/lib/utils';
 import {useCountUp} from '@/lib/hooks/useCountUp';
 import {useReducedMotionCountdown} from '@/lib/hooks/useReducedMotionCountdown';
 import {Hourglass, NotebookPen} from 'lucide-react';
@@ -183,7 +183,7 @@ export function Seat({
     setPeeked([false, false]);
     setPeekReported(false);
   }
-  const togglePeek = (i: 0 | 1) => {
+  const togglePeek = useCallback((i: 0 | 1) => {
     setPeeked(prev => {
       const next: [boolean, boolean] = [...prev];
       next[i] = !next[i];
@@ -193,12 +193,29 @@ export function Seat({
       setPeekReported(true);
       onPeekCards?.();
     }
-  };
+  }, [peekReported, onPeekCards]);
   // onPeekCards is only ever wired on the live table page; hand-history replay
   // reuses this same Seat/TableStage pair to show already-resolved hole cards
   // and must never gate them behind a live-only interaction. handComplete lifts
   // the gate too: the hand is over, the cards are the viewer's own again.
   const peekGated = isViewer && !handComplete && Boolean(onPeekCards);
+  useEffect(() => {
+    if (!peekGated) return undefined;
+
+    function onKey(event: KeyboardEvent) {
+      if (!isPlainKey(event)) return;
+      if (event.key === '1') {
+        event.preventDefault();
+        togglePeek(0);
+      } else if (event.key === '2') {
+        event.preventDefault();
+        togglePeek(1);
+      }
+    }
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [peekGated, togglePeek]);
   const chance = seat.equity == null ? null : Math.round(seat.equity * 100);
   // Equity is computed from the viewer's own hole cards, so publishing it
   // before they have looked hands them the exact knowledge the "all-in without
@@ -276,7 +293,8 @@ export function Seat({
                           revealPending={revealPending}
                           peekable={peekGated}
                           peeked={peeked[i]}
-                          onPeekToggle={peekGated ? () => togglePeek(i as 0 | 1) : undefined}/>;
+                          onPeekToggle={peekGated ? () => togglePeek(i as 0 | 1) : undefined}
+                          shortcutKey={peekGated ? String(i + 1) : undefined}/>;
     })}</div>
     {isWinner && winAmount > 0 && <span key={`confetti-${winAmount}`} className="seat-confetti" aria-hidden="true">
       {SEAT_CONFETTI_ANGLES.map((rot, i) => <span key={i} style={{

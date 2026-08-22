@@ -1,4 +1,4 @@
-import {act, render, screen} from '@testing-library/react';
+import {act, fireEvent, render, screen} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, describe, expect, test, vi} from 'vitest';
 import {Seat} from './Seat';
@@ -287,6 +287,30 @@ describe('Seat', () => {
     test('auto-reveals the viewer own cards once the hand completes, with no peek gate at all', () => {
       render_({seat: seat({hole_cards: ['AH', 'KD']}), isViewer: true, onPeekCards: vi.fn(), handComplete: true});
       expect(screen.queryByRole('button', {name: /^Ver sua/})).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', {name: /^Ocultar sua/})).not.toBeInTheDocument();
+    });
+
+    test('1/2 toggle the matching hole card only while peeking is gated', () => {
+      render_({seat: seat({hole_cards: ['AH', 'KD']}), isViewer: true, onPeekCards: vi.fn()});
+      act(() => void fireEvent.keyDown(window, {key: '1'}));
+      expect(screen.getByRole('button', {name: /Ocultar sua 1ª/})).toBeInTheDocument();
+
+      act(() => void fireEvent.keyDown(window, {key: '2'}));
+      expect(screen.getByRole('button', {name: /Ocultar sua 2ª/})).toBeInTheDocument();
+
+      act(() => void fireEvent.keyDown(window, {key: '1'}));
+      expect(screen.getByRole('button', {name: 'Ver sua 1ª carta'})).toBeInTheDocument();
+    });
+
+    test('1/2 are a no-op once the hand completes (peek gate lifted)', () => {
+      render_({seat: seat({hole_cards: ['AH', 'KD']}), isViewer: true, onPeekCards: vi.fn(), handComplete: true});
+      act(() => void fireEvent.keyDown(window, {key: '1'}));
+      expect(screen.queryByRole('button', {name: /^Ocultar sua/})).not.toBeInTheDocument();
+    });
+
+    test('1/2 are a no-op for an opponent seat or with nowhere to report a peek', () => {
+      render_({seat: seat({hole_cards: ['AH', 'KD']}), isViewer: false});
+      act(() => void fireEvent.keyDown(window, {key: '1'}));
       expect(screen.queryByRole('button', {name: /^Ocultar sua/})).not.toBeInTheDocument();
     });
   });

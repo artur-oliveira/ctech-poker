@@ -9,6 +9,7 @@ import {betShortcutAmount} from '@/lib/betShortcuts';
 import {VoiceActionButton} from '@/components/table/VoiceActionButton';
 import {type ActionPreselection, resolvePreselection} from '@/lib/actionPreselection';
 import {useLiveNow} from '@/lib/hooks/useLiveNow';
+import {isPlainKey, isTypingTarget} from '@/lib/utils';
 
 export type ActionAvailability = Record<PokerAction, boolean>
 
@@ -49,15 +50,6 @@ const actionLabel: Record<PokerAction, string> = {
 // amount, where a loanword reads worse. Confirmed intentional; don't
 // "fix" this into Desistir/Passar without checking first.
 
-/** True when the key press belongs to a text field (chat input, etc.), never the raise slider. */
-function isTypingTarget(target: EventTarget | null) {
-  return target instanceof HTMLElement && !!target.closest('input:not([type=range]), textarea, select, [contenteditable]');
-}
-
-function isPlainKey(event: KeyboardEvent) {
-  return !event.metaKey && !event.ctrlKey && !event.altKey && !event.repeat && !isTypingTarget(event.target);
-}
-
 /** Same as isPlainKey but allows ctrlKey through. Used only by the arrow-key
  * bet-adjust shortcuts, where holding ctrl means "step faster". */
 function isBetAdjustKey(event: KeyboardEvent) {
@@ -97,6 +89,7 @@ function PreselectionControls({
                                 pending,
                                 available,
                                 callAmount,
+                                maxRaise,
                                 prospectiveCallAmount,
                                 selection,
                                 selectionAmount,
@@ -110,11 +103,12 @@ function PreselectionControls({
   pending: PokerAction | null;
   available: ActionAvailability;
   callAmount: number;
+  maxRaise: number;
   prospectiveCallAmount: number;
   selection: ActionPreselection | null;
   selectionAmount: number;
   onSelectAction: (selection: ActionPreselection | null, amount?: number) => boolean;
-  onAct: (action: PokerAction) => boolean;
+  onAct: (action: PokerAction, amount?: number) => boolean;
 }) {
   const executedRef = useRef<string | null>(null);
   useEffect(() => {
@@ -128,25 +122,66 @@ function PreselectionControls({
     const executionKey = action ? `${selection}:${selectionAmount}:${callAmount}:${action}` : null;
     if (action && executedRef.current !== executionKey) {
       executedRef.current = executionKey;
-      onAct(action);
+      if (action === 'raise') onAct(action, maxRaise);
+      else onAct(action);
     }
-  }, [selection, selectionAmount, isTurn, connected, pending, available, callAmount, onAct]);
-  
+  }, [selection, selectionAmount, isTurn, connected, pending, available, callAmount, maxRaise, onAct]);
+
+  const hasFixedCall = supportsCallPreselection && prospectiveCallAmount > 0;
+  // Shared by both the button's onClick and the keyboard shortcuts below, so
+  // there is exactly one place that decides what selecting/deselecting a
+  // value means.
+  const toggle = useCallback((value: ActionPreselection, amount = 0) =>
+    onSelectAction(selection === value ? null : value, selection === value ? 0 : amount),
+  [selection, onSelectAction]);
+
+  useEffect(() => {
+    if (!canPreselect) return undefined;
+
+    function onKey(event: KeyboardEvent) {
+      if (!isPlainKey(event)) return;
+      const key = event.key.toLowerCase();
+      if (key === 'x') {
+        event.preventDefault();
+        toggle('check_fold');
+      } else if (key === 'f') {
+        event.preventDefault();
+        toggle('fold');
+      } else if (key === 'c' && supportsCallPreselection) {
+        event.preventDefault();
+        if (hasFixedCall) {
+          if (selection === 'call') toggle('call_any');
+          else if (selection === 'call_any') onSelectAction(null, 0);
+          else toggle('call', prospectiveCallAmount);
+        } else {
+          toggle('call_any');
+        }
+      } else if (key === 'a') {
+        event.preventDefault();
+        toggle('all_in');
+      }
+    }
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [canPreselect, selection, supportsCallPreselection, hasFixedCall, prospectiveCallAmount, onSelectAction, toggle]);
+
   if (!canPreselect && !selection) return null;
-  const option = (value: ActionPreselection, label: string, description: string, amount = 0) =>
+  const option = (value: ActionPreselection, label: string, description: string, key?: string, amount = 0) =>
     <button type="button" className={selection === value ? 'selected' : ''}
             aria-pressed={selection === value} title={description}
             disabled={!connected || pending !== null}
-            onClick={() => onSelectAction(selection === value ? null : value, selection === value ? 0 : amount)}>
-      <span>{label}<small>{description}</small></span>
+            onClick={() => toggle(value, amount)}>
+      <span>{label}{key && <kbd aria-hidden="true">{key}</kbd>}<small>{description}</small></span>
     </button>;
   return <div className="action-preselectors" role="group" aria-label="Preparar próxima ação">
     <span>Próxima ação</span>
-    {option('check_fold', 'Check / Fold', 'Check se for grátis; caso contrário, fold')}
-    {option('fold', 'Fold', 'Desistir quando chegar sua vez')}
-    {supportsCallPreselection && prospectiveCallAmount > 0 && option('call', `Call ${prospectiveCallAmount.toLocaleString('pt-BR')}`,
-      'Pagar somente este valor; cancela se a aposta aumentar', prospectiveCallAmount)}
-    {supportsCallPreselection && option('call_any', 'Call Any', 'Pagar qualquer valor quando chegar sua vez')}
+    {option('check_fold', 'Check / Fold', 'Check se for grátis; caso contrário, fold', 'X')}
+    {option('fold', 'Fold', 'Desistir quando chegar sua vez', 'F')}
+    {supportsCallPreselection && hasFixedCall && option('call', `Call ${prospectiveCallAmount.toLocaleString('pt-BR')}`,
+      'Pagar somente este valor; cancela se a aposta aumentar', 'C', prospectiveCallAmount)}
+    {supportsCallPreselection && option('call_any', 'Call Any', 'Pagar qualquer valor quando chegar sua vez', hasFixedCall ? undefined : 'C')}
+    {option('all_in', 'All In', 'Apostar tudo quando chegar sua vez', 'A')}
   </div>;
 }
 
@@ -346,7 +381,7 @@ export function ActionBar({
     <PreselectionControls key={selectionScope} canPreselect={canPreselect}
                           supportsCallPreselection={supportsCallPreselection} isTurn={isTurn}
                           connected={connected} pending={pending} available={available}
-                          callAmount={callAmount} prospectiveCallAmount={prospectiveCallAmount}
+                          callAmount={callAmount} maxRaise={maxRaise} prospectiveCallAmount={prospectiveCallAmount}
                           selection={preselection} selectionAmount={preselectionAmount}
                           onSelectAction={onPreselectAction} onAct={onActAction}/>
     {!noLegalActions && !executingPreparedAction &&

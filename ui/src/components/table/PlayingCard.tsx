@@ -3,7 +3,7 @@ import type {CSSProperties} from 'react';
 import {back, cardLabel, cardPath} from '@/lib/cards';
 import {useDeckVariant} from '@/lib/hooks/useDeckVariant';
 
-export function PlayingCard({card, index, size, owner, slow, onReveal, revealPending, peekable, peeked, onPeekToggle}: {
+export function PlayingCard({card, index, size, owner, slow, onReveal, revealPending, peekable, peeked, onPeekToggle, shortcutKey}: {
   card?: string;
   index: number;
   size: 'board' | 'hole';
@@ -19,6 +19,7 @@ export function PlayingCard({card, index, size, owner, slow, onReveal, revealPen
   peekable?: boolean;
   peeked?: boolean;
   onPeekToggle?: () => void;
+  shortcutKey?: string;
 }) {
   const variant = useDeckVariant();
   const revealed = Boolean(card && card.toLowerCase() !== 'back' && cardPath(card, variant) !== back);
@@ -45,7 +46,7 @@ export function PlayingCard({card, index, size, owner, slow, onReveal, revealPen
                      : `Ver sua ${index + 1}ª carta`}
                    onClick={onPeekToggle} style={style}>
       {inner}
-      <span className="peek-hint" aria-hidden="true">Ver</span>
+      <span className="peek-hint" aria-hidden="true">Ver{shortcutKey && <kbd>{shortcutKey}</kbd>}</span>
     </button>;
   }
   if (onReveal) {

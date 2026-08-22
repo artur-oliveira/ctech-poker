@@ -23,3 +23,13 @@ test('call any pays the current amount or checks for free', () => {
   assert.equal(resolvePreselection('call_any', ['fold', 'call', 'raise'], 200), 'call');
   assert.equal(resolvePreselection('call_any', ['fold', 'check', 'raise']), 'check');
 });
+
+test('all in raises when raising is legal', () => {
+  assert.equal(resolvePreselection('all_in', ['fold', 'call', 'raise'], 200), 'raise');
+});
+
+test('all in falls back to call, then check, when raising is no longer legal', () => {
+  assert.equal(resolvePreselection('all_in', ['fold', 'call'], 200), 'call');
+  assert.equal(resolvePreselection('all_in', ['fold', 'check']), 'check');
+  assert.equal(resolvePreselection('all_in', ['fold']), null);
+});

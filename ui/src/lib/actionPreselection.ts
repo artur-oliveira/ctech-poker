@@ -14,6 +14,10 @@ export function resolvePreselection(
   if (selection === 'call') {
     return legal.has('call') && callAmount === selectedCallAmount ? 'call' : null;
   }
+  if (selection === 'all_in') {
+    if (legal.has('raise')) return 'raise';
+    return legal.has('call') ? 'call' : legal.has('check') ? 'check' : null;
+  }
   if (legal.has('call')) return 'call';
   return legal.has('check') ? 'check' : null;
 }
