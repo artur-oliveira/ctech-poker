@@ -115,6 +115,10 @@ vi.mock('@/components/table/PlayerNoteDialog', () => ({
 vi.mock('@/components/table/PerimeterTimer', () => ({PerimeterTimer: () => <span>next-hand-timer</span>}));
 vi.mock('@/components/table/TablePreferencesDialog', () => ({TablePreferencesDialog: () => null}));
 vi.mock('@/components/table/RealityCheck', () => ({RealityCheck: () => null}));
+vi.mock('@/components/table/SessionRecap', () => ({
+  SessionRecap: ({onCloseAction}: { onCloseAction: () => void }) =>
+    <button onClick={onCloseAction}>close-recap</button>,
+}));
 vi.mock('@/components/table/BotChallenge', () => ({BotChallenge: () => null}));
 vi.mock('@/components/table/LastWinners', () => ({
   LastWinners: ({open, onOpenChangeAction}: { open: boolean; onOpenChangeAction: (open: boolean) => void }) =>
@@ -292,6 +296,9 @@ describe('table page integration', () => {
     
     await user.click(screen.getByRole('button', {name: 'leave'}));
     expect(mocks.notification).toHaveBeenCalledWith('Você saiu com 1.234 fichas.', 'info');
+    expect(mocks.push).not.toHaveBeenCalledWith('/lobby');
+
+    await user.click(screen.getByRole('button', {name: 'close-recap'}));
     expect(mocks.setQueryData).toHaveBeenCalledWith(['seated', ROOM_ID], {seated: false, stack: 0});
     expect(mocks.push).toHaveBeenCalledWith('/lobby');
   });

@@ -20,6 +20,7 @@ import type {HandOutcomeState} from '@/components/table/HandOutcome';
 import {LastWinners} from '@/components/table/LastWinners';
 import {TablePreferencesDialog} from '@/components/table/TablePreferencesDialog';
 import {RealityCheck} from '@/components/table/RealityCheck';
+import {SessionRecap} from '@/components/table/SessionRecap';
 import {TableReactions} from '@/components/table/TableReactions';
 import {TableUtilityMenu, type TableUtility} from '@/components/table/TableUtilityMenu';
 import {BotChallenge} from '@/components/table/BotChallenge';
@@ -201,6 +202,7 @@ function TableContent() {
     queryKey: ['player', 'me'], queryFn: getMe, enabled: valid && seated
   });
   const [noteOpponent, setNoteOpponent] = useState<{ player_id: string; name?: string } | null>(null);
+  const [sessionRecap, setSessionRecap] = useState<{ joinedAt: number; buyIn: number; finalStack: number } | null>(null);
   const [reactionPurchaseTarget, setReactionPurchaseTarget] = useState<ReactionCatalogEntry | null>(null);
   const [favoritesSaving, setFavoritesSaving] = useState(false);
   const socialActions = useSocialActions();
@@ -519,8 +521,11 @@ function TableContent() {
                              onRebuyAction={() => rt.ready(true)}/>}
             <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} onLeftAction={amount => {
               pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
-              queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
-              router.push('/lobby');
+              setSessionRecap({
+                joinedAt: openSession?.joined_at || Date.now(),
+                buyIn: openSession?.buyin_amount || viewerSeat?.stack_at_hand_start || viewerSeat?.stack || 0,
+                finalStack: amount
+              });
             }}/>
           </div>
         </header>
@@ -610,6 +615,13 @@ function TableContent() {
                                    buyIn={openSession?.buyin_amount || viewerSeat.stack_at_hand_start || viewerSeat.stack}
                                    currentStack={viewerSeat.stack} handId={s.hand_id}
                                    handComplete={s.stage === 'complete'} isTurn={actions.isTurn}/>}
+      {sessionRecap && <SessionRecap joinedAt={sessionRecap.joinedAt} buyIn={sessionRecap.buyIn}
+                                      finalStack={sessionRecap.finalStack} tableId={id}
+                                      mode={room?.currency_mode === 'real' ? 'real' : 'sandbox'}
+                                      onCloseAction={() => {
+                                        queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
+                                        router.push('/lobby');
+                                      }}/>}
       <Chat items={rt.chat}
             onSendAction={rt.sendChat}
             connected={rt.status === 'connected'}
