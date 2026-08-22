@@ -68,6 +68,18 @@ Every page is `'use client'`; only `layout.tsx` and `share/layout.tsx` are serve
 | `/poker-rules` | `poker-rules/page.tsx` | Rules + hand rankings reference |
 | `/callback` | `callback/page.tsx` | OAuth code→token exchange, then `returnTo` or `/lobby` |
 
+## Visual capture assets
+
+With `npm run dev:mock` running on port 3003, `npm run og:capture` refreshes both sets of checked-in
+WebP screenshots: Open Graph previews in `public/og/` and the product screenshots embedded by the
+guide in `public/guide/`. The guide set covers the lobby, buy-in and private-room states, three table
+streets, hands, achievements, store, profile menu and leaderboard. Stateful targets wait for their
+rendered UI selector before Chrome writes the image; for example, the table waits for `.game`.
+
+Use `npm run og:capture -- --og` or `npm run og:capture -- --guide` when only one set needs to be
+regenerated. `OG_CAPTURE_ORIGIN` can point the capture process at a different running origin. The
+legacy `npm run screenshots:capture` command remains an alias for a full capture.
+
 **Profile editing does not live at `/profile`.** That route is the public showcase; the editor is
 the `ProfileMenu` popover in the lobby header (display name, wallet mode, deck variant), plus
 `ProfileShowcaseDialog` (showcase visibility, ≤3 featured achievements). All of them call

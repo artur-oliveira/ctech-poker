@@ -12,7 +12,7 @@ export default defineConfig({
     globals: true,
     testTimeout: 10_000,
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}'],
+    include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.mjs'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
