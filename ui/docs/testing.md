@@ -80,6 +80,21 @@ npm run build
 
 All four must pass with zero errors and zero warnings before a change is done.
 
+### Local table scenes
+
+`npm run dev:mock` accepts a `scenario` query parameter on `/table`. Named scenes deep-link
+straight into a seated table in a fresh browser, and the **Cenários de teste** control switches
+between them without losing the room id. The post-hand and session flows have dedicated scenes:
+
+- `run_it_twice` — two-board showdown;
+- `winner_cards` — a folded player can pay to reveal the winner's mucked cards;
+- `rabbit_hunt` — a verified, paid hypothetical runout after an uncontested hand;
+- `rebuy` — the viewer is sitting out with a zero stack and the rebuy dialog is open;
+- `reality_check` — a two-hour session opens the neutral session summary away from the viewer's turn.
+
+Use the stable mock room id `01ARZ3NDEKTSV4RRFFQ69G5FAV`, for example
+`/table?id=01ARZ3NDEKTSV4RRFFQ69G5FAV&scenario=winner_cards&delay=0`.
+
 To see what a change left uncovered, `npx vitest run --coverage` prints a per-file table with
 the uncovered line ranges; `coverage/index.html` has the same data with the branches
 highlighted.

@@ -5,6 +5,7 @@ import type {InternalAxiosRequestConfig} from 'axios';
 const scenarios: MockScenario[] = [
   'full_hand', 'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
   'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot',
+  'run_it_twice', 'winner_cards', 'rabbit_hunt', 'rebuy', 'reality_check',
   'reconnecting', 'action_error', 'timeout', 'complete_loss',
   'complete_tie', 'fold_win', 'complete',
 ];
@@ -55,6 +56,16 @@ describe('mock store REST contract', () => {
     expect(share.data).toMatchObject({
       token: 'mock-share-demo', kind: 'brag', hero_cards: expect.any(Array),
     });
+  });
+
+  test('named table scenes deep-link into a seated table', async () => {
+    window.history.replaceState({}, '', '/table?scenario=winner_cards');
+    try {
+      const seated = await request('GET', '/v1.0/rooms/01ARZ3NDEKTSV4RRFFQ69G5FAV/seated');
+      expect(seated.data).toEqual({seated: true, stack: 4850});
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
   });
 });
 
@@ -111,6 +122,31 @@ describe('mock table state contract', () => {
     expect(snapshot.seats.filter(seat => seat.player_id !== MOCK_PLAYER_ID)
       .flatMap(seat => seat.hole_cards || []).every(card => card === 'back')).toBe(true);
     expect(snapshot.seats.flatMap(seat => seat.hole_cards_revealed || []).every(Boolean)).toBe(false);
+  });
+
+  test('paid post-hand scenes expose only the intended purchase', () => {
+    const winnerCards = snapshotForScenario('winner_cards');
+    expect(winnerCards).toMatchObject({stage: 'complete', won_without_showdown: true, winners: ['bia_sp']});
+    expect(winnerCards.seats.find(seat => seat.player_id === 'bia_sp')?.hole_cards).toEqual(['back', 'back']);
+    expect(winnerCards.shuffle_server_seed_hex).toBeUndefined();
+
+    const rabbit = snapshotForScenario('rabbit_hunt');
+    expect(rabbit).toMatchObject({stage: 'complete', won_without_showdown: true, winners: [MOCK_PLAYER_ID]});
+    expect(rabbit.shuffle_server_seed_hex).toBeTruthy();
+    expect(rabbit.shuffle_commit_hash).toBeTruthy();
+  });
+
+  test('rebuy starts the viewer busted and sitting out', () => {
+    const snapshot = snapshotForScenario('rebuy');
+    expect(snapshot.seats.find(seat => seat.player_id === MOCK_PLAYER_ID)).toMatchObject({
+      stack: 0, state: 'sitting_out', dealt_in: false
+    });
+  });
+
+  test('long-session reminder waits until another player has the turn', () => {
+    const snapshot = snapshotForScenario('reality_check');
+    expect(snapshot.current_player_id).not.toBe(MOCK_PLAYER_ID);
+    expect(snapshot.legal_actions?.actions).toEqual([]);
   });
   
   test('side pots list eligible players and reconcile their amounts', () => {
@@ -179,6 +215,45 @@ describe('mock realtime service contract', () => {
     const hero = latest.seats.find(seat => seat.player_id === MOCK_PLAYER_ID);
     expect(hero?.ready).toBe(false);
     expect(hero?.hole_cards_revealed).toEqual([false, true]);
+    service.close();
+  });
+
+  test('acknowledges rabbit hunt and reveals paid winner cards in the next snapshot', () => {
+    vi.useFakeTimers();
+    const rabbit = serviceFor('rabbit_hunt');
+    rabbit.service.connect();
+    vi.runAllTimers();
+    rabbit.messages.length = 0;
+    rabbit.service.send({type: 'request_rabbit_hunt', action_id: 'rabbit-1'});
+    vi.runAllTimers();
+    expect(rabbit.messages).toContainEqual(expect.objectContaining({type: 'action_ack', action_id: 'rabbit-1'}));
+
+    const paid = serviceFor('winner_cards');
+    paid.service.connect();
+    vi.runAllTimers();
+    paid.messages.length = 0;
+    paid.service.send({type: 'request_winner_cards', action_id: 'winner-1'});
+    vi.runAllTimers();
+    expect(paid.messages).toContainEqual(expect.objectContaining({type: 'action_ack', action_id: 'winner-1'}));
+    const latest = paid.messages.filter(message => message.type === 'state').at(-1)?.snapshot as ReturnType<typeof snapshotForScenario>;
+    expect(latest.seats.find(seat => seat.player_id === 'bia_sp')).toMatchObject({
+      hole_cards: ['AS', 'AD'], hole_cards_revealed: [true, true]
+    });
+    rabbit.service.close();
+    paid.service.close();
+  });
+
+  test('applies a rebuy to the busted viewer and publishes the new stack', () => {
+    vi.useFakeTimers();
+    const {service, messages} = serviceFor('rebuy');
+    service.connect();
+    vi.runAllTimers();
+    messages.length = 0;
+    service.applyRebuy(5500, true);
+    const latest = messages.at(-1)?.snapshot as ReturnType<typeof snapshotForScenario>;
+    expect(latest.seats.find(seat => seat.player_id === MOCK_PLAYER_ID)).toMatchObject({
+      stack: 5500, state: 'active', ready: true, auto_rebuy: true
+    });
     service.close();
   });
   

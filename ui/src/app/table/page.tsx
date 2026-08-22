@@ -91,6 +91,7 @@ const MOCK_SCENARIOS = new Set<MockScenario>([
   'full_hand', 'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
   'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot',
   'complete', 'complete_loss', 'complete_tie', 'fold_win', 'run_it_twice',
+  'winner_cards', 'rabbit_hunt', 'rebuy', 'reality_check',
   'reconnecting', 'action_error', 'timeout'
 ]);
 
@@ -599,7 +600,9 @@ function TableContent() {
         pending={rt.pendingAction}
         error={rt.actionError} onDismissErrorAction={rt.clearActionError}/>
       <IdleWarning deadline={s.idle_removal_unix_ms} onKeepSeat={rt.keepSeat}/>
-      {viewerSeat && <RealityCheck joinedAt={openSession?.joined_at || tableOpenedAt}
+      {viewerSeat && <RealityCheck joinedAt={USE_MOCK && scenario === 'reality_check'
+        ? tableOpenedAt - 2 * 60 * 60
+        : openSession?.joined_at || tableOpenedAt}
                                    buyIn={openSession?.buyin_amount || viewerSeat.stack_at_hand_start || viewerSeat.stack}
                                    currentStack={viewerSeat.stack} handId={s.hand_id}
                                    handComplete={s.stage === 'complete'} isTurn={actions.isTurn}/>}

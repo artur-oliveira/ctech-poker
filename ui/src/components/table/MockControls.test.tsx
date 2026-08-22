@@ -24,6 +24,18 @@ describe('MockControls', () => {
     fireEvent.change(screen.getByLabelText('Latência'), {target: {value: '1200'}});
     expect(replace).toHaveBeenLastCalledWith('?keep=value&delay=1200', {scroll: false});
   });
+
+  test('lists post-hand purchases, rebuy, long-session and run-it-twice scenes', () => {
+    render(<MockControls scenario="waiting" delay={350}/>);
+    const labels = Array.from(screen.getByLabelText<HTMLSelectElement>('Cena').options).map(option => option.text);
+    expect(labels).toEqual(expect.arrayContaining([
+      'Showdown · rodar duas vezes',
+      'Resultado · pagar para ver a mão',
+      'Resultado · rabbit hunt',
+      'Saldo zerado · recompra',
+      'Sessão longa · pausa consciente'
+    ]));
+  });
   
   test('hides optional controls when their values are absent', () => {
     render(<MockControls/>);

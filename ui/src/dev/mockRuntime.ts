@@ -534,6 +534,12 @@ function mockSocialUnread() {
 // `leave` mock mirror the real engine's rule (hand.go: RemovePlayerForActor)
 // that a player still dealt in (active/all-in, hand in progress) can't cash out.
 let mockPlayerDealtIn = false;
+let applyActiveMockRebuy: ((amount: number, autoRebuy: boolean) => void) | null = null;
+
+function scenarioFromLocation(): MockScenario | null {
+  if (typeof window === 'undefined') return null;
+  return new URLSearchParams(window.location.search).get('scenario') as MockScenario | null;
+}
 
 function mockDelay() {
   if (typeof window === 'undefined') return 0;
@@ -957,10 +963,15 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     if (room.visibility === 'private' && !isCreator && body.share_code !== room.share_code) {
       fail(403, 'share code required to join a private room', config);
     }
+    if (scenarioFromLocation() === 'rebuy') {
+      applyActiveMockRebuy?.(Number(body.amount), Boolean(body.auto_rebuy));
+    }
     return ok({}, config);
   }
   if (method === 'GET' && /^\/v1\.0\/rooms\/[^/]+\/seated$/.test(path)) {
-    return ok({seated: false, stack: 0}, config);
+    // Named scenes are intentional local-QA deep links. A fresh browser should
+    // land on the state under test instead of requiring a throwaway buy-in.
+    return ok({seated: Boolean(scenarioFromLocation()), stack: 4850}, config);
   }
   const leaveMatch = method === 'POST' ? path.match(/^\/v1\.0\/rooms\/([^/]+)\/leave$/) : null;
   if (leaveMatch) {
@@ -1286,6 +1297,14 @@ const HAND_VARIANTS: Record<InteractiveScenario, HandVariant> = {
 
 export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
   const seats = baseSeats();
+  if (scenario === 'rebuy') return {
+    stage: 'waiting_for_players',
+    board: [],
+    seats: seats.slice(0, 3).map((seat, index) => index === 0 ? {
+      ...seat, stack: 0, contributed: 0, state: 'sitting_out', dealt_in: false, auto_rebuy: false
+    } : {...seat, contributed: 0, dealt_in: false}),
+    rake: 0
+  };
   if (scenario === 'waiting') return {
     stage: 'waiting_for_players',
     board: [],
@@ -1312,13 +1331,14 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
       big_blind_player_id: MOCK_PLAYER_ID
     };
   }
-  if (scenario === 'pre_flop' || scenario === 'action_error' || scenario === 'timeout' || scenario === 'reconnecting') {
+  if (scenario === 'pre_flop' || scenario === 'action_error' || scenario === 'timeout' ||
+    scenario === 'reconnecting' || scenario === 'reality_check') {
     return {
       stage: 'pre_flop',
       board: [],
       seats,
-      current_player_id: MOCK_PLAYER_ID,
-      legal_actions: {
+      current_player_id: scenario === 'reality_check' ? 'nina_recife' : MOCK_PLAYER_ID,
+      legal_actions: scenario === 'reality_check' ? {actions: []} : {
         actions: ['fold', 'call', 'raise'],
         call_amount: 25,
         min_raise_to: 150,
@@ -1371,6 +1391,39 @@ export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
       won_without_showdown: scenario === 'fold_win',
       dealer_player_id: 'rafa_curitiba',
       small_blind_player_id: 'leo_rio',
+      big_blind_player_id: MOCK_PLAYER_ID
+    };
+  }
+  if (scenario === 'winner_cards' || scenario === 'rabbit_hunt') {
+    const winnerID = scenario === 'winner_cards' ? 'bia_sp' : MOCK_PLAYER_ID;
+    const resolvedSeats = fullHandSeats().map(seat => ({
+      ...seat,
+      state: seat.player_id === winnerID ? 'active' : 'folded',
+      contributed: 0,
+      hole_cards: seat.player_id === MOCK_PLAYER_ID ? ['AH', 'KD'] : ['back', 'back'],
+      hole_cards_revealed: [false, false] as [boolean, boolean]
+    }));
+    return {
+      stage: 'complete',
+      board: ['7H', '8C', 'QS'],
+      seats: resolvedSeats,
+      payouts: {[winnerID]: 425},
+      winners: [winnerID],
+      pot_results: [{
+        amount: 425,
+        payout_amount: 425,
+        eligible_player_ids: [winnerID],
+        winner_player_ids: [winnerID],
+        payouts: {[winnerID]: 425}
+      }],
+      rake: 5,
+      won_without_showdown: true,
+      ...(scenario === 'rabbit_hunt' ? {
+        shuffle_server_seed_hex: mockHands[0].server_seed,
+        shuffle_commit_hash: mockHands[0].commit_hash
+      } : {}),
+      dealer_player_id: 'caio_goiânia',
+      small_blind_player_id: 'bia_sp',
       big_blind_player_id: MOCK_PLAYER_ID
     };
   }
@@ -1543,6 +1596,7 @@ export class MockTableService {
 
   constructor(private scenario: MockScenario, private delay: number, private handlers: MockHandlers) {
     this.snapshot = snapshotForScenario(scenario);
+    applyActiveMockRebuy = (amount, autoRebuy) => this.applyRebuy(amount, autoRebuy);
     if (INTERACTIVE_SCENARIOS.has(scenario)) this.beginStreet(false);
   }
 
@@ -1646,6 +1700,38 @@ export class MockTableService {
       this.later(() => this.emitState());
       return true;
     }
+    if (value.type === 'request_rabbit_hunt') {
+      this.later(() => this.handlers.onMessage({
+        type: 'action_ack', action_id: String(value.action_id || '')
+      }));
+      return true;
+    }
+    if (value.type === 'request_winner_cards') {
+      const winnerID = this.snapshot.winners?.[0];
+      const winnerCards = LOSS_REVEAL[winnerID || ''];
+      if (this.scenario !== 'winner_cards' || !winnerID || !winnerCards) {
+        this.later(() => this.handlers.onMessage({
+          type: 'error', code: 'invalid_action', action_id: String(value.action_id || '')
+        }));
+        return true;
+      }
+      this.snapshot = {
+        ...this.snapshot,
+        seats: this.snapshot.seats.map(seat => seat.player_id === winnerID ? {
+          ...seat,
+          stack: seat.stack + 25,
+          hole_cards: winnerCards,
+          hole_cards_revealed: [true, true],
+          hand_category: 'pair'
+        } : seat.player_id === MOCK_PLAYER_ID ? {...seat, stack: Math.max(0, seat.stack - 50)} : seat),
+        rake: (this.snapshot.rake || 0) + 25
+      };
+      this.later(() => this.handlers.onMessage({
+        type: 'action_ack', action_id: String(value.action_id || '')
+      }));
+      this.later(() => this.emitState(), 2);
+      return true;
+    }
     if (value.type === 'reaction') {
       this.later(() => this.handlers.onMessage({
         type: 'reaction',
@@ -1735,6 +1821,7 @@ export class MockTableService {
     this.timers.clear();
     this.turnTimer = undefined;
     mockPlayerDealtIn = false;
+    applyActiveMockRebuy = null;
   }
 
   private later(task: () => void, factor = 1) {
@@ -2162,6 +2249,17 @@ export class MockTableService {
       hand_id: this.snapshot.hand_id || (stage === 'waiting_for_players' ? undefined : `mock-${this.scenario}-hand`)
     };
     this.handlers.onMessage({type: 'state', snapshot: this.snapshot, action_id: actionId});
+  }
+
+  applyRebuy(amount: number, autoRebuy: boolean) {
+    if (this.scenario !== 'rebuy' || !Number.isFinite(amount) || amount <= 0) return;
+    this.snapshot = {
+      ...this.snapshot,
+      seats: this.snapshot.seats.map(seat => seat.player_id === MOCK_PLAYER_ID ? {
+        ...seat, stack: amount, state: 'active', ready: true, auto_rebuy: autoRebuy
+      } : seat)
+    };
+    this.emitState();
   }
 }
 
