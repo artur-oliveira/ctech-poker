@@ -16,6 +16,7 @@ export const POKER_READ_SCOPES = [
   'poker:player-notes:read',
   'poker:sandbox-purchases:read',
   'poker:reaction-purchases:read',
+  'poker:cosmetic-purchases:read',
 ] as const;
 
 export const OAUTH_SCOPE = [...IDENTITY_SCOPES, ...POKER_READ_SCOPES].join(' ');
