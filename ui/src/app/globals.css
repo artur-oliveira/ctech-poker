@@ -14733,6 +14733,42 @@ button.deck-grid-slot:hover {
     background: radial-gradient(circle, var(--theme-a), var(--theme-b))
 }
 
+/* The full "mini table" treatment (oval, felt gradient, rail border) is
+   reserved for the purchase dialog hero — the moment the player is actually
+   deciding, per product direction. The store gallery keeps the small flat
+   swatch above just for scanning the list. */
+.cosmetic-purchase-hero {
+    display: grid;
+    place-items: center;
+    width: auto;
+    height: auto;
+    margin-bottom: 12px;
+    padding: 10px;
+    border-radius: var(--rounded-panel);
+    background: color-mix(in srgb, var(--gold) 12%, var(--surface-seat))
+}
+
+.cosmetic-purchase-hero .cosmetic-store-deck-preview img {
+    width: 36px;
+    height: 50px;
+    margin-left: -10px;
+    filter: drop-shadow(0 3px 4px var(--black-08));
+    transform: rotate(calc((var(--card-index, 0) - 1.5) * 4deg))
+}
+
+.cosmetic-purchase-hero .cosmetic-store-deck-preview img:first-child {
+    margin-left: 0
+}
+
+.cosmetic-purchase-hero .felt-swatch {
+    width: 132px;
+    height: 68px;
+    border: 6px solid var(--table-rail);
+    border-radius: 50%;
+    background: radial-gradient(ellipse, var(--theme-a), var(--theme-b));
+    box-shadow: inset 0 0 0 2px var(--table-rail-edge)
+}
+
 .reaction-history-list li {
     display: grid;
     grid-template-columns: 32px minmax(0, 1fr) 92px;

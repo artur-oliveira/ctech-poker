@@ -37,8 +37,12 @@ function labelFor(kind: CosmeticKind, itemId: string) {
   return kind === 'deck' ? DECK_VARIANTS[itemId as DeckVariantId]?.label : TABLE_THEMES[itemId as TableThemeId]?.label;
 }
 
+const ACES = ['As', 'Ah', 'Ad', 'Ac'];
+
 function CosmeticPreview({kind, itemId}: { kind: CosmeticKind; itemId: string }) {
-  if (kind === 'deck') return <Image src={cardPath('As', itemId as DeckVariantId)} alt="" width={48} height={68}/>;
+  if (kind === 'deck') return <span className="cosmetic-store-deck-preview">
+    {ACES.map(card => <Image key={card} src={cardPath(card, itemId as DeckVariantId)} alt="" width={36} height={50}/>)}
+  </span>;
   const theme = TABLE_THEMES[itemId as TableThemeId];
   return <span className="felt-swatch"
                style={{'--theme-a': theme?.colors[0], '--theme-b': theme?.colors[1]} as React.CSSProperties}/>;
@@ -114,7 +118,7 @@ export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBal
   }}>
     <DialogContent className="reaction-purchase-dialog cosmetic-purchase-dialog">
       <DialogHeader>
-        <span className="reaction-purchase-hero cosmetic-purchase-hero"><CosmeticPreview kind={kind} itemId={entry.id}/></span>
+        <span className="cosmetic-purchase-hero"><CosmeticPreview kind={kind} itemId={entry.id}/></span>
         <DialogTitle>{confirmed ? `${label} liberado` : `Liberar ${label}`}</DialogTitle>
         <DialogDescription>{confirmed
           ? 'O item é seu para sempre e já pode ser usado em qualquer mesa.'
