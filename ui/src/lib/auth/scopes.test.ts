@@ -25,7 +25,7 @@ describe('Poker OAuth scopes', () => {
 
   test('requests identity and read-only Poker scopes, never an internal scope', () => {
     expect(OAUTH_SCOPE.split(' ')).toEqual([...IDENTITY_SCOPES, ...POKER_READ_SCOPES]);
-    expect(POKER_READ_SCOPES).toHaveLength(11);
+    expect(POKER_READ_SCOPES).toHaveLength(12);
     expect(POKER_READ_SCOPES.every((scope) => scope.endsWith(':read'))).toBe(true);
     expect(OAUTH_SCOPE).not.toContain('internal:');
   });
