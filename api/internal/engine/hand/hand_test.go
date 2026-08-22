@@ -884,6 +884,109 @@ func TestRequestRabbitHuntChargesBigBlindAndGatesViewFor(t *testing.T) {
 	}
 }
 
+func TestRequestWinnerCardsChargesAndRevealsOnlyToPayer(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 21) // odd blind proves the split conserves every chip
+	table.ConfigureRake("sandbox")
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	payerID := table.playerToActForTest()
+	winnerID, payer, winner := "p2", p1, p2
+	if payerID == "p2" {
+		winnerID, payer, winner = "p1", p2, p1
+	}
+	if err := table.Act(payerID, betting.ActionFold, 0); err != nil {
+		t.Fatalf("%s folds: %v", payerID, err)
+	}
+	payerBefore, winnerBefore, rakeBefore := payer.Stack, winner.Stack, table.RakeCollected()
+
+	fee, err := table.RequestWinnerCards(payerID)
+	if err != nil {
+		t.Fatalf("RequestWinnerCards: %v", err)
+	}
+	if fee != 21 || payer.Stack != payerBefore-21 || winner.Stack != winnerBefore+10 || table.RakeCollected() != rakeBefore+11 {
+		t.Fatalf("unexpected fee split: fee=%d payer=%d winner=%d rake=%d", fee, payer.Stack, winner.Stack, table.RakeCollected())
+	}
+	for _, seat := range table.ViewFor(payerID).Seats {
+		if seat.PlayerID == winnerID && (len(seat.HoleCards) != 2 || seat.HoleCards[0] == "back" || !seat.HoleCardsRevealed[0]) {
+			t.Fatalf("payer should see the winner's complete hand, got %+v", seat)
+		}
+	}
+	for _, seat := range table.ViewFor(winnerID).Seats {
+		if seat.PlayerID == winnerID && len(seat.HoleCards) != 2 {
+			t.Fatal("winner should always see their own hand")
+		}
+	}
+	if _, err := table.RequestWinnerCards(payerID); err == nil {
+		t.Fatal("expected a second request in the same hand to be rejected")
+	}
+}
+
+func TestRequestWinnerCardsRejectsIneligibleRequestsWithoutCharging(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		mode            string
+		requestAsWinner bool
+		prepare         func(*Table, string, *Player)
+	}{
+		{name: "real money", mode: "real", prepare: func(*Table, string, *Player) {}},
+		{name: "winner", mode: "sandbox", requestAsWinner: true, prepare: func(*Table, string, *Player) {}},
+		{name: "winner voluntarily showed", mode: "sandbox", prepare: func(table *Table, winnerID string, _ *Player) { _ = table.RevealHoleCards(winnerID) }},
+		{name: "insufficient stack", mode: "sandbox", prepare: func(_ *Table, _ string, payer *Player) { payer.Stack = 20 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+			p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+			table := NewTable([]*Player{p1, p2}, 10, 21)
+			table.ConfigureRake(tc.mode)
+			_ = table.StartHand()
+			payerID := table.playerToActForTest()
+			winnerID, payer, winner := "p2", p1, p2
+			if payerID == "p2" {
+				winnerID, payer, winner = "p1", p2, p1
+			}
+			_ = table.Act(payerID, betting.ActionFold, 0)
+			tc.prepare(table, winnerID, payer)
+			if tc.requestAsWinner {
+				payerID = winnerID
+			}
+			payerBefore, winnerBefore, rakeBefore := payer.Stack, winner.Stack, table.RakeCollected()
+			if _, err := table.RequestWinnerCards(payerID); err == nil {
+				t.Fatal("expected request to be rejected")
+			}
+			if payer.Stack != payerBefore || winner.Stack != winnerBefore || table.RakeCollected() != rakeBefore {
+				t.Fatal("rejected request must not move chips")
+			}
+		})
+	}
+}
+
+func TestRequestWinnerCardsNeverRevealsToAnotherViewer(t *testing.T) {
+	players := []*Player{
+		{ID: "p1", Stack: 1000, Ready: true},
+		{ID: "p2", Stack: 1000, Ready: true},
+		{ID: "p3", Stack: 1000, Ready: true},
+	}
+	table := NewTable(players, 10, 20)
+	table.ConfigureRake("sandbox")
+	_ = table.StartHand()
+	payerID := table.playerToActForTest()
+	_ = table.Act(payerID, betting.ActionFold, 0)
+	nonPayerID := table.playerToActForTest()
+	_ = table.Act(nonPayerID, betting.ActionFold, 0)
+	winnerID := table.LastOutcomeForActor().Winners[0]
+	if _, err := table.RequestWinnerCards(payerID); err != nil {
+		t.Fatalf("RequestWinnerCards: %v", err)
+	}
+	for _, seat := range table.ViewFor(nonPayerID).Seats {
+		if seat.PlayerID == winnerID && (len(seat.HoleCards) != 0 || seat.HoleCardsRevealed[0] || seat.HoleCardsRevealed[1]) {
+			t.Fatalf("non-paying viewer must keep the winner's cards masked, got %+v", seat)
+		}
+	}
+}
+
 func TestRequestRabbitHuntRejectsDoublePayment(t *testing.T) {
 	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
 	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}

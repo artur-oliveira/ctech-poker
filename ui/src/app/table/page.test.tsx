@@ -181,6 +181,7 @@ function realtime(overrides: Record<string, unknown> = {}) {
     announcement: '', removed: null, retryNow: vi.fn(), act: vi.fn(() => true),
     ready: vi.fn(), readyPending: false, showCards: vi.fn(), showCardsPending: false,
     requestRabbitHunt: vi.fn(() => true), requestRabbitHuntPending: false,
+    requestWinnerCards: vi.fn(() => true), requestWinnerCardsPending: false,
     reportRabbitHuntVerifyFailed: vi.fn(() => true),
     preselectAction: vi.fn(() => true), pendingAction: null, actionError: null,
     clearActionError: vi.fn(), keepSeat: vi.fn(() => true), chat: [], sendChat: vi.fn(),
@@ -500,6 +501,14 @@ describe('table page integration', () => {
     act(() => (mocks.stageProps?.onRabbitHuntVerifyFailedAction as () => void)());
     expect(mocks.realtime.reportRabbitHuntVerifyFailed).toHaveBeenCalledOnce();
     expect(mocks.stageProps?.rabbitHuntPending).toBe(false);
+  });
+
+  test('wires the winner-card request into TableStage', () => {
+    realtime({snapshot: snapshot({stage: 'complete', won_without_showdown: true, winners: ['opponent']})});
+    render(<TablePage/>);
+    act(() => (mocks.stageProps?.onRequestWinnerCardsAction as () => void)());
+    expect(mocks.realtime.requestWinnerCards).toHaveBeenCalledOnce();
+    expect(mocks.stageProps?.winnerCardsPending).toBe(false);
   });
 
   test('a paused seat resumes play, and a busted one rebuys instead', async () => {

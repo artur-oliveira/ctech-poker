@@ -23,7 +23,7 @@ func TestProtectedResourceMetadata(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
-	if resp.StatusCode != 200 || body.Resource != "https://poker.example.test" || len(body.Scopes) != 11 {
+	if resp.StatusCode != 200 || body.Resource != "https://poker.example.test" || len(body.Scopes) != 12 {
 		t.Fatalf("status=%d metadata=%+v", resp.StatusCode, body)
 	}
 }

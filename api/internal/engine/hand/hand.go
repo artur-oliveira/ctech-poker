@@ -148,6 +148,10 @@ type Table struct {
 	// alongside rakeCollected/seenActionIDs (see StartHand).
 	rabbitHuntPaid map[string]bool
 
+	// winnerCardsPaid tracks, for the current hand, which dealt-in opponents
+	// paid to see the uncontested winner's otherwise-mucked hole cards.
+	winnerCardsPaid map[string]bool
+
 	// handOrder is the seat order of players dealt into the current (or
 	// most recently completed) hand — the same slice built as `active` in
 	// StartHand. Used at hand-end to rotate dealerSeat forward to the next
@@ -704,6 +708,7 @@ func (t *Table) StartHand() error {
 	t.wasEverAllIn = make(map[string]bool)
 	t.rakeCollected = 0
 	t.rabbitHuntPaid = make(map[string]bool)
+	t.winnerCardsPaid = make(map[string]bool)
 	t.seenActionIDs = make(map[string]bool)
 	for _, p := range t.players {
 		p.VoluntarilyShown = false
@@ -1048,6 +1053,63 @@ func (t *Table) RefundRabbitHunt(playerID string) error {
 	p.Stack += t.bigBlind
 	delete(t.rabbitHuntPaid, playerID)
 	return nil
+}
+
+// RequestWinnerCards charges playerID the current hand's big blind to reveal
+// the sole uncontested winner's hole cards to that viewer only. Half the fee
+// goes to the winner and the remainder is collected as rake.
+func (t *Table) RequestWinnerCards(playerID string) (fee int64, err error) {
+	if t.currencyMode != "sandbox" {
+		return 0, fmt.Errorf("hand: winner cards are only available on sandbox tables")
+	}
+	if t.stage != Complete {
+		return 0, fmt.Errorf("hand: winner cards are only available after the hand is complete")
+	}
+	if t.lastOutcome == nil || !t.lastOutcome.WonWithoutShowdown {
+		return 0, fmt.Errorf("hand: winner cards are only available when the hand ended without a showdown")
+	}
+	if len(t.lastOutcome.Winners) != 1 {
+		return 0, fmt.Errorf("hand: winner cards require exactly one winner")
+	}
+	winnerID := t.lastOutcome.Winners[0]
+	if playerID == winnerID {
+		return 0, fmt.Errorf("hand: winner cannot pay to see their own cards")
+	}
+	winner := t.playerByID(winnerID)
+	if winner == nil {
+		return 0, fmt.Errorf("hand: winner %s is no longer seated", winnerID)
+	}
+	if winner.VoluntarilyShown || winner.VoluntarilyShownCards[0] || winner.VoluntarilyShownCards[1] {
+		return 0, fmt.Errorf("hand: winner cards are already revealed")
+	}
+	dealtIn := false
+	for _, hp := range t.handOrder {
+		if hp.ID == playerID {
+			dealtIn = true
+			break
+		}
+	}
+	if !dealtIn {
+		return 0, fmt.Errorf("hand: player %s was not dealt into this hand", playerID)
+	}
+	if t.winnerCardsPaid[playerID] {
+		return 0, fmt.Errorf("hand: player %s already paid to see winner cards this hand", playerID)
+	}
+	requester := t.playerByID(playerID)
+	if requester == nil {
+		return 0, fmt.Errorf("hand: player %s is no longer seated", playerID)
+	}
+	if requester.Stack < t.bigBlind {
+		return 0, fmt.Errorf("hand: insufficient stack for the winner cards fee")
+	}
+	requester.Stack -= t.bigBlind
+	winner.Stack += t.bigBlind / 2
+	t.rakeCollected += t.bigBlind - t.bigBlind/2
+	if t.winnerCardsPaid == nil {
+		t.winnerCardsPaid = make(map[string]bool)
+	}
+	t.winnerCardsPaid[playerID] = true
+	return t.bigBlind, nil
 }
 
 func (t *Table) blindSeats(active []*Player) (sb, bb int) {

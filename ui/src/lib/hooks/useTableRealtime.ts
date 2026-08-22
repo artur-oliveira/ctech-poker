@@ -227,15 +227,19 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const readyLockRef = useRef(false);
   const showCardsLockRef = useRef(false);
   const requestRabbitHuntLockRef = useRef(false);
+	const requestWinnerCardsLockRef = useRef(false);
   const readyActionRef = useRef<string | null>(null);
   const showCardsActionRef = useRef<string | null>(null);
   const requestRabbitHuntActionRef = useRef<string | null>(null);
+	const requestWinnerCardsActionRef = useRef<string | null>(null);
   const readyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const showCardsTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const requestRabbitHuntTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	const requestWinnerCardsTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [readyPending, setReadyPending] = useState(false);
   const [showCardsPending, setShowCardsPending] = useState(false);
   const [requestRabbitHuntPending, setRequestRabbitHuntPending] = useState(false);
+	const [requestWinnerCardsPending, setRequestWinnerCardsPending] = useState(false);
   const [snapshot, setSnapshot] = useState<TableSnapshot | null>(null);
   const [snapshotTableID, setSnapshotTableID] = useState('');
   // Captured once per snapshot (in this event handler, never during render) so
@@ -326,6 +330,12 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       requestRabbitHuntLockRef.current = false;
       setRequestRabbitHuntPending(false);
     }
+		if (requestWinnerCardsActionRef.current === actionId) {
+			if (requestWinnerCardsTimerRef.current) clearTimeout(requestWinnerCardsTimerRef.current);
+			requestWinnerCardsActionRef.current = null;
+			requestWinnerCardsLockRef.current = false;
+			setRequestWinnerCardsPending(false);
+		}
     if (postBigBlindActionRef.current === actionId) {
       if (postBigBlindTimerRef.current) clearTimeout(postBigBlindTimerRef.current);
       postBigBlindActionRef.current = null;
@@ -458,7 +468,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       if (legacyUnversioned) {
         clearPending();
         for (const id of [readyActionRef.current, showCardsActionRef.current, postBigBlindActionRef.current,
-              requestRabbitHuntActionRef.current]) {
+			  requestRabbitHuntActionRef.current, requestWinnerCardsActionRef.current]) {
           if (id) finishAuxiliaryCommand(id);
         }
       }
@@ -607,6 +617,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       setReadyPending(false);
       setShowCardsPending(false);
       setRequestRabbitHuntPending(false);
+			setRequestWinnerCardsPending(false);
       setLastActionError(null);
       setAnnouncement('');
       setRemoved(null);
@@ -661,7 +672,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
             setRemoved(null);
             clearPending();
             for (const actionId of [readyActionRef.current, showCardsActionRef.current, postBigBlindActionRef.current,
-              requestRabbitHuntActionRef.current]) {
+			  requestRabbitHuntActionRef.current, requestWinnerCardsActionRef.current]) {
               if (actionId) finishAuxiliaryCommand(actionId);
             }
             postedBigBlindRef.current = false;
@@ -708,11 +719,13 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     readyActionRef.current = null;
     showCardsActionRef.current = null;
     requestRabbitHuntActionRef.current = null;
+		requestWinnerCardsActionRef.current = null;
     readyLockRef.current = false;
     showCardsLockRef.current = false;
     requestRabbitHuntLockRef.current = false;
+		requestWinnerCardsLockRef.current = false;
     for (const timer of [pendingTimer.current, readyTimerRef.current, showCardsTimerRef.current,
-      postBigBlindTimerRef.current, requestRabbitHuntTimerRef.current]) {
+		  postBigBlindTimerRef.current, requestRabbitHuntTimerRef.current, requestWinnerCardsTimerRef.current]) {
       if (timer) clearTimeout(timer);
     }
     pendingTimer.current = undefined;
@@ -720,6 +733,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     showCardsTimerRef.current = undefined;
     postBigBlindTimerRef.current = undefined;
     requestRabbitHuntTimerRef.current = undefined;
+		requestWinnerCardsTimerRef.current = undefined;
     pendingActionRef.current = null;
     for (const timer of reactionTimersRef.current.values()) window.clearTimeout(timer);
     reactionTimersRef.current.clear();
@@ -734,6 +748,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     if (showCardsTimerRef.current) clearTimeout(showCardsTimerRef.current);
     if (postBigBlindTimerRef.current) clearTimeout(postBigBlindTimerRef.current);
     if (requestRabbitHuntTimerRef.current) clearTimeout(requestRabbitHuntTimerRef.current);
+		if (requestWinnerCardsTimerRef.current) clearTimeout(requestWinnerCardsTimerRef.current);
     for (const timer of reactionTimersRef.current.values()) window.clearTimeout(timer);
     reactionTimersRef.current.clear();
     for (const timer of soundTimersRef.current) window.clearTimeout(timer);
@@ -813,6 +828,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     readyPending,
     showCardsPending,
     requestRabbitHuntPending,
+		requestWinnerCardsPending,
     ready: (ready = true) => {
       if (readyLockRef.current) return false;
       const actionId = crypto.randomUUID();
@@ -855,6 +871,22 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       requestRabbitHuntTimerRef.current = setTimeout(() => finishAuxiliaryCommand(actionId, 'action_timeout'), ACTION_TIMEOUT_MS);
       return ok;
     },
+		requestWinnerCards: () => {
+			if (requestWinnerCardsLockRef.current) return false;
+			const actionId = crypto.randomUUID();
+			requestWinnerCardsLockRef.current = true;
+			requestWinnerCardsActionRef.current = actionId;
+			setRequestWinnerCardsPending(true);
+			const ok = emit({type: 'request_winner_cards', action_id: actionId});
+			if (!ok) {
+				finishAuxiliaryCommand(actionId);
+				return false;
+			}
+			requestWinnerCardsTimerRef.current = setTimeout(
+				() => finishAuxiliaryCommand(actionId, 'action_timeout'), ACTION_TIMEOUT_MS
+			);
+			return ok;
+		},
     // Fire-and-forget: RabbitHunt.tsx already shows its own "taxa devolvida"
     // message locally the moment verification fails, independent of the
     // server's response, so nothing in the UI waits on this ack.

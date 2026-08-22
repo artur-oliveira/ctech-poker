@@ -209,6 +209,10 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 	seats := make([]SeatView, 0, len(t.players))
 	wonWithoutShowdown := t.stage == Complete && t.lastOutcome != nil && t.lastOutcome.WonWithoutShowdown
 	revealAll := t.stage == Complete && t.lastOutcome != nil && !wonWithoutShowdown
+	winnerID := ""
+	if wonWithoutShowdown && len(t.lastOutcome.Winners) == 1 {
+		winnerID = t.lastOutcome.Winners[0]
+	}
 	var winners []string
 	var potResults []PotResultView
 	if t.stage == Complete && t.lastOutcome != nil {
@@ -260,12 +264,13 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		if revealAll && p.State != Folded {
 			publicReveal[0], publicReveal[1] = true, true
 		}
-		sv.HoleCardsRevealed = publicReveal
+		paidWinnerReveal := p.ID == winnerID && t.winnerCardsPaid[viewerID]
+		sv.HoleCardsRevealed = []bool{publicReveal[0] || paidWinnerReveal, publicReveal[1] || paidWinnerReveal}
 		if dealtIn[p.ID] {
-			if p.ID == viewerID || publicReveal[0] || publicReveal[1] {
+			if p.ID == viewerID || publicReveal[0] || publicReveal[1] || paidWinnerReveal {
 				sv.HoleCards = []string{"back", "back"}
 				for i := range sv.HoleCards {
-					if p.ID == viewerID || publicReveal[i] {
+					if p.ID == viewerID || publicReveal[i] || paidWinnerReveal {
 						sv.HoleCards[i] = cardCode(p.HoleCards[i])
 					}
 				}
@@ -274,7 +279,7 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 			if t.runItTwice && t.runoutPhase == 2 {
 				evaluationBoard = append(append([]deck.Card(nil), t.board[:t.boardSplitAt]...), t.boardTwo...)
 			}
-			fullyKnown := p.ID == viewerID || (publicReveal[0] && publicReveal[1])
+			fullyKnown := p.ID == viewerID || paidWinnerReveal || (publicReveal[0] && publicReveal[1])
 			switch {
 			case fullyKnown && len(evaluationBoard) == 5:
 				var full [7]deck.Card
@@ -297,10 +302,10 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 				// stays unset: only the true 7-card Score is comparable, and
 				// clients decide outcomes with it.
 				knownHole := make([]deck.Card, 0, 2)
-				if p.ID == viewerID || publicReveal[0] {
+				if p.ID == viewerID || publicReveal[0] || paidWinnerReveal {
 					knownHole = append(knownHole, p.HoleCards[0])
 				}
-				if p.ID == viewerID || publicReveal[1] {
+				if p.ID == viewerID || publicReveal[1] || paidWinnerReveal {
 					knownHole = append(knownHole, p.HoleCards[1])
 				}
 				// An opponent with nothing revealed gets no category at all —

@@ -27,6 +27,7 @@ const (
 	ScopeDailyRewardRead       = "poker:daily-reward:read"
 	ScopePlayerNotesRead       = "poker:player-notes:read"
 	ScopeSandboxPurchasesRead  = "poker:sandbox-purchases:read"
+	ScopeCosmeticPurchasesRead = "poker:cosmetic-purchases:read"
 	ScopeReactionPurchasesRead = "poker:reaction-purchases:read"
 )
 
@@ -34,7 +35,7 @@ var publicReadScopes = []string{
 	ScopeRoomsRead, ScopePlayersRead, ScopeSessionsRead, ScopeHandsRead,
 	ScopeAchievementsRead, ScopeStatsRead, ScopeLeaderboardRead,
 	ScopeDailyRewardRead, ScopePlayerNotesRead, ScopeSandboxPurchasesRead,
-	ScopeReactionPurchasesRead,
+	ScopeReactionPurchasesRead, ScopeCosmeticPurchasesRead,
 }
 
 func hasPokerScope(claims *jwtverify.Claims) bool {
@@ -100,6 +101,8 @@ func requiredReadScope(path string) string {
 		return ScopeDailyRewardRead
 	case strings.HasPrefix(path, "/v1.0/wallet/sandbox-purchase"):
 		return ScopeSandboxPurchasesRead
+	case strings.HasPrefix(path, "/v1.0/wallet/cosmetic-purchase"):
+		return ScopeCosmeticPurchasesRead
 	case strings.HasPrefix(path, "/v1.0/wallet/reaction-purchase"):
 		return ScopeReactionPurchasesRead
 	default:

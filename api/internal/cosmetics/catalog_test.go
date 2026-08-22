@@ -21,9 +21,9 @@ func TestCatalogRows(t *testing.T) {
 		{KindDeck, "pink", true, 500_000, "poker_deck_pink"},
 		{KindDeck, "alt", true, 500_000, "poker_deck_alt"},
 		{KindFelt, "classic", false, 0, ""},
-		{KindFelt, "midnight", true, 200_000, "poker_felt_midnight"},
-		{KindFelt, "burgundy", true, 200_000, "poker_felt_burgundy"},
-		{KindFelt, "ocean", true, 200_000, "poker_felt_ocean"},
+		{KindFelt, "midnight", true, 1_000_000, "poker_felt_midnight"},
+		{KindFelt, "burgundy", true, 1_000_000, "poker_felt_burgundy"},
+		{KindFelt, "ocean", true, 1_000_000, "poker_felt_ocean"},
 	}
 	for _, tc := range cases {
 		if !IsKnown(tc.kind, tc.id) {
@@ -60,7 +60,7 @@ func TestItemForSKU(t *testing.T) {
 		t.Fatalf("ItemForSKU(poker_deck_golden) = %v, %q, %d, %v", kind, id, priceFichas, ok)
 	}
 	kind, id, priceFichas, ok = ItemForSKU("poker_felt_ocean")
-	if !ok || kind != KindFelt || id != "ocean" || priceFichas != 200_000 {
+	if !ok || kind != KindFelt || id != "ocean" || priceFichas != 1_000_000 {
 		t.Fatalf("ItemForSKU(poker_felt_ocean) = %v, %q, %d, %v", kind, id, priceFichas, ok)
 	}
 	if _, _, _, ok := ItemForSKU("not-a-product"); ok {

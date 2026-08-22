@@ -243,6 +243,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleShowCards(ctx, c)
 	case RequestRabbitHuntCmd:
 		return a.handleRequestRabbitHunt(ctx, c)
+	case RequestWinnerCardsCmd:
+		return a.handleRequestWinnerCards(ctx, c)
 	case RabbitHuntVerifyFailedCmd:
 		return a.handleRabbitHuntVerifyFailed(ctx, c)
 	case SetRunItTwiceCmd:
@@ -1428,6 +1430,34 @@ func (a *Actor) handleRequestRabbitHunt(ctx context.Context, c RequestRabbitHunt
 		changed = true
 		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
 			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "request_rabbit_hunt",
+		})
+	}
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		if !errors.Is(err, tablestore.ErrDuplicateAction) {
+			return err
+		}
+		if err := a.ensureLoaded(ctx, true); err != nil {
+			return err
+		}
+	}
+	if changed {
+		a.broadcastAll()
+	}
+	return nil
+}
+
+func (a *Actor) handleRequestWinnerCards(ctx context.Context, c RequestWinnerCardsCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	changed := false
+	apply := func() error {
+		if _, err := a.cached.RequestWinnerCards(c.PlayerID); err != nil {
+			return err
+		}
+		changed = true
+		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "request_winner_cards",
 		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {

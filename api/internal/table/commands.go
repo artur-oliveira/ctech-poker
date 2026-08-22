@@ -127,6 +127,16 @@ type RequestRabbitHuntCmd struct {
 
 func (c RequestRabbitHuntCmd) reply() chan error { return c.Reply }
 
+// RequestWinnerCardsCmd charges a dealt-in opponent to see the sole
+// uncontested winner's otherwise-mucked hole cards for this hand.
+type RequestWinnerCardsCmd struct {
+	PlayerID string
+	ActionID string
+	Reply    chan error
+}
+
+func (c RequestWinnerCardsCmd) reply() chan error { return c.Reply }
+
 // RabbitHuntVerifyFailedCmd refunds a RequestRabbitHuntCmd charge when the
 // client couldn't locally verify the revealed runout.
 type RabbitHuntVerifyFailedCmd struct {

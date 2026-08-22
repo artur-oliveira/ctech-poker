@@ -372,6 +372,19 @@ describe('useTableRealtime', () => {
     expect(result.current.requestRabbitHuntPending).toBe(false);
   });
 
+  test('locks the winner-cards request until acknowledgement and surfaces a rejection', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    act(() => {
+      expect(result.current.requestWinnerCards()).toBe(true);
+      expect(result.current.requestWinnerCards()).toBe(false);
+    });
+    expect(result.current.requestWinnerCardsPending).toBe(true);
+    expect(ws.send).toHaveBeenLastCalledWith({type: 'request_winner_cards', action_id: 'action-1'});
+    receive({type: 'error', code: 'invalid_action', action_id: 'action-1'});
+    expect(result.current.requestWinnerCardsPending).toBe(false);
+    expect(result.current.actionError).toMatchObject({code: 'invalid_action'});
+  });
+
   test('reports a rabbit hunt verification failure as a fire-and-forget frame', () => {
     const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
     act(() => {

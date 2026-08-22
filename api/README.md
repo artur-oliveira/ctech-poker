@@ -121,7 +121,7 @@ Per-binary keys read outside `Config` (not in the struct above):
   `user#<playerID>`. The registry is **Valkey-backed in prod**; the in-memory fallback is `dev` only and non-dev fails
   fast without Valkey.
 - **Client → server**: `ping`, `sync_state`, `ready`, `act`, `preselect_action`, `bot_challenge`,
-  `post_big_blind`, `show_cards`, `keep_seat`, `chat`, `reaction`.
+  `post_big_blind`, `show_cards`, `request_rabbit_hunt`, `request_winner_cards`, `keep_seat`, `chat`, `reaction`.
 - **Server → client**: `connected`, `pong`, `state` (full authoritative snapshot on join and on every mutation — no
   delta replay), `chat`, `error`, `removed`, `achievement_unlocked`, `room_created`,
   `room_updated`, `payment_received`, `system_broadcast`, `social_event`, `social_presence_changed` and

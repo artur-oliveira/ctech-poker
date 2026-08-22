@@ -556,6 +556,8 @@ function TableContent() {
                   rabbitHuntPending={rt.requestRabbitHuntPending}
                   onRequestRabbitHuntAction={rt.requestRabbitHunt}
                   onRabbitHuntVerifyFailedAction={rt.reportRabbitHuntVerifyFailed}
+                  winnerCardsPending={rt.requestWinnerCardsPending}
+                  onRequestWinnerCardsAction={rt.requestWinnerCards}
                   playerNotes={playerNotesByID}
                   onEditPlayerNoteAction={seat => setNoteOpponent({player_id: seat.player_id, name: seat.name})}
                   renderPlayerActionsAction={seat => <PlayerActionsMenu

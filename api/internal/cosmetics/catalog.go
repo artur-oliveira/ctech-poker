@@ -39,9 +39,9 @@ var catalog = []CatalogEntry{
 	{Kind: KindDeck, ID: "alt", Premium: true, PriceFichas: 500_000, SKU: "poker_deck_alt"},
 
 	{Kind: KindFelt, ID: "classic"},
-	{Kind: KindFelt, ID: "midnight", Premium: true, PriceFichas: 200_000, SKU: "poker_felt_midnight"},
-	{Kind: KindFelt, ID: "burgundy", Premium: true, PriceFichas: 200_000, SKU: "poker_felt_burgundy"},
-	{Kind: KindFelt, ID: "ocean", Premium: true, PriceFichas: 200_000, SKU: "poker_felt_ocean"},
+	{Kind: KindFelt, ID: "midnight", Premium: true, PriceFichas: 1_000_000, SKU: "poker_felt_midnight"},
+	{Kind: KindFelt, ID: "burgundy", Premium: true, PriceFichas: 1_000_000, SKU: "poker_felt_burgundy"},
+	{Kind: KindFelt, ID: "ocean", Premium: true, PriceFichas: 1_000_000, SKU: "poker_felt_ocean"},
 }
 
 func catalogKey(kind Kind, id string) string { return string(kind) + "#" + id }

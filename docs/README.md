@@ -24,7 +24,7 @@ history documents and lag the code by design. O índice de planos foi atualizado
 | Hand history, hand replayer, hand export, public hand sharing             | **LIVE**                | `sessionlog`, `handshare`, `ui/src/app/hands/*`, `ui/src/app/share`                           |
 | Gamification: leaderboard, achievements, daily sandbox-credit spin        | **LIVE**                | `leaderboard`, `achievements`, `dailyreward`, `ui/src/app/{leaderboard,achievements}`         |
 | Player tooling: private notes, self-HUD stats, profile showcase           | **LIVE**                | `playernotes`, `pokerstats`, `ProfileShowcaseDialog.tsx`, `SelfHudDialog.tsx`                 |
-| Table UX: time banks, action pre-selection, reactions, rabbit hunt        | **LIVE**                | `engine/hand/timebank*.go`, `lib/actionPreselection.ts`, `reactions.ts`, `RabbitHunt.tsx`     |
+| Table UX: time banks, action pre-selection, reactions, paid rabbit hunt and paid winner-card reveal | **LIVE** | `engine/hand/timebank*.go`, `lib/actionPreselection.ts`, `reactions.ts`, `RabbitHunt.tsx`, `WinnerCards.tsx` |
 | Voice: dealer speech synthesis + voice-driven actions                     | **LIVE**                | `ui/src/lib/hooks/useDealerVoice.ts`, `ui/src/lib/voiceActions.ts`                            |
 | Bot prevention (Cloudflare Turnstile challenge over WS)                   | **LIVE**                | `api/internal/botcheck`, `ui/src/components/table/BotChallenge.tsx`                           |
 | Real-money mode (fixed-fee model, wallet hold/cash-out, reconcile sweep)  | **LIVE, gated off**     | `walletclient`, `buyin`, `reconcile`, `REAL_MONEY_ENABLED` + `LEGAL_SIGNOFF_REF`              |

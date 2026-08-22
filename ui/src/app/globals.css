@@ -2647,6 +2647,45 @@ h1 em {
     width: 34px
 }
 
+.winner-cards {
+    position: absolute;
+    z-index: 24;
+    left: 50%;
+    bottom: calc(14% + 62px);
+    transform: translateX(-50%);
+    padding: 8px 12px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-control);
+    background: color-mix(in srgb, var(--surface-control) 92%, transparent);
+    box-shadow: var(--shadow-soft);
+    backdrop-filter: blur(12px)
+}
+
+.winner-cards button {
+    all: unset;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 44px;
+    cursor: pointer
+}
+
+.winner-cards button:disabled { cursor: wait; opacity: .65 }
+
+.winner-cards button:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 4px;
+    border-radius: var(--radius-control)
+}
+
+.winner-cards svg { flex: 0 0 auto; width: 19px; color: var(--gold) }
+
+.winner-cards button span { display: flex; flex-direction: column; white-space: nowrap }
+.winner-cards b { color: var(--on-brand); font-size: 12px }
+.winner-cards small { color: var(--muted); font-size: 10px }
+
+.stage-v .winner-cards { bottom: calc(7% + 62px) }
+
 .stage-v .rabbit-hunt {
     bottom: 7%
 }
@@ -2660,6 +2699,8 @@ h1 em {
     .rabbit-hunt-cards .playing-card {
         width: 28px
     }
+
+    .winner-cards { bottom: calc(6% + 58px); padding: 7px 9px }
 }
 
 .self-hud-empty {

@@ -13,6 +13,7 @@
     { "name": "poker:daily-reward:read", "descriptions": { "pt-BR": "Consultar a disponibilidade da recompensa diaria.", "en": "Read daily reward availability." }, "visibility": "public", "status": "active" },
     { "name": "poker:player-notes:read", "descriptions": { "pt-BR": "Consultar anotacoes privadas sobre jogadores.", "en": "Read private notes about players." }, "visibility": "public", "status": "active" },
     { "name": "poker:sandbox-purchases:read", "descriptions": { "pt-BR": "Consultar catalogo e compras sandbox existentes.", "en": "Read the catalog and existing sandbox purchases." }, "visibility": "public", "status": "active" },
-    { "name": "poker:reaction-purchases:read", "descriptions": { "pt-BR": "Consultar catalogo e compras de reacoes existentes.", "en": "Read the catalog and existing reaction purchases." }, "visibility": "public", "status": "active" }
+    { "name": "poker:reaction-purchases:read", "descriptions": { "pt-BR": "Consultar catalogo e compras de reacoes existentes.", "en": "Read the catalog and existing reaction purchases." }, "visibility": "public", "status": "active" },
+    { "name": "poker:cosmetic-purchases:read", "descriptions": { "pt-BR": "Consultar catalogo e compras de cosméticos existentes.", "en": "Read the catalog and existing cosmetic purchases." }, "visibility": "public", "status": "active" }
   ]
 }

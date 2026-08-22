@@ -323,6 +323,69 @@ func TestRequestRabbitHuntCmdRevealsOnlyToPayer(t *testing.T) {
 	}
 }
 
+func TestRequestWinnerCardsCmdRevealsOnlyToPayerAndSplitsFee(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+	a, tableID := newTestActorSandbox(t, store)
+	ctx := context.Background()
+
+	_ = a.Dispatch(ReadyCmd{PlayerID: "p1", Ready: true, Reply: make(chan error, 1)})
+	_ = a.Dispatch(ReadyCmd{PlayerID: "p2", Ready: true, Reply: make(chan error, 1)})
+	stored, _ := store.LoadTable(ctx, tableID)
+	payerID := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
+	winnerID := "p2"
+	if payerID == "p2" {
+		winnerID = "p1"
+	}
+	if err := a.Dispatch(ActCmd{PlayerID: payerID, ActionID: "a1", Action: betting.ActionFold, Reply: make(chan error, 1)}); err != nil {
+		t.Fatalf("fold: %v", err)
+	}
+
+	stored, _ = store.LoadTable(ctx, tableID)
+	before := hand.NewTableFromState(stored.State)
+	payerBefore, winnerBefore, rakeBefore := stackForView(t, before.ViewFor(payerID), payerID), stackForView(t, before.ViewFor(payerID), winnerID), before.RakeCollected()
+	if err := a.Dispatch(RequestWinnerCardsCmd{PlayerID: payerID, ActionID: "a2", Reply: make(chan error, 1)}); err != nil {
+		t.Fatalf("RequestWinnerCardsCmd: %v", err)
+	}
+
+	stored, _ = store.LoadTable(ctx, tableID)
+	table := hand.NewTableFromState(stored.State)
+	if got := stackForView(t, table.ViewFor(payerID), payerID); got != payerBefore-20 {
+		t.Fatalf("payer stack = %d, want %d", got, payerBefore-20)
+	}
+	if got := stackForView(t, table.ViewFor(payerID), winnerID); got != winnerBefore+10 {
+		t.Fatalf("winner stack = %d, want %d", got, winnerBefore+10)
+	}
+	if table.RakeCollected() != rakeBefore+10 {
+		t.Fatalf("rake = %d, want %d", table.RakeCollected(), rakeBefore+10)
+	}
+	for _, seat := range table.ViewFor(payerID).Seats {
+		if seat.PlayerID == winnerID && (len(seat.HoleCards) != 2 || seat.HoleCards[0] == "back") {
+			t.Fatal("payer should see the winner's cards")
+		}
+	}
+	for _, seat := range table.ViewFor(winnerID).Seats {
+		if seat.PlayerID == winnerID {
+			continue // A winner always sees their own cards; the payer's view above is the reveal gate.
+		}
+		if seat.PlayerID == payerID && len(seat.HoleCards) != 0 {
+			t.Fatal("winner must not gain visibility into the folded payer's cards")
+		}
+	}
+}
+
+func stackForView(t *testing.T, view hand.Snapshot, playerID string) int64 {
+	t.Helper()
+	for _, seat := range view.Seats {
+		if seat.PlayerID == playerID {
+			return seat.Stack
+		}
+	}
+	t.Fatalf("missing seat for %s", playerID)
+	return 0
+}
+
 func TestRequestRabbitHuntCmdRejectsDoublePaymentSameHand(t *testing.T) {
 	db := testClient(t)
 	store := tablestore.NewStore(db, "table_test")

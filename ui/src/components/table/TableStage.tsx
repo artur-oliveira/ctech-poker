@@ -8,6 +8,7 @@ import type {TableSnapshot} from '@/lib/api/table';
 import {playerPotBreakdown, winnerStandings} from '@/lib/tableOutcome';
 import type {PlayerNote} from '@/lib/api/playerNotes';
 import {RabbitHunt} from '@/components/table/RabbitHunt';
+import {WinnerCards} from '@/components/table/WinnerCards';
 import {DEFAULT_TURN_TIMEOUT_MS} from '@/lib/gameTiming';
 
 // Portrait handhelds get a different experience, not a shrunk table: a tall
@@ -92,6 +93,8 @@ type Props = {
   rabbitHuntPending?: boolean;
   onRequestRabbitHuntAction?: () => void;
   onRabbitHuntVerifyFailedAction?: () => void;
+  winnerCardsPending?: boolean;
+  onRequestWinnerCardsAction?: () => void;
   playerNotes?: Record<string, PlayerNote>;
   onEditPlayerNoteAction?: (seat: TableSnapshot['seats'][number]) => void;
   targetedReactionLabel?: string;
@@ -121,6 +124,8 @@ export function TableStage({
                              rabbitHuntPending,
                              onRequestRabbitHuntAction,
                              onRabbitHuntVerifyFailedAction,
+                             winnerCardsPending,
+                             onRequestWinnerCardsAction,
                              playerNotes,
                              onEditPlayerNoteAction,
                              targetedReactionLabel,
@@ -185,6 +190,8 @@ export function TableStage({
       <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
                   pending={rabbitHuntPending} onRequestRabbitHuntAction={onRequestRabbitHuntAction}
                   onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
+      <WinnerCards key={`winner-cards:${snapshot.hand_id}`} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
+                   pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}/>
     </div>
   );
 
@@ -203,6 +210,8 @@ export function TableStage({
         <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
                   pending={rabbitHuntPending} onRequestRabbitHuntAction={onRequestRabbitHuntAction}
                   onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
+        <WinnerCards key={`winner-cards:${snapshot.hand_id}`} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
+                     pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}/>
       </div>
       {viewerFirst && seatNode(seats[0], 0)}
     </div>
