@@ -53,7 +53,7 @@ export function FriendCodeLookup({actions}: {actions: SocialActionState}) {
   return <section className="friend-code-shell" aria-label="Código de amizade">
     <div className="friend-code-own">
       <span>Seu código</span>
-      <b>{me?.friend_code || '—'}</b>
+      <b>{me?.friend_code || '-'}</b>
       <Button type="button" variant="ghost" size="icon" disabled={!me?.friend_code}
               aria-label="Copiar meu código de amizade" onClick={copyOwnCode}>
         {copied ? <Check aria-hidden="true"/> : <Copy aria-hidden="true"/>}

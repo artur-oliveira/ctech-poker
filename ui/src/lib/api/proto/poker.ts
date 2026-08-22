@@ -201,9 +201,9 @@ export interface TableSnapshot {
   action_base_deadline_unix_ms: number;
   chat_messages: ChatMessage[];
   reactions: TableReaction[];
-  /** Viewer-scoped one-shot value: check_fold | fold | call | call_any | empty. */
+  /** Viewer-scoped one-shot value: check_fold | fold | call | call_any | all_in | empty. */
   action_preselection: string;
-  /** Frozen amount for a fixed "call" preselection; zero for every other mode. */
+  /** Frozen amount for fixed call/check_fold preselections; zero for all_in and unconditional modes. */
   action_preselection_amount: number;
   /**
    * What this viewer would owe if action reached them now, even before their
@@ -248,7 +248,7 @@ export interface ClientMessage {
   share_code: string;
   /** for ready command */
   ready: boolean;
-  /** poker action, or check_fold|fold|call|call_any|empty for preselect_action */
+  /** poker action, or check_fold|fold|call|call_any|all_in|empty for preselect_action */
   action: string;
   /** bet amount for act; frozen call amount for preselect_action */
   amount: number;

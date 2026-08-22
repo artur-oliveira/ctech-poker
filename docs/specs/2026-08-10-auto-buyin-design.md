@@ -18,7 +18,7 @@ this feature:
   (`buyin/service.go:230-238`, `296-304`) — a known, currently-manual-only cost. Wiring
   auto-rebuy into real money would silently and repeatedly re-charge a player's real,
   withdrawable wallet with no chance to opt out per-attempt. That's a separate, already
-  tracked problem (`docs/plans/2026-07-28-entry-fee-entitlement.md`) and not something
+  tracked problem (`../plans/2026-08-21-entry-fee-entitlement.md`) and not something
   this feature should compound.
 - `REAL_MONEY_ENABLED` is off by default; the UI is explicitly built assuming real
   money is off (`ui/CLAUDE.md`).

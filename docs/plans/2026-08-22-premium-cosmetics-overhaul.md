@@ -494,3 +494,8 @@ badges reuse `ReactionFavoritesDialog`'s existing locked-item pattern.
 - [ ] `git commit -m "feat: added premium cosmetics overhaul"` including the spec, this plan, and
   all implementation changes in one commit (per explicit instruction — not split per task here).
 - [ ] `git push origin main`.
+
+## Post-implementation UI correction (2026-08-22)
+
+Reaction glyphs use the platform's native Unicode artwork. The table reaction grids explicitly center
+their button contents with Grid, preventing the emoji baseline from appearing off-center in the popover.

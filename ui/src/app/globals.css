@@ -5551,7 +5551,9 @@ h1 em {
 .reaction-quick button,
 .reaction-objects button {
     position: relative;
+    display: grid;
     min-height: 44px;
+    place-items: center;
     border: 0;
     border-radius: var(--rounded-control);
     background: var(--surface-control);

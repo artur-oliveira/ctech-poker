@@ -57,7 +57,7 @@ export function AppPageNav({authed, current, rewardReady = false}: {
 }) {
   return <>
     <nav className="app-nav shell" aria-label="Navegação principal">
-      <Link href="/" className="brand" aria-label="CTech Poker — início">
+      <Link href="/" className="brand" aria-label="CTech Poker - início">
         <span className="brand-mark"><PokerLogo priority/></span>
         <span className="brand-name">CTech <b>Poker</b></span>
       </Link>
@@ -68,10 +68,10 @@ export function AppPageNav({authed, current, rewardReady = false}: {
           {MAIN_ROUTES.map(({href, label, route, icon: Icon}) => <Link key={route} href={href}
             aria-current={current === route ? 'page' : undefined}
             className={routeBadgeClass(route)}
-            title={route === 'store' && rewardReady ? 'Loja — recompensa diária disponível' : label}>
+            title={route === 'store' && rewardReady ? 'Loja - recompensa diária disponível' : label}>
             <Icon aria-hidden="true"/><span className="header-right-label">{label}</span>
             {route === 'store' && rewardReady && <><span className="app-nav-reward-dot" aria-hidden="true"/>
-              <span className="sr-only"> — recompensa diária disponível</span></>}
+              <span className="sr-only"> - recompensa diária disponível</span></>}
             {route === 'people' && <PeopleNavBadge/>}
           </Link>)}
         </div>
@@ -93,7 +93,7 @@ function AppTabBar({current, rewardReady}: {current?: MainRoute; rewardReady: bo
       <span className="app-tab-bar-icon">
         <Icon aria-hidden="true"/>
         {route === 'store' && rewardReady && <><span className="app-nav-reward-dot" aria-hidden="true"/>
-          <span className="sr-only"> — recompensa diária disponível</span></>}
+          <span className="sr-only"> - recompensa diária disponível</span></>}
         {route === 'people' && <PeopleNavBadge/>}
       </span>
       <span>{label}</span>

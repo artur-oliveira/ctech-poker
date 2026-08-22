@@ -287,7 +287,7 @@ type MockSandboxPurchase = SandboxPurchase & {
 
 const mockSandboxPurchases: MockSandboxPurchase[] = [];
 
-const mockReactionPrices: Record<string, {price_cents: number; price_fichas: number}> = {
+const mockReactionPrices: Record<string, { price_cents: number; price_fichas: number }> = {
   cold: {price_cents: 100, price_fichas: 100_000},
   fire: {price_cents: 100, price_fichas: 100_000},
   poop: {price_cents: 500, price_fichas: 500_000},
@@ -298,7 +298,10 @@ const mockReactionPrices: Record<string, {price_cents: number; price_fichas: num
 const mockReactionCatalog: ReactionCatalogEntry[] = Object.keys(TABLE_REACTIONS).map(id => ({
   id, premium: id in mockReactionPrices, ...mockReactionPrices[id]
 }));
-type MockReactionPurchase = ReactionPurchase & {resolves_at_ms?: number; outcome?: 'confirmed' | 'expired' | 'failed'};
+type MockReactionPurchase = ReactionPurchase & {
+  resolves_at_ms?: number;
+  outcome?: 'confirmed' | 'expired' | 'failed'
+};
 const mockReactionPurchases: MockReactionPurchase[] = [];
 
 function settleReactionPurchase(purchase: MockReactionPurchase) {
@@ -553,23 +556,23 @@ function forcedError(method: string, path: string) {
 function generateNativeULID() {
   const ENCODING = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // Crockford's Base32
   let time = Date.now();
-  
+
   // 1. Encode Timestamp (48 bits -> 10 characters)
   let timeChars = "";
   for (let i = 9; i >= 0; i--) {
     timeChars = ENCODING[time % 32] + timeChars;
     time = Math.floor(time / 32);
   }
-  
+
   // 2. Encode Randomness (80 bits -> 16 characters) using Secure Crypto
   const randomBytes = new Uint8Array(16);
   crypto.getRandomValues(randomBytes);
-  
+
   let randomChars = "";
   for (let i = 0; i < 16; i++) {
     randomChars += ENCODING[randomBytes[i] % 32];
   }
-  
+
   return timeChars + randomChars;
 }
 
@@ -582,7 +585,7 @@ function wait(ms: number) {
  * code, requests, presence, blocks, invites, reports) can be walked in mock
  * mode without a backend. Returns null when the path is not a social one. */
 function mockSocialRequest(method: string, path: string, body: Record<string, unknown>,
-  config: InternalAxiosRequestConfig): AxiosResponse | null {
+                           config: InternalAxiosRequestConfig): AxiosResponse | null {
   const idempotencyKey = (config.headers?.['Idempotency-Key'] || config.headers?.['idempotency-key']) as string | undefined;
   const mutating = method !== 'GET';
   if (mutating && !idempotencyKey) fail(400, 'Idempotency-Key is required', config);
@@ -595,7 +598,7 @@ function mockSocialRequest(method: string, path: string, body: Record<string, un
     return ok(page(mockSocialPlayers.filter(item => item.relationship === 'friend')), config);
   }
   if (method === 'GET' && path === '/v1.0/social/friend-requests') {
-    const direction = (config.params as {direction?: string} | undefined)?.direction === 'outgoing'
+    const direction = (config.params as { direction?: string } | undefined)?.direction === 'outgoing'
       ? 'outgoing' : 'incoming';
     return ok(page(mockSocialPlayers.filter(item => item.relationship === direction)), config);
   }
@@ -612,7 +615,7 @@ function mockSocialRequest(method: string, path: string, body: Record<string, un
     return ok({}, config);
   }
   if (method === 'GET' && path === '/v1.0/social/relationships') {
-    const ids = String((config.params as {player_ids?: string} | undefined)?.player_ids || '').split(',');
+    const ids = String((config.params as { player_ids?: string } | undefined)?.player_ids || '').split(',');
     return ok({data: mockSocialPlayers.filter(item => ids.includes(item.player_id))}, config);
   }
   const lookup = method === 'GET' ? path.match(/^\/v1\.0\/social\/lookup\/(.+)$/) : null;
@@ -1047,6 +1050,8 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     mockProfile.sandbox_balance += 250;
     return ok({amount: 250, remaining_time_seconds: MOCK_CREDIT_COOLDOWN_S}, config);
   }
+  if (method === 'GET' && path.startsWith('/v1.0/wallet/cosmetic-purchase')) return ok([], config);
+  console.log(path);
   return ok({}, config);
 }
 
@@ -1535,12 +1540,12 @@ export class MockTableService {
   private turnTimer?: ReturnType<typeof setTimeout>;
   private decisionNumber = 0;
   private snapshotVersion = 0;
-  
+
   constructor(private scenario: MockScenario, private delay: number, private handlers: MockHandlers) {
     this.snapshot = snapshotForScenario(scenario);
     if (INTERACTIVE_SCENARIOS.has(scenario)) this.beginStreet(false);
   }
-  
+
   connect() {
     this.setStatus('connecting');
     if (this.scenario === 'reconnecting') {
@@ -1565,7 +1570,7 @@ export class MockTableService {
       else this.emitState();
     });
   }
-  
+
   reconnect() {
     this.attempt += 1;
     this.setStatus('reconnecting');
@@ -1574,7 +1579,7 @@ export class MockTableService {
       this.emitState();
     });
   }
-  
+
   send(value: Record<string, unknown>) {
     // The timeout scenario models a server that accepts the connection but
     // never replies to anything — so every action (and the watchdog ping)
@@ -1724,18 +1729,18 @@ export class MockTableService {
     });
     return true;
   }
-  
+
   close() {
     this.timers.forEach(clearTimeout);
     this.timers.clear();
     this.turnTimer = undefined;
     mockPlayerDealtIn = false;
   }
-  
+
   private later(task: () => void, factor = 1) {
     this.laterMs(task, this.delay * factor);
   }
-  
+
   private laterMs(task: () => void, milliseconds: number) {
     const timer = setTimeout(() => {
       this.timers.delete(timer);
@@ -1744,14 +1749,14 @@ export class MockTableService {
     this.timers.add(timer);
     return timer;
   }
-  
+
   // --- Interactive mini-table engine ---------------------------------------
-  
+
   private setStatus(status: MockConnectionStatus) {
     this.status = status;
     this.handlers.onStatus(status, this.attempt);
   }
-  
+
   private beginStreet(clear: boolean) {
     this.streetCommitted = {};
     for (const seat of this.snapshot.seats) {
@@ -1760,11 +1765,11 @@ export class MockTableService {
       }
     }
   }
-  
+
   private streetBet(seats: SeatView[]) {
     return Math.max(0, ...seats.map(s => this.streetCommitted[s.player_id] || 0));
   }
-  
+
   private legalActionsFor(seats: SeatView[], playerId: string): LegalActionState {
     const seat = seats.find(s => s.player_id === playerId);
     if (!seat || seat.state !== 'active') return {actions: []};
@@ -1783,7 +1788,7 @@ export class MockTableService {
       step: 25
     };
   }
-  
+
   private startInteractiveHand() {
     if (this.scenario === 'auto_fold') {
       this.turnOrder = [MOCK_PLAYER_ID];
@@ -1793,29 +1798,29 @@ export class MockTableService {
     }
     this.activateNextTurn();
   }
-  
+
   private orderAfter(playerId: string) {
     const seated = new Set(this.snapshot.seats.map(seat => seat.player_id));
     const ids = FULL_HAND_ORDER.filter(id => seated.has(id));
     const start = ids.indexOf(playerId);
     return [...ids.slice(start + 1), ...ids.slice(0, start + 1)];
   }
-  
+
   private canAct(playerId: string) {
     return this.snapshot.seats.find(seat => seat.player_id === playerId)?.state === 'active';
   }
-  
+
   private contenders(seats = this.snapshot.seats) {
     return seats.filter(seat => seat.state === 'active' || seat.state === 'all_in');
   }
-  
+
   private cancelTurnTimer() {
     if (!this.turnTimer) return;
     clearTimeout(this.turnTimer);
     this.timers.delete(this.turnTimer);
     this.turnTimer = undefined;
   }
-  
+
   private activateNextTurn() {
     this.cancelTurnTimer();
     this.turnOrder = this.turnOrder.filter(id => this.canAct(id));
@@ -1854,7 +1859,7 @@ export class MockTableService {
       }, thinkTime);
     }
   }
-  
+
   private commit(seat: SeatView, streetTotal: number) {
     const committed = this.streetCommitted[seat.player_id] || 0;
     const add = Math.min(seat.stack, Math.max(0, streetTotal - committed));
@@ -1863,7 +1868,7 @@ export class MockTableService {
     this.streetCommitted[seat.player_id] = committed + add;
     if (seat.stack === 0) seat.state = 'all_in';
   }
-  
+
   private resolveAction(playerId: string, action: PokerAction, amount: number) {
     if (this.snapshot.current_player_id !== playerId) return;
     this.cancelTurnTimer();
@@ -1889,7 +1894,7 @@ export class MockTableService {
     } else {
       this.commit(seat, committed + Math.max(0, currentBet - committed));
     }
-    
+
     this.snapshot = {
       ...this.snapshot,
       seats,
@@ -1904,7 +1909,7 @@ export class MockTableService {
       key: 'primeiro_aumento',
       stars: 2
     }), 2);
-    
+
     if (this.contenders(seats).length <= 1) {
       this.later(() => this.finishWithoutShowdown(), 1);
       return;
@@ -1916,11 +1921,11 @@ export class MockTableService {
     }
     this.later(() => this.activateNextTurn(), 1);
   }
-  
+
   private canActIn(seats: SeatView[], playerId: string) {
     return seats.find(seat => seat.player_id === playerId)?.state === 'active';
   }
-  
+
   private advanceStreet() {
     const stage = this.snapshot.stage;
     const next = stage === 'pre_flop' ? 'flop' : stage === 'flop' ? 'turn' : stage === 'turn' ? 'river' : 'showdown';
@@ -1953,7 +1958,7 @@ export class MockTableService {
       .filter(id => this.canAct(id));
     this.later(() => this.activateNextTurn(), 2);
   }
-  
+
   private reachShowdown() {
     this.cancelTurnTimer();
     const variant = HAND_VARIANTS[this.scenario as InteractiveScenario];
@@ -1991,7 +1996,7 @@ export class MockTableService {
       this.emitState();
     }, 6);
   }
-  
+
   /** Resolve main/side pots one contribution layer at a time. Folded chips
    * stay in every layer they funded, while only active/all-in seats are
    * eligible to win it. A lone unmatched top layer is a refund (payout but
@@ -2043,7 +2048,7 @@ export class MockTableService {
     }
     return {payouts, winnerIds: [...winnerIds], potResults};
   }
-  
+
   private finishWithoutShowdown() {
     this.cancelTurnTimer();
     const seats = this.snapshot.seats.map(seat => ({...seat}));
@@ -2072,7 +2077,7 @@ export class MockTableService {
     };
     this.emitState();
   }
-  
+
   private botDecision(playerId: string): { action: PokerAction; amount: number } {
     const legal = this.legalActionsFor(this.snapshot.seats, playerId);
     const seat = this.snapshot.seats.find(item => item.player_id === playerId)!;
@@ -2082,7 +2087,7 @@ export class MockTableService {
     const committed = this.streetCommitted[playerId] || 0;
     const decisionIndex = this.decisionNumber++;
     const random = this.seededRandom(`${playerId}:${profile.style}`);
-    
+
     // The first orbit deliberately covers poker's basic vocabulary; later
     // decisions come from the profiles below. This keeps every QA run useful
     // without turning the whole simulation into a rigid action script.
@@ -2101,14 +2106,14 @@ export class MockTableService {
         return {action: 'raise', amount: shove ? legal.max_raise_to || 0 : Math.min(150, legal.max_raise_to || 150)};
       }
     }
-    
+
     // The loss/tie scenarios guarantee that one rival reaches showdown with
     // Ana; otherwise a perfectly valid random fold could turn the named
     // scenario into an uncontested win and make the QA outcome non-repeatable.
     if (playerId === 'bia_sp' && (this.scenario === 'full_hand_loss' || this.scenario === 'full_hand_tie')) {
       return callAmount > 0 ? {action: 'call', amount: 0} : {action: 'check', amount: 0};
     }
-    
+
     if (legal.actions.includes('raise') && (random < profile.shove || random < profile.aggression * .55)) {
       const maximum = legal.max_raise_to || committed + seat.stack;
       const minimum = legal.min_raise_to || currentBet + 25;
@@ -2123,7 +2128,7 @@ export class MockTableService {
     }
     return {action: 'check', amount: 0};
   }
-  
+
   private seededRandom(salt: string) {
     const source = `${this.scenario}:${this.snapshot.stage}:${this.decisionNumber}:${salt}`;
     let hash = 2166136261;
@@ -2133,7 +2138,7 @@ export class MockTableService {
     }
     return (hash >>> 0) / 4294967296;
   }
-  
+
   private emitState(actionId?: string) {
     const stage = this.snapshot.stage;
     const handInProgress = stage !== 'waiting_for_players' && stage !== 'complete';

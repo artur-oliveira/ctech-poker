@@ -977,9 +977,9 @@ type TableSnapshot struct {
 	ActionBaseDeadlineUnixMs int64            `protobuf:"varint,23,opt,name=action_base_deadline_unix_ms,json=actionBaseDeadlineUnixMs,proto3" json:"action_base_deadline_unix_ms,omitempty"`
 	ChatMessages             []*ChatMessage   `protobuf:"bytes,24,rep,name=chat_messages,json=chatMessages,proto3" json:"chat_messages,omitempty"`
 	Reactions                []*TableReaction `protobuf:"bytes,25,rep,name=reactions,proto3" json:"reactions,omitempty"`
-	// Viewer-scoped one-shot value: check_fold | fold | call | call_any | empty.
+	// Viewer-scoped one-shot value: check_fold | fold | call | call_any | all_in | empty.
 	ActionPreselection string `protobuf:"bytes,26,opt,name=action_preselection,json=actionPreselection,proto3" json:"action_preselection,omitempty"`
-	// Frozen amount for a fixed "call" preselection; zero for every other mode.
+	// Frozen amount for fixed call/check_fold preselections; zero for all_in and unconditional modes.
 	ActionPreselectionAmount int64 `protobuf:"varint,27,opt,name=action_preselection_amount,json=actionPreselectionAmount,proto3" json:"action_preselection_amount,omitempty"`
 	// What this viewer would owe if action reached them now, even before their
 	// turn. Viewer-scoped so the UI can offer an exact fixed-call preselection.
@@ -1317,12 +1317,12 @@ func (x *RevealedSalt) GetSaltHex() string {
 // ClientMessage is sent from the client to the server.
 type ClientMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice" | "peek_cards"
+	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice" | "peek_cards" | "request_rabbit_hunt" | "rabbit_hunt_verify_failed"
 	// payload fields
 	Token                   string `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`                                                                       // for auth frame
 	ShareCode               string `protobuf:"bytes,3,opt,name=share_code,json=shareCode,proto3" json:"share_code,omitempty"`                                              // for auth frame
 	Ready                   bool   `protobuf:"varint,4,opt,name=ready,proto3" json:"ready,omitempty"`                                                                      // for ready command
-	Action                  string `protobuf:"bytes,5,opt,name=action,proto3" json:"action,omitempty"`                                                                     // poker action, or check_fold|fold|call|call_any|empty for preselect_action
+	Action                  string `protobuf:"bytes,5,opt,name=action,proto3" json:"action,omitempty"`                                                                     // poker action, or check_fold|fold|call|call_any|all_in|empty for preselect_action
 	Amount                  int64  `protobuf:"varint,6,opt,name=amount,proto3" json:"amount,omitempty"`                                                                    // bet amount for act; frozen call amount for preselect_action
 	ActionId                string `protobuf:"bytes,7,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`                                                 // for act command
 	Message                 string `protobuf:"bytes,8,opt,name=message,proto3" json:"message,omitempty"`                                                                   // for chat command

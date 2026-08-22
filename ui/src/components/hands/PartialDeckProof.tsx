@@ -61,7 +61,7 @@ export function PartialDeckProof({rootCommitHash, revealed, unrevealed}: {
       </div>
       <div className="deck-reveal-actions">
         <ShieldCheck aria-hidden="true"/>
-        <p>Esta mão terminou sem showdown, então a seed do servidor não é publicada — ela revelaria cartas que ninguém
+        <p>Esta mão terminou sem showdown, então a seed do servidor não é publicada; ela revelaria cartas que ninguém
           pagou para ver. Cada posição vem como carta + salt permitido ou somente como hash comprometido.</p>
         <span className="deck-reveal-count" aria-live="polite">{flipped.size} de {revealedIndexes.length} cartas permitidas reveladas</span>
         <button type="button" className="deck-reveal-toggle-all"
