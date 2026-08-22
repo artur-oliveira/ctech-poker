@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Eye,
   LoaderCircle,
+  LockKeyhole,
   LogOut,
   Pencil,
   ShoppingBag,
@@ -19,6 +20,7 @@ import {
   X
 } from 'lucide-react';
 import {getMe, updateMe, type WalletMode} from '@/lib/api/player';
+import {listCosmeticCatalog, listCosmeticPurchases, ownedCosmeticIDs} from '@/lib/api/cosmeticPurchases';
 import {logout} from '@/lib/auth/oauth';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {Button} from '@/components/ui/button';
@@ -28,7 +30,7 @@ import {Switch} from '@/components/ui/switch';
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
 import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
 import {cardPath} from '@/lib/cards';
-import {DECK_VARIANTS, type DeckVariantId, DEFAULT_DECK_VARIANT} from '@/lib/cardVariants';
+import {DECK_VARIANTS, type DeckVariantId, DEFAULT_DECK_VARIANT, PREMIUM_DECK_IDS} from '@/lib/cardVariants';
 import {ProfileShowcaseDialog} from '@/components/lobby/ProfileShowcaseDialog';
 import {SelfHudDialog} from '@/components/lobby/SelfHudDialog';
 import {deleteAvatar, uploadAvatar} from '@/lib/avatar';
@@ -47,6 +49,14 @@ function formatReal(amount?: number) {
 export function ProfileMenu() {
   const queryClient = useQueryClient();
   const {data: me} = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
+  const {data: deckCatalog = []} = useQuery({
+    queryKey: ['wallet', 'cosmetic-catalog', 'deck'], queryFn: () => listCosmeticCatalog('deck')
+  });
+  const {data: deckPurchases = []} = useQuery({
+    queryKey: ['wallet', 'cosmetic-purchases', 'deck'], queryFn: () => listCosmeticPurchases('deck')
+  });
+  const ownedDecks = ownedCosmeticIDs(deckPurchases);
+  const deckPrices = new Map(deckCatalog.map(entry => [entry.id, entry.price_fichas]));
   const [name, setName] = useState('');
   const [editingName, setEditingName] = useState(false);
   const [showcaseOpen, setShowcaseOpen] = useState(false);
@@ -173,24 +183,36 @@ export function ProfileMenu() {
               </span>
             </div>
             <Select value={deckVariant}
-                    onValueChange={(value: DeckVariantId | null) => value && save.mutate({deck_variant: value})}>
+                    onValueChange={(value: DeckVariantId | null) => {
+                      if (!value) return;
+                      // Locked items render as a Link to the store instead (below) and never
+                      // reach this branch on a real click, but guard the value change too in
+                      // case selection is ever driven by keyboard/programmatically.
+                      if (PREMIUM_DECK_IDS.has(value) && !ownedDecks.has(value)) return;
+                      save.mutate({deck_variant: value});
+                    }}>
               <SelectTrigger aria-labelledby="deck-variant-label" disabled={save.isPending}>
                 <SelectValue>
                   {(value: DeckVariantId) => DECK_VARIANTS[value]?.label ?? DECK_VARIANTS[DEFAULT_DECK_VARIANT].label}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent className="profile-deck-options" align="end">
-                {Object.entries(DECK_VARIANTS).map(([id, variant]) => (
-                  <SelectItem key={id} value={id as DeckVariantId} label={variant.label}>
-                    <span className="deck-variant-option">
+                {Object.entries(DECK_VARIANTS).map(([id, variant]) => {
+                  const locked = PREMIUM_DECK_IDS.has(id as DeckVariantId) && !ownedDecks.has(id as DeckVariantId);
+                  const price = deckPrices.get(id);
+                  return <SelectItem key={id} value={id as DeckVariantId} label={variant.label}
+                                     {...(locked ? {render: <Link href="/store#decks"/>} : {})}>
+                    <span className={`deck-variant-option${locked ? ' locked' : ''}`}>
                       <span className="deck-variant-option-cards">
                         {ACES.map(card => <Image key={card} src={cardPath(card, id as DeckVariantId)} alt=""
                                                  height={0} width={0} style={{width: '20px', height: 'auto'}}/>)}
                       </span>
                       {variant.label}
+                      {locked && <LockKeyhole aria-label={`Baralho premium bloqueado${
+                        price ? ` · ${price.toLocaleString('pt-BR')} fichas` : ''} · Ver na loja`}/>}
                     </span>
-                  </SelectItem>
-                ))}
+                  </SelectItem>;
+                })}
               </SelectContent>
             </Select>
           </div>

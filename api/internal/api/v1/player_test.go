@@ -114,6 +114,11 @@ func (s *fakePlayerStore) SetDeckVariant(_ context.Context, id string, variant s
 	s.profile.DeckVariant = variant
 	return nil
 }
+func (s *fakePlayerStore) SetTableTheme(_ context.Context, id string, theme string) error {
+	s.profile.UserID = id
+	s.profile.TableTheme = theme
+	return nil
+}
 func (s *fakePlayerStore) SetShowcase(_ context.Context, id string, public, playstylePublic bool, featured []string) error {
 	s.profile.UserID = id
 	s.profile.ShowcasePublic = public

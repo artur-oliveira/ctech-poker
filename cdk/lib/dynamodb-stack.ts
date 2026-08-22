@@ -14,6 +14,7 @@ export type TableName =
   'poker_daily_reward' | 'poker_pending_cashouts' | 'poker_player_sessions' | 'poker_player_hands' |
   'poker_player_notes' | 'poker_hand_shares' | 'poker_player_poker_stats' | 'poker_sandbox_purchases' |
   'poker_reaction_entitlements' | 'poker_reaction_purchases' |
+  'poker_cosmetic_entitlements' | 'poker_cosmetic_purchases' |
   (typeof DYNAMO_TABLE)[keyof typeof DYNAMO_TABLE];
 
 interface DynamoDBStackProps extends cdk.StackProps {
@@ -142,6 +143,17 @@ export class DynamoDBStack extends cdk.Stack {
     // confirmation is webhook-driven (no local pending sweep), fichas
     // purchases are synchronous.
     table('poker_reaction_purchases', true);
+    // poker_cosmetic_entitlements: pk = player_id, sk = "kind#item_id" — one
+    // row per owned premium deck/felt cosmetic, mirrors
+    // poker_reaction_entitlements. No TTL (permanent), no GSI (player.Service
+    // reads it by exact key — see
+    // docs/specs/2026-08-21-premium-cosmetics-overhaul.md).
+    table('poker_cosmetic_entitlements', true);
+    // poker_cosmetic_purchases: pk = player_id, sk = purchase_id — permanent
+    // purchase history, mirrors poker_reaction_purchases. No GSI: pix
+    // confirmation is webhook-driven (no local pending sweep), fichas
+    // purchases are synchronous.
+    table('poker_cosmetic_purchases', true);
     // Resolved money-movement safety records are retained for 30 days for
     // audit/debugging, then reaped by DynamoDB TTL. Unresolved entries never
     // receive ttl and therefore cannot expire before reconciliation.

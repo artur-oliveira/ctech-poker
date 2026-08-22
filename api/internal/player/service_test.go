@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 )
 
 type memoryStore struct{ profile PlayerProfile }
@@ -31,6 +33,10 @@ func (s *memoryStore) SetDeckVariant(_ context.Context, _ string, variant string
 	s.profile.DeckVariant = variant
 	return nil
 }
+func (s *memoryStore) SetTableTheme(_ context.Context, _ string, theme string) error {
+	s.profile.TableTheme = theme
+	return nil
+}
 func (s *memoryStore) SetShowcase(_ context.Context, _ string, public, playstylePublic bool, featured []string) error {
 	s.profile.ShowcasePublic = public
 	s.profile.PlaystylePublic = playstylePublic
@@ -40,6 +46,12 @@ func (s *memoryStore) SetShowcase(_ context.Context, _ string, public, playstyle
 func (s *memoryStore) SetFavoriteReactions(_ context.Context, _ string, favorites []string) error {
 	s.profile.FavoriteReactions = favorites
 	return nil
+}
+
+type fakeCosmeticsChecker struct{ owned bool }
+
+func (f *fakeCosmeticsChecker) IsOwned(context.Context, string, cosmetics.Kind, string) (bool, error) {
+	return f.owned, nil
 }
 
 func TestRequireAccepted(t *testing.T) {
@@ -116,6 +128,81 @@ func TestSetDeckVariant(t *testing.T) {
 
 	if _, err := svc.SetDeckVariant(context.Background(), "u1", "   "); !errors.Is(err, ErrInvalidDeckVariant) {
 		t.Fatalf("got %v, want ErrInvalidDeckVariant", err)
+	}
+}
+
+func TestSetDeckVariantRejectsUnknownID(t *testing.T) {
+	store := &memoryStore{profile: PlayerProfile{UserID: "u1"}}
+	svc := NewService(store)
+	if _, err := svc.SetDeckVariant(context.Background(), "u1", "not-a-real-deck"); !errors.Is(err, ErrInvalidDeckVariant) {
+		t.Fatalf("got %v, want ErrInvalidDeckVariant", err)
+	}
+}
+
+func TestSetDeckVariantPremiumRequiresOwnership(t *testing.T) {
+	store := &memoryStore{profile: PlayerProfile{UserID: "u1"}}
+	svc := NewService(store)
+
+	// No cosmetics dependency wired at all: fails closed.
+	if _, err := svc.SetDeckVariant(context.Background(), "u1", "casino"); !errors.Is(err, ErrCosmeticNotOwned) {
+		t.Fatalf("got %v, want ErrCosmeticNotOwned when cosmetics is unwired", err)
+	}
+
+	svc.WithCosmetics(&fakeCosmeticsChecker{owned: false})
+	if _, err := svc.SetDeckVariant(context.Background(), "u1", "casino"); !errors.Is(err, ErrCosmeticNotOwned) {
+		t.Fatalf("got %v, want ErrCosmeticNotOwned without an entitlement", err)
+	}
+
+	svc.WithCosmetics(&fakeCosmeticsChecker{owned: true})
+	profile, err := svc.SetDeckVariant(context.Background(), "u1", "casino")
+	if err != nil {
+		t.Fatalf("SetDeckVariant with an entitlement: %v", err)
+	}
+	if profile.DeckVariant != "casino" {
+		t.Fatalf("DeckVariant = %q, want %q", profile.DeckVariant, "casino")
+	}
+}
+
+func TestSetTableTheme(t *testing.T) {
+	store := &memoryStore{profile: PlayerProfile{UserID: "u1"}}
+	svc := NewService(store)
+
+	profile, err := svc.SetTableTheme(context.Background(), "u1", "classic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.TableTheme != "classic" {
+		t.Fatalf("TableTheme = %q, want %q", profile.TableTheme, "classic")
+	}
+
+	if _, err := svc.SetTableTheme(context.Background(), "u1", "   "); !errors.Is(err, ErrInvalidTableTheme) {
+		t.Fatalf("got %v, want ErrInvalidTableTheme", err)
+	}
+	if _, err := svc.SetTableTheme(context.Background(), "u1", "not-a-real-theme"); !errors.Is(err, ErrInvalidTableTheme) {
+		t.Fatalf("got %v, want ErrInvalidTableTheme", err)
+	}
+}
+
+func TestSetTableThemePremiumRequiresOwnership(t *testing.T) {
+	store := &memoryStore{profile: PlayerProfile{UserID: "u1"}}
+	svc := NewService(store)
+
+	if _, err := svc.SetTableTheme(context.Background(), "u1", "midnight"); !errors.Is(err, ErrCosmeticNotOwned) {
+		t.Fatalf("got %v, want ErrCosmeticNotOwned when cosmetics is unwired", err)
+	}
+
+	svc.WithCosmetics(&fakeCosmeticsChecker{owned: false})
+	if _, err := svc.SetTableTheme(context.Background(), "u1", "midnight"); !errors.Is(err, ErrCosmeticNotOwned) {
+		t.Fatalf("got %v, want ErrCosmeticNotOwned without an entitlement", err)
+	}
+
+	svc.WithCosmetics(&fakeCosmeticsChecker{owned: true})
+	profile, err := svc.SetTableTheme(context.Background(), "u1", "midnight")
+	if err != nil {
+		t.Fatalf("SetTableTheme with an entitlement: %v", err)
+	}
+	if profile.TableTheme != "midnight" {
+		t.Fatalf("TableTheme = %q, want %q", profile.TableTheme, "midnight")
 	}
 }
 

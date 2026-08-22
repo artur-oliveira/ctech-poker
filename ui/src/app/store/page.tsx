@@ -1,7 +1,7 @@
 'use client';
 import {useCallback, useRef, useState} from 'react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
-import {ChevronRight, Clock3, Coins, ShoppingBag, Sparkles} from 'lucide-react';
+import {ChevronRight, Clock3, Coins, Layers, Palette, ShoppingBag, Sparkles} from 'lucide-react';
 import {TermsGate} from '@/components/TermsGate';
 import {DailyRewardPanel} from '@/components/store/DailyRewardPanel';
 import {SkuGrid} from '@/components/store/SkuGrid';
@@ -11,6 +11,9 @@ import {RefundConfirmationDialog} from '@/components/store/RefundConfirmationDia
 import {ReactionPurchaseHistory, ReactionStoreSection} from '@/components/reactions/ReactionStoreSection';
 import {ReactionPurchaseDialog} from '@/components/reactions/ReactionPurchaseDialog';
 import {ReactionRefundDialog} from '@/components/reactions/ReactionRefundDialog';
+import {DeckStoreSection, FeltStoreSection} from '@/components/store/CosmeticStoreSection';
+import {CosmeticPurchaseDialog} from '@/components/store/CosmeticPurchaseDialog';
+import {CosmeticRefundDialog} from '@/components/store/CosmeticRefundDialog';
 import {
   createPurchase, getPurchase, listPurchases, listSkus, refundPurchase, type SandboxPurchase, type SandboxSKU
 } from '@/lib/api/wallet';
@@ -21,6 +24,10 @@ import {
   getReactionPurchase, listReactionCatalog, listReactionPurchases, refundReactionPurchase,
   type ReactionCatalogEntry, type ReactionPurchase
 } from '@/lib/api/reactionPurchases';
+import {
+  type CosmeticCatalogEntry, getCosmeticPurchase, listCosmeticCatalog, listCosmeticPurchases,
+  ownedCosmeticIDs, refundCosmeticPurchase, type CosmeticPurchase
+} from '@/lib/api/cosmeticPurchases';
 
 export default function Store() {
   const queryClient = useQueryClient();
@@ -31,6 +38,12 @@ export default function Store() {
   const [reactionTarget, setReactionTarget] = useState<ReactionCatalogEntry | null>(null);
   const [activeReactionPurchase, setActiveReactionPurchase] = useState<ReactionPurchase | undefined>();
   const [reactionRefundTarget, setReactionRefundTarget] = useState<ReactionPurchase | null>(null);
+  const [deckTarget, setDeckTarget] = useState<CosmeticCatalogEntry | null>(null);
+  const [activeDeckPurchase, setActiveDeckPurchase] = useState<CosmeticPurchase | undefined>();
+  const [deckRefundTarget, setDeckRefundTarget] = useState<CosmeticPurchase | null>(null);
+  const [feltTarget, setFeltTarget] = useState<CosmeticCatalogEntry | null>(null);
+  const [activeFeltPurchase, setActiveFeltPurchase] = useState<CosmeticPurchase | undefined>();
+  const [feltRefundTarget, setFeltRefundTarget] = useState<CosmeticPurchase | null>(null);
   const purchaseTriggerRef = useRef<HTMLButtonElement | null>(null);
   const player = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
 
@@ -45,6 +58,18 @@ export default function Store() {
   });
   const reactionPurchases = useQuery({
     queryKey: ['wallet', 'reaction-purchases'], queryFn: listReactionPurchases, retry: 1,
+  });
+  const deckCatalog = useQuery({
+    queryKey: ['wallet', 'cosmetic-catalog', 'deck'], queryFn: () => listCosmeticCatalog('deck'), retry: 1,
+  });
+  const deckPurchases = useQuery({
+    queryKey: ['wallet', 'cosmetic-purchases', 'deck'], queryFn: () => listCosmeticPurchases('deck'), retry: 1,
+  });
+  const feltCatalog = useQuery({
+    queryKey: ['wallet', 'cosmetic-catalog', 'felt'], queryFn: () => listCosmeticCatalog('felt'), retry: 1,
+  });
+  const feltPurchases = useQuery({
+    queryKey: ['wallet', 'cosmetic-purchases', 'felt'], queryFn: () => listCosmeticPurchases('felt'), retry: 1,
   });
 
   const selectSku = useCallback(async (sku: SandboxSKU) => {
@@ -96,10 +121,30 @@ export default function Store() {
     ]);
   }, [queryClient]);
 
+  const refundDeck = useCallback(async (purchaseId: string) => {
+    await refundCosmeticPurchase('deck', purchaseId);
+    await Promise.all([
+      queryClient.invalidateQueries({queryKey: ['wallet', 'cosmetic-purchases', 'deck']}),
+      queryClient.invalidateQueries({queryKey: ['player', 'me']}),
+    ]);
+  }, [queryClient]);
+
+  const refundFelt = useCallback(async (purchaseId: string) => {
+    await refundCosmeticPurchase('felt', purchaseId);
+    await Promise.all([
+      queryClient.invalidateQueries({queryKey: ['wallet', 'cosmetic-purchases', 'felt']}),
+      queryClient.invalidateQueries({queryKey: ['player', 'me']}),
+    ]);
+  }, [queryClient]);
+
   const premiumReactionCount = (reactionCatalog.data ?? []).filter(entry => entry.premium).length;
   const ownedReactionCount = new Set((reactionPurchases.data ?? [])
     .filter(purchase => purchase.status === 'confirmed')
     .map(purchase => purchase.reaction_id)).size;
+  const premiumDeckCount = (deckCatalog.data ?? []).filter(entry => entry.premium).length;
+  const ownedDeckCount = ownedCosmeticIDs(deckPurchases.data ?? []).size;
+  const premiumFeltCount = (feltCatalog.data ?? []).filter(entry => entry.premium).length;
+  const ownedFeltCount = ownedCosmeticIDs(feltPurchases.data ?? []).size;
   const sandboxBalance = player.data?.sandbox_balance;
 
   return <TermsGate>
@@ -117,6 +162,18 @@ export default function Store() {
             <span className="store-directory-icon"><Sparkles aria-hidden="true"/></span>
             <span><b>Reações</b><small>{reactionCatalog.isLoading ? 'Carregando catálogo…'
               : `${ownedReactionCount} de ${premiumReactionCount} liberadas`}</small></span>
+            <ChevronRight aria-hidden="true"/>
+          </a>
+          <a href="#decks">
+            <span className="store-directory-icon"><Layers aria-hidden="true"/></span>
+            <span><b>Baralhos</b><small>{deckCatalog.isLoading ? 'Carregando catálogo…'
+              : `${ownedDeckCount} de ${premiumDeckCount} liberados`}</small></span>
+            <ChevronRight aria-hidden="true"/>
+          </a>
+          <a href="#felt">
+            <span className="store-directory-icon"><Palette aria-hidden="true"/></span>
+            <span><b>Feltro</b><small>{feltCatalog.isLoading ? 'Carregando catálogo…'
+              : `${ownedFeltCount} de ${premiumFeltCount} liberados`}</small></span>
             <ChevronRight aria-hidden="true"/>
           </a>
           <a href="#chips">
@@ -166,6 +223,64 @@ export default function Store() {
                 isLoading={reactionPurchases.isLoading} isError={reactionPurchases.isError}
                 onRetryAction={() => void reactionPurchases.refetch()}/>
             </section>
+          </section>
+
+          <section id="decks" className="store-section store-department cosmetic-store-section"
+                   aria-labelledby="premium-decks-title">
+            <div className="store-section-heading">
+              <Layers aria-hidden="true"/>
+              <div><h2 id="premium-decks-title">Baralhos</h2>
+                <p>Personalize as cores do baralho. Libere uma vez, use para sempre em qualquer mesa.</p></div>
+            </div>
+            <DeckStoreSection catalog={deckCatalog.data ?? []} purchases={deckPurchases.data ?? []}
+              isLoading={deckCatalog.isLoading || deckPurchases.isLoading}
+              isError={deckCatalog.isError || deckPurchases.isError}
+              onRetryAction={() => {
+                void deckCatalog.refetch();
+                void deckPurchases.refetch();
+              }}
+              onBuyAction={entry => {
+                setActiveDeckPurchase(undefined);
+                setDeckTarget(entry);
+              }}
+              onResumeAction={async (entry, purchase) => {
+                setDeckTarget(entry);
+                try {
+                  setActiveDeckPurchase(await getCosmeticPurchase('deck', purchase.purchase_id));
+                } catch {
+                  setActiveDeckPurchase(purchase);
+                }
+              }}
+              onRefundAction={setDeckRefundTarget}/>
+          </section>
+
+          <section id="felt" className="store-section store-department cosmetic-store-section"
+                   aria-labelledby="premium-felt-title">
+            <div className="store-section-heading">
+              <Palette aria-hidden="true"/>
+              <div><h2 id="premium-felt-title">Feltro</h2>
+                <p>Escolha o tema da mesa. Libere uma vez, use para sempre em qualquer mesa.</p></div>
+            </div>
+            <FeltStoreSection catalog={feltCatalog.data ?? []} purchases={feltPurchases.data ?? []}
+              isLoading={feltCatalog.isLoading || feltPurchases.isLoading}
+              isError={feltCatalog.isError || feltPurchases.isError}
+              onRetryAction={() => {
+                void feltCatalog.refetch();
+                void feltPurchases.refetch();
+              }}
+              onBuyAction={entry => {
+                setActiveFeltPurchase(undefined);
+                setFeltTarget(entry);
+              }}
+              onResumeAction={async (entry, purchase) => {
+                setFeltTarget(entry);
+                try {
+                  setActiveFeltPurchase(await getCosmeticPurchase('felt', purchase.purchase_id));
+                } catch {
+                  setActiveFeltPurchase(purchase);
+                }
+              }}
+              onRefundAction={setFeltRefundTarget}/>
           </section>
 
           <section id="chips" className="store-section store-department store-chips-department"
@@ -224,5 +339,25 @@ export default function Store() {
     <ReactionRefundDialog key={reactionRefundTarget?.purchase_id ?? 'closed-reaction-refund'}
                           purchase={reactionRefundTarget} onCloseAction={() => setReactionRefundTarget(null)}
                           onConfirmAction={refundReaction}/>
+    <CosmeticPurchaseDialog key={`deck:${deckTarget?.id ?? 'closed'}:${activeDeckPurchase?.purchase_id ?? 'new'}`}
+                            kind="deck" entry={deckTarget} initialPurchase={activeDeckPurchase}
+                            sandboxBalance={player.data?.sandbox_balance}
+                            onCloseAction={() => {
+                              setDeckTarget(null);
+                              setActiveDeckPurchase(undefined);
+                            }}/>
+    <CosmeticRefundDialog key={deckRefundTarget?.purchase_id ?? 'closed-deck-refund'} kind="deck"
+                          purchase={deckRefundTarget} onCloseAction={() => setDeckRefundTarget(null)}
+                          onConfirmAction={refundDeck}/>
+    <CosmeticPurchaseDialog key={`felt:${feltTarget?.id ?? 'closed'}:${activeFeltPurchase?.purchase_id ?? 'new'}`}
+                            kind="felt" entry={feltTarget} initialPurchase={activeFeltPurchase}
+                            sandboxBalance={player.data?.sandbox_balance}
+                            onCloseAction={() => {
+                              setFeltTarget(null);
+                              setActiveFeltPurchase(undefined);
+                            }}/>
+    <CosmeticRefundDialog key={feltRefundTarget?.purchase_id ?? 'closed-felt-refund'} kind="felt"
+                          purchase={feltRefundTarget} onCloseAction={() => setFeltRefundTarget(null)}
+                          onConfirmAction={refundFelt}/>
   </TermsGate>;
 }

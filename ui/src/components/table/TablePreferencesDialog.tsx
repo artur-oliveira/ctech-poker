@@ -1,5 +1,6 @@
 'use client';
-import {Mic, Repeat2, Settings2, Volume2} from 'lucide-react';
+import {LockKeyhole, Mic, Repeat2, Settings2, Volume2} from 'lucide-react';
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
 import {
   Dialog,
@@ -12,7 +13,9 @@ import {
 import {Label} from '@/components/ui/label';
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
 import {Switch} from '@/components/ui/switch';
-import {TABLE_THEMES, type TableThemeId, useTablePreferences} from '@/lib/tablePreferences';
+import {getMe, updateMe} from '@/lib/api/player';
+import {listCosmeticCatalog, listCosmeticPurchases, ownedCosmeticIDs} from '@/lib/api/cosmeticPurchases';
+import {PREMIUM_FELT_IDS, TABLE_THEMES, type TableThemeId, useTablePreferences} from '@/lib/tablePreferences';
 
 const REALITY_OPTIONS = [
   {value: '0', label: 'Desativado'},
@@ -22,12 +25,35 @@ const REALITY_OPTIONS = [
   {value: '120', label: 'A cada 2 horas'}
 ];
 
-export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice = false, onRunItTwiceChange}: {
+export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice = false, onRunItTwiceChange,
+                                         onLockedFeltAction}: {
   runItTwiceAvailable?: boolean;
   runItTwice?: boolean;
-  onRunItTwiceChange?: (enabled: boolean) => boolean
+  onRunItTwiceChange?: (enabled: boolean) => boolean;
+  onLockedFeltAction?: (id: TableThemeId) => void;
 }) {
   const {preferences, update} = useTablePreferences();
+  const queryClient = useQueryClient();
+  const {data: me} = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
+  const catalog = useQuery({queryKey: ['wallet', 'cosmetic-catalog', 'felt'], queryFn: () => listCosmeticCatalog('felt')});
+  const purchases = useQuery({queryKey: ['wallet', 'cosmetic-purchases', 'felt'], queryFn: () => listCosmeticPurchases('felt')});
+  const owned = ownedCosmeticIDs(purchases.data ?? []);
+  const prices = new Map((catalog.data ?? []).map(entry => [entry.id, entry.price_fichas]));
+  const save = useMutation({
+    mutationFn: updateMe,
+    onSuccess: data => queryClient.setQueryData(['player', 'me'], data),
+  });
+  const theme: TableThemeId = me?.table_theme || 'classic';
+
+  function chooseTheme(value: TableThemeId | null) {
+    if (!value) return;
+    if (PREMIUM_FELT_IDS.has(value) && !owned.has(value)) {
+      onLockedFeltAction?.(value);
+      return;
+    }
+    save.mutate({table_theme: value});
+  }
+
   return <Dialog>
     <DialogTrigger render={<Button type="button" variant="ghost" size="icon" aria-label="Preferências da mesa"/>}>
       <Settings2/>
@@ -40,22 +66,25 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
       <div className="table-preferences">
         <div>
           <Label id="table-theme-label">Tema do feltro</Label>
-          <Select value={preferences.theme}
-                  onValueChange={(value: TableThemeId | null) => value && update({theme: value})}>
-            <SelectTrigger aria-labelledby="table-theme-label">
+          <Select value={theme} onValueChange={chooseTheme}>
+            <SelectTrigger aria-labelledby="table-theme-label" disabled={save.isPending}>
               <SelectValue>
                 {(value: TableThemeId) => TABLE_THEMES[value]?.label ?? TABLE_THEMES.classic.label}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              {Object.entries(TABLE_THEMES).map(([id, theme]) =>
-                <SelectItem key={id} value={id as TableThemeId} label={theme.label}>
-                  <span className="table-theme-option">
+              {Object.entries(TABLE_THEMES).map(([id, feltTheme]) => {
+                const locked = PREMIUM_FELT_IDS.has(id as TableThemeId) && !owned.has(id as TableThemeId);
+                return <SelectItem key={id} value={id as TableThemeId} label={feltTheme.label}>
+                  <span className={`table-theme-option${locked ? ' locked' : ''}`}>
                     <span aria-hidden="true"
-                          style={{'--theme-a': theme.colors[0], '--theme-b': theme.colors[1]} as React.CSSProperties}/>
-                    {theme.label}
+                          style={{'--theme-a': feltTheme.colors[0], '--theme-b': feltTheme.colors[1]} as React.CSSProperties}/>
+                    {feltTheme.label}
+                    {locked && <LockKeyhole aria-label={`Premium bloqueado${
+                      prices.get(id) ? ` · ${prices.get(id)!.toLocaleString('pt-BR')} fichas` : ''}`}/>}
                   </span>
-                </SelectItem>)}
+                </SelectItem>;
+              })}
             </SelectContent>
           </Select>
         </div>

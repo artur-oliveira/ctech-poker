@@ -2,6 +2,7 @@
 import {type CSSProperties, useEffect, useRef, useState} from 'react';
 import {LockKeyhole, SmilePlus, Sparkles, Star, Volume2, VolumeX, X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
+import {EmojiGlyph} from '@/components/ui/EmojiGlyph';
 import {ReactionFavoritesDialog} from '@/components/reactions/ReactionFavoritesDialog';
 import type {SeatView} from '@/lib/api/table';
 import type {ReactionCatalogEntry, ReactionPurchase} from '@/lib/api/reactionPurchases';
@@ -28,7 +29,7 @@ function ReactionChipStack({className = '', style}: {className?: string; style?:
 function ReactionGlyph({reactionId, glyph}: {reactionId: TableReactionID; glyph: string}) {
   return reactionId === 'chip'
     ? <ReactionChipStack/>
-    : <span aria-hidden="true">{glyph}</span>;
+    : <EmojiGlyph glyph={glyph}/>;
 }
 
 function chipBurstStyle(index: number): CSSProperties {
@@ -238,7 +239,7 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
                              className={`${state}${state === 'owned' ? ' premium-owned' : ''}`}
                              disabled={!connected || coolingDown || state === 'loading' || state === 'unavailable' ||
                                (definition.targeted && !hasOpponents)} onClick={() => chooseReaction(id)}>
-                <span aria-hidden="true">{definition.glyph}</span>
+                <EmojiGlyph glyph={definition.glyph}/>
                 {state === 'locked' && <LockKeyhole aria-label="Premium bloqueada"/>}
                 {state === 'owned' && <Sparkles aria-label="Premium liberada"/>}
               </button>;
@@ -252,7 +253,7 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
                 return <button type="button" key={id} title={definition.label} className={`reaction-choice ${state}`}
                                disabled={!connected || coolingDown || state === 'loading' || state === 'unavailable'}
                                onClick={() => chooseReaction(id)}>
-                  <span aria-hidden="true">{definition.glyph}</span><span className="sr-only">{definition.label}</span>
+                  <EmojiGlyph glyph={definition.glyph}/><span className="sr-only">{definition.label}</span>
                   {state === 'locked' && <LockKeyhole className="reaction-choice-state" aria-label="Premium bloqueada"/>}
                   {state === 'owned' && <Sparkles className="reaction-choice-state" aria-label="Premium liberada"/>}
                 </button>;

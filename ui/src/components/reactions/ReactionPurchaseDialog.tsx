@@ -7,6 +7,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
 } from '@/components/ui/dialog';
 import {PixPaymentView} from '@/components/store/PixPaymentView';
+import {EmojiGlyph} from '@/components/ui/EmojiGlyph';
 import {ApiError} from '@/lib/api/client';
 import {
   createReactionPurchase, getReactionPurchase, type ReactionCatalogEntry, type ReactionPurchase,
@@ -98,7 +99,7 @@ export function ReactionPurchaseDialog({entry, initialPurchase, sandboxBalance, 
   }}>
     <DialogContent className="reaction-purchase-dialog">
       <DialogHeader>
-        <span className="reaction-purchase-hero" aria-hidden="true">{definition.glyph}</span>
+        <span className="reaction-purchase-hero"><EmojiGlyph glyph={definition.glyph}/></span>
         <DialogTitle>{confirmed ? `${definition.label} liberada` : `Liberar ${definition.label}`}</DialogTitle>
         <DialogDescription>{confirmed
           ? 'A reação é sua para sempre e já pode ser usada em qualquer mesa.'

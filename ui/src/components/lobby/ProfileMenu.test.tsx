@@ -2,6 +2,7 @@ import {render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import {ProfileMenu} from './ProfileMenu';
+import type {CosmeticCatalogEntry, CosmeticPurchase} from '@/lib/api/cosmeticPurchases';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -9,15 +10,26 @@ const mocks = vi.hoisted(() => ({
   setQueryData: vi.fn(),
   logout: vi.fn(),
   notify: vi.fn(),
+  state: {
+    player: undefined as unknown,
+    catalog: [] as CosmeticCatalogEntry[],
+    purchases: [] as CosmeticPurchase[],
+  },
 }));
 
 vi.mock('@tanstack/react-query', () => ({
-  useQuery: mocks.query,
+  useQuery: ({queryKey}: {queryKey: unknown[]}) => {
+    mocks.query(queryKey);
+    if (queryKey[0] === 'player') return {data: mocks.state.player};
+    if (queryKey[1] === 'cosmetic-catalog') return {data: mocks.state.catalog};
+    if (queryKey[1] === 'cosmetic-purchases') return {data: mocks.state.purchases};
+    return {data: undefined};
+  },
   useQueryClient: () => ({setQueryData: mocks.setQueryData}),
   useMutation: ({onSuccess}: { onSuccess: (data: unknown, input: unknown) => void }) => ({
     mutate: (input: unknown) => {
       mocks.mutate(input);
-      onSuccess({...mocks.query().data, ...(input as object)}, input);
+      onSuccess({...(mocks.state.player as object), ...(input as object)}, input);
     },
     isPending: false,
   }),
@@ -53,22 +65,24 @@ async function openProfile() {
 describe('ProfileMenu', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.query.mockReturnValue({data: player});
+    mocks.state.player = player;
+    mocks.state.catalog = [];
+    mocks.state.purchases = [];
   });
-  
+
   test('summarizes the active wallet and exposes both balances in the menu', async () => {
     render(<ProfileMenu/>);
     expect(screen.getByText('12.345 fichas')).toBeInTheDocument();
     expect(screen.getByRole('link', {name: /Abrir loja/})).toHaveAttribute('href', '/store');
     expect(screen.getByText('AS')).toBeInTheDocument();
-    
+
     await openProfile();
     expect(screen.getByText('Sandbox')).toBeInTheDocument();
     expect(screen.getAllByText('12.345 fichas')).toHaveLength(2);
     expect(screen.getByText(/R\$\s*987,60/)).toBeInTheDocument();
     expect(screen.getByRole('button', {name: /Loja/})).toHaveAttribute('href', '/store');
   });
-  
+
   test('trims and saves a changed display name into the player cache', async () => {
     render(<ProfileMenu/>);
     await openProfile();
@@ -77,7 +91,7 @@ describe('ProfileMenu', () => {
     await userEvent.clear(input);
     await userEvent.type(input, '  Nova Ana  ');
     await userEvent.click(screen.getByRole('button', {name: 'Salvar'}));
-    
+
     expect(mocks.mutate).toHaveBeenCalledWith({name: 'Nova Ana'});
     expect(mocks.setQueryData).toHaveBeenCalledWith(
       ['player', 'me'],
@@ -85,7 +99,7 @@ describe('ProfileMenu', () => {
     );
     await waitFor(() => expect(screen.queryByRole('textbox')).not.toBeInTheDocument());
   });
-  
+
   test('cancels name editing with Escape and prevents an empty save', async () => {
     render(<ProfileMenu/>);
     await openProfile();
@@ -97,13 +111,13 @@ describe('ProfileMenu', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(mocks.mutate).not.toHaveBeenCalled();
   });
-  
+
   test('switches to real money, opens profile tools, and logs out', async () => {
     render(<ProfileMenu/>);
     await openProfile();
     await userEvent.click(screen.getByRole('switch', {name: 'Sandbox'}));
     expect(mocks.mutate).toHaveBeenCalledWith({wallet_mode: 'real'});
-    
+
     await userEvent.click(screen.getByRole('button', {name: 'Vitrine do perfil'}));
     expect(screen.getByText('showcase-open')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', {name: /Seu jogo/}));
@@ -111,7 +125,7 @@ describe('ProfileMenu', () => {
     await userEvent.click(screen.getByRole('button', {name: /Sair da conta/}));
     expect(mocks.logout).toHaveBeenCalledOnce();
   });
-  
+
 
   test('saves the display name straight from the Enter key', async () => {
     render(<ProfileMenu/>);
@@ -123,7 +137,7 @@ describe('ProfileMenu', () => {
   });
 
   test('confirms a deck change and a switch back to sandbox', async () => {
-    mocks.query.mockReturnValue({data: {...player, wallet_mode: 'real'}});
+    mocks.state.player = {...player, wallet_mode: 'real'};
     render(<ProfileMenu/>);
     await openProfile();
     await userEvent.click(screen.getByRole('switch', {name: 'Dinheiro real'}));
@@ -137,7 +151,7 @@ describe('ProfileMenu', () => {
   });
 
   test('uploads a chosen profile photo and lets an existing one be removed', async () => {
-    mocks.query.mockReturnValue({data: {...player, avatar_url: '/avatars/player-1.jpg'}});
+    mocks.state.player = {...player, avatar_url: '/avatars/player-1.jpg'};
     render(<ProfileMenu/>);
     await openProfile();
 
@@ -158,7 +172,7 @@ describe('ProfileMenu', () => {
   });
 
   test('falls back to zeroed balances and an unset name for a fresh player', async () => {
-    mocks.query.mockReturnValue({data: undefined});
+    mocks.state.player = undefined;
     render(<ProfileMenu/>);
     expect(screen.getByText('0 fichas')).toBeInTheDocument();
 
@@ -169,8 +183,35 @@ describe('ProfileMenu', () => {
   });
 
   test('formats the real-money wallet in the collapsed summary', () => {
-    mocks.query.mockReturnValue({data: {...player, wallet_mode: 'real'}});
+    mocks.state.player = {...player, wallet_mode: 'real'};
     render(<ProfileMenu/>);
     expect(screen.getByText(/R\$\s*987,60/)).toBeInTheDocument();
+  });
+
+  test('locks an unowned premium deck with a link to the store instead of selecting it', async () => {
+    mocks.state.catalog = [{kind: 'deck', id: 'golden', premium: true, price_fichas: 500_000}];
+    render(<ProfileMenu/>);
+    await openProfile();
+    await userEvent.click(screen.getByRole('combobox', {name: 'Baralho'}));
+
+    const golden = await screen.findByRole('option', {name: /Dourado/});
+    expect(golden.tagName).toBe('A');
+    expect(golden).toHaveAttribute('href', '/store#decks');
+    expect(golden.querySelector('svg[aria-label*="Baralho premium bloqueado"]')).not.toBeNull();
+    expect(golden.querySelector('svg[aria-label*="500.000 fichas"]')).not.toBeNull();
+    expect(mocks.mutate).not.toHaveBeenCalledWith(expect.objectContaining({deck_variant: 'golden'}));
+  });
+
+  test('an owned premium deck selects normally, with no lock icon', async () => {
+    mocks.state.catalog = [{kind: 'deck', id: 'golden', premium: true, price_fichas: 500_000}];
+    mocks.state.purchases = [{purchase_id: 'pp1', kind: 'deck', item_id: 'golden', method: 'fichas', status: 'confirmed'}];
+    render(<ProfileMenu/>);
+    await openProfile();
+    await userEvent.click(screen.getByRole('combobox', {name: 'Baralho'}));
+
+    const golden = await screen.findByRole('option', {name: 'Dourado'});
+    expect(golden.tagName).not.toBe('A');
+    await userEvent.click(golden);
+    expect(mocks.mutate).toHaveBeenCalledWith({deck_variant: 'golden'});
   });
 });

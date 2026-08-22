@@ -80,14 +80,14 @@ describe('shared presentation contracts', () => {
   
   test('table preferences persist only normalized values', () => {
     const {result} = renderHook(() => useTablePreferences());
-    expect(result.current.preferences.theme).toBe('classic');
-    act(() => result.current.update({theme: 'ocean', dealerVoice: true, realityCheckMinutes: 30}));
-    expect(result.current.preferences).toMatchObject({theme: 'ocean', dealerVoice: true, realityCheckMinutes: 30});
-    
+    expect(result.current.preferences).not.toHaveProperty('theme');
+    act(() => result.current.update({dealerVoice: true, realityCheckMinutes: 30}));
+    expect(result.current.preferences).toMatchObject({dealerVoice: true, realityCheckMinutes: 30});
+
     act(() => {
       localStorage.setItem('ctech-poker:table-preferences:v1', '{"theme":"invalid","realityCheckMinutes":13}');
       window.dispatchEvent(new Event('ctech-poker:table-preferences'));
     });
-    expect(result.current.preferences).toMatchObject({theme: 'classic', realityCheckMinutes: 60});
+    expect(result.current.preferences).toMatchObject({realityCheckMinutes: 60});
   });
 });

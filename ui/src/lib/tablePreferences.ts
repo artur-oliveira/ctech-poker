@@ -4,7 +4,6 @@ import {useCallback, useMemo, useSyncExternalStore} from 'react';
 export type TableThemeId = 'classic' | 'midnight' | 'burgundy' | 'ocean';
 
 export type TablePreferences = {
-  theme: TableThemeId;
   dealerVoice: boolean;
   voiceCommands: boolean;
   realityCheckMinutes: number;
@@ -17,17 +16,20 @@ export const TABLE_THEMES: Record<TableThemeId, { label: string; colors: [string
   ocean: {label: 'Oceano', colors: ['#14717a', '#073f49']}
 };
 
+// Felt theme lives server-side on the player profile now (table_theme), so it
+// can be gated by ownership like any other cosmetic — see cosmeticPurchases.ts.
+export const PREMIUM_FELT_IDS = new Set<TableThemeId>(['midnight', 'burgundy', 'ocean']);
+
 const STORAGE_KEY = 'ctech-poker:table-preferences:v1';
 const CHANGE_EVENT = 'ctech-poker:table-preferences';
 const DEFAULTS: TablePreferences = {
-  theme: 'classic', dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60
+  dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60
 };
 const REALITY_INTERVALS = new Set([0, 30, 60, 90, 120]);
 
 function normalize(value: unknown): TablePreferences {
   const input = value && typeof value === 'object' ? value as Partial<TablePreferences> : {};
   return {
-    theme: input.theme && input.theme in TABLE_THEMES ? input.theme : DEFAULTS.theme,
     dealerVoice: input.dealerVoice === true,
     voiceCommands: input.voiceCommands === true,
     realityCheckMinutes: typeof input.realityCheckMinutes === 'number' &&

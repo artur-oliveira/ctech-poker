@@ -484,7 +484,7 @@ function TableContent() {
   const playerNotesByID = Object.fromEntries(playerNotes.map(note => [note.opponent_id, note]));
   const relationshipsByID = Object.fromEntries(relationships.map(item => [item.player_id, item]));
   return (
-    <main className="game" data-table-theme={preferences.theme}>
+    <main className="game" data-table-theme={profile?.table_theme || 'classic'}>
       <h1 className="sr-only">Mesa de poker: {STAGE_LABELS[s.stage] || s.stage.replaceAll('_', ' ')}</h1>
       <div className="game-chrome">
         <header>
@@ -499,7 +499,8 @@ function TableContent() {
                                 onOpenChangeAction={open => setActiveTablePanel(open ? 'rankings' : null)}/>
             <TablePreferencesDialog runItTwiceAvailable={Boolean(room?.run_it_twice_enabled)}
                                     runItTwice={Boolean(viewerSeat?.run_it_twice)}
-                                    onRunItTwiceChange={rt.setRunItTwice}/>
+                                    onRunItTwiceChange={rt.setRunItTwice}
+                                    onLockedFeltAction={() => router.push('/store#felt')}/>
             {canInvite && <InviteDialog url={inviteUrl} roomId={id}/>}
             {viewerSeat && !isPaused &&
                 <Button type="button" variant="ghost" size="icon" aria-label="Sentar fora" disabled={rt.readyPending}

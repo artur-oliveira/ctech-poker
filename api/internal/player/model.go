@@ -16,12 +16,17 @@ const (
 // variant catalog (cosmetic-only) lives and grows on the frontend.
 const DefaultDeckVariant = "four-color"
 
+// DefaultTableTheme matches DEFAULT_TABLE_THEME (the "classic" entry) in the
+// UI's src/lib/tablePreferences.ts.
+const DefaultTableTheme = "classic"
+
 type PlayerProfile struct {
 	UserID               string   `dynamodbav:"pk" json:"user_id"`
 	Name                 string   `dynamodbav:"name,omitempty" json:"name,omitempty"`
 	FriendCode           string   `dynamodbav:"friend_code,omitempty" json:"friend_code,omitempty"`
 	WalletMode           string   `dynamodbav:"wallet_mode,omitempty" json:"wallet_mode,omitempty"`
 	DeckVariant          string   `dynamodbav:"deck_variant,omitempty" json:"deck_variant,omitempty"`
+	TableTheme           string   `dynamodbav:"table_theme,omitempty" json:"table_theme,omitempty"`
 	ShowcasePublic       bool     `dynamodbav:"showcase_public,omitempty" json:"showcase_public"`
 	PlaystylePublic      bool     `dynamodbav:"playstyle_public,omitempty" json:"playstyle_public"`
 	FeaturedAchievements []string `dynamodbav:"featured_achievements,omitempty" json:"featured_achievements,omitempty"`
@@ -55,4 +60,13 @@ func (p *PlayerProfile) EffectiveDeckVariant() string {
 		return DefaultDeckVariant
 	}
 	return p.DeckVariant
+}
+
+// EffectiveTableTheme defaults an unset preference to classic, same rationale
+// as EffectiveDeckVariant.
+func (p *PlayerProfile) EffectiveTableTheme() string {
+	if p == nil || p.TableTheme == "" {
+		return DefaultTableTheme
+	}
+	return p.TableTheme
 }

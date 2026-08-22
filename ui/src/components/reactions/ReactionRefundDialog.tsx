@@ -3,6 +3,7 @@ import {useState} from 'react';
 import {Check, CircleAlert, LoaderCircle, RotateCcw} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog';
+import {EmojiGlyph} from '@/components/ui/EmojiGlyph';
 import {ApiError} from '@/lib/api/client';
 import type {ReactionPurchase} from '@/lib/api/reactionPurchases';
 import {TABLE_REACTIONS, type TableReactionID} from '@/lib/reactions';
@@ -49,7 +50,7 @@ export function ReactionRefundDialog({purchase, onCloseAction, onConfirmAction}:
         <Check aria-hidden="true"/><div><strong>Estorno concluído</strong><p>A reação voltou a ficar bloqueada.</p></div>
       </div> : <>
         <dl className="reaction-refund-summary">
-          <div><dt>Reação</dt><dd><span aria-hidden="true">{definition?.glyph}</span> {definition?.label}</dd></div>
+          <div><dt>Reação</dt><dd>{definition?.glyph && <EmojiGlyph glyph={definition.glyph}/>} {definition?.label}</dd></div>
           <div><dt>Valor devolvido</dt><dd>{valueLabel(purchase)}</dd></div>
           <div><dt>Destino</dt><dd>{purchase.method === 'pix' ? 'Mesma compra Pix' : 'Saldo de fichas sandbox'}</dd></div>
         </dl>

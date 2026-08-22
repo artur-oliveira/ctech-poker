@@ -2,6 +2,7 @@ import type {Page} from './client';
 import {apiClient} from './client';
 import type {DeckVariantId} from '../cardVariants';
 import type {PlaystyleBadge} from '../playstyle';
+import type {TableThemeId} from '../tablePreferences';
 
 export type WalletMode = 'sandbox' | 'real';
 
@@ -20,6 +21,7 @@ export interface PlayerProfile {
   // Not sent by the backend yet, reserved so the deck color variant can be
   // wired in without another PlayerProfile shape change.
   deck_variant?: DeckVariantId;
+  table_theme?: TableThemeId;
   showcase_public: boolean;
   playstyle_public: boolean;
   featured_achievements?: string[];
@@ -39,6 +41,7 @@ export async function updateMe(input: {
   name?: string;
   wallet_mode?: WalletMode;
   deck_variant?: DeckVariantId;
+  table_theme?: TableThemeId;
   showcase_public?: boolean;
   playstyle_public?: boolean;
   featured_achievements?: string[];

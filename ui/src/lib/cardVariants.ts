@@ -7,8 +7,10 @@ export type DeckVariantId = (
   'high-constrast' |
   'casino' |
   'bicycle' |
-  'dark' |
-  'vintage'
+  'vintage' |
+  'golden' |
+  'pink' |
+  'alt'
   )
 
 export interface DeckVariant {
@@ -71,15 +73,6 @@ export const DECK_VARIANTS: Record<DeckVariantId, DeckVariant> = {
       club: '#1A1A1A'
     }
   },
-  dark: {
-    label: 'Modo Escuro',
-    colors: {
-      spade: '#8B8B8B',
-      heart: '#FF6B6B',
-      diamond: '#4DABF7',
-      club: '#69DB7C'
-    }
-  },
   vintage: {
     label: 'Vintage',
     colors: {
@@ -88,7 +81,38 @@ export const DECK_VARIANTS: Record<DeckVariantId, DeckVariant> = {
       diamond: '#2C5282',
       club: '#276749'
     }
+  },
+  golden: {
+    label: 'Dourado',
+    colors: {
+      spade: '#141414',
+      heart: '#8B0000',
+      diamond: '#C9A227',
+      club: '#0E3B2E'
+    }
+  },
+  pink: {
+    label: 'Rosa',
+    colors: {
+      spade: '#2E1A2E',
+      heart: '#FF4D6D',
+      diamond: '#FF8FB1',
+      club: '#6B2D5C'
+    }
+  },
+  alt: {
+    label: 'Alternativo',
+    colors: {
+      spade: '#3A3A3C',
+      heart: '#D63447',
+      diamond: '#D4AF37',
+      club: '#2E5FA3'
+    }
   }
 };
 
 export const DEFAULT_DECK_VARIANT: DeckVariantId = 'four-color';
+
+export const PREMIUM_DECK_IDS = new Set<DeckVariantId>([
+  'casino', 'bicycle', 'vintage', 'golden', 'pink', 'alt'
+]);

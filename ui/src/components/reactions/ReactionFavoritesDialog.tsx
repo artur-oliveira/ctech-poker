@@ -3,6 +3,7 @@ import {useState} from 'react';
 import {Check, LockKeyhole, Star} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog';
+import {EmojiGlyph} from '@/components/ui/EmojiGlyph';
 import {PREMIUM_REACTION_IDS, TABLE_REACTIONS, type TableReactionID} from '@/lib/reactions';
 
 export function ReactionFavoritesDialog({open, favorites, owned, saving, onOpenChangeAction, onSaveAction}: {
@@ -34,7 +35,7 @@ export function ReactionFavoritesDialog({open, favorites, owned, saving, onOpenC
             const locked = PREMIUM_REACTION_IDS.has(id) && !owned.has(id);
             return <button type="button" key={id} aria-pressed={selected}
                            disabled={!selected && draft.length >= 3} onClick={() => toggle(id)}>
-              <span className="reaction-favorite-glyph" aria-hidden="true">{definition.glyph}</span>
+              <span className="reaction-favorite-glyph"><EmojiGlyph glyph={definition.glyph}/></span>
               <span>{definition.label}</span>
               {locked && <LockKeyhole aria-label="Premium bloqueada"/>}
               {selected ? <Check aria-hidden="true"/> : <Star aria-hidden="true"/>}

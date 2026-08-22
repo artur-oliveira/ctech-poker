@@ -314,6 +314,23 @@ func (s *Store) SetDeckVariant(ctx context.Context, userID, variant string) erro
 	return nil
 }
 
+func (s *Store) SetTableTheme(ctx context.Context, userID, theme string) error {
+	if _, err := s.GetOrCreate(ctx, userID); err != nil {
+		return err
+	}
+	ok, err := s.base.UpdateItem(ctx, userID, nil, map[string]any{
+		"table_theme": theme,
+		"updated_at":  dynamo.NowStr(),
+	})
+	if err != nil {
+		return fmt.Errorf("player: set table theme: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("player: profile disappeared while setting table theme")
+	}
+	return nil
+}
+
 func (s *Store) SetShowcase(ctx context.Context, userID string, public, playstylePublic bool, featured []string) error {
 	if _, err := s.GetOrCreate(ctx, userID); err != nil {
 		return err

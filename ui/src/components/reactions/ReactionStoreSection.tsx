@@ -1,6 +1,7 @@
 'use client';
 import {LockKeyhole, QrCode, RotateCcw, Sparkles} from 'lucide-react';
 import {Button} from '@/components/ui/button';
+import {EmojiGlyph} from '@/components/ui/EmojiGlyph';
 import {SkeletonList} from '@/components/ui/skeleton';
 import type {ReactionCatalogEntry, ReactionPurchase} from '@/lib/api/reactionPurchases';
 import {currentReactionPurchase} from '@/lib/api/reactionPurchases';
@@ -49,7 +50,7 @@ export function ReactionStoreSection({catalog, purchases, isLoading, isError, on
         const active = purchase?.status === 'pending' || purchase?.status === 'processing';
         const refunding = purchase?.status === 'refunding';
         return <li key={entry.id} className={`reaction-store-item${owned ? ' owned' : ''}`}>
-          <span className="reaction-store-glyph" aria-hidden="true">{definition.glyph}</span>
+          <span className="reaction-store-glyph"><EmojiGlyph glyph={definition.glyph}/></span>
           <span className="reaction-store-copy"><strong>{definition.label}</strong>
             <small>{formatBRL(entry.price_cents)} <span aria-hidden="true">·</span> {(entry.price_fichas ?? 0).toLocaleString('pt-BR')} fichas</small></span>
           {owned ? <span className="reaction-store-owned"><Sparkles aria-hidden="true"/> Sua</span>
@@ -87,7 +88,7 @@ export function ReactionPurchaseHistory({purchases, isLoading = false, isError =
 
   return <ul className="reaction-history-list">{history.map(item => {
         const definition = TABLE_REACTIONS[item.reaction_id as TableReactionID];
-        return <li key={item.purchase_id}><span aria-hidden="true">{definition?.glyph}</span>
+        return <li key={item.purchase_id}><span>{definition?.glyph && <EmojiGlyph glyph={definition.glyph}/>}</span>
           <span><strong>{definition?.label || item.reaction_id}</strong><small>{item.method === 'pix' ? 'Pix' : 'Fichas'}{formatDate(item.updated_at || item.created_at) ? ` · ${formatDate(item.updated_at || item.created_at)}` : ''}</small></span>
           <b className={`reaction-history-status ${item.status}`}>{STATUS_LABEL[item.status] || 'Atualizando'}</b>
         </li>;

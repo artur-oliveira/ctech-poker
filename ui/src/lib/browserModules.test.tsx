@@ -195,22 +195,26 @@ describe('useTablePreferences', () => {
   test('discards a corrupted or out-of-range payload instead of applying it', () => {
     localStorage.setItem('ctech-poker:table-preferences:v1', 'not json');
     const {result: corrupted} = renderHook(() => useTablePreferences());
-    expect(corrupted.current.preferences.theme).toBe('classic');
+    expect(corrupted.current.preferences).toEqual({
+      dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60
+    });
 
+    // A stale blob from before table_theme moved server-side (still carrying
+    // a "theme" key) round-trips harmlessly: the extra key is ignored.
     localStorage.setItem('ctech-poker:table-preferences:v1',
       JSON.stringify({theme: 'neon', dealerVoice: 'yes', realityCheckMinutes: 7}));
     const {result} = renderHook(() => useTablePreferences());
     expect(result.current.preferences).toEqual({
-      theme: 'classic', dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60
+      dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60
     });
   });
 
   test('propagates a change written by another tab', () => {
     const {result} = renderHook(() => useTablePreferences());
     act(() => {
-      localStorage.setItem('ctech-poker:table-preferences:v1', JSON.stringify({theme: 'ocean'}));
+      localStorage.setItem('ctech-poker:table-preferences:v1', JSON.stringify({realityCheckMinutes: 90}));
       window.dispatchEvent(new StorageEvent('storage', {key: 'ctech-poker:table-preferences:v1'}));
     });
-    expect(result.current.preferences.theme).toBe('ocean');
+    expect(result.current.preferences.realityCheckMinutes).toBe(90);
   });
 });

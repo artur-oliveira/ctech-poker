@@ -45,6 +45,9 @@ func (unacceptedProfiles) SetWalletMode(context.Context, string, string) error {
 func (unacceptedProfiles) SetDeckVariant(context.Context, string, string) error {
 	return nil
 }
+func (unacceptedProfiles) SetTableTheme(context.Context, string, string) error {
+	return nil
+}
 func (unacceptedProfiles) SetShowcase(context.Context, string, bool, bool, []string) error {
 	return nil
 }

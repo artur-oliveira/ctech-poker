@@ -3,9 +3,11 @@ package player
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"gopkg.aoctech.app/poker/api/internal/achievements"
+	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 	"gopkg.aoctech.app/poker/api/internal/reactions"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
@@ -14,6 +16,8 @@ var ErrTermsNotAccepted = errors.New("poker terms not accepted")
 var ErrEmptyName = errors.New("player: name is empty")
 var ErrInvalidWalletMode = errors.New("player: wallet_mode must be sandbox or real")
 var ErrInvalidDeckVariant = errors.New("player: deck_variant must not be empty")
+var ErrInvalidTableTheme = errors.New("player: table_theme must not be empty")
+var ErrCosmeticNotOwned = errors.New("player: cosmetic is premium and not owned")
 var ErrInvalidShowcase = errors.New("player: invalid showcase")
 var ErrShowcasePrivate = errors.New("player: showcase is private")
 var ErrInvalidFavoriteReactions = errors.New("player: invalid favorite reactions")
@@ -22,11 +26,6 @@ var ErrInvalidFavoriteReactions = errors.New("player: invalid favorite reactions
 // every other seat at a table, so it gets the same length ceiling as chat.
 const maxDisplayNameLen = 60
 
-// maxDeckVariantLen is a generous cap, not a catalog check — the variant
-// catalog is cosmetic-only and lives on the frontend (src/lib/cardVariants.ts),
-// so the backend just stores whatever id it's given.
-const maxDeckVariantLen = 60
-
 type profileStore interface {
 	GetOrCreate(context.Context, string) (*PlayerProfile, error)
 	Get(context.Context, string) (*PlayerProfile, error)
@@ -34,8 +33,18 @@ type profileStore interface {
 	SetName(context.Context, string, string) error
 	SetWalletMode(context.Context, string, string) error
 	SetDeckVariant(context.Context, string, string) error
+	SetTableTheme(context.Context, string, string) error
 	SetShowcase(context.Context, string, bool, bool, []string) error
 	SetFavoriteReactions(context.Context, string, []string) error
+}
+
+// cosmeticsOwnershipChecker is the narrow slice of *cosmeticpurchase.Service
+// SetDeckVariant/SetTableTheme need — satisfied by *cosmeticpurchase.Service
+// without this package importing it directly (cosmeticpurchase itself
+// depends on player's EffectiveDeckVariant/EffectiveTableTheme for its own
+// refund check, so a direct import here would cycle).
+type cosmeticsOwnershipChecker interface {
+	IsOwned(ctx context.Context, playerID string, kind cosmetics.Kind, itemID string) (bool, error)
 }
 
 func (s *Service) ReportAvatar(ctx context.Context, targetID, reporterID string) error {
@@ -82,8 +91,9 @@ type balanceFetcher interface {
 }
 
 type Service struct {
-	store  profileStore
-	wallet balanceFetcher
+	store     profileStore
+	wallet    balanceFetcher
+	cosmetics cosmeticsOwnershipChecker
 }
 
 func NewService(store profileStore) *Service { return &Service{store: store} }
@@ -92,6 +102,13 @@ func NewService(store profileStore) *Service { return &Service{store: store} }
 // instead of erroring (a profile that predates wallet wiring, or a test).
 func (s *Service) WithWallet(wallet balanceFetcher) *Service {
 	s.wallet = wallet
+	return s
+}
+
+// WithCosmetics wires in the premium deck/felt ownership check
+// SetDeckVariant/SetTableTheme require before persisting a premium id.
+func (s *Service) WithCosmetics(c cosmeticsOwnershipChecker) *Service {
+	s.cosmetics = c
 	return s
 }
 
@@ -114,21 +131,68 @@ func (s *Service) SetWalletMode(ctx context.Context, userID, mode string) (*Play
 	return s.store.GetOrCreate(ctx, userID)
 }
 
-// SetDeckVariant persists the player's card-color-scheme preference. The id
-// itself is opaque to the backend — it just needs to round-trip back to the
-// frontend, which owns the catalog and picks the default when unset.
+// SetDeckVariant persists the player's card-color-scheme preference. variant
+// must be a known catalog id (docs/specs/2026-08-21-premium-cosmetics-overhaul.md
+// Part 4 — this used to accept any string up to 60 chars with no catalog or
+// ownership check at all); a premium id additionally requires an active
+// entitlement.
 func (s *Service) SetDeckVariant(ctx context.Context, userID, variant string) (*PlayerProfile, error) {
 	variant = strings.TrimSpace(variant)
 	if variant == "" {
 		return nil, ErrInvalidDeckVariant
 	}
-	if len(variant) > maxDeckVariantLen {
-		variant = variant[:maxDeckVariantLen]
+	if !cosmetics.IsKnown(cosmetics.KindDeck, variant) {
+		return nil, ErrInvalidDeckVariant
+	}
+	if cosmetics.IsPremium(cosmetics.KindDeck, variant) {
+		if err := s.requireCosmetic(ctx, userID, cosmetics.KindDeck, variant); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.store.SetDeckVariant(ctx, userID, variant); err != nil {
 		return nil, err
 	}
 	return s.store.GetOrCreate(ctx, userID)
+}
+
+// SetTableTheme persists the player's felt preference, mirroring
+// SetDeckVariant's validate-then-persist shape exactly — unlike deck_variant,
+// which shipped without an ownership check and is being closed after the
+// fact, table_theme never ships without one.
+func (s *Service) SetTableTheme(ctx context.Context, userID, themeID string) (*PlayerProfile, error) {
+	themeID = strings.TrimSpace(themeID)
+	if themeID == "" {
+		return nil, ErrInvalidTableTheme
+	}
+	if !cosmetics.IsKnown(cosmetics.KindFelt, themeID) {
+		return nil, ErrInvalidTableTheme
+	}
+	if cosmetics.IsPremium(cosmetics.KindFelt, themeID) {
+		if err := s.requireCosmetic(ctx, userID, cosmetics.KindFelt, themeID); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.store.SetTableTheme(ctx, userID, themeID); err != nil {
+		return nil, err
+	}
+	return s.store.GetOrCreate(ctx, userID)
+}
+
+// requireCosmetic fails closed: a premium id is rejected outright if
+// ownership wiring is missing, since the ownership check must never silently
+// pass just because s.cosmetics was never set (e.g. a wiring mistake).
+func (s *Service) requireCosmetic(ctx context.Context, userID string, kind cosmetics.Kind, itemID string) error {
+	if s.cosmetics == nil {
+		return fmt.Errorf("%w: ownership check unavailable", ErrCosmeticNotOwned)
+	}
+	owned, err := s.cosmetics.IsOwned(ctx, userID, kind, itemID)
+	if err != nil {
+		return err
+	}
+	if !owned {
+		return ErrCosmeticNotOwned
+	}
+	return nil
 }
 
 func (s *Service) GetOrCreate(ctx context.Context, userID string) (*PlayerProfile, error) {

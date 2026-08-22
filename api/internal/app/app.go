@@ -29,6 +29,8 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/avatar"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/cosmeticpurchase"
+	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 	"gopkg.aoctech.app/poker/api/internal/dailyreward"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/handshare"
@@ -69,6 +71,9 @@ var Module = fx.Options(
 		newTableStore,
 		newRoomStore,
 		newPlayerStore,
+		newCosmeticsEntitlementStore,
+		newCosmeticsPurchaseStore,
+		newCosmeticsPurchaseService,
 		newPlayerService,
 		newPlayerNoteStore,
 		newHandShareStore,
@@ -102,6 +107,7 @@ var Module = fx.Options(
 	),
 	fx.Invoke(wirePlayerRemovedHook),
 	fx.Invoke(wireAutoRebuyHook),
+	fx.Invoke(wireCosmeticCurrentSelection),
 	fx.Invoke(registerRoutesWithSocialRuntime),
 	fx.Invoke(startServer),
 )
@@ -253,8 +259,8 @@ func newRoomStore(db *dynamodb.Client, cfg *config.Config) *roomstore.Store {
 func newPlayerStore(db *dynamodb.Client, cfg *config.Config) *player.Store {
 	return player.NewStore(db, cfg.Env)
 }
-func newPlayerService(store *player.Store, wallet *walletclient.Client) *player.Service {
-	return player.NewService(store).WithWallet(wallet)
+func newPlayerService(store *player.Store, wallet *walletclient.Client, cosmeticsSvc *cosmeticpurchase.Service) *player.Service {
+	return player.NewService(store).WithWallet(wallet).WithCosmetics(cosmeticsSvc)
 }
 func newPlayerNoteStore(db *dynamodb.Client, cfg *config.Config) *playernotes.Store {
 	return playernotes.NewStore(db, cfg.Env)
@@ -300,6 +306,37 @@ func newReactionPurchaseService(wallet *walletclient.Client, entitlements *react
 }
 func newReactionOwnershipCache(svc *reactionpurchase.Service, cacheB cache.Backend) *reactionpurchase.OwnershipCache {
 	return reactionpurchase.NewOwnershipCache(svc, cacheB)
+}
+func newCosmeticsEntitlementStore(db *dynamodb.Client, cfg *config.Config) *cosmeticpurchase.EntitlementStore {
+	return cosmeticpurchase.NewEntitlementStore(db, cfg.Env)
+}
+func newCosmeticsPurchaseStore(db *dynamodb.Client, cfg *config.Config) *cosmeticpurchase.Store {
+	return cosmeticpurchase.NewStore(db, cfg.Env)
+}
+func newCosmeticsPurchaseService(wallet *walletclient.Client, entitlements *cosmeticpurchase.EntitlementStore, store *cosmeticpurchase.Store) *cosmeticpurchase.Service {
+	return cosmeticpurchase.NewService(wallet, entitlements, store)
+}
+
+// wireCosmeticCurrentSelection wires the "is this item currently applied"
+// check Service.Refund needs into the cosmetics purchase service, after Fx
+// has built both — cosmeticpurchase can't import player directly (player
+// already depends on cosmeticpurchase for ownership checks), so the callback
+// is injected the same way SetOwnershipInvalidator injects one.
+func wireCosmeticCurrentSelection(cosmeticsSvc *cosmeticpurchase.Service, players *player.Service) {
+	cosmeticsSvc.SetCurrentSelectionFunc(func(ctx context.Context, playerID string, kind cosmetics.Kind) (string, error) {
+		profile, err := players.Get(ctx, playerID)
+		if err != nil {
+			return "", err
+		}
+		switch kind {
+		case cosmetics.KindDeck:
+			return profile.EffectiveDeckVariant(), nil
+		case cosmetics.KindFelt:
+			return profile.EffectiveTableTheme(), nil
+		default:
+			return "", nil
+		}
+	})
 }
 func newSessionStore(db *dynamodb.Client, cfg *config.Config) *sessionlog.Store {
 	return sessionlog.NewStore(db, cfg.Env)
@@ -754,12 +791,13 @@ func registerRoutesWithSocialRuntime(
 	avatars *avatar.Service,
 	sandboxPurchaseSvc *sandboxpurchase.Service,
 	reactionPurchaseSvc *reactionpurchase.Service,
+	cosmeticPurchaseSvc *cosmeticpurchase.Service,
 	socialSvc *social.Service,
 	presenceSvc *presence.Service,
 	recentSvc *recentplayers.Service,
 	reportSvc *reports.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc)
 }
 
 // registerRoutes retains the narrow construction seam used by older unit
@@ -772,9 +810,9 @@ func registerRoutes(
 	tableStore *tablestore.Store, sessionStore *sessionlog.Store, achievementStore *achievements.Store,
 	playerNoteStore *playernotes.Store, handShareStore *handshare.Store, pokerStatsStore *pokerstats.Store,
 	avatars *avatar.Service, sandboxPurchaseSvc *sandboxpurchase.Service,
-	reactionPurchaseSvc *reactionpurchase.Service, socialSvc *social.Service,
+	reactionPurchaseSvc *reactionpurchase.Service, cosmeticPurchaseSvc *cosmeticpurchase.Service, socialSvc *social.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, socialSvc, nil, nil, nil)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil)
 }
 
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {
