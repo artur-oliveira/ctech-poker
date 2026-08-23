@@ -34,6 +34,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/dailyreward"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/entitlement"
+	"gopkg.aoctech.app/poker/api/internal/handreveal"
 	"gopkg.aoctech.app/poker/api/internal/handshare"
 	"gopkg.aoctech.app/poker/api/internal/highlights"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
@@ -80,6 +81,7 @@ var Module = fx.Options(
 		newPlayerService,
 		newPlayerNoteStore,
 		newHandShareStore,
+		newHandRevealStore,
 		newPokerStatsStore,
 		newMatchupStore,
 		newHighlightsStore,
@@ -278,6 +280,9 @@ func newPlayerNoteStore(db *dynamodb.Client, cfg *config.Config) *playernotes.St
 func newHandShareStore(db *dynamodb.Client, cfg *config.Config) *handshare.Store {
 	return handshare.NewStore(db, cfg.Env)
 }
+func newHandRevealStore(db *dynamodb.Client, cfg *config.Config) *handreveal.Store {
+	return handreveal.NewStore(db, cfg.Env)
+}
 func newPokerStatsStore(db *dynamodb.Client, cfg *config.Config) *pokerstats.Store {
 	return pokerstats.NewStore(db, cfg.Env)
 }
@@ -446,7 +451,7 @@ func tableCurrencyMode(ctx context.Context, rooms roomModeReader, tableID string
 	return room.CurrencyMode, nil
 }
 
-func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config) *tablemanager.Manager {
+func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
 		data, err := goproto.Marshal(message)
@@ -470,6 +475,32 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 			if err := sessionStore.RecordHand(context.Background(), item); err != nil {
 				slog.Error("sessionlog: record hand failed", "table", tableID, "hand", handID, "player", id, "err", err)
 			}
+		}
+	}
+	persistHandReveal := func(tableID, handID, mode string, outcome hand.HandOutcome) {
+		if handRevealStore == nil || mode != roomstore.CurrencyModeSandbox {
+			return
+		}
+		if !outcome.WonWithoutShowdown || len(outcome.Winners) != 1 {
+			return
+		}
+		room, err := rooms.Get(context.Background(), tableID)
+		if err != nil || room == nil {
+			slog.Error("handreveal: load room for big blind failed", "table", tableID, "hand", handID, "err", err)
+			return
+		}
+		winnerID := outcome.Winners[0]
+		playerHands := make(map[string]handreveal.PlayerHandCode, len(outcome.PlayerHands))
+		for id, info := range outcome.PlayerHands {
+			playerHands[id] = handreveal.PlayerHandCode{Cards: info.HoleCards}
+		}
+		record := handreveal.HandRecord{
+			HandID: handID, TableID: tableID, BigBlind: room.BigBlind,
+			WinnerID: winnerID, WinnerShown: outcome.PlayerHands[winnerID].Revealed,
+			PlayerHands: playerHands, EndedAt: time.Now().UnixMilli(),
+		}
+		if err := handRevealStore.Put(context.Background(), record); err != nil {
+			slog.Error("handreveal: record hand failed", "table", tableID, "hand", handID, "err", err)
 		}
 	}
 	onHandComplete := func(tableID, handID string, outcome hand.HandOutcome, names map[string]string) {
@@ -533,6 +564,7 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 			slog.Error("matchup: record hand failed", "table", tableID, "hand", handID, "err", err)
 		}
 		persistHandHistory(tableID, handID, mode, outcome, names)
+		persistHandReveal(tableID, handID, mode, outcome)
 		if err := highlightsStore.RecordHand(ctx, tableID, handID, outcome, names); err != nil {
 			slog.Error("highlights: record hand failed", "table", tableID, "hand", handID, "err", err)
 		}
@@ -576,6 +608,7 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 			return
 		}
 		persistHandHistory(tableID, handID, mode, outcome, names)
+		persistHandReveal(tableID, handID, mode, outcome)
 	})
 	mgr.SetOnSeatsChanged(func(tableID string, seatsTaken int) {
 		if err := rooms.SetSeatsTaken(context.Background(), tableID, seatsTaken); err != nil {
