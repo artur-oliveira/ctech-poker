@@ -101,6 +101,12 @@ catalog.
   with hashes for hidden positions and rabbit runout cards. Rabbit-hunt runout cards specifically are withheld from a
   viewer's `ViewFor` snapshot until `Table.RequestRabbitHunt` charges them the table's big blind (sandbox tables only —
   `Table.currencyMode`); see `docs/specs/2026-08-21-paid-rabbit-hunt.md`.
+- `internal/handreveal` (`poker_hand_reveals` + `poker_hand_reveal_payments`) extends the live paid winner-cards reveal
+  (`Table.RequestWinnerCards`) to hand history: `POST`/`GET /players/me/hands/:handId/reveal-winner`. Sandbox-only, one
+  archive row per eligible hand (won without showdown, single winner), written by the same hand-complete/hand-updated
+  hooks that already write `sessionlog.HandItem`. Payment moves through `walletclient` (debit buyer, credit winner
+  half), not a local DynamoDB transaction — sandbox balance lives in ctech-wallet. See
+  `docs/specs/2026-08-21-pay-to-see-winner-cards-history.md`.
 - A separate audit (`docs/plans/2026-07-19-api-audit-remediation.md`) covers H1–H4 / M1–M7 / L1–L6 / E1–E3 / S1–S7. Some
   fixes are already in code (actor re-resolve `tablews.go:185-198`, prod Valkey fail-fast, HTTP rate limiters
   `router.go:39-41`); others are not — verify before relying on them.
@@ -112,7 +118,7 @@ catalog.
 `internal/engine/{hand,betting,deck,equity,handeval,sidepots}` ·
 `internal/{table,tablemanager,tablestore,tablelease,roomstore}` ·
 `internal/{buyin,walletclient,reconcile,entitlement}` (money) ·
-`internal/{player,playernotes,pokerstats,matchup,sessionlog,handshare,highlights}` (player-scoped data) ·
+`internal/{player,playernotes,pokerstats,matchup,sessionlog,handshare,handreveal,highlights}` (player-scoped data) ·
 `internal/{leaderboard,achievements,dailyreward}` (gamification) ·
 `internal/{botcheck,chatfilter,config,problem}` · `tests/{integration,load}`.
 
