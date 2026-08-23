@@ -112,7 +112,7 @@ catalog.
 `internal/engine/{hand,betting,deck,equity,handeval,sidepots}` ·
 `internal/{table,tablemanager,tablestore,tablelease,roomstore}` ·
 `internal/{buyin,walletclient,reconcile,entitlement}` (money) ·
-`internal/{player,playernotes,pokerstats,sessionlog,handshare,highlights}` (player-scoped data) ·
+`internal/{player,playernotes,pokerstats,matchup,sessionlog,handshare,highlights}` (player-scoped data) ·
 `internal/{leaderboard,achievements,dailyreward}` (gamification) ·
 `internal/{botcheck,chatfilter,config,problem}` · `tests/{integration,load}`.
 
