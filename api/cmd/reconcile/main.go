@@ -140,10 +140,17 @@ func handler(ctx context.Context) error {
 	wURLParam := os.Getenv("WALLET_URL_PARAM")
 	if wURLParam != "" {
 		params, err := resolveSSMParams(ctx, wURLParam, os.Getenv("POKER_CLIENT_ID_PARAM"), os.Getenv("POKER_CLIENT_SECRET_PARAM"))
-		if err == nil {
-			_ = os.Setenv("WALLET_URL", params.walletURL)
-			_ = os.Setenv("POKER_CLIENT_ID", params.clientID)
-			_ = os.Setenv("POKER_CLIENT_SECRET", params.clientSecret)
+		if err != nil {
+			return fmt.Errorf("reconcile: resolve SSM params: %w", err)
+		}
+		if err := os.Setenv("WALLET_URL", params.walletURL); err != nil {
+			return fmt.Errorf("set WALLET_URL: %w", err)
+		}
+		if err := os.Setenv("POKER_CLIENT_ID", params.clientID); err != nil {
+			return fmt.Errorf("set POKER_CLIENT_ID: %w", err)
+		}
+		if err := os.Setenv("POKER_CLIENT_SECRET", params.clientSecret); err != nil {
+			return fmt.Errorf("set POKER_CLIENT_SECRET: %w", err)
 		}
 	}
 

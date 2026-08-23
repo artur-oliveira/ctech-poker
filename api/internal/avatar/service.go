@@ -19,6 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"gopkg.aoctech.app/api-commons/observability"
 )
 
 const (
@@ -125,7 +126,11 @@ func (s *Service) ValidateAndPublish(ctx context.Context, uploadKey, publishedKe
 		}
 		return fmt.Errorf("avatar: get quarantine object: %w", err)
 	}
-	defer object.Body.Close()
+	defer func() {
+		if closeErr := object.Body.Close(); closeErr != nil {
+			observability.Warn(ctx, "avatar object body close failed", closeErr, "upload_key", uploadKey)
+		}
+	}()
 	if totalSize(object.ContentRange, object.ContentLength) > MaxBytes {
 		return ErrImageTooLarge
 	}

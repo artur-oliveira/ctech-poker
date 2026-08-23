@@ -63,6 +63,9 @@ implemented-vs-designed index.
   shared buckets this repo imports. Editing a shared script versions this repo's launch
   template on its next deploy.
 - **ctech-go-common** — `jwtverify`, `dynamo`, `cache`, `lock`, `problem`, `ratelimit`, `ws`.
+- **Observabilidade de erros** — `api-commons/observability` centraliza logs estruturados; toda resposta de erro HTTP
+  é registrada (`WARN` em 4xx, `ERROR` em 5xx) com `request_id`, método, path e causa interna quando disponível.
+  `X-Request-ID` é preservado/gerado e exposto por CORS. Logs nunca incluem tokens, payloads ou PII desnecessária.
 - **ctech-billing** — not used. Only relevant if the rake/table-fee model changes.
 
 ## Read this first

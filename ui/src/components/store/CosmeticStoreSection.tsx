@@ -47,8 +47,6 @@ function CosmeticGrid({kind, labelFor, renderPreview, ariaLabel, loadingLabel, e
 
   // Always-visible gallery: every catalog entry for this kind, owned and unowned, free and premium.
   const entries = catalog.filter(entry => entry.kind === kind && labelFor(entry.id));
-  console.log(catalog);
-  console.log(entries);
   if (!entries.length) return <div className="lobby-empty"><Sparkles aria-hidden="true"/><p>{emptyLabel}</p></div>;
 
   return <ul className="cosmetic-store-grid" aria-label={ariaLabel}>

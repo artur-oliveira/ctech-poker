@@ -175,5 +175,9 @@ google.golang.org/protobuf v1.36.12 h1:pJOKDDOyeXErUroCihFAd5LQuwXBSpVnKGrj5o/fw
 google.golang.org/protobuf v1.36.12/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=
 gopkg.aoctech.app/api-commons v1.6.0 h1:EcakqgtT00KYXdWHJxwcBaZoZtHODFrIUOF5K4I+JpA=
 gopkg.aoctech.app/api-commons v1.6.0/go.mod h1:a2nR7vS/SCYLxufpRPJk2Djph0hsmpDysb546nD1isE=
+gopkg.aoctech.app/api-commons v1.7.0 h1:Hz2uu5lxiSbmACTiIObQbCB3rFuw8X4NBN4t7N9CVFU=
+gopkg.aoctech.app/api-commons v1.7.0/go.mod h1:xkDcFzBfC7sihgVystgciUi1DREehO9mzaOlNpCZ9P8=
+gopkg.aoctech.app/api-commons v1.7.2 h1:C94N0N9cBFvPQT9uPn9VWj+2+7mwEpw/w7zQxIau0/0=
+gopkg.aoctech.app/api-commons v1.7.2/go.mod h1:xkDcFzBfC7sihgVystgciUi1DREehO9mzaOlNpCZ9P8=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=

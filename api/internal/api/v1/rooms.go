@@ -11,6 +11,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/oklog/ulid/v2"
 	"gopkg.aoctech.app/api-commons/dynamo"
+	"gopkg.aoctech.app/api-commons/observability"
 	"gopkg.aoctech.app/api-commons/ws"
 	pokerproto "gopkg.aoctech.app/poker/api/internal/api/v1/proto"
 	"gopkg.aoctech.app/poker/api/internal/buyin"
@@ -135,7 +136,11 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 		CreatedAt:            dynamo.NowStr(),
 	}
 	if req.Visibility == "private" {
-		room.ShareCode = newShareCode()
+		shareCode, err := newShareCode()
+		if err != nil {
+			return problem.InternalServer("failed to create room", c, err).Send(c)
+		}
+		room.ShareCode = shareCode
 		room.BlindEscalation = req.BlindEscalation
 		if req.TurnTimeoutSeconds != nil {
 			room.TurnTimeoutSeconds = *req.TurnTimeoutSeconds
@@ -146,19 +151,25 @@ func (h *roomHandlers) createRoom(c fiber.Ctx) error {
 			return problem.InternalServer("failed to create room", c, err).Send(c)
 		}
 		if h.reg != nil {
-			data, _ := goproto.Marshal(&pokerproto.ServerMessage{
+			data, err := goproto.Marshal(&pokerproto.ServerMessage{
 				Type: "room_created",
 				Room: ConvertRoom(room),
 			})
-			h.reg.Broadcast(c.Context(), "lobby", data)
+			if err != nil {
+				observability.Warn(c.Context(), "room created event serialization failed", err, "room_id", room.ID)
+			} else {
+				h.reg.Broadcast(c.Context(), "lobby", data)
+			}
 		}
 	}
 	if room.BlindEscalation != nil && h.manager != nil {
 		// Escalation is now re-armed on every actor creation via the manager's
 		// roomLoader (T6), so the createRoom hook only needs to warm the actor.
-		_, _ = h.manager.GetOrCreateActor(c.Context(), room.ID, func() *hand.Table {
+		if _, err := h.manager.GetOrCreateActor(c.Context(), room.ID, func() *hand.Table {
 			return table.SeedForRoom(&room)
-		})
+		}); err != nil {
+			observability.Warn(c.Context(), "room actor warmup failed", err, "room_id", room.ID)
+		}
 	}
 	return c.Status(fiber.StatusCreated).JSON(room)
 }
@@ -326,7 +337,9 @@ func (h *roomHandlers) join(c fiber.Ctx) error {
 
 func (h *roomHandlers) leave(c fiber.Ctx) error {
 	var req LeaveRoomRequest
-	_ = c.Bind().Body(&req)
+	if err := c.Bind().Body(&req); err != nil {
+		return problem.BadRequest("invalid request body").WithCause(err).Send(c)
+	}
 	userID, _ := c.Locals(localsUserID).(string)
 	stack, err := h.buyin.CashOut(c.Context(), c.Params("id"), userID, req.IdempotencyKey)
 	if err != nil {
@@ -343,4 +356,10 @@ func newRoomID() string { return ulid.MustNew(ulid.Now(), rand.Reader).String() 
 
 // 6 random bytes = 12 hex chars: still typeable, but too sparse to brute-force
 // online against GET /rooms/code/:code.
-func newShareCode() string { var b [6]byte; _, _ = rand.Read(b[:]); return fmt.Sprintf("%X", b) }
+func newShareCode() (string, error) {
+	var b [6]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%X", b), nil
+}

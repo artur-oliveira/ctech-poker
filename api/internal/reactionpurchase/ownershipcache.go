@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"gopkg.aoctech.app/api-commons/cache"
+	"gopkg.aoctech.app/api-commons/observability"
 )
 
 const ownershipCacheTTLSeconds = 30
@@ -35,7 +36,9 @@ func (c *OwnershipCache) Invalidate(ctx context.Context, playerID, reactionID st
 
 func (c *OwnershipCache) IsOwned(ctx context.Context, playerID, reactionID string) (bool, error) {
 	key := ownershipCacheKey(playerID, reactionID)
-	if cached, ok, _ := c.backend.Get(ctx, key); ok && len(cached) == 1 {
+	if cached, ok, err := c.backend.Get(ctx, key); err != nil {
+		observability.Warn(ctx, "reaction ownership cache read failed", err, "reaction_id", reactionID)
+	} else if ok && len(cached) == 1 {
 		return cached[0] == '1', nil
 	}
 	owned, err := c.svc.IsOwned(ctx, playerID, reactionID)
@@ -46,6 +49,8 @@ func (c *OwnershipCache) IsOwned(ctx context.Context, playerID, reactionID strin
 	if owned {
 		value = '1'
 	}
-	_ = c.backend.Set(ctx, key, []byte{value}, ownershipCacheTTLSeconds)
+	if err := c.backend.Set(ctx, key, []byte{value}, ownershipCacheTTLSeconds); err != nil {
+		observability.Warn(ctx, "reaction ownership cache write failed", err, "reaction_id", reactionID)
+	}
 	return owned, nil
 }

@@ -3,6 +3,7 @@ package leaderboard
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -60,7 +61,10 @@ func (s *Store) IncrementStats(ctx context.Context, playerID, name, mode string,
 
 func number(value types.AttributeValue) int64 {
 	if n, ok := value.(*types.AttributeValueMemberN); ok {
-		parsed, _ := strconv.ParseInt(n.Value, 10, 64)
+		parsed, err := strconv.ParseInt(n.Value, 10, 64)
+		if err != nil {
+			slog.Warn("leaderboard numeric attribute parse failed", "err", err)
+		}
 		return parsed
 	}
 	return 0

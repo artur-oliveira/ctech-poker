@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -100,7 +101,10 @@ func attributeValueToInterface(v events.DynamoDBAttributeValue) any {
 	case events.DataTypeString:
 		return v.String()
 	case events.DataTypeNumber:
-		n, _ := strconv.ParseFloat(v.Number(), 64)
+		n, err := strconv.ParseFloat(v.Number(), 64)
+		if err != nil {
+			slog.Warn("archive event numeric attribute parse failed", "err", err)
+		}
 		return n
 	case events.DataTypeBoolean:
 		return v.Boolean()

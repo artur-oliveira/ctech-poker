@@ -131,9 +131,15 @@ func resolveSSMParams(ctx context.Context, walletURLParam, clientIDParam, client
 	if err != nil {
 		return err
 	}
-	_ = os.Setenv("WALLET_URL", wURL)
-	_ = os.Setenv("POKER_CLIENT_ID", cID)
-	_ = os.Setenv("POKER_CLIENT_SECRET", cSecret)
+	if err := os.Setenv("WALLET_URL", wURL); err != nil {
+		return fmt.Errorf("set WALLET_URL: %w", err)
+	}
+	if err := os.Setenv("POKER_CLIENT_ID", cID); err != nil {
+		return fmt.Errorf("set POKER_CLIENT_ID: %w", err)
+	}
+	if err := os.Setenv("POKER_CLIENT_SECRET", cSecret); err != nil {
+		return fmt.Errorf("set POKER_CLIENT_SECRET: %w", err)
+	}
 	return nil
 }
 

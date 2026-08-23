@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"gopkg.aoctech.app/api-commons/dynamo"
+	"gopkg.aoctech.app/api-commons/observability"
 	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
@@ -83,7 +84,9 @@ func (s *Service) SetCurrentSelectionFunc(fn currentSelectionFunc) {
 
 func (s *Service) invalidate(ctx context.Context, playerID string, kind cosmetics.Kind, itemID string) {
 	if s.invalidateOwnership != nil {
-		_ = s.invalidateOwnership(ctx, playerID, kind, itemID)
+		if err := s.invalidateOwnership(ctx, playerID, kind, itemID); err != nil {
+			observability.Warn(ctx, "cosmetic ownership cache invalidation failed", err, "kind", kind, "item_id", itemID)
+		}
 	}
 }
 

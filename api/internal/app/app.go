@@ -17,11 +17,11 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/gofiber/fiber/v3/middleware/recover"
-	"github.com/gofiber/fiber/v3/middleware/requestid"
 	"go.uber.org/fx"
 	"gopkg.aoctech.app/api-commons/awsconfig"
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/api-commons/jwtverify"
+	fiberobs "gopkg.aoctech.app/api-commons/observability/fiber"
 	"gopkg.aoctech.app/api-commons/ws"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
 	v1 "gopkg.aoctech.app/poker/api/internal/api/v1"
@@ -143,12 +143,12 @@ func newFiberApp(cfg *config.Config) *fiber.App {
 			if fiberErr, ok := errors.AsType[*fiber.Error](err); ok {
 				return problem.FromError(fiberErr, c).Send(c)
 			}
-			slog.Error("unhandled HTTP error", "request_id", requestid.FromContext(c), "path", c.Path(), "err", err)
 			return problem.InternalServer("an unexpected error occurred", c, err).Send(c)
 		},
 	})
 
-	app.Use(recover.New())
+	app.Use(fiberobs.RequestID())
+	app.Use(recover.New(recover.Config{EnableStackTrace: true}))
 	// AllowCredentials requires explicit origins. Development intentionally
 	// leaves origins empty, which means wildcard/no credentials like Wallet.
 	corsCfg := cors.Config{
@@ -162,9 +162,13 @@ func newFiberApp(cfg *config.Config) *fiber.App {
 		corsCfg.AllowCredentials = true
 	}
 	app.Use(cors.New(corsCfg))
-	app.Use(requestid.New())
 	app.Use(logger.New(logger.Config{
-		Format: `{"time":"${time}","status":${status},"latency":"${latency}","method":"${method}","path":"${path}","request-id":"${request-id}"}` + "\n",
+		Format: `{"time":"${time}","status":${status},"latency":"${latency}","method":"${method}",` +
+			`"path":"${path}","request_id":"${respHeader:X-Request-Id}"}` + "\n",
+		DisableColors: true,
+		Skip: func(c fiber.Ctx) bool {
+			return c.Path() == "/v1.0/health" || c.Path() == "/v1.0/health-check"
+		},
 	}))
 	return app
 }
@@ -561,12 +565,16 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		if err := rooms.SetSeatsTaken(context.Background(), tableID, seatsTaken); err != nil {
 			slog.Error("roomstore: seats taken write-through failed", "table", tableID, "err", err)
 		}
-		data, _ := goproto.Marshal(&pokerproto.ServerMessage{
+		data, err := goproto.Marshal(&pokerproto.ServerMessage{
 			Type:       "room_updated",
 			RoomId:     tableID,
 			SeatsTaken: int32(seatsTaken),
 		})
-		reg.Broadcast(context.Background(), "lobby", data)
+		if err != nil {
+			slog.Error("room update event serialization failed", "table", tableID, "err", err)
+		} else {
+			reg.Broadcast(context.Background(), "lobby", data)
+		}
 	})
 	return mgr
 }
@@ -748,11 +756,15 @@ func wirePlayerRemovedHook(mgr *tablemanager.Manager, buyinSvc *buyin.Service, r
 		// receiving state broadcasts (they're no longer in PlayersForActor)
 		// with no signal telling the client why, so it sits on a stale table
 		// instead of redirecting to the lobby.
-		data, _ := goproto.Marshal(&pokerproto.ServerMessage{
+		data, err := goproto.Marshal(&pokerproto.ServerMessage{
 			Type: "removed",
 			Code: reason,
 		})
-		reg.Broadcast(ctx, tableID+"#"+playerID, data)
+		if err != nil {
+			slog.Error("player removed event serialization failed", "table", tableID, "player", playerID, "err", err)
+		} else {
+			reg.Broadcast(ctx, tableID+"#"+playerID, data)
+		}
 		if err := buyinSvc.SettleSystemRemoval(ctx, tableID, playerID, stack, holdID, reason); err != nil {
 			slog.Error("buyin: settle system removal failed", "table", tableID, "player", playerID, "reason", reason, "err", err)
 		}

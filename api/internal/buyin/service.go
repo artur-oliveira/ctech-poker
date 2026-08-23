@@ -13,6 +13,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 
+	"gopkg.aoctech.app/api-commons/observability"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/entitlement"
 	"gopkg.aoctech.app/poker/api/internal/player"
@@ -305,18 +306,24 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 	// other viewer sees this seat as "Visitante" for however long it takes
 	// this player's client to actually open its socket after buying in.
 	if s.players != nil {
-		if profile, perr := s.players.GetOrCreate(ctx, playerID); perr == nil && profile != nil {
+		if profile, perr := s.players.GetOrCreate(ctx, playerID); perr != nil {
+			observability.Warn(ctx, "buyin player profile lookup failed", perr, "table_id", roomID)
+		} else if profile != nil {
 			playstyleBadge := ""
 			if profile.PlaystylePublic && s.stats != nil {
-				if playerStats, statsErr := s.stats.Get(ctx, playerID, room.CurrencyMode); statsErr == nil {
+				if playerStats, statsErr := s.stats.Get(ctx, playerID, room.CurrencyMode); statsErr != nil {
+					observability.Warn(ctx, "buyin player stats lookup failed", statsErr, "table_id", roomID)
+				} else {
 					if badges := pokerstats.StyleFor(playerStats, pokerstats.MinHandsPublic); len(badges) > 0 {
 						playstyleBadge = badges[0].Key
 					}
 				}
 			}
 			nameReply := make(chan error, 1)
-			_ = actor.Dispatch(table.SetIdentityCmd{PlayerID: playerID, Name: profile.Name,
-				AvatarURL: player.AvatarURL(profile, s.avatarBaseURL), PlaystyleBadge: playstyleBadge, Reply: nameReply})
+			if err := actor.Dispatch(table.SetIdentityCmd{PlayerID: playerID, Name: profile.Name,
+				AvatarURL: player.AvatarURL(profile, s.avatarBaseURL), PlaystyleBadge: playstyleBadge, Reply: nameReply}); err != nil {
+				observability.Warn(ctx, "buyin table identity dispatch failed", err, "table_id", roomID)
+			}
 		}
 	}
 
@@ -698,7 +705,11 @@ func (s *Service) settle(ctx context.Context, roomID, playerID string, stack int
 		return errors.New("buyin: settlement store unavailable")
 	}
 	mode := "sandbox"
-	if room, _ := s.rooms.Get(ctx, roomID); room != nil {
+	room, err := s.rooms.Get(ctx, roomID)
+	if err != nil {
+		return fmt.Errorf("buyin: load settlement room: %w", err)
+	}
+	if room != nil {
 		mode = room.CurrencyMode
 	}
 	var holdIDs []string

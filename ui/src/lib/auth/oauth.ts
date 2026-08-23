@@ -19,7 +19,6 @@ function usernameFrom(idToken?: string | null) {
 
 export async function exchangeCode(code: string, state: string) {
   const r = await client.exchangeCode(code, state);
-  console.log(`current code ${code} and state ${state}`);
   return {
     accessToken: r.accessToken,
     username: usernameFrom(r.idToken),

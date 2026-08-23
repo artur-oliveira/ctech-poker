@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gopkg.aoctech.app/api-commons/observability"
 )
 
 const (
@@ -77,7 +78,11 @@ func (s *Service) Verify(ctx context.Context, token, remoteIP string) error {
 	if err != nil {
 		return fmt.Errorf("botcheck: siteverify: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			observability.Warn(ctx, "botcheck response body close failed", closeErr)
+		}
+	}()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
 	if err != nil {
 		return fmt.Errorf("botcheck: read response: %w", err)

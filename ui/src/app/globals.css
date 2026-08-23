@@ -14985,10 +14985,10 @@ button.deck-grid-slot:hover {
 .cosmetic-purchase-hero {
     display: grid;
     place-items: center;
-    width: auto;
-    height: auto;
+    width: fit-content;
+    max-width: 100%;
     margin-bottom: 12px;
-    padding: 10px;
+    padding: 10px 14px;
     border-radius: var(--rounded-panel);
     background: color-mix(in srgb, var(--gold) 12%, var(--surface-seat))
 }
@@ -15316,7 +15316,8 @@ button.deck-grid-slot:hover {
         padding-block: 32px
     }
 
-    .reaction-store-grid {
+    .reaction-store-grid,
+    .cosmetic-store-grid {
         grid-template-columns: 1fr
     }
 }
@@ -15332,9 +15333,18 @@ button.deck-grid-slot:hover {
         grid-template-areas: "glyph copy" "state action"
     }
 
+    .cosmetic-store-item {
+        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-areas: "preview copy" "state action"
+    }
+
     .reaction-store-owned,
     .reaction-store-lock,
-    .reaction-store-state {
+    .reaction-store-state,
+    .cosmetic-store-free,
+    .cosmetic-store-owned,
+    .cosmetic-store-lock,
+    .cosmetic-store-state {
         justify-self: start
     }
 

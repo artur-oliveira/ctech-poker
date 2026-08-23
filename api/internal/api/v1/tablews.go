@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"gopkg.aoctech.app/api-commons/jwtverify"
+	"gopkg.aoctech.app/api-commons/observability"
+	fiberobs "gopkg.aoctech.app/api-commons/observability/fiber"
 	"gopkg.aoctech.app/api-commons/ws"
 	"gopkg.aoctech.app/poker/api/internal/botcheck"
 	"gopkg.aoctech.app/poker/api/internal/chatfilter"
@@ -59,14 +61,15 @@ var tableChatFilter = chatfilter.New([]string{"idiota", "burro"})
 // client sends {"token":"...","share_code":"..."} (or a raw token) once; a
 // missing or unreadable frame fails closed so no connection hangs open.
 // Mirrors ctech-wallet's internal/api/v1/ws.go.
-func readAuthToken(conn *fws.Conn) (token, shareCode string, ok bool) {
-	_ = conn.SetReadDeadline(time.Now().Add(wsAuthTimeout))
-	defer func(conn *fws.Conn, t time.Time) {
-		err := conn.SetReadDeadline(t)
-		if err != nil {
-
+func readAuthToken(ctx context.Context, conn *fws.Conn) (token, shareCode string, ok bool) {
+	if err := conn.SetReadDeadline(time.Now().Add(wsAuthTimeout)); err != nil {
+		observability.Warn(ctx, "ws auth deadline setup failed", err)
+	}
+	defer func() {
+		if err := conn.SetReadDeadline(time.Time{}); err != nil {
+			observability.Warn(ctx, "ws auth deadline clear failed", err)
 		}
-	}(conn, time.Time{})
+	}()
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
 		return "", "", false
@@ -241,21 +244,22 @@ func RegisterTableWS(
 		// table yet" until they reload the page.
 		tableID := strings.Clone(c.Params("id"))
 		remoteIP := strings.Clone(c.IP())
+		logCtx := observability.WithRequestID(context.Background(), fiberobs.RequestIDFromContext(c))
 		return upgrader.Upgrade(c.RequestCtx(), func(conn *fws.Conn) {
+			ctx, cancelCtx := context.WithCancel(logCtx)
+			defer cancelCtx()
 			// Post-upgrade the handler runs on a hijacked goroutine outside
 			// Fiber's recover middleware — an unrecovered panic here kills the
 			// whole process, not just this connection.
 			defer func() {
 				if r := recover(); r != nil {
-					slog.Error("table ws handler panic", "table", tableID, "panic", r)
-					_ = conn.Close()
+					slog.ErrorContext(ctx, "table ws handler panic", "table", tableID, "panic", r)
+					closePokerWS(ctx, conn, "panic")
 				}
 			}()
 			// Same lifetime problem as tableID above: the request context dies
 			// with the request, while this goroutine keeps making DynamoDB and
 			// Redis calls for as long as the socket lives. Own the context.
-			ctx, cancelCtx := context.WithCancel(context.Background())
-			defer cancelCtx()
 			// Single adapter shared by this handler and the fan-out registry:
 			// its mutex is the only thing serializing data-frame writes, so
 			// every write path must go through it (fasthttp/websocket panics
@@ -264,22 +268,26 @@ func RegisterTableWS(
 			safeConn := &wsConnAdapter{conn: conn}
 			send := func(msg *pokerproto.ServerMessage) {
 				data, err := goproto.Marshal(msg)
-				if err == nil {
-					_ = safeConn.WriteMessage(fws.BinaryMessage, data)
+				if err != nil {
+					observability.Warn(ctx, "table ws message serialization failed", err, "table_id", tableID)
+					return
+				}
+				if err := safeConn.WriteMessage(fws.BinaryMessage, data); err != nil {
+					observability.Warn(ctx, "table ws message write failed", err, "table_id", tableID)
 				}
 			}
 
-			token, shareCode, ok := readAuthToken(conn)
+			token, shareCode, ok := readAuthToken(ctx, conn)
 			if !ok {
 				send(&pokerproto.ServerMessage{Type: "error", Code: "unauthorized"})
-				_ = conn.Close()
+				closePokerWS(ctx, conn, "connection shutdown")
 				return
 			}
 			// Empty sid = M2M client_credentials token — never a player (B9).
 			claims, err := verifier.VerifyClaims(ctx, token)
 			if err != nil || claims == nil || claims.Sub == "" || !isFirstPartyPokerSession(claims) {
 				send(&pokerproto.ServerMessage{Type: "error", Code: "unauthorized"})
-				_ = conn.Close()
+				closePokerWS(ctx, conn, "connection shutdown")
 				return
 			}
 			playerID := claims.Sub
@@ -290,12 +298,12 @@ func RegisterTableWS(
 			if rooms != nil {
 				if room, err = rooms.Get(ctx, tableID); err != nil {
 					send(&pokerproto.ServerMessage{Type: "error", Code: "unavailable"})
-					_ = conn.Close()
+					closePokerWS(ctx, conn, "connection shutdown")
 					return
 				}
 				if room == nil {
 					send(&pokerproto.ServerMessage{Type: "error", Code: "not_found"})
-					_ = conn.Close()
+					closePokerWS(ctx, conn, "connection shutdown")
 					return
 				}
 			}
@@ -305,26 +313,26 @@ func RegisterTableWS(
 					accessAllowed, err = rooms.HasInviteGrant(ctx, room.ID, playerID)
 					if err != nil {
 						send(&pokerproto.ServerMessage{Type: "error", Code: "unavailable"})
-						_ = conn.Close()
+						closePokerWS(ctx, conn, "connection shutdown")
 						return
 					}
 				}
 				if !accessAllowed {
 					send(&pokerproto.ServerMessage{Type: "error", Code: "forbidden"})
-					_ = conn.Close()
+					closePokerWS(ctx, conn, "connection shutdown")
 					return
 				}
 			}
 			if room != nil && room.CurrencyMode != "sandbox" && !cfg.RealMoneyEnabled {
 				send(&pokerproto.ServerMessage{Type: "error", Code: "unsupported_currency_mode"})
-				_ = conn.Close()
+				closePokerWS(ctx, conn, "connection shutdown")
 				return
 			}
 
 			actor, err := manager.GetOrCreateActor(ctx, tableID, seed(tableID))
 			if err != nil {
 				send(&pokerproto.ServerMessage{Type: "error", Code: "unavailable"})
-				_ = conn.Close()
+				closePokerWS(ctx, conn, "connection shutdown")
 				return
 			}
 			if room != nil {
@@ -381,8 +389,10 @@ func RegisterTableWS(
 						}
 					}
 					r := make(chan error, 1)
-					_ = dispatch(table.SetIdentityCmd{PlayerID: playerID, Name: profile.Name,
-						AvatarURL: player.AvatarURL(profile, cfg.AvatarBaseURL), PlaystyleBadge: playstyleBadge, Reply: r})
+					if err := dispatch(table.SetIdentityCmd{PlayerID: playerID, Name: profile.Name,
+						AvatarURL: player.AvatarURL(profile, cfg.AvatarBaseURL), PlaystyleBadge: playstyleBadge, Reply: r}); err != nil {
+						observability.Warn(ctx, "table ws identity dispatch failed", err, "table_id", tableID)
+					}
 				}
 			}
 
@@ -398,13 +408,15 @@ func RegisterTableWS(
 			connectReply := make(chan error, 1)
 			if err := dispatch(table.ConnectCmd{PlayerID: playerID, ConnID: connID, Reply: connectReply}); err != nil {
 				send(&pokerproto.ServerMessage{Type: "error", Code: "unavailable"})
-				_ = conn.Close()
+				closePokerWS(ctx, conn, "connection shutdown")
 				return
 			}
 			connectionRegistered = true
 			defer func() {
 				disconnectReply := make(chan error, 1)
-				_ = dispatch(table.DisconnectCmd{PlayerID: playerID, ConnID: connID, Reply: disconnectReply})
+				if err := dispatch(table.DisconnectCmd{PlayerID: playerID, ConnID: connID, Reply: disconnectReply}); err != nil {
+					observability.Warn(ctx, "table ws disconnect dispatch failed", err, "table_id", tableID)
+				}
 				connectionRegistered = false
 			}()
 
@@ -435,7 +447,7 @@ func RegisterTableWS(
 			botRiskScore := 0
 			challengeRequired := false
 			done := make(chan struct{})
-			go startHeartbeat(safeConn, done, wsPingInterval, wsPongWait)
+			go startHeartbeat(ctx, safeConn, done, wsPingInterval, wsPongWait)
 
 			for {
 				_, msg, e := conn.ReadMessage()
@@ -443,7 +455,9 @@ func RegisterTableWS(
 					break
 				}
 				reply := make(chan error, 1)
-				_ = dispatch(table.ReconnectCmd{PlayerID: playerID, Reply: reply})
+				if err := dispatch(table.ReconnectCmd{PlayerID: playerID, Reply: reply}); err != nil {
+					observability.Warn(ctx, "table ws reconnect dispatch failed", err, "table_id", tableID)
+				}
 
 				var m pokerproto.ClientMessage
 				if err := goproto.Unmarshal(msg, &m); err != nil {
@@ -657,10 +671,14 @@ func RegisterTableWS(
 					} else {
 						// Compatibility event for clients predating protocol v6. The
 						// authoritative copy is also present in every state snapshot.
-						data, _ := goproto.Marshal(&pokerproto.ServerMessage{
+						data, err := goproto.Marshal(&pokerproto.ServerMessage{
 							Type: "chat", PlayerId: playerID, Message: message, ActionId: m.ActionId,
 						})
-						reg.Broadcast(ctx, tableID+"#chat", data)
+						if err != nil {
+							observability.Warn(ctx, "chat event serialization failed", err, "table_id", tableID)
+						} else {
+							reg.Broadcast(ctx, tableID+"#chat", data)
+						}
 						ack()
 					}
 				case "reaction":
@@ -700,11 +718,15 @@ func RegisterTableWS(
 					}); err != nil {
 						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
 					} else {
-						data, _ := goproto.Marshal(&pokerproto.ServerMessage{
+						data, err := goproto.Marshal(&pokerproto.ServerMessage{
 							Type: "reaction", PlayerId: playerID, ReactionId: m.ReactionId,
 							TargetPlayerId: m.TargetPlayerId, ActionId: m.ActionId,
 						})
-						reg.Broadcast(ctx, tableID+"#chat", data)
+						if err != nil {
+							observability.Warn(ctx, "reaction event serialization failed", err, "table_id", tableID)
+						} else {
+							reg.Broadcast(ctx, tableID+"#chat", data)
+						}
 						ack()
 					}
 				case "preselect_action":
@@ -732,20 +754,29 @@ func RegisterTableWS(
 	})
 }
 
-func startHeartbeat(adapter *wsConnAdapter, done <-chan struct{}, pingInterval, pongWait time.Duration) {
+func startHeartbeat(ctx context.Context, adapter *wsConnAdapter, done <-chan struct{}, pingInterval, pongWait time.Duration) {
 	adapter.conn.SetPongHandler(func(string) error { return adapter.conn.SetReadDeadline(time.Now().Add(pongWait)) })
-	_ = adapter.conn.SetReadDeadline(time.Now().Add(pongWait))
+	if err := adapter.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+		observability.Warn(ctx, "ws pong deadline setup failed", err)
+	}
 	t := time.NewTicker(pingInterval)
 	defer t.Stop()
 	for {
 		select {
 		case <-t.C:
 			if e := adapter.WriteControl(fws.PingMessage, nil, time.Now().Add(wsWriteWait)); e != nil {
+				observability.Warn(ctx, "ws heartbeat write failed", e)
 				return
 			}
 		case <-done:
 			return
 		}
+	}
+}
+
+func closePokerWS(ctx context.Context, conn *fws.Conn, reason string) {
+	if err := conn.Close(); err != nil {
+		observability.Warn(ctx, "ws connection close failed", err, "reason", reason)
 	}
 }
 
@@ -795,36 +826,41 @@ func RegisterGeneralWS(
 		CheckOrigin:     func(ctx *fasthttp.RequestCtx) bool { return wsAllowedOrigin(ctx, allowedOrigins) },
 	}
 	router.Get("/ws", func(c fiber.Ctx) error {
+		logCtx := observability.WithRequestID(context.Background(), fiberobs.RequestIDFromContext(c))
 		return upgrader.Upgrade(c.RequestCtx(), func(conn *fws.Conn) {
+			ctx, cancelCtx := context.WithCancel(logCtx)
+			defer cancelCtx()
 			defer func() {
 				if r := recover(); r != nil {
-					slog.Error("general ws handler panic", "panic", r)
-					_ = conn.Close()
+					slog.ErrorContext(ctx, "general ws handler panic", "panic", r)
+					closePokerWS(ctx, conn, "panic")
 				}
 			}()
 			// See RegisterTableWS: the request context is dead once the
 			// upgrade returns, this goroutine is not.
-			ctx, cancelCtx := context.WithCancel(context.Background())
-			defer cancelCtx()
 			conn.SetReadLimit(wsMaxMessageBytes)
 			safeConn := &wsConnAdapter{conn: conn}
 			send := func(msg *pokerproto.ServerMessage) {
 				data, err := goproto.Marshal(msg)
-				if err == nil {
-					_ = safeConn.WriteMessage(fws.BinaryMessage, data)
+				if err != nil {
+					observability.Warn(ctx, "general ws message serialization failed", err)
+					return
+				}
+				if err := safeConn.WriteMessage(fws.BinaryMessage, data); err != nil {
+					observability.Warn(ctx, "general ws message write failed", err)
 				}
 			}
 
-			token, _, ok := readAuthToken(conn)
+			token, _, ok := readAuthToken(ctx, conn)
 			if !ok {
 				send(&pokerproto.ServerMessage{Type: "error", Code: "unauthorized"})
-				_ = conn.Close()
+				closePokerWS(ctx, conn, "connection shutdown")
 				return
 			}
 			claims, err := verifier.VerifyClaims(ctx, token)
 			if err != nil || claims == nil || claims.Sub == "" || !isFirstPartyPokerSession(claims) {
 				send(&pokerproto.ServerMessage{Type: "error", Code: "unauthorized"})
-				_ = conn.Close()
+				closePokerWS(ctx, conn, "connection shutdown")
 				return
 			}
 			playerID := claims.Sub
@@ -855,7 +891,7 @@ func RegisterGeneralWS(
 			slog.Info("general ws connected", "player", playerID, "conn", connID)
 
 			done := make(chan struct{})
-			go startHeartbeat(safeConn, done, wsPingInterval, wsPongWait)
+			go startHeartbeat(ctx, safeConn, done, wsPingInterval, wsPongWait)
 			if presenceSvc != nil {
 				go startPresenceHeartbeat(ctx, done, presenceSvc, playerID, connID)
 			}

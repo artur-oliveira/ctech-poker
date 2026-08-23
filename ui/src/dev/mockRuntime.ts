@@ -1084,7 +1084,6 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     return ok(kind === 'deck' ? deckCatalog : feltCatalog, config);
   }
   if (method === 'GET' && path.startsWith('/v1.0/wallet/cosmetic-purchase')) return ok([], config);
-  console.log(path);
   return ok({}, config);
 }
 

@@ -1165,7 +1165,9 @@ func (a *Actor) armKickTimer(playerID string) {
 	}
 	a.kickTimers[playerID] = time.AfterFunc(a.kickGrace, func() {
 		reply := make(chan error, 1)
-		_ = a.Dispatch(kickTimeoutCmd{PlayerID: playerID, Reply: reply})
+		if err := a.Dispatch(kickTimeoutCmd{PlayerID: playerID, Reply: reply}); err != nil {
+			slog.Warn("table kick timeout dispatch failed", "table_id", a.id, "player_id", playerID, "err", err)
+		}
 	})
 }
 
@@ -1199,7 +1201,9 @@ func (a *Actor) handleKickTimeout(ctx context.Context, c kickTimeoutCmd) error {
 func (a *Actor) armKickRetry(playerID string) {
 	a.kickTimers[playerID] = time.AfterFunc(a.afkSweepInterval, func() {
 		reply := make(chan error, 1)
-		_ = a.Dispatch(kickTimeoutCmd{PlayerID: playerID, Reply: reply})
+		if err := a.Dispatch(kickTimeoutCmd{PlayerID: playerID, Reply: reply}); err != nil {
+			slog.Warn("table kick retry dispatch failed", "table_id", a.id, "player_id", playerID, "err", err)
+		}
 	})
 }
 
@@ -1237,7 +1241,9 @@ func (a *Actor) isSeated(playerID string) bool {
 func (a *Actor) armAFKSweepTimer() {
 	a.afkSweepTimer = time.AfterFunc(a.afkSweepInterval, func() {
 		reply := make(chan error, 1)
-		_ = a.Dispatch(afkSweepCmd{Reply: reply})
+		if err := a.Dispatch(afkSweepCmd{Reply: reply}); err != nil {
+			slog.Warn("table AFK sweep dispatch failed", "table_id", a.id, "err", err)
+		}
 	})
 }
 
@@ -1819,7 +1825,9 @@ func (a *Actor) armTurnTimer(current string, stage hand.Stage, grace time.Durati
 	// goroutine.
 	a.turnTimer = time.AfterFunc(remaining, func() {
 		reply := make(chan error, 1)
-		_ = a.Dispatch(turnTimeoutCmd{PlayerID: current, Reply: reply})
+		if err := a.Dispatch(turnTimeoutCmd{PlayerID: current, Reply: reply}); err != nil {
+			slog.Warn("table turn timeout dispatch failed", "table_id", a.id, "player_id", current, "err", err)
+		}
 	})
 }
 
@@ -1853,7 +1861,9 @@ func (a *Actor) armNextHandTimer(complete bool) {
 	a.nextHandDeadline = timeNowFunc().Add(a.nextHandDelay)
 	a.nextHandTimer = time.AfterFunc(a.nextHandDelay, func() {
 		reply := make(chan error, 1)
-		_ = a.Dispatch(nextHandCmd{Reply: reply})
+		if err := a.Dispatch(nextHandCmd{Reply: reply}); err != nil {
+			slog.Warn("table next hand dispatch failed", "table_id", a.id, "err", err)
+		}
 	})
 }
 
@@ -1927,7 +1937,9 @@ func (a *Actor) armRunoutTimer(awaiting bool, stage hand.Stage) {
 	a.runoutTimerPhase = phase
 	a.runoutTimer = time.AfterFunc(a.runoutStreetDelay, func() {
 		reply := make(chan error, 1)
-		_ = a.Dispatch(runoutStepCmd{Reply: reply})
+		if err := a.Dispatch(runoutStepCmd{Reply: reply}); err != nil {
+			slog.Warn("table runout dispatch failed", "table_id", a.id, "err", err)
+		}
 	})
 }
 
@@ -2027,10 +2039,14 @@ func (a *Actor) processInlinePreselections(ctx context.Context) {
 			Amount:   amount,
 		})
 		if err != nil || !applied {
-			_ = a.ensureLoaded(ctx, true)
+			if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+				slog.Error("table reload after preselection failed", "table_id", a.id, "err", reloadErr)
+			}
 			return
 		}
-		_ = a.commitOutcomeLogEntries(ctx)
+		if err := a.commitOutcomeLogEntries(ctx); err != nil {
+			slog.Error("table preselection outcome log commit failed", "table_id", a.id, "err", err)
+		}
 	}
 }
 

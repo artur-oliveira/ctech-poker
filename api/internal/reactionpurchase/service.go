@@ -13,6 +13,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/dynamo"
+	"gopkg.aoctech.app/api-commons/observability"
 	"gopkg.aoctech.app/poker/api/internal/reactions"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
@@ -69,7 +70,9 @@ func (s *Service) SetOwnershipInvalidator(fn func(context.Context, string, strin
 
 func (s *Service) invalidate(ctx context.Context, playerID, reactionID string) {
 	if s.invalidateOwnership != nil {
-		_ = s.invalidateOwnership(ctx, playerID, reactionID)
+		if err := s.invalidateOwnership(ctx, playerID, reactionID); err != nil {
+			observability.Warn(ctx, "reaction ownership cache invalidation failed", err, "reaction_id", reactionID)
+		}
 	}
 }
 

@@ -21,6 +21,7 @@ import (
 
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/api-commons/oauth2client"
+	"gopkg.aoctech.app/api-commons/observability"
 	"gopkg.aoctech.app/poker/api/internal/config"
 )
 
@@ -253,12 +254,28 @@ func (c *Client) do(req *http.Request, retrySafe bool) (*http.Response, error) {
 		ceiling := min(800*time.Millisecond, 100*time.Millisecond*(1<<attempt))
 		delay := retryAfter(resp, time.Duration(rand.Int64N(int64(ceiling)+1)))
 		if resp != nil {
-			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-			_ = resp.Body.Close()
+			if _, copyErr := io.Copy(io.Discard, io.LimitReader(resp.Body, 4096)); copyErr != nil {
+				observability.Warn(req.Context(), "wallet retry response drain failed", copyErr, "endpoint", endpoint)
+			}
+			closeResponseBody(req.Context(), resp.Body)
 		}
 		c.retryDelay(delay)
 	}
 	return nil, errors.New("walletclient: retry loop exhausted")
+}
+
+func closeResponseBody(ctx context.Context, body io.ReadCloser) {
+	if err := body.Close(); err != nil {
+		observability.Warn(ctx, "wallet response body close failed", err)
+	}
+}
+
+func readResponseBody(ctx context.Context, body io.Reader) []byte {
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		observability.Warn(ctx, "wallet response body read failed", err)
+	}
+	return raw
 }
 
 func (c *Client) Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error {
@@ -308,9 +325,9 @@ func (c *Client) HoldGame(ctx context.Context, userID string, amount int64, tabl
 	if err != nil {
 		return "", fmt.Errorf("walletclient: request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeResponseBody(ctx, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
+		raw := readResponseBody(ctx, resp.Body)
 		return "", fmt.Errorf("walletclient: status %d: %s", resp.StatusCode, string(raw))
 	}
 	var res struct {
@@ -338,9 +355,9 @@ func (c *Client) ReleaseHold(ctx context.Context, holdID string) error {
 	if err != nil {
 		return fmt.Errorf("walletclient: request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeResponseBody(ctx, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
+		raw := readResponseBody(ctx, resp.Body)
 		return fmt.Errorf("walletclient: status %d: %s", resp.StatusCode, string(raw))
 	}
 	return nil
@@ -375,9 +392,9 @@ func (c *Client) CashoutGame(ctx context.Context, userID string, amount int64, t
 	if err != nil {
 		return fmt.Errorf("walletclient: request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeResponseBody(ctx, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
+		raw := readResponseBody(ctx, resp.Body)
 		return fmt.Errorf("walletclient: status %d: %s", resp.StatusCode, string(raw))
 	}
 	return nil
@@ -401,9 +418,9 @@ func (c *Client) IsGamblingActivated(ctx context.Context, userID string) (bool, 
 	if err != nil {
 		return false, fmt.Errorf("walletclient: request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeResponseBody(ctx, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
+		raw := readResponseBody(ctx, resp.Body)
 		return false, fmt.Errorf("walletclient: status %d: %s", resp.StatusCode, string(raw))
 	}
 
@@ -434,9 +451,9 @@ func (c *Client) Balances(ctx context.Context, userID string) (*Balances, error)
 	if err != nil {
 		return nil, fmt.Errorf("walletclient: request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeResponseBody(ctx, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
+		raw := readResponseBody(ctx, resp.Body)
 		return nil, walletError(resp.StatusCode, raw)
 	}
 	var b Balances
@@ -471,9 +488,9 @@ func (c *Client) movementWithResponse(ctx context.Context, url string, tokens *o
 	if err != nil {
 		return "", fmt.Errorf("walletclient: request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeResponseBody(ctx, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
+		raw := readResponseBody(ctx, resp.Body)
 		return "", walletError(resp.StatusCode, raw)
 	}
 
@@ -534,9 +551,9 @@ func (c *Client) ListSandboxSKUs(ctx context.Context) ([]SandboxSKU, error) {
 	if err != nil {
 		return nil, fmt.Errorf("walletclient: request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeResponseBody(ctx, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
+		raw := readResponseBody(ctx, resp.Body)
 		return nil, walletError(resp.StatusCode, raw)
 	}
 	var skus []SandboxSKU
@@ -571,9 +588,9 @@ func (c *Client) PurchaseSandbox(ctx context.Context, userID, sku, idempotencyKe
 	if err != nil {
 		return nil, fmt.Errorf("walletclient: request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeResponseBody(ctx, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
+		raw := readResponseBody(ctx, resp.Body)
 		return nil, walletError(resp.StatusCode, raw)
 	}
 	var p SandboxPurchase
@@ -603,9 +620,9 @@ func (c *Client) GetSandboxPurchase(ctx context.Context, purchaseID string) (*Sa
 	if err != nil {
 		return nil, fmt.Errorf("walletclient: request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeResponseBody(ctx, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
+		raw := readResponseBody(ctx, resp.Body)
 		return nil, walletError(resp.StatusCode, raw)
 	}
 	var p SandboxPurchase
@@ -640,9 +657,9 @@ func (c *Client) RefundSandboxPurchase(ctx context.Context, userID, purchaseID, 
 	if err != nil {
 		return nil, fmt.Errorf("walletclient: request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeResponseBody(ctx, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
+		raw := readResponseBody(ctx, resp.Body)
 		return nil, walletError(resp.StatusCode, raw)
 	}
 	var p SandboxPurchase
@@ -694,9 +711,9 @@ func (c *Client) ListProductSKUs(ctx context.Context) ([]ProductSKU, error) {
 	if err != nil {
 		return nil, fmt.Errorf("walletclient: request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeResponseBody(ctx, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
+		raw := readResponseBody(ctx, resp.Body)
 		return nil, walletError(resp.StatusCode, raw)
 	}
 	var skus []ProductSKU
@@ -731,9 +748,9 @@ func (c *Client) PurchaseProduct(ctx context.Context, userID, sku, idempotencyKe
 	if err != nil {
 		return nil, fmt.Errorf("walletclient: request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeResponseBody(ctx, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
+		raw := readResponseBody(ctx, resp.Body)
 		return nil, walletError(resp.StatusCode, raw)
 	}
 	var p ProductPurchase
@@ -763,9 +780,9 @@ func (c *Client) GetProductPurchase(ctx context.Context, purchaseID string) (*Pr
 	if err != nil {
 		return nil, fmt.Errorf("walletclient: request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeResponseBody(ctx, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
+		raw := readResponseBody(ctx, resp.Body)
 		return nil, walletError(resp.StatusCode, raw)
 	}
 	var p ProductPurchase
@@ -800,9 +817,9 @@ func (c *Client) RefundProductPurchase(ctx context.Context, userID, purchaseID, 
 	if err != nil {
 		return nil, fmt.Errorf("walletclient: request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer closeResponseBody(ctx, resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		raw, _ := io.ReadAll(resp.Body)
+		raw := readResponseBody(ctx, resp.Body)
 		return nil, walletError(resp.StatusCode, raw)
 	}
 	var p ProductPurchase
