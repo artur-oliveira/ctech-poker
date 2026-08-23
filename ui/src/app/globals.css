@@ -2289,6 +2289,31 @@ h1 em {
     white-space: nowrap
 }
 
+.today-highlight {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+    white-space: nowrap;
+    font: 600 13px var(--font-mono);
+    background: var(--white-08);
+    border: 1px solid var(--white-13);
+    padding: 6px 12px;
+    border-radius: 999px;
+    color: var(--gold)
+}
+
+.today-highlight svg {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto
+}
+
+.today-highlight-cards {
+    color: var(--muted);
+    font-weight: 500
+}
+
 .profile-summary {
     display: flex;
     align-items: center;

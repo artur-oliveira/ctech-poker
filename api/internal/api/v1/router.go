@@ -16,6 +16,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/dailyreward"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/handshare"
+	"gopkg.aoctech.app/poker/api/internal/highlights"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/oauthresource"
 	"gopkg.aoctech.app/poker/api/internal/player"
@@ -58,6 +59,7 @@ func Register(
 	playerNoteStore *playernotes.Store,
 	handShareStore *handshare.Store,
 	pokerStatsStore *pokerstats.Store,
+	highlightsStore *highlights.Store,
 	avatars *avatar.Service,
 	sandboxPurchaseSvc *sandboxpurchase.Service,
 	reactionPurchaseSvc *reactionpurchase.Service,
@@ -109,6 +111,7 @@ func Register(
 	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter, pokerStatsStore, reportSvc)
 	RegisterPlayerNotes(router, auth, playerNoteStore)
 	RegisterHandShares(router, auth, sessionStore, tableStore, handShareStore)
+	RegisterHighlights(router, auth, sessionStore, highlightsStore)
 	RegisterPokerStats(router, auth, pokerStatsStore)
 	RegisterLeaderboard(router, auth, leaderboardSvc)
 	RegisterDailyReward(router, auth, dailyRewardSvc, spinLimiter)

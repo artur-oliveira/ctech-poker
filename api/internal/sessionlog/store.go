@@ -173,6 +173,31 @@ func (s *Store) FindOpenSession(ctx context.Context, playerID, tableID string) (
 	}
 }
 
+// HasSessionAtTable reports whether playerID has ever had a session (open or
+// closed, any time) at tableID — used to scope access to table-scoped views
+// (e.g. the highlights feed) to players who were actually there, the same
+// privacy boundary the rest of the match-history surface uses.
+func (s *Store) HasSessionAtTable(ctx context.Context, playerID, tableID string) (bool, error) {
+	var startKey map[string]dynamotypes.AttributeValue
+	for {
+		res, err := s.sessions.Query(ctx, dynamo.QueryOpts{
+			PK: playerID, Limit: 50, ScanIndexForward: false,
+			FilterField: "table_id", FilterValue: tableID,
+			ExclusiveStartKey: startKey,
+		})
+		if err != nil {
+			return false, err
+		}
+		if len(res.Items) > 0 {
+			return true, nil
+		}
+		if res.LastEvaluatedKey == nil {
+			return false, nil
+		}
+		startKey = res.LastEvaluatedKey
+	}
+}
+
 // FindLatestOpenSession reports whether the player has any unclosed table
 // session. It is used to reconcile friend-visible in_table presence after a
 // process restart or a WebSocket reconnect, without exposing the table ID.

@@ -4,6 +4,7 @@ import {leaderboard, remainingTime, spin} from './gamification';
 import {createHandShare, getHandShare, revokeHandShare} from './handShares';
 import {acceptPokerTerms, getHand, getHands, getMe, getProfileShowcase, getSessions, updateMe,} from './player';
 import {getPlayerNotes, savePlayerNote} from './playerNotes';
+import {getTodayHighlight} from './highlights';
 import {getMyPokerStats} from './pokerStats';
 import {createRoom, getRoom, getSeated, joinRoom, leaveRoom, listRooms, listStakes} from './rooms';
 import {getHandHistory} from './table';
@@ -126,19 +127,25 @@ describe('API domain modules', () => {
   test('covers notes and hand-history endpoints with encoded opponent ids', async () => {
     client.get
       .mockResolvedValueOnce({data: {data: ['note']}})
-      .mockResolvedValueOnce({data: {hand_id: 'hand-1'}});
+      .mockResolvedValueOnce({data: {hand_id: 'hand-1'}})
+      .mockResolvedValueOnce({data: {table_id: 'table/1', pot: 500}});
     client.post.mockResolvedValueOnce({data: {opponent_id: 'a/b'}});
-    
+
     await expect(getPlayerNotes()).resolves.toEqual(['note']);
     await savePlayerNote('a/b', {tag: 'red', note: 'agressivo'});
     await getHandHistory('table-1', 'hand-1');
-    
+    await expect(getTodayHighlight('table/1')).resolves.toEqual({table_id: 'table/1', pot: 500});
+
     expect(client.post).toHaveBeenCalledWith(
       '/v1.0/players/me/notes/a%2Fb',
       {tag: 'red', note: 'agressivo'},
     );
     expect(client.get).toHaveBeenCalledWith(
       '/v1.0/tables/table-1/hands/hand-1/history',
+      {silentError: true},
+    );
+    expect(client.get).toHaveBeenCalledWith(
+      '/v1.0/rooms/table%2F1/highlights/today',
       {silentError: true},
     );
   });

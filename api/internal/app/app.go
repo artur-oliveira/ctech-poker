@@ -35,6 +35,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/entitlement"
 	"gopkg.aoctech.app/poker/api/internal/handshare"
+	"gopkg.aoctech.app/poker/api/internal/highlights"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/playernotes"
@@ -79,6 +80,7 @@ var Module = fx.Options(
 		newPlayerNoteStore,
 		newHandShareStore,
 		newPokerStatsStore,
+		newHighlightsStore,
 		newAchievementStore,
 		newAchievementService,
 		newLeaderboardStore,
@@ -277,6 +279,9 @@ func newHandShareStore(db *dynamodb.Client, cfg *config.Config) *handshare.Store
 func newPokerStatsStore(db *dynamodb.Client, cfg *config.Config) *pokerstats.Store {
 	return pokerstats.NewStore(db, cfg.Env)
 }
+func newHighlightsStore(db *dynamodb.Client, cfg *config.Config) *highlights.Store {
+	return highlights.NewStore(db, cfg.Env)
+}
 func newAchievementStore(db *dynamodb.Client, cfg *config.Config) *achievements.Store {
 	return achievements.NewStore(db, cfg.Env)
 }
@@ -436,7 +441,7 @@ func tableCurrencyMode(ctx context.Context, rooms roomModeReader, tableID string
 	return room.CurrencyMode, nil
 }
 
-func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config) *tablemanager.Manager {
+func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
 		data, err := goproto.Marshal(message)
@@ -520,6 +525,9 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 			}
 		}
 		persistHandHistory(tableID, handID, mode, outcome, names)
+		if err := highlightsStore.RecordHand(ctx, tableID, handID, outcome, names); err != nil {
+			slog.Error("highlights: record hand failed", "table", tableID, "hand", handID, "err", err)
+		}
 		if recentSvc != nil {
 			if err := recentSvc.RecordHand(ctx, tableID, handID, outcome.Participants, time.Now()); err != nil {
 				slog.Error("recent players: record hand failed", "table", tableID, "hand", handID, "err", err)
@@ -805,6 +813,7 @@ func registerRoutesWithSocialRuntime(
 	playerNoteStore *playernotes.Store,
 	handShareStore *handshare.Store,
 	pokerStatsStore *pokerstats.Store,
+	highlightsStore *highlights.Store,
 	avatars *avatar.Service,
 	sandboxPurchaseSvc *sandboxpurchase.Service,
 	reactionPurchaseSvc *reactionpurchase.Service,
@@ -814,7 +823,7 @@ func registerRoutesWithSocialRuntime(
 	recentSvc *recentplayers.Service,
 	reportSvc *reports.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc)
 }
 
 // registerRoutes retains the narrow construction seam used by older unit
@@ -826,10 +835,11 @@ func registerRoutes(
 	leaderboardSvc *leaderboard.Service, dailyRewardSvc *dailyreward.Service,
 	tableStore *tablestore.Store, sessionStore *sessionlog.Store, achievementStore *achievements.Store,
 	playerNoteStore *playernotes.Store, handShareStore *handshare.Store, pokerStatsStore *pokerstats.Store,
+	highlightsStore *highlights.Store,
 	avatars *avatar.Service, sandboxPurchaseSvc *sandboxpurchase.Service,
 	reactionPurchaseSvc *reactionpurchase.Service, cosmeticPurchaseSvc *cosmeticpurchase.Service, socialSvc *social.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil)
 }
 
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {

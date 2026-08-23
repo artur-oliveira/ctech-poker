@@ -21,6 +21,7 @@ import {LastWinners} from '@/components/table/LastWinners';
 import {EquityTrainerPanel} from '@/components/table/EquityTrainerPanel';
 import {TablePreferencesDialog} from '@/components/table/TablePreferencesDialog';
 import {RealityCheck} from '@/components/table/RealityCheck';
+import {TodayHighlight} from '@/components/table/TodayHighlight';
 import {SessionRecap} from '@/components/table/SessionRecap';
 import {TableReactions} from '@/components/table/TableReactions';
 import {type TableUtility, TableUtilityMenu} from '@/components/table/TableUtilityMenu';
@@ -508,6 +509,7 @@ function TableContent() {
               <Wifi aria-hidden="true"/>
               <span className="connection-label">{rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}</span>
             </span>
+            <TodayHighlight tableId={id} handId={s.hand_id} handComplete={s.stage === 'complete'}/>
             <span className="table-utility-menu-slot">
               <TableUtilityMenu active={activeTablePanel}
                                 winnersAvailable={tableHands.length > 0}

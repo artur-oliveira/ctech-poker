@@ -302,7 +302,7 @@ func TestHandItemForPersistsFairnessProofWithoutSeed(t *testing.T) {
 func testRoutes(app *fiber.App, cfg *config.Config) {
 	verifier := jwtverify.NewVerifier("", "", "", cache.NewMemoryBackend(1))
 	manager := tablemanager.NewManager(nil, nil, nil, nil)
-	registerRoutes(app, cfg, nil, verifier, manager, ws.NewMemoryRegistry(), nil, nil, (*buyin.Service)(nil), (*player.Service)(nil), (*leaderboard.Service)(nil), (*dailyreward.Service)(nil), nil, nil, nil, nil, nil, nil, nil, (*sandboxpurchase.Service)(nil), (*reactionpurchase.Service)(nil), (*cosmeticpurchase.Service)(nil), (*social.Service)(nil))
+	registerRoutes(app, cfg, nil, verifier, manager, ws.NewMemoryRegistry(), nil, nil, (*buyin.Service)(nil), (*player.Service)(nil), (*leaderboard.Service)(nil), (*dailyreward.Service)(nil), nil, nil, nil, nil, nil, nil, nil, nil, (*sandboxpurchase.Service)(nil), (*reactionpurchase.Service)(nil), (*cosmeticpurchase.Service)(nil), (*social.Service)(nil))
 }
 
 func TestLivenessEndpointReturnsOK(t *testing.T) {

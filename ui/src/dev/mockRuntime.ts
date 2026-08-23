@@ -1084,6 +1084,15 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     return ok(kind === 'deck' ? deckCatalog : feltCatalog, config);
   }
   if (method === 'GET' && path.startsWith('/v1.0/wallet/cosmetic-purchase')) return ok([], config);
+  const highlightMatch = method === 'GET' ? path.match(/^\/v1\.0\/rooms\/([^/]+)\/highlights\/today$/) : null;
+  if (highlightMatch) {
+    return ok({
+      table_id: highlightMatch[1], date: new Date().toISOString().slice(0, 10),
+      hand_id: 'mock-highlight-hand', pot: 18500, board: ['Ah', 'Kd', '7c', '2s', '9h'],
+      revealed: [{player_id: MOCK_PLAYER_ID, name: mockProfile.name, hole_cards: ['Ah', 'As']}],
+      recorded_at: Date.now(),
+    }, config);
+  }
   return ok({}, config);
 }
 

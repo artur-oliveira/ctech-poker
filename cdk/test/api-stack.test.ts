@@ -35,6 +35,7 @@ function synthStack() {
     playerNotesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_player_notes',
     handSharesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_hand_shares',
     pokerStatsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_player_poker_stats',
+    highlightsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_table_highlights',
     walletUrlParam: '/ctech/dev/poker/wallet-url',
     pokerClientIdParam: '/ctech/dev/poker/poker-client-id',
     pokerClientSecretParam: '/ctech/dev/poker/poker-client-secret',

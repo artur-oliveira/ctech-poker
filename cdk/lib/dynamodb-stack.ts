@@ -15,7 +15,7 @@ export type TableName =
   'poker_player_notes' | 'poker_hand_shares' | 'poker_player_poker_stats' | 'poker_sandbox_purchases' |
   'poker_reaction_entitlements' | 'poker_reaction_purchases' |
   'poker_cosmetic_entitlements' | 'poker_cosmetic_purchases' |
-  'poker_table_entitlements' |
+  'poker_table_entitlements' | 'poker_table_highlights' |
   (typeof DYNAMO_TABLE)[keyof typeof DYNAMO_TABLE];
 
 interface DynamoDBStackProps extends cdk.StackProps {
@@ -109,6 +109,11 @@ export class DynamoDBStack extends cdk.Stack {
     // One permanent private aggregate per player plus short-lived idempotency
     // guards for completed hands.
     table('poker_player_poker_stats', false, true);
+    // poker_table_highlights: one item per table per day (pk table_id, sk
+    // date), overwritten in place as bigger pots come in — rolls over
+    // naturally at UTC midnight since the sort key changes. No TTL; a
+    // 30-day-old item table costs nothing to keep.
+    table('poker_table_highlights', true);
     table('poker_achievement_progress', true);
     const leaderboardStats = table('poker_leaderboard_stats', true);
     leaderboardStats.addGlobalSecondaryIndex({

@@ -42,6 +42,7 @@ interface ApiStackProps extends cdk.StackProps {
   playerNotesTableArn: string;
   handSharesTableArn: string;
   pokerStatsTableArn: string;
+  highlightsTableArn: string;
   walletUrlParam: string;
   pokerClientIdParam: string;
   pokerClientSecretParam: string;
@@ -99,6 +100,7 @@ export class PokerApiStack extends cdk.Stack {
       playerNotesTableArn,
       handSharesTableArn,
       pokerStatsTableArn,
+      highlightsTableArn,
       walletUrlParam,
       pokerClientIdParam,
       pokerClientSecretParam,
@@ -147,7 +149,7 @@ export class PokerApiStack extends cdk.Stack {
     const tableArns = [
       tableStateArn, tableStateHistoryArn, actionLogArn, actionGuardsArn, roomsTableArn, playerProfilesTableArn,
       achievementProgressTableArn, leaderboardStatsTableArn, dailyRewardTableArn, playerSessionsTableArn,
-      playerHandsTableArn, playerNotesTableArn, handSharesTableArn, pokerStatsTableArn, sandboxPurchasesTableArn,
+      playerHandsTableArn, playerNotesTableArn, handSharesTableArn, pokerStatsTableArn, highlightsTableArn, sandboxPurchasesTableArn,
       pendingCashoutsTableArn, reactionEntitlementsTableArn, reactionPurchasesTableArn, cosmeticEntitlementsTableArn,
       cosmeticPurchasesTableArn, tableEntitlementsTableArn, socialEdgesTableArn, recentPlayersTableArn, socialEventsTableArn, playerReportsTableArn,
     ];
