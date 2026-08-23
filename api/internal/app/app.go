@@ -82,6 +82,8 @@ var Module = fx.Options(
 		newPlayerNoteStore,
 		newHandShareStore,
 		newHandRevealStore,
+		newHandRevealPaymentStore,
+		newHandRevealService,
 		newPokerStatsStore,
 		newMatchupStore,
 		newHighlightsStore,
@@ -282,6 +284,12 @@ func newHandShareStore(db *dynamodb.Client, cfg *config.Config) *handshare.Store
 }
 func newHandRevealStore(db *dynamodb.Client, cfg *config.Config) *handreveal.Store {
 	return handreveal.NewStore(db, cfg.Env)
+}
+func newHandRevealPaymentStore(db *dynamodb.Client, cfg *config.Config) *handreveal.PaymentStore {
+	return handreveal.NewPaymentStore(db, cfg.Env)
+}
+func newHandRevealService(wallet *walletclient.Client, payments *handreveal.PaymentStore) *handreveal.Service {
+	return handreveal.NewService(wallet, payments)
 }
 func newPokerStatsStore(db *dynamodb.Client, cfg *config.Config) *pokerstats.Store {
 	return pokerstats.NewStore(db, cfg.Env)
@@ -853,6 +861,8 @@ func registerRoutesWithSocialRuntime(
 	achievementStore *achievements.Store,
 	playerNoteStore *playernotes.Store,
 	handShareStore *handshare.Store,
+	handRevealStore *handreveal.Store,
+	handRevealSvc *handreveal.Service,
 	pokerStatsStore *pokerstats.Store,
 	matchupStore *matchup.Store,
 	highlightsStore *highlights.Store,
@@ -865,7 +875,7 @@ func registerRoutesWithSocialRuntime(
 	recentSvc *recentplayers.Service,
 	reportSvc *reports.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, matchupStore, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, handRevealStore, handRevealSvc, pokerStatsStore, matchupStore, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc)
 }
 
 // registerRoutes retains the narrow construction seam used by older unit
@@ -881,7 +891,7 @@ func registerRoutes(
 	avatars *avatar.Service, sandboxPurchaseSvc *sandboxpurchase.Service,
 	reactionPurchaseSvc *reactionpurchase.Service, cosmeticPurchaseSvc *cosmeticpurchase.Service, socialSvc *social.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, pokerStatsStore, nil, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, nil, nil, pokerStatsStore, nil, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil)
 }
 
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {
