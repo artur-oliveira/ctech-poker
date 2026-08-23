@@ -133,15 +133,20 @@ test('user data only fetches and runs the shared ctech-cdk scripts', () => {
   expect(text).toContain('setup-base.sh');
   expect(text).toContain('setup-app-service.sh');
   expect(text).toContain('setup-deploy.sh');
-  // No nginx in this stack, so neither of the two nginx scripts belongs here.
-  expect(text).not.toContain('setup-nginx.sh');
-  expect(text).not.toContain('setup-realip.sh');
+  // nginx now fronts the app (zero-downtime rolling deploy needs it to
+  // round-robin between app and app2).
+  expect(text).toContain('setup-nginx.sh');
+  expect(text).toContain('setup-realip.sh');
+  // app-port-alt/alt-port turn on the rolling deploy.
+  expect(text).toContain("setup-nginx.sh '8080' '8000' '/v1.0/health-check' '100' '1m' '8001'");
+  expect(text).toContain("setup-app-service.sh 'CTech Poker API' 'app' 'network.target nginx.service' '8001'");
   // Downloaded to a file and then executed: a pipe truncated mid-transfer runs a
   // partial script and reports success.
   expect(text).not.toMatch(/aws s3 cp [^\n]*\| *bash/);
-  // Only app-static.env, service-env.sh and the CloudWatch agent config are still
-  // written inline; everything else moved to the shared scripts.
-  expect((text.match(/cat > /g) ?? []).length).toBeLessThanOrEqual(3);
+  // Only app-static.env, service-env.sh, the WS nginx location fragment and
+  // the CloudWatch agent config are still written inline; everything else
+  // moved to the shared scripts.
+  expect((text.match(/cat > /g) ?? []).length).toBeLessThanOrEqual(4);
 });
 
 test('user data stays under the EC2 limit', () => {

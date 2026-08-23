@@ -11,9 +11,11 @@ import {Ec2ScriptRunner, Environment, HaproxyEc2Service,} from '@aoctech/cdk';
 import {
   API_CURRENT_ARTIFACT_KEY,
   APP_PORT,
+  APP_PORT_ALT,
   asgName,
   HEALTH_CHECK_PATH,
   instanceRoleName,
+  NGINX_PORT,
   S3_PREFIX,
   SERVICE,
   SSM_ACCOUNT,
@@ -67,12 +69,10 @@ interface ApiStackProps extends cdk.StackProps {
   socialEventsTableArn: string;
   playerReportsTableArn: string;
   socialGraphEnabledParam: string;
-  // Session Manager. **Off by default**: deploys replace the instances through an
-  // ASG instance refresh, so nothing needs SSM RunCommand any more, and the
-  // agent costs ~70 MiB of RSS on a t4g.nano. Poker pays one extra price for
-  // that: the termination-drain lifecycle hook stops the app through RunCommand,
-  // so with the agent off it fails open and instances terminate without draining
-  // tables. Accepted while this is a development environment.
+  // Session Manager. **On**: CI deploys over SSM RunCommand (/opt/app/deploy.sh),
+  // and the termination-drain lifecycle hook stops the app through RunCommand
+  // too — with the agent off, draining fails open and instances terminate
+  // without releasing table leases.
   enableSsmAgent?: boolean;
 }
 
@@ -212,8 +212,6 @@ export class PokerApiStack extends cdk.Stack {
     this.asgName = asgName(environment);
     const logRetention: logs.RetentionDays = isProd ? logs.RetentionDays.ONE_MONTH : logs.RetentionDays.ONE_WEEK;
     const logGroupApp = `/${SERVICE}/${environment}/app`;
-    // No nginx in this stack (see APP_PORT doc comment in constants.ts). Keep the
-    // existing log group/output stable for deployment and monitoring compatibility.
     const logGroupNginx = `/${SERVICE}/${environment}/nginx`;
 
     // ── User Data ─────────────────────────────────────────────────────────────
@@ -231,9 +229,7 @@ export class PokerApiStack extends cdk.Stack {
     const userData = ec2.UserData.forLinux();
     scripts.install(userData);
 
-    // No nginx in this stack (see APP_PORT doc comment in constants.ts): no extra
-    // packages, no setup-nginx.sh and no setup-realip.sh.
-    scripts.run(userData, 'setup-base.sh', SERVICE);
+    scripts.run(userData, 'setup-base.sh', SERVICE, 'nginx');
     scripts.run(userData, 'setup-swap.sh', '256');
     scripts.run(userData, 'setup-dualstack.sh');
     scripts.run(userData, 'setup-cloudflare-ca.sh');
@@ -253,9 +249,9 @@ export class PokerApiStack extends cdk.Stack {
       `AWS_REGION=${this.region}`,
       `AWS_USE_DUALSTACK_ENDPOINT=true`,
       `PORT=${APP_PORT}`,
-      // Poker is reached directly from HAProxy, with no localhost nginx hop.
-      // Trust only peers inside this VPC before honoring X-Forwarded-For.
-      `TRUSTED_PROXIES=${vpc.vpcCidrBlock}`,
+      // nginx is now the only caller reaching the app — same as every other
+      // CTech service fronted by it.
+      `TRUSTED_PROXIES=127.0.0.1`,
       `AVATAR_BUCKET=${avatarsBucketName}`,
       `ENV`,
     );
@@ -298,11 +294,51 @@ export class PokerApiStack extends cdk.Stack {
       `chmod 0755 /opt/app/service-env.sh`,
     );
 
-    // network.target only: there is no nginx unit to wait for.
-    scripts.run(userData, 'setup-app-service.sh', 'CTech Poker API', 'app');
+    // The app's WebSocket upgraders reject a request whose Upgrade/Connection
+    // headers were not forwarded. $connection_upgrade comes from the map in
+    // the shared nginx.conf. Two locations: the general socket and the
+    // per-table one (tableId varies, hence the regex).
+    userData.addCommands(
+      `cat > /etc/nginx/conf.d/location-ws.conf << 'WSLOC'`,
+      `location = /v1.0/ws {`,
+      `    proxy_pass http://app;`,
+      `    proxy_http_version 1.1;`,
+      `    proxy_set_header Upgrade $http_upgrade;`,
+      `    proxy_set_header Connection $connection_upgrade;`,
+      `    proxy_set_header Host $host;`,
+      `    proxy_set_header X-Real-IP $remote_addr;`,
+      `    proxy_set_header X-Forwarded-For $remote_addr;`,
+      `    proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;`,
+      `    proxy_read_timeout 3600s;`,
+      `    proxy_send_timeout 3600s;`,
+      `    proxy_buffering off;`,
+      `}`,
+      `location ~ ^/v1\\.0/tables/[^/]+/ws$ {`,
+      `    proxy_pass http://app;`,
+      `    proxy_http_version 1.1;`,
+      `    proxy_set_header Upgrade $http_upgrade;`,
+      `    proxy_set_header Connection $connection_upgrade;`,
+      `    proxy_set_header Host $host;`,
+      `    proxy_set_header X-Real-IP $remote_addr;`,
+      `    proxy_set_header X-Forwarded-For $remote_addr;`,
+      `    proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;`,
+      `    proxy_read_timeout 3600s;`,
+      `    proxy_send_timeout 3600s;`,
+      `    proxy_buffering off;`,
+      `}`,
+      `WSLOC`,
+    );
+
+    scripts.run(userData, 'setup-realip.sh', vpc.vpcCidrBlock);
+    // app-port-alt/alt-port turn on the zero-downtime rolling deploy: a second
+    // app process nginx round-robins into, so deploy.sh can restart one unit
+    // at a time instead of dropping the health check during `systemctl restart`.
+    scripts.run(userData, 'setup-nginx.sh', `${NGINX_PORT}`, `${APP_PORT}`, HEALTH_CHECK_PATH, '100', '1m', `${APP_PORT_ALT}`);
+    scripts.run(userData, 'setup-app-service.sh', 'CTech Poker API', 'app',
+      'network.target nginx.service', `${APP_PORT_ALT}`);
     scripts.run(userData, 'setup-deploy.sh', deploymentsBucketName, 'app',
-      `http://127.0.0.1:${APP_PORT}${HEALTH_CHECK_PATH}`);
-    scripts.run(userData, 'setup-logs.sh', logsBucketName, S3_PREFIX, SERVICE, '/var/log/app');
+      `http://127.0.0.1:${NGINX_PORT}${HEALTH_CHECK_PATH}`);
+    scripts.run(userData, 'setup-logs.sh', logsBucketName, S3_PREFIX, SERVICE, '/var/log/app', '/var/log/nginx');
 
     // Logs only. No `metrics` block: EC2 already publishes CPUUtilization and
     // CPUCreditBalance for free, and every custom series this service used to
@@ -317,6 +353,9 @@ export class PokerApiStack extends cdk.Stack {
             files: {
               collect_list: [
                 {file_path: '/var/log/app/app.log', log_group_name: logGroupApp, log_stream_name: '{instance_id}'},
+                {file_path: '/var/log/app/app2.log', log_group_name: logGroupApp, log_stream_name: '{instance_id}/app2'},
+                {file_path: '/var/log/nginx/access.log', log_group_name: logGroupNginx, log_stream_name: '{instance_id}/access'},
+                {file_path: '/var/log/nginx/error.log', log_group_name: logGroupNginx, log_stream_name: '{instance_id}/error'},
               ],
             },
           },
@@ -327,17 +366,18 @@ export class PokerApiStack extends cdk.Stack {
     scripts.run(userData, 'setup-cloudwatch-agent.sh', '/tmp/cwagent.json');
     scripts.run(userData, 'bootstrap-deploy.sh', deploymentsBucketName, API_CURRENT_ARTIFACT_KEY);
 
-    // ctech-lbalancer still owns the bootstrap route and private CNAME.
+    // ctech-lbalancer still owns the bootstrap route and private CNAME. Target
+    // port is NGINX_PORT (unchanged value, 8080) now that nginx fronts the app
+    // — ctech-lbalancer's route needs no update.
     const service = new HaproxyEc2Service(this, 'ApiService', {
       vpc,
       edgeSecurityGroup: edgeSg,
-      appPort: APP_PORT,
+      appPort: NGINX_PORT,
       userData,
       instanceProfileName,
       securityGroupName: `${environment}-${SERVICE}-api-sg`,
       securityGroupDescription: 'ctech-poker API instances',
       appLogGroupName: logGroupApp,
-      // Kept for output/deployment compatibility even though poker has no nginx.
       nginxLogGroupName: logGroupNginx,
       logRetention,
       logRemovalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
@@ -354,10 +394,11 @@ export class PokerApiStack extends cdk.Stack {
     const asg = service.autoScalingGroup;
     asg.node.addDependency(profile);
 
-    // ASG termination pauses before EC2 shutdown, asks systemd to stop the
-    // process (which runs Fx OnStop -> DrainAndRelease), then explicitly
-    // completes the lifecycle action. The finally block fails open so a
-    // broken SSM agent can never strand an instance in Terminating:Wait.
+    // ASG termination pauses before EC2 shutdown, asks systemd to stop both
+    // app processes (each runs Fx OnStop -> DrainAndRelease, releasing every
+    // table lease it holds), then explicitly completes the lifecycle action.
+    // The finally block fails open so a broken SSM agent can never strand an
+    // instance in Terminating:Wait.
     const drainFunction = new lambda.Function(this, 'TerminationDrainFunction', {
       functionName: `${environment}-${SERVICE}-termination-drain`,
       runtime: lambda.Runtime.PYTHON_3_14,
@@ -375,7 +416,7 @@ def handler(event, context):
         result = ssm.send_command(
             InstanceIds=[instance_id],
             DocumentName="AWS-RunShellScript",
-            Parameters={"commands": ["systemctl stop app"]},
+            Parameters={"commands": ["systemctl stop app app2"]},
             TimeoutSeconds=55,
         )
         command_id = result["Command"]["CommandId"]

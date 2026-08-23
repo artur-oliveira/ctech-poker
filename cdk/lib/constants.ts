@@ -42,12 +42,25 @@ export const API_PATH_PATTERNS = ['/v1.0/*', '/.well-known/*'];
 export const ALB_LISTENER_PRIORITY = 45;
 
 /**
- * Port the Go binary listens on directly (matches api/internal/config/config.go
- * PORT default). Unlike ctech-wallet/ctech-dfe, this skeleton does not front
- * the app with nginx, so appPort IS the ALB target/health-check port — no
- * separate NGINX_PORT.
+ * Port the Go binary listens on internally, behind nginx. Previously this was
+ * also the HAProxy target port, before poker had nginx in front; it now
+ * matches the ctech-wallet/ctech-dfe/ctech-account layout.
  */
-export const APP_PORT = 8080;
+export const APP_PORT = 8000;
+
+/**
+ * Loopback-only port for the second app process (zero-downtime rolling
+ * deploy). nginx round-robins between APP_PORT and APP_PORT_ALT; never
+ * touches the security group. See ctech-cdk's assets/ec2/setup-deploy.sh.
+ */
+export const APP_PORT_ALT = APP_PORT + 1;
+
+/**
+ * Port nginx listens on — the HAProxy target/health-check port. Unchanged
+ * from when this was APP_PORT directly, so ctech-lbalancer's route needs no
+ * update.
+ */
+export const NGINX_PORT = 8080;
 
 /**
  * Detailed health check path served by the Go API (RFC draft-inadarei-api-health-check;
