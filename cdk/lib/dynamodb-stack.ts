@@ -17,6 +17,7 @@ export type TableName =
   'poker_reaction_entitlements' | 'poker_reaction_purchases' |
   'poker_cosmetic_entitlements' | 'poker_cosmetic_purchases' |
   'poker_table_entitlements' | 'poker_table_highlights' |
+  'poker_hand_reveals' | 'poker_hand_reveal_payments' |
   (typeof DYNAMO_TABLE)[keyof typeof DYNAMO_TABLE];
 
 interface DynamoDBStackProps extends cdk.StackProps {
@@ -107,6 +108,23 @@ export class DynamoDBStack extends cdk.Stack {
     // Opaque public token -> sanitized hand projection. TTL enforces the
     // owner's chosen expiry without retaining public links indefinitely.
     table('poker_hand_shares', false, true);
+    // poker_hand_reveals: one permanent row per sandbox hand that ended
+    // without a showdown with exactly one winner (pk = hand_id — globally
+    // unique already, so the buy/check endpoints never need the table id to
+    // look a hand up). Holds every participant's true hole cards regardless
+    // of whether they were ever shown, gated entirely by the paid-reveal
+    // endpoint that is the only reader of this table — sessionlog.HandItem
+    // and hand-shares are untouched and keep their existing write-time
+    // redaction as their only guarantee. No TTL: matches poker_player_hands'
+    // real (permanent) retention, not a TTL'd table.
+    // See docs/specs/2026-08-21-pay-to-see-winner-cards-history.md.
+    table('poker_hand_reveals', false);
+    // poker_hand_reveal_payments: one permanent row per (hand, buyer) pair
+    // recording a paid reveal purchase — kept in its own table so a payment
+    // write never races the poker_hand_reveals write (that one is written
+    // once, by the hand-complete/hand-updated hooks, and never touched
+    // again). No TTL, mirrors poker_sandbox_purchases' permanent history.
+    table('poker_hand_reveal_payments', false);
     // One permanent private aggregate per player plus short-lived idempotency
     // guards for completed hands.
     table('poker_player_poker_stats', false, true);
