@@ -66,6 +66,22 @@ export async function getProfileShowcase(playerId: string) {
   )).data;
 }
 
+export interface MatchupStats {
+  hands_together: number;
+  viewer_wins: number;
+  opponent_wins: number;
+  ties: number;
+  heads_up_hands_together: number;
+  net_change_viewer: number;
+}
+
+export async function getMatchupStats(opponentId: string) {
+  return (await apiClient.get<MatchupStats>(
+    `/v1.0/players/me/matchups/${encodeURIComponent(opponentId)}`,
+    {silentError: true}
+  )).data;
+}
+
 export interface PlayerSession {
   table_id: string;
   buyin_amount: number;

@@ -3,10 +3,10 @@ import {Suspense} from 'react';
 import Link from 'next/link';
 import {useSearchParams} from 'next/navigation';
 import {useQuery} from '@tanstack/react-query';
-import {ChevronLeft, Sparkles, Trophy} from 'lucide-react';
+import {ChevronLeft, Sparkles, Swords, Trophy} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {PlayingCard} from '@/components/table/PlayingCard';
-import {getProfileShowcase} from '@/lib/api/player';
+import {getMatchupStats, getProfileShowcase} from '@/lib/api/player';
 import {achievementLabel} from '@/lib/achievements';
 import {useOptionalSession} from "@/lib/auth/session";
 import {AppPage} from '@/components/AppPageChrome';
@@ -26,6 +26,12 @@ function ProfileContent() {
     queryKey: ['profile-showcase', playerID],
     queryFn: () => getProfileShowcase(playerID),
     enabled: Boolean(playerID),
+    retry: false
+  });
+  const matchup = useQuery({
+    queryKey: ['profile-matchup', playerID],
+    queryFn: () => getMatchupStats(playerID),
+    enabled: authed && Boolean(playerID),
     retry: false
   });
   const socialActions = useSocialActions();
@@ -92,6 +98,14 @@ function ProfileContent() {
                   showcase.data.best_hand.ended_at * 1000 : showcase.data.best_hand.ended_at).toLocaleDateString('pt-BR')}</span>
               </article> : <p className="profile-showcase-empty">Nenhuma vitória recente registrada nesta vitrine.</p>}
             </section>
+            {matchup.data && matchup.data.hands_together > 0 && <section className="profile-matchup">
+              <h2><Swords aria-hidden="true"/> Cara a Cara</h2>
+              <p>
+                Vocês já jogaram {matchup.data.hands_together.toLocaleString('pt-BR')} mãos juntos,
+                {' '}você venceu {matchup.data.viewer_wins.toLocaleString('pt-BR')},{' '}
+                {showcase.data.name || 'Jogador'} venceu {matchup.data.opponent_wins.toLocaleString('pt-BR')}.
+              </p>
+            </section>}
           </div>
         </>}
     </section>

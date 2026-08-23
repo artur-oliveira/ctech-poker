@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   session: {authed: true, checking: false},
   query: {} as Record<string, unknown>,
   relationshipQuery: {} as Record<string, unknown>,
+  matchupQuery: {} as Record<string, unknown>,
   queryOptions: undefined as unknown,
   invalidateQueries: vi.fn(),
 }));
@@ -18,7 +19,9 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/auth/session', () => ({useOptionalSession: () => mocks.session}));
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (options: unknown) => {
-    if ((options as {queryKey: string[]}).queryKey[1] === 'relationship') return mocks.relationshipQuery;
+    const key = (options as {queryKey: string[]}).queryKey;
+    if (key[1] === 'relationship') return mocks.relationshipQuery;
+    if (key[0] === 'profile-matchup') return mocks.matchupQuery;
     mocks.queryOptions = options;
     return mocks.query;
   },
@@ -40,6 +43,7 @@ describe('public player profile page', () => {
     mocks.playerID = 'player-42';
     mocks.session = {authed: true, checking: false};
     mocks.relationshipQuery = {data: undefined, isLoading: false, isError: true};
+    mocks.matchupQuery = {data: undefined, isLoading: false, isError: true};
     mocks.query = queryState({
       player_id: 'player-42',
       name: 'Ás da Mesa',
@@ -125,6 +129,40 @@ describe('public player profile page', () => {
     };
     rerender(<ProfilePage/>);
     expect(screen.getByRole('button', {name: 'Ações para Ás da Mesa'})).toBeInTheDocument();
+  });
+
+  test('shows the head-to-head card once the pair has shared hands', () => {
+    mocks.matchupQuery = {
+      data: {
+        hands_together: 12,
+        viewer_wins: 7,
+        opponent_wins: 5,
+        ties: 0,
+        heads_up_hands_together: 4,
+        net_change_viewer: 380
+      },
+      isLoading: false, isError: false,
+    };
+    render(<ProfilePage/>);
+    expect(screen.getByText(/12 mãos juntos/)).toBeInTheDocument();
+    expect(screen.getByText(/você venceu 7/)).toBeInTheDocument();
+    expect(screen.getByText(/Ás da Mesa venceu 5/)).toBeInTheDocument();
+  });
+
+  test('hides the head-to-head card for a pair that never shared a table', () => {
+    mocks.matchupQuery = {
+      data: {
+        hands_together: 0,
+        viewer_wins: 0,
+        opponent_wins: 0,
+        ties: 0,
+        heads_up_hands_together: 0,
+        net_change_viewer: 0
+      },
+      isLoading: false, isError: false,
+    };
+    render(<ProfilePage/>);
+    expect(screen.queryByText(/mãos juntos/)).not.toBeInTheDocument();
   });
 
 });

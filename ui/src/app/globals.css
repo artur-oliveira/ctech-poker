@@ -3012,6 +3012,18 @@ h1 em {
     color: var(--success)
 }
 
+.profile-matchup {
+    grid-column: 1 / -1;
+    padding: 16px;
+    border-radius: var(--rounded-card);
+    background: var(--surface-seat)
+}
+
+.profile-matchup p {
+    margin: 0;
+    font-size: 13px
+}
+
 @media (max-width: 640px) {
     .profile-showcase-content {
         grid-template-columns: 1fr
