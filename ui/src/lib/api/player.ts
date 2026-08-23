@@ -152,3 +152,25 @@ export async function getHand(handId: string, mode: WalletMode = 'sandbox') {
     params: {mode}, silentError: true
   })).data;
 }
+
+export interface HandRevealCheck {
+  fee: number;
+  already_paid: boolean;
+  cards?: [string, string];
+}
+
+// GET .../reveal-winner always returns 200 with the fee once an archive
+// exists for handId (a sandbox hand that ended without a showdown with
+// exactly one winner) — 404 means no archive exists at all (showdown hand,
+// real-money hand, split pot, or a hand that predates this feature).
+export async function getHandRevealWinner(handId: string) {
+  return (await apiClient.get<HandRevealCheck>(
+    `/v1.0/players/me/hands/${encodeURIComponent(handId)}/reveal-winner`, {silentError: true}
+  )).data;
+}
+
+export async function revealHandWinner(handId: string) {
+  return (await apiClient.post<{ cards: [string, string] }>(
+    `/v1.0/players/me/hands/${encodeURIComponent(handId)}/reveal-winner`, {}, {silentError: true}
+  )).data;
+}
