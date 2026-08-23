@@ -4,6 +4,7 @@ import {ChevronLeft, ChevronRight, Coins, Pause, Play, RotateCcw, Sparkles} from
 import {Button} from '@/components/ui/button';
 import {TableStage} from '@/components/table/TableStage';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
+import {RevealWinnerButton} from '@/components/hands/RevealWinnerButton';
 import type {Action, HandHistoryAction, TableSnapshot} from '@/lib/api/table';
 import type {HandItem} from '@/lib/api/player';
 import {isTableReaction, TABLE_REACTIONS} from '@/lib/reactions';
@@ -84,6 +85,7 @@ export function HandReplayer({
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
+  const [revealedWinnerCards, setRevealedWinnerCards] = useState<[string, string] | null>(null);
   const lastIndex = Math.max(0, replayActions.length - 1);
   const safeIndex = Math.min(index, lastIndex);
   
@@ -119,9 +121,13 @@ export function HandReplayer({
   const stepReactions = reactionsByStep.get(current.seq) || [];
   const actor = playerName(current.player_id, viewerId, opponents.get(current.player_id)?.name ||
     frame.seats?.find(seat => seat.player_id === current.player_id)?.name);
-  
+  const winnerOpponent = frame.stage === 'complete'
+    ? [...opponents.values()].find(o => o.won && (!o.hole_cards || o.hole_cards.length === 0))
+    : undefined;
+
   const holeCardsFor = (playerId: string) => {
     if (playerId === viewerId) return hand.hole_cards;
+    if (winnerOpponent && playerId === winnerOpponent.player_id && revealedWinnerCards) return revealedWinnerCards;
     if (!showFinalCards && !shownPlayers.has(playerId)) return undefined;
     return opponents.get(playerId)?.hole_cards;
   };
@@ -162,6 +168,12 @@ export function HandReplayer({
       </div>
       <div className="replay-header-end">
         {frame.stage === 'complete' && <OutcomeBadge outcome={hand.outcome}/>}
+        {winnerOpponent && <RevealWinnerButton
+          handId={hand.hand_id}
+          winnerName={winnerOpponent.name}
+          alreadyRevealed={Boolean(revealedWinnerCards)}
+          onRevealedAction={cards => setRevealedWinnerCards(cards)}
+        />}
         <span className="replay-pot"><Coins aria-hidden="true"/> <span>Pote</span> <b
           key={`${current.seq}-${frame.pot}`}>{frame.pot.toLocaleString('pt-BR')}</b></span>
       </div>
