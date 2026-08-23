@@ -12,7 +12,8 @@ export type TableName =
   'poker_table_state' | 'poker_table_state_history' | 'poker_action_log' | 'poker_action_guards' |
   'poker_rooms' | 'poker_player_profiles' | 'poker_achievement_progress' | 'poker_leaderboard_stats' |
   'poker_daily_reward' | 'poker_pending_cashouts' | 'poker_player_sessions' | 'poker_player_hands' |
-  'poker_player_notes' | 'poker_hand_shares' | 'poker_player_poker_stats' | 'poker_sandbox_purchases' |
+  'poker_player_notes' | 'poker_hand_shares' | 'poker_player_poker_stats' | 'poker_player_matchups' |
+  'poker_sandbox_purchases' |
   'poker_reaction_entitlements' | 'poker_reaction_purchases' |
   'poker_cosmetic_entitlements' | 'poker_cosmetic_purchases' |
   'poker_table_entitlements' | 'poker_table_highlights' |
@@ -109,6 +110,12 @@ export class DynamoDBStack extends cdk.Stack {
     // One permanent private aggregate per player plus short-lived idempotency
     // guards for completed hands.
     table('poker_player_poker_stats', false, true);
+    // poker_player_matchups: one permanent aggregate per unordered player
+    // pair (pk "pair#<mode>#<idLow>#<idHigh>") plus short-lived per-pair
+    // idempotency guards for completed hands (pk "guard#<table>#<hand>#pair#...") —
+    // same PK-only, TTL'd shape as poker_player_poker_stats.
+    // See docs/specs/2026-08-21-head-to-head-stats.md.
+    table('poker_player_matchups', false, true);
     // poker_table_highlights: one item per table per day (pk table_id, sk
     // date), overwritten in place as bigger pots come in — rolls over
     // naturally at UTC midnight since the sort key changes. No TTL; a
