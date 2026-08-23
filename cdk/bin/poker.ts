@@ -41,8 +41,8 @@ const CTECH_LOGS_BUCKET = process.env.CTECH_LOGS_BUCKET || `${ENVIRONMENT}-ctech
 // instances through an ASG instance refresh, so nothing needs RunCommand any
 // more, and the agent costs ~70 MiB of RSS on a t4g.nano. Set
 // ENABLE_SSM_AGENT=true to get a shell back onto the box for debugging.
-const ENABLE_SSM_AGENT = process.env.ENABLE_SSM_AGENT === 'true';
-
+// const ENABLE_SSM_AGENT = process.env.ENABLE_SSM_AGENT === 'true';
+const ENABLE_SSM_AGENT = true;
 const env = {account: AWS_ACCOUNT, region: AWS_REGION};
 const pokerParameters = SSM_POKER(ENVIRONMENT);
 
