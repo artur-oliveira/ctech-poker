@@ -23,6 +23,12 @@ import (
 // or fire a spurious refund.
 var ErrAlreadySeated = errors.New("hand: already seated")
 
+// ErrPlayerNotFound means playerID already isn't seated at this table — a
+// terminal outcome for whoever's trying to remove them (they're already
+// gone), unlike RemovePlayerForActor's mid-hand rejection, which is a normal,
+// retryable race at a busy table.
+var ErrPlayerNotFound = errors.New("hand: player not found")
+
 type PlayerState uint8
 
 const (
@@ -610,7 +616,7 @@ func (t *Table) RemovePlayerForActor(playerID string) (int64, string, error) {
 		}
 		return stack, holdID, nil
 	}
-	return 0, "", fmt.Errorf("hand: player %s not found", playerID)
+	return 0, "", fmt.Errorf("%w: %s", ErrPlayerNotFound, playerID)
 }
 
 // dealtIntoCurrentHand reports whether playerID is part of t.handOrder — the

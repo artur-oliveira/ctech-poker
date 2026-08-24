@@ -330,6 +330,9 @@ func (h *roomHandlers) join(c fiber.Ctx) error {
 		if errors.Is(err, table.ErrNoSeatsAvailable) {
 			return problem.TableFull().Send(c)
 		}
+		if p, ok := problem.FromWalletError(err); ok {
+			return p.Send(c)
+		}
 		return problem.Conflict(err.Error()).Send(c)
 	}
 	return c.SendStatus(fiber.StatusOK)
@@ -343,6 +346,9 @@ func (h *roomHandlers) leave(c fiber.Ctx) error {
 	userID, _ := c.Locals(localsUserID).(string)
 	stack, err := h.buyin.CashOut(c.Context(), c.Params("id"), userID, req.IdempotencyKey)
 	if err != nil {
+		if p, ok := problem.FromWalletError(err); ok {
+			return p.Send(c)
+		}
 		return problem.Conflict(err.Error()).Send(c)
 	}
 	return c.JSON(fiber.Map{"amount": stack})

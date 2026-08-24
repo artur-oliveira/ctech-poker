@@ -173,7 +173,7 @@ describe('table bankroll dialogs', () => {
   test('cash-outs the returned stack and closes the leave dialog', async () => {
     const left = vi.fn();
     mocks.leaveRoom.mockResolvedValue({amount: 1_750});
-    render(<LeaveDialog roomId="room-1" stack={2_000} onLeftAction={left}/>);
+    render(<LeaveDialog roomId="room-1" stack={2_000} dealtIn={false} onLeftAction={left}/>);
     await userEvent.click(screen.getByRole('button', {name: 'Sair da mesa'}));
     expect(screen.getByText(/2.000 fichas/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', {name: 'Sair e sacar fichas'}));
@@ -184,17 +184,24 @@ describe('table bankroll dialogs', () => {
   test('distinguishes a dealt-in conflict from an already completed leave', async () => {
     const left = vi.fn();
     mocks.leaveRoom.mockRejectedValueOnce({axios: true, response: {status: 409, data: {detail: 'still active'}}});
-    render(<LeaveDialog roomId="room-1" stack={900} onLeftAction={left}/>);
+    render(<LeaveDialog roomId="room-1" stack={900} dealtIn={false} onLeftAction={left}/>);
     await userEvent.click(screen.getByRole('button', {name: 'Sair da mesa'}));
     await userEvent.click(screen.getByRole('button', {name: 'Sair e sacar fichas'}));
     expect(await screen.findByRole('alert')).toHaveTextContent('Você está na mão atual');
     expect(left).not.toHaveBeenCalled();
-    
+
     mocks.leaveRoom.mockRejectedValueOnce({axios: true, response: {status: 409, data: {detail: 'player not found'}}});
     await userEvent.click(screen.getByRole('button', {name: 'Sair e sacar fichas'}));
     await waitFor(() => expect(left).toHaveBeenCalledWith(900));
   });
-  
+
+  test('disables the leave trigger while dealt into the current hand, instead of letting a doomed leave request fire', () => {
+    render(<LeaveDialog roomId="room-1" stack={900} dealtIn onLeftAction={vi.fn()}/>);
+    const trigger = screen.getByRole('button', {name: 'Sair da mesa'});
+    expect(trigger).toBeDisabled();
+    expect(trigger).toHaveAttribute('title', expect.stringContaining('Você está na mão atual'));
+  });
+
   test('rebuys a changed amount and reports a retryable failure', async () => {
     const rebought = vi.fn();
     mocks.joinRoom.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(undefined);

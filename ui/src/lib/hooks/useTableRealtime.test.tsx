@@ -11,7 +11,8 @@ const ws = vi.hoisted(() => ({
   },
   send: vi.fn((frame: object): boolean => Boolean(frame)),
   reconnect: vi.fn(),
-  status: 'connected' as 'connected' | 'disconnected',
+  status: 'connected' as 'connected' | 'connecting' | 'reconnecting' | 'disconnected' | 'error',
+  attempt: 0,
 }));
 
 const auth = vi.hoisted(() => ({
@@ -24,9 +25,10 @@ const auth = vi.hoisted(() => ({
 }));
 
 vi.mock('@aoctech/ws-client', () => ({
+  MAX_RECONNECT_ATTEMPTS: 10,
   useWebSocket: vi.fn((options: typeof ws.options) => {
     ws.options = options;
-    return {status: ws.status, attempt: 0, send: ws.send, reconnect: ws.reconnect};
+    return {status: ws.status, attempt: ws.attempt ?? 0, send: ws.send, reconnect: ws.reconnect};
   }),
 }));
 
@@ -554,8 +556,29 @@ describe('useTableRealtime', () => {
     expect(ws.reconnect).toHaveBeenCalledTimes(1);
     visibility.mockRestore();
     ws.status = 'connected';
+    ws.attempt = 0;
   });
-  
+
+  test('reports a drop as reconnecting, not disconnected/error, while retries remain', () => {
+    ws.status = 'error';
+    ws.attempt = 1;
+    const {result, rerender} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    expect(result.current.status).toBe('reconnecting');
+
+    ws.status = 'disconnected';
+    rerender();
+    expect(result.current.status).toBe('reconnecting');
+
+    // Once @aoctech/ws-client has actually given up (attempt > MAX_RECONNECT_ATTEMPTS),
+    // the raw status must surface as-is so the UI's "give up" copy can show.
+    ws.attempt = 11;
+    rerender();
+    expect(result.current.status).toBe('disconnected');
+
+    ws.status = 'connected';
+    ws.attempt = 0;
+  });
+
   test('resets table-scoped state when navigating between tables', () => {
     const {result, rerender} = renderHook(
       ({tableId}) => useTableRealtime(tableId, VIEWER),

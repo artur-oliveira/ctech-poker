@@ -19,9 +19,10 @@ import {leaveRoom} from '@/lib/api/rooms';
 const DEALT_IN_MESSAGE = 'Você está na mão atual. Desista ou aguarde o fim da rodada para sair.';
 const GENERIC_MESSAGE = 'Não foi possível sair da mesa agora. Tente novamente.';
 
-export function LeaveDialog({roomId, stack, onLeftAction}: {
+export function LeaveDialog({roomId, stack, dealtIn, onLeftAction}: {
   roomId: string;
   stack: number;
+  dealtIn: boolean;
   onLeftAction: (amount: number) => void
 }) {
   const [open, setOpen] = useState(false);
@@ -50,10 +51,11 @@ export function LeaveDialog({roomId, stack, onLeftAction}: {
   }
   
   return <Dialog open={open} onOpenChange={next => {
-    setOpen(next);
+    setOpen(dealtIn ? false : next);
     if (!next) setError('');
   }}>
-    <DialogTrigger render={<Button type="button" variant="ghost" size="icon" aria-label="Sair da mesa"/>}>
+    <DialogTrigger render={<Button type="button" variant="ghost" size="icon" aria-label="Sair da mesa"
+                                    disabled={dealtIn} title={dealtIn ? DEALT_IN_MESSAGE : undefined}/>}>
       <DoorOpen/>
     </DialogTrigger>
     <DialogContent>

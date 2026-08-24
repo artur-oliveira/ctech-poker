@@ -595,8 +595,31 @@ func (a *Actor) ensureLoaded(ctx context.Context, force bool) error {
 	a.pendingPersistedDeadline = stored.TurnDeadlineUnixMs
 	a.pendingDeadlineFor = a.cached.CurrentPlayerIDForActor()
 	a.pendingDeadlineForStage = a.cached.Stage()
+	a.pruneStalePresence()
 	a.rearmTimersFromCache()
 	return nil
+}
+
+// pruneStalePresence drops disconnect/kick bookkeeping for anyone no longer
+// in the freshly reloaded cache — e.g. another actor instance already
+// completed their leave/cash-out before this reload. Without this, a kick
+// timer armed against the old, now-stale player list keeps firing and
+// retrying forever against a player RemovePlayerForActor will never find
+// again (same self-healing guarantee rearmTimersFromCache gives the other
+// timers on every reload).
+func (a *Actor) pruneStalePresence() {
+	for playerID, timer := range a.kickTimers {
+		if !a.isSeated(playerID) {
+			timer.Stop()
+			delete(a.kickTimers, playerID)
+			delete(a.disconnectedSince, playerID)
+		}
+	}
+	for playerID := range a.disconnectedSince {
+		if !a.isSeated(playerID) {
+			delete(a.disconnectedSince, playerID)
+		}
+	}
 }
 
 // rearmTimersFromCache re-derives and re-arms the turn/runout/next-hand
@@ -1189,6 +1212,14 @@ func (a *Actor) handleKickTimeout(ctx context.Context, c kickTimeoutCmd) error {
 	stackCh := make(chan int64, 1)
 	holdIDCh := make(chan string, 1)
 	if err := a.handleLeave(ctx, a.systemLeaveCmd(ctx, c.PlayerID, "disconnected", stackCh, holdIDCh)); err != nil {
+		if errors.Is(err, hand.ErrPlayerNotFound) {
+			// Terminal, not a race: the player is already gone (removed by
+			// another actor instance, or table cleanup), so there is nothing
+			// left to retry — retrying forever just spams this WARN on an
+			// otherwise-healthy, possibly now-empty table.
+			delete(a.disconnectedSince, c.PlayerID)
+			return nil
+		}
 		a.armKickRetry(c.PlayerID)
 		return err
 	}

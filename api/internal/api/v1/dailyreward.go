@@ -1,12 +1,9 @@
 package v1
 
 import (
-	"errors"
-
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/dailyreward"
 	"gopkg.aoctech.app/poker/api/internal/problem"
-	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
 
 type dailyRewardHandlers struct{ svc *dailyreward.Service }
@@ -48,9 +45,8 @@ func (h *dailyRewardHandlers) cooldown(c fiber.Ctx) error {
 // mode" that the frontend needs to see and act on) — anything else (store
 // failures, tier-pick failures) stays a generic internal error.
 func walletOrInternalProblem(err error, detail string, c fiber.Ctx) *problem.Problem {
-	var werr *walletclient.Error
-	if errors.As(err, &werr) {
-		return problem.New(werr.Status, werr.Type, werr.Title, werr.Detail)
+	if p, ok := problem.FromWalletError(err); ok {
+		return p
 	}
 	return problem.InternalServer(detail, c, err)
 }

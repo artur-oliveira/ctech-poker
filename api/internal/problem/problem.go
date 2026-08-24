@@ -10,6 +10,7 @@ import (
 	"gopkg.aoctech.app/api-commons/observability"
 	fiberobs "gopkg.aoctech.app/api-commons/observability/fiber"
 	common "gopkg.aoctech.app/api-commons/problem"
+	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
 
 const ContentType = "application/problem+json"
@@ -73,4 +74,19 @@ func FromError(err error, c fiber.Ctx) *Problem {
 		}
 	}
 	return InternalServer("an unexpected error occurred", c, err)
+}
+
+// FromWalletError passes ctech-wallet's own problem+json straight through
+// (Status/Type/Title/Detail) when err wraps a *walletclient.Error, instead of
+// letting a caller's generic fallback stringify the whole wrapped Go error
+// chain (e.g. "buyin: debit: walletclient: Insufficient Balance: ...") into
+// the response detail. The wrapping prefixes are for server logs/traces only
+// — never meant to reach the client. ok is false when err isn't a wallet
+// error, so the caller can fall back to its own generic problem.
+func FromWalletError(err error) (p *Problem, ok bool) {
+	var werr *walletclient.Error
+	if errors.As(err, &werr) {
+		return New(werr.Status, werr.Type, werr.Title, werr.Detail), true
+	}
+	return nil, false
 }

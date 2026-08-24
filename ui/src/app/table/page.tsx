@@ -535,7 +535,8 @@ function TableContent() {
               s.stage !== 'showdown' && s.stage !== 'complete' &&
                 <RebuyDialog roomId={id} room={room} autoRebuy={Boolean(viewerSeat.auto_rebuy)}
                              onRebuyAction={() => rt.ready(true)}/>}
-            <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} onLeftAction={amount => {
+            <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} dealtIn={Boolean(viewerSeat?.dealt_in)}
+                         onLeftAction={amount => {
               pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
               setSessionRecap({
                 joinedAt: openSession?.joined_at || Date.now(),

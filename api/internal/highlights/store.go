@@ -51,9 +51,14 @@ func NewStore(db *dynamodb.Client, env string) *Store {
 // pot beats whatever is currently on record — same "update only if better"
 // shape a leaderboard Top-N write uses.
 func (s *Store) RecordHand(ctx context.Context, tableID, handID string, outcome hand.HandOutcome, names map[string]string) error {
+	// Sum only contested layers — a Refund layer is uncalled excess returned to
+	// its own bettor (e.g. an all-in everyone folds to), never chips actually
+	// won, so it must not inflate "biggest pot of the day".
 	pot := int64(0)
-	for _, amount := range outcome.Payouts {
-		pot += amount
+	for _, result := range outcome.PotResults {
+		if !result.Refund {
+			pot += result.PayoutAmount
+		}
 	}
 	if pot <= 0 {
 		return nil // no chips changed hands (e.g. a walkover) — nothing to highlight

@@ -4,7 +4,7 @@ import {getAccessToken, subscribeAccessToken} from '@/lib/api/client';
 import {wsOrigin} from '@/lib/ws/origin';
 import {recoverSession} from '@/lib/auth/session';
 import {cardLabel} from '@/lib/cards';
-import {useWebSocket, type WSStatus} from '@aoctech/ws-client';
+import {MAX_RECONNECT_ATTEMPTS, useWebSocket, type WSStatus} from '@aoctech/ws-client';
 import type {MockTableService} from '@/dev/mockRuntime';
 import {type MockScenario, USE_MOCK} from '@/lib/mockConfig';
 import type {ActionPreselection, PokerAction, ServerMessage, TableSnapshot} from '@/lib/api/table';
@@ -693,8 +693,18 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   
   const send = useCallback((value: object) => USE_MOCK ? Boolean(mockService.current?.send(value as Record<string, unknown>)) : wsSend(value), [wsSend]);
   const retryNow = useCallback(() => USE_MOCK ? mockService.current?.reconnect() : wsRetryNow(), [wsRetryNow]);
-  const status = USE_MOCK ? mockStatus : wsStatus;
   const reconnectAttempt = USE_MOCK ? mockReconnectAttempt : wsReconnectAttempt;
+  const rawStatus = USE_MOCK ? mockStatus : wsStatus;
+  // @aoctech/ws-client reports 'error'/'disconnected' the instant a socket
+  // drops, then only flips to 'reconnecting' once its retry timer actually
+  // fires — so every drop flashes the red "connection lost" state even
+  // though a retry is already guaranteed. reconnectAttempt <= MAX means the
+  // library hasn't given up (see connectionCopyFor's identical threshold in
+  // table/page.tsx): show 'reconnecting' for that whole window instead, and
+  // only surface the raw status once retries are truly exhausted.
+  const status = (rawStatus === 'error' || rawStatus === 'disconnected') && reconnectAttempt <= MAX_RECONNECT_ATTEMPTS
+    ? 'reconnecting'
+    : rawStatus;
   useEffect(() => {
     sendRef.current = send;
     retryNowRef.current = retryNow;
