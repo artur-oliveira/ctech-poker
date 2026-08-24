@@ -18,7 +18,7 @@ permissions:
 jobs:
   test:
     name: Test
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
 
     # DynamoDB Local backs the -tags integration suite below (internal/table,
     # tests/integration, etc.) — every testClient()/testDynamoClient() helper
@@ -119,7 +119,7 @@ jobs:
 
   deploy:
     name: Build & Deploy
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     needs: test
     if: ${{ github.event_name != 'pull_request' }}
     permissions:

@@ -134,6 +134,9 @@ new PokerApiStack(app, id('API'), {
   recentPlayersTableArn: dynamoStack.tables.get(DYNAMO_TABLE.recentPlayers)!.tableArn,
   socialEventsTableArn: dynamoStack.tables.get(DYNAMO_TABLE.socialEvents)!.tableArn,
   playerReportsTableArn: dynamoStack.tables.get(DYNAMO_TABLE.playerReports)!.tableArn,
+  // Alpine/ARM is the default (same rollout as ctech-account/ctech-wallet);
+  // OS_FAMILY=al2023 is the one-line rollback if this ever needs to revert.
+  osFamily: (process.env.OS_FAMILY as 'al2023' | 'alpine' | undefined) ?? 'alpine',
   description: `CTech Poker API (EC2 + ASG + ALB) - ${ENVIRONMENT}`,
 });
 
