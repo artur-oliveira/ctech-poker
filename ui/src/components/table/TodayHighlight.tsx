@@ -1,5 +1,5 @@
 'use client';
-import {useEffect, useRef} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {Trophy} from 'lucide-react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {getTodayHighlight} from '@/lib/api/highlights';
@@ -29,6 +29,8 @@ export function TodayHighlight({tableId, handId, handComplete}: {
     retry: shouldRetryHighlightFetch,
   });
   const lastHandId = useRef<string | undefined>(undefined);
+  const [expanded, setExpanded] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!handComplete || !handId || handId === lastHandId.current) return;
@@ -36,16 +38,39 @@ export function TodayHighlight({tableId, handId, handComplete}: {
     queryClient.invalidateQueries({queryKey: ['highlights', tableId, 'today']});
   }, [handComplete, handId, queryClient, tableId]);
 
+  // Narrow phones shrink the pill down to the trophy icon (see .today-highlight
+  // in globals.css) since the label + pot + revealed hand text no longer fit
+  // beside the table's utility icons; tapping it re-opens what CSS hid rather
+  // than losing the information outright.
+  useEffect(() => {
+    if (!expanded) return undefined;
+    function onPointerDown(e: PointerEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setExpanded(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setExpanded(false);
+    }
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [expanded]);
+
   if (!data?.pot) return null;
   const revealedText = data.revealed && data.revealed.length > 0
     ? data.revealed.map(hand => `${hand.name || 'Jogador'} ${hand.hole_cards.join('')}`).join(' vs ')
     : undefined;
   return (
-    <span className="today-highlight">
-      <Trophy aria-hidden="true"/>
-      <span className="today-highlight-label">Maior pote de hoje</span>
-      <span className="today-highlight-pot">{data.pot.toLocaleString('pt-BR')}</span>
-      {revealedText && <span className="today-highlight-cards">{revealedText}</span>}
-    </span>
+    <div className={`today-highlight-wrap ${expanded ? 'expanded' : ''}`} ref={wrapRef}>
+      <button type="button" className="today-highlight" aria-expanded={expanded}
+              onClick={() => setExpanded(v => !v)}>
+        <Trophy aria-hidden="true"/>
+        <span className="today-highlight-label">Maior pote de hoje</span>
+        <span className="today-highlight-pot">{data.pot.toLocaleString('pt-BR')}</span>
+        {revealedText && <span className="today-highlight-cards">{revealedText}</span>}
+      </button>
+    </div>
   );
 }

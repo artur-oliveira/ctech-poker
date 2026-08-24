@@ -2289,18 +2289,27 @@ h1 em {
     white-space: nowrap
 }
 
+.today-highlight-wrap {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+    max-width: 100%
+}
+
 .today-highlight {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    flex-shrink: 0;
+    width: 100%;
     white-space: nowrap;
     font: 600 13px var(--font-mono);
     background: var(--white-08);
     border: 1px solid var(--white-13);
     padding: 6px 12px;
     border-radius: 999px;
-    color: var(--gold)
+    color: var(--gold);
+    cursor: pointer;
+    appearance: none
 }
 
 .today-highlight svg {
@@ -10711,17 +10720,21 @@ h1 em {
 }
 
 @media (max-width: 520px) {
+    /* Was flex-wrap:wrap: header-left (the Lobby chevron) and header-right
+       used to overflow their combined row and drop to a second line whenever
+       header-right's content was too wide to shrink. Both flex items below
+       now get min-width:0 with .today-highlight as the one shrinkable child,
+       so the pair fits one row at every phone width instead of wrapping. */
     .game-chrome > header {
-        flex-wrap: wrap;
-        row-gap: 6px;
+        flex-wrap: nowrap;
         padding-right: max(12px, env(safe-area-inset-right));
         padding-left: max(12px, env(safe-area-inset-left))
     }
 
-    /* The header-right icon row can already eat most of a phone-width row;
-       without this the trailing icons (Convidar/Sentar fora/Sair da mesa)
-       get pushed past the edge and .game's overflow-x:clip hides them
-       entirely instead of just reflowing. */
+    .game-chrome > header > a {
+        flex-shrink: 0
+    }
+
     /* One header row on phones: the Lobby link collapses to its chevron
        (label stays for assistive tech) so every table tool fits beside it
        without wrapping. */
@@ -10734,9 +10747,14 @@ h1 em {
     }
 
     .game-chrome > header .header-right {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         justify-content: flex-end;
+        min-width: 0;
         gap: 6px
+    }
+
+    .game-chrome > header .header-right > *:not(.today-highlight-wrap) {
+        flex-shrink: 0
     }
 
     /* icon-only status indicator: the "Ao vivo"/"Reconectando" label has no
@@ -10747,6 +10765,109 @@ h1 em {
         height: 1px;
         overflow: hidden;
         clip-path: inset(50%)
+    }
+
+    /* The pot amount is the one number worth a glance mid-hand. The label and
+       the revealed-hand recap are unbounded text (player names, hole cards)
+       that used to force .header-right past the viewport width and clip the
+       utility menu off-screen; both stay in the DOM (and the accessibility
+       tree) for screen readers, just off-screen visually. The wrap is the one
+       flexible header-right child, absorbing whatever width the fixed-size
+       icons don't need instead of a hand-tuned max-width per breakpoint — it
+       shrinks to a 28px icon-only badge before it would ever force a wrap,
+       and grows back up to its content size (pot fully legible) on any phone
+       with room to spare. Tapping the icon-only badge re-opens the hidden
+       label/pot/cards as a floating panel (below) rather than losing them. */
+    .today-highlight-wrap {
+        flex: 1 1 auto;
+        min-width: 28px;
+        max-width: max-content
+    }
+
+    .today-highlight-label,
+    .today-highlight-cards {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
+    }
+
+    .today-highlight-pot {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+
+    /* Expanded: the button leaves the flex row (the wrap keeps reserving the
+       collapsed footprint so header-right's width — and the one-line fit —
+       doesn't change) and floats as a card below the icon, full label/pot/
+       cards restored. Grid instead of the pill's flex row: the icon anchors
+       the left column, label/pot/cards stack in reading order beside it. */
+    .today-highlight-wrap.expanded .today-highlight {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        align-items: start;
+        column-gap: 10px;
+        row-gap: 2px;
+        width: max-content;
+        max-width: min(78vw, 300px);
+        white-space: normal;
+        padding: 12px 16px;
+        border-radius: 14px;
+        background: var(--surface-control);
+        border-color: var(--white-1c);
+        box-shadow: 0 10px 28px var(--black-08);
+        z-index: var(--z-notice);
+        animation: today-highlight-open 160ms var(--ease-out-quart) both
+    }
+
+    .today-highlight-wrap.expanded .today-highlight svg {
+        grid-row: 1 / 4;
+        margin-top: 2px
+    }
+
+    .today-highlight-wrap.expanded .today-highlight-label,
+    .today-highlight-wrap.expanded .today-highlight-cards {
+        position: static;
+        width: auto;
+        height: auto;
+        overflow: visible;
+        clip-path: none;
+        grid-column: 2
+    }
+
+    .today-highlight-wrap.expanded .today-highlight-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--muted)
+    }
+
+    .today-highlight-wrap.expanded .today-highlight-pot {
+        grid-column: 2;
+        overflow: visible;
+        text-overflow: clip;
+        font-size: 18px
+    }
+
+    .today-highlight-wrap.expanded .today-highlight-cards {
+        font-size: 12px
+    }
+
+    @keyframes today-highlight-open {
+        from {
+            opacity: 0;
+            transform: translateY(-4px)
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .today-highlight-wrap.expanded .today-highlight {
+            animation: none
+        }
     }
 
     /* A fixed banner can't reliably dodge a header that wraps to two lines,
@@ -10837,6 +10958,24 @@ h1 em {
         min-height: 60px;
         padding: 6px 8px
     }
+
+    /* Seats 4/5 are the top-center pair; both slide their bet badge sideways
+       into the shared gap between them (see the stage-v-ring .seat-bet rules
+       above). That gap is wide enough on desktop's oval but not on a phone
+       ring — a tier-4/5 chip stack from each side collides mid-gap. Shrink
+       just this pair's badge rather than every seat's, since every other
+       seat's badge already clears its neighbor. */
+    .stage-v-ring .seat-4 .seat-bet .chip-stack,
+    .stage-v-ring .seat-5 .seat-bet .chip-stack {
+        --chip-size: 11px;
+        --chip-gap: 2px
+    }
+
+    .stage-v-ring .seat-4 .seat-bet b,
+    .stage-v-ring .seat-5 .seat-bet b {
+        font-size: 9px;
+        padding: 2px 5px
+    }
 }
 
 /* At the 320px content boundary, keeping every actual header control on one
@@ -10852,6 +10991,29 @@ h1 em {
     .game-chrome > header .header-right {
         flex-wrap: nowrap;
         gap: 3px
+    }
+
+    /* The 520px-tier shrink still leaves seat-4/seat-5's badges ~12px deep
+       into each other at this width — the gap between the two top-center
+       seats scales down faster than the badge does. One more size step. */
+    .stage-v-ring .seat-4 .seat-bet .chip-stack,
+    .stage-v-ring .seat-5 .seat-bet .chip-stack {
+        --chip-size: 9px;
+        --chip-gap: 2px
+    }
+
+    .stage-v-ring .seat-4 .seat-bet b,
+    .stage-v-ring .seat-5 .seat-bet b {
+        font-size: 8px;
+        padding: 1px 4px
+    }
+
+    .stage-v-ring .seat-4 .seat-bet {
+        left: calc(100% + 1px)
+    }
+
+    .stage-v-ring .seat-5 .seat-bet {
+        right: calc(100% + 1px)
     }
 
     /* "Você" already identifies the hero HUD; removing the duplicate avatar

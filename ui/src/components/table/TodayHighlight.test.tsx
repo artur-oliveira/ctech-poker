@@ -1,5 +1,6 @@
 import type {ReactNode} from 'react';
 import {render, screen, waitFor} from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import {ApiError} from '@/lib/api/client';
@@ -79,6 +80,46 @@ describe('TodayHighlight', () => {
     renderHighlight();
     await waitFor(() => expect(screen.getByText('Maior pote de hoje')).toBeInTheDocument());
     expect(screen.queryByText(/Ah|Kd/)).not.toBeInTheDocument();
+  });
+
+  test('is collapsed by default and expands on click (mobile\'s icon-only badge)', async () => {
+    const user = userEvent.setup();
+    getTodayHighlight.mockResolvedValueOnce(highlight({pot: 25000}));
+    renderHighlight();
+    const button = await screen.findByRole('button', {name: /Maior pote de hoje/});
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+
+    await user.click(button);
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+
+    await user.click(button);
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('closes when a click lands outside the badge', async () => {
+    const user = userEvent.setup();
+    getTodayHighlight.mockResolvedValueOnce(highlight({pot: 25000}));
+    renderHighlight();
+    const button = await screen.findByRole('button', {name: /Maior pote de hoje/});
+
+    await user.click(button);
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+
+    await user.click(document.body);
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('closes on Escape', async () => {
+    const user = userEvent.setup();
+    getTodayHighlight.mockResolvedValueOnce(highlight({pot: 25000}));
+    renderHighlight();
+    const button = await screen.findByRole('button', {name: /Maior pote de hoje/});
+
+    await user.click(button);
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+
+    await user.keyboard('{Escape}');
+    expect(button).toHaveAttribute('aria-expanded', 'false');
   });
 
   test('refetches once a hand this viewer watched completes', async () => {
