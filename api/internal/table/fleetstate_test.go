@@ -1,0 +1,369 @@
+package table
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+)
+
+// fakeHandHooks stands in for internal/handhook: one shared claim set, exactly
+// like the Valkey key is in production.
+type fakeHandHooks struct {
+	claimed map[string]bool
+	err     error
+	calls   int
+}
+
+func newFakeHandHooks() *fakeHandHooks { return &fakeHandHooks{claimed: map[string]bool{}} }
+
+func (f *fakeHandHooks) Claim(_ context.Context, tableID, handID string) (bool, error) {
+	f.calls++
+	if f.err != nil {
+		return false, f.err
+	}
+	k := tableID + ":" + handID
+	if f.claimed[k] {
+		return false, nil
+	}
+	f.claimed[k] = true
+	return true, nil
+}
+
+// fakeConnStore stands in for internal/tableconn.
+type fakeConnStore struct {
+	shared map[string]bool
+	err    error
+	calls  int
+}
+
+func newFakeConnStore() *fakeConnStore { return &fakeConnStore{shared: map[string]bool{}} }
+
+func (f *fakeConnStore) Sync(_ context.Context, _ string, local []string) (map[string]bool, error) {
+	f.calls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	for _, id := range local {
+		f.shared[id] = true
+	}
+	out := make(map[string]bool, len(f.shared))
+	for id, v := range f.shared {
+		out[id] = v
+	}
+	return out, nil
+}
+
+// completeActor builds an actor sitting on a hand that has already reached
+// Complete, which is the state every instance can load and broadcast. label
+// names the simulated instance; the table ID is deliberately the same for all
+// of them, because that is the situation being tested — several instances
+// running an Actor for ONE table.
+func completeActor(t *testing.T, label string) (*Actor, *[]string) {
+	t.Helper()
+	table := hand.NewTable([]*hand.Player{
+		{ID: "p1", Stack: 1000, Ready: true},
+		{ID: "p2", Stack: 1000, Ready: true},
+	}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	// Fold the hand out so it reaches Complete with a real lastOutcome.
+	for table.Stage() != hand.Complete {
+		current := table.CurrentPlayerIDForActor()
+		if current == "" {
+			t.Fatal("no current player before Complete")
+		}
+		if err := table.Act(current, "fold", 0); err != nil {
+			t.Fatalf("fold %s: %v", current, err)
+		}
+	}
+	fired := &[]string{}
+	actor := New("table-1", nil, true, func(string, hand.Snapshot) {})
+	t.Cleanup(func() { actor.afkSweepTimer.Stop() })
+	actor.cached = table
+	actor.handID = "hand-1"
+	actor.SetOnHandCompleteForActor(func(handID string, _ hand.HandOutcome, _ map[string]string) {
+		*fired = append(*fired, label+"/"+handID)
+	})
+	return actor, fired
+}
+
+// The post-hand hooks credit non-idempotent counters (achievements.RecordHand,
+// RecordTableStreak, the auto-rebuy sweep). lastOutcome is persisted state, so
+// a second instance that merely broadcasts an already-Complete table — a chat
+// message during the 12s countdown is enough — used to re-credit the whole
+// hand off its own process-local guard.
+func TestHandHooksRunOnceAcrossInstances(t *testing.T) {
+	hooks := newFakeHandHooks()
+	first, firstFired := completeActor(t, "instance-a")
+	second, secondFired := completeActor(t, "instance-b")
+	first.SetHandHookClaimerForActor(hooks)
+	second.SetHandHookClaimerForActor(hooks)
+
+	first.notifyHandComplete()
+	second.notifyHandComplete()
+
+	if len(*firstFired) != 1 {
+		t.Fatalf("first instance fired %v, want exactly one", *firstFired)
+	}
+	if len(*secondFired) != 0 {
+		t.Fatalf("second instance fired %v, want none — A already claimed the hand", *secondFired)
+	}
+}
+
+// Re-broadcasting the same hand must not re-ask the shared store: broadcastAll
+// runs on every chat message and reaction while the table sits on Complete.
+func TestHandHookClaimIsAskedOncePerHand(t *testing.T) {
+	hooks := newFakeHandHooks()
+	actor, fired := completeActor(t, "instance-a")
+	actor.SetHandHookClaimerForActor(hooks)
+
+	actor.notifyHandComplete()
+	actor.notifyHandComplete()
+	actor.notifyHandComplete()
+
+	if len(*fired) != 1 {
+		t.Fatalf("fired %v, want exactly one", *fired)
+	}
+	if hooks.calls != 1 {
+		t.Fatalf("claim calls = %d, want 1", hooks.calls)
+	}
+}
+
+// An unreachable Valkey must degrade to the previous at-least-once behaviour.
+// Skipping the hooks would lose the hand's achievements and streak for good,
+// which is strictly worse than a bounded, visible double credit.
+func TestHandHookClaimFailureStillCreditsTheHand(t *testing.T) {
+	hooks := newFakeHandHooks()
+	hooks.err = errors.New("valkey down")
+	actor, fired := completeActor(t, "instance-a")
+	actor.SetHandHookClaimerForActor(hooks)
+
+	actor.notifyHandComplete()
+
+	if len(*fired) != 1 {
+		t.Fatalf("fired %v, want the hand credited despite the claim error", *fired)
+	}
+}
+
+// Without a claimer (dev, tests, single instance) nothing changes.
+func TestHandHooksRunWithoutASharedClaimer(t *testing.T) {
+	actor, fired := completeActor(t, "instance-a")
+	actor.notifyHandComplete()
+	actor.notifyHandComplete()
+	if len(*fired) != 1 {
+		t.Fatalf("fired %v, want exactly one", *fired)
+	}
+}
+
+// The dot has to reflect sockets terminating on other instances. Before this,
+// applyPresence defaulted an unknown player to "connected" and trusted a stale
+// local mark for one who had reconnected elsewhere.
+func TestConnectionDotFollowsTheFleetNotOneInstance(t *testing.T) {
+	store := newFakeConnStore()
+	first, _ := completeActor(t, "instance-a")
+	second, _ := completeActor(t, "instance-b")
+	first.SetConnStoreForActor(store)
+	second.SetConnStoreForActor(store)
+
+	// p1's socket lives on A; A also holds a stale disconnect mark for p2.
+	first.activeConns["p1"] = map[string]struct{}{"c1": {}}
+	first.disconnectedSince["p2"] = timeNowFunc()
+	first.syncFleetConns(true)
+
+	// B has seen neither socket, yet must agree with A about both seats.
+	second.syncFleetConns(true)
+	seats := second.cached.ViewFor("p1").Seats
+	second.applyPresence(seats)
+	states := map[string]string{}
+	for _, seat := range seats {
+		states[seat.PlayerID] = seat.ConnectionState
+	}
+	if states["p1"] != "connected" {
+		t.Fatalf("p1 = %q, want connected — its socket is live on the other instance", states["p1"])
+	}
+	if states["p2"] != "disconnected" {
+		t.Fatalf("p2 = %q, want disconnected — no instance holds its socket", states["p2"])
+	}
+}
+
+// A seat whose socket is on THIS instance stays connected even if the shared
+// set is stale or a write was lost: the local view can only add, never remove.
+func TestLocalSocketWinsOverAStaleFleetSet(t *testing.T) {
+	actor, _ := completeActor(t, "instance-a")
+	actor.SetConnStoreForActor(newFakeConnStore())
+	actor.fleetConns = map[string]bool{}
+	actor.activeConns["p1"] = map[string]struct{}{"c1": {}}
+
+	seats := actor.cached.ViewFor("p1").Seats
+	actor.applyPresence(seats)
+	for _, seat := range seats {
+		if seat.PlayerID == "p1" && seat.ConnectionState != "connected" {
+			t.Fatalf("p1 = %q, want connected", seat.ConnectionState)
+		}
+	}
+}
+
+// A failed sync keeps the last known answer rather than blanking every dot.
+func TestConnSyncFailureKeepsTheLastKnownSet(t *testing.T) {
+	store := newFakeConnStore()
+	actor, _ := completeActor(t, "instance-a")
+	actor.SetConnStoreForActor(store)
+	actor.activeConns["p1"] = map[string]struct{}{"c1": {}}
+	actor.syncFleetConns(true)
+	if !actor.fleetConns["p1"] {
+		t.Fatalf("fleetConns = %v, want p1", actor.fleetConns)
+	}
+
+	store.err = errors.New("valkey down")
+	actor.syncFleetConns(true)
+	if !actor.fleetConns["p1"] {
+		t.Fatalf("fleetConns = %v, want the previous answer kept", actor.fleetConns)
+	}
+}
+
+// Steady-state broadcasts are paced; connect/disconnect force the round trip
+// because every other instance's dot depends on it immediately.
+func TestConnSyncIsPacedButForcedOnLifecycleEvents(t *testing.T) {
+	store := newFakeConnStore()
+	actor, _ := completeActor(t, "instance-a")
+	actor.SetConnStoreForActor(store)
+
+	actor.syncFleetConns(false)
+	actor.syncFleetConns(false)
+	actor.syncFleetConns(false)
+	if store.calls != 1 {
+		t.Fatalf("paced sync calls = %d, want 1", store.calls)
+	}
+	actor.syncFleetConns(true)
+	if store.calls != 2 {
+		t.Fatalf("forced sync calls = %d, want 2", store.calls)
+	}
+}
+
+// Without a store the dot keeps its previous, local-only meaning.
+func TestPresenceFallsBackToTheLocalViewWithoutAStore(t *testing.T) {
+	actor, _ := completeActor(t, "instance-a")
+	actor.syncFleetConns(true) // no store: must be a no-op, not a panic
+	actor.disconnectedSince["p2"] = timeNowFunc()
+
+	seats := actor.cached.ViewFor("p1").Seats
+	actor.applyPresence(seats)
+	for _, seat := range seats {
+		want := "connected"
+		if seat.PlayerID == "p2" {
+			want = "disconnected"
+		}
+		if seat.ConnectionState != want {
+			t.Fatalf("seat %s = %q, want %q", seat.PlayerID, seat.ConnectionState, want)
+		}
+	}
+}
+
+// The post-hand countdown used to be a bare in-process time.Time, so every
+// instance started its own 12s window and only the one that armed it published
+// next_hand_unix_ms at all.
+func TestNextHandCountdownResumesThePersistedDeadline(t *testing.T) {
+	actor, _ := completeActor(t, "instance-b")
+	persisted := timeNowFunc().Add(4 * time.Second).UnixMilli()
+	actor.pendingNextHandDeadline = persisted
+
+	actor.armNextHandTimer(true)
+	t.Cleanup(func() { actor.nextHandTimer.Stop() })
+
+	if got := actor.nextHandDeadline.UnixMilli(); got != persisted {
+		t.Fatalf("deadline = %d, want the persisted %d", got, persisted)
+	}
+	if actor.pendingNextHandDeadline != 0 {
+		t.Fatal("pending deadline must be consumed exactly once")
+	}
+}
+
+// With nothing persisted (a hand completing right now) the countdown starts
+// fresh, and what it computed is what the next commit persists.
+func TestNextHandCountdownPersistsWhatItArmed(t *testing.T) {
+	actor, _ := completeActor(t, "instance-a")
+	actor.armNextHandTimer(true)
+	t.Cleanup(func() { actor.nextHandTimer.Stop() })
+
+	if got := actor.nextHandDeadlineForPersist(); got != actor.nextHandDeadline.UnixMilli() {
+		t.Fatalf("persisted %d, armed %d — they must agree", got, actor.nextHandDeadline.UnixMilli())
+	}
+}
+
+// A table that is not on Complete must clear the stored countdown instead of
+// inheriting the previous hand's expiry.
+func TestNextHandDeadlineIsClearedOffComplete(t *testing.T) {
+	table := hand.NewTable([]*hand.Player{
+		{ID: "p1", Stack: 1000, Ready: true},
+		{ID: "p2", Stack: 1000, Ready: true},
+	}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	actor := New("instance-a", nil, true, func(string, hand.Snapshot) {})
+	t.Cleanup(func() { actor.afkSweepTimer.Stop() })
+	actor.cached = table
+	actor.handID = "hand-2"
+	actor.pendingNextHandDeadline = timeNowFunc().Add(time.Minute).UnixMilli()
+
+	if got := actor.nextHandDeadlineForPersist(); got != 0 {
+		t.Fatalf("persisted %d mid-hand, want 0", got)
+	}
+	actor.armNextHandTimer(false)
+	if actor.pendingNextHandDeadline != 0 {
+		t.Fatal("leaving Complete must drop the pending deadline")
+	}
+}
+
+// A table where everyone is connected and quiet broadcasts nothing, so pacing
+// the sync off broadcastAll alone let the shared key lapse and every other
+// instance showed the whole seat row as disconnected. ensureLoaded is the
+// heartbeat: any traffic, down to a keepalive ping, refreshes the entries.
+func TestEnsureLoadedKeepsTheFleetSetAlive(t *testing.T) {
+	store := newFakeConnStore()
+	actor, _ := completeActor(t, "instance-a")
+	actor.SetConnStoreForActor(store)
+	actor.activeConns["p1"] = map[string]struct{}{"c1": {}}
+
+	// A ping's ReconnectCmd reaches ensureLoaded without ever broadcasting.
+	if err := actor.ensureLoaded(context.Background(), false); err != nil {
+		t.Fatalf("ensureLoaded: %v", err)
+	}
+	if store.calls == 0 {
+		t.Fatal("ensureLoaded did not refresh the fleet set")
+	}
+	if !actor.fleetConns["p1"] {
+		t.Fatalf("fleetConns = %v, want p1", actor.fleetConns)
+	}
+}
+
+// Re-arming for a hand already counting down must consume the persisted
+// deadline too. Left set, the NEXT hand's arm picked up this hand's expired
+// value and started immediately, skipping the countdown entirely.
+func TestReArmingTheSameHandDoesNotStrandThePersistedDeadline(t *testing.T) {
+	actor, _ := completeActor(t, "instance-a")
+	actor.armNextHandTimer(true)
+	t.Cleanup(func() { actor.nextHandTimer.Stop() })
+	firstDeadline := actor.nextHandDeadline
+
+	// A reload of the same hand re-publishes the stored deadline.
+	actor.pendingNextHandDeadline = timeNowFunc().Add(-time.Minute).UnixMilli()
+	actor.armNextHandTimer(true)
+	if actor.nextHandDeadline != firstDeadline {
+		t.Fatal("re-arming the same hand must not move its deadline")
+	}
+	if actor.pendingNextHandDeadline != 0 {
+		t.Fatal("the stale pending deadline must be dropped")
+	}
+
+	// The next hand must get a full, future window.
+	actor.handID = "hand-2"
+	actor.armNextHandTimer(true)
+	if !actor.nextHandDeadline.After(timeNowFunc()) {
+		t.Fatalf("hand-2 deadline %v is not in the future", actor.nextHandDeadline)
+	}
+}

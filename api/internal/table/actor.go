@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -22,6 +23,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/reactions"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
+	"gopkg.aoctech.app/poker/api/internal/tableconn"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
 
@@ -51,17 +53,33 @@ type Actor struct {
 	turnTimeout       time.Duration
 	timeBankEnabled   bool
 	disconnectedSince map[string]time.Time
-	// streaks caches each seated player's current per-table win/loss streak
+	// streaks holds each seated player's current per-table win/loss streak
 	// (positive = consecutive wins, negative = consecutive losses), overlaid
 	// onto every ViewFor snapshot exactly like disconnectedSince/applyPresence.
-	// DynamoDB (achievements.Store) is the durable copy; this is a display
-	// cache only, refreshed by SetStreaksForActor after every completed hand,
-	// and empty (no badge) until this table's actor processes its first hand.
+	// It is only this command's read of streakStore below, never the source of
+	// truth: any instance may run an Actor for any table, so a process-local
+	// tally had two live actors publishing two different badges for one seat,
+	// flipping between them on consecutive snapshots of the same hand.
 	streaks map[string]int
+	// streakStore is the cross-instance home of that badge (Valkey, see
+	// internal/tablestreak). nil in dev/tests without a cache, where the map
+	// above is the whole story.
+	streakStore StreakStore
 	// activeConns tracks physical connection IDs, not just a count. Connect
 	// and Disconnect are therefore idempotent when a live WS is re-registered
 	// after actor replacement, and one tab closing cannot disconnect another.
+	// It only ever knows about sockets terminating on THIS process, which is
+	// why the seat dot also consults connStore below.
 	activeConns map[string]map[string]struct{}
+	// connStore shares the connection set with every other instance serving
+	// this table (internal/tableconn). nil in dev/tests without a cache.
+	connStore ConnStore
+	// fleetConns is the last answer connStore gave — who the whole fleet
+	// considers connected. nil means "never synced", which applyPresence reads
+	// as "trust the local view". Display only, never a removal input.
+	fleetConns map[string]bool
+	// connSyncedAt paces the round trip; see tableconn.SyncInterval.
+	connSyncedAt time.Time
 	// kickGrace bounds how long a disconnected player can occupy a seat
 	// before being auto-removed (Leave, cashing them out same as a manual
 	// exit). kickTimers holds one AfterFunc per currently-disconnected
@@ -86,26 +104,40 @@ type Actor struct {
 	nextHandDeadline         time.Time
 	nextHandArmedFor         string
 	nextHandDelay            time.Duration
-	winnerCardsTimer         *time.Timer
-	winnerCardsArmedFor      string
-	lastBroadcastStage       hand.Stage
-	runoutTimer              *time.Timer
-	runoutTimerHandID        string
-	runoutTimerStage         hand.Stage
-	runoutTimerPhase         int
-	runoutStreetDelay        time.Duration
-	escalationInterval       time.Duration
-	escalationCfg            roomstore.BlindEscalation
-	afkSweepTimer            *time.Timer
-	afkSweepInterval         time.Duration
-	done                     chan struct{}
-	equityEnabled            atomic.Bool
-	runItTwiceEnabled        atomic.Bool
-	onHandComplete           func(string, hand.HandOutcome, map[string]string)
-	onHandUpdated            func(string, hand.HandOutcome, map[string]string)
-	completedHandNotified    string
-	outcomeLoggedForHand     string
-	onSeatsChanged           func(int)
+	// pendingNextHandDeadline carries a just-loaded StoredTable's
+	// NextHandDeadlineUnixMs across to the next armNextHandTimer call (set by
+	// ensureLoaded, consumed and zeroed there) — the post-hand countdown's
+	// exact analogue of pendingPersistedDeadline above, so every instance
+	// rendering a Complete table publishes the same next_hand_unix_ms instead
+	// of each starting a fresh 12s window from its own now.
+	pendingNextHandDeadline int64
+	winnerCardsTimer        *time.Timer
+	winnerCardsArmedFor     string
+	lastBroadcastStage      hand.Stage
+	runoutTimer             *time.Timer
+	runoutTimerHandID       string
+	runoutTimerStage        hand.Stage
+	runoutTimerPhase        int
+	runoutStreetDelay       time.Duration
+	escalationInterval      time.Duration
+	escalationCfg           roomstore.BlindEscalation
+	afkSweepTimer           *time.Timer
+	afkSweepInterval        time.Duration
+	done                    chan struct{}
+	equityEnabled           atomic.Bool
+	runItTwiceEnabled       atomic.Bool
+	onHandComplete          func(string, hand.HandOutcome, map[string]string)
+	onHandUpdated           func(string, hand.HandOutcome, map[string]string)
+	// completedHandNotified suppresses a repeat within THIS process only.
+	// handHooks below is what stops a second instance from re-firing the same
+	// hand's hooks — see notifyHandComplete.
+	completedHandNotified string
+	// handHooks grants the fleet-wide right to run one hand's post-hand hooks
+	// (internal/handhook, Valkey SET NX). nil in dev/tests without a cache,
+	// where one instance is the whole fleet and the field above suffices.
+	handHooks            HandHookClaimer
+	outcomeLoggedForHand string
+	onSeatsChanged       func(int)
 	// onPlayerRemoved fires only for a system-initiated removal (AFK sweep,
 	// disconnect kick timeout) — never for a player-requested LeaveCmd, which
 	// the client already knows about and navigates away for itself. It lets
@@ -583,6 +615,8 @@ func (a *Actor) handleEscalate(ctx context.Context) error {
 func (a *Actor) ensureLoaded(ctx context.Context, force bool) error {
 	if a.cached != nil && a.trustCache && !force {
 		a.cached.ConfigureRunItTwice(a.runItTwiceEnabled.Load())
+		a.refreshStreaks(ctx)
+		a.syncFleetConns(false)
 		return nil
 	}
 	if a.store == nil {
@@ -603,8 +637,11 @@ func (a *Actor) ensureLoaded(ctx context.Context, force bool) error {
 	a.pendingPersistedDeadline = stored.TurnDeadlineUnixMs
 	a.pendingDeadlineFor = a.cached.CurrentPlayerIDForActor()
 	a.pendingDeadlineForStage = a.cached.Stage()
+	a.pendingNextHandDeadline = stored.NextHandDeadlineUnixMs
 	a.pruneStalePresence()
 	a.rearmTimersFromCache()
+	a.refreshStreaks(ctx)
+	a.syncFleetConns(false)
 	return nil
 }
 
@@ -813,12 +850,58 @@ func (a *Actor) validateActionPrecondition(ctx context.Context, c ActCmd) error 
 	return nil
 }
 
+// HandHookClaimer answers whether this instance is the one allowed to run a
+// given hand's post-hand hooks. See internal/handhook for why the claim must
+// be atomic and cross-instance.
+type HandHookClaimer interface {
+	Claim(ctx context.Context, tableID, handID string) (bool, error)
+}
+
+// handHookTimeout bounds the claim round trip so an unreachable Valkey cannot
+// stall the table's actor goroutine.
+const handHookTimeout = 2 * time.Second
+
+// SetHandHookClaimerForActor wires the shared hook claim. Set once, right
+// after construction, by tablemanager.
+func (a *Actor) SetHandHookClaimerForActor(c HandHookClaimer) { a.handHooks = c }
+
+// claimHandHooks reports whether this instance may run the current hand's
+// post-hand hooks. A claim error fails OPEN: an unreachable Valkey degrades
+// back to the previous at-least-once behaviour, because silently skipping the
+// hooks would permanently lose a hand's achievements, streak and auto-rebuy
+// while a double credit is at least visible and bounded.
+func (a *Actor) claimHandHooks() bool {
+	if a.handHooks == nil {
+		return true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), handHookTimeout)
+	defer cancel()
+	claimed, err := a.handHooks.Claim(ctx, a.id, a.handID)
+	if err != nil {
+		slog.Warn("table hand hook claim failed", "table_id", a.id, "hand_id", a.handID, "err", err)
+		return true
+	}
+	return claimed
+}
+
+// notifyHandComplete runs one completed hand's gamification hooks. It is
+// reached from broadcastAll, which any instance can call for a table already
+// sitting on Complete (chat, reactions and connect/disconnect all broadcast),
+// so the local completedHandNotified guard is not enough on its own — the
+// hooks downstream are non-idempotent counters. handHooks is what makes this
+// once per hand for the whole fleet.
 func (a *Actor) notifyHandComplete() {
 	if a.cached == nil || a.cached.Stage() != hand.Complete || a.handID == "" || a.completedHandNotified == a.handID {
 		return
 	}
 	if outcome := a.cached.LastOutcomeForActor(); outcome != nil {
+		// Mark before claiming: a lost claim means another instance owns this
+		// hand, and re-asking on every later broadcast of the same hand would
+		// be one wasted round trip per chat message.
 		a.completedHandNotified = a.handID
+		if !a.claimHandHooks() {
+			return
+		}
 		if a.onHandComplete != nil {
 			names := make(map[string]string)
 			for _, p := range a.cached.PlayersForActor() {
@@ -994,7 +1077,8 @@ func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.A
 	entry.TableID, entry.HandID, entry.Version = a.id, a.handID, a.version+1
 	entry.Frame = replayFrameFor(a.cached.ViewFor(""))
 	deadline := a.turnDeadlineForPersist()
-	if err := a.store.CommitAction(ctx, a.id, a.handID, actionID, a.version, newState, a.activity, deadline, *entry, extra...); err != nil {
+	if err := a.store.CommitAction(ctx, a.id, a.handID, actionID, a.version, newState, a.activity,
+		deadline, a.nextHandDeadlineForPersist(), *entry, extra...); err != nil {
 		return err
 	}
 	a.version++
@@ -1050,6 +1134,25 @@ func (a *Actor) turnDeadlineForPersist() int64 {
 		return a.turnDeadline.UnixMilli()
 	}
 	return timeNowFunc().Add(a.turnTimeout + a.timeBankFor(current)).UnixMilli()
+}
+
+// nextHandDeadlineForPersist returns the post-hand countdown to commit
+// alongside this state: the already-armed expiry when this actor is the one
+// that armed it for this hand, a fresh one nextHandDelay from now when this
+// commit is what completed the hand, and 0 whenever the table is not on
+// Complete (so leaving Complete clears the stored value instead of leaving
+// the previous hand's expiry behind). Like turnDeadlineForPersist above this
+// only has to agree with armNextHandTimer closely enough that a reload
+// resumes the same instant — armNextHandTimer, which runs from broadcastAll
+// immediately after every commit, stays the one scheduler of record.
+func (a *Actor) nextHandDeadlineForPersist() int64 {
+	if a.cached == nil || a.cached.Stage() != hand.Complete {
+		return 0
+	}
+	if a.handID != "" && a.handID == a.nextHandArmedFor {
+		return a.nextHandDeadline.UnixMilli()
+	}
+	return timeNowFunc().Add(a.nextHandDelay).UnixMilli()
 }
 
 func (a *Actor) timeBankFor(playerID string) time.Duration {
@@ -1123,6 +1226,9 @@ func (a *Actor) handleConnect(c ConnectCmd) error {
 		a.connCount.Add(1)
 	}
 	a.activeConns[c.PlayerID][c.ConnID] = struct{}{}
+	// Force the publish: every other instance's dot for this player depends on
+	// it, and a connect is rare enough to always be worth the round trip.
+	a.syncFleetConns(true)
 	if a.clearDisconnectMark(c.PlayerID) {
 		a.broadcastAll()
 	}
@@ -1150,6 +1256,9 @@ func (a *Actor) handleDisconnect(c DisconnectCmd) error {
 	}
 	a.disconnectedSince[c.PlayerID] = timeNowFunc()
 	a.armKickTimer(c.PlayerID)
+	// activeConns no longer lists this player, so the forced sync is what
+	// retracts them from the fleet set instead of waiting out EntryTTL.
+	a.syncFleetConns(true)
 	a.broadcastAll()
 	return nil
 }
@@ -1212,6 +1321,26 @@ func (a *Actor) handleKickTimeout(ctx context.Context, c kickTimeoutCmd) error {
 	if _, disconnected := a.disconnectedSince[c.PlayerID]; !disconnected {
 		return nil
 	}
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return nil // transient load failure; the AFK sweep retries this seat
+	}
+	// The disconnect mark is in-memory and therefore instance-local, while any
+	// instance may run an Actor for any table: a player whose socket dropped
+	// here and reconnected through another instance leaves this mark uncleared
+	// forever, because this actor never sees that connect. Removing on the
+	// mark alone cashed out players who were sitting at the table playing.
+	// LastActionAt is persisted by whichever instance they are actually on, so
+	// it is the one piece of evidence that crosses instances: recent activity
+	// means alive somewhere, and the mark is the stale side. A seat with no
+	// LastActionAt at all (never acted since it was seeded) has no such
+	// evidence and stays kickable. Silence past kickGrace is removed either
+	// way — that is exactly what handleAFKSweep does to connected players too.
+	if p := a.seatedPlayer(c.PlayerID); p != nil && p.LastActionAt > 0 &&
+		timeNowFunc().Sub(time.UnixMilli(p.LastActionAt)) < a.kickGrace {
+		a.clearDisconnectMark(c.PlayerID)
+		a.broadcastAll()
+		return nil
+	}
 	delete(a.kickTimers, c.PlayerID)
 	// RemovePlayerForActor rejects removal while the player is still dealt
 	// into a hand in progress (including after they folded). This is a normal
@@ -1263,12 +1392,22 @@ func (a *Actor) markLastAction(playerID string) {
 }
 
 func (a *Actor) isSeated(playerID string) bool {
+	return a.seatedPlayer(playerID) != nil
+}
+
+// seatedPlayer returns playerID's entry in the currently cached state, or nil
+// when they aren't seated (or nothing is loaded yet). Read-only — callers that
+// mutate go through the engine so the change is committed.
+func (a *Actor) seatedPlayer(playerID string) *hand.Player {
+	if a.cached == nil {
+		return nil
+	}
 	for _, p := range a.cached.PlayersForActor() {
 		if p.ID == playerID {
-			return true
+			return p
 		}
 	}
-	return false
+	return nil
 }
 
 // armAFKSweepTimer (re-)arms the periodic AFK sweep. Unlike every other timer
@@ -1968,17 +2107,37 @@ func (a *Actor) armNextHandTimer(complete bool) {
 			a.nextHandTimer.Stop()
 		}
 		a.nextHandArmedFor = ""
+		a.pendingNextHandDeadline = 0
 		return
 	}
 	if a.handID == a.nextHandArmedFor {
+		// Already counting down for this hand. The persisted value describes
+		// the very countdown already running, so drop it — left set, the NEXT
+		// hand's arm would consume this hand's (by then expired) deadline and
+		// start immediately instead of giving players their 12 seconds.
+		a.pendingNextHandDeadline = 0
 		return
 	}
 	if a.nextHandTimer != nil {
 		a.nextHandTimer.Stop()
 	}
 	a.nextHandArmedFor = a.handID
-	a.nextHandDeadline = timeNowFunc().Add(a.nextHandDelay)
-	a.nextHandTimer = time.AfterFunc(a.nextHandDelay, func() {
+	// Resume the persisted expiry when this table was loaded mid-countdown,
+	// so a second instance publishes the same next_hand_unix_ms rather than
+	// granting a fresh full window from its own now (see
+	// StoredTable.NextHandDeadlineUnixMs). Consumed once, exactly like
+	// armTurnTimer treats pendingPersistedDeadline.
+	delay := a.nextHandDelay
+	if persisted := a.pendingNextHandDeadline; persisted > 0 {
+		a.nextHandDeadline = time.UnixMilli(persisted)
+		if delay = a.nextHandDeadline.Sub(timeNowFunc()); delay < 0 {
+			delay = 0
+		}
+	} else {
+		a.nextHandDeadline = timeNowFunc().Add(delay)
+	}
+	a.pendingNextHandDeadline = 0
+	a.nextHandTimer = time.AfterFunc(delay, func() {
 		reply := make(chan error, 1)
 		if err := a.Dispatch(nextHandCmd{Reply: reply}); err != nil {
 			slog.Warn("table next hand dispatch failed", "table_id", a.id, "err", err)
@@ -2289,12 +2448,114 @@ func (a *Actor) applyActivity(viewerID string, snapshot *hand.Snapshot) {
 // applyPresence keeps transport presence separate from poker state: a folded
 // or all-in player can simultaneously be disconnected without losing either
 // piece of information.
+//
+// The local disconnect mark is only this instance's view. Once the fleet-wide
+// set is known (fleetConns, refreshed by syncFleetConns) it decides instead:
+// a player whose socket lives on another instance is connected even though
+// this one holds a stale mark, and a player this instance never saw is
+// disconnected rather than defaulting to connected.
 func (a *Actor) applyPresence(seats []hand.SeatView) {
 	for i := range seats {
-		seats[i].ConnectionState = "connected"
-		if _, disconnected := a.disconnectedSince[seats[i].PlayerID]; disconnected {
-			seats[i].ConnectionState = "disconnected"
+		playerID := seats[i].PlayerID
+		_, locallyConnected := a.activeConns[playerID]
+		_, locallyDisconnected := a.disconnectedSince[playerID]
+		connected := locallyConnected || !locallyDisconnected
+		if a.fleetConns != nil {
+			connected = locallyConnected || a.fleetConns[playerID]
 		}
+		seats[i].ConnectionState = "disconnected"
+		if connected {
+			seats[i].ConnectionState = "connected"
+		}
+	}
+}
+
+// ConnStore shares which players hold a live table socket anywhere in the
+// fleet. See internal/tableconn.
+type ConnStore interface {
+	Sync(ctx context.Context, tableID string, localPlayerIDs []string) (map[string]bool, error)
+}
+
+// SetConnStoreForActor wires the shared connection set. Set once, right after
+// construction, by tablemanager.
+func (a *Actor) SetConnStoreForActor(s ConnStore) { a.connStore = s }
+
+// syncFleetConns republishes this instance's connected players and refreshes
+// the fleet-wide set. force is set by the connect/disconnect handlers, whose
+// whole point is to make the change visible immediately; the paced caller is
+// ensureLoaded, so ANY traffic — down to a keepalive ping's ReconnectCmd —
+// keeps this instance's entries from lapsing, while tableconn.SyncInterval
+// keeps a busy table to one round trip per interval instead of one per
+// action. Pacing it off broadcastAll alone was not enough: a table where
+// everyone is connected and quiet broadcasts nothing, so the shared key
+// expired and every other instance showed the whole seat row as
+// disconnected. A failure keeps the previous answer rather than blanking
+// every dot.
+func (a *Actor) syncFleetConns(force bool) {
+	if a.connStore == nil {
+		return
+	}
+	now := timeNowFunc()
+	if !force && !a.connSyncedAt.IsZero() && now.Sub(a.connSyncedAt) < tableconn.SyncInterval {
+		return
+	}
+	a.connSyncedAt = now
+	local := make([]string, 0, len(a.activeConns))
+	for playerID := range a.activeConns {
+		local = append(local, playerID)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), connStoreTimeout)
+	defer cancel()
+	connected, err := a.connStore.Sync(ctx, a.id, local)
+	if err != nil {
+		slog.Warn("table conn sync failed", "table_id", a.id, "err", err)
+		return
+	}
+	if connected != nil {
+		a.fleetConns = connected
+	}
+}
+
+// connStoreTimeout bounds the shared-cache round trip, so an unreachable
+// Valkey degrades the dot instead of stalling the actor goroutine.
+const connStoreTimeout = 2 * time.Second
+
+// StreakStore is the cross-instance home of the hot/cold streak badge
+// (internal/tablestreak, Valkey-backed). Load answers with the whole table's
+// map; Merge folds one completed hand's values in and answers with the merged
+// result, so no actor ever treats its own process as authoritative.
+type StreakStore interface {
+	Load(ctx context.Context, tableID string) (map[string]int, error)
+	Merge(ctx context.Context, tableID string, streaks map[string]int) (map[string]int, error)
+}
+
+// streakStoreTimeout bounds every shared-cache round trip, so an unreachable
+// Valkey degrades the badge instead of stalling this table's actor goroutine
+// (which would stall the table itself).
+const streakStoreTimeout = 2 * time.Second
+
+// SetStreakStoreForActor wires the shared badge store. Set once, right after
+// construction, by tablemanager.
+func (a *Actor) SetStreakStoreForActor(s StreakStore) { a.streakStore = s }
+
+// refreshStreaks re-reads the badge from the shared store so every instance
+// rendering this table publishes the same number. Called from ensureLoaded —
+// once per command, the same point at which everything else in the cache
+// heals. A read failure keeps the last known values rather than blanking
+// every seat.
+func (a *Actor) refreshStreaks(ctx context.Context) {
+	if a.streakStore == nil {
+		return
+	}
+	loadCtx, cancel := context.WithTimeout(ctx, streakStoreTimeout)
+	defer cancel()
+	streaks, err := a.streakStore.Load(loadCtx, a.id)
+	if err != nil {
+		slog.Warn("table streak load failed", "table_id", a.id, "err", err)
+		return
+	}
+	if streaks != nil {
+		a.streaks = streaks
 	}
 }
 
@@ -2306,13 +2567,25 @@ func (a *Actor) applyStreaks(seats []hand.SeatView) {
 	}
 }
 
-// SetStreaksForActor merges freshly persisted streak values into the cache.
-// Called synchronously from the same table-actor goroutine that just ran the
+// SetStreaksForActor publishes a just-completed hand's freshly persisted
+// streak values to the shared store and adopts the merged result. Called
+// synchronously from the same table-actor goroutine that just ran the
 // post-hand hooks (tablemanager.Manager's onHandComplete wrapper) — never
 // via Dispatch, which would deadlock against that same in-flight call.
 func (a *Actor) SetStreaksForActor(streaks map[string]int) {
-	for playerID, streak := range streaks {
-		a.streaks[playerID] = streak
+	maps.Copy(a.streaks, streaks)
+	if a.streakStore == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), streakStoreTimeout)
+	defer cancel()
+	merged, err := a.streakStore.Merge(ctx, a.id, streaks)
+	if err != nil {
+		slog.Warn("table streak publish failed", "table_id", a.id, "err", err)
+		return
+	}
+	if merged != nil {
+		a.streaks = merged
 	}
 }
 

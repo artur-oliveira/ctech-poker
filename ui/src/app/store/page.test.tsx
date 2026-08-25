@@ -336,7 +336,7 @@ describe('store cosmetics and reactions', () => {
       'wallet.skus': queryState(skus),
       'wallet.sandbox-purchases': pageState(purchases),
       'wallet.reaction-catalog': queryState(reactionCatalog),
-      'wallet.reaction-purchases': pageState([reactionReceipt]),
+      'wallet.reaction-purchases.history': pageState([reactionReceipt]),
       'wallet.cosmetic-catalog.deck': queryState(deckCatalog),
       'wallet.cosmetic-purchases.deck': pageState([deckReceipt]),
       'wallet.cosmetic-catalog.felt': queryState(feltCatalog),

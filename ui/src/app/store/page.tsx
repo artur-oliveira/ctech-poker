@@ -33,6 +33,7 @@ import {
   getReactionPurchase,
   listReactionCatalog,
   listReactionPurchases,
+  REACTION_PURCHASE_HISTORY_KEY,
   type ReactionCatalogEntry,
   type ReactionPurchase,
   refundReactionPurchase
@@ -108,7 +109,7 @@ export default function Store() {
   // ownedCosmeticIDs), so these only feed the activity lists and the
   // resume/refund actions.
   const purchases = usePurchaseHistory(['wallet', 'sandbox-purchases'], listPurchases);
-  const reactionPurchases = usePurchaseHistory(['wallet', 'reaction-purchases'], listReactionPurchases);
+  const reactionPurchases = usePurchaseHistory(REACTION_PURCHASE_HISTORY_KEY, listReactionPurchases);
   const deckPurchases = usePurchaseHistory(['wallet', 'cosmetic-purchases', 'deck'],
     cursor => listCosmeticPurchases('deck', cursor));
   const feltPurchases = usePurchaseHistory(['wallet', 'cosmetic-purchases', 'felt'],

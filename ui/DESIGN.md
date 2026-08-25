@@ -1,125 +1,51 @@
 ---
 name: CTech Poker
-description: A vivid, trustworthy online poker table built for social play on any connected device.
+description: A vivid, trustworthy social poker room whose interface stays alive around every hand.
 colors:
-  brand: "#af2a2f"
-  brand-bright: "#d9464d"
-  wine: "#5b1218"
-  ink: "#120d0e"
-  paper: "#f6f0e7"
-  gold: "#e6b85c"
-  felt: "#0d5b45"
+  oxblood-signal: "#af2a2f"
+  oxblood-active: "#d9464d"
+  deep-wine: "#5b1218"
+  night-ink: "#120d0e"
+  card-paper: "#f6f0e7"
+  chip-gold: "#e6b85c"
+  value-ink: "#30230a"
+  table-felt: "#0d5b45"
   felt-light: "#18765b"
   felt-dark: "#084b38"
-  rail: "#7c4d2f"
+  rail-walnut: "#7c4d2f"
   rail-edge: "#291714"
   rail-highlight: "#b0774a"
   muted-rose: "#ad9fa0"
   text-secondary: "#cbbfc0"
   felt-text: "#e3f1ea"
-  felt-text-muted: "#d9eee7"
-  gold-ink: "#30230a"
   success: "#48c98c"
   danger: "#dc2626"
-  text-danger: "#ef4444"
+  danger-soft: "#f5b0b3"
+  danger-text: "#ef4444"
   focus-ring: "#ed777c"
   on-brand: "#ffffff"
-  surface-seat: "#161011"
-  surface-control: "#211416"
-  surface-control-hover: "#3e3133"
-  surface-error: "#3b0b0e"
-  control-border: "#ffffff24"
-  seat-border: "#ffffff26"
-  black-scrim: "#00000030"
-  tag-red: "#ef4444"
-  tag-orange: "#f97316"
-  tag-yellow: "#eab308"
-  tag-green: "#22c55e"
-  tag-blue: "#3b82f6"
-  tag-purple: "#a855f7"
-  # captured drift tokens (previously literal hex across the stylesheet)
-  white-03: "#ffffff03"
-  white-08: "#ffffff08"
-  white-0b: "#ffffff0b"
-  white-0c: "#ffffff0c"
-  white-12: "#ffffff12"
-  white-13: "#ffffff13"
-  white-18: "#ffffff18"
-  white-1b: "#ffffff1b"
-  white-1c: "#ffffff1c"
-  white-1d: "#ffffff1d"
-  white-22: "#ffffff22"
-  white-2a: "#ffffff2a"
-  white-2c: "#ffffff2c"
-  black: "#000"
-  black-06: "#0006"
-  black-07: "#0007"
-  black-08: "#0008"
-  black-0b: "#000b"
-  brand-33: "#af2a2f55"
-  brand-53: "#af2a2f88"
-  brand-27: "#af2a2f44"
-  brand-13: "#af2a2f22"
-  brand-08: "#af2a2f14"
-  brand-07: "#af2a2f12"
-  brand-40: "#d8404766"
-  brand-deep-33: "#db4a5055"
-  brand-tint: "#c7353b"
-  brand-tint-soft: "#e2b7b9"
-  brand-bright-2: "#e24a51"
-  brand-bright-3: "#d85b61"
-  brand-bright-4: "#e65b62"
-  brand-bright-5: "#df5a61"
-  brand-bright-6: "#d75359"
-  brand-bright-7: "#ef747a"
-  wine-deep-2: "#6e1d23"
-  wine-deep-3: "#5b171a"
-  wine-deep-4: "#721d23"
-  wine-deep-5: "#45151a"
-  wine-deep-6: "#792128"
-  wine-deep-7: "#201214"
-  wine-edge: "#824b4e"
-  wine-edge-2: "#3d2224"
-  gold-bright: "#e7bd63"
-  gold-bright-2: "#e7c36f"
-  gold-bright-3: "#e9c678"
-  gold-pale: "#efe1b7"
-  cream: "#f1e5ce"
-  text-muted-soft: "#d9cccd"
-  neutral-rose-2: "#c0b3b4"
-  neutral-rose-3: "#c9bcbd"
-  neutral-rose-4: "#bcaeb0"
-  neutral-wine: "#897d7e"
-  neutral-wine-2: "#5e5051"
-  neutral-wine-3: "#645758"
-  ink-soft: "#130d0e"
-  room-grad-1: "#180d10"
-  room-grad-2: "#100c0d"
-  room-grad-3: "#251012"
-  room-grad-4: "#0d090a"
-  room-overlay: "#080506d9"
-  rail-shadow: "#351d17"
-  rail-mid: "#7c5035"
-  rail-light: "#a46d42"
-  rail-edge-2: "#382018"
-  rail-wood-2: "#5b3428"
-  felt-bright: "#12694f"
-  felt-deep: "#084332"
-  success-bright: "#45c489"
-  felt-text-soft: "#b6d6c5"
-  felt-27: "#0a806044"
-  felt-shadow: "#001f18"
-  overlay-night: "#001b"
-  overlay-night-2: "#0018"
-  overlay-night-3: "#001d"
-  surface-seat-92: "#171011eb"
+  seat-surface: "#161011"
+  control-surface: "#211416"
+  control-hover: "#3e3133"
+  error-surface: "#3b0b0e"
 typography:
   display:
     fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "clamp(2.375rem, 5vw, 3.875rem)"
-    fontWeight: 700
-    lineHeight: 1.05
+    fontSize: "clamp(52px, 6vw, 82px)"
+    fontWeight: 400
+    lineHeight: 0.98
     letterSpacing: "-0.04em"
+  headline:
+    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "clamp(2.5rem, 5vw, 3.875rem)"
+    fontWeight: 700
+    lineHeight: 1.02
+    letterSpacing: "-0.035em"
+  compact-heading:
+    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "clamp(1.75rem, 4vw, 2.25rem)"
+    fontWeight: 700
+    lineHeight: 1.1
   title:
     fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
     fontSize: "1.5rem"
@@ -135,41 +61,27 @@ typography:
     fontSize: "0.875rem"
     fontWeight: 600
     lineHeight: 1.2
-  mono:
+  readout:
     fontFamily: "IBM Plex Mono, ui-monospace, SFMono-Regular, monospace"
     fontSize: "0.75rem"
     fontWeight: 600
     lineHeight: 1.2
     letterSpacing: "0.1em"
-  tiny:
-    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "0.625rem"
-    fontWeight: 600
-    lineHeight: 1.2
   compact:
     fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
     fontSize: "0.6875rem"
     fontWeight: 600
     lineHeight: 1.2
-  subtitle:
+  tiny:
     fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1.125rem"
-    fontWeight: 400
-    lineHeight: 1.5
-  large:
-    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1.25rem"
-    fontWeight: 700
+    fontSize: "0.625rem"
+    fontWeight: 600
     lineHeight: 1.2
-  xl:
-    fontFamily: "IBM Plex Sans, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "2rem"
-    fontWeight: 700
-    lineHeight: 1.15
 rounded:
+  card-thumb: "2px"
   xs: "4px"
-  sm: "8px"
   card: "6px"
+  sm: "8px"
   control: "12px"
   seat: "14px"
   panel: "16px"
@@ -186,14 +98,14 @@ spacing:
   4xl: "96px"
 components:
   button-primary:
-    backgroundColor: "{colors.brand}"
+    backgroundColor: "{colors.oxblood-signal}"
     textColor: "{colors.on-brand}"
+    typography: "{typography.label}"
     rounded: "{rounded.control}"
     height: "44px"
     padding: "0 16px"
-    typography: "{typography.label}"
   button-primary-hover:
-    backgroundColor: "{colors.brand-bright}"
+    backgroundColor: "{colors.oxblood-active}"
     textColor: "{colors.on-brand}"
     rounded: "{rounded.control}"
     height: "44px"
@@ -201,300 +113,271 @@ components:
   button-outline:
     backgroundColor: "#ffffff0d"
     textColor: "{colors.on-brand}"
+    typography: "{typography.label}"
     rounded: "{rounded.control}"
     height: "44px"
     padding: "0 16px"
   button-light:
-    backgroundColor: "{colors.paper}"
-    textColor: "{colors.wine}"
+    backgroundColor: "{colors.card-paper}"
+    textColor: "{colors.deep-wine}"
+    typography: "{typography.label}"
     rounded: "{rounded.control}"
     height: "44px"
     padding: "0 16px"
-  button-ghost:
-    backgroundColor: "transparent"
+  button-destructive:
+    backgroundColor: "{colors.danger}"
     textColor: "{colors.on-brand}"
+    typography: "{typography.label}"
     rounded: "{rounded.control}"
     height: "44px"
     padding: "0 16px"
+  input:
+    backgroundColor: "#ffffff0d"
+    textColor: "{colors.on-brand}"
+    typography: "{typography.body}"
+    rounded: "{rounded.control}"
+    height: "44px"
+    padding: "0 12px"
+  dialog:
+    backgroundColor: "{colors.control-surface}"
+    textColor: "{colors.on-brand}"
+    rounded: "{rounded.panel}"
+    padding: "24px"
+    width: "min(448px, calc(100% - 32px))"
+  player-seat:
+    backgroundColor: "{colors.seat-surface}"
+    textColor: "{colors.card-paper}"
+    rounded: "{rounded.seat}"
+    padding: "7px 10px"
   action-call:
-    backgroundColor: "{colors.paper}"
-    textColor: "{colors.wine}"
+    backgroundColor: "{colors.card-paper}"
+    textColor: "{colors.deep-wine}"
+    typography: "{typography.label}"
     rounded: "{rounded.control}"
     height: "48px"
     padding: "12px 18px"
   action-raise:
-    backgroundColor: "{colors.brand}"
+    backgroundColor: "{colors.oxblood-signal}"
     textColor: "{colors.on-brand}"
+    typography: "{typography.label}"
     rounded: "{rounded.control}"
     height: "48px"
     padding: "12px 18px"
-  seat:
-    backgroundColor: "{colors.surface-seat}"
-    textColor: "{colors.paper}"
-    rounded: "{rounded.seat}"
-    padding: "7px 10px"
-  input:
-    backgroundColor: "{colors.surface-control}"
-    textColor: "{colors.paper}"
-    rounded: "{rounded.control}"
-    height: "44px"
-    padding: "0 12px"
 ---
 
 # Design System: CTech Poker
 
-> Refreshed from the live `:root` tokens in `src/app/globals.css` and the real component styles in `src/components/table/*`, `src/components/ui/button.tsx`, and `src/components/ui/input.tsx`. Token names here match the code, not the legacy `table-red` / `wine-deep` spellings.
-
-## 1. Overview
+## Overview
 
 **Creative North Star: "The Living Table"**
 
-CTech Poker feels like sitting at a responsive physical table with other people, not operating a static card diagram. Cards arrive with purpose, chips travel between meaningful positions, turns are unmistakable, and the table always acknowledges input. The dark room recedes so the felt, cards, people, and the current decision carry the scene.
+CTech Poker should feel like joining people around a responsive physical table, not operating a static card diagram. The near-black wine room recedes; felt, cards, chips, people, and the current decision hold the scene. Every meaningful state change is acknowledged through position, copy, contrast, or motion, so speed and fairness remain visible rather than merely promised.
 
-This is the vivid member of the CTech product family. It inherits IBM Plex typography, direct pt-BR copy, clear state semantics, familiar controls, restrained radii, accessible focus, and trust-first behavior from Account, Wallet, and DFe — then departs through a dark, table-focused composition and richer state motion. Vivid never means noisy: motion reports play, color reports meaning, decoration never competes with a decision.
+The visual voice is vivid, trustworthy, and social. It combines an expansive, atmospheric public experience with restrained operational pages and a tactile game surface. IBM Plex, direct pt-BR copy, compact controls, explicit states, and disciplined spacing keep the interface credible; material color and purposeful motion give Poker its own identity within the CTech family.
 
-The system explicitly rejects PokerStars-style frozen play, casino clutter, predatory prompts, childish gamification, and crypto aesthetics. It should feel social and competitive without manufacturing urgency, and physical without imitating a gaudy casino floor.
+The system rejects frozen-feeling play, casino clutter, manufactured urgency, childish reward language, and crypto-style spectacle. Vivid means present and legible—not louder, shinier, or more promotional.
 
 **Key Characteristics:**
-- A near-black wine room concentrates attention on green felt, warm cards, and people.
-- Oxblood red signals the primary action, the viewer, or an active moment — not ambient decoration.
-- Gold is reserved for chips, pots, winnings, and earned achievement.
-- Motion makes state changes legible and immediate; reduced motion preserves every cue without travel.
-- Shared CTech control shapes and typography keep the game credible beside Account, Wallet, and DFe.
 
-## 2. Colors: The Table-at-Night Palette
+- A dark wine room concentrates attention on the active layer.
+- Oxblood marks the primary commitment, active identity, or navigational location.
+- Felt, card paper, walnut rail, and chip gold retain physical meanings.
+- Structural depth explains how table parts and transient layers relate.
+- Tactile controls answer quickly and keep states unmistakable.
+- Motion reports play; reduced motion preserves the same information without travel.
 
-A dark wine room supports three physical materials — green felt, warm card stock, and gold chips — while oxblood red carries CTech Poker's active signal.
+## Colors
+
+The palette reads as a cardroom after dark: oxblood signals intent, green felt locates play, warm paper carries cards and contrast, walnut gives the table weight, and gold represents value or earned outcomes.
 
 ### Primary
-- **Table Red** (`#af2a2f`): primary actions, the viewer's seat, focus emphasis, and the strongest active state. A signal, not a background wash. (Code token: `--brand`.)
-- **Bright Table Red** (`#d9464d`): hover, focus-border, and small high-attention details. Never body text on the dark canvas. (Code token: `--brand-bright`.)
+
+- **Oxblood Signal** (colors.oxblood-signal): primary actions, desktop viewer identity, selected controls, and the strongest brand signal. Use it sparingly inside any one decision area.
+- **Oxblood Active** (colors.oxblood-active): hover borders, small active details, and focused emphasis. It is an accent, not small body text.
+- **Deep Wine** (colors.deep-wine): warm structural depth, pressed red contexts, and the atmospheric public canvas.
 
 ### Secondary
-- **Table Felt** (`#0d5b45`): the playing surface and poker-specific spatial context. Felt is not a generic success color. Rendered as a radial from `#18765b` to `#084b38` (code tokens `--table-felt-light` / `--table-felt-dark`).
-- **Chip Gold** (`#e6b85c`): pot values, stacks, wins, and earned rewards. Gold always corresponds to value or achievement; text on gold uses `#30230a`.
+
+- **Table Felt** (colors.table-felt, with colors.felt-light and colors.felt-dark): the playing surface and poker-specific spatial context. Felt does not stand in for generic success.
+- **Chip Gold** (colors.chip-gold): pots, stacks, wins, turn timing, and earned achievements. Pair filled gold with colors.value-ink.
+- **Walnut Rail** (colors.rail-walnut, edged by colors.rail-edge and lifted by colors.rail-highlight): the physical boundary between the room and play.
+
+### Tertiary
+
+- **Success** (colors.success): availability, connection, and confirmed completion; always pair it with text, an icon, shape, or position.
+- **Danger** (colors.danger): destructive fills, error icons, and irreversible actions. Small error copy uses colors.danger-text; supporting warning copy uses colors.danger-soft.
+- **Focus Ring** (colors.focus-ring): the universal high-contrast keyboard focus signal on dark surfaces.
 
 ### Neutral
-- **Night Ink** (`#120d0e`): the global room and base canvas (code token `--ink`; aliased by `--table-room`).
-- **Card Paper** (`#f6f0e7`): cards, light actions, and rare high-contrast surfaces. A material cue, not the default page background. (Code token: `--paper`.)
-- **Muted Rose** (`#ad9fa0`): secondary copy on dark surfaces. Verified ≥7.3:1 on every dark canvas it touches — safe for small text, but do not reduce its opacity further. (Code token: `--muted`.)
-- **Text Secondary** (`#cbbfc0`): the brighter secondary text role (≈10.8:1 on ink); use for seat state labels and readouts where `--muted` reads too dim. (Code token: `--text-secondary`.)
-- **Felt Text** (`#e3f1ea`): pot label and readouts on the felt (≥4.5:1 on `#18765b`). Raised from the old `#b8d5c9` after an audit found it failing AA at 3.54:1. (Code token: `--felt-text`.)
-- **Success Green** (`#48c98c`): connection, availability, confirmed success; pair with text or an icon. (Code token: `--success`.)
-- **Destructive Red** (`#dc2626`): errors and irreversible actions — the error *surface*, icon and destructive-button role. Separate from Table Red's brand/action meaning. (Code token: `--danger`.)
-- **Error Text Red** (`#ef4444`): the text pair for the same role. `--danger` on `--ink` measures 3.99:1, under AA for the 11–12px error and expiry copy that most needs it; this reads 5.12:1 on `--ink` and 4.74:1 on `--surface-control`/`--surface-seat`. Use it for any red *words* (`.social-error`, an expiring Pix countdown); keep `--danger` for fills, icons and borders. (Code token: `--text-danger`.)
 
-### Structural / material
-- **Deep Wine** (`#5b1218`): pressed red states and warm structural depth around the table (code token `--wine`; aliased by `--table-room-wine`).
-- **Table Rail** (`#7c4d2f`) with **Rail Edge** `#291714` and **Rail Highlight** `#b0774a`: the brown physical rail around the felt.
-- **Surface Seat** (`#161011`), **Surface Control** (`#211416`), **Surface Control Hover** (`#3e3133`), **Surface Error** (`#3b0b0e`): the layered dark surfaces.
-- **Focus Ring** (`#ed777c`): the 3px keyboard-focus ring on dark (≈6.9:1 on ink). (Code token: `--focus-ring`.)
-- **Control Border** (`#ffffff24`) / **Seat Border** (`#ffffff26`): the single low-contrast white hairlines.
-- **Black Scrim** (`#00000030`): a recessed field inside an already-dark panel (report details, note textarea). (Code token: `--black-scrim`.)
-- **Note tags** (`--tag-red` `#ef4444`, `--tag-orange` `#f97316`, `--tag-yellow` `#eab308`, `--tag-green` `#22c55e`, `--tag-blue` `#3b82f6`, `--tag-purple` `#a855f7`): the six private player-note tags. They are named by hue on purpose — the *player* assigns the meaning, and `PlayerNoteDialog` labels them "Vermelho", "Laranja" and so on. They are tokens rather than literals so a theme can retune them, and they are the one categorical palette in the system; do not borrow them for product state.
+- **Night Ink** (colors.night-ink): the global room and base page canvas.
+- **Card Paper** (colors.card-paper): playing cards, light action buttons, and rare high-contrast material surfaces—not the default page background.
+- **Seat Surface** (colors.seat-surface): compact player identity and dense table modules.
+- **Control Surface** (colors.control-surface) and **Control Hover** (colors.control-hover): fields, dialogs, action controls, and their lifted interaction state.
+- **Muted Rose** (colors.muted-rose): secondary copy that remains readable on dark surfaces. Do not fade it further for essential information.
+- **Text Secondary** (colors.text-secondary): brighter supporting labels and state readouts.
+- **Felt Text** (colors.felt-text): labels and values placed directly over the brightest felt.
 
 ### Named Rules
-**The Three Materials Rule.** Felt means play, card paper means cards or light contrast, and gold means value. Do not spread these colors decoratively across generic UI.
 
-**The Red Signal Rule.** Table Red identifies the primary decision, active player context, or focus. One dominant red signal per decision area is enough.
+**The Three Materials Rule.** Felt means play, card paper means cards or deliberate light contrast, and gold means value, time, or achievement. Never distribute these colors as generic decoration.
 
-## 3. Typography
+**The Oxblood Signal Rule.** Oxblood identifies the primary commitment, current location, or active identity. One dominant oxblood signal per decision group is enough; a player's turn is gold so it cannot be confused with danger.
 
-**Display Font:** IBM Plex Sans (`ui-sans-serif, system-ui, sans-serif` fallback)
-**Body Font:** IBM Plex Sans (`ui-sans-serif, system-ui, sans-serif` fallback)
-**Label/Mono Font:** IBM Plex Mono (`ui-monospace, SFMono-Regular, monospace` fallback)
+**The Semantic Pair Rule.** Suit, connection, turn, win, and error colors always travel with text, iconography, shape, or position. Hue alone never carries game state.
 
-**Character:** IBM Plex Sans keeps the product clear and quick to scan while its more distinctive terminals make the game feel less scaffolded. IBM Plex Mono acts as the table readout for pots, stakes, timers, equity, and compact state labels; never a crypto or terminal affectation.
+## Typography
 
-> **Resolved (2026-08-22):** IBM Plex Sans and IBM Plex Mono are bound via `next/font/google` in
-> `src/app/layout.tsx`, exposing `--font-sans` and `--font-mono`. The explicit 400–700 weight
-> cuts are self-hosted by Next.js; the former 750 mono readouts use 700.
+**Display Font:** IBM Plex Sans, with ui-sans-serif, system-ui, and sans-serif fallbacks
+
+**Body Font:** IBM Plex Sans, with ui-sans-serif, system-ui, and sans-serif fallbacks
+
+**Label/Mono Font:** IBM Plex Mono, with ui-monospace, SFMono-Regular, and monospace fallbacks
+
+**Character:** IBM Plex Sans is direct, contemporary, and highly legible without becoming anonymous. IBM Plex Mono acts as the table readout for stakes, pots, timers, equity, and aligned values; it is an instrument, never a terminal aesthetic.
 
 ### Hierarchy
-- **Display** (700, `clamp(2.375rem, 5vw, 3.875rem)`, 1.05, `-0.04em`): lobby / landing titles only. In gameplay, fixed compact sizes preserve table space.
-- **Title** (700, `1.5rem`, 1.2): dialogs, panels, prominent lobby values.
-- **Body** (400, `0.875rem`, 1.5): instructions, chat, descriptions, supporting content; prose stays within 65–75ch.
-- **Label** (600, `0.875rem`, 1.2): buttons, form labels, navigation, action controls.
-- **Mono** (600, `0.75rem`, `0.1em` tracking, sizes 9–12px in practice): pots, stakes, timers, chip values, brief system state. Use `tabular-nums` for changing values.
 
-**The table micro-scale.** The steps below the 10px `--font-size-tiny` token are documented, not drift, and they exist only inside table geometry:
-- **10px** — opponent name on the portrait ring, and the ring's daily-highlight pot.
-- **11px** — opponent stack on the portrait ring. Deliberately a step *above* the name: the number is the value a player reads mid-hand.
-- **8–9px** — standardized single-token badges pinned to a 34–52px avatar: dealer/blind role (`D`, `SB`, `BB`), streak, timebank, and the felt's street strip. They carry an abbreviation from a closed vocabulary, never free text or a player name.
-- **Nothing below 8px in CSS pixels.** The 7px playstyle badge that used to sit on the portrait ring was removed rather than shrunk further, and the card peek/reveal hints were raised to 9px; a label that does not fit belongs on desktop or in the profile. The one remaining `7px` literal is `.poker-style-radar text`, which is an SVG user unit inside a `0 0 200 200` viewBox scaled to the dialog width — it renders around 9px and is not a CSS size.
+- **Display** (typography.display): public landing statements only. Its fluid scale earns attention without entering dense game UI.
+- **Headline** (typography.headline): editorial arrivals such as the guide hub and rare feature pages.
+- **Compact Heading** (typography.compact-heading): task pages, lobby, store, ranking, people, and other operational surfaces.
+- **Title** (typography.title): dialogs, panels, room names, and prominent values.
+- **Body** (typography.body): instructions, descriptions, chat, and supporting content. Long prose stays near 65–75 characters per line.
+- **Label** (typography.label): buttons, navigation, form labels, and actions.
+- **Readout** (typography.readout): live or aligned numeric state, with tabular numerals when values change.
+- **Compact / Tiny** (typography.compact, typography.tiny): closed-vocabulary table labels and dense status only; never general prose.
 
-Marketing display type uses `clamp()` with fluid endpoints off this ramp on purpose — see the Game-Space Rule below. Those endpoints are landing/guide headlines only and never reach table UI.
+The table permits an evidence-backed micro-scale below the token floor only inside constrained geometry: 10px opponent names, 11px stacks, and 8–9px single-token badges or card hints. Nothing rendered in CSS pixels goes below 8px, and unbounded names or localized sentences never use this scale.
 
 ### Named Rules
-**The Readout Rule.** If a value changes during play or must align with another value, render it in IBM Plex Mono with tabular numerals. Player names and conversational copy stay in IBM Plex Sans.
 
-**The Game-Space Rule.** Marketing titles may be fluid; table UI uses a fixed, tight type scale so responsive adaptation changes structure rather than shrinking critical labels.
+**The Readout Rule.** If a value changes during play or must align with another value, use IBM Plex Mono with tabular numerals. Player names and conversational copy stay in IBM Plex Sans.
 
-## 4. Elevation
+**The Game-Space Rule.** Marketing and editorial headings may be fluid. Table UI adapts its structure instead of shrinking critical labels below readability.
 
-Elevation is structural and material. The table rail and felt use inset shadows to imply depth; seats, cards, dialogs, chat, and toasts lift only because they occupy a distinct physical or transient layer. Ordinary controls and lobby containers stay close to the surface. Glow is reserved for a live connection, the viewer's seat, or a focused active signal.
+## Layout
+
+Public and authenticated content share a centered shell capped at 1160px, with 20px desktop gutters and 16px mobile gutters. Public landing layouts use generous vertical sections, asymmetric two-column storytelling, and a responsive table preview. Operational pages use a sticky 72px application bar, compact page headings, and scannable grids or lists; only true editorial arrivals opt into centered feature headings.
+
+The live table is a distinct blocking layout. It occupies the available 100dvh, subtracts the global API-unavailable strip when present, and divides the viewport into table chrome, a flexible stage, and the action dock. Desktop and landscape use an oval rail up to 920px wide. Portrait handhelds use a dedicated vertical seat ring; the viewer leaves the ring and becomes a bottom hero HUD so identity and actions stay readable.
+
+Responsive adaptation is structural. At 600px, the seven authenticated routes leave the top bar for a fixed four-slot bottom navigation; every page using it reserves bottom safe-area clearance. Table actions collapse into an opaque bottom sheet at 800px or in short landscape. Content indexes and guide topics become native disclosures near 720px. Compact 520px and 380px tiers resolve dense components without horizontal page scrolling. Touch targets remain at least 44×44px even when their visible badge or icon is smaller.
+
+Spacing follows a 4px base rhythm with recurring 8, 12, 16, 24, 32, 48, 64, and 96px steps. Table geometry may use tighter physical offsets, but content and controls return to the shared rhythm.
+
+### Named Rules
+
+**The Blocking Table Rule.** Portrait play owns exactly one viewport: header, flexible table, viewer HUD, and safe-area action dock. Do not add document scroll to solve table crowding.
+
+**The Structure-Before-Shrink Rule.** Reflow, disclose, or relocate before reducing type or touch targets. Critical actions never fall below 44px.
+
+**The Stable Seat Rule.** Seat positions remain stable during a hand; vacancies fill in server turn order, and hidden cards render exactly as received.
+
+## Elevation & Depth
+
+Depth is structural. The rail sits above the room, felt is inset within the rail, seats lift slightly from the table, and dialogs or transient feedback occupy a clearly higher layer. Ordinary page cards remain close to the canvas through tonal layering and a single hairline. Glow is reserved for focus, live connection, turn timing, the viewer, or a resolved win.
 
 ### Shadow Vocabulary
-- **Table depth** (`0 30px 80px #000, inset 0 0 0 4px #b0774a`): the outer rail only.
-- **Felt depth** (`inset 0 0 70px #001f18`): the playing surface only.
-- **Seat lift** (`0 4px 8px #0009`): compact structural separation for player seats, no wide card-like halo.
-- **Viewer signal** (`0 0 0 3px #af2a2f40`): a crisp outer ring for the local player's seat or equivalent active identity.
-- **Overlay** (`0 30px 100px #000`): dialogs and high-priority overlays.
-- **Transient feedback** (`0 15px 50px #0008`): achievement and result toasts.
+
+- **Table Depth** (--shadow-table): 0 30px 80px #000 plus a 4px inset rail highlight; outer table only.
+- **Felt Depth** (--shadow-felt): an inset 70px dark-green shade; playing surface only.
+- **Seat Lift** (--shadow-seat): a compact 0 4px 8px #0009 separation for player seats.
+- **Modal Lift:** a strong overlay shadow behind the 16px dialog surface and a 75% black, lightly blurred backdrop.
+- **Signal Glow:** a crisp ring or tight glow attached to focus, live status, turn timing, viewer identity, or winner feedback—not ambient decoration.
+
+Motion reinforces the same layer model. Most state changes complete in 120–250ms with quartic or quintic ease-out. Entry choreography may reach about 420ms; card dealing can run longer when sequence itself conveys information. Reduced motion removes travel, pulsing, and sequential waits while retaining visible state.
 
 ### Named Rules
-**The Physical Layer Rule.** A shadow must answer "what is above or inset from what?" If it cannot, use a tonal change or hairline instead.
 
-**The One Glow Rule.** Glow means live, focused, or personally active. Never apply ambient glows to a whole card grid or inactive controls.
+**The Physical Layer Rule.** Every shadow must answer what is above or inset from what. If it cannot, use a tonal shift or hairline.
 
-## 5. Components
+**The One Glow Rule.** Glow means live, focused, personally active, timed, or victorious. Inactive card grids and ordinary controls do not glow.
 
-The component vocabulary is tactile and immediate: controls look pressable, acknowledge interaction within 150–250 ms, and keep the same shape across marketing, lobby, and play.
+**The Information Motion Rule.** Motion may explain dealing, collection, turn ownership, or panel state. It never delays the next valid action.
+
+## Shapes
+
+The system uses compact, gently curved geometry. Playing-card thumbnails use 2px corners, physical cards 6px, small controls 8px, standard controls 12px, seats 14px, and panels or dialogs 16px. Pills are reserved for categorical filters, compact statuses, and values that benefit from a continuous capsule. Avatars and icon-only voice controls are circular.
+
+Borders are single low-contrast hairlines at rest. Active, viewer, winner, error, or focus states may replace the whole border or add a complete ring. Thick side accents, stacked ornamental borders, and oversized 32px-plus radii do not belong to this system. Playing cards and the oval table are the two signature silhouettes; generic content containers should not imitate either.
+
+### Named Rules
+
+**The Complete Outline Rule.** State surrounds the component with a complete border or ring. Never bolt a thick accent stripe onto one edge.
+
+**The Radius Ladder Rule.** Use the established 2/4/6/8/12/14/16px ladder or the full pill. A new radius requires a reusable geometric role.
+
+## Components
+
+Components feel tactile and decisive: pressable, fast, explicit about state, and consistent across public, operational, and table contexts.
 
 ### Buttons
-- **Shape:** 12px radius, 44px default and compact height, 48px large; semibold 14px labels. The 44px floor is shared with inputs, selects, chips, and coarse-pointer links.
-- **Primary:** Table Red fill, white label, 16px horizontal padding. One main decision per group: join, create, raise, accept.
-- **Hover / Focus:** hover shifts to Bright Table Red; keyboard focus uses a visible 3px red-derived ring; active may press down by 1px. Disabled uses 50% opacity and no pointer events.
-- **Outline / Ghost:** translucent white well or transparent surface with white text. Carry secondary table actions without competing with the primary decision.
-- **Light:** Card Paper fill and Deep Wine text for a high-contrast call to action on a red surface.
-- **Destructive:** semantic red, icon plus explicit verb, for irreversible actions — not for folding a hand.
 
-> **Token-aligned:** `src/components/ui/button.tsx` and the other primitives (checkbox, dialog, select, input, label, CreateRoomDialog) now reference the `--brand` / `--brand-bright` / `--paper` / `--wine` / `--on-brand` / `--surface-control` / `--muted-rose` / `--danger` tokens instead of hard-coded hex. Only neutral `white/xx` translucency and the destructive `red-500` hover (no token) remain as Tailwind defaults.
-
-### Action Bar (table decisions)
-- **Layout:** fixed bottom bar, `grid-template-columns: auto minmax(190px,320px) auto`, centered; 48px-tall buttons; a full-width `action-context` status line above the choices.
-- **Quick actions (Fold / Check / Mesa / Pagar):** outline style by default (translucent white well, white text, 1px hairline). Disabled state drops to `--surface-seat` bg with `--muted-rose` text and `not-allowed` cursor — opacity stays 1 so the label remains readable.
-- **Call:** paper fill, Deep Wine text — the committed, money-moving action.
-- **Raise:** Table Red fill, white text — the primary bet. Desktop keeps the range slider and keyboard shortcuts. Portrait handhelds open an opaque bottom sheet with Mín / ½ pote / Pote / Máx presets plus 48px minus and plus controls; holding a step control accelerates from 1× to 5× to 10×. A horizontal wager gesture is never required, so browser back-swipe cannot steal the interaction.
-- **Blocking mobile viewport:** portrait play is exactly `100dvh` with no document scroll. Header, flexible table stage, viewer HUD, and safe-area betting dock divide that viewport; the expanded raise sheet overlays the lower table without compressing seat geometry.
-- **Compact visuals, full touch targets:** small table controls such as the hand-outcome dismiss and seat badges keep their circular visual geometry while an invisible pseudo-element supplies the 44px touch area. Coarse-pointer rules must not resize those visual hosts.
-- **Error:** `role="alert"` row on `--surface-error`, with a dismiss button.
+- **Shape:** 12px corners, 44px default height, 48px large height, semibold 14px labels, and 16px horizontal padding.
+- **Primary:** Oxblood Signal with white text; reserve it for the principal commitment in a group.
+- **Outline / Ghost:** translucent or transparent dark controls with white text for secondary actions.
+- **Light:** Card Paper with Deep Wine text for a high-contrast action on an oxblood surface and for the table's call action.
+- **Destructive:** semantic Danger with an explicit verb; do not use brand red as a substitute.
+- **States:** hover changes surface, focus receives the 3px focus ring, active presses by 1px, and disabled stays readable while losing interaction.
 
 ### Chips
-- **Style:** compact rounded labels using either a translucent dark surface or a material color with readable text.
-- **State:** gold limited to monetary/chip value and earned rewards; status chips use text plus icon or shape, never color alone.
 
-### Cards / Containers (seats, chat, dialogs)
-- **Corner Style:** 14–16px for seats, room rows, chat, and panels. Playing cards use 4–6px to retain their physical shape. The full ladder is tokenised — `--rounded-xs` 4, `--rounded-card` 6, `--rounded-sm` 8, `--rounded-control` 12, `--rounded-seat` 14, `--rounded-panel` 16, `--rounded-pill` 999 — plus `--rounded-card-thumb` 2px for a playing card shrunk to swatch size in a deck or felt preview, which is the one place a card corner scales below its own step. There are no literal radii outside this ladder; a new value means a new named step, not an inline px.
-- **Background:** `#161011ef` for seats, `#171011ee` for chat, `#211416` for dialogs and controls.
-- **Border:** a single low-contrast white hairline (`--seat-border` / `--control-border`). Viewer/active state may shift the complete border to Table Red; never a thick side stripe.
-- **Internal Padding:** 7–10px for seats and dense table controls, 16–24px for panels, 24px for dialogs.
+- **Style:** pill geometry, compact label, hairline or tonal fill, and at least a 44px interaction height when clickable.
+- **Selected:** Oxblood Signal with white text for filters; gold with Value Ink for table preselection or value-bearing state.
+- **Semantics:** status chips pair color with copy or icon. The six private player-note tag hues form a user-assigned categorical palette and are never reused as product status colors.
 
-### Player Seat
-- **Shape:** 14px container, absolute-positioned around the rail (9 seats, `--seat-0` … `--seat-8`), with a `:after` ring for turn state.
-- **Identity:** a 28px avatar is always visible on desktop/tablet; the portrait ring scales it with `--seat-size`. A failed or absent image falls back to the same shared initials on every surface.
-- **Turn:** `is-turn` paints the ring Bright Table Red and pulses it (`turn-signal`, 1.5s). Reduced motion freezes it visible.
-- **Viewer:** `viewer` shifts the full border to Bright Table Red and adds the 3px viewer-signal ring.
-- **Folded:** grayscale + dashed border, cards dimmed — identity stays readable.
-- **Winner:** `is-winner` shifts the border to gold; a gold `seat-win` pill animates in.
-- **Capacity rooms:** portrait rooms use fixed physical maps: heads-up places one opponent face-to-face in slot 4; 6-max uses slots 1 / 3 / 4 / 6 / 8; 9-max uses slots 1–8. The viewer is always the bottom hero HUD. Surviving players retain their coordinates and vacancies fill in server turn order, so seats never jump during a hand.
-- **Portrait seat lanes:** opponent hole cards occupy the table-facing side of the avatar and identity occupies the opposite caption lane. Cards always paint above captions during reveal/hover expansion. State is the caption line nearest its avatar on both normal and mirrored top seats, so it never appears attached to a neighboring position.
-- **Nine-seat portrait micro-layout.** 9-max is the only capacity that fills seats 2 and 7, the two the ring parks level with the community row. They get their own rules: the caption is anchored to the ring edge (never centred, which used to hang it off the viewport) and the bet points inward off the mid-line so the two never share a lane. The supplemental playstyle badge is not drawn on the ring at all — it only fits at 7px, under any readable floor, and identity owns that lane. State labels wrap rather than ellipsize ("Desconectado", not "Desconecta…"); names and stacks still ellipsize, because those are unbounded. The stack drops its "fichas" unit on the ring only (`.seat-stack-unit`, still in the accessibility tree) — a number beside an avatar at a poker table is never anything else, and the unit costs a third of the caption width.
-- **Short portrait rings** (`max-height: 760px`, i.e. 320×568 through 375×667): the ring drops the 3/4 capsule and takes the full stage width, the state line goes back to assistive-tech-only (the avatar already carries state through grayscale, the gold all-in ring and the folded dashed border), hole cards tuck deeper behind their own avatar, and the lower corners spread. Three seats per column share ~185px there; without those four levers a caption lands on the neighbour's cards.
-- **Viewer hero density:** the bottom HUD is capped at 78px. On portrait, name/stack occupy the left two rows, state/hand category use the aligned right column, and equity becomes one compact full-width row. Optional playstyle is omitted from the viewer's own HUD, and a deferred-pause state takes priority over hand category.
+### Cards / Containers
+
+- **Room and content cards:** 16px corners, one low-contrast border, dark tonal fill, and 16–24px internal padding. Hover may lift up to 5px when the whole card is actionable.
+- **Player seats:** 14px corners, Seat Surface, a one-pixel border, 7×10px padding, and compact shadow. Turn and winner use gold; desktop viewer identity uses oxblood.
+- **Playing cards:** warm card stock, 6px physical corners, and proportional 2px corners only at thumbnail scale. Archives reveal together; live play and replay may retain deal sequence.
+- **Empty states:** dashed 1px outline, plain explanation, and one clear recovery or creation path.
 
 ### Inputs / Fields
-- **Style:** 44px height, 12px radius, translucent control surface, white text, `white/15` hairline.
-- **Focus:** border changes to Bright Table Red with a 3px focus-ring at low offset.
-- **Error / Disabled:** errors use semantic red and linked error copy; disabled controls retain readable labels. Placeholder text meets 4.5:1 (uses `--muted-rose`, verified 7.38:1 on the seat surface).
+
+- **Style:** 44px height, 12px corners, translucent dark fill, white text, muted placeholder, and a one-pixel hairline.
+- **Focus:** Oxblood Active border plus a visible 3px Focus Ring.
+- **Error:** semantic red border with linked readable error copy; do not rely on border color alone.
+- **Disabled:** preserve the label and explanation instead of collapsing to opacity-only ambiguity.
 
 ### Navigation
 
-- **Style:** sparse top navigation, IBM Plex Sans 14px, brand identity on the left and authenticated destinations on the right. `public/svgs/logo.svg` is the canonical product mark: a “P” built from two nested monoline strokes, echoing the geometric family logic of Account without depending on cards, ranks, or suits. Its oxblood, white, and soft-red geometry replaces generic suit glyphs across landing, app chrome, public shares, state pages, footers, and the table signature.
-- **Ownership:** route navigation belongs to the shared `app-nav`; `AppPageHeader` contains page identity and contextual actions only. Lobby is the first authenticated destination and is omitted from public navigation.
-- **States:** hover moves muted text to white; current location communicated through text and state, not color alone.
-- **Mobile:** below 600px the seven `MAIN_ROUTES` icons move out of `app-nav` entirely into a fixed
-  bottom `app-tab-bar` (Lobby, Pessoas, Loja always visible — Pessoas/Loja carry the same badges as
-  desktop — plus a "Mais" trigger that opens the remaining four routes, `.social-actions-item`
-  styled, in a popover). **The trigger names the active location.** Standing on Guia, Ranking,
-  Conquistas or Mãos, it shows that route's icon and label with `aria-current="page"`, and only
-  falls back to the generic "Mais" when the player is elsewhere — otherwise four of the seven
-  destinations had no visible mark of where you are. The top bar keeps only the brand mark and the
-  profile avatar, both reachable without scrolling; below 520px the wordmark hides and the brand
-  link keeps a 44px target around the mark. Public pages keep their return link in `app-nav`; the
-  table header (a separate surface, not `AppPageNav`) keeps a 44px-min Lobby link and a
-  connection-state indicator instead.
-- **Fixed-bar clearance:** every `.has-tab-bar` surface reserves `76px + safe-area` of bottom
-  padding and the same `scroll-padding-bottom` — the bar's own 60px plus breathing room, so the
-  last actionable row in a list ends clear of it rather than flush against it.
-- **Public profile:** player showcases use the same `AppPage` chrome. Authenticated viewers retain the full desktop route set and mobile tab bar; anonymous viewers receive the standard public return action. Never build a route-local icon strip.
-- **Page headings:** `AppPageHeader` is compact by default: a 40–44px icon sits inline with a 28–36px title and description, with no repeated eyebrow. `variant="feature"` is reserved for a true editorial arrival page such as the guide hub.
-- **Guide topics:** topic pills wrap on tablet/desktop. At 720px and below, topic and in-page indexes become native disclosures with 44px rows; no route depends on a clipped horizontal label to remain discoverable.
-
-### Global API-unavailable strip
-- **Shape:** a full-bleed strip pinned to the very top of the viewport on `--surface-error`, one row tall (`--api-bar-h`, 56px), icon + headline + a `Verificar agora` retry. Below 600px the reassurance line drops and the headline plus retry carry the message; the strip height never changes.
-- **It reserves its space.** `NetworkProvider` sets `data-api-offline` on `<html>`, which switches `--api-bar-h` from `0px` to its real height. `body` takes it as padding, the sticky `.app-nav` takes it as its `top` offset, and the table — whose body is scroll-locked at `100dvh` — takes it as a top margin plus a shortened height. Nothing is ever painted over.
-- **Why:** a floating notice over the top of the page covered the table's Lobby, reactions, chat, menu, pause and **Sair** controls, i.e. the controls a player most needs while the server is unreachable. A recovery state must never occlude the way out.
-
-### Table utilities
-- **Desktop / landscape:** chat, reactions, winners, and hand rankings retain their direct controls outside seat geometry.
-- **Portrait target floor:** every control in the table header — Lobby, reactions, chat, More, pause and Exit — is a full 44×44. The row pays for it with a zero gap between the icon buttons and with the daily highlight, which is the one flexible child: it gives up width first and collapses to its 28px icon-only badge (tapping it re-opens the pot as a floating panel) before any control shrinks. Nothing in that row is allowed below 44px.
-- **Portrait:** reactions and chat are direct header actions, followed by More, pause, and a separated destructive Exit. More owns hand rankings, last winners, equity trainer, table preferences, and sharing without duplicating those quick actions. The largest-pot value flexes into the header width left by the fixed controls. Exit always opens, but confirmation stays disabled with a clear explanation while the player is dealt in. The controlled `activeTablePanel` contract guarantees one open surface at a time, and every mobile panel has an explicit 44px close control.
-- **Daily highlight:** the header celebrates the table's largest pot of the day. It names the strongest fully revealed winner and the locally evaluated made-hand category (`Ana — Trinca`), never raw transport codes such as `AhAs`.
-- **Transient layers:** the hand outcome owns the primary announcement layer. Achievements queue until it clears, and the optional paid winner-card offer waits until the player minimizes the outcome. Active consent prompts remain authoritative, avoiding stacked cards and competing calls to action.
-- **Blind selection:** lobby blind choices wrap without scroll chrome above 720px and use one deliberate, snap-aligned rail on smaller screens.
+- **Desktop:** sparse sticky top bar; brand on the left, route destinations and profile on the right. Each destination owns a 44px target, 12px corners, icon plus label, and a tonal current-location state.
+- **Mobile:** top bar keeps brand and profile; a fixed four-slot bottom bar exposes Lobby, Pessoas, Loja, and a context-aware More destination. It respects safe-area insets and never overlays the last actionable row.
+- **Public:** the landing header may simplify to brand, anchor links, and Entrar. Public profiles retain the shared application chrome when authenticated.
 
 ### Dialogs
-- **Surface:** `#211416`, 16px radius, 24px padding, white/15 hairline, 75% black backdrop.
-- **Behavior:** trap focus, close on Escape unless a mutation is pending, label the close button, stack actions on narrow screens when needed. Every shared dialog is capped at `calc(100dvh - 2rem)`, scrolls internally, and uses overscroll containment so close and actions stay reachable on short phones, landscape, zoom, and localized copy.
-- **Motion:** fast fade/scale; reduced motion uses an instant change or crossfade.
 
-### Archives are not a deal
-A finished record is not a hand being dealt. `/hands` rows, the hand-history detail and a shared hand carry `.static-cards`: their cards resolve together in one 200ms crossfade instead of replaying up to 2.06s of sequential dealing before the board is readable. The live table and `HandReplayer` keep the staggered deal — that sequence is information there, not decoration. A scrollable archive board is also a defect, not something to signpost: the board shrinks to fit rather than asking for a sideways gesture.
-
-### Recovery states
-`SystemState` owns whole-app failures (404/500/503). `RecoveryState` owns the in-app equivalent: a link that lost its parameters, or a record this account cannot open. Same grammar — mark, plain-language `h1`, what happened, one way back — with a `nested` variant for a page shell that already owns the viewport. A missing-parameter archive link is a trust moment; it never renders as a bare error line, and it always sits inside a `main` landmark with a real page heading.
+- **Surface:** Control Surface, 16px corners, 24px padding, white hairline, strong modal shadow, and a 75% black blurred backdrop.
+- **Sizing:** width is capped near 448px by default; height never exceeds the viewport minus 32px. Content scrolls internally with overscroll containment.
+- **Behavior:** focus is trapped, close is labeled, Escape works unless a pending mutation makes dismissal unsafe, and narrow-screen actions stack.
 
 ### The Living Table
-The signature composition: a brown physical rail around green felt, cards at the center, seats around the perimeter, decisions anchored below. Cards deal from a consistent source, chips move along comprehensible paths, turn ownership combines position, outline, label, and restrained motion. Latency, reconnecting, waiting, all-in, folded, winner, and audit states are explicit; a frozen-looking table is always a defect.
 
-## 6. Do's and Don'ts
+The signature composition places a walnut oval or portrait ring around radial green felt, cards at center, seats around the perimeter, and decisions in a bottom dock. Cards deal from a consistent source, chips move along comprehensible paths, current turn combines gold outline, timing, and copy, and the local viewer remains easy to identify without competing with errors. Reconnection, waiting, all-in, folded, winner, audit, and API-unavailable states are explicit; a frozen-looking table is a defect.
+
+The action dock separates decision roles: neutral dark buttons for fold/check, Card Paper for call, and Oxblood Signal for raise. Desktop retains sliders, presets, and shortcuts. Compact layouts open an opaque raise sheet with presets and 48px step controls; horizontal gestures are never required.
+
+## Do's and Don'ts
 
 ### Do:
-- **Do** make every card, chip, turn, connection, and result transition communicate a real state change.
-- **Do** keep most interaction transitions between 150–250 ms with exponential ease-out curves; dealing may run up to 450 ms when sequence clarity benefits.
-- **Do** preserve the shared CTech family vocabulary: IBM Plex, direct copy, 12–16px control/container radii, explicit states, clear focus, WCAG 2.2 AA.
-- **Do** reserve Table Red (`#af2a2f`) for the primary decision, active player context, and focus signal.
-- **Do** reserve Felt (`#0d5b45`), Card Paper (`#f6f0e7`), and Chip Gold (`#e6b85c`) for their named physical meanings.
-- **Do** pair suit, turn, win, error, and connection colors with text, iconography, shape, or position.
-- **Do** provide keyboard play, reduced-motion alternatives, reconnection feedback, and responsive table structure from mobile web through desktop.
-- **Do** keep money and sandbox semantics unmistakable and surface fairness/audit information in plain language.
+
+- **Do** make every card, chip, turn, connection, result, and recovery transition communicate a real state change.
+- **Do** keep Oxblood Signal rare enough to identify the primary commitment or active location immediately.
+- **Do** reserve felt for play, paper for cards or deliberate light contrast, and gold for value, time, and earned outcomes.
+- **Do** use IBM Plex Mono with tabular numerals for changing values and IBM Plex Sans for names and language.
+- **Do** pair color-coded suits and states with text, shape, iconography, or position.
+- **Do** keep keyboard focus visible, preserve 44px touch targets, and provide reduced-motion equivalents.
+- **Do** keep sandbox and wallet semantics explicit; the interface must never imply real-money mode is enabled by default.
+- **Do** render hidden cards exactly as delivered and let browser-side fairness checks determine verification.
 
 ### Don't:
-- **Don't** create PokerStars-style static or frozen-feeling play; an unchanged table during latency or processing must show an honest state.
-- **Don't** build casino clutter: no flashing chrome, competing promotions, or dense calls to action around the table.
-- **Don't** use predatory gambling patterns: no urgency pressure, loss-chasing prompts, manipulative rewards, or obscured money semantics.
-- **Don't** use childish gamification that weakens trust in real-money play.
-- **Don't** drift into crypto aesthetics: no neon speculation, token hype, terminal styling, or volatility theater.
-- **Don't** use `border-left` / `border-right` greater than 1px as an accent on a card, seat, callout, or alert.
-- **Don't** combine a decorative 1px border with a wide soft shadow on the same ordinary card or button.
-- **Don't** use gradient text, decorative grid/stripe backgrounds, default glassmorphism, or 32px-plus card radii.
-- **Don't** use tiny uppercase tracked eyebrows as repeated page scaffolding; mono labels are reserved for real game/readout state.
-- **Don't** rely on hue alone to distinguish red and black suits, active turns, winners, errors, or connection status.
-- **Don't** animate layout properties or use bounce/elastic motion; never make a user wait for choreography before acting.
-- **Don't** hard-code brand colors as literals in components (`bg-[#af2a2f]`); reference the `--brand` / `--paper` / `--wine` tokens so theming stays single-source.
 
-### Implementation coverage note (updated 2026-08-22)
-
-Sections 2–4 (colors, typography, elevation) are current and authoritative. Section 5's component
-vocabulary predates roughly fifteen table components added in the 2026-07-26→28 work and does not
-specify them: `PerimeterTimer`, `ChipStack`, `RabbitHunt`, `RealityCheck`, `BotChallenge`,
-`PlayerNoteDialog`, `LastWinners`, `TablePreferencesDialog`, `VoiceActionButton`, `HandOutcome`,
-`HandReplayer`, `ShareHandDialog`, `DeckReveal`, `PartialDeckProof`, `AchievementCard`. They were
-built against the tokens and the do/don't rules above rather than against per-component specs.
-
-Two layout facts that section 5 does not cover:
-
-- **`TableStage` has two distinct layouts** — an oval for desktop and a vertical `stage-v` ring for
-  portrait handhelds. `.seat-avatar` is 28px alongside the name on desktop and becomes the primary,
-  `--seat-size`-scaled identity in the portrait ring.
-- **Deck variants** are user-selectable (`lib/cardVariants.ts`, default `four-color`), so card
-  colour is not a fixed design constant.
-- **The two seat-corner triggers scale together.** `.seat-note-trigger` (opponent note only) and
-  `.seat-actions-trigger` (the fuller player menu that replaces it once one is wired up) both shrink
-  proportionally with `--seat-size` on the portrait ring, floored at 16px, with an invisible
-  `::before` padding the real hit target back out to 44px so the visible badge never inflates past
-  the avatar it sits on.
-
-When adding a component, follow the tokens and the do/don't list; a per-component spec here is not
-a prerequisite.
+- **Don't** create static or frozen-feeling play; latency and processing require honest visible state.
+- **Don't** build casino clutter, flashing chrome, competing promotions, urgency pressure, or loss-chasing prompts.
+- **Don't** drift into crypto aesthetics, terminal theater, childish gamification, gradient text, or decorative grid backgrounds.
+- **Don't** use thick side accents, decorative double borders, ambient card glows, or oversized container radii.
+- **Don't** use tiny uppercase tracked eyebrows as repeated task-page scaffolding; reserve mono labels for real readout or category state.
+- **Don't** shrink critical labels or controls to fit. Reflow, disclose, or relocate first.
+- **Don't** animate layout properties, use elastic motion, or make users wait for choreography before acting.
+- **Don't** hard-code semantic brand colors inside components when the live CSS token already exists.

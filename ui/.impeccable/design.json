@@ -1,63 +1,319 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-22T18:00:00-03:00",
+  "generatedAt": "2026-08-25T17:20:00Z",
   "title": "Design System: CTech Poker",
   "extensions": {
     "colorMeta": {
-      "brand": {"role": "primary", "displayName": "Table Red", "canonical": "#af2a2f", "tonalRamp": ["#2b1113", "#4b1519", "#701c21", "#942329", "#af2a2f", "#d9464d", "#ef8e92", "#f9d9da"]},
-      "felt": {"role": "secondary", "displayName": "Tournament Felt", "canonical": "#0d5b45", "tonalRamp": ["#062119", "#083629", "#0a4a38", "#0d5b45", "#18765b", "#39977a", "#86c8b2", "#d7efe7"]},
-      "ink": {"role": "neutral", "displayName": "Wine Room Ink", "canonical": "#120d0e", "tonalRamp": ["#120d0e", "#211719", "#3c2d30", "#65575a", "#918487", "#bdb3b5", "#ded8d9", "#f7f4f4"]}
+      "oxblood-signal": {
+        "role": "primary",
+        "displayName": "Oxblood Signal",
+        "canonical": "#af2a2f",
+        "tonalRamp": ["oklch(15% 0.07 25)", "oklch(25% 0.10 25)", "oklch(35% 0.13 25)", "oklch(45% 0.15 25)", "oklch(58% 0.14 25)", "oklch(70% 0.11 25)", "oklch(83% 0.07 25)", "oklch(95% 0.02 25)"]
+      },
+      "oxblood-active": {
+        "role": "primary",
+        "displayName": "Oxblood Active",
+        "canonical": "#d9464d",
+        "tonalRamp": ["oklch(15% 0.08 25)", "oklch(25% 0.11 25)", "oklch(35% 0.15 25)", "oklch(45% 0.18 25)", "oklch(58% 0.17 25)", "oklch(70% 0.13 25)", "oklch(83% 0.08 25)", "oklch(95% 0.02 25)"]
+      },
+      "deep-wine": {
+        "role": "primary",
+        "displayName": "Deep Wine",
+        "canonical": "#5b1218",
+        "tonalRamp": ["oklch(15% 0.05 22)", "oklch(25% 0.08 22)", "oklch(35% 0.10 22)", "oklch(45% 0.10 22)", "oklch(58% 0.08 22)", "oklch(70% 0.06 22)", "oklch(83% 0.04 22)", "oklch(95% 0.01 22)"]
+      },
+      "night-ink": {
+        "role": "neutral",
+        "displayName": "Night Ink",
+        "canonical": "#120d0e",
+        "tonalRamp": ["oklch(15% 0.01 20)", "oklch(25% 0.012 20)", "oklch(35% 0.014 20)", "oklch(45% 0.014 20)", "oklch(58% 0.012 20)", "oklch(70% 0.01 20)", "oklch(83% 0.006 20)", "oklch(95% 0.002 20)"]
+      },
+      "card-paper": {
+        "role": "neutral",
+        "displayName": "Card Paper",
+        "canonical": "#f6f0e7",
+        "tonalRamp": ["oklch(15% 0.018 75)", "oklch(25% 0.024 75)", "oklch(35% 0.028 75)", "oklch(45% 0.03 75)", "oklch(58% 0.028 75)", "oklch(70% 0.024 75)", "oklch(83% 0.018 75)", "oklch(95% 0.01 75)"]
+      },
+      "chip-gold": {
+        "role": "secondary",
+        "displayName": "Chip Gold",
+        "canonical": "#e6b85c",
+        "tonalRamp": ["oklch(15% 0.05 85)", "oklch(25% 0.075 85)", "oklch(35% 0.10 85)", "oklch(45% 0.12 85)", "oklch(58% 0.14 85)", "oklch(70% 0.13 85)", "oklch(83% 0.09 85)", "oklch(95% 0.03 85)"]
+      },
+      "value-ink": {
+        "role": "neutral",
+        "displayName": "Value Ink",
+        "canonical": "#30230a",
+        "tonalRamp": ["oklch(15% 0.025 80)", "oklch(25% 0.04 80)", "oklch(35% 0.05 80)", "oklch(45% 0.055 80)", "oklch(58% 0.05 80)", "oklch(70% 0.04 80)", "oklch(83% 0.025 80)", "oklch(95% 0.008 80)"]
+      },
+      "table-felt": {
+        "role": "secondary",
+        "displayName": "Table Felt",
+        "canonical": "#0d5b45",
+        "tonalRamp": ["oklch(15% 0.045 160)", "oklch(25% 0.065 160)", "oklch(35% 0.08 160)", "oklch(45% 0.095 160)", "oklch(58% 0.09 160)", "oklch(70% 0.075 160)", "oklch(83% 0.045 160)", "oklch(95% 0.015 160)"]
+      },
+      "felt-light": {
+        "role": "secondary",
+        "displayName": "Felt Light",
+        "canonical": "#18765b",
+        "tonalRamp": ["oklch(15% 0.05 160)", "oklch(25% 0.07 160)", "oklch(35% 0.09 160)", "oklch(45% 0.105 160)", "oklch(58% 0.10 160)", "oklch(70% 0.08 160)", "oklch(83% 0.05 160)", "oklch(95% 0.015 160)"]
+      },
+      "felt-dark": {
+        "role": "secondary",
+        "displayName": "Felt Dark",
+        "canonical": "#084b38",
+        "tonalRamp": ["oklch(15% 0.04 160)", "oklch(25% 0.06 160)", "oklch(35% 0.075 160)", "oklch(45% 0.085 160)", "oklch(58% 0.08 160)", "oklch(70% 0.065 160)", "oklch(83% 0.04 160)", "oklch(95% 0.012 160)"]
+      },
+      "rail-walnut": {
+        "role": "secondary",
+        "displayName": "Rail Walnut",
+        "canonical": "#7c4d2f",
+        "tonalRamp": ["oklch(15% 0.035 55)", "oklch(25% 0.05 55)", "oklch(35% 0.065 55)", "oklch(45% 0.075 55)", "oklch(58% 0.07 55)", "oklch(70% 0.055 55)", "oklch(83% 0.035 55)", "oklch(95% 0.01 55)"]
+      },
+      "rail-edge": {
+        "role": "secondary",
+        "displayName": "Rail Edge",
+        "canonical": "#291714",
+        "tonalRamp": ["oklch(15% 0.025 35)", "oklch(25% 0.04 35)", "oklch(35% 0.05 35)", "oklch(45% 0.055 35)", "oklch(58% 0.05 35)", "oklch(70% 0.04 35)", "oklch(83% 0.025 35)", "oklch(95% 0.008 35)"]
+      },
+      "rail-highlight": {
+        "role": "secondary",
+        "displayName": "Rail Highlight",
+        "canonical": "#b0774a",
+        "tonalRamp": ["oklch(15% 0.04 60)", "oklch(25% 0.06 60)", "oklch(35% 0.075 60)", "oklch(45% 0.09 60)", "oklch(58% 0.085 60)", "oklch(70% 0.065 60)", "oklch(83% 0.04 60)", "oklch(95% 0.012 60)"]
+      },
+      "muted-rose": {
+        "role": "neutral",
+        "displayName": "Muted Rose",
+        "canonical": "#ad9fa0",
+        "tonalRamp": ["oklch(15% 0.008 20)", "oklch(25% 0.012 20)", "oklch(35% 0.016 20)", "oklch(45% 0.02 20)", "oklch(58% 0.022 20)", "oklch(70% 0.02 20)", "oklch(83% 0.014 20)", "oklch(95% 0.005 20)"]
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Text Secondary",
+        "canonical": "#cbbfc0",
+        "tonalRamp": ["oklch(15% 0.006 20)", "oklch(25% 0.01 20)", "oklch(35% 0.014 20)", "oklch(45% 0.018 20)", "oklch(58% 0.02 20)", "oklch(70% 0.018 20)", "oklch(83% 0.012 20)", "oklch(95% 0.004 20)"]
+      },
+      "felt-text": {
+        "role": "neutral",
+        "displayName": "Felt Text",
+        "canonical": "#e3f1ea",
+        "tonalRamp": ["oklch(15% 0.015 155)", "oklch(25% 0.025 155)", "oklch(35% 0.035 155)", "oklch(45% 0.04 155)", "oklch(58% 0.04 155)", "oklch(70% 0.035 155)", "oklch(83% 0.025 155)", "oklch(95% 0.01 155)"]
+      },
+      "success": {
+        "role": "tertiary",
+        "displayName": "Success",
+        "canonical": "#48c98c",
+        "tonalRamp": ["oklch(15% 0.055 155)", "oklch(25% 0.08 155)", "oklch(35% 0.105 155)", "oklch(45% 0.13 155)", "oklch(58% 0.14 155)", "oklch(70% 0.12 155)", "oklch(83% 0.075 155)", "oklch(95% 0.025 155)"]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Danger",
+        "canonical": "#dc2626",
+        "tonalRamp": ["oklch(15% 0.08 25)", "oklch(25% 0.12 25)", "oklch(35% 0.16 25)", "oklch(45% 0.19 25)", "oklch(58% 0.19 25)", "oklch(70% 0.15 25)", "oklch(83% 0.09 25)", "oklch(95% 0.025 25)"]
+      },
+      "danger-soft": {
+        "role": "tertiary",
+        "displayName": "Danger Soft",
+        "canonical": "#f5b0b3",
+        "tonalRamp": ["oklch(15% 0.05 20)", "oklch(25% 0.075 20)", "oklch(35% 0.10 20)", "oklch(45% 0.12 20)", "oklch(58% 0.12 20)", "oklch(70% 0.10 20)", "oklch(83% 0.065 20)", "oklch(95% 0.02 20)"]
+      },
+      "danger-text": {
+        "role": "tertiary",
+        "displayName": "Danger Text",
+        "canonical": "#ef4444",
+        "tonalRamp": ["oklch(15% 0.08 25)", "oklch(25% 0.12 25)", "oklch(35% 0.16 25)", "oklch(45% 0.19 25)", "oklch(58% 0.18 25)", "oklch(70% 0.14 25)", "oklch(83% 0.085 25)", "oklch(95% 0.025 25)"]
+      },
+      "focus-ring": {
+        "role": "tertiary",
+        "displayName": "Focus Ring",
+        "canonical": "#ed777c",
+        "tonalRamp": ["oklch(15% 0.055 20)", "oklch(25% 0.08 20)", "oklch(35% 0.11 20)", "oklch(45% 0.135 20)", "oklch(58% 0.14 20)", "oklch(70% 0.115 20)", "oklch(83% 0.07 20)", "oklch(95% 0.02 20)"]
+      },
+      "on-brand": {
+        "role": "neutral",
+        "displayName": "On Brand",
+        "canonical": "#ffffff",
+        "tonalRamp": ["oklch(15% 0 0)", "oklch(25% 0 0)", "oklch(35% 0 0)", "oklch(45% 0 0)", "oklch(58% 0 0)", "oklch(70% 0 0)", "oklch(83% 0 0)", "oklch(95% 0 0)"]
+      },
+      "seat-surface": {
+        "role": "neutral",
+        "displayName": "Seat Surface",
+        "canonical": "#161011",
+        "tonalRamp": ["oklch(15% 0.01 20)", "oklch(25% 0.014 20)", "oklch(35% 0.018 20)", "oklch(45% 0.02 20)", "oklch(58% 0.018 20)", "oklch(70% 0.014 20)", "oklch(83% 0.008 20)", "oklch(95% 0.002 20)"]
+      },
+      "control-surface": {
+        "role": "neutral",
+        "displayName": "Control Surface",
+        "canonical": "#211416",
+        "tonalRamp": ["oklch(15% 0.015 20)", "oklch(25% 0.022 20)", "oklch(35% 0.028 20)", "oklch(45% 0.03 20)", "oklch(58% 0.028 20)", "oklch(70% 0.022 20)", "oklch(83% 0.014 20)", "oklch(95% 0.004 20)"]
+      },
+      "control-hover": {
+        "role": "neutral",
+        "displayName": "Control Hover",
+        "canonical": "#3e3133",
+        "tonalRamp": ["oklch(15% 0.012 20)", "oklch(25% 0.018 20)", "oklch(35% 0.024 20)", "oklch(45% 0.028 20)", "oklch(58% 0.026 20)", "oklch(70% 0.02 20)", "oklch(83% 0.012 20)", "oklch(95% 0.004 20)"]
+      },
+      "error-surface": {
+        "role": "neutral",
+        "displayName": "Error Surface",
+        "canonical": "#3b0b0e",
+        "tonalRamp": ["oklch(15% 0.035 22)", "oklch(25% 0.055 22)", "oklch(35% 0.07 22)", "oklch(45% 0.08 22)", "oklch(58% 0.075 22)", "oklch(70% 0.055 22)", "oklch(83% 0.035 22)", "oklch(95% 0.01 22)"]
+      }
     },
     "typographyMeta": {
-      "display": {"displayName": "Display", "purpose": "Feature arrivals only; operational routes use the compact title scale."},
-      "body": {"displayName": "Body", "purpose": "Instructions, descriptions, and social content."},
-      "mono": {"displayName": "Game readout", "purpose": "Blinds, chip values, and genuine system state only."}
+      "display": {"displayName": "Display", "purpose": "Public landing statements only."},
+      "headline": {"displayName": "Headline", "purpose": "Editorial arrival pages and feature headings."},
+      "compact-heading": {"displayName": "Compact Heading", "purpose": "Operational page identity."},
+      "title": {"displayName": "Title", "purpose": "Dialogs, panels, and room names."},
+      "body": {"displayName": "Body", "purpose": "Instructions, descriptions, and conversation."},
+      "label": {"displayName": "Label", "purpose": "Controls, navigation, and form labels."},
+      "readout": {"displayName": "Readout", "purpose": "Live numeric and aligned table state."},
+      "compact": {"displayName": "Compact", "purpose": "Dense, closed-vocabulary table state."},
+      "tiny": {"displayName": "Tiny", "purpose": "Minimum reusable table labels."}
     },
     "shadows": [
-      {"name": "panel", "value": "0 24px 64px rgba(0,0,0,.45)", "purpose": "Modal and elevated popover separation only."}
+      {"name": "table-depth", "value": "0 30px 80px #000, inset 0 0 0 4px var(--table-rail-highlight)", "purpose": "Physical outer table rail."},
+      {"name": "felt-depth", "value": "inset 0 0 70px #001f18", "purpose": "Inset playing surface."},
+      {"name": "seat-lift", "value": "0 4px 8px #0009", "purpose": "Compact separation for player seats."},
+      {"name": "viewer-signal", "value": "0 4px 8px #0009, 0 0 0 3px color-mix(in srgb, var(--brand) 25%, transparent)", "purpose": "Desktop viewer identity."},
+      {"name": "winner-signal", "value": "0 4px 8px #0009, 0 0 0 4px color-mix(in srgb, var(--gold) 45%, transparent), 0 0 22px 4px color-mix(in srgb, var(--gold) 45%, transparent)", "purpose": "Brief resolved-win feedback."}
     ],
     "motion": [
-      {"name": "ease-out-quart", "value": "cubic-bezier(.25,1,.5,1)", "purpose": "Fast, tactile control and panel feedback."}
+      {"name": "ease-out-quart", "value": "cubic-bezier(.25, 1, .5, 1)", "purpose": "Default direct state transitions."},
+      {"name": "ease-out-quint", "value": "cubic-bezier(.22, 1, .36, 1)", "purpose": "Confident entrances and action readiness."},
+      {"name": "ease-out-expo", "value": "cubic-bezier(.16, 1, .3, 1)", "purpose": "Card face and reveal transitions."},
+      {"name": "press", "value": "70ms", "purpose": "Immediate button compression feedback."},
+      {"name": "state", "value": "180ms", "purpose": "Color and surface changes."},
+      {"name": "deal", "value": "440ms", "purpose": "Hole-card reveal when sequence communicates play."}
     ],
     "breakpoints": [
-      {"name": "phone", "value": "600px"},
-      {"name": "guide-collapse", "value": "720px"},
+      {"name": "xs-table", "value": "360px"},
+      {"name": "narrow", "value": "380px"},
+      {"name": "compact", "value": "520px"},
+      {"name": "mobile-nav", "value": "600px"},
+      {"name": "reading", "value": "720px"},
+      {"name": "table-controls", "value": "800px"},
+      {"name": "app-nav", "value": "860px"},
+      {"name": "desktop-table", "value": "1000px"},
       {"name": "portrait-table", "value": "1023px"}
     ]
   },
   "components": [
     {
-      "name": "Primary Button", "kind": "button", "refersTo": "button-primary", "description": "The single primary decision in a group.",
-      "html": "<button class=\"ds-button-primary\">Entrar agora</button>",
-      "css": ".ds-button-primary{min-height:44px;padding:0 16px;border:0;border-radius:12px;background:#af2a2f;color:#fff;font:600 14px IBM Plex Sans,sans-serif;transition:background .2s,transform .2s}.ds-button-primary:hover{background:#d9464d}.ds-button-primary:focus-visible{outline:3px solid #ed777c;outline-offset:2px}.ds-button-primary:active{transform:translateY(1px)}"
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The principal commitment in a decision group.",
+      "html": "<button class=\"ds-btn-primary\">Jogar agora</button>",
+      "css": ".ds-btn-primary { min-height:44px; padding:0 16px; border:0; border-radius:var(--rounded-control); background:var(--brand); color:var(--on-brand); font:600 14px var(--font-sans),sans-serif; cursor:pointer; box-shadow:0 8px 24px color-mix(in srgb,var(--brand) 20%,transparent); transition:background-color 200ms var(--ease-out-quart),transform 120ms var(--ease-out-quart),box-shadow 200ms var(--ease-out-quart); } .ds-btn-primary:hover { background:var(--brand-bright); } .ds-btn-primary:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; } .ds-btn-primary:active { transform:translateY(1px); }"
     },
     {
-      "name": "Text Field", "kind": "input", "refersTo": "input", "description": "A shared 44px form control with explicit focus.",
-      "html": "<input class=\"ds-input\" placeholder=\"Buscar jogador\">",
-      "css": ".ds-input{box-sizing:border-box;width:100%;height:44px;padding:0 12px;border:1px solid #ffffff26;border-radius:12px;background:#211416;color:#f6f0e7;font:400 14px IBM Plex Sans,sans-serif}.ds-input:focus-visible{outline:3px solid #ed777c;border-color:#d9464d}.ds-input::placeholder{color:#ad9fa0}"
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary action that stays subordinate to the main commitment.",
+      "html": "<button class=\"ds-btn-outline\">Conhecer recursos</button>",
+      "css": ".ds-btn-outline { min-height:44px; padding:0 16px; border:1px solid var(--control-border); border-radius:var(--rounded-control); background:#ffffff0d; color:var(--on-brand); font:600 14px var(--font-sans),sans-serif; cursor:pointer; transition:background-color 180ms var(--ease-out-quart),border-color 180ms var(--ease-out-quart),transform 120ms var(--ease-out-quart); } .ds-btn-outline:hover { background:#ffffff1a; } .ds-btn-outline:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; } .ds-btn-outline:active { transform:translateY(1px); }"
     },
     {
-      "name": "App Navigation", "kind": "nav", "description": "Shared route ownership for every authenticated content page and public profile.",
-      "html": "<nav class=\"ds-nav\"><strong>CTech Poker</strong><a href=\"#\" aria-current=\"page\">Lobby</a><a href=\"#\">Pessoas</a><a href=\"#\">Loja</a></nav>",
-      "css": ".ds-nav{display:flex;align-items:center;gap:8px;padding:12px 16px;background:#120d0e;color:#f6f0e7;font:600 14px IBM Plex Sans,sans-serif}.ds-nav strong{margin-right:auto}.ds-nav a{min-height:44px;display:flex;align-items:center;padding:0 12px;border-radius:12px;color:#cbbfc0;text-decoration:none}.ds-nav a:hover,.ds-nav a:focus-visible,.ds-nav a[aria-current=page]{background:#af2a2f22;color:#fff}"
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A dark, tactile 44px field with an explicit focus and error boundary.",
+      "html": "<label class=\"ds-field\"><span>Nome da mesa</span><input placeholder=\"Ex.: Sexta com amigos\" /></label>",
+      "css": ".ds-field { display:grid; gap:8px; color:var(--paper); font:600 14px var(--font-sans),sans-serif; } .ds-field input { height:44px; padding:0 12px; border:1px solid var(--control-border); border-radius:var(--rounded-control); background:#ffffff0d; color:var(--on-brand); font:400 14px var(--font-sans),sans-serif; outline:none; transition:border-color 200ms,box-shadow 200ms,background-color 200ms; } .ds-field input::placeholder { color:var(--muted-rose); } .ds-field input:hover { background:#ffffff12; } .ds-field input:focus { border-color:var(--brand-bright); box-shadow:0 0 0 3px color-mix(in srgb,var(--focus-ring) 45%,transparent); }"
     },
     {
-      "name": "Stake Chip", "kind": "chip", "description": "Selectable blind level; wraps on larger screens and scrolls on phones.",
-      "html": "<button class=\"ds-stake\" aria-pressed=\"true\">10 / 25</button>",
-      "css": ".ds-stake{min-height:44px;padding:0 13px;border:1px solid #ffffff22;border-radius:12px;background:#161011;color:#cbbfc0;font:600 14px IBM Plex Mono,monospace}.ds-stake:hover,.ds-stake:focus-visible{border-color:#d9464d;color:#fff}.ds-stake[aria-pressed=true]{background:#af2a2f;border-color:#d9464d;color:#fff}"
+      "name": "Filter Chip",
+      "kind": "chip",
+      "description": "A full-height capsule for mutually exclusive operational filters.",
+      "html": "<button class=\"ds-filter\" aria-pressed=\"true\">Todos</button>",
+      "css": ".ds-filter { min-height:44px; padding:8px 16px; border:1px solid var(--brand); border-radius:var(--rounded-pill); background:var(--brand); color:var(--on-brand); font:600 14px var(--font-sans),sans-serif; cursor:pointer; transition:color 180ms var(--ease-out-quart),border-color 180ms var(--ease-out-quart),background-color 180ms var(--ease-out-quart); } .ds-filter:hover,.ds-filter:focus-visible { border-color:var(--brand-bright); } .ds-filter:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; } .ds-filter[aria-pressed=\"false\"] { border-color:var(--control-border); background:transparent; color:var(--text-secondary); } .ds-filter[aria-pressed=\"false\"]:hover { color:var(--on-brand); border-color:var(--brand-bright); }"
     },
     {
-      "name": "Table Utility Menu", "kind": "custom", "description": "One portrait-safe entry point for table overlays.",
-      "html": "<button class=\"ds-table-tool\" aria-label=\"Ferramentas da mesa\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M14.7 6.3a4 4 0 0 0-5-5l2.1 2.1-2.4 2.4-2.1-2.1a4 4 0 0 0 5 5l7.1 7.1-2.8 2.8-7.1-7.1a4 4 0 0 0-5 5l2.1-2.1 2.4 2.4-2.1 2.1a4 4 0 0 0 5-5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/></svg></button>",
-      "css": ".ds-table-tool{width:44px;height:44px;display:grid;place-items:center;border:1px solid #ffffff24;border-radius:12px;background:#211416;color:#fff}.ds-table-tool svg{width:20px;height:20px}.ds-table-tool:hover,.ds-table-tool:focus-visible{background:#3e3133;outline:3px solid #ed777c}"
+      "name": "Room Card",
+      "kind": "card",
+      "description": "A scannable, fully actionable lobby room with live state and buy-in context.",
+      "html": "<button class=\"ds-room\"><span><small>NLH · 6 lugares</small><strong>Blinds 10 / 20</strong><em>Buy-in 400–2.000</em></span><i aria-hidden=\"true\"></i></button>",
+      "css": ".ds-room { position:relative; display:flex; width:100%; align-items:center; justify-content:space-between; padding:23px; border:1px solid #ffffff21; border-radius:var(--rounded-panel); background:#ffffff08; color:var(--paper); text-align:left; cursor:pointer; transition:transform 250ms var(--ease-out-quart),border-color 250ms,background-color 250ms; } .ds-room span { display:grid; gap:7px; } .ds-room small,.ds-room em { color:var(--muted); font:400 12px var(--font-sans),sans-serif; font-style:normal; } .ds-room strong { font:700 24px var(--font-sans),sans-serif; } .ds-room i { position:absolute; top:16px; right:16px; width:7px; height:7px; border-radius:50%; background:var(--success); box-shadow:0 0 10px var(--success); } .ds-room:hover { transform:translateY(-5px); border-color:#af2a2f88; background:#af2a2f14; } .ds-room:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; }"
+    },
+    {
+      "name": "Player Seat",
+      "kind": "custom",
+      "refersTo": "player-seat",
+      "description": "Compact identity, stack, and current-turn signal around the live table.",
+      "html": "<div class=\"ds-seat is-turn\"><span class=\"ds-avatar\">A</span><span><strong>Ana</strong><small>2.450</small></span></div>",
+      "css": ".ds-seat { position:relative; display:inline-flex; align-items:center; gap:7px; padding:7px 10px; border:1px solid var(--seat-border); border-radius:var(--rounded-seat); background:var(--surface-seat); color:var(--paper); box-shadow:var(--shadow-seat); font-family:var(--font-sans),sans-serif; } .ds-seat::after { content:\"\"; position:absolute; inset:-1px; border:2px solid transparent; border-radius:inherit; pointer-events:none; } .ds-seat.is-turn::after { border-color:var(--gold); box-shadow:0 0 0 1px color-mix(in srgb,var(--gold) 55%,transparent),0 0 10px 2px color-mix(in srgb,var(--gold) 45%,transparent); } .ds-avatar { display:grid; width:28px; height:28px; place-items:center; border-radius:50%; background:var(--brand); color:var(--on-brand); font-weight:700; } .ds-seat strong,.ds-seat small { display:block; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; } .ds-seat small { margin-top:3px; color:var(--gold); font-family:var(--font-mono),monospace; font-variant-numeric:tabular-nums; }"
+    },
+    {
+      "name": "Table Actions",
+      "kind": "custom",
+      "description": "Decision hierarchy: neutral fold, paper call, and oxblood raise.",
+      "html": "<div class=\"ds-actions\"><button>Fold</button><button class=\"ds-call\">Pagar 120</button><button class=\"ds-raise\">Aumentar</button></div>",
+      "css": ".ds-actions { display:flex; gap:8px; padding:12px; background:linear-gradient(transparent,var(--table-room)); } .ds-actions button { min-width:96px; min-height:48px; padding:12px 18px; border:1px solid var(--control-border); border-radius:var(--rounded-control); background:var(--surface-control); color:var(--paper); font:700 14px var(--font-sans),sans-serif; cursor:pointer; transition:transform 120ms var(--ease-out-quart),background-color 180ms var(--ease-out-quart); } .ds-actions button:hover { transform:translateY(-2px); background:var(--surface-control-hover); } .ds-actions button:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; } .ds-actions button:active { transform:scale(.96); } .ds-actions .ds-call { background:var(--paper); color:var(--wine); } .ds-actions .ds-raise { background:var(--brand); color:var(--on-brand); } .ds-actions .ds-raise:hover { background:var(--brand-bright); }"
+    },
+    {
+      "name": "Application Navigation",
+      "kind": "nav",
+      "description": "Sparse shared chrome with a tonal current-location state.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-brand\" href=\"#\"><svg viewBox=\"0 0 64 64\" aria-hidden=\"true\"><rect width=\"64\" height=\"64\" rx=\"16\" fill=\"#af2a2f\"/><path d=\"M18 49V17c0-2.2 1.8-4 4-4h14c8.3 0 14 5.3 14 13s-5.7 13-14 13h-8\" fill=\"none\" stroke=\"#fff\" stroke-width=\"4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M27 49V22h9c3.8 0 6 1.9 6 5s-2.2 5-6 5h-3\" fill=\"none\" stroke=\"#efb4b7\" stroke-width=\"4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg><span>CTech <b>Poker</b></span></a><a href=\"#\">Lobby</a><a class=\"is-current\" href=\"#\" aria-current=\"page\">Guia</a><a href=\"#\">Loja</a></nav>",
+      "css": ".ds-nav { display:flex; min-height:72px; align-items:center; gap:2px; padding:0 12px; background:color-mix(in srgb,var(--ink) 84%,transparent); color:var(--paper); font-family:var(--font-sans),sans-serif; } .ds-nav a { display:inline-flex; min-width:44px; min-height:44px; align-items:center; justify-content:center; padding:0 10px; border-radius:var(--rounded-control); color:var(--text-secondary); font-size:14px; font-weight:600; text-decoration:none; transition:color 180ms var(--ease-out-quart),background-color 180ms var(--ease-out-quart); } .ds-nav a:hover,.ds-nav a:focus-visible { color:var(--paper); background:#ffffff08; } .ds-nav a:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; } .ds-nav .is-current { color:#ef747a; background:#af2a2f22; } .ds-nav .ds-brand { margin-right:auto; gap:10px; padding-left:0; color:var(--paper); } .ds-brand svg { width:38px; height:38px; }"
+    },
+    {
+      "name": "Dialog Surface",
+      "kind": "custom",
+      "refersTo": "dialog",
+      "description": "A bounded, internally scrolling modal with clear title and actions.",
+      "html": "<section class=\"ds-dialog\" role=\"dialog\" aria-labelledby=\"ds-dialog-title\"><button class=\"ds-close\" aria-label=\"Fechar\">×</button><h2 id=\"ds-dialog-title\">Criar mesa</h2><p>Escolha os blinds, a capacidade e quem pode entrar.</p><div class=\"ds-dialog-actions\"><button>Cancelar</button><button class=\"primary\">Criar mesa</button></div></section>",
+      "css": ".ds-dialog { position:relative; width:min(448px,calc(100% - 32px)); max-height:calc(100dvh - 32px); overflow:auto; padding:24px; border:1px solid #ffffff26; border-radius:var(--rounded-panel); background:var(--surface-control); color:var(--on-brand); box-shadow:0 25px 50px -12px #000; font-family:var(--font-sans),sans-serif; } .ds-dialog h2 { margin:0 44px 8px 0; font-size:24px; line-height:1.2; } .ds-dialog p { margin:0; color:var(--muted-rose); font-size:14px; line-height:1.5; } .ds-close { position:absolute; top:12px; right:12px; width:44px; height:44px; border:0; border-radius:var(--rounded-control); background:transparent; color:var(--paper); font-size:24px; cursor:pointer; } .ds-close:hover { background:#ffffff1a; } .ds-dialog button:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; } .ds-dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:24px; } .ds-dialog-actions button { min-height:44px; padding:0 16px; border:1px solid var(--control-border); border-radius:var(--rounded-control); background:#ffffff0d; color:var(--paper); font-weight:600; } .ds-dialog-actions .primary { border-color:var(--brand); background:var(--brand); color:var(--on-brand); }"
     }
   ],
   "narrative": {
     "northStar": "The Living Table",
-    "overview": "CTech Poker feels like sitting at a responsive physical table with other people, not operating a static card diagram. The dark room recedes so the felt, cards, people, and current decision carry the scene.",
-    "keyCharacteristics": ["Near-black wine room", "Oxblood active signal", "Gold reserved for chips and earned reward", "Motion reports real state", "Shared CTech typography and controls"],
-    "rules": [{"name": "The Physical Layer Rule", "body": "A shadow must answer what is above or inset from what.", "section": "elevation"}, {"name": "The One Glow Rule", "body": "Glow means live, focused, or personally active.", "section": "elevation"}],
-    "dos": ["Do preserve a 44px touch floor.", "Do keep route navigation in shared app chrome.", "Do keep dialogs reachable on short viewports."],
-    "donts": ["Don't build casino clutter.", "Don't repeat marketing heroes on task routes.", "Don't place persistent tools over portrait seats."]
+    "overview": "CTech Poker should feel like joining people around a responsive physical table, not operating a static card diagram. The near-black wine room recedes; felt, cards, chips, people, and the current decision hold the scene. Every meaningful state change is acknowledged through position, copy, contrast, or motion, so speed and fairness remain visible rather than merely promised.\n\nThe visual voice is vivid, trustworthy, and social. It combines an expansive, atmospheric public experience with restrained operational pages and a tactile game surface. IBM Plex, direct pt-BR copy, compact controls, explicit states, and disciplined spacing keep the interface credible; material color and purposeful motion give Poker its own identity within the CTech family.\n\nThe system rejects frozen-feeling play, casino clutter, manufactured urgency, childish reward language, and crypto-style spectacle. Vivid means present and legible—not louder, shinier, or more promotional.",
+    "keyCharacteristics": [
+      "A dark wine room concentrates attention on the active layer.",
+      "Oxblood marks the primary commitment, active identity, or navigational location.",
+      "Felt, card paper, walnut rail, and chip gold retain physical meanings.",
+      "Structural depth explains how table parts and transient layers relate.",
+      "Tactile controls answer quickly and keep states unmistakable.",
+      "Motion reports play; reduced motion preserves the same information without travel."
+    ],
+    "rules": [
+      {"name": "The Three Materials Rule", "body": "Felt means play, card paper means cards or deliberate light contrast, and gold means value, time, or achievement. Never distribute these colors as generic decoration.", "section": "colors"},
+      {"name": "The Oxblood Signal Rule", "body": "Oxblood identifies the primary commitment, current location, or active identity. One dominant oxblood signal per decision group is enough; a player's turn is gold so it cannot be confused with danger.", "section": "colors"},
+      {"name": "The Semantic Pair Rule", "body": "Suit, connection, turn, win, and error colors always travel with text, iconography, shape, or position. Hue alone never carries game state.", "section": "colors"},
+      {"name": "The Readout Rule", "body": "If a value changes during play or must align with another value, use IBM Plex Mono with tabular numerals. Player names and conversational copy stay in IBM Plex Sans.", "section": "typography"},
+      {"name": "The Game-Space Rule", "body": "Marketing and editorial headings may be fluid. Table UI adapts its structure instead of shrinking critical labels below readability.", "section": "typography"},
+      {"name": "The Blocking Table Rule", "body": "Portrait play owns exactly one viewport: header, flexible table, viewer HUD, and safe-area action dock. Do not add document scroll to solve table crowding.", "section": "layout"},
+      {"name": "The Structure-Before-Shrink Rule", "body": "Reflow, disclose, or relocate before reducing type or touch targets. Critical actions never fall below 44px.", "section": "layout"},
+      {"name": "The Stable Seat Rule", "body": "Seat positions remain stable during a hand; vacancies fill in server turn order, and hidden cards render exactly as received.", "section": "layout"},
+      {"name": "The Physical Layer Rule", "body": "Every shadow must answer what is above or inset from what. If it cannot, use a tonal shift or hairline.", "section": "elevation"},
+      {"name": "The One Glow Rule", "body": "Glow means live, focused, personally active, timed, or victorious. Inactive card grids and ordinary controls do not glow.", "section": "elevation"},
+      {"name": "The Information Motion Rule", "body": "Motion may explain dealing, collection, turn ownership, or panel state. It never delays the next valid action.", "section": "elevation"},
+      {"name": "The Complete Outline Rule", "body": "State surrounds the component with a complete border or ring. Never bolt a thick accent stripe onto one edge.", "section": "shapes"},
+      {"name": "The Radius Ladder Rule", "body": "Use the established 2/4/6/8/12/14/16px ladder or the full pill. A new radius requires a reusable geometric role.", "section": "shapes"}
+    ],
+    "dos": [
+      "Do make every card, chip, turn, connection, result, and recovery transition communicate a real state change.",
+      "Do keep Oxblood Signal rare enough to identify the primary commitment or active location immediately.",
+      "Do reserve felt for play, paper for cards or deliberate light contrast, and gold for value, time, and earned outcomes.",
+      "Do use IBM Plex Mono with tabular numerals for changing values and IBM Plex Sans for names and language.",
+      "Do pair color-coded suits and states with text, shape, iconography, or position.",
+      "Do keep keyboard focus visible, preserve 44px touch targets, and provide reduced-motion equivalents.",
+      "Do keep sandbox and wallet semantics explicit; the interface must never imply real-money mode is enabled by default.",
+      "Do render hidden cards exactly as delivered and let browser-side fairness checks determine verification."
+    ],
+    "donts": [
+      "Don't create static or frozen-feeling play; latency and processing require honest visible state.",
+      "Don't build casino clutter, flashing chrome, competing promotions, urgency pressure, or loss-chasing prompts.",
+      "Don't drift into crypto aesthetics, terminal theater, childish gamification, gradient text, or decorative grid backgrounds.",
+      "Don't use thick side accents, decorative double borders, ambient card glows, or oversized container radii.",
+      "Don't use tiny uppercase tracked eyebrows as repeated task-page scaffolding; reserve mono labels for real readout or category state.",
+      "Don't shrink critical labels or controls to fit. Reflow, disclose, or relocate first.",
+      "Don't animate layout properties, use elastic motion, or make users wait for choreography before acting.",
+      "Don't hard-code semantic brand colors inside components when the live CSS token already exists."
+    ]
   }
 }

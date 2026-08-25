@@ -186,3 +186,94 @@ func TestKickTimeoutRearmsWhenPlayerIsStillDealtIn(t *testing.T) {
 	}
 	retry.Stop()
 }
+
+// A player whose socket dropped on this instance and reconnected through
+// another one leaves this actor's in-memory disconnect mark uncleared — it
+// never sees the other instance's connect. The persisted LastActionAt is the
+// only evidence that crosses instances, so a player who acted inside
+// kickGrace must survive this actor's kick timer, and the stale mark must be
+// dropped instead of firing again.
+func TestKickTimeoutSparesAPlayerActiveOnAnotherInstance(t *testing.T) {
+	game := hand.NewTable([]*hand.Player{
+		{ID: "moved", Stack: 1000, Ready: true},
+		{ID: "other", Stack: 1000, Ready: true},
+	}, 10, 20)
+	actor := New("table-1", nil, true, func(string, hand.Snapshot) {})
+	defer func() { actor.afkSweepTimer.Stop() }()
+	actor.cached = game
+	actor.kickGrace = 5 * time.Minute
+	actor.disconnectedSince["moved"] = time.Now().Add(-10 * time.Minute)
+	// What the instance they actually reconnected to persisted for them.
+	for _, p := range game.PlayersForActor() {
+		if p.ID == "moved" {
+			p.LastActionAt = time.Now().Add(-time.Minute).UnixMilli()
+		}
+	}
+	var removed []string
+	actor.SetOnPlayerRemovedForActor(func(playerID, _ string, _ int64, _ string) {
+		removed = append(removed, playerID)
+	})
+
+	if err := actor.handleKickTimeout(context.Background(), kickTimeoutCmd{
+		PlayerID: "moved",
+		Reply:    make(chan error, 1),
+	}); err != nil {
+		t.Fatalf("handleKickTimeout: %v", err)
+	}
+	if len(removed) != 0 {
+		t.Fatalf("removed %v, want nobody", removed)
+	}
+	if findSeated(game, "moved") == nil {
+		t.Fatal("expected the player to keep their seat")
+	}
+	if _, marked := actor.disconnectedSince["moved"]; marked {
+		t.Fatal("expected the stale disconnect mark to be cleared")
+	}
+}
+
+// The same timer must still free a seat whose player really is gone: no
+// activity recorded anywhere inside kickGrace.
+func TestKickTimeoutStillRemovesATrulySilentPlayer(t *testing.T) {
+	game := hand.NewTable([]*hand.Player{
+		{ID: "gone", Stack: 1000, Ready: true},
+		{ID: "other", Stack: 1000, Ready: true},
+	}, 10, 20)
+	actor := New("table-1", nil, true, func(string, hand.Snapshot) {})
+	defer func() { actor.afkSweepTimer.Stop() }()
+	actor.cached = game
+	actor.kickGrace = 5 * time.Minute
+	actor.disconnectedSince["gone"] = time.Now().Add(-10 * time.Minute)
+	for _, p := range game.PlayersForActor() {
+		if p.ID == "gone" {
+			p.LastActionAt = time.Now().Add(-10 * time.Minute).UnixMilli()
+		}
+	}
+	var removed []string
+	actor.SetOnPlayerRemovedForActor(func(playerID, reason string, _ int64, _ string) {
+		if reason == "disconnected" {
+			removed = append(removed, playerID)
+		}
+	})
+
+	if err := actor.handleKickTimeout(context.Background(), kickTimeoutCmd{
+		PlayerID: "gone",
+		Reply:    make(chan error, 1),
+	}); err != nil {
+		t.Fatalf("handleKickTimeout: %v", err)
+	}
+	if len(removed) != 1 || removed[0] != "gone" {
+		t.Fatalf("removed = %v, want [gone]", removed)
+	}
+	if findSeated(game, "gone") != nil {
+		t.Fatal("expected the seat to be freed")
+	}
+}
+
+func findSeated(table *hand.Table, id string) *hand.Player {
+	for _, p := range table.PlayersForActor() {
+		if p.ID == id {
+			return p
+		}
+	}
+	return nil
+}

@@ -56,6 +56,8 @@ interface ApiStackProps extends cdk.StackProps {
   dailyRewardTableArn: string;
   playerSessionsTableArn: string;
   playerHandsTableArn: string;
+  handRevealsTableArn: string;
+  playerMatchupsTableArn: string;
   walletWebhookHmacSecretParam: string;
   sandboxPurchasesTableArn: string;
   pendingCashoutsTableArn: string;
@@ -116,6 +118,8 @@ export class PokerApiStack extends cdk.Stack {
       leaderboardStatsTableArn,
       playerSessionsTableArn,
       playerHandsTableArn,
+      handRevealsTableArn,
+      playerMatchupsTableArn,
       dailyRewardTableArn,
       walletWebhookHmacSecretParam,
       sandboxPurchasesTableArn,
@@ -155,7 +159,8 @@ export class PokerApiStack extends cdk.Stack {
     const tableArns = [
       tableStateArn, tableStateHistoryArn, actionLogArn, actionGuardsArn, roomsTableArn, playerProfilesTableArn,
       achievementProgressTableArn, leaderboardStatsTableArn, dailyRewardTableArn, playerSessionsTableArn,
-      playerHandsTableArn, playerNotesTableArn, handSharesTableArn, pokerStatsTableArn, highlightsTableArn, sandboxPurchasesTableArn,
+      playerHandsTableArn, handRevealsTableArn, playerMatchupsTableArn,
+      playerNotesTableArn, handSharesTableArn, pokerStatsTableArn, highlightsTableArn, sandboxPurchasesTableArn,
       pendingCashoutsTableArn, reactionEntitlementsTableArn, reactionPurchasesTableArn, cosmeticEntitlementsTableArn,
       cosmeticPurchasesTableArn, tableEntitlementsTableArn, socialEdgesTableArn, recentPlayersTableArn, socialEventsTableArn, playerReportsTableArn,
     ];

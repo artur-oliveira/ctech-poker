@@ -47,6 +47,9 @@ type Manager struct {
 	onPlayerRemoved        func(tableID, playerID, reason string, stack int64, holdID string)
 	autoRebuySweep         func(tableID, handID string, outcome hand.HandOutcome)
 	tableStreak            func(tableID, handID string, outcome hand.HandOutcome) map[string]int
+	streakStore            table.StreakStore
+	handHooks              table.HandHookClaimer
+	connStore              table.ConnStore
 	systemSettlementIntent func(context.Context, string, string, string, int64, string) (types.TransactWriteItem, error)
 	roomLoader             func(tableID string) (*roomstore.Room, bool, error)
 	reactionOwnership      func(ctx context.Context, playerID, reactionID string) (bool, error)
@@ -114,12 +117,34 @@ func (m *Manager) SetOnAutoRebuySweep(fn func(tableID, handID string, outcome ha
 
 // SetOnTableStreak installs the post-hand hot/cold streak hook. It returns
 // the freshly persisted per-player streak values (achievements.Service is
-// the durable writer), which the wrapper below writes straight into this
-// actor's own display cache via SetStreaksForActor — a direct call, not a
-// Dispatch, since this too fires synchronously on the actor's own goroutine
-// (same constraint as autoRebuySweep above).
+// the durable writer), which the wrapper below hands to SetStreaksForActor —
+// a direct call, not a Dispatch, since this too fires synchronously on the
+// actor's own goroutine (same constraint as autoRebuySweep above).
 func (m *Manager) SetOnTableStreak(fn func(tableID, handID string, outcome hand.HandOutcome) map[string]int) {
 	m.tableStreak = fn
+}
+
+// SetStreakStore gives every actor this instance creates the shared badge
+// store (internal/tablestreak). Without it the badge falls back to this
+// process's own tally, which is exactly what made two instances publish two
+// different numbers for one seat.
+func (m *Manager) SetStreakStore(s table.StreakStore) {
+	m.streakStore = s
+}
+
+// SetHandHookClaimer gives every actor this instance creates the shared
+// once-per-hand claim for post-hand hooks (internal/handhook). Without it the
+// only guard is each process's own completedHandNotified, which is what let a
+// second instance re-credit a hand's achievements and streak.
+func (m *Manager) SetHandHookClaimer(c table.HandHookClaimer) {
+	m.handHooks = c
+}
+
+// SetConnStore gives every actor this instance creates the fleet-wide
+// connection set (internal/tableconn) behind the seat's connection dot.
+// Without it the dot reflects only sockets terminating on this process.
+func (m *Manager) SetConnStore(s table.ConnStore) {
+	m.connStore = s
 }
 
 // GetOrCreateActor returns this instance's Actor for tableID, seeding the
@@ -179,6 +204,15 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	}
 
 	actor := table.New(tableID, m.store, trustCache, m.broadcastFor(tableID))
+	if m.streakStore != nil {
+		actor.SetStreakStoreForActor(m.streakStore)
+	}
+	if m.handHooks != nil {
+		actor.SetHandHookClaimerForActor(m.handHooks)
+	}
+	if m.connStore != nil {
+		actor.SetConnStoreForActor(m.connStore)
+	}
 	if m.store == nil && seed != nil {
 		actor.SetCachedForTest(seed())
 	}

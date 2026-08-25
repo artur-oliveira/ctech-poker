@@ -46,11 +46,30 @@ describe('RabbitHunt', () => {
     {stage: 'river'},
     {won_without_showdown: false},
     {board: ['AH', 'KD', 'QS', 'JC', 'TH']},
-    {shuffle_server_seed_hex: undefined},
+    {shuffle_server_seed_hex: undefined, shuffle_commit_hash: undefined, root_commit_hash: undefined},
     {seats: [{player_id: 'viewer', stack: 1, state: 'waiting', contributed: 0, dealt_in: false}]},
   ] satisfies Partial<TableSnapshot>[])('stays hidden when rabbit hunting is unavailable %#', overrides => {
     const {container} = render(<RabbitHunt snapshot={snapshot(overrides)} viewer="viewer" bigBlind={50}/>);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  test('offers the paid runout while the server still withholds the proof', async () => {
+    // How production actually looks the moment a hand is won without showdown:
+    // only the commitments are published, and the proof arrives after payment.
+    const onRequest = vi.fn();
+    const unpaid = snapshot({
+      shuffle_server_seed_hex: undefined, shuffle_commit_hash: 'commit', root_commit_hash: 'root',
+    });
+    const {rerender} = render(<RabbitHunt snapshot={unpaid} viewer="viewer" bigBlind={50}
+                                          onRequestRabbitHuntAction={onRequest}/>);
+    await userEvent.click(screen.getByRole('button', {name: /Ver por 50 fichas/}));
+    expect(onRequest).toHaveBeenCalled();
+    expect(screen.getByText('Verificando o baralho…')).toBeInTheDocument();
+
+    rerender(<RabbitHunt snapshot={{...unpaid, shuffle_server_seed_hex: 'seed'}} viewer="viewer" bigBlind={50}
+                         onRequestRabbitHuntAction={onRequest}/>);
+    await waitFor(() => expect(screen.getAllByTestId('rabbit-card')).toHaveLength(2));
+    expect(verifyDeck).toHaveBeenCalledWith('seed', 'commit');
   });
 
   test('derives the remaining runout from the revealed shuffle seed after verifying it', async () => {

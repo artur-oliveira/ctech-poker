@@ -200,6 +200,48 @@ This matches the **revised** model in `ARCHITECTURE.md §2` — *not* a Redis-le
   (`tablews.go:185-198`) so a lease-killed actor cannot hang a request (remediation T1 is already in code).
 - **Crash recovery is trivial**: state is durable after every single action, so a crashed instance loses at most the
   in-flight request; the next action (any instance) re-reads DynamoDB and proceeds.
+- **Anything a seat displays must be shared state too, not per-process state** (found 2026-08-25 from a client HAR).
+  Because several instances legitimately serve one table and all of them broadcast to the same sockets, per-process
+  display state produces two different answers for one seat, alternating on consecutive snapshots of the *same*
+  `snapshot_version`. That is what happened to the hot/cold streak badge: `Actor.streaks` was filled only from the
+  hands that one process ran, so players saw "V2, V4, V2, V4". The badge now lives in Valkey
+  (`internal/tablestreak`, key `poker:tablestreak:<tableID>`, 24h TTL): the actor re-reads it in `ensureLoaded` and
+  publishes a merge from `SetStreaksForActor`. DynamoDB (`achievements.Store`) stays the durable writer of record;
+  Valkey is the cross-instance display cache in front of it, and a Valkey failure degrades to the last known badge
+  instead of blanking seats.
+- **Only persisted state may justify removing a player** (same root cause, same date). The disconnect kick armed a
+  5-minute timer from the in-memory `disconnectedSince` mark: a player whose socket dropped on instance A and
+  reconnected through instance B left A's mark uncleared forever — A never sees B's connect — so A removed and cashed
+  out someone who was sitting at the table playing. `handleKickTimeout` now checks the persisted `LastActionAt`
+  first: activity inside `kickGrace` means alive on some instance, so the stale mark is dropped instead of fired. A
+  seat with no `LastActionAt` at all stays kickable (that is the path
+  `TestDisconnectKickRemovesSeatAcrossServers` covers), and silence past `kickGrace` is still removed — exactly what
+  `handleAFKSweep` does to connected players anyway.
+- **Non-idempotent side effects need a fleet-wide claim, not a process flag.** `Table.lastOutcome` is part of the
+  persisted state, so *any* instance that loads a table sitting on `Complete` and calls `broadcastAll` reaches
+  `notifyHandComplete` — and `broadcastAll` runs on every chat message, reaction, connect and disconnect, not only on
+  the action that completed the hand. The only guard used to be `Actor.completedHandNotified`, one field per process,
+  while the hooks behind it (`achievements.RecordHand`, `RecordTableStreak`, the auto-rebuy sweep) all use bare
+  `Increment`/`IncrementStreak` with no per-hand guard. A player typing in chat on instance B during the post-hand
+  countdown therefore re-credited a hand instance A had already paid: `hands_played` moved by two, streaks jumped,
+  tier unlocks fired twice. `internal/handhook` now grants the right to run them exactly once per
+  `(table_id, hand_id)`. It uses `SET NX` on the raw Valkey client rather than `cache.Backend`, whose `Get`/`Set` pair
+  cannot express an atomic claim — a read-then-write would let both instances observe "unclaimed". The claim fails
+  **open**: an unreachable Valkey degrades to the previous at-least-once behaviour, because skipping the hooks would
+  lose a hand's progression permanently while a double credit is bounded and visible.
+- **Client-visible deadlines belong in the table item, not in a `time.Time` field.** `TurnDeadlineUnixMs` already did
+  this; the post-hand countdown did not, so every instance started its own 12s window from its own `now` and only the
+  one that armed the timer emitted `next_hand_unix_ms` at all — clients served by anyone else saw a different
+  countdown or none. `StoredTable.NextHandDeadlineUnixMs` is committed with the state that completed the hand, and
+  `armNextHandTimer` resumes it through `pendingNextHandDeadline` exactly as `armTurnTimer` resumes the turn clock.
+  Persisting beats caching here: the value is born with a state transition, so it can ride the same conditional write.
+- **The seat's connection dot is fleet state.** `Actor.activeConns` only knows sockets terminating on its own process,
+  and `applyPresence` defaulted anything else to `connected`, so the dot was wrong in both directions: a stale local
+  mark showed a phantom disconnect for someone who reconnected elsewhere, and an instance that never saw the socket
+  showed a departed player as present. `internal/tableconn` (key `poker:tableconn:<tableID>`) holds the union;
+  `syncFleetConns` republishes this instance's set and reads the merge back, forced on connect/disconnect and paced to
+  `SyncInterval` otherwise so a busy table costs one round trip per interval instead of one per action. It is
+  **display only** — the kick path still rests on `LastActionAt`, per the rule above.
 - Engine (pure logic, no networking): `internal/engine/{hand,betting,sidepots,equity,deck,handeval}`.
   `sidepots.ComputeSidePots`, 7-card evaluator, and HMAC-SHA256 Fisher–Yates shuffle with rejection sampling are present
   and unit-tested. A scripted **hand-replay harness** lives at `cmd/handreplay` (`script.example.json`,

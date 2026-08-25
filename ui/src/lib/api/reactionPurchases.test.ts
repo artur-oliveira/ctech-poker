@@ -1,3 +1,4 @@
+import {QueryClient} from '@tanstack/react-query';
 import {describe, expect, test, vi} from 'vitest';
 
 const get = vi.fn();
@@ -6,8 +7,10 @@ vi.mock('./client', () => ({apiClient: {get: (...a: unknown[]) => get(...a), pos
 
 import {
   createReactionPurchase, currentReactionPurchase, getReactionPurchase, listReactionCatalog, listReactionPurchases,
-  ownedReactionIDs, refundReactionPurchase, type ReactionCatalogEntry, type ReactionPurchase
+  ownedReactionIDs, refundReactionPurchase, REACTION_PURCHASE_FIRST_PAGE_KEY, REACTION_PURCHASE_HISTORY_KEY,
+  type ReactionCatalogEntry, type ReactionPurchase
 } from './reactionPurchases';
+import {WALLET_QUERY_ROOT} from './wallet';
 
 const page = <T, >(data: T[], overrides: Record<string, unknown> = {}) => ({
   data: {data, has_next: false, next_cursor: null, has_previous: false, previous_cursor: null, ...overrides},
@@ -73,6 +76,17 @@ describe('reactionPurchases api', () => {
       entry({id: 'fire', owned: true}),
       entry({id: 'cold', owned: false}),
     ])).toEqual(new Set(['clap', 'fire']));
+  });
+
+  test('the store history and the table first page never share one cache entry', () => {
+    const client = new QueryClient();
+    // What the store's useInfiniteQuery writes. Under a shared key the table's
+    // plain useQuery would hand this object to TableReactions as `purchases`.
+    client.setQueryData(REACTION_PURCHASE_HISTORY_KEY, {pages: [{data: [purchase()]}], pageParams: [undefined]});
+    expect(client.getQueryData(REACTION_PURCHASE_FIRST_PAGE_KEY)).toBeUndefined();
+    // Both must still be swept by the single wallet-root invalidation.
+    client.setQueryData(REACTION_PURCHASE_FIRST_PAGE_KEY, [purchase()]);
+    expect(client.getQueryCache().findAll({queryKey: WALLET_QUERY_ROOT})).toHaveLength(2);
   });
 
   test('currentReactionPurchase prioritizes confirmed over pending, newest first as a tiebreak', () => {

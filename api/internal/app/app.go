@@ -34,6 +34,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/dailyreward"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/entitlement"
+	"gopkg.aoctech.app/poker/api/internal/handhook"
 	"gopkg.aoctech.app/poker/api/internal/handreveal"
 	"gopkg.aoctech.app/poker/api/internal/handshare"
 	"gopkg.aoctech.app/poker/api/internal/highlights"
@@ -53,9 +54,11 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
 	"gopkg.aoctech.app/poker/api/internal/social"
 	"gopkg.aoctech.app/poker/api/internal/table"
+	"gopkg.aoctech.app/poker/api/internal/tableconn"
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
+	"gopkg.aoctech.app/poker/api/internal/tablestreak"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
 	"gopkg.aoctech.app/poker/api/internal/wsdrain"
 
@@ -304,8 +307,13 @@ func newHighlightsStore(db *dynamodb.Client, cfg *config.Config) *highlights.Sto
 func newAchievementStore(db *dynamodb.Client, cfg *config.Config) *achievements.Store {
 	return achievements.NewStore(db, cfg.Env)
 }
-func newAchievementService(store *achievements.Store) *achievements.Service {
-	return achievements.NewService(store)
+func newAchievementService(store *achievements.Store, cacheBackend cache.Backend) *achievements.Service {
+	svc := achievements.NewService(store)
+	// The "same pocket pair" streak remembers which pair a player last won
+	// with. That memory has to be shared: any instance can serve the hand
+	// that completes (see Service.cache).
+	svc.SetCache(cacheBackend)
+	return svc
 }
 func newLeaderboardStore(db *dynamodb.Client, cfg *config.Config) *leaderboard.Store {
 	return leaderboard.NewStore(db, cfg.Env)
@@ -460,7 +468,7 @@ func tableCurrencyMode(ctx context.Context, rooms roomModeReader, tableID string
 	return room.CurrencyMode, nil
 }
 
-func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store) *tablemanager.Manager {
+func newTableManager(leases *tablelease.Service, store *tablestore.Store, cacheBackend cache.Backend, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
 		data, err := goproto.Marshal(message)
@@ -597,6 +605,21 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, reg ws
 		return r, true, nil
 	}
 	mgr := tablemanager.NewManager(leases, store, broadcast, roomLoader, onHandComplete)
+	// The streak badge is shared state, not per-process state: several
+	// instances can run an actor for one table and each used to publish its
+	// own tally (see internal/tablestreak).
+	mgr.SetStreakStore(tablestreak.NewService(cacheBackend))
+	// Post-hand hooks credit non-idempotent counters, and any instance that
+	// merely broadcasts a table already sitting on Complete used to fire them
+	// again (see internal/handhook). The claim needs SET NX, which
+	// cache.Backend cannot express, so it takes the raw client — same reason
+	// newPresenceStore does.
+	if redis, ok := cacheBackend.(*cache.RedisBackend); ok {
+		mgr.SetHandHookClaimer(handhook.NewService(redis.Client()))
+	}
+	// The seat's connection dot has to see sockets terminating on other
+	// instances too (see internal/tableconn).
+	mgr.SetConnStore(tableconn.NewService(cacheBackend))
 	mgr.SetOnTableStreak(func(tableID, handID string, outcome hand.HandOutcome) map[string]int {
 		mode, err := tableCurrencyMode(context.Background(), rooms, tableID)
 		if err != nil {

@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   reactionProps: null as Record<string, unknown> | null,
   purchaseProps: null as Record<string, unknown> | null,
   noteProps: null as Record<string, unknown> | null,
+  inviteProps: null as Record<string, unknown> | null,
+  preferencesProps: null as Record<string, unknown> | null,
   notification: vi.fn(),
   updateMe: vi.fn(),
   blockPlayer: vi.fn(),
@@ -96,7 +98,10 @@ vi.mock('@/components/table/HandRankingsDialog', () => ({
     <button aria-pressed={open} onClick={() => onOpenChangeAction(!open)}>rankings</button>,
 }));
 vi.mock('@/components/table/InviteDialog', () => ({
-  InviteDialog: ({url}: { url: string }) => <span>invite:{url}</span>,
+  InviteDialog: (props: Record<string, unknown>) => {
+    mocks.inviteProps = props;
+    return <span>invite:{String(props.url)}</span>;
+  },
 }));
 vi.mock('@/components/table/LeaveDialog', () => ({
   LeaveDialog: ({onLeftAction}: { onLeftAction: (amount: number) => void }) =>
@@ -113,7 +118,12 @@ vi.mock('@/components/table/PlayerNoteDialog', () => ({
   },
 }));
 vi.mock('@/components/table/PerimeterTimer', () => ({PerimeterTimer: () => <span>next-hand-timer</span>}));
-vi.mock('@/components/table/TablePreferencesDialog', () => ({TablePreferencesDialog: () => null}));
+vi.mock('@/components/table/TablePreferencesDialog', () => ({
+  TablePreferencesDialog: (props: Record<string, unknown>) => {
+    mocks.preferencesProps = props;
+    return null;
+  },
+}));
 vi.mock('@/components/table/RealityCheck', () => ({RealityCheck: () => null}));
 vi.mock('@/components/table/SessionRecap', () => ({
   SessionRecap: ({onCloseAction}: { onCloseAction: () => void }) =>
@@ -553,6 +563,16 @@ describe('table page integration', () => {
       .toBeInTheDocument();
   });
 
+  test('keeps the preferences and invite triggers on their own, for layouts without the utility menu', () => {
+    // .table-utility-menu-slot is display:none outside portrait ≤1023px, so
+    // these dialogs are the only way into preferences and invites on desktop:
+    // suppressing their triggers left those actions unreachable there.
+    setQueries({roomData: {...room, visibility: 'private', share_code: 'ABC123'}});
+    render(<TablePage/>);
+    expect(mocks.preferencesProps?.showTrigger).not.toBe(false);
+    expect(mocks.inviteProps?.showTrigger).not.toBe(false);
+  });
+
   test('hides the invite affordance on a private table the viewer did not create', () => {
     setQueries({roomData: {...room, visibility: 'private'}});
     render(<TablePage/>);
@@ -620,7 +640,7 @@ describe('table page integration', () => {
     setQueries({
       data: {
         'player:me': {sandbox_balance: 4200},
-        'wallet:reaction-purchases': purchases,
+        'wallet:reaction-purchases:first-page': purchases,
       }
     });
     const {rerender} = render(<TablePage/>);

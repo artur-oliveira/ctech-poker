@@ -114,6 +114,8 @@ new PokerApiStack(app, id('API'), {
   dailyRewardTableArn: dynamoStack.tables.get('poker_daily_reward')!.tableArn,
   playerSessionsTableArn: dynamoStack.tables.get('poker_player_sessions')!.tableArn,
   playerHandsTableArn: dynamoStack.tables.get('poker_player_hands')!.tableArn,
+  handRevealsTableArn: dynamoStack.tables.get('poker_hand_reveals')!.tableArn,
+  playerMatchupsTableArn: dynamoStack.tables.get('poker_player_matchups')!.tableArn,
   walletWebhookHmacSecretParam: pokerParameters.walletWebhookHmacSecret,
   sandboxPurchasesTableArn: dynamoStack.tables.get('poker_sandbox_purchases')!.tableArn,
   pendingCashoutsTableArn: dynamoStack.tables.get('poker_pending_cashouts')!.tableArn,

@@ -20,8 +20,16 @@ export function RabbitHunt({snapshot, viewer, bigBlind, pending, onRequestRabbit
   const [verificationFailed, setVerificationFailed] = useState(false);
   const viewerParticipated = snapshot.seats.some(seat => seat.player_id === viewer && seat.dealt_in);
   const serverRunoutAvailable = Boolean(snapshot.runout_cards && snapshot.runout_cards.length > 0);
+  // The offer is gated on the deck *commitment*, never on the proof: the
+  // server withholds the seed, the salts and the runout of a hand won without
+  // showdown until this viewer has paid (snapshot.go's rabbitHuntPaid check),
+  // so requiring them here made the button that triggers the payment depend on
+  // data only the payment produces — it never rendered. Verification still
+  // happens in the browser, below, once the paid snapshot arrives.
+  const commitmentPublished = Boolean(snapshot.shuffle_commit_hash || snapshot.root_commit_hash ||
+    snapshot.shuffle_server_seed_hex || serverRunoutAvailable);
   const available = snapshot.stage === 'complete' && snapshot.won_without_showdown &&
-    snapshot.board.length < 5 && (Boolean(snapshot.shuffle_server_seed_hex) || serverRunoutAvailable) && viewerParticipated;
+    snapshot.board.length < 5 && commitmentPublished && viewerParticipated;
   
   useEffect(() => {
     if (!requested || !available) return undefined;

@@ -36,6 +36,7 @@ import {
   currentReactionPurchase,
   listReactionCatalog,
   listReactionPurchases,
+  REACTION_PURCHASE_FIRST_PAGE_KEY,
   type ReactionCatalogEntry
 } from '@/lib/api/reactionPurchases';
 import {useTablePreferences} from '@/lib/tablePreferences';
@@ -201,7 +202,7 @@ function TableContent() {
   const {data: reactionPurchases = [], isLoading: reactionPurchasesLoading} = useQuery({
     // First page only: this list drives the in-table "refunding" badge, not
     // ownership (which comes from the catalog's `owned` flag).
-    queryKey: ['wallet', 'reaction-purchases'],
+    queryKey: REACTION_PURCHASE_FIRST_PAGE_KEY,
     queryFn: () => listReactionPurchases().then(page => page.data),
     enabled: valid && seated
   });
@@ -551,14 +552,12 @@ function TableContent() {
             </span>
             <span className="table-preferences-standalone"><TablePreferencesDialog
               open={preferencesOpen} onOpenChangeAction={setPreferencesOpen}
-              showTrigger={false}
               runItTwiceAvailable={Boolean(room?.run_it_twice_enabled)}
                                     runItTwice={Boolean(viewerSeat?.run_it_twice)}
                                     onRunItTwiceChange={rt.setRunItTwice}
                                     onLockedFeltAction={() => router.push('/store#felt')}/></span>
             {canInvite && <span className="table-invite-standalone"><InviteDialog
-              url={inviteUrl} roomId={id} open={inviteOpen} onOpenChangeAction={setInviteOpen}
-              showTrigger={false}/></span>}
+              url={inviteUrl} roomId={id} open={inviteOpen} onOpenChangeAction={setInviteOpen}/></span>}
             {viewerSeat && !isPaused &&
                 <Button type="button" variant="ghost" size="icon" className="table-pause-action"
                         aria-label="Sentar fora" disabled={rt.readyPending}

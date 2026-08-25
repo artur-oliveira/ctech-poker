@@ -32,6 +32,15 @@ export async function listReactionCatalog() {
   return (await apiClient.get<Page<ReactionCatalogEntry>>('/v1.0/wallet/reaction-purchase/catalog')).data.data;
 }
 
+// TanStack caches by key hash alone — it does not distinguish a useQuery from
+// a useInfiniteQuery. The store paginates this list while the table reads only
+// its first page, so the two MUST NOT share a key: whichever mounts second
+// renders the other's shape ({pages, pageParams} instead of an array) until its
+// own fetch resolves, which crashed the table for anyone arriving from the
+// store (and stayed crashed while the API was unreachable).
+export const REACTION_PURCHASE_HISTORY_KEY = ['wallet', 'reaction-purchases', 'history'] as const;
+export const REACTION_PURCHASE_FIRST_PAGE_KEY = ['wallet', 'reaction-purchases', 'first-page'] as const;
+
 export async function listReactionPurchases(cursor?: string) {
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
   return (await apiClient.get<Page<ReactionPurchase>>(`/v1.0/wallet/reaction-purchase/${query}`)).data;

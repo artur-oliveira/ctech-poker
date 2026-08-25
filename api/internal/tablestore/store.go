@@ -123,6 +123,16 @@ type StoredTable struct {
 	// what a bare in-process deadline would do since nothing else persists
 	// when a turn actually started. Zero means no active turn.
 	TurnDeadlineUnixMs int64 `dynamodbav:"turn_deadline_unix_ms,omitempty"`
-	LastActionAt       int64 `dynamodbav:"last_action_at"`
-	Archived           bool  `dynamodbav:"archived,omitempty"`
+	// NextHandDeadlineUnixMs is the post-hand countdown's absolute expiry
+	// (unix millis) for a table sitting on Complete, committed with the state
+	// that completed the hand. It exists for exactly the reason
+	// TurnDeadlineUnixMs above does: the countdown was a bare in-process
+	// time.AfterFunc plus an unpersisted time.Time, so every actor that
+	// (re)loaded this table started its own 12s window from its own now, and
+	// only the actor that happened to arm it emitted next_hand_unix_ms at all
+	// — clients served by any other instance saw either a different countdown
+	// or none. Zero means the table is not on a post-hand countdown.
+	NextHandDeadlineUnixMs int64 `dynamodbav:"next_hand_deadline_unix_ms,omitempty"`
+	LastActionAt           int64 `dynamodbav:"last_action_at"`
+	Archived               bool  `dynamodbav:"archived,omitempty"`
 }

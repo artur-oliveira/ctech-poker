@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
 
@@ -241,5 +242,93 @@ func TestTierCrossedReturnsHighestTierAcrossLargeIncrement(t *testing.T) {
 	stars, ok := TierCrossed(KeyWins, 0, 100)
 	if !ok || stars != 3 {
 		t.Fatalf("got (%d,%v), want (3,true)", stars, ok)
+	}
+}
+
+// pocketPairWin is one hand where p1 wins holding the given pocket pair. The
+// full board is required: the pocket-pair branch sits behind
+// hasCompleteCards, which needs five community cards to parse.
+func pocketPairWin(rank string) hand.HandOutcome {
+	return hand.HandOutcome{
+		Winners:      []string{"p1"},
+		Participants: []string{"p1"},
+		Board:        []string{"2c", "5d", "8h", "9s", "Tc"},
+		PlayerHands:  map[string]hand.PlayerHandInfo{"p1": {HoleCards: [2]string{rank + "h", rank + "s"}}},
+	}
+}
+
+// "Which pocket pair did this player last win with" decided whether
+// KeySamePocketPairStreak continued or reset, and it lived in one process's
+// map. Any instance can serve the hand that completes, so the streak advanced
+// or reset depending purely on which one did — the same class of bug as the
+// per-table streak badge.
+func TestSamePocketPairStreakIsSharedBetweenInstances(t *testing.T) {
+	ctx := context.Background()
+	store := &memStore{progress: map[string]map[string]int{}}
+	backend := cache.NewMemoryBackend(16)
+	// Two API instances over one progress store and one shared cache.
+	instanceA, instanceB := NewServiceWithStore(store), NewServiceWithStore(store)
+	instanceA.SetCache(backend)
+	instanceB.SetCache(backend)
+
+	if _, err := instanceA.RecordHand(ctx, "table-1", "sandbox", pocketPairWin("K")); err != nil {
+		t.Fatal(err)
+	}
+	// The next hand of the same pair completes on the OTHER instance.
+	if _, err := instanceB.RecordHand(ctx, "table-1", "sandbox", pocketPairWin("K")); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.progress["sandbox#p1"][KeySamePocketPairStreak]; got != 2 {
+		t.Fatalf("streak = %d, want 2 — instance B must see A's pair", got)
+	}
+
+	// A different pair restarts the streak, from either instance.
+	if _, err := instanceA.RecordHand(ctx, "table-1", "sandbox", pocketPairWin("Q")); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.progress["sandbox#p1"][KeySamePocketPairStreak]; got != 1 {
+		t.Fatalf("streak = %d, want 1 after a different pair", got)
+	}
+}
+
+// A hand that does not qualify clears the shared memory, so the next win with
+// that same pair starts a fresh streak rather than continuing the old one.
+func TestSamePocketPairStreakClearsOnANonQualifyingHand(t *testing.T) {
+	ctx := context.Background()
+	store := &memStore{progress: map[string]map[string]int{}}
+	svc := NewServiceWithStore(store)
+	svc.SetCache(cache.NewMemoryBackend(16))
+
+	if _, err := svc.RecordHand(ctx, "table-1", "sandbox", pocketPairWin("K")); err != nil {
+		t.Fatal(err)
+	}
+	// Same pair, but p1 loses: not a qualifying hand.
+	lost := pocketPairWin("K")
+	lost.Winners = nil
+	if _, err := svc.RecordHand(ctx, "table-1", "sandbox", lost); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.RecordHand(ctx, "table-1", "sandbox", pocketPairWin("K")); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.progress["sandbox#p1"][KeySamePocketPairStreak]; got != 1 {
+		t.Fatalf("streak = %d, want 1 — the loss cleared the remembered pair", got)
+	}
+}
+
+// Without a cache the service keeps its own map, so dev and single-instance
+// deployments behave exactly as before.
+func TestSamePocketPairStreakFallsBackToLocalMemory(t *testing.T) {
+	ctx := context.Background()
+	store := &memStore{progress: map[string]map[string]int{}}
+	svc := NewServiceWithStore(store)
+
+	for range 2 {
+		if _, err := svc.RecordHand(ctx, "table-1", "sandbox", pocketPairWin("K")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := store.progress["sandbox#p1"][KeySamePocketPairStreak]; got != 2 {
+		t.Fatalf("streak = %d, want 2", got)
 	}
 }

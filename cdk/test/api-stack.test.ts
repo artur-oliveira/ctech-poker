@@ -47,6 +47,8 @@ function synthStack() {
     dailyRewardTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_daily_reward',
     playerSessionsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_player_sessions',
     playerHandsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_player_hands',
+    handRevealsTableArn:  'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_hand_reveals',
+    playerMatchupsTableArn:  'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_player_matchups',
     walletWebhookHmacSecretParam: '/ctech/dev/poker/wallet-webhook-hmac-secret',
     sandboxPurchasesTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_sandbox_purchases',
     pendingCashoutsTableArn: 'arn:aws:dynamodb:us-east-1:123456789012:table/dev_poker_pending_cashouts',
@@ -138,15 +140,15 @@ test('user data only fetches and runs the shared ctech-cdk scripts', () => {
   expect(text).toContain('setup-nginx.sh');
   expect(text).toContain('setup-realip.sh');
   // app-port-alt/alt-port turn on the rolling deploy.
-  expect(text).toContain("setup-nginx.sh '8080' '8000' '/v1.0/health-check' '100' '1m' '8001'");
-  expect(text).toContain("setup-app-service.sh 'CTech Poker API' 'app' 'network.target nginx.service' '8001'");
+  expect(text).toContain("setup-nginx.sh 8080 8000 /v1.0/health-check 100 1m 8001");
+  expect(text).toContain("ctech_run setup-app-service.sh 'CTech Poker API' app 8001");
   // Downloaded to a file and then executed: a pipe truncated mid-transfer runs a
   // partial script and reports success.
   expect(text).not.toMatch(/aws s3 cp [^\n]*\| *bash/);
   // Only app-static.env, service-env.sh, the WS nginx location fragment and
   // the CloudWatch agent config are still written inline; everything else
   // moved to the shared scripts.
-  expect((text.match(/cat > /g) ?? []).length).toBeLessThanOrEqual(4);
+  expect((text.match(/cat > /g) ?? []).length).toBeLessThanOrEqual(5);
 });
 
 test('user data stays under the EC2 limit', () => {

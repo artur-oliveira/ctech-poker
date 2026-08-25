@@ -151,7 +151,7 @@ func (s *Store) LoadTable(ctx context.Context, tableID string) (*StoredTable, er
 // ctech-wallet/api/internal/repositories/wallet.go's mutate/resolveTxErr
 // shape: on a failed condition, re-read the guard to disambiguate a version
 // race from a duplicate submission.
-func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID string, expectedVersion int, newState hand.State, activity TableActivity, turnDeadlineUnixMs int64, entry ActionLogEntry, extra ...types.TransactWriteItem) error {
+func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID string, expectedVersion int, newState hand.State, activity TableActivity, turnDeadlineUnixMs, nextHandDeadlineUnixMs int64, entry ActionLogEntry, extra ...types.TransactWriteItem) error {
 	entry.Timestamp = timeNowFunc().UnixMilli()
 	stateItem, err := dynamo.Encode(struct {
 		State hand.State `dynamodbav:"state"`
@@ -174,14 +174,18 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 		":state":        stateAV,
 		":activity":     activityItem["activity"],
 		":turnDeadline": mustN(int(turnDeadlineUnixMs)),
-		":lastActionAt": mustN(int(timeNowFunc().Unix())),
+		// Written on every commit, zero included: a table leaving Complete must
+		// clear the countdown, not inherit the previous hand's expiry.
+		":nextHandDeadline": mustN(int(nextHandDeadlineUnixMs)),
+		":lastActionAt":     mustN(int(timeNowFunc().Unix())),
 	}
 	names := map[string]string{
 		"#version": "version",
 		"#state":   "state",
 	}
 	stateTx := s.state.BuildRawUpdateTxItem(tableID, nil,
-		"SET #version = :newVersion, hand_id = :handID, #state = :state, activity = :activity, turn_deadline_unix_ms = :turnDeadline, last_action_at = :lastActionAt",
+		"SET #version = :newVersion, hand_id = :handID, #state = :state, activity = :activity, "+
+			"turn_deadline_unix_ms = :turnDeadline, next_hand_deadline_unix_ms = :nextHandDeadline, last_action_at = :lastActionAt",
 		"attribute_exists(pk) AND #version = :expected", names, values)
 
 	logItem, err := dynamo.Encode(struct {

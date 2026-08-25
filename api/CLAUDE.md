@@ -68,6 +68,21 @@ See `docs/plans/2026-08-21-entry-fee-entitlement.md`. **Still blocking, found 20
   hook). `Actor.SetStreaksForActor` (backing the hot/cold streak badge, `Seat.CurrentStreak`) is the pattern to copy:
   a plain exported method that mutates actor-owned cache state directly, applied onto `ViewFor`'s output the same way
   `applyPresence` already does for `ConnectionState`.
+- **Per-seat display state belongs in Valkey, not in the actor.** Several instances serve one table and all broadcast
+  to the same sockets, so a process-local tally shows two different values for one seat, alternating between
+  broadcasts (the streak badge read "V2, V4, V2, V4" in production). `internal/tablestreak` holds it now:
+  `ensureLoaded` re-reads it, `SetStreaksForActor` merges into it, and `Actor.streaks` is only that read — never the
+  source of truth. Removing a player follows the same rule with a harder edge: **only persisted state
+  (`LastActionAt`) may justify a removal.** In-memory presence marks (`disconnectedSince`) are instance-local, and
+  the disconnect kick built on one was cashing out players who had merely reconnected through another instance.
+- **A process flag cannot deduplicate a fleet-wide side effect.** `Table.lastOutcome` is persisted, so any instance
+  that broadcasts an already-`Complete` table runs `notifyHandComplete` — chat, reactions and connect/disconnect all
+  call `broadcastAll`. Guard non-idempotent hooks with `internal/handhook` (`SET NX` per `(table_id, hand_id)`), not
+  with a field. Pick the store by what the state *is*: an atomic claim needs the raw Valkey client (`cache.Backend`'s
+  `Get`/`Set` cannot express one); a value born with a state transition belongs in the same conditional write
+  (`StoredTable.NextHandDeadlineUnixMs`, resumed via `pendingNextHandDeadline` like the turn clock); merely shared
+  display state goes in `cache.Backend` (`tablestreak`, `tableconn`). Everything cross-instance fails **open** —
+  degrade the display or accept a bounded duplicate, never stall the actor goroutine or drop a player's progression.
 - **`handeval` is table-driven — never edit `handeval/ref` without regenerating.** `ref` is the reference evaluator and
   the sole definition of the canonical hand ordering; `tables.bin` is compiled from it by
   `go generate ./internal/engine/handeval/...` and embedded. Changing `ref` without regenerating leaves stale tables

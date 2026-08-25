@@ -3,10 +3,13 @@ package achievements
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
 
@@ -18,9 +21,75 @@ type progressStore interface {
 }
 
 type Service struct {
-	store          progressStore
-	mu             sync.Mutex
+	store progressStore
+	// cache is the cross-instance home of lastPocketPair below (Valkey in
+	// production). Any instance can run the hand that completes, so a
+	// process-local memory of "which pocket pair did this player last win
+	// with" made KeySamePocketPairStreak reset or continue depending purely
+	// on which instance happened to serve the hand. nil in dev/tests, where
+	// the map is the whole fleet's memory.
+	cache cache.Backend
+	mu    sync.Mutex
+	// lastPocketPair is the no-cache fallback only — see cache above.
 	lastPocketPair map[string]byte
+}
+
+// pocketPairKeyPrefix namespaces the shared copy of lastPocketPair.
+const pocketPairKeyPrefix = "poker:achv:lastpocketpair:"
+
+// pocketPairTTL keeps a player's last winning pocket pair alive across a
+// normal session gap. Expiry only resets the streak, which is also what a
+// non-qualifying hand does, so it can never over-award.
+const pocketPairTTL = 30 * 24 * time.Hour
+
+// SetCache wires the shared store for cross-instance service state. Set once,
+// at construction, by app wiring.
+func (s *Service) SetCache(c cache.Backend) { s.cache = c }
+
+// lastPocketPairFor reads the rank this player last won with, from the shared
+// cache when there is one. A read error is reported as "no previous pair",
+// which resets the streak — the same safe direction the rest of RecordHand
+// takes on missing data.
+func (s *Service) lastPocketPairFor(ctx context.Context, stateKey string) byte {
+	if s.cache == nil {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.lastPocketPair[stateKey]
+	}
+	raw, found, err := s.cache.Get(ctx, pocketPairKeyPrefix+stateKey)
+	if err != nil {
+		slog.Warn("achievements: last pocket pair load failed", "key", stateKey, "err", err)
+		return 0
+	}
+	if !found || len(raw) != 1 {
+		return 0
+	}
+	return raw[0]
+}
+
+// storeLastPocketPair records rank as this player's last winning pocket pair,
+// or clears it when rank is 0 (the hand did not qualify).
+func (s *Service) storeLastPocketPair(ctx context.Context, stateKey string, rank byte) {
+	if s.cache == nil {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if rank == 0 {
+			delete(s.lastPocketPair, stateKey)
+		} else {
+			s.lastPocketPair[stateKey] = rank
+		}
+		return
+	}
+	key := pocketPairKeyPrefix + stateKey
+	var err error
+	if rank == 0 {
+		err = s.cache.Delete(ctx, key)
+	} else {
+		err = s.cache.Set(ctx, key, []byte{rank}, int(pocketPairTTL.Seconds()))
+	}
+	if err != nil {
+		slog.Warn("achievements: last pocket pair save failed", "key", stateKey, "err", err)
+	}
 }
 
 type HandMetric struct {
@@ -294,20 +363,18 @@ func (s *Service) RecordHand(ctx context.Context, tableID, mode string, outcome 
 		}
 		rank, paired := pocketPairRank(outcome.PlayerHands[id].HoleCards)
 		stateKey := mode + "#" + id
-		s.mu.Lock()
-		last := s.lastPocketPair[stateKey]
+		last := s.lastPocketPairFor(ctx, stateKey)
 		qualifies := winnerSet[id] && paired
 		reset, resetTo := true, 0
+		next := byte(0)
 		if qualifies {
 			resetTo = 1
 			if last == rank {
 				reset = false
 			}
-			s.lastPocketPair[stateKey] = rank
-		} else {
-			delete(s.lastPocketPair, stateKey)
+			next = rank
 		}
-		s.mu.Unlock()
+		s.storeLastPocketPair(ctx, stateKey, next)
 		if err := streak(id, KeySamePocketPairStreak, reset, resetTo); err != nil {
 			return nil, err
 		}
