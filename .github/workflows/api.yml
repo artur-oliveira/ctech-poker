@@ -212,17 +212,34 @@ jobs:
             *)     API_HOST="poker-api-dev.aoctech.app" ;;
           esac
           for ATTEMPT in $(seq 1 12); do
-            BODY=$(curl --fail --silent --show-error \
+            # No --fail: it discards the body on 4xx/5xx, which is exactly the
+            # response worth reading. The status, body and edge headers are
+            # captured instead, so a rejection at the CDN/LB is distinguishable
+            # from an app that is simply still booting the new release.
+            HTTP_CODE=$(curl --silent --show-error \
               --connect-timeout 3 --max-time 8 \
-              "https://${API_HOST}/v1.0/health") || true
-            RELEASE=$(jq -r '.releaseId // empty' <<< "$BODY")
+              --output /tmp/health.body --dump-header /tmp/health.head \
+              --write-out '%{http_code} via %{remote_ip}' \
+              "https://${API_HOST}/v1.0/health") || HTTP_CODE="000 (curl failed)"
+            # jq exits non-zero on a non-JSON body (an HTML block page), and the
+            # step runs under `bash -e`, so this must not be allowed to abort
+            # the retry loop.
+            RELEASE=$(jq -r '.releaseId // empty' < /tmp/health.body 2>/dev/null || true)
             if [ "$RELEASE" = "$VERSION" ]; then
               echo "Release $VERSION is live"
               exit 0
             fi
-            echo "Attempt $ATTEMPT: expected $VERSION, received ${RELEASE:-no healthy response}"
+            echo "Attempt $ATTEMPT: HTTP $HTTP_CODE"
+            echo "  expected releaseId: $VERSION"
+            echo "  received releaseId: ${RELEASE:-<none>}"
+            echo "  body: $(head -c 300 /tmp/health.body | tr -d '\r\n')"
+            # server/cf-ray identify the edge that answered; a 403 carrying them
+            # with no app headers means the request never reached the API.
+            grep -iE '^(server|cf-ray|cf-mitigated|x-request-id|retry-after|content-type):' \
+              /tmp/health.head | sed 's/^/  /' || true
             sleep 5
           done
+          echo "Health gate never observed releaseId $VERSION after 12 attempts."
           exit 1
 
       - name: Restore previous artifact
