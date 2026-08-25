@@ -1,5 +1,6 @@
 import type {Metadata, Viewport} from 'next';
 import {IBM_Plex_Mono, IBM_Plex_Sans} from 'next/font/google';
+import {SITE_URL} from '@/lib/routeMetadata';
 import {QueryProvider} from '@/lib/providers/QueryProvider';
 import {Notifier} from '@/components/Notifier';
 import {RouteAnnouncer} from '@/components/RouteAnnouncer';
@@ -10,7 +11,7 @@ const sans = IBM_Plex_Sans({subsets: ['latin'], weight: ['400', '500', '600', '7
 const mono = IBM_Plex_Mono({subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-mono'});
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://poker.aoctech.app'),
+  metadataBase: new URL(SITE_URL),
   title: {default: 'CTech Poker · a mesa está pronta', template: '%s · CTech Poker'},
   description: 'Texas Hold’em prático, social e responsivo no navegador. Jogue em mesas sandbox de 2 a 9 jogadores com provably fair, ranking e conquistas com seus amigos.',
   applicationName: 'CTech Poker',

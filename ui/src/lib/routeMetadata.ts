@@ -1,5 +1,7 @@
 import type {Metadata} from 'next';
 
+export const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://poker.aoctech.app';
+
 const OG_SIZE = {width: 1200, height: 630};
 
 type RouteMetadataOptions = {
@@ -30,7 +32,7 @@ export function routeMetadata({
       title: `${title} · CTech Poker`,
       description,
       images: [{url: imagePath, ...OG_SIZE, alt: `${title} no CTech Poker`}, {
-        url: '/og-image.png',
+        url: '/og-image.webp',
         ...OG_SIZE,
         alt: 'CTech Poker · sua mesa de poker com amigos'
       }]

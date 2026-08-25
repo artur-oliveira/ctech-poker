@@ -5,6 +5,13 @@ import type {Metadata} from 'next';
 import AchievementsLayout, {metadata as achievementsMetadata} from './achievements/layout';
 import CallbackLayout, {metadata as callbackMetadata} from './callback/layout';
 import GuideLayout, {metadata as guideMetadata} from './guide/layout';
+import GuideBasicsLayout, {metadata as guideBasicsMetadata} from './guide/basics/layout';
+import GuideTableLayout, {metadata as guideTableMetadata} from './guide/table/layout';
+import GuideHandsLayout, {metadata as guideHandsMetadata} from './guide/hands/layout';
+import GuideAchievementsLayout, {metadata as guideAchievementsMetadata} from './guide/achievements/layout';
+import GuideStoreLayout, {metadata as guideStoreMetadata} from './guide/store/layout';
+import GuideProfileLayout, {metadata as guideProfileMetadata} from './guide/profile/layout';
+import GuideCommunityLayout, {metadata as guideCommunityMetadata} from './guide/community/layout';
 import HandsLayout, {metadata as handsMetadata} from './hands/layout';
 import HandsHistoryLayout, {metadata as handsHistoryMetadata} from './hands/history/layout';
 import HandsReplayLayout, {metadata as handsReplayMetadata} from './hands/replay/layout';
@@ -19,10 +26,18 @@ import GlobalError from './global-error';
 import NotFoundPage from './not-found';
 import UnavailablePage, {metadata as unavailableMetadata} from './unavailable/page';
 import {OG_PREVIEWS} from '@/lib/ogPreviews';
+import {INDEXABLE_ROUTES} from './sitemap';
 
 const layouts = [
   {path: '/achievements', Layout: AchievementsLayout, metadata: achievementsMetadata, indexable: false},
   {path: '/guide', Layout: GuideLayout, metadata: guideMetadata, indexable: true},
+  {path: '/guide/basics', Layout: GuideBasicsLayout, metadata: guideBasicsMetadata, indexable: true},
+  {path: '/guide/table', Layout: GuideTableLayout, metadata: guideTableMetadata, indexable: true},
+  {path: '/guide/hands', Layout: GuideHandsLayout, metadata: guideHandsMetadata, indexable: true},
+  {path: '/guide/achievements', Layout: GuideAchievementsLayout, metadata: guideAchievementsMetadata, indexable: true},
+  {path: '/guide/store', Layout: GuideStoreLayout, metadata: guideStoreMetadata, indexable: true},
+  {path: '/guide/profile', Layout: GuideProfileLayout, metadata: guideProfileMetadata, indexable: true},
+  {path: '/guide/community', Layout: GuideCommunityLayout, metadata: guideCommunityMetadata, indexable: true},
   {path: '/hands', Layout: HandsLayout, metadata: handsMetadata, indexable: false},
   {path: '/hands/history', Layout: HandsHistoryLayout, metadata: handsHistoryMetadata, indexable: false},
   {path: '/hands/replay', Layout: HandsReplayLayout, metadata: handsReplayMetadata, indexable: false},
@@ -62,6 +77,19 @@ describe('route layouts', () => {
     for (const {metadata} of layouts) {
       const images = metadata.openGraph?.images as {url: string}[];
       expect(slugs).toContain(images[0].url.replace('/og/', '').replace('.webp', ''));
+    }
+  });
+
+  test('every sitemap route ships an indexable layout, and no private layout sneaks in', () => {
+    const indexable = layouts.filter(layout => layout.indexable).map(layout => layout.path);
+    for (const route of INDEXABLE_ROUTES) {
+      if (route === '/') continue;
+      expect(indexable).toContain(route);
+    }
+    for (const {path, metadata, indexable: isIndexable} of layouts) {
+      if (isIndexable) continue;
+      expect(INDEXABLE_ROUTES as readonly string[]).not.toContain(path);
+      expect(robotsOf(metadata).index).toBe(false);
     }
   });
 

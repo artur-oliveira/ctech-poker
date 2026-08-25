@@ -61,7 +61,8 @@ off by default — do not build UI that assumes real money is on.
 
 `src/app/{page,lobby,people,table,hands,hands/history,hands/replay,leaderboard,achievements,profile,share,guide,poker-rules,callback}`
 · `src/components/{achievements,hands,lobby,social,table,ui}` (+ root: `TermsGate`, `Notifier`,
-`AchievementToast`, `HandRankings`) · `src/lib/{api,api/proto,auth,hooks,providers,ws}` + domain
+`AchievementToast`, `HandRankings`) · `src/app/{robots,sitemap}.ts` (crawler surface — see `docs/seo.md`)
+· `src/lib/{api,api/proto,auth,hooks,providers,ws}` + domain
 modules at `src/lib/*.ts` · `src/dev` (mock runtime, aliased away in prod) · `src/test/setup.ts`.
 
 Profile **editing** is `components/lobby/ProfileMenu.tsx` + `ProfileShowcaseDialog.tsx`, not

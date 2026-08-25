@@ -71,7 +71,7 @@ describe('routeMetadata', () => {
     expect(metadata.openGraph?.url).toBe('/lobby');
     expect(metadata.openGraph?.locale).toBe('pt_BR');
     expect((metadata.openGraph?.images as {url: string}[])[0].url).toBe('/og/lobby.webp');
-    expect((metadata.openGraph?.images as {url: string}[])[1].url).toBe('/og-image.png');
+    expect((metadata.openGraph?.images as {url: string}[])[1].url).toBe('/og-image.webp');
     expect((metadata.twitter as {card: string}).card).toBe('summary_large_image');
   });
 
