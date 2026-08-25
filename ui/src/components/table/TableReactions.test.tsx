@@ -49,6 +49,8 @@ describe('TableReactions', () => {
     const opened = renderReactions();
     await userEvent.click(screen.getByRole('button', {name: 'Fechar reações'}));
     expect(opened.props.onOpenChangeAction).toHaveBeenCalledWith(false);
+    await userEvent.click(screen.getByRole('button', {name: 'Fechar painel de reações'}));
+    expect(opened.props.onOpenChangeAction).toHaveBeenCalledTimes(2);
   });
 
   test('dismisses on Escape and on an outside click', async () => {
@@ -205,7 +207,7 @@ describe('TableReactions', () => {
   });
 
   test('opens the buy flow for locked premium reactions and sends owned ones normally', async () => {
-    const catalog = [{id: 'cold', premium: true, price_cents: 100, price_fichas: 100_000}];
+    const catalog = [{id: 'cold', premium: true, owned: false, price_cents: 100, price_fichas: 100_000}];
     const locked = renderReactions({premiumEnabled: true, catalog, purchases: [], onLockedReactionAction: vi.fn()});
     await userEvent.click(screen.getByTitle('Frio na mesa'));
     expect(locked.props.onLockedReactionAction).toHaveBeenCalledWith(catalog[0]);
@@ -214,7 +216,7 @@ describe('TableReactions', () => {
 
     const owned = renderReactions({
       premiumEnabled: true,
-      catalog,
+      catalog: [{...catalog[0], owned: true}],
       purchases: [{purchase_id: 'rp-1', reaction_id: 'cold', method: 'fichas', status: 'confirmed'}],
       onLockedReactionAction: vi.fn(),
     });
@@ -243,7 +245,7 @@ describe('TableReactions', () => {
     const onOpenChangeAction = vi.fn();
     renderReactions({
       favorites: ['clap', 'fire'], premiumEnabled: true,
-      catalog: [{id: 'fire', premium: true, price_cents: 990, price_fichas: 5000}],
+      catalog: [{id: 'fire', premium: true, owned: true, price_cents: 990, price_fichas: 5000}],
       purchases: [{purchase_id: 'p1', reaction_id: 'fire', method: 'pix', status: 'confirmed'}],
       onQuickSendAction, onOpenChangeAction,
     });

@@ -131,6 +131,31 @@ func (s *EntitlementStore) Get(ctx context.Context, playerID string, kind cosmet
 	return dynamo.Decode[Entitlement](item)
 }
 
+// OwnedIDs returns the ids of kind this player actively owns.
+//
+// Ownership lives here and nowhere else: a bought-then-refunded item leaves a
+// history row behind (status "refunded") but no entitlement row, so anything
+// answering "what does this player have" must read entitlements rather than
+// replay purchase history. One query is enough — the entitlement table only
+// ever holds premium claims, and cosmetics.All(kind) is a fixed handful.
+func (s *EntitlementStore) OwnedIDs(ctx context.Context, playerID string, kind cosmetics.Kind) (map[string]bool, error) {
+	result, err := s.base.Query(ctx, dynamo.QueryOpts{PK: playerID, SKPrefix: string(kind) + "#", Limit: 100})
+	if err != nil {
+		return nil, fmt.Errorf("cosmeticpurchase: list entitlements: %w", err)
+	}
+	owned := make(map[string]bool, len(result.Items))
+	for _, item := range result.Items {
+		e, err := dynamo.Decode[Entitlement](item)
+		if err != nil {
+			return nil, fmt.Errorf("cosmeticpurchase: decode entitlement: %w", err)
+		}
+		if e.active() {
+			owned[e.ItemID] = true
+		}
+	}
+	return owned, nil
+}
+
 func (s *EntitlementStore) Delete(ctx context.Context, playerID string, kind cosmetics.Kind, itemID string) error {
 	if _, err := s.base.DeleteItem(ctx, playerID, entitlementSK(kind, itemID)); err != nil {
 		return fmt.Errorf("cosmeticpurchase: delete entitlement: %w", err)
@@ -559,18 +584,31 @@ func (s *Store) UpdateStatus(ctx context.Context, playerID, purchaseID, status, 
 	return s.base.UpdateItem(ctx, playerID, &sk, map[string]any{"status": status, "updated_at": updatedAt})
 }
 
-func (s *Store) List(ctx context.Context, playerID string) ([]Record, error) {
-	result, err := s.base.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: 100})
+// List returns one page of this player's purchase history for kind, newest
+// page first, plus the DynamoDB key to resume from.
+//
+// The kind filter is not optional: deck and felt purchases share one
+// (pk=player, sk=purchase) table, so an unfiltered query hands the deck
+// endpoint every felt purchase too — which is how "8 de 6 liberados" showed
+// up in the store. It is a FilterExpression rather than a key condition
+// because the sort key is the purchase id, so a page can come back short
+// while LastEvaluatedKey is still set; that is ordinary DynamoDB filtering
+// and the has_next/next_cursor envelope already expresses it.
+func (s *Store) List(ctx context.Context, playerID string, kind cosmetics.Kind, limit int, startKey map[string]types.AttributeValue) ([]Record, map[string]types.AttributeValue, error) {
+	result, err := s.base.Query(ctx, dynamo.QueryOpts{
+		PK: playerID, Limit: limit, ExclusiveStartKey: startKey,
+		FilterField: "kind", FilterValue: string(kind),
+	})
 	if err != nil {
-		return nil, fmt.Errorf("cosmeticpurchase: list records: %w", err)
+		return nil, nil, fmt.Errorf("cosmeticpurchase: list records: %w", err)
 	}
 	out := make([]Record, 0, len(result.Items))
 	for _, item := range result.Items {
 		rec, err := dynamo.Decode[Record](item)
 		if err != nil {
-			return nil, fmt.Errorf("cosmeticpurchase: decode record: %w", err)
+			return nil, nil, fmt.Errorf("cosmeticpurchase: decode record: %w", err)
 		}
 		out = append(out, *rec)
 	}
-	return out, nil
+	return out, result.LastEvaluatedKey, nil
 }

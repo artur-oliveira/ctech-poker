@@ -54,10 +54,13 @@ func TestListSkusRouteRegisteredBeforeIDRoute(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 from /skus, got %d", resp.StatusCode)
 	}
-	var skus []walletclient.SandboxSKU
-	if err := json.NewDecoder(resp.Body).Decode(&skus); err != nil {
+	var page struct {
+		Data []walletclient.SandboxSKU `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+	skus := page.Data
 	if len(skus) != 1 || skus[0].ID != "pack_100" {
 		t.Fatalf("unexpected skus: %+v", skus)
 	}

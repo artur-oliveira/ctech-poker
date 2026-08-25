@@ -72,7 +72,7 @@ func (f *fakeWallet) Credit(_ context.Context, _ string, _ int64, key, _ string)
 func TestListCatalogMergesFreeAndPremium(t *testing.T) {
 	w := &fakeWallet{skus: allPremiumSKUs()}
 	svc := NewService(w, newTestEntitlementStore(t), newTestStore(t))
-	entries, err := svc.ListCatalog(context.Background())
+	entries, err := svc.ListCatalog(context.Background(), "player-1")
 	if err != nil {
 		t.Fatalf("ListCatalog: %v", err)
 	}

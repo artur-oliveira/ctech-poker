@@ -5,6 +5,7 @@ import {LockKeyhole, QrCode, RotateCcw, Sparkles} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {SkeletonList} from '@/components/ui/skeleton';
 import type {CosmeticCatalogEntry, CosmeticKind, CosmeticPurchase} from '@/lib/api/cosmeticPurchases';
+import type {ActivityRow} from '@/components/store/PurchaseActivityList';
 import {currentCosmeticPurchase} from '@/lib/api/cosmeticPurchases';
 import {cardPath} from '@/lib/cards';
 import {DECK_VARIANTS, type DeckVariantId} from '@/lib/cardVariants';
@@ -27,9 +28,12 @@ interface CosmeticSectionProps {
   isLoading: boolean;
   isError: boolean;
   onRetryAction: () => void;
-  onBuyAction: (entry: CosmeticCatalogEntry) => void;
-  onRefundAction: (purchase: CosmeticPurchase) => void;
-  onResumeAction: (entry: CosmeticCatalogEntry, purchase: CosmeticPurchase) => void;
+  // Each action receives the button that triggered it: the dialogs are opened
+  // programmatically, so base-ui has nothing to restore focus to on close
+  // unless we hand it the trigger ourselves.
+  onBuyAction: (entry: CosmeticCatalogEntry, trigger: HTMLButtonElement) => void;
+  onRefundAction: (purchase: CosmeticPurchase, trigger: HTMLButtonElement) => void;
+  onResumeAction: (entry: CosmeticCatalogEntry, purchase: CosmeticPurchase, trigger: HTMLButtonElement) => void;
 }
 
 function CosmeticGrid({kind, labelFor, renderPreview, ariaLabel, loadingLabel, emptyLabel, catalog, purchases,
@@ -52,7 +56,11 @@ function CosmeticGrid({kind, labelFor, renderPreview, ariaLabel, loadingLabel, e
   return <ul className="cosmetic-store-grid" aria-label={ariaLabel}>
     {entries.map(entry => {
       const purchase = entry.premium ? currentCosmeticPurchase(purchases, entry.id) : undefined;
-      const owned = !entry.premium || purchase?.status === 'confirmed';
+      // Ownership is the catalog's server-side entitlement flag (always true for
+      // free items); the purchase row is only what a refund needs in order to
+      // name a receipt. The two can disagree — history is paginated, and a
+      // refunded item leaves rows behind — and ownership wins when they do.
+      const owned = entry.owned;
       const active = purchase?.status === 'pending' || purchase?.status === 'processing';
       const refunding = purchase?.status === 'refunding';
       return <li key={entry.id} className={`cosmetic-store-item${owned ? ' owned' : ''}`}>
@@ -66,13 +74,14 @@ function CosmeticGrid({kind, labelFor, renderPreview, ariaLabel, loadingLabel, e
               : <span className="cosmetic-store-lock"><LockKeyhole aria-hidden="true"/> Não liberada</span>}
         <span className="cosmetic-store-action">
           {!entry.premium ? null
-            : owned ? <Button type="button" variant="ghost" size="sm" onClick={() => onRefundAction(purchase!)}>
-                <RotateCcw aria-hidden="true"/> Estornar</Button>
+            : owned ? (purchase && <Button type="button" variant="ghost" size="sm"
+                                           onClick={event => onRefundAction(purchase, event.currentTarget)}>
+                <RotateCcw aria-hidden="true"/> Estornar</Button>)
               : refunding ? <span className="cosmetic-store-wait">Aguarde</span>
                 : active ? <Button type="button" variant="outline" size="sm"
-                                   onClick={() => onResumeAction(entry, purchase!)}>
+                                   onClick={event => onResumeAction(entry, purchase!, event.currentTarget)}>
                   <QrCode aria-hidden="true"/> Acompanhar</Button>
-                : <Button type="button" size="sm" onClick={() => onBuyAction(entry)}>Liberar</Button>}
+                : <Button type="button" size="sm" onClick={event => onBuyAction(entry, event.currentTarget)}>Liberar</Button>}
         </span>
       </li>;
     })}
@@ -97,4 +106,36 @@ export function FeltStoreSection(props: CosmeticSectionProps) {
     }}
     ariaLabel="Catálogo de feltros" loadingLabel="Carregando feltros…"
     emptyLabel="Nenhum feltro disponível no momento."/>;
+}
+
+// Maps deck/felt purchases into the shared activity-list row shape. Deck and
+// felt ids never collide, so one mapper covers both kinds.
+export function cosmeticActivityRows(purchases: CosmeticPurchase[]): ActivityRow[] {
+  return purchases.map(item => {
+    const label = item.kind === 'deck'
+      ? DECK_VARIANTS[item.item_id as DeckVariantId]?.label
+      : TABLE_THEMES[item.item_id as TableThemeId]?.label;
+    const date = formatDate(item.updated_at || item.created_at);
+    const kindLabel = item.kind === 'deck' ? 'Baralho' : 'Feltro';
+    return {
+      id: item.purchase_id,
+      label: label || item.item_id,
+      detail: `${kindLabel} · ${item.method === 'pix' ? 'Pix' : 'Fichas'}${date ? ` · ${date}` : ''}`,
+      status: item.status,
+      statusLabel: STATUS_LABEL[item.status] || 'Atualizando',
+      media: item.kind === 'deck'
+        ? <Image src={cardPath('As', item.item_id as DeckVariantId)} alt="" width={18} height={25}/>
+        : <span className="felt-swatch" style={{
+          '--theme-a': TABLE_THEMES[item.item_id as TableThemeId]?.colors[0],
+          '--theme-b': TABLE_THEMES[item.item_id as TableThemeId]?.colors[1],
+        } as React.CSSProperties}/>,
+      at: item.updated_at || item.created_at || '',
+    };
+  });
+}
+
+function formatDate(value?: string) {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('pt-BR', {day: '2-digit', month: 'short'});
 }

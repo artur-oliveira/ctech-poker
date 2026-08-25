@@ -323,7 +323,10 @@ func TestRequestRabbitHuntCmdRevealsOnlyToPayer(t *testing.T) {
 	}
 }
 
-func TestRequestWinnerCardsCmdRevealsOnlyToPayerAndSplitsFee(t *testing.T) {
+// winnerCardsActorSetup deals a heads-up hand through the actor, folds the
+// player to act, and returns the resulting requester/winner pair.
+func winnerCardsActorSetup(t *testing.T) (*Actor, *tablestore.Store, string, string, string) {
+	t.Helper()
 	db := testClient(t)
 	store := tablestore.NewStore(db, "table_test")
 	mustCreateTestTables(t, db, "table_test")
@@ -333,45 +336,150 @@ func TestRequestWinnerCardsCmdRevealsOnlyToPayerAndSplitsFee(t *testing.T) {
 	_ = a.Dispatch(ReadyCmd{PlayerID: "p1", Ready: true, Reply: make(chan error, 1)})
 	_ = a.Dispatch(ReadyCmd{PlayerID: "p2", Ready: true, Reply: make(chan error, 1)})
 	stored, _ := store.LoadTable(ctx, tableID)
-	payerID := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
+	requesterID := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
 	winnerID := "p2"
-	if payerID == "p2" {
+	if requesterID == "p2" {
 		winnerID = "p1"
 	}
-	if err := a.Dispatch(ActCmd{PlayerID: payerID, ActionID: "a1", Action: betting.ActionFold, Reply: make(chan error, 1)}); err != nil {
+	if err := a.Dispatch(ActCmd{PlayerID: requesterID, ActionID: "a1", Action: betting.ActionFold, Reply: make(chan error, 1)}); err != nil {
 		t.Fatalf("fold: %v", err)
 	}
+	return a, store, tableID, requesterID, winnerID
+}
 
-	stored, _ = store.LoadTable(ctx, tableID)
+func TestWinnerCardsConsentFlowChargesOnRequestAndPaysOnAccept(t *testing.T) {
+	a, store, tableID, requesterID, winnerID := winnerCardsActorSetup(t)
+	ctx := context.Background()
+
+	stored, _ := store.LoadTable(ctx, tableID)
 	before := hand.NewTableFromState(stored.State)
-	payerBefore, winnerBefore, rakeBefore := stackForView(t, before.ViewFor(payerID), payerID), stackForView(t, before.ViewFor(payerID), winnerID), before.RakeCollected()
-	if err := a.Dispatch(RequestWinnerCardsCmd{PlayerID: payerID, ActionID: "a2", Reply: make(chan error, 1)}); err != nil {
+	requesterBefore := stackForView(t, before.ViewFor(requesterID), requesterID)
+	winnerBefore := stackForView(t, before.ViewFor(requesterID), winnerID)
+	rakeBefore := before.RakeCollected()
+
+	if err := a.Dispatch(RequestWinnerCardsCmd{PlayerID: requesterID, ActionID: "a2", Reply: make(chan error, 1)}); err != nil {
 		t.Fatalf("RequestWinnerCardsCmd: %v", err)
 	}
 
 	stored, _ = store.LoadTable(ctx, tableID)
-	table := hand.NewTableFromState(stored.State)
-	if got := stackForView(t, table.ViewFor(payerID), payerID); got != payerBefore-20 {
-		t.Fatalf("payer stack = %d, want %d", got, payerBefore-20)
+	pending := hand.NewTableFromState(stored.State)
+	if got := stackForView(t, pending.ViewFor(requesterID), requesterID); got != requesterBefore-20 {
+		t.Fatalf("requester stack = %d, want %d", got, requesterBefore-20)
 	}
-	if got := stackForView(t, table.ViewFor(payerID), winnerID); got != winnerBefore+10 {
+	if got := stackForView(t, pending.ViewFor(requesterID), winnerID); got != winnerBefore {
+		t.Fatalf("winner must not be paid before accepting, stack = %d", got)
+	}
+	if pending.RakeCollected() != rakeBefore {
+		t.Fatalf("rake must not move before accepting, got %d", pending.RakeCollected())
+	}
+	if prompt := pending.ViewFor(winnerID).PendingWinnerCards; prompt == nil || prompt.RequesterID != requesterID {
+		t.Fatalf("winner should have been prompted, got %+v", prompt)
+	}
+	for _, seat := range pending.ViewFor(requesterID).Seats {
+		if seat.PlayerID == winnerID && len(seat.HoleCards) == 2 && seat.HoleCards[0] != "back" {
+			t.Fatal("nothing may be revealed while consent is pending")
+		}
+	}
+
+	// The requester must not be able to answer on the winner's behalf.
+	if err := a.Dispatch(AcceptWinnerCardsCmd{PlayerID: requesterID, ActionID: "a3", Reply: make(chan error, 1)}); err == nil {
+		t.Fatal("expected the requester's own accept to be rejected")
+	}
+
+	if err := a.Dispatch(AcceptWinnerCardsCmd{PlayerID: winnerID, ActionID: "a4", Reply: make(chan error, 1)}); err != nil {
+		t.Fatalf("AcceptWinnerCardsCmd: %v", err)
+	}
+
+	stored, _ = store.LoadTable(ctx, tableID)
+	table := hand.NewTableFromState(stored.State)
+	if got := stackForView(t, table.ViewFor(requesterID), winnerID); got != winnerBefore+10 {
 		t.Fatalf("winner stack = %d, want %d", got, winnerBefore+10)
 	}
 	if table.RakeCollected() != rakeBefore+10 {
 		t.Fatalf("rake = %d, want %d", table.RakeCollected(), rakeBefore+10)
 	}
-	for _, seat := range table.ViewFor(payerID).Seats {
+	if table.ViewFor(winnerID).PendingWinnerCards != nil {
+		t.Fatal("an answered request must be cleared from durable state")
+	}
+	for _, seat := range table.ViewFor(requesterID).Seats {
 		if seat.PlayerID == winnerID && (len(seat.HoleCards) != 2 || seat.HoleCards[0] == "back") {
-			t.Fatal("payer should see the winner's cards")
+			t.Fatal("requester should see the winner's cards after consent")
 		}
 	}
 	for _, seat := range table.ViewFor(winnerID).Seats {
-		if seat.PlayerID == winnerID {
-			continue // A winner always sees their own cards; the payer's view above is the reveal gate.
+		if seat.PlayerID == requesterID && len(seat.HoleCards) != 0 {
+			t.Fatal("winner must not gain visibility into the folded requester's cards")
 		}
-		if seat.PlayerID == payerID && len(seat.HoleCards) != 0 {
-			t.Fatal("winner must not gain visibility into the folded payer's cards")
+	}
+}
+
+func TestWinnerCardsDeclineRefundsTheRequesterAndRevealsNothing(t *testing.T) {
+	a, store, tableID, requesterID, winnerID := winnerCardsActorSetup(t)
+	ctx := context.Background()
+
+	stored, _ := store.LoadTable(ctx, tableID)
+	before := hand.NewTableFromState(stored.State)
+	requesterBefore := stackForView(t, before.ViewFor(requesterID), requesterID)
+	rakeBefore := before.RakeCollected()
+
+	if err := a.Dispatch(RequestWinnerCardsCmd{PlayerID: requesterID, ActionID: "a2", Reply: make(chan error, 1)}); err != nil {
+		t.Fatalf("RequestWinnerCardsCmd: %v", err)
+	}
+	if err := a.Dispatch(DeclineWinnerCardsCmd{PlayerID: winnerID, ActionID: "a3", Reply: make(chan error, 1)}); err != nil {
+		t.Fatalf("DeclineWinnerCardsCmd: %v", err)
+	}
+
+	stored, _ = store.LoadTable(ctx, tableID)
+	table := hand.NewTableFromState(stored.State)
+	if got := stackForView(t, table.ViewFor(requesterID), requesterID); got != requesterBefore {
+		t.Fatalf("decline must refund in full, stack = %d want %d", got, requesterBefore)
+	}
+	if table.RakeCollected() != rakeBefore {
+		t.Fatalf("decline must not rake anything, got %d", table.RakeCollected())
+	}
+	if table.ViewFor(requesterID).PendingWinnerCards != nil {
+		t.Fatal("a declined request must be cleared")
+	}
+	for _, seat := range table.ViewFor(requesterID).Seats {
+		if seat.PlayerID == winnerID && len(seat.HoleCards) == 2 && seat.HoleCards[0] != "back" {
+			t.Fatal("a declined request must reveal nothing")
 		}
+	}
+}
+
+// The consent window is enforced server-side, not by the client's countdown:
+// an expiry commits the refund to durable state so a requester's fee is never
+// stranded by a client that simply stopped asking.
+func TestWinnerCardsExpiryRefundsTheRequester(t *testing.T) {
+	a, store, tableID, requesterID, winnerID := winnerCardsActorSetup(t)
+	ctx := context.Background()
+
+	stored, _ := store.LoadTable(ctx, tableID)
+	requesterBefore := stackForView(t, hand.NewTableFromState(stored.State).ViewFor(requesterID), requesterID)
+
+	if err := a.Dispatch(RequestWinnerCardsCmd{PlayerID: requesterID, ActionID: "a2", Reply: make(chan error, 1)}); err != nil {
+		t.Fatalf("RequestWinnerCardsCmd: %v", err)
+	}
+
+	restore := timeNowFunc
+	timeNowFunc = func() time.Time { return restore().Add(hand.WinnerCardsConsentWindow + time.Second) }
+	t.Cleanup(func() { timeNowFunc = restore })
+
+	if err := a.Dispatch(expireWinnerCardsCmd{Reply: make(chan error, 1)}); err != nil {
+		t.Fatalf("expireWinnerCardsCmd: %v", err)
+	}
+
+	stored, _ = store.LoadTable(ctx, tableID)
+	table := hand.NewTableFromState(stored.State)
+	if got := stackForView(t, table.ViewFor(requesterID), requesterID); got != requesterBefore {
+		t.Fatalf("expiry must refund in full, stack = %d want %d", got, requesterBefore)
+	}
+	if table.ViewFor(requesterID).PendingWinnerCards != nil {
+		t.Fatal("an expired request must be cleared")
+	}
+	// Too late to accept: the window is closed and the fee is already back.
+	if err := a.Dispatch(AcceptWinnerCardsCmd{PlayerID: winnerID, ActionID: "a3", Reply: make(chan error, 1)}); err == nil {
+		t.Fatal("expected accepting an expired request to be rejected")
 	}
 }
 

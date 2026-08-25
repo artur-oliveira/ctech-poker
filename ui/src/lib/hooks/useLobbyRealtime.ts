@@ -11,6 +11,7 @@ import {pushNotification} from '@/lib/notify';
 import {decodeServerMessage, encodeClientMessage} from "@/lib/ws/utils";
 import type {SocialEventType} from '@/lib/api/social';
 import {SOCIAL_KEYS} from '@/lib/social';
+import {WALLET_QUERY_ROOT} from '@/lib/api/wallet';
 
 interface LobbyMessage {
   type: string;
@@ -71,9 +72,11 @@ export function useLobbyRealtime() {
       queryClient.setQueryData<Room | undefined>(['room', room_id], oldRoom =>
         oldRoom ? {...oldRoom, seats_taken} : oldRoom);
     } else if (message.type === 'sandbox_purchase_update') {
-      queryClient.invalidateQueries({queryKey: ['wallet', 'balance']});
+      // One root invalidation: a purchase moves balance, catalog ownership and
+      // history together, and naming a subset is what left the store showing
+      // ownership that no longer existed.
+      queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT});
       queryClient.invalidateQueries({queryKey: ['player', 'me']});
-      queryClient.invalidateQueries({queryKey: ['wallet', 'sandbox-purchases']});
       const statusLabel: Record<string, string> = {
         confirmed: 'Compra confirmada — créditos adicionados!',
         refunded: 'Compra estornada.',
@@ -82,8 +85,7 @@ export function useLobbyRealtime() {
       };
       pushNotification(statusLabel[message.code || ''] || 'Atualização na sua compra de créditos.', 'info');
     } else if (message.type === 'reaction_purchase_update') {
-      queryClient.invalidateQueries({queryKey: ['wallet', 'reaction-purchases']});
-      queryClient.invalidateQueries({queryKey: ['wallet', 'reaction-catalog']});
+      queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT});
       const statusLabel: Record<string, string> = {
         confirmed: 'Reação premium liberada!',
         refunded: 'Compra da reação estornada.',

@@ -101,8 +101,30 @@ catalog.
   with hashes for hidden positions and rabbit runout cards. Rabbit-hunt runout cards specifically are withheld from a
   viewer's `ViewFor` snapshot until `Table.RequestRabbitHunt` charges them the table's big blind (sandbox tables only —
   `Table.currencyMode`); see `docs/specs/2026-08-21-paid-rabbit-hunt.md`.
+- **The live paid winner-cards reveal is consensual.** `Table.RequestWinnerCards` charges the requester and opens a
+  single per-hand `pendingWinnerCards` request (`hand.WinnerCardsRequest`, persisted in `State`); nothing is revealed
+  and nobody is paid until the winner sends `accept_winner_cards`. `decline_winner_cards`, the
+  `hand.WinnerCardsConsentWindow` (8s, deliberately under `table.NextHandDelay`) expiring, or `StartHand` dealing the
+  next hand all refund the requester in full — the fee only splits winner/rake on accept. `winnerCardsAsked` caps it at
+  one ask per player per hand (answered or not), so a decline can't be re-asked past. The expiry is enforced
+  server-side by `Actor.armWinnerCardsTimer`, re-derived from the persisted `ExpiresAt` in `rearmTimersFromCache`, so
+  an actor handoff can never strand a fee. The prompt itself is viewer-scoped in `ViewFor`
+  (`Snapshot.PendingWinnerCards`): only the winner and the requester learn a request exists. Rabbit hunt stays
+  unilateral on purpose — that secret belongs to the deck, not to another player. See
+  `docs/specs/2026-08-24-pay-to-see-cards-consent.md`.
+- **Every list endpoint returns the `sendPage` envelope** (`{data, has_next, next_cursor, has_previous,
+  previous_cursor}` — `internal/api/v1/helpers.go`), including fixed in-memory catalogs, which simply sit permanently
+  on their only page. Purchase history (`sandbox-purchase`, `reaction-purchase`, `cosmetic-purchase/:kind`) pages for
+  real off a DynamoDB `ExclusiveStartKey`. `cosmeticpurchase.Store.List` **must** stay filtered by `kind`: deck and
+  felt share one purchase table, and the unfiltered query is what made the store report "8 de 6 liberados".
+- **Ownership is read from the entitlement tables, never from purchase history.** `EntitlementStore.OwnedIDs` backs
+  the `owned` flag on every catalog entry (`cosmeticpurchase`/`reactionpurchase` `ListCatalog`), because a
+  buy/refund/buy cycle leaves history rows no client can safely reduce to ownership.
+- `internal/wsdrain` tracks this process's live sockets so `OnStop` can send each a 1001 "going away" close before
+  `ShutdownWithContext` force-closes them mid-deploy. See `docs/specs/2026-08-24-graceful-ws-shutdown-on-deploy.md`.
 - `internal/handreveal` (`poker_hand_reveals` + `poker_hand_reveal_payments`) extends the live paid winner-cards reveal
-  (`Table.RequestWinnerCards`) to hand history: `POST`/`GET /players/me/hands/:handId/reveal-winner`. Sandbox-only, one
+  (`Table.RequestWinnerCards`) to hand history — non-consensual by design, since the hand is archived and there is no
+  winner still at the table to ask: `POST`/`GET /players/me/hands/:handId/reveal-winner`. Sandbox-only, one
   archive row per eligible hand (won without showdown, single winner), written by the same hand-complete/hand-updated
   hooks that already write `sessionlog.HandItem`. Payment moves through `walletclient` (debit buyer, credit winner
   half), not a local DynamoDB transaction — sandbox balance lives in ctech-wallet. See
@@ -120,7 +142,7 @@ catalog.
 `internal/{buyin,walletclient,reconcile,entitlement}` (money) ·
 `internal/{player,playernotes,pokerstats,matchup,sessionlog,handshare,handreveal,highlights}` (player-scoped data) ·
 `internal/{leaderboard,achievements,dailyreward}` (gamification) ·
-`internal/{botcheck,chatfilter,config,problem}` · `tests/{integration,load}`.
+`internal/{botcheck,chatfilter,config,problem,wsdrain}` · `tests/{integration,load}`.
 
 Transport is **binary protobuf** on both gateways (`GET /v1.0/tables/:id/ws`, `GET /v1.0/ws`), with the access token
 sent as the first frame after upgrade and a 32 KiB frame cap.

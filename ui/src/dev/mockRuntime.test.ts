@@ -3,7 +3,7 @@ import {MOCK_PLAYER_ID, mockAdapter, type MockScenario, MockTableService, snapsh
 import type {InternalAxiosRequestConfig} from 'axios';
 
 const scenarios: MockScenario[] = [
-  'full_hand', 'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
+  'full_hand', 'heads_up', 'six_max', 'nine_max', 'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
   'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot',
   'run_it_twice', 'winner_cards', 'rabbit_hunt', 'rebuy', 'reality_check',
   'reconnecting', 'action_error', 'timeout', 'complete_loss',
@@ -18,7 +18,7 @@ describe('mock store REST contract', () => {
   test('creates a pending Pix purchase with a QR image and exposes it in history', async () => {
     localStorage.setItem('ctech_poker_mock_delay', '0');
     const catalog = await request('GET', '/v1.0/wallet/sandbox-purchase/skus');
-    expect(catalog.data).toHaveLength(4);
+    expect(catalog.data.data).toHaveLength(4);
 
     const created = await request('POST', '/v1.0/wallet/sandbox-purchase/', {
       sku: 'pack_1000', idem_key: 'store-test',
@@ -30,9 +30,10 @@ describe('mock store REST contract', () => {
     expect(created.data.qr_code_base64).toMatch(/^PHN2Zy/);
 
     const history = await request('GET', '/v1.0/wallet/sandbox-purchase/');
-    expect(history.data).toEqual(expect.arrayContaining([
+    expect(history.data.data).toEqual(expect.arrayContaining([
       expect.objectContaining({purchase_id: created.data.purchase_id, status: 'pending'}),
     ]));
+    expect(history.data).toMatchObject({has_next: false, next_cursor: null});
   });
 
   test('accepts the daily-reward trailing slash used by the store client', async () => {
@@ -104,6 +105,13 @@ describe('mock table state contract', () => {
     expect(snapshot.legal_actions?.actions).toEqual(['fold', 'call', 'raise']);
     expect(snapshot.legal_actions!.min_raise_to).toBeLessThan(snapshot.legal_actions!.max_raise_to!);
   });
+
+  test.each([['heads_up', 2], ['six_max', 6], ['nine_max', 9]] as const)(
+    '%s provides the exact physical room capacity', (scenario, seats) => {
+      const snapshot = snapshotForScenario(scenario);
+      expect(snapshot.seats).toHaveLength(seats);
+      expect(snapshot.current_player_id).toBe(MOCK_PLAYER_ID);
+    });
   
   test.each([
     ['complete', [MOCK_PLAYER_ID], 1275],
@@ -241,6 +249,51 @@ describe('mock realtime service contract', () => {
     });
     rabbit.service.close();
     paid.service.close();
+  });
+
+  test('holds the fee while consent is pending and refunds it when the winner declines', () => {
+    vi.useFakeTimers();
+    const {service, messages} = serviceFor('winner_cards');
+    service.connect();
+    vi.runOnlyPendingTimers();
+    const stackOf = () => (messages.filter(message => message.type === 'state').at(-1)
+      ?.snapshot as ReturnType<typeof snapshotForScenario>)
+      .seats.find(seat => seat.player_id === MOCK_PLAYER_ID)!.stack;
+    const before = stackOf();
+
+    messages.length = 0;
+    // 30ms covers the ack and its snapshot without reaching the mock winner's
+    // 80ms auto-accept, which is what leaves the request observable as pending.
+    service.send({type: 'request_winner_cards', action_id: 'winner-1'});
+    vi.advanceTimersByTime(30);
+    const pendingState = messages.filter(message => message.type === 'state').at(-1)
+      ?.snapshot as ReturnType<typeof snapshotForScenario>;
+    expect(pendingState.pending_winner_cards).toMatchObject({winner_id: 'bia_sp', fee: 50});
+    expect(pendingState.seats.find(seat => seat.player_id === 'bia_sp')?.hole_cards_revealed).toEqual([false, false]);
+    expect(stackOf()).toBe(before - 50);
+
+    service.send({type: 'decline_winner_cards', action_id: 'winner-2'});
+    vi.advanceTimersByTime(30);
+    expect(messages).toContainEqual(expect.objectContaining({type: 'action_ack', action_id: 'winner-2'}));
+    const declined = messages.filter(message => message.type === 'state').at(-1)
+      ?.snapshot as ReturnType<typeof snapshotForScenario>;
+    expect(declined.pending_winner_cards).toBeUndefined();
+    expect(declined.seats.find(seat => seat.player_id === 'bia_sp')?.hole_cards_revealed).toEqual([false, false]);
+    expect(stackOf()).toBe(before);
+    service.close();
+  });
+
+  test('rejects an answer when no consent request is outstanding', () => {
+    vi.useFakeTimers();
+    const {service, messages} = serviceFor('winner_cards');
+    service.connect();
+    vi.runAllTimers();
+    messages.length = 0;
+    service.send({type: 'accept_winner_cards', action_id: 'winner-9'});
+    vi.runAllTimers();
+    expect(messages).toContainEqual(
+      expect.objectContaining({type: 'error', code: 'invalid_action', action_id: 'winner-9'}));
+    service.close();
   });
 
   test('applies a rebuy to the busted viewer and publishes the new stack', () => {

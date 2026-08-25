@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"sort"
 	"time"
 
@@ -23,7 +24,7 @@ type store interface {
 	Create(ctx context.Context, rec Record) (Record, error)
 	Get(ctx context.Context, playerID, purchaseID string) (*Record, error)
 	UpdateStatus(ctx context.Context, playerID, purchaseID, status, updatedAt string) (bool, error)
-	List(ctx context.Context, playerID string) ([]Record, error)
+	List(ctx context.Context, playerID string, limit int, startKey map[string]types.AttributeValue) ([]Record, map[string]types.AttributeValue, error)
 }
 
 type Service struct {
@@ -77,13 +78,20 @@ func (s *Service) Create(ctx context.Context, playerID, sku, idemKey string) (Re
 	return s.store.Create(ctx, rec)
 }
 
-func (s *Service) List(ctx context.Context, playerID string) ([]Record, error) {
-	records, err := s.store.List(ctx, playerID)
+// List returns one page of purchase history, newest first *within the page*.
+//
+// ponytail: page-local ordering. The sort key is the purchase id, not a
+// timestamp, so DynamoDB hands back id order and the sort below can only
+// reorder what this page contains. Fine while a player's history fits in a
+// page or two; upgrade path is a created_at GSI queried with
+// ScanIndexForward:false, at which point this sort goes away entirely.
+func (s *Service) List(ctx context.Context, playerID string, limit int, startKey map[string]types.AttributeValue) ([]Record, map[string]types.AttributeValue, error) {
+	records, nextKey, err := s.store.List(ctx, playerID, limit, startKey)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	sort.Slice(records, func(i, j int) bool { return records[i].CreatedAt > records[j].CreatedAt })
-	return records, nil
+	return records, nextKey, nil
 }
 
 // Refresh re-fetches purchaseID from wallet (source of truth) and updates the

@@ -3,6 +3,7 @@ package hand
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/deck"
@@ -884,43 +885,193 @@ func TestRequestRabbitHuntChargesBigBlindAndGatesViewFor(t *testing.T) {
 	}
 }
 
-func TestRequestWinnerCardsChargesAndRevealsOnlyToPayer(t *testing.T) {
+// winnerCardsSetup deals a heads-up hand, folds the player to act, and returns
+// the requester/winner pair plus the table, so every consent test starts from
+// the same "won without showdown, single winner" position.
+func winnerCardsSetup(t *testing.T, mode string, bigBlind int64) (table *Table, requesterID, winnerID string, requester, winner *Player) {
+	t.Helper()
 	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
 	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
-	table := NewTable([]*Player{p1, p2}, 10, 21) // odd blind proves the split conserves every chip
-	table.ConfigureRake("sandbox")
+	table = NewTable([]*Player{p1, p2}, 10, bigBlind)
+	table.ConfigureRake(mode)
 	if err := table.StartHand(); err != nil {
 		t.Fatalf("StartHand: %v", err)
 	}
-	payerID := table.playerToActForTest()
-	winnerID, payer, winner := "p2", p1, p2
-	if payerID == "p2" {
-		winnerID, payer, winner = "p1", p2, p1
+	requesterID = table.playerToActForTest()
+	winnerID, requester, winner = "p2", p1, p2
+	if requesterID == "p2" {
+		winnerID, requester, winner = "p1", p2, p1
 	}
-	if err := table.Act(payerID, betting.ActionFold, 0); err != nil {
-		t.Fatalf("%s folds: %v", payerID, err)
+	if err := table.Act(requesterID, betting.ActionFold, 0); err != nil {
+		t.Fatalf("%s folds: %v", requesterID, err)
 	}
-	payerBefore, winnerBefore, rakeBefore := payer.Stack, winner.Stack, table.RakeCollected()
+	return table, requesterID, winnerID, requester, winner
+}
 
-	fee, err := table.RequestWinnerCards(payerID)
+func winnerCardsVisible(view Snapshot, winnerID string) bool {
+	for _, seat := range view.Seats {
+		if seat.PlayerID == winnerID {
+			return len(seat.HoleCards) == 2 && seat.HoleCards[0] != "back" && seat.HoleCardsRevealed[0]
+		}
+	}
+	return false
+}
+
+func TestRequestWinnerCardsChargesButRevealsNothingUntilTheWinnerAccepts(t *testing.T) {
+	// Odd blind proves the accept-time split still conserves every chip.
+	table, requesterID, winnerID, requester, winner := winnerCardsSetup(t, "sandbox", 21)
+	now := time.Unix(1_700_000_000, 0)
+	requesterBefore, winnerBefore, rakeBefore := requester.Stack, winner.Stack, table.RakeCollected()
+
+	fee, err := table.RequestWinnerCards(requesterID, now)
 	if err != nil {
 		t.Fatalf("RequestWinnerCards: %v", err)
 	}
-	if fee != 21 || payer.Stack != payerBefore-21 || winner.Stack != winnerBefore+10 || table.RakeCollected() != rakeBefore+11 {
-		t.Fatalf("unexpected fee split: fee=%d payer=%d winner=%d rake=%d", fee, payer.Stack, winner.Stack, table.RakeCollected())
+	if fee != 21 || requester.Stack != requesterBefore-21 {
+		t.Fatalf("requester must be charged the big blind up front: fee=%d stack=%d", fee, requester.Stack)
 	}
-	for _, seat := range table.ViewFor(payerID).Seats {
-		if seat.PlayerID == winnerID && (len(seat.HoleCards) != 2 || seat.HoleCards[0] == "back" || !seat.HoleCardsRevealed[0]) {
-			t.Fatalf("payer should see the winner's complete hand, got %+v", seat)
+	if winner.Stack != winnerBefore || table.RakeCollected() != rakeBefore {
+		t.Fatalf("nothing may be paid out before the winner accepts: winner=%d rake=%d", winner.Stack, table.RakeCollected())
+	}
+	if winnerCardsVisible(table.ViewFor(requesterID), winnerID) {
+		t.Fatal("the requester must not see the winner's cards while consent is pending")
+	}
+
+	for _, viewerID := range []string{requesterID, winnerID} {
+		pending := table.ViewFor(viewerID).PendingWinnerCards
+		if pending == nil || pending.RequesterID != requesterID || pending.WinnerID != winnerID || pending.Fee != 21 {
+			t.Fatalf("%s should see the pending request, got %+v", viewerID, pending)
+		}
+		if pending.ExpiresAtUnixMs != now.Add(WinnerCardsConsentWindow).UnixMilli() {
+			t.Fatalf("expiry must be server-set from the request time, got %d", pending.ExpiresAtUnixMs)
 		}
 	}
-	for _, seat := range table.ViewFor(winnerID).Seats {
-		if seat.PlayerID == winnerID && len(seat.HoleCards) != 2 {
-			t.Fatal("winner should always see their own hand")
-		}
+
+	if _, err := table.RequestWinnerCards(requesterID, now); err == nil {
+		t.Fatal("expected a second request while one is pending to be rejected")
 	}
-	if _, err := table.RequestWinnerCards(payerID); err == nil {
-		t.Fatal("expected a second request in the same hand to be rejected")
+
+	if err := table.AcceptWinnerCards(winnerID, now); err != nil {
+		t.Fatalf("AcceptWinnerCards: %v", err)
+	}
+	if winner.Stack != winnerBefore+10 || table.RakeCollected() != rakeBefore+11 {
+		t.Fatalf("accept must split the fee: winner=%d rake=%d", winner.Stack, table.RakeCollected())
+	}
+	if !winnerCardsVisible(table.ViewFor(requesterID), winnerID) {
+		t.Fatal("the requester should see the winner's complete hand after consent")
+	}
+	if table.ViewFor(winnerID).PendingWinnerCards != nil {
+		t.Fatal("the request must be cleared once answered")
+	}
+	if _, err := table.RequestWinnerCards(requesterID, now); err == nil {
+		t.Fatal("expected a second paid request in the same hand to be rejected")
+	}
+}
+
+func TestWinnerCardsRequestIsRefundedWhenItIsNotAccepted(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		resolve func(table *Table, winnerID string, now time.Time)
+	}{
+		{name: "declined", resolve: func(table *Table, winnerID string, now time.Time) {
+			if err := table.DeclineWinnerCards(winnerID); err != nil {
+				t.Fatalf("DeclineWinnerCards: %v", err)
+			}
+		}},
+		{name: "expired", resolve: func(table *Table, _ string, now time.Time) {
+			if !table.ExpireWinnerCards(now.Add(WinnerCardsConsentWindow)) {
+				t.Fatal("expected the closed window to resolve the request")
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			table, requesterID, winnerID, requester, winner := winnerCardsSetup(t, "sandbox", 20)
+			now := time.Unix(1_700_000_000, 0)
+			requesterBefore, winnerBefore, rakeBefore := requester.Stack, winner.Stack, table.RakeCollected()
+			if _, err := table.RequestWinnerCards(requesterID, now); err != nil {
+				t.Fatalf("RequestWinnerCards: %v", err)
+			}
+
+			tc.resolve(table, winnerID, now)
+
+			if requester.Stack != requesterBefore {
+				t.Fatalf("an unaccepted request must be refunded in full, got %d want %d", requester.Stack, requesterBefore)
+			}
+			if winner.Stack != winnerBefore || table.RakeCollected() != rakeBefore {
+				t.Fatalf("an unaccepted request must pay nobody: winner=%d rake=%d", winner.Stack, table.RakeCollected())
+			}
+			if winnerCardsVisible(table.ViewFor(requesterID), winnerID) {
+				t.Fatal("an unaccepted request must reveal nothing")
+			}
+			if table.ViewFor(requesterID).PendingWinnerCards != nil {
+				t.Fatal("the request must be cleared")
+			}
+			// One ask per hand, answered or not: a "no" the requester can
+			// immediately re-ask past is not consent.
+			if _, err := table.RequestWinnerCards(requesterID, now); err == nil {
+				t.Fatal("expected a re-ask in the same hand to be rejected")
+			}
+			if requester.Stack != requesterBefore {
+				t.Fatalf("the rejected re-ask must not charge again, got %d", requester.Stack)
+			}
+		})
+	}
+}
+
+// StartHand is the backstop for a request nobody ever answered: it must give
+// the fee back rather than clear the request and keep the chips. The next deal
+// immediately posts blinds, so the requester is measured as stack plus this
+// hand's contribution — which is exactly the chips they still own.
+func TestStartHandRefundsAnUnansweredWinnerCardsRequest(t *testing.T) {
+	table, requesterID, _, requester, _ := winnerCardsSetup(t, "sandbox", 20)
+	before := requester.Stack
+
+	if _, err := table.RequestWinnerCards(requesterID, time.Unix(1_700_000_000, 0)); err != nil {
+		t.Fatalf("RequestWinnerCards: %v", err)
+	}
+	if requester.Stack != before-20 {
+		t.Fatalf("the fee should be held while pending, got %d want %d", requester.Stack, before-20)
+	}
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	if owned := requester.Stack + requester.Contributed; owned != before {
+		t.Fatalf("StartHand must return the held fee, got %d want %d", owned, before)
+	}
+	if table.ViewFor(requesterID).PendingWinnerCards != nil {
+		t.Fatal("the request must not survive into the next hand")
+	}
+}
+
+func TestAcceptWinnerCardsRejectsAnyoneButTheWinnerAndAnExpiredWindow(t *testing.T) {
+	table, requesterID, winnerID, requester, winner := winnerCardsSetup(t, "sandbox", 20)
+	now := time.Unix(1_700_000_000, 0)
+	winnerBefore, rakeBefore := winner.Stack, table.RakeCollected()
+	if _, err := table.RequestWinnerCards(requesterID, now); err != nil {
+		t.Fatalf("RequestWinnerCards: %v", err)
+	}
+
+	if err := table.AcceptWinnerCards(requesterID, now); err == nil {
+		t.Fatal("the requester must not be able to accept on the winner's behalf")
+	}
+	if err := table.DeclineWinnerCards(requesterID); err == nil {
+		t.Fatal("the requester must not be able to decline on the winner's behalf")
+	}
+	if winner.Stack != winnerBefore || table.RakeCollected() != rakeBefore {
+		t.Fatal("a rejected answer must not move chips")
+	}
+
+	// Accepting after the window closed expires the request instead: the
+	// requester is refunded and nothing is revealed.
+	requesterBefore := requester.Stack
+	if err := table.AcceptWinnerCards(winnerID, now.Add(WinnerCardsConsentWindow)); err == nil {
+		t.Fatal("expected an expired request to be unacceptable")
+	}
+	if requester.Stack != requesterBefore+20 {
+		t.Fatalf("expiring on accept must refund the requester, got %d", requester.Stack)
+	}
+	if winnerCardsVisible(table.ViewFor(requesterID), winnerID) {
+		t.Fatal("an expired request must reveal nothing")
 	}
 }
 
@@ -937,27 +1088,20 @@ func TestRequestWinnerCardsRejectsIneligibleRequestsWithoutCharging(t *testing.T
 		{name: "insufficient stack", mode: "sandbox", prepare: func(_ *Table, _ string, payer *Player) { payer.Stack = 20 }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
-			p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
-			table := NewTable([]*Player{p1, p2}, 10, 21)
-			table.ConfigureRake(tc.mode)
-			_ = table.StartHand()
-			payerID := table.playerToActForTest()
-			winnerID, payer, winner := "p2", p1, p2
-			if payerID == "p2" {
-				winnerID, payer, winner = "p1", p2, p1
-			}
-			_ = table.Act(payerID, betting.ActionFold, 0)
+			table, payerID, winnerID, payer, winner := winnerCardsSetup(t, tc.mode, 21)
 			tc.prepare(table, winnerID, payer)
 			if tc.requestAsWinner {
 				payerID = winnerID
 			}
 			payerBefore, winnerBefore, rakeBefore := payer.Stack, winner.Stack, table.RakeCollected()
-			if _, err := table.RequestWinnerCards(payerID); err == nil {
+			if _, err := table.RequestWinnerCards(payerID, time.Unix(1_700_000_000, 0)); err == nil {
 				t.Fatal("expected request to be rejected")
 			}
 			if payer.Stack != payerBefore || winner.Stack != winnerBefore || table.RakeCollected() != rakeBefore {
 				t.Fatal("rejected request must not move chips")
+			}
+			if table.ViewFor(payerID).PendingWinnerCards != nil {
+				t.Fatal("a rejected request must not leave a pending prompt behind")
 			}
 		})
 	}
@@ -977,8 +1121,17 @@ func TestRequestWinnerCardsNeverRevealsToAnotherViewer(t *testing.T) {
 	nonPayerID := table.playerToActForTest()
 	_ = table.Act(nonPayerID, betting.ActionFold, 0)
 	winnerID := table.LastOutcomeForActor().Winners[0]
-	if _, err := table.RequestWinnerCards(payerID); err != nil {
+	now := time.Unix(1_700_000_000, 0)
+	if _, err := table.RequestWinnerCards(payerID, now); err != nil {
 		t.Fatalf("RequestWinnerCards: %v", err)
+	}
+	// A bystander must not even learn a request exists — the prompt is
+	// viewer-scoped, not a table-wide broadcast.
+	if table.ViewFor(nonPayerID).PendingWinnerCards != nil {
+		t.Fatal("a bystander must not see the pending request")
+	}
+	if err := table.AcceptWinnerCards(winnerID, now); err != nil {
+		t.Fatalf("AcceptWinnerCards: %v", err)
 	}
 	for _, seat := range table.ViewFor(nonPayerID).Seats {
 		if seat.PlayerID == winnerID && (len(seat.HoleCards) != 0 || seat.HoleCardsRevealed[0] || seat.HoleCardsRevealed[1]) {

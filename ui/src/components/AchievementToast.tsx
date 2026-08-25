@@ -1,5 +1,5 @@
 'use client';
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {Star} from 'lucide-react';
 import {ACHIEVEMENT_LABELS} from "@/lib/utils";
 
@@ -7,17 +7,34 @@ import {ACHIEVEMENT_LABELS} from "@/lib/utils";
 const HOLD_MS = 4200;
 const EXIT_MS = 350;
 
-export function AchievementToast({unlock}: { unlock: { key: string; stars: number } | null }) {
+type AchievementUnlock = { key: string; stars: number };
+
+export function AchievementToast({unlock, blocked = false}: {
+  unlock: AchievementUnlock | null;
+  blocked?: boolean;
+}) {
   const [shown, setShown] = useState(unlock);
   const [leaving, setLeaving] = useState(false);
+  const queued = useRef<AchievementUnlock | null>(null);
   
   useEffect(() => {
-    if (!unlock) return;
+    if (blocked) {
+      if (unlock) queued.current = unlock;
+      // Outcome and consent cards own the announcement layer. Keep the latest
+      // unlock queued instead of stacking a toast over a decision.
+      setShown(previous => {
+        if (previous && !queued.current) queued.current = previous;
+        return null;
+      });
+      return;
+    }
+    const next = queued.current || unlock;
+    queued.current = null;
+    if (!next) return;
     // Retain the last unlock while its exit animation finishes.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setShown(previous => previous?.key === unlock.key && previous.stars === unlock.stars ? previous : unlock);
+    setShown(previous => previous?.key === next.key && previous.stars === next.stars ? previous : next);
     setLeaving(false);
-  }, [unlock]);
+  }, [unlock, blocked]);
   
   useEffect(() => {
     if (!shown) return () => {
@@ -31,7 +48,8 @@ export function AchievementToast({unlock}: { unlock: { key: string; stars: numbe
   }, [shown]);
   
   if (!shown) return null;
-  return <div key={`${shown.key}-${shown.stars}`} className={`achievement-toast${leaving ? ' leaving' : ''}`}>
+  return <div key={`${shown.key}-${shown.stars}`} className={`achievement-toast${leaving ? ' leaving' : ''}`}
+              role="status" aria-live="polite">
     <Star/>
     <span>
       <small>CONQUISTA DESBLOQUEADA</small>

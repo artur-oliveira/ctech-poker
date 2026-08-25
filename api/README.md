@@ -121,7 +121,10 @@ Per-binary keys read outside `Config` (not in the struct above):
   `user#<playerID>`. The registry is **Valkey-backed in prod**; the in-memory fallback is `dev` only and non-dev fails
   fast without Valkey.
 - **Client → server**: `ping`, `sync_state`, `ready`, `act`, `preselect_action`, `bot_challenge`,
-  `post_big_blind`, `show_cards`, `request_rabbit_hunt`, `request_winner_cards`, `keep_seat`, `chat`, `reaction`.
+  `post_big_blind`, `show_cards`, `request_rabbit_hunt`, `request_winner_cards`, `accept_winner_cards`,
+  `decline_winner_cards`, `keep_seat`, `chat`, `reaction`. `request_winner_cards` charges the requester and opens a
+  consent request; only the winner's `accept_winner_cards` reveals anything and pays anyone (protocol version 11 adds
+  `TableSnapshot.pending_winner_cards`, sent only to those two players).
 - **Server → client**: `connected`, `pong`, `state` (full authoritative snapshot on join and on every mutation — no
   delta replay), `chat`, `error`, `removed`, `achievement_unlocked`, `room_created`,
   `room_updated`, `payment_received`, `system_broadcast`, `social_event`, `social_presence_changed` and
@@ -247,8 +250,9 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /leaderboard`                           | JWT             | `?metric=hands_won\|hands_played\|win_rate`, `?limit`, `?cursor`                           |
 | `POST /sandbox-credits/`                     | JWT             | daily spin; rate-limited 60/min/IP                                                         |
 | `GET /sandbox-credits/`                      | JWT             | `{remaining_time_seconds}` cooldown; scoped tokens require `poker:daily-reward:read`       |
-| `GET /wallet/sandbox-purchase/...`           | JWT             | catalog/history/detail reads; `poker:sandbox-purchases:read`                               |
-| `GET /wallet/reaction-purchase/...`          | JWT             | catalog/history/detail reads; `poker:reaction-purchases:read`                              |
+| `GET /wallet/sandbox-purchase/...`           | JWT             | catalog/history/detail reads; `poker:sandbox-purchases:read`; lists are paginated           |
+| `GET /wallet/reaction-purchase/...`          | JWT             | catalog/history/detail reads; `poker:reaction-purchases:read`; lists are paginated          |
+| `GET /wallet/cosmetic-purchase/:kind/...`    | JWT             | per-kind catalog/history/detail; `poker:cosmetic-purchases:read`; lists are paginated       |
 | `GET /social/friends`                        | first-party JWT | paginated mutual friends                                                                   |
 | `GET /social/friend-requests`                | first-party JWT | pending `?direction=incoming\|outgoing`; paginated                                         |
 | `GET /social/blocked`                        | first-party JWT | players blocked by the caller; paginated                                                   |

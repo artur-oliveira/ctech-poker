@@ -32,11 +32,13 @@ func RegisterReactionPurchase(router fiber.Router, auth fiber.Handler, svc *reac
 }
 
 func (h *reactionPurchaseHandlers) catalog(c fiber.Ctx) error {
-	entries, err := h.svc.ListCatalog(c.Context())
+	entries, err := h.svc.ListCatalog(c.Context(), c.Locals(localsUserID).(string))
 	if err != nil {
 		return walletOrInternalProblem(err, "list catalog failed", c).Send(c)
 	}
-	return c.JSON(entries)
+	// A fixed in-memory catalog has nothing to page through, but it is still a
+	// list endpoint: same envelope, permanently on its only page.
+	return sendPage(c, entries, nil, "")
 }
 
 func (h *reactionPurchaseHandlers) create(c fiber.Ctx) error {
@@ -72,11 +74,12 @@ func (h *reactionPurchaseHandlers) create(c fiber.Ctx) error {
 
 func (h *reactionPurchaseHandlers) list(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
-	records, err := h.svc.List(c.Context(), userID)
+	cursor := c.Query("cursor")
+	records, lastKey, err := h.svc.List(c.Context(), userID, limitParam(c), decodeCursor(cursor))
 	if err != nil {
 		return problem.InternalServer("list reaction purchases failed", c, err).Send(c)
 	}
-	return c.JSON(records)
+	return sendPage(c, records, lastKey, cursor)
 }
 
 func (h *reactionPurchaseHandlers) get(c fiber.Ctx) error {

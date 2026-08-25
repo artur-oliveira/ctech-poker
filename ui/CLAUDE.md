@@ -67,10 +67,6 @@ modules at `src/lib/*.ts` · `src/dev` (mock runtime, aliased away in prod) · `
 Profile **editing** is `components/lobby/ProfileMenu.tsx` + `ProfileShowcaseDialog.tsx`, not
 `app/profile/` — that route is the public read-only showcase of another player.
 
-The showcase also renders a "Cara a Cara" head-to-head card (`app/profile/page.tsx`) fetched from
-`GET /v1.0/players/me/matchups/:id`, shown only when `hands_together > 0` — no empty-state card for
-pairs that have never shared a table.
-
 ## Auth flow
 
 `@aoctech/auth-client` → `lib/auth/oauth.ts` (+ `lib/auth/session.ts` for keep-alive/recovery).

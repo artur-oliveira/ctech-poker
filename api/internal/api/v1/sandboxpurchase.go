@@ -37,7 +37,9 @@ func (h *sandboxPurchaseHandlers) listSkus(c fiber.Ctx) error {
 	if err != nil {
 		return walletOrInternalProblem(err, "list skus failed", c).Send(c)
 	}
-	return c.JSON(skus)
+	// The SKU catalog comes back whole from wallet; same envelope as every
+	// other list endpoint, permanently on its only page.
+	return sendPage(c, skus, nil, "")
 }
 
 func (h *sandboxPurchaseHandlers) create(c fiber.Ctx) error {
@@ -62,11 +64,12 @@ func (h *sandboxPurchaseHandlers) create(c fiber.Ctx) error {
 
 func (h *sandboxPurchaseHandlers) list(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
-	records, err := h.svc.List(c.Context(), userID)
+	cursor := c.Query("cursor")
+	records, lastKey, err := h.svc.List(c.Context(), userID, limitParam(c), decodeCursor(cursor))
 	if err != nil {
 		return problem.InternalServer("list purchases failed", c, err).Send(c)
 	}
-	return c.JSON(records)
+	return sendPage(c, records, lastKey, cursor)
 }
 
 func (h *sandboxPurchaseHandlers) get(c fiber.Ctx) error {

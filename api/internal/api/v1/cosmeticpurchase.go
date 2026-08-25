@@ -46,11 +46,13 @@ func validCosmeticKind(c fiber.Ctx) error {
 
 func (h *cosmeticPurchaseHandlers) catalog(c fiber.Ctx) error {
 	kind := cosmetics.Kind(c.Params("kind"))
-	entries, err := h.svc.ListCatalog(c.Context(), kind)
+	entries, err := h.svc.ListCatalog(c.Context(), c.Locals(localsUserID).(string), kind)
 	if err != nil {
 		return walletOrInternalProblem(err, "list catalog failed", c).Send(c)
 	}
-	return c.JSON(entries)
+	// A fixed in-memory catalog has nothing to page through, but it is still a
+	// list endpoint: same envelope, permanently on its only page.
+	return sendPage(c, entries, nil, "")
 }
 
 func (h *cosmeticPurchaseHandlers) create(c fiber.Ctx) error {
@@ -87,11 +89,12 @@ func (h *cosmeticPurchaseHandlers) create(c fiber.Ctx) error {
 
 func (h *cosmeticPurchaseHandlers) list(c fiber.Ctx) error {
 	userID := c.Locals(localsUserID).(string)
-	records, err := h.svc.List(c.Context(), userID)
+	cursor := c.Query("cursor")
+	records, lastKey, err := h.svc.List(c.Context(), userID, cosmetics.Kind(c.Params("kind")), limitParam(c), decodeCursor(cursor))
 	if err != nil {
 		return problem.InternalServer("list cosmetic purchases failed", c, err).Send(c)
 	}
-	return c.JSON(records)
+	return sendPage(c, records, lastKey, cursor)
 }
 
 func (h *cosmeticPurchaseHandlers) get(c fiber.Ctx) error {

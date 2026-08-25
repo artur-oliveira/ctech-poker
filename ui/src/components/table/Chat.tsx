@@ -75,7 +75,11 @@ export function Chat({items, onSendAction, connected = true, viewerId, seats = [
       {unread > 0 && <span className="chat-unread-dot" aria-hidden="true"/>}
     </Button>
     <div id={panelId} className="chat-body" aria-hidden={!open}>
-      <h2>Chat da mesa</h2>
+      <div className="chat-panel-header">
+        <h2>Chat da mesa</h2>
+        <Button type="button" variant="ghost" size="icon" aria-label="Fechar painel de chat"
+                onClick={() => onOpenChangeAction(false)}><X/></Button>
+      </div>
       <div className="messages" role="log" aria-live="polite" aria-relevant="additions text" ref={messagesRef}>
         {items.length === 0 ? <p className="messages-empty">Nenhuma mensagem ainda. Diga um oi para a mesa.</p> :
           items.map(message => <p key={message.id}>

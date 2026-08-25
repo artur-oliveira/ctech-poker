@@ -1,4 +1,4 @@
-import {apiClient} from './client';
+import {apiClient, type Page} from './client';
 
 export type CosmeticKind = 'deck' | 'felt';
 export type CosmeticPurchaseMethod = 'pix' | 'fichas';
@@ -7,6 +7,8 @@ export interface CosmeticCatalogEntry {
   kind: CosmeticKind;
   id: string;
   premium: boolean;
+  // Server-computed from the entitlement table. Always true for free items.
+  owned?: boolean;
   price_cents?: number;
   price_fichas?: number;
 }
@@ -27,14 +29,19 @@ export interface CosmeticPurchase {
   updated_at?: string;
 }
 
+// The catalog is a fixed set, so it arrives on a single page — unwrap it and
+// hand callers the plain array.
 export async function listCosmeticCatalog(kind: CosmeticKind) {
-  return (await apiClient.get<CosmeticCatalogEntry[]>(
+  return (await apiClient.get<Page<CosmeticCatalogEntry>>(
     `/v1.0/wallet/cosmetic-purchase/${kind}/catalog`
-  )).data;
+  )).data.data;
 }
 
-export async function listCosmeticPurchases(kind: CosmeticKind) {
-  return (await apiClient.get<CosmeticPurchase[]>(`/v1.0/wallet/cosmetic-purchase/${kind}/`)).data;
+export async function listCosmeticPurchases(kind: CosmeticKind, cursor?: string) {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  return (await apiClient.get<Page<CosmeticPurchase>>(
+    `/v1.0/wallet/cosmetic-purchase/${kind}/${query}`
+  )).data;
 }
 
 export async function createCosmeticPurchase(kind: CosmeticKind, itemId: string, method: CosmeticPurchaseMethod) {
@@ -60,8 +67,12 @@ export async function refundCosmeticPurchase(kind: CosmeticKind, purchaseId: str
   )).data;
 }
 
-export function ownedCosmeticIDs(purchases: CosmeticPurchase[]) {
-  return new Set([...purchases].filter(item => item.status === 'confirmed').map(item => item.item_id));
+// Ownership comes from the catalog's server-computed `owned` flag, which is
+// backed by the entitlement table — never from purchase history. A
+// buy/refund/buy/refund cycle leaves history rows the client cannot reduce to
+// ownership, which is how the store once reported "8 de 6 liberados".
+export function ownedCosmeticIDs(catalog: CosmeticCatalogEntry[]) {
+  return new Set(catalog.filter(entry => entry.owned).map(entry => entry.id));
 }
 
 export function currentCosmeticPurchase(purchases: CosmeticPurchase[], itemId: string) {

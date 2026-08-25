@@ -36,7 +36,7 @@ export function SkuGrid({skus, isLoading, isError, onRetryAction, onSelectAction
     || left.total_credits - right.total_credits
     || left.id.localeCompare(right.id));
 
-  return <div className="store-sku-grid" aria-label="Pacotes de fichas sandbox">
+  return <div className="store-sku-grid" role="group" aria-label="Pacotes de fichas sandbox">
       {sortedSkus.map(sku => {
         const bonusCredits = Math.max(0, sku.total_credits - sku.base_credits);
         const totalLabel = sku.total_credits.toLocaleString('pt-BR');

@@ -4,6 +4,26 @@ import {Trophy} from 'lucide-react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {getTodayHighlight} from '@/lib/api/highlights';
 import {isNotFound} from '@/lib/api/client';
+import {HAND_CATEGORY_LABELS} from '@/lib/handCategories';
+import {bestHandCategory, compareHands} from '@/lib/pokerRules';
+
+const CARD_CODE = /^[2-9TJQKA][CDHS]$/i;
+
+export function highlightWinnerLabel(board?: string[], revealed?: Array<{name?: string; hole_cards: string[]}>) {
+  if (board?.length !== 5 || new Set(board.map(card => card.toUpperCase())).size !== 5 ||
+    board.some(card => !CARD_CODE.test(card))) return undefined;
+  const candidates = (revealed || []).filter(hand => hand.hole_cards.length === 2 &&
+    hand.hole_cards.every(card => CARD_CODE.test(card)) &&
+    new Set([...board, ...hand.hole_cards].map(card => card.toUpperCase())).size === 7);
+  if (candidates.length === 0) return undefined;
+  const best = candidates.reduce((winner, hand) =>
+    compareHands([...hand.hole_cards, ...board], [...winner.hole_cards, ...board]) > 0 ? hand : winner);
+  const tied = candidates.filter(hand =>
+    compareHands([...hand.hole_cards, ...board], [...best.hole_cards, ...board]) === 0);
+  const names = tied.map(hand => hand.name || 'Jogador').join(' e ');
+  const category = HAND_CATEGORY_LABELS[bestHandCategory([...best.hole_cards, ...board])];
+  return category ? `${names} — ${category}` : names;
+}
 
 // Pulled out so both branches (a permanent 404 vs. a transient failure) are
 // unit-testable directly, instead of relying on TanStack Query's real retry
@@ -59,9 +79,7 @@ export function TodayHighlight({tableId, handId, handComplete}: {
   }, [expanded]);
 
   if (!data?.pot) return null;
-  const revealedText = data.revealed && data.revealed.length > 0
-    ? data.revealed.map(hand => `${hand.name || 'Jogador'} ${hand.hole_cards.join('')}`).join(' vs ')
-    : undefined;
+  const revealedText = highlightWinnerLabel(data.board, data.revealed);
   return (
     <div className={`today-highlight-wrap ${expanded ? 'expanded' : ''}`} ref={wrapRef}>
       <button type="button" className="today-highlight" aria-expanded={expanded}

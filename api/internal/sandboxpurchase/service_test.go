@@ -3,6 +3,7 @@ package sandboxpurchase
 import (
 	"context"
 	"errors"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"testing"
 	"time"
 
@@ -65,14 +66,14 @@ func (f *fakeStore) UpdateStatus(_ context.Context, playerID, purchaseID, status
 	f.rows[k] = rec
 	return true, nil
 }
-func (f *fakeStore) List(_ context.Context, playerID string) ([]Record, error) {
+func (f *fakeStore) List(_ context.Context, playerID string, _ int, _ map[string]types.AttributeValue) ([]Record, map[string]types.AttributeValue, error) {
 	var out []Record
 	for _, rec := range f.rows {
 		if rec.PlayerID == playerID {
 			out = append(out, rec)
 		}
 	}
-	return out, nil
+	return out, nil, nil
 }
 
 func TestServiceCreatePersistsWithSKUBreakdown(t *testing.T) {

@@ -57,6 +57,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
+	"gopkg.aoctech.app/poker/api/internal/wsdrain"
 
 	goproto "google.golang.org/protobuf/proto"
 )
@@ -894,6 +895,11 @@ func registerRoutes(
 	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, nil, nil, pokerStatsStore, nil, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil)
 }
 
+// wsDrainGrace is how long OnStop waits after sending close frames so
+// clients can process them and start reconnecting. Kept well under the 5s
+// ShutdownWithContext budget it precedes.
+const wsDrainGrace = 1500 * time.Millisecond
+
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {
 	lc.Append(fx.Hook{
 		OnStart: func(context.Context) error {
@@ -907,6 +913,14 @@ func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *t
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
+			// Hand every live socket a 1001 "going away" before anything else:
+			// ShutdownWithContext below force-closes them once its window
+			// elapses, and a client that learns about it only from a dead read
+			// starts reconnecting far later than one that got a close frame.
+			// See docs/specs/2026-08-24-graceful-ws-shutdown-on-deploy.md.
+			if n := wsdrain.CloseAll(ctx, wsDrainGrace); n > 0 {
+				slog.Info("sent websocket going-away frames", "conns", n)
+			}
 			slog.Info("shutting down ctech-poker-api, draining table manager leases")
 			manager.DrainAndRelease(ctx)
 			stopCtx, cancel := context.WithTimeout(ctx, 5*time.Second)

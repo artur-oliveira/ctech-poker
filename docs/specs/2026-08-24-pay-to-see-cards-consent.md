@@ -2,8 +2,15 @@
 
 ## Status
 
-Not implemented. This is a design for product/eng sign-off, not a bug fix — the current
-non-consensual behavior matches its own specs exactly
+**Implemented 2026-08-24 as option (B)**, after product picked it over (A) and (C). What shipped
+differs from the sketch below in one place worth knowing: the live fee moves *table chips*
+(`requester.Stack` / `winner.Stack` / `rakeCollected`), not wallet balances, so the refund path is a
+plain stack reversal — no `poker_pending_cashouts` entry is involved. The consent window is 8s
+(`hand.WinnerCardsConsentWindow`), chosen to fit inside `table.NextHandDelay`'s 12s post-hand
+window; `StartHand` refunds anything still unanswered as a backstop.
+
+The rest of this document is the original design. It was written before implementation — the
+current non-consensual behavior it describes matches its own specs exactly
 (`docs/specs/2026-08-21-pay-to-see-winner-cards-live.md`,
 `docs/specs/2026-08-21-pay-to-see-winner-cards-history.md`): any dealt-in opponent pays a fixed
 fee and is shown the winner's cards immediately, with no notice to or acceptance from the winner
@@ -95,12 +102,15 @@ already used elsewhere in this codebase (`buyin`), not a new bespoke retry mecha
   their `ViewFor` names them: "{requester} quer pagar {fee} fichas para ver sua mão." with
   Accept/Decline buttons and a visible countdown to `ExpiresAt`.
 
-### Open questions for product
+### Open questions for product — resolved at implementation time
 
-- Fee visibility to the winner before they decide — shown in the prompt (as sketched above), or
-  withheld?
-- Should declining have any cooldown (preventing the same requester from immediately re-asking)?
-- Does the winner get to see *who* asked, or just that someone did?
+- **Fee visibility to the winner before they decide:** shown. The prompt names the fee and that
+  the winner keeps half, because a decision about your own cards with the price hidden is not a
+  real choice.
+- **Cooldown on decline:** none. The per-hand `winnerCardsPaid` guard already stops a requester
+  from paying twice for the same hand, and a request only lives inside the post-hand window.
+- **Does the winner see who asked:** yes — `WinnerCardsRequestView.RequesterName`. Anonymising it
+  would make the prompt impossible to reason about socially.
 
 ## Out of scope
 

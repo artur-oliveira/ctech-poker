@@ -5,7 +5,7 @@ import {type ActionAvailability, ActionBar} from './ActionBar';
 import {Board} from './Board';
 import {Chat} from './Chat';
 import {HandOutcomeBanner, type HandOutcomeState} from './HandOutcome';
-import {TableStage} from './TableStage';
+import {stableSeatOccupants, tableCapacity, TableStage} from './TableStage';
 import {MOCK_PLAYER_ID, snapshotForScenario} from '@/dev/mockRuntime';
 
 vi.mock('@/lib/hooks/useDeckVariant', () => ({
@@ -165,6 +165,31 @@ function useVerticalStage() {
 afterEach(() => vi.mocked(window.matchMedia).mockImplementation(NON_MATCHING_MEDIA));
 
 describe('table presentation', () => {
+  test.each([[2, 2], [3, 6], [6, 6], [7, 9], [9, 9], [undefined, 9]] as const)(
+    'maps room capacity %s to the %s-seat physical layout', (maximum, capacity) => {
+      expect(tableCapacity(maximum)).toBe(capacity);
+    });
+
+  test('keeps surviving players in stable slots and fills a vacancy in turn order', () => {
+    expect(stableSeatOccupants(['a', 'b', 'c'], [null, null, null])).toEqual(['a', 'b', 'c']);
+    expect(stableSeatOccupants(['a', 'c'], ['a', 'b', 'c'])).toEqual(['a', null, 'c']);
+    expect(stableSeatOccupants(['a', 'd', 'c'], ['a', null, 'c'])).toEqual(['a', 'd', 'c']);
+  });
+
+  test.each([
+    ['heads_up', 2, 1],
+    ['six_max', 6, 5],
+    ['nine_max', 9, 8],
+  ] as const)('renders the %s fixed-capacity ring', (scenario, capacity, opponents) => {
+    useVerticalStage();
+    const snapshot = snapshotForScenario(scenario);
+    const {container} = render(<TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID} maxSeats={capacity}
+      seatLayoutKey="room-1" pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}/>);
+    expect(container.querySelector('.stage-v')).toHaveAttribute('data-capacity', String(capacity));
+    expect(container.querySelectorAll('.stage-v-ring .game-seat')).toHaveLength(opponents);
+    expect(container.querySelector('.stage-v > .game-seat.viewer')).toBeInTheDocument();
+  });
+
   test('shows one public playstyle badge and leaves unbadged seats unchanged', () => {
     const snapshot = snapshotForScenario('pre_flop');
     snapshot.seats.forEach(seat => {
@@ -202,6 +227,16 @@ describe('table presentation', () => {
     expect(armed.container.querySelector('.hand-outcome-ring-standalone')).toBeInTheDocument();
   });
 
+  test('queues the paid winner-card offer behind the primary hand outcome', async () => {
+    useVerticalStage();
+    const snapshot = snapshotForScenario('winner_cards');
+    render(<TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID} maxSeats={6}
+      pot={0} bigBlind={50} nowMs={Date.now()} outcome={{key: 1, kind: 'fold'}} holdOutcomeOpen/>);
+    expect(screen.queryByRole('button', {name: /Pedir a mão/})).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: 'Minimizar resultado'}));
+    expect(screen.getByRole('button', {name: /Pedir a mão/})).toBeInTheDocument();
+  });
+
   test('the next-hand countdown rides on the outcome badge once a personalized result exists', () => {
     const outcome: HandOutcomeState = {key: 1, kind: 'win', handCategory: 'pair'};
     const {container, getByRole} = render(<HandOutcomeBanner outcome={outcome} holdOpen
@@ -210,7 +245,9 @@ describe('table presentation', () => {
     expect(container.querySelector('.hand-outcome-dismiss .hand-outcome-ring')).toBeInTheDocument();
     fireEvent.click(getByRole('button', {name: 'Minimizar resultado'}));
     // Collapsed: ring moves with it onto the badge.
-    expect(container.querySelector('.hand-outcome-badge .hand-outcome-ring')).toBeInTheDocument();
+    const badgeRing = container.querySelector('.hand-outcome-badge .hand-outcome-ring');
+    expect(badgeRing).toBeInTheDocument();
+    expect(badgeRing?.querySelector('rect')).toHaveAttribute('rx', '20');
   });
 
   test('renders a speech bubble on the seat with the latest chat message', () => {
@@ -298,6 +335,13 @@ describe('table presentation', () => {
 });
 
 describe('chat', () => {
+  test('offers an explicit close control inside the mobile panel', async () => {
+    const onOpenChangeAction = vi.fn();
+    render(<Chat open items={[]} onOpenChangeAction={onOpenChangeAction} onSendAction={vi.fn()}/>);
+    await userEvent.click(screen.getByRole('button', {name: 'Fechar painel de chat'}));
+    expect(onOpenChangeAction).toHaveBeenCalledWith(false);
+  });
+
   test('opens, resolves player names and sends a trimmed message', async () => {
     const user = userEvent.setup();
     const onOpenChangeAction = vi.fn();

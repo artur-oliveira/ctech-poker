@@ -4,6 +4,7 @@ import {Button} from '@/components/ui/button';
 import {EmojiGlyph} from '@/components/ui/EmojiGlyph';
 import {SkeletonList} from '@/components/ui/skeleton';
 import type {ReactionCatalogEntry, ReactionPurchase} from '@/lib/api/reactionPurchases';
+import {PurchaseActivityList, type ActivityRow} from '@/components/store/PurchaseActivityList';
 import {currentReactionPurchase} from '@/lib/api/reactionPurchases';
 import {TABLE_REACTIONS, type TableReactionID} from '@/lib/reactions';
 
@@ -29,9 +30,12 @@ export function ReactionStoreSection({catalog, purchases, isLoading, isError, on
   isLoading: boolean;
   isError: boolean;
   onRetryAction: () => void;
-  onBuyAction: (entry: ReactionCatalogEntry) => void;
-  onRefundAction: (purchase: ReactionPurchase) => void;
-  onResumeAction: (entry: ReactionCatalogEntry, purchase: ReactionPurchase) => void;
+  // Each action receives the button that triggered it: the dialogs are opened
+  // programmatically, so base-ui has nothing to restore focus to on close
+  // unless we hand it the trigger ourselves.
+  onBuyAction: (entry: ReactionCatalogEntry, trigger: HTMLButtonElement) => void;
+  onRefundAction: (purchase: ReactionPurchase, trigger: HTMLButtonElement) => void;
+  onResumeAction: (entry: ReactionCatalogEntry, purchase: ReactionPurchase, trigger: HTMLButtonElement) => void;
 }) {
   if (isLoading) return <SkeletonList label="Carregando reações premium…" count={3} height={96}
     className="reaction-store-grid"/>;
@@ -46,7 +50,11 @@ export function ReactionStoreSection({catalog, purchases, isLoading, isError, on
       {premium.map(entry => {
         const definition = TABLE_REACTIONS[entry.id as TableReactionID];
         const purchase = currentReactionPurchase(purchases, entry.id);
-        const owned = purchase?.status === 'confirmed';
+        // Ownership is the catalog's server-side entitlement flag; the purchase
+        // row is only what a refund needs in order to name a receipt. The two
+        // can disagree (history is paginated, and a refunded item leaves rows
+        // behind) — when they do, ownership wins.
+        const owned = entry.owned;
         const active = purchase?.status === 'pending' || purchase?.status === 'processing';
         const refunding = purchase?.status === 'refunding';
         return <li key={entry.id} className={`reaction-store-item${owned ? ' owned' : ''}`}>
@@ -57,40 +65,47 @@ export function ReactionStoreSection({catalog, purchases, isLoading, isError, on
             : active || refunding ? <span className="reaction-store-state">{STATUS_LABEL[purchase.status]}</span>
               : <span className="reaction-store-lock"><LockKeyhole aria-hidden="true"/> Não liberada</span>}
           <span className="reaction-store-action">
-            {owned ? <Button type="button" variant="ghost" size="sm" onClick={() => onRefundAction(purchase)}>
-                <RotateCcw aria-hidden="true"/> Estornar</Button>
+            {owned ? (purchase && <Button type="button" variant="ghost" size="sm" onClick={event => onRefundAction(purchase, event.currentTarget)}>
+                <RotateCcw aria-hidden="true"/> Estornar</Button>)
               : refunding ? <span className="reaction-store-wait">Aguarde</span>
-                : active ? <Button type="button" variant="outline" size="sm" onClick={() => onResumeAction(entry, purchase)}>
+                : active ? <Button type="button" variant="outline" size="sm" onClick={event => onResumeAction(entry, purchase, event.currentTarget)}>
                   <QrCode aria-hidden="true"/> Acompanhar</Button>
-                : <Button type="button" size="sm" onClick={() => onBuyAction(entry)}>Liberar</Button>}
+                : <Button type="button" size="sm" onClick={event => onBuyAction(entry, event.currentTarget)}>Liberar</Button>}
           </span>
         </li>;
       })}
     </ul>;
 }
 
+// Maps reaction purchases into the shared activity-list row shape.
+export function reactionActivityRows(purchases: ReactionPurchase[]): ActivityRow[] {
+  return purchases.map(item => {
+    const definition = TABLE_REACTIONS[item.reaction_id as TableReactionID];
+    const date = formatDate(item.updated_at || item.created_at);
+    return {
+      id: item.purchase_id,
+      label: definition?.label || item.reaction_id,
+      detail: `${item.method === 'pix' ? 'Pix' : 'Fichas'}${date ? ` · ${date}` : ''}`,
+      status: item.status,
+      statusLabel: STATUS_LABEL[item.status] || 'Atualizando',
+      media: definition?.glyph ? <EmojiGlyph glyph={definition.glyph}/> : undefined,
+      at: item.updated_at || item.created_at || '',
+    };
+  });
+}
+
+/** Backwards-compatible composition used by focused tests and any caller that
+ * still wants the reaction-only history block. The store route composes the
+ * same rows into its shared purchase activity list. */
 export function ReactionPurchaseHistory({purchases, isLoading = false, isError = false, onRetryAction}: {
   purchases: ReactionPurchase[];
   isLoading?: boolean;
   isError?: boolean;
   onRetryAction?: () => void;
 }) {
-  if (isLoading) return <SkeletonList label="Carregando compras de reações…" count={2} height={58}
-    className="reaction-history-list"/>;
-  if (isError) return <div className="store-activity-error">Não foi possível carregar as compras de reações.
-    {onRetryAction && <Button variant="outline" size="sm" onClick={onRetryAction}>Tentar novamente</Button>}
-  </div>;
-
-  const history = [...purchases].sort((a, b) =>
-    (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || '')).slice(0, 4);
-
-  if (!history.length) return <p className="store-history-empty">Suas compras de reações aparecerão aqui.</p>;
-
-  return <ul className="reaction-history-list">{history.map(item => {
-        const definition = TABLE_REACTIONS[item.reaction_id as TableReactionID];
-        return <li key={item.purchase_id}><span>{definition?.glyph && <EmojiGlyph glyph={definition.glyph}/>}</span>
-          <span><strong>{definition?.label || item.reaction_id}</strong><small>{item.method === 'pix' ? 'Pix' : 'Fichas'}{formatDate(item.updated_at || item.created_at) ? ` · ${formatDate(item.updated_at || item.created_at)}` : ''}</small></span>
-          <b className={`reaction-history-status ${item.status}`}>{STATUS_LABEL[item.status] || 'Atualizando'}</b>
-        </li>;
-      })}</ul>;
+  return <PurchaseActivityList rows={reactionActivityRows(purchases)} isLoading={isLoading} isError={isError}
+    loadingLabel="Carregando compras de reações…"
+    errorLabel="Não foi possível carregar suas compras de reações agora."
+    emptyLabel="Suas compras de reações aparecerão aqui."
+    onRetryAction={onRetryAction}/>;
 }

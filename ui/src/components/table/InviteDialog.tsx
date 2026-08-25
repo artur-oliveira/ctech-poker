@@ -22,9 +22,20 @@ import {playerName} from '@/lib/utils';
 /** Link sharing stays exactly as it was; `roomId` adds the friends section,
  * which sends in-app invites instead. The invite never carries the room's
  * share code — accepting it creates a server-side grant instead. */
-export function InviteDialog({url, roomId}: { url: string; roomId?: string }) {
+export function InviteDialog({url, roomId, open: controlledOpen, onOpenChangeAction, showTrigger = true}: {
+  url: string;
+  roomId?: string;
+  open?: boolean;
+  onOpenChangeAction?: (open: boolean) => void;
+  showTrigger?: boolean;
+}) {
   const searchId = useId();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = (next: boolean) => {
+    if (controlledOpen == null) setInternalOpen(next);
+    onOpenChangeAction?.(next);
+  };
   const [copied, setCopied] = useState(false);
   const [search, setSearch] = useState('');
   const [invited, setInvited] = useState<string[]>([]);
@@ -73,9 +84,9 @@ export function InviteDialog({url, roomId}: { url: string; roomId?: string }) {
     playerName(friend.player_id, undefined, friend.name).toLocaleLowerCase('pt-BR').includes(term));
 
   return <Dialog open={open} onOpenChange={setOpen}>
-    <DialogTrigger render={<Button type="button" variant="ghost" size="icon" aria-label="Convidar para a mesa"/>}>
+    {showTrigger && <DialogTrigger render={<Button type="button" variant="ghost" size="icon" aria-label="Convidar para a mesa"/>}>
       <Share2/>
-    </DialogTrigger>
+    </DialogTrigger>}
     <DialogContent>
       <DialogHeader>
         <DialogTitle>Convidar para a mesa</DialogTitle>

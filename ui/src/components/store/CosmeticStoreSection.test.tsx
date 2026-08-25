@@ -7,15 +7,19 @@ import type {CosmeticCatalogEntry, CosmeticPurchase} from '@/lib/api/cosmeticPur
 vi.mock('next/image', () => ({default: ({alt}: {alt: string}) => <div role="img" aria-label={alt}/>}));
 
 const deckCatalog: CosmeticCatalogEntry[] = [
-  {kind: 'deck', id: 'four-color', premium: false},
-  {kind: 'deck', id: 'golden', premium: true, price_cents: 2990, price_fichas: 500_000},
-  {kind: 'deck', id: 'pink', premium: true, price_cents: 2990, price_fichas: 500_000},
-  {kind: 'deck', id: 'not-a-real-deck', premium: true, price_cents: 100, price_fichas: 100},
+  {kind: 'deck', id: 'four-color', premium: false, owned: true},
+  {kind: 'deck', id: 'golden', premium: true, owned: false, price_cents: 2990, price_fichas: 500_000},
+  {kind: 'deck', id: 'pink', premium: true, owned: false, price_cents: 2990, price_fichas: 500_000},
+  {kind: 'deck', id: 'not-a-real-deck', premium: true, owned: false, price_cents: 100, price_fichas: 100},
 ];
 
+// Ownership is a catalog fact now (the server reads it from entitlements), so
+// "owning golden" is a different catalog, not a different purchase list.
+const ownedGoldenCatalog = deckCatalog.map(entry => entry.id === 'golden' ? {...entry, owned: true} : entry);
+
 const feltCatalog: CosmeticCatalogEntry[] = [
-  {kind: 'felt', id: 'classic', premium: false},
-  {kind: 'felt', id: 'midnight', premium: true, price_cents: 990, price_fichas: 200_000},
+  {kind: 'felt', id: 'classic', premium: false, owned: true},
+  {kind: 'felt', id: 'midnight', premium: true, owned: false, price_cents: 990, price_fichas: 200_000},
 ];
 
 function purchase(overrides: Partial<CosmeticPurchase> = {}): CosmeticPurchase {
@@ -65,17 +69,27 @@ describe('DeckStoreSection', () => {
     renderSection();
     expect(screen.getAllByText('Não liberada').length).toBeGreaterThan(0);
     await userEvent.click(screen.getAllByRole('button', {name: 'Liberar'})[0]);
-    expect(actions.onBuyAction).toHaveBeenCalledWith(expect.objectContaining({id: 'golden'}));
+    expect(actions.onBuyAction).toHaveBeenCalledWith(expect.objectContaining({id: 'golden'}), expect.any(HTMLButtonElement));
   });
 
   test('an owned premium deck shows an owned state and can be refunded, no buy button', async () => {
-    renderSection([purchase()]);
+    renderSection([purchase()], {catalog: ownedGoldenCatalog});
     const items = within(screen.getByRole('list', {name: 'Catálogo de baralhos'})).getAllByRole('listitem');
     const owned = items.find(item => within(item).queryByText('Sua'));
     expect(owned).toBeDefined();
     expect(within(owned!).queryByRole('button', {name: 'Liberar'})).not.toBeInTheDocument();
     await userEvent.click(within(owned!).getByRole('button', {name: /Estornar/}));
-    expect(actions.onRefundAction).toHaveBeenCalledWith(expect.objectContaining({purchase_id: 'p1'}));
+    expect(actions.onRefundAction).toHaveBeenCalledWith(expect.objectContaining({purchase_id: 'p1'}), expect.any(HTMLButtonElement));
+  });
+
+  test('an owned deck whose receipt is not on this page of history offers no refund button', () => {
+    // Ownership comes from the catalog and history is paginated, so the two can
+    // legitimately disagree; the owned state must still render.
+    renderSection([], {catalog: ownedGoldenCatalog});
+    const items = within(screen.getByRole('list', {name: 'Catálogo de baralhos'})).getAllByRole('listitem');
+    const owned = items.find(item => within(item).queryByText('Sua'));
+    expect(owned).toBeDefined();
+    expect(within(owned!).queryByRole('button')).not.toBeInTheDocument();
   });
 
   test('a pending purchase resumes instead of buying again', async () => {
@@ -83,7 +97,7 @@ describe('DeckStoreSection', () => {
     renderSection([pending]);
     expect(screen.getByText('Aguardando Pix')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', {name: /Acompanhar/}));
-    expect(actions.onResumeAction).toHaveBeenCalledWith(expect.objectContaining({id: 'golden'}), pending);
+    expect(actions.onResumeAction).toHaveBeenCalledWith(expect.objectContaining({id: 'golden'}), pending, expect.any(HTMLButtonElement));
   });
 
   test('a refunding purchase blocks further action', () => {
@@ -108,6 +122,6 @@ describe('FeltStoreSection', () => {
   test('buys an unowned premium felt', async () => {
     render(<FeltStoreSection catalog={feltCatalog} purchases={[]} isLoading={false} isError={false} {...actions}/>);
     await userEvent.click(screen.getByRole('button', {name: 'Liberar'}));
-    expect(actions.onBuyAction).toHaveBeenCalledWith(expect.objectContaining({id: 'midnight'}));
+    expect(actions.onBuyAction).toHaveBeenCalledWith(expect.objectContaining({id: 'midnight'}), expect.any(HTMLButtonElement));
   });
 });

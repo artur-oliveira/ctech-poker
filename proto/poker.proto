@@ -165,6 +165,21 @@ message TableSnapshot {
   repeated string runout_cards = 32;
   repeated string board_two = 33;
   int32 board_split_at = 34;
+  // Viewer-scoped: present only for the winner being asked and the requester
+  // waiting on the answer. Nobody else learns a request exists.
+  WinnerCardsRequest pending_winner_cards = 35;
+}
+
+// WinnerCardsRequest is one outstanding paid request to reveal the sole
+// uncontested winner's mucked hole cards. The requester has already been
+// charged; the winner has until expires_at_unix_ms to accept or decline, and
+// a decline or timeout refunds in full.
+message WinnerCardsRequest {
+  string requester_id = 1;
+  string requester_name = 2;
+  string winner_id = 3;
+  int64 fee = 4;
+  int64 expires_at_unix_ms = 5;
 }
 
 message RevealedSalt {
@@ -176,7 +191,7 @@ message RevealedSalt {
 
 // ClientMessage is sent from the client to the server.
 message ClientMessage {
-  string type = 1; // "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice" | "peek_cards" | "request_rabbit_hunt" | "rabbit_hunt_verify_failed" | "request_winner_cards"
+  string type = 1; // "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice" | "peek_cards" | "request_rabbit_hunt" | "rabbit_hunt_verify_failed" | "request_winner_cards" | "accept_winner_cards" | "decline_winner_cards"
   
   // payload fields
   string token = 2; // for auth frame

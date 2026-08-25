@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import type {ReactNode} from 'react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
-import {ReactionPurchaseHistory, ReactionStoreSection} from './ReactionStoreSection';
+import {reactionActivityRows, ReactionStoreSection} from './ReactionStoreSection';
+import {PurchaseActivityList} from '@/components/store/PurchaseActivityList';
 import {ReactionPurchaseDialog} from './ReactionPurchaseDialog';
 import {ReactionRefundDialog} from './ReactionRefundDialog';
 import {ReactionFavoritesDialog} from './ReactionFavoritesDialog';
@@ -21,11 +22,15 @@ vi.mock('@/lib/api/reactionPurchases', async importOriginal => ({
 vi.mock('next/image', () => ({default: ({alt}: {alt: string}) => <div role="img" aria-label={alt}/>}));
 
 const catalog: ReactionCatalogEntry[] = [
-  {id: 'fire', premium: true, price_cents: 990, price_fichas: 5000},
-  {id: 'cold', premium: true, price_cents: 490, price_fichas: 2500},
-  {id: 'clap', premium: false, price_cents: 0, price_fichas: 0},
-  {id: 'ghost-reaction', premium: true, price_cents: 100},
+  {id: 'fire', premium: true, owned: false, price_cents: 990, price_fichas: 5000},
+  {id: 'cold', premium: true, owned: false, price_cents: 490, price_fichas: 2500},
+  {id: 'clap', premium: false, owned: true, price_cents: 0, price_fichas: 0},
+  {id: 'ghost-reaction', premium: true, owned: false, price_cents: 100},
 ];
+
+// Ownership is a catalog fact now (the server reads it from entitlements), so
+// "owning fire" is a different catalog, not a different purchase list.
+const ownedFireCatalog = catalog.map(entry => entry.id === 'fire' ? {...entry, owned: true} : entry);
 
 const purchase = (overrides: Partial<ReactionPurchase> = {}): ReactionPurchase => ({
   purchase_id: 'p1', reaction_id: 'fire', method: 'pix', status: 'confirmed',
@@ -60,7 +65,7 @@ describe('ReactionStoreSection', () => {
   });
 
   test('falls back to an empty state when nothing premium is on sale', () => {
-    renderSection([], {catalog: [{id: 'clap', premium: false}]});
+    renderSection([], {catalog: [{id: 'clap', premium: false, owned: true}]});
     expect(screen.getByText('Nenhuma reação premium disponível no momento.')).toBeInTheDocument();
   });
 
@@ -77,14 +82,15 @@ describe('ReactionStoreSection', () => {
     renderSection();
     expect(screen.getAllByText('Não liberada')).toHaveLength(2);
     await userEvent.click(screen.getAllByRole('button', {name: 'Liberar'})[0]);
-    expect(actions.onBuyAction).toHaveBeenCalledWith(catalog[0]);
+    expect(actions.onBuyAction).toHaveBeenCalledWith(catalog[0], expect.any(HTMLButtonElement));
   });
 
   test('an owned reaction can be refunded instead of bought again', async () => {
-    renderSection([purchase()]);
+    renderSection([purchase()], {catalog: ownedFireCatalog});
     expect(screen.getByText('Sua')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', {name: /Estornar/}));
-    expect(actions.onRefundAction).toHaveBeenCalledWith(expect.objectContaining({purchase_id: 'p1'}));
+    expect(actions.onRefundAction).toHaveBeenCalledWith(expect.objectContaining({purchase_id: 'p1'}),
+      expect.any(HTMLButtonElement));
   });
 
   test('a pending purchase resumes instead of starting a second one', async () => {
@@ -92,7 +98,7 @@ describe('ReactionStoreSection', () => {
     renderSection([pending]);
     expect(screen.getByText('Aguardando Pix')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', {name: /Acompanhar/}));
-    expect(actions.onResumeAction).toHaveBeenCalledWith(catalog[0], pending);
+    expect(actions.onResumeAction).toHaveBeenCalledWith(catalog[0], pending, expect.any(HTMLButtonElement));
     expect(actions.onBuyAction).not.toHaveBeenCalled();
   });
 
@@ -103,42 +109,62 @@ describe('ReactionStoreSection', () => {
     expect(screen.queryByRole('button', {name: /Estornar/})).not.toBeInTheDocument();
   });
 
-  test('picks the highest-priority purchase when a reaction has several', () => {
-    renderSection([purchase({purchase_id: 'old', status: 'refunded'}), purchase({purchase_id: 'new'})]);
+  test('picks the highest-priority purchase when a reaction has several', async () => {
+    renderSection([purchase({purchase_id: 'old', status: 'refunded'}), purchase({purchase_id: 'new'})],
+      {catalog: ownedFireCatalog});
     expect(screen.getByText('Sua')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: /Estornar/}));
+    expect(actions.onRefundAction).toHaveBeenCalledWith(expect.objectContaining({purchase_id: 'new'}),
+      expect.any(HTMLButtonElement));
+  });
+
+  test('an owned reaction whose receipt is not on this page of history offers no refund button', () => {
+    // Ownership comes from the catalog and history is paginated, so the two can
+    // legitimately disagree; the owned state must still render.
+    renderSection([], {catalog: ownedFireCatalog});
+    const items = within(screen.getByRole('list', {name: 'Catálogo de reações premium'})).getAllByRole('listitem');
+    const owned = items.find(item => within(item).queryByText('Sua'));
+    expect(owned).toBeDefined();
+    expect(within(owned!).queryByRole('button')).not.toBeInTheDocument();
   });
 });
 
-describe('ReactionPurchaseHistory', () => {
+const activity = (purchases: ReactionPurchase[] = [], overrides = {}) =>
+  <PurchaseActivityList rows={reactionActivityRows(purchases)}
+    loadingLabel="Carregando compras de reações…"
+    errorLabel="Não foi possível carregar as compras de reações."
+    emptyLabel="Suas compras de reações aparecerão aqui." {...overrides}/>;
+
+describe('reaction purchase activity', () => {
   test('renders loading, error and empty states', async () => {
     const onRetryAction = vi.fn();
-    const {rerender} = render(<ReactionPurchaseHistory purchases={[]} isLoading/>);
+    const {rerender} = render(activity([], {isLoading: true}));
     expect(screen.getByText('Carregando compras de reações…')).toBeInTheDocument();
 
-    rerender(<ReactionPurchaseHistory purchases={[]} isError onRetryAction={onRetryAction}/>);
+    rerender(activity([], {isError: true, onRetryAction}));
     await userEvent.click(screen.getByRole('button', {name: 'Tentar novamente'}));
     expect(onRetryAction).toHaveBeenCalledOnce();
 
-    rerender(<ReactionPurchaseHistory purchases={[]} isError/>);
+    rerender(activity([], {isError: true}));
     expect(screen.queryByRole('button', {name: 'Tentar novamente'})).not.toBeInTheDocument();
 
-    rerender(<ReactionPurchaseHistory purchases={[]}/>);
+    rerender(activity([]));
     expect(screen.getByText('Suas compras de reações aparecerão aqui.')).toBeInTheDocument();
   });
 
   test('shows the four most recent purchases newest first', () => {
-    render(<ReactionPurchaseHistory purchases={[1, 2, 3, 4, 5].map(index => purchase({
+    render(activity([1, 2, 3, 4, 5].map(index => purchase({
       purchase_id: `p${index}`, reaction_id: 'fire', updated_at: `2026-08-0${index}T10:00:00Z`,
-    }))}/>);
+    }))));
     const items = screen.getAllByRole('listitem');
     expect(items).toHaveLength(4);
-    expect(within(items[0]).getByText(/05 de ago|05 de ago\./)).toBeInTheDocument();
+    expect(within(items[0]).getByText(/05 de ago/)).toBeInTheDocument();
   });
 
   test('degrades gracefully for an unknown reaction, method and status', () => {
-    render(<ReactionPurchaseHistory purchases={[purchase({
+    render(activity([purchase({
       reaction_id: 'unknown-reaction', method: 'fichas', status: 'weird', updated_at: 'not-a-date', created_at: '',
-    })]}/>);
+    })]));
     expect(screen.getByText('unknown-reaction')).toBeInTheDocument();
     expect(screen.getByText('Fichas')).toBeInTheDocument();
     expect(screen.getByText('Atualizando')).toBeInTheDocument();
@@ -156,7 +182,7 @@ describe('ReactionPurchaseDialog', () => {
   test('renders nothing for an unknown reaction', () => {
     const {container} = render(<ReactionPurchaseDialog entry={null} onCloseAction={vi.fn()}/>, {wrapper});
     expect(container).toBeEmptyDOMElement();
-    render(<ReactionPurchaseDialog entry={{id: 'nope', premium: true}} onCloseAction={vi.fn()}/>, {wrapper});
+    render(<ReactionPurchaseDialog entry={{id: 'nope', premium: true, owned: false}} onCloseAction={vi.fn()}/>, {wrapper});
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 

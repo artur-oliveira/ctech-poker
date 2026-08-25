@@ -87,16 +87,15 @@ describe('useLobbyRealtime', () => {
   test('invalidates wallet queries and notifies on sandbox_purchase_update', () => {
     renderHook(() => useLobbyRealtime());
     act(() => state.options?.onMessage({type: 'sandbox_purchase_update', purchase_id: 'sbxp-1', code: 'confirmed', amount: 110000}));
-    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'balance']});
-    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'sandbox-purchases']});
+    // One root invalidation covers balance, catalogs (which carry ownership) and history.
+    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet']});
     expect(state.notify).toHaveBeenCalledWith(expect.stringContaining('confirmada'), 'info');
   });
 
   test('refreshes reaction ownership and notifies on reaction_purchase_update', () => {
     renderHook(() => useLobbyRealtime());
     act(() => state.options?.onMessage({type: 'reaction_purchase_update', purchase_id: 'prdp-1', code: 'confirmed'}));
-    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'reaction-purchases']});
-    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'reaction-catalog']});
+    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet']});
     expect(state.notify).toHaveBeenCalledWith('Reação premium liberada!', 'info');
   });
 

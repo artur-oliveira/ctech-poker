@@ -4,23 +4,24 @@ import {describe, expect, test, vi} from 'vitest';
 import {TableUtilityMenu} from './TableUtilityMenu';
 
 describe('TableUtilityMenu', () => {
-  test('consolidates narrow-screen table tools and reports the selected panel', async () => {
+  test('keeps quick chat and reactions out of More and reports a secondary selection', async () => {
     const onSelectAction = vi.fn();
-    render(<TableUtilityMenu active="chat" winnersAvailable={false} onSelectAction={onSelectAction}/>);
+    render(<TableUtilityMenu active={null} winnersAvailable={false} onSelectAction={onSelectAction}/>);
 
-    await userEvent.click(screen.getByRole('button', {name: 'Ferramentas da mesa'}));
-    expect(screen.getByRole('button', {name: 'Chat da mesa'})).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', {name: 'Últimos vencedores'})).toBeDisabled();
-    await userEvent.click(screen.getByRole('button', {name: 'Reações'}));
-    expect(onSelectAction).toHaveBeenCalledWith('reactions');
+    await userEvent.click(screen.getByRole('button', {name: 'Mais ações da mesa'}));
     expect(screen.queryByRole('button', {name: 'Chat da mesa'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: 'Reações'})).not.toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Últimos vencedores'})).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', {name: 'Ranking de mãos'}));
+    expect(onSelectAction).toHaveBeenCalledWith('rankings');
+    expect(screen.queryByRole('button', {name: 'Ranking de mãos'})).not.toBeInTheDocument();
   });
 
   test('hides the equity trainer entry until it is explicitly visible, and disables it mid-turn', async () => {
     const onSelectAction = vi.fn();
     const {rerender} = render(<TableUtilityMenu active={null} winnersAvailable
       onSelectAction={onSelectAction}/>);
-    await userEvent.click(screen.getByRole('button', {name: 'Ferramentas da mesa'}));
+    await userEvent.click(screen.getByRole('button', {name: 'Mais ações da mesa'}));
     expect(screen.queryByRole('button', {name: 'Treinador'})).not.toBeInTheDocument();
 
     rerender(<TableUtilityMenu active={null} winnersAvailable equityTrainerVisible

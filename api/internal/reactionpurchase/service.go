@@ -46,10 +46,15 @@ type wallet interface {
 // wallet's own PriceCents — prices are never cached/hardcoded locally
 // (docs/specs/2026-08-12-premium-reactions.md).
 type CatalogEntry struct {
-	ID          string `json:"id"`
-	Premium     bool   `json:"premium"`
-	PriceCents  int64  `json:"price_cents,omitempty"`
-	PriceFichas int64  `json:"price_fichas,omitempty"`
+	ID      string `json:"id"`
+	Premium bool   `json:"premium"`
+	// Owned is read from the entitlement table, never derived from purchase
+	// history: a buy/refund/buy/refund cycle leaves history rows the client
+	// cannot safely reduce to ownership. Always true for free reactions,
+	// whose ownership is universal.
+	Owned       bool  `json:"owned"`
+	PriceCents  int64 `json:"price_cents,omitempty"`
+	PriceFichas int64 `json:"price_fichas,omitempty"`
 }
 
 type Service struct {
@@ -99,8 +104,15 @@ func recordFromProductPurchase(purchase *walletclient.ProductPurchase, reactionI
 	}
 }
 
-func (s *Service) ListCatalog(ctx context.Context) ([]CatalogEntry, error) {
+// ListCatalog merges the game-owned catalog with wallet prices and this
+// player's entitlements, so the client never has to infer ownership from
+// purchase history.
+func (s *Service) ListCatalog(ctx context.Context, playerID string) ([]CatalogEntry, error) {
 	skus, err := s.wallet.ListProductSKUs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	owned, err := s.entitlements.OwnedIDs(ctx, playerID)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +123,7 @@ func (s *Service) ListCatalog(ctx context.Context) ([]CatalogEntry, error) {
 	all := reactions.All()
 	out := make([]CatalogEntry, 0, len(all))
 	for _, e := range all {
-		entry := CatalogEntry{ID: e.ID, Premium: e.Premium}
+		entry := CatalogEntry{ID: e.ID, Premium: e.Premium, Owned: !e.Premium || owned[e.ID]}
 		if e.Premium {
 			entry.PriceFichas = e.PriceFichas
 			price, found := priceBySKU[e.SKU]
@@ -588,11 +600,18 @@ func (s *Service) Refresh(ctx context.Context, playerID, purchaseID string) (Rec
 	return *rec, nil
 }
 
-func (s *Service) List(ctx context.Context, playerID string) ([]Record, error) {
-	records, err := s.store.List(ctx, playerID)
+// List returns one page of purchase history, newest first *within the page*.
+//
+// ponytail: page-local ordering. The sort key is the purchase id, not a
+// timestamp, so DynamoDB hands back id order and the sort below can only
+// reorder what this page contains. Fine while a player's history fits in a
+// page or two; upgrade path is a created_at GSI queried with
+// ScanIndexForward:false, at which point this sort goes away entirely.
+func (s *Service) List(ctx context.Context, playerID string, limit int, startKey map[string]types.AttributeValue) ([]Record, map[string]types.AttributeValue, error) {
+	records, nextKey, err := s.store.List(ctx, playerID, limit, startKey)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	sort.Slice(records, func(i, j int) bool { return records[i].CreatedAt > records[j].CreatedAt })
-	return records, nil
+	return records, nextKey, nil
 }

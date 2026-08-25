@@ -1,16 +1,24 @@
 'use client';
-import {useCallback, useEffect, useState} from 'react';
+import {type RefObject, useCallback, useEffect, useState} from 'react';
 import {Check, Coins, LoaderCircle, QrCode, ShieldCheck} from 'lucide-react';
 import {useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
 } from '@/components/ui/dialog';
 import {PixPaymentView} from '@/components/store/PixPaymentView';
 import {EmojiGlyph} from '@/components/ui/EmojiGlyph';
 import {ApiError} from '@/lib/api/client';
 import {
-  createReactionPurchase, getReactionPurchase, type ReactionCatalogEntry, type ReactionPurchase,
+  createReactionPurchase,
+  getReactionPurchase,
+  type ReactionCatalogEntry,
+  type ReactionPurchase,
   type ReactionPurchaseMethod
 } from '@/lib/api/reactionPurchases';
 import {TABLE_REACTIONS, type TableReactionID} from '@/lib/reactions';
@@ -31,10 +39,11 @@ function purchaseError(error: unknown) {
   return 'Não foi possível iniciar a compra agora. Tente novamente.';
 }
 
-export function ReactionPurchaseDialog({entry, initialPurchase, sandboxBalance, onCloseAction, onConfirmedAction}: {
+export function ReactionPurchaseDialog({entry, initialPurchase, sandboxBalance, finalFocusRef, onCloseAction, onConfirmedAction}: {
   entry: ReactionCatalogEntry | null;
   initialPurchase?: ReactionPurchase;
   sandboxBalance?: number;
+  finalFocusRef?: RefObject<HTMLButtonElement | null>;
   onCloseAction: () => void;
   onConfirmedAction?: (purchase: ReactionPurchase) => void;
 }) {
@@ -97,7 +106,7 @@ export function ReactionPurchaseDialog({entry, initialPurchase, sandboxBalance, 
   return <Dialog open onOpenChange={open => {
     if (!open && !pendingMethod) onCloseAction();
   }}>
-    <DialogContent className="reaction-purchase-dialog">
+    <DialogContent className="reaction-purchase-dialog" finalFocus={finalFocusRef}>
       <DialogHeader>
         <span className="reaction-purchase-hero"><EmojiGlyph glyph={definition.glyph}/></span>
         <DialogTitle>{confirmed ? `${definition.label} liberada` : `Liberar ${definition.label}`}</DialogTitle>
@@ -110,8 +119,8 @@ export function ReactionPurchaseDialog({entry, initialPurchase, sandboxBalance, 
         <span><Check aria-hidden="true"/></span>
         <div><strong>Pronta para a mesa</strong><p>Feche esta janela e envie a reação pelo atalho.</p></div>
       </div> : active && purchase?.method === 'pix' ? <>
-        <PixPaymentView purchase={purchase}
-          paymentNote="O pagamento libera apenas esta reação cosmética e não altera fichas nem saldo de jogo."/>
+        <PixPaymentView purchase={purchase} amountDetail={definition ? `Reação ${definition.label}` : undefined}
+                        paymentNote="O pagamento libera apenas esta reação cosmética e não altera fichas nem saldo de jogo."/>
         <p className="reaction-purchase-wait"><LoaderCircle aria-hidden="true"/> Aguardando confirmação do Pix…</p>
       </> : active ? <div className="reaction-purchase-processing" role="status">
         <LoaderCircle aria-hidden="true"/><strong>Confirmando o débito de fichas…</strong>
@@ -134,20 +143,22 @@ export function ReactionPurchaseDialog({entry, initialPurchase, sandboxBalance, 
           O preço vem do catálogo do servidor e a reação só é liberada após a confirmação.</p>
       </>}
 
-      {expired && <p className="reaction-purchase-error" role="alert">Este Pix expirou. Gere uma nova compra para tentar novamente.</p>}
+      {expired && <p className="reaction-purchase-error" role="alert">Este Pix expirou. Gere uma nova compra para tentar
+          novamente.</p>}
       {active && pollError && <div className="store-poll-recovery" role="alert">
-        <span>Não foi possível atualizar a confirmação.</span>
-        <Button type="button" variant="ghost" onClick={() => void refreshStatus()}>Verificar novamente</Button>
+          <span>Não foi possível atualizar a confirmação.</span>
+          <Button type="button" variant="ghost" onClick={() => void refreshStatus()}>Verificar novamente</Button>
       </div>}
       {error && <p className="reaction-purchase-error" role="alert">{error}</p>}
 
       <DialogFooter>
         {confirmed ? <Button type="button" onClick={onCloseAction}>Usar na mesa</Button>
           : expired ? <><Button type="button" variant="ghost" onClick={onCloseAction}>Agora não</Button>
-            <Button type="button" disabled={pendingMethod !== null} onClick={() => void buy('pix')}>Gerar novo Pix</Button></>
-          : <Button type="button" variant="ghost" disabled={pendingMethod !== null} onClick={onCloseAction}>
-            {active ? 'Fechar e acompanhar depois' : 'Agora não'}
-          </Button>}
+              <Button type="button" disabled={pendingMethod !== null} onClick={() => void buy('pix')}>Gerar novo
+                Pix</Button></>
+            : <Button type="button" variant="ghost" disabled={pendingMethod !== null} onClick={onCloseAction}>
+              {active ? 'Fechar e acompanhar depois' : 'Agora não'}
+            </Button>}
       </DialogFooter>
     </DialogContent>
   </Dialog>;

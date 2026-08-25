@@ -86,6 +86,8 @@ type Actor struct {
 	nextHandDeadline         time.Time
 	nextHandArmedFor         string
 	nextHandDelay            time.Duration
+	winnerCardsTimer         *time.Timer
+	winnerCardsArmedFor      string
 	lastBroadcastStage       hand.Stage
 	runoutTimer              *time.Timer
 	runoutTimerHandID        string
@@ -245,6 +247,12 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleRequestRabbitHunt(ctx, c)
 	case RequestWinnerCardsCmd:
 		return a.handleRequestWinnerCards(ctx, c)
+	case AcceptWinnerCardsCmd:
+		return a.handleAcceptWinnerCards(ctx, c)
+	case DeclineWinnerCardsCmd:
+		return a.handleDeclineWinnerCards(ctx, c)
+	case expireWinnerCardsCmd:
+		return a.handleExpireWinnerCards(ctx, c)
 	case RabbitHuntVerifyFailedCmd:
 		return a.handleRabbitHuntVerifyFailed(ctx, c)
 	case SetRunItTwiceCmd:
@@ -648,6 +656,7 @@ func (a *Actor) rearmTimersFromCache() {
 	a.armTurnTimer(a.cached.CurrentPlayerIDForActor(), stage, 0)
 	a.armRunoutTimer(a.cached.IsAwaitingRunoutForActor(), stage)
 	a.armNextHandTimer(stage == hand.Complete)
+	a.armWinnerCardsTimer(a.cached.PendingWinnerCards())
 }
 
 func (a *Actor) handleReady(ctx context.Context, c ReadyCmd) error {
@@ -1489,7 +1498,7 @@ func (a *Actor) handleRequestWinnerCards(ctx context.Context, c RequestWinnerCar
 	}
 	changed := false
 	apply := func() error {
-		if _, err := a.cached.RequestWinnerCards(c.PlayerID); err != nil {
+		if _, err := a.cached.RequestWinnerCards(c.PlayerID, timeNowFunc()); err != nil {
 			return err
 		}
 		changed = true
@@ -1498,10 +1507,89 @@ func (a *Actor) handleRequestWinnerCards(ctx context.Context, c RequestWinnerCar
 		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
+		// A rejected request can still have mutated a.cached on the way to the
+		// rejection: RequestWinnerCards expires (and refunds) a stale pending
+		// request before it validates the rest. Reload so that refund is never
+		// left sitting uncommitted in memory for the next command to trust —
+		// same discipline as handleTurnTimeout/handleNextHand.
+		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+			return reloadErr
+		}
 		if !errors.Is(err, tablestore.ErrDuplicateAction) {
 			return err
 		}
-		if err := a.ensureLoaded(ctx, true); err != nil {
+	}
+	if changed {
+		a.broadcastAll()
+	}
+	return nil
+}
+
+// handleAcceptWinnerCards and handleDeclineWinnerCards mirror
+// handleRequestWinnerCards exactly — same conflict retry, same duplicate-action
+// reload — because all three mutate the same per-hand request and must commit
+// through the same conditional-write path.
+func (a *Actor) handleAcceptWinnerCards(ctx context.Context, c AcceptWinnerCardsCmd) error {
+	return a.applyWinnerCardsAnswer(ctx, c.PlayerID, c.ActionID, "accept_winner_cards",
+		func() error { return a.cached.AcceptWinnerCards(c.PlayerID, timeNowFunc()) })
+}
+
+func (a *Actor) handleDeclineWinnerCards(ctx context.Context, c DeclineWinnerCardsCmd) error {
+	return a.applyWinnerCardsAnswer(ctx, c.PlayerID, c.ActionID, "decline_winner_cards",
+		func() error { return a.cached.DeclineWinnerCards(c.PlayerID) })
+}
+
+func (a *Actor) applyWinnerCardsAnswer(ctx context.Context, playerID, actionID, action string, mutate func() error) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	changed := false
+	apply := func() error {
+		if err := mutate(); err != nil {
+			return err
+		}
+		changed = true
+		return a.commit(ctx, actionID, &tablestore.ActionLogEntry{
+			PlayerID: playerID, ActionID: actionID, Action: action,
+		})
+	}
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		// AcceptWinnerCards expires a stale request and refunds the requester
+		// before reporting that the window closed or the winner has left, so a
+		// failed answer can still have moved chips in memory. Discard it.
+		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+			return reloadErr
+		}
+		if !errors.Is(err, tablestore.ErrDuplicateAction) {
+			return err
+		}
+	}
+	if changed {
+		a.broadcastAll()
+	}
+	return nil
+}
+
+// handleExpireWinnerCards closes an unanswered consent window and refunds the
+// requester. A stale timer (already answered, or the next hand already
+// started) is a silent no-op.
+func (a *Actor) handleExpireWinnerCards(ctx context.Context, _ expireWinnerCardsCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	changed := false
+	apply := func() error {
+		if !a.cached.ExpireWinnerCards(timeNowFunc()) {
+			return nil
+		}
+		changed = true
+		return a.commit(ctx, "", &tablestore.ActionLogEntry{Action: "expire_winner_cards"})
+	}
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+			return reloadErr
+		}
+		if !errors.Is(err, tablestore.ErrVersionConflict) {
 			return err
 		}
 	}
@@ -1942,6 +2030,39 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 	return nil
 }
 
+// armWinnerCardsTimer (re-)arms the consent-window expiry for a pending
+// paid-reveal request. Idempotent per requester (at most one request exists
+// per hand) and driven off the request's persisted ExpiresAt, so a reload on
+// any node resumes the same deadline rather than restarting it — without
+// this, an actor handoff mid-request would strand the requester's fee.
+func (a *Actor) armWinnerCardsTimer(req *hand.WinnerCardsRequest) {
+	if req == nil {
+		if a.winnerCardsTimer != nil {
+			a.winnerCardsTimer.Stop()
+		}
+		a.winnerCardsArmedFor = ""
+		return
+	}
+	key := a.handID + "#" + req.RequesterID
+	if key == a.winnerCardsArmedFor {
+		return
+	}
+	if a.winnerCardsTimer != nil {
+		a.winnerCardsTimer.Stop()
+	}
+	a.winnerCardsArmedFor = key
+	delay := time.UnixMilli(req.ExpiresAt).Sub(timeNowFunc())
+	if delay < 0 {
+		delay = 0
+	}
+	a.winnerCardsTimer = time.AfterFunc(delay, func() {
+		reply := make(chan error, 1)
+		if err := a.Dispatch(expireWinnerCardsCmd{Reply: reply}); err != nil {
+			slog.Warn("table winner cards expiry dispatch failed", "table_id", a.id, "err", err)
+		}
+	})
+}
+
 // armRunoutTimer (re-)arms the paced all-in-runout timer while
 // IsAwaitingRunoutForActor is true. Idempotent per (handID, phase, stage) —
 // re-arming for the same point in the runout does not restart the delay,
@@ -2095,6 +2216,7 @@ func (a *Actor) broadcastAll() {
 	a.armTurnTimer(current, stage, grace)
 	a.armRunoutTimer(a.cached.IsAwaitingRunoutForActor(), stage)
 	a.armNextHandTimer(stage == hand.Complete)
+	a.armWinnerCardsTimer(a.cached.PendingWinnerCards())
 	a.lastBroadcastStage = stage
 	doEquity := a.equityEnabled.Load() && equityStage(stage)
 	for _, p := range a.cached.PlayersForActor() {

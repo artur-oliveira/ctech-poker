@@ -53,6 +53,22 @@ type Snapshot struct {
 	ActionPreselection       string                   `json:"action_preselection,omitempty"`
 	ActionPreselectionAmount int64                    `json:"action_preselection_amount,omitempty"`
 	ProspectiveCallAmount    int64                    `json:"prospective_call_amount,omitempty"`
+	// PendingWinnerCards is the outstanding paid-reveal request, sent only to
+	// the two players it concerns — the winner, who has to answer it, and the
+	// requester, who is waiting. Everyone else must not learn that someone
+	// tried to buy a look at a mucked hand.
+	PendingWinnerCards *WinnerCardsRequestView `json:"pending_winner_cards,omitempty"`
+}
+
+// WinnerCardsRequestView is the viewer-scoped projection of
+// WinnerCardsRequest. RequesterName is resolved here so the prompt can name
+// who is asking without the client holding a seat lookup.
+type WinnerCardsRequestView struct {
+	RequesterID     string `json:"requester_id"`
+	RequesterName   string `json:"requester_name,omitempty"`
+	WinnerID        string `json:"winner_id"`
+	Fee             int64  `json:"fee"`
+	ExpiresAtUnixMs int64  `json:"expires_at_unix_ms"`
 }
 
 type RevealedSaltView struct {
@@ -338,6 +354,16 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 		WonWithoutShowdown:    wonWithoutShowdown,
 		Pots:                  t.potViews(),
 		PotResults:            potResults,
+	}
+	if req := t.pendingWinnerCards; req != nil && (viewerID == req.WinnerID || viewerID == req.RequesterID) {
+		view := WinnerCardsRequestView{
+			RequesterID: req.RequesterID, WinnerID: req.WinnerID,
+			Fee: req.Fee, ExpiresAtUnixMs: req.ExpiresAt,
+		}
+		if requester := t.playerByID(req.RequesterID); requester != nil {
+			view.RequesterName = requester.Name
+		}
+		out.PendingWinnerCards = &view
 	}
 	if len(t.handOrder) >= 2 {
 		sb, bb := t.blindSeats(t.handOrder)

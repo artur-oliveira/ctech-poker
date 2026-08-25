@@ -91,7 +91,7 @@ func TestListCatalogMergesFreeAndPremium(t *testing.T) {
 		t.Run(string(fx.kind), func(t *testing.T) {
 			w := &fakeWallet{skus: allCosmeticSKUs()}
 			svc := NewService(w, newTestEntitlementStore(t), newTestStore(t))
-			entries, err := svc.ListCatalog(context.Background(), fx.kind)
+			entries, err := svc.ListCatalog(context.Background(), "player-1", fx.kind)
 			if err != nil {
 				t.Fatalf("ListCatalog: %v", err)
 			}

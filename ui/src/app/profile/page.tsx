@@ -3,7 +3,7 @@ import {Suspense} from 'react';
 import Link from 'next/link';
 import {useSearchParams} from 'next/navigation';
 import {useQuery} from '@tanstack/react-query';
-import {ChevronLeft, Sparkles, Swords, Trophy} from 'lucide-react';
+import {Sparkles, Swords, Trophy} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {getMatchupStats, getProfileShowcase} from '@/lib/api/player';
@@ -46,7 +46,6 @@ function ProfileContent() {
   
   return <AppPage authed={authed} footer={false}>
     <section className="profile-showcase shell">
-      {authed && <Link href="/lobby"><ChevronLeft/> Lobby</Link>}
       {showcase.isLoading ?
         <LoadingRegion label="Carregando vitrine do jogador…" className="skeleton-panel profile-showcase-skeleton">
           <Skeleton style={{height: '68px', width: '68px', borderRadius: '50%'}}/>

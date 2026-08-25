@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import {Suspense, useEffect, useMemo, useRef, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
-import {ChevronLeft, ClockAlert, Pause, Play, RotateCw, Wifi} from 'lucide-react';
+import {ChevronLeft, ClockAlert, MessageCircle, Pause, Play, RotateCw, SmilePlus, Wifi} from 'lucide-react';
 import {getViewerId} from '@/lib/utils';
 import {useTableRealtime} from '@/lib/hooks/useTableRealtime';
 import {getRoom, getSeated} from '@/lib/api/rooms';
@@ -60,6 +60,7 @@ import {type MockScenario, USE_MOCK} from '@/lib/mockConfig';
 import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
 import {DEFAULT_TURN_TIMEOUT_SECONDS} from '@/lib/gameTiming';
 import {isTableReaction, TABLE_REACTIONS, type TableReactionID} from '@/lib/reactions';
+import {WALLET_QUERY_ROOT} from '@/lib/api/wallet';
 
 const ROOM_ID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 const MockControls = USE_MOCK
@@ -95,7 +96,7 @@ function connectionCopyFor(status: keyof typeof CONNECTION_COPY, attempt: number
 }
 
 const MOCK_SCENARIOS = new Set<MockScenario>([
-  'full_hand', 'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
+  'full_hand', 'heads_up', 'six_max', 'nine_max', 'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
   'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot',
   'complete', 'complete_loss', 'complete_tie', 'fold_win', 'run_it_twice',
   'winner_cards', 'rabbit_hunt', 'rebuy', 'reality_check',
@@ -201,7 +202,11 @@ function TableContent() {
     queryKey: ['wallet', 'reaction-catalog'], queryFn: listReactionCatalog, enabled: valid && seated
   });
   const {data: reactionPurchases = [], isLoading: reactionPurchasesLoading} = useQuery({
-    queryKey: ['wallet', 'reaction-purchases'], queryFn: listReactionPurchases, enabled: valid && seated
+    // First page only: this list drives the in-table "refunding" badge, not
+    // ownership (which comes from the catalog's `owned` flag).
+    queryKey: ['wallet', 'reaction-purchases'],
+    queryFn: () => listReactionPurchases().then(page => page.data),
+    enabled: valid && seated
   });
   const {data: profile} = useQuery({
     queryKey: ['player', 'me'], queryFn: getMe, enabled: valid && seated
@@ -278,6 +283,8 @@ function TableContent() {
     useState<{ tableID: string; value: HandOutcomeState } | null>(null);
   const [activeTablePanel, setActiveTablePanel] =
     useState<TableUtility | null>(null);
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [pendingReaction, setPendingReaction] = useState<TableReactionID | null>(null);
   const [reactionCoolingDown, setReactionCoolingDown] = useState(false);
   const reactionCooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -302,6 +309,18 @@ function TableContent() {
       setPendingReaction(null);
       startReactionCooldown();
     }
+  }
+
+  function selectTableUtility(utility: TableUtility) {
+    if (utility === 'preferences') {
+      setPreferencesOpen(true);
+      return;
+    }
+    if (utility === 'share') {
+      setInviteOpen(true);
+      return;
+    }
+    setActiveTablePanel(previous => previous === utility ? null : utility);
   }
 
   // Protocol v3 publishes the exact pre-blind stack. During a rolling deploy,
@@ -487,6 +506,8 @@ function TableContent() {
   const nextHandDurationMs = s.next_hand_unix_ms && nextHandArmed?.deadline === s.next_hand_unix_ms ?
     Math.max(0, s.next_hand_unix_ms - nextHandArmed.snapshotAt) : 0;
   const canInvite = room && (room.visibility === 'public' || room.share_code);
+  const layoutCapacity = scenario === 'heads_up' ? 2 : scenario === 'six_max' ? 6 :
+    scenario === 'nine_max' ? 9 : room?.max_seats;
   const isPaused = viewerSeat?.ready === false || viewerSeat?.state === 'sitting_out';
   const canRevealCards = s.stage === 'complete' && seatParticipated(viewerSeat) &&
     Boolean(viewerSeat?.hole_cards?.some(card => card.toLowerCase() !== 'back')) &&
@@ -510,32 +531,51 @@ function TableContent() {
               <span className="connection-label">{rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}</span>
             </span>
             <TodayHighlight tableId={id} handId={s.hand_id} handComplete={s.stage === 'complete'}/>
+            <Button type="button" variant="ghost" size="icon" className="table-mobile-quick-action"
+                    aria-label="Abrir reações" aria-pressed={activeTablePanel === 'reactions'}
+                    onClick={() => setActiveTablePanel(activeTablePanel === 'reactions' ? null : 'reactions')}>
+              <SmilePlus aria-hidden="true"/>
+            </Button>
+            <Button type="button" variant="ghost" size="icon" className="table-mobile-quick-action"
+                    aria-label="Abrir chat" aria-pressed={activeTablePanel === 'chat'}
+                    onClick={() => setActiveTablePanel(activeTablePanel === 'chat' ? null : 'chat')}>
+              <MessageCircle aria-hidden="true"/>
+            </Button>
             <span className="table-utility-menu-slot">
               <TableUtilityMenu active={activeTablePanel}
                                 winnersAvailable={tableHands.length > 0}
                                 equityTrainerVisible={room?.currency_mode === 'sandbox' && preferences.equityTrainer}
                                 equityTrainerAvailable={!actions.isTurn}
-                                onSelectAction={utility => setActiveTablePanel(utility)}/>
+                                inviteAvailable={Boolean(canInvite)}
+                                onSelectAction={selectTableUtility}/>
             </span>
             <span className="table-rankings-standalone"><HandRankingsDialog open={activeTablePanel === 'rankings'}
                                                                             onOpenChangeAction={open => setActiveTablePanel(open ? 'rankings' : null)}/>
             </span>
-            <TablePreferencesDialog runItTwiceAvailable={Boolean(room?.run_it_twice_enabled)}
+            <span className="table-preferences-standalone"><TablePreferencesDialog
+              open={preferencesOpen} onOpenChangeAction={setPreferencesOpen}
+              showTrigger={false}
+              runItTwiceAvailable={Boolean(room?.run_it_twice_enabled)}
                                     runItTwice={Boolean(viewerSeat?.run_it_twice)}
                                     onRunItTwiceChange={rt.setRunItTwice}
-                                    onLockedFeltAction={() => router.push('/store#felt')}/>
-            {canInvite && <InviteDialog url={inviteUrl} roomId={id}/>}
+                                    onLockedFeltAction={() => router.push('/store#felt')}/></span>
+            {canInvite && <span className="table-invite-standalone"><InviteDialog
+              url={inviteUrl} roomId={id} open={inviteOpen} onOpenChangeAction={setInviteOpen}
+              showTrigger={false}/></span>}
             {viewerSeat && !isPaused &&
-                <Button type="button" variant="ghost" size="icon" aria-label="Sentar fora" disabled={rt.readyPending}
+                <Button type="button" variant="ghost" size="icon" className="table-pause-action"
+                        aria-label="Sentar fora" disabled={rt.readyPending}
                         onClick={() => rt.ready(false)}><Pause/></Button>}
             {viewerSeat && isPaused && viewerSeat.stack > 0 &&
-                <Button type="button" variant="ghost" size="icon" aria-label="Voltar a jogar" disabled={rt.readyPending}
+                <Button type="button" variant="ghost" size="icon" className="table-pause-action"
+                        aria-label="Voltar a jogar" disabled={rt.readyPending}
                         onClick={() => rt.ready(true)}><Play/></Button>}
             {viewerSeat && isPaused && viewerSeat.stack === 0 && room &&
               s.stage !== 'showdown' && s.stage !== 'complete' &&
                 <RebuyDialog roomId={id} room={room} autoRebuy={Boolean(viewerSeat.auto_rebuy)}
                              onRebuyAction={() => rt.ready(true)}/>}
-            <LeaveDialog roomId={id} stack={viewerSeat?.stack || 0} dealtIn={Boolean(viewerSeat?.dealt_in)}
+            <span className="table-exit-slot"><LeaveDialog roomId={id} stack={viewerSeat?.stack || 0}
+                         dealtIn={Boolean(viewerSeat?.dealt_in)}
                          onLeftAction={amount => {
               pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
               setSessionRecap({
@@ -543,7 +583,7 @@ function TableContent() {
                 buyIn: openSession?.buyin_amount || viewerSeat?.stack_at_hand_start || viewerSeat?.stack || 0,
                 finalStack: amount
               });
-            }}/>
+            }}/></span>
           </div>
         </header>
         <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
@@ -572,6 +612,7 @@ function TableContent() {
           racing the banner's own exit timer into dismissing it before
           `complete` ever arrived. */}
       <TableStage snapshot={s} viewer={viewer} pot={pot} bigBlind={bigBlind} nowMs={rt.snapshotAt}
+                  maxSeats={layoutCapacity} seatLayoutKey={id}
                   turnTimeoutMs={(room?.turn_timeout_seconds || DEFAULT_TURN_TIMEOUT_SECONDS) * 1000}
                   outcome={handOutcome} holdOutcomeOpen={Boolean(s.payouts && Object.keys(s.payouts).length > 0)}
                   nextHandDeadlineMs={!connectionMessage ? s.next_hand_unix_ms : undefined}
@@ -585,6 +626,7 @@ function TableContent() {
                   onRabbitHuntVerifyFailedAction={rt.reportRabbitHuntVerifyFailed}
                   winnerCardsPending={rt.requestWinnerCardsPending}
                   onRequestWinnerCardsAction={rt.requestWinnerCards}
+                  onAnswerWinnerCardsAction={rt.answerWinnerCards}
                   playerNotes={playerNotesByID}
                   onEditPlayerNoteAction={seat => setNoteOpponent({player_id: seat.player_id, name: seat.name})}
                   renderPlayerActionsAction={seat => <PlayerActionsMenu
@@ -697,10 +739,10 @@ function TableContent() {
                               sandboxBalance={profile?.sandbox_balance}
                               onCloseAction={() => setReactionPurchaseTarget(null)}
                               onConfirmedAction={() => {
-                                void queryClient.invalidateQueries({queryKey: ['wallet', 'reaction-purchases']});
+                                void queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT});
                               }}/>
 
-      <AchievementToast unlock={rt.unlock}/>
+      <AchievementToast unlock={rt.unlock} blocked={Boolean(handOutcome)}/>
       {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
     </main>
   );

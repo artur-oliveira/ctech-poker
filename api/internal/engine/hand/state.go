@@ -45,39 +45,48 @@ type State struct {
 	WasEverAllIn    map[string]bool
 	RabbitHuntPaid  map[string]bool
 	WinnerCardsPaid map[string]bool
+	// WinnerCardsAsked is the one-request-per-hand-per-player guard; see
+	// Table.winnerCardsAsked for why it is not WinnerCardsPaid.
+	WinnerCardsAsked map[string]bool
+	// PendingWinnerCards survives a reload so a request outlives the instance
+	// that armed its expiry timer — the same self-healing property
+	// rearmTimersFromCache gives every other post-hand timer.
+	PendingWinnerCards *WinnerCardsRequest
 }
 
 // ExportState captures every field this Table carries, for durable storage.
 func (t *Table) ExportState() State {
 	return State{
-		Players:         t.players,
-		SmallBlind:      t.smallBlind,
-		BigBlind:        t.bigBlind,
-		DealerSeat:      t.dealerSeat,
-		DealerDrawn:     t.dealerDrawn,
-		Stage:           t.stage,
-		Board:           t.board,
-		BoardTwo:        t.boardTwo,
-		BoardSplitAt:    t.boardSplitAt,
-		RunItTwice:      t.runItTwice,
-		RunoutPhase:     t.runoutPhase,
-		Shuffle:         t.shuffle,
-		NextCard:        t.nextCard,
-		Round:           t.round,
-		RoundIdx:        t.roundIdx,
-		RoundBaseline:   t.roundBaseline,
-		Payouts:         t.payouts,
-		RakeBPS:         t.rakeBPS,
-		RakeCollected:   t.rakeCollected,
-		CurrencyMode:    t.currencyMode,
-		HandOrder:       t.handOrder,
-		SeenActionIDs:   t.seenActionIDs,
-		ReadyToPost:     t.readyToPost,
-		OwesBigBlind:    t.owesBigBlind,
-		LastOutcome:     t.lastOutcome,
-		WasEverAllIn:    t.wasEverAllIn,
-		RabbitHuntPaid:  t.rabbitHuntPaid,
-		WinnerCardsPaid: t.winnerCardsPaid,
+		Players:            t.players,
+		SmallBlind:         t.smallBlind,
+		BigBlind:           t.bigBlind,
+		DealerSeat:         t.dealerSeat,
+		DealerDrawn:        t.dealerDrawn,
+		Stage:              t.stage,
+		Board:              t.board,
+		BoardTwo:           t.boardTwo,
+		BoardSplitAt:       t.boardSplitAt,
+		RunItTwice:         t.runItTwice,
+		RunoutPhase:        t.runoutPhase,
+		Shuffle:            t.shuffle,
+		NextCard:           t.nextCard,
+		Round:              t.round,
+		RoundIdx:           t.roundIdx,
+		RoundBaseline:      t.roundBaseline,
+		Payouts:            t.payouts,
+		RakeBPS:            t.rakeBPS,
+		RakeCollected:      t.rakeCollected,
+		CurrencyMode:       t.currencyMode,
+		HandOrder:          t.handOrder,
+		SeenActionIDs:      t.seenActionIDs,
+		ReadyToPost:        t.readyToPost,
+		OwesBigBlind:       t.owesBigBlind,
+		LastOutcome:        t.lastOutcome,
+		WasEverAllIn:       t.wasEverAllIn,
+		RabbitHuntPaid:     t.rabbitHuntPaid,
+		WinnerCardsPaid:    t.winnerCardsPaid,
+		WinnerCardsAsked:   t.winnerCardsAsked,
+		PendingWinnerCards: t.pendingWinnerCards,
 	}
 }
 
@@ -125,30 +134,32 @@ func NewTableFromState(s State) *Table {
 		// Pre-Phase-3 snapshots have no DealerDrawn field. Any snapshot past
 		// the initial waiting state necessarily already assigned a dealer, so
 		// infer true to avoid re-drawing after recovery.
-		dealerDrawn:     s.DealerDrawn || s.Stage != WaitingForPlayers,
-		stage:           s.Stage,
-		board:           s.Board,
-		boardTwo:        s.BoardTwo,
-		boardSplitAt:    s.BoardSplitAt,
-		runItTwice:      s.RunItTwice,
-		runoutPhase:     s.RunoutPhase,
-		shuffle:         s.Shuffle,
-		nextCard:        s.NextCard,
-		round:           s.Round,
-		roundIdx:        s.RoundIdx,
-		roundBaseline:   s.RoundBaseline,
-		payouts:         s.Payouts,
-		rakeBPS:         s.RakeBPS,
-		rakeCollected:   s.RakeCollected,
-		currencyMode:    s.CurrencyMode,
-		handOrder:       handOrder,
-		seenActionIDs:   s.SeenActionIDs,
-		readyToPost:     s.ReadyToPost,
-		owesBigBlind:    s.OwesBigBlind,
-		lastOutcome:     s.LastOutcome,
-		wasEverAllIn:    s.WasEverAllIn,
-		rabbitHuntPaid:  s.RabbitHuntPaid,
-		winnerCardsPaid: s.WinnerCardsPaid,
+		dealerDrawn:        s.DealerDrawn || s.Stage != WaitingForPlayers,
+		stage:              s.Stage,
+		board:              s.Board,
+		boardTwo:           s.BoardTwo,
+		boardSplitAt:       s.BoardSplitAt,
+		runItTwice:         s.RunItTwice,
+		runoutPhase:        s.RunoutPhase,
+		shuffle:            s.Shuffle,
+		nextCard:           s.NextCard,
+		round:              s.Round,
+		roundIdx:           s.RoundIdx,
+		roundBaseline:      s.RoundBaseline,
+		payouts:            s.Payouts,
+		rakeBPS:            s.RakeBPS,
+		rakeCollected:      s.RakeCollected,
+		currencyMode:       s.CurrencyMode,
+		handOrder:          handOrder,
+		seenActionIDs:      s.SeenActionIDs,
+		readyToPost:        s.ReadyToPost,
+		owesBigBlind:       s.OwesBigBlind,
+		lastOutcome:        s.LastOutcome,
+		wasEverAllIn:       s.WasEverAllIn,
+		rabbitHuntPaid:     s.RabbitHuntPaid,
+		winnerCardsPaid:    s.WinnerCardsPaid,
+		winnerCardsAsked:   s.WinnerCardsAsked,
+		pendingWinnerCards: s.PendingWinnerCards,
 	}
 }
 

@@ -74,6 +74,16 @@ instead of relying on TCP-level failure detection which can lag.
   above proves insufficient in practice.
 - Changing deploy frequency/cadence — an operational decision, not this spec's call.
 
+## Status
+
+**Implemented 2026-08-24.** `api/internal/wsdrain` is a process-local registry of live sockets
+(`Track`/`Untrack` from both WS handlers in `tablews.go`); `startServer`'s `OnStop`
+(`internal/app/app.go`) calls `wsdrain.CloseAll(ctx, wsDrainGrace)` — a 1001 close frame to every
+tracked connection, then a 1.5s grace — before `DrainAndRelease` and the existing 5s
+`ShutdownWithContext`. The registry is a package-level singleton rather than an injected
+dependency: it is process-wide transport state with exactly one consumer, and threading it through
+`v1.Register`'s 30-argument signature would buy nothing.
+
 ## Rollout / verification
 
 - Manually verify against a table with an open WS during a `setup-deploy.sh` run: confirm the

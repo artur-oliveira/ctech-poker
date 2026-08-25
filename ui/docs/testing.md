@@ -91,9 +91,19 @@ between them without losing the room id. The post-hand and session flows have de
 - `rabbit_hunt` — a verified, paid hypothetical runout after an uncontested hand;
 - `rebuy` — the viewer is sitting out with a zero stack and the rebuy dialog is open;
 - `reality_check` — a two-hour session opens the neutral session summary away from the viewer's turn.
+- `heads_up`, `six_max`, `nine_max` — fixed portrait seat-capacity layouts with the viewer at the bottom.
+- At narrow portrait widths, verify the largest-pot value uses remaining header width, Chat/Reactions appear only as quick actions, and compact outcome/seat controls retain 44px hit areas without visually expanding their rings.
+- For every portrait seat orientation, verify hole cards remain fully visible above captions and each state label is the line nearest and centered on its own avatar; top seats mirror the caption order.
+- In completed/all-in mobile states, compare `.stage-v > .viewer` and its `.seat-info`: the info grid must remain within the 78px hero HUD while showing name, stack, state, category, and equity without crossing the cards or betting dock.
 
 Use the stable mock room id `01ARZ3NDEKTSV4RRFFQ69G5FAV`, for example
 `/table?id=01ARZ3NDEKTSV4RRFFQ69G5FAV&scenario=winner_cards&delay=0`.
+
+For mobile table work, verify at least `320×568`, `360×640`, `375×667`, `390×844`, and
+`430×932`. For each capacity scene assert that `documentElement.scrollWidth/scrollHeight` equals
+the viewport, then exercise reactions, chat, More, pause, Exit, raise expansion, single-step, and
+held-step betting. Also check `run_it_twice`, `complete`, and `winner_cards`: outcome, consent,
+achievement, and paid-card layers must not overflow or present competing decisions.
 
 To see what a change left uncovered, `npx vitest run --coverage` prints a per-file table with
 the uncovered line ranges; `coverage/index.html` has the same data with the branches

@@ -7,8 +7,12 @@ vi.mock('./client', () => ({apiClient: {get: (...a: unknown[]) => get(...a), pos
 import {createPurchase, getPurchase, listPurchases, listSkus, refundPurchase} from './wallet';
 
 describe('wallet api', () => {
-  test('listSkus GETs the catalog', async () => {
-    get.mockResolvedValueOnce({data: [{id: 'pack_100', price_cents: 100, base_credits: 1000, bonus_percent: 0, total_credits: 1000}]});
+  const page = <T, >(data: T[], overrides: Record<string, unknown> = {}) => ({
+    data: {data, has_next: false, next_cursor: null, has_previous: false, previous_cursor: null, ...overrides},
+  });
+
+  test('listSkus GETs the catalog and unwraps its single page', async () => {
+    get.mockResolvedValueOnce(page([{id: 'pack_100', price_cents: 100, base_credits: 1000, bonus_percent: 0, total_credits: 1000}]));
     const skus = await listSkus();
     expect(get).toHaveBeenCalledWith('/v1.0/wallet/sandbox-purchase/skus');
     expect(skus).toHaveLength(1);
@@ -24,10 +28,16 @@ describe('wallet api', () => {
     );
   });
 
-  test('listPurchases GETs the history', async () => {
-    get.mockResolvedValueOnce({data: []});
-    await listPurchases();
+  test('listPurchases GETs the history and returns the page envelope', async () => {
+    get.mockResolvedValueOnce(page([], {has_next: true, next_cursor: 'c2'}));
+    expect((await listPurchases()).next_cursor).toBe('c2');
     expect(get).toHaveBeenCalledWith('/v1.0/wallet/sandbox-purchase/');
+  });
+
+  test('listPurchases passes an encoded cursor through as a query param', async () => {
+    get.mockResolvedValueOnce(page([]));
+    await listPurchases('a+b/c=');
+    expect(get).toHaveBeenCalledWith('/v1.0/wallet/sandbox-purchase/?cursor=a%2Bb%2Fc%3D');
   });
 
   test('getPurchase GETs by id', async () => {

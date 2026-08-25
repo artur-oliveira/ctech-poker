@@ -20,7 +20,7 @@ import {
   X
 } from 'lucide-react';
 import {getMe, updateMe, type WalletMode} from '@/lib/api/player';
-import {listCosmeticCatalog, listCosmeticPurchases, ownedCosmeticIDs} from '@/lib/api/cosmeticPurchases';
+import {listCosmeticCatalog, ownedCosmeticIDs} from '@/lib/api/cosmeticPurchases';
 import {logout} from '@/lib/auth/oauth';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {Button} from '@/components/ui/button';
@@ -52,10 +52,7 @@ export function ProfileMenu() {
   const {data: deckCatalog = []} = useQuery({
     queryKey: ['wallet', 'cosmetic-catalog', 'deck'], queryFn: () => listCosmeticCatalog('deck')
   });
-  const {data: deckPurchases = []} = useQuery({
-    queryKey: ['wallet', 'cosmetic-purchases', 'deck'], queryFn: () => listCosmeticPurchases('deck')
-  });
-  const ownedDecks = ownedCosmeticIDs(deckPurchases);
+  const ownedDecks = ownedCosmeticIDs(deckCatalog);
   const deckPrices = new Map(deckCatalog.map(entry => [entry.id, entry.price_fichas]));
   const [name, setName] = useState('');
   const [editingName, setEditingName] = useState(false);

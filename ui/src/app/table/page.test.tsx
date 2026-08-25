@@ -634,7 +634,7 @@ describe('table page integration', () => {
 
     await userEvent.click(screen.getByRole('button', {name: 'purchase-dialog'}));
     rerender(<TablePage/>);
-    expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'reaction-purchases']});
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet']});
     expect(mocks.purchaseProps?.entry).toBeNull();
   });
 

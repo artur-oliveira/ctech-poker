@@ -59,7 +59,7 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 	if converted.Seats[0].StackAtHandStart == nil || converted.Seats[0].GetStackAtHandStart() != 500 {
 		t.Fatalf("pre-blind stack lost during protobuf conversion: %+v", converted.Seats[0])
 	}
-	if converted.ProtocolVersion != 10 || converted.IdleRemovalUnixMs != 123456 ||
+	if converted.ProtocolVersion != 11 || converted.IdleRemovalUnixMs != 123456 ||
 		converted.Seats[0].TimeBankMs != 27000 || converted.Seats[0].HandScore != 4321 || len(converted.PotResults) != 1 ||
 		!converted.Seats[0].GetRunItTwice() || converted.PotResults[0].Runout != 1 ||
 		len(converted.BoardTwo) != 2 || converted.BoardSplitAt != 3 ||
@@ -69,6 +69,20 @@ func TestConvertSnapshotPreservesVersionPresenceAndHand(t *testing.T) {
 		converted.Reactions[0].Id != "react-1" || converted.ActionPreselection != "check_fold" ||
 		converted.ActionPreselectionAmount != 40 || converted.ProspectiveCallAmount != 80 {
 		t.Fatalf("result protocol fields lost during conversion: %+v", converted)
+	}
+}
+
+func TestConvertSnapshotCarriesThePendingWinnerCardsRequest(t *testing.T) {
+	snap := hand.Snapshot{PendingWinnerCards: &hand.WinnerCardsRequestView{
+		RequesterID: "p1", RequesterName: "Ana", WinnerID: "p2", Fee: 40, ExpiresAtUnixMs: 1700,
+	}}
+	got := ConvertSnapshot(snap).GetPendingWinnerCards()
+	if got == nil || got.GetRequesterId() != "p1" || got.GetRequesterName() != "Ana" ||
+		got.GetWinnerId() != "p2" || got.GetFee() != 40 || got.GetExpiresAtUnixMs() != 1700 {
+		t.Fatalf("pending winner cards request lost during conversion: %+v", got)
+	}
+	if ConvertSnapshot(hand.Snapshot{}).GetPendingWinnerCards() != nil {
+		t.Fatal("a snapshot with no pending request must not fabricate one")
 	}
 }
 

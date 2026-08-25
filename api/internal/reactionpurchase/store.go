@@ -121,6 +121,32 @@ func (s *EntitlementStore) Get(ctx context.Context, playerID, reactionID string)
 	return dynamo.Decode[Entitlement](item)
 }
 
+// OwnedIDs returns the reaction ids this player actively owns.
+//
+// Ownership lives here and nowhere else: a bought-then-refunded reaction
+// leaves a history row behind (status "refunded") but no entitlement row, so
+// anything answering "what does this player have" must read entitlements
+// rather than replay purchase history. One query is enough — the entitlement
+// table only ever holds premium claims, and reactions.All() is a fixed
+// handful.
+func (s *EntitlementStore) OwnedIDs(ctx context.Context, playerID string) (map[string]bool, error) {
+	result, err := s.base.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: 100})
+	if err != nil {
+		return nil, fmt.Errorf("reactionpurchase: list entitlements: %w", err)
+	}
+	owned := make(map[string]bool, len(result.Items))
+	for _, item := range result.Items {
+		e, err := dynamo.Decode[Entitlement](item)
+		if err != nil {
+			return nil, fmt.Errorf("reactionpurchase: decode entitlement: %w", err)
+		}
+		if e.active() {
+			owned[e.ReactionID] = true
+		}
+	}
+	return owned, nil
+}
+
 // MarkUsed is a conditional update setting used_at only if empty —
 // first-use-wins, idempotent on replay.
 func (s *EntitlementStore) MarkUsed(ctx context.Context, playerID, reactionID string) error {
@@ -596,18 +622,20 @@ func (s *Store) UpdateStatus(ctx context.Context, playerID, purchaseID, status, 
 	return s.base.UpdateItem(ctx, playerID, &sk, map[string]any{"status": status, "updated_at": updatedAt})
 }
 
-func (s *Store) List(ctx context.Context, playerID string) ([]Record, error) {
-	result, err := s.base.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: 100})
+// List returns one page of this player's purchase history plus the DynamoDB
+// key to resume from.
+func (s *Store) List(ctx context.Context, playerID string, limit int, startKey map[string]types.AttributeValue) ([]Record, map[string]types.AttributeValue, error) {
+	result, err := s.base.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: limit, ExclusiveStartKey: startKey})
 	if err != nil {
-		return nil, fmt.Errorf("reactionpurchase: list records: %w", err)
+		return nil, nil, fmt.Errorf("reactionpurchase: list records: %w", err)
 	}
 	out := make([]Record, 0, len(result.Items))
 	for _, item := range result.Items {
 		rec, err := dynamo.Decode[Record](item)
 		if err != nil {
-			return nil, fmt.Errorf("reactionpurchase: decode record: %w", err)
+			return nil, nil, fmt.Errorf("reactionpurchase: decode record: %w", err)
 		}
 		out = append(out, *rec)
 	}
-	return out, nil
+	return out, result.LastEvaluatedKey, nil
 }

@@ -346,7 +346,9 @@ The component vocabulary is tactile and immediate: controls look pressable, ackn
 - **Layout:** fixed bottom bar, `grid-template-columns: auto minmax(190px,320px) auto`, centered; 48px-tall buttons; a full-width `action-context` status line above the choices.
 - **Quick actions (Fold / Check / Mesa / Pagar):** outline style by default (translucent white well, white text, 1px hairline). Disabled state drops to `--surface-seat` bg with `--muted-rose` text and `not-allowed` cursor — opacity stays 1 so the label remains readable.
 - **Call:** paper fill, Deep Wine text — the committed, money-moving action.
-- **Raise:** Table Red fill, white text — the primary bet. Paired with a range slider (`accent-color: #af2a2f`) and a tabular-nums `output` showing the chosen total.
+- **Raise:** Table Red fill, white text — the primary bet. Desktop keeps the range slider and keyboard shortcuts. Portrait handhelds open an opaque bottom sheet with Mín / ½ pote / Pote / Máx presets plus 48px minus and plus controls; holding a step control accelerates from 1× to 5× to 10×. A horizontal wager gesture is never required, so browser back-swipe cannot steal the interaction.
+- **Blocking mobile viewport:** portrait play is exactly `100dvh` with no document scroll. Header, flexible table stage, viewer HUD, and safe-area betting dock divide that viewport; the expanded raise sheet overlays the lower table without compressing seat geometry.
+- **Compact visuals, full touch targets:** small table controls such as the hand-outcome dismiss and seat badges keep their circular visual geometry while an invisible pseudo-element supplies the 44px touch area. Coarse-pointer rules must not resize those visual hosts.
 - **Error:** `role="alert"` row on `--surface-error`, with a dismiss button.
 
 ### Chips
@@ -366,6 +368,9 @@ The component vocabulary is tactile and immediate: controls look pressable, ackn
 - **Viewer:** `viewer` shifts the full border to Bright Table Red and adds the 3px viewer-signal ring.
 - **Folded:** grayscale + dashed border, cards dimmed — identity stays readable.
 - **Winner:** `is-winner` shifts the border to gold; a gold `seat-win` pill animates in.
+- **Capacity rooms:** portrait rooms use fixed physical maps: heads-up places one opponent face-to-face in slot 4; 6-max uses slots 1 / 3 / 4 / 6 / 8; 9-max uses slots 1–8. The viewer is always the bottom hero HUD. Surviving players retain their coordinates and vacancies fill in server turn order, so seats never jump during a hand.
+- **Portrait seat lanes:** opponent hole cards occupy the table-facing side of the avatar and identity occupies the opposite caption lane. Cards always paint above captions during reveal/hover expansion. State is the caption line nearest its avatar on both normal and mirrored top seats, so it never appears attached to a neighboring position.
+- **Viewer hero density:** the bottom HUD is capped at 78px. On portrait, name/stack occupy the left two rows, state/hand category use the aligned right column, and equity becomes one compact full-width row. Optional playstyle is omitted from the viewer's own HUD, and a deferred-pause state takes priority over hand category.
 
 ### Inputs / Fields
 - **Style:** 44px height, 12px radius, translucent control surface, white text, `white/15` hairline.
@@ -390,7 +395,9 @@ The component vocabulary is tactile and immediate: controls look pressable, ackn
 
 ### Table utilities
 - **Desktop / landscape:** chat, reactions, winners, and hand rankings retain their direct controls outside seat geometry.
-- **Portrait:** one 44px header trigger opens a single tools menu. Closed chat, reaction, and winner triggers never occupy the right-side seat ring. The controlled `activeTablePanel` contract guarantees one open surface at a time.
+- **Portrait:** reactions and chat are direct header actions, followed by More, pause, and a separated destructive Exit. More owns hand rankings, last winners, equity trainer, table preferences, and sharing without duplicating those quick actions. The largest-pot value flexes into the header width left by the fixed controls. Exit always opens, but confirmation stays disabled with a clear explanation while the player is dealt in. The controlled `activeTablePanel` contract guarantees one open surface at a time, and every mobile panel has an explicit 44px close control.
+- **Daily highlight:** the header celebrates the table's largest pot of the day. It names the strongest fully revealed winner and the locally evaluated made-hand category (`Ana — Trinca`), never raw transport codes such as `AhAs`.
+- **Transient layers:** the hand outcome owns the primary announcement layer. Achievements queue until it clears, and the optional paid winner-card offer waits until the player minimizes the outcome. Active consent prompts remain authoritative, avoiding stacked cards and competing calls to action.
 - **Blind selection:** lobby blind choices wrap without scroll chrome above 720px and use one deliberate, snap-aligned rail on smaller screens.
 
 ### Dialogs

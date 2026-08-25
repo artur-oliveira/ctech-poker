@@ -1,6 +1,6 @@
 'use client';
-import {useCallback, useEffect, useRef, useState} from 'react';
-import {CircleAlert, Clock3, LoaderCircle, X} from 'lucide-react';
+import {type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState} from 'react';
+import {CircleAlert, Clock3, LoaderCircle, Minus, Plus, X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import type {PokerAction} from '@/lib/api/table';
@@ -62,6 +62,76 @@ function isBetAdjustKey(event: KeyboardEvent) {
 // taps Aumentar once to reveal it; desktop keeps it always open (CSS ignores
 // the collapsed class outside this query).
 const COMPACT_QUERY = '(max-width: 800px), (max-height: 620px) and (orientation: landscape)';
+const HOLD_DELAY_MS = 420;
+const HOLD_REPEAT_MS = 130;
+
+function BetStepButton({direction, disabled, onStep}: {
+  direction: -1 | 1;
+  disabled: boolean;
+  onStep: (multiplier: number) => void;
+}) {
+  const delayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const repeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const repeatedRef = useRef(false);
+  const ticksRef = useRef(0);
+  const clearTimers = useCallback(() => {
+    if (delayRef.current) clearTimeout(delayRef.current);
+    if (repeatRef.current) clearInterval(repeatRef.current);
+    delayRef.current = null;
+    repeatRef.current = null;
+  }, []);
+
+  useEffect(() => clearTimers, [clearTimers]);
+
+  function start(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (disabled || event.button !== 0) return;
+    repeatedRef.current = false;
+    ticksRef.current = 0;
+    delayRef.current = setTimeout(() => {
+      repeatedRef.current = true;
+      onStep(1);
+      repeatRef.current = setInterval(() => {
+        ticksRef.current += 1;
+        onStep(ticksRef.current < 5 ? 1 : ticksRef.current < 11 ? 5 : 10);
+      }, HOLD_REPEAT_MS);
+    }, HOLD_DELAY_MS);
+  }
+
+  function click() {
+    if (repeatedRef.current) {
+      repeatedRef.current = false;
+      return;
+    }
+    onStep(1);
+  }
+
+  const label = direction < 0 ? 'Menos fichas' : 'Mais fichas';
+  const Icon = direction < 0 ? Minus : Plus;
+  return (
+    <button type="button" className="bet-step-button" aria-label={label} disabled={disabled}
+            onPointerDown={start} onPointerUp={clearTimers} onPointerCancel={clearTimers}
+            onPointerLeave={clearTimers} onClick={click}>
+      <Icon aria-hidden="true"/>
+    </button>
+  );
+}
+
+function BetAmountOutput({amount, isAllIn, wasClamped, className}: {
+  amount: number;
+  isAllIn: boolean;
+  wasClamped: boolean;
+  className: string;
+}) {
+  return (
+    <output className={className} htmlFor="raise-amount">
+      <small>{isAllIn ? 'All In' : 'Total'}</small>
+      {amount.toLocaleString('pt-BR')}
+      {wasClamped && <small className="bet-clamped-note" role="status">
+        {isAllIn ? 'ajustado ao máximo' : 'ajustado ao mínimo'}
+      </small>}
+    </output>
+  );
+}
 
 function TimeBankStatus({isTurn, baseDeadline, actionDeadline, balance}: {
   isTurn: boolean;
@@ -132,8 +202,8 @@ function PreselectionControls({
   // there is exactly one place that decides what selecting/deselecting a
   // value means.
   const toggle = useCallback((value: ActionPreselection, amount = 0) =>
-    onSelectAction(selection === value ? null : value, selection === value ? 0 : amount),
-  [selection, onSelectAction]);
+      onSelectAction(selection === value ? null : value, selection === value ? 0 : amount),
+    [selection, onSelectAction]);
 
   useEffect(() => {
     if (!canPreselect) return undefined;
@@ -187,10 +257,11 @@ function PreselectionControls({
 
 /** Raise control. Keyed by `actionKey` in the parent so the chosen amount
  * resets to the street minimum on every new decision without an effect. */
-function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending, onRaise}: {
+function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending, onRaise, onExpandedChange}: {
   minRaise: number; maxRaise: number; raiseStep: number; disabled: boolean; pending: boolean;
   presets: { label: string; value: number }[];
   onRaise: (amount: number) => void;
+  onExpandedChange: (expanded: boolean) => void;
 }) {
   const [amount, setAmount] = useState(minRaise);
   const [expanded, setExpanded] = useState(false);
@@ -207,15 +278,27 @@ function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending
   // itself shouldn't lie about which one it is.
   const uniquePresets = presets
     .map(preset => ({...preset, raw: preset.value, value: Math.min(maxRaise, Math.max(minRaise, preset.value))}))
-    .filter((preset, index, all) => all.findLastIndex(item => item.value === preset.value) === index);
+    .filter((preset, index, all) => {
+      const matches = all.map((item, itemIndex) => item.value === preset.value ? itemIndex : -1)
+        .filter(itemIndex => itemIndex >= 0);
+      if (preset.value === minRaise) {
+        const namedMinimum = all.findIndex(item => item.value === preset.value && item.label === 'Mín');
+        return index === (namedMinimum >= 0 ? namedMinimum : matches[0]);
+      }
+      if (preset.value === maxRaise) {
+        const namedMaximum = all.findIndex(item => item.value === preset.value && item.label === 'Máx');
+        return index === (namedMaximum >= 0 ? namedMaximum : matches.at(-1));
+      }
+      return index === matches[0];
+    });
   // Presets carry their pre-clamp `raw` value into `amount` (not the already-
   // clamped `value` used for button dedup/display) so a short stack clamp
   // shows up as amount !== safeAmount below, instead of vanishing silently.
   const wasClamped = amount !== safeAmount;
-  
+
   useEffect(() => {
     if (inactive) return undefined;
-    
+
     function onKey(event: KeyboardEvent) {
       const key = event.key.toLowerCase();
       if (isPlainKey(event)) {
@@ -249,39 +332,47 @@ function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending
           event.ctrlKey) ?? value);
       }
     }
-    
+
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [inactive, safeAmount, onRaise, minRaise, maxRaise, raiseStep, presets]);
-  
+
   function handleRaiseClick() {
     if (!expanded && window.matchMedia(COMPACT_QUERY).matches) {
       setExpanded(true);
+      onExpandedChange(true);
       return;
     }
     onRaise(safeAmount);
   }
-  
+
+  const adjust = useCallback((direction: -1 | 1, multiplier: number) => {
+    setAmount(value => Math.min(maxRaise, Math.max(minRaise, value + direction * raiseStep * multiplier)));
+  }, [maxRaise, minRaise, raiseStep]);
+
   return <>
     <label className={`bet-control${expanded ? '' : ' bet-control-collapsed'}`} htmlFor="raise-amount">
       <span className="sr-only">Valor total do aumento</span>
       <div className="bet-presets" role="group" aria-label="Valores rápidos de aumento">
         {uniquePresets.map(preset => <button key={preset.label} type="button" disabled={inactive}
+                                             className={['Mín', '½ pote', 'Pote', 'Máx'].includes(preset.label) ?
+                                               undefined : 'bet-preset-mobile-hidden'}
                                              onClick={() => setAmount(preset.raw)}>{preset.label}</button>)}
       </div>
-      <Input id="raise-amount" aria-describedby="action-context" type="range"
+      <Input id="raise-amount" className="bet-range" aria-describedby="action-context" type="range"
              aria-keyshortcuts="a h ArrowUp ArrowDown ArrowLeft ArrowRight"
              min={minRaise} max={maxRaise} step={raiseStep} value={safeAmount}
              disabled={inactive}
              onChange={event => setAmount(Number(event.target.value))}
              aria-valuetext={`Total ${safeAmount.toLocaleString('pt-BR')} fichas${isAllIn ? ', All In' : ''}`}/>
-      <output id="raise-amount-output" htmlFor="raise-amount">
-        <small>{isAllIn ? 'All In' : 'Total'}</small>
-        {safeAmount.toLocaleString('pt-BR')}
-        {wasClamped && <small className="bet-clamped-note" role="status">
-          {safeAmount >= maxRaise ? 'ajustado ao máximo' : 'ajustado ao mínimo'}
-        </small>}
-      </output>
+      <BetAmountOutput className="bet-output bet-output-desktop" amount={safeAmount}
+                       isAllIn={isAllIn} wasClamped={wasClamped}/>
+      <div className="bet-stepper" role="group" aria-label="Ajustar valor do aumento">
+        <BetStepButton direction={-1} disabled={inactive} onStep={multiplier => adjust(-1, multiplier)}/>
+        <BetAmountOutput className="bet-output bet-output-mobile" amount={safeAmount}
+                         isAllIn={isAllIn} wasClamped={wasClamped}/>
+        <BetStepButton direction={1} disabled={inactive} onStep={multiplier => adjust(1, multiplier)}/>
+      </div>
     </label>
     <Button type="button" disabled={inactive} aria-keyshortcuts="r"
             aria-describedby="action-context" onClick={handleRaiseClick}
@@ -294,7 +385,10 @@ function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending
           <kbd aria-hidden="true">R</kbd></span>}
     </Button>
     {expanded && <Button type="button" variant="ghost" className="raise-cancel"
-                         onClick={() => setExpanded(false)}>Cancelar</Button>}
+                         onClick={() => {
+                           setExpanded(false);
+                           onExpandedChange(false);
+                         }}>Cancelar</Button>}
   </>;
 }
 
@@ -325,6 +419,12 @@ export function ActionBar({
                             timeBankMs,
                             voiceCommands
                           }: Props) {
+  const [raiseSizing, setRaiseSizing] = useState(false);
+  const [raiseScope, setRaiseScope] = useState(actionKey);
+  if (raiseScope !== actionKey) {
+    setRaiseScope(actionKey);
+    setRaiseSizing(false);
+  }
   const legalActions = (Object.keys(available) as PokerAction[]).filter(action => available[action]);
   const preparedAction = selectionScope && preselection && isTurn ?
     resolvePreselection(preselection, legalActions, callAmount, preselectionAmount) : null;
@@ -349,12 +449,12 @@ export function ActionBar({
   // complete), so collapse the choice row + raise slider instead of painting
   // the full disabled control surface a spectating player has no use for.
   const noLegalActions = !canFold && !canCheck && !canCall && !available.raise;
-  
+
   useEffect(() => {
     if (unavailable) return undefined;
     const keyActions: Record<string, PokerAction> = {f: 'fold', c: 'check', p: 'call'};
     const legal: Record<string, boolean> = {f: canFold, c: canCheck, p: canCall};
-    
+
     function onKey(event: KeyboardEvent) {
       if (!isPlainKey(event)) return;
       const key = event.key.toLowerCase();
@@ -363,12 +463,12 @@ export function ActionBar({
       event.preventDefault();
       onActAction(action);
     }
-    
+
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [unavailable, canFold, canCheck, canCall, onActAction]);
-  
-  return <div className={`action-bar${isTurn ? ' is-turn' : ''}`} role="group"
+
+  return <div className={`action-bar${isTurn ? ' is-turn' : ''}${raiseSizing ? ' is-sizing' : ''}`} role="group"
               aria-label="Ações da rodada" aria-busy={pending !== null}>
     <div className="action-context-row">
       <p id="action-context" className="action-context" aria-live="polite">{context}</p>
@@ -400,7 +500,7 @@ export function ActionBar({
     {!noLegalActions && !executingPreparedAction &&
         <RaiseControl key={actionKey} minRaise={minRaise} maxRaise={maxRaise} raiseStep={raiseStep}
                       disabled={unavailable || !available.raise} presets={raisePresets}
-                      pending={pending === 'raise'} onRaise={onRaise}/>}
+                      pending={pending === 'raise'} onRaise={onRaise} onExpandedChange={setRaiseSizing}/>}
     {error && <div className="action-error" role="alert">
         <CircleAlert aria-hidden="true"/><p>{error.message}</p>
         <Button type="button" variant="ghost" size="icon" aria-label="Fechar aviso"

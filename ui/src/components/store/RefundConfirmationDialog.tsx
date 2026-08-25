@@ -1,4 +1,5 @@
 'use client';
+import type {RefObject} from 'react';
 import {useState} from 'react';
 import {Check, CircleAlert, Coins, LoaderCircle, RotateCcw} from 'lucide-react';
 import {Button} from '@/components/ui/button';
@@ -21,9 +22,11 @@ function refundError(error: unknown) {
   return 'Não foi possível concluir o estorno agora. Seu histórico não foi alterado; tente novamente.';
 }
 
-export function RefundConfirmationDialog({purchase, sandboxBalance, onCloseAction, onConfirmAction}: {
+export function RefundConfirmationDialog({purchase, sandboxBalance, finalFocusRef, onCloseAction, onConfirmAction}: {
   purchase: SandboxPurchase | null;
   sandboxBalance?: number;
+  /** Restores keyboard focus to the control that opened this dialog. */
+  finalFocusRef?: RefObject<HTMLButtonElement | null>;
   onCloseAction: () => void;
   onConfirmAction: (purchaseId: string) => Promise<void>;
 }) {
@@ -51,7 +54,7 @@ export function RefundConfirmationDialog({purchase, sandboxBalance, onCloseActio
   return <Dialog open onOpenChange={open => {
     if (!open && !pending) onCloseAction();
   }}>
-    <DialogContent className="store-refund-dialog">
+    <DialogContent className="store-refund-dialog" finalFocus={finalFocusRef}>
       <DialogHeader>
         <DialogTitle>{state === 'success' ? 'Compra estornada' : 'Solicitar estorno desta compra?'}</DialogTitle>
         <DialogDescription>{state === 'success'

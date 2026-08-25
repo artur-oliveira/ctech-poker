@@ -137,6 +137,34 @@ type RequestWinnerCardsCmd struct {
 
 func (c RequestWinnerCardsCmd) reply() chan error { return c.Reply }
 
+// AcceptWinnerCardsCmd is the winner agreeing to the pending paid-reveal
+// request, which is what actually moves the fee and reveals the cards.
+type AcceptWinnerCardsCmd struct {
+	PlayerID string
+	ActionID string
+	Reply    chan error
+}
+
+func (c AcceptWinnerCardsCmd) reply() chan error { return c.Reply }
+
+// DeclineWinnerCardsCmd is the winner refusing; the requester is refunded and
+// nothing is revealed.
+type DeclineWinnerCardsCmd struct {
+	PlayerID string
+	ActionID string
+	Reply    chan error
+}
+
+func (c DeclineWinnerCardsCmd) reply() chan error { return c.Reply }
+
+// expireWinnerCardsCmd is the consent window closing with no answer. Internal
+// (timer-driven), never dispatched by a client.
+type expireWinnerCardsCmd struct {
+	Reply chan error
+}
+
+func (c expireWinnerCardsCmd) reply() chan error { return c.Reply }
+
 // RabbitHuntVerifyFailedCmd refunds a RequestRabbitHuntCmd charge when the
 // client couldn't locally verify the revealed runout.
 type RabbitHuntVerifyFailedCmd struct {

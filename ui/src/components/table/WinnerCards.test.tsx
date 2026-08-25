@@ -1,6 +1,6 @@
 import {render, screen} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {describe, expect, test, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import type {TableSnapshot} from '@/lib/api/table';
 import {WinnerCards} from './WinnerCards';
 
@@ -16,12 +16,55 @@ function snapshot(overrides: Partial<TableSnapshot> = {}): TableSnapshot {
   };
 }
 
+function request(overrides: Partial<NonNullable<TableSnapshot['pending_winner_cards']>> = {}) {
+  return {
+    requester_id: 'viewer', requester_name: 'Ana', winner_id: 'winner', fee: 50,
+    expires_at_unix_ms: 1_000_000 + 8_000, ...overrides,
+  };
+}
+
 describe('WinnerCards', () => {
+  beforeEach(() => vi.useFakeTimers({shouldAdvanceTime: true}));
+  afterEach(() => vi.useRealTimers());
+
   test('shows the winner name and big-blind price, then requests the reveal', async () => {
     const onRequest = vi.fn();
     render(<WinnerCards snapshot={snapshot()} viewer="viewer" bigBlind={50} onRequestWinnerCardsAction={onRequest}/>);
-    await userEvent.click(screen.getByRole('button', {name: /Ver a mão de Bia por 50 fichas/}));
+    await userEvent.click(screen.getByRole('button', {name: /Pedir a mão de Bia por 50 fichas/}));
     expect(onRequest).toHaveBeenCalledOnce();
+  });
+
+  test('asks the winner to consent, naming the requester, the fee and the deadline', async () => {
+    const onAnswer = vi.fn();
+    vi.setSystemTime(new Date(1_000_000));
+    render(<WinnerCards viewer="winner" bigBlind={50} onAnswerWinnerCardsAction={onAnswer}
+      snapshot={snapshot({pending_winner_cards: request()})}/>);
+
+    expect(screen.getByText(/Ana quer pagar 50 fichas para ver sua mão/)).toBeInTheDocument();
+    expect(screen.getByText(/8s para responder/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: /Mostrar/}));
+    expect(onAnswer).toHaveBeenCalledWith(true);
+    await userEvent.click(screen.getByRole('button', {name: /Recusar/}));
+    expect(onAnswer).toHaveBeenCalledWith(false);
+  });
+
+  test('shows the requester a wait state with the refund promise instead of the buy button', () => {
+    vi.setSystemTime(new Date(1_000_000));
+    render(<WinnerCards snapshot={snapshot({pending_winner_cards: request()})} viewer="viewer" bigBlind={50}/>);
+    expect(screen.getByText('Aguardando resposta…')).toBeInTheDocument();
+    expect(screen.getByText(/suas 50 fichas voltam/)).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  test('disables both answers while one is in flight', () => {
+    render(<WinnerCards snapshot={snapshot({pending_winner_cards: request()})} viewer="winner" bigBlind={50} pending/>);
+    for (const button of screen.getAllByRole('button')) expect(button).toBeDisabled();
+  });
+
+  test('falls back to a neutral requester label when the name is missing', () => {
+    render(<WinnerCards viewer="winner" bigBlind={50}
+      snapshot={snapshot({pending_winner_cards: request({requester_name: ''})})}/>);
+    expect(screen.getByText(/Um jogador quer pagar/)).toBeInTheDocument();
   });
 
   test.each([

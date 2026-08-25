@@ -6,6 +6,9 @@ import type {MockScenario} from '@/lib/mockConfig';
 
 const scenarios: { value: MockScenario; label: string }[] = [
   {value: 'full_hand', label: 'Mesa-bot · vitória'},
+  {value: 'heads_up', label: 'Layout · heads-up'},
+  {value: 'six_max', label: 'Layout · 6-max'},
+  {value: 'nine_max', label: 'Layout · 9-max'},
   {value: 'full_hand_loss', label: 'Mesa-bot · derrota'},
   {value: 'full_hand_tie', label: 'Mesa-bot · empate'},
   {value: 'all_in', label: 'Mesa-bot · rival all-in'},

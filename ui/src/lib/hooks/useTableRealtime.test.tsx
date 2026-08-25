@@ -387,6 +387,23 @@ describe('useTableRealtime', () => {
     expect(result.current.actionError).toMatchObject({code: 'invalid_action'});
   });
 
+  test.each([
+    {accept: true, frame: 'accept_winner_cards'},
+    {accept: false, frame: 'decline_winner_cards'},
+  ])('sends the winner\'s $frame answer and unlocks it on acknowledgement', ({accept, frame}) => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    act(() => {
+      expect(result.current.answerWinnerCards(accept)).toBe(true);
+      // Requester and winner share one in-flight slot; a second answer while
+      // the first is unacknowledged must not go out.
+      expect(result.current.answerWinnerCards(accept)).toBe(false);
+    });
+    expect(result.current.requestWinnerCardsPending).toBe(true);
+    expect(ws.send).toHaveBeenLastCalledWith({type: frame, action_id: 'action-1'});
+    receive({type: 'action_ack', action_id: 'action-1'});
+    expect(result.current.requestWinnerCardsPending).toBe(false);
+  });
+
   test('reports a rabbit hunt verification failure as a fire-and-forget frame', () => {
     const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
     act(() => {

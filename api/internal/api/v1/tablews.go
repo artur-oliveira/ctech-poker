@@ -26,6 +26,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
+	"gopkg.aoctech.app/poker/api/internal/wsdrain"
 
 	fws "github.com/fasthttp/websocket"
 	"github.com/gofiber/fiber/v3"
@@ -107,7 +108,7 @@ func wsAllowedOrigin(ctx *fasthttp.RequestCtx, allowed []string) bool {
 
 func rateLimitedTableMessage(messageType string) bool {
 	switch messageType {
-	case "act", "chat", "reaction", "preselect_action", "bot_challenge", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "set_run_it_twice", "peek_cards", "ping", "request_rabbit_hunt", "rabbit_hunt_verify_failed", "request_winner_cards":
+	case "act", "chat", "reaction", "preselect_action", "bot_challenge", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "set_run_it_twice", "peek_cards", "ping", "request_rabbit_hunt", "rabbit_hunt_verify_failed", "request_winner_cards", "accept_winner_cards", "decline_winner_cards":
 		return true
 	default:
 		return false
@@ -266,6 +267,10 @@ func RegisterTableWS(
 			// on concurrent writes).
 			conn.SetReadLimit(wsMaxMessageBytes)
 			safeConn := &wsConnAdapter{conn: conn}
+			// Tracked so a rolling deploy can hand this socket a clean 1001
+			// close before the server force-closes it (wsdrain).
+			wsdrain.Track(safeConn)
+			defer wsdrain.Untrack(safeConn)
 			send := func(msg *pokerproto.ServerMessage) {
 				data, err := goproto.Marshal(msg)
 				if err != nil {
@@ -622,6 +627,22 @@ func RegisterTableWS(
 					} else {
 						ack()
 					}
+				case "accept_winner_cards":
+					ensureActionID()
+					r := make(chan error, 1)
+					if err := dispatch(table.AcceptWinnerCardsCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+					} else {
+						ack()
+					}
+				case "decline_winner_cards":
+					ensureActionID()
+					r := make(chan error, 1)
+					if err := dispatch(table.DeclineWinnerCardsCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+					} else {
+						ack()
+					}
 				case "rabbit_hunt_verify_failed":
 					ensureActionID()
 					r := make(chan error, 1)
@@ -840,6 +861,10 @@ func RegisterGeneralWS(
 			// upgrade returns, this goroutine is not.
 			conn.SetReadLimit(wsMaxMessageBytes)
 			safeConn := &wsConnAdapter{conn: conn}
+			// Tracked so a rolling deploy can hand this socket a clean 1001
+			// close before the server force-closes it (wsdrain).
+			wsdrain.Track(safeConn)
+			defer wsdrain.Untrack(safeConn)
 			send := func(msg *pokerproto.ServerMessage) {
 				data, err := goproto.Marshal(msg)
 				if err != nil {
@@ -1042,6 +1067,14 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		protoUnrevealedHashes[int32(idx)] = hashHex
 	}
 
+	var protoWinnerCards *pokerproto.WinnerCardsRequest
+	if req := snap.PendingWinnerCards; req != nil {
+		protoWinnerCards = &pokerproto.WinnerCardsRequest{
+			RequesterId: req.RequesterID, RequesterName: req.RequesterName,
+			WinnerId: req.WinnerID, Fee: req.Fee, ExpiresAtUnixMs: req.ExpiresAtUnixMs,
+		}
+	}
+
 	return &pokerproto.TableSnapshot{
 		Stage:                    snap.Stage,
 		Board:                    snap.Board,
@@ -1065,7 +1098,7 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		Pots:                     protoPots,
 		HandId:                   snap.HandID,
 		PotResults:               protoPotResults,
-		ProtocolVersion:          10,
+		ProtocolVersion:          11,
 		ChatMessages:             protoChat,
 		Reactions:                protoReactions,
 		ActionPreselection:       snap.ActionPreselection,
@@ -1077,6 +1110,7 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		RunoutCards:              snap.RunoutCards,
 		BoardTwo:                 snap.BoardTwo,
 		BoardSplitAt:             int32(snap.BoardSplitAt),
+		PendingWinnerCards:       protoWinnerCards,
 	}
 }
 

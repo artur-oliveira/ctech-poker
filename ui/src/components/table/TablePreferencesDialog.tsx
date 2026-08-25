@@ -14,7 +14,7 @@ import {Label} from '@/components/ui/label';
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select';
 import {Switch} from '@/components/ui/switch';
 import {getMe, updateMe} from '@/lib/api/player';
-import {listCosmeticCatalog, listCosmeticPurchases, ownedCosmeticIDs} from '@/lib/api/cosmeticPurchases';
+import {listCosmeticCatalog, ownedCosmeticIDs} from '@/lib/api/cosmeticPurchases';
 import {PREMIUM_FELT_IDS, TABLE_THEMES, type TableThemeId, useTablePreferences} from '@/lib/tablePreferences';
 
 const REALITY_OPTIONS = [
@@ -26,18 +26,20 @@ const REALITY_OPTIONS = [
 ];
 
 export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice = false, onRunItTwiceChange,
-                                         onLockedFeltAction}: {
+                                         onLockedFeltAction, open, onOpenChangeAction, showTrigger = true}: {
   runItTwiceAvailable?: boolean;
   runItTwice?: boolean;
   onRunItTwiceChange?: (enabled: boolean) => boolean;
   onLockedFeltAction?: (id: TableThemeId) => void;
+  open?: boolean;
+  onOpenChangeAction?: (open: boolean) => void;
+  showTrigger?: boolean;
 }) {
   const {preferences, update} = useTablePreferences();
   const queryClient = useQueryClient();
   const {data: me} = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
   const catalog = useQuery({queryKey: ['wallet', 'cosmetic-catalog', 'felt'], queryFn: () => listCosmeticCatalog('felt')});
-  const purchases = useQuery({queryKey: ['wallet', 'cosmetic-purchases', 'felt'], queryFn: () => listCosmeticPurchases('felt')});
-  const owned = ownedCosmeticIDs(purchases.data ?? []);
+  const owned = ownedCosmeticIDs(catalog.data ?? []);
   const prices = new Map((catalog.data ?? []).map(entry => [entry.id, entry.price_fichas]));
   const save = useMutation({
     mutationFn: updateMe,
@@ -54,10 +56,10 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
     save.mutate({table_theme: value});
   }
 
-  return <Dialog>
-    <DialogTrigger render={<Button type="button" variant="ghost" size="icon" aria-label="Preferências da mesa"/>}>
+  return <Dialog open={open} onOpenChange={onOpenChangeAction}>
+    {showTrigger && <DialogTrigger render={<Button type="button" variant="ghost" size="icon" aria-label="Preferências da mesa"/>}>
       <Settings2/>
-    </DialogTrigger>
+    </DialogTrigger>}
     <DialogContent>
       <DialogHeader>
         <DialogTitle>Preferências da mesa</DialogTitle>

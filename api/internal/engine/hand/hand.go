@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"time"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/deck"
@@ -157,6 +158,22 @@ type Table struct {
 	// winnerCardsPaid tracks, for the current hand, which dealt-in opponents
 	// paid to see the uncontested winner's otherwise-mucked hole cards.
 	winnerCardsPaid map[string]bool
+
+	// winnerCardsAsked tracks who has already asked this hand, accepted or
+	// not. winnerCardsPaid can't do this job — it also drives the reveal in
+	// ViewFor — and without a separate flag a declined requester could re-ask
+	// immediately, for as long as the post-hand window lasts, which would make
+	// the winner's "no" worth nothing.
+	winnerCardsAsked map[string]bool
+
+	// pendingWinnerCards is this hand's single outstanding paid-reveal
+	// request, waiting on the winner's answer. Unlike the rabbit hunt — whose
+	// secret belongs to the deck — these cards belong to another player, so
+	// the fee buys a request, not the cards
+	// (docs/specs/2026-08-24-pay-to-see-cards-consent.md, option B). At most
+	// one is outstanding per hand; it is always resolved (accepted, declined,
+	// expired, or refunded by StartHand) before the next hand deals.
+	pendingWinnerCards *WinnerCardsRequest
 
 	// handOrder is the seat order of players dealt into the current (or
 	// most recently completed) hand — the same slice built as `active` in
@@ -712,9 +729,15 @@ func (t *Table) StartHand() error {
 	t.payouts = nil
 	t.lastOutcome = nil
 	t.wasEverAllIn = make(map[string]bool)
+	// Backstop: a request nobody answered must never survive into the next
+	// hand still holding the requester's chips. Runs before rakeCollected is
+	// zeroed so an orphaned fee (requester already gone) is booked against the
+	// hand that produced it.
+	t.refundPendingWinnerCards()
 	t.rakeCollected = 0
 	t.rabbitHuntPaid = make(map[string]bool)
 	t.winnerCardsPaid = make(map[string]bool)
+	t.winnerCardsAsked = make(map[string]bool)
 	t.seenActionIDs = make(map[string]bool)
 	for _, p := range t.players {
 		p.VoluntarilyShown = false
@@ -1061,10 +1084,51 @@ func (t *Table) RefundRabbitHunt(playerID string) error {
 	return nil
 }
 
-// RequestWinnerCards charges playerID the current hand's big blind to reveal
-// the sole uncontested winner's hole cards to that viewer only. Half the fee
-// goes to the winner and the remainder is collected as rake.
-func (t *Table) RequestWinnerCards(playerID string) (fee int64, err error) {
+// WinnerCardsRequest is one outstanding paid-reveal request: the requester
+// has already been charged, and the winner has until ExpiresAt to accept or
+// decline. Exported because it is persisted in State and surfaced, viewer-
+// scoped, on the snapshot.
+type WinnerCardsRequest struct {
+	RequesterID string `json:"requester_id" dynamodbav:"requester_id"`
+	WinnerID    string `json:"winner_id" dynamodbav:"winner_id"`
+	Fee         int64  `json:"fee" dynamodbav:"fee"`
+	// ExpiresAt is server-set (unix ms). Persisted rather than derived from a
+	// timer so any instance that picks this table up can finish the request.
+	ExpiresAt int64 `json:"expires_at" dynamodbav:"expires_at"`
+}
+
+// PendingWinnerCards returns this hand's outstanding paid-reveal request, or
+// nil. The returned value is a copy — callers must not mutate table state.
+func (t *Table) PendingWinnerCards() *WinnerCardsRequest {
+	if t.pendingWinnerCards == nil {
+		return nil
+	}
+	copied := *t.pendingWinnerCards
+	return &copied
+}
+
+// refundPendingWinnerCards returns an unresolved request's fee and clears it.
+// A requester who has since left the table cannot be paid back — their stack
+// was already settled short — so the fee goes to rake, which is this table's
+// "chips removed from play" accumulator and therefore the only bookkeeping
+// that keeps the chip count balanced.
+func (t *Table) refundPendingWinnerCards() {
+	if t.pendingWinnerCards == nil {
+		return
+	}
+	if requester := t.playerByID(t.pendingWinnerCards.RequesterID); requester != nil {
+		requester.Stack += t.pendingWinnerCards.Fee
+	} else {
+		t.rakeCollected += t.pendingWinnerCards.Fee
+	}
+	t.pendingWinnerCards = nil
+}
+
+// RequestWinnerCards charges playerID the current hand's big blind and asks
+// the sole uncontested winner for permission to reveal their hole cards to
+// that viewer only. Nothing is revealed and the winner is paid nothing until
+// they accept; a decline or a timeout refunds the requester in full.
+func (t *Table) RequestWinnerCards(playerID string, now time.Time) (fee int64, err error) {
 	if t.currencyMode != "sandbox" {
 		return 0, fmt.Errorf("hand: winner cards are only available on sandbox tables")
 	}
@@ -1098,8 +1162,14 @@ func (t *Table) RequestWinnerCards(playerID string) (fee int64, err error) {
 	if !dealtIn {
 		return 0, fmt.Errorf("hand: player %s was not dealt into this hand", playerID)
 	}
-	if t.winnerCardsPaid[playerID] {
-		return 0, fmt.Errorf("hand: player %s already paid to see winner cards this hand", playerID)
+	if t.winnerCardsAsked[playerID] {
+		return 0, fmt.Errorf("hand: player %s already asked to see winner cards this hand", playerID)
+	}
+	// One outstanding request per hand: a second one queues nothing, it is
+	// rejected, so the winner is never asked two questions at once.
+	t.expirePendingWinnerCards(now)
+	if t.pendingWinnerCards != nil {
+		return 0, fmt.Errorf("hand: a winner cards request is already pending")
 	}
 	requester := t.playerByID(playerID)
 	if requester == nil {
@@ -1109,13 +1179,80 @@ func (t *Table) RequestWinnerCards(playerID string) (fee int64, err error) {
 		return 0, fmt.Errorf("hand: insufficient stack for the winner cards fee")
 	}
 	requester.Stack -= t.bigBlind
-	winner.Stack += t.bigBlind / 2
-	t.rakeCollected += t.bigBlind - t.bigBlind/2
+	if t.winnerCardsAsked == nil {
+		t.winnerCardsAsked = make(map[string]bool)
+	}
+	t.winnerCardsAsked[playerID] = true
+	t.pendingWinnerCards = &WinnerCardsRequest{
+		RequesterID: playerID, WinnerID: winnerID, Fee: t.bigBlind,
+		ExpiresAt: now.Add(WinnerCardsConsentWindow).UnixMilli(),
+	}
+	return t.bigBlind, nil
+}
+
+// AcceptWinnerCards is the winner agreeing to show. Only now does the fee
+// actually move: half to the winner, the rest to rake — the same split the
+// unilateral version used to apply at request time.
+func (t *Table) AcceptWinnerCards(winnerID string, now time.Time) error {
+	t.expirePendingWinnerCards(now)
+	req := t.pendingWinnerCards
+	if req == nil {
+		return fmt.Errorf("hand: no winner cards request is pending")
+	}
+	if req.WinnerID != winnerID {
+		return fmt.Errorf("hand: player %s is not the winner this request is addressed to", winnerID)
+	}
+	winner := t.playerByID(winnerID)
+	if winner == nil {
+		// The winner left between the request and their answer; nobody can be
+		// paid, so the requester gets their chips back instead.
+		t.refundPendingWinnerCards()
+		return fmt.Errorf("hand: winner %s is no longer seated", winnerID)
+	}
+	winner.Stack += req.Fee / 2
+	t.rakeCollected += req.Fee - req.Fee/2
 	if t.winnerCardsPaid == nil {
 		t.winnerCardsPaid = make(map[string]bool)
 	}
-	t.winnerCardsPaid[playerID] = true
-	return t.bigBlind, nil
+	t.winnerCardsPaid[req.RequesterID] = true
+	t.pendingWinnerCards = nil
+	return nil
+}
+
+// DeclineWinnerCards is the winner refusing. Nothing is revealed and the
+// requester is made whole. Unlike Accept, it does not check the window: a
+// decline that lands just after expiry produces exactly the outcome expiry
+// would have (full refund, nothing shown), so failing it would only report an
+// error for something that already went the way the winner wanted.
+func (t *Table) DeclineWinnerCards(winnerID string) error {
+	req := t.pendingWinnerCards
+	if req == nil {
+		return fmt.Errorf("hand: no winner cards request is pending")
+	}
+	if req.WinnerID != winnerID {
+		return fmt.Errorf("hand: player %s is not the winner this request is addressed to", winnerID)
+	}
+	t.refundPendingWinnerCards()
+	return nil
+}
+
+// ExpireWinnerCards resolves an unanswered request whose window has closed.
+// Reports whether anything changed, so the caller only persists a real
+// mutation.
+func (t *Table) ExpireWinnerCards(now time.Time) bool {
+	before := t.pendingWinnerCards
+	t.expirePendingWinnerCards(now)
+	return before != nil && t.pendingWinnerCards == nil
+}
+
+// expirePendingWinnerCards refunds the request if its window has closed. Every
+// entry point calls this first so a stale request can never be accepted just
+// because no timer happened to fire on this instance.
+func (t *Table) expirePendingWinnerCards(now time.Time) {
+	if t.pendingWinnerCards == nil || now.UnixMilli() < t.pendingWinnerCards.ExpiresAt {
+		return
+	}
+	t.refundPendingWinnerCards()
 }
 
 func (t *Table) blindSeats(active []*Player) (sb, bb int) {
@@ -1802,3 +1939,10 @@ func (t *Table) rakeForLayer(amount, remainingCap int64) int64 {
 	}
 	return rake
 }
+
+// WinnerCardsConsentWindow is how long the winner has to accept or decline a
+// paid-reveal request. Deliberately shorter than table.NextHandDelay (12s):
+// the request lives entirely inside the post-hand window, so a longer one
+// would routinely be cut off by the next deal — StartHand refunds in that
+// case, but a window players can't actually use is worse than a tight one.
+const WinnerCardsConsentWindow = 8 * time.Second

@@ -5,7 +5,7 @@ import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 
 import {TablePreferencesDialog} from './TablePreferencesDialog';
-import type {CosmeticCatalogEntry, CosmeticPurchase} from '@/lib/api/cosmeticPurchases';
+import type {CosmeticCatalogEntry} from '@/lib/api/cosmeticPurchases';
 import type {PlayerProfile} from '@/lib/api/player';
 
 const {useTablePreferences, update, getMe, updateMe, listCosmeticCatalog, listCosmeticPurchases} = vi.hoisted(() => ({
@@ -71,15 +71,15 @@ const player = (overrides: Partial<PlayerProfile> = {}): PlayerProfile => ({
 });
 
 const catalog: CosmeticCatalogEntry[] = [
-  {kind: 'felt', id: 'classic', premium: false},
-  {kind: 'felt', id: 'midnight', premium: true, price_fichas: 200_000},
-  {kind: 'felt', id: 'burgundy', premium: true, price_fichas: 200_000},
-  {kind: 'felt', id: 'ocean', premium: true, price_fichas: 200_000},
+  {kind: 'felt', id: 'classic', premium: false, owned: true},
+  {kind: 'felt', id: 'midnight', premium: true, owned: false, price_fichas: 200_000},
+  {kind: 'felt', id: 'burgundy', premium: true, owned: false, price_fichas: 200_000},
+  {kind: 'felt', id: 'ocean', premium: true, owned: false, price_fichas: 200_000},
 ];
 
-function purchase(itemId: string, status: CosmeticPurchase['status'] = 'confirmed'): CosmeticPurchase {
-  return {purchase_id: `pp-${itemId}`, kind: 'felt', item_id: itemId, method: 'fichas', status};
-}
+// Ownership is a catalog fact now (the server reads it from entitlements).
+const ownedMidnightCatalog = catalog.map(entry => entry.id === 'midnight' ? {...entry, owned: true} : entry);
+
 
 function wrapper({children}: {children: ReactNode}) {
   const client = new QueryClient({defaultOptions: {queries: {retry: false}}});
@@ -172,7 +172,7 @@ describe('TablePreferencesDialog', () => {
   });
 
   test('selecting an owned premium felt mutates normally with no lock icon', async () => {
-    listCosmeticPurchases.mockResolvedValue([purchase('midnight')]);
+    listCosmeticCatalog.mockResolvedValue(ownedMidnightCatalog);
     const onLockedFeltAction = vi.fn();
     renderDialog({onLockedFeltAction});
     const midnight = await screen.findByRole('button', {name: 'Meia-noite'});

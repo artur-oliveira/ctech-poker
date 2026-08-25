@@ -1,10 +1,12 @@
-import {apiClient} from './client';
+import {apiClient, type Page} from './client';
 
 export type ReactionPurchaseMethod = 'pix' | 'fichas';
 
 export interface ReactionCatalogEntry {
   id: string;
   premium: boolean;
+  // Server-computed from the entitlement table. Always true for free reactions.
+  owned?: boolean;
   price_cents?: number;
   price_fichas?: number;
 }
@@ -24,12 +26,15 @@ export interface ReactionPurchase {
   updated_at?: string;
 }
 
+// The catalog is a fixed set, so it arrives on a single page — unwrap it and
+// hand callers the plain array.
 export async function listReactionCatalog() {
-  return (await apiClient.get<ReactionCatalogEntry[]>('/v1.0/wallet/reaction-purchase/catalog')).data;
+  return (await apiClient.get<Page<ReactionCatalogEntry>>('/v1.0/wallet/reaction-purchase/catalog')).data.data;
 }
 
-export async function listReactionPurchases() {
-  return (await apiClient.get<ReactionPurchase[]>('/v1.0/wallet/reaction-purchase/')).data;
+export async function listReactionPurchases(cursor?: string) {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  return (await apiClient.get<Page<ReactionPurchase>>(`/v1.0/wallet/reaction-purchase/${query}`)).data;
 }
 
 export async function createReactionPurchase(reactionId: string, method: ReactionPurchaseMethod) {
@@ -55,8 +60,11 @@ export async function refundReactionPurchase(id: string) {
   )).data;
 }
 
-export function ownedReactionIDs(purchases: ReactionPurchase[]) {
-  return new Set(purchases.filter(item => item.status === 'confirmed').map(item => item.reaction_id));
+// Ownership comes from the catalog's server-computed `owned` flag, which is
+// backed by the entitlement table — never from purchase history. See
+// ownedCosmeticIDs for the failure this avoids.
+export function ownedReactionIDs(catalog: ReactionCatalogEntry[]) {
+  return new Set(catalog.filter(entry => entry.owned).map(entry => entry.id));
 }
 
 export function currentReactionPurchase(purchases: ReactionPurchase[], reactionId: string) {

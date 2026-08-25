@@ -9,10 +9,20 @@ interface PixPayable {
   pix_copia_e_cola?: string;
   qr_code_base64?: string;
   expires_at?: string;
+  price_cents?: number;
 }
 
-export function PixPaymentView({purchase, paymentNote = 'As fichas são apenas do modo sandbox e não têm valor em dinheiro.'}: {
+function formatBRL(cents?: number) {
+  return ((cents ?? 0) / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+}
+
+// amountDetail says what the money buys (e.g. "5.500 fichas", "Baralho Dourado").
+// The amount itself is never optional: this is a real-money QR code, and a player
+// must never be asked to scan one without the charge stated on the same screen.
+export function PixPaymentView({purchase, amountDetail,
+                                paymentNote = 'As fichas são apenas do modo sandbox e não têm valor em dinheiro.'}: {
   purchase: PixPayable;
+  amountDetail?: string;
   paymentNote?: string;
 }) {
   const [copied, setCopied] = useState(false);
@@ -35,6 +45,10 @@ export function PixPaymentView({purchase, paymentNote = 'As fichas são apenas d
   }
 
   return <>
+    <p className="store-pix-amount">
+      <strong>{formatBRL(purchase.price_cents)}</strong>
+      {amountDetail && <small>{amountDetail}</small>}
+    </p>
     {purchase.qr_code_base64 && <div className="store-qr">
       <Image src={`data:${qrImageType};base64,${purchase.qr_code_base64}`} alt="QR code Pix para pagamento"
              width={200} height={200} unoptimized/>

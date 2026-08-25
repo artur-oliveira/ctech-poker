@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -161,8 +162,8 @@ func (f *webhookFakeStore) UpdateStatus(_ context.Context, playerID, purchaseID,
 	f.rows[k] = rec
 	return true, nil
 }
-func (f *webhookFakeStore) List(context.Context, string) ([]sandboxpurchase.Record, error) {
-	return nil, nil
+func (f *webhookFakeStore) List(context.Context, string, int, map[string]types.AttributeValue) ([]sandboxpurchase.Record, map[string]types.AttributeValue, error) {
+	return nil, nil, nil
 }
 
 func key(a, b string) string { return a + "#" + b }

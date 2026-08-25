@@ -44,4 +44,22 @@ describe('AchievementToast', () => {
     act(() => vi.advanceTimersByTime(4550));
     expect(container).toBeEmptyDOMElement();
   });
+
+  test('queues an unlock while an outcome decision owns the announcement layer', () => {
+    const {rerender} = render(<AchievementToast unlock={{key: 'wins', stars: 1}} blocked/>);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+    rerender(<AchievementToast unlock={{key: 'wins', stars: 1}} blocked={false}/>);
+    expect(screen.getByRole('status')).toHaveTextContent('Vitórias');
+  });
+
+  test('removes a visible toast when blocked and restores the queued unlock afterwards', () => {
+    const {rerender} = render(<AchievementToast unlock={{key: 'bluff', stars: 2}}/>);
+    expect(screen.getByRole('status')).toHaveTextContent('Mestre do Blefe');
+
+    rerender(<AchievementToast unlock={{key: 'bluff', stars: 2}} blocked/>);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    rerender(<AchievementToast unlock={null} blocked={false}/>);
+    expect(screen.getByRole('status')).toHaveTextContent('Mestre do Blefe');
+  });
 });

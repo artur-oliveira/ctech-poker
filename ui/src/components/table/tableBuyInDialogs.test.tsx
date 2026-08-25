@@ -195,11 +195,15 @@ describe('table bankroll dialogs', () => {
     await waitFor(() => expect(left).toHaveBeenCalledWith(900));
   });
 
-  test('disables the leave trigger while dealt into the current hand, instead of letting a doomed leave request fire', () => {
+  test('keeps Exit reachable while dealt in and explains why confirmation is blocked', async () => {
     render(<LeaveDialog roomId="room-1" stack={900} dealtIn onLeftAction={vi.fn()}/>);
     const trigger = screen.getByRole('button', {name: 'Sair da mesa'});
-    expect(trigger).toBeDisabled();
+    expect(trigger).toBeEnabled();
     expect(trigger).toHaveAttribute('title', expect.stringContaining('Você está na mão atual'));
+    await userEvent.click(trigger);
+    expect(screen.getByRole('status')).toHaveTextContent('Você está na mão atual');
+    expect(screen.getByRole('button', {name: 'Aguarde o fim da mão'})).toBeDisabled();
+    expect(mocks.leaveRoom).not.toHaveBeenCalled();
   });
 
   test('rebuys a changed amount and reports a retryable failure', async () => {

@@ -296,7 +296,7 @@ const mockReactionPrices: Record<string, { price_cents: number; price_fichas: nu
   turtle: {price_cents: 500, price_fichas: 500_000},
 };
 const mockReactionCatalog: ReactionCatalogEntry[] = Object.keys(TABLE_REACTIONS).map(id => ({
-  id, premium: id in mockReactionPrices, ...mockReactionPrices[id]
+  id, premium: id in mockReactionPrices, owned: !(id in mockReactionPrices), ...mockReactionPrices[id]
 }));
 type MockReactionPurchase = ReactionPurchase & {
   resolves_at_ms?: number;
@@ -787,11 +787,11 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     }, config);
   }
   if (method === 'GET' && /^\/v1\.0\/wallet\/sandbox-purchase\/skus\/?$/.test(path)) {
-    return ok(mockSandboxSkus.map(sku => ({...sku})), config);
+    return ok(page(mockSandboxSkus.map(sku => ({...sku}))), config);
   }
   if (method === 'GET' && /^\/v1\.0\/wallet\/sandbox-purchase\/?$/.test(path)) {
     mockSandboxPurchases.forEach(settlePurchase);
-    return ok(mockSandboxPurchases.map(publicPurchase), config);
+    return ok(page(mockSandboxPurchases.map(publicPurchase)), config);
   }
   if (method === 'POST' && /^\/v1\.0\/wallet\/sandbox-purchase\/?$/.test(path)) {
     const sku = mockSandboxSkus.find(item => item.id === body.sku);
@@ -844,11 +844,17 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     return ok(publicPurchase(purchase), config);
   }
   if (method === 'GET' && /^\/v1\.0\/wallet\/reaction-purchase\/catalog\/?$/.test(path)) {
-    return ok(mockReactionCatalog.map(entry => ({...entry})), config);
+    // Ownership mirrors the real API: derived from the entitlement the server
+    // holds, which in mock-land is "a confirmed purchase exists".
+    return ok(page(mockReactionCatalog.map(entry => ({
+      ...entry,
+      owned: !entry.premium || mockReactionPurchases.some(
+        item => item.reaction_id === entry.id && item.status === 'confirmed'),
+    }))), config);
   }
   if (method === 'GET' && /^\/v1\.0\/wallet\/reaction-purchase\/?$/.test(path)) {
     mockReactionPurchases.forEach(settleReactionPurchase);
-    return ok(mockReactionPurchases.map(item => ({...item})), config);
+    return ok(page(mockReactionPurchases.map(item => ({...item}))), config);
   }
   if (method === 'POST' && /^\/v1\.0\/wallet\/reaction-purchase\/?$/.test(path)) {
     const prices = mockReactionPrices[body.reaction_id];
@@ -1081,15 +1087,18 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       {kind: 'felt', id: 'burgundy', premium: true, price_cents: 500, price_fichas: 1000000},
       {kind: 'felt', id: 'ocean', premium: true, price_cents: 500, price_fichas: 1000000},
     ];
-    return ok(kind === 'deck' ? deckCatalog : feltCatalog, config);
+    // Nothing is bought in mock-land, so only the free items come back owned.
+    const entries = (kind === 'deck' ? deckCatalog : feltCatalog).map(entry => ({...entry, owned: !entry.premium}));
+    return ok(page(entries), config);
   }
-  if (method === 'GET' && path.startsWith('/v1.0/wallet/cosmetic-purchase')) return ok([], config);
+  if (method === 'GET' && path.startsWith('/v1.0/wallet/cosmetic-purchase')) return ok(page([]), config);
+  if (method === 'GET' && path.startsWith('/v1.0/wallet/cosmetic-catalog')) return ok(page([]), config);
   const highlightMatch = method === 'GET' ? path.match(/^\/v1\.0\/rooms\/([^/]+)\/highlights\/today$/) : null;
   if (highlightMatch) {
     return ok({
       table_id: highlightMatch[1], date: new Date().toISOString().slice(0, 10),
-      hand_id: 'mock-highlight-hand', pot: 18500, board: ['Ah', 'Kd', '7c', '2s', '9h'],
-      revealed: [{player_id: MOCK_PLAYER_ID, name: mockProfile.name, hole_cards: ['Ah', 'As']}],
+      hand_id: 'mock-highlight-hand', pot: 18500, board: ['Kh', 'Kd', '7c', '2s', '9h'],
+      revealed: [{player_id: MOCK_PLAYER_ID, name: mockProfile.name, hole_cards: ['Ks', 'As']}],
       recorded_at: Date.now(),
     }, config);
   }
@@ -1327,6 +1336,24 @@ const HAND_VARIANTS: Record<InteractiveScenario, HandVariant> = {
 
 export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
   const seats = baseSeats();
+  if (scenario === 'heads_up' || scenario === 'six_max' || scenario === 'nine_max') {
+    const layoutSeats = scenario === 'heads_up' ? fullHandSeats().slice(0, 2) :
+      scenario === 'six_max' ? fullHandSeats() : seats;
+    return {
+      stage: 'flop',
+      board: ['7H', '8C', 'QS'],
+      seats: layoutSeats,
+      current_player_id: MOCK_PLAYER_ID,
+      legal_actions: {
+        actions: ['fold', 'check', 'raise'], min_raise_to: 100, max_raise_to: 4900, step: 25,
+        current_bet: 50, current_contribution: 50, half_pot_raise_to: 175, pot_raise_to: 300
+      },
+      dealer_player_id: layoutSeats.at(-1)?.player_id,
+      small_blind_player_id: layoutSeats[1]?.player_id,
+      big_blind_player_id: MOCK_PLAYER_ID,
+      rake: 5
+    };
+  }
   if (scenario === 'rebuy') return {
     stage: 'waiting_for_players',
     board: [],
@@ -1745,16 +1772,66 @@ export class MockTableService {
         }));
         return true;
       }
+      // Paying opens a request the winner has to answer; nothing is revealed
+      // yet. The mock winner auto-accepts after a beat so the flow stays
+      // playable without a second browser.
       this.snapshot = {
         ...this.snapshot,
-        seats: this.snapshot.seats.map(seat => seat.player_id === winnerID ? {
-          ...seat,
-          stack: seat.stack + 25,
-          hole_cards: winnerCards,
-          hole_cards_revealed: [true, true],
-          hand_category: 'pair'
-        } : seat.player_id === MOCK_PLAYER_ID ? {...seat, stack: Math.max(0, seat.stack - 50)} : seat),
-        rake: (this.snapshot.rake || 0) + 25
+        seats: this.snapshot.seats.map(seat => seat.player_id === MOCK_PLAYER_ID
+          ? {...seat, stack: Math.max(0, seat.stack - 50)} : seat),
+        pending_winner_cards: {
+          requester_id: MOCK_PLAYER_ID, requester_name: 'Você',
+          winner_id: winnerID, fee: 50, expires_at_unix_ms: Date.now() + 8000,
+        },
+      };
+      this.later(() => this.handlers.onMessage({
+        type: 'action_ack', action_id: String(value.action_id || '')
+      }));
+      this.later(() => this.emitState(), 2);
+      this.later(() => {
+        // Only if the request is still outstanding — a real winner answering
+        // first must win over the mock's auto-accept.
+        if (this.snapshot.pending_winner_cards?.winner_id !== winnerID) return;
+        this.snapshot = {
+          ...this.snapshot,
+          pending_winner_cards: undefined,
+          seats: this.snapshot.seats.map(seat => seat.player_id === winnerID ? {
+            ...seat,
+            stack: seat.stack + 25,
+            hole_cards: winnerCards,
+            hole_cards_revealed: [true, true],
+            hand_category: 'pair'
+          } : seat),
+          rake: (this.snapshot.rake || 0) + 25
+        };
+        this.emitState();
+      }, 8);
+      return true;
+    }
+    if (value.type === 'accept_winner_cards' || value.type === 'decline_winner_cards') {
+      const request = this.snapshot.pending_winner_cards;
+      if (!request) {
+        this.later(() => this.handlers.onMessage({
+          type: 'error', code: 'invalid_action', action_id: String(value.action_id || '')
+        }));
+        return true;
+      }
+      const accepted = value.type === 'accept_winner_cards';
+      const winnerCards = LOSS_REVEAL[request.winner_id] || ['back', 'back'];
+      this.snapshot = {
+        ...this.snapshot,
+        pending_winner_cards: undefined,
+        seats: this.snapshot.seats.map(seat => {
+          if (accepted && seat.player_id === request.winner_id) {
+            return {...seat, stack: seat.stack + request.fee / 2, hole_cards: winnerCards,
+              hole_cards_revealed: [true, true], hand_category: 'pair'};
+          }
+          if (!accepted && seat.player_id === request.requester_id) {
+            return {...seat, stack: seat.stack + request.fee};
+          }
+          return seat;
+        }),
+        rake: (this.snapshot.rake || 0) + (accepted ? request.fee - request.fee / 2 : 0),
       };
       this.later(() => this.handlers.onMessage({
         type: 'action_ack', action_id: String(value.action_id || '')

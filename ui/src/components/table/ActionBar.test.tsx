@@ -63,6 +63,20 @@ describe('ActionBar raise controls', () => {
     expect(slider()).toHaveAttribute('aria-valuetext', 'Total 1.000 fichas, All In');
   });
 
+  test('keeps the explicit minimum and maximum names when clamped presets duplicate them', () => {
+    renderActionBar({
+      minRaise: 100,
+      maxRaise: 1000,
+      raisePresets: [
+        {label: 'Mín', value: 100}, {label: '½ pote', value: 75},
+        {label: 'Pote', value: 1200}, {label: 'Máx', value: 1000},
+      ],
+    });
+    expect(screen.getByRole('button', {name: 'Mín'})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Máx'})).toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: '½ pote'})).not.toBeInTheDocument();
+  });
+
   test('clamps an amount the server no longer allows and says which bound it hit', () => {
     const {view} = renderActionBar();
     fireEvent.change(slider(), {target: {value: '400'}});
@@ -127,6 +141,31 @@ describe('ActionBar raise controls', () => {
 
     await userEvent.click(screen.getByRole('button', {name: 'Cancelar'}));
     expect(screen.queryByRole('button', {name: 'Cancelar'})).not.toBeInTheDocument();
+  });
+
+  test('adjusts a mobile bet with explicit plus and minus buttons and clamps to the limits', async () => {
+    renderActionBar({minRaise: 150, maxRaise: 200, raiseStep: 25});
+    const plus = screen.getByRole('button', {name: 'Mais fichas'});
+    const minus = screen.getByRole('button', {name: 'Menos fichas'});
+    await userEvent.click(plus);
+    await userEvent.click(plus);
+    await userEvent.click(plus);
+    expect(slider()).toHaveValue('200');
+    await userEvent.click(minus);
+    expect(slider()).toHaveValue('175');
+  });
+
+  test('accelerates a held mobile bet adjustment and stops on pointer release', () => {
+    vi.useFakeTimers();
+    renderActionBar({maxRaise: 5000, raiseStep: 25});
+    const plus = screen.getByRole('button', {name: 'Mais fichas'});
+    fireEvent.pointerDown(plus, {button: 0});
+    act(() => vi.advanceTimersByTime(420 + 12 * 130));
+    fireEvent.pointerUp(plus);
+    const released = Number((slider() as HTMLInputElement).value);
+    expect(released).toBeGreaterThan(150 + 12 * 25);
+    act(() => vi.advanceTimersByTime(520));
+    expect(slider()).toHaveValue(String(released));
   });
 
   test('shows the all-in spinner label while the raise is in flight', () => {

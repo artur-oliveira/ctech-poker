@@ -1,5 +1,5 @@
 'use client';
-import {type ReactNode, useSyncExternalStore} from 'react';
+import {type ReactNode, useCallback, useState, useSyncExternalStore} from 'react';
 import {Board} from '@/components/table/Board';
 import {Seat} from '@/components/table/Seat';
 import {HandOutcomeBanner, type HandOutcomeState} from '@/components/table/HandOutcome';
@@ -19,6 +19,55 @@ import {DEFAULT_TURN_TIMEOUT_MS} from '@/lib/gameTiming';
 // the two stages is too different to patch across breakpoints.
 const VERTICAL_STAGE_QUERY = '(orientation: portrait) and (max-width: 1023px)';
 const STREET_STAGES = ['pre_flop', 'flop', 'turn', 'river'] as const;
+type TableCapacity = 2 | 6 | 9;
+
+const OPPONENT_SLOTS: Record<TableCapacity, number[]> = {
+  2: [4],
+  6: [1, 3, 4, 6, 8],
+  9: [1, 2, 3, 4, 5, 6, 7, 8],
+};
+
+const OBSERVER_SLOTS: Record<TableCapacity, number[]> = {
+  2: [4, 0],
+  6: [1, 2, 3, 5, 7, 8],
+  9: [1, 2, 3, 4, 5, 6, 7, 8, 0],
+};
+
+export function tableCapacity(maxSeats?: number): TableCapacity {
+  if (maxSeats != null && maxSeats <= 2) return 2;
+  if (maxSeats != null && maxSeats <= 6) return 6;
+  return 9;
+}
+
+/** Preserve surviving players' physical slots while filling a vacancy after
+ * the nearest preceding player in turn order. This is presentation-only: the
+ * wire has no seat-number field and game state remains server-authored. */
+export function stableSeatOccupants(playerIds: string[], previous: Array<string | null>): Array<string | null> {
+  const active = new Set(playerIds);
+  const next = previous.map(playerId => playerId && active.has(playerId) ? playerId : null);
+  for (const [playerIndex, playerId] of playerIds.entries()) {
+    if (next.includes(playerId)) continue;
+
+    let precedingSlot = -1;
+    for (let offset = 1; offset <= playerIds.length; offset += 1) {
+      const precedingId = playerIds[(playerIndex - offset + playerIds.length) % playerIds.length];
+      const found = next.indexOf(precedingId);
+      if (found >= 0) {
+        precedingSlot = found;
+        break;
+      }
+    }
+
+    for (let offset = 1; offset <= next.length; offset += 1) {
+      const candidate = (precedingSlot + offset + next.length) % next.length;
+      if (next[candidate] == null) {
+        next[candidate] = playerId;
+        break;
+      }
+    }
+  }
+  return next;
+}
 // Exported so the page's sr-only heading can name the current stage without
 // keeping a second copy of this copy in sync with the felt's own label.
 export const STAGE_LABELS: Record<string, string> = {
@@ -70,6 +119,8 @@ function useVerticalStage() {
 type Props = {
   snapshot: TableSnapshot;
   viewer?: string;
+  maxSeats?: number;
+  seatLayoutKey?: string;
   pot: number;
   bigBlind: number;
   turnTimeoutMs?: number;
@@ -95,6 +146,7 @@ type Props = {
   onRabbitHuntVerifyFailedAction?: () => void;
   winnerCardsPending?: boolean;
   onRequestWinnerCardsAction?: () => void;
+  onAnswerWinnerCardsAction?: (accept: boolean) => void;
   playerNotes?: Record<string, PlayerNote>;
   onEditPlayerNoteAction?: (seat: TableSnapshot['seats'][number]) => void;
   targetedReactionLabel?: string;
@@ -108,6 +160,8 @@ type Props = {
 export function TableStage({
                              snapshot,
                              viewer,
+                             maxSeats,
+                             seatLayoutKey,
                              pot,
                              bigBlind,
                              turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS,
@@ -126,6 +180,7 @@ export function TableStage({
                              onRabbitHuntVerifyFailedAction,
                              winnerCardsPending,
                              onRequestWinnerCardsAction,
+                             onAnswerWinnerCardsAction,
                              playerNotes,
                              onEditPlayerNoteAction,
                              targetedReactionLabel,
@@ -135,6 +190,18 @@ export function TableStage({
                              renderPlayerActionsAction
                            }: Props) {
   const vertical = useVerticalStage();
+  const capacity = tableCapacity(maxSeats);
+  const [outcomeLayer, setOutcomeLayer] = useState({key: outcome?.key, dismissed: false});
+  if (outcomeLayer.key !== outcome?.key) setOutcomeLayer({key: outcome?.key, dismissed: false});
+  const onOutcomeDismissedChange = useCallback((dismissed: boolean) => {
+    setOutcomeLayer(previous => previous.key === outcome?.key && previous.dismissed === dismissed ? previous :
+      {key: outcome?.key, dismissed});
+  }, [outcome?.key]);
+  const [mobileLayout, setMobileLayout] = useState<{
+    key: string;
+    playerOrder: string;
+    occupants: Array<string | null>;
+  }>({key: '', playerOrder: '', occupants: []});
   const seats = rotateSeats(snapshot.seats, viewer);
   const standings = winnerStandings(snapshot);
   const seatNode = (seat: TableSnapshot['seats'][number], index: number) => {
@@ -181,17 +248,20 @@ export function TableStage({
   </>;
 
   if (!vertical) return (
-    <div className="game-table" data-stage={snapshot.stage}>
+    <div className="game-table" data-stage={snapshot.stage} data-capacity={capacity}>
       <div className="game-rail"/>
       <div className="game-felt">{feltContent}</div>
       {seats.map(seatNode)}
       <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}
+                         onDismissedChangeAction={onOutcomeDismissedChange}
                          nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
       <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
                   pending={rabbitHuntPending} onRequestRabbitHuntAction={onRequestRabbitHuntAction}
                   onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
       <WinnerCards key={`winner-cards:${snapshot.hand_id}`} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
-                   pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}/>
+                   pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}
+                   onAnswerWinnerCardsAction={onAnswerWinnerCardsAction}
+                   offerBlocked={Boolean(outcome && !outcomeLayer.dismissed)}/>
     </div>
   );
 
@@ -199,19 +269,35 @@ export function TableStage({
   // the ring entirely and becomes the hero HUD at the stage's bottom edge.
   const viewerFirst = seats[0]?.player_id === viewer;
   const opponents = viewerFirst ? seats.slice(1) : seats;
+  const mobileSlots = viewerFirst ? OPPONENT_SLOTS[capacity] : OBSERVER_SLOTS[capacity];
+  const layoutKey = `${seatLayoutKey || 'table'}:${viewer || 'observer'}:${capacity}:${viewerFirst}`;
+  const playerOrder = opponents.map(seat => seat.player_id).join(':');
+  const previousOccupants = mobileLayout.key === layoutKey && mobileLayout.occupants.length === mobileSlots.length ?
+    mobileLayout.occupants :
+    Array.from<string | null>({length: mobileSlots.length}).fill(null);
+  const occupants = stableSeatOccupants(opponents.map(seat => seat.player_id), previousOccupants);
+  if (mobileLayout.key !== layoutKey || mobileLayout.playerOrder !== playerOrder) {
+    setMobileLayout({key: layoutKey, playerOrder, occupants});
+  }
+  const mobileSlotByPlayer = new Map(occupants.flatMap((playerId, index) =>
+    playerId ? [[playerId, mobileSlots[index]] as const] : []));
   return (
-    <div className="game-table stage-v" data-stage={snapshot.stage}>
+    <div className="game-table stage-v" data-stage={snapshot.stage} data-capacity={capacity}>
       <div className="stage-v-ring">
         <div className="game-rail"/>
         <div className="game-felt">{feltContent}</div>
-        {opponents.map((seat, i) => seatNode(seat, i + 1))}
+        {opponents.map((seat, index) => seatNode(seat,
+          mobileSlotByPlayer.get(seat.player_id) ?? mobileSlots[index] ?? index + 1))}
         <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}
+                           onDismissedChangeAction={onOutcomeDismissedChange}
                            nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
         <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
                   pending={rabbitHuntPending} onRequestRabbitHuntAction={onRequestRabbitHuntAction}
                   onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
         <WinnerCards key={`winner-cards:${snapshot.hand_id}`} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
-                     pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}/>
+                     pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}
+                   onAnswerWinnerCardsAction={onAnswerWinnerCardsAction}
+                   offerBlocked={Boolean(outcome && !outcomeLayer.dismissed)}/>
       </div>
       {viewerFirst && seatNode(seats[0], 0)}
     </div>

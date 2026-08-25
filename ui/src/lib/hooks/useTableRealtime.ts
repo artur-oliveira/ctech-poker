@@ -897,6 +897,26 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
 			);
 			return ok;
 		},
+    // The winner answering the pending request. It shares requestWinnerCards'
+    // in-flight slot on purpose: a client is either the requester or the winner
+    // of a given request, never both, so one slot is all a session can need —
+    // and WinnerCards.tsx disables both answers off that pending flag.
+    answerWinnerCards: (accept: boolean) => {
+      if (requestWinnerCardsLockRef.current) return false;
+      const actionId = crypto.randomUUID();
+      requestWinnerCardsLockRef.current = true;
+      requestWinnerCardsActionRef.current = actionId;
+      setRequestWinnerCardsPending(true);
+      const ok = emit({type: accept ? 'accept_winner_cards' : 'decline_winner_cards', action_id: actionId});
+      if (!ok) {
+        finishAuxiliaryCommand(actionId);
+        return false;
+      }
+      requestWinnerCardsTimerRef.current = setTimeout(
+        () => finishAuxiliaryCommand(actionId, 'action_timeout'), ACTION_TIMEOUT_MS
+      );
+      return ok;
+    },
     // Fire-and-forget: RabbitHunt.tsx already shows its own "taxa devolvida"
     // message locally the moment verification fails, independent of the
     // server's response, so nothing in the UI waits on this ack.

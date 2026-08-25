@@ -52,7 +52,7 @@ func newReactionPurchaseApp(svc *reactionpurchase.Service) *fiber.App {
 
 func TestReactionPurchaseCatalogRouteRegistered(t *testing.T) {
 	wallet := &fakeReactionWallet{skus: allReactionProductSKUs()}
-	svc := reactionpurchase.NewService(wallet, reactionpurchase.NewEntitlementStore(nil, "test"), reactionpurchase.NewStore(nil, "test"))
+	svc := reactionpurchase.NewService(wallet, reactionpurchase.NewEntitlementStore(stubDynamoClient(t), "test"), reactionpurchase.NewStore(nil, "test"))
 	app := newReactionPurchaseApp(svc)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1.0/wallet/reaction-purchase/catalog", nil)
@@ -63,10 +63,13 @@ func TestReactionPurchaseCatalogRouteRegistered(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 from /catalog, got %d", resp.StatusCode)
 	}
-	var entries []reactionpurchase.CatalogEntry
-	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+	var page struct {
+		Data []reactionpurchase.CatalogEntry `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+	entries := page.Data
 	var found bool
 	for _, e := range entries {
 		if e.ID == "cold" && e.Premium && e.PriceCents == 100 {
@@ -84,7 +87,7 @@ func TestReactionPurchaseCatalogRouteRegistered(t *testing.T) {
 // store.Create, so this stays a pure-Go route/handler check with nil stores
 // (mirrors sandboxpurchase_test.go's TestCreateSandboxPurchaseRouteRegistered).
 func TestCreateReactionPurchaseUnknownReactionRejected(t *testing.T) {
-	svc := reactionpurchase.NewService(&fakeReactionWallet{}, reactionpurchase.NewEntitlementStore(nil, "test"), reactionpurchase.NewStore(nil, "test"))
+	svc := reactionpurchase.NewService(&fakeReactionWallet{}, reactionpurchase.NewEntitlementStore(stubDynamoClient(t), "test"), reactionpurchase.NewStore(nil, "test"))
 	app := newReactionPurchaseApp(svc)
 
 	body, _ := json.Marshal(map[string]string{"reaction_id": "not-a-reaction", "method": "fichas"})
@@ -103,7 +106,7 @@ func TestCreateReactionPurchaseUnknownReactionRejected(t *testing.T) {
 }
 
 func TestCreateReactionPurchaseInvalidMethodRejected(t *testing.T) {
-	svc := reactionpurchase.NewService(&fakeReactionWallet{}, reactionpurchase.NewEntitlementStore(nil, "test"), reactionpurchase.NewStore(nil, "test"))
+	svc := reactionpurchase.NewService(&fakeReactionWallet{}, reactionpurchase.NewEntitlementStore(stubDynamoClient(t), "test"), reactionpurchase.NewStore(nil, "test"))
 	app := newReactionPurchaseApp(svc)
 
 	body, _ := json.Marshal(map[string]string{"reaction_id": "cold", "method": "credit_card"})
@@ -119,7 +122,7 @@ func TestCreateReactionPurchaseInvalidMethodRejected(t *testing.T) {
 }
 
 func TestCreateReactionPurchaseMissingReactionIDRejected(t *testing.T) {
-	svc := reactionpurchase.NewService(&fakeReactionWallet{}, reactionpurchase.NewEntitlementStore(nil, "test"), reactionpurchase.NewStore(nil, "test"))
+	svc := reactionpurchase.NewService(&fakeReactionWallet{}, reactionpurchase.NewEntitlementStore(stubDynamoClient(t), "test"), reactionpurchase.NewStore(nil, "test"))
 	app := newReactionPurchaseApp(svc)
 
 	body, _ := json.Marshal(map[string]string{"method": "fichas"})

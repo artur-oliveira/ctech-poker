@@ -195,9 +195,11 @@ function ChipCountUp({from, to}: { from: number; to: number }) {
  * away mid-hand and looks back a few seconds later still finds their
  * win/loss on screen, not a banner that already auto-dismissed under them.
  * It closes once the next hand actually starts. */
-export function HandOutcomeBanner({outcome, holdOpen, nextHandDeadlineMs, nextHandDurationMs}: {
+export function HandOutcomeBanner({outcome, holdOpen, nextHandDeadlineMs, nextHandDurationMs,
+                                   onDismissedChangeAction}: {
   outcome: HandOutcomeState | null;
   holdOpen: boolean;
+  onDismissedChangeAction?: (dismissed: boolean) => void;
   // Countdown to the next hand starting. Rendered as a ring on the dismiss
   // button (full card) or around the badge (collapsed), instead of its old
   // home floating over the felt's center (.street-progress): a winner's
@@ -223,7 +225,8 @@ export function HandOutcomeBanner({outcome, holdOpen, nextHandDeadlineMs, nextHa
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDismissed(false);
-  }, [outcome?.key]);
+    onDismissedChangeAction?.(false);
+  }, [outcome?.key, onDismissedChangeAction]);
 
   const leaving = !!shown && !holdOpen;
   
@@ -295,14 +298,16 @@ export function HandOutcomeBanner({outcome, holdOpen, nextHandDeadlineMs, nextHa
     <div className="hand-outcome">
       {dismissed ? (
         <button type="button" className={`hand-outcome-badge ${shown.kind}${leaving ? ' leaving' : ''}`}
-                onClick={() => setDismissed(false)} aria-label={BADGE_LABEL[shown.kind]}>
+                onClick={() => { setDismissed(false); onDismissedChangeAction?.(false); }}
+                aria-label={BADGE_LABEL[shown.kind]}>
           {nextHandDeadlineMs != null && <HandOutcomeRing key={nextHandDeadlineMs} className="hand-outcome-ring"
-            radius={23} deadlineMs={nextHandDeadlineMs} durationMs={nextHandDurationMs ?? 0}/>}
+            radius={20} deadlineMs={nextHandDeadlineMs} durationMs={nextHandDurationMs ?? 0}/>}
           <BadgeIcon aria-hidden="true"/>
         </button>
       ) : (
       <div key={shown.key} className={`hand-outcome-card ${shown.kind}${leaving ? ' leaving' : ''}`}>
-        <button type="button" className="hand-outcome-dismiss" onClick={() => setDismissed(true)}
+        <button type="button" className="hand-outcome-dismiss"
+                onClick={() => { setDismissed(true); onDismissedChangeAction?.(true); }}
                 aria-label="Minimizar resultado">
           {nextHandDeadlineMs != null && <HandOutcomeRing key={nextHandDeadlineMs} className="hand-outcome-ring"
             radius={14} deadlineMs={nextHandDeadlineMs} durationMs={nextHandDurationMs ?? 0}/>}

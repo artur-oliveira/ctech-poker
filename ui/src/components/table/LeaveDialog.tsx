@@ -51,11 +51,11 @@ export function LeaveDialog({roomId, stack, dealtIn, onLeftAction}: {
   }
   
   return <Dialog open={open} onOpenChange={next => {
-    setOpen(dealtIn ? false : next);
+    setOpen(next);
     if (!next) setError('');
   }}>
     <DialogTrigger render={<Button type="button" variant="ghost" size="icon" aria-label="Sair da mesa"
-                                    disabled={dealtIn} title={dealtIn ? DEALT_IN_MESSAGE : undefined}/>}>
+                                    title={dealtIn ? DEALT_IN_MESSAGE : undefined}/>}>
       <DoorOpen/>
     </DialogTrigger>
     <DialogContent>
@@ -63,11 +63,12 @@ export function LeaveDialog({roomId, stack, dealtIn, onLeftAction}: {
         <DialogTitle>Sair da mesa?</DialogTitle>
         <DialogDescription>Você será pago com {stack.toLocaleString('pt-BR')} fichas.</DialogDescription>
       </DialogHeader>
+      {dealtIn && <p className="buyin-error leave-blocked-message" role="status">{DEALT_IN_MESSAGE}</p>}
       {error && <p className="buyin-error" role="alert">{error}</p>}
       <DialogFooter>
-        <Button type="button" variant="ghost" disabled={leaving} onClick={() => setOpen(false)}>Cancelar</Button>
-        <Button type="button" variant="destructive" disabled={leaving} onClick={confirm}>
-          {leaving ? 'Saindo…' : 'Sair e sacar fichas'}
+        <Button type="button" variant="ghost" disabled={leaving} onClick={() => setOpen(false)}>Continuar jogando</Button>
+        <Button type="button" variant="destructive" disabled={dealtIn || leaving} onClick={confirm}>
+          {dealtIn ? 'Aguarde o fim da mão' : leaving ? 'Saindo…' : 'Sair e sacar fichas'}
         </Button>
       </DialogFooter>
     </DialogContent>

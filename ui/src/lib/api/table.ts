@@ -71,6 +71,15 @@ export interface PotResultView {
   runout?: number
 }
 
+export interface WinnerCardsRequest {
+  requester_id: string;
+  requester_name?: string;
+  winner_id: string;
+  winner_name?: string;
+  fee: number;
+  expires_at_unix_ms: number;
+}
+
 export interface TableSnapshot {
   stage: string;
   board: string[];
@@ -104,6 +113,7 @@ export interface TableSnapshot {
   snapshot_version?: number;
   pots?: PotView[];
   pot_results?: PotResultView[];
+  pending_winner_cards?: WinnerCardsRequest;
   protocol_version?: number;
   hand_id?: string;
   shuffle_commit_hash?: string;

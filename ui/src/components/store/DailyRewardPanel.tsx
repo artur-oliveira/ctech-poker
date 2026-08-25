@@ -58,7 +58,7 @@ export function DailyRewardPanel() {
     return <div className="store-reward store-reward-error">
       <span className="store-reward-icon"><Gift aria-hidden="true"/></span>
       <div className="store-reward-copy">
-        <h2>Recompensa diária</h2>
+        <h3 id="daily-reward-title">Recompensa diária</h3>
         <p>Não foi possível consultar a disponibilidade agora.</p>
       </div>
       <Button type="button" variant="outline" onClick={() => void cooldown.refetch()}>
@@ -71,7 +71,7 @@ export function DailyRewardPanel() {
     return <div className="store-reward is-compact">
       <span className="store-reward-icon"><Gift aria-hidden="true"/></span>
       <div className="store-reward-copy">
-        <h2>Recompensa diária</h2>
+        <h3 id="daily-reward-title">Recompensa diária</h3>
         <p>{wonAmount !== null
           ? `+${wonAmount.toLocaleString('pt-BR')} fichas recebidas · próxima em ${formatDuration(remainingMs)}`
           : `Resgatada · próxima em ${formatDuration(remainingMs)}`}</p>
@@ -82,7 +82,7 @@ export function DailyRewardPanel() {
   return <div className="store-reward">
     <span className="store-reward-icon"><Gift aria-hidden="true"/></span>
     <div className="store-reward-copy">
-      <h2>Recompensa diária</h2>
+      <h3 id="daily-reward-title">Recompensa diária</h3>
       <p>Disponível agora. O valor em fichas sandbox é revelado no resgate.</p>
     </div>
     <Button type="button" disabled={spinning || cooldown.isLoading} onClick={() => void claim()}>

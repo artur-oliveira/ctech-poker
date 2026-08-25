@@ -443,7 +443,6 @@ button, a {
     color: white
 }
 
-
 .hero {
     min-height: 680px;
     display: grid;
@@ -2204,7 +2203,6 @@ h1 em {
     text-align: center
 }
 
-
 .game {
     min-height: 100dvh;
     overflow-x: clip;
@@ -2700,7 +2698,7 @@ h1 em {
     transform: translateX(-50%);
     padding: 8px 12px;
     border: 1px solid var(--control-border);
-    border-radius: var(--radius-control);
+    border-radius: var(--rounded-control);
     background: color-mix(in srgb, var(--surface-control) 92%, transparent);
     box-shadow: var(--shadow-soft);
     backdrop-filter: blur(12px)
@@ -2720,7 +2718,7 @@ h1 em {
 .winner-cards button:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 4px;
-    border-radius: var(--radius-control)
+    border-radius: var(--rounded-control)
 }
 
 .winner-cards svg { flex: 0 0 auto; width: 19px; color: var(--gold) }
@@ -2728,6 +2726,52 @@ h1 em {
 .winner-cards button span { display: flex; flex-direction: column; white-space: nowrap }
 .winner-cards b { color: var(--on-brand); font-size: 12px }
 .winner-cards small { color: var(--muted); font-size: 10px }
+
+.winner-cards p { all: unset; display: flex; align-items: center; gap: 9px }
+.winner-cards-waiting svg { animation: winner-cards-wait 1.6s ease-in-out infinite }
+
+@keyframes winner-cards-wait {
+    0%, 100% { transform: none }
+    50% { transform: rotate(180deg) }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .winner-cards-waiting svg { animation: none }
+}
+
+.winner-cards-prompt { display: flex; flex-direction: column; gap: 8px; align-items: stretch }
+.winner-cards-prompt p { flex-direction: column; align-items: flex-start; gap: 2px }
+.winner-cards-prompt b, .winner-cards-prompt small { white-space: normal }
+
+.winner-cards-answers { display: flex; gap: 8px; justify-content: flex-end }
+
+.winner-cards-answers button {
+    all: unset;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex: 1;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control);
+    color: var(--on-brand);
+    font-size: 12px;
+    cursor: pointer
+}
+
+.winner-cards-answers button:disabled { cursor: wait; opacity: .65 }
+
+.winner-cards-answers button:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px
+}
+
+.winner-cards-answers .winner-cards-accept {
+    border-color: var(--gold);
+    background: color-mix(in srgb, var(--gold) 18%, transparent)
+}
 
 .stage-v .winner-cards { bottom: calc(7% + 62px) }
 
@@ -4510,7 +4554,8 @@ h1 em {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 9px
+    gap: 9px;
+    padding-inline: 22px
 }
 
 .hand-outcome-heading > svg {
@@ -4734,6 +4779,15 @@ h1 em {
     transition: opacity 150ms var(--ease-out-quart), background 150ms var(--ease-out-quart)
 }
 
+/* The visible close stays compact and circular. This transparent extension
+   supplies the 44px coarse-pointer target without resizing its timer ring. */
+.hand-outcome-dismiss::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%
+}
+
 .hand-outcome-dismiss:hover,
 .hand-outcome-dismiss:focus-visible {
     opacity: 1;
@@ -4756,8 +4810,8 @@ h1 em {
     position: relative;
     align-self: start;
     justify-self: end;
-    width: 46px;
-    height: 46px;
+    width: 40px;
+    height: 40px;
     display: grid;
     place-items: center;
     border: 0;
@@ -4767,6 +4821,13 @@ h1 em {
     box-shadow: 0 4px 14px var(--black-08), 0 0 0 2px color-mix(in srgb, var(--paper) 25%, transparent);
     pointer-events: auto;
     animation: hand-outcome-badge-in 260ms var(--ease-out-quint) both
+}
+
+.hand-outcome-badge::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%
 }
 
 .hand-outcome-badge:hover,
@@ -6959,7 +7020,6 @@ h1 em {
     100% { opacity: 0; transform: rotate(var(--rot)) scaleY(1) }
 }
 
-
 /* Mirrors .game-chat's fixed toggle/panel vocabulary. Desktop docks it
    bottom-left; portrait and short-landscape rules below move it into a safe
    corner without removing access to the hand log. */
@@ -7578,7 +7638,6 @@ h1 em {
     left: 30px;
     top: 30px
 }
-
 
 .roulette > strong {
     font-size: var(--font-size-large);
@@ -8974,13 +9033,6 @@ h1 em {
     line-height: 1.55
 }
 
-.store-reward-countdown {
-    font: 600 var(--font-size-mono) var(--font-mono);
-    letter-spacing: .06em;
-    color: var(--muted)
-}
-
-
 .store-sku-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -9010,16 +9062,6 @@ h1 em {
     opacity: .55;
     cursor: default;
     transform: none
-}
-
-.store-sku-bonus {
-    align-self: flex-start;
-    padding: 3px 10px;
-    border-radius: var(--rounded-pill);
-    background: var(--felt);
-    color: var(--felt-text);
-    font: 600 var(--font-size-compact) var(--font-mono);
-    letter-spacing: .04em
 }
 
 .store-sku-credits {
@@ -9058,6 +9100,27 @@ h1 em {
     margin-top: auto;
     color: var(--text-muted-soft);
     font-size: var(--font-size-body)
+}
+
+.store-pix-amount {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    margin: 0 0 4px;
+    text-align: center
+}
+
+.store-pix-amount strong {
+    color: var(--paper);
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    line-height: 1.1
+}
+
+.store-pix-amount small {
+    color: var(--muted);
+    font-size: var(--font-size-compact)
 }
 
 .store-qr {
@@ -9099,7 +9162,9 @@ h1 em {
 
 .store-pix-field input {
     min-width: 0;
-    height: 42px;
+    /* 44px floor everywhere, not only under 600px: this is a real-money Pix
+       field and tablets are coarse-pointer too. */
+    height: 44px;
     flex: 1;
     padding: 0 4px 0 12px;
     overflow: hidden;
@@ -9113,9 +9178,9 @@ h1 em {
 }
 
 .store-pix-field button {
-    width: 42px;
-    height: 42px;
-    min-height: 42px;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
     flex: none;
     border-radius: 10px
 }
@@ -9230,7 +9295,9 @@ h1 em {
 
 .store-status.failed {
     background: var(--surface-error);
-    color: var(--danger)
+    /* --danger on --surface-error is 3.51:1 at 11px — under AA. --danger-soft is
+       9.47:1 on the same ground and is what .reaction-purchase-error already uses. */
+    color: var(--danger-soft)
 }
 
 .store-refund-dialog {
@@ -9312,9 +9379,10 @@ h1 em {
 
 .store-refund-error {
     padding: 12px;
-    border-radius: var(--radius-control);
+    border-radius: var(--rounded-control);
     background: var(--surface-error);
-    color: var(--danger)
+    /* Same AA failure as .store-status.failed; same fix. */
+    color: var(--danger-soft)
 }
 
 .store-refund-result {
@@ -9421,10 +9489,6 @@ h1 em {
     margin-inline: auto
 }
 
-.store-reward-section {
-    max-width: 640px
-}
-
 .store-section-heading {
     display: flex;
     align-items: flex-start;
@@ -9498,7 +9562,6 @@ h1 em {
     min-width: 190px
 }
 
-
 .store-reward.is-compact {
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
@@ -9528,29 +9591,12 @@ h1 em {
     font-variant-numeric: tabular-nums
 }
 
-
-.store-reward-countdown {
-    display: flex;
-    align-items: baseline;
-    gap: 7px;
-    letter-spacing: 0
-}
-
-.store-reward-countdown strong {
-    color: var(--gold-pale);
-    font-variant-numeric: tabular-nums
-}
-
 .store-sku-card {
     min-height: 156px
 }
 
 .store-sku-card:active:not(:disabled) {
     transform: translateY(1px)
-}
-
-.store-sku-bonus {
-    background: color-mix(in srgb, var(--felt) 58%, var(--surface-seat))
 }
 
 .store-sku-credits {
@@ -9666,7 +9712,6 @@ h1 em {
 .store-purchase-chips i:nth-child(4) { --chip-x: 70%; animation-delay: 30ms }
 .store-purchase-chips i:nth-child(5) { --chip-x: 86%; animation-delay: 100ms }
 
-
 @keyframes purchase-confirm {
     from { opacity: 0; transform: scale(.72) }
     to { opacity: 1; transform: scale(1) }
@@ -9709,7 +9754,6 @@ h1 em {
         grid-template-columns: auto minmax(0, 1fr)
     }
 
-
     .store-history-item {
         grid-template-columns: minmax(0, 1fr) auto;
         grid-template-areas: "credits value" "date status" "action action";
@@ -9728,18 +9772,8 @@ h1 em {
         width: 100%
     }
 
-    .store-history-item button,
-    .store-pix-field button {
+    .store-history-item button {
         min-height: 44px
-    }
-
-    .store-pix-field button {
-        width: 44px;
-        height: 44px
-    }
-
-    .store-pix-field input {
-        height: 44px
     }
 }
 
@@ -11264,6 +11298,591 @@ h1 em {
 
     .game .seat-note-trigger {
         min-height: 0
+    }
+
+    .game .hand-outcome-dismiss {
+        min-height: 28px
+    }
+
+    .game .hand-outcome-badge {
+        min-height: 40px
+    }
+}
+
+/* ===== Mobile table interaction model (2026-08) =====
+   Portrait play is a blocking, non-scrolling viewport: table geometry owns
+   the flexible middle and betting owns the bottom safe area. The range input
+   remains available to desktop/keyboard players; coarse pointers use explicit
+   minus/plus controls so a horizontal wager gesture can never become browser
+   back navigation. */
+.table-mobile-quick-action,
+.bet-stepper,
+.bet-output-mobile {
+    display: none
+}
+
+.chat-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px
+}
+
+.chat-body .chat-panel-header h2 {
+    margin: 0
+}
+
+.chat-panel-header button,
+.reaction-panel header button {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    padding: 0
+}
+
+.leave-blocked-message {
+    margin: 0
+}
+
+@media (orientation: portrait) and (max-width: 1023px) {
+    html:has(.game),
+    body:has(.game) {
+        height: 100%;
+        overflow: hidden;
+        overscroll-behavior: none
+    }
+
+    .game {
+        width: 100%;
+        height: 100dvh;
+        min-height: 0;
+        max-height: 100dvh;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        overflow: hidden;
+        overscroll-behavior: none
+    }
+
+    .game-chrome {
+        position: relative;
+        z-index: var(--z-chrome)
+    }
+
+    .game-chrome > header {
+        min-height: calc(48px + env(safe-area-inset-top));
+        padding: env(safe-area-inset-top) max(3px, env(safe-area-inset-right)) 0 max(3px, env(safe-area-inset-left));
+        gap: 2px;
+        overflow: visible
+    }
+
+    .game-chrome > header > a {
+        width: 40px;
+        min-width: 40px;
+        min-height: 44px;
+        justify-content: center;
+        margin: 0;
+        padding: 0
+    }
+
+    .game-chrome > header .header-right {
+        flex: 1;
+        justify-content: flex-end;
+        gap: 2px
+    }
+
+    .header-right .connection-state {
+        width: 18px;
+        justify-content: center
+    }
+
+    .table-mobile-quick-action {
+        display: inline-flex
+    }
+
+    .header-right > .table-mobile-quick-action,
+    .header-right > .table-pause-action,
+    .table-utility-menu-slot > button,
+    .table-exit-slot button {
+        width: 40px;
+        min-width: 40px;
+        min-height: 44px;
+        padding: 0
+    }
+
+    .table-rankings-standalone,
+    .table-preferences-standalone,
+    .table-invite-standalone {
+        display: none
+    }
+
+    .table-exit-slot {
+        display: inline-flex;
+        margin-left: 2px;
+        padding-left: 2px;
+        border-left: 1px solid var(--white-18)
+    }
+
+    .table-exit-slot button {
+        color: var(--danger-soft)
+    }
+
+    .today-highlight-wrap {
+        flex: 1 1 64px;
+        min-width: 52px;
+        max-width: 112px
+    }
+
+    .today-highlight {
+        min-height: 36px;
+        justify-content: flex-start;
+        padding-inline: 6px
+    }
+
+    .today-highlight-label,
+    .today-highlight-cards {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
+    }
+
+    .today-highlight-pot {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+
+    .game-table.stage-v {
+        min-height: 0;
+        padding: 4px 8px 0;
+        gap: 6px;
+        overflow: hidden
+    }
+
+    .stage-v-ring {
+        width: auto;
+        min-height: 0;
+        max-height: 100%;
+        overflow: visible
+    }
+
+    /* Player identity remains readable without making the seat card wider.
+       The avatar carries state; the two compact lines carry name and stack. */
+    .stage-v-ring .seat-info {
+        display: grid;
+        align-content: center;
+        gap: 1px;
+        width: 72px;
+        max-width: 72px;
+        padding: 3px 4px
+    }
+
+    .stage-v-ring .seat-info b,
+    .stage-v-ring .seat-info .seat-state {
+        position: static;
+        display: block;
+        width: auto;
+        height: auto;
+        overflow: hidden;
+        clip-path: none;
+        color: var(--paper);
+        font-size: 10px;
+        line-height: 1.15;
+        margin: 0;
+        text-overflow: ellipsis;
+        white-space: nowrap
+    }
+
+    .stage-v-ring .seat-info span {
+        color: var(--text-secondary);
+        font-size: 11px;
+        line-height: 1.15
+    }
+
+    /* Keep status physically attached to the avatar on every side of the
+       ring. For the lower/side seats the caption grows downward, so status
+       comes first; the top pair grows upward and keeps status last. */
+    .stage-v-ring .seat-info .seat-state {
+        order: -1;
+        justify-self: center;
+        max-width: 100%
+    }
+
+    .stage-v-ring .seat-4 .seat-info .seat-state,
+    .stage-v-ring .seat-5 .seat-info .seat-state {
+        order: initial
+    }
+
+    /* Identity and hole cards own opposite lanes around the avatar. Cards
+       paint above captions as a final guard during reveal/hover expansion. */
+    .stage-v-ring .game-seat .seat-cards {
+        z-index: 2
+    }
+
+    /* Capacity-specific physical rooms. Turn order follows clockwise from
+       the viewer; vacancies keep their coordinates stable in TableStage. */
+    .stage-v[data-capacity='2'] .seat-4 {
+        --seat-x: 50%;
+        --seat-y: 34px
+    }
+
+    .stage-v[data-capacity='6'] .seat-1 {
+        --seat-x: 12%;
+        --seat-y: 76%
+    }
+
+    .stage-v[data-capacity='6'] .seat-3 {
+        --seat-x: 10%;
+        --seat-y: 28%
+    }
+
+    .stage-v[data-capacity='6'] .seat-4 {
+        --seat-x: 50%;
+        --seat-y: 34px
+    }
+
+    .stage-v[data-capacity='6'] .seat-6 {
+        --seat-x: 90%;
+        --seat-y: 28%
+    }
+
+    .stage-v[data-capacity='6'] .seat-8 {
+        --seat-x: 88%;
+        --seat-y: 76%
+    }
+
+    .stage-v[data-capacity='2'] .game-felt {
+        inset-inline: 18%
+    }
+
+    .stage-v[data-capacity='2'] .board-card,
+    .stage-v[data-capacity='2'] .board > div > span {
+        width: 44px;
+        height: 62px
+    }
+
+    .stage-v > .game-seat {
+        flex: 0 0 auto;
+        min-height: 64px;
+        max-height: 78px;
+        padding: 7px 10px
+    }
+
+    .stage-v > .game-seat .seat-info {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-rows: auto auto auto;
+        align-content: center;
+        column-gap: 8px;
+        row-gap: 2px;
+        padding: 3px 4px
+    }
+
+    .stage-v > .game-seat .seat-info > b {
+        grid-column: 1;
+        grid-row: 1;
+        align-self: end
+    }
+
+    .stage-v > .game-seat .seat-info > span:not(.seat-playstyle) {
+        grid-column: 1;
+        grid-row: 2;
+        align-self: start;
+        font-size: 13px;
+        line-height: 1.15
+    }
+
+    .stage-v > .game-seat .seat-info > .seat-equity {
+        grid-column: 1 / -1;
+        grid-row: 3;
+        display: grid;
+        grid-template-columns: minmax(48px, 1fr) auto;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        margin-top: 0
+    }
+
+    .stage-v > .game-seat .seat-info > .seat-state {
+        grid-column: 2;
+        grid-row: 1;
+        align-self: end;
+        justify-self: end
+    }
+
+    .stage-v > .game-seat .seat-info > .seat-next-state,
+    .stage-v > .game-seat .seat-info > .seat-hand-category {
+        grid-column: 2;
+        grid-row: 2;
+        align-self: start;
+        justify-self: end
+    }
+
+    .stage-v > .game-seat .seat-info:has(.seat-next-state) > .seat-hand-category,
+    .stage-v > .game-seat .seat-info > .seat-playstyle {
+        display: none
+    }
+
+    .stage-v > .game-seat .seat-info span,
+    .stage-v > .game-seat .seat-info small {
+        margin-top: 0
+    }
+
+    .stage-v > .game-seat .seat-cards > .playing-card {
+        width: 48px;
+        height: 67px
+    }
+
+    .action-bar {
+        z-index: var(--z-chrome);
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        align-items: stretch;
+        align-content: end;
+        gap: 6px;
+        width: 100%;
+        max-height: 43dvh;
+        padding: 6px max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        background: linear-gradient(transparent 0, color-mix(in srgb, var(--table-room) 96%, transparent) 16px, var(--table-room) 100%)
+    }
+
+    .action-context-row {
+        gap: 6px;
+        min-height: 22px
+    }
+
+    .action-context {
+        overflow: hidden;
+        font-size: 11px;
+        text-overflow: ellipsis;
+        white-space: nowrap
+    }
+
+    .time-bank-status {
+        min-height: 28px;
+        padding: 4px 7px
+    }
+
+    .time-bank-status > span {
+        font-size: 0
+    }
+
+    .time-bank-status b {
+        font-size: 10px
+    }
+
+    .voice-action button {
+        width: 36px;
+        height: 36px;
+        min-height: 36px
+    }
+
+    .action-choices {
+        grid-column: 1 / 4;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px
+    }
+
+    .action-bar .action-choices button,
+    .action-bar > .raise,
+    .action-bar > .raise-cancel {
+        min-height: 48px;
+        padding: 6px;
+        font-size: 12px
+    }
+
+    .action-bar > .raise {
+        grid-column: 4;
+        grid-row: auto
+    }
+
+    .action-bar .bet-control-collapsed {
+        display: none
+    }
+
+    .action-bar.is-sizing .action-choices {
+        display: none
+    }
+
+    .action-bar.is-sizing .bet-control {
+        grid-column: 1 / -1
+    }
+
+    .action-bar.is-sizing {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: var(--z-notice);
+        max-height: min(48dvh, 286px);
+        border-top: 1px solid var(--white-18);
+        background: var(--table-room);
+        box-shadow: 0 -8px 8px var(--overlay-night-3)
+    }
+
+    .action-bar.is-sizing > .raise {
+        grid-column: 1 / 4
+    }
+
+    .action-bar.is-sizing > .raise-cancel {
+        grid-column: 4;
+        padding-inline: 4px
+    }
+
+    .bet-range,
+    .bet-control .bet-output-desktop {
+        display: none
+    }
+
+    .bet-preset-mobile-hidden {
+        display: none
+    }
+
+    .bet-control {
+        grid-template-columns: 1fr;
+        gap: 6px
+    }
+
+    .bet-stepper {
+        display: grid;
+        grid-template-columns: 52px minmax(0, 1fr) 52px;
+        gap: 6px
+    }
+
+    .action-bar .bet-step-button {
+        display: grid;
+        place-items: center;
+        min-height: 48px;
+        padding: 0;
+        line-height: 0;
+        text-align: center;
+        touch-action: manipulation;
+        user-select: none;
+        -webkit-user-select: none
+    }
+
+    .action-bar .bet-presets button,
+    .action-bar > .raise,
+    .action-bar > .raise-cancel {
+        align-items: center;
+        justify-content: center;
+        text-align: center
+    }
+
+    .bet-step-button svg {
+        width: 20px;
+        height: 20px
+    }
+
+    .bet-output-mobile {
+        display: flex;
+        min-width: 0;
+        min-height: 48px;
+        padding: 5px 8px;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        text-align: center
+    }
+
+    .hand-outcome-dismiss {
+        width: 28px;
+        height: 28px;
+        min-width: 28px;
+        min-height: 28px;
+        border-radius: 50%
+    }
+
+    .stage-v .winner-cards {
+        width: max-content;
+        max-width: calc(100% - 16px)
+    }
+
+    .stage-v .winner-cards button span {
+        min-width: 0;
+        white-space: normal
+    }
+
+    .action-preselectors {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        width: 100%
+    }
+
+    .action-preselectors > span {
+        display: none
+    }
+
+    .action-bar .action-preselectors button {
+        min-width: 0;
+        padding-inline: 6px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap
+    }
+
+    .game-chat.game-chat,
+    .table-reactions,
+    .last-winners,
+    .equity-trainer {
+        z-index: var(--z-notice);
+        top: calc(env(safe-area-inset-top) + 52px);
+        right: max(8px, env(safe-area-inset-right))
+    }
+
+    .chat-body,
+    .reaction-panel {
+        width: min(320px, calc(100vw - 16px));
+        max-height: calc(100dvh - env(safe-area-inset-top) - 64px - min(160px, 24dvh));
+        margin: 0;
+        border-radius: var(--rounded-panel)
+    }
+
+    .achievement-toast {
+        z-index: var(--z-toast);
+        top: calc(env(safe-area-inset-top) + 58px);
+        right: 8px;
+        left: 8px;
+        width: auto;
+        max-width: 360px;
+        margin-inline: auto
+    }
+}
+
+@media (orientation: portrait) and (max-width: 380px) {
+    .game-chrome > header .header-right,
+    .game-chrome > header {
+        gap: 0
+    }
+
+    .header-right > .table-mobile-quick-action,
+    .header-right > .table-pause-action,
+    .table-utility-menu-slot > button,
+    .table-exit-slot button,
+    .game-chrome > header > a {
+        width: 38px;
+        min-width: 38px
+    }
+
+    .today-highlight-wrap {
+        min-width: 54px;
+        max-width: 64px
+    }
+
+    .today-highlight-pot {
+        position: static;
+        width: auto;
+        height: auto;
+        overflow: hidden;
+        clip-path: none;
+        font-size: 10px
+    }
+
+    .stage-v-ring .seat-info {
+        width: 64px;
+        max-width: 64px
     }
 }
 
@@ -14845,10 +15464,6 @@ button.deck-grid-slot:hover {
     border-top: 1px solid var(--control-border)
 }
 
-.reaction-store-section {
-    border-block-end: 0
-}
-
 .store-department .store-wallet {
     max-width: none;
     margin: 0 0 28px
@@ -14906,6 +15521,19 @@ button.deck-grid-slot:hover {
     text-align: start
 }
 
+.store-activity-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 24px
+}
+
+.store-activity-groups > section > h3 {
+    margin: 0 0 10px;
+    color: var(--text-secondary);
+    font-size: var(--font-size-label);
+    font-weight: 600
+}
+
 .store-activity-error {
     display: flex;
     align-items: center;
@@ -14923,7 +15551,10 @@ button.deck-grid-slot:hover {
     gap: 12px;
     margin-top: 14px;
     padding: 10px 12px;
-    border-inline-start: 3px solid var(--brand-bright);
+    /* Full hairline, not a >1px side stripe (DESIGN.md ban); the tinted
+       background is what carries the emphasis. */
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control);
     background: color-mix(in srgb, var(--brand) 9%, transparent);
     color: var(--text-secondary);
     font-size: var(--font-size-compact)
@@ -15036,7 +15667,7 @@ button.deck-grid-slot:hover {
     font-size: var(--font-size-compact)
 }
 
-.reaction-history-list {
+.store-activity-list {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
@@ -15213,7 +15844,7 @@ button.deck-grid-slot:hover {
     box-shadow: inset 0 0 0 2px var(--table-rail-edge)
 }
 
-.reaction-history-list li {
+.store-activity-list li {
     display: grid;
     grid-template-columns: 32px minmax(0, 1fr) 92px;
     align-items: center;
@@ -15225,39 +15856,39 @@ button.deck-grid-slot:hover {
     background: var(--surface-seat)
 }
 
-.reaction-history-list li > span:first-child {
+.store-activity-list li > span:first-child {
     font-size: 20px
 }
 
-.reaction-history-list li > span:nth-child(2) {
+.store-activity-list li > span:nth-child(2) {
     display: flex;
     min-width: 0;
     flex-direction: column
 }
 
-.reaction-history-list li strong {
+.store-activity-list li strong {
     overflow: hidden;
     font-size: var(--font-size-compact);
     text-overflow: ellipsis;
     white-space: nowrap
 }
 
-.reaction-history-list li small,
-.reaction-history-status {
+.store-activity-list li small,
+.store-activity-status {
     color: var(--muted-rose);
     font-size: var(--font-size-compact)
 }
 
-.reaction-history-status.confirmed {
+.store-activity-status.confirmed {
     color: var(--success)
 }
 
-.reaction-history-status {
+.store-activity-status {
     justify-self: start
 }
 
-.reaction-history-status.pending,
-.reaction-history-status.processing {
+.store-activity-status.pending,
+.store-activity-status.processing {
     color: var(--gold)
 }
 
@@ -16235,5 +16866,32 @@ button.deck-grid-slot:hover {
     .hand-meta-copy {
         min-width: 44px;
         min-height: 44px
+    }
+}
+
+/* Final table-specific cascade: generic app link sizing and the shared
+   portrait utility rail are declared later than the main mobile-table block. */
+@media (orientation: portrait) and (max-width: 1023px) {
+    .game-chrome > header > a {
+        width: 40px;
+        min-width: 40px
+    }
+
+    .game-chat.game-chat,
+    .table-reactions,
+    .last-winners,
+    .equity-trainer {
+        top: calc(env(safe-area-inset-top) + 52px)
+    }
+
+    .achievement-toast {
+        top: calc(env(safe-area-inset-top) + 58px)
+    }
+}
+
+@media (orientation: portrait) and (max-width: 380px) {
+    .game-chrome > header > a {
+        width: 38px;
+        min-width: 38px
     }
 }

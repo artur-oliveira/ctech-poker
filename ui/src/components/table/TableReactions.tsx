@@ -166,7 +166,7 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
     setSeatEls(map);
   }, [seatIdsKey]);
   const entries = new Map(catalog.map(entry => [entry.id, entry]));
-  const owned = ownedReactionIDs(purchases);
+  const owned = ownedReactionIDs(catalog);
 
   function toggleMute() {
     setMuted(value => {
@@ -227,7 +227,10 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
                       aria-label={muted ? 'Ativar animações de reações' : 'Silenciar animações de reações'}
                       aria-pressed={muted} onClick={toggleMute}>
                 {muted ? <VolumeX/> : <Volume2/>}
-              </Button></span>
+              </Button>
+              <Button type="button" variant="ghost" size="icon" aria-label="Fechar painel de reações"
+                      onClick={() => onOpenChangeAction(false)}><X/></Button>
+            </span>
           </header>
           {favorites.length > 0 && <div className="reaction-favorites" role="group" aria-label="Reações favoritas">
             <span><Star aria-hidden="true"/> Atalhos</span>

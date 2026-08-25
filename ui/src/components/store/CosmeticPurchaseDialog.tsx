@@ -1,4 +1,5 @@
 'use client';
+import type {RefObject} from 'react';
 import {useCallback, useEffect, useState} from 'react';
 import Image from 'next/image';
 import {Check, Coins, LoaderCircle, QrCode, ShieldCheck} from 'lucide-react';
@@ -16,6 +17,7 @@ import {
 import {cardPath} from '@/lib/cards';
 import {DECK_VARIANTS, type DeckVariantId} from '@/lib/cardVariants';
 import {TABLE_THEMES, type TableThemeId} from '@/lib/tablePreferences';
+import {WALLET_QUERY_ROOT} from '@/lib/api/wallet';
 
 const POLL_MS = 4000;
 
@@ -48,12 +50,14 @@ function CosmeticPreview({kind, itemId}: { kind: CosmeticKind; itemId: string })
                style={{'--theme-a': theme?.colors[0], '--theme-b': theme?.colors[1]} as React.CSSProperties}/>;
 }
 
-export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBalance, onCloseAction,
+export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBalance, finalFocusRef, onCloseAction,
                                         onConfirmedAction}: {
   kind: CosmeticKind;
   entry: CosmeticCatalogEntry | null;
   initialPurchase?: CosmeticPurchase;
   sandboxBalance?: number;
+  /** Restores keyboard focus to the control that opened this dialog. */
+  finalFocusRef?: RefObject<HTMLButtonElement | null>;
   onCloseAction: () => void;
   onConfirmedAction?: (purchase: CosmeticPurchase) => void;
 }) {
@@ -75,8 +79,7 @@ export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBal
       setPurchase(next);
       setPollError(false);
       if (next.status === 'confirmed') {
-        void queryClient.invalidateQueries({queryKey: ['wallet', 'cosmetic-purchases', kind]});
-        void queryClient.invalidateQueries({queryKey: ['wallet', 'cosmetic-catalog', kind]});
+        void queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT});
         void queryClient.invalidateQueries({queryKey: ['player', 'me']});
         onConfirmedAction?.(next);
       }
@@ -102,7 +105,7 @@ export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBal
       const next = await createCosmeticPurchase(kind, entry!.id, method);
       setPurchase(next);
       await Promise.all([
-        queryClient.invalidateQueries({queryKey: ['wallet', 'cosmetic-purchases', kind]}),
+        queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT}),
         queryClient.invalidateQueries({queryKey: ['player', 'me']}),
       ]);
       if (next.status === 'confirmed') onConfirmedAction?.(next);
@@ -116,7 +119,7 @@ export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBal
   return <Dialog open onOpenChange={open => {
     if (!open && !pendingMethod) onCloseAction();
   }}>
-    <DialogContent className="reaction-purchase-dialog cosmetic-purchase-dialog">
+    <DialogContent className="reaction-purchase-dialog cosmetic-purchase-dialog" finalFocus={finalFocusRef}>
       <DialogHeader>
         <span className="cosmetic-purchase-hero"><CosmeticPreview kind={kind} itemId={entry.id}/></span>
         <DialogTitle>{confirmed ? `${label} liberado` : `Liberar ${label}`}</DialogTitle>
@@ -129,14 +132,14 @@ export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBal
         <span><Check aria-hidden="true"/></span>
         <div><strong>Pronto para a mesa</strong><p>Feche esta janela e selecione o item na sua próxima mão.</p></div>
       </div> : active && purchase?.method === 'pix' ? <>
-        <PixPaymentView purchase={purchase}
+        <PixPaymentView purchase={purchase} amountDetail={label}
           paymentNote="O pagamento libera apenas este item cosmético e não altera fichas nem saldo de jogo."/>
         <p className="reaction-purchase-wait"><LoaderCircle aria-hidden="true"/> Aguardando confirmação do Pix…</p>
       </> : active ? <div className="reaction-purchase-processing" role="status">
         <LoaderCircle aria-hidden="true"/><strong>Confirmando o débito de fichas…</strong>
         <p>Você pode fechar esta janela. A compra continuará segura e aparecerá no histórico.</p>
       </div> : <>
-        <div className="reaction-payment-options" aria-label="Meios de pagamento">
+        <div className="reaction-payment-options" role="group" aria-label="Meios de pagamento">
           <button type="button" disabled={pendingMethod !== null || insufficientFichas}
                   onClick={() => void buy('fichas')}>
             <Coins aria-hidden="true"/><span><strong>{(entry.price_fichas ?? 0).toLocaleString('pt-BR')} fichas</strong>

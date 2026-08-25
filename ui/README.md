@@ -110,11 +110,9 @@ vertical `stage-v` ring for portrait handhelds.
 - Actions: `fold | check | call | raise`, plus `post_big_blind`, `show_cards`, `keep_seat` and
   `preselect_action` as separate socket messages.
 - Notable components: `PerimeterTimer` (SVG countdown ring), `RabbitHunt` (post-fold runout),
-  `RealityCheck` (session-length nudge), `SessionRecap` (one-time duration/hands/result summary
-  shown when leaving a table, replacing the old immediate `/lobby` redirect), `BotChallenge`
-  (Turnstile), `PlayerNoteDialog` (private opponent notes + colour tag), `LastWinners`, `ChipStack`,
-  `TablePreferencesDialog` (theme, sound, voice), `VoiceActionButton` (speech recognition),
-  `HandOutcome` (win banner + confetti).
+  `RealityCheck` (session-length nudge), `BotChallenge` (Turnstile), `PlayerNoteDialog` (private
+  opponent notes + colour tag), `LastWinners`, `ChipStack`, `TablePreferencesDialog` (theme,
+  sound, voice), `VoiceActionButton` (speech recognition), `HandOutcome` (win banner + confetti).
 - `BuyInPanel` has an "Auto rebuy" toggle (sandbox rooms only), sent as `auto_rebuy` on
   `joinRoom`. When a busted seat has it on, `RebuyDialog` waits a short grace window (server auto-
   rebuy runs async right after the bust snapshot) before falling back to the manual slider, or —

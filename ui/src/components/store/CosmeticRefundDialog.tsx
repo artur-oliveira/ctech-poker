@@ -1,4 +1,5 @@
 'use client';
+import type {RefObject} from 'react';
 import {useState} from 'react';
 import Image from 'next/image';
 import {Check, CircleAlert, LoaderCircle, RotateCcw} from 'lucide-react';
@@ -27,9 +28,11 @@ function valueLabel(purchase: CosmeticPurchase) {
     : `${(purchase.price_fichas ?? 0).toLocaleString('pt-BR')} fichas`;
 }
 
-export function CosmeticRefundDialog({kind, purchase, onCloseAction, onConfirmAction}: {
+export function CosmeticRefundDialog({kind, purchase, finalFocusRef, onCloseAction, onConfirmAction}: {
   kind: CosmeticKind;
   purchase: CosmeticPurchase | null;
+  /** Restores keyboard focus to the control that opened this dialog. */
+  finalFocusRef?: RefObject<HTMLButtonElement | null>;
   onCloseAction: () => void;
   onConfirmAction: (purchaseId: string) => Promise<void>;
 }) {
@@ -53,7 +56,7 @@ export function CosmeticRefundDialog({kind, purchase, onCloseAction, onConfirmAc
   }
 
   return <Dialog open onOpenChange={open => !open && state !== 'pending' && onCloseAction()}>
-    <DialogContent className="reaction-refund-dialog cosmetic-refund-dialog">
+    <DialogContent className="reaction-refund-dialog cosmetic-refund-dialog" finalFocus={finalFocusRef}>
       <DialogHeader>
         <DialogTitle>{state === 'success' ? 'Item estornado' : `Estornar ${label || 'item'}?`}</DialogTitle>
         <DialogDescription>{state === 'success'

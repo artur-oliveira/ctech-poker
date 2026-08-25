@@ -990,8 +990,11 @@ type TableSnapshot struct {
 	RunoutCards           []string                `protobuf:"bytes,32,rep,name=runout_cards,json=runoutCards,proto3" json:"runout_cards,omitempty"`
 	BoardTwo              []string                `protobuf:"bytes,33,rep,name=board_two,json=boardTwo,proto3" json:"board_two,omitempty"`
 	BoardSplitAt          int32                   `protobuf:"varint,34,opt,name=board_split_at,json=boardSplitAt,proto3" json:"board_split_at,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// Viewer-scoped: present only for the winner being asked and the requester
+	// waiting on the answer. Nobody else learns a request exists.
+	PendingWinnerCards *WinnerCardsRequest `protobuf:"bytes,35,opt,name=pending_winner_cards,json=pendingWinnerCards,proto3" json:"pending_winner_cards,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *TableSnapshot) Reset() {
@@ -1262,6 +1265,93 @@ func (x *TableSnapshot) GetBoardSplitAt() int32 {
 	return 0
 }
 
+func (x *TableSnapshot) GetPendingWinnerCards() *WinnerCardsRequest {
+	if x != nil {
+		return x.PendingWinnerCards
+	}
+	return nil
+}
+
+// WinnerCardsRequest is one outstanding paid request to reveal the sole
+// uncontested winner's mucked hole cards. The requester has already been
+// charged; the winner has until expires_at_unix_ms to accept or decline, and
+// a decline or timeout refunds in full.
+type WinnerCardsRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	RequesterId     string                 `protobuf:"bytes,1,opt,name=requester_id,json=requesterId,proto3" json:"requester_id,omitempty"`
+	RequesterName   string                 `protobuf:"bytes,2,opt,name=requester_name,json=requesterName,proto3" json:"requester_name,omitempty"`
+	WinnerId        string                 `protobuf:"bytes,3,opt,name=winner_id,json=winnerId,proto3" json:"winner_id,omitempty"`
+	Fee             int64                  `protobuf:"varint,4,opt,name=fee,proto3" json:"fee,omitempty"`
+	ExpiresAtUnixMs int64                  `protobuf:"varint,5,opt,name=expires_at_unix_ms,json=expiresAtUnixMs,proto3" json:"expires_at_unix_ms,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *WinnerCardsRequest) Reset() {
+	*x = WinnerCardsRequest{}
+	mi := &file_poker_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WinnerCardsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WinnerCardsRequest) ProtoMessage() {}
+
+func (x *WinnerCardsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_poker_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WinnerCardsRequest.ProtoReflect.Descriptor instead.
+func (*WinnerCardsRequest) Descriptor() ([]byte, []int) {
+	return file_poker_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *WinnerCardsRequest) GetRequesterId() string {
+	if x != nil {
+		return x.RequesterId
+	}
+	return ""
+}
+
+func (x *WinnerCardsRequest) GetRequesterName() string {
+	if x != nil {
+		return x.RequesterName
+	}
+	return ""
+}
+
+func (x *WinnerCardsRequest) GetWinnerId() string {
+	if x != nil {
+		return x.WinnerId
+	}
+	return ""
+}
+
+func (x *WinnerCardsRequest) GetFee() int64 {
+	if x != nil {
+		return x.Fee
+	}
+	return 0
+}
+
+func (x *WinnerCardsRequest) GetExpiresAtUnixMs() int64 {
+	if x != nil {
+		return x.ExpiresAtUnixMs
+	}
+	return 0
+}
+
 type RevealedSalt struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Card          string                 `protobuf:"bytes,1,opt,name=card,proto3" json:"card,omitempty"`
@@ -1272,7 +1362,7 @@ type RevealedSalt struct {
 
 func (x *RevealedSalt) Reset() {
 	*x = RevealedSalt{}
-	mi := &file_poker_proto_msgTypes[10]
+	mi := &file_poker_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1284,7 +1374,7 @@ func (x *RevealedSalt) String() string {
 func (*RevealedSalt) ProtoMessage() {}
 
 func (x *RevealedSalt) ProtoReflect() protoreflect.Message {
-	mi := &file_poker_proto_msgTypes[10]
+	mi := &file_poker_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1297,7 +1387,7 @@ func (x *RevealedSalt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevealedSalt.ProtoReflect.Descriptor instead.
 func (*RevealedSalt) Descriptor() ([]byte, []int) {
-	return file_poker_proto_rawDescGZIP(), []int{10}
+	return file_poker_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *RevealedSalt) GetCard() string {
@@ -1317,7 +1407,7 @@ func (x *RevealedSalt) GetSaltHex() string {
 // ClientMessage is sent from the client to the server.
 type ClientMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice" | "peek_cards" | "request_rabbit_hunt" | "rabbit_hunt_verify_failed" | "request_winner_cards"
+	Type  string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice" | "peek_cards" | "request_rabbit_hunt" | "rabbit_hunt_verify_failed" | "request_winner_cards" | "accept_winner_cards" | "decline_winner_cards"
 	// payload fields
 	Token                   string `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`                                                                       // for auth frame
 	ShareCode               string `protobuf:"bytes,3,opt,name=share_code,json=shareCode,proto3" json:"share_code,omitempty"`                                              // for auth frame
@@ -1343,7 +1433,7 @@ type ClientMessage struct {
 
 func (x *ClientMessage) Reset() {
 	*x = ClientMessage{}
-	mi := &file_poker_proto_msgTypes[11]
+	mi := &file_poker_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1355,7 +1445,7 @@ func (x *ClientMessage) String() string {
 func (*ClientMessage) ProtoMessage() {}
 
 func (x *ClientMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_poker_proto_msgTypes[11]
+	mi := &file_poker_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1368,7 +1458,7 @@ func (x *ClientMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientMessage.ProtoReflect.Descriptor instead.
 func (*ClientMessage) Descriptor() ([]byte, []int) {
-	return file_poker_proto_rawDescGZIP(), []int{11}
+	return file_poker_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ClientMessage) GetType() string {
@@ -1515,7 +1605,7 @@ type ServerMessage struct {
 
 func (x *ServerMessage) Reset() {
 	*x = ServerMessage{}
-	mi := &file_poker_proto_msgTypes[12]
+	mi := &file_poker_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1527,7 +1617,7 @@ func (x *ServerMessage) String() string {
 func (*ServerMessage) ProtoMessage() {}
 
 func (x *ServerMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_poker_proto_msgTypes[12]
+	mi := &file_poker_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1540,7 +1630,7 @@ func (x *ServerMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerMessage.ProtoReflect.Descriptor instead.
 func (*ServerMessage) Descriptor() ([]byte, []int) {
-	return file_poker_proto_rawDescGZIP(), []int{12}
+	return file_poker_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ServerMessage) GetType() string {
@@ -1702,7 +1792,7 @@ type PlayerPresence struct {
 
 func (x *PlayerPresence) Reset() {
 	*x = PlayerPresence{}
-	mi := &file_poker_proto_msgTypes[13]
+	mi := &file_poker_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1714,7 +1804,7 @@ func (x *PlayerPresence) String() string {
 func (*PlayerPresence) ProtoMessage() {}
 
 func (x *PlayerPresence) ProtoReflect() protoreflect.Message {
-	mi := &file_poker_proto_msgTypes[13]
+	mi := &file_poker_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1727,7 +1817,7 @@ func (x *PlayerPresence) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerPresence.ProtoReflect.Descriptor instead.
 func (*PlayerPresence) Descriptor() ([]byte, []int) {
-	return file_poker_proto_rawDescGZIP(), []int{13}
+	return file_poker_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PlayerPresence) GetPlayerId() string {
@@ -1762,7 +1852,7 @@ type SocialEvent struct {
 
 func (x *SocialEvent) Reset() {
 	*x = SocialEvent{}
-	mi := &file_poker_proto_msgTypes[14]
+	mi := &file_poker_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1774,7 +1864,7 @@ func (x *SocialEvent) String() string {
 func (*SocialEvent) ProtoMessage() {}
 
 func (x *SocialEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_poker_proto_msgTypes[14]
+	mi := &file_poker_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1787,7 +1877,7 @@ func (x *SocialEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SocialEvent.ProtoReflect.Descriptor instead.
 func (*SocialEvent) Descriptor() ([]byte, []int) {
-	return file_poker_proto_rawDescGZIP(), []int{14}
+	return file_poker_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SocialEvent) GetEventId() string {
@@ -1970,7 +2060,7 @@ const file_poker_proto_rawDesc = "" +
 	"\x10target_player_id\x18\x04 \x01(\tR\x0etargetPlayerId\x12\x1c\n" +
 	"\ttimestamp\x18\x05 \x01(\x03R\ttimestamp\x12\x1d\n" +
 	"\n" +
-	"expires_at\x18\x06 \x01(\x03R\texpiresAt\"\xb0\x0e\n" +
+	"expires_at\x18\x06 \x01(\x03R\texpiresAt\"\xfd\x0e\n" +
 	"\rTableSnapshot\x12\x14\n" +
 	"\x05stage\x18\x01 \x01(\tR\x05stage\x12\x14\n" +
 	"\x05board\x18\x02 \x03(\tR\x05board\x12!\n" +
@@ -2008,7 +2098,8 @@ const file_poker_proto_rawDesc = "" +
 	"\x16unrevealed_card_hashes\x18\x1f \x03(\v2..poker.TableSnapshot.UnrevealedCardHashesEntryR\x14unrevealedCardHashes\x12!\n" +
 	"\frunout_cards\x18  \x03(\tR\vrunoutCards\x12\x1b\n" +
 	"\tboard_two\x18! \x03(\tR\bboardTwo\x12$\n" +
-	"\x0eboard_split_at\x18\" \x01(\x05R\fboardSplitAt\x1a:\n" +
+	"\x0eboard_split_at\x18\" \x01(\x05R\fboardSplitAt\x12K\n" +
+	"\x14pending_winner_cards\x18# \x01(\v2\x19.poker.WinnerCardsRequestR\x12pendingWinnerCards\x1a:\n" +
 	"\fPayoutsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x03R\x05value:\x028\x01\x1aY\n" +
@@ -2017,7 +2108,13 @@ const file_poker_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\v2\x13.poker.RevealedSaltR\x05value:\x028\x01\x1aG\n" +
 	"\x19UnrevealedCardHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"=\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xba\x01\n" +
+	"\x12WinnerCardsRequest\x12!\n" +
+	"\frequester_id\x18\x01 \x01(\tR\vrequesterId\x12%\n" +
+	"\x0erequester_name\x18\x02 \x01(\tR\rrequesterName\x12\x1b\n" +
+	"\twinner_id\x18\x03 \x01(\tR\bwinnerId\x12\x10\n" +
+	"\x03fee\x18\x04 \x01(\x03R\x03fee\x12+\n" +
+	"\x12expires_at_unix_ms\x18\x05 \x01(\x03R\x0fexpiresAtUnixMs\"=\n" +
 	"\fRevealedSalt\x12\x12\n" +
 	"\x04card\x18\x01 \x01(\tR\x04card\x12\x19\n" +
 	"\bsalt_hex\x18\x02 \x01(\tR\asaltHex\"\xc1\x04\n" +
@@ -2099,50 +2196,52 @@ func file_poker_proto_rawDescGZIP() []byte {
 	return file_poker_proto_rawDescData
 }
 
-var file_poker_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_poker_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_poker_proto_goTypes = []any{
-	(*Card)(nil),            // 0: poker.Card
-	(*Seat)(nil),            // 1: poker.Seat
-	(*BlindEscalation)(nil), // 2: poker.BlindEscalation
-	(*Room)(nil),            // 3: poker.Room
-	(*LegalActions)(nil),    // 4: poker.LegalActions
-	(*Pot)(nil),             // 5: poker.Pot
-	(*PotResult)(nil),       // 6: poker.PotResult
-	(*ChatMessage)(nil),     // 7: poker.ChatMessage
-	(*TableReaction)(nil),   // 8: poker.TableReaction
-	(*TableSnapshot)(nil),   // 9: poker.TableSnapshot
-	(*RevealedSalt)(nil),    // 10: poker.RevealedSalt
-	(*ClientMessage)(nil),   // 11: poker.ClientMessage
-	(*ServerMessage)(nil),   // 12: poker.ServerMessage
-	(*PlayerPresence)(nil),  // 13: poker.PlayerPresence
-	(*SocialEvent)(nil),     // 14: poker.SocialEvent
-	nil,                     // 15: poker.PotResult.PayoutsEntry
-	nil,                     // 16: poker.TableSnapshot.PayoutsEntry
-	nil,                     // 17: poker.TableSnapshot.RevealedCardSaltsEntry
-	nil,                     // 18: poker.TableSnapshot.UnrevealedCardHashesEntry
+	(*Card)(nil),               // 0: poker.Card
+	(*Seat)(nil),               // 1: poker.Seat
+	(*BlindEscalation)(nil),    // 2: poker.BlindEscalation
+	(*Room)(nil),               // 3: poker.Room
+	(*LegalActions)(nil),       // 4: poker.LegalActions
+	(*Pot)(nil),                // 5: poker.Pot
+	(*PotResult)(nil),          // 6: poker.PotResult
+	(*ChatMessage)(nil),        // 7: poker.ChatMessage
+	(*TableReaction)(nil),      // 8: poker.TableReaction
+	(*TableSnapshot)(nil),      // 9: poker.TableSnapshot
+	(*WinnerCardsRequest)(nil), // 10: poker.WinnerCardsRequest
+	(*RevealedSalt)(nil),       // 11: poker.RevealedSalt
+	(*ClientMessage)(nil),      // 12: poker.ClientMessage
+	(*ServerMessage)(nil),      // 13: poker.ServerMessage
+	(*PlayerPresence)(nil),     // 14: poker.PlayerPresence
+	(*SocialEvent)(nil),        // 15: poker.SocialEvent
+	nil,                        // 16: poker.PotResult.PayoutsEntry
+	nil,                        // 17: poker.TableSnapshot.PayoutsEntry
+	nil,                        // 18: poker.TableSnapshot.RevealedCardSaltsEntry
+	nil,                        // 19: poker.TableSnapshot.UnrevealedCardHashesEntry
 }
 var file_poker_proto_depIdxs = []int32{
 	2,  // 0: poker.Room.blind_escalation:type_name -> poker.BlindEscalation
-	15, // 1: poker.PotResult.payouts:type_name -> poker.PotResult.PayoutsEntry
+	16, // 1: poker.PotResult.payouts:type_name -> poker.PotResult.PayoutsEntry
 	1,  // 2: poker.TableSnapshot.seats:type_name -> poker.Seat
-	16, // 3: poker.TableSnapshot.payouts:type_name -> poker.TableSnapshot.PayoutsEntry
+	17, // 3: poker.TableSnapshot.payouts:type_name -> poker.TableSnapshot.PayoutsEntry
 	4,  // 4: poker.TableSnapshot.legal_actions:type_name -> poker.LegalActions
 	5,  // 5: poker.TableSnapshot.pots:type_name -> poker.Pot
 	6,  // 6: poker.TableSnapshot.pot_results:type_name -> poker.PotResult
 	7,  // 7: poker.TableSnapshot.chat_messages:type_name -> poker.ChatMessage
 	8,  // 8: poker.TableSnapshot.reactions:type_name -> poker.TableReaction
-	17, // 9: poker.TableSnapshot.revealed_card_salts:type_name -> poker.TableSnapshot.RevealedCardSaltsEntry
-	18, // 10: poker.TableSnapshot.unrevealed_card_hashes:type_name -> poker.TableSnapshot.UnrevealedCardHashesEntry
-	9,  // 11: poker.ServerMessage.snapshot:type_name -> poker.TableSnapshot
-	3,  // 12: poker.ServerMessage.room:type_name -> poker.Room
-	14, // 13: poker.ServerMessage.social_event:type_name -> poker.SocialEvent
-	13, // 14: poker.SocialEvent.presence:type_name -> poker.PlayerPresence
-	10, // 15: poker.TableSnapshot.RevealedCardSaltsEntry.value:type_name -> poker.RevealedSalt
-	16, // [16:16] is the sub-list for method output_type
-	16, // [16:16] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	18, // 9: poker.TableSnapshot.revealed_card_salts:type_name -> poker.TableSnapshot.RevealedCardSaltsEntry
+	19, // 10: poker.TableSnapshot.unrevealed_card_hashes:type_name -> poker.TableSnapshot.UnrevealedCardHashesEntry
+	10, // 11: poker.TableSnapshot.pending_winner_cards:type_name -> poker.WinnerCardsRequest
+	9,  // 12: poker.ServerMessage.snapshot:type_name -> poker.TableSnapshot
+	3,  // 13: poker.ServerMessage.room:type_name -> poker.Room
+	15, // 14: poker.ServerMessage.social_event:type_name -> poker.SocialEvent
+	14, // 15: poker.SocialEvent.presence:type_name -> poker.PlayerPresence
+	11, // 16: poker.TableSnapshot.RevealedCardSaltsEntry.value:type_name -> poker.RevealedSalt
+	17, // [17:17] is the sub-list for method output_type
+	17, // [17:17] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_poker_proto_init() }
@@ -2151,15 +2250,15 @@ func file_poker_proto_init() {
 		return
 	}
 	file_poker_proto_msgTypes[1].OneofWrappers = []any{}
-	file_poker_proto_msgTypes[11].OneofWrappers = []any{}
 	file_poker_proto_msgTypes[12].OneofWrappers = []any{}
+	file_poker_proto_msgTypes[13].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_poker_proto_rawDesc), len(file_poker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

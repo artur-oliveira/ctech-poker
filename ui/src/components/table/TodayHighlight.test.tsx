@@ -13,6 +13,7 @@ vi.mock('@/lib/api/highlights', () => ({getTodayHighlight}));
 function highlight(overrides: Partial<TableHighlight> = {}): TableHighlight {
   return {
     table_id: 't1', date: '2026-08-23', hand_id: 'hand-1', pot: 1500, recorded_at: 0,
+    board: ['Ac', '7d', '2s', '9h', '3c'],
     ...overrides,
   };
 }
@@ -59,12 +60,13 @@ describe('TodayHighlight', () => {
     expect(screen.getByText('25.000')).toBeInTheDocument();
   });
 
-  test('renders revealed hole cards when present', async () => {
+  test('names the winner and made hand without exposing card codes', async () => {
     getTodayHighlight.mockResolvedValueOnce(highlight({
       revealed: [{player_id: 'p1', name: 'Alice', hole_cards: ['Ah', 'Kd']}],
     }));
     renderHighlight();
-    await waitFor(() => expect(screen.getByText('Alice AhKd')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Alice — Par')).toBeInTheDocument());
+    expect(screen.queryByText(/AhKd/)).not.toBeInTheDocument();
   });
 
   test('falls back to "Jogador" when a revealed hand has no name', async () => {
@@ -72,7 +74,29 @@ describe('TodayHighlight', () => {
       revealed: [{player_id: 'p1', hole_cards: ['2c', '7s']}],
     }));
     renderHighlight();
-    await waitFor(() => expect(screen.getByText('Jogador 2c7s')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Jogador — Dois pares')).toBeInTheDocument());
+  });
+
+  test('joins tied winners and names their shared made hand', async () => {
+    getTodayHighlight.mockResolvedValueOnce(highlight({
+      board: ['Ah', 'Kd', 'Qs', 'Jc', 'Th'],
+      revealed: [
+        {player_id: 'p1', name: 'Alice', hole_cards: ['2c', '3d']},
+        {player_id: 'p2', name: 'Bia', hole_cards: ['4c', '5d']},
+      ],
+    }));
+    renderHighlight();
+    await waitFor(() => expect(screen.getByText('Alice e Bia — Sequência')).toBeInTheDocument());
+  });
+
+  test('omits the hand label when card data is incomplete or invalid', async () => {
+    getTodayHighlight.mockResolvedValueOnce(highlight({
+      board: ['Ac', '7d', '2s'],
+      revealed: [{player_id: 'p1', name: 'Alice', hole_cards: ['Ah', 'Kd']}],
+    }));
+    renderHighlight();
+    await waitFor(() => expect(screen.getByText('Maior pote de hoje')).toBeInTheDocument());
+    expect(screen.queryByText(/Alice/)).not.toBeInTheDocument();
   });
 
   test('omits card text when nothing was revealed', async () => {

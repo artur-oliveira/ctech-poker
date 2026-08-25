@@ -189,7 +189,7 @@ describe('ProfileMenu', () => {
   });
 
   test('locks an unowned premium deck with a link to the store instead of selecting it', async () => {
-    mocks.state.catalog = [{kind: 'deck', id: 'golden', premium: true, price_fichas: 500_000}];
+    mocks.state.catalog = [{kind: 'deck', id: 'golden', premium: true, owned: false, price_fichas: 500_000}];
     render(<ProfileMenu/>);
     await openProfile();
     await userEvent.click(screen.getByRole('combobox', {name: 'Baralho'}));
@@ -203,8 +203,9 @@ describe('ProfileMenu', () => {
   });
 
   test('an owned premium deck selects normally, with no lock icon', async () => {
-    mocks.state.catalog = [{kind: 'deck', id: 'golden', premium: true, price_fichas: 500_000}];
-    mocks.state.purchases = [{purchase_id: 'pp1', kind: 'deck', item_id: 'golden', method: 'fichas', status: 'confirmed'}];
+    // Ownership is a catalog fact (the server reads it from entitlements), not a
+    // purchase-history one.
+    mocks.state.catalog = [{kind: 'deck', id: 'golden', premium: true, owned: true, price_fichas: 500_000}];
     render(<ProfileMenu/>);
     await openProfile();
     await userEvent.click(screen.getByRole('combobox', {name: 'Baralho'}));

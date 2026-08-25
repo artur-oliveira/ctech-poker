@@ -1,4 +1,12 @@
-import {apiClient} from './client';
+import {apiClient, type Page} from './client';
+
+// Everything the store reads lives under this query root: balance, the
+// SKU/cosmetic/reaction catalogs (which now carry the `owned` flag), and
+// purchase history. A buy or a refund can move all three at once, so
+// mutations invalidate the root instead of naming the subset they think they
+// touched — that list is what went stale and left the store showing
+// ownership that no longer existed.
+export const WALLET_QUERY_ROOT = ['wallet'] as const;
 
 export interface SandboxSKU {
   id: string;
@@ -24,8 +32,10 @@ export interface SandboxPurchase {
   updated_at?: string;
 }
 
+// The SKU catalog arrives whole on a single page — unwrap it and hand callers
+// the plain array.
 export async function listSkus() {
-  return (await apiClient.get<SandboxSKU[]>('/v1.0/wallet/sandbox-purchase/skus')).data;
+  return (await apiClient.get<Page<SandboxSKU>>('/v1.0/wallet/sandbox-purchase/skus')).data.data;
 }
 
 export async function createPurchase(sku: string) {
@@ -38,8 +48,9 @@ export async function createPurchase(sku: string) {
   )).data;
 }
 
-export async function listPurchases() {
-  return (await apiClient.get<SandboxPurchase[]>('/v1.0/wallet/sandbox-purchase/')).data;
+export async function listPurchases(cursor?: string) {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  return (await apiClient.get<Page<SandboxPurchase>>(`/v1.0/wallet/sandbox-purchase/${query}`)).data;
 }
 
 export async function getPurchase(id: string) {

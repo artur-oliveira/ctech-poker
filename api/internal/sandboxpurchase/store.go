@@ -78,18 +78,20 @@ func (s *Store) UpdateStatus(ctx context.Context, playerID, purchaseID, status, 
 	return s.base.UpdateItem(ctx, playerID, &sk, map[string]any{"status": status, "updated_at": updatedAt})
 }
 
-func (s *Store) List(ctx context.Context, playerID string) ([]Record, error) {
-	result, err := s.base.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: 100})
+// List returns one page of this player's purchase history plus the DynamoDB
+// key to resume from.
+func (s *Store) List(ctx context.Context, playerID string, limit int, startKey map[string]types.AttributeValue) ([]Record, map[string]types.AttributeValue, error) {
+	result, err := s.base.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: limit, ExclusiveStartKey: startKey})
 	if err != nil {
-		return nil, fmt.Errorf("sandboxpurchase: list: %w", err)
+		return nil, nil, fmt.Errorf("sandboxpurchase: list: %w", err)
 	}
 	out := make([]Record, 0, len(result.Items))
 	for _, item := range result.Items {
 		rec, err := dynamo.Decode[Record](item)
 		if err != nil {
-			return nil, fmt.Errorf("sandboxpurchase: decode: %w", err)
+			return nil, nil, fmt.Errorf("sandboxpurchase: decode: %w", err)
 		}
 		out = append(out, *rec)
 	}
-	return out, nil
+	return out, result.LastEvaluatedKey, nil
 }

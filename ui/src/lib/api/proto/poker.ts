@@ -216,6 +216,11 @@ export interface TableSnapshot {
   runout_cards: string[];
   board_two: string[];
   board_split_at: number;
+  /**
+   * Viewer-scoped: present only for the winner being asked and the requester
+   * waiting on the answer. Nobody else learns a request exists.
+   */
+  pending_winner_cards?: WinnerCardsRequest | undefined;
 }
 
 export interface TableSnapshot_PayoutsEntry {
@@ -233,6 +238,20 @@ export interface TableSnapshot_UnrevealedCardHashesEntry {
   value: string;
 }
 
+/**
+ * WinnerCardsRequest is one outstanding paid request to reveal the sole
+ * uncontested winner's mucked hole cards. The requester has already been
+ * charged; the winner has until expires_at_unix_ms to accept or decline, and
+ * a decline or timeout refunds in full.
+ */
+export interface WinnerCardsRequest {
+  requester_id: string;
+  requester_name: string;
+  winner_id: string;
+  fee: number;
+  expires_at_unix_ms: number;
+}
+
 export interface RevealedSalt {
   card: string;
   salt_hex: string;
@@ -240,7 +259,7 @@ export interface RevealedSalt {
 
 /** ClientMessage is sent from the client to the server. */
 export interface ClientMessage {
-  /** "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice" | "peek_cards" | "request_rabbit_hunt" | "rabbit_hunt_verify_failed" | "request_winner_cards" */
+  /** "auth" | "ping" | "sync_state" | "ready" | "act" | "preselect_action" | "post_big_blind" | "show_cards" | "keep_seat" | "chat" | "reaction" | "bot_challenge" | "set_run_it_twice" | "peek_cards" | "request_rabbit_hunt" | "rabbit_hunt_verify_failed" | "request_winner_cards" | "accept_winner_cards" | "decline_winner_cards" */
   type: string;
   /** payload fields */
   token: string;
@@ -2331,6 +2350,7 @@ function createBaseTableSnapshot(): TableSnapshot {
     runout_cards: [],
     board_two: [],
     board_split_at: 0,
+    pending_winner_cards: undefined,
   };
 }
 
@@ -2437,6 +2457,9 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     }
     if (message.board_split_at !== 0) {
       writer.uint32(272).int32(message.board_split_at);
+    }
+    if (message.pending_winner_cards !== undefined) {
+      WinnerCardsRequest.encode(message.pending_winner_cards, writer.uint32(282).fork()).join();
     }
     return writer;
   },
@@ -2729,6 +2752,14 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
           message.board_split_at = reader.int32();
           continue;
         }
+        case 35: {
+          if (tag !== 282) {
+            break;
+          }
+
+          message.pending_winner_cards = WinnerCardsRequest.decode(reader, reader.uint32());
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2914,6 +2945,11 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
         : isSet(object.board_split_at)
         ? globalThis.Number(object.board_split_at)
         : 0,
+      pending_winner_cards: isSet(object.pendingWinnerCards)
+        ? WinnerCardsRequest.fromJSON(object.pendingWinnerCards)
+        : isSet(object.pending_winner_cards)
+        ? WinnerCardsRequest.fromJSON(object.pending_winner_cards)
+        : undefined,
     };
   },
 
@@ -3039,6 +3075,9 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     if (message.board_split_at !== 0) {
       obj.boardSplitAt = Math.round(message.board_split_at);
     }
+    if (message.pending_winner_cards !== undefined) {
+      obj.pendingWinnerCards = WinnerCardsRequest.toJSON(message.pending_winner_cards);
+    }
     return obj;
   },
 
@@ -3109,6 +3148,9 @@ export const TableSnapshot: MessageFns<TableSnapshot> = {
     message.runout_cards = object.runout_cards?.map((e) => e) || [];
     message.board_two = object.board_two?.map((e) => e) || [];
     message.board_split_at = object.board_split_at ?? 0;
+    message.pending_winner_cards = (object.pending_winner_cards !== undefined && object.pending_winner_cards !== null)
+      ? WinnerCardsRequest.fromPartial(object.pending_winner_cards)
+      : undefined;
     return message;
   },
 };
@@ -3347,6 +3389,146 @@ export const TableSnapshot_UnrevealedCardHashesEntry: MessageFns<TableSnapshot_U
     const message = createBaseTableSnapshot_UnrevealedCardHashesEntry();
     message.key = object.key ?? 0;
     message.value = object.value ?? "";
+    return message;
+  },
+};
+
+function createBaseWinnerCardsRequest(): WinnerCardsRequest {
+  return { requester_id: "", requester_name: "", winner_id: "", fee: 0, expires_at_unix_ms: 0 };
+}
+
+export const WinnerCardsRequest: MessageFns<WinnerCardsRequest> = {
+  encode(message: WinnerCardsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.requester_id !== "") {
+      writer.uint32(10).string(message.requester_id);
+    }
+    if (message.requester_name !== "") {
+      writer.uint32(18).string(message.requester_name);
+    }
+    if (message.winner_id !== "") {
+      writer.uint32(26).string(message.winner_id);
+    }
+    if (message.fee !== 0) {
+      writer.uint32(32).int64(message.fee);
+    }
+    if (message.expires_at_unix_ms !== 0) {
+      writer.uint32(40).int64(message.expires_at_unix_ms);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): WinnerCardsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseWinnerCardsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.requester_id = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.requester_name = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.winner_id = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.fee = longToNumber(reader.int64());
+          continue;
+        }
+        case 5: {
+          if (tag !== 40) {
+            break;
+          }
+
+          message.expires_at_unix_ms = longToNumber(reader.int64());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): WinnerCardsRequest {
+    return {
+      requester_id: isSet(object.requesterId)
+        ? globalThis.String(object.requesterId)
+        : isSet(object.requester_id)
+        ? globalThis.String(object.requester_id)
+        : "",
+      requester_name: isSet(object.requesterName)
+        ? globalThis.String(object.requesterName)
+        : isSet(object.requester_name)
+        ? globalThis.String(object.requester_name)
+        : "",
+      winner_id: isSet(object.winnerId)
+        ? globalThis.String(object.winnerId)
+        : isSet(object.winner_id)
+        ? globalThis.String(object.winner_id)
+        : "",
+      fee: isSet(object.fee) ? globalThis.Number(object.fee) : 0,
+      expires_at_unix_ms: isSet(object.expiresAtUnixMs)
+        ? globalThis.Number(object.expiresAtUnixMs)
+        : isSet(object.expires_at_unix_ms)
+        ? globalThis.Number(object.expires_at_unix_ms)
+        : 0,
+    };
+  },
+
+  toJSON(message: WinnerCardsRequest): unknown {
+    const obj: any = {};
+    if (message.requester_id !== "") {
+      obj.requesterId = message.requester_id;
+    }
+    if (message.requester_name !== "") {
+      obj.requesterName = message.requester_name;
+    }
+    if (message.winner_id !== "") {
+      obj.winnerId = message.winner_id;
+    }
+    if (message.fee !== 0) {
+      obj.fee = Math.round(message.fee);
+    }
+    if (message.expires_at_unix_ms !== 0) {
+      obj.expiresAtUnixMs = Math.round(message.expires_at_unix_ms);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<WinnerCardsRequest>, I>>(base?: I): WinnerCardsRequest {
+    return WinnerCardsRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<WinnerCardsRequest>, I>>(object: I): WinnerCardsRequest {
+    const message = createBaseWinnerCardsRequest();
+    message.requester_id = object.requester_id ?? "";
+    message.requester_name = object.requester_name ?? "";
+    message.winner_id = object.winner_id ?? "";
+    message.fee = object.fee ?? 0;
+    message.expires_at_unix_ms = object.expires_at_unix_ms ?? 0;
     return message;
   },
 };

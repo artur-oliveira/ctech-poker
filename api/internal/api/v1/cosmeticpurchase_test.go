@@ -54,7 +54,7 @@ func newCosmeticPurchaseApp(svc *cosmeticpurchase.Service) *fiber.App {
 
 func TestCosmeticPurchaseCatalogRouteRegistered(t *testing.T) {
 	wallet := &fakeCosmeticWallet{skus: allCosmeticProductSKUs()}
-	svc := cosmeticpurchase.NewService(wallet, cosmeticpurchase.NewEntitlementStore(nil, "test"), cosmeticpurchase.NewStore(nil, "test"))
+	svc := cosmeticpurchase.NewService(wallet, cosmeticpurchase.NewEntitlementStore(stubDynamoClient(t), "test"), cosmeticpurchase.NewStore(nil, "test"))
 	app := newCosmeticPurchaseApp(svc)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1.0/wallet/cosmetic-purchase/deck/catalog", nil)
@@ -65,10 +65,13 @@ func TestCosmeticPurchaseCatalogRouteRegistered(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 from /catalog, got %d", resp.StatusCode)
 	}
-	var entries []cosmeticpurchase.CatalogEntry
-	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
+	var page struct {
+		Data []cosmeticpurchase.CatalogEntry `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+	entries := page.Data
 	var found bool
 	for _, e := range entries {
 		if e.ID == "golden" && e.Premium && e.PriceCents == 500 {
@@ -81,7 +84,7 @@ func TestCosmeticPurchaseCatalogRouteRegistered(t *testing.T) {
 }
 
 func TestCosmeticPurchaseCatalogUnknownKindRejected(t *testing.T) {
-	svc := cosmeticpurchase.NewService(&fakeCosmeticWallet{}, cosmeticpurchase.NewEntitlementStore(nil, "test"), cosmeticpurchase.NewStore(nil, "test"))
+	svc := cosmeticpurchase.NewService(&fakeCosmeticWallet{}, cosmeticpurchase.NewEntitlementStore(stubDynamoClient(t), "test"), cosmeticpurchase.NewStore(nil, "test"))
 	app := newCosmeticPurchaseApp(svc)
 
 	req := httptest.NewRequest(http.MethodGet, "/v1.0/wallet/cosmetic-purchase/hats/catalog", nil)
@@ -95,7 +98,7 @@ func TestCosmeticPurchaseCatalogUnknownKindRejected(t *testing.T) {
 }
 
 func TestCreateCosmeticPurchaseUnknownItemRejected(t *testing.T) {
-	svc := cosmeticpurchase.NewService(&fakeCosmeticWallet{}, cosmeticpurchase.NewEntitlementStore(nil, "test"), cosmeticpurchase.NewStore(nil, "test"))
+	svc := cosmeticpurchase.NewService(&fakeCosmeticWallet{}, cosmeticpurchase.NewEntitlementStore(stubDynamoClient(t), "test"), cosmeticpurchase.NewStore(nil, "test"))
 	app := newCosmeticPurchaseApp(svc)
 
 	body, _ := json.Marshal(map[string]string{"item_id": "not-a-cosmetic", "method": "fichas"})
@@ -114,7 +117,7 @@ func TestCreateCosmeticPurchaseUnknownItemRejected(t *testing.T) {
 }
 
 func TestCreateCosmeticPurchaseInvalidMethodRejected(t *testing.T) {
-	svc := cosmeticpurchase.NewService(&fakeCosmeticWallet{}, cosmeticpurchase.NewEntitlementStore(nil, "test"), cosmeticpurchase.NewStore(nil, "test"))
+	svc := cosmeticpurchase.NewService(&fakeCosmeticWallet{}, cosmeticpurchase.NewEntitlementStore(stubDynamoClient(t), "test"), cosmeticpurchase.NewStore(nil, "test"))
 	app := newCosmeticPurchaseApp(svc)
 
 	body, _ := json.Marshal(map[string]string{"item_id": "golden", "method": "credit_card"})
@@ -130,7 +133,7 @@ func TestCreateCosmeticPurchaseInvalidMethodRejected(t *testing.T) {
 }
 
 func TestCreateCosmeticPurchaseMissingItemIDRejected(t *testing.T) {
-	svc := cosmeticpurchase.NewService(&fakeCosmeticWallet{}, cosmeticpurchase.NewEntitlementStore(nil, "test"), cosmeticpurchase.NewStore(nil, "test"))
+	svc := cosmeticpurchase.NewService(&fakeCosmeticWallet{}, cosmeticpurchase.NewEntitlementStore(stubDynamoClient(t), "test"), cosmeticpurchase.NewStore(nil, "test"))
 	app := newCosmeticPurchaseApp(svc)
 
 	body, _ := json.Marshal(map[string]string{"method": "fichas"})
@@ -146,7 +149,7 @@ func TestCreateCosmeticPurchaseMissingItemIDRejected(t *testing.T) {
 }
 
 func TestCreateCosmeticPurchaseUnknownKindRejectedBeforeCreate(t *testing.T) {
-	svc := cosmeticpurchase.NewService(&fakeCosmeticWallet{}, cosmeticpurchase.NewEntitlementStore(nil, "test"), cosmeticpurchase.NewStore(nil, "test"))
+	svc := cosmeticpurchase.NewService(&fakeCosmeticWallet{}, cosmeticpurchase.NewEntitlementStore(stubDynamoClient(t), "test"), cosmeticpurchase.NewStore(nil, "test"))
 	app := newCosmeticPurchaseApp(svc)
 
 	body, _ := json.Marshal(map[string]string{"item_id": "golden", "method": "fichas"})
