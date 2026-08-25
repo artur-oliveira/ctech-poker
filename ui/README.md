@@ -1,7 +1,7 @@
 # ctech-poker — UI (Next.js SPA)
 
 Next.js 16 SPA (App Router) for the poker lobby, tables, and game client. Everything below is
-anchored to `ui/src` as of **2026-07-28**, not to `DESIGN.md`/`PRODUCT.md` (which are design specs).
+anchored to `ui/src` as of **2026-08-24**, not to `DESIGN.md`/`PRODUCT.md` (which are design specs).
 Sandbox play is live end to end; the wallet-mode switch for real money exists in the UI but the
 backend gate (`REAL_MONEY_ENABLED`) is off by default.
 
@@ -148,6 +148,29 @@ vertical `stage-v` ring for portrait handhelds.
   module-level singleton in `src/lib/api/client.ts` (set/get/subscribe), **not persisted** —
   lost on full reload, recovered via `doRefresh()`. An axios interceptor attaches `Bearer` and
   auto-refreshes on 401.
+
+## Network resilience
+
+- `src/lib/network/liveness.ts` treats `GET /v1.0/health` as the single availability probe. It is
+  dependency-free and unauthenticated; the UI never uses `/v1.0/health-check`, whose dependency
+  report is for infrastructure. A rejected health fetch—including the CORS-shaped `TypeError` a
+  dead HAProxy can produce—is an unavailable server, not an application exception.
+- Ordinary Axios requests have a **3 second timeout**. Safe reads and mutations carrying an
+  `Idempotency-Key` receive at most two retries (three total attempts) with jitter; unsafe
+  mutations remain single-attempt so a lost response cannot duplicate a debit or poker action.
+  TanStack Query does not add another retry layer.
+- While health is unavailable, ordinary HTTP calls fail fast and both shared WebSocket hooks are
+  disabled. Only the health poller continues, using exponential equal-jitter delays capped at 30
+  seconds. Successful health recovery re-enables sockets and refetches active queries; socket open
+  handlers then reconcile deltas missed during the outage.
+- `NetworkProvider` keeps cached screens mounted and shows a single accessible offline/server
+  banner. A terminal `503` preserves the interrupted route in session storage; `/unavailable`
+  returns there only after a successful health check. Root and route error boundaries provide
+  recovery UI for unexpected rendering failures.
+- OAuth token exchange, refresh, revocation and the presigned avatar upload are also bounded to
+  three seconds. After an authenticated HTTP `401` or WebSocket `unauthorized`, one shared refresh
+  is attempted; if no replacement token can be issued, the local identity is cleared and the IdP
+  SSO session is ended instead of reconnecting indefinitely with dead credentials.
 
 ## Auth flow
 

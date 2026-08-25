@@ -56,7 +56,7 @@ export function CreateRoomDialog() {
   // Only fetch (and only offer) real-money stakes for players already in real-money
   // wallet mode. 404s when REAL_MONEY_ENABLED is off server-side, hiding the toggle.
   const {data: realStakes = []} = useQuery({
-    queryKey: ['stakes', 'real'], queryFn: () => listStakes('real'), retry: false,
+    queryKey: ['stakes', 'real'], queryFn: () => listStakes('real'),
     enabled: me?.wallet_mode === 'real'
   });
   const queryClient = useQueryClient();

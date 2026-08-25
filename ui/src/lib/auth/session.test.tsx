@@ -16,13 +16,14 @@ const mocks = vi.hoisted(() => ({
   setUsername: vi.fn(),
   setPlayerId: vi.fn(),
   refresh: vi.fn(),
+  endSession: vi.fn(),
   query: vi.fn(),
 }));
 
 vi.mock('@tanstack/react-query', () => ({useQuery: mocks.query}));
 vi.mock('@/lib/mockConfig', () => ({USE_MOCK: false}));
 vi.mock('@/lib/api/player', () => ({getMe: vi.fn()}));
-vi.mock('@/lib/auth/oauth', () => ({doRefresh: mocks.refresh}));
+vi.mock('@/lib/auth/oauth', () => ({doRefresh: mocks.refresh, endSession: mocks.endSession}));
 vi.mock('@/lib/api/client', () => ({
   getAccessToken: () => mocks.token,
   setAccessToken: mocks.setToken,
@@ -65,6 +66,7 @@ describe('session keep-alive', () => {
     recoverSession();
     await waitFor(() => expect(mocks.setToken).toHaveBeenCalledWith(null));
     expect(mocks.setPlayerId).toHaveBeenCalledWith(null);
+    expect(mocks.endSession).toHaveBeenCalledWith('/');
   });
   
   test('keeps the session when a refresh fails on a network error', async () => {

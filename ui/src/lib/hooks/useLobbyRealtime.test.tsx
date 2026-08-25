@@ -31,6 +31,10 @@ vi.mock('@/lib/api/client', () => ({
 }));
 vi.mock('@/lib/notify', () => ({pushNotification: state.notify}));
 vi.mock('@/lib/auth/session', () => ({recoverSession: state.recover}));
+vi.mock('@/lib/network/NetworkProvider', () => ({
+  useApiLiveness: () => ({status: 'available', reason: null, checkedAt: 1}),
+}));
+vi.mock('@/lib/network/liveness', () => ({checkApiLiveness: vi.fn()}));
 
 describe('useLobbyRealtime', () => {
   beforeEach(() => {

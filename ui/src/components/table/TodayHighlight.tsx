@@ -3,7 +3,6 @@ import {useEffect, useRef, useState} from 'react';
 import {Trophy} from 'lucide-react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {getTodayHighlight} from '@/lib/api/highlights';
-import {isNotFound} from '@/lib/api/client';
 import {HAND_CATEGORY_LABELS} from '@/lib/handCategories';
 import {bestHandCategory, compareHands} from '@/lib/pokerRules';
 
@@ -25,13 +24,6 @@ export function highlightWinnerLabel(board?: string[], revealed?: Array<{name?: 
   return category ? `${names} — ${category}` : names;
 }
 
-// Pulled out so both branches (a permanent 404 vs. a transient failure) are
-// unit-testable directly, instead of relying on TanStack Query's real retry
-// timers/backoff inside a component test.
-export function shouldRetryHighlightFetch(count: number, err: unknown) {
-  return !isNotFound(err) && count < 3;
-}
-
 // System-detected "biggest pot of the day" for this table — no player action
 // required, distinct from the manual, player-initiated hand-share flow.
 // Fetched once on mount; re-fetched (via invalidateQueries, not polling) the
@@ -46,7 +38,6 @@ export function TodayHighlight({tableId, handId, handComplete}: {
   const {data} = useQuery({
     queryKey: ['highlights', tableId, 'today'],
     queryFn: () => getTodayHighlight(tableId),
-    retry: shouldRetryHighlightFetch,
   });
   const lastHandId = useRef<string | undefined>(undefined);
   const [expanded, setExpanded] = useState(false);

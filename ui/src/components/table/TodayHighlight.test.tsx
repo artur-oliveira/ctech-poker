@@ -5,7 +5,7 @@ import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import {ApiError} from '@/lib/api/client';
 import type {TableHighlight} from '@/lib/api/highlights';
-import {shouldRetryHighlightFetch, TodayHighlight} from './TodayHighlight';
+import {TodayHighlight} from './TodayHighlight';
 
 const {getTodayHighlight} = vi.hoisted(() => ({getTodayHighlight: vi.fn()}));
 vi.mock('@/lib/api/highlights', () => ({getTodayHighlight}));
@@ -27,18 +27,6 @@ function wrapper({children}: { children: ReactNode }) {
 function renderHighlight(props: Partial<React.ComponentProps<typeof TodayHighlight>> = {}) {
   return render(<TodayHighlight tableId="t1" handComplete={false} {...props}/>, {wrapper});
 }
-
-describe('shouldRetryHighlightFetch', () => {
-  test('never retries a 404 (no highlight yet / not your table)', () => {
-    expect(shouldRetryHighlightFetch(0, new ApiError('not found', 404))).toBe(false);
-  });
-
-  test('retries a transient failure up to the count cap', () => {
-    const err = new ApiError('boom', 500);
-    expect(shouldRetryHighlightFetch(0, err)).toBe(true);
-    expect(shouldRetryHighlightFetch(3, err)).toBe(false);
-  });
-});
 
 describe('TodayHighlight', () => {
   beforeEach(() => {

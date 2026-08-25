@@ -3,7 +3,6 @@ import {useEffect, useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {Eye} from 'lucide-react';
 import {getHandRevealWinner, revealHandWinner} from '@/lib/api/player';
-import {isNotFound} from '@/lib/api/client';
 
 // Buy button for a history/replay view — the REST-driven counterpart to
 // components/table/WinnerCards.tsx, which does the same purchase live over
@@ -20,7 +19,6 @@ export function RevealWinnerButton({handId, winnerName, alreadyRevealed, onRevea
   const check = useQuery({
     queryKey: ['hand-reveal-winner', handId],
     queryFn: () => getHandRevealWinner(handId),
-    retry: (count, err) => !isNotFound(err) && count < 3,
   });
 
   useEffect(() => {

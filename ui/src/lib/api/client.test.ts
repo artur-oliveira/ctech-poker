@@ -4,6 +4,7 @@ import {
   getPlayerId,
   getUsername,
   ApiError,
+  httpRetryDelay,
   isNotFound,
   normalizeApiError,
   redirectOnServiceUnavailable,
@@ -37,6 +38,9 @@ const mocks = vi.hoisted(() => {
     responseHandlers,
     errorHandlers,
     refresh: vi.fn(),
+    endSession: vi.fn(),
+    healthCheck: vi.fn(),
+    requireLiveness: vi.fn(),
     notify: vi.fn(),
     isAxiosError: vi.fn(),
   };
@@ -48,13 +52,21 @@ vi.mock('axios', () => ({
     isAxiosError: mocks.isAxiosError,
   },
 }));
-vi.mock('@/lib/auth/oauth', () => ({doRefresh: mocks.refresh}));
+vi.mock('@/lib/auth/oauth', () => ({doRefresh: mocks.refresh, endSession: mocks.endSession}));
 vi.mock('@/lib/mockConfig', () => ({USE_MOCK: false}));
 vi.mock('@/lib/notify', () => ({notifyApiError: mocks.notify}));
+vi.mock('@/lib/network/liveness', () => ({
+  HTTP_TIMEOUT_MS: 3_000,
+  requireApiLiveness: mocks.requireLiveness,
+  checkApiLiveness: mocks.healthCheck,
+}));
 
 describe('API client session and interceptors', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.instance.request.mockReset();
+    mocks.requireLiveness.mockResolvedValue(undefined);
+    mocks.healthCheck.mockResolvedValue(true);
     setAccessToken(null);
     setUsername(null);
     setPlayerId(null);
@@ -137,6 +149,50 @@ describe('API client session and interceptors', () => {
     expect(error).toMatchObject({message: 'Muitas tentativas', status: 429, retryAfterMs: 2000});
   });
 
+  test('uses full jitter for transient retries and adds small jitter after Retry-After', () => {
+    expect(httpRetryDelay(1, undefined, () => 0)).toBe(0);
+    expect(httpRetryDelay(2, undefined, () => 1)).toBe(500);
+    expect(httpRetryDelay(1, '2', () => 0.5)).toBe(2125);
+  });
+
+  test('retries a safe transient request with the same config before surfacing it', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const config = {method: 'get', headers: {}, url: '/rooms'};
+    const error = {response: {status: 503, headers: {}}, config};
+    mocks.instance.request.mockResolvedValue({data: 'recovered'});
+    await expect(mocks.errorHandlers[0](error)).resolves.toEqual({data: 'recovered'});
+    expect(config).toMatchObject({_networkRetryCount: 1});
+    expect(mocks.instance.request).toHaveBeenCalledWith(config);
+  });
+
+  test('does not automatically repeat a mutation without an idempotency key', async () => {
+    mocks.isAxiosError.mockReturnValue(true);
+    const error = {response: {status: 500, data: {}, headers: {}}, config: {method: 'post', headers: {}}};
+    await expect(mocks.errorHandlers[0](error)).rejects.toMatchObject({status: 500});
+    expect(mocks.instance.request).not.toHaveBeenCalled();
+  });
+
+  test('does not retry the failed endpoint when the health probe says the server is down', async () => {
+    mocks.healthCheck.mockResolvedValue(false);
+    mocks.isAxiosError.mockReturnValue(true);
+    const error = {message: 'Network Error', request: {}, config: {method: 'get', headers: {}}};
+    await expect(mocks.errorHandlers[0](error)).rejects.toMatchObject({message: 'Network Error'});
+    expect(mocks.healthCheck).toHaveBeenCalledOnce();
+    expect(mocks.instance.request).not.toHaveBeenCalled();
+  });
+
+  test('retries an idempotent mutation but stops at the shared cap', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const config = {method: 'post', headers: {'Idempotency-Key': 'key-1'}};
+    mocks.instance.request.mockResolvedValue({data: 'ok'});
+    await expect(mocks.errorHandlers[0]({response: {status: 500, headers: {}}, config})).resolves.toEqual({data: 'ok'});
+    expect(config).toMatchObject({_networkRetryCount: 1});
+
+    mocks.isAxiosError.mockReturnValue(true);
+    const exhausted = {response: {status: 500, data: {}, headers: {}}, config: {...config, _networkRetryCount: 2}};
+    await expect(mocks.errorHandlers[0](exhausted)).rejects.toMatchObject({status: 500});
+  });
+
   test('falls back through title, axios message and a generic label, ignoring a bad Retry-After', () => {
     mocks.isAxiosError.mockReturnValue(true);
     expect(normalizeApiError({response: {status: 500, data: {title: 'Server error'}, headers: {}}}))
@@ -180,6 +236,7 @@ describe('API client session and interceptors', () => {
     const error = {response: {status: 401}, config: {headers: {}}};
     mocks.refresh.mockResolvedValue(null);
     await expect(mocks.errorHandlers[0](error)).rejects.toMatchObject({name: 'ApiError', original: error});
+    expect(mocks.endSession).toHaveBeenCalledWith('/');
     expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({name: 'ApiError', original: error}));
     
     const alreadyRetried = {response: {status: 401}, config: {_retried: true}};
@@ -191,7 +248,7 @@ describe('API client session and interceptors', () => {
   });
   
   test('honors silentError even for errors without a response', async () => {
-    const silent = {config: {silentError: true}};
+    const silent = {config: {method: 'post', silentError: true}};
     await expect(mocks.errorHandlers[0](silent)).rejects.toMatchObject({name: 'ApiError', original: silent});
     expect(mocks.notify).not.toHaveBeenCalled();
   });

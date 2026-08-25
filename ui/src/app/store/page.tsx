@@ -52,7 +52,7 @@ import {
 // covers chips, reactions and cosmetics.
 function usePurchaseHistory<T>(queryKey: readonly unknown[], fetchPage: (cursor?: string) => Promise<Page<T>>) {
   const query = useInfiniteQuery({
-    queryKey, retry: 1,
+    queryKey,
     queryFn: ({pageParam}) => fetchPage(pageParam),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page: Page<T>) => (page.has_next && page.next_cursor) || undefined,
@@ -93,16 +93,16 @@ export default function Store() {
   const player = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
 
   const skus = useQuery({
-    queryKey: ['wallet', 'skus'], queryFn: listSkus, retry: 1,
+    queryKey: ['wallet', 'skus'], queryFn: listSkus,
   });
   const reactionCatalog = useQuery({
-    queryKey: ['wallet', 'reaction-catalog'], queryFn: listReactionCatalog, retry: 1,
+    queryKey: ['wallet', 'reaction-catalog'], queryFn: listReactionCatalog,
   });
   const deckCatalog = useQuery({
-    queryKey: ['wallet', 'cosmetic-catalog', 'deck'], queryFn: () => listCosmeticCatalog('deck'), retry: 1,
+    queryKey: ['wallet', 'cosmetic-catalog', 'deck'], queryFn: () => listCosmeticCatalog('deck'),
   });
   const feltCatalog = useQuery({
-    queryKey: ['wallet', 'cosmetic-catalog', 'felt'], queryFn: () => listCosmeticCatalog('felt'), retry: 1,
+    queryKey: ['wallet', 'cosmetic-catalog', 'felt'], queryFn: () => listCosmeticCatalog('felt'),
   });
   // Purchase history is cursor-paginated; ownership is not read from it (see
   // ownedCosmeticIDs), so these only feed the activity lists and the

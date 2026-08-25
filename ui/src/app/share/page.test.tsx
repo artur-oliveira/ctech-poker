@@ -35,7 +35,6 @@ describe('shared hand page', () => {
     expect(mocks.options).toMatchObject({
       queryKey: ['hand-share', 'share-token'],
       enabled: true,
-      retry: false,
     });
     expect(screen.getByText(/Carregando mão compartilhada/)).toBeInTheDocument();
   });

@@ -9,7 +9,7 @@ import {useEffect, useState} from "react";
 import {useQuery} from "@tanstack/react-query";
 import {getAccessToken, setAccessToken, setPlayerId, setUsername, subscribeAccessToken} from "@/lib/api/client";
 import {MOCK_PLAYER_ID, USE_MOCK} from "@/lib/mockConfig";
-import {doRefresh} from "@/lib/auth/oauth";
+import {doRefresh, endSession} from "@/lib/auth/oauth";
 import {getMe} from "@/lib/api/player";
 
 /** Access tokens live 15 minutes; refresh well inside that window. */
@@ -18,6 +18,7 @@ export const TOKEN_REFRESH_INTERVAL_MS = 4 * 60 * 1000;
 export type SessionResult = Awaited<ReturnType<typeof doRefresh>>;
 
 let refreshPromise: Promise<SessionResult> | null = null;
+let endingExpiredSession = false;
 const expiredListeners = new Set<() => void>();
 
 function clearSession() {
@@ -27,6 +28,15 @@ function clearSession() {
   expiredListeners.forEach(listener => listener());
 }
 
+/** Ends both the local identity and the IdP SSO session after a credentialed
+ * channel was explicitly rejected and no replacement token could be issued. */
+export function endExpiredSession() {
+  clearSession();
+  if (endingExpiredSession || typeof window === 'undefined') return;
+  endingExpiredSession = true;
+  endSession('/');
+}
+
 export function subscribeSessionExpired(listener: () => void) {
   expiredListeners.add(listener);
   return () => expiredListeners.delete(listener);
@@ -34,11 +44,10 @@ export function subscribeSessionExpired(listener: () => void) {
 
 /**
  * Silent OAuth refresh shared by every caller, so two of them can never race
- * the same refresh token. `clearOnNetworkError` is the only difference between
- * them: the periodic keep-alive treats a thrown request as "device is offline
- * for a moment" and keeps the session, while a server that actively answered
- * `unauthorized` has already told us the credentials are dead. A refresh that
- * resolves with no result means the session is over either way.
+ * the same refresh token. A thrown request/deadline preserves the in-memory
+ * identity for a later keep-alive attempt; a refresh that resolves with no
+ * result clears it. Callers reacting to an explicit `unauthorized` additionally
+ * end the IdP session through endExpiredSession().
  */
 export function getOrRefreshSession(): Promise<SessionResult> {
   if (USE_MOCK) return Promise.resolve(null);
@@ -74,7 +83,11 @@ export function refreshSession() {
  * trips in ten minutes off a token that had expired.
  */
 export function recoverSession() {
-  refreshSession();
+  void getOrRefreshSession()
+    .then(result => {
+      if (!result) endExpiredSession();
+    })
+    .catch(() => endExpiredSession());
 }
 
 /**

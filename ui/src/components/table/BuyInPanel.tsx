@@ -55,8 +55,7 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
   const [error, setError] = useState('');
   const {data: room, isLoading, error: roomError, isError, refetch} = useQuery({
     queryKey: ['room', roomId],
-    queryFn: () => getRoom(roomId),
-    retry: (count, err) => !isNotFound(err) && count < 3
+    queryFn: () => getRoom(roomId)
   });
 
   if (isLoading) return (

@@ -1,5 +1,5 @@
 import type {Metadata} from 'next';
-import {SystemState} from '@/components/SystemState';
+import {UnavailableState} from './UnavailableState';
 
 export const metadata: Metadata = {
   title: 'Serviço temporariamente indisponível',
@@ -8,10 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function UnavailablePage() {
-  return <SystemState
-    code="503"
-    title="A mesa volta em breve."
-    description="Estamos realizando uma manutenção para manter as partidas rápidas, estáveis e seguras."
-    detail="Aguarde alguns minutos antes de tentar novamente."
-  />;
+  return <UnavailableState/>;
 }

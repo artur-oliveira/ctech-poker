@@ -12,6 +12,8 @@ import {decodeServerMessage, encodeClientMessage} from "@/lib/ws/utils";
 import type {SocialEventType} from '@/lib/api/social';
 import {SOCIAL_KEYS} from '@/lib/social';
 import {WALLET_QUERY_ROOT} from '@/lib/api/wallet';
+import {checkApiLiveness} from '@/lib/network/liveness';
+import {useApiLiveness} from '@/lib/network/NetworkProvider';
 
 interface LobbyMessage {
   type: string;
@@ -38,6 +40,7 @@ export function useLobbyRealtime() {
   const queryClient = useQueryClient();
   const sendRef = useRef<(value: object) => boolean>(() => false);
   const [socketAuthToken, setSocketAuthToken] = useState(() => getAccessToken());
+  const apiLiveness = useApiLiveness();
   useEffect(() => subscribeAccessToken(setSocketAuthToken), []);
   
   const receive = useCallback((message: LobbyMessage) => {
@@ -75,8 +78,8 @@ export function useLobbyRealtime() {
       // One root invalidation: a purchase moves balance, catalog ownership and
       // history together, and naming a subset is what left the store showing
       // ownership that no longer existed.
-      queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT});
-      queryClient.invalidateQueries({queryKey: ['player', 'me']});
+      void queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT});
+      void queryClient.invalidateQueries({queryKey: ['player', 'me']});
       const statusLabel: Record<string, string> = {
         confirmed: 'Compra confirmada — créditos adicionados!',
         refunded: 'Compra estornada.',
@@ -85,7 +88,7 @@ export function useLobbyRealtime() {
       };
       pushNotification(statusLabel[message.code || ''] || 'Atualização na sua compra de créditos.', 'info');
     } else if (message.type === 'reaction_purchase_update') {
-      queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT});
+      void queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT});
       const statusLabel: Record<string, string> = {
         confirmed: 'Reação premium liberada!',
         refunded: 'Compra da reação estornada.',
@@ -137,7 +140,7 @@ export function useLobbyRealtime() {
     onMessage: data => receive(data as LobbyMessage),
     // No token means no session to authenticate with: connecting anyway only
     // produces the same unauthorized/close loop against the server.
-    enabled: !USE_MOCK && Boolean(socketAuthToken),
+    enabled: !USE_MOCK && Boolean(socketAuthToken) && apiLiveness.status === 'available',
     authToken: socketAuthToken || undefined,
     onOpen: handleOpen
   });
@@ -145,6 +148,12 @@ export function useLobbyRealtime() {
   useEffect(() => {
     sendRef.current = send;
   }, [send]);
+
+  useEffect(() => {
+    if (!USE_MOCK && socketAuthToken && (status === 'error' || status === 'disconnected')) {
+      void checkApiLiveness();
+    }
+  }, [socketAuthToken, status]);
   
   return {status, reconnect};
 }

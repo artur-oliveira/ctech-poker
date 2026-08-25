@@ -5,6 +5,8 @@ import {wsOrigin} from '@/lib/ws/origin';
 import {recoverSession} from '@/lib/auth/session';
 import {cardLabel} from '@/lib/cards';
 import {MAX_RECONNECT_ATTEMPTS, useWebSocket, type WSStatus} from '@aoctech/ws-client';
+import {checkApiLiveness} from '@/lib/network/liveness';
+import {useApiLiveness} from '@/lib/network/NetworkProvider';
 import type {MockTableService} from '@/dev/mockRuntime';
 import {type MockScenario, USE_MOCK} from '@/lib/mockConfig';
 import type {ActionPreselection, PokerAction, ServerMessage, TableSnapshot} from '@/lib/api/table';
@@ -164,6 +166,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   delay?: number
 }, suppressedPlayerIds?: ReadonlySet<string>) {
   const [socketAuthToken, setSocketAuthToken] = useState(() => getAccessToken());
+  const apiLiveness = useApiLiveness();
   useEffect(() => subscribeAccessToken(setSocketAuthToken), []);
   // Read through a ref: receive() must see the current suppression set without
   // being rebuilt (and re-subscribing the socket) every time it changes.
@@ -638,11 +641,17 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     // Without a token the server answers unauthorized and closes right after
     // the upgrade, which resets ws-client's backoff — an endless loop rather
     // than a bounded retry. Wait for a session instead.
-    enabled: Boolean(wsUrl) && !USE_MOCK && Boolean(socketAuthToken) && !terminalError,
+    enabled: Boolean(wsUrl) && !USE_MOCK && Boolean(socketAuthToken) &&
+      apiLiveness.status === 'available' && !terminalError,
     authToken: socketAuthToken || undefined,
     shareCode,
     onOpen: handleOpen
   });
+  useEffect(() => {
+    if (!USE_MOCK && socketAuthToken && (wsStatus === 'error' || wsStatus === 'disconnected')) {
+      void checkApiLiveness();
+    }
+  }, [socketAuthToken, wsStatus]);
   const mockScenario = mockOptions?.scenario || 'flop';
   const mockDelay = Math.min(15000, Math.max(0, mockOptions?.delay ?? 650));
   useEffect(() => {
@@ -694,7 +703,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const send = useCallback((value: object) => USE_MOCK ? Boolean(mockService.current?.send(value as Record<string, unknown>)) : wsSend(value), [wsSend]);
   const retryNow = useCallback(() => USE_MOCK ? mockService.current?.reconnect() : wsRetryNow(), [wsRetryNow]);
   const reconnectAttempt = USE_MOCK ? mockReconnectAttempt : wsReconnectAttempt;
-  const rawStatus = USE_MOCK ? mockStatus : wsStatus;
+  const rawStatus = USE_MOCK ? mockStatus : apiLiveness.status === 'unavailable' ? 'disconnected' : wsStatus;
   // @aoctech/ws-client reports 'error'/'disconnected' the instant a socket
   // drops, then only flips to 'reconnecting' once its retry timer actually
   // fires — so every drop flashes the red "connection lost" state even

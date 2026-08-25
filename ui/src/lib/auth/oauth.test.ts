@@ -74,6 +74,19 @@ describe('OAuth integration', () => {
     mocks.refresh.mockResolvedValueOnce(null);
     await expect(doRefresh()).resolves.toBeNull();
   });
+
+  test('bounds a token issue attempt to three seconds', async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.refresh.mockReturnValue(new Promise(() => undefined));
+      const refresh = doRefresh();
+      const rejection = expect(refresh).rejects.toThrow('Token request timed out after 3000ms');
+      await vi.advanceTimersByTimeAsync(3_000);
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   
   test('revokes before redirecting logout and supports its safe default', async () => {
     const order: string[] = [];

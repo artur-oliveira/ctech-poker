@@ -15,7 +15,7 @@ import {PokerLogo} from '@/components/PokerLogo';
 function SharedHandContent() {
   const token = useSearchParams().get('id') || '';
   const share = useQuery({
-    queryKey: ['hand-share', token], queryFn: () => getHandShare(token), enabled: Boolean(token), retry: false
+    queryKey: ['hand-share', token], queryFn: () => getHandShare(token), enabled: Boolean(token)
   });
   
   if (!token || share.isError) return <section className="public-hand unavailable">

@@ -49,6 +49,10 @@ vi.mock('@/lib/api/client', () => ({
 
 vi.mock('@/lib/auth/oauth', () => ({doRefresh: auth.refresh}));
 vi.mock('@/lib/sound', () => ({playSound: vi.fn()}));
+vi.mock('@/lib/network/NetworkProvider', () => ({
+  useApiLiveness: () => ({status: 'available', reason: null, checkedAt: 1}),
+}));
+vi.mock('@/lib/network/liveness', () => ({checkApiLiveness: vi.fn()}));
 
 const VIEWER = 'player-1';
 

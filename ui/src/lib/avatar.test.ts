@@ -109,6 +109,23 @@ describe('avatar upload', () => {
     expect(post).toHaveBeenCalledOnce();
   });
 
+  test('aborts an object-store upload after three seconds', async () => {
+    vi.useFakeTimers();
+    try {
+      post.mockResolvedValueOnce({data: {url: 'https://bucket.invalid', fields: {}, version: 2}});
+      vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) => new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+      })));
+      const upload = uploadAvatarJPEG(new Blob(['jpeg']));
+      const rejection = expect(upload).rejects.toMatchObject({name: 'AbortError'});
+      await vi.advanceTimersByTimeAsync(3_000);
+      await rejection;
+      expect(post).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test('processes an original file through upload and deletes an avatar', async () => {
     const close = vi.fn();
     const jpeg = new Blob(['jpeg'], {type: 'image/jpeg'});

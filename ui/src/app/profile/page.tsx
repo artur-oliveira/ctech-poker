@@ -25,14 +25,12 @@ function ProfileContent() {
   const showcase = useQuery({
     queryKey: ['profile-showcase', playerID],
     queryFn: () => getProfileShowcase(playerID),
-    enabled: Boolean(playerID),
-    retry: false
+    enabled: Boolean(playerID)
   });
   const matchup = useQuery({
     queryKey: ['profile-matchup', playerID],
     queryFn: () => getMatchupStats(playerID),
-    enabled: authed && Boolean(playerID),
-    retry: false
+    enabled: authed && Boolean(playerID)
   });
   const socialActions = useSocialActions();
   // Fails (400) for the viewer's own profile, which is exactly when no safety
@@ -40,8 +38,7 @@ function ProfileContent() {
   const relationship = useQuery({
     queryKey: SOCIAL_KEYS.relationship(playerID),
     queryFn: () => getRelationship(playerID),
-    enabled: authed && Boolean(playerID),
-    retry: false
+    enabled: authed && Boolean(playerID)
   });
   
   return <AppPage authed={authed} footer={false}>

@@ -1,5 +1,6 @@
 import {apiClient} from './api/client';
 import type {PlayerProfile} from './api/player';
+import {HTTP_TIMEOUT_MS} from './network/liveness';
 
 const AVATAR_SIZE = 192;
 
@@ -43,7 +44,10 @@ export async function uploadAvatarJPEG(jpeg: Blob): Promise<PlayerProfile> {
   const form = new FormData();
   Object.entries(presign.fields).forEach(([key, value]) => form.append(key, value));
   form.append('file', jpeg, 'avatar.jpg');
-  const response = await fetch(presign.url, {method: 'POST', body: form});
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
+  const response = await fetch(presign.url, {method: 'POST', body: form, signal: controller.signal})
+    .finally(() => clearTimeout(timeout));
   if (!response.ok) throw new Error(`S3 upload failed: ${response.status}`);
   return (await apiClient.post<PlayerProfile>('/v1.0/players/me/avatar/confirm',
     {version: presign.version}, {silentError: false})).data;

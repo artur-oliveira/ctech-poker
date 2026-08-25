@@ -9,6 +9,15 @@ const client = new OAuthClient({
 });
 export const decodeIdToken = sdkDecodeIdToken;
 
+const TOKEN_REQUEST_TIMEOUT_MS = 3_000;
+
+function withTokenDeadline<T>(request: Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('Token request timed out after 3000ms')), TOKEN_REQUEST_TIMEOUT_MS);
+    request.then(resolve, reject).finally(() => clearTimeout(timeout));
+  });
+}
+
 export async function startOAuthFlow(returnTo = '/lobby') {
   await client.startOAuthFlow(returnTo);
 }
@@ -18,7 +27,7 @@ function usernameFrom(idToken?: string | null) {
 }
 
 export async function exchangeCode(code: string, state: string) {
-  const r = await client.exchangeCode(code, state);
+  const r = await withTokenDeadline(client.exchangeCode(code, state));
   return {
     accessToken: r.accessToken,
     username: usernameFrom(r.idToken),
@@ -27,13 +36,17 @@ export async function exchangeCode(code: string, state: string) {
 }
 
 export async function doRefresh() {
-  const r = await client.refresh();
+  const r = await withTokenDeadline(client.refresh());
   return r ? {accessToken: r.accessToken, username: usernameFrom(r.idToken)} : null;
+}
+
+export function endSession(returnTo = '/') {
+  client.endSessionRedirect(returnTo);
 }
 
 // Logout sequence per @aoctech/auth-client's README: revoke the refresh
 // token, then redirect through the IdP's RP-initiated end-session endpoint.
 export async function logout(returnTo = '/') {
-  await client.revoke();
-  client.endSessionRedirect(returnTo);
+  await withTokenDeadline(client.revoke()).catch(() => undefined);
+  endSession(returnTo);
 }

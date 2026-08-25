@@ -13,7 +13,7 @@ function deadlineFromSeconds(seconds: number): number | null {
 
 export function DailyRewardPanel() {
   const queryClient = useQueryClient();
-  const cooldown = useQuery({queryKey: ['dailyReward', 'cooldown'], queryFn: getCooldown, retry: 1});
+  const cooldown = useQuery({queryKey: ['dailyReward', 'cooldown'], queryFn: getCooldown});
   const [deadline, setDeadline] = useState<number | null>(null);
   // Tracks which server-reported cooldown the local deadline was last derived
   // from, so a fresh GET result resets the countdown exactly once (during

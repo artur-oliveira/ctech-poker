@@ -66,7 +66,6 @@ describe('public player profile page', () => {
     expect(mocks.queryOptions).toMatchObject({
       queryKey: ['profile-showcase', 'player-42'],
       enabled: true,
-      retry: false,
     });
     expect(screen.getByRole('heading', {name: 'Ás da Mesa'})).toBeInTheDocument();
     expect(screen.getByText('1.234 registradas')).toBeInTheDocument();

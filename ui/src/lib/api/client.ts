@@ -2,11 +2,17 @@ import axios from 'axios';
 import {getOrRefreshSession} from '@/lib/auth/session';
 import {USE_MOCK} from '@/lib/mockConfig';
 import {notifyApiError} from '@/lib/notify';
+import {
+  checkApiLiveness,
+  HTTP_TIMEOUT_MS,
+  requireApiLiveness,
+} from '@/lib/network/liveness';
 
 declare module 'axios' {
   export interface AxiosRequestConfig {
     silentError?: boolean
     _retried?: boolean
+    _networkRetryCount?: number
   }
 }
 
@@ -132,18 +138,53 @@ export function normalizeApiError(error: unknown): ApiError {
 
 export function redirectOnServiceUnavailable(status?: number) {
   if (status !== 503 || typeof window === 'undefined' || window.location.pathname === '/unavailable') return false;
+  try {
+    window.sessionStorage.setItem('poker:return-after-outage', `${window.location.pathname}${window.location.search || ''}`);
+  } catch {
+    // Storage can be unavailable in privacy modes; /lobby remains the safe fallback.
+  }
   window.location.replace('/unavailable');
   return true;
 }
 
+const MAX_HTTP_RETRIES = 2;
+const RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const SAFE_HTTP_METHODS = new Set(['get', 'head', 'options']);
+
+export function httpRetryDelay(attempt: number, retryAfter?: string, random = Math.random) {
+  const retryAfterMs = retryAfter == null ? Number.NaN : Number(retryAfter) * 1000;
+  if (Number.isFinite(retryAfterMs)) return Math.max(0, retryAfterMs) + Math.floor(random() * 250);
+  const ceiling = Math.min(3_000, 250 * 2 ** Math.max(0, attempt - 1));
+  return Math.floor(random() * ceiling);
+}
+
+function retryableConfig(config?: {method?: string; headers?: Record<string, unknown>; _networkRetryCount?: number}) {
+  if (!config || (config._networkRetryCount || 0) >= MAX_HTTP_RETRIES) return false;
+  const method = (config.method || 'get').toLowerCase();
+  return SAFE_HTTP_METHODS.has(method) || Boolean(config.headers?.['Idempotency-Key'] || config.headers?.['idempotency-key']);
+}
+
+function retryableFailure(error: {response?: {status?: number}; config?: Parameters<typeof retryableConfig>[0]}) {
+  if (!retryableConfig(error.config)) return false;
+  const status = error.response?.status;
+  return status === undefined || RETRYABLE_HTTP_STATUSES.has(status);
+}
+
+function wait(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || '',
-  timeout: 10_000,
+  timeout: HTTP_TIMEOUT_MS,
   adapter: USE_MOCK
     ? async config => (await import('@/dev/mockRuntime')).mockAdapter(config)
     : undefined
 });
 apiClient.interceptors.request.use(async c => {
+  // The public, dependency-free health probe owns recovery while the API is
+  // down. Do not let every mounted query become its own availability probe.
+  if (!USE_MOCK) await requireApiLiveness();
   // On first load, other data requests can fire before the silent session
   // refresh resolves (visible in the HAR as unauthenticated calls racing the
   // token exchange). Gate once on the outcome of that check instead of
@@ -156,18 +197,35 @@ apiClient.interceptors.request.use(async c => {
   return c;
 });
 apiClient.interceptors.response.use(r => r, async e => {
-  if (e.response?.status === 401 && !e.config._retried) {
+  if (e?.response?.status === 401 && !e.config?._retried) {
     e.config._retried = true;
-    const r = await getOrRefreshSession();
+    const r = await getOrRefreshSession().catch(() => null);
     if (r) {
       setAccessToken(r.accessToken);
       setUsername(r.username);
       e.config.headers.Authorization = `Bearer ${r.accessToken}`;
       return apiClient.request(e.config);
     }
+    // A server-confirmed 401 plus a failed token issue is terminal. Merely
+    // clearing the in-memory token leaves the IdP cookie alive and can trap
+    // the app in a refresh/401 loop, so end the complete SSO session.
+    const {endExpiredSession} = await import('@/lib/auth/session');
+    endExpiredSession();
   }
-  redirectOnServiceUnavailable(e.response?.status);
+  // Network errors and 3 s timeouts are ambiguous in browsers. Verify them
+  // against the liveness endpoint before TanStack decides whether a read is
+  // safe to retry. A CORS-shaped health failure marks the API unavailable.
+  let livenessAllowsRetry = e?.name !== 'ApiUnavailableError';
+  if (!USE_MOCK && !e?.response && livenessAllowsRetry) livenessAllowsRetry = await checkApiLiveness();
+  if (livenessAllowsRetry && retryableFailure(e)) {
+    const retryCount = (e.config._networkRetryCount || 0) + 1;
+    e.config._networkRetryCount = retryCount;
+    const retryAfter = e.response?.headers?.['retry-after'];
+    await wait(httpRetryDelay(retryCount, retryAfter));
+    return apiClient.request(e.config);
+  }
+  redirectOnServiceUnavailable(e?.response?.status);
   const normalized = normalizeApiError(e);
-  if (!e.config?.silentError) notifyApiError(normalized);
+  if (e?.name !== 'ApiUnavailableError' && !e?.config?.silentError) notifyApiError(normalized);
   return Promise.reject(normalized);
 });

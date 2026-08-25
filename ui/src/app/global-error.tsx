@@ -1,15 +1,27 @@
 'use client';
 
+import {useEffect} from 'react';
 import {SystemState} from '@/components/SystemState';
 
-export default function GlobalError({reset}: { error: Error & { digest?: string }; reset: () => void }) {
+/** Last-resort boundary for failures in the root layout/provider tree. Route
+ * boundaries keep handling ordinary screen errors closer to their source. */
+export default function GlobalError({error, reset}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  useEffect(() => {
+    console.error(error);
+  }, [error]);
+
   return <html lang="pt-BR">
-  <body><SystemState
+  <body>
+  <SystemState
     code="500"
-    title="O CTech Poker encontrou um erro."
-    description="A aplicação não conseguiu continuar com segurança."
-    detail="Atualize a experiência. Se o problema persistir, volte em alguns instantes."
+    title="O aplicativo encontrou um problema."
+    description="A tela foi interrompida de forma segura. Nenhuma jogada deve ser repetida sem a confirmação da mesa."
+    detail={error.digest ? `Referência do erro: ${error.digest}` : 'Tente iniciar o aplicativo novamente.'}
     onRetryAction={reset}
-  /></body>
+  />
+  </body>
   </html>;
 }

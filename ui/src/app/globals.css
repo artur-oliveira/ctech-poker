@@ -197,6 +197,74 @@ body {
     text-rendering: optimizeLegibility
 }
 
+.network-status {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    left: 50%;
+    z-index: var(--z-api);
+    width: min(680px, calc(100vw - 24px));
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: var(--rounded-control);
+    color: var(--paper);
+    background: var(--surface-error);
+    box-shadow: 0 4px 8px var(--black-0b);
+    transform: translateX(-50%);
+}
+
+.network-status > svg {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    color: var(--danger-soft)
+}
+
+.network-status > div {
+    min-width: 0;
+    flex: 1;
+    display: grid;
+    gap: 2px
+}
+
+.network-status strong,
+.network-status span {
+    overflow-wrap: anywhere
+}
+
+.network-status strong {
+    font-size: var(--font-size-body)
+}
+
+.network-status span {
+    color: var(--text-secondary);
+    font-size: var(--font-size-mono);
+    line-height: 1.4
+}
+
+.network-status button {
+    flex: 0 0 auto;
+    color: var(--paper)
+}
+
+@media (max-width: 600px) {
+    .network-status {
+        align-items: flex-start;
+        flex-wrap: wrap
+    }
+
+    .network-status > div {
+        width: calc(100% - 34px);
+        flex: 0 0 calc(100% - 34px)
+    }
+
+    .network-status button {
+        width: 100%
+    }
+}
+
 ::selection {
     color: var(--paper);
     background: var(--brand)

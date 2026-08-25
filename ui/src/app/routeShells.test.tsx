@@ -15,6 +15,7 @@ import ProfileLayout, {metadata as profileMetadata} from './profile/layout';
 import ShareLayout, {metadata as shareMetadata} from './share/layout';
 import TableLayout, {metadata as tableMetadata} from './table/layout';
 import ErrorPage from './error';
+import GlobalError from './global-error';
 import NotFoundPage from './not-found';
 import UnavailablePage, {metadata as unavailableMetadata} from './unavailable/page';
 import {OG_PREVIEWS} from '@/lib/ogPreviews';
@@ -90,10 +91,19 @@ describe('system state routes', () => {
     expect(screen.getByText('Tente carregar esta tela novamente.')).toBeInTheDocument();
   });
 
-  test('the maintenance page has no retry and stays out of the index', () => {
+  test('the root boundary still offers recovery when the provider tree crashes', async () => {
+    const reset = vi.fn();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<GlobalError error={Object.assign(new Error('root boom'), {digest: 'root123'})} reset={reset}/>);
+    expect(screen.getByText('Referência do erro: root123')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: /Tentar novamente/}));
+    expect(reset).toHaveBeenCalledOnce();
+  });
+
+  test('the maintenance page offers a health-checked retry and stays out of the index', () => {
     render(<UnavailablePage/>);
     expect(screen.getByText('503')).toBeInTheDocument();
-    expect(screen.queryByRole('button', {name: /Tentar novamente/})).not.toBeInTheDocument();
+    expect(screen.getByRole('button', {name: /Tentar novamente/})).toBeInTheDocument();
     expect(screen.getByRole('button', {name: /Ir para o início/})).toHaveAttribute('href', '/');
     expect(unavailableMetadata.robots).toEqual({index: false, follow: false});
   });

@@ -8,7 +8,6 @@ import {ChevronLeft, ClockAlert, MessageCircle, Pause, Play, RotateCw, SmilePlus
 import {getViewerId} from '@/lib/utils';
 import {useTableRealtime} from '@/lib/hooks/useTableRealtime';
 import {getRoom, getSeated} from '@/lib/api/rooms';
-import {isNotFound} from '@/lib/api/client';
 import {BuyInPanel} from '@/components/table/BuyInPanel';
 import {STAGE_LABELS, TableStage} from '@/components/table/TableStage';
 import type {ActionAvailability} from '@/components/table/ActionBar';
@@ -169,8 +168,7 @@ function TableContent() {
   const [tableOpenedAt] = useState(() => Math.floor(Date.now() / 1000));
   const {preferences} = useTablePreferences();
   const {data: room} = useQuery({
-    queryKey: ['room', id], queryFn: () => getRoom(id), enabled: valid,
-    retry: (count, err) => !isNotFound(err) && count < 3
+    queryKey: ['room', id], queryFn: () => getRoom(id), enabled: valid
   });
   const queryClient = useQueryClient();
   // Buy-in is an explicit ceremony: nothing is debited until the player
@@ -180,8 +178,7 @@ function TableContent() {
   // different device without repeating the ceremony for a seat they
   // already have.
   const {data: seatedStatus, isLoading: seatedLoading} = useQuery({
-    queryKey: ['seated', id], queryFn: () => getSeated(id), enabled: valid,
-    retry: (count, err) => !isNotFound(err) && count < 3
+    queryKey: ['seated', id], queryFn: () => getSeated(id), enabled: valid
   });
   const seated = seatedStatus?.seated ?? false;
   // Last-winners strip: sourced from the player's own hand-history endpoint
