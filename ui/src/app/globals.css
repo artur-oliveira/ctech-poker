@@ -3437,6 +3437,54 @@ h1 em {
     place-items: center
 }
 
+/* One authored transition links the betting street to the felt. The keyed
+   node is recreated only when the server-authored hand/stage changes, so the
+   light sweep reports real progress instead of looping as decoration. */
+.table-street-wash {
+    --street-signal: var(--felt-text);
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    overflow: hidden;
+    border-radius: inherit;
+    pointer-events: none
+}
+
+.table-street-wash::before {
+    position: absolute;
+    inset: -22%;
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in srgb, var(--street-signal) 26%, transparent), transparent 58%);
+    content: "";
+    opacity: 0;
+    animation: table-street-arrival 900ms var(--ease-out-expo) both
+}
+
+.game-table[data-stage='complete'] .table-street-wash {
+    --street-signal: var(--gold)
+}
+
+.board {
+    position: relative;
+    z-index: 1
+}
+
+@keyframes table-street-arrival {
+    0% {
+        opacity: 0;
+        transform: scale(.35);
+        filter: blur(18px)
+    }
+    28% {
+        opacity: .92
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1);
+        filter: blur(0)
+    }
+}
+
 /* Live table events appear where the player's eyes already are. The dealer
    puck makes this read as a table call, while the one-shot fade keeps repeated
    betting from turning the felt into a notification feed. */
@@ -3659,6 +3707,37 @@ h1 em {
     display: grid;
     justify-items: center;
     gap: 8px
+}
+
+.board-runouts-heading {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--felt-text);
+    text-align: left
+}
+
+.board-runouts-heading > svg {
+    width: 18px;
+    height: 18px;
+    padding: 3px;
+    border-radius: 50%;
+    background: var(--gold);
+    color: var(--gold-ink)
+}
+
+.board-runouts-heading > span {
+    display: grid;
+    gap: 1px
+}
+
+.board-runouts-heading b {
+    font: 700 10px var(--font-sans)
+}
+
+.board-runouts-heading small {
+    color: var(--felt-text-muted);
+    font: 600 var(--font-size-tiny) var(--font-mono)
 }
 
 .board-common {
@@ -4648,6 +4727,17 @@ h1 em {
     pointer-events: none
 }
 
+.hand-outcome::before {
+    position: absolute;
+    inset: 5%;
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in srgb, var(--gold) 16%, transparent), transparent 65%);
+    content: "";
+    opacity: 0;
+    pointer-events: none;
+    animation: outcome-spotlight 900ms var(--ease-out-expo) both
+}
+
 /* .hand-outcome deliberately beats the asides' resting --z-chrome so a fresh
    win/loss reads as the loudest thing on the table. But once a player
    actually opens chat/reactions/winners, that panel needs to win the fight
@@ -4669,10 +4759,13 @@ h1 em {
     justify-items: center;
     width: max-content;
     max-width: min(340px, calc(100vw - 32px));
+    max-height: min(78dvh, 560px);
     padding: 18px 22px;
     border-radius: var(--rounded-panel);
     background: var(--toast-bg);
     color: var(--toast-ink);
+    overflow-y: auto;
+    overscroll-behavior: contain;
     text-align: center;
     box-shadow: 0 15px 50px var(--black-08);
     animation: hand-outcome-in 320ms var(--ease-out-quint) both
@@ -4841,6 +4934,141 @@ h1 em {
     color: var(--felt-text);
     font-size: var(--font-size-mono);
     line-height: 1.35
+}
+
+.hand-outcome-settlement {
+    display: grid;
+    gap: 7px;
+    width: 100%;
+    padding-top: 2px
+}
+
+.hand-outcome-settlement > header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px
+}
+
+.hand-outcome-settlement > header svg {
+    width: 18px;
+    height: 18px;
+    color: var(--gold)
+}
+
+.hand-outcome-card.win .hand-outcome-settlement > header svg {
+    color: var(--gold-ink)
+}
+
+.hand-outcome-settlement > header span {
+    display: grid;
+    gap: 1px;
+    text-align: left
+}
+
+.hand-outcome-settlement > header b {
+    font-size: var(--font-size-compact)
+}
+
+.hand-outcome-settlement > header small {
+    color: var(--text-secondary);
+    font-size: var(--font-size-tiny)
+}
+
+.hand-outcome-card.win .hand-outcome-settlement > header small {
+    color: color-mix(in srgb, var(--toast-ink) 72%, transparent)
+}
+
+.hand-outcome-settlement ul {
+    display: grid;
+    gap: 4px;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    list-style: none
+}
+
+.hand-outcome-settlement li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2px 10px;
+    min-height: 44px;
+    padding: 6px 9px;
+    border: 1px solid var(--white-13);
+    border-radius: var(--rounded-control);
+    background: var(--white-08);
+    text-align: left
+}
+
+.hand-outcome-card.win .hand-outcome-settlement li {
+    border-color: color-mix(in srgb, var(--toast-ink) 16%, transparent);
+    background: color-mix(in srgb, var(--toast-ink) 5%, transparent)
+}
+
+.hand-outcome-settlement li > span:first-child {
+    display: grid;
+    min-width: 0
+}
+
+.hand-outcome-settlement li b,
+.hand-outcome-settlement li small,
+.hand-outcome-settlement li strong,
+.hand-outcome-pot-amount {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums
+}
+
+.hand-outcome-settlement li b {
+    overflow: hidden;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+
+.hand-outcome-settlement li small {
+    color: var(--text-secondary);
+    font-size: var(--font-size-tiny)
+}
+
+.hand-outcome-card.win .hand-outcome-settlement li small {
+    color: color-mix(in srgb, var(--toast-ink) 72%, transparent)
+}
+
+.hand-outcome-pot-amount {
+    color: var(--text-secondary);
+    font-size: 10px
+}
+
+.hand-outcome-card.win .hand-outcome-pot-amount {
+    color: color-mix(in srgb, var(--toast-ink) 72%, transparent)
+}
+
+.hand-outcome-settlement li strong {
+    grid-column: 1 / -1;
+    color: var(--paper);
+    font-size: 10px
+}
+
+.hand-outcome-card.win .hand-outcome-settlement li strong {
+    color: var(--toast-ink)
+}
+
+.hand-outcome-settlement li.viewer-won {
+    border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+    background: color-mix(in srgb, var(--gold) 14%, transparent)
+}
+
+.hand-outcome-settlement li.viewer-won strong {
+    color: var(--gold)
+}
+
+.hand-outcome-card.win .hand-outcome-settlement li.viewer-won strong {
+    color: var(--gold-ink)
+}
+
+.hand-outcome-settlement li.viewer-out {
+    opacity: .76
 }
 
 .hand-outcome-chips-base, .hand-outcome-chips-delta, .hand-outcome-chips-total {
@@ -5113,8 +5341,20 @@ h1 em {
 @keyframes hand-outcome-in {
     from {
         opacity: 0;
-        transform: translateY(10px) scale(.9)
+        transform: translateY(10px) scale(.9);
+        clip-path: inset(22% 8% round var(--rounded-panel));
+        filter: blur(10px)
     }
+    to {
+        clip-path: inset(0 round var(--rounded-panel));
+        filter: blur(0)
+    }
+}
+
+@keyframes outcome-spotlight {
+    0% { opacity: 0; transform: scale(.55) }
+    35% { opacity: 1 }
+    100% { opacity: .38; transform: scale(1) }
 }
 
 @keyframes chip-phase-in {
@@ -5500,6 +5740,47 @@ h1 em {
 .bet-control output .bet-clamped-note {
     color: var(--danger-soft);
     opacity: 1
+}
+
+.bet-commitment-meter {
+    display: block;
+    width: min(46px, 76%);
+    height: 2px;
+    overflow: hidden;
+    border-radius: var(--rounded-pill);
+    background: var(--white-18)
+}
+
+.bet-commitment-meter i {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--brand-bright);
+    transform: scaleX(var(--bet-progress));
+    transform-origin: left;
+    transition: transform 180ms var(--ease-out-quart), background-color 180ms var(--ease-out-quart)
+}
+
+.bet-output.is-all-in .bet-commitment-meter i {
+    background: var(--gold)
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .table-street-wash::before,
+    .hand-outcome::before,
+    .hand-outcome-card {
+        animation: none
+    }
+
+    .table-street-wash::before,
+    .hand-outcome::before {
+        opacity: 0
+    }
+
+    .bet-commitment-meter i {
+        transition: none
+    }
 }
 
 .bet-presets {

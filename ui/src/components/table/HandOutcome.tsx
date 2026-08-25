@@ -1,6 +1,6 @@
 'use client';
 import {useEffect, useState} from 'react';
-import {Equal, Flag, PartyPopper, Swords, X} from 'lucide-react';
+import {Equal, Flag, Layers3, PartyPopper, Repeat2, Swords, X} from 'lucide-react';
 import {HAND_CATEGORY_LABELS} from '@/lib/utils';
 import {bestHandCategory, HAND_MATCH_SIZE, wasDecidedByKicker} from '@/lib/pokerRules';
 import {PlayingCard} from '@/components/table/PlayingCard';
@@ -54,6 +54,21 @@ export type HandOutcomeState = {
   // of only the viewer's own combination. `cards` is undefined whenever that
   // player's hole cards weren't revealed.
   tiedWith?: { name?: string; cards?: string[] }[];
+  runItTwice?: boolean;
+  // Complete, server-authored settlement of every pot layer. This is wider
+  // than `pots` above: a viewer may win the main pot while being ineligible
+  // for a side pot, and still needs to understand where the rest went.
+  resolvedPots?: {
+    amount: number;
+    payoutAmount: number;
+    viewerPayout?: number;
+    winnerNames: string[];
+    wonByViewer: boolean;
+    viewerEligible: boolean;
+    split: boolean;
+    refund: boolean;
+    runout?: number;
+  }[];
 };
 
 const EXIT_MS = 320;
@@ -118,6 +133,37 @@ function OutcomeCards({cards, viewerHoleCards, startIndex = 0, kickerFrom}: {
       </span>;
     })}
   </span>;
+}
+
+function OutcomeSettlement({pots = [], runItTwice = false}: {
+  pots?: HandOutcomeState['resolvedPots'];
+  runItTwice?: boolean;
+}) {
+  if (!runItTwice && pots.length < 2) return null;
+  return <section className="hand-outcome-settlement" aria-label="Distribuição dos potes">
+    <header>
+      {runItTwice ? <Repeat2 aria-hidden="true"/> : <Layers3 aria-hidden="true"/>}
+      <span><b>{runItTwice ? 'Rodado duas vezes' : 'Acerto dos potes'}</b>
+        <small>{runItTwice ? 'Dois boards, resultados confirmados' : `${pots.length} potes resolvidos`}</small></span>
+    </header>
+    {pots.length > 0 && <ul>
+      {pots.map((pot, index) => {
+        const label = index === 0 ? 'Pote principal' : `Pote lateral ${index}`;
+        const winner = pot.refund ? 'Devolução' : pot.wonByViewer ? 'Você' :
+          pot.winnerNames.length ? pot.winnerNames.join(' e ') : 'Sem vencedor';
+        const payout = pot.split ? `${winner} · ${pot.payoutAmount.toLocaleString('pt-BR')} fichas distribuídas${
+          pot.viewerPayout != null ? ` · sua parte +${pot.viewerPayout.toLocaleString('pt-BR')}` : ''}` :
+          `${winner}${pot.payoutAmount > 0 ? ` +${pot.payoutAmount.toLocaleString('pt-BR')}` : ''}`;
+        return <li key={`${index}-${pot.amount}-${pot.runout ?? 0}`}
+                   className={pot.wonByViewer ? 'viewer-won' : pot.viewerEligible ? 'viewer-lost' : 'viewer-out'}>
+          <span><b>{label}{pot.runout ? ` · Board ${pot.runout}` : ''}</b>
+            {!pot.viewerEligible && !pot.refund && <small>Você não disputou este pote</small>}</span>
+          <span className="hand-outcome-pot-amount">{pot.amount.toLocaleString('pt-BR')}</span>
+          <strong>{pot.split ? 'Dividido · ' : ''}{payout}</strong>
+        </li>;
+      })}
+    </ul>}
+  </section>;
 }
 
 /** Wraps PerimeterTimer with the same "capture elapsed time once, at mount"
@@ -324,8 +370,6 @@ export function HandOutcomeBanner({outcome, holdOpen, nextHandDeadlineMs, nextHa
                           viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>
           {wonByKicker && <p className="hand-outcome-kicker-note">Mesma combinação, o kicker decidiu.</p>}
           {amountDetails && <p className="hand-outcome-tie-note">{amountDetails}</p>}
-          {chipChange}
-            <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
         </>}
 
         {shown.kind === 'lose' && <>
@@ -356,8 +400,6 @@ export function HandOutcomeBanner({outcome, holdOpen, nextHandDeadlineMs, nextHa
           {decidedByKicker && <p className="hand-outcome-kicker-note">Mesma combinação, o kicker decidiu.</p>}
           {higherCombination && <p className="hand-outcome-kicker-note">A combinação mais alta venceu.</p>}
           {amountDetails && <p className="hand-outcome-tie-note">{amountDetails}</p>}
-          {chipChange}
-            <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
         </>}
         
         {shown.kind === 'tie' && <>
@@ -385,8 +427,6 @@ export function HandOutcomeBanner({outcome, holdOpen, nextHandDeadlineMs, nextHa
             <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards || shown.winningHoleCards}/>}
             <p className="hand-outcome-tie-note">Mesma combinação. Os naipes não desempatam.</p>
           {amountDetails && <p className="hand-outcome-tie-note">{amountDetails}</p>}
-          {chipChange}
-            <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
         </>}
         
         {shown.kind === 'mixed' && <>
@@ -420,8 +460,6 @@ export function HandOutcomeBanner({outcome, holdOpen, nextHandDeadlineMs, nextHa
               })}
             </div>
           {amountDetails && <p className="hand-outcome-tie-note">{amountDetails}</p>}
-          {chipChange}
-            <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
         </>}
         
         {shown.kind === 'fold' && <>
@@ -446,8 +484,10 @@ export function HandOutcomeBanner({outcome, holdOpen, nextHandDeadlineMs, nextHa
                   <OutcomeCards cards={ownCombination} viewerHoleCards={shown.viewerHoleCards} startIndex={5}/>
               </div>
           </div>}
-            <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
         </>}
+        <OutcomeSettlement pots={shown.resolvedPots} runItTwice={shown.runItTwice}/>
+        {shown.kind !== 'fold' && chipChange}
+        <small className="hand-outcome-next">A próxima mão já está a caminho.</small>
       </div>
       )}
     </div>

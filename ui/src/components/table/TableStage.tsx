@@ -241,6 +241,7 @@ export function TableStage({
                        splitAt={snapshot.board_split_at} pot={pot} pots={snapshot.pots}
                        rake={snapshot.rake} bigBlind={bigBlind}/>;
   const feltContent = <>
+    <span key={`${snapshot.hand_id || 'waiting'}:${snapshot.stage}`} className="table-street-wash" aria-hidden="true"/>
     {announcement && snapshot.stage !== 'complete' && <div key={announcement} className="table-callout"
       aria-hidden="true"><span>D</span><p>{calloutCopy(announcement)}</p></div>}
     {board}

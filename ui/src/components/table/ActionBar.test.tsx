@@ -54,6 +54,7 @@ describe('ActionBar raise controls', () => {
     await userEvent.click(screen.getByRole('button', {name: '½ pote'}));
     expect(slider()).toHaveValue('250');
     expect(slider()).toHaveAttribute('aria-valuetext', 'Total 250 fichas');
+    expect(document.querySelector('.bet-commitment-meter i')).toHaveStyle('--bet-progress: 0.25');
   });
 
   test('reads the maximum raise as an all-in instead of a number', async () => {
@@ -61,6 +62,7 @@ describe('ActionBar raise controls', () => {
     await userEvent.click(screen.getByRole('button', {name: 'Máx'}));
     expect(screen.getByRole('button', {name: /All In/})).toBeInTheDocument();
     expect(slider()).toHaveAttribute('aria-valuetext', 'Total 1.000 fichas, All In');
+    expect(document.querySelector('.bet-output.is-all-in .bet-commitment-meter i')).toHaveStyle('--bet-progress: 1');
   });
 
   test('keeps the explicit minimum and maximum names when clamped presets duplicate them', () => {

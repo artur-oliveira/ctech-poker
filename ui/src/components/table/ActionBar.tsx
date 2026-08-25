@@ -1,5 +1,5 @@
 'use client';
-import {type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState} from 'react';
+import {type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState} from 'react';
 import {CircleAlert, Clock3, LoaderCircle, Minus, Plus, X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
@@ -116,16 +116,21 @@ function BetStepButton({direction, disabled, onStep}: {
   );
 }
 
-function BetAmountOutput({amount, isAllIn, wasClamped, className}: {
+function BetAmountOutput({amount, maxAmount, isAllIn, wasClamped, className}: {
   amount: number;
+  maxAmount: number;
   isAllIn: boolean;
   wasClamped: boolean;
   className: string;
 }) {
+  const progress = maxAmount > 0 ? Math.min(1, amount / maxAmount) : 0;
   return (
-    <output className={className} htmlFor="raise-amount">
+    <output className={`${className}${isAllIn ? ' is-all-in' : ''}`} htmlFor="raise-amount">
       <small>{isAllIn ? 'All In' : 'Total'}</small>
       {amount.toLocaleString('pt-BR')}
+      <span className="bet-commitment-meter" aria-hidden="true">
+        <i style={{'--bet-progress': progress} as CSSProperties}/>
+      </span>
       {wasClamped && <small className="bet-clamped-note" role="status">
         {isAllIn ? 'ajustado ao máximo' : 'ajustado ao mínimo'}
       </small>}
@@ -365,11 +370,11 @@ function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending
              disabled={inactive}
              onChange={event => setAmount(Number(event.target.value))}
              aria-valuetext={`Total ${safeAmount.toLocaleString('pt-BR')} fichas${isAllIn ? ', All In' : ''}`}/>
-      <BetAmountOutput className="bet-output bet-output-desktop" amount={safeAmount}
+      <BetAmountOutput className="bet-output bet-output-desktop" amount={safeAmount} maxAmount={maxRaise}
                        isAllIn={isAllIn} wasClamped={wasClamped}/>
       <div className="bet-stepper" role="group" aria-label="Ajustar valor do aumento">
         <BetStepButton direction={-1} disabled={inactive} onStep={multiplier => adjust(-1, multiplier)}/>
-        <BetAmountOutput className="bet-output bet-output-mobile" amount={safeAmount}
+        <BetAmountOutput className="bet-output bet-output-mobile" amount={safeAmount} maxAmount={maxRaise}
                          isAllIn={isAllIn} wasClamped={wasClamped}/>
         <BetStepButton direction={1} disabled={inactive} onStep={multiplier => adjust(1, multiplier)}/>
       </div>

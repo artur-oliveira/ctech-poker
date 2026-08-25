@@ -61,6 +61,7 @@ import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
 import {DEFAULT_TURN_TIMEOUT_SECONDS} from '@/lib/gameTiming';
 import {isTableReaction, TABLE_REACTIONS, type TableReactionID} from '@/lib/reactions';
 import {WALLET_QUERY_ROOT} from '@/lib/api/wallet';
+import {setSoundEffectsEnabled} from '@/lib/sound';
 
 const ROOM_ID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 const MockControls = USE_MOCK
@@ -168,6 +169,10 @@ function TableContent() {
   const viewer = getViewerId();
   const [tableOpenedAt] = useState(() => Math.floor(Date.now() / 1000));
   const {preferences} = useTablePreferences();
+  useEffect(() => {
+    setSoundEffectsEnabled(preferences.soundEffects);
+    return () => setSoundEffectsEnabled(false);
+  }, [preferences.soundEffects]);
   const {data: room} = useQuery({
     queryKey: ['room', id], queryFn: () => getRoom(id), enabled: valid
   });
@@ -428,6 +433,18 @@ function TableContent() {
     const stackBefore = seat.stack_at_hand_start ??
       (rememberedStart?.tableID === id && rememberedStart.handID === snap.hand_id ? rememberedStart.stack : undefined);
     const breakdown = playerPotBreakdown(snap, viewer);
+    const resolvedPots = (snap.pot_results ?? []).map(pot => ({
+      amount: pot.amount,
+      payoutAmount: pot.payout_amount,
+      viewerPayout: pot.payouts?.[viewer],
+      winnerNames: pot.winner_player_ids.map(playerId =>
+        snap.seats.find(item => item.player_id === playerId)?.name).filter((name): name is string => Boolean(name)),
+      wonByViewer: pot.winner_player_ids.includes(viewer),
+      viewerEligible: pot.eligible_player_ids.includes(viewer),
+      split: pot.winner_player_ids.length > 1,
+      refund: Boolean(pot.refund),
+      runout: pot.runout
+    }));
     // Folding is not a loss in the sense of having contested the pot. It
     // gets its own banner ("você desistiu"), only naming a rival hand when
     // the board actually ran to a showdown that revealed one, and only
@@ -450,6 +467,7 @@ function TableContent() {
         handCategory: seat.hand_category, opponentCategory,
         winningCards, winningHoleCards: winnerHole, viewerCards, viewerHoleCards: viewerHole,
         beatenCards, beatenCategory: beatenSeat?.hand_category, pots, tiedWith,
+        runItTwice: Boolean(snap.board_two?.length), resolvedPots,
         winnerName: winnerSeat?.name, stackBefore, stackAfter: seat.stack,
         wonAmount: breakdown.won, refundAmount: breakdown.refund
       }

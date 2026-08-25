@@ -3,7 +3,7 @@ import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import type {ReactNode} from 'react';
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {hasSeenOnboarding, markOnboardingSeen} from './onboarding';
-import {playSound, type SoundName} from './sound';
+import {playSound, setSoundEffectsEnabled, type SoundName} from './sound';
 import {routeMetadata} from './routeMetadata';
 import {OG_PREVIEWS} from './ogPreviews';
 import {useCountUp} from './hooks/useCountUp';
@@ -38,9 +38,13 @@ describe('sound playback', () => {
 
       play = play;
     });
+    setSoundEffectsEnabled(true);
   });
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    setSoundEffectsEnabled(false);
+    vi.unstubAllGlobals();
+  });
 
   test.each<SoundName>(['reveal', 'showing_card', 'half_pot', 'all_in', 'bet', 'your_turn'])(
     'plays an existing mp3 for %s', name => {
@@ -196,7 +200,7 @@ describe('useTablePreferences', () => {
     localStorage.setItem('ctech-poker:table-preferences:v1', 'not json');
     const {result: corrupted} = renderHook(() => useTablePreferences());
     expect(corrupted.current.preferences).toEqual({
-      dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false
+      soundEffects: false, dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false
     });
 
     // A stale blob from before table_theme moved server-side (still carrying
@@ -205,7 +209,7 @@ describe('useTablePreferences', () => {
       JSON.stringify({theme: 'neon', dealerVoice: 'yes', realityCheckMinutes: 7}));
     const {result} = renderHook(() => useTablePreferences());
     expect(result.current.preferences).toEqual({
-      dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false
+      soundEffects: false, dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false
     });
   });
 

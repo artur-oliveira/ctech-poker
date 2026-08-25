@@ -94,7 +94,9 @@ describe('TablePreferencesDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useTablePreferences.mockReturnValue({
-      preferences: {dealerVoice: false, voiceCommands: true, realityCheckMinutes: 60, equityTrainer: false},
+      preferences: {
+        soundEffects: false, dealerVoice: false, voiceCommands: true, realityCheckMinutes: 60, equityTrainer: false
+      },
       update,
     });
     getMe.mockResolvedValue(player());
@@ -115,9 +117,10 @@ describe('TablePreferencesDialog', () => {
     expect(screen.getByRole('button', {name: /Oceano/})).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Desativado'})).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'A cada 2 horas'})).toBeInTheDocument();
-    expect(screen.getAllByRole('switch')).toHaveLength(3);
-    expect(screen.getAllByRole('switch')[0]).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getAllByRole('switch')[1]).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getAllByRole('switch')).toHaveLength(4);
+    expect(screen.getByRole('switch', {name: 'Sons da mesa'})).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('switch', {name: 'Dealer auditivo'})).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('switch', {name: 'Comandos por voz'})).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('switch', {name: 'Treinador'})).toHaveAttribute('aria-checked', 'false');
   });
 
@@ -137,17 +140,19 @@ describe('TablePreferencesDialog', () => {
   test('updates voice settings and session reminder through the local preferences store', async () => {
     renderDialog();
 
-    await userEvent.click(screen.getAllByRole('switch')[0]);
-    await userEvent.click(screen.getAllByRole('switch')[1]);
+    await userEvent.click(screen.getByRole('switch', {name: 'Sons da mesa'}));
+    await userEvent.click(screen.getByRole('switch', {name: 'Dealer auditivo'}));
+    await userEvent.click(screen.getByRole('switch', {name: 'Comandos por voz'}));
     await userEvent.click(screen.getByRole('button', {name: 'A cada 30 minutos'}));
 
     await userEvent.click(screen.getByRole('switch', {name: 'Treinador'}));
 
+    expect(update).toHaveBeenCalledWith({soundEffects: true});
     expect(update).toHaveBeenCalledWith({dealerVoice: true});
     expect(update).toHaveBeenCalledWith({voiceCommands: false});
     expect(update).toHaveBeenCalledWith({equityTrainer: true});
     expect(update).toHaveBeenCalledWith({realityCheckMinutes: 30});
-    expect(update).toHaveBeenCalledTimes(4);
+    expect(update).toHaveBeenCalledTimes(5);
   });
 
   test('selecting the free classic felt persists via updateMe, not localStorage', async () => {

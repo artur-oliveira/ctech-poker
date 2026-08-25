@@ -1,6 +1,7 @@
 import {ChipStack} from '@/components/table/ChipStack';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import type {PotView} from '@/lib/api/table';
+import {Repeat2} from 'lucide-react';
 
 const SLOT_SUITS = ['♠', '♥', '♣', '♦', '♠'];
 
@@ -49,6 +50,10 @@ export function Board({cards, boardTwo, splitAt = 0, pot, pots, rake, bigBlind}:
       </small>)}
     </span>}</span>}
     {boardTwo?.length ? <div className="board-runouts" aria-label="Duas distribuições do board">
+      <div className="board-runouts-heading">
+        <Repeat2 aria-hidden="true"/>
+        <span><b>Rodando duas vezes</b><small>Dois boards no mesmo all-in</small></span>
+      </div>
       {splitAt > 0 && <div className="board-common">
           <small>Comum</small>
           <CardRow cards={cards.slice(0, splitAt)} slots={splitAt}/>

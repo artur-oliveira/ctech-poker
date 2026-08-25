@@ -1,5 +1,5 @@
 'use client';
-import {Lightbulb, LockKeyhole, Mic, Repeat2, Settings2, Volume2} from 'lucide-react';
+import {AudioLines, Lightbulb, LockKeyhole, Mic, Repeat2, Settings2, Volume2} from 'lucide-react';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
 import {
@@ -89,6 +89,12 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
               })}
             </SelectContent>
           </Select>
+        </div>
+        <div className="table-preference-toggle">
+          <span><AudioLines aria-hidden="true"/><span><Label id="sound-effects-label">Sons da mesa</Label>
+            <small>Cartas, fichas e alertas. Começa sem som até você ativar.</small></span></span>
+          <Switch aria-labelledby="sound-effects-label" checked={preferences.soundEffects}
+                  onCheckedChange={checked => update({soundEffects: checked})}/>
         </div>
         <div className="table-preference-toggle">
           <span><Volume2 aria-hidden="true"/><span><Label id="dealer-voice-label">Dealer auditivo</Label>

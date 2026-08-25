@@ -18,6 +18,8 @@ describe('Board', () => {
     render(<Board cards={['Ah', 'Kd', 'Qc', '2s', '3h']} boardTwo={['4c', '5d']}
                   splitAt={3} pot={100}/>);
     expect(screen.getByText('Comum')).toBeInTheDocument();
+    expect(screen.getByText('Rodando duas vezes')).toBeInTheDocument();
+    expect(screen.getByText('Dois boards no mesmo all-in')).toBeInTheDocument();
     expect(screen.getByLabelText('1ª distribuição')).toBeInTheDocument();
     expect(screen.getByLabelText('2ª distribuição')).toBeInTheDocument();
     expect(screen.getAllByRole('img', {name: /Carta comunitária/})).toHaveLength(7);

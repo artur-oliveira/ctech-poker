@@ -4,6 +4,9 @@ import {useCallback, useMemo, useSyncExternalStore} from 'react';
 export type TableThemeId = 'classic' | 'midnight' | 'burgundy' | 'ocean';
 
 export type TablePreferences = {
+  // Card, chip and turn sounds are explicitly opt-in. Browser autoplay
+  // policy is not a consent mechanism, so the default must remain silent.
+  soundEffects: boolean;
   dealerVoice: boolean;
   voiceCommands: boolean;
   realityCheckMinutes: number;
@@ -27,13 +30,14 @@ export const PREMIUM_FELT_IDS = new Set<TableThemeId>(['midnight', 'burgundy', '
 const STORAGE_KEY = 'ctech-poker:table-preferences:v1';
 const CHANGE_EVENT = 'ctech-poker:table-preferences';
 const DEFAULTS: TablePreferences = {
-  dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false
+  soundEffects: false, dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false
 };
 const REALITY_INTERVALS = new Set([0, 30, 60, 90, 120]);
 
 function normalize(value: unknown): TablePreferences {
   const input = value && typeof value === 'object' ? value as Partial<TablePreferences> : {};
   return {
+    soundEffects: input.soundEffects === true,
     dealerVoice: input.dealerVoice === true,
     voiceCommands: input.voiceCommands === true,
     realityCheckMinutes: typeof input.realityCheckMinutes === 'number' &&

@@ -21,7 +21,7 @@ describe('useTablePreferences', () => {
   test('defaults with no theme field on the preferences type', () => {
     const {result} = renderHook(() => useTablePreferences());
     expect(result.current.preferences).toEqual({
-      dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false
+      soundEffects: false, dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false
     });
     expect(result.current.preferences).not.toHaveProperty('theme');
   });
@@ -32,7 +32,7 @@ describe('useTablePreferences', () => {
     }));
     const {result} = renderHook(() => useTablePreferences());
     expect(result.current.preferences).toEqual({
-      dealerVoice: true, voiceCommands: false, realityCheckMinutes: 90, equityTrainer: true
+      soundEffects: false, dealerVoice: true, voiceCommands: false, realityCheckMinutes: 90, equityTrainer: true
     });
   });
 
@@ -42,5 +42,12 @@ describe('useTablePreferences', () => {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
     expect(stored).not.toHaveProperty('theme');
     expect(stored.dealerVoice).toBe(true);
+  });
+
+  test('sound effects stay silent by default and persist only after explicit opt-in', () => {
+    const {result} = renderHook(() => useTablePreferences());
+    expect(result.current.preferences.soundEffects).toBe(false);
+    act(() => result.current.update({soundEffects: true}));
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).soundEffects).toBe(true);
   });
 });

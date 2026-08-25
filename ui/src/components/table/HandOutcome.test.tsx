@@ -79,6 +79,49 @@ describe('HandOutcomeBanner', () => {
     expect(screen.getByText('100 fichas ganhas e 25 fichas devolvidas')).toBeInTheDocument();
   });
 
+  test('explains side pots the viewer did not contest using only resolved server data', () => {
+    renderOutcome({
+      key: 41, kind: 'win', wonAmount: 900,
+      resolvedPots: [
+        {
+          amount: 900, payoutAmount: 900, winnerNames: ['Ana'], wonByViewer: true,
+          viewerEligible: true, split: false, refund: false
+        },
+        {
+          amount: 800, payoutAmount: 800, winnerNames: ['Bia'], wonByViewer: false,
+          viewerEligible: false, split: false, refund: false
+        }
+      ]
+    });
+    expect(screen.getByText('Acerto dos potes')).toBeInTheDocument();
+    expect(screen.getByText('Pote principal')).toBeInTheDocument();
+    expect(screen.getByText('Pote lateral 1')).toBeInTheDocument();
+    expect(screen.getByText('Você não disputou este pote')).toBeInTheDocument();
+    expect(screen.getByText('Você +900')).toBeInTheDocument();
+    expect(screen.getByText('Bia +800')).toBeInTheDocument();
+  });
+
+  test('marks a two-board settlement and names split and refund outcomes', () => {
+    renderOutcome({
+      key: 42, kind: 'tie', runItTwice: true,
+      resolvedPots: [
+        {
+          amount: 600, payoutAmount: 600, viewerPayout: 300, winnerNames: ['Ana', 'Bia'], wonByViewer: true,
+          viewerEligible: true, split: true, refund: false, runout: 1
+        },
+        {
+          amount: 50, payoutAmount: 50, winnerNames: [], wonByViewer: false,
+          viewerEligible: true, split: false, refund: true, runout: 2
+        }
+      ]
+    });
+    expect(screen.getByText('Rodado duas vezes')).toBeInTheDocument();
+    expect(screen.getByText('Pote principal · Board 1')).toBeInTheDocument();
+    expect(screen.getByText('Pote lateral 1 · Board 2')).toBeInTheDocument();
+    expect(screen.getByText('Dividido · Você · 600 fichas distribuídas · sua parte +300')).toBeInTheDocument();
+    expect(screen.getByText('Devolução +50')).toBeInTheDocument();
+  });
+
   test('drops the pot label when a mixed result only has one pot to show', () => {
     renderOutcome({key: 5, kind: 'mixed', pots: [{won: true}]});
     expect(screen.getByText('Você')).toBeInTheDocument();

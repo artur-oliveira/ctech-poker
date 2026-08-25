@@ -87,12 +87,14 @@ straight into a seated table in a fresh browser, and the **Cenários de teste** 
 between them without losing the room id. The post-hand and session flows have dedicated scenes:
 
 - `run_it_twice` — two-board showdown;
+- `side_pot` — main/side-pot settlement with different eligible players and winners;
 - `winner_cards` — a folded player can pay to reveal the winner's mucked cards;
 - `rabbit_hunt` — a verified, paid hypothetical runout after an uncontested hand;
 - `rebuy` — the viewer is sitting out with a zero stack and the rebuy dialog is open;
 - `reality_check` — a two-hour session opens the neutral session summary away from the viewer's turn.
 - `heads_up`, `six_max`, `nine_max` — fixed portrait seat-capacity layouts with the viewer at the bottom.
 - At narrow portrait widths, verify the largest-pot value uses remaining header width, Chat/Reactions appear only as quick actions, and compact outcome/seat controls retain 44px hit areas without visually expanding their rings.
+- In preferences, verify “Sons da mesa” starts disabled, survives reload only after opt-in, and stays independent from “Dealer auditivo”.
 - For every portrait seat orientation, verify hole cards remain fully visible above captions and each state label is the line nearest and centered on its own avatar; top seats mirror the caption order.
 - In completed/all-in mobile states, compare `.stage-v > .viewer` and its `.seat-info`: the info grid must remain within the 78px hero HUD while showing name, stack, state, category, and equity without crossing the cards or betting dock.
 
