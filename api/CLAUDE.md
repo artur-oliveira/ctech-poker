@@ -94,6 +94,11 @@ See `docs/plans/2026-08-21-entry-fee-entitlement.md`. **Still blocking, found 20
   change to `ref`, `hashq`, the generator, or `tables.bin`. Multi-server turn-order/timer changes must also run
   `go test -tags integration -race ./tests/integration -run TestMultiServerFuzz`; retain the existing `-count=15`
   stress run for changes to `internal/table/actor.go` timer paths.
+- **Changing an exported signature? `go test ./... -race` will not tell you.** `internal/tablestore/dynamo_test.go` and
+  `internal/table/actor_test.go` are `//go:build integration` files inside *unit* packages, so the plain gate never
+  compiles them: adding a parameter to `tablestore.Store.CommitAction` passes every local check and then fails the CI
+  build. Run `go vet -tags integration ./...` (and `-tags exhaustive`, `-tags load`) after any signature change — it
+  compiles every tagged file in seconds without needing DynamoDB Local.
 
 ## B9 authz — what is enforced (fixed 2026-07)
 

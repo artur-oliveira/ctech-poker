@@ -100,7 +100,7 @@ func TestSeedThenCommitThenLoad(t *testing.T) {
 	}
 
 	newState := hand.State{Stage: hand.PreFlop}
-	if err := s.CommitAction(ctx, "table-1", "hand-1", "act-1", 1, newState, TableActivity{}, 0, ActionLogEntry{
+	if err := s.CommitAction(ctx, "table-1", "hand-1", "act-1", 1, newState, TableActivity{}, 0, 0, ActionLogEntry{
 		TableID: "table-1", HandID: "hand-1", Version: 2, PlayerID: "p1", ActionID: "act-1", Action: "call",
 	}); err != nil {
 		t.Fatalf("CommitAction: %v", err)
@@ -122,7 +122,7 @@ func TestFindActionByIDStaysWithinHandPartition(t *testing.T) {
 		t.Fatal(err)
 	}
 	entry := ActionLogEntry{TableID: "table-report", HandID: "hand-report", Version: 2, PlayerID: "target", ActionID: "chat-action", Action: "chat", Message: "sanitized"}
-	if err := s.CommitAction(ctx, "table-report", "hand-report", "chat-action", 1, hand.State{Stage: hand.PreFlop}, TableActivity{}, 0, entry); err != nil {
+	if err := s.CommitAction(ctx, "table-report", "hand-report", "chat-action", 1, hand.State{Stage: hand.PreFlop}, TableActivity{}, 0, 0, entry); err != nil {
 		t.Fatal(err)
 	}
 	found, err := s.FindActionByID(ctx, "table-report", "hand-report", "chat-action")
@@ -144,7 +144,7 @@ func TestCommitActionRejectsStaleVersion(t *testing.T) {
 
 	_ = s.SeedTable(ctx, "table-2", hand.State{Stage: hand.WaitingForPlayers})
 
-	err := s.CommitAction(ctx, "table-2", "hand-1", "act-1", 99, hand.State{}, TableActivity{}, 0, ActionLogEntry{TableID: "table-2", HandID: "hand-1", Version: 100, ActionID: "act-1"})
+	err := s.CommitAction(ctx, "table-2", "hand-1", "act-1", 99, hand.State{}, TableActivity{}, 0, 0, ActionLogEntry{TableID: "table-2", HandID: "hand-1", Version: 100, ActionID: "act-1"})
 	if !errors.Is(err, ErrVersionConflict) {
 		t.Fatalf("expected ErrVersionConflict against a stale expected version, got %v", err)
 	}
@@ -172,7 +172,7 @@ func TestSeedAndCommitSetLastActionAt(t *testing.T) {
 	}
 
 	timeNowFunc = func() time.Time { return time.Unix(2000, 0) }
-	if err := s.CommitAction(ctx, "table-4", "hand-1", "act-1", 1, hand.State{Stage: hand.PreFlop}, TableActivity{}, 0, ActionLogEntry{
+	if err := s.CommitAction(ctx, "table-4", "hand-1", "act-1", 1, hand.State{Stage: hand.PreFlop}, TableActivity{}, 0, 0, ActionLogEntry{
 		TableID: "table-4", HandID: "hand-1", Version: 2, PlayerID: "p1", ActionID: "act-1", Action: "call",
 	}); err != nil {
 		t.Fatalf("CommitAction: %v", err)
@@ -198,7 +198,7 @@ func TestCommitActionStampsLogEntryTimestamp(t *testing.T) {
 	defer func() { timeNowFunc = time.Now }()
 
 	_ = s.SeedTable(ctx, "table-5", hand.State{Stage: hand.WaitingForPlayers})
-	if err := s.CommitAction(ctx, "table-5", "hand-1", "act-1", 1, hand.State{Stage: hand.PreFlop}, TableActivity{}, 0, ActionLogEntry{
+	if err := s.CommitAction(ctx, "table-5", "hand-1", "act-1", 1, hand.State{Stage: hand.PreFlop}, TableActivity{}, 0, 0, ActionLogEntry{
 		TableID: "table-5", HandID: "hand-1", Version: 2, PlayerID: "p1", ActionID: "act-1", Action: "call",
 	}); err != nil {
 		t.Fatalf("CommitAction: %v", err)
@@ -227,7 +227,7 @@ func TestLoadActionsSinceReturnsChronologicalOrder(t *testing.T) {
 
 	_ = s.SeedTable(ctx, "table-6", hand.State{Stage: hand.WaitingForPlayers})
 	for i, action := range []string{"call", "check", "raise"} {
-		if err := s.CommitAction(ctx, "table-6", "hand-1", fmt.Sprintf("act-%d", i+1), i+1, hand.State{}, TableActivity{}, 0, ActionLogEntry{
+		if err := s.CommitAction(ctx, "table-6", "hand-1", fmt.Sprintf("act-%d", i+1), i+1, hand.State{}, TableActivity{}, 0, 0, ActionLogEntry{
 			TableID: "table-6", HandID: "hand-1", Version: i + 2, PlayerID: "p1", ActionID: fmt.Sprintf("act-%d", i+1), Action: action,
 		}); err != nil {
 			t.Fatalf("CommitAction %s: %v", action, err)
@@ -344,11 +344,11 @@ func TestCommitActionRejectsDuplicateActionID(t *testing.T) {
 
 	_ = s.SeedTable(ctx, "table-3", hand.State{Stage: hand.WaitingForPlayers})
 	entry := ActionLogEntry{TableID: "table-3", HandID: "hand-1", Version: 2, ActionID: "dup-1"}
-	if err := s.CommitAction(ctx, "table-3", "hand-1", "dup-1", 1, hand.State{Stage: hand.PreFlop}, TableActivity{}, 0, entry); err != nil {
+	if err := s.CommitAction(ctx, "table-3", "hand-1", "dup-1", 1, hand.State{Stage: hand.PreFlop}, TableActivity{}, 0, 0, entry); err != nil {
 		t.Fatalf("first commit: %v", err)
 	}
 
-	err := s.CommitAction(ctx, "table-3", "hand-1", "dup-1", 2, hand.State{Stage: hand.Flop}, TableActivity{}, 0, ActionLogEntry{TableID: "table-3", HandID: "hand-1", Version: 3, ActionID: "dup-1"})
+	err := s.CommitAction(ctx, "table-3", "hand-1", "dup-1", 2, hand.State{Stage: hand.Flop}, TableActivity{}, 0, 0, ActionLogEntry{TableID: "table-3", HandID: "hand-1", Version: 3, ActionID: "dup-1"})
 	if !errors.Is(err, ErrDuplicateAction) {
 		t.Fatalf("expected ErrDuplicateAction on a replayed action_id, got %v", err)
 	}
@@ -384,7 +384,7 @@ func TestCommitActionIncludesExtraItemsWithoutActionID(t *testing.T) {
 
 	entry := ActionLogEntry{TableID: "table-6", HandID: "hand-1", Version: 2}
 	// actionID is "" on purpose here — mirrors every real Leave commit.
-	if err := s.CommitAction(ctx, "table-6", "hand-1", "", 1, hand.State{Stage: hand.WaitingForPlayers}, TableActivity{}, 0, entry, extraTx); err != nil {
+	if err := s.CommitAction(ctx, "table-6", "hand-1", "", 1, hand.State{Stage: hand.WaitingForPlayers}, TableActivity{}, 0, 0, entry, extraTx); err != nil {
 		t.Fatalf("CommitAction: %v", err)
 	}
 
