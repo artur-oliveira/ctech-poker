@@ -168,6 +168,48 @@ describe('ActionBar raise controls', () => {
     expect(slider()).toHaveValue(String(released));
   });
 
+  test('ignores secondary-pointer holds and suppresses the click emitted after a completed hold', () => {
+    vi.useFakeTimers();
+    renderActionBar({maxRaise: 5000, raiseStep: 25});
+    const plus = screen.getByRole('button', {name: 'Mais fichas'});
+
+    fireEvent.pointerDown(plus, {button: 2});
+    act(() => vi.advanceTimersByTime(600));
+    expect(slider()).toHaveValue('150');
+
+    fireEvent.pointerDown(plus, {button: 0});
+    act(() => vi.advanceTimersByTime(420));
+    fireEvent.pointerUp(plus);
+    expect(slider()).toHaveValue('175');
+    fireEvent.click(plus);
+    expect(slider()).toHaveValue('175');
+  });
+
+  test('falls back to first and last duplicate presets when explicit bound names are absent', () => {
+    renderActionBar({
+      minRaise: 100,
+      maxRaise: 1000,
+      raisePresets: [
+        {label: 'Abrir', value: 50}, {label: 'Dobrar', value: 100},
+        {label: 'Pote', value: 1200}, {label: 'Tudo', value: 1400},
+      ],
+    });
+    expect(screen.getByRole('button', {name: 'Abrir'})).toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: 'Dobrar'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: 'Pote'})).not.toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Tudo'})).toBeInTheDocument();
+  });
+
+  test('closes mobile sizing when the action scope changes', async () => {
+    vi.mocked(window.matchMedia).mockReturnValue({matches: true} as MediaQueryList);
+    const {view} = renderActionBar();
+    await userEvent.click(screen.getByRole('button', {name: /Aumentar/}));
+    expect(screen.getByRole('button', {name: 'Cancelar'})).toBeInTheDocument();
+
+    view.rerender(<ActionBar {...renderActionBarProps({actionKey: 'hand-1:turn'})}/>);
+    expect(screen.queryByRole('button', {name: 'Cancelar'})).not.toBeInTheDocument();
+  });
+
   test('shows the all-in spinner label while the raise is in flight', () => {
     renderActionBar({pending: 'raise', minRaise: 1000, maxRaise: 1000});
     expect(screen.getByRole('button', {name: /Indo All In…/})).toBeInTheDocument();
@@ -208,6 +250,35 @@ describe('ActionBar preselection', () => {
     expect(onActAction).toHaveBeenCalledWith('fold');
     expect(screen.getByText('Executando sua ação preparada…')).toBeInTheDocument();
     expect(document.querySelector('.action-choices')).toBeNull();
+  });
+
+  test('executes a prepared all-in as a raise to the maximum', () => {
+    const {onActAction} = renderActionBar({
+      canPreselect: false, selectionScope: 'hand-1:flop', preselection: 'all_in', isTurn: true,
+    });
+    expect(onActAction).toHaveBeenCalledWith('raise', 1000);
+  });
+
+  test('waits to execute a prepared action while disconnected or another action is pending', () => {
+    const disconnected = renderActionBar({
+      selectionScope: 'hand-1:flop', preselection: 'fold', isTurn: true, connected: false,
+    });
+    expect(disconnected.onActAction).not.toHaveBeenCalled();
+    disconnected.view.unmount();
+
+    const pending = renderActionBar({
+      selectionScope: 'hand-1:flop', preselection: 'fold', isTurn: true, pending: 'call',
+    });
+    expect(pending.onActAction).not.toHaveBeenCalled();
+  });
+
+  test('keeps manual controls when a prepared action is no longer legal', () => {
+    const {onActAction} = renderActionBar({
+      selectionScope: 'hand-1:flop', preselection: 'call', preselectionAmount: 50,
+      callAmount: 75, isTurn: true,
+    });
+    expect(onActAction).not.toHaveBeenCalled();
+    expect(document.querySelector('.action-choices')).toBeInTheDocument();
   });
 
   test('releases the manual controls again once the prepared action is rejected', () => {

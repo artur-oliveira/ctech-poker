@@ -89,6 +89,18 @@ describe('TodayHighlight', () => {
     await waitFor(() => expect(screen.getByText('Alice e Bia — Sequência')).toBeInTheDocument());
   });
 
+  test('selects a later revealed player when their hand beats the first candidate', async () => {
+    getTodayHighlight.mockResolvedValueOnce(highlight({
+      revealed: [
+        {player_id: 'p1', name: 'Alice', hole_cards: ['Kh', 'Qd']},
+        {player_id: 'p2', name: 'Bia', hole_cards: ['Ah', 'Ad']},
+      ],
+    }));
+    renderHighlight();
+    await waitFor(() => expect(screen.getByText('Bia — Trinca')).toBeInTheDocument());
+    expect(screen.queryByText(/Alice/)).not.toBeInTheDocument();
+  });
+
   test('omits the hand label when card data is incomplete or invalid', async () => {
     getTodayHighlight.mockResolvedValueOnce(highlight({
       board: ['Ac', '7d', '2s'],

@@ -62,4 +62,31 @@ describe('AchievementToast', () => {
     rerender(<AchievementToast unlock={null} blocked={false}/>);
     expect(screen.getByRole('status')).toHaveTextContent('Mestre do Blefe');
   });
+
+  test('renders nothing when there is no current or queued unlock', () => {
+    const {container, rerender} = render(<AchievementToast unlock={null}/>);
+    expect(container).toBeEmptyDOMElement();
+    rerender(<AchievementToast unlock={null} blocked/>);
+    expect(container).toBeEmptyDOMElement();
+    rerender(<AchievementToast unlock={null} blocked={false}/>);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  test('queues the visible toast itself when blocking begins without a replacement unlock', () => {
+    const {rerender} = render(<AchievementToast unlock={{key: 'wins', stars: 1}}/>);
+    expect(screen.getByRole('status')).toHaveTextContent('Vitórias');
+
+    rerender(<AchievementToast unlock={null} blocked/>);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    rerender(<AchievementToast unlock={null} blocked={false}/>);
+    expect(screen.getByRole('status')).toHaveTextContent('Vitórias');
+  });
+
+  test('retains the same visible unlock without restarting its lifecycle', () => {
+    const unlock = {key: 'wins', stars: 2};
+    const {rerender} = render(<AchievementToast unlock={unlock}/>);
+    const toast = screen.getByRole('status');
+    rerender(<AchievementToast unlock={{...unlock}}/>);
+    expect(screen.getByRole('status')).toBe(toast);
+  });
 });
