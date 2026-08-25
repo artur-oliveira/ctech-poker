@@ -1,3 +1,4 @@
+import {StrictMode} from 'react';
 import {render, screen} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {RouteAnnouncer} from './RouteAnnouncer';
@@ -27,6 +28,18 @@ describe('RouteAnnouncer', () => {
     render(<RouteAnnouncer/>);
     expect(screen.getByRole('status')).toHaveTextContent('');
     expect(screen.getByRole('heading')).not.toHaveFocus();
+  });
+
+  // The regression this guards: with a "have I mounted" boolean, StrictMode's
+  // second mount-effect pass fell through and set tabindex on main/h1 while a
+  // Suspense boundary below was still hydrating, which React reports as a
+  // hydration mismatch on /profile and /share.
+  test('does not touch the DOM when the mount effect runs twice on the same path', () => {
+    mountPage('<main><h1>Vitrine do jogador</h1></main>');
+    render(<StrictMode><RouteAnnouncer/></StrictMode>);
+    expect(screen.getByRole('heading')).not.toHaveAttribute('tabindex');
+    expect(document.querySelector('main')).not.toHaveAttribute('tabindex');
+    expect(screen.getByRole('status')).toHaveTextContent('');
   });
 
   test('moves focus to the new page heading and announces its title after a route change', () => {

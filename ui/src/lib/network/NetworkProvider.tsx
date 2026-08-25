@@ -21,6 +21,18 @@ export function NetworkProvider({children}: { children: React.ReactNode }) {
   const state = useApiLiveness();
   const queryClient = useQueryClient();
   const checkNowRef = useRef<() => void>(() => undefined);
+  const banner = state.status === 'unavailable'
+    && (typeof window === 'undefined' || window.location.pathname !== '/unavailable');
+
+  // The notice is a strip that reserves its own height rather than a card
+  // floating over the page, so navigation and the table's Lobby/Sair controls
+  // stay reachable exactly when recovery matters. The height itself lives in
+  // CSS (--api-bar-h); this only says whether the strip is up.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (banner) root.dataset.apiOffline = 'true';
+    else delete root.dataset.apiOffline;
+  }, [banner]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -62,10 +74,9 @@ export function NetworkProvider({children}: { children: React.ReactNode }) {
 
   return <>
     {children}
-    {state.status === 'unavailable' &&
-      (typeof window === 'undefined' || window.location.pathname !== '/unavailable') && <NetworkStatusBanner
-        offline={state.reason === 'offline'}
-        onRetryAction={() => checkNowRef.current()}
+    {banner && <NetworkStatusBanner
+      offline={state.reason === 'offline'}
+      onRetryAction={() => checkNowRef.current()}
     />}
   </>;
 }

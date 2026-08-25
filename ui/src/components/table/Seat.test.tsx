@@ -22,7 +22,11 @@ describe('Seat', () => {
   test('names the seat, its stack and its hand category', () => {
     render_({seat: seat({hand_category: 'two_pair'})});
     expect(screen.getByText('Bia')).toBeInTheDocument();
-    expect(screen.getByText('1.000 fichas')).toBeInTheDocument();
+    // The unit sits in its own element so the portrait ring can drop it from
+   // the visual caption while keeping it in the accessibility tree.
+    expect(screen.getByText((_, node) => node?.textContent === '1.000 fichas'
+      && node.className === '')).toBeInTheDocument();
+    expect(screen.getByText('fichas', {exact: false, selector: '.seat-stack-unit'})).toBeInTheDocument();
     expect(screen.getByText('Dois pares')).toBeInTheDocument();
   });
 

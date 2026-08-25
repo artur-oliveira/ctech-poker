@@ -27,12 +27,17 @@ export function PlayingCard({card, index, size, owner, slow, onReveal, revealPen
   // Safari rasterizes an <img>-embedded SVG once at its width/height attributes,
   // ignoring devicePixelRatio, so a 1x-sized source reads blurry on Retina iPhones.
   const dimensions = size === 'board' ? {width: 204, height: 285} : {width: 138, height: 192};
+  // The card back is one shared asset, it is above the fold on every surface
+  // that shows a table, and Next measured it as the LCP element there. Eager
+  // (not `priority`) fetches it without emitting a preload link per instance —
+  // twenty seats would otherwise queue twenty preloads for the same file.
+  const backImageProps = {...dimensions, loading: 'eager'} as const;
   const style = {'--deal-index': index} as CSSProperties;
-  if (!revealed) return <Image className={`playing-card ${size}-card`} src={back} alt="Carta fechada" {...dimensions}
+  if (!revealed) return <Image className={`playing-card ${size}-card`} src={back} alt="Carta fechada" {...backImageProps}
                                style={style}/>;
 
   const inner = <span className="card-reveal-inner">
-    <Image className="card-back" src={back} alt="" aria-hidden="true" {...dimensions}/>
+    <Image className="card-back" src={back} alt="" aria-hidden="true" {...backImageProps}/>
     <Image className="card-front" src={cardPath(card!, variant)} alt="" aria-hidden="true" {...dimensions}/>
   </span>;
   if (peekable) {

@@ -34,16 +34,16 @@
     display: grid;
     place-items: center;
     padding: 1.25rem;
-    background: radial-gradient(circle at top, rgb(175 42 47 / 22%), transparent 38%), var(--ink);
+    background: radial-gradient(circle at top, color-mix(in srgb, var(--brand) 22%, transparent), transparent 38%), var(--ink);
 }
 
 .terms-gate > div {
     width: min(100%, 31rem);
     padding: clamp(1.5rem, 5vw, 2.5rem);
-    border: 1px solid rgb(255 255 255 / 12%);
+    border: 1px solid var(--control-border);
     border-radius: var(--rounded-panel);
-    background: rgb(28 18 20 / 92%);
-    box-shadow: 0 2rem 6rem rgb(0 0 0 / 35%);
+    background: var(--surface-seat-92);
+    box-shadow: 0 2rem 6rem var(--black-06);
     animation: rise 320ms var(--ease-out-quart) both;
 }
 

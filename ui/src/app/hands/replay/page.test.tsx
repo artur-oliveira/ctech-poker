@@ -38,7 +38,10 @@ describe('hand replay page', () => {
   test('rejects incomplete replay links and disables their queries', () => {
     mocks.params = new Map([['table_id', 'table-1']]);
     render(<ReplayPage/>);
-    expect(screen.getByRole('heading', {name: 'Este replay perdeu o endereço'})).toBeInTheDocument();
+    expect(screen.getByRole('heading', {level: 1, name: 'Este replay perdeu o endereço'})).toBeInTheDocument();
+    // The recovery branches used to render outside any landmark, so a screen
+    // reader lost `main` exactly on the state that needs orientation most.
+    expect(screen.getByRole('main')).toContainElement(screen.getByRole('heading', {level: 1}));
     expect(mocks.query).toHaveBeenCalledWith(expect.objectContaining({enabled: false}));
   });
   
@@ -48,7 +51,8 @@ describe('hand replay page', () => {
     expect(screen.getByText(/Preparando a mesa/)).toBeInTheDocument();
     queryState({}, {isLoading: false, isError: true});
     view.rerender(<ReplayPage/>);
-    expect(screen.getByRole('heading', {name: 'Não foi possível carregar o replay'})).toBeInTheDocument();
+    expect(screen.getByRole('heading', {level: 1, name: 'Não foi possível carregar o replay'})).toBeInTheDocument();
+    expect(screen.getByRole('main')).toContainElement(screen.getByRole('heading', {level: 1}));
   });
   
   test('sorts backend actions and passes viewer identity to the engine', () => {
@@ -60,6 +64,8 @@ describe('hand replay page', () => {
       }
     });
     render(<ReplayPage/>);
+    // The replayer's own heading is an h2; without this the valid page had no h1.
+    expect(screen.getByRole('heading', {level: 1})).toHaveTextContent('Replay da mão hand 1');
     expect(screen.getByTestId('replayer')).toHaveTextContent('viewer:1,2,3');
     expect(screen.getByRole('link', {name: /Detalhes da mão/})).toHaveAttribute(
       'href', '/hands/history?table_id=table%2F1&hand_id=hand%201&mode=sandbox'

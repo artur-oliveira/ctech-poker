@@ -31,6 +31,7 @@ import {HandExportButton} from '@/components/hands/HandExportButton';
 import {ShareHandDialog} from '@/components/hands/ShareHandDialog';
 import {Button} from '@/components/ui/button';
 import {TermsGate} from '@/components/TermsGate';
+import {RecoveryState} from '@/components/RecoveryState';
 import {getViewerId, HAND_CATEGORY_LABELS, playerName} from '@/lib/utils';
 import {bestHandCategory} from '@/lib/pokerRules';
 import {availableWalletMode} from '@/lib/capabilities';
@@ -64,14 +65,17 @@ function HandHistoryContent() {
   const opponentNames = new Map((hand.data?.opponents || []).map(o => [o.player_id, o.name]));
   const resolveName = (playerId: string) => playerName(playerId, viewerId, opponentNames.get(playerId));
 
-  if (!tableId || !handId) return <div className="hand-history shell">
-    <p className="form-error">Link de mão inválido ou incompleto.</p>
-    <Link href="/hands"><ChevronLeft/> Voltar para Minhas Mãos</Link>
-  </div>;
+  // A link that lost its parameters is a trust moment, not a stray error line:
+  // it gets the same recovery composition the replay page uses.
+  if (!tableId || !handId) return <RecoveryState
+    nested
+    title="Este link de mão está incompleto"
+    description="O endereço não diz qual mesa e qual mão abrir. Suas mãos continuam registradas — escolha uma na lista para ver o detalhe completo."
+    action={<Button render={<Link href="/hands"/>}><ListChecks/> Ver minhas mãos</Button>}/>;
 
   // Shaped like the loaded page (tool row, result header, seats, board, timeline)
   // so nothing jumps when the hand arrives.
-  if (hand.isLoading) return <div className="hand-history shell">
+  if (hand.isLoading) return <div className="hand-history shell static-cards">
     <LoadingRegion label="Carregando detalhes da mão…" className="skeleton-panel hand-history-skeleton">
       <Skeleton style={{height: '20px', width: '190px'}}/>
       <Skeleton style={{height: '104px'}}/>
@@ -80,10 +84,11 @@ function HandHistoryContent() {
     </LoadingRegion>
   </div>;
 
-  if (hand.isError || !hand.data) return <div className="hand-history shell">
-    <Link href="/hands"><ChevronLeft/> Voltar para Minhas Mãos</Link>
-    <p className="form-error">Não foi possível carregar esta mão. Verifique se você está conectado na conta correta.</p>
-  </div>;
+  if (hand.isError || !hand.data) return <RecoveryState
+    nested
+    title="Não foi possível carregar esta mão"
+    description="A mão pode não pertencer a esta conta ou o histórico não está mais disponível. Verifique se você entrou com a conta certa."
+    action={<Button render={<Link href="/hands"/>}><ListChecks/> Ver minhas mãos</Button>}/>;
 
   const h = hand.data;
   const viewerIsWinner = h.outcome === 'won' || h.outcome === 'tied';
@@ -104,7 +109,7 @@ function HandHistoryContent() {
     }
   }
 
-  return <div className="hand-history shell">
+  return <div className="hand-history shell static-cards">
     {/* Export and share are utilities: they belong on the page's tool row beside
         the way out, not stacked down the centre line where the result and the
         winners are what the player came to read. */}
@@ -221,7 +226,7 @@ function HandHistoryContent() {
 export default function HandHistoryPage() {
   return <TermsGate>
     <main className="app-page">
-      <Suspense fallback={<div className="hand-history shell">
+      <Suspense fallback={<div className="hand-history shell static-cards">
         <LoadingRegion label="Carregando mão…" className="skeleton-panel hand-history-skeleton">
           <Skeleton style={{height: '20px', width: '190px'}}/>
           <Skeleton style={{height: '104px'}}/>

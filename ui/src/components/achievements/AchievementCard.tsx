@@ -57,7 +57,7 @@ export function AchievementCard({achievement, count}: { achievement: Achievement
           </div>
           <div className="achievement-progress-track" role="progressbar" aria-label={`Progresso de ${achievementLabel(achievement.key)}`}
                aria-valuemin={0} aria-valuemax={100} aria-valuenow={segmentProgress}>
-            <span style={{width: `${segmentProgress}%`}}/>
+            <span style={{'--fill': segmentProgress / 100} as CSSProperties}/>
           </div>
           {progress.maxed && <p className="achievement-count sr-only">Completo</p>}
         </div>

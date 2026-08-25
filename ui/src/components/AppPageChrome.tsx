@@ -85,7 +85,11 @@ export function AppPageNav({authed, current, rewardReady = false}: {
 function AppTabBar({current, rewardReady}: {current?: MainRoute; rewardReady: boolean}) {
   const primary = MAIN_ROUTES.filter(({route}) => TAB_BAR_PRIMARY.includes(route));
   const secondary = MAIN_ROUTES.filter(({route}) => !TAB_BAR_PRIMARY.includes(route));
-  const moreActive = secondary.some(({route}) => route === current);
+  // When the player is standing on one of the four routes behind "Mais", the
+  // trigger says so. A generic "Mais" as the active-location label left Guia,
+  // Ranking, Conquistas and Mãos with no visible mark of where you are.
+  const activeSecondary = secondary.find(({route}) => route === current);
+  const MoreIcon = activeSecondary?.icon ?? MoreHorizontal;
 
   return <nav className="app-tab-bar" aria-label="Navegação rápida">
     {primary.map(({href, label, route, icon: Icon}) => <Link key={route} href={href}
@@ -99,8 +103,12 @@ function AppTabBar({current, rewardReady}: {current?: MainRoute; rewardReady: bo
       <span>{label}</span>
     </Link>)}
     <Popover>
-      <PopoverTrigger render={<button type="button" className={moreActive ? 'is-active' : undefined}/>}>
-        <MoreHorizontal aria-hidden="true"/><span>Mais</span>
+      <PopoverTrigger render={<button type="button" className={activeSecondary ? 'is-active' : undefined}
+                                      aria-current={activeSecondary ? 'page' : undefined}
+                                      aria-label={activeSecondary
+                                        ? `${activeSecondary.label} — abrir mais destinos`
+                                        : 'Mais destinos'}/>}>
+        <MoreIcon aria-hidden="true"/><span>{activeSecondary?.label ?? 'Mais'}</span>
       </PopoverTrigger>
       <PopoverContent className="app-tab-bar-menu" side="top" align="center" aria-label="Mais opções">
         {secondary.map(({href, label, route, icon: Icon}) => <Link key={route} href={href}

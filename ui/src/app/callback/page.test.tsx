@@ -38,7 +38,11 @@ describe('OAuth callback page', () => {
   
   test('exchanges credentials, persists the session and restores the destination', async () => {
     render(<CallbackPage/>);
-    expect(screen.getByText(/Autenticando seu lugar/)).toBeInTheDocument();
+    // A route that can sit on screen for seconds has to be a landmark with a
+    // heading, and has to announce the wait rather than leave silence.
+    expect(screen.getByRole('main')).toBeInTheDocument();
+    expect(screen.getByRole('heading', {level: 1})).toHaveTextContent('Autenticando');
+    expect(screen.getByRole('status')).toHaveTextContent('Autenticando seu lugar…');
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/table?id=1'));
     expect(mocks.exchangeCode).toHaveBeenCalledWith('code-1', 'state-1');
     expect(mocks.setAccessToken).toHaveBeenCalledWith('token');
@@ -61,7 +65,9 @@ describe('OAuth callback page', () => {
   test('offers a new OAuth flow after an expired code', async () => {
     mocks.exchangeCode.mockRejectedValue(new Error('expired'));
     render(<CallbackPage/>);
-    expect(await screen.findByRole('heading', {name: 'Não foi possível autenticar'})).toBeInTheDocument();
+    expect(await screen.findByRole('heading', {level: 1, name: 'Não foi possível autenticar'})).toBeInTheDocument();
+    expect(screen.getByRole('main')).toContainElement(screen.getByRole('heading', {level: 1}));
+    expect(screen.getByRole('alert')).toHaveTextContent(/código de acesso expirou/);
     await userEvent.click(screen.getByRole('button', {name: 'Tentar novamente'}));
     expect(mocks.startOAuthFlow).toHaveBeenCalledOnce();
     expect(screen.getByRole('button', {name: 'Voltar ao início'})).toHaveAttribute('href', '/');

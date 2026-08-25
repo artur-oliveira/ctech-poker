@@ -319,7 +319,8 @@ export function Seat({
     <div className="seat-info">
       {playstyle && <span className="seat-playstyle" title={playstyle.reason}>{playstyle.label}</span>}
       <b
-        title={seat.name || undefined}>{playerName(seat.player_id, isViewer ? seat.player_id : undefined, seat.name)}</b><span>{displayStack.toLocaleString('pt-BR')} fichas</span>{showEquity && chance != null &&
+        title={seat.name || undefined}>{playerName(seat.player_id, isViewer ? seat.player_id : undefined, seat.name)}</b><span>{displayStack.toLocaleString('pt-BR')}<i
+        className="seat-stack-unit"> fichas</i></span>{showEquity && chance != null &&
         <div className="seat-equity" aria-label={`Chance estimada de vitória: ${chance}%`}>
             <Progress value={chance} indicatorClassName={equityTone(chance)}/>
             <small>Chance {chance}%</small>

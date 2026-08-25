@@ -32,11 +32,33 @@
     --gold-ink: #30230a;
     --gold-deep: #d8ae5d;
     --danger-soft: #f5b0b3;
+    /* --danger is the error surface and icon red; on --ink it reaches 3.99:1,
+       below AA for the 11-12px error and expiry copy that needs it most. This is
+       the text pair: 5.12:1 on --ink, 4.74:1 on --surface-control/--surface-seat. */
+    --text-danger: #ef4444;
     --toast-bg: #efe0bf;
     --toast-ink: #3a241a;
     --focus-ring: #ed777c;
     --control-border: #ffffff24;
     --seat-border: #ffffff26;
+
+    /* Private note tags. The six are a categorical palette the *player* assigns
+       meaning to (the labels are the colour names), so they are named by hue on
+       purpose — but they are tokens, not literals, so a theme can retune them. */
+    --tag-red: #ef4444;
+    --tag-orange: #f97316;
+    --tag-yellow: #eab308;
+    --tag-green: #22c55e;
+    --tag-blue: #3b82f6;
+    --tag-purple: #a855f7;
+
+    /* Height the global API-unavailable strip occupies at the top of the
+       viewport. 0 while the API is reachable, so every calc() that subtracts it
+       is inert in the normal case. NetworkProvider flips the html attribute. */
+    --api-bar-h: 0px;
+
+    /* Recessed field inside an already-dark panel (report details, note text). */
+    --black-scrim: #00000030;
 
     /* Design System Tokens */
     --font-size-tiny: 0.625rem;
@@ -51,6 +73,9 @@
     --rounded-xs: 4px;
     --rounded-sm: 8px;
     --rounded-card: 6px;
+    /* deck/felt thumbnails: a playing card shrunk to swatch size keeps its
+       shape only if the corner shrinks with it */
+    --rounded-card-thumb: 2px;
     --rounded-control: 12px;
     --rounded-seat: 14px;
     --rounded-panel: 16px;
@@ -197,22 +222,45 @@ body {
     text-rendering: optimizeLegibility
 }
 
+/* The API-down notice used to float as a centred card over the top of whatever
+   page was open, which on the table covered Lobby, reactions, chat, menu, pause
+   and Sair — the controls a player most needs while the server is unreachable.
+   It is now a full-width strip that *reserves* its own height instead: the
+   `--api-bar-h` token below pushes the document (and the table's 100dvh grid)
+   down by exactly the strip's height, so nothing is ever occluded. */
+html[data-api-offline] {
+    --api-bar-h: 56px;
+}
+
+body {
+    padding-top: var(--api-bar-h)
+}
+
+/* The table is a blocking 100dvh grid with its own scroll lock, so it takes the
+   offset as a margin plus a shortened height (see .game) rather than through
+   body padding, which its `overflow: hidden` body would swallow. */
+body:has(.game) {
+    padding-top: 0
+}
+
 .network-status {
     position: fixed;
-    top: max(12px, env(safe-area-inset-top));
-    left: 50%;
+    top: 0;
+    left: 0;
+    right: 0;
     z-index: var(--z-api);
-    width: min(680px, calc(100vw - 24px));
+    height: var(--api-bar-h);
     min-width: 0;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 12px;
-    padding: 12px 14px;
-    border-radius: var(--rounded-control);
+    padding: 0 max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
     color: var(--paper);
     background: var(--surface-error);
+    border-bottom: 1px solid var(--white-12);
     box-shadow: 0 4px 8px var(--black-0b);
-    transform: translateX(-50%);
+    overflow: hidden;
 }
 
 .network-status > svg {
@@ -224,9 +272,8 @@ body {
 
 .network-status > div {
     min-width: 0;
-    flex: 1;
     display: grid;
-    gap: 2px
+    gap: 1px
 }
 
 .network-status strong,
@@ -249,19 +296,17 @@ body {
     color: var(--paper)
 }
 
+/* One strip height on every screen: below 600px the reassurance line is the
+   part that goes, not the height — a taller bar would eat the phone table's
+   already-blocking 100dvh budget, and the headline plus retry still say
+   everything a player has to act on. */
 @media (max-width: 600px) {
     .network-status {
-        align-items: flex-start;
-        flex-wrap: wrap
+        gap: 10px
     }
 
-    .network-status > div {
-        width: calc(100% - 34px);
-        flex: 0 0 calc(100% - 34px)
-    }
-
-    .network-status button {
-        width: 100%
+    .network-status span {
+        display: none
     }
 }
 
@@ -1719,7 +1764,8 @@ h1 em {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    min-height: 34px;
+    /* the project's 44px floor, not the 34px the pill used to draw at */
+    min-height: 44px;
     padding: 6px 9px;
     border: 1px solid var(--white-22);
     border-radius: 999px;
@@ -1749,27 +1795,27 @@ h1 em {
 }
 
 .player-note-dot.tag-red {
-    background: #ef4444
+    background: var(--tag-red)
 }
 
 .player-note-dot.tag-orange {
-    background: #f97316
+    background: var(--tag-orange)
 }
 
 .player-note-dot.tag-yellow {
-    background: #eab308
+    background: var(--tag-yellow)
 }
 
 .player-note-dot.tag-green {
-    background: #22c55e
+    background: var(--tag-green)
 }
 
 .player-note-dot.tag-blue {
-    background: #3b82f6
+    background: var(--tag-blue)
 }
 
 .player-note-dot.tag-purple {
-    background: #a855f7
+    background: var(--tag-purple)
 }
 
 .player-note-form textarea {
@@ -1865,7 +1911,8 @@ h1 em {
 
 .app-nav {
     position: sticky;
-    top: 0;
+    /* parks under the API-unavailable strip instead of behind it; 0 normally */
+    top: var(--api-bar-h);
     z-index: var(--z-chrome);
     height: 78px;
     display: flex;
@@ -1977,7 +2024,7 @@ h1 em {
     height: 34px;
     display: grid;
     place-items: center;
-    border-radius: 10px;
+    border-radius: var(--rounded-control);
     color: var(--paper);
     background: var(--surface-control)
 }
@@ -2272,7 +2319,10 @@ h1 em {
 }
 
 .game {
-    min-height: 100dvh;
+    /* margin, not body padding: body:has(.game) locks scrolling, so the offset
+       has to come out of the table's own height budget (see --api-bar-h). */
+    margin-top: var(--api-bar-h);
+    min-height: calc(100dvh - var(--api-bar-h));
     overflow-x: clip;
     background: radial-gradient(circle at 50% 50%, var(--table-room-wine), var(--table-room) 65%);
     display: grid;
@@ -3305,7 +3355,7 @@ h1 em {
     border: 1px solid color-mix(in srgb, var(--gold) 55%, transparent);
     border-radius: 1rem;
     background: var(--surface-notice);
-    box-shadow: 0 .75rem 2rem rgb(0 0 0 / 35%);
+    box-shadow: 0 .75rem 2rem var(--black-06);
 }
 
 .idle-warning svg {
@@ -3690,6 +3740,35 @@ h1 em {
     animation-delay: calc(var(--deal-index, 0) * 75ms)
 }
 
+/* Archives are not a deal. /hands rows, the hand-history detail and a shared
+   hand are finished records, so their cards resolve together in one short
+   crossfade instead of replaying up to 2.06s of sequential dealing before the
+   board is readable. The live table and the replayer keep the sequence. */
+.static-cards .playing-card .card-reveal-inner,
+.static-cards .playing-card .card-back,
+.static-cards .playing-card .card-front {
+    animation-delay: 0s
+}
+
+.static-cards .playing-card .card-reveal-inner {
+    animation: none
+}
+
+.static-cards .playing-card .card-back {
+    animation: none;
+    opacity: 0
+}
+
+.static-cards .playing-card .card-front {
+    animation: static-card-in 200ms var(--ease-out-quart) both
+}
+
+@keyframes static-card-in {
+    from {
+        opacity: 0
+    }
+}
+
 .card-reveal img {
     position: absolute;
     inset: 0;
@@ -4037,7 +4116,9 @@ h1 em {
     border-radius: var(--rounded-xs);
     background: var(--overlay-night-3);
     color: var(--paper);
-    font: 700 7px var(--font-sans);
+    /* 9px, the table micro-scale floor: the hint box is 44px wide, so 7px was
+       shrinking a legible label for no space it needed. */
+    font: 700 9px var(--font-sans);
     line-height: 1.1;
     text-align: center
 }
@@ -4124,7 +4205,9 @@ h1 em {
     border-radius: var(--rounded-xs);
     background: var(--overlay-night-3);
     color: var(--paper);
-    font: 700 7px var(--font-sans);
+    /* 9px, the table micro-scale floor: the hint box is 44px wide, so 7px was
+       shrinking a legible label for no space it needed. */
+    font: 700 9px var(--font-sans);
     line-height: 1.1;
     text-align: center;
     transition: opacity 160ms var(--ease-out-quart) 160ms
@@ -4489,7 +4572,7 @@ h1 em {
     z-index: 8;
     inset: -7px;
     border: 2px solid var(--gold);
-    border-radius: 18px;
+    border-radius: var(--rounded-panel);
     background: color-mix(in srgb, var(--gold) 8%, transparent);
     color: var(--gold-ink);
     cursor: crosshair
@@ -6879,9 +6962,27 @@ h1 em {
         grid-template-columns: 1fr
     }
 
+    /* Better than an edge fade over a scrollable row: don't make it scroll.
+       Five 52px board cards plus gaps need 288px, more than a 320px phone has
+       left after the page and panel padding. Letting the cards shrink keeps
+       the whole board on screen — no sideways gesture to discover, no card
+       half-hidden behind a fade. */
     .public-hand-cards article > div {
-        overflow-x: auto;
+        flex-wrap: nowrap;
         padding-bottom: 4px
+    }
+
+    .public-hand-cards article > div > .playing-card,
+    .hand-history-board .hand-board > .playing-card,
+    .hand-history-board .hand-board > .board-slot-undealt {
+        flex: 0 1 auto;
+        min-width: 0;
+        height: auto;
+        aspect-ratio: 46 / 64
+    }
+
+    .hand-history-board .hand-board {
+        flex-wrap: nowrap
     }
 }
 
@@ -7159,7 +7260,7 @@ h1 em {
     gap: 10px;
     margin: -6px -8px;
     padding: 6px 8px;
-    border-radius: 10px;
+    border-radius: var(--rounded-control);
     transition: background-color 150ms var(--ease-out-quart)
 }
 
@@ -7737,7 +7838,7 @@ h1 em {
     place-items: center;
     width: 32px;
     height: 32px;
-    border-radius: 10px;
+    border-radius: var(--rounded-control);
     color: var(--brand-bright-4)
 }
 
@@ -8232,13 +8333,23 @@ h1 em {
     color: inherit;
     text-decoration: none;
     border-bottom: 1px solid var(--control-border);
-    transition: background 180ms var(--ease-out-quart), padding 180ms var(--ease-out-quart)
+    transition: background 180ms var(--ease-out-quart)
+}
+
+/* The hover inset used to animate padding-inline, which relaid out the row on
+   every pointer move. Same 8px shift, carried by the row's contents. */
+.guide-directory > a > * {
+    transition: transform 180ms var(--ease-out-quart)
 }
 
 .guide-directory > a:hover,
 .guide-directory > a:focus-visible {
-    padding-inline: 24px;
     background: var(--white-03)
+}
+
+.guide-directory > a:hover > *,
+.guide-directory > a:focus-visible > * {
+    transform: translateX(8px)
 }
 
 .guide-directory > a.featured {
@@ -8804,14 +8915,19 @@ h1 em {
     background: var(--white-12)
 }
 
+/* scaleX, not width: the fill is a solid bar, so a transform reads identically
+   and never asks the browser to re-lay-out the track while it animates.
+   --fill is 0-1, set inline by the card/overview. */
 .achievement-progress-track > span,
 .achievement-overview-track > span {
     display: block;
-    width: 0;
+    width: 100%;
     height: 100%;
     border-radius: inherit;
     background: var(--gold);
-    transition: width 500ms var(--ease-out-quart)
+    transform: scaleX(var(--fill, 0));
+    transform-origin: left center;
+    transition: transform 500ms var(--ease-out-quart)
 }
 
 .achievement-card.is-complete .achievement-progress-track > span {
@@ -9250,7 +9366,7 @@ h1 em {
     height: 44px;
     min-height: 44px;
     flex: none;
-    border-radius: 10px
+    border-radius: var(--rounded-control)
 }
 
 .store-countdown {
@@ -9265,7 +9381,7 @@ h1 em {
 }
 
 .store-countdown.is-expiring {
-    color: var(--danger)
+    color: var(--text-danger)
 }
 
 .store-history {
@@ -10178,6 +10294,10 @@ h1 em {
     pointer-events: none
 }
 
+.seat-stack-unit {
+    font-style: normal
+}
+
 .stage-v-ring .seat-info b,
 .stage-v-ring .seat-info .seat-state {
     position: absolute;
@@ -10195,12 +10315,11 @@ h1 em {
     white-space: nowrap
 }
 
+/* The supplemental playstyle badge only fits the ring at 7px, well under any
+   readable floor, and it competes with name/stack for a caption lane that 9-max
+   cannot spare. Identity wins; the badge stays on desktop and in the profile. */
 .stage-v-ring .seat-info .seat-playstyle {
-    width: max-content;
-    max-width: 64px;
-    margin: 0 auto 2px;
-    padding: 1px 4px;
-    font-size: 7px
+    display: none
 }
 
 .stage-v-ring .seat-info .seat-equity, .stage-v-ring .seat-info .seat-hand-category {
@@ -10273,19 +10392,50 @@ h1 em {
 /* The two middle seats line up with the community cards. A side-pointing bet
    grows toward the board once its localized value reaches four digits; drop
    it into the empty diagonal below and slightly outside the seat instead.
-   This keeps the value at full size rather than truncating poker information. */
+   This keeps the value at full size rather than truncating poker information.
+
+   Because that puts the bet in the same lane the caption uses, seats 2 and 7 —
+   the only two the 9-max ring parks at the extreme left/right of the ring —
+   take the *inward* half of that lane for their caption. Below-outward bet,
+   below-inward caption: neither collides, and a 72px caption centred on a seat
+   34px from the ring edge stops hanging off the viewport. */
+.stage-v-ring .seat-2 .seat-info,
+.stage-v-ring .seat-7 .seat-info {
+    width: 70px;
+    max-width: 70px;
+    transform: none
+}
+
+.stage-v-ring .seat-2 .seat-info {
+    left: 0
+}
+
+.stage-v-ring .seat-7 .seat-info {
+    left: auto;
+    right: 0
+}
+
+/* Bet points inward like the rest of the column, lifted off the mid-line so it
+   clears the community row rather than dropping into the caption lane. */
+.stage-v-ring .seat-2 .seat-bet,
+.stage-v-ring .seat-7 .seat-bet {
+    top: 30%;
+    bottom: auto;
+    flex-direction: column
+}
+
 .stage-v-ring .seat-2 .seat-bet {
-    top: calc(100% + 10px);
+    left: calc(100% + 6px);
     right: auto;
-    left: 50%;
-    transform: translateX(-75%)
+    transform: translateY(-50%);
+    transform-origin: 0 50%
 }
 
 .stage-v-ring .seat-7 .seat-bet {
-    top: calc(100% + 10px);
-    right: auto;
-    left: 50%;
-    transform: translateX(-25%)
+    left: auto;
+    right: calc(100% + 6px);
+    transform: translateY(-50%);
+    transform-origin: 100% 50%
 }
 
 /* Top-arc bets slide sideways into the gap between the two top seats,
@@ -10852,7 +11002,11 @@ h1 em {
         flex-wrap: nowrap;
         justify-content: flex-end;
         min-width: 0;
-        gap: 6px
+        /* 0, not 6: the gap is what pays for the 44px touch floor below. The
+           icons are centred inside their 44px targets, so removing the gap
+           costs no legibility and buys the daily-highlight pot enough width to
+           print in full instead of ellipsizing a number ("18.5…"). */
+        gap: 0
     }
 
     .game-chrome > header .header-right > *:not(.today-highlight-wrap) {
@@ -11423,9 +11577,9 @@ h1 em {
 
     .game {
         width: 100%;
-        height: 100dvh;
+        height: calc(100dvh - var(--api-bar-h));
         min-height: 0;
-        max-height: 100dvh;
+        max-height: calc(100dvh - var(--api-bar-h));
         grid-template-rows: auto minmax(0, 1fr) auto;
         overflow: hidden;
         overscroll-behavior: none
@@ -11444,18 +11598,21 @@ h1 em {
     }
 
     .game-chrome > header > a {
-        width: 40px;
-        min-width: 40px;
+        width: 44px;
+        min-width: 44px;
         min-height: 44px;
         justify-content: center;
         margin: 0;
         padding: 0
     }
 
+    /* No gap: the icons are centred inside their 44px targets, so the row
+       reads the same and the daily-highlight pot keeps enough width to print
+       in full instead of ellipsizing a number ("18.5…"). */
     .game-chrome > header .header-right {
         flex: 1;
         justify-content: flex-end;
-        gap: 2px
+        gap: 0
     }
 
     .header-right .connection-state {
@@ -11471,8 +11628,8 @@ h1 em {
     .header-right > .table-pause-action,
     .table-utility-menu-slot > button,
     .table-exit-slot button {
-        width: 40px;
-        min-width: 40px;
+        width: 44px;
+        min-width: 44px;
         min-height: 44px;
         padding: 0
     }
@@ -11494,9 +11651,11 @@ h1 em {
         color: var(--danger-soft)
     }
 
+    /* No min-width floor of its own: it collapses to the 28px icon-only badge
+       (base rule) so the seven header targets keep a full 44px even at 320px,
+       and re-opens the pot/label as a floating panel on tap. */
     .today-highlight-wrap {
         flex: 1 1 64px;
-        min-width: 52px;
         max-width: 112px
     }
 
@@ -11536,13 +11695,15 @@ h1 em {
     }
 
     /* Player identity remains readable without making the seat card wider.
-       The avatar carries state; the two compact lines carry name and stack. */
+       The avatar carries state; the two compact lines carry name and stack.
+       78px, not 72: a five-digit stack ("12.345 fichas") measures 66px at 11px
+       and used to ellipsize inside the old 64px content box. */
     .stage-v-ring .seat-info {
         display: grid;
         align-content: center;
         gap: 1px;
-        width: 72px;
-        max-width: 72px;
+        width: 78px;
+        max-width: 78px;
         padding: 3px 4px
     }
 
@@ -11562,10 +11723,32 @@ h1 em {
         white-space: nowrap
     }
 
+    /* State is a fixed vocabulary, not free text: let the longest of them
+       ("Desconectado", "Ausente e pronto") wrap onto a second line rather than
+       render as "Desconecta…", which reads like a bug. Names and stacks keep
+       ellipsis — those are unbounded. */
+    .stage-v-ring .seat-info .seat-state {
+        white-space: normal;
+        text-overflow: clip;
+        line-height: 1.05
+    }
+
     .stage-v-ring .seat-info span {
         color: var(--text-secondary);
         font-size: 11px;
         line-height: 1.15
+    }
+
+    /* "fichas" costs ~33px of a caption lane that is 64-78px wide, and a
+       number beside an avatar at a poker table is never anything but a stack.
+       The unit stays in the accessibility tree; only the ring drops it, so the
+       viewer's own HUD and every desktop seat still read "4.850 fichas". */
+    .stage-v-ring .seat-info .seat-stack-unit {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
     }
 
     /* Keep status physically attached to the avatar on every side of the
@@ -11925,18 +12108,11 @@ h1 em {
         gap: 0
     }
 
-    .header-right > .table-mobile-quick-action,
-    .header-right > .table-pause-action,
-    .table-utility-menu-slot > button,
-    .table-exit-slot button,
-    .game-chrome > header > a {
-        width: 38px;
-        min-width: 38px
-    }
-
+    /* Narrow phones pay for the 44px targets with the highlight, not with the
+       targets: it drops toward its icon-only badge here instead of the controls
+       dropping to 38px, which is what used to break the 44px floor. */
     .today-highlight-wrap {
-        min-width: 54px;
-        max-width: 64px
+        max-width: 56px
     }
 
     .today-highlight-pot {
@@ -11949,8 +12125,8 @@ h1 em {
     }
 
     .stage-v-ring .seat-info {
-        width: 64px;
-        max-width: 64px
+        width: 70px;
+        max-width: 70px
     }
 }
 
@@ -12481,10 +12657,22 @@ h1 em {
     }
 }
 
+/* Five fixed 46px cards plus their gaps measure 246px, which is wider than the
+   track the row gives them below 600px — the fifth card used to be cut off at
+   the viewport edge. Size them from the track instead, capped at the design
+   size so wider phones still get 46px. */
 @media (max-width: 600px) {
+    .hand-row-board {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 4px;
+        max-width: 246px
+    }
+
     .hand-row-board .playing-card.board-card {
-        width: 46px;
-        height: 64px
+        width: 100%;
+        height: auto;
+        aspect-ratio: 46 / 64
     }
 }
 
@@ -13005,7 +13193,10 @@ h1 em {
     background: var(--surface-seat)
 }
 
-.replay-page-error {
+/* Shared recovery composition: a mark, a plain-language title, what went wrong
+   and the one action back. Used by the replay page's own invalid/failed states
+   and, nested, by an invalid hand-history link. */
+.recovery-state {
     min-height: 100svh;
     display: grid;
     place-content: center;
@@ -13016,7 +13207,7 @@ h1 em {
     text-align: center
 }
 
-.replay-page-error h1 {
+.recovery-state h1 {
     max-width: 18ch;
     margin: 3px 0 0;
     font-size: clamp(26px, 5vw, 40px);
@@ -13024,7 +13215,7 @@ h1 em {
     text-wrap: balance
 }
 
-.replay-page-error p {
+.recovery-state p {
     max-width: 52ch;
     margin: 0 0 8px;
     color: var(--text-secondary);
@@ -13032,7 +13223,7 @@ h1 em {
     text-wrap: pretty
 }
 
-.replay-error-mark {
+.recovery-state-mark {
     width: 54px;
     height: 54px;
     display: grid;
@@ -13042,9 +13233,17 @@ h1 em {
     color: var(--gold)
 }
 
-.replay-error-mark svg {
+.recovery-state-mark svg {
     width: 23px;
     height: 23px
+}
+
+/* Nested inside a page shell that already paints its own background and owns
+   the viewport height. */
+.recovery-state.is-nested {
+    min-height: 76svh;
+    padding-block: 40px;
+    background: none
 }
 
 .replay-action {
@@ -13160,7 +13359,7 @@ h1 em {
     border: 3px solid var(--paper);
     border-radius: 50%;
     background: var(--brand);
-    box-shadow: 0 1px 5px #0008
+    box-shadow: 0 1px 5px var(--black-08)
 }
 
 .replay-scrubber input::-moz-range-thumb {
@@ -13169,7 +13368,7 @@ h1 em {
     border: 3px solid var(--paper);
     border-radius: 50%;
     background: var(--brand);
-    box-shadow: 0 1px 5px #0008
+    box-shadow: 0 1px 5px var(--black-08)
 }
 
 .replay-scrubber input:focus-visible {
@@ -13791,11 +13990,19 @@ button.deck-grid-slot:hover {
     border-color: var(--brand-bright);
 }
 
+/* --brand, not --brand-bright: white on the bright red measures 4.26:1, under
+   AA for these 14px labels. The base brand fill reads 6.58:1 and still carries
+   the "this is the active choice" signal. Hover/focus keep the bright edge. */
 .filter-tab.active {
-    background: var(--brand-bright);
-    color: #fff;
-    border-color: var(--brand-bright);
+    background: var(--brand);
+    color: var(--on-brand);
+    border-color: var(--brand);
     font-weight: 600;
+}
+
+.filter-tab.active:hover, .filter-tab.active:focus-visible {
+    color: var(--on-brand);
+    border-color: var(--brand-bright);
 }
 
 .filter-tab:disabled {
@@ -13822,7 +14029,7 @@ button.deck-grid-slot:hover {
     align-items: center;
     justify-content: center;
     padding: 16px 20px;
-    background: rgba(18, 13, 14, 0.6);
+    background: color-mix(in srgb, var(--ink) 60%, transparent);
     border: 1px solid var(--control-border);
     border-radius: var(--rounded-panel);
     text-align: center;
@@ -13935,7 +14142,7 @@ button.deck-grid-slot:hover {
     align-items: center;
     padding: 20px 16px;
     border-radius: var(--rounded-panel);
-    background: rgba(18, 13, 14, 0.7);
+    background: color-mix(in srgb, var(--ink) 70%, transparent);
     border: 1px solid var(--control-border);
     text-align: center;
     position: relative;
@@ -13949,18 +14156,18 @@ button.deck-grid-slot:hover {
 .podium-card.rank-1 {
     order: 2;
     border-color: var(--gold);
-    box-shadow: 0 0 24px rgba(230, 184, 92, 0.15);
+    box-shadow: 0 0 24px color-mix(in srgb, var(--gold) 15%, transparent);
     padding-top: 28px;
 }
 
 .podium-card.rank-2 {
     order: 1;
-    border-color: rgba(203, 191, 192, 0.4);
+    border-color: color-mix(in srgb, var(--text-secondary) 40%, transparent);
 }
 
 .podium-card.rank-3 {
     order: 3;
-    border-color: rgba(173, 159, 160, 0.3);
+    border-color: color-mix(in srgb, var(--muted-rose) 30%, transparent);
 }
 
 .podium-crown {
@@ -13981,17 +14188,17 @@ button.deck-grid-slot:hover {
 
 .podium-card.rank-1 .podium-badge {
     background: var(--gold);
-    color: #120d0e;
+    color: var(--ink);
 }
 
 .podium-card.rank-2 .podium-badge {
-    background: #cbbfc0;
-    color: #120d0e;
+    background: var(--text-secondary);
+    color: var(--ink);
 }
 
 .podium-card.rank-3 .podium-badge {
-    background: #ad9fa0;
-    color: #120d0e;
+    background: var(--muted-rose);
+    color: var(--ink);
 }
 
 .podium-name {
@@ -14017,7 +14224,7 @@ button.deck-grid-slot:hover {
     max-width: 680px;
     margin: 48px auto 0;
     padding: 32px 24px;
-    background: rgba(18, 13, 14, 0.5);
+    background: color-mix(in srgb, var(--ink) 50%, transparent);
     border: 1px solid var(--control-border);
     border-radius: var(--rounded-panel);
     text-align: center;
@@ -14070,8 +14277,8 @@ button.deck-grid-slot:hover {
     justify-content: space-between;
     gap: 16px;
     padding: 16px 20px;
-    background: linear-gradient(135deg, rgba(230, 184, 92, 0.12), rgba(175, 42, 47, 0.15));
-    border: 1px solid rgba(230, 184, 92, 0.35);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--gold) 12%, transparent), color-mix(in srgb, var(--brand) 15%, transparent));
+    border: 1px solid color-mix(in srgb, var(--gold) 35%, transparent);
     border-radius: var(--rounded-panel);
     margin-bottom: 24px;
     color: var(--paper);
@@ -14124,8 +14331,8 @@ button.deck-grid-slot:hover {
     align-items: flex-start;
     gap: 16px;
     padding: 18px 22px;
-    background: linear-gradient(135deg, rgba(13, 91, 69, 0.3), rgba(8, 67, 50, 0.4));
-    border: 1px solid rgba(72, 201, 140, 0.3);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--felt) 30%, transparent), color-mix(in srgb, var(--felt-deep) 40%, transparent));
+    border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
     border-radius: var(--rounded-panel);
     margin-top: 16px;
 }
@@ -14407,8 +14614,17 @@ button.deck-grid-slot:hover {
         width: max(200px, min(calc(100vw - 24px), 260px))
     }
 
+    /* Tab bar geometry: 6px top padding + 48px row + max(6px, safe-area). The
+       extra 16px is breathing room, so the last interactive row in a list ends
+       clear of the bar instead of flush against it, and scroll-padding keeps
+       keyboard/anchor scrolling from parking a target underneath it. */
     .has-tab-bar {
-        padding-bottom: calc(60px + env(safe-area-inset-bottom))
+        padding-bottom: calc(76px + env(safe-area-inset-bottom));
+        scroll-padding-bottom: calc(76px + env(safe-area-inset-bottom))
+    }
+
+    html:has(.has-tab-bar) {
+        scroll-padding-bottom: calc(76px + env(safe-area-inset-bottom))
     }
 
     .content-page {
@@ -14436,6 +14652,13 @@ button.deck-grid-slot:hover {
         height: 1px;
         overflow: hidden;
         clip-path: inset(50%)
+    }
+
+    /* With the wordmark hidden the link collapsed to the 38px mark. The mark
+       keeps its size; the link claims the documented 44px target around it. */
+    .app-nav .brand {
+        min-width: 44px;
+        justify-content: center
     }
 }
 
@@ -14695,7 +14918,7 @@ button.deck-grid-slot:hover {
     width: 20px;
     height: 28px;
     margin-left: -5px;
-    border-radius: 2px;
+    border-radius: var(--rounded-card-thumb);
     filter: drop-shadow(0 2px 2px var(--black-08));
     transform: rotate(calc((var(--card-index, 0) - 1.5) * 2deg));
     transform-origin: 50% 100%
@@ -15791,7 +16014,7 @@ button.deck-grid-slot:hover {
     width: 14px;
     height: 20px;
     margin-left: -4px;
-    border-radius: 2px;
+    border-radius: var(--rounded-card-thumb);
     filter: drop-shadow(0 2px 2px var(--black-08));
     transform: rotate(calc((var(--card-index, 0) - 1.5) * 2deg));
     transform-origin: 50% 100%
@@ -16291,7 +16514,7 @@ button.deck-grid-slot:hover {
     justify-content: center;
     border-radius: var(--rounded-pill);
     background: var(--brand-bright);
-    color: #fff;
+    color: var(--on-brand);
     font-size: var(--font-size-tiny);
     font-weight: 700;
     line-height: 1
@@ -16365,7 +16588,7 @@ button.deck-grid-slot:hover {
     padding: 10px 12px;
     border: 1px solid var(--control-border);
     border-radius: var(--rounded-control);
-    background: #ffffff08
+    background: var(--white-08)
 }
 
 .people-row.is-unread {
@@ -16446,7 +16669,7 @@ button.deck-grid-slot:hover {
 }
 
 .social-error {
-    color: var(--danger)
+    color: var(--text-danger)
 }
 
 .friend-code-shell {
@@ -16520,7 +16743,7 @@ button.deck-grid-slot:hover {
     gap: 8px;
     width: 100%;
     padding: 8px;
-    min-height: 40px;
+    min-height: 44px;
     border: 0;
     border-radius: var(--rounded-sm);
     background: transparent;
@@ -16531,7 +16754,7 @@ button.deck-grid-slot:hover {
 }
 
 .social-actions-item:hover, .social-actions-item:focus-visible {
-    background: #ffffff14
+    background: var(--white-12)
 }
 
 .social-actions-item:disabled {
@@ -16545,7 +16768,7 @@ button.deck-grid-slot:hover {
     gap: 8px;
     padding: 8px;
     border-radius: var(--rounded-sm);
-    background: #ffffff0f
+    background: var(--white-0c)
 }
 
 .social-actions-confirm p {
@@ -16576,7 +16799,7 @@ button.deck-grid-slot:hover {
     display: flex;
     align-items: center;
     gap: 8px;
-    min-height: 36px;
+    min-height: 44px;
     font-size: var(--font-size-body)
 }
 
@@ -16591,7 +16814,7 @@ button.deck-grid-slot:hover {
     padding: 10px;
     border: 1px solid var(--control-border);
     border-radius: var(--rounded-control);
-    background: #00000030;
+    background: var(--black-scrim);
     color: inherit;
     font: inherit;
     resize: vertical
@@ -16941,8 +17164,8 @@ button.deck-grid-slot:hover {
    portrait utility rail are declared later than the main mobile-table block. */
 @media (orientation: portrait) and (max-width: 1023px) {
     .game-chrome > header > a {
-        width: 40px;
-        min-width: 40px
+        width: 44px;
+        min-width: 44px
     }
 
     .game-chat.game-chat,
@@ -16959,7 +17182,74 @@ button.deck-grid-slot:hover {
 
 @media (orientation: portrait) and (max-width: 380px) {
     .game-chrome > header > a {
-        width: 38px;
-        min-width: 38px
+        width: 44px;
+        min-width: 44px
+    }
+}
+
+/* Declared after the coarse-pointer caption block that un-hides seat state:
+   a third caption line does not fit a short ring. At 320x568 the eight
+   opponent lanes sit ~40px apart and a name/stack/state stack collides with
+   the neighbouring seat's floated cards. The avatar already carries state
+   here (grayscale for sitting-out, disconnected and pending-entry, gold ring
+   for all-in, dashed border for folded), so on short portrait rings the word
+   goes back to assistive tech only and identity keeps the lane. */
+@media (orientation: portrait) and (max-height: 760px) {
+    .stage-v-ring .seat-info .seat-state {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
+    }
+
+    /* The rest of the short-ring lane budget. Three seats per column share
+       185px of ring height at 320x568, and each one wants avatar + floated
+       cards + caption. Tucking the cards deeper behind their own avatar and
+       tightening the caption's internal leading buys the ~17px that stopped
+       seat 3's caption landing on seat 2's cards; widening the column spread
+       covers the same collision between seats 1 and 2. */
+    .stage-v-ring .game-seat .seat-cards {
+        bottom: calc(100% - 12px)
+    }
+
+    .stage-v-ring .seat-4 .seat-cards, .stage-v-ring .seat-5 .seat-cards {
+        bottom: auto;
+        top: calc(100% - 12px)
+    }
+
+    .stage-v-ring .seat-info {
+        gap: 0;
+        margin-top: 2px
+    }
+
+    .stage-v-ring .seat-1, .stage-v-ring .seat-8 {
+        --seat-y: 79%
+    }
+
+    /* Short phones drop the tall-capsule proportion and take the full stage
+       width. The ring is height-driven, so at 320x568 the 3/4 capsule was only
+       252px wide while the community row needs ~181px of the middle — which
+       left the mid-side seats nowhere to put a caption. Full-bleed moves seats
+       2 and 7 out to the edges and gives the caption its own column. */
+    .stage-v-ring {
+        aspect-ratio: auto;
+        width: 100%
+    }
+
+    /* Those two captions are the only ones that sit level with the community
+       row, so they are the ones held to the width outside it. */
+    .stage-v-ring .seat-2 .seat-info,
+    .stage-v-ring .seat-7 .seat-info {
+        width: 64px;
+        max-width: 64px
+    }
+
+    .stage-v-ring .seat-2 .seat-info {
+        left: -10px
+    }
+
+    .stage-v-ring .seat-7 .seat-info {
+        right: -10px
     }
 }

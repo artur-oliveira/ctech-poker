@@ -24,19 +24,24 @@ function Callback() {
       r.replace(x.returnTo || '/lobby');
     }).catch(() => setFailed(true));
   }, [p, r]);
+  // Same shell in both branches, and both are landmarks with a real page
+  // heading: this route can sit on screen for a while, and an authentication
+  // that finishes (or fails) without announcing itself leaves a screen-reader
+  // user waiting on silence.
   if (failed) return (
-    <div className="loading-screen">
-      <h2>Não foi possível autenticar</h2>
-      <p>O código de acesso expirou ou já foi usado. Entre novamente para continuar.</p>
+    <main className="loading-screen">
+      <h1>Não foi possível autenticar</h1>
+      <p role="alert">O código de acesso expirou ou já foi usado. Entre novamente para continuar.</p>
       <Button onClick={() => startOAuthFlow()}>Tentar novamente</Button>
       <Button variant="ghost" render={<Link href="/"/>}>Voltar ao início</Button>
-    </div>
+    </main>
   );
   return (
-    <div className="loading-screen">
-      <span className="loader"/>
-      Autenticando seu lugar…
-    </div>
+    <main className="loading-screen">
+      <h1 className="sr-only">Autenticando</h1>
+      <span className="loader" aria-hidden="true"/>
+      <p role="status" aria-live="polite">Autenticando seu lugar…</p>
+    </main>
   );
 }
 

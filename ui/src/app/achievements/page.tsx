@@ -1,5 +1,5 @@
 'use client';
-import {useCallback, useMemo, useState} from 'react';
+import {type CSSProperties, useCallback, useMemo, useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {Sparkles, Star, Trophy} from 'lucide-react';
 import {AchievementCard} from '@/components/achievements/AchievementCard';
@@ -117,7 +117,7 @@ export default function Achievements() {
             </div>
             <div className="achievement-overview-track" role="progressbar" aria-label="Maestria geral"
                  aria-valuemin={0} aria-valuemax={100} aria-valuenow={stats.completionRate}>
-              <span style={{width: `${stats.completionRate}%`}}/>
+              <span style={{'--fill': stats.completionRate / 100} as CSSProperties}/>
             </div>
             <div className="achievements-stats-bar">
               <div className="stat-card">
@@ -165,6 +165,10 @@ export default function Achievements() {
       {authed && mine.isError &&
           <p className="form-error">Não foi possível carregar seu progresso no momento. O catálogo abaixo exibe as metas
               gerais.</p>}
+      {/* The cards below are h3s. Without this the page jumped H1 -> H3 and the
+          grid had no name of its own in the heading tree; the filters above it
+          are the visible label, so the heading itself stays screen-reader-only. */}
+      <h2 className="sr-only">Catálogo de conquistas</h2>
       {catalog.isLoading ?
         <SkeletonList label="Carregando catálogo de conquistas…" count={6} height={218}
                       className="achievements-grid"/>

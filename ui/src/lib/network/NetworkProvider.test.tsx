@@ -46,6 +46,30 @@ describe('NetworkProvider', () => {
     expect(mocks.check).toHaveBeenCalledTimes(2);
   });
 
+  // The strip reserves its own height instead of floating over the page, so
+  // navigation and the table's Lobby/Sair controls stay reachable exactly when
+  // recovery matters. The height itself is CSS (--api-bar-h); this flag is what
+  // switches it on.
+  test('marks the document while the strip is up and clears it on recovery', () => {
+    const {rerender, unmount} = render(<NetworkProvider><span>content</span></NetworkProvider>);
+    expect(document.documentElement.dataset.apiOffline).toBe('true');
+
+    mocks.snapshot = {status: 'available', reason: null, checkedAt: 2};
+    act(() => mocks.listeners.forEach(listener => listener()));
+    rerender(<NetworkProvider><span>content</span></NetworkProvider>);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(document.documentElement.dataset.apiOffline).toBeUndefined();
+    unmount();
+  });
+
+  test('never reserves the strip on the dedicated unavailable route', () => {
+    window.history.replaceState({}, '', '/unavailable');
+    render(<NetworkProvider><span>content</span></NetworkProvider>);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(document.documentElement.dataset.apiOffline).toBeUndefined();
+    window.history.replaceState({}, '', '/');
+  });
+
   test('distinguishes a device outage and responds to browser recovery events', () => {
     mocks.snapshot = {status: 'unavailable', reason: 'offline', checkedAt: 1};
     render(<NetworkProvider><span>content</span></NetworkProvider>);

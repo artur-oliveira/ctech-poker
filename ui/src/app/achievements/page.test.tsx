@@ -84,6 +84,17 @@ describe('achievements page', () => {
     expect(screen.getByText('hands_played')).toHaveAttribute('data-count', '0');
   });
   
+  test('keeps the heading tree intact and animates mastery without touching layout', () => {
+    render(<Achievements/>);
+    // The cards are h3s: without an h2 for the catalogue the page jumped H1->H3.
+    expect(screen.getByRole('heading', {level: 1})).toHaveTextContent('Conquistas');
+    expect(screen.getByRole('heading', {level: 2, name: 'Catálogo de conquistas'})).toBeInTheDocument();
+
+    const overview = screen.getByRole('progressbar', {name: 'Maestria geral'});
+    const rate = Number(overview.getAttribute('aria-valuenow'));
+    expect(overview.firstElementChild).toHaveStyle({'--fill': String(rate / 100)});
+  });
+
   test('filters unlocked, in-progress and completed achievements and restores an empty filter', () => {
     const populated = render(<Achievements/>);
     

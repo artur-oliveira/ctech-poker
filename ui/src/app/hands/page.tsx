@@ -48,7 +48,7 @@ const HandRow = memo(function HandRow({hand, mode}: { hand: HandItem; mode: Wall
     mode
   });
   const category = handCategoryLabel(hand.hole_cards, hand.board);
-  return <Link href={`/hands/history?${historyParams.toString()}`} className={`hand-row is-${hand.outcome}`}>
+  return <Link href={`/hands/history?${historyParams.toString()}`} className={`hand-row static-cards is-${hand.outcome}`}>
     <div className="hand-row-top">
       <div className="hand-row-card-group">
         <small>Suas cartas</small>

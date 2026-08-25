@@ -140,7 +140,11 @@ describe('hand history components', () => {
 
   test('reveals opponent cards only after a show_cards action or at showdown', () => {
     const {rerender} = render(<HandReplayer hand={hand} viewerId="viewer" actions={[actions[0]]}/>);
-    expect(screen.getAllByAltText('Carta fechada').length).toBeGreaterThan(0);
+    const backs = screen.getAllByAltText('Carta fechada');
+    expect(backs.length).toBeGreaterThan(0);
+    // The shared card back is above the fold and measured as LCP on every
+    // table surface, so it must not be lazy-loaded.
+    backs.forEach(back => expect(back).toHaveAttribute('loading', 'eager'));
 
     rerender(<HandReplayer hand={hand} viewerId="viewer" actions={[
       actions[0], {...actions[1], player_id: 'p2', action: 'show_cards'},

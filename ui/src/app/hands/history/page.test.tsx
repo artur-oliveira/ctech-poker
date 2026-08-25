@@ -89,7 +89,8 @@ describe('hand detail page', () => {
   test('rejects incomplete links without executing enabled queries', () => {
     mocks.params = new Map();
     render(<HandHistoryPage/>);
-    expect(screen.getByText('Link de mão inválido ou incompleto.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name: 'Este link de mão está incompleto'})).toBeInTheDocument();
+    expect(screen.getByText(/Ver minhas mãos/).closest('a')).toHaveAttribute('href', '/hands');
     expect(mocks.query).toHaveBeenCalledWith(expect.objectContaining({enabled: false}));
   });
   
@@ -99,7 +100,8 @@ describe('hand detail page', () => {
     expect(screen.getByText(/Carregando detalhes/)).toBeInTheDocument();
     queryState({handData: undefined, handError: true});
     view.rerender(<HandHistoryPage/>);
-    expect(screen.getByText(/conta correta/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name: 'Não foi possível carregar esta mão'})).toBeInTheDocument();
+    expect(screen.getByText(/conta certa/)).toBeInTheDocument();
   });
   
   test('integrates hand and chronologically sorted history responses', () => {

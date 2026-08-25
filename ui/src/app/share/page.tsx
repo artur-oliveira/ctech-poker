@@ -48,7 +48,7 @@ function SharedHandContent() {
       <p><ShieldCheck aria-hidden="true"/> Jogadores anonimizados · expira
         em {new Date(item.expires_at).toLocaleDateString('pt-BR')}</p>
     </header>
-    <div className="public-hand-cards">
+    <div className="public-hand-cards static-cards">
       <article>
         <b>Herói</b>
         <div>{item.hero_cards?.length ? item.hero_cards.map((card, index) =>

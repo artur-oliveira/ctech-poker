@@ -9,14 +9,20 @@ import {usePathname} from 'next/navigation';
  * page load would do. */
 export function RouteAnnouncer() {
   const pathname = usePathname();
-  const mounted = useRef(false);
+  // The path this effect last acted on, not a "have I mounted" boolean: under
+  // StrictMode the mount effect runs twice, and the second pass used to fall
+  // through and mutate `main`/`h1` while a Suspense boundary below was still
+  // hydrating — which React reports as a hydration mismatch on /profile and
+  // /share. Comparing the path makes the re-run a no-op, so the DOM is only
+  // ever touched on a real route change, after hydration.
+  const lastPath = useRef<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
 
   useEffect(() => {
-    if (!mounted.current) {
-      mounted.current = true;
-      return;
-    }
+    if (lastPath.current === pathname) return;
+    const first = lastPath.current === null;
+    lastPath.current = pathname;
+    if (first) return;
     const heading = document.querySelector<HTMLElement>('main h1, h1');
     const target = heading ?? document.querySelector<HTMLElement>('main');
     if (target) {

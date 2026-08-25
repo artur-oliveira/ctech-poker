@@ -62,8 +62,12 @@ describe('shared app page chrome', () => {
       const tabBar = screen.getByRole('navigation', {name: 'Navegação rápida'});
 
       expect(within(tabBar).queryByRole('link', {name: /Guia/})).not.toBeInTheDocument();
-      const more = within(tabBar).getByRole('button', {name: 'Mais'});
+      // Standing on a tucked route, the trigger names that route instead of
+      // the generic "Mais" so the active location is still visible.
+      const more = within(tabBar).getByRole('button', {name: 'Ranking — abrir mais destinos'});
       expect(more).toHaveClass('is-active');
+      expect(more).toHaveAttribute('aria-current', 'page');
+      expect(within(more).getByText('Ranking')).toBeInTheDocument();
 
       await userEvent.click(more);
       const menu = within(screen.getByLabelText('Mais opções'));
@@ -79,7 +83,10 @@ describe('shared app page chrome', () => {
       render(<AppPageNav authed current="lobby" rewardReady/>);
       const tabBar = screen.getByRole('navigation', {name: 'Navegação rápida'});
 
-      expect(within(tabBar).getByRole('button', {name: 'Mais'})).not.toHaveClass('is-active');
+      const more = within(tabBar).getByRole('button', {name: 'Mais destinos'});
+      expect(more).not.toHaveClass('is-active');
+      expect(more).not.toHaveAttribute('aria-current');
+      expect(within(more).getByText('Mais')).toBeInTheDocument();
       expect(within(tabBar).getByText(/recompensa diária disponível/)).toBeInTheDocument();
     });
 

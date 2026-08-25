@@ -44,7 +44,10 @@ describe('AchievementCard', () => {
     render(<AchievementCard achievement={achievement} count={1200}/>);
     expect(screen.getByText('Completo')).toBeInTheDocument();
     expect(screen.getByText('Dominada')).toBeInTheDocument();
-    expect(screen.getByRole('progressbar', {name: 'Progresso de Vitórias'})).toHaveAttribute('aria-valuenow', '100');
+    const track = screen.getByRole('progressbar', {name: 'Progresso de Vitórias'});
+    expect(track).toHaveAttribute('aria-valuenow', '100');
+    // scaleX, not width: the fill must not animate a layout property.
+    expect(track.firstElementChild).toHaveStyle({'--fill': '1'});
     expect(document.querySelectorAll('.achievement-star.is-filled')).toHaveLength(5);
   });
   

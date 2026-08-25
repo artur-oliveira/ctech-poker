@@ -16,7 +16,16 @@ off by default — do not build UI that assumes real money is on.
 - **The wire is binary protobuf**, not JSON. Encode/decode through `lib/ws/utils.ts` against
   `lib/api/proto/poker.ts`; regenerate from `../proto/poker.proto` rather than hand-editing.
 - **Named constants over literals.** Reuse `lib/api/*`, `lib/utils.ts`, `lib/pokerRules.ts`,
-  `lib/tableOutcome.ts` etc. instead of inlining URLs, paths or event strings.
+  `lib/tableOutcome.ts` etc. instead of inlining URLs, paths or event strings. The same holds in
+  CSS: every colour and radius is a token in `globals.css`'s `:root` (the only literals left there
+  are the `[data-table-theme]` blocks, which *define* tokens). A new value means a new named token
+  documented in `DESIGN.md`, never an inline hex or px.
+- **Never animate a layout property.** `width`, `height`, `padding` and `margin` transitions are
+  banned; use `transform`/`opacity` (a progress fill is `scaleX(var(--fill))`, a hover inset is a
+  `translateX` on the row's contents). The design hook flags regressions.
+- **Landmarks and headings survive every state.** Loading, empty, error and invalid-link branches
+  render inside the same `main` with a real `h1` as the success branch — the recovery vocabulary is
+  `SystemState` (whole-app) or `RecoveryState` (in-app), not a bare `.form-error` line.
 - **Two realtime hooks, no more.** `lib/hooks/useTableRealtime.ts` owns the table surface;
   `lib/hooks/useLobbyRealtime.ts` owns the lobby/user gateway (rooms **and** all social pushes).
   Extend them rather than opening a third socket. `useLobbyRealtime` is mounted once, by
@@ -61,7 +70,8 @@ off by default — do not build UI that assumes real money is on.
 
 `src/app/{page,lobby,people,table,hands,hands/history,hands/replay,leaderboard,achievements,profile,share,guide,poker-rules,callback}`
 · `src/components/{achievements,hands,lobby,social,table,ui}` (+ root: `TermsGate`, `Notifier`,
-`AchievementToast`, `HandRankings`) · `src/app/{robots,sitemap}.ts` (crawler surface — see `docs/seo.md`)
+`AchievementToast`, `HandRankings`, `SystemState`, `RecoveryState`) · `src/app/{robots,sitemap}.ts`
+(crawler surface — see `docs/seo.md`)
 · `src/lib/{api,api/proto,auth,hooks,providers,ws}` + domain
 modules at `src/lib/*.ts` · `src/dev` (mock runtime, aliased away in prod) · `src/test/setup.ts`.
 
