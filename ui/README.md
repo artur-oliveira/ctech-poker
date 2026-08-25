@@ -121,6 +121,14 @@ vertical `stage-v` ring for portrait handhelds.
 - **Animations are pure CSS** (`src/app/globals.css` keyframes) — no animation library. Deal,
   flip, street reveals, wager-in, pot count, turn signal, winner, reconnect progress, and
   `prefers-reduced-motion` are all handled there.
+- **Table reactions use the Poker Theater system** (`TableReactions.tsx` +
+  `src/app/table-reactions.css`): 13 seat-anchored self tells and 15 directed gestures are split
+  into two explicit picker modes, with three favorites kept above the catalog. Every catalog ID
+  has its own CSS choreography; directed gestures follow a source-to-target arc and resolve at the
+  recipient seat. Reduced motion lands the identifying glyph directly at its final seat, and the
+  stored visibility preference can hide all effects without changing the socket stream. The six
+  Poker Theater additions (`heartbeat`, `shark`, `pokerface`, `spotlight`, `crown`,
+  `bandage`) are free, but still must exist in the API's fixed reaction whitelist.
 - Chat messages are capped at `CHAT_MESSAGE_MAX_LENGTH` (`lib/chat.ts`, 50 chars, mirrored
   server-side). A message actually delivered live (never chat history hydrated from a snapshot on
   connect/reconnect) pops a speech bubble on the sender's `Seat` — `useTableRealtime`'s

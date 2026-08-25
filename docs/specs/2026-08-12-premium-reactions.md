@@ -20,8 +20,10 @@ now rejected, not silently accepted).
 
 ## Non-goals
 
-- No changing which reactions exist or their glyph/animation — that stays 100% client-owned
-  (`ui/src/lib/reactions.ts`), same as today.
+- Reaction glyphs, supporting copy and animation stay 100% client-owned
+  (`ui/src/lib/reactions.ts` + `ui/src/app/table-reactions.css`). The server owns only the
+  fixed ID whitelist, premium flag and targeted shape, so every new client ID must be mirrored in
+  `internal/reactions/catalog.go` before it can be sent in production.
 - No admin UI for pricing. Both catalogs (`internal/reactions/catalog.go` here, `productSKUCatalog`
   in wallet) are fixed Go tables, edited by a deploy — mirrors every other SKU catalog in this
   codebase.
@@ -44,6 +46,24 @@ Exactly these six `TABLE_REACTIONS` IDs become premium; every other ID stays fre
 Pricing follows the type-based rule below — untargeted emoji vs. targeted object — not a per-ID
 override, so adding a seventh premium reaction later just means flipping its `Premium` flag with the
 price that matches its `targeted` shape in `TABLE_REACTIONS`.
+
+## Free Poker Theater expansion (2026-08-25)
+
+The Poker Theater UI expansion adds six free reactions. They participate in the same fixed catalog
+validation and favorites flow but create no entitlement, purchase SKU, or wallet product:
+
+| ID | Label (pt-BR) | Type |
+|---|---|---|
+| `heartbeat` | Coração all-in | untargeted self tell |
+| `shark` | Modo tubarão | untargeted self tell |
+| `pokerface` | Cara de pôquer | untargeted self tell |
+| `spotlight` | Boa leitura | targeted gesture |
+| `crown` | Passar a coroa | targeted gesture |
+| `bandage` | Curar bad beat | targeted gesture |
+
+The wire remains unchanged: `reaction_id` plus `target_player_id` for the three directed
+gestures. The frontend's complete choreography catalog is documented in
+`ui/docs/2026-08-25-poker-theater-reactions.md`.
 
 ## Pricing example
 

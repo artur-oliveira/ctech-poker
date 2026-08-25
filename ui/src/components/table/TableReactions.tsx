@@ -1,6 +1,8 @@
 'use client';
 import {type CSSProperties, useEffect, useRef, useState} from 'react';
-import {LockKeyhole, SmilePlus, Sparkles, Star, Volume2, VolumeX, X} from 'lucide-react';
+import {
+  Crosshair, Eye, EyeOff, LockKeyhole, SmilePlus, Sparkles, Star, UserRound, X
+} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {EmojiGlyph} from '@/components/ui/EmojiGlyph';
 import {ReactionFavoritesDialog} from '@/components/reactions/ReactionFavoritesDialog';
@@ -15,10 +17,42 @@ import {
 
 const REACTION_MUTE_KEY = 'poker:table-reactions-muted';
 const CHIP_PIECES = Array.from({length: 12}, (_, index) => index);
-const EFFECT_PIECES = Array.from({length: 8}, (_, index) => index);
-// Self reactions (cold, fire) decorate the floating emote itself rather than
-// hitting an opponent, so they get a satellite effect with no throw delay.
-const SELF_IMPACT_REACTIONS = new Set<TableReactionID>(['cold', 'fire', 'respect', 'sleepy']);
+type ReactionScope = 'self' | 'target';
+
+const REACTION_ENTRIES = Object.entries(TABLE_REACTIONS) as [
+  TableReactionID, typeof TABLE_REACTIONS[TableReactionID]
+][];
+
+const REACTION_THEATER = {
+  clap: {accent: 'BRAVO', particles: ['✦', '·', '✦', '·', '✦', '·']},
+  laugh: {accent: 'HA!', particles: ['HA', 'HA', 'HA', 'HA']},
+  wow: {accent: '!', particles: ['✦', '!', '✦', '!']},
+  angry: {accent: '', particles: ['', '', '', '']},
+  cry: {accent: '', particles: ['💧', '💧', '💧', '💧']},
+  nervous: {accent: '', particles: ['•', '•', '•', '•', '•']},
+  cold: {accent: '', particles: ['❄', '❄', '❄', '❄', '❄', '❄']},
+  fire: {accent: '', particles: ['', '', '', '', '', '']},
+  respect: {accent: 'GG', particles: ['✦', '✦', '✦', '✦']},
+  sleepy: {accent: '', particles: ['z', 'z', 'Z']},
+  heartbeat: {accent: 'ALL IN', particles: ['♥', '·', '♥', '·']},
+  shark: {accent: '', particles: ['≈', '≈', '≈', '≈']},
+  pokerface: {accent: '', particles: ['♠', '♦', '♣', '♥']},
+  chip: {accent: '', particles: []},
+  coffee: {accent: '', particles: ['~', '~', '~']},
+  clover: {accent: '', particles: ['🍀', '✦', '🍀', '✦', '🍀', '✦']},
+  horseshoe: {accent: '', particles: ['★', '★', '★', '★', '★', '★']},
+  tear: {accent: '', particles: ['💧', '💧', '💧', '💧', '💧', '💧']},
+  tomato: {accent: 'SPLAT', particles: ['', '', '', '', '', '']},
+  poop: {accent: '', particles: ['·', '·', '·', '·', '·']},
+  rofl: {accent: 'HA!', particles: ['🤣', '🤣', '🤣']},
+  duck: {accent: 'QUACK', particles: ['🪶', '🪶', '🪶', '🪶', '🪶']},
+  turtle: {accent: 'TANK', particles: ['z', 'z', 'Z']},
+  knife: {accent: '', particles: ['', '', '', '', '', '', '', '']},
+  flowers: {accent: '', particles: ['🌸', '🌸', '🌸', '🌸', '🌸', '🌸']},
+  spotlight: {accent: 'READ', particles: ['✦', '✦', '✦', '✦']},
+  crown: {accent: 'REI', particles: ['♠', '♦', '♣', '♥', '★']},
+  bandage: {accent: '+1', particles: ['♥', '✦', '♥', '✦']}
+} satisfies Record<TableReactionID, {accent: string; particles: string[]}>;
 
 function ReactionChipStack({className = '', style}: {className?: string; style?: CSSProperties}) {
   return <span className={`reaction-table-chip-stack ${className}`} style={style} aria-hidden="true">
@@ -51,53 +85,27 @@ function chipBurstStyle(index: number): CSSProperties {
 }
 
 function ReactionImpact({reactionId}: {reactionId: TableReactionID}) {
-  if (reactionId === 'chip') return <span className="reaction-impact reaction-impact-chip" aria-hidden="true">
-    <i className="reaction-chip-flash"/>
-    {CHIP_PIECES.map(index => <ReactionChipStack key={index} className="reaction-jackpot-stack"
-                                                 style={chipBurstStyle(index)}/>)}</span>;
-  if (reactionId === 'tomato') return <span className="reaction-impact reaction-impact-tomato" aria-hidden="true">
-    {EFFECT_PIECES.map(index => <span key={index} style={{'--piece': index} as CSSProperties}/>)}</span>;
-  if (reactionId === 'coffee') return <span className="reaction-impact reaction-impact-coffee" aria-hidden="true">
-    <span>☕</span><b aria-hidden="true">✨</b>
-    {[0, 1, 2].map(index => <i key={index} style={{'--piece': index} as CSSProperties}/>)}</span>;
-  if (reactionId === 'clover') return <span className="reaction-impact reaction-impact-clover" aria-hidden="true">
-    <i className="reaction-clover-glow"/>
-    <span>🍀</span>{EFFECT_PIECES.slice(0, 6).map(index => <i key={index} style={{'--piece': index} as CSSProperties}>
-      {index % 2 ? '✦' : '🍀'}</i>)}</span>;
-  if (reactionId === 'horseshoe') return <span className="reaction-impact reaction-impact-horseshoe" aria-hidden="true">
-    <i className="reaction-chip-flash reaction-horseshoe-flash"/>
-    <span className="reaction-star-ring">{EFFECT_PIECES.map(index =>
-      <i key={index} style={{'--piece': index} as CSSProperties}>★</i>)}</span></span>;
-  if (reactionId === 'tear') return <span className="reaction-impact reaction-impact-tear" aria-hidden="true">
-    {EFFECT_PIECES.map(index => <i key={index} style={{'--piece': index} as CSSProperties}>💧</i>)}</span>;
-  if (reactionId === 'poop') return <span className="reaction-impact reaction-impact-poop" aria-hidden="true">
-    {[0, 1].map(index => <i key={index} className="reaction-poop-stink" style={{'--piece': index} as CSSProperties}/>)}
-    {EFFECT_PIECES.slice(0, 5).map(index => <span key={index} style={{'--piece': index} as CSSProperties}/>)}</span>;
-  if (reactionId === 'rofl') return <span className="reaction-impact reaction-impact-rofl" aria-hidden="true">
-    {[0, 1, 2].map(index => <i key={index} style={{'--piece': index} as CSSProperties}>🤣</i>)}</span>;
-  if (reactionId === 'duck') return <span className="reaction-impact reaction-impact-duck" aria-hidden="true">
-    {EFFECT_PIECES.slice(0, 6).map(index => <i key={index} style={{'--piece': index} as CSSProperties}>🪶</i>)}</span>;
-  if (reactionId === 'turtle') return <span className="reaction-impact reaction-impact-turtle" aria-hidden="true">
-    {[0, 1, 2].map(index => <i key={index} style={{'--piece': index} as CSSProperties}>💤</i>)}</span>;
-  if (reactionId === 'cold') return <span className="reaction-impact reaction-impact-cold" aria-hidden="true">
-    {[0, 1, 2].map(index => <i key={index} style={{'--piece': index} as CSSProperties}>❄</i>)}</span>;
-  if (reactionId === 'fire') return <span className="reaction-impact reaction-impact-fire" aria-hidden="true">
-    {[0, 1, 2].map(index => <i key={index} style={{'--piece': index} as CSSProperties}/>)}</span>;
-  if (reactionId === 'respect') return <span className="reaction-impact reaction-impact-respect" aria-hidden="true">
-    <i className="reaction-respect-glow"/>
-    {[0, 1, 2].map(index => <i key={index} style={{'--piece': index} as CSSProperties}>✦</i>)}</span>;
-  if (reactionId === 'sleepy') return <span className="reaction-impact reaction-impact-sleepy" aria-hidden="true">
-    {[0, 1, 2].map(index => <i key={index} style={{'--piece': index} as CSSProperties}>z</i>)}</span>;
-  if (reactionId === 'knife') return <span className="reaction-impact reaction-impact-knife" aria-hidden="true">
-    {EFFECT_PIECES.map(index => <i key={index} style={{'--piece': index} as CSSProperties}/>)}</span>;
-  if (reactionId === 'flowers') return <span className="reaction-impact reaction-impact-flowers" aria-hidden="true">
-    {EFFECT_PIECES.map(index => <i key={index} style={{'--piece': index} as CSSProperties}>🌸</i>)}</span>;
-  return null;
+  if (reactionId === 'chip') {
+    return <span className="reaction-impact reaction-impact-chip" data-reaction-impact={reactionId} aria-hidden="true">
+      <i className="reaction-chip-flash"/>
+      {CHIP_PIECES.map(index => <ReactionChipStack key={index} className="reaction-jackpot-stack"
+                                                   style={chipBurstStyle(index)}/>)}
+    </span>;
+  }
+
+  const theater = REACTION_THEATER[reactionId];
+  return <span className={`reaction-impact reaction-impact-${reactionId}`}
+               data-reaction-impact={reactionId} aria-hidden="true">
+    {theater.accent && <b className="reaction-impact-accent">{theater.accent}</b>}
+    <span className="reaction-impact-particles">
+      {theater.particles.map((particle, index) =>
+        <i key={index} style={{'--piece': index} as CSSProperties}>{particle}</i>)}
+    </span>
+  </span>;
 }
 
-function ReactionEffect({item, seatEls}: { item: TableReactionEvent; seatEls: Map<string, HTMLElement> }) {
+function ReactionEffect({item, seatEls}: {item: TableReactionEvent; seatEls: Map<string, HTMLElement>}) {
   const definition = TABLE_REACTIONS[item.reactionId];
-  const showImpact = definition.targeted || SELF_IMPACT_REACTIONS.has(item.reactionId);
   const positionEffect = (node: HTMLSpanElement | null) => {
     if (!node) return;
     const source = seatEls.get(item.playerId);
@@ -107,19 +115,48 @@ function ReactionEffect({item, seatEls}: { item: TableReactionEvent; seatEls: Ma
     const to = target?.getBoundingClientRect();
     const fromX = from.left + from.width / 2;
     const fromY = from.top + from.height / 2;
+    const dx = to ? to.left + to.width / 2 - fromX : 0;
+    const dy = to ? to.top + to.height / 2 - fromY : -72;
+    const travel = Math.hypot(dx, dy);
     node.style.setProperty('--reaction-x', `${fromX}px`);
     node.style.setProperty('--reaction-y', `${fromY}px`);
-    node.style.setProperty('--reaction-dx', `${to ? to.left + to.width / 2 - fromX : 0}px`);
-    node.style.setProperty('--reaction-dy', `${to ? to.top + to.height / 2 - fromY : -72}px`);
+    node.style.setProperty('--reaction-dx', `${dx}px`);
+    node.style.setProperty('--reaction-dy', `${dy}px`);
+    node.style.setProperty('--reaction-mid-x', `${(dx * .48).toFixed(1)}px`);
+    node.style.setProperty('--reaction-mid-y', `${(dy * .48).toFixed(1)}px`);
+    node.style.setProperty('--reaction-arc', `${Math.min(112, Math.max(58, travel * .22)).toFixed(1)}px`);
     node.style.visibility = 'visible';
   };
 
   return <span ref={positionEffect}
                className={`table-reaction-effect reaction-${item.reactionId} ${definition.targeted ? 'thrown' : 'emote'}`}
-               role="img" aria-label={definition.label}>
+               data-reaction-id={item.reactionId} role="img" aria-label={definition.label}>
     <span className="reaction-projectile"><ReactionGlyph reactionId={item.reactionId} glyph={definition.glyph}/></span>
-    {showImpact && <ReactionImpact reactionId={item.reactionId}/>}
+    <ReactionImpact reactionId={item.reactionId}/>
   </span>;
+}
+
+function ReactionChoice({id, state, disabled, onChoose}: {
+  id: TableReactionID;
+  state: 'free' | 'loading' | 'owned' | 'locked' | 'unavailable';
+  disabled: boolean;
+  onChoose: (id: TableReactionID) => void;
+}) {
+  const definition = TABLE_REACTIONS[id];
+  return <button type="button" className={`reaction-choice reaction-choice-${id} ${state}`}
+                 disabled={disabled} onClick={() => onChoose(id)}
+                 aria-label={`${definition.label}. ${definition.caption}`}>
+    <span className="reaction-choice-glyph">
+      <ReactionGlyph reactionId={id} glyph={definition.glyph}/>
+    </span>
+    <span className="reaction-choice-copy">
+      <strong>{definition.label}</strong>
+      <small>{definition.caption}</small>
+    </span>
+    {state === 'loading' && <span className="reaction-choice-loading" aria-label="Carregando"/>}
+    {state === 'locked' && <LockKeyhole className="reaction-choice-state" aria-label="Premium bloqueada"/>}
+    {state === 'owned' && <Sparkles className="reaction-choice-state" aria-label="Premium liberada"/>}
+  </button>;
 }
 
 export function TableReactions({items, seats, viewerId, connected, coolingDown, pendingReaction, onQuickSendAction,
@@ -147,26 +184,30 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
 }) {
   const [muted, setMuted] = useState(() =>
     typeof window !== 'undefined' && window.localStorage.getItem(REACTION_MUTE_KEY) === 'true');
+  const [scope, setScope] = useState<ReactionScope>('self');
   const hasOpponents = seats.some(seat => seat.player_id !== viewerId);
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const asideRef = useRef<HTMLElement>(null);
   useDismiss(asideRef, open, () => onOpenChangeAction(false));
-  // Seat DOM nodes only change when players join/leave, not per reaction —
-  // caching this keyed on seat ids avoids a full-document query on every
-  // reaction mount (previously the hot path for the seat position lookup).
   const [seatEls, setSeatEls] = useState<Map<string, HTMLElement>>(() => new Map());
   const seatIdsKey = seats.map(seat => seat.player_id).join(',');
+
   useEffect(() => {
     const map = new Map<string, HTMLElement>();
     document.querySelectorAll<HTMLElement>('.game-seat[data-player-id]').forEach(node => {
       if (node.dataset.playerId) map.set(node.dataset.playerId, node);
     });
-    // Reads the seats DOM built by other components; not synchronizable any other way.
+    // Reads the seats DOM built by sibling components; there is no shared ref boundary.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSeatEls(map);
   }, [seatIdsKey]);
+
   const entries = new Map(catalog.map(entry => [entry.id, entry]));
   const owned = ownedReactionIDs(catalog);
+  const visibleReactions = REACTION_ENTRIES.filter(([, definition]) =>
+    scope === 'target' ? definition.targeted : !definition.targeted);
+  const selfCount = REACTION_ENTRIES.filter(([, definition]) => !definition.targeted).length;
+  const targetCount = REACTION_ENTRIES.length - selfCount;
 
   function toggleMute() {
     setMuted(value => {
@@ -202,81 +243,87 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
       onOpenChangeAction(false);
     }
   }
-  
+
+  const pendingLabel = pendingReaction ? TABLE_REACTIONS[pendingReaction].label : '';
+
   return <>
     {!muted && <div className="table-reaction-layer" aria-live="off">
       {items.map(item => <ReactionEffect key={item.id} item={item} seatEls={seatEls}/>)}
     </div>}
-    <aside ref={asideRef} className={`table-reactions${open ? ' open' : ''}${pendingReaction ? ' targeting' : ''}`} aria-label="Reações da mesa"
+    <aside ref={asideRef} className={`table-reactions${open ? ' open' : ''}${pendingReaction ? ' targeting' : ''}`}
+           aria-label="Reações da mesa"
            onMouseEnter={() => isHoverCapable() && !pendingReaction && onOpenChangeAction(true)}
            onMouseLeave={() => isHoverCapable() && !pendingReaction && onOpenChangeAction(false)}>
       <Button type="button" variant="ghost" size="icon" className="reaction-toggle"
-              aria-label={pendingReaction ? 'Cancelar arremesso' : open ? 'Fechar reações' : 'Abrir reações'}
+              aria-label={pendingReaction ? 'Cancelar reação direcionada' : open ? 'Fechar reações' : 'Abrir reações'}
               aria-expanded={open} aria-pressed={Boolean(pendingReaction)}
               onClick={() => pendingReaction ? onPendingReactionChangeAction(null) : onOpenChangeAction(!open)}>
         {open || pendingReaction ? <X/> : <SmilePlus/>}
       </Button>
-      {pendingReaction && <span className="reaction-target-hint" role="status">Escolha um jogador</span>}
+      {pendingReaction && <span className="reaction-target-hint" role="status">
+        <b>{pendingLabel}</b><small>Toque em um jogador</small>
+      </span>}
       {open && <div className="reaction-panel">
-          <header><b>Reagir</b><span>
-              {onFavoriteReactionsChangeAction && <Button type="button" variant="ghost" size="icon"
-                      aria-label="Editar reações favoritas" onClick={() => setFavoritesOpen(true)}>
-                <Star aria-hidden="true"/>
-              </Button>}
-              <Button type="button" variant="ghost" size="icon"
-                      aria-label={muted ? 'Ativar animações de reações' : 'Silenciar animações de reações'}
-                      aria-pressed={muted} onClick={toggleMute}>
-                {muted ? <VolumeX/> : <Volume2/>}
-              </Button>
-              <Button type="button" variant="ghost" size="icon" aria-label="Fechar painel de reações"
-                      onClick={() => onOpenChangeAction(false)}><X/></Button>
-            </span>
-          </header>
-          {favorites.length > 0 && <div className="reaction-favorites" role="group" aria-label="Reações favoritas">
-            <span><Star aria-hidden="true"/> Atalhos</span>
-            <div>{favorites.map(id => {
-              const definition = TABLE_REACTIONS[id];
-              if (!definition) return null;
-              const state = premiumState(id);
-              return <button type="button" key={id} title={definition.label}
-                             className={`${state}${state === 'owned' ? ' premium-owned' : ''}`}
-                             disabled={!connected || coolingDown || state === 'loading' || state === 'unavailable' ||
-                               (definition.targeted && !hasOpponents)} onClick={() => chooseReaction(id)}>
-                <EmojiGlyph glyph={definition.glyph}/>
-                {state === 'locked' && <LockKeyhole aria-label="Premium bloqueada"/>}
-                {state === 'owned' && <Sparkles aria-label="Premium liberada"/>}
-              </button>;
-            })}</div>
-          </div>}
-          <div className="reaction-quick" role="group" aria-label="Emotes rápidos">
-            {(Object.entries(TABLE_REACTIONS) as [TableReactionID, typeof TABLE_REACTIONS[TableReactionID]][])
-              .filter(([, definition]) => !definition.targeted)
-              .map(([id, definition]) => {
-                const state = premiumState(id);
-                return <button type="button" key={id} title={definition.label} className={`reaction-choice ${state}`}
-                               disabled={!connected || coolingDown || state === 'loading' || state === 'unavailable'}
-                               onClick={() => chooseReaction(id)}>
-                  <EmojiGlyph glyph={definition.glyph}/><span className="sr-only">{definition.label}</span>
-                  {state === 'locked' && <LockKeyhole className="reaction-choice-state" aria-label="Premium bloqueada"/>}
-                  {state === 'owned' && <Sparkles className="reaction-choice-state" aria-label="Premium liberada"/>}
-                </button>;
-              })}
-          </div>
-          <p className="reaction-object-instruction">Escolha um objeto e toque no jogador.</p>
-          <div className="reaction-objects" role="group" aria-label="Objetos">
-            {(Object.entries(TABLE_REACTIONS) as [TableReactionID, typeof TABLE_REACTIONS[TableReactionID]][])
-              .filter(([, definition]) => definition.targeted)
-              .map(([id, definition]) => {
-                const state = premiumState(id);
-                return <button type="button" key={id} title={definition.label} className={`reaction-choice ${state}`}
-                               disabled={!connected || !hasOpponents || coolingDown || state === 'loading' || state === 'unavailable'}
-                               onClick={() => chooseReaction(id)}>
-                  <ReactionGlyph reactionId={id} glyph={definition.glyph}/>{definition.label}
-                  {state === 'locked' && <LockKeyhole className="reaction-choice-state" aria-label="Premium bloqueada"/>}
-                  {state === 'owned' && <Sparkles className="reaction-choice-state" aria-label="Premium liberada"/>}
-                </button>;
-              })}
-          </div>
+        <header>
+          <span><b>Teatro da mesa</b><small>Escolha o seu momento</small></span>
+          <span>
+            {onFavoriteReactionsChangeAction && <Button type="button" variant="ghost" size="icon"
+                    aria-label="Editar reações favoritas" onClick={() => setFavoritesOpen(true)}>
+              <Star aria-hidden="true"/>
+            </Button>}
+            <Button type="button" variant="ghost" size="icon"
+                    aria-label={muted ? 'Mostrar efeitos de reações' : 'Ocultar efeitos de reações'}
+                    aria-pressed={muted} onClick={toggleMute}>
+              {muted ? <EyeOff/> : <Eye/>}
+            </Button>
+            <Button type="button" variant="ghost" size="icon" aria-label="Fechar painel de reações"
+                    onClick={() => onOpenChangeAction(false)}><X/></Button>
+          </span>
+        </header>
+        {favorites.length > 0 && <div className="reaction-favorites" role="group" aria-label="Reações favoritas">
+          <span><Star aria-hidden="true"/> Seus atalhos</span>
+          <div>{favorites.map(id => {
+            const definition = TABLE_REACTIONS[id];
+            if (!definition) return null;
+            const state = premiumState(id);
+            return <button type="button" key={id} title={definition.label}
+                           className={`${state}${state === 'owned' ? ' premium-owned' : ''}`}
+                           disabled={!connected || coolingDown || state === 'loading' || state === 'unavailable' ||
+                             (definition.targeted && !hasOpponents)} onClick={() => chooseReaction(id)}>
+              <ReactionGlyph reactionId={id} glyph={definition.glyph}/>
+              <span>{definition.label}</span>
+              {state === 'locked' && <LockKeyhole aria-label="Premium bloqueada"/>}
+              {state === 'owned' && <Sparkles aria-label="Premium liberada"/>}
+            </button>;
+          })}</div>
+        </div>}
+        <div className="reaction-scope" role="tablist" aria-label="Tipo de reação">
+          <button type="button" role="tab" aria-selected={scope === 'self'}
+                  onClick={() => setScope('self')}>
+            <UserRound aria-hidden="true"/><span>Na minha cadeira<small>{selfCount} tells</small></span>
+          </button>
+          <button type="button" role="tab" aria-selected={scope === 'target'}
+                  onClick={() => setScope('target')}>
+            <Crosshair aria-hidden="true"/><span>Mandar para alguém<small>{targetCount} gestos</small></span>
+          </button>
+        </div>
+        <p className="reaction-scope-instruction">
+          {scope === 'self'
+            ? 'A reação nasce na sua cadeira e não interrompe a mão.'
+            : hasOpponents
+              ? 'Escolha um gesto e depois toque no jogador que vai recebê-lo.'
+              : 'Outro jogador precisa estar sentado para receber um gesto.'}
+        </p>
+        <div className="reaction-catalog" role="tabpanel"
+             aria-label={scope === 'self' ? 'Reações na minha cadeira' : 'Reações para outro jogador'}>
+          {visibleReactions.map(([id, definition]) => {
+            const state = premiumState(id);
+            return <ReactionChoice key={id} id={id} state={state}
+                                   disabled={!connected || coolingDown || state === 'loading' ||
+                                     state === 'unavailable' || (definition.targeted && !hasOpponents)}
+                                   onChoose={chooseReaction}/>;
+          })}
+        </div>
       </div>}
     </aside>
     {onFavoriteReactionsChangeAction && favoritesOpen && <ReactionFavoritesDialog

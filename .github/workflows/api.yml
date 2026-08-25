@@ -211,6 +211,12 @@ jobs:
             stage) API_HOST="poker-api-stage.aoctech.app" ;;
             *)     API_HOST="poker-api-dev.aoctech.app" ;;
           esac
+          # Distinguishes the two failures that used to look identical: an app
+          # that answered with the wrong releaseId (the deploy is bad, roll
+          # back) versus never getting a readable answer at all (a 403 at the
+          # CDN, DNS, a timeout — the deploy was never observed to be bad, so
+          # rolling back would revert a release that may well be live).
+          VERDICT="unreachable"
           for ATTEMPT in $(seq 1 12); do
             # No --fail: it discards the body on 4xx/5xx, which is exactly the
             # response worth reading. The status, body and edge headers are
@@ -229,6 +235,11 @@ jobs:
               echo "Release $VERSION is live"
               exit 0
             fi
+            # A readable releaseId means the API itself answered, so a mismatch
+            # is a real verdict on the deploy rather than a failure to observe.
+            if [ -n "$RELEASE" ]; then
+              VERDICT="stale"
+            fi
             echo "Attempt $ATTEMPT: HTTP $HTTP_CODE"
             echo "  expected releaseId: $VERSION"
             echo "  received releaseId: ${RELEASE:-<none>}"
@@ -239,12 +250,21 @@ jobs:
               /tmp/health.head | sed 's/^/  /' || true
             sleep 5
           done
-          echo "Health gate never observed releaseId $VERSION after 12 attempts."
+          echo "verdict=$VERDICT" >> "$GITHUB_OUTPUT"
+          if [ "$VERDICT" = "stale" ]; then
+            echo "::error::The API is answering but still reports releaseId '$RELEASE' instead of '$VERSION'. Treating the deploy as bad and rolling back."
+          else
+            echo "::error::Could not verify the release: the health endpoint never returned a readable releaseId (see the HTTP status and edge headers above). NOT rolling back, because the deploy was never observed to be bad - check whether it is actually live before acting."
+          fi
           exit 1
 
+      # Only roll back when the smoke test actually read a wrong releaseId off
+      # a responding API. An unverifiable health endpoint (403 at the edge,
+      # DNS, timeouts) says nothing about the deploy, and reverting on it once
+      # rolled back a release that was live and healthy.
       - name: Restore previous artifact
         id: restore
-        if: ${{ failure() && steps.smoke.outcome == 'failure' }}
+        if: ${{ failure() && steps.smoke.outputs.verdict == 'stale' }}
         run: |
           if ! aws s3api head-object \
             --bucket "$DEPLOYMENTS_BUCKET" --key "$ROLLBACK_KEY" >/dev/null 2>&1; then

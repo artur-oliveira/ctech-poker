@@ -1,0 +1,1589 @@
+/*
+ * Poker Theater
+ * Seat-anchored reaction choreography. The transport stays a catalog key;
+ * this sheet owns presentation only and every effect has a static
+ * prefers-reduced-motion landing state.
+ */
+
+/* Reaction glyphs are illustrations with optical display sizing, not text hierarchy. */
+/* impeccable-disable design-system-font-size */
+
+.reaction-panel {
+    width: min(376px, calc(100vw - 24px));
+    max-height: min(610px, calc(100dvh - 132px));
+    gap: 14px;
+    padding: 16px;
+    overflow-x: hidden;
+    border-color: color-mix(in srgb, var(--gold) 18%, var(--seat-border));
+    border-radius: var(--rounded-panel);
+    background:
+        radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--brand) 14%, transparent), transparent 38%),
+        var(--surface-seat);
+    box-shadow: 0 18px 48px var(--black-0b);
+    scrollbar-color: var(--neutral-wine-2) transparent;
+}
+
+.reaction-panel header > span:first-child {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+
+.reaction-panel header > span:first-child b {
+    color: var(--paper);
+    font-size: var(--font-size-body);
+    line-height: 1.2;
+}
+
+.reaction-panel header > span:first-child small {
+    color: var(--text-secondary);
+    font-size: var(--font-size-compact);
+    line-height: 1.25;
+}
+
+.reaction-panel header > span:last-child {
+    flex: none;
+}
+
+.reaction-panel header button {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+}
+
+.reaction-panel header button:hover {
+    color: var(--paper);
+    background: var(--white-08);
+}
+
+.reaction-favorites {
+    padding-bottom: 14px;
+}
+
+.reaction-favorites > span {
+    margin-bottom: 8px;
+}
+
+.reaction-favorites > div {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.reaction-favorites button {
+    min-width: 0;
+    min-height: 58px;
+    grid-template-rows: 27px auto;
+    gap: 2px;
+    padding: 6px 5px 5px;
+    overflow: hidden;
+    transition: transform 160ms var(--ease-out-quart), background 160ms var(--ease-out-quart);
+}
+
+.reaction-favorites button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--gold) 14%, var(--surface-control-hover));
+    transform: translateY(-2px);
+}
+
+.reaction-favorites button > .emoji-glyph,
+.reaction-favorites button > .reaction-table-chip-stack {
+    font-size: 22px;
+}
+
+.reaction-favorites button > span:last-of-type:not(.emoji-glyph, .reaction-table-chip-stack) {
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: var(--font-size-tiny);
+    font-weight: 650;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reaction-scope {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 4px;
+    border-radius: var(--rounded-control);
+    background: var(--black-scrim);
+}
+
+.reaction-scope > button {
+    display: grid;
+    min-width: 0;
+    min-height: 52px;
+    grid-template-columns: 20px minmax(0, 1fr);
+    align-items: center;
+    gap: 7px;
+    padding: 7px 9px;
+    border: 0;
+    border-radius: var(--rounded-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    text-align: left;
+    cursor: pointer;
+    transition: background 150ms var(--ease-out-quart), color 150ms var(--ease-out-quart),
+                transform 150ms var(--ease-out-quart);
+}
+
+.reaction-scope > button:hover {
+    color: var(--paper);
+    transform: translateY(-1px);
+}
+
+.reaction-scope > button[aria-selected='true'] {
+    background: var(--paper);
+    color: var(--wine);
+    box-shadow: 0 4px 12px var(--black-08);
+}
+
+.reaction-scope svg {
+    width: 18px;
+    height: 18px;
+}
+
+.reaction-scope button > span {
+    min-width: 0;
+    font-size: var(--font-size-compact);
+    font-weight: 750;
+    line-height: 1.15;
+}
+
+.reaction-scope button small {
+    display: block;
+    margin-top: 2px;
+    color: currentColor;
+    font-size: var(--font-size-tiny);
+    font-weight: 550;
+    opacity: .72;
+}
+
+.reaction-scope-instruction {
+    min-height: 30px;
+    margin: -4px 2px 0;
+    color: var(--text-secondary);
+    font-size: var(--font-size-compact);
+    line-height: 1.4;
+}
+
+.reaction-catalog {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.reaction-choice {
+    --reaction-accent: var(--gold);
+    position: relative;
+    display: grid;
+    min-width: 0;
+    min-height: 61px;
+    grid-template-columns: 38px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    padding: 8px 9px;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--rounded-control);
+    background: color-mix(in srgb, var(--reaction-accent) 7%, var(--surface-control));
+    color: var(--paper);
+    text-align: left;
+    cursor: pointer;
+    isolation: isolate;
+    transition: background 160ms var(--ease-out-quart), transform 160ms var(--ease-out-quart),
+                box-shadow 160ms var(--ease-out-quart);
+}
+
+.reaction-choice::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    left: -18px;
+    top: 50%;
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--reaction-accent) 18%, transparent);
+    filter: blur(12px);
+    transform: translateY(-50%);
+    transition: transform 180ms var(--ease-out-quart), opacity 180ms var(--ease-out-quart);
+}
+
+.reaction-choice:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--reaction-accent) 13%, var(--surface-control-hover));
+    box-shadow: 0 6px 14px var(--black-08);
+    transform: translateY(-2px);
+}
+
+.reaction-choice:hover:not(:disabled)::before {
+    opacity: .92;
+    transform: translate(6px, -50%) scale(1.18);
+}
+
+.reaction-choice:active:not(:disabled) {
+    transform: translateY(0) scale(.98);
+}
+
+.reaction-choice:disabled {
+    opacity: .46;
+    cursor: not-allowed;
+    filter: saturate(.55);
+}
+
+.reaction-choice-glyph {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border-radius: var(--rounded-sm);
+    background: color-mix(in srgb, var(--reaction-accent) 16%, var(--black-scrim));
+    font-size: 24px;
+    transition: transform 190ms var(--ease-out-expo);
+}
+
+.reaction-choice:hover:not(:disabled) .reaction-choice-glyph {
+    transform: translateY(-2px) rotate(-4deg) scale(1.08);
+}
+
+.reaction-choice-copy {
+    display: block;
+    min-width: 0;
+}
+
+.reaction-choice-copy strong,
+.reaction-choice-copy small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reaction-choice-copy strong {
+    color: var(--paper);
+    font-size: var(--font-size-compact);
+    font-weight: 750;
+    line-height: 1.2;
+}
+
+.reaction-choice-copy small {
+    margin-top: 3px;
+    color: var(--text-secondary);
+    font-size: var(--font-size-tiny);
+    line-height: 1.2;
+}
+
+.reaction-choice-state {
+    top: 6px;
+    right: 6px;
+}
+
+.reaction-choice-loading {
+    position: absolute;
+    right: 7px;
+    top: 7px;
+    width: 11px;
+    height: 11px;
+    border: 2px solid var(--white-22);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: reaction-loading-spin 700ms linear infinite;
+}
+
+.reaction-choice-clap,
+.reaction-choice-chip,
+.reaction-choice-crown { --reaction-accent: var(--gold) }
+.reaction-choice-laugh,
+.reaction-choice-coffee,
+.reaction-choice-duck { --reaction-accent: var(--tag-yellow) }
+.reaction-choice-wow,
+.reaction-choice-spotlight { --reaction-accent: var(--tag-blue) }
+.reaction-choice-angry,
+.reaction-choice-heartbeat,
+.reaction-choice-tomato { --reaction-accent: var(--brand-bright) }
+.reaction-choice-cry,
+.reaction-choice-nervous,
+.reaction-choice-tear { --reaction-accent: var(--tag-blue) }
+.reaction-choice-cold { --reaction-accent: var(--felt-text) }
+.reaction-choice-fire { --reaction-accent: var(--tag-orange) }
+.reaction-choice-respect,
+.reaction-choice-horseshoe { --reaction-accent: var(--gold-pale) }
+.reaction-choice-sleepy,
+.reaction-choice-turtle { --reaction-accent: var(--neutral-rose-2) }
+.reaction-choice-shark { --reaction-accent: var(--table-felt-light) }
+.reaction-choice-pokerface,
+.reaction-choice-knife { --reaction-accent: var(--paper) }
+.reaction-choice-clover,
+.reaction-choice-bandage { --reaction-accent: var(--success) }
+.reaction-choice-poop { --reaction-accent: var(--table-rail-highlight) }
+.reaction-choice-rofl { --reaction-accent: var(--tag-purple) }
+.reaction-choice-flowers { --reaction-accent: var(--brand-bright-7) }
+
+.reaction-target-hint {
+    display: grid;
+    min-height: 45px;
+    align-content: center;
+    padding: 7px 12px;
+    border-radius: var(--rounded-control);
+    box-shadow: 0 8px 20px var(--black-08);
+}
+
+.reaction-target-hint b,
+.reaction-target-hint small {
+    display: block;
+    line-height: 1.15;
+}
+
+.reaction-target-hint small {
+    margin-top: 2px;
+    font-size: var(--font-size-tiny);
+    font-weight: 650;
+    opacity: .72;
+}
+
+.table-reaction-layer {
+    overflow: hidden;
+}
+
+.table-reaction-effect {
+    --reaction-arc: 72px;
+    width: 52px;
+    height: 52px;
+    margin: -26px;
+    border: 1px solid color-mix(in srgb, var(--paper) 18%, transparent);
+    background: var(--surface-seat);
+    font-size: 29px;
+    filter: drop-shadow(0 7px 10px var(--black-0b));
+    isolation: isolate;
+}
+
+.table-reaction-effect::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: -8px;
+    border-radius: 50%;
+    border: 1px solid color-mix(in srgb, var(--gold) 32%, transparent);
+    opacity: 0;
+}
+
+.table-reaction-effect.emote {
+    animation: reaction-theater-emote 3.2s var(--ease-out-expo) both;
+}
+
+.table-reaction-effect.emote::before {
+    animation: reaction-seat-ring 2.4s var(--ease-out-quart) 180ms both;
+}
+
+.table-reaction-effect.thrown {
+    border: 0;
+    background: transparent;
+    animation: reaction-theater-throw 3.3s var(--ease-out-quart) both;
+}
+
+.table-reaction-effect.thrown .reaction-projectile {
+    animation: reaction-theater-projectile 3.3s var(--ease-out-quart) both;
+}
+
+.reaction-projectile {
+    position: relative;
+    z-index: 3;
+    transform-origin: 50% 70%;
+}
+
+.reaction-impact {
+    --impact-delay: 0ms;
+    position: absolute;
+    z-index: 2;
+    inset: 50%;
+    width: 132px;
+    height: 132px;
+    margin: -66px;
+    opacity: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    pointer-events: none;
+}
+
+.thrown .reaction-impact {
+    --impact-delay: 880ms;
+}
+
+.reaction-impact::before,
+.reaction-impact::after {
+    content: '';
+    position: absolute;
+    pointer-events: none;
+}
+
+.reaction-impact-accent {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    color: var(--paper);
+    font: 800 var(--font-size-compact) var(--font-mono);
+    letter-spacing: .08em;
+    white-space: nowrap;
+}
+
+.reaction-impact-particles,
+.reaction-impact-particles i {
+    position: absolute;
+    inset: 0;
+}
+
+.reaction-impact .reaction-impact-particles {
+    display: block;
+    left: 0;
+    top: 0;
+    width: auto;
+    height: auto;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: inherit;
+    opacity: 1;
+    transform: none;
+    animation: none;
+}
+
+.reaction-impact-particles i {
+    left: 50%;
+    top: 50%;
+    width: max-content;
+    height: max-content;
+    color: var(--paper);
+    font-style: normal;
+}
+
+/* Self tells: each grows from the actor's seat and owns one visual motif. */
+.reaction-clap .reaction-projectile {
+    animation: reaction-clap-hands 520ms var(--ease-out-quart) 140ms 3;
+}
+
+.reaction-impact-clap {
+    animation: reaction-impact-hold 2.5s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-clap .reaction-impact-accent {
+    padding: 4px 9px;
+    border-radius: var(--rounded-xs);
+    background: var(--gold);
+    color: var(--gold-ink);
+    transform: translate(-50%, -18px) rotate(-3deg);
+    animation: reaction-banner-snap 1.8s var(--ease-out-expo) var(--impact-delay) both;
+}
+
+.reaction-impact-clap i {
+    color: var(--gold-pale);
+    animation: reaction-radial-pop 1.4s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 65ms) both;
+}
+
+.reaction-laugh .reaction-projectile {
+    animation: reaction-laugh-hop 720ms var(--ease-out-quart) 120ms 3;
+}
+
+.reaction-impact-laugh {
+    animation: reaction-impact-hold 2.5s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-laugh .reaction-impact-accent {
+    color: var(--tag-yellow);
+    font-size: var(--font-size-body);
+    transform: translate(-50%, -36px) rotate(-8deg);
+    animation: reaction-laugh-label 1.6s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-laugh i {
+    color: var(--gold-pale);
+    font: 800 var(--font-size-tiny) var(--font-mono);
+    animation: reaction-laugh-bubble 1.8s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 110ms) both;
+}
+
+.reaction-impact-wow {
+    animation: reaction-impact-hold 2.4s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-wow::before,
+.reaction-impact-wow::after {
+    inset: 28px;
+    border: 2px solid color-mix(in srgb, var(--tag-blue) 75%, transparent);
+    border-radius: 50%;
+    animation: reaction-shock-ring 1.5s var(--ease-out-expo)
+               calc(var(--impact-delay) + var(--ring, 0) * 180ms) both;
+}
+
+.reaction-impact-wow::after { --ring: 1 }
+
+.reaction-impact-wow .reaction-impact-accent {
+    color: var(--tag-blue);
+    font-size: 2rem;
+    transform: translate(-50%, -50%);
+    animation: reaction-wow-mark 1.2s var(--ease-out-expo) var(--impact-delay) both;
+}
+
+.reaction-impact-wow i {
+    color: var(--felt-text);
+    animation: reaction-radial-pop 1.3s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 90ms) both;
+}
+
+.reaction-angry .reaction-projectile {
+    animation: reaction-angry-shake 420ms linear 160ms 5;
+}
+
+.reaction-impact-angry {
+    animation: reaction-impact-hold 2.4s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-angry::before {
+    inset: 30px;
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in srgb, var(--danger) 36%, transparent), transparent 68%);
+    animation: reaction-heat-pulse 950ms var(--ease-out-quart) var(--impact-delay) 2;
+}
+
+.reaction-impact-angry i {
+    width: 8px;
+    height: 44px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--paper) 74%, transparent);
+    filter: blur(1px);
+    animation: reaction-steam-jet 1.55s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 90ms) both;
+}
+
+.reaction-impact-cry {
+    animation: reaction-impact-hold 2.6s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-cry i {
+    font-size: 15px;
+    animation: reaction-tear-curtain 1.9s ease-in
+               calc(var(--impact-delay) + var(--piece) * 120ms) both;
+}
+
+.reaction-nervous .reaction-projectile {
+    animation: reaction-nervous-tremble 150ms linear 180ms 10;
+}
+
+.reaction-impact-nervous {
+    animation: reaction-impact-hold 2.45s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-nervous::before {
+    inset: 31px;
+    border: 2px dashed color-mix(in srgb, var(--tag-blue) 52%, transparent);
+    border-radius: 50%;
+    animation: reaction-nervous-orbit 1.5s linear var(--impact-delay) 2;
+}
+
+.reaction-impact-nervous i {
+    width: 7px;
+    height: 10px;
+    border-radius: 50% 50% 55% 45%;
+    background: var(--tag-blue);
+    animation: reaction-sweat-orbit 1.45s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 90ms) both;
+}
+
+.reaction-cold .reaction-projectile {
+    animation: reaction-shiver 240ms var(--ease-out-quart) 120ms 7;
+}
+
+.reaction-impact-cold {
+    animation: reaction-impact-hold 2.7s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-cold::before {
+    inset: 24px;
+    border: 3px double color-mix(in srgb, var(--felt-text) 70%, transparent);
+    border-radius: 28% 72% 34% 66%;
+    animation: reaction-frost-grow 2s var(--ease-out-expo) var(--impact-delay) both;
+}
+
+.reaction-impact-cold i {
+    color: var(--felt-text);
+    animation: reaction-snow-orbit 2.2s ease-in-out
+               calc(var(--impact-delay) + var(--piece) * 80ms) both;
+}
+
+.reaction-fire .reaction-projectile {
+    animation: reaction-flame-pulse 650ms var(--ease-out-quart) 80ms 4;
+}
+
+.reaction-impact-fire {
+    animation: reaction-impact-hold 2.6s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-fire::before {
+    left: 43px;
+    top: 54px;
+    width: 46px;
+    height: 55px;
+    border-radius: 48% 52% 44% 56%;
+    background: radial-gradient(circle at 50% 80%, var(--gold-bright), var(--tag-orange) 48%, transparent 72%);
+    filter: blur(2px);
+    animation: reaction-flame-crown 1.1s var(--ease-out-quart) var(--impact-delay) 2;
+}
+
+.reaction-impact-fire i {
+    left: 50%;
+    top: 50%;
+    bottom: auto;
+    width: 6px;
+    height: 6px;
+    border-radius: 50% 50% 50% 0;
+    background: var(--gold-bright);
+    animation: reaction-ember-fan 1.6s ease-out
+               calc(var(--impact-delay) + var(--piece) * 100ms) both;
+}
+
+.reaction-impact-respect {
+    animation: reaction-impact-hold 2.55s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-respect::before {
+    inset: 24px;
+    border: 2px solid color-mix(in srgb, var(--gold) 66%, transparent);
+    border-radius: 50%;
+    clip-path: polygon(0 0, 43% 0, 43% 100%, 0 100%, 0 62%, 24% 50%, 0 38%,
+                       100% 38%, 76% 50%, 100% 62%, 100% 100%, 57% 100%, 57% 0, 100% 0);
+    animation: reaction-laurel-open 1.7s var(--ease-out-expo) var(--impact-delay) both;
+}
+
+.reaction-impact-respect .reaction-impact-accent {
+    color: var(--gold);
+    transform: translate(-50%, -50%);
+    animation: reaction-respect-mark 1.9s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-respect i {
+    color: var(--gold-pale);
+    animation: reaction-radial-pop 1.35s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 100ms) both;
+}
+
+.reaction-impact-sleepy,
+.reaction-impact-turtle {
+    animation: reaction-impact-hold 2.7s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-sleepy i,
+.reaction-impact-turtle i {
+    left: 50%;
+    top: 50%;
+    bottom: auto;
+    color: var(--felt-text);
+    font: 800 var(--font-size-body) var(--font-mono);
+    animation: reaction-dream-rise 2s ease-in-out
+               calc(var(--impact-delay) + var(--piece) * 270ms) both;
+}
+
+.reaction-heartbeat .reaction-projectile {
+    animation: reaction-heartbeat 1.05s var(--ease-out-quart) 100ms 3;
+}
+
+.reaction-impact-heartbeat {
+    animation: reaction-impact-hold 2.7s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-heartbeat::before {
+    left: 17px;
+    top: 60px;
+    width: 98px;
+    height: 16px;
+    border-block: 2px solid var(--brand-bright);
+    clip-path: polygon(0 43%, 24% 43%, 30% 4%, 39% 96%, 48% 43%, 61% 43%, 67% 20%, 73% 66%, 79% 43%, 100% 43%, 100% 58%, 80% 58%, 73% 82%, 67% 39%, 62% 58%, 49% 58%, 39% 100%, 30% 19%, 25% 58%, 0 58%);
+    background: var(--brand-bright);
+    animation: reaction-ecg-scan 1.5s var(--ease-out-expo) var(--impact-delay) both;
+}
+
+.reaction-impact-heartbeat .reaction-impact-accent {
+    top: 36px;
+    color: var(--danger-soft);
+    transform: translateX(-50%);
+    animation: reaction-banner-snap 1.8s var(--ease-out-expo) var(--impact-delay) both;
+}
+
+.reaction-impact-heartbeat i {
+    color: var(--brand-bright);
+    animation: reaction-heart-pop 1.5s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 120ms) both;
+}
+
+.reaction-impact-shark {
+    animation: reaction-impact-hold 2.8s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-shark::before {
+    left: 49px;
+    top: 27px;
+    width: 34px;
+    height: 64px;
+    background: var(--table-felt-light);
+    clip-path: polygon(50% 0, 100% 100%, 52% 73%, 0 100%);
+    animation: reaction-fin-pass 2.1s var(--ease-out-expo) var(--impact-delay) both;
+}
+
+.reaction-impact-shark::after {
+    left: 18px;
+    right: 18px;
+    bottom: 26px;
+    height: 22px;
+    background: radial-gradient(
+        ellipse at 50% 100%,
+        transparent 65%,
+        color-mix(in srgb, var(--tag-blue) 74%, transparent) 66% 69%,
+        transparent 70%
+    );
+    animation: reaction-wake-spread 2s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-shark i {
+    color: var(--tag-blue);
+    font-weight: 800;
+    animation: reaction-wave-run 1.8s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 100ms) both;
+}
+
+.reaction-impact-pokerface {
+    animation: reaction-impact-hold 2.65s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-pokerface::before {
+    left: 33px;
+    top: 50px;
+    width: 66px;
+    height: 25px;
+    border-radius: var(--rounded-pill);
+    background: var(--ink);
+    box-shadow: 0 5px 14px var(--black-0b);
+    animation: reaction-poker-shades 1.6s var(--ease-out-expo) var(--impact-delay) both;
+}
+
+.reaction-impact-pokerface i {
+    color: var(--suit-color, var(--paper));
+    font-size: var(--font-size-body);
+    animation: reaction-suit-orbit 2.1s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 80ms) both;
+}
+
+.reaction-impact-pokerface i:nth-child(2),
+.reaction-impact-pokerface i:nth-child(4) {
+    --suit-color: var(--brand-bright);
+}
+
+/* Directed gestures: flight arrives at 27%, then the target owns the impact. */
+.reaction-impact-chip {
+    animation: reaction-impact-hold 2.3s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-jackpot-stack {
+    animation-delay: calc(var(--impact-delay) + var(--piece) * 10ms);
+}
+
+.reaction-chip-flash {
+    animation-delay: var(--impact-delay);
+}
+
+.reaction-impact-coffee {
+    animation: reaction-impact-hold 2.45s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-coffee::before {
+    content: '☕';
+    left: 48px;
+    top: 43px;
+    font-size: 34px;
+    animation: reaction-cup-land 1.7s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-coffee i {
+    left: calc(51px + var(--piece) * 10px);
+    top: 30px;
+    width: 8px;
+    height: 37px;
+    overflow: hidden;
+    color: var(--paper);
+    font: 800 var(--font-size-body) var(--font-mono);
+    filter: blur(.7px);
+    animation: reaction-coffee-steam 1.75s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 110ms) both;
+}
+
+.reaction-impact-clover,
+.reaction-impact-horseshoe {
+    animation: reaction-impact-hold 2.5s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-clover::before {
+    content: '🍀';
+    left: 49px;
+    top: 43px;
+    font-size: 34px;
+    animation: reaction-clover-bloom 1.8s var(--ease-out-expo) var(--impact-delay) both;
+}
+
+.reaction-impact-clover::after {
+    inset: 29px;
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in srgb, var(--success) 38%, transparent), transparent 70%);
+    animation: reaction-shock-ring 1.7s var(--ease-out-expo) var(--impact-delay) both;
+}
+
+.reaction-impact-clover i,
+.reaction-impact-horseshoe i {
+    color: var(--gold-pale);
+    animation: reaction-suit-orbit 2s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 70ms) both;
+}
+
+.reaction-impact-horseshoe::before {
+    content: '🧲';
+    left: 48px;
+    top: 39px;
+    font-size: 35px;
+    animation: reaction-horseshoe-slam 1.85s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-horseshoe i {
+    color: var(--gold);
+}
+
+.reaction-impact-tear {
+    animation: reaction-impact-hold 2.55s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-tear::before {
+    left: 26px;
+    right: 26px;
+    bottom: 19px;
+    height: 15px;
+    border: 2px solid color-mix(in srgb, var(--tag-blue) 58%, transparent);
+    border-radius: 50%;
+    animation: reaction-puddle 1.8s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-tear i {
+    font-size: 14px;
+    animation: reaction-target-rain 1.65s ease-in
+               calc(var(--impact-delay) + var(--piece) * 95ms) both;
+}
+
+.reaction-impact-tomato,
+.reaction-impact-poop {
+    animation: reaction-impact-hold 2.5s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-tomato::before {
+    inset: 35px 25px;
+    border-radius: 46% 54% 51% 49%;
+    background: color-mix(in srgb, var(--danger) 82%, transparent);
+    box-shadow: -22px 6px 0 -9px color-mix(in srgb, var(--danger) 70%, transparent),
+                24px -3px 0 -11px color-mix(in srgb, var(--danger) 66%, transparent),
+                9px 22px 0 -13px color-mix(in srgb, var(--danger) 72%, transparent);
+    animation: reaction-splat 1.9s var(--ease-out-expo) var(--impact-delay) both;
+}
+
+.reaction-impact-tomato .reaction-impact-accent {
+    top: 61px;
+    color: var(--paper);
+    transform: translate(-50%, -50%) rotate(-8deg);
+    animation: reaction-splat-word 1.75s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-tomato i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--danger);
+    animation: reaction-splat-drop 1.7s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 45ms) both;
+}
+
+.reaction-impact-poop::before {
+    content: '💩';
+    left: 47px;
+    top: 42px;
+    font-size: 37px;
+    animation: reaction-poop-plop 1.8s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-poop::after {
+    left: 36px;
+    top: 25px;
+    width: 58px;
+    height: 60px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--table-rail-highlight) 24%, transparent);
+    filter: blur(8px);
+    animation: reaction-stink-cloud 2s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-poop i {
+    color: var(--table-rail-highlight);
+    font-size: var(--font-size-title);
+    animation: reaction-stink-dot 1.7s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 100ms) both;
+}
+
+.reaction-impact-rofl {
+    animation: reaction-impact-hold 2.5s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-rofl .reaction-impact-accent {
+    top: 29px;
+    color: var(--tag-purple);
+    transform: translateX(-50%);
+    animation: reaction-banner-snap 1.6s var(--ease-out-expo) var(--impact-delay) both;
+}
+
+.reaction-impact-rofl i {
+    font-size: 19px;
+    animation: reaction-rofl-roll 2s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 100ms) both;
+}
+
+.reaction-impact-duck,
+.reaction-impact-flowers {
+    animation: reaction-impact-hold 2.55s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-duck::before {
+    content: '🦆';
+    left: 47px;
+    top: 42px;
+    font-size: 37px;
+    animation: reaction-duck-waddle 1.8s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-duck .reaction-impact-accent {
+    top: 30px;
+    color: var(--tag-yellow);
+    transform: translateX(-50%) rotate(-5deg);
+    animation: reaction-laugh-label 1.7s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-duck i,
+.reaction-impact-flowers i {
+    font-size: 15px;
+    animation: reaction-feather-fall 1.95s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 75ms) both;
+}
+
+.reaction-impact-turtle::before {
+    content: '🐢';
+    left: 48px;
+    top: 47px;
+    font-size: 34px;
+    animation: reaction-turtle-tank 2.05s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-turtle .reaction-impact-accent {
+    top: 28px;
+    color: var(--felt-text);
+    transform: translateX(-50%);
+    animation: reaction-laugh-label 1.8s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-knife {
+    animation: reaction-impact-hold 3.1s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-knife::before {
+    left: 53px;
+    top: 53px;
+    width: 26px;
+    height: 26px;
+    margin: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle,
+        color-mix(in srgb, var(--danger) 62%, transparent),
+        transparent 70%);
+    opacity: 0;
+    animation: reaction-flash-pop 420ms var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-knife::after {
+    display: none;
+}
+
+.reaction-impact-knife .reaction-impact-particles i {
+    --rot: 0deg;
+    inset: auto;
+    top: 55px;
+    width: 5px;
+    height: 34px;
+    border-radius: 50% 50% 50% 50% / 55% 55% 100% 100%;
+    background: linear-gradient(to bottom, transparent 8%,
+        color-mix(in srgb, var(--danger) 55%, transparent) 40%,
+        color-mix(in srgb, var(--danger) 92%, transparent) 78%);
+    transform-origin: top center;
+    opacity: 0;
+    animation: reaction-bleed-drip 2.35s var(--ease-out-quart)
+               calc(var(--impact-delay) + 60ms + var(--piece) * 110ms) both;
+}
+
+.reaction-impact-knife i:nth-child(1) { left: 45px; height: 26px; --rot: -8deg }
+.reaction-impact-knife i:nth-child(2) { left: 56px; height: 42px; --rot: 5deg }
+.reaction-impact-knife i:nth-child(3) { left: 67px; width: 6px; height: 30px; --rot: -3deg }
+.reaction-impact-knife i:nth-child(4) { left: 81px; height: 22px; --rot: 9deg }
+.reaction-impact-knife i:nth-child(5) { left: 36px; width: 4px; height: 20px; --rot: 11deg }
+.reaction-impact-knife i:nth-child(6) { left: 90px; height: 36px; --rot: -10deg }
+.reaction-impact-knife i:nth-child(7) { left: 62px; width: 4px; height: 18px; --rot: 3deg }
+.reaction-impact-knife i:nth-child(8) { left: 74px; height: 40px; --rot: -5deg }
+
+.reaction-impact-flowers::before {
+    content: '💐';
+    left: 44px;
+    top: 42px;
+    font-size: 39px;
+    animation: reaction-bouquet-open 1.9s var(--ease-out-expo) var(--impact-delay) both;
+}
+
+.reaction-impact-flowers i {
+    color: var(--brand-bright-7);
+}
+
+.reaction-impact-spotlight {
+    animation: reaction-impact-hold 2.55s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-spotlight::before {
+    left: 13px;
+    top: 6px;
+    width: 106px;
+    height: 116px;
+    background: linear-gradient(to bottom, color-mix(in srgb, var(--gold-pale) 48%, transparent), transparent 78%);
+    clip-path: polygon(42% 0, 58% 0, 91% 100%, 9% 100%);
+    transform-origin: top center;
+    animation: reaction-spotlight-sweep 1.9s var(--ease-out-expo) var(--impact-delay) both;
+}
+
+.reaction-impact-spotlight::after {
+    left: 27px;
+    bottom: 10px;
+    width: 78px;
+    height: 18px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--gold-pale) 34%, transparent);
+    filter: blur(4px);
+    animation: reaction-puddle 1.8s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-spotlight .reaction-impact-accent {
+    top: 64px;
+    color: var(--gold-ink);
+    transform: translate(-50%, -50%);
+    animation: reaction-spotlight-word 1.85s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-spotlight i {
+    color: var(--gold-pale);
+    animation: reaction-radial-pop 1.5s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 90ms) both;
+}
+
+.reaction-impact-crown {
+    animation: reaction-impact-hold 2.7s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-crown::before {
+    content: '👑';
+    left: 43px;
+    top: 27px;
+    font-size: 43px;
+    filter: drop-shadow(0 5px 6px var(--black-08));
+    animation: reaction-crown-land 2s var(--ease-out-expo) var(--impact-delay) both;
+}
+
+.reaction-impact-crown .reaction-impact-accent {
+    top: 81px;
+    padding: 3px 7px;
+    border-radius: var(--rounded-xs);
+    background: var(--gold);
+    color: var(--gold-ink);
+    transform: translateX(-50%);
+    animation: reaction-banner-snap 1.8s var(--ease-out-expo)
+               calc(var(--impact-delay) + 180ms) both;
+}
+
+.reaction-impact-crown i {
+    color: var(--suit-color, var(--paper));
+    animation: reaction-crown-suit 1.9s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 75ms) both;
+}
+
+.reaction-impact-crown i:nth-child(2),
+.reaction-impact-crown i:nth-child(4) {
+    --suit-color: var(--brand-bright);
+}
+
+.reaction-impact-bandage {
+    animation: reaction-impact-hold 2.65s var(--ease-out-quart) var(--impact-delay) both;
+}
+
+.reaction-impact-bandage::before {
+    content: '🩹';
+    left: 44px;
+    top: 40px;
+    font-size: 40px;
+    animation: reaction-bandage-seal 1.9s var(--ease-out-expo) var(--impact-delay) both;
+}
+
+.reaction-impact-bandage::after {
+    inset: 26px;
+    border: 2px solid color-mix(in srgb, var(--success) 68%, transparent);
+    border-radius: 50%;
+    animation: reaction-heal-ring 1.8s var(--ease-out-expo) var(--impact-delay) both;
+}
+
+.reaction-impact-bandage .reaction-impact-accent {
+    top: 27px;
+    color: var(--success);
+    transform: translateX(-50%);
+    animation: reaction-laugh-label 1.6s var(--ease-out-quart)
+               calc(var(--impact-delay) + 200ms) both;
+}
+
+.reaction-impact-bandage i {
+    color: var(--success);
+    animation: reaction-heart-pop 1.55s var(--ease-out-quart)
+               calc(var(--impact-delay) + var(--piece) * 100ms) both;
+}
+
+@keyframes reaction-loading-spin {
+    to { transform: rotate(360deg) }
+}
+
+@keyframes reaction-theater-emote {
+    0% { opacity: 0; transform: translateY(10px) scale(.68); filter: blur(3px) drop-shadow(0 7px 10px var(--black-0b)) }
+    13% { opacity: 1; transform: translateY(calc(var(--reaction-dy) + 7px)) scale(1.08); filter: blur(0) drop-shadow(0 7px 10px var(--black-0b)) }
+    20%, 74% { opacity: 1; transform: translateY(var(--reaction-dy)) scale(1) }
+    100% { opacity: 0; transform: translateY(calc(var(--reaction-dy) - 12px)) scale(.88); filter: drop-shadow(0 7px 10px var(--black-0b)) }
+}
+
+@keyframes reaction-theater-throw {
+    0% { opacity: 0; transform: translate(0, 4px) rotate(-16deg) scale(.72) }
+    8% { opacity: 1 }
+    16% {
+        opacity: 1;
+        transform: translate(var(--reaction-mid-x), calc(var(--reaction-mid-y) - var(--reaction-arc)))
+                   rotate(155deg) scale(1.08)
+    }
+    27% {
+        opacity: 1;
+        transform: translate(var(--reaction-dx), var(--reaction-dy)) rotate(340deg) scale(1)
+    }
+    31%, 100% {
+        opacity: 1;
+        transform: translate(var(--reaction-dx), var(--reaction-dy)) rotate(360deg) scale(1)
+    }
+}
+
+@keyframes reaction-theater-projectile {
+    0%, 25% { opacity: 1; transform: scale(1) }
+    30%, 100% { opacity: 0; transform: scale(.35) }
+}
+
+@keyframes reaction-seat-ring {
+    0% { opacity: 0; transform: scale(.45) }
+    24% { opacity: .85; transform: scale(1.2) }
+    100% { opacity: 0; transform: scale(1.65) }
+}
+
+@keyframes reaction-impact-hold {
+    0% { opacity: 0 }
+    8%, 82% { opacity: 1 }
+    100% { opacity: 0 }
+}
+
+@keyframes reaction-clap-hands {
+    0%, 100% { transform: rotate(0) scale(1) }
+    48% { transform: rotate(-9deg) scale(1.13) }
+}
+
+@keyframes reaction-banner-snap {
+    0% { opacity: 0; clip-path: inset(0 50%); filter: blur(3px); scale: .75 }
+    24%, 78% { opacity: 1; clip-path: inset(0); filter: blur(0); scale: 1 }
+    100% { opacity: 0; clip-path: inset(0); scale: .95 }
+}
+
+@keyframes reaction-radial-pop {
+    0% { opacity: 0; transform: rotate(calc(var(--piece) * 60deg)) translateY(-12px) scale(.3) }
+    28%, 68% { opacity: 1; transform: rotate(calc(var(--piece) * 60deg)) translateY(-54px) scale(1) }
+    100% { opacity: 0; transform: rotate(calc(var(--piece) * 60deg + 18deg)) translateY(-65px) scale(.55) }
+}
+
+@keyframes reaction-laugh-hop {
+    0%, 100% { transform: translateY(0) rotate(0) }
+    45% { transform: translateY(-7px) rotate(-7deg) }
+}
+
+@keyframes reaction-laugh-label {
+    0% { opacity: 0; transform: translate(-50%, 4px) rotate(-8deg) scale(.55) }
+    28%, 75% { opacity: 1; transform: translate(-50%, -36px) rotate(-8deg) scale(1) }
+    100% { opacity: 0; transform: translate(-50%, -46px) rotate(-2deg) scale(.86) }
+}
+
+@keyframes reaction-laugh-bubble {
+    0% { opacity: 0; transform: translate(-50%, 4px) scale(.4) }
+    24%, 68% { opacity: 1; transform: translate(calc(-50% + (var(--piece) - 1.5) * 21px), calc(-28px - var(--piece) * 5px)) rotate(calc((var(--piece) - 2) * 8deg)) scale(1) }
+    100% { opacity: 0; transform: translate(calc(-50% + (var(--piece) - 1.5) * 27px), calc(-48px - var(--piece) * 6px)) scale(.72) }
+}
+
+@keyframes reaction-shock-ring {
+    0% { opacity: 0; transform: scale(.25) }
+    24% { opacity: .9 }
+    100% { opacity: 0; transform: scale(1.65) }
+}
+
+@keyframes reaction-wow-mark {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(.35); filter: blur(4px) }
+    32%, 72% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); filter: blur(0) }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(.85) }
+}
+
+@keyframes reaction-angry-shake {
+    0%, 100% { transform: translateX(0) rotate(0) }
+    25% { transform: translateX(-3px) rotate(-4deg) }
+    75% { transform: translateX(3px) rotate(4deg) }
+}
+
+@keyframes reaction-heat-pulse {
+    0%, 100% { opacity: 0; transform: scale(.6) }
+    40% { opacity: 1; transform: scale(1.18) }
+}
+
+@keyframes reaction-steam-jet {
+    0% { opacity: 0; transform: translate(calc((var(--piece) - 1.5) * 17px), 12px) scaleY(.3) }
+    28%, 64% { opacity: .8; transform: translate(calc((var(--piece) - 1.5) * 22px), -30px) scaleY(1) }
+    100% { opacity: 0; transform: translate(calc((var(--piece) - 1.5) * 28px), -54px) scaleY(1.25) }
+}
+
+@keyframes reaction-tear-curtain {
+    0% { opacity: 0; transform: translate(calc((var(--piece) - 1.5) * 19px), -36px) scale(.7) }
+    18%, 72% { opacity: 1 }
+    100% { opacity: 0; transform: translate(calc((var(--piece) - 1.5) * 21px), 54px) scale(1.08) }
+}
+
+@keyframes reaction-nervous-tremble {
+    0%, 100% { transform: translate(0) }
+    50% { transform: translate(2px, -1px) }
+}
+
+@keyframes reaction-nervous-orbit {
+    from { opacity: 0; transform: rotate(0) scale(.7) }
+    18% { opacity: 1 }
+    to { opacity: 0; transform: rotate(360deg) scale(1.05) }
+}
+
+@keyframes reaction-sweat-orbit {
+    0% { opacity: 0; transform: rotate(calc(var(--piece) * 72deg)) translateY(-29px) scale(.4) }
+    24%, 70% { opacity: 1; transform: rotate(calc(var(--piece) * 72deg + 36deg)) translateY(-47px) scale(1) }
+    100% { opacity: 0; transform: rotate(calc(var(--piece) * 72deg + 52deg)) translateY(-59px) scale(.7) }
+}
+
+@keyframes reaction-frost-grow {
+    0% { opacity: 0; transform: rotate(-18deg) scale(.3); filter: blur(3px) }
+    30%, 76% { opacity: 1; transform: rotate(8deg) scale(1); filter: blur(0) }
+    100% { opacity: 0; transform: rotate(16deg) scale(1.16) }
+}
+
+@keyframes reaction-snow-orbit {
+    0% { opacity: 0; transform: rotate(calc(var(--piece) * 60deg)) translateY(-21px) scale(.4) }
+    24%, 74% { opacity: 1; transform: rotate(calc(var(--piece) * 60deg + 80deg)) translateY(-51px) scale(1) }
+    100% { opacity: 0; transform: rotate(calc(var(--piece) * 60deg + 140deg)) translateY(-59px) scale(.7) }
+}
+
+@keyframes reaction-flame-crown {
+    0%, 100% { opacity: 0; transform: scale(.55) rotate(-7deg); filter: blur(4px) }
+    30%, 66% { opacity: 1; transform: scale(1.1) rotate(5deg); filter: blur(1px) }
+}
+
+@keyframes reaction-ember-fan {
+    0% { opacity: 0; transform: translate(calc((var(--piece) - 2.5) * 8px), 12px) scale(.4) }
+    28% { opacity: 1 }
+    100% { opacity: 0; transform: translate(calc((var(--piece) - 2.5) * 17px), calc(-42px - var(--piece) * 3px)) rotate(120deg) scale(.3) }
+}
+
+@keyframes reaction-laurel-open {
+    0% { opacity: 0; transform: scale(.42) rotate(-25deg); clip-path: inset(0 50%) }
+    30%, 76% { opacity: 1; transform: scale(1) rotate(0); clip-path: inset(0) }
+    100% { opacity: 0; transform: scale(1.12) }
+}
+
+@keyframes reaction-respect-mark {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(.4) }
+    28%, 78% { opacity: 1; transform: translate(-50%, -50%) scale(1) }
+    100% { opacity: 0; transform: translate(-50%, -56%) scale(.9) }
+}
+
+@keyframes reaction-dream-rise {
+    0% { opacity: 0; transform: translate(calc((var(--piece) - 1) * 12px), 8px) rotate(-6deg) scale(.5) }
+    24%, 68% { opacity: 1; transform: translate(calc((var(--piece) - 1) * 17px), calc(-21px - var(--piece) * 10px)) rotate(5deg) scale(1) }
+    100% { opacity: 0; transform: translate(calc((var(--piece) - 1) * 23px), calc(-48px - var(--piece) * 12px)) rotate(13deg) scale(1.3) }
+}
+
+@keyframes reaction-heartbeat {
+    0%, 100% { transform: scale(1) }
+    18% { transform: scale(1.18) }
+    32% { transform: scale(.96) }
+    48% { transform: scale(1.1) }
+}
+
+@keyframes reaction-ecg-scan {
+    0% { opacity: 0; transform: scaleX(0); transform-origin: left center; filter: blur(2px) }
+    26%, 72% { opacity: 1; transform: scaleX(1); transform-origin: left center; filter: blur(0) }
+    100% { opacity: 0; transform: translateX(18px) scaleX(.7); transform-origin: right center }
+}
+
+@keyframes reaction-heart-pop {
+    0% { opacity: 0; transform: rotate(calc(var(--piece) * 90deg)) translateY(-18px) scale(.3) }
+    28%, 72% { opacity: 1; transform: rotate(calc(var(--piece) * 90deg)) translateY(-49px) scale(1) }
+    100% { opacity: 0; transform: rotate(calc(var(--piece) * 90deg + 15deg)) translateY(-59px) scale(.62) }
+}
+
+@keyframes reaction-fin-pass {
+    0% { opacity: 0; transform: translate(-48px, 17px) rotate(-12deg) scale(.7) }
+    24%, 66% { opacity: 1; transform: translate(0, 0) rotate(5deg) scale(1) }
+    100% { opacity: 0; transform: translate(52px, 13px) rotate(12deg) scale(.78) }
+}
+
+@keyframes reaction-wake-spread {
+    0% { opacity: 0; transform: scaleX(.2) }
+    26%, 70% { opacity: 1; transform: scaleX(1) }
+    100% { opacity: 0; transform: scaleX(1.35) translateY(5px) }
+}
+
+@keyframes reaction-wave-run {
+    0% { opacity: 0; transform: translate(calc((var(--piece) - 1.5) * 18px), 15px) scaleX(.5) }
+    30%, 74% { opacity: 1; transform: translate(calc((var(--piece) - 1.5) * 24px), 38px) scaleX(1.15) }
+    100% { opacity: 0; transform: translate(calc((var(--piece) - 1.5) * 31px), 42px) scaleX(1.5) }
+}
+
+@keyframes reaction-poker-shades {
+    0% { opacity: 0; transform: translateY(-20px) rotate(-8deg) scaleX(.55); clip-path: inset(0 50%) }
+    30%, 78% { opacity: 1; transform: translateY(0) rotate(0) scaleX(1); clip-path: inset(0) }
+    100% { opacity: 0; transform: translateY(4px) scaleX(.95) }
+}
+
+@keyframes reaction-suit-orbit {
+    0% { opacity: 0; transform: rotate(calc(var(--piece) * 90deg)) translateY(-17px) scale(.35) }
+    25%, 75% { opacity: 1; transform: rotate(calc(var(--piece) * 90deg + 95deg)) translateY(-50px) rotate(calc(var(--piece) * -90deg - 95deg)) scale(1) }
+    100% { opacity: 0; transform: rotate(calc(var(--piece) * 90deg + 150deg)) translateY(-57px) scale(.62) }
+}
+
+@keyframes reaction-cup-land {
+    0% { opacity: 0; transform: translateY(-25px) rotate(-14deg) scale(.72) }
+    28% { opacity: 1; transform: translateY(3px) rotate(5deg) scale(1.08) }
+    42%, 76% { opacity: 1; transform: translateY(0) rotate(0) scale(1) }
+    100% { opacity: 0; transform: translateY(2px) scale(.94) }
+}
+
+@keyframes reaction-coffee-steam {
+    0% { opacity: 0; transform: translate(0, 24px) scaleX(.6) }
+    28%, 66% { opacity: .9; transform: translate(calc((var(--piece) - 1) * 4px), -3px) scaleX(1) }
+    100% { opacity: 0; transform: translate(calc((var(--piece) - 1) * -4px), -27px) scaleX(1.35) }
+}
+
+@keyframes reaction-clover-bloom {
+    0% { opacity: 0; transform: rotate(-100deg) scale(.28); filter: blur(4px) }
+    30%, 76% { opacity: 1; transform: rotate(8deg) scale(1.12); filter: blur(0) }
+    100% { opacity: 0; transform: rotate(22deg) scale(.93) }
+}
+
+@keyframes reaction-horseshoe-slam {
+    0% { opacity: 0; transform: translateY(-42px) rotate(-22deg) scale(1.25) }
+    27% { opacity: 1; transform: translateY(5px) rotate(6deg) scale(1.08) }
+    39%, 76% { opacity: 1; transform: translateY(0) rotate(0) scale(1) }
+    100% { opacity: 0; transform: translateY(2px) scale(.95) }
+}
+
+@keyframes reaction-puddle {
+    0% { opacity: 0; transform: scale(.2) }
+    32%, 74% { opacity: .85; transform: scale(1) }
+    100% { opacity: 0; transform: scale(1.3) }
+}
+
+@keyframes reaction-target-rain {
+    0% { opacity: 0; transform: translate(calc((var(--piece) - 2.5) * 17px), -43px) scale(.55) }
+    18%, 74% { opacity: 1 }
+    100% { opacity: 0; transform: translate(calc((var(--piece) - 2.5) * 19px), 45px) scale(1.08) }
+}
+
+@keyframes reaction-splat {
+    0% { opacity: 0; transform: scale(.16) rotate(-10deg); filter: blur(3px) }
+    24%, 76% { opacity: .94; transform: scale(1) rotate(0); filter: blur(0) }
+    100% { opacity: 0; transform: scale(1.06) }
+}
+
+@keyframes reaction-splat-word {
+    0% { opacity: 0; transform: translate(-50%, -50%) rotate(-18deg) scale(.35) }
+    28%, 70% { opacity: 1; transform: translate(-50%, -50%) rotate(-8deg) scale(1) }
+    100% { opacity: 0; transform: translate(-50%, -55%) rotate(2deg) scale(.9) }
+}
+
+@keyframes reaction-splat-drop {
+    0% { opacity: 0; transform: rotate(calc(var(--piece) * 60deg)) translateY(-15px) scale(.3) }
+    26%, 70% { opacity: 1; transform: rotate(calc(var(--piece) * 60deg)) translateY(-49px) scale(1) }
+    100% { opacity: 0; transform: rotate(calc(var(--piece) * 60deg + 7deg)) translateY(-58px) scale(.65) }
+}
+
+@keyframes reaction-poop-plop {
+    0% { opacity: 0; transform: translateY(-39px) rotate(-12deg) scale(.7) }
+    26% { opacity: 1; transform: translateY(5px) rotate(5deg) scale(1.12) }
+    38%, 74% { opacity: 1; transform: translateY(0) rotate(0) scale(1) }
+    100% { opacity: 0; transform: translateY(3px) scale(.92) }
+}
+
+@keyframes reaction-stink-cloud {
+    0% { opacity: 0; transform: scale(.3); filter: blur(2px) }
+    30%, 68% { opacity: .8; transform: scale(1); filter: blur(8px) }
+    100% { opacity: 0; transform: translateY(-18px) scale(1.35); filter: blur(12px) }
+}
+
+@keyframes reaction-stink-dot {
+    0% { opacity: 0; transform: translate(calc((var(--piece) - 2) * 14px), 10px) scale(.3) }
+    28%, 68% { opacity: .8; transform: translate(calc((var(--piece) - 2) * 19px), -25px) scale(1) }
+    100% { opacity: 0; transform: translate(calc((var(--piece) - 2) * 23px), -49px) scale(1.25) }
+}
+
+@keyframes reaction-duck-waddle {
+    0% { opacity: 0; transform: translateX(-35px) rotate(-14deg) scale(.66) }
+    26% { opacity: 1; transform: translateX(-7px) rotate(8deg) scale(1.08) }
+    42%, 74% { opacity: 1; transform: translateX(4px) rotate(-5deg) scale(1) }
+    100% { opacity: 0; transform: translateX(35px) rotate(8deg) scale(.82) }
+}
+
+@keyframes reaction-turtle-tank {
+    0% { opacity: 0; transform: translateX(-34px) scale(.65) }
+    34%, 76% { opacity: 1; transform: translateX(0) scale(1) }
+    100% { opacity: 0; transform: translateX(16px) scale(.9) }
+}
+
+@keyframes reaction-bleed-drip {
+    0% { opacity: 0; transform: rotate(var(--rot)) scaleY(.08) }
+    16% { opacity: .95; transform: rotate(var(--rot)) scaleY(.24) }
+    55% { opacity: .85; transform: rotate(var(--rot)) scaleY(.7) }
+    82% { opacity: .5; transform: rotate(var(--rot)) scaleY(.92) }
+    100% { opacity: 0; transform: rotate(var(--rot)) scaleY(1) }
+}
+
+@keyframes reaction-bouquet-open {
+    0% { opacity: 0; transform: translateY(21px) rotate(-16deg) scale(.45); filter: blur(3px) }
+    30%, 76% { opacity: 1; transform: translateY(0) rotate(4deg) scale(1.08); filter: blur(0) }
+    100% { opacity: 0; transform: translateY(4px) rotate(0) scale(.94) }
+}
+
+@keyframes reaction-spotlight-sweep {
+    0% { opacity: 0; transform: rotate(-26deg) scaleX(.25); filter: blur(5px) }
+    30%, 76% { opacity: .92; transform: rotate(0) scaleX(1); filter: blur(0) }
+    100% { opacity: 0; transform: rotate(18deg) scaleX(.55); filter: blur(4px) }
+}
+
+@keyframes reaction-spotlight-word {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(.55); filter: blur(3px) }
+    32%, 74% { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0) }
+    100% { opacity: 0; transform: translate(-50%, -57%) scale(.88) }
+}
+
+@keyframes reaction-crown-land {
+    0% { opacity: 0; transform: translateY(-52px) rotate(-18deg) scale(.72) }
+    28% { opacity: 1; transform: translateY(3px) rotate(7deg) scale(1.12) }
+    43%, 78% { opacity: 1; transform: translateY(0) rotate(0) scale(1) }
+    100% { opacity: 0; transform: translateY(-3px) scale(.94) }
+}
+
+@keyframes reaction-crown-suit {
+    0% { opacity: 0; transform: rotate(calc(var(--piece) * 72deg)) translateY(-18px) scale(.3) }
+    28%, 72% { opacity: 1; transform: rotate(calc(var(--piece) * 72deg + 48deg)) translateY(-52px) scale(1) }
+    100% { opacity: 0; transform: rotate(calc(var(--piece) * 72deg + 76deg)) translateY(-60px) scale(.58) }
+}
+
+@keyframes reaction-bandage-seal {
+    0% { opacity: 0; transform: rotate(-42deg) scale(.3); filter: blur(4px) }
+    30%, 76% { opacity: 1; transform: rotate(8deg) scale(1.1); filter: blur(0) }
+    100% { opacity: 0; transform: rotate(0) scale(.95) }
+}
+
+@keyframes reaction-heal-ring {
+    0% { opacity: 0; transform: scale(.3) }
+    30%, 70% { opacity: 1; transform: scale(1) }
+    100% { opacity: 0; transform: scale(1.45) }
+}
+
+@media (max-width: 420px) {
+    .reaction-panel {
+        width: min(340px, calc(100vw - 16px));
+        padding: 13px;
+    }
+
+    .reaction-catalog {
+        gap: 7px;
+    }
+
+    .reaction-choice {
+        min-height: 58px;
+        grid-template-columns: 34px minmax(0, 1fr);
+        gap: 7px;
+        padding: 7px;
+    }
+
+    .reaction-choice-glyph {
+        width: 34px;
+        height: 34px;
+        font-size: 21px;
+    }
+
+    .reaction-choice-copy small {
+        display: none;
+    }
+}
+
+@media (orientation: portrait) and (max-width: 1023px) {
+    .reaction-panel {
+        max-height: calc(100dvh - env(safe-area-inset-top) - 64px - min(150px, 22dvh));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reaction-choice,
+    .reaction-choice::before,
+    .reaction-choice-glyph,
+    .reaction-favorites button,
+    .reaction-scope > button,
+    .reaction-choice-loading {
+        animation: none !important;
+        transition: none !important;
+    }
+
+    .table-reaction-effect,
+    .table-reaction-effect.emote,
+    .table-reaction-effect.thrown,
+    .table-reaction-effect::before,
+    .table-reaction-effect .reaction-projectile {
+        animation: none !important;
+        opacity: 1;
+        filter: drop-shadow(0 4px 6px var(--black-08));
+    }
+
+    .table-reaction-effect.emote {
+        transform: translateY(var(--reaction-dy));
+    }
+
+    .table-reaction-effect.thrown {
+        transform: translate(var(--reaction-dx), var(--reaction-dy));
+    }
+
+    .reaction-impact {
+        display: none;
+    }
+}

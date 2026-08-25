@@ -1442,6 +1442,15 @@ func (a *Actor) handleAFKSweep(ctx context.Context, c afkSweepCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return nil // transient load failure; next sweep retries
 	}
+	// The sweep is the only unconditional, self-perpetuating tick this actor
+	// has, which makes it the natural watchdog for every timer — not just the
+	// idle seats it was written for. ensureLoaded's trust-cache path skips
+	// rearmTimersFromCache, and the sweep only broadcasts when it actually
+	// removes someone, so without this a timer lost to a transient failure
+	// (see handleNextHand) was never re-derived on a quiet table. Every arm
+	// function is idempotent per hand/stage, so this is a no-op whenever the
+	// timers are already correct.
+	a.rearmTimersFromCache()
 	now := timeNowFunc()
 	var stale []string
 	for _, p := range a.cached.PlayersForActor() {
@@ -2152,6 +2161,18 @@ func (a *Actor) armNextHandTimer(complete bool) {
 // case, so it doesn't stay stuck on Complete; a ReadyCmd(true) later starts
 // the next hand normally.
 func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
+	// The timer that dispatched this command has already fired, so the
+	// invariant nextHandArmedFor stands for — "a countdown is pending for this
+	// hand" — is false the moment we get here. Clear it before anything that
+	// can fail: an error exit below consumed the only timer, and leaving the
+	// flag set made armNextHandTimer's idempotence check suppress every later
+	// re-arm, so the table sat on Complete forever. Nothing on this instance
+	// could recover it — a keepalive ping's ReconnectCmd, the AFK sweep and a
+	// reconnect all reach armNextHandTimer and hit that same early return —
+	// only another instance that had never armed for this hand. Under load the
+	// trigger is ordinary: ensureLoaded or commit failing with a cancelled
+	// DynamoDB context.
+	a.nextHandArmedFor = ""
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}

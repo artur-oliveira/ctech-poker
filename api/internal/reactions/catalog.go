@@ -16,10 +16,12 @@ type ReactionCatalogEntry struct {
 
 var catalog = []ReactionCatalogEntry{
 	{ID: "clap"}, {ID: "laugh"}, {ID: "wow"}, {ID: "angry"}, {ID: "cry"},
-	{ID: "nervous"}, {ID: "respect"}, {ID: "sleepy"},
+	{ID: "nervous"}, {ID: "respect"}, {ID: "sleepy"}, {ID: "heartbeat"},
+	{ID: "shark"}, {ID: "pokerface"},
 	{ID: "chip", Targeted: true}, {ID: "coffee", Targeted: true}, {ID: "clover", Targeted: true},
 	{ID: "horseshoe", Targeted: true}, {ID: "tear", Targeted: true}, {ID: "tomato", Targeted: true},
 	{ID: "duck", Targeted: true}, {ID: "flowers", Targeted: true},
+	{ID: "spotlight", Targeted: true}, {ID: "crown", Targeted: true}, {ID: "bandage", Targeted: true},
 
 	{ID: "cold", Premium: true, PriceFichas: 100_000, SKU: "poker_reaction_cold"},
 	{ID: "fire", Premium: true, PriceFichas: 100_000, SKU: "poker_reaction_fire"},

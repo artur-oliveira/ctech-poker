@@ -333,6 +333,24 @@ Components feel tactile and decisive: pressable, fast, explicit about state, and
 - **Playing cards:** warm card stock, 6px physical corners, and proportional 2px corners only at thumbnail scale. Archives reveal together; live play and replay may retain deal sequence.
 - **Empty states:** dashed 1px outline, plain explanation, and one clear recovery or creation path.
 
+### Table Reactions
+
+- **Picker:** Keep favorites first, then split the catalog into “Na minha cadeira” and “Mandar para alguém.” The
+  two-mode structure protects the timed poker decision from a 28-option wall while keeping every reaction directly
+  discoverable.
+- **Identity:** Every reaction owns a label, a short supporting line, a color family, and one recognizable
+  choreography. Self tells rise from the sender's seat; directed gestures travel in an arc and resolve at the
+  recipient's seat.
+- **Scale:** Effects stay within roughly one seat's visual territory and complete inside the existing ephemeral
+  reaction lifetime. They may briefly celebrate a seat, but never move cards, alter table state, or delay an action.
+- **Control:** The eye toggle hides all transient effects and persists locally. Locked, owned, loading, unavailable,
+  disconnected, cooldown, no-opponent, and targeting states remain explicit.
+- **Reduced motion:** Skip travel and particles. Place the reaction's identifying glyph directly at its final
+  seat so the same social information remains visible.
+
+**The Seat-Anchored Theater Rule.** A reaction begins with the player who sent it and, when directed, ends with the
+player who receives it. Spectacle may decorate that relationship; it never becomes an unrelated full-screen event.
+
 ### Inputs / Fields
 
 - **Style:** 44px height, 12px corners, translucent dark fill, white text, muted placeholder, and a one-pixel hairline.

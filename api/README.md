@@ -125,6 +125,9 @@ Per-binary keys read outside `Config` (not in the struct above):
   `decline_winner_cards`, `keep_seat`, `chat`, `reaction`. `request_winner_cards` charges the requester and opens a
   consent request; only the winner's `accept_winner_cards` reveals anything and pays anyone (protocol version 11 adds
   `TableSnapshot.pending_winner_cards`, sent only to those two players).
+  `reaction` accepts only IDs from `internal/reactions/catalog.go`; entries marked targeted also require an occupied
+  opponent `target_player_id`. The free Poker Theater additions are `heartbeat`, `shark`, `pokerface`,
+  `spotlight`, `crown`, and `bandage`.
 - **Server → client**: `connected`, `pong`, `state` (full authoritative snapshot on join and on every mutation — no
   delta replay), `chat`, `error`, `removed`, `achievement_unlocked`, `room_created`,
   `room_updated`, `payment_received`, `system_broadcast`, `social_event`, `social_presence_changed` and

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-25T17:20:00Z",
+  "generatedAt": "2026-08-25T18:10:00Z",
   "title": "Design System: CTech Poker",
   "extensions": {
     "colorMeta": {
@@ -267,6 +267,13 @@
       "description": "A bounded, internally scrolling modal with clear title and actions.",
       "html": "<section class=\"ds-dialog\" role=\"dialog\" aria-labelledby=\"ds-dialog-title\"><button class=\"ds-close\" aria-label=\"Fechar\">×</button><h2 id=\"ds-dialog-title\">Criar mesa</h2><p>Escolha os blinds, a capacidade e quem pode entrar.</p><div class=\"ds-dialog-actions\"><button>Cancelar</button><button class=\"primary\">Criar mesa</button></div></section>",
       "css": ".ds-dialog { position:relative; width:min(448px,calc(100% - 32px)); max-height:calc(100dvh - 32px); overflow:auto; padding:24px; border:1px solid #ffffff26; border-radius:var(--rounded-panel); background:var(--surface-control); color:var(--on-brand); box-shadow:0 25px 50px -12px #000; font-family:var(--font-sans),sans-serif; } .ds-dialog h2 { margin:0 44px 8px 0; font-size:24px; line-height:1.2; } .ds-dialog p { margin:0; color:var(--muted-rose); font-size:14px; line-height:1.5; } .ds-close { position:absolute; top:12px; right:12px; width:44px; height:44px; border:0; border-radius:var(--rounded-control); background:transparent; color:var(--paper); font-size:24px; cursor:pointer; } .ds-close:hover { background:#ffffff1a; } .ds-dialog button:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; } .ds-dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:24px; } .ds-dialog-actions button { min-height:44px; padding:0 16px; border:1px solid var(--control-border); border-radius:var(--rounded-control); background:#ffffff0d; color:var(--paper); font-weight:600; } .ds-dialog-actions .primary { border-color:var(--brand); background:var(--brand); color:var(--on-brand); }"
+    },
+    {
+      "name": "Table Reaction Choice",
+      "kind": "custom",
+      "description": "A compact Poker Theater choice with an identity glyph, direct label, and supporting poker context.",
+      "html": "<div class=\"ds-reactions\"><button><span>🫀</span><b>Coração all-in<small>Tudo no centro</small></b></button><button class=\"targeted\"><span>👑</span><b>Passar a coroa<small>Dono desta mão</small></b></button></div>",
+      "css": ".ds-reactions { display:grid; width:min(360px,100%); grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:12px; border-radius:var(--rounded-panel); background:var(--surface-seat); font-family:var(--font-sans),sans-serif; } .ds-reactions button { display:grid; min-width:0; min-height:61px; grid-template-columns:38px minmax(0,1fr); align-items:center; gap:8px; padding:8px 9px; border:0; border-radius:var(--rounded-control); background:color-mix(in srgb,var(--brand-bright) 8%,var(--surface-control)); color:var(--paper); text-align:left; cursor:pointer; } .ds-reactions button.targeted { background:color-mix(in srgb,var(--gold) 9%,var(--surface-control)); } .ds-reactions button>span { display:grid; width:38px; height:38px; place-items:center; border-radius:var(--rounded-sm); background:color-mix(in srgb,var(--brand-bright) 18%,var(--black-scrim)); font-size:24px; } .ds-reactions .targeted>span { background:color-mix(in srgb,var(--gold) 18%,var(--black-scrim)); } .ds-reactions b,.ds-reactions small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .ds-reactions b { font-size:11px; } .ds-reactions small { margin-top:3px; color:var(--text-secondary); font-size:10px; font-weight:400; } .ds-reactions button:hover { background:var(--surface-control-hover); transform:translateY(-2px); } .ds-reactions button:focus-visible { outline:3px solid var(--focus-ring); outline-offset:2px; }"
     }
   ],
   "narrative": {
@@ -293,7 +300,8 @@
       {"name": "The One Glow Rule", "body": "Glow means live, focused, personally active, timed, or victorious. Inactive card grids and ordinary controls do not glow.", "section": "elevation"},
       {"name": "The Information Motion Rule", "body": "Motion may explain dealing, collection, turn ownership, or panel state. It never delays the next valid action.", "section": "elevation"},
       {"name": "The Complete Outline Rule", "body": "State surrounds the component with a complete border or ring. Never bolt a thick accent stripe onto one edge.", "section": "shapes"},
-      {"name": "The Radius Ladder Rule", "body": "Use the established 2/4/6/8/12/14/16px ladder or the full pill. A new radius requires a reusable geometric role.", "section": "shapes"}
+      {"name": "The Radius Ladder Rule", "body": "Use the established 2/4/6/8/12/14/16px ladder or the full pill. A new radius requires a reusable geometric role.", "section": "shapes"},
+      {"name": "The Seat-Anchored Theater Rule", "body": "A reaction begins with the player who sent it and, when directed, ends with the player who receives it. Spectacle may decorate that relationship; it never becomes an unrelated full-screen event.", "section": "components"}
     ],
     "dos": [
       "Do make every card, chip, turn, connection, result, and recovery transition communicate a real state change.",

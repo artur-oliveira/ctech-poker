@@ -5,6 +5,7 @@ import {QueryProvider} from '@/lib/providers/QueryProvider';
 import {Notifier} from '@/components/Notifier';
 import {RouteAnnouncer} from '@/components/RouteAnnouncer';
 import './globals.css';
+import './table-reactions.css';
 import React from "react";
 
 const sans = IBM_Plex_Sans({subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-sans'});

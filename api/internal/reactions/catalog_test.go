@@ -54,9 +54,10 @@ func TestIsTargetedMatchesFrontend(t *testing.T) {
 	targeted := map[string]bool{
 		"clap": false, "laugh": false, "wow": false, "angry": false, "cry": false,
 		"nervous": false, "cold": false, "fire": false, "respect": false, "sleepy": false,
+		"heartbeat": false, "shark": false, "pokerface": false,
 		"chip": true, "coffee": true, "clover": true, "horseshoe": true, "tear": true,
 		"tomato": true, "poop": true, "rofl": true, "duck": true, "turtle": true,
-		"knife": true, "flowers": true,
+		"knife": true, "flowers": true, "spotlight": true, "crown": true, "bandage": true,
 	}
 	for id, want := range targeted {
 		if got := IsTargeted(id); got != want {
@@ -72,7 +73,8 @@ func TestEveryFreeTableReactionIsKnown(t *testing.T) {
 	// coupled across languages).
 	all := []string{
 		"clap", "laugh", "wow", "angry", "cry", "nervous", "cold", "fire", "respect", "sleepy",
-		"chip", "coffee", "clover", "horseshoe", "tear", "tomato", "poop", "rofl", "duck", "turtle", "knife", "flowers",
+		"heartbeat", "shark", "pokerface", "chip", "coffee", "clover", "horseshoe", "tear",
+		"tomato", "poop", "rofl", "duck", "turtle", "knife", "flowers", "spotlight", "crown", "bandage",
 	}
 	for _, id := range all {
 		if !IsKnown(id) {

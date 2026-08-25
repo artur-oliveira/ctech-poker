@@ -367,3 +367,85 @@ func TestReArmingTheSameHandDoesNotStrandThePersistedDeadline(t *testing.T) {
 		t.Fatalf("hand-2 deadline %v is not in the future", actor.nextHandDeadline)
 	}
 }
+
+// A next-hand countdown lost to a transient failure (handleNextHand's timer
+// fires, then ensureLoaded or commit errors out) leaves the table on Complete
+// with no pending timer. Nothing else on this instance re-derives it: a
+// keepalive ping, a reconnect and the sweep all reach armNextHandTimer, which
+// used to see nextHandArmedFor still set and suppress the re-arm. The sweep is
+// the only unconditional tick, so it has to be the watchdog.
+func TestAFKSweepRearmsALostNextHandCountdown(t *testing.T) {
+	actor, _ := completeActor(t, "instance-a")
+	actor.armNextHandTimer(true)
+	if actor.nextHandArmedFor != actor.handID {
+		t.Fatalf("setup: armed for %q, want %q", actor.nextHandArmedFor, actor.handID)
+	}
+	// The state handleNextHand leaves behind when it bails out: the timer has
+	// fired (so it is gone) and the marker is cleared, but the table is still
+	// Complete and no countdown exists.
+	actor.nextHandTimer.Stop()
+	actor.nextHandArmedFor = ""
+	actor.nextHandTimer = nil
+
+	if err := actor.handleAFKSweep(context.Background(), afkSweepCmd{}); err != nil {
+		t.Fatalf("handleAFKSweep: %v", err)
+	}
+	t.Cleanup(func() {
+		if actor.nextHandTimer != nil {
+			actor.nextHandTimer.Stop()
+		}
+	})
+
+	if actor.nextHandArmedFor != actor.handID {
+		t.Fatalf("armed for %q after the sweep, want %q — the countdown was never re-derived", actor.nextHandArmedFor, actor.handID)
+	}
+	if actor.nextHandTimer == nil {
+		t.Fatal("no next-hand timer after the sweep")
+	}
+	if !actor.nextHandDeadline.After(timeNowFunc().Add(-time.Second)) {
+		t.Fatalf("deadline %v is stale", actor.nextHandDeadline)
+	}
+}
+
+// The sweep must not disturb a countdown that is already correct: every arm
+// function is idempotent per hand, so a healthy table keeps its deadline.
+func TestAFKSweepLeavesAHealthyCountdownAlone(t *testing.T) {
+	actor, _ := completeActor(t, "instance-a")
+	actor.armNextHandTimer(true)
+	t.Cleanup(func() { actor.nextHandTimer.Stop() })
+	deadline := actor.nextHandDeadline
+
+	if err := actor.handleAFKSweep(context.Background(), afkSweepCmd{}); err != nil {
+		t.Fatalf("handleAFKSweep: %v", err)
+	}
+	if actor.nextHandDeadline != deadline {
+		t.Fatalf("deadline moved from %v to %v", deadline, actor.nextHandDeadline)
+	}
+}
+
+// handleNextHand must not leave the armed marker behind when it returns
+// without starting a hand: the timer that dispatched it is already gone, so a
+// stale marker is what blocked every later re-arm.
+func TestNextHandClearsTheArmedMarkerWhenItStartsNothing(t *testing.T) {
+	table := hand.NewTable([]*hand.Player{
+		{ID: "p1", Stack: 1000, Ready: true},
+		{ID: "p2", Stack: 1000, Ready: true},
+	}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	actor := New("table-1", nil, true, func(string, hand.Snapshot) {})
+	t.Cleanup(func() { actor.afkSweepTimer.Stop() })
+	actor.cached = table
+	actor.handID = "hand-1"
+	// A spurious/late fire: the marker says a countdown is pending for this
+	// hand, but the table is mid-hand so handleNextHand returns early.
+	actor.nextHandArmedFor = "hand-1"
+
+	if err := actor.handleNextHand(context.Background(), nextHandCmd{}); err != nil {
+		t.Fatalf("handleNextHand: %v", err)
+	}
+	if actor.nextHandArmedFor != "" {
+		t.Fatalf("armed marker = %q, want cleared", actor.nextHandArmedFor)
+	}
+}
