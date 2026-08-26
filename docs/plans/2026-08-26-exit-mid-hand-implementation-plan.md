@@ -1743,7 +1743,7 @@ git commit -m "feat: add ExitStatus UI and wire the exit-mid-hand flow end to en
 
 **Interfaces:** none (documentation only).
 
-- [ ] **Step 1: Add a bullet under "Other known issues" (or a new dedicated section, matching how
+- [x] **Step 1: Add a bullet under "Other known issues" (or a new dedicated section, matching how
   the paid-rabbit-hunt / pay-to-see-winner-cards features are documented there today)**
 
 ```markdown
@@ -1761,7 +1761,7 @@ git commit -m "feat: add ExitStatus UI and wire the exit-mid-hand flow end to en
   `docs/plans/2026-08-26-exit-mid-hand-design.md`.
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add api/CLAUDE.md
