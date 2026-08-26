@@ -2,14 +2,12 @@ import {act, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {BuyInPanel, formatBuyIn, midBuyIn} from './BuyInPanel';
-import {LeaveDialog} from './LeaveDialog';
 import {RebuyDialog} from './RebuyDialog';
 import type {Room} from '@/lib/api/rooms';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   joinRoom: vi.fn(),
-  leaveRoom: vi.fn(),
   refetch: vi.fn(),
   invalidateQueries: vi.fn(),
   setQueryData: vi.fn(),
@@ -25,7 +23,6 @@ vi.mock('@tanstack/react-query', () => ({
 vi.mock('@/lib/api/rooms', () => ({
   getRoom: vi.fn(),
   joinRoom: mocks.joinRoom,
-  leaveRoom: mocks.leaveRoom,
 }));
 vi.mock('@/lib/api/client', () => ({isNotFound: mocks.isNotFound}));
 vi.mock('@/lib/api/wallet', () => ({
@@ -168,42 +165,6 @@ describe('table bankroll dialogs', () => {
       if (key === 'dailyReward:cooldown') return {data: cooldownData};
       return {data: undefined, isLoading: false, isError: false, refetch: vi.fn()};
     });
-  });
-
-  test('cash-outs the returned stack and closes the leave dialog', async () => {
-    const left = vi.fn();
-    mocks.leaveRoom.mockResolvedValue({amount: 1_750});
-    render(<LeaveDialog roomId="room-1" stack={2_000} dealtIn={false} onLeftAction={left}/>);
-    await userEvent.click(screen.getByRole('button', {name: 'Sair da mesa'}));
-    expect(screen.getByText(/2.000 fichas/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', {name: 'Sair e sacar fichas'}));
-    await waitFor(() => expect(left).toHaveBeenCalledWith(1_750));
-    expect(screen.queryByText('Sair da mesa?')).not.toBeInTheDocument();
-  });
-  
-  test('distinguishes a dealt-in conflict from an already completed leave', async () => {
-    const left = vi.fn();
-    mocks.leaveRoom.mockRejectedValueOnce({axios: true, response: {status: 409, data: {detail: 'still active'}}});
-    render(<LeaveDialog roomId="room-1" stack={900} dealtIn={false} onLeftAction={left}/>);
-    await userEvent.click(screen.getByRole('button', {name: 'Sair da mesa'}));
-    await userEvent.click(screen.getByRole('button', {name: 'Sair e sacar fichas'}));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Você está na mão atual');
-    expect(left).not.toHaveBeenCalled();
-
-    mocks.leaveRoom.mockRejectedValueOnce({axios: true, response: {status: 409, data: {detail: 'player not found'}}});
-    await userEvent.click(screen.getByRole('button', {name: 'Sair e sacar fichas'}));
-    await waitFor(() => expect(left).toHaveBeenCalledWith(900));
-  });
-
-  test('keeps Exit reachable while dealt in and explains why confirmation is blocked', async () => {
-    render(<LeaveDialog roomId="room-1" stack={900} dealtIn onLeftAction={vi.fn()}/>);
-    const trigger = screen.getByRole('button', {name: 'Sair da mesa'});
-    expect(trigger).toBeEnabled();
-    expect(trigger).toHaveAttribute('title', expect.stringContaining('Você está na mão atual'));
-    await userEvent.click(trigger);
-    expect(screen.getByRole('status')).toHaveTextContent('Você está na mão atual');
-    expect(screen.getByRole('button', {name: 'Aguarde o fim da mão'})).toBeDisabled();
-    expect(mocks.leaveRoom).not.toHaveBeenCalled();
   });
 
   test('rebuys a changed amount and reports a retryable failure', async () => {

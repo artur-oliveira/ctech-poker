@@ -1508,7 +1508,7 @@ git commit -m "feat: LeaveDialog sends request_exit over the websocket"
 - Consumes: `SeatView.pending_exit` (Task 8), `current_player_id`/turn-deadline fields already on
   `TableSnapshot` (unchanged), `cancelExit()` (Task 8).
 
-- [ ] **Step 1: Write the failing component test**
+- [x] **Step 1: Write the failing component test**
 
 Create `ui/src/components/table/ExitStatus.test.tsx`:
 
@@ -1544,7 +1544,7 @@ describe('ExitStatus', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 cd ui && npx vitest run src/components/table/ExitStatus.test.tsx
@@ -1552,7 +1552,7 @@ cd ui && npx vitest run src/components/table/ExitStatus.test.tsx
 
 Expected: FAIL — module `./ExitStatus` does not exist.
 
-- [ ] **Step 3: Write the minimal component**
+- [x] **Step 3: Write the minimal component**
 
 Create `ui/src/components/table/ExitStatus.tsx`:
 
@@ -1584,7 +1584,7 @@ export function ExitStatus({pendingExit, isViewerTurn, onCancelAction}: {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 ```bash
 cd ui && npx vitest run src/components/table/ExitStatus.test.tsx
@@ -1592,7 +1592,7 @@ cd ui && npx vitest run src/components/table/ExitStatus.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 5: Invoke `/impeccable` on the new component**
+- [x] **Step 5: Invoke `/impeccable` on the new component**
 
 Run the `/impeccable` skill against `ExitStatus.tsx` (and the `LeaveDialog.tsx` copy from Task 9)
 per the user's explicit request that the UI go through it — follow its guidance for spacing,
@@ -1600,7 +1600,7 @@ motion (respecting `prefers-reduced-motion` per `ui/CLAUDE.md`), and token usage
 `:root`, no inline hex/px), then re-run Step 4's test to confirm no regressions from any markup
 changes it suggests.
 
-- [ ] **Step 6: Wire into `TableStage.tsx`**
+- [x] **Step 6: Wire into `TableStage.tsx`**
 
 Add to `Props` (`TableStage.tsx:119-159`), alongside the existing `rabbitHuntPending`/
 `onRequestRabbitHuntAction` props:
@@ -1623,7 +1623,7 @@ portrait and landscape branches, same duplication pattern already present for `R
 Add `import {ExitStatus} from '@/components/table/ExitStatus';` alongside the existing `RabbitHunt`
 import.
 
-- [ ] **Step 7: Wire into `page.tsx`**
+- [x] **Step 7: Wire into `page.tsx`**
 
 Add `viewerPendingExit={Boolean(viewerSeat?.pending_exit)}` and
 `onCancelExitAction={rt.cancelExit}` to the `<TableStage .../>` call (`page.tsx:591`, alongside the
@@ -1677,7 +1677,7 @@ the recap treatment instead of the generic redirect:
   }, [rt.removed, id, queryClient, router, handlePlayerLeft]);
 ```
 
-- [ ] **Step 8: Update `page.test.tsx`**
+- [x] **Step 8: Update `page.test.tsx`**
 
 The existing `LeaveDialog` mock (`page.test.tsx:106-109`) currently exposes `onLeftAction`;
 update it to match the new prop names:
@@ -1707,7 +1707,7 @@ test('an exit_requested removal shows the same recap as an immediate leave', asy
 fully in scope for this plan's research — before writing this test, read the file's existing
 `removed`-effect test if one exists and mirror its exact setup rather than the sketch above.)
 
-- [ ] **Step 9: Run the full frontend suite**
+- [x] **Step 9: Run the full frontend suite**
 
 ```bash
 cd ui && npx vitest run
@@ -1718,7 +1718,7 @@ npm run build
 
 Expected: all green, coverage thresholds unbroken (90% lines/functions/statements/branches).
 
-- [ ] **Step 10: Manual verification in the browser**
+- [x] **Step 10: Manual verification in the browser**
 
 Start the dev server (`npm run dev` in `ui/`, with `USE_MOCK`/the dev mock runtime per
 `ui/CLAUDE.md`'s "Not built" section and `src/dev/mockRuntime.ts` if a live backend isn't running)
@@ -1726,7 +1726,7 @@ and walk the golden path: sit at a table, request exit mid-hand as a blind befor
 confirm the status/cancel UI appears, confirm cancel restores the normal action bar, confirm an
 uncontested win still shows the normal win banner before the recap fires.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add ui/src/components/table/ExitStatus.tsx ui/src/components/table/ExitStatus.test.tsx \
