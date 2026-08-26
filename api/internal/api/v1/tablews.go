@@ -108,7 +108,7 @@ func wsAllowedOrigin(ctx *fasthttp.RequestCtx, allowed []string) bool {
 
 func rateLimitedTableMessage(messageType string) bool {
 	switch messageType {
-	case "act", "chat", "reaction", "preselect_action", "bot_challenge", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "set_run_it_twice", "peek_cards", "ping", "request_rabbit_hunt", "rabbit_hunt_verify_failed", "request_winner_cards", "accept_winner_cards", "decline_winner_cards":
+	case "act", "chat", "reaction", "preselect_action", "bot_challenge", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "set_run_it_twice", "peek_cards", "ping", "request_rabbit_hunt", "rabbit_hunt_verify_failed", "request_winner_cards", "accept_winner_cards", "decline_winner_cards", "request_exit", "cancel_exit":
 		return true
 	default:
 		return false
@@ -619,6 +619,22 @@ func RegisterTableWS(
 					} else {
 						ack()
 					}
+				case "request_exit":
+					ensureActionID()
+					r := make(chan error, 1)
+					if err := dispatch(table.RequestExitCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+					} else {
+						ack()
+					}
+				case "cancel_exit":
+					ensureActionID()
+					r := make(chan error, 1)
+					if err := dispatch(table.CancelExitCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+					} else {
+						ack()
+					}
 				case "request_winner_cards":
 					ensureActionID()
 					r := make(chan error, 1)
@@ -963,7 +979,7 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		if s.Equity != nil {
 			equity = new(*s.Equity)
 		}
-		dealtIn, ready := s.DealtIn, s.Ready
+		dealtIn, ready, pendingExit := s.DealtIn, s.Ready, s.PendingExit
 		var avatarURL *string
 		if s.AvatarURL != "" {
 			avatarURL = &s.AvatarURL
@@ -994,6 +1010,7 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 			State:             s.State,
 			DealtIn:           &dealtIn,
 			Ready:             &ready,
+			PendingExit:       &pendingExit,
 			Contributed:       s.Contributed,
 			HoleCards:         s.HoleCards,
 			HoleCardsRevealed: s.HoleCardsRevealed,

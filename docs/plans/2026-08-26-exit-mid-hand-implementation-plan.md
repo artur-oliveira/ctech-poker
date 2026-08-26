@@ -1092,7 +1092,7 @@ git commit -m "feat: dispatch and sweep RequestExit/CancelExit in the table acto
 - Consumes: `RequestExitCmd`/`CancelExitCmd` (Task 4), `SeatView.PendingExit` (Task 3),
   `pokerproto.Seat.PendingExit` (Task 1).
 
-- [ ] **Step 1: Add the command names to the allowlist**
+- [x] **Step 1: Add the command names to the allowlist**
 
 In `tablews.go:111`, add `"request_exit", "cancel_exit"` to the existing `case` list:
 
@@ -1100,7 +1100,7 @@ In `tablews.go:111`, add `"request_exit", "cancel_exit"` to the existing `case` 
 	case "act", "chat", "reaction", "preselect_action", "bot_challenge", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "set_run_it_twice", "peek_cards", "ping", "request_rabbit_hunt", "rabbit_hunt_verify_failed", "request_winner_cards", "accept_winner_cards", "decline_winner_cards", "request_exit", "cancel_exit":
 ```
 
-- [ ] **Step 2: Add the dispatch cases**
+- [x] **Step 2: Add the dispatch cases**
 
 Immediately after the existing `case "request_rabbit_hunt":` block (`tablews.go:614-621`):
 
@@ -1123,13 +1123,13 @@ Immediately after the existing `case "request_rabbit_hunt":` block (`tablews.go:
 		}
 ```
 
-- [ ] **Step 3: Wire `PendingExit` into the outgoing `Seat` proto**
+- [x] **Step 3: Wire `PendingExit` into the outgoing `Seat` proto**
 
 In the seat-building block (`tablews.go:960-1006`), add `pendingExit := s.PendingExit` alongside
 the existing `dealtIn, ready := s.DealtIn, s.Ready` line, and `PendingExit: &pendingExit,` in the
 `&pokerproto.Seat{...}` literal alongside `Ready: &ready,`.
 
-- [ ] **Step 4: Build**
+- [x] **Step 4: Build**
 
 ```bash
 cd api && go build ./...
@@ -1137,7 +1137,7 @@ cd api && go build ./...
 
 Expected: clean.
 
-- [ ] **Step 5: Manual smoke test against the mock/dev server** (no existing automated WS-gateway
+- [x] **Step 5: Manual smoke test against the mock/dev server** (no existing automated WS-gateway
 test harness for a single new no-payload command was found in this plan's research — if one
 exists, extend it here instead of skipping to manual verification)
 
@@ -1145,7 +1145,7 @@ Start the API locally per its normal dev instructions and use a WS client (or th
 Task 8 lands) to send `{"type": "request_exit"}` against a live table and confirm an `action_ack`
 or `error` frame comes back.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/internal/api/v1/tablews.go
