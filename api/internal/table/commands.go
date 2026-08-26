@@ -127,6 +127,30 @@ type RequestRabbitHuntCmd struct {
 
 func (c RequestRabbitHuntCmd) reply() chan error { return c.Reply }
 
+// RequestExitCmd asks to leave the table. It always pauses the player
+// (no future hands) and, if currently their turn, folds them out of the
+// live round — see Table.RequestExit. If they are not currently dealt into
+// a hand, this resolves as an immediate removal+cash-out, same latency as
+// the plain HTTP leave path it replaces.
+type RequestExitCmd struct {
+	PlayerID string
+	ActionID string
+	Reply    chan error
+}
+
+func (c RequestExitCmd) reply() chan error { return c.Reply }
+
+// CancelExitCmd reverses a still-pending RequestExitCmd. Errors if the
+// player has no pending exit (either never requested one, or the sweep
+// already removed them).
+type CancelExitCmd struct {
+	PlayerID string
+	ActionID string
+	Reply    chan error
+}
+
+func (c CancelExitCmd) reply() chan error { return c.Reply }
+
 // RequestWinnerCardsCmd charges a dealt-in opponent to see the sole
 // uncontested winner's otherwise-mucked hole cards for this hand.
 type RequestWinnerCardsCmd struct {
