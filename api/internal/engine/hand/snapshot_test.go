@@ -698,3 +698,31 @@ func TestViewForOmitsBlindSeatsBeforeFirstHand(t *testing.T) {
 		t.Fatalf("no hand has started, dealer must be empty, got %q", view.DealerPlayerID)
 	}
 }
+
+func TestViewForExposesPendingExit(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true, PendingExit: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	view := table.ViewFor(p1.ID)
+	var seenP1, seenP2 bool
+	for _, s := range view.Seats {
+		if s.PlayerID == p1.ID {
+			seenP1 = true
+			if !s.PendingExit {
+				t.Fatal("expected p1's seat view to show PendingExit true")
+			}
+		}
+		if s.PlayerID == p2.ID {
+			seenP2 = true
+			if s.PendingExit {
+				t.Fatal("expected p2's seat view to show PendingExit false")
+			}
+		}
+	}
+	if !seenP1 || !seenP2 {
+		t.Fatal("expected both seats in the view")
+	}
+}

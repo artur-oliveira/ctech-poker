@@ -137,6 +137,7 @@ type SeatView struct {
 	// player may become Active mid-hand while waiting for the next deal.
 	DealtIn           bool     `json:"dealt_in"`
 	Ready             bool     `json:"ready"`
+	PendingExit       bool     `json:"pending_exit,omitempty"`
 	Contributed       int64    `json:"contributed"`
 	HoleCards         []string `json:"hole_cards,omitempty"`
 	HoleCardsRevealed []bool   `json:"hole_cards_revealed,omitempty"`
@@ -264,6 +265,7 @@ func (t *Table) ViewFor(viewerID string) Snapshot {
 			State:            playerStateNames[p.State],
 			DealtIn:          dealtIn[p.ID],
 			Ready:            p.Ready,
+			PendingExit:      p.PendingExit,
 			Contributed:      p.Contributed,
 			StackAtHandStart: p.HandStartStack,
 			TimeBankMs:       t.TimeBankForActor(p.ID),
