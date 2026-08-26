@@ -142,6 +142,7 @@ type Props = {
   onRevealCardAction?: (index: number) => void;
   onPeekCardsAction?: () => void;
   rabbitHuntPending?: boolean;
+  rabbitHuntFailCount?: number;
   onRequestRabbitHuntAction?: () => void;
   onRabbitHuntVerifyFailedAction?: () => void;
   winnerCardsPending?: boolean;
@@ -176,6 +177,7 @@ export function TableStage({
                              onRevealCardAction,
                              onPeekCardsAction,
                              rabbitHuntPending,
+                             rabbitHuntFailCount,
                              onRequestRabbitHuntAction,
                              onRabbitHuntVerifyFailedAction,
                              winnerCardsPending,
@@ -257,7 +259,8 @@ export function TableStage({
                          onDismissedChangeAction={onOutcomeDismissedChange}
                          nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
       <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
-                  pending={rabbitHuntPending} onRequestRabbitHuntAction={onRequestRabbitHuntAction}
+                  pending={rabbitHuntPending} failCount={rabbitHuntFailCount}
+                  onRequestRabbitHuntAction={onRequestRabbitHuntAction}
                   onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
       <WinnerCards key={`winner-cards:${snapshot.hand_id}`} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
                    pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}
@@ -293,7 +296,8 @@ export function TableStage({
                            onDismissedChangeAction={onOutcomeDismissedChange}
                            nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
         <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
-                  pending={rabbitHuntPending} onRequestRabbitHuntAction={onRequestRabbitHuntAction}
+                  pending={rabbitHuntPending} failCount={rabbitHuntFailCount}
+                  onRequestRabbitHuntAction={onRequestRabbitHuntAction}
                   onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
         <WinnerCards key={`winner-cards:${snapshot.hand_id}`} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
                      pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}

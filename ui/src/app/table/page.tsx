@@ -636,6 +636,7 @@ function TableContent() {
                   onRevealCardAction={index => rt.showCards(index)}
                   onPeekCardsAction={rt.peekCards}
                   rabbitHuntPending={rt.requestRabbitHuntPending}
+                  rabbitHuntFailCount={rt.requestRabbitHuntFailCount}
                   onRequestRabbitHuntAction={rt.requestRabbitHunt}
                   onRabbitHuntVerifyFailedAction={rt.reportRabbitHuntVerifyFailed}
                   winnerCardsPending={rt.requestWinnerCardsPending}

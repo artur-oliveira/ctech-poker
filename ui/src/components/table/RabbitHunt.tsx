@@ -1,23 +1,37 @@
 'use client';
 
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {Rabbit} from 'lucide-react';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {verifyDeck, verifyWirePartialDeck} from '@/lib/deckVerify';
 import type {TableSnapshot} from '@/lib/api/table';
 import {rabbitRunout} from '@/lib/rabbitHunt';
 
-export function RabbitHunt({snapshot, viewer, bigBlind, pending, onRequestRabbitHuntAction, onRabbitHuntVerifyFailedAction}: {
+export function RabbitHunt({snapshot, viewer, bigBlind, pending, failCount, onRequestRabbitHuntAction, onRabbitHuntVerifyFailedAction}: {
   snapshot: TableSnapshot;
   viewer?: string;
   bigBlind: number;
   pending?: boolean;
+  failCount?: number;
   onRequestRabbitHuntAction?: () => void;
   onRabbitHuntVerifyFailedAction?: () => void;
 }) {
   const [requested, setRequested] = useState(false);
   const [cards, setCards] = useState<string[]>([]);
   const [verificationFailed, setVerificationFailed] = useState(false);
+  const lastFailCount = useRef(failCount ?? 0);
+
+  // The server rejects the request outright (e.g. "hand not complete yet"
+  // while this client's snapshot is momentarily ahead of the server's)
+  // rather than acking it, so no runout ever arrives. Without this,
+  // `requested` stays true forever and the button never comes back for the
+  // player to retry.
+  useEffect(() => {
+    if ((failCount ?? 0) !== lastFailCount.current) {
+      lastFailCount.current = failCount ?? 0;
+      setRequested(false);
+    }
+  }, [failCount]);
   const viewerParticipated = snapshot.seats.some(seat => seat.player_id === viewer && seat.dealt_in);
   const serverRunoutAvailable = Boolean(snapshot.runout_cards && snapshot.runout_cards.length > 0);
   // The offer is gated on the deck *commitment*, never on the proof: the

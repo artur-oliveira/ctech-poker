@@ -210,8 +210,14 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   // server can be answering frames while serving a table it cannot load), so
   // the only recovery is a fresh connection — which is exactly what a manual
   // F5 used to do for the player.
-  const resyncWatchdog = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const resyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Keyed by action_id (or '__global__' for an action-less resyncable
+  // error) rather than a single shared ref: two different in-flight
+  // commands (e.g. an act() and a requestRabbitHunt()) can each get their
+  // own resyncable error within the same jitter window, and a shared ref
+  // let the second overwrite/disarm the first's watchdog, stranding it
+  // pending forever with no recovery (see armResyncWatchdog/clearResyncFor).
+  const resyncWatchdogs = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const resyncTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   // A mid-hand joiner is seated as pending_entry and stays that way forever
   // unless the client opts them in (PostBigBlindCmd). The product intent is
   // an automatic buy-in for the next hand's big blind, no manual click, so
@@ -242,6 +248,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const [readyPending, setReadyPending] = useState(false);
   const [showCardsPending, setShowCardsPending] = useState(false);
   const [requestRabbitHuntPending, setRequestRabbitHuntPending] = useState(false);
+  const [requestRabbitHuntFailCount, setRequestRabbitHuntFailCount] = useState(0);
 	const [requestWinnerCardsPending, setRequestWinnerCardsPending] = useState(false);
   const [snapshot, setSnapshot] = useState<TableSnapshot | null>(null);
   const [snapshotTableID, setSnapshotTableID] = useState('');
@@ -332,6 +339,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       requestRabbitHuntActionRef.current = null;
       requestRabbitHuntLockRef.current = false;
       setRequestRabbitHuntPending(false);
+      if (failedCode) setRequestRabbitHuntFailCount(value => value + 1);
     }
 		if (requestWinnerCardsActionRef.current === actionId) {
 			if (requestWinnerCardsTimerRef.current) clearTimeout(requestWinnerCardsTimerRef.current);
@@ -374,20 +382,30 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     return true;
   }, [clearPending]);
 
-  const armResyncWatchdog = useCallback(() => {
-    if (resyncWatchdog.current) clearTimeout(resyncWatchdog.current);
-    resyncWatchdog.current = setTimeout(() => {
-      resyncWatchdog.current = null;
+  const armResyncWatchdog = useCallback((key: string) => {
+    const existing = resyncWatchdogs.current.get(key);
+    if (existing) clearTimeout(existing);
+    resyncWatchdogs.current.set(key, setTimeout(() => {
+      resyncWatchdogs.current.delete(key);
       awaitingReconnectSnapshotRef.current = true;
       retryNowRef.current();
-    }, RESYNC_TIMEOUT_MS);
+    }, RESYNC_TIMEOUT_MS));
   }, []);
-  
+
   const receive = useCallback((message: ServerMessage) => {
     if (message.type === 'state' && message.snapshot) {
-      if (resyncWatchdog.current) {
-        clearTimeout(resyncWatchdog.current);
-        resyncWatchdog.current = null;
+      // Only disarm the watchdog(s) this message actually resolves: a
+      // correlated reply to the resync it belongs to (matched by
+      // action_id), or — once a reconnect is underway — every watchdog at
+      // once, since a fresh connection makes them all moot. An unrelated
+      // broadcast (no matching action_id) must not disarm anything; that
+      // was the bug (see the Map comment above).
+      if (awaitingReconnectSnapshotRef.current) {
+        for (const timer of resyncWatchdogs.current.values()) clearTimeout(timer);
+        resyncWatchdogs.current.clear();
+      } else if (message.action_id && resyncWatchdogs.current.has(message.action_id)) {
+        clearTimeout(resyncWatchdogs.current.get(message.action_id)!);
+        resyncWatchdogs.current.delete(message.action_id);
       }
       const legacyUnversioned = !message.snapshot.snapshot_version;
       const version = message.snapshot.snapshot_version ?? 0;
@@ -432,15 +450,16 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
           }, item.expires_at);
         }
       }
-      // ACK is authoritative. This version check is the recovery path for a
-      // lost ACK: once a newer state arrives, the old decision cannot still
-      // be pending against the snapshot it was sent from. Skip it when a
-      // stale_state retry is armed — the correlated reply below (matched by
-      // action_id) is what resubmits it, not this generic bump.
-      if (pendingActionRef.current && version > pendingActionRef.current.snapshotVersion &&
-        !pendingActionRef.current.awaitingRetry) {
-        clearPending(pendingActionRef.current.id);
-      }
+      // ACK is authoritative — a plain unrelated broadcast (no action_id)
+      // must NOT clear the pending action, even at a newer version: the
+      // direct reply to our own request (ack, or the stale_state error that
+      // arms a retry below) can legitimately arrive on the socket *after*
+      // that broadcast, and clearing here first meant the retry-arm block
+      // below found pendingActionRef already null and silently dropped the
+      // action instead of resubmitting it (seen live: a "check" rejected as
+      // stale_state right after an unrelated broadcast bumped the version).
+      // A genuinely lost ACK is still covered by sendActFrame's own
+      // ACTION_TIMEOUT_MS backstop.
       // A sync_state response is serialized after the action frame on the
       // same socket. Even at the same version it is authoritative proof that
       // the timed-out action was not committed. If it was armed for a
@@ -497,6 +516,10 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
         }
       } else {
         postedBigBlindRef.current = false;
+        // Otherwise a stale id here blocks the next hand's auto-post (the
+        // `!postBigBlindActionRef.current` guard above) until its own ack
+        // or the internal 2s x3 retry loop eventually times it out.
+        postBigBlindActionRef.current = null;
       }
     }
     if (message.type === 'equity' && message.player_id && message.equity !== undefined &&
@@ -546,18 +569,29 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
         // The resync runs on its own timer so failPending's clearPending
         // cannot cancel it.
         if (pendingTimer.current) clearTimeout(pendingTimer.current);
-        if (resyncTimer.current) clearTimeout(resyncTimer.current);
+        // Keyed by this error's own action_id (falling back to a shared
+        // '__global__' bucket for the rare action-less error) so scheduling
+        // a resync for one command can never cancel or starve another's —
+        // see the Map comment on resyncTimers/resyncWatchdogs above.
+        const resyncKey = actionId || '__global__';
+        const existingResync = resyncTimers.current.get(resyncKey);
+        if (existingResync) clearTimeout(existingResync);
         // Backoff grows with each stale_state retry already spent on this
         // action (50ms, 100ms, 200ms, ...), plus up to 400ms of jitter so
         // simultaneous clients resyncing off the same broadcast don't all
         // hammer the table actor in lockstep.
         const backoffMs = code === 'rate_limited' ? 800 : Math.min(1600, 50 * 2 ** retriesUsed);
         const jitterMs = backoffMs + Math.floor(Math.random() * 400);
-        resyncTimer.current = setTimeout(() => {
+        resyncTimers.current.set(resyncKey, setTimeout(() => {
+          resyncTimers.current.delete(resyncKey);
           if (keepsPending && pendingActionRef.current?.id !== actionId) return;
-          sendRef.current({type: 'sync_state', action_id: actionId || crypto.randomUUID()});
-          armResyncWatchdog();
-        }, jitterMs);
+          // The id sent here is also the correlation key the reply is
+          // matched against above, so the watchdog must be armed under
+          // this exact same id, not a separately generated one.
+          const syncActionId = actionId || crypto.randomUUID();
+          sendRef.current({type: 'sync_state', action_id: syncActionId});
+          armResyncWatchdog(syncActionId);
+        }, jitterMs));
       }
       if (keepsPending) {
         // Auto-retry is already in flight (armed above via awaitingRetry) —
@@ -720,8 +754,10 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   }, [retryNow, send]);
   
   useEffect(() => () => {
-    if (resyncWatchdog.current) clearTimeout(resyncWatchdog.current);
-    if (resyncTimer.current) clearTimeout(resyncTimer.current);
+    for (const timer of resyncWatchdogs.current.values()) clearTimeout(timer);
+    resyncWatchdogs.current.clear();
+    for (const timer of resyncTimers.current.values()) clearTimeout(timer);
+    resyncTimers.current.clear();
   }, []);
   
   // Query-param navigation reuses this hook instance. Every realtime ref is
@@ -847,6 +883,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     readyPending,
     showCardsPending,
     requestRabbitHuntPending,
+    requestRabbitHuntFailCount,
 		requestWinnerCardsPending,
     ready: (ready = true) => {
       if (readyLockRef.current) return false;
