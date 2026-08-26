@@ -1382,7 +1382,7 @@ git commit -m "feat: add requestExit/cancelExit to useTableRealtime"
 - Consumes: `requestExit(): boolean`, `requestExitPending: boolean` (Task 8).
 - Produces: `LeaveDialog` no longer takes `dealtIn`/blocks on it; instead takes `onRequestExitAction: () => boolean` and `pending: boolean`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `ui/src/components/table/LeaveDialog.test.tsx`:
 
@@ -1409,7 +1409,7 @@ describe('LeaveDialog', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 cd ui && npx vitest run src/components/table/LeaveDialog.test.tsx
@@ -1417,7 +1417,7 @@ cd ui && npx vitest run src/components/table/LeaveDialog.test.tsx
 
 Expected: FAIL — `onRequestExitAction` prop unused/nonexistent, dialog still calls HTTP `leaveRoom`.
 
-- [ ] **Step 3: Rewrite `LeaveDialog.tsx`**
+- [x] **Step 3: Rewrite `LeaveDialog.tsx`**
 
 ```tsx
 'use client';
@@ -1470,7 +1470,7 @@ export function LeaveDialog({stack, pending, onRequestExitAction}: {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 ```bash
 cd ui && npx vitest run src/components/table/LeaveDialog.test.tsx
@@ -1478,7 +1478,7 @@ cd ui && npx vitest run src/components/table/LeaveDialog.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 5: `tsc`/`eslint`**
+- [x] **Step 5: `tsc`/`eslint`**
 
 ```bash
 cd ui && npx tsc --noEmit && npx eslint src --max-warnings 0
@@ -1488,7 +1488,7 @@ Expected: clean (Task 10 fixes the now-stale caller in `page.tsx`/`TableStage.ts
 fails on those call sites here, that is expected and resolved in Task 10; do not patch them out of
 order).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add ui/src/components/table/LeaveDialog.tsx ui/src/components/table/LeaveDialog.test.tsx
