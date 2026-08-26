@@ -1826,3 +1826,150 @@ func TestActRejectsWhenNoPlayerHasPendingDecision(t *testing.T) {
 		t.Fatal("waiting table must reject an action when current_player_id is empty")
 	}
 }
+
+// TestRequestExitPausesAndFoldsWhenItIsTheirTurn extends the existing
+// SitOutForActor coverage with the PendingExit flag RequestExit layers on
+// top — it must reuse the exact same fold-out-of-the-live-round behavior,
+// not reimplement it.
+func TestRequestExitPausesAndFoldsWhenItIsTheirTurn(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	current := table.CurrentPlayerIDForActor()
+	if current == "" {
+		t.Fatal("expected a player to be on the clock after StartHand")
+	}
+
+	if err := table.RequestExit(current); err != nil {
+		t.Fatalf("RequestExit: %v", err)
+	}
+
+	p := table.playerByID(current)
+	if !p.PendingExit {
+		t.Fatal("expected PendingExit to be set")
+	}
+	if p.State != Folded {
+		t.Fatalf("expected the exiting player to be folded out of the live round, got state %v", p.State)
+	}
+	if table.Stage() != Complete {
+		t.Fatalf("folding the only other active player in a heads-up hand must end it, got stage %v", table.Stage())
+	}
+}
+
+// TestRequestExitAsBlindStillWinsUncontested is the design doc's headline
+// case: exiting as BB before anyone raises must not force a fold, so an
+// uncontested win still pays out normally.
+func TestRequestExitAsBlindStillWinsUncontested(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	// Exit as the player NOT currently on the clock (the blind who already
+	// posted and is waiting on the other player's action).
+	waitingPlayer := p1.ID
+	if table.CurrentPlayerIDForActor() == p1.ID {
+		waitingPlayer = p2.ID
+	}
+
+	if err := table.RequestExit(waitingPlayer); err != nil {
+		t.Fatalf("RequestExit: %v", err)
+	}
+	if p := table.playerByID(waitingPlayer); p.State == Folded {
+		t.Fatal("a player not currently on the clock must not be force-folded")
+	}
+
+	// The player on the clock folds, ending the hand uncontested.
+	current := table.CurrentPlayerIDForActor()
+	if err := table.Act(current, betting.ActionFold, 0); err != nil {
+		t.Fatalf("Act(fold): %v", err)
+	}
+
+	if table.Stage() != Complete {
+		t.Fatalf("expected hand to complete uncontested, got stage %v", table.Stage())
+	}
+	if table.Payouts()[waitingPlayer] == 0 {
+		t.Fatalf("the exiting player must still be credited an uncontested win, got payouts %+v", table.Payouts())
+	}
+}
+
+func TestCancelExitClearsThePendingFlag(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	waiting := p1.ID
+	if table.CurrentPlayerIDForActor() == p1.ID {
+		waiting = p2.ID
+	}
+	if err := table.RequestExit(waiting); err != nil {
+		t.Fatalf("RequestExit: %v", err)
+	}
+	if err := table.CancelExit(waiting); err != nil {
+		t.Fatalf("CancelExit: %v", err)
+	}
+	p := table.playerByID(waiting)
+	if p.PendingExit {
+		t.Fatal("expected PendingExit cleared")
+	}
+	if !p.Ready {
+		t.Fatal("expected Ready restored so the player is dealt into the next hand")
+	}
+}
+
+func TestCancelExitErrorsWithNoPendingExit(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1}, 10, 20)
+	if err := table.CancelExit(p1.ID); err == nil {
+		t.Fatal("expected an error canceling an exit that was never requested")
+	}
+}
+
+func TestCurrentPlayerHasPendingExitForActor(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	if table.CurrentPlayerHasPendingExitForActor() {
+		t.Fatal("expected false before any exit is requested")
+	}
+	waiting := p1.ID
+	if table.CurrentPlayerIDForActor() == p1.ID {
+		waiting = p2.ID
+	}
+	if err := table.RequestExit(waiting); err != nil {
+		t.Fatalf("RequestExit: %v", err)
+	}
+	if table.CurrentPlayerHasPendingExitForActor() {
+		t.Fatal("expected false: the exiting player is not the one currently on the clock")
+	}
+	if err := table.Act(table.CurrentPlayerIDForActor(), betting.ActionCall, 20); err != nil {
+		t.Fatalf("Act(call): %v", err)
+	}
+	if !table.CurrentPlayerHasPendingExitForActor() {
+		t.Fatal("expected true: it is now the exiting player's turn")
+	}
+}
+
+func TestDealtIntoCurrentHandForActorMatchesInternalCheck(t *testing.T) {
+	p1 := &Player{ID: "p1", Stack: 1000, Ready: true}
+	p2 := &Player{ID: "p2", Stack: 1000, Ready: true}
+	table := NewTable([]*Player{p1, p2}, 10, 20)
+	if err := table.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	if !table.DealtIntoCurrentHandForActor(p1.ID) {
+		t.Fatal("expected p1 to be dealt into the hand just started")
+	}
+	if table.DealtIntoCurrentHandForActor("nobody") {
+		t.Fatal("expected an unseated id to report false")
+	}
+}

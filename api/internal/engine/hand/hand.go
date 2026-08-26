@@ -67,6 +67,13 @@ type Player struct {
 	BuyInAmount int64        `dynamodbav:"buy_in_amount,omitempty"`
 	Stack       int64        `dynamodbav:"stack"`
 	Ready       bool         `dynamodbav:"ready"`
+	// PendingExit means the player asked to leave (RequestExit). They are
+	// paused (Ready is cleared, same as any sit-out) and, once no longer
+	// dealt into the current hand, Actor's post-commit sweep removes and
+	// cashes them out automatically. Persisted — not an actor-local map —
+	// so it survives an actor restart/handoff (see api/CLAUDE.md's
+	// disconnectedSince cautionary note for why that distinction matters).
+	PendingExit bool `dynamodbav:"pending_exit,omitempty"`
 	State       PlayerState  `dynamodbav:"state"`
 	HoleCards   [2]deck.Card `dynamodbav:"hole_cards"`
 	Contributed int64        `dynamodbav:"contributed"` // this hand's total contribution across all rounds, for side-pot math
@@ -494,6 +501,75 @@ func (t *Table) SitOutForActor(playerID string) {
 		}
 	}
 	p.State = SittingOut
+}
+
+// RequestExit pauses playerID (no future hands) and, if it is currently
+// their turn, folds them out of the live betting round via SitOutForActor —
+// same as the disconnect/turn-timeout path. Round.Act has no turn-order
+// check of its own, so SitOutForActor would fold ANY Active player it's
+// called on, not just the one on the clock; calling it unconditionally here
+// would force-fold an exiting BB/SB before their turn ever comes back
+// around, breaking an uncontested win they're still owed. So a player who is
+// dealt in and Active but not currently on the clock is left exactly as
+// they are — Actor.processPendingExitAutoFolds (driven from broadcastAll,
+// the same per-commit reconciliation point armTurnTimer/preselections use)
+// folds them the instant their own turn actually arrives, via
+// CurrentPlayerHasPendingExitForActor below.
+func (t *Table) RequestExit(playerID string) error {
+	p := t.playerByID(playerID)
+	if p == nil {
+		return fmt.Errorf("%w: %s", ErrPlayerNotFound, playerID)
+	}
+	p.PendingExit = true
+	if t.currentPlayerToAct() == playerID {
+		t.SitOutForActor(playerID)
+		return nil
+	}
+	p.Ready = false
+	if p.State == Active {
+		return nil
+	}
+	if p.State != AllIn {
+		p.State = SittingOut
+	}
+	return nil
+}
+
+// CurrentPlayerHasPendingExitForActor reports whether the player currently
+// on the clock (if any) has a pending exit request. Actor's
+// processPendingExitAutoFolds uses this to fold them out the moment it
+// becomes their turn, rather than at RequestExit time — see RequestExit's
+// doc comment for why that distinction matters.
+func (t *Table) CurrentPlayerHasPendingExitForActor() bool {
+	p := t.playerByID(t.currentPlayerToAct())
+	return p != nil && p.PendingExit
+}
+
+// CancelExit reverses a still-pending RequestExit — mirrors the Ready:true
+// branch of the ordinary sit-out toggle (RequestReturnFromSitOut) so a
+// player who exited when it was not yet their turn resumes eligibility the
+// exact same way a voluntary sit-out un-does. A player already folded out of
+// the current hand by RequestExit stays folded for THIS hand (canceling
+// exit is not "undo my fold") but is Ready again for the next one.
+func (t *Table) CancelExit(playerID string) error {
+	p := t.playerByID(playerID)
+	if p == nil {
+		return fmt.Errorf("%w: %s", ErrPlayerNotFound, playerID)
+	}
+	if !p.PendingExit {
+		return fmt.Errorf("hand: player %s has no pending exit to cancel", playerID)
+	}
+	p.PendingExit = false
+	p.Ready = true
+	t.RequestReturnFromSitOut(playerID)
+	return nil
+}
+
+// DealtIntoCurrentHandForActor exposes dealtIntoCurrentHand to
+// internal/table (a different package) so Actor's post-commit sweep can
+// check removal eligibility before attempting RemovePlayerForActor.
+func (t *Table) DealtIntoCurrentHandForActor(playerID string) bool {
+	return t.dealtIntoCurrentHand(playerID)
 }
 
 func (t *Table) playerByID(id string) *Player {
