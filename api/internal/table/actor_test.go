@@ -670,3 +670,258 @@ func TestHandleReactionFreeReactionWorksWithoutOwnershipHook(t *testing.T) {
 		t.Fatalf("expected free reaction to succeed without an ownership hook, got %v", err)
 	}
 }
+
+// TestRequestExitAsBlindStillPaysOutOnUncontestedWin exercises the full
+// command -> commit -> sweep path: exit requested as the player not
+// currently on the clock, the other player folds, the hand completes, and
+// the exiting player is both credited the pot AND actually removed by the
+// sweep — no second leave call needed. This is also the exact regression
+// case that caught the original RequestExit design being wrong (see the
+// design doc's "Correction" note): a naive SitOutForActor(playerID) call
+// here would fold the "waiting" player immediately since Round.Act has no
+// turn-order check, breaking this uncontested win entirely.
+func TestRequestExitAsBlindStillPaysOutOnUncontestedWin(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+
+	tableID := uniqueTableID(t)
+	seed := hand.NewTable([]*hand.Player{
+		{ID: "p1", Stack: 1000, Ready: true},
+		{ID: "p2", Stack: 1000, Ready: true},
+	}, 10, 20)
+	if err := seed.StartHand(); err != nil {
+		t.Fatalf("seed StartHand: %v", err)
+	}
+	state := seed.ExportState()
+	ctx := context.Background()
+	if err := store.SeedTable(ctx, tableID, state); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	a := New(tableID, store, true, func(string, hand.Snapshot) {})
+	runCtx, cancel := context.WithCancel(ctx)
+	go a.Run(runCtx)
+	defer stopActor(t, a, cancel)
+
+	current := seed.CurrentPlayerIDForActor()
+	waiting := "p1"
+	if current == "p1" {
+		waiting = "p2"
+	}
+
+	exitReply := make(chan error, 1)
+	if err := a.Dispatch(RequestExitCmd{PlayerID: waiting, ActionID: "exit-1", Reply: exitReply}); err != nil {
+		t.Fatalf("RequestExitCmd: %v", err)
+	}
+
+	actReply := make(chan error, 1)
+	// ExpectedSnapshotVersion/ExpectedHandID left zero: validateActionPrecondition
+	// treats that as an internal/system-originated act and skips the staleness
+	// check (actor.go:836-838) — this test isn't exercising that gate.
+	if err := a.Dispatch(ActCmd{
+		PlayerID: current, Action: betting.ActionFold, ActionID: "fold-1", Reply: actReply,
+	}); err != nil {
+		t.Fatalf("ActCmd: %v", err)
+	}
+
+	stored, err := store.LoadTable(ctx, tableID)
+	if err != nil {
+		t.Fatalf("LoadTable: %v", err)
+	}
+	if stored.State.Stage != hand.Complete {
+		t.Fatalf("expected the hand to complete uncontested, got stage %v", stored.State.Stage)
+	}
+	if stored.State.Payouts[waiting] == 0 {
+		t.Fatalf("expected %s to be credited the uncontested win, got payouts %+v", waiting, stored.State.Payouts)
+	}
+	// dealtIntoCurrentHand (via handOrder) stays true through the whole
+	// Complete-stage window — only the NEXT hand's StartHand clears it — so
+	// the sweep cannot remove them until that transition actually runs.
+	var stillSeated bool
+	for _, p := range stored.State.Players {
+		if p.ID == waiting {
+			stillSeated = true
+		}
+	}
+	if !stillSeated {
+		t.Fatalf("expected %s to still be seated immediately after the hand completes (removal waits for next_hand)", waiting)
+	}
+
+	nextHandReply := make(chan error, 1)
+	if err := a.Dispatch(nextHandCmd{Reply: nextHandReply}); err != nil {
+		t.Fatalf("nextHandCmd: %v", err)
+	}
+
+	stored, err = store.LoadTable(ctx, tableID)
+	if err != nil {
+		t.Fatalf("LoadTable (after next_hand): %v", err)
+	}
+	for _, p := range stored.State.Players {
+		if p.ID == waiting {
+			t.Fatalf("expected %s to be swept off the table once the next hand started, still found: %+v", waiting, p)
+		}
+	}
+}
+
+// TestRequestExitOnCurrentActorFoldsImmediately covers the other half of
+// RequestExit: when the exiting player IS the one currently on the clock,
+// they fold right away (same as a disconnect timeout) rather than waiting
+// for processPendingExitAutoFolds — there's no "later turn" to wait for.
+func TestRequestExitOnCurrentActorFoldsImmediately(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+
+	tableID := uniqueTableID(t)
+	seed := hand.NewTable([]*hand.Player{
+		{ID: "p1", Stack: 1000, Ready: true},
+		{ID: "p2", Stack: 1000, Ready: true},
+	}, 10, 20)
+	if err := seed.StartHand(); err != nil {
+		t.Fatalf("seed StartHand: %v", err)
+	}
+	state := seed.ExportState()
+	ctx := context.Background()
+	if err := store.SeedTable(ctx, tableID, state); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	a := New(tableID, store, true, func(string, hand.Snapshot) {})
+	runCtx, cancel := context.WithCancel(ctx)
+	go a.Run(runCtx)
+	defer stopActor(t, a, cancel)
+
+	current := seed.CurrentPlayerIDForActor()
+	other := "p1"
+	if current == "p1" {
+		other = "p2"
+	}
+
+	exitReply := make(chan error, 1)
+	if err := a.Dispatch(RequestExitCmd{PlayerID: current, ActionID: "exit-1", Reply: exitReply}); err != nil {
+		t.Fatalf("RequestExitCmd: %v", err)
+	}
+
+	stored, err := store.LoadTable(ctx, tableID)
+	if err != nil {
+		t.Fatalf("LoadTable: %v", err)
+	}
+	if stored.State.Stage != hand.Complete {
+		t.Fatalf("expected the hand to complete uncontested, got stage %v", stored.State.Stage)
+	}
+	if stored.State.Payouts[other] == 0 {
+		t.Fatalf("expected %s to be credited the uncontested win, got payouts %+v", other, stored.State.Payouts)
+	}
+
+	nextHandReply := make(chan error, 1)
+	if err := a.Dispatch(nextHandCmd{Reply: nextHandReply}); err != nil {
+		t.Fatalf("nextHandCmd: %v", err)
+	}
+
+	stored, err = store.LoadTable(ctx, tableID)
+	if err != nil {
+		t.Fatalf("LoadTable (after next_hand): %v", err)
+	}
+	for _, p := range stored.State.Players {
+		if p.ID == current {
+			t.Fatalf("expected %s to be swept off the table once the next hand started, still found: %+v", current, p)
+		}
+	}
+	var otherFound bool
+	for _, p := range stored.State.Players {
+		if p.ID == other {
+			otherFound = true
+		}
+	}
+	if !otherFound {
+		t.Fatalf("expected %s to still be seated", other)
+	}
+}
+
+// TestPendingExitAutoFoldsOnTurnArrival covers the case RequestExit itself
+// deliberately does NOT handle: exit requested while NOT the exiting
+// player's turn, then a later commit brings the turn back around to them —
+// Actor.processPendingExitAutoFolds (run from broadcastAll) must fold them
+// automatically at that point, without a further client action. Heads-up on
+// purpose: with only two players, "whoever isn't current" has an
+// unambiguous, single, deterministic next turn once current acts.
+func TestPendingExitAutoFoldsOnTurnArrival(t *testing.T) {
+	db := testClient(t)
+	store := tablestore.NewStore(db, "table_test")
+	mustCreateTestTables(t, db, "table_test")
+
+	tableID := uniqueTableID(t)
+	seed := hand.NewTable([]*hand.Player{
+		{ID: "p1", Stack: 1000, Ready: true},
+		{ID: "p2", Stack: 1000, Ready: true},
+	}, 10, 20)
+	if err := seed.StartHand(); err != nil {
+		t.Fatalf("seed StartHand: %v", err)
+	}
+	state := seed.ExportState()
+	ctx := context.Background()
+	if err := store.SeedTable(ctx, tableID, state); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	a := New(tableID, store, true, func(string, hand.Snapshot) {})
+	runCtx, cancel := context.WithCancel(ctx)
+	go a.Run(runCtx)
+	defer stopActor(t, a, cancel)
+
+	current := seed.CurrentPlayerIDForActor()
+	waiting := "p1"
+	if current == "p1" {
+		waiting = "p2"
+	}
+
+	exitReply := make(chan error, 1)
+	if err := a.Dispatch(RequestExitCmd{PlayerID: waiting, ActionID: "exit-1", Reply: exitReply}); err != nil {
+		t.Fatalf("RequestExitCmd: %v", err)
+	}
+
+	stored, err := store.LoadTable(ctx, tableID)
+	if err != nil {
+		t.Fatalf("LoadTable: %v", err)
+	}
+	for _, p := range stored.State.Players {
+		if p.ID == waiting && p.State == hand.Folded {
+			t.Fatal("expected the exiting player to still be live — it is not yet their turn")
+		}
+	}
+
+	// current calls, which in heads-up hands the turn straight to waiting.
+	actReply := make(chan error, 1)
+	if err := a.Dispatch(ActCmd{
+		PlayerID: current, Action: betting.ActionCall, Amount: 20, ActionID: "act-1", Reply: actReply,
+	}); err != nil {
+		t.Fatalf("ActCmd: %v", err)
+	}
+
+	stored, err = store.LoadTable(ctx, tableID)
+	if err != nil {
+		t.Fatalf("LoadTable (after): %v", err)
+	}
+	if stored.State.Stage != hand.Complete {
+		t.Fatalf("expected the auto-fold to complete the hand uncontested, got stage %v", stored.State.Stage)
+	}
+	if stored.State.Payouts[current] == 0 {
+		t.Fatalf("expected %s to be credited the win after waiting's auto-fold, got payouts %+v", current, stored.State.Payouts)
+	}
+
+	nextHandReply := make(chan error, 1)
+	if err := a.Dispatch(nextHandCmd{Reply: nextHandReply}); err != nil {
+		t.Fatalf("nextHandCmd: %v", err)
+	}
+
+	stored, err = store.LoadTable(ctx, tableID)
+	if err != nil {
+		t.Fatalf("LoadTable (after next_hand): %v", err)
+	}
+	for _, p := range stored.State.Players {
+		if p.ID == waiting {
+			t.Fatalf("expected %s to have been auto-folded and then swept off once the next hand started, still found: %+v", waiting, p)
+		}
+	}
+}

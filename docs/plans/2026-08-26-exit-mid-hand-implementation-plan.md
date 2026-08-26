@@ -609,7 +609,19 @@ git commit -m "feat: add RequestExitCmd/CancelExitCmd"
 
 ---
 
-### Task 5: Actor — dispatch, handlers, turn-arrival auto-fold, sweep
+### Task 5: Actor — dispatch, handlers, turn-arrival auto-fold, sweep [DONE — status below]
+
+**Status:** implemented, committed. Second correction found while running these integration tests
+(not a design bug this time, a test-expectation bug): removal is not synchronous with the fold
+that completes the hand. `dealtIntoCurrentHand`/`t.handOrder` stays true through the *entire*
+`Complete`-stage window (win banner, recap) — only the *next* hand's `StartHand` clears it (see
+`RemovePlayerForActor`'s own doc comment). So each integration test below needed a second phase:
+assert the hand completed and the exiting player is still seated, dispatch `nextHandCmd{Reply:
+...}` (unexported but same-package, so directly dispatchable from `actor_test.go`) to simulate the
+timer that normally fires this in production, then assert the removal. The `TestPendingExitAutoFoldsOnTurnArrival`
+scenario below is also simplified from the original 3-handed sketch to heads-up, for a
+deterministic single next-turn instead of an ambiguous one. The test bodies below are updated to
+match what's actually committed.
 
 **Correction from the original plan:** the sweep is no longer wired into two separate call sites
 (`handleAct`'s tail and `handleNextHand`). Both `removeEligiblePendingExits` and the new
@@ -635,7 +647,7 @@ below don't call the sweep directly at all — `broadcastAll`, which they alread
   `func (a *Actor) processPendingExitAutoFolds(ctx context.Context)`,
   `func (a *Actor) removeEligiblePendingExits(ctx context.Context)`.
 
-- [ ] **Step 1: Write the failing integration test**
+- [x] **Step 1: Write the failing integration test**
 
 Append to `api/internal/table/actor_test.go` (this file already has `//go:build integration` at
 line 1 and the `testClient`/`mustCreateTestTables`/`uniqueTableID`/`stopActor` helpers Task 5
@@ -858,7 +870,7 @@ func TestPendingExitAutoFoldsOnTurnArrival(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 cd api && go test -tags integration ./internal/table/... -run 'TestRequestExitAsBlindStillPaysOutOnUncontestedWin|TestRequestExitOnCurrentActorFoldsImmediately|TestPendingExitAutoFoldsOnTurnArrival' -v
@@ -867,7 +879,7 @@ cd api && go test -tags integration ./internal/table/... -run 'TestRequestExitAs
 Expected: FAIL to compile — `RequestExitCmd`/`handleRequestExit` not dispatched (`Dispatch`
 returns "unknown command type" or the switch has no matching case).
 
-- [ ] **Step 3: Add the dispatch cases**
+- [x] **Step 3: Add the dispatch cases**
 
 In `api/internal/table/actor.go`, in the `handle` method's command-type switch (`actor.go:256-321`
 — find the existing `case RequestRabbitHuntCmd: return a.handleRequestRabbitHunt(ctx, c)` line and
@@ -880,7 +892,7 @@ add immediately after it):
 		return a.handleCancelExit(ctx, c)
 ```
 
-- [ ] **Step 4: Add `handleRequestExit`**
+- [x] **Step 4: Add `handleRequestExit`**
 
 Immediately after `handleRequestRabbitHunt` (`actor.go:1615-1641`):
 
@@ -953,7 +965,7 @@ func (a *Actor) handleCancelExit(ctx context.Context, c CancelExitCmd) error {
 }
 ```
 
-- [ ] **Step 5: Add `processPendingExitAutoFolds` and the sweep**
+- [x] **Step 5: Add `processPendingExitAutoFolds` and the sweep**
 
 Immediately after `removeIdlePlayersBetweenHands` (`actor.go:1482-1500`):
 
@@ -1016,7 +1028,7 @@ func (a *Actor) processPendingExitAutoFolds(ctx context.Context) {
 }
 ```
 
-- [ ] **Step 6: Wire both into `broadcastAll`**
+- [x] **Step 6: Wire both into `broadcastAll`**
 
 In `broadcastAll` (`actor.go:2385-2389`), the function currently opens:
 
@@ -1043,7 +1055,7 @@ This single hook point covers every case: a fold/call/check (`handleAct`), a sta
 them already end by calling `broadcastAll`, so no other call site needs to know about either
 function.
 
-- [ ] **Step 7: Run the integration tests to verify they pass**
+- [x] **Step 7: Run the integration tests to verify they pass**
 
 ```bash
 docker compose -f docker-compose.test.yml up -d
@@ -1052,7 +1064,7 @@ cd api && go test -tags integration ./internal/table/... -run 'TestRequestExitAs
 
 Expected: all PASS.
 
-- [ ] **Step 8: Run the full backend suite**
+- [x] **Step 8: Run the full backend suite**
 
 ```bash
 cd api && go test ./... -race
@@ -1062,7 +1074,7 @@ go test -tags integration ./internal/table/... -race
 
 Expected: all PASS/clean.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add api/internal/table/actor.go api/internal/table/actor_test.go

@@ -206,7 +206,13 @@ func (a *Actor) removeEligiblePendingExits(ctx context.Context) {
 Call site: `broadcastAll`, immediately after `processPendingExitAutoFolds` (both run on every
 commit that changes table state — a fold/call/check, a stage advance, `StartHand`'s next-hand
 prep, `RequestExit`/`CancelExit` themselves — so this single hook covers every case the design
-originally scattered across `handleAct`'s tail and `handleNextHand` individually).
+originally scattered across `handleAct`'s tail and `handleNextHand` individually). It runs on every
+one of those commits but is a no-op until `DealtIntoCurrentHandForActor` actually goes false —
+confirmed by the integration tests (`TestRequestExitAsBlindStillPaysOutOnUncontestedWin` et al.)
+that `t.handOrder` is *not* cleared merely by a hand reaching `Complete` (per
+`RemovePlayerForActor`'s own doc comment: "otherwise only cleared by the next `StartHand`"), so a
+pending-exit player stays seated through the entire post-hand `Complete`-stage window (win banner,
+recap) and is only actually removed once the *next* hand's `StartHand` runs.
 
 ### Uncontested-win case, walked through
 
