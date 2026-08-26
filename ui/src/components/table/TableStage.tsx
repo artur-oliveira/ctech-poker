@@ -8,6 +8,7 @@ import type {TableSnapshot} from '@/lib/api/table';
 import {playerPotBreakdown, winnerStandings} from '@/lib/tableOutcome';
 import type {PlayerNote} from '@/lib/api/playerNotes';
 import {RabbitHunt} from '@/components/table/RabbitHunt';
+import {ExitStatus} from '@/components/table/ExitStatus';
 import {WinnerCards} from '@/components/table/WinnerCards';
 import {DEFAULT_TURN_TIMEOUT_MS} from '@/lib/gameTiming';
 
@@ -142,8 +143,11 @@ type Props = {
   onRevealCardAction?: (index: number) => void;
   onPeekCardsAction?: () => void;
   rabbitHuntPending?: boolean;
+  rabbitHuntFailCount?: number;
   onRequestRabbitHuntAction?: () => void;
   onRabbitHuntVerifyFailedAction?: () => void;
+  viewerPendingExit?: boolean;
+  onCancelExitAction?: () => void;
   winnerCardsPending?: boolean;
   onRequestWinnerCardsAction?: () => void;
   onAnswerWinnerCardsAction?: (accept: boolean) => void;
@@ -176,8 +180,11 @@ export function TableStage({
                              onRevealCardAction,
                              onPeekCardsAction,
                              rabbitHuntPending,
+                             rabbitHuntFailCount,
                              onRequestRabbitHuntAction,
                              onRabbitHuntVerifyFailedAction,
+                             viewerPendingExit,
+                             onCancelExitAction,
                              winnerCardsPending,
                              onRequestWinnerCardsAction,
                              onAnswerWinnerCardsAction,
@@ -257,8 +264,12 @@ export function TableStage({
                          onDismissedChangeAction={onOutcomeDismissedChange}
                          nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
       <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
-                  pending={rabbitHuntPending} onRequestRabbitHuntAction={onRequestRabbitHuntAction}
+                  pending={rabbitHuntPending} failCount={rabbitHuntFailCount}
+                  onRequestRabbitHuntAction={onRequestRabbitHuntAction}
                   onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
+      <ExitStatus pendingExit={Boolean(viewerPendingExit)}
+                  isViewerTurn={snapshot.current_player_id === viewer}
+                  onCancelAction={() => onCancelExitAction?.()}/>
       <WinnerCards key={`winner-cards:${snapshot.hand_id}`} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
                    pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}
                    onAnswerWinnerCardsAction={onAnswerWinnerCardsAction}
@@ -293,8 +304,12 @@ export function TableStage({
                            onDismissedChangeAction={onOutcomeDismissedChange}
                            nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
         <RabbitHunt key={snapshot.hand_id} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
-                  pending={rabbitHuntPending} onRequestRabbitHuntAction={onRequestRabbitHuntAction}
+                  pending={rabbitHuntPending} failCount={rabbitHuntFailCount}
+                  onRequestRabbitHuntAction={onRequestRabbitHuntAction}
                   onRabbitHuntVerifyFailedAction={onRabbitHuntVerifyFailedAction}/>
+        <ExitStatus pendingExit={Boolean(viewerPendingExit)}
+                    isViewerTurn={snapshot.current_player_id === viewer}
+                    onCancelAction={() => onCancelExitAction?.()}/>
         <WinnerCards key={`winner-cards:${snapshot.hand_id}`} snapshot={snapshot} viewer={viewer} bigBlind={bigBlind}
                      pending={winnerCardsPending} onRequestWinnerCardsAction={onRequestWinnerCardsAction}
                    onAnswerWinnerCardsAction={onAnswerWinnerCardsAction}

@@ -82,7 +82,8 @@ const CONNECTION_COPY = {
 } as const;
 const REMOVED_REASON_COPY: Record<string, string> = {
   idle: 'Você foi removido da mesa por inatividade.',
-  disconnected: 'Você foi removido da mesa após ficar desconectado por muito tempo.'
+  disconnected: 'Você foi removido da mesa após ficar desconectado por muito tempo.',
+  exit_requested: 'Você saiu da mesa.'
 };
 // @aoctech/ws-client gives up on its own retry loop after MAX_RECONNECT_ATTEMPTS
 // and never schedules another one. Only a fresh token (handled elsewhere) or
@@ -247,16 +248,41 @@ function TableContent() {
     setOpponentIds(previous => previous.join(',') === ids.join(',') ? previous : ids);
   }, [rt.snapshot?.seats, viewer]);
   useDealerVoice(rt.announcement, preferences.dealerVoice);
+  const handledRemovalRef = useRef<typeof rt.removed>(null);
   // The server never closes a removed player's socket (it just stops
   // targeting it in future broadcasts). Without reacting to this message the
   // client would otherwise sit frozen on the last snapshot it received, or
   // silently reconnect into a seat it no longer holds.
   useEffect(() => {
-    if (!rt.removed) return;
+    if (!rt.removed || rt.removed === handledRemovalRef.current) return;
+    // queryClient/router aren't guaranteed referentially stable (the real
+    // useQueryClient() is, but this guards against any dependency here
+    // that isn't), which would otherwise re-run this on every unrelated
+    // render once setSessionRecap below has fired once — same rt.removed
+    // object, so the ref comparison above is what actually stops it, not
+    // the dependency array.
+    handledRemovalRef.current = rt.removed;
+    // An exit the player requested (rather than an idle/disconnect kick)
+    // reuses the same recap treatment LeaveDialog's own immediate-leave path
+    // shows — the player is already gone from rt.snapshot by the time this
+    // fires, so there is no viewerSeat left here to fall back to.
+    if (rt.removed.code === 'exit_requested' && rt.removed.amount !== undefined) {
+      const amount = rt.removed.amount;
+      const openSessionAtRemoval = sessions.find(session => session.table_id === id && session.ended_at === 0);
+      pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
+      const recap = {
+        joinedAt: openSessionAtRemoval?.joined_at || Date.now(),
+        buyIn: openSessionAtRemoval?.buyin_amount || 0,
+        finalStack: amount
+      };
+      queueMicrotask(() => setSessionRecap(recap));
+      queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
+      return;
+    }
     pushNotification(REMOVED_REASON_COPY[rt.removed.code || ''] || 'Você foi removido da mesa.', 'info');
     queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
     router.push('/lobby');
-  }, [rt.removed, id, queryClient, router]);
+  }, [rt.removed, id, queryClient, router, sessions]);
   useEffect(() => {
     if (!rt.terminalError) return;
     pushNotification(rt.terminalError === 'forbidden' ? 'Você não tem acesso a esta mesa.' :
@@ -588,16 +614,14 @@ function TableContent() {
               s.stage !== 'showdown' && s.stage !== 'complete' &&
                 <RebuyDialog roomId={id} room={room} autoRebuy={Boolean(viewerSeat.auto_rebuy)}
                              onRebuyAction={() => rt.ready(true)}/>}
-            <span className="table-exit-slot"><LeaveDialog roomId={id} stack={viewerSeat?.stack || 0}
-                         dealtIn={Boolean(viewerSeat?.dealt_in)}
-                         onLeftAction={amount => {
-              pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
-              setSessionRecap({
-                joinedAt: openSession?.joined_at || Date.now(),
-                buyIn: openSession?.buyin_amount || viewerSeat?.stack_at_hand_start || viewerSeat?.stack || 0,
-                finalStack: amount
-              });
-            }}/></span>
+            {/* The actual "left" handling (recap + notification) always
+                arrives via the removed-frame effect above, whether this
+                resolves instantly (not dealt in) or only once the current
+                hand releases the player — LeaveDialog itself only ever
+                fires the request. */}
+            <span className="table-exit-slot"><LeaveDialog stack={viewerSeat?.stack || 0}
+                         pending={rt.requestExitPending}
+                         onRequestExitAction={rt.requestExit}/></span>
           </div>
         </header>
         <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
@@ -636,8 +660,11 @@ function TableContent() {
                   onRevealCardAction={index => rt.showCards(index)}
                   onPeekCardsAction={rt.peekCards}
                   rabbitHuntPending={rt.requestRabbitHuntPending}
+                  rabbitHuntFailCount={rt.requestRabbitHuntFailCount}
                   onRequestRabbitHuntAction={rt.requestRabbitHunt}
                   onRabbitHuntVerifyFailedAction={rt.reportRabbitHuntVerifyFailed}
+                  viewerPendingExit={Boolean(viewerSeat?.pending_exit)}
+                  onCancelExitAction={rt.cancelExit}
                   winnerCardsPending={rt.requestWinnerCardsPending}
                   onRequestWinnerCardsAction={rt.requestWinnerCards}
                   onAnswerWinnerCardsAction={rt.answerWinnerCards}

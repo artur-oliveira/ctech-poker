@@ -2808,6 +2808,53 @@ h1 em {
     width: 34px
 }
 
+.exit-status {
+    position: absolute;
+    z-index: 24;
+    left: 50%;
+    bottom: 14%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: calc(100% - 24px);
+    padding: 8px 14px;
+    border: 1px solid var(--white-13);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--surface-control) 92%, transparent);
+    box-shadow: var(--shadow-soft);
+    backdrop-filter: blur(12px)
+}
+
+/* Signal Glow: reserved for a live, personally-timed state — the viewer's
+   own turn, about to auto-fold — never the plain waiting pill. */
+.exit-status[data-urgent] {
+    border-color: var(--gold);
+    box-shadow: var(--shadow-soft), 0 0 0 1px var(--gold)
+}
+
+.exit-status > svg {
+    flex: 0 0 auto;
+    width: 16px;
+    color: var(--muted)
+}
+
+.exit-status[data-urgent] > svg {
+    color: var(--gold)
+}
+
+.exit-status-label {
+    color: var(--on-brand);
+    font-size: 12px;
+    white-space: nowrap
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .exit-status {
+        transition: box-shadow 200ms var(--ease-out-quart)
+    }
+}
+
 .winner-cards {
     position: absolute;
     z-index: 24;

@@ -104,8 +104,8 @@ vi.mock('@/components/table/InviteDialog', () => ({
   },
 }));
 vi.mock('@/components/table/LeaveDialog', () => ({
-  LeaveDialog: ({onLeftAction}: { onLeftAction: (amount: number) => void }) =>
-    <button onClick={() => onLeftAction(1234)}>leave</button>,
+  LeaveDialog: ({onRequestExitAction}: { onRequestExitAction: () => boolean }) =>
+    <button onClick={() => onRequestExitAction()}>leave</button>,
 }));
 vi.mock('@/components/table/RebuyDialog', () => ({
   RebuyDialog: ({onRebuyAction}: { onRebuyAction: () => void }) =>
@@ -197,6 +197,7 @@ function realtime(overrides: Record<string, unknown> = {}) {
     requestRabbitHunt: vi.fn(() => true), requestRabbitHuntPending: false,
     requestWinnerCards: vi.fn(() => true), requestWinnerCardsPending: false,
     reportRabbitHuntVerifyFailed: vi.fn(() => true),
+    requestExit: vi.fn(() => true), requestExitPending: false, cancelExit: vi.fn(() => true),
     preselectAction: vi.fn(() => true), pendingAction: null, actionError: null,
     clearActionError: vi.fn(), keepSeat: vi.fn(() => true), chat: [], sendChat: vi.fn(),
     reactions: [], sendReaction: vi.fn(), botChallengeRequired: false, submitBotChallenge: vi.fn(),
@@ -300,15 +301,21 @@ describe('table page integration', () => {
     render(<TablePage/>);
     await user.click(screen.getByRole('button', {name: 'Sentar fora'}));
     expect(mocks.realtime.ready).toHaveBeenCalledWith(false);
-    
+
     await user.click(screen.getByRole('button', {name: 'table-stage'}));
     expect(screen.getByText('note-dialog')).toBeInTheDocument();
-    
+
     await user.click(screen.getByRole('button', {name: 'leave'}));
-    expect(mocks.notification).toHaveBeenCalledWith('Você saiu com 1.234 fichas.', 'info');
+    expect(mocks.realtime.requestExit).toHaveBeenCalledOnce();
+  });
+
+  test('an exit_requested removal shows the same recap as an immediate leave', async () => {
+    realtime({removed: {code: 'exit_requested', amount: 1234}});
+    render(<TablePage/>);
+    await waitFor(() => expect(mocks.notification).toHaveBeenCalledWith('Você saiu com 1.234 fichas.', 'info'));
     expect(mocks.push).not.toHaveBeenCalledWith('/lobby');
 
-    await user.click(screen.getByRole('button', {name: 'close-recap'}));
+    await userEvent.click(screen.getByRole('button', {name: 'close-recap'}));
     expect(mocks.setQueryData).toHaveBeenCalledWith(['seated', ROOM_ID], {seated: false, stack: 0});
     expect(mocks.push).toHaveBeenCalledWith('/lobby');
   });

@@ -277,6 +277,10 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleShowCards(ctx, c)
 	case RequestRabbitHuntCmd:
 		return a.handleRequestRabbitHunt(ctx, c)
+	case RequestExitCmd:
+		return a.handleRequestExit(ctx, c)
+	case CancelExitCmd:
+		return a.handleCancelExit(ctx, c)
 	case RequestWinnerCardsCmd:
 		return a.handleRequestWinnerCards(ctx, c)
 	case AcceptWinnerCardsCmd:
@@ -1499,6 +1503,31 @@ func (a *Actor) removeIdlePlayersBetweenHands(ctx context.Context) {
 	}
 }
 
+// removeEligiblePendingExits removes and cashes out every PendingExit
+// player no longer dealt into the current hand. Not gated behind
+// claimHandHooks (that guard fleet-dedupes optional gamification side
+// effects) — RemovePlayerForActor's own conditional commit already makes a
+// duplicate attempt from another instance a safe, cheap no-op, the same
+// protection handleLeave's ErrVersionConflict retry already relies on.
+func (a *Actor) removeEligiblePendingExits(ctx context.Context) {
+	var exiting []string
+	for _, p := range a.cached.PlayersForActor() {
+		if p.PendingExit && !a.cached.DealtIntoCurrentHandForActor(p.ID) {
+			exiting = append(exiting, p.ID)
+		}
+	}
+	for _, id := range exiting {
+		stackCh := make(chan int64, 1)
+		holdIDCh := make(chan string, 1)
+		if err := a.handleLeave(ctx, a.systemLeaveCmd(ctx, id, "exit_requested", stackCh, holdIDCh)); err != nil {
+			continue
+		}
+		if a.onPlayerRemoved != nil {
+			a.onPlayerRemoved(id, "exit_requested", <-stackCh, <-holdIDCh)
+		}
+	}
+}
+
 func (a *Actor) handleSitOut(ctx context.Context, c SitOutCmd) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
@@ -1624,6 +1653,73 @@ func (a *Actor) handleRequestRabbitHunt(ctx context.Context, c RequestRabbitHunt
 		changed = true
 		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
 			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "request_rabbit_hunt",
+		})
+	}
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		if !errors.Is(err, tablestore.ErrDuplicateAction) {
+			return err
+		}
+		if err := a.ensureLoaded(ctx, true); err != nil {
+			return err
+		}
+	}
+	if changed {
+		a.broadcastAll()
+	}
+	return nil
+}
+
+func (a *Actor) handleRequestExit(ctx context.Context, c RequestExitCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	changed := false
+	apply := func() error {
+		if !a.isSeated(c.PlayerID) {
+			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+		}
+		a.markLastAction(c.PlayerID)
+		if err := a.cached.RequestExit(c.PlayerID); err != nil {
+			return err
+		}
+		changed = true
+		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "request_exit",
+		})
+	}
+	if err := a.retryOnConflict(ctx, apply); err != nil {
+		if !errors.Is(err, tablestore.ErrDuplicateAction) {
+			return err
+		}
+		if err := a.ensureLoaded(ctx, true); err != nil {
+			return err
+		}
+	}
+	if changed {
+		a.broadcastAll()
+	}
+	return nil
+}
+
+func (a *Actor) handleCancelExit(ctx context.Context, c CancelExitCmd) error {
+	if err := a.ensureLoaded(ctx, false); err != nil {
+		return err
+	}
+	changed := false
+	apply := func() error {
+		if !a.isSeated(c.PlayerID) {
+			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+		}
+		a.markLastAction(c.PlayerID)
+		if err := a.cached.CancelExit(c.PlayerID); err != nil {
+			return err
+		}
+		changed = true
+		if a.cached.Stage() == hand.WaitingForPlayers {
+			a.tryStartHand(ctx)
+		}
+		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "cancel_exit",
 		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
@@ -2382,11 +2478,41 @@ func (a *Actor) processInlinePreselections(ctx context.Context) {
 	}
 }
 
+// processPendingExitAutoFolds folds out, one at a time, whoever is
+// currently on the clock and has a pending exit request — the moment their
+// turn actually arrives, not when RequestExit was called (an uncontested
+// win owed to them before their turn comes back around must still pay
+// out — see Table.RequestExit's doc comment). Mirrors
+// processInlinePreselections's loop shape exactly (same applyActAndCommit +
+// commitOutcomeLogEntries tail), and runs immediately before it from the
+// same broadcastAll call site so a pending exit always takes priority over
+// a stale preselection for the same turn.
+func (a *Actor) processPendingExitAutoFolds(ctx context.Context) {
+	for a.cached != nil && a.cached.Stage() != hand.Complete && a.cached.CurrentPlayerHasPendingExitForActor() {
+		current := a.cached.CurrentPlayerIDForActor()
+		autoActionID := fmt.Sprintf("auto-exit-fold-%s-%d", current, a.version)
+		applied, err := a.applyActAndCommit(ctx, ActCmd{
+			PlayerID: current, ActionID: autoActionID, Action: betting.ActionFold,
+		})
+		if err != nil || !applied {
+			if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+				slog.Error("table reload after pending-exit auto-fold failed", "table_id", a.id, "err", reloadErr)
+			}
+			return
+		}
+		if err := a.commitOutcomeLogEntries(ctx); err != nil {
+			slog.Error("table pending-exit auto-fold outcome log commit failed", "table_id", a.id, "err", err)
+		}
+	}
+}
+
 func (a *Actor) broadcastAll() {
 	if a.broadcast == nil || a.cached == nil {
 		return
 	}
+	a.processPendingExitAutoFolds(context.Background())
 	a.processInlinePreselections(context.Background())
+	a.removeEligiblePendingExits(context.Background())
 	stage := a.cached.Stage()
 	current := a.cached.CurrentPlayerIDForActor()
 	grace := time.Duration(0)

@@ -838,8 +838,9 @@ func wirePlayerRemovedHook(mgr *tablemanager.Manager, buyinSvc *buyin.Service, r
 		// with no signal telling the client why, so it sits on a stale table
 		// instead of redirecting to the lobby.
 		data, err := goproto.Marshal(&pokerproto.ServerMessage{
-			Type: "removed",
-			Code: reason,
+			Type:   "removed",
+			Code:   reason,
+			Amount: stack,
 		})
 		if err != nil {
 			slog.Error("player removed event serialization failed", "table", tableID, "player", playerID, "err", err)

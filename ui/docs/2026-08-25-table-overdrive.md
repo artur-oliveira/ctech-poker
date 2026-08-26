@@ -2,18 +2,18 @@
 
 ## Objetivo
 
-Transformar os recursos já existentes da mesa em uma experiência coordenada de “mesa viva”, sem alterar regras de
-poker nem inventar estado ausente do protocolo. A direção preserva a identidade de feltro, papel, madeira e ouro e
-mantém a mesa como uma SPA estática, inteiramente cliente.
+Transformar os recursos já existentes da mesa em uma experiência coordenada de “mesa viva”, sem alterar regras de poker
+nem inventar estado ausente do protocolo. A direção preserva a identidade de feltro, papel, madeira e ouro e mantém a
+mesa como uma SPA estática, inteiramente cliente.
 
 ## Experiência entregue
 
-- Cada mudança real de street recria uma única camada de luz sobre o feltro. A camada é informativa, não fica em loop
-  e desaparece imediatamente quando `prefers-reduced-motion: reduce` está ativo.
+- Cada mudança real de street recria uma única camada de luz sobre o feltro. A camada é informativa, não fica em loop e
+  desaparece imediatamente quando `prefers-reduced-motion: reduce` está ativo.
 - O board de run it twice ganha uma identificação explícita — “Rodando duas vezes” e “Dois boards no mesmo all-in” —
   antes das cartas comuns e das duas distribuições.
-- O resultado da mão continua distinguindo vitória, derrota, empate, fold e resultado misto, mas agora também mostra
-  um acerto completo quando existem side pots ou dois runouts. Cada linha informa pote principal/lateral, board quando
+- O resultado da mão continua distinguindo vitória, derrota, empate, fold e resultado misto, mas agora também mostra um
+  acerto completo quando existem side pots ou dois runouts. Cada linha informa pote principal/lateral, board quando
   publicado, valor, vencedor, divisão, total distribuído, parcela individual quando publicada e se o jogador não
   disputou aquele pote.
 - O acerto usa somente `pot_results`, `winner_player_ids`, `eligible_player_ids`, `payout_amount`, `refund` e `runout`
@@ -26,8 +26,8 @@ mantém a mesa como uma SPA estática, inteiramente cliente.
 
 ## Responsividade e acessibilidade
 
-- O resultado tem altura máxima relativa a `dvh`, rolagem interna e `overscroll-behavior: contain`, preservando a
-  regra de uma única viewport da mesa em retrato.
+- O resultado tem altura máxima relativa a `dvh`, rolagem interna e `overscroll-behavior: contain`, preservando a regra
+  de uma única viewport da mesa em retrato.
 - As linhas de pote mantêm alvo/altura mínima de 44 px e valores tabulares. Cor nunca é a única indicação: vencedor,
   divisão, devolução e inelegibilidade aparecem em texto.
 - O foco do resultado é removível e minimizável como antes. O live region continua anunciando o desfecho textual.

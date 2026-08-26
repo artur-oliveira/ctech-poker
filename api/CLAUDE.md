@@ -132,6 +132,20 @@ catalog.
   (`Snapshot.PendingWinnerCards`): only the winner and the requester learn a request exists. Rabbit hunt stays
   unilateral on purpose — that secret belongs to the deck, not to another player. See
   `docs/specs/2026-08-24-pay-to-see-cards-consent.md`.
+- **Exit mid-hand no longer waits for the turn.** `request_exit` (WS) pauses the player
+  immediately and marks them `PendingExit`. `Table.RequestExit` folds them via `SitOutForActor`
+  only if they're currently the player on the clock (`Round.Act` has no turn-order check of its
+  own, so calling `SitOutForActor` unconditionally would force-fold an exiting BB/SB before their
+  turn ever comes back — breaking an uncontested win they're still owed). Otherwise they're left
+  untouched: `Actor.processPendingExitAutoFolds` folds them the instant their own turn actually
+  arrives, and `Actor.removeEligiblePendingExits` sweeps and cashes out every `PendingExit` player
+  no longer `DealtIntoCurrentHandForActor`. Both are hooked into `broadcastAll` (the same
+  per-commit point `armTurnTimer`/inline preselections already use) — not gated behind
+  `claimHandHooks`, since `RemovePlayerForActor`'s conditional commit already makes a duplicate
+  sweep a safe no-op. `dealtIntoCurrentHand`/`handOrder` stays true through the entire post-hand
+  `Complete`-stage window, so removal only actually happens once the *next* hand's `StartHand`
+  runs, not synchronously with the hand that completes. `cancel_exit` reverses it before either
+  commits. See `docs/plans/2026-08-26-exit-mid-hand-design.md`.
 - **Every list endpoint returns the `sendPage` envelope** (`{data, has_next, next_cursor, has_previous,
   previous_cursor}` — `internal/api/v1/helpers.go`), including fixed in-memory catalogs, which simply sit permanently
   on their only page. Purchase history (`sandbox-purchase`, `reaction-purchase`, `cosmetic-purchase/:kind`) pages for

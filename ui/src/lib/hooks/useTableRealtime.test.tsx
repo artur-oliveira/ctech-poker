@@ -231,6 +231,29 @@ describe('useTableRealtime', () => {
     expect(result.current.actionError).toBeNull();
   });
   
+  test('still auto-retries a stale_state that arrives after an unrelated broadcast raced ahead of it', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot()});
+    act(() => result.current.act('check'));
+
+    // The server's pubsub broadcast for a concurrent event can reach this
+    // socket before the direct reply to our own request.
+    receive({type: 'state', snapshot: snapshot({snapshot_version: 2})});
+    expect(result.current.pendingAction).toBe('check');
+
+    receive({type: 'error', code: 'stale_state', action_id: 'action-1'});
+    act(() => vi.advanceTimersByTime(50));
+    expect(ws.send).toHaveBeenLastCalledWith({type: 'sync_state', action_id: 'action-1'});
+
+    receive({type: 'state', snapshot: snapshot({snapshot_version: 3}), action_id: 'action-1'});
+    expect(result.current.pendingAction).toBe('check');
+    expect(ws.send).toHaveBeenLastCalledWith(expect.objectContaining({
+      type: 'act', action: 'check', expected_snapshot_version: 3
+    }));
+  });
+
   test('auto-retries a stale_state action against each fresh resync up to the retry cap', () => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0);
@@ -258,6 +281,43 @@ describe('useTableRealtime', () => {
     receive({type: 'error', code: 'stale_state', action_id: 'action-1'});
     expect(result.current.pendingAction).toBeNull();
     expect(result.current.actionError).toMatchObject({code: 'stale_state'});
+  });
+
+  test('two commands resyncing close together do not starve each others sync_state', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot()});
+    act(() => result.current.act('raise', 100));
+    act(() => result.current.requestRabbitHunt());
+
+    receive({type: 'error', code: 'invalid_action', action_id: 'action-1'});
+    receive({type: 'error', code: 'invalid_action', action_id: 'action-2'});
+    act(() => vi.advanceTimersByTime(50));
+
+    expect(ws.send).toHaveBeenCalledWith({type: 'sync_state', action_id: 'action-1'});
+    expect(ws.send).toHaveBeenCalledWith({type: 'sync_state', action_id: 'action-2'});
+  });
+
+  test('an unrelated broadcast does not disarm the resync watchdog, so a lost resync reply still escalates', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'state', snapshot: snapshot()});
+    act(() => result.current.act('raise', 100));
+
+    receive({type: 'error', code: 'invalid_action', action_id: 'action-1'});
+    act(() => vi.advanceTimersByTime(50));
+    expect(ws.send).toHaveBeenLastCalledWith({type: 'sync_state', action_id: 'action-1'});
+
+    // Someone else's turn broadcasts a newer, uncorrelated snapshot before
+    // our own resync's reply comes back.
+    receive({type: 'state', snapshot: snapshot({snapshot_version: 2})});
+    expect(ws.reconnect).not.toHaveBeenCalled();
+
+    // The resync's own reply never arrives — the watchdog must still fire.
+    act(() => vi.advanceTimersByTime(2500));
+    expect(ws.reconnect).toHaveBeenCalled();
   });
 
   test('resyncs after invalid_action and reconnects when the snapshot never arrives', () => {
@@ -289,7 +349,10 @@ describe('useTableRealtime', () => {
     
     receive({type: 'error', code: 'invalid_action', action_id: 'action-1'});
     act(() => vi.advanceTimersByTime(50));
-    receive({type: 'state', snapshot: snapshot({snapshot_version: 2})});
+    // The resync's own reply echoes the action_id it was sent with — an
+    // unrelated broadcast (no action_id) must NOT cancel this watchdog, only
+    // the correlated reply may.
+    receive({type: 'state', snapshot: snapshot({snapshot_version: 2}), action_id: 'action-1'});
     act(() => vi.advanceTimersByTime(2500));
     expect(ws.reconnect).not.toHaveBeenCalled();
   });
@@ -378,6 +441,31 @@ describe('useTableRealtime', () => {
     expect(result.current.requestRabbitHuntPending).toBe(false);
   });
 
+  test('locks the exit request until acknowledgement', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    act(() => {
+      expect(result.current.requestExit()).toBe(true);
+      expect(result.current.requestExit()).toBe(false);
+    });
+    expect(result.current.requestExitPending).toBe(true);
+    expect(ws.send).toHaveBeenLastCalledWith({type: 'request_exit', action_id: 'action-1'});
+
+    receive({type: 'action_ack', action_id: 'action-1'});
+    expect(result.current.requestExitPending).toBe(false);
+  });
+
+  test('sends cancel_exit', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    act(() => result.current.cancelExit());
+    expect(ws.send).toHaveBeenLastCalledWith({type: 'cancel_exit', action_id: 'action-1'});
+  });
+
+  test('a removed frame carries the settled stack', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'removed', code: 'exit_requested', amount: 480});
+    expect(result.current.removed).toEqual({code: 'exit_requested', amount: 480});
+  });
+
   test('locks the winner-cards request until acknowledgement and surfaces a rejection', () => {
     const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
     act(() => {
@@ -441,6 +529,50 @@ describe('useTableRealtime', () => {
     receive({type: 'action_ack', action_id: 'action-1'});
   });
   
+  test('clears the stale post_big_blind action id once the seat leaves pending_entry, so a fresh pending_entry retries immediately', () => {
+    vi.useFakeTimers();
+    renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({
+      type: 'state',
+      snapshot: snapshot({
+        stage: 'waiting_for_players',
+        hand_id: '',
+        seats: [
+          {player_id: VIEWER, stack: 1000, state: 'pending_entry', contributed: 0},
+          {player_id: 'player-2', stack: 1000, state: 'active', contributed: 0},
+        ],
+      }),
+    });
+    expect(ws.send).toHaveBeenCalledWith({type: 'post_big_blind', action_id: 'action-1'});
+
+    // The seat leaves pending_entry before that post ever acks (e.g. it was
+    // actually accepted, or the hand moved on) ...
+    receive({
+      type: 'state',
+      snapshot: snapshot({
+        snapshot_version: 2, hand_id: 'hand-2',
+        seats: [
+          {player_id: VIEWER, stack: 980, state: 'active', contributed: 20},
+          {player_id: 'player-2', stack: 1000, state: 'active', contributed: 0},
+        ],
+      }),
+    });
+    // ... then re-enters pending_entry on a later hand. Without clearing the
+    // stale action id here, this is silently dropped until the internal
+    // 2s x3 retry loop times it out.
+    receive({
+      type: 'state',
+      snapshot: snapshot({
+        snapshot_version: 3, hand_id: 'hand-3', stage: 'waiting_for_players',
+        seats: [
+          {player_id: VIEWER, stack: 980, state: 'pending_entry', contributed: 0},
+          {player_id: 'player-2', stack: 1000, state: 'active', contributed: 0},
+        ],
+      }),
+    });
+    expect(ws.send).toHaveBeenCalledWith({type: 'post_big_blind', action_id: 'action-2'});
+  });
+
   test('refreshes an unauthorized session and exposes server-side lifecycle events', async () => {
     auth.refresh.mockResolvedValue({
       accessToken: 'fresh-token',
@@ -500,14 +632,19 @@ describe('useTableRealtime', () => {
     }));
   });
   
-  test('releases pending work from newer, correlated and reconnect snapshots', () => {
+  test('keeps a pending action alive through an unrelated broadcast, but releases it on a correlated or reconnect snapshot', () => {
     const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
     receive({type: 'state', snapshot: snapshot()});
-    
+
+    // An unrelated newer broadcast (someone else's action) must not clear our
+    // own pending action: the direct reply to it (ack, or a stale_state that
+    // arms a retry) can still arrive after this on the same socket.
     act(() => result.current.act('call'));
     receive({type: 'state', snapshot: snapshot({snapshot_version: 2})});
+    expect(result.current.pendingAction).toBe('call');
+    receive({type: 'action_ack', action_id: 'action-1'});
     expect(result.current.pendingAction).toBeNull();
-    
+
     act(() => result.current.act('fold'));
     receive({type: 'state', action_id: 'action-2', snapshot: snapshot({snapshot_version: 2})});
     expect(result.current.pendingAction).toBeNull();

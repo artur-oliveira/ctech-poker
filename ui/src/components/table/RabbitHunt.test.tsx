@@ -137,4 +137,16 @@ describe('RabbitHunt', () => {
     render(<RabbitHunt snapshot={snapshot()} viewer="viewer" bigBlind={50} pending/>);
     expect(screen.getByRole('button', {name: /Ver por 50 fichas/})).toBeDisabled();
   });
+
+  test('brings the button back after the server rejects the payment', async () => {
+    const onRequest = vi.fn();
+    const {rerender} = render(<RabbitHunt snapshot={snapshot()} viewer="viewer" bigBlind={50}
+                                           onRequestRabbitHuntAction={onRequest} failCount={0}/>);
+    await userEvent.click(screen.getByRole('button', {name: /Ver por 50 fichas/}));
+    expect(screen.queryByRole('button', {name: /Ver por 50 fichas/})).not.toBeInTheDocument();
+
+    rerender(<RabbitHunt snapshot={snapshot()} viewer="viewer" bigBlind={50}
+                          onRequestRabbitHuntAction={onRequest} failCount={1}/>);
+    expect(await screen.findByRole('button', {name: /Ver por 50 fichas/})).toBeInTheDocument();
+  });
 });

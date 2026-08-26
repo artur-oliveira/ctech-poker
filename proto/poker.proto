@@ -48,6 +48,10 @@ message Seat {
   // wins, negative counts consecutive losses, zero means no streak (no
   // badge). Public, like the D/SB/BB role badge — every viewer sees it.
   int32 current_streak = 20;
+  // The player has asked to leave. They are paused (no future hands) and,
+  // once no longer dealt into the current hand, will be removed and cashed
+  // out automatically. Cancelable via cancel_exit until that removal commits.
+  optional bool pending_exit = 21;
 }
 
 message BlindEscalation {
@@ -231,7 +235,7 @@ message ServerMessage {
   Room room = 9; // for room_created
   string room_id = 10; // for room_updated
   int32 seats_taken = 11; // for room_updated
-  int64 amount = 12; // for payment_received, or credits_granted for sandbox_purchase_update
+  int64 amount = 12; // for payment_received, credits_granted for sandbox_purchase_update, or the settled stack for a "removed" frame
   string text = 13; // for system_broadcast
   string action_id = 14; // correlation id for action_ack/error
   uint64 snapshot_version = 15; // for equity delta

@@ -16,6 +16,9 @@ export interface SeatView {
   // Optional during the API-first rollout; absent snapshots use state-based
   // compatibility behavior without falsely marking every player paused.
   ready?: boolean;
+  // The player asked to leave (request_exit) and will be removed once no
+  // longer dealt into the current hand; cancelable via cancel_exit.
+  pending_exit?: boolean;
   contributed: number;
   hole_cards?: string[];
   hole_cards_revealed?: boolean[];
@@ -132,6 +135,9 @@ export type ServerMessage = {
   player_id?: string;
   message?: string;
   code?: string;
+  // Settled stack on a "removed" frame (also reused for payment_received /
+  // sandbox_purchase_update credits — see proto/poker.proto's amount field).
+  amount?: number;
   action_id?: string;
   snapshot_version?: number;
   equity?: number
