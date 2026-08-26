@@ -1774,7 +1774,7 @@ git commit -m "docs: document the exit-mid-hand flow"
 
 **Files:** none (verification only).
 
-- [ ] **Step 1: Full backend gate**
+- [x] **Step 1: Full backend gate**
 
 ```bash
 cd api
@@ -1789,7 +1789,7 @@ Expected: all clean/PASS. (The `-count=15` actor-timer stress run `api/CLAUDE.md
 timer-path changes specifically — this feature adds no new timers, only two new command handlers
 and a sweep called from existing commit points, so it is not required here; skip it.)
 
-- [ ] **Step 2: Full frontend gate**
+- [x] **Step 2: Full frontend gate**
 
 ```bash
 cd ui
@@ -1801,12 +1801,12 @@ npm run build
 
 Expected: all clean, coverage thresholds unbroken.
 
-- [ ] **Step 3: Re-read the spec and confirm every numbered goal is met**
+- [x] **Step 3: Re-read the spec and confirm every numbered goal is met**
 
 Walk `docs/plans/2026-08-26-exit-mid-hand-design.md`'s "Goal" list (1-5) against the shipped
 behavior: WS-based request (Task 6/8), immediate pause + turn-fold (Task 2/5), uncontested win
 still pays (Task 2, tested), automatic removal+cashout (Task 5), cancelable (Task 2/5/8/10).
 
-- [ ] **Step 4: No further commit needed** — this task is verification-only; if any check fails,
+- [x] **Step 4: No further commit needed** — this task is verification-only; if any check fails,
   fix it inside the task/file it belongs to and re-run that task's own test command before
   re-running this full gate.
