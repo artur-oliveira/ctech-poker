@@ -1163,7 +1163,7 @@ git commit -m "feat: wire request_exit/cancel_exit into the table websocket gate
 - Consumes: `onPlayerRemoved(playerID, reason string, stack int64, holdID string)` (already
   receives `stack`, just wasn't forwarding it onto the wire).
 
-- [ ] **Step 1: Add the field**
+- [x] **Step 1: Add the field**
 
 In `wirePlayerRemovedHook` (`app.go:827-848`), the `pokerproto.ServerMessage` literal currently
 reads:
@@ -1185,7 +1185,7 @@ Change to:
 		})
 ```
 
-- [ ] **Step 2: Build**
+- [x] **Step 2: Build**
 
 ```bash
 cd api && go build ./...
@@ -1193,7 +1193,7 @@ cd api && go build ./...
 
 Expected: clean.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add api/internal/app/app.go
