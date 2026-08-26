@@ -441,6 +441,31 @@ describe('useTableRealtime', () => {
     expect(result.current.requestRabbitHuntPending).toBe(false);
   });
 
+  test('locks the exit request until acknowledgement', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    act(() => {
+      expect(result.current.requestExit()).toBe(true);
+      expect(result.current.requestExit()).toBe(false);
+    });
+    expect(result.current.requestExitPending).toBe(true);
+    expect(ws.send).toHaveBeenLastCalledWith({type: 'request_exit', action_id: 'action-1'});
+
+    receive({type: 'action_ack', action_id: 'action-1'});
+    expect(result.current.requestExitPending).toBe(false);
+  });
+
+  test('sends cancel_exit', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    act(() => result.current.cancelExit());
+    expect(ws.send).toHaveBeenLastCalledWith({type: 'cancel_exit', action_id: 'action-1'});
+  });
+
+  test('a removed frame carries the settled stack', () => {
+    const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
+    receive({type: 'removed', code: 'exit_requested', amount: 480});
+    expect(result.current.removed).toEqual({code: 'exit_requested', amount: 480});
+  });
+
   test('locks the winner-cards request until acknowledgement and surfaces a rejection', () => {
     const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
     act(() => {

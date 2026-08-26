@@ -237,19 +237,23 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const showCardsLockRef = useRef(false);
   const requestRabbitHuntLockRef = useRef(false);
 	const requestWinnerCardsLockRef = useRef(false);
+  const requestExitLockRef = useRef(false);
   const readyActionRef = useRef<string | null>(null);
   const showCardsActionRef = useRef<string | null>(null);
   const requestRabbitHuntActionRef = useRef<string | null>(null);
 	const requestWinnerCardsActionRef = useRef<string | null>(null);
+  const requestExitActionRef = useRef<string | null>(null);
   const readyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const showCardsTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const requestRabbitHuntTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const requestWinnerCardsTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const requestExitTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [readyPending, setReadyPending] = useState(false);
   const [showCardsPending, setShowCardsPending] = useState(false);
   const [requestRabbitHuntPending, setRequestRabbitHuntPending] = useState(false);
   const [requestRabbitHuntFailCount, setRequestRabbitHuntFailCount] = useState(0);
 	const [requestWinnerCardsPending, setRequestWinnerCardsPending] = useState(false);
+  const [requestExitPending, setRequestExitPending] = useState(false);
   const [snapshot, setSnapshot] = useState<TableSnapshot | null>(null);
   const [snapshotTableID, setSnapshotTableID] = useState('');
   // Captured once per snapshot (in this event handler, never during render) so
@@ -287,7 +291,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const [lastActionError, setLastActionError] = useState<ActionError | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const [botChallengeRequired, setBotChallengeRequired] = useState(false);
-  const [removed, setRemoved] = useState<{ code?: string } | null>(null);
+  const [removed, setRemoved] = useState<{ code?: string; amount?: number } | null>(null);
   const [terminalFailure, setTerminalFailure] = useState<{ tableID: string; code: string } | null>(null);
   const terminalError = terminalFailure?.tableID === id ? terminalFailure.code : null;
   const [mockStatus, setMockStatus] = useState<WSStatus>('connecting');
@@ -347,6 +351,12 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
 			requestWinnerCardsLockRef.current = false;
 			setRequestWinnerCardsPending(false);
 		}
+    if (requestExitActionRef.current === actionId) {
+      if (requestExitTimerRef.current) clearTimeout(requestExitTimerRef.current);
+      requestExitActionRef.current = null;
+      requestExitLockRef.current = false;
+      setRequestExitPending(false);
+    }
     if (postBigBlindActionRef.current === actionId) {
       if (postBigBlindTimerRef.current) clearTimeout(postBigBlindTimerRef.current);
       postBigBlindActionRef.current = null;
@@ -490,7 +500,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       if (legacyUnversioned) {
         clearPending();
         for (const id of [readyActionRef.current, showCardsActionRef.current, postBigBlindActionRef.current,
-			  requestRabbitHuntActionRef.current, requestWinnerCardsActionRef.current]) {
+			  requestRabbitHuntActionRef.current, requestWinnerCardsActionRef.current, requestExitActionRef.current]) {
           if (id) finishAuxiliaryCommand(id);
         }
       }
@@ -612,7 +622,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       setBotChallengeRequired(false);
       setLastActionError(null);
     }
-    if (message.type === 'removed') setRemoved({code: message.code});
+    if (message.type === 'removed') setRemoved({code: message.code, amount: message.amount});
     if (message.type === 'achievement_unlocked' && message.key) setUnlock({
       key: message.key,
       stars: message.stars || 1
@@ -715,7 +725,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
             setRemoved(null);
             clearPending();
             for (const actionId of [readyActionRef.current, showCardsActionRef.current, postBigBlindActionRef.current,
-			  requestRabbitHuntActionRef.current, requestWinnerCardsActionRef.current]) {
+			  requestRabbitHuntActionRef.current, requestWinnerCardsActionRef.current, requestExitActionRef.current]) {
               if (actionId) finishAuxiliaryCommand(actionId);
             }
             postedBigBlindRef.current = false;
@@ -775,12 +785,15 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     showCardsActionRef.current = null;
     requestRabbitHuntActionRef.current = null;
 		requestWinnerCardsActionRef.current = null;
+    requestExitActionRef.current = null;
     readyLockRef.current = false;
     showCardsLockRef.current = false;
     requestRabbitHuntLockRef.current = false;
 		requestWinnerCardsLockRef.current = false;
+    requestExitLockRef.current = false;
     for (const timer of [pendingTimer.current, readyTimerRef.current, showCardsTimerRef.current,
-		  postBigBlindTimerRef.current, requestRabbitHuntTimerRef.current, requestWinnerCardsTimerRef.current]) {
+		  postBigBlindTimerRef.current, requestRabbitHuntTimerRef.current, requestWinnerCardsTimerRef.current,
+		  requestExitTimerRef.current]) {
       if (timer) clearTimeout(timer);
     }
     pendingTimer.current = undefined;
@@ -789,6 +802,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     postBigBlindTimerRef.current = undefined;
     requestRabbitHuntTimerRef.current = undefined;
 		requestWinnerCardsTimerRef.current = undefined;
+    requestExitTimerRef.current = undefined;
     pendingActionRef.current = null;
     for (const timer of reactionTimersRef.current.values()) window.clearTimeout(timer);
     reactionTimersRef.current.clear();
@@ -804,6 +818,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     if (postBigBlindTimerRef.current) clearTimeout(postBigBlindTimerRef.current);
     if (requestRabbitHuntTimerRef.current) clearTimeout(requestRabbitHuntTimerRef.current);
 		if (requestWinnerCardsTimerRef.current) clearTimeout(requestWinnerCardsTimerRef.current);
+    if (requestExitTimerRef.current) clearTimeout(requestExitTimerRef.current);
     for (const timer of reactionTimersRef.current.values()) window.clearTimeout(timer);
     reactionTimersRef.current.clear();
     for (const timer of soundTimersRef.current) window.clearTimeout(timer);
@@ -885,6 +900,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     requestRabbitHuntPending,
     requestRabbitHuntFailCount,
 		requestWinnerCardsPending,
+    requestExitPending,
     ready: (ready = true) => {
       if (readyLockRef.current) return false;
       const actionId = crypto.randomUUID();
@@ -927,6 +943,24 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       requestRabbitHuntTimerRef.current = setTimeout(() => finishAuxiliaryCommand(actionId, 'action_timeout'), ACTION_TIMEOUT_MS);
       return ok;
     },
+    requestExit: () => {
+      if (requestExitLockRef.current) return false;
+      const actionId = crypto.randomUUID();
+      requestExitLockRef.current = true;
+      requestExitActionRef.current = actionId;
+      setRequestExitPending(true);
+      const ok = emit({type: 'request_exit', action_id: actionId});
+      if (!ok) {
+        finishAuxiliaryCommand(actionId);
+        return false;
+      }
+      requestExitTimerRef.current = setTimeout(() => finishAuxiliaryCommand(actionId, 'action_timeout'), ACTION_TIMEOUT_MS);
+      return ok;
+    },
+    // Fire-and-forget like reportRabbitHuntVerifyFailed below: cancellation
+    // is reflected in the next snapshot's pending_exit field, no local
+    // pending/lock state needed.
+    cancelExit: () => emit({type: 'cancel_exit', action_id: crypto.randomUUID()}),
 		requestWinnerCards: () => {
 			if (requestWinnerCardsLockRef.current) return false;
 			const actionId = crypto.randomUUID();

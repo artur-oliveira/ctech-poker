@@ -1214,7 +1214,7 @@ git commit -m "feat: include settled stack on the removed frame"
 - Produces: `requestExit(): boolean`, `cancelExit(): boolean`, `requestExitPending: boolean`,
   `removed: {code?: string; amount?: number} | null` (extended from today's `{code?: string}`).
 
-- [ ] **Step 1: Add `pending_exit` to the `SeatView` type**
+- [x] **Step 1: Add `pending_exit` to the `SeatView` type**
 
 In `ui/src/lib/api/table.ts`, immediately after `ready?: boolean;` (line 18):
 
@@ -1224,7 +1224,7 @@ In `ui/src/lib/api/table.ts`, immediately after `ready?: boolean;` (line 18):
   pending_exit?: boolean;
 ```
 
-- [ ] **Step 2: Write the failing hook tests**
+- [x] **Step 2: Write the failing hook tests**
 
 Append to `useTableRealtime.test.tsx` (reusing the exact `requestRabbitHunt`-shaped tests already
 in this file as the direct template — find and mirror
@@ -1262,7 +1262,7 @@ test('a removed frame carries the settled stack', () => {
 });
 ```
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 ```bash
 cd ui && npx vitest run src/lib/hooks/useTableRealtime.test.tsx -t 'request_exit|cancel_exit|removed frame carries'
@@ -1271,7 +1271,7 @@ cd ui && npx vitest run src/lib/hooks/useTableRealtime.test.tsx -t 'request_exit
 Expected: FAIL — `requestExit`/`cancelExit`/`requestExitPending` not returned by the hook, and
 `removed` has no `amount`.
 
-- [ ] **Step 4: Add the refs/state and the two methods**
+- [x] **Step 4: Add the refs/state and the two methods**
 
 In `useTableRealtime.ts`, alongside the existing `requestRabbitHunt`-family refs (near
 `requestRabbitHuntLockRef`/`requestRabbitHuntActionRef`/`requestRabbitHuntTimerRef`/
@@ -1324,7 +1324,7 @@ is reflected in the next snapshot's `pending_exit` field, no local pending/lock 
 
 And in the returned object, add `requestExitPending,` alongside `requestRabbitHuntPending,`.
 
-- [ ] **Step 5: Extend `removed` to carry `amount`**
+- [x] **Step 5: Extend `removed` to carry `amount`**
 
 Change `const [removed, setRemoved] = useState<{ code?: string } | null>(null);` (line 290) to:
 
@@ -1338,7 +1338,7 @@ Change `if (message.type === 'removed') setRemoved({code: message.code});` (line
     if (message.type === 'removed') setRemoved({code: message.code, amount: message.amount});
 ```
 
-- [ ] **Step 6: Add cleanup for the new timer**
+- [x] **Step 6: Add cleanup for the new timer**
 
 In the two `useEffect` cleanup blocks that clear `requestRabbitHuntTimerRef.current` (the
 per-table-switch reset around line 749 and the unmount cleanup around line 772), add
@@ -1347,7 +1347,7 @@ false` and `requestExitActionRef.current = null` alongside the existing
 `requestRabbitHuntLockRef.current = false` / `requestRabbitHuntActionRef.current = null` lines in
 the per-table-switch effect.
 
-- [ ] **Step 7: Run the tests to verify they pass**
+- [x] **Step 7: Run the tests to verify they pass**
 
 ```bash
 cd ui && npx vitest run src/lib/hooks/useTableRealtime.test.tsx
@@ -1355,7 +1355,7 @@ cd ui && npx vitest run src/lib/hooks/useTableRealtime.test.tsx
 
 Expected: all PASS (existing + 3 new).
 
-- [ ] **Step 8: `tsc`/`eslint`**
+- [x] **Step 8: `tsc`/`eslint`**
 
 ```bash
 cd ui && npx tsc --noEmit && npx eslint src --max-warnings 0
@@ -1363,7 +1363,7 @@ cd ui && npx tsc --noEmit && npx eslint src --max-warnings 0
 
 Expected: clean.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add ui/src/lib/api/table.ts ui/src/lib/hooks/useTableRealtime.ts ui/src/lib/hooks/useTableRealtime.test.tsx
