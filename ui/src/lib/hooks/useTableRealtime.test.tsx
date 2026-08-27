@@ -417,7 +417,15 @@ describe('useTableRealtime', () => {
     expect(playSound).toHaveBeenCalledWith('showing_card');
   });
 
-  test('locks the rabbit hunt request until acknowledgement and surfaces a rejection', () => {
+  // A rabbit hunt (like every auxiliary command) carries no
+  // expected_snapshot_version, so a server that judged it against state this
+  // client does not have can only answer with a flat rejection. Those are
+  // resubmitted under the same action_id — the server rejects them before
+  // commit, so no idempotency guard was written — instead of failing the
+  // player's click outright on the first try.
+  test('retries a rabbit hunt rejected against stale state, then surfaces it once exhausted', () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
     const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
 
     act(() => {
@@ -426,6 +434,15 @@ describe('useTableRealtime', () => {
     });
     expect(result.current.requestRabbitHuntPending).toBe(true);
     expect(ws.send).toHaveBeenLastCalledWith({type: 'request_rabbit_hunt', action_id: 'action-1'});
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      ws.send.mockClear();
+      receive({type: 'error', code: 'invalid_action', action_id: 'action-1'});
+      expect(result.current.requestRabbitHuntPending).toBe(true);
+      expect(result.current.actionError).toBeNull();
+      act(() => vi.advanceTimersByTime(700 * 2 ** (attempt - 1)));
+      expect(ws.send).toHaveBeenCalledWith({type: 'request_rabbit_hunt', action_id: 'action-1'});
+    }
 
     receive({type: 'error', code: 'invalid_action', action_id: 'action-1'});
     expect(result.current.requestRabbitHuntPending).toBe(false);
@@ -467,6 +484,7 @@ describe('useTableRealtime', () => {
   });
 
   test('locks the winner-cards request until acknowledgement and surfaces a rejection', () => {
+    vi.useFakeTimers();
     const {result} = renderHook(() => useTableRealtime('table-1', VIEWER));
     act(() => {
       expect(result.current.requestWinnerCards()).toBe(true);
@@ -474,7 +492,12 @@ describe('useTableRealtime', () => {
     });
     expect(result.current.requestWinnerCardsPending).toBe(true);
     expect(ws.send).toHaveBeenLastCalledWith({type: 'request_winner_cards', action_id: 'action-1'});
-    receive({type: 'error', code: 'invalid_action', action_id: 'action-1'});
+    // Resync-class rejections are resubmitted first (see the rabbit hunt test);
+    // only an exhausted retry budget surfaces the failure to the player.
+    for (let attempt = 0; attempt <= 3; attempt++) {
+      receive({type: 'error', code: 'invalid_action', action_id: 'action-1'});
+      act(() => vi.advanceTimersByTime(3000));
+    }
     expect(result.current.requestWinnerCardsPending).toBe(false);
     expect(result.current.actionError).toMatchObject({code: 'invalid_action'});
   });

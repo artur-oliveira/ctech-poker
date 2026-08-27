@@ -15,6 +15,15 @@ import (
 // state via LoadTable and retry validation against it.
 var ErrVersionConflict = errors.New("tablestore: version conflict")
 
+// ErrUnavailable marks a failure of the store itself — the read or write
+// never reached a verdict about the caller's action. It exists so the WS
+// gateway can answer "the table is unavailable, retry" instead of the flat
+// "that action is no longer valid" every handler error used to become: an
+// ensureLoaded failure aborts a command *before* its own validation runs, so
+// reporting it as an invalid action blames the player for an outage and, on
+// the client, ends the command instead of resyncing it.
+var ErrUnavailable = errors.New("tablestore: table state unavailable")
+
 // ErrDuplicateAction means actionID was already committed for this hand —
 // the caller should treat this the same as a successful no-op.
 var ErrDuplicateAction = errors.New("tablestore: duplicate action_id")

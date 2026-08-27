@@ -396,3 +396,51 @@ func TestCommitActionIncludesExtraItemsWithoutActionID(t *testing.T) {
 		t.Fatal("expected the extra transact item to be written alongside the state commit even with an empty actionID")
 	}
 }
+
+// LoadTable used to run through TransactGetItems, which DynamoDB cancels with
+// TransactionConflict whenever a TransactWrite touches the same item. Every
+// caller aborts its command on a load error, so a table under a burst of
+// commits (the post-hand window: outcome log entries, next-hand countdown,
+// hand hooks) rejected reads — and with them show_cards / request_rabbit_hunt
+// — on essentially every attempt. Reads must survive concurrent commits.
+func TestLoadTableSurvivesConcurrentCommits(t *testing.T) {
+	db := testClient(t)
+	env := isolatedEnv()
+	s := NewStore(db, env)
+	ctx := context.Background()
+	mustCreateTestTables(ctx, t, db, env)
+
+	if err := s.SeedTable(ctx, "table-1", hand.State{Stage: hand.WaitingForPlayers}); err != nil {
+		t.Fatalf("SeedTable: %v", err)
+	}
+
+	const commits = 25
+	done := make(chan error, 1)
+	go func() {
+		for i := range commits {
+			version := 1 + i
+			if err := s.CommitAction(ctx, "table-1", "hand-1", fmt.Sprintf("act-%d", i), version,
+				hand.State{Stage: hand.PreFlop}, TableActivity{}, 0, 0, ActionLogEntry{
+					TableID: "table-1", HandID: "hand-1", Version: version + 1,
+					PlayerID: "p1", ActionID: fmt.Sprintf("act-%d", i), Action: "call",
+				}); err != nil {
+				done <- err
+				return
+			}
+		}
+		done <- nil
+	}()
+
+	for range commits * 2 {
+		loaded, err := s.LoadTable(ctx, "table-1")
+		if err != nil {
+			t.Fatalf("LoadTable during concurrent commits: %v", err)
+		}
+		if loaded == nil {
+			t.Fatal("LoadTable reported a seeded table as absent")
+		}
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("CommitAction: %v", err)
+	}
+}

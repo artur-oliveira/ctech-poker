@@ -26,6 +26,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
+	"gopkg.aoctech.app/poker/api/internal/tablestore"
 	"gopkg.aoctech.app/poker/api/internal/wsdrain"
 
 	fws "github.com/fasthttp/websocket"
@@ -104,6 +105,19 @@ func wsAllowedOrigin(ctx *fasthttp.RequestCtx, allowed []string) bool {
 		return true
 	}
 	return slices.Contains(allowed, origin)
+}
+
+// actionErrorCode classifies a rejected table command for the client. A store
+// or actor failure never reached a verdict about the action itself, so it must
+// not come back as "invalid_action": that reads to the player as "your move is
+// no longer legal" (blaming them for an outage) and, on the client, ends the
+// command instead of resyncing and resubmitting it. "unavailable" is the
+// honest answer and the one useTableRealtime.ts already retries.
+func actionErrorCode(err error) string {
+	if errors.Is(err, tablestore.ErrUnavailable) || errors.Is(err, table.ErrActorStopped) {
+		return "unavailable"
+	}
+	return "invalid_action"
 }
 
 func rateLimitedTableMessage(messageType string) bool {
@@ -512,7 +526,7 @@ func RegisterTableWS(
 					ensureActionID()
 					r := make(chan error, 1)
 					if err := dispatch(table.ReadyCmd{PlayerID: playerID, ActionID: m.ActionId, Ready: m.Ready, Reply: r}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()
 					}
@@ -548,7 +562,7 @@ func RegisterTableWS(
 						ExpectedHandID:          m.ExpectedHandId,
 						Action:                  betting.Action(m.Action), Amount: m.Amount, Reply: r,
 					}); err != nil {
-						code := "invalid_action"
+						code := actionErrorCode(err)
 						if strings.Contains(err.Error(), "stale action state") {
 							code = "stale_state"
 						}
@@ -607,7 +621,7 @@ func RegisterTableWS(
 					if err := dispatch(table.ShowCardsCmd{
 						PlayerID: playerID, ActionID: m.ActionId, CardIndex: m.CardIndex, Reply: r,
 					}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()
 					}
@@ -615,7 +629,7 @@ func RegisterTableWS(
 					ensureActionID()
 					r := make(chan error, 1)
 					if err := dispatch(table.RequestRabbitHuntCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()
 					}
@@ -623,7 +637,7 @@ func RegisterTableWS(
 					ensureActionID()
 					r := make(chan error, 1)
 					if err := dispatch(table.RequestExitCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()
 					}
@@ -631,7 +645,7 @@ func RegisterTableWS(
 					ensureActionID()
 					r := make(chan error, 1)
 					if err := dispatch(table.CancelExitCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()
 					}
@@ -639,7 +653,7 @@ func RegisterTableWS(
 					ensureActionID()
 					r := make(chan error, 1)
 					if err := dispatch(table.RequestWinnerCardsCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()
 					}
@@ -647,7 +661,7 @@ func RegisterTableWS(
 					ensureActionID()
 					r := make(chan error, 1)
 					if err := dispatch(table.AcceptWinnerCardsCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()
 					}
@@ -655,7 +669,7 @@ func RegisterTableWS(
 					ensureActionID()
 					r := make(chan error, 1)
 					if err := dispatch(table.DeclineWinnerCardsCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()
 					}
@@ -663,7 +677,7 @@ func RegisterTableWS(
 					ensureActionID()
 					r := make(chan error, 1)
 					if err := dispatch(table.RabbitHuntVerifyFailedCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()
 					}
@@ -671,13 +685,13 @@ func RegisterTableWS(
 					r := make(chan error, 1)
 					enabled := m.RunItTwice != nil && *m.RunItTwice
 					if err := dispatch(table.SetRunItTwiceCmd{PlayerID: playerID, Enabled: enabled, Reply: r}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error()})
+						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error()})
 					}
 				case "keep_seat":
 					ensureActionID()
 					r := make(chan error, 1)
 					if err := dispatch(table.KeepSeatCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()
 					}
@@ -689,7 +703,7 @@ func RegisterTableWS(
 					ensureActionID()
 					r := make(chan error, 1)
 					if err := dispatch(table.PeekCardsCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error(), ActionId: m.ActionId})
 					}
 				case "chat":
 					message := strings.TrimSpace(m.Message)
@@ -704,7 +718,7 @@ func RegisterTableWS(
 					message = tableChatFilter.Clean(message)
 					r := make(chan error, 1)
 					if err := dispatch(table.ChatCmd{PlayerID: playerID, ActionID: m.ActionId, Message: message, Reply: r}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						// Compatibility event for clients predating protocol v6. The
 						// authoritative copy is also present in every state snapshot.
@@ -753,7 +767,7 @@ func RegisterTableWS(
 						PlayerID: playerID, ActionID: m.ActionId, ReactionID: m.ReactionId,
 						TargetPlayerID: m.TargetPlayerId, Reply: r,
 					}); err != nil {
-						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_action", Message: err.Error(), ActionId: m.ActionId})
+						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						data, err := goproto.Marshal(&pokerproto.ServerMessage{
 							Type: "reaction", PlayerId: playerID, ReactionId: m.ReactionId,
@@ -775,7 +789,7 @@ func RegisterTableWS(
 						ExpectedHandID:          m.ExpectedHandId,
 						ExpectedStage:           m.ExpectedStage, Reply: r,
 					}); err != nil {
-						code := "invalid_action"
+						code := actionErrorCode(err)
 						if strings.Contains(err.Error(), "stale action state") {
 							code = "stale_state"
 						}

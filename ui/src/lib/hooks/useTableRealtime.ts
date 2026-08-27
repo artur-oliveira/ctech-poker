@@ -34,6 +34,11 @@ const MAX_ACTION_RETRIES = 3;
 const RESYNC_ERROR_CODES = new Set(['stale_state', 'rate_limited', 'invalid_action', 'unavailable']);
 const TERMINAL_ERROR_CODES = new Set(['forbidden', 'not_found']);
 const RESYNC_TIMEOUT_MS = 2500;
+// First resubmit delay for an auxiliary command rejected against stale state,
+// doubled per retry. Deliberately longer than the resync backoff scheduled for
+// the same action_id (<=450ms on a first rejection) so the resubmit is judged
+// against the state that resync pulled, not the one that just rejected it.
+const AUX_RETRY_BASE_MS = 700;
 
 const ERROR_MESSAGES: Record<string, string> = {
   unauthorized: 'Sua sessão expirou. Entre novamente para continuar.',
@@ -248,6 +253,14 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   const requestRabbitHuntTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const requestWinnerCardsTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const requestExitTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Auxiliary commands (show_cards, request_rabbit_hunt, request_winner_cards,
+  // ...) carry no expected_snapshot_version, so the server can only answer
+  // them with a flat rejection — there is no stale_state path for them the way
+  // there is for act(). Keeping the exact frame here is what lets a
+  // resync-class rejection be resubmitted instead of surfaced, keyed by the
+  // action_id the reply correlates on. Entries live only while the command is
+  // in flight; finishAuxiliaryCommand drops them.
+  const auxFramesRef = useRef<Map<string, { frame: object; retries: number; timer?: ReturnType<typeof setTimeout> }>>(new Map());
   const [readyPending, setReadyPending] = useState(false);
   const [showCardsPending, setShowCardsPending] = useState(false);
   const [requestRabbitHuntPending, setRequestRabbitHuntPending] = useState(false);
@@ -326,6 +339,11 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
   }, [clearPending]);
   
   const finishAuxiliaryCommand = useCallback((actionId: string, failedCode?: string) => {
+    const aux = auxFramesRef.current.get(actionId);
+    if (aux) {
+      if (aux.timer) clearTimeout(aux.timer);
+      auxFramesRef.current.delete(actionId);
+    }
     if (readyActionRef.current === actionId) {
       if (readyTimerRef.current) clearTimeout(readyTimerRef.current);
       readyActionRef.current = null;
@@ -364,6 +382,33 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     }
     if (failedCode) setLastActionError(actionError(failedCode));
   }, []);
+
+  // A resync-class rejection of an auxiliary command means the server judged
+  // it against a state this client does not have — the exact situation the
+  // resync scheduled alongside it is about to fix. The lease-holding table
+  // actor can serve a cache another fleet instance has already moved past, and
+  // these commands are rejected by an engine precondition ("hand is not
+  // complete yet") *before* any commit, so nothing on the server forces that
+  // reload either: without a resubmit, a rabbit hunt or a card reveal fails on
+  // every single attempt while the client is looking at the very snapshot the
+  // fleet broadcast. Resends the identical frame under the SAME action_id —
+  // the rejection happened before commit, so no idempotency guard was written
+  // for it — capped at the same MAX_ACTION_RETRIES act() uses, and always
+  // later than the resync's own backoff so the resubmit lands on fresh state.
+  // The original ACTION_TIMEOUT_MS timer stays armed as the backstop.
+  const retryAuxiliaryCommand = useCallback((actionId: string, code: string) => {
+    if (!RESYNC_ERROR_CODES.has(code)) return false;
+    const aux = auxFramesRef.current.get(actionId);
+    if (!aux || aux.retries >= MAX_ACTION_RETRIES) return false;
+    aux.retries += 1;
+    if (aux.timer) clearTimeout(aux.timer);
+    aux.timer = setTimeout(() => {
+      aux.timer = undefined;
+      if (!auxFramesRef.current.has(actionId)) return;
+      if (!sendRef.current(aux.frame)) finishAuxiliaryCommand(actionId, 'not_connected');
+    }, AUX_RETRY_BASE_MS * 2 ** (aux.retries - 1) + Math.floor(Math.random() * 200));
+    return true;
+  }, [finishAuxiliaryCommand]);
 
   // Sends (or resends) the 'act' frame and (re)arms its own timeout. Used both
   // for the first submit and for a stale_state auto-retry, so it goes through
@@ -611,8 +656,9 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
         // actually exhausted.
       } else if (message.action_id && pendingActionRef.current?.id === message.action_id) {
         failPending(code, message.action_id);
-      } else if (message.action_id) finishAuxiliaryCommand(message.action_id, code);
-      else setLastActionError(actionError(code));
+      } else if (message.action_id) {
+        if (!retryAuxiliaryCommand(message.action_id, code)) finishAuxiliaryCommand(message.action_id, code);
+      } else setLastActionError(actionError(code));
     }
     if (message.type === 'connected') {
       awaitingReconnectSnapshotRef.current = true;
@@ -646,7 +692,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       showReaction(reaction);
     }
   }, [armResyncWatchdog, clearPending, failPending, finishAuxiliaryCommand, id, isSuppressed,
-    noteFreshChatArrivals, sendActFrame, showReaction, viewerId]);
+    noteFreshChatArrivals, retryAuxiliaryCommand, sendActFrame, showReaction, viewerId]);
 
   const receiveForTable = useCallback((message: ServerMessage) => {
     if (activeTableIDRef.current === id) receive(message);
@@ -804,6 +850,8 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
 		requestWinnerCardsTimerRef.current = undefined;
     requestExitTimerRef.current = undefined;
     pendingActionRef.current = null;
+    for (const aux of auxFramesRef.current.values()) if (aux.timer) clearTimeout(aux.timer);
+    auxFramesRef.current.clear();
     for (const timer of reactionTimersRef.current.values()) window.clearTimeout(timer);
     reactionTimersRef.current.clear();
     for (const timer of soundTimersRef.current) window.clearTimeout(timer);
@@ -819,6 +867,8 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     if (requestRabbitHuntTimerRef.current) clearTimeout(requestRabbitHuntTimerRef.current);
 		if (requestWinnerCardsTimerRef.current) clearTimeout(requestWinnerCardsTimerRef.current);
     if (requestExitTimerRef.current) clearTimeout(requestExitTimerRef.current);
+    for (const aux of auxFramesRef.current.values()) if (aux.timer) clearTimeout(aux.timer);
+    auxFramesRef.current.clear();
     for (const timer of reactionTimersRef.current.values()) window.clearTimeout(timer);
     reactionTimersRef.current.clear();
     for (const timer of soundTimersRef.current) window.clearTimeout(timer);
@@ -849,6 +899,17 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     return true;
   }, [send]);
   
+  // Records the frame under its action_id before sending, so a resync-class
+  // rejection can resubmit this exact command instead of failing it outright
+  // (see retryAuxiliaryCommand). Only for commands that carry an action_id the
+  // server echoes back — fire-and-forget ones have nothing to correlate on.
+  const emitAux = useCallback((actionId: string, frame: object) => {
+    auxFramesRef.current.set(actionId, {frame, retries: 0});
+    if (emit(frame)) return true;
+    auxFramesRef.current.delete(actionId);
+    return false;
+  }, [emit]);
+
   const submitBotChallenge = useCallback((token: string) =>
     emit({type: 'bot_challenge', turnstile_token: token, action_id: crypto.randomUUID()}), [emit]);
   
@@ -921,7 +982,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       showCardsLockRef.current = true;
       showCardsActionRef.current = actionId;
       setShowCardsPending(true);
-      const ok = emit({type: 'show_cards', action_id: actionId, card_index: cardIndex});
+      const ok = emitAux(actionId, {type: 'show_cards', action_id: actionId, card_index: cardIndex});
       if (!ok) {
         finishAuxiliaryCommand(actionId);
         return false;
@@ -935,7 +996,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       requestRabbitHuntLockRef.current = true;
       requestRabbitHuntActionRef.current = actionId;
       setRequestRabbitHuntPending(true);
-      const ok = emit({type: 'request_rabbit_hunt', action_id: actionId});
+      const ok = emitAux(actionId, {type: 'request_rabbit_hunt', action_id: actionId});
       if (!ok) {
         finishAuxiliaryCommand(actionId);
         return false;
@@ -949,7 +1010,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       requestExitLockRef.current = true;
       requestExitActionRef.current = actionId;
       setRequestExitPending(true);
-      const ok = emit({type: 'request_exit', action_id: actionId});
+      const ok = emitAux(actionId, {type: 'request_exit', action_id: actionId});
       if (!ok) {
         finishAuxiliaryCommand(actionId);
         return false;
@@ -967,7 +1028,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
 			requestWinnerCardsLockRef.current = true;
 			requestWinnerCardsActionRef.current = actionId;
 			setRequestWinnerCardsPending(true);
-			const ok = emit({type: 'request_winner_cards', action_id: actionId});
+			const ok = emitAux(actionId, {type: 'request_winner_cards', action_id: actionId});
 			if (!ok) {
 				finishAuxiliaryCommand(actionId);
 				return false;
@@ -987,7 +1048,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       requestWinnerCardsLockRef.current = true;
       requestWinnerCardsActionRef.current = actionId;
       setRequestWinnerCardsPending(true);
-      const ok = emit({type: accept ? 'accept_winner_cards' : 'decline_winner_cards', action_id: actionId});
+      const ok = emitAux(actionId, {type: accept ? 'accept_winner_cards' : 'decline_winner_cards', action_id: actionId});
       if (!ok) {
         finishAuxiliaryCommand(actionId);
         return false;

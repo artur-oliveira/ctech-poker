@@ -30,6 +30,17 @@ off by default — do not build UI that assumes real money is on.
   `lib/hooks/useLobbyRealtime.ts` owns the lobby/user gateway (rooms **and** all social pushes).
   Extend them rather than opening a third socket. `useLobbyRealtime` is mounted once, by
   `lib/providers/RealtimeBridge.tsx` inside `QueryProvider` — do not mount it from a page again.
+- **A rejected table command is resubmitted, not surfaced.** `act()` retries on `stale_state` via
+  `pendingActionRef`; the auxiliary commands (`show_cards`, `request_rabbit_hunt`,
+  `request_winner_cards`, `accept`/`decline_winner_cards`, `request_exit`) carry no
+  `expected_snapshot_version`, so the server can only answer them with a flat rejection — they go
+  through `emitAux`, which keeps the frame in `auxFramesRef` so a resync-class code
+  (`RESYNC_ERROR_CODES`) resubmits the **same** frame under the **same** `action_id`. Reusing the id
+  is safe because the server rejects these before commit, so no idempotency guard was written.
+  Retries are capped at `MAX_ACTION_RETRIES` and back off past the resync scheduled for that same
+  id; only an exhausted budget reaches `setLastActionError`. Any new command with an `action_id` the
+  server echoes belongs on `emitAux`, not bare `emit`. See
+  `docs/plans/2026-08-27-table-load-transaction-conflict.md`.
 - **Social state is server state.** Every social read is a `['social', …]` query key
   (`SOCIAL_KEYS` in `lib/social.ts`); mutations go through `lib/hooks/useSocialActions.ts`, which
   invalidates that root instead of patching a mirrored relationship locally. Chat/reaction

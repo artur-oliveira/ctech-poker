@@ -631,7 +631,10 @@ func (a *Actor) ensureLoaded(ctx context.Context, force bool) error {
 		return err
 	}
 	if stored == nil {
-		return errors.New("table: no state seeded for this table yet")
+		// tablestore.ErrUnavailable, not a plain error: this aborts the command
+		// before any of its own validation runs, so the gateway must answer
+		// "table unavailable" rather than blaming the player's action.
+		return fmt.Errorf("%w: no state seeded for this table yet", tablestore.ErrUnavailable)
 	}
 	a.cached = hand.NewTableFromState(stored.State)
 	a.cached.ConfigureRunItTwice(a.runItTwiceEnabled.Load())
@@ -1204,11 +1207,7 @@ func (a *Actor) retryOnConflict(ctx context.Context, apply func() error) error {
 	if err := a.ensureLoaded(ctx, true); err != nil {
 		return err
 	}
-	err := apply()
-	if err != nil {
-	} else {
-	}
-	return err
+	return apply()
 }
 
 func (a *Actor) SetEnv(env string) { a.env = env }

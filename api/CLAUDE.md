@@ -36,6 +36,20 @@ See `docs/plans/2026-08-21-entry-fee-entitlement.md`. **Still blocking, found 20
 - **Correctness = DynamoDB conditional writes.** Every mutated action commits via
   `tablestore.CommitAction` with a `version` equality `ConditionExpression` + per-action idempotency guard. Never
   read-then-write against table state.
+- **Never read the table item with `TransactGetItems`.** `LoadTable` uses `BatchGetItem` with `ConsistentRead` — the
+  same strong consistency, no transaction semantics. A transactional read conflicts with any `CommitAction`
+  `TransactWrite` on that same item and fails with `TransactionCanceledException[TransactionConflict]`, which the SDK
+  never retries (it is in neither `DefaultRetryableErrorCodes` nor `DefaultThrottleErrorCodes`). Since `ensureLoaded`
+  runs before every handler's own validation, a failed load aborts the command outright: that is what made
+  `show_cards` / `request_rabbit_hunt` fail on essentially every attempt in the write-heavy post-hand window. The
+  isolation was never worth anything either — a one-item read set is already atomic. Handle `UnprocessedKeys`: a
+  `BatchGetItem` that read nothing is not the same as an absent table. See
+  `docs/plans/2026-08-27-table-load-transaction-conflict.md`.
+- **Distinguish "the store failed" from "the action is illegal."** Failures that never reached a verdict about the
+  player's command wrap `tablestore.ErrUnavailable`; `tablews.go`'s `actionErrorCode` turns those (and
+  `table.ErrActorStopped`) into `unavailable`, everything else into `invalid_action`. Reporting an outage as
+  `invalid_action` blames the player for it and makes the client end the command instead of resyncing and
+  resubmitting. `ErrVersionConflict` stays `invalid_action` — it *is* a verdict.
 - **`tablelease` is latency-only**, not correctness. Never add lease-based correctness logic.
 - **Player identity comes from the JWT `sub`** — derive `playerID` from claims, never trust a client-supplied id
   (prevents IDOR).

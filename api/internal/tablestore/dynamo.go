@@ -50,6 +50,9 @@ const (
 // timeNowFunc is overridden in tests that need a deterministic TTL value.
 var timeNowFunc = time.Now
 
+// sleepFunc is overridden in tests so a retry backoff costs no wall time.
+var sleepFunc = time.Sleep
+
 // Store persists the one authoritative item per table, an audit log, and the
 // idempotency guards that back CommitAction's duplicate-action_id rejection.
 type Store struct {
@@ -109,34 +112,54 @@ func (s *Store) SeedTable(ctx context.Context, tableID string, state hand.State)
 		if dynamo.IsConditionFailed(err) {
 			return nil // already seeded
 		}
-		return fmt.Errorf("tablestore: seed table: %w", err)
+		return fmt.Errorf("%w: seed table: %w", ErrUnavailable, err)
 	}
 	return nil
 }
 
-// LoadTable always does a strongly consistent read (via TransactGetItems,
-// the only way api-commons' dynamo.Base exposes one for a single-item get).
-// A plain eventually-consistent GetItem here would let ensureLoaded
+// LoadTable always does a strongly consistent read. A plain
+// eventually-consistent GetItem here would let ensureLoaded
 // (internal/table/actor.go) observe "no item" for a table this same request
 // just seeded/committed a moment earlier on a different replica — any
 // instance may serve any table with no proxying to a lease holder
 // (ARCHITECTURE.md §2), so that race is routine, not a corner case, and it
 // surfaces to players as a wrongly-rejected "no state seeded" action error.
+//
+// The consistent read runs through BatchGetItem, NOT TransactGetItems. A
+// transactional read of the table item conflicts with any CommitAction
+// TransactWrite touching that same item and fails the whole read with
+// TransactionCanceledException[TransactionConflict] — which every caller
+// surfaces as an outright rejection, since a load error aborts the command
+// before its own retry/precondition logic ever runs. The post-hand window is
+// exactly when that collides most (outcome log entries, the next-hand
+// countdown commit and the hand hooks all write the item while players click
+// "show cards" / "rabbit hunt"), so those commands failed on essentially
+// every attempt. BatchGetItem with ConsistentRead gives the same freshness
+// with no transaction semantics to conflict with — and at half the read
+// capacity of a transactional get.
 func (s *Store) LoadTable(ctx context.Context, tableID string) (*StoredTable, error) {
-	resp, err := s.state.TransactGetItems(ctx, []types.TransactGetItem{
-		{Get: &types.Get{
-			TableName: aws.String(s.state.TableName),
-			Key:       map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: tableID}},
-		}},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("tablestore: get table: %w", err)
+	key := map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: tableID}}
+	// BatchGetItem is the one read path that can come back "fine, but I did
+	// not read it" (UnprocessedKeys, under throttling). Treating that as an
+	// empty result would report a live table as unseeded, so retry it.
+	for attempt := range 3 {
+		out, err := s.state.BatchGetItemRaw(ctx, &dynamodb.BatchGetItemInput{
+			RequestItems: map[string]types.KeysAndAttributes{
+				s.state.TableName: {Keys: []map[string]types.AttributeValue{key}, ConsistentRead: aws.Bool(true)},
+			},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("%w: get table: %w", ErrUnavailable, err)
+		}
+		if items := out.Responses[s.state.TableName]; len(items) > 0 {
+			return dynamo.Decode[StoredTable](items[0])
+		}
+		if len(out.UnprocessedKeys) == 0 {
+			return nil, nil // genuinely absent
+		}
+		sleepFunc(time.Duration(20<<attempt) * time.Millisecond)
 	}
-	item := resp[0].Item
-	if item == nil {
-		return nil, nil
-	}
-	return dynamo.Decode[StoredTable](item)
+	return nil, fmt.Errorf("%w: get table %s: still unprocessed after retries", ErrUnavailable, tableID)
 }
 
 // CommitAction atomically bumps tableID's version (guarded by
@@ -350,12 +373,12 @@ func (s *Store) MarkArchived(ctx context.Context, tableID string, expectedVersio
 
 func (s *Store) resolveCommitErr(ctx context.Context, tableID, handID, actionID string, txErr error) error {
 	if !dynamo.IsConditionFailed(txErr) {
-		return fmt.Errorf("tablestore: commit: %w", txErr)
+		return fmt.Errorf("%w: commit: %w", ErrUnavailable, txErr)
 	}
 	if actionID != "" {
 		item, err := s.guards.GetItem(ctx, tableID+"#"+handID+"#"+actionID)
 		if err != nil {
-			return fmt.Errorf("tablestore: check guard: %w", err)
+			return fmt.Errorf("%w: check guard: %w", ErrUnavailable, err)
 		}
 		if item != nil {
 			return ErrDuplicateAction
