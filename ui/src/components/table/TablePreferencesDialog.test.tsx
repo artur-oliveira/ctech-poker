@@ -67,7 +67,7 @@ vi.mock('@/components/ui/switch', () => ({
 
 const player = (overrides: Partial<PlayerProfile> = {}): PlayerProfile => ({
   user_id: 'p1', wallet_mode: 'sandbox', poker_terms_accepted: true, showcase_public: true,
-  playstyle_public: true, ...overrides,
+  playstyle_public: true, table_public: false, ...overrides,
 });
 
 const catalog: CosmeticCatalogEntry[] = [

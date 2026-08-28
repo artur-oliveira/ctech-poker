@@ -266,6 +266,7 @@ const mockProfile = {
   poker_terms_accepted: true,
   showcase_public: true,
   playstyle_public: true,
+  table_public: false,
   featured_achievements: ['wins', 'hands_played', 'bad_beat'] as string[],
   favorite_reactions: ['clap', 'cold', 'tomato'] as string[],
   game_balance: 12500,
@@ -467,6 +468,7 @@ interface MockSocialPlayer {
   presence?: 'online' | 'offline' | 'in_table';
   last_played_at?: number;
   hands_together?: number;
+  room_id?: string;
 }
 
 const mockSocialPlayers: MockSocialPlayer[] = [
@@ -476,7 +478,8 @@ const mockSocialPlayers: MockSocialPlayer[] = [
   },
   {
     player_id: 'leo_rio', name: 'Leo', friend_code: 'PKR-LEO1-3333-4444', relationship: 'friend',
-    muted: true, blocked: false, presence: 'in_table', last_played_at: Date.now() - 172_800_000, hands_together: 17
+    muted: true, blocked: false, presence: 'in_table', last_played_at: Date.now() - 172_800_000, hands_together: 17,
+    room_id: ROOM_ID
   },
   {
     player_id: 'caio_bh', name: 'Caio', friend_code: 'PKR-CAIO-5555-6666', relationship: 'incoming',
@@ -759,6 +762,7 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     }
     if (typeof body.showcase_public === 'boolean') mockProfile.showcase_public = body.showcase_public;
     if (typeof body.playstyle_public === 'boolean') mockProfile.playstyle_public = body.playstyle_public;
+    if (typeof body.table_public === 'boolean') mockProfile.table_public = body.table_public;
     if (Array.isArray(body.featured_achievements)) {
       if (body.featured_achievements.length > 3) fail(400, 'too many featured achievements', config);
       mockProfile.featured_achievements = [...body.featured_achievements];

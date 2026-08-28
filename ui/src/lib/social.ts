@@ -25,8 +25,9 @@ export const PRESENCE_LABELS: Record<PresenceStatus, string> = {
   in_table: 'Em uma mesa'
 };
 
-// Presence never carries the table, room code, blinds or balance — an
-// `in_table` friend is only ever "em uma mesa".
+// Presence never carries blinds or balance, and never a private table. A
+// public table shows up only for a friend who turned that on in their profile,
+// and it travels as a separate room_id field — never inside the status label.
 export function presenceLabel(presence?: PresenceStatus) {
   return presence ? PRESENCE_LABELS[presence] : PRESENCE_LABELS.offline;
 }
