@@ -5,10 +5,18 @@
 
 export type NotificationVariant = 'error' | 'info'
 
+export interface NotificationAction {
+  label: string
+  run: () => void | Promise<void>
+}
+
 export interface AppNotification {
   id: string
   message: string
   variant: NotificationVariant
+  // Optional inline buttons. An ignored toast still auto-dismisses on the
+  // normal timer: every action offered here also exists on a durable surface.
+  actions?: NotificationAction[]
 }
 
 const listeners = new Set<(items: AppNotification[]) => void>();
@@ -20,12 +28,13 @@ const AUTO_DISMISS_MS = 6000;
 const MAX_VISIBLE = 3;
 let nextID = 0;
 
-export function pushNotification(message: string, variant: NotificationVariant = 'error'): void {
+export function pushNotification(message: string, variant: NotificationVariant = 'error',
+                                 actions?: NotificationAction[]): void {
   const now = Date.now();
   if (now - (recent.get(message) || 0) < DEDUPE_MS) return;
   recent.set(message, now);
   const id = `${now}-${nextID++}`;
-  items = [...items, {id, message, variant}].slice(-MAX_VISIBLE);
+  items = [...items, {id, message, variant, actions}].slice(-MAX_VISIBLE);
   listeners.forEach(f => f(items));
   setTimeout(() => dismissNotification(id), AUTO_DISMISS_MS);
 }

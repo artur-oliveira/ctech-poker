@@ -13,7 +13,15 @@ export function Notifier() {
         <div key={n.id} className={`api-toast ${n.variant}`}
              role={n.variant === 'error' ? 'alert' : 'status'} aria-atomic="true">
           {n.variant === 'error' ? <CircleAlert aria-hidden="true"/> : <Info aria-hidden="true"/>}
-          <p className="wrap-anywhere">{n.message}</p>
+          <div className="api-toast-main">
+            <p className="wrap-anywhere">{n.message}</p>
+            {n.actions?.length ? <div className="api-toast-actions">
+              {n.actions.map(action => <button key={action.label} type="button" onClick={() => {
+                dismissNotification(n.id);
+                void action.run();
+              }}>{action.label}</button>)}
+            </div> : null}
+          </div>
           <button type="button" aria-label="Fechar aviso" onClick={() => dismissNotification(n.id)}><X/></button>
         </div>
       ))}

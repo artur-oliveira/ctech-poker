@@ -7938,11 +7938,33 @@ h1 em {
     color: var(--muted-rose)
 }
 
+.api-toast-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px
+}
+
 .api-toast p {
     margin: 0;
-    flex: 1;
     font-size: 14px;
     line-height: 1.4
+}
+
+.api-toast-actions {
+    display: flex;
+    gap: 8px
+}
+
+.api-toast-actions button {
+    width: auto;
+    height: auto;
+    padding: 4px 12px;
+    border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+    color: inherit;
+    font: inherit;
+    font-size: 13px
 }
 
 .wrap-anywhere {
