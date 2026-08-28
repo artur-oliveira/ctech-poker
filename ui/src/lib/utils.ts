@@ -61,6 +61,7 @@ export const ACHIEVEMENT_LABELS: Record<string, string> = {
   folded_streak: "Paciência de Pedra",
   all_in_blind: "All-in às Cegas",
   blind_magic: "Magia das Cartas",
+  no_rush: "Sem pressa",
   four_to_royal_missed: "Quase Royal",
   four_to_straight_flush_missed: "Quase Straight Flush",
   paid_river_draw_missed: "Pagou e Não Veio",
