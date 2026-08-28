@@ -129,3 +129,26 @@ func TestPersistedDeadlineCannotLeakToNextPlayer(t *testing.T) {
 		t.Fatalf("next player inherited persisted deadline: got %v want %v", actor.turnDeadline, want)
 	}
 }
+
+func TestConsumeTimeBankReturnsChargedMillis(t *testing.T) {
+	actor, _, current := newTimeBankActor(t)
+	baseNow := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	oldNow := timeNowFunc
+	timeNowFunc = func() time.Time { return baseNow }
+	t.Cleanup(func() {
+		timeNowFunc = oldNow
+		if actor.turnTimer != nil {
+			actor.turnTimer.Stop()
+		}
+	})
+
+	actor.armTurnTimer(current, hand.PreFlop, 0)
+	timeNowFunc = func() time.Time { return actor.turnBaseDeadline.Add(2 * time.Second) }
+	if charged := actor.consumeTimeBank(current); charged != 2000 {
+		t.Fatalf("charged=%d, want 2000", charged)
+	}
+	timeNowFunc = func() time.Time { return actor.turnBaseDeadline.Add(-2 * time.Second) }
+	if charged := actor.consumeTimeBank(current); charged != 0 {
+		t.Fatalf("charged=%d inside the deadline, want 0", charged)
+	}
+}

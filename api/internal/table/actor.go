@@ -996,14 +996,14 @@ func (a *Actor) applyActAndCommit(ctx context.Context, c ActCmd) (bool, error) {
 		}
 		a.prunePreselections()
 	}
-	a.consumeTimeBank(c.PlayerID)
+	timeBankMs := a.consumeTimeBank(c.PlayerID)
 	action := string(c.Action)
 	if a.cached.PlayerAllInForActor(c.PlayerID) {
 		action = "all_in"
 	}
 	entry := tablestore.ActionLogEntry{
 		PlayerID: c.PlayerID, ActionID: c.ActionID, Action: action,
-		BettingAction: string(bettingAction), Amount: c.Amount,
+		BettingAction: string(bettingAction), Amount: c.Amount, TimeBankMs: timeBankMs,
 	}
 	if err := a.commit(ctx, c.ActionID, &entry); err != nil {
 		return false, err
@@ -1177,21 +1177,25 @@ func (a *Actor) timeBankFor(playerID string) time.Duration {
 // room clock expired. The total deadline and the durable balance are
 // committed in the same conditionally-written table state, so a losing
 // multi-server attempt is discarded and recomputed after reload.
-func (a *Actor) consumeTimeBank(playerID string) {
+func (a *Actor) consumeTimeBank(playerID string) int64 {
 	if !a.timeBankEnabled || a.turnTimeout < 5*time.Second || playerID == "" || playerID != a.turnDeadlineFor || a.turnBaseDeadline.IsZero() {
-		return
+		return 0
 	}
 	elapsed := timeNowFunc().Sub(a.turnBaseDeadline).Milliseconds()
-	if elapsed > 0 {
-		before := a.cached.TimeBankForActor(playerID)
-		after := a.cached.ConsumeTimeBankForActor(playerID, elapsed)
-		slog.Info("table time bank consumed",
-			"table", a.id, "hand", a.handID, "stage", a.cached.ViewFor("").Stage,
-			"turn_player", a.turnDeadlineFor, "charged_player", playerID,
-			"bank_before_ms", before, "bank_elapsed_ms", elapsed, "bank_after_ms", after,
-			"base_deadline_unix_ms", a.turnBaseDeadline.UnixMilli(),
-			"action_deadline_unix_ms", a.turnDeadline.UnixMilli())
+	if elapsed <= 0 {
+		return 0
 	}
+	before := a.cached.TimeBankForActor(playerID)
+	after := a.cached.ConsumeTimeBankForActor(playerID, elapsed)
+	slog.Info("table time bank consumed",
+		"table", a.id, "hand", a.handID, "stage", a.cached.ViewFor("").Stage,
+		"turn_player", a.turnDeadlineFor, "charged_player", playerID,
+		"bank_before_ms", before, "bank_elapsed_ms", elapsed, "bank_after_ms", after,
+		"base_deadline_unix_ms", a.turnBaseDeadline.UnixMilli(),
+		"action_deadline_unix_ms", a.turnDeadline.UnixMilli())
+	// The bank can run out mid-decision: charge what was actually deducted,
+	// never the raw elapsed time.
+	return before - after
 }
 
 // retryOnConflict runs apply once. If a version conflict is detected (another
@@ -1924,9 +1928,11 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 	// chips until the kick timer, and reconnecting plus "sit in" brings them
 	// straight back.
 	if _, disconnected := a.disconnectedSince[c.PlayerID]; disconnected {
-		a.consumeTimeBank(c.PlayerID)
+		timeBankMs := a.consumeTimeBank(c.PlayerID)
 		a.cached.SitOutForActor(c.PlayerID)
-		if err := a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "disconnect_sit_out"}); err != nil {
+		if err := a.commit(ctx, "", &tablestore.ActionLogEntry{
+			PlayerID: c.PlayerID, Action: "disconnect_sit_out", TimeBankMs: timeBankMs,
+		}); err != nil {
 			// a.cached now holds an uncommitted SitOutForActor mutation
 			// layered on stale state -- discard it by reloading fresh,
 			// authoritative state instead of leaving this fabricated,
