@@ -32,7 +32,11 @@ vi.mock('@/lib/api/social', async importOriginal => ({
 vi.mock('@/lib/api/player', () => ({getMe: api.getMe}));
 vi.mock('@/components/TermsGate', () => ({TermsGate: ({children}: {children: ReactNode}) => children}));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
-vi.mock('next/navigation', () => ({useRouter: () => ({push: vi.fn()})}));
+const searchParams = {value: new URLSearchParams()};
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({push: vi.fn()}),
+  useSearchParams: () => searchParams.value,
+}));
 vi.mock('@/lib/notify', () => ({pushNotification: api.notify}));
 
 function page<T>(items: T[], hasNext = false): Page<T> {
@@ -57,6 +61,7 @@ function renderPeople() {
 describe('people page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    searchParams.value = new URLSearchParams();
     api.getMe.mockResolvedValue({user_id: 'me', friend_code: 'PKR-AAAA-BBBB-CCCC'});
     api.listFriends.mockResolvedValue(page([player({player_id: 'bia', relationship: 'friend', presence: 'online'})]));
     api.listFriendRequests.mockResolvedValue(page([player({player_id: 'caio', name: 'Caio',
@@ -68,6 +73,18 @@ describe('people page', () => {
     api.listSocialInbox.mockResolvedValue(page([inboxEvent()]));
     api.acceptFriendRequest.mockResolvedValue(player({player_id: 'caio', relationship: 'friend'}));
     api.markInboxRead.mockResolvedValue(undefined);
+  });
+
+  test('opens the activity tab when the url asks for it', async () => {
+    searchParams.value = new URLSearchParams('tab=activity');
+    renderPeople();
+    expect(await screen.findByRole('button', {name: 'Atividades'})).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('falls back to friends for an unknown tab', async () => {
+    searchParams.value = new URLSearchParams('tab=garbage');
+    renderPeople();
+    expect(await screen.findByRole('button', {name: 'Amigos'})).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('opens on friends and only loads a tab once it is selected', async () => {
