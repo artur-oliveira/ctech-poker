@@ -331,13 +331,14 @@ func (s *Store) SetTableTheme(ctx context.Context, userID, theme string) error {
 	return nil
 }
 
-func (s *Store) SetShowcase(ctx context.Context, userID string, public, playstylePublic bool, featured []string) error {
+func (s *Store) SetShowcase(ctx context.Context, userID string, public, playstylePublic, tablePublic bool, featured []string) error {
 	if _, err := s.GetOrCreate(ctx, userID); err != nil {
 		return err
 	}
 	ok, err := s.base.UpdateItem(ctx, userID, nil, map[string]any{
 		"showcase_public":       public,
 		"playstyle_public":      playstylePublic,
+		"table_public":          tablePublic,
 		"featured_achievements": featured,
 		"updated_at":            dynamo.NowStr(),
 	})

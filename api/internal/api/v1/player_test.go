@@ -119,10 +119,11 @@ func (s *fakePlayerStore) SetTableTheme(_ context.Context, id string, theme stri
 	s.profile.TableTheme = theme
 	return nil
 }
-func (s *fakePlayerStore) SetShowcase(_ context.Context, id string, public, playstylePublic bool, featured []string) error {
+func (s *fakePlayerStore) SetShowcase(_ context.Context, id string, public, playstylePublic, tablePublic bool, featured []string) error {
 	s.profile.UserID = id
 	s.profile.ShowcasePublic = public
 	s.profile.PlaystylePublic = playstylePublic
+	s.profile.TablePublic = tablePublic
 	s.profile.FeaturedAchievements = featured
 	return nil
 }

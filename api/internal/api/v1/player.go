@@ -27,6 +27,7 @@ type UpdatePlayerRequest struct {
 	WalletMode           *string   `json:"wallet_mode"`
 	DeckVariant          *string   `json:"deck_variant"`
 	ShowcasePublic       *bool     `json:"showcase_public"`
+	TablePublic          *bool     `json:"table_public"`
 	PlaystylePublic      *bool     `json:"playstyle_public"`
 	FeaturedAchievements *[]string `json:"featured_achievements"`
 	FavoriteReactions    *[]string `json:"favorite_reactions"`
@@ -227,13 +228,14 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			return problem.InternalServer("failed to update player profile", c, err).Send(c)
 		}
 	}
-	if req.ShowcasePublic != nil || req.PlaystylePublic != nil || req.FeaturedAchievements != nil {
+	if req.ShowcasePublic != nil || req.PlaystylePublic != nil || req.TablePublic != nil || req.FeaturedAchievements != nil {
 		current, err := h.players.GetOrCreate(c.Context(), userID)
 		if err != nil {
 			return problem.InternalServer("failed to load player profile", c, err).Send(c)
 		}
 		public := current.ShowcasePublic
 		playstylePublic := current.PlaystylePublic
+		tablePublic := current.TablePublic
 		featured := current.FeaturedAchievements
 		if req.ShowcasePublic != nil {
 			public = *req.ShowcasePublic
@@ -241,10 +243,13 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 		if req.PlaystylePublic != nil {
 			playstylePublic = *req.PlaystylePublic
 		}
+		if req.TablePublic != nil {
+			tablePublic = *req.TablePublic
+		}
 		if req.FeaturedAchievements != nil {
 			featured = *req.FeaturedAchievements
 		}
-		if _, err := h.players.SetShowcase(c.Context(), userID, public, playstylePublic, featured); err != nil {
+		if _, err := h.players.SetShowcase(c.Context(), userID, public, playstylePublic, tablePublic, featured); err != nil {
 			if errors.Is(err, player.ErrInvalidShowcase) {
 				return problem.BadRequest("featured_achievements must contain up to three valid unique keys").Send(c)
 			}
@@ -425,6 +430,7 @@ func playerResponse(profile *player.PlayerProfile, avatarBaseURL string) fiber.M
 		"deck_variant":            profile.EffectiveDeckVariant(),
 		"showcase_public":         profile.ShowcasePublic,
 		"playstyle_public":        profile.PlaystylePublic,
+		"table_public":            profile.TablePublic,
 		"featured_achievements":   profile.FeaturedAchievements,
 		"favorite_reactions":      profile.FavoriteReactions,
 		"poker_terms_accepted":    profile.TermsAccepted(),
