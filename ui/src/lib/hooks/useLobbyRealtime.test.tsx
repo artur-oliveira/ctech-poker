@@ -13,6 +13,9 @@ const state = vi.hoisted(() => ({
   invalidateQueries: vi.fn(),
   notify: vi.fn(),
   recover: vi.fn(),
+  push: vi.fn(),
+  acceptInvite: vi.fn(() => Promise.resolve(undefined)),
+  declineInvite: vi.fn(() => Promise.resolve(undefined)),
 }));
 
 vi.mock('@aoctech/ws-client', () => ({
@@ -35,6 +38,11 @@ vi.mock('@/lib/network/NetworkProvider', () => ({
   useApiLiveness: () => ({status: 'available', reason: null, checkedAt: 1}),
 }));
 vi.mock('@/lib/network/liveness', () => ({checkApiLiveness: vi.fn()}));
+vi.mock('next/navigation', () => ({useRouter: () => ({push: state.push})}));
+vi.mock('@/lib/api/social', () => ({
+  acceptTableInvite: state.acceptInvite,
+  declineTableInvite: state.declineInvite,
+}));
 
 describe('useLobbyRealtime', () => {
   beforeEach(() => {
@@ -156,7 +164,35 @@ describe('useLobbyRealtime', () => {
       type: 'social_event', social_event: eventType ? {type: eventType} : undefined
     }));
     expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['social']});
-    expect(state.notify).toHaveBeenCalledWith(message, 'info');
+    expect(state.notify).toHaveBeenCalledWith(message, 'info', expect.any(Array));
+  });
+
+  test('offers accept and decline on a table invite push', async () => {
+    renderHook(() => useLobbyRealtime());
+    act(() => state.options?.onMessage({
+      type: 'social_event',
+      social_event: {event_id: 'ev-1', type: 'table_invite', actor_id: 'p2', room_id: 'room-9'},
+    }));
+    const actions = state.notify.mock.calls.at(-1)![2] as {label: string; run: () => Promise<void>}[];
+    expect(actions.map(action => action.label)).toEqual(['Entrar', 'Recusar']);
+
+    await act(() => actions[0].run());
+    expect(state.acceptInvite).toHaveBeenCalledWith('ev-1');
+    expect(state.push).toHaveBeenCalledWith('/table?id=room-9');
+
+    await act(() => actions[1].run());
+    expect(state.declineInvite).toHaveBeenCalledWith('ev-1');
+  });
+
+  test('sends any other social push to the activity tab', async () => {
+    renderHook(() => useLobbyRealtime());
+    act(() => state.options?.onMessage({
+      type: 'social_event', social_event: {event_id: 'ev-2', type: 'friend_request', actor_id: 'p2'},
+    }));
+    const actions = state.notify.mock.calls.at(-1)![2] as {label: string; run: () => Promise<void>}[];
+    expect(actions.map(action => action.label)).toEqual(['Ver atividades']);
+    await act(() => actions[0].run());
+    expect(state.push).toHaveBeenCalledWith('/people?tab=activity');
   });
 
   test('refreshes only presence-bearing lists on a presence change', () => {

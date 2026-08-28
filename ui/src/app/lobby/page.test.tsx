@@ -12,6 +12,7 @@ vi.mock('@/components/lobby/CreateRoomDialog', () => ({CreateRoomDialog: () => <
 vi.mock('@/components/social/PeopleDrawer', () => ({PeopleDrawer: () => <div>people-drawer</div>}));
 vi.mock('@/components/lobby/OnboardingIntro', () => ({OnboardingIntro: () => <div>onboarding</div>}));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
+vi.mock('@/lib/hooks/useSocialUnread', () => ({useSocialUnread: () => 0}));
 vi.mock('@/components/social/PeopleNavBadge', () => ({PeopleNavBadge: () => <span>people-badge</span>}));
 vi.mock('@/components/table/MockControls', () => ({MockControls: () => <div>mock-controls</div>}));
 
