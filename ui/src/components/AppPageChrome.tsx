@@ -7,6 +7,7 @@ import type {ReactNode} from 'react';
 import {ProfileMenu} from '@/components/lobby/ProfileMenu';
 import {PokerLogo} from '@/components/PokerLogo';
 import {PeopleNavBadge} from '@/components/social/PeopleNavBadge';
+import {useSocialUnread} from '@/lib/hooks/useSocialUnread';
 import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
 
 type MainRoute = 'lobby' | 'people' | 'guide' | 'leaderboard' | 'achievements' | 'hands' | 'store';
@@ -27,6 +28,13 @@ const MAIN_ROUTES: {href: string; label: string; route: MainRoute; icon: LucideI
 // floor, and forcing them all in stopped being a real IA choice once nobody
 // could tell which ones actually mattered.
 const TAB_BAR_PRIMARY: MainRoute[] = ['lobby', 'people', 'store'];
+
+// The badge counts inbox events, and only the Atividades tab marks them read.
+// Landing on Amigos (the page default) left the badge visible with no obvious
+// way to clear it.
+function routeHref(route: MainRoute, href: string, unread: number) {
+  return route === 'people' && unread > 0 ? '/people?tab=activity' : href;
+}
 
 function routeBadgeClass(route: MainRoute) {
   return route === 'store' ? 'app-nav-store-link' : route === 'people' ? 'app-nav-people-link' : undefined;
@@ -55,6 +63,7 @@ export function AppPageNav({authed, current, rewardReady = false}: {
   current?: MainRoute;
   rewardReady?: boolean;
 }) {
+  const unread = useSocialUnread();
   return <>
     <nav className="app-nav shell" aria-label="Navegação principal">
       <Link href="/" className="brand" aria-label="CTech Poker - início">
@@ -65,7 +74,7 @@ export function AppPageNav({authed, current, rewardReady = false}: {
         {/* Hidden below 600px — the tab bar below takes over as the mobile
            destination for these same routes. */}
         <div className="app-nav-routes">
-          {MAIN_ROUTES.map(({href, label, route, icon: Icon}) => <Link key={route} href={href}
+          {MAIN_ROUTES.map(({href, label, route, icon: Icon}) => <Link key={route} href={routeHref(route, href, unread)}
             aria-current={current === route ? 'page' : undefined}
             className={routeBadgeClass(route)}
             title={route === 'store' && rewardReady ? 'Loja - recompensa diária disponível' : label}>
@@ -90,9 +99,10 @@ function AppTabBar({current, rewardReady}: {current?: MainRoute; rewardReady: bo
   // Ranking, Conquistas and Mãos with no visible mark of where you are.
   const activeSecondary = secondary.find(({route}) => route === current);
   const MoreIcon = activeSecondary?.icon ?? MoreHorizontal;
+  const unread = useSocialUnread();
 
   return <nav className="app-tab-bar" aria-label="Navegação rápida">
-    {primary.map(({href, label, route, icon: Icon}) => <Link key={route} href={href}
+    {primary.map(({href, label, route, icon: Icon}) => <Link key={route} href={routeHref(route, href, unread)}
       aria-current={current === route ? 'page' : undefined} className={routeBadgeClass(route)}>
       <span className="app-tab-bar-icon">
         <Icon aria-hidden="true"/>
