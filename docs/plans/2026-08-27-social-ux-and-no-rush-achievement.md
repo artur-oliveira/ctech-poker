@@ -65,7 +65,7 @@
 - Consumes: `SOCIAL_KEYS.summary` and `getSocialSummary` (already exist in `@/lib/social` and `@/lib/api/social`).
 - Produces: `useSocialUnread(): number` from `@/lib/hooks/useSocialUnread`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `ui/src/components/AppPageChrome.test.tsx` (reuse whatever render helper and QueryClient wrapper the file already defines; the snippet below assumes a `renderWithClient(ui, client)` helper — if the file names it differently, use that name):
 
@@ -92,12 +92,12 @@ it('sends the Pessoas link to the plain page with nothing unread', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd ui && npx vitest run src/components/AppPageChrome.test.tsx`
 Expected: FAIL — the href is `/people` in both cases.
 
-- [ ] **Step 3: Create the hook**
+- [x] **Step 3: Create the hook**
 
 `ui/src/lib/hooks/useSocialUnread.ts`:
 
@@ -116,7 +116,7 @@ export function useSocialUnread(): number {
 }
 ```
 
-- [ ] **Step 4: Consume the hook in the badge**
+- [x] **Step 4: Consume the hook in the badge**
 
 Replace the body of `ui/src/components/social/PeopleNavBadge.tsx`:
 
@@ -137,7 +137,7 @@ export function PeopleNavBadge() {
 }
 ```
 
-- [ ] **Step 5: Route the link by the count**
+- [x] **Step 5: Route the link by the count**
 
 In `ui/src/components/AppPageChrome.tsx`, import the hook:
 
@@ -158,12 +158,12 @@ function routeHref(route: MainRoute, href: string, unread: number) {
 
 In `AppPageNav`, add `const unread = useSocialUnread();` at the top of the component and change the desktop link to `href={routeHref(route, href, unread)}`. Do the same inside `AppTabBar` (add its own `const unread = useSocialUnread();` — the query is shared, so this costs no extra request).
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `cd ui && npx vitest run src/components/AppPageChrome.test.tsx src/components/social/socialComponents.test.tsx`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add ui/src/lib/hooks/useSocialUnread.ts ui/src/components/social/PeopleNavBadge.tsx \
@@ -183,7 +183,7 @@ git commit -m "feat(ui): point the Pessoas badge at the activity tab"
 - Consumes: `routeHref` from Task 1 produces `/people?tab=activity`.
 - Produces: `/people?tab=<friends|requests|recent|blocked|activity>` opens that tab.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `ui/src/app/people/page.test.tsx`. The file already mocks `next/navigation`; extend that mock so `useSearchParams` is controllable:
 
@@ -210,12 +210,12 @@ it('falls back to friends for an unknown tab', async () => {
 
 If the existing file already mocks `next/navigation` with a fixed object, merge the `useSearchParams` entry into that mock rather than adding a second `vi.mock` for the same module. If `FilterGroup` renders its options as buttons rather than radios, assert on `aria-pressed`/`aria-current` as that component does — check `ui/src/components/FilterGroup.tsx` and match it.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd ui && npx vitest run src/app/people/page.test.tsx`
 Expected: FAIL — Amigos is selected in both cases.
 
-- [ ] **Step 3: Seed the tab from the query string**
+- [x] **Step 3: Seed the tab from the query string**
 
 In `ui/src/app/people/page.tsx`, import `useSearchParams` from `next/navigation` and replace the tab state:
 
@@ -229,12 +229,12 @@ const [tab, setTab] = useState<PeopleTab>(() => {
 });
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd ui && npx vitest run src/app/people/page.test.tsx`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ui/src/app/people/page.tsx ui/src/app/people/page.test.tsx
@@ -253,7 +253,7 @@ git commit -m "feat(ui): open the people tab named in the query string"
 **Interfaces:**
 - Produces: `NotificationAction = {label: string; run: () => void | Promise<void>}` and `pushNotification(message: string, variant?: NotificationVariant, actions?: NotificationAction[]): void`, both exported from `@/lib/notify`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `ui/src/components/Notifier.test.tsx`:
 
@@ -268,12 +268,12 @@ it('runs a notification action and dismisses the toast', async () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd ui && npx vitest run src/components/Notifier.test.tsx`
 Expected: FAIL — `pushNotification` takes two arguments and no button renders.
 
-- [ ] **Step 3: Add actions to the notification model**
+- [x] **Step 3: Add actions to the notification model**
 
 In `ui/src/lib/notify.ts`:
 
@@ -304,7 +304,7 @@ export function pushNotification(message: string, variant: NotificationVariant =
 }
 ```
 
-- [ ] **Step 4: Render the actions**
+- [x] **Step 4: Render the actions**
 
 In `ui/src/components/Notifier.tsx`, inside the toast, after the `<p>`:
 
@@ -317,7 +317,7 @@ In `ui/src/components/Notifier.tsx`, inside the toast, after the `<p>`:
 </div> : null}
 ```
 
-- [ ] **Step 5: Style the row**
+- [x] **Step 5: Style the row**
 
 In the stylesheet that already defines `.api-toast` (find it with `grep -rn "api-toast" ui/src --include=*.css`), add:
 
@@ -336,12 +336,12 @@ In the stylesheet that already defines `.api-toast` (find it with `grep -rn "api
 }
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes**
 
 Run: `cd ui && npx vitest run src/components/Notifier.test.tsx`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add ui/src/lib/notify.ts ui/src/components/Notifier.tsx ui/src/components/Notifier.test.tsx ui/src/**/*.css
@@ -359,7 +359,7 @@ git commit -m "feat(ui): allow toasts to carry inline actions"
 **Interfaces:**
 - Consumes: `pushNotification(message, variant, actions)` from Task 3; `acceptTableInvite(eventId)` / `declineTableInvite(eventId)` from `@/lib/api/social`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 import {renderHook} from '@testing-library/react';
@@ -394,12 +394,12 @@ it('offers accept and decline on a table invite push', async () => {
 
 If extracting a testable handler is more churn than it is worth in this file, assert the same behavior through the existing lobby page test instead — the requirement is that a `table_invite` push produces a two-action toast whose first action calls `acceptTableInvite` with the event id.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd ui && npx vitest run src/lib/hooks/useLobbyRealtime.test.ts`
 Expected: FAIL — the toast is pushed with two arguments.
 
-- [ ] **Step 3: Build the invite toast**
+- [x] **Step 3: Build the invite toast**
 
 In `ui/src/lib/hooks/useLobbyRealtime.ts`, replace the `social_event` branch:
 
@@ -442,12 +442,12 @@ In `ui/src/lib/hooks/useLobbyRealtime.ts`, replace the `social_event` branch:
 
 Add `import {useRouter} from 'next/navigation';` and `const router = useRouter();` inside the hook (before the `receive` callback), extend `receive`'s dependency array with `router`, and import `acceptTableInvite` / `declineTableInvite` from `@/lib/api/social`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `cd ui && npx vitest run src/lib/hooks src/app/lobby`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ui/src/lib/hooks/useLobbyRealtime.ts ui/src/lib/hooks/useLobbyRealtime.test.ts
@@ -468,7 +468,7 @@ git commit -m "feat(ui): accept or decline a table invite from its toast"
 
 Note the signature change: `SetShowcase` gains a third bool. Update both the service and the store, and every existing caller and test (`grep -rn "SetShowcase" api/`).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `api/internal/player/service_test.go`:
 
@@ -489,12 +489,12 @@ func TestSetShowcaseStoresTablePublic(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd api && go test ./internal/player/ -run TestSetShowcaseStoresTablePublic`
 Expected: FAIL — compile error, `SetShowcase` takes five arguments and `TablePublic` is undefined.
 
-- [ ] **Step 3: Add the field and thread it through**
+- [x] **Step 3: Add the field and thread it through**
 
 `api/internal/player/model.go`, after `PlaystylePublic`:
 
@@ -510,16 +510,16 @@ Expected: FAIL — compile error, `SetShowcase` takes five arguments and `TableP
 
 `api/internal/player/service.go`, in `SetShowcase`: take `tablePublic bool` after `playstylePublic` and pass it to `s.store.SetShowcase`.
 
-- [ ] **Step 4: Wire the HTTP layer**
+- [x] **Step 4: Wire the HTTP layer**
 
 `api/internal/api/v1/player.go`: add `TablePublic *bool \`json:"table_public"\`` to the PATCH request struct next to `PlaystylePublic`; extend the `if` guard to `req.ShowcasePublic != nil || req.PlaystylePublic != nil || req.TablePublic != nil || req.FeaturedAchievements != nil`; read `tablePublic := current.TablePublic`, override when `req.TablePublic != nil`, and pass it to `SetShowcase`. Add `"table_public": profile.TablePublic,` to `playerResponse`.
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `cd api && go build ./... && go test ./internal/player/ ./internal/api/v1/`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/internal/player api/internal/api/v1/player.go
@@ -546,7 +546,7 @@ git commit -m "feat(api): add the table_public profile opt-in"
   - `sessionlog.Store.FindLatestOpenSession(ctx, playerID) (tableID string, err error)` — empty means no open session
 - Consumes: nothing from earlier tasks.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `api/internal/presence/service_test.go` (and change `fakeSessions` to the new shape at the top of the file):
 
@@ -584,12 +584,12 @@ func TestRoomIDSurvivesSetAndReconcile(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd api && go test ./internal/presence/ -run TestRoomIDSurvivesSetAndReconcile`
 Expected: FAIL — compile error, `GetMany` returns `map[string]Status`.
 
-- [ ] **Step 3: Update the model and the interfaces**
+- [x] **Step 3: Update the model and the interfaces**
 
 `api/internal/presence/model.go` — replace the package comment's absolute claim and extend the struct:
 
@@ -625,7 +625,7 @@ type SessionSource interface {
 }
 ```
 
-- [ ] **Step 4: Update the memory store**
+- [x] **Step 4: Update the memory store**
 
 In `memory.go`, change `inTable map[string]bool` to `inTable map[string]string`, and:
 
@@ -662,7 +662,7 @@ func (s *MemoryStore) GetMany(_ context.Context, playerIDs []string) (map[string
 
 Update `NewMemoryStore` to `make(map[string]string)`.
 
-- [ ] **Step 5: Update the Valkey store**
+- [x] **Step 5: Update the Valkey store**
 
 In `valkey.go`, the table key now holds the room id instead of `'1'`:
 
@@ -724,7 +724,7 @@ func (s *ValkeyStore) GetMany(ctx context.Context, playerIDs []string) (map[stri
 
 Add `"strings"` to the imports.
 
-- [ ] **Step 6: Update the service**
+- [x] **Step 6: Update the service**
 
 In `service.go`:
 
@@ -773,7 +773,7 @@ In `Open`, replace the reconciliation block:
 
 In `broadcastCurrent`, read `entries[playerID].Status`.
 
-- [ ] **Step 7: Update sessionlog and buyin**
+- [x] **Step 7: Update sessionlog and buyin**
 
 `api/internal/sessionlog/store.go`:
 
@@ -789,12 +789,12 @@ Inside, return `item.TableID, nil` on the hit, `"", nil` when exhausted, and `""
 
 `api/internal/buyin/service.go`: change both `Reconcile`/`SetInTable` interface declarations (lines ~83 and ~135) to `SetInTable(context.Context, string, string) error`, call `s.presence.SetInTable(ctx, playerID, roomID)` at line ~345, and leave the `Reconcile` call at ~761 as is (it now restores the room id by itself).
 
-- [ ] **Step 8: Fix remaining callers and run the suite**
+- [x] **Step 8: Fix remaining callers and run the suite**
 
 Run: `cd api && go build ./... && go test ./...`
 Expected: PASS. Compile errors point at every other caller of `SetInTable`, `GetMany` or `FindLatestOpenSession` — fix each to the new signature (`presence.Status` reads become `.Status`).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add api/internal/presence api/internal/sessionlog/store.go api/internal/buyin/service.go
@@ -814,7 +814,7 @@ git commit -m "feat(api): carry the room id through presence"
 - Consumes: `presence.PlayerPresence.RoomID` (Task 6), `player.PlayerProfile.TablePublic` (Task 5).
 - Produces: `socialPlayerResponse.RoomID string \`json:"room_id,omitempty"\`` on `GET /v1.0/social/friends`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```go
 func TestFriendsRoomIDGates(t *testing.T) {
@@ -847,12 +847,12 @@ func TestFriendsRoomIDGates(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd api && go test ./internal/api/v1/ -run TestFriendsRoomIDGates`
 Expected: FAIL — `socialPlayerResponse` has no `RoomID`.
 
-- [ ] **Step 3: Accept a room store in the social handlers**
+- [x] **Step 3: Accept a room store in the social handlers**
 
 In `api/internal/api/v1/social.go`, add `rooms *roomstore.Store` to `socialHandlers`, and in `RegisterSocial`'s `extras` switch add:
 
@@ -863,7 +863,7 @@ In `api/internal/api/v1/social.go`, add `rooms *roomstore.Store` to `socialHandl
 
 declaring `var roomsStore *roomstore.Store` alongside the other extras and passing it into the struct literal. In `router.go`, add `rooms` to the `RegisterSocial` call's trailing arguments: `}, presenceSvc, recentSvc, rooms)`.
 
-- [ ] **Step 4: Add the field and the gates**
+- [x] **Step 4: Add the field and the gates**
 
 Add to `socialPlayerResponse`:
 
@@ -940,12 +940,12 @@ and in the per-edge loop:
 		}
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `cd api && go test ./internal/api/v1/`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/internal/api/v1/social.go api/internal/api/v1/router.go api/internal/api/v1/social_test.go
@@ -967,7 +967,7 @@ git commit -m "feat(api): publish a joinable room id for opted-in friends"
 **Interfaces:**
 - Consumes: `room_id` on a friend row (Task 7), `table_public` on the profile (Task 5).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `ui/src/components/social/socialComponents.test.tsx`:
 
@@ -990,12 +990,12 @@ it('does not offer to join without a room id', () => {
 
 Use whatever render helper the file already provides for `PeopleList`; if there is none, render `<PeopleList variant="friends" items={items} actions={{run: vi.fn(), pending: null}}/>` directly.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd ui && npx vitest run src/components/social/socialComponents.test.tsx`
 Expected: FAIL — no such link, and `room_id` is not on the type.
 
-- [ ] **Step 3: Extend the types**
+- [x] **Step 3: Extend the types**
 
 `ui/src/lib/api/social.ts`, in `SocialPlayer`:
 
@@ -1007,7 +1007,7 @@ Expected: FAIL — no such link, and `room_id` is not on the type.
 
 `ui/src/lib/api/player.ts`: add `table_public: boolean;` to `PlayerProfile` and `table_public?: boolean;` to the update body type.
 
-- [ ] **Step 4: Render the join link**
+- [x] **Step 4: Render the join link**
 
 In `ui/src/components/social/PeopleList.tsx`, inside the `friends` variant's action area:
 
@@ -1019,7 +1019,7 @@ In `ui/src/components/social/PeopleList.tsx`, inside the `friends` variant's act
 
 Import `Link` from `next/link` if it is not imported yet.
 
-- [ ] **Step 5: Add the profile toggle**
+- [x] **Step 5: Add the profile toggle**
 
 In `ui/src/components/lobby/ProfileShowcaseDialog.tsx`'s `ShowcaseEditor`, add `const [isTablePublic, setIsTablePublic] = useState(me.table_public);`, include `table_public: isTablePublic` in the `updateMe` payload, add `me.table_public` to the remount `key` on line ~103, and add a privacy row next to the existing ones:
 
@@ -1030,7 +1030,7 @@ In `ui/src/components/lobby/ProfileShowcaseDialog.tsx`'s `ShowcaseEditor`, add `
 </div>
 ```
 
-- [ ] **Step 6: Update the copy that promised the opposite**
+- [x] **Step 6: Update the copy that promised the opposite**
 
 `ui/src/app/people/page.tsx`, the `AppPageHeader` description:
 
@@ -1046,16 +1046,16 @@ description="A amizade é sempre mútua. A presença aparece só entre amigos, e
 // and it travels as a separate room_id field — never inside the status label.
 ```
 
-- [ ] **Step 7: Update the mock runtime**
+- [x] **Step 7: Update the mock runtime**
 
 In `ui/src/dev/mockRuntime.ts`: add `table_public: false` to `mockProfile`, accept it in the PATCH handler (`if (typeof body.table_public === 'boolean') mockProfile.table_public = body.table_public;`), and give one mocked friend a `room_id` so the button can be exercised by hand.
 
-- [ ] **Step 8: Run tests to verify they pass**
+- [x] **Step 8: Run tests to verify they pass**
 
 Run: `cd ui && npx vitest run` and `cd ui && npx tsc --noEmit`
 Expected: PASS
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add ui/src
@@ -1074,7 +1074,7 @@ git commit -m "feat(ui): join a friend at their public table"
 **Interfaces:**
 - Produces: `tablestore.ActionLogEntry.TimeBankMs int64` and `func (a *Actor) consumeTimeBank(playerID string) int64` returning the milliseconds charged (0 when nothing was).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```go
 func TestConsumeTimeBankReturnsChargedMillis(t *testing.T) {
@@ -1096,12 +1096,12 @@ func TestConsumeTimeBankReturnsChargedMillis(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd api && go test ./internal/table/ -run TestConsumeTimeBankReturnsChargedMillis`
 Expected: FAIL — `consumeTimeBank` returns nothing.
 
-- [ ] **Step 3: Return the charge**
+- [x] **Step 3: Return the charge**
 
 `api/internal/table/actor.go`:
 
@@ -1134,7 +1134,7 @@ func (a *Actor) consumeTimeBank(playerID string) int64 {
 }
 ```
 
-- [ ] **Step 4: Persist it on the entry**
+- [x] **Step 4: Persist it on the entry**
 
 `api/internal/tablestore/store.go`, in `ActionLogEntry`:
 
@@ -1157,12 +1157,12 @@ At the disconnect sit-out call site (~line 1927):
 		}); err != nil {
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `cd api && go test ./internal/table/ ./internal/tablestore/`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/internal/table/actor.go api/internal/tablestore/store.go api/internal/table/actor_test.go
@@ -1183,7 +1183,7 @@ git commit -m "feat(api): record consumed time-bank millis on the action log"
 - Consumes: `tablestore.ActionLogEntry.TimeBankMs` (Task 9).
 - Produces: `achievements.KeyNoRush = "no_rush"`; `achievements.HandMetric.TimeBankMs int64`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `api/internal/achievements/service_test.go`:
 
@@ -1223,12 +1223,12 @@ func TestNoRushIgnoresZero(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd api && go test ./internal/achievements/ -run TestNoRush`
 Expected: FAIL — `KeyNoRush` and `HandMetric.TimeBankMs` are undefined.
 
-- [ ] **Step 3: Add the catalog entry**
+- [x] **Step 3: Add the catalog entry**
 
 `api/internal/achievements/catalog.go` — add to the key block:
 
@@ -1245,7 +1245,7 @@ and to `Catalog`:
 		{1, 60_000}, {2, 3_600_000}, {3, 86_400_000}, {4, 604_800_000}, {5, 2_592_000_000}}},
 ```
 
-- [ ] **Step 4: Award it**
+- [x] **Step 4: Award it**
 
 `api/internal/achievements/service.go` — add to `HandMetric`:
 
@@ -1272,7 +1272,7 @@ In `RecordHand`, right after the `handsTotals` loop:
 	}
 ```
 
-- [ ] **Step 5: Sum the milliseconds in the hand hook**
+- [x] **Step 5: Sum the milliseconds in the hand hook**
 
 `api/internal/app/app.go`, in `onHandComplete`, next to the `peeked` loop:
 
@@ -1300,12 +1300,12 @@ In `RecordHand`, right after the `handsTotals` loop:
 			}
 ```
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `cd api && go build ./... && go test ./internal/achievements/ ./internal/app/`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add api/internal/achievements api/internal/app/app.go
@@ -1327,7 +1327,7 @@ git commit -m "feat(api): award the no_rush achievement for consumed time bank"
 - Consumes: the `no_rush` catalog entry from Task 10.
 - Produces: `achievementValueFormat(key: string): (value: number) => string` exported from `@/lib/achievements`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `ui/src/components/achievements/AchievementCard.test.tsx`:
 
@@ -1354,12 +1354,12 @@ it('still renders plain counts for other achievements', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd ui && npx vitest run src/components/achievements/AchievementCard.test.tsx`
 Expected: FAIL — the label reads `Nível 1: 60.000`.
 
-- [ ] **Step 3: Add the label, description and example**
+- [x] **Step 3: Add the label, description and example**
 
 `ui/src/lib/utils.ts`, in `ACHIEVEMENT_LABELS`: `no_rush: "Sem pressa",`
 
@@ -1371,7 +1371,7 @@ Expected: FAIL — the label reads `Nível 1: 60.000`.
 
 and in `EXAMPLES`: `no_rush: ['QS', 'JS'],`
 
-- [ ] **Step 4: Add the formatter**
+- [x] **Step 4: Add the formatter**
 
 Append to `ui/src/lib/achievements.ts`:
 
@@ -1406,7 +1406,7 @@ export function achievementValueFormat(key: string): (value: number) => string {
 }
 ```
 
-- [ ] **Step 5: Route the card's four renders through it**
+- [x] **Step 5: Route the card's four renders through it**
 
 In `ui/src/components/achievements/AchievementCard.tsx`, import `achievementValueFormat`, add `const formatValue = achievementValueFormat(achievement.key);` next to `const example = …`, and replace each `…toLocaleString('pt-BR')` on a **count or threshold** with `formatValue(…)`:
 
@@ -1418,7 +1418,7 @@ In `ui/src/components/achievements/AchievementCard.tsx`, import `achievementValu
 
 Leave `progress.starsFilled`/`achievement.tiers.length` and the progress-bar math alone — they are counts of stars and percentages, not metric values.
 
-- [ ] **Step 6: Fix the "faltam" line**
+- [x] **Step 6: Fix the "faltam" line**
 
 `ui/src/app/achievements/page.tsx` line ~142:
 
@@ -1428,12 +1428,12 @@ Leave `progress.starsFilled`/`achievement.tiers.length` and the progress-bar mat
 
 Import `achievementValueFormat` and use whatever the surrounding code calls the catalog item that `nextMilestone` was built from (check the `nextMilestone` construction around line 60-70 and use its actual property name for the achievement key).
 
-- [ ] **Step 7: Run tests to verify they pass**
+- [x] **Step 7: Run tests to verify they pass**
 
 Run: `cd ui && npx vitest run src/components/achievements src/app/achievements && npx tsc --noEmit`
 Expected: PASS
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add ui/src/lib/utils.ts ui/src/lib/achievements.ts ui/src/components/achievements ui/src/app/achievements
@@ -1448,7 +1448,7 @@ git commit -m "feat(ui): render no_rush thresholds as durations"
 - Modify: `docs/specs/2026-08-27-social-ux-and-no-rush-achievement.md` (status line)
 - Modify: `api/CLAUDE.md` and/or `ui/CLAUDE.md` if either documents presence's room-blindness or the achievement catalog
 
-- [ ] **Step 1: Run everything**
+- [x] **Step 1: Run everything**
 
 Run:
 ```bash
@@ -1457,16 +1457,16 @@ cd ../ui && npx tsc --noEmit && npx vitest run && npm run lint
 ```
 Expected: all PASS
 
-- [ ] **Step 2: Check the docs that state the old guarantee**
+- [x] **Step 2: Check the docs that state the old guarantee**
 
 Run: `grep -rn "nunca revela\|room-blind\|No table or room identifier" --include=*.md --include=*.go .`
 Update every hit that now overstates the guarantee: presence still never reveals a private table, and a public one only with the player's opt-in.
 
-- [ ] **Step 3: Mark the spec implemented**
+- [x] **Step 3: Mark the spec implemented**
 
 Change the spec's Status section to `**Implemented 2026-08-27.**` plus a line for anything that shipped differently from the design.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs api/CLAUDE.md ui/CLAUDE.md

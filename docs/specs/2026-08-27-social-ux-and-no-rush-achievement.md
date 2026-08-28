@@ -2,9 +2,17 @@
 
 ## Status
 
-Design approved 2026-08-27. Not implemented. Four independent deliverables in one spec; they
-share no code and can ship in any order, but §3 is the only one that changes a privacy model
-and should be reviewed on its own terms.
+**Implemented 2026-08-28.** Four independent deliverables in one spec; they share no code, but
+§3 is the only one that changes a privacy model and was reviewed on its own terms.
+
+Shipped as designed. Two notes:
+
+- The `no_rush` progress counter stores raw **milliseconds**, so its stored count grows far
+  faster than any other achievement's. `achievementValueFormat` in the frontend is the only
+  thing that makes those numbers readable — a new duration-metric achievement must be added to
+  its `DURATION_KEYS` set.
+- The actor-level time-bank tests live in `api/internal/table/timebank_test.go` next to the
+  existing ones, not in `actor_test.go`.
 
 ## Motivation
 
