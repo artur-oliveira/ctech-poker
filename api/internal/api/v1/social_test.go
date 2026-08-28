@@ -13,6 +13,8 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/player"
+	"gopkg.aoctech.app/poker/api/internal/presence"
+	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/social"
 )
 
@@ -243,5 +245,75 @@ func TestSocialReadsRejectDelegatedClients(t *testing.T) {
 	response, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/social/friends", nil))
 	if err != nil || response.StatusCode != fiber.StatusForbidden {
 		t.Fatalf("response=%v err=%v", response.StatusCode, err)
+	}
+}
+
+type fakeRoomLookup struct{ room *roomstore.Room }
+
+func (f fakeRoomLookup) Get(context.Context, string) (*roomstore.Room, error) { return f.room, nil }
+
+// TestFriendsRoomIDGates locks every condition that has to hold before a
+// friend's table becomes joinable. Any of them failing must omit room_id
+// entirely — a missing join button is always the safe direction.
+func TestFriendsRoomIDGates(t *testing.T) {
+	joinable := &roomstore.Room{ID: "r1", Visibility: "public", Status: "active", MaxSeats: 6, SeatsTaken: 2}
+	cases := []struct {
+		name        string
+		tablePublic bool
+		room        *roomstore.Room
+		want        string
+	}{
+		{"opted out", false, joinable, ""},
+		{"private room", true, &roomstore.Room{ID: "r1", Visibility: "private", Status: "active", MaxSeats: 6, SeatsTaken: 2}, ""},
+		{"closed room", true, &roomstore.Room{ID: "r1", Visibility: "public", Status: "closed", MaxSeats: 6, SeatsTaken: 2}, ""},
+		{"full room", true, &roomstore.Room{ID: "r1", Visibility: "public", Status: "waiting", MaxSeats: 6, SeatsTaken: 6}, ""},
+		{"missing room", true, nil, ""},
+		{"joinable", true, joinable, "r1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := fiber.New()
+			auth := func(c fiber.Ctx) error {
+				c.Locals(localsUserID, "actor")
+				c.Locals(localsFirstParty, true)
+				return c.Next()
+			}
+			store := newAPISocialStore()
+			store.edges[apiEdgeKey("actor", "friend-1")] = social.Edge{
+				OwnerPlayerID: "actor", OtherPlayerID: "friend-1",
+				Relationship: social.RelationshipFriend, Version: 1,
+			}
+			profiles := &fakePlayerStore{profile: player.PlayerProfile{Name: "Friend", TablePublic: tc.tablePublic}}
+			presenceSvc := presence.NewService(presence.NewMemoryStore(), nil, nil, nil)
+			ctx := context.Background()
+			if err := presenceSvc.Open(ctx, "friend-1", "c1"); err != nil {
+				t.Fatal(err)
+			}
+			if err := presenceSvc.SetInTable(ctx, "friend-1", "r1"); err != nil {
+				t.Fatal(err)
+			}
+			RegisterSocial(app.Group("/v1.0"), auth, social.NewService(store, true), player.NewService(profiles),
+				&config.Config{SocialGraphEnabled: true}, SocialLimiters{}, presenceSvc, fakeRoomLookup{room: tc.room})
+
+			response, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/social/friends", nil))
+			if err != nil || response.StatusCode != fiber.StatusOK {
+				t.Fatalf("response=%v err=%v", response.StatusCode, err)
+			}
+			var body struct {
+				Data []socialPlayerResponse `json:"data"`
+			}
+			if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if len(body.Data) != 1 {
+				t.Fatalf("want one friend, got %d", len(body.Data))
+			}
+			if body.Data[0].RoomID != tc.want {
+				t.Fatalf("want room_id %q, got %q", tc.want, body.Data[0].RoomID)
+			}
+			if body.Data[0].Presence == nil || *body.Data[0].Presence != presence.StatusInTable {
+				t.Fatalf("presence must stay in_table, got %v", body.Data[0].Presence)
+			}
+		})
 	}
 }

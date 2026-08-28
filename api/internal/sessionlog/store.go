@@ -198,24 +198,26 @@ func (s *Store) HasSessionAtTable(ctx context.Context, playerID, tableID string)
 	}
 }
 
-// FindLatestOpenSession reports whether the player has any unclosed table
-// session. It is used to reconcile friend-visible in_table presence after a
-// process restart or a WebSocket reconnect, without exposing the table ID.
-func (s *Store) FindLatestOpenSession(ctx context.Context, playerID string) (bool, error) {
+// FindLatestOpenSession returns the table id of the player's newest unclosed
+// session, or "" when there is none. It reconciles friend-visible in_table
+// presence after a process restart or a WebSocket reconnect; whether that id
+// is ever published to anyone is decided by api/v1/social.go's gates, never
+// here.
+func (s *Store) FindLatestOpenSession(ctx context.Context, playerID string) (string, error) {
 	var startKey map[string]dynamotypes.AttributeValue
 	for {
 		res, err := s.sessions.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: 50, ScanIndexForward: false, ExclusiveStartKey: startKey})
 		if err != nil {
-			return false, err
+			return "", err
 		}
 		for _, raw := range res.Items {
 			item, decodeErr := dynamo.Decode[SessionItem](raw)
 			if decodeErr == nil && item != nil && item.EndedAt == 0 {
-				return true, nil
+				return item.TableID, nil
 			}
 		}
 		if len(res.LastEvaluatedKey) == 0 {
-			return false, nil
+			return "", nil
 		}
 		startKey = res.LastEvaluatedKey
 	}

@@ -79,7 +79,7 @@ type Service struct {
 		Get(context.Context, string, string) (pokerstats.Stats, error)
 	}
 	presence interface {
-		SetInTable(context.Context, string, bool) error
+		SetInTable(context.Context, string, string) error
 		Reconcile(context.Context, string) error
 	}
 }
@@ -131,7 +131,7 @@ func (s *Service) WithPokerStats(stats interface {
 }
 
 func (s *Service) WithPresence(presence interface {
-	SetInTable(context.Context, string, bool) error
+	SetInTable(context.Context, string, string) error
 	Reconcile(context.Context, string) error
 }) *Service {
 	s.presence = presence
@@ -342,7 +342,7 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 		}
 	}
 	if s.presence != nil {
-		if err := s.presence.SetInTable(ctx, playerID, true); err != nil {
+		if err := s.presence.SetInTable(ctx, playerID, roomID); err != nil {
 			slog.Warn("presence: mark player in table failed", "player", playerID, "table", roomID, "err", err)
 		}
 	}

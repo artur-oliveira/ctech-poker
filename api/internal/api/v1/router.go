@@ -132,6 +132,6 @@ func Register(
 		RequestIP:       friendRequestIPLimiter,
 		InviteSender:    inviteSenderLimiter,
 		InviteRecipient: inviteRecipientLimiter,
-	}, presenceSvc, recentSvc)
+	}, presenceSvc, recentSvc, rooms)
 	RegisterReports(router, auth, reportSvc, cfg, ReportLimiters{Player: reportPlayerLimiter, IP: reportIPLimiter})
 }
