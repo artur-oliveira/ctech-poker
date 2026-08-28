@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import {Check, RotateCw, UserPlus, X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
@@ -20,8 +21,10 @@ const SURFACE: Record<PeopleListVariant, ReportSurface> = {
 };
 
 /** Dense list, never a card grid: these are people to act on, and the row is
- * the unit of action. Presence is the only status shown for a friend — never
- * the table, room code or stakes they are sitting at. */
+ * the unit of action. Presence is the only status shown for a friend; a table
+ * appears as a join link only when the server published a room_id, which it
+ * does exclusively for a friend who opted in and is at a joinable public
+ * table — never a private one, and never the room code or stakes. */
 export function PeopleList({
   variant, items, isLoading = false, isError = false, isStale = false, onRetryAction,
   emptyTitle, emptyHint, hasNext = false, loadingMore = false, onMoreAction, actions, onInviteAction, invitedIds
@@ -94,6 +97,8 @@ export function PeopleList({
                       onClick={() => void actions.run('request', player.player_id)}>
                 <UserPlus aria-hidden="true"/> Adicionar
               </Button>}
+            {variant === 'friends' && player.room_id &&
+              <Link href={`/table?id=${player.room_id}`} className="social-actions-item">Entrar na mesa</Link>}
             {variant === 'friends' && onInviteAction &&
               <Button type="button" variant="outline" disabled={busy || invitedIds?.includes(player.player_id)}
                       onClick={() => onInviteAction(player)}>

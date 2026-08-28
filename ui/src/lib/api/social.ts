@@ -20,6 +20,9 @@ export interface SocialPlayer {
   presence?: PresenceStatus;
   last_played_at?: number;
   hands_together?: number;
+  /** Present only for a friend who opted in and is sitting at a joinable
+   * public table. The join flow revalidates everything; this is a shortcut. */
+  room_id?: string;
 }
 
 export interface SocialInboxEvent {

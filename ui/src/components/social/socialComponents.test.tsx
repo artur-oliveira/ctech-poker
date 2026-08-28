@@ -111,6 +111,20 @@ describe('PeopleList', () => {
     expect(actions.run).toHaveBeenCalledWith('request', 'p1');
   });
 
+  test('offers to join a friend at a joinable public table', () => {
+    renderWithClient(
+      <PeopleList variant="friends" emptyTitle="vazio" actions={actionState()}
+                  items={[player({relationship: 'friend', presence: 'in_table', room_id: 'room-9'})]}/>);
+    expect(screen.getByRole('link', {name: 'Entrar na mesa'})).toHaveAttribute('href', '/table?id=room-9');
+  });
+
+  test('offers no join target without a room id', () => {
+    renderWithClient(
+      <PeopleList variant="friends" emptyTitle="vazio" actions={actionState()}
+                  items={[player({relationship: 'friend', presence: 'in_table'})]}/>);
+    expect(screen.queryByRole('link', {name: 'Entrar na mesa'})).not.toBeInTheDocument();
+  });
+
   test('invites a friend once, warns when stale and pages forward', async () => {
     const invite = vi.fn();
     const loadMore = vi.fn();
