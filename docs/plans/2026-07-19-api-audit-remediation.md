@@ -61,7 +61,7 @@ died.
    passes empty, derive a *stable* default `roomID#playerID#buyin` (one buy-in per seat; repeats dedupe — matches "no
    repeated rebuys"). The UI supplies a fresh nonce per genuine rebuy.
 3. `buyin.CashOut`: key `fmt.Sprintf("%s#%s#cashout", roomID, playerID)` (one cash-out per seat) — stable, retry-safe.
-4. Drop the `uuid.NewString()` calls in both.
+4. Drop the `uuid.New().String()` calls in both.
 5. `join` handler: pass `req.IdempotencyKey` through. **Verify:** unit test — call `BuyIn` twice with same `idemKey`;
    assert wallet `Debit` invoked once (wallet client mock counts calls). `go test ./api/internal/buyin/...`.
 

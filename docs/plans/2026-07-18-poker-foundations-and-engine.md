@@ -14,13 +14,13 @@ copied from throughout this plan). The rules engine is a pure-logic package tree
 dependency on HTTP/WebSocket/DB — it takes actions in, returns state out — so it can be built and correctness-tested in
 complete isolation before Phase 2 wires it to a live table server.
 
-**Tech Stack:** Go 1.26, Fiber v3, `go.uber.org/fx`, `gopkg.aoctech.app/api-commons` (`cache`, `ws`),
+**Tech Stack:** Go 1.27, Fiber v3, `go.uber.org/fx`, `gopkg.aoctech.app/api-commons` (`cache`, `ws`),
 `github.com/valkey-io/valkey-go`, AWS CDK (TypeScript) importing `@aoctech/cdk`, GitHub Actions.
 
 ## Global Constraints
 
 - Go module path: `gopkg.aoctech.app/poker/api` (matches `wallet/api`, `dfe/api`, `account/api` naming).
-- Go version: `1.26` (matches `golang:1.26-alpine` builder image used company-wide).
+- Go version: `1.27` (matches `golang:1.27-alpine` builder image used company-wide).
 - Deployed binary **must be named `app`** — CDK userdata on the shared `PrivateIpv4Ec2Service` construct hardcodes
   `/opt/app/current/app`.
 - Server framework: Fiber v3 (`github.com/gofiber/fiber/v3`), DI: `go.uber.org/fx`, logging: `log/slog` with
@@ -296,7 +296,7 @@ func main() {
 `api/Dockerfile`:
 
 ```dockerfile
-FROM golang:1.26-alpine AS builder
+FROM golang:1.27-alpine AS builder
 
 WORKDIR /app
 

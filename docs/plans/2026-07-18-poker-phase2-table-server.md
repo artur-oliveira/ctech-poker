@@ -14,7 +14,7 @@ snapshot)`. Clients reach a table over a WebSocket gateway; a connection that la
 the table's lease is transparently proxied — not redirected — to the instance that does, over the private VPC network
 (both instances sit in the same security group; ALB only ever sees the client-facing hop).
 
-**Tech Stack:** Go 1.26, Fiber v3, `github.com/fasthttp/websocket`, `gopkg.aoctech.app/api-commons/ws` (Redis Pub/Sub
+**Tech Stack:** Go 1.27, Fiber v3, `github.com/fasthttp/websocket`, `gopkg.aoctech.app/api-commons/ws` (Redis Pub/Sub
 fan-out registry), `gopkg.aoctech.app/api-commons/dynamo` (DynamoDB helpers), the existing
 `internal/tablelease` lease service, AWS CDK.
 
@@ -1511,7 +1511,7 @@ import (
 
 	fws "github.com/fasthttp/websocket"
 	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
+	"uuid"
 	"github.com/valyala/fasthttp"
 	"gopkg.aoctech.app/api-commons/jwtverify"
 	"gopkg.aoctech.app/api-commons/ws"
@@ -1621,7 +1621,7 @@ func RegisterTableWS(router fiber.Router, verifier *jwtverify.Verifier, manager 
 				}
 			}
 
-			connID := uuid.NewString()
+			connID := uuid.New().String()
 			reg.Register(tableID, connID, &wsConnAdapter{conn: conn})
 			defer reg.Unregister(tableID, connID)
 

@@ -39,7 +39,7 @@ table's lease trusts its own in-memory `hand.Table` between actions instead of r
 without the lease always re-reads before validating. A bug in `tablelease` is a performance regression, never a
 correctness bug — nothing in this plan may treat lease possession as permission to skip the conditional write itself.
 
-**Tech Stack:** Go 1.26, Fiber v3, `github.com/fasthttp/websocket`, `gopkg.aoctech.app/api-commons/ws` (Redis Pub/Sub
+**Tech Stack:** Go 1.27, Fiber v3, `github.com/fasthttp/websocket`, `gopkg.aoctech.app/api-commons/ws` (Redis Pub/Sub
 fan-out registry), `gopkg.aoctech.app/api-commons/dynamo` (DynamoDB helpers), the existing
 `internal/tablelease` service (now advisory-only), AWS CDK.
 

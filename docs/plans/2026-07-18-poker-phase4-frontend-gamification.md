@@ -14,7 +14,7 @@ a Next.js SPA mirroring `ctech-wallet/ui`'s exact stack and deploy shape (static
 `@aoctech/auth-client` for OAuth and `@aoctech/ws-client` for the table WebSocket — no new frontend infra pattern, only
 a new consumer of patterns that already exist and are proven in production.
 
-**Tech Stack:** Go 1.26 (backend gamification), Next.js 16 + React 19 + TypeScript + Tailwind + ShadCN (frontend,
+**Tech Stack:** Go 1.27 (backend gamification), Next.js 16 + React 19 + TypeScript + Tailwind + ShadCN (frontend,
 matching `ctech-wallet/ui`'s `package.json` exactly), `@aoctech/auth-client`, `@aoctech/ws-client`,
 `@tanstack/react-query`, AWS CDK (S3 + CloudFront, matching `ctech-wallet/cdk/lib/frontend-stack.ts`).
 

@@ -29,9 +29,10 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 	"gopkg.aoctech.app/poker/api/internal/wsdrain"
 
+	"uuid"
+
 	fws "github.com/fasthttp/websocket"
 	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
 	"github.com/valyala/fasthttp"
 
 	goproto "google.golang.org/protobuf/proto"
@@ -358,7 +359,7 @@ func RegisterTableWS(
 				actor.SetEquityEnabledForActor(room.EquityDisplayEnabled)
 				actor.SetRunItTwiceEnabledForActor(room.RunItTwiceEnabled)
 			}
-			connID := uuid.NewString()
+			connID := uuid.New().String()
 			connectionRegistered := false
 
 			// dispatch sends a command to the table actor, re-resolving a live
@@ -511,7 +512,7 @@ func RegisterTableWS(
 						// Ready/show/post were historically sent without an ID.
 						// Generate one during the rolling-deploy window; new
 						// clients always provide their own correlation ID.
-						m.ActionId = uuid.NewString()
+						m.ActionId = uuid.New().String()
 					}
 				}
 				ack := func() {
@@ -919,7 +920,7 @@ func RegisterGeneralWS(
 				return
 			}
 			playerID := claims.Sub
-			connID := uuid.NewString()
+			connID := uuid.New().String()
 			if presenceSvc != nil {
 				if err := presenceSvc.Open(ctx, playerID, connID); err != nil {
 					slog.Warn("presence: websocket open failed", "player", playerID, "err", err)
