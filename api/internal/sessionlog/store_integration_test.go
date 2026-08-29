@@ -38,14 +38,14 @@ func TestFindLatestOpenSessionReconcilesAcrossTables(t *testing.T) {
 		t.Fatal(err)
 	}
 	open, err := store.FindLatestOpenSession(ctx, playerID)
-	if err != nil || open {
+	if err != nil || open != "" {
 		t.Fatalf("open=%v err=%v", open, err)
 	}
 	if err := store.RecordSession(ctx, SessionItem{PK: playerID, SK: "2", TableID: "open", JoinedAt: 3}); err != nil {
 		t.Fatal(err)
 	}
 	open, err = store.FindLatestOpenSession(ctx, playerID)
-	if err != nil || !open {
+	if err != nil || open == "" {
 		t.Fatalf("open=%v err=%v", open, err)
 	}
 }
