@@ -3,8 +3,9 @@ package v1
 import (
 	"errors"
 
+	"uuid"
+
 	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
 	"gopkg.aoctech.app/poker/api/internal/cosmeticpurchase"
 	"gopkg.aoctech.app/poker/api/internal/cosmetics"
 	"gopkg.aoctech.app/poker/api/internal/problem"
@@ -66,7 +67,7 @@ func (h *cosmeticPurchaseHandlers) create(c fiber.Ctx) error {
 	}
 	idemKey := req.IdempotencyKey
 	if idemKey == "" {
-		idemKey = uuid.NewString()
+		idemKey = uuid.New().String()
 	}
 	userID := c.Locals(localsUserID).(string)
 	switch req.Method {
@@ -116,7 +117,7 @@ func (h *cosmeticPurchaseHandlers) refund(c fiber.Ctx) error {
 	}
 	idemKey := req.IdempotencyKey
 	if idemKey == "" {
-		idemKey = uuid.NewString()
+		idemKey = uuid.New().String()
 	}
 	userID := c.Locals(localsUserID).(string)
 	rec, err := h.svc.Refund(c.Context(), userID, c.Params("id"), idemKey)

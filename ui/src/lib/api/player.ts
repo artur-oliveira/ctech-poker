@@ -23,6 +23,7 @@ export interface PlayerProfile {
   deck_variant?: DeckVariantId;
   table_theme?: TableThemeId;
   showcase_public: boolean;
+  table_public: boolean;
   playstyle_public: boolean;
   featured_achievements?: string[];
   favorite_reactions?: string[];
@@ -43,6 +44,7 @@ export async function updateMe(input: {
   deck_variant?: DeckVariantId;
   table_theme?: TableThemeId;
   showcase_public?: boolean;
+  table_public?: boolean;
   playstyle_public?: boolean;
   featured_achievements?: string[];
   favorite_reactions?: string[];

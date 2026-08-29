@@ -1,15 +1,26 @@
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {render, screen, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {BookOpen} from 'lucide-react';
+import type {ReactNode} from 'react';
 import {describe, expect, test, vi} from 'vitest';
+import {SOCIAL_KEYS} from '@/lib/social';
 import {AppPageHeader, AppPageNav} from './AppPageChrome';
+
+// AppPageNav reads the unread social count to decide where the Pessoas link
+// points, so every nav render needs a query client.
+function renderNav(ui: ReactNode, unreadCount = 0) {
+  const client = new QueryClient({defaultOptions: {queries: {retry: false}}});
+  client.setQueryData(SOCIAL_KEYS.summary, {unread_count: unreadCount});
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
 vi.mock('@/components/social/PeopleNavBadge', () => ({PeopleNavBadge: () => <span>people-badge</span>}));
 
 describe('shared app page chrome', () => {
   test('keeps Lobby in authenticated primary navigation and marks it as current', () => {
-    render(<AppPageNav authed current="lobby"/>);
+    renderNav(<AppPageNav authed current="lobby"/>);
     const nav = screen.getByRole('navigation', {name: 'Navegação principal'});
     const lobby = within(nav).getByRole('link', {name: 'Lobby'});
 
@@ -21,12 +32,26 @@ describe('shared app page chrome', () => {
   });
 
   test('omits Lobby and private navigation for anonymous visitors', () => {
-    render(<AppPageNav authed={false}/>);
+    renderNav(<AppPageNav authed={false}/>);
     const nav = screen.getByRole('navigation', {name: 'Navegação principal'});
 
     expect(within(nav).queryByRole('link', {name: 'Lobby'})).not.toBeInTheDocument();
     expect(within(nav).queryByText('profile-menu')).not.toBeInTheDocument();
     expect(within(nav).getByRole('link', {name: 'Voltar'})).toHaveAttribute('href', '/');
+  });
+
+  test('sends the Pessoas link to the activity tab while there are unread events', () => {
+    renderNav(<AppPageNav authed current="lobby"/>, 2);
+    for (const link of screen.getAllByRole('link', {name: /Pessoas/})) {
+      expect(link).toHaveAttribute('href', '/people?tab=activity');
+    }
+  });
+
+  test('sends the Pessoas link to the plain page with nothing unread', () => {
+    renderNav(<AppPageNav authed current="lobby"/>, 0);
+    for (const link of screen.getAllByRole('link', {name: /Pessoas/})) {
+      expect(link).toHaveAttribute('href', '/people');
+    }
   });
 
   test('keeps route navigation out of page headers', () => {
@@ -46,7 +71,7 @@ describe('shared app page chrome', () => {
 
   describe('mobile tab bar', () => {
     test('surfaces Lobby, Pessoas and Loja directly, marking the current one', () => {
-      render(<AppPageNav authed current="people"/>);
+      renderNav(<AppPageNav authed current="people"/>);
       const tabBar = screen.getByRole('navigation', {name: 'Navegação rápida'});
 
       expect(within(tabBar).getByRole('link', {name: /Lobby/})).toHaveAttribute('href', '/lobby');
@@ -58,7 +83,7 @@ describe('shared app page chrome', () => {
     });
 
     test('tucks Guia, Ranking, Conquistas and Mãos behind "Mais"', async () => {
-      render(<AppPageNav authed current="leaderboard"/>);
+      renderNav(<AppPageNav authed current="leaderboard"/>);
       const tabBar = screen.getByRole('navigation', {name: 'Navegação rápida'});
 
       expect(within(tabBar).queryByRole('link', {name: /Guia/})).not.toBeInTheDocument();
@@ -80,7 +105,7 @@ describe('shared app page chrome', () => {
     });
 
     test('does not mark "Mais" active for a primary route, and shows the reward dot on Loja', () => {
-      render(<AppPageNav authed current="lobby" rewardReady/>);
+      renderNav(<AppPageNav authed current="lobby" rewardReady/>);
       const tabBar = screen.getByRole('navigation', {name: 'Navegação rápida'});
 
       const more = within(tabBar).getByRole('button', {name: 'Mais destinos'});
@@ -91,7 +116,7 @@ describe('shared app page chrome', () => {
     });
 
     test('is not rendered for anonymous visitors', () => {
-      render(<AppPageNav authed={false}/>);
+      renderNav(<AppPageNav authed={false}/>);
       expect(screen.queryByRole('navigation', {name: 'Navegação rápida'})).not.toBeInTheDocument();
     });
   });

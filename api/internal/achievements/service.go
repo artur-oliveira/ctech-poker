@@ -100,6 +100,11 @@ type HandMetric struct {
 	// point this hand (client-reported "peek_cards" action; see PeekCardsCmd
 	// in api/internal/table). Gates KeyAllInBlind/KeyBlindMagic below.
 	Peeked bool
+	// TimeBankMs is this player's time-bank milliseconds consumed during the
+	// hand, summed from the action log by app.go's onHandComplete. Drives
+	// KeyNoRush below. Zero means either "decided in time" or "no action log
+	// to read", and both correctly award nothing.
+	TimeBankMs int64
 }
 
 type TierUnlock struct {
@@ -158,6 +163,16 @@ func (s *Service) RecordHand(ctx context.Context, tableID, mode string, outcome 
 		handsTotals[id] = current
 		if stars, crossed := TierCrossed(KeyHandsPlayed, previous, current); crossed {
 			unlocks = append(unlocks, TierUnlock{PlayerID: id, Key: KeyHandsPlayed, Stars: stars})
+		}
+	}
+	if len(metricSets) > 0 {
+		for _, metric := range metricSets[0] {
+			if metric.TimeBankMs <= 0 {
+				continue
+			}
+			if err := bumpBy(metric.PlayerID, KeyNoRush, int(metric.TimeBankMs)); err != nil {
+				return nil, err
+			}
 		}
 	}
 	winnerSet := stringSet(outcome.Winners)

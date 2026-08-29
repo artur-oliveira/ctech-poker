@@ -16,7 +16,7 @@ type FriendSource interface {
 }
 
 type SessionSource interface {
-	FindLatestOpenSession(ctx context.Context, playerID string) (bool, error)
+	FindLatestOpenSession(ctx context.Context, playerID string) (string, error)
 }
 
 type NotifyFunc func(context.Context, string, string, Status)
@@ -39,9 +39,9 @@ func (s *Service) Open(ctx context.Context, playerID, connectionID string) error
 		return err
 	}
 	if s.sessions != nil {
-		if inTable, sessionErr := s.sessions.FindLatestOpenSession(ctx, playerID); sessionErr != nil {
+		if roomID, sessionErr := s.sessions.FindLatestOpenSession(ctx, playerID); sessionErr != nil {
 			slog.Warn("presence: session reconciliation failed", "player", playerID, "err", sessionErr)
-		} else if _, setErr := s.store.SetInTable(ctx, playerID, inTable); setErr != nil {
+		} else if _, setErr := s.store.SetInTable(ctx, playerID, roomID); setErr != nil {
 			return setErr
 		}
 	}
@@ -67,15 +67,15 @@ func (s *Service) Close(ctx context.Context, playerID, connectionID string) erro
 	return err
 }
 
-func (s *Service) SetInTable(ctx context.Context, playerID string, inTable bool) error {
-	changed, err := s.store.SetInTable(ctx, playerID, inTable)
+func (s *Service) SetInTable(ctx context.Context, playerID, roomID string) error {
+	changed, err := s.store.SetInTable(ctx, playerID, roomID)
 	if err == nil && changed {
-		statuses, statusErr := s.store.GetMany(ctx, []string{playerID})
+		entries, statusErr := s.store.GetMany(ctx, []string{playerID})
 		if statusErr != nil {
 			return statusErr
 		}
-		if statuses[playerID] != StatusOffline {
-			s.broadcast(ctx, playerID, statuses[playerID])
+		if entries[playerID].Status != StatusOffline {
+			s.broadcast(ctx, playerID, entries[playerID].Status)
 		}
 	}
 	return err
@@ -85,21 +85,21 @@ func (s *Service) Reconcile(ctx context.Context, playerID string) error {
 	if s.sessions == nil {
 		return nil
 	}
-	inTable, err := s.sessions.FindLatestOpenSession(ctx, playerID)
+	roomID, err := s.sessions.FindLatestOpenSession(ctx, playerID)
 	if err != nil {
 		return err
 	}
-	return s.SetInTable(ctx, playerID, inTable)
+	return s.SetInTable(ctx, playerID, roomID)
 }
 
-func (s *Service) GetMany(ctx context.Context, playerIDs []string) (map[string]Status, error) {
+func (s *Service) GetMany(ctx context.Context, playerIDs []string) (map[string]PlayerPresence, error) {
 	return s.store.GetMany(ctx, playerIDs)
 }
 
 func (s *Service) broadcastCurrent(ctx context.Context, playerID string) {
-	statuses, err := s.store.GetMany(ctx, []string{playerID})
+	entries, err := s.store.GetMany(ctx, []string{playerID})
 	if err == nil {
-		s.broadcast(ctx, playerID, statuses[playerID])
+		s.broadcast(ctx, playerID, entries[playerID].Status)
 	}
 }
 

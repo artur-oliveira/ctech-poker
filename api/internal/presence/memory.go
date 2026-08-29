@@ -11,12 +11,12 @@ import (
 type MemoryStore struct {
 	mu          sync.Mutex
 	connections map[string]map[string]time.Time
-	inTable     map[string]bool
+	inTable     map[string]string
 	now         func() time.Time
 }
 
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{connections: make(map[string]map[string]time.Time), inTable: make(map[string]bool), now: time.Now}
+	return &MemoryStore{connections: make(map[string]map[string]time.Time), inTable: make(map[string]string), now: time.Now}
 }
 
 func (s *MemoryStore) activeLocked(playerID string) int {
@@ -56,31 +56,31 @@ func (s *MemoryStore) Close(_ context.Context, playerID, connectionID string) (b
 	return existed && s.activeLocked(playerID) == 0, nil
 }
 
-func (s *MemoryStore) SetInTable(_ context.Context, playerID string, inTable bool) (bool, error) {
+func (s *MemoryStore) SetInTable(_ context.Context, playerID, roomID string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	changed := s.inTable[playerID] != inTable
-	if inTable {
-		s.inTable[playerID] = true
-	} else {
+	changed := s.inTable[playerID] != roomID
+	if roomID == "" {
 		delete(s.inTable, playerID)
+	} else {
+		s.inTable[playerID] = roomID
 	}
 	return changed, nil
 }
 
-func (s *MemoryStore) GetMany(_ context.Context, playerIDs []string) (map[string]Status, error) {
+func (s *MemoryStore) GetMany(_ context.Context, playerIDs []string) (map[string]PlayerPresence, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	result := make(map[string]Status, len(playerIDs))
+	result := make(map[string]PlayerPresence, len(playerIDs))
 	for _, playerID := range playerIDs {
-		status := StatusOffline
+		entry := PlayerPresence{PlayerID: playerID, Status: StatusOffline}
 		if s.activeLocked(playerID) > 0 {
-			status = StatusOnline
-			if s.inTable[playerID] {
-				status = StatusInTable
+			entry.Status = StatusOnline
+			if room := s.inTable[playerID]; room != "" {
+				entry.Status, entry.RoomID = StatusInTable, room
 			}
 		}
-		result[playerID] = status
+		result[playerID] = entry
 	}
 	return result, nil
 }

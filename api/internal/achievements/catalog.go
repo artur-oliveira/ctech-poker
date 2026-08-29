@@ -51,6 +51,7 @@ const (
 	KeySamePocketPairStreak      = "same_pocket_pair_streak"
 	KeyAllInBlind                = "all_in_blind"
 	KeyBlindMagic                = "blind_magic"
+	KeyNoRush                    = "no_rush"
 )
 
 func KeyWinByCategory(category string) string { return fmt.Sprintf("win_category_%s", category) }
@@ -148,6 +149,10 @@ var Catalog = []Achievement{
 	{Key: KeyWonWithNuts, Metric: "hand_won_with_nuts", Tiers: []Tier{{1, 1}, {2, 5}, {3, 25}, {4, 100}, {5, 500}}},
 	{Key: KeySamePocketPairStreak, Metric: "same_pocket_pair_win_streak", Tiers: []Tier{{1, 3}}, Secret: true},
 	{Key: KeyAllInBlind, Metric: "went_all_in_without_peeking", Tiers: []Tier{{1, 1}, {2, 5}, {3, 25}, {4, 100}, {5, 500}}},
+	// Thresholds are MILLISECONDS of consumed time bank: 1 minute, 1 hour,
+	// 1 day, 1 week, 30 days. The frontend renders them as those durations.
+	{Key: KeyNoRush, Metric: "time_bank_ms_consumed", Tiers: []Tier{
+		{1, 60_000}, {2, 3_600_000}, {3, 86_400_000}, {4, 604_800_000}, {5, 2_592_000_000}}},
 	{Key: KeyBlindMagic, Metric: "hand_won_without_peeking", Tiers: []Tier{{1, 1}, {2, 5}, {3, 25}, {4, 100}, {5, 500}}},
 	{Key: KeyWinByCategory("royal_flush"), Metric: "hand_won_with_category", Tiers: []Tier{{1, 1}, {2, 2}, {3, 3}, {4, 5}, {5, 10}}},
 	{Key: KeyWinByCategory("straight_flush"), Metric: "hand_won_with_category", Tiers: []Tier{{1, 1}, {2, 5}, {3, 10}, {4, 25}, {5, 50}}},

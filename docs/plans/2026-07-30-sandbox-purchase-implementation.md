@@ -1355,7 +1355,7 @@ import (
 	"errors"
 
 	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
+	"uuid"
 	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/sandboxpurchase"
 )
@@ -1401,7 +1401,7 @@ func (h *sandboxPurchaseHandlers) create(c fiber.Ctx) error {
 	}
 	idemKey := req.IdempotencyKey
 	if idemKey == "" {
-		idemKey = uuid.NewString()
+		idemKey = uuid.New().String()
 	}
 	userID := c.Locals(localsUserID).(string)
 	rec, err := h.svc.Create(c.Context(), userID, req.SKU, idemKey)
@@ -1439,7 +1439,7 @@ func (h *sandboxPurchaseHandlers) refund(c fiber.Ctx) error {
 	}
 	idemKey := req.IdempotencyKey
 	if idemKey == "" {
-		idemKey = uuid.NewString()
+		idemKey = uuid.New().String()
 	}
 	userID := c.Locals(localsUserID).(string)
 	rec, err := h.svc.Refund(c.Context(), userID, c.Params("id"), idemKey)

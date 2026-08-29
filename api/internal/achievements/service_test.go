@@ -332,3 +332,45 @@ func TestSamePocketPairStreakFallsBackToLocalMemory(t *testing.T) {
 		t.Fatalf("streak = %d, want 2", got)
 	}
 }
+
+func TestNoRushAwardsOnFirstMinute(t *testing.T) {
+	store := &memStore{progress: map[string]map[string]int{}}
+	service := NewServiceWithStore(store)
+	outcome := hand.HandOutcome{Participants: []string{"p1"}}
+	unlocks, err := service.RecordHand(context.Background(), "table-1", "sandbox", outcome,
+		[]HandMetric{{PlayerID: "p1", TimeBankMs: 60_000}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stars := 0
+	for _, unlock := range unlocks {
+		if unlock.Key == KeyNoRush {
+			stars = unlock.Stars
+		}
+	}
+	if stars != 1 {
+		t.Fatalf("want one star for no_rush, got %d", stars)
+	}
+	if got := store.progress["sandbox#p1"][KeyNoRush]; got != 60_000 {
+		t.Fatalf("progress=%d, want 60000", got)
+	}
+}
+
+func TestNoRushIgnoresZero(t *testing.T) {
+	store := &memStore{progress: map[string]map[string]int{}}
+	service := NewServiceWithStore(store)
+	outcome := hand.HandOutcome{Participants: []string{"p1"}}
+	unlocks, err := service.RecordHand(context.Background(), "table-1", "sandbox", outcome,
+		[]HandMetric{{PlayerID: "p1", TimeBankMs: 0}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, unlock := range unlocks {
+		if unlock.Key == KeyNoRush {
+			t.Fatal("no_rush must not unlock without consumed time")
+		}
+	}
+	if _, ok := store.progress["sandbox#p1"][KeyNoRush]; ok {
+		t.Fatal("no_rush progress written for a zero charge")
+	}
+}

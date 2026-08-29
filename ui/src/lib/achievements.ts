@@ -43,7 +43,8 @@ const DESCRIPTIONS: Record<string, string> = {
   lost_river_after_leading_turn: 'Estava na frente no turn e perdeu no river.',
   lost_straight_flush_to_royal: 'Perdeu com straight flush para um royal flush.',
   all_in_blind: 'Foi all-in sem ver nenhuma das suas cartas.',
-  blind_magic: 'Venceu a mão sem ver nenhuma das suas cartas.'
+  blind_magic: 'Venceu a mão sem ver nenhuma das suas cartas.',
+  no_rush: 'Deixou o relógio correr e usou seu tempo extra para decidir.'
 };
 
 // The two "earned" counters are wallet-scoped by definition: the server keeps
@@ -87,7 +88,8 @@ const EXAMPLES: Record<string, string[]> = {
   lost_river_after_leading_turn: ['KS', 'QS'],
   lost_straight_flush_to_royal: ['9H', 'TH', 'JH', 'QH', 'KH'],
   all_in_blind: ['back', 'back'],
-  blind_magic: ['back', 'back']
+  blind_magic: ['back', 'back'],
+  no_rush: ['QS', 'JS']
 };
 
 export function achievementLabel(key: string): string {
@@ -118,4 +120,33 @@ export function achievementExample(key: string): string[] {
     return HAND_RANKINGS.find(h => h.key === category)?.example || [];
   }
   return EXAMPLES[key] || [];
+}
+
+// Most achievements count events; no_rush counts milliseconds, so its raw
+// thresholds ("2.592.000.000") are unreadable. The unit lives here rather
+// than in the catalog because it is purely a presentation concern.
+const DURATION_UNITS: { ms: number; one: string; many: string }[] = [
+  {ms: 2_592_000_000, one: 'mês', many: 'meses'},
+  {ms: 604_800_000, one: 'semana', many: 'semanas'},
+  {ms: 86_400_000, one: 'dia', many: 'dias'},
+  {ms: 3_600_000, one: 'hora', many: 'horas'},
+  {ms: 60_000, one: 'minuto', many: 'minutos'},
+];
+
+function formatDurationMs(value: number): string {
+  for (const unit of DURATION_UNITS) {
+    if (value >= unit.ms) {
+      const count = Math.floor(value / unit.ms);
+      return `${count.toLocaleString('pt-BR')} ${count === 1 ? unit.one : unit.many}`;
+    }
+  }
+  const seconds = Math.max(0, Math.floor(value / 1000));
+  return `${seconds.toLocaleString('pt-BR')} ${seconds === 1 ? 'segundo' : 'segundos'}`;
+}
+
+const DURATION_KEYS = new Set(['no_rush']);
+
+/** How this achievement's counts and thresholds are written out. */
+export function achievementValueFormat(key: string): (value: number) => string {
+  return DURATION_KEYS.has(key) ? formatDurationMs : value => value.toLocaleString('pt-BR');
 }

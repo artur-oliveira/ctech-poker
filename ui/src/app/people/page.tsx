@@ -1,5 +1,6 @@
 'use client';
 import {useState} from 'react';
+import {useSearchParams} from 'next/navigation';
 import {Users} from 'lucide-react';
 import {TermsGate} from '@/components/TermsGate';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
@@ -32,7 +33,13 @@ const DIRECTIONS = [
 
 export default function People() {
   const actions = useSocialActions();
-  const [tab, setTab] = useState<PeopleTab>('friends');
+  // The unread badge links here with ?tab=activity: Atividades is the only
+  // tab that marks inbox events read, so it is the only one that clears it.
+  const params = useSearchParams();
+  const [tab, setTab] = useState<PeopleTab>(() => {
+    const requested = params.get('tab');
+    return TABS.some(option => option.value === requested) ? requested as PeopleTab : 'friends';
+  });
   const [direction, setDirection] = useState<RequestDirection>('incoming');
 
   // Friends stay enabled on every tab: they are the cheapest source of display
@@ -49,7 +56,7 @@ export default function People() {
       <AppPageBody className="people-page">
         <AppPageHeader icon={Users} eyebrow="PESSOAS"
                        title="Seus amigos, solicitações e adversários recentes."
-                       description="A amizade é sempre mútua. Presença aparece só entre amigos e nunca revela em qual mesa alguém está."/>
+                       description="A amizade é sempre mútua. A presença aparece só entre amigos, e sua mesa só fica visível se você ativar isso no perfil — mesas privadas nunca aparecem."/>
         <FriendCodeLookup actions={actions}/>
         <FilterGroup label="Seções de pessoas" value={tab} options={TABS} onChangeAction={setTab}/>
         {tab === 'friends' && <PeopleList variant="friends" items={friends.items} isLoading={friends.isLoading}

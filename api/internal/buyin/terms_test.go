@@ -48,7 +48,7 @@ func (unacceptedProfiles) SetDeckVariant(context.Context, string, string) error 
 func (unacceptedProfiles) SetTableTheme(context.Context, string, string) error {
 	return nil
 }
-func (unacceptedProfiles) SetShowcase(context.Context, string, bool, bool, []string) error {
+func (unacceptedProfiles) SetShowcase(context.Context, string, bool, bool, bool, []string) error {
 	return nil
 }
 func (unacceptedProfiles) SetFavoriteReactions(context.Context, string, []string) error {

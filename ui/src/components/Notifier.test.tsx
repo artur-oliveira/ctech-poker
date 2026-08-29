@@ -35,6 +35,16 @@ describe('Notifier', () => {
     expect(screen.queryByRole('region')).not.toBeInTheDocument();
   });
   
+  test('runs a notification action and dismisses the toast', async () => {
+    const run = vi.fn();
+    render(<Notifier/>);
+    act(() => pushNotification('Convite de mesa', 'info', [{label: 'Entrar', run}]));
+
+    fireEvent.click(screen.getByRole('button', {name: 'Entrar'}));
+    expect(run).toHaveBeenCalledOnce();
+    expect(screen.queryByText('Convite de mesa')).not.toBeInTheDocument();
+  });
+
   test('removes an alert after its automatic timeout', () => {
     render(<Notifier/>);
     act(() => pushNotification('Aviso passageiro'));

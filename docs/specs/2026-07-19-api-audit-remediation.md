@@ -50,7 +50,7 @@ verify cache (latency-only, lower priority).
 
 ### H3. `buyin` idempotency keys are unique per call → no replay protection (money correctness)
 
-**Where:** `api/internal/buyin/service.go` `BuyIn` (line 97, `uuid.NewString()`) and `CashOut` (line 152). **What:** The
+**Where:** `api/internal/buyin/service.go` `BuyIn` (line 97, `uuid.New().String()`) and `CashOut` (line 152). **What:** The
 wallet idempotency key is `…#buyin#<uuid>` / `…#cashout#<uuid>` — a fresh random key every invocation. The wallet's
 idempotency guard therefore **cannot** dedupe a retried request (client retry, ALB retry on a timeout after the debit
 already succeeded). Result: a single logical buy-in can **double-debit** the sandbox wallet, and a cash-out can
@@ -267,7 +267,7 @@ No further engine changes recommended beyond H4/M5.
 
 **Findings:**
 
-- **S1 (HIGH, money):** `buyin` idempotency keys are unique per call (`uuid.NewString()`) — see **H3**. Under
+- **S1 (HIGH, money):** `buyin` idempotency keys are unique per call (`uuid.New().String()`) — see **H3**. Under
   at-least-once delivery a retried buy-in/cash-out double-moves chips. (Contrast: `sandbox credits.Spin` correctly uses
   a stable per-day key.)
 - **S2 (MED, abuse/DoS):** No HTTP rate limiting on `POST /rooms`, `POST /rooms/:id/join`, `POST /v1.0/sandbox-credits`.

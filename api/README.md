@@ -11,7 +11,7 @@ default** and blocked on legal sign-off, not on missing code.
 
 ## Stack
 
-- Go `1.26.6`, module `gopkg.aoctech.app/poker/api` (`go.mod:1`).
+- Go `1.27`, module `gopkg.aoctech.app/poker/api` (`go.mod:1`).
 - HTTP: **Fiber v3** (`go.mod:14`); WebSocket: **`fasthttp/websocket`** (`go.mod:13`).
 - State/cache/registry: **Valkey** (`valkey-io/valkey-go`, `go.mod:16`) — used for the
   `ws.Registry` fan-out, the JWT-verify cache, and the `tablelease` latency hint.
@@ -42,7 +42,7 @@ default** and blocked on legal sign-off, not on missing code.
   `internal/engine/handeval/ref`, `hashq`, the generator, or `tables.bin`, run the full 133,784,560-hand proof
   explicitly with
   `go test -tags exhaustive -timeout 60m ./internal/engine/handeval`.
-- Dockerfile: `golang:1.26-alpine` builder → `distroless/static-debian12`, `EXPOSE 8003`.
+- Dockerfile: `golang:1.27-alpine` builder → `distroless/static-debian12`, `EXPOSE 8003`.
 - Deploy: GitHub Actions `api.yml` builds the binary, uploads to the shared deployments S3 bucket, and does a rolling
   SSM deploy across the EC2 Auto-Scaling Group (see [`../cdk/README.md`](../cdk/README.md)).
 

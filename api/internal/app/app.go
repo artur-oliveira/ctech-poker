@@ -538,18 +538,23 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, cacheB
 		// which intentionally stops at the flop) since a player can peek at
 		// their own cards at any street, not just preflop.
 		peeked := make(map[string]bool)
+		// Time bank is charged per action, so one hand can carry several
+		// charges for the same player.
+		timeBankMs := make(map[string]int64)
 		for _, entry := range actions {
 			if entry.Action == "peek_cards" {
 				peeked[entry.PlayerID] = true
 			}
+			timeBankMs[entry.PlayerID] += entry.TimeBankMs
 		}
 		achievementMetrics := make([]achievements.HandMetric, len(metrics))
 		for i, metric := range metrics {
 			achievementMetrics[i] = achievements.HandMetric{
-				PlayerID: metric.PlayerID,
-				VPIP:     metric.VPIP,
-				ThreeBet: metric.ThreeBet,
-				Peeked:   peeked[metric.PlayerID],
+				PlayerID:   metric.PlayerID,
+				VPIP:       metric.VPIP,
+				ThreeBet:   metric.ThreeBet,
+				Peeked:     peeked[metric.PlayerID],
+				TimeBankMs: timeBankMs[metric.PlayerID],
 			}
 		}
 		unlocks, err := achv.RecordHand(ctx, tableID, mode, outcome, achievementMetrics)

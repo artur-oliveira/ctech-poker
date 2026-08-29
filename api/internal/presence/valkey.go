@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/valkey-io/valkey-go"
@@ -34,23 +35,31 @@ end
 return 0`
 
 const setTableStateScript = `
-local before = redis.call('EXISTS', KEYS[1])
-if ARGV[1] == '1' then
-  redis.call('SET', KEYS[1], '1', 'EX', ARGV[2])
-else
+local before = redis.call('GET', KEYS[1])
+if ARGV[1] == '' then
   redis.call('DEL', KEYS[1])
+else
+  redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
 end
-if (before == 1 and ARGV[1] == '0') or (before == 0 and ARGV[1] == '1') then return 1 end
-return 0`
+local after = redis.call('GET', KEYS[1])
+if before == after then return 0 end
+return 1`
 
+// readStatusScript returns "<status>|<room id>". A table key written before
+// rooms were tracked holds '1'; it still reads as in_table, just with no room,
+// so it offers no join target and expires on its own TTL.
 const readStatusScript = `
 redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
 if redis.call('ZCARD', KEYS[1]) == 0 then
   redis.call('DEL', KEYS[1])
-  return 'offline'
+  return 'offline|'
 end
-if redis.call('EXISTS', KEYS[2]) == 1 then return 'in_table' end
-return 'online'`
+local room = redis.call('GET', KEYS[2])
+if room then
+  if room == '1' then return 'in_table|' end
+  return 'in_table|' .. room
+end
+return 'online|'`
 
 // ValkeyStore uses one sorted set per player so close order and multiple API
 // replicas cannot incorrectly mark a still-connected player offline.
@@ -83,18 +92,14 @@ func (s *ValkeyStore) Close(ctx context.Context, playerID, connectionID string) 
 	return value == 1, err
 }
 
-func (s *ValkeyStore) SetInTable(ctx context.Context, playerID string, inTable bool) (bool, error) {
-	value := "0"
-	if inTable {
-		value = "1"
-	}
+func (s *ValkeyStore) SetInTable(ctx context.Context, playerID, roomID string) (bool, error) {
 	changed, err := s.client.Do(ctx, s.client.B().Eval().Script(setTableStateScript).Numkeys(1).
-		Key(tableKey(playerID)).Arg(value, strconv.FormatInt(int64(tableStateTTL.Seconds()), 10)).Build()).ToInt64()
+		Key(tableKey(playerID)).Arg(roomID, strconv.FormatInt(int64(tableStateTTL.Seconds()), 10)).Build()).ToInt64()
 	return changed == 1, err
 }
 
-func (s *ValkeyStore) GetMany(ctx context.Context, playerIDs []string) (map[string]Status, error) {
-	result := make(map[string]Status, len(playerIDs))
+func (s *ValkeyStore) GetMany(ctx context.Context, playerIDs []string) (map[string]PlayerPresence, error) {
+	result := make(map[string]PlayerPresence, len(playerIDs))
 	commands := make([]valkey.Completed, 0, len(playerIDs))
 	now := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	for _, playerID := range playerIDs {
@@ -102,11 +107,12 @@ func (s *ValkeyStore) GetMany(ctx context.Context, playerIDs []string) (map[stri
 			Key(connectionKey(playerID), tableKey(playerID)).Arg(now).Build())
 	}
 	for i, response := range s.client.DoMulti(ctx, commands...) {
-		status, err := response.ToString()
+		raw, err := response.ToString()
 		if err != nil {
 			return nil, fmt.Errorf("presence: read %s: %w", playerIDs[i], err)
 		}
-		result[playerIDs[i]] = Status(status)
+		status, room, _ := strings.Cut(raw, "|")
+		result[playerIDs[i]] = PlayerPresence{PlayerID: playerIDs[i], Status: Status(status), RoomID: room}
 	}
 	return result, nil
 }

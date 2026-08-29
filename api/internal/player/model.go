@@ -29,6 +29,11 @@ type PlayerProfile struct {
 	TableTheme           string   `dynamodbav:"table_theme,omitempty" json:"table_theme,omitempty"`
 	ShowcasePublic       bool     `dynamodbav:"showcase_public,omitempty" json:"showcase_public"`
 	PlaystylePublic      bool     `dynamodbav:"playstyle_public,omitempty" json:"playstyle_public"`
+	// TablePublic lets friends see which PUBLIC room this player is sitting
+	// in, so they can join it. Off by default: presence is otherwise
+	// room-blind by design (see internal/presence), and a private room is
+	// never exposed even with this on.
+	TablePublic bool `dynamodbav:"table_public,omitempty" json:"table_public"`
 	FeaturedAchievements []string `dynamodbav:"featured_achievements,omitempty" json:"featured_achievements,omitempty"`
 	FavoriteReactions    []string `dynamodbav:"favorite_reactions,omitempty" json:"favorite_reactions,omitempty"`
 	PokerTermsVersion    string   `dynamodbav:"poker_terms_version,omitempty" json:"-"`

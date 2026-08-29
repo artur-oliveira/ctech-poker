@@ -75,3 +75,29 @@ describe('AchievementCard', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('1.000');
   });
 });
+
+describe('AchievementCard duration formatting', () => {
+  const noRush: Achievement = {
+    key: 'no_rush',
+    metric: 'time_bank_ms_consumed',
+    tiers: [
+      {stars: 1, threshold: 60_000},
+      {stars: 2, threshold: 3_600_000},
+      {stars: 3, threshold: 86_400_000},
+      {stars: 4, threshold: 604_800_000},
+      {stars: 5, threshold: 2_592_000_000},
+    ],
+  };
+  
+  test('labels no_rush tiers as durations', () => {
+    render(<AchievementCard achievement={noRush}/>);
+    expect(screen.getByLabelText('Nível 1: 1 minuto')).toBeInTheDocument();
+    expect(screen.getByLabelText('Nível 3: 1 dia')).toBeInTheDocument();
+    expect(screen.getByLabelText('Nível 5: 1 mês')).toBeInTheDocument();
+  });
+  
+  test('still renders plain counts for other achievements', () => {
+    render(<AchievementCard achievement={{key: 'wins', metric: 'wins', tiers: [{stars: 1, threshold: 1000}]}}/>);
+    expect(screen.getByLabelText('Nível 1: 1.000')).toBeInTheDocument();
+  });
+});

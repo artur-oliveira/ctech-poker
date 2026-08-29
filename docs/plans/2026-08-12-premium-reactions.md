@@ -19,7 +19,7 @@ dual-currency purchase (PIX via `ctech-wallet`'s new product-purchase M2M route,
 fichas debit). `Actor.handleReaction` gains a catalog + cached-ownership check. Favorites are a new
 field on the existing `PlayerProfile`.
 
-**Tech Stack:** Go 1.26.5, Fiber v3, AWS SDK v2 DynamoDB, `gopkg.aoctech.app/api-commons`
+**Tech Stack:** Go 1.27.5, Fiber v3, AWS SDK v2 DynamoDB, `gopkg.aoctech.app/api-commons`
 (`cache.Backend`/Valkey, `ws.Registry`), `uber-go/fx`, AWS CDK v2 (TypeScript).
 
 **Spec:** `docs/specs/2026-08-12-premium-reactions.md` — depends on `ctech-wallet`'s
@@ -1514,7 +1514,7 @@ import (
 	"errors"
 
 	"github.com/gofiber/fiber/v3"
-	"github.com/google/uuid"
+	"uuid"
 	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
 )
@@ -1559,7 +1559,7 @@ func (h *reactionPurchaseHandlers) create(c fiber.Ctx) error {
 	}
 	idemKey := req.IdempotencyKey
 	if idemKey == "" {
-		idemKey = uuid.NewString()
+		idemKey = uuid.New().String()
 	}
 	userID := c.Locals(localsUserID).(string)
 	switch req.Method {
@@ -1608,7 +1608,7 @@ func (h *reactionPurchaseHandlers) refund(c fiber.Ctx) error {
 	}
 	idemKey := req.IdempotencyKey
 	if idemKey == "" {
-		idemKey = uuid.NewString()
+		idemKey = uuid.New().String()
 	}
 	userID := c.Locals(localsUserID).(string)
 	rec, err := h.svc.Refund(c.Context(), userID, c.Params("id"), idemKey)

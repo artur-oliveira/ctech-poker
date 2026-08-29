@@ -28,6 +28,7 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({invalidateQueries: mocks.invalidateQueries}),
 }));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
+vi.mock('@/lib/hooks/useSocialUnread', () => ({useSocialUnread: () => 0}));
 vi.mock('@/components/social/PeopleNavBadge', () => ({PeopleNavBadge: () => null}));
 vi.mock('@/components/table/PlayingCard', () => ({
   PlayingCard: ({card}: { card: string }) => <span data-testid="card">{card}</span>,

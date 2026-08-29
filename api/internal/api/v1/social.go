@@ -14,6 +14,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/presence"
 	"gopkg.aoctech.app/poker/api/internal/problem"
 	"gopkg.aoctech.app/poker/api/internal/recentplayers"
+	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/social"
 )
 
@@ -48,9 +49,16 @@ type SocialLimiters struct {
 	InviteRecipient *RateLimiter
 }
 
+// roomLookup is the slice of roomstore.Store the friends list needs to decide
+// whether a friend's table may be published as joinable.
+type roomLookup interface {
+	Get(ctx context.Context, roomID string) (*roomstore.Room, error)
+}
+
 type socialHandlers struct {
 	svc                    *social.Service
 	presence               *presence.Service
+	rooms                  roomLookup
 	recent                 *recentplayers.Service
 	players                *player.Service
 	avatarBaseURL          string
@@ -59,16 +67,20 @@ type socialHandlers struct {
 }
 
 type socialPlayerResponse struct {
-	PlayerID      string              `json:"player_id"`
-	Name          string              `json:"name,omitempty"`
-	AvatarURL     string              `json:"avatar_url,omitempty"`
-	FriendCode    string              `json:"friend_code,omitempty"`
-	Relationship  social.Relationship `json:"relationship"`
-	Muted         bool                `json:"muted"`
-	Blocked       bool                `json:"blocked"`
-	Presence      *presence.Status    `json:"presence,omitempty"`
-	LastPlayedAt  int64               `json:"last_played_at,omitempty"`
-	HandsTogether int64               `json:"hands_together,omitempty"`
+	PlayerID     string              `json:"player_id"`
+	Name         string              `json:"name,omitempty"`
+	AvatarURL    string              `json:"avatar_url,omitempty"`
+	FriendCode   string              `json:"friend_code,omitempty"`
+	Relationship social.Relationship `json:"relationship"`
+	Muted        bool                `json:"muted"`
+	Blocked      bool                `json:"blocked"`
+	Presence     *presence.Status    `json:"presence,omitempty"`
+	// RoomID is present only for a friend who opted in (player.TablePublic)
+	// and is sitting in a joinable PUBLIC room — see joinableRoomIDs. Every
+	// other case omits it, including a private table.
+	RoomID        string `json:"room_id,omitempty"`
+	LastPlayedAt  int64  `json:"last_played_at,omitempty"`
+	HandsTogether int64  `json:"hands_together,omitempty"`
 }
 
 type friendRequestBody struct {
@@ -88,15 +100,20 @@ type inboxReadBody struct {
 func RegisterSocial(router fiber.Router, auth fiber.Handler, svc *social.Service, players *player.Service, cfg *config.Config, limiters SocialLimiters, extras ...any) {
 	var presenceSvc *presence.Service
 	var recentSvc *recentplayers.Service
+	var roomsStore roomLookup
 	for _, extra := range extras {
 		switch value := extra.(type) {
 		case *presence.Service:
 			presenceSvc = value
 		case *recentplayers.Service:
 			recentSvc = value
+		// Last: roomLookup is an interface, so it would otherwise swallow any
+		// future extra that happens to carry a matching Get method.
+		case roomLookup:
+			roomsStore = value
 		}
 	}
-	h := &socialHandlers{svc: svc, presence: presenceSvc, recent: recentSvc, players: players, avatarBaseURL: cfg.AvatarBaseURL, graphEnabled: cfg.SocialGraphEnabled, inviteRecipientLimiter: limiters.InviteRecipient}
+	h := &socialHandlers{svc: svc, presence: presenceSvc, rooms: roomsStore, recent: recentSvc, players: players, avatarBaseURL: cfg.AvatarBaseURL, graphEnabled: cfg.SocialGraphEnabled, inviteRecipientLimiter: limiters.InviteRecipient}
 	g := router.Group(socialBasePath, auth, firstPartyOnly)
 
 	g.Get(socialFriendsPath, h.listFriends)
@@ -127,6 +144,46 @@ func RegisterSocial(router fiber.Router, auth fiber.Handler, svc *social.Service
 	g.Post(socialTableInvitesPath, mutationPlayer, mutationIP, inviteSender, h.sendTableInvite)
 	g.Post(socialTableInvitesPath+"/:eventId/accept", mutationPlayer, mutationIP, h.acceptTableInvite)
 	g.Post(socialTableInvitesPath+"/:eventId/decline", mutationPlayer, mutationIP, h.declineTableInvite)
+}
+
+// joinableRoomIDs resolves which presences may be published as a joinable
+// room. All five gates must hold: the friend opted in, presence says in_table
+// with a known room, and that room is public, open and not full. Any failure —
+// including a room read error — drops the id.
+func (h *socialHandlers) joinableRoomIDs(ctx context.Context, presences map[string]presence.PlayerPresence,
+	profiles map[string]player.PlayerProfile) map[string]string {
+	if h.rooms == nil {
+		return nil
+	}
+	wanted := make(map[string]string)
+	rooms := make(map[string]bool)
+	for playerID, entry := range presences {
+		profile, ok := profiles[playerID]
+		if !ok || !profile.TablePublic || entry.Status != presence.StatusInTable || entry.RoomID == "" {
+			continue
+		}
+		wanted[playerID] = entry.RoomID
+		rooms[entry.RoomID] = true
+	}
+	// One read per distinct room, not per friend: a full table of friends
+	// resolves to a single lookup.
+	joinable := make(map[string]bool, len(rooms))
+	for roomID := range rooms {
+		room, err := h.rooms.Get(ctx, roomID)
+		if err != nil {
+			slog.Warn("social: room lookup for friend presence failed", "room", roomID, "err", err)
+			continue
+		}
+		joinable[roomID] = room != nil && room.Visibility == "public" &&
+			(room.Status == "waiting" || room.Status == "active") && room.SeatsTaken < room.MaxSeats
+	}
+	result := make(map[string]string, len(wanted))
+	for playerID, roomID := range wanted {
+		if joinable[roomID] {
+			result[playerID] = roomID
+		}
+	}
+	return result
 }
 
 func (h *socialHandlers) summary(c fiber.Ctx) error {
@@ -427,12 +484,14 @@ func (h *socialHandlers) hydrate(c fiber.Ctx, edges []social.Edge, includeFriend
 	if err != nil {
 		return nil, err
 	}
-	statuses := map[string]presence.Status{}
+	statuses := map[string]presence.PlayerPresence{}
+	var joinable map[string]string
 	if includePresence && h.presence != nil {
 		statuses, err = h.presence.GetMany(c.Context(), ids)
 		if err != nil {
 			return nil, err
 		}
+		joinable = h.joinableRoomIDs(c.Context(), statuses, profiles)
 	}
 	for i := range edges {
 		profile, ok := profiles[edges[i].OtherPlayerID]
@@ -441,8 +500,9 @@ func (h *socialHandlers) hydrate(c fiber.Ctx, edges []social.Edge, includeFriend
 		}
 		response := h.response(&profile, &edges[i], includeFriendCode)
 		if includePresence && h.presence != nil {
-			status := statuses[edges[i].OtherPlayerID]
+			status := statuses[edges[i].OtherPlayerID].Status
 			response.Presence = &status
+			response.RoomID = joinable[edges[i].OtherPlayerID]
 		}
 		result = append(result, response)
 	}
@@ -476,7 +536,7 @@ func (h *socialHandlers) listRecent(c fiber.Ctx) error {
 			friendIDs = append(friendIDs, id)
 		}
 	}
-	statuses := map[string]presence.Status{}
+	statuses := map[string]presence.PlayerPresence{}
 	if len(friendIDs) > 0 && h.presence != nil {
 		statuses, err = h.presence.GetMany(c.Context(), friendIDs)
 		if err != nil {
@@ -496,7 +556,7 @@ func (h *socialHandlers) listRecent(c fiber.Ctx) error {
 		response := h.response(&profile, edge, false)
 		response.LastPlayedAt, response.HandsTogether = item.LastPlayedAt, item.HandsTogether
 		if edge != nil && edge.Relationship == social.RelationshipFriend && h.presence != nil {
-			status := statuses[item.OpponentPlayerID]
+			status := statuses[item.OpponentPlayerID].Status
 			response.Presence = &status
 		}
 		result = append(result, response)

@@ -9,6 +9,7 @@ vi.mock('@/lib/auth/session', () => ({
   useOptionalSession: () => ({authed: mocks.authed, checking: false}),
 }));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
+vi.mock('@/lib/hooks/useSocialUnread', () => ({useSocialUnread: () => 0}));
 vi.mock('@/components/social/PeopleNavBadge', () => ({PeopleNavBadge: () => <span>people-badge</span>}));
 vi.mock('next/image', () => ({
   default: ({alt}: { alt: string }) => <div role="img" aria-label={alt}/>,

@@ -8,7 +8,7 @@ import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {FilterGroup} from '@/components/FilterGroup';
 import {SkeletonList, StatCardsSkeleton} from '@/components/ui/skeleton';
 import {achievementProgress, getAchievementCatalog, getMyAchievements} from '@/lib/api/achievements';
-import {achievementLabel, achievementWalletMode} from '@/lib/achievements';
+import {achievementLabel, achievementValueFormat, achievementWalletMode} from '@/lib/achievements';
 import type {WalletMode} from '@/lib/api/player';
 import {useOptionalSession} from "@/lib/auth/session";
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
@@ -139,7 +139,7 @@ export default function Achievements() {
             <div>
               <span>Sua próxima estrela</span>
               <strong>{achievementLabel(nextMilestone.item.key)}</strong>
-              <small>Faltam {(nextMilestone.progress.nextTier!.threshold - nextMilestone.progress.count).toLocaleString('pt-BR')} para o nível {nextMilestone.progress.nextTier!.stars}.</small>
+              <small>Faltam {achievementValueFormat(nextMilestone.item.key)(nextMilestone.progress.nextTier!.threshold - nextMilestone.progress.count)} para o nível {nextMilestone.progress.nextTier!.stars}.</small>
             </div>
           </div>}
         </section>

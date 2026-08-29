@@ -37,9 +37,10 @@ func (s *memoryStore) SetTableTheme(_ context.Context, _ string, theme string) e
 	s.profile.TableTheme = theme
 	return nil
 }
-func (s *memoryStore) SetShowcase(_ context.Context, _ string, public, playstylePublic bool, featured []string) error {
+func (s *memoryStore) SetShowcase(_ context.Context, _ string, public, playstylePublic, tablePublic bool, featured []string) error {
 	s.profile.ShowcasePublic = public
 	s.profile.PlaystylePublic = playstylePublic
+	s.profile.TablePublic = tablePublic
 	s.profile.FeaturedAchievements = featured
 	return nil
 }
@@ -219,17 +220,29 @@ func TestBalancesDefaultsToZeroWithoutWallet(t *testing.T) {
 	}
 }
 
+func TestSetShowcaseStoresTablePublic(t *testing.T) {
+	store := &memoryStore{profile: PlayerProfile{UserID: "u1"}}
+	svc := NewService(store)
+	profile, err := svc.SetShowcase(context.Background(), "u1", true, false, true, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !profile.TablePublic {
+		t.Fatal("expected table_public to persist")
+	}
+}
+
 func TestSetShowcaseValidatesSelection(t *testing.T) {
 	store := &memoryStore{profile: PlayerProfile{UserID: "u1"}}
 	svc := NewService(store)
-	profile, err := svc.SetShowcase(context.Background(), "u1", true, true, []string{"wins", "hands_played"})
+	profile, err := svc.SetShowcase(context.Background(), "u1", true, true, false, []string{"wins", "hands_played"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !profile.ShowcasePublic || len(profile.FeaturedAchievements) != 2 {
 		t.Fatalf("unexpected showcase: %+v", profile)
 	}
-	if _, err := svc.SetShowcase(context.Background(), "u1", true, true, []string{"not-real"}); !errors.Is(err, ErrInvalidShowcase) {
+	if _, err := svc.SetShowcase(context.Background(), "u1", true, true, false, []string{"not-real"}); !errors.Is(err, ErrInvalidShowcase) {
 		t.Fatalf("got %v, want ErrInvalidShowcase", err)
 	}
 }

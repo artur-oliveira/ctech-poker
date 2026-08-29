@@ -42,8 +42,12 @@ type ActionLogEntry struct {
 	// decorated as "all_in". It distinguishes an all-in call from an all-in
 	// raise for exact VPIP/PFR/3-bet accounting. Older rows omit it and are
 	// handled conservatively by pokerstats.
-	BettingAction  string `dynamodbav:"betting_action,omitempty"`
-	Amount         int64  `dynamodbav:"amount"`
+	BettingAction string `dynamodbav:"betting_action,omitempty"`
+	Amount        int64  `dynamodbav:"amount"`
+	// TimeBankMs is the time-bank milliseconds this action consumed. Written
+	// by Actor.consumeTimeBank; read once per hand by app.go's onHandComplete
+	// to award the no_rush achievement. Older rows omit it and read as zero.
+	TimeBankMs     int64  `dynamodbav:"time_bank_ms,omitempty"`
 	Message        string `dynamodbav:"message,omitempty"`
 	ReactionID     string `dynamodbav:"reaction_id,omitempty"`
 	TargetPlayerID string `dynamodbav:"target_player_id,omitempty"`

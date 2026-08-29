@@ -11,7 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
+	"uuid"
+
 	"gopkg.aoctech.app/api-commons/observability"
 )
 
@@ -64,7 +65,7 @@ func (s *Service) Verify(ctx context.Context, token, remoteIP string) error {
 		return ErrVerificationFailed
 	}
 	body, err := json.Marshal(verifyRequest{
-		Secret: s.secret, Response: token, RemoteIP: remoteIP, IdempotencyKey: uuid.NewString(),
+		Secret: s.secret, Response: token, RemoteIP: remoteIP, IdempotencyKey: uuid.New().String(),
 	})
 	if err != nil {
 		return fmt.Errorf("botcheck: encode request: %w", err)

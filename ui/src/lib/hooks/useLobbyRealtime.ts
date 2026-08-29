@@ -9,7 +9,8 @@ import {USE_MOCK} from '@/lib/mockConfig';
 import type {Room} from '@/lib/api/rooms';
 import {pushNotification} from '@/lib/notify';
 import {decodeServerMessage, encodeClientMessage} from "@/lib/ws/utils";
-import type {SocialEventType} from '@/lib/api/social';
+import {useRouter} from 'next/navigation';
+import {acceptTableInvite, declineTableInvite, type SocialEventType} from '@/lib/api/social';
 import {SOCIAL_KEYS} from '@/lib/social';
 import {WALLET_QUERY_ROOT} from '@/lib/api/wallet';
 import {checkApiLiveness} from '@/lib/network/liveness';
@@ -26,7 +27,7 @@ interface LobbyMessage {
   purchase_id?: string;
   // Social pushes are invalidation-only: the durable state always comes back
   // over HTTP, never from the socket payload.
-  social_event?: {type?: SocialEventType | string};
+  social_event?: {type?: SocialEventType | string; event_id?: string; room_id?: string};
   unread_count?: number;
 }
 
@@ -42,6 +43,7 @@ export function useLobbyRealtime() {
   const [socketAuthToken, setSocketAuthToken] = useState(() => getAccessToken());
   const apiLiveness = useApiLiveness();
   useEffect(() => subscribeAccessToken(setSocketAuthToken), []);
+  const router = useRouter();
   
   const receive = useCallback((message: LobbyMessage) => {
     if (message.type === 'error' && message.code === 'unauthorized') {
@@ -98,9 +100,38 @@ export function useLobbyRealtime() {
       pushNotification(statusLabel[message.code || ''] || 'Atualização na compra da sua reação.', 'info');
     } else if (message.type === 'social_event') {
       void queryClient.invalidateQueries({queryKey: SOCIAL_KEYS.root});
-      const eventType = message.social_event?.type as SocialEventType | undefined;
-      pushNotification(eventType ? SOCIAL_EVENT_COPY[eventType] || 'Nova atividade em Pessoas.'
-        : 'Nova atividade em Pessoas.', 'info');
+      const event = message.social_event;
+      const eventType = event?.type as SocialEventType | undefined;
+      const copy = eventType ? SOCIAL_EVENT_COPY[eventType] || 'Nova atividade em Pessoas.'
+        : 'Nova atividade em Pessoas.';
+      // Answering from the toast also marks the inbox event read (both server
+      // handlers call notifyUnread), so the badge clears without opening the
+      // list. Accepting authorises nothing on its own: expiry, friendship,
+      // room status and capacity are revalidated by the server and again by
+      // the normal join flow.
+      if (eventType === 'table_invite' && event?.event_id && event.room_id) {
+        const eventId = event.event_id;
+        const roomId = event.room_id;
+        pushNotification(copy, 'info', [
+          {
+            label: 'Entrar', run: async () => {
+              await acceptTableInvite(eventId);
+              await queryClient.invalidateQueries({queryKey: SOCIAL_KEYS.root});
+              router.push(`/table?id=${roomId}`);
+            }
+          },
+          {
+            label: 'Recusar', run: async () => {
+              await declineTableInvite(eventId);
+              await queryClient.invalidateQueries({queryKey: SOCIAL_KEYS.root});
+            }
+          },
+        ]);
+      } else {
+        pushNotification(copy, 'info', [
+          {label: 'Ver atividades', run: () => router.push('/people?tab=activity')},
+        ]);
+      }
     } else if (message.type === 'social_presence_changed') {
       // Presence rides along with the friend and recent lists; nothing else
       // on screen depends on it.
@@ -114,7 +145,7 @@ export function useLobbyRealtime() {
     } else if (message.type === 'system_broadcast') {
       pushNotification(message.text || '', 'info');
     }
-  }, [queryClient]);
+  }, [queryClient, router]);
   
   const origin = wsOrigin();
   const wsUrl = `${origin}/v1.0/ws`;
