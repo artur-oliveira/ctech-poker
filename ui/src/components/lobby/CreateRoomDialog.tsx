@@ -48,8 +48,8 @@ function radioGroupKeyDown(e: React.KeyboardEvent<HTMLButtonElement>, index: num
   (e.currentTarget.parentElement?.children[next] as HTMLElement | undefined)?.focus();
 }
 
-export function CreateRoomDialog() {
-  const [open, setOpen] = useState(false);
+export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean}) {
+  const [open, setOpen] = useState(initialOpen);
   const router = useRouter();
   const {data: sandboxStakes = []} = useQuery({queryKey: ['stakes'], queryFn: () => listStakes()});
   const {data: me} = useQuery({queryKey: ['player', 'me'], queryFn: getMe});

@@ -1,4 +1,5 @@
 'use client';
+import '@/app/table-reactions.css';
 import {type CSSProperties, useEffect, useRef, useState} from 'react';
 import {
   Crosshair, Eye, EyeOff, LockKeyhole, SmilePlus, Sparkles, Star, UserRound, X

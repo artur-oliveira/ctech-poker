@@ -1142,6 +1142,22 @@ h1 em {
     gap: 12px
 }
 
+/* The static `/people` shell keeps the page heading and list footprint stable
+   while its URL-driven tab choice resolves inside Suspense. */
+.people-suspense-skeleton {
+    display: grid;
+    gap: 12px;
+    min-height: 280px
+}
+
+.people-suspense-skeleton .skeleton:nth-child(1) {
+    height: 52px
+}
+
+.people-suspense-skeleton .skeleton:nth-child(n + 2) {
+    height: 88px
+}
+
 @keyframes board-deal {
     from {
         opacity: 0;

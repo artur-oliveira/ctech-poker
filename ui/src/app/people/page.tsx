@@ -1,5 +1,5 @@
 'use client';
-import {useState} from 'react';
+import {Suspense, useState} from 'react';
 import {useSearchParams} from 'next/navigation';
 import {Users} from 'lucide-react';
 import {TermsGate} from '@/components/TermsGate';
@@ -31,7 +31,7 @@ const DIRECTIONS = [
   {value: 'outgoing', label: 'Enviadas'}
 ] as const;
 
-export default function People() {
+function PeopleContent() {
   const actions = useSocialActions();
   // The unread badge links here with ?tab=activity: Atividades is the only
   // tab that marks inbox events read, so it is the only one that clears it.
@@ -51,8 +51,7 @@ export default function People() {
   const blocked = useSocialList(SOCIAL_KEYS.blocked, listBlockedPlayers, tab === 'blocked');
   const inbox = useSocialList(SOCIAL_KEYS.inbox, listSocialInbox, tab === 'activity');
 
-  return <TermsGate>
-    <AppPage authed current="people">
+  return <AppPage authed current="people">
       <AppPageBody className="people-page">
         <AppPageHeader icon={Users} eyebrow="PESSOAS"
                        title="Seus amigos, solicitações e adversários recentes."
@@ -98,6 +97,22 @@ export default function People() {
                                             actions={actions}
                                             nameOf={nameResolver(friends.items, requests.items)}/>}
       </AppPageBody>
-    </AppPage>
-  </TermsGate>;
+    </AppPage>;
+}
+
+function PeopleFallback() {
+  return <AppPage authed current="people">
+    <AppPageBody className="people-page" aria-busy="true" aria-live="polite">
+      <AppPageHeader icon={Users} eyebrow="PESSOAS"
+                     title="Seus amigos, solicitações e adversários recentes."
+                     description="Carregando suas conexões…"/>
+      <div className="people-suspense-skeleton" aria-label="Carregando pessoas">
+        <span className="skeleton"/><span className="skeleton"/><span className="skeleton"/>
+      </div>
+    </AppPageBody>
+  </AppPage>;
+}
+
+export default function People() {
+  return <TermsGate><Suspense fallback={<PeopleFallback/>}><PeopleContent/></Suspense></TermsGate>;
 }

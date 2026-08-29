@@ -8,7 +8,7 @@ vi.mock('@/lib/api/dailyReward', () => ({
 vi.mock('@/components/TermsGate', () => ({TermsGate: ({children}: { children: React.ReactNode }) => children}));
 vi.mock('@/components/lobby/StakesGrid', () => ({StakesGrid: () => <div>stakes-grid</div>}));
 vi.mock('@/components/lobby/ActiveTableBanner', () => ({ActiveTableBanner: () => <div>active-table</div>}));
-vi.mock('@/components/lobby/CreateRoomDialog', () => ({CreateRoomDialog: () => <div>create-room</div>}));
+vi.mock('@/components/lobby/CreateRoomDialogTrigger', () => ({CreateRoomDialogTrigger: () => <div>create-room</div>}));
 vi.mock('@/components/social/PeopleDrawer', () => ({PeopleDrawer: () => <div>people-drawer</div>}));
 vi.mock('@/components/lobby/OnboardingIntro', () => ({OnboardingIntro: () => <div>onboarding</div>}));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
