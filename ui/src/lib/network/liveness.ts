@@ -1,6 +1,11 @@
 export const HTTP_TIMEOUT_MS = 3_000;
 export const HEALTHY_POLL_INTERVAL_MS = 30_000;
 export const MAX_UNAVAILABLE_POLL_INTERVAL_MS = 30_000;
+/** A single timed-out or failed /health probe is not proof the API is down —
+ * it retries this many times (with a short backoff) before the outage is
+ * published. Only once every attempt is exhausted does the app go offline. */
+export const HEALTH_PROBE_ATTEMPTS = 3;
+export const HEALTH_PROBE_RETRY_MS = 600;
 
 export type ApiLivenessStatus = 'checking' | 'available' | 'unavailable';
 export type ApiUnavailableReason = 'offline' | 'server' | null;
@@ -62,6 +67,20 @@ export function markApiOffline() {
  * a failed response: a dead HAProxy can omit CORS headers, so browsers expose
  * that outage as a TypeError rather than an HTTP status.
  */
+function probeHealthOnce(): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
+  return fetch(apiURL('/v1.0/health'), {
+    method: 'GET',
+    cache: 'no-store',
+    credentials: 'omit',
+    headers: {Accept: 'application/json'},
+    signal: controller.signal,
+  }).then(response => response.ok).catch(() => false).finally(() => clearTimeout(timeout));
+}
+
+const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
 export function checkApiLiveness(): Promise<boolean> {
   if (browserIsOffline()) {
     markApiOffline();
@@ -69,31 +88,28 @@ export function checkApiLiveness(): Promise<boolean> {
   }
   if (inFlightCheck) return inFlightCheck;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
-  inFlightCheck = fetch(apiURL('/v1.0/health'), {
-    method: 'GET',
-    cache: 'no-store',
-    credentials: 'omit',
-    headers: {Accept: 'application/json'},
-    signal: controller.signal,
-  }).then(response => {
-    const available = response.ok;
-    publish({
-      status: available ? 'available' : 'unavailable',
-      reason: available ? null : 'server',
-      checkedAt: Date.now(),
-    });
-    return available;
-  }).catch(() => {
-    publish({
-      status: 'unavailable',
-      reason: browserIsOffline() ? 'offline' : 'server',
-      checkedAt: Date.now(),
-    });
+  inFlightCheck = (async () => {
+    // A dead HAProxy times out or omits CORS headers, so both a rejected
+    // fetch and a non-OK response mean "could not confirm healthy". Retry a
+    // few times before concluding the API is actually down — a single slow
+    // response must not black out the whole app.
+    for (let attempt = 1; attempt <= HEALTH_PROBE_ATTEMPTS; attempt++) {
+      if (browserIsOffline()) {
+        markApiOffline();
+        return false;
+      }
+      if (await probeHealthOnce()) {
+        publish({status: 'available', reason: null, checkedAt: Date.now()});
+        return true;
+      }
+      if (attempt < HEALTH_PROBE_ATTEMPTS) await wait(HEALTH_PROBE_RETRY_MS);
+    }
+    // Every attempt failed while the browser still believed it was online:
+    // treat it as a server-side outage (a genuine offline drop is caught at
+    // the top of the loop and reported as such).
+    publish({status: 'unavailable', reason: 'server', checkedAt: Date.now()});
     return false;
-  }).finally(() => {
-    clearTimeout(timeout);
+  })().finally(() => {
     inFlightCheck = null;
   });
   return inFlightCheck;

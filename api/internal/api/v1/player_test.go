@@ -247,6 +247,49 @@ func TestUpdateMeSetsFavoriteReactionsAndReturnsThem(t *testing.T) {
 	}
 }
 
+// Regression: table_theme was fully wired through the service/store/catalog but
+// updateMe never read the field and playerResponse never echoed it, so felt
+// changes from the client were silently dropped.
+func TestUpdateMeSetsTableThemeAndEchoesIt(t *testing.T) {
+	store := &fakePlayerStore{}
+	h := &playerHandlers{players: player.NewService(store)}
+	app := fiber.New()
+	auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "u1"); return c.Next() }
+	app.Post("/players/me", auth, h.updateMe)
+
+	req := httptest.NewRequest(fiber.MethodPost, "/players/me", strings.NewReader(`{"table_theme":"classic"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	var body struct {
+		TableTheme string `json:"table_theme"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.TableTheme != "classic" {
+		t.Fatalf("TableTheme = %q, want %q (persisted but never echoed back is the regression this guards)", body.TableTheme, "classic")
+	}
+	if store.profile.TableTheme != "classic" {
+		t.Fatalf("store TableTheme = %q, want it persisted", store.profile.TableTheme)
+	}
+
+	req = httptest.NewRequest(fiber.MethodPost, "/players/me", strings.NewReader(`{"table_theme":"not-a-felt"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 for an unknown felt id", resp.StatusCode)
+	}
+}
+
 func TestUpdateMeSetsWalletModeWithoutTouchingName(t *testing.T) {
 	store := &fakePlayerStore{profile: player.PlayerProfile{Name: "Artur"}}
 	h := &playerHandlers{players: player.NewService(store)}

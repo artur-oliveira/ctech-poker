@@ -175,6 +175,14 @@ actually matters and is now closed.
 
 ## Part 5 — Felt theme gets server persistence
 
+> **Follow-up (2026-08-31):** the `player.Service`/store/catalog side of this
+> part shipped, but the HTTP wiring in `internal/api/v1/player.go` was missed —
+> `UpdatePlayerRequest` had no `TableTheme` field, `updateMe` never called
+> `SetTableTheme`, and `playerResponse` never echoed `table_theme`, so every
+> felt change from the client was silently dropped. Fixed in
+> `docs/plans/2026-08-31-side-pot-fold-and-health-retry.md`; the same change
+> also maps a premium-not-owned `deck_variant` selection to 400 instead of 500.
+
 New `PlayerProfile` field, mirroring `DeckVariant` exactly (`player/model.go`):
 
 ```go

@@ -26,6 +26,7 @@ type UpdatePlayerRequest struct {
 	Name                 *string   `json:"name"`
 	WalletMode           *string   `json:"wallet_mode"`
 	DeckVariant          *string   `json:"deck_variant"`
+	TableTheme           *string   `json:"table_theme"`
 	ShowcasePublic       *bool     `json:"showcase_public"`
 	TablePublic          *bool     `json:"table_public"`
 	PlaystylePublic      *bool     `json:"playstyle_public"`
@@ -224,6 +225,20 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 		if _, err := h.players.SetDeckVariant(c.Context(), userID, *req.DeckVariant); err != nil {
 			if errors.Is(err, player.ErrInvalidDeckVariant) {
 				return problem.BadRequest("deck_variant must not be empty").Send(c)
+			}
+			if errors.Is(err, player.ErrCosmeticNotOwned) {
+				return problem.BadRequest("deck_variant is premium and not owned").Send(c)
+			}
+			return problem.InternalServer("failed to update player profile", c, err).Send(c)
+		}
+	}
+	if req.TableTheme != nil {
+		if _, err := h.players.SetTableTheme(c.Context(), userID, *req.TableTheme); err != nil {
+			if errors.Is(err, player.ErrInvalidTableTheme) {
+				return problem.BadRequest("table_theme must be a known felt id").Send(c)
+			}
+			if errors.Is(err, player.ErrCosmeticNotOwned) {
+				return problem.BadRequest("table_theme is premium and not owned").Send(c)
 			}
 			return problem.InternalServer("failed to update player profile", c, err).Send(c)
 		}
@@ -428,6 +443,7 @@ func playerResponse(profile *player.PlayerProfile, avatarBaseURL string) fiber.M
 		"avatar_url":              player.AvatarURL(profile, avatarBaseURL),
 		"wallet_mode":             profile.EffectiveWalletMode(),
 		"deck_variant":            profile.EffectiveDeckVariant(),
+		"table_theme":             profile.EffectiveTableTheme(),
 		"showcase_public":         profile.ShowcasePublic,
 		"playstyle_public":        profile.PlaystylePublic,
 		"table_public":            profile.TablePublic,

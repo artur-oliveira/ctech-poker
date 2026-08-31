@@ -640,24 +640,18 @@ func TestBustedAllInPlayerSitsOutInsteadOfBeingRedealt(t *testing.T) {
 	}
 }
 
-// TestOrphanedSidePotLayerIsRefundedNotDropped covers Finding 2: a pot layer
-// whose sole eligible contributor(s) have since folded must not simply
-// vanish from Payouts() — sidepots.ComputeSidePots' Eligible list includes
-// folded players by contract, and if EVERY eligible player for a layer has
-// folded there's no showdown winner to award it to. That layer is an
-// uncalled/unmatched bet: it must be refunded to whoever funded it, not
-// dropped.
+// TestFoldedPlayersMatchedMoneyRollsIntoContestedPot: a side pot two players
+// bet and called against each other becomes dead money — not a refund — once
+// both of them fold. It rolls down into the pot the remaining live players
+// contest, exactly as a folded player's chips do in real poker.
 //
 // Scenario: A and C shove all-in pre-flop for 100 each (a shared floor).
 // D1 and D2 both call the 100, then both raise/call their way up to a tied
-// 400 on the flop, then BOTH fold on the turn without either of them ever
-// being called at that level. The layer between 100 and 400 (Amount 600) is
-// eligible only to D1 and D2 — and both are folded — while A and C (neither
-// folded) remain live for the lower layer. Without the fix, that 600 simply
-// disappears from Payouts(); with the fix, D1 and D2 split it back evenly
-// (they contributed equally into that specific layer, per
-// sidepots.ComputeSidePots' own construction).
-func TestOrphanedSidePotLayerIsRefundedNotDropped(t *testing.T) {
+// 400 on the flop, then BOTH fold on the turn. The 600 chips D1 and D2 put
+// in above 100 are dead money now that neither is in the hand: A and C (the
+// only players left, both all-in at 100) play for the whole 1000-chip pot,
+// and D1/D2 get nothing back.
+func TestFoldedPlayersMatchedMoneyRollsIntoContestedPot(t *testing.T) {
 	players := []*Player{
 		{ID: "A", Stack: 100, Ready: true},
 		{ID: "C", Stack: 100, Ready: true},
@@ -709,10 +703,8 @@ func TestOrphanedSidePotLayerIsRefundedNotDropped(t *testing.T) {
 		t.Fatalf("expected Turn once D1/D2 both matched 400, got %v", table.Stage())
 	}
 
-	// Turn: both D1 and D2 fold without either being called at the 400
-	// level. The layer between 100 and 400 (600 chips) is now eligible only
-	// to D1 and D2 — and both have folded — while A and C remain in the
-	// hand at the lower layer.
+	// Turn: both D1 and D2 fold. The 600 chips they put in above the 100
+	// floor are dead money now — it rolls into the pot A and C contest.
 	if err := table.Act("D1", betting.ActionFold, 0); err != nil {
 		t.Fatalf("D1 folds on the turn: %v", err)
 	}
@@ -736,11 +728,11 @@ func TestOrphanedSidePotLayerIsRefundedNotDropped(t *testing.T) {
 	if total != contributedTotal {
 		t.Fatalf("total payouts (%d) must equal total contributed (%d) — chips must never vanish, got %+v", total, contributedTotal, payouts)
 	}
-	if payouts["D1"] != 300 {
-		t.Fatalf("D1 folded but funded half of the orphaned 600-chip layer and must be refunded 300, got %d", payouts["D1"])
+	if payouts["D1"] != 0 || payouts["D2"] != 0 {
+		t.Fatalf("D1/D2 folded — their matched bets are dead money, not a refund, got %+v", payouts)
 	}
-	if payouts["D2"] != 300 {
-		t.Fatalf("D2 folded but funded half of the orphaned 600-chip layer and must be refunded 300, got %d", payouts["D2"])
+	if payouts["A"]+payouts["C"] != contributedTotal {
+		t.Fatalf("A and C are the only players left and must split the entire %d-chip pot, got %+v", contributedTotal, payouts)
 	}
 }
 

@@ -70,13 +70,20 @@ not yet dealt in — see § 2).
   test per scenario, not just "make it work for the happy path."
 - **Betting round ends** when all active (non-folded, non-all-in) players have acted and all
   outstanding bets are equal.
-- **Side pots**: when players go all-in at different stack sizes, split into pot layers.
-  Algorithm: sort all-in contribution amounts ascending; each layer's pot is
-  `(layer_amount − previous_layer_amount) × number_of_contributors_at_or_above_this_layer`;
-  a player is only eligible to win layers up to their own contribution level. This must be
-  implemented as a named, independently unit-tested function (`ComputeSidePots`) with test
-  cases covering 2-way and 3+-way simultaneous all-ins at different amounts — this is the
-  #1 place real-money poker engines have historically had payout bugs.
+- **Side pots**: when players *still in the hand* go all-in at different stack sizes, split
+  the pot into layers. Layer boundaries are drawn only at the contribution levels of players
+  who have **not folded** — a folded player's partial bet never carves out its own side pot.
+  A folded player's chips are dead money: they are spread across whichever layers span the
+  bands they cover and become part of what the live players there contest; folded money that
+  sits above every live contribution rolls down into the main pot (unless it was never
+  matched by anyone at all, in which case it is a genuinely uncalled bet and returned to the
+  player who put it in — the `Uncalled` layer flag). Each layer's pot is the sum, over every
+  contributor, of the chips they put into that band; a non-folded player is eligible to win
+  layers up to their own contribution level. This must be implemented as a named,
+  independently unit-tested function (`ComputeSidePots`) with test cases covering 2-way and
+  3+-way simultaneous all-ins at different amounts, folded partial bets, and uncalled
+  over-shoves — this is the #1 place real-money poker engines have historically had payout
+  bugs.
 - **Showdown**: best 5-card hand from 7 (2 hole + 5 board) wins each pot layer it's eligible
   for; ties split the pot layer evenly (odd chip to the player closest to the button, standard
   convention); reveal order follows standard convention (last aggressor shows first, or first

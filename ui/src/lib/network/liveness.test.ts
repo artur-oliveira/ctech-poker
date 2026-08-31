@@ -41,11 +41,51 @@ describe('API liveness', () => {
   test.each([
     ['a non-OK response', () => vi.mocked(fetch).mockResolvedValue({ok: false} as Response)],
     ['a CORS-shaped rejection', () => vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'))],
-  ])('treats %s as server unavailability', async (_label, arrange) => {
+  ])('treats %s as server unavailability only after exhausting retries', async (_label, arrange) => {
+    vi.useFakeTimers();
     arrange();
-    await expect(checkApiLiveness()).resolves.toBe(false);
+    const probe = checkApiLiveness();
+    await vi.advanceTimersByTimeAsync(2_000);
+    await expect(probe).resolves.toBe(false);
+    // One initial attempt plus two retries before the outage is published.
+    expect(fetch).toHaveBeenCalledTimes(3);
     expect(getApiLivenessSnapshot()).toMatchObject({status: 'unavailable', reason: 'server'});
     await expect(requireApiLiveness()).rejects.toThrow('Poker API is unavailable');
+  });
+
+  test('does not publish an outage while retries are still pending', async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch).mockResolvedValue({ok: false} as Response);
+    const probe = checkApiLiveness();
+    await vi.advanceTimersByTimeAsync(0); // first attempt resolved, backoff armed
+    expect(getApiLivenessSnapshot().status).toBe('checking');
+    await vi.advanceTimersByTimeAsync(2_000);
+    await probe;
+    expect(getApiLivenessSnapshot().status).toBe('unavailable');
+  });
+
+  test('recovers without an outage when a later retry succeeds', async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch)
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce({ok: true} as Response);
+    const probe = checkApiLiveness();
+    await vi.advanceTimersByTimeAsync(2_000);
+    await expect(probe).resolves.toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(getApiLivenessSnapshot()).toMatchObject({status: 'available', reason: null});
+  });
+
+  test('stops retrying and reports offline if the browser drops mid-retry', async () => {
+    vi.useFakeTimers();
+    vi.mocked(fetch).mockResolvedValue({ok: false} as Response);
+    const probe = checkApiLiveness();
+    await vi.advanceTimersByTimeAsync(0);
+    Object.defineProperty(navigator, 'onLine', {configurable: true, value: false});
+    await vi.advanceTimersByTimeAsync(2_000);
+    await expect(probe).resolves.toBe(false);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(getApiLivenessSnapshot()).toMatchObject({status: 'unavailable', reason: 'offline'});
   });
 
   test('does not call the server while the browser reports offline', async () => {
@@ -55,14 +95,15 @@ describe('API liveness', () => {
     expect(getApiLivenessSnapshot()).toMatchObject({status: 'unavailable', reason: 'offline'});
   });
 
-  test('aborts a health request after three seconds', async () => {
+  test('aborts each health request after three seconds and gives up after every retry', async () => {
     vi.useFakeTimers();
     vi.mocked(fetch).mockImplementation((_url, init) => new Promise((_resolve, reject) => {
       init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
     }));
     const probe = checkApiLiveness();
-    await vi.advanceTimersByTimeAsync(3_000);
+    await vi.advanceTimersByTimeAsync(3 * 3_000 + 2 * 1_000);
     await expect(probe).resolves.toBe(false);
+    expect(fetch).toHaveBeenCalledTimes(3);
     expect(getApiLivenessSnapshot().status).toBe('unavailable');
   });
 

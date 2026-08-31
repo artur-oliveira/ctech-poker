@@ -532,23 +532,28 @@ func (t *Table) AllInAmountForActor(playerID string) (int64, bool) {
 
 func (t *Table) potViews() []PotView {
 	contributions := make([]sidepots.Contribution, 0, len(t.handOrder))
-	folded := make(map[string]bool, len(t.handOrder))
 	for _, p := range t.handOrder {
 		if p.Contributed > 0 {
-			contributions = append(contributions, sidepots.Contribution{PlayerID: p.ID, Amount: p.Contributed})
+			contributions = append(contributions, sidepots.Contribution{
+				PlayerID: p.ID, Amount: p.Contributed, Folded: p.State == Folded,
+			})
 		}
-		folded[p.ID] = p.State == Folded
 	}
 	layers := sidepots.ComputeSidePots(contributions)
 	out := make([]PotView, 0, len(layers))
 	for _, layer := range layers {
-		eligible := make([]string, 0, len(layer.Eligible))
-		for _, id := range layer.Eligible {
-			if !folded[id] {
-				eligible = append(eligible, id)
-			}
+		// An uncalled layer is one player's excess bet that will be returned
+		// to them at resolution — fold it into the main pot for display so
+		// the shown total matches the chips in the middle instead of showing
+		// a phantom side pot.
+		if layer.Uncalled && len(out) > 0 {
+			out[0].Amount += layer.Amount
+			continue
 		}
-		out = append(out, PotView{Amount: layer.Amount, EligiblePlayerIDs: eligible})
+		out = append(out, PotView{
+			Amount:            layer.Amount,
+			EligiblePlayerIDs: append([]string(nil), layer.Eligible...),
+		})
 	}
 	return out
 }

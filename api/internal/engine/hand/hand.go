@@ -63,17 +63,17 @@ type Player struct {
 	// (AddWaitingPlayer/AddMidHandJoiner's new-Player branch) — rebuyExisting
 	// never touches either, so a later manual rebuy at a different amount
 	// can't change what the server auto-rebuys back to.
-	AutoRebuy   bool         `dynamodbav:"auto_rebuy,omitempty"`
-	BuyInAmount int64        `dynamodbav:"buy_in_amount,omitempty"`
-	Stack       int64        `dynamodbav:"stack"`
-	Ready       bool         `dynamodbav:"ready"`
+	AutoRebuy   bool  `dynamodbav:"auto_rebuy,omitempty"`
+	BuyInAmount int64 `dynamodbav:"buy_in_amount,omitempty"`
+	Stack       int64 `dynamodbav:"stack"`
+	Ready       bool  `dynamodbav:"ready"`
 	// PendingExit means the player asked to leave (RequestExit). They are
 	// paused (Ready is cleared, same as any sit-out) and, once no longer
 	// dealt into the current hand, Actor's post-commit sweep removes and
 	// cashes them out automatically. Persisted — not an actor-local map —
 	// so it survives an actor restart/handoff (see api/CLAUDE.md's
 	// disconnectedSince cautionary note for why that distinction matters).
-	PendingExit bool `dynamodbav:"pending_exit,omitempty"`
+	PendingExit bool         `dynamodbav:"pending_exit,omitempty"`
 	State       PlayerState  `dynamodbav:"state"`
 	HoleCards   [2]deck.Card `dynamodbav:"hole_cards"`
 	Contributed int64        `dynamodbav:"contributed"` // this hand's total contribution across all rounds, for side-pot math
@@ -1720,7 +1720,9 @@ func (t *Table) runShowdown() {
 	contributions := make([]sidepots.Contribution, 0, len(t.handOrder))
 	for _, p := range t.handOrder {
 		if p.Contributed > 0 {
-			contributions = append(contributions, sidepots.Contribution{PlayerID: p.ID, Amount: p.Contributed})
+			contributions = append(contributions, sidepots.Contribution{
+				PlayerID: p.ID, Amount: p.Contributed, Folded: p.State == Folded,
+			})
 		}
 	}
 	layers := sidepots.ComputeSidePots(contributions)
@@ -1731,18 +1733,30 @@ func (t *Table) runShowdown() {
 	var winningScore handeval.Score
 	remainingRakeCap := t.rakeCap()
 	for _, layer := range layers {
-		if len(layer.Eligible) == 1 {
-			// Only one player ever contributed to this layer — it's an
+		if layer.Uncalled {
+			// Only one player ever put chips into this layer — it's an
 			// uncalled bet, not a contested pot. Nobody else ever had a
 			// stake in it, so it's never a "win": no rake, and the sole
 			// contributor must not land in Winners/ComebackWinners (that
 			// falsely fires win/comeback achievements for a player who lost
 			// their actual showdown and just got their own excess back).
-			payouts[layer.Eligible[0]] += layer.Amount
+			// (Eligible normally holds exactly that one player; the pooled
+			// everyone-folded fallback splits evenly.)
+			n := int64(len(layer.Eligible))
+			share := layer.Amount / n
+			layerPayouts := make(map[string]int64, len(layer.Eligible))
+			for _, id := range layer.Eligible {
+				payouts[id] += share
+				layerPayouts[id] += share
+			}
+			if remainder := layer.Amount - share*n; remainder > 0 {
+				payouts[layer.Eligible[0]] += remainder
+				layerPayouts[layer.Eligible[0]] += remainder
+			}
 			potResults = append(potResults, PotResult{
 				Amount: layer.Amount, PayoutAmount: layer.Amount,
 				EligiblePlayerIDs: append([]string(nil), layer.Eligible...),
-				Payouts:           map[string]int64{layer.Eligible[0]: layer.Amount},
+				Payouts:           layerPayouts,
 				Refund:            true,
 			})
 			continue

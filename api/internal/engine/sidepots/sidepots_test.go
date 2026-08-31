@@ -215,6 +215,79 @@ func TestSixWayRingWithMixedAllInsAndTies(t *testing.T) {
 	}
 }
 
+// A folded player's partial bet must never carve out its own side pot: its
+// chips are absorbed into the layer the live players contest. Here A and C
+// are all-in for 100; D1 and D2 folded after putting in 400 each. The result
+// is a single 1000-chip pot for A and C — not a 400 main pot plus a 600
+// "side pot" for the folded players.
+func TestFoldedPartialBetsDoNotCreateASidePot(t *testing.T) {
+	contributions := []Contribution{
+		{PlayerID: "A", Amount: 100},
+		{PlayerID: "C", Amount: 100},
+		{PlayerID: "D1", Amount: 400, Folded: true},
+		{PlayerID: "D2", Amount: 400, Folded: true},
+	}
+	got := sortedEligible(ComputeSidePots(contributions))
+	want := []PotLayer{
+		{Amount: 1000, Eligible: []string{"A", "C"}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}
+
+// A folded player whose contribution sits between two live levels adds no
+// boundary of its own — it is spread across the layers that span it.
+func TestFoldedMidStackContributionIsAbsorbed(t *testing.T) {
+	contributions := []Contribution{
+		{PlayerID: "A", Amount: 100},               // live, all-in
+		{PlayerID: "B", Amount: 300},               // live
+		{PlayerID: "X", Amount: 200, Folded: true}, // folded between the two
+	}
+	got := sortedEligible(ComputeSidePots(contributions))
+	want := []PotLayer{
+		{Amount: 300, Eligible: []string{"A", "B"}}, // 100(A)+100(B)+100(X)
+		{Amount: 300, Eligible: []string{"B"}},      // 200(B)+100(X), no boundary at 200
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}
+
+// A folded player who over-bet everyone still gets the genuinely uncalled
+// portion back: X bet 200, only A (all-in 100) was there to call it.
+func TestFoldedPlayerUncalledExcessIsReturned(t *testing.T) {
+	contributions := []Contribution{
+		{PlayerID: "A", Amount: 100},
+		{PlayerID: "X", Amount: 200, Folded: true},
+	}
+	got := ComputeSidePots(contributions)
+	want := []PotLayer{
+		{Amount: 200, Eligible: []string{"A"}},
+		{Amount: 100, Eligible: []string{"X"}, Uncalled: true},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}
+
+// The classic heads-up over-shove: the excess one player put in that the
+// other could never cover is flagged Uncalled so the caller returns it.
+func TestHeadsUpOverShoveExcessIsFlaggedUncalled(t *testing.T) {
+	contributions := []Contribution{
+		{PlayerID: "short", Amount: 10_000},
+		{PlayerID: "big", Amount: 50_000},
+	}
+	got := ComputeSidePots(contributions)
+	want := []PotLayer{
+		{Amount: 20_000, Eligible: []string{"short", "big"}},
+		{Amount: 40_000, Eligible: []string{"big"}, Uncalled: true},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}
+
 // The function sorts distinct levels internally, so feeding it contributions
 // in an already-shuffled, non-ascending order must still produce the same
 // layers as the sorted-input case — guards against a future refactor that
