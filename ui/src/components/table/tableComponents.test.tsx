@@ -190,6 +190,22 @@ describe('table presentation', () => {
     expect(container.querySelector('.stage-v > .game-seat.viewer')).toBeInTheDocument();
   });
 
+  test('weaves the decorative house mark into the felt on both stages', () => {
+    const desktop = render(<TableStage snapshot={snapshotForScenario('pre_flop')} viewer={MOCK_PLAYER_ID}
+      pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}/>);
+    const desktopMark = desktop.container.querySelector('.game-felt .felt-wordmark');
+    expect(desktopMark).toHaveTextContent('CTECH');
+    expect(desktopMark).toHaveAttribute('aria-hidden', 'true');
+    expect(desktop.container.querySelector('#felt-weave feTurbulence')).toHaveAttribute('seed', '7');
+    desktop.unmount();
+
+    useVerticalStage();
+    const portrait = render(<TableStage snapshot={snapshotForScenario('six_max')} viewer={MOCK_PLAYER_ID}
+      maxSeats={6} seatLayoutKey="room-1" pot={0} bigBlind={50} nowMs={Date.now()} outcome={null}
+      holdOutcomeOpen={false}/>);
+    expect(portrait.container.querySelector('.stage-v-ring .game-felt .felt-wordmark')).toHaveTextContent('CTECH');
+  });
+
   test('shows one public playstyle badge and leaves unbadged seats unchanged', () => {
     const snapshot = snapshotForScenario('pre_flop');
     snapshot.seats.forEach(seat => {

@@ -3535,6 +3535,57 @@ h1 em {
     z-index: 1
 }
 
+/* The house mark woven into the felt (see FeltWordmark in TableStage.tsx),
+   matching the landing hero's .table-logo. It rides the calm top arc of the
+   felt, clear of the pot readout (which sits as high as ~17% once a hand
+   completes) and the community cards; tone-on-tone so it never reads as the
+   gold that carries value here, with the SVG turbulence filter fraying the
+   glyph edges into the weave instead of tinting them. Decorative and behind
+   the board — a transient dealer call (.table-callout, z 2) may briefly pass
+   over it, which is fine for an aria-hidden mark. */
+.felt-fx-defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden
+}
+
+.felt-wordmark {
+    position: absolute;
+    left: 50%;
+    top: 14%;
+    z-index: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    transform: translateX(-50%);
+    font: 700 12px var(--font-mono);
+    letter-spacing: .38em;
+    white-space: nowrap;
+    color: color-mix(in srgb, var(--felt-text) 17%, transparent);
+    text-shadow: 0 1px 0 color-mix(in srgb, var(--felt-shadow) 65%, transparent);
+    filter: url(#felt-weave);
+    pointer-events: none
+}
+
+.felt-wordmark img {
+    width: 15px;
+    height: 15px;
+    border-radius: var(--rounded-xs);
+    opacity: .62
+}
+
+@media (prefers-contrast: more) {
+    .felt-wordmark {
+        color: var(--felt-text-muted);
+        filter: none
+    }
+
+    .felt-wordmark img {
+        opacity: .9
+    }
+}
+
 @keyframes table-street-arrival {
     0% {
         opacity: 0;
@@ -10519,6 +10570,14 @@ h1 em {
 
 .stage-v .board > div {
     gap: 4px
+}
+
+/* The capsule felt is tall and narrow: the mark sits in the top arc and
+   loses a little tracking so it never reaches the rail. */
+.stage-v .felt-wordmark {
+    top: 6%;
+    font-size: 10px;
+    letter-spacing: .32em
 }
 
 .stage-v .board-runout-row,

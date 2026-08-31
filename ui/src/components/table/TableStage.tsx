@@ -4,6 +4,7 @@ import {Board} from '@/components/table/Board';
 import {Seat} from '@/components/table/Seat';
 import {HandOutcomeBanner, type HandOutcomeState} from '@/components/table/HandOutcome';
 import {rotateSeats} from '@/lib/utils';
+import {PokerLogo} from '@/components/PokerLogo';
 import type {TableSnapshot} from '@/lib/api/table';
 import {playerPotBreakdown, winnerStandings} from '@/lib/tableOutcome';
 import type {PlayerNote} from '@/lib/api/playerNotes';
@@ -75,6 +76,26 @@ export const STAGE_LABELS: Record<string, string> = {
   waiting_for_players: 'Aguardando jogadores', pre_flop: 'Pré-flop', flop: 'Flop', turn: 'Turn', river: 'River',
   showdown: 'Showdown', complete: 'Mão encerrada'
 };
+
+// The house mark woven into the felt, matching the landing hero's table
+// preview. Purely decorative (aria-hidden) and tone-on-tone: the SVG filter
+// frays the letter edges into the felt weave rather than tinting them, so it
+// never competes with the gold that carries value on this surface. The filter
+// uses a fixed seed so the fray is stable across renders and reduced-motion
+// contexts; `prefers-contrast: more` drops it for a clean, higher-contrast
+// mark (see globals.css).
+function FeltWordmark() {
+  return <div className="felt-wordmark" aria-hidden="true">
+    <svg className="felt-fx-defs" focusable="false" aria-hidden="true">
+      <filter id="felt-weave" x="-15%" y="-15%" width="130%" height="130%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.62 0.92" numOctaves="1" seed="7" result="noise"/>
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="0.7"
+          xChannelSelector="R" yChannelSelector="G"/>
+      </filter>
+    </svg>
+    <PokerLogo size={14}/> CTECH
+  </div>;
+}
 
 function StreetProgress({stage}: { stage: string }) {
   const label = STAGE_LABELS[stage] || stage.replaceAll('_', ' ');
@@ -249,6 +270,7 @@ export function TableStage({
                        rake={snapshot.rake} bigBlind={bigBlind}/>;
   const feltContent = <>
     <span key={`${snapshot.hand_id || 'waiting'}:${snapshot.stage}`} className="table-street-wash" aria-hidden="true"/>
+    <FeltWordmark/>
     {announcement && snapshot.stage !== 'complete' && <div key={announcement} className="table-callout"
       aria-hidden="true"><span>D</span><p>{calloutCopy(announcement)}</p></div>}
     {board}

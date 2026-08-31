@@ -381,6 +381,10 @@ The signature composition places a walnut oval or portrait ring around radial gr
 
 The action dock separates decision roles: neutral dark buttons for fold/check, Card Paper for call, and Oxblood Signal for raise. Desktop retains sliders, presets, and shortcuts. Compact layouts open an opaque raise sheet with presets and 48px step controls; horizontal gestures are never required.
 
+**Felt wordmark.** The `{PokerLogo} CTECH` house mark is woven into the calm top arc of the felt on both stages (and in replay), matching the landing hero's table preview. It is decorative (`aria-hidden`; the stage name lives on the page `h1`). The `CTECH` lettering is **tone-on-tone** — `felt-text` at ~15% over the felt with a `felt-shadow` relief — so it never reads as the gold the Three Materials Rule reserves for value; the P monogram keeps its oxblood, exactly as on the landing hero, dimmed into the felt. Its character comes from a single static SVG turbulence filter (fixed seed) that frays the glyph edges into the weave rather than from added colour or motion; `prefers-contrast: more` drops the filter for a clean higher-contrast lockup. It renders behind the community cards and the dealer call and never moves.
+
+The SVG displacement filter (`#felt-weave`) is the system's one sanctioned raster-filter effect: seed-fixed, applied only to this small decorative element, and disabled under increased-contrast. New filter chains elsewhere are not covered by this exception.
+
 ## Do's and Don'ts
 
 ### Do:
