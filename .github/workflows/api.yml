@@ -51,7 +51,7 @@ jobs:
       # running it unconditionally on every api/** change.
       - name: Detect turn-order/timer changes
         id: turnorder
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           filters: |
             slow:
