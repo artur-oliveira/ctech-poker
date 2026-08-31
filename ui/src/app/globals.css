@@ -7970,17 +7970,47 @@ h1 em {
 
 .api-toast-actions {
     display: flex;
-    gap: 8px
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 2px
 }
 
 .api-toast-actions button {
-    width: auto;
-    height: auto;
-    padding: 4px 12px;
-    border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 0 14px;
+    border-radius: var(--rounded-control);
+    border: 1px solid color-mix(in srgb, var(--toast-ink) 30%, transparent);
+    background: transparent;
     color: inherit;
     font: inherit;
-    font-size: 13px
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color .15s ease, border-color .15s ease
+}
+
+.api-toast-actions button:hover {
+    background: color-mix(in srgb, var(--toast-ink) 10%, transparent);
+    border-color: color-mix(in srgb, var(--toast-ink) 45%, transparent)
+}
+
+.api-toast-actions button:active {
+    transform: translateY(1px)
+}
+
+.api-toast-actions button:first-child {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: var(--on-brand)
+}
+
+.api-toast-actions button:first-child:hover {
+    background: var(--brand-bright);
+    border-color: var(--brand-bright)
 }
 
 .wrap-anywhere {
@@ -7988,7 +8018,7 @@ h1 em {
     overflow-wrap: anywhere
 }
 
-.api-toast button {
+.api-toast > button {
     flex: none;
     display: grid;
     place-items: center;
@@ -7998,11 +8028,13 @@ h1 em {
     color: var(--muted-rose);
     background: transparent;
     border: none;
-    cursor: pointer
+    cursor: pointer;
+    transition: background-color .15s ease, color .15s ease
 }
 
-.api-toast button:hover {
-    background: var(--black-08)
+.api-toast > button:hover {
+    background: color-mix(in srgb, var(--toast-ink) 12%, transparent);
+    color: var(--toast-ink)
 }
 
 .game-loading {
