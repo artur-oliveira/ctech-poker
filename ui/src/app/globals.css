@@ -200,7 +200,10 @@
     --overlay-night-2: #0018;
     --overlay-night-3: #001d;
     /* surface alpha */
-    --surface-seat-92: #171011eb
+    --surface-seat-92: #171011eb;
+    /* reaction fx — muck brown for the "jogar cocô" splat, not a rail/wood surface */
+    --reaction-muck: #6b4a2a;
+    --reaction-muck-deep: #3f2b18
 }
 
 * {
@@ -7476,12 +7479,24 @@ h1 em {
 }
 
 @keyframes reaction-feather-fall {
-    0% { opacity: 0; transform: translate(0, -10px) rotate(calc(var(--piece) * 60deg - 30deg)) scale(.7) }
-    18%, 30% { opacity: 1; transform: translate(0, 4px) rotate(calc(var(--piece) * 60deg - 30deg + 14deg)) scale(1) }
-    65% { transform: translate(calc((var(--piece) - 3) * 6px), 34px) rotate(calc(var(--piece) * 60deg - 60deg)) scale(1) }
+    0% {
+        opacity: 0;
+        transform: translate(calc((var(--piece) - 2.5) * 12px), -10px)
+                   rotate(calc(var(--piece) * 60deg - 30deg)) scale(.7)
+    }
+    18%, 30% {
+        opacity: 1;
+        transform: translate(calc((var(--piece) - 2.5) * 15px), 4px)
+                   rotate(calc(var(--piece) * 60deg - 30deg + 14deg)) scale(1)
+    }
+    65% {
+        transform: translate(calc((var(--piece) - 2.5) * 20px), 34px)
+                   rotate(calc(var(--piece) * 60deg - 60deg)) scale(1)
+    }
     100% {
         opacity: 0;
-        transform: translate(calc((var(--piece) - 3) * 10px), 58px) rotate(calc(var(--piece) * 60deg - 90deg)) scale(.9)
+        transform: translate(calc((var(--piece) - 2.5) * 26px), 58px)
+                   rotate(calc(var(--piece) * 60deg - 90deg)) scale(.9)
     }
 }
 

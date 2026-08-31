@@ -29,7 +29,7 @@ const REACTION_THEATER = {
   laugh: {accent: 'HA!', particles: ['HA', 'HA', 'HA', 'HA']},
   wow: {accent: '!', particles: ['✦', '!', '✦', '!']},
   angry: {accent: '', particles: ['', '', '', '']},
-  cry: {accent: '', particles: ['💧', '💧', '💧', '💧']},
+  cry: {accent: '', particles: ['', '', '', '', '']},
   nervous: {accent: '', particles: ['•', '•', '•', '•', '•']},
   cold: {accent: '', particles: ['❄', '❄', '❄', '❄', '❄', '❄']},
   fire: {accent: '', particles: ['', '', '', '', '', '']},
@@ -42,17 +42,19 @@ const REACTION_THEATER = {
   coffee: {accent: '', particles: ['~', '~', '~']},
   clover: {accent: '', particles: ['🍀', '✦', '🍀', '✦', '🍀', '✦']},
   horseshoe: {accent: '', particles: ['★', '★', '★', '★', '★', '★']},
-  tear: {accent: '', particles: ['💧', '💧', '💧', '💧', '💧', '💧']},
+  tear: {accent: '', particles: []},
   tomato: {accent: 'SPLAT', particles: ['', '', '', '', '', '']},
-  poop: {accent: '', particles: ['·', '·', '·', '·', '·']},
+  poop: {accent: 'ECA', particles: ['·', '·', '·', '·', '·']},
   rofl: {accent: 'HA!', particles: ['🤣', '🤣', '🤣']},
   duck: {accent: 'QUACK', particles: ['🪶', '🪶', '🪶', '🪶', '🪶']},
-  turtle: {accent: 'TANK', particles: ['z', 'z', 'Z']},
+  turtle: {accent: '', particles: ['z', 'z', 'Z']},
   knife: {accent: '', particles: ['', '', '', '', '', '', '', '']},
   flowers: {accent: '', particles: ['🌸', '🌸', '🌸', '🌸', '🌸', '🌸']},
-  spotlight: {accent: 'READ', particles: ['✦', '✦', '✦', '✦']},
+  spotlight: {accent: 'BOA', particles: ['✦', '✦', '✦', '✦']},
   crown: {accent: 'REI', particles: ['♠', '♦', '♣', '♥', '★']},
-  bandage: {accent: '+1', particles: ['♥', '✦', '♥', '✦']}
+  bandage: {accent: '+1', particles: ['♥', '✦', '♥', '✦']},
+  cucumber: {accent: 'SUSTO!', particles: ['', '', '', '', '', '']},
+  boomerang: {accent: 'VOLTOU', particles: ['', '', '']}
 } satisfies Record<TableReactionID, {accent: string; particles: string[]}>;
 
 function ReactionChipStack({className = '', style}: {className?: string; style?: CSSProperties}) {

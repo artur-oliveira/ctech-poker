@@ -54,10 +54,17 @@ persistence.
 | `spotlight` | Boa leitura     | Sweeping table spotlight, READ mark, and gold sparks       |
 | `crown`     | Passar a coroa  | Crown landing, REI plaque, and orbiting suits              |
 | `bandage`   | Curar bad beat  | Bandage seal, green recovery ring, and hearts              |
+| `cucumber`  | Botar pepino    | Cucumber creeps in behind the seat, then a green SUSTO! burst and jump lines |
+| `boomerang` | Jogar bumerangue| Spinning arc to the target, then whips back toward the sender with VOLTOU     |
 
-The six new IDs are `heartbeat`, `shark`, `pokerface`, `spotlight`, `crown`, and `bandage`. They are free. The API's
-`internal/reactions/catalog.go` whitelist mirrors the frontend keys; adding a frontend key without that server entry
-would make production reject the socket action.
+See `docs/2026-08-31-reactions-polish.md` for the 2026-08-31 choreography/​copy pass that reworked
+`clap`, `cry`, `fire`, `heartbeat`, `shark`, `pokerface`, `tear`, `poop`, `rofl`, `duck`, and `flowers`,
+rewrote every caption in the table's acid-humour voice, and added the two reactions above.
+
+`heartbeat`, `shark`, `pokerface`, `spotlight`, `crown`, `bandage`, `cucumber`, and `boomerang` are free. The API's
+`internal/reactions/catalog.go` whitelist mirrors the frontend keys (and `internal/reactions/catalog_test.go` mirrors
+both the `targeted` flags and the full key list); adding a frontend key without those server entries would make
+production reject the socket action.
 
 ## Interaction states
 

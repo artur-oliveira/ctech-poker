@@ -22,6 +22,7 @@ var catalog = []ReactionCatalogEntry{
 	{ID: "horseshoe", Targeted: true}, {ID: "tear", Targeted: true}, {ID: "tomato", Targeted: true},
 	{ID: "duck", Targeted: true}, {ID: "flowers", Targeted: true},
 	{ID: "spotlight", Targeted: true}, {ID: "crown", Targeted: true}, {ID: "bandage", Targeted: true},
+	{ID: "cucumber", Targeted: true}, {ID: "boomerang", Targeted: true},
 
 	{ID: "cold", Premium: true, PriceFichas: 100_000, SKU: "poker_reaction_cold"},
 	{ID: "fire", Premium: true, PriceFichas: 100_000, SKU: "poker_reaction_fire"},

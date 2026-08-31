@@ -65,7 +65,7 @@ describe('TableReactions Poker Theater', () => {
     expect(callbacks.onQuickSendAction).toHaveBeenCalledWith('heartbeat');
     expect(callbacks.onOpenChangeAction).toHaveBeenCalledWith(false);
 
-    await user.click(screen.getByRole('tab', {name: /Mandar para alguém.*15 gestos/}));
+    await user.click(screen.getByRole('tab', {name: /Mandar para alguém.*17 gestos/}));
     expect(screen.getByRole('tabpanel', {name: 'Reações para outro jogador'})).toBeInTheDocument();
     await user.click(screen.getByRole('button', {name: /Boa leitura/}));
     expect(callbacks.onPendingReactionChangeAction).toHaveBeenCalledWith('spotlight');
@@ -102,7 +102,7 @@ describe('TableReactions Poker Theater', () => {
     await user.click(cold);
     expect(callbacks.onLockedReactionAction).toHaveBeenCalledWith(catalog[0]);
 
-    const fire = screen.getByRole('button', {name: /Sequência quente/});
+    const fire = screen.getByRole('button', {name: /Pegando fogo/});
     expect(within(fire).getByLabelText('Premium liberada')).toBeInTheDocument();
     await user.click(fire);
     expect(callbacks.onQuickSendAction).toHaveBeenCalledWith('fire');
@@ -162,13 +162,13 @@ describe('TableReactions Poker Theater', () => {
     };
     renderReactions({items: [item]});
 
-    await waitFor(() => expect(screen.getByRole('img', {name: 'Cara de pôquer'})).toBeVisible());
+    await waitFor(() => expect(screen.getByRole('img', {name: 'Pokerface'})).toBeVisible());
     await user.click(screen.getByRole('button', {name: 'Ocultar efeitos de reações'}));
-    expect(screen.queryByRole('img', {name: 'Cara de pôquer'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', {name: 'Pokerface'})).not.toBeInTheDocument();
     expect(window.localStorage.getItem('poker:table-reactions-muted')).toBe('true');
 
     await user.click(screen.getByRole('button', {name: 'Mostrar efeitos de reações'}));
-    expect(await screen.findByRole('img', {name: 'Cara de pôquer'})).toBeInTheDocument();
+    expect(await screen.findByRole('img', {name: 'Pokerface'})).toBeInTheDocument();
     expect(window.localStorage.getItem('poker:table-reactions-muted')).toBe('false');
   });
 

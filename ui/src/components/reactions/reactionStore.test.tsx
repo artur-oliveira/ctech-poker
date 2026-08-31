@@ -73,7 +73,7 @@ describe('ReactionStoreSection', () => {
     renderSection();
     const items = within(screen.getByRole('list', {name: 'Catálogo de reações premium'})).getAllByRole('listitem');
     expect(items).toHaveLength(2);
-    expect(within(items[0]).getByText('Sequência quente')).toBeInTheDocument();
+    expect(within(items[0]).getByText('Pegando fogo')).toBeInTheDocument();
     expect(within(items[0]).getByText(/R\$\s?9,90/)).toBeInTheDocument();
     expect(within(items[0]).getByText(/5\.000 fichas/)).toBeInTheDocument();
   });
@@ -350,7 +350,7 @@ describe('ReactionFavoritesDialog', () => {
     render(<ReactionFavoritesDialog open favorites={[]} owned={owned} saving={false}
       onOpenChangeAction={onOpenChangeAction} onSaveAction={onSaveAction}/>);
 
-    expect(within(screen.getByRole('button', {name: /Sequência quente/})).queryByLabelText('Premium bloqueada')).toBeNull();
+    expect(within(screen.getByRole('button', {name: /Pegando fogo/})).queryByLabelText('Premium bloqueada')).toBeNull();
     const locked = screen.getByRole('button', {name: /Frio na mesa/});
     expect(within(locked).getByLabelText('Premium bloqueada')).toBeInTheDocument();
 

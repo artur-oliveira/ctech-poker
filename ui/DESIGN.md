@@ -336,11 +336,16 @@ Components feel tactile and decisive: pressable, fast, explicit about state, and
 ### Table Reactions
 
 - **Picker:** Keep favorites first, then split the catalog into “Na minha cadeira” and “Mandar para alguém.” The
-  two-mode structure protects the timed poker decision from a 28-option wall while keeping every reaction directly
+  two-mode structure protects the timed poker decision from a 30-option wall while keeping every reaction directly
   discoverable.
 - **Identity:** Every reaction owns a label, a short supporting line, a color family, and one recognizable
   choreography. Self tells rise from the sender's seat; directed gestures travel in an arc and resolve at the
-  recipient's seat.
+  recipient's seat with a distinct terminal beat (splat, banner, ring, catch — never a plain fade).
+- **Voice:** Labels name the gesture; captions carry the table's acid friendly-fire humour (pt-BR, e.g. “Chora mais,
+  campeão”, “Meus pêsames”). Sincere gestures (respect, flowers-as-tribute is the exception) stay warm.
+- **Reaction fx colours:** the standard `--tag-*` / `--gold*` / felt families carry every effect except one — the
+  “Jogar cocô” splat uses `--reaction-muck` / `--reaction-muck-deep`, a dedicated muck brown that is deliberately not
+  a rail/wood surface token.
 - **Scale:** Effects stay within roughly one seat's visual territory and complete inside the existing ephemeral
   reaction lifetime. They may briefly celebrate a seat, but never move cards, alter table state, or delay an action.
 - **Control:** The eye toggle hides all transient effects and persists locally. Locked, owned, loading, unavailable,
