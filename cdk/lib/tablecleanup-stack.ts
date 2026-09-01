@@ -42,7 +42,7 @@ export class TableCleanupStack extends cdk.Stack {
       managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')],
     });
     role.addToPolicy(new iam.PolicyStatement({
-      actions: ['dynamodb:Query', 'dynamodb:GetItem', 'dynamodb:UpdateItem'],
+      actions: ['dynamodb:Query', 'dynamodb:GetItem', 'dynamodb:BatchGetItem', 'dynamodb:UpdateItem'],
       resources: [
         tableStateArn, `${tableStateArn}/index/*`,
       ],

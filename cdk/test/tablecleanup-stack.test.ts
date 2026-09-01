@@ -50,7 +50,8 @@ test('the Lambda role can Query the table-state index but never Scan it', () => 
     PolicyDocument: Match.objectLike({
       Statement: Match.arrayWith([
         Match.objectLike({
-          Action: Match.arrayWith(['dynamodb:Query']),
+          // BatchGetItem backs tablestore's consistent-read load path.
+          Action: Match.arrayWith(['dynamodb:Query', 'dynamodb:BatchGetItem']),
           Resource: Match.arrayWith([
             'arn:aws:dynamodb:us-east-1:868899309401:table/dev_poker_table_state',
             'arn:aws:dynamodb:us-east-1:868899309401:table/dev_poker_table_state/index/*',
