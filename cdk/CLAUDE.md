@@ -60,12 +60,22 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
 
 - **No WAF** on the CloudFront distribution — no `aws-wafv2` import, no `webAclId`. `PLAN.md`'s
   Task 9 claimed this shipped; it did not.
-- **Termination drain is explicit but currently inert:** the ASG lifecycle hook invokes a Lambda
-  that stops the app through SSM RunCommand and always completes termination (120-second
-  heartbeat). The SSM agent is disabled by default since deploys became instance refreshes, so
-  `send_command` fails and the hook completes without draining — players are dropped mid-hand.
-  Set `ENABLE_SSM_AGENT=true`, or replace the drain with something that does not need the agent,
-  before this leaves development.
+- **Termination drain works but is not reliably triggered for every termination** (re-verified
+  2026-09-01, incident on table `01M1C5GQR7HWXSNSSX8Q49XN9X`). `ENABLE_SSM_AGENT` is hardcoded
+  `true` in `cdk/bin/poker.ts` (not the `false` this file previously claimed), and the SSM agent
+  does run on the Alpine AMI — confirmed from `/ctech-poker/prod/app` logs, `rc-service app stop`
+  actually reaches the Go binary's Fx `OnStop`/`DrainAndRelease` (`"shutting down ctech-poker-api,
+  draining table manager leases"`) for terminations it fires for. The gap: during a spot-instance
+  rebalance storm (`capacityRebalance: true`, most replacement launches failing on
+  `UnfulfillableCapacity`), the ASG recorded at least 4-5 real terminations in ~30 minutes but
+  `/aws/lambda/<env>-ctech-poker-termination-drain` only invoked 3 times — one terminated instance
+  got no drain attempt at all (no Lambda invocation, no `OnStop` log line), and that is the
+  instance whose in-flight hand ended up corrupted. Root cause of the missed invocation
+  (SNS/EventBridge delivery under high churn vs. some other path) is not yet isolated — do that
+  before changing this mechanism. Application-side, `internal/table/actor.go`'s commit-time
+  duplicate-seat guard (`docs/specs/2026-09-01-duplicate-seat-commit-guard.md`) now makes a missed
+  drain fail safe (refuse + reload) instead of corrupting state, but it does not make the drain
+  itself reliable — a dropped-without-draining instance still costs the game in-progress hands.
 - **No DLQ on either EventBridge Scheduler target** (`reconcile-stack.ts`, `tablecleanup-stack.ts`).
 - **No test** for `oidc-stack.ts`.
 - **B10 (fixed)** — archiver `DynamoEventSource` has `bisectBatchOnError` + `onFailure: SqsDlq`.

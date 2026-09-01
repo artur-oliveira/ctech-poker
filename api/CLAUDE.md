@@ -20,8 +20,13 @@ See `docs/plans/2026-08-21-entry-fee-entitlement.md`. **Still blocking, found 20
 2. Poker's M2M client has never been granted the `internal:wallet:debit-real` scope in `ctech-account`'s catalog. Both
    are data/config actions in `ctech-account`, not code changes in this repo. Also unresolved (re-verified 2026-07-28):
 
-- No ASG lifecycle hook exists in either `ctech-cdk`'s `PrivateIpv4Ec2Service` or this repo's `cdk/lib/api-stack.ts` —
-  `tablemanager.DrainAndRelease` relies on the EC2 default shutdown grace period, not a guaranteed drain window.
+- An ASG lifecycle hook + drain Lambda **do** exist (`cdk/lib/api-stack.ts`'s `TerminationDrainFunction`) and do reach
+  `tablemanager.DrainAndRelease` via `OnStop` when they fire — re-verified 2026-09-01 from
+  `"shutting down ctech-poker-api, draining table manager leases"` in `/ctech-poker/prod/app`. What is not reliable is
+  the hook firing for *every* termination: under a spot rebalance storm the same day, the drain Lambda invoked for
+  only 3 of at least 4-5 real terminations — see `cdk/CLAUDE.md`'s Known Issues for the details and
+  `docs/specs/2026-09-01-duplicate-seat-commit-guard.md` for the resulting incident. Treat `DrainAndRelease` as
+  best-effort, not guaranteed, until that gap is closed.
 - The real-money buy-in path skips the poker-terms-acceptance check the sandbox path performs (`internal/app/app.go`).
 - No WAF at the CloudFront edge (and the distribution itself is being retired — the app is on Cloudflare Workers); application rate limits (`internal/api/v1/ratelimit.go`) and Turnstile are the only
   protection.
