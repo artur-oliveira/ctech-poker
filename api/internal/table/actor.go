@@ -617,6 +617,22 @@ func (a *Actor) handleEscalate(ctx context.Context) error {
 // version conflict is evidence about staleness at this moment, not a
 // permanent downgrade or upgrade of that grant.
 func (a *Actor) ensureLoaded(ctx context.Context, force bool) error {
+	// A duplicate seat can only exist in a.cached if some earlier mutation
+	// (e.g. applyJoinAndCommit's append) was never actually committed — commit's
+	// own DuplicateSeatIDForActor guard is what stopped it — yet the handler
+	// that produced it had no before/rollback to undo it locally (unlike
+	// applyLeaveAndCommit/applyJoinAndCommit, applyReadyAndCommit mutates
+	// a.cached in place with no snapshot to restore). Trusting this cache
+	// forever after that (trustCache skips every future reload) is exactly
+	// how the 2026-09-01 incident's ghost seat kept surviving until an
+	// unrelated commit finally persisted it for real. Force a genuine reload
+	// the moment this is detected, regardless of trustCache, so the next
+	// command starts from DynamoDB's still-clean state instead of this fork.
+	if a.cached != nil && a.trustCache && !force {
+		if _, dup := a.cached.DuplicateSeatIDForActor(); dup {
+			force = true
+		}
+	}
 	if a.cached != nil && a.trustCache && !force {
 		a.cached.ConfigureRunItTwice(a.runItTwiceEnabled.Load())
 		a.refreshStreaks(ctx)
@@ -724,6 +740,18 @@ func (a *Actor) applyReadyAndCommit(ctx context.Context, c ReadyCmd) error {
 	if !a.isSeated(c.PlayerID) {
 		return fmt.Errorf("table: player %s is not seated", c.PlayerID)
 	}
+	// Snapshot before any in-place mutation, same discipline as
+	// applyLeaveAndCommit/applyJoinAndCommit: c.Ready can drive tryStartHand
+	// (a full StartHand() — dealing, dealer rotation, blind posting) straight
+	// into a.cached, and a.handID alongside it. A commit failure below that
+	// isn't a version conflict (a transient store error, not just something
+	// retryOnConflict already reloads on) must not leave that uncommitted
+	// mutation trusted in this actor's cache with no matching
+	// poker_action_log entry — that is exactly what let the 2026-09-01
+	// incident's ghost seat and dropped player survive to be persisted for
+	// real by a later, unrelated successful commit.
+	before := a.cached.ExportState()
+	beforeHandID := a.handID
 	a.markLastAction(c.PlayerID)
 	for _, p := range a.cached.PlayersForActor() {
 		if p.ID == c.PlayerID {
@@ -746,9 +774,14 @@ func (a *Actor) applyReadyAndCommit(ctx context.Context, c ReadyCmd) error {
 	} else {
 		a.cached.SitOutForActor(c.PlayerID)
 	}
-	return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+	if err := a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
 		PlayerID: c.PlayerID, ActionID: c.ActionID, Action: action,
-	})
+	}); err != nil {
+		a.cached = hand.NewTableFromState(before)
+		a.handID = beforeHandID
+		return err
+	}
+	return nil
 }
 
 // tryStartHand attempts to start a new hand if the table is between hands.
@@ -1079,6 +1112,24 @@ func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.A
 		// production — the manager always supplies a real *tablestore.Store.
 		a.version++
 		return nil
+	}
+	// Last-line backstop (2026-09-01 incident: a player seated twice at
+	// 01M1C5GQR7HWXSNSSX8Q49XN9X after a non-version-conflict commit failure
+	// left a.cached poisoned with an uncommitted duplicate seat that a later,
+	// unrelated successful commit then persisted for real). Never persist a
+	// state with two seats sharing one player ID, no matter which upstream
+	// handler produced it — refuse loudly instead of writing corrupted state
+	// that every subsequent read/broadcast/settlement would then trust.
+	if dupID, dup := a.cached.DuplicateSeatIDForActor(); dup {
+		// Never persist it — whatever mutation produced this was never
+		// committed, so DynamoDB is still clean. Leave recovery to the next
+		// ensureLoaded call (see its own duplicate check) rather than forcing
+		// a reload here, which would race this function's own callers: both
+		// applyLeaveAndCommit and applyJoinAndCommit unconditionally restore
+		// a.cached to their pre-mutation snapshot on any commit error,
+		// immediately after this returns — a reload performed here would
+		// just get overwritten by that restore.
+		return fmt.Errorf("table: refusing to commit duplicate seat for player %s", dupID)
 	}
 	newState := a.cached.ExportState()
 	entry.TableID, entry.HandID, entry.Version = a.id, a.handID, a.version+1
@@ -2035,6 +2086,7 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 	// this, the next unrelated successful commit persists the ghost seat for
 	// real the first time any other player's action commits.
 	before := a.cached.ExportState()
+	beforeHandID := a.handID
 	p := &hand.Player{ID: c.PlayerID, Stack: c.Stack, HoldID: c.HoldID, LastActionAt: timeNowFunc().UnixMilli(), AutoRebuy: c.AutoRebuy, BuyInAmount: c.Stack}
 	stage := a.cached.Stage()
 	if stage != hand.WaitingForPlayers && stage != hand.Complete {
@@ -2052,12 +2104,14 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 		intent, err := c.SettlementIntent()
 		if err != nil {
 			a.cached = hand.NewTableFromState(before)
+			a.handID = beforeHandID
 			return err
 		}
 		extra = append(extra, intent)
 	}
 	if err := a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "join"}, extra...); err != nil {
 		a.cached = hand.NewTableFromState(before)
+		a.handID = beforeHandID
 		return err
 	}
 	return nil

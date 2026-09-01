@@ -518,6 +518,27 @@ func TestAllInRunoutDoesNotStallTheHand(t *testing.T) {
 // returned nil, and dereferencing p.State panicked with a nil pointer.
 // Removal must stay blocked for anyone dealt into the hand, in any state,
 // until the hand reaches Complete.
+func TestDuplicateSeatIDForActorDetectsRepeatedID(t *testing.T) {
+	table := NewTable([]*Player{
+		{ID: "A", Stack: 500, Ready: true},
+		{ID: "B", Stack: 500, Ready: true},
+	}, 10, 20)
+	if _, dup := table.DuplicateSeatIDForActor(); dup {
+		t.Fatal("expected no duplicate in a freshly seated table")
+	}
+
+	// Simulates the 2026-09-01 incident: an uncommitted-and-never-rolled-back
+	// mutation left the same player ID occupying two seats.
+	table.players = append(table.players, &Player{ID: "A", Stack: 100})
+	id, dup := table.DuplicateSeatIDForActor()
+	if !dup {
+		t.Fatal("expected a duplicate seat to be detected")
+	}
+	if id != "A" {
+		t.Fatalf("expected duplicate player ID %q, got %q", "A", id)
+	}
+}
+
 func TestRemovePlayerForActorRejectsFoldedPlayerStillInHand(t *testing.T) {
 	players := []*Player{
 		{ID: "Dealer", Stack: 500, Ready: true},

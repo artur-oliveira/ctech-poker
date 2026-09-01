@@ -383,6 +383,26 @@ func (t *Table) RunoutPhaseForActor() int { return t.runoutPhase }
 // nothing in this package previously needed to write it from outside).
 func (t *Table) PlayersForActor() []*Player { return t.players }
 
+// DuplicateSeatIDForActor reports the first player ID occupying more than one
+// seat, if any. t.players must never contain the same ID twice — every seat
+// mutation (AddMidHandJoiner/AddWaitingPlayer/rebuyExisting/RemovePlayerForActor)
+// is written to dedupe by ID, so a duplicate here means some earlier mutation
+// was applied to an in-memory cache that a failed, non-rolled-back commit left
+// poisoned (see actor.go's commit, which refuses to persist this). Detecting it
+// here rather than trusting every call site to get its own rollback right is
+// the backstop: a two-line invariant check is far cheaper to keep correct than
+// auditing every future seat-mutating code path for a missed rollback.
+func (t *Table) DuplicateSeatIDForActor() (string, bool) {
+	seen := make(map[string]bool, len(t.players))
+	for _, p := range t.players {
+		if seen[p.ID] {
+			return p.ID, true
+		}
+		seen[p.ID] = true
+	}
+	return "", false
+}
+
 // SetPlayerIdentityForActor persists display identity with the seat so snapshots
 // built by any actor instance carry the same name/avatar. It reports whether the
 // value changed, allowing connection setup to avoid a no-op table commit.

@@ -51,6 +51,16 @@ See `docs/plans/2026-08-21-entry-fee-entitlement.md`. **Still blocking, found 20
   `invalid_action` blames the player for it and makes the client end the command instead of resyncing and
   resubmitting. `ErrVersionConflict` stays `invalid_action` — it *is* a verdict.
 - **`tablelease` is latency-only**, not correctness. Never add lease-based correctness logic.
+- **Every `a.cached`-mutating handler must snapshot and roll back on any commit failure**, not just
+  `ErrVersionConflict` — mirror `applyLeaveAndCommit`'s `before := a.cached.ExportState()` /
+  `a.cached = hand.NewTableFromState(before)` pattern (also restore `a.handID` if the handler can call
+  `tryStartHand`). A handler that skips this (found missing from `applyReadyAndCommit` 2026-09-01) leaves an
+  uncommitted mutation trusted in the actor's cache under `trustCache`, which the next unrelated successful
+  commit then persists for real — this is what let a player end up seated three times at once while another
+  silently vanished during a spot-instance rebalance storm. `Actor.commit` also refuses outright to persist any
+  state with a duplicate player ID (`hand.Table.DuplicateSeatIDForActor`) as a backstop, and `ensureLoaded` forces
+  a reload past `trustCache` the moment it sees one — but a missing rollback is still a bug in the handler, not
+  something to rely on the backstop for. See `docs/specs/2026-09-01-duplicate-seat-commit-guard.md`.
 - **Player identity comes from the JWT `sub`** — derive `playerID` from claims, never trust a client-supplied id
   (prevents IDOR).
 - **The `currency_mode` boundary is load-bearing.** `buyin` routes to exactly one ledger per room and must never let
