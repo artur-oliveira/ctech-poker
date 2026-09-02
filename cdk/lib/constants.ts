@@ -83,7 +83,7 @@ export const HEALTH_CHECK_PATH = '/v1.0/health-check';
  * one unit of ASG capacity — unrelated to the leasing model, which already
  * tolerates 2 concurrently-running instances (minCapacity=1/maxCapacity=2).
  */
-export const API_ASG_SPOT_INSTANCE_TYPES = ['t4g.nano', 't4g.micro', 't4g.small'] as const;
+export const API_ASG_SPOT_INSTANCE_TYPES = ['t4g.nano', 't4g.micro',] as const;
 
 /** S3 key prefix inside the shared deployments/logs buckets. */
 export const S3_PREFIX = SERVICE;
