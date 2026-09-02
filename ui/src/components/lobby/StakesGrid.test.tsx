@@ -128,16 +128,19 @@ describe('lobby stakes integration', () => {
     // Simulates the aggregate the paginated fetch hands back once it has
     // walked every page: a full room from page one and the joinable one that
     // used to be invisible on page two (see #90).
-    roomsQuery = {
-      data: [
-        {id: 'page-1-full-room', visibility: 'public', small_blind: 25, big_blind: 50, max_seats: 6, seats_taken: 6},
-        {id: 'page-2-open-room', visibility: 'public', small_blind: 25, big_blind: 50, max_seats: 6, seats_taken: 3},
-      ], isLoading: false
-    };
+    const rooms = [
+      {id: 'page-1-full-room', visibility: 'public', small_blind: 25, big_blind: 50, max_seats: 6, seats_taken: 6},
+      {id: 'page-2-open-room', visibility: 'public', small_blind: 25, big_blind: 50, max_seats: 6, seats_taken: 3},
+    ];
+    roomsQuery = {data: rooms, isLoading: false, refetch: vi.fn().mockResolvedValue({data: rooms})};
+    // The seat-race re-check (#91) re-verifies the candidate with a direct
+    // read before trusting the cached list.
+    getRoom.mockResolvedValue({seats_taken: 3, max_seats: 6});
     render(<StakesGrid/>);
     expect(screen.getByText('1 mesa ativa · até 6 jogadores')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', {name: /6-MAX/}));
-    expect(push).toHaveBeenCalledWith('/table?id=page-2-open-room');
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/table?id=page-2-open-room'));
+    expect(getRoom).toHaveBeenCalledWith('page-2-open-room');
     expect(createRoom).not.toHaveBeenCalled();
   });
 
