@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"slices"
 	"strconv"
 	"time"
@@ -965,7 +966,34 @@ func registerRoutes(
 // ShutdownWithContext budget it precedes.
 const wsDrainGrace = 1500 * time.Millisecond
 
+// spotTerminationMetadataURL is the EC2 instance metadata (IMDS) path that
+// reports an impending spot reclamation
+// (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/spot-instance-termination-notices.html):
+// a 200 response means this instance has ~2 minutes left; 404 means no
+// notice yet. A var, not a const, so tests can point it at an httptest
+// server. Deliberately IMDSv1 (plain GET, no token dance) — this only ever
+// reads a single unauthenticated, non-sensitive metadata path.
+var spotTerminationMetadataURL = "http://169.254.169.254/latest/meta-data/spot/instance-action"
+
+// spotPollInterval matches the "every few seconds" the issue asks for —
+// frequent enough that the ~2 minute spot notice window comfortably covers
+// several polls, without hammering IMDS. A var (not const) so tests can
+// speed it up instead of waiting out a real 5s ticker.
+var spotPollInterval = 5 * time.Second
+
+const (
+	// spotPollTimeout bounds a single IMDS request. On any host that isn't
+	// EC2 (local/dev, CI) 169.254.169.254 is unroutable and fails fast well
+	// under this; it exists to bound the rare hung-connection case.
+	spotPollTimeout = 2 * time.Second
+	// spotDrainTimeout bounds the proactive drain triggered by a termination
+	// notice. Generous relative to the ~2 minute spot warning, but bounded so
+	// a stuck actor can't wedge the poller forever.
+	spotDrainTimeout = 30 * time.Second
+)
+
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {
+	pollCtx, cancelPoll := context.WithCancel(context.Background())
 	lc.Append(fx.Hook{
 		OnStart: func(context.Context) error {
 			addr := ":" + strconv.Itoa(cfg.Port)
@@ -975,9 +1003,24 @@ func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *t
 					slog.Error("server stopped", "err", err)
 				}
 			}()
+			// Reduce reliance on the ASG lifecycle hook + drain Lambda alone
+			// (#33): during the 2026-09-01 spot rebalance storm it fired for
+			// only 3 of at least 4-5 real terminations, stranding leases the
+			// commit-guard backstops then had to paper over (api/CLAUDE.md,
+			// docs/specs/2026-09-01-duplicate-seat-commit-guard.md). This
+			// instance also polls its own spot termination notice directly
+			// and drains proactively the moment one appears, instead of
+			// waiting solely on the external hook to complete before
+			// termination. Only meaningful on real EC2 instances (prod);
+			// skip it elsewhere so dev/test never spend a background
+			// goroutine polling a link-local address that doesn't exist.
+			if cfg.Env == "prod" {
+				go pollSpotTermination(pollCtx, manager, &http.Client{Timeout: spotPollTimeout})
+			}
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
+			cancelPoll()
 			// Hand every live socket a 1001 "going away" before anything else:
 			// ShutdownWithContext below force-closes them once its window
 			// elapses, and a client that learns about it only from a dead read
@@ -987,10 +1030,72 @@ func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *t
 				slog.Info("sent websocket going-away frames", "conns", n)
 			}
 			slog.Info("shutting down ctech-poker-api, draining table manager leases")
+			// Idempotent (#33): a no-op here if pollSpotTermination already
+			// drained this instance proactively.
 			manager.DrainAndRelease(ctx)
 			stopCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 			return app.ShutdownWithContext(stopCtx)
 		},
 	})
+}
+
+// pollSpotTermination polls this instance's own EC2 metadata for a spot
+// termination notice and, the moment one appears, proactively runs the same
+// idempotent manager.DrainAndRelease the OnStop SIGTERM handler above runs —
+// rather than waiting solely on the ASG lifecycle hook's drain Lambda to
+// reach this instance before AWS reclaims it (#33). Exits after the first
+// detected notice (nothing left to poll for once this instance is
+// draining); ctx cancellation (OnStop) also stops it early on a normal
+// deploy, where no notice ever appears.
+func pollSpotTermination(ctx context.Context, manager *tablemanager.Manager, client *http.Client) {
+	ticker := time.NewTicker(spotPollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			noticed, err := spotTerminationNoticed(ctx, client)
+			if err != nil {
+				// Not on EC2, or IMDS transiently unreachable — try again
+				// next tick rather than logging noise every 5s.
+				continue
+			}
+			if !noticed {
+				continue
+			}
+			slog.Warn("spot termination notice detected via instance metadata, draining proactively ahead of the lifecycle hook")
+			drainCtx, cancel := context.WithTimeout(context.Background(), spotDrainTimeout)
+			manager.DrainAndRelease(drainCtx)
+			cancel()
+			return
+		}
+	}
+}
+
+// spotTerminationNoticed reports whether IMDS currently has a spot
+// instance-action published for this instance. A non-nil error means the
+// check was inconclusive (not on EC2, network error, unexpected status) —
+// callers must treat that as "no notice yet", not as a notice.
+func spotTerminationNoticed(ctx context.Context, client *http.Client) (bool, error) {
+	reqCtx, cancel := context.WithTimeout(ctx, spotPollTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, spotTerminationMetadataURL, nil)
+	if err != nil {
+		return false, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return true, nil
+	case http.StatusNotFound:
+		return false, nil
+	default:
+		return false, fmt.Errorf("unexpected instance metadata status %d", resp.StatusCode)
+	}
 }

@@ -25,8 +25,18 @@ See `docs/plans/2026-08-21-entry-fee-entitlement.md`. **Still blocking, found 20
   `"shutting down ctech-poker-api, draining table manager leases"` in `/ctech-poker/prod/app`. What is not reliable is
   the hook firing for *every* termination: under a spot rebalance storm the same day, the drain Lambda invoked for
   only 3 of at least 4-5 real terminations — see `cdk/CLAUDE.md`'s Known Issues for the details and
-  `docs/specs/2026-09-01-duplicate-seat-commit-guard.md` for the resulting incident. Treat `DrainAndRelease` as
-  best-effort, not guaranteed, until that gap is closed.
+  `docs/specs/2026-09-01-duplicate-seat-commit-guard.md` for the resulting incident. **Fixed (#33):** the app no
+  longer waits solely on that hook. `startServer` (`internal/app/app.go`) also runs
+  `pollSpotTermination` — a background goroutine, only in prod (`cfg.Env == "prod"`), that polls
+  this instance's own EC2 metadata (`http://169.254.169.254/latest/meta-data/spot/instance-action`)
+  every 5s and calls `manager.DrainAndRelease` proactively the instant a spot termination notice
+  appears, instead of waiting for the Lambda to reach `OnStop`. `tablemanager.Manager.DrainAndRelease`
+  is now idempotent — a `drainMu`/`draining`/`drainDone` guard makes every call after the first
+  (concurrent or sequential, from the proactive poller or the OnStop/SIGTERM path) a no-op wait
+  rather than a second walk of `m.actors`, so the two triggers can never double-release a lease no
+  matter which fires first or whether both do. This still does not cover non-spot terminations (no
+  metadata notice precedes those) — treat the hook itself as best-effort for those, with the
+  commit-time duplicate-seat guard below as the remaining backstop.
 - The real-money buy-in path skips the poker-terms-acceptance check the sandbox path performs (`internal/app/app.go`).
 - No WAF at the CloudFront edge (and the distribution itself is being retired — the app is on Cloudflare Workers); application rate limits (`internal/api/v1/ratelimit.go`) and Turnstile are the only
   protection.
