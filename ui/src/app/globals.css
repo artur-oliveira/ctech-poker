@@ -5788,6 +5788,46 @@ h1 em {
     width: 16px
 }
 
+.voice-confirm {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 8px;
+    padding: 4px 4px 4px 10px;
+    border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+    border-radius: var(--rounded-control);
+    background: color-mix(in srgb, var(--gold) 12%, var(--surface-seat))
+}
+
+.voice-confirm-label {
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--text-secondary)
+}
+
+.voice-action .voice-confirm-yes,
+.voice-action .voice-confirm-no {
+    width: auto;
+    height: 30px;
+    border-radius: var(--rounded-control)
+}
+
+.voice-action .voice-confirm-yes {
+    display: inline-flex;
+    gap: 4px;
+    padding: 0 10px;
+    border-color: transparent;
+    background: var(--gold);
+    color: var(--gold-ink);
+    font-size: 12px;
+    font-weight: 600
+}
+
+.voice-action .voice-confirm-no {
+    padding: 0 7px
+}
+
 @keyframes voice-listening {
     50% {
         box-shadow: 0 0 0 5px color-mix(in srgb, var(--gold) 12%, transparent)
