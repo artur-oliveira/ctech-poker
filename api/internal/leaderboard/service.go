@@ -19,10 +19,20 @@ type Entry struct {
 	WinRate           float64 `dynamodbav:"win_rate_score" json:"win_rate"`
 }
 
+// RankInfo is a player's exact position on a mode/metric leaderboard,
+// computed independently of any fetched page (see Service.MyRank).
+type RankInfo struct {
+	Entry Entry `json:"entry"`
+	Rank  int64 `json:"rank"`
+	Total int64 `json:"total"`
+}
+
 type statsStore interface {
 	IncrementStats(ctx context.Context, playerID, name, mode string, playedDelta, wonDelta int) error
 	IncrementAchievementPoints(context.Context, string, string, int) error
 	Top(ctx context.Context, mode, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error)
+	PlayerEntry(ctx context.Context, playerID, mode string) (*Entry, error)
+	RankOf(ctx context.Context, mode, metric string, entry Entry) (rank int64, total int64, err error)
 }
 type Service struct{ store statsStore }
 
@@ -65,15 +75,24 @@ func (s *Service) RecordUnlocks(ctx context.Context, mode string, unlocks []achi
 	return nil
 }
 
-func (s *Service) Top(ctx context.Context, mode, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
+// normalizeMetric defaults an empty metric to hands_won and rejects anything
+// not backed by a GSI. achievement_points is deliberately NOT rankable (B31):
+// there is no gsi_achievement_points GSI, and ranking it via another metric's
+// GSI silently returned wrong ordering. Add the GSI before re-enabling it.
+func normalizeMetric(metric string) (string, error) {
 	if metric == "" {
 		metric = "hands_won"
 	}
-	// achievement_points is deliberately NOT rankable (B31): there is no
-	// gsi_achievement_points GSI, and ranking it via another metric's GSI
-	// silently returned wrong ordering. Add the GSI before re-enabling it.
 	if metric != "hands_won" && metric != "hands_played" && metric != "win_rate" {
-		return nil, nil, fmt.Errorf("leaderboard: unsupported metric %q", metric)
+		return "", fmt.Errorf("leaderboard: unsupported metric %q", metric)
+	}
+	return metric, nil
+}
+
+func (s *Service) Top(ctx context.Context, mode, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
+	metric, err := normalizeMetric(metric)
+	if err != nil {
+		return nil, nil, err
 	}
 	if limit <= 0 {
 		limit = 50
@@ -109,4 +128,38 @@ func (s *Service) Top(ctx context.Context, mode, metric string, limit int, start
 		entries = entries[:limit]
 	}
 	return entries, lastKey, nil
+}
+
+// MyRank computes playerID's exact global rank and the total number of
+// ranked players for mode/metric, via a COUNT query against the metric's
+// GSI (Store.RankOf) rather than fetching and sorting the whole board — so a
+// player far outside Top's page still gets an exact answer. Returns
+// (nil, nil) when playerID has no stats row for mode yet (never played a
+// hand there this mode) — the "unranked yet" case the caller should render
+// as such rather than as an error.
+func (s *Service) MyRank(ctx context.Context, mode, metric, playerID string) (*RankInfo, error) {
+	metric, err := normalizeMetric(metric)
+	if err != nil {
+		return nil, err
+	}
+	entry, err := s.store.PlayerEntry(ctx, playerID, mode)
+	if err != nil {
+		return nil, err
+	}
+	if entry == nil {
+		return nil, nil
+	}
+	// RankOf must compare against the score actually materialized in the
+	// GSI right now (entry.WinRate as decoded), not a value recomputed here
+	// — the two can differ for a moment during the two-write
+	// IncrementStats/materializeWinRate sequence (see store.go).
+	rank, total, err := s.store.RankOf(ctx, mode, metric, *entry)
+	if err != nil {
+		return nil, err
+	}
+	// Recompute WinRate fresh for display, same as Top does for every row.
+	if entry.HandsPlayed > 0 {
+		entry.WinRate = float64(entry.HandsWon) / float64(entry.HandsPlayed)
+	}
+	return &RankInfo{Entry: *entry, Rank: rank, Total: total}, nil
 }

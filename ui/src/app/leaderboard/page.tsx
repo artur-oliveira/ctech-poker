@@ -2,7 +2,7 @@
 import React, {useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {Crown, Sparkles} from 'lucide-react';
-import {leaderboard} from '@/lib/api/gamification';
+import {leaderboard, myRank} from '@/lib/api/gamification';
 import {getViewerId, playerName} from '@/lib/utils';
 import {useOptionalSession} from "@/lib/auth/session";
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
@@ -18,11 +18,15 @@ export default function Ranking() {
   });
   const viewer = getViewerId();
   const {authed} = useOptionalSession();
-  
+  const {data: rankInfo} = useQuery({
+    queryKey: ['leaderboard-me', mode],
+    queryFn: () => myRank(mode),
+    enabled: authed
+  });
+
   const topThree = data.slice(0, 3);
   const remaining = data.slice(3);
-  const viewerEntry = data.find(p => p.player_id === viewer);
-  
+
   return (
     <AppPage authed={authed} current="leaderboard">
       <AppPageBody className="ranking">
@@ -34,17 +38,27 @@ export default function Ranking() {
         />
         <CurrencyModeTabs mode={mode} onChangeAction={setMode}/>
         
-        {viewerEntry && (
+        {authed && rankInfo && (
           <div className="viewer-ranking-card" aria-label="Sua posição atual">
             <Sparkles aria-hidden="true"/>
-            <div>
-              <span>Sua posição no ranking</span>
-              <strong>#{data.findIndex(p => p.player_id === viewer) + 1} de {data.length} jogadore{data.length === 1 ? 'r' : 's'}</strong>
-            </div>
-            <div className="viewer-ranking-stats">
-              <span><b>{viewerEntry.hands_won}</b> vitórias</span>
-              <span><b>{(viewerEntry.win_rate * 100).toFixed(1)}%</b> de taxa de vitória</span>
-            </div>
+            {rankInfo.ranked && rankInfo.entry ? (
+              <>
+                <div>
+                  <span>Sua posição no ranking</span>
+                  <strong>#{rankInfo.rank} de {rankInfo.total} jogador{rankInfo.total === 1 ? '' : 'es'}</strong>
+                </div>
+                <div className="viewer-ranking-stats">
+                  <span><b>{rankInfo.entry.hands_won}</b> vitórias</span>
+                  <span><b>{(rankInfo.entry.win_rate * 100).toFixed(1)}%</b> de taxa de vitória</span>
+                </div>
+              </>
+            ) : (
+              <div>
+                <span>Sua posição no ranking</span>
+                <strong>Ainda sem ranking</strong>
+                <p className="viewer-ranking-hint">Jogue uma mão nesta modalidade para entrar no ranking.</p>
+              </div>
+            )}
           </div>
         )}
         

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strconv"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/dynamo"
@@ -17,6 +18,14 @@ const (
 	gsiHandsWon    = "gsi_hands_won"
 	gsiHandsPlayed = "gsi_hands_played"
 	gsiWinRate     = "gsi_win_rate"
+
+	// maxRankCountPages bounds the pagination loop in countGSI: a COUNT
+	// query still pages every ~1MB of matched items, so a partition with an
+	// unbounded number of players could in principle loop forever. This is
+	// the single-partition-GSI hotspot flagged in issue #62 — acceptable for
+	// today's scale, but the right long-term fix is the Valkey ZSET mirror
+	// described there, not a bigger cap here.
+	maxRankCountPages = 200
 )
 
 type Store struct{ base dynamo.Base }
@@ -118,13 +127,21 @@ func (s *Store) IncrementAchievementPoints(ctx context.Context, playerID, mode s
 	return nil
 }
 
-func (s *Store) Top(ctx context.Context, mode, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
-	index, key := gsiHandsWon, "gsi_hands_won_pk"
-	if metric == "hands_played" {
-		index, key = gsiHandsPlayed, "gsi_hands_played_pk"
-	} else if metric == "win_rate" {
-		index, key = gsiWinRate, "gsi_win_rate_pk"
+// gsiFor maps a rankable metric to its GSI name, partition-key attribute, and
+// sort-key attribute (the field the GSI is actually ordered by).
+func gsiFor(metric string) (index, pkField, sortField string) {
+	switch metric {
+	case "hands_played":
+		return gsiHandsPlayed, "gsi_hands_played_pk", "hands_played"
+	case "win_rate":
+		return gsiWinRate, "gsi_win_rate_pk", "win_rate_score"
+	default:
+		return gsiHandsWon, "gsi_hands_won_pk", "hands_won"
 	}
+}
+
+func (s *Store) Top(ctx context.Context, mode, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
+	index, key, _ := gsiFor(metric)
 	result, err := s.base.Query(ctx, dynamo.QueryOpts{
 		PK: mode, PKField: key, IndexName: index,
 		ScanIndexForward: false, Limit: limit, ExclusiveStartKey: startKey,
@@ -141,4 +158,154 @@ func (s *Store) Top(ctx context.Context, mode, metric string, limit int, startKe
 		out = append(out, *e)
 	}
 	return out, result.LastEvaluatedKey, nil
+}
+
+// PlayerEntry loads a single player's stats row for mode, without going
+// through the GSI. Returns (nil, nil) when the player has no row yet (they
+// have never played a hand in this mode) — the caller's "unranked" case.
+func (s *Store) PlayerEntry(ctx context.Context, playerID, mode string) (*Entry, error) {
+	sk := statsSK + "#" + mode
+	item, err := s.base.GetItem(ctx, playerID, sk)
+	if err != nil {
+		return nil, fmt.Errorf("leaderboard: get player entry: %w", err)
+	}
+	if item == nil {
+		return nil, nil
+	}
+	e, err := dynamo.Decode[Entry](item)
+	if err != nil {
+		return nil, fmt.Errorf("leaderboard: decode player entry: %w", err)
+	}
+	return e, nil
+}
+
+// RankOf returns entry's 1-based rank and the total number of ranked rows for
+// mode/metric, computed with COUNT queries against the metric's GSI instead
+// of fetching and sorting the whole board. The rank is exact, including ties:
+// it counts rows with a strictly better score, then rows tied on score but
+// ordered before entry by player_id (the same tiebreak Service.Top's in-memory
+// sort uses), then adds 1.
+//
+// Three GSI queries, each Select:COUNT and each paginating only over its own
+// bounded slice (better-than, tied-before, and the mode's full partition for
+// the total) — no items are fetched or sorted in this process. The full-count
+// query for the mode's total is the one query genuinely bounded only by the
+// mode's total player count; see the maxRankCountPages comment.
+func (s *Store) RankOf(ctx context.Context, mode, metric string, entry Entry) (rank int64, total int64, err error) {
+	index, pkField, sortField := gsiFor(metric)
+	score := scoreFor(metric, entry)
+	scoreAV := &types.AttributeValueMemberN{Value: formatScore(score)}
+
+	better, err := s.countGSI(ctx, index, pkField, mode, countOpts{
+		sortCond:   "#sort > :val",
+		sortNames:  map[string]string{"#sort": sortField},
+		sortValues: map[string]types.AttributeValue{":val": scoreAV},
+	})
+	if err != nil {
+		return 0, 0, fmt.Errorf("leaderboard: count better: %w", err)
+	}
+	tiedBefore, err := s.countGSI(ctx, index, pkField, mode, countOpts{
+		sortCond:   "#sort = :val",
+		sortNames:  map[string]string{"#sort": sortField},
+		sortValues: map[string]types.AttributeValue{":val": scoreAV},
+		filterCond: "pk < :pid",
+		filterValues: map[string]types.AttributeValue{
+			":pid": &types.AttributeValueMemberS{Value: entry.PlayerID},
+		},
+	})
+	if err != nil {
+		return 0, 0, fmt.Errorf("leaderboard: count tied: %w", err)
+	}
+	total, err = s.countGSI(ctx, index, pkField, mode, countOpts{})
+	if err != nil {
+		return 0, 0, fmt.Errorf("leaderboard: count total: %w", err)
+	}
+	return better + tiedBefore + 1, total, nil
+}
+
+// scoreFor extracts the value entry is ranked by for metric, matching
+// Service.Top's sort keys.
+func scoreFor(metric string, entry Entry) float64 {
+	switch metric {
+	case "hands_played":
+		return float64(entry.HandsPlayed)
+	case "win_rate":
+		return entry.WinRate
+	default:
+		return float64(entry.HandsWon)
+	}
+}
+
+// formatScore renders score as the DynamoDB Number literal it must exactly
+// equal for a tied-score comparison to match: win_rate_score is materialized
+// with 9 decimal places (materializeWinRate), the integer metrics need none.
+func formatScore(score float64) string {
+	if score == float64(int64(score)) {
+		return strconv.FormatInt(int64(score), 10)
+	}
+	return strconv.FormatFloat(score, 'f', 9, 64)
+}
+
+// countOpts configures countGSI's key condition (always PK equality on mode,
+// plus an optional comparison on the metric's sort key) and an optional
+// FilterExpression evaluated after it (e.g. narrowing a tied-score page down
+// to rows ordered before one player_id).
+type countOpts struct {
+	sortCond     string
+	sortNames    map[string]string
+	sortValues   map[string]types.AttributeValue
+	filterCond   string
+	filterNames  map[string]string
+	filterValues map[string]types.AttributeValue
+}
+
+// countGSI runs a Select:COUNT query against index, paginating until
+// exhausted (or maxRankCountPages) and summing each page's Count — which
+// DynamoDB reports post-filter, so a FilterExpression in opts is reflected
+// correctly in the total.
+func (s *Store) countGSI(ctx context.Context, index, pkField, mode string, opts countOpts) (int64, error) {
+	names := map[string]string{"#pk": pkField}
+	values := map[string]types.AttributeValue{":pk": &types.AttributeValueMemberS{Value: mode}}
+	cond := "#pk = :pk"
+	if opts.sortCond != "" {
+		cond += " AND " + opts.sortCond
+		for k, v := range opts.sortNames {
+			names[k] = v
+		}
+		for k, v := range opts.sortValues {
+			values[k] = v
+		}
+	}
+	for k, v := range opts.filterNames {
+		names[k] = v
+	}
+	for k, v := range opts.filterValues {
+		values[k] = v
+	}
+
+	var total int64
+	var startKey map[string]types.AttributeValue
+	for page := 0; page < maxRankCountPages; page++ {
+		input := &dynamodb.QueryInput{
+			IndexName:                 aws.String(index),
+			KeyConditionExpression:    aws.String(cond),
+			ExpressionAttributeNames:  names,
+			ExpressionAttributeValues: values,
+			Select:                    types.SelectCount,
+			ExclusiveStartKey:         startKey,
+		}
+		if opts.filterCond != "" {
+			input.FilterExpression = aws.String(opts.filterCond)
+		}
+		out, err := s.base.QueryRaw(ctx, input)
+		if err != nil {
+			return 0, fmt.Errorf("leaderboard: count query: %w", err)
+		}
+		total += int64(out.Count)
+		if out.LastEvaluatedKey == nil {
+			break
+		}
+		startKey = out.LastEvaluatedKey
+	}
+	return total, nil
 }

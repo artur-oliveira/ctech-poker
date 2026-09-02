@@ -145,6 +145,15 @@ catalog.
 - B10 fixed: archiver stream failures now go to an SQS DLQ with a CloudWatch alarm (`cdk/lib/archiver-stack.ts`).
 - B31 fixed by rejection: `leaderboard.Top("achievement_points")` returns an unsupported-metric error instead of
   silently ranking via `gsi_hands_won`; add a `gsi_achievement_points` GSI before re-enabling the metric.
+- **Issue #62 partially fixed.** `GET /leaderboard/me` (`leaderboard.Service.MyRank` / `Store.RankOf`) gives a player
+  their exact rank + total via `Select: COUNT` queries instead of the frontend computing rank from whatever page of
+  `Top` it happened to fetch (the old bug: `#{data.findIndex+1} de {data.length}` showed page size, not the real
+  total). **Still open, deliberately deferred:** the underlying `gsi_hands_won`/`gsi_hands_played`/`gsi_win_rate`
+  GSIs remain single-partition per mode (`gsi_*_pk = mode`) — every hand's `IncrementStats` write and every
+  `RankOf`/`Top` read still funnel through one DynamoDB partition per mode, and `RankOf`'s full-partition COUNT for
+  `total` is itself unbounded in the number of ranked players (capped by `maxRankCountPages`, not fixed by it). The
+  issue's proposed fix — a Valkey ZSET mirror per `(mode, metric)`, rebuilt from the GSI on cold start — was out of
+  scope for the correctness fix and is not implemented.
 - B32 fixed: `ShuffleCommitHash` and the per-card `RootCommitHash` are published from
   `StartHand` on. Complete hands reveal either the full seed (no hidden private cards) or viewer-scoped card+salt proofs
   with hashes for hidden positions and rabbit runout cards. Rabbit-hunt runout cards specifically are withheld from a

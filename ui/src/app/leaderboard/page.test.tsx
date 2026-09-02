@@ -1,12 +1,13 @@
 import {fireEvent, render, screen, within} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
-import type {Entry} from '@/lib/api/gamification';
+import type {Entry, MyRank} from '@/lib/api/gamification';
 import Ranking from './page';
 
 const mocks = vi.hoisted(() => ({
   session: {authed: true, checking: false},
   viewer: 'viewer-id',
-  query: {} as Record<string, unknown>,
+  boardQuery: {} as Record<string, unknown>,
+  rankQuery: {} as Record<string, unknown>,
   refetch: vi.fn(),
 }));
 
@@ -16,7 +17,10 @@ vi.mock('@/lib/utils', async (importOriginal) => ({
   getViewerId: () => mocks.viewer,
   playerName: (id: string, viewer: string, name?: string) => name || (id === viewer ? 'Você' : id),
 }));
-vi.mock('@tanstack/react-query', () => ({useQuery: () => mocks.query}));
+vi.mock('@tanstack/react-query', () => ({
+  useQuery: ({queryKey}: {queryKey: unknown[]}) =>
+    queryKey[0] === 'leaderboard-me' ? mocks.rankQuery : mocks.boardQuery,
+}));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
 
 const entries: Entry[] = [
@@ -26,8 +30,12 @@ const entries: Entry[] = [
   {player_id: 'fourth', player_name: 'Dani', hands_played: 50, hands_won: 5, win_rate: .1},
 ];
 
-function queryState(data: Entry[] = [], overrides: Record<string, unknown> = {}) {
+function boardState(data: Entry[] = [], overrides: Record<string, unknown> = {}) {
   return {data, isLoading: false, isError: false, refetch: mocks.refetch, ...overrides};
+}
+
+function rankState(data?: MyRank, overrides: Record<string, unknown> = {}) {
+  return {data, isLoading: false, isError: false, ...overrides};
 }
 
 describe('community leaderboard page', () => {
@@ -35,12 +43,13 @@ describe('community leaderboard page', () => {
     vi.clearAllMocks();
     mocks.session = {authed: true, checking: false};
     mocks.viewer = 'viewer-id';
-    mocks.query = queryState(entries);
+    mocks.boardQuery = boardState(entries);
+    mocks.rankQuery = rankState({ranked: true, rank: 2, total: 4, entry: entries[1]});
   });
-  
-  test('renders the podium, remaining positions and viewer summary from backend data', () => {
+
+  test('renders the podium, remaining positions and viewer summary from the my-rank endpoint', () => {
     render(<Ranking/>);
-    
+
     expect(screen.getByLabelText('Sua posição atual')).toHaveTextContent('#2 de 4 jogadores');
     expect(screen.getByLabelText('Sua posição atual')).toHaveTextContent('30.0%');
     expect(screen.getByLabelText('Pódio do ranking')).toHaveTextContent('Ana');
@@ -51,38 +60,48 @@ describe('community leaderboard page', () => {
     expect(within(screen.getByRole('navigation', {name: 'Navegação principal'}))
       .getByRole('link', {name: /Lobby/})).toHaveAttribute('href', '/lobby');
   });
-  
+
   test('uses a list without podium for fewer than three entries and singularizes one player', () => {
-    mocks.query = queryState([entries[1]]);
+    mocks.boardQuery = boardState([entries[1]]);
+    mocks.rankQuery = rankState({ranked: true, rank: 1, total: 1, entry: entries[1]});
     render(<Ranking/>);
-    
+
     expect(screen.queryByLabelText('Pódio do ranking')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Sua posição atual')).toHaveTextContent('#1 de 1 jogador');
     expect(screen.getByText('01')).toBeInTheDocument();
     expect(screen.getByText('Beto (Você)')).toBeInTheDocument();
   });
-  
+
+  test('shows an unranked hint when the player has no stats row for this mode yet', () => {
+    mocks.rankQuery = rankState({ranked: false});
+    render(<Ranking/>);
+
+    expect(screen.getByLabelText('Sua posição atual')).toHaveTextContent('Ainda sem ranking');
+    expect(screen.getByLabelText('Sua posição atual')).toHaveTextContent('Jogue uma mão');
+  });
+
   test('handles loading, error retry and the empty ranking', () => {
-    mocks.query = queryState([], {isLoading: true});
+    mocks.boardQuery = boardState([], {isLoading: true});
     const view = render(<Ranking/>);
     expect(screen.getByText(/Buscando o ranking da comunidade/)).toBeInTheDocument();
-    
-    mocks.query = queryState([], {isError: true});
+
+    mocks.boardQuery = boardState([], {isError: true});
     view.rerender(<Ranking/>);
     fireEvent.click(screen.getByRole('button', {name: 'Tentar novamente'}));
     expect(mocks.refetch).toHaveBeenCalledOnce();
-    
-    mocks.query = queryState([]);
+
+    mocks.boardQuery = boardState([]);
     view.rerender(<Ranking/>);
     expect(screen.getByText(/Nenhum jogador pontuou ainda/)).toBeInTheDocument();
   });
-  
+
   test('shows public navigation without private controls for anonymous visitors', () => {
     mocks.session = {authed: false, checking: false};
     mocks.viewer = '';
-    mocks.query = queryState(entries.slice(0, 3));
+    mocks.boardQuery = boardState(entries.slice(0, 3));
+    mocks.rankQuery = rankState(undefined);
     render(<Ranking/>);
-    
+
     expect(screen.getByRole('link', {name: /Voltar/})).toHaveAttribute('href', '/');
     expect(screen.queryByText('profile-menu')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Sua posição atual')).not.toBeInTheDocument();
