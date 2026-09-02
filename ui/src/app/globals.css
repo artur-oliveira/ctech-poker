@@ -3261,6 +3261,19 @@ h1 em {
     font-size: 13px
 }
 
+.profile-matchup p + p {
+    margin-top: 8px
+}
+
+.profile-matchup-net .hand-net {
+    font: 600 13px var(--font-mono);
+    font-variant-numeric: tabular-nums
+}
+
+.profile-matchup-headsup {
+    color: var(--muted)
+}
+
 @media (max-width: 640px) {
     .profile-showcase-content {
         grid-template-columns: 1fr

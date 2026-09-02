@@ -5,10 +5,12 @@ import ProfilePage from './page';
 
 const mocks = vi.hoisted(() => ({
   playerID: 'player-42',
+  viewerID: 'viewer-9' as string | undefined,
   session: {authed: true, checking: false},
   query: {} as Record<string, unknown>,
   relationshipQuery: {} as Record<string, unknown>,
   matchupQuery: {} as Record<string, unknown>,
+  matchupOptions: undefined as unknown,
   queryOptions: undefined as unknown,
   invalidateQueries: vi.fn(),
 }));
@@ -17,11 +19,21 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => ({get: (key: string) => key === 'id' ? mocks.playerID : null}),
 }));
 vi.mock('@/lib/auth/session', () => ({useOptionalSession: () => mocks.session}));
+vi.mock('@/lib/utils', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/utils')>(),
+  getViewerId: () => mocks.viewerID,
+}));
+vi.mock('@/components/lobby/ProfileShowcaseDialog', () => ({
+  ProfileShowcaseDialog: ({open}: {open: boolean}) => open ? <div>showcase-editor</div> : null,
+}));
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (options: unknown) => {
     const key = (options as {queryKey: string[]}).queryKey;
     if (key[1] === 'relationship') return mocks.relationshipQuery;
-    if (key[0] === 'profile-matchup') return mocks.matchupQuery;
+    if (key[0] === 'profile-matchup') {
+      mocks.matchupOptions = options;
+      return mocks.matchupQuery;
+    }
     mocks.queryOptions = options;
     return mocks.query;
   },
@@ -42,6 +54,7 @@ describe('public player profile page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.playerID = 'player-42';
+    mocks.viewerID = 'viewer-9';
     mocks.session = {authed: true, checking: false};
     mocks.relationshipQuery = {data: undefined, isLoading: false, isError: true};
     mocks.matchupQuery = {data: undefined, isLoading: false, isError: true};
@@ -147,6 +160,64 @@ describe('public player profile page', () => {
     expect(screen.getByText(/12 mãos juntos/)).toBeInTheDocument();
     expect(screen.getByText(/você venceu 7/)).toBeInTheDocument();
     expect(screen.getByText(/Ás da Mesa venceu 5/)).toBeInTheDocument();
+  });
+
+  test('distinguishes a private showcase from a missing one', () => {
+    mocks.query = queryState(undefined, {isError: true, error: {status: 403}});
+    const view = render(<ProfilePage/>);
+    expect(screen.getByRole('heading', {level: 1, name: 'Vitrine privada'})).toBeInTheDocument();
+    expect(screen.getByText(/mantém a vitrine privada/)).toBeInTheDocument();
+
+    mocks.query = queryState(undefined, {isError: true, error: {status: 404}});
+    view.rerender(<ProfilePage/>);
+    expect(screen.getByRole('heading', {level: 1, name: 'Vitrine indisponível'})).toBeInTheDocument();
+    expect(screen.getByText('Este perfil não existe ou foi removido.')).toBeInTheDocument();
+  });
+
+  test('offers the showcase editor when the link is the viewer own id', () => {
+    mocks.viewerID = 'player-42';
+    render(<ProfilePage/>);
+
+    expect(mocks.queryOptions).toMatchObject({enabled: false});
+    expect(mocks.matchupOptions).toMatchObject({enabled: false});
+    expect(screen.getByRole('heading', {level: 1, name: 'Esta é a sua vitrine'})).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name: /Editar minha vitrine/}));
+    expect(screen.getByText('showcase-editor')).toBeInTheDocument();
+  });
+
+  test('keeps an h1 in the loading state', () => {
+    mocks.query = queryState(undefined, {isLoading: true});
+    render(<ProfilePage/>);
+    expect(screen.getByRole('heading', {level: 1})).toHaveTextContent('Vitrine do jogador');
+  });
+
+  test('accounts for ties and the net chip result in the head-to-head copy', () => {
+    mocks.matchupQuery = {
+      data: {
+        hands_together: 10, viewer_wins: 3, opponent_wins: 4, ties: 3,
+        heads_up_hands_together: 6, net_change_viewer: -220,
+      },
+      isLoading: false, isError: false,
+    };
+    render(<ProfilePage/>);
+    expect(screen.getByText(/3 terminaram empatadas/)).toBeInTheDocument();
+    expect(screen.getByText('-220 fichas')).toBeInTheDocument();
+    expect(screen.getByText(/contra você/)).toBeInTheDocument();
+    expect(screen.getByText(/6 dessas mãos foram mano a mano/)).toBeInTheDocument();
+  });
+
+  test('reads naturally with zero ties', () => {
+    mocks.matchupQuery = {
+      data: {
+        hands_together: 12, viewer_wins: 7, opponent_wins: 5, ties: 0,
+        heads_up_hands_together: 12, net_change_viewer: 0,
+      },
+      isLoading: false, isError: false,
+    };
+    render(<ProfilePage/>);
+    expect(screen.getByText(/Ás da Mesa venceu 5\./)).toBeInTheDocument();
+    expect(screen.queryByText(/empatadas/)).not.toBeInTheDocument();
+    expect(screen.getByText(/empatado\./)).toBeInTheDocument();
   });
 
   test('hides the head-to-head card for a pair that never shared a table', () => {
