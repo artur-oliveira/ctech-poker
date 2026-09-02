@@ -145,6 +145,11 @@ catalog.
 - B10 fixed: archiver stream failures now go to an SQS DLQ with a CloudWatch alarm (`cdk/lib/archiver-stack.ts`).
 - B31 fixed by rejection: `leaderboard.Top("achievement_points")` returns an unsupported-metric error instead of
   silently ranking via `gsi_hands_won`; add a `gsi_achievement_points` GSI before re-enabling the metric.
+- Issue #63 fixed: the `win_rate` board enforces `leaderboard.MinHandsForWinRateRank` (100) hands per currency mode.
+  `gsi_win_rate_pk` is a sparse key — `leaderboard.Store.syncWinRateRankKey` writes it once the counters cross the
+  floor and `REMOVE`s it below, so a 1-hand 100% row is never returned by `gsi_win_rate`; `Service.Top` filters
+  sub-floor rows again before sorting so none occupies a rank slot. Legacy stale keys clean up lazily on the row's
+  next write — no migration job. `hands_won` / `hands_played` boards are untouched.
 - B32 fixed: `ShuffleCommitHash` and the per-card `RootCommitHash` are published from
   `StartHand` on. Complete hands reveal either the full seed (no hidden private cards) or viewer-scoped card+salt proofs
   with hashes for hidden positions and rabbit runout cards. Rabbit-hunt runout cards specifically are withheld from a
