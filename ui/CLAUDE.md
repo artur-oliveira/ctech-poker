@@ -41,6 +41,17 @@ off by default — do not build UI that assumes real money is on.
   id; only an exhausted budget reaches `setLastActionError`. Any new command with an `action_id` the
   server echoes belongs on `emitAux`, not bare `emit`. See
   `docs/plans/2026-08-27-table-load-transaction-conflict.md`.
+- **Press-and-hold is one hook.** `lib/hooks/useHoldRepeat.ts` owns the accelerating repeat used by
+  the bet stepper's `+`/`−` buttons *and* by the `ArrowLeft`/`ArrowRight` shortcuts, so touch and
+  keyboard ramp identically. OS key auto-repeat stays ignored (`isBetAdjustKey` drops
+  `event.repeat`); the hook's timers are the cadence. See
+  `docs/2026-09-01-bet-hold-repeat.md`.
+- **The docked asides are one pattern.** `Chat`, `TableReactions` and `LastWinners` share the
+  `column-reverse` toggle/panel stack, `useHoverPanel` (hover open with a close grace period) and
+  the `.table-aside-skirt` hit-area class. Extend those three rather than re-deriving hover
+  behaviour per aside, and keep the felt's band layout intact (wordmark / dealer call / board +
+  street rail; the felt's lower band belongs to the bottom seats' bet chips). See
+  `docs/2026-09-01-table-felt-and-aside-polish.md`.
 - **Social state is server state.** Every social read is a `['social', …]` query key
   (`SOCIAL_KEYS` in `lib/social.ts`); mutations go through `lib/hooks/useSocialActions.ts`, which
   invalidates that root instead of patching a mirrored relationship locally. Chat/reaction

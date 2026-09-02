@@ -3535,55 +3535,52 @@ h1 em {
     z-index: 1
 }
 
-/* The house mark woven into the felt (see FeltWordmark in TableStage.tsx),
-   matching the landing hero's .table-logo. It rides the calm top arc of the
-   felt, clear of the pot readout (which sits as high as ~17% once a hand
-   completes) and the community cards; tone-on-tone so it never reads as the
-   gold that carries value here, with the SVG turbulence filter fraying the
-   glyph edges into the weave instead of tinting them. Decorative and behind
-   the board — a transient dealer call (.table-callout, z 2) may briefly pass
-   over it, which is fine for an aria-hidden mark. */
-.felt-fx-defs {
-    position: absolute;
-    width: 0;
-    height: 0;
-    overflow: hidden
-}
-
+/* The house mark on the felt (see FeltWordmark in TableStage.tsx), matching
+   the landing hero's .table-logo. It owns the felt's top arc as a full lockup
+   — mark plus the name in white — instead of the tone-on-tone weave it used to
+   be, so the table reads as CTech's from across the room. The band is its
+   own: the dealer call (.table-callout) starts below it and the board starts
+   below that, so nothing ever crosses the mark. Sized off --felt-wordmark-mark
+   so the portrait capsule scales the whole lockup from one number. */
 .felt-wordmark {
+    --felt-wordmark-mark: 26px;
     position: absolute;
     left: 50%;
-    top: 14%;
-    z-index: 0;
+    top: 8%;
+    z-index: 1;
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 9px;
     transform: translateX(-50%);
-    font: 700 12px var(--font-mono);
-    letter-spacing: .38em;
     white-space: nowrap;
-    color: color-mix(in srgb, var(--felt-text) 17%, transparent);
-    text-shadow: 0 1px 0 color-mix(in srgb, var(--felt-shadow) 65%, transparent);
-    filter: url(#felt-weave);
     pointer-events: none
 }
 
 .felt-wordmark img {
-    width: 15px;
-    height: 15px;
+    width: var(--felt-wordmark-mark);
+    height: var(--felt-wordmark-mark);
     border-radius: var(--rounded-xs);
-    opacity: .62
+    filter: drop-shadow(0 2px 5px var(--overlay-night-3))
 }
 
-@media (prefers-contrast: more) {
-    .felt-wordmark {
-        color: var(--felt-text-muted);
-        filter: none
+/* The two-board run-it-twice layout is the one board tall enough to claim the
+   felt's whole height; on a short viewport it reaches up into the mark's band,
+   and the mark is the decoration, so it yields rather than tangling with the
+   pot readout. */
+@media (max-height: 820px) {
+    .game-felt:has(.board-runouts) .felt-wordmark {
+        opacity: 0
     }
+}
 
-    .felt-wordmark img {
-        opacity: .9
-    }
+/* The trailing letter-space is pulled back so the lockup optically centers on
+   the felt's axis rather than sitting a third of an em to the left. */
+.felt-wordmark b {
+    margin-right: -.28em;
+    color: var(--on-brand);
+    font: 700 calc(var(--felt-wordmark-mark) * .58) var(--font-mono);
+    letter-spacing: .28em;
+    text-shadow: 0 1px 4px var(--overlay-night-3)
 }
 
 @keyframes table-street-arrival {
@@ -3608,7 +3605,7 @@ h1 em {
 .table-callout {
     position: absolute;
     z-index: 2;
-    top: 13%;
+    top: 22%;
     left: 50%;
     display: flex;
     align-items: center;
@@ -3675,10 +3672,15 @@ h1 em {
    make room for the header's action icons). The step rail sits underneath
    it as a decoration, orientation stays inside the decision surface on
    both desktop and portrait layouts. */
+.felt-center {
+    position: relative;
+    z-index: 1
+}
+
 .street-progress {
     position: absolute;
     left: 50%;
-    bottom: 9%;
+    top: calc(100% + 14px);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -5957,16 +5959,24 @@ h1 em {
     padding: 0
 }
 
+/* Same stack vocabulary as .table-reactions: toggle pinned to the bottom of
+   the column, panel growing upward off it. It used to float the toggle
+   instead, which let the opening panel push the button to the TOP of the
+   aside — the two docked asides then moved in opposite directions under an
+   identical hover. */
 .game-chat {
     position: fixed;
     z-index: var(--z-chrome);
     right: 16px;
-    bottom: var(--action-bar-clear)
+    bottom: var(--action-bar-clear);
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: flex-end;
+    gap: 8px
 }
 
 .chat-toggle {
     position: relative;
-    float: right;
     width: 45px;
     height: 45px;
     border-radius: 50%;
@@ -6001,7 +6011,6 @@ h1 em {
     background: var(--surface-seat);
     border: 1px solid var(--seat-border);
     border-radius: 16px;
-    margin-bottom: 8px;
     padding: 17px
 }
 
@@ -6117,6 +6126,20 @@ h1 em {
     .table-reactions {
         transition: none
     }
+}
+
+/* Pointer-travel room. The toggle is a 45px circle and the panel it opens is
+   a detached box a gap away, so the natural diagonal from button to content
+   crossed outside the element and closed it mid-travel. This invisible skirt
+   widens the aside's own hit area in every direction (out of flow, so it is
+   never a flex item of the stack it sits in) and pairs with the grace timer in
+   useHoverPanel. Only while open: closed, the toggle should not swallow
+   clicks meant for the felt around it. */
+.table-aside-skirt.open::before {
+    position: absolute;
+    z-index: -1;
+    inset: -26px -20px -20px -26px;
+    content: ""
 }
 
 .reaction-toggle {
@@ -9088,6 +9111,15 @@ h1 em {
     margin: 0
 }
 
+/* Shortcut lists reuse the term column but name a key, not a concept: the
+   mono face and tracking match the <kbd> chips printed on the table's own
+   action buttons, so the two read as the same thing. */
+.guide-keys .guide-term dt {
+    font: 700 .8125rem var(--font-mono);
+    letter-spacing: .08em;
+    text-transform: uppercase
+}
+
 .guide-callout {
     max-width: 720px;
     margin: 24px 0;
@@ -10573,11 +10605,11 @@ h1 em {
 }
 
 /* The capsule felt is tall and narrow: the mark sits in the top arc and
-   loses a little tracking so it never reaches the rail. */
+   shrinks off its own size token so it never reaches the rail. */
 .stage-v .felt-wordmark {
-    top: 6%;
-    font-size: 10px;
-    letter-spacing: .32em
+    --felt-wordmark-mark: 19px;
+    top: 5%;
+    gap: 7px
 }
 
 .stage-v .board-runout-row,
@@ -11151,7 +11183,9 @@ h1 em {
     .game-chat.game-chat {
         right: 12px;
         top: calc(env(safe-area-inset-top) + 60px);
-        bottom: auto
+        bottom: auto;
+        flex-direction: column;
+        align-items: flex-end
     }
 
     .table-reactions {
@@ -11178,12 +11212,8 @@ h1 em {
        dynamic viewport so an open keyboard can't push the message input
        off-screen. */
     .game-chat .chat-body {
-        margin-bottom: 0;
-        margin-top: 8px;
         width: min(285px, calc(100vw - 24px));
-        max-height: min(320px, 50dvh);
-        float: right;
-        clear: right
+        max-height: min(320px, 50dvh)
     }
 
     /* Same rail, same collision as chat->reactions on desktop (line ~5197):

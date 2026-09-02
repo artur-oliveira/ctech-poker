@@ -13,15 +13,23 @@ describe('capture image targets', () => {
             'table-preflop.webp',
             'table-flop.webp',
             'table-showdown.webp',
+            'table-reactions.webp',
+            'table-preferences.webp',
             'hands-live.webp',
+            'hand-replay.webp',
+            'people-live.webp',
             'achievements-live.webp',
             'store-live.webp',
             'profile-live.webp',
             'leaderboard-live.webp'
         ]);
         expect(GUIDE_CAPTURES.find(capture => capture.slug === 'buyin').route).not.toContain('scenario=');
+        // Every table shot waits for the live felt; the street shots reach their
+        // state through a scenario alone, while the panel shots need one click.
         expect(GUIDE_CAPTURES.filter(capture => capture.slug.startsWith('table-'))
-            .every(capture => capture.ready === '.game' && capture.prepare === undefined)).toBe(true);
+            .every(capture => capture.ready === '.game')).toBe(true);
+        expect(GUIDE_CAPTURES.filter(capture => capture.slug.startsWith('table-') && !capture.prepare)
+            .map(capture => capture.slug)).toEqual(['table-preflop', 'table-flop', 'table-showdown']);
     });
 
     test('can limit a run to guide images', () => {

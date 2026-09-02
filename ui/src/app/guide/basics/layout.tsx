@@ -4,7 +4,7 @@ import React from "react";
 
 export const metadata: Metadata = routeMetadata({
   title: 'Do lobby à primeira mão',
-  description: 'O caminho mais curto para encontrar uma mesa, escolher seu buy-in e entender quando a partida começa.',
+  description: 'Como escolher uma mesa, quantas fichas levar e quando a próxima mão começa.',
   path: '/guide/basics',
   image: 'guide',
   index: true

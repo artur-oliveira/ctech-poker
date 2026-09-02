@@ -284,6 +284,47 @@ describe('table page integration', () => {
     expect(winners).toHaveAttribute('aria-pressed', 'true');
   });
 
+  test('ignores an aside closing itself after another aside already took the slot', async () => {
+    const user = userEvent.setup();
+    render(<TablePage/>);
+    const chat = screen.getByRole('button', {name: 'chat'});
+    const reactions = screen.getByRole('button', {name: 'reactions'});
+
+    // Crossing the reactions toggle on the way to chat: reactions opens on
+    // hover, chat takes the slot, then reactions' deferred close finally fires.
+    await user.click(reactions);
+    await user.click(chat);
+    await act(async () => {
+      (mocks.reactionProps?.onOpenChangeAction as (open: boolean) => void)(false);
+    });
+    expect(chat).toHaveAttribute('aria-pressed', 'true');
+    expect(reactions).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('E and T toggle reactions and chat, and stay out of a focused text field', async () => {
+    const user = userEvent.setup();
+    render(<TablePage/>);
+    const chat = screen.getByRole('button', {name: 'chat'});
+    const reactions = screen.getByRole('button', {name: 'reactions'});
+
+    await user.keyboard('e');
+    expect(reactions).toHaveAttribute('aria-pressed', 'true');
+    await user.keyboard('t');
+    expect(reactions).toHaveAttribute('aria-pressed', 'false');
+    expect(chat).toHaveAttribute('aria-pressed', 'true');
+    await user.keyboard('t');
+    expect(chat).toHaveAttribute('aria-pressed', 'false');
+
+    // Typing the letters into a text field must never move the panels.
+    const field = document.createElement('input');
+    document.body.append(field);
+    field.focus();
+    await user.keyboard('et');
+    expect(chat).toHaveAttribute('aria-pressed', 'false');
+    expect(reactions).toHaveAttribute('aria-pressed', 'false');
+    field.remove();
+  });
+
   test('selects a reaction, targets a seat, and clears targeting after a successful throw', async () => {
     realtime({sendReaction: vi.fn(() => true)});
     const {rerender} = render(<TablePage/>);

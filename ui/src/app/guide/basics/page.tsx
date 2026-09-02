@@ -5,53 +5,48 @@ import {GuideBullets, GuideCallout, GuideLink, GuidePage, GuideSteps, GuideTerm,
 
 export default function BasicsGuide() {
   return <GuidePage icon={Compass} eyebrow="COMECE AQUI" title="Do lobby à primeira mão"
-    description="O caminho mais curto para encontrar uma mesa, escolher seu buy-in e entender quando a partida começa."
+    description="Como escolher uma mesa, quantas fichas levar e quando a próxima mão começa."
     currentHref="/guide/basics" next={{href: '/guide/table', label: 'Conhecer a mesa'}} sections={[
       {
-        id: 'conta', title: 'Entrar e confirmar os termos', summary: 'Mesas, preferências e histórico ficam ligados à sua conta CTech.',
-        body: <><GuideSteps><li><span>Na página inicial, escolha <b>Jogar agora</b> ou <b>Entrar</b> e conclua o acesso pela CTech Account.</span></li>
-          <li><span>No primeiro acesso ao poker, abra Termos e Política de Privacidade, marque o aceite e confirme.</span></li>
-          <li><span>O sistema cria seu perfil e pode aproveitar o nome da conta como nome de exibição inicial.</span></li>
-          <li><span>Depois disso, você chega ao lobby; o mesmo login protege saldo, mãos, conquistas e preferências de perfil.</span></li></GuideSteps>
-          <GuideCallout kind="safe" title="Aceite único e explícito">A caixa não vem marcada. Se o perfil ou o registro do aceite falhar, a tela mantém uma ação para tentar novamente sem entrar em uma mesa parcialmente autenticada.</GuideCallout></>
+        id: 'conta', title: 'Entrar e aceitar os termos', summary: 'Saldo, mãos, conquistas e preferências ficam ligados à sua conta CTech.',
+        body: <><GuideSteps><li><span>Na página inicial, use <b>Jogar agora</b> e conclua o acesso pela CTech Account.</span></li>
+          <li><span>No primeiro acesso ao poker, abra os Termos e a Política de Privacidade, marque o aceite e confirme.</span></li>
+          <li><span>Seu perfil é criado com o nome da conta. Você troca o nome e a foto quando quiser.</span></li></GuideSteps>
+          <GuideCallout kind="safe" title="O aceite é explícito">A caixa não vem marcada e o jogo não abre sem ela. Se o registro do aceite falhar, a tela oferece uma nova tentativa em vez de deixar você entrar pela metade.</GuideCallout></>
       },
       {
-        id: 'lobby', title: 'Entenda o lobby', summary: 'Cada opção representa uma faixa de blinds e as mesas disponíveis nela.',
-        image: {src: '/guide/lobby.webp', alt: 'Lobby do CTech Poker com mesas organizadas por blinds'},
-        body: <><p>O lobby é o ponto de partida depois do login. O saldo no topo leva à Loja; a navegação abre Guia, Ranking, Conquistas e Mãos. Se você já está sentado, o aviso <b>Voltar à mesa</b> recupera a partida ativa sem criar outro assento.</p>
-          <GuideTerms><GuideTerm term="Blinds">Apostas obrigatórias que iniciam cada mão. A mesa mostra o par small blind / big blind, por exemplo 10 / 20.</GuideTerm>
-            <GuideTerm term="Lugares">Quantidade máxima de jogadores. A ocupação atual aparece na opção da mesa.</GuideTerm>
-            <GuideTerm term="Sandbox">Modo de treino com fichas fictícias, sem saque e sem valor monetário.</GuideTerm></GuideTerms></>
+        id: 'lobby', title: 'O lobby em duas escolhas', summary: 'Primeiro os blinds, depois o tamanho da mesa.',
+        image: {src: '/guide/lobby.webp', alt: 'Lobby com a lista de blinds e os três formatos de mesa'},
+        body: <><p>Escolha um par de blinds e em seguida o formato: <b>Heads-up</b> (2), <b>6-max</b> (6) ou <b>Full-ring</b> (9). Cada cartão mostra quantas mesas daquele formato têm vaga agora e a faixa de entrada correspondente.</p>
+          <GuideTerms><GuideTerm term="Blinds">Apostas obrigatórias que abrem cada mão. O primeiro número é o small blind; o segundo, o big blind.</GuideTerm>
+            <GuideTerm term="Entrar agora">Existe mesa pública com vaga naquele formato e você senta nela.</GuideTerm>
+            <GuideTerm term="Criar mesa">Não há vaga; uma nova mesa pública é aberta com a sua escolha.</GuideTerm>
+            <GuideTerm term="Sandbox">Fichas fictícias. Servem para jogar, não têm saque nem conversão em dinheiro.</GuideTerm></GuideTerms>
+          <p>Se você já está sentado em algum lugar, <b>Sua mesa continua aberta</b> aparece no topo com a entrada usada e leva de volta ao mesmo assento — nunca cria um segundo. Um ponto dourado na Loja significa que a recompensa diária já pode ser resgatada.</p></>
       },
       {
-        id: 'publica', title: 'Entrar em uma mesa pública', summary: 'Escolha a stake; o sistema encontra uma sala compatível.',
-        body: <><GuideSteps><li><span>Confira seu saldo sandbox e escolha blinds proporcionais ao valor que pretende levar.</span></li>
-          <li><span>Ative a opção da stake. Enquanto a entrada é preparada, os demais botões ficam protegidos contra cliques duplicados.</span></li>
-          <li><span>Na tela de buy-in, ajuste o valor dentro do mínimo e máximo permitidos e confirme.</span></li>
-          <li><span>Você entra sentado. Se uma mão já estiver em andamento, participa a partir da próxima.</span></li></GuideSteps>
-          <GuideCallout kind="tip" title="Escolha confortável">Para aprender os controles, prefira uma stake que permita várias mãos sem consumir grande parte do saldo em um único buy-in.</GuideCallout></>
+        id: 'buyin', title: 'Buy-in e auto rebuy', summary: 'O buy-in transfere fichas da carteira para a sua pilha na mesa.',
+        image: {src: '/guide/buyin.webp', alt: 'Tela de buy-in com controle deslizante, faixa permitida e opção de auto rebuy'},
+        body: <><p>A faixa aceita vai de 20 a 100 big blinds. Ajuste o valor no controle deslizante e confirme; nada é debitado antes disso. Ao sair, as fichas que sobraram voltam para a mesma carteira.</p>
+          <GuideBullets><li><span><b>Auto rebuy:</b> se a sua pilha zerar, a mesa recompra automaticamente o mesmo valor e você continua jogando sem parar a sessão. Só existe em mesas sandbox e pode ser ligado aqui ou depois, na recompra.</span></li>
+            <li><span><b>Se uma mão já começou:</b> você senta na hora e entra a partir da próxima distribuição.</span></li></GuideBullets>
+          <GuideCallout kind="warning" title="Saldo insuficiente">Se o saldo não cobre o buy-in mínimo, resgate a recompensa diária na Loja ou escolha blinds menores.</GuideCallout></>
       },
       {
-        id: 'buyin', title: 'Confirmar o buy-in', summary: 'O buy-in transfere fichas da sua carteira sandbox para a pilha da mesa.',
-        image: {src: '/guide/buyin.webp', alt: 'Painel de buy-in com faixa de fichas e botão para sentar'},
-        body: <><p>O painel informa blinds, faixa aceita e saldo disponível. Nada é debitado antes da confirmação. Ao sair da mesa, as fichas restantes da sua pilha voltam para a carteira correspondente.</p>
-          <GuideCallout kind="warning" title="Saldo insuficiente">Se o saldo não atingir o buy-in mínimo, abra a Loja para resgatar a recompensa diária ou obter saldo sandbox.</GuideCallout></>
-      },
-      {
-        id: 'privada', title: 'Criar ou abrir uma mesa privada', summary: 'Salas privadas usam um link de convite e não aparecem como entrada pública comum.',
-        image: {src: '/guide/create-room.webp', alt: 'Diálogo para configurar uma mesa privada'},
+        id: 'privada', title: 'Criar uma mesa privada', summary: 'Salas privadas não aparecem na lista pública: o link é o acesso.',
+        image: {src: '/guide/create-room.webp', alt: 'Diálogo de mesa privada com modo, stakes, lugares e a opção de rodar duas vezes'},
         body: <><GuideSteps><li><span>No lobby, escolha <b>Mesa privada</b>.</span></li>
-          <li><span>Defina a stake e a quantidade de assentos oferecida pela configuração.</span></li>
-          <li><span>Crie a sala e compartilhe o link. O código de convite já vai dentro dele.</span></li>
-          <li><span>Quem recebe o link ainda confirma o próprio buy-in antes de sentar.</span></li></GuideSteps>
-          <GuideCallout kind="safe" title="O link controla o acesso">Trate o convite como uma chave: qualquer pessoa com o link pode tentar abrir a sala. Não publique um link que deveria ficar entre amigos.</GuideCallout></>
+          <li><span>Defina o modo, a stake e quantos lugares a mesa terá.</span></li>
+          <li><span>Decida se a sala vai <b>permitir rodar duas vezes</b>. Isso libera o recurso; cada jogador ainda ativa por conta própria nas preferências.</span></li>
+          <li><span>Crie a sala e compartilhe o link — o código de convite já vai dentro dele. Na mesa, <b>Convidar</b> também chama amigos direto da sua lista.</span></li></GuideSteps>
+          <GuideCallout kind="safe" title="O link é a chave">Qualquer pessoa com o link pode tentar entrar. Trate um convite privado como senha e não publique em lugar aberto.</GuideCallout></>
       },
       {
-        id: 'primeira-mao', title: 'Quando a mão começa', summary: 'A mesa pode aguardar mais jogadores ou uma contagem para a próxima distribuição.',
-        body: <><GuideBullets><li><span><b>Aguardando jogadores:</b> ainda não há participantes suficientes para distribuir.</span></li>
-          <li><span><b>Próxima mão:</b> o contador indica quando a nova rodada começa.</span></li>
-          <li><span><b>Sentar fora:</b> pausa sua participação sem encerrar imediatamente o assento.</span></li>
-          <li><span><b>Voltar a jogar:</b> torna você elegível para a próxima mão.</span></li></GuideBullets>
+        id: 'primeira-mao', title: 'Quando a mão começa', summary: 'A mesa espera jogadores suficientes e depois anuncia a próxima distribuição.',
+        body: <><GuideBullets><li><span><b>Aguardando jogadores:</b> ainda não há gente suficiente para distribuir.</span></li>
+          <li><span><b>Próxima mão:</b> um contador no feltro marca quando a rodada seguinte começa.</span></li>
+          <li><span><b>Sentar fora:</b> pausa sua participação sem soltar o assento; a pilha continua sua.</span></li>
+          <li><span><b>Voltar a jogar:</b> devolve você à próxima mão, pagando o big blind quando for o caso.</span></li></GuideBullets>
           <GuideLink href="/poker-rules">Rever as regras e o ranking das mãos</GuideLink></>
       }
     ]}/>;

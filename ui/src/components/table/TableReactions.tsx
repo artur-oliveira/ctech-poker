@@ -10,8 +10,8 @@ import {ReactionFavoritesDialog} from '@/components/reactions/ReactionFavoritesD
 import type {SeatView} from '@/lib/api/table';
 import type {ReactionCatalogEntry, ReactionPurchase} from '@/lib/api/reactionPurchases';
 import {ownedReactionIDs} from '@/lib/api/reactionPurchases';
-import {isHoverCapable} from '@/lib/utils';
 import {useDismiss} from '@/lib/hooks/useDismiss';
+import {useHoverPanel} from '@/lib/hooks/useHoverPanel';
 import {
   PREMIUM_REACTION_IDS, TABLE_REACTIONS, type TableReactionEvent, type TableReactionID
 } from '@/lib/reactions';
@@ -192,6 +192,7 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const asideRef = useRef<HTMLElement>(null);
   useDismiss(asideRef, open, () => onOpenChangeAction(false));
+  const hover = useHoverPanel(onOpenChangeAction, !pendingReaction);
   const [seatEls, setSeatEls] = useState<Map<string, HTMLElement>>(() => new Map());
   const seatIdsKey = seats.map(seat => seat.player_id).join(',');
 
@@ -253,13 +254,12 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
     {!muted && <div className="table-reaction-layer" aria-live="off">
       {items.map(item => <ReactionEffect key={item.id} item={item} seatEls={seatEls}/>)}
     </div>}
-    <aside ref={asideRef} className={`table-reactions${open ? ' open' : ''}${pendingReaction ? ' targeting' : ''}`}
-           aria-label="Reações da mesa"
-           onMouseEnter={() => isHoverCapable() && !pendingReaction && onOpenChangeAction(true)}
-           onMouseLeave={() => isHoverCapable() && !pendingReaction && onOpenChangeAction(false)}>
+    <aside ref={asideRef}
+           className={`table-reactions table-aside-skirt${open ? ' open' : ''}${pendingReaction ? ' targeting' : ''}`}
+           aria-label="Reações da mesa" {...hover}>
       <Button type="button" variant="ghost" size="icon" className="reaction-toggle"
               aria-label={pendingReaction ? 'Cancelar reação direcionada' : open ? 'Fechar reações' : 'Abrir reações'}
-              aria-expanded={open} aria-pressed={Boolean(pendingReaction)}
+              aria-expanded={open} aria-pressed={Boolean(pendingReaction)} aria-keyshortcuts="e"
               onClick={() => pendingReaction ? onPendingReactionChangeAction(null) : onOpenChangeAction(!open)}>
         {open || pendingReaction ? <X/> : <SmilePlus/>}
       </Button>

@@ -4,8 +4,9 @@ import {MessageCircle, Send, X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import type {SeatView} from '@/lib/api/table';
-import {isHoverCapable, playerName} from '@/lib/utils';
+import {playerName} from '@/lib/utils';
 import {useDismiss} from '@/lib/hooks/useDismiss';
+import {useHoverPanel} from '@/lib/hooks/useHoverPanel';
 import {CHAT_MESSAGE_MAX_LENGTH} from '@/lib/chat';
 
 type ChatItem = { id: string; player: string; message: string; timestamp?: number };
@@ -61,15 +62,15 @@ export function Chat({items, onSendAction, connected = true, viewerId, seats = [
   }
 
   useDismiss(asideRef, open, () => onOpenChangeAction(false));
+  const hover = useHoverPanel(onOpenChangeAction);
 
-  return <aside ref={asideRef} className={`game-chat ${open ? 'open' : ''}`} aria-label="Chat da mesa"
-                onMouseEnter={() => isHoverCapable() && onOpenChangeAction(true)}
-                onMouseLeave={() => isHoverCapable() && onOpenChangeAction(false)}>
+  return <aside ref={asideRef} className={`game-chat table-aside-skirt ${open ? 'open' : ''}`}
+                aria-label="Chat da mesa" {...hover}>
     <div className="sr-only" role="status" aria-live={open ? 'off' : 'polite'} aria-atomic="true">
       {latest ? `${nameOf(latest.player)} disse: ${latest.message}` : ''}
     </div>
     <Button type="button" variant="ghost" size="icon" aria-label={open ? 'Fechar chat' : 'Abrir chat'}
-            aria-expanded={open} aria-controls={panelId} className="chat-toggle"
+            aria-expanded={open} aria-controls={panelId} aria-keyshortcuts="t" className="chat-toggle"
             onClick={() => onOpenChangeAction(!open)}>
       {open ? <X/> : <MessageCircle/>}
       {unread > 0 && <span className="chat-unread-dot" aria-hidden="true"/>}

@@ -1,9 +1,10 @@
-import {fireEvent, render, screen, waitFor, within} from '@testing-library/react';
+import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {describe, expect, test, vi} from 'vitest';
 import type {SeatView} from '@/lib/api/table';
 import type {ReactionCatalogEntry, ReactionPurchase} from '@/lib/api/reactionPurchases';
 import {TABLE_REACTIONS, type TableReactionEvent, type TableReactionID} from '@/lib/reactions';
+import {HOVER_PANEL_CLOSE_DELAY_MS} from '@/lib/hooks/useHoverPanel';
 import {TableReactions} from './TableReactions';
 
 vi.mock('@/lib/utils', async importOriginal => ({
@@ -219,18 +220,48 @@ describe('TableReactions Poker Theater', () => {
     expect((container.querySelector<HTMLElement>('[data-reaction-id="crown"]'))?.style.visibility).toBe('');
   });
 
-  test('names pending targeting, cancels it, toggles the panel and responds to hover', () => {
-    const {callbacks, rerender, props} = renderReactions({open: false, pendingReaction: 'bandage'});
-    expect(screen.getByRole('status')).toHaveTextContent('Curar bad beat');
-    fireEvent.click(screen.getByRole('button', {name: 'Cancelar reação direcionada'}));
-    expect(callbacks.onPendingReactionChangeAction).toHaveBeenCalledWith(null);
+  test('names pending targeting, cancels it, toggles the panel and closes after the hover grace period', () => {
+    vi.useFakeTimers();
+    try {
+      const {callbacks, rerender, props} = renderReactions({open: false, pendingReaction: 'bandage'});
+      expect(screen.getByRole('status')).toHaveTextContent('Curar bad beat');
+      fireEvent.click(screen.getByRole('button', {name: 'Cancelar reação direcionada'}));
+      expect(callbacks.onPendingReactionChangeAction).toHaveBeenCalledWith(null);
 
-    rerender(<TableReactions {...props} open={false} pendingReaction={null}/>);
-    const aside = screen.getByLabelText('Reações da mesa');
-    fireEvent.click(screen.getByRole('button', {name: 'Abrir reações'}));
-    fireEvent.mouseEnter(aside);
-    fireEvent.mouseLeave(aside);
-    expect(callbacks.onOpenChangeAction).toHaveBeenCalledWith(true);
-    expect(callbacks.onOpenChangeAction).toHaveBeenCalledWith(false);
+      rerender(<TableReactions {...props} open={false} pendingReaction={null}/>);
+      const aside = screen.getByLabelText('Reações da mesa');
+      fireEvent.click(screen.getByRole('button', {name: 'Abrir reações'}));
+      fireEvent.mouseEnter(aside);
+      expect(callbacks.onOpenChangeAction).toHaveBeenCalledWith(true);
+
+      // Leaving does not close immediately: the pointer gets a grace period to
+      // reach the panel, and coming back inside cancels the pending close.
+      fireEvent.mouseLeave(aside);
+      act(() => void vi.advanceTimersByTime(HOVER_PANEL_CLOSE_DELAY_MS - 20));
+      expect(callbacks.onOpenChangeAction).not.toHaveBeenCalledWith(false);
+      fireEvent.mouseEnter(aside);
+      act(() => void vi.advanceTimersByTime(HOVER_PANEL_CLOSE_DELAY_MS));
+      expect(callbacks.onOpenChangeAction).not.toHaveBeenCalledWith(false);
+
+      fireEvent.mouseLeave(aside);
+      act(() => void vi.advanceTimersByTime(HOVER_PANEL_CLOSE_DELAY_MS));
+      expect(callbacks.onOpenChangeAction).toHaveBeenCalledWith(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('leaves the aside alone while a targeted reaction is waiting for its player', () => {
+    vi.useFakeTimers();
+    try {
+      const {callbacks} = renderReactions({open: false, pendingReaction: 'bandage'});
+      const aside = screen.getByLabelText('Reações da mesa');
+      fireEvent.mouseEnter(aside);
+      fireEvent.mouseLeave(aside);
+      act(() => void vi.advanceTimersByTime(HOVER_PANEL_CLOSE_DELAY_MS * 2));
+      expect(callbacks.onOpenChangeAction).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -106,8 +106,10 @@ export function GuideTerm({term, children}: {term: string; children: ReactNode})
   return <div className="guide-term"><dt>{term}</dt><dd>{children}</dd></div>;
 }
 
-export function GuideTerms({children}: {children: ReactNode}) {
-  return <dl className="guide-terms">{children}</dl>;
+/** `variant="keys"` sets the term column in the mono face used by the table's
+ * own <kbd> chips, so a shortcut list reads as keys and not as vocabulary. */
+export function GuideTerms({children, variant}: {children: ReactNode; variant?: 'keys'}) {
+  return <dl className={variant ? `guide-terms guide-${variant}` : 'guide-terms'}>{children}</dl>;
 }
 
 export function GuideEmptyIcon() {

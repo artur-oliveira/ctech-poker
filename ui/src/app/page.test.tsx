@@ -67,7 +67,7 @@ describe('landing page', () => {
     render(<Home/>);
     
     expect(screen.getByRole('link', {name: /Ver catálogo/})).toHaveAttribute('href', '/achievements');
-    expect(screen.getByRole('link', {name: /Ver o guia completo/})).toHaveAttribute('href', '/guide');
+    expect(screen.getByRole('link', {name: /Acessar o guia completo/})).toHaveAttribute('href', '/guide');
     expect(screen.getByRole('link', {name: 'Termos de Uso'})).toHaveAttribute(
       'href', 'https://accounts.aoctech.app/products/poker'
     );

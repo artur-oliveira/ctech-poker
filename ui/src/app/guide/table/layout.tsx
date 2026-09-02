@@ -4,7 +4,7 @@ import React from "react";
 
 export const metadata: Metadata = routeMetadata({
   title: 'Tudo o que acontece na mesa',
-  description: 'Controles de aposta, tempo de decisão, ferramentas sociais, resultados e situações especiais em uma única referência.',
+  description: 'Controles, atalhos, tempo de decisão, cartas, resultados e ferramentas da mesa em uma referência só.',
   path: '/guide/table',
   image: 'guide',
   index: true

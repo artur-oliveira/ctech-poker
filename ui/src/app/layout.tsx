@@ -18,13 +18,17 @@ export const metadata: Metadata = {
   keywords: ['poker online', 'Texas Hold’em', 'poker com amigos', 'CTech Poker', 'poker sandbox'],
   alternates: {canonical: '/'},
   icons: {
-    icon: [{url: '/favicon.ico'}, {
-      url: '/favicon-16x16.png',
-      sizes: '16x16',
-      type: 'image/png'
-    }, {url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png'}],
-    apple: [{url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png'}],
-    other: [{rel: 'manifest', url: '/site.webmanifest'}]
+    icon: [
+      {url: '/favicon.ico'},
+      {url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png'},
+      {url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png'}
+    ],
+    apple: [
+      {url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png'}
+    ],
+    other: [
+      {rel: 'manifest', url: '/site.webmanifest'}
+    ]
   },
   manifest: '/site.webmanifest',
   openGraph: {
@@ -55,7 +59,13 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
-    googleBot: {index: true, follow: true, 'max-image-preview': 'large', 'max-snippet': -1, 'max-video-preview': -1}
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1
+    }
   },
   category: 'games',
 };
@@ -64,6 +74,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: 'cover'
 };
+
 export default function Layout({children}: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning data-scroll-behavior="smooth">

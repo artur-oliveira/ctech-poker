@@ -187,6 +187,44 @@ describe('ActionBar raise controls', () => {
     expect(slider()).toHaveValue('175');
   });
 
+  test('holding an arrow key accelerates the raise amount and stops on key release', () => {
+    vi.useFakeTimers();
+    renderActionBar({maxRaise: 5000, raiseStep: 25});
+    act(() => void fireEvent.keyDown(window, {key: 'ArrowRight'}));
+    expect(slider()).toHaveValue('175');
+
+    act(() => vi.advanceTimersByTime(420 + 12 * 130));
+    const held = Number((slider() as HTMLInputElement).value);
+    expect(held).toBeGreaterThan(175 + 12 * 25);
+
+    act(() => void fireEvent.keyUp(window, {key: 'ArrowRight'}));
+    act(() => vi.advanceTimersByTime(520));
+    expect(slider()).toHaveValue(String(held));
+  });
+
+  test('a held ctrl+arrow uses the faster stride, and a window blur ends the hold', () => {
+    vi.useFakeTimers();
+    renderActionBar({maxRaise: 50000, raiseStep: 25});
+    const heldFrom = (options: {ctrlKey?: boolean}) => {
+      act(() => void fireEvent.keyDown(window, {key: 'ArrowUp'}));
+      act(() => void fireEvent.keyDown(window, {key: 'ArrowLeft', ...options}));
+      act(() => vi.advanceTimersByTime(420 + 4 * 130));
+      act(() => void fireEvent.keyUp(window, {key: 'ArrowLeft'}));
+      return 50000 - Number((slider() as HTMLInputElement).value);
+    };
+    const fast = heldFrom({ctrlKey: true});
+    const plain = heldFrom({});
+    expect(plain).toBeGreaterThan(0);
+    expect(fast).toBe(plain * 3);
+
+    act(() => void fireEvent.keyDown(window, {key: 'ArrowLeft'}));
+    act(() => vi.advanceTimersByTime(420 + 130));
+    act(() => void fireEvent.blur(window));
+    const stopped = Number((slider() as HTMLInputElement).value);
+    act(() => vi.advanceTimersByTime(520));
+    expect(slider()).toHaveValue(String(stopped));
+  });
+
   test('falls back to first and last duplicate presets when explicit bound names are absent', () => {
     renderActionBar({
       minRaise: 100,

@@ -77,23 +77,14 @@ export const STAGE_LABELS: Record<string, string> = {
   showdown: 'Showdown', complete: 'Mão encerrada'
 };
 
-// The house mark woven into the felt, matching the landing hero's table
-// preview. Purely decorative (aria-hidden) and tone-on-tone: the SVG filter
-// frays the letter edges into the felt weave rather than tinting them, so it
-// never competes with the gold that carries value on this surface. The filter
-// uses a fixed seed so the fray is stable across renders and reduced-motion
-// contexts; `prefers-contrast: more` drops it for a clean, higher-contrast
-// mark (see globals.css).
+// The house mark on the felt, matching the landing hero's table preview.
+// Purely decorative (aria-hidden). It owns the felt's top arc as a real
+// lockup — mark plus the name in white — rather than the tone-on-tone weave it
+// used to be; the dealer call (.table-callout) was moved down into its own band
+// so nothing crosses it. See docs/2026-08-31-felt-wordmark.md.
 function FeltWordmark() {
   return <div className="felt-wordmark" aria-hidden="true">
-    <svg className="felt-fx-defs" focusable="false" aria-hidden="true">
-      <filter id="felt-weave" x="-15%" y="-15%" width="130%" height="130%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.62 0.92" numOctaves="1" seed="7" result="noise"/>
-        <feDisplacementMap in="SourceGraphic" in2="noise" scale="0.7"
-          xChannelSelector="R" yChannelSelector="G"/>
-      </filter>
-    </svg>
-    <PokerLogo size={14}/> CTECH
+    <PokerLogo size={26}/><b>CTECH</b>
   </div>;
 }
 
@@ -273,8 +264,10 @@ export function TableStage({
     <FeltWordmark/>
     {announcement && snapshot.stage !== 'complete' && <div key={announcement} className="table-callout"
       aria-hidden="true"><span>D</span><p>{calloutCopy(announcement)}</p></div>}
-    {board}
-    <StreetProgress stage={snapshot.stage}/>
+    {/* The street rail hangs off the board rather than off the felt's bottom
+        edge: down there it sat in the lane the bottom-row seats' bet chips
+        travel through, so a raise from the viewer's own seat covered it. */}
+    <div className="felt-center">{board}<StreetProgress stage={snapshot.stage}/></div>
   </>;
 
   if (!vertical) return (

@@ -1,6 +1,8 @@
 # Felt wordmark on the live table
 
 **Date:** 2026-08-31
+**Superseded in part:** placement, colour and the `#felt-weave` filter were
+reworked on 2026-09-01 — see `docs/2026-09-01-table-felt-and-aside-polish.md`.
 **Scope:** `src/components/table/TableStage.tsx`, `src/app/globals.css`, `DESIGN.md`
 
 ## What changed

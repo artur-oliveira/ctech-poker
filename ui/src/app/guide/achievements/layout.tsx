@@ -4,7 +4,7 @@ import React from "react";
 
 export const metadata: Metadata = routeMetadata({
   title: 'Como funcionam as conquistas',
-  description: 'Metas acumulam progresso a partir das mãos concluídas e liberam estrelas em marcos sucessivos.',
+  description: 'Cada meta acumula progresso a partir das mãos concluídas e libera estrelas em marcos sucessivos.',
   path: '/guide/achievements',
   image: 'guide',
   index: true

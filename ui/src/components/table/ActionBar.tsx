@@ -5,11 +5,12 @@ import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import type {PokerAction} from '@/lib/api/table';
 import type {ActionError} from '@/lib/hooks/useTableRealtime';
-import {betShortcutAmount} from '@/lib/betShortcuts';
+import {betShortcutAmount, FAST_STEP_STRIDE} from '@/lib/betShortcuts';
 import {VoiceActionButton} from '@/components/table/VoiceActionButton';
 import {type ActionPreselection, resolvePreselection} from '@/lib/actionPreselection';
 import {useLiveNow} from '@/lib/hooks/useLiveNow';
 import {isPlainKey, isTypingTarget} from '@/lib/utils';
+import {useHoldRepeat} from '@/lib/hooks/useHoldRepeat';
 
 export type ActionAvailability = Record<PokerAction, boolean>
 
@@ -62,46 +63,21 @@ function isBetAdjustKey(event: KeyboardEvent) {
 // taps Aumentar once to reveal it; desktop keeps it always open (CSS ignores
 // the collapsed class outside this query).
 const COMPACT_QUERY = '(max-width: 800px), (max-height: 620px) and (orientation: landscape)';
-const HOLD_DELAY_MS = 420;
-const HOLD_REPEAT_MS = 130;
 
 function BetStepButton({direction, disabled, onStep}: {
   direction: -1 | 1;
   disabled: boolean;
-  onStep: (multiplier: number) => void;
+  onStep: (stride: number) => void;
 }) {
-  const delayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const repeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const repeatedRef = useRef(false);
-  const ticksRef = useRef(0);
-  const clearTimers = useCallback(() => {
-    if (delayRef.current) clearTimeout(delayRef.current);
-    if (repeatRef.current) clearInterval(repeatRef.current);
-    delayRef.current = null;
-    repeatRef.current = null;
-  }, []);
-
-  useEffect(() => clearTimers, [clearTimers]);
+  const hold = useHoldRepeat();
 
   function start(event: ReactPointerEvent<HTMLButtonElement>) {
     if (disabled || event.button !== 0) return;
-    repeatedRef.current = false;
-    ticksRef.current = 0;
-    delayRef.current = setTimeout(() => {
-      repeatedRef.current = true;
-      onStep(1);
-      repeatRef.current = setInterval(() => {
-        ticksRef.current += 1;
-        onStep(ticksRef.current < 5 ? 1 : ticksRef.current < 11 ? 5 : 10);
-      }, HOLD_REPEAT_MS);
-    }, HOLD_DELAY_MS);
+    hold.start(onStep);
   }
 
   function click() {
-    if (repeatedRef.current) {
-      repeatedRef.current = false;
-      return;
-    }
+    if (hold.consumeRepeated()) return;
     onStep(1);
   }
 
@@ -109,8 +85,8 @@ function BetStepButton({direction, disabled, onStep}: {
   const Icon = direction < 0 ? Minus : Plus;
   return (
     <button type="button" className="bet-step-button" aria-label={label} disabled={disabled}
-            onPointerDown={start} onPointerUp={clearTimers} onPointerCancel={clearTimers}
-            onPointerLeave={clearTimers} onClick={click}>
+            onPointerDown={start} onPointerUp={hold.stop} onPointerCancel={hold.stop}
+            onPointerLeave={hold.stop} onClick={click}>
       <Icon aria-hidden="true"/>
     </button>
   );
@@ -301,8 +277,17 @@ function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending
   // shows up as amount !== safeAmount below, instead of vanishing silently.
   const wasClamped = amount !== safeAmount;
 
+  const hold = useHoldRepeat();
+  const adjust = useCallback((direction: -1 | 1, multiplier: number) => {
+    const key = direction > 0 ? 'ArrowRight' : 'ArrowLeft';
+    setAmount(value => betShortcutAmount(key, value, minRaise, maxRaise, raiseStep * multiplier) ?? value);
+  }, [maxRaise, minRaise, raiseStep]);
+
   useEffect(() => {
-    if (inactive) return undefined;
+    if (inactive) {
+      hold.stop();
+      return undefined;
+    }
 
     function onKey(event: KeyboardEvent) {
       const key = event.key.toLowerCase();
@@ -314,7 +299,7 @@ function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending
         }
         if (key === 'h') {
           event.preventDefault();
-          setAmount(betShortcutAmount(key, safeAmount, minRaise, maxRaise, raiseStep, false,
+          setAmount(betShortcutAmount(key, safeAmount, minRaise, maxRaise, raiseStep,
             presets.find(preset => preset.label === '½ pote')?.value) ?? safeAmount);
           return;
         }
@@ -333,14 +318,34 @@ function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending
         setAmount(betShortcutAmount(event.key, safeAmount, minRaise, maxRaise, raiseStep) ?? safeAmount);
       } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault();
-        setAmount(value => betShortcutAmount(event.key, value, minRaise, maxRaise, raiseStep,
-          event.ctrlKey) ?? value);
+        // The first press steps once immediately; holding the key then hands
+        // the cadence to useHoldRepeat, the same accelerating ramp the mobile
+        // +/- buttons use, so a deep stack is reachable without spamming keys.
+        const direction = event.key === 'ArrowRight' ? 1 : -1;
+        const stride = event.ctrlKey ? FAST_STEP_STRIDE : 1;
+        adjust(direction, stride);
+        hold.start(multiplier => adjust(direction, multiplier * stride));
       }
     }
 
+    function onKeyUp(event: KeyboardEvent) {
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') hold.stop();
+    }
+
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [inactive, safeAmount, onRaise, minRaise, maxRaise, raiseStep, presets]);
+    window.addEventListener('keyup', onKeyUp);
+    // A window blur (alt-tab, a focused iframe) swallows the keyup, which would
+    // otherwise leave the amount climbing on its own.
+    window.addEventListener('blur', hold.stop);
+    // No hold.stop() here: this effect re-runs on every amount change, so
+    // stopping would cancel the hold on its own first step. The hook clears its
+    // timers on unmount, and keyup/blur/inactive end the hold otherwise.
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', hold.stop);
+    };
+  }, [inactive, safeAmount, onRaise, minRaise, maxRaise, raiseStep, presets, adjust, hold]);
 
   function handleRaiseClick() {
     if (!expanded && window.matchMedia(COMPACT_QUERY).matches) {
@@ -351,13 +356,9 @@ function RaiseControl({minRaise, maxRaise, raiseStep, presets, disabled, pending
     onRaise(safeAmount);
   }
 
-  const adjust = useCallback((direction: -1 | 1, multiplier: number) => {
-    setAmount(value => Math.min(maxRaise, Math.max(minRaise, value + direction * raiseStep * multiplier)));
-  }, [maxRaise, minRaise, raiseStep]);
-
   return <>
     <label className={`bet-control${expanded ? '' : ' bet-control-collapsed'}`} htmlFor="raise-amount">
-      <span className="sr-only">Valor total do aumento</span>
+      <span className="sr-only">Valor total do aumento. Setas esquerda e direita ajustam; segure para acelerar</span>
       <div className="bet-presets" role="group" aria-label="Valores rápidos de aumento">
         {uniquePresets.map(preset => <button key={preset.label} type="button" disabled={inactive}
                                              className={['Mín', '½ pote', 'Pote', 'Máx'].includes(preset.label) ?

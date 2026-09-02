@@ -4,7 +4,7 @@ import React from "react";
 
 export const metadata: Metadata = routeMetadata({
   title: 'Ranking, convivência e jogo seguro',
-  description: 'Recursos que conectam jogadores, preservam contexto entre sessões e ajudam a manter controle sobre tempo, privacidade e conexão.',
+  description: 'Como encontrar gente para jogar, o que os outros veem de você e os controles de tempo, privacidade e conexão.',
   path: '/guide/community',
   image: 'guide',
   index: true

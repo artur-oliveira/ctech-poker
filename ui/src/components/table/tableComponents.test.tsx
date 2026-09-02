@@ -190,13 +190,16 @@ describe('table presentation', () => {
     expect(container.querySelector('.stage-v > .game-seat.viewer')).toBeInTheDocument();
   });
 
-  test('weaves the decorative house mark into the felt on both stages', () => {
+  test('flies the house mark on the felt on both stages', () => {
     const desktop = render(<TableStage snapshot={snapshotForScenario('pre_flop')} viewer={MOCK_PLAYER_ID}
       pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}/>);
     const desktopMark = desktop.container.querySelector('.game-felt .felt-wordmark');
     expect(desktopMark).toHaveTextContent('CTECH');
     expect(desktopMark).toHaveAttribute('aria-hidden', 'true');
-    expect(desktop.container.querySelector('#felt-weave feTurbulence')).toHaveAttribute('seed', '7');
+    // The board and the street rail travel together so the rail can never
+    // drift into the lane the bottom seats' bet chips move through.
+    expect(desktop.container.querySelector('.felt-center > .board')).toBeInTheDocument();
+    expect(desktop.container.querySelector('.felt-center > .street-progress')).toBeInTheDocument();
     desktop.unmount();
 
     useVerticalStage();

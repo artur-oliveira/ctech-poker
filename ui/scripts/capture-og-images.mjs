@@ -22,7 +22,21 @@ export const GUIDE_CAPTURES = [
     {slug: 'table-preflop', route: `/table?id=${tableID}&scenario=pre_flop`, ready: '.game'},
     {slug: 'table-flop', route: `/table?id=${tableID}&scenario=flop`, ready: '.game'},
     {slug: 'table-showdown', route: `/table?id=${tableID}&scenario=showdown`, ready: '.game'},
+    {
+        slug: 'table-reactions', route: `/table?id=${tableID}&scenario=flop`, ready: '.game',
+        prepare: 'open-reactions'
+    },
+    {
+        slug: 'table-preferences', route: `/table?id=${tableID}&scenario=flop`, ready: '.game',
+        prepare: 'open-preferences'
+    },
     {slug: 'hands-live', route: '/hands', ready: '.hands-list'},
+    {
+        slug: 'hand-replay',
+        route: `/hands/replay?table_id=${tableID}&hand_id=hand_0003&mode=sandbox`,
+        ready: '.hand-replayer', prepare: 'advance-replay'
+    },
+    {slug: 'people-live', route: '/people', ready: '.people-page'},
     {slug: 'achievements-live', route: '/achievements', ready: '.achievements-grid'},
     {slug: 'store-live', route: '/store', ready: '.store-directory'},
     {slug: 'profile-live', route: '/lobby', ready: '.lobby', prepare: 'open-profile-menu'},
@@ -107,6 +121,28 @@ async function prepareCapture(send, action) {
         await evaluate(send,
             `Array.from(document.querySelectorAll('button')).find(node => node.textContent?.includes('Mesa privada'))?.click()`);
         await waitFor(send, `Boolean(document.querySelector('[role="dialog"]'))`, 'the private-room dialog');
+    }
+    if (action === 'open-reactions') {
+        await waitFor(send, `Boolean(document.querySelector('.table-reactions .reaction-toggle'))`,
+            'the reactions toggle');
+        await evaluate(send, `document.querySelector('.table-reactions .reaction-toggle')?.click()`);
+        await waitFor(send, `Boolean(document.querySelector('.table-reactions.open'))`, 'the reactions panel');
+    }
+    if (action === 'open-preferences') {
+        await waitFor(send, `Boolean(document.querySelector('button[aria-label="Preferências da mesa"]'))`,
+            'the table preferences button');
+        await evaluate(send, `document.querySelector('button[aria-label="Preferências da mesa"]')?.click()`);
+        await waitFor(send, `Boolean(document.querySelector('[role="dialog"]'))`, 'the preferences dialog');
+    }
+    if (action === 'advance-replay') {
+        // Park the replay mid-hand: a first frame shows an empty board and
+        // tells the reader nothing about what the replayer actually does.
+        await waitFor(send, `Boolean(document.querySelector('button[aria-label="Próxima ação"]'))`,
+            'the replay transport');
+        for (let step = 0; step < 5; step += 1) {
+            await evaluate(send, `document.querySelector('button[aria-label="Próxima ação"]')?.click()`);
+            await delay(150);
+        }
     }
     if (action === 'open-profile-menu') {
         await waitFor(send, `Boolean(document.querySelector('button[aria-label="Abrir perfil"]'))`,

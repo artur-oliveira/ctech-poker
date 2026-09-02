@@ -4,7 +4,7 @@ import React from "react";
 
 export const metadata: Metadata = routeMetadata({
   title: 'Mãos, replay e Provably Fair',
-  description: 'Encontre uma rodada, reconstrua cada decisão e confira no próprio navegador se as cartas pertencem ao baralho comprometido.',
+  description: 'Encontre uma rodada, reconstrua cada decisão e confira no próprio navegador se as cartas vieram do baralho comprometido.',
   path: '/guide/hands',
   image: 'guide',
   index: true

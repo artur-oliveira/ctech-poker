@@ -24,7 +24,7 @@ describe('static learning pages', () => {
   test('renders the complete guide and public calls to action', () => {
     render(<Guide/>);
     expect(screen.getByRole('heading', {name: 'Aprenda no seu ritmo'})).toBeInTheDocument();
-    expect(screen.getByRole('heading', {name: 'Sua primeira mão em três movimentos'})).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name: 'Sua primeira mão em quatro passos'})).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Ver primeiros passos'})).toHaveAttribute('href', '/guide/basics');
     expect(screen.getByRole('link', {name: /Tudo sobre a mesa/})).toHaveAttribute('href', '/guide/table');
     expect(screen.getByRole('link', {name: /Mãos, replay e integridade/})).toHaveAttribute('href', '/guide/hands');

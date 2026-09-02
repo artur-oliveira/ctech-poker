@@ -5,44 +5,47 @@ import {GuideBullets, GuideCallout, GuidePage, GuideSteps, GuideTerm, GuideTerms
 
 export default function ProfileGuide() {
   return <GuidePage icon={UserRound} eyebrow="IDENTIDADE E LEITURA" title="Perfil, vitrine e estatísticas"
-    description="Personalize como você aparece na mesa, escolha o que fica público e acompanhe tendências privadas do seu jogo."
+    description="Como você aparece na mesa, o que fica público e o que as suas mãos dizem sobre o seu jogo."
     currentHref="/guide/profile" next={{href: '/guide/community', label: 'Comunidade e segurança'}} sections={[
       {
-        id: 'menu', title: 'Abrir e entender o menu', summary: 'O avatar no topo reúne identidade, baralho, carteiras e atalhos pessoais.',
-        image: {src: '/guide/profile-live.webp', alt: 'Menu do perfil com foto, nome, baralho, saldos e atalhos'},
-        body: <><GuideBullets><li><span>O saldo ao lado do avatar abre diretamente a Loja.</span></li>
-          <li><span><b>Fichas sandbox</b> e <b>Dinheiro real</b> ficam separados; trocar o modo não converte valores.</span></li>
-          <li><span><b>Créditos e recompensas</b>, <b>Vitrine do perfil</b> e <b>Seu jogo</b> levam a funções diferentes.</span></li>
-          <li><span><b>Sair da conta</b> encerra a sessão de autenticação atual.</span></li></GuideBullets></>
+        id: 'menu', title: 'O menu do perfil', summary: 'O avatar no topo reúne identidade, baralho, carteiras e atalhos pessoais.',
+        image: {src: '/guide/profile-live.webp', alt: 'Menu do perfil com foto, nome, modo de jogo, baralho, saldos e atalhos'},
+        body: <><GuideBullets><li><span>O saldo ao lado do avatar abre a Loja direto.</span></li>
+          <li><span><b>Modo de jogo</b> alterna entre sandbox e dinheiro real. Trocar o modo não converte valores; os dois saldos aparecem lado a lado logo abaixo.</span></li>
+          <li><span><b>Baralho</b> muda as cartas exibidas para você.</span></li>
+          <li><span><b>Seu jogo</b> e <b>Vitrine do perfil</b> abrem as duas telas pessoais descritas nesta página.</span></li>
+          <li><span><b>Sair da conta</b> encerra a sessão de autenticação.</span></li></GuideBullets>
+          <p>A linha sob o seu nome diz, o tempo todo, se a vitrine está pública ou privada.</p></>
       },
       {
-        id: 'identidade', title: 'Alterar nome e foto', summary: 'Mudanças confirmadas passam a identificar você nas mesas e superfícies públicas permitidas.',
-        body: <><GuideSteps><li><span>Toque no avatar e depois no nome atual para editar.</span></li>
-          <li><span>Digite o nome de exibição e salve; Enter também confirma e Escape cancela.</span></li>
-          <li><span>Em <b>Foto do perfil</b>, adicione JPG ou PNG com corte quadrado, troque o arquivo ou remova a imagem.</span></li></GuideSteps>
-          <p>Sem foto, o sistema usa o componente de avatar com suas iniciais. Uploads mostram estado de envio e uma mensagem informa sucesso ou falha.</p></>
+        id: 'identidade', title: 'Nome e foto', summary: 'É assim que a mesa, a vitrine e o ranking chamam você.',
+        body: <><GuideSteps><li><span>Toque no nome atual para editar. Enter confirma, Escape cancela.</span></li>
+          <li><span>Na foto, use a câmera para enviar um JPG ou PNG; a lixeira remove a imagem.</span></li></GuideSteps>
+          <p>Sem foto, o jogo usa suas iniciais. O envio mostra o estado de progresso e avisa se falhar. Trocar de nome não afeta mãos já registradas.</p></>
       },
       {
-        id: 'baralho', title: 'Escolher o visual do baralho', summary: 'A preferência altera a leitura visual das cartas sem mudar a mão.',
-        body: <><p>O seletor mostra uma amostra dos quatro ases para cada variante. A escolha fica associada ao perfil e é aplicada às cartas exibidas para você.</p>
-          <GuideCallout kind="info" title="Somente apresentação">Trocar o baralho não interfere na distribuição, no hash da prova ou nas cartas recebidas.</GuideCallout></>
+        id: 'baralho', title: 'Escolher o baralho', summary: 'Preferência visual, aplicada às cartas que você vê.',
+        body: <><p>O seletor mostra uma amostra dos quatro ases de cada variante. As gratuitas são aplicadas na hora; as premium aparecem com cadeado, com o preço, e levam à seção de baralhos da Loja.</p>
+          <GuideCallout kind="info" title="Somente apresentação">Trocar o baralho não interfere na distribuição, no hash da prova nem nas cartas que você recebe.</GuideCallout></>
       },
       {
-        id: 'vitrine', title: 'Configurar a vitrine pública', summary: 'A vitrine começa privada e só expõe os blocos que você habilitar.',
-        body: <><GuideTerms><GuideTerm term="Perfil público">Permite abrir a rota compartilhável da sua vitrine.</GuideTerm>
-          <GuideTerm term="Estilo de jogo público">Autoriza mostrar badges derivados das suas estatísticas.</GuideTerm>
-          <GuideTerm term="Conquistas em destaque">Seleciona até três conquistas com progresso para aparecerem no perfil.</GuideTerm>
-          <GuideTerm term="Copiar link / Ver perfil">Só aparecem quando a vitrine está pública; servem para compartilhar e revisar a mesma visualização que outra pessoa recebe.</GuideTerm></GuideTerms>
-          <GuideCallout kind="safe" title="Controle de privacidade">Nome e foto usados no jogo podem aparecer em contextos sociais. Estatísticas detalhadas continuam privadas; apenas badges autorizados entram na vitrine.</GuideCallout></>
+        id: 'vitrine', title: 'Configurar a vitrine pública', summary: 'A vitrine começa privada e só mostra o que você habilitar.',
+        body: <><GuideTerms><GuideTerm term="Perfil público">Libera a rota compartilhável da sua vitrine. Enquanto está desligada, o link não abre para ninguém.</GuideTerm>
+          <GuideTerm term="Estilo de jogo público">Depois de 200 mãos, mostra um rótulo de tendência na mesa e na vitrine. Em vitrine pública, ele pode ser visto sem login.</GuideTerm>
+          <GuideTerm term="Mesa visível para amigos">Permite que amigos entrem na sua mesa quando ela é pública. Mesa privada nunca aparece.</GuideTerm>
+          <GuideTerm term="Conquistas em destaque">Até três conquistas já iniciadas.</GuideTerm>
+          <GuideTerm term="Copiar link / Ver perfil">Aparecem com a vitrine pública e mostram exatamente o que a outra pessoa recebe.</GuideTerm></GuideTerms>
+          <p>Quem abre a sua vitrine vê nome, foto, os rótulos de estilo autorizados, as conquistas em destaque, a sua melhor vitória recente e — se estiver logado — quantas mãos vocês já jogaram juntos e quem venceu mais.</p>
+          <GuideCallout kind="safe" title="Estatística detalhada não vai junto">Tornar a vitrine pública não publica VPIP, PFR nem 3-bet. Só os rótulos que você autorizou saem do seu perfil.</GuideCallout></>
       },
       {
-        id: 'hud', title: 'Ler “Seu jogo”', summary: 'O HUD pessoal calcula tendências pré-flop a partir das mãos concluídas.',
-        body: <><GuideTerms><GuideTerm term="VPIP">Percentual de mãos em que você colocou fichas voluntariamente no pote pré-flop, sem contar blinds.</GuideTerm>
-          <GuideTerm term="PFR">Percentual de mãos em que fez pelo menos um raise pré-flop.</GuideTerm>
-          <GuideTerm term="3-bet">Frequência de reaumento diante de um raise, medida nas oportunidades reais.</GuideTerm>
-          <GuideTerm term="Radar e badges">Interpretação da amostra em participação, iniciativa, pressão, reaumento e seleção. Abra um badge para ver o critério.</GuideTerm></GuideTerms>
-          <p>As abas mantêm estatísticas de Sandbox e Dinheiro real separadas. Com poucas mãos, leia os números como amostra inicial; eles ficam mais representativos conforme você joga.</p>
-          <GuideCallout kind="safe" title="Estatísticas privadas">A tela “Seu jogo” é visível somente para você. Tornar a vitrine pública não publica automaticamente VPIP, PFR ou 3-bet.</GuideCallout></>
+        id: 'hud', title: 'Ler “Seu jogo”', summary: 'Tendências pré-flop calculadas a partir das suas mãos concluídas.',
+        body: <><GuideTerms><GuideTerm term="VPIP">Mãos em que você colocou fichas voluntariamente no pote pré-flop, sem contar os blinds.</GuideTerm>
+          <GuideTerm term="PFR">Mãos em que você fez pelo menos um raise pré-flop.</GuideTerm>
+          <GuideTerm term="3-bet">Reaumentos diante de um raise, medidos sobre as oportunidades reais.</GuideTerm>
+          <GuideTerm term="Radar e badges">Leitura da amostra em participação, iniciativa, pressão, reaumento e seleção. Abra um badge para ver o critério.</GuideTerm></GuideTerms>
+          <p>As abas separam sandbox de dinheiro real, e o tamanho da amostra fica visível: com poucas mãos, leia os números como uma primeira impressão.</p>
+          <GuideCallout kind="safe" title="Estatísticas privadas">A tela “Seu jogo” é visível só para você, em qualquer situação.</GuideCallout></>
       }
     ]}/>;
 }

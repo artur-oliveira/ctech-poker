@@ -5,8 +5,9 @@ import Link from 'next/link';
 import {Trophy} from 'lucide-react';
 import type {HandItem} from '@/lib/api/player';
 import {bestFiveCardHand, bestHandCategory} from '@/lib/pokerRules';
-import {HAND_CATEGORY_LABELS, isHoverCapable} from '@/lib/utils';
+import {HAND_CATEGORY_LABELS} from '@/lib/utils';
 import {useDismiss} from '@/lib/hooks/useDismiss';
+import {useHoverPanel} from '@/lib/hooks/useHoverPanel';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 
@@ -70,10 +71,10 @@ export function LastWinners({items, tableId, open: controlledOpen, onOpenChangeA
   const winners = deriveWinners(items);
   const asideRef = useRef<HTMLElement>(null);
   useDismiss(asideRef, open, () => setOpen(false));
+  const hover = useHoverPanel(setOpen);
   if (!winners.length) return null;
-  return <aside ref={asideRef} className={`last-winners ${open ? 'open' : ''}`} aria-label="Últimos vencedores da mesa"
-                onMouseEnter={() => isHoverCapable() && setOpen(true)}
-                onMouseLeave={() => isHoverCapable() && setOpen(false)}>
+  return <aside ref={asideRef} className={`last-winners table-aside-skirt ${open ? 'open' : ''}`}
+                aria-label="Últimos vencedores da mesa" {...hover}>
     <button type="button" className="last-winners-toggle" aria-expanded={open} aria-controls="last-winners-panel"
             aria-label={open ? 'Fechar últimos vencedores' : 'Ver últimos vencedores'}
             onClick={() => setOpen(!open)}>

@@ -1,11 +1,11 @@
 'use client';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import {Suspense, useEffect, useMemo, useRef, useState} from 'react';
+import {Suspense, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {ChevronLeft, ClockAlert, MessageCircle, Pause, Play, RotateCw, SmilePlus, Wifi} from 'lucide-react';
-import {getViewerId} from '@/lib/utils';
+import {getViewerId, isPlainKey} from '@/lib/utils';
 import {useTableRealtime} from '@/lib/hooks/useTableRealtime';
 import {getRoom, getSeated} from '@/lib/api/rooms';
 import {BuyInPanel} from '@/components/table/BuyInPanel';
@@ -312,6 +312,28 @@ function TableContent() {
     useState<{ tableID: string; value: HandOutcomeState } | null>(null);
   const [activeTablePanel, setActiveTablePanel] =
     useState<TableUtility | null>(null);
+  // The asides share one slot, and a hover-opened one closes on a delay
+  // (HOVER_PANEL_CLOSE_DELAY_MS). Crossing the reactions toggle on the way to
+  // chat therefore fires reactions' close *after* chat already took the slot,
+  // which shut chat again. Only the panel that still owns the slot may clear it.
+  const panelOpenChange = useCallback((panel: TableUtility) => (open: boolean) =>
+    setActiveTablePanel(current => open ? panel : current === panel ? null : current), []);
+  // E/T open the two asides the player reaches for mid-hand, matching the
+  // action bar's own single-letter shortcuts (f/c/p/a/h/r, and 1/2 to peek).
+  // isPlainKey keeps them out of the chat input the T panel focuses on open.
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (!isPlainKey(event)) return;
+      const panel: TableUtility | null =
+        event.key.toLowerCase() === 'e' ? 'reactions' : event.key.toLowerCase() === 't' ? 'chat' : null;
+      if (!panel) return;
+      event.preventDefault();
+      setActiveTablePanel(current => current === panel ? null : panel);
+    }
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [pendingReaction, setPendingReaction] = useState<TableReactionID | null>(null);
@@ -574,12 +596,12 @@ function TableContent() {
             </span>
             <TodayHighlight tableId={id} handId={s.hand_id} handComplete={s.stage === 'complete'}/>
             <Button type="button" variant="ghost" size="icon" className="table-mobile-quick-action"
-                    aria-label="Abrir reações" aria-pressed={activeTablePanel === 'reactions'}
+                    aria-label="Abrir reações" aria-keyshortcuts="e" aria-pressed={activeTablePanel === 'reactions'}
                     onClick={() => setActiveTablePanel(activeTablePanel === 'reactions' ? null : 'reactions')}>
               <SmilePlus aria-hidden="true"/>
             </Button>
             <Button type="button" variant="ghost" size="icon" className="table-mobile-quick-action"
-                    aria-label="Abrir chat" aria-pressed={activeTablePanel === 'chat'}
+                    aria-label="Abrir chat" aria-keyshortcuts="t" aria-pressed={activeTablePanel === 'chat'}
                     onClick={() => setActiveTablePanel(activeTablePanel === 'chat' ? null : 'chat')}>
               <MessageCircle aria-hidden="true"/>
             </Button>
@@ -592,7 +614,7 @@ function TableContent() {
                                 onSelectAction={selectTableUtility}/>
             </span>
             <span className="table-rankings-standalone"><HandRankingsDialog open={activeTablePanel === 'rankings'}
-                                                                            onOpenChangeAction={open => setActiveTablePanel(open ? 'rankings' : null)}/>
+                                                                            onOpenChangeAction={panelOpenChange('rankings')}/>
             </span>
             <span className="table-preferences-standalone"><TablePreferencesDialog
               open={preferencesOpen} onOpenChangeAction={setPreferencesOpen}
@@ -728,7 +750,7 @@ function TableContent() {
             viewerId={viewer}
             seats={s.seats}
             open={activeTablePanel === 'chat'}
-            onOpenChangeAction={open => setActiveTablePanel(open ? 'chat' : null)}/>
+            onOpenChangeAction={panelOpenChange('chat')}/>
       <TableReactions items={rt.reactions} seats={s.seats} viewerId={viewer}
                       connected={rt.status === 'connected'} coolingDown={reactionCoolingDown}
                       pendingReaction={pendingReaction} onQuickSendAction={sendQuickReaction}
@@ -752,15 +774,15 @@ function TableContent() {
                         }
                       }}
                       open={activeTablePanel === 'reactions'}
-                      onOpenChangeAction={open => setActiveTablePanel(open ? 'reactions' : null)}/>
+                      onOpenChangeAction={panelOpenChange('reactions')}/>
       <BotChallenge required={rt.botChallengeRequired} onTokenAction={rt.submitBotChallenge}/>
       <LastWinners items={tableHands} tableId={id} open={activeTablePanel === 'winners'}
-                   onOpenChangeAction={open => setActiveTablePanel(open ? 'winners' : null)}/>
+                   onOpenChangeAction={panelOpenChange('winners')}/>
       {viewerSeat && room?.currency_mode === 'sandbox' && preferences.equityTrainer &&
           <EquityTrainerPanel seat={viewerSeat} isViewer board={s.board} stage={s.stage} handId={s.hand_id}
                               handComplete={s.stage === 'complete'} isTurn={actions.isTurn}
                               currencyMode={room?.currency_mode} open={activeTablePanel === 'equity'}
-                              onOpenChangeAction={open => setActiveTablePanel(open ? 'equity' : null)}/>}
+                              onOpenChangeAction={panelOpenChange('equity')}/>}
       <PlayerNoteDialog key={noteOpponent?.player_id || 'closed'} opponent={noteOpponent}
                         existing={noteOpponent ? playerNotesByID[noteOpponent.player_id] : undefined}
                         open={Boolean(noteOpponent)}
