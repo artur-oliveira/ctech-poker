@@ -43,6 +43,12 @@ const CTECH_LOGS_BUCKET = process.env.CTECH_LOGS_BUCKET || `${ENVIRONMENT}-ctech
 // ENABLE_SSM_AGENT=true to get a shell back onto the box for debugging.
 // const ENABLE_SSM_AGENT = process.env.ENABLE_SSM_AGENT === 'true';
 const ENABLE_SSM_AGENT = true;
+// CloudWatch alarms (Lambda DLQ-depth/Errors from #30, DynamoDB throttle
+// alarms from #34) are all standard-resolution, ~R$0.10/mo each — cheap, but
+// not $0. Off by default so a `cdk deploy` never adds that cost on its own;
+// flip to 'true' (or set CLOUDWATCH_ALARMS_ENABLED=true) once the shared
+// alerts topic should actually start paging on this app's alarms.
+const CLOUDWATCH_ALARMS_ENABLED = process.env.CLOUDWATCH_ALARMS_ENABLED === 'true';
 const env = {account: AWS_ACCOUNT, region: AWS_REGION};
 const pokerParameters = SSM_POKER(ENVIRONMENT);
 
@@ -67,6 +73,7 @@ new OidcStack(app, 'CtechPoker-Global-OIDC', {
 const dynamoStack = new DynamoDBStack(app, id('DynamoDB'), {
   env,
   environment: ENVIRONMENT,
+  cloudwatchAlarmsEnabled: CLOUDWATCH_ALARMS_ENABLED,
   description: `CTech Poker DynamoDB tables - ${ENVIRONMENT}`,
 });
 
@@ -74,6 +81,7 @@ new ArchiverStack(app, id('Archiver'), {
   env,
   environment: ENVIRONMENT,
   actionLogTable: dynamoStack.tables.get('poker_action_log')!,
+  cloudwatchAlarmsEnabled: CLOUDWATCH_ALARMS_ENABLED,
   description: `CTech Poker action-log archiver (DynamoDB Streams -> S3) - ${ENVIRONMENT}`,
 });
 
@@ -150,6 +158,7 @@ new ReconcileStack(app, id('Reconcile'), {
   walletUrlParam: pokerParameters.walletUrl,
   pokerClientIdParam: pokerParameters.clientId,
   pokerClientSecretParam: pokerParameters.clientSecret,
+  cloudwatchAlarmsEnabled: CLOUDWATCH_ALARMS_ENABLED,
   description: `CTech Poker Cashout Reconcile Lambda - ${ENVIRONMENT}`,
 });
 
@@ -161,5 +170,6 @@ new TableCleanupStack(app, id('TableCleanup'), {
   walletUrlParam: pokerParameters.walletUrl,
   pokerClientIdParam: pokerParameters.clientId,
   pokerClientSecretParam: pokerParameters.clientSecret,
+  cloudwatchAlarmsEnabled: CLOUDWATCH_ALARMS_ENABLED,
   description: `CTech Poker stale-table cleanup Lambda - ${ENVIRONMENT}`,
 });

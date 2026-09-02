@@ -2,7 +2,7 @@ import {App} from 'aws-cdk-lib';
 import {Match, Template} from 'aws-cdk-lib/assertions';
 import {ReconcileStack} from '../lib/reconcile-stack';
 
-function buildStack() {
+function buildStack(cloudwatchAlarmsEnabled = true) {
   const app = new App();
   return Template.fromStack(new ReconcileStack(app, 'TestReconcileStack', {
     environment: 'dev',
@@ -11,6 +11,7 @@ function buildStack() {
     walletUrlParam: '/ctech/dev/poker/wallet-url',
     pokerClientIdParam: '/ctech/dev/poker/client-id',
     pokerClientSecretParam: '/ctech/dev/poker/client-secret',
+    cloudwatchAlarmsEnabled,
   }));
 }
 
@@ -55,4 +56,11 @@ test('protects scheduled reconciliation with retry, DLQ and an errors alarm', ()
     AlarmActions: [alerts],
     OKActions: [alerts],
   });
+});
+
+test('creates no alarms when cloudwatchAlarmsEnabled is false', () => {
+  const template = buildStack(false);
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
+  // The schedule and its DLQ are unaffected by the flag.
+  template.hasResourceProperties('AWS::SQS::Queue', {QueueName: 'dev-ctech-poker-reconcile-dlq'});
 });

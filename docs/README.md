@@ -41,8 +41,11 @@ history documents and lag the code by design. O índice de planos foi atualizado
 All three Lambdas (`reconcile`, `tablecleanup`, `archiver`) have an SQS DLQ **and**, as of #30, a
 DLQ-depth alarm plus a Lambda-`Errors` alarm on the shared `ctech-prod-alerts` SNS topic
 (`cdk/lib/alarms.ts`), covering both EventBridge Scheduler targets (`reconcile-stack.ts`,
-`tablecleanup-stack.ts`). Older docs claiming "no DLQ" / "no alarm" are stale. `oidc-stack.ts` and
-`reconcile-stack.ts` both have CDK tests (`cdk/test/oidc-stack.test.ts`,
+`tablecleanup-stack.ts`) — same for the DynamoDB throttle alarms (#34). Older docs claiming "no
+DLQ" / "no alarm" are stale. **All of these alarms are gated by one flag** (`cloudwatchAlarmsEnabled`,
+`bin/poker.ts`'s `CLOUDWATCH_ALARMS_ENABLED` env var), which **defaults to `false`** to keep the
+CloudWatch cost at $0 until explicitly turned on — the DLQs and Lambdas themselves are unaffected.
+`oidc-stack.ts` and `reconcile-stack.ts` both have CDK tests (`cdk/test/oidc-stack.test.ts`,
 `cdk/test/reconcile-stack.test.ts`); older docs claiming otherwise are stale.
 
 Issues **B9** (`sub`-only authz), **B10** (archiver DLQ), **B31** (leaderboard ranking), **B32** (fairness surface) and

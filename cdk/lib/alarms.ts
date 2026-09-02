@@ -21,13 +21,19 @@ import {ALERTS_TOPIC_ARN} from './constants';
  *
  * Standard-resolution alarms on AWS-emitted metrics: a few R$/month total, no
  * new billable service (issue #30 hard constraint).
+ *
+ * `enabled` is the `cloudwatchAlarmsEnabled` flag threaded down from
+ * `bin/poker.ts` — a no-op cost lever for turning every alarm this app
+ * creates off without touching the Lambda/DLQ resources themselves.
  */
 export function addLambdaDlqAlarms(
   scope: Construct,
   idPrefix: string,
   fn: lambda.IFunction,
   dlq: sqs.IQueue,
+  enabled: boolean,
 ): void {
+  if (!enabled) return;
   const alertsTopic = sns.Topic.fromTopicArn(scope, `${idPrefix}AlertsTopic`, ALERTS_TOPIC_ARN);
   const action = new cloudwatchActions.SnsAction(alertsTopic);
 

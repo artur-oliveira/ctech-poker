@@ -26,12 +26,13 @@ import {addLambdaDlqAlarms} from './alarms';
 interface ArchiverStackProps extends cdk.StackProps {
   environment: Environment;
   actionLogTable: dynamodb.ITableV2;
+  cloudwatchAlarmsEnabled: boolean;
 }
 
 export class ArchiverStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ArchiverStackProps) {
     super(scope, id, props);
-    const {environment, actionLogTable} = props;
+    const {environment, actionLogTable, cloudwatchAlarmsEnabled} = props;
 
     const bucket = new s3.Bucket(this, 'ActionLogArchive', {
       bucketName: `poker-action-log-archive-${environment}`,
@@ -76,6 +77,6 @@ export class ArchiverStack extends cdk.Stack {
       onFailure: new SqsDlq(dlq),
     }));
 
-    addLambdaDlqAlarms(this, 'Archiver', fn, dlq);
+    addLambdaDlqAlarms(this, 'Archiver', fn, dlq, cloudwatchAlarmsEnabled);
   }
 }
