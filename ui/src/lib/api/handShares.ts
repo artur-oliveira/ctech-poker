@@ -8,6 +8,9 @@ export interface PublicHandShare {
   outcome: HandOutcome;
   net_change: number;
   ended_at: number;
+  // Big blind in force for the shared hand (backend issue #75). Absent on
+  // shares created before it; HandReplayer then derives it from the timeline.
+  big_blind?: number;
   board?: string[];
   hero_cards?: string[];
   opponents?: Array<{ alias: string; hole_cards?: string[]; won?: boolean }>;

@@ -120,6 +120,10 @@ export interface HandItem {
   outcome: HandOutcome;
   net_change: number;
   ended_at: number;
+  // Big blind in force for this hand. Added by backend issue #75; absent on
+  // hands logged before it, where HandReplayer derives the level from the
+  // `post_big_blind` action instead.
+  big_blind?: number;
   board?: string[];
   board_two?: string[];
   hole_cards?: string[];
