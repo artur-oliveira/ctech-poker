@@ -17,6 +17,11 @@ export const AWS_REGION = 'us-east-1';
 export const CERT_ARN =
   'arn:aws:acm:us-east-1:868899309401:certificate/29678869-bfc3-4688-b81b-55aa5b1d7443';
 
+// Account-wide CloudWatch alarms topic — owned by ctech-cdk, imported via
+// sns.Topic.fromTopicArn wherever an alarm needs an action. Never create a
+// new SNS topic for poker's own alarms (see issue #34).
+export const ALERTS_TOPIC_ARN = 'arn:aws:sns:us-east-1:868899309401:ctech-prod-alerts';
+
 export const GITHUB_REPO_DEFAULT = 'artur-oliveira/ctech-poker';
 
 // ── Naming ──────────────────────────────────────────────────────────────────
