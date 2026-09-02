@@ -9,9 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -101,11 +99,14 @@ func attributeValueToInterface(v events.DynamoDBAttributeValue) any {
 	case events.DataTypeString:
 		return v.String()
 	case events.DataTypeNumber:
-		n, err := strconv.ParseFloat(v.Number(), 64)
-		if err != nil {
-			slog.Warn("archive event numeric attribute parse failed", "err", err)
-		}
-		return n
+		// json.Number preserves DynamoDB's number exactly as stored — it is
+		// itself a string, but encoding/json emits it as a bare numeric
+		// token (never quoted) as long as it's a valid JSON number literal,
+		// which every DynamoDB Number attribute already is. Routing this
+		// through float64 (the old behaviour) silently loses precision past
+		// 2^53, which matters here: this archive is the permanent audit
+		// trail for every chip amount and payout (#55).
+		return json.Number(v.Number())
 	case events.DataTypeBoolean:
 		return v.Boolean()
 	case events.DataTypeNull:

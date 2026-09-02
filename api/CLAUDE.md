@@ -226,6 +226,12 @@ catalog.
   mutations, never across a network call. See `internal/tablemanager/manager_concurrency_test.go`.
 - B10 fixed: archiver stream failures now go to an SQS DLQ with a DLQ-depth + `Errors` CloudWatch alarm
   on `ctech-prod-alerts` (`cdk/lib/archiver-stack.ts`, `cdk/lib/alarms.ts`; #30).
+- Issue #55 fixed: `cmd/archiver`'s `attributeValueToInterface` no longer routes DynamoDB Number attributes
+  through `strconv.ParseFloat`/float64 before archiving — a chip total or payout past 2^53 silently lost
+  precision on the permanent audit archive. It now carries the attribute through as `json.Number(v.Number())`,
+  so `json.Marshal` emits the original digit string verbatim as a bare JSON number token; any consumer must
+  decode with `json.Decoder.UseNumber()` to preserve the same fidelity on read. See
+  `cmd/archiver/main_test.go`'s `TestNumericAttributesPreserveIntegerFidelity`.
 - B31 fixed by rejection: `leaderboard.Top("achievement_points")` returns an unsupported-metric error instead of
   silently ranking via `gsi_hands_won`; add a `gsi_achievement_points` GSI before re-enabling the metric.
 - Issue #63 fixed: the `win_rate` board enforces `leaderboard.MinHandsForWinRateRank` (100) hands per currency mode.
