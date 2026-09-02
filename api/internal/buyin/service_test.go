@@ -206,6 +206,76 @@ func TestBuyInRefundsLoserOfConcurrentSeatRace(t *testing.T) {
 	}
 }
 
+// TestBuyInRefundKeyIsPlayerScopedAndCollisionFree guards #42: the refund
+// idempotency key must be globally unique per refund operation, not the
+// constant literal ":refund" that `idemKey+":refund"` collapses to whenever
+// idemKey is empty (auto-rebuy sweep, webhook paths). Two different players
+// each losing a concurrent seat race with an empty idemKey must produce
+// distinct refund keys so ctech-wallet cannot dedupe the second one away —
+// while the key stays a pure function of (roomID, playerID, nonce) so a
+// legitimate retry of the SAME failed buy-in still reproduces it and dedupes.
+func TestBuyInRefundKeyIsPlayerScopedAndCollisionFree(t *testing.T) {
+	loserKey := func(player string) string {
+		// mirrors service.go: nonce falls back to playerID when idemKey == "".
+		return fmt.Sprintf("room-1#%s#buyin#%s:refund", player, player)
+	}
+
+	run := func(t *testing.T, loser string) call {
+		t.Helper()
+		wallet := &raceWallet{firstStarted: make(chan struct{}), release: make(chan struct{})}
+		mgr := testManager(t)
+		rooms := &fakeRoomLookup{room: &roomstore.Room{
+			ID: "test-room", CurrencyMode: "sandbox", BigBlind: 20,
+			BuyInMin: 40, BuyInMax: 400, MaxSeats: 1,
+		}}
+		svc := NewService(wallet, mgr, rooms)
+		ctx := context.Background()
+
+		seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+		if _, err := mgr.GetOrCreateActor(ctx, "room-1", seed); err != nil {
+			t.Fatalf("get or create actor: %v", err)
+		}
+
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.BuyIn(ctx, "room-1", loser, 400, false, "") }()
+
+		<-wallet.firstStarted
+		if err := svc.BuyIn(ctx, "room-1", "winner", 400, false, ""); err != nil {
+			t.Fatalf("winning buyin should succeed: %v", err)
+		}
+		close(wallet.release)
+
+		if err := <-errCh; err == nil {
+			t.Fatal("losing buyin should return an error (refunded), not silent success")
+		}
+		if len(wallet.credits) != 1 || wallet.credits[0].amount != 400 {
+			t.Fatalf("expected exactly one 400-chip refund credit for the race loser, got %+v", wallet.credits)
+		}
+		got := wallet.credits[0]
+		if got.key == ":refund" {
+			t.Fatalf("refund key collapsed to the constant %q — collides across every player (#42)", got.key)
+		}
+		if got.key != loserKey(loser) {
+			t.Fatalf("refund key = %q, want %q", got.key, loserKey(loser))
+		}
+		return got
+	}
+
+	a := run(t, "alice")
+	b := run(t, "bob")
+	if a.key == b.key {
+		t.Fatalf("two different players' refunds share key %q — a wallet dedupe would drop the second refund (#42)", a.key)
+	}
+
+	// Retry safety: the key is a pure function of (roomID, playerID, nonce),
+	// so re-running the identical failed buy-in yields the identical refund
+	// key and ctech-wallet dedupes the retry.
+	a2 := run(t, "alice")
+	if a2.key != a.key {
+		t.Fatalf("retry of the same refund produced key %q, want stable %q — breaks dedupe", a2.key, a.key)
+	}
+}
+
 func TestBuyInFastFailsAlreadyFullTableBeforeDebit(t *testing.T) {
 	wallet := &fakeWallet{}
 	mgr := testManager(t)
