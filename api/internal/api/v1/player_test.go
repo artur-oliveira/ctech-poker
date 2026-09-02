@@ -19,10 +19,16 @@ import (
 
 type mockHistoryReader struct{}
 
-type mockAchievementReader struct{}
+type mockAchievementReader struct {
+	all []achievements.PlayerAchievementProgress
+}
 
 func (mockAchievementReader) ListAchievements(context.Context, string, string, int, map[string]types.AttributeValue) ([]achievements.PlayerAchievementProgress, map[string]types.AttributeValue, error) {
 	return nil, nil, nil
+}
+
+func (m mockAchievementReader) AllAchievements(context.Context, string, string) ([]achievements.PlayerAchievementProgress, error) {
+	return m.all, nil
 }
 
 type mockPokerStatsReader struct{ stats pokerstats.Stats }
@@ -328,6 +334,66 @@ func TestUpdateMeSetsWalletModeWithoutTouchingName(t *testing.T) {
 	}
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestAchievementsSummaryReturnsFullState(t *testing.T) {
+	h := &playerHandlers{
+		players:  player.NewService(&fakePlayerStore{}),
+		sessions: &mockHistoryReader{},
+		achievements: mockAchievementReader{all: []achievements.PlayerAchievementProgress{
+			{Key: achievements.KeyWins, Count: 15},
+			{Key: achievements.KeyFirstHandAllInWin, Count: 1},        // secret, past first tier -> revealed
+			{Key: achievements.KeyLostStraightFlushToRoyal, Count: 1}, // secret, past first tier -> revealed
+			{Key: achievements.KeySamePocketPairStreak, Count: 1},     // secret, below first tier -> hidden
+		}},
+	}
+	app := fiber.New()
+	app.Get("/players/me/achievements/summary", func(c fiber.Ctx) error {
+		c.Locals(localsUserID, "user-123")
+		return h.achievementsSummary(c)
+	})
+
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/players/me/achievements/summary", nil))
+	if err != nil || resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, err = %v", resp.StatusCode, err)
+	}
+	var body achievements.Summary
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+
+	states := make(map[string]achievements.AchievementState, len(body.Achievements))
+	for _, s := range body.Achievements {
+		states[s.Key] = s
+	}
+	if len(body.Achievements) != len(achievements.Catalog)-1 {
+		t.Fatalf("revealed %d achievements, want %d (whole catalog minus the still-locked secret)",
+			len(body.Achievements), len(achievements.Catalog)-1)
+	}
+	if _, hidden := states[achievements.KeySamePocketPairStreak]; hidden {
+		t.Fatal("still-locked secret achievement leaked into the summary")
+	}
+
+	wins := states[achievements.KeyWins]
+	if wins.Stars != 2 || !wins.Unlocked || wins.Completed {
+		t.Fatalf("wins state = %+v, want stars 2, unlocked, not completed", wins)
+	}
+	if wins.NextTarget == nil || *wins.NextTarget != 100 {
+		t.Fatalf("wins next target = %v, want 100", wins.NextTarget)
+	}
+
+	secret := states[achievements.KeyFirstHandAllInWin]
+	if !secret.Secret || !secret.Unlocked || !secret.Completed || secret.NextTarget != nil {
+		t.Fatalf("revealed secret state = %+v, want secret unlocked & completed", secret)
+	}
+
+	// A never-touched achievement is still present, just at zero.
+	if hu, ok := states[achievements.KeyWonHeadsUp]; !ok || hu.Unlocked || hu.Progress != 0 {
+		t.Fatalf("untouched achievement state = %+v (present %v)", hu, ok)
+	}
+	if body.Totals.Stars < 3 || body.Totals.Unlocked < 2 || body.Totals.MaxStars == 0 {
+		t.Fatalf("totals = %+v, want stars>=3, unlocked>=2, max stars set", body.Totals)
 	}
 }
 

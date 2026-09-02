@@ -284,6 +284,7 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /players/me/hands`                      | JWT             | hand history, `?table_id`, paginated (50)                                                  |
 | `GET /players/me/hand/:id?mode=...`          | JWT             | one hand incl. its fairness proof                                                          |
 | `GET /players/me/achievements`               | JWT             | own progress, paginated (100)                                                              |
+| `GET /players/me/achievements/summary`       | JWT             | full-state achievement summary in one response — every catalog key (secrets only once revealed), progress/stars/next-target/completed plus catalog-wide totals; not paginated |
 | `GET /players/me/notes/`                     | JWT             | private opponent notes; `poker:player-notes:read`                                          |
 | `POST /players/me/notes/:opponentId`         | JWT             | save/delete a note (`{tag, note}`, ≤500 chars)                                             |
 | `GET /players/me/poker-stats`                | JWT             | own VPIP/PFR/3-bet                                                                         |
