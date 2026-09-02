@@ -16,7 +16,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/logger"
-	"github.com/gofiber/fiber/v3/middleware/recover"
+	fiberrecover "github.com/gofiber/fiber/v3/middleware/recover"
 	"go.uber.org/fx"
 	"gopkg.aoctech.app/api-commons/awsconfig"
 	"gopkg.aoctech.app/api-commons/cache"
@@ -160,7 +160,7 @@ func newFiberApp(cfg *config.Config) *fiber.App {
 	})
 
 	app.Use(fiberobs.RequestID())
-	app.Use(recover.New(recover.Config{EnableStackTrace: true}))
+	app.Use(fiberrecover.New(fiberrecover.Config{EnableStackTrace: true}))
 	// AllowCredentials requires explicit origins. Development intentionally
 	// leaves origins empty, which means wildcard/no credentials like Wallet.
 	corsCfg := cors.Config{
@@ -468,6 +468,24 @@ func tableCurrencyMode(ctx context.Context, rooms roomModeReader, tableID string
 	return room.CurrencyMode, nil
 }
 
+// dispatchGamificationPipeline detaches a completed hand's gamification
+// bookkeeping (pipeline) onto its own goroutine so the table actor's own
+// goroutine — which calls onHandComplete synchronously from
+// table/actor.go's notifyHandComplete — never blocks on it (#61). A panic
+// inside pipeline is recovered and logged rather than crashing the whole
+// process, since this goroutine runs outside any request's recover
+// middleware, the same reasoning as tablews.go's own ws handler recover.
+func dispatchGamificationPipeline(tableID, handID string, pipeline func()) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("gamification: onHandComplete panic recovered", "table", tableID, "hand", handID, "panic", r)
+			}
+		}()
+		pipeline()
+	}()
+}
+
 func newTableManager(leases *tablelease.Service, store *tablestore.Store, cacheBackend cache.Backend, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
@@ -520,81 +538,99 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, cacheB
 			slog.Error("handreveal: record hand failed", "table", tableID, "hand", handID, "err", err)
 		}
 	}
+	// onHandComplete is invoked synchronously on the table actor's own
+	// goroutine (table/actor.go's notifyHandComplete, called from
+	// broadcastAll), but everything it does is gamification bookkeeping —
+	// achievements, leaderboard, pokerstats, matchup, session/hand history,
+	// highlights, recent players — none of which the actor's own state or
+	// any client-visible broadcast depends on: broadcastAll already sent
+	// every player their post-hand "state" snapshot before it ever reaches
+	// this hook, and notifyHandComplete's handhook SET NX claim (fleet-wide
+	// once-per-hand dedup, internal/handhook) has already been taken
+	// synchronously before this closure runs. So the whole body is safe to
+	// detach into its own goroutine, exactly like autoRebuySweep
+	// (app.wireAutoRebuyHook) — at real-table scale this was hundreds of
+	// sequential DynamoDB round trips blocking the actor and every other
+	// player's next action for multiple seconds (#61). A panic here must
+	// not take the process down with it, same reasoning as the ws
+	// handler's own recover in tablews.go.
 	onHandComplete := func(tableID, handID string, outcome hand.HandOutcome, names map[string]string) {
-		ctx := context.Background()
-		mode, err := tableCurrencyMode(ctx, rooms, tableID)
-		if err != nil {
-			slog.Error("gamification: load room mode failed", "table", tableID, "err", err)
-			return
-		}
-		var metrics []pokerstats.HandMetric
-		actions, metricsErr := store.LoadActionsSince(ctx, tableID, handID, 0)
-		if metricsErr != nil {
-			slog.Error("pokerstats: load hand actions failed", "table", tableID, "hand", handID, "err", metricsErr)
-		} else {
-			metrics = pokerstats.Analyze(outcome.Participants, actions)
-		}
-		// peeked scans the whole hand's action log (unlike pokerstats.Analyze,
-		// which intentionally stops at the flop) since a player can peek at
-		// their own cards at any street, not just preflop.
-		peeked := make(map[string]bool)
-		// Time bank is charged per action, so one hand can carry several
-		// charges for the same player.
-		timeBankMs := make(map[string]int64)
-		for _, entry := range actions {
-			if entry.Action == "peek_cards" {
-				peeked[entry.PlayerID] = true
+		dispatchGamificationPipeline(tableID, handID, func() {
+			ctx := context.Background()
+			mode, err := tableCurrencyMode(ctx, rooms, tableID)
+			if err != nil {
+				slog.Error("gamification: load room mode failed", "table", tableID, "err", err)
+				return
 			}
-			timeBankMs[entry.PlayerID] += entry.TimeBankMs
-		}
-		achievementMetrics := make([]achievements.HandMetric, len(metrics))
-		for i, metric := range metrics {
-			achievementMetrics[i] = achievements.HandMetric{
-				PlayerID:   metric.PlayerID,
-				VPIP:       metric.VPIP,
-				ThreeBet:   metric.ThreeBet,
-				Peeked:     peeked[metric.PlayerID],
-				TimeBankMs: timeBankMs[metric.PlayerID],
+			var metrics []pokerstats.HandMetric
+			actions, metricsErr := store.LoadActionsSince(ctx, tableID, handID, 0)
+			if metricsErr != nil {
+				slog.Error("pokerstats: load hand actions failed", "table", tableID, "hand", handID, "err", metricsErr)
+			} else {
+				metrics = pokerstats.Analyze(outcome.Participants, actions)
 			}
-		}
-		unlocks, err := achv.RecordHand(ctx, tableID, mode, outcome, achievementMetrics)
-		if err != nil {
-			slog.Error("achievements record hand failed", "table", tableID, "err", err)
-		}
-		for _, unlock := range unlocks {
-			data, err := goproto.Marshal(&pokerproto.ServerMessage{
-				Type:  "achievement_unlocked",
-				Key:   unlock.Key,
-				Stars: int32(unlock.Stars),
-			})
-			if err == nil {
-				reg.Broadcast(ctx, tableID+"#"+unlock.PlayerID, data)
+			// peeked scans the whole hand's action log (unlike pokerstats.Analyze,
+			// which intentionally stops at the flop) since a player can peek at
+			// their own cards at any street, not just preflop.
+			peeked := make(map[string]bool)
+			// Time bank is charged per action, so one hand can carry several
+			// charges for the same player.
+			timeBankMs := make(map[string]int64)
+			for _, entry := range actions {
+				if entry.Action == "peek_cards" {
+					peeked[entry.PlayerID] = true
+				}
+				timeBankMs[entry.PlayerID] += entry.TimeBankMs
 			}
-		}
-		if err := leaderboardSvc.RecordUnlocks(ctx, mode, unlocks); err != nil {
-			slog.Error("leaderboard achievement points failed", "table", tableID, "err", err)
-		}
-		if err := leaderboardSvc.RecordHand(ctx, mode, outcome, names); err != nil {
-			slog.Error("leaderboard record hand failed", "table", tableID, "err", err)
-		}
-		if metricsErr == nil {
-			if err := pokerStatsStore.RecordHand(ctx, mode, tableID, handID, metrics); err != nil {
-				slog.Error("pokerstats: record hand failed", "table", tableID, "hand", handID, "err", err)
+			achievementMetrics := make([]achievements.HandMetric, len(metrics))
+			for i, metric := range metrics {
+				achievementMetrics[i] = achievements.HandMetric{
+					PlayerID:   metric.PlayerID,
+					VPIP:       metric.VPIP,
+					ThreeBet:   metric.ThreeBet,
+					Peeked:     peeked[metric.PlayerID],
+					TimeBankMs: timeBankMs[metric.PlayerID],
+				}
 			}
-		}
-		if err := matchupStore.RecordHand(ctx, mode, tableID, handID, outcome); err != nil {
-			slog.Error("matchup: record hand failed", "table", tableID, "hand", handID, "err", err)
-		}
-		persistHandHistory(tableID, handID, mode, outcome, names)
-		persistHandReveal(tableID, handID, mode, outcome)
-		if err := highlightsStore.RecordHand(ctx, tableID, handID, outcome, names); err != nil {
-			slog.Error("highlights: record hand failed", "table", tableID, "hand", handID, "err", err)
-		}
-		if recentSvc != nil {
-			if err := recentSvc.RecordHand(ctx, tableID, handID, outcome.Participants, time.Now()); err != nil {
-				slog.Error("recent players: record hand failed", "table", tableID, "hand", handID, "err", err)
+			unlocks, err := achv.RecordHand(ctx, tableID, mode, outcome, achievementMetrics)
+			if err != nil {
+				slog.Error("achievements record hand failed", "table", tableID, "err", err)
 			}
-		}
+			for _, unlock := range unlocks {
+				data, err := goproto.Marshal(&pokerproto.ServerMessage{
+					Type:  "achievement_unlocked",
+					Key:   unlock.Key,
+					Stars: int32(unlock.Stars),
+				})
+				if err == nil {
+					reg.Broadcast(ctx, tableID+"#"+unlock.PlayerID, data)
+				}
+			}
+			if err := leaderboardSvc.RecordUnlocks(ctx, mode, unlocks); err != nil {
+				slog.Error("leaderboard achievement points failed", "table", tableID, "err", err)
+			}
+			if err := leaderboardSvc.RecordHand(ctx, mode, outcome, names); err != nil {
+				slog.Error("leaderboard record hand failed", "table", tableID, "err", err)
+			}
+			if metricsErr == nil {
+				if err := pokerStatsStore.RecordHand(ctx, mode, tableID, handID, metrics); err != nil {
+					slog.Error("pokerstats: record hand failed", "table", tableID, "hand", handID, "err", err)
+				}
+			}
+			if err := matchupStore.RecordHand(ctx, mode, tableID, handID, outcome); err != nil {
+				slog.Error("matchup: record hand failed", "table", tableID, "hand", handID, "err", err)
+			}
+			persistHandHistory(tableID, handID, mode, outcome, names)
+			persistHandReveal(tableID, handID, mode, outcome)
+			if err := highlightsStore.RecordHand(ctx, tableID, handID, outcome, names); err != nil {
+				slog.Error("highlights: record hand failed", "table", tableID, "hand", handID, "err", err)
+			}
+			if recentSvc != nil {
+				if err := recentSvc.RecordHand(ctx, tableID, handID, outcome.Participants, time.Now()); err != nil {
+					slog.Error("recent players: record hand failed", "table", tableID, "hand", handID, "err", err)
+				}
+			}
+		})
 	}
 	// roomLoader re-arms blind escalation and the per-turn action timeout from
 	// the room's authoritative config on every actor creation (T6), so both
