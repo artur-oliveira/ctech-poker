@@ -318,11 +318,20 @@ escalation.
 
 **Critérios de aceitação**
 
-- [ ] Attempt counter persisted per pending entry
-- [ ] After N attempts the entry is quarantined and alarmed, not retried
-- [ ] `LoadForLambda` enforces the real-money legal-signoff gate
-- [ ] Test: an entry failing N times ends up quarantined
-- [ ] Runbook: inspecting and resolving a quarantined money entry
+- [x] Attempt counter persisted per pending entry — `PendingCashout.Attempts` / `LastAttemptAt` /
+  `LastError`, incremented by `PendingStore.RecordFailedAttempt` (#32).
+- [x] After N attempts the entry is quarantined and alarmed, not retried — `reconcile.MaxAttempts`
+  = 5; `gsi_status` flips to `"manual_review"` (out of `ListUnresolved`), `run` returns an
+  aggregated error so the Lambda invocation fails and the message reaches the DLQ. Early-attempt
+  failures are counted + `slog.Warn`-logged and retried next run; the whole batch is processed
+  before returning so one poison entry never blocks the rest (#32).
+- [x] `LoadForLambda` enforces the real-money legal-signoff gate — same
+  `RealMoneyEnabled && LegalSignoffRef == ""` fail-closed check as `Load` (#32).
+- [x] Test: an entry failing N times ends up quarantined —
+  `TestRunEscalatesEntryThatExhaustsRetries` (unit) +
+  `TestRecordFailedAttemptQuarantinesAfterMaxAttempts` (integration) (#32).
+- [ ] Runbook: inspecting and resolving a quarantined money entry — still open (alarming on the
+  `manual_review` state is Issue 2 / CDK work).
 
 ---
 
