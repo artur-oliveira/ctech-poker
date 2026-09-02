@@ -32,6 +32,7 @@ vi.mock('@/lib/api/player', () => ({
 vi.mock('@/lib/api/achievements', () => ({
   getAchievementCatalog: vi.fn(),
   getMyAchievements: vi.fn(),
+  getMyAchievementsSummary: vi.fn(),
 }));
 vi.mock('@/lib/notify', () => ({pushNotification: mocks.notify}));
 
@@ -49,7 +50,11 @@ const catalog = [
   {key: 'hands_1000'},
   {key: 'locked'},
 ];
-const mine = catalog.map((item, index) => ({key: item.key, count: item.key === 'locked' ? 0 : index + 1}));
+const mine = {
+  achievements: catalog.map((item, index) => ({
+    key: item.key, progress: item.key === 'locked' ? 0 : index + 1,
+  })),
+};
 
 describe('ProfileShowcaseDialog', () => {
   beforeEach(() => {
