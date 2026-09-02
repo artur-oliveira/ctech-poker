@@ -55,7 +55,6 @@ type config struct {
 	thinkMax     time.Duration
 	wFold        int
 	wCheckCall   int
-	insecureTLS  bool
 	reportEvery  time.Duration
 }
 
@@ -369,8 +368,6 @@ type client struct {
 	token   string
 	m       *metrics
 	rng     *rand.Rand
-
-	playerID string // learned from the first "connected"/"state" frame is not exposed; kept for churn logs
 }
 
 func (c *client) run(ctx context.Context) {
