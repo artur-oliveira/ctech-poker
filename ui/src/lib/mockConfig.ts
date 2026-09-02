@@ -11,7 +11,12 @@ export const MOCK_PLAYER_ID = 'mock_player_ana';
 export type MockScenario =
   'full_hand'
   | 'heads_up'
+  | 'layout_3'
+  | 'layout_4'
+  | 'layout_5'
   | 'six_max'
+  | 'layout_7'
+  | 'layout_8'
   | 'nine_max'
   | 'full_hand_loss'
   | 'full_hand_tie'

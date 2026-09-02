@@ -5,7 +5,7 @@ import {type ActionAvailability, ActionBar} from './ActionBar';
 import {Board} from './Board';
 import {Chat} from './Chat';
 import {HandOutcomeBanner, type HandOutcomeState} from './HandOutcome';
-import {stableSeatOccupants, tableCapacity, TableStage} from './TableStage';
+import {balancedSeatPosition, stableSeatOccupants, tableCapacity, TableStage} from './TableStage';
 import {MOCK_PLAYER_ID, snapshotForScenario} from '@/dev/mockRuntime';
 
 vi.mock('@/lib/hooks/useDeckVariant', () => ({
@@ -177,17 +177,50 @@ describe('table presentation', () => {
   });
 
   test.each([
-    ['heads_up', 2, 1],
-    ['six_max', 6, 5],
-    ['nine_max', 9, 8],
-  ] as const)('renders the %s fixed-capacity ring', (scenario, capacity, opponents) => {
+    ['heads_up', 2], ['layout_3', 3], ['layout_4', 4], ['layout_5', 5],
+    ['six_max', 6], ['layout_7', 7], ['layout_8', 8], ['nine_max', 9],
+  ] as const)('balances the %s portrait ring by current occupancy', (scenario, playerCount) => {
     useVerticalStage();
     const snapshot = snapshotForScenario(scenario);
-    const {container} = render(<TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID} maxSeats={capacity}
+    const {container} = render(<TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID} maxSeats={9}
       seatLayoutKey="room-1" pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}/>);
-    expect(container.querySelector('.stage-v')).toHaveAttribute('data-capacity', String(capacity));
-    expect(container.querySelectorAll('.stage-v-ring .game-seat')).toHaveLength(opponents);
+    expect(container.querySelector('.stage-v')).toHaveAttribute('data-player-count', String(playerCount));
+    expect(container.querySelectorAll('.stage-v-ring .game-seat')).toHaveLength(playerCount - 1);
     expect(container.querySelector('.stage-v > .game-seat.viewer')).toBeInTheDocument();
+    expect(container.querySelectorAll('.stage-v-ring [data-balanced-seat]')).toHaveLength(playerCount - 1);
+  });
+
+  test('derives the canonical heads-up, triangle and diamond geometry', () => {
+    expect(balancedSeatPosition(0, 2)).toEqual({x: 50, y: 92, zone: 'bottom', side: 'center'});
+    expect(balancedSeatPosition(1, 2)).toEqual({x: 50, y: 8, zone: 'top', side: 'center'});
+    expect(balancedSeatPosition(1, 3)).toEqual({x: 10.16, y: 29, zone: 'left', side: 'left'});
+    expect(balancedSeatPosition(2, 3)).toEqual({x: 89.84, y: 29, zone: 'right', side: 'right'});
+    expect([0, 1, 2, 3].map(index => balancedSeatPosition(index, 4))).toEqual([
+      {x: 50, y: 92, zone: 'bottom', side: 'center'},
+      {x: 4, y: 50, zone: 'left', side: 'left'},
+      {x: 50, y: 8, zone: 'top', side: 'center'},
+      {x: 96, y: 50, zone: 'right', side: 'right'},
+    ]);
+  });
+
+  test('samples portrait seats from the capsule rail instead of an inset ellipse', () => {
+    expect(balancedSeatPosition(1, 2, true)).toEqual({x: 50, y: 7, zone: 'top', side: 'center'});
+    expect(balancedSeatPosition(1, 3, true)).toEqual({x: 12, y: 22, zone: 'left', side: 'left'});
+    expect(balancedSeatPosition(2, 3, true)).toEqual({x: 88, y: 22, zone: 'right', side: 'right'});
+    expect(balancedSeatPosition(1, 9, true)).toEqual({x: 12, y: 74, zone: 'bottom', side: 'left'});
+    expect(balancedSeatPosition(8, 9, true)).toEqual({x: 88, y: 74, zone: 'bottom', side: 'right'});
+  });
+
+  test.each([
+    ['heads_up', 2], ['layout_3', 3], ['layout_4', 4], ['layout_5', 5],
+    ['six_max', 6], ['layout_7', 7], ['layout_8', 8], ['nine_max', 9],
+  ] as const)('balances all %s desktop seats on the occupied perimeter', (scenario, playerCount) => {
+    const snapshot = snapshotForScenario(scenario);
+    const {container} = render(<TableStage snapshot={snapshot} viewer={MOCK_PLAYER_ID} maxSeats={9}
+      seatLayoutKey="room-1" pot={0} bigBlind={50} nowMs={Date.now()} outcome={null} holdOutcomeOpen={false}/>);
+    expect(container.querySelector('.game-table')).toHaveAttribute('data-player-count', String(playerCount));
+    expect(container.querySelectorAll('.game-table > [data-balanced-seat]')).toHaveLength(playerCount);
+    expect(container.querySelector('.game-table > .viewer')).toHaveAttribute('data-seat-zone', 'bottom');
   });
 
   test('flies the house mark on the felt on both stages', () => {

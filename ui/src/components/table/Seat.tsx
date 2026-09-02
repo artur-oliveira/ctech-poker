@@ -40,8 +40,16 @@ const ROLE_LABELS: Record<string, string> = {
   'D/SB': 'Dealer e small blind'
 };
 
-// Seats 3/4/5 sit on the top rail; their winner pill must drop below instead of above.
+// Legacy standalone seats use their numeric index. TableStage supplies the
+// geometric zone for occupancy-balanced layouts instead.
 const TOP_SEAT_INDICES = [3, 4, 5];
+
+export type SeatLayoutPosition = {
+  x: number;
+  y: number;
+  zone: 'bottom' | 'left' | 'top' | 'right';
+  side: 'left' | 'center' | 'right';
+};
 
 // A small burst around the winner's own seat, independent of the viewer's
 // personal win/lose banner, so every player at the table can tell who just
@@ -121,7 +129,8 @@ export function Seat({
                        reactionTargetLabel,
                        onReactionTarget,
                        chatBubble,
-                       actionsMenu
+                       actionsMenu,
+                       layoutPosition
                      }: {
   seat: SeatView;
   isViewer: boolean;
@@ -165,6 +174,9 @@ export function Seat({
   // single unlabelled affordance for what is now a whole set of actions.
   // Hand-history replay reuses this seat without one.
   actionsMenu?: ReactNode;
+  // TableStage owns visual geometry. Keeping it presentation-only means the
+  // server-authored player order and all hidden-card data remain untouched.
+  layoutPosition?: SeatLayoutPosition;
 }) {
   const cards = seat.hole_cards;
   // Peeking is click-only: hover used to reveal too, which made the click that
@@ -258,10 +270,19 @@ export function Seat({
   // "Ausente" there reads as if the ready click did nothing.
   const sittingOutReady = seat.state === 'sitting_out' && seat.ready === true;
   const playstyle = seat.playstyle_badge ? playstyleMeta(seat.playstyle_badge) : undefined;
+  const seatStyle = layoutPosition ? {
+    '--seat-x': `${layoutPosition.x}%`,
+    '--seat-y': `${layoutPosition.y}%`,
+  } as CSSProperties : undefined;
+  const isTopSeat = layoutPosition?.zone === 'top' || (!layoutPosition && TOP_SEAT_INDICES.includes(index));
   return <div data-state={seat.state} data-connection-state={seat.connection_state}
               data-player-id={seat.player_id}
+              data-seat-zone={layoutPosition?.zone}
+              data-seat-side={layoutPosition?.side}
+              data-balanced-seat={layoutPosition ? '' : undefined}
+              style={seatStyle}
               aria-current={isTurn ? 'true' : undefined}
-              className={`game-seat seat-${index} ${seat.state} ${isDisconnected ? 'disconnected' : ''} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${isWinner ? 'is-winner' : ''} ${reactionTargetLabel ? 'is-reaction-target' : ''} ${pendingName ? 'is-pending-name' : ''} ${TOP_SEAT_INDICES.includes(index) ? 'top-seat' : ''}`}>
+              className={`game-seat seat-${index} ${layoutPosition ? `seat-zone-${layoutPosition.zone}` : ''} ${seat.state} ${isDisconnected ? 'disconnected' : ''} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${isWinner ? 'is-winner' : ''} ${reactionTargetLabel ? 'is-reaction-target' : ''} ${pendingName ? 'is-pending-name' : ''} ${isTopSeat ? 'top-seat' : ''}`}>
     {reactionTargetLabel && onReactionTarget && <button type="button" className="seat-reaction-target"
                                                         aria-label={`${reactionTargetLabel} em ${playerName(seat.player_id, undefined, seat.name)}`}
                                                         onClick={onReactionTarget}><span>Escolher</span></button>}

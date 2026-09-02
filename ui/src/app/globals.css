@@ -3536,17 +3536,20 @@ h1 em {
 }
 
 /* The house mark on the felt (see FeltWordmark in TableStage.tsx), matching
-   the landing hero's .table-logo. It owns the felt's top arc as a full lockup
-   — mark plus the name in white — instead of the tone-on-tone weave it used to
-   be, so the table reads as CTech's from across the room. The band is its
-   own: the dealer call (.table-callout) starts below it and the board starts
-   below that, so nothing ever crosses the mark. Sized off --felt-wordmark-mark
-   so the portrait capsule scales the whole lockup from one number. */
+   the landing hero's .table-logo. A full lockup — mark plus the name in white
+   — so the table reads as CTech's from across the room. It crowns the board
+   group instead of the felt's top arc: the top-row seats' bet chips cross that
+   arc on their way to the pot and covered the mark on every raise. Anchored to
+   .felt-center's top edge it rides directly above the pot readout and travels
+   with the board instead of sitting at a fixed percentage of the felt; being
+   absolute, it adds no height to the centred board group. Sized off
+   --felt-wordmark-mark so the portrait capsule scales the lockup from one
+   number. */
 .felt-wordmark {
     --felt-wordmark-mark: 26px;
     position: absolute;
     left: 50%;
-    top: 8%;
+    bottom: calc(100% + 10px);
     z-index: 1;
     display: flex;
     align-items: center;
@@ -5540,6 +5543,79 @@ h1 em {
 .seat-8 {
     left: 63%;
     bottom: 1%
+}
+
+/* Occupancy, not room capacity, owns live-table geometry. Every rendered seat
+   receives one point on the same ellipse, starting with the viewer at the
+   bottom. This naturally becomes heads-up face-to-face, a reversed triangle
+   at three, a diamond at four, and an even perimeter from five through nine.
+   Center anchoring is essential: the old left-edge anchors made the rightmost
+   9-max seat overlap the viewer even when their percentage values differed. */
+.game-table:not(.stage-v) > .game-seat[data-balanced-seat] {
+    left: var(--seat-x);
+    top: var(--seat-y);
+    right: auto;
+    bottom: auto;
+    transform: translate(-50%, -50%)
+}
+
+/* Chips always travel inward from the geometric zone. These selectors come
+   after the legacy numeric-seat rules so replays or standalone seats keep
+   their existing behavior while the live balanced layout uses its real side. */
+.game-table .seat-zone-bottom .seat-bet {
+    top: auto;
+    left: 50%;
+    right: auto;
+    bottom: calc(100% + 9px);
+    flex-direction: column-reverse;
+    transform: translateX(-50%);
+    transform-origin: 50% 100%
+}
+
+.game-table .seat-zone-top .seat-bet {
+    top: calc(100% + 9px);
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    flex-direction: column;
+    transform: translateX(-50%);
+    transform-origin: 50% 0
+}
+
+.game-table .seat-zone-left .seat-bet {
+    top: 50%;
+    left: calc(100% + 6px);
+    right: auto;
+    bottom: auto;
+    flex-direction: column;
+    transform: translateY(-50%);
+    transform-origin: 0 50%
+}
+
+.game-table .seat-zone-right .seat-bet {
+    top: 50%;
+    left: auto;
+    right: calc(100% + 6px);
+    bottom: auto;
+    flex-direction: column;
+    transform: translateY(-50%);
+    transform-origin: 100% 50%
+}
+
+/* Heads-up's opponent owns the exact top-center anchor. Sending that one bet
+   sideways keeps it clear of the centered house mark while preserving the
+   face-to-face seat axis. */
+.game-table:not(.stage-v)[data-player-count='2'] > .seat-1 .seat-bet,
+.game-table:not(.stage-v)[data-player-count='4'] > .seat-2 .seat-bet,
+.game-table:not(.stage-v)[data-player-count='6'] > .seat-3 .seat-bet,
+.game-table:not(.stage-v)[data-player-count='8'] > .seat-4 .seat-bet {
+    top: 50%;
+    left: calc(100% + 8px);
+    right: auto;
+    bottom: auto;
+    flex-direction: column;
+    transform: translateY(-50%);
+    transform-origin: 0 50%
 }
 
 .folded {
@@ -10592,23 +10668,26 @@ h1 em {
     border-radius: 999px
 }
 
-/* Horizontal felt inset stretches with the ring (12%) so the avatar band
-   between rail and felt stays roughly avatar-sized from phone to portrait
-   tablet; vertical insets leave the top arc's captions clear of the header. */
+/* Rail and felt stay concentric: each side uses approximately the same visual
+   band thickness at phone and tablet widths. The previous 12% horizontal felt
+   inset made the walnut sides much wider than the top/bottom arcs, which read
+   as a stretched capsule and pulled seats off the rail's centerline. */
 .stage-v .game-felt {
-    inset: clamp(56px, 9%, 84px) clamp(44px, 12%, 90px) clamp(48px, 8%, 76px);
+    inset: clamp(56px, 9%, 84px) clamp(30px, 8%, 60px) clamp(40px, 7%, 68px);
     border-radius: 999px
 }
 
 .stage-v .board > div {
-    gap: 4px
+    gap: 3px
 }
 
-/* The capsule felt is tall and narrow: the mark sits in the top arc and
-   shrinks off its own size token so it never reaches the rail. */
+/* The capsule felt is tall and narrow: the mark shrinks off its own size token
+   so the lockup stays inside the board's width. It crowns the board here too,
+   which is what frees the capsule's top center — the seat lane that made the
+   mark yield on several occupancies below. */
 .stage-v .felt-wordmark {
     --felt-wordmark-mark: 19px;
-    top: 5%;
+    bottom: calc(100% + 7px);
     gap: 7px
 }
 
@@ -10620,8 +10699,8 @@ h1 em {
 
 .stage-v .board-card, .stage-v .board > div > span,
 .stage-v .board-runout-row > div > span:not(.playing-card) {
-    width: 40px;
-    height: 56px
+    width: 38px;
+    height: 53px
 }
 
 /* --- Opponents: avatar chips on the rail band --- */
@@ -10819,6 +10898,14 @@ h1 em {
     white-space: nowrap
 }
 
+/* Side captions stay centered on their avatar and narrow to the established
+   64px compact lane. This keeps the 3/4-player diamond's extreme left/right
+   labels inside a 320–390px viewport without pushing them toward the board. */
+.stage-v-ring :is(.seat-zone-left, .seat-zone-right) .seat-info {
+    width: 60px;
+    max-width: 60px
+}
+
 /* The supplemental playstyle badge only fits the ring at 7px, well under any
    readable floor, and it competes with name/stack for a caption lane that 9-max
    cannot spare. Identity wins; the badge stays on desktop and in the profile. */
@@ -10845,12 +10932,14 @@ h1 em {
     margin-right: -12px
 }
 
-.stage-v-ring .seat-4 .seat-cards, .stage-v-ring .seat-5 .seat-cards {
+.stage-v-ring .seat-4 .seat-cards, .stage-v-ring .seat-5 .seat-cards,
+.stage-v-ring .seat-zone-top .seat-cards {
     bottom: auto;
     top: calc(100% - 3px)
 }
 
-.stage-v-ring .seat-4 .seat-info, .stage-v-ring .seat-5 .seat-info {
+.stage-v-ring .seat-4 .seat-info, .stage-v-ring .seat-5 .seat-info,
+.stage-v-ring .seat-zone-top .seat-info {
     top: auto;
     bottom: 100%;
     margin-top: 0;
@@ -11012,6 +11101,139 @@ h1 em {
 .stage-v-ring .seat-8 {
     --seat-x: 88%;
     --seat-y: 74%
+}
+
+/* Inline ellipse coordinates from TableStage supersede the capacity-era
+   slots above. Directional classes also supersede numeric chip rules: at
+   lower occupancies the same player index can sit on a different side. */
+.stage-v-ring .seat-zone-bottom .seat-bet {
+    top: auto;
+    left: 50%;
+    right: auto;
+    bottom: calc(100% + 8px);
+    flex-direction: column-reverse;
+    transform: translateX(-50%);
+    transform-origin: 50% 100%
+}
+
+.stage-v-ring .seat-zone-top .seat-bet {
+    top: calc(100% + 8px);
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    flex-direction: column;
+    transform: translateX(-50%);
+    transform-origin: 50% 0
+}
+
+.stage-v-ring .seat-zone-left .seat-bet {
+    top: 50%;
+    left: calc(100% + 8px);
+    right: auto;
+    bottom: auto;
+    flex-direction: column;
+    transform: translateY(-50%);
+    transform-origin: 0 50%
+}
+
+.stage-v-ring .seat-zone-right .seat-bet {
+    top: 50%;
+    left: auto;
+    right: calc(100% + 8px);
+    bottom: auto;
+    flex-direction: column;
+    transform: translateY(-50%);
+    transform-origin: 100% 50%
+}
+
+.stage-v-ring .seat-zone-top .seat-win {
+    top: calc(100% + 8px);
+    bottom: auto
+}
+
+/* A top-rail seat has three independent lanes: cards drop inward, identity
+   reads outward along the rail, and chips move sideways onto the felt. This
+   prevents the top player's cards and wager from occupying the same pixels. */
+.stage-v-ring .seat-zone-top .seat-info {
+    top: 50%;
+    bottom: auto;
+    width: 54px;
+    max-width: 54px;
+    margin: 0;
+    transform: translateY(-50%)
+}
+
+.stage-v-ring .seat-zone-top:is([data-seat-side='left'], [data-seat-side='center']) .seat-info {
+    left: auto;
+    right: calc(100% + 2px);
+    text-align: right
+}
+
+.stage-v-ring .seat-zone-top[data-seat-side='right'] .seat-info {
+    left: calc(100% + 2px);
+    right: auto;
+    text-align: left
+}
+
+.stage-v-ring .seat-zone-top:is([data-seat-side='left'], [data-seat-side='center']) .seat-bet {
+    top: 50%;
+    left: calc(100% + 8px);
+    right: auto;
+    bottom: auto;
+    flex-direction: column;
+    transform: translateY(-50%);
+    transform-origin: 0 50%
+}
+
+.stage-v-ring .seat-zone-top[data-seat-side='right'] .seat-bet {
+    top: 50%;
+    left: auto;
+    right: calc(100% + 8px);
+    bottom: auto;
+    flex-direction: column;
+    transform: translateY(-50%);
+    transform-origin: 100% 50%
+}
+
+/* Lower-arc seats mirror the top: their cards rise onto the felt, while bet
+   chips take the open sideways lane. Both remain inside the rail and never
+   stack on one another. */
+.stage-v-ring .seat-zone-bottom[data-seat-side='left'] .seat-bet {
+    top: 50%;
+    left: calc(100% + 8px);
+    right: auto;
+    bottom: auto;
+    flex-direction: column;
+    transform: translateY(-50%);
+    transform-origin: 0 50%
+}
+
+.stage-v-ring .seat-zone-bottom[data-seat-side='right'] .seat-bet {
+    top: 50%;
+    left: auto;
+    right: calc(100% + 8px);
+    bottom: auto;
+    flex-direction: column;
+    transform: translateY(-50%);
+    transform-origin: 100% 50%
+}
+
+/* Reassert balanced side captions after the legacy seat-2/seat-7 rules. The
+   numeric index no longer guarantees a physical side at low occupancy. */
+.stage-v-ring .seat-zone-left .seat-info {
+    left: 0;
+    right: auto;
+    width: 60px;
+    max-width: 60px;
+    transform: none
+}
+
+.stage-v-ring .seat-zone-right .seat-info {
+    left: auto;
+    right: 0;
+    width: 60px;
+    max-width: 60px;
+    transform: none
 }
 
 /* --- Viewer hero HUD --- */
@@ -11804,6 +12026,78 @@ h1 em {
         min-height: 320px
     }
 
+    /* The action dock owns the second grid column, so balanced centers clamp
+       inside the first column by half a compact seat. Vertical clamping keeps
+       floated cards below the header and above the street rail. */
+    .game-table:not(.stage-v) > .game-seat[data-balanced-seat] {
+        left: clamp(64px, var(--seat-x), calc(100% - 64px));
+        top: clamp(90px, var(--seat-y), calc(100% - 90px))
+    }
+
+    .game-table:not(.stage-v) .felt-wordmark {
+        display: none
+    }
+
+    /* Short landscape uses the same compact-seat DOM as portrait, but on a
+       shallow oval. The viewer HUD consumes a small strip below the ring and
+       the action dock remains in its dedicated right column. */
+    .game-table.stage-h {
+        gap: 4px;
+        padding: 0 8px 4px
+    }
+
+    .stage-h .stage-v-ring {
+        align-self: stretch;
+        width: 100%;
+        min-height: 0;
+        aspect-ratio: auto
+    }
+
+    .stage-h .game-rail {
+        inset: 10% 1% 8%;
+        border-radius: 50%
+    }
+
+    .stage-h .game-felt {
+        inset: 15% 6% 13%;
+        border-radius: 50%
+    }
+
+    .stage-h .felt-wordmark,
+    .stage-h .table-callout {
+        display: none
+    }
+
+    .stage-h .stage-v-ring .game-seat {
+        --seat-size: 34px
+    }
+
+    .stage-h .stage-v-ring .seat-cards > .playing-card {
+        width: 26px;
+        height: 36px;
+        margin-right: -11px
+    }
+
+    .stage-h .stage-v-ring .seat-info,
+    .stage-h .stage-v-ring .seat-zone-top .seat-info {
+        width: 48px;
+        max-width: 48px
+    }
+
+    .stage-h > .game-seat {
+        min-height: 54px;
+        padding-block: 4px
+    }
+
+    .stage-h > .game-seat .seat-avatar {
+        display: none
+    }
+
+    .stage-h > .game-seat .seat-cards > .playing-card {
+        width: 38px;
+        height: 53px
+    }
+
     .game-rail {
         inset: 10% 1% 8%
     }
@@ -11945,6 +12239,12 @@ h1 em {
     .board-runout-row > div > span:not(.playing-card) {
         width: 42px;
         height: 59px
+    }
+
+    .stage-h .board-card, .stage-h .board > div > span,
+    .stage-h .board-runout-row > div > span:not(.playing-card) {
+        width: 34px;
+        height: 48px
     }
 }
 
@@ -17715,7 +18015,8 @@ button.deck-grid-slot:hover {
         bottom: calc(100% - 12px)
     }
 
-    .stage-v-ring .seat-4 .seat-cards, .stage-v-ring .seat-5 .seat-cards {
+    .stage-v-ring .seat-4 .seat-cards, .stage-v-ring .seat-5 .seat-cards,
+    .stage-v-ring .seat-zone-top .seat-cards {
         bottom: auto;
         top: calc(100% - 12px)
     }

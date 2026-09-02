@@ -3,7 +3,8 @@ import {MOCK_PLAYER_ID, mockAdapter, type MockScenario, MockTableService, snapsh
 import type {InternalAxiosRequestConfig} from 'axios';
 
 const scenarios: MockScenario[] = [
-  'full_hand', 'heads_up', 'six_max', 'nine_max', 'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
+  'full_hand', 'heads_up', 'layout_3', 'layout_4', 'layout_5', 'six_max', 'layout_7', 'layout_8', 'nine_max',
+  'full_hand_loss', 'full_hand_tie', 'all_in', 'auto_fold',
   'waiting', 'pre_flop', 'flop', 'turn', 'river', 'showdown', 'side_pot',
   'run_it_twice', 'winner_cards', 'rabbit_hunt', 'rebuy', 'reality_check',
   'reconnecting', 'action_error', 'timeout', 'complete_loss',
@@ -106,7 +107,10 @@ describe('mock table state contract', () => {
     expect(snapshot.legal_actions!.min_raise_to).toBeLessThan(snapshot.legal_actions!.max_raise_to!);
   });
 
-  test.each([['heads_up', 2], ['six_max', 6], ['nine_max', 9]] as const)(
+  test.each([
+    ['heads_up', 2], ['layout_3', 3], ['layout_4', 4], ['layout_5', 5],
+    ['six_max', 6], ['layout_7', 7], ['layout_8', 8], ['nine_max', 9],
+  ] as const)(
     '%s provides the exact physical room capacity', (scenario, seats) => {
       const snapshot = snapshotForScenario(scenario);
       expect(snapshot.seats).toHaveLength(seats);

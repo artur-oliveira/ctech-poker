@@ -125,3 +125,24 @@ Lobby stake/mode filters · multi-table grid · tournaments · spectator mode ·
 There are NO exceptions.
 
 Any modification affecting behavior, architecture, APIs, integrations, configuration, deployment, security, business rules, or developer workflow MUST include the corresponding documentation update in the same change.
+
+### The in-app guide is part of that policy
+
+`src/app/guide` is user-facing documentation of this product. **Every feature, and every change to
+how something looks or behaves for the player, MUST land with the matching guide update in the same
+change.** No exceptions — not for "small" tweaks, not for renames, not for a moved control.
+
+That includes: new routes, dialogs, menus and panels; new or renamed controls, labels and states;
+changed defaults, shortcuts, limits, prices or timings; new empty/loading/error/disabled states;
+anything that changes what the player sees or can do.
+
+- Find the topic page that already owns the surface (`basics`, `table`, `hands`, `achievements`,
+  `store`, `profile`, `community`) and extend it; only add a section when none fits.
+- If the change alters a screen shown in the guide, re-capture it:
+  `npm run dev:mock` then `npm run og:capture -- --guide`. New surfaces get a new entry (and, when
+  the state needs a click, a `prepare` action) in `scripts/capture-og-images.mjs`.
+- Names in the guide must match the strings shipped in the UI, verbatim.
+- Removing a feature means removing its guide copy and its screenshot in the same change.
+
+A change that ships without its guide update is incomplete.
+

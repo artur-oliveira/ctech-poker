@@ -1340,9 +1340,13 @@ const HAND_VARIANTS: Record<InteractiveScenario, HandVariant> = {
 
 export function snapshotForScenario(scenario: MockScenario): TableSnapshot {
   const seats = baseSeats();
-  if (scenario === 'heads_up' || scenario === 'six_max' || scenario === 'nine_max') {
-    const layoutSeats = scenario === 'heads_up' ? fullHandSeats().slice(0, 2) :
-      scenario === 'six_max' ? fullHandSeats() : seats;
+  const layoutCounts: Partial<Record<MockScenario, number>> = {
+    heads_up: 2, layout_3: 3, layout_4: 4, layout_5: 5,
+    six_max: 6, layout_7: 7, layout_8: 8, nine_max: 9,
+  };
+  const layoutCount = layoutCounts[scenario];
+  if (layoutCount) {
+    const layoutSeats = seats.slice(0, layoutCount);
     return {
       stage: 'flop',
       board: ['7H', '8C', 'QS'],

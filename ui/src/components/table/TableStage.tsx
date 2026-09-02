@@ -1,7 +1,7 @@
 'use client';
 import {type ReactNode, useCallback, useState, useSyncExternalStore} from 'react';
 import {Board} from '@/components/table/Board';
-import {Seat} from '@/components/table/Seat';
+import {Seat, type SeatLayoutPosition} from '@/components/table/Seat';
 import {HandOutcomeBanner, type HandOutcomeState} from '@/components/table/HandOutcome';
 import {rotateSeats} from '@/lib/utils';
 import {PokerLogo} from '@/components/PokerLogo';
@@ -13,32 +13,55 @@ import {ExitStatus} from '@/components/table/ExitStatus';
 import {WinnerCards} from '@/components/table/WinnerCards';
 import {DEFAULT_TURN_TIMEOUT_MS} from '@/lib/gameTiming';
 
-// Portrait handhelds get a different experience, not a shrunk table: a tall
-// capsule ringed by compact opponents, with the viewer promoted to a hero HUD
-// (large hole cards) docked above the action bar. Landscape phones, tablets in
-// landscape, and desktop keep the classic oval. Selected per layout tree via
-// matchMedia instead of stacking CSS overrides on one DOM, since the geometry of
-// the two stages is too different to patch across breakpoints.
+// Handhelds get a different experience, not a shrunk desktop table: compact
+// opponents ring the rail and the viewer becomes a separate hero HUD. Portrait
+// uses a capsule; short landscape uses a shallow oval beside its action dock.
 const VERTICAL_STAGE_QUERY = '(orientation: portrait) and (max-width: 1023px)';
+const COMPACT_LANDSCAPE_QUERY = '(orientation: landscape) and (max-height: 620px)';
 const STREET_STAGES = ['pre_flop', 'flop', 'turn', 'river'] as const;
 type TableCapacity = 2 | 6 | 9;
-
-const OPPONENT_SLOTS: Record<TableCapacity, number[]> = {
-  2: [4],
-  6: [1, 3, 4, 6, 8],
-  9: [1, 2, 3, 4, 5, 6, 7, 8],
-};
-
-const OBSERVER_SLOTS: Record<TableCapacity, number[]> = {
-  2: [4, 0],
-  6: [1, 2, 3, 5, 7, 8],
-  9: [1, 2, 3, 4, 5, 6, 7, 8, 0],
-};
 
 export function tableCapacity(maxSeats?: number): TableCapacity {
   if (maxSeats != null && maxSeats <= 2) return 2;
   if (maxSeats != null && maxSeats <= 6) return 6;
   return 9;
+}
+
+/** Evenly divide the occupied perimeter with the viewer at index zero on the
+ * bottom. The same angular rule produces face-to-face, reversed-triangle and
+ * diamond layouts for 2/3/4 players without capacity-specific magic slots. */
+export function balancedSeatPosition(index: number, playerCount: number, portrait = false): SeatLayoutPosition {
+  const safeCount = Math.max(1, playerCount);
+  if (portrait) {
+    // Nine reference points trace the center of the CSS capsule rail. Sampling
+    // that path by occupancy keeps every player on the material itself; an
+    // ellipse cuts the lower pair through the felt because a capsule's sides
+    // stay straight before turning into its bottom arc.
+    const rail = [
+      [50, 91], [12, 74], [5, 48], [12, 22], [32, 7],
+      [68, 7], [88, 22], [95, 48], [88, 74], [50, 91],
+    ] as const;
+    const progress = index / safeCount * 9;
+    const start = Math.floor(progress);
+    const mix = progress - start;
+    const from = rail[start];
+    const to = rail[Math.min(start + 1, rail.length - 1)];
+    const x = from[0] + (to[0] - from[0]) * mix;
+    const y = from[1] + (to[1] - from[1]) * mix;
+    // Only the shallow top arc uses the inward-card/outward-label treatment.
+    // The y=22 reference points are already on the straight upper sides.
+    const zone = y > 68 ? 'bottom' : y < 18 ? 'top' : x < 50 ? 'left' : 'right';
+    const side = x < 45 ? 'left' : x > 55 ? 'right' : 'center';
+    return {x: Number(x.toFixed(2)), y: Number(y.toFixed(2)), zone, side};
+  }
+  const angle = Math.PI / 2 + index * (Math.PI * 2 / safeCount);
+  const cosine = Math.cos(angle);
+  const sine = Math.sin(angle);
+  const x = 50 + cosine * 46;
+  const y = 50 + sine * 42;
+  const zone = sine > .55 ? 'bottom' : sine < -.55 ? 'top' : cosine < 0 ? 'left' : 'right';
+  const side = cosine < -.15 ? 'left' : cosine > .15 ? 'right' : 'center';
+  return {x: Number(x.toFixed(2)), y: Number(y.toFixed(2)), zone, side};
 }
 
 /** Preserve surviving players' physical slots while filling a vacancy after
@@ -78,10 +101,11 @@ export const STAGE_LABELS: Record<string, string> = {
 };
 
 // The house mark on the felt, matching the landing hero's table preview.
-// Purely decorative (aria-hidden). It owns the felt's top arc as a real
-// lockup — mark plus the name in white — rather than the tone-on-tone weave it
-// used to be; the dealer call (.table-callout) was moved down into its own band
-// so nothing crosses it. See docs/2026-08-31-felt-wordmark.md.
+// Purely decorative (aria-hidden). It crowns the board group (.felt-center)
+// rather than the felt's top arc: up there the top-row seats' bet chips travel
+// straight through it on their way to the pot, so the lockup was covered on
+// every raise. Riding directly above the pot readout keeps it inside the
+// centre band the chips stop at. See docs/2026-08-31-felt-wordmark.md.
 function FeltWordmark() {
   return <div className="felt-wordmark" aria-hidden="true">
     <PokerLogo size={26}/><b>CTECH</b>
@@ -127,6 +151,17 @@ function useVerticalStage() {
   // Server snapshot says desktop: the table only renders after the socket
   // delivers a snapshot (post-hydration), so the mismatch frame never paints.
   return useSyncExternalStore(subscribeToStage, () => window.matchMedia(VERTICAL_STAGE_QUERY).matches, () => false);
+}
+
+function subscribeToCompactLandscape(onChange: () => void) {
+  const query = window.matchMedia(COMPACT_LANDSCAPE_QUERY);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
+
+function useCompactLandscapeStage() {
+  return useSyncExternalStore(subscribeToCompactLandscape,
+    () => window.matchMedia(COMPACT_LANDSCAPE_QUERY).matches, () => false);
 }
 
 type Props = {
@@ -209,6 +244,7 @@ export function TableStage({
                              renderPlayerActionsAction
                            }: Props) {
   const vertical = useVerticalStage();
+  const compactLandscape = useCompactLandscapeStage();
   const capacity = tableCapacity(maxSeats);
   const [outcomeLayer, setOutcomeLayer] = useState({key: outcome?.key, dismissed: false});
   if (outcomeLayer.key !== outcome?.key) setOutcomeLayer({key: outcome?.key, dismissed: false});
@@ -216,14 +252,9 @@ export function TableStage({
     setOutcomeLayer(previous => previous.key === outcome?.key && previous.dismissed === dismissed ? previous :
       {key: outcome?.key, dismissed});
   }, [outcome?.key]);
-  const [mobileLayout, setMobileLayout] = useState<{
-    key: string;
-    playerOrder: string;
-    occupants: Array<string | null>;
-  }>({key: '', playerOrder: '', occupants: []});
   const seats = rotateSeats(snapshot.seats, viewer);
   const standings = winnerStandings(snapshot);
-  const seatNode = (seat: TableSnapshot['seats'][number], index: number) => {
+  const seatNode = (seat: TableSnapshot['seats'][number], index: number, layoutPosition?: SeatLayoutPosition) => {
     const breakdown = playerPotBreakdown(snapshot, seat.player_id);
     const standing = standings.find(item => item.playerId === seat.player_id);
     return <Seat key={seat.player_id} seat={seat} index={index}
@@ -254,6 +285,7 @@ export function TableStage({
                  isSmallBlind={snapshot.small_blind_player_id === seat.player_id}
                  isBigBlind={snapshot.big_blind_player_id === seat.player_id}
                  chatBubble={chatBubbles?.[seat.player_id]}
+                 layoutPosition={layoutPosition}
                  actionsMenu={seat.player_id !== viewer ? renderPlayerActionsAction?.(seat) : undefined}/>;
   };
   const board = <Board cards={snapshot.board} boardTwo={snapshot.board_two}
@@ -261,20 +293,20 @@ export function TableStage({
                        rake={snapshot.rake} bigBlind={bigBlind}/>;
   const feltContent = <>
     <span key={`${snapshot.hand_id || 'waiting'}:${snapshot.stage}`} className="table-street-wash" aria-hidden="true"/>
-    <FeltWordmark/>
     {announcement && snapshot.stage !== 'complete' && <div key={announcement} className="table-callout"
       aria-hidden="true"><span>D</span><p>{calloutCopy(announcement)}</p></div>}
     {/* The street rail hangs off the board rather than off the felt's bottom
         edge: down there it sat in the lane the bottom-row seats' bet chips
         travel through, so a raise from the viewer's own seat covered it. */}
-    <div className="felt-center">{board}<StreetProgress stage={snapshot.stage}/></div>
+    <div className="felt-center"><FeltWordmark/>{board}<StreetProgress stage={snapshot.stage}/></div>
   </>;
 
-  if (!vertical) return (
-    <div className="game-table" data-stage={snapshot.stage} data-capacity={capacity}>
+  if (!vertical && !compactLandscape) return (
+    <div className="game-table" data-stage={snapshot.stage} data-capacity={capacity}
+         data-player-count={seats.length} data-layout-key={seatLayoutKey}>
       <div className="game-rail"/>
       <div className="game-felt">{feltContent}</div>
-      {seats.map(seatNode)}
+      {seats.map((seat, index) => seatNode(seat, index, balancedSeatPosition(index, seats.length)))}
       <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}
                          onDismissedChangeAction={onOutcomeDismissedChange}
                          nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
@@ -296,25 +328,16 @@ export function TableStage({
   // the ring entirely and becomes the hero HUD at the stage's bottom edge.
   const viewerFirst = seats[0]?.player_id === viewer;
   const opponents = viewerFirst ? seats.slice(1) : seats;
-  const mobileSlots = viewerFirst ? OPPONENT_SLOTS[capacity] : OBSERVER_SLOTS[capacity];
-  const layoutKey = `${seatLayoutKey || 'table'}:${viewer || 'observer'}:${capacity}:${viewerFirst}`;
-  const playerOrder = opponents.map(seat => seat.player_id).join(':');
-  const previousOccupants = mobileLayout.key === layoutKey && mobileLayout.occupants.length === mobileSlots.length ?
-    mobileLayout.occupants :
-    Array.from<string | null>({length: mobileSlots.length}).fill(null);
-  const occupants = stableSeatOccupants(opponents.map(seat => seat.player_id), previousOccupants);
-  if (mobileLayout.key !== layoutKey || mobileLayout.playerOrder !== playerOrder) {
-    setMobileLayout({key: layoutKey, playerOrder, occupants});
-  }
-  const mobileSlotByPlayer = new Map(occupants.flatMap((playerId, index) =>
-    playerId ? [[playerId, mobileSlots[index]] as const] : []));
   return (
-    <div className="game-table stage-v" data-stage={snapshot.stage} data-capacity={capacity}>
+    <div className={`game-table stage-v ${compactLandscape ? 'stage-h' : ''}`} data-stage={snapshot.stage} data-capacity={capacity}
+         data-player-count={seats.length} data-layout-key={seatLayoutKey}>
       <div className="stage-v-ring">
         <div className="game-rail"/>
         <div className="game-felt">{feltContent}</div>
-        {opponents.map((seat, index) => seatNode(seat,
-          mobileSlotByPlayer.get(seat.player_id) ?? mobileSlots[index] ?? index + 1))}
+        {opponents.map((seat, index) => {
+          const tableIndex = viewerFirst ? index + 1 : index;
+          return seatNode(seat, tableIndex, balancedSeatPosition(tableIndex, seats.length, vertical));
+        })}
         <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}
                            onDismissedChangeAction={onOutcomeDismissedChange}
                            nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
