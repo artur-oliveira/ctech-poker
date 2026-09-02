@@ -292,6 +292,13 @@ catalog.
 - A separate audit (`docs/plans/2026-07-19-api-audit-remediation.md`) covers H1–H4 / M1–M7 / L1–L6 / E1–E3 / S1–S7. Some
   fixes are already in code (actor re-resolve `tablews.go:185-198`, prod Valkey fail-fast, HTTP rate limiters
   `router.go:39-41`); others are not — verify before relying on them.
+- Issue #45 fixed: `RateLimiter.allowRedis` (`internal/api/v1/ratelimit.go`) used to `INCR` then `EXPIRE`
+  only when the counter had just been created (`n == 1`); if the process died or the `EXPIRE` call failed
+  in between, the key kept counting with no TTL and the bucket never reset. Both steps now run as one
+  atomic Lua script (`incrAndBoundTTLScript`) that increments the key and, on every hit (not just the
+  first), re-applies the TTL whenever `TTL` reports the key has none — so a key that somehow lost its
+  expiry self-heals on its very next hit instead of staying stuck. See
+  `internal/api/v1/ratelimit_test.go`'s `TestRateLimiterAllowRedisRecoversMissingTTL`.
 
 ## Layout
 
