@@ -40,7 +40,14 @@ See `docs/plans/2026-08-21-entry-fee-entitlement.md`. **Still blocking, found 20
 - The real-money buy-in path skips the poker-terms-acceptance check the sandbox path performs (`internal/app/app.go`).
 - No WAF at the CloudFront edge (and the distribution itself is being retired — the app is on Cloudflare Workers); application rate limits (`internal/api/v1/ratelimit.go`) and Turnstile are the only
   protection.
-- Neither EventBridge Scheduler target (`cmd/reconcile`, `cmd/tablecleanup`) has a DLQ.
+- `cmd/tablecleanup`'s EventBridge Scheduler target has no DLQ. `cmd/reconcile` now *reaches* its
+  Lambda DLQ: each pending entry carries an `Attempts` counter (`reconcile.PendingCashout`), a
+  per-entry failure increments it via `PendingStore.RecordFailedAttempt`, and once it hits
+  `reconcile.MaxAttempts` (5) the row's `gsi_status` flips to `"manual_review"` so it drops out of
+  `ListUnresolved` and `run` returns an aggregated error — failing the invocation so the message
+  lands in the DLQ. Early-attempt failures are still counted + logged (`slog.Warn`) and retried next
+  run without failing the invocation. `run` processes the whole batch before returning, so one
+  poison entry never blocks the rest.
 
 ## Conventions (follow these)
 
@@ -85,7 +92,7 @@ See `docs/plans/2026-08-21-entry-fee-entitlement.md`. **Still blocking, found 20
 - **The `currency_mode` boundary is load-bearing.** `buyin` routes to exactly one ledger per room and must never let
   sandbox chips reach the real wallet or vice versa — enforce it in `buyin`, not at the handler. The real path is built;
   what gates it at runtime is `REAL_MONEY_ENABLED` + `LEGAL_SIGNOFF_REF`, checked fail-closed in
-  `config.Load`. (Earlier revisions of this file said to reject non-`sandbox` outright — that is no longer the rule.)
+  `config.Load` and, since the reconcile Lambda also moves real money, in `config.LoadForLambda`. (Earlier revisions of this file said to reject non-`sandbox` outright — that is no longer the rule.)
 - **Money ordering is deliberate**: debit-then-seat on buy-in, remove-then-credit on cash-out. Anything that can fail
   after chips moved goes to `poker_pending_cashouts` for the `cmd/reconcile` sweeper. Keep new money paths in that shape
   rather than inventing a compensating transaction per call site.
