@@ -1,8 +1,11 @@
 import {act, renderHook, waitFor} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import {
+  endExpiredSession,
+  EXPIRED_SESSION_REDIRECT_WATCHDOG_MS,
   getOrRefreshSession,
   recoverSession,
+  resetExpiredSessionLatchForTests,
   TOKEN_REFRESH_INTERVAL_MS,
   useOptionalSession,
   useSessionKeepAlive
@@ -17,13 +20,18 @@ const mocks = vi.hoisted(() => ({
   setPlayerId: vi.fn(),
   refresh: vi.fn(),
   endSession: vi.fn(),
+  startOAuthFlow: vi.fn(),
   query: vi.fn(),
 }));
 
 vi.mock('@tanstack/react-query', () => ({useQuery: mocks.query}));
 vi.mock('@/lib/mockConfig', () => ({USE_MOCK: false}));
 vi.mock('@/lib/api/player', () => ({getMe: vi.fn()}));
-vi.mock('@/lib/auth/oauth', () => ({doRefresh: mocks.refresh, endSession: mocks.endSession}));
+vi.mock('@/lib/auth/oauth', () => ({
+  doRefresh: mocks.refresh,
+  endSession: mocks.endSession,
+  startOAuthFlow: mocks.startOAuthFlow,
+}));
 vi.mock('@/lib/api/client', () => ({
   getAccessToken: () => mocks.token,
   setAccessToken: mocks.setToken,
@@ -38,6 +46,7 @@ vi.mock('@/lib/api/client', () => ({
 describe('session keep-alive', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetExpiredSessionLatchForTests();
     mocks.refresh.mockResolvedValue({accessToken: 'fresh', username: 'Ana'});
   });
   
@@ -67,6 +76,61 @@ describe('session keep-alive', () => {
     await waitFor(() => expect(mocks.setToken).toHaveBeenCalledWith(null));
     expect(mocks.setPlayerId).toHaveBeenCalledWith(null);
     expect(mocks.endSession).toHaveBeenCalledWith('/');
+    resetExpiredSessionLatchForTests();
+  });
+
+  test('falls back to an interactive sign-in when the logout redirect no-ops', () => {
+    vi.useFakeTimers();
+    endExpiredSession();
+    expect(mocks.setToken).toHaveBeenCalledWith(null);
+    expect(mocks.endSession).toHaveBeenCalledWith('/');
+    expect(mocks.startOAuthFlow).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(EXPIRED_SESSION_REDIRECT_WATCHDOG_MS);
+    expect(mocks.startOAuthFlow).toHaveBeenCalledWith('/');
+
+    // Latch was reset, so a later expiry can redirect again.
+    endExpiredSession();
+    expect(mocks.endSession).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+    resetExpiredSessionLatchForTests();
+  });
+
+  test('two rapid endExpiredSession calls trigger one redirect but clear the session each time', () => {
+    vi.useFakeTimers();
+    endExpiredSession();
+    endExpiredSession();
+    expect(mocks.endSession).toHaveBeenCalledTimes(1);
+    expect(mocks.setToken).toHaveBeenCalledTimes(2);
+    expect(mocks.setToken).toHaveBeenNthCalledWith(1, null);
+    expect(mocks.setToken).toHaveBeenNthCalledWith(2, null);
+    vi.useRealTimers();
+    resetExpiredSessionLatchForTests();
+  });
+
+  test('refreshes the token when the tab becomes visible and when the network reconnects', async () => {
+    vi.useFakeTimers();
+    const {unmount} = renderHook(() => useSessionKeepAlive());
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await Promise.resolve();
+    });
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      window.dispatchEvent(new Event('online'));
+      await Promise.resolve();
+    });
+    expect(mocks.refresh).toHaveBeenCalledTimes(2);
+
+    unmount();
+    await act(async () => {
+      window.dispatchEvent(new Event('online'));
+      await Promise.resolve();
+    });
+    expect(mocks.refresh).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
   });
   
   test('keeps the session when a refresh fails on a network error', async () => {
