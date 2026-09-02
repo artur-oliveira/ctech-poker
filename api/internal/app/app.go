@@ -122,6 +122,7 @@ var Module = fx.Options(
 	fx.Invoke(wirePlayerRemovedHook),
 	fx.Invoke(wireAutoRebuyHook),
 	fx.Invoke(wireCosmeticCurrentSelection),
+	fx.Invoke(validateWalletScopes),
 	fx.Invoke(registerRoutesWithSocialRuntime),
 	fx.Invoke(startServer),
 )
@@ -928,6 +929,30 @@ func registerRoutes(
 // clients can process them and start reconnecting. Kept well under the 5s
 // ShutdownWithContext budget it precedes.
 const wsDrainGrace = 1500 * time.Millisecond
+
+// validateWalletScopes fails startup loudly when real-money mode is enabled
+// but ctech-account has not granted poker's M2M client the two scopes
+// DebitReal/IsGamblingActivated depend on (internal:wallet:debit-real,
+// internal:wallet:game-status — see walletclient.ValidateRequiredScopes and
+// api/CLAUDE.md's "Still blocking" note: granting them is a config change in
+// ctech-account, not something this repo can fix on its own). Registered
+// before startServer so a broken grant never reaches "listening" — the
+// process exits with a clear cause instead of the first real player's entry
+// fee or gambling-activation check failing silently in production.
+func validateWalletScopes(lc fx.Lifecycle, cfg *config.Config, wallet *walletclient.Client) {
+	if !cfg.RealMoneyEnabled {
+		return
+	}
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			if err := wallet.ValidateRequiredScopes(ctx); err != nil {
+				return fmt.Errorf("real-money mode (REAL_MONEY_ENABLED=true) is enabled but startup scope check failed: %w", err)
+			}
+			slog.Info("ctech-account wallet scopes verified for real-money mode")
+			return nil
+		},
+	})
+}
 
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {
 	lc.Append(fx.Hook{

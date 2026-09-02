@@ -18,7 +18,24 @@ See `docs/plans/2026-08-21-entry-fee-entitlement.md`. **Still blocking, found 20
 1. ctech-wallet's scope catalog (`ctech-account/api/internal/scopes/catalog.go`) has no `internal:wallet:game-status`
    entry, so no M2M client can ever be granted the scope `ctech-wallet`'s `GET /wallet/game/status/:user_id` requires.
 2. Poker's M2M client has never been granted the `internal:wallet:debit-real` scope in `ctech-account`'s catalog. Both
-   are data/config actions in `ctech-account`, not code changes in this repo. Also unresolved (re-verified 2026-07-28):
+   are data/config actions in `ctech-account`, not code changes in this repo — **this is what needs to change to
+   actually unblock real-money mode; nothing in this repo can grant a scope on ctech-account's behalf.** (issue #39)
+   Until both are granted, in every environment poker's M2M client runs in:
+   - Add `internal:wallet:game-status` to `ctech-account/api/internal/scopes/catalog.go`.
+   - Grant poker's M2M client both `internal:wallet:game-status` and `internal:wallet:debit-real` in
+     `ctech-account`'s client-grant data/config for every environment (dev/staging/prod), and cover both grants in
+     deploy reconciliation so a new environment can't come up missing them silently.
+   What this repo *does* do about it: `walletclient.Client.ValidateRequiredScopes` (`internal/walletclient/client.go`)
+   runs once at startup, gated on `REAL_MONEY_ENABLED`, wired via `validateWalletScopes` in `internal/app/app.go`
+   (registered as an `fx.Lifecycle` `OnStart` hook, before `startServer`). It fetches an M2M token for each of the two
+   scopes above and confirms the scope actually made it into the grant — checking the token endpoint's own response
+   (an outright rejection surfaces directly) and, for a JWT access token, decoding its `scope` claim (unverified —
+   safe here since we already trust the token endpoint's TLS response; this is a diagnostic read, not an auth
+   decision) in case ctech-account silently narrows the grant instead of rejecting the request. Either failure mode
+   returns an error from the `OnStart` hook, which fails the whole process to start with a message naming exactly
+   which scope is missing — so a broken grant is a loud, immediate deploy failure instead of every real-money entry
+   fee and gambling-activation check silently failing in production. An opaque (non-JWT) token can't be decoded this
+   way and is treated as "can't verify, assume granted" rather than a false positive. Also unresolved (re-verified 2026-07-28):
 
 - An ASG lifecycle hook + drain Lambda **do** exist (`cdk/lib/api-stack.ts`'s `TerminationDrainFunction`) and do reach
   `tablemanager.DrainAndRelease` via `OnStop` when they fire — re-verified 2026-09-01 from

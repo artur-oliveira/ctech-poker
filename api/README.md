@@ -439,8 +439,11 @@ repeat that charge with no way to opt out per attempt.
   guaranteed drain window — scale-in can cut a table mid-hand.
 - **No DLQ on either EventBridge Scheduler target** (`cmd/reconcile`, `cmd/tablecleanup`).
 - **Real-money buy-in skips the terms check** (above).
-- **Two missing ctech-account scopes** block real-money verification calls — see `CLAUDE.md`. Both are config actions in
-  ctech-account, not code changes here.
+- **Two missing ctech-account scopes** block real-money verification calls (`internal:wallet:game-status`,
+  `internal:wallet:debit-real`) — see `CLAUDE.md`. Both are config actions in ctech-account, not code changes here;
+  poker's own fix (issue #39) is `walletclient.Client.ValidateRequiredScopes`, which fails startup loudly with
+  `REAL_MONEY_ENABLED=true` and either scope missing, instead of leaving it to fail silently at the first real
+  buy-in.
 
 Fixed, for the record, since older revisions of this file listed them as open: **B9** (authz is now
 `sub` + `sid`, M2M rejected, leaderboard authenticated), **B10** (archiver has an SQS DLQ and a depth alarm), **B31**
