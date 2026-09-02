@@ -69,7 +69,7 @@ export default function CommunityGuide() {
       {
         id: 'protecao', title: 'Inatividade e verificação rápida', summary: 'Proteções automáticas só aparecem com um motivo concreto.',
         body: <><GuideTerms><GuideTerm term="Aviso de inatividade">No último minuto antes da remoção, mostra a contagem e o botão <b>Continuar na mesa</b>.</GuideTerm>
-          <GuideTerm term="Verificação rápida">Uma sequência incomum de ações muito rápidas pode abrir uma checagem anti-bot. O relógio da mesa continua visível e o time bank segue disponível.</GuideTerm></GuideTerms>
+          <GuideTerm term="Verificação rápida">Uma sequência incomum de ações muito rápidas pode abrir uma checagem anti-bot. O relógio da mesa continua visível e o time bank segue disponível. Se a checagem não carregar em cerca de 15 segundos, o diálogo mostra <b>Recarregar página</b> e <b>Voltar ao lobby</b> para você nunca ficar preso.</GuideTerm></GuideTerms>
           <GuideCallout kind="info" title="A verificação não lê sua voz nem suas cartas">O desafio só confirma interação humana. Comandos por voz enviam apenas a ação reconhecida, e cartas ocultas continuam fora da interface.</GuideCallout></>
       },
       {

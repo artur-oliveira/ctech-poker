@@ -7030,6 +7030,17 @@ h1 em {
     line-height: 1.45
 }
 
+.bot-challenge-recovery {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin-top: 13px
+}
+
+.bot-challenge-recovery > * {
+    flex: 1 1 auto
+}
+
 .bot-challenge-dialog > small {
     display: block;
     margin-top: 14px;
