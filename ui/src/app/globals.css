@@ -8314,6 +8314,11 @@ h1 em {
     margin: auto
 }
 
+.ranking-list.is-virtualized {
+    position: relative;
+    width: 100%
+}
+
 .ranking-list article {
     display: grid;
     grid-template-columns:60px 1fr auto;
@@ -8322,6 +8327,13 @@ h1 em {
     padding: 18px;
     animation: rise 380ms var(--ease-out-quart) both;
     animation-delay: var(--delay, 0ms)
+}
+
+.ranking-list article.ranking-row-virtual {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%
 }
 
 .ranking-list article > b {
