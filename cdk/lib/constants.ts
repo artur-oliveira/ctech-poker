@@ -69,6 +69,22 @@ export const NGINX_PORT = 8080;
  */
 export const HEALTH_CHECK_PATH = '/v1.0/health-check';
 
+/**
+ * Spot instance-type pool for the API ASG's MixedInstancesPolicy (#35: a spot
+ * capacity shortage in a single instance type/pool used to be able to zero
+ * the whole ASG, in every AZ, non-self-healing). All three are the same
+ * burstable Graviton (arm64) family as the previous single type (t4g.nano)
+ * — nano/micro/small only differ in memory (0.5/1/2 GiB) at 2 vCPU each, so
+ * price-capacity-optimized keeps picking the cheapest available pool and
+ * cost stays roughly flat; this only lets the ASG fall back to a slightly
+ * larger pool instead of going to zero when one type's spot capacity dries
+ * up. WeightedCapacity is left at its CDK/CFN default (1 per instance) for
+ * every override, so a launch of any of these three still counts as exactly
+ * one unit of ASG capacity — unrelated to the leasing model, which already
+ * tolerates 2 concurrently-running instances (minCapacity=1/maxCapacity=2).
+ */
+export const API_ASG_SPOT_INSTANCE_TYPES = ['t4g.nano', 't4g.micro', 't4g.small'] as const;
+
 /** S3 key prefix inside the shared deployments/logs buckets. */
 export const S3_PREFIX = SERVICE;
 /** Key of the artifact new ASG instances bootstrap from. */

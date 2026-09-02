@@ -61,6 +61,39 @@ Go Lambdas are bundled by `lib/bundle.ts` (`localGoBundling` — local `go build
   RunCommand, so with the agent off it fails open and instances terminate **without draining
   tables** — players are dropped mid-hand on every deploy and every scheduled scale-down.
 - **The ASG runs 11:55 → 13:15 America/Sao_Paulo** and is scaled to zero outside that window.
+- **Multi-AZ + multi-type spot (#35, 2026-09-02)**: the ASG is 100% spot with a
+  `MixedInstancesPolicy`. Two independent points of correlated failure were
+  identified — a spot-reclaim event across the whole fleet, and a single AZ
+  going down — with no automatic recovery until capacity returned:
+  - *AZ spread* was already correct and needed no change: `HaproxyEc2Service`
+    selects every public subnet of the imported VPC with no `availabilityZones`
+    filter, and the shared VPC (`vpc-0adfd86727d17445b`) has one public subnet
+    per AZ across `us-east-1b/c/d` — confirmed via `cdk synth`
+    (`VPCZoneIdentifier` already lists all 3).
+  - *Instance-type diversification* was missing: `HaproxyEc2Service`'s
+    `MixedInstancesPolicy` carried a single launch template with no
+    `LaunchTemplateOverrides`, so the ASG only ever bid on one spot pool
+    (`t4g.nano`). `api-stack.ts` now adds an L1 override
+    (`MixedInstancesPolicy.LaunchTemplate.Overrides`, not exposed by the
+    shared construct's props — same "own the override locally" pattern as the
+    private-IPv4 launch-template override below) listing
+    `API_ASG_SPOT_INSTANCE_TYPES` (`t4g.nano`, `t4g.micro`, `t4g.small` —
+    `lib/constants.ts`): same burstable Graviton family, differing only in
+    memory (0.5/1/2 GiB at 2 vCPU each), so `price-capacity-optimized` keeps
+    bidding the cheapest available pool first and cost stays roughly flat.
+    Every override omits `WeightedCapacity`, so it defaults to `1`: a launch of
+    any of the three types still costs exactly one unit of ASG capacity,
+    leaving `minCapacity`/`maxCapacity` semantics unchanged.
+  - `minCapacity`/`maxCapacity` were **not** changed. The table-leasing model
+    (`api/internal/tablelease`, `api/internal/tablemanager`) already tolerates
+    2 concurrently-running instances — `tablelease` is a latency/cache-affinity
+    hint (a Valkey `table:{id}` key), not a correctness-critical singleton
+    lock; any instance may create an Actor for any table, and correctness
+    comes from DynamoDB conditional writes. Raising desired/max capacity
+    further, or adding an always-on on-demand base instance, is **deferred**:
+    it is not free (base instance) and this is still an invite-only, low-QPS
+    service — revisit before general availability or once real-money traffic
+    justifies the extra always-on cost.
 - An ASG termination lifecycle hook gives `tablemanager.DrainAndRelease` up to 120 seconds to
   stop the app through SSM before completing termination; its Lambda fails open so a broken SSM
   agent cannot strand an instance in `Terminating:Wait`. **With the agent disabled (the default
