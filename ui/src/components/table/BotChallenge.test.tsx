@@ -2,6 +2,10 @@ import {act, fireEvent, render, screen} from '@testing-library/react';
 import {afterEach, describe, expect, test, vi} from 'vitest';
 import {BotChallenge} from './BotChallenge';
 
+vi.mock('next/link', () => ({
+  default: ({href, children}: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a>,
+}));
+
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({children}: { children: React.ReactNode }) => <>{children}</>,
   DialogContent: ({children}: { children: React.ReactNode }) => <section>{children}</section>,
@@ -42,6 +46,49 @@ describe('BotChallenge', () => {
     expect(document.getElementById('cloudflare-turnstile-script')).toBeNull();
     fireEvent.click(screen.getByRole('button', {name: 'Recarregar página'}));
     expect(reload).toHaveBeenCalledOnce();
+    expect(screen.getByRole('link', {name: 'Voltar ao lobby'})).toHaveAttribute('href', '/lobby');
+  });
+
+  test('reaches an error state with reload + lobby exit when the script never loads', () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubEnv('NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'site-key');
+      const reload = vi.fn();
+      Object.defineProperty(window, 'location', {value: {...window.location, reload}, writable: true});
+      render(<BotChallenge required onTokenAction={() => true}/>);
+      expect(screen.getByText('Preparando verificação…')).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(15_000);
+      });
+
+      expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível validar');
+      fireEvent.click(screen.getByRole('button', {name: 'Recarregar página'}));
+      expect(reload).toHaveBeenCalledOnce();
+      expect(screen.getByRole('link', {name: 'Voltar ao lobby'})).toHaveAttribute('href', '/lobby');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('offers reload + lobby exit while still loading, before the timeout', () => {
+    vi.stubEnv('NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'site-key');
+    render(<BotChallenge required onTokenAction={() => true}/>);
+    expect(screen.getByRole('button', {name: 'Recarregar página'})).toBeInTheDocument();
+    expect(screen.getByRole('link', {name: 'Voltar ao lobby'})).toBeInTheDocument();
+  });
+
+  test('a ready widget hides the recovery controls', () => {
+    vi.stubEnv('NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'site-key');
+    (window as typeof window & { turnstile: unknown }).turnstile = {
+      render: () => 'widget-ready',
+      remove: vi.fn(),
+    };
+    render(<BotChallenge required onTokenAction={() => true}/>);
+    fireEvent.load(document.getElementById('cloudflare-turnstile-script')!);
+    expect(screen.queryByRole('button', {name: 'Recarregar página'})).toBeNull();
+    expect(screen.queryByRole('link', {name: 'Voltar ao lobby'})).toBeNull();
   });
   
   test('loads Turnstile, validates a token and removes its widget on cleanup', () => {
@@ -94,5 +141,7 @@ describe('BotChallenge', () => {
     act(() => options?.['error-callback']());
     act(() => options?.['expired-callback']());
     expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Recarregar página'})).toBeInTheDocument();
+    expect(screen.getByRole('link', {name: 'Voltar ao lobby'})).toBeInTheDocument();
   });
 });

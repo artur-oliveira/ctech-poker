@@ -2,9 +2,33 @@ import * as cdk from 'aws-cdk-lib';
 import {RemovalPolicy} from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import {Billing} from 'aws-cdk-lib/aws-dynamodb';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import {Construct} from 'constructs';
 import {Environment} from '@aoctech/cdk';
-import {DYNAMO_INDEX, DYNAMO_TABLE} from './constants';
+import {ALERTS_TOPIC_ARN, DYNAMO_INDEX, DYNAMO_TABLE} from './constants';
+
+// Tables on the hot commit path: every committed table action is a
+// TransactWriteItems touching poker_table_state + poker_action_log +
+// poker_action_guards (transactional writes bill 2x WCU), plus poker_rooms
+// (lobby liveness) and poker_player_sessions (per-connection presence)
+// churn on every seat/leave/reconnect. See
+// docs/plans/2026-09-02-systematic-review-and-issue-backlog.md §3 Issue 6
+// and GitHub issue #34. Everything else (purchase history, matchups,
+// highlights, hand shares, ...) is comparatively cold and keeps the
+// original 1000 RRU/WCU on-demand ceiling.
+const HOT_PATH_TABLES: ReadonlySet<TableName> = new Set<TableName>([
+  'poker_table_state', 'poker_action_log', 'poker_action_guards', 'poker_rooms', 'poker_player_sessions',
+]);
+// A dozen concurrently active tables during a promo, or a post-deploy
+// reconnect burst, comfortably clears 1000 RRU/WCU on the hot-path tables
+// without ever approaching DynamoDB's on-demand scaling limits — see the
+// per-table cap review in issue #34. On-demand only bills for units actually
+// consumed, so raising the ceiling here has $0 cost unless traffic grows
+// into it.
+const HOT_PATH_CAPACITY = {maxReadRequestUnits: 4000, maxWriteRequestUnits: 4000};
+const COLD_PATH_CAPACITY = {maxReadRequestUnits: 1000, maxWriteRequestUnits: 1000};
 
 // Table names carry the `poker_` segment so they never collide with another
 // service's tables in the same AWS account.
@@ -39,11 +63,12 @@ export class DynamoDBStack extends cdk.Stack {
       name: TableName, withSortKey: boolean, withTTL: boolean = false, withStream: boolean = false,
     ): dynamodb.TableV2 => {
       const tableName = `${environment}_${name}`;
+      const capacity = HOT_PATH_TABLES.has(name) ? HOT_PATH_CAPACITY : COLD_PATH_CAPACITY;
       const t = new dynamodb.TableV2(this, tableName, {
         tableName,
         partitionKey: {name: 'pk', type: dynamodb.AttributeType.STRING},
         sortKey: withSortKey ? {name: 'sk', type: dynamodb.AttributeType.STRING} : undefined,
-        billing: Billing.onDemand({maxReadRequestUnits: 1000, maxWriteRequestUnits: 1000}),
+        billing: Billing.onDemand(capacity),
         removalPolicy,
         pointInTimeRecoverySpecification,
         encryption: dynamodb.TableEncryptionV2.awsManagedKey(),
@@ -52,6 +77,38 @@ export class DynamoDBStack extends cdk.Stack {
       });
       this.tables.set(name, t);
       return t;
+    };
+
+    // Throttle alarm on the hot-path tables — wired to the existing
+    // account-wide alerts topic (never a new SNS topic; see #34). Fires on
+    // any read or write throttle event within the window: DynamoDB emits
+    // ReadThrottleEvents/WriteThrottleEvents in on-demand mode exactly as it
+    // does in provisioned mode, whether the throttle comes from the
+    // maxRead/WriteRequestUnits ceiling above or from a hot single-partition
+    // burst. CloudWatch alarms are ~$0.10/mo each on the standard tier — five
+    // hot-path tables is a negligible, predictable cost, not a metered spend
+    // that scales with traffic.
+    const alertsTopic = sns.Topic.fromTopicArn(this, 'AlertsTopic', ALERTS_TOPIC_ARN);
+    const addThrottleAlarm = (t: dynamodb.TableV2, name: TableName) => {
+      const throttleEvents = new cloudwatch.MathExpression({
+        expression: 'reads + writes',
+        usingMetrics: {
+          reads: t.metric('ReadThrottleEvents', {statistic: 'sum'}),
+          writes: t.metric('WriteThrottleEvents', {statistic: 'sum'}),
+        },
+        period: cdk.Duration.minutes(5),
+      });
+      const alarm = new cloudwatch.Alarm(this, `${name}ThrottleAlarm`, {
+        alarmName: `${environment}-${name}-throttled-requests`,
+        alarmDescription: `${environment}_${name} is being throttled — see issue #34's per-table capacity review.`,
+        metric: throttleEvents,
+        threshold: 1,
+        evaluationPeriods: 3,
+        datapointsToAlarm: 3,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
+      alarm.addAlarmAction(new cloudwatchActions.SnsAction(alertsTopic));
     };
 
     // poker_table_state: the single authoritative item per table, versioned
@@ -67,6 +124,7 @@ export class DynamoDBStack extends cdk.Stack {
       sortKey: {name: 'last_action_at', type: dynamodb.AttributeType.NUMBER},
       projectionType: dynamodb.ProjectionType.KEYS_ONLY,
     });
+    addThrottleAlarm(tableState, 'poker_table_state');
     // poker_table_state_history: append-only audit snapshot of each hand's
     // final state, written just before the table resets for the next hand —
     // pk is the table ID, sk is the unix-seconds capture time. No TTL (kept
@@ -76,11 +134,13 @@ export class DynamoDBStack extends cdk.Stack {
     // window" served directly from Dynamo) with a stream so the archiver
     // Lambda (archiver-stack.ts) ships every entry to S3 before that TTL ever
     // reaps it — nothing is lost, just moved to cheaper long-term storage.
-    table('poker_action_log', true, true, true);
+    const actionLog = table('poker_action_log', true, true, true);
+    addThrottleAlarm(actionLog, 'poker_action_log');
     // poker_action_guards: TTL'd (mirrors ctech-wallet's wallet_idempotency
     // table) — a guard only needs to outlive plausible client retries
     // (tablestore.guardTTLDays = 7 days).
-    table('poker_action_guards', false, true);
+    const actionGuards = table('poker_action_guards', false, true);
+    addThrottleAlarm(actionGuards, 'poker_action_guards');
 
     // poker_rooms is lobby metadata only. The sparse indexes are populated by
     // roomstore for public rooms and private-room share codes respectively.
@@ -90,6 +150,7 @@ export class DynamoDBStack extends cdk.Stack {
       partitionKey: {name: 'gsi_public', type: dynamodb.AttributeType.STRING},
       projectionType: dynamodb.ProjectionType.ALL,
     });
+    addThrottleAlarm(rooms, 'poker_rooms');
     rooms.addGlobalSecondaryIndex({
       indexName: 'gsi_share_code',
       partitionKey: {name: 'gsi_share_code', type: dynamodb.AttributeType.STRING},
@@ -204,7 +265,8 @@ export class DynamoDBStack extends cdk.Stack {
     // poker_player_sessions: TTL'd — only tracks which table a player is
     // currently at (or was recently at); the durable per-hand history lives
     // in poker_player_hands instead.
-    table('poker_player_sessions', true, true);
+    const playerSessions = table('poker_player_sessions', true, true);
+    addThrottleAlarm(playerSessions, 'poker_player_sessions');
     const playerHands = table('poker_player_hands', true);
     playerHands.addGlobalSecondaryIndex({
       indexName: 'gsi_table_id',

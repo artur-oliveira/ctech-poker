@@ -8,8 +8,14 @@ const mocks = vi.hoisted(() => ({
   createRoom: vi.fn(),
   invalidateQueries: vi.fn(),
   push: vi.fn(),
+  realMoney: {enabled: false},
 }));
 
+vi.mock('@/lib/capabilities', () => ({
+  get REAL_MONEY_UI_ENABLED() {
+    return mocks.realMoney.enabled;
+  },
+}));
 vi.mock('@tanstack/react-query', () => ({
   useQuery: mocks.query,
   useQueryClient: () => ({invalidateQueries: mocks.invalidateQueries}),
@@ -30,6 +36,7 @@ const realStakes = [{small_blind: 100, big_blind: 200, fee_cents: 75}];
 describe('CreateRoomDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.realMoney.enabled = false;
     mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) => {
       if (queryKey[0] === 'player') return {data: {wallet_mode: 'sandbox'}};
       if (queryKey[1] === 'real') return {data: []};
@@ -71,7 +78,19 @@ describe('CreateRoomDialog', () => {
     })));
   });
   
+  test('never offers real-money mode while the real-money UI is gated off', async () => {
+    mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) => {
+      if (queryKey[0] === 'player') return {data: {wallet_mode: 'real'}};
+      if (queryKey[1] === 'real') return {data: realStakes};
+      return {data: sandboxStakes};
+    });
+    render(<CreateRoomDialog/>);
+    await userEvent.click(screen.getByRole('button', {name: /Mesa privada/}));
+    expect(screen.queryByRole('radio', {name: 'Dinheiro real'})).not.toBeInTheDocument();
+  });
+
   test('offers real-money mode only to an eligible wallet and resets the stake selection', async () => {
+    mocks.realMoney.enabled = true;
     mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) => {
       if (queryKey[0] === 'player') return {data: {wallet_mode: 'real'}};
       if (queryKey[1] === 'real') return {data: realStakes};

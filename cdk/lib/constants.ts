@@ -17,6 +17,11 @@ export const AWS_REGION = 'us-east-1';
 export const CERT_ARN =
   'arn:aws:acm:us-east-1:868899309401:certificate/29678869-bfc3-4688-b81b-55aa5b1d7443';
 
+// Account-wide CloudWatch alarms topic — owned by ctech-cdk, imported via
+// sns.Topic.fromTopicArn wherever an alarm needs an action. Never create a
+// new SNS topic for poker's own alarms (see issue #34).
+export const ALERTS_TOPIC_ARN = 'arn:aws:sns:us-east-1:868899309401:ctech-prod-alerts';
+
 export const GITHUB_REPO_DEFAULT = 'artur-oliveira/ctech-poker';
 
 // ── Naming ──────────────────────────────────────────────────────────────────
@@ -123,6 +128,15 @@ export const DYNAMO_INDEX = {
   socialUnread: 'gsi_unread',
   reportStatus: 'gsi_status',
 } as const;
+
+// ── GitHub Actions OIDC trust scoping ──────────────────────────────────────
+/**
+ * Branches that `.github/workflows/deploy.yml` deploys from (its `push`
+ * trigger). The OIDC trust policy is pinned to exactly these refs — no bare
+ * `:*` wildcard — so a workflow running on any other ref (a feature branch, a
+ * tag, a fork) cannot assume the deployment roles.
+ */
+export const GHA_DEPLOY_BRANCHES = ['main', 'staging', 'dev'] as const;
 
 // ── GitHub Actions role names (global, not per-env) ─────────────────────────
 export const GHA_API_ROLE = `${SERVICE}-gha-api`;

@@ -35,7 +35,8 @@ function SharedHandContent() {
   const item = share.data;
   const hand: HandItem = {
     pk: '', sk: '', table_id: 'shared', hand_id: item.token, outcome: item.outcome,
-    net_change: item.net_change, ended_at: item.ended_at, board: item.board, hole_cards: item.hero_cards,
+    net_change: item.net_change, ended_at: item.ended_at, big_blind: item.big_blind,
+    board: item.board, hole_cards: item.hero_cards,
     opponents: (item.opponents || []).map((opponent, index) => ({
       player_id: `player_${index + 1}`, name: opponent.alias, hole_cards: opponent.hole_cards, won: opponent.won
     }))

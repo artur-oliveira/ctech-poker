@@ -33,6 +33,9 @@ export default function HandsGuide() {
           <li><span>Use reproduzir, pausar, ação anterior, próxima ação ou voltar ao início.</span></li>
           <li><span>Alterne a velocidade entre 1× e 2× para correr até o desfecho ou acompanhar cada detalhe.</span></li>
           <li><span>As reações enviadas naquele momento reaparecem junto com a ação que as provocou.</span></li></GuideSteps>
+          <p>O cabeçalho mostra o <b>big blind</b> daquela mão ao lado do pote, para o tamanho das fichas fazer sentido
+            em qualquer stake. Mãos antigas sem o valor registrado usam o big blind do lance inicial ou 25 como
+            referência.</p>
           <p>O replayer abre na mesma aba de propósito: o link de volta leva direto ao detalhe da mão.</p></>
       },
       {
