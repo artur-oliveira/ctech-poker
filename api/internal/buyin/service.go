@@ -57,7 +57,7 @@ type pendingStore interface {
 type entitlementStore interface {
 	ActiveFor(ctx context.Context, playerID string) ([]entitlement.Entitlement, error)
 	Claim(ctx context.Context, e entitlement.Entitlement) error
-	Rebind(ctx context.Context, playerID, originTableID, newTableID string) error
+	Rebind(ctx context.Context, playerID, originTableID, expectedBoundTableID, newTableID string) error
 }
 
 type Service struct {
@@ -183,8 +183,9 @@ func (s *Service) walletFor(ctx context.Context, roomID, playerID string) (walle
 
 // BuyIn debits amount from playerID's sandbox wallet, then seats them into
 // roomID's live table. If seating fails, the debit is immediately reversed
-// with a distinct idempotency key (":refund" suffix) so the reversal can
-// never collide with — or be mistaken as a retry of — the original debit.
+// with a distinct idempotency key (the composite debit key plus a ":refund"
+// suffix) so the reversal can never collide with — or be mistaken as a retry
+// of — the original debit, nor collide with another player's refund.
 func (s *Service) BuyIn(ctx context.Context, roomID, playerID string, amount int64, midHand bool, idemKey string) error {
 	return s.buyIn(ctx, roomID, playerID, amount, midHand, false, idemKey)
 }
@@ -294,7 +295,15 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 				return fmt.Errorf("buyin: seat failed AND release failed (manual reconciliation needed): seat=%v refund=%w", joinErr, refundErr)
 			}
 		} else {
-			if refundErr := mover.Credit(ctx, playerID, amount, idemKey+":refund", "poker_buyin_refund"); refundErr != nil {
+			// Derive the refund key from the composite debit `key`, never the
+			// raw idemKey: idemKey is caller-optional and empty on the auto-rebuy
+			// sweep and webhook paths, so `idemKey+":refund"` collapses to the
+			// constant ":refund" for every player and ctech-wallet dedupes the
+			// second race-loser's refund away entirely (#42). `key` already folds
+			// in roomID, playerID and the nonce (itself playerID when idemKey is
+			// empty), so it is globally unique per refund while a genuine retry of
+			// the SAME failed buy-in still reproduces it and dedupes.
+			if refundErr := mover.Credit(ctx, playerID, amount, key+":refund", "poker_buyin_refund"); refundErr != nil {
 				return fmt.Errorf("buyin: seat failed AND refund failed (manual reconciliation needed): seat=%v refund=%w", joinErr, refundErr)
 			}
 		}
@@ -383,9 +392,9 @@ func (s *Service) resolveEntitlement(ctx context.Context, room *roomstore.Room, 
 		if !unavailable {
 			continue
 		}
-		if err := s.entitlements.Rebind(ctx, playerID, e.OriginTableID, room.ID); err != nil {
+		if err := s.entitlements.Rebind(ctx, playerID, e.OriginTableID, e.BoundTableID, room.ID); err != nil {
 			if errors.Is(err, entitlement.ErrNotFound) {
-				continue // lost the race (expired, or moved by a concurrent buy-in) — try the next candidate
+				continue // lost the race (expired, deleted, or bound_table_id moved by a concurrent buy-in) — try the next candidate
 			}
 			return fmt.Errorf("buyin: rebind entitlement: %w", err)
 		}

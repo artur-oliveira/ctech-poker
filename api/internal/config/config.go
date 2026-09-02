@@ -121,6 +121,13 @@ func LoadForLambda() (*Config, error) {
 	if cfg.CtechURL == "" && cfg.Env == "prod" {
 		return nil, fmt.Errorf("config: CTECH_URL must be set in production so the issuer is verified")
 	}
+	// Mirror Load's fail-closed real-money gate: cmd/reconcile moves real money
+	// through walletclient (DebitReal/CashoutGame), so an engineer must not be
+	// able to flip REAL_MONEY_ENABLED for the Lambda without a recorded legal
+	// sign-off either.
+	if cfg.RealMoneyEnabled && cfg.LegalSignoffRef == "" {
+		return nil, fmt.Errorf("config: REAL_MONEY_ENABLED=true requires a non-empty LEGAL_SIGNOFF_REF (OVERVIEW.md §11 — this is a business decision, not an engineering toggle)")
+	}
 	if cfg.CtechJWKSURL == "" && cfg.CtechURL != "" {
 		cfg.CtechJWKSURL = cfg.CtechURL + "/.well-known/jwks.json"
 	}
