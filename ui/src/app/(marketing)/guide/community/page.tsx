@@ -63,7 +63,7 @@ export default function CommunityGuide() {
           <li><span><b>Tentar agora:</b> antecipa uma nova tentativa; depois de várias falhas, o aviso passa a esperar esse toque em vez de prometer uma reconexão automática.</span></li>
           <li><span><b>Ação rejeitada:</b> a barra explica o erro e devolve as decisões ainda válidas.</span></li>
           <li><span><b>Removido da mesa:</b> por inatividade ou por tempo demais desconectado, com aviso e volta ao lobby; a pilha vai para a carteira.</span></li>
-          <li><span><b>Sessão expirada:</b> a autenticação precisa ser renovada. Nenhuma ação é enviada sem token válido.</span></li></GuideBullets></>
+          <li><span><b>Sessão expirada:</b> a autenticação precisa ser renovada. Nenhuma ação é enviada sem token válido. Se o encerramento da sessão não redirecionar sozinho em alguns instantes, o app leva você direto para a tela de entrar.</span></li></GuideBullets></>
       },
       {
         id: 'protecao', title: 'Inatividade e verificação rápida', summary: 'Proteções automáticas só aparecem com um motivo concreto.',

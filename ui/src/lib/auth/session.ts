@@ -9,13 +9,18 @@ import {useEffect, useState} from "react";
 import {useQuery} from "@tanstack/react-query";
 import {getAccessToken, setAccessToken, setPlayerId, setUsername, subscribeAccessToken} from "@/lib/api/client";
 import {MOCK_PLAYER_ID, USE_MOCK} from "@/lib/mockConfig";
-import {doRefresh, endSession} from "@/lib/auth/oauth";
+import {doRefresh, endSession, startOAuthFlow} from "@/lib/auth/oauth";
 import {getMe} from "@/lib/api/player";
 
 /** Access tokens live 15 minutes; refresh well inside that window. */
 export const TOKEN_REFRESH_INTERVAL_MS = 4 * 60 * 1000;
 
 export type SessionResult = Awaited<ReturnType<typeof doRefresh>>;
+
+/** If the RP-initiated logout redirect hasn't taken the page away within this
+ * window, assume it no-op'd (IdP end-session endpoint misconfigured/unreachable,
+ * popup blocked) and fall back to an interactive sign-in. */
+export const EXPIRED_SESSION_REDIRECT_WATCHDOG_MS = 1_500;
 
 let refreshPromise: Promise<SessionResult> | null = null;
 let endingExpiredSession = false;
@@ -31,10 +36,25 @@ function clearSession() {
 /** Ends both the local identity and the IdP SSO session after a credentialed
  * channel was explicitly rejected and no replacement token could be issued. */
 export function endExpiredSession() {
+  // The in-memory identity is cleared on every call, even a deduped one — a
+  // second caller must never keep a dead token alive.
   clearSession();
   if (endingExpiredSession || typeof window === 'undefined') return;
   endingExpiredSession = true;
   endSession('/');
+  // Watchdog: if endSession() didn't navigate away, the app would be left
+  // tokenless with the latch stuck true and no route back to an interactive
+  // login. Reset the latch and start a fresh OAuth flow instead.
+  window.setTimeout(() => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    endingExpiredSession = false;
+    void startOAuthFlow('/');
+  }, EXPIRED_SESSION_REDIRECT_WATCHDOG_MS);
+}
+
+/** Test-only: clears the redirect latch between cases. */
+export function resetExpiredSessionLatchForTests() {
+  endingExpiredSession = false;
 }
 
 export function subscribeSessionExpired(listener: () => void) {
@@ -101,7 +121,20 @@ export function useSessionKeepAlive() {
     if (USE_MOCK) return () => {
     };
     const interval = setInterval(() => refreshSession(), TOKEN_REFRESH_INTERVAL_MS);
-    return () => clearInterval(interval);
+    // The interval alone can't cover a laptop that slept past the token's
+    // 15-minute life: refresh as soon as the tab comes back or the network
+    // reconnects, so the first action after a wake isn't a guaranteed 401.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refreshSession();
+    };
+    const onOnline = () => refreshSession();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onOnline);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onOnline);
+    };
   }, []);
 }
 
