@@ -68,14 +68,16 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   commit-time duplicate-seat guard below as the remaining backstop.
 - No WAF at the CloudFront edge (and the distribution itself is being retired — the app is on Cloudflare Workers); application rate limits (`internal/api/v1/ratelimit.go`) and Turnstile are the only
   protection.
-- `cmd/tablecleanup`'s EventBridge Scheduler target has no DLQ. `cmd/reconcile` now *reaches* its
-  Lambda DLQ: each pending entry carries an `Attempts` counter (`reconcile.PendingCashout`), a
-  per-entry failure increments it via `PendingStore.RecordFailedAttempt`, and once it hits
-  `reconcile.MaxAttempts` (5) the row's `gsi_status` flips to `"manual_review"` so it drops out of
-  `ListUnresolved` and `run` returns an aggregated error — failing the invocation so the message
-  lands in the DLQ. Early-attempt failures are still counted + logged (`slog.Warn`) and retried next
-  run without failing the invocation. `run` processes the whole batch before returning, so one
+- `cmd/reconcile` now *reaches* its Lambda DLQ: each pending entry carries an `Attempts` counter
+  (`reconcile.PendingCashout`), a per-entry failure increments it via `PendingStore.RecordFailedAttempt`,
+  and once it hits `reconcile.MaxAttempts` (5) the row's `gsi_status` flips to `"manual_review"` so it
+  drops out of `ListUnresolved` and `run` returns an aggregated error — failing the invocation so the
+  message lands in the DLQ. Early-attempt failures are still counted + logged (`slog.Warn`) and retried
+  next run without failing the invocation. `run` processes the whole batch before returning, so one
   poison entry never blocks the rest.
+- As of #30, the `cmd/reconcile`, `cmd/tablecleanup`, and archiver Lambdas each have a DLQ-depth alarm
+  (`ApproximateNumberOfMessagesVisible >= 1`) + a Lambda-`Errors` alarm on the `ctech-prod-alerts` SNS
+  topic (`cdk/lib/alarms.ts`, `addLambdaDlqAlarms`).
 
 ## Conventions (follow these)
 
@@ -222,7 +224,8 @@ catalog.
   tables' cold starts never block each other, same-table callers still dedupe to exactly one
   Actor (T7) — with `Manager.mu` held only for the short `actors`/`cancels`/`releases`/`locks` map
   mutations, never across a network call. See `internal/tablemanager/manager_concurrency_test.go`.
-- B10 fixed: archiver stream failures now go to an SQS DLQ with a CloudWatch alarm (`cdk/lib/archiver-stack.ts`).
+- B10 fixed: archiver stream failures now go to an SQS DLQ with a DLQ-depth + `Errors` CloudWatch alarm
+  on `ctech-prod-alerts` (`cdk/lib/archiver-stack.ts`, `cdk/lib/alarms.ts`; #30).
 - B31 fixed by rejection: `leaderboard.Top("achievement_points")` returns an unsupported-metric error instead of
   silently ranking via `gsi_hands_won`; add a `gsi_achievement_points` GSI before re-enabling the metric.
 - Issue #63 fixed: the `win_rate` board enforces `leaderboard.MinHandsForWinRateRank` (100) hands per currency mode.

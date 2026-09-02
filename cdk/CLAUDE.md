@@ -49,17 +49,17 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   defaulting to `false` — enabling real money is a parameter change plus an instance refresh.
 - **Three Lambdas**: the archiver (DynamoDB Stream → S3, with an SQS DLQ), plus
   `reconcile` (`rate(5 minutes)`) and `tablecleanup` (`rate(30 minutes)`) on EventBridge Scheduler.
-  **The CDK creates no Lambda CloudWatch alarms** (2026-08-19): the archiver's DLQ alarm and
-  the three Lambdas' DLQ-count/throttle/missed-run alarms went 2026-08-17, and `reconcile`/
-  `tablecleanup`'s `*ErrorsAlarm` followed — all unmonitored, no SNS subscriber, billed past
-  the CloudWatch free tier. Lambda errors are a console/Logs Insights check now.
+  **Each Lambda has two CloudWatch alarms** (#30, `lib/alarms.ts` `addLambdaDlqAlarms`): DLQ
+  `ApproximateNumberOfMessagesVisible >= 1` and Lambda `Errors >= 1` (both 5-min period, 1
+  datapoint, `treatMissingData: NOT_BREACHING`, ALARM + OK actions). All six point at the
+  **existing** shared topic `arn:aws:sns:us-east-1:868899309401:ctech-prod-alerts`
+  (`ALERTS_TOPIC_ARN`), imported with `sns.Topic.fromTopicArn` — CDK creates no topic and no
+  subscription. The earlier throttle/missed-run alarms removed 2026-08-17/08-19 were not restored.
 - **DynamoDB throttle alarms exist** (2026-09-02, #34): `dynamodb-stack.ts` puts a
   `ReadThrottleEvents + WriteThrottleEvents` CloudWatch alarm on each hot-path table
   (`poker_table_state`, `poker_action_log`, `poker_action_guards`, `poker_rooms`,
-  `poker_player_sessions`), wired to the existing account-wide alerts topic
-  (`ALERTS_TOPIC_ARN` in `constants.ts`, imported with `sns.Topic.fromTopicArn` — never a new
-  topic). These are the first CloudWatch alarms this CDK app creates; the Lambda alarms above are
-  still gone.
+  `poker_player_sessions`), wired to the same `ALERTS_TOPIC_ARN` (`constants.ts`, imported with
+  `sns.Topic.fromTopicArn` — never a new topic).
 - **Frontend**: private S3 + CloudFront via OAC, a route KeyValueStore with a viewer-request
   rewrite Function, and a `ResponseHeadersPolicy` carrying the CSP, HSTS and Permissions-Policy.
   **Being retired** — the app deploys to Cloudflare Workers Static Assets from
@@ -106,7 +106,9 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   Application-side, `internal/table/actor.go`'s commit-time duplicate-seat guard
   (`docs/specs/2026-09-01-duplicate-seat-commit-guard.md`) remains the backstop for whatever gap is
   left.
-- **No DLQ on either EventBridge Scheduler target** (`reconcile-stack.ts`, `tablecleanup-stack.ts`).
+- As of #30, the `cmd/reconcile`, `cmd/tablecleanup`, and archiver Lambdas each have a `messages-visible`
+  (DLQ-depth) alarm and an `errors` alarm on the `ctech-prod-alerts` SNS topic (`cdk/lib/alarms.ts`).
+  The EventBridge Scheduler → Lambda delivery hop itself still has no separate scheduler-target DLQ.
 - **`oidc-stack.ts` (issue #41, 2026-09-02)**: OIDC trust is now pinned with `StringEquals` to
   exact `sub`s — `repo:<repo>:ref:refs/heads/{main,staging,dev}` for the api/scopes roles, plus
   `repo:<repo>:pull_request` for the infra role (its `cdk diff` PR job). No bare `:*`; the old
@@ -117,9 +119,8 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   roles CDK creates + a CloudFormation-only allowlist. `apiRole`'s `ssm:SendCommand` is scoped to
   instances tagged `Project=ctech-poker` + the `AWS-RunShellScript` document;
   `autoscaling:StartInstanceRefresh` pinned to `*-ctech-poker` ASGs. Covered by `test/oidc-stack.test.ts`.
-- **B10 (fixed)** — archiver `DynamoEventSource` has `bisectBatchOnError` + `onFailure: SqsDlq`.
-  The DLQ-visible-message alarm was removed 2026-08-17 (see alarm note above); the DLQ itself
-  is unchanged.
+- **B10 (fixed)** — archiver `DynamoEventSource` has `bisectBatchOnError` + `onFailure: SqsDlq`,
+  and (#30) a DLQ-depth + `Errors` alarm on `ctech-prod-alerts`.
 - **B31 relevance** — `poker_leaderboard_stats` has GSIs only for `hands_won` / `hands_played` /
   `win_rate`. The API rejects any other metric (incl. `achievement_points`); adding a new ranking
   metric requires its own GSI here first.

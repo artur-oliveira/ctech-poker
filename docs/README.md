@@ -38,9 +38,12 @@ history documents and lag the code by design. O índice de planos foi atualizado
 - **No WAF.** `cdk/lib/frontend-stack.ts:103-121` builds the Distribution with no `webAclId`. PLAN.md previously
   claimed this shipped; it did not.
 - **No ASG lifecycle hook.** Scale-in can terminate an instance before `DrainAndRelease` finishes.
-- **No DLQ on either EventBridge Scheduler target** (`reconcile-stack.ts`, `tablecleanup-stack.ts`) — tracked as T13 in
-  `plans/2026-07-28-audit-implementation-plan.md`.
-- **No CDK test** for `reconcile-stack.ts` or `oidc-stack.ts`.
+All three Lambdas (`reconcile`, `tablecleanup`, `archiver`) have an SQS DLQ **and**, as of #30, a
+DLQ-depth alarm plus a Lambda-`Errors` alarm on the shared `ctech-prod-alerts` SNS topic
+(`cdk/lib/alarms.ts`), covering both EventBridge Scheduler targets (`reconcile-stack.ts`,
+`tablecleanup-stack.ts`). Older docs claiming "no DLQ" / "no alarm" are stale. `oidc-stack.ts` and
+`reconcile-stack.ts` both have CDK tests (`cdk/test/oidc-stack.test.ts`,
+`cdk/test/reconcile-stack.test.ts`); older docs claiming otherwise are stale.
 
 Issues **B9** (`sub`-only authz), **B10** (archiver DLQ), **B31** (leaderboard ranking), **B32** (fairness surface) and
 the real-money buy-in terms-acceptance gap (both `buyin.NewServiceWithGame` and `NewServiceWithPlayers` wiring chain
