@@ -42,7 +42,7 @@ describe('RouteAnnouncer', () => {
     expect(screen.getByRole('status')).toHaveTextContent('');
   });
 
-  test('moves focus to the new page heading and announces its title after a route change', () => {
+  test('moves focus to the new page heading without a second live-region announcement', () => {
     const page = mountPage('<main><h1>Lobby</h1></main>');
     const {rerender} = render(<RouteAnnouncer/>);
     document.title = 'Mesa de poker · CTech Poker';
@@ -51,14 +51,41 @@ describe('RouteAnnouncer', () => {
     rerender(<RouteAnnouncer/>);
     expect(screen.getByRole('heading')).toHaveFocus();
     expect(screen.getByRole('heading')).toHaveAttribute('tabindex', '-1');
-    expect(screen.getByRole('status')).toHaveTextContent('Mesa de poker · CTech Poker');
+    // Focusing the heading is the announcement; the live region stays empty so
+    // the page name is not read twice.
+    expect(screen.getByRole('status')).toHaveTextContent('');
   });
 
-  test('falls back to focusing main when the page has no heading', () => {
+  test('removes the injected tabindex once focus leaves the heading', () => {
+    const page = mountPage('<main><h1>Lobby</h1></main>');
+    const {rerender} = render(<RouteAnnouncer/>);
+    page.innerHTML = '<main><h1>Mesa de poker</h1></main>';
+    mocks.pathname = '/table/room-1';
+    rerender(<RouteAnnouncer/>);
+    const heading = screen.getByRole('heading');
+    expect(heading).toHaveAttribute('tabindex', '-1');
+    heading.blur();
+    expect(heading).not.toHaveAttribute('tabindex');
+  });
+
+  test('keeps a pre-existing tabindex on the heading intact after blur', () => {
+    const page = mountPage('<main><h1>Lobby</h1></main>');
+    const {rerender} = render(<RouteAnnouncer/>);
+    page.innerHTML = '<main><h1 tabindex="-1">Mesa de poker</h1></main>';
+    mocks.pathname = '/table/room-1';
+    rerender(<RouteAnnouncer/>);
+    const heading = screen.getByRole('heading');
+    heading.blur();
+    expect(heading).toHaveAttribute('tabindex', '-1');
+  });
+
+  test('falls back to focusing main and announcing the title when the page has no heading', () => {
     mountPage('<main></main>');
     const {rerender} = render(<RouteAnnouncer/>);
+    document.title = 'Ranking · CTech Poker';
     mocks.pathname = '/leaderboard';
     rerender(<RouteAnnouncer/>);
     expect(document.querySelector('main')).toHaveFocus();
+    expect(screen.getByRole('status')).toHaveTextContent('Ranking · CTech Poker');
   });
 });

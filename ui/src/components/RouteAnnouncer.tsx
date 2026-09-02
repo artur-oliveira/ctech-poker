@@ -26,10 +26,26 @@ export function RouteAnnouncer() {
     const heading = document.querySelector<HTMLElement>('main h1, h1');
     const target = heading ?? document.querySelector<HTMLElement>('main');
     if (target) {
-      if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+      // Only carry the tabindex for as long as the element holds focus: a
+      // permanent tabindex="-1" on every page heading is a latent trap for
+      // sequential navigation and shows up in a11y audits.
+      const injected = !target.hasAttribute('tabindex');
+      if (injected) target.setAttribute('tabindex', '-1');
       target.focus();
+      if (injected) {
+        const cleanup = () => {
+          target.removeAttribute('tabindex');
+          target.removeEventListener('blur', cleanup);
+        };
+        target.addEventListener('blur', cleanup);
+      }
     }
-    setAnnouncement(document.title);
+    // A focused heading is spoken by screen readers on its own, so pushing the
+    // same text into the live region would double-announce. Reach for the live
+    // region only when there was no heading to focus, and never announce
+    // document.title on a client nav — Next may not have committed the new
+    // route's <title> yet, so it can still be the previous page's.
+    setAnnouncement(heading ? '' : document.title);
   }, [pathname]);
 
   return <div className="sr-only" role="status" aria-live="polite">{announcement}</div>;

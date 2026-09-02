@@ -10,6 +10,8 @@ import {
   getServerApiLivenessSnapshot,
   livenessPollDelay,
   markApiOffline,
+  navigateToUnavailable,
+  SERVER_OUTAGE_ESCALATION_THRESHOLD,
   subscribeApiLiveness,
 } from './liveness';
 
@@ -37,6 +39,11 @@ export function NetworkProvider({children}: { children: React.ReactNode }) {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let failures = 0;
+    // Counts consecutive *poll cycles* published as reason:'server' — distinct
+    // from the retries checkApiLiveness() already exhausts internally before
+    // publishing one such result. A device-offline outage (reason:'offline')
+    // resets this and never escalates; only a server-shaped outage does.
+    let consecutiveServerOutages = 0;
     let cancelled = false;
     async function runCheck() {
       if (timer) clearTimeout(timer);
@@ -45,6 +52,15 @@ export function NetworkProvider({children}: { children: React.ReactNode }) {
       if (cancelled) return;
       failures = available ? 0 : failures + 1;
       if (available && wasUnavailable) void queryClient.refetchQueries({type: 'active'});
+      const isServerOutage = !available && getApiLivenessSnapshot().reason === 'server';
+      consecutiveServerOutages = isServerOutage ? consecutiveServerOutages + 1 : 0;
+      if (consecutiveServerOutages >= SERVER_OUTAGE_ESCALATION_THRESHOLD) {
+        // The thin strip is not prominent enough for a confirmed total
+        // outage: escalate to the same full-bleed screen a 503 gets. This
+        // unmounts the app (navigation), so there is nothing left to poll.
+        navigateToUnavailable();
+        return;
+      }
       timer = setTimeout(() => void runCheck(), livenessPollDelay(failures));
     }
     checkNowRef.current = () => void runCheck();

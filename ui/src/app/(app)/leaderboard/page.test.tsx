@@ -87,12 +87,30 @@ describe('community leaderboard page', () => {
 
     mocks.boardQuery = boardState([], {isError: true});
     view.rerender(<Ranking/>);
+    expect(screen.getByRole('heading', {level: 1}))
+      .toHaveTextContent(/Não foi possível carregar o ranking/);
     fireEvent.click(screen.getByRole('button', {name: 'Tentar novamente'}));
     expect(mocks.refetch).toHaveBeenCalledOnce();
 
     mocks.boardQuery = boardState([]);
     view.rerender(<Ranking/>);
     expect(screen.getByText(/Nenhum jogador pontuou ainda/)).toBeInTheDocument();
+  });
+
+  test('window-virtualizes a long board instead of rendering every row', () => {
+    const many: Entry[] = Array.from({length: 60}, (_, i) => ({
+      player_id: `p-${i}`, player_name: `Jogador ${i}`,
+      hands_played: 60 - i, hands_won: 30 - i / 2, win_rate: 0.3,
+    }));
+    mocks.boardQuery = boardState(many);
+    mocks.rankQuery = rankState({ranked: false});
+    render(<Ranking/>);
+
+    const list = screen.getByRole('list', {name: /Ranking, posições 4 em diante/});
+    const rows = within(list).getAllByRole('listitem');
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.length).toBeLessThan(57);
+    expect(rows[0]).toHaveAttribute('aria-setsize', '57');
   });
 
   test('shows public navigation without private controls for anonymous visitors', () => {

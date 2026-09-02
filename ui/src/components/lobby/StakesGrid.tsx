@@ -1,10 +1,10 @@
 'use client';
-import React, {useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {useRouter} from 'next/navigation';
 import {ArrowRight, Users} from 'lucide-react';
 import {Button} from '@/components/ui/button';
-import {createRoom, listRooms, listStakes} from '@/lib/api/rooms';
+import {createRoom, getRoom, listRooms, listStakes, type Room} from '@/lib/api/rooms';
 import {SkeletonList} from '@/components/ui/skeleton';
 import {BUY_IN_MAX_BB, BUY_IN_MIN_BB, buyInRange} from '@/lib/pokerRules';
 
@@ -14,13 +14,19 @@ function bucketKey(smallBlind: number, bigBlind: number, maxSeats: number) {
   return `${smallBlind}-${bigBlind}-${maxSeats}`;
 }
 
+function openCandidates(rooms: Room[], smallBlind: number, bigBlind: number, maxSeats: number) {
+  return rooms.filter(r => r.visibility === 'public' && r.small_blind === smallBlind
+    && r.big_blind === bigBlind && r.max_seats === maxSeats && r.seats_taken < maxSeats);
+}
+
 export function StakesGrid() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [joiningKey, setJoiningKey] = useState<string | null>(null);
   const [failedKey, setFailedKey] = useState<string | null>(null);
   const [selectedStakeKey, setSelectedStakeKey] = useState<string | null>(null);
-  
+  const retryHandledRef = useRef(false);
+
   const {data: stakes = [], isLoading: stakesLoading, isError: stakesError, refetch: refetchStakes} = useQuery({
     queryKey: ['stakes'], queryFn: () => listStakes()
   });
@@ -32,26 +38,46 @@ export function StakesGrid() {
   } = useQuery({
     queryKey: ['rooms'], queryFn: () => listRooms()
   });
-  
+
+  // The `['rooms']` cache can be up to 30s stale, and a concurrent joiner can
+  // fill the last open seat in that window (or between two players' clicks
+  // on the same bucket). Rather than trust a cached candidate, refetch the
+  // list right before navigating and re-verify each open candidate with a
+  // direct read, falling through to the next candidate (or a brand-new room)
+  // instead of sending the player into a seat that is already gone. See
+  // docs/plans/2026-09-02-frontend-module-review/02-lobby-store-wallet.md (F-L2).
+  async function resolveRoomId(smallBlind: number, bigBlind: number, maxSeats: number) {
+    const fresh = await refetchRooms();
+    const candidates = openCandidates(fresh.data ?? rooms, smallBlind, bigBlind, maxSeats);
+    for (const candidate of candidates) {
+      const id = candidate.room_id || candidate.id || '';
+      if (!id) continue;
+      try {
+        const verified = await getRoom(id);
+        if (verified.seats_taken < verified.max_seats) return id;
+      } catch {
+        // The room vanished or became inaccessible between the refetch above
+        // and this check; try the next candidate instead of dead-ending.
+      }
+    }
+    const range = buyInRange(bigBlind);
+    const room = await createRoom({
+      visibility: 'public', small_blind: smallBlind, big_blind: bigBlind, max_seats: maxSeats,
+      buy_in_min: range.min, buy_in_max: range.max
+    });
+    const id = room.room_id || room.id || '';
+    if (!id) throw new Error('A API criou uma mesa sem identificador.');
+    await queryClient.invalidateQueries({queryKey: ['rooms']});
+    return id;
+  }
+
   async function joinOrCreate(smallBlind: number, bigBlind: number, maxSeats: number) {
     if (joiningKey) return;
     const key = bucketKey(smallBlind, bigBlind, maxSeats);
     setFailedKey(null);
     setJoiningKey(key);
     try {
-      const openRoom = rooms.find(r => r.visibility === 'public' && r.small_blind === smallBlind
-        && r.big_blind === bigBlind && r.max_seats === maxSeats && r.seats_taken < maxSeats);
-      let id = openRoom?.room_id || openRoom?.id || '';
-      if (!id) {
-        const range = buyInRange(bigBlind);
-        const room = await createRoom({
-          visibility: 'public', small_blind: smallBlind, big_blind: bigBlind, max_seats: maxSeats,
-          buy_in_min: range.min, buy_in_max: range.max
-        });
-        id = room.room_id || room.id || '';
-        await queryClient.invalidateQueries({queryKey: ['rooms']});
-      }
-      if (!id) throw new Error('A API criou uma mesa sem identificador.');
+      const id = await resolveRoomId(smallBlind, bigBlind, maxSeats);
       router.push(`/table?id=${encodeURIComponent(id)}`);
     } catch {
       setFailedKey(key);
@@ -59,7 +85,30 @@ export function StakesGrid() {
       setJoiningKey(null);
     }
   }
-  
+
+  // The table page bounces a room-full failure back here with a
+  // `retrySmallBlind`/`retryBigBlind`/`retrySeats` query so the player isn't
+  // left to redo the pick by hand; a plain `window.location.search` read
+  // (rather than `useSearchParams`) avoids requiring a Suspense boundary on
+  // this otherwise static route. Runs once per mount and strips the query
+  // immediately so a reload or the back button never re-triggers it.
+  useEffect(() => {
+    if (retryHandledRef.current || stakesLoading || roomsLoading || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const smallBlind = Number(params.get('retrySmallBlind'));
+    const bigBlind = Number(params.get('retryBigBlind'));
+    const maxSeats = Number(params.get('retrySeats'));
+    if (!smallBlind || !bigBlind || !maxSeats) return;
+    retryHandledRef.current = true;
+    router.replace('/lobby');
+    // Mirrors the retried bucket into the radio selection so the busy
+    // indicator below lands on the card actually being retried.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedStakeKey(`${smallBlind}-${bigBlind}`);
+    void joinOrCreate(smallBlind, bigBlind, maxSeats);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stakesLoading, roomsLoading]);
+
   if (stakesLoading || roomsLoading) return (
     <SkeletonList label="Buscando mesas…" count={3} height={128} className="skeleton-panel"/>
   );
@@ -114,8 +163,7 @@ export function StakesGrid() {
           const maxSeats = opt[0];
           const displayName = opt[1];
           const key = bucketKey(selectedStake.small_blind, selectedStake.big_blind, maxSeats);
-          const active = rooms.filter(r => r.visibility === 'public' && r.small_blind === selectedStake.small_blind
-            && r.big_blind === selectedStake.big_blind && r.max_seats === maxSeats && r.seats_taken < maxSeats).length;
+          const active = openCandidates(rooms, selectedStake.small_blind, selectedStake.big_blind, maxSeats).length;
           const isJoining = joiningKey === key;
           const actionLabel = active > 0 ? 'Entrar agora' : 'Criar mesa';
           const {min: buyInMin, max: buyInMax} = buyInRange(selectedStake.big_blind);

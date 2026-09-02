@@ -22,6 +22,7 @@ import {Checkbox} from '@/components/ui/checkbox';
 import {getMe} from '@/lib/api/player';
 import {createRoom, listStakes} from '@/lib/api/rooms';
 import {buyInRange} from '@/lib/pokerRules';
+import {REAL_MONEY_UI_ENABLED} from '@/lib/capabilities';
 
 const MAX_SEATS_OPTIONS = [6, 9] as const;
 
@@ -58,7 +59,7 @@ export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean})
   // wallet mode. 404s when REAL_MONEY_ENABLED is off server-side, hiding the toggle.
   const {data: realStakes = []} = useQuery({
     queryKey: ['stakes', 'real'], queryFn: () => listStakes('real'),
-    enabled: me?.wallet_mode === 'real'
+    enabled: REAL_MONEY_UI_ENABLED && me?.wallet_mode === 'real'
   });
   const queryClient = useQueryClient();
   const form = useForm<Values>({
@@ -105,7 +106,7 @@ export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean})
         ? 'Os valores abaixo são em dinheiro real, debitados da sua carteira ctech-wallet.'
         : 'Os valores abaixo são fichas virtuais do sandbox.'}</DialogDescription></DialogHeader>
       <form onSubmit={form.handleSubmit(submit)} className="space-y-5">
-        {realStakes.length > 0 &&
+        {REAL_MONEY_UI_ENABLED && realStakes.length > 0 &&
             <div className="space-y-2"><Label id="currency-label">Modo</Label><Controller control={form.control}
                                                                                           name="currencyMode"
                                                                                           render={({field}) => <div

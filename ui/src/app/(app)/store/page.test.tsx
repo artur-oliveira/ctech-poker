@@ -129,7 +129,10 @@ describe('store page', () => {
     fireEvent.click(screen.getByRole('button', {name: 'Resgatar fichas grátis'}));
     await waitFor(() => expect(screen.getByText(/^\+500 fichas recebidas · próxima em/)).toBeInTheDocument());
     expect(mocks.notify).toHaveBeenCalledWith(expect.stringContaining('500'), 'info');
-    expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet', 'balance']});
+    // Balance rides on the canonical player profile key, never a dead
+    // `['wallet','balance']` key (issue #101).
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['player', 'me']});
+    expect(mocks.invalidateQueries).not.toHaveBeenCalledWith({queryKey: ['wallet', 'balance']});
     expect(mocks.setQueryData).toHaveBeenCalledWith(
       ['dailyReward', 'cooldown'],
       {remaining_time_seconds: 86400},

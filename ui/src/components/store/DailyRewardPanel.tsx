@@ -4,6 +4,7 @@ import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {Gift, RotateCcw} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {getCooldown, spin} from '@/lib/api/dailyReward';
+import {BALANCE_QUERY_KEY} from '@/lib/api/player';
 import {pushNotification} from '@/lib/notify';
 import {formatDuration, useCountdownMs} from './useCountdown';
 
@@ -39,8 +40,7 @@ export function DailyRewardPanel() {
       queryClient.setQueryData(['dailyReward', 'cooldown'], {
         remaining_time_seconds: result.remaining_time_seconds,
       });
-      void queryClient.invalidateQueries({queryKey: ['wallet', 'balance']});
-      void queryClient.invalidateQueries({queryKey: ['player', 'me']});
+      void queryClient.invalidateQueries({queryKey: BALANCE_QUERY_KEY});
       if (result.amount > 0) {
         setWonAmount(result.amount);
         pushNotification(`Você recebeu ${result.amount.toLocaleString('pt-BR')} fichas sandbox!`, 'info');

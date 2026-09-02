@@ -45,12 +45,24 @@ describe('Notifier', () => {
     expect(screen.queryByText('Convite de mesa')).not.toBeInTheDocument();
   });
 
-  test('removes an alert after its automatic timeout', () => {
+  test('removes a plain info toast after its 6 s timeout', () => {
     render(<Notifier/>);
-    act(() => pushNotification('Aviso passageiro'));
+    act(() => pushNotification('Aviso passageiro', 'info'));
     expect(screen.getByText('Aviso passageiro')).toBeInTheDocument();
-    
+
     act(() => vi.advanceTimersByTime(6000));
+    expect(screen.queryByRole('region')).not.toBeInTheDocument();
+  });
+
+  test('keeps an actionable error toast on screen past the 6 s timer', () => {
+    const run = vi.fn();
+    render(<Notifier/>);
+    act(() => pushNotification('Falha ao entrar na mesa', 'error', [{label: 'Tentar de novo', run}]));
+
+    act(() => vi.advanceTimersByTime(6000));
+    expect(screen.getByText('Falha ao entrar na mesa')).toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(14000));
     expect(screen.queryByRole('region')).not.toBeInTheDocument();
   });
 });

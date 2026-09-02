@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => {
     endSession: vi.fn(),
     healthCheck: vi.fn(),
     requireLiveness: vi.fn(),
+    navigateToUnavailable: vi.fn(),
     notify: vi.fn(),
     isAxiosError: vi.fn(),
   };
@@ -59,6 +60,7 @@ vi.mock('@/lib/network/liveness', () => ({
   HTTP_TIMEOUT_MS: 3_000,
   requireApiLiveness: mocks.requireLiveness,
   checkApiLiveness: mocks.healthCheck,
+  navigateToUnavailable: mocks.navigateToUnavailable,
 }));
 
 describe('API client session and interceptors', () => {
@@ -202,20 +204,14 @@ describe('API client session and interceptors', () => {
       .toMatchObject({message: 'API request failed', retryAfterMs: undefined});
   });
 
-  test('sends the player to the maintenance page exactly once on a 503', () => {
-    const replace = vi.fn();
-    Object.defineProperty(window, 'location', {
-      configurable: true, value: {pathname: '/lobby', replace},
-    });
+  test('delegates a 503 to the shared unavailable navigation, and only a 503', () => {
+    mocks.navigateToUnavailable.mockReturnValue(true);
     expect(redirectOnServiceUnavailable(503)).toBe(true);
-    expect(replace).toHaveBeenCalledWith('/unavailable');
+    expect(mocks.navigateToUnavailable).toHaveBeenCalledOnce();
 
     expect(redirectOnServiceUnavailable(500)).toBe(false);
-    Object.defineProperty(window, 'location', {
-      configurable: true, value: {pathname: '/unavailable', replace},
-    });
-    expect(redirectOnServiceUnavailable(503)).toBe(false);
-    expect(replace).toHaveBeenCalledOnce();
+    expect(redirectOnServiceUnavailable(undefined)).toBe(false);
+    expect(mocks.navigateToUnavailable).toHaveBeenCalledOnce();
   });
 
   test('refreshes once after 401 and retries with the new identity', async () => {

@@ -114,6 +114,27 @@ describe('hand history components', () => {
     render(<HandReplayer hand={hand} actions={[]} viewerId="viewer"/>);
     expect(screen.getByText(/antes dos frames de replay/)).toBeInTheDocument();
   });
+
+  test('shows the hand big blind, derived from post_big_blind for non-25 tables', () => {
+    render(<HandReplayer hand={hand} viewerId="viewer" actions={[
+      {seq: 0, player_id: 'p2', action: 'post_big_blind', amount: 100, timestamp: 0, frame: actions[0].frame},
+      actions[0],
+    ]}/>);
+    const blind = document.querySelector('.replay-blind') as HTMLElement;
+    expect(blind).toHaveTextContent('BB');
+    expect(blind).toHaveTextContent('100');
+  });
+
+  test('prefers a stored big_blind over the timeline and falls back to 25 for legacy hands', () => {
+    const {rerender} = render(<HandReplayer hand={{...hand, big_blind: 500}} viewerId="viewer" actions={[
+      {seq: 0, player_id: 'p2', action: 'post_big_blind', amount: 100, timestamp: 0, frame: actions[0].frame},
+      actions[0],
+    ]}/>);
+    expect(document.querySelector('.replay-blind')).toHaveTextContent('500');
+
+    rerender(<HandReplayer hand={hand} viewerId="viewer" actions={[actions[0]]}/>);
+    expect(document.querySelector('.replay-blind')).toHaveTextContent('25');
+  });
   
 
   test('plays through the remaining steps and stops at the last action', () => {

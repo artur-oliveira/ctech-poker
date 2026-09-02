@@ -12,7 +12,8 @@ export default function BasicsGuide() {
         body: <><GuideSteps><li><span>Na página inicial, use <b>Jogar agora</b> e conclua o acesso pela CTech Account.</span></li>
           <li><span>No primeiro acesso ao poker, abra os Termos e a Política de Privacidade, marque o aceite e confirme.</span></li>
           <li><span>Seu perfil é criado com o nome da conta. Você troca o nome e a foto quando quiser.</span></li></GuideSteps>
-          <GuideCallout kind="safe" title="O aceite é explícito">A caixa não vem marcada e o jogo não abre sem ela. Se o registro do aceite falhar, a tela oferece uma nova tentativa em vez de deixar você entrar pela metade.</GuideCallout></>
+          <GuideCallout kind="safe" title="O aceite é explícito">A caixa não vem marcada e o jogo não abre sem ela. Se o registro do aceite falhar, a tela oferece uma nova tentativa em vez de deixar você entrar pela metade.</GuideCallout>
+          <GuideCallout kind="info" title="Se o acesso não completar">A tela distingue o motivo em vez de mostrar sempre a mesma mensagem: uma instabilidade passageira oferece <b>Tentar novamente</b> tentando de novo na hora, sem pedir um novo login; um código de acesso expirado ou já usado pede para entrar de novo; e uma indisponibilidade do provedor de login leva à tela de manutenção.</GuideCallout></>
       },
       {
         id: 'lobby', title: 'O lobby em duas escolhas', summary: 'Primeiro os blinds, depois o tamanho da mesa.',
@@ -22,7 +23,8 @@ export default function BasicsGuide() {
             <GuideTerm term="Entrar agora">Existe mesa pública com vaga naquele formato e você senta nela.</GuideTerm>
             <GuideTerm term="Criar mesa">Não há vaga; uma nova mesa pública é aberta com a sua escolha.</GuideTerm>
             <GuideTerm term="Sandbox">Fichas fictícias. Servem para jogar, não têm saque nem conversão em dinheiro.</GuideTerm></GuideTerms>
-          <p>Se você já está sentado em algum lugar, <b>Sua mesa continua aberta</b> aparece no topo com a entrada usada e leva de volta ao mesmo assento — nunca cria um segundo. Um ponto dourado na Loja significa que a recompensa diária já pode ser resgatada.</p></>
+          <p>Se você já está sentado em algum lugar, <b>Sua mesa continua aberta</b> aparece no topo com a entrada usada e leva de volta ao mesmo assento — nunca cria um segundo. Um ponto dourado na Loja significa que a recompensa diária já pode ser resgatada.</p>
+          <p>Se a última vaga for ocupada bem no momento em que você entra, você volta automaticamente para o lobby com um aviso — suas fichas nunca ficam presas — e tentamos de novo nos mesmos blinds e formato.</p></>
       },
       {
         id: 'buyin', title: 'Buy-in e auto rebuy', summary: 'O buy-in transfere fichas da carteira para a sua pilha na mesa.',

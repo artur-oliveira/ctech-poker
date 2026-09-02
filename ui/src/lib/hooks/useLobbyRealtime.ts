@@ -156,8 +156,8 @@ export function useLobbyRealtime() {
     // queries on every open; this is cheap and prevents an indefinitely stale
     // lobby after sleep/network changes.
     void queryClient.invalidateQueries({queryKey: ['rooms']});
+    // `['player','me']` carries the wallet balances too (see BALANCE_QUERY_KEY).
     void queryClient.invalidateQueries({queryKey: ['player', 'me']});
-    void queryClient.invalidateQueries({queryKey: ['wallet', 'balance']});
     // Social deltas sent while the socket was down are never replayed either,
     // and the unread badge is the most visible thing that goes stale.
     void queryClient.invalidateQueries({queryKey: SOCIAL_KEYS.root});
