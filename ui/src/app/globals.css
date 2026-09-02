@@ -7323,6 +7323,31 @@ h1 em {
     margin-top: 1px
 }
 
+.share-hand-revoked {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    border-radius: var(--rounded-control);
+    color: var(--text-secondary);
+    background: var(--surface-seat);
+    font-size: 13px;
+    line-height: 1.45
+}
+
+.share-hand-revoked svg {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 auto;
+    margin-top: 1px;
+    color: var(--paper)
+}
+
+.share-hand-revoked b {
+    color: var(--paper)
+}
+
 @keyframes share-link-ready {
     from {
         opacity: .4;

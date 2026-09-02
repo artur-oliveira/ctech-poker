@@ -51,6 +51,9 @@ export default function HandsGuide() {
           <li><span>Crie e copie. Quem abrir vê uma versão anonimizada, sem acesso ao seu histórico.</span></li></GuideSteps>
           <p><b>Exportar .txt</b> baixa um relato legível da mão, com as ações disponíveis, para arquivo ou análise fora do jogo.</p>
           <GuideCallout kind="warning" title="O link é público enquanto durar">Qualquer pessoa com o endereço abre a mão até ela expirar. O que ficou oculto no jogo nunca entra no link.</GuideCallout>
+          <p>Reabrir <b>Compartilhar</b> na mesma mão mostra o link já criado em vez de gerar outro — e traz o botão <b>Revogar</b>, que
+            desativa esse link imediatamente e devolve a tela ao estado inicial. A lembrança do link fica só neste navegador: em outro
+            aparelho, ou depois de limpar os dados do site, a tela volta a oferecer a criação de um novo.</p>
           <GuideLink href="/hands">Abrir minhas mãos</GuideLink></>
       }
     ]}/>;
