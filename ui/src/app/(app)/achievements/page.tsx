@@ -7,10 +7,11 @@ import {Button} from '@/components/ui/button';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {FilterGroup} from '@/components/FilterGroup';
 import {SkeletonList, StatCardsSkeleton} from '@/components/ui/skeleton';
-import {achievementProgress, getAchievementCatalog, getMyAchievements} from '@/lib/api/achievements';
+import {achievementProgress, getAchievementCatalog} from '@/lib/api/achievements';
 import {achievementLabel, achievementValueFormat, achievementWalletMode} from '@/lib/achievements';
 import type {WalletMode} from '@/lib/api/player';
 import {useOptionalSession} from "@/lib/auth/session";
+import {useAchievementsSummary} from '@/lib/hooks/useAchievementsSummary';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 
 type FilterTab = 'all' | 'unlocked' | 'in_progress' | 'completed';
@@ -19,14 +20,13 @@ export default function Achievements() {
   const {authed, checking} = useOptionalSession();
   const [mode, setMode] = useState<WalletMode>('sandbox');
   const catalog = useQuery({queryKey: ['achievements', 'catalog'], queryFn: getAchievementCatalog});
-  const mine = useQuery({
-    queryKey: ['achievements', 'me', mode],
-    queryFn: () => getMyAchievements(mode),
-    enabled: authed
-  });
+  const mine = useAchievementsSummary(mode, authed);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
-  
-  const progressMap = useMemo(() => new Map((mine.data || []).map(p => [p.key, p.count])), [mine.data]);
+
+  // Full-state summary (#79): every key the player has touched, not just the
+  // first page, so completion %, star totals and secret reveals below are
+  // never understated by a followed-but-truncated cursor.
+  const progressMap = useMemo(() => new Map((mine.data?.achievements || []).map(p => [p.key, p.progress])), [mine.data]);
   const visibleCatalog = useMemo(() => (catalog.data || []).filter(item => {
     const walletMode = achievementWalletMode(item.key);
     if (walletMode && walletMode !== mode) return false;

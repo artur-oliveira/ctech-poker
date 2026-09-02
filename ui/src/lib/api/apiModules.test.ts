@@ -1,6 +1,6 @@
 import {beforeEach, describe, expect, test, vi} from 'vitest';
-import {getAchievementCatalog, getMyAchievements} from './achievements';
-import {leaderboard, remainingTime, spin} from './gamification';
+import {getAchievementCatalog, getMyAchievements, getMyAchievementsSummary} from './achievements';
+import {leaderboard, myRank, remainingTime, spin} from './gamification';
 import {createHandShare, getHandShare, revokeHandShare} from './handShares';
 import {acceptPokerTerms, getHand, getHands, getMe, getProfileShowcase, getSessions, updateMe,} from './player';
 import {getPlayerNotes, savePlayerNote} from './playerNotes';
@@ -30,23 +30,32 @@ describe('API domain modules', () => {
   });
   
   test('maps achievement and gamification calls to their backend contracts', async () => {
+    const summary = {mode: 'real', totals: {revealed: 1, unlocked: 1, completed: 0, stars: 1, max_stars: 5}, achievements: [{key: 'wins'}]};
     client.get
       .mockResolvedValueOnce({data: ['catalog']})
       .mockResolvedValueOnce({data: {data: ['progress']}})
+      .mockResolvedValueOnce({data: summary})
       .mockResolvedValueOnce({data: {data: ['leader']}})
-      .mockResolvedValueOnce({data: {remaining_time_seconds: 5}});
+      .mockResolvedValueOnce({data: {remaining_time_seconds: 5}})
+      .mockResolvedValueOnce({data: {ranked: true, rank: 12, total: 480, entry: {player_id: 'me'}}});
     client.post.mockResolvedValueOnce({data: {amount: 100, remaining_time_seconds: 60}});
-    
+
     await expect(getAchievementCatalog()).resolves.toEqual(['catalog']);
     await expect(getMyAchievements('real', 'next')).resolves.toEqual(['progress']);
+    await expect(getMyAchievementsSummary('real')).resolves.toEqual(summary);
     await expect(leaderboard('real', 'rank-next')).resolves.toEqual(['leader']);
     await expect(spin()).resolves.toEqual({amount: 100, remaining_time_seconds: 60});
     await expect(remainingTime()).resolves.toEqual({remaining_time_seconds: 5});
-    
+    await expect(myRank('real')).resolves.toEqual({ranked: true, rank: 12, total: 480, entry: {player_id: 'me'}});
+
     expect(client.get).toHaveBeenNthCalledWith(2, '/v1.0/players/me/achievements', {
       params: {mode: 'real', cursor: 'next'}, silentError: true,
     });
+    expect(client.get).toHaveBeenNthCalledWith(3, '/v1.0/players/me/achievements/summary', {
+      params: {mode: 'real'}, silentError: true,
+    });
     expect(client.post).toHaveBeenCalledWith('/v1.0/sandbox-credits', {}, {silentError: true});
+    expect(client.get).toHaveBeenCalledWith('/v1.0/leaderboard/me', {params: {mode: 'real'}});
   });
   
   test('encodes identifiers for player profile, hands and public shares', async () => {

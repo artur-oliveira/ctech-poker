@@ -437,6 +437,77 @@ describe('table page integration', () => {
     expect(mocks.stageProps).toEqual(expect.objectContaining({holdOutcomeOpen: true, viewerStackBefore: 500}));
   });
 
+  test('clears the hand outcome once the next hand deals, unblocking achievement toasts and the winner-cards offer', async () => {
+    const resolvedHand = snapshot({
+      stage: 'complete', board: ['2H', '3D', '4C', '5S', '9H'],
+      payouts: {viewer: 120}, winners: ['viewer'],
+      seats: [
+        {
+          player_id: 'viewer', name: 'Você', stack: 600, stack_at_hand_start: 500, state: 'active',
+          dealt_in: true, contributed: 20, hole_cards: ['AH', 'KD'], hand_category: 'pair', hand_score: 200,
+        },
+        {
+          player_id: 'opponent', name: 'Bia', stack: 780, state: 'active', dealt_in: true,
+          contributed: 40, hole_cards: ['QS', 'JC'], hole_cards_revealed: [true, true],
+          hand_category: 'high_card', hand_score: 100,
+        },
+      ],
+    });
+    realtime({snapshot: resolvedHand});
+    const {rerender} = render(<TablePage/>);
+    await waitFor(() => expect(mocks.stageProps?.outcome).toEqual(expect.objectContaining({kind: 'win'})));
+
+    // The next hand deals under a fresh hand_id with no payouts yet: the
+    // outcome from the resolved hand above must not linger and keep gating
+    // AchievementToast/WinnerCards forever (issue #78).
+    realtime({snapshot: snapshot({hand_id: 'hand-2', stage: 'pre_flop'})});
+    rerender(<TablePage/>);
+    await waitFor(() => expect(mocks.stageProps?.outcome).toBeNull());
+  });
+
+  test('produces a fresh outcome for a second resolved hand instead of latching the first', async () => {
+    realtime({
+      snapshot: snapshot({
+        stage: 'complete', board: ['2H', '3D', '4C', '5S', '9H'],
+        payouts: {viewer: 50}, winners: ['viewer'],
+        seats: [
+          {
+            player_id: 'viewer', name: 'Você', stack: 550, stack_at_hand_start: 500, state: 'active',
+            dealt_in: true, contributed: 20, hole_cards: ['AH', 'KD'], hand_category: 'pair', hand_score: 200,
+          },
+          {player_id: 'opponent', name: 'Bia', stack: 750, state: 'active', dealt_in: true, contributed: 40},
+        ],
+      })
+    });
+    const {rerender} = render(<TablePage/>);
+    await waitFor(() => expect(mocks.stageProps?.outcome).toEqual(expect.objectContaining({kind: 'win'})));
+
+    // Next hand deals (clearing the first hand's outcome), then resolves too.
+    realtime({snapshot: snapshot({hand_id: 'hand-2', stage: 'pre_flop'})});
+    rerender(<TablePage/>);
+    await waitFor(() => expect(mocks.stageProps?.outcome).toBeNull());
+
+    realtime({
+      snapshot: snapshot({
+        hand_id: 'hand-2', stage: 'complete', board: ['2H', '3D', '4C', '5S', '9H'],
+        payouts: {opponent: 60}, winners: ['opponent'],
+        seats: [
+          {
+            player_id: 'viewer', name: 'Você', stack: 490, stack_at_hand_start: 550, state: 'active',
+            dealt_in: true, contributed: 20, hole_cards: ['2C', '3S'], hand_category: 'high_card', hand_score: 10,
+          },
+          {
+            player_id: 'opponent', name: 'Bia', stack: 810, state: 'active', dealt_in: true,
+            contributed: 40, hole_cards: ['AS', 'AC'], hole_cards_revealed: [true, true],
+            hand_category: 'pair', hand_score: 300,
+          },
+        ],
+      })
+    });
+    rerender(<TablePage/>);
+    await waitFor(() => expect(mocks.stageProps?.outcome).toEqual(expect.objectContaining({kind: 'lose'})));
+  });
+
   test('details every contested pot when the viewer wins one and loses another', async () => {
     realtime({
       snapshot: snapshot({

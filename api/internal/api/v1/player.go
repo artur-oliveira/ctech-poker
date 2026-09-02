@@ -43,6 +43,7 @@ type sessionLogReader interface {
 
 type playerAchievementStore interface {
 	ListAchievements(ctx context.Context, playerID, mode string, limit int, startKey map[string]types.AttributeValue) ([]achievements.PlayerAchievementProgress, map[string]types.AttributeValue, error)
+	AllAchievements(ctx context.Context, playerID, mode string) ([]achievements.PlayerAchievementProgress, error)
 }
 
 type playerHandlers struct {
@@ -79,6 +80,7 @@ func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Se
 	g.Get("/me/hands", h.handHistory)
 	g.Get("/me/hand/:id", h.handByID)
 	g.Get("/me/achievements", h.achievementProgress)
+	g.Get("/me/achievements/summary", h.achievementsSummary)
 }
 
 type confirmAvatarRequest struct {
@@ -352,6 +354,23 @@ func (h *playerHandlers) achievementProgress(c fiber.Ctx) error {
 		return problem.InternalServer("failed to list achievements", c, err).Send(c)
 	}
 	return sendPage(c, progress, lastKey, cursor)
+}
+
+// achievementsSummary returns the caller's COMPLETE achievement state for one
+// mode in a single response: every catalog entry (secret ones only once the
+// player is past their first tier) with its progress, earned stars, next
+// target and completion flag, plus catalog-wide roll-ups. Unlike
+// achievementProgress it is not paginated — the catalog is bounded — so the
+// client never derives stars, completion % or the secret-unlock gate from a
+// truncated page. Backs the achievements page and the showcase picker (#71).
+func (h *playerHandlers) achievementsSummary(c fiber.Ctx) error {
+	userID := c.Locals(localsUserID).(string)
+	mode := currencyModeParam(c)
+	progress, err := h.achievements.AllAchievements(c.Context(), userID, mode)
+	if err != nil {
+		return problem.InternalServer("failed to load achievement summary", c, err).Send(c)
+	}
+	return c.JSON(achievements.BuildSummary(mode, progress))
 }
 
 func (h *playerHandlers) showcase(c fiber.Ctx) error {
