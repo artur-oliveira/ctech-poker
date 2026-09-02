@@ -206,7 +206,9 @@ export default function TableGuide() {
         <li><span><b>Dealer auditivo:</b> narra as cartas e as ações principais.</span></li>
         <li><span><b>Rodar duas vezes:</b> aparece somente nas salas que permitem o recurso.</span></li>
         <li><span><b>Comandos por voz:</b> push-to-talk para Fold, Check, Pagar, Aumentar e All In. O jogo recebe a
-          ação reconhecida, nunca o áudio.</span></li>
+          ação reconhecida, nunca o áudio. Fold, Check e Pagar valem na hora; Aumentar e All In abrem um chip de
+          confirmação — diga &ldquo;confirmar&rdquo; ou toque em <b>Confirmar</b>. Sem confirmação em alguns segundos, o
+          aumento é descartado sozinho.</span></li>
         <li><span><b>Treinador:</b> explica sua mão depois que você age, só em mesas sandbox. Fica indisponível
           durante a sua decisão, para nunca funcionar como dica em tempo real; ao fim da mão, mostra como a sua chance
           mudou rua a rua.</span></li>
