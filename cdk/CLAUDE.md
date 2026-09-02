@@ -107,7 +107,16 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   (`docs/specs/2026-09-01-duplicate-seat-commit-guard.md`) remains the backstop for whatever gap is
   left.
 - **No DLQ on either EventBridge Scheduler target** (`reconcile-stack.ts`, `tablecleanup-stack.ts`).
-- **No test** for `oidc-stack.ts`.
+- **`oidc-stack.ts` (issue #41, 2026-09-02)**: OIDC trust is now pinned with `StringEquals` to
+  exact `sub`s — `repo:<repo>:ref:refs/heads/{main,staging,dev}` for the api/scopes roles, plus
+  `repo:<repo>:pull_request` for the infra role (its `cdk diff` PR job). No bare `:*`; the old
+  malformed second pattern is gone. `infraRole` dropped `AdministratorAccess` for
+  `PowerUserAccess` + a scoped IAM block (service + `cdk-*`/`CtechPoker-*` roles/profiles/policies
+  only) + an explicit `Deny` on IAM user/access-key/login-profile/MFA/SAML/OIDC-provider creation
+  and `organizations:*`/`account:*`. **Interim** — follow-up is a permissions boundary on the
+  roles CDK creates + a CloudFormation-only allowlist. `apiRole`'s `ssm:SendCommand` is scoped to
+  instances tagged `Project=ctech-poker` + the `AWS-RunShellScript` document;
+  `autoscaling:StartInstanceRefresh` pinned to `*-ctech-poker` ASGs. Covered by `test/oidc-stack.test.ts`.
 - **B10 (fixed)** — archiver `DynamoEventSource` has `bisectBatchOnError` + `onFailure: SqsDlq`.
   The DLQ-visible-message alarm was removed 2026-08-17 (see alarm note above); the DLQ itself
   is unchanged.
