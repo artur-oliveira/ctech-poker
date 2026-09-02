@@ -9,10 +9,10 @@ export default function ProfileGuide() {
     currentHref="/guide/profile" next={{href: '/guide/community', label: 'Comunidade e segurança'}} sections={[
       {
         id: 'menu', title: 'O menu do perfil', summary: 'O avatar no topo reúne identidade, baralho, carteiras e atalhos pessoais.',
-        image: {src: '/guide/profile-live.webp', alt: 'Menu do perfil com foto, nome, modo de jogo, baralho, saldos e atalhos'},
+        image: {src: '/guide/profile-live.webp', alt: 'Menu do perfil com foto, nome, baralho, saldo sandbox e atalhos'},
         body: <><GuideBullets><li><span>O saldo ao lado do avatar abre a Loja direto.</span></li>
-          <li><span><b>Modo de jogo</b> alterna entre sandbox e dinheiro real. Trocar o modo não converte valores; os dois saldos aparecem lado a lado logo abaixo.</span></li>
           <li><span><b>Baralho</b> muda as cartas exibidas para você.</span></li>
+          <li><span>O menu mostra o seu saldo sandbox. O modo dinheiro real, e o controle para alterná-lo, só aparecem em ambientes onde as apostas em dinheiro real estão liberadas — o padrão é sandbox.</span></li>
           <li><span><b>Seu jogo</b> e <b>Vitrine do perfil</b> abrem as duas telas pessoais descritas nesta página.</span></li>
           <li><span><b>Sair da conta</b> encerra a sessão de autenticação.</span></li></GuideBullets>
           <p>A linha sob o seu nome diz, o tempo todo, se a vitrine está pública ou privada.</p></>
