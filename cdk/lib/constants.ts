@@ -108,6 +108,15 @@ export const DYNAMO_INDEX = {
   reportStatus: 'gsi_status',
 } as const;
 
+// ── GitHub Actions OIDC trust scoping ──────────────────────────────────────
+/**
+ * Branches that `.github/workflows/deploy.yml` deploys from (its `push`
+ * trigger). The OIDC trust policy is pinned to exactly these refs — no bare
+ * `:*` wildcard — so a workflow running on any other ref (a feature branch, a
+ * tag, a fork) cannot assume the deployment roles.
+ */
+export const GHA_DEPLOY_BRANCHES = ['main', 'staging', 'dev'] as const;
+
 // ── GitHub Actions role names (global, not per-env) ─────────────────────────
 export const GHA_API_ROLE = `${SERVICE}-gha-api`;
 export const GHA_FRONTEND_ROLE = `${SERVICE}-gha-frontend`;
