@@ -13,7 +13,19 @@ the same tier instead of charging again — never across tiers. `GET /rooms/:id/
 queued to the same retry table (`poker_pending_cashouts` with `Kind: "fee_debit"`) for Lambda reconciliation retries;
 the entitlement itself is left in place on a debit failure (nobody is ever seated on that path) so the retry — this
 request's caller, or `cmd/reconcile` — completes the same idempotent charge at most once.
-See `docs/plans/2026-08-21-entry-fee-entitlement.md`. **Still blocking, found 2026-07-25 while verifying cross-repo:**
+See `docs/plans/2026-08-21-entry-fee-entitlement.md`. The entitlement Claim/Rebind race is closed by #146 (issue #122)
+— see `docs/specs/2026-09-02-reconcile-entitlement-concurrency-audit.md`.
+
+`cmd/tablecleanup` now handles real-money tables instead of skipping them: it settles every seated player's
+game-wallet hold via `CashoutGame`, first recording the obligation to `poker_pending_cashouts` (same
+record-then-attempt-then-resolve shape as `buyin.Service.settle`) so `cmd/reconcile`'s sweep retries it — using the
+recorded hold ID — if the immediate cash-out fails; the table archives either way once the obligation is durably
+recorded. The table-entry entitlement itself is left untouched (it's a paid, non-refundable reservation, not a fund
+hold — it just expires on its own TTL). A room record that can't be found is now "unknown, skip" — never treated as
+sandbox — so a sweep-ordering bug can no longer credit a real-money table's stack to the sandbox ledger. See
+`cmd/tablecleanup/main.go`'s `settleRealMoneyAndArchive`.
+
+**Still blocking, found 2026-07-25 while verifying cross-repo:**
 
 1. ctech-wallet's scope catalog (`ctech-account/api/internal/scopes/catalog.go`) has no `internal:wallet:game-status`
    entry, so no M2M client can ever be granted the scope `ctech-wallet`'s `GET /wallet/game/status/:user_id` requires.
