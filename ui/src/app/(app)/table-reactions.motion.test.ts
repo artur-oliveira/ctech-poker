@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {describe, expect, test} from 'vitest';
 
-const stylesheet = readFileSync(join(process.cwd(), 'src/app/table-reactions.css'), 'utf8');
+const stylesheet = readFileSync(join(process.cwd(), 'src/app/(app)/table-reactions.css'), 'utf8');
 
 function keyframes(name: string): string {
   const body = stylesheet.match(new RegExp(`@keyframes ${name} \\{([\\s\\S]*?)\\n\\}`))?.[1];

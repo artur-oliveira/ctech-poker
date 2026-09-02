@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"testing"
@@ -34,8 +35,11 @@ func TestLogPendingCashoutsReportsCountAndOldestAge(t *testing.T) {
 }
 
 type fakePendingLister struct {
-	unresolved []reconcile.PendingCashout
-	resolved   []string
+	unresolved  []reconcile.PendingCashout
+	resolved    []string
+	attempts    map[string]int
+	quarantined []string
+	recordErr   error
 }
 
 func (f *fakePendingLister) ListUnresolved(context.Context, time.Duration) ([]reconcile.PendingCashout, error) {
@@ -44,6 +48,27 @@ func (f *fakePendingLister) ListUnresolved(context.Context, time.Duration) ([]re
 func (f *fakePendingLister) MarkResolved(_ context.Context, id string) error {
 	f.resolved = append(f.resolved, id)
 	return nil
+}
+func (f *fakePendingLister) RecordFailedAttempt(_ context.Context, e reconcile.PendingCashout, _ error) (int, bool, error) {
+	if f.recordErr != nil {
+		return 0, false, f.recordErr
+	}
+	if f.attempts == nil {
+		f.attempts = map[string]int{}
+	}
+	n := e.Attempts + 1
+	f.attempts[e.ID] = n
+	quarantined := n >= reconcile.MaxAttempts
+	if quarantined {
+		f.quarantined = append(f.quarantined, e.ID)
+	}
+	return n, quarantined, nil
+}
+
+type stubErrGameCredit struct{ err error }
+
+func (s stubErrGameCredit) CashoutGame(context.Context, string, int64, string, []string, string, string) error {
+	return s.err
 }
 
 type fakeGameCredit struct {
@@ -105,6 +130,51 @@ func TestRunResolvesUnresolvedCashouts(t *testing.T) {
 	}
 	if len(sandbox.credits) != 1 || sandbox.credits[0].PlayerID != "user-2" {
 		t.Fatalf("expected 1 sandbox credit, got %+v", sandbox.credits)
+	}
+}
+
+func TestRunCountsTransientFailureWithoutFailingInvocation(t *testing.T) {
+	pending := &fakePendingLister{
+		unresolved: []reconcile.PendingCashout{
+			{ID: "co-1", PlayerID: "user-1", Amount: 400, CurrencyMode: "real", TableRef: "room-1", Attempts: 0},
+			{ID: "co-2", PlayerID: "user-2", Amount: 100, CurrencyMode: "sandbox"},
+		},
+	}
+	game := stubErrGameCredit{err: errors.New("wallet down")}
+
+	if err := run(context.Background(), pending, game, &fakeSandboxCredit{}, &fakeFeeDebiter{}); err != nil {
+		t.Fatalf("early transient failure must not fail the invocation, got %v", err)
+	}
+	if pending.attempts["co-1"] != 1 {
+		t.Fatalf("expected co-1 attempt counter incremented to 1, got %d", pending.attempts["co-1"])
+	}
+	// The healthy sandbox entry must still be processed despite co-1 failing.
+	if len(pending.resolved) != 1 || pending.resolved[0] != "co-2" {
+		t.Fatalf("poison entry blocked the batch: resolved=%v", pending.resolved)
+	}
+}
+
+func TestRunEscalatesEntryThatExhaustsRetries(t *testing.T) {
+	pending := &fakePendingLister{
+		unresolved: []reconcile.PendingCashout{
+			{ID: "co-1", PlayerID: "user-1", Amount: 400, CurrencyMode: "real", TableRef: "room-1", Attempts: reconcile.MaxAttempts - 1},
+			{ID: "co-2", PlayerID: "user-2", Amount: 100, CurrencyMode: "sandbox"},
+		},
+	}
+	game := stubErrGameCredit{err: errors.New("wallet down")}
+
+	err := run(context.Background(), pending, game, &fakeSandboxCredit{}, &fakeFeeDebiter{})
+	if err == nil {
+		t.Fatal("expected run to return an aggregated error so the Lambda DLQ fires")
+	}
+	if !strings.Contains(err.Error(), "co-1") || !strings.Contains(err.Error(), "quarantined") {
+		t.Fatalf("expected error to name the quarantined entry, got %v", err)
+	}
+	if len(pending.quarantined) != 1 || pending.quarantined[0] != "co-1" {
+		t.Fatalf("expected co-1 quarantined, got %v", pending.quarantined)
+	}
+	if len(pending.resolved) != 1 || pending.resolved[0] != "co-2" {
+		t.Fatalf("healthy entry must still resolve, got %v", pending.resolved)
 	}
 }
 

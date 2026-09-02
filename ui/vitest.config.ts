@@ -23,7 +23,8 @@ export default defineConfig({
         'src/lib/api/proto/**',
         'src/dev/**',
         'src/app/layout.tsx',
-        'src/app/share/layout.tsx',
+        'src/app/(app)/layout.tsx',
+        'src/app/(app)/share/layout.tsx',
         'src/lib/providers/QueryProvider.tsx',
       ],
       // 90 across the board: every new feature ships with the tests that keep

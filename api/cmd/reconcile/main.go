@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -27,6 +28,7 @@ var timeNow = time.Now
 type pendingLister interface {
 	ListUnresolved(ctx context.Context, olderThan time.Duration) ([]reconcile.PendingCashout, error)
 	MarkResolved(ctx context.Context, id string) error
+	RecordFailedAttempt(ctx context.Context, e reconcile.PendingCashout, cause error) (attempts int, quarantined bool, err error)
 }
 
 type gameCredit interface {
@@ -47,6 +49,11 @@ func run(ctx context.Context, pending pendingLister, game gameCredit, sandbox sa
 		return fmt.Errorf("reconcile: list unresolved: %w", err)
 	}
 	logPendingCashouts(entries)
+
+	// One poison entry must not block the rest of the batch: process every
+	// entry, collect terminal failures, and return them aggregated so the
+	// Lambda invocation fails and its DLQ catches the message.
+	var failures []error
 	for _, e := range entries {
 		var opErr error
 		switch e.Kind {
@@ -68,14 +75,38 @@ func run(ctx context.Context, pending pendingLister, game gameCredit, sandbox sa
 		}
 
 		if opErr != nil {
-			slog.Error("ALARM: reconcile operation failed, needs manual review",
-				"pending_id", e.ID, "kind", e.Kind, "player", e.PlayerID, "amount", e.Amount, "err", opErr)
+			attempts, quarantined, recErr := pending.RecordFailedAttempt(ctx, e, opErr)
+			if recErr != nil {
+				slog.Error("ALARM: reconcile failed to persist attempt counter",
+					"pending_id", e.ID, "kind", e.Kind, "player", e.PlayerID, "amount", e.Amount,
+					"op_err", opErr, "err", recErr)
+				failures = append(failures, fmt.Errorf("pending %s: record attempt: %w (op error: %v)", e.ID, recErr, opErr))
+				continue
+			}
+			if quarantined {
+				slog.Error("ALARM: reconcile entry exhausted retries, quarantined for manual review",
+					"pending_id", e.ID, "kind", e.Kind, "player", e.PlayerID, "amount", e.Amount,
+					"attempts", attempts, "err", opErr)
+				failures = append(failures, fmt.Errorf("pending %s (kind=%s player=%s amount=%d): quarantined after %d attempts: %w",
+					e.ID, e.Kind, e.PlayerID, e.Amount, attempts, opErr))
+				continue
+			}
+			// Transient early-attempt failure: counted and logged, retried on
+			// the next run. Not aggregated into failures — it does not fail
+			// the invocation yet.
+			slog.Warn("reconcile operation failed, will retry next run",
+				"pending_id", e.ID, "kind", e.Kind, "player", e.PlayerID, "amount", e.Amount,
+				"attempts", attempts, "max_attempts", reconcile.MaxAttempts, "err", opErr)
 			continue
 		}
 		if err := pending.MarkResolved(ctx, e.ID); err != nil {
 			slog.Error("ALARM: reconcile resolved operation but failed to mark pending entry resolved",
 				"pending_id", e.ID, "err", err)
+			failures = append(failures, fmt.Errorf("pending %s: mark resolved: %w", e.ID, err))
 		}
+	}
+	if len(failures) > 0 {
+		return fmt.Errorf("reconcile: %d entr(y|ies) need attention: %w", len(failures), errors.Join(failures...))
 	}
 	return nil
 }
