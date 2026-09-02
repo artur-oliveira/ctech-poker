@@ -1,7 +1,6 @@
 import type {Metadata, Viewport} from 'next';
 import {IBM_Plex_Mono, IBM_Plex_Sans} from 'next/font/google';
 import {SITE_URL} from '@/lib/routeMetadata';
-import {QueryProvider} from '@/lib/providers/QueryProvider';
 import {Notifier} from '@/components/Notifier';
 import {RouteAnnouncer} from '@/components/RouteAnnouncer';
 import './globals.css';
@@ -79,7 +78,7 @@ export default function Layout({children}: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning data-scroll-behavior="smooth">
     <body suppressHydrationWarning className={`${sans.variable} ${mono.variable}`}>
-    <QueryProvider>{children}</QueryProvider><Notifier/><RouteAnnouncer/></body>
+    {children}<Notifier/><RouteAnnouncer/></body>
     </html>
   );
 }
