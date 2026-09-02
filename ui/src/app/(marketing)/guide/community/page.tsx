@@ -63,7 +63,8 @@ export default function CommunityGuide() {
           <li><span><b>Tentar agora:</b> antecipa uma nova tentativa; depois de várias falhas, o aviso passa a esperar esse toque em vez de prometer uma reconexão automática.</span></li>
           <li><span><b>Ação rejeitada:</b> a barra explica o erro e devolve as decisões ainda válidas.</span></li>
           <li><span><b>Removido da mesa:</b> por inatividade ou por tempo demais desconectado, com aviso e volta ao lobby; a pilha vai para a carteira.</span></li>
-          <li><span><b>Sessão expirada:</b> a autenticação precisa ser renovada. Nenhuma ação é enviada sem token válido.</span></li></GuideBullets></>
+          <li><span><b>Sessão expirada:</b> a autenticação precisa ser renovada. Nenhuma ação é enviada sem token válido.</span></li>
+          <li><span><b>Servidor fora do ar:</b> se as tentativas de verificação continuarem falhando, o aviso deixa de ser uma faixa fina e leva você para a tela de manutenção — sua ficha e seu histórico continuam seguros, e você volta de onde parou assim que o serviço responder de novo. Uma queda só da sua internet continua mostrando apenas a faixa fina.</span></li></GuideBullets></>
       },
       {
         id: 'protecao', title: 'Inatividade e verificação rápida', summary: 'Proteções automáticas só aparecem com um motivo concreto.',
