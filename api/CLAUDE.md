@@ -142,6 +142,12 @@ catalog.
 
 ## Other known issues (documentation only — see api/README.md)
 
+- Issue #31 fixed: `tablemanager.Manager.GetOrCreateActor` no longer serializes the whole instance
+  behind one process-global mutex spanning `LoadTable`/`leases.Acquire`/`roomLoader`. It now holds
+  a refcounted per-tableID `*sync.Mutex` (`Manager.locks`) across the create path — different
+  tables' cold starts never block each other, same-table callers still dedupe to exactly one
+  Actor (T7) — with `Manager.mu` held only for the short `actors`/`cancels`/`releases`/`locks` map
+  mutations, never across a network call. See `internal/tablemanager/manager_concurrency_test.go`.
 - B10 fixed: archiver stream failures now go to an SQS DLQ with a CloudWatch alarm (`cdk/lib/archiver-stack.ts`).
 - B31 fixed by rejection: `leaderboard.Top("achievement_points")` returns an unsupported-metric error instead of
   silently ranking via `gsi_hands_won`; add a `gsi_achievement_points` GSI before re-enabling the metric.
