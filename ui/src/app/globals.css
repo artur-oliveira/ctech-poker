@@ -13900,6 +13900,25 @@ h1 em {
     font: 600 12px var(--font-mono)
 }
 
+.replay-blind {
+    flex: none;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    padding: 7px 10px;
+    border-radius: var(--rounded-control);
+    background: var(--white-05);
+    color: var(--felt-text-muted);
+    font: 600 11px var(--font-mono);
+    letter-spacing: .04em;
+    text-transform: uppercase
+}
+
+.replay-blind b {
+    font-size: 13px;
+    color: var(--felt-text)
+}
+
 .replay-pot svg {
     width: 15px;
     height: 15px;

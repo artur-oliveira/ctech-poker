@@ -8,6 +8,7 @@ import {RevealWinnerButton} from '@/components/hands/RevealWinnerButton';
 import type {Action, HandHistoryAction, TableSnapshot} from '@/lib/api/table';
 import type {HandItem} from '@/lib/api/player';
 import {isTableReaction, TABLE_REACTIONS} from '@/lib/reactions';
+import {deriveBigBlind} from '@/lib/replayBlinds';
 import {playerName} from '@/lib/utils';
 
 const STAGE_LABELS: Record<string, string> = {
@@ -82,6 +83,7 @@ export function HandReplayer({
     }
     return byStep;
   }, [actions]);
+  const bigBlind = useMemo(() => deriveBigBlind(actions, hand.big_blind), [actions, hand.big_blind]);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -174,12 +176,13 @@ export function HandReplayer({
           alreadyRevealed={Boolean(revealedWinnerCards)}
           onRevealedAction={cards => setRevealedWinnerCards(cards)}
         />}
+        <span className="replay-blind"><span>BB</span> <b>{bigBlind.toLocaleString('pt-BR')}</b></span>
         <span className="replay-pot"><Coins aria-hidden="true"/> <span>Pote</span> <b
           key={`${current.seq}-${frame.pot}`}>{frame.pot.toLocaleString('pt-BR')}</b></span>
       </div>
     </header>
     <div className="replay-live-table">
-      <TableStage snapshot={replaySnapshot} viewer={viewerId} pot={frame.pot} bigBlind={25}
+      <TableStage snapshot={replaySnapshot} viewer={viewerId} pot={frame.pot} bigBlind={bigBlind}
                   nowMs={current.timestamp} outcome={null} holdOutcomeOpen={false}/>
       <p key={`action-${current.seq}`} className="replay-action" aria-live="polite">
         <b>{actor}</b> {actionLabel}
