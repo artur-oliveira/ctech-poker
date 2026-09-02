@@ -140,7 +140,7 @@ func TestRebindMovesBoundTableID(t *testing.T) {
 		t.Fatalf("claim: %v", err)
 	}
 
-	if err := s.Rebind(ctx, "player-1", "table-origin", "table-new"); err != nil {
+	if err := s.Rebind(ctx, "player-1", "table-origin", "table-origin", "table-new"); err != nil {
 		t.Fatalf("rebind: %v", err)
 	}
 
@@ -161,7 +161,7 @@ func TestRebindFailsForExpiredEntitlement(t *testing.T) {
 		t.Fatalf("claim: %v", err)
 	}
 
-	if err := s.Rebind(ctx, "player-1", "table-origin", "table-new"); !errors.Is(err, ErrNotFound) {
+	if err := s.Rebind(ctx, "player-1", "table-origin", "table-origin", "table-new"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("rebind expired: got %v, want ErrNotFound", err)
 	}
 }
@@ -169,7 +169,57 @@ func TestRebindFailsForExpiredEntitlement(t *testing.T) {
 func TestRebindFailsForUnknownEntitlement(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	if err := s.Rebind(ctx, "player-1", "table-never-claimed", "table-new"); !errors.Is(err, ErrNotFound) {
+	if err := s.Rebind(ctx, "player-1", "table-never-claimed", "table-never-claimed", "table-new"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("rebind unknown: got %v, want ErrNotFound", err)
+	}
+}
+
+// TestRebindIsCompareAndSwapOnBoundTableID is the regression test for the
+// broader concurrency audit (issue #122): two concurrent buy-ins racing to
+// rebind the SAME entitlement (bound to the same now-unavailable origin
+// table) to two DIFFERENT destination tables must not both succeed. Without
+// a bound_table_id check in Rebind's ConditionExpression, both UpdateItem
+// calls satisfy "exists AND not expired" and both callers proceed to seat
+// their player off the same one paid entitlement — a real double-admission
+// bug, since buyin.Service.confirmFeeCharged only confirms the fee's own
+// recovery row resolved, never which table ended up bound.
+func TestRebindIsCompareAndSwapOnBoundTableID(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	e := Entitlement{PlayerID: "player-1", OriginTableID: "table-origin", BoundTableID: "table-origin", Tier: "micro", FeeCents: 100, ExpiresAt: time.Now().Add(Window)}
+	if err := s.Claim(ctx, e); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+
+	const n = 8
+	var wg sync.WaitGroup
+	results := make([]error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			results[i] = s.Rebind(ctx, "player-1", "table-origin", "table-origin", fmt.Sprintf("table-dest-%d", i))
+		}(i)
+	}
+	wg.Wait()
+
+	successes := 0
+	for _, err := range results {
+		if err == nil {
+			successes++
+		} else if !errors.Is(err, ErrNotFound) {
+			t.Fatalf("unexpected rebind error: %v", err)
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("expected exactly one rebind to win the compare-and-swap, got %d successes", successes)
+	}
+
+	ents, err := s.ActiveFor(ctx, "player-1")
+	if err != nil {
+		t.Fatalf("ActiveFor: %v", err)
+	}
+	if len(ents) != 1 {
+		t.Fatalf("expected exactly one persisted entitlement, got %+v", ents)
 	}
 }

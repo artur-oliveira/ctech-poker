@@ -188,12 +188,14 @@ poisoned command fails cleanly.
 
 **Critérios de aceitação**
 
-- [ ] A panic in any handler is recovered; the process survives
-- [ ] The panicking command's caller gets a resyncable error, not `invalid_action`
-- [ ] `a.cached` is discarded so the next command reloads
-- [ ] Panic logged with table_id / hand_id / command type
-- [ ] Defensive bounds check + error return added to `hand.dealCard()`
-- [ ] Test: injected panic → survives + reloads
+- [x] A panic in any handler is recovered; the process survives (`Actor.handleSafely`, `internal/table/actor.go`)
+- [x] The panicking command's caller gets a resyncable error, not `invalid_action` (`tablestore.ErrUnavailable`-wrapped)
+- [x] `a.cached` is discarded (along with `version`/`handID`/`activity`) so the next command reloads
+- [x] Panic logged with table_id / hand_id / command type + full stack
+- [x] Defensive bounds check added to `hand.dealCard()` — panics with table/stage context (recovered by the actor loop) instead of a bare index-out-of-range; a full `error`-return refactor across its ~10 call sites was deliberately deferred as out of proportion to the fix
+- [x] Test: injected panic → survives + reloads (`internal/table/panicrecovery_test.go`)
+
+Done 2026-09-02 (#29).
 
 ---
 
@@ -249,12 +251,22 @@ Also: fix the stale "no DLQ" / "no alarm" claims in `docs/README.md` and both `C
 
 ---
 
-### Issue 3 — [BACKEND/TABLEMANAGER]
+### Issue 3 — [BACKEND/TABLEMANAGER] — **FIXED 2026-09-02** (#31)
 
 `GetOrCreateActor` serializes the whole instance behind one mutex + three network calls
 
 **Module:** `api/internal/tablemanager/manager.go`
 **Priority:** High · **Effort:** M · **Cost:** $0
+
+**Fix applied:** `GetOrCreateActor` now guards its create path with a refcounted per-tableID
+`*sync.Mutex` (`Manager.locks` / `acquireTableLock` / `releaseTableLock`), evicted from the map
+once nobody is waiting on it. `Manager.mu` is only ever held for the short `actors` /
+`cancels` / `releases` / `locks` map reads/writes — never across `LoadTable`, `leases.Acquire`,
+or `roomLoader`. Two callers for different tables no longer block on each other; two callers for
+the same table still dedupe to exactly one Actor (T7), since the second blocks on the per-table
+lock and then finds the freshly-registered actor on re-check instead of racing the first's
+creation. See `internal/tablemanager/manager_concurrency_test.go` for the concurrency proof
+(overlap-window timing test for different tables + `-race -count=5` same-table dedup stress test).
 
 **Problema**
 `GetOrCreateActor` does `m.mu.Lock(); defer m.mu.Unlock()` and, inside that critical section:
@@ -280,10 +292,11 @@ Guard the create path per-table: a `singleflight.Group` keyed by `tableID` (or a
 
 **Critérios de aceitação**
 
-- [ ] Concurrent `GetOrCreateActor` for different table IDs do not block each other
-- [ ] Concurrent calls for the same table ID still yield exactly one actor (T7 test passes)
-- [ ] `roomLoader` / lease acquire happen outside the global map lock
-- [ ] Benchmark: N-table cold-start latency under a simulated reconnect storm, before/after
+- [x] Concurrent `GetOrCreateActor` for different table IDs do not block each other
+- [x] Concurrent calls for the same table ID still yield exactly one actor (T7 test passes)
+- [x] `roomLoader` / lease acquire happen outside the global map lock
+- [ ] Benchmark: N-table cold-start latency under a simulated reconnect storm, before/after —
+      not done; the concurrency test proves non-serialization directly instead
 
 ---
 
@@ -318,11 +331,20 @@ escalation.
 
 **Critérios de aceitação**
 
-- [ ] Attempt counter persisted per pending entry
-- [ ] After N attempts the entry is quarantined and alarmed, not retried
-- [ ] `LoadForLambda` enforces the real-money legal-signoff gate
-- [ ] Test: an entry failing N times ends up quarantined
-- [ ] Runbook: inspecting and resolving a quarantined money entry
+- [x] Attempt counter persisted per pending entry — `PendingCashout.Attempts` / `LastAttemptAt` /
+  `LastError`, incremented by `PendingStore.RecordFailedAttempt` (#32).
+- [x] After N attempts the entry is quarantined and alarmed, not retried — `reconcile.MaxAttempts`
+  = 5; `gsi_status` flips to `"manual_review"` (out of `ListUnresolved`), `run` returns an
+  aggregated error so the Lambda invocation fails and the message reaches the DLQ. Early-attempt
+  failures are counted + `slog.Warn`-logged and retried next run; the whole batch is processed
+  before returning so one poison entry never blocks the rest (#32).
+- [x] `LoadForLambda` enforces the real-money legal-signoff gate — same
+  `RealMoneyEnabled && LegalSignoffRef == ""` fail-closed check as `Load` (#32).
+- [x] Test: an entry failing N times ends up quarantined —
+  `TestRunEscalatesEntryThatExhaustsRetries` (unit) +
+  `TestRecordFailedAttemptQuarantinesAfterMaxAttempts` (integration) (#32).
+- [ ] Runbook: inspecting and resolving a quarantined money entry — still open (alarming on the
+  `manual_review` state is Issue 2 / CDK work).
 
 ---
 
@@ -549,13 +571,19 @@ succeed with the poker client token, and cover the grants in deploy reconciliati
 
 **Critérios de aceitação**
 
-- [ ] `LoadForLambda` enforces the legal gate
-- [ ] A real-money stale-table cleanup path exists (release holds, archive), or an explicit documented decision that
-  real-money tables are cleaned differently
-- [ ] `tablecleanup` never credits a real-money table's stack to any ledger; missing-room →
-  "unknown, skip", not "sandbox"
-- [ ] Decision recorded on the Claim-race free-seat window (accept as bounded, or gate seating on the fee actually
-  clearing)
+- [ ] `LoadForLambda` enforces the legal gate (in progress on PR #130, which mirrors `config.Load`'s fail-closed
+  `REAL_MONEY_ENABLED`→`LEGAL_SIGNOFF_REF` gate for `cmd/reconcile`'s Lambda; not yet merged as of this issue's fix)
+- [x] A real-money stale-table cleanup path exists (release holds, archive) — `cmd/tablecleanup`'s
+  `settleRealMoneyAndArchive` records each seated player's game-wallet settlement to `poker_pending_cashouts` (so
+  `cmd/reconcile` retries a failed immediate `CashoutGame` using the recorded hold ID) before archiving
+- [x] `tablecleanup` never credits a real-money table's stack to any ledger; missing-room →
+  "unknown, skip", not "sandbox" — a `nil` room now skips the table entirely instead of falling into the sandbox
+  refund path
+- [x] Decision recorded on the Claim-race free-seat window: closed, not merely bounded — handled independently by
+  #146 (issue #122). `entitlement.Store.Rebind` gained a compare-and-swap `expectedBoundTableID` guard and
+  `buyin.Service.confirmFeeCharged` decides "the fee is covered" by whether that entitlement's own
+  `poker_pending_cashouts` recovery row is resolved, never by the entitlement row merely existing. See
+  `docs/specs/2026-09-02-reconcile-entitlement-concurrency-audit.md`.
 - [ ] Fold into the D2 deep-dive
 
 ---
@@ -610,6 +638,13 @@ same seat race is **not refunded**. Fix: derive the refund key from the composit
 concurrent `BuyIn` for different players into a 1-seat-left table, both empty `idemKey`, loser fully refunded. Audit
 callers for empty-key sites (auto-rebuy sweep, webhooks). Confirm the real-money `ReleaseHold` path (holdID-scoped) is
 unaffected.
+
+**Resolved (#42):** the seat-failed refund branch now credits with `key + ":refund"` — `key` already folds in
+`roomID`, `playerID` and the nonce (itself `playerID` when `idemKey == ""`), so it is globally unique per refund
+while a genuine retry of the same failed buy-in still reproduces it and `ctech-wallet` dedupes. Callers audited: the
+only empty-`idemKey` sites are `app.autoRebuySweep` (passes a generated nonce, not empty — but the `key` derivation
+is now safe either way) and any future webhook path; the real-money branch uses `ReleaseHold(holdID)` and never
+touched `idemKey`. Regression test: `TestBuyInRefundKeyIsPlayerScopedAndCollisionFree`.
 
 ---
 

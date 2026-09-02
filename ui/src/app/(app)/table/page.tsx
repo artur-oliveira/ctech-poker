@@ -310,7 +310,7 @@ function TableContent() {
   const [rememberedStart, setRememberedStart] =
     useState<{ tableID: string; handID: string; stack: number } | null>(null);
   const [scopedHandOutcome, setScopedHandOutcome] =
-    useState<{ tableID: string; value: HandOutcomeState } | null>(null);
+    useState<{ tableID: string; handID?: string; value: HandOutcomeState } | null>(null);
   const [activeTablePanel, setActiveTablePanel] =
     useState<TableUtility | null>(null);
   // The asides share one slot, and a hover-opened one closes on a delay
@@ -511,6 +511,7 @@ function TableContent() {
       seat.hand_score > winnerSeat.hand_score : undefined;
     setScopedHandOutcome({
       tableID: id,
+      handID: snap.hand_id,
       value: {
         key: outcomeKeyRef.current, kind: folded ? 'fold' : kind, couldHaveWon,
         handCategory: seat.hand_category, opponentCategory,
@@ -522,6 +523,20 @@ function TableContent() {
       }
     });
   }, [rt.snapshot, viewer, queryClient, id, rememberedStart]);
+  // The banner/toast-blocking state above is scoped to the hand that produced
+  // it and must not survive into the next one: once the server deals a new
+  // hand (a fresh hand_id), whatever outcome is still displayed belongs to
+  // the previous hand's exit animation only (handled locally by
+  // HandOutcomeBanner) and no longer has any business gating achievement
+  // toasts or the pay-to-see-winner-cards offer. Without this, `handOutcome`
+  // latches non-null forever after the very first resolved hand.
+  useEffect(() => {
+    const handID = rt.snapshot?.hand_id;
+    if (!handID) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setScopedHandOutcome(previous => previous && previous.tableID === id && previous.handID !== handID ?
+      null : previous);
+  }, [rt.snapshot?.hand_id, id]);
   if (!valid) return (
     <main className="game-loading">
       <h1 className="sr-only">Mesa de poker</h1>

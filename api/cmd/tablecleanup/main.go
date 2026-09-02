@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/config"
+	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
@@ -48,10 +49,27 @@ type sandboxCredit interface {
 	Credit(ctx context.Context, userID string, amount int64, idempotencyKey, reason string) error
 }
 
+// gameCashout settles a seated player's real-money stack against the
+// ring-fenced game wallet, releasing the buy-in hold(s) that back it.
+// Mirrors buyin.Service's walletMover.CashoutGame subset.
+type gameCashout interface {
+	CashoutGame(ctx context.Context, userID string, amount int64, tableRef string, holdIDs []string, idempotencyKey, reason string) error
+}
+
+// pendingRecorder is the subset of *reconcile.PendingStore this job needs to
+// durably record a real-money settlement obligation before attempting it —
+// same "record, then attempt, then resolve" shape as buyin.Service.settle,
+// so a CashoutGame failure here is retried by cmd/reconcile instead of
+// stranding the hold forever.
+type pendingRecorder interface {
+	Record(ctx context.Context, p reconcile.PendingCashout) error
+	MarkResolved(ctx context.Context, id string) error
+}
+
 // timeNowFunc is overridden in tests that need a deterministic cutoff.
 var timeNowFunc = time.Now
 
-func run(ctx context.Context, stale staleQuerier, rooms roomLookup, wallet sandboxCredit, cutoff time.Duration) error {
+func run(ctx context.Context, stale staleQuerier, rooms roomLookup, wallet sandboxCredit, game gameCashout, pending pendingRecorder, cutoff time.Duration) error {
 	olderThan := timeNowFunc().Add(-cutoff).Unix()
 	tables, err := stale.QueryStaleActive(ctx, olderThan, queryBatchLimit)
 	if err != nil {
@@ -65,45 +83,122 @@ func run(ctx context.Context, stale staleQuerier, rooms roomLookup, wallet sandb
 			slog.Error("tablecleanup: room lookup failed, skipping this pass", "table_id", st.TableID, "err", err)
 			continue
 		}
-		// Sandbox isolation is load-bearing (api/CLAUDE.md): this job never
-		// touches a real-money table. A missing room record is treated the
-		// same as sandbox, since every table this codebase creates today is
-		// sandbox-only end-to-end.
-		if room != nil && room.CurrencyMode != "sandbox" {
+		// A missing room record is "unknown", never "assume sandbox": this
+		// job must never credit a table it can't positively identify as
+		// sandbox to the sandbox ledger (the currency_mode boundary is
+		// load-bearing per api/CLAUDE.md). Skip and let a later pass, once
+		// the room lookup succeeds (or the table itself expires/gets
+		// archived by other means), resolve it.
+		if room == nil {
+			slog.Warn("tablecleanup: no room record for stale table, skipping (currency mode unknown)", "table_id", st.TableID)
 			continue
 		}
 
-		refundFailed := false
-		for _, p := range st.State.Players {
-			if p.Stack <= 0 {
+		switch room.CurrencyMode {
+		case roomstore.CurrencyModeSandbox:
+			if !refundSandboxAndArchive(ctx, stale, rooms, wallet, st) {
 				continue
 			}
-			key := fmt.Sprintf("%s#%s#stale_archive_refund", st.TableID, p.ID)
-			if err := wallet.Credit(ctx, p.ID, p.Stack, key, "poker_stale_table_refund"); err != nil {
-				slog.Error("ALARM: tablecleanup refund failed, table left active for retry", "table_id", st.TableID, "player", p.ID, "amount", p.Stack, "err", err)
-				refundFailed = true
+		case roomstore.CurrencyModeReal:
+			if !settleRealMoneyAndArchive(ctx, stale, rooms, game, pending, st) {
 				continue
 			}
-		}
-
-		if refundFailed {
-			slog.Error("tablecleanup: skipping archive for table with failed player refund(s)", "table_id", st.TableID)
+		default:
+			slog.Warn("tablecleanup: unrecognized currency_mode, skipping", "table_id", st.TableID, "currency_mode", room.CurrencyMode)
 			continue
 		}
-
-		if err := stale.MarkArchived(ctx, st.TableID, st.Version); err != nil {
-			slog.Error("tablecleanup: archive failed (table may have just received a fresh action; skipping)", "table_id", st.TableID, "err", err)
-			continue
-		}
-		// Room PK == table PK, deleted only after the table is confirmed
-		// archived so a mid-sweep crash never drops a room while its table
-		// is still live/joinable.
-		if err := rooms.Delete(ctx, st.TableID); err != nil {
-			slog.Error("tablecleanup: room delete failed, room will linger in lobby listing", "table_id", st.TableID, "err", err)
-		}
-		slog.Info("tablecleanup: archived stale table", "table_id", st.TableID, "seats_refunded", len(st.State.Players))
 	}
 	return nil
+}
+
+// refundSandboxAndArchive refunds every seated sandbox player's stack, then
+// archives the table and deletes its room. Returns false (and leaves the
+// table active for the next sweep) if any refund or the archive itself
+// fails — a sandbox refund has no durable recovery record of its own, so an
+// archived table with a failed refund would strand those chips forever.
+func refundSandboxAndArchive(ctx context.Context, stale staleQuerier, rooms roomLookup, wallet sandboxCredit, st tablestore.StoredTable) bool {
+	refundFailed := false
+	for _, p := range st.State.Players {
+		if p.Stack <= 0 {
+			continue
+		}
+		key := fmt.Sprintf("%s#%s#stale_archive_refund", st.TableID, p.ID)
+		if err := wallet.Credit(ctx, p.ID, p.Stack, key, "poker_stale_table_refund"); err != nil {
+			slog.Error("ALARM: tablecleanup refund failed, table left active for retry", "table_id", st.TableID, "player", p.ID, "amount", p.Stack, "err", err)
+			refundFailed = true
+			continue
+		}
+	}
+	if refundFailed {
+		slog.Error("tablecleanup: skipping archive for table with failed player refund(s)", "table_id", st.TableID)
+		return false
+	}
+	return archiveTableAndRoom(ctx, stale, rooms, st)
+}
+
+// settleRealMoneyAndArchive releases every seated real-money player's
+// game-wallet hold (crediting their final stack) before the table is
+// archived. Each settlement is first recorded to poker_pending_cashouts —
+// the same record-then-attempt-then-resolve shape buyin.Service.settle uses
+// — so an immediate CashoutGame failure is not lost: cmd/reconcile's sweep
+// retries it from the durable row, using the recorded hold IDs, until it
+// resolves. Because the obligation is durable the moment Record succeeds,
+// the table is safe to archive even if CashoutGame itself fails right now;
+// only a Record failure (no durable obligation exists yet) blocks the
+// archive, leaving the table active for the next sweep to retry.
+//
+// The table-entry entitlement (internal/entitlement) is deliberately left
+// untouched here: it is a paid, non-refundable 3-hour reservation, not a
+// fund hold, so there is nothing to "release" — it simply expires on its
+// own TTL. See docs/plans/2026-08-21-entry-fee-entitlement.md.
+func settleRealMoneyAndArchive(ctx context.Context, stale staleQuerier, rooms roomLookup, game gameCashout, pending pendingRecorder, st tablestore.StoredTable) bool {
+	recordFailed := false
+	for _, p := range st.State.Players {
+		if p.Stack <= 0 {
+			continue
+		}
+		key := fmt.Sprintf("%s#%s#stale_archive_cashout", st.TableID, p.ID)
+		var holdIDs []string
+		if p.HoldID != "" {
+			holdIDs = []string{p.HoldID}
+		}
+		if err := pending.Record(ctx, reconcile.PendingCashout{
+			ID: key, PlayerID: p.ID, Amount: p.Stack, CurrencyMode: roomstore.CurrencyModeReal,
+			HoldIDs: holdIDs, TableRef: st.TableID, IdempotencyKey: key,
+		}); err != nil {
+			slog.Error("ALARM: tablecleanup real-money settlement record failed, table left active for retry", "table_id", st.TableID, "player", p.ID, "amount", p.Stack, "err", err)
+			recordFailed = true
+			continue
+		}
+		if err := game.CashoutGame(ctx, p.ID, p.Stack, st.TableID, holdIDs, key, "poker_stale_table_refund"); err != nil {
+			slog.Error("tablecleanup: real-money cash-out failed after seat sweep, reconcile sweep will retry", "table_id", st.TableID, "player", p.ID, "amount", p.Stack, "hold_ids", holdIDs, "err", err)
+			continue
+		}
+		if err := pending.MarkResolved(ctx, key); err != nil {
+			slog.Error("tablecleanup: real-money cash-out succeeded but recovery row finalization failed", "table_id", st.TableID, "player", p.ID, "err", err)
+		}
+	}
+	if recordFailed {
+		slog.Error("tablecleanup: skipping archive for real-money table with failed recovery-record write(s)", "table_id", st.TableID)
+		return false
+	}
+	return archiveTableAndRoom(ctx, stale, rooms, st)
+}
+
+// archiveTableAndRoom is the shared tail of both settlement paths: mark the
+// table archived, then delete its room only once the archive is confirmed —
+// a mid-sweep crash must never drop a room while its table is still
+// live/joinable.
+func archiveTableAndRoom(ctx context.Context, stale staleQuerier, rooms roomLookup, st tablestore.StoredTable) bool {
+	if err := stale.MarkArchived(ctx, st.TableID, st.Version); err != nil {
+		slog.Error("tablecleanup: archive failed (table may have just received a fresh action; skipping)", "table_id", st.TableID, "err", err)
+		return false
+	}
+	if err := rooms.Delete(ctx, st.TableID); err != nil {
+		slog.Error("tablecleanup: room delete failed, room will linger in lobby listing", "table_id", st.TableID, "err", err)
+	}
+	slog.Info("tablecleanup: archived stale table", "table_id", st.TableID, "seats_settled", len(st.State.Players))
+	return true
 }
 
 func resolveSSMParams(ctx context.Context, walletURLParam, clientIDParam, clientSecretParam string) error {
@@ -162,7 +257,8 @@ func handler(ctx context.Context) error {
 	store := tablestore.NewStore(db, cfg.Env)
 	rooms := roomstore.NewStore(db, cfg.Env)
 	wallet := walletclient.New(cfg, cache.NewMemoryBackend(10))
-	return run(ctx, store, rooms, wallet, staleCutoff)
+	pendingStore := reconcile.NewPendingStore(db, cfg.Env)
+	return run(ctx, store, rooms, wallet, wallet, pendingStore, staleCutoff)
 }
 
 func main() {

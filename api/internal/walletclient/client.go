@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/api-commons/oauth2client"
 	"gopkg.aoctech.app/api-commons/observability"
@@ -173,6 +174,94 @@ func New(cfg *config.Config, cacheB cache.Backend) *Client {
 		breakers:              make(map[string]breakerState),
 		retryDelay:            time.Sleep,
 	}
+}
+
+// requiredRealMoneyScope pairs a scope name with the TokenManager that
+// requests it, for ValidateRequiredScopes.
+type requiredRealMoneyScope struct {
+	scope   string
+	tokens  *oauth2client.TokenManager
+	purpose string
+}
+
+// ValidateRequiredScopes confirms ctech-account has actually granted poker's
+// M2M client the two scopes real-money mode depends on:
+//
+//   - internal:wallet:debit-real (DebitReal — the fixed table-entry fee)
+//   - internal:wallet:game-status (IsGamblingActivated — the per-player
+//     gambling-activation precondition every real-money buy-in checks)
+//
+// Granting these is entirely an out-of-band ctech-account change — see
+// api/CLAUDE.md's "Still blocking" note — this repo has no API to request or
+// register scopes. What this repo *can* do is refuse to silently limp along
+// on a broken grant: call this once at startup (gated on
+// config.RealMoneyEnabled) and fail loudly — log.Fatal / a fx OnStart error —
+// instead of discovering it the first time a real player's entry fee or
+// gambling check fails in production.
+//
+// Detection has two layers because ctech-account can fail a missing scope
+// two different ways:
+//  1. The token endpoint itself rejects the request outright (unknown/
+//     ungranted scope) — surfaces here as the oauth2client token fetch
+//     erroring, which we wrap with which scope and why.
+//  2. The token endpoint issues a token anyway but silently narrows the
+//     granted scope down from what was requested (common OAuth2 behavior
+//     when a client asks for a scope it doesn't hold) — the access token is
+//     almost always ctech-account's own RS256 JWT, so we decode (NOT
+//     verify — we already trust this token came straight from the token
+//     endpoint over TLS; we only need to read its own "scope" claim) and
+//     confirm the requested scope actually made it into the grant. An
+//     opaque/non-JWT token can't be inspected this way and is treated as
+//     "can't verify, assume granted" rather than a false failure.
+func (c *Client) ValidateRequiredScopes(ctx context.Context) error {
+	checks := []requiredRealMoneyScope{
+		{scope: scopeDebitReal, tokens: c.debitRealTokens, purpose: "DebitReal (real-money table entry fee)"},
+		{scope: scopeGameStatus, tokens: c.gameStatusTokens, purpose: "IsGamblingActivated (real-money gambling precondition)"},
+	}
+	var missing []string
+	for _, check := range checks {
+		token, err := check.tokens.Get(ctx)
+		if err != nil {
+			missing = append(missing, fmt.Sprintf(
+				"%s (needed for %s): token request failed — ctech-account's M2M client for poker likely has not "+
+					"been granted this scope yet (see api/CLAUDE.md's \"Still blocking\" note): %v",
+				check.scope, check.purpose, err))
+			continue
+		}
+		if granted, ok := jwtGrantedScope(token, check.scope); ok && !granted {
+			missing = append(missing, fmt.Sprintf(
+				"%s (needed for %s): token endpoint issued a token but did not include this scope in its grant — "+
+					"ctech-account's scope catalog or poker's M2M client grant is still missing it (see "+
+					"api/CLAUDE.md's \"Still blocking\" note)",
+				check.scope, check.purpose))
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("walletclient: required ctech-account scopes not granted:\n  - %s", strings.Join(missing, "\n  - "))
+	}
+	return nil
+}
+
+// jwtGrantedScope decodes an access token's own claims (without signature
+// verification — see ValidateRequiredScopes) and reports whether want is
+// present in its "scope" (space-separated, OAuth2 standard) claim. ok is
+// false when the token can't be decoded as a JWT or carries no scope claim
+// at all, in which case callers should not treat that as proof of absence.
+func jwtGrantedScope(token, want string) (granted bool, ok bool) {
+	claims := jwt.MapClaims{}
+	if _, _, err := jwt.NewParser().ParseUnverified(token, claims); err != nil {
+		return false, false
+	}
+	raw, _ := claims["scope"].(string)
+	if raw == "" {
+		return false, false
+	}
+	for _, s := range strings.Fields(raw) {
+		if s == want {
+			return true, true
+		}
+	}
+	return false, true
 }
 
 func retryableStatus(status int) bool {

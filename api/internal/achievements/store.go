@@ -181,6 +181,44 @@ func (s *Store) ListAchievements(ctx context.Context, playerID, mode string, lim
 	return out, result.LastEvaluatedKey, nil
 }
 
+// allProgressPageSize / allProgressMaxPages bound the batched read behind the
+// full-state summary endpoint. The achievement catalog is bounded (~dozens of
+// keys), so one page almost always suffices; the internal loop and the hard
+// page cap exist only so a player who has touched more distinct keys than a
+// single DynamoDB page holds still gets their complete state, never a
+// truncated one, and an unbounded fetch loop can never happen.
+const (
+	allProgressPageSize = 200
+	allProgressMaxPages = 20
+)
+
+// AllAchievements returns every progress row for one player in a single logical
+// read, following DynamoDB's pagination cursor internally up to
+// allProgressMaxPages. It reuses ListAchievements' row filtering: streak
+// counters are dropped and still-locked secret achievements stay hidden, while
+// a secret achievement already past its first tier is included.
+func (s *Store) AllAchievements(ctx context.Context, playerID, mode string) ([]PlayerAchievementProgress, error) {
+	if playerID == "" {
+		return nil, fmt.Errorf("achievements: invalid playerId")
+	}
+	var (
+		out      []PlayerAchievementProgress
+		startKey map[string]dynamotypes.AttributeValue
+	)
+	for page := 0; page < allProgressMaxPages; page++ {
+		rows, next, err := s.ListAchievements(ctx, playerID, mode, allProgressPageSize, startKey)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, rows...)
+		if len(next) == 0 {
+			break
+		}
+		startKey = next
+	}
+	return out, nil
+}
+
 func achievementForKey(key string) (Achievement, bool) {
 	for _, achievement := range Catalog {
 		if achievement.Key == key {

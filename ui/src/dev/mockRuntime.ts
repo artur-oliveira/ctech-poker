@@ -1061,6 +1061,30 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
   ]), config);
   if (method === 'GET' && path === '/v1.0/achievements') return ok(achievementCatalog, config);
   if (method === 'GET' && path === '/v1.0/players/me/achievements') return ok(page(mockAchievementProgress), config);
+  if (method === 'GET' && path === '/v1.0/players/me/achievements/summary') {
+    const mode = config.params?.mode || 'sandbox';
+    const counts = new Map(mockAchievementProgress.map(item => [item.key, item.count]));
+    const totals = {revealed: 0, unlocked: 0, completed: 0, stars: 0, max_stars: 0};
+    const achievements = achievementCatalog.flatMap(item => {
+      const progress = counts.get(item.key) || 0;
+      const firstTier = Math.min(...item.tiers.map(tier => tier.threshold));
+      if (item.secret && progress < firstTier) return [];
+      const maxTier = item.tiers.reduce((max, tier) => tier.stars > max.stars ? tier : max, item.tiers[0]);
+      const stars = item.tiers.reduce((max, tier) => progress >= tier.threshold ? Math.max(max, tier.stars) : max, 0);
+      const next = item.tiers.filter(tier => tier.threshold > progress).sort((a, b) => a.threshold - b.threshold)[0];
+      totals.revealed++;
+      if (stars > 0) totals.unlocked++;
+      if (stars === maxTier.stars) totals.completed++;
+      totals.stars += stars;
+      totals.max_stars += maxTier.stars;
+      return [{
+        key: item.key, metric: item.metric, tiers: item.tiers, progress, stars,
+        unlocked: stars > 0, completed: stars === maxTier.stars,
+        next_target: next ? next.threshold : null, max_target: maxTier.threshold
+      }];
+    });
+    return ok({mode, totals, achievements}, config);
+  }
   if (method === 'GET' && /^\/v1\.0\/sandbox-credits\/?$/.test(path)) {
     return ok({remaining_time_seconds: creditCooldown()}, config);
   }

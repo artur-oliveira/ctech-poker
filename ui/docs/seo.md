@@ -22,6 +22,18 @@ de `/guide` (canonical duplicado colapsaria os capítulos numa única URL).
 Imagens OG ficam em `public/og/<slug>.webp` e cada slug usado precisa existir em
 `OG_PREVIEWS` (`src/lib/ogPreviews.ts`) — há teste garantindo isso.
 
+### Grupos de rota
+
+As páginas indexáveis (`/`, `/poker-rules`, `/guide` e capítulos) vivem em
+`src/app/(marketing)/`; o restante em `src/app/(app)/`. O parêntese é só
+organização de código — **não muda a URL, o canonical nem o sitemap**. O layout
+`(marketing)` usa um provider enxuto (`MarketingQueryProvider`) sem keep-alive,
+`NetworkProvider` nem `RealtimeBridge`, então a página de conteúdo não baixa o
+chunk protobuf nem abre socket. Ver
+`docs/2026-09-02-marketing-app-route-split.md`. Ao mover uma rota entre grupos,
+`routeShells.test.tsx` importa cada `layout.tsx` pelo caminho com o grupo — ajuste
+os imports junto.
+
 ## robots.txt e sitemap.xml
 
 - `src/app/robots.ts` → `out/robots.txt`: `Allow: /` com `Disallow` para as rotas com sessão
