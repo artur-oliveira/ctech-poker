@@ -1416,6 +1416,14 @@ func (t *Table) postBlind(p *Player, amount int64) {
 }
 
 func (t *Table) dealCard() deck.Card {
+	// Defensive bounds check: a 52-card shuffle can only be over-drawn if hand
+	// progression itself is buggy. Panic with context (recovered by the table
+	// Actor's handler loop, which then reloads authoritative state) instead of
+	// a bare runtime index-out-of-range with no table/stage in the message.
+	if t.nextCard < 0 || t.nextCard >= len(t.shuffle.Cards) {
+		panic(fmt.Sprintf("hand: deal past end of shuffle (nextCard=%d, deck=%d, stage=%d)",
+			t.nextCard, len(t.shuffle.Cards), t.stage))
+	}
 	c := t.shuffle.Cards[t.nextCard]
 	t.nextCard++
 	return c

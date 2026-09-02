@@ -66,6 +66,13 @@ See `docs/plans/2026-08-21-entry-fee-entitlement.md`. **Still blocking, found 20
   state with a duplicate player ID (`hand.Table.DuplicateSeatIDForActor`) as a backstop, and `ensureLoaded` forces
   a reload past `trustCache` the moment it sees one — but a missing rollback is still a bug in the handler, not
   something to rely on the backstop for. See `docs/specs/2026-09-01-duplicate-seat-commit-guard.md`.
+- **The actor goroutine recovers per-command panics — never let one escape.** `Actor.Run` dispatches every command
+  through `handleSafely`, which wraps `handle` in `defer/recover`: an engine panic (out-of-bounds `dealCard`, malformed
+  persisted `State` decode, a nil deref in `hand.go`) is logged with `table_id`/`hand_id`/command type + stack, the
+  caller gets a `tablestore.ErrUnavailable`-wrapped error (resync, not `invalid_action`), and `a.cached` /`version`
+  /`handID`/`activity` are dropped so the next command reloads authoritative state — a panic can land mid-mutation with
+  no rollback path, exactly the poisoned-cache shape of the 2026-09-01 duplicate-seat incident. Nothing is persisted:
+  the panic unwinds before `commit`. Don't add a bare `recover()` elsewhere in the actor or swallow a panic silently.
 - **Player identity comes from the JWT `sub`** — derive `playerID` from claims, never trust a client-supplied id
   (prevents IDOR).
 - **The `currency_mode` boundary is load-bearing.** `buyin` routes to exactly one ledger per room and must never let

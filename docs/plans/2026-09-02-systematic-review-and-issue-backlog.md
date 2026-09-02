@@ -188,12 +188,14 @@ poisoned command fails cleanly.
 
 **Critérios de aceitação**
 
-- [ ] A panic in any handler is recovered; the process survives
-- [ ] The panicking command's caller gets a resyncable error, not `invalid_action`
-- [ ] `a.cached` is discarded so the next command reloads
-- [ ] Panic logged with table_id / hand_id / command type
-- [ ] Defensive bounds check + error return added to `hand.dealCard()`
-- [ ] Test: injected panic → survives + reloads
+- [x] A panic in any handler is recovered; the process survives (`Actor.handleSafely`, `internal/table/actor.go`)
+- [x] The panicking command's caller gets a resyncable error, not `invalid_action` (`tablestore.ErrUnavailable`-wrapped)
+- [x] `a.cached` is discarded (along with `version`/`handID`/`activity`) so the next command reloads
+- [x] Panic logged with table_id / hand_id / command type + full stack
+- [x] Defensive bounds check added to `hand.dealCard()` — panics with table/stage context (recovered by the actor loop) instead of a bare index-out-of-range; a full `error`-return refactor across its ~10 call sites was deliberately deferred as out of proportion to the fix
+- [x] Test: injected panic → survives + reloads (`internal/table/panicrecovery_test.go`)
+
+Done 2026-09-02 (#29).
 
 ---
 
