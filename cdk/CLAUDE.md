@@ -29,7 +29,7 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
 - **ASG resilience (#35, fixed 2026-09-02)**: 100% spot with `MixedInstancesPolicy`, spread across
   every public subnet of the shared VPC (3 AZs, `us-east-1b/c/d` — already the default, no filter
   applied) and, as of this fix, 3 spot instance types (`API_ASG_SPOT_INSTANCE_TYPES` in
-  `lib/constants.ts`: `t4g.nano`/`t4g.micro`/`t4g.small`) via an L1
+  `lib/constants.ts`: `t4g.nano`/`t4g.micro`) via an L1
   `MixedInstancesPolicy.LaunchTemplate.Overrides` override in `api-stack.ts` — `HaproxyEc2Service`
   itself only ever configures one instance type. `minCapacity`/`maxCapacity` are unchanged; the
   table-leasing model already tolerates 2 concurrently-running instances (`tablelease` is a

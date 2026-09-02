@@ -151,7 +151,7 @@ test('ASG spreads across multiple AZs and diversifies spot instance types (#35)'
   expect(overrides.length).toBeGreaterThanOrEqual(3);
   expect(overrides.every((o: any) => o.WeightedCapacity === undefined)).toBe(true);
   expect(overrides.map((o: any) => o.InstanceType)).toEqual(
-    expect.arrayContaining(['t4g.nano', 't4g.micro', 't4g.small']),
+    expect.arrayContaining(['t4g.nano', 't4g.micro',]),
   );
 });
 

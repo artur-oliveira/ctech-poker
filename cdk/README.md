@@ -77,7 +77,7 @@ Go Lambdas are bundled by `lib/bundle.ts` (`localGoBundling` — local `go build
     (`MixedInstancesPolicy.LaunchTemplate.Overrides`, not exposed by the
     shared construct's props — same "own the override locally" pattern as the
     private-IPv4 launch-template override below) listing
-    `API_ASG_SPOT_INSTANCE_TYPES` (`t4g.nano`, `t4g.micro`, `t4g.small` —
+    `API_ASG_SPOT_INSTANCE_TYPES` (`t4g.nano`, `t4g.micro` —
     `lib/constants.ts`): same burstable Graviton family, differing only in
     memory (0.5/1/2 GiB at 2 vCPU each), so `price-capacity-optimized` keeps
     bidding the cheapest available pool first and cost stays roughly flat.
