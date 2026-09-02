@@ -188,12 +188,14 @@ poisoned command fails cleanly.
 
 **Critérios de aceitação**
 
-- [ ] A panic in any handler is recovered; the process survives
-- [ ] The panicking command's caller gets a resyncable error, not `invalid_action`
-- [ ] `a.cached` is discarded so the next command reloads
-- [ ] Panic logged with table_id / hand_id / command type
-- [ ] Defensive bounds check + error return added to `hand.dealCard()`
-- [ ] Test: injected panic → survives + reloads
+- [x] A panic in any handler is recovered; the process survives (`Actor.handleSafely`, `internal/table/actor.go`)
+- [x] The panicking command's caller gets a resyncable error, not `invalid_action` (`tablestore.ErrUnavailable`-wrapped)
+- [x] `a.cached` is discarded (along with `version`/`handID`/`activity`) so the next command reloads
+- [x] Panic logged with table_id / hand_id / command type + full stack
+- [x] Defensive bounds check added to `hand.dealCard()` — panics with table/stage context (recovered by the actor loop) instead of a bare index-out-of-range; a full `error`-return refactor across its ~10 call sites was deliberately deferred as out of proportion to the fix
+- [x] Test: injected panic → survives + reloads (`internal/table/panicrecovery_test.go`)
+
+Done 2026-09-02 (#29).
 
 ---
 
@@ -249,12 +251,22 @@ Also: fix the stale "no DLQ" / "no alarm" claims in `docs/README.md` and both `C
 
 ---
 
-### Issue 3 — [BACKEND/TABLEMANAGER]
+### Issue 3 — [BACKEND/TABLEMANAGER] — **FIXED 2026-09-02** (#31)
 
 `GetOrCreateActor` serializes the whole instance behind one mutex + three network calls
 
 **Module:** `api/internal/tablemanager/manager.go`
 **Priority:** High · **Effort:** M · **Cost:** $0
+
+**Fix applied:** `GetOrCreateActor` now guards its create path with a refcounted per-tableID
+`*sync.Mutex` (`Manager.locks` / `acquireTableLock` / `releaseTableLock`), evicted from the map
+once nobody is waiting on it. `Manager.mu` is only ever held for the short `actors` /
+`cancels` / `releases` / `locks` map reads/writes — never across `LoadTable`, `leases.Acquire`,
+or `roomLoader`. Two callers for different tables no longer block on each other; two callers for
+the same table still dedupe to exactly one Actor (T7), since the second blocks on the per-table
+lock and then finds the freshly-registered actor on re-check instead of racing the first's
+creation. See `internal/tablemanager/manager_concurrency_test.go` for the concurrency proof
+(overlap-window timing test for different tables + `-race -count=5` same-table dedup stress test).
 
 **Problema**
 `GetOrCreateActor` does `m.mu.Lock(); defer m.mu.Unlock()` and, inside that critical section:
@@ -280,10 +292,11 @@ Guard the create path per-table: a `singleflight.Group` keyed by `tableID` (or a
 
 **Critérios de aceitação**
 
-- [ ] Concurrent `GetOrCreateActor` for different table IDs do not block each other
-- [ ] Concurrent calls for the same table ID still yield exactly one actor (T7 test passes)
-- [ ] `roomLoader` / lease acquire happen outside the global map lock
-- [ ] Benchmark: N-table cold-start latency under a simulated reconnect storm, before/after
+- [x] Concurrent `GetOrCreateActor` for different table IDs do not block each other
+- [x] Concurrent calls for the same table ID still yield exactly one actor (T7 test passes)
+- [x] `roomLoader` / lease acquire happen outside the global map lock
+- [ ] Benchmark: N-table cold-start latency under a simulated reconnect storm, before/after —
+      not done; the concurrency test proves non-serialization directly instead
 
 ---
 

@@ -15,6 +15,13 @@ vi.mock('@tanstack/react-query', () => ({
   useQuery: ({queryKey}: { queryKey: string[] }) =>
     queryKey[1] === 'catalog' ? mocks.catalog : mocks.mine,
 }));
+
+// Wraps a flat [{key, count}] fixture (the old paginated shape) into the
+// summary endpoint's {achievements: [{key, progress}]} shape, so existing
+// test fixtures below only needed a rename, not a rewrite.
+function summaryOf(counts: { key: string; count: number }[]) {
+  return {achievements: counts.map(({key, count}) => ({key, progress: count}))};
+}
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
 vi.mock('@/components/achievements/AchievementCard', () => ({
   AchievementCard: ({achievement, count}: { achievement: Achievement; count?: number }) =>
@@ -40,11 +47,11 @@ describe('achievements page', () => {
     vi.clearAllMocks();
     mocks.session = {authed: true, checking: false};
     mocks.catalog = queryState(catalog, {refetch: mocks.catalogRefetch});
-    mocks.mine = queryState([
+    mocks.mine = queryState(summaryOf([
       {key: 'wins', count: 5},
       {key: 'bluff', count: 2},
       {key: 'all_in', count: 0},
-    ]);
+    ]));
   });
   
   test('keeps the session loading screen isolated from page content', () => {
@@ -110,7 +117,7 @@ describe('achievements page', () => {
     expect(screen.getByText('wins')).toBeInTheDocument();
     
     populated.unmount();
-    mocks.mine = queryState([]);
+    mocks.mine = queryState(summaryOf([]));
     const view = render(<Achievements/>);
     fireEvent.click(screen.getByRole('button', {name: 'Completas (0)'}));
     expect(screen.getByText('Nenhuma conquista nesta categoria.')).toBeInTheDocument();
@@ -136,7 +143,7 @@ describe('achievements page', () => {
     const view = render(<Achievements/>);
     expect(screen.getAllByTestId('achievement').map(node => node.textContent)).not.toContain('secret_one');
 
-    mocks.mine = queryState([{key: 'secret_one', count: 3}]);
+    mocks.mine = queryState(summaryOf([{key: 'secret_one', count: 3}]));
     view.rerender(<Achievements/>);
     expect(screen.getAllByTestId('achievement').map(node => node.textContent)).toContain('secret_one');
   });
@@ -150,7 +157,7 @@ describe('achievements page', () => {
 
   test('drops the milestone hint once every visible achievement is maxed out', () => {
     mocks.catalog = queryState([{key: 'wins', metric: 'wins', tiers}]);
-    mocks.mine = queryState([{key: 'wins', count: 99}]);
+    mocks.mine = queryState(summaryOf([{key: 'wins', count: 99}]));
     render(<Achievements/>);
     expect(document.querySelector('.achievement-next-star')).toBeNull();
     expect(screen.getByRole('button', {name: 'Completas (1)'})).toBeInTheDocument();
@@ -158,7 +165,7 @@ describe('achievements page', () => {
 
   test('reports a zero completion rate when the catalog has no stars to earn', () => {
     mocks.catalog = queryState([]);
-    mocks.mine = queryState([]);
+    mocks.mine = queryState(summaryOf([]));
     render(<Achievements/>);
     expect(screen.getByRole('button', {name: 'Todas (0)'})).toBeInTheDocument();
   });

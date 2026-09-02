@@ -59,9 +59,18 @@ type Manager struct {
 	actors   map[string]*Actor
 	releases map[string]func()
 	cancels  map[string]context.CancelFunc
+	locks    map[string]*tableLock
 
 	leaseLessIdleTimeout time.Duration
 	idleCheckInterval    time.Duration
+
+	// preRegisterHook, when set, runs once per actual actor creation, just
+	// before the fresh actor is inserted into m.actors — after every
+	// create-path network call and while tableID's per-table lock is still
+	// held. It exists purely so tests can inject latency/instrumentation
+	// into the create path without a real DynamoDB/Valkey dependency;
+	// production code never sets it.
+	preRegisterHook func(tableID string)
 
 	// drainMu/draining/drainDone make DrainAndRelease idempotent (#33): the
 	// SIGTERM/OnStop path and the proactive spot-termination poller
@@ -75,6 +84,68 @@ type Manager struct {
 	drainMu   sync.Mutex
 	draining  bool
 	drainDone chan struct{}
+}
+
+// tableLock is a per-tableID mutex, refcounted so Manager.locks never
+// retains an entry for a table nobody is currently creating/recreating an
+// actor for. Guarded by Manager.mu: only the refs field and the locks map
+// entry itself are protected by mu; mu is a bare struct{}-style mutex is
+// held only long enough to look up/insert/evict the entry (see
+// acquireTableLock/releaseTableLock), never across the network calls the
+// per-table mu below serializes.
+type tableLock struct {
+	mu   sync.Mutex
+	refs int
+}
+
+// acquireTableLock returns tableID's per-table lock, held, incrementing its
+// refcount so a concurrent releaseTableLock can't evict the entry out from
+// under a waiter. Only Manager.mu (briefly, for the map lookup/insert) is
+// held here — never across the caller's subsequent network calls.
+func (m *Manager) acquireTableLock(tableID string) *tableLock {
+	m.mu.Lock()
+	l, ok := m.locks[tableID]
+	if !ok {
+		l = &tableLock{}
+		m.locks[tableID] = l
+	}
+	l.refs++
+	m.mu.Unlock()
+
+	l.mu.Lock()
+	return l
+}
+
+// releaseTableLock unlocks l and, if no other caller is waiting on it,
+// evicts it from m.locks so the registry doesn't grow unboundedly across
+// this process's lifetime as distinct table IDs come and go.
+func (m *Manager) releaseTableLock(tableID string, l *tableLock) {
+	l.mu.Unlock()
+
+	m.mu.Lock()
+	l.refs--
+	if l.refs == 0 {
+		if cur, ok := m.locks[tableID]; ok && cur == l {
+			delete(m.locks, tableID)
+		}
+	}
+	m.mu.Unlock()
+}
+
+// lookupAliveActor returns the live actor cached for tableID, if any,
+// dropping it first if it has stopped (lease lost) — a stale actor is never
+// handed back so callers never dispatch to a dead one (T1). Guarded only by
+// the short-lived m.mu, never held across a network call.
+func (m *Manager) lookupAliveActor(tableID string) (*Actor, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if a, ok := m.actors[tableID]; ok {
+		if a.IsAlive() {
+			return a, true
+		}
+		delete(m.actors, tableID)
+	}
+	return nil, false
 }
 
 func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast func(string, string, hand.Snapshot), roomLoader func(string) (*roomstore.Room, bool, error), completion ...func(string, string, hand.HandOutcome, map[string]string)) *Manager {
@@ -91,6 +162,7 @@ func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast f
 		actors:               make(map[string]*Actor),
 		releases:             make(map[string]func()),
 		cancels:              make(map[string]context.CancelFunc),
+		locks:                make(map[string]*tableLock),
 		leaseLessIdleTimeout: defaultLeaseLessIdleTimeout,
 		idleCheckInterval:    defaultIdleCheckInterval,
 	}
@@ -166,21 +238,30 @@ func (m *Manager) SetConnStore(s table.ConnStore) {
 // it only means the resulting Actor re-reads DynamoDB before every command
 // instead of trusting its cache between commits.
 //
-// The whole create path is guarded by m.mu so two concurrent callers for the
-// same tableID can never end up with two live Actors (T7). If the cached
-// actor has stopped (it lost its lease and Run exited), it is dropped and a
-// fresh one is created in its place so callers never dispatch to a dead actor
-// (T1).
+// The create path is guarded per-tableID (not by a single process-global
+// mutex) so two concurrent callers for the same tableID can never end up
+// with two live Actors (T7), while callers for different tableIDs never
+// block on each other's DynamoDB/Valkey round trips — the whole point of
+// #31. m.mu itself is only ever held long enough to read or mutate the
+// actors/cancels/releases/locks maps; it is never held across a network
+// call. If the cached actor has stopped (it lost its lease and Run exited),
+// it is dropped and a fresh one is created in its place so callers never
+// dispatch to a dead actor (T1).
+//
+// This lock is deliberately process-local, not a Valkey/distributed lock:
+// two *different* instances each running an Actor for the same table is an
+// explicitly supported state (see the package doc + ARCHITECTURE.md §2).
+// Cross-instance correctness is enforced by DynamoDB conditional writes
+// (`version` + ConditionExpression in tablestore.CommitAction) — the second
+// writer fails its condition and reloads — never by there being exactly one
+// Actor fleet-wide. tablelease already keeps cross-instance duplication rare
+// (cache-affinity only). The one race a lock here must prevent is two
+// goroutines *in this process* creating two Actor goroutines for the same
+// table, which would race on the same in-memory cache; that is purely a
+// local concern and a sync.Mutex is the right tool for it.
 func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed func() *hand.Table, onCreated ...func(*Actor)) (*Actor, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if a, ok := m.actors[tableID]; ok {
-		if a.IsAlive() {
-			return a, nil
-		}
-		// Stale/dead actor (lease lost) — drop it and recreate below.
-		delete(m.actors, tableID)
+	if a, ok := m.lookupAliveActor(tableID); ok {
+		return a, nil
 	}
 
 	// Past this point tableID is retained by state that outlives the caller:
@@ -192,6 +273,20 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	// "/01KYNA8GAXYP5TF8K71XB1DMT", making every LoadTable miss and every
 	// action fail with "table: no state seeded for this table yet".
 	tableID = strings.Clone(tableID)
+
+	// Everything from here down — the DynamoDB/Valkey round trips and the
+	// actor construction they gate — runs under tableID's own lock, never
+	// under m.mu, so an unrelated table's cold start never waits behind this
+	// one's. The lock still guarantees at most one Actor is ever created for
+	// this tableID (T7): a second concurrent caller blocks here, then finds
+	// the freshly-registered actor via the re-check below instead of racing
+	// this one's creation.
+	tl := m.acquireTableLock(tableID)
+	defer m.releaseTableLock(tableID, tl)
+
+	if a, ok := m.lookupAliveActor(tableID); ok {
+		return a, nil
+	}
 
 	if m.store != nil {
 		existing, err := m.store.LoadTable(ctx, tableID)
@@ -209,10 +304,11 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	}
 
 	trustCache := false
+	var release func()
 	if m.leases != nil {
 		if rel, ok, err := m.leases.Acquire(ctx, tableID); err == nil && ok {
 			trustCache = true
-			m.releases[tableID] = rel
+			release = rel
 		}
 	}
 
@@ -275,7 +371,14 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 		return m.reactionMarkUsed(ctx, playerID, reactionID)
 	})
 	runCtx, cancel := context.WithCancel(context.Background())
+
+	m.mu.Lock()
 	m.cancels[tableID] = cancel
+	if release != nil {
+		m.releases[tableID] = release
+	}
+	m.mu.Unlock()
+
 	if trustCache {
 		m.leases.StartHeartbeat(runCtx, tableID, func() {
 			cancel()
@@ -287,7 +390,13 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	}
 	go actor.Run(runCtx)
 
+	if m.preRegisterHook != nil {
+		m.preRegisterHook(tableID)
+	}
+
+	m.mu.Lock()
 	m.actors[tableID] = actor
+	m.mu.Unlock()
 
 	// Re-arm blind escalation and the per-turn action timeout from the room's
 	// authoritative config so both survive instance/lease moves (T6). Any

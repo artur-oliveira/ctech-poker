@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"runtime/debug"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -248,10 +249,45 @@ func (a *Actor) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case cmd := <-a.cmds:
-			err := a.handle(ctx, cmd)
-			cmd.reply() <- err
+			cmd.reply() <- a.handleSafely(ctx, cmd)
 		}
 	}
+}
+
+// handleSafely runs one command's handler with panic recovery so a single
+// engine panic (an out-of-bounds deal in hand.go, a malformed persisted
+// State decode, a nil deref anywhere in the ~2000 lines of engine code)
+// fails just that request instead of unwinding Run and taking the whole
+// process — and every other table Actor on this instance — down with it.
+// The two WebSocket handlers in tablews.go already recover their own
+// goroutine panics; the actor goroutine, which runs all engine logic, must
+// do the same.
+func (a *Actor) handleSafely(ctx context.Context, cmd Command) (err error) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		slog.ErrorContext(ctx, "table actor handler panic recovered",
+			"table_id", a.id, "hand_id", a.handID, "command", fmt.Sprintf("%T", cmd),
+			"panic", r, "stack", string(debug.Stack()))
+		// A panic can land mid-mutation, after a.cached (or a.handID, a.activity,
+		// the timers) was changed but before the matching conditional write
+		// committed — exactly the poisoned-cache shape the 2026-09-01 duplicate
+		// seat incident came from, with no rollback path from here. Drop the
+		// cached state so the next command reloads authoritative state from the
+		// store instead of trusting this fork. Nothing was persisted: the panic
+		// unwound before commit.
+		a.cached = nil
+		a.version = 0
+		a.handID = ""
+		a.activity = tablestore.TableActivity{}
+		// ErrUnavailable (not a bare error): the command reached no verdict about
+		// the player's action, so the gateway answers "resync" rather than
+		// blaming the action as invalid — see tablews.go/actionErrorCode.
+		err = fmt.Errorf("%w: table actor recovered from an internal error", tablestore.ErrUnavailable)
+	}()
+	return a.handle(ctx, cmd)
 }
 
 func (a *Actor) handle(ctx context.Context, cmd Command) error {
