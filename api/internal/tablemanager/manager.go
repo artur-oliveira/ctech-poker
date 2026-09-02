@@ -71,6 +71,19 @@ type Manager struct {
 	// into the create path without a real DynamoDB/Valkey dependency;
 	// production code never sets it.
 	preRegisterHook func(tableID string)
+
+	// drainMu/draining/drainDone make DrainAndRelease idempotent (#33): the
+	// SIGTERM/OnStop path and the proactive spot-termination poller
+	// (internal/app's pollSpotTermination) can now both call it — sequentially
+	// or concurrently, on this instance's single shared Manager — without
+	// either one re-releasing a lease the other already released. The first
+	// caller to observe draining==false does the real work and closes
+	// drainDone when finished; every other caller (already in progress, or
+	// arriving after this instance has already fully drained) just waits on
+	// that same channel instead of touching m.actors again.
+	drainMu   sync.Mutex
+	draining  bool
+	drainDone chan struct{}
 }
 
 // tableLock is a per-tableID mutex, refcounted so Manager.locks never
@@ -234,6 +247,18 @@ func (m *Manager) SetConnStore(s table.ConnStore) {
 // call. If the cached actor has stopped (it lost its lease and Run exited),
 // it is dropped and a fresh one is created in its place so callers never
 // dispatch to a dead actor (T1).
+//
+// This lock is deliberately process-local, not a Valkey/distributed lock:
+// two *different* instances each running an Actor for the same table is an
+// explicitly supported state (see the package doc + ARCHITECTURE.md §2).
+// Cross-instance correctness is enforced by DynamoDB conditional writes
+// (`version` + ConditionExpression in tablestore.CommitAction) — the second
+// writer fails its condition and reloads — never by there being exactly one
+// Actor fleet-wide. tablelease already keeps cross-instance duplication rare
+// (cache-affinity only). The one race a lock here must prevent is two
+// goroutines *in this process* creating two Actor goroutines for the same
+// table, which would race on the same in-memory cache; that is purely a
+// local concern and a sync.Mutex is the right tool for it.
 func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed func() *hand.Table, onCreated ...func(*Actor)) (*Actor, error) {
 	if a, ok := m.lookupAliveActor(tableID); ok {
 		return a, nil
@@ -461,9 +486,36 @@ func (m *Manager) Release(tableID string) {
 	}
 }
 
-// DrainAndRelease releases every table lease held by this instance on graceful shutdown
-// and waits for all table actor goroutines to finish processing in-flight operations.
+// DrainAndRelease releases every table lease held by this instance on
+// graceful shutdown and waits for all table actor goroutines to finish
+// processing in-flight operations.
+//
+// It is idempotent and safe to call concurrently or repeatedly for the same
+// Manager (#33): only the first call actually walks m.actors and releases
+// anything; every other call — whether it arrives while the first is still
+// running or after this instance has already fully drained — blocks only
+// until that first call's work (or ctx) is done, then returns without
+// touching a single lease itself. This is what lets both the OnStop
+// SIGTERM handler and the proactive EC2 spot-termination-notice poller
+// (internal/app's pollSpotTermination) call this same path without either
+// one double-releasing a seat/lease the other already tore down.
 func (m *Manager) DrainAndRelease(ctx context.Context) {
+	m.drainMu.Lock()
+	if m.draining {
+		done := m.drainDone
+		m.drainMu.Unlock()
+		select {
+		case <-done:
+		case <-ctx.Done():
+		}
+		return
+	}
+	m.draining = true
+	done := make(chan struct{})
+	m.drainDone = done
+	m.drainMu.Unlock()
+	defer close(done)
+
 	m.mu.Lock()
 	ids := make([]string, 0, len(m.actors))
 	actors := make([]*table.Actor, 0, len(m.actors))

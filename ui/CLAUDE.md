@@ -29,7 +29,9 @@ off by default — do not build UI that assumes real money is on.
 - **Two realtime hooks, no more.** `lib/hooks/useTableRealtime.ts` owns the table surface;
   `lib/hooks/useLobbyRealtime.ts` owns the lobby/user gateway (rooms **and** all social pushes).
   Extend them rather than opening a third socket. `useLobbyRealtime` is mounted once, by
-  `lib/providers/RealtimeBridge.tsx` inside `QueryProvider` — do not mount it from a page again.
+  `lib/providers/RealtimeBridge.tsx` inside `QueryProvider`, which the `(app)` route group
+  layout owns — do not mount it from a page again, and never from the `(marketing)` group
+  (its `MarketingQueryProvider` deliberately omits it, keep-alive and `NetworkProvider`).
 - **A rejected table command is resubmitted, not surfaced.** `act()` retries on `stale_state` via
   `pendingActionRef`; the auxiliary commands (`show_cards`, `request_rabbit_hunt`,
   `request_winner_cards`, `accept`/`decline_winner_cards`, `request_exit`) carry no
@@ -90,7 +92,15 @@ off by default — do not build UI that assumes real money is on.
 
 ## Layout
 
-`src/app/{page,lobby,people,table,hands,hands/history,hands/replay,leaderboard,achievements,profile,share,guide,poker-rules,callback}`
+**Route groups** (parenthesised folders — no effect on the URL):
+`src/app/(marketing)/{page,poker-rules,guide,guide/*}` are the static, indexable,
+logged-out-friendly pages; `src/app/(app)/{lobby,people,table,hands,hands/history,hands/replay,leaderboard,achievements,profile,store,share,callback}`
+is everything that needs the authenticated/live shell. `(marketing)/layout.tsx`
+mounts only `MarketingQueryProvider`; `(app)/layout.tsx` mounts `QueryProvider`
+(keep-alive + `NetworkProvider` + `RealtimeBridge`). `robots.ts`, `sitemap.ts`,
+the error boundaries, `not-found.tsx` and `unavailable/` stay ungrouped under the
+root `layout.tsx`. See `docs/2026-09-02-marketing-app-route-split.md`.
+
 · `src/components/{achievements,hands,lobby,social,table,ui}` (+ root: `TermsGate`, `Notifier`,
 `AchievementToast`, `HandRankings`, `SystemState`, `RecoveryState`) · `src/app/{robots,sitemap}.ts`
 (crawler surface — see `docs/seo.md`)
