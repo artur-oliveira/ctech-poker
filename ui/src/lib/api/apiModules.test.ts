@@ -6,7 +6,7 @@ import {acceptPokerTerms, getHand, getHands, getMe, getProfileShowcase, getSessi
 import {getPlayerNotes, savePlayerNote} from './playerNotes';
 import {getTodayHighlight} from './highlights';
 import {getMyPokerStats} from './pokerStats';
-import {createRoom, getRoom, getSeated, joinRoom, leaveRoom, listRooms, listStakes} from './rooms';
+import {createRoom, getRoom, getSeated, joinRoom, leaveRoom, listAllRooms, listRooms, listStakes, MAX_ROOM_LIST_PAGES} from './rooms';
 import {getHandHistory} from './table';
 import {
   createReactionPurchase, getReactionPurchase, listReactionCatalog, listReactionPurchases,
@@ -106,7 +106,8 @@ describe('API domain modules', () => {
       .mockResolvedValueOnce({data: undefined})
       .mockResolvedValueOnce({data: {amount: 500}});
     
-    await expect(listRooms('next')).resolves.toEqual(['room']);
+    await expect(listRooms('next', 'sandbox')).resolves.toEqual(['room']);
+    expect(client.get).toHaveBeenCalledWith('/v1.0/rooms', {params: {cursor: 'next', currency_mode: 'sandbox'}});
     await expect(listStakes('real')).resolves.toEqual(['1/2']);
     await getRoom('table-1');
     await createRoom({
@@ -133,6 +134,36 @@ describe('API domain modules', () => {
     }, {silentError: true});
   });
   
+  test('listAllRooms walks the cursor across every page, scoped to the requested currency mode', async () => {
+    client.get
+      .mockResolvedValueOnce({
+        data: {data: [{id: 'r1'}], has_next: true, next_cursor: 'p2', has_previous: false, previous_cursor: null},
+      })
+      .mockResolvedValueOnce({
+        data: {data: [{id: 'r2'}], has_next: true, next_cursor: 'p3', has_previous: true, previous_cursor: 'p1'},
+      })
+      .mockResolvedValueOnce({
+        data: {data: [{id: 'r3'}], has_next: false, next_cursor: null, has_previous: true, previous_cursor: 'p2'},
+      });
+
+    await expect(listAllRooms('sandbox')).resolves.toEqual([{id: 'r1'}, {id: 'r2'}, {id: 'r3'}]);
+
+    expect(client.get).toHaveBeenNthCalledWith(1, '/v1.0/rooms', {params: {cursor: undefined, currency_mode: 'sandbox'}});
+    expect(client.get).toHaveBeenNthCalledWith(2, '/v1.0/rooms', {params: {cursor: 'p2', currency_mode: 'sandbox'}});
+    expect(client.get).toHaveBeenNthCalledWith(3, '/v1.0/rooms', {params: {cursor: 'p3', currency_mode: 'sandbox'}});
+  });
+
+  test('listAllRooms stops at the page cap instead of hanging when the server never terminates the cursor', async () => {
+    client.get.mockResolvedValue({
+      data: {data: [{id: 'r'}], has_next: true, next_cursor: 'more', has_previous: true, previous_cursor: 'more'},
+    });
+
+    const rooms = await listAllRooms('sandbox');
+
+    expect(rooms).toHaveLength(MAX_ROOM_LIST_PAGES);
+    expect(client.get).toHaveBeenCalledTimes(MAX_ROOM_LIST_PAGES);
+  });
+
   test('covers notes and hand-history endpoints with encoded opponent ids', async () => {
     client.get
       .mockResolvedValueOnce({data: {data: ['note']}})

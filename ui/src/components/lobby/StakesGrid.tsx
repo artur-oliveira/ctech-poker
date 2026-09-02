@@ -4,7 +4,7 @@ import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {useRouter} from 'next/navigation';
 import {ArrowRight, Users} from 'lucide-react';
 import {Button} from '@/components/ui/button';
-import {createRoom, listRooms, listStakes} from '@/lib/api/rooms';
+import {createRoom, listAllRooms, listStakes} from '@/lib/api/rooms';
 import {SkeletonList} from '@/components/ui/skeleton';
 
 const MAX_SEATS_OPTIONS = [[2, 'HEADS-UP'], [6, '6-MAX'], [9, 'FULL-RING']] as const;
@@ -29,7 +29,7 @@ export function StakesGrid() {
     isError: roomsError,
     refetch: refetchRooms
   } = useQuery({
-    queryKey: ['rooms'], queryFn: () => listRooms()
+    queryKey: ['rooms'], queryFn: () => listAllRooms('sandbox')
   });
   
   async function joinOrCreate(smallBlind: number, bigBlind: number, maxSeats: number) {
