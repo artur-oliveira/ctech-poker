@@ -97,6 +97,20 @@ See `docs/plans/2026-08-21-entry-fee-entitlement.md`. **Still blocking, found 20
   hook). `Actor.SetStreaksForActor` (backing the hot/cold streak badge, `Seat.CurrentStreak`) is the pattern to copy:
   a plain exported method that mutates actor-owned cache state directly, applied onto `ViewFor`'s output the same way
   `applyPresence` already does for `ConnectionState`.
+- **`onHandComplete`'s own gamification pipeline runs off the actor goroutine, not on it (fixed 2026-09, #61).**
+  `app.newTableManager`'s `onHandComplete` closure — achievements, leaderboard, pokerstats, matchup,
+  session/hand history, highlights, recent players, ~50-150+ sequential DynamoDB round trips at a full table — is
+  detached via `app.dispatchGamificationPipeline` (`go` + `recover`), the same pattern `autoRebuySweep` already used.
+  This is safe specifically because, by the time `table/actor.go`'s `notifyHandComplete` reaches this hook,
+  `broadcastAll` has already sent every player their post-hand `state` snapshot, and the fleet-wide `handhook` SET NX
+  claim (`claimHandHooks`) has already been taken synchronously — so detaching can neither delay what a player sees
+  nor double-run a hand's bookkeeping. `SetOnTableStreak` and `autoRebuySweep` stay exactly as they were (the former
+  writes back into actor-owned cache via `SetStreaksForActor` and must stay synchronous per the rule above; the
+  latter was already detached). **Known gap, not closed by this change:** if the process dies while the detached
+  goroutine is mid-flight, the hand's `handhook` claim was already taken and is never released, so that hand's
+  gamification writes are permanently lost — pre-existing (a synchronous panic/crash mid-`onHandComplete` had the
+  same failure mode) but the detach widens the window slightly since the actor can move on to the next hand while
+  the goroutine is still running.
 - **Per-seat display state belongs in Valkey, not in the actor.** Several instances serve one table and all broadcast
   to the same sockets, so a process-local tally shows two different values for one seat, alternating between
   broadcasts (the streak badge read "V2, V4, V2, V4" in production). `internal/tablestreak` holds it now:
