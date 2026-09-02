@@ -60,8 +60,11 @@ describe('useLobbyRealtime', () => {
     });
     act(() => state.options?.onOpen());
     expect(state.send).toHaveBeenCalledWith({type: 'ping'});
-    expect(state.invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(state.invalidateQueries).toHaveBeenCalledTimes(3);
     expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['social']});
+    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['player', 'me']});
+    // No dead `['wallet','balance']` key — balance rides on `['player','me']` (issue #101).
+    expect(state.invalidateQueries).not.toHaveBeenCalledWith({queryKey: ['wallet', 'balance']});
     act(() => result.current.reconnect());
     expect(state.reconnect).toHaveBeenCalled();
   });
