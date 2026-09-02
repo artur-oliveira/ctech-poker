@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import {useId, useState} from 'react';
+import {useRouter} from 'next/navigation';
 import {ChevronLeft, RefreshCw} from 'lucide-react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import axios from 'axios';
@@ -9,10 +10,23 @@ import {Label} from '@/components/ui/label';
 import {Switch} from '@/components/ui/switch';
 import {getRoom, joinRoom} from '@/lib/api/rooms';
 import {isNotFound} from '@/lib/api/client';
+import {pushNotification} from '@/lib/notify';
 
 const GENERIC_JOIN_ERROR = 'Não foi possível sentar na mesa. Verifique suas fichas e tente novamente.';
 const TABLE_FULL_TYPE = '/problems/table-full';
 const TABLE_FULL_ERROR = 'A última vaga foi ocupada. Se houve débito, suas fichas já foram devolvidas.';
+// Interim mitigation for the join-or-create seat race (issue #91): the
+// backend has no atomic `POST /rooms/join-or-create` yet (#76), so a seat can
+// still fill between the lobby's fresh-check and this buy-in. Rather than
+// strand the player on a dead table page, bounce them back to the lobby with
+// this bucket so StakesGrid's own retry effect immediately tries another
+// open room (or creates one) for the same blinds/format.
+const TABLE_FULL_RETRY_NOTICE = `${TABLE_FULL_ERROR} Levando você de volta ao lobby para tentar outra mesa nesses blinds.`;
+
+function isTableFullError(err: unknown) {
+  return axios.isAxiosError(err) &&
+    (err.response?.data as { type?: string } | undefined)?.type === TABLE_FULL_TYPE;
+}
 
 // The API's real-money buy-in gate (buyin.walletFor) reports "has not
 // activated gambling on ctech-wallet" as a plain RFC 9457 `detail` string.
@@ -21,8 +35,7 @@ const TABLE_FULL_ERROR = 'A última vaga foi ocupada. Se houve débito, suas fic
 function joinErrorMessage(err: unknown) {
   if (axios.isAxiosError(err)) {
     const detail = (err.response?.data as { detail?: string } | undefined)?.detail;
-    const type = (err.response?.data as { type?: string } | undefined)?.type;
-    if (type === TABLE_FULL_TYPE) return TABLE_FULL_ERROR;
+    if (isTableFullError(err)) return TABLE_FULL_ERROR;
     if (detail?.includes('gambling')) return 'Sua carteira ainda não tem apostas ativadas. Ative em ctech-wallet e tente novamente.';
   }
   return GENERIC_JOIN_ERROR;
@@ -48,6 +61,7 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
 }) {
   const sliderId = useId();
   const autoRebuyId = useId();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [amount, setAmount] = useState<number | null>(null);
   const [autoRebuy, setAutoRebuy] = useState(false);
@@ -89,6 +103,7 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
   const fmt = (n: number) => formatBuyIn(n, isReal);
 
   async function confirm() {
+    if (!room) return;
     setJoining(true);
     setError('');
     try {
@@ -99,15 +114,23 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
       }
       onSeatedAction();
     } catch (err) {
-      setError(joinErrorMessage(err));
-      if (axios.isAxiosError(err) &&
-        (err.response?.data as { type?: string } | undefined)?.type === TABLE_FULL_TYPE) {
+      if (isTableFullError(err)) {
         await Promise.all([
           queryClient.invalidateQueries({queryKey: ['rooms']}),
           queryClient.invalidateQueries({queryKey: ['room', roomId]}),
           queryClient.invalidateQueries({queryKey: ['seated', roomId]}),
         ]);
+        // Interim frontend mitigation (no atomic join-or-create endpoint
+        // yet, see #76): rather than strand the player on this dead table
+        // with only an inline error, bounce them back to the lobby with a
+        // toast and hand the same blinds/format back to StakesGrid so it
+        // retries the bucket automatically instead of making them redo the
+        // pick by hand.
+        pushNotification(TABLE_FULL_RETRY_NOTICE, 'info');
+        router.push(`/lobby?retrySmallBlind=${room.small_blind}&retryBigBlind=${room.big_blind}&retrySeats=${room.max_seats}`);
+        return;
       }
+      setError(joinErrorMessage(err));
       setJoining(false);
     }
   }
