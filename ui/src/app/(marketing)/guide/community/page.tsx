@@ -62,6 +62,7 @@ export default function CommunityGuide() {
         body: <><GuideBullets><li><span><b>Reconectando:</b> ações, chat e preparações ficam bloqueados até o snapshot chegar. Suas fichas continuam na mesa.</span></li>
           <li><span><b>Tentar agora:</b> antecipa uma nova tentativa; depois de várias falhas, o aviso passa a esperar esse toque em vez de prometer uma reconexão automática.</span></li>
           <li><span><b>Ação rejeitada:</b> a barra explica o erro e devolve as decisões ainda válidas.</span></li>
+          <li><span><b>Avisos de erro:</b> um aviso de erro, ou qualquer aviso com botões (como <b>Entrar</b>/<b>Recusar</b> de um convite), permanece na tela até você fechá-lo. Só os avisos informativos simples somem sozinhos após alguns segundos.</span></li>
           <li><span><b>Removido da mesa:</b> por inatividade ou por tempo demais desconectado, com aviso e volta ao lobby; a pilha vai para a carteira.</span></li>
           <li><span><b>Sessão expirada:</b> a autenticação precisa ser renovada. Nenhuma ação é enviada sem token válido.</span></li>
           <li><span><b>Servidor fora do ar:</b> se as tentativas de verificação continuarem falhando, o aviso deixa de ser uma faixa fina e leva você para a tela de manutenção — sua ficha e seu histórico continuam seguros, e você volta de onde parou assim que o serviço responder de novo. Uma queda só da sua internet continua mostrando apenas a faixa fina.</span></li></GuideBullets></>
