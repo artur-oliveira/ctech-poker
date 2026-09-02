@@ -9,6 +9,7 @@ import * as ssm from 'aws-cdk-lib/aws-ssm';
 import {Construct} from 'constructs';
 import {Ec2ScriptRunner, Environment, HaproxyEc2Service, SSM as CtechSSM} from '@aoctech/cdk';
 import {
+  API_ASG_SPOT_INSTANCE_TYPES,
   API_CURRENT_ARTIFACT_KEY,
   APP_PORT,
   APP_PORT_ALT,
@@ -499,6 +500,38 @@ export class PokerApiStack extends cdk.Stack {
     });
     const asg = service.autoScalingGroup;
     asg.node.addDependency(profile);
+
+    // #35: HaproxyEc2Service's MixedInstancesPolicy carries a single launch
+    // template with no per-type overrides, so the ASG only ever bid on one
+    // spot pool (t4g.nano). A correlated spot-reclaim event for that one
+    // pool could zero the whole ASG — in every AZ it's spread across — with
+    // nothing to fail over to.
+    //
+    // The ASG is already multi-AZ: `vpcSubnets` (set inside
+    // HaproxyEc2Service, not overridable here) selects every public subnet
+    // in the imported VPC with no `availabilityZones` filter, and this
+    // account's shared VPC has one public subnet per AZ (confirmed via
+    // `cdk synth`: VPCZoneIdentifier already lists all 3 — us-east-1b/c/d).
+    // Nothing to add there.
+    //
+    // What's missing is instance-type diversification, added here as an L1
+    // override on MixedInstancesPolicy.LaunchTemplate.Overrides (not exposed
+    // by HaproxyEc2Service's props) the same way this stack already owns the
+    // private-IPv4 launch-template override locally (see cdk/CLAUDE.md).
+    // Every override omits WeightedCapacity, so it defaults to 1 — a launch
+    // of any of these types still counts as exactly one unit of ASG
+    // capacity, so minCapacity/maxCapacity semantics (and the tablelease/
+    // tablemanager model, which already tolerates 2 concurrent instances —
+    // see api/internal/tablemanager/manager.go, api/internal/tablelease/
+    // lease.go) are unaffected. All three types are the same burstable
+    // Graviton (arm64) family, differing only in memory (0.5/1/2 GiB at 2
+    // vCPU each), so price-capacity-optimized keeps bidding the cheapest
+    // available pool first and cost stays roughly flat.
+    const cfnAsg = asg.node.defaultChild as autoscaling.CfnAutoScalingGroup;
+    cfnAsg.addPropertyOverride(
+      'MixedInstancesPolicy.LaunchTemplate.Overrides',
+      API_ASG_SPOT_INSTANCE_TYPES.map((instanceType) => ({InstanceType: instanceType})),
+    );
 
     // ASG termination pauses before EC2 shutdown, asks systemd to stop both
     // app processes (each runs Fx OnStop -> DrainAndRelease, releasing every

@@ -129,6 +129,32 @@ test('synthesizes without error and declares exactly one ASG', () => {
   expect(rendered).toContain('ssm:SendCommand');
 });
 
+test('ASG spreads across multiple AZs and diversifies spot instance types (#35)', () => {
+  const template = Template.fromStack(synthStack());
+  // The dummy VPC ec2.Vpc.fromLookup falls back to (no cdk.context.json
+  // cache entry for this vpc-id/account/region combination) carries subnets
+  // in 2 AZs — enough to prove the ASG is not artificially pinned to one.
+  // The real shared VPC (see cdk.context.json) has 3 (us-east-1b/c/d); this
+  // stack applies no `availabilityZones` filter, so it inherits whatever
+  // the looked-up VPC provides.
+  const asgResources = template.findResources('AWS::AutoScaling::AutoScalingGroup');
+  const [asg] = Object.values(asgResources) as any[];
+  expect(asg.Properties.VPCZoneIdentifier.length).toBeGreaterThanOrEqual(2);
+
+  // A correlated spot-reclaim event for a single instance type/pool must not
+  // be able to zero the whole ASG: at least 3 equivalent Graviton burstable
+  // types are offered, so price-capacity-optimized has somewhere else to
+  // bid. Every override carries no WeightedCapacity, so it defaults to 1 —
+  // launching any of these three types still costs exactly one unit of ASG
+  // capacity (minCapacity/maxCapacity are unaffected).
+  const overrides = asg.Properties.MixedInstancesPolicy.LaunchTemplate.Overrides;
+  expect(overrides.length).toBeGreaterThanOrEqual(2);
+  expect(overrides.every((o: any) => o.WeightedCapacity === undefined)).toBe(true);
+  expect(overrides.map((o: any) => o.InstanceType)).toEqual(
+    expect.arrayContaining(['t4g.nano', 't4g.micro',]),
+  );
+});
+
 test('user data only fetches and runs the shared ctech-cdk scripts', () => {
   const text = userDataText(Template.fromStack(synthStack()));
   expect(text).toContain('ctech_run');

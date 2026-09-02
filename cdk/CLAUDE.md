@@ -26,6 +26,14 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   **Not Lambda/Fargate.** The Go binary is the HAProxy target directly on port 8080 (no nginx).
   The retained edge security group and VPC are imported from SSM/lookup; no ALB target group or
   listener rule is created.
+- **ASG resilience (#35, fixed 2026-09-02)**: 100% spot with `MixedInstancesPolicy`, spread across
+  every public subnet of the shared VPC (3 AZs, `us-east-1b/c/d` — already the default, no filter
+  applied) and, as of this fix, 3 spot instance types (`API_ASG_SPOT_INSTANCE_TYPES` in
+  `lib/constants.ts`: `t4g.nano`/`t4g.micro`) via an L1
+  `MixedInstancesPolicy.LaunchTemplate.Overrides` override in `api-stack.ts` — `HaproxyEc2Service`
+  itself only ever configures one instance type. `minCapacity`/`maxCapacity` are unchanged; the
+  table-leasing model already tolerates 2 concurrently-running instances (`tablelease` is a
+  latency hint, not a correctness lock). No on-demand base instance — deferred, see `README.md`.
 - **29 DynamoDB tables** (`dynamodb-stack.ts`) — an older revision of this file undercounted (15, before it, 8, then 26,
   then 27). The last two, `poker_hand_reveals` / `poker_hand_reveal_payments`, back the paid history winner-cards
   reveal (`docs/specs/2026-08-21-pay-to-see-winner-cards-history.md`).
