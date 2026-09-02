@@ -61,6 +61,43 @@ describe('notification store', () => {
       .toEqual(['Aviso 3', 'Aviso 4', 'Aviso 5']);
   });
   
+  test('keeps error toasts past the 6 s timer and clears them at the 20 s ceiling', async () => {
+    const {pushNotification, subscribeNotifications} = await import('./notify');
+    const listener = vi.fn();
+    subscribeNotifications(listener);
+
+    pushNotification('Falha ao salvar', 'error');
+    vi.advanceTimersByTime(6000);
+    expect(listener.mock.lastCall?.[0]).toHaveLength(1);
+
+    vi.advanceTimersByTime(14000);
+    expect(listener.mock.lastCall?.[0]).toEqual([]);
+  });
+
+  test('does not auto-dismiss an info toast that carries actions on the 6 s timer', async () => {
+    const {pushNotification, subscribeNotifications} = await import('./notify');
+    const listener = vi.fn();
+    subscribeNotifications(listener);
+
+    pushNotification('Convite para a mesa', 'info', [{label: 'Entrar', run: () => undefined}]);
+    vi.advanceTimersByTime(6000);
+    expect(listener.mock.lastCall?.[0]).toHaveLength(1);
+
+    vi.advanceTimersByTime(14000);
+    expect(listener.mock.lastCall?.[0]).toEqual([]);
+  });
+
+  test('still evicts persistent toasts beyond MAX_VISIBLE', async () => {
+    const {pushNotification, subscribeNotifications} = await import('./notify');
+    const listener = vi.fn();
+    subscribeNotifications(listener);
+
+    for (let index = 1; index <= 5; index++) pushNotification(`Erro ${index}`, 'error');
+
+    expect(listener.mock.lastCall?.[0].map((item: {message: string}) => item.message))
+      .toEqual(['Erro 3', 'Erro 4', 'Erro 5']);
+  });
+
   test.each([
     [{name: 'ApiError', original: {request: {}, message: 'Network Error'}},
       'Sem conexão com o servidor. Verifique sua internet e tente novamente.'],

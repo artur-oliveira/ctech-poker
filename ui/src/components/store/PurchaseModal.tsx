@@ -5,6 +5,7 @@ import {useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog';
 import {getPurchase, type SandboxPurchase} from '@/lib/api/wallet';
+import {BALANCE_QUERY_KEY} from '@/lib/api/player';
 import {useCountdownMs} from './useCountdown';
 import {PixPaymentView} from './PixPaymentView';
 
@@ -37,8 +38,7 @@ export function PurchaseModal({purchase, finalFocusRef, onCloseAction, onUpdateA
   useEffect(() => {
     if (purchase?.status !== 'confirmed') return;
     void queryClient.invalidateQueries({queryKey: ['wallet', 'sandbox-purchases']});
-    void queryClient.invalidateQueries({queryKey: ['wallet', 'balance']});
-    void queryClient.invalidateQueries({queryKey: ['player', 'me']});
+    void queryClient.invalidateQueries({queryKey: BALANCE_QUERY_KEY});
   }, [purchase?.status, queryClient]);
 
   // Websocket confirmation (useLobbyRealtime) is the primary path; this poll

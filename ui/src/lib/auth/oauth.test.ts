@@ -1,5 +1,5 @@
 import {beforeEach, describe, expect, test, vi} from 'vitest';
-import {decodeIdToken, doRefresh, exchangeCode, logout, startOAuthFlow} from './oauth';
+import {decodeIdToken, doRefresh, exchangeCode, logout, OAuthExchangeError, startOAuthFlow} from './oauth';
 import {OAUTH_SCOPE} from './scopes';
 
 const mocks = vi.hoisted(() => ({
@@ -88,6 +88,74 @@ describe('OAuth integration', () => {
     }
   });
   
+  test('bounds a callback exchange to three seconds and classifies it transient', async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.exchange.mockReturnValue(new Promise(() => undefined));
+      const attempt = exchangeCode('code', 'state');
+      const assertion = expect(attempt).rejects.toMatchObject({
+        name: 'OAuthExchangeError', kind: 'transient', message: 'Token request timed out after 3000ms',
+      });
+      await vi.advanceTimersByTimeAsync(3_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('ignores a late exchange response once the deadline has already rejected', async () => {
+    vi.useFakeTimers();
+    try {
+      let resolveExchange: (value: {accessToken: string; idToken: null; returnTo: string}) => void = () => undefined;
+      mocks.exchange.mockReturnValue(new Promise(resolve => {
+        resolveExchange = resolve;
+      }));
+      const attempt = exchangeCode('code', 'state');
+      const assertion = expect(attempt).rejects.toMatchObject({kind: 'transient'});
+      await vi.advanceTimersByTimeAsync(3_000);
+      await assertion;
+      // The underlying request finally settles after we already gave up on
+      // it — this must not resolve a second, already-rejected promise.
+      resolveExchange({accessToken: 'late', idToken: null, returnTo: '/lobby'});
+      await vi.advanceTimersByTimeAsync(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test.each([
+    ['a PKCE state mismatch', new Error('OAuth state mismatch'), 'invalid'],
+    ['an expired/used code (4xx)', new Error('Token exchange failed (400): invalid_grant'), 'invalid'],
+    ['an IdP outage (5xx)', new Error('Token exchange failed (503): bad gateway'), 'unavailable'],
+    ['a rejected fetch with no status', new TypeError('Failed to fetch'), 'transient'],
+    ['a non-Error rejection', 'boom', 'transient'],
+  ] as const)('classifies %s as %s', async (_label, error, kind) => {
+    mocks.exchange.mockRejectedValue(error);
+    const failure = await exchangeCode('code', 'state').catch(e => e);
+    expect(failure).toBeInstanceOf(OAuthExchangeError);
+    expect(failure.kind).toBe(kind);
+  });
+
+  test('ignores a late exchange rejection once the deadline has already rejected', async () => {
+    vi.useFakeTimers();
+    try {
+      let rejectExchange: (error: unknown) => void = () => undefined;
+      mocks.exchange.mockReturnValue(new Promise((_resolve, reject) => {
+        rejectExchange = reject;
+      }));
+      const attempt = exchangeCode('code', 'state');
+      const assertion = expect(attempt).rejects.toMatchObject({kind: 'transient'});
+      await vi.advanceTimersByTimeAsync(3_000);
+      await assertion;
+      // The underlying request finally rejects after we already gave up on
+      // it — this must not reject an already-settled promise a second time.
+      rejectExchange(new Error('too late'));
+      await vi.advanceTimersByTimeAsync(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test('revokes before redirecting logout and supports its safe default', async () => {
     const order: string[] = [];
     mocks.revoke.mockImplementation(async () => {

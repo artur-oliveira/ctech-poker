@@ -8,13 +8,24 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   mutate: vi.fn(),
   setQueryData: vi.fn(),
+  invalidateQueries: vi.fn(),
   logout: vi.fn(),
   notify: vi.fn(),
+  saveShouldFail: false,
+  realMoney: {enabled: false},
   state: {
     player: undefined as unknown,
     catalog: [] as CosmeticCatalogEntry[],
     purchases: [] as CosmeticPurchase[],
   },
+}));
+
+vi.mock('@/lib/capabilities', () => ({
+  get REAL_MONEY_UI_ENABLED() {
+    return mocks.realMoney.enabled;
+  },
+  availableWalletMode: (value: string | null | undefined) =>
+    value === 'real' && mocks.realMoney.enabled ? 'real' : 'sandbox',
 }));
 
 vi.mock('@tanstack/react-query', () => ({
@@ -25,10 +36,17 @@ vi.mock('@tanstack/react-query', () => ({
     if (queryKey[1] === 'cosmetic-purchases') return {data: mocks.state.purchases};
     return {data: undefined};
   },
-  useQueryClient: () => ({setQueryData: mocks.setQueryData}),
-  useMutation: ({onSuccess}: { onSuccess: (data: unknown, input: unknown) => void }) => ({
+  useQueryClient: () => ({setQueryData: mocks.setQueryData, invalidateQueries: mocks.invalidateQueries}),
+  useMutation: ({onSuccess, onError}: {
+    onSuccess: (data: unknown, input: unknown) => void;
+    onError?: (error: unknown, input: unknown) => void;
+  }) => ({
     mutate: (input: unknown) => {
       mocks.mutate(input);
+      if (mocks.saveShouldFail) {
+        onError?.(new Error('rejected'), input);
+        return;
+      }
       onSuccess({...(mocks.state.player as object), ...(input as object)}, input);
     },
     isPending: false,
@@ -68,19 +86,55 @@ describe('ProfileMenu', () => {
     mocks.state.player = player;
     mocks.state.catalog = [];
     mocks.state.purchases = [];
+    mocks.saveShouldFail = false;
+    mocks.realMoney.enabled = false;
   });
 
-  test('summarizes the active wallet and exposes both balances in the menu', async () => {
+  test('summarizes the sandbox wallet in the menu', async () => {
     render(<ProfileMenu/>);
     expect(screen.getByText('12.345 fichas')).toBeInTheDocument();
     expect(screen.getByRole('link', {name: /Abrir loja/})).toHaveAttribute('href', '/store');
     expect(screen.getByText('AS')).toBeInTheDocument();
 
     await openProfile();
-    expect(screen.getByText('Sandbox')).toBeInTheDocument();
     expect(screen.getAllByText('12.345 fichas')).toHaveLength(2);
-    expect(screen.getByText(/R\$\s*987,60/)).toBeInTheDocument();
     expect(screen.getByRole('button', {name: /Loja/})).toHaveAttribute('href', '/store');
+  });
+
+  test('hides the wallet-mode switch and the real-money balance when real money is off', async () => {
+    mocks.state.player = {...player, wallet_mode: 'real'};
+    render(<ProfileMenu/>);
+    // A server-set real wallet mode must not leak into the pill.
+    expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
+    expect(screen.getByText('12.345 fichas')).toBeInTheDocument();
+
+    await openProfile();
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.queryByText('Modo de jogo')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dinheiro real')).not.toBeInTheDocument();
+    expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
+  });
+
+  test('shows both balances and the wallet-mode switch when real money is on', async () => {
+    mocks.realMoney.enabled = true;
+    render(<ProfileMenu/>);
+    await openProfile();
+    expect(screen.getByRole('switch', {name: 'Sandbox'})).toBeInTheDocument();
+    expect(screen.getByText('Modo de jogo')).toBeInTheDocument();
+    expect(screen.getByText(/R\$\s*987,60/)).toBeInTheDocument();
+  });
+
+  test('reverts and explains when a wallet-mode change is rejected', async () => {
+    mocks.realMoney.enabled = true;
+    mocks.saveShouldFail = true;
+    render(<ProfileMenu/>);
+    await openProfile();
+    await userEvent.click(screen.getByRole('switch', {name: 'Sandbox'}));
+    expect(mocks.mutate).toHaveBeenCalledWith({wallet_mode: 'real'});
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['player', 'me']});
+    expect(mocks.notify).toHaveBeenCalledWith(
+      'Não foi possível trocar o modo de jogo. Seu modo atual foi mantido.'
+    );
   });
 
   test('trims and saves a changed display name into the player cache', async () => {
@@ -113,6 +167,7 @@ describe('ProfileMenu', () => {
   });
 
   test('switches to real money, opens profile tools, and logs out', async () => {
+    mocks.realMoney.enabled = true;
     render(<ProfileMenu/>);
     await openProfile();
     await userEvent.click(screen.getByRole('switch', {name: 'Sandbox'}));
@@ -137,6 +192,7 @@ describe('ProfileMenu', () => {
   });
 
   test('confirms a deck change and a switch back to sandbox', async () => {
+    mocks.realMoney.enabled = true;
     mocks.state.player = {...player, wallet_mode: 'real'};
     render(<ProfileMenu/>);
     await openProfile();
@@ -172,6 +228,7 @@ describe('ProfileMenu', () => {
   });
 
   test('falls back to zeroed balances and an unset name for a fresh player', async () => {
+    mocks.realMoney.enabled = true;
     mocks.state.player = undefined;
     render(<ProfileMenu/>);
     expect(screen.getByText('0 fichas')).toBeInTheDocument();
@@ -182,7 +239,8 @@ describe('ProfileMenu', () => {
     expect(screen.getByText('Vitrine privada')).toBeInTheDocument();
   });
 
-  test('formats the real-money wallet in the collapsed summary', () => {
+  test('formats the real-money wallet in the collapsed summary when real money is on', () => {
+    mocks.realMoney.enabled = true;
     mocks.state.player = {...player, wallet_mode: 'real'};
     render(<ProfileMenu/>);
     expect(screen.getByText(/R\$\s*987,60/)).toBeInTheDocument();

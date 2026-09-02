@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
     listeners: new Set<() => void>(),
     check: vi.fn(),
     offline: vi.fn(),
+    navigateToUnavailable: vi.fn(),
     refetchQueries,
     queryClient: {refetchQueries},
   };
@@ -19,12 +20,14 @@ vi.mock('@tanstack/react-query', () => ({useQueryClient: () => mocks.queryClient
 
 vi.mock('./liveness', () => ({
   HTTP_TIMEOUT_MS: 3_000,
+  SERVER_OUTAGE_ESCALATION_THRESHOLD: 2,
   requireApiLiveness: vi.fn().mockResolvedValue(undefined),
   checkApiLiveness: mocks.check,
   getApiLivenessSnapshot: () => mocks.snapshot,
   getServerApiLivenessSnapshot: () => ({status: 'checking', reason: null, checkedAt: null}),
   livenessPollDelay: () => 30_000,
   markApiOffline: mocks.offline,
+  navigateToUnavailable: mocks.navigateToUnavailable,
   subscribeApiLiveness: (listener: () => void) => {
     mocks.listeners.add(listener);
     return () => mocks.listeners.delete(listener);
@@ -93,5 +96,62 @@ describe('NetworkProvider', () => {
     await userEvent.click(screen.getByRole('button', {name: 'Verificar agora'}));
     await waitFor(() => expect(mocks.refetchQueries).toHaveBeenCalledWith({type: 'active'}));
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  // A dead HAProxy is more likely to surface as a rejected fetch (reason
+  // 'server' from repeated failed health probes) than a clean HTTP 503, and
+  // that shape must reach the same prominent outage UI, not linger forever as
+  // the thin strip.
+  test('escalates a persistent server-shaped outage to the full outage screen', async () => {
+    vi.useFakeTimers();
+    try {
+      render(<NetworkProvider><span>content</span></NetworkProvider>);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mocks.check).toHaveBeenCalledTimes(1);
+      expect(mocks.navigateToUnavailable).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(mocks.check).toHaveBeenCalledTimes(2);
+      expect(mocks.navigateToUnavailable).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('never escalates a device-offline outage, no matter how long it persists', async () => {
+    mocks.snapshot = {status: 'unavailable', reason: 'offline', checkedAt: 1};
+    vi.useFakeTimers();
+    try {
+      render(<NetworkProvider><span>content</span></NetworkProvider>);
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(mocks.navigateToUnavailable).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('resets the escalation count once a poll cycle recovers', async () => {
+    mocks.check
+      .mockResolvedValueOnce(false) // 1st consecutive server failure
+      .mockImplementationOnce(async () => { // recovers before the threshold
+        mocks.snapshot = {status: 'available', reason: null, checkedAt: 2};
+        return true;
+      })
+      .mockImplementationOnce(async () => { // drops again — should be back at 1, not 2
+        mocks.snapshot = {status: 'unavailable', reason: 'server', checkedAt: 3};
+        return false;
+      });
+    vi.useFakeTimers();
+    try {
+      render(<NetworkProvider><span>content</span></NetworkProvider>);
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(mocks.check).toHaveBeenCalledTimes(3);
+      expect(mocks.navigateToUnavailable).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

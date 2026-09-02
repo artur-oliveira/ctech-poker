@@ -26,6 +26,7 @@ import GlobalError from './global-error';
 import NotFoundPage from './not-found';
 import UnavailablePage, {metadata as unavailableMetadata} from './unavailable/page';
 import MarketingLayout from './(marketing)/layout';
+import {ApiError} from '@/lib/api/client';
 import {OG_PREVIEWS} from '@/lib/ogPreviews';
 import {INDEXABLE_ROUTES} from './sitemap';
 
@@ -125,6 +126,47 @@ describe('system state routes', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     render(<ErrorPage error={new Error('boom')} reset={vi.fn()}/>);
     expect(screen.getByText('Tente carregar esta tela novamente.')).toBeInTheDocument();
+  });
+
+  test('a thrown ApiError(404) renders the not-found state with lobby links', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const error = new ApiError('Room not found', 404);
+    render(<ErrorPage error={error} reset={vi.fn()}/>);
+    expect(screen.getByText('404')).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name: 'Não encontramos esta mesa.'})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: /Voltar ao lobby/})).toHaveAttribute('href', '/lobby');
+  });
+
+  test('a thrown ApiError(503) routes to the maintenance screen', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const replace = vi.fn();
+    const original = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        origin: 'http://localhost:3000',
+        href: 'http://localhost:3000/table?id=room-1',
+        pathname: '/table',
+        search: '?id=room-1',
+        replace,
+      },
+    });
+    try {
+      render(<ErrorPage error={new ApiError('Service Unavailable', 503)} reset={vi.fn()}/>);
+      expect(screen.getByText('503')).toBeInTheDocument();
+      expect(replace).toHaveBeenCalledWith('/unavailable');
+      expect(window.sessionStorage.getItem('poker:return-after-outage')).toBe('/table?id=room-1');
+    } finally {
+      Object.defineProperty(window, 'location', {configurable: true, value: original});
+    }
+  });
+
+  test('a non-API error still renders the generic 500 state with the digest', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const error = Object.assign(new Error('boom'), {digest: 'deadbeef'});
+    render(<ErrorPage error={error} reset={vi.fn()}/>);
+    expect(screen.getByText('500')).toBeInTheDocument();
+    expect(screen.getByText('Referência do erro: deadbeef')).toBeInTheDocument();
   });
 
   test('the root boundary still offers recovery when the provider tree crashes', async () => {

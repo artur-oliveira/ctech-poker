@@ -6,6 +6,15 @@ export const MAX_UNAVAILABLE_POLL_INTERVAL_MS = 30_000;
  * published. Only once every attempt is exhausted does the app go offline. */
 export const HEALTH_PROBE_ATTEMPTS = 3;
 export const HEALTH_PROBE_RETRY_MS = 600;
+/** A single published `reason: 'server'` outage already survived
+ * `HEALTH_PROBE_ATTEMPTS` failures inside one `checkApiLiveness()` call. This
+ * is how many *additional*, separately-scheduled poll cycles must also come
+ * back `reason: 'server'` before `NetworkProvider` escalates past the thin
+ * status strip to the full-bleed `/unavailable` screen — bounding a
+ * total-outage-shaped-as-network-errors to a handful of seconds without
+ * escalating on one slow response. A device-offline outage never escalates:
+ * only `reason === 'server'` counts. */
+export const SERVER_OUTAGE_ESCALATION_THRESHOLD = 2;
 
 export type ApiLivenessStatus = 'checking' | 'available' | 'unavailable';
 export type ApiUnavailableReason = 'offline' | 'server' | null;
@@ -131,6 +140,27 @@ export function livenessPollDelay(failureCount: number, random = Math.random) {
   const ceiling = Math.min(MAX_UNAVAILABLE_POLL_INTERVAL_MS, 1_000 * 2 ** (failureCount - 1));
   // Equal jitter avoids both a near-zero busy loop and synchronized clients.
   return Math.floor(ceiling / 2 + random() * ceiling / 2);
+}
+
+const RETURN_AFTER_OUTAGE_KEY = 'poker:return-after-outage';
+
+/**
+ * Navigates to the full-bleed `/unavailable` screen, saving the interrupted
+ * route first so `UnavailableState` can restore it once the health probe
+ * recovers. Shared by the explicit-503 path (`redirectOnServiceUnavailable`)
+ * and by any caller escalating a confirmed server-side outage (a run of
+ * network-error-shaped health probes, an unrecoverable OAuth callback) to the
+ * same prominent UI a 503 gets — no-op once already there.
+ */
+export function navigateToUnavailable(): boolean {
+  if (typeof window === 'undefined' || window.location.pathname === '/unavailable') return false;
+  try {
+    window.sessionStorage.setItem(RETURN_AFTER_OUTAGE_KEY, `${window.location.pathname}${window.location.search || ''}`);
+  } catch {
+    // Storage can be unavailable in privacy modes; /lobby remains the safe fallback.
+  }
+  window.location.replace('/unavailable');
+  return true;
 }
 
 /** Test-only reset kept explicit so runtime code cannot accidentally hide an outage. */

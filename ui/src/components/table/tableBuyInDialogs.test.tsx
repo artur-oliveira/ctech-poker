@@ -14,12 +14,15 @@ const mocks = vi.hoisted(() => ({
   isNotFound: vi.fn(),
   createPurchase: vi.fn(),
   spin: vi.fn(),
+  push: vi.fn(),
+  pushNotification: vi.fn(),
 }));
 
 vi.mock('@tanstack/react-query', () => ({
   useQuery: mocks.query,
   useQueryClient: () => ({invalidateQueries: mocks.invalidateQueries, setQueryData: mocks.setQueryData}),
 }));
+vi.mock('next/navigation', () => ({useRouter: () => ({push: mocks.push})}));
 vi.mock('@/lib/api/rooms', () => ({
   getRoom: vi.fn(),
   joinRoom: mocks.joinRoom,
@@ -31,6 +34,7 @@ vi.mock('@/lib/api/wallet', () => ({
 }));
 vi.mock('@/lib/api/player', () => ({getMe: vi.fn()}));
 vi.mock('@/lib/api/dailyReward', () => ({getCooldown: vi.fn(), spin: mocks.spin}));
+vi.mock('@/lib/notify', () => ({pushNotification: mocks.pushNotification}));
 vi.mock('axios', () => ({
   default: {isAxiosError: (error: { axios?: boolean }) => Boolean(error?.axios)},
   isAxiosError: (error: { axios?: boolean }) => Boolean(error?.axios),
@@ -135,19 +139,33 @@ describe('BuyInPanel', () => {
     expect(seated).not.toHaveBeenCalled();
   });
   
-  test('explains a full-table race and refreshes room state after the refund', async () => {
+  test('bounces a full-table race back to the lobby with a toast instead of stranding the player', async () => {
     mocks.joinRoom.mockRejectedValue({
       axios: true,
       response: {status: 409, data: {type: '/problems/table-full'}},
     });
     render(<BuyInPanel roomId="room-1" onSeatedAction={vi.fn()}/>);
-    
+
     await userEvent.click(screen.getByRole('button', {name: /Entrar com/}));
-    expect(await screen.findByRole('alert')).toHaveTextContent('última vaga foi ocupada');
     await waitFor(() => expect(mocks.invalidateQueries).toHaveBeenCalledTimes(3));
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['rooms']});
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['room', 'room-1']});
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['seated', 'room-1']});
+    expect(mocks.pushNotification).toHaveBeenCalledWith(
+      expect.stringContaining('última vaga foi ocupada'), 'info');
+    expect(mocks.push).toHaveBeenCalledWith(
+      '/lobby?retrySmallBlind=25&retryBigBlind=50&retrySeats=6');
+    // No raw error is left behind on the table page itself.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  test('shows a generic retryable message for an unrecognized join failure', async () => {
+    mocks.joinRoom.mockRejectedValue(new Error('boom'));
+    render(<BuyInPanel roomId="room-1" onSeatedAction={vi.fn()}/>);
+
+    await userEvent.click(screen.getByRole('button', {name: /Entrar com/}));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Verifique suas fichas e tente novamente');
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 });
 

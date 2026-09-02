@@ -4,6 +4,7 @@ import {
   getApiLivenessSnapshot,
   livenessPollDelay,
   markApiOffline,
+  navigateToUnavailable,
   requireApiLiveness,
   resetApiLivenessForTests,
   subscribeApiLiveness,
@@ -121,5 +122,40 @@ describe('API liveness', () => {
     expect(livenessPollDelay(1, () => 0)).toBe(500);
     expect(livenessPollDelay(1, () => 1)).toBe(1_000);
     expect(livenessPollDelay(20, () => 1)).toBe(30_000);
+  });
+
+  describe('navigateToUnavailable', () => {
+    const replace = vi.fn();
+
+    beforeEach(() => {
+      replace.mockClear();
+      window.sessionStorage.clear();
+      Object.defineProperty(window, 'location', {
+        configurable: true, value: {pathname: '/table', search: '?id=room-1', replace},
+      });
+    });
+
+    test('saves the interrupted route and navigates to the maintenance page', () => {
+      expect(navigateToUnavailable()).toBe(true);
+      expect(replace).toHaveBeenCalledWith('/unavailable');
+      expect(window.sessionStorage.getItem('poker:return-after-outage')).toBe('/table?id=room-1');
+    });
+
+    test('is a no-op when already on the maintenance page', () => {
+      Object.defineProperty(window, 'location', {
+        configurable: true, value: {pathname: '/unavailable', search: '', replace},
+      });
+      expect(navigateToUnavailable()).toBe(false);
+      expect(replace).not.toHaveBeenCalled();
+    });
+
+    test('still navigates when sessionStorage throws', () => {
+      const setItem = vi.spyOn(window.sessionStorage.__proto__, 'setItem').mockImplementation(() => {
+        throw new Error('storage disabled');
+      });
+      expect(navigateToUnavailable()).toBe(true);
+      expect(replace).toHaveBeenCalledWith('/unavailable');
+      setItem.mockRestore();
+    });
   });
 });
