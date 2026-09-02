@@ -37,6 +37,14 @@ default** and blocked on legal sign-off, not on missing code.
   (see `internal/reconcile/pending_test.go`'s `mustCreateTestTable`). The same change also made real-money `BuyIn`
   fail closed when `EntryFeeCents > 0` and no pending store is wired (`internal/buyin/service.go`) — every real-money
   test needs `.WithPendingStore(...)`.
+- Load / soak harness (`-tags load`, GitHub issue #123) for pre-release concurrency validation:
+  `tests/load/soak_test.go` (`TestSoak`) drives the real `tablemanager`/`table.Actor`/`tablestore` stack against
+  DynamoDB Local — N tables, M simulated fleet instances, weighted fold/check/call bots, Connect/Disconnect churn,
+  busted-player rebuys — and reports p50/p95/p99 action-commit latency, hands completed, and errors by class with
+  pass/fail thresholds. It skips unless `LOADTEST_DURATION` is set. `cmd/loadtest` is the companion tool: synthetic
+  binary-protobuf WebSocket clients against a deployed prod-like stack. Both are laptop / throwaway-instance tools —
+  see `docs/plans/2026-09-02-load-soak-test-harness.md` for the runbook, target numbers, and how to read results
+  alongside the CloudWatch alarms.
 - `handeval` keeps the normal CI fast with a deterministic 20,000-hand differential sample plus directed
   category/tiebreak tests. After changing
   `internal/engine/handeval/ref`, `hashq`, the generator, or `tables.bin`, run the full 133,784,560-hand proof

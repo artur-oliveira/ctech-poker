@@ -14,11 +14,12 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import {Switch} from '@/components/ui/switch';
-import {getAchievementCatalog, getMyAchievements} from '@/lib/api/achievements';
+import {getAchievementCatalog} from '@/lib/api/achievements';
 import {getMe, type PlayerProfile, updateMe} from '@/lib/api/player';
 import {achievementLabel} from '@/lib/achievements';
 import {pushNotification} from '@/lib/notify';
 import {SkeletonList} from '@/components/ui/skeleton';
+import {useAchievementsSummary} from '@/lib/hooks/useAchievementsSummary';
 
 function ShowcaseEditor({me, onSaved}: { me: PlayerProfile; onSaved: (profile: PlayerProfile) => void }) {
   const [isPublic, setIsPublic] = useState(me.showcase_public);
@@ -26,8 +27,13 @@ function ShowcaseEditor({me, onSaved}: { me: PlayerProfile; onSaved: (profile: P
   const [isTablePublic, setIsTablePublic] = useState(me.table_public);
   const [selected, setSelected] = useState<string[]>(me.featured_achievements || []);
   const catalog = useQuery({queryKey: ['achievements', 'catalog'], queryFn: getAchievementCatalog});
-  const mine = useQuery({queryKey: ['achievements', 'me'], queryFn: () => getMyAchievements()});
-  const counts = new Map((mine.data || []).map(item => [item.key, item.count]));
+  // Full-state summary (#79): the featured-achievement picker used to build
+  // its counts from the paginated endpoint (cursor never followed), so a key
+  // past page one silently couldn't be featured. Same wallet default
+  // ('sandbox') as before this fix — only the completeness of the data
+  // changed.
+  const mine = useAchievementsSummary('sandbox', true);
+  const counts = new Map((mine.data?.achievements || []).map(item => [item.key, item.progress]));
   const save = useMutation({
     mutationFn: () => updateMe({
       showcase_public: isPublic, playstyle_public: isPlaystylePublic, table_public: isTablePublic,
