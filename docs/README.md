@@ -21,8 +21,8 @@ history documents and lag the code by design. O índice de planos foi atualizado
 | Engine: betting, side pots, 7-card eval, CSPRNG shuffle, equity           | **LIVE + tested**       | `api/internal/engine/*`                                                                      |
 | Binary protobuf WebSocket (table + lobby/user gateways)                   | **LIVE**                | `proto/poker.proto`, `api/internal/api/v1/tablews.go`, `ui/src/lib/ws/utils.ts`               |
 | Provably-fair: commit, root commit, seed reveal, seed-less partial proof  | **LIVE**                | `engine/hand/snapshot.go`, `ui/src/lib/deckVerify.ts`, `PartialDeckProof.tsx`                 |
-| Hand history, hand replayer, hand export, public hand sharing             | **LIVE**                | `sessionlog`, `handshare`, `ui/src/app/hands/*`, `ui/src/app/share`                           |
-| Gamification: leaderboard, achievements, daily sandbox-credit spin        | **LIVE**                | `leaderboard`, `achievements`, `dailyreward`, `ui/src/app/{leaderboard,achievements}`         |
+| Hand history, hand replayer, hand export, public hand sharing             | **LIVE**                | `sessionlog`, `handshare`, `ui/src/app/(app)/hands/*`, `ui/src/app/(app)/share`               |
+| Gamification: leaderboard, achievements, daily sandbox-credit spin        | **LIVE**                | `leaderboard`, `achievements`, `dailyreward`, `ui/src/app/(app)/{leaderboard,achievements}`   |
 | Player tooling: private notes, self-HUD stats, profile showcase           | **LIVE**                | `playernotes`, `pokerstats`, `ProfileShowcaseDialog.tsx`, `SelfHudDialog.tsx`                 |
 | Table UX: time banks, action pre-selection, reactions, paid rabbit hunt and paid winner-card reveal | **LIVE** | `engine/hand/timebank*.go`, `lib/actionPreselection.ts`, `reactions.ts`, `RabbitHunt.tsx`, `WinnerCards.tsx` |
 | Voice: dealer speech synthesis + voice-driven actions                     | **LIVE**                | `ui/src/lib/hooks/useDealerVoice.ts`, `ui/src/lib/voiceActions.ts`                            |

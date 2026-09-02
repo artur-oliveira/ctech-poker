@@ -63,7 +63,7 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
 
 - **No WAF** on the CloudFront distribution — no `aws-wafv2` import, no `webAclId`. `PLAN.md`'s
   Task 9 claimed this shipped; it did not.
-- **Termination drain works but is not reliably triggered for every termination** (re-verified
+- **Termination drain Lambda is still not reliably invoked for every termination** (re-verified
   2026-09-01, incident on table `01M1C5GQR7HWXSNSSX8Q49XN9X`). `ENABLE_SSM_AGENT` is hardcoded
   `true` in `cdk/bin/poker.ts` (not the `false` this file previously claimed), and the SSM agent
   does run on the Alpine AMI — confirmed from `/ctech-poker/prod/app` logs, `rc-service app stop`
@@ -75,12 +75,23 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   got no drain attempt at all (no Lambda invocation, no `OnStop` log line), and that is the
   instance whose in-flight hand ended up corrupted. Root cause of the missed invocation
   (SNS/EventBridge delivery under high churn vs. some other path) is not yet isolated — do that
-  before changing this mechanism. Application-side, `internal/table/actor.go`'s commit-time
-  duplicate-seat guard (`docs/specs/2026-09-01-duplicate-seat-commit-guard.md`) now makes a missed
-  drain fail safe (refuse + reload) instead of corrupting state, but it does not make the drain
-  itself reliable — a dropped-without-draining instance still costs the game in-progress hands.
-- ~~**No DLQ on either EventBridge Scheduler target**~~ — both have one (14-day retention), and
-  as of #30 each has a `messages-visible` and an `errors` alarm on `ctech-prod-alerts`.
+  before changing this mechanism. **Application-side mitigation shipped (#33):** the Go binary no
+  longer depends solely on this Lambda reaching it — it polls its own instance metadata
+  (`http://169.254.169.254/latest/meta-data/spot/instance-action`) every 5s in prod
+  (`internal/app.pollSpotTermination`) and calls the same `DrainAndRelease` proactively the moment
+  a spot termination notice appears, instead of waiting on the Lambda/lifecycle-hook path.
+  `DrainAndRelease` itself is now idempotent (`tablemanager.Manager.drainMu`/`draining`/`drainDone`)
+  so the proactive poller and the hook-triggered `OnStop` can both fire — concurrently or in either
+  order — without double-releasing a lease. This closes the "no drain attempt at all" failure mode
+  for spot reclamations specifically (the 2-minute spot notice always precedes them); it does not
+  fix the Lambda invocation gap itself, and does not help for non-spot terminations (scale-in,
+  manual instance termination) that carry no metadata notice — those still depend on the Lambda.
+  Application-side, `internal/table/actor.go`'s commit-time duplicate-seat guard
+  (`docs/specs/2026-09-01-duplicate-seat-commit-guard.md`) remains the backstop for whatever gap is
+  left.
+- As of #30, the `cmd/reconcile`, `cmd/tablecleanup`, and archiver Lambdas each have a `messages-visible`
+  (DLQ-depth) alarm and an `errors` alarm on the `ctech-prod-alerts` SNS topic (`cdk/lib/alarms.ts`).
+  The EventBridge Scheduler → Lambda delivery hop itself still has no separate scheduler-target DLQ.
 - **No test** for `oidc-stack.ts`.
 - **B10 (fixed)** — archiver `DynamoEventSource` has `bisectBatchOnError` + `onFailure: SqsDlq`,
   and (#30) a DLQ-depth + `Errors` alarm on `ctech-prod-alerts`.

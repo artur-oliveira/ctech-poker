@@ -19,6 +19,14 @@ const (
 	gsiWinRate     = "gsi_win_rate"
 )
 
+// MinHandsForWinRateRank is the minimum hands_played a player must have in a
+// currency mode before they are eligible for that mode's win_rate leaderboard
+// (issue #63). The gsi_win_rate_pk key is only written once a row crosses this
+// floor and REMOVEd below it, so the sparse GSI excludes sub-floor rows from
+// the ranking query outright; the service layer also filters defensively.
+// Other metrics (hands_won, hands_played) are unaffected.
+const MinHandsForWinRateRank = 100
+
 type Store struct{ base dynamo.Base }
 
 func NewStore(db *dynamodb.Client, env string) *Store {
@@ -34,8 +42,11 @@ func NewStore(db *dynamodb.Client, env string) *Store {
 func (s *Store) IncrementStats(ctx context.Context, playerID, name, mode string, playedDelta, wonDelta int) error {
 	sk := statsSK + "#" + mode
 	key := map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: playerID}, "sk": &types.AttributeValueMemberS{Value: sk}}
-	updateExpr := "ADD #played :played, #won :won SET #updated = :now, #wonpk = :all, #playedpk = :all, #ratepk = :all"
-	names := map[string]string{"#played": "hands_played", "#won": "hands_won", "#updated": "updated_at", "#wonpk": "gsi_hands_won_pk", "#playedpk": "gsi_hands_played_pk", "#ratepk": "gsi_win_rate_pk"}
+	// gsi_win_rate_pk is deliberately NOT set here: it is a sparse key managed
+	// by syncWinRateRankKey once the min-hands floor (issue #63) is known from
+	// the post-update counters.
+	updateExpr := "ADD #played :played, #won :won SET #updated = :now, #wonpk = :all, #playedpk = :all"
+	names := map[string]string{"#played": "hands_played", "#won": "hands_won", "#updated": "updated_at", "#wonpk": "gsi_hands_won_pk", "#playedpk": "gsi_hands_played_pk"}
 	values := map[string]types.AttributeValue{
 		":played": &types.AttributeValueMemberN{Value: strconv.Itoa(playedDelta)}, ":won": &types.AttributeValueMemberN{Value: strconv.Itoa(wonDelta)},
 		":now": &types.AttributeValueMemberS{Value: dynamo.NowStr()}, ":all": &types.AttributeValueMemberS{Value: mode},
@@ -56,7 +67,30 @@ func (s *Store) IncrementStats(ctx context.Context, playerID, name, mode string,
 		return fmt.Errorf("leaderboard: increment stats: %w", err)
 	}
 	played, won := number(out.Attributes["hands_played"]), number(out.Attributes["hands_won"])
-	return s.materializeWinRate(ctx, playerID, mode, played, won)
+	if err := s.materializeWinRate(ctx, playerID, mode, played, won); err != nil {
+		return err
+	}
+	return s.syncWinRateRankKey(ctx, playerID, mode, played)
+}
+
+// syncWinRateRankKey adds gsi_win_rate_pk once a row reaches
+// MinHandsForWinRateRank hands and REMOVEs it below the floor (issue #63).
+// Because it runs on every counter update it also lazily backfills existing
+// sub-floor rows that still carry a stale key from before this change — no
+// migration job needed, the row is cleaned on its owner's next hand.
+func (s *Store) syncWinRateRankKey(ctx context.Context, playerID, mode string, played int64) error {
+	key := map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: playerID}, "sk": &types.AttributeValueMemberS{Value: statsSK + "#" + mode}}
+	input := &dynamodb.UpdateItemInput{Key: key, ExpressionAttributeNames: map[string]string{"#ratepk": "gsi_win_rate_pk"}}
+	if played >= MinHandsForWinRateRank {
+		input.UpdateExpression = new("SET #ratepk = :mode")
+		input.ExpressionAttributeValues = map[string]types.AttributeValue{":mode": &types.AttributeValueMemberS{Value: mode}}
+	} else {
+		input.UpdateExpression = new("REMOVE #ratepk")
+	}
+	if _, err := s.base.UpdateItemRaw(ctx, input); err != nil {
+		return fmt.Errorf("leaderboard: sync win rate rank key: %w", err)
+	}
+	return nil
 }
 
 func number(value types.AttributeValue) int64 {
@@ -112,10 +146,16 @@ func (s *Store) IncrementAchievementPoints(ctx context.Context, playerID, mode s
 			return fmt.Errorf("leaderboard: increment achievement points: %w", err)
 		}
 	}
-	if err := s.base.UpsertAttrs(ctx, playerID, &sk, map[string]any{"gsi_hands_won_pk": mode, "gsi_hands_played_pk": mode, "gsi_win_rate_pk": mode}); err != nil {
+	if err := s.base.UpsertAttrs(ctx, playerID, &sk, map[string]any{"gsi_hands_won_pk": mode, "gsi_hands_played_pk": mode}); err != nil {
 		return fmt.Errorf("leaderboard: index achievement row: %w", err)
 	}
-	return nil
+	// win_rate eligibility follows hands_played only (issue #63) — achievement
+	// points must not put a sub-floor row back on the win_rate board.
+	item, err := s.base.GetItem(ctx, playerID, sk)
+	if err != nil {
+		return fmt.Errorf("leaderboard: reload hands for win rate key: %w", err)
+	}
+	return s.syncWinRateRankKey(ctx, playerID, mode, number(item["hands_played"]))
 }
 
 func (s *Store) Top(ctx context.Context, mode, metric string, limit int, startKey map[string]types.AttributeValue) ([]Entry, map[string]types.AttributeValue, error) {
