@@ -116,19 +116,33 @@ func (s *Store) ActiveFor(ctx context.Context, playerID string) ([]Entitlement, 
 
 // Rebind points an existing, still-valid entitlement at a new table — used
 // when its currently bound table becomes unavailable (archived or full).
-// The condition (row exists AND not expired) is what stops a race from
-// resurrecting an entitlement that just expired, or rebinding one a
-// concurrent caller already deleted. Returns ErrNotFound in either case.
-func (s *Store) Rebind(ctx context.Context, playerID, originTableID, newTableID string) error {
+// expectedBoundTableID must be the caller's own just-read BoundTableID: the
+// condition is a full compare-and-swap (row exists AND not expired AND
+// bound_table_id still equals what the caller observed), not merely
+// "exists and not expired". Without the bound_table_id check, two
+// concurrent buy-ins at two different other tables (B and C) that both
+// observe the same entitlement bound to the same now-unavailable origin
+// table could each successfully "rebind" it — one right after the other,
+// each satisfying "exists AND not expired" — leaving the single paid
+// entitlement pointed at whichever raced last while BOTH callers already
+// proceeded to seat their player for free off the same one confirmed
+// charge (buyin.Service.confirmFeeCharged only checks the fee's own
+// recovery row, which is unaffected by which table ends up bound). The CAS
+// makes exactly one of them win; the loser gets ErrNotFound the same as an
+// expired/deleted row and falls back to its next candidate or a fresh
+// charge. Returns ErrNotFound for every losing case (absent, expired, or
+// bound_table_id changed out from under the caller).
+func (s *Store) Rebind(ctx context.Context, playerID, originTableID, expectedBoundTableID, newTableID string) error {
 	_, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
 		Key: map[string]types.AttributeValue{
 			"pk": &types.AttributeValueMemberS{Value: playerID},
 			"sk": &types.AttributeValueMemberS{Value: sk(originTableID)},
 		},
 		UpdateExpression:    aws.String("SET bound_table_id = :new"),
-		ConditionExpression: aws.String("attribute_exists(pk) AND expires_at > :now"),
+		ConditionExpression: aws.String("attribute_exists(pk) AND expires_at > :now AND bound_table_id = :old"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":new": &types.AttributeValueMemberS{Value: newTableID},
+			":old": &types.AttributeValueMemberS{Value: expectedBoundTableID},
 			":now": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", s.now().Unix())},
 		},
 	})
