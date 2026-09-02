@@ -87,6 +87,16 @@ type RevealedSalt struct {
 // player's own match-history view. HoleCards is only populated when that
 // opponent's hand was actually shown to the table (showdown or voluntary
 // show) — never a folded hand, matching hand.PlayerHandInfo.Revealed.
+//
+// AvatarURL is denormalized here at hand-complete and never refreshed in
+// storage, so a stored row can go stale the moment that opponent's avatar
+// changes or is cleared — API callers must not serve it as-is. As of #68,
+// internal/api/v1/player.go's resolveOpponentAvatars re-resolves it from the
+// opponent's live profile before any hand-history response leaves the
+// handler, clearing it to "" for an opponent whose avatar was since removed
+// or whose profile no longer exists, rather than handing back a 404ing URL.
+// Name has the same staleness problem and is intentionally not addressed
+// here — see Issue #64.
 type OpponentSummary struct {
 	PlayerID  string   `dynamodbav:"player_id" json:"player_id"`
 	Name      string   `dynamodbav:"name,omitempty" json:"name,omitempty"`

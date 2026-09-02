@@ -292,6 +292,15 @@ catalog.
 - A separate audit (`docs/plans/2026-07-19-api-audit-remediation.md`) covers H1–H4 / M1–M7 / L1–L6 / E1–E3 / S1–S7. Some
   fixes are already in code (actor re-resolve `tablews.go:185-198`, prod Valkey fail-fast, HTTP rate limiters
   `router.go:39-41`); others are not — verify before relying on them.
+- **Issue #68 fixed:** `sessionlog.OpponentSummary.AvatarURL` is still captured (denormalized) at hand-complete, but
+  `playerHandlers.handHistory`/`handByID` (`internal/api/v1/player.go`) no longer serve that frozen copy as-is —
+  `resolveOpponentAvatars` re-resolves every opponent's `AvatarURL` from their *current* profile via
+  `player.Service.GetMany` (chunked at `player.MaxBatchProfileIDs` per call) before the response is sent, so a hand
+  recorded before a later `ClearAvatar` (or an avatar-report block) never serves a URL pointing at a deleted object.
+  `player.AvatarURL` already treats a blocked/missing avatar as absent, so a cleared or since-deleted opponent profile
+  now resolves to `""` instead of a stale, 404ing link — same as the player's own profile response. This is the
+  read-time-resolution approach Issue #64 proposes for the same struct's stale `Name` (still open, not implemented),
+  applied narrowly here to `AvatarURL` only; `Name` is untouched by this change.
 
 ## Layout
 

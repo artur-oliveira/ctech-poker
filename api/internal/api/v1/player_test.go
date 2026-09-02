@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
+	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/reports"
@@ -141,6 +142,36 @@ func (s *fakePlayerStore) SetFavoriteReactions(_ context.Context, id string, fav
 func (s *fakePlayerStore) ReportAvatar(context.Context, string, string) error {
 	s.avatarReports++
 	return nil
+}
+
+// fakeMultiPlayerStore backs distinct profiles per player id (unlike
+// fakePlayerStore's single shared profile) so opponent-avatar-resolution
+// tests can exercise several opponents in one hand, some cleared/missing and
+// some not, the way real ClearAvatar callers see it. Embedding
+// fakePlayerStore supplies the write-path methods the profileStore interface
+// still requires but these tests don't exercise.
+type fakeMultiPlayerStore struct {
+	fakePlayerStore
+	profiles map[string]player.PlayerProfile
+}
+
+func (s *fakeMultiPlayerStore) Get(_ context.Context, id string) (*player.PlayerProfile, error) {
+	if profile, ok := s.profiles[id]; ok {
+		profile.UserID = id
+		return &profile, nil
+	}
+	return nil, nil
+}
+
+func (s *fakeMultiPlayerStore) GetMany(_ context.Context, ids []string) (map[string]player.PlayerProfile, error) {
+	out := make(map[string]player.PlayerProfile, len(ids))
+	for _, id := range ids {
+		if profile, ok := s.profiles[id]; ok {
+			profile.UserID = id
+			out[id] = profile
+		}
+	}
+	return out, nil
 }
 
 func TestLegacyAvatarReportAlsoCreatesModerationQueueItem(t *testing.T) {
@@ -434,4 +465,107 @@ func TestShowcasePlaystyleRequiresOptInAndPublicSample(t *testing.T) {
 			}
 		})
 	}
+}
+
+// opponentHandReader is a sessionLogReader stub whose ListHands/GetHand
+// return a fixed hand carrying the opponents fixture below, so
+// TestHandHistoryDropsStaleOpponentAvatar and TestHandByIDDropsStaleOpponentAvatar
+// can drive the real handHistory/handByID handlers end to end.
+type opponentHandReader struct{ mockHistoryReader }
+
+func opponentFixtureHand(playerID string) sessionlog.HandItem {
+	return sessionlog.HandItem{
+		PK: playerID, HandID: "h-1", NetChange: 50,
+		Opponents: []sessionlog.OpponentSummary{
+			{PlayerID: "still-has-avatar", Name: "Ainda Tem", AvatarURL: "https://cdn.example.com/av/still-has-avatar/1.jpg"},
+			{PlayerID: "cleared-avatar", Name: "Limpou o Avatar", AvatarURL: "https://cdn.example.com/av/cleared-avatar/1.jpg"},
+			{PlayerID: "deleted-player", Name: "Sumiu", AvatarURL: "https://cdn.example.com/av/deleted-player/1.jpg"},
+		},
+	}
+}
+
+func (m *opponentHandReader) ListHands(_ context.Context, playerID, _ string, _ int, _ map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error) {
+	return []sessionlog.HandItem{opponentFixtureHand(playerID)}, nil, nil
+}
+
+func (m *opponentHandReader) GetHand(_ context.Context, playerID, _, handID string) (*sessionlog.HandItem, error) {
+	hand := opponentFixtureHand(playerID)
+	hand.HandID = handID
+	return &hand, nil
+}
+
+// newOpponentAvatarPlayers seeds a live profile for "still-has-avatar" and
+// leaves "cleared-avatar" present but avatar-less (the post-ClearAvatar
+// shape: no avatar_key) — "deleted-player" is absent from the store
+// entirely, covering a profile that no longer resolves at all.
+func newOpponentAvatarPlayers() *player.Service {
+	return player.NewService(&fakeMultiPlayerStore{profiles: map[string]player.PlayerProfile{
+		"still-has-avatar": {AvatarKey: "av/still-has-avatar/2.jpg", AvatarVersion: 2},
+		"cleared-avatar":   {AvatarVersion: 1},
+	}})
+}
+
+func assertNoStaleAvatars(t *testing.T, hand sessionlog.HandItem) {
+	t.Helper()
+	if len(hand.Opponents) != 3 {
+		t.Fatalf("expected 3 opponents, got %d", len(hand.Opponents))
+	}
+	byID := make(map[string]sessionlog.OpponentSummary, len(hand.Opponents))
+	for _, opp := range hand.Opponents {
+		byID[opp.PlayerID] = opp
+	}
+	if got := byID["still-has-avatar"].AvatarURL; got != "https://cdn.example.com/still-has-avatar/2.jpg" {
+		t.Fatalf("still-has-avatar: got avatar_url %q, want the live resolved URL", got)
+	}
+	if got := byID["cleared-avatar"].AvatarURL; got != "" {
+		t.Fatalf("cleared-avatar: got stale avatar_url %q, want empty (404 risk after ClearAvatar)", got)
+	}
+	if got := byID["deleted-player"].AvatarURL; got != "" {
+		t.Fatalf("deleted-player: got stale avatar_url %q, want empty (profile no longer exists)", got)
+	}
+}
+
+func TestHandHistoryDropsStaleOpponentAvatar(t *testing.T) {
+	h := &playerHandlers{
+		players:  newOpponentAvatarPlayers(),
+		sessions: &opponentHandReader{},
+		cfg:      &config.Config{AvatarBaseURL: "https://cdn.example.com"},
+	}
+	app := fiber.New()
+	auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "viewer"); return c.Next() }
+	app.Get("/players/me/hands", auth, h.handHistory)
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/players/me/hands", nil))
+	if err != nil || resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, err = %v", resp.StatusCode, err)
+	}
+	var page struct {
+		Data []sessionlog.HandItem `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+		t.Fatalf("decode page: %v", err)
+	}
+	if len(page.Data) != 1 {
+		t.Fatalf("expected 1 hand, got %d", len(page.Data))
+	}
+	assertNoStaleAvatars(t, page.Data[0])
+}
+
+func TestHandByIDDropsStaleOpponentAvatar(t *testing.T) {
+	h := &playerHandlers{
+		players:  newOpponentAvatarPlayers(),
+		sessions: &opponentHandReader{},
+		cfg:      &config.Config{AvatarBaseURL: "https://cdn.example.com"},
+	}
+	app := fiber.New()
+	auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "viewer"); return c.Next() }
+	app.Get("/players/me/hands/:id", auth, h.handByID)
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/players/me/hands/h-1", nil))
+	if err != nil || resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, err = %v", resp.StatusCode, err)
+	}
+	var hand sessionlog.HandItem
+	if err := json.NewDecoder(resp.Body).Decode(&hand); err != nil {
+		t.Fatalf("decode hand: %v", err)
+	}
+	assertNoStaleAvatars(t, hand)
 }
