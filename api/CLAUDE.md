@@ -30,7 +30,9 @@ See `docs/plans/2026-08-21-entry-fee-entitlement.md`. **Still blocking, found 20
 - The real-money buy-in path skips the poker-terms-acceptance check the sandbox path performs (`internal/app/app.go`).
 - No WAF at the CloudFront edge (and the distribution itself is being retired — the app is on Cloudflare Workers); application rate limits (`internal/api/v1/ratelimit.go`) and Turnstile are the only
   protection.
-- Neither EventBridge Scheduler target (`cmd/reconcile`, `cmd/tablecleanup`) has a DLQ.
+- Both EventBridge Scheduler targets (`cmd/reconcile`, `cmd/tablecleanup`) and the archiver have an SQS DLQ,
+  and as of #30 each has a DLQ-depth alarm + a Lambda-`Errors` alarm on the `ctech-prod-alerts` SNS topic
+  (`cdk/lib/alarms.ts`).
 
 ## Conventions (follow these)
 
@@ -142,7 +144,8 @@ catalog.
 
 ## Other known issues (documentation only — see api/README.md)
 
-- B10 fixed: archiver stream failures now go to an SQS DLQ with a CloudWatch alarm (`cdk/lib/archiver-stack.ts`).
+- B10 fixed: archiver stream failures now go to an SQS DLQ with a DLQ-depth + `Errors` CloudWatch alarm
+  on `ctech-prod-alerts` (`cdk/lib/archiver-stack.ts`, `cdk/lib/alarms.ts`; #30).
 - B31 fixed by rejection: `leaderboard.Top("achievement_points")` returns an unsupported-metric error instead of
   silently ranking via `gsi_hands_won`; add a `gsi_achievement_points` GSI before re-enabling the metric.
 - B32 fixed: `ShuffleCommitHash` and the per-card `RootCommitHash` are published from

@@ -19,6 +19,13 @@ export const CERT_ARN =
 
 export const GITHUB_REPO_DEFAULT = 'artur-oliveira/ctech-poker';
 
+/**
+ * Shared cross-service alert topic owned/provisioned out of band (email
+ * subscription already attached). CDK imports it via
+ * `sns.Topic.fromTopicArn` — it never creates a topic or a subscription.
+ */
+export const ALERTS_TOPIC_ARN = 'arn:aws:sns:us-east-1:868899309401:ctech-prod-alerts';
+
 // ── Naming ──────────────────────────────────────────────────────────────────
 export const SERVICE = 'ctech-poker';
 export const BASE_DOMAIN = 'aoctech.app';

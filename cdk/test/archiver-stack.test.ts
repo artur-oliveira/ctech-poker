@@ -21,12 +21,28 @@ test('creates an archive bucket and a Lambda subscribed to the action log stream
   template.hasResourceProperties('AWS::Lambda::Function', {FunctionName: 'dev-poker-action-log-archiver'});
   template.resourceCountIs('AWS::Lambda::EventSourceMapping', 1);
 
-  // B10: poison records must land in a DLQ (not be dropped). No alarm (removed
-  // 2026-08-17: unmonitored, no SNS subscriber, billed past the CloudWatch free tier).
+  // B10: poison records must land in a DLQ (not be dropped).
   template.hasResourceProperties('AWS::SQS::Queue', {QueueName: 'dev-poker-action-log-archiver-dlq'});
   template.hasResourceProperties('AWS::Lambda::EventSourceMapping', {
     BisectBatchOnFunctionError: true,
     DestinationConfig: {OnFailure: {Destination: {'Fn::GetAtt': [Match.stringLikeRegexp('ArchiverDLQ'), 'Arn']}}},
   });
-  template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
+  // #30: DLQ-depth + Lambda-errors alarms notifying the existing
+  // ctech-prod-alerts topic (imported via fromTopicArn, not created here).
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
+  template.resourceCountIs('AWS::SNS::Topic', 0);
+  const alerts = 'arn:aws:sns:us-east-1:868899309401:ctech-prod-alerts';
+  template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+    Namespace: 'AWS/SQS',
+    MetricName: 'ApproximateNumberOfMessagesVisible',
+    TreatMissingData: 'notBreaching',
+    AlarmActions: [alerts],
+    OKActions: [alerts],
+  });
+  template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+    Namespace: 'AWS/Lambda',
+    MetricName: 'Errors',
+    AlarmActions: [alerts],
+    OKActions: [alerts],
+  });
 });

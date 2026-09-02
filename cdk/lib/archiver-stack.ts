@@ -13,6 +13,7 @@ import {StartingPosition} from 'aws-cdk-lib/aws-lambda';
 import {Construct} from 'constructs';
 import {Environment} from '@aoctech/cdk';
 import {localGoBundling} from "./bundle";
+import {addLambdaDlqAlarms} from './alarms';
 
 // localGoBundling builds the archiver binary with the host's own Go
 // toolchain, skipping Docker entirely when `go` is on PATH — Docker-in-CI
@@ -74,5 +75,7 @@ export class ArchiverStack extends cdk.Stack {
       bisectBatchOnError: true,
       onFailure: new SqsDlq(dlq),
     }));
+
+    addLambdaDlqAlarms(this, 'Archiver', fn, dlq);
   }
 }

@@ -38,10 +38,24 @@ test('schedules the sweep every 30 minutes', () => {
     QueueName: 'dev-ctech-poker-tablecleanup-dlq',
     MessageRetentionPeriod: 1209600,
   });
-  // All alarms removed (dlq-messages/throttles/missed-run 2026-08-17, the
-  // Lambda-errors alarm 2026-08-19): unmonitored, no SNS subscriber, billed
-  // past the CloudWatch free tier.
-  template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
+  // #30: DLQ-depth + Lambda-errors alarms notifying the existing
+  // ctech-prod-alerts topic (imported, not created here).
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
+  template.resourceCountIs('AWS::SNS::Topic', 0);
+  const alerts = 'arn:aws:sns:us-east-1:868899309401:ctech-prod-alerts';
+  template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+    Namespace: 'AWS/SQS',
+    MetricName: 'ApproximateNumberOfMessagesVisible',
+    TreatMissingData: 'notBreaching',
+    AlarmActions: [alerts],
+    OKActions: [alerts],
+  });
+  template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+    Namespace: 'AWS/Lambda',
+    MetricName: 'Errors',
+    AlarmActions: [alerts],
+    OKActions: [alerts],
+  });
 });
 
 test('the Lambda role can Query the table-state index but never Scan it', () => {

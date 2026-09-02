@@ -7,6 +7,7 @@ import {Construct} from 'constructs';
 import {Environment} from '@aoctech/cdk';
 import {localGoBundling} from "./bundle";
 import {reconcileDlqName, reconcileJobName} from './constants';
+import {addLambdaDlqAlarms} from './alarms';
 
 const RECONCILE_RATE_MINUTES = 5;
 
@@ -81,6 +82,8 @@ export class ReconcileStack extends cdk.Stack {
       receiveMessageWaitTime: cdk.Duration.seconds(20),
     });
     dlq.grantSendMessages(schedulerRole);
+
+    addLambdaDlqAlarms(this, 'Reconcile', fn, dlq);
 
     new scheduler.CfnSchedule(this, 'ReconcileSchedule', {
       name: reconcileJobName(environment),

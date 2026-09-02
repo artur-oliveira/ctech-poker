@@ -7,6 +7,7 @@ import {Construct} from 'constructs';
 import {Environment} from '@aoctech/cdk';
 import {localGoBundling} from './bundle';
 import {tableCleanupDlqName, tableCleanupJobName} from './constants';
+import {addLambdaDlqAlarms} from './alarms';
 
 const TABLE_CLEANUP_RATE_MINUTES = 30;
 
@@ -95,6 +96,8 @@ export class TableCleanupStack extends cdk.Stack {
       receiveMessageWaitTime: cdk.Duration.seconds(20),
     });
     dlq.grantSendMessages(schedulerRole);
+
+    addLambdaDlqAlarms(this, 'TableCleanup', fn, dlq);
 
     new scheduler.CfnSchedule(this, 'TableCleanupSchedule', {
       name: tableCleanupJobName(environment),
