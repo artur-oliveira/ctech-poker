@@ -1,11 +1,16 @@
 'use client';
 import {useEffect, useRef, useState} from 'react';
+import Link from 'next/link';
 import {LoaderCircle, ShieldCheck} from 'lucide-react';
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle} from '@/components/ui/dialog';
 import {Button} from '@/components/ui/button';
 
 const TURNSTILE_SCRIPT_ID = 'cloudflare-turnstile-script';
 const TURNSTILE_SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+// If the script is blocked or the widget renders but never fires a callback, the
+// dialog would otherwise sit on "Preparando verificação…" forever with the table
+// locked behind it. Flip to an actionable error state after this long.
+const LOAD_TIMEOUT_MS = 15_000;
 
 type TurnstileAPI = {
   render: (element: HTMLElement, options: Record<string, unknown>) => string;
@@ -24,7 +29,7 @@ export function BotChallenge({required, onTokenAction}: {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef('');
   const [status, setStatus] = useState<'loading' | 'ready' | 'checking' | 'error'>('loading');
-  
+
   useEffect(() => {
     if (!required || !siteKey) return undefined;
     let cancelled = false;
@@ -60,14 +65,22 @@ export function BotChallenge({required, onTokenAction}: {
       script.addEventListener('error', () => setStatus('error'), {once: true});
       document.head.appendChild(script);
     }
+    const timeout = window.setTimeout(() => {
+      if (!cancelled) setStatus(current => (current === 'loading' ? 'error' : current));
+    }, LOAD_TIMEOUT_MS);
     return () => {
       cancelled = true;
+      window.clearTimeout(timeout);
       if (widgetRef.current && turnstileAPI()) turnstileAPI()?.remove(widgetRef.current);
       widgetRef.current = '';
     };
   }, [onTokenAction, required, siteKey]);
-  
+
   if (!required) return null;
+  const recovery = <div className="bot-challenge-recovery">
+    <Button type="button" onClick={() => window.location.reload()}>Recarregar página</Button>
+    <Button type="button" variant="ghost" render={<Link href="/lobby"/>}>Voltar ao lobby</Button>
+  </div>;
   return <Dialog open onOpenChange={() => undefined}>
     <DialogContent className="bot-challenge-dialog">
       <DialogHeader>
@@ -80,7 +93,7 @@ export function BotChallenge({required, onTokenAction}: {
         <p className="bot-challenge-error" role="alert">
           A verificação ainda não foi configurada neste ambiente.
         </p>
-        <Button type="button" onClick={() => window.location.reload()}>Recarregar página</Button>
+        {recovery}
       </> : <>
         <div ref={containerRef} className="turnstile-slot"/>
         {(status === 'loading' || status === 'checking') && <p className="bot-challenge-status">
@@ -90,6 +103,7 @@ export function BotChallenge({required, onTokenAction}: {
         {status === 'error' && <p className="bot-challenge-error" role="alert">
             Não foi possível validar. Recarregue a página para tentar novamente.
         </p>}
+        {status !== 'ready' && recovery}
       </>}
       <small>O relógio da mesa continua visível ao fundo e seu Time Bank permanece disponível.</small>
     </DialogContent>
