@@ -65,7 +65,10 @@ export function SocialInbox({events, isLoading = false, isError = false, hasNext
         return <li key={event.event_id}
                    className={`people-row people-row-activity ${event.unread ? 'is-unread' : ''}`}>
           <div className="people-row-identity">
-            <b>{socialEventCopy(event, nameOf(event.actor_id))}</b>
+            {/* actor_name is resolved server-side for every actor (#73); nameOf
+                — sourced from the friends/requests lists already in memory —
+                is only a fallback for an older cached page without it. */}
+            <b>{socialEventCopy(event, event.actor_name || nameOf(event.actor_id))}</b>
             <small>{new Date(event.created_at).toLocaleString('pt-BR')}</small>
           </div>
           {inviteActionable(event) && event.room_id && <div className="people-row-actions">

@@ -292,6 +292,12 @@ catalog.
 - A separate audit (`docs/plans/2026-07-19-api-audit-remediation.md`) covers H1–H4 / M1–M7 / L1–L6 / E1–E3 / S1–S7. Some
   fixes are already in code (actor re-resolve `tablews.go:185-198`, prod Valkey fail-fast, HTTP rate limiters
   `router.go:39-41`); others are not — verify before relying on them.
+- Issue #73 fixed: `social.Event` still only stores `actor_id` — no name/avatar denormalization — but `GET
+  /social/inbox` now resolves every distinct actor on the page through one `player.Service.GetMany` batch call
+  (`socialHandlers.hydrateInboxActors`, `internal/api/v1/social.go`) and adds `actor_name`/`actor_avatar_url` to the
+  response only. This closes the "Visitante" bug (a stranger's `friend_request` or a `table_invite` couldn't be
+  named because the frontend's `nameResolver` only knew actors already in the friends/requests lists) without
+  reintroducing the #64 name-drift failure mode a write-time denormalized copy would have.
 
 ## Layout
 

@@ -29,6 +29,12 @@ export interface SocialInboxEvent {
   event_id: string;
   type: SocialEventType;
   actor_id: string;
+  /** Resolved server-side from actor_id via a single batch lookup per feed
+   * page (#73) — present for any actor with a profile, not just one already
+   * loaded into the friends/requests lists. Empty when the profile can't be
+   * resolved (e.g. deleted); callers should fall back to a placeholder. */
+  actor_name?: string;
+  actor_avatar_url?: string;
   status: SocialEventStatus;
   room_id?: string;
   unread: boolean;
