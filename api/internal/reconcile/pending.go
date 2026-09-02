@@ -91,6 +91,26 @@ func (s *PendingStore) Record(ctx context.Context, p PendingCashout) error {
 	return nil
 }
 
+// Get reads back a single recovery row by its ID, or (nil, nil) if none
+// exists. Used to confirm whether a specific settlement obligation (e.g. a
+// real-money entry-fee charge, keyed off its owning entitlement's persisted
+// CreatedAt) actually resolved, instead of trusting a related row's mere
+// existence as proof the money moved.
+func (s *PendingStore) Get(ctx context.Context, id string) (*PendingCashout, error) {
+	item, err := s.base.GetItem(ctx, id, pendingSK)
+	if err != nil {
+		return nil, fmt.Errorf("reconcile: get: %w", err)
+	}
+	if len(item) == 0 {
+		return nil, nil
+	}
+	p, err := dynamo.Decode[PendingCashout](item)
+	if err != nil {
+		return nil, fmt.Errorf("reconcile: decode: %w", err)
+	}
+	return p, nil
+}
+
 func (s *PendingStore) MarkResolved(ctx context.Context, id string) error {
 	sk := pendingSK
 	_, err := s.base.UpdateItem(ctx, id, &sk, map[string]any{

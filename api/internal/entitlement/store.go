@@ -2,6 +2,7 @@ package entitlement
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -61,19 +62,31 @@ func NewStore(db *dynamodb.Client, env string) *Store {
 // buy-in at the same table recharge once the previous entitlement's window
 // has genuinely passed (an expired row is otherwise indistinguishable from a
 // live one until DynamoDB's eventually-consistent TTL sweep reaps it).
-// Returns ErrAlreadyClaimed if a still-valid entitlement already exists.
-func (s *Store) Claim(ctx context.Context, e Entitlement) error {
+//
+// Returns (persisted, nil) on a fresh claim. Returns (winning, ErrAlreadyClaimed)
+// when a still-valid entitlement already exists — winning is that row as
+// DynamoDB actually persisted it (read back atomically from the same
+// conditional PutItem via ReturnValuesOnConditionCheckFailure, not a
+// separate query), never this call's own input. A caller that raced and
+// lost must derive any resulting idempotency key from winning, not from its
+// own request-local values: two concurrent callers computing different keys
+// from their own inputs is exactly what let buyin.Service's old
+// chargeEntryFee treat "someone else claimed it" as "the fee is covered"
+// without ever confirming the actual charge — see
+// docs/plans/2026-08-21-entry-fee-entitlement.md and issue #40.
+func (s *Store) Claim(ctx context.Context, e Entitlement) (Entitlement, error) {
 	created := e.CreatedAt
 	if created.IsZero() {
 		created = s.now()
 	}
+	e.CreatedAt = created
 	item, err := dynamo.Encode(entitlementItem{
 		PK: e.PlayerID, SK: sk(e.OriginTableID), BoundTableID: e.BoundTableID, Tier: e.Tier,
 		FeeCents: e.FeeCents, ExpiresAt: e.ExpiresAt.Unix(), CreatedAt: created.Unix(),
 		TTL: e.ExpiresAt.Add(ttlSlack).Unix(),
 	})
 	if err != nil {
-		return fmt.Errorf("entitlement: encode: %w", err)
+		return Entitlement{}, fmt.Errorf("entitlement: encode: %w", err)
 	}
 	_, err = s.base.PutItemRaw(ctx, &dynamodb.PutItemInput{
 		Item:                item,
@@ -81,14 +94,35 @@ func (s *Store) Claim(ctx context.Context, e Entitlement) error {
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":now": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", s.now().Unix())},
 		},
+		ReturnValuesOnConditionCheckFailure: types.ReturnValuesOnConditionCheckFailureAllOld,
 	})
 	if err != nil {
 		if dynamo.IsConditionFailed(err) {
-			return ErrAlreadyClaimed
+			if winning, ok := decodeConditionFailureItem(err); ok {
+				return winning.toEntitlement(), ErrAlreadyClaimed
+			}
+			return Entitlement{}, ErrAlreadyClaimed
 		}
-		return fmt.Errorf("entitlement: claim: %w", err)
+		return Entitlement{}, fmt.Errorf("entitlement: claim: %w", err)
 	}
-	return nil
+	return e, nil
+}
+
+// decodeConditionFailureItem extracts and decodes the pre-existing item
+// DynamoDB returns on a PutItem whose ConditionExpression failed, when the
+// call set ReturnValuesOnConditionCheckFailure: ALL_OLD. Returns false if
+// err isn't that specific exception, or carries no item (e.g. a
+// TransactWrite condition failure, which never populates it the same way).
+func decodeConditionFailureItem(err error) (entitlementItem, bool) {
+	var condErr *types.ConditionalCheckFailedException
+	if !errors.As(err, &condErr) || len(condErr.Item) == 0 {
+		return entitlementItem{}, false
+	}
+	item, decErr := dynamo.Decode[entitlementItem](condErr.Item)
+	if decErr != nil || item == nil {
+		return entitlementItem{}, false
+	}
+	return *item, true
 }
 
 // ActiveFor returns playerID's not-yet-expired entitlements. A player holds

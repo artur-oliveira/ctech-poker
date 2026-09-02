@@ -64,11 +64,12 @@ func TestClaimIsExactlyOnceUnderConcurrency(t *testing.T) {
 	const n = 8
 	var wg sync.WaitGroup
 	results := make([]error, n)
+	winners := make([]Entitlement, n)
 	for i := 0; i < n; i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			results[i] = s.Claim(ctx, base)
+			winners[i], results[i] = s.Claim(ctx, base)
 		}(i)
 	}
 	wg.Wait()
@@ -95,6 +96,21 @@ func TestClaimIsExactlyOnceUnderConcurrency(t *testing.T) {
 	if len(ents) != 1 {
 		t.Fatalf("expected exactly one persisted entitlement, got %d", len(ents))
 	}
+
+	// Every racer — the one that won and every one that lost — must agree on
+	// the exact same persisted CreatedAt (to whole-second precision, which is
+	// all a caller's derived fee idempotency key uses), since a caller
+	// derives a shared fee idempotency key from it. A loser reporting
+	// anything but the winner's own CreatedAt would reopen the free-seat
+	// race this atomic read-back closes.
+	for i, err := range results {
+		if err == nil {
+			continue
+		}
+		if winners[i].CreatedAt.Unix() != ents[0].CreatedAt.Unix() {
+			t.Fatalf("loser %d reported CreatedAt %v, want the winner's persisted %v", i, winners[i].CreatedAt, ents[0].CreatedAt)
+		}
+	}
 }
 
 func TestClaimRejectsSecondCallForSameOriginTable(t *testing.T) {
@@ -102,11 +118,16 @@ func TestClaimRejectsSecondCallForSameOriginTable(t *testing.T) {
 	ctx := context.Background()
 	e := Entitlement{PlayerID: "player-1", OriginTableID: "table-1", BoundTableID: "table-1", Tier: "micro", FeeCents: 100, ExpiresAt: time.Now().Add(Window)}
 
-	if err := s.Claim(ctx, e); err != nil {
+	first, err := s.Claim(ctx, e)
+	if err != nil {
 		t.Fatalf("first claim: %v", err)
 	}
-	if err := s.Claim(ctx, e); !errors.Is(err, ErrAlreadyClaimed) {
+	second, err := s.Claim(ctx, e)
+	if !errors.Is(err, ErrAlreadyClaimed) {
 		t.Fatalf("second claim: got %v, want ErrAlreadyClaimed", err)
+	}
+	if second.CreatedAt.Unix() != first.CreatedAt.Unix() {
+		t.Fatalf("expected the losing claim to report the winner's own CreatedAt %v, got %v", first.CreatedAt, second.CreatedAt)
 	}
 }
 
@@ -116,10 +137,10 @@ func TestActiveForOmitsExpiredEntitlements(t *testing.T) {
 
 	expired := Entitlement{PlayerID: "player-1", OriginTableID: "table-expired", BoundTableID: "table-expired", Tier: "micro", FeeCents: 100, ExpiresAt: time.Now().Add(-time.Hour)}
 	active := Entitlement{PlayerID: "player-1", OriginTableID: "table-active", BoundTableID: "table-active", Tier: "micro", FeeCents: 100, ExpiresAt: time.Now().Add(Window)}
-	if err := s.Claim(ctx, expired); err != nil {
+	if _, err := s.Claim(ctx, expired); err != nil {
 		t.Fatalf("claim expired: %v", err)
 	}
-	if err := s.Claim(ctx, active); err != nil {
+	if _, err := s.Claim(ctx, active); err != nil {
 		t.Fatalf("claim active: %v", err)
 	}
 
@@ -136,7 +157,7 @@ func TestRebindMovesBoundTableID(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	e := Entitlement{PlayerID: "player-1", OriginTableID: "table-origin", BoundTableID: "table-origin", Tier: "micro", FeeCents: 100, ExpiresAt: time.Now().Add(Window)}
-	if err := s.Claim(ctx, e); err != nil {
+	if _, err := s.Claim(ctx, e); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
 
@@ -157,7 +178,7 @@ func TestRebindFailsForExpiredEntitlement(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	e := Entitlement{PlayerID: "player-1", OriginTableID: "table-origin", BoundTableID: "table-origin", Tier: "micro", FeeCents: 100, ExpiresAt: time.Now().Add(-time.Minute)}
-	if err := s.Claim(ctx, e); err != nil {
+	if _, err := s.Claim(ctx, e); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
 

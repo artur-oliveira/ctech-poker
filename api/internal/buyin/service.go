@@ -50,13 +50,14 @@ type pendingStore interface {
 	BuildRecordTx(reconcile.PendingCashout) (types.TransactWriteItem, error)
 	Record(context.Context, reconcile.PendingCashout) error
 	MarkResolved(context.Context, string) error
+	Get(context.Context, string) (*reconcile.PendingCashout, error)
 }
 
 // entitlementStore is the subset of *entitlement.Store the real-money entry
 // fee needs — narrowed to an interface so tests can fake it.
 type entitlementStore interface {
 	ActiveFor(ctx context.Context, playerID string) ([]entitlement.Entitlement, error)
-	Claim(ctx context.Context, e entitlement.Entitlement) error
+	Claim(ctx context.Context, e entitlement.Entitlement) (entitlement.Entitlement, error)
 	Rebind(ctx context.Context, playerID, originTableID, newTableID string) error
 }
 
@@ -257,7 +258,7 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 	// a failure here aborts the buy-in cleanly, with nobody seated and no
 	// stack debit to refund.
 	if room != nil && room.CurrencyMode == roomstore.CurrencyModeReal && room.EntryFeeCents > 0 {
-		if err := s.resolveEntitlement(ctx, room, playerID, nonce); err != nil {
+		if err := s.resolveEntitlement(ctx, room, playerID); err != nil {
 			return err
 		}
 	}
@@ -355,7 +356,23 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 // docs/plans/2026-08-21-entry-fee-entitlement.md's Fase 2. Called only for
 // real-money rooms with a non-zero entry fee; the caller must not have moved
 // any stack money yet.
-func (s *Service) resolveEntitlement(ctx context.Context, room *roomstore.Room, playerID, nonce string) error {
+//
+// An entitlement row existing and being unexpired is NOT by itself proof the
+// fee was ever actually collected for it — Claim persists the row before
+// DebitReal runs, and that debit can fail (transiently, or forever). The old
+// code treated "found a matching active entitlement" as sufficient and
+// returned immediately; this is the more common way issue #40's free-seat
+// gap actually manifested (far more often than the tight two-in-flight-Claim
+// race), since any buy-in arriving after the entitlement row was persisted
+// but before or instead of its debit succeeding takes this exact path.
+// confirmFeeCharged is what actually closes the gap here: it never re-runs
+// DebitReal for an entitlement whose fee has genuinely already resolved (so
+// a legitimate rebuy/re-entry within the window still costs zero extra
+// wallet calls, same as before), but it does re-attempt — idempotently,
+// keyed off the entitlement's own persisted CreatedAt — for one that is
+// still outstanding, and it is what chargeEntryFee's own Claim-race branch
+// now delegates to as well, so both paths share one definition of "covered".
+func (s *Service) resolveEntitlement(ctx context.Context, room *roomstore.Room, playerID string) error {
 	if s.entitlements == nil {
 		return errors.New("buyin: entitlement store unavailable; refusing real-money admission with an entry fee")
 	}
@@ -365,7 +382,7 @@ func (s *Service) resolveEntitlement(ctx context.Context, room *roomstore.Room, 
 	}
 	for _, e := range ents {
 		if e.Tier == room.Tier && e.BoundTableID == room.ID {
-			return nil
+			return s.confirmFeeCharged(ctx, room, playerID, e)
 		}
 	}
 	for _, e := range ents {
@@ -389,9 +406,13 @@ func (s *Service) resolveEntitlement(ctx context.Context, room *roomstore.Room, 
 			}
 			return fmt.Errorf("buyin: rebind entitlement: %w", err)
 		}
-		return nil
+		// Rebind only ever moves bound_table_id — CreatedAt (and so the fee's
+		// derived idempotency key) is unchanged, so e still confirms the
+		// right obligation for the table this reservation now grants access
+		// to.
+		return s.confirmFeeCharged(ctx, room, playerID, e)
 	}
-	return s.chargeEntryFee(ctx, room, playerID, nonce)
+	return s.chargeEntryFee(ctx, room, playerID)
 }
 
 // tableUnavailable reports whether tableID (some OTHER real-money table a
@@ -423,14 +444,29 @@ func (s *Service) tableUnavailable(ctx context.Context, tableID string) (bool, e
 	return room.MaxSeats > 0 && occupied >= room.MaxSeats, nil
 }
 
-// chargeEntryFee claims a fresh entitlement for room and charges its fixed
-// fee. Claim commits before DebitReal so a debit failure never leaves a
-// charge with no matching reservation; the entitlement itself is left in
-// place on a debit failure (never seating this player) so an idempotent
-// retry — this request's caller retrying the whole buy-in, or
-// cmd/reconcile's fee_debit sweep — can complete the same charge exactly
-// once, keyed by feeKey.
-func (s *Service) chargeEntryFee(ctx context.Context, room *roomstore.Room, playerID, nonce string) error {
+// chargeEntryFee claims a fresh entitlement for room, then hands off to
+// confirmFeeCharged to actually collect the fee. Claim commits before any
+// money moves so a debit failure never leaves a charge with no matching
+// reservation.
+//
+// The Claim race: when two BuyIn calls for the same (player, room) reach
+// Claim concurrently, exactly one persists the row and the other gets back
+// entitlement.ErrAlreadyClaimed. The old code treated ErrAlreadyClaimed as
+// "the fee is covered" and returned immediately, seating that caller without
+// ever confirming the winner's DebitReal actually succeeded — if the winner's
+// debit failed and its retries were later exhausted (quarantined, see PR
+// #130 / cmd/reconcile's manual_review path), the loser's player had already
+// been seated for free. There is no such gap here: every caller, winner or
+// loser, runs confirmFeeCharged against the entitlement row Claim reports as
+// the actual persisted winner (never against this call's own request-local
+// nonce) — see entitlement.Store.Claim's doc. ctech-wallet's idempotency-key
+// dedup then collapses every concurrent attempt into at most one real
+// charge, while guaranteeing at least one caller's own DebitReal call must
+// return success before that caller (or any other racer sharing the same
+// key) is allowed to seat. If the charge is genuinely and permanently
+// failing, every racing caller returns that failure and nobody is seated for
+// free.
+func (s *Service) chargeEntryFee(ctx context.Context, room *roomstore.Room, playerID string) error {
 	if s.pending == nil {
 		return errors.New("buyin: settlement store unavailable; refusing real-money admission with an entry fee")
 	}
@@ -438,24 +474,45 @@ func (s *Service) chargeEntryFee(ctx context.Context, room *roomstore.Room, play
 		PlayerID: playerID, OriginTableID: room.ID, BoundTableID: room.ID,
 		Tier: room.Tier, FeeCents: room.EntryFeeCents, ExpiresAt: s.now().Add(entitlement.Window),
 	}
-	if err := s.entitlements.Claim(ctx, claim); err != nil {
-		if errors.Is(err, entitlement.ErrAlreadyClaimed) {
-			// A concurrent BuyIn for this same (player, room) already claimed
-			// (and is charging, or has charged) it — treat as covered.
-			return nil
-		}
+	winner, err := s.entitlements.Claim(ctx, claim)
+	if err != nil && !errors.Is(err, entitlement.ErrAlreadyClaimed) {
 		return fmt.Errorf("buyin: claim entitlement: %w", err)
 	}
+	return s.confirmFeeCharged(ctx, room, playerID, winner)
+}
 
-	feeKey := fmt.Sprintf("%s#%s#buyinfee#%s", room.ID, playerID, nonce)
+// confirmFeeCharged is the single place that decides an entitlement's fee is
+// "covered": a resolved recovery row means the fee genuinely cleared and
+// nothing more happens — zero further wallet calls, so a legitimate
+// rebuy/re-entry within the window (resolveEntitlement's ActiveFor match) or
+// a rebind to another same-tier table stays free, exactly as before. Any
+// other outcome (no row yet — Claim persisted but the process never reached
+// Record/DebitReal, or one that Record'd but never resolved) re-attempts the
+// same idempotent record-then-debit sequence, keyed off e.OriginTableID and
+// e.CreatedAt so every caller checking the same entitlement — a Claim-race
+// loser, or a later buy-in arriving after the row exists but before/instead
+// of its debit succeeding — converges on one real charge instead of any of
+// them silently treating "the row exists" as "the fee was paid".
+func (s *Service) confirmFeeCharged(ctx context.Context, room *roomstore.Room, playerID string, e entitlement.Entitlement) error {
+	if s.pending == nil {
+		return errors.New("buyin: settlement store unavailable; refusing real-money admission with an entry fee")
+	}
+	feeKey := fmt.Sprintf("%s#%s#buyinfee#%d", e.OriginTableID, playerID, e.CreatedAt.Unix())
+	existing, err := s.pending.Get(ctx, feeKey)
+	if err != nil {
+		return fmt.Errorf("buyin: load fee recovery intent: %w", err)
+	}
+	if existing != nil && existing.Resolved {
+		return nil
+	}
 	if err := s.pending.Record(ctx, reconcile.PendingCashout{
-		ID: feeKey, PlayerID: playerID, Amount: room.EntryFeeCents, CurrencyMode: roomstore.CurrencyModeReal,
+		ID: feeKey, PlayerID: playerID, Amount: e.FeeCents, CurrencyMode: roomstore.CurrencyModeReal,
 		Kind: reconcile.KindFeeDebit, TableRef: room.ID, IdempotencyKey: feeKey,
 	}); err != nil {
 		return fmt.Errorf("buyin: persist fee recovery intent: %w", err)
 	}
-	if err := s.game.DebitReal(ctx, playerID, room.EntryFeeCents, feeKey, "poker_table_fee"); err != nil {
-		slog.Error("ALARM: poker table-entry fee charge failed before seating; reconciliation will retry", "player", playerID, "room", room.ID, "amount", room.EntryFeeCents, "err", err)
+	if err := s.game.DebitReal(ctx, playerID, e.FeeCents, feeKey, "poker_table_fee"); err != nil {
+		slog.Error("ALARM: poker table-entry fee charge failed before seating; reconciliation will retry", "player", playerID, "room", room.ID, "amount", e.FeeCents, "err", err)
 		return fmt.Errorf("buyin: table fee charge failed, reconciliation will retry: %w", err)
 	}
 	if err := s.pending.MarkResolved(ctx, feeKey); err != nil {
