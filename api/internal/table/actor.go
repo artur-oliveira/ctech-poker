@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/oklog/ulid/v2"
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
@@ -329,12 +330,14 @@ func (a *Actor) handlePostBigBlind(ctx context.Context, c PostBigBlindCmd) error
 		return err
 	}
 	apply := func() error {
-		if !a.isSeated(c.PlayerID) {
-			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
-		}
-		a.cached.MarkReadyToPost(c.PlayerID)
-		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
-			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "post_big_blind",
+		return a.mutate(func() error {
+			if !a.isSeated(c.PlayerID) {
+				return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+			}
+			a.cached.MarkReadyToPost(c.PlayerID)
+			return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+				PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "post_big_blind",
+			})
 		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
@@ -357,19 +360,21 @@ func (a *Actor) handleChat(ctx context.Context, c ChatCmd) error {
 		return errors.New("table: chat message is required")
 	}
 	return a.commitActivity(ctx, true, func() error {
-		if !a.isSeated(c.PlayerID) {
-			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
-		}
-		a.markLastAction(c.PlayerID)
-		now := timeNowFunc().UnixMilli()
-		a.activity.Chat = append(a.activity.Chat, tablestore.ChatMessage{
-			ID: c.ActionID, PlayerID: c.PlayerID, Message: c.Message, Timestamp: now,
-		})
-		if len(a.activity.Chat) > maxPersistedChatMessages {
-			a.activity.Chat = append([]tablestore.ChatMessage(nil), a.activity.Chat[len(a.activity.Chat)-maxPersistedChatMessages:]...)
-		}
-		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
-			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "chat", Message: c.Message,
+		return a.mutate(func() error {
+			if !a.isSeated(c.PlayerID) {
+				return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+			}
+			a.markLastAction(c.PlayerID)
+			now := timeNowFunc().UnixMilli()
+			a.activity.Chat = append(a.activity.Chat, tablestore.ChatMessage{
+				ID: c.ActionID, PlayerID: c.PlayerID, Message: c.Message, Timestamp: now,
+			})
+			if len(a.activity.Chat) > maxPersistedChatMessages {
+				a.activity.Chat = append([]tablestore.ChatMessage(nil), a.activity.Chat[len(a.activity.Chat)-maxPersistedChatMessages:]...)
+			}
+			return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+				PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "chat", Message: c.Message,
+			})
 		})
 	})
 }
@@ -400,40 +405,42 @@ func (a *Actor) handleReaction(ctx context.Context, c ReactionCmd) error {
 	// reconnect can restore the short-lived effect, but do not also broadcast
 	// a full table snapshot for the same cosmetic action.
 	return a.commitActivity(ctx, false, func() error {
-		if !a.isSeated(c.PlayerID) {
-			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
-		}
-		if c.TargetPlayerID != "" && (c.TargetPlayerID == c.PlayerID || !a.isSeated(c.TargetPlayerID)) {
-			return errors.New("table: invalid reaction target")
-		}
-		var extra []types.TransactWriteItem
-		if reactions.IsPremium(c.ReactionID) {
-			if a.reactionMarkUsed == nil {
-				return errors.New("table: reaction usage recorder unavailable")
+		return a.mutate(func() error {
+			if !a.isSeated(c.PlayerID) {
+				return fmt.Errorf("table: player %s is not seated", c.PlayerID)
 			}
-			// This conditional write commits atomically with the reaction and is
-			// the serialization point against refunds: exactly one can win.
-			usedIntent, err := a.reactionMarkUsed(ctx, c.PlayerID, c.ReactionID)
-			if err != nil {
-				return fmt.Errorf("table: build premium reaction usage: %w", err)
+			if c.TargetPlayerID != "" && (c.TargetPlayerID == c.PlayerID || !a.isSeated(c.TargetPlayerID)) {
+				return errors.New("table: invalid reaction target")
 			}
-			if usedIntent != nil {
-				extra = append(extra, *usedIntent)
+			var extra []types.TransactWriteItem
+			if reactions.IsPremium(c.ReactionID) {
+				if a.reactionMarkUsed == nil {
+					return errors.New("table: reaction usage recorder unavailable")
+				}
+				// This conditional write commits atomically with the reaction and is
+				// the serialization point against refunds: exactly one can win.
+				usedIntent, err := a.reactionMarkUsed(ctx, c.PlayerID, c.ReactionID)
+				if err != nil {
+					return fmt.Errorf("table: build premium reaction usage: %w", err)
+				}
+				if usedIntent != nil {
+					extra = append(extra, *usedIntent)
+				}
 			}
-		}
-		a.markLastAction(c.PlayerID)
-		now := timeNowFunc().UnixMilli()
-		a.activity.Reactions = append(a.activity.Reactions, tablestore.Reaction{
-			ID: c.ActionID, PlayerID: c.PlayerID, ReactionID: c.ReactionID,
-			TargetPlayerID: c.TargetPlayerID, Timestamp: now, ExpiresAt: now + reactionLifetime.Milliseconds(),
+			a.markLastAction(c.PlayerID)
+			now := timeNowFunc().UnixMilli()
+			a.activity.Reactions = append(a.activity.Reactions, tablestore.Reaction{
+				ID: c.ActionID, PlayerID: c.PlayerID, ReactionID: c.ReactionID,
+				TargetPlayerID: c.TargetPlayerID, Timestamp: now, ExpiresAt: now + reactionLifetime.Milliseconds(),
+			})
+			if len(a.activity.Reactions) > maxPersistedReactions {
+				a.activity.Reactions = append([]tablestore.Reaction(nil), a.activity.Reactions[len(a.activity.Reactions)-maxPersistedReactions:]...)
+			}
+			return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+				PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "reaction",
+				ReactionID: c.ReactionID, TargetPlayerID: c.TargetPlayerID,
+			}, extra...)
 		})
-		if len(a.activity.Reactions) > maxPersistedReactions {
-			a.activity.Reactions = append([]tablestore.Reaction(nil), a.activity.Reactions[len(a.activity.Reactions)-maxPersistedReactions:]...)
-		}
-		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
-			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "reaction",
-			ReactionID: c.ReactionID, TargetPlayerID: c.TargetPlayerID,
-		}, extra...)
 	})
 }
 
@@ -446,50 +453,52 @@ func (a *Actor) handlePreselect(ctx context.Context, c PreselectCmd) error {
 		return errors.New("table: invalid action preselection")
 	}
 	return a.commitActivity(ctx, true, func() error {
-		if !a.isSeated(c.PlayerID) {
-			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
-		}
-		stage := a.cached.ViewFor("").Stage
-		if c.ExpectedHandID == "" || a.handID != c.ExpectedHandID {
-			return errors.New("table: stale action state")
-		}
-		// New clients scope this harmless future intent to hand+street instead
-		// of the whole table version. Activity, presence and another player's
-		// action may legitimately advance version while the frame is in flight.
-		// Keep exact-version validation only as a rolling-deploy fallback for
-		// older clients that do not send expected_stage yet.
-		if c.ExpectedStage != "" {
-			if c.ExpectedStage != stage {
+		return a.mutate(func() error {
+			if !a.isSeated(c.PlayerID) {
+				return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+			}
+			stage := a.cached.ViewFor("").Stage
+			if c.ExpectedHandID == "" || a.handID != c.ExpectedHandID {
 				return errors.New("table: stale action state")
 			}
-		} else if c.ExpectedSnapshotVersion == 0 || uint64(a.version) != c.ExpectedSnapshotVersion {
-			return errors.New("table: stale action state")
-		}
-		if c.Selection == "call" && (c.Amount <= 0 || c.Amount != a.cached.ProspectiveCallAmountForActor(c.PlayerID)) {
-			return errors.New("table: fixed call amount changed")
-		}
-		if c.Selection == "check_fold" {
-			c.Amount = a.cached.ProspectiveCallAmountForActor(c.PlayerID)
-		} else if c.Selection != "call" {
-			c.Amount = 0
-		}
-		if a.activity.Preselections == nil {
-			a.activity.Preselections = make(map[string]tablestore.Preselection)
-		}
-		if c.Selection == "" {
-			delete(a.activity.Preselections, c.PlayerID)
-		} else {
-			a.activity.Preselections[c.PlayerID] = tablestore.Preselection{
-				Selection: c.Selection, Amount: c.Amount, HandID: a.handID, Stage: stage,
+			// New clients scope this harmless future intent to hand+street instead
+			// of the whole table version. Activity, presence and another player's
+			// action may legitimately advance version while the frame is in flight.
+			// Keep exact-version validation only as a rolling-deploy fallback for
+			// older clients that do not send expected_stage yet.
+			if c.ExpectedStage != "" {
+				if c.ExpectedStage != stage {
+					return errors.New("table: stale action state")
+				}
+			} else if c.ExpectedSnapshotVersion == 0 || uint64(a.version) != c.ExpectedSnapshotVersion {
+				return errors.New("table: stale action state")
 			}
-		}
-		a.markLastAction(c.PlayerID)
-		action := "preselect_action"
-		if c.Selection == "" {
-			action = "clear_preselection"
-		}
-		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
-			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: action, Selection: c.Selection, Amount: c.Amount,
+			if c.Selection == "call" && (c.Amount <= 0 || c.Amount != a.cached.ProspectiveCallAmountForActor(c.PlayerID)) {
+				return errors.New("table: fixed call amount changed")
+			}
+			if c.Selection == "check_fold" {
+				c.Amount = a.cached.ProspectiveCallAmountForActor(c.PlayerID)
+			} else if c.Selection != "call" {
+				c.Amount = 0
+			}
+			if a.activity.Preselections == nil {
+				a.activity.Preselections = make(map[string]tablestore.Preselection)
+			}
+			if c.Selection == "" {
+				delete(a.activity.Preselections, c.PlayerID)
+			} else {
+				a.activity.Preselections[c.PlayerID] = tablestore.Preselection{
+					Selection: c.Selection, Amount: c.Amount, HandID: a.handID, Stage: stage,
+				}
+			}
+			a.markLastAction(c.PlayerID)
+			action := "preselect_action"
+			if c.Selection == "" {
+				action = "clear_preselection"
+			}
+			return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+				PlayerID: c.PlayerID, ActionID: c.ActionID, Action: action, Selection: c.Selection, Amount: c.Amount,
+			})
 		})
 	})
 }
@@ -509,6 +518,122 @@ func (a *Actor) prunePreselections() {
 			delete(a.activity.Preselections, playerID)
 		}
 	}
+}
+
+// mutatingSnapshot captures everything a handler is allowed to change in
+// a.cached before committing: the engine's own exported state, the current
+// hand ID (StartHand rotates it), and the persisted activity sidecar
+// (chat/reactions/preselections). Restoring all three together — never just
+// a.cached alone — is what makes (*Actor).mutate's guarantee cover every
+// handler that touches any of them, not only the ones a future author
+// remembers to snapshot.
+//
+// state is captured as marshaled DynamoDB attribute values, not as a bare
+// hand.State, deliberately: hand.State.ExportState is a SHALLOW copy — its
+// Players slice holds the exact same *Player pointers the live table
+// mutates in place (Ready, Stack, HoleCards, Contributed, ...). A plain
+// `before := a.cached.ExportState()` / `a.cached = hand.NewTableFromState(before)`
+// pair — the very convention every apply*AndCommit handler used before this
+// change — silently fails to undo any in-place field mutation on an
+// already-seated player, because "before" aliases the same struct the
+// handler just mutated: restoring from it is then a no-op for that player.
+// Round-tripping through attributevalue.MarshalMap/UnmarshalMap — the exact
+// encoding CommitAction uses for the real write — forces a genuine deep
+// copy the same way a real reload from DynamoDB would, so the restored
+// table is never just a second reference to the mutated one.
+type mutatingSnapshot struct {
+	stateAV  map[string]types.AttributeValue
+	handID   string
+	activity tablestore.TableActivity
+}
+
+func (a *Actor) snapshotForMutate() (mutatingSnapshot, error) {
+	av, err := attributevalue.MarshalMap(a.cached.ExportState())
+	if err != nil {
+		return mutatingSnapshot{}, err
+	}
+	return mutatingSnapshot{
+		stateAV:  av,
+		handID:   a.handID,
+		activity: cloneActivity(a.activity),
+	}, nil
+}
+
+func (s mutatingSnapshot) restore(a *Actor) {
+	var state hand.State
+	if err := attributevalue.UnmarshalMap(s.stateAV, &state); err != nil {
+		// The marshal that produced s.stateAV just succeeded moments ago on
+		// this exact type, so a failure to reverse it here means hand.State's
+		// encoding is broken in a way that also breaks every real commit —
+		// not something worth trusting a half-restored a.cached over. Drop
+		// the whole cache instead, the same fallback handleSafely's panic
+		// recovery (#29/PR #126) uses, so the next command reloads
+		// authoritative state from the store rather than trusting anything
+		// left over from this failed restore.
+		slog.Error("table: failed to restore pre-mutation snapshot", "table_id", a.id, "err", err)
+		a.cached = nil
+		a.version = 0
+		a.handID = ""
+		a.activity = tablestore.TableActivity{}
+		return
+	}
+	a.cached = hand.NewTableFromState(state)
+	a.handID = s.handID
+	a.activity = s.activity
+}
+
+// cloneActivity deep-copies a TableActivity so a restored snapshot can never
+// alias the live actor's slices/map — a shallow struct copy would still
+// share the same backing Chat/Reactions arrays and Preselections map, so an
+// in-place mutation made after the snapshot was taken (e.g. a delete on the
+// live map) would silently corrupt the "before" copy too.
+func cloneActivity(act tablestore.TableActivity) tablestore.TableActivity {
+	clone := tablestore.TableActivity{
+		Chat:      append([]tablestore.ChatMessage(nil), act.Chat...),
+		Reactions: append([]tablestore.Reaction(nil), act.Reactions...),
+	}
+	if act.Preselections != nil {
+		clone.Preselections = maps.Clone(act.Preselections)
+	}
+	return clone
+}
+
+// mutate is the structural guard for every handler that mutates a.cached,
+// a.handID and/or a.activity before committing. It snapshots all three, runs
+// fn, and on ANY error fn returns — a validation rejection partway through, an
+// engine error, or the final a.commit call itself failing — restores the
+// exact pre-call snapshot. This is what makes the cache-rollback obligation
+// structural instead of convention: a handler can no longer forget the
+// snapshot/restore dance, because there is no path through mutate that
+// leaves a partial mutation trusted in the actor's cache without either a
+// matching successful commit or an automatic restore. fn is expected to
+// itself call a.commit(...) as its last successful step; mutate does not
+// call commit for callers, so they keep full control over the
+// ActionLogEntry and any extra transact items.
+//
+// This is exactly the failure mode that produced the 2026-09-01 duplicate
+// seat incident (a handler's uncommitted mutation left trusted in a.cached,
+// persisted for real by a later, unrelated successful commit) — see
+// docs/specs/2026-09-01-duplicate-seat-commit-guard.md. It complements,
+// rather than duplicates, PR #126's separate panic-recovery guard (#29): a
+// panic mid-handler unwinds past any deferred restore this file could add,
+// so that guard instead drops the whole cache in its recover() to force a
+// reload from the store on the next command. mutate only ever needs to
+// handle a normal returned error, which never unwinds the stack — so it can
+// restore the snapshot in place, without a round trip back to the store.
+func (a *Actor) mutate(fn func() error) error {
+	if a.cached == nil {
+		return fn()
+	}
+	before, err := a.snapshotForMutate()
+	if err != nil {
+		return fmt.Errorf("table: snapshot table state before mutating: %w", err)
+	}
+	if err := fn(); err != nil {
+		before.restore(a)
+		return err
+	}
+	return nil
 }
 
 func (a *Actor) commitActivity(ctx context.Context, broadcast bool, apply func() error) error {
@@ -581,11 +706,13 @@ func (a *Actor) handleSetIdentity(ctx context.Context, c SetIdentityCmd) error {
 		return err
 	}
 	apply := func() error {
-		if !a.cached.SetPlayerIdentityForActor(c.PlayerID, c.Name, c.AvatarURL, c.PlaystyleBadge) {
-			return nil
-		}
-		return a.commit(ctx, "", &tablestore.ActionLogEntry{
-			PlayerID: c.PlayerID, Action: "set_identity",
+		return a.mutate(func() error {
+			if !a.cached.SetPlayerIdentityForActor(c.PlayerID, c.Name, c.AvatarURL, c.PlaystyleBadge) {
+				return nil
+			}
+			return a.commit(ctx, "", &tablestore.ActionLogEntry{
+				PlayerID: c.PlayerID, Action: "set_identity",
+			})
 		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
@@ -600,8 +727,10 @@ func (a *Actor) handleEscalate(ctx context.Context) error {
 		return err
 	}
 	apply := func() error {
-		a.cached.EscalateBlindsForActor(a.escalationCfg.Multiplier, a.escalationCfg.Max)
-		return a.commit(ctx, "", &tablestore.ActionLogEntry{Action: "escalate_blinds"})
+		return a.mutate(func() error {
+			a.cached.EscalateBlindsForActor(a.escalationCfg.Multiplier, a.escalationCfg.Max)
+			return a.commit(ctx, "", &tablestore.ActionLogEntry{Action: "escalate_blinds"})
+		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
 		return err
@@ -737,51 +866,45 @@ func (a *Actor) handleReady(ctx context.Context, c ReadyCmd) error {
 }
 
 func (a *Actor) applyReadyAndCommit(ctx context.Context, c ReadyCmd) error {
-	if !a.isSeated(c.PlayerID) {
-		return fmt.Errorf("table: player %s is not seated", c.PlayerID)
-	}
-	// Snapshot before any in-place mutation, same discipline as
-	// applyLeaveAndCommit/applyJoinAndCommit: c.Ready can drive tryStartHand
-	// (a full StartHand() — dealing, dealer rotation, blind posting) straight
-	// into a.cached, and a.handID alongside it. A commit failure below that
-	// isn't a version conflict (a transient store error, not just something
-	// retryOnConflict already reloads on) must not leave that uncommitted
+	// c.Ready can drive tryStartHand (a full StartHand() — dealing, dealer
+	// rotation, blind posting) straight into a.cached, and a.handID alongside
+	// it. mutate is what guarantees a commit failure below that isn't a
+	// version conflict (a transient store error, not just something
+	// retryOnConflict already reloads on) can't leave that uncommitted
 	// mutation trusted in this actor's cache with no matching
 	// poker_action_log entry — that is exactly what let the 2026-09-01
 	// incident's ghost seat and dropped player survive to be persisted for
 	// real by a later, unrelated successful commit.
-	before := a.cached.ExportState()
-	beforeHandID := a.handID
-	a.markLastAction(c.PlayerID)
-	for _, p := range a.cached.PlayersForActor() {
-		if p.ID == c.PlayerID {
-			p.Ready = c.Ready
+	return a.mutate(func() error {
+		if !a.isSeated(c.PlayerID) {
+			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
 		}
-	}
-	action := "not_ready"
-	if c.Ready {
-		a.cached.RequestReturnFromSitOut(c.PlayerID)
-		action = "ready"
-		// Sit-out (ready:false) never raises the ready-player count, so it must not
-		// trigger tryStartHand: doing so during Stage==Complete forced the "not enough
-		// ready players" fallback early, snapping the table back to WaitingForPlayers
-		// and clearing payouts before next_hand_unix_ms elapsed — killing the other
-		// player's win banner mid-countdown. armNextHandTimer still starts the next
-		// hand once the grace period actually ends.
-		if a.cached.Stage() == hand.WaitingForPlayers {
-			a.tryStartHand(ctx)
+		a.markLastAction(c.PlayerID)
+		for _, p := range a.cached.PlayersForActor() {
+			if p.ID == c.PlayerID {
+				p.Ready = c.Ready
+			}
 		}
-	} else {
-		a.cached.SitOutForActor(c.PlayerID)
-	}
-	if err := a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
-		PlayerID: c.PlayerID, ActionID: c.ActionID, Action: action,
-	}); err != nil {
-		a.cached = hand.NewTableFromState(before)
-		a.handID = beforeHandID
-		return err
-	}
-	return nil
+		action := "not_ready"
+		if c.Ready {
+			a.cached.RequestReturnFromSitOut(c.PlayerID)
+			action = "ready"
+			// Sit-out (ready:false) never raises the ready-player count, so it must not
+			// trigger tryStartHand: doing so during Stage==Complete forced the "not enough
+			// ready players" fallback early, snapping the table back to WaitingForPlayers
+			// and clearing payouts before next_hand_unix_ms elapsed — killing the other
+			// player's win banner mid-countdown. armNextHandTimer still starts the next
+			// hand once the grace period actually ends.
+			if a.cached.Stage() == hand.WaitingForPlayers {
+				a.tryStartHand(ctx)
+			}
+		} else {
+			a.cached.SitOutForActor(c.PlayerID)
+		}
+		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: action,
+		})
+	})
 }
 
 // tryStartHand attempts to start a new hand if the table is between hands.
@@ -1005,43 +1128,48 @@ func (a *Actor) notifySeatsChanged() {
 // second time from this process.
 
 func (a *Actor) applyActAndCommit(ctx context.Context, c ActCmd) (bool, error) {
-	bettingAction := a.cached.NormalizedActionForActor(c.PlayerID, c.Action)
-	applied, err := a.cached.ActIdempotent(c.ActionID, c.PlayerID, c.Action, c.Amount)
+	var applied bool
+	err := a.mutate(func() error {
+		bettingAction := a.cached.NormalizedActionForActor(c.PlayerID, c.Action)
+		ok, err := a.cached.ActIdempotent(c.ActionID, c.PlayerID, c.Action, c.Amount)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return nil
+		}
+		applied = true
+		if a.activity.Preselections != nil {
+			delete(a.activity.Preselections, c.PlayerID)
+			// A fixed call means exactly the amount visible when it was selected.
+			// Any raise that changes what another player owes cancels it atomically
+			// with the action, so reconnecting clients never revive a stale call.
+			for playerID, preselection := range a.activity.Preselections {
+				current := a.cached.ProspectiveCallAmountForActor(playerID)
+				if preselection.Selection == "call" && preselection.Amount != current {
+					delete(a.activity.Preselections, playerID)
+				}
+				if preselection.Selection == "check_fold" && current > preselection.Amount {
+					delete(a.activity.Preselections, playerID)
+				}
+			}
+			a.prunePreselections()
+		}
+		timeBankMs := a.consumeTimeBank(c.PlayerID)
+		action := string(c.Action)
+		if a.cached.PlayerAllInForActor(c.PlayerID) {
+			action = "all_in"
+		}
+		entry := tablestore.ActionLogEntry{
+			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: action,
+			BettingAction: string(bettingAction), Amount: c.Amount, TimeBankMs: timeBankMs,
+		}
+		return a.commit(ctx, c.ActionID, &entry)
+	})
 	if err != nil {
 		return false, err
 	}
-	if !applied {
-		return false, nil
-	}
-	if a.activity.Preselections != nil {
-		delete(a.activity.Preselections, c.PlayerID)
-		// A fixed call means exactly the amount visible when it was selected.
-		// Any raise that changes what another player owes cancels it atomically
-		// with the action, so reconnecting clients never revive a stale call.
-		for playerID, preselection := range a.activity.Preselections {
-			current := a.cached.ProspectiveCallAmountForActor(playerID)
-			if preselection.Selection == "call" && preselection.Amount != current {
-				delete(a.activity.Preselections, playerID)
-			}
-			if preselection.Selection == "check_fold" && current > preselection.Amount {
-				delete(a.activity.Preselections, playerID)
-			}
-		}
-		a.prunePreselections()
-	}
-	timeBankMs := a.consumeTimeBank(c.PlayerID)
-	action := string(c.Action)
-	if a.cached.PlayerAllInForActor(c.PlayerID) {
-		action = "all_in"
-	}
-	entry := tablestore.ActionLogEntry{
-		PlayerID: c.PlayerID, ActionID: c.ActionID, Action: action,
-		BettingAction: string(bettingAction), Amount: c.Amount, TimeBankMs: timeBankMs,
-	}
-	if err := a.commit(ctx, c.ActionID, &entry); err != nil {
-		return false, err
-	}
-	return a.cached.Stage() == hand.Complete, nil
+	return applied && a.cached.Stage() == hand.Complete, nil
 }
 
 // commitOutcomeLogEntries appends one "won" or "tie" ActionLogEntry per
@@ -1587,12 +1715,14 @@ func (a *Actor) handleSitOut(ctx context.Context, c SitOutCmd) error {
 		return err
 	}
 	apply := func() error {
-		if !a.isSeated(c.PlayerID) {
-			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
-		}
-		a.markLastAction(c.PlayerID)
-		a.cached.SitOutForActor(c.PlayerID)
-		return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "sit_out"})
+		return a.mutate(func() error {
+			if !a.isSeated(c.PlayerID) {
+				return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+			}
+			a.markLastAction(c.PlayerID)
+			a.cached.SitOutForActor(c.PlayerID)
+			return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "sit_out"})
+		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
 		return err
@@ -1606,12 +1736,14 @@ func (a *Actor) handleKeepSeat(ctx context.Context, c KeepSeatCmd) error {
 		return err
 	}
 	apply := func() error {
-		if !a.isSeated(c.PlayerID) {
-			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
-		}
-		a.markLastAction(c.PlayerID)
-		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
-			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "keep_seat",
+		return a.mutate(func() error {
+			if !a.isSeated(c.PlayerID) {
+				return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+			}
+			a.markLastAction(c.PlayerID)
+			return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+				PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "keep_seat",
+			})
 		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
@@ -1658,16 +1790,18 @@ func (a *Actor) handleShowCards(ctx context.Context, c ShowCardsCmd) error {
 	}
 	changed := false
 	apply := func() error {
-		applied, err := a.cached.RevealHoleCard(c.PlayerID, c.CardIndex)
-		if err != nil {
-			return err
-		}
-		if !applied {
-			return nil
-		}
-		changed = true
-		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
-			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "show_cards",
+		return a.mutate(func() error {
+			applied, err := a.cached.RevealHoleCard(c.PlayerID, c.CardIndex)
+			if err != nil {
+				return err
+			}
+			if !applied {
+				return nil
+			}
+			changed = true
+			return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+				PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "show_cards",
+			})
 		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
@@ -1701,12 +1835,14 @@ func (a *Actor) handleRequestRabbitHunt(ctx context.Context, c RequestRabbitHunt
 	}
 	changed := false
 	apply := func() error {
-		if _, err := a.cached.RequestRabbitHunt(c.PlayerID); err != nil {
-			return err
-		}
-		changed = true
-		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
-			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "request_rabbit_hunt",
+		return a.mutate(func() error {
+			if _, err := a.cached.RequestRabbitHunt(c.PlayerID); err != nil {
+				return err
+			}
+			changed = true
+			return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+				PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "request_rabbit_hunt",
+			})
 		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
@@ -1729,16 +1865,18 @@ func (a *Actor) handleRequestExit(ctx context.Context, c RequestExitCmd) error {
 	}
 	changed := false
 	apply := func() error {
-		if !a.isSeated(c.PlayerID) {
-			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
-		}
-		a.markLastAction(c.PlayerID)
-		if err := a.cached.RequestExit(c.PlayerID); err != nil {
-			return err
-		}
-		changed = true
-		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
-			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "request_exit",
+		return a.mutate(func() error {
+			if !a.isSeated(c.PlayerID) {
+				return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+			}
+			a.markLastAction(c.PlayerID)
+			if err := a.cached.RequestExit(c.PlayerID); err != nil {
+				return err
+			}
+			changed = true
+			return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+				PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "request_exit",
+			})
 		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
@@ -1761,19 +1899,21 @@ func (a *Actor) handleCancelExit(ctx context.Context, c CancelExitCmd) error {
 	}
 	changed := false
 	apply := func() error {
-		if !a.isSeated(c.PlayerID) {
-			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
-		}
-		a.markLastAction(c.PlayerID)
-		if err := a.cached.CancelExit(c.PlayerID); err != nil {
-			return err
-		}
-		changed = true
-		if a.cached.Stage() == hand.WaitingForPlayers {
-			a.tryStartHand(ctx)
-		}
-		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
-			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "cancel_exit",
+		return a.mutate(func() error {
+			if !a.isSeated(c.PlayerID) {
+				return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+			}
+			a.markLastAction(c.PlayerID)
+			if err := a.cached.CancelExit(c.PlayerID); err != nil {
+				return err
+			}
+			changed = true
+			if a.cached.Stage() == hand.WaitingForPlayers {
+				a.tryStartHand(ctx)
+			}
+			return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+				PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "cancel_exit",
+			})
 		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
@@ -1796,24 +1936,26 @@ func (a *Actor) handleRequestWinnerCards(ctx context.Context, c RequestWinnerCar
 	}
 	changed := false
 	apply := func() error {
-		if _, err := a.cached.RequestWinnerCards(c.PlayerID, timeNowFunc()); err != nil {
-			return err
-		}
-		changed = true
-		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
-			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "request_winner_cards",
+		// RequestWinnerCards can expire (and refund) a stale pending request
+		// before it validates and rejects the rest of this call — mutate covers
+		// that partial mutation the same as a commit failure, restoring the
+		// pre-call snapshot on any error so a rejected request never leaves that
+		// refund sitting uncommitted in memory for the next command to trust.
+		return a.mutate(func() error {
+			if _, err := a.cached.RequestWinnerCards(c.PlayerID, timeNowFunc()); err != nil {
+				return err
+			}
+			changed = true
+			return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+				PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "request_winner_cards",
+			})
 		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
-		// A rejected request can still have mutated a.cached on the way to the
-		// rejection: RequestWinnerCards expires (and refunds) a stale pending
-		// request before it validates the rest. Reload so that refund is never
-		// left sitting uncommitted in memory for the next command to trust —
-		// same discipline as handleTurnTimeout/handleNextHand.
-		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
-			return reloadErr
-		}
 		if !errors.Is(err, tablestore.ErrDuplicateAction) {
+			return err
+		}
+		if err := a.ensureLoaded(ctx, true); err != nil {
 			return err
 		}
 	}
@@ -1837,29 +1979,34 @@ func (a *Actor) handleDeclineWinnerCards(ctx context.Context, c DeclineWinnerCar
 		func() error { return a.cached.DeclineWinnerCards(c.PlayerID) })
 }
 
-func (a *Actor) applyWinnerCardsAnswer(ctx context.Context, playerID, actionID, action string, mutate func() error) error {
+func (a *Actor) applyWinnerCardsAnswer(ctx context.Context, playerID, actionID, action string, engineMutate func() error) error {
 	if err := a.ensureLoaded(ctx, false); err != nil {
 		return err
 	}
 	changed := false
 	apply := func() error {
-		if err := mutate(); err != nil {
-			return err
-		}
-		changed = true
-		return a.commit(ctx, actionID, &tablestore.ActionLogEntry{
-			PlayerID: playerID, ActionID: actionID, Action: action,
+		// AcceptWinnerCards expires a stale request and refunds the requester
+		// before reporting that the window closed or the winner has left, so a
+		// failed answer can still have moved chips in a.cached on the way to
+		// that error. a.mutate covers exactly that: it restores the pre-call
+		// snapshot on any error from engineMutate or from commit, so a failed
+		// answer never leaves those chips sitting uncommitted in memory.
+		return a.mutate(func() error {
+			if err := engineMutate(); err != nil {
+				return err
+			}
+			changed = true
+			return a.commit(ctx, actionID, &tablestore.ActionLogEntry{
+				PlayerID: playerID, ActionID: actionID, Action: action,
+			})
 		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
-		// AcceptWinnerCards expires a stale request and refunds the requester
-		// before reporting that the window closed or the winner has left, so a
-		// failed answer can still have moved chips in memory. Discard it.
-		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
-			return reloadErr
-		}
 		if !errors.Is(err, tablestore.ErrDuplicateAction) {
 			return err
+		}
+		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+			return reloadErr
 		}
 	}
 	if changed {
@@ -1877,18 +2024,20 @@ func (a *Actor) handleExpireWinnerCards(ctx context.Context, _ expireWinnerCards
 	}
 	changed := false
 	apply := func() error {
-		if !a.cached.ExpireWinnerCards(timeNowFunc()) {
-			return nil
-		}
-		changed = true
-		return a.commit(ctx, "", &tablestore.ActionLogEntry{Action: "expire_winner_cards"})
+		return a.mutate(func() error {
+			if !a.cached.ExpireWinnerCards(timeNowFunc()) {
+				return nil
+			}
+			changed = true
+			return a.commit(ctx, "", &tablestore.ActionLogEntry{Action: "expire_winner_cards"})
+		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
-		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
-			return reloadErr
-		}
 		if !errors.Is(err, tablestore.ErrVersionConflict) {
 			return err
+		}
+		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+			return reloadErr
 		}
 	}
 	if changed {
@@ -1903,12 +2052,14 @@ func (a *Actor) handleRabbitHuntVerifyFailed(ctx context.Context, c RabbitHuntVe
 	}
 	changed := false
 	apply := func() error {
-		if err := a.cached.RefundRabbitHunt(c.PlayerID); err != nil {
-			return err
-		}
-		changed = true
-		return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
-			PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "rabbit_hunt_verify_failed",
+		return a.mutate(func() error {
+			if err := a.cached.RefundRabbitHunt(c.PlayerID); err != nil {
+				return err
+			}
+			changed = true
+			return a.commit(ctx, c.ActionID, &tablestore.ActionLogEntry{
+				PlayerID: c.PlayerID, ActionID: c.ActionID, Action: "rabbit_hunt_verify_failed",
+			})
 		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
@@ -1931,15 +2082,17 @@ func (a *Actor) handleSetRunItTwice(ctx context.Context, c SetRunItTwiceCmd) err
 	}
 	changed := false
 	apply := func() error {
-		if !a.isSeated(c.PlayerID) {
-			return fmt.Errorf("table: player %s is not seated", c.PlayerID)
-		}
-		if !a.cached.SetPlayerRunItTwiceForActor(c.PlayerID, c.Enabled) {
-			return nil
-		}
-		changed = true
-		return a.commit(ctx, "", &tablestore.ActionLogEntry{
-			PlayerID: c.PlayerID, Action: "set_run_it_twice",
+		return a.mutate(func() error {
+			if !a.isSeated(c.PlayerID) {
+				return fmt.Errorf("table: player %s is not seated", c.PlayerID)
+			}
+			if !a.cached.SetPlayerRunItTwiceForActor(c.PlayerID, c.Enabled) {
+				return nil
+			}
+			changed = true
+			return a.commit(ctx, "", &tablestore.ActionLogEntry{
+				PlayerID: c.PlayerID, Action: "set_run_it_twice",
+			})
 		})
 	}
 	if err := a.retryOnConflict(ctx, apply); err != nil {
@@ -1979,30 +2132,31 @@ func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
 	// chips until the kick timer, and reconnecting plus "sit in" brings them
 	// straight back.
 	if _, disconnected := a.disconnectedSince[c.PlayerID]; disconnected {
-		timeBankMs := a.consumeTimeBank(c.PlayerID)
-		a.cached.SitOutForActor(c.PlayerID)
-		if err := a.commit(ctx, "", &tablestore.ActionLogEntry{
-			PlayerID: c.PlayerID, Action: "disconnect_sit_out", TimeBankMs: timeBankMs,
-		}); err != nil {
-			// a.cached now holds an uncommitted SitOutForActor mutation
-			// layered on stale state -- discard it by reloading fresh,
-			// authoritative state instead of leaving this fabricated,
-			// never-persisted table in memory for whatever this actor does
-			// next (e.g. a later kick-timeout removal computing
-			// handInProgress/dealtIntoCurrentHand off of it, which could
-			// wrongly allow removing a player still dealt into the REAL
-			// hand and leave a stale handOrder entry for a since-removed
-			// player — runShowdown's playerByID lookup on that entry would
-			// then panic). Unconditional: an ErrVersionConflict genuinely
-			// means someone else already advanced and this reload is enough
-			// to reconcile, but any OTHER commit error (a dropped extra
-			// item, a throttle) left the exact same kind of uncommitted
-			// mutation behind and must be purged the same way — the error
-			// itself still propagates for anything but ErrVersionConflict.
-			if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
-				return reloadErr
-			}
-			if !errors.Is(err, tablestore.ErrVersionConflict) {
+		// a.mutate is what guarantees a commit failure here can't leave an
+		// uncommitted SitOutForActor mutation layered on stale state trusted
+		// in a.cached for whatever this actor does next (e.g. a later
+		// kick-timeout removal computing handInProgress/dealtIntoCurrentHand
+		// off of it, which could wrongly allow removing a player still dealt
+		// into the REAL hand and leave a stale handOrder entry for a
+		// since-removed player — runShowdown's playerByID lookup on that
+		// entry would then panic).
+		err := a.mutate(func() error {
+			timeBankMs := a.consumeTimeBank(c.PlayerID)
+			a.cached.SitOutForActor(c.PlayerID)
+			return a.commit(ctx, "", &tablestore.ActionLogEntry{
+				PlayerID: c.PlayerID, Action: "disconnect_sit_out", TimeBankMs: timeBankMs,
+			})
+		})
+		if err != nil {
+			// An ErrVersionConflict genuinely means someone else already
+			// advanced, so reload to reconcile before broadcasting; mutate has
+			// already restored a.cached for any other error, so nothing further
+			// needs discarding there — just propagate it.
+			if errors.Is(err, tablestore.ErrVersionConflict) {
+				if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+					return reloadErr
+				}
+			} else {
 				return err
 			}
 		}
@@ -2077,44 +2231,36 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 	if !alreadySeated && c.MaxSeats > 0 && len(players) >= c.MaxSeats {
 		return ErrNoSeatsAvailable
 	}
-	// Snapshot before any in-place mutation, mirroring applyLeaveAndCommit —
-	// AddMidHandJoiner/AddWaitingPlayer append straight into a.cached.players,
-	// so a commit failure below (a transient store error, not just a version
-	// conflict retryOnConflict already reloads on) must not leave a phantom
-	// seated player — already carrying their debited buy-in stack — trusted
-	// in this actor's cache with no matching poker_action_log entry. Without
-	// this, the next unrelated successful commit persists the ghost seat for
-	// real the first time any other player's action commits.
-	before := a.cached.ExportState()
-	beforeHandID := a.handID
-	p := &hand.Player{ID: c.PlayerID, Stack: c.Stack, HoldID: c.HoldID, LastActionAt: timeNowFunc().UnixMilli(), AutoRebuy: c.AutoRebuy, BuyInAmount: c.Stack}
-	stage := a.cached.Stage()
-	if stage != hand.WaitingForPlayers && stage != hand.Complete {
-		if err := a.cached.AddMidHandJoiner(p); err != nil {
+	// mutate is what guarantees a commit failure below (a transient store
+	// error, not just a version conflict retryOnConflict already reloads on)
+	// can't leave a phantom seated player — already carrying their debited
+	// buy-in stack — trusted in this actor's cache with no matching
+	// poker_action_log entry. Without this, the next unrelated successful
+	// commit persists the ghost seat for real the first time any other
+	// player's action commits — the 2026-09-01 incident.
+	return a.mutate(func() error {
+		p := &hand.Player{ID: c.PlayerID, Stack: c.Stack, HoldID: c.HoldID, LastActionAt: timeNowFunc().UnixMilli(), AutoRebuy: c.AutoRebuy, BuyInAmount: c.Stack}
+		stage := a.cached.Stage()
+		if stage != hand.WaitingForPlayers && stage != hand.Complete {
+			if err := a.cached.AddMidHandJoiner(p); err != nil {
+				return err
+			}
+		} else if err := a.cached.AddWaitingPlayer(p); err != nil {
 			return err
 		}
-	} else if err := a.cached.AddWaitingPlayer(p); err != nil {
-		return err
-	}
-	if stage == hand.WaitingForPlayers {
-		a.tryStartHand(ctx)
-	}
-	var extra []types.TransactWriteItem
-	if c.SettlementIntent != nil {
-		intent, err := c.SettlementIntent()
-		if err != nil {
-			a.cached = hand.NewTableFromState(before)
-			a.handID = beforeHandID
-			return err
+		if stage == hand.WaitingForPlayers {
+			a.tryStartHand(ctx)
 		}
-		extra = append(extra, intent)
-	}
-	if err := a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "join"}, extra...); err != nil {
-		a.cached = hand.NewTableFromState(before)
-		a.handID = beforeHandID
-		return err
-	}
-	return nil
+		var extra []types.TransactWriteItem
+		if c.SettlementIntent != nil {
+			intent, err := c.SettlementIntent()
+			if err != nil {
+				return err
+			}
+			extra = append(extra, intent)
+		}
+		return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "join"}, extra...)
+	})
 }
 
 func (a *Actor) systemLeaveCmd(ctx context.Context, playerID, reason string, stack chan int64, holdID chan string) LeaveCmd {
@@ -2165,22 +2311,25 @@ func (a *Actor) handleLeave(ctx context.Context, c LeaveCmd) error {
 }
 
 func (a *Actor) applyLeaveAndCommit(ctx context.Context, c LeaveCmd) (int64, string, error) {
-	before := a.cached.ExportState()
-	stack, holdID, err := a.cached.RemovePlayerForActor(c.PlayerID)
-	if err != nil {
-		return 0, "", err
-	}
-	var extra []types.TransactWriteItem
-	if c.SettlementIntent != nil {
-		intent, err := c.SettlementIntent(stack, holdID)
+	var stack int64
+	var holdID string
+	err := a.mutate(func() error {
+		var err error
+		stack, holdID, err = a.cached.RemovePlayerForActor(c.PlayerID)
 		if err != nil {
-			a.cached = hand.NewTableFromState(before)
-			return 0, "", fmt.Errorf("table: build settlement intent: %w", err)
+			return err
 		}
-		extra = append(extra, intent)
-	}
-	if err := a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "leave"}, extra...); err != nil {
-		a.cached = hand.NewTableFromState(before)
+		var extra []types.TransactWriteItem
+		if c.SettlementIntent != nil {
+			intent, err := c.SettlementIntent(stack, holdID)
+			if err != nil {
+				return fmt.Errorf("table: build settlement intent: %w", err)
+			}
+			extra = append(extra, intent)
+		}
+		return a.commit(ctx, "", &tablestore.ActionLogEntry{PlayerID: c.PlayerID, Action: "leave"}, extra...)
+	})
+	if err != nil {
 		return 0, "", err
 	}
 	return stack, holdID, nil
@@ -2342,22 +2491,27 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 	if a.cached.Stage() != hand.Complete {
 		return nil
 	}
-	if err := a.cached.StartHand(); err == nil {
-		a.handID = newHandID()
-		a.prunePreselections()
-	}
-	if err := a.commit(ctx, "", &tablestore.ActionLogEntry{Action: "next_hand"}); err != nil {
-		// a.cached now holds an uncommitted tryStartHand mutation (possibly a
-		// whole fabricated next hand, dealt from a stale player roster) layered
-		// on stale state -- discard it by reloading fresh, authoritative state
-		// instead of leaving it in memory for this actor's next command to
-		// trust (see handleTurnTimeout's identical fix for the full story).
-		// Unconditional, same reasoning: any commit error leaves this exact
-		// kind of fabricated state behind, not just ErrVersionConflict.
-		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
-			return reloadErr
+	// a.mutate is what guarantees a commit failure here can't leave an
+	// uncommitted StartHand mutation (possibly a whole fabricated next hand,
+	// dealt from a stale player roster) trusted in a.cached for this actor's
+	// next command (see handleTurnTimeout's identical guard for the full
+	// story).
+	err := a.mutate(func() error {
+		if err := a.cached.StartHand(); err == nil {
+			a.handID = newHandID()
+			a.prunePreselections()
 		}
-		if !errors.Is(err, tablestore.ErrVersionConflict) {
+		return a.commit(ctx, "", &tablestore.ActionLogEntry{Action: "next_hand"})
+	})
+	if err != nil {
+		// An ErrVersionConflict genuinely means someone else already advanced
+		// this table, so reload to reconcile before broadcasting; mutate has
+		// already restored a.cached for any other error, so it just propagates.
+		if errors.Is(err, tablestore.ErrVersionConflict) {
+			if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+				return reloadErr
+			}
+		} else {
 			return err
 		}
 	}
@@ -2442,16 +2596,19 @@ func (a *Actor) handleRunoutStep(ctx context.Context, c runoutStepCmd) error {
 	if !a.cached.IsAwaitingRunoutForActor() {
 		return nil
 	}
-	a.cached.AdvanceRunoutStreetForActor()
-	if err := a.commit(ctx, "", &tablestore.ActionLogEntry{Action: "runout_step"}); err != nil {
-		// Same discard-and-reload fix as handleTurnTimeout/handleNextHand:
-		// a.cached currently holds an uncommitted AdvanceRunoutStreetForActor
-		// mutation layered on stale state. Unconditional for the same reason
-		// — any commit error leaves it behind, not just ErrVersionConflict.
-		if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
-			return reloadErr
-		}
-		if !errors.Is(err, tablestore.ErrVersionConflict) {
+	// Same guard as handleTurnTimeout/handleNextHand: a.mutate restores
+	// a.cached to its pre-call snapshot if AdvanceRunoutStreetForActor's
+	// mutation never actually commits.
+	err := a.mutate(func() error {
+		a.cached.AdvanceRunoutStreetForActor()
+		return a.commit(ctx, "", &tablestore.ActionLogEntry{Action: "runout_step"})
+	})
+	if err != nil {
+		if errors.Is(err, tablestore.ErrVersionConflict) {
+			if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
+				return reloadErr
+			}
+		} else {
 			return err
 		}
 	}

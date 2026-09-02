@@ -2,29 +2,30 @@ import {render, screen} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {describe, expect, test, vi} from 'vitest';
 import type {Metadata} from 'next';
-import AchievementsLayout, {metadata as achievementsMetadata} from './achievements/layout';
-import CallbackLayout, {metadata as callbackMetadata} from './callback/layout';
-import GuideLayout, {metadata as guideMetadata} from './guide/layout';
-import GuideBasicsLayout, {metadata as guideBasicsMetadata} from './guide/basics/layout';
-import GuideTableLayout, {metadata as guideTableMetadata} from './guide/table/layout';
-import GuideHandsLayout, {metadata as guideHandsMetadata} from './guide/hands/layout';
-import GuideAchievementsLayout, {metadata as guideAchievementsMetadata} from './guide/achievements/layout';
-import GuideStoreLayout, {metadata as guideStoreMetadata} from './guide/store/layout';
-import GuideProfileLayout, {metadata as guideProfileMetadata} from './guide/profile/layout';
-import GuideCommunityLayout, {metadata as guideCommunityMetadata} from './guide/community/layout';
-import HandsLayout, {metadata as handsMetadata} from './hands/layout';
-import HandsHistoryLayout, {metadata as handsHistoryMetadata} from './hands/history/layout';
-import HandsReplayLayout, {metadata as handsReplayMetadata} from './hands/replay/layout';
-import LeaderboardLayout, {metadata as leaderboardMetadata} from './leaderboard/layout';
-import LobbyLayout, {metadata as lobbyMetadata} from './lobby/layout';
-import PokerRulesLayout, {metadata as pokerRulesMetadata} from './poker-rules/layout';
-import ProfileLayout, {metadata as profileMetadata} from './profile/layout';
-import ShareLayout, {metadata as shareMetadata} from './share/layout';
-import TableLayout, {metadata as tableMetadata} from './table/layout';
+import AchievementsLayout, {metadata as achievementsMetadata} from './(app)/achievements/layout';
+import CallbackLayout, {metadata as callbackMetadata} from './(app)/callback/layout';
+import GuideLayout, {metadata as guideMetadata} from './(marketing)/guide/layout';
+import GuideBasicsLayout, {metadata as guideBasicsMetadata} from './(marketing)/guide/basics/layout';
+import GuideTableLayout, {metadata as guideTableMetadata} from './(marketing)/guide/table/layout';
+import GuideHandsLayout, {metadata as guideHandsMetadata} from './(marketing)/guide/hands/layout';
+import GuideAchievementsLayout, {metadata as guideAchievementsMetadata} from './(marketing)/guide/achievements/layout';
+import GuideStoreLayout, {metadata as guideStoreMetadata} from './(marketing)/guide/store/layout';
+import GuideProfileLayout, {metadata as guideProfileMetadata} from './(marketing)/guide/profile/layout';
+import GuideCommunityLayout, {metadata as guideCommunityMetadata} from './(marketing)/guide/community/layout';
+import HandsLayout, {metadata as handsMetadata} from './(app)/hands/layout';
+import HandsHistoryLayout, {metadata as handsHistoryMetadata} from './(app)/hands/history/layout';
+import HandsReplayLayout, {metadata as handsReplayMetadata} from './(app)/hands/replay/layout';
+import LeaderboardLayout, {metadata as leaderboardMetadata} from './(app)/leaderboard/layout';
+import LobbyLayout, {metadata as lobbyMetadata} from './(app)/lobby/layout';
+import PokerRulesLayout, {metadata as pokerRulesMetadata} from './(marketing)/poker-rules/layout';
+import ProfileLayout, {metadata as profileMetadata} from './(app)/profile/layout';
+import ShareLayout, {metadata as shareMetadata} from './(app)/share/layout';
+import TableLayout, {metadata as tableMetadata} from './(app)/table/layout';
 import ErrorPage from './error';
 import GlobalError from './global-error';
 import NotFoundPage from './not-found';
 import UnavailablePage, {metadata as unavailableMetadata} from './unavailable/page';
+import MarketingLayout from './(marketing)/layout';
 import {OG_PREVIEWS} from '@/lib/ogPreviews';
 import {INDEXABLE_ROUTES} from './sitemap';
 
@@ -97,6 +98,13 @@ describe('route layouts', () => {
     render(<CallbackLayout><p>trocando código</p></CallbackLayout>);
     expect(screen.getByText('trocando código')).toBeInTheDocument();
     expect(callbackMetadata.robots).toEqual({index: false, follow: false});
+  });
+});
+
+describe('marketing route group', () => {
+  test('the marketing shell renders children through its lightweight query provider', () => {
+    render(<MarketingLayout><p>marketing content</p></MarketingLayout>);
+    expect(screen.getByText('marketing content')).toBeInTheDocument();
   });
 });
 

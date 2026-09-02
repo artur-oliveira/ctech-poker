@@ -11,11 +11,22 @@ import (
 )
 
 const (
-	tablePending = "poker_pending_cashouts"
-	pendingSK    = "pending"
-	pendingGSI   = "gsi_status"
-	pendingOpen  = "open"
+	tablePending        = "poker_pending_cashouts"
+	pendingSK           = "pending"
+	pendingGSI          = "gsi_status"
+	pendingOpen         = "open"
+	pendingManualReview = "manual_review"
 )
+
+// MaxAttempts is the number of failed reconcile passes a single pending entry
+// tolerates before it is quarantined (gsi_status -> "manual_review") and lifted
+// out of the normal sweep. cmd/reconcile escalates a quarantined entry to the
+// Lambda DLQ so it pages instead of retrying silently every 5 minutes forever.
+const MaxAttempts = 5
+
+// maxLastErrorLen caps the persisted LastError string so a verbose wrapped
+// error can never bloat the row.
+const maxLastErrorLen = 500
 
 // Kind values for PendingCashout.Kind. Empty string means KindCashout, for
 // backward compatibility with entries recorded before this field existed.
@@ -41,6 +52,13 @@ type PendingCashout struct {
 	RecordedAt     string   `dynamodbav:"recorded_at" json:"recorded_at"`
 	Resolved       bool     `dynamodbav:"resolved" json:"resolved"`
 	GSIStatus      string   `dynamodbav:"gsi_status,omitempty" json:"-"`
+	// Attempts counts how many reconcile passes have tried and failed to
+	// resolve this entry. LastAttemptAt/LastError carry the context of the
+	// most recent failure. Set by RecordFailedAttempt; once Attempts reaches
+	// MaxAttempts the entry is quarantined out of the sweep.
+	Attempts      int    `dynamodbav:"attempts,omitempty" json:"attempts,omitempty"`
+	LastAttemptAt string `dynamodbav:"last_attempt_at,omitempty" json:"last_attempt_at,omitempty"`
+	LastError     string `dynamodbav:"last_error,omitempty" json:"last_error,omitempty"`
 }
 
 type PendingStore struct {
@@ -103,6 +121,43 @@ func (s *PendingStore) MarkResolved(ctx context.Context, id string) error {
 		return fmt.Errorf("reconcile: mark resolved: %w", err)
 	}
 	return nil
+}
+
+// RecordFailedAttempt increments the attempt counter on a pending entry and
+// records the failure context. It returns the new attempt count and whether the
+// entry was quarantined by this call: once the count reaches MaxAttempts the
+// row's gsi_status flips to "manual_review", which removes it from ListUnresolved
+// (that query is keyed on gsi_status = "open") so the sweep stops retrying a
+// poison entry — cmd/reconcile then escalates it to the Lambda DLQ.
+func (s *PendingStore) RecordFailedAttempt(ctx context.Context, e PendingCashout, cause error) (attempts int, quarantined bool, err error) {
+	attempts = e.Attempts + 1
+	quarantined = attempts >= MaxAttempts
+
+	lastErr := ""
+	if cause != nil {
+		lastErr = cause.Error()
+		if len(lastErr) > maxLastErrorLen {
+			lastErr = lastErr[:maxLastErrorLen]
+		}
+	}
+	updates := map[string]any{
+		"attempts":        attempts,
+		"last_attempt_at": dynamo.NowStr(),
+		"last_error":      lastErr,
+	}
+	if quarantined {
+		updates["gsi_status"] = pendingManualReview
+	}
+
+	sk := pendingSK
+	ok, uErr := s.base.UpdateItem(ctx, e.ID, &sk, updates)
+	if uErr != nil {
+		return attempts, false, fmt.Errorf("reconcile: record failed attempt for %s: %w", e.ID, uErr)
+	}
+	if !ok {
+		return attempts, false, fmt.Errorf("reconcile: record failed attempt for %s: entry not found", e.ID)
+	}
+	return attempts, quarantined, nil
 }
 
 func (s *PendingStore) ListUnresolved(ctx context.Context, olderThan time.Duration) ([]PendingCashout, error) {
