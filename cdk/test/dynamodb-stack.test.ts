@@ -203,3 +203,54 @@ test('creates social graph, recent players, inbox and reports storage', () => {
     ]),
   });
 });
+
+test('right-sizes on-demand capacity: hot-path tables get a higher ceiling than the rest (#34)', () => {
+  const app = new App();
+  const stack = new DynamoDBStack(app, 'TestCapacityStack', {environment: 'dev'});
+  const template = Template.fromStack(stack);
+
+  const hotPathTables = [
+    'poker_table_state', 'poker_action_log', 'poker_action_guards', 'poker_rooms', 'poker_player_sessions',
+  ];
+  // TableV2 puts read capacity on each region's replica entry and write
+  // capacity at the table level.
+  for (const name of hotPathTables) {
+    template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+      TableName: `dev_${name}`,
+      BillingMode: 'PAY_PER_REQUEST',
+      Replicas: Match.arrayWith([
+        Match.objectLike({ReadOnDemandThroughputSettings: {MaxReadRequestUnits: 4000}}),
+      ]),
+      WriteOnDemandThroughputSettings: {MaxWriteRequestUnits: 4000},
+    });
+  }
+  // A representative cold table keeps the original, lower ceiling.
+  template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'dev_poker_sandbox_purchases',
+    Replicas: Match.arrayWith([
+      Match.objectLike({ReadOnDemandThroughputSettings: {MaxReadRequestUnits: 1000}}),
+    ]),
+    WriteOnDemandThroughputSettings: {MaxWriteRequestUnits: 1000},
+  });
+});
+
+test('wires a throttle alarm on every hot-path table to the existing account alerts topic, never a new SNS topic (#34)', () => {
+  const app = new App();
+  const stack = new DynamoDBStack(app, 'TestThrottleAlarmStack', {environment: 'dev'});
+  const template = Template.fromStack(stack);
+
+  template.resourceCountIs('AWS::SNS::Topic', 0);
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 5);
+  for (const name of [
+    'dev-poker_table_state-throttled-requests',
+    'dev-poker_action_log-throttled-requests',
+    'dev-poker_action_guards-throttled-requests',
+    'dev-poker_rooms-throttled-requests',
+    'dev-poker_player_sessions-throttled-requests',
+  ]) {
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: name,
+      AlarmActions: Match.arrayWith(['arn:aws:sns:us-east-1:868899309401:ctech-prod-alerts']),
+    });
+  }
+});

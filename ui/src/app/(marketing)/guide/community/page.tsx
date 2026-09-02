@@ -14,7 +14,11 @@ export default function CommunityGuide() {
           <GuideTerm term="Vitórias">Mãos vencidas no conjunto contabilizado.</GuideTerm>
           <GuideTerm term="Mãos jogadas">Tamanho da amostra que contextualiza o resultado.</GuideTerm>
           <GuideTerm term="Taxa de vitória">Vitórias divididas por mãos jogadas. Não mede lucro nem a força dos adversários.</GuideTerm></GuideTerms>
-          <p>Com três jogadores ou mais, o topo vira pódio. A sua linha fica destacada quando você aparece na lista.</p>
+          <p>Com três jogadores ou mais, o topo vira pódio. A sua linha fica destacada quando você aparece na lista,
+            e a lista rola por toda a classificação sem travar, por mais longa que ela fique.</p>
+          <p>O cartão &quot;Sua posição no ranking&quot; sempre mostra a sua colocação real entre todos os jogadores
+            daquele modo — não apenas entre os que aparecem na página carregada. Se você ainda não jogou nenhuma mão
+            nesse modo, ele mostra &quot;Ainda sem ranking&quot; em vez de uma posição.</p>
           <GuideLink href="/leaderboard">Abrir o ranking</GuideLink></>
       },
       {
@@ -59,13 +63,15 @@ export default function CommunityGuide() {
         body: <><GuideBullets><li><span><b>Reconectando:</b> ações, chat e preparações ficam bloqueados até o snapshot chegar. Suas fichas continuam na mesa.</span></li>
           <li><span><b>Tentar agora:</b> antecipa uma nova tentativa; depois de várias falhas, o aviso passa a esperar esse toque em vez de prometer uma reconexão automática.</span></li>
           <li><span><b>Ação rejeitada:</b> a barra explica o erro e devolve as decisões ainda válidas.</span></li>
+          <li><span><b>Avisos de erro:</b> um aviso de erro, ou qualquer aviso com botões (como <b>Entrar</b>/<b>Recusar</b> de um convite), permanece na tela até você fechá-lo. Só os avisos informativos simples somem sozinhos após alguns segundos.</span></li>
           <li><span><b>Removido da mesa:</b> por inatividade ou por tempo demais desconectado, com aviso e volta ao lobby; a pilha vai para a carteira.</span></li>
-          <li><span><b>Sessão expirada:</b> a autenticação precisa ser renovada. Nenhuma ação é enviada sem token válido.</span></li></GuideBullets></>
+          <li><span><b>Sessão expirada:</b> a autenticação precisa ser renovada. Nenhuma ação é enviada sem token válido.</span></li>
+          <li><span><b>Servidor fora do ar:</b> se as tentativas de verificação continuarem falhando, o aviso deixa de ser uma faixa fina e leva você para a tela de manutenção — sua ficha e seu histórico continuam seguros, e você volta de onde parou assim que o serviço responder de novo. Uma queda só da sua internet continua mostrando apenas a faixa fina.</span></li></GuideBullets></>
       },
       {
         id: 'protecao', title: 'Inatividade e verificação rápida', summary: 'Proteções automáticas só aparecem com um motivo concreto.',
         body: <><GuideTerms><GuideTerm term="Aviso de inatividade">No último minuto antes da remoção, mostra a contagem e o botão <b>Continuar na mesa</b>.</GuideTerm>
-          <GuideTerm term="Verificação rápida">Uma sequência incomum de ações muito rápidas pode abrir uma checagem anti-bot. O relógio da mesa continua visível e o time bank segue disponível.</GuideTerm></GuideTerms>
+          <GuideTerm term="Verificação rápida">Uma sequência incomum de ações muito rápidas pode abrir uma checagem anti-bot. O relógio da mesa continua visível e o time bank segue disponível. Se a checagem não carregar em cerca de 15 segundos, o diálogo mostra <b>Recarregar página</b> e <b>Voltar ao lobby</b> para você nunca ficar preso.</GuideTerm></GuideTerms>
           <GuideCallout kind="info" title="A verificação não lê sua voz nem suas cartas">O desafio só confirma interação humana. Comandos por voz enviam apenas a ação reconhecida, e cartas ocultas continuam fora da interface.</GuideCallout></>
       },
       {

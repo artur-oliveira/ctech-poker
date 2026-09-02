@@ -35,8 +35,13 @@ src/app/
                         stay ungrouped under the root layout
 ```
 
-- `lib/providers/createQueryClient.ts` — shared `QueryClient` factory so the two
-  providers can't drift.
+- `lib/providers/createQueryClient.ts` — shared `QueryClient` factory (`createQueryClient`)
+  plus `getQueryClient()`, which memoises **one** client per browser session. Both group
+  providers use `getQueryClient()`, so an authenticated player crossing the
+  `(app)` ↔ `(marketing)` boundary keeps the warm `['player','me']` / wallet /
+  social-unread cache instead of flashing a `?` avatar and a zeroed balance pill
+  while `getMe` re-resolves (very visible on 3G). On the server every request
+  still gets a fresh client.
 - `lib/providers/MarketingQueryProvider.tsx` — plain `QueryClientProvider` for the
   `(marketing)` group. No keep-alive, no `NetworkProvider`, no `RealtimeBridge`.
 - `lib/providers/QueryProvider.tsx` — unchanged behaviour, now mounted only by

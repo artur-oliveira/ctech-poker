@@ -292,6 +292,7 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /players/me/hands`                      | JWT             | hand history, `?table_id`, paginated (50)                                                  |
 | `GET /players/me/hand/:id?mode=...`          | JWT             | one hand incl. its fairness proof                                                          |
 | `GET /players/me/achievements`               | JWT             | own progress, paginated (100)                                                              |
+| `GET /players/me/achievements/summary`       | JWT             | full-state achievement summary in one response — every catalog key (secrets only once revealed), progress/stars/next-target/completed plus catalog-wide totals; not paginated |
 | `GET /players/me/notes/`                     | JWT             | private opponent notes; `poker:player-notes:read`                                          |
 | `POST /players/me/notes/:opponentId`         | JWT             | save/delete a note (`{tag, note}`, ≤500 chars)                                             |
 | `GET /players/me/poker-stats`                | JWT             | own VPIP/PFR/3-bet                                                                         |
@@ -301,6 +302,7 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /tables/:tableId/hands/:handId/history` | JWT             | action-log replay for one hand                                                             |
 | `GET /achievements`                          | **none**        | static achievement catalog                                                                 |
 | `GET /leaderboard`                           | JWT             | `?metric=hands_won\|hands_played\|win_rate` (win_rate needs ≥100 hands), `?limit`, `?cursor` |
+| `GET /leaderboard/me`                        | JWT             | caller's exact rank + total for `?mode`/`?metric`; `{ranked:false}` if never played that mode |
 | `POST /sandbox-credits/`                     | JWT             | daily spin; rate-limited 60/min/IP                                                         |
 | `GET /sandbox-credits/`                      | JWT             | `{remaining_time_seconds}` cooldown; scoped tokens require `poker:daily-reward:read`       |
 | `GET /wallet/sandbox-purchase/...`           | JWT             | catalog/history/detail reads; `poker:sandbox-purchases:read`; lists are paginated           |
@@ -338,6 +340,16 @@ sender and 5/minute per recipient. A second pending invite for the same sender, 
 
 `achievement_points` is **rejected** as a leaderboard metric — no `gsi_achievement_points` exists, and returning an
 error beats silently ranking by a different GSI.
+
+`GET /leaderboard/me` answers "what's my rank" without paging through the whole board: it loads the caller's own
+stats row (`leaderboard.Store.PlayerEntry`), then runs three `Select: COUNT` queries against the metric's GSI
+(`leaderboard.Store.RankOf`) — rows with a strictly better score, rows tied on score but ordered before the caller by
+`player_id` (matching `Service.Top`'s tiebreak), and the mode's full ranked count — instead of fetching and sorting
+every row. `{ranked: false}` (no `rank`/`total`/`entry`) means the caller has no stats row for that mode yet. The
+per-mode GSI partition this counts against is still the single-partition hotspot described in issue #62 — `RankOf`'s
+full-partition COUNT for `total` is itself `O(players in that mode)` in the worst case (bounded by
+`maxRankCountPages`). Replacing the GSI with a Valkey ZSET mirror (per the issue's proposal) would fix both the
+write-side hotspot and make this read O(log N); that redesign is deliberately out of scope here.
 
 The `win_rate` board has a **minimum-hands floor** (`leaderboard.MinHandsForWinRateRank = 100`, per currency mode): a
 player is only eligible once `hands_played >= 100` in that mode. `gsi_win_rate_pk` is a sparse key — written on the
@@ -455,8 +467,11 @@ repeat that charge with no way to opt out per attempt.
   guaranteed drain window — scale-in can cut a table mid-hand.
 - **No DLQ on either EventBridge Scheduler target** (`cmd/reconcile`, `cmd/tablecleanup`).
 - **Real-money buy-in skips the terms check** (above).
-- **Two missing ctech-account scopes** block real-money verification calls — see `CLAUDE.md`. Both are config actions in
-  ctech-account, not code changes here.
+- **Two missing ctech-account scopes** block real-money verification calls (`internal:wallet:game-status`,
+  `internal:wallet:debit-real`) — see `CLAUDE.md`. Both are config actions in ctech-account, not code changes here;
+  poker's own fix (issue #39) is `walletclient.Client.ValidateRequiredScopes`, which fails startup loudly with
+  `REAL_MONEY_ENABLED=true` and either scope missing, instead of leaving it to fail silently at the first real
+  buy-in.
 
 Fixed, for the record, since older revisions of this file listed them as open: **B9** (authz is now
 `sub` + `sid`, M2M rejected, leaderboard authenticated), **B10** (archiver has an SQS DLQ and a depth alarm), **B31**

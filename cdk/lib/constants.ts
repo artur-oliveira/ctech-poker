@@ -17,14 +17,12 @@ export const AWS_REGION = 'us-east-1';
 export const CERT_ARN =
   'arn:aws:acm:us-east-1:868899309401:certificate/29678869-bfc3-4688-b81b-55aa5b1d7443';
 
-export const GITHUB_REPO_DEFAULT = 'artur-oliveira/ctech-poker';
-
-/**
- * Shared cross-service alert topic owned/provisioned out of band (email
- * subscription already attached). CDK imports it via
- * `sns.Topic.fromTopicArn` — it never creates a topic or a subscription.
- */
+// Account-wide CloudWatch alarms topic — owned by ctech-cdk, imported via
+// sns.Topic.fromTopicArn wherever an alarm needs an action. Never create a
+// new SNS topic for poker's own alarms (see issue #34).
 export const ALERTS_TOPIC_ARN = 'arn:aws:sns:us-east-1:868899309401:ctech-prod-alerts';
+
+export const GITHUB_REPO_DEFAULT = 'artur-oliveira/ctech-poker';
 
 // ── Naming ──────────────────────────────────────────────────────────────────
 export const SERVICE = 'ctech-poker';
@@ -76,6 +74,22 @@ export const NGINX_PORT = 8080;
  */
 export const HEALTH_CHECK_PATH = '/v1.0/health-check';
 
+/**
+ * Spot instance-type pool for the API ASG's MixedInstancesPolicy (#35: a spot
+ * capacity shortage in a single instance type/pool used to be able to zero
+ * the whole ASG, in every AZ, non-self-healing). All three are the same
+ * burstable Graviton (arm64) family as the previous single type (t4g.nano)
+ * — nano/micro/small only differ in memory (0.5/1/2 GiB) at 2 vCPU each, so
+ * price-capacity-optimized keeps picking the cheapest available pool and
+ * cost stays roughly flat; this only lets the ASG fall back to a slightly
+ * larger pool instead of going to zero when one type's spot capacity dries
+ * up. WeightedCapacity is left at its CDK/CFN default (1 per instance) for
+ * every override, so a launch of any of these three still counts as exactly
+ * one unit of ASG capacity — unrelated to the leasing model, which already
+ * tolerates 2 concurrently-running instances (minCapacity=1/maxCapacity=2).
+ */
+export const API_ASG_SPOT_INSTANCE_TYPES = ['t4g.nano', 't4g.micro',] as const;
+
 /** S3 key prefix inside the shared deployments/logs buckets. */
 export const S3_PREFIX = SERVICE;
 /** Key of the artifact new ASG instances bootstrap from. */
@@ -114,6 +128,15 @@ export const DYNAMO_INDEX = {
   socialUnread: 'gsi_unread',
   reportStatus: 'gsi_status',
 } as const;
+
+// ── GitHub Actions OIDC trust scoping ──────────────────────────────────────
+/**
+ * Branches that `.github/workflows/deploy.yml` deploys from (its `push`
+ * trigger). The OIDC trust policy is pinned to exactly these refs — no bare
+ * `:*` wildcard — so a workflow running on any other ref (a feature branch, a
+ * tag, a fork) cannot assume the deployment roles.
+ */
+export const GHA_DEPLOY_BRANCHES = ['main', 'staging', 'dev'] as const;
 
 // ── GitHub Actions role names (global, not per-env) ─────────────────────────
 export const GHA_API_ROLE = `${SERVICE}-gha-api`;

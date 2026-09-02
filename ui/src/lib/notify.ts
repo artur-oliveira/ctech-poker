@@ -24,7 +24,12 @@ let items: AppNotification[] = [];
 const recent = new Map<string, number>();
 
 const DEDUPE_MS = 600;
+// Plain info toasts repeat a durable surface, so they clear themselves quickly.
 const AUTO_DISMISS_MS = 6000;
+// Errors and any toast carrying an action (retry, invite accept/decline) must
+// survive a read: they stay until dismissed, with this hard ceiling so a stack
+// of ignored toasts still drains on its own.
+const PERSISTENT_DISMISS_MS = 20000;
 const MAX_VISIBLE = 3;
 let nextID = 0;
 
@@ -36,7 +41,8 @@ export function pushNotification(message: string, variant: NotificationVariant =
   const id = `${now}-${nextID++}`;
   items = [...items, {id, message, variant, actions}].slice(-MAX_VISIBLE);
   listeners.forEach(f => f(items));
-  setTimeout(() => dismissNotification(id), AUTO_DISMISS_MS);
+  const persistent = variant === 'error' || (actions?.length ?? 0) > 0;
+  setTimeout(() => dismissNotification(id), persistent ? PERSISTENT_DISMISS_MS : AUTO_DISMISS_MS);
 }
 
 export function dismissNotification(id: string): void {

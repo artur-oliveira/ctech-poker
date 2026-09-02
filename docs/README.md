@@ -38,15 +38,17 @@ history documents and lag the code by design. O índice de planos foi atualizado
 - **No WAF.** `cdk/lib/frontend-stack.ts:103-121` builds the Distribution with no `webAclId`. PLAN.md previously
   claimed this shipped; it did not.
 - **No ASG lifecycle hook.** Scale-in can terminate an instance before `DrainAndRelease` finishes.
-- **Real-money buy-in skips the terms-acceptance check** that the sandbox path performs (`api/internal/app/app.go`).
-- **No CDK test** for `oidc-stack.ts`.
-
 All three Lambdas (`reconcile`, `tablecleanup`, `archiver`) have an SQS DLQ **and**, as of #30, a
 DLQ-depth alarm plus a Lambda-`Errors` alarm on the shared `ctech-prod-alerts` SNS topic
-(`cdk/lib/alarms.ts`). Older docs claiming "no DLQ" / "no alarm" are stale.
+(`cdk/lib/alarms.ts`), covering both EventBridge Scheduler targets (`reconcile-stack.ts`,
+`tablecleanup-stack.ts`). Older docs claiming "no DLQ" / "no alarm" are stale. `oidc-stack.ts` and
+`reconcile-stack.ts` both have CDK tests (`cdk/test/oidc-stack.test.ts`,
+`cdk/test/reconcile-stack.test.ts`); older docs claiming otherwise are stale.
 
-Issues **B9** (`sub`-only authz), **B10** (archiver DLQ), **B31** (leaderboard ranking) and **B32** (fairness surface)
-are all **fixed**; older docs that still list them as open are stale.
+Issues **B9** (`sub`-only authz), **B10** (archiver DLQ), **B31** (leaderboard ranking), **B32** (fairness surface) and
+the real-money buy-in terms-acceptance gap (both `buyin.NewServiceWithGame` and `NewServiceWithPlayers` wiring chain
+`.WithPlayers(players)` in `api/internal/app/app.go`, and `Service.buyIn` calls `RequireAccepted` unconditionally
+whenever a players store is wired) are all **fixed**; older docs that still list them as open are stale.
 
 ## Other reference material
 

@@ -30,6 +30,14 @@ export interface PlayerProfile {
   playstyle?: PlaystyleBadge[];
 }
 
+// Canonical source of truth for a player's wallet balances. Both the sandbox
+// balance (`sandbox_balance`) and the real-money balance (`game_balance`) live
+// on the `['player','me']` profile — there is no separate balance query. Every
+// balance-moving path (PIX purchase confirm, daily reward, wallet socket
+// frames) must invalidate THIS key. Do not reintroduce a `['wallet','balance']`
+// key: nothing reads it and a widget wired to it would silently go stale.
+export const BALANCE_QUERY_KEY = ['player', 'me'] as const;
+
 export async function getMe() {
   return (await apiClient.get<PlayerProfile>('/v1.0/players/me', {silentError: true})).data;
 }
@@ -120,6 +128,10 @@ export interface HandItem {
   outcome: HandOutcome;
   net_change: number;
   ended_at: number;
+  // Big blind in force for this hand. Added by backend issue #75; absent on
+  // hands logged before it, where HandReplayer derives the level from the
+  // `post_big_blind` action instead.
+  big_blind?: number;
   board?: string[];
   board_two?: string[];
   hole_cards?: string[];

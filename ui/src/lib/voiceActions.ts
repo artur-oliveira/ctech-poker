@@ -11,8 +11,23 @@ function parseSpokenAmount(normalized: string): number | undefined {
   return amount && Number.isFinite(amount) ? amount : undefined;
 }
 
+function normalizeTranscript(transcript: string): string {
+  return transcript.toLocaleLowerCase('pt-BR').normalize('NFD').replace(/\p{Diacritic}/gu, '').trim();
+}
+
+// A raise / all-in is the one irreversible chip commitment reachable by voice, so
+// it is staged behind a spoken (or tapped) confirmation. STT drops the "-mar"
+// ending often enough that "confirma" has to count too.
+export function isVoiceConfirmation(transcript: string): boolean {
+  return /\b(confirm(ar|a|o|ado)?|isso|pode ir)\b/.test(normalizeTranscript(transcript));
+}
+
+export function isVoiceCancellation(transcript: string): boolean {
+  return /\b(cancelar|cancela|cancelo|nao|para|parar|esquec[ae])\b/.test(normalizeTranscript(transcript));
+}
+
 export function parseVoiceAction(transcript: string): VoiceAction | null {
-  const normalized = transcript.toLocaleLowerCase('pt-BR').normalize('NFD').replace(/\p{Diacritic}/gu, '').trim();
+  const normalized = normalizeTranscript(transcript);
   if (/\b(all ?in|tudo)\b/.test(normalized)) return {action: 'raise', allIn: true};
   if (/\b(aumentar|aumento|raise)\b/.test(normalized)) {
     const amount = parseSpokenAmount(normalized);

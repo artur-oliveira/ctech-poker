@@ -6,6 +6,13 @@ import {SelfHudDialog} from './SelfHudDialog';
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   push: vi.fn(),
+  realMoney: {enabled: false},
+}));
+
+vi.mock('@/lib/capabilities', () => ({
+  get REAL_MONEY_UI_ENABLED() {
+    return mocks.realMoney.enabled;
+  },
 }));
 
 vi.mock('@tanstack/react-query', () => ({
@@ -16,7 +23,23 @@ vi.mock('@tanstack/react-query', () => ({
 vi.mock('next/navigation', () => ({useRouter: () => ({push: mocks.push})}));
 
 describe('lobby player components', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.realMoney.enabled = false;
+  });
+
+  test('omits the currency-mode tabs from the HUD when real money is off', () => {
+    mocks.query.mockReturnValue({isLoading: true});
+    render(<SelfHudDialog open onOpenChangeAction={vi.fn()}/>);
+    expect(screen.queryByRole('group', {name: 'Modo das estatísticas'})).not.toBeInTheDocument();
+  });
+
+  test('shows the currency-mode tabs in the HUD when real money is on', () => {
+    mocks.realMoney.enabled = true;
+    mocks.query.mockReturnValue({isLoading: true});
+    render(<SelfHudDialog open onOpenChangeAction={vi.fn()}/>);
+    expect(screen.getByRole('group', {name: 'Modo das estatísticas'})).toBeInTheDocument();
+  });
   
   test('hides the active-table banner without an open session', () => {
     mocks.query.mockReturnValue({data: [{table_id: 'old', ended_at: 10}]});

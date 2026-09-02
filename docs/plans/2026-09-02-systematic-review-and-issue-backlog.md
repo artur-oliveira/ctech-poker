@@ -571,13 +571,19 @@ succeed with the poker client token, and cover the grants in deploy reconciliati
 
 **Critérios de aceitação**
 
-- [ ] `LoadForLambda` enforces the legal gate
-- [ ] A real-money stale-table cleanup path exists (release holds, archive), or an explicit documented decision that
-  real-money tables are cleaned differently
-- [ ] `tablecleanup` never credits a real-money table's stack to any ledger; missing-room →
-  "unknown, skip", not "sandbox"
-- [ ] Decision recorded on the Claim-race free-seat window (accept as bounded, or gate seating on the fee actually
-  clearing)
+- [ ] `LoadForLambda` enforces the legal gate (in progress on PR #130, which mirrors `config.Load`'s fail-closed
+  `REAL_MONEY_ENABLED`→`LEGAL_SIGNOFF_REF` gate for `cmd/reconcile`'s Lambda; not yet merged as of this issue's fix)
+- [x] A real-money stale-table cleanup path exists (release holds, archive) — `cmd/tablecleanup`'s
+  `settleRealMoneyAndArchive` records each seated player's game-wallet settlement to `poker_pending_cashouts` (so
+  `cmd/reconcile` retries a failed immediate `CashoutGame` using the recorded hold ID) before archiving
+- [x] `tablecleanup` never credits a real-money table's stack to any ledger; missing-room →
+  "unknown, skip", not "sandbox" — a `nil` room now skips the table entirely instead of falling into the sandbox
+  refund path
+- [x] Decision recorded on the Claim-race free-seat window: closed, not merely bounded — handled independently by
+  #146 (issue #122). `entitlement.Store.Rebind` gained a compare-and-swap `expectedBoundTableID` guard and
+  `buyin.Service.confirmFeeCharged` decides "the fee is covered" by whether that entitlement's own
+  `poker_pending_cashouts` recovery row is resolved, never by the entitlement row merely existing. See
+  `docs/specs/2026-09-02-reconcile-entitlement-concurrency-audit.md`.
 - [ ] Fold into the D2 deep-dive
 
 ---

@@ -12,7 +12,12 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
 - **Named constants in `lib/constants.ts`** — no magic strings for names, ports, domains,
   SSM paths, role names, or ARNs. AWS resource names must never be inlined at a call site.
 - **DynamoDB:** on-demand (`Billing.onDemand`) with an explicit `maxRead/WriteRequestUnits`
-  cap (currently 1000) — never a single-digit RCU/WCU cap (CI guard rejects `<100`).
+  cap — never a single-digit RCU/WCU cap (CI guard rejects `<100`). Not one-size-fits-all: the
+  hot-path tables (`poker_table_state`, `poker_action_log`, `poker_action_guards`, `poker_rooms`,
+  `poker_player_sessions` — every one touched by a table-commit `TransactWriteItems` or by
+  per-connection presence churn) get 4000 RRU/WCU; every other (cold) table keeps 1000
+  (`HOT_PATH_TABLES`/`HOT_PATH_CAPACITY`/`COLD_PATH_CAPACITY` in `dynamodb-stack.ts`, #34). Raising
+  an on-demand ceiling costs nothing unless traffic actually grows into it.
 - **Resource naming:** tables carry a `poker_` segment and are prefixed `<env>_` so they
   never collide with other services in the shared account (`868899309401`, `us-east-1`).
 
@@ -26,6 +31,14 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   **Not Lambda/Fargate.** The Go binary is the HAProxy target directly on port 8080 (no nginx).
   The retained edge security group and VPC are imported from SSM/lookup; no ALB target group or
   listener rule is created.
+- **ASG resilience (#35, fixed 2026-09-02)**: 100% spot with `MixedInstancesPolicy`, spread across
+  every public subnet of the shared VPC (3 AZs, `us-east-1b/c/d` — already the default, no filter
+  applied) and, as of this fix, 3 spot instance types (`API_ASG_SPOT_INSTANCE_TYPES` in
+  `lib/constants.ts`: `t4g.nano`/`t4g.micro`) via an L1
+  `MixedInstancesPolicy.LaunchTemplate.Overrides` override in `api-stack.ts` — `HaproxyEc2Service`
+  itself only ever configures one instance type. `minCapacity`/`maxCapacity` are unchanged; the
+  table-leasing model already tolerates 2 concurrently-running instances (`tablelease` is a
+  latency hint, not a correctness lock). No on-demand base instance — deferred, see `README.md`.
 - **29 DynamoDB tables** (`dynamodb-stack.ts`) — an older revision of this file undercounted (15, before it, 8, then 26,
   then 27). The last two, `poker_hand_reveals` / `poker_hand_reveal_payments`, back the paid history winner-cards
   reveal (`docs/specs/2026-08-21-pay-to-see-winner-cards-history.md`).
@@ -41,8 +54,12 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   datapoint, `treatMissingData: NOT_BREACHING`, ALARM + OK actions). All six point at the
   **existing** shared topic `arn:aws:sns:us-east-1:868899309401:ctech-prod-alerts`
   (`ALERTS_TOPIC_ARN`), imported with `sns.Topic.fromTopicArn` — CDK creates no topic and no
-  subscription. These are the only alarms in `lib/`; the earlier throttle/missed-run alarms
-  removed 2026-08-17/08-19 were not restored.
+  subscription. The earlier throttle/missed-run alarms removed 2026-08-17/08-19 were not restored.
+- **DynamoDB throttle alarms exist** (2026-09-02, #34): `dynamodb-stack.ts` puts a
+  `ReadThrottleEvents + WriteThrottleEvents` CloudWatch alarm on each hot-path table
+  (`poker_table_state`, `poker_action_log`, `poker_action_guards`, `poker_rooms`,
+  `poker_player_sessions`), wired to the same `ALERTS_TOPIC_ARN` (`constants.ts`, imported with
+  `sns.Topic.fromTopicArn` — never a new topic).
 - **Frontend**: private S3 + CloudFront via OAC, a route KeyValueStore with a viewer-request
   rewrite Function, and a `ResponseHeadersPolicy` carrying the CSP, HSTS and Permissions-Policy.
   **Being retired** — the app deploys to Cloudflare Workers Static Assets from
@@ -92,7 +109,16 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
 - As of #30, the `cmd/reconcile`, `cmd/tablecleanup`, and archiver Lambdas each have a `messages-visible`
   (DLQ-depth) alarm and an `errors` alarm on the `ctech-prod-alerts` SNS topic (`cdk/lib/alarms.ts`).
   The EventBridge Scheduler → Lambda delivery hop itself still has no separate scheduler-target DLQ.
-- **No test** for `oidc-stack.ts`.
+- **`oidc-stack.ts` (issue #41, 2026-09-02)**: OIDC trust is now pinned with `StringEquals` to
+  exact `sub`s — `repo:<repo>:ref:refs/heads/{main,staging,dev}` for the api/scopes roles, plus
+  `repo:<repo>:pull_request` for the infra role (its `cdk diff` PR job). No bare `:*`; the old
+  malformed second pattern is gone. `infraRole` dropped `AdministratorAccess` for
+  `PowerUserAccess` + a scoped IAM block (service + `cdk-*`/`CtechPoker-*` roles/profiles/policies
+  only) + an explicit `Deny` on IAM user/access-key/login-profile/MFA/SAML/OIDC-provider creation
+  and `organizations:*`/`account:*`. **Interim** — follow-up is a permissions boundary on the
+  roles CDK creates + a CloudFormation-only allowlist. `apiRole`'s `ssm:SendCommand` is scoped to
+  instances tagged `Project=ctech-poker` + the `AWS-RunShellScript` document;
+  `autoscaling:StartInstanceRefresh` pinned to `*-ctech-poker` ASGs. Covered by `test/oidc-stack.test.ts`.
 - **B10 (fixed)** — archiver `DynamoEventSource` has `bisectBatchOnError` + `onFailure: SqsDlq`,
   and (#30) a DLQ-depth + `Errors` alarm on `ctech-prod-alerts`.
 - **B31 relevance** — `poker_leaderboard_stats` has GSIs only for `hands_won` / `hands_played` /

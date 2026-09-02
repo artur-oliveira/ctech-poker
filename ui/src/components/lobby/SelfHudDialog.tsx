@@ -6,6 +6,7 @@ import {PlaystyleBadges} from '@/components/PlaystyleBadges';
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle} from '@/components/ui/dialog';
 import {getMyPokerStats, type PokerStats} from '@/lib/api/pokerStats';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
+import {REAL_MONEY_UI_ENABLED} from '@/lib/capabilities';
 import {SkeletonList} from '@/components/ui/skeleton';
 import {useState} from 'react';
 import type {WalletMode} from '@/lib/api/player';
@@ -132,7 +133,7 @@ export function SelfHudDialog({open, onOpenChangeAction}: { open: boolean; onOpe
         <DialogTitle>Seu jogo</DialogTitle>
         <DialogDescription>Estatísticas privadas calculadas a partir das suas mãos concluídas.</DialogDescription>
       </DialogHeader>
-      <CurrencyModeTabs mode={mode} onChangeAction={setMode}/>
+      {REAL_MONEY_UI_ENABLED && <CurrencyModeTabs mode={mode} onChangeAction={setMode}/>}
       {query.isLoading ?
         <SkeletonList label="Calculando tendências…" count={4} height={52} className="skeleton-panel"/> :
         query.data ? <HudContent stats={query.data}/> :

@@ -11,11 +11,33 @@ export const decodeIdToken = sdkDecodeIdToken;
 
 const TOKEN_REQUEST_TIMEOUT_MS = 3_000;
 
-function withTokenDeadline<T>(request: Promise<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Token request timed out after 3000ms')), TOKEN_REQUEST_TIMEOUT_MS);
-    request.then(resolve, reject).finally(() => clearTimeout(timeout));
+/**
+ * @aoctech/auth-client v1.1.0's `exchangeCode`/`refresh` take no `AbortSignal`
+ * (checked against the shipped `.d.ts`), so this cannot cancel the underlying
+ * `fetch` itself — that needs a library change. What it *can* do, and does:
+ * once the deadline fires, `controller.signal.aborted` is set and a late
+ * settlement of the real request is discarded rather than resolving/rejecting
+ * the caller a second time. That is the abort this module is responsible for.
+ */
+function withTokenDeadline<T>(request: Promise<T>): {promise: Promise<T>; controller: AbortController} {
+  const controller = new AbortController();
+  const promise = new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      controller.abort();
+      reject(new Error('Token request timed out after 3000ms'));
+    }, TOKEN_REQUEST_TIMEOUT_MS);
+    request.then(
+      value => {
+        clearTimeout(timeout);
+        if (!controller.signal.aborted) resolve(value);
+      },
+      error => {
+        clearTimeout(timeout);
+        if (!controller.signal.aborted) reject(error);
+      }
+    );
   });
+  return {promise, controller};
 }
 
 export async function startOAuthFlow(returnTo = '/lobby') {
@@ -26,17 +48,61 @@ function usernameFrom(idToken?: string | null) {
   return idToken ? decodeIdToken(idToken)?.username ?? null : null;
 }
 
+/** Why a callback exchange failed, so the page can react instead of
+ * collapsing every rejection into "code expired":
+ * - `transient`: network blip or the 3 s deadline — the code is likely still
+ *   valid; retry the same exchange.
+ * - `invalid`: a PKCE `state` mismatch or a 4xx from the token endpoint (the
+ *   code is expired, already used, or the IdP rejected it) — restart the
+ *   whole flow.
+ * - `unavailable`: the IdP itself is down (5xx) — send the player to
+ *   `/unavailable` rather than looping them through a dead sign-in. */
+export type OAuthFailureKind = 'transient' | 'invalid' | 'unavailable';
+
+export class OAuthExchangeError extends Error {
+  constructor(public readonly kind: OAuthFailureKind, message: string, public readonly cause?: unknown) {
+    super(message);
+    this.name = 'OAuthExchangeError';
+  }
+}
+
+// `client.exchangeCode` throws a plain `Error` in every failure shape: a
+// literal "OAuth state mismatch" string, `Token exchange failed (<status>): …`
+// for a non-2xx token response, or whatever a rejected `fetch` throws (a
+// `TypeError` with no status) for a network blip. This recovers the only
+// signal available to classify the failure.
+const IDP_STATUS_PATTERN = /Token exchange failed \((\d{3})\)/;
+
+function classifyExchangeFailure(error: unknown, deadlineExceeded: boolean): OAuthFailureKind {
+  if (deadlineExceeded) return 'transient';
+  const message = error instanceof Error ? error.message : String(error);
+  if (message === 'OAuth state mismatch') return 'invalid';
+  const status = Number(message.match(IDP_STATUS_PATTERN)?.[1]);
+  if (Number.isFinite(status)) return status >= 500 ? 'unavailable' : 'invalid';
+  // An unrecognized shape (typically a rejected fetch/TypeError) is treated
+  // as a transient blip rather than forcing a full re-auth on every surprise.
+  return 'transient';
+}
+
 export async function exchangeCode(code: string, state: string) {
-  const r = await withTokenDeadline(client.exchangeCode(code, state));
-  return {
-    accessToken: r.accessToken,
-    username: usernameFrom(r.idToken),
-    returnTo: r.returnTo
-  };
+  const {promise, controller} = withTokenDeadline(client.exchangeCode(code, state));
+  try {
+    const r = await promise;
+    return {
+      accessToken: r.accessToken,
+      username: usernameFrom(r.idToken),
+      returnTo: r.returnTo
+    };
+  } catch (error) {
+    const kind = classifyExchangeFailure(error, controller.signal.aborted);
+    const message = error instanceof Error ? error.message : 'Token exchange failed';
+    throw new OAuthExchangeError(kind, message, error);
+  }
 }
 
 export async function doRefresh() {
-  const r = await withTokenDeadline(client.refresh());
+  const {promise} = withTokenDeadline(client.refresh());
+  const r = await promise;
   return r ? {accessToken: r.accessToken, username: usernameFrom(r.idToken)} : null;
 }
 
@@ -47,6 +113,7 @@ export function endSession(returnTo = '/') {
 // Logout sequence per @aoctech/auth-client's README: revoke the refresh
 // token, then redirect through the IdP's RP-initiated end-session endpoint.
 export async function logout(returnTo = '/') {
-  await withTokenDeadline(client.revoke()).catch(() => undefined);
+  const {promise} = withTokenDeadline(client.revoke());
+  await promise.catch(() => undefined);
   endSession(returnTo);
 }

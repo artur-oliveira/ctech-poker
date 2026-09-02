@@ -35,6 +35,7 @@ import {ProfileShowcaseDialog} from '@/components/lobby/ProfileShowcaseDialog';
 import {SelfHudDialog} from '@/components/lobby/SelfHudDialog';
 import {deleteAvatar, uploadAvatar} from '@/lib/avatar';
 import {pushNotification} from '@/lib/notify';
+import {availableWalletMode, REAL_MONEY_UI_ENABLED} from '@/lib/capabilities';
 
 const ACES = ['As', 'Ah', 'Ad', 'Ac'];
 
@@ -71,6 +72,15 @@ export function ProfileMenu() {
         input.wallet_mode === 'sandbox' ? 'Modo sandbox selecionado.' : 'Modo dinheiro real selecionado.',
         'info'
       );
+    },
+    onError: (_error, input) => {
+      // A rejected wallet-mode change leaves the profile untouched; re-sync
+      // from the server so the Switch snaps back to the real mode and tell the
+      // player nothing changed (the generic API toast doesn't say which mode).
+      if (input?.wallet_mode) {
+        void queryClient.invalidateQueries({queryKey: ['player', 'me']});
+        pushNotification('Não foi possível trocar o modo de jogo. Seu modo atual foi mantido.');
+      }
     }
   });
   const avatar = useMutation({
@@ -89,7 +99,9 @@ export function ProfileMenu() {
     },
   });
 
-  const walletMode: WalletMode = me?.wallet_mode || 'sandbox';
+  // Coerce to sandbox whenever the real-money UI is gated off, so the pill,
+  // the Switch and the balance label never imply real money is active.
+  const walletMode: WalletMode = availableWalletMode(me?.wallet_mode);
   const deckVariant: DeckVariantId = me?.deck_variant || DEFAULT_DECK_VARIANT;
   const balanceLabel = walletMode === 'real' ? formatReal(me?.game_balance) : formatSandbox(me?.sandbox_balance);
 
@@ -165,13 +177,13 @@ export function ProfileMenu() {
             <div><Sparkles aria-hidden="true"/><span><b id="profile-table-title">Sua mesa, do seu jeito</b>
               <small>Preferências aplicadas na próxima mão.</small></span></div>
           </div>
-          <div className="profile-menu-setting">
+          {REAL_MONEY_UI_ENABLED && <div className="profile-menu-setting">
             <span><Label id="wallet-mode-label">{walletMode === 'real' ? 'Dinheiro real' : 'Sandbox'}</Label>
               <small>Modo de jogo</small></span>
             <Switch aria-labelledby="wallet-mode-label"
                     checked={walletMode === 'real'}
                     onCheckedChange={checked => save.mutate({wallet_mode: checked ? 'real' : 'sandbox'})}/>
-          </div>
+          </div>}
           <div className="profile-deck-setting">
             <div className="profile-deck-label">
               <Label id="deck-variant-label">Baralho</Label>
@@ -219,7 +231,7 @@ export function ProfileMenu() {
           <div className="profile-wallet-heading"><WalletCards aria-hidden="true"/><b>Seus saldos</b></div>
           <div className="profile-balances">
             <span>Fichas sandbox <b>{formatSandbox(me?.sandbox_balance)}</b></span>
-            <span>Dinheiro real <b>{formatReal(me?.game_balance)}</b></span>
+            {REAL_MONEY_UI_ENABLED && <span>Dinheiro real <b>{formatReal(me?.game_balance)}</b></span>}
           </div>
           <Button type="button" variant="ghost" className="profile-wallet-link" render={<Link href="/store"/>}>
             <ShoppingBag aria-hidden="true"/> <span><b>Loja</b><small>Reações e fichas sandbox</small></span>

@@ -13,12 +13,41 @@ the same tier instead of charging again — never across tiers. `GET /rooms/:id/
 queued to the same retry table (`poker_pending_cashouts` with `Kind: "fee_debit"`) for Lambda reconciliation retries;
 the entitlement itself is left in place on a debit failure (nobody is ever seated on that path) so the retry — this
 request's caller, or `cmd/reconcile` — completes the same idempotent charge at most once.
-See `docs/plans/2026-08-21-entry-fee-entitlement.md`. **Still blocking, found 2026-07-25 while verifying cross-repo:**
+See `docs/plans/2026-08-21-entry-fee-entitlement.md`. The entitlement Claim/Rebind race is closed by #146 (issue #122)
+— see `docs/specs/2026-09-02-reconcile-entitlement-concurrency-audit.md`.
+
+`cmd/tablecleanup` now handles real-money tables instead of skipping them: it settles every seated player's
+game-wallet hold via `CashoutGame`, first recording the obligation to `poker_pending_cashouts` (same
+record-then-attempt-then-resolve shape as `buyin.Service.settle`) so `cmd/reconcile`'s sweep retries it — using the
+recorded hold ID — if the immediate cash-out fails; the table archives either way once the obligation is durably
+recorded. The table-entry entitlement itself is left untouched (it's a paid, non-refundable reservation, not a fund
+hold — it just expires on its own TTL). A room record that can't be found is now "unknown, skip" — never treated as
+sandbox — so a sweep-ordering bug can no longer credit a real-money table's stack to the sandbox ledger. See
+`cmd/tablecleanup/main.go`'s `settleRealMoneyAndArchive`.
+
+**Still blocking, found 2026-07-25 while verifying cross-repo:**
 
 1. ctech-wallet's scope catalog (`ctech-account/api/internal/scopes/catalog.go`) has no `internal:wallet:game-status`
    entry, so no M2M client can ever be granted the scope `ctech-wallet`'s `GET /wallet/game/status/:user_id` requires.
 2. Poker's M2M client has never been granted the `internal:wallet:debit-real` scope in `ctech-account`'s catalog. Both
-   are data/config actions in `ctech-account`, not code changes in this repo. Also unresolved (re-verified 2026-07-28):
+   are data/config actions in `ctech-account`, not code changes in this repo — **this is what needs to change to
+   actually unblock real-money mode; nothing in this repo can grant a scope on ctech-account's behalf.** (issue #39)
+   Until both are granted, in every environment poker's M2M client runs in:
+   - Add `internal:wallet:game-status` to `ctech-account/api/internal/scopes/catalog.go`.
+   - Grant poker's M2M client both `internal:wallet:game-status` and `internal:wallet:debit-real` in
+     `ctech-account`'s client-grant data/config for every environment (dev/staging/prod), and cover both grants in
+     deploy reconciliation so a new environment can't come up missing them silently.
+   What this repo *does* do about it: `walletclient.Client.ValidateRequiredScopes` (`internal/walletclient/client.go`)
+   runs once at startup, gated on `REAL_MONEY_ENABLED`, wired via `validateWalletScopes` in `internal/app/app.go`
+   (registered as an `fx.Lifecycle` `OnStart` hook, before `startServer`). It fetches an M2M token for each of the two
+   scopes above and confirms the scope actually made it into the grant — checking the token endpoint's own response
+   (an outright rejection surfaces directly) and, for a JWT access token, decoding its `scope` claim (unverified —
+   safe here since we already trust the token endpoint's TLS response; this is a diagnostic read, not an auth
+   decision) in case ctech-account silently narrows the grant instead of rejecting the request. Either failure mode
+   returns an error from the `OnStart` hook, which fails the whole process to start with a message naming exactly
+   which scope is missing — so a broken grant is a loud, immediate deploy failure instead of every real-money entry
+   fee and gambling-activation check silently failing in production. An opaque (non-JWT) token can't be decoded this
+   way and is treated as "can't verify, assume granted" rather than a false positive. Also unresolved (re-verified 2026-07-28):
 
 - An ASG lifecycle hook + drain Lambda **do** exist (`cdk/lib/api-stack.ts`'s `TerminationDrainFunction`) and do reach
   `tablemanager.DrainAndRelease` via `OnStop` when they fire — re-verified 2026-09-01 from
@@ -37,7 +66,6 @@ See `docs/plans/2026-08-21-entry-fee-entitlement.md`. **Still blocking, found 20
   matter which fires first or whether both do. This still does not cover non-spot terminations (no
   metadata notice precedes those) — treat the hook itself as best-effort for those, with the
   commit-time duplicate-seat guard below as the remaining backstop.
-- The real-money buy-in path skips the poker-terms-acceptance check the sandbox path performs (`internal/app/app.go`).
 - No WAF at the CloudFront edge (and the distribution itself is being retired — the app is on Cloudflare Workers); application rate limits (`internal/api/v1/ratelimit.go`) and Turnstile are the only
   protection.
 - `cmd/reconcile` now *reaches* its Lambda DLQ: each pending entry carries an `Attempts` counter
@@ -186,6 +214,10 @@ catalog.
 
 ## Other known issues (documentation only — see api/README.md)
 
+- **(#38) fixed:** real-money `BuyIn` now enforces `player.RequireAccepted` unconditionally. Both
+  `app.newBuyinService` constructors (sandbox and real-money) chain `.WithPlayers(players)`, and `buyin.Service.buyIn`
+  calls `s.players.RequireAccepted` before any wallet debit or entitlement charge whenever a players store is wired —
+  see `internal/buyin/terms_test.go`'s `TestRealMoneyBuyInRequiresPokerTerms`.
 - Issue #31 fixed: `tablemanager.Manager.GetOrCreateActor` no longer serializes the whole instance
   behind one process-global mutex spanning `LoadTable`/`leases.Acquire`/`roomLoader`. It now holds
   a refcounted per-tableID `*sync.Mutex` (`Manager.locks`) across the create path — different
@@ -201,6 +233,15 @@ catalog.
   floor and `REMOVE`s it below, so a 1-hand 100% row is never returned by `gsi_win_rate`; `Service.Top` filters
   sub-floor rows again before sorting so none occupies a rank slot. Legacy stale keys clean up lazily on the row's
   next write — no migration job. `hands_won` / `hands_played` boards are untouched.
+- **Issue #62 partially fixed.** `GET /leaderboard/me` (`leaderboard.Service.MyRank` / `Store.RankOf`) gives a player
+  their exact rank + total via `Select: COUNT` queries instead of the frontend computing rank from whatever page of
+  `Top` it happened to fetch (the old bug: `#{data.findIndex+1} de {data.length}` showed page size, not the real
+  total). **Still open, deliberately deferred:** the underlying `gsi_hands_won`/`gsi_hands_played`/`gsi_win_rate`
+  GSIs remain single-partition per mode (`gsi_*_pk = mode`) — every hand's `IncrementStats` write and every
+  `RankOf`/`Top` read still funnel through one DynamoDB partition per mode, and `RankOf`'s full-partition COUNT for
+  `total` is itself unbounded in the number of ranked players (capped by `maxRankCountPages`, not fixed by it). The
+  issue's proposed fix — a Valkey ZSET mirror per `(mode, metric)`, rebuilt from the GSI on cold start — was out of
+  scope for the correctness fix and is not implemented.
 - B32 fixed: `ShuffleCommitHash` and the per-card `RootCommitHash` are published from
   `StartHand` on. Complete hands reveal either the full seed (no hidden private cards) or viewer-scoped card+salt proofs
   with hashes for hidden positions and rabbit runout cards. Rabbit-hunt runout cards specifically are withheld from a
