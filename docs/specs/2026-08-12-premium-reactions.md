@@ -280,6 +280,12 @@ record, changed, err := sandboxSvc.ConfirmFromWebhook(c.Context(), payload.Purch
 }
 ```
 
+> **Follow-up (2026-09-02, #69):** premium cosmetics (`docs/specs/2026-08-21-premium-cosmetics-overhaul.md`) reuse the
+> same wallet product-purchase API and the same `"prdp"` prefix, so the prefix alone no longer disambiguates. The
+> handler now falls through from `reactionSvc.ConfirmFromWebhook` to `cosmeticSvc.ConfirmFromWebhook` on
+> `reactionpurchase.ErrCatalogMismatch` (the purchase's SKU isn't a reaction SKU) before giving up, broadcasting
+> `"cosmetic_purchase_update"` on a changed cosmetic status. See `internal/api/v1/walletwebhook.go`.
+
 ## Proto (`proto/poker.proto`)
 
 New `ServerMessage.type = "reaction_purchase_update"`, reusing existing `player_id`, `purchase_id`,

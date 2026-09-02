@@ -220,7 +220,7 @@ message ClientMessage {
 
 // ServerMessage is sent from the server to the client.
 message ServerMessage {
-  string type = 1; // "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast" | "sandbox_purchase_update" | "reaction_purchase_update" | "social_event" | "social_presence_changed" | "social_inbox_count"
+  string type = 1; // "connected" | "pong" | "state" | "chat" | "error" | "removed" | "achievement_unlocked" | "room_created" | "room_updated" | "payment_received" | "system_broadcast" | "sandbox_purchase_update" | "reaction_purchase_update" | "cosmetic_purchase_update" | "social_event" | "social_presence_changed" | "social_inbox_count"
 
   // payload fields
   string conn_id = 2; // for connected frame
@@ -242,7 +242,7 @@ message ServerMessage {
   optional double equity = 16; // for equity delta (player_id identifies owner)
   string reaction_id = 17; // ephemeral table reaction catalog key
   string target_player_id = 18; // destination for thrown objects
-  string purchase_id = 19; // for sandbox_purchase_update or reaction_purchase_update
+  string purchase_id = 19; // for sandbox_purchase_update, reaction_purchase_update, or cosmetic_purchase_update
   SocialEvent social_event = 20; // for social_event or social_presence_changed
   int32 unread_count = 21; // for social_inbox_count
 }

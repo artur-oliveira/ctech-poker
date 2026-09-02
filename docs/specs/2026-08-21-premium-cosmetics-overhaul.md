@@ -141,6 +141,22 @@ owns that table (per `ctech-wallet`'s existing pattern).
 New DynamoDB tables: `poker_cosmetic_entitlements` (mirrors `poker_reaction_entitlements`'s shape, keyed
 `player_id#kind#item_id`) and `poker_cosmetic_purchases` (mirrors `poker_reaction_purchases`).
 
+> **Follow-up (2026-09-02, #69):** this spec built `cosmeticpurchase.Service.ConfirmFromWebhook` (mirroring
+> `reactionpurchase.Service.ConfirmFromWebhook`) but never wired it into `internal/api/v1/walletwebhook.go`, and never
+> gave it a realtime push. Both premium reactions and premium cosmetics buy through wallet's generic product-purchase
+> API and get a `"prdp"`-prefixed `purchase_id`, so the prefix alone can't tell the two apart the way it tells
+> `"sbxp"` (sandbox) apart from `"prdp"`. The webhook handler now tries `reactionSvc.ConfirmFromWebhook` first for any
+> `"prdp"` id; when that returns `reactionpurchase.ErrCatalogMismatch` (the SKU isn't a reaction SKU), it falls
+> through to `cosmeticSvc.ConfirmFromWebhook`. On a changed cosmetic status it broadcasts a new
+> `ServerMessage{Type: "cosmetic_purchase_update", PlayerId, PurchaseId, Code: status}` to `"user#"+playerID` via
+> `ws.Registry.Broadcast` — the same registry/frame shape `sandbox_purchase_update` and `reaction_purchase_update`
+> already use (no new proto fields; `proto/poker.proto`'s `ServerMessage.type` comment lists the new value). See
+> `internal/api/v1/walletwebhook_cosmetic_test.go` (`-tags integration`) for webhook coverage of a cosmetic purchase
+> id, including the reaction-then-cosmetic fallback. **Still open:** the client (`ui/src/lib/hooks/useLobbyRealtime.ts`)
+> has no `cosmetic_purchase_update` branch yet — a cosmetic PIX confirmation now broadcasts correctly, but nothing
+> in the browser invalidates the wallet/catalog query cache or toasts on receipt (mirror the existing
+> `reaction_purchase_update` branch there). `CosmeticPurchaseDialog`'s 4s poll while open still works as a fallback.
+
 ### Closing the actual security gap
 
 `SetDeckVariant` (`player/service.go:120-131`) today accepts **any string up to 60 characters** — no catalog check, no
