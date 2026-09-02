@@ -40,6 +40,44 @@ func (m *memStats) Top(_ context.Context, mode, _ string, _ int, _ map[string]ty
 	}
 	return out, nil, nil
 }
+func (m *memStats) PlayerEntry(_ context.Context, id, mode string) (*Entry, error) {
+	e, ok := m.rows[mode+"#"+id]
+	if !ok {
+		return nil, nil
+	}
+	return e, nil
+}
+
+// RankOf mirrors Store.RankOf's semantics (better-than count, then
+// tied-before-by-player-id count, then +1) over the in-memory rows, so the
+// fake tests the same rank contract the real GSI-backed store implements.
+func (m *memStats) RankOf(_ context.Context, mode, metric string, entry Entry) (int64, int64, error) {
+	score := func(e *Entry) float64 {
+		switch metric {
+		case "hands_played":
+			return float64(e.HandsPlayed)
+		case "win_rate":
+			return e.WinRate
+		default:
+			return float64(e.HandsWon)
+		}
+	}
+	mine := score(&entry)
+	var better, tied, total int64
+	for key, e := range m.rows {
+		if len(key) <= len(mode) || key[:len(mode)+1] != mode+"#" {
+			continue
+		}
+		total++
+		s := score(e)
+		if s > mine {
+			better++
+		} else if s == mine && e.PlayerID < entry.PlayerID {
+			tied++
+		}
+	}
+	return better + tied + 1, total, nil
+}
 func TestRecordHandAndTop(t *testing.T) {
 	m := &memStats{rows: map[string]*Entry{}}
 	s := NewServiceWithStore(m)
@@ -68,6 +106,46 @@ func TestRecordHandAndTop(t *testing.T) {
 	}
 	if m.rows["sandbox#p1"].AchievementPoints != 2 {
 		t.Fatalf("achievement points=%d", m.rows["sandbox#p1"].AchievementPoints)
+	}
+}
+
+func TestMyRank(t *testing.T) {
+	m := &memStats{rows: map[string]*Entry{}}
+	s := NewServiceWithStore(m)
+	// p1: 2/2, p2: 1/2, p3: 0/1 win_rate; ranking by hands_won: p1=2, p2=1, p3=0.
+	if err := s.RecordHand(context.Background(), "sandbox", hand.HandOutcome{Winners: []string{"p1"}, Participants: []string{"p1", "p2"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordHand(context.Background(), "sandbox", hand.HandOutcome{Winners: []string{"p1"}, Participants: []string{"p1", "p3"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := s.MyRank(context.Background(), "sandbox", "hands_won", "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info == nil || info.Rank != 1 || info.Total != 3 {
+		t.Fatalf("expected p1 rank 1 of 3, got %+v", info)
+	}
+
+	info, err = s.MyRank(context.Background(), "sandbox", "hands_won", "p3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info == nil || info.Rank != 3 || info.Total != 3 {
+		t.Fatalf("expected p3 rank 3 of 3, got %+v", info)
+	}
+
+	info, err = s.MyRank(context.Background(), "sandbox", "hands_won", "ghost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info != nil {
+		t.Fatalf("expected unranked (nil) for a player with no stats row, got %+v", info)
+	}
+
+	if _, err := s.MyRank(context.Background(), "sandbox", "not_a_metric", "p1"); err == nil {
+		t.Fatal("expected error for unsupported metric")
 	}
 }
 

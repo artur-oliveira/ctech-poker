@@ -302,6 +302,7 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /tables/:tableId/hands/:handId/history` | JWT             | action-log replay for one hand                                                             |
 | `GET /achievements`                          | **none**        | static achievement catalog                                                                 |
 | `GET /leaderboard`                           | JWT             | `?metric=hands_won\|hands_played\|win_rate` (win_rate needs ≥100 hands), `?limit`, `?cursor` |
+| `GET /leaderboard/me`                        | JWT             | caller's exact rank + total for `?mode`/`?metric`; `{ranked:false}` if never played that mode |
 | `POST /sandbox-credits/`                     | JWT             | daily spin; rate-limited 60/min/IP                                                         |
 | `GET /sandbox-credits/`                      | JWT             | `{remaining_time_seconds}` cooldown; scoped tokens require `poker:daily-reward:read`       |
 | `GET /wallet/sandbox-purchase/...`           | JWT             | catalog/history/detail reads; `poker:sandbox-purchases:read`; lists are paginated           |
@@ -339,6 +340,16 @@ sender and 5/minute per recipient. A second pending invite for the same sender, 
 
 `achievement_points` is **rejected** as a leaderboard metric — no `gsi_achievement_points` exists, and returning an
 error beats silently ranking by a different GSI.
+
+`GET /leaderboard/me` answers "what's my rank" without paging through the whole board: it loads the caller's own
+stats row (`leaderboard.Store.PlayerEntry`), then runs three `Select: COUNT` queries against the metric's GSI
+(`leaderboard.Store.RankOf`) — rows with a strictly better score, rows tied on score but ordered before the caller by
+`player_id` (matching `Service.Top`'s tiebreak), and the mode's full ranked count — instead of fetching and sorting
+every row. `{ranked: false}` (no `rank`/`total`/`entry`) means the caller has no stats row for that mode yet. The
+per-mode GSI partition this counts against is still the single-partition hotspot described in issue #62 — `RankOf`'s
+full-partition COUNT for `total` is itself `O(players in that mode)` in the worst case (bounded by
+`maxRankCountPages`). Replacing the GSI with a Valkey ZSET mirror (per the issue's proposal) would fix both the
+write-side hotspot and make this read O(log N); that redesign is deliberately out of scope here.
 
 The `win_rate` board has a **minimum-hands floor** (`leaderboard.MinHandsForWinRateRank = 100`, per currency mode): a
 player is only eligible once `hands_played >= 100` in that mode. `gsi_win_rate_pk` is a sparse key — written on the

@@ -230,6 +230,15 @@ catalog.
   floor and `REMOVE`s it below, so a 1-hand 100% row is never returned by `gsi_win_rate`; `Service.Top` filters
   sub-floor rows again before sorting so none occupies a rank slot. Legacy stale keys clean up lazily on the row's
   next write — no migration job. `hands_won` / `hands_played` boards are untouched.
+- **Issue #62 partially fixed.** `GET /leaderboard/me` (`leaderboard.Service.MyRank` / `Store.RankOf`) gives a player
+  their exact rank + total via `Select: COUNT` queries instead of the frontend computing rank from whatever page of
+  `Top` it happened to fetch (the old bug: `#{data.findIndex+1} de {data.length}` showed page size, not the real
+  total). **Still open, deliberately deferred:** the underlying `gsi_hands_won`/`gsi_hands_played`/`gsi_win_rate`
+  GSIs remain single-partition per mode (`gsi_*_pk = mode`) — every hand's `IncrementStats` write and every
+  `RankOf`/`Top` read still funnel through one DynamoDB partition per mode, and `RankOf`'s full-partition COUNT for
+  `total` is itself unbounded in the number of ranked players (capped by `maxRankCountPages`, not fixed by it). The
+  issue's proposed fix — a Valkey ZSET mirror per `(mode, metric)`, rebuilt from the GSI on cold start — was out of
+  scope for the correctness fix and is not implemented.
 - B32 fixed: `ShuffleCommitHash` and the per-card `RootCommitHash` are published from
   `StartHand` on. Complete hands reveal either the full seed (no hidden private cards) or viewer-scoped card+salt proofs
   with hashes for hidden positions and rabbit runout cards. Rabbit-hunt runout cards specifically are withheld from a

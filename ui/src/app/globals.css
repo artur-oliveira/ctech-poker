@@ -15121,6 +15121,13 @@ button.deck-grid-slot:hover {
     color: var(--gold-bright);
 }
 
+.viewer-ranking-hint {
+    margin: 2px 0 0;
+    font-size: var(--font-size-compact);
+    color: var(--paper);
+    opacity: 0.8;
+}
+
 @media (max-width: 640px) {
     .viewer-ranking-card {
         flex-direction: column;
