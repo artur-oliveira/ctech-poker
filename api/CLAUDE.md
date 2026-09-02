@@ -66,7 +66,6 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   matter which fires first or whether both do. This still does not cover non-spot terminations (no
   metadata notice precedes those) — treat the hook itself as best-effort for those, with the
   commit-time duplicate-seat guard below as the remaining backstop.
-- The real-money buy-in path skips the poker-terms-acceptance check the sandbox path performs (`internal/app/app.go`).
 - No WAF at the CloudFront edge (and the distribution itself is being retired — the app is on Cloudflare Workers); application rate limits (`internal/api/v1/ratelimit.go`) and Turnstile are the only
   protection.
 - `cmd/tablecleanup`'s EventBridge Scheduler target has no DLQ. `cmd/reconcile` now *reaches* its
@@ -213,6 +212,10 @@ catalog.
 
 ## Other known issues (documentation only — see api/README.md)
 
+- **(#38) fixed:** real-money `BuyIn` now enforces `player.RequireAccepted` unconditionally. Both
+  `app.newBuyinService` constructors (sandbox and real-money) chain `.WithPlayers(players)`, and `buyin.Service.buyIn`
+  calls `s.players.RequireAccepted` before any wallet debit or entitlement charge whenever a players store is wired —
+  see `internal/buyin/terms_test.go`'s `TestRealMoneyBuyInRequiresPokerTerms`.
 - Issue #31 fixed: `tablemanager.Manager.GetOrCreateActor` no longer serializes the whole instance
   behind one process-global mutex spanning `LoadTable`/`leases.Acquire`/`roomLoader`. It now holds
   a refcounted per-tableID `*sync.Mutex` (`Manager.locks`) across the create path — different
