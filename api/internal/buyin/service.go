@@ -57,7 +57,7 @@ type pendingStore interface {
 type entitlementStore interface {
 	ActiveFor(ctx context.Context, playerID string) ([]entitlement.Entitlement, error)
 	Claim(ctx context.Context, e entitlement.Entitlement) error
-	Rebind(ctx context.Context, playerID, originTableID, newTableID string) error
+	Rebind(ctx context.Context, playerID, originTableID, expectedBoundTableID, newTableID string) error
 }
 
 type Service struct {
@@ -383,9 +383,9 @@ func (s *Service) resolveEntitlement(ctx context.Context, room *roomstore.Room, 
 		if !unavailable {
 			continue
 		}
-		if err := s.entitlements.Rebind(ctx, playerID, e.OriginTableID, room.ID); err != nil {
+		if err := s.entitlements.Rebind(ctx, playerID, e.OriginTableID, e.BoundTableID, room.ID); err != nil {
 			if errors.Is(err, entitlement.ErrNotFound) {
-				continue // lost the race (expired, or moved by a concurrent buy-in) — try the next candidate
+				continue // lost the race (expired, deleted, or bound_table_id moved by a concurrent buy-in) — try the next candidate
 			}
 			return fmt.Errorf("buyin: rebind entitlement: %w", err)
 		}
