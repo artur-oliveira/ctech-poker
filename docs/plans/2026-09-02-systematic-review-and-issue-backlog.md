@@ -611,6 +611,13 @@ concurrent `BuyIn` for different players into a 1-seat-left table, both empty `i
 callers for empty-key sites (auto-rebuy sweep, webhooks). Confirm the real-money `ReleaseHold` path (holdID-scoped) is
 unaffected.
 
+**Resolved (#42):** the seat-failed refund branch now credits with `key + ":refund"` — `key` already folds in
+`roomID`, `playerID` and the nonce (itself `playerID` when `idemKey == ""`), so it is globally unique per refund
+while a genuine retry of the same failed buy-in still reproduces it and `ctech-wallet` dedupes. Callers audited: the
+only empty-`idemKey` sites are `app.autoRebuySweep` (passes a generated nonce, not empty — but the `key` derivation
+is now safe either way) and any future webhook path; the real-money branch uses `ReleaseHold(holdID)` and never
+touched `idemKey`. Regression test: `TestBuyInRefundKeyIsPlayerScopedAndCollisionFree`.
+
 ---
 
 ### Issue 15 — [BACKEND/API] WS rate limiters are per-instance → N× the intended limit fleet-wide
