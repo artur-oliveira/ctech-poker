@@ -14,7 +14,8 @@ export default function CommunityGuide() {
           <GuideTerm term="Vitórias">Mãos vencidas no conjunto contabilizado.</GuideTerm>
           <GuideTerm term="Mãos jogadas">Tamanho da amostra que contextualiza o resultado.</GuideTerm>
           <GuideTerm term="Taxa de vitória">Vitórias divididas por mãos jogadas. Não mede lucro nem a força dos adversários.</GuideTerm></GuideTerms>
-          <p>Com três jogadores ou mais, o topo vira pódio. A sua linha fica destacada quando você aparece na lista.</p>
+          <p>Com três jogadores ou mais, o topo vira pódio. A sua linha fica destacada quando você aparece na lista,
+            e a lista rola por toda a classificação sem travar, por mais longa que ela fique.</p>
           <p>O cartão &quot;Sua posição no ranking&quot; sempre mostra a sua colocação real entre todos os jogadores
             daquele modo — não apenas entre os que aparecem na página carregada. Se você ainda não jogou nenhuma mão
             nesse modo, ele mostra &quot;Ainda sem ranking&quot; em vez de uma posição.</p>
