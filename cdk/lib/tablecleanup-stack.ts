@@ -18,6 +18,7 @@ interface TableCleanupStackProps extends cdk.StackProps {
   walletUrlParam: string;
   pokerClientIdParam: string;
   pokerClientSecretParam: string;
+  cloudwatchAlarmsEnabled: boolean;
 }
 
 /**
@@ -35,7 +36,8 @@ export class TableCleanupStack extends cdk.Stack {
       roomsTableArn,
       walletUrlParam,
       pokerClientIdParam,
-      pokerClientSecretParam
+      pokerClientSecretParam,
+      cloudwatchAlarmsEnabled
     } = props;
 
     const role = new iam.Role(this, 'TableCleanupRole', {
@@ -97,7 +99,7 @@ export class TableCleanupStack extends cdk.Stack {
     });
     dlq.grantSendMessages(schedulerRole);
 
-    addLambdaDlqAlarms(this, 'TableCleanup', fn, dlq);
+    addLambdaDlqAlarms(this, 'TableCleanup', fn, dlq, cloudwatchAlarmsEnabled);
 
     new scheduler.CfnSchedule(this, 'TableCleanupSchedule', {
       name: tableCleanupJobName(environment),

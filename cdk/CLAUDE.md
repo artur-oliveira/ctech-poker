@@ -60,6 +60,13 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   (`poker_table_state`, `poker_action_log`, `poker_action_guards`, `poker_rooms`,
   `poker_player_sessions`), wired to the same `ALERTS_TOPIC_ARN` (`constants.ts`, imported with
   `sns.Topic.fromTopicArn` — never a new topic).
+- **Every alarm above is gated by one flag** (2026-09-02): `cloudwatchAlarmsEnabled: boolean`,
+  threaded from `bin/poker.ts`'s `CLOUDWATCH_ALARMS_ENABLED` (env var, **defaults to `false`**) into
+  `DynamoDBStack`/`ArchiverStack`/`ReconcileStack`/`TableCleanupStack`. `addLambdaDlqAlarms` and
+  `dynamodb-stack.ts`'s `addThrottleAlarm` both no-op when it's off — the DLQs, the schedules and
+  the Lambdas themselves are unaffected, only the ~$0.10/mo-each CloudWatch alarms disappear. Set
+  `CLOUDWATCH_ALARMS_ENABLED=true` before `cdk deploy` once the shared alerts topic should actually
+  page on this app.
 - **Frontend**: private S3 + CloudFront via OAC, a route KeyValueStore with a viewer-request
   rewrite Function, and a `ResponseHeadersPolicy` carrying the CSP, HSTS and Permissions-Policy.
   **Being retired** — the app deploys to Cloudflare Workers Static Assets from

@@ -18,6 +18,7 @@ interface ReconcileStackProps extends cdk.StackProps {
   walletUrlParam: string;
   pokerClientIdParam: string;
   pokerClientSecretParam: string;
+  cloudwatchAlarmsEnabled: boolean;
 }
 
 /**
@@ -27,7 +28,10 @@ interface ReconcileStackProps extends cdk.StackProps {
 export class ReconcileStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ReconcileStackProps) {
     super(scope, id, props);
-    const {environment, authDomainName, pendingCashoutsTableArn, walletUrlParam, pokerClientIdParam, pokerClientSecretParam} = props;
+    const {
+      environment, authDomainName, pendingCashoutsTableArn, walletUrlParam, pokerClientIdParam,
+      pokerClientSecretParam, cloudwatchAlarmsEnabled
+    } = props;
 
     const role = new iam.Role(this, 'ReconcileRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
@@ -83,7 +87,7 @@ export class ReconcileStack extends cdk.Stack {
     });
     dlq.grantSendMessages(schedulerRole);
 
-    addLambdaDlqAlarms(this, 'Reconcile', fn, dlq);
+    addLambdaDlqAlarms(this, 'Reconcile', fn, dlq, cloudwatchAlarmsEnabled);
 
     new scheduler.CfnSchedule(this, 'ReconcileSchedule', {
       name: reconcileJobName(environment),

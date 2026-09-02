@@ -12,7 +12,9 @@ test('creates an archive bucket and a Lambda subscribed to the action log stream
     dynamoStream: dynamodb.StreamViewType.NEW_IMAGE,
   });
 
-  const stack = new ArchiverStack(app, 'TestArchiverStack', {environment: 'dev', actionLogTable: table});
+  const stack = new ArchiverStack(app, 'TestArchiverStack', {
+    environment: 'dev', actionLogTable: table, cloudwatchAlarmsEnabled: true
+  });
   const template = Template.fromStack(stack);
   template.resourceCountIs('AWS::S3::Bucket', 1);
   // Note: autoDeleteObjects (dev only) provisions its own singleton Lambda
@@ -45,4 +47,21 @@ test('creates an archive bucket and a Lambda subscribed to the action log stream
     AlarmActions: [alerts],
     OKActions: [alerts],
   });
+});
+
+test('creates no alarms when cloudwatchAlarmsEnabled is false', () => {
+  const app = new App();
+  const tableStack = new Stack(app, 'TestTableStack2');
+  const table = new dynamodb.TableV2(tableStack, 'TestActionLog2', {
+    partitionKey: {name: 'pk', type: dynamodb.AttributeType.STRING},
+    sortKey: {name: 'sk', type: dynamodb.AttributeType.STRING},
+    dynamoStream: dynamodb.StreamViewType.NEW_IMAGE,
+  });
+  const stack = new ArchiverStack(app, 'TestArchiverNoAlarmsStack', {
+    environment: 'dev', actionLogTable: table, cloudwatchAlarmsEnabled: false
+  });
+  const template = Template.fromStack(stack);
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
+  // The DLQ itself (B10) is unaffected by the flag.
+  template.hasResourceProperties('AWS::SQS::Queue', {QueueName: 'dev-poker-action-log-archiver-dlq'});
 });

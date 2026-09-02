@@ -2,7 +2,7 @@ import {App} from 'aws-cdk-lib';
 import {Match, Template} from 'aws-cdk-lib/assertions';
 import {TableCleanupStack} from '../lib/tablecleanup-stack';
 
-function buildStack() {
+function buildStack(cloudwatchAlarmsEnabled = true) {
   const app = new App();
   const stack = new TableCleanupStack(app, 'TestTableCleanupStack', {
     environment: 'dev',
@@ -11,6 +11,7 @@ function buildStack() {
     walletUrlParam: '/ctech/dev/poker/wallet-url',
     pokerClientIdParam: '/ctech/dev/poker/client-id',
     pokerClientSecretParam: '/ctech/dev/poker/client-secret',
+    cloudwatchAlarmsEnabled,
   });
   return Template.fromStack(stack);
 }
@@ -56,6 +57,13 @@ test('schedules the sweep every 30 minutes', () => {
     AlarmActions: [alerts],
     OKActions: [alerts],
   });
+});
+
+test('creates no alarms when cloudwatchAlarmsEnabled is false', () => {
+  const template = buildStack(false);
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 0);
+  // The schedule and its DLQ are unaffected by the flag.
+  template.hasResourceProperties('AWS::SQS::Queue', {QueueName: 'dev-ctech-poker-tablecleanup-dlq'});
 });
 
 test('the Lambda role can Query the table-state index but never Scan it', () => {

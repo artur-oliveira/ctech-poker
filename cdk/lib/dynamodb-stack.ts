@@ -46,6 +46,7 @@ export type TableName =
 
 interface DynamoDBStackProps extends cdk.StackProps {
   environment: Environment;
+  cloudwatchAlarmsEnabled: boolean;
 }
 
 export class DynamoDBStack extends cdk.Stack {
@@ -54,7 +55,7 @@ export class DynamoDBStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: DynamoDBStackProps) {
     super(scope, id, props);
     this.tables = new Map();
-    const {environment} = props;
+    const {environment, cloudwatchAlarmsEnabled} = props;
     const removalPolicy = environment === 'dev' ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN;
     const pointInTimeRecoverySpecification =
       environment === 'prod' ? {pointInTimeRecoveryEnabled: true} : undefined;
@@ -87,9 +88,12 @@ export class DynamoDBStack extends cdk.Stack {
     // maxRead/WriteRequestUnits ceiling above or from a hot single-partition
     // burst. CloudWatch alarms are ~$0.10/mo each on the standard tier — five
     // hot-path tables is a negligible, predictable cost, not a metered spend
-    // that scales with traffic.
-    const alertsTopic = sns.Topic.fromTopicArn(this, 'AlertsTopic', ALERTS_TOPIC_ARN);
+    // that scales with traffic. Gated on `cloudwatchAlarmsEnabled` all the
+    // same — a cost lever to turn every alarm this app creates off at once.
+    const alertsTopic = cloudwatchAlarmsEnabled
+      ? sns.Topic.fromTopicArn(this, 'AlertsTopic', ALERTS_TOPIC_ARN) : undefined;
     const addThrottleAlarm = (t: dynamodb.TableV2, name: TableName) => {
+      if (!alertsTopic) return;
       const throttleEvents = new cloudwatch.MathExpression({
         expression: 'reads + writes',
         usingMetrics: {
