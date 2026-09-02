@@ -33,8 +33,33 @@ export interface Stake {
   fee_cents?: number;
 }
 
-export async function listRooms(cursor?: string) {
-  return (await apiClient.get<Page<Room>>('/v1.0/rooms', {params: {cursor}})).data.data;
+async function fetchRoomsPage(cursor?: string, currencyMode?: 'sandbox' | 'real') {
+  return (await apiClient.get<Page<Room>>('/v1.0/rooms', {
+    params: {cursor, currency_mode: currencyMode},
+  })).data;
+}
+
+export async function listRooms(cursor?: string, currencyMode?: 'sandbox' | 'real') {
+  return (await fetchRoomsPage(cursor, currencyMode)).data;
+}
+
+// A page of the lobby's room list beyond page one is otherwise invisible to
+// the join-vs-create decision and bucket availability counts (see #90), so
+// this walks the cursor to completion. Bounded by MAX_ROOM_LIST_PAGES so a
+// server that never reports has_next:false (or keeps returning a cursor)
+// can't turn the lobby load into an unbounded fetch loop.
+export const MAX_ROOM_LIST_PAGES = 20;
+
+export async function listAllRooms(currencyMode: 'sandbox' | 'real' = 'sandbox') {
+  const rooms: Room[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < MAX_ROOM_LIST_PAGES; page++) {
+    const result = await fetchRoomsPage(cursor, currencyMode);
+    rooms.push(...result.data);
+    if (!result.has_next || !result.next_cursor) break;
+    cursor = result.next_cursor;
+  }
+  return rooms;
 }
 
 export async function listStakes(currencyMode: 'sandbox' | 'real' = 'sandbox') {

@@ -4,7 +4,7 @@ import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {useRouter} from 'next/navigation';
 import {ArrowRight, Users} from 'lucide-react';
 import {Button} from '@/components/ui/button';
-import {createRoom, getRoom, listRooms, listStakes, type Room} from '@/lib/api/rooms';
+import {createRoom, getRoom, listAllRooms, listStakes, type Room} from '@/lib/api/rooms';
 import {SkeletonList} from '@/components/ui/skeleton';
 import {BUY_IN_MAX_BB, BUY_IN_MIN_BB, buyInRange} from '@/lib/pokerRules';
 
@@ -36,7 +36,7 @@ export function StakesGrid() {
     isError: roomsError,
     refetch: refetchRooms
   } = useQuery({
-    queryKey: ['rooms'], queryFn: () => listRooms()
+    queryKey: ['rooms'], queryFn: () => listAllRooms('sandbox')
   });
 
   // The `['rooms']` cache can be up to 30s stale, and a concurrent joiner can

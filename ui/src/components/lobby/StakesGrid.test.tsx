@@ -9,21 +9,26 @@ const invalidateQueries = vi.fn();
 const createRoom = vi.fn();
 const getRoom = vi.fn();
 const listStakes = vi.fn();
-const listRooms = vi.fn();
+const listAllRooms = vi.fn();
 let stakesQuery: Record<string, unknown> = {};
 let roomsQuery: Record<string, unknown> = {};
+let roomsQueryFn: (() => unknown) | null = null;
 
 vi.mock('next/navigation', () => ({useRouter: () => ({push, replace})}));
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({invalidateQueries}),
-  useQuery: ({queryKey}: { queryKey: string[] }) => queryKey[0] === 'stakes' ? stakesQuery : roomsQuery,
+  useQuery: ({queryKey, queryFn}: { queryKey: string[]; queryFn: () => unknown }) => {
+    if (queryKey[0] === 'stakes') return stakesQuery;
+    roomsQueryFn = queryFn;
+    return roomsQuery;
+  },
 }));
 vi.mock('@/lib/hooks/useLobbyRealtime', () => ({useLobbyRealtime: vi.fn()}));
 vi.mock('@/lib/api/rooms', () => ({
   createRoom: (...args: unknown[]) => createRoom(...args),
   getRoom: (...args: unknown[]) => getRoom(...args),
   listStakes: (...args: unknown[]) => listStakes(...args),
-  listRooms: (...args: unknown[]) => listRooms(...args),
+  listAllRooms: (...args: unknown[]) => listAllRooms(...args),
 }));
 
 // A single open room, used across the join-race tests below.
@@ -39,12 +44,23 @@ describe('lobby stakes integration', () => {
   beforeEach(() => {
     stakesQuery = {};
     roomsQuery = {};
+    roomsQueryFn = null;
     push.mockReset();
     replace.mockReset();
     createRoom.mockReset();
     getRoom.mockReset();
     invalidateQueries.mockReset();
+    listAllRooms.mockReset();
     window.history.replaceState(null, '', '/lobby');
+  });
+
+  test('fetches the room list through the paginated, sandbox-scoped fetch', () => {
+    stakesQuery = {data: [], isLoading: false};
+    roomsQuery = {data: [], isLoading: false};
+    render(<StakesGrid/>);
+    expect(roomsQueryFn).not.toBeNull();
+    roomsQueryFn?.();
+    expect(listAllRooms).toHaveBeenCalledWith('sandbox');
   });
   afterEach(() => {
     window.history.replaceState(null, '', '/lobby');
@@ -104,6 +120,27 @@ describe('lobby stakes integration', () => {
     await userEvent.click(screen.getByRole('button', {name: /6-MAX/}));
     await waitFor(() => expect(push).toHaveBeenCalledWith('/table?id=open-room'));
     expect(getRoom).toHaveBeenCalledWith('open-room');
+    expect(createRoom).not.toHaveBeenCalled();
+  });
+
+  test('joins an open room that only exists past page one of the room list, without creating a new one', async () => {
+    stakesQuery = {data: [{small_blind: 25, big_blind: 50}], isLoading: false};
+    // Simulates the aggregate the paginated fetch hands back once it has
+    // walked every page: a full room from page one and the joinable one that
+    // used to be invisible on page two (see #90).
+    const rooms = [
+      {id: 'page-1-full-room', visibility: 'public', small_blind: 25, big_blind: 50, max_seats: 6, seats_taken: 6},
+      {id: 'page-2-open-room', visibility: 'public', small_blind: 25, big_blind: 50, max_seats: 6, seats_taken: 3},
+    ];
+    roomsQuery = {data: rooms, isLoading: false, refetch: vi.fn().mockResolvedValue({data: rooms})};
+    // The seat-race re-check (#91) re-verifies the candidate with a direct
+    // read before trusting the cached list.
+    getRoom.mockResolvedValue({seats_taken: 3, max_seats: 6});
+    render(<StakesGrid/>);
+    expect(screen.getByText('1 mesa ativa · até 6 jogadores')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: /6-MAX/}));
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/table?id=page-2-open-room'));
+    expect(getRoom).toHaveBeenCalledWith('page-2-open-room');
     expect(createRoom).not.toHaveBeenCalled();
   });
 
