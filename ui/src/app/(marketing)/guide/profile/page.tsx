@@ -35,8 +35,9 @@ export default function ProfileGuide() {
           <GuideTerm term="Mesa visível para amigos">Permite que amigos entrem na sua mesa quando ela é pública. Mesa privada nunca aparece.</GuideTerm>
           <GuideTerm term="Conquistas em destaque">Até três conquistas já iniciadas.</GuideTerm>
           <GuideTerm term="Copiar link / Ver perfil">Aparecem com a vitrine pública e mostram exatamente o que a outra pessoa recebe.</GuideTerm></GuideTerms>
-          <p>Quem abre a sua vitrine vê nome, foto, os rótulos de estilo autorizados, as conquistas em destaque, a sua melhor vitória recente e — se estiver logado — quantas mãos vocês já jogaram juntos e quem venceu mais.</p>
-          <GuideCallout kind="safe" title="Estatística detalhada não vai junto">Tornar a vitrine pública não publica VPIP, PFR nem 3-bet. Só os rótulos que você autorizou saem do seu perfil.</GuideCallout></>
+          <p>Quem abre a sua vitrine vê nome, foto, os rótulos de estilo autorizados, as conquistas em destaque, a sua melhor vitória recente e — se estiver logado — o &quot;Cara a Cara&quot;: quantas mãos vocês jogaram juntos, quantas cada um venceu, quantas empataram e o saldo de fichas do confronto.</p>
+          <GuideCallout kind="safe" title="Estatística detalhada não vai junto">Tornar a vitrine pública não publica VPIP, PFR nem 3-bet. Só os rótulos que você autorizou saem do seu perfil.</GuideCallout>
+          <p>Abrir o seu próprio link de vitrine mostra o botão &quot;Editar minha vitrine&quot; em vez do perfil público. Uma vitrine privada de outro jogador diz que está privada — não que o perfil não existe.</p></>
       },
       {
         id: 'hud', title: 'Ler “Seu jogo”', summary: 'Tendências pré-flop calculadas a partir das suas mãos concluídas.',
