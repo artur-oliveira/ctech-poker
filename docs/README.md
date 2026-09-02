@@ -40,11 +40,12 @@ history documents and lag the code by design. O índice de planos foi atualizado
 - **No ASG lifecycle hook.** Scale-in can terminate an instance before `DrainAndRelease` finishes.
 - **No DLQ on either EventBridge Scheduler target** (`reconcile-stack.ts`, `tablecleanup-stack.ts`) — tracked as T13 in
   `plans/2026-07-28-audit-implementation-plan.md`.
-- **Real-money buy-in skips the terms-acceptance check** that the sandbox path performs (`api/internal/app/app.go`).
 - **No CDK test** for `reconcile-stack.ts` or `oidc-stack.ts`.
 
-Issues **B9** (`sub`-only authz), **B10** (archiver DLQ), **B31** (leaderboard ranking) and **B32** (fairness surface)
-are all **fixed**; older docs that still list them as open are stale.
+Issues **B9** (`sub`-only authz), **B10** (archiver DLQ), **B31** (leaderboard ranking), **B32** (fairness surface) and
+the real-money buy-in terms-acceptance gap (both `buyin.NewServiceWithGame` and `NewServiceWithPlayers` wiring chain
+`.WithPlayers(players)` in `api/internal/app/app.go`, and `Service.buyIn` calls `RequireAccepted` unconditionally
+whenever a players store is wired) are all **fixed**; older docs that still list them as open are stale.
 
 ## Other reference material
 

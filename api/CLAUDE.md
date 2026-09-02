@@ -27,7 +27,6 @@ See `docs/plans/2026-08-21-entry-fee-entitlement.md`. **Still blocking, found 20
   only 3 of at least 4-5 real terminations — see `cdk/CLAUDE.md`'s Known Issues for the details and
   `docs/specs/2026-09-01-duplicate-seat-commit-guard.md` for the resulting incident. Treat `DrainAndRelease` as
   best-effort, not guaranteed, until that gap is closed.
-- The real-money buy-in path skips the poker-terms-acceptance check the sandbox path performs (`internal/app/app.go`).
 - No WAF at the CloudFront edge (and the distribution itself is being retired — the app is on Cloudflare Workers); application rate limits (`internal/api/v1/ratelimit.go`) and Turnstile are the only
   protection.
 - Neither EventBridge Scheduler target (`cmd/reconcile`, `cmd/tablecleanup`) has a DLQ.
@@ -142,6 +141,10 @@ catalog.
 
 ## Other known issues (documentation only — see api/README.md)
 
+- **(#38) fixed:** real-money `BuyIn` now enforces `player.RequireAccepted` unconditionally. Both
+  `app.newBuyinService` constructors (sandbox and real-money) chain `.WithPlayers(players)`, and `buyin.Service.buyIn`
+  calls `s.players.RequireAccepted` before any wallet debit or entitlement charge whenever a players store is wired —
+  see `internal/buyin/terms_test.go`'s `TestRealMoneyBuyInRequiresPokerTerms`.
 - B10 fixed: archiver stream failures now go to an SQS DLQ with a CloudWatch alarm (`cdk/lib/archiver-stack.ts`).
 - B31 fixed by rejection: `leaderboard.Top("achievement_points")` returns an unsupported-metric error instead of
   silently ranking via `gsi_hands_won`; add a `gsi_achievement_points` GSI before re-enabling the metric.
