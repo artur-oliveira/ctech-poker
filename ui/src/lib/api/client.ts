@@ -5,6 +5,7 @@ import {notifyApiError} from '@/lib/notify';
 import {
   checkApiLiveness,
   HTTP_TIMEOUT_MS,
+  navigateToUnavailable,
   requireApiLiveness,
 } from '@/lib/network/liveness';
 
@@ -137,14 +138,8 @@ export function normalizeApiError(error: unknown): ApiError {
 }
 
 export function redirectOnServiceUnavailable(status?: number) {
-  if (status !== 503 || typeof window === 'undefined' || window.location.pathname === '/unavailable') return false;
-  try {
-    window.sessionStorage.setItem('poker:return-after-outage', `${window.location.pathname}${window.location.search || ''}`);
-  } catch {
-    // Storage can be unavailable in privacy modes; /lobby remains the safe fallback.
-  }
-  window.location.replace('/unavailable');
-  return true;
+  if (status !== 503) return false;
+  return navigateToUnavailable();
 }
 
 const MAX_HTTP_RETRIES = 2;
