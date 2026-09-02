@@ -10,7 +10,9 @@ const mocks = vi.hoisted(() => ({
   viewerId: vi.fn((): string | undefined => 'viewer'),
   setQueryData: vi.fn(),
   reportPlayer: vi.fn().mockResolvedValue({report_id: 'rep-1', status: 'open'}),
+  getRelationships: vi.fn().mockResolvedValue([]),
   noteProps: null as Record<string, unknown> | null,
+  queryFns: new Map<string, () => unknown>(),
 }));
 
 vi.mock('next/navigation', () => ({useSearchParams: () => ({get: (key: string) => mocks.params.get(key) ?? null})}));
@@ -25,6 +27,7 @@ vi.mock('@/lib/utils', async importOriginal => {
 vi.mock('@/lib/api/social', async importOriginal => ({
   ...await importOriginal<typeof import('@/lib/api/social')>(),
   reportPlayer: mocks.reportPlayer,
+  getRelationships: mocks.getRelationships,
 }));
 vi.mock('@/components/TermsGate', () => ({TermsGate: ({children}: { children: React.ReactNode }) => children}));
 vi.mock('@/components/table/PlayerNoteDialog', () => ({
@@ -87,11 +90,16 @@ function queryState({
                       },
                       historyLoading = false,
                       historyError = false,
+                      historyRefetch = vi.fn(),
                       relationshipsData = [] as unknown[],
                     }: Record<string, unknown> = {}) {
-  mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) => {
+  mocks.queryFns.clear();
+  mocks.query.mockImplementation(({queryKey, queryFn}: { queryKey: string[]; queryFn: () => unknown }) => {
+    mocks.queryFns.set(queryKey[0], queryFn);
     if (queryKey[0] === 'hand') return {data: handData, isLoading: handLoading, isError: handError};
-    if (queryKey[0] === 'hand-history') return {data: historyData, isLoading: historyLoading, isError: historyError};
+    if (queryKey[0] === 'hand-history') {
+      return {data: historyData, isLoading: historyLoading, isError: historyError, refetch: historyRefetch};
+    }
     if (queryKey[0] === 'social') return {data: relationshipsData, isLoading: false, isError: false};
     return {data: [], isLoading: false, isError: false}; // player-notes and anything else
   });
@@ -170,7 +178,14 @@ describe('hand detail page', () => {
 
     await userEvent.click(screen.getByRole('button', {name: 'Copiar ID da mesa'}));
     expect(writeText).toHaveBeenCalledWith('table-123456');
-    expect(await screen.findByRole('button', {name: 'ID da mesa copiado'})).toBeInTheDocument();
+    const copiedButton = await screen.findByRole('button', {name: 'ID da mesa copiado'});
+    expect(copiedButton).toBeInTheDocument();
+
+    // A second attempt (clipboard permission revoked mid-session) clears the
+    // confirmation instead of leaving a stale "copiado" label behind.
+    await userEvent.click(copiedButton);
+    expect(writeText).toHaveBeenCalledTimes(2);
+    expect(await screen.findByRole('button', {name: 'Copiar ID da mesa'})).toBeInTheDocument();
   });
 
   test('marks a tie with a handshake for the viewer and the sharing opponent', () => {
@@ -217,17 +232,21 @@ describe('hand detail page', () => {
     expect(screen.getByTestId('timeline')).toBeEmptyDOMElement();
   });
 
-  test('shows independent history error and unavailable fairness proof', () => {
+  test('shows independent history error and unavailable fairness proof, and retries on demand', async () => {
+    const historyRefetch = vi.fn();
     queryState({
       handData: {...hand, server_seed: undefined, commit_hash: undefined},
       historyError: true,
+      historyRefetch,
     });
     render(<HandHistoryPage/>);
     expect(screen.getByText(/sequência de ações/)).toBeInTheDocument();
     expect(screen.getByText(/Prova de integridade criptográfica indisponível/)).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'exportar resumo'})).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'compartilhar'})).toBeInTheDocument();
-    expect(screen.getByRole('button', {name: 'Tentar ações novamente'})).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', {name: 'Tentar ações novamente'}));
+    expect(historyRefetch).toHaveBeenCalledOnce();
   });
 
   test('links each opponent to their profile and mounts the actions menu, never for the viewer', () => {
@@ -286,5 +305,25 @@ describe('hand detail page', () => {
     act(() => (mocks.noteProps?.onSaved as (note: object | null) => void)(null));
     const [, clearUpdater] = mocks.setQueryData.mock.calls.at(-1)!;
     expect((clearUpdater as (current: object[]) => object[])([{opponent_id: 'p2', note: 'velho'}])).toEqual([]);
+  });
+
+  test('dismissing the note dialog without saving closes it', async () => {
+    const user = userEvent.setup();
+    render(<HandHistoryPage/>);
+    await user.click(screen.getByRole('button', {name: 'Ações para Bia'}));
+    await screen.findByText('Ver perfil');
+    await user.click(screen.getByRole('button', {name: 'Editar nota privada'}));
+    expect(screen.getByText('note-dialog')).toBeInTheDocument();
+
+    act(() => (mocks.noteProps?.onOpenChangeAction as (open: boolean) => void)(false));
+    expect(screen.queryByText('note-dialog')).not.toBeInTheDocument();
+  });
+
+  test('fetches relationships only for signed-in viewers with real opponent ids', () => {
+    render(<HandHistoryPage/>);
+    const relationshipsFn = mocks.queryFns.get('social');
+    expect(relationshipsFn).toBeDefined();
+    void relationshipsFn?.();
+    expect(mocks.getRelationships).toHaveBeenCalledWith(['p2', 'p3']);
   });
 });
