@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"slices"
 	"strconv"
 	"time"
@@ -16,7 +17,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/logger"
-	"github.com/gofiber/fiber/v3/middleware/recover"
+	fiberrecover "github.com/gofiber/fiber/v3/middleware/recover"
 	"go.uber.org/fx"
 	"gopkg.aoctech.app/api-commons/awsconfig"
 	"gopkg.aoctech.app/api-commons/cache"
@@ -160,7 +161,7 @@ func newFiberApp(cfg *config.Config) *fiber.App {
 	})
 
 	app.Use(fiberobs.RequestID())
-	app.Use(recover.New(recover.Config{EnableStackTrace: true}))
+	app.Use(fiberrecover.New(fiberrecover.Config{EnableStackTrace: true}))
 	// AllowCredentials requires explicit origins. Development intentionally
 	// leaves origins empty, which means wildcard/no credentials like Wallet.
 	corsCfg := cors.Config{
@@ -468,6 +469,24 @@ func tableCurrencyMode(ctx context.Context, rooms roomModeReader, tableID string
 	return room.CurrencyMode, nil
 }
 
+// dispatchGamificationPipeline detaches a completed hand's gamification
+// bookkeeping (pipeline) onto its own goroutine so the table actor's own
+// goroutine — which calls onHandComplete synchronously from
+// table/actor.go's notifyHandComplete — never blocks on it (#61). A panic
+// inside pipeline is recovered and logged rather than crashing the whole
+// process, since this goroutine runs outside any request's recover
+// middleware, the same reasoning as tablews.go's own ws handler recover.
+func dispatchGamificationPipeline(tableID, handID string, pipeline func()) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("gamification: onHandComplete panic recovered", "table", tableID, "hand", handID, "panic", r)
+			}
+		}()
+		pipeline()
+	}()
+}
+
 func newTableManager(leases *tablelease.Service, store *tablestore.Store, cacheBackend cache.Backend, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
@@ -520,81 +539,99 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, cacheB
 			slog.Error("handreveal: record hand failed", "table", tableID, "hand", handID, "err", err)
 		}
 	}
+	// onHandComplete is invoked synchronously on the table actor's own
+	// goroutine (table/actor.go's notifyHandComplete, called from
+	// broadcastAll), but everything it does is gamification bookkeeping —
+	// achievements, leaderboard, pokerstats, matchup, session/hand history,
+	// highlights, recent players — none of which the actor's own state or
+	// any client-visible broadcast depends on: broadcastAll already sent
+	// every player their post-hand "state" snapshot before it ever reaches
+	// this hook, and notifyHandComplete's handhook SET NX claim (fleet-wide
+	// once-per-hand dedup, internal/handhook) has already been taken
+	// synchronously before this closure runs. So the whole body is safe to
+	// detach into its own goroutine, exactly like autoRebuySweep
+	// (app.wireAutoRebuyHook) — at real-table scale this was hundreds of
+	// sequential DynamoDB round trips blocking the actor and every other
+	// player's next action for multiple seconds (#61). A panic here must
+	// not take the process down with it, same reasoning as the ws
+	// handler's own recover in tablews.go.
 	onHandComplete := func(tableID, handID string, outcome hand.HandOutcome, names map[string]string) {
-		ctx := context.Background()
-		mode, err := tableCurrencyMode(ctx, rooms, tableID)
-		if err != nil {
-			slog.Error("gamification: load room mode failed", "table", tableID, "err", err)
-			return
-		}
-		var metrics []pokerstats.HandMetric
-		actions, metricsErr := store.LoadActionsSince(ctx, tableID, handID, 0)
-		if metricsErr != nil {
-			slog.Error("pokerstats: load hand actions failed", "table", tableID, "hand", handID, "err", metricsErr)
-		} else {
-			metrics = pokerstats.Analyze(outcome.Participants, actions)
-		}
-		// peeked scans the whole hand's action log (unlike pokerstats.Analyze,
-		// which intentionally stops at the flop) since a player can peek at
-		// their own cards at any street, not just preflop.
-		peeked := make(map[string]bool)
-		// Time bank is charged per action, so one hand can carry several
-		// charges for the same player.
-		timeBankMs := make(map[string]int64)
-		for _, entry := range actions {
-			if entry.Action == "peek_cards" {
-				peeked[entry.PlayerID] = true
+		dispatchGamificationPipeline(tableID, handID, func() {
+			ctx := context.Background()
+			mode, err := tableCurrencyMode(ctx, rooms, tableID)
+			if err != nil {
+				slog.Error("gamification: load room mode failed", "table", tableID, "err", err)
+				return
 			}
-			timeBankMs[entry.PlayerID] += entry.TimeBankMs
-		}
-		achievementMetrics := make([]achievements.HandMetric, len(metrics))
-		for i, metric := range metrics {
-			achievementMetrics[i] = achievements.HandMetric{
-				PlayerID:   metric.PlayerID,
-				VPIP:       metric.VPIP,
-				ThreeBet:   metric.ThreeBet,
-				Peeked:     peeked[metric.PlayerID],
-				TimeBankMs: timeBankMs[metric.PlayerID],
+			var metrics []pokerstats.HandMetric
+			actions, metricsErr := store.LoadActionsSince(ctx, tableID, handID, 0)
+			if metricsErr != nil {
+				slog.Error("pokerstats: load hand actions failed", "table", tableID, "hand", handID, "err", metricsErr)
+			} else {
+				metrics = pokerstats.Analyze(outcome.Participants, actions)
 			}
-		}
-		unlocks, err := achv.RecordHand(ctx, tableID, mode, outcome, achievementMetrics)
-		if err != nil {
-			slog.Error("achievements record hand failed", "table", tableID, "err", err)
-		}
-		for _, unlock := range unlocks {
-			data, err := goproto.Marshal(&pokerproto.ServerMessage{
-				Type:  "achievement_unlocked",
-				Key:   unlock.Key,
-				Stars: int32(unlock.Stars),
-			})
-			if err == nil {
-				reg.Broadcast(ctx, tableID+"#"+unlock.PlayerID, data)
+			// peeked scans the whole hand's action log (unlike pokerstats.Analyze,
+			// which intentionally stops at the flop) since a player can peek at
+			// their own cards at any street, not just preflop.
+			peeked := make(map[string]bool)
+			// Time bank is charged per action, so one hand can carry several
+			// charges for the same player.
+			timeBankMs := make(map[string]int64)
+			for _, entry := range actions {
+				if entry.Action == "peek_cards" {
+					peeked[entry.PlayerID] = true
+				}
+				timeBankMs[entry.PlayerID] += entry.TimeBankMs
 			}
-		}
-		if err := leaderboardSvc.RecordUnlocks(ctx, mode, unlocks); err != nil {
-			slog.Error("leaderboard achievement points failed", "table", tableID, "err", err)
-		}
-		if err := leaderboardSvc.RecordHand(ctx, mode, outcome, names); err != nil {
-			slog.Error("leaderboard record hand failed", "table", tableID, "err", err)
-		}
-		if metricsErr == nil {
-			if err := pokerStatsStore.RecordHand(ctx, mode, tableID, handID, metrics); err != nil {
-				slog.Error("pokerstats: record hand failed", "table", tableID, "hand", handID, "err", err)
+			achievementMetrics := make([]achievements.HandMetric, len(metrics))
+			for i, metric := range metrics {
+				achievementMetrics[i] = achievements.HandMetric{
+					PlayerID:   metric.PlayerID,
+					VPIP:       metric.VPIP,
+					ThreeBet:   metric.ThreeBet,
+					Peeked:     peeked[metric.PlayerID],
+					TimeBankMs: timeBankMs[metric.PlayerID],
+				}
 			}
-		}
-		if err := matchupStore.RecordHand(ctx, mode, tableID, handID, outcome); err != nil {
-			slog.Error("matchup: record hand failed", "table", tableID, "hand", handID, "err", err)
-		}
-		persistHandHistory(tableID, handID, mode, outcome, names)
-		persistHandReveal(tableID, handID, mode, outcome)
-		if err := highlightsStore.RecordHand(ctx, tableID, handID, outcome, names); err != nil {
-			slog.Error("highlights: record hand failed", "table", tableID, "hand", handID, "err", err)
-		}
-		if recentSvc != nil {
-			if err := recentSvc.RecordHand(ctx, tableID, handID, outcome.Participants, time.Now()); err != nil {
-				slog.Error("recent players: record hand failed", "table", tableID, "hand", handID, "err", err)
+			unlocks, err := achv.RecordHand(ctx, tableID, mode, outcome, achievementMetrics)
+			if err != nil {
+				slog.Error("achievements record hand failed", "table", tableID, "err", err)
 			}
-		}
+			for _, unlock := range unlocks {
+				data, err := goproto.Marshal(&pokerproto.ServerMessage{
+					Type:  "achievement_unlocked",
+					Key:   unlock.Key,
+					Stars: int32(unlock.Stars),
+				})
+				if err == nil {
+					reg.Broadcast(ctx, tableID+"#"+unlock.PlayerID, data)
+				}
+			}
+			if err := leaderboardSvc.RecordUnlocks(ctx, mode, unlocks); err != nil {
+				slog.Error("leaderboard achievement points failed", "table", tableID, "err", err)
+			}
+			if err := leaderboardSvc.RecordHand(ctx, mode, outcome, names); err != nil {
+				slog.Error("leaderboard record hand failed", "table", tableID, "err", err)
+			}
+			if metricsErr == nil {
+				if err := pokerStatsStore.RecordHand(ctx, mode, tableID, handID, metrics); err != nil {
+					slog.Error("pokerstats: record hand failed", "table", tableID, "hand", handID, "err", err)
+				}
+			}
+			if err := matchupStore.RecordHand(ctx, mode, tableID, handID, outcome); err != nil {
+				slog.Error("matchup: record hand failed", "table", tableID, "hand", handID, "err", err)
+			}
+			persistHandHistory(tableID, handID, mode, outcome, names)
+			persistHandReveal(tableID, handID, mode, outcome)
+			if err := highlightsStore.RecordHand(ctx, tableID, handID, outcome, names); err != nil {
+				slog.Error("highlights: record hand failed", "table", tableID, "hand", handID, "err", err)
+			}
+			if recentSvc != nil {
+				if err := recentSvc.RecordHand(ctx, tableID, handID, outcome.Participants, time.Now()); err != nil {
+					slog.Error("recent players: record hand failed", "table", tableID, "hand", handID, "err", err)
+				}
+			}
+		})
 	}
 	// roomLoader re-arms blind escalation and the per-turn action timeout from
 	// the room's authoritative config on every actor creation (T6), so both
@@ -929,7 +966,34 @@ func registerRoutes(
 // ShutdownWithContext budget it precedes.
 const wsDrainGrace = 1500 * time.Millisecond
 
+// spotTerminationMetadataURL is the EC2 instance metadata (IMDS) path that
+// reports an impending spot reclamation
+// (https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/spot-instance-termination-notices.html):
+// a 200 response means this instance has ~2 minutes left; 404 means no
+// notice yet. A var, not a const, so tests can point it at an httptest
+// server. Deliberately IMDSv1 (plain GET, no token dance) — this only ever
+// reads a single unauthenticated, non-sensitive metadata path.
+var spotTerminationMetadataURL = "http://169.254.169.254/latest/meta-data/spot/instance-action"
+
+// spotPollInterval matches the "every few seconds" the issue asks for —
+// frequent enough that the ~2 minute spot notice window comfortably covers
+// several polls, without hammering IMDS. A var (not const) so tests can
+// speed it up instead of waiting out a real 5s ticker.
+var spotPollInterval = 5 * time.Second
+
+const (
+	// spotPollTimeout bounds a single IMDS request. On any host that isn't
+	// EC2 (local/dev, CI) 169.254.169.254 is unroutable and fails fast well
+	// under this; it exists to bound the rare hung-connection case.
+	spotPollTimeout = 2 * time.Second
+	// spotDrainTimeout bounds the proactive drain triggered by a termination
+	// notice. Generous relative to the ~2 minute spot warning, but bounded so
+	// a stuck actor can't wedge the poller forever.
+	spotDrainTimeout = 30 * time.Second
+)
+
 func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *tablemanager.Manager) {
+	pollCtx, cancelPoll := context.WithCancel(context.Background())
 	lc.Append(fx.Hook{
 		OnStart: func(context.Context) error {
 			addr := ":" + strconv.Itoa(cfg.Port)
@@ -939,9 +1003,24 @@ func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *t
 					slog.Error("server stopped", "err", err)
 				}
 			}()
+			// Reduce reliance on the ASG lifecycle hook + drain Lambda alone
+			// (#33): during the 2026-09-01 spot rebalance storm it fired for
+			// only 3 of at least 4-5 real terminations, stranding leases the
+			// commit-guard backstops then had to paper over (api/CLAUDE.md,
+			// docs/specs/2026-09-01-duplicate-seat-commit-guard.md). This
+			// instance also polls its own spot termination notice directly
+			// and drains proactively the moment one appears, instead of
+			// waiting solely on the external hook to complete before
+			// termination. Only meaningful on real EC2 instances (prod);
+			// skip it elsewhere so dev/test never spend a background
+			// goroutine polling a link-local address that doesn't exist.
+			if cfg.Env == "prod" {
+				go pollSpotTermination(pollCtx, manager, &http.Client{Timeout: spotPollTimeout})
+			}
 			return nil
 		},
 		OnStop: func(ctx context.Context) error {
+			cancelPoll()
 			// Hand every live socket a 1001 "going away" before anything else:
 			// ShutdownWithContext below force-closes them once its window
 			// elapses, and a client that learns about it only from a dead read
@@ -951,10 +1030,72 @@ func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *t
 				slog.Info("sent websocket going-away frames", "conns", n)
 			}
 			slog.Info("shutting down ctech-poker-api, draining table manager leases")
+			// Idempotent (#33): a no-op here if pollSpotTermination already
+			// drained this instance proactively.
 			manager.DrainAndRelease(ctx)
 			stopCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 			return app.ShutdownWithContext(stopCtx)
 		},
 	})
+}
+
+// pollSpotTermination polls this instance's own EC2 metadata for a spot
+// termination notice and, the moment one appears, proactively runs the same
+// idempotent manager.DrainAndRelease the OnStop SIGTERM handler above runs —
+// rather than waiting solely on the ASG lifecycle hook's drain Lambda to
+// reach this instance before AWS reclaims it (#33). Exits after the first
+// detected notice (nothing left to poll for once this instance is
+// draining); ctx cancellation (OnStop) also stops it early on a normal
+// deploy, where no notice ever appears.
+func pollSpotTermination(ctx context.Context, manager *tablemanager.Manager, client *http.Client) {
+	ticker := time.NewTicker(spotPollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			noticed, err := spotTerminationNoticed(ctx, client)
+			if err != nil {
+				// Not on EC2, or IMDS transiently unreachable — try again
+				// next tick rather than logging noise every 5s.
+				continue
+			}
+			if !noticed {
+				continue
+			}
+			slog.Warn("spot termination notice detected via instance metadata, draining proactively ahead of the lifecycle hook")
+			drainCtx, cancel := context.WithTimeout(context.Background(), spotDrainTimeout)
+			manager.DrainAndRelease(drainCtx)
+			cancel()
+			return
+		}
+	}
+}
+
+// spotTerminationNoticed reports whether IMDS currently has a spot
+// instance-action published for this instance. A non-nil error means the
+// check was inconclusive (not on EC2, network error, unexpected status) —
+// callers must treat that as "no notice yet", not as a notice.
+func spotTerminationNoticed(ctx context.Context, client *http.Client) (bool, error) {
+	reqCtx, cancel := context.WithTimeout(ctx, spotPollTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, spotTerminationMetadataURL, nil)
+	if err != nil {
+		return false, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return true, nil
+	case http.StatusNotFound:
+		return false, nil
+	default:
+		return false, fmt.Errorf("unexpected instance metadata status %d", resp.StatusCode)
+	}
 }

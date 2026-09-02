@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/api-commons/cache"
@@ -391,5 +392,63 @@ func TestHealthCheckEndpointFailsWhenDynamoDBIsUnavailable(t *testing.T) {
 		if _, ok := body.Checks[key]; !ok {
 			t.Fatalf("expected checks to contain %q, got %+v", key, body.Checks)
 		}
+	}
+}
+
+// TestDispatchGamificationPipelineDoesNotBlockCaller is the regression test
+// for #61: onHandComplete used to run its entire gamification pipeline
+// (achievements, leaderboard, matchup, sessionlog, ...) synchronously on the
+// table actor's own goroutine, so a slow/throttled DynamoDB dependency froze
+// the whole table for as long as the pipeline took. dispatchGamificationPipeline
+// is the exact function onHandComplete now calls instead of running its body
+// inline — this asserts the call returns immediately regardless of how long
+// the pipeline itself takes, i.e. the caller (the actor) is never blocked on
+// gamification I/O.
+func TestDispatchGamificationPipelineDoesNotBlockCaller(t *testing.T) {
+	const pipelineDelay = 200 * time.Millisecond
+	started := make(chan struct{})
+	finished := make(chan struct{})
+
+	callStart := time.Now()
+	dispatchGamificationPipeline("table-1", "hand-1", func() {
+		close(started)
+		time.Sleep(pipelineDelay)
+		close(finished)
+	})
+	callDuration := time.Since(callStart)
+
+	// The dispatch call itself must return long before the pipeline's own
+	// artificial delay elapses — this is what "the actor is never blocked on
+	// gamification I/O" means in practice.
+	if callDuration >= pipelineDelay {
+		t.Fatalf("dispatchGamificationPipeline blocked the caller for %v (pipeline delay %v) — the gamification pipeline is not detached", callDuration, pipelineDelay)
+	}
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("pipeline never started running in its own goroutine")
+	}
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("pipeline never finished running in the background")
+	}
+}
+
+// TestDispatchGamificationPipelineRecoversPanic ensures a panicking
+// gamification write (e.g. a bad DynamoDB response) can never crash the
+// process from the detached goroutine, since it runs outside any request's
+// recover middleware.
+func TestDispatchGamificationPipelineRecoversPanic(t *testing.T) {
+	done := make(chan struct{})
+	dispatchGamificationPipeline("table-1", "hand-1", func() {
+		defer close(done)
+		panic("boom")
+	})
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("panicking pipeline never completed — process may have crashed instead of recovering")
 	}
 }

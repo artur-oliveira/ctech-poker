@@ -292,7 +292,7 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /hand-shares/:token`                    | **none**        | public shared hand, opponents aliased                                                      |
 | `GET /tables/:tableId/hands/:handId/history` | JWT             | action-log replay for one hand                                                             |
 | `GET /achievements`                          | **none**        | static achievement catalog                                                                 |
-| `GET /leaderboard`                           | JWT             | `?metric=hands_won\|hands_played\|win_rate`, `?limit`, `?cursor`                           |
+| `GET /leaderboard`                           | JWT             | `?metric=hands_won\|hands_played\|win_rate` (win_rate needs ≥100 hands), `?limit`, `?cursor` |
 | `GET /leaderboard/me`                        | JWT             | caller's exact rank + total for `?mode`/`?metric`; `{ranked:false}` if never played that mode |
 | `POST /sandbox-credits/`                     | JWT             | daily spin; rate-limited 60/min/IP                                                         |
 | `GET /sandbox-credits/`                      | JWT             | `{remaining_time_seconds}` cooldown; scoped tokens require `poker:daily-reward:read`       |
@@ -341,6 +341,14 @@ per-mode GSI partition this counts against is still the single-partition hotspot
 full-partition COUNT for `total` is itself `O(players in that mode)` in the worst case (bounded by
 `maxRankCountPages`). Replacing the GSI with a Valkey ZSET mirror (per the issue's proposal) would fix both the
 write-side hotspot and make this read O(log N); that redesign is deliberately out of scope here.
+
+The `win_rate` board has a **minimum-hands floor** (`leaderboard.MinHandsForWinRateRank = 100`, per currency mode): a
+player is only eligible once `hands_played >= 100` in that mode. `gsi_win_rate_pk` is a sparse key — written on the
+counter update that crosses the floor and `REMOVE`d below it — so the `gsi_win_rate` query never returns a sub-floor
+row, and the service layer filters again defensively before ranking so a lagging or not-yet-backfilled row can neither
+appear nor occupy a rank slot. `hands_won` / `hands_played` are unaffected. Legacy sub-floor rows carrying a stale key
+are cleaned lazily on their owner's next hand (or next achievement unlock) — no migration job. Every row already
+carries `hands_played` in the response for the client to render alongside the rate.
 
 ## Authentication & authorization
 
