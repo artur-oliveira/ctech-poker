@@ -21,6 +21,7 @@ import {Label} from '@/components/ui/label';
 import {Checkbox} from '@/components/ui/checkbox';
 import {getMe} from '@/lib/api/player';
 import {createRoom, listStakes} from '@/lib/api/rooms';
+import {buyInRange} from '@/lib/pokerRules';
 import {REAL_MONEY_UI_ENABLED} from '@/lib/capabilities';
 
 const MAX_SEATS_OPTIONS = [6, 9] as const;
@@ -74,6 +75,7 @@ export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean})
       form.setError('stakeIndex', {message: 'Selecione um stake disponível'});
       return;
     }
+    const range = buyInRange(stake.big_blind);
     try {
       const room = await createRoom({
         visibility: 'private',
@@ -81,8 +83,8 @@ export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean})
         small_blind: stake.small_blind,
         big_blind: stake.big_blind,
         max_seats: values.maxSeats,
-        buy_in_min: stake.big_blind * 40,
-        buy_in_max: stake.big_blind * 100,
+        buy_in_min: range.min,
+        buy_in_max: range.max,
         run_it_twice_enabled: values.runItTwiceEnabled
       });
       await queryClient.invalidateQueries({queryKey: ['rooms']});

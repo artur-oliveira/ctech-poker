@@ -1,6 +1,27 @@
 import assert from 'node:assert/strict';
 import {describe, expect, test} from 'vitest';
-import {bestFiveCardHand, bestHandCategory, compareHands, wasDecidedByKicker} from './pokerRules.ts';
+import {
+  bestFiveCardHand,
+  bestHandCategory,
+  BUY_IN_MAX_BB,
+  BUY_IN_MIN_BB,
+  buyInRange,
+  compareHands,
+  wasDecidedByKicker
+} from './pokerRules.ts';
+
+describe('shared buy-in window', () => {
+  test('one floor and ceiling in big blinds, min below max', () => {
+    expect(BUY_IN_MIN_BB).toBe(40);
+    expect(BUY_IN_MAX_BB).toBe(100);
+    expect(BUY_IN_MIN_BB).toBeLessThan(BUY_IN_MAX_BB);
+  });
+
+  test('buyInRange scales both bounds by the big blind', () => {
+    expect(buyInRange(20)).toEqual({min: 800, max: 2000});
+    expect(buyInRange(200)).toEqual({min: 8000, max: 20000});
+  });
+});
 
 test('different two-pair values are not mislabeled as a kicker decision', () => {
   assert.equal(wasDecidedByKicker(

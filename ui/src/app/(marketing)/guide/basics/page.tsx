@@ -29,7 +29,7 @@ export default function BasicsGuide() {
       {
         id: 'buyin', title: 'Buy-in e auto rebuy', summary: 'O buy-in transfere fichas da carteira para a sua pilha na mesa.',
         image: {src: '/guide/buyin.webp', alt: 'Tela de buy-in com controle deslizante, faixa permitida e opção de auto rebuy'},
-        body: <><p>A faixa aceita vai de 20 a 100 big blinds. Ajuste o valor no controle deslizante e confirme; nada é debitado antes disso. Ao sair, as fichas que sobraram voltam para a mesma carteira.</p>
+        body: <><p>A faixa aceita vai de 40 a 100 big blinds. Ajuste o valor no controle deslizante e confirme; nada é debitado antes disso. Ao sair, as fichas que sobraram voltam para a mesma carteira.</p>
           <GuideBullets><li><span><b>Auto rebuy:</b> se a sua pilha zerar, a mesa recompra automaticamente o mesmo valor e você continua jogando sem parar a sessão. Só existe em mesas sandbox e pode ser ligado aqui ou depois, na recompra.</span></li>
             <li><span><b>Se uma mão já começou:</b> você senta na hora e entra a partir da próxima distribuição.</span></li></GuideBullets>
           <GuideCallout kind="warning" title="Saldo insuficiente">Se o saldo não cobre o buy-in mínimo, resgate a recompensa diária na Loja ou escolha blinds menores.</GuideCallout></>

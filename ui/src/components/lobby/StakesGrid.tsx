@@ -6,6 +6,7 @@ import {ArrowRight, Users} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {createRoom, getRoom, listRooms, listStakes, type Room} from '@/lib/api/rooms';
 import {SkeletonList} from '@/components/ui/skeleton';
+import {BUY_IN_MAX_BB, BUY_IN_MIN_BB, buyInRange} from '@/lib/pokerRules';
 
 const MAX_SEATS_OPTIONS = [[2, 'HEADS-UP'], [6, '6-MAX'], [9, 'FULL-RING']] as const;
 
@@ -59,9 +60,10 @@ export function StakesGrid() {
         // and this check; try the next candidate instead of dead-ending.
       }
     }
+    const range = buyInRange(bigBlind);
     const room = await createRoom({
       visibility: 'public', small_blind: smallBlind, big_blind: bigBlind, max_seats: maxSeats,
-      buy_in_min: bigBlind * 20, buy_in_max: bigBlind * 100
+      buy_in_min: range.min, buy_in_max: range.max
     });
     const id = room.room_id || room.id || '';
     if (!id) throw new Error('A API criou uma mesa sem identificador.');
@@ -164,8 +166,7 @@ export function StakesGrid() {
           const active = openCandidates(rooms, selectedStake.small_blind, selectedStake.big_blind, maxSeats).length;
           const isJoining = joiningKey === key;
           const actionLabel = active > 0 ? 'Entrar agora' : 'Criar mesa';
-          const buyInMin = selectedStake.big_blind * 20;
-          const buyInMax = selectedStake.big_blind * 100;
+          const {min: buyInMin, max: buyInMax} = buyInRange(selectedStake.big_blind);
           return <Button variant="ghost" key={key} className="room-card h-auto" disabled={joiningKey !== null}
                          aria-busy={joiningKey === key}
                          style={{'--delay': `${i * 60}ms`} as React.CSSProperties}
@@ -179,7 +180,7 @@ export function StakesGrid() {
                 {active > 0 ? `${active} mesa${active > 1 ? 's' : ''} ativa${active > 1 ? 's' : ''}` : 'Nenhuma mesa ativa'} · até {maxSeats} jogadores
               </span>
               <span className="room-card-buy-in">
-                Entrada sandbox: {buyInMin.toLocaleString('pt-BR')}–{buyInMax.toLocaleString('pt-BR')} fichas (20–100 BB)
+                Entrada sandbox: {buyInMin.toLocaleString('pt-BR')}–{buyInMax.toLocaleString('pt-BR')} fichas ({BUY_IN_MIN_BB}–{BUY_IN_MAX_BB} BB)
               </span>
               <span className="room-card-buy-in-hint">Buy-in é a quantidade de fichas que você leva para a mesa.</span>
               <strong className="room-card-action">
