@@ -1752,6 +1752,11 @@ func (t *Table) runShowdown() {
 	potResults := make([]PotResult, 0, len(layers))
 	var winningScore handeval.Score
 	remainingRakeCap := t.rakeCap()
+	// deadWinnerlessCarry accumulates chips from a layer that resolves with
+	// zero winners (see below) so they roll forward into the next layer that
+	// actually has one, per the folded-money-is-dead-money ruling — never
+	// refunded to their contributors.
+	var deadWinnerlessCarry int64
 	for _, layer := range layers {
 		if layer.Uncalled {
 			// Only one player ever put chips into this layer — it's an
@@ -1783,35 +1788,26 @@ func (t *Table) runShowdown() {
 		}
 		winners, eligible, bestScore := t.evaluateLayer(layer, t.board)
 		if len(winners) == 0 {
-			// Every player who reached this layer's contribution level has
-			// since folded — there's no one left to award it to at
-			// showdown. These chips were never called by anyone still in
-			// the hand, so they aren't "won" or "lost": they go back to
-			// whoever put them in. layer.Eligible lists exactly the
-			// contributor(s) who reached this layer's boundary, and by
-			// construction (ComputeSidePots) each contributed the same
-			// amount into this specific layer, so an even split (with the
-			// odd chip to the first, same convention as a showdown win) is
-			// the correct refund.
-			n := int64(len(layer.Eligible))
-			share := layer.Amount / n
-			layerPayouts := make(map[string]int64, len(layer.Eligible))
-			for _, id := range layer.Eligible {
-				payouts[id] += share
-				layerPayouts[id] += share
-			}
-			remainder := layer.Amount - share*n
-			if remainder > 0 {
-				payouts[layer.Eligible[0]] += remainder
-				layerPayouts[layer.Eligible[0]] += remainder
-			}
-			potResults = append(potResults, PotResult{
-				Amount: layer.Amount, PayoutAmount: layer.Amount,
-				EligiblePlayerIDs: append([]string(nil), layer.Eligible...),
-				Payouts:           layerPayouts,
-				Refund:            true,
-			})
+			// This should be unreachable: sidepots.ComputeSidePots never puts
+			// a folded player in a contested layer's Eligible (it rolls a
+			// fully-folded band into dead money itself, before this layer is
+			// even built), and RemovePlayerForActor refuses to remove anyone
+			// still in t.handOrder for the entire hand (stage stays
+			// != WaitingForPlayers/Complete until the very end of this
+			// function) — so every id in layer.Eligible resolves to a live,
+			// non-folded *Player here. If it is somehow reached anyway,
+			// per the folded-money-is-dead-money ruling these chips are
+			// still not "refundable": they were called money, not an
+			// uncalled bet, so they must roll forward as dead money into
+			// whichever later layer actually has a winner (that layer's
+			// normal rake still applies to them there) rather than being
+			// split back to their contributors.
+			deadWinnerlessCarry += layer.Amount
 			continue
+		}
+		if deadWinnerlessCarry > 0 {
+			layer.Amount += deadWinnerlessCarry
+			deadWinnerlessCarry = 0
 		}
 		layerRake := t.rakeForLayer(layer.Amount, remainingRakeCap)
 		remainingRakeCap -= layerRake
@@ -1853,6 +1849,15 @@ func (t *Table) runShowdown() {
 		} else {
 			award(netAmount, 0, winners, eligible, bestScore)
 		}
+	}
+	if deadWinnerlessCarry > 0 && len(winningIDs) > 0 {
+		// Every layer built by ComputeSidePots resolved winnerless (see the
+		// comment above — provably unreachable today) and none of the later
+		// layers had a winner to absorb the carry either. As an ultimate
+		// fallback, still never refund it: hand it to the hand's actual
+		// winner rather than to the (now-nil) contributors.
+		fallbackWinner := winningIDs[len(winningIDs)-1]
+		payouts[fallbackWinner] += deadWinnerlessCarry
 	}
 	for id, amount := range payouts {
 		// A payout recipient who left t.players entirely before showdown

@@ -62,6 +62,19 @@ type Manager struct {
 
 	leaseLessIdleTimeout time.Duration
 	idleCheckInterval    time.Duration
+
+	// drainMu/draining/drainDone make DrainAndRelease idempotent (#33): the
+	// SIGTERM/OnStop path and the proactive spot-termination poller
+	// (internal/app's pollSpotTermination) can now both call it — sequentially
+	// or concurrently, on this instance's single shared Manager — without
+	// either one re-releasing a lease the other already released. The first
+	// caller to observe draining==false does the real work and closes
+	// drainDone when finished; every other caller (already in progress, or
+	// arriving after this instance has already fully drained) just waits on
+	// that same channel instead of touching m.actors again.
+	drainMu   sync.Mutex
+	draining  bool
+	drainDone chan struct{}
 }
 
 func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast func(string, string, hand.Snapshot), roomLoader func(string) (*roomstore.Room, bool, error), completion ...func(string, string, hand.HandOutcome, map[string]string)) *Manager {
@@ -364,9 +377,36 @@ func (m *Manager) Release(tableID string) {
 	}
 }
 
-// DrainAndRelease releases every table lease held by this instance on graceful shutdown
-// and waits for all table actor goroutines to finish processing in-flight operations.
+// DrainAndRelease releases every table lease held by this instance on
+// graceful shutdown and waits for all table actor goroutines to finish
+// processing in-flight operations.
+//
+// It is idempotent and safe to call concurrently or repeatedly for the same
+// Manager (#33): only the first call actually walks m.actors and releases
+// anything; every other call — whether it arrives while the first is still
+// running or after this instance has already fully drained — blocks only
+// until that first call's work (or ctx) is done, then returns without
+// touching a single lease itself. This is what lets both the OnStop
+// SIGTERM handler and the proactive EC2 spot-termination-notice poller
+// (internal/app's pollSpotTermination) call this same path without either
+// one double-releasing a seat/lease the other already tore down.
 func (m *Manager) DrainAndRelease(ctx context.Context) {
+	m.drainMu.Lock()
+	if m.draining {
+		done := m.drainDone
+		m.drainMu.Unlock()
+		select {
+		case <-done:
+		case <-ctx.Done():
+		}
+		return
+	}
+	m.draining = true
+	done := make(chan struct{})
+	m.drainDone = done
+	m.drainMu.Unlock()
+	defer close(done)
+
 	m.mu.Lock()
 	ids := make([]string, 0, len(m.actors))
 	actors := make([]*table.Actor, 0, len(m.actors))

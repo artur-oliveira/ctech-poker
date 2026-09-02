@@ -90,6 +90,19 @@ func (s *Service) Top(ctx context.Context, mode, metric string, limit int, start
 			entries[i].WinRate = float64(entries[i].HandsWon) / float64(entries[i].HandsPlayed)
 		}
 	}
+	// Defensive floor for win_rate (issue #63): the sparse gsi_win_rate_pk key
+	// should already keep sub-floor rows out of the query, but GSI propagation
+	// lag or a not-yet-backfilled legacy row could still slip one in. Drop them
+	// before sorting/truncation so they neither appear nor occupy a rank slot.
+	if metric == "win_rate" {
+		kept := entries[:0]
+		for _, e := range entries {
+			if e.HandsPlayed >= MinHandsForWinRateRank {
+				kept = append(kept, e)
+			}
+		}
+		entries = kept
+	}
 	sort.SliceStable(entries, func(i, j int) bool {
 		var a, b float64
 		switch metric {
