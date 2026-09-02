@@ -13661,10 +13661,28 @@ h1 em {
     border-color: var(--gold)
 }
 
-.hand-history-seat > b {
+.hand-history-seat b {
     display: block;
     margin-bottom: 12px;
     font-size: 14px
+}
+
+.hand-history-seat-identity {
+    display: block;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 10px
+}
+
+.hand-history-seat-identity:hover b,
+.hand-history-seat-identity:focus-visible b {
+    text-decoration: underline
+}
+
+.hand-history-seat-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px
 }
 
 .hand-history-seat-cards {
