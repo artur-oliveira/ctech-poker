@@ -83,7 +83,7 @@ describe('lobby stakes integration', () => {
     expect(screen.getByText('Agora escolha o tamanho da mesa')).toBeInTheDocument();
     expect(screen.getByText('O tamanho define quantos jogadores podem ocupar a mesa.')).toBeInTheDocument();
     expect(screen.getByText('Entrar agora')).toBeInTheDocument();
-    expect(screen.getAllByText('Entrada sandbox: 1.000–5.000 fichas (20–100 BB)')).toHaveLength(3);
+    expect(screen.getAllByText('Entrada sandbox: 2.000–5.000 fichas (40–100 BB)')).toHaveLength(3);
     await userEvent.click(screen.getByRole('button', {name: /6-MAX/}));
     expect(push).toHaveBeenCalledWith('/table?id=open-room');
     expect(createRoom).not.toHaveBeenCalled();
@@ -116,11 +116,11 @@ describe('lobby stakes integration', () => {
     const blindSelector = screen.getByRole('radio', {name: '25 / 50'});
     expect(blindSelector).toBeChecked();
     expect(screen.getAllByRole('button')).toHaveLength(3);
-    expect(screen.getAllByText('Entrada sandbox: 1.000–5.000 fichas (20–100 BB)')).toHaveLength(3);
+    expect(screen.getAllByText('Entrada sandbox: 2.000–5.000 fichas (40–100 BB)')).toHaveLength(3);
 
     await userEvent.click(screen.getByRole('radio', {name: '100 / 200'}));
     expect(screen.getAllByRole('button')).toHaveLength(3);
-    expect(screen.getAllByText('Entrada sandbox: 4.000–20.000 fichas (20–100 BB)')).toHaveLength(3);
+    expect(screen.getAllByText('Entrada sandbox: 8.000–20.000 fichas (40–100 BB)')).toHaveLength(3);
     expect(screen.getAllByText('Criar mesa')).toHaveLength(3);
   });
 
@@ -130,10 +130,10 @@ describe('lobby stakes integration', () => {
     roomsQuery = {data: [], isLoading: false};
     const {unmount} = render(<StakesGrid/>);
     expect(screen.getAllByText('Criar mesa')).toHaveLength(3);
-    expect(screen.getAllByText('Entrada sandbox: 400–2.000 fichas (20–100 BB)')).toHaveLength(3);
+    expect(screen.getAllByText('Entrada sandbox: 800–2.000 fichas (40–100 BB)')).toHaveLength(3);
     await userEvent.click(screen.getByRole('button', {name: /HEADS-UP/}));
     expect(createRoom).toHaveBeenCalledWith(expect.objectContaining({
-      small_blind: 10, big_blind: 20, max_seats: 2, buy_in_min: 400, buy_in_max: 2000,
+      small_blind: 10, big_blind: 20, max_seats: 2, buy_in_min: 800, buy_in_max: 2000,
     }));
     expect(invalidateQueries).toHaveBeenCalledWith({queryKey: ['rooms']});
     expect(push).toHaveBeenCalledWith('/table?id=new%20room');

@@ -1,5 +1,20 @@
 import {HAND_CATEGORY_LABELS} from './handCategories.ts';
 
+// Single source of truth for the client-authored buy-in window, in big blinds.
+// Both lobby entry points (quick-join in StakesGrid and the private-room
+// dialog) post these on `createRoom`, and the "N–M BB" display copy derives
+// from them. The server clamps/overrides for public rooms, so these are a
+// sane default, not an authority. Previously quick-join sent 20 BB and the
+// private dialog sent 40 BB — two floors for the same product (issue #102).
+export const BUY_IN_MIN_BB = 40;
+export const BUY_IN_MAX_BB = 100;
+
+/** Absolute buy-in window (in chips / cents) for a table at the given big
+ * blind, from the shared BB multipliers above. */
+export function buyInRange(bigBlind: number): {min: number; max: number} {
+  return {min: bigBlind * BUY_IN_MIN_BB, max: bigBlind * BUY_IN_MAX_BB};
+}
+
 export type HandRankingEntry = {
   key: string;
   label: string;
