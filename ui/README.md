@@ -48,25 +48,33 @@ which is why `img-src` names the API host. `images: {unoptimized: true}`, so no 
 
 ## Routes (App Router, `src/app/`)
 
-Every page is `'use client'`; only `layout.tsx` and `share/layout.tsx` are server components.
+Every page is `'use client'`; the server components are `layout.tsx` (root),
+`(marketing)/layout.tsx`, `(app)/layout.tsx` and `(app)/share/layout.tsx`.
+
+**Route groups** organise the tree without changing any URL
+(`docs/2026-09-02-marketing-app-route-split.md`): `(marketing)/` holds the static,
+indexable pages behind a lightweight `MarketingQueryProvider`; `(app)/` holds
+everything that needs the authenticated shell (`QueryProvider` — keep-alive,
+`NetworkProvider`, `RealtimeBridge`). `robots.ts`, `sitemap.ts`, the error
+boundaries, `not-found.tsx` and `unavailable/` stay ungrouped.
 
 | Route | File | Purpose |
 |---|---|---|
-| `/` | `page.tsx` | Landing: hero demo table, features, achievement teaser, OAuth CTAs |
-| `/lobby` | `lobby/page.tsx` | Stakes grid with explicit join/create states and sandbox buy-in ranges, compact active-session resume strip, create-room dialog, daily spin, onboarding |
-| `/table?id=<id>` | `table/page.tsx` | The live table (room id is a **query param**, not a segment) |
-| `/hands` | `hands/page.tsx` | Immediate infinite-scroll, window-virtualized hand history in the API's paginated order; no technical-ID or client-only filter surface |
-| `/hands/history?table_id=&hand_id=` | `hands/history/page.tsx` | One hand: seats, board, street-grouped actions, progressive fairness proof, resilient export/share, and action retry |
-| `/hands/replay?table_id=&hand_id=` | `hands/replay/page.tsx` | Frame-by-frame `HandReplayer` |
-| `/leaderboard` | `leaderboard/page.tsx` | Podium + ranking list, highlights the viewer's row |
-| `/achievements` | `achievements/page.tsx` | Catalog + own progress, all/unlocked/in-progress/completed tabs |
-| `/store` | `store/page.tsx` | Durable Fichas hub: sandbox balance, daily reward, Pix chip packages, and expandable recent purchase activity |
-| `/people` | `people/page.tsx` | Friends, requests (in/out), recent players, blocked list and activity feed, plus the friend-code header |
-| `/profile?id=<playerId>` | `profile/page.tsx` | **Public read-only showcase** of another player, with the shared player menu |
-| `/share?id=<token>` | `share/page.tsx` | Public anonymized shared hand (`robots: noindex`) |
-| `/guide` | `guide/page.tsx` | Illustrated how-to-play |
-| `/poker-rules` | `poker-rules/page.tsx` | Rules + hand rankings reference |
-| `/callback` | `callback/page.tsx` | OAuth code→token exchange, then `returnTo` or `/lobby` |
+| `/` | `(marketing)/page.tsx` | Landing: hero demo table, features, achievement teaser, OAuth CTAs |
+| `/lobby` | `(app)/lobby/page.tsx` | Stakes grid with explicit join/create states and sandbox buy-in ranges, compact active-session resume strip, create-room dialog, daily spin, onboarding |
+| `/table?id=<id>` | `(app)/table/page.tsx` | The live table (room id is a **query param**, not a segment) |
+| `/hands` | `(app)/hands/page.tsx` | Immediate infinite-scroll, window-virtualized hand history in the API's paginated order; no technical-ID or client-only filter surface |
+| `/hands/history?table_id=&hand_id=` | `(app)/hands/history/page.tsx` | One hand: seats, board, street-grouped actions, progressive fairness proof, resilient export/share, and action retry |
+| `/hands/replay?table_id=&hand_id=` | `(app)/hands/replay/page.tsx` | Frame-by-frame `HandReplayer` |
+| `/leaderboard` | `(app)/leaderboard/page.tsx` | Podium + ranking list, highlights the viewer's row |
+| `/achievements` | `(app)/achievements/page.tsx` | Catalog + own progress, all/unlocked/in-progress/completed tabs |
+| `/store` | `(app)/store/page.tsx` | Durable Fichas hub: sandbox balance, daily reward, Pix chip packages, and expandable recent purchase activity |
+| `/people` | `(app)/people/page.tsx` | Friends, requests (in/out), recent players, blocked list and activity feed, plus the friend-code header |
+| `/profile?id=<playerId>` | `(app)/profile/page.tsx` | **Public read-only showcase** of another player, with the shared player menu |
+| `/share?id=<token>` | `(app)/share/page.tsx` | Public anonymized shared hand (`robots: noindex`) |
+| `/guide` | `(marketing)/guide/page.tsx` | Illustrated how-to-play |
+| `/poker-rules` | `(marketing)/poker-rules/page.tsx` | Rules + hand rankings reference |
+| `/callback` | `(app)/callback/page.tsx` | OAuth code→token exchange, then `returnTo` or `/lobby` |
 
 ## Visual capture assets
 
@@ -144,15 +152,19 @@ vertical `stage-v` ring for portrait handhelds.
   room-list updates and user-scoped events, including the social pushes (`social_event`,
   `social_presence_changed`, `social_inbox_count`). It is mounted **exactly once**, by
   `RealtimeBridge` inside `QueryProvider` — never again from a page or a component, or the same
-  account opens two sockets. Social frames are invalidation-only: they refresh the `['social', …]`
-  query keys (`SOCIAL_KEYS` in `src/lib/social.ts`) and the unread badge; the durable state always
-  comes back over HTTP.
+  account opens two sockets. `RealtimeBridge` lives in `QueryProvider`, which only the `(app)`
+  route-group layout mounts — the `(marketing)` group (`/`, `/poker-rules`, `/guide/*`) never
+  opens the lobby socket, runs the keep-alive timer or ships the protobuf chunk. Social frames
+  are invalidation-only: they refresh the `['social', …]` query keys (`SOCIAL_KEYS` in
+  `src/lib/social.ts`) and the unread badge; the durable state always comes back over HTTP.
 - **Table-side suppression** is a `useTableRealtime` argument, not a filter in a component: the
   page loads the muted/blocked ids for the seated players (`GET /social/relationships?player_ids=`)
   and passes the set in, so suppressed chat and reactions never reach React state — no bubble, no
   animation, no live-region announcement. Seats, stacks, bets and every poker action stay visible.
 - Other hooks: `useCountUp` (animated stack deltas), `useDeckVariant`, `useDealerVoice`.
-- **The only React provider is `QueryProvider`** (TanStack Query). The access token is a
+- **The React provider is `QueryProvider`** (TanStack Query) for the `(app)` group and the
+  cut-down `MarketingQueryProvider` (bare `QueryClientProvider`, shared `createQueryClient`
+  factory) for `(marketing)`. The access token is a
   module-level singleton in `src/lib/api/client.ts` (set/get/subscribe), **not persisted** —
   lost on full reload, recovered via `doRefresh()`. An axios interceptor attaches `Bearer` and
   auto-refreshes on 401.

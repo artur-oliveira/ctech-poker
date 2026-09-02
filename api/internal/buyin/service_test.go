@@ -61,9 +61,6 @@ func (s failingPendingStore) BuildRecordTx(reconcile.PendingCashout) (types.Tran
 }
 func (s failingPendingStore) Record(context.Context, reconcile.PendingCashout) error { return s.err }
 func (s failingPendingStore) MarkResolved(context.Context, string) error             { return s.err }
-func (s failingPendingStore) Get(context.Context, string) (*reconcile.PendingCashout, error) {
-	return nil, s.err
-}
 
 func (f *fakeWallet) Credit(_ context.Context, userID string, amount int64, key, _ string) error {
 	f.credits = append(f.credits, call{userID, amount, key})
@@ -206,6 +203,76 @@ func TestBuyInRefundsLoserOfConcurrentSeatRace(t *testing.T) {
 	}
 	if len(wallet.credits) != 1 || wallet.credits[0].amount != 400 {
 		t.Fatalf("expected exactly one 400-chip refund credit for the race loser, got %+v", wallet.credits)
+	}
+}
+
+// TestBuyInRefundKeyIsPlayerScopedAndCollisionFree guards #42: the refund
+// idempotency key must be globally unique per refund operation, not the
+// constant literal ":refund" that `idemKey+":refund"` collapses to whenever
+// idemKey is empty (auto-rebuy sweep, webhook paths). Two different players
+// each losing a concurrent seat race with an empty idemKey must produce
+// distinct refund keys so ctech-wallet cannot dedupe the second one away —
+// while the key stays a pure function of (roomID, playerID, nonce) so a
+// legitimate retry of the SAME failed buy-in still reproduces it and dedupes.
+func TestBuyInRefundKeyIsPlayerScopedAndCollisionFree(t *testing.T) {
+	loserKey := func(player string) string {
+		// mirrors service.go: nonce falls back to playerID when idemKey == "".
+		return fmt.Sprintf("room-1#%s#buyin#%s:refund", player, player)
+	}
+
+	run := func(t *testing.T, loser string) call {
+		t.Helper()
+		wallet := &raceWallet{firstStarted: make(chan struct{}), release: make(chan struct{})}
+		mgr := testManager(t)
+		rooms := &fakeRoomLookup{room: &roomstore.Room{
+			ID: "test-room", CurrencyMode: "sandbox", BigBlind: 20,
+			BuyInMin: 40, BuyInMax: 400, MaxSeats: 1,
+		}}
+		svc := NewService(wallet, mgr, rooms)
+		ctx := context.Background()
+
+		seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+		if _, err := mgr.GetOrCreateActor(ctx, "room-1", seed); err != nil {
+			t.Fatalf("get or create actor: %v", err)
+		}
+
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.BuyIn(ctx, "room-1", loser, 400, false, "") }()
+
+		<-wallet.firstStarted
+		if err := svc.BuyIn(ctx, "room-1", "winner", 400, false, ""); err != nil {
+			t.Fatalf("winning buyin should succeed: %v", err)
+		}
+		close(wallet.release)
+
+		if err := <-errCh; err == nil {
+			t.Fatal("losing buyin should return an error (refunded), not silent success")
+		}
+		if len(wallet.credits) != 1 || wallet.credits[0].amount != 400 {
+			t.Fatalf("expected exactly one 400-chip refund credit for the race loser, got %+v", wallet.credits)
+		}
+		got := wallet.credits[0]
+		if got.key == ":refund" {
+			t.Fatalf("refund key collapsed to the constant %q — collides across every player (#42)", got.key)
+		}
+		if got.key != loserKey(loser) {
+			t.Fatalf("refund key = %q, want %q", got.key, loserKey(loser))
+		}
+		return got
+	}
+
+	a := run(t, "alice")
+	b := run(t, "bob")
+	if a.key == b.key {
+		t.Fatalf("two different players' refunds share key %q — a wallet dedupe would drop the second refund (#42)", a.key)
+	}
+
+	// Retry safety: the key is a pure function of (roomID, playerID, nonce),
+	// so re-running the identical failed buy-in yields the identical refund
+	// key and ctech-wallet dedupes the retry.
+	a2 := run(t, "alice")
+	if a2.key != a.key {
+		t.Fatalf("retry of the same refund produced key %q, want stable %q — breaks dedupe", a2.key, a.key)
 	}
 }
 
@@ -663,75 +730,6 @@ func TestBuyInChargesFixedEntryFeeForRealRoomsBeforeSeating(t *testing.T) {
 	}
 }
 
-// failingFeeWallet lets a test force every DebitReal call to fail while
-// still recording each attempt, so a test can assert on how many times (and
-// with what idempotency key) the entry fee was actually attempted.
-type failingFeeWallet struct {
-	fakeWallet
-	err error
-}
-
-func (f *failingFeeWallet) DebitReal(ctx context.Context, userID string, amount int64, key, reason string) error {
-	if err := f.fakeWallet.DebitReal(ctx, userID, amount, key, reason); err != nil {
-		return err
-	}
-	return f.err
-}
-
-// TestBuyInEntitlementClaimRaceNeverSeatsForFreeWhenFeeChargeFails is the
-// regression test for issue #40's Claim-race free seat: two concurrent
-// buy-ins for the same (player, room) both reach entitlement.Store.Claim —
-// one wins (persists the row), the other loses (ErrAlreadyClaimed). The old
-// buyin.Service.chargeEntryFee treated ErrAlreadyClaimed alone as "the fee
-// is covered" and seated the loser unconditionally, even though the
-// winner's own DebitReal might never actually succeed. This drives that
-// exact sequence — winner's charge fails, then a second (losing) claim
-// attempt for the same table — and asserts neither call ever seats the
-// player nor records a game-wallet stake hold: the fee genuinely never
-// cleared, so nobody should be sitting at the table for it.
-func TestBuyInEntitlementClaimRaceNeverSeatsForFreeWhenFeeChargeFails(t *testing.T) {
-	sandbox := &fakeWallet{}
-	game := &failingFeeWallet{err: errors.New("wallet unavailable")}
-	mgr := testManager(t)
-	rooms := &fakeRoomLookup{room: &roomstore.Room{
-		ID: "room-real-fee-race", CurrencyMode: "real", Tier: "micro", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9,
-		EntryFeeCents: 100,
-	}}
-	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}}).
-		WithPendingStore(testPendingStore(t)).WithEntitlements(testEntitlementStore(t))
-	ctx := context.Background()
-
-	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
-	if _, err := mgr.GetOrCreateActor(ctx, "room-real-fee-race", seed); err != nil {
-		t.Fatalf("acquire: %v", err)
-	}
-
-	// "Winner": claims the entitlement, then its fee charge fails — must not
-	// seat the player (this alone is not the race; it's the setup for it).
-	if err := svc.BuyIn(ctx, "room-real-fee-race", "user-1", 400, false, "nonce-winner"); err == nil {
-		t.Fatal("expected the winning claim's failed fee charge to return an error")
-	}
-
-	// "Loser": a second, concurrent-in-spirit buy-in for the same
-	// (player, room) — a different client nonce, same as a double-click or
-	// second device — arrives while the entitlement row the winner claimed
-	// is still valid. Before the fix this returned nil (ErrAlreadyClaimed
-	// alone treated as "covered") and seated the player for free.
-	if err := svc.BuyIn(ctx, "room-real-fee-race", "user-1", 400, false, "nonce-loser"); err == nil {
-		t.Fatal("expected the losing claim to also fail: the fee was never actually collected")
-	}
-
-	if len(game.holds) != 0 {
-		t.Fatalf("player must never be seated (no stake hold) when the entry fee never cleared, got %+v", game.holds)
-	}
-	if len(game.feeDebits) != 2 {
-		t.Fatalf("expected both the winner and the loser to each attempt the fee charge, got %+v", game.feeDebits)
-	}
-	if game.feeDebits[0].key != game.feeDebits[1].key {
-		t.Fatalf("expected both racers to share one idempotency key derived from the persisted claim, got %q and %q", game.feeDebits[0].key, game.feeDebits[1].key)
-	}
-}
-
 // TestBuyInDoesNotChargeFeeAgainOnRebuyOrReentryWithinWindow is the
 // regression test for Problem 1 (docs/plans/2026-08-21-entry-fee-entitlement.md):
 // the fee is a table reservation good for entitlement.Window, not a
@@ -880,27 +878,11 @@ func TestBuyInRebindsEntitlementWhenBoundTableIsArchived(t *testing.T) {
 	if _, err := mgr.GetOrCreateActor(ctx, "room-gone", seed); err != nil {
 		t.Fatalf("seed room-gone: %v", err)
 	}
-	claimed, err := svc.entitlements.Claim(ctx, entitlement.Entitlement{
+	if err := svc.entitlements.Claim(ctx, entitlement.Entitlement{
 		PlayerID: "user-1", OriginTableID: "room-gone", BoundTableID: "room-gone",
 		Tier: "micro", FeeCents: 100, ExpiresAt: time.Now().Add(entitlement.Window),
-	})
-	if err != nil {
-		t.Fatalf("seed entitlement: %v", err)
-	}
-	// confirmFeeCharged (buyin.Service.resolveEntitlement's rebind path) only
-	// treats a matching entitlement as fee-covered once its own recovery row
-	// reports resolved — a real successful buy-in always leaves one via
-	// chargeEntryFee's Record+MarkResolved. Seed it here too, since this test
-	// claims the entitlement directly rather than through a full BuyIn.
-	feeKey := fmt.Sprintf("room-gone#user-1#buyinfee#%d", claimed.CreatedAt.Unix())
-	if err := svc.pending.Record(ctx, reconcile.PendingCashout{
-		ID: feeKey, PlayerID: "user-1", Amount: 100, CurrencyMode: roomstore.CurrencyModeReal,
-		Kind: reconcile.KindFeeDebit, TableRef: "room-gone", IdempotencyKey: feeKey,
 	}); err != nil {
-		t.Fatalf("seed fee recovery row: %v", err)
-	}
-	if err := svc.pending.MarkResolved(ctx, feeKey); err != nil {
-		t.Fatalf("resolve fee recovery row: %v", err)
+		t.Fatalf("seed entitlement: %v", err)
 	}
 	stored, err := store.LoadTable(ctx, "room-gone")
 	if err != nil || stored == nil {
@@ -942,7 +924,7 @@ func TestBuyInChargesAgainAfterEntitlementWindowExpires(t *testing.T) {
 	// now()+Window — nothing in resolveEntitlement ever extends ExpiresAt on
 	// later activity, so this is equivalent to (and faster than) actually
 	// waiting out the real 3-hour window.
-	if _, err := ents.Claim(ctx, entitlement.Entitlement{
+	if err := ents.Claim(ctx, entitlement.Entitlement{
 		PlayerID: "user-1", OriginTableID: "room-real-expiry", BoundTableID: "room-real-expiry",
 		Tier: "micro", FeeCents: 100, ExpiresAt: time.Now().Add(-time.Minute),
 	}); err != nil {

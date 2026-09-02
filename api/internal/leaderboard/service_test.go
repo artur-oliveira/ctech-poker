@@ -44,10 +44,13 @@ func TestRecordHandAndTop(t *testing.T) {
 	m := &memStats{rows: map[string]*Entry{}}
 	s := NewServiceWithStore(m)
 	names := map[string]string{"p1": "Player One"}
-	if err := s.RecordHand(context.Background(), "sandbox", hand.HandOutcome{Winners: []string{"p1"}, Participants: []string{"p1", "p2"}}, names); err != nil {
-		t.Fatal(err)
+	// p1 must clear MinHandsForWinRateRank to be eligible for the win_rate board.
+	for i := 0; i < MinHandsForWinRateRank; i++ {
+		if err := s.RecordHand(context.Background(), "sandbox", hand.HandOutcome{Winners: []string{"p1"}, Participants: []string{"p1", "p2"}}, names); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if m.rows["sandbox#p1"].HandsWon != 1 || m.rows["sandbox#p2"].HandsPlayed != 1 {
+	if m.rows["sandbox#p1"].HandsWon != MinHandsForWinRateRank || m.rows["sandbox#p2"].HandsPlayed != MinHandsForWinRateRank {
 		t.Fatalf("rows=%+v", m.rows)
 	}
 	if m.rows["sandbox#p1"].PlayerName != "Player One" {
@@ -65,6 +68,38 @@ func TestRecordHandAndTop(t *testing.T) {
 	}
 	if m.rows["sandbox#p1"].AchievementPoints != 2 {
 		t.Fatalf("achievement points=%d", m.rows["sandbox#p1"].AchievementPoints)
+	}
+}
+
+// TestWinRateMinHandsFloor: a 1-hand 100% player is excluded from the win_rate
+// board and does not occupy a rank slot; a 150-hand grinder is ranked (#63).
+func TestWinRateMinHandsFloor(t *testing.T) {
+	m := &memStats{rows: map[string]*Entry{
+		"sandbox#oneHand": {PlayerID: "oneHand", HandsPlayed: 1, HandsWon: 1},
+		"sandbox#grinder": {PlayerID: "grinder", HandsPlayed: 150, HandsWon: 87},
+	}}
+	s := NewServiceWithStore(m)
+
+	top, _, err := s.Top(context.Background(), "sandbox", "win_rate", 10, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(top) != 1 || top[0].PlayerID != "grinder" {
+		t.Fatalf("expected only the 150-hand grinder ranked, got %+v", top)
+	}
+	for _, e := range top {
+		if e.PlayerID == "oneHand" {
+			t.Fatalf("1-hand 100%% player must not appear on the win_rate board: %+v", top)
+		}
+	}
+
+	// Other metrics are unaffected — the low-hand player still ranks there.
+	byPlayed, _, err := s.Top(context.Background(), "sandbox", "hands_won", 10, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byPlayed) != 2 {
+		t.Fatalf("hands_won board must not apply the win_rate floor, got %+v", byPlayed)
 	}
 }
 

@@ -4,6 +4,7 @@ package reconcile
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -95,5 +96,48 @@ func TestRecordThenListUnresolvedThenMarkResolved(t *testing.T) {
 	unresolved, err = store.ListUnresolved(ctx, 0)
 	if err != nil || len(unresolved) != 2 {
 		t.Fatalf("expected only the resolved entry removed, got %+v", unresolved)
+	}
+}
+
+func TestRecordFailedAttemptQuarantinesAfterMaxAttempts(t *testing.T) {
+	db := testClient(t)
+	ctx := context.Background()
+	env := "test"
+	mustCreateTestTable(ctx, t, db, env)
+
+	store := NewPendingStore(db, env)
+	if err := store.Record(ctx, PendingCashout{ID: "co-1", PlayerID: "user-1", Amount: 400, CurrencyMode: "real"}); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+
+	cause := errors.New("wallet unavailable")
+	for attempt := 1; attempt <= MaxAttempts; attempt++ {
+		unresolved, err := store.ListUnresolved(ctx, 0)
+		if err != nil {
+			t.Fatalf("list before attempt %d: %v", attempt, err)
+		}
+		if len(unresolved) != 1 {
+			t.Fatalf("attempt %d: expected entry still in sweep, got %+v", attempt, unresolved)
+		}
+
+		n, quarantined, err := store.RecordFailedAttempt(ctx, unresolved[0], cause)
+		if err != nil {
+			t.Fatalf("record failed attempt %d: %v", attempt, err)
+		}
+		if n != attempt {
+			t.Fatalf("expected attempt count %d, got %d", attempt, n)
+		}
+		if want := attempt >= MaxAttempts; quarantined != want {
+			t.Fatalf("attempt %d: quarantined=%v, want %v", attempt, quarantined, want)
+		}
+	}
+
+	// Quarantined entry has left the normal sweep.
+	unresolved, err := store.ListUnresolved(ctx, 0)
+	if err != nil {
+		t.Fatalf("final list: %v", err)
+	}
+	if len(unresolved) != 0 {
+		t.Fatalf("expected quarantined entry out of sweep, got %+v", unresolved)
 	}
 }

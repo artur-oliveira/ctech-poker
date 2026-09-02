@@ -2,7 +2,6 @@ package entitlement
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -62,31 +61,19 @@ func NewStore(db *dynamodb.Client, env string) *Store {
 // buy-in at the same table recharge once the previous entitlement's window
 // has genuinely passed (an expired row is otherwise indistinguishable from a
 // live one until DynamoDB's eventually-consistent TTL sweep reaps it).
-//
-// Returns (persisted, nil) on a fresh claim. Returns (winning, ErrAlreadyClaimed)
-// when a still-valid entitlement already exists — winning is that row as
-// DynamoDB actually persisted it (read back atomically from the same
-// conditional PutItem via ReturnValuesOnConditionCheckFailure, not a
-// separate query), never this call's own input. A caller that raced and
-// lost must derive any resulting idempotency key from winning, not from its
-// own request-local values: two concurrent callers computing different keys
-// from their own inputs is exactly what let buyin.Service's old
-// chargeEntryFee treat "someone else claimed it" as "the fee is covered"
-// without ever confirming the actual charge — see
-// docs/plans/2026-08-21-entry-fee-entitlement.md and issue #40.
-func (s *Store) Claim(ctx context.Context, e Entitlement) (Entitlement, error) {
+// Returns ErrAlreadyClaimed if a still-valid entitlement already exists.
+func (s *Store) Claim(ctx context.Context, e Entitlement) error {
 	created := e.CreatedAt
 	if created.IsZero() {
 		created = s.now()
 	}
-	e.CreatedAt = created
 	item, err := dynamo.Encode(entitlementItem{
 		PK: e.PlayerID, SK: sk(e.OriginTableID), BoundTableID: e.BoundTableID, Tier: e.Tier,
 		FeeCents: e.FeeCents, ExpiresAt: e.ExpiresAt.Unix(), CreatedAt: created.Unix(),
 		TTL: e.ExpiresAt.Add(ttlSlack).Unix(),
 	})
 	if err != nil {
-		return Entitlement{}, fmt.Errorf("entitlement: encode: %w", err)
+		return fmt.Errorf("entitlement: encode: %w", err)
 	}
 	_, err = s.base.PutItemRaw(ctx, &dynamodb.PutItemInput{
 		Item:                item,
@@ -94,35 +81,14 @@ func (s *Store) Claim(ctx context.Context, e Entitlement) (Entitlement, error) {
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":now": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", s.now().Unix())},
 		},
-		ReturnValuesOnConditionCheckFailure: types.ReturnValuesOnConditionCheckFailureAllOld,
 	})
 	if err != nil {
 		if dynamo.IsConditionFailed(err) {
-			if winning, ok := decodeConditionFailureItem(err); ok {
-				return winning.toEntitlement(), ErrAlreadyClaimed
-			}
-			return Entitlement{}, ErrAlreadyClaimed
+			return ErrAlreadyClaimed
 		}
-		return Entitlement{}, fmt.Errorf("entitlement: claim: %w", err)
+		return fmt.Errorf("entitlement: claim: %w", err)
 	}
-	return e, nil
-}
-
-// decodeConditionFailureItem extracts and decodes the pre-existing item
-// DynamoDB returns on a PutItem whose ConditionExpression failed, when the
-// call set ReturnValuesOnConditionCheckFailure: ALL_OLD. Returns false if
-// err isn't that specific exception, or carries no item (e.g. a
-// TransactWrite condition failure, which never populates it the same way).
-func decodeConditionFailureItem(err error) (entitlementItem, bool) {
-	var condErr *types.ConditionalCheckFailedException
-	if !errors.As(err, &condErr) || len(condErr.Item) == 0 {
-		return entitlementItem{}, false
-	}
-	item, decErr := dynamo.Decode[entitlementItem](condErr.Item)
-	if decErr != nil || item == nil {
-		return entitlementItem{}, false
-	}
-	return *item, true
+	return nil
 }
 
 // ActiveFor returns playerID's not-yet-expired entitlements. A player holds
@@ -150,19 +116,33 @@ func (s *Store) ActiveFor(ctx context.Context, playerID string) ([]Entitlement, 
 
 // Rebind points an existing, still-valid entitlement at a new table — used
 // when its currently bound table becomes unavailable (archived or full).
-// The condition (row exists AND not expired) is what stops a race from
-// resurrecting an entitlement that just expired, or rebinding one a
-// concurrent caller already deleted. Returns ErrNotFound in either case.
-func (s *Store) Rebind(ctx context.Context, playerID, originTableID, newTableID string) error {
+// expectedBoundTableID must be the caller's own just-read BoundTableID: the
+// condition is a full compare-and-swap (row exists AND not expired AND
+// bound_table_id still equals what the caller observed), not merely
+// "exists and not expired". Without the bound_table_id check, two
+// concurrent buy-ins at two different other tables (B and C) that both
+// observe the same entitlement bound to the same now-unavailable origin
+// table could each successfully "rebind" it — one right after the other,
+// each satisfying "exists AND not expired" — leaving the single paid
+// entitlement pointed at whichever raced last while BOTH callers already
+// proceeded to seat their player for free off the same one confirmed
+// charge (buyin.Service.confirmFeeCharged only checks the fee's own
+// recovery row, which is unaffected by which table ends up bound). The CAS
+// makes exactly one of them win; the loser gets ErrNotFound the same as an
+// expired/deleted row and falls back to its next candidate or a fresh
+// charge. Returns ErrNotFound for every losing case (absent, expired, or
+// bound_table_id changed out from under the caller).
+func (s *Store) Rebind(ctx context.Context, playerID, originTableID, expectedBoundTableID, newTableID string) error {
 	_, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
 		Key: map[string]types.AttributeValue{
 			"pk": &types.AttributeValueMemberS{Value: playerID},
 			"sk": &types.AttributeValueMemberS{Value: sk(originTableID)},
 		},
 		UpdateExpression:    aws.String("SET bound_table_id = :new"),
-		ConditionExpression: aws.String("attribute_exists(pk) AND expires_at > :now"),
+		ConditionExpression: aws.String("attribute_exists(pk) AND expires_at > :now AND bound_table_id = :old"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":new": &types.AttributeValueMemberS{Value: newTableID},
+			":old": &types.AttributeValueMemberS{Value: expectedBoundTableID},
 			":now": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", s.now().Unix())},
 		},
 	})
