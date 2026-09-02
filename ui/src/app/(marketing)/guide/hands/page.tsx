@@ -24,6 +24,9 @@ export default function HandsGuide() {
           <GuideTerm term="Histórico de ações">Entrada, blinds, check, fold, call, bet, raise, all-in, chat, reações, vencedores e empates em ordem de tempo.</GuideTerm>
           <GuideTerm term="Mesa">O identificador da sala, com um botão para copiar — útil para comparar duas mãos da mesma mesa.</GuideTerm></GuideTerms>
           <GuideCallout kind="safe" title="Informação oculta continua privada">Quando um adversário não mostrou as cartas, o detalhe apresenta versos e o aviso “Cartas não reveladas”. Nada é deduzido.</GuideCallout>
+          <p>O nome e o avatar de cada adversário abrem o perfil público dele, e o botão <b>⋮</b> ao lado traz o mesmo menu de jogador das mesas e do
+            <b> /people</b>: adicionar amigo, silenciar, bloquear, denunciar (já levando a mão em questão) e escrever uma nota privada.
+            Sua própria carteira nunca mostra esse menu, e ele só aparece com uma conta autenticada.</p>
           <p>Se a sequência de ações falhar em carregar, o resumo, a prova e as ferramentas continuam na tela com uma nova tentativa só para ela.</p></>
       },
       {

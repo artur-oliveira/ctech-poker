@@ -1,8 +1,9 @@
 'use client';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import {Suspense, useState} from 'react';
 import {useSearchParams} from 'next/navigation';
-import {useQuery} from '@tanstack/react-query';
+import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {
   CalendarDays,
   ChevronLeft,
@@ -19,6 +20,8 @@ import {
 import type {WalletMode} from '@/lib/api/player';
 import {getHand} from '@/lib/api/player';
 import {getHandHistory} from '@/lib/api/table';
+import {getPlayerNotes, type PlayerNote} from '@/lib/api/playerNotes';
+import {getRelationships} from '@/lib/api/social';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {BoardSlots} from '@/components/hands/BoardSlots';
@@ -29,12 +32,21 @@ import {DeckReveal} from '@/components/hands/DeckReveal';
 import {PartialDeckProof} from '@/components/hands/PartialDeckProof';
 import {HandExportButton} from '@/components/hands/HandExportButton';
 import {ShareHandDialog} from '@/components/hands/ShareHandDialog';
+import {PlayerActionsMenu} from '@/components/social/PlayerActionsMenu';
 import {Button} from '@/components/ui/button';
 import {TermsGate} from '@/components/TermsGate';
 import {RecoveryState} from '@/components/RecoveryState';
 import {getViewerId, HAND_CATEGORY_LABELS, playerName} from '@/lib/utils';
 import {bestHandCategory} from '@/lib/pokerRules';
 import {availableWalletMode} from '@/lib/capabilities';
+import {useSocialActions} from '@/lib/hooks/useSocialActions';
+import {SOCIAL_KEYS} from '@/lib/social';
+
+// Loaded lazily: the private-note editor is only ever opened from the
+// opponent-menu affordance below, so most visits to a hand's detail never
+// need its bundle.
+const PlayerNoteDialog = dynamic(() => import('@/components/table/PlayerNoteDialog')
+  .then(module => module.PlayerNoteDialog));
 
 function formatDate(unixSeconds: number) {
   return new Date(unixSeconds * 1000).toLocaleString('pt-BR', {
@@ -48,6 +60,9 @@ function HandHistoryContent() {
   const handId = params.get('hand_id') || '';
   const mode: WalletMode = availableWalletMode(params.get('mode'));
   const [tableCopied, setTableCopied] = useState(false);
+  const [noteOpponent, setNoteOpponent] = useState<{ player_id: string; name?: string } | null>(null);
+  const socialActions = useSocialActions();
+  const queryClient = useQueryClient();
 
   const hand = useQuery({
     queryKey: ['hand', mode, handId],
@@ -64,6 +79,22 @@ function HandHistoryContent() {
   const viewerId = getViewerId();
   const opponentNames = new Map((hand.data?.opponents || []).map(o => [o.player_id, o.name]));
   const resolveName = (playerId: string) => playerName(playerId, viewerId, opponentNames.get(playerId));
+
+  // Menu affordances (profile actions + private note) require a signed-in
+  // viewer; a logged-out reader of a shared/incomplete-session link never
+  // sees them. `getViewerId()` is the same "who is looking at this" gate
+  // used everywhere else in the app.
+  const opponentIds = Boolean(viewerId) ? (hand.data?.opponents || [])
+    .map(o => o.player_id).filter((id): id is string => Boolean(id)) : [];
+  const {data: relationships = []} = useQuery({
+    queryKey: SOCIAL_KEYS.relationships(opponentIds), queryFn: () => getRelationships(opponentIds),
+    enabled: opponentIds.length > 0
+  });
+  const relationshipsByID = Object.fromEntries(relationships.map(item => [item.player_id, item]));
+  const {data: playerNotes = []} = useQuery({
+    queryKey: ['player-notes'], queryFn: getPlayerNotes, enabled: opponentIds.length > 0
+  });
+  const playerNotesByID = Object.fromEntries(playerNotes.map(note => [note.opponent_id, note]));
 
   // A link that lost its parameters is a trust moment, not a stray error line:
   // it gets the same recovery composition the replay page uses.
@@ -171,14 +202,36 @@ function HandHistoryContent() {
         </div>
         {viewerCategory && <small className="hand-category">{viewerCategory}</small>}
       </article>
-      {(h.opponents || []).map(o => {
+      {(h.opponents || []).map((o, i) => {
         const category = categoryFor(o.hole_cards);
-        return <article key={o.player_id} className={`hand-history-seat${o.won ? ' is-winner' : ''}`}>
+        const identity = <>
+          <PlayerAvatar name={o.name} avatarUrl={o.avatar_url} size={36}/>
+          <b>{o.name || 'Adversário'}</b>
+        </>;
+        const relationship = o.player_id ? relationshipsByID[o.player_id] : undefined;
+        return <article key={o.player_id || `opponent-${i}`}
+                        className={`hand-history-seat${o.won ? ' is-winner' : ''}`}>
           {o.won && (h.outcome === 'tied'
             ? <Handshake aria-hidden="true" className="winner-crown tie-mark"/>
             : <Crown aria-hidden="true" className="winner-crown"/>)}
-          <PlayerAvatar name={o.name} avatarUrl={o.avatar_url} size={36}/>
-          <b>{o.name || 'Adversário'}</b>
+          {/* A degenerate row with no player_id (legacy data) keeps the plain
+              text+avatar it always had — no profile to link to and no player
+              to run a social action against. */}
+          {o.player_id
+            ? <Link href={`/profile?id=${encodeURIComponent(o.player_id)}`} className="hand-history-seat-identity">
+              {identity}
+            </Link>
+            : identity}
+          {o.player_id && viewerId && <div className="hand-history-seat-actions">
+              <PlayerActionsMenu
+                target={{
+                  player_id: o.player_id, name: o.name,
+                  relationship: relationship?.relationship,
+                  muted: relationship?.muted, blocked: relationship?.blocked
+                }}
+                actions={socialActions} surface="table_behavior" tableId={h.table_id} handId={h.hand_id}
+                onEditNoteAction={() => setNoteOpponent({player_id: o.player_id, name: o.name})}/>
+          </div>}
           <div className="hand-history-seat-cards">
             {o.hole_cards?.length
               ? o.hole_cards.map((c, i) => <PlayingCard key={i} card={c} index={i} size="hole"/>)
@@ -220,6 +273,18 @@ function HandHistoryContent() {
           :
           <p className="deck-reveal-status mismatch">Prova de integridade criptográfica indisponível para esta mão.</p>}
     </section>
+
+    <PlayerNoteDialog key={noteOpponent?.player_id || 'closed'} opponent={noteOpponent}
+                      existing={noteOpponent ? playerNotesByID[noteOpponent.player_id] : undefined}
+                      open={Boolean(noteOpponent)}
+                      onOpenChangeAction={open => !open && setNoteOpponent(null)}
+                      onSaved={(note: PlayerNote | null) => {
+                        if (!noteOpponent) return;
+                        queryClient.setQueryData<PlayerNote[]>(['player-notes'], current => {
+                          const rest = (current || []).filter(item => item.opponent_id !== noteOpponent.player_id);
+                          return note ? [...rest, note] : rest;
+                        });
+                      }}/>
   </div>;
 }
 
