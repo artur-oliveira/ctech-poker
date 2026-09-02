@@ -202,7 +202,8 @@ export default function TableGuide() {
       body: <><GuideBullets>
         <li><span><b>Tema do feltro:</b> Clássico vem liberado; Meia-noite, Bordô e Oceano são cosméticos da Loja e
           levam até lá quando ainda não são seus. A escolha fica na sua conta e vale em qualquer mesa.</span></li>
-        <li><span><b>Sons da mesa:</b> cartas, fichas e alertas. Começa desligado.</span></li>
+        <li><span><b>Sons da mesa:</b> cartas, fichas e alertas. Começa desligado. Ao ligar, os áudios são
+          carregados na hora, então o aviso de &ldquo;sua vez&rdquo; toca sem atraso mesmo em conexão lenta.</span></li>
         <li><span><b>Dealer auditivo:</b> narra as cartas e as ações principais.</span></li>
         <li><span><b>Rodar duas vezes:</b> aparece somente nas salas que permitem o recurso.</span></li>
         <li><span><b>Comandos por voz:</b> push-to-talk para Fold, Check, Pagar, Aumentar e All In. O jogo recebe a
