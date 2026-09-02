@@ -25,20 +25,30 @@ describe('onboarding memory', () => {
 });
 
 describe('sound playback', () => {
-  const play = vi.fn();
-  let sources: string[];
+  // Sound effects are preloaded and pooled per file at enable time (one
+  // Audio per file, reused on every play), not allocated fresh on each
+  // playSound() call — so playback is asserted on the shared `play` mock,
+  // keyed by the source of the instance it was invoked on, not on
+  // construction. See sound.test.ts for the pool's own lifecycle coverage.
+  const play = vi.fn<(source: string) => Promise<void>>();
 
   beforeEach(() => {
-    sources = [];
     play.mockReset().mockResolvedValue(undefined);
     vi.stubGlobal('Audio', class {
-      constructor(source: string) {
-        sources.push(source);
+      preload = '';
+      currentTime = 0;
+
+      constructor(public src: string) {
       }
 
-      play = play;
+      play = () => play(this.src);
+      pause = vi.fn();
+      load = vi.fn();
+      removeAttribute = vi.fn();
     });
     setSoundEffectsEnabled(true);
+    // Drop the pool-priming unlock play() calls fired by enabling above.
+    play.mockClear();
   });
 
   afterEach(() => {
@@ -49,9 +59,8 @@ describe('sound playback', () => {
   test.each<SoundName>(['reveal', 'showing_card', 'half_pot', 'all_in', 'bet', 'your_turn'])(
     'plays an existing mp3 for %s', name => {
       playSound(name);
-      expect(sources).toHaveLength(1);
-      expect(sources[0]).toMatch(/^\/sounds\/[a-z0-9-]+\.mp3$/);
       expect(play).toHaveBeenCalledOnce();
+      expect(play.mock.calls[0][0]).toMatch(/^\/sounds\/[a-z0-9-]+\.mp3$/);
     });
 
   test('picks between the alternate chip samples', () => {
@@ -59,7 +68,7 @@ describe('sound playback', () => {
     playSound('bet');
     random.mockReturnValue(.99);
     playSound('bet');
-    expect(new Set(sources).size).toBe(2);
+    expect(new Set(play.mock.calls.map(call => call[0])).size).toBe(2);
   });
 
   test('swallows the autoplay rejection instead of surfacing an unhandled error', () => {
