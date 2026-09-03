@@ -25,6 +25,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
+	"gopkg.aoctech.app/poker/api/internal/tableconn"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 	"gopkg.aoctech.app/poker/api/internal/wsdrain"
 
@@ -55,6 +56,21 @@ const (
 	// as CHAT_MESSAGE_MAX_LENGTH (ui/src/lib/chat.ts).
 	chatMessageMaxLength = 50
 )
+
+// TableProtocolVersion is stamped on every TableSnapshot the gateway sends.
+// It is a feature gate, not a compatibility floor: the client keeps rendering
+// any older snapshot and simply switches individual features off below the
+// version that introduced them (ui/src/lib/hooks/useTableRealtime.ts and
+// table/page.tsx currently gate on >= 2, >= 6 and >= 8). There is therefore
+// no minimum supported client — an old server and a new client interoperate,
+// with the newer features dark.
+//
+// Bump this in the SAME change that adds or repurposes a snapshot field, and
+// add the line here saying what changed; the gates above are what a mixed
+// fleet during a rolling deploy actually reads. Recorded history starts where
+// it was first written down: 10 was the run-it-twice board split
+// (docs/plans/2026-07-29-run-it-twice.md), 11 is current.
+const TableProtocolVersion = 11
 
 var tableChatFilter = chatfilter.New([]string{"idiota", "burro"})
 
@@ -469,14 +485,30 @@ func RegisterTableWS(
 			done := make(chan struct{})
 			go startHeartbeat(ctx, safeConn, done, wsPingInterval, wsPongWait)
 
+			// ReconnectCmd used to be dispatched ahead of EVERY inbound frame,
+			// keepalive pings included — a channel send plus a full turn of the
+			// actor goroutine (the one that also runs broadcastAll) per frame per
+			// seat, for a command that almost always finds nothing to clear (#58).
+			// It cannot simply be skipped for pings: it is also the paced caller
+			// that keeps this instance's tableconn entry (EntryTTL 45s) alive on a
+			// table whose only traffic IS pings, and the AFK sweep ticks too slowly
+			// (1min) to cover that. So it is debounced to the same interval the
+			// fleet-presence sync is paced at, which preserves both. The
+			// just-completed ConnectCmd already synced presence and cleared any
+			// disconnect mark, so the window starts now rather than at zero.
+			lastReconnectSignal := time.Now()
+
 			for {
 				_, msg, e := conn.ReadMessage()
 				if e != nil {
 					break
 				}
-				reply := make(chan error, 1)
-				if err := dispatch(table.ReconnectCmd{PlayerID: playerID, Reply: reply}); err != nil {
-					observability.Warn(ctx, "table ws reconnect dispatch failed", err, "table_id", tableID)
+				if time.Since(lastReconnectSignal) >= tableconn.SyncInterval {
+					lastReconnectSignal = time.Now()
+					reply := make(chan error, 1)
+					if err := dispatch(table.ReconnectCmd{PlayerID: playerID, Reply: reply}); err != nil {
+						observability.Warn(ctx, "table ws reconnect dispatch failed", err, "table_id", tableID)
+					}
 				}
 
 				var m pokerproto.ClientMessage
@@ -1130,7 +1162,7 @@ func ConvertSnapshot(snap hand.Snapshot) *pokerproto.TableSnapshot {
 		Pots:                     protoPots,
 		HandId:                   snap.HandID,
 		PotResults:               protoPotResults,
-		ProtocolVersion:          11,
+		ProtocolVersion:          TableProtocolVersion,
 		ChatMessages:             protoChat,
 		Reactions:                protoReactions,
 		ActionPreselection:       snap.ActionPreselection,
