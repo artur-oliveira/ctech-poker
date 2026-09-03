@@ -15,6 +15,10 @@ type AchievementState struct {
 	Completed  bool   `json:"completed"`
 	NextTarget *int   `json:"next_target"`
 	MaxTarget  int    `json:"max_target"`
+	// UnlockedAt is when this player last crossed one of Tiers (issue #72),
+	// or empty when they never have or the row predates the stamp. The
+	// "recently unlocked" rail sorts by it and skips the empty ones.
+	UnlockedAt string `json:"unlocked_at,omitempty"`
 }
 
 // SummaryTotals are the roll-ups the achievements page header needs, computed
@@ -42,8 +46,10 @@ type Summary struct {
 // always present, unlocked or not.
 func BuildSummary(mode string, progress []PlayerAchievementProgress) Summary {
 	counts := make(map[string]int, len(progress))
+	unlockedAt := make(map[string]string, len(progress))
 	for _, row := range progress {
 		counts[row.Key] = row.Count
+		unlockedAt[row.Key] = row.UnlockedAt
 	}
 	out := Summary{Mode: mode, Achievements: make([]AchievementState, 0, len(Catalog))}
 	for _, achievement := range Catalog {
@@ -52,6 +58,7 @@ func BuildSummary(mode string, progress []PlayerAchievementProgress) Summary {
 			continue
 		}
 		state := stateFor(achievement, count)
+		state.UnlockedAt = unlockedAt[achievement.Key]
 		out.Totals.Revealed++
 		out.Totals.MaxStars += maxStars(achievement.Tiers)
 		out.Totals.Stars += state.Stars

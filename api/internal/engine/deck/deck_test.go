@@ -1,6 +1,35 @@
 package deck
 
-import "testing"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"testing"
+)
+
+// TestLegacyCommitHashLayoutIsPinned freezes the legacy global commit hash's
+// byte layout. It is compat-only (see commitHash's doc comment) but still
+// published on every snapshot and persisted in sessionlog, so a change here
+// would silently invalidate the fairness proof of every hand already played.
+func TestLegacyCommitHashLayoutIsPinned(t *testing.T) {
+	var seed [32]byte
+	for i := range seed {
+		seed[i] = byte(i)
+	}
+	cards := shuffleWithSeed(seed)
+	got := commitHash(seed, cards)
+
+	// Recomputed independently from the documented layout: SHA256 over
+	// seed || (rank, suit) for each of the 52 cards, in deck order.
+	var buf []byte
+	buf = append(buf, seed[:]...)
+	for _, c := range cards {
+		buf = append(buf, byte(c.Rank), byte(c.Suit))
+	}
+	if want := sha256.Sum256(buf); got != want {
+		t.Fatalf("commitHash layout changed: got %s, want %s",
+			hex.EncodeToString(got[:]), hex.EncodeToString(want[:]))
+	}
+}
 
 func TestNewShuffleProducesAPermutationOf52UniqueCards(t *testing.T) {
 	result, err := NewShuffle()

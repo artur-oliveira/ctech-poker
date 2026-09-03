@@ -564,9 +564,46 @@ func (m *opponentHandReader) GetHand(_ context.Context, playerID, _, handID stri
 // entirely, covering a profile that no longer resolves at all.
 func newOpponentAvatarPlayers() *player.Service {
 	return player.NewService(&fakeMultiPlayerStore{profiles: map[string]player.PlayerProfile{
-		"still-has-avatar": {AvatarKey: "av/still-has-avatar/2.jpg", AvatarVersion: 2},
+		// Renamed since the hand was recorded ("Ainda Tem" in the fixture) —
+		// covers issue #64's stale OpponentSummary.Name alongside the avatar.
+		"still-has-avatar": {Name: "Nome Novo", AvatarKey: "av/still-has-avatar/2.jpg", AvatarVersion: 2},
 		"cleared-avatar":   {AvatarVersion: 1},
 	}})
+}
+
+// TestHandHistoryResolvesRenamedOpponentName is issue #64's read-time
+// resolution for hand history: a rename after the hand was recorded shows up
+// on the next read without any backfill, while an opponent whose profile no
+// longer resolves keeps the name the hand stored rather than going blank.
+func TestHandHistoryResolvesRenamedOpponentName(t *testing.T) {
+	h := &playerHandlers{
+		players:  newOpponentAvatarPlayers(),
+		sessions: &opponentHandReader{},
+		cfg:      &config.Config{AvatarBaseURL: "https://cdn.example.com"},
+	}
+	app := fiber.New()
+	auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "viewer"); return c.Next() }
+	app.Get("/players/me/hands", auth, h.handHistory)
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/players/me/hands", nil))
+	if err != nil || resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, err = %v", resp.StatusCode, err)
+	}
+	var page struct {
+		Data []sessionlog.HandItem `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+		t.Fatalf("decode page: %v", err)
+	}
+	byID := map[string]sessionlog.OpponentSummary{}
+	for _, opp := range page.Data[0].Opponents {
+		byID[opp.PlayerID] = opp
+	}
+	if got := byID["still-has-avatar"].Name; got != "Nome Novo" {
+		t.Fatalf("renamed opponent name = %q, want the live profile name", got)
+	}
+	if got := byID["deleted-player"].Name; got != "Sumiu" {
+		t.Fatalf("unresolvable opponent name = %q, want the stored fallback", got)
+	}
 }
 
 func assertNoStaleAvatars(t *testing.T, hand sessionlog.HandItem) {

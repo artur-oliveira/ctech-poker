@@ -4,7 +4,7 @@ import "testing"
 
 func TestBuildSummaryFoldsWholeCatalog(t *testing.T) {
 	summary := BuildSummary("sandbox", []PlayerAchievementProgress{
-		{Key: KeyWins, Count: 15},
+		{Key: KeyWins, Count: 15, UnlockedAt: "2026-09-01T10:00:00Z"},
 		{Key: KeyFirstHandAllInWin, Count: 1},        // secret, past first tier
 		{Key: KeyLostStraightFlushToRoyal, Count: 1}, // secret, past first tier
 		{Key: KeySamePocketPairStreak, Count: 2},     // secret, below first tier (3) -> hidden
@@ -26,6 +26,15 @@ func TestBuildSummaryFoldsWholeCatalog(t *testing.T) {
 	}
 
 	wins := byKey[KeyWins]
+	// The unlock timestamp rides through to the payload (issue #72) while a
+	// row that never carried one — every legacy row — stays empty rather than
+	// erroring or inventing a date.
+	if wins.UnlockedAt != "2026-09-01T10:00:00Z" {
+		t.Fatalf("wins.UnlockedAt = %q, want the stored stamp", wins.UnlockedAt)
+	}
+	if got := byKey[KeyFirstHandAllInWin].UnlockedAt; got != "" {
+		t.Fatalf("legacy row without a stamp reported UnlockedAt %q", got)
+	}
 	if wins.Stars != 2 || wins.Progress != 15 || !wins.Unlocked || wins.Completed {
 		t.Fatalf("wins = %+v", wins)
 	}

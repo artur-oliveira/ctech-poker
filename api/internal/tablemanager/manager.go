@@ -259,6 +259,23 @@ func (m *Manager) SetConnStore(s table.ConnStore) {
 // goroutines *in this process* creating two Actor goroutines for the same
 // table, which would race on the same in-memory cache; that is purely a
 // local concern and a sync.Mutex is the right tool for it.
+// IsArchived reports whether tableID's stored table has been archived by
+// cmd/tablecleanup. It is a single DynamoDB read: no actor goroutine, no
+// timers, no lease acquisition and no per-table lock — for callers that only
+// need to know whether a table they are NOT joining is still alive (issue
+// #57). A table with no stored state at all is not archived (it is simply
+// cold and would be seeded on first join).
+func (m *Manager) IsArchived(ctx context.Context, tableID string) (bool, error) {
+	if m == nil || m.store == nil {
+		return false, nil
+	}
+	stored, err := m.store.LoadTable(ctx, tableID)
+	if err != nil {
+		return false, fmt.Errorf("tablemanager: load table: %w", err)
+	}
+	return stored != nil && stored.Archived, nil
+}
+
 func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed func() *hand.Table, onCreated ...func(*Actor)) (*Actor, error) {
 	if a, ok := m.lookupAliveActor(tableID); ok {
 		return a, nil

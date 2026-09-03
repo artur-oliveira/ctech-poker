@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"log/slog"
+	"strconv"
 	"sync"
 	"time"
 
@@ -11,16 +12,54 @@ import (
 	"gopkg.aoctech.app/api-commons/cache"
 )
 
+// incrAndBoundTTLScript atomically increments key and guarantees it carries a
+// TTL, closing the race from #45: a plain INCR followed by a separate
+// "EXPIRE only when n == 1" left the key permanently TTL-less whenever the
+// EXPIRE step failed (or the process died between the two calls), so the
+// counter never reset and the bucket stayed rate-limited forever. Running
+// both steps as one Lua script makes them atomic from Redis's point of view,
+// and re-checking TTL on every hit (not just the first) means a key that
+// somehow lost its TTL self-heals on its very next hit instead of staying
+// stuck. redis.call('TTL', ...) returns -1 for "exists, no expiry" and -2 for
+// "doesn't exist"; a fresh INCR always creates the key, so only -1 is
+// reachable here, but the check is written to catch either.
+const incrAndBoundTTLScript = `
+local n = redis.call('INCR', KEYS[1])
+local ttl = redis.call('TTL', KEYS[1])
+if ttl < 0 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return n`
+
+// redisCounter is the one Valkey/Redis operation the rate limiter needs: an
+// atomic "increment and guarantee a TTL". It is factored out of RateLimiter
+// so allowRedis's bucket-arithmetic and TTL-recovery paths can be unit-tested
+// against a fake, without depending on valkey-go's (unexported) wire-message
+// types.
+type redisCounter interface {
+	incrAndBoundTTL(ctx context.Context, key string, windowSeconds int64) (int64, error)
+}
+
+// valkeyCounter adapts a real valkey.CommandClient to redisCounter.
+type valkeyCounter struct{ client valkey.CommandClient }
+
+func (v valkeyCounter) incrAndBoundTTL(ctx context.Context, key string, windowSeconds int64) (int64, error) {
+	return v.client.Do(ctx, v.client.B().Eval().Script(incrAndBoundTTLScript).Numkeys(1).
+		Key(key).Arg(strconv.FormatInt(windowSeconds, 10)).Build()).ToInt64()
+}
+
 // RateLimiter is a fixed-window limiter keyed by caller. In prod the backend is
-// Redis (mandatory, T2) and counting is atomic via INCR+EXPIRE; in dev the
-// in-memory backend uses a per-instance mutex map. It stops a script from
-// spamming room creation or sandbox chip spins (M6/S2).
+// Redis (mandatory, T2) and counting is atomic via a Lua script that combines
+// INCR with a TTL guarantee (see incrAndBoundTTLScript); in dev the in-memory
+// backend uses a per-instance mutex map. It stops a script from spamming room
+// creation or sandbox chip spins (M6/S2).
 type RateLimiter struct {
 	// incr is nil unless the backend is Redis. It returns key's hit count in
 	// the current window, which is what makes the counter fleet-wide rather
 	// than per-instance (#43). Tests substitute a shared fake to simulate two
 	// API instances counting against one player's budget.
 	incr   func(ctx context.Context, key string) (int64, error)
+	client redisCounter // nil unless the backend is Redis
 	limit  int
 	window time.Duration
 
@@ -39,6 +78,7 @@ func NewRateLimiter(backend cache.Backend, limit int, window time.Duration) *Rat
 	rl := &RateLimiter{limit: limit, window: window, mem: make(map[string]*rateWindow)}
 	if rb, ok := backend.(*cache.RedisBackend); ok {
 		rl.incr = redisIncr(rb.Client(), window)
+		rl.client = valkeyCounter{client: rb.Client()}
 	}
 	return rl
 }
@@ -83,6 +123,14 @@ func (r *RateLimiter) AllowFailOpen(ctx context.Context, key string) bool {
 		return true
 	}
 	return allow
+}
+
+func (r *RateLimiter) allowRedis(ctx context.Context, key string) (bool, error) {
+	n, err := r.client.incrAndBoundTTL(ctx, key, int64(r.window.Seconds()))
+	if err != nil {
+		return false, err
+	}
+	return n <= int64(r.limit), nil
 }
 
 // wsActionKey / wsReactionKey are the fleet-wide WebSocket limiter keys. They

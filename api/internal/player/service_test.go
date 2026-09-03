@@ -3,6 +3,7 @@ package player
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 
 	"gopkg.aoctech.app/poker/api/internal/cosmetics"
@@ -276,5 +277,60 @@ func TestSetFavoriteReactionsAllowsUnownedPremium(t *testing.T) {
 	svc := NewService(store)
 	if _, err := svc.SetFavoriteReactions(context.Background(), "user-1", []string{"cold"}); err != nil {
 		t.Fatalf("expected favoriting an unowned premium reaction to succeed, got %v", err)
+	}
+}
+
+// batchStore records the size of every GetMany batch the service issues, so
+// the chunking below is asserted on the calls actually made rather than on
+// the merged result alone.
+type batchStore struct {
+	memoryStore
+	batches []int
+}
+
+func (s *batchStore) GetMany(_ context.Context, userIDs []string) (map[string]PlayerProfile, error) {
+	s.batches = append(s.batches, len(userIDs))
+	if len(userIDs) > MaxBatchProfileIDs {
+		return nil, errors.New("player: batch profile limit exceeded")
+	}
+	out := make(map[string]PlayerProfile, len(userIDs))
+	for _, id := range userIDs {
+		out[id] = PlayerProfile{UserID: id, Name: "name-" + id}
+	}
+	return out, nil
+}
+
+// TestGetManyChunksAtBatchLimit pins the one shared resolution point issue #64
+// routes every stale-name consumer through: a caller handing it more ids than
+// BatchGetItem accepts must get all of them resolved, not an error, and no
+// single store call may exceed the limit.
+func TestGetManyChunksAtBatchLimit(t *testing.T) {
+	ids := make([]string, MaxBatchProfileIDs*2+7)
+	for i := range ids {
+		ids[i] = "p" + strconv.Itoa(i)
+	}
+	store := &batchStore{}
+	profiles, err := NewService(store).GetMany(context.Background(), ids)
+	if err != nil {
+		t.Fatalf("GetMany over %d ids: %v", len(ids), err)
+	}
+	if len(profiles) != len(ids) {
+		t.Fatalf("resolved %d of %d ids", len(profiles), len(ids))
+	}
+	if len(store.batches) != 3 {
+		t.Fatalf("expected 3 batches for %d ids, got %v", len(ids), store.batches)
+	}
+	for i, size := range store.batches {
+		if size > MaxBatchProfileIDs {
+			t.Fatalf("batch %d carried %d ids, over the %d limit", i, size, MaxBatchProfileIDs)
+		}
+	}
+	// A set that already fits still goes out as exactly one call.
+	small := &batchStore{}
+	if _, err := NewService(small).GetMany(context.Background(), ids[:5]); err != nil {
+		t.Fatal(err)
+	}
+	if len(small.batches) != 1 || small.batches[0] != 5 {
+		t.Fatalf("a fitting set should be one call of 5, got %v", small.batches)
 	}
 }

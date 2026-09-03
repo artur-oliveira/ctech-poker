@@ -54,6 +54,10 @@ type playerHandlers struct {
 	avatars      *avatar.Service
 	stats        pokerStatsReader
 	reports      *reports.Service
+	// identity pushes a renamed display name into the table the player is
+	// seated at, so opponents stop seeing the old one without a reconnect
+	// (#64). nil wherever the WS/table stack isn't wired (tests).
+	identity *tableIdentityPusher
 }
 
 // RegisterPlayers mounts every /players/me/* route: profile, wallet-mode,
@@ -61,12 +65,16 @@ type playerHandlers struct {
 // under the same resource and share the same auth-derived playerID.
 func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Service, sessions sessionLogReader, achievementStore playerAchievementStore, cfg *config.Config, avatars *avatar.Service, avatarLimiter *RateLimiter, stats pokerStatsReader, extras ...any) {
 	var reportSvc *reports.Service
+	var identity *tableIdentityPusher
 	for _, extra := range extras {
-		if value, ok := extra.(*reports.Service); ok {
+		switch value := extra.(type) {
+		case *reports.Service:
 			reportSvc = value
+		case *tableIdentityPusher:
+			identity = value
 		}
 	}
-	h := &playerHandlers{players: players, sessions: sessions, achievements: achievementStore, cfg: cfg, avatars: avatars, stats: stats, reports: reportSvc}
+	h := &playerHandlers{players: players, sessions: sessions, achievements: achievementStore, cfg: cfg, avatars: avatars, stats: stats, reports: reportSvc, identity: identity}
 	router.Get("/players/:playerId/showcase", h.showcase)
 	g := router.Group("/players", auth)
 	g.Get("/me", h.me)
@@ -211,6 +219,10 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			}
 			return problem.InternalServer("failed to update player profile", c, err).Send(c)
 		}
+		// The seat's name is a cache the table actor filled at join time and
+		// never re-reads, so a rename would otherwise stay invisible to
+		// everyone at the table until this player reconnected (#64).
+		h.identity.push(c.Context(), userID)
 	}
 	if req.WalletMode != nil {
 		if *req.WalletMode == "real" && (h.cfg == nil || !h.cfg.RealMoneyEnabled) {
@@ -318,8 +330,8 @@ func (h *playerHandlers) handHistory(c fiber.Ctx) error {
 		if err != nil {
 			return problem.InternalServer("failed to list hands", c, err).Send(c)
 		}
-		if err := h.resolveOpponentAvatars(c.Context(), hands); err != nil {
-			return problem.InternalServer("failed to resolve opponent avatars", c, err).Send(c)
+		if err := h.resolveOpponentProfiles(c.Context(), hands); err != nil {
+			return problem.InternalServer("failed to resolve opponent profiles", c, err).Send(c)
 		}
 		return sendPage(c, hands, lastKey, cursor)
 	}
@@ -327,8 +339,8 @@ func (h *playerHandlers) handHistory(c fiber.Ctx) error {
 	if err != nil {
 		return problem.InternalServer("failed to list hands", c, err).Send(c)
 	}
-	if err := h.resolveOpponentAvatars(c.Context(), hands); err != nil {
-		return problem.InternalServer("failed to resolve opponent avatars", c, err).Send(c)
+	if err := h.resolveOpponentProfiles(c.Context(), hands); err != nil {
+		return problem.InternalServer("failed to resolve opponent profiles", c, err).Send(c)
 	}
 	return sendPage(c, hands, lastKey, cursor)
 }
@@ -349,28 +361,27 @@ func (h *playerHandlers) handByID(c fiber.Ctx) error {
 	if hand == nil {
 		return problem.NotFound("hand not found").Send(c)
 	}
-	if err := h.resolveOpponentAvatars(c.Context(), []sessionlog.HandItem{*hand}); err != nil {
-		return problem.InternalServer("failed to resolve opponent avatars", c, err).Send(c)
+	if err := h.resolveOpponentProfiles(c.Context(), []sessionlog.HandItem{*hand}); err != nil {
+		return problem.InternalServer("failed to resolve opponent profiles", c, err).Send(c)
 	}
 	return c.JSON(hand)
 }
 
-// resolveOpponentAvatars overwrites each opponent's denormalized AvatarURL
-// with what their live player profile resolves to right now, in place. A
-// hand row's AvatarURL is captured once at hand-complete
+// resolveOpponentProfiles overwrites each opponent's denormalized Name and
+// AvatarURL with what their live player profile resolves to right now, in
+// place. Both are captured once at hand-complete
 // (`sessionlog.OpponentSummary`, no TTL) and never updated again, so without
 // this a hand recorded before a later `ClearAvatar` (or an avatar-report
 // block) keeps serving a URL to a since-deleted object — a 404 in the
-// opponent list (#68). This is the read-time-resolution fix Issue #64
-// proposes for the same struct's stale `Name`, applied narrowly to
-// `AvatarURL` here; `player.AvatarURL` already treats a blocked or absent
-// avatar as "no URL", so a cleared/blocked profile now just clears the
-// field the same way it does on the player's own profile response, instead
-// of leaving a stale link behind. Batches lookups at
-// `player.MaxBatchProfileIDs` per `GetMany` call — a single hand-history page
-// full of distinct opponents can exceed BatchGetItem's 100-key ceiling even
+// opponent list (#68) — and a hand recorded before a rename keeps showing the
+// old display name forever (#64). This is the read-time resolution #64
+// proposes: nothing is backfilled and no rename fans out, the stored copies
+// simply stop being what anyone reads, and a row whose player no longer has
+// a profile falls back to whatever the hand recorded. `player.Service.GetMany`
+// chunks the lookup at `player.MaxBatchProfileIDs` — a single hand-history
+// page full of distinct opponents can exceed BatchGetItem's key ceiling even
 // though any one hand has at most a table's worth of seats.
-func (h *playerHandlers) resolveOpponentAvatars(ctx context.Context, hands []sessionlog.HandItem) error {
+func (h *playerHandlers) resolveOpponentProfiles(ctx context.Context, hands []sessionlog.HandItem) error {
 	seen := make(map[string]struct{})
 	ids := make([]string, 0)
 	for i := range hands {
@@ -388,19 +399,9 @@ func (h *playerHandlers) resolveOpponentAvatars(ctx context.Context, hands []ses
 	if len(ids) == 0 {
 		return nil
 	}
-	profiles := make(map[string]player.PlayerProfile, len(ids))
-	for start := 0; start < len(ids); start += player.MaxBatchProfileIDs {
-		end := start + player.MaxBatchProfileIDs
-		if end > len(ids) {
-			end = len(ids)
-		}
-		batch, err := h.players.GetMany(ctx, ids[start:end])
-		if err != nil {
-			return err
-		}
-		for id, profile := range batch {
-			profiles[id] = profile
-		}
+	profiles, err := h.players.GetMany(ctx, ids)
+	if err != nil {
+		return err
 	}
 	baseURL := h.avatarBaseURL()
 	for i := range hands {
@@ -412,6 +413,9 @@ func (h *playerHandlers) resolveOpponentAvatars(ctx context.Context, hands []ses
 				continue
 			}
 			opp.AvatarURL = player.AvatarURL(&profile, baseURL)
+			if profile.Name != "" {
+				opp.Name = profile.Name
+			}
 		}
 	}
 	return nil

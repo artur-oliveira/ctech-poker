@@ -200,6 +200,38 @@ func (s *Store) UpdateTableStreak(ctx context.Context, playerID, mode, tableID s
 type PlayerAchievementProgress struct {
 	Key   string `dynamodbav:"sk" json:"key"`
 	Count int    `dynamodbav:"counter" json:"count"`
+	// UnlockedAt is when this key last crossed a tier threshold (issue #72),
+	// stamped by StampTierUnlock. Empty for every row written before that
+	// existed and for every key still below its first tier — a legacy or
+	// still-locked row, never an error, so the client just gets no "recently
+	// unlocked" moment for it.
+	UnlockedAt string `dynamodbav:"unlocked_at,omitempty" json:"unlocked_at,omitempty"`
+}
+
+// StampTierUnlock records "now" as the moment playerID crossed a tier on key.
+// Called by Service.RecordHand once per TierUnlock it reports, i.e. exactly
+// when a threshold is genuinely crossed: a replayed hand hook is already
+// stopped upstream by ClaimHandCounters, and even past that a replay moves no
+// counter, so TierCrossed stays false and no rewrite happens. A later, higher
+// tier does overwrite it — the field means "last tier unlocked at", which is
+// the recency the achievements page sorts and celebrates by.
+func (s *Store) StampTierUnlock(ctx context.Context, playerID, mode, key string) error {
+	if playerID == "" || key == "" {
+		return nil
+	}
+	_, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(s.base.TableName),
+		Key: map[string]dynamotypes.AttributeValue{
+			"pk": &dynamotypes.AttributeValueMemberS{Value: playerID},
+			"sk": &dynamotypes.AttributeValueMemberS{Value: mode + "#" + key},
+		},
+		UpdateExpression:          aws.String("SET unlocked_at = :now"),
+		ExpressionAttributeValues: map[string]dynamotypes.AttributeValue{":now": &dynamotypes.AttributeValueMemberS{Value: dynamo.NowStr()}},
+	})
+	if err != nil {
+		return fmt.Errorf("achievements: stamp tier unlock %s/%s: %w", playerID, key, err)
+	}
+	return nil
 }
 
 func (s *Store) ListAchievements(ctx context.Context, playerID, mode string, limit int, startKey map[string]dynamotypes.AttributeValue) ([]PlayerAchievementProgress, map[string]dynamotypes.AttributeValue, error) {
