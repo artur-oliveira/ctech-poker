@@ -13,8 +13,16 @@ same tier instead of charging again — never across tiers. `GET /rooms/:id/seat
 queued to the same retry table (`poker_pending_cashouts` with `Kind: "fee_debit"`) for Lambda reconciliation retries;
 the entitlement itself is left in place on a debit failure (nobody is ever seated on that path) so the retry — this
 request's caller, or `cmd/reconcile` — completes the same idempotent charge at most once. See
-`docs/plans/2026-08-21-entry-fee-entitlement.md`. The entitlement Claim/Rebind race is closed by #146 (issue #122)
-— see `docs/specs/2026-09-02-reconcile-entitlement-concurrency-audit.md`.
+`docs/plans/2026-08-21-entry-fee-entitlement.md`. The Rebind half of the entitlement race is closed by #146 (issue
+#122) — see `docs/specs/2026-09-02-reconcile-entitlement-concurrency-audit.md`. **The Claim half was closed later
+(#40):** #139 dropped its `confirmFeeCharged` in favour of #146, and #146 shipped only the `Rebind` CAS, so the
+free-seat window survived both. Coverage is now never inferred from "an entitlement row exists" — every path
+(`resolveEntitlement`'s exact-match and rebind branches, the `ErrAlreadyClaimed` loser, and read-only `FeeStatus`)
+goes through `buyin.Service.confirmFeeCharged`, which decides from the fee's own **resolved** `poker_pending_cashouts`
+row and otherwise completes the same charge before anyone is seated. That works because the fee's idempotency key is
+now derived from the reservation itself (`entitlementFeeKey`: origin table + player + `ExpiresAt`), not from the
+request nonce — so a retry, a claim-race loser and `cmd/reconcile` all reproduce one key and ctech-wallet charges once,
+while a fresh window after expiry keys a new charge.
 
 `cmd/tablecleanup` now handles real-money tables instead of skipping them: it settles every seated player's game-wallet
 hold via `CashoutGame`, first recording the obligation to `poker_pending_cashouts` (same
