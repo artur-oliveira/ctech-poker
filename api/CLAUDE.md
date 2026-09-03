@@ -308,6 +308,21 @@ catalog.
 - A separate audit (`docs/plans/2026-07-19-api-audit-remediation.md`) covers H1–H4 / M1–M7 / L1–L6 / E1–E3 / S1–S7. Some
   fixes are already in code (actor re-resolve `tablews.go:185-198`, prod Valkey fail-fast, HTTP rate limiters
   `router.go:39-41`); others are not — verify before relying on them.
+- **Issue #70 fixed: a session's `buyin_amount` is now updated with an atomic conditional ADD, not a
+  read-modify-write.** `buyin.Service.buyIn`'s rebuy path used to `FindOpenSession`, add `amount` to the decoded
+  `BuyinAmount` in Go, and `PutItem` the whole item back — two concurrent rebuys for the same player (a client
+  double-submit, or the auto-rebuy sweep racing a manual rebuy) could both read the same starting value and one
+  addition would be silently lost, undercounting money actually put at risk (a responsible-gaming/spend-tracking
+  correctness issue: `RealityCheck`/`SessionRecap` both derive their "session result" from this figure). `AddBuyin`
+  (`internal/sessionlog/store.go`) now runs a single `TransactWriteItems` call: an `ADD buyin_amount :amt` update
+  conditioned on `attribute_exists(pk) AND ended_at = :zero` (a rebuy losing a race with a concurrent cash-out never
+  reopens an already-closed session), paired with a create-only idempotency guard row keyed by the same composite
+  key `buyin.Service` already uses for the wallet debit — so a retried buy-in can never double-count the rebuy. The
+  guard lives in the same `poker_player_sessions` table under a namespaced partition key (`buyinguard#<player_id>`,
+  never a real player id), so it can never surface as a bogus row in `ListSessions`/`FindOpenSession`/
+  `FindLatestOpenSession`, all of which query by the literal player id. Every buy-in path (initial seat, manual
+  rebuy, re-entry after busting, the post-hand auto-rebuy sweep) funnels through this same `buyIn` call, so all of
+  them get the fix. See `internal/sessionlog/store_integration_test.go`'s `TestAddBuyin*` tests.
 
 ## Layout
 
