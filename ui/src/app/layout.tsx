@@ -8,7 +8,11 @@ import './globals.css';
 import React from "react";
 
 const sans = IBM_Plex_Sans({subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-sans'});
-const mono = IBM_Plex_Mono({subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-mono'});
+// Mono skips 500: nothing asks for it. Every mono rule is 600, 700, or an inherited 400
+// (.reward-timer, .hand-row-table, the share-link input), and the 650/750/800 rules already
+// resolve to 700 under CSS font matching. It was the fourth mono woff2 preloaded on every
+// route for nothing (#108). Sans keeps all four — 400/500/600/700 are all referenced.
+const mono = IBM_Plex_Mono({subsets: ['latin'], weight: ['400', '600', '700'], variable: '--font-mono'});
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

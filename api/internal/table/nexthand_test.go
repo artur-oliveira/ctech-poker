@@ -1,9 +1,94 @@
 package table
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
+
+// unreachableStore is a real Store whose every call fails, so handleNextHand
+// can be driven through its ordinary (non-panic) failure branch without a
+// DynamoDB Local. Paired with a cancelled context the load fails immediately,
+// which is exactly the shape seen in production: the post-hand timer fires
+// while the request context that carried it is already gone.
+func unreachableStore() *tablestore.Store {
+	db := dynamodb.NewFromConfig(aws.Config{
+		Region:      "us-east-1",
+		Credentials: credentials.NewStaticCredentialsProvider("dummy", "dummy", ""),
+	}, func(o *dynamodb.Options) { o.BaseEndpoint = aws.String("http://127.0.0.1:1") })
+	return tablestore.NewStore(db, "test")
+}
+
+// A transient failure when the next-hand timer fires used to leave the table
+// on Complete with no pending countdown at all: the timer that dispatched the
+// command was already spent, and on a quiet table nothing else arrives to
+// re-derive it, so the hand stalled silently (#136).
+func TestHandleNextHandReArmsTheTimerAfterATransientFailure(t *testing.T) {
+	a := New("table-1", unreachableStore(), true, func(string, hand.Snapshot) {})
+	t.Cleanup(func() { a.afkSweepTimer.Stop() })
+	a.nextHandRetryDelay = time.Millisecond
+	a.nextHandArmedFor = "hand-1"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := a.handleNextHand(ctx, nextHandCmd{}); err == nil {
+		t.Fatal("expected the cancelled-context load to fail")
+	}
+	t.Cleanup(func() { a.nextHandTimer.Stop() })
+	if a.nextHandTimer == nil {
+		t.Fatal("no next-hand timer after a transient failure — the hand can never restart")
+	}
+	if a.nextHandRetries != 1 {
+		t.Fatalf("retries = %d, want 1", a.nextHandRetries)
+	}
+
+	select {
+	case cmd := <-a.cmds:
+		if _, ok := cmd.(nextHandCmd); !ok {
+			t.Fatalf("got command %T, want nextHandCmd", cmd)
+		}
+		cmd.reply() <- nil
+	case <-time.After(2 * time.Second):
+		t.Fatal("the re-armed timer never dispatched another nextHandCmd")
+	}
+}
+
+// The re-arm is bounded: a permanently broken store must degrade to the AFK
+// sweep's watchdog rather than spin a timer forever.
+func TestNextHandRetriesAreBounded(t *testing.T) {
+	a := New("table-1", nil, true, func(string, hand.Snapshot) {})
+	t.Cleanup(func() { a.afkSweepTimer.Stop() })
+	a.nextHandRetryDelay = time.Hour
+
+	boom := errors.New("boom")
+	for i := 1; i <= MaxNextHandRetries; i++ {
+		if err := a.retryNextHand(boom); !errors.Is(err, boom) {
+			t.Fatalf("attempt %d returned %v, want the original error", i, err)
+		}
+		if a.nextHandRetries != i {
+			t.Fatalf("retries = %d after attempt %d", a.nextHandRetries, i)
+		}
+	}
+	a.nextHandTimer.Stop()
+	a.nextHandTimer = nil
+
+	if err := a.retryNextHand(boom); !errors.Is(err, boom) {
+		t.Fatalf("exhausted attempt returned %v, want the original error", err)
+	}
+	if a.nextHandTimer != nil {
+		t.Fatal("a timer was armed past MaxNextHandRetries")
+	}
+	if a.nextHandRetries != 0 {
+		t.Fatalf("retries = %d after exhaustion, want the counter reset", a.nextHandRetries)
+	}
+}
 
 func TestArmNextHandTimerEnqueuesNextHandCmdWhenComplete(t *testing.T) {
 	a := &Actor{cmds: make(chan Command, 1), done: make(chan struct{}), nextHandDelay: time.Millisecond, handID: "h1"}

@@ -13,8 +13,16 @@ same tier instead of charging again — never across tiers. `GET /rooms/:id/seat
 queued to the same retry table (`poker_pending_cashouts` with `Kind: "fee_debit"`) for Lambda reconciliation retries;
 the entitlement itself is left in place on a debit failure (nobody is ever seated on that path) so the retry — this
 request's caller, or `cmd/reconcile` — completes the same idempotent charge at most once. See
-`docs/plans/2026-08-21-entry-fee-entitlement.md`. The entitlement Claim/Rebind race is closed by #146 (issue #122)
-— see `docs/specs/2026-09-02-reconcile-entitlement-concurrency-audit.md`.
+`docs/plans/2026-08-21-entry-fee-entitlement.md`. The Rebind half of the entitlement race is closed by #146 (issue
+#122) — see `docs/specs/2026-09-02-reconcile-entitlement-concurrency-audit.md`. **The Claim half was closed later
+(#40):** #139 dropped its `confirmFeeCharged` in favour of #146, and #146 shipped only the `Rebind` CAS, so the
+free-seat window survived both. Coverage is now never inferred from "an entitlement row exists" — every path
+(`resolveEntitlement`'s exact-match and rebind branches, the `ErrAlreadyClaimed` loser, and read-only `FeeStatus`)
+goes through `buyin.Service.confirmFeeCharged`, which decides from the fee's own **resolved** `poker_pending_cashouts`
+row and otherwise completes the same charge before anyone is seated. That works because the fee's idempotency key is
+now derived from the reservation itself (`entitlementFeeKey`: origin table + player + `ExpiresAt`), not from the
+request nonce — so a retry, a claim-race loser and `cmd/reconcile` all reproduce one key and ctech-wallet charges once,
+while a fresh window after expiry keys a new charge.
 
 `cmd/tablecleanup` now handles real-money tables instead of skipping them: it settles every seated player's game-wallet
 hold via `CashoutGame`, first recording the obligation to `poker_pending_cashouts` (same
@@ -200,6 +208,20 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   (`StoredTable.NextHandDeadlineUnixMs`, resumed via `pendingNextHandDeadline` like the turn clock); merely shared
   display state goes in `cache.Backend` (`tablestreak`, `tableconn`). Everything cross-instance fails **open** — degrade
   the display or accept a bounded duplicate, never stall the actor goroutine or drop a player's progression.
+- **A timer that has already fired is the actor's only scheduler — a handler that consumes one must put it back.**
+  `handleNextHand` clears `nextHandArmedFor` before anything that can fail, but on a quiet table between hands there is
+  no later command to carry a re-arm, so an ordinary failure (a cancelled DynamoDB context on the load or the commit)
+  stalled the hand outright (#136). Every non-panic error branch now goes through `retryNextHand`, which re-arms with a
+  linear backoff bounded by `MaxNextHandRetries`; past the cap the AFK sweep's `rearmTimersFromCache` stays the
+  last-resort watchdog. `Dispatch` is blocking, never lossy — a full mailbox backpressures the caller.
+- **Nothing viewer-independent belongs inside `broadcastAll`'s per-seat loop, and nothing expensive belongs on the
+  actor goroutine twice.** Chat and reaction views are built once per broadcast (`activityViews`) and shared; the
+  `equityIterations` Monte Carlo is memoized by `(hole, board, opponent count)` per hand (`equityFor`), because a
+  single street re-broadcasts on every chat message, act and reconnect signal (#37). That signal is itself debounced:
+  `tablews.go` used to dispatch `ReconnectCmd` ahead of *every* inbound frame, keepalive pings included; it now fires
+  at most once per `tableconn.SyncInterval` per connection (#58). It cannot simply be skipped for pings — it is also
+  the paced caller keeping this instance's `tableconn` entry (45s `EntryTTL`) alive on a table whose only traffic is
+  pings, and the 1-minute AFK sweep ticks too slowly to cover that.
 - **`handeval` is table-driven — never edit `handeval/ref` without regenerating.** `ref` is the reference evaluator and
   the sole definition of the canonical hand ordering; `tables.bin` is compiled from it by
   `go generate ./internal/engine/handeval/...` and embedded. Changing `ref` without regenerating leaves stale tables
@@ -334,9 +356,33 @@ catalog.
   `player.Service.GetMany` (chunked at `player.MaxBatchProfileIDs` per call) before the response is sent, so a hand
   recorded before a later `ClearAvatar` (or an avatar-report block) never serves a URL pointing at a deleted object.
   `player.AvatarURL` already treats a blocked/missing avatar as absent, so a cleared or since-deleted opponent profile
-  now resolves to `""` instead of a stale, 404ing link — same as the player's own profile response. This is the
-  read-time-resolution approach Issue #64 proposes for the same struct's stale `Name` (still open, not implemented),
-  applied narrowly here to `AvatarURL` only; `Name` is untouched by this change.
+  now resolves to `""` instead of a stale, 404ing link — same as the player's own profile response. The helper is now
+  called `resolveOpponentProfiles` and resolves `Name` the same way — see the #64 entry below.
+- **Issue #64 fixed by read-time resolution — no backfill, nothing fans out on rename.** Denormalized display names are
+  still written (they are the fallback when a profile no longer resolves) but no consumer serves its own copy any more:
+  `player.Service.GetMany` is the single resolution point (it now chunks at `player.MaxBatchProfileIDs` internally, so
+  no caller has to), `resolveOpponentProfiles` (`internal/api/v1/player.go`) overwrites `OpponentSummary.Name` +
+  `AvatarURL` on every hand-history read, and `leaderboardHandlers.resolveNames` (`internal/api/v1/leaderboard.go`)
+  overwrites `Entry.PlayerName` on `GET /leaderboard` and `/leaderboard/me` — one `BatchGetItem` per rendered page.
+  Existing rows are therefore correct on their next read with no migration job. Live seats are the one write-side push:
+  `POST /players/me` with a new `name` calls `tableIdentityPusher.push` (`internal/api/v1/tableidentity.go`), which
+  finds the player's current table from `presence` and dispatches `SetIdentityCmd` so opponents see the rename without
+  a reconnect. `identityCmdFor` in that file is now the only place a `SetIdentityCmd` payload is assembled (the WS
+  gateway uses it too) — `hand.Table.SetPlayerIdentityForActor` replaces name/avatar/badge as one unit, so pushing a
+  single field would blank the other two. Public hand shares already anonymized `ReplaySeat.Name`; that half of the
+  issue needed no change.
+- **Issue #72 fixed:** `achievements.Store.StampTierUnlock` stamps `unlocked_at` on a progress row when
+  `Service.RecordHand` reports a `TierUnlock`, surfaced as `unlocked_at` on `PlayerAchievementProgress` and on
+  `AchievementState` (`/players/me/achievements` and the summary endpoint). Legacy rows carry no stamp and report an
+  empty string — a still-locked or pre-change row, never an error. A replayed hand hook stamps nothing: it is stopped by
+  `ClaimHandCounters`, and past that a counter that crosses no threshold reports no unlock. A stamp failure is logged,
+  not returned — the counters are already committed and must not be retried.
+- **Issue #65 fixed:** `matchup.Store.RecordHand` no longer writes one 72-item `TransactWriteItems` call per hand. It
+  chunks pairs at `maxPairsPerTx` (12 pairs = 24 items), so a 9-max table's C(9,2)=36 pairs commit as 3 bounded
+  transactions. The atomicity that actually mattered is per-pair, not per-hand: each pair's create-only guard rides in
+  the same transaction as that pair's increment, so no pair is ever double-counted and a partially-applied hand is
+  safely completed by a retry (landed chunks fail their guards and are skipped). Moving matchup off the
+  hand-completion critical path was #61's detached gamification pipeline, already done.
 - **Issue #70 fixed: a session's `buyin_amount` is now updated with an atomic conditional ADD, not a
   read-modify-write.** `buyin.Service.buyIn`'s rebuy path used to `FindOpenSession`, add `amount` to the decoded
   `BuyinAmount` in Go, and `PutItem` the whole item back — two concurrent rebuys for the same player (a client

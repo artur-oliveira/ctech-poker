@@ -144,7 +144,12 @@ Per-binary keys read outside `Config` (not in the struct above):
   delta replay), `chat`, `error`, `removed`, `achievement_unlocked`, `room_created`,
   `room_updated`, `payment_received`, `system_broadcast`, `social_event`, `social_presence_changed` and
   `social_inbox_count`. Social frames are emitted only on the authenticated `user#<playerID>` channel.
-- Abuse control: per-seat fixed-window limiter (10 actions/sec/seat), **32 KiB frame cap**, chat truncated to
+- Abuse control: per-**player** fixed-window limiters — 10 actions/sec and 1 reaction/2 s — sharing the same
+  `RateLimiter` (`internal/api/v1/ratelimit.go`) and therefore the same Redis `INCR`/`EXPIRE` counter as the HTTP
+  limiters, keyed `ws:act:<playerID>` / `ws:react:<playerID>`. Before #43 these were per-process, per-connection
+  in-memory maps, so any instance handing out a fresh budget (a reconnect, a second tab, a client spread across the
+  fleet) multiplied the intended allowance by N. The in-memory path remains as the dev/no-Valkey fallback and a
+  backend error fails **open** — rate limiting is abuse mitigation, not a correctness gate. Also: **32 KiB frame cap**, chat truncated to
   `chatMessageMaxLength` (50 chars, mirrored client-side as `CHAT_MESSAGE_MAX_LENGTH`) and masked by
   `internal/chatfilter`, and an adaptive Turnstile challenge (`internal/botcheck`) issued over the socket.
 - Heartbeat: 30s ping / 45s pong wait.
@@ -286,6 +291,8 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /ws`                                    | first-frame JWT | lobby/user WebSocket; registers `lobby` + `user#<id>`                                      |
 | `POST /rooms/`                               | JWT             | create room; takes `currency_mode` + `entry_fee_cents`; rate-limited 10/min/IP             |
 | `GET /rooms/`                                | JWT             | list public rooms (paginated, 50)                                                          |
+| `POST /rooms/join-or-create`                 | JWT             | seat the caller in a stake bucket, server-resolved → `{room_id, created}`; 30/min/IP        |
+| `GET /rooms/buckets`                         | JWT             | per-bucket lobby availability across every page; `?currency_mode=sandbox\|real`             |
 | `GET /rooms/stakes`                          | JWT             | stake catalog; `?currency_mode=sandbox\|real`                                              |
 | `GET /rooms/code/:code`                      | JWT             | lookup by share code                                                                       |
 | `GET /rooms/:id`                             | JWT             | room detail (`share_code` stripped for non-creators)                                       |
@@ -311,6 +318,7 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `POST /players/me/notes/:opponentId`         | JWT             | save/delete a note (`{tag, note}`, ≤500 chars)                                             |
 | `GET /players/me/poker-stats`                | JWT             | own VPIP/PFR/3-bet                                                                         |
 | `POST /players/me/hand/:id/share`            | JWT             | create a public share link (`mode` in request body)                                        |
+| `GET /players/me/hand-shares`                | JWT             | caller's live share links, newest first: `{token, kind, outcome, net_change, created_at, expires_at}` |
 | `DELETE /players/me/hand-shares/:token`      | JWT             | revoke a share link                                                                        |
 | `GET /hand-shares/:token`                    | **none**        | public shared hand, opponents aliased                                                      |
 | `GET /tables/:tableId/hands/:handId/history` | JWT             | action-log replay for one hand                                                             |
@@ -372,6 +380,49 @@ row, and the service layer filters again defensively before ranking so a lagging
 appear nor occupy a rank slot. `hands_won` / `hands_played` are unaffected. Legacy sub-floor rows carrying a stale key
 are cleaned lazily on their owner's next hand (or next achievement unlock) — no migration job. Every row already
 carries `hands_played` in the response for the client to render alongside the rate.
+
+### Lobby seating: `POST /rooms/join-or-create` (#76)
+
+The lobby used to decide "join vs create" itself from the **first page** of `GET /rooms` and then navigate to a room id
+that could already be full — two players clicking the same tile both navigated, and the loser only found out as a
+buy-in error on the table page. `POST /rooms/join-or-create` takes a **bucket spec**
+(`{small_blind, big_blind, max_seats, currency_mode, amount, auto_rebuy?, idem_key?}`) instead of a room id and answers
+`{room_id, created}` after the player is actually seated:
+
+1. An open session already inside that bucket short-circuits (a retry, or a second tab, lands on the seat the player
+   already holds instead of buying a second one).
+2. Candidates are every public room in the bucket with a free seat and a matching buy-in window, **fullest first** so
+   players consolidate onto near-full tables. `seats_taken` is a write-through mirror and may be stale, so a candidate
+   that answers `ErrNoSeatsAvailable` is simply skipped — the seat race is resolved server-side, never surfaced.
+3. If none can seat the player, a fresh public room is created (buy-in window `20`–`100` BB, same rule `POST /rooms`
+   enforces) and the player is seated there.
+
+Any other buy-in failure (wallet, terms, entry fee) stops the walk and is returned — retrying it against a sibling
+table would just repeat it, and on the money paths could debit twice.
+
+`GET /rooms/buckets` is the grid's companion aggregate: it walks **every** page of `gsi_public` (not just the first) and
+returns one row per `(blinds, seats)` within the requested currency mode —
+`{small_blind, big_blind, max_seats, currency_mode, rooms, open_rooms, seats_taken, seats_available}`.
+
+### Blind level on hands and shares (#75)
+
+`sessionlog.HandItem` and the hand-share payload now carry `small_blind` / `big_blind` — the level the hand was
+**actually played at**, captured on `hand.HandOutcome`, because blind escalation moves it between hands and the room's
+current blinds are not a valid answer for a hand in the past. Hands recorded before the field existed derive it from
+the first pre-flop replay frame (the blind seats' contributions are still exactly the posted blinds there); anything
+else stays `0` = unknown, which clients must render by hiding the blind marker rather than assuming a default.
+
+### Hand-share revocation list (#77)
+
+`GET /players/me/hand-shares` enumerates the caller's live shares so a regretted public link can be revoked instead of
+circulating until its 1–30 day TTL expires. `poker_hand_shares` is a **PK-only** table (the token *is* the key, so a
+public link resolves in one `GetItem`), which leaves no owner-keyed query — so `Create` also maintains one extra row
+per owner, `pk = "owner#<playerID>"`, holding the owner's live tokens as a DynamoDB string set. `ListByOwner` reads
+that set, fans out one `Get` per token, drops anything expired/revoked/foreign from the response and prunes it from the
+set on the way out (self-healing, no sweeper). Index writes are best-effort on both create and revoke: the share itself
+is already live (or already gone), so a failed index update must never report the operation as failed. If a player ever
+accumulates enough live shares for the fan-out to hurt, the upgrade is a `gsi_owner` index on that table — a CDK
+change, deliberately not taken here.
 
 ## Authentication & authorization
 

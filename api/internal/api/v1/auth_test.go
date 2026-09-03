@@ -110,7 +110,7 @@ func TestAuthMiddleware(t *testing.T) {
 func TestLeaderboardRequiresAuth(t *testing.T) {
 	app := fiber.New()
 	deny := func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusUnauthorized) }
-	RegisterLeaderboard(app.Group("/v1.0"), deny, &leaderboard.Service{})
+	RegisterLeaderboard(app.Group("/v1.0"), deny, &leaderboard.Service{}, nil)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard", nil)
 	resp, err := app.Test(req)

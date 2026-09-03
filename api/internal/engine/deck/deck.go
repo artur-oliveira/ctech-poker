@@ -117,7 +117,16 @@ func shuffleWithSeed(seed [32]byte) [52]Card {
 	return d
 }
 
-// commitHash produces the legacy global commit hash for backwards compatibility.
+// commitHash produces the legacy global commit hash: SHA256(seed || every
+// card). Superseded by RootCommitHash, which commits to each card
+// individually so one hand's mucked cards stay hidden while the rest are
+// verifiable — but NOT dead. It is still live wire and storage:
+// ShuffleResult.CommitHash flows into hand.Snapshot.ShuffleCommitHash (proto
+// field 12, every table snapshot), hand.HandOutcome.CommitHash, and
+// sessionlog's persisted commit_hash column, so every hand ever recorded is
+// verifiable only against this exact construction. Compat-only: publish it,
+// never build anything new on it, and never change the byte layout below —
+// TestLegacyCommitHashLayoutIsPinned fails if you do.
 func commitHash(seed [32]byte, cards [52]Card) [32]byte {
 	var buf [32 + 52*2]byte
 	copy(buf[:32], seed[:])

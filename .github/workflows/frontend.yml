@@ -123,8 +123,21 @@ jobs:
       # policy never granted — script-src was 'self' and frame-src fell back to
       # default-src 'self'. img-src gains the API host because avatars now come
       # from there instead of a same-origin /avatars/* behaviour.
+      #
+      # script-src carries no 'unsafe-inline' (#46/#120). The export's own inline
+      # scripts — the per-page `self.__next_f.push(...)` flight payloads — are moved
+      # into /_next/static/chunks/inline/<sha256>.js by ui/scripts/strip-inline-scripts.mjs,
+      # which `npm run build` runs and which fails the build if an inline script
+      # survives. A per-build sha256 allowlist was the other option and does not fit:
+      # one distinct hash per page (25 measured, ~1.4 kB) on top of the ~0.65 kB policy
+      # exceeds the 2,000-character `_headers` line limit the reusable workflow asserts.
+      #
+      # style-src keeps 'unsafe-inline' deliberately: the export emits zero inline
+      # <style> tags, but React writes `style="…"` attributes throughout (chip stacks,
+      # seat geometry, progress fills), and those are what 'unsafe-inline' covers.
+      # Dropping it needs style-src-attr plus a token rewrite, not a flag.
       csp-overrides: |
-        script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com
+        script-src 'self' https://challenges.cloudflare.com
         frame-src https://challenges.cloudflare.com
         img-src 'self' data: $API_ORIGIN
       permissions-policy: on-device-speech-recognition=self

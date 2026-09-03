@@ -35,6 +35,13 @@ exists, but the backend gate is off by default — never ship UI that assumes re
     the dev mock runtime is off every route's critical path. `lighthouserc.json` audits the static export. All three run
     in the `quality` job of `.github/workflows/frontend.yml`.
 
+11. **The table page composes, it does not derive.** `app/(app)/table/page.tsx` wires
+    `useTableSession`/`useTableRemoval`, `useTableOutcome`, `useTableOverlays`, `actionState` and
+    `buildHandOutcome`. New table state belongs in the hook that owns the concern.
+12. **One interval for every countdown** (`lib/hooks/useSharedTicker.ts`, reached through
+    `useLiveNow`), and **seats publish their own rects** (`lib/seatRects.ts`) — never a DOM query
+    for a seat, never a rect cached for the length of an animation.
+
 ## Tests / verification
 
 `vitest` + `@testing-library/react`, jsdom; 81 test files; setup at `src/test/setup.ts`. Mock

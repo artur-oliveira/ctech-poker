@@ -127,6 +127,33 @@ func (s *Store) GetByShareCode(ctx context.Context, code string) (*Room, error) 
 	return dynamo.Decode[Room](result.Items[0])
 }
 
+// listAllPublicMaxPages bounds ListAllPublic so a pathological index can
+// never turn one lobby request into an unbounded scan. At 100 rooms a page
+// that is 2 000 public rooms — far past anything the lobby is sized for.
+const listAllPublicMaxPages = 20
+
+// ListAllPublic walks every page of gsi_public, unlike ListPublic which
+// returns one. The lobby's bucket aggregate has to be correct beyond the
+// first page (#76) — a per-page count silently under-reports availability.
+func (s *Store) ListAllPublic(ctx context.Context) ([]Room, error) {
+	var (
+		out      []Room
+		startKey map[string]types.AttributeValue
+	)
+	for page := 0; page < listAllPublicMaxPages; page++ {
+		rooms, lastKey, err := s.ListPublic(ctx, 100, startKey)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, rooms...)
+		if len(lastKey) == 0 {
+			break
+		}
+		startKey = lastKey
+	}
+	return out, nil
+}
+
 func (s *Store) ListPublic(ctx context.Context, limit int, startKey map[string]types.AttributeValue) ([]Room, map[string]types.AttributeValue, error) {
 	result, err := s.base.QueryGSI(ctx, gsiPublic, "gsi_public", "public", limit, startKey)
 	if err != nil {

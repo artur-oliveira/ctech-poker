@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -131,14 +132,15 @@ func TestEveryStateChangingOrAmplifiableMessageIsRateLimited(t *testing.T) {
 }
 
 func TestReactionLimiterAllowsOnlyOneBurstPerWindow(t *testing.T) {
-	limiter := newWindowSeatLimiter(1, 2*time.Second)
-	if !limiter.Allow("p1") {
+	limiter := NewRateLimiter(nil, 1, 2*time.Second)
+	ctx := context.Background()
+	if !limiter.AllowFailOpen(ctx, wsReactionKey("p1")) {
 		t.Fatal("first reaction should be allowed")
 	}
-	if limiter.Allow("p1") {
+	if limiter.AllowFailOpen(ctx, wsReactionKey("p1")) {
 		t.Fatal("second reaction in the same window should be blocked")
 	}
-	if !limiter.Allow("p2") {
+	if !limiter.AllowFailOpen(ctx, wsReactionKey("p2")) {
 		t.Fatal("one player's reaction limit must not block another player")
 	}
 }

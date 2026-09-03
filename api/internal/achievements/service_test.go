@@ -17,6 +17,18 @@ type memStore struct {
 	// false, exactly like a duplicate onHandComplete invocation racing a
 	// Valkey blip (issue #66).
 	claimed map[string]bool
+	// stamps counts StampTierUnlock calls per "mode#playerID#key" (issue
+	// #72), so a test can assert a tier crossing stamps exactly once and a
+	// replayed hand stamps not at all.
+	stamps map[string]int
+}
+
+func (m *memStore) StampTierUnlock(_ context.Context, playerID, mode, key string) error {
+	if m.stamps == nil {
+		m.stamps = map[string]int{}
+	}
+	m.stamps[mode+"#"+playerID+"#"+key]++
+	return nil
 }
 
 func (m *memStore) ClaimHandCounters(_ context.Context, tableID, handID string) (bool, error) {
@@ -162,6 +174,49 @@ func TestRecordHandUpdatesProgressAndUnlocks(t *testing.T) {
 	}
 	if len(unlocks) != 3 {
 		t.Fatalf("got %d first-tier unlocks, want 3", len(unlocks))
+	}
+}
+
+// TestRecordHandStampsEachTierCrossingExactlyOnce covers issue #72: every
+// unlock RecordHand reports gets its "recently unlocked" timestamp stamped
+// once, and a hand that crosses nothing new (the second hand below moves the
+// same counters but no threshold) stamps nothing at all — the "no timestamp
+// rewrite on replayed hand hooks" acceptance criterion, which holds even past
+// ClaimHandCounters because a counter that does not cross a tier never
+// reports an unlock.
+func TestRecordHandStampsEachTierCrossingExactlyOnce(t *testing.T) {
+	store := &memStore{progress: map[string]map[string]int{}}
+	service := NewServiceWithStore(store)
+	outcome := hand.HandOutcome{Winners: []string{"p1"}, WinningCategory: "flush", Participants: []string{"p1", "p2"}}
+
+	unlocks, err := service.RecordHand(context.Background(), "table-1", "sandbox", outcome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unlocks) == 0 {
+		t.Fatal("expected first-tier unlocks on the very first hand")
+	}
+	for _, unlock := range unlocks {
+		if got := store.stamps["sandbox#"+unlock.PlayerID+"#"+unlock.Key]; got != 1 {
+			t.Fatalf("unlock %s/%s stamped %d times, want exactly 1", unlock.PlayerID, unlock.Key, got)
+		}
+	}
+	if len(store.stamps) != len(unlocks) {
+		t.Fatalf("stamped %d keys for %d unlocks", len(store.stamps), len(unlocks))
+	}
+	before := len(store.stamps)
+
+	// Same shape of hand again: counters move, no new threshold is crossed.
+	if _, err := service.RecordHand(context.Background(), "table-1", "sandbox", outcome); err != nil {
+		t.Fatal(err)
+	}
+	for key, count := range store.stamps {
+		if count != 1 {
+			t.Fatalf("key %s was re-stamped (%d) by a hand that crossed no new tier", key, count)
+		}
+	}
+	if len(store.stamps) != before {
+		t.Fatalf("stamped keys grew from %d to %d without a new tier", before, len(store.stamps))
 	}
 }
 

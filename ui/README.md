@@ -8,10 +8,12 @@ backend gate (`REAL_MONEY_ENABLED`) is off by default.
 ## Stack
 
 - Next.js **16.3.1** (App Router, `src/app/`), React **19.2.8**, TypeScript 6 (`package.json`).
-- **Static export** in prod (`output: 'export'`, `next.config.ts:18`); served from S3 +
-  CloudFront. SPA route manifest published to a CloudFront **KeyValueStore**
-  (`scripts/publish-routes.sh`). `images: {unoptimized: true}` — there is no Next image
-  optimizer and no server route at runtime.
+- **Static export** in prod (`output: 'export'`, `next.config.ts:18`); `out/` is served as a
+  Cloudflare Worker's static assets (`html_handling: auto-trailing-slash`,
+  `not_found_handling: 404-page` — no route manifest to publish). `npm run build` also runs
+  `scripts/strip-inline-scripts.mjs`, which externalizes the export's inline scripts so the
+  deployed `script-src` needs no `'unsafe-inline'`. `images: {unoptimized: true}` — there is no
+  Next image optimizer and no server route at runtime.
 - Real-time: **`@aoctech/ws-client`** with **binary protobuf** frames — `src/lib/ws/utils.ts`
   encodes/decodes against `src/lib/api/proto/poker.ts` (ts-proto, generated from
   `../proto/poker.proto`). Not JSON.
@@ -306,16 +308,19 @@ The production dependency audit must remain at zero known vulnerabilities.
 - **Every new feature ships with the tests that cover it** — error, empty and disabled paths
   included. The 90% thresholds may be raised, never lowered to land a change. Rules and
   per-area recipes: [`docs/testing.md`](docs/testing.md).
-- `frontend.yml`: `npm ci` → `eslint src --max-warnings 0` → `npm run build` (static export) →
-  S3 sync + route-manifest publish + CloudFront invalidation.
+- `frontend.yml` delegates to the shared reusable workflow
+  (`artur-oliveira/ctech-cdk/.github/workflows/frontend-cloudflare.yml`): `npm ci` → `npm test`
+  → `npm run build` (static export) → export guards → generated `out/_headers` and
+  `wrangler.jsonc` → `wrangler deploy`. It passes only the per-environment `NEXT_PUBLIC_*`
+  values and the CSP sources that are not derived from them.
 - Quality bar: lint, typecheck, tests and build must all pass with **zero errors and zero
   warnings**.
 - ESLint is pinned to the 9.x line because Next 16.3's bundled `eslint-plugin-import`,
   `eslint-plugin-jsx-a11y`, and `eslint-plugin-react` declare peer support through ESLint 9.
   Keep ESLint on that line until all of those plugin peer ranges support a newer major.
-- ⚠️ The deploy step is `aws s3 sync out/ s3://$S3_BUCKET/ --delete` — anything else stored in
-  that bucket under a synced prefix is deleted on every frontend deploy. Relevant if
-  user-uploaded assets are ever put there.
+- The deploy uploads `out/` as the Worker's static asset manifest, so it is inherently
+  `--delete`-shaped: only what the export contains is served. Nothing else can be parked
+  alongside it.
 
 ## CSS
 

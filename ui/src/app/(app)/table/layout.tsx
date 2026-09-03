@@ -1,4 +1,6 @@
 import {routeMetadata} from '@/lib/routeMetadata';
+// Table-only rules (#84) — no other route loads this sheet.
+import './table.css';
 
 export const metadata = routeMetadata({
   title: 'Mesa de poker',

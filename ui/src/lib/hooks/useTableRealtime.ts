@@ -3,163 +3,24 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {getAccessToken, subscribeAccessToken} from '@/lib/api/client';
 import {wsOrigin} from '@/lib/ws/origin';
 import {recoverSession} from '@/lib/auth/session';
-import {cardLabel} from '@/lib/cards';
 import {MAX_RECONNECT_ATTEMPTS, useWebSocket, type WSStatus} from '@aoctech/ws-client';
 import {checkApiLiveness} from '@/lib/network/liveness';
 import {useApiLiveness} from '@/lib/network/NetworkProvider';
 import type {MockTableService} from '@/dev/mockRuntime';
 import {type MockScenario, USE_MOCK} from '@/lib/mockConfig';
 import type {ActionPreselection, PokerAction, ServerMessage, TableSnapshot} from '@/lib/api/table';
-import {playerName} from '@/lib/utils';
 import {playSound} from '@/lib/sound';
 import {decodeServerMessage, encodeClientMessage} from "@/lib/ws/utils";
 import {isTableReaction, type TableReactionEvent, type TableReactionID} from '@/lib/reactions';
-import {CHAT_HISTORY_LIMIT, CHAT_MESSAGE_MAX_LENGTH} from '@/lib/chat';
+import {CHAT_HISTORY_LIMIT} from '@/lib/chat';
+import {
+  ACTION_TIMEOUT_MS, type ActionError, actionError, auxRetryDelayMs, MAX_ACTION_RETRIES,
+  RESYNC_ERROR_CODES, RESYNC_TIMEOUT_MS, TERMINAL_ERROR_CODES
+} from '@/lib/tableResilience';
+import {describeSnapshot, playSoundForTransition} from '@/lib/tableNarration';
 
 export type ConnectionStatus = WSStatus
-export type ActionError = { code: string; message: string }
-
-const ACTION_TIMEOUT_MS = 8000;
-// A stale_state rejection means the actor's own snapshot/hand precondition
-// didn't match the server's — the same action resubmitted against the fresh
-// version the resync just fetched is legal again (see actor.go's
-// validateActionPrecondition). Cap the auto-resubmits so a genuinely illegal
-// action (or a table stuck racing another player) fails visibly instead of
-// looping forever.
-const MAX_ACTION_RETRIES = 3;
-// Rejections that mean "your view of the table is not the server's view".
-// invalid_action belongs here even though it is also the code for a genuinely
-// illegal move: a resync costs one snapshot, while not resyncing leaves a
-// player who hit a server-side desync stuck until they reload the page.
-const RESYNC_ERROR_CODES = new Set(['stale_state', 'rate_limited', 'invalid_action', 'unavailable']);
-const TERMINAL_ERROR_CODES = new Set(['forbidden', 'not_found']);
-const RESYNC_TIMEOUT_MS = 2500;
-// First resubmit delay for an auxiliary command rejected against stale state,
-// doubled per retry. Deliberately longer than the resync backoff scheduled for
-// the same action_id (<=450ms on a first rejection) so the resubmit is judged
-// against the state that resync pulled, not the one that just rejected it.
-const AUX_RETRY_BASE_MS = 700;
-
-const ERROR_MESSAGES: Record<string, string> = {
-  unauthorized: 'Sua sessão expirou. Entre novamente para continuar.',
-  forbidden: 'Você não tem acesso a esta mesa.',
-  not_found: 'Essa sala não está mais disponível.',
-  unavailable: 'A mesa está indisponível no momento. Tente reconectar.',
-  rate_limited: 'Muitas ações em sequência. Aguarde um instante e tente novamente.',
-  invalid_action: 'Essa ação não é mais válida. Confira o estado atual da mesa.',
-  missing_action_id: 'A ação não pôde ser identificada. Atualize a página e tente novamente.',
-  missing_precondition: 'O estado da mesa ainda não está pronto para receber essa ação.',
-  stale_state: 'A mesa mudou antes da sua ação. Sincronizando o estado mais recente.',
-  invalid_post: 'Não foi possível confirmar o blind. Tente novamente.',
-  message_too_long: `A mensagem ultrapassa o limite de ${CHAT_MESSAGE_MAX_LENGTH} caracteres.`,
-  not_connected: 'Sem conexão com a mesa. Reconecte antes de agir.',
-  action_timeout: 'A mesa demorou para confirmar a ação. O estado será atualizado antes de uma nova tentativa.',
-  bot_challenge_required: 'Conclua a verificação para continuar jogando.',
-  bot_challenge_failed: 'A verificação não foi concluída. Tente novamente.',
-  connection_lost: 'A conexão caiu antes da confirmação. Aguarde a atualização da mesa.'
-};
-
-function actionError(code = 'unknown'): ActionError {
-  return {code, message: ERROR_MESSAGES[code] || 'Não foi possível concluir a ação. Tente novamente.'};
-}
-
-const STAGE_LABELS: Record<string, string> = {
-  waiting_for_players: 'aguardando jogadores', pre_flop: 'pré-flop', flop: 'flop', turn: 'turn', river: 'river',
-  showdown: 'showdown', complete: 'mão encerrada'
-};
-
-function describeSnapshot(previous: TableSnapshot | null, next: TableSnapshot, viewerId?: string) {
-  const nameOf = (id: string) => next.seats.find(seat => seat.player_id === id)?.name;
-  const playerLabel = (id: string) => playerName(id, viewerId, nameOf(id));
-  if (!previous) return `Mesa atualizada. ${STAGE_LABELS[next.stage] || next.stage}.`;
-  const messages: string[] = [];
-  if (next.stage !== previous.stage) messages.push(`Etapa: ${STAGE_LABELS[next.stage] || next.stage}`);
-  if (next.board.length > previous.board.length) {
-    const dealt = next.board.slice(previous.board.length).map(cardLabel).join(', ');
-    messages.push(`${next.board.length === 3 ? 'Flop' : next.board.length === 4 ? 'Turn' : 'River'}: ${dealt}`);
-  }
-  const previousSeats = new Map(previous.seats.map(seat => [seat.player_id, seat]));
-  const bettor = next.seats.find(seat => seat.contributed > (previousSeats.get(seat.player_id)?.contributed || 0));
-  if (bettor) {
-    const added = bettor.contributed - (previousSeats.get(bettor.player_id)?.contributed || 0);
-    messages.push(`${playerLabel(bettor.player_id)} colocou ${added.toLocaleString('pt-BR')} fichas no pote`);
-  }
-  if (next.current_player_id && next.current_player_id !== previous.current_player_id) {
-    messages.push(next.current_player_id === viewerId ? 'Sua vez de agir' : `Vez de ${playerLabel(next.current_player_id)}`);
-  }
-  const nextHasPayouts = next.payouts && Object.keys(next.payouts).length > 0;
-  const prevHasPayouts = previous.payouts && Object.keys(previous.payouts).length > 0;
-  if (nextHasPayouts && !prevHasPayouts) {
-    if (next.pot_results?.length) {
-      for (const pot of next.pot_results) {
-        if (pot.refund) {
-          messages.push(...Object.entries(pot.payouts || {})
-            .filter(([, amount]) => amount > 0)
-            .map(([playerId, amount]) =>
-              `${playerLabel(playerId)} recebeu ${amount.toLocaleString('pt-BR')} fichas devolvidas`));
-        } else if (pot.winner_player_ids.length === 1) {
-          const winner = pot.winner_player_ids[0];
-          const amount = pot.payouts?.[winner] ?? pot.payout_amount;
-          messages.push(`${playerLabel(winner)} ganhou ${amount.toLocaleString('pt-BR')} fichas`);
-        } else if (pot.winner_player_ids.length > 1) {
-          messages.push(`${pot.winner_player_ids.map(playerLabel).join(' e ')} dividiram um pote de ${pot.payout_amount.toLocaleString('pt-BR')} fichas`);
-        }
-      }
-    } else {
-      // Compatibility with protocol v1, which only published aggregate
-      // credits and could not distinguish a win from a refund precisely.
-      messages.push(...Object.entries(next.payouts || {})
-        .filter(([playerId, amount]) => amount > 0 && next.winners?.includes(playerId))
-        .map(([playerId, amount]) =>
-          `${playerLabel(playerId)} recebeu ${amount.toLocaleString('pt-BR')} fichas`));
-    }
-  }
-  return messages.join('. ');
-}
-
-// Plays at most one sound per snapshot transition (never on every broadcast):
-// each condition compares against the previous snapshot exactly like
-// describeSnapshot does). Priority: a new board card beats an all-in beats a
-// bet beats a fold-to-one reveal, since at most one usually fires per frame
-// anyway.
-function playSoundForTransition(previous: TableSnapshot | null, next: TableSnapshot, viewerId?: string) {
-  const scheduled: number[] = [];
-  if (!previous) return scheduled;
-  // Table is busy with a lot going on at once. The turn ring alone is easy
-  // to miss, so this fires independently of (and can co-occur with) whatever
-  // else this transition triggers below (a bet, a fold-to-one reveal, etc).
-  if (viewerId && next.current_player_id === viewerId && previous.current_player_id !== viewerId) {
-    playSound('your_turn');
-  }
-  if (next.board.length > previous.board.length) {
-    const added = next.board.length - previous.board.length;
-    // Flop deals 3 cards one at a time (Board/PlayingCard stagger reveal via
-    // --deal-index; see .board-card .card-reveal-inner in globals.css): one
-    // reveal sound per card, timed to match. Keep this in sync with that
-    // animation-delay with a little gap (currently 360ms/index). Turn/river add a single card
-    // with no stagger.
-    for (let i = 0; i < added; i++) {
-      if (i === 0) playSound('reveal');
-      else scheduled.push(window.setTimeout(() => playSound('reveal'), i * 360));
-    }
-    return scheduled;
-  }
-  const previousSeats = new Map(previous.seats.map(seat => [seat.player_id, seat]));
-  const wentAllIn = next.seats.some(seat => seat.state === 'all_in' && previousSeats.get(seat.player_id)?.state !== 'all_in');
-  if (wentAllIn) {
-    playSound('all_in');
-    return scheduled;
-  }
-  const pot = previous.seats.reduce((n, seat) => n + seat.contributed, 0);
-  const bettor = next.seats.find(seat => seat.contributed > (previousSeats.get(seat.player_id)?.contributed || 0));
-  if (bettor) {
-    const added = bettor.contributed - (previousSeats.get(bettor.player_id)?.contributed || 0);
-    playSound(pot > 0 && added >= pot / 2 ? 'half_pot' : 'bet');
-    return scheduled;
-  }
-  if (next.stage === 'complete' && previous.stage !== 'complete' && !next.won_without_showdown) playSound('reveal');
-  return scheduled;
-}
+export type {ActionError};
 
 /** `suppressedPlayerIds` are the players the viewer muted or blocked. Their
  * chat and reactions are filtered *before* entering state, so a suppressed
@@ -406,7 +267,7 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
       aux.timer = undefined;
       if (!auxFramesRef.current.has(actionId)) return;
       if (!sendRef.current(aux.frame)) finishAuxiliaryCommand(actionId, 'not_connected');
-    }, AUX_RETRY_BASE_MS * 2 ** (aux.retries - 1) + Math.floor(Math.random() * 200));
+    }, auxRetryDelayMs(aux.retries));
     return true;
   }, [finishAuxiliaryCommand]);
 

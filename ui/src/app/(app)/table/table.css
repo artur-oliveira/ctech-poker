@@ -1,0 +1,407 @@
+/*
+ * Table renderer stylesheet — loaded by src/app/(app)/table/layout.tsx, so only /table pays
+ * for it.
+ *
+ * Split out of (app)/app.css (#84) on the same rule as that sheet: every class in every
+ * selector here appears literally in a source file reachable only from (app)/table/** and
+ * nowhere else, and nothing left in app.css can beat it at equal specificity. Seat, board,
+ * card and hand-outcome rules are NOT all here: /hands, /hands/history, /hands/replay,
+ * /share, /profile, /lobby and the (marketing) landing demo render those same components,
+ * so their CSS has to stay in the sheet those routes load.
+ */
+.table-preference-gameplay {
+    padding-block: 12px;
+    border-block: 1px solid var(--white-12)
+}
+.table-preference-gameplay small {
+    max-width: 42ch
+}
+.reality-check-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px
+}
+.reality-check-title svg {
+    width: 22px;
+    color: var(--gold)
+}
+.today-highlight-cards {
+    color: var(--muted);
+    font-weight: 500
+}
+.idle-warning {
+    position: fixed;
+    z-index: var(--z-notice);
+    left: 50%;
+    bottom: calc(var(--action-bar-stack) + 1rem);
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    max-width: min(92vw, 34rem);
+    padding: .75rem 1rem;
+    border: 1px solid color-mix(in srgb, var(--gold) 55%, transparent);
+    border-radius: 1rem;
+    background: var(--surface-notice);
+    box-shadow: 0 .75rem 2rem var(--black-06);
+}
+.idle-warning svg {
+    flex: 0 0 auto;
+    color: var(--gold);
+}
+.idle-warning p {
+    margin: 0;
+}
+.idle-warning button {
+    flex: 0 0 auto;
+}
+.voice-action {
+    display: flex;
+    align-items: center
+}
+.voice-action button {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--white-13);
+    border-radius: 50%;
+    background: var(--white-05);
+    color: var(--muted);
+    cursor: pointer
+}
+.voice-action button:hover:not(:disabled),
+.voice-action button[aria-pressed=true] {
+    border-color: color-mix(in srgb, var(--gold) 45%, transparent);
+    color: var(--gold)
+}
+.voice-action button[aria-pressed=true] {
+    animation: voice-listening 1.1s ease-in-out infinite
+}
+.voice-action button:disabled {
+    opacity: .4;
+    cursor: not-allowed
+}
+.voice-action svg {
+    width: 16px
+}
+.voice-confirm {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 8px;
+    padding: 4px 4px 4px 10px;
+    border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+    border-radius: var(--rounded-control);
+    background: color-mix(in srgb, var(--gold) 12%, var(--surface-seat))
+}
+.voice-confirm-label {
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--text-secondary)
+}
+.voice-action .voice-confirm-yes,
+.voice-action .voice-confirm-no {
+    width: auto;
+    height: 30px;
+    border-radius: var(--rounded-control)
+}
+.voice-action .voice-confirm-yes {
+    display: inline-flex;
+    gap: 4px;
+    padding: 0 10px;
+    border-color: transparent;
+    background: var(--gold);
+    color: var(--gold-ink);
+    font-size: 12px;
+    font-weight: 600
+}
+.voice-action .voice-confirm-no {
+    padding: 0 7px
+}
+@keyframes voice-listening {
+    50% {
+        box-shadow: 0 0 0 5px color-mix(in srgb, var(--gold) 12%, transparent)
+    }
+}
+.chat-unread-dot {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--gold);
+    border: 2px solid var(--table-room);
+    animation: chip-drop 260ms var(--ease-out-quint) both
+}
+.chat-char-count {
+    align-self: center;
+    padding: 0 6px;
+    color: var(--muted);
+    font: 600 10px var(--font-mono);
+    white-space: nowrap
+}
+.chat-error {
+    margin: 7px 0 0;
+    color: var(--danger-soft);
+    font-size: var(--font-size-compact);
+    line-height: 1.35
+}
+.bot-challenge-dialog > button {
+    display: none
+}
+.bot-challenge-dialog h2 {
+    display: flex;
+    align-items: center;
+    gap: 9px
+}
+.bot-challenge-dialog h2 svg {
+    width: 23px;
+    height: 23px;
+    color: var(--brand-bright)
+}
+.turnstile-slot {
+    min-height: 70px;
+    display: grid;
+    place-items: center
+}
+.bot-challenge-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    color: var(--text-secondary);
+    font-size: 13px
+}
+.bot-challenge-status svg {
+    width: 16px
+}
+.bot-challenge-error {
+    margin: 0;
+    padding: 11px;
+    border-radius: var(--rounded-control);
+    background: color-mix(in srgb, var(--danger) 16%, var(--surface-seat));
+    color: var(--danger-soft);
+    line-height: 1.45
+}
+.bot-challenge-recovery {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin-top: 13px
+}
+.bot-challenge-recovery > * {
+    flex: 1 1 auto
+}
+.bot-challenge-dialog > small {
+    display: block;
+    margin-top: 14px;
+    color: var(--muted);
+    line-height: 1.4
+}
+.last-winners-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: -6px -8px;
+    padding: 6px 8px;
+    border-radius: var(--rounded-control);
+    transition: background-color 150ms var(--ease-out-quart)
+}
+.last-winners-row:hover,
+.last-winners-row:focus-visible {
+    background: var(--seat-border)
+}
+@media (prefers-reduced-motion: reduce) {
+.last-winners-row {
+        transition: none
+    }
+}
+.last-winners-cards {
+    display: flex;
+    flex-shrink: 0
+}
+.last-winners-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0
+}
+.last-winners-info b {
+    font-size: var(--font-size-compact);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+.last-winners-info small {
+    color: var(--gold);
+    font-size: var(--font-size-tiny)
+}
+.equity-trainer-waiting {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: var(--font-size-body);
+    line-height: 1.5
+}
+.equity-trainer-category {
+    margin: 0;
+    align-self: flex-start;
+    padding: 3px 8px;
+    border-radius: var(--rounded-pill);
+    background: var(--white-12);
+    color: var(--felt-text);
+    font: 600 var(--font-size-mono) var(--font-mono);
+    letter-spacing: .04em
+}
+.equity-trainer-cards {
+    display: flex;
+    gap: 4px
+}
+.equity-trainer-chance {
+    margin: 0;
+    color: var(--muted-rose);
+    font-size: var(--font-size-compact)
+}
+.equity-trainer-chance b {
+    color: var(--paper)
+}
+.equity-trainer-reason {
+    margin: 0;
+    color: var(--paper);
+    font-size: var(--font-size-body);
+    line-height: 1.5
+}
+.equity-trainer-history {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+    gap: 1px;
+    overflow: hidden;
+    border-radius: var(--rounded-control);
+    background: var(--white-12)
+}
+.equity-trainer-history > div {
+    padding: 8px;
+    background: var(--surface-control);
+    text-align: center
+}
+.equity-trainer-history dt {
+    color: var(--muted-rose);
+    font-size: var(--font-size-tiny)
+}
+.equity-trainer-history dd {
+    margin: 2px 0 0;
+    color: var(--paper);
+    font: 700 var(--font-size-compact) var(--font-mono)
+}
+.achievement-toast-stars {
+    display: inline-flex;
+    gap: 1px
+}
+.achievement-toast-stars span {
+    display: inline-block;
+    animation: achievement-pop .35s var(--ease-out-quint) both;
+    animation-delay: calc(220ms + var(--delay, 0ms))
+}
+@media (max-width: 520px) {
+/* One header row on phones: the Lobby link collapses to its chevron
+       (label stays for assistive tech) so every table tool fits beside it
+       without wrapping. */
+    .header-lobby-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
+    }
+/* icon-only status indicator: the "Ao vivo"/"Reconectando" label has no
+       room next to Convidar/Sentar fora/Sair da mesa at phone widths */
+    .connection-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
+    }
+.today-highlight-label,
+    .today-highlight-cards {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
+    }
+.today-highlight-pot {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+}
+@media (orientation: portrait) and (max-width: 1023px) {
+.today-highlight-label,
+    .today-highlight-cards {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
+    }
+.today-highlight-pot {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+.voice-action button {
+        width: 36px;
+        height: 36px;
+        min-height: 36px
+    }
+}
+@media (orientation: portrait) and (max-width: 380px) {
+.today-highlight-pot {
+        position: static;
+        width: auto;
+        height: auto;
+        overflow: hidden;
+        clip-path: none;
+        font-size: 10px
+    }
+}
+.reaction-favorites-dialog {
+    max-width: 600px
+}
+.reaction-favorite-count {
+    margin: -8px 0 10px;
+    color: var(--gold-pale);
+    font: 600 var(--font-size-compact) var(--font-mono)
+}
+.reaction-favorite-list button {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 8px;
+    min-height: 46px;
+    padding: 7px 10px;
+    text-align: left;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control);
+    background: var(--surface-seat);
+    color: var(--paper);
+    cursor: pointer
+}
+.reaction-favorite-list button[aria-pressed="true"] {
+    border-color: var(--gold);
+    background: color-mix(in srgb, var(--gold) 9%, var(--surface-seat))
+}
+.reaction-favorite-list button:disabled {
+    opacity: .45;
+    cursor: not-allowed
+}
+.reaction-favorite-glyph {
+    font-size: 21px
+}
+.reaction-favorite-list button > svg {
+    width: 15px;
+    height: 15px;
+    color: var(--gold)
+}
