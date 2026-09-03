@@ -915,7 +915,7 @@ func wirePlayerRemovedHook(mgr *tablemanager.Manager, buyinSvc *buyin.Service, r
 	mgr.SetReactionOwnership(reactionOwnershipCache.IsOwned)
 	mgr.SetReactionMarkUsed(reactionSvc.BuildMarkUsedIntent)
 	reactionSvc.SetOwnershipInvalidator(reactionOwnershipCache.Invalidate)
-	mgr.SetOnPlayerRemoved(func(tableID, playerID, reason string, stack int64, holdID string) {
+	mgr.SetOnPlayerRemoved(func(tableID, playerID, reason, settlementNonce string, stack int64, holdID string) {
 		ctx := context.Background()
 		// Pushes an explicit "removed" frame straight to the removed player's
 		// own connection (same per-player fan-out key the "state" broadcast
@@ -933,7 +933,7 @@ func wirePlayerRemovedHook(mgr *tablemanager.Manager, buyinSvc *buyin.Service, r
 		} else {
 			reg.Broadcast(ctx, tableID+"#"+playerID, data)
 		}
-		if err := buyinSvc.SettleSystemRemoval(ctx, tableID, playerID, stack, holdID, reason); err != nil {
+		if err := buyinSvc.SettleSystemRemoval(ctx, tableID, playerID, stack, holdID, reason, settlementNonce); err != nil {
 			slog.Error("buyin: settle system removal failed", "table", tableID, "player", playerID, "reason", reason, "err", err)
 		}
 	})

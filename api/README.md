@@ -549,6 +549,16 @@ silently dropped from every `Leave` commit** — `extra` was only appended insid
 no recovery row ever written if the follow-up wallet-credit call then failed. See
 `docs/plans/2026-08-03-leave-settlement-atomicity.md`.
 
+Fixed 2026-09-03: **a player could not leave a table they had already been system-removed from once.**
+`buyin.BuildSystemSettlementIntent` keyed its create-only `poker_pending_cashouts` row as
+`roomID#playerID#system_leave#reason` — constant across every seating. Since 2026-08-03 that row is
+co-committed atomically with the seat removal, so a second `request_exit` (or AFK/disconnect removal) at the
+same table hit the leftover row's `attribute_not_exists` condition, cancelled the whole transaction, and left
+the player stuck with `pending_exit=true` until an idle sweep (different reason → different key) happened to
+catch them. Fix threads a fresh per-removal nonce (`Actor.newSettlementNonce`) through to the key, mirroring
+the client nonce `CashOut` already appends. See
+`docs/specs/2026-09-03-system-leave-settlement-key-collision.md`.
+
 `docs/plans/2026-07-19-api-audit-remediation.md` remains a useful cross-check: some of its items (T1 actor re-resolve,
 T2 prod fail-fast on missing Valkey, M6 rate limiters, stable buy-in idempotency)
 are in code, others are not — verify against the tree before relying on any of them.

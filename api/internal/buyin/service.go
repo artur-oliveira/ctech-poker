@@ -771,9 +771,28 @@ func (s *Service) CashOut(ctx context.Context, roomID, playerID, idemKey string)
 	return stack, s.settle(ctx, roomID, playerID, stack, holdID, mover, key)
 }
 
+// systemLeaveKey builds the poker_pending_cashouts idempotency key for one
+// system removal. The nonce is what keeps a rebuy-then-removed-again cycle at
+// the same table from colliding onto a single create-only key: without it the
+// second removal's whole co-committed transaction failed its condition
+// forever and the seat could never be pulled (the player was wedged
+// "leaving…" until an idle sweep with a different reason caught them). Mirrors
+// the client nonce CashOut already appends. Falls back to the bare key when
+// no nonce is supplied so an older caller (or a replayed pre-fix obligation
+// row) still resolves.
+func systemLeaveKey(roomID, playerID, reason, nonce string) string {
+	if nonce == "" {
+		return fmt.Sprintf("%s#%s#system_leave#%s", roomID, playerID, reason)
+	}
+	return fmt.Sprintf("%s#%s#system_leave#%s#%s", roomID, playerID, reason, nonce)
+}
+
 // BuildSystemSettlementIntent creates the immutable recovery row that an
-// Actor co-writes with an AFK/disconnect seat removal.
-func (s *Service) BuildSystemSettlementIntent(ctx context.Context, roomID, playerID, reason string, stack int64, holdID string) (types.TransactWriteItem, error) {
+// Actor co-writes with an AFK/disconnect/exit seat removal. nonce must be the
+// same value the matching SettleSystemRemoval call receives (both come from
+// the Actor's per-removal newSettlementNonce) or the follow-up credit would
+// resolve a different key and reconcile would credit the wallet twice.
+func (s *Service) BuildSystemSettlementIntent(ctx context.Context, roomID, playerID, reason, nonce string, stack int64, holdID string) (types.TransactWriteItem, error) {
 	if s.pending == nil {
 		return types.TransactWriteItem{}, errors.New("buyin: settlement store unavailable")
 	}
@@ -785,7 +804,7 @@ func (s *Service) BuildSystemSettlementIntent(ctx context.Context, roomID, playe
 	if room != nil {
 		mode = room.CurrencyMode
 	}
-	key := fmt.Sprintf("%s#%s#system_leave#%s", roomID, playerID, reason)
+	key := systemLeaveKey(roomID, playerID, reason, nonce)
 	var holdIDs []string
 	if holdID != "" {
 		holdIDs = []string{holdID}
@@ -806,12 +825,12 @@ func (s *Service) BuildSystemSettlementIntent(ctx context.Context, roomID, playe
 // (never credited to any wallet) and their session stayed open forever,
 // which is also why the lobby's "return to table" banner could point at a
 // table the player no longer holds a seat at.
-func (s *Service) SettleSystemRemoval(ctx context.Context, roomID, playerID string, stack int64, holdID, reason string) error {
+func (s *Service) SettleSystemRemoval(ctx context.Context, roomID, playerID string, stack int64, holdID, reason, nonce string) error {
 	mover, err := s.walletFor(ctx, roomID, playerID)
 	if err != nil {
 		return fmt.Errorf("buyin: settle system removal: %w", err)
 	}
-	key := fmt.Sprintf("%s#%s#system_leave#%s", roomID, playerID, reason)
+	key := systemLeaveKey(roomID, playerID, reason, nonce)
 	return s.settle(ctx, roomID, playerID, stack, holdID, mover, key)
 }
 

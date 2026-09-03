@@ -100,7 +100,7 @@ func TestAFKSweepKeepsSeatWhenSettlementIntentCannotBeBuilt(t *testing.T) {
 	actor.cached = game
 	actor.kickGrace = 5 * time.Minute
 	called := false
-	actor.SetSystemSettlementIntentForActor(func(context.Context, string, string, int64, string) (types.TransactWriteItem, error) {
+	actor.SetSystemSettlementIntentForActor(func(context.Context, string, string, string, int64, string) (types.TransactWriteItem, error) {
 		called = true
 		return types.TransactWriteItem{}, errors.New("dynamodb unavailable")
 	})
@@ -137,7 +137,7 @@ func TestNextHandRemovesIdlePlayerBeforeDeal(t *testing.T) {
 	actor.cached = game
 	actor.kickGrace = 5 * time.Minute
 	var removed string
-	actor.SetOnPlayerRemovedForActor(func(playerID, reason string, _ int64, _ string) {
+	actor.SetOnPlayerRemovedForActor(func(playerID, reason, _ string, _ int64, _ string) {
 		if reason == "idle" {
 			removed = playerID
 		}
@@ -210,7 +210,7 @@ func TestKickTimeoutSparesAPlayerActiveOnAnotherInstance(t *testing.T) {
 		}
 	}
 	var removed []string
-	actor.SetOnPlayerRemovedForActor(func(playerID, _ string, _ int64, _ string) {
+	actor.SetOnPlayerRemovedForActor(func(playerID, _, _ string, _ int64, _ string) {
 		removed = append(removed, playerID)
 	})
 
@@ -249,7 +249,7 @@ func TestKickTimeoutStillRemovesATrulySilentPlayer(t *testing.T) {
 		}
 	}
 	var removed []string
-	actor.SetOnPlayerRemovedForActor(func(playerID, reason string, _ int64, _ string) {
+	actor.SetOnPlayerRemovedForActor(func(playerID, reason, _ string, _ int64, _ string) {
 		if reason == "disconnected" {
 			removed = append(removed, playerID)
 		}

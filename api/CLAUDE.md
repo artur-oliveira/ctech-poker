@@ -329,7 +329,17 @@ catalog.
   `dealtIntoCurrentHand`/`handOrder` stays true through the entire post-hand
   `Complete`-stage window, so removal only actually happens once the *next* hand's `StartHand`
   runs, not synchronously with the hand that completes. `cancel_exit` reverses it before either commits. See
-  `docs/plans/2026-08-26-exit-mid-hand-design.md`.
+  `docs/plans/2026-08-26-exit-mid-hand-design.md`. **Every system removal path (`removeEligiblePendingExits`,
+  `removeIdlePlayersBetweenHands`, `handleAFKSweep`, `handleKickTimeout`) generates a fresh
+  `Actor.newSettlementNonce` and forwards it verbatim through both `systemSettlementIntent` and `onPlayerRemoved`
+  — it is what makes the co-committed `poker_pending_cashouts` key
+  (`roomID#playerID#system_leave#reason#nonce`) unique per removal.** Without it, keying on `(room, player,
+  reason)` alone meant the SECOND system removal at the same table hit the leftover create-only row's
+  `attribute_not_exists` and cancelled the whole seat-removal transaction — the player was wedged
+  `pending_exit=true` until an idle sweep (different reason → different key) caught them (fixed 2026-09-03,
+  `docs/specs/2026-09-03-system-leave-settlement-key-collision.md`). The two calls must share the same nonce or
+  `reconcile` credits the wallet twice under divergent keys. Mirrors the client nonce `buyin.Service.CashOut`
+  already appends.
 - **Every list endpoint returns the `sendPage` envelope** (`{data, has_next, next_cursor, has_previous,
   previous_cursor}` — `internal/api/v1/helpers.go`), including fixed in-memory catalogs, which simply sit permanently on
   their only page. Purchase history (`sandbox-purchase`, `reaction-purchase`, `cosmetic-purchase/:kind`) pages for real

@@ -167,8 +167,20 @@ type Actor struct {
 	// inside the Actor's own goroutine), so without forwarding them here the
 	// removed player's chips are never credited back to any wallet and their
 	// sessionlog entry is never closed (buyin.SettleSystemRemoval does both).
-	onPlayerRemoved        func(playerID, reason string, stack int64, holdID string)
-	systemSettlementIntent func(context.Context, string, string, int64, string) (types.TransactWriteItem, error)
+	//
+	// settlementNonce is a fresh per-removal token that both hooks forward
+	// unchanged. It is what makes the co-committed poker_pending_cashouts row's
+	// key unique to THIS removal: a player can be seated, system-removed, rebuy,
+	// and be system-removed again from the same table for the same reason, and
+	// without the nonce all of those collapse onto one key
+	// (roomID#playerID#system_leave#reason). The row is written create-only and
+	// co-committed atomically with the seat removal, so the second removal's
+	// whole transaction failed its condition forever — the seat could never be
+	// pulled and the player was wedged "leaving…" until an unrelated idle sweep
+	// (different reason, different key) happened to catch them. Mirrors the
+	// client nonce buyin.Service.CashOut already appends for the same reason.
+	onPlayerRemoved        func(playerID, reason, settlementNonce string, stack int64, holdID string)
+	systemSettlementIntent func(ctx context.Context, playerID, reason, settlementNonce string, stack int64, holdID string) (types.TransactWriteItem, error)
 	// Premium reactions fail closed until both hooks are wired by the manager.
 	reactionOwnership func(ctx context.Context, playerID, reactionID string) (bool, error)
 	reactionMarkUsed  func(ctx context.Context, playerID, reactionID string) (*types.TransactWriteItem, error)
@@ -1153,11 +1165,11 @@ func (a *Actor) SetOnSeatsChangedForActor(fn func(int)) { a.onSeatsChanged = fn 
 
 // SetOnPlayerRemovedForActor installs the system-removal notification hook —
 // see onPlayerRemoved's doc comment.
-func (a *Actor) SetOnPlayerRemovedForActor(fn func(playerID, reason string, stack int64, holdID string)) {
+func (a *Actor) SetOnPlayerRemovedForActor(fn func(playerID, reason, settlementNonce string, stack int64, holdID string)) {
 	a.onPlayerRemoved = fn
 }
 
-func (a *Actor) SetSystemSettlementIntentForActor(fn func(context.Context, string, string, int64, string) (types.TransactWriteItem, error)) {
+func (a *Actor) SetSystemSettlementIntentForActor(fn func(ctx context.Context, playerID, reason, settlementNonce string, stack int64, holdID string) (types.TransactWriteItem, error)) {
 	a.systemSettlementIntent = fn
 }
 
@@ -1588,7 +1600,8 @@ func (a *Actor) handleKickTimeout(ctx context.Context, c kickTimeoutCmd) error {
 	// guarantee across actor replacement; this retry covers the same actor.
 	stackCh := make(chan int64, 1)
 	holdIDCh := make(chan string, 1)
-	if err := a.handleLeave(ctx, a.systemLeaveCmd(ctx, c.PlayerID, "disconnected", stackCh, holdIDCh)); err != nil {
+	nonce := newSettlementNonce()
+	if err := a.handleLeave(ctx, a.systemLeaveCmd(ctx, c.PlayerID, "disconnected", nonce, stackCh, holdIDCh)); err != nil {
 		if errors.Is(err, hand.ErrPlayerNotFound) {
 			// Terminal, not a race: the player is already gone (removed by
 			// another actor instance, or table cleanup), so there is nothing
@@ -1601,7 +1614,7 @@ func (a *Actor) handleKickTimeout(ctx context.Context, c kickTimeoutCmd) error {
 		return err
 	}
 	if a.onPlayerRemoved != nil {
-		a.onPlayerRemoved(c.PlayerID, "disconnected", <-stackCh, <-holdIDCh)
+		a.onPlayerRemoved(c.PlayerID, "disconnected", nonce, <-stackCh, <-holdIDCh)
 	}
 	return nil
 }
@@ -1703,11 +1716,12 @@ func (a *Actor) handleAFKSweep(ctx context.Context, c afkSweepCmd) error {
 	for _, id := range stale {
 		stackCh := make(chan int64, 1)
 		holdIDCh := make(chan string, 1)
-		if err := a.handleLeave(ctx, a.systemLeaveCmd(ctx, id, "idle", stackCh, holdIDCh)); err != nil {
+		nonce := newSettlementNonce()
+		if err := a.handleLeave(ctx, a.systemLeaveCmd(ctx, id, "idle", nonce, stackCh, holdIDCh)); err != nil {
 			continue // still dealt into a hand in progress; next sweep retries
 		}
 		if a.onPlayerRemoved != nil {
-			a.onPlayerRemoved(id, "idle", <-stackCh, <-holdIDCh)
+			a.onPlayerRemoved(id, "idle", nonce, <-stackCh, <-holdIDCh)
 		}
 	}
 	return nil
@@ -1729,11 +1743,12 @@ func (a *Actor) removeIdlePlayersBetweenHands(ctx context.Context) {
 	for _, id := range stale {
 		stackCh := make(chan int64, 1)
 		holdIDCh := make(chan string, 1)
-		if err := a.handleLeave(ctx, a.systemLeaveCmd(ctx, id, "idle", stackCh, holdIDCh)); err != nil {
+		nonce := newSettlementNonce()
+		if err := a.handleLeave(ctx, a.systemLeaveCmd(ctx, id, "idle", nonce, stackCh, holdIDCh)); err != nil {
 			continue
 		}
 		if a.onPlayerRemoved != nil {
-			a.onPlayerRemoved(id, "idle", <-stackCh, <-holdIDCh)
+			a.onPlayerRemoved(id, "idle", nonce, <-stackCh, <-holdIDCh)
 		}
 	}
 }
@@ -1754,11 +1769,12 @@ func (a *Actor) removeEligiblePendingExits(ctx context.Context) {
 	for _, id := range exiting {
 		stackCh := make(chan int64, 1)
 		holdIDCh := make(chan string, 1)
-		if err := a.handleLeave(ctx, a.systemLeaveCmd(ctx, id, "exit_requested", stackCh, holdIDCh)); err != nil {
+		nonce := newSettlementNonce()
+		if err := a.handleLeave(ctx, a.systemLeaveCmd(ctx, id, "exit_requested", nonce, stackCh, holdIDCh)); err != nil {
 			continue
 		}
 		if a.onPlayerRemoved != nil {
-			a.onPlayerRemoved(id, "exit_requested", <-stackCh, <-holdIDCh)
+			a.onPlayerRemoved(id, "exit_requested", nonce, <-stackCh, <-holdIDCh)
 		}
 	}
 }
@@ -2316,11 +2332,21 @@ func (a *Actor) applyJoinAndCommit(ctx context.Context, c JoinCmd) error {
 	})
 }
 
-func (a *Actor) systemLeaveCmd(ctx context.Context, playerID, reason string, stack chan int64, holdID chan string) LeaveCmd {
+// newSettlementNonce returns a fresh token to make one system removal's
+// settlement key unique (see the onPlayerRemoved field comment). Generated
+// once per removal attempt and forwarded verbatim to both the settlement
+// intent builder and the onPlayerRemoved hook so the co-committed
+// poker_pending_cashouts row and the follow-up SettleSystemRemoval credit
+// resolve the same key.
+func newSettlementNonce() string {
+	return ulid.MustNew(ulid.Timestamp(timeNowFunc()), rand.Reader).String()
+}
+
+func (a *Actor) systemLeaveCmd(ctx context.Context, playerID, reason, settlementNonce string, stack chan int64, holdID chan string) LeaveCmd {
 	cmd := LeaveCmd{PlayerID: playerID, Stack: stack, HoldID: holdID}
 	if a.systemSettlementIntent != nil {
 		cmd.SettlementIntent = func(amount int64, hold string) (types.TransactWriteItem, error) {
-			return a.systemSettlementIntent(ctx, playerID, reason, amount, hold)
+			return a.systemSettlementIntent(ctx, playerID, reason, settlementNonce, amount, hold)
 		}
 	}
 	return cmd

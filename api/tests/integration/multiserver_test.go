@@ -563,8 +563,8 @@ func TestDisconnectKickRemovesSeatAcrossServers(t *testing.T) {
 	// write buyin.Service.BuildSystemSettlementIntent performs in production,
 	// against the real pending-cashouts table this test's DynamoDB Local seeds.
 	pending := reconcile.NewPendingStore(db, "flow_test")
-	mgrB.SetSystemSettlementIntent(func(ctx context.Context, tableID, playerID, reason string, stack int64, holdID string) (types.TransactWriteItem, error) {
-		key := fmt.Sprintf("%s#%s#system_leave#%s", tableID, playerID, reason)
+	mgrB.SetSystemSettlementIntent(func(ctx context.Context, tableID, playerID, reason, settlementNonce string, stack int64, holdID string) (types.TransactWriteItem, error) {
+		key := fmt.Sprintf("%s#%s#system_leave#%s#%s", tableID, playerID, reason, settlementNonce)
 		var holdIDs []string
 		if holdID != "" {
 			holdIDs = []string{holdID}

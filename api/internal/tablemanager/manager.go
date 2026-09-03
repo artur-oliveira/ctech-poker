@@ -44,13 +44,13 @@ type Manager struct {
 	onHandComplete         func(tableID, handID string, outcome hand.HandOutcome, names map[string]string)
 	onHandUpdated          func(tableID, handID string, outcome hand.HandOutcome, names map[string]string)
 	onSeatsChanged         func(tableID string, seatsTaken int)
-	onPlayerRemoved        func(tableID, playerID, reason string, stack int64, holdID string)
+	onPlayerRemoved        func(tableID, playerID, reason, settlementNonce string, stack int64, holdID string)
 	autoRebuySweep         func(tableID, handID string, outcome hand.HandOutcome)
 	tableStreak            func(tableID, handID string, outcome hand.HandOutcome) map[string]int
 	streakStore            table.StreakStore
 	handHooks              table.HandHookClaimer
 	connStore              table.ConnStore
-	systemSettlementIntent func(context.Context, string, string, string, int64, string) (types.TransactWriteItem, error)
+	systemSettlementIntent func(ctx context.Context, tableID, playerID, reason, settlementNonce string, stack int64, holdID string) (types.TransactWriteItem, error)
 	roomLoader             func(tableID string) (*roomstore.Room, bool, error)
 	reactionOwnership      func(ctx context.Context, playerID, reactionID string) (bool, error)
 	reactionMarkUsed       func(ctx context.Context, playerID, reactionID string) (*types.TransactWriteItem, error)
@@ -184,8 +184,10 @@ func (m *Manager) SetOnSeatsChanged(fn func(tableID string, seatsTaken int)) { m
 // invoked with (tableID, playerID, reason, stack, holdID) for every actor
 // this manager creates, including ones created before this call. stack/holdID
 // are what buyin.SettleSystemRemoval needs to credit the removed player's
-// wallet and close their sessionlog entry.
-func (m *Manager) SetOnPlayerRemoved(fn func(tableID, playerID, reason string, stack int64, holdID string)) {
+// wallet and close their sessionlog entry. settlementNonce makes this
+// removal's poker_pending_cashouts key unique — SettleSystemRemoval must pass
+// the same value so its credit resolves the row the seat removal co-wrote.
+func (m *Manager) SetOnPlayerRemoved(fn func(tableID, playerID, reason, settlementNonce string, stack int64, holdID string)) {
 	m.onPlayerRemoved = fn
 }
 
@@ -364,16 +366,16 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 			m.onSeatsChanged(tableID, seatsTaken)
 		}
 	})
-	actor.SetOnPlayerRemovedForActor(func(playerID, reason string, stack int64, holdID string) {
+	actor.SetOnPlayerRemovedForActor(func(playerID, reason, settlementNonce string, stack int64, holdID string) {
 		if m.onPlayerRemoved != nil {
-			m.onPlayerRemoved(tableID, playerID, reason, stack, holdID)
+			m.onPlayerRemoved(tableID, playerID, reason, settlementNonce, stack, holdID)
 		}
 	})
-	actor.SetSystemSettlementIntentForActor(func(ctx context.Context, playerID, reason string, stack int64, holdID string) (types.TransactWriteItem, error) {
+	actor.SetSystemSettlementIntentForActor(func(ctx context.Context, playerID, reason, settlementNonce string, stack int64, holdID string) (types.TransactWriteItem, error) {
 		if m.systemSettlementIntent == nil {
 			return types.TransactWriteItem{}, errors.New("tablemanager: system settlement intent builder unavailable")
 		}
-		return m.systemSettlementIntent(ctx, tableID, playerID, reason, stack, holdID)
+		return m.systemSettlementIntent(ctx, tableID, playerID, reason, settlementNonce, stack, holdID)
 	})
 	actor.SetReactionOwnershipForActor(func(ctx context.Context, playerID, reactionID string) (bool, error) {
 		if m.reactionOwnership == nil {
@@ -558,7 +560,7 @@ func (m *Manager) DrainAndRelease(ctx context.Context) {
 // SetSystemSettlementIntent installs the pre-commit builder used by AFK and
 // disconnect removals. A system removal fails closed if this dependency is
 // absent or cannot build its durable recovery obligation.
-func (m *Manager) SetSystemSettlementIntent(fn func(context.Context, string, string, string, int64, string) (types.TransactWriteItem, error)) {
+func (m *Manager) SetSystemSettlementIntent(fn func(ctx context.Context, tableID, playerID, reason, settlementNonce string, stack int64, holdID string) (types.TransactWriteItem, error)) {
 	m.systemSettlementIntent = fn
 }
 
