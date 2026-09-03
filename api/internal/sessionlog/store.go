@@ -44,23 +44,35 @@ type SessionItem struct {
 	CashoutAmount int64  `dynamodbav:"cashout_amount" json:"cashout_amount"`
 	NetPnL        int64  `dynamodbav:"net_pnl" json:"net_pnl"`
 	JoinedAt      int64  `dynamodbav:"joined_at" json:"joined_at"`
-	EndedAt       int64  `dynamodbav:"ended_at" json:"ended_at"`
-	TTL           int64  `dynamodbav:"ttl,omitempty" json:"-"`
+	// EndedAt is an epoch-milliseconds timestamp (time.Now().UnixMilli()),
+	// never seconds — 0 means the session is still open (see CloseSession).
+	// Every reader of this field (buyin.Service, the /players/me/sessions
+	// response) must keep treating it as ms; see HandItem.EndedAt below and
+	// #74 for the cross-endpoint unit contract this backs.
+	EndedAt int64 `dynamodbav:"ended_at" json:"ended_at"`
+	TTL     int64 `dynamodbav:"ttl,omitempty" json:"-"`
 }
 
 type HandItem struct {
-	PK           string            `dynamodbav:"pk" json:"pk"` // player_id
-	SK           string            `dynamodbav:"sk" json:"sk"` // currency_mode#hand_id
-	CurrencyMode string            `dynamodbav:"currency_mode" json:"currency_mode"`
-	TableID      string            `dynamodbav:"table_id" json:"table_id"`
-	HandID       string            `dynamodbav:"hand_id" json:"hand_id"`
-	Outcome      string            `dynamodbav:"outcome" json:"outcome"` // won | lost | tied
-	NetChange    int64             `dynamodbav:"net_change" json:"net_change"`
-	EndedAt      int64             `dynamodbav:"ended_at" json:"ended_at"`
-	Board        []string          `dynamodbav:"board,omitempty" json:"board,omitempty"`
-	BoardTwo     []string          `dynamodbav:"board_two,omitempty" json:"board_two,omitempty"`
-	HoleCards    []string          `dynamodbav:"hole_cards,omitempty" json:"hole_cards,omitempty"`
-	Opponents    []OpponentSummary `dynamodbav:"opponents,omitempty" json:"opponents,omitempty"`
+	PK           string `dynamodbav:"pk" json:"pk"` // player_id
+	SK           string `dynamodbav:"sk" json:"sk"` // currency_mode#hand_id
+	CurrencyMode string `dynamodbav:"currency_mode" json:"currency_mode"`
+	TableID      string `dynamodbav:"table_id" json:"table_id"`
+	HandID       string `dynamodbav:"hand_id" json:"hand_id"`
+	Outcome      string `dynamodbav:"outcome" json:"outcome"` // won | lost | tied
+	NetChange    int64  `dynamodbav:"net_change" json:"net_change"`
+	// EndedAt is an epoch-milliseconds timestamp (time.Now().UnixMilli(), set
+	// once in app.go's onHandComplete pipeline). Every endpoint that emits a
+	// hand — /players/me/hands, /players/me/hand/:id, and the public
+	// showcase's best_hand — MUST pass this value through unchanged. Do not
+	// divide/multiply by 1000 on any one endpoint; that per-endpoint drift is
+	// exactly the bug #74 fixed (a `< 1e12` runtime heuristic had crept into
+	// the frontend to cope with it).
+	EndedAt   int64             `dynamodbav:"ended_at" json:"ended_at"`
+	Board     []string          `dynamodbav:"board,omitempty" json:"board,omitempty"`
+	BoardTwo  []string          `dynamodbav:"board_two,omitempty" json:"board_two,omitempty"`
+	HoleCards []string          `dynamodbav:"hole_cards,omitempty" json:"hole_cards,omitempty"`
+	Opponents []OpponentSummary `dynamodbav:"opponents,omitempty" json:"opponents,omitempty"`
 	// ServerSeed and CommitHash are the hand's shuffle fairness proof
 	// (hand.HandOutcome.ServerSeed/CommitHash), hex-encoded — lets the
 	// player independently verify the deck they were dealt (B32).
