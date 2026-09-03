@@ -1,5 +1,5 @@
 'use client';
-import {useEffect, useMemo, useState, type CSSProperties} from 'react';
+import {useEffect, useId, useMemo, useState, type CSSProperties} from 'react';
 import {ChevronLeft, ChevronRight, Coins, Pause, Play, RotateCcw, Sparkles} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {TableStage} from '@/components/table/TableStage';
@@ -40,8 +40,15 @@ const BOARD_CARD_REVEAL_MS = 780;
 const BOARD_CARD_STAGGER_MS = 320;
 const REVEAL_BUFFER_MS = 200;
 const ACTION_STEP_MS = 900;
+// Under `prefers-reduced-motion` the card-reveal animations are suppressed by
+// globals.css, so there is no deal to wait for — and the animation was also
+// what made the cadence readable. A flat, unhurried step replaces both, so no
+// frame advances before it has been read.
+const REDUCED_MOTION_STEP_MS = 2_400;
+const SPEEDS = [1, 2, 0.5] as const;
 
-function stepDelayMs(currentBoardLen?: number, nextBoardLen?: number) {
+function stepDelayMs(reduced: boolean, currentBoardLen?: number, nextBoardLen?: number) {
+  if (reduced) return REDUCED_MOTION_STEP_MS;
   const cardsAdded = Math.max(0, (nextBoardLen ?? 0) - (currentBoardLen ?? 0));
   if (cardsAdded === 0) return ACTION_STEP_MS;
   return BOARD_CARD_STAGGER_MS * (cardsAdded - 1) + BOARD_CARD_REVEAL_MS + REVEAL_BUFFER_MS;
@@ -86,11 +93,14 @@ export function HandReplayer({
   const bigBlind = useMemo(() => deriveBigBlind(actions, hand.big_blind), [actions, hand.big_blind]);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(1);
+  const [speedIndex, setSpeedIndex] = useState(0);
+  const speed = SPEEDS[speedIndex];
+  const [reduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const [revealedWinnerCards, setRevealedWinnerCards] = useState<[string, string] | null>(null);
+  const shortcutsId = useId();
   const lastIndex = Math.max(0, replayActions.length - 1);
   const safeIndex = Math.min(index, lastIndex);
-  
+
   useEffect(() => {
     if (!playing || replayActions.length < 2) return undefined;
     const timer = window.setTimeout(() => {
@@ -101,10 +111,47 @@ export function HandReplayer({
         }
         return current + 1;
       });
-    }, stepDelayMs(replayActions[safeIndex]?.frame?.board?.length, replayActions[safeIndex + 1]?.frame?.board?.length) / speed);
+    }, stepDelayMs(reduced, replayActions[safeIndex]?.frame?.board?.length, replayActions[safeIndex + 1]?.frame?.board?.length) / speed);
     return () => window.clearTimeout(timer);
-  }, [playing, safeIndex, lastIndex, replayActions, speed]);
-  
+  }, [playing, safeIndex, lastIndex, replayActions, speed, reduced]);
+
+  // Space play/pause, ←/→ step, Home restart — the same transport the buttons
+  // expose, for a keyboard already inside the replayer. A focused form control
+  // (the scrubber, any text field) keeps its own keys, and a focused button
+  // keeps Space as its activation; OS auto-repeat is dropped like
+  // `useHoldRepeat` does, so a held arrow does not race through the hand.
+  function onTransportKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+    if (event.repeat) return;
+    const target = event.target as HTMLElement;
+    const tag = target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) return;
+    if (event.key === ' ' && tag === 'BUTTON') return;
+    if (event.key === ' ') {
+      event.preventDefault();
+      if (safeIndex === lastIndex) setIndex(0);
+      setPlaying(value => !value);
+      return;
+    }
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      setPlaying(false);
+      setIndex(value => Math.max(0, Math.min(value, lastIndex) - 1));
+      return;
+    }
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      setPlaying(false);
+      setIndex(value => Math.min(lastIndex, value + 1));
+      return;
+    }
+    if (event.key === 'Home') {
+      event.preventDefault();
+      setPlaying(false);
+      setIndex(0);
+    }
+  }
+
+
   if (!replayActions.length) return <section className="hand-replayer unavailable">
     <div>
       <h2>Replay da mão</h2>
@@ -158,7 +205,11 @@ export function HandReplayer({
   const replayPosition = (safeIndex + 1) / replayActions.length;
 
   return <section className={`hand-replayer${frame.stage === 'complete' ? ' is-complete' : ''}`}
-                  aria-label="Replay interativo da mão">
+                  aria-label="Replay interativo da mão" aria-describedby={shortcutsId}
+                  tabIndex={-1} onKeyDown={onTransportKeyDown}>
+    <p id={shortcutsId} className="sr-only">
+      Atalhos: barra de espaço reproduz ou pausa, seta esquerda e seta direita avançam uma ação, Home volta ao início.
+    </p>
     <header>
       <div className="replay-heading">
         <span className="replay-mark" aria-hidden="true"><Sparkles/></span>
@@ -239,9 +290,10 @@ export function HandReplayer({
                  setIndex(Number(event.target.value));
                }}/>
       </label>
-      <button type="button" className="replay-speed" onClick={() => setSpeed(value => value === 1 ? 2 : 1)}
-              aria-label={`Velocidade ${speed} vezes`}>
-        <span>Velocidade</span><b>{speed}×</b>
+      <button type="button" className="replay-speed"
+              onClick={() => setSpeedIndex(value => (value + 1) % SPEEDS.length)}
+              aria-label={`Velocidade ${speed.toLocaleString('pt-BR')} vezes, trocar`}>
+        <span>Velocidade</span><b>{speed.toLocaleString('pt-BR')}×</b>
       </button>
     </div>
     <span className="replay-progress" aria-hidden="true"

@@ -167,14 +167,22 @@ export function StakesGrid() {
           const isJoining = joiningKey === key;
           const actionLabel = active > 0 ? 'Entrar agora' : 'Criar mesa';
           const {min: buyInMin, max: buyInMax} = buyInRange(selectedStake.big_blind);
-          return <Button variant="ghost" key={key} className="room-card h-auto" disabled={joiningKey !== null}
-                         aria-busy={joiningKey === key}
+          // A join in flight blocks the other two options, but with
+          // `aria-disabled` rather than `disabled`: the card stays focusable and
+          // says why it cannot be used, instead of greying out in silence. The
+          // click guard lives in joinOrCreate, so activation is a no-op anyway.
+          const waiting = joiningKey !== null && !isJoining;
+          return <Button variant="ghost" key={key} className="room-card h-auto"
+                         loading={isJoining} aria-disabled={waiting || undefined}
+                         aria-label={`${displayName}, até ${maxSeats} jogadores — ${
+                           isJoining ? (active > 0 ? 'entrando…' : 'criando mesa…')
+                             : waiting ? 'aguarde, outra mesa está sendo aberta' : actionLabel}`}
                          style={{'--delay': `${i * 60}ms`} as React.CSSProperties}
                          onClick={() => joinOrCreate(selectedStake.small_blind, selectedStake.big_blind, maxSeats)}>
             {active > 0 && <span className="status-dot"/>}
             <div>
               <small>MESA SANDBOX</small>
-              <h3>{displayName}</h3>
+              <b className="room-card-name">{displayName}</b>
               <span>
                 <Users/>
                 {active > 0 ? `${active} mesa${active > 1 ? 's' : ''} ativa${active > 1 ? 's' : ''}` : 'Nenhuma mesa ativa'} · até {maxSeats} jogadores
@@ -184,8 +192,9 @@ export function StakesGrid() {
               </span>
               <span className="room-card-buy-in-hint">Buy-in é a quantidade de fichas que você leva para a mesa.</span>
               <strong className="room-card-action">
-                {isJoining ? (active > 0 ? 'Entrando…' : 'Criando mesa…') : actionLabel}
-                {!isJoining && <ArrowRight aria-hidden="true"/>}
+                {isJoining ? (active > 0 ? 'Entrando…' : 'Criando mesa…')
+                  : waiting ? 'Aguarde…' : actionLabel}
+                {!isJoining && !waiting && <ArrowRight aria-hidden="true"/>}
               </strong>
               {failedKey === key && (
                 <span className="room-card-error" role="alert">

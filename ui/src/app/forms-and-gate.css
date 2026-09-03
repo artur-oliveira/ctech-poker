@@ -4,6 +4,19 @@
     font-size: var(--font-size-body);
 }
 
+/* `components/ui/field.tsx` — one label/description/error stack for every
+   labelled control, so the association is a primitive rather than per-form
+   `aria-describedby` wiring. */
+.field {
+    display: grid;
+    gap: .5rem;
+}
+
+.field-description {
+    color: var(--muted);
+    font-size: var(--font-size-body);
+}
+
 .footer-content {
     display: flex;
     flex: 1;

@@ -1,5 +1,6 @@
 import type {ReactNode} from 'react';
 import {render, screen, waitFor} from '@testing-library/react';
+import {expectNoAxeViolations} from '@/test/axe';
 import userEvent from '@testing-library/user-event';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
@@ -149,4 +150,13 @@ describe('people page', () => {
     await userEvent.click(screen.getByRole('button', {name: /Tentar novamente/}));
     expect(await screen.findByText('Bia')).toBeInTheDocument();
   });
+
+  // Issue #60: an automated floor under the a11y intent in ui/CLAUDE.md — a new
+  // serious or critical axe violation on this route fails CI.
+  test('is axe-clean', async () => {
+    const {container} = renderPeople();
+    await screen.findByRole('heading', {level: 1});
+    await expectNoAxeViolations(container);
+  });
+
 });

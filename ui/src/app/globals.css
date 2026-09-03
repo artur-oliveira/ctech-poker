@@ -2253,8 +2253,12 @@ h1 em {
     background: var(--brand-08)
 }
 
-.room-card h3 {
+/* Plain text, not a heading: the card is a <button>, and an interactive
+   element must not contain the page's heading outline. */
+.room-card-name {
+    display: block;
     font-size: 24px;
+    font-weight: 700;
     margin: 9px 0
 }
 
@@ -9432,7 +9436,7 @@ h1 em {
     background: color-mix(in srgb, var(--surface-control) 76%, var(--gold) 24%)
 }
 
-.achievement-card:has(.achievement-star:hover, .achievement-star:focus-visible) {
+.achievement-card:has(.achievement-stars:hover, .achievement-stars:focus-visible) {
     border-color: var(--gold);
     transform: translateY(-2px)
 }
@@ -9528,20 +9532,24 @@ h1 em {
     color: var(--gold)
 }
 
-.achievement-star:hover,
-.achievement-star:focus-visible {
+/* The ladder is one focusable readout, not five buttons that do nothing on
+   activation, so hover and focus live on the group. */
+.achievement-stars:hover .achievement-star,
+.achievement-stars:focus-visible .achievement-star {
     transform: translateY(-2px)
 }
 
-.achievement-star:focus-visible {
+.achievement-stars:focus-visible {
     outline: 2px solid var(--focus-ring);
-    outline-offset: 2px
+    outline-offset: 2px;
+    border-radius: var(--rounded-xs)
 }
 
 .achievement-star-tooltip {
     position: absolute;
     bottom: calc(100% + 8px);
-    left: min(calc(var(--tier-index, 0) * 20%), calc(100% - 76px));
+    left: 0;
+    opacity: 0;
     padding: 4px 8px;
     border-radius: var(--rounded-xs);
     background: var(--ink);
@@ -9549,7 +9557,12 @@ h1 em {
     font: 600 var(--font-size-compact) var(--font-mono);
     white-space: nowrap;
     pointer-events: none;
-    animation: rise 140ms var(--ease-out-quart) both
+    transition: opacity 140ms var(--ease-out-quart)
+}
+
+.achievement-stars:hover .achievement-star-tooltip,
+.achievement-stars:focus-visible .achievement-star-tooltip {
+    opacity: 1
 }
 
 .achievement-count {
@@ -9794,9 +9807,9 @@ h1 em {
         transition-duration: .01ms
     }
 
-    .achievement-card:has(.achievement-star:hover, .achievement-star:focus-visible),
-    .achievement-star:hover,
-    .achievement-star:focus-visible {
+    .achievement-card:has(.achievement-stars:hover, .achievement-stars:focus-visible),
+    .achievement-stars:hover .achievement-star,
+    .achievement-stars:focus-visible .achievement-star {
         transform: none
     }
 }

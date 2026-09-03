@@ -31,14 +31,14 @@ export function Chat({items, onSendAction, connected = true, viewerId, seats = [
   const asideRef = useRef<HTMLElement>(null);
   const latest = items.at(-1);
   const nameOf = (id: string) => playerName(id, viewerId, seats.find(seat => seat.player_id === id)?.name);
+  // Opening the drawer is the acknowledgement boundary, but `open` is owned by
+  // the parent — there is no local close event to hook. So the count is
+  // adjusted during render (React's documented answer for "state that follows
+  // a prop") rather than in an effect: the extra render is discarded before
+  // the browser paints, where an effect would flash a stale unread badge.
   const [seenCount, setSeenCount] = useState(items.length);
+  if (open && seenCount !== items.length) setSeenCount(items.length);
   const unread = open ? 0 : Math.max(0, items.length - seenCount);
-
-  useEffect(() => {
-    // Opening the drawer is the explicit acknowledgement boundary.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (open) setSeenCount(items.length);
-  }, [open, items.length]);
 
   useEffect(() => {
     if (open) inputRef.current?.focus();

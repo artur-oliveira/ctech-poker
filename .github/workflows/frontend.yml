@@ -13,7 +13,63 @@ permissions:
   contents: read
 
 jobs:
+  # The a11y, bundle-size and Lighthouse gates for the SPA (Issue #60). The
+  # reusable deploy workflow below runs lint/tsc/vitest and the production
+  # Turbopack build; this job adds what it does not cover, and blocks it.
+  #
+  # The axe assertions themselves live in the vitest suite (src/test/axe.ts,
+  # imported by the route tests) so they run with the tests developers already
+  # run locally — CI does not need a separate axe step for them.
+  quality:
+    name: A11y & budgets
+    runs-on: ubuntu-26.04-arm
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Includes the jsdom axe assertions on the six main routes and the
+      # recovery components; a new serious/critical violation fails here.
+      - name: Test (incl. axe assertions)
+        run: npx vitest run
+
+      # Deliberately the webpack builder: it is what bundle-budget.json was
+      # pinned with, and Turbopack splits chunks differently, so mixing the two
+      # would compare unlike numbers. The deploy job still ships the Turbopack
+      # build — this one exists only to produce out/ for the two gates below.
+      - name: Build static export for measurement
+        run: npx next build --webpack
+
+      # Per-route first-load JS against the pinned budget, plus the proof that
+      # the dev mock runtime is not on any route's critical path.
+      - name: Bundle budget
+        run: npm run bundle:check
+
+      # LHCI serves out/ itself, so there is no server and no auth to arrange.
+      # Category scores are warnings (runner variance); the resource budget in
+      # lighthouserc.json is the hard assertion.
+      - name: Lighthouse CI
+        run: npx --yes @lhci/cli@0.15.x autorun
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-report
+          path: ui/.lighthouseci
+          if-no-files-found: ignore
+
   deploy:
+    needs: quality
     uses: artur-oliveira/ctech-cdk/.github/workflows/frontend-cloudflare.yml@main
     secrets: inherit
     with:

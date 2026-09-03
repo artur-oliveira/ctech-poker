@@ -1,4 +1,5 @@
 import {act, fireEvent, render, screen} from '@testing-library/react';
+import {expectNoAxeViolations} from '@/test/axe';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import type {HandItem} from '@/lib/api/player';
 import type {Page} from '@/lib/api/client';
@@ -186,6 +187,14 @@ describe('hands list page', () => {
     expect(container.querySelectorAll('.hand-row').length).toBeGreaterThan(0);
     expect(container.querySelectorAll('.hand-row').length).toBeLessThan(20);
     expect(container.querySelectorAll('[aria-setsize="500"]').length).toBeGreaterThan(0);
+  });
+
+
+  // Issue #60: an automated floor under the a11y intent in ui/CLAUDE.md — a new
+  // serious or critical axe violation on this route fails CI.
+  test('is axe-clean', async () => {
+    const {container} = render(<HandsHistory/>);
+    await expectNoAxeViolations(container);
   });
 
 });

@@ -10,6 +10,7 @@ api/archiver
 out/
 .next/
 coverage/
+.lighthouseci/
 api/dist/
 .env
 .env.local

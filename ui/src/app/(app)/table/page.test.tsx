@@ -1,4 +1,5 @@
 import {act, fireEvent, render, screen, waitFor} from '@testing-library/react';
+import {expectNoAxeViolations} from '@/test/axe';
 import userEvent from '@testing-library/user-event';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import type {TableSnapshot} from '@/lib/api/table';
@@ -869,6 +870,14 @@ describe('table page integration', () => {
     await userEvent.click(screen.getByRole('button', {name: 'Ações para Bia'}));
     await userEvent.click(await screen.findByRole('button', {name: 'Editar nota privada'}));
     expect(mocks.noteProps?.opponent).toEqual({player_id: 'opponent', name: 'Bia'});
+  });
+
+
+  // Issue #60: an automated floor under the a11y intent in ui/CLAUDE.md — a new
+  // serious or critical axe violation on this route fails CI.
+  test('is axe-clean', async () => {
+    const {container} = render(<TablePage/>);
+    await expectNoAxeViolations(container);
   });
 
 });

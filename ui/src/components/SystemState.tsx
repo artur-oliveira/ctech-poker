@@ -9,11 +9,13 @@ type SystemStateProps = {
   description: string;
   detail: string;
   onRetryAction?: () => void;
+  /** Drives the retry button's pending affordance while the check is running. */
+  retryPending?: boolean;
 };
 
 const icons = {404: Club, 500: ShieldAlert, 503: Wrench};
 
-export function SystemState({code, title, description, detail, onRetryAction}: SystemStateProps) {
+export function SystemState({code, title, description, detail, onRetryAction, retryPending}: SystemStateProps) {
   const Icon = icons[code];
   return <main className="system-state">
     <nav>
@@ -28,9 +30,14 @@ export function SystemState({code, title, description, detail, onRetryAction}: S
         <small>{code === '404' ? 'FORA DA MESA' : code === '500' ? 'A MÃO FOI INTERROMPIDA' : 'INTERVALO TÉCNICO'}</small>
         <h1>{title}</h1>
         <p>{description}</p>
-        <span>{detail}</span>
+        {/* The detail line is the only part of this screen that changes while
+            it is open (a retry's outcome, the countdown to the next one), so
+            it is the live region. */}
+        <span role="status" aria-live="polite">{detail}</span>
         <div className="system-state-actions">
-          {onRetryAction && <Button size="lg" onClick={onRetryAction}><RefreshCw/> Tentar novamente</Button>}
+          {onRetryAction && <Button size="lg" loading={retryPending} onClick={onRetryAction}>
+            {!retryPending && <RefreshCw/>} {retryPending ? 'Verificando…' : 'Tentar novamente'}
+          </Button>}
           <Button size="lg" variant={onRetryAction ? 'outline' : 'default'} render={<Link href="/"/>}>
             <House/> Ir para o início
           </Button>

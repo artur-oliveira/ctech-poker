@@ -1,0 +1,31 @@
+{
+  "_comment": "Per-route first-load JS in bytes, pinned by `npm run bundle:pin` from the static export in out/. Measured with `next build --webpack`, which is also what CI measures with \u2014 the deploy build uses Turbopack and splits chunks differently, so the two sets of numbers are not comparable. Re-pin deliberately, in the same commit as the change that moved a number.",
+  "tolerance": 0.08,
+  "routes": {
+    "/": 785425,
+    "/_not-found": 740827,
+    "/404": 740827,
+    "/achievements": 1084716,
+    "/callback": 851733,
+    "/guide": 988802,
+    "/guide/achievements": 991868,
+    "/guide/basics": 994417,
+    "/guide/community": 998969,
+    "/guide/hands": 995106,
+    "/guide/profile": 993171,
+    "/guide/store": 994567,
+    "/guide/table": 1004818,
+    "/hands": 1112863,
+    "/hands/history": 1051025,
+    "/hands/replay": 949252,
+    "/leaderboard": 1104084,
+    "/lobby": 1109768,
+    "/people": 1101058,
+    "/poker-rules": 990641,
+    "/profile": 1092537,
+    "/share": 931062,
+    "/store": 1142752,
+    "/table": 1222188,
+    "/unavailable": 750582
+  }
+}
