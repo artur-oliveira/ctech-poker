@@ -203,11 +203,31 @@ func (s *Service) Get(ctx context.Context, userID string) (*PlayerProfile, error
 	return s.store.Get(ctx, userID)
 }
 
+// GetMany resolves a set of player ids to their canonical profiles — the one
+// place every consumer of a denormalized display name/avatar re-reads the
+// truth at render time instead of trusting its own stale copy (issue #64).
+// Chunks at MaxBatchProfileIDs so callers never have to: the store's
+// BatchGetItem has a hard key ceiling, and a single leaderboard page or hand-
+// history page can carry more distinct ids than one hand ever does.
 func (s *Service) GetMany(ctx context.Context, userIDs []string) (map[string]PlayerProfile, error) {
 	if store, ok := s.store.(interface {
 		GetMany(context.Context, []string) (map[string]PlayerProfile, error)
 	}); ok {
-		return store.GetMany(ctx, userIDs)
+		if len(userIDs) <= MaxBatchProfileIDs {
+			return store.GetMany(ctx, userIDs)
+		}
+		result := make(map[string]PlayerProfile, len(userIDs))
+		for start := 0; start < len(userIDs); start += MaxBatchProfileIDs {
+			end := min(start+MaxBatchProfileIDs, len(userIDs))
+			batch, err := store.GetMany(ctx, userIDs[start:end])
+			if err != nil {
+				return nil, err
+			}
+			for id, profile := range batch {
+				result[id] = profile
+			}
+		}
+		return result, nil
 	}
 	result := make(map[string]PlayerProfile, len(userIDs))
 	for _, userID := range userIDs {

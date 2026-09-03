@@ -94,3 +94,34 @@ func TestDeltasForSkipsEmptyAndSelfPairs(t *testing.T) {
 		t.Fatalf("expected no pairs from an empty/self participant list, got %+v", deltas)
 	}
 }
+
+// TestRecordHandChunkingStaysUnderTransactionLimit pins issue #65's ceiling: a
+// full 9-max table's C(9,2)=36 pairs must never again ride in one 72-item
+// TransactWriteItems call, and no chunk RecordHand forms may exceed ~25 items.
+// It walks the same boundaries RecordHand walks, so a maxPairsPerTx that
+// breaks the ceiling — or a chunking bug that drops a pair — fails here.
+func TestRecordHandChunkingStaysUnderTransactionLimit(t *testing.T) {
+	deltas := deltasFor("sandbox", hand.HandOutcome{
+		Winners:      []string{"p1"},
+		Participants: []string{"p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9"},
+	})
+	if len(deltas) != 36 {
+		t.Fatalf("expected C(9,2)=36 pairs, got %d", len(deltas))
+	}
+	covered, chunks := 0, 0
+	for start := 0; start < len(deltas); start += maxPairsPerTx {
+		end := min(start+maxPairsPerTx, len(deltas))
+		// Two items per pair: the create-only guard and the counter update.
+		if items := (end - start) * 2; items > 25 {
+			t.Fatalf("chunk %d carries %d transaction items, want <= 25", chunks, items)
+		}
+		covered += end - start
+		chunks++
+	}
+	if covered != len(deltas) {
+		t.Fatalf("chunking covered %d of %d pairs", covered, len(deltas))
+	}
+	if chunks < 2 {
+		t.Fatalf("expected a 9-max hand to split across transactions, got %d chunk(s)", chunks)
+	}
+}

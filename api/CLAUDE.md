@@ -327,9 +327,33 @@ catalog.
   `player.Service.GetMany` (chunked at `player.MaxBatchProfileIDs` per call) before the response is sent, so a hand
   recorded before a later `ClearAvatar` (or an avatar-report block) never serves a URL pointing at a deleted object.
   `player.AvatarURL` already treats a blocked/missing avatar as absent, so a cleared or since-deleted opponent profile
-  now resolves to `""` instead of a stale, 404ing link — same as the player's own profile response. This is the
-  read-time-resolution approach Issue #64 proposes for the same struct's stale `Name` (still open, not implemented),
-  applied narrowly here to `AvatarURL` only; `Name` is untouched by this change.
+  now resolves to `""` instead of a stale, 404ing link — same as the player's own profile response. The helper is now
+  called `resolveOpponentProfiles` and resolves `Name` the same way — see the #64 entry below.
+- **Issue #64 fixed by read-time resolution — no backfill, nothing fans out on rename.** Denormalized display names are
+  still written (they are the fallback when a profile no longer resolves) but no consumer serves its own copy any more:
+  `player.Service.GetMany` is the single resolution point (it now chunks at `player.MaxBatchProfileIDs` internally, so
+  no caller has to), `resolveOpponentProfiles` (`internal/api/v1/player.go`) overwrites `OpponentSummary.Name` +
+  `AvatarURL` on every hand-history read, and `leaderboardHandlers.resolveNames` (`internal/api/v1/leaderboard.go`)
+  overwrites `Entry.PlayerName` on `GET /leaderboard` and `/leaderboard/me` — one `BatchGetItem` per rendered page.
+  Existing rows are therefore correct on their next read with no migration job. Live seats are the one write-side push:
+  `POST /players/me` with a new `name` calls `tableIdentityPusher.push` (`internal/api/v1/tableidentity.go`), which
+  finds the player's current table from `presence` and dispatches `SetIdentityCmd` so opponents see the rename without
+  a reconnect. `identityCmdFor` in that file is now the only place a `SetIdentityCmd` payload is assembled (the WS
+  gateway uses it too) — `hand.Table.SetPlayerIdentityForActor` replaces name/avatar/badge as one unit, so pushing a
+  single field would blank the other two. Public hand shares already anonymized `ReplaySeat.Name`; that half of the
+  issue needed no change.
+- **Issue #72 fixed:** `achievements.Store.StampTierUnlock` stamps `unlocked_at` on a progress row when
+  `Service.RecordHand` reports a `TierUnlock`, surfaced as `unlocked_at` on `PlayerAchievementProgress` and on
+  `AchievementState` (`/players/me/achievements` and the summary endpoint). Legacy rows carry no stamp and report an
+  empty string — a still-locked or pre-change row, never an error. A replayed hand hook stamps nothing: it is stopped by
+  `ClaimHandCounters`, and past that a counter that crosses no threshold reports no unlock. A stamp failure is logged,
+  not returned — the counters are already committed and must not be retried.
+- **Issue #65 fixed:** `matchup.Store.RecordHand` no longer writes one 72-item `TransactWriteItems` call per hand. It
+  chunks pairs at `maxPairsPerTx` (12 pairs = 24 items), so a 9-max table's C(9,2)=36 pairs commit as 3 bounded
+  transactions. The atomicity that actually mattered is per-pair, not per-hand: each pair's create-only guard rides in
+  the same transaction as that pair's increment, so no pair is ever double-counted and a partially-applied hand is
+  safely completed by a retry (landed chunks fail their guards and are skipped). Moving matchup off the
+  hand-completion critical path was #61's detached gamification pipeline, already done.
 - **Issue #70 fixed: a session's `buyin_amount` is now updated with an atomic conditional ADD, not a
   read-modify-write.** `buyin.Service.buyIn`'s rebuy path used to `FindOpenSession`, add `amount` to the decoded
   `BuyinAmount` in Go, and `PutItem` the whole item back — two concurrent rebuys for the same player (a client
