@@ -20,7 +20,7 @@ describe('externalizeInlineScripts', () => {
     const srcs = [...out.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
     expect(srcs[0]).toMatch(new RegExp(`^/${INLINE_DIR}/[0-9a-f]{32}\\.js$`));
     expect(srcs[1]).toBe('/_next/static/chunks/a.js');
-    expect(out).not.toMatch(/<script>/);
+    expect(out).not.toMatch(/<script>/i);
     // No async/defer: a bare `src` keeps the two pushes ordered relative to each other.
     expect(out).not.toMatch(/inline\/[0-9a-f]{32}\.js" (async|defer)/);
   });
