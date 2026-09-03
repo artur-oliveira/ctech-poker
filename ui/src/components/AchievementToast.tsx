@@ -2,6 +2,7 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {Star} from 'lucide-react';
 import {ACHIEVEMENT_LABELS} from "@/lib/utils";
+import {rememberAchievementUnlock} from '@/lib/achievementRecency';
 
 
 const HOLD_MS = 4200;
@@ -39,6 +40,9 @@ export function AchievementToast({unlock, blocked = false}: {
   useEffect(() => {
     if (!shown) return () => {
     };
+    // #119: the toast is gone in 4.2s, so it hands the unlock to the
+    // achievements page, which celebrates it once when the player gets there.
+    rememberAchievementUnlock(shown.key);
     const startLeave = setTimeout(() => setLeaving(true), HOLD_MS);
     const clear = setTimeout(() => setShown(null), HOLD_MS + EXIT_MS);
     return () => {

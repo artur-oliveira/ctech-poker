@@ -133,9 +133,11 @@ export interface HandItem {
   // handEndedAtMs below. Do not add a per-call-site unit heuristic; a
   // `< 1e12 ? *1000 : ended_at` guess is exactly the bug #74 removed.
   ended_at: number;
-  // Big blind in force for this hand. Added by backend issue #75; absent on
-  // hands logged before it, where HandReplayer derives the level from the
-  // `post_big_blind` action instead.
+  // Blind level in force for this hand, not the room's current one. Added by
+  // backend issue #75; both absent on hands logged before it, where
+  // HandReplayer derives the level from the `post_big_blind` action instead.
+  // Zero/absent means unknown — never substitute a default.
+  small_blind?: number;
   big_blind?: number;
   board?: string[];
   board_two?: string[];

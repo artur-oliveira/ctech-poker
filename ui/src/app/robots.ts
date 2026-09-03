@@ -9,11 +9,20 @@ export const PRIVATE_ROUTES = [
   '/leaderboard',
   '/lobby',
   '/people',
-  '/share',
   '/store',
   '/table',
   '/unavailable'
 ];
+
+/**
+ * `/share` is deliberately NOT in PRIVATE_ROUTES (#118). A shared-hand link is
+ * meant to be pasted into WhatsApp, Discord, Slack or X, and every one of those
+ * unfurlers honours robots.txt — disallowing the path is exactly what made a
+ * pasted link render as a bare domain with no card. The route keeps its
+ * `robots: {index: false}` meta tag (see `(app)/share/layout.tsx`) and stays out
+ * of the sitemap, so it is crawlable-but-not-indexable: the bot can read the OG
+ * tags, search engines still won't list it.
+ */
 
 // Static export: this route is a build-time file, not a request handler.
 export const dynamic = 'force-static';

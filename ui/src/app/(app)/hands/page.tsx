@@ -1,13 +1,14 @@
 'use client';
 import React, {memo, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import Link from 'next/link';
-import {useInfiniteQuery} from '@tanstack/react-query';
+import {useInfiniteQuery, useQuery} from '@tanstack/react-query';
 import {measureElement, useWindowVirtualizer} from '@tanstack/react-virtual';
 import {
   AlertCircle,
   ArrowRight,
   ChevronRight,
   History,
+  Infinity as InfinityIcon,
   LockKeyhole,
   ShieldCheck
 } from 'lucide-react';
@@ -23,6 +24,13 @@ import {HAND_CATEGORY_LABELS} from '@/lib/utils';
 import {Button} from '@/components/ui/button';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
+import {FilterGroup} from '@/components/FilterGroup';
+import {MyHandSharesPanel} from '@/components/hands/MyHandSharesPanel';
+import {myRank} from '@/lib/api/gamification';
+import {
+  ALL_TABLES, filterHands, groupHandsByDay, handTables, type HandsFilter, type HandsRow, loadedTotals,
+  NO_FILTER, type OutcomeFilter
+} from '@/lib/handsHistory';
 
 function formatDate(endedAtMs: number) {
   return new Date(handEndedAtMs(endedAtMs)).toLocaleString('pt-BR', {
@@ -79,6 +87,11 @@ const HandRow = memo(function HandRow({hand, mode}: { hand: HandItem; mode: Wall
     <div className="hand-row-bottom">
       <span>{formatDate(hand.ended_at)}</span>
       <span className="hand-row-table" title={hand.table_id}>Mesa {hand.table_id}</span>
+      {/* Blind level of this hand (#75). 0/absent means the record predates the
+          field: hide the marker rather than guess a stake. */}
+      {Boolean(hand.big_blind) && <span className="hand-row-blinds">
+        {(hand.small_blind ?? 0).toLocaleString('pt-BR')}/{hand.big_blind!.toLocaleString('pt-BR')}
+      </span>}
       {hand.server_seed
         ? <span className="hand-row-seed" title={hand.server_seed}><ShieldCheck aria-hidden="true"/> seed {truncateSeed(hand.server_seed)}</span>
         : <span className="hand-row-seed is-pending"><LockKeyhole aria-hidden="true"/> seed não revelada</span>}
@@ -87,7 +100,7 @@ const HandRow = memo(function HandRow({hand, mode}: { hand: HandItem; mode: Wall
   </Link>;
 });
 
-function VirtualHandsList({hands, mode}: { hands: HandItem[]; mode: WalletMode }) {
+function VirtualHandsList({rows, mode}: { rows: HandsRow[]; mode: WalletMode }) {
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
 
@@ -102,36 +115,52 @@ function VirtualHandsList({hands, mode}: { hands: HandItem[]; mode: WalletMode }
   }, []);
 
   const virtualizer = useWindowVirtualizer({
-    count: hands.length,
-    estimateSize: () => 184,
+    count: rows.length,
+    estimateSize: index => rows[index].kind === 'day' ? 52 : 184,
     measureElement: (element, entry, instance) => measureElement(element, entry, instance) || 184,
     overscan: 3,
     scrollMargin
   });
 
-  return <div
-    ref={listRef}
-    className="hands-list is-virtualized"
-    role="list"
-    aria-label={`${hands.length} mãos carregadas`}
-    style={{height: virtualizer.getTotalSize()}}
-  >
-    {virtualizer.getVirtualItems().map(virtualHand => {
-      const hand = hands[virtualHand.index];
-      return <div
-        key={hand.hand_id}
-        ref={virtualizer.measureElement}
-        className="hand-row-virtual"
-        data-index={virtualHand.index}
-        role="listitem"
-        aria-posinset={virtualHand.index + 1}
-        aria-setsize={hands.length}
-        style={{transform: `translateY(${virtualHand.start - scrollMargin}px)`}}
-      >
-        <HandRow hand={hand} mode={mode}/>
-      </div>;
-    })}
-  </div>;
+  const virtualRows = virtualizer.getVirtualItems();
+  // The pinned bar names whichever day is at the top of the viewport. Sticky
+  // positioning cannot live on the rows themselves — each one is placed with a
+  // transform, which is exactly what `position: sticky` cannot escape — so one
+  // opaque bar outside the transformed rows does the pinning, and the inline
+  // day headings scroll underneath it.
+  const firstRow = rows[virtualRows[0]?.index ?? 0];
+  const pinnedDay = firstRow?.kind === 'day' ? firstRow.label : firstRow?.day;
+
+  // The `role="list"` the flat version carried is gone on purpose: the rows are
+  // now interleaved with real `h3` day headings, and a list whose children are
+  // half headings is a worse tree than links under headings. The named section
+  // keeps the count the old `aria-label` announced.
+  const handCount = rows.reduce((total, row) => total + (row.kind === 'hand' ? 1 : 0), 0);
+
+  return <section aria-label={`${handCount} ${handCount === 1 ? 'mão' : 'mãos'} nesta lista, agrupadas por dia`}>
+    {pinnedDay && <div className="hands-day-pinned" aria-hidden="true">{pinnedDay}</div>}
+    <div
+      ref={listRef}
+      className="hands-list is-virtualized"
+      style={{height: virtualizer.getTotalSize()}}
+    >
+      {virtualRows.map(virtualRow => {
+        const row = rows[virtualRow.index];
+        return <div
+          key={row.key}
+          ref={virtualizer.measureElement}
+          className={`hand-row-virtual${row.kind === 'day' ? ' is-day' : ''}`}
+          data-index={virtualRow.index}
+          style={{transform: `translateY(${virtualRow.start - scrollMargin}px)`}}
+        >
+          {row.kind === 'day'
+            ? <h3 className="hands-day-header">{row.label}
+              <small>{row.count} {row.count === 1 ? 'mão' : 'mãos'}</small></h3>
+            : <HandRow hand={row.hand} mode={mode}/>}
+        </div>;
+      })}
+    </div>
+  </section>;
 }
 
 export default function HandsHistory() {
@@ -148,20 +177,16 @@ export default function HandsHistory() {
     [history.data]
   );
 
-  const stats = useMemo(() => {
-    if (!hands.length) return null;
-    let netSum = 0;
-    let wins = 0;
-    let ties = 0;
-    let losses = 0;
-    for (const hand of hands) {
-      netSum += hand.net_change;
-      if (hand.outcome === 'won') wins++;
-      else if (hand.outcome === 'tied') ties++;
-      else losses++;
-    }
-    return {total: hands.length, netSum, wins, ties, losses, winRate: Math.round((wins / hands.length) * 100)};
-  }, [hands]);
+  const [filter, setFilter] = useState<HandsFilter>(NO_FILTER);
+  const visible = useMemo(() => filterHands(hands, filter), [hands, filter]);
+  const rows = useMemo(() => groupHandsByDay(visible), [visible]);
+  const tables = useMemo(() => handTables(hands), [hands]);
+  const stats = useMemo(() => loadedTotals(visible), [visible]);
+
+  // Lifetime W/L comes from the leaderboard's own counters, the only totals
+  // that describe every hand ever played instead of the pages loaded here.
+  // `ranked: false` means "no stats row yet", not an error.
+  const lifetime = useQuery({queryKey: ['leaderboard', 'me', mode], queryFn: () => myRank(mode)});
 
   const fetchNextPage = history.fetchNextPage;
 
@@ -188,23 +213,63 @@ export default function HandsHistory() {
       <CurrencyModeTabs mode={mode} onChangeAction={setMode}/>
 
       {history.isLoading ? <StatCardsSkeleton label="Somando as mãos carregadas…" count={3}/> : stats && (
-        <div className="hands-stats-bar" aria-label="Resumo das mãos carregadas">
-          <div className="stat-card">
-            <span className="stat-label">Mãos carregadas</span>
-            <strong className="stat-value">{stats.total}</strong>
+        <div className="hands-totals">
+          <div className="hands-stats-bar" aria-label="Resumo das mãos nesta lista">
+            <div className="stat-card">
+              <span className="stat-label">Mãos nesta lista</span>
+              <strong className="stat-value">{stats.total}</strong>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">Saldo nesta lista</span>
+              <strong className={`stat-value ${stats.netSum > 0 ? 'gain' : stats.netSum < 0 ? 'loss' : ''}`}>
+                {stats.netSum > 0 ? '+' : ''}{stats.netSum.toLocaleString('pt-BR')}
+              </strong>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">Vitórias nesta lista</span>
+              <strong className="stat-value">{stats.winRate}% <small>({stats.wins}V · {stats.ties}E · {stats.losses}D)</small></strong>
+            </div>
           </div>
-          <div className="stat-card">
-            <span className="stat-label">Saldo carregado</span>
-            <strong className={`stat-value ${stats.netSum > 0 ? 'gain' : stats.netSum < 0 ? 'loss' : ''}`}>
-              {stats.netSum > 0 ? '+' : ''}{stats.netSum.toLocaleString('pt-BR')}
-            </strong>
-          </div>
-          <div className="stat-card">
-            <span className="stat-label">Vitórias carregadas</span>
-            <strong className="stat-value">{stats.winRate}% <small>({stats.wins}V · {stats.ties}E · {stats.losses}D)</small></strong>
-          </div>
+          {/* The bar above only ever describes the pages already loaded (and
+              the active filter). This strip is the honest lifetime number, so
+              a heavy player is not left reading "carregadas" as their record. */}
+          {lifetime.data?.ranked && lifetime.data.entry && <p className="hands-lifetime" role="note">
+            <InfinityIcon aria-hidden="true"/>
+            <span>Desde o início: <b>{lifetime.data.entry.hands_played.toLocaleString('pt-BR')} mãos</b>,
+              {' '}<b>{lifetime.data.entry.hands_won.toLocaleString('pt-BR')} vitórias</b>
+              {' '}({Math.round(lifetime.data.entry.win_rate * 100)}%)</span>
+          </p>}
         </div>
       )}
+
+      {!history.isLoading && !history.isError && hands.length > 0 && <div className="hands-filters">
+        <FilterGroup
+          label="Filtro por resultado"
+          value={filter.outcome}
+          options={[
+            {value: 'all', label: `Todas (${hands.length})`},
+            {value: 'won', label: 'Só vitórias'},
+            {value: 'lost', label: 'Só derrotas'},
+            {value: 'tied', label: 'Só empates'}
+          ] as const}
+          onChangeAction={(outcome: OutcomeFilter) => setFilter(current => ({...current, outcome}))}
+        />
+        {tables.length > 1 && <FilterGroup
+          label="Filtro por mesa"
+          value={filter.tableId}
+          options={[
+            {value: ALL_TABLES, label: 'Todas as mesas'},
+            ...tables.map(table => ({
+              value: table.tableId,
+              // Full id, truncated by CSS: the last six characters of a table
+              // id name nothing a player recognizes.
+              label: `Mesa ${table.tableId} (${table.count})`,
+              title: table.tableId
+            }))
+          ]}
+          onChangeAction={(tableId: string) => setFilter(current => ({...current, tableId}))}
+        />}
+      </div>}
 
       {history.isLoading ?
         <SkeletonList label="Reunindo cartas, resultados e provas…" count={4} height={168} className="hands-list"/> :
@@ -231,11 +296,17 @@ export default function HandsHistory() {
                 Encontrar uma mesa <ArrowRight aria-hidden="true"/>
               </Button>
             </div> :
-            (
-              <VirtualHandsList hands={hands} mode={mode}/>
+            !visible.length ? <div className="lobby-empty hands-state">
+              <div>
+                <strong>Nenhuma mão com esse filtro</strong>
+                <p>As {hands.length} mãos carregadas continuam aqui. Solte o filtro para vê-las de novo.</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setFilter(NO_FILTER)}>Limpar filtros</Button>
+            </div> : (
+              <VirtualHandsList rows={rows} mode={mode}/>
             )}
 
-      {history.hasNextPage && !history.isLoading && !history.isError && (
+      {history.hasNextPage && !history.isLoading && !history.isError && visible.length > 0 && (
         <div className="hands-more" ref={sentinel}>
           <Button variant="outline" size="sm" disabled={history.isFetchingNextPage}
                   onClick={() => void history.fetchNextPage()}>
@@ -245,6 +316,8 @@ export default function HandsHistory() {
                 role="status" aria-label={history.isFetchingNextPage ? 'Carregando mais mãos' : ''}/>
         </div>
       )}
+
+      <MyHandSharesPanel/>
     </AppPageBody>
   </AppPage></TermsGate>;
 }

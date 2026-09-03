@@ -114,6 +114,17 @@ describe('useLobbyRealtime', () => {
     expect(state.notify).toHaveBeenCalledWith('Reação premium liberada!', 'info');
   });
 
+  // #144: the cosmetic dialog reads its status from the ['cosmetic-purchase']
+  // root, so this frame has to invalidate it — that is what resolves an open
+  // purchase immediately instead of on the dialog's 4s fallback poll.
+  test('resolves an open cosmetic purchase on cosmetic_purchase_update', () => {
+    renderHook(() => useLobbyRealtime());
+    act(() => state.options?.onMessage({type: 'cosmetic_purchase_update', purchase_id: 'prdp-cos-1', code: 'confirmed'}));
+    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['cosmetic-purchase']});
+    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['wallet']});
+    expect(state.notify).toHaveBeenCalledWith('Item cosmético liberado!', 'info');
+  });
+
   test('renews the session instead of looping on an unauthorized frame', () => {
     renderHook(() => useLobbyRealtime());
     act(() => state.options?.onMessage({type: 'error', code: 'unauthorized'}));
@@ -149,6 +160,10 @@ describe('useLobbyRealtime', () => {
     ['reaction_purchase_update', 'expired', 'Compra da reação expirou sem pagamento.'],
     ['reaction_purchase_update', 'failed', 'Falha na compra da reação.'],
     ['reaction_purchase_update', 'brand_new', 'Atualização na compra da sua reação.'],
+    ['cosmetic_purchase_update', 'refunded', 'Compra do item cosmético estornada.'],
+    ['cosmetic_purchase_update', 'expired', 'Compra do item cosmético expirou sem pagamento.'],
+    ['cosmetic_purchase_update', 'failed', 'Falha na compra do item cosmético.'],
+    ['cosmetic_purchase_update', undefined, 'Atualização na compra do seu item cosmético.'],
   ])('translates a %s with code %s', (type, code, message) => {
     renderHook(() => useLobbyRealtime());
     act(() => state.options?.onMessage({type, code}));

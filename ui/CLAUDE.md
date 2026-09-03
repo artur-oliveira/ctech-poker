@@ -104,6 +104,12 @@ off by default — do not build UI that assumes real money is on.
   behaviour per aside, and keep the felt's band layout intact (wordmark / dealer call / board +
   street rail; the felt's lower band belongs to the bottom seats' bet chips). See
   `docs/2026-09-01-table-felt-and-aside-polish.md`.
+- **A shared hand has two records, on purpose.** `GET /players/me/hand-shares` (via
+  `listMyHandShares`, key `HAND_SHARES_QUERY_KEY`) is the authority on which links are live and
+  powers `MyHandSharesPanel`'s Revogar; `lib/handShareStorage.ts` is a per-browser map of
+  hand → token, and the only thing that can answer "I already shared *this* hand" in
+  `ShareHandDialog`, because the list endpoint does not carry the source hand. Revoking must clear
+  both. See `docs/2026-09-02-hand-shares-history-filters-achievement-recency.md`.
 - **Social state is server state.** Every social read is a `['social', …]` query key
   (`SOCIAL_KEYS` in `lib/social.ts`); mutations go through `lib/hooks/useSocialActions.ts`, which
   invalidates that root instead of patching a mirrored relationship locally. Chat/reaction

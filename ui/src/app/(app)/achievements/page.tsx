@@ -1,20 +1,23 @@
 'use client';
-import {type CSSProperties, useCallback, useMemo, useState} from 'react';
+import {type CSSProperties, useCallback, useEffect, useMemo, useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {Sparkles, Star, Trophy} from 'lucide-react';
 import {AchievementCard} from '@/components/achievements/AchievementCard';
+import {RecentUnlocksRail} from '@/components/achievements/RecentUnlocksRail';
 import {Button} from '@/components/ui/button';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {FilterGroup} from '@/components/FilterGroup';
 import {SkeletonList, StatCardsSkeleton} from '@/components/ui/skeleton';
 import {achievementProgress, getAchievementCatalog} from '@/lib/api/achievements';
 import {achievementLabel, achievementValueFormat, achievementWalletMode} from '@/lib/achievements';
+import {byRecencyFirst, recentUnlocks, takeAchievementUnlock} from '@/lib/achievementRecency';
 import type {WalletMode} from '@/lib/api/player';
 import {useOptionalSession} from "@/lib/auth/session";
 import {useAchievementsSummary} from '@/lib/hooks/useAchievementsSummary';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 
 type FilterTab = 'all' | 'unlocked' | 'in_progress' | 'completed';
+type SortTab = 'catalog' | 'recent';
 
 export default function Achievements() {
   const {authed, checking} = useOptionalSession();
@@ -22,11 +25,29 @@ export default function Achievements() {
   const catalog = useQuery({queryKey: ['achievements', 'catalog'], queryFn: getAchievementCatalog});
   const mine = useAchievementsSummary(mode, authed);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const [sort, setSort] = useState<SortTab>('catalog');
+
+  // #119: the table's AchievementToast parks the key it just showed in
+  // sessionStorage; reading it here clears it, so the celebration fires exactly
+  // once per arrival and never replays on a filter change or a remount.
+  const [celebrating, setCelebrating] = useState<string | null>(null);
+  // A mount-only read of sessionStorage: it cannot run during render (static
+  // export prerenders this page) and it must clear the key, so the one
+  // synchronous setState in an effect is the point, not an accident.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setCelebrating(takeAchievementUnlock()), []);
 
   // Full-state summary (#79): every key the player has touched, not just the
   // first page, so completion %, star totals and secret reveals below are
   // never understated by a followed-but-truncated cursor.
   const progressMap = useMemo(() => new Map((mine.data?.achievements || []).map(p => [p.key, p.progress])), [mine.data]);
+  // `unlocked_at` per key (#72), for the recency sort below. Absent for legacy
+  // unlocks, which is why the comparator treats undefined as "no position".
+  const unlockedAtMap = useMemo(
+    () => new Map((mine.data?.achievements || []).map(p => [p.key, p.unlocked_at])),
+    [mine.data]
+  );
+  const recent = useMemo(() => recentUnlocks(mine.data?.achievements), [mine.data]);
   const visibleCatalog = useMemo(() => (catalog.data || []).filter(item => {
     const walletMode = achievementWalletMode(item.key);
     if (walletMode && walletMode !== mode) return false;
@@ -74,9 +95,7 @@ export default function Achievements() {
   
   const filteredCatalog = useMemo(() => {
     if (!catalog.data) return [];
-    if (!authed || activeTab === 'all') return visibleCatalog;
-    
-    return visibleCatalog.filter(item => {
+    const matching = !authed || activeTab === 'all' ? visibleCatalog : visibleCatalog.filter(item => {
       const cnt = countFor(item.key) ?? 0;
       const p = achievementProgress(item.tiers, cnt);
       if (activeTab === 'completed') return p.maxed;
@@ -84,7 +103,9 @@ export default function Achievements() {
       if (activeTab === 'unlocked') return p.starsFilled > 0;
       return true;
     });
-  }, [catalog.data, visibleCatalog, authed, activeTab, countFor]);
+    if (sort !== 'recent') return matching;
+    return [...matching].sort((a, b) => byRecencyFirst(unlockedAtMap.get(a.key), unlockedAtMap.get(b.key)));
+  }, [catalog.data, visibleCatalog, authed, activeTab, countFor, sort, unlockedAtMap]);
   
   if (checking) return <div className="loading-screen"><span className="loader"/>Carregando conquistas…</div>;
   
@@ -161,6 +182,20 @@ export default function Achievements() {
           onChangeAction={setActiveTab}
         />
       )}
+
+      {/* Recency is a second axis, not a fifth filter: a player who just
+          unlocked something wants the same list reordered, not narrowed. */}
+      {authed && !mine.isLoading && !mine.isError && catalog.data && recent.length > 0 && (
+        <FilterGroup
+          label="Ordenação das conquistas"
+          value={sort}
+          options={[
+            {value: 'catalog', label: 'Ordem do catálogo'},
+            {value: 'recent', label: 'Mais recentes'}
+          ] as const}
+          onChangeAction={setSort}
+        />
+      )}
       
       {authed && mine.isError &&
           <p className="form-error">Não foi possível carregar seu progresso no momento. O catálogo abaixo exibe as metas
@@ -168,6 +203,8 @@ export default function Achievements() {
       {/* The cards below are h3s. Without this the page jumped H1 -> H3 and the
           grid had no name of its own in the heading tree; the filters above it
           are the visible label, so the heading itself stays screen-reader-only. */}
+      {authed && <RecentUnlocksRail unlocks={recent} celebrating={celebrating}/>}
+
       <h2 className="sr-only">Catálogo de conquistas</h2>
       {catalog.isLoading ?
         <SkeletonList label="Carregando catálogo de conquistas…" count={6} height={218}

@@ -11,10 +11,13 @@ export default function HandsGuide() {
         id: 'historico', title: 'Encontrar uma mão', summary: 'A lista separa as carteiras e resume cartas, board e resultado.',
         image: {src: '/guide/hands-live.webp', alt: 'Lista de mãos com cartas, board, combinação, resultado e estado da seed'},
         body: <><p>Abra <b>Mãos</b> na navegação. As abas Sandbox e Dinheiro real consultam registros independentes; uma carteira vazia não apaga a outra.</p>
-          <GuideBullets><li><span>Os três indicadores no topo resumem as mãos já carregadas: quantidade, saldo e taxa de vitórias com vitórias, empates e derrotas.</span></li>
+          <GuideBullets><li><span>Os três indicadores no topo resumem só o que está <b>nesta lista</b>: quantidade, saldo e taxa de vitórias com vitórias, empates e derrotas — eles acompanham o filtro ativo.</span></li>
+            <li><span>Logo abaixo, a faixa <b>Desde o início</b> traz os números de toda a sua história na carteira escolhida, para você não confundir o recorte carregado com o total. Ela aparece quando você já tem posição no ranking.</span></li>
+            <li><span>Os filtros <b>Todas</b>, <b>Só vitórias</b>, <b>Só derrotas</b> e <b>Só empates</b> reorganizam as mãos já carregadas sem buscar nada de novo; havendo mais de uma mesa, uma segunda linha de filtros deixa escolher <b>Todas as mesas</b> ou uma delas.</span></li>
+            <li><span>As mãos vêm agrupadas por dia — <b>Hoje</b>, <b>Ontem</b> e a data completa para as mais antigas — e o dia em foco fica fixo no alto enquanto você rola.</span></li>
             <li><span>A lista carrega sozinha conforme você desce; o botão <b>Carregar mais mãos</b> continua disponível para teclado.</span></li>
-            <li><span>Cada linha diz se a seed do servidor já foi revelada ou se a mão ainda tem prova parcial.</span></li>
-            <li><span>Sem nenhuma mão registrada, a página mostra o caminho de volta ao lobby em vez de uma lista vazia.</span></li></GuideBullets></>
+            <li><span>Cada linha diz se a seed do servidor já foi revelada ou se a mão ainda tem prova parcial, e mostra o nível de blinds daquela mão quando o registro o guarda.</span></li>
+            <li><span>Se o filtro não deixar nenhuma mão, a página explica o que aconteceu e oferece <b>Limpar filtros</b>. Sem nenhuma mão registrada, ela mostra o caminho de volta ao lobby em vez de uma lista vazia.</span></li></GuideBullets></>
       },
       {
         id: 'detalhes', title: 'Ler os detalhes', summary: 'A página preserva o que foi público na mão e organiza a sequência.',
@@ -51,7 +54,8 @@ export default function HandsGuide() {
           <GuideTerms><GuideTerm term="Prova completa">A seed do servidor recria o baralho; o navegador calcula o SHA-256 e compara com o hash comprometido.</GuideTerm>
           <GuideTerm term="Prova parcial">Cada posição revelada traz carta e salt; as ocultas permanecem como hashes. A raiz confirma que todas pertencem ao mesmo compromisso sem expor carta nenhuma.</GuideTerm>
           <GuideTerm term="Correspondência">Diz que o cálculo local reproduziu o compromisso. Divergência ou dado faltando aparece como tal, nunca como “verificado”.</GuideTerm></GuideTerms>
-          <GuideCallout kind="info" title="Integridade não prevê o futuro">A prova confirma que o baralho registrado é consistente. Ela não revela cartas ocultas nem muda o resultado.</GuideCallout></>
+          <GuideCallout kind="info" title="Integridade não prevê o futuro">A prova confirma que o baralho registrado é consistente. Ela não revela cartas ocultas nem muda o resultado.</GuideCallout>
+          <p>Mãos anteriores à prova criptográfica dizem, em tom neutro, que <b>foram registradas antes da prova criptográfica</b> — não há nada a recalcular ali, e isso não é uma falha de verificação. O vermelho de falha continua reservado para quando o hash realmente não confere.</p></>
       },
       {
         id: 'compartilhar', title: 'Compartilhar ou exportar', summary: 'Um link público com prazo, ou um arquivo de texto para estudo.',
@@ -64,6 +68,10 @@ export default function HandsGuide() {
           <p>Reabrir <b>Compartilhar</b> na mesma mão mostra o link já criado em vez de gerar outro — e traz o botão <b>Revogar</b>, que
             desativa esse link imediatamente e devolve a tela ao estado inicial. A lembrança do link fica só neste navegador: em outro
             aparelho, ou depois de limpar os dados do site, a tela volta a oferecer a criação de um novo.</p>
+          <p>No fim da página <b>Mãos</b>, o painel <b>Meus links compartilhados</b> lista todos os links ativos que você criou — em
+            qualquer aparelho — com o tipo, o resultado, quando foi criado e quando expira. Cada linha traz <b>Copiar link</b> e
+            <b> Revogar</b>: revogar desativa o endereço na hora, e quem tentar abri-lo vê a mensagem de link revogado ou expirado.
+            Sem links ativos, o painel explica como criar o primeiro.</p>
           <GuideLink href="/hands">Abrir minhas mãos</GuideLink></>
       }
     ]}/>;

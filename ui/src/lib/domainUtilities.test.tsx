@@ -6,7 +6,7 @@ import {cardLabel, cardPath} from './cards';
 import {chipTier} from './chips';
 import {isTableReaction, TABLE_REACTIONS} from './reactions';
 import {useTablePreferences} from './tablePreferences';
-import {cn, initials, playerName, rotateSeats} from './utils';
+import {cn, initials, playerName, relativeTime, rotateSeats} from './utils';
 
 describe('shared presentation contracts', () => {
   test('achievement metadata covers known, category and unknown keys', () => {
@@ -89,5 +89,19 @@ describe('shared presentation contracts', () => {
       window.dispatchEvent(new Event('ctech-poker:table-preferences'));
     });
     expect(result.current.preferences).toMatchObject({realityCheckMinutes: 60});
+  });
+
+  test('phrases an instant relatively in pt-BR, past and future', () => {
+    const now = Date.UTC(2026, 8, 2, 15);
+    const HOUR = 3600_000;
+    expect(relativeTime(now, now)).toBe('agora');
+    expect(relativeTime(now - 30_000, now)).toBe('há 30 segundos');
+    expect(relativeTime(now - 5 * 60_000, now)).toBe('há 5 minutos');
+    expect(relativeTime(now - 3 * HOUR, now)).toBe('há 3 horas');
+    expect(relativeTime(now - 2 * 24 * HOUR, now)).toBe('anteontem');
+    expect(relativeTime(now - 4 * 24 * HOUR, now)).toBe('há 4 dias');
+    expect(relativeTime(now + 6 * 24 * HOUR, now)).toBe('em 6 dias');
+    expect(relativeTime(now + 35 * 24 * HOUR, now)).toBe('próximo mês');
+    expect(relativeTime(now - 800 * 24 * HOUR, now)).toBe('há 2 anos');
   });
 });

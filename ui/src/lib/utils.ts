@@ -107,6 +107,26 @@ export function initials(name?: string): string {
   return ((parts[0]?.[0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() || '?';
 }
 
+// Relative pt-BR phrasing for an epoch-milliseconds instant, past or future
+// ("há 3 dias", "em 6 dias"). Intl.RelativeTimeFormat does the wording, so
+// there is no hand-written plural table to keep in sync.
+const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['year', 365 * 24 * 3600_000],
+  ['month', 30 * 24 * 3600_000],
+  ['day', 24 * 3600_000],
+  ['hour', 3600_000],
+  ['minute', 60_000]
+];
+
+export function relativeTime(instantMs: number, nowMs = Date.now()): string {
+  const delta = instantMs - nowMs;
+  const format = new Intl.RelativeTimeFormat('pt-BR', {numeric: 'auto'});
+  for (const [unit, size] of RELATIVE_UNITS) {
+    if (Math.abs(delta) >= size) return format.format(Math.round(delta / size), unit);
+  }
+  return format.format(Math.round(delta / 1000), 'second');
+}
+
 // Seat CSS position is purely index-driven (Seat.tsx's `seat-${index}` class),
 // so the server's seat order must be rotated before rendering, otherwise the
 // viewer lands wherever the server happens to seat them instead of always at

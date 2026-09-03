@@ -7,11 +7,15 @@ import HandsHistory from './page';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  lifetime: vi.fn(),
   refetch: vi.fn(),
   fetchNextPage: vi.fn(),
 }));
 
-vi.mock('@tanstack/react-query', () => ({useInfiniteQuery: mocks.query}));
+// `useQuery` is the lifetime-totals read (#115); the shared-links panel below
+// is its own suite, so it is stubbed out rather than given a query client.
+vi.mock('@tanstack/react-query', () => ({useInfiniteQuery: mocks.query, useQuery: mocks.lifetime}));
+vi.mock('@/components/hands/MyHandSharesPanel', () => ({MyHandSharesPanel: () => <div>hand-shares-panel</div>}));
 vi.mock('@/components/TermsGate', () => ({TermsGate: ({children}: { children: React.ReactNode }) => children}));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
 vi.mock('@/lib/hooks/useSocialUnread', () => ({useSocialUnread: () => 0}));
@@ -68,6 +72,7 @@ describe('hands list page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.query.mockReturnValue(queryResult([pageOf(hands)]));
+    mocks.lifetime.mockReturnValue({data: undefined, isLoading: false, isError: false});
   });
   
   test('summarizes backend outcomes and renders safe hand links and incomplete cards', () => {
@@ -183,10 +188,76 @@ describe('hands list page', () => {
 
     const {container} = render(<HandsHistory/>);
 
-    expect(screen.getByRole('list', {name: '500 mãos carregadas'})).toBeInTheDocument();
+    // #115: the rows are now interleaved with real day headings, so the list
+    // roles are gone and the named region carries the count instead.
+    expect(screen.getByRole('region', {name: /^500 mãos nesta lista/})).toBeInTheDocument();
     expect(container.querySelectorAll('.hand-row').length).toBeGreaterThan(0);
     expect(container.querySelectorAll('.hand-row').length).toBeLessThan(20);
-    expect(container.querySelectorAll('[aria-setsize="500"]').length).toBeGreaterThan(0);
+    // Only the window is mounted; the day headers ride along inside it.
+    expect(container.querySelectorAll('.hands-day-header').length).toBeGreaterThan(0);
+    expect(container.querySelector('.hands-day-pinned')).toBeInTheDocument();
+  });
+
+  test('filters to only wins over the loaded pages, without refetching', () => {
+    render(<HandsHistory/>);
+    mocks.query.mockClear();
+
+    fireEvent.click(screen.getByRole('button', {name: 'Só vitórias'}));
+
+    expect(screen.getAllByText('won')).toHaveLength(1);
+    expect(screen.queryByText('lost')).not.toBeInTheDocument();
+    // The whole point of client-side filtering: no new request.
+    expect(mocks.fetchNextPage).not.toHaveBeenCalled();
+    // The subset roll-up follows the filter, not the loaded page count.
+    expect(screen.getByText('1', {selector: '.stat-value'})).toBeInTheDocument();
+  });
+
+  test('filters to a single table and offers a way back out of an empty result', () => {
+    render(<HandsHistory/>);
+    fireEvent.click(screen.getByRole('button', {name: /Mesa .*table-one/i}));
+    expect(screen.getAllByText('won')).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', {name: 'Só derrotas'}));
+    expect(screen.getByText('Nenhuma mão com esse filtro')).toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: /Carregar mais/})).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', {name: 'Limpar filtros'}));
+    expect(screen.getAllByText('won')).toHaveLength(1);
+    expect(screen.getByText('lost')).toBeInTheDocument();
+  });
+
+  test('groups the rows by day with a pinned header for the day in view', () => {
+    const {container} = render(<HandsHistory/>);
+    // Three hands, three distinct days in the fixture.
+    expect(container.querySelectorAll('.hands-day-header')).toHaveLength(3);
+    expect(container.querySelector('.hands-day-pinned')?.textContent)
+      .toBe(container.querySelector('.hands-day-header')?.firstChild?.textContent);
+  });
+
+  test('states the lifetime totals beside the loaded subset, and stays quiet when unranked', () => {
+    mocks.lifetime.mockReturnValue({
+      data: {ranked: true, rank: 3, total: 40, entry: {player_id: 'p1', hands_played: 12_500, hands_won: 4_000, win_rate: 0.32}},
+      isLoading: false, isError: false,
+    });
+    const {rerender} = render(<HandsHistory/>);
+    expect(screen.getByText(/12\.500 mãos/)).toBeInTheDocument();
+    expect(screen.getByText(/4\.000 vitórias/)).toBeInTheDocument();
+    expect(screen.getByText(/\(32%\)/)).toBeInTheDocument();
+
+    mocks.lifetime.mockReturnValue({data: {ranked: false}, isLoading: false, isError: false});
+    rerender(<HandsHistory/>);
+    expect(screen.queryByText(/Desde o início/)).not.toBeInTheDocument();
+  });
+
+  test('shows the blind level of a hand only when the record carries one', () => {
+    mocks.query.mockReturnValue(queryResult([pageOf([
+      {...hands[0], small_blind: 25, big_blind: 50},
+      {...hands[1]},
+    ])]));
+    const {container} = render(<HandsHistory/>);
+    const blinds = container.querySelectorAll('.hand-row-blinds');
+    expect(blinds).toHaveLength(1);
+    expect(blinds[0].textContent).toBe('25/50');
   });
 
 

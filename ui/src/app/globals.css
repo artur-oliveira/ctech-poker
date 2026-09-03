@@ -166,6 +166,9 @@
     --gold-bright-2: #e7c36f;
     --gold-bright-3: #e9c678;
     --gold-pale: #efe1b7;
+    /* 33% gold: the expanding ring of the achievement-arrival celebration,
+       the gold counterpart to --brand-33. */
+    --gold-33: #e6b85c55;
     --cream: #f1e5ce;
     /* neutrals / muted */
     --text-muted-soft: #d9cccd;
@@ -7763,6 +7766,18 @@ html:has(.game),
 }
 .deck-reveal-status.mismatch {
     color: var(--danger-soft)
+}
+
+/* Legacy hands (#117): no proof to recalculate is a fact about the record,
+   not a verification failure, so it borrows the neutral panel surface and
+   the secondary text colour instead of the danger tint above. */
+.deck-reveal-status.is-unavailable {
+    padding: 12px;
+    border-top: 0;
+    border-radius: var(--rounded-control);
+    background: var(--white-08);
+    color: var(--text-secondary);
+    font-weight: 400
 }
 @media (max-width: 520px) {
 .hand-history-board .playing-card.board-card {
