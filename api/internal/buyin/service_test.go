@@ -61,6 +61,9 @@ func (s failingPendingStore) BuildRecordTx(reconcile.PendingCashout) (types.Tran
 }
 func (s failingPendingStore) Record(context.Context, reconcile.PendingCashout) error { return s.err }
 func (s failingPendingStore) MarkResolved(context.Context, string) error             { return s.err }
+func (s failingPendingStore) Get(context.Context, string) (*reconcile.PendingCashout, error) {
+	return nil, s.err
+}
 
 func (f *fakeWallet) Credit(_ context.Context, userID string, amount int64, key, _ string) error {
 	f.credits = append(f.credits, call{userID, amount, key})
@@ -811,7 +814,11 @@ func TestBuyInRebindsEntitlementWhenBoundTableIsFull(t *testing.T) {
 	game := &fakeWallet{}
 	mgr := testManager(t)
 	rooms := multiRoomLookup{
-		"room-full": {ID: "room-full", CurrencyMode: "real", Tier: "micro", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 1, EntryFeeCents: 100},
+		// SeatsTaken mirrors what tablemanager's onSeatsChanged hook writes
+		// through in production; the availability check reads it instead of
+		// materialising room-full's actor (issue #57), and this fake lookup
+		// has no such hook, so the occupied state is stated up front.
+		"room-full": {ID: "room-full", CurrencyMode: "real", Tier: "micro", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 1, SeatsTaken: 1, EntryFeeCents: 100},
 		"room-open": {ID: "room-open", CurrencyMode: "real", Tier: "micro", BigBlind: 20, BuyInMin: 40, BuyInMax: 400, MaxSeats: 9, EntryFeeCents: 100},
 	}
 	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true, "user-2": true}}).
@@ -867,8 +874,9 @@ func TestBuyInRebindsEntitlementWhenBoundTableIsArchived(t *testing.T) {
 		// room-gone is intentionally absent from rooms: cmd/tablecleanup
 		// deletes the room row only after confirming the table archived.
 	}
+	pending := testPendingStore(t)
 	svc := NewServiceWithGame(sandbox, game, mgr, rooms, &fakeActivation{activated: map[string]bool{"user-1": true}}).
-		WithPendingStore(testPendingStore(t)).WithEntitlements(testEntitlementStore(t))
+		WithPendingStore(pending).WithEntitlements(testEntitlementStore(t))
 	ctx := context.Background()
 
 	// Seed and claim an entitlement bound to room-gone, then archive it —
@@ -878,11 +886,24 @@ func TestBuyInRebindsEntitlementWhenBoundTableIsArchived(t *testing.T) {
 	if _, err := mgr.GetOrCreateActor(ctx, "room-gone", seed); err != nil {
 		t.Fatalf("seed room-gone: %v", err)
 	}
-	if err := svc.entitlements.Claim(ctx, entitlement.Entitlement{
+	paid := entitlement.Entitlement{
 		PlayerID: "user-1", OriginTableID: "room-gone", BoundTableID: "room-gone",
 		Tier: "micro", FeeCents: 100, ExpiresAt: time.Now().Add(entitlement.Window),
-	}); err != nil {
+	}
+	if err := svc.entitlements.Claim(ctx, paid); err != nil {
 		t.Fatalf("seed entitlement: %v", err)
+	}
+	// A reservation only covers a seat once its fee actually settled (#40), so
+	// seed the resolved recovery row BuyIn's own charge path would have left.
+	feeKey := entitlementFeeKey("user-1", paid)
+	if err := pending.Record(ctx, reconcile.PendingCashout{
+		ID: feeKey, PlayerID: "user-1", Amount: 100, CurrencyMode: roomstore.CurrencyModeReal,
+		Kind: reconcile.KindFeeDebit, TableRef: "room-gone", IdempotencyKey: feeKey,
+	}); err != nil {
+		t.Fatalf("seed fee recovery row: %v", err)
+	}
+	if err := pending.MarkResolved(ctx, feeKey); err != nil {
+		t.Fatalf("resolve seeded fee: %v", err)
 	}
 	stored, err := store.LoadTable(ctx, "room-gone")
 	if err != nil || stored == nil {
