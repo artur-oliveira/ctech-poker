@@ -19,6 +19,7 @@ type progressStore interface {
 	ListAchievements(ctx context.Context, playerID, mode string, limit int, startKey map[string]types.AttributeValue) ([]PlayerAchievementProgress, map[string]types.AttributeValue, error)
 	UpdateTableStreak(ctx context.Context, playerID, mode, tableID string, won bool) (current int, err error)
 	ClaimHandCounters(ctx context.Context, tableID, handID string) (bool, error)
+	StampTierUnlock(ctx context.Context, playerID, mode, key string) error
 }
 
 type Service struct {
@@ -406,6 +407,18 @@ func (s *Service) RecordHand(ctx context.Context, tableID, mode string, outcome 
 		s.storeLastPocketPair(ctx, stateKey, next)
 		if err := streak(id, KeySamePocketPairStreak, reset, resetTo); err != nil {
 			return nil, err
+		}
+	}
+	// Stamp every tier actually crossed by this hand (issue #72), in one place
+	// rather than at each of the call sites above that can append an unlock.
+	// A failed stamp costs the achievements page a "recently unlocked" badge,
+	// never a counter — the counters are already committed — so it is logged,
+	// not returned: failing RecordHand here would make the caller retry
+	// increments that are not idempotent.
+	for _, unlock := range unlocks {
+		if err := s.store.StampTierUnlock(ctx, unlock.PlayerID, mode, unlock.Key); err != nil {
+			slog.Warn("achievements: tier unlock timestamp failed",
+				"player", unlock.PlayerID, "key", unlock.Key, "err", err)
 		}
 	}
 	return unlocks, nil

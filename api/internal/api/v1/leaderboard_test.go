@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
+	"gopkg.aoctech.app/poker/api/internal/player"
 )
 
 // fakeLeaderboardStore is a minimal in-memory stand-in for leaderboard's
@@ -98,7 +99,7 @@ func TestLeaderboardMeUnranked(t *testing.T) {
 	app := fiber.New()
 	store := &fakeLeaderboardStore{entries: map[string]*leaderboard.Entry{}}
 	svc := leaderboard.NewServiceWithStore(store)
-	RegisterLeaderboard(app.Group("/v1.0"), withUser("nobody"), svc)
+	RegisterLeaderboard(app.Group("/v1.0"), withUser("nobody"), svc, nil)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard/me?mode=sandbox&metric=hands_won", nil)
 	resp, err := app.Test(req)
@@ -124,7 +125,7 @@ func TestLeaderboardMeRanked(t *testing.T) {
 		"sandbox#p2": {PlayerID: "p2", HandsPlayed: 5, HandsWon: 1},
 	}}
 	svc := leaderboard.NewServiceWithStore(store)
-	RegisterLeaderboard(app.Group("/v1.0"), withUser("p2"), svc)
+	RegisterLeaderboard(app.Group("/v1.0"), withUser("p2"), svc, nil)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard/me?mode=sandbox&metric=hands_won", nil)
 	resp, err := app.Test(req)
@@ -151,11 +152,63 @@ func TestLeaderboardMeRequiresAuth(t *testing.T) {
 	deny := func(c fiber.Ctx) error { return c.SendStatus(fiber.StatusUnauthorized) }
 	store := &fakeLeaderboardStore{entries: map[string]*leaderboard.Entry{}}
 	svc := leaderboard.NewServiceWithStore(store)
-	RegisterLeaderboard(app.Group("/v1.0"), deny, svc)
+	RegisterLeaderboard(app.Group("/v1.0"), deny, svc, nil)
 
 	req := httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard/me", nil)
 	resp, err := app.Test(req)
 	if err != nil || resp.StatusCode != fiber.StatusUnauthorized {
 		t.Fatalf("expected 401 from auth middleware, got %d, err %v", resp.StatusCode, err)
+	}
+}
+
+// TestLeaderboardResolvesRenamedPlayerName is issue #64 on the leaderboard: a
+// row's denormalized player_name is only refreshed by the write a completed
+// hand makes, so a player who renames and stops playing keeps the old name on
+// the board forever. Both /leaderboard and /leaderboard/me now resolve names
+// from the canonical profile at read time, and a row whose profile does not
+// resolve keeps whatever it stored rather than going blank.
+func TestLeaderboardResolvesRenamedPlayerName(t *testing.T) {
+	store := &fakeLeaderboardStore{entries: map[string]*leaderboard.Entry{
+		"sandbox#p1": {PlayerID: "p1", PlayerName: "Nome Antigo", HandsPlayed: 5, HandsWon: 3},
+		"sandbox#p2": {PlayerID: "p2", PlayerName: "Sem Perfil", HandsPlayed: 5, HandsWon: 1},
+	}}
+	players := player.NewService(&fakeMultiPlayerStore{profiles: map[string]player.PlayerProfile{
+		"p1": {Name: "Nome Novo"},
+	}})
+	svc := leaderboard.NewServiceWithStore(store)
+	app := fiber.New()
+	RegisterLeaderboard(app.Group("/v1.0"), withUser("p1"), svc, players)
+
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard?mode=sandbox&metric=hands_won", nil))
+	if err != nil || resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, err = %v", resp.StatusCode, err)
+	}
+	var page struct {
+		Data []leaderboard.Entry `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]leaderboard.Entry{}
+	for _, entry := range page.Data {
+		byID[entry.PlayerID] = entry
+	}
+	if got := byID["p1"].PlayerName; got != "Nome Novo" {
+		t.Fatalf("p1 player_name = %q, want the live profile name", got)
+	}
+	if got := byID["p2"].PlayerName; got != "Sem Perfil" {
+		t.Fatalf("p2 player_name = %q, want the stored fallback when no profile resolves", got)
+	}
+
+	resp, err = app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/leaderboard/me?mode=sandbox&metric=hands_won", nil))
+	if err != nil || resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("me status = %d, err = %v", resp.StatusCode, err)
+	}
+	var me meResponse
+	if err := json.NewDecoder(resp.Body).Decode(&me); err != nil {
+		t.Fatal(err)
+	}
+	if me.Entry == nil || me.Entry.PlayerName != "Nome Novo" {
+		t.Fatalf("/leaderboard/me served a stale name: %+v", me.Entry)
 	}
 }
