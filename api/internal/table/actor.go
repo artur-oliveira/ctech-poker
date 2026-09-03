@@ -21,6 +21,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/oklog/ulid/v2"
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
+	"gopkg.aoctech.app/poker/api/internal/engine/deck"
 	"gopkg.aoctech.app/poker/api/internal/engine/equity"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/reactions"
@@ -106,6 +107,12 @@ type Actor struct {
 	nextHandDeadline         time.Time
 	nextHandArmedFor         string
 	nextHandDelay            time.Duration
+	// nextHandRetryDelay/nextHandRetries drive handleNextHand's bounded
+	// re-arm after a transient (non-panic) load/commit failure — see
+	// retryNextHand. Counted per stall, reset the moment a next-hand attempt
+	// reaches a verdict.
+	nextHandRetryDelay time.Duration
+	nextHandRetries    int
 	// pendingNextHandDeadline carries a just-loaded StoredTable's
 	// NextHandDeadlineUnixMs across to the next armNextHandTimer call (set by
 	// ensureLoaded, consumed and zeroed there) — the post-hand countdown's
@@ -126,10 +133,18 @@ type Actor struct {
 	afkSweepTimer           *time.Timer
 	afkSweepInterval        time.Duration
 	done                    chan struct{}
-	equityEnabled           atomic.Bool
-	runItTwiceEnabled       atomic.Bool
-	onHandComplete          func(string, hand.HandOutcome, map[string]string)
-	onHandUpdated           func(string, hand.HandOutcome, map[string]string)
+	// equityCache memoizes the per-viewer Monte-Carlo estimate for the hand
+	// in equityCacheHand. The estimate is a pure function of (hole cards,
+	// board, opponent count) — all of which are keyed below — while
+	// broadcastAll re-runs for every chat message, reconnect signal and act,
+	// so without this a single street paid for equityIterations samples per
+	// active seat over and over. Dropped whenever the hand changes.
+	equityCache       map[string]float64
+	equityCacheHand   string
+	equityEnabled     atomic.Bool
+	runItTwiceEnabled atomic.Bool
+	onHandComplete    func(string, hand.HandOutcome, map[string]string)
+	onHandUpdated     func(string, hand.HandOutcome, map[string]string)
 	// completedHandNotified suppresses a repeat within THIS process only.
 	// handHooks below is what stops a second instance from re-firing the same
 	// hand's hooks — see notifyHandComplete.
@@ -174,17 +189,18 @@ type Actor struct {
 func New(id string, store *tablestore.Store, trustCache bool, broadcast func(string, hand.Snapshot)) *Actor {
 	a := &Actor{
 		id: id, store: store, trustCache: trustCache, broadcast: broadcast, cmds: make(chan Command, 64),
-		done:              make(chan struct{}),
-		turnTimeout:       DefaultTurnTimeout,
-		timeBankEnabled:   true,
-		nextHandDelay:     NextHandDelay,
-		runoutStreetDelay: RunoutStreetDelay,
-		disconnectedSince: make(map[string]time.Time),
-		streaks:           make(map[string]int),
-		activeConns:       make(map[string]map[string]struct{}),
-		kickGrace:         5 * time.Minute,
-		kickTimers:        make(map[string]*time.Timer),
-		afkSweepInterval:  AFKSweepInterval,
+		done:               make(chan struct{}),
+		turnTimeout:        DefaultTurnTimeout,
+		timeBankEnabled:    true,
+		nextHandDelay:      NextHandDelay,
+		nextHandRetryDelay: NextHandRetryDelay,
+		runoutStreetDelay:  RunoutStreetDelay,
+		disconnectedSince:  make(map[string]time.Time),
+		streaks:            make(map[string]int),
+		activeConns:        make(map[string]map[string]struct{}),
+		kickGrace:          5 * time.Minute,
+		kickTimers:         make(map[string]*time.Timer),
+		afkSweepInterval:   AFKSweepInterval,
 	}
 	a.equityEnabled.Store(true)
 	a.armAFKSweepTimer()
@@ -202,10 +218,8 @@ var ErrActorStopped = errors.New("table: actor stopped")
 var ErrNoSeatsAvailable = errors.New("table: no seats available")
 
 func (a *Actor) Dispatch(cmd Command) error {
-	if len(a.cmds) >= (cap(a.cmds)*3)/4 {
-		// The mailbox is deliberately blocking rather than lossy. This signal
-		// detects sustained pressure without emitting one metric per command.
-	}
+	// The mailbox is deliberately blocking rather than lossy: a full channel
+	// backpressures the caller instead of dropping a command.
 	select {
 	case a.cmds <- cmd:
 		// Sent (channel is buffered). Wait for the reply, but bail if the
@@ -727,7 +741,8 @@ func (a *Actor) handleSnapshot(ctx context.Context, c SnapshotCmd) error {
 	}
 	a.applyPresence(snapshot.Seats)
 	a.applyStreaks(snapshot.Seats)
-	a.applyActivity(c.PlayerID, &snapshot)
+	chat, reactions := a.activityViews()
+	a.applyActivity(c.PlayerID, &snapshot, chat, reactions)
 	c.Snapshot <- snapshot
 	return nil
 }
@@ -961,7 +976,7 @@ func (a *Actor) tryStartHand(ctx context.Context) {
 // saveHandHistorySnapshot persists the table's current (pre-reset) state to
 // poker_table_state_history for audit purposes. Best-effort: this is an
 // append-only audit copy, not the authoritative item, so a failure here never
-// blocks the hand transition — it only emits a metric. A version-conflict
+// blocks the hand transition — it only logs. A version-conflict
 // retry re-running tryStartHand is harmless: once another instance has
 // already advanced the stage past Complete, the reloaded cache no longer
 // satisfies the Complete guard above, so the snapshot is not repeated.
@@ -970,6 +985,8 @@ func (a *Actor) saveHandHistorySnapshot(ctx context.Context) {
 		return
 	}
 	if err := a.store.SaveTableStateHistory(ctx, a.id, timeNowFunc().Unix(), a.cached.ExportState()); err != nil {
+		slog.WarnContext(ctx, "table hand history snapshot failed",
+			"table_id", a.id, "hand_id", a.handID, "err", err)
 	}
 }
 
@@ -1000,16 +1017,11 @@ func (a *Actor) handleAct(ctx context.Context, c ActCmd) error {
 		//     if it's genuinely invalid, re-running it against freshly
 		//     loaded state reproduces the identical rejection.
 		if errors.Is(err, tablestore.ErrVersionConflict) || a.trustCache {
-			if errors.Is(err, tablestore.ErrVersionConflict) {
-			}
 			if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
 				return reloadErr
 			}
 			a.markLastAction(c.PlayerID)
 			_, err = a.applyActAndCommit(ctx, c)
-			if errors.Is(err, tablestore.ErrVersionConflict) {
-			} else {
-			}
 		}
 	}
 	if errors.Is(err, tablestore.ErrDuplicateAction) {
@@ -2519,9 +2531,10 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 	// DynamoDB context.
 	a.nextHandArmedFor = ""
 	if err := a.ensureLoaded(ctx, false); err != nil {
-		return err
+		return a.retryNextHand(err)
 	}
 	if a.cached.Stage() != hand.Complete {
+		a.nextHandRetries = 0
 		return nil
 	}
 	a.saveHandHistorySnapshot(ctx)
@@ -2530,6 +2543,7 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 	// removal retried/reloaded. Never start from a stage that is no longer the
 	// completed hand this timer was responsible for.
 	if a.cached.Stage() != hand.Complete {
+		a.nextHandRetries = 0
 		return nil
 	}
 	// a.mutate is what guarantees a commit failure here can't leave an
@@ -2550,14 +2564,43 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 		// already restored a.cached for any other error, so it just propagates.
 		if errors.Is(err, tablestore.ErrVersionConflict) {
 			if reloadErr := a.ensureLoaded(ctx, true); reloadErr != nil {
-				return reloadErr
+				return a.retryNextHand(reloadErr)
 			}
 		} else {
-			return err
+			return a.retryNextHand(err)
 		}
 	}
+	a.nextHandRetries = 0
 	a.broadcastAll()
 	return nil
+}
+
+// retryNextHand re-arms the post-hand countdown after handleNextHand failed
+// for an ordinary (non-panic) reason, and returns err unchanged so the caller
+// still reports the failure. Clearing nextHandArmedFor alone only unblocks a
+// LATER re-arm — on a quiet table between hands there is no later command to
+// carry one, which is exactly how a hand stalled silently (#136). Bounded by
+// MaxNextHandRetries so a permanently broken store degrades to the AFK
+// sweep's watchdog instead of spinning a timer forever.
+func (a *Actor) retryNextHand(err error) error {
+	if a.nextHandRetries >= MaxNextHandRetries {
+		slog.Error("table next hand retries exhausted", "table_id", a.id, "hand_id", a.handID, "err", err)
+		a.nextHandRetries = 0
+		return err
+	}
+	a.nextHandRetries++
+	if a.nextHandTimer != nil {
+		a.nextHandTimer.Stop()
+	}
+	slog.Warn("table next hand failed; re-arming",
+		"table_id", a.id, "hand_id", a.handID, "attempt", a.nextHandRetries, "err", err)
+	a.nextHandTimer = time.AfterFunc(time.Duration(a.nextHandRetries)*a.nextHandRetryDelay, func() {
+		reply := make(chan error, 1)
+		if dispatchErr := a.Dispatch(nextHandCmd{Reply: reply}); dispatchErr != nil {
+			slog.Warn("table next hand retry dispatch failed", "table_id", a.id, "err", dispatchErr)
+		}
+	})
+	return err
 }
 
 // armWinnerCardsTimer (re-)arms the consent-window expiry for a pending
@@ -2782,6 +2825,10 @@ func (a *Actor) broadcastAll() {
 	a.armWinnerCardsTimer(a.cached.PendingWinnerCards())
 	a.lastBroadcastStage = stage
 	doEquity := a.equityEnabled.Load() && equityStage(stage)
+	// Chat and reactions are identical for every viewer, so build them once
+	// per broadcast instead of once per seat (#37). Both slices are only ever
+	// read downstream (ConvertSnapshot marshals them), never mutated.
+	chat, reactions := a.activityViews()
 	for _, p := range a.cached.PlayersForActor() {
 		snapshot := a.cached.ViewFor(p.ID)
 		snapshot.SnapshotVersion = uint64(a.version)
@@ -2798,7 +2845,7 @@ func (a *Actor) broadcastAll() {
 		}
 		a.applyPresence(snapshot.Seats)
 		a.applyStreaks(snapshot.Seats)
-		a.applyActivity(p.ID, &snapshot)
+		a.applyActivity(p.ID, &snapshot, chat, reactions)
 		if doEquity {
 			if hole, board, ok := a.cached.HoleAndBoardForActor(p.ID); ok {
 				opponents := 0
@@ -2808,8 +2855,7 @@ func (a *Actor) broadcastAll() {
 					}
 				}
 				if opponents > 0 {
-					estimate, _, err := equity.EstimateWithStats(hole, board, nil, opponents, 200)
-					if err == nil {
+					if estimate, ok := a.equityFor(hole, board, opponents); ok {
 						for i := range snapshot.Seats {
 							if snapshot.Seats[i].PlayerID == p.ID {
 								snapshot.Seats[i].Equity = &estimate
@@ -2825,23 +2871,35 @@ func (a *Actor) broadcastAll() {
 	a.notifyHandComplete()
 }
 
-func (a *Actor) applyActivity(viewerID string, snapshot *hand.Snapshot) {
-	snapshot.ChatMessages = make([]hand.ChatMessageView, 0, len(a.activity.Chat))
+// activityViews converts the table-wide activity (chat + unexpired
+// reactions) into their snapshot form. Viewer-independent by construction,
+// so broadcastAll builds them once and hands the same slices to every seat.
+func (a *Actor) activityViews() ([]hand.ChatMessageView, []hand.ReactionView) {
+	chat := make([]hand.ChatMessageView, 0, len(a.activity.Chat))
 	for _, message := range a.activity.Chat {
-		snapshot.ChatMessages = append(snapshot.ChatMessages, hand.ChatMessageView{
+		chat = append(chat, hand.ChatMessageView{
 			ID: message.ID, PlayerID: message.PlayerID, Message: message.Message, Timestamp: message.Timestamp,
 		})
 	}
+	var reactions []hand.ReactionView
 	now := timeNowFunc().UnixMilli()
 	for _, reaction := range a.activity.Reactions {
 		if reaction.ExpiresAt <= now {
 			continue
 		}
-		snapshot.Reactions = append(snapshot.Reactions, hand.ReactionView{
+		reactions = append(reactions, hand.ReactionView{
 			ID: reaction.ID, PlayerID: reaction.PlayerID, ReactionID: reaction.ReactionID,
 			TargetPlayerID: reaction.TargetPlayerID, Timestamp: reaction.Timestamp, ExpiresAt: reaction.ExpiresAt,
 		})
 	}
+	return chat, reactions
+}
+
+// applyActivity attaches the shared activity views built by activityViews
+// plus the one genuinely per-viewer piece: that viewer's own preselection.
+func (a *Actor) applyActivity(viewerID string, snapshot *hand.Snapshot, chat []hand.ChatMessageView, reactions []hand.ReactionView) {
+	snapshot.ChatMessages = chat
+	snapshot.Reactions = reactions
 	if preselection, ok := a.activity.Preselections[viewerID]; ok &&
 		preselection.HandID == a.handID && preselection.Stage == snapshot.Stage {
 		snapshot.ActionPreselection = preselection.Selection
@@ -2995,6 +3053,34 @@ func (a *Actor) SetStreaksForActor(streaks map[string]int) {
 
 func equityStage(stage hand.Stage) bool {
 	return stage == hand.PreFlop || stage == hand.Flop || stage == hand.Turn || stage == hand.River
+}
+
+// equityIterations is the Monte-Carlo sample count behind the seat's win-%
+// hint. It runs on the actor goroutine, so it is deliberately small: enough
+// for a stable one-decimal display, cheap enough not to stall the table.
+const equityIterations = 200
+
+// equityFor returns the cached win-probability estimate for one seat,
+// computing it only on a miss. The estimate depends solely on (hole, board,
+// opponent count), so the key below is exact — a fold changes the opponent
+// count and a new street changes the board, both producing a fresh entry.
+// Without this, every broadcast during a street (each chat message, act or
+// reconnect signal) re-ran the simulation for every active seat (#37).
+func (a *Actor) equityFor(hole [2]deck.Card, board []deck.Card, opponents int) (float64, bool) {
+	if a.equityCacheHand != a.handID || a.equityCache == nil {
+		a.equityCache = make(map[string]float64)
+		a.equityCacheHand = a.handID
+	}
+	key := fmt.Sprintf("%v|%v|%d", hole, board, opponents)
+	if estimate, hit := a.equityCache[key]; hit {
+		return estimate, true
+	}
+	estimate, _, err := equity.EstimateWithStats(hole, board, nil, opponents, equityIterations)
+	if err != nil {
+		return 0, false
+	}
+	a.equityCache[key] = estimate
+	return estimate, true
 }
 
 func (a *Actor) SetEquityEnabledForActor(enabled bool) { a.equityEnabled.Store(enabled) }

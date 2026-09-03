@@ -200,6 +200,20 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   (`StoredTable.NextHandDeadlineUnixMs`, resumed via `pendingNextHandDeadline` like the turn clock); merely shared
   display state goes in `cache.Backend` (`tablestreak`, `tableconn`). Everything cross-instance fails **open** — degrade
   the display or accept a bounded duplicate, never stall the actor goroutine or drop a player's progression.
+- **A timer that has already fired is the actor's only scheduler — a handler that consumes one must put it back.**
+  `handleNextHand` clears `nextHandArmedFor` before anything that can fail, but on a quiet table between hands there is
+  no later command to carry a re-arm, so an ordinary failure (a cancelled DynamoDB context on the load or the commit)
+  stalled the hand outright (#136). Every non-panic error branch now goes through `retryNextHand`, which re-arms with a
+  linear backoff bounded by `MaxNextHandRetries`; past the cap the AFK sweep's `rearmTimersFromCache` stays the
+  last-resort watchdog. `Dispatch` is blocking, never lossy — a full mailbox backpressures the caller.
+- **Nothing viewer-independent belongs inside `broadcastAll`'s per-seat loop, and nothing expensive belongs on the
+  actor goroutine twice.** Chat and reaction views are built once per broadcast (`activityViews`) and shared; the
+  `equityIterations` Monte Carlo is memoized by `(hole, board, opponent count)` per hand (`equityFor`), because a
+  single street re-broadcasts on every chat message, act and reconnect signal (#37). That signal is itself debounced:
+  `tablews.go` used to dispatch `ReconnectCmd` ahead of *every* inbound frame, keepalive pings included; it now fires
+  at most once per `tableconn.SyncInterval` per connection (#58). It cannot simply be skipped for pings — it is also
+  the paced caller keeping this instance's `tableconn` entry (45s `EntryTTL`) alive on a table whose only traffic is
+  pings, and the 1-minute AFK sweep ticks too slowly to cover that.
 - **`handeval` is table-driven — never edit `handeval/ref` without regenerating.** `ref` is the reference evaluator and
   the sole definition of the canonical hand ordering; `tables.bin` is compiled from it by
   `go generate ./internal/engine/handeval/...` and embedded. Changing `ref` without regenerating leaves stale tables
