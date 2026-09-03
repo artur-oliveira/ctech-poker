@@ -113,14 +113,18 @@ func Register(
 	// Unauthenticated, unlike every Register* call below it.
 	RegisterAvatars(router, avatars, avatarReadLimiter)
 	RegisterRooms(router, auth, rooms, buyinSvc, manager, reg, cfg, createLimiter, joinLimiter)
-	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter, pokerStatsStore, reportSvc)
+	identityPusher := &tableIdentityPusher{
+		manager: manager, seed: seed, presence: presenceSvc,
+		players: players, stats: pokerStatsStore, cfg: cfg,
+	}
+	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter, pokerStatsStore, reportSvc, identityPusher)
 	RegisterPlayerNotes(router, auth, playerNoteStore)
 	RegisterHandShares(router, auth, sessionStore, tableStore, handShareStore)
 	RegisterHandReveal(router, auth, sessionStore, handRevealStore, handRevealSvc, purchaseLimiter)
 	RegisterHighlights(router, auth, sessionStore, highlightsStore)
 	RegisterPokerStats(router, auth, pokerStatsStore)
 	RegisterMatchups(router, auth, matchupStore)
-	RegisterLeaderboard(router, auth, leaderboardSvc)
+	RegisterLeaderboard(router, auth, leaderboardSvc, players)
 	RegisterDailyReward(router, auth, dailyRewardSvc, spinLimiter)
 	RegisterSandboxPurchase(router, auth, sandboxPurchaseSvc, purchaseLimiter)
 	RegisterReactionPurchase(router, auth, reactionPurchaseSvc, purchaseLimiter)

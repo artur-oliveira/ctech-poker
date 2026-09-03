@@ -21,6 +21,13 @@ import (
 const (
 	tableMatchups = "poker_player_matchups"
 	guardTTLDays  = 90
+
+	// maxPairsPerTx caps how many pairs ride in one TransactWriteItems call
+	// (issue #65). Each pair costs 2 items (guard + update), so 12 pairs = 24
+	// items — under the ~25-item ceiling the issue asks for, and far under
+	// DynamoDB's hard 100. A 9-max table's C(9,2)=36 pairs therefore commit
+	// as 3 bounded transactions instead of one 72-item, ~144-WCU write.
+	maxPairsPerTx = 12
 )
 
 // Stats is one unordered player pair's cumulative head-to-head record,
@@ -123,18 +130,18 @@ func deltasFor(mode string, outcome hand.HandOutcome) []pairDelta {
 	return deltas
 }
 
-// RecordHand atomically applies one completed hand to every unordered pair
-// within outcome.Participants. Each pair carries its own create-only
-// idempotency guard inside the same TransactWriteItems call (mirrors
-// pokerstats.Store.RecordHand's guard-plus-increments shape, extended to
-// per-pair guards since one hand now touches many independent items), so a
-// duplicate onHandComplete invocation for the same hand double-counts no
-// pair — and, since all guards ride in one transaction, either the whole
-// hand's pairs commit or none do. tableID disambiguates the guard because
-// hand ids are only unique within a table (mirrors
-// pokerstats.Store.RecordHand's "guard#"+tableID+"#"+handID key). A 9-max
-// table caps this at C(9,2)=36 pairs * 2 items (guard + update) = 72 items,
-// under DynamoDB's 100-item TransactWriteItems limit.
+// RecordHand applies one completed hand to every unordered pair within
+// outcome.Participants, in bounded chunks of maxPairsPerTx pairs per
+// TransactWriteItems call (issue #65 — one 72-item transaction per hand was
+// 72% of DynamoDB's hard limit and ~144 WCU). Each pair carries its own
+// create-only idempotency guard inside the same transaction as its own
+// increment (mirrors pokerstats.Store.RecordHand's guard-plus-increments
+// shape, extended to per-pair guards since one hand touches many independent
+// items), so a duplicate onHandComplete invocation for the same hand
+// double-counts no pair. tableID disambiguates the guard because hand ids
+// are only unique within a table (mirrors pokerstats.Store.RecordHand's
+// "guard#"+tableID+"#"+handID key). See writePairs for why per-pair — rather
+// than per-hand — atomicity is the guarantee this actually relies on.
 func (s *Store) RecordHand(ctx context.Context, mode, tableID, handID string, outcome hand.HandOutcome) error {
 	if tableID == "" || handID == "" {
 		return nil
@@ -143,6 +150,27 @@ func (s *Store) RecordHand(ctx context.Context, mode, tableID, handID string, ou
 	if len(deltas) == 0 {
 		return nil
 	}
+	for start := 0; start < len(deltas); start += maxPairsPerTx {
+		end := min(start+maxPairsPerTx, len(deltas))
+		if err := s.writePairs(ctx, tableID, handID, deltas[start:end]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writePairs commits one chunk of pairs (guard + update per pair) in a single
+// transaction. Chunking does not weaken the duplicate protection RecordHand
+// promises: a pair's guard always rides in the same transaction as that
+// pair's increment, so no pair is ever counted twice however the chunks
+// interleave or fail. What a chunk boundary does introduce is a
+// partially-applied hand — and the per-pair guards are exactly what makes
+// retrying that safe: the chunks that already landed fail their guards and
+// are skipped, the chunks that never landed are applied. deltasFor is
+// deterministic for a given outcome, so a retry reproduces the same chunk
+// boundaries and never mixes an already-guarded pair with a fresh one inside
+// one transaction.
+func (s *Store) writePairs(ctx context.Context, tableID, handID string, deltas []pairDelta) error {
 	items := make([]types.TransactWriteItem, 0, len(deltas)*2)
 	for _, d := range deltas {
 		guard, err := dynamo.Encode(struct {

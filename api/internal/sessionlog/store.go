@@ -104,7 +104,7 @@ type RevealedSalt struct {
 // AvatarURL is denormalized here at hand-complete and never refreshed in
 // storage, so a stored row can go stale the moment that opponent's avatar
 // changes or is cleared — API callers must not serve it as-is. As of #68,
-// internal/api/v1/player.go's resolveOpponentAvatars re-resolves it from the
+// internal/api/v1/player.go's resolveOpponentProfiles re-resolves it from the
 // opponent's live profile before any hand-history response leaves the
 // handler, clearing it to "" for an opponent whose avatar was since removed
 // or whose profile no longer exists, rather than handing back a 404ing URL.

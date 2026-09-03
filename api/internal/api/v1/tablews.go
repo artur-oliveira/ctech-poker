@@ -20,7 +20,6 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/player"
-	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/presence"
 	"gopkg.aoctech.app/poker/api/internal/reactions"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
@@ -410,21 +409,10 @@ func RegisterTableWS(
 			// flow had the client resend "set_name" every connect; the name is
 			// now server-authoritative (GET/POST /players/me), so the server
 			// looks it up itself instead of trusting a client message.
-			if players != nil {
-				if profile, perr := players.GetOrCreate(ctx, playerID); perr == nil && profile != nil {
-					playstyleBadge := ""
-					if profile.PlaystylePublic && stats != nil {
-						if playerStats, statsErr := stats.Get(ctx, playerID, roomstore.CurrencyModeSandbox); statsErr == nil {
-							if badges := pokerstats.StyleFor(playerStats, pokerstats.MinHandsPublic); len(badges) > 0 {
-								playstyleBadge = badges[0].Key
-							}
-						}
-					}
-					r := make(chan error, 1)
-					if err := dispatch(table.SetIdentityCmd{PlayerID: playerID, Name: profile.Name,
-						AvatarURL: player.AvatarURL(profile, cfg.AvatarBaseURL), PlaystyleBadge: playstyleBadge, Reply: r}); err != nil {
-						observability.Warn(ctx, "table ws identity dispatch failed", err, "table_id", tableID)
-					}
+			if cmd, ok := identityCmdFor(ctx, players, stats, cfg, playerID); ok {
+				cmd.Reply = make(chan error, 1)
+				if err := dispatch(cmd); err != nil {
+					observability.Warn(ctx, "table ws identity dispatch failed", err, "table_id", tableID)
 				}
 			}
 
