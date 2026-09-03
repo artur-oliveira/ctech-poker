@@ -5733,6 +5733,7 @@ h1 em {
     aspect-ratio: 3 / 4;
     width: auto;
     max-width: 100%;
+    min-width: 220px;
     min-height: 300px
 }
 /* Rail and felt stay concentric: each side uses approximately the same visual
