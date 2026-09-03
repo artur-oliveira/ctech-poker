@@ -1088,7 +1088,12 @@ func (a *Actor) claimHandHooks() bool {
 // sitting on Complete (chat, reactions and connect/disconnect all broadcast),
 // so the local completedHandNotified guard is not enough on its own — the
 // hooks downstream are non-idempotent counters. handHooks is what makes this
-// once per hand for the whole fleet.
+// once per hand for the whole fleet in the common case, but it fails OPEN on
+// a Valkey error (see claimHandHooks/internal/handhook), so it cannot be the
+// only guard for a truly non-idempotent counter: achievements.RecordHand and
+// leaderboard's stats writers additionally claim
+// achievements.Service.ClaimHandCounters (issue #66) before touching a
+// counter, since a Valkey blip can still let two instances both reach here.
 func (a *Actor) notifyHandComplete() {
 	if a.cached == nil || a.cached.Stage() != hand.Complete || a.handID == "" || a.completedHandNotified == a.handID {
 		return

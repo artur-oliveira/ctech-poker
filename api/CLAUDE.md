@@ -161,14 +161,30 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   detached via `app.dispatchGamificationPipeline` (`go` + `recover`), the same pattern `autoRebuySweep` already used.
   This is safe specifically because, by the time `table/actor.go`'s `notifyHandComplete` reaches this hook,
   `broadcastAll` has already sent every player their post-hand `state` snapshot, and the fleet-wide `handhook` SET NX
-  claim (`claimHandHooks`) has already been taken synchronously — so detaching can neither delay what a player sees
-  nor double-run a hand's bookkeeping. `SetOnTableStreak` and `autoRebuySweep` stay exactly as they were (the former
-  writes back into actor-owned cache via `SetStreaksForActor` and must stay synchronous per the rule above; the
-  latter was already detached). **Known gap, not closed by this change:** if the process dies while the detached
-  goroutine is mid-flight, the hand's `handhook` claim was already taken and is never released, so that hand's
-  gamification writes are permanently lost — pre-existing (a synchronous panic/crash mid-`onHandComplete` had the
-  same failure mode) but the detach widens the window slightly since the actor can move on to the next hand while
-  the goroutine is still running.
+  claim (`claimHandHooks`) has already been taken synchronously — so detaching can neither delay what a player sees.
+  `SetOnTableStreak` and `autoRebuySweep` stay exactly as they were (the former writes back into actor-owned cache
+  via `SetStreaksForActor` and must stay synchronous per the rule above; the latter was already detached). **Known
+  gap, not closed by this change:** if the process dies while the detached goroutine is mid-flight, the hand's
+  `handhook` claim was already taken and is never released, so that hand's gamification writes are permanently lost
+  — pre-existing (a synchronous panic/crash mid-`onHandComplete` had the same failure mode) but the detach widens the
+  window slightly since the actor can move on to the next hand while the goroutine is still running.
+- **`handhook`'s claim does NOT by itself make the pipeline's counters double-run-safe (#66).** `claimHandHooks`
+  fails OPEN on a Valkey error ("a double credit is at least visible and bounded" — see `internal/handhook`'s doc
+  comment), so a Valkey blip during hand completion can let two instances both pass the claim and both reach
+  `onHandComplete` for the same hand. `pokerstats.Store.RecordHand`/`matchup.Store.RecordHand` already guard
+  themselves with their own `"guard#table_id#hand_id"` conditional-write idempotency key (safe either way), and
+  session/hand-history/highlights/recent-players are plain overwrites (also safe either way) — but
+  `achievements.Service.RecordHand`'s `bump`/`bumpBy`/`streak` and `leaderboard.Service`'s
+  `IncrementStats`/`IncrementAchievementPoints` are bare DynamoDB `ADD`s with no guard of their own, so a duplicate
+  run permanently inflated every participant's achievement progress and `hands_played`/`hands_won`. Fixed by
+  `achievements.Service.ClaimHandCounters` / `achievements.Store.ClaimHandCounters` — a second, DynamoDB-backed
+  conditional-write claim (reusing `poker_achievement_progress`, no new table, the same reuse `streakKeyPrefix`
+  already established) that `app.go`'s pipeline takes once, before calling `achv.RecordHand` and either
+  `leaderboardSvc` method, skipping both entirely when the claim is lost. Unlike `handhook`'s claim, an error from
+  `ClaimHandCounters` fails **closed** (skips the increments) rather than open: this guard is the actual source of
+  truth for "already counted," not an optional latency accelerator, so an ambiguous outcome must never risk a second
+  increment landing. If a future writer needs the same non-idempotent-`ADD` protection, gate it behind
+  `ClaimHandCounters` too rather than inventing a new guard — don't assume `handhook`'s claim alone is enough.
 - **Per-seat display state belongs in Valkey, not in the actor.** Several instances serve one table and all broadcast
   to the same sockets, so a process-local tally shows two different values for one seat, alternating between
   broadcasts (the streak badge read "V2, V4, V2, V4" in production). `internal/tablestreak` holds it now:

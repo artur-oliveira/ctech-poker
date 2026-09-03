@@ -556,6 +556,16 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, cacheB
 	// player's next action for multiple seconds (#61). A panic here must
 	// not take the process down with it, same reasoning as the ws
 	// handler's own recover in tablews.go.
+	//
+	// The handhook claim bounds which instance may run this closure at all,
+	// but it fails OPEN on its own Valkey error (see internal/handhook), so
+	// a Valkey blip can still let two instances both reach here for the same
+	// hand. That is only harmless for the writers below that are already
+	// idempotent per (table_id, hand_id) on their own (pokerstats, matchup,
+	// and the plain-overwrite session/hand-history, highlights, recent
+	// players writes) — the achievements/leaderboard counters are bare ADDs
+	// with no guard of their own, so they are additionally gated behind
+	// achv.ClaimHandCounters below (issue #66).
 	onHandComplete := func(tableID, handID string, outcome hand.HandOutcome, names map[string]string) {
 		dispatchGamificationPipeline(tableID, handID, func() {
 			ctx := context.Background()
@@ -594,25 +604,48 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, cacheB
 					TimeBankMs: timeBankMs[metric.PlayerID],
 				}
 			}
-			unlocks, err := achv.RecordHand(ctx, tableID, mode, outcome, achievementMetrics)
+			// claimHandCounters is the correctness backstop for the two
+			// non-idempotent ADD-based writers below (achievements'
+			// counters, leaderboard's hands_played/hands_won/achievement
+			// points): internal/handhook's own claim already dedupes which
+			// instance may reach this pipeline at all, but it fails OPEN on
+			// a Valkey error, so a Valkey blip during hand completion can
+			// let two instances both pass it and both reach here — and
+			// unlike matchup/pokerstats (which guard their own
+			// TransactWrite) neither of these had a per-hand guard of their
+			// own before issue #66. Skip both entirely when the claim is
+			// lost or errors — an error here fails CLOSED (never runs the
+			// increments) rather than open, because this guard IS the
+			// source of truth for "already counted", not an optional
+			// accelerator. matchup/pokerstats/sessionlog/highlights/recent
+			// players are unaffected: they stay outside this guard exactly
+			// as before, since each is already idempotent on its own.
+			claimed, err := achv.ClaimHandCounters(ctx, tableID, handID)
 			if err != nil {
-				slog.Error("achievements record hand failed", "table", tableID, "err", err)
-			}
-			for _, unlock := range unlocks {
-				data, err := goproto.Marshal(&pokerproto.ServerMessage{
-					Type:  "achievement_unlocked",
-					Key:   unlock.Key,
-					Stars: int32(unlock.Stars),
-				})
-				if err == nil {
-					reg.Broadcast(ctx, tableID+"#"+unlock.PlayerID, data)
+				slog.Error("gamification: hand counter guard failed, skipping achievement/leaderboard increments", "table", tableID, "hand", handID, "err", err)
+			} else if !claimed {
+				slog.Info("gamification: hand counters already claimed for this hand, skipping duplicate achievement/leaderboard increments", "table", tableID, "hand", handID)
+			} else {
+				unlocks, err := achv.RecordHand(ctx, tableID, mode, outcome, achievementMetrics)
+				if err != nil {
+					slog.Error("achievements record hand failed", "table", tableID, "err", err)
 				}
-			}
-			if err := leaderboardSvc.RecordUnlocks(ctx, mode, unlocks); err != nil {
-				slog.Error("leaderboard achievement points failed", "table", tableID, "err", err)
-			}
-			if err := leaderboardSvc.RecordHand(ctx, mode, outcome, names); err != nil {
-				slog.Error("leaderboard record hand failed", "table", tableID, "err", err)
+				for _, unlock := range unlocks {
+					data, err := goproto.Marshal(&pokerproto.ServerMessage{
+						Type:  "achievement_unlocked",
+						Key:   unlock.Key,
+						Stars: int32(unlock.Stars),
+					})
+					if err == nil {
+						reg.Broadcast(ctx, tableID+"#"+unlock.PlayerID, data)
+					}
+				}
+				if err := leaderboardSvc.RecordUnlocks(ctx, mode, unlocks); err != nil {
+					slog.Error("leaderboard achievement points failed", "table", tableID, "err", err)
+				}
+				if err := leaderboardSvc.RecordHand(ctx, mode, outcome, names); err != nil {
+					slog.Error("leaderboard record hand failed", "table", tableID, "err", err)
+				}
 			}
 			if metricsErr == nil {
 				if err := pokerStatsStore.RecordHand(ctx, mode, tableID, handID, metrics); err != nil {

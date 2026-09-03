@@ -20,10 +20,59 @@ const tableProgress = "poker_achievement_progress"
 // can exclude it from a player's achievement list.
 const streakKeyPrefix = "streak#"
 
+// handGuardPK/handGuardSK namespace the per-hand idempotency guard (issue
+// #66) inside the same table, the same "no new table" reuse streakKeyPrefix
+// above already established. pk carries table_id+hand_id (guaranteed unique
+// per real player_id pk since a player_id never starts with "hand_guard#"),
+// so it can never collide with a real progress row.
+func handGuardPK(tableID, handID string) string { return "hand_guard#" + tableID + "#" + handID }
+
+const handGuardSK = "guard"
+
 type Store struct{ base dynamo.Base }
 
 func NewStore(db *dynamodb.Client, env string) *Store {
 	return &Store{base: dynamo.NewBase(db, env, tableProgress)}
+}
+
+// ClaimHandCounters reports whether this call is the first, fleet-wide, to
+// reach this hand's non-idempotent achievement/leaderboard counters (issue
+// #66). internal/handhook's SET NX claim already dedupes which instance may
+// run onHandComplete at all, but it fails OPEN on a Valkey error (deliberate
+// there — "a double credit is at least visible and bounded", see
+// handhook.go) — so on a Valkey blip during a hand completion, two instances
+// can both pass that claim and both reach Service.RecordHand's bare ADD
+// increments, which have no guard of their own. This is that guard: an
+// atomic conditional PutItem, following this codebase's established
+// "guard#table_id#hand_id" idempotency idiom (pokerstats.Store.RecordHand,
+// matchup.Store.RecordHand), reusing this table rather than a new one (same
+// reasoning as streakKeyPrefix above). Unlike handhook's claim, an error here
+// is reported to the caller rather than defaulting to "claimed": this guard
+// IS the correctness backstop for these counters, so an ambiguous outcome
+// must never risk a second increment landing.
+func (s *Store) ClaimHandCounters(ctx context.Context, tableID, handID string) (bool, error) {
+	if tableID == "" || handID == "" {
+		return true, nil
+	}
+	item, err := dynamo.Encode(struct {
+		PK string `dynamodbav:"pk"`
+		SK string `dynamodbav:"sk"`
+	}{PK: handGuardPK(tableID, handID), SK: handGuardSK})
+	if err != nil {
+		return false, fmt.Errorf("achievements: encode hand guard: %w", err)
+	}
+	_, err = s.base.PutItemRaw(ctx, &dynamodb.PutItemInput{
+		TableName:           aws.String(s.base.TableName),
+		Item:                item,
+		ConditionExpression: aws.String("attribute_not_exists(pk)"),
+	})
+	if err != nil {
+		if dynamo.IsConditionFailed(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("achievements: claim hand counters %s/%s: %w", tableID, handID, err)
+	}
+	return true, nil
 }
 
 func (s *Store) Increment(ctx context.Context, playerID, mode, key string, by int) (int, int, error) {
