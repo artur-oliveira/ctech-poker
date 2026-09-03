@@ -574,6 +574,20 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, cacheB
 				slog.Error("gamification: load room mode failed", "table", tableID, "err", err)
 				return
 			}
+			// Player-visible reads (the last-winners strip's hand history and
+			// the "maior pote de hoje" highlight) are written first: the client
+			// invalidates both the instant it sees the `complete` snapshot, and
+			// everything below (achievements, leaderboard, pokerstats, matchup)
+			// is tens-to-hundreds of sequential DynamoDB round trips that would
+			// otherwise make the client's refetch race ahead of these writes
+			// and show the finished hand a whole hand late. All three are plain
+			// idempotent overwrites and depend only on the outcome, not on any
+			// metrics computed below.
+			persistHandHistory(tableID, handID, mode, outcome, names)
+			persistHandReveal(tableID, handID, mode, outcome)
+			if err := highlightsStore.RecordHand(ctx, tableID, handID, outcome, names); err != nil {
+				slog.Error("highlights: record hand failed", "table", tableID, "hand", handID, "err", err)
+			}
 			var metrics []pokerstats.HandMetric
 			actions, metricsErr := store.LoadActionsSince(ctx, tableID, handID, 0)
 			if metricsErr != nil {
@@ -654,11 +668,6 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, cacheB
 			}
 			if err := matchupStore.RecordHand(ctx, mode, tableID, handID, outcome); err != nil {
 				slog.Error("matchup: record hand failed", "table", tableID, "hand", handID, "err", err)
-			}
-			persistHandHistory(tableID, handID, mode, outcome, names)
-			persistHandReveal(tableID, handID, mode, outcome)
-			if err := highlightsStore.RecordHand(ctx, tableID, handID, outcome, names); err != nil {
-				slog.Error("highlights: record hand failed", "table", tableID, "hand", handID, "err", err)
 			}
 			if recentSvc != nil {
 				if err := recentSvc.RecordHand(ctx, tableID, handID, outcome.Participants, time.Now()); err != nil {

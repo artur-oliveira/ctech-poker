@@ -611,6 +611,9 @@ describe('useTableRealtime', () => {
     receive({type: 'removed', code: 'idle_timeout'});
     expect(result.current.unlock).toEqual({key: 'first_win', stars: 3});
     expect(result.current.removed).toEqual({code: 'idle_timeout'});
+
+    act(() => result.current.clearUnlock());
+    expect(result.current.unlock).toBeNull();
   });
   
   test('updates only equity that belongs to the latest snapshot version', () => {

@@ -202,7 +202,7 @@ function realtime(overrides: Record<string, unknown> = {}) {
     preselectAction: vi.fn(() => true), pendingAction: null, actionError: null,
     clearActionError: vi.fn(), keepSeat: vi.fn(() => true), chat: [], sendChat: vi.fn(),
     reactions: [], sendReaction: vi.fn(), botChallengeRequired: false, submitBotChallenge: vi.fn(),
-    unlock: null, ...overrides,
+    unlock: null, clearUnlock: vi.fn(), ...overrides,
   };
   mocks.realtimeHook.mockImplementation(() => mocks.realtime);
 }

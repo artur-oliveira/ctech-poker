@@ -156,4 +156,25 @@ describe('TodayHighlight', () => {
     await waitFor(() => expect(screen.getByText('900')).toBeInTheDocument());
     expect(getTodayHighlight).toHaveBeenCalledTimes(2);
   });
+
+  test('keeps re-checking after completion so a late-written highlight still lands', async () => {
+    vi.useFakeTimers();
+    try {
+      // Server hasn't written the row yet at completion: the immediate refetch
+      // returns the stale pot, a backoff refetch picks up the real one.
+      getTodayHighlight.mockResolvedValueOnce(highlight({pot: 100}));
+      const {rerender} = renderHighlight({handId: 'hand-1', handComplete: false});
+      await vi.waitFor(() => expect(screen.getByText('100')).toBeInTheDocument());
+
+      getTodayHighlight.mockResolvedValueOnce(highlight({pot: 100}));
+      getTodayHighlight.mockResolvedValueOnce(highlight({pot: 4200}));
+      rerender(<TodayHighlight tableId="t1" handId="hand-1" handComplete/>);
+
+      await vi.advanceTimersByTimeAsync(2000);
+      await vi.waitFor(() => expect(screen.getByText('4.200')).toBeInTheDocument());
+      expect(getTodayHighlight).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

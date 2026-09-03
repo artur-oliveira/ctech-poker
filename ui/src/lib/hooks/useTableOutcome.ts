@@ -4,6 +4,7 @@ import {useQueryClient} from '@tanstack/react-query';
 import type {TableSnapshot} from '@/lib/api/table';
 import type {HandOutcomeState} from '@/components/table/HandOutcome';
 import {buildHandOutcome, seatParticipated} from '@/lib/tableOutcome';
+import {invalidateAfterSettle} from '@/lib/settleRefetch';
 
 /** The showdown banner and the two frozen timestamps around it.
  *
@@ -71,14 +72,13 @@ export function useTableOutcome({id, viewer, snapshot, snapshotAt}: {
       previousPayoutsRef.current.payouts : undefined;
     const isFreshPayout = hasPayouts && !previousPayouts;
     previousPayoutsRef.current = {tableID: id, payouts: hasPayouts ? snapshot?.payouts : undefined};
-    if (isFreshPayout) void queryClient.invalidateQueries({queryKey: ['hands', id]});
     if (!isFreshPayout || !snapshot || !viewer) return;
     const remembered = rememberedStart?.tableID === id ? rememberedStart : null;
     const value = buildHandOutcome(snapshot, viewer, remembered, outcomeKeyRef.current + 1);
     if (!value) return;
     outcomeKeyRef.current += 1;
     setScopedHandOutcome({tableID: id, handID: snapshot.hand_id, value});
-  }, [snapshot, viewer, queryClient, id, rememberedStart]);
+  }, [snapshot, viewer, id, rememberedStart]);
 
   // The banner/toast-blocking state above is scoped to the hand that produced
   // it and must not survive into the next one: once the server deals a new
@@ -94,6 +94,18 @@ export function useTableOutcome({id, viewer, snapshot, snapshotAt}: {
     setScopedHandOutcome(previous => previous && previous.tableID === id && previous.handID !== handID ?
       null : previous);
   }, [snapshot?.hand_id, id]);
+
+  // The last-winners strip reads the player's own hand history, which the
+  // server only writes on a pipeline it runs *after* broadcasting this
+  // `complete` snapshot — so one invalidate here would refetch before the row
+  // exists. Re-invalidate with a backoff, keyed on the settled hand so the
+  // sequence starts once and is cancelled when the next hand deals.
+  const settledHandID = snapshot?.payouts && Object.keys(snapshot.payouts).length > 0 ?
+    snapshot?.hand_id : undefined;
+  useEffect(() => {
+    if (!settledHandID) return undefined;
+    return invalidateAfterSettle(queryClient, ['hands', id]);
+  }, [settledHandID, id, queryClient]);
 
   const viewerSeat = snapshot?.seats.find(seat => seat.player_id === viewer);
   return {

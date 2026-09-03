@@ -176,6 +176,13 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   `handhook` claim was already taken and is never released, so that hand's gamification writes are permanently lost —
   pre-existing (a synchronous panic/crash mid-`onHandComplete` had the same failure mode) but the detach widens the
   window slightly since the actor can move on to the next hand while the goroutine is still running.
+  **Ordering within the pipeline matters (2026-09-03):** the two player-visible writes — `persistHandHistory`
+  (backs the last-winners strip) and `highlightsStore.RecordHand` (backs "maior pote de hoje") — run **first**,
+  before achievements/leaderboard/pokerstats/matchup. The client invalidates both query keys the instant it sees the
+  `complete` snapshot, so anything ahead of these writes in the pipeline was making its refetch race ahead of the row
+  and show the finished hand a whole hand late. Keep them at the front; the UI also re-invalidates on a backoff
+  (`ui/src/lib/settleRefetch.ts`) as the real safety net. See
+  `docs/specs/2026-09-03-post-hand-refresh-latency-and-achievement-toast-replay.md`.
 - **`handhook`'s claim does NOT by itself make the pipeline's counters double-run-safe (#66).** `claimHandHooks`
   fails OPEN on a Valkey error ("a double credit is at least visible and bounded" — see `internal/handhook`'s doc
   comment), so a Valkey blip during hand completion can let two instances both pass the claim and both reach

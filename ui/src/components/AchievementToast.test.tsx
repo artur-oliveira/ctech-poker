@@ -82,6 +82,57 @@ describe('AchievementToast', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Vitórias');
   });
 
+  test('calls onConsumed once its full lifecycle finishes', () => {
+    const onConsumed = vi.fn();
+    render(<AchievementToast unlock={{key: 'wins', stars: 1}} onConsumed={onConsumed}/>);
+
+    act(() => vi.advanceTimersByTime(4200));
+    expect(onConsumed).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(350));
+    expect(onConsumed).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not replay a completed unlock when blocking toggles afterwards', () => {
+    // Reproduces the bug: the owner keeps `unlock` set, and every resolved hand
+    // flips `blocked` true→false. A celebrated achievement must not come back.
+    const unlock = {key: 'beat_pocket_aces', stars: 1};
+    const {rerender} = render(<AchievementToast unlock={unlock} blocked={false}/>);
+    act(() => vi.advanceTimersByTime(4550));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+    rerender(<AchievementToast unlock={unlock} blocked/>);
+    rerender(<AchievementToast unlock={unlock} blocked={false}/>);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+    rerender(<AchievementToast unlock={unlock} blocked/>);
+    rerender(<AchievementToast unlock={unlock} blocked={false}/>);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  test('still shows a new achievement after a previous one completed', () => {
+    const {rerender} = render(<AchievementToast unlock={{key: 'wins', stars: 1}}/>);
+    act(() => vi.advanceTimersByTime(4550));
+
+    rerender(<AchievementToast unlock={{key: 'bluff', stars: 2}}/>);
+    expect(screen.getByRole('status')).toHaveTextContent('Mestre do Blefe');
+  });
+
+  test('resumes an unlock interrupted mid-celebration and only then consumes it', () => {
+    const onConsumed = vi.fn();
+    const unlock = {key: 'bluff', stars: 2};
+    const {rerender} = render(<AchievementToast unlock={unlock} onConsumed={onConsumed}/>);
+    expect(screen.getByRole('status')).toHaveTextContent('Mestre do Blefe');
+
+    rerender(<AchievementToast unlock={unlock} blocked onConsumed={onConsumed}/>);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    rerender(<AchievementToast unlock={null} blocked={false} onConsumed={onConsumed}/>);
+    expect(screen.getByRole('status')).toHaveTextContent('Mestre do Blefe');
+
+    act(() => vi.advanceTimersByTime(4550));
+    expect(onConsumed).toHaveBeenCalledTimes(1);
+  });
+
   test('retains the same visible unlock without restarting its lifecycle', () => {
     const unlock = {key: 'wins', stars: 2};
     const {rerender} = render(<AchievementToast unlock={unlock}/>);

@@ -805,6 +805,10 @@ export function useTableRealtime(id: string, viewerId?: string, shareCode?: stri
     snapshot: snapshotTableID === id ? snapshot : null,
     snapshotAt,
     unlock,
+    // The socket sets `unlock` once per achievement_unlocked frame and it must
+    // be dropped once the toast has celebrated it — otherwise every later
+    // hand-outcome card (which blocks the toast layer) replays the same one.
+    clearUnlock: () => setUnlock(null),
     chat: visibleChat,
     chatBubbles: visibleBubbles,
     reactions: visibleReactions,

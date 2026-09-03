@@ -5,6 +5,7 @@ import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {getTodayHighlight} from '@/lib/api/highlights';
 import {HAND_CATEGORY_LABELS} from '@/lib/handCategories';
 import {bestHandCategory, compareHands} from '@/lib/pokerRules';
+import {invalidateAfterSettle} from '@/lib/settleRefetch';
 
 const CARD_CODE = /^[2-9TJQKA][CDHS]$/i;
 
@@ -44,9 +45,12 @@ export function TodayHighlight({tableId, handId, handComplete}: {
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!handComplete || !handId || handId === lastHandId.current) return;
+    if (!handComplete || !handId || handId === lastHandId.current) return undefined;
     lastHandId.current = handId;
-    queryClient.invalidateQueries({queryKey: ['highlights', tableId, 'today']});
+    // The highlight row is written by the server's detached post-hand
+    // pipeline, after this `complete` frame was already sent — re-invalidate
+    // with a backoff so a bigger pot isn't shown a hand late.
+    return invalidateAfterSettle(queryClient, ['highlights', tableId, 'today']);
   }, [handComplete, handId, queryClient, tableId]);
 
   // Narrow phones shrink the pill down to the trophy icon (see .today-highlight

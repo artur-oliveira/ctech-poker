@@ -5722,17 +5722,24 @@ h1 em {
     min-height: 0;
     padding: 8px 12px 0
 }
-/* The ring keeps a tall-capsule proportion instead of swallowing all leftover
-   height, since on tablets the felt would otherwise balloon into a near-circle of
-   dead green. Short phones opt back into full-bleed width (see the
-   max-height tier at the end of this file). */
+/* The ring used to derive its width from aspect-ratio(3/4) against the
+   height flex:1 hands it — a flex-basis-from-cross-size transfer that some
+   mobile engines (confirmed on real iOS Safari/Chrome and a Xiaomi browser;
+   never reproduced in desktop DevTools' emulation, same engine as the
+   desktop that authored it) silently refuse: width sticks to its floor
+   instead of tracking height at all, leaving a hairline table with the felt
+   content overflowing sideways. An explicit width the flex algorithm can
+   always resolve — capped so it doesn't balloon into a near-circle of dead
+   green on tablets — replaces that dependency outright rather than patching
+   around it again. Short, cramped screens still opt back into full-bleed
+   width (see the max-height tier at the end of this file), which is now the
+   same value as the default rather than a distinct fallback. */
 .stage-v-ring {
     position: relative;
     flex: 1;
     align-self: center;
-    aspect-ratio: 3 / 4;
-    width: auto;
-    max-width: 100%;
+    width: 100%;
+    max-width: min(100%, 640px);
     min-width: 220px;
     min-height: 300px
 }
@@ -9534,15 +9541,11 @@ html:has(.has-tab-bar) {
         --seat-y: 79%
     }
 
-    /* Short phones drop the tall-capsule proportion and take the full stage
-       width. The ring is height-driven, so at 320x568 the 3/4 capsule was only
-       252px wide while the community row needs ~181px of the middle — which
-       left the mid-side seats nowhere to put a caption. Full-bleed moves seats
-       2 and 7 out to the edges and gives the caption its own column. */
-    .stage-v-ring {
-        aspect-ratio: auto;
-        width: 100%
-    }
+    /* Full-bleed width is now the default for every stage-v ring (see the
+       base rule), not just this short-phone tier: at 320x568 a 3/4 capsule
+       left the community row only ~181px of the middle, with no room for the
+       mid-side seats' captions. Full width moves seats 2 and 7 out to the
+       edges and gives the caption its own column. */
 
     /* Those two captions are the only ones that sit level with the community
        row, so they are the ones held to the width outside it. */

@@ -417,7 +417,7 @@ function TableContent() {
                                 void queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT});
                               }}/>
 
-      <AchievementToast unlock={rt.unlock} blocked={Boolean(handOutcome)}/>
+      <AchievementToast unlock={rt.unlock} blocked={Boolean(handOutcome)} onConsumed={rt.clearUnlock}/>
       {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
     </main>
   );
