@@ -18,7 +18,7 @@ import {
   Table2
 } from 'lucide-react';
 import type {WalletMode} from '@/lib/api/player';
-import {getHand} from '@/lib/api/player';
+import {getHand, handEndedAtMs} from '@/lib/api/player';
 import {getHandHistory} from '@/lib/api/table';
 import {getPlayerNotes, type PlayerNote} from '@/lib/api/playerNotes';
 import {getRelationships} from '@/lib/api/social';
@@ -48,8 +48,8 @@ import {SOCIAL_KEYS} from '@/lib/social';
 const PlayerNoteDialog = dynamic(() => import('@/components/table/PlayerNoteDialog')
   .then(module => module.PlayerNoteDialog));
 
-function formatDate(unixSeconds: number) {
-  return new Date(unixSeconds * 1000).toLocaleString('pt-BR', {
+function formatDate(endedAtMs: number) {
+  return new Date(handEndedAtMs(endedAtMs)).toLocaleString('pt-BR', {
     day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 }
@@ -156,7 +156,7 @@ function HandHistoryContent() {
       <OutcomeBadge outcome={h.outcome}/>
       <h1>Detalhes da mão</h1>
       <div className="hand-history-meta">
-        <span><CalendarDays aria-hidden="true"/>{formatDate(h.ended_at / 1000)}</span>
+        <span><CalendarDays aria-hidden="true"/>{formatDate(h.ended_at)}</span>
         <span className="hand-history-table-id"><Table2 aria-hidden="true"/>Mesa <code>{h.table_id}</code>
           <button type="button" onClick={() => void copyTableId()}
                   aria-label={tableCopied ? 'ID da mesa copiado' : 'Copiar ID da mesa'} title="Copiar ID da mesa">

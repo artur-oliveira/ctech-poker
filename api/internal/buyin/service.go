@@ -338,8 +338,11 @@ func (s *Service) buyIn(ctx context.Context, roomID, playerID string, amount int
 
 	if s.sessions != nil {
 		if open, err := s.sessions.FindOpenSession(ctx, playerID, roomID); err == nil && open != nil {
-			open.BuyinAmount += amount
-			if err := s.sessions.RecordSession(ctx, *open); err != nil {
+			// Atomic conditional ADD, not a read-modify-write: `key` is the
+			// same composite idempotency key already used for the wallet
+			// debit above, so a retried buy-in can never double-count this
+			// rebuy in the session's cumulative total (issue #70).
+			if err := s.sessions.AddBuyin(ctx, playerID, open.SK, amount, key); err != nil {
 				slog.Error("sessionlog: update session rebuy failed", "player", playerID, "table", roomID, "err", err)
 			}
 		} else {

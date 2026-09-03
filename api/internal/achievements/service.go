@@ -18,6 +18,7 @@ type progressStore interface {
 	IncrementStreak(context.Context, string, string, string, bool, int) (current int, err error)
 	ListAchievements(ctx context.Context, playerID, mode string, limit int, startKey map[string]types.AttributeValue) ([]PlayerAchievementProgress, map[string]types.AttributeValue, error)
 	UpdateTableStreak(ctx context.Context, playerID, mode, tableID string, won bool) (current int, err error)
+	ClaimHandCounters(ctx context.Context, tableID, handID string) (bool, error)
 }
 
 type Service struct {
@@ -117,6 +118,19 @@ func NewService(store *Store) *Service                 { return newService(store
 func NewServiceWithStore(store progressStore) *Service { return newService(store) }
 func newService(store progressStore) *Service {
 	return &Service{store: store, lastPocketPair: make(map[string]byte)}
+}
+
+// ClaimHandCounters reports whether the caller is the first, fleet-wide, to
+// reach tableID/handID's non-idempotent achievement and leaderboard
+// counters. Callers (app.go's gamification pipeline) must call this once,
+// before RecordHand and any leaderboard update, and skip both entirely when
+// it returns false — see Store.ClaimHandCounters for why this exists in
+// addition to internal/handhook's own claim.
+func (s *Service) ClaimHandCounters(ctx context.Context, tableID, handID string) (bool, error) {
+	if s == nil || s.store == nil {
+		return true, nil
+	}
+	return s.store.ClaimHandCounters(ctx, tableID, handID)
 }
 
 func (s *Service) RecordHand(ctx context.Context, tableID, mode string, outcome hand.HandOutcome, metricSets ...[]HandMetric) ([]TierUnlock, error) {

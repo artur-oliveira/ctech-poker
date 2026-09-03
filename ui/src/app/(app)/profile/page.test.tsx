@@ -67,7 +67,7 @@ describe('public player profile page', () => {
         hand_id: 'hand-1',
         table_id: 'table-1',
         net_change: 2500,
-        ended_at: 1_700_000_000,
+        ended_at: 1_700_000_000_000,
         hole_cards: ['AH', 'KH'],
         board: ['QH', 'JH', 'TH'],
       },

@@ -98,6 +98,7 @@ export interface PlayerSession {
   cashout_amount: number;
   net_pnl: number;
   joined_at: number;
+  // Epoch milliseconds, never seconds — see handEndedAtMs below (#74).
   ended_at: number;
 }
 
@@ -127,6 +128,10 @@ export interface HandItem {
   hand_id: string;
   outcome: HandOutcome;
   net_change: number;
+  // Epoch milliseconds, never seconds, on every hand endpoint that emits
+  // this field (list, by-id, and ProfileShowcase.best_hand) — see
+  // handEndedAtMs below. Do not add a per-call-site unit heuristic; a
+  // `< 1e12 ? *1000 : ended_at` guess is exactly the bug #74 removed.
   ended_at: number;
   // Big blind in force for this hand. Added by backend issue #75; absent on
   // hands logged before it, where HandReplayer derives the level from the
@@ -165,6 +170,16 @@ export async function getHand(handId: string, mode: WalletMode = 'sandbox') {
   return (await apiClient.get<HandItem>(`/v1.0/players/me/hand/${encodeURIComponent(handId)}`, {
     params: {mode}, silentError: true
   })).data;
+}
+
+// Single point of truth for turning a hand's `ended_at` into the epoch
+// milliseconds `Date` expects. Every hand-bearing endpoint (getHands,
+// getHand, and ProfileShowcase.best_hand) already returns ms, so this is
+// intentionally a passthrough — its purpose is to be the one call site a
+// future unit regression on any single endpoint gets fixed at, instead of a
+// `< 1e12 ? *1000 : ended_at` heuristic creeping back into a page (#74).
+export function handEndedAtMs(endedAt: number): number {
+  return endedAt;
 }
 
 export interface HandRevealCheck {

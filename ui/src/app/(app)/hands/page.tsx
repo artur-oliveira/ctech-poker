@@ -12,7 +12,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import type {HandItem, WalletMode} from '@/lib/api/player';
-import {getHands} from '@/lib/api/player';
+import {getHands, handEndedAtMs} from '@/lib/api/player';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {BoardSlots} from '@/components/hands/BoardSlots';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
@@ -24,8 +24,8 @@ import {Button} from '@/components/ui/button';
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 
-function formatDate(unixSeconds: number) {
-  return new Date(unixSeconds * 1000).toLocaleString('pt-BR', {
+function formatDate(endedAtMs: number) {
+  return new Date(handEndedAtMs(endedAtMs)).toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit'
   });
 }
@@ -77,7 +77,7 @@ const HandRow = memo(function HandRow({hand, mode}: { hand: HandItem; mode: Wall
       </div>
     </div>
     <div className="hand-row-bottom">
-      <span>{formatDate(hand.ended_at / 1000)}</span>
+      <span>{formatDate(hand.ended_at)}</span>
       <span className="hand-row-table" title={hand.table_id}>Mesa {hand.table_id}</span>
       {hand.server_seed
         ? <span className="hand-row-seed" title={hand.server_seed}><ShieldCheck aria-hidden="true"/> seed {truncateSeed(hand.server_seed)}</span>

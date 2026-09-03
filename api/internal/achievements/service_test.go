@@ -9,7 +9,27 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 )
 
-type memStore struct{ progress map[string]map[string]int }
+type memStore struct {
+	progress map[string]map[string]int
+	// claimed simulates the fleet-wide DynamoDB hand-counter guard: a
+	// (table_id, hand_id) key present here has already been claimed by some
+	// caller, so a later ClaimHandCounters call for the same key returns
+	// false, exactly like a duplicate onHandComplete invocation racing a
+	// Valkey blip (issue #66).
+	claimed map[string]bool
+}
+
+func (m *memStore) ClaimHandCounters(_ context.Context, tableID, handID string) (bool, error) {
+	if m.claimed == nil {
+		m.claimed = map[string]bool{}
+	}
+	key := tableID + "#" + handID
+	if m.claimed[key] {
+		return false, nil
+	}
+	m.claimed[key] = true
+	return true, nil
+}
 
 func (m *memStore) Increment(_ context.Context, playerID, mode, key string, by int) (int, int, error) {
 	row := mode + "#" + playerID
@@ -62,6 +82,68 @@ func (m *memStore) ListAchievements(_ context.Context, playerID, mode string, _ 
 		out = append(out, PlayerAchievementProgress{Key: key, Count: count})
 	}
 	return out, nil, nil
+}
+
+// TestClaimHandCountersOnlyFirstCallerWins covers the guard itself (issue
+// #66): a second claim for the same (table_id, hand_id) must lose, no matter
+// how many times it is retried, while a different hand_id is unaffected.
+func TestClaimHandCountersOnlyFirstCallerWins(t *testing.T) {
+	store := &memStore{progress: map[string]map[string]int{}}
+	service := NewServiceWithStore(store)
+	first, err := service.ClaimHandCounters(context.Background(), "table-1", "hand-1")
+	if err != nil || !first {
+		t.Fatalf("first claim: got (%v, %v), want (true, nil)", first, err)
+	}
+	second, err := service.ClaimHandCounters(context.Background(), "table-1", "hand-1")
+	if err != nil || second {
+		t.Fatalf("duplicate claim: got (%v, %v), want (false, nil)", second, err)
+	}
+	third, err := service.ClaimHandCounters(context.Background(), "table-1", "hand-1")
+	if err != nil || third {
+		t.Fatalf("re-retried claim: got (%v, %v), want (false, nil)", third, err)
+	}
+	otherHand, err := service.ClaimHandCounters(context.Background(), "table-1", "hand-2")
+	if err != nil || !otherHand {
+		t.Fatalf("different hand claim: got (%v, %v), want (true, nil)", otherHand, err)
+	}
+}
+
+// TestRecordHandGuardPreventsDoubleCountOnDuplicateInvocation simulates the
+// exact failure this issue describes: a Valkey blip during hand completion
+// lets two instances both pass internal/handhook's fail-open claim and both
+// reach the gamification pipeline for the same hand. The caller (mirroring
+// app.go's onHandComplete) must gate RecordHand behind ClaimHandCounters, so
+// only the winning call ever increments progress.
+func TestRecordHandGuardPreventsDoubleCountOnDuplicateInvocation(t *testing.T) {
+	store := &memStore{progress: map[string]map[string]int{}}
+	service := NewServiceWithStore(store)
+	outcome := hand.HandOutcome{Winners: []string{"p1"}, Participants: []string{"p1", "p2"}}
+
+	runOnce := func() {
+		claimed, err := service.ClaimHandCounters(context.Background(), "table-1", "hand-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !claimed {
+			return
+		}
+		if _, err := service.RecordHand(context.Background(), "table-1", "sandbox", outcome); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Two "instances" both reach the pipeline for the same hand.
+	runOnce()
+	runOnce()
+
+	if got := store.progress["sandbox#p1"][KeyHandsPlayed]; got != 1 {
+		t.Fatalf("p1 hands played = %d, want 1 (double-counted)", got)
+	}
+	if got := store.progress["sandbox#p1"][KeyWins]; got != 1 {
+		t.Fatalf("p1 wins = %d, want 1 (double-counted)", got)
+	}
+	if got := store.progress["sandbox#p2"][KeyHandsPlayed]; got != 1 {
+		t.Fatalf("p2 hands played = %d, want 1 (double-counted)", got)
+	}
 }
 
 func TestRecordHandUpdatesProgressAndUnlocks(t *testing.T) {

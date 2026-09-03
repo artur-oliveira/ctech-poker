@@ -20,6 +20,12 @@ import (
 
 type mockHistoryReader struct{}
 
+// fixtureEndedAtMs is an epoch-milliseconds timestamp (13 digits, well above
+// 1e12) used to assert every hand endpoint passes sessionlog.HandItem's
+// EndedAt straight through, in the same unit, with no per-endpoint
+// conversion (#74).
+const fixtureEndedAtMs int64 = 1_700_000_000_000
+
 type mockAchievementReader struct {
 	all []achievements.PlayerAchievementProgress
 }
@@ -43,13 +49,13 @@ func (m *mockHistoryReader) ListSessions(_ context.Context, playerID string, _ i
 }
 
 func (m *mockHistoryReader) ListHands(_ context.Context, playerID, mode string, _ int, _ map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error) {
-	return []sessionlog.HandItem{{PK: playerID, HandID: "h-1", NetChange: 50}}, nil, nil
+	return []sessionlog.HandItem{{PK: playerID, HandID: "h-1", NetChange: 50, EndedAt: fixtureEndedAtMs}}, nil, nil
 }
 func (m *mockHistoryReader) ListHandsByTable(_ context.Context, playerID, mode, tableID string, _ int, _ map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error) {
-	return []sessionlog.HandItem{{PK: playerID, HandID: "h-1", NetChange: 50, TableID: tableID}}, nil, nil
+	return []sessionlog.HandItem{{PK: playerID, HandID: "h-1", NetChange: 50, TableID: tableID, EndedAt: fixtureEndedAtMs}}, nil, nil
 }
 func (m *mockHistoryReader) GetHand(_ context.Context, playerID, mode, handID string) (*sessionlog.HandItem, error) {
-	return &sessionlog.HandItem{PK: playerID, HandID: handID, NetChange: 50}, nil
+	return &sessionlog.HandItem{PK: playerID, HandID: handID, NetChange: 50, EndedAt: fixtureEndedAtMs}, nil
 }
 
 func TestPlayerHistoryEndpoints(t *testing.T) {
@@ -426,6 +432,64 @@ func TestAchievementsSummaryReturnsFullState(t *testing.T) {
 	if body.Totals.Stars < 3 || body.Totals.Unlocked < 2 || body.Totals.MaxStars == 0 {
 		t.Fatalf("totals = %+v, want stars>=3, unlocked>=2, max stars set", body.Totals)
 	}
+}
+
+// TestHandEndedAtIsEpochMillisecondsEverywhere locks down the unit fix for
+// #74: every hand-bearing endpoint — the hand list, hand-by-id, and the
+// public showcase's best_hand — must emit sessionlog.HandItem.EndedAt
+// unchanged, in epoch milliseconds. A regression that divides/multiplies by
+// 1000 on only one of these endpoints (the historical bug) fails this test.
+func TestHandEndedAtIsEpochMillisecondsEverywhere(t *testing.T) {
+	app := fiber.New()
+	auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "user-123"); return c.Next() }
+	store := &fakePlayerStore{profile: player.PlayerProfile{ShowcasePublic: true}}
+	RegisterPlayers(app.Group("/v1.0"), auth, player.NewService(store), &mockHistoryReader{},
+		mockAchievementReader{}, nil, nil, nil, nil)
+
+	decodeEndedAt := func(t *testing.T, path string, dig func(map[string]json.RawMessage) json.RawMessage) int64 {
+		t.Helper()
+		resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, path, nil))
+		if err != nil || resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("GET %s: status = %d, err = %v", path, resp.StatusCode, err)
+		}
+		var body map[string]json.RawMessage
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatalf("GET %s: decode: %v", path, err)
+		}
+		raw := dig(body)
+		var endedAt int64
+		if err := json.Unmarshal(raw, &endedAt); err != nil {
+			t.Fatalf("GET %s: ended_at not a bare int64 (%s): %v", path, raw, err)
+		}
+		return endedAt
+	}
+
+	t.Run("GET /players/me/hand/:id", func(t *testing.T) {
+		got := decodeEndedAt(t, "/v1.0/players/me/hand/h-1", func(b map[string]json.RawMessage) json.RawMessage {
+			return b["ended_at"]
+		})
+		if got != fixtureEndedAtMs {
+			t.Fatalf("ended_at = %d, want %d (ms)", got, fixtureEndedAtMs)
+		}
+	})
+
+	t.Run("GET /players/:playerId/showcase best_hand", func(t *testing.T) {
+		resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/players/user-123/showcase", nil))
+		if err != nil || resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("status = %d, err = %v", resp.StatusCode, err)
+		}
+		var body struct {
+			BestHand struct {
+				EndedAt int64 `json:"ended_at"`
+			} `json:"best_hand"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.BestHand.EndedAt != fixtureEndedAtMs {
+			t.Fatalf("best_hand.ended_at = %d, want %d (ms)", body.BestHand.EndedAt, fixtureEndedAtMs)
+		}
+	})
 }
 
 func TestShowcasePlaystyleRequiresOptInAndPublicSample(t *testing.T) {

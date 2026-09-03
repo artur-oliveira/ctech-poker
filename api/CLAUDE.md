@@ -161,14 +161,30 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   detached via `app.dispatchGamificationPipeline` (`go` + `recover`), the same pattern `autoRebuySweep` already used.
   This is safe specifically because, by the time `table/actor.go`'s `notifyHandComplete` reaches this hook,
   `broadcastAll` has already sent every player their post-hand `state` snapshot, and the fleet-wide `handhook` SET NX
-  claim (`claimHandHooks`) has already been taken synchronously — so detaching can neither delay what a player sees
-  nor double-run a hand's bookkeeping. `SetOnTableStreak` and `autoRebuySweep` stay exactly as they were (the former
-  writes back into actor-owned cache via `SetStreaksForActor` and must stay synchronous per the rule above; the
-  latter was already detached). **Known gap, not closed by this change:** if the process dies while the detached
-  goroutine is mid-flight, the hand's `handhook` claim was already taken and is never released, so that hand's
-  gamification writes are permanently lost — pre-existing (a synchronous panic/crash mid-`onHandComplete` had the
-  same failure mode) but the detach widens the window slightly since the actor can move on to the next hand while
-  the goroutine is still running.
+  claim (`claimHandHooks`) has already been taken synchronously — so detaching can neither delay what a player sees.
+  `SetOnTableStreak` and `autoRebuySweep` stay exactly as they were (the former writes back into actor-owned cache
+  via `SetStreaksForActor` and must stay synchronous per the rule above; the latter was already detached). **Known
+  gap, not closed by this change:** if the process dies while the detached goroutine is mid-flight, the hand's
+  `handhook` claim was already taken and is never released, so that hand's gamification writes are permanently lost
+  — pre-existing (a synchronous panic/crash mid-`onHandComplete` had the same failure mode) but the detach widens the
+  window slightly since the actor can move on to the next hand while the goroutine is still running.
+- **`handhook`'s claim does NOT by itself make the pipeline's counters double-run-safe (#66).** `claimHandHooks`
+  fails OPEN on a Valkey error ("a double credit is at least visible and bounded" — see `internal/handhook`'s doc
+  comment), so a Valkey blip during hand completion can let two instances both pass the claim and both reach
+  `onHandComplete` for the same hand. `pokerstats.Store.RecordHand`/`matchup.Store.RecordHand` already guard
+  themselves with their own `"guard#table_id#hand_id"` conditional-write idempotency key (safe either way), and
+  session/hand-history/highlights/recent-players are plain overwrites (also safe either way) — but
+  `achievements.Service.RecordHand`'s `bump`/`bumpBy`/`streak` and `leaderboard.Service`'s
+  `IncrementStats`/`IncrementAchievementPoints` are bare DynamoDB `ADD`s with no guard of their own, so a duplicate
+  run permanently inflated every participant's achievement progress and `hands_played`/`hands_won`. Fixed by
+  `achievements.Service.ClaimHandCounters` / `achievements.Store.ClaimHandCounters` — a second, DynamoDB-backed
+  conditional-write claim (reusing `poker_achievement_progress`, no new table, the same reuse `streakKeyPrefix`
+  already established) that `app.go`'s pipeline takes once, before calling `achv.RecordHand` and either
+  `leaderboardSvc` method, skipping both entirely when the claim is lost. Unlike `handhook`'s claim, an error from
+  `ClaimHandCounters` fails **closed** (skips the increments) rather than open: this guard is the actual source of
+  truth for "already counted," not an optional latency accelerator, so an ambiguous outcome must never risk a second
+  increment landing. If a future writer needs the same non-idempotent-`ADD` protection, gate it behind
+  `ClaimHandCounters` too rather than inventing a new guard — don't assume `handhook`'s claim alone is enough.
 - **Per-seat display state belongs in Valkey, not in the actor.** Several instances serve one table and all broadcast
   to the same sockets, so a process-local tally shows two different values for one seat, alternating between
   broadcasts (the streak badge read "V2, V4, V2, V4" in production). `internal/tablestreak` holds it now:
@@ -214,6 +230,14 @@ catalog.
 
 ## Other known issues (documentation only — see api/README.md)
 
+- **Issue #44 fixed:** `wsAllowedOrigin` (`tablews.go`, backs both WS gateways) used to allow a WebSocket upgrade with
+  no `Origin` header at all, even once `CORS_ALLOWED_ORIGINS` was configured — a scripted client with a valid
+  first-party token could skip the origin check entirely, which is the wrong prod default for a game whose threat
+  model is automation, not cross-site browsers. Now a missing Origin is allowed only when no allow-list is
+  configured (dev — `config.Load` fails closed if prod's list is empty); once an allow-list exists, a present and
+  listed Origin is required, matching (and reusing) the HTTP CORS allow-list. `cmd/loadtest`, the one non-browser
+  caller of the table socket that is meant to run against staging/prod, gained an `-origin` flag for this — it is not
+  exempted from the check, it just has to send a real, listed Origin like anything else would.
 - **(#38) fixed:** real-money `BuyIn` now enforces `player.RequireAccepted` unconditionally. Both
   `app.newBuyinService` constructors (sandbox and real-money) chain `.WithPlayers(players)`, and `buyin.Service.buyIn`
   calls `s.players.RequireAccepted` before any wallet debit or entitlement charge whenever a players store is wired —
@@ -226,6 +250,12 @@ catalog.
   mutations, never across a network call. See `internal/tablemanager/manager_concurrency_test.go`.
 - B10 fixed: archiver stream failures now go to an SQS DLQ with a DLQ-depth + `Errors` CloudWatch alarm
   on `ctech-prod-alerts` (`cdk/lib/archiver-stack.ts`, `cdk/lib/alarms.ts`; #30).
+- Issue #55 fixed: `cmd/archiver`'s `attributeValueToInterface` no longer routes DynamoDB Number attributes
+  through `strconv.ParseFloat`/float64 before archiving — a chip total or payout past 2^53 silently lost
+  precision on the permanent audit archive. It now carries the attribute through as `json.Number(v.Number())`,
+  so `json.Marshal` emits the original digit string verbatim as a bare JSON number token; any consumer must
+  decode with `json.Decoder.UseNumber()` to preserve the same fidelity on read. See
+  `cmd/archiver/main_test.go`'s `TestNumericAttributesPreserveIntegerFidelity`.
 - B31 fixed by rejection: `leaderboard.Top("achievement_points")` returns an unsupported-metric error instead of
   silently ranking via `gsi_hands_won`; add a `gsi_achievement_points` GSI before re-enabling the metric.
 - Issue #63 fixed: the `win_rate` board enforces `leaderboard.MinHandsForWinRateRank` (100) hands per currency mode.
@@ -301,6 +331,21 @@ catalog.
   now resolves to `""` instead of a stale, 404ing link — same as the player's own profile response. This is the
   read-time-resolution approach Issue #64 proposes for the same struct's stale `Name` (still open, not implemented),
   applied narrowly here to `AvatarURL` only; `Name` is untouched by this change.
+- **Issue #70 fixed: a session's `buyin_amount` is now updated with an atomic conditional ADD, not a
+  read-modify-write.** `buyin.Service.buyIn`'s rebuy path used to `FindOpenSession`, add `amount` to the decoded
+  `BuyinAmount` in Go, and `PutItem` the whole item back — two concurrent rebuys for the same player (a client
+  double-submit, or the auto-rebuy sweep racing a manual rebuy) could both read the same starting value and one
+  addition would be silently lost, undercounting money actually put at risk (a responsible-gaming/spend-tracking
+  correctness issue: `RealityCheck`/`SessionRecap` both derive their "session result" from this figure). `AddBuyin`
+  (`internal/sessionlog/store.go`) now runs a single `TransactWriteItems` call: an `ADD buyin_amount :amt` update
+  conditioned on `attribute_exists(pk) AND ended_at = :zero` (a rebuy losing a race with a concurrent cash-out never
+  reopens an already-closed session), paired with a create-only idempotency guard row keyed by the same composite
+  key `buyin.Service` already uses for the wallet debit — so a retried buy-in can never double-count the rebuy. The
+  guard lives in the same `poker_player_sessions` table under a namespaced partition key (`buyinguard#<player_id>`,
+  never a real player id), so it can never surface as a bogus row in `ListSessions`/`FindOpenSession`/
+  `FindLatestOpenSession`, all of which query by the literal player id. Every buy-in path (initial seat, manual
+  rebuy, re-entry after busting, the post-hand auto-rebuy sweep) funnels through this same `buyIn` call, so all of
+  them get the fix. See `internal/sessionlog/store_integration_test.go`'s `TestAddBuyin*` tests.
 
 ## Layout
 
