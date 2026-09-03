@@ -117,6 +117,12 @@ off by default — do not build UI that assumes real money is on.
 - **Quality gate:** `npx vitest run`, `npx tsc --noEmit`, `npx eslint src --max-warnings 0` and
   `npm run build` must all pass with **zero errors and zero warnings**. Coverage thresholds are
   enforced in `vitest.config.ts` (**lines/functions/statements/branches 90**).
+- **Automated a11y and size gates.** `src/test/axe.ts`'s `expectNoAxeViolations(container)` runs axe-core in jsdom
+  and fails on a new `serious`/`critical` violation; it is asserted in the six main route tests and
+  `recoveryA11y.test.tsx`. `npm run bundle:check` compares per-route first-load JS in `out/` against
+  `bundle-budget.json` (re-pin with `npm run bundle:pin`, in the same commit as the change that moved it) and proves
+  the dev mock runtime is off every route's critical path. `lighthouserc.json` audits the static export. All three run
+  in the `quality` job of `.github/workflows/frontend.yml`.
 - **Every new feature must ship with the tests that cover it** — including the error, empty and
   disabled branches, not just the happy path. Uncovered `??`/optional-field branches are exactly
   where type-shaped bugs survive `tsc`. Never lower a coverage threshold to land a change; write

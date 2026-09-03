@@ -1,4 +1,5 @@
 import {fireEvent, render, screen, within} from '@testing-library/react';
+import {expectNoAxeViolations} from '@/test/axe';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import type {Entry, MyRank} from '@/lib/api/gamification';
 import Ranking from './page';
@@ -124,4 +125,12 @@ describe('community leaderboard page', () => {
     expect(screen.queryByText('profile-menu')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Sua posição atual')).not.toBeInTheDocument();
   });
+
+  // Issue #60: an automated floor under the a11y intent in ui/CLAUDE.md — a new
+  // serious or critical axe violation on this route fails CI.
+  test('is axe-clean', async () => {
+    const {container} = render(<Ranking/>);
+    await expectNoAxeViolations(container);
+  });
+
 });

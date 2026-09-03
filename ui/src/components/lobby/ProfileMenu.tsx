@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import {getMe, updateMe, type WalletMode} from '@/lib/api/player';
 import {listCosmeticCatalog, ownedCosmeticIDs} from '@/lib/api/cosmeticPurchases';
-import {logout} from '@/lib/auth/oauth';
+import {endSession, logout} from '@/lib/auth/oauth';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
@@ -38,6 +38,12 @@ import {pushNotification} from '@/lib/notify';
 import {availableWalletMode, REAL_MONEY_UI_ENABLED} from '@/lib/capabilities';
 
 const ACES = ['As', 'Ah', 'Ad', 'Ac'];
+
+/** `logout()` revokes the refresh token under a 3 s deadline and only then
+ * redirects through the IdP. Past that the redirect itself is what stalled, so
+ * the toast offers the direct end-session exit. Deliberately never cleared: a
+ * successful logout navigates away and takes the timer with it. */
+const LOGOUT_STALL_MS = 4_000;
 
 function formatSandbox(amount?: number) {
   return `${(amount ?? 0).toLocaleString('pt-BR')} fichas`;
@@ -59,7 +65,18 @@ export function ProfileMenu() {
   const [editingName, setEditingName] = useState(false);
   const [showcaseOpen, setShowcaseOpen] = useState(false);
   const [selfHudOpen, setSelfHudOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  function signOut() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    window.setTimeout(() => pushNotification(
+      'A saída está demorando mais que o normal.', 'error',
+      [{label: 'Sair agora', run: () => endSession()}]
+    ), LOGOUT_STALL_MS);
+    void logout();
+  }
 
   const save = useMutation({
     mutationFn: updateMe,
@@ -250,8 +267,8 @@ export function ProfileMenu() {
           </Button>
         </nav>
 
-        <Button variant="ghost" className="profile-menu-logout" onClick={() => logout()}>
-          <LogOut aria-hidden="true"/> Sair da conta
+        <Button variant="ghost" className="profile-menu-logout" loading={loggingOut} onClick={signOut}>
+          {!loggingOut && <LogOut aria-hidden="true"/>} {loggingOut ? 'Saindo…' : 'Sair da conta'}
         </Button>
       </div>
     </PopoverContent>

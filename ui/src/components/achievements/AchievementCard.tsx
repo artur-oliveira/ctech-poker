@@ -1,5 +1,5 @@
 'use client';
-import {type CSSProperties, useState} from 'react';
+import type {CSSProperties} from 'react';
 import {Check, Star} from 'lucide-react';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {type Achievement, achievementProgress, type AchievementProgress} from '@/lib/api/achievements';
@@ -8,13 +8,14 @@ import {achievementDescription, achievementExample, achievementLabel, achievemen
 // Progress is undefined for the not-logged variant (no player data to merge):
 // stars render empty and the tier ladder shows instead of a live count.
 export function AchievementCard({achievement, count}: { achievement: Achievement; count?: number }) {
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const progress: AchievementProgress | null = count === undefined ? null : achievementProgress(achievement.tiers, count);
   const example = achievementExample(achievement.key);
   const formatValue = achievementValueFormat(achievement.key);
-  
-  const previewing = hoverIndex !== null;
-  const previewTier = previewing ? achievement.tiers[hoverIndex] : null;
+
+  const thresholdLadder = achievement.tiers.map(tier => formatValue(tier.threshold)).join(' · ');
+  const starsLabel = progress
+    ? `${progress.starsFilled} de ${achievement.tiers.length} estrelas, ${formatValue(progress.count)} registrados. Níveis: ${thresholdLadder}`
+    : `Progresso disponível após entrar na conta. Níveis: ${thresholdLadder}`;
   const previousThreshold = progress
     ? Math.max(0, ...achievement.tiers.filter(tier => tier.threshold <= progress.count).map(tier => tier.threshold))
     : 0;
@@ -33,22 +34,20 @@ export function AchievementCard({achievement, count}: { achievement: Achievement
     <div className="achievement-card-body">
       <h3>{achievementLabel(achievement.key)}</h3>
       <p>{achievementDescription(achievement.key)}</p>
-      <div className="achievement-stars" onMouseLeave={() => setHoverIndex(null)}
-           aria-label={progress ? `${progress.starsFilled} de 5 estrelas, ${formatValue(progress.count)} registrados` : 'Progresso disponível após entrar na conta'}>
-        {achievement.tiers.map((tier, i) => {
-          const filled = previewing ? i <= hoverIndex! : Boolean(progress && i < progress.starsFilled);
-          return <button key={tier.stars} type="button" className={`achievement-star${filled ? ' is-filled' : ''}`}
-                         style={{'--tier-index': i} as CSSProperties}
-                         onMouseEnter={() => setHoverIndex(i)} onFocus={() => setHoverIndex(i)}
-                         onBlur={() => setHoverIndex(null)}
-                         aria-label={`Nível ${tier.stars}: ${formatValue(tier.threshold)}`}>
-            <Star fill={filled ? 'currentColor' : 'none'} aria-hidden="true"/>
-          </button>;
-        })}
-        {previewTier && <span className="achievement-star-tooltip" role="tooltip">
-          {progress ? `${formatValue(progress.count)}/${formatValue(previewTier.threshold)}`
-            : formatValue(previewTier.threshold)}
-        </span>}
+      {/* One focusable readout, not five buttons whose only handlers were hover
+          previews: activation did nothing, and five dead tab stops per card
+          multiplied across dozens of cards. The thresholds are in the
+          accessible name and, on hover or focus, on screen. */}
+      <div className="achievement-stars" role="img" tabIndex={0} aria-label={starsLabel}>
+        {achievement.tiers.map((tier, i) => (
+          <span key={tier.stars} aria-hidden="true"
+                className={`achievement-star${progress && i < progress.starsFilled ? ' is-filled' : ''}`}>
+            <Star fill={progress && i < progress.starsFilled ? 'currentColor' : 'none'}/>
+          </span>
+        ))}
+        {/* The locked variant already prints the ladder underneath, so the
+            hover readout would only duplicate it there. */}
+        {progress && <span className="achievement-star-tooltip" aria-hidden="true">{thresholdLadder}</span>}
       </div>
       {progress
         ? <div className="achievement-progress-wrap">
@@ -62,8 +61,7 @@ export function AchievementCard({achievement, count}: { achievement: Achievement
           </div>
           {progress.maxed && <p className="achievement-count sr-only">Completo</p>}
         </div>
-        : <p
-          className="achievement-count achievement-count-locked">{achievement.tiers.map(t => formatValue(t.threshold)).join(' · ')}</p>}
+        : <p className="achievement-count achievement-count-locked">{thresholdLadder}</p>}
     </div>
   </article>;
 }

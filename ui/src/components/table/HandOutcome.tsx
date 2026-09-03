@@ -258,7 +258,8 @@ export function HandOutcomeBanner({outcome, holdOpen, nextHandDeadlineMs, nextHa
   // Collapsed to the corner badge until the player dismisses the full card,
   // or reopens it. Reset per hand (not per broadcast) so a dismissal never
   // carries over and silently hides the next hand's result.
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissedKey, setDismissedKey] = useState<number | null>(null);
+  const dismissed = dismissedKey !== null && dismissedKey === outcome?.key;
 
   useEffect(() => {
     if (outcome) {
@@ -268,9 +269,9 @@ export function HandOutcomeBanner({outcome, holdOpen, nextHandDeadlineMs, nextHa
     }
   }, [outcome]);
 
+  // Only the parent notification is a side effect; the flag itself is derived
+  // from which hand was dismissed, so a new hand_id un-dismisses it for free.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDismissed(false);
     onDismissedChangeAction?.(false);
   }, [outcome?.key, onDismissedChangeAction]);
 
@@ -344,7 +345,7 @@ export function HandOutcomeBanner({outcome, holdOpen, nextHandDeadlineMs, nextHa
     <div className="hand-outcome">
       {dismissed ? (
         <button type="button" className={`hand-outcome-badge ${shown.kind}${leaving ? ' leaving' : ''}`}
-                onClick={() => { setDismissed(false); onDismissedChangeAction?.(false); }}
+                onClick={() => { setDismissedKey(null); onDismissedChangeAction?.(false); }}
                 aria-label={BADGE_LABEL[shown.kind]}>
           {nextHandDeadlineMs != null && <HandOutcomeRing key={nextHandDeadlineMs} className="hand-outcome-ring"
             radius={20} deadlineMs={nextHandDeadlineMs} durationMs={nextHandDurationMs ?? 0}/>}
@@ -353,7 +354,7 @@ export function HandOutcomeBanner({outcome, holdOpen, nextHandDeadlineMs, nextHa
       ) : (
       <div key={shown.key} className={`hand-outcome-card ${shown.kind}${leaving ? ' leaving' : ''}`}>
         <button type="button" className="hand-outcome-dismiss"
-                onClick={() => { setDismissed(true); onDismissedChangeAction?.(true); }}
+                onClick={() => { setDismissedKey(outcome?.key ?? null); onDismissedChangeAction?.(true); }}
                 aria-label="Minimizar resultado">
           {nextHandDeadlineMs != null && <HandOutcomeRing key={nextHandDeadlineMs} className="hand-outcome-ring"
             radius={14} deadlineMs={nextHandDeadlineMs} durationMs={nextHandDurationMs ?? 0}/>}

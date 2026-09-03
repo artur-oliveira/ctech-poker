@@ -1,4 +1,4 @@
-import {fireEvent, render, screen} from '@testing-library/react';
+import {render, screen} from '@testing-library/react';
 import {describe, expect, test, vi} from 'vitest';
 
 import type {Achievement} from '@/lib/api/achievements';
@@ -27,14 +27,18 @@ describe('AchievementCard', () => {
     expect(screen.getByRole('heading', {name: 'Vitórias'})).toBeInTheDocument();
     expect(screen.getByText('Toda mão vencida conta um ponto.')).toBeInTheDocument();
     expect(screen.getAllByTestId('playing-card')).toHaveLength(2);
-    expect(screen.getByLabelText('Progresso disponível após entrar na conta')).toBeInTheDocument();
+    expect(screen.getByRole('img', {
+      name: 'Progresso disponível após entrar na conta. Níveis: 1 · 10 · 25 · 100 · 1.000',
+    })).toBeInTheDocument();
     expect(screen.getByText('1 · 10 · 25 · 100 · 1.000')).toBeInTheDocument();
   });
   
   test('renders earned stars and progress toward the next tier', () => {
     render(<AchievementCard achievement={achievement} count={25}/>);
     
-    expect(screen.getByLabelText('3 de 5 estrelas, 25 registrados')).toBeInTheDocument();
+    expect(screen.getByRole('img', {
+      name: '3 de 5 estrelas, 25 registrados. Níveis: 1 · 10 · 25 · 100 · 1.000',
+    })).toBeInTheDocument();
     expect(screen.getByText('25/100')).toBeInTheDocument();
     expect(document.querySelectorAll('.achievement-star.is-filled')).toHaveLength(3);
     expect(screen.getByRole('progressbar', {name: 'Progresso de Vitórias'})).toHaveAttribute('aria-valuenow', '0');
@@ -51,28 +55,26 @@ describe('AchievementCard', () => {
     expect(document.querySelectorAll('.achievement-star.is-filled')).toHaveLength(5);
   });
   
-  test('previews a tier by mouse or keyboard and restores current progress afterward', () => {
+  // Issue #116: the ladder used to be five <button>s whose only handlers were
+  // hover previews — activation did nothing and each card cost five tab stops.
+  test('exposes the ladder as one labelled, focusable readout', () => {
     render(<AchievementCard achievement={achievement} count={2}/>);
-    const fourthTier = screen.getByRole('button', {name: 'Nível 4: 100'});
-    
-    fireEvent.mouseEnter(fourthTier);
-    expect(screen.getByRole('tooltip')).toHaveTextContent('2/100');
-    expect(document.querySelectorAll('.achievement-star.is-filled')).toHaveLength(4);
-    
-    fireEvent.mouseLeave(fourthTier.closest('.achievement-stars')!);
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    const ladder = screen.getByRole('img', {name: /1 de 5 estrelas/});
+    expect(ladder).toHaveAttribute('tabindex', '0');
+    // The whole card must cost at most one tab stop.
+    expect(document.querySelectorAll('[tabindex="0"], button, a[href], input')).toHaveLength(1);
+    // Every threshold stays in the accessible name, so nothing is hover-only.
+    expect(ladder).toHaveAccessibleName(/Níveis: 1 · 10 · 25 · 100 · 1\.000/);
+    expect(document.querySelectorAll('.achievement-star')).toHaveLength(5);
     expect(document.querySelectorAll('.achievement-star.is-filled')).toHaveLength(1);
-    
-    fireEvent.focus(screen.getByRole('button', {name: 'Nível 2: 10'}));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('2/10');
-    fireEvent.blur(screen.getByRole('button', {name: 'Nível 2: 10'}));
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
-  
-  test('previews a locked tier using only its threshold', () => {
+
+  test('omits the hover readout on the locked variant, which already lists the ladder', () => {
     render(<AchievementCard achievement={achievement}/>);
-    fireEvent.mouseEnter(screen.getByRole('button', {name: 'Nível 5: 1.000'}));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('1.000');
+    expect(document.querySelector('.achievement-star-tooltip')).toBeNull();
+    expect(screen.getByText('1 · 10 · 25 · 100 · 1.000')).toBeInTheDocument();
   });
 });
 
@@ -91,13 +93,12 @@ describe('AchievementCard duration formatting', () => {
   
   test('labels no_rush tiers as durations', () => {
     render(<AchievementCard achievement={noRush}/>);
-    expect(screen.getByLabelText('Nível 1: 1 minuto')).toBeInTheDocument();
-    expect(screen.getByLabelText('Nível 3: 1 dia')).toBeInTheDocument();
-    expect(screen.getByLabelText('Nível 5: 1 mês')).toBeInTheDocument();
+    expect(screen.getByRole('img')).toHaveAccessibleName(
+      /Níveis: 1 minuto · 1 hora · 1 dia · 1 semana · 1 mês/);
   });
   
   test('still renders plain counts for other achievements', () => {
     render(<AchievementCard achievement={{key: 'wins', metric: 'wins', tiers: [{stars: 1, threshold: 1000}]}}/>);
-    expect(screen.getByLabelText('Nível 1: 1.000')).toBeInTheDocument();
+    expect(screen.getByRole('img')).toHaveAccessibleName(/Níveis: 1\.000/);
   });
 });

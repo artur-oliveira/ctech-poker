@@ -342,6 +342,10 @@ Components feel tactile and decisive: pressable, fast, explicit about state, and
 - **Light:** Card Paper with Deep Wine text for a high-contrast action on an oxblood surface and for the table's call action.
 - **Destructive:** semantic Danger with an explicit verb; do not use brand red as a substitute.
 - **States:** hover changes surface, focus receives the 3px focus ring, active presses by 1px, and disabled stays readable while losing interaction.
+- **Pending:** `<Button loading>` is the one pending affordance — a spinner ahead of the label, `aria-busy` for the
+  screen reader, and `disabled` so a second click cannot fire the same request twice. Swap the label to the present
+  progressive ("Saindo…", "Verificando…", "Buscando…"); never drop it, or the button resizes mid-press. No screen
+  hand-rolls `disabled={isPending}` plus a manual spinner.
 
 ### Chips
 
@@ -385,6 +389,11 @@ player who receives it. Spectacle may decorate that relationship; it never becom
 - **Focus:** Oxblood Active border plus a visible 3px Focus Ring.
 - **Error:** semantic red border with linked readable error copy; do not rely on border color alone.
 - **Disabled:** preserve the label and explanation instead of collapsing to opacity-only ambiguity.
+- **Field:** `<Field label description error>` is the labelled-control primitive. It owns the generated ids and wires
+  them with `aria-describedby` (description **and** error together, so the hint is not lost the moment the field goes
+  invalid) plus `aria-invalid` / `aria-errormessage`. It takes a render prop because the control varies — a plain
+  `Input`, a search row with a trailing button, a range — while the association rules do not. A labelled control that
+  wires its own `aria-describedby` by hand is a bug, not a variant.
 
 ### Navigation
 
