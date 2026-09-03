@@ -82,7 +82,14 @@ func Register(
 	// probes (it accepts 200 and 207).
 	RegisterHealth(router, cfg, db)
 
-	RegisterTableWS(router, verifier, manager, reg, cfg.CorsAllowedOrigins, seed, rooms, cfg, players, pokerStatsStore)
+	// The table WebSocket's per-player limits go through the same Redis
+	// counter as the HTTP ones — a player spread across instances, or
+	// reconnecting, used to get one fresh in-memory budget per connection
+	// (#43). 10 actions/sec/player is generous for a human, tight for a
+	// script; reactions stay at one per 2 s.
+	wsActionLimiter := NewRateLimiter(cacheBackend, 10, time.Second)
+	wsReactionLimiter := NewRateLimiter(cacheBackend, 1, 2*time.Second)
+	RegisterTableWS(router, verifier, manager, reg, cfg.CorsAllowedOrigins, seed, rooms, cfg, players, pokerStatsStore, wsActionLimiter, wsReactionLimiter)
 	RegisterGeneralWS(router, verifier, reg, cfg.CorsAllowedOrigins, presenceSvc)
 	auth := authMiddleware(verifier)
 	RegisterHandHistory(router, auth, &tablestoreAdapter{store: tableStore})
@@ -112,7 +119,7 @@ func Register(
 
 	// Unauthenticated, unlike every Register* call below it.
 	RegisterAvatars(router, avatars, avatarReadLimiter)
-	RegisterRooms(router, auth, rooms, buyinSvc, manager, reg, cfg, createLimiter, joinLimiter)
+	RegisterRooms(router, auth, rooms, buyinSvc, manager, reg, cfg, sessionStore, createLimiter, joinLimiter)
 	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter, pokerStatsStore, reportSvc)
 	RegisterPlayerNotes(router, auth, playerNoteStore)
 	RegisterHandShares(router, auth, sessionStore, tableStore, handShareStore)

@@ -142,16 +142,6 @@ func rateLimitedTableMessage(messageType string) bool {
 	}
 }
 
-// seatLimiter is a fixed-window per-player counter — abuse prevention
-// (ARCHITECTURE.md §8), not precise rate metering.
-type seatLimiter struct {
-	mu        sync.Mutex
-	perWindow int
-	window    time.Duration
-	counts    map[string]int
-	resetAt   map[string]time.Time
-}
-
 // tableConnectionTracker is process-local transport truth, independent of a
 // table Actor's lifetime. When an actor is replaced after lease loss, every
 // still-open connection on this instance is replayed into the new actor
@@ -211,29 +201,6 @@ func (t *tableConnectionTracker) listTable(tableID string) []trackedTableConnect
 	return out
 }
 
-func newSeatLimiter(perSecond int) *seatLimiter {
-	return &seatLimiter{perWindow: perSecond, window: time.Second, counts: make(map[string]int), resetAt: make(map[string]time.Time)}
-}
-
-func newWindowSeatLimiter(perWindow int, window time.Duration) *seatLimiter {
-	return &seatLimiter{perWindow: perWindow, window: window, counts: make(map[string]int), resetAt: make(map[string]time.Time)}
-}
-
-func (l *seatLimiter) Allow(playerID string) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	now := time.Now()
-	if now.After(l.resetAt[playerID]) {
-		l.counts[playerID] = 0
-		l.resetAt[playerID] = now.Add(l.window)
-	}
-	if l.counts[playerID] >= l.perWindow {
-		return false
-	}
-	l.counts[playerID]++
-	return true
-}
-
 // RegisterTableWS mounts GET /v1.0/tables/:id/ws. seed builds a brand-new
 // hand.Table the first time a given table is ever acquired (see
 // tablemanager.Manager.GetOrCreateActor) — Phase 3's room service supplies
@@ -252,6 +219,8 @@ func RegisterTableWS(
 	cfg *config.Config,
 	players *player.Service,
 	stats pokerStatsReader,
+	actionLimiter *RateLimiter,
+	reactionLimiter *RateLimiter,
 ) {
 	connectionTracker := newTableConnectionTracker()
 	checker := botcheck.New(cfg.TurnstileSecret, cfg.TurnstileExpectedHostname)
@@ -474,8 +443,6 @@ func RegisterTableWS(
 			}
 			sendSnapshot("")
 
-			limiter := newSeatLimiter(10) // 10 actions/sec/seat — generous for a human, tight for a script
-			reactionLimiter := newWindowSeatLimiter(1, 2*time.Second)
 			botRiskScore := 0
 			challengeRequired := false
 			done := make(chan struct{})
@@ -495,7 +462,7 @@ func RegisterTableWS(
 				if err := goproto.Unmarshal(msg, &m); err != nil {
 					continue
 				}
-				if rateLimitedTableMessage(m.Type) && !limiter.Allow(playerID) {
+				if rateLimitedTableMessage(m.Type) && !actionLimiter.AllowFailOpen(ctx, wsActionKey(playerID)) {
 					send(&pokerproto.ServerMessage{Type: "error", Code: "rate_limited", ActionId: m.ActionId})
 					continue
 				}
@@ -751,7 +718,7 @@ func RegisterTableWS(
 						send(&pokerproto.ServerMessage{Type: "error", Code: "invalid_reaction", ActionId: m.ActionId})
 						continue
 					}
-					if !reactionLimiter.Allow(playerID) {
+					if !reactionLimiter.AllowFailOpen(ctx, wsReactionKey(playerID)) {
 						send(&pokerproto.ServerMessage{Type: "error", Code: "reaction_rate_limited", ActionId: m.ActionId})
 						continue
 					}

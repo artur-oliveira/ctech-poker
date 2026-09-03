@@ -16,7 +16,11 @@ import (
 // in-memory backend uses a per-instance mutex map. It stops a script from
 // spamming room creation or sandbox chip spins (M6/S2).
 type RateLimiter struct {
-	client valkey.Client // nil unless the backend is Redis
+	// incr is nil unless the backend is Redis. It returns key's hit count in
+	// the current window, which is what makes the counter fleet-wide rather
+	// than per-instance (#43). Tests substitute a shared fake to simulate two
+	// API instances counting against one player's budget.
+	incr   func(ctx context.Context, key string) (int64, error)
 	limit  int
 	window time.Duration
 
@@ -34,31 +38,58 @@ type rateWindow struct {
 func NewRateLimiter(backend cache.Backend, limit int, window time.Duration) *RateLimiter {
 	rl := &RateLimiter{limit: limit, window: window, mem: make(map[string]*rateWindow)}
 	if rb, ok := backend.(*cache.RedisBackend); ok {
-		rl.client = rb.Client()
+		rl.incr = redisIncr(rb.Client(), window)
 	}
 	return rl
 }
 
+func redisIncr(client valkey.Client, window time.Duration) func(context.Context, string) (int64, error) {
+	return func(ctx context.Context, key string) (int64, error) {
+		n, err := client.Do(ctx, client.B().Incr().Key(key).Build()).ToInt64()
+		if err != nil {
+			return 0, err
+		}
+		if n == 1 {
+			// First hit in this window: bound the key's lifetime to one window so
+			// the counter eventually resets without manual cleanup.
+			client.Do(ctx, client.B().Expire().Key(key).Seconds(int64(window.Seconds())).Build())
+		}
+		return n, nil
+	}
+}
+
 // Allow reports whether key is still within its window. Safe for concurrent use.
 func (r *RateLimiter) Allow(ctx context.Context, key string) (bool, error) {
-	if r.client != nil {
-		return r.allowRedis(ctx, key)
+	if r.incr != nil {
+		n, err := r.incr(ctx, key)
+		if err != nil {
+			return false, err
+		}
+		return n <= int64(r.limit), nil
 	}
 	return r.allowMem(key), nil
 }
 
-func (r *RateLimiter) allowRedis(ctx context.Context, key string) (bool, error) {
-	n, err := r.client.Do(ctx, r.client.B().Incr().Key(key).Build()).ToInt64()
+// AllowFailOpen applies rateLimit's fail-open policy outside the HTTP
+// middleware chain — the table WebSocket loop, which has no c.Next() to fall
+// through to. A nil limiter (dev wiring, tests) allows everything.
+func (r *RateLimiter) AllowFailOpen(ctx context.Context, key string) bool {
+	if r == nil {
+		return true
+	}
+	allow, err := r.Allow(ctx, key)
 	if err != nil {
-		return false, err
+		slog.Warn("rate limiter backend error; allowing action", "err", err)
+		return true
 	}
-	if n == 1 {
-		// First hit in this window: bound the key's lifetime to one window so
-		// the counter eventually resets without manual cleanup.
-		r.client.Do(ctx, r.client.B().Expire().Key(key).Seconds(int64(r.window.Seconds())).Build())
-	}
-	return n <= int64(r.limit), nil
+	return allow
 }
+
+// wsActionKey / wsReactionKey are the fleet-wide WebSocket limiter keys. They
+// are per player, never per connection: a client spread across instances or
+// reconnecting must not multiply its allowance (#43).
+func wsActionKey(playerID string) string   { return "ws:act:" + playerID }
+func wsReactionKey(playerID string) string { return "ws:react:" + playerID }
 
 func (r *RateLimiter) allowMem(key string) bool {
 	r.mu.Lock()

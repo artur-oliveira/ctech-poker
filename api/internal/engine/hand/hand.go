@@ -225,6 +225,13 @@ type HandOutcome struct {
 	Board       []string
 	BoardTwo    []string `json:"board_two,omitempty"`
 	PlayerHands map[string]PlayerHandInfo
+	// SmallBlind and BigBlind are the blind level this hand was actually
+	// played at — captured here because escalation (EscalateBlindsForActor)
+	// moves them between hands, so the room's current blinds are not a
+	// reliable answer for a hand in the past (#75). The replayer needs them
+	// to render pot sizes and the blind markers at the right scale.
+	SmallBlind int64
+	BigBlind   int64
 	// ShowdownResults holds each non-folded participant's OWN best-hand
 	// category and result. Unlike PlayerHands/Revealed, this is never
 	// exposed to opponents — it only drives per-player achievements
@@ -1897,6 +1904,8 @@ func (t *Table) runShowdown() {
 		Payouts:            payouts,
 		Contributions:      contributionsByID,
 		PotResults:         potResults,
+		SmallBlind:         t.smallBlind,
+		BigBlind:           t.bigBlind,
 	}
 	if t.shuffle != nil {
 		outcome.ServerSeed = hex.EncodeToString(t.shuffle.ServerSeed[:])
