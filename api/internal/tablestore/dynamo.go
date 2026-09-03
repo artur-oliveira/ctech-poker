@@ -32,6 +32,19 @@ const (
 	// needs to outlive plausible client retries, not forever.
 	guardTTLDays = 7
 
+	// stateTTLDays bounds how long the authoritative per-table item and its
+	// audit-history snapshots linger after the table goes quiet.
+	// poker_table_state / poker_table_state_history are ephemeral: a live
+	// table refreshes its ttl on every CommitAction (last_action_at moves with
+	// it), cmd/tablecleanup archives idle tables long before this fires, and a
+	// rejoin re-seeds a fresh item. Without a ttl a table that was only ever
+	// seeded — or an old history snapshot — sat in DynamoDB forever (and,
+	// pre-2026-09-03, in PITR continuous backups too). 7 days mirrors
+	// guardTTLDays: long enough to investigate a fresh incident, short enough
+	// that dead tables do not accumulate. See
+	// docs/specs/2026-09-03-next-hand-rearm-storm.md.
+	stateTTLDays = 7
+
 	// logTTLDays bounds how long an audit-log entry stays in the hot
 	// DynamoDB table before TTL reaps it. Nothing is lost when that
 	// happens: the archiver Lambda (cdk/lib/archiver-stack.ts) ships every
@@ -85,7 +98,11 @@ func (s *Store) SaveTableStateHistory(ctx context.Context, tableID string, unixS
 		PK    string     `dynamodbav:"pk"`
 		SK    string     `dynamodbav:"sk"`
 		State hand.State `dynamodbav:"state"`
-	}{PK: tableID, SK: fmt.Sprintf("%d", unixSeconds), State: state})
+		TTL   int64      `dynamodbav:"ttl"`
+	}{
+		PK: tableID, SK: fmt.Sprintf("%d", unixSeconds), State: state,
+		TTL: timeNowFunc().Add(stateTTLDays * 24 * time.Hour).Unix(),
+	})
 	if err != nil {
 		return fmt.Errorf("tablestore: encode history snapshot: %w", err)
 	}
@@ -103,7 +120,11 @@ func (s *Store) SeedTable(ctx context.Context, tableID string, state hand.State)
 		State        hand.State `dynamodbav:"state"`
 		LastActionAt int64      `dynamodbav:"last_action_at"`
 		GSIActive    string     `dynamodbav:"gsi_active"`
-	}{PK: tableID, Version: 1, State: state, LastActionAt: timeNowFunc().Unix(), GSIActive: gsiActiveValue})
+		TTL          int64      `dynamodbav:"ttl"`
+	}{
+		PK: tableID, Version: 1, State: state, LastActionAt: timeNowFunc().Unix(), GSIActive: gsiActiveValue,
+		TTL: timeNowFunc().Add(stateTTLDays * 24 * time.Hour).Unix(),
+	})
 	if err != nil {
 		return fmt.Errorf("tablestore: encode seed state: %w", err)
 	}
@@ -201,14 +222,22 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 		// clear the countdown, not inherit the previous hand's expiry.
 		":nextHandDeadline": mustN(int(nextHandDeadlineUnixMs)),
 		":lastActionAt":     mustN(int(timeNowFunc().Unix())),
+		// Refreshed on every commit so a live table's item never expires; once
+		// a table goes quiet the ttl stops moving forward and DynamoDB reaps
+		// it after stateTTLDays (see the const's doc). "ttl" is a reserved word
+		// in expressions, hence the #ttl alias below (the item encoders that
+		// PutItem the same attribute do not need one).
+		":ttl": mustN(int(timeNowFunc().Add(stateTTLDays * 24 * time.Hour).Unix())),
 	}
 	names := map[string]string{
 		"#version": "version",
 		"#state":   "state",
+		"#ttl":     "ttl",
 	}
 	stateTx := s.state.BuildRawUpdateTxItem(tableID, nil,
 		"SET #version = :newVersion, hand_id = :handID, #state = :state, activity = :activity, "+
-			"turn_deadline_unix_ms = :turnDeadline, next_hand_deadline_unix_ms = :nextHandDeadline, last_action_at = :lastActionAt",
+			"turn_deadline_unix_ms = :turnDeadline, next_hand_deadline_unix_ms = :nextHandDeadline, "+
+			"last_action_at = :lastActionAt, #ttl = :ttl",
 		"attribute_exists(pk) AND #version = :expected", names, values)
 
 	logItem, err := dynamo.Encode(struct {

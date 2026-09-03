@@ -113,6 +113,13 @@ type Actor struct {
 	// reaches a verdict.
 	nextHandRetryDelay time.Duration
 	nextHandRetries    int
+	// nextHandArm{GuardHand,sForHand} cap armNextHandTimer's (re-)arms per hand
+	// so a burst of rearmTimersFromCache calls (a client reconnect loop, a
+	// keepalive storm) against a wedged table cannot become a storm of rejected
+	// next-hand DynamoDB transactions — see MaxNextHandArmsPerHand and
+	// docs/specs/2026-09-03-next-hand-rearm-storm.md.
+	nextHandArmGuardHand string
+	nextHandArmsForHand  int
 	// pendingNextHandDeadline carries a just-loaded StoredTable's
 	// NextHandDeadlineUnixMs across to the next armNextHandTimer call (set by
 	// ensureLoaded, consumed and zeroed there) — the post-hand countdown's
@@ -2500,6 +2507,8 @@ func (a *Actor) armNextHandTimer(complete bool) {
 		}
 		a.nextHandArmedFor = ""
 		a.pendingNextHandDeadline = 0
+		a.nextHandArmGuardHand = ""
+		a.nextHandArmsForHand = 0
 		return
 	}
 	if a.handID == a.nextHandArmedFor {
@@ -2510,6 +2519,28 @@ func (a *Actor) armNextHandTimer(complete bool) {
 		a.pendingNextHandDeadline = 0
 		return
 	}
+	// Wedge guard (see the nextHandArm* field docs). handleNextHand clears
+	// nextHandArmedFor on entry so the check above stops throttling the moment
+	// the timer first fires; from then on every rearmTimersFromCache (a
+	// reconnect, a keepalive ping, the AFK sweep) re-arms a fresh timer, and an
+	// already-past persisted deadline makes it fire instantly. Cap the arms per
+	// hand — past MaxNextHandArmsPerHand stop re-arming entirely; a table this
+	// stuck recovers via tablecleanup or an operator, not by retrying.
+	if a.nextHandArmGuardHand != a.handID {
+		a.nextHandArmGuardHand = a.handID
+		a.nextHandArmsForHand = 0
+	}
+	if a.nextHandArmsForHand >= MaxNextHandArmsPerHand {
+		if a.nextHandArmsForHand == MaxNextHandArmsPerHand {
+			a.nextHandArmsForHand++ // log exactly once per stuck hand
+			slog.Error("table next hand permanently stalled; leaving timer un-armed",
+				"table_id", a.id, "hand_id", a.handID, "arms", MaxNextHandArmsPerHand)
+		}
+		a.nextHandArmedFor = a.handID
+		a.pendingNextHandDeadline = 0
+		return
+	}
+	a.nextHandArmsForHand++
 	if a.nextHandTimer != nil {
 		a.nextHandTimer.Stop()
 	}

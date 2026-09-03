@@ -221,6 +221,14 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   stalled the hand outright (#136). Every non-panic error branch now goes through `retryNextHand`, which re-arms with a
   linear backoff bounded by `MaxNextHandRetries`; past the cap the AFK sweep's `rearmTimersFromCache` stays the
   last-resort watchdog. `Dispatch` is blocking, never lossy — a full mailbox backpressures the caller.
+  **The re-arm is also capped the other direction: `armNextHandTimer` refuses to (re-)arm more than
+  `MaxNextHandArmsPerHand` times for one `handID`.** `rearmTimersFromCache` fires on every reconnect, keepalive ping
+  and sweep, and a persisted next-hand deadline in the past makes the timer fire instantly — so on a wedged table (a
+  seat that won't leave) a client reconnect loop became ~8 rejected next-hand `TransactWriteItems` per second, each
+  still billed, for 12 minutes (2026-09-02, `docs/specs/2026-09-03-next-hand-rearm-storm.md`). Past the cap the timer
+  is left un-armed; `cmd/tablecleanup` or an operator is the recovery for a table that stuck, not a transaction that
+  keeps being rejected. `poker_table_state` / `poker_table_state_history` are also TTL'd now (`tablestore.stateTTLDays`,
+  refreshed on every commit) and PITR-off — ephemeral, rebuildable, and a runaway write shows up in PITR storage too.
 - **Nothing viewer-independent belongs inside `broadcastAll`'s per-seat loop, and nothing expensive belongs on the
   actor goroutine twice.** Chat and reaction views are built once per broadcast (`activityViews`) and shared; the
   `equityIterations` Monte Carlo is memoized by `(hole, board, opponent count)` per hand (`equityFor`), because a

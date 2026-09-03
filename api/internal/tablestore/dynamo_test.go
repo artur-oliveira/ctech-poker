@@ -110,6 +110,13 @@ func TestSeedThenCommitThenLoad(t *testing.T) {
 	if err != nil || loaded.Version != 2 || loaded.State.Stage != hand.PreFlop {
 		t.Fatalf("expected version 2 pre_flop after commit, got %+v err=%v", loaded, err)
 	}
+	// The item carries a ttl from SeedTable, and CommitAction refreshes it so
+	// a live table never expires — see stateTTLDays. A roughly-7-days-out
+	// value is all we assert; the exact second is timeNowFunc-dependent.
+	minTTL := time.Now().Add((stateTTLDays - 1) * 24 * time.Hour).Unix()
+	if loaded.TTL < minTTL {
+		t.Fatalf("commit did not set/refresh the state ttl: got %d, want >= %d", loaded.TTL, minTTL)
+	}
 }
 
 func TestFindActionByIDStaysWithinHandPartition(t *testing.T) {
@@ -332,6 +339,11 @@ func TestSaveTableStateHistoryPersistsSnapshot(t *testing.T) {
 	loaded, err := dynamo.Decode[StoredTable](item)
 	if err != nil || loaded == nil || loaded.State.Stage != hand.Complete {
 		t.Fatalf("expected a persisted Complete-stage snapshot, got %+v err=%v", loaded, err)
+	}
+	// History snapshots are ephemeral audit data — they carry a ttl so they
+	// do not accumulate forever (see stateTTLDays).
+	if loaded.TTL < time.Now().Add((stateTTLDays-1)*24*time.Hour).Unix() {
+		t.Fatalf("history snapshot has no ttl (got %d)", loaded.TTL)
 	}
 }
 

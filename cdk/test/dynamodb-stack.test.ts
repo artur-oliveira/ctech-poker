@@ -30,13 +30,47 @@ test('creates poker_table_state, poker_action_log, poker_action_guards tables', 
     TableName: 'dev_poker_action_guards',
     TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},
   });
+  // The authoritative table item and its audit-history snapshots are
+  // ephemeral: TTL'd so a dead table is reaped rather than lingering forever
+  // (2026-09-02 incident follow-up).
+  template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'dev_poker_table_state',
+    TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},
+  });
   template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_table_state_history',
+    TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},
     KeySchema: Match.arrayWith([
       Match.objectLike({AttributeName: 'pk', KeyType: 'HASH'}),
       Match.objectLike({AttributeName: 'sk', KeyType: 'RANGE'}),
     ]),
   });
+});
+
+test('PITR is on for durable data and off for ephemeral tables (2026-09-02 follow-up)', () => {
+  const app = new App();
+  const stack = new DynamoDBStack(app, 'TestPitrStack', {environment: 'prod', cloudwatchAlarmsEnabled: false});
+  const template = Template.fromStack(stack);
+
+  for (const name of [
+    'poker_table_state', 'poker_table_state_history', 'poker_action_log', 'poker_action_guards',
+    'poker_player_sessions',
+  ]) {
+    template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+      TableName: `prod_${name}`,
+      Replicas: Match.arrayWith([
+        Match.objectLike({PointInTimeRecoverySpecification: {PointInTimeRecoveryEnabled: false}}),
+      ]),
+    });
+  }
+  for (const name of ['poker_player_hands', 'poker_leaderboard_stats', 'poker_pending_cashouts', 'poker_rooms']) {
+    template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+      TableName: `prod_${name}`,
+      Replicas: Match.arrayWith([
+        Match.objectLike({PointInTimeRecoverySpecification: {PointInTimeRecoveryEnabled: true}}),
+      ]),
+    });
+  }
 });
 
 test('creates gamification tables and hands-won leaderboard index', () => {
@@ -240,19 +274,30 @@ test('wires a throttle alarm on every hot-path table to the existing account ale
   const template = Template.fromStack(stack);
 
   template.resourceCountIs('AWS::SNS::Topic', 0);
-  template.resourceCountIs('AWS::CloudWatch::Alarm', 5);
+  // 5 throttle alarms + 2 sustained-write-volume alarms (2026-09-02 follow-up).
+  template.resourceCountIs('AWS::CloudWatch::Alarm', 7);
   for (const name of [
     'dev-poker_table_state-throttled-requests',
     'dev-poker_action_log-throttled-requests',
     'dev-poker_action_guards-throttled-requests',
     'dev-poker_rooms-throttled-requests',
     'dev-poker_player_sessions-throttled-requests',
+    'dev-poker_table_state-write-volume',
+    'dev-poker_pending_cashouts-write-volume',
   ]) {
     template.hasResourceProperties('AWS::CloudWatch::Alarm', {
       AlarmName: name,
       AlarmActions: Match.arrayWith(['arn:aws:sns:us-east-1:868899309401:ctech-prod-alerts']),
     });
   }
+  // The write-volume alarm pages on a single 5-minute breach — a wedge is
+  // caught in minutes, not on the next bill.
+  template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+    AlarmName: 'dev-poker_table_state-write-volume',
+    Threshold: 40_000,
+    EvaluationPeriods: 1,
+    ComparisonOperator: 'GreaterThanThreshold',
+  });
 });
 
 test('creates no alarms and no SNS topic reference when cloudwatchAlarmsEnabled is false', () => {

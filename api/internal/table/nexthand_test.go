@@ -125,4 +125,45 @@ func TestArmNextHandTimerClearsWhenNotComplete(t *testing.T) {
 	if a.nextHandArmedFor != "" {
 		t.Fatal("expected nextHandArmedFor cleared once the hand is no longer Complete")
 	}
+	if a.nextHandArmGuardHand != "" || a.nextHandArmsForHand != 0 {
+		t.Fatal("expected the arm-storm guard reset once the hand is no longer Complete")
+	}
+}
+
+// A burst of rearmTimersFromCache calls for one stuck hand (handleNextHand
+// clears nextHandArmedFor on entry, so the same-hand idempotence check stops
+// throttling once the timer fires) must not become an unbounded burst of
+// next-hand dispatches. Past MaxNextHandArmsPerHand the timer is left
+// un-armed: a table this stuck recovers via tablecleanup or an operator, not
+// by retrying a transaction that keeps being rejected. Regression for the
+// 2026-09-02 DynamoDB write-storm incident.
+func TestArmNextHandTimerStopsReArmingAfterTheCap(t *testing.T) {
+	a := &Actor{
+		cmds: make(chan Command, 64), done: make(chan struct{}),
+		nextHandDelay: time.Hour, handID: "stuck",
+	}
+	t.Cleanup(func() { close(a.done) })
+
+	for i := 0; i < MaxNextHandArmsPerHand+50; i++ {
+		a.nextHandArmedFor = "" // what handleNextHand does on every dispatch
+		a.armNextHandTimer(true)
+	}
+	if a.nextHandArmsForHand != MaxNextHandArmsPerHand+1 {
+		t.Fatalf("arms counter = %d, want it pinned at the cap (+1 for the once-only log marker)", a.nextHandArmsForHand)
+	}
+	a.nextHandTimer.Stop()
+	a.nextHandTimer = nil
+	a.nextHandArmedFor = ""
+	a.armNextHandTimer(true)
+	if a.nextHandTimer != nil {
+		t.Fatal("a timer was armed past MaxNextHandArmsPerHand")
+	}
+
+	// A new hand ID resets the guard — the next real hand still gets its timer.
+	a.handID = "fresh"
+	a.armNextHandTimer(true)
+	if a.nextHandTimer == nil {
+		t.Fatal("guard did not reset when the hand ID changed")
+	}
+	a.nextHandTimer.Stop()
 }

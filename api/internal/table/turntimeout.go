@@ -29,6 +29,25 @@ const (
 	MaxNextHandRetries = 5
 )
 
+// MaxNextHandArmsPerHand caps how many times armNextHandTimer will (re-)arm
+// the post-hand timer for ONE hand. rearmTimersFromCache re-derives this timer
+// on every reconnect, keepalive ping and AFK sweep, and handleNextHand clears
+// nextHandArmedFor on entry (#136) so the "same hand" idempotence check stops
+// throttling the moment the timer first fires. When the persisted next-hand
+// deadline is already in the past the re-armed timer fires instantly — so on a
+// wedged table (a seat that will not leave) a client reconnect loop became ~8
+// rejected next-hand DynamoDB transactions per second, each still billed,
+// until the table was cleaned up (2026-09-02 incident,
+// docs/specs/2026-09-03-next-hand-rearm-storm.md).
+//
+// Past the cap the timer is left un-armed: a table this stuck recovers via
+// tablecleanup's sweep or an operator, not by retrying a transaction that
+// keeps being rejected. The count resets the moment a.handID changes (a hand
+// actually started) or the table leaves Complete. handleNextHand's own
+// transient-failure re-arm (retryNextHand, bounded by MaxNextHandRetries) does
+// not go through armNextHandTimer and is counted separately.
+const MaxNextHandArmsPerHand = 12
+
 // TurnTimeoutFor resolves a room's configured turn_timeout_seconds (0 means
 // "not configured") to a duration.
 func TurnTimeoutFor(seconds int) time.Duration {

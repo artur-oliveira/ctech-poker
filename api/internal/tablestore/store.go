@@ -148,4 +148,8 @@ type StoredTable struct {
 	NextHandDeadlineUnixMs int64 `dynamodbav:"next_hand_deadline_unix_ms,omitempty"`
 	LastActionAt           int64 `dynamodbav:"last_action_at"`
 	Archived               bool  `dynamodbav:"archived,omitempty"`
+	// TTL is the DynamoDB expiry (unix seconds), refreshed on every commit so
+	// a live table never expires and a dead one is reaped after stateTTLDays.
+	// Never read for correctness — recovery ignores it.
+	TTL int64 `dynamodbav:"ttl,omitempty"`
 }

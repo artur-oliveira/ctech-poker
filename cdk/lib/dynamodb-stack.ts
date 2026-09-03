@@ -57,11 +57,19 @@ export class DynamoDBStack extends cdk.Stack {
     this.tables = new Map();
     const {environment, cloudwatchAlarmsEnabled} = props;
     const removalPolicy = environment === 'dev' ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN;
-    const pointInTimeRecoverySpecification =
-      environment === 'prod' ? {pointInTimeRecoveryEnabled: true} : undefined;
 
+    // PITR (continuous backups) is per-table, not blanket-on. It earns its
+    // keep only where the data is durable and non-reconstructable — hands,
+    // profiles, stats, purchases, money-safety rows. Ephemeral tables (the
+    // authoritative table item and its audit-history snapshots, the S3-archived
+    // action log, the 7-day idempotency guards, per-connection presence) opt
+    // out with `pitr: false`: nothing there is worth a point-in-time restore,
+    // and a runaway write path (2026-09-02 incident,
+    // docs/specs/2026-09-03-next-hand-rearm-storm.md) shows up in
+    // TimedPITRStorage-ByteHrs too. Only ever set in prod.
     const table = (
       name: TableName, withSortKey: boolean, withTTL: boolean = false, withStream: boolean = false,
+      pitr: boolean = true,
     ): dynamodb.TableV2 => {
       const tableName = `${environment}_${name}`;
       const capacity = HOT_PATH_TABLES.has(name) ? HOT_PATH_CAPACITY : COLD_PATH_CAPACITY;
@@ -71,7 +79,8 @@ export class DynamoDBStack extends cdk.Stack {
         sortKey: withSortKey ? {name: 'sk', type: dynamodb.AttributeType.STRING} : undefined,
         billing: Billing.onDemand(capacity),
         removalPolicy,
-        pointInTimeRecoverySpecification,
+        pointInTimeRecoverySpecification:
+          environment === 'prod' ? {pointInTimeRecoveryEnabled: pitr} : undefined,
         encryption: dynamodb.TableEncryptionV2.awsManagedKey(),
         timeToLiveAttribute: withTTL ? 'ttl' : undefined,
         dynamoStream: withStream ? dynamodb.StreamViewType.NEW_IMAGE : undefined,
@@ -115,13 +124,41 @@ export class DynamoDBStack extends cdk.Stack {
       alarm.addAlarmAction(new cloudwatchActions.SnsAction(alertsTopic));
     };
 
+    // Sustained-write-volume alarm. The throttle alarm above never fired on
+    // 2026-09-02: on-demand scaled the write storm just fine, it just billed
+    // for it (docs/specs/2026-09-03-next-hand-rearm-storm.md). This one
+    // watches ConsumedWriteCapacityUnits directly — an active six-max table
+    // peaks near ~8k WCU/5min, the incident hit >200k. `threshold` is set per
+    // table well above a busy peak and well below a runaway loop; one 5-min
+    // breach pages, so a wedge is caught in minutes, not on the next bill.
+    const addWriteVolumeAlarm = (t: dynamodb.TableV2, name: TableName, threshold: number) => {
+      if (!alertsTopic) return;
+      const alarm = new cloudwatch.Alarm(this, `${name}WriteVolumeAlarm`, {
+        alarmName: `${environment}-${name}-write-volume`,
+        alarmDescription:
+          `${environment}_${name} consumed >${threshold} write units in 5 minutes — a runaway write path, ` +
+          'not organic play. See docs/specs/2026-09-03-next-hand-rearm-storm.md.',
+        metric: t.metric('ConsumedWriteCapacityUnits', {
+          statistic: 'sum', period: cdk.Duration.minutes(5),
+        }),
+        threshold,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
+      alarm.addAlarmAction(new cloudwatchActions.SnsAction(alertsTopic));
+    };
+
     // poker_table_state: the single authoritative item per table, versioned
-    // (tablestore.CommitAction) — no TTL, no stream, always current.
-    // gsi_active_last_action is sparse — only tables still active carry a
-    // gsi_active value (tablestore.SeedTable sets it; cmd/tablecleanup's
-    // archive step REMOVEs it) — so an archived table drops out of the index
-    // instead of accumulating there forever.
-    const tableState = table('poker_table_state', false);
+    // (tablestore.CommitAction). Ephemeral — TTL'd (tablestore.stateTTLDays,
+    // refreshed on every commit) so a dead table is reaped instead of lingering
+    // forever, and PITR-off (nothing here is worth a point-in-time restore; a
+    // rejoin re-seeds). No stream. gsi_active_last_action is sparse — only
+    // tables still active carry a gsi_active value (tablestore.SeedTable sets
+    // it; cmd/tablecleanup's archive step REMOVEs it) — so an archived table
+    // drops out of the index instead of accumulating there forever.
+    const tableState = table('poker_table_state', false, true, false, false);
     tableState.addGlobalSecondaryIndex({
       indexName: 'gsi_active_last_action',
       partitionKey: {name: 'gsi_active', type: dynamodb.AttributeType.STRING},
@@ -129,21 +166,25 @@ export class DynamoDBStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.KEYS_ONLY,
     });
     addThrottleAlarm(tableState, 'poker_table_state');
+    addWriteVolumeAlarm(tableState, 'poker_table_state', 40_000);
     // poker_table_state_history: append-only audit snapshot of each hand's
     // final state, written just before the table resets for the next hand —
-    // pk is the table ID, sk is the unix-seconds capture time. No TTL (kept
-    // indefinitely for audit) and no stream (nothing consumes it downstream).
-    table('poker_table_state_history', true);
+    // pk is the table ID, sk is the unix-seconds capture time. Ephemeral audit
+    // data: TTL'd at stateTTLDays and PITR-off, same as poker_table_state.
+    table('poker_table_state_history', true, true, false, false);
     // poker_action_log: TTL'd (tablestore.logTTLDays = 90 days — the "recent
     // window" served directly from Dynamo) with a stream so the archiver
     // Lambda (archiver-stack.ts) ships every entry to S3 before that TTL ever
     // reaps it — nothing is lost, just moved to cheaper long-term storage.
-    const actionLog = table('poker_action_log', true, true, true);
+    // PITR-off: S3 is already the durable copy, a second continuous backup of
+    // the same rows buys nothing.
+    const actionLog = table('poker_action_log', true, true, true, false);
     addThrottleAlarm(actionLog, 'poker_action_log');
     // poker_action_guards: TTL'd (mirrors ctech-wallet's wallet_idempotency
     // table) — a guard only needs to outlive plausible client retries
-    // (tablestore.guardTTLDays = 7 days).
-    const actionGuards = table('poker_action_guards', false, true);
+    // (tablestore.guardTTLDays = 7 days). PITR-off: a lost idempotency crumb
+    // is not worth restoring.
+    const actionGuards = table('poker_action_guards', false, true, false, false);
     addThrottleAlarm(actionGuards, 'poker_action_guards');
 
     // poker_rooms is lobby metadata only. The sparse indexes are populated by
@@ -260,16 +301,23 @@ export class DynamoDBStack extends cdk.Stack {
     // Resolved money-movement safety records are retained for 30 days for
     // audit/debugging, then reaped by DynamoDB TTL. Unresolved entries never
     // receive ttl and therefore cannot expire before reconciliation.
+    // Keeps PITR: these are money-safety records — a lost unresolved row is a
+    // stranded credit. It also spiked 1:1 with the wedged next-hand loop on
+    // 2026-09-02 (one rejected settlement Put per rejected transaction), so it
+    // gets the write-volume alarm too — from a near-zero organic baseline any
+    // sustained volume here is a loop.
     const pendingCashouts = table('poker_pending_cashouts', true, true);
     pendingCashouts.addGlobalSecondaryIndex({
       indexName: 'gsi_status',
       partitionKey: {name: 'gsi_status', type: dynamodb.AttributeType.STRING},
       projectionType: dynamodb.ProjectionType.ALL,
     });
+    addWriteVolumeAlarm(pendingCashouts, 'poker_pending_cashouts', 5_000);
     // poker_player_sessions: TTL'd — only tracks which table a player is
     // currently at (or was recently at); the durable per-hand history lives
-    // in poker_player_hands instead.
-    const playerSessions = table('poker_player_sessions', true, true);
+    // in poker_player_hands instead. PITR-off: per-connection presence, not
+    // history.
+    const playerSessions = table('poker_player_sessions', true, true, false, false);
     addThrottleAlarm(playerSessions, 'poker_player_sessions');
     const playerHands = table('poker_player_hands', true);
     playerHands.addGlobalSecondaryIndex({
