@@ -256,6 +256,7 @@ export default function HandsHistory() {
         />
         {tables.length > 1 && <FilterGroup
           label="Filtro por mesa"
+          className="filter-tabs-scroll"
           value={filter.tableId}
           options={[
             {value: ALL_TABLES, label: 'Todas as mesas'},

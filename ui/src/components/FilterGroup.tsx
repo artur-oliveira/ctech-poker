@@ -7,13 +7,14 @@ export type FilterOption<T extends string> = {
   title?: string;
 };
 
-export function FilterGroup<T extends string>({label, value, options, onChangeAction}: {
+export function FilterGroup<T extends string>({label, value, options, onChangeAction, className}: {
   label: string;
   value: T;
   options: readonly FilterOption<T>[];
   onChangeAction: (value: T) => void;
+  className?: string;
 }) {
-  return <div className="filter-tabs" role="group" aria-label={label}>
+  return <div className={`filter-tabs${className ? ` ${className}` : ''}`} role="group" aria-label={label}>
     {options.map(option => <button
       key={option.value}
       type="button"

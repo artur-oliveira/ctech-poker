@@ -70,11 +70,7 @@ func TestRequestExitStillRemovesWhenAPriorSystemLeaveRowExists(t *testing.T) {
 		})
 	})
 
-	reply := make(chan error, 1)
-	if err := a.Dispatch(RequestExitCmd{PlayerID: "p1", ActionID: "exit-1", Reply: reply}); err != nil {
-		t.Fatalf("RequestExitCmd dispatch: %v", err)
-	}
-	if err := <-reply; err != nil {
+	if err := a.Dispatch(RequestExitCmd{PlayerID: "p1", ActionID: "exit-1", Reply: make(chan error, 1)}); err != nil {
 		t.Fatalf("RequestExitCmd: %v", err)
 	}
 

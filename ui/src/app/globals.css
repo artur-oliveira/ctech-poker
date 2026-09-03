@@ -7581,7 +7581,13 @@ html:has(.game),
    the viewport edge. Size them from the track instead, capped at the design
    size so wider phones still get 46px. */
 @media (max-width: 600px) {
-    .hand-row-board {
+    /* Two classes deep on purpose: .hand-row-card-group-cards (app.css, no
+       media guard) sets display: flex on this same element, and app.css
+       loads after this sheet. A bare .hand-row-board selector ties that
+       rule's specificity and loses the cascade every time this media query
+       is active, no matter how narrow the viewport — the board silently
+       stayed flex and each card stretched to the row's full width. */
+    .hand-row-top .hand-row-board {
         display: grid;
         grid-template-columns: repeat(5, minmax(0, 1fr));
         gap: 4px;
