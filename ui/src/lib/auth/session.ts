@@ -107,7 +107,9 @@ export function recoverSession() {
     .then(result => {
       if (!result) endExpiredSession();
     })
-    .catch(() => endExpiredSession());
+    // A transport/5xx failure says nothing about the refresh credential.
+    // Keep the identity and let the keep-alive/online hooks try again.
+    .catch(() => undefined);
 }
 
 /**

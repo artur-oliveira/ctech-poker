@@ -197,6 +197,9 @@ vertical `stage-v` ring for portrait handhelds.
   three seconds. After an authenticated HTTP `401` or WebSocket `unauthorized`, one shared refresh
   is attempted; if no replacement token can be issued, the local identity is cleared and the IdP
   SSO session is ended instead of reconnecting indefinitely with dead credentials.
+  A network, throttling, or Accounts 5xx failure instead preserves the in-memory identity and retries later;
+  only a definitive credential rejection starts logout. Refreshes are serialized across tabs by
+  `@aoctech/auth-client`, and Accounts keeps a separate HttpOnly refresh cookie per OAuth client.
 
 ## Auth flow
 
