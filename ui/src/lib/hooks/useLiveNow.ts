@@ -1,4 +1,5 @@
 import {useEffect, useState} from 'react';
+import {subscribeTicker} from '@/lib/hooks/useSharedTicker';
 
 /** Wall-clock milliseconds, re-read every `intervalMs` while `active`.
  *
@@ -7,7 +8,11 @@ import {useEffect, useState} from 'react';
  * pure functions of their props. Deadline *phases* can't use it: the turn clock
  * hands over to the time bank at an absolute instant no broadcast coincides
  * with, so a gate comparing against a frozen timestamp only ever flips when an
- * unrelated snapshot happens to land (or the page reloads). */
+ * unrelated snapshot happens to land (or the page reloads).
+ *
+ * The tick itself comes from `useSharedTicker`, so every clock on the table
+ * (action bar, each timed seat, the reality check, the idle warning) shares a
+ * single interval instead of arming one apiece. */
 export function useLiveNow(active: boolean, intervalMs = 250): number {
   const [now, setNow] = useState(() => Date.now());
   // While inactive the clock stands still, so re-activating after an idle
@@ -23,8 +28,7 @@ export function useLiveNow(active: boolean, intervalMs = 250): number {
 
   useEffect(() => {
     if (!active) return undefined;
-    const timer = window.setInterval(() => setNow(Date.now()), intervalMs);
-    return () => window.clearInterval(timer);
+    return subscribeTicker(intervalMs, () => setNow(Date.now()));
   }, [active, intervalMs]);
 
   return now;

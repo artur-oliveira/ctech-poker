@@ -109,6 +109,25 @@ func (s *PendingStore) Record(ctx context.Context, p PendingCashout) error {
 	return nil
 }
 
+// Get reads one recovery obligation by its ID, or (nil, nil) when no such
+// row exists. It is the "has this money movement actually completed?" read:
+// buyin.Service.confirmFeeCharged uses it so the mere existence of a
+// table-entry entitlement can never stand in for a settled fee debit.
+func (s *PendingStore) Get(ctx context.Context, id string) (*PendingCashout, error) {
+	item, err := s.base.GetItem(ctx, id, pendingSK)
+	if err != nil {
+		return nil, fmt.Errorf("reconcile: get pending: %w", err)
+	}
+	if len(item) == 0 {
+		return nil, nil
+	}
+	p, err := dynamo.Decode[PendingCashout](item)
+	if err != nil {
+		return nil, fmt.Errorf("reconcile: decode pending: %w", err)
+	}
+	return p, nil
+}
+
 func (s *PendingStore) MarkResolved(ctx context.Context, id string) error {
 	sk := pendingSK
 	_, err := s.base.UpdateItem(ctx, id, &sk, map[string]any{

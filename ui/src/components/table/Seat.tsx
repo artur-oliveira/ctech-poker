@@ -13,6 +13,7 @@ import {Hourglass, NotebookPen} from 'lucide-react';
 import type {PlayerNote} from '@/lib/api/playerNotes';
 import {playstyleMeta} from '@/lib/playstyle';
 import type {WinnerStanding} from '@/lib/tableOutcome';
+import {useSeatElementRef} from '@/lib/seatRects';
 
 // chance <= 20% red, <= 60% yellow (reusing the --gold token already used for
 // bet amounts on this same seat card), > 60% green.
@@ -275,7 +276,10 @@ export function Seat({
     '--seat-y': `${layoutPosition.y}%`,
   } as CSSProperties : undefined;
   const isTopSeat = layoutPosition?.zone === 'top' || (!layoutPosition && TOP_SEAT_INDICES.includes(index));
-  return <div data-state={seat.state} data-connection-state={seat.connection_state}
+  // Publishes this element for the reaction layer, which has no ref path here.
+  const seatElementRef = useSeatElementRef(seat.player_id);
+  return <div ref={seatElementRef}
+              data-state={seat.state} data-connection-state={seat.connection_state}
               data-player-id={seat.player_id}
               data-seat-zone={layoutPosition?.zone}
               data-seat-side={layoutPosition?.side}

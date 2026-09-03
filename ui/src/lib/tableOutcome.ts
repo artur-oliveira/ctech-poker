@@ -1,4 +1,6 @@
 import type {SeatView, TableSnapshot} from '@/lib/api/table';
+import type {HandOutcomeState} from '@/components/table/HandOutcome';
+import {bestFiveCardHand} from '@/lib/pokerRules';
 
 export type TableOutcomeKind = 'win' | 'lose' | 'tie' | 'mixed';
 
@@ -135,4 +137,120 @@ export function winnerStandings(snapshot: TableSnapshot): WinnerStanding[] {
     previousAmount = standing.amount;
     return {...standing, place: standing.tied ? undefined : place};
   });
+}
+
+/** The two hole cards of a seat, but only when both are actually known — the
+ * server masks anything unseen as the literal `"back"`, which must never be
+ * reconstructed into a hand. */
+function knownHoleCards(seat?: SeatView) {
+  return seat?.hole_cards?.length === 2 &&
+  seat.hole_cards.every(card => card.toLowerCase() !== 'back') ? seat.hole_cards : undefined;
+}
+
+/** The seat's hole cards reduced to the actual best five-card combination once
+ * the board is complete — a bare pair of hole cards doesn't show what the
+ * player won with when the winning combination uses the board too.
+ * Presentation only: `bestFiveCardHand` orders the cards shown in the banner
+ * and never decides who won (that stays server-authoritative). */
+function resolvedHand(snapshot: TableSnapshot, seat?: SeatView) {
+  const hole = knownHoleCards(seat);
+  return hole && snapshot.board.length === 5 ? bestFiveCardHand([...hole, ...snapshot.board]) : hole;
+}
+
+/** Assembles the whole showdown banner for one resolved snapshot: the
+ * win/lose/tie/mixed/fold reading, the hands worth naming beside it, the
+ * per-pot detail a mixed result needs, and the viewer's chip delta.
+ *
+ * `rememberedStart` is the pre-blind stack remembered from the earliest live
+ * frame of this hand, used only while API instances still predate protocol
+ * v3's `stack_at_hand_start`. Returns null when the viewer was not dealt into
+ * this hand — seat state does not prove participation, since a player may
+ * become active mid-hand and only be eligible for the next deal. */
+export function buildHandOutcome(snapshot: TableSnapshot, viewer: string,
+                                 rememberedStart?: {handID: string; stack: number} | null,
+                                 key = 0): HandOutcomeState | null {
+  const seat = snapshot.seats.find(item => item.player_id === viewer);
+  if (!shouldShowOutcome(seat)) return null;
+  // Membership in `winners`, not a truthy payout, decides win/lose: an
+  // uncalled all-in's excess or an orphaned side-pot refund also shows up in
+  // `payouts` without being an actual win.
+  const kind = tableOutcomeKind(snapshot, viewer);
+  // The banner names one rival hand as the point of comparison when the viewer
+  // lost at least one eligible pot. Only seats that reached showdown carry
+  // hand_category, so this stays undefined (and the banner falls back to the
+  // plain category chip) whenever the hand ended without one.
+  const opponentCategory = (kind === 'lose' || kind === 'mixed') ?
+    relevantWinner(snapshot, viewer)?.hand_category : undefined;
+  // The hand that actually won this pot: the viewer's own on a win (always
+  // known), or the first winning rival's on a loss, but only when a showdown
+  // actually revealed them.
+  const winnerSeat = kind === 'lose' ? relevantWinner(snapshot, viewer) : seat;
+  const winnerHole = knownHoleCards(winnerSeat);
+  // The best other hand the viewer actually beat, so a win can also read
+  // "same combination, the kicker decided".
+  const beatenSeat = kind === 'win' ? relevantRunnerUp(snapshot, viewer) : undefined;
+  const viewerHole = knownHoleCards(seat);
+  // A 'mixed' result means the viewer won at least one contested pot and lost
+  // at least one other; per-pot detail is required because the pot the viewer
+  // lost may have a different winner (and hand) than the pot they won.
+  const pots = kind === 'mixed' ? contestedPots(snapshot, viewer).map(potOutcome => potOutcome.won
+    ? {won: true as const}
+    : {
+      won: false as const,
+      winnerName: potOutcome.winnerSeat?.name,
+      category: potOutcome.winnerSeat?.hand_category,
+      winningCards: resolvedHand(snapshot, potOutcome.winnerSeat)
+    }) : undefined;
+  // A tie means every contested pot the viewer won was split; name the other
+  // hand(s) in that split (2-way or 3+-way chop).
+  const tiedWith = kind === 'tie' ? tiedWinners(snapshot, viewer).map(tiedSeat => ({
+    name: tiedSeat.name, cards: resolvedHand(snapshot, tiedSeat)
+  })) : undefined;
+  const breakdown = playerPotBreakdown(snapshot, viewer);
+  // Folding is not a loss in the sense of having contested the pot. It gets
+  // its own banner, only naming a rival hand when the board actually ran to a
+  // showdown that revealed one, and only claiming "poderia ter ganhado" when
+  // the folded hand would truly have beaten what got shown. That comparison
+  // is server-authoritative (hand_score), never the local evaluator.
+  const folded = seat.state === 'folded';
+  const winnerWasPubliclyRevealed = Boolean(winnerHole &&
+    winnerSeat?.hole_cards_revealed?.length === 2 &&
+    winnerSeat.hole_cards_revealed.every(Boolean));
+  return {
+    key,
+    kind: folded ? 'fold' : kind,
+    couldHaveWon: folded && winnerWasPubliclyRevealed &&
+    seat.hand_score != null && winnerSeat?.hand_score != null ?
+      seat.hand_score > winnerSeat.hand_score : undefined,
+    handCategory: seat.hand_category,
+    opponentCategory,
+    winningCards: resolvedHand(snapshot, winnerSeat),
+    winningHoleCards: winnerHole,
+    viewerCards: resolvedHand(snapshot, seat),
+    viewerHoleCards: viewerHole,
+    beatenCards: resolvedHand(snapshot, beatenSeat),
+    beatenCategory: beatenSeat?.hand_category,
+    pots,
+    tiedWith,
+    runItTwice: Boolean(snapshot.board_two?.length),
+    resolvedPots: (snapshot.pot_results ?? []).map(pot => ({
+      amount: pot.amount,
+      payoutAmount: pot.payout_amount,
+      viewerPayout: pot.payouts?.[viewer],
+      winnerNames: pot.winner_player_ids.map(playerId =>
+        snapshot.seats.find(item => item.player_id === playerId)?.name)
+        .filter((name): name is string => Boolean(name)),
+      wonByViewer: pot.winner_player_ids.includes(viewer),
+      viewerEligible: pot.eligible_player_ids.includes(viewer),
+      split: pot.winner_player_ids.length > 1,
+      refund: Boolean(pot.refund),
+      runout: pot.runout
+    })),
+    winnerName: winnerSeat?.name,
+    stackBefore: seat.stack_at_hand_start ??
+      (rememberedStart && rememberedStart.handID === snapshot.hand_id ? rememberedStart.stack : undefined),
+    stackAfter: seat.stack,
+    wonAmount: breakdown.won,
+    refundAmount: breakdown.refund
+  };
 }

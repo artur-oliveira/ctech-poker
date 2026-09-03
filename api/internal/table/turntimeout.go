@@ -17,6 +17,18 @@ const (
 	NextHandDelay = NextHandDelaySeconds * time.Second
 )
 
+// NextHandRetryDelay/MaxNextHandRetries bound handleNextHand's re-arm after a
+// transient failure (a cancelled DynamoDB context on the load or the commit).
+// The countdown timer that dispatched the command is already spent at that
+// point, so without a re-arm a quiet table sits on Complete until some other
+// command happens to reach the actor. Backoff is linear in the attempt count;
+// past the cap the AFK sweep (the only unconditional tick) stays the
+// last-resort watchdog, so retrying forever here buys nothing.
+const (
+	NextHandRetryDelay = 2 * time.Second
+	MaxNextHandRetries = 5
+)
+
 // TurnTimeoutFor resolves a room's configured turn_timeout_seconds (0 means
 // "not configured") to a duration.
 func TurnTimeoutFor(seconds int) time.Duration {

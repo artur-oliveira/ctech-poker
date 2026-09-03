@@ -64,3 +64,17 @@ test('creates no alarms when cloudwatchAlarmsEnabled is false', () => {
   // The schedule and its DLQ are unaffected by the flag.
   template.hasResourceProperties('AWS::SQS::Queue', {QueueName: 'dev-ctech-poker-reconcile-dlq'});
 });
+
+// cmd/reconcile only Querys gsi_status and UpdateItems the row it resolved; there is no
+// Scan in api/ at all. Keeps the grant from drifting back to table-wide reads (#56).
+test('grants the reconcile Lambda no dynamodb:Scan', () => {
+  const template = buildStack();
+  template.hasResourceProperties('AWS::IAM::Policy', {
+    PolicyDocument: Match.objectLike({
+      Statement: Match.arrayWith([
+        Match.objectLike({Action: ['dynamodb:Query', 'dynamodb:UpdateItem']}),
+      ]),
+    }),
+  });
+  expect(JSON.stringify(template.toJSON())).not.toContain('dynamodb:Scan');
+});

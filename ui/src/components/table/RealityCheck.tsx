@@ -11,6 +11,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import {useTablePreferences} from '@/lib/tablePreferences';
+import {useLiveNow} from '@/lib/hooks/useLiveNow';
 
 function durationLabel(seconds: number) {
   const hours = Math.floor(seconds / 3600);
@@ -35,24 +36,19 @@ export function RealityCheck({
 }) {
   const {preferences} = useTablePreferences();
   const [open, setOpen] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
   const shownAt = useRef(0);
   const [completedHands, setCompletedHands] = useState<Set<string>>(() => new Set());
   const intervalMs = preferences.realityCheckMinutes * 60_000;
-  
+  // Rides the shared table clock (one interval for every countdown on the
+  // table) instead of arming a 15 s interval of its own.
+  const now = useLiveNow(Boolean(intervalMs), 15_000);
+
   useEffect(() => {
     if (!handComplete || !handId) return;
     // Record each completed hand once; the set spans subsequent live snapshots.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCompletedHands(previous => previous.has(handId) ? previous : new Set(previous).add(handId));
   }, [handComplete, handId]);
-  
-  useEffect(() => {
-    if (!intervalMs) return undefined;
-    const tick = () => setNow(Date.now());
-    const timer = window.setInterval(tick, 15_000);
-    return () => window.clearInterval(timer);
-  }, [intervalMs]);
   
   useEffect(() => {
     if (!intervalMs || isTurn || open) return;

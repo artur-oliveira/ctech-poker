@@ -1,21 +1,19 @@
 'use client';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import {Suspense, useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {Suspense, useEffect, useMemo, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
-import {ChevronLeft, ClockAlert, MessageCircle, Pause, Play, RotateCw, SmilePlus, Wifi} from 'lucide-react';
-import {getViewerId, isPlainKey} from '@/lib/utils';
+import {ChevronLeft, MessageCircle, Pause, Play, RotateCw, SmilePlus, Wifi} from 'lucide-react';
+import {getViewerId} from '@/lib/utils';
 import {useTableRealtime} from '@/lib/hooks/useTableRealtime';
-import {getRoom, getSeated} from '@/lib/api/rooms';
 import {BuyInPanel} from '@/components/table/BuyInPanel';
 import {STAGE_LABELS, TableStage} from '@/components/table/TableStage';
-import type {ActionAvailability} from '@/components/table/ActionBar';
 import {ActionBar} from '@/components/table/ActionBar';
 import {Chat} from '@/components/table/Chat';
+import {IdleWarning} from '@/components/table/IdleWarning';
 import {InviteDialog} from '@/components/table/InviteDialog';
 import {LeaveDialog} from '@/components/table/LeaveDialog';
-import type {HandOutcomeState} from '@/components/table/HandOutcome';
 import {LastWinners} from '@/components/table/LastWinners';
 import {EquityTrainerPanel} from '@/components/table/EquityTrainerPanel';
 import {TablePreferencesDialog} from '@/components/table/TablePreferencesDialog';
@@ -23,35 +21,22 @@ import {RealityCheck} from '@/components/table/RealityCheck';
 import {TodayHighlight} from '@/components/table/TodayHighlight';
 import {SessionRecap} from '@/components/table/SessionRecap';
 import {TableReactions} from '@/components/table/TableReactions';
-import {type TableUtility, TableUtilityMenu} from '@/components/table/TableUtilityMenu';
+import {TableUtilityMenu} from '@/components/table/TableUtilityMenu';
 import {BotChallenge} from '@/components/table/BotChallenge';
 import {AchievementToast} from '@/components/AchievementToast';
 import {TermsGate} from '@/components/TermsGate';
 import {Button} from '@/components/ui/button';
 import {pushNotification} from '@/lib/notify';
-import type {TableSnapshot} from '@/lib/api/table';
-import {bestFiveCardHand} from '@/lib/pokerRules';
-import {getHands, getMe, getSessions, updateMe} from '@/lib/api/player';
-import {
-  currentReactionPurchase,
-  listReactionCatalog,
-  listReactionPurchases,
-  REACTION_PURCHASE_FIRST_PAGE_KEY,
-  type ReactionCatalogEntry
-} from '@/lib/api/reactionPurchases';
+import {updateMe} from '@/lib/api/player';
+import {currentReactionPurchase, type ReactionCatalogEntry} from '@/lib/api/reactionPurchases';
 import {useTablePreferences} from '@/lib/tablePreferences';
 import {useDealerVoice} from '@/lib/hooks/useDealerVoice';
-import {getPlayerNotes, type PlayerNote} from '@/lib/api/playerNotes';
-import {
-  contestedPots,
-  playerPotBreakdown,
-  relevantRunnerUp,
-  relevantWinner,
-  seatParticipated,
-  shouldShowOutcome,
-  tableOutcomeKind,
-  tiedWinners
-} from '@/lib/tableOutcome';
+import {useTableRemoval, useTableSession} from '@/lib/hooks/useTableSession';
+import {useTableOutcome} from '@/lib/hooks/useTableOutcome';
+import {useTableOverlays} from '@/lib/hooks/useTableOverlays';
+import {actionState} from '@/lib/tableActions';
+import type {PlayerNote} from '@/lib/api/playerNotes';
+import {seatParticipated} from '@/lib/tableOutcome';
 import {getRelationships} from '@/lib/api/social';
 import {SOCIAL_KEYS, suppressedPlayerIds} from '@/lib/social';
 import {useSocialActions} from '@/lib/hooks/useSocialActions';
@@ -59,7 +44,7 @@ import {PlayerActionsMenu} from '@/components/social/PlayerActionsMenu';
 import {type MockScenario, USE_MOCK} from '@/lib/mockConfig';
 import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
 import {DEFAULT_TURN_TIMEOUT_SECONDS} from '@/lib/gameTiming';
-import {isTableReaction, TABLE_REACTIONS, type TableReactionID} from '@/lib/reactions';
+import {isTableReaction, TABLE_REACTIONS} from '@/lib/reactions';
 import {WALLET_QUERY_ROOT} from '@/lib/api/wallet';
 import {setSoundEffectsEnabled} from '@/lib/sound';
 
@@ -80,17 +65,11 @@ const CONNECTION_COPY = {
   disconnected: 'Conexão interrompida. Tentando novamente…',
   error: 'A conexão oscilou. Suas fichas continuam seguras.'
 } as const;
-const REMOVED_REASON_COPY: Record<string, string> = {
-  idle: 'Você foi removido da mesa por inatividade.',
-  disconnected: 'Você foi removido da mesa após ficar desconectado por muito tempo.',
-  exit_requested: 'Você saiu da mesa.'
-};
 // @aoctech/ws-client gives up on its own retry loop after MAX_RECONNECT_ATTEMPTS
 // and never schedules another one. Only a fresh token (handled elsewhere) or
 // this button's retryNow() tries again. Telling the player "tentando
 // novamente" past that point would be a lie.
 const RECONNECT_GIVEN_UP_COPY = 'Conexão perdida. Toque para tentar novamente.';
-const REACTION_COOLDOWN_MS = 2000;
 
 function connectionCopyFor(status: keyof typeof CONNECTION_COPY, attempt: number) {
   if (status === 'disconnected' && attempt > MAX_RECONNECT_ATTEMPTS) return RECONNECT_GIVEN_UP_COPY;
@@ -105,60 +84,6 @@ const MOCK_SCENARIOS = new Set<MockScenario>([
   'winner_cards', 'rabbit_hunt', 'rebuy', 'reality_check',
   'reconnecting', 'action_error', 'timeout'
 ]);
-
-function actionState(snapshot: TableSnapshot, viewer?: string) {
-  const seat = snapshot.seats.find(item => item.player_id === viewer);
-  const serverActions = snapshot.legal_actions;
-  const callAmount = Math.min(seat?.stack || 0, Math.max(0, serverActions?.call_amount || 0));
-  // An empty current_player_id is a deliberate server state (street
-  // transition, runout, showdown), never permission for the viewer to act.
-  const isTurn = Boolean(viewer && snapshot.current_player_id === viewer);
-  const actions = new Set(serverActions?.actions || []);
-  const available: ActionAvailability = {
-    fold: actions.has('fold'), check: actions.has('check'), call: actions.has('call'), raise: actions.has('raise')
-  };
-  const maxRaise = Math.max(0, serverActions?.max_raise_to || 0);
-  const minRaise = Math.min(maxRaise, Math.max(0, serverActions?.min_raise_to || 0));
-  return {
-    available, callAmount, isTurn, minRaise, maxRaise, raiseStep: Math.max(1, serverActions?.step || 1),
-    effectiveStack: Math.min(seat?.stack || 0, Math.max(0, ...snapshot.seats
-      .filter(item => item.player_id !== viewer && item.state !== 'folded' && item.state !== 'sitting_out')
-      .map(item => item.stack))),
-    raisePresets: [
-      {label: 'Mín', value: minRaise},
-      {label: '⅓ pote', value: serverActions?.one_third_pot_raise_to || minRaise},
-      {label: '½ pote', value: serverActions?.half_pot_raise_to || minRaise},
-      {label: '⅔ pote', value: serverActions?.two_thirds_pot_raise_to || minRaise},
-      {label: 'Pote', value: serverActions?.pot_raise_to || minRaise},
-      {label: 'Máx', value: maxRaise}
-    ]
-  };
-}
-
-function IdleWarning({deadline, onKeepSeat}: { deadline?: number; onKeepSeat: () => boolean }) {
-  const [now, setNow] = useState(0);
-  useEffect(() => {
-    if (!deadline) return undefined;
-    const delay = Math.max(0, deadline - Date.now() - 60_000);
-    let interval: ReturnType<typeof setInterval> | undefined;
-    const timeout = setTimeout(() => {
-      setNow(Date.now());
-      interval = setInterval(() => setNow(Date.now()), 1000);
-    }, delay);
-    return () => {
-      clearTimeout(timeout);
-      if (interval) clearInterval(interval);
-    };
-  }, [deadline]);
-  if (!deadline || !now) return null;
-  const seconds = Math.max(0, Math.ceil((deadline - now) / 1000));
-  if (seconds > 60) return null;
-  return <div className="idle-warning" role="alert">
-    <ClockAlert aria-hidden="true"/>
-    <p>Você será removido por inatividade em <strong>{seconds}s</strong>.</p>
-    <Button type="button" variant="outline" onClick={onKeepSeat}>Continuar na mesa</Button>
-  </div>;
-}
 
 function TableContent() {
   const router = useRouter();
@@ -175,53 +100,10 @@ function TableContent() {
     setSoundEffectsEnabled(preferences.soundEffects);
     return () => setSoundEffectsEnabled(false);
   }, [preferences.soundEffects]);
-  const {data: room} = useQuery({
-    queryKey: ['room', id], queryFn: () => getRoom(id), enabled: valid
-  });
   const queryClient = useQueryClient();
-  // Buy-in is an explicit ceremony: nothing is debited until the player
-  // confirms an amount. The server (not local browser storage) is the
-  // source of truth for "is this player already seated", which is what
-  // lets a player return via a new tab, a different browser, or a
-  // different device without repeating the ceremony for a seat they
-  // already have.
-  const {data: seatedStatus, isLoading: seatedLoading} = useQuery({
-    queryKey: ['seated', id], queryFn: () => getSeated(id), enabled: valid
-  });
-  const seated = seatedStatus?.seated ?? false;
-  // Last-winners strip: sourced from the player's own hand-history endpoint
-  // (not live socket state) so it's populated from table load, not only
-  // after the viewer sits through a fresh resolution. Re-fetched once per
-  // resolved hand below.
-  const {data: tableHands = []} = useQuery({
-    queryKey: ['hands', id], queryFn: () => getHands({tableId: id}), enabled: valid,
-    select: page => page.data
-  });
-  const {data: sessions = []} = useQuery({
-    queryKey: ['sessions', 'me'], queryFn: () => getSessions(), enabled: valid && seated
-  });
-  const {data: playerNotes = []} = useQuery({
-    queryKey: ['player-notes'], queryFn: getPlayerNotes, enabled: valid && seated
-  });
-  const {data: reactionCatalog = [], isLoading: reactionCatalogLoading} = useQuery({
-    queryKey: ['wallet', 'reaction-catalog'], queryFn: listReactionCatalog, enabled: valid && seated
-  });
-  const {data: reactionPurchases = [], isLoading: reactionPurchasesLoading} = useQuery({
-    // First page only: this list drives the in-table "refunding" badge, not
-    // ownership (which comes from the catalog's `owned` flag).
-    queryKey: REACTION_PURCHASE_FIRST_PAGE_KEY,
-    queryFn: () => listReactionPurchases().then(page => page.data),
-    enabled: valid && seated
-  });
-  const {data: profile} = useQuery({
-    queryKey: ['player', 'me'], queryFn: getMe, enabled: valid && seated
-  });
+  const session = useTableSession(id, valid);
+  const {room, seated, profile, playerNotes, reactionCatalog, reactionPurchases, tableHands} = session;
   const [noteOpponent, setNoteOpponent] = useState<{ player_id: string; name?: string } | null>(null);
-  const [sessionRecap, setSessionRecap] = useState<{
-    joinedAt: number;
-    buyIn: number;
-    finalStack: number
-  } | null>(null);
   const [reactionPurchaseTarget, setReactionPurchaseTarget] = useState<ReactionCatalogEntry | null>(null);
   const [favoritesSaving, setFavoritesSaving] = useState(false);
   const socialActions = useSocialActions();
@@ -249,294 +131,15 @@ function TableContent() {
     setOpponentIds(previous => previous.join(',') === ids.join(',') ? previous : ids);
   }, [rt.snapshot?.seats, viewer]);
   useDealerVoice(rt.announcement, preferences.dealerVoice);
-  const handledRemovalRef = useRef<typeof rt.removed>(null);
-  // The server never closes a removed player's socket (it just stops
-  // targeting it in future broadcasts). Without reacting to this message the
-  // client would otherwise sit frozen on the last snapshot it received, or
-  // silently reconnect into a seat it no longer holds.
-  useEffect(() => {
-    if (!rt.removed || rt.removed === handledRemovalRef.current) return;
-    // queryClient/router aren't guaranteed referentially stable (the real
-    // useQueryClient() is, but this guards against any dependency here
-    // that isn't), which would otherwise re-run this on every unrelated
-    // render once setSessionRecap below has fired once — same rt.removed
-    // object, so the ref comparison above is what actually stops it, not
-    // the dependency array.
-    handledRemovalRef.current = rt.removed;
-    // An exit the player requested (rather than an idle/disconnect kick)
-    // reuses the same recap treatment LeaveDialog's own immediate-leave path
-    // shows — the player is already gone from rt.snapshot by the time this
-    // fires, so there is no viewerSeat left here to fall back to.
-    if (rt.removed.code === 'exit_requested' && rt.removed.amount !== undefined) {
-      const amount = rt.removed.amount;
-      const openSessionAtRemoval = sessions.find(session => session.table_id === id && session.ended_at === 0);
-      pushNotification(`Você saiu com ${amount.toLocaleString('pt-BR')} fichas.`, 'info');
-      const recap = {
-        joinedAt: openSessionAtRemoval?.joined_at || Date.now(),
-        buyIn: openSessionAtRemoval?.buyin_amount || 0,
-        finalStack: amount
-      };
-      queueMicrotask(() => setSessionRecap(recap));
-      queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
-      return;
-    }
-    pushNotification(REMOVED_REASON_COPY[rt.removed.code || ''] || 'Você foi removido da mesa.', 'info');
-    queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
-    router.push('/lobby');
-  }, [rt.removed, id, queryClient, router, sessions]);
-  useEffect(() => {
-    if (!rt.terminalError) return;
-    pushNotification(rt.terminalError === 'forbidden' ? 'Você não tem acesso a esta mesa.' :
-      'Essa sala não está mais disponível.', 'info');
-    queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
-    router.push('/lobby');
-  }, [rt.terminalError, id, queryClient, router]);
-  // The next-hand deadline is fixed server-side once armed, but a state
-  // broadcast can still arrive mid-countdown (e.g. another player revealing
-  // cards) and shift rt.snapshotAt forward. Recomputing animationDuration
-  // against that later snapshotAt would shrink the CSS animation's total
-  // duration while it's already running, snapping the ring to its end frame
-  // long before the real 5s deadline. Freezing the duration at the first
-  // snapshot that armed this deadline keeps the ring in sync with backend
-  // time regardless of how many broadcasts land before it fires.
-  const [nextHandArmed, setNextHandArmed] = useState<{ deadline: number; snapshotAt: number } | null>(null);
-  // Fires the win/lose banner exactly once per resolved hand: payouts appear
-  // once when a hand completes and stay put across every later broadcast of
-  // that same `complete` snapshot (show_cards, pings, ...), so comparing
-  // against the previous render's payouts (not the current one) is what
-  // keeps this from re-firing on those repeats.
-  const previousPayoutsRef = useRef<{ tableID: string; payouts?: TableSnapshot['payouts'] }>({tableID: ''});
-  const outcomeKeyRef = useRef(0);
-  const [rememberedStart, setRememberedStart] =
-    useState<{ tableID: string; handID: string; stack: number } | null>(null);
-  const [scopedHandOutcome, setScopedHandOutcome] =
-    useState<{ tableID: string; handID?: string; value: HandOutcomeState } | null>(null);
-  const [activeTablePanel, setActiveTablePanel] =
-    useState<TableUtility | null>(null);
-  // The asides share one slot, and a hover-opened one closes on a delay
-  // (HOVER_PANEL_CLOSE_DELAY_MS). Crossing the reactions toggle on the way to
-  // chat therefore fires reactions' close *after* chat already took the slot,
-  // which shut chat again. Only the panel that still owns the slot may clear it.
-  const panelOpenChange = useCallback((panel: TableUtility) => (open: boolean) =>
-    setActiveTablePanel(current => open ? panel : current === panel ? null : current), []);
-  // E/T open the two asides the player reaches for mid-hand, matching the
-  // action bar's own single-letter shortcuts (f/c/p/a/h/r, and 1/2 to peek).
-  // isPlainKey keeps them out of the chat input the T panel focuses on open.
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (!isPlainKey(event)) return;
-      const panel: TableUtility | null =
-        event.key.toLowerCase() === 'e' ? 'reactions' : event.key.toLowerCase() === 't' ? 'chat' : null;
-      if (!panel) return;
-      event.preventDefault();
-      setActiveTablePanel(current => current === panel ? null : panel);
-    }
-
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-  const [preferencesOpen, setPreferencesOpen] = useState(false);
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [pendingReaction, setPendingReaction] = useState<TableReactionID | null>(null);
-  const [reactionCoolingDown, setReactionCoolingDown] = useState(false);
-  const reactionCooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    if (reactionCooldownRef.current) clearTimeout(reactionCooldownRef.current);
-  }, []);
-
-  function startReactionCooldown() {
-    setReactionCoolingDown(true);
-    if (reactionCooldownRef.current) clearTimeout(reactionCooldownRef.current);
-    reactionCooldownRef.current = setTimeout(() => setReactionCoolingDown(false), REACTION_COOLDOWN_MS);
-  }
-
-  function sendQuickReaction(reaction: TableReactionID) {
-    if (reactionCoolingDown || rt.status !== 'connected') return;
-    if (rt.sendReaction(reaction)) startReactionCooldown();
-  }
-
-  function sendTargetedReaction(playerId: string) {
-    if (!pendingReaction || reactionCoolingDown || rt.status !== 'connected') return;
-    if (rt.sendReaction(pendingReaction, playerId)) {
-      setPendingReaction(null);
-      startReactionCooldown();
-    }
-  }
-
-  function selectTableUtility(utility: TableUtility) {
-    if (utility === 'preferences') {
-      setPreferencesOpen(true);
-      return;
-    }
-    if (utility === 'share') {
-      setInviteOpen(true);
-      return;
-    }
-    setActiveTablePanel(previous => previous === utility ? null : utility);
-  }
-
-  // Protocol v3 publishes the exact pre-blind stack. During a rolling deploy,
-  // remember the earliest live snapshot as stack+contributed; unlike the old
-  // stage-based state this is scoped to both table and hand and also works
-  // when the first frame arrives on flop/turn after a reconnect.
-  const liveSeat = rt.snapshot?.seats.find(item => item.player_id === viewer);
-  useEffect(() => {
-    const handID = rt.snapshot?.hand_id;
-    if (!handID || !liveSeat || !seatParticipated(liveSeat) || Object.keys(rt.snapshot?.payouts || {}).length) return;
-    const next = {
-      tableID: id, handID,
-      stack: liveSeat.stack_at_hand_start ?? liveSeat.stack + liveSeat.contributed,
-    };
-    // This state intentionally retains the starting stack after payouts remove
-    // it from the live snapshot; it cannot be derived from the current frame.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setRememberedStart(previous => previous?.tableID === id && previous.handID === handID ? previous : next);
-  }, [id, liveSeat, rt.snapshot?.hand_id, rt.snapshot?.payouts]);
-  useEffect(() => {
-    const deadline = rt.snapshot?.next_hand_unix_ms;
-    if (!deadline) return;
-    // Preserve the timestamp of the first frame carrying this deadline.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setNextHandArmed(previous => previous?.deadline === deadline ? previous :
-      {deadline, snapshotAt: rt.snapshotAt});
-  }, [rt.snapshot?.next_hand_unix_ms, rt.snapshotAt]);
-  useEffect(() => {
-    const snap = rt.snapshot;
-    const hasPayouts = Boolean(snap?.payouts && Object.keys(snap.payouts).length > 0);
-    const previousPayouts = previousPayoutsRef.current.tableID === id ?
-      previousPayoutsRef.current.payouts : undefined;
-    const isFreshPayout = hasPayouts && !previousPayouts;
-    previousPayoutsRef.current = {tableID: id, payouts: hasPayouts ? snap?.payouts : undefined};
-    if (isFreshPayout) void queryClient.invalidateQueries({queryKey: ['hands', id]});
-    if (!isFreshPayout || !snap || !hasPayouts || !viewer) return;
-    // Seat state does not prove participation: a player may become active
-    // mid-hand after returning/rebuying, but they are only eligible for the
-    // next deal. `dealt_in` is the server-authored membership of this hand.
-    const seat = snap.seats.find(item => item.player_id === viewer);
-    if (!shouldShowOutcome(seat)) return;
-    outcomeKeyRef.current += 1;
-    // Membership in `winners`, not a truthy payout, decides win/lose: an
-    // uncalled all-in's excess or an orphaned side-pot refund also shows up
-    // in `payouts` without being an actual win.
-    const kind = tableOutcomeKind(snap, viewer);
-    // The banner names one rival hand as the point of comparison when the
-    // viewer lost at least one eligible pot. Only seats
-    // that reached showdown carry hand_category, so this stays undefined
-    // (and the banner falls back to the plain category chip) whenever the
-    // hand ended without one (e.g. everyone else folded).
-    const opponentCategory = (kind === 'lose' || kind === 'mixed') ?
-      relevantWinner(snap, viewer)?.hand_category : undefined;
-    // The hand that actually won this pot: the viewer's own cards on a win
-    // (always known), or the first winning rival's cards on a loss, but only
-    // when a showdown actually revealed them (a hand that ended with everyone
-    // else folding never shows opponent cards). Combined with the board (once
-    // the board is complete) and reduced to the actual best 5-card hand, since a
-    // bare pair of hole cards doesn't show what the player actually won with
-    // when the winning combination uses the board too.
-    const winnerSeat = kind === 'lose' ? relevantWinner(snap, viewer) : seat;
-    const winnerHole = winnerSeat?.hole_cards?.length === 2 &&
-    winnerSeat.hole_cards.every(card => card.toLowerCase() !== 'back') ? winnerSeat.hole_cards : undefined;
-    const winningCards = winnerHole && snap.board.length === 5 ?
-      bestFiveCardHand([...winnerHole, ...snap.board]) : winnerHole;
-    const viewerHole = seat.hole_cards?.length === 2 &&
-    seat.hole_cards.every(card => card.toLowerCase() !== 'back') ? seat.hole_cards : undefined;
-    const viewerCards = viewerHole && snap.board.length === 5 ?
-      bestFiveCardHand([...viewerHole, ...snap.board]) : viewerHole;
-    // The best other hand the viewer actually beat, so a win can also read
-    // "same combination, the kicker decided" instead of only ever showing
-    // that explanation to the loser.
-    const beatenSeat = kind === 'win' ? relevantRunnerUp(snap, viewer) : undefined;
-    const beatenHole = beatenSeat?.hole_cards?.length === 2 &&
-    beatenSeat.hole_cards.every(card => card.toLowerCase() !== 'back') ? beatenSeat.hole_cards : undefined;
-    const beatenCards = beatenHole && snap.board.length === 5 ?
-      bestFiveCardHand([...beatenHole, ...snap.board]) : beatenHole;
-    // A 'mixed' result means the viewer won at least one contested pot and
-    // lost at least one other; per-pot detail is required because the pot
-    // the viewer lost may have a different winner (and hand) than the pot
-    // they won, so a single flattened winner/hand pair can't represent it.
-    const pots = kind === 'mixed' ? contestedPots(snap, viewer).map(potOutcome => {
-      if (potOutcome.won) return {won: true as const};
-      const potWinnerHole = potOutcome.winnerSeat?.hole_cards?.length === 2 &&
-      potOutcome.winnerSeat.hole_cards.every(card => card.toLowerCase() !== 'back') ?
-        potOutcome.winnerSeat.hole_cards : undefined;
-      const potWinningCards = potWinnerHole && snap.board.length === 5 ?
-        bestFiveCardHand([...potWinnerHole, ...snap.board]) : potWinnerHole;
-      return {
-        won: false as const,
-        winnerName: potOutcome.winnerSeat?.name,
-        category: potOutcome.winnerSeat?.hand_category,
-        winningCards: potWinningCards
-      };
-    }) : undefined;
-    // A tie means every contested pot the viewer won was split; name the
-    // other hand(s) in that split (2-way or 3+-way chop) instead of only
-    // showing the viewer's own combination.
-    const tiedWith = kind === 'tie' ? tiedWinners(snap, viewer).map(tiedSeat => {
-      const tiedHole = tiedSeat.hole_cards?.length === 2 &&
-      tiedSeat.hole_cards.every(card => card.toLowerCase() !== 'back') ? tiedSeat.hole_cards : undefined;
-      return {
-        name: tiedSeat.name,
-        cards: tiedHole && snap.board.length === 5 ? bestFiveCardHand([...tiedHole, ...snap.board]) : tiedHole
-      };
-    }) : undefined;
-    const stackBefore = seat.stack_at_hand_start ??
-      (rememberedStart?.tableID === id && rememberedStart.handID === snap.hand_id ? rememberedStart.stack : undefined);
-    const breakdown = playerPotBreakdown(snap, viewer);
-    const resolvedPots = (snap.pot_results ?? []).map(pot => ({
-      amount: pot.amount,
-      payoutAmount: pot.payout_amount,
-      viewerPayout: pot.payouts?.[viewer],
-      winnerNames: pot.winner_player_ids.map(playerId =>
-        snap.seats.find(item => item.player_id === playerId)?.name).filter((name): name is string => Boolean(name)),
-      wonByViewer: pot.winner_player_ids.includes(viewer),
-      viewerEligible: pot.eligible_player_ids.includes(viewer),
-      split: pot.winner_player_ids.length > 1,
-      refund: Boolean(pot.refund),
-      runout: pot.runout
-    }));
-    // Folding is not a loss in the sense of having contested the pot. It
-    // gets its own banner ("você desistiu"), only naming a rival hand when
-    // the board actually ran to a showdown that revealed one, and only
-    // claiming "poderia ter ganhado" when the folded hand would truly have
-    // beaten what got shown.
-    const folded = seat.state === 'folded';
-    // Outcome comparison is server-authoritative. The local five-card
-    // evaluator remains presentation-only (ordering the cards shown in the
-    // banner) and never decides whether this folded hand would have won.
-    const winnerWasPubliclyRevealed = Boolean(winnerHole &&
-      winnerSeat?.hole_cards_revealed?.length === 2 &&
-      winnerSeat.hole_cards_revealed.every(Boolean));
-    const couldHaveWon = folded && winnerWasPubliclyRevealed &&
-    seat.hand_score != null && winnerSeat?.hand_score != null ?
-      seat.hand_score > winnerSeat.hand_score : undefined;
-    setScopedHandOutcome({
-      tableID: id,
-      handID: snap.hand_id,
-      value: {
-        key: outcomeKeyRef.current, kind: folded ? 'fold' : kind, couldHaveWon,
-        handCategory: seat.hand_category, opponentCategory,
-        winningCards, winningHoleCards: winnerHole, viewerCards, viewerHoleCards: viewerHole,
-        beatenCards, beatenCategory: beatenSeat?.hand_category, pots, tiedWith,
-        runItTwice: Boolean(snap.board_two?.length), resolvedPots,
-        winnerName: winnerSeat?.name, stackBefore, stackAfter: seat.stack,
-        wonAmount: breakdown.won, refundAmount: breakdown.refund
-      }
-    });
-  }, [rt.snapshot, viewer, queryClient, id, rememberedStart]);
-  // The banner/toast-blocking state above is scoped to the hand that produced
-  // it and must not survive into the next one: once the server deals a new
-  // hand (a fresh hand_id), whatever outcome is still displayed belongs to
-  // the previous hand's exit animation only (handled locally by
-  // HandOutcomeBanner) and no longer has any business gating achievement
-  // toasts or the pay-to-see-winner-cards offer. Without this, `handOutcome`
-  // latches non-null forever after the very first resolved hand.
-  useEffect(() => {
-    const handID = rt.snapshot?.hand_id;
-    if (!handID) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setScopedHandOutcome(previous => previous && previous.tableID === id && previous.handID !== handID ?
-      null : previous);
-  }, [rt.snapshot?.hand_id, id]);
+  const {sessionRecap, closeRecap} = useTableRemoval({
+    id, removed: rt.removed, terminalError: rt.terminalError,
+    sessions: session.sessions, sessionsLoading: session.sessionsLoading
+  });
+  const {handOutcome, viewerStackBefore, nextHandDurationMs} = useTableOutcome({
+    id, viewer, snapshot: rt.snapshot, snapshotAt: rt.snapshotAt
+  });
+  const overlays = useTableOverlays({connected: rt.status === 'connected', sendReaction: rt.sendReaction});
+  const {activeTablePanel, setActiveTablePanel, panelOpenChange, pendingReaction} = overlays;
   if (!valid) return (
     <main className="game-loading">
       <h1 className="sr-only">Mesa de poker</h1>
@@ -545,7 +148,7 @@ function TableContent() {
       <Button render={<Link href="/lobby"/>}>Voltar ao lobby</Button>
     </main>
   );
-  if (seatedLoading) return (
+  if (session.seatedLoading) return (
     <main className="game-loading">
       <h1 className="sr-only">Mesa de poker</h1>
       <span className="loader"/>
@@ -575,16 +178,11 @@ function TableContent() {
   const connectionMessage = rt.status === 'connected' ? null : connectionCopyFor(rt.status, rt.reconnectAttempt);
   const actions = actionState(s, viewer);
   const viewerSeat = s.seats.find(seat => seat.player_id === viewer);
-  const viewerStackBefore = viewerSeat?.stack_at_hand_start ??
-    (rememberedStart?.tableID === id && rememberedStart.handID === s.hand_id ? rememberedStart.stack : undefined);
-  const handOutcome = scopedHandOutcome?.tableID === id ? scopedHandOutcome.value : null;
   const actionKey = [s.stage, s.current_player_id, s.board.join(','), viewerSeat?.stack, viewerSeat?.contributed,
     actions.minRaise, actions.maxRaise, actions.raiseStep].join(':');
   // A room's share_code is only ever present for its own creator (the server
   // strips it from every other viewer), so its presence alone gates the
   // invite affordance for private tables; public tables need no code at all.
-  const nextHandDurationMs = s.next_hand_unix_ms && nextHandArmed?.deadline === s.next_hand_unix_ms ?
-    Math.max(0, s.next_hand_unix_ms - nextHandArmed.snapshotAt) : 0;
   const canInvite = room && (room.visibility === 'public' || room.share_code);
   const layoutCapacity = scenario === 'heads_up' ? 2 : scenario === 'six_max' ? 6 :
     scenario === 'nine_max' ? 9 : room?.max_seats;
@@ -595,7 +193,7 @@ function TableContent() {
     [0, 1].some(index => !(viewerSeat?.hole_cards_revealed?.[index] ?? false));
   const inviteUrl = typeof window !== 'undefined' ?
     `${window.location.origin}/table?id=${id}${room?.share_code ? `&invite=${room.share_code}` : ''}` : '';
-  const openSession = sessions.find(session => session.table_id === id && session.ended_at === 0);
+  const openSession = session.openSession;
   const playerNotesByID = Object.fromEntries(playerNotes.map(note => [note.opponent_id, note]));
   const relationshipsByID = Object.fromEntries(relationships.map(item => [item.player_id, item]));
   return (
@@ -627,19 +225,20 @@ function TableContent() {
                                 equityTrainerVisible={room?.currency_mode === 'sandbox' && preferences.equityTrainer}
                                 equityTrainerAvailable={!actions.isTurn}
                                 inviteAvailable={Boolean(canInvite)}
-                                onSelectAction={selectTableUtility}/>
+                                onSelectAction={overlays.selectTableUtility}/>
             </span>
             <span className="table-rankings-standalone"><HandRankingsDialog open={activeTablePanel === 'rankings'}
                                                                             onOpenChangeAction={panelOpenChange('rankings')}/>
             </span>
             <span className="table-preferences-standalone"><TablePreferencesDialog
-              open={preferencesOpen} onOpenChangeAction={setPreferencesOpen}
+              open={overlays.preferencesOpen} onOpenChangeAction={overlays.setPreferencesOpen}
               runItTwiceAvailable={Boolean(room?.run_it_twice_enabled)}
                                     runItTwice={Boolean(viewerSeat?.run_it_twice)}
                                     onRunItTwiceChange={rt.setRunItTwice}
                                     onLockedFeltAction={() => router.push('/store#felt')}/></span>
             {canInvite && <span className="table-invite-standalone"><InviteDialog
-              url={inviteUrl} roomId={id} open={inviteOpen} onOpenChangeAction={setInviteOpen}/></span>}
+              url={inviteUrl} roomId={id} open={overlays.inviteOpen}
+              onOpenChangeAction={overlays.setInviteOpen}/></span>}
             {viewerSeat && !isPaused &&
                 <Button type="button" variant="ghost" size="icon" className="table-pause-action"
                         aria-label="Sentar fora" disabled={rt.readyPending}
@@ -653,9 +252,9 @@ function TableContent() {
                 <RebuyDialog roomId={id} room={room} autoRebuy={Boolean(viewerSeat.auto_rebuy)}
                              onRebuyAction={() => rt.ready(true)}/>}
             {/* The actual "left" handling (recap + notification) always
-                arrives via the removed-frame effect above, whether this
-                resolves instantly (not dealt in) or only once the current
-                hand releases the player — LeaveDialog itself only ever
+                arrives via the removed-frame effect in useTableRemoval,
+                whether this resolves instantly (not dealt in) or only once the
+                current hand releases the player — LeaveDialog itself only ever
                 fires the request. */}
             <span className="table-exit-slot"><LeaveDialog stack={viewerSeat?.stack || 0}
                          pending={rt.requestExitPending}
@@ -724,7 +323,7 @@ function TableContent() {
                       return true;
                     }}/>}
                   targetedReactionLabel={pendingReaction ? TABLE_REACTIONS[pendingReaction].label : undefined}
-                  onTargetPlayerAction={pendingReaction ? sendTargetedReaction : undefined}
+                  onTargetPlayerAction={pendingReaction ? overlays.sendTargetedReaction : undefined}
                   announcement={rt.announcement}
                   chatBubbles={rt.chatBubbles}/>
       <ActionBar
@@ -756,10 +355,7 @@ function TableContent() {
       {sessionRecap && <SessionRecap joinedAt={sessionRecap.joinedAt} buyIn={sessionRecap.buyIn}
                                      finalStack={sessionRecap.finalStack} tableId={id}
                                      mode={room?.currency_mode === 'real' ? 'real' : 'sandbox'}
-                                     onCloseAction={() => {
-                                       queryClient.setQueryData(['seated', id], {seated: false, stack: 0});
-                                       router.push('/lobby');
-                                     }}/>}
+                                     onCloseAction={closeRecap}/>}
       <Chat items={rt.chat}
             onSendAction={rt.sendChat}
             connected={rt.status === 'connected'}
@@ -768,10 +364,10 @@ function TableContent() {
             open={activeTablePanel === 'chat'}
             onOpenChangeAction={panelOpenChange('chat')}/>
       <TableReactions items={rt.reactions} seats={s.seats} viewerId={viewer}
-                      connected={rt.status === 'connected'} coolingDown={reactionCoolingDown}
-                      pendingReaction={pendingReaction} onQuickSendAction={sendQuickReaction}
-                      onPendingReactionChangeAction={setPendingReaction}
-                      premiumEnabled premiumLoading={reactionCatalogLoading || reactionPurchasesLoading}
+                      connected={rt.status === 'connected'} coolingDown={overlays.reactionCoolingDown}
+                      pendingReaction={pendingReaction} onQuickSendAction={overlays.sendQuickReaction}
+                      onPendingReactionChangeAction={overlays.setPendingReaction}
+                      premiumEnabled premiumLoading={session.reactionCatalogLoading || session.reactionPurchasesLoading}
                       catalog={reactionCatalog} purchases={reactionPurchases}
                       favorites={(profile?.favorite_reactions || []).filter(isTableReaction)}
                       favoritesSaving={favoritesSaving}

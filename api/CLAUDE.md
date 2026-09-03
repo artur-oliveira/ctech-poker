@@ -13,8 +13,16 @@ same tier instead of charging again — never across tiers. `GET /rooms/:id/seat
 queued to the same retry table (`poker_pending_cashouts` with `Kind: "fee_debit"`) for Lambda reconciliation retries;
 the entitlement itself is left in place on a debit failure (nobody is ever seated on that path) so the retry — this
 request's caller, or `cmd/reconcile` — completes the same idempotent charge at most once. See
-`docs/plans/2026-08-21-entry-fee-entitlement.md`. The entitlement Claim/Rebind race is closed by #146 (issue #122)
-— see `docs/specs/2026-09-02-reconcile-entitlement-concurrency-audit.md`.
+`docs/plans/2026-08-21-entry-fee-entitlement.md`. The Rebind half of the entitlement race is closed by #146 (issue
+#122) — see `docs/specs/2026-09-02-reconcile-entitlement-concurrency-audit.md`. **The Claim half was closed later
+(#40):** #139 dropped its `confirmFeeCharged` in favour of #146, and #146 shipped only the `Rebind` CAS, so the
+free-seat window survived both. Coverage is now never inferred from "an entitlement row exists" — every path
+(`resolveEntitlement`'s exact-match and rebind branches, the `ErrAlreadyClaimed` loser, and read-only `FeeStatus`)
+goes through `buyin.Service.confirmFeeCharged`, which decides from the fee's own **resolved** `poker_pending_cashouts`
+row and otherwise completes the same charge before anyone is seated. That works because the fee's idempotency key is
+now derived from the reservation itself (`entitlementFeeKey`: origin table + player + `ExpiresAt`), not from the
+request nonce — so a retry, a claim-race loser and `cmd/reconcile` all reproduce one key and ctech-wallet charges once,
+while a fresh window after expiry keys a new charge.
 
 `cmd/tablecleanup` now handles real-money tables instead of skipping them: it settles every seated player's game-wallet
 hold via `CashoutGame`, first recording the obligation to `poker_pending_cashouts` (same
@@ -200,6 +208,20 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   (`StoredTable.NextHandDeadlineUnixMs`, resumed via `pendingNextHandDeadline` like the turn clock); merely shared
   display state goes in `cache.Backend` (`tablestreak`, `tableconn`). Everything cross-instance fails **open** — degrade
   the display or accept a bounded duplicate, never stall the actor goroutine or drop a player's progression.
+- **A timer that has already fired is the actor's only scheduler — a handler that consumes one must put it back.**
+  `handleNextHand` clears `nextHandArmedFor` before anything that can fail, but on a quiet table between hands there is
+  no later command to carry a re-arm, so an ordinary failure (a cancelled DynamoDB context on the load or the commit)
+  stalled the hand outright (#136). Every non-panic error branch now goes through `retryNextHand`, which re-arms with a
+  linear backoff bounded by `MaxNextHandRetries`; past the cap the AFK sweep's `rearmTimersFromCache` stays the
+  last-resort watchdog. `Dispatch` is blocking, never lossy — a full mailbox backpressures the caller.
+- **Nothing viewer-independent belongs inside `broadcastAll`'s per-seat loop, and nothing expensive belongs on the
+  actor goroutine twice.** Chat and reaction views are built once per broadcast (`activityViews`) and shared; the
+  `equityIterations` Monte Carlo is memoized by `(hole, board, opponent count)` per hand (`equityFor`), because a
+  single street re-broadcasts on every chat message, act and reconnect signal (#37). That signal is itself debounced:
+  `tablews.go` used to dispatch `ReconnectCmd` ahead of *every* inbound frame, keepalive pings included; it now fires
+  at most once per `tableconn.SyncInterval` per connection (#58). It cannot simply be skipped for pings — it is also
+  the paced caller keeping this instance's `tableconn` entry (45s `EntryTTL`) alive on a table whose only traffic is
+  pings, and the 1-minute AFK sweep ticks too slowly to cover that.
 - **`handeval` is table-driven — never edit `handeval/ref` without regenerating.** `ref` is the reference evaluator and
   the sole definition of the canonical hand ordering; `tables.bin` is compiled from it by
   `go generate ./internal/engine/handeval/...` and embedded. Changing `ref` without regenerating leaves stale tables
@@ -321,6 +343,13 @@ catalog.
 - A separate audit (`docs/plans/2026-07-19-api-audit-remediation.md`) covers H1–H4 / M1–M7 / L1–L6 / E1–E3 / S1–S7. Some
   fixes are already in code (actor re-resolve `tablews.go:185-198`, prod Valkey fail-fast, HTTP rate limiters
   `router.go:39-41`); others are not — verify before relying on them.
+- Issue #45 fixed: `RateLimiter.allowRedis` (`internal/api/v1/ratelimit.go`) used to `INCR` then `EXPIRE`
+  only when the counter had just been created (`n == 1`); if the process died or the `EXPIRE` call failed in between,
+  the key kept counting with no TTL and the bucket never reset. Both steps now run as one atomic Lua script
+  (`incrAndBoundTTLScript`) that increments the key and, on every hit (not just the first), re-applies the TTL whenever
+  `TTL` reports the key has none — so a key that somehow lost its expiry self-heals on its very next hit instead of
+  staying stuck. See
+  `internal/api/v1/ratelimit_test.go`'s `TestRateLimiterAllowRedisRecoversMissingTTL`.
 - **Issue #68 fixed:** `sessionlog.OpponentSummary.AvatarURL` is still captured (denormalized) at hand-complete, but
   `playerHandlers.handHistory`/`handByID` (`internal/api/v1/player.go`) no longer serve that frozen copy as-is —
   `resolveOpponentAvatars` re-resolves every opponent's `AvatarURL` from their *current* profile via

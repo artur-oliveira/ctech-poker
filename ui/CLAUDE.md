@@ -9,10 +9,29 @@ off by default — do not build UI that assumes real money is on.
 - **Reuse shared CTech client libraries:** `@aoctech/auth-client` (OAuth) and
   `@aoctech/ws-client` (WebSocket). Do NOT hand-roll auth or socket clients. (The design
   docs mention `ctech-oauth-client`; the code uses `@aoctech/auth-client` — trust the code.)
-- **Static export.** `output: 'export'` in prod (`next.config.ts`); the SPA route manifest is
-  published to a CloudFront KeyValueStore by `scripts/publish-routes.sh`. **There is no server
+- **Static export.** `output: 'export'` in prod (`next.config.ts`). `out/` is deployed to a
+  Cloudflare Worker's static assets by the shared reusable workflow
+  (`artur-oliveira/ctech-cdk/.github/workflows/frontend-cloudflare.yml`, called from
+  `.github/workflows/frontend.yml`); `html_handling: auto-trailing-slash` and
+  `not_found_handling: 404-page` do what the CloudFront viewer-request Function and its route
+  KeyValueStore used to — there is no route manifest to publish any more. **There is no server
   at runtime** — no API routes, no server actions, no image optimizer. Anything needing a server
   belongs in `api/`.
+- **The deployed security headers are generated, not committed.** The same reusable workflow
+  writes `out/_headers` (CSP, HSTS, `Permissions-Policy`, the `/_next/static/*` immutable rule);
+  `frontend.yml` only supplies `extra-connect-src`, `csp-overrides` and `permissions-policy`, and
+  `connect-src` is derived from the build env. Anything this repo writes to `out/_headers` is
+  overwritten, so a per-build CSP value cannot come from here.
+- **`script-src` has no `'unsafe-inline'`, and the build keeps it that way.** `npm run build` is
+  `next build && node scripts/strip-inline-scripts.mjs`, which rewrites the export's inline
+  `self.__next_f.push(…)` flight scripts into `/_next/static/chunks/inline/<sha256>.js` in place
+  (bare `<script src>`, so execution order is unchanged) and fails the build if any inline
+  `<script>` survives. Never add an inline `<script>` to a layout or page: it will either break
+  the build or, if attributed, be refused by that script. See #46/#120.
+- **Generated assets are manual, on purpose.** `npm run og:capture` (OG + guide screenshots, needs
+  `npm run dev:mock` running) and `npm run cards:variants` (card face SVG variants) are run by
+  hand by whoever changes the surface they capture, and their output is committed. No workflow
+  regenerates them — a stale screenshot is a review failure, not a CI failure.
 - **The wire is binary protobuf**, not JSON. Encode/decode through `lib/ws/utils.ts` against
   `lib/api/proto/poker.ts`; regenerate from `../proto/poker.proto` rather than hand-editing.
 - **Named constants over literals.** Reuse `lib/api/*`, `lib/utils.ts`, `lib/pokerRules.ts`,
@@ -20,12 +39,39 @@ off by default — do not build UI that assumes real money is on.
   CSS: every colour and radius is a token in `globals.css`'s `:root` (the only literals left there
   are the `[data-table-theme]` blocks, which *define* tokens). A new value means a new named token
   documented in `DESIGN.md`, never an inline hex or px.
+- **Three stylesheets, narrowest wins.** `globals.css` (root layout, every route) → `(app)/app.css`
+  (`(app)/layout.tsx`) → `(app)/table/table.css` (`(app)/table/layout.tsx`), plus
+  `(app)/table-reactions.css` and the `@import`ed `forms-and-gate.css`. A new rule goes in the
+  narrowest sheet that can render it; anything a `(marketing)` page or a root-level boundary can
+  match stays in `globals.css`. Seat/board/card/hand-outcome rules stay broad on purpose — `/hands`,
+  `/share`, `/profile`, `/lobby` and the landing demo render those components too. The sheets load
+  in that order, so moving a rule inward only ever strengthens it: never move one that something in
+  an outer sheet is meant to override at equal specificity. Tokens never move. See `DESIGN.md`
+  ("Where the CSS lives") and #84.
 - **Never animate a layout property.** `width`, `height`, `padding` and `margin` transitions are
   banned; use `transform`/`opacity` (a progress fill is `scaleX(var(--fill))`, a hover inset is a
   `translateX` on the row's contents). The design hook flags regressions.
 - **Landmarks and headings survive every state.** Loading, empty, error and invalid-link branches
   render inside the same `main` with a real `h1` as the success branch — the recovery vocabulary is
   `SystemState` (whole-app) or `RecoveryState` (in-app), not a bare `.form-error` line.
+- **The table page is a composition, not a component.** `app/(app)/table/page.tsx` wires hooks
+  together and renders; it holds no derivation of its own. Server reads live in
+  `lib/hooks/useTableSession.ts` (plus `useTableRemoval` for the removed-frame reaction and the
+  leave recap), showdown bookkeeping in `lib/hooks/useTableOutcome.ts`, the asides/dialogs/reaction
+  cooldown in `lib/hooks/useTableOverlays.ts`, the action-bar derivation in `lib/tableActions.ts`,
+  and the whole banner assembly in `buildHandOutcome` (`lib/tableOutcome.ts`). Extend the hook that
+  owns the concern; do not grow the page back. See
+  `docs/2026-09-02-table-module-decomposition.md`.
+- **One clock for the whole table.** `lib/hooks/useSharedTicker.ts` runs a single `setInterval` at
+  the shortest cadence anyone asked for and notifies each subscriber on its own period. Every
+  countdown goes through `useLiveNow` (which subscribes to it) — the action bar, each timed seat,
+  the reduced-motion countdown, `RealityCheck`, `IdleWarning`. Never arm a bare `setInterval` for a
+  countdown; `tickerIntervalCount()` exists so "at most one interval during a turn" stays
+  assertable.
+- **Seats publish their own position.** `lib/seatRects.ts` is where `Seat` registers its element
+  and where the reaction layer reads seat centres from. Do not locate a seat with a DOM query, and
+  re-measure on `resize`/`orientationchange` rather than caching a rect for the length of an
+  animation — the stage swaps between oval and portrait-ring layouts mid-flight.
 - **Two realtime hooks, no more.** `lib/hooks/useTableRealtime.ts` owns the table surface;
   `lib/hooks/useLobbyRealtime.ts` owns the lobby/user gateway (rooms **and** all social pushes).
   Extend them rather than opening a third socket. `useLobbyRealtime` is mounted once, by
@@ -41,8 +87,12 @@ off by default — do not build UI that assumes real money is on.
   is safe because the server rejects these before commit, so no idempotency guard was written.
   Retries are capped at `MAX_ACTION_RETRIES` and back off past the resync scheduled for that same
   id; only an exhausted budget reaches `setLastActionError`. Any new command with an `action_id` the
-  server echoes belongs on `emitAux`, not bare `emit`. See
-  `docs/plans/2026-08-27-table-load-transaction-conflict.md`.
+  server echoes belongs on `emitAux`, not bare `emit`. The vocabulary itself —
+  `RESYNC_ERROR_CODES`, `TERMINAL_ERROR_CODES`, `MAX_ACTION_RETRIES`, the timeouts, the
+  `auxRetryDelayMs` backoff and the player-facing copy — lives in `lib/tableResilience.ts` and is
+  unit-tested there; the ref-driven state machine that uses it stays in `useTableRealtime`.
+  Snapshot-transition narration (`describeSnapshot`, `playSoundForTransition`) is
+  `lib/tableNarration.ts`. See `docs/plans/2026-08-27-table-load-transaction-conflict.md`.
 - **Press-and-hold is one hook.** `lib/hooks/useHoldRepeat.ts` owns the accelerating repeat used by
   the bet stepper's `+`/`−` buttons *and* by the `ArrowLeft`/`ArrowRight` shortcuts, so touch and
   keyboard ramp identically. OS key auto-repeat stays ignored (`isBetAdjustKey` drops
@@ -67,7 +117,7 @@ off by default — do not build UI that assumes real money is on.
   never in a component, and never touches seats, bets or poker actions.
 - **State:** the token is a module singleton in `lib/api/client.ts` (not React Context, not
   persisted); server data flows through `QueryProvider` (TanStack Query). No other providers.
-- **Animations are CSS** (`src/app/globals.css` keyframes) — no animation library. Keep it that
+- **Animations are CSS** (keyframes in `globals.css` / `app.css` / `table.css`) — no animation library. Keep it that
   way; honor `prefers-reduced-motion`.
 - **Type safety:** `zod` for form/API shapes, `react-hook-form` for forms.
 - **Quality gate:** `npx vitest run`, `npx tsc --noEmit`, `npx eslint src --max-warnings 0` and

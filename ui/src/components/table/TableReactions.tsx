@@ -1,6 +1,6 @@
 'use client';
 import '@/app/(app)/table-reactions.css';
-import {type CSSProperties, useEffect, useRef, useState} from 'react';
+import {type CSSProperties, useCallback, useEffect, useRef, useState} from 'react';
 import {
   Crosshair, Eye, EyeOff, LockKeyhole, SmilePlus, Sparkles, Star, UserRound, X
 } from 'lucide-react';
@@ -12,6 +12,7 @@ import type {ReactionCatalogEntry, ReactionPurchase} from '@/lib/api/reactionPur
 import {ownedReactionIDs} from '@/lib/api/reactionPurchases';
 import {useDismiss} from '@/lib/hooks/useDismiss';
 import {useHoverPanel} from '@/lib/hooks/useHoverPanel';
+import {seatCenter} from '@/lib/seatRects';
 import {
   PREMIUM_REACTION_IDS, TABLE_REACTIONS, type TableReactionEvent, type TableReactionID
 } from '@/lib/reactions';
@@ -107,31 +108,51 @@ function ReactionImpact({reactionId}: {reactionId: TableReactionID}) {
   </span>;
 }
 
-function ReactionEffect({item, seatEls}: {item: TableReactionEvent; seatEls: Map<string, HTMLElement>}) {
+function ReactionEffect({item}: {item: TableReactionEvent}) {
   const definition = TABLE_REACTIONS[item.reactionId];
-  const positionEffect = (node: HTMLSpanElement | null) => {
+  const nodeRef = useRef<HTMLSpanElement | null>(null);
+  // The projectile's whole ~3 s flight is described by custom props measured
+  // from the two seats. Anything that moves the seats mid-flight — an
+  // orientation flip between TableStage's oval and portrait-ring layouts, the
+  // outcome banner reflowing, a seat-ring resize — used to leave it arcing
+  // towards where the recipient no longer is, because the rects were read once
+  // in the ref callback. Re-measuring re-aims it at the live seats instead.
+  const position = useCallback(() => {
+    const node = nodeRef.current;
     if (!node) return;
-    const source = seatEls.get(item.playerId);
-    const target = item.targetPlayerId ? seatEls.get(item.targetPlayerId) : undefined;
-    if (!source || (definition.targeted && !target)) return;
-    const from = source.getBoundingClientRect();
-    const to = target?.getBoundingClientRect();
-    const fromX = from.left + from.width / 2;
-    const fromY = from.top + from.height / 2;
-    const dx = to ? to.left + to.width / 2 - fromX : 0;
-    const dy = to ? to.top + to.height / 2 - fromY : -72;
+    const from = seatCenter(item.playerId);
+    const to = item.targetPlayerId ? seatCenter(item.targetPlayerId) : undefined;
+    if (!from || (definition.targeted && !to)) return;
+    const dx = to ? to.x - from.x : 0;
+    const dy = to ? to.y - from.y : -72;
     const travel = Math.hypot(dx, dy);
-    node.style.setProperty('--reaction-x', `${fromX}px`);
-    node.style.setProperty('--reaction-y', `${fromY}px`);
+    node.style.setProperty('--reaction-x', `${from.x}px`);
+    node.style.setProperty('--reaction-y', `${from.y}px`);
     node.style.setProperty('--reaction-dx', `${dx}px`);
     node.style.setProperty('--reaction-dy', `${dy}px`);
     node.style.setProperty('--reaction-mid-x', `${(dx * .48).toFixed(1)}px`);
     node.style.setProperty('--reaction-mid-y', `${(dy * .48).toFixed(1)}px`);
     node.style.setProperty('--reaction-arc', `${Math.min(112, Math.max(58, travel * .22)).toFixed(1)}px`);
     node.style.visibility = 'visible';
+  }, [item.playerId, item.targetPlayerId, definition.targeted]);
+
+  useEffect(() => {
+    window.addEventListener('resize', position);
+    window.addEventListener('orientationchange', position);
+    return () => {
+      window.removeEventListener('resize', position);
+      window.removeEventListener('orientationchange', position);
+    };
+  }, [position]);
+
+  // Positioned from the ref callback, during commit: an effect would run after
+  // the first paint, showing the glyph at the layer's origin for one frame.
+  const attach = (node: HTMLSpanElement | null) => {
+    nodeRef.current = node;
+    position();
   };
 
-  return <span ref={positionEffect}
+  return <span ref={attach}
                className={`table-reaction-effect reaction-${item.reactionId} ${definition.targeted ? 'thrown' : 'emote'}`}
                data-reaction-id={item.reactionId} role="img" aria-label={definition.label}>
     <span className="reaction-projectile"><ReactionGlyph reactionId={item.reactionId} glyph={definition.glyph}/></span>
@@ -193,18 +214,6 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
   const asideRef = useRef<HTMLElement>(null);
   useDismiss(asideRef, open, () => onOpenChangeAction(false));
   const hover = useHoverPanel(onOpenChangeAction, !pendingReaction);
-  const [seatEls, setSeatEls] = useState<Map<string, HTMLElement>>(() => new Map());
-  const seatIdsKey = seats.map(seat => seat.player_id).join(',');
-
-  useEffect(() => {
-    const map = new Map<string, HTMLElement>();
-    document.querySelectorAll<HTMLElement>('.game-seat[data-player-id]').forEach(node => {
-      if (node.dataset.playerId) map.set(node.dataset.playerId, node);
-    });
-    // Reads the seats DOM built by sibling components; there is no shared ref boundary.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSeatEls(map);
-  }, [seatIdsKey]);
 
   const entries = new Map(catalog.map(entry => [entry.id, entry]));
   const owned = ownedReactionIDs(catalog);
@@ -252,7 +261,7 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
 
   return <>
     {!muted && <div className="table-reaction-layer" aria-live="off">
-      {items.map(item => <ReactionEffect key={item.id} item={item} seatEls={seatEls}/>)}
+      {items.map(item => <ReactionEffect key={item.id} item={item}/>)}
     </div>}
     <aside ref={asideRef}
            className={`table-reactions table-aside-skirt${open ? ' open' : ''}${pendingReaction ? ' targeting' : ''}`}
