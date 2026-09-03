@@ -5,6 +5,7 @@ import type {SeatView} from '@/lib/api/table';
 import type {ReactionCatalogEntry, ReactionPurchase} from '@/lib/api/reactionPurchases';
 import {TABLE_REACTIONS, type TableReactionEvent, type TableReactionID} from '@/lib/reactions';
 import {HOVER_PANEL_CLOSE_DELAY_MS} from '@/lib/hooks/useHoverPanel';
+import {registerSeatElement, seatCenter} from '@/lib/seatRects';
 import {TableReactions} from './TableReactions';
 
 vi.mock('@/lib/utils', async importOriginal => ({
@@ -23,6 +24,21 @@ function seat(playerId: string): SeatView {
     state: 'active',
     contributed: 0,
   };
+}
+
+/** Stands in for `Seat`, publishing its element the same way through the
+ * shared registry — no class/data-attribute contract to keep in sync. */
+function StubSeat({playerId}: {playerId: string}) {
+  return <div ref={node => registerSeatElement(playerId, node)}/>;
+}
+
+/** A seat whose viewport rect is fixed, for asserting the reaction geometry
+ * jsdom's own zero rects can't express. */
+function seatNode(left: number) {
+  const node = document.createElement('div');
+  node.getBoundingClientRect = () => ({left, top: 0, width: 40, height: 40, right: left + 40,
+    bottom: 40, x: left, y: 0, toJSON: () => undefined}) as DOMRect;
+  return node;
 }
 
 function renderReactions(overrides: Partial<React.ComponentProps<typeof TableReactions>> = {}) {
@@ -46,8 +62,8 @@ function renderReactions(overrides: Partial<React.ComponentProps<typeof TableRea
     ...overrides,
   };
   const rendered = render(<>
-    <div className="game-seat" data-player-id={viewer.player_id}/>
-    <div className="game-seat" data-player-id={opponent.player_id}/>
+    <StubSeat playerId={viewer.player_id}/>
+    <StubSeat playerId={opponent.player_id}/>
     <TableReactions {...props}/>
   </>);
   return {...rendered, callbacks, props};
@@ -179,6 +195,51 @@ describe('TableReactions Poker Theater', () => {
       items: [{id: 'reaction-1', playerId: viewer.player_id, reactionId: 'clap'}],
     });
     expect(screen.queryByRole('img', {name: 'Aplausos'})).not.toBeInTheDocument();
+  });
+
+  test('re-aims a thrown reaction at the recipient when a layout change moves the seats mid-flight', () => {
+    const {container} = renderReactions({
+      items: [{
+        id: 'reaction-1', playerId: viewer.player_id,
+        reactionId: 'tomato', targetPlayerId: opponent.player_id,
+      }],
+    });
+    const effect = container.querySelector<HTMLElement>('[data-reaction-id="tomato"]');
+    // jsdom gives the stub seats a zero rect, so the flight starts flat.
+    expect(effect?.style.getPropertyValue('--reaction-dx')).toBe('0px');
+
+    // The stage flipping between its oval and portrait-ring layouts moves both
+    // seats while the ~3 s projectile is still in the air.
+    const stops = [
+      registerSeatElement(viewer.player_id, seatNode(0)),
+      registerSeatElement(opponent.player_id, seatNode(400)),
+    ];
+    act(() => void fireEvent(window, new Event('orientationchange')));
+    expect(effect?.style.getPropertyValue('--reaction-dx')).toBe('400px');
+    expect(effect?.style.getPropertyValue('--reaction-x')).toBe('20px');
+
+    // A plain viewport resize re-aims it the same way.
+    stops.push(registerSeatElement(opponent.player_id, seatNode(120)));
+    act(() => void fireEvent(window, new Event('resize')));
+    expect(effect?.style.getPropertyValue('--reaction-dx')).toBe('120px');
+
+    stops.forEach(stop => stop?.());
+  });
+
+  test('leaves a thrown reaction unpositioned while its recipient has no seat on screen', () => {
+    const {container} = renderReactions({
+      items: [{
+        id: 'reaction-1', playerId: viewer.player_id,
+        reactionId: 'tomato', targetPlayerId: 'left-the-table',
+      }],
+    });
+
+    expect(seatCenter('left-the-table')).toBeUndefined();
+    // The stylesheet keeps the effect hidden until it is positioned; nothing
+    // here reveals it, so no inline geometry is written at all.
+    const effect = container.querySelector<HTMLElement>('[data-reaction-id="tomato"]');
+    expect(effect?.style.visibility).toBe('');
+    expect(effect?.style.getPropertyValue('--reaction-dx')).toBe('');
   });
 
   test('gives every catalog action its own effect identity and positions targeted effects', async () => {

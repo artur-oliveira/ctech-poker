@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'vitest';
 import type {TableSnapshot} from './api/table.ts';
 import {
+  buildHandOutcome,
   contestedPots,
   playerPotBreakdown,
   relevantRunnerUp,
@@ -196,4 +197,153 @@ test('protocol-v1 participation falls back to the viewer cards', () => {
   assert.equal(seatParticipated({
     player_id: 'waiting', stack: 10, state: 'active', contributed: 0
   }), false);
+});
+
+// --- buildHandOutcome: the whole banner, assembled from one resolved frame ---
+
+const BOARD = ['Ah', 'Kd', '7c', '2s', '9h'];
+
+function resolved(overrides: Partial<TableSnapshot> = {}): TableSnapshot {
+  return {
+    stage: 'complete', hand_id: 'hand-1', board: BOARD, winners: ['hero'],
+    seats: [
+      {
+        player_id: 'hero', name: 'Hero', stack: 300, state: 'active', dealt_in: true, contributed: 100,
+        hole_cards: ['As', 'Ac'], hole_cards_revealed: [true, true], hand_category: 'three_of_a_kind',
+        hand_score: 900, stack_at_hand_start: 200
+      },
+      {
+        player_id: 'villain', name: 'Villain', stack: 0, state: 'active', dealt_in: true, contributed: 100,
+        hole_cards: ['Kh', 'Kc'], hole_cards_revealed: [true, true], hand_category: 'two_pair',
+        hand_score: 700
+      }
+    ],
+    pot_results: [{
+      amount: 200, payout_amount: 200,
+      eligible_player_ids: ['hero', 'villain'], winner_player_ids: ['hero'], payouts: {hero: 200}
+    }],
+    ...overrides
+  };
+}
+
+test('a win names the beaten hand and the viewer chip delta', () => {
+  const outcome = buildHandOutcome(resolved(), 'hero', null, 7);
+  assert.ok(outcome);
+  assert.equal(outcome.key, 7);
+  assert.equal(outcome.kind, 'win');
+  assert.equal(outcome.winnerName, 'Hero');
+  assert.equal(outcome.stackBefore, 200);
+  assert.equal(outcome.stackAfter, 300);
+  assert.equal(outcome.wonAmount, 200);
+  assert.equal(outcome.beatenCategory, 'two_pair');
+  // Presentation only: the hole cards are reduced against the complete board.
+  assert.equal(outcome.viewerCards?.length, 5);
+  assert.deepEqual(outcome.viewerHoleCards, ['As', 'Ac']);
+  assert.equal(outcome.opponentCategory, undefined);
+  assert.deepEqual(outcome.resolvedPots, [{
+    amount: 200, payoutAmount: 200, viewerPayout: 200, winnerNames: ['Hero'],
+    wonByViewer: true, viewerEligible: true, split: false, refund: false, runout: undefined
+  }]);
+});
+
+test('a loss names the rival hand that took the pot', () => {
+  const outcome = buildHandOutcome(resolved(), 'villain');
+  assert.ok(outcome);
+  assert.equal(outcome.kind, 'lose');
+  assert.equal(outcome.opponentCategory, 'three_of_a_kind');
+  assert.equal(outcome.winnerName, 'Hero');
+  assert.deepEqual(outcome.winningHoleCards, ['As', 'Ac']);
+  assert.equal(outcome.beatenCards, undefined);
+  assert.equal(outcome.wonAmount, 0);
+});
+
+test('a mixed result carries per-pot detail, because each pot had its own winner', () => {
+  const outcome = buildHandOutcome(snapshot, 'side');
+  assert.ok(outcome);
+  assert.equal(outcome.kind, 'mixed');
+  assert.deepEqual(outcome.pots, [
+    {won: false, winnerName: undefined, category: undefined, winningCards: undefined},
+    {won: true}
+  ]);
+  assert.equal(outcome.tiedWith, undefined);
+});
+
+test('a tie names the other hands in the chop', () => {
+  const outcome = buildHandOutcome(resolved({
+    winners: ['hero', 'villain'],
+    pot_results: [{
+      amount: 200, payout_amount: 200, eligible_player_ids: ['hero', 'villain'],
+      winner_player_ids: ['hero', 'villain'], payouts: {hero: 100, villain: 100}
+    }]
+  }), 'hero');
+  assert.ok(outcome);
+  assert.equal(outcome.kind, 'tie');
+  assert.equal(outcome.tiedWith?.length, 1);
+  assert.equal(outcome.tiedWith?.[0].name, 'Villain');
+  assert.equal(outcome.tiedWith?.[0].cards?.length, 5);
+  assert.equal(outcome.pots, undefined);
+});
+
+test('a fold that would have won says so, but only off the server hand scores', () => {
+  const folded = resolved({
+    winners: ['villain'],
+    pot_results: [{
+      amount: 200, payout_amount: 200, eligible_player_ids: ['hero', 'villain'],
+      winner_player_ids: ['villain'], payouts: {villain: 200}
+    }]
+  });
+  folded.seats[0] = {...folded.seats[0], state: 'folded'};
+  const outcome = buildHandOutcome(folded, 'hero');
+  assert.ok(outcome);
+  assert.equal(outcome.kind, 'fold');
+  // hero 900 > villain 700, and villain's cards were publicly revealed.
+  assert.equal(outcome.couldHaveWon, true);
+
+  // With the winner's cards never revealed there is nothing to compare against.
+  const hidden = {...folded, seats: folded.seats.map(seat =>
+    seat.player_id === 'villain' ? {...seat, hole_cards: ['back', 'back'], hole_cards_revealed: undefined} : seat)};
+  assert.equal(buildHandOutcome(hidden, 'hero')?.couldHaveWon, undefined);
+});
+
+test('an unrevealed rival hand is never reconstructed into a shown combination', () => {
+  const masked = resolved({
+    winners: ['villain'],
+    pot_results: [{
+      amount: 200, payout_amount: 200, eligible_player_ids: ['hero', 'villain'],
+      winner_player_ids: ['villain'], payouts: {villain: 200}
+    }],
+    seats: [
+      resolved().seats[0],
+      {...resolved().seats[1], hole_cards: ['back', 'back'], hole_cards_revealed: undefined}
+    ]
+  });
+  const outcome = buildHandOutcome(masked, 'hero');
+  assert.equal(outcome?.winningHoleCards, undefined);
+  assert.equal(outcome?.winningCards, undefined);
+});
+
+test('an incomplete board leaves the hole cards as they are, unreduced', () => {
+  const outcome = buildHandOutcome(resolved({board: ['Ah', 'Kd', '7c']}), 'hero');
+  assert.deepEqual(outcome?.viewerCards, ['As', 'Ac']);
+});
+
+test('run-it-twice is reported so the banner can show both boards', () => {
+  assert.equal(buildHandOutcome(resolved({board_two: BOARD}), 'hero')?.runItTwice, true);
+  assert.equal(buildHandOutcome(resolved(), 'hero')?.runItTwice, false);
+});
+
+test('the remembered pre-blind stack only stands in for the hand it was captured on', () => {
+  const legacy = resolved();
+  legacy.seats[0] = {...legacy.seats[0], stack_at_hand_start: undefined};
+  assert.equal(buildHandOutcome(legacy, 'hero', {handID: 'hand-1', stack: 175})?.stackBefore, 175);
+  assert.equal(buildHandOutcome(legacy, 'hero', {handID: 'other-hand', stack: 175})?.stackBefore, undefined);
+  assert.equal(buildHandOutcome(legacy, 'hero')?.stackBefore, undefined);
+});
+
+test('a viewer who was never dealt into the hand gets no banner at all', () => {
+  const outcome = buildHandOutcome(resolved({
+    seats: [...resolved().seats, {player_id: 'watcher', stack: 500, state: 'active', dealt_in: false, contributed: 0}]
+  }), 'watcher');
+  assert.equal(outcome, null);
+  assert.equal(buildHandOutcome(resolved(), 'nobody'), null);
 });
