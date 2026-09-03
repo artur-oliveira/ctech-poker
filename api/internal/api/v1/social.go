@@ -97,6 +97,20 @@ type inboxReadBody struct {
 	EventIDs []string `json:"event_ids"`
 }
 
+// socialInboxEventResponse is the wire shape of an inbox row: the stored
+// event plus the actor's display name/avatar resolved at read time. The
+// event itself only ever persists actor_id (see social.Event) — resolving a
+// batch of ids per feed render, rather than denormalizing a name/avatar copy
+// onto the event at write time, keeps the inbox immune to the name-drift bug
+// #64 fixed elsewhere (a stale copy surviving a later profile edit). A
+// resolve miss (e.g. a deleted profile) leaves both fields empty; the client
+// falls back to its own placeholder rather than the server guessing one.
+type socialInboxEventResponse struct {
+	social.Event
+	ActorName      string `json:"actor_name,omitempty"`
+	ActorAvatarURL string `json:"actor_avatar_url,omitempty"`
+}
+
 func RegisterSocial(router fiber.Router, auth fiber.Handler, svc *social.Service, players *player.Service, cfg *config.Config, limiters SocialLimiters, extras ...any) {
 	var presenceSvc *presence.Service
 	var recentSvc *recentplayers.Service
@@ -200,7 +214,41 @@ func (h *socialHandlers) listInbox(c fiber.Ctx) error {
 	if err != nil {
 		return socialProblem(err, c).Send(c)
 	}
-	return sendPage(c, events, lastKey, cursor)
+	result, err := h.hydrateInboxActors(c.Context(), events)
+	if err != nil {
+		return problem.InternalServer("failed to hydrate inbox", c, err).Send(c)
+	}
+	return sendPage(c, result, lastKey, cursor)
+}
+
+// hydrateInboxActors resolves every distinct actor_id on this page in a
+// single players.GetMany batch call — one resolve request per feed render,
+// not one per row — so a friend_request from a stranger, a table_invite, or
+// any event whose actor is absent from the friends/requests lists the
+// frontend used to rely on still gets a real name and avatar.
+func (h *socialHandlers) hydrateInboxActors(ctx context.Context, events []social.Event) ([]socialInboxEventResponse, error) {
+	ids := make([]string, 0, len(events))
+	seen := make(map[string]bool, len(events))
+	for i := range events {
+		if actorID := events[i].ActorPlayerID; actorID != "" && !seen[actorID] {
+			seen[actorID] = true
+			ids = append(ids, actorID)
+		}
+	}
+	profiles, err := h.players.GetMany(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]socialInboxEventResponse, 0, len(events))
+	for i := range events {
+		response := socialInboxEventResponse{Event: events[i]}
+		if profile, ok := profiles[events[i].ActorPlayerID]; ok {
+			response.ActorName = profile.Name
+			response.ActorAvatarURL = player.AvatarURL(&profile, h.avatarBaseURL)
+		}
+		result = append(result, response)
+	}
+	return result, nil
 }
 
 func (h *socialHandlers) markInboxRead(c fiber.Ctx) error {

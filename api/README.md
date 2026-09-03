@@ -168,6 +168,16 @@ items use the sparse `gsi_unread` index; marking an item read removes it from th
 Each mutation also fans out a protobuf `social_event` or `social_inbox_count` frame on `user#<player_id>` so all open
 first-party Poker sessions converge without push notifications, e-mail or direct messages.
 
+`social.Event` itself only ever persists `actor_id` — never a name or avatar copy. `GET /social/inbox`
+(`socialHandlers.hydrateInboxActors`, `internal/api/v1/social.go`) resolves every distinct actor on the returned page
+through one `player.Service.GetMany` batch call and adds `actor_name`/`actor_avatar_url` to each row in the response
+only, so a `friend_request` from a stranger or a `table_invite` is always named — not just an actor already present in
+the friends/requests lists the client happened to have loaded (#73). A batch resolve at read time was chosen over
+denormalizing the name onto the event at write time specifically to avoid the stale-copy name-drift failure mode
+fixed elsewhere for leaderboard/hand-history (#64): an inbox row always reflects the actor's current display name and
+avatar, never whatever they were named when the event was created. A resolve miss (e.g. a deleted profile) leaves
+both fields empty rather than guessing a name server-side.
+
 Table invitations are friend-only, expire after 15 minutes and require the sender to have an open session at that
 table. Acceptance never buys chips or reserves a seat. For private rooms it atomically changes the inbox event and
 creates `poker_rooms(pk=<room>, sk=invite#<player>)`; GET, table WebSocket auth and join accept that unexpired grant
