@@ -68,11 +68,19 @@ type HandItem struct {
 	// divide/multiply by 1000 on any one endpoint; that per-endpoint drift is
 	// exactly the bug #74 fixed (a `< 1e12` runtime heuristic had crept into
 	// the frontend to cope with it).
-	EndedAt   int64             `dynamodbav:"ended_at" json:"ended_at"`
-	Board     []string          `dynamodbav:"board,omitempty" json:"board,omitempty"`
-	BoardTwo  []string          `dynamodbav:"board_two,omitempty" json:"board_two,omitempty"`
-	HoleCards []string          `dynamodbav:"hole_cards,omitempty" json:"hole_cards,omitempty"`
-	Opponents []OpponentSummary `dynamodbav:"opponents,omitempty" json:"opponents,omitempty"`
+	EndedAt int64 `dynamodbav:"ended_at" json:"ended_at"`
+	// SmallBlind and BigBlind are the blind level the hand was played at, not
+	// the room's current one — blind escalation moves it between hands, so a
+	// replayer that reads the room would render an old hand at the wrong
+	// scale (#75). Zero on hands recorded before this field existed; readers
+	// must treat 0 as "unknown" and hide the marker rather than assume a
+	// default.
+	SmallBlind int64             `dynamodbav:"small_blind,omitempty" json:"small_blind,omitempty"`
+	BigBlind   int64             `dynamodbav:"big_blind,omitempty" json:"big_blind,omitempty"`
+	Board      []string          `dynamodbav:"board,omitempty" json:"board,omitempty"`
+	BoardTwo   []string          `dynamodbav:"board_two,omitempty" json:"board_two,omitempty"`
+	HoleCards  []string          `dynamodbav:"hole_cards,omitempty" json:"hole_cards,omitempty"`
+	Opponents  []OpponentSummary `dynamodbav:"opponents,omitempty" json:"opponents,omitempty"`
 	// ServerSeed and CommitHash are the hand's shuffle fairness proof
 	// (hand.HandOutcome.ServerSeed/CommitHash), hex-encoded — lets the
 	// player independently verify the deck they were dealt (B32).

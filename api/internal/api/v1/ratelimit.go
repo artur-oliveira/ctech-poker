@@ -54,7 +54,10 @@ func (v valkeyCounter) incrAndBoundTTL(ctx context.Context, key string, windowSe
 // backend uses a per-instance mutex map. It stops a script from spamming room
 // creation or sandbox chip spins (M6/S2).
 type RateLimiter struct {
-	client redisCounter // nil unless the backend is Redis
+	// client is nil unless the backend is Redis. Counting there is what makes
+	// the budget fleet-wide rather than per-instance (#43); tests substitute a
+	// fake to simulate two API instances counting against one player's budget.
+	client redisCounter
 	limit  int
 	window time.Duration
 
@@ -85,6 +88,21 @@ func (r *RateLimiter) Allow(ctx context.Context, key string) (bool, error) {
 	return r.allowMem(key), nil
 }
 
+// AllowFailOpen applies rateLimit's fail-open policy outside the HTTP
+// middleware chain — the table WebSocket loop, which has no c.Next() to fall
+// through to. A nil limiter (dev wiring, tests) allows everything.
+func (r *RateLimiter) AllowFailOpen(ctx context.Context, key string) bool {
+	if r == nil {
+		return true
+	}
+	allow, err := r.Allow(ctx, key)
+	if err != nil {
+		slog.Warn("rate limiter backend error; allowing action", "err", err)
+		return true
+	}
+	return allow
+}
+
 func (r *RateLimiter) allowRedis(ctx context.Context, key string) (bool, error) {
 	n, err := r.client.incrAndBoundTTL(ctx, key, int64(r.window.Seconds()))
 	if err != nil {
@@ -92,6 +110,12 @@ func (r *RateLimiter) allowRedis(ctx context.Context, key string) (bool, error) 
 	}
 	return n <= int64(r.limit), nil
 }
+
+// wsActionKey / wsReactionKey are the fleet-wide WebSocket limiter keys. They
+// are per player, never per connection: a client spread across instances or
+// reconnecting must not multiply its allowance (#43).
+func wsActionKey(playerID string) string   { return "ws:act:" + playerID }
+func wsReactionKey(playerID string) string { return "ws:react:" + playerID }
 
 func (r *RateLimiter) allowMem(key string) bool {
 	r.mu.Lock()
