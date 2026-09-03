@@ -37,8 +37,10 @@ export class ReconcileStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')],
     });
+    // Least privilege (#56): cmd/reconcile only Querys gsi_status (ListUnresolved)
+    // and UpdateItems the row it resolved. There is no Scan anywhere in api/.
     role.addToPolicy(new iam.PolicyStatement({
-      actions: ['dynamodb:Scan', 'dynamodb:Query', 'dynamodb:UpdateItem'],
+      actions: ['dynamodb:Query', 'dynamodb:UpdateItem'],
       resources: [pendingCashoutsTableArn, `${pendingCashoutsTableArn}/index/*`],
     }));
     role.addToPolicy(new iam.PolicyStatement({

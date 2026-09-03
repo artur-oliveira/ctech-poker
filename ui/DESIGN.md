@@ -186,6 +186,29 @@ The system rejects frozen-feeling play, casino clutter, manufactured urgency, ch
 - Tactile controls answer quickly and keep states unmistakable.
 - Motion reports play; reduced motion preserves the same information without travel.
 
+### Where the CSS lives
+
+The system ships as three cascading stylesheets, in load order (#84):
+
+| Sheet | Loaded by | Owns |
+|---|---|---|
+| `src/app/globals.css` | root `layout.tsx` (every route) | the `:root` tokens, the `[data-table-theme]` blocks, the reset, typography, chrome, forms and everything the `(marketing)` group, the error boundaries and `/unavailable` render |
+| `src/app/(app)/app.css` | `(app)/layout.tsx` | rules only the authenticated shell can render — lobby, hands, store, people, profile, achievements, leaderboard and the live table |
+| `src/app/(app)/table/table.css` | `(app)/table/layout.tsx` | rules only `/table` can render |
+
+Plus `src/app/(app)/table-reactions.css` (imported by `TableReactions`) and
+`src/app/forms-and-gate.css` (`@import`ed by `globals.css`).
+
+**Every colour and radius is still a token defined in `globals.css`'s `:root`** — the split moved
+rules, never tokens, so a value referenced from `app.css` or `table.css` resolves to the same
+token. A new rule belongs in the *narrowest* sheet that can render it; a rule whose selector a
+`(marketing)` page or a root-level boundary can match belongs in `globals.css`. Seat, board, card
+and hand-outcome rules deliberately stay broad: `/hands`, `/hands/history`, `/hands/replay`,
+`/share`, `/profile`, `/lobby` and the landing demo render those same components.
+
+Because the sheets load in that order, a rule may only move down a level when nothing left in the
+outer sheet could beat it at equal specificity. Moving a rule to a narrower sheet strengthens it.
+
 ## Colors
 
 The palette reads as a cardroom after dark: oxblood signals intent, green felt locates play, warm paper carries cards and contrast, walnut gives the table weight, and gold represents value or earned outcomes.

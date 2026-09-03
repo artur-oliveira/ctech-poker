@@ -9,10 +9,29 @@ off by default — do not build UI that assumes real money is on.
 - **Reuse shared CTech client libraries:** `@aoctech/auth-client` (OAuth) and
   `@aoctech/ws-client` (WebSocket). Do NOT hand-roll auth or socket clients. (The design
   docs mention `ctech-oauth-client`; the code uses `@aoctech/auth-client` — trust the code.)
-- **Static export.** `output: 'export'` in prod (`next.config.ts`); the SPA route manifest is
-  published to a CloudFront KeyValueStore by `scripts/publish-routes.sh`. **There is no server
+- **Static export.** `output: 'export'` in prod (`next.config.ts`). `out/` is deployed to a
+  Cloudflare Worker's static assets by the shared reusable workflow
+  (`artur-oliveira/ctech-cdk/.github/workflows/frontend-cloudflare.yml`, called from
+  `.github/workflows/frontend.yml`); `html_handling: auto-trailing-slash` and
+  `not_found_handling: 404-page` do what the CloudFront viewer-request Function and its route
+  KeyValueStore used to — there is no route manifest to publish any more. **There is no server
   at runtime** — no API routes, no server actions, no image optimizer. Anything needing a server
   belongs in `api/`.
+- **The deployed security headers are generated, not committed.** The same reusable workflow
+  writes `out/_headers` (CSP, HSTS, `Permissions-Policy`, the `/_next/static/*` immutable rule);
+  `frontend.yml` only supplies `extra-connect-src`, `csp-overrides` and `permissions-policy`, and
+  `connect-src` is derived from the build env. Anything this repo writes to `out/_headers` is
+  overwritten, so a per-build CSP value cannot come from here.
+- **`script-src` has no `'unsafe-inline'`, and the build keeps it that way.** `npm run build` is
+  `next build && node scripts/strip-inline-scripts.mjs`, which rewrites the export's inline
+  `self.__next_f.push(…)` flight scripts into `/_next/static/chunks/inline/<sha256>.js` in place
+  (bare `<script src>`, so execution order is unchanged) and fails the build if any inline
+  `<script>` survives. Never add an inline `<script>` to a layout or page: it will either break
+  the build or, if attributed, be refused by that script. See #46/#120.
+- **Generated assets are manual, on purpose.** `npm run og:capture` (OG + guide screenshots, needs
+  `npm run dev:mock` running) and `npm run cards:variants` (card face SVG variants) are run by
+  hand by whoever changes the surface they capture, and their output is committed. No workflow
+  regenerates them — a stale screenshot is a review failure, not a CI failure.
 - **The wire is binary protobuf**, not JSON. Encode/decode through `lib/ws/utils.ts` against
   `lib/api/proto/poker.ts`; regenerate from `../proto/poker.proto` rather than hand-editing.
 - **Named constants over literals.** Reuse `lib/api/*`, `lib/utils.ts`, `lib/pokerRules.ts`,
@@ -20,6 +39,15 @@ off by default — do not build UI that assumes real money is on.
   CSS: every colour and radius is a token in `globals.css`'s `:root` (the only literals left there
   are the `[data-table-theme]` blocks, which *define* tokens). A new value means a new named token
   documented in `DESIGN.md`, never an inline hex or px.
+- **Three stylesheets, narrowest wins.** `globals.css` (root layout, every route) → `(app)/app.css`
+  (`(app)/layout.tsx`) → `(app)/table/table.css` (`(app)/table/layout.tsx`), plus
+  `(app)/table-reactions.css` and the `@import`ed `forms-and-gate.css`. A new rule goes in the
+  narrowest sheet that can render it; anything a `(marketing)` page or a root-level boundary can
+  match stays in `globals.css`. Seat/board/card/hand-outcome rules stay broad on purpose — `/hands`,
+  `/share`, `/profile`, `/lobby` and the landing demo render those components too. The sheets load
+  in that order, so moving a rule inward only ever strengthens it: never move one that something in
+  an outer sheet is meant to override at equal specificity. Tokens never move. See `DESIGN.md`
+  ("Where the CSS lives") and #84.
 - **Never animate a layout property.** `width`, `height`, `padding` and `margin` transitions are
   banned; use `transform`/`opacity` (a progress fill is `scaleX(var(--fill))`, a hover inset is a
   `translateX` on the row's contents). The design hook flags regressions.
@@ -83,7 +111,7 @@ off by default — do not build UI that assumes real money is on.
   never in a component, and never touches seats, bets or poker actions.
 - **State:** the token is a module singleton in `lib/api/client.ts` (not React Context, not
   persisted); server data flows through `QueryProvider` (TanStack Query). No other providers.
-- **Animations are CSS** (`src/app/globals.css` keyframes) — no animation library. Keep it that
+- **Animations are CSS** (keyframes in `globals.css` / `app.css` / `table.css`) — no animation library. Keep it that
   way; honor `prefers-reduced-motion`.
 - **Type safety:** `zod` for form/API shapes, `react-hook-form` for forms.
 - **Quality gate:** `npx vitest run`, `npx tsc --noEmit`, `npx eslint src --max-warnings 0` and
