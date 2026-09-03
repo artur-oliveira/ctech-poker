@@ -22,12 +22,15 @@ off by default — do not build UI that assumes real money is on.
   `frontend.yml` only supplies `extra-connect-src`, `csp-overrides` and `permissions-policy`, and
   `connect-src` is derived from the build env. Anything this repo writes to `out/_headers` is
   overwritten, so a per-build CSP value cannot come from here.
-- **`script-src` has no `'unsafe-inline'`, and the build keeps it that way.** `npm run build` is
-  `next build && node scripts/strip-inline-scripts.mjs`, which rewrites the export's inline
+- **The application does not rely on inline scripts.** `npm run build` is `next build && node
+  scripts/strip-inline-scripts.mjs`, which rewrites the export's inline
   `self.__next_f.push(…)` flight scripts into `/_next/static/chunks/inline/<sha256>.js` in place
   (bare `<script src>`, so execution order is unchanged) and fails the build if any inline
-  `<script>` survives. Never add an inline `<script>` to a layout or page: it will either break
-  the build or, if attributed, be refused by that script. See #46/#120.
+  `<script>` survives. The deployed `script-src` nevertheless has `'unsafe-inline'` because
+  Cloudflare injects a per-request challenge bootstrap after the build; its changing Ray ID and
+  timestamp preclude a stable hash, and the static app cannot give it a nonce. Never add an inline
+  `<script>` to a layout or page: the postbuild guard must remain effective even though this edge
+  compatibility exception exists. See #46/#120.
 - **Generated assets are manual, on purpose.** `npm run og:capture` (OG + guide screenshots, needs
   `npm run dev:mock` running) and `npm run cards:variants` (card face SVG variants) are run by
   hand by whoever changes the surface they capture, and their output is committed. No workflow
@@ -217,4 +220,3 @@ anything that changes what the player sees or can do.
 - Removing a feature means removing its guide copy and its screenshot in the same change.
 
 A change that ships without its guide update is incomplete.
-
