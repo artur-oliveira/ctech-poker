@@ -132,12 +132,18 @@ jobs:
       # one distinct hash per page (25 measured, ~1.4 kB) on top of the ~0.65 kB policy
       # exceeds the 2,000-character `_headers` line limit the reusable workflow asserts.
       #
+      # Cloudflare Web Analytics is injected at the edge, after the static export.
+      # Keep the permission narrow: the versioned beacon host and the hash of its
+      # injected bootstrap, rather than restoring a blanket 'unsafe-inline'. The
+      # automatic setup reports to same-origin /cdn-cgi/rum, already covered by
+      # connect-src 'self'.
+      #
       # style-src keeps 'unsafe-inline' deliberately: the export emits zero inline
       # <style> tags, but React writes `style="…"` attributes throughout (chip stacks,
       # seat geometry, progress fills), and those are what 'unsafe-inline' covers.
       # Dropping it needs style-src-attr plus a token rewrite, not a flag.
       csp-overrides: |
-        script-src 'self' https://challenges.cloudflare.com
+        script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com/beacon.min.js 'sha256-0CyHZ2JzFocVw5Wc5dHBy/yQyOs40QkSV2Nx+DW69nk='
         frame-src https://challenges.cloudflare.com
         img-src 'self' data: $API_ORIGIN
       permissions-policy: on-device-speech-recognition=self
