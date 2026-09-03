@@ -230,6 +230,14 @@ catalog.
 
 ## Other known issues (documentation only — see api/README.md)
 
+- **Issue #44 fixed:** `wsAllowedOrigin` (`tablews.go`, backs both WS gateways) used to allow a WebSocket upgrade with
+  no `Origin` header at all, even once `CORS_ALLOWED_ORIGINS` was configured — a scripted client with a valid
+  first-party token could skip the origin check entirely, which is the wrong prod default for a game whose threat
+  model is automation, not cross-site browsers. Now a missing Origin is allowed only when no allow-list is
+  configured (dev — `config.Load` fails closed if prod's list is empty); once an allow-list exists, a present and
+  listed Origin is required, matching (and reusing) the HTTP CORS allow-list. `cmd/loadtest`, the one non-browser
+  caller of the table socket that is meant to run against staging/prod, gained an `-origin` flag for this — it is not
+  exempted from the check, it just has to send a real, listed Origin like anything else would.
 - **(#38) fixed:** real-money `BuyIn` now enforces `player.RequireAccepted` unconditionally. Both
   `app.newBuyinService` constructors (sandbox and real-money) chain `.WithPlayers(players)`, and `buyin.Service.buyIn`
   calls `s.players.RequireAccepted` before any wallet debit or entitlement charge whenever a players store is wired —
