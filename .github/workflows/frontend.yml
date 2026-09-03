@@ -22,7 +22,7 @@ jobs:
   # run locally — CI does not need a separate axe step for them.
   quality:
     name: A11y & budgets
-    runs-on: ubuntu-26.04-arm
+    runs-on: ubuntu-26.04
     defaults:
       run:
         working-directory: ui
