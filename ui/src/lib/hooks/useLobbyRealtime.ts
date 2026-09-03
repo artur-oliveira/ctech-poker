@@ -13,6 +13,7 @@ import {useRouter} from 'next/navigation';
 import {acceptTableInvite, declineTableInvite, type SocialEventType} from '@/lib/api/social';
 import {SOCIAL_KEYS} from '@/lib/social';
 import {WALLET_QUERY_ROOT} from '@/lib/api/wallet';
+import {COSMETIC_PURCHASE_QUERY_ROOT} from '@/lib/api/cosmeticPurchases';
 import {checkApiLiveness} from '@/lib/network/liveness';
 import {useApiLiveness} from '@/lib/network/NetworkProvider';
 
@@ -98,6 +99,19 @@ export function useLobbyRealtime() {
         failed: 'Falha na compra da reação.',
       };
       pushNotification(statusLabel[message.code || ''] || 'Atualização na compra da sua reação.', 'info');
+    } else if (message.type === 'cosmetic_purchase_update') {
+      // #144: the deck/felt dialog reads its status from
+      // COSMETIC_PURCHASE_QUERY_ROOT, so invalidating it here resolves an open
+      // purchase on the frame instead of on the dialog's 4s fallback poll.
+      void queryClient.invalidateQueries({queryKey: COSMETIC_PURCHASE_QUERY_ROOT});
+      void queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT});
+      const statusLabel: Record<string, string> = {
+        confirmed: 'Item cosmético liberado!',
+        refunded: 'Compra do item cosmético estornada.',
+        expired: 'Compra do item cosmético expirou sem pagamento.',
+        failed: 'Falha na compra do item cosmético.',
+      };
+      pushNotification(statusLabel[message.code || ''] || 'Atualização na compra do seu item cosmético.', 'info');
     } else if (message.type === 'social_event') {
       void queryClient.invalidateQueries({queryKey: SOCIAL_KEYS.root});
       const event = message.social_event;

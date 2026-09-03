@@ -12,6 +12,7 @@ import {
   Copy,
   Crown,
   Handshake,
+  Info,
   ListChecks,
   Play,
   ShieldCheck,
@@ -271,7 +272,10 @@ function HandHistoryContent() {
           ? <PartialDeckProof key={h.hand_id} rootCommitHash={h.root_commit_hash}
                               revealed={h.revealed_card_salts} unrevealed={h.unrevealed_card_hashes}/>
           :
-          <p className="deck-reveal-status mismatch">Prova de integridade criptográfica indisponível para esta mão.</p>}
+          // Neutral on purpose (#117): a hand recorded before the proof
+          // existed is a legacy record, not a failed verification, and the
+          // `mismatch` red is reserved for a genuine hash divergence.
+          <p className="deck-reveal-status is-unavailable"><Info aria-hidden="true"/>Esta mão foi registrada antes da prova criptográfica, por isso não há o que recalcular aqui.</p>}
     </section>
 
     <PlayerNoteDialog key={noteOpponent?.player_id || 'closed'} opponent={noteOpponent}

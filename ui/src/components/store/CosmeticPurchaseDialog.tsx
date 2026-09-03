@@ -1,9 +1,9 @@
 'use client';
 import type {RefObject} from 'react';
-import {useCallback, useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import Image from 'next/image';
 import {Check, Coins, LoaderCircle, QrCode, ShieldCheck} from 'lucide-react';
-import {useQueryClient} from '@tanstack/react-query';
+import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
@@ -11,8 +11,8 @@ import {
 import {PixPaymentView} from '@/components/store/PixPaymentView';
 import {ApiError} from '@/lib/api/client';
 import {
-  createCosmeticPurchase, getCosmeticPurchase, type CosmeticCatalogEntry, type CosmeticKind,
-  type CosmeticPurchase, type CosmeticPurchaseMethod
+  cosmeticPurchaseKey, createCosmeticPurchase, getCosmeticPurchase, type CosmeticCatalogEntry,
+  type CosmeticKind, type CosmeticPurchase, type CosmeticPurchaseMethod
 } from '@/lib/api/cosmeticPurchases';
 import {cardPath} from '@/lib/cards';
 import {DECK_VARIANTS, type DeckVariantId} from '@/lib/cardVariants';
@@ -62,37 +62,38 @@ export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBal
   onConfirmedAction?: (purchase: CosmeticPurchase) => void;
 }) {
   const queryClient = useQueryClient();
-  const [purchase, setPurchase] = useState<CosmeticPurchase | undefined>(initialPurchase);
+  const [started, setStarted] = useState<CosmeticPurchase | undefined>(initialPurchase);
   const [pendingMethod, setPendingMethod] = useState<CosmeticPurchaseMethod | null>(null);
   const [error, setError] = useState('');
-  const [pollError, setPollError] = useState(false);
   const label = entry && labelFor(kind, entry.id);
+  const startedId = started?.purchase_id;
+
+  // The purchase's live status is server state, so it lives in the query cache
+  // under `cosmeticPurchaseKey`: `refetchInterval` is the 4s fallback poll, and
+  // the `cosmetic_purchase_update` websocket frame (#144) invalidates this same
+  // key, which resolves the dialog on the next tick instead of on the next poll.
+  const statusQuery = useQuery({
+    queryKey: cosmeticPurchaseKey(kind, startedId ?? ''),
+    queryFn: () => getCosmeticPurchase(kind, startedId!),
+    enabled: Boolean(startedId) && (started?.status === 'pending' || started?.status === 'processing'),
+    refetchInterval: POLL_MS
+  });
+
+  const purchase = statusQuery.data ?? started;
   const confirmed = purchase?.status === 'confirmed';
   const active = purchase?.status === 'pending' || purchase?.status === 'processing';
   const expired = purchase?.status === 'expired';
-  const purchaseId = purchase?.purchase_id;
 
-  const refreshStatus = useCallback(async () => {
-    if (!purchaseId) return;
-    try {
-      const next = await getCosmeticPurchase(kind, purchaseId);
-      setPurchase(next);
-      setPollError(false);
-      if (next.status === 'confirmed') {
-        void queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT});
-        void queryClient.invalidateQueries({queryKey: ['player', 'me']});
-        onConfirmedAction?.(next);
-      }
-    } catch {
-      setPollError(true);
-    }
-  }, [kind, purchaseId, queryClient, onConfirmedAction]);
-
+  // Fires once per confirmed purchase id: the store's ownership refresh must
+  // not re-run on every re-render that still reads a confirmed status.
+  const announcedRef = useRef('');
   useEffect(() => {
-    if (!active) return undefined;
-    const timer = window.setInterval(() => void refreshStatus(), POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [active, refreshStatus]);
+    if (!confirmed || !purchase || announcedRef.current === purchase.purchase_id) return;
+    announcedRef.current = purchase.purchase_id;
+    void queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT});
+    void queryClient.invalidateQueries({queryKey: ['player', 'me']});
+    onConfirmedAction?.(purchase);
+  }, [confirmed, purchase, queryClient, onConfirmedAction]);
 
   if (!entry || !label) return null;
 
@@ -103,12 +104,8 @@ export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBal
     setError('');
     try {
       const next = await createCosmeticPurchase(kind, entry!.id, method);
-      setPurchase(next);
-      await Promise.all([
-        queryClient.invalidateQueries({queryKey: WALLET_QUERY_ROOT}),
-        queryClient.invalidateQueries({queryKey: ['player', 'me']}),
-      ]);
-      if (next.status === 'confirmed') onConfirmedAction?.(next);
+      setStarted(next);
+      queryClient.setQueryData(cosmeticPurchaseKey(kind, next.purchase_id), next);
     } catch (caught) {
       setError(purchaseError(caught));
     } finally {
@@ -157,9 +154,9 @@ export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBal
       </>}
 
       {expired && <p className="reaction-purchase-error" role="alert">Este Pix expirou. Gere uma nova compra para tentar novamente.</p>}
-      {active && pollError && <div className="store-poll-recovery" role="alert">
+      {active && statusQuery.isError && <div className="store-poll-recovery" role="alert">
         <span>Não foi possível atualizar a confirmação.</span>
-        <Button type="button" variant="ghost" onClick={() => void refreshStatus()}>Verificar novamente</Button>
+        <Button type="button" variant="ghost" onClick={() => void statusQuery.refetch()}>Verificar novamente</Button>
       </div>}
       {error && <p className="reaction-purchase-error" role="alert">{error}</p>}
 

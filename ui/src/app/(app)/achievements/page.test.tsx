@@ -196,4 +196,49 @@ describe('achievements page', () => {
       expect(card).toHaveAttribute('data-count', 'unknown')
     );
   });
+  // ── #119: recency rail, recency sort, arrival celebration ───────────────
+  const dated = (key: string, progress: number, stars: number, unlockedAt?: string) =>
+    ({key, progress, stars, unlocked: stars > 0, unlocked_at: unlockedAt});
+
+  test('rails the most recent unlocks and offers a recency sort', () => {
+    mocks.mine = queryState({achievements: [
+      dated('wins', 5, 3, '2026-09-01T12:00:00Z'),
+      dated('bluff', 2, 1, '2026-09-02T12:00:00Z'),
+      dated('all_in', 0, 0),
+    ]});
+    render(<Achievements/>);
+
+    const rail = screen.getByRole('region', {name: /Recém-desbloqueadas/});
+    // Newest first, and the never-unlocked key is not on the rail at all.
+    expect(within(rail).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(rail).getAllByRole('listitem')[0]).toHaveTextContent('1 estrela');
+
+    // The sort reorders the same catalogue instead of narrowing it.
+    const before = screen.getAllByTestId('achievement').map(card => card.textContent);
+    expect(before).toHaveLength(4);
+    fireEvent.click(screen.getByRole('button', {name: 'Mais recentes'}));
+    expect(screen.getAllByTestId('achievement').map(card => card.textContent))
+      .toEqual(['bluff', 'wins', ...before.filter(key => key !== 'bluff' && key !== 'wins')]);
+
+    fireEvent.click(screen.getByRole('button', {name: 'Ordem do catálogo'}));
+    expect(screen.getAllByTestId('achievement').map(card => card.textContent)).toEqual(before);
+  });
+
+  test('hides the rail and the sort when nothing carries a timestamp', () => {
+    render(<Achievements/>);
+    expect(screen.queryByRole('region', {name: /Recém-desbloqueadas/})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: 'Mais recentes'})).not.toBeInTheDocument();
+  });
+
+  test('celebrates a table unlock once, then never again in that tab', () => {
+    window.sessionStorage.setItem('ctech-poker:achievement-arrival', 'wins');
+    mocks.mine = queryState({achievements: [dated('wins', 5, 3, '2026-09-01T12:00:00Z')]});
+
+    const first = render(<Achievements/>);
+    expect(screen.getByRole('status')).toHaveTextContent(/entrou na sua coleção agora/);
+    first.unmount();
+
+    render(<Achievements/>);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
 });

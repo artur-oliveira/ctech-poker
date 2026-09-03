@@ -160,7 +160,7 @@ describe('hand detail page', () => {
     });
     render(<HandHistoryPage/>);
     expect(screen.getByText('partial:root-1')).toBeInTheDocument();
-    expect(screen.queryByText(/Prova de integridade criptográfica indisponível/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/registrada antes da prova criptográfica/)).not.toBeInTheDocument();
   });
 
   test('does not honor a real-money URL while the UI capability is disabled', () => {
@@ -241,7 +241,12 @@ describe('hand detail page', () => {
     });
     render(<HandHistoryPage/>);
     expect(screen.getByText(/sequência de ações/)).toBeInTheDocument();
-    expect(screen.getByText(/Prova de integridade criptográfica indisponível/)).toBeInTheDocument();
+    // #117: a legacy hand with no proof is neutral prose, never the
+    // `mismatch` failure red DeckReveal uses for a genuine hash divergence.
+    const legacyProof = screen.getByText(/registrada antes da prova criptográfica/);
+    expect(legacyProof).toBeInTheDocument();
+    expect(legacyProof).toHaveClass('is-unavailable');
+    expect(legacyProof).not.toHaveClass('mismatch');
     expect(screen.getByRole('button', {name: 'exportar resumo'})).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'compartilhar'})).toBeInTheDocument();
 

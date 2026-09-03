@@ -27,6 +27,8 @@ export default function AchievementsGuide() {
       {
         id: 'filtros', title: 'Filtrar e separar carteiras', summary: 'Sandbox e dinheiro real acumulam progresso independente.',
         body: <><p>Escolha a carteira nas abas e depois filtre por <b>Todas</b>, <b>Desbloqueadas</b>, <b>Em progresso</b> ou <b>Completas</b> — cada filtro traz a contagem junto. Metas ligadas a um único modo, como fichas sandbox ganhas, só aparecem nele.</p>
+          <p>Tendo desbloqueios com data, uma segunda linha alterna a ordem entre <b>Ordem do catálogo</b> e <b>Mais recentes</b>. A ordenação reorganiza o mesmo conjunto: ela não esconde conquistas, e desbloqueios antigos sem data registrada ficam depois dos datados.</p>
+          <p>Acima do catálogo, o trilho <b>Recém-desbloqueadas</b> traz os últimos cinco desbloqueios com estrelas e há quanto tempo aconteceram. Quando você desbloqueia algo na mesa e abre esta página em seguida, o item que acabou de entrar aparece destacado com uma mensagem de parabéns — uma vez só. Com movimento reduzido ligado, o destaque continua visível, sem pulsar.</p>
           <GuideCallout kind="warning" title="Carteira real pode estar indisponível">Ver a aba não significa que o dinheiro real esteja liberado. O ambiente padrão é sandbox e a ativação depende do serviço.</GuideCallout></>
       },
       {

@@ -283,7 +283,7 @@ Depth is structural. The rail sits above the room, felt is inset within the rail
 - **Felt Depth** (--shadow-felt): an inset 70px dark-green shade; playing surface only.
 - **Seat Lift** (--shadow-seat): a compact 0 4px 8px #0009 separation for player seats.
 - **Modal Lift:** a strong overlay shadow behind the 16px dialog surface and a 75% black, lightly blurred backdrop.
-- **Signal Glow:** a crisp ring or tight glow attached to focus, live status, turn timing, viewer identity, or winner feedback—not ambient decoration.
+- **Signal Glow:** a crisp ring or tight glow attached to focus, live status, turn timing, viewer identity, or winner feedback—not ambient decoration. The achievement-arrival ring on the "Recém-desbloqueadas" rail is the earned-value member of this family and uses `--gold-33` (33% Chip Gold, the gold counterpart of `--brand-33`); it expands and fades twice, and reduced motion keeps the gold border while dropping the pulse.
 
 Motion reinforces the same layer model. Most state changes complete in 120–250ms with quartic or quintic ease-out. Entry choreography may reach about 420ms; card dealing can run longer when sequence itself conveys information. Reduced motion removes travel, pulsing, and sequential waits while retaining visible state.
 

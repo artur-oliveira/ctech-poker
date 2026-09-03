@@ -45,7 +45,12 @@ export interface AchievementSummaryEntry extends Achievement {
   unlocked: boolean;
   completed: boolean;
   next_target: number | null;
-  max_target: number
+  max_target: number;
+  // RFC 3339 instant of the last tier this player crossed (backend #72),
+  // `omitempty` on the wire: absent on every row unlocked before the field
+  // existed, and on rows with no tier cleared at all. Never substitute a
+  // fallback date — "unknown when" is the truth for a legacy unlock.
+  unlocked_at?: string
 }
 
 export interface AchievementTotals {

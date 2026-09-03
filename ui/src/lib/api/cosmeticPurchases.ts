@@ -52,6 +52,15 @@ export async function createCosmeticPurchase(kind: CosmeticKind, itemId: string,
   )).data;
 }
 
+// One query key family for "the live status of this cosmetic purchase", so the
+// dialog's 4s fallback poll and the `cosmetic_purchase_update` websocket frame
+// (#144) act on the same cache entry instead of two parallel notions of truth.
+export const COSMETIC_PURCHASE_QUERY_ROOT = ['cosmetic-purchase'] as const;
+
+export function cosmeticPurchaseKey(kind: CosmeticKind, purchaseId: string) {
+  return [...COSMETIC_PURCHASE_QUERY_ROOT, kind, purchaseId];
+}
+
 export async function getCosmeticPurchase(kind: CosmeticKind, purchaseId: string) {
   return (await apiClient.get<CosmeticPurchase>(
     `/v1.0/wallet/cosmetic-purchase/${kind}/${encodeURIComponent(purchaseId)}`,

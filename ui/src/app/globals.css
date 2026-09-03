@@ -167,6 +167,9 @@
     --gold-bright-2: #e7c36f;
     --gold-bright-3: #e9c678;
     --gold-pale: #efe1b7;
+    /* 33% gold: the expanding ring of the achievement-arrival celebration,
+       the gold counterpart to --brand-33. */
+    --gold-33: #e6b85c55;
     --cream: #f1e5ce;
     /* neutrals / muted */
     --text-muted-soft: #d9cccd;
@@ -14624,6 +14627,18 @@ h1 em {
     color: var(--danger-soft)
 }
 
+/* Legacy hands (#117): no proof to recalculate is a fact about the record,
+   not a verification failure, so it borrows the neutral panel surface and
+   the secondary text colour instead of the danger tint above. */
+.deck-reveal-status.is-unavailable {
+    padding: 12px;
+    border-top: 0;
+    border-radius: var(--rounded-control);
+    background: var(--white-08);
+    color: var(--text-secondary);
+    font-weight: 400
+}
+
 .deck-reveal-actions {
     display: flex;
     align-items: center;
@@ -18200,4 +18215,393 @@ button.deck-grid-slot:hover {
     .stage-v-ring .seat-7 .seat-info {
         right: -10px
     }
+}
+
+/* ── Hand history: totals, filters, day grouping (#115) ──────────────────── */
+
+/* The loaded-subset bar and the lifetime strip are one block so the honest
+   "desde o início" line can never drift away from the "nesta lista" numbers
+   it exists to qualify. */
+.hands-totals {
+    max-width: 760px;
+    margin-inline: auto
+}
+
+.hands-totals .hands-stats-bar {
+    margin-bottom: 12px
+}
+
+.hands-lifetime {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 0 auto 32px;
+    padding: 10px 16px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-pill);
+    background: var(--white-08);
+    color: var(--text-secondary);
+    font-size: var(--font-size-body);
+    text-align: center
+}
+
+.hands-lifetime svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    color: var(--gold)
+}
+
+.hands-lifetime b {
+    color: var(--paper);
+    font-variant-numeric: tabular-nums
+}
+
+.hands-filters {
+    margin-bottom: 24px
+}
+
+.hands-filters .filter-tabs {
+    margin-bottom: 8px
+}
+
+.hands-filters .filter-tabs:last-child {
+    margin-bottom: 0
+}
+
+/* Blind level of the hand, next to the mesa id: a readout, so it stays mono
+   and tabular like every other value that has to line up down the column. */
+.hand-row-blinds {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary)
+}
+
+.hand-row-virtual.is-day {
+    padding-bottom: 0
+}
+
+.hands-day-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 14px 4px 8px;
+    font-size: var(--font-size-body);
+    font-weight: 600;
+    color: var(--paper)
+}
+
+.hands-day-header small {
+    font-size: var(--font-size-compact);
+    font-weight: 400;
+    color: var(--muted-rose)
+}
+
+/* The rows are transform-positioned by the virtualizer, so `position: sticky`
+   on a header inside the list can never escape them. This one bar lives above
+   the list instead and names whichever day is at the top of the viewport; it
+   parks under the sticky app nav (78px tall, itself parked under the
+   API-unavailable strip). */
+.hands-day-pinned {
+    position: sticky;
+    top: calc(var(--api-bar-h) + 78px);
+    z-index: calc(var(--z-chrome) - 1);
+    max-width: 900px;
+    margin: 0 auto -6px;
+    padding: 8px 12px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-pill);
+    background: var(--surface-control);
+    box-shadow: var(--shadow-seat);
+    color: var(--text-secondary);
+    font-size: var(--font-size-compact);
+    font-weight: 600;
+    text-align: center
+}
+
+/* Under 600px the nav is a bottom bar, so there is nothing above to clear. */
+@media (max-width: 600px) {
+    .hands-day-pinned {
+        top: var(--api-bar-h)
+    }
+}
+
+/* ── Meus links compartilhados (#96) ────────────────────────────────────── */
+
+.hand-shares-panel {
+    max-width: 900px;
+    margin: 48px auto 0;
+    padding: 24px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-panel);
+    background: var(--surface-seat)
+}
+
+.hand-shares-panel > header {
+    margin-bottom: 16px
+}
+
+.hand-shares-panel h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: var(--font-size-subtitle);
+    font-weight: 700;
+    color: var(--paper)
+}
+
+.hand-shares-panel h2 svg {
+    width: 18px;
+    height: 18px;
+    color: var(--brand-bright)
+}
+
+.hand-shares-panel > header p {
+    max-width: 68ch;
+    margin: 6px 0 0;
+    color: var(--text-secondary);
+    font-size: var(--font-size-body)
+}
+
+.hand-shares-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none
+}
+
+.hand-share-row {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control);
+    background: var(--white-08)
+}
+
+.hand-share-kind {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--rounded-pill);
+    background: var(--gold);
+    color: var(--gold-ink);
+    font-size: var(--font-size-compact);
+    font-weight: 600;
+    white-space: nowrap
+}
+
+.hand-share-kind.is-bad-beat {
+    background: var(--surface-error);
+    color: var(--danger-soft)
+}
+
+.hand-share-kind svg {
+    width: 13px;
+    height: 13px
+}
+
+.hand-share-outcome {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px
+}
+
+.hand-share-outcome b {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary)
+}
+
+.hand-share-outcome b.gain {
+    color: var(--success)
+}
+
+.hand-share-outcome b.loss {
+    color: var(--danger-soft)
+}
+
+.hand-share-dates {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    color: var(--muted-rose);
+    font-size: var(--font-size-compact)
+}
+
+.hand-share-dates small {
+    display: flex;
+    align-items: center;
+    gap: 5px
+}
+
+.hand-share-dates svg {
+    width: 12px;
+    height: 12px
+}
+
+.hand-share-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-self: end
+}
+
+@media (max-width: 720px) {
+    .hand-shares-panel {
+        padding: 16px
+    }
+
+    .hand-share-row {
+        grid-template-columns: auto minmax(0, 1fr);
+        row-gap: 10px
+    }
+
+    .hand-share-dates,
+    .hand-share-actions {
+        grid-column: 1 / -1;
+        justify-self: stretch
+    }
+
+    .hand-share-actions > * {
+        flex: 1
+    }
+}
+
+/* ── Recém-desbloqueadas rail + arrival celebration (#119) ──────────────── */
+
+.achievement-recent {
+    max-width: 900px;
+    margin: 0 auto 32px
+}
+
+.achievement-recent h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px;
+    font-size: var(--font-size-subtitle);
+    font-weight: 700;
+    color: var(--paper)
+}
+
+.achievement-recent h2 svg {
+    width: 18px;
+    height: 18px;
+    color: var(--gold)
+}
+
+/* A rail, not a grid: five items in recency order read as a sequence, and on
+   narrow viewports they scroll sideways instead of restacking into a second
+   grid that competes with the catalogue below. */
+.achievement-recent-list {
+    display: flex;
+    gap: 8px;
+    margin: 0;
+    padding: 0 0 4px;
+    overflow-x: auto;
+    list-style: none;
+    scroll-snap-type: x proximity
+}
+
+.achievement-recent-item {
+    flex: 1 0 168px;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-control);
+    background: var(--white-08)
+}
+
+.achievement-recent-item b {
+    color: var(--paper);
+    font-size: var(--font-size-body);
+    font-weight: 600
+}
+
+.achievement-recent-item small {
+    color: var(--muted-rose);
+    font-size: var(--font-size-compact)
+}
+
+.achievement-recent-stars {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--gold);
+    font-size: var(--font-size-compact)
+}
+
+.achievement-recent-stars svg {
+    width: 12px;
+    height: 12px
+}
+
+/* The unlock the player just earned at the table. Gold ring = earned value,
+   the one glow this page is allowed; it fades on its own so the rail settles
+   back into a plain list. */
+.achievement-recent-item.is-celebrating {
+    border-color: var(--gold);
+    animation: achievement-arrival 1600ms var(--ease-out-quart) 2
+}
+
+@keyframes achievement-arrival {
+    0% {
+        box-shadow: 0 0 0 0 var(--gold-33)
+    }
+    60% {
+        box-shadow: 0 0 0 6px transparent
+    }
+    100% {
+        box-shadow: 0 0 0 0 transparent
+    }
+}
+
+.achievement-arrival-note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--gold);
+    border-radius: var(--rounded-control);
+    background: var(--white-08);
+    color: var(--paper);
+    font-size: var(--font-size-body)
+}
+
+.achievement-arrival-note svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    color: var(--gold)
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .achievement-recent-item.is-celebrating {
+        animation: none
+    }
+}
+
+/* Table-filter chips carry a whole table id (#115); the label truncates rather
+   than pushing the row of chips past the shell. */
+.hands-filters .filter-tab {
+    max-width: min(28ch, 70vw);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap
 }

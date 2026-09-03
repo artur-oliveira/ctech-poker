@@ -15,6 +15,14 @@ describe('robots.txt', () => {
     expect(robots().sitemap).toBe(new URL('/sitemap.xml', SITE_URL).toString());
   });
 
+  // #118: unfurl bots (WhatsApp, Slack, Discord, X) honour robots.txt, so a
+  // disallowed /share is a link that never gets a preview card. It stays
+  // crawlable and out of the sitemap; the noindex lives in the route's meta.
+  test('leaves /share crawlable so link unfurlers can read its OG card', () => {
+    expect(PRIVATE_ROUTES).not.toContain('/share');
+    expect(INDEXABLE_ROUTES as readonly string[]).not.toContain('/share');
+  });
+
   test('never disallows a route the sitemap advertises', () => {
     for (const route of INDEXABLE_ROUTES) {
       expect(PRIVATE_ROUTES.some(blocked => route === blocked || route.startsWith(`${blocked}/`))).toBe(false);

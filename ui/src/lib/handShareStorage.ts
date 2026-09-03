@@ -1,8 +1,9 @@
-// Local record of hand shares the viewer created in *this* browser. There is
-// no `GET /players/me/hand-shares` yet (backend #77), so this is the only way
-// the client can know "I already shared this hand" when `ShareHandDialog`
-// reopens for the same `handId` — it is best-effort (another device, or a
-// cleared browser, will not see it) and never asserts anything about the
+// Local record of hand shares the viewer created in *this* browser. It is what
+// lets `ShareHandDialog` answer "I already shared this hand" when it reopens
+// for the same `handId` — `GET /players/me/hand-shares` lists a player's live
+// shares but not the hand each came from, so it cannot replace this map (it
+// powers `MyHandSharesPanel` instead). Best-effort: another device, or a
+// cleared browser, will not see it, and it never asserts anything about the
 // share's live status beyond a client-side expiry guess.
 const STORAGE_KEY = 'ctech-poker:hand-shares:v1';
 
@@ -55,6 +56,16 @@ export function getPersistedHandShare(handId: string): PersistedHandShare | null
 export function setPersistedHandShare(handId: string, share: PersistedHandShare) {
   const map = readAll();
   map[handId] = share;
+  writeAll(map);
+}
+
+/** Drops whichever hand remembers `token` (#96: revoking from the shared-links
+ * panel, which knows the token but not the hand it came from). */
+export function clearPersistedHandShareByToken(token: string) {
+  const map = readAll();
+  const handId = Object.keys(map).find(key => map[key].token === token);
+  if (!handId) return;
+  delete map[handId];
   writeAll(map);
 }
 
