@@ -7,17 +7,17 @@ validates blinds against the 10-tier fee catalog, and stores the fixed `EntryFee
 is a **per-table reservation entitlement (`internal/entitlement`, `poker_table_entitlements`), not a per-buy-in
 charge**: the first real-money buy-in at a table claims and pays a 3-hour, absolute (never sliding) entitlement before
 the player is seated; every rebuy or re-entry at that same table within the window is free. If the table becomes
-unavailable (archived, or full) while the entitlement is still valid, `buyin.Service` rebinds it to another table of
-the same tier instead of charging again — never across tiers. `GET /rooms/:id/seated` exposes `fee_due` /
+unavailable (archived, or full) while the entitlement is still valid, `buyin.Service` rebinds it to another table of the
+same tier instead of charging again — never across tiers. `GET /rooms/:id/seated` exposes `fee_due` /
 `entitlement_expires_at` so the client never surprises a player with a silent charge at buy-in. Failed fee debits are
 queued to the same retry table (`poker_pending_cashouts` with `Kind: "fee_debit"`) for Lambda reconciliation retries;
 the entitlement itself is left in place on a debit failure (nobody is ever seated on that path) so the retry — this
-request's caller, or `cmd/reconcile` — completes the same idempotent charge at most once.
-See `docs/plans/2026-08-21-entry-fee-entitlement.md`. The entitlement Claim/Rebind race is closed by #146 (issue #122)
+request's caller, or `cmd/reconcile` — completes the same idempotent charge at most once. See
+`docs/plans/2026-08-21-entry-fee-entitlement.md`. The entitlement Claim/Rebind race is closed by #146 (issue #122)
 — see `docs/specs/2026-09-02-reconcile-entitlement-concurrency-audit.md`.
 
-`cmd/tablecleanup` now handles real-money tables instead of skipping them: it settles every seated player's
-game-wallet hold via `CashoutGame`, first recording the obligation to `poker_pending_cashouts` (same
+`cmd/tablecleanup` now handles real-money tables instead of skipping them: it settles every seated player's game-wallet
+hold via `CashoutGame`, first recording the obligation to `poker_pending_cashouts` (same
 record-then-attempt-then-resolve shape as `buyin.Service.settle`) so `cmd/reconcile`'s sweep retries it — using the
 recorded hold ID — if the immediate cash-out fails; the table archives either way once the obligation is durably
 recorded. The table-entry entitlement itself is left untouched (it's a paid, non-refundable reservation, not a fund
@@ -33,51 +33,50 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
    are data/config actions in `ctech-account`, not code changes in this repo — **this is what needs to change to
    actually unblock real-money mode; nothing in this repo can grant a scope on ctech-account's behalf.** (issue #39)
    Until both are granted, in every environment poker's M2M client runs in:
-   - Add `internal:wallet:game-status` to `ctech-account/api/internal/scopes/catalog.go`.
-   - Grant poker's M2M client both `internal:wallet:game-status` and `internal:wallet:debit-real` in
-     `ctech-account`'s client-grant data/config for every environment (dev/staging/prod), and cover both grants in
-     deploy reconciliation so a new environment can't come up missing them silently.
-   What this repo *does* do about it: `walletclient.Client.ValidateRequiredScopes` (`internal/walletclient/client.go`)
-   runs once at startup, gated on `REAL_MONEY_ENABLED`, wired via `validateWalletScopes` in `internal/app/app.go`
-   (registered as an `fx.Lifecycle` `OnStart` hook, before `startServer`). It fetches an M2M token for each of the two
-   scopes above and confirms the scope actually made it into the grant — checking the token endpoint's own response
-   (an outright rejection surfaces directly) and, for a JWT access token, decoding its `scope` claim (unverified —
-   safe here since we already trust the token endpoint's TLS response; this is a diagnostic read, not an auth
-   decision) in case ctech-account silently narrows the grant instead of rejecting the request. Either failure mode
-   returns an error from the `OnStart` hook, which fails the whole process to start with a message naming exactly
-   which scope is missing — so a broken grant is a loud, immediate deploy failure instead of every real-money entry
-   fee and gambling-activation check silently failing in production. An opaque (non-JWT) token can't be decoded this
-   way and is treated as "can't verify, assume granted" rather than a false positive. Also unresolved (re-verified 2026-07-28):
+    - Add `internal:wallet:game-status` to `ctech-account/api/internal/scopes/catalog.go`.
+    - Grant poker's M2M client both `internal:wallet:game-status` and `internal:wallet:debit-real` in
+      `ctech-account`'s client-grant data/config for every environment (dev/staging/prod), and cover both grants in
+      deploy reconciliation so a new environment can't come up missing them silently. What this repo *does* do about it:
+      `walletclient.Client.ValidateRequiredScopes` (`internal/walletclient/client.go`)
+      runs once at startup, gated on `REAL_MONEY_ENABLED`, wired via `validateWalletScopes` in `internal/app/app.go`
+      (registered as an `fx.Lifecycle` `OnStart` hook, before `startServer`). It fetches an M2M token for each of the
+      two scopes above and confirms the scope actually made it into the grant — checking the token endpoint's own
+      response (an outright rejection surfaces directly) and, for a JWT access token, decoding its `scope` claim
+      (unverified — safe here since we already trust the token endpoint's TLS response; this is a diagnostic read, not
+      an auth decision) in case ctech-account silently narrows the grant instead of rejecting the request. Either
+      failure mode returns an error from the `OnStart` hook, which fails the whole process to start with a message
+      naming exactly which scope is missing — so a broken grant is a loud, immediate deploy failure instead of every
+      real-money entry fee and gambling-activation check silently failing in production. An opaque (non-JWT) token can't
+      be decoded this way and is treated as "can't verify, assume granted" rather than a false positive. Also unresolved
+      (re-verified 2026-07-28):
 
 - An ASG lifecycle hook + drain Lambda **do** exist (`cdk/lib/api-stack.ts`'s `TerminationDrainFunction`) and do reach
   `tablemanager.DrainAndRelease` via `OnStop` when they fire — re-verified 2026-09-01 from
   `"shutting down ctech-poker-api, draining table manager leases"` in `/ctech-poker/prod/app`. What is not reliable is
-  the hook firing for *every* termination: under a spot rebalance storm the same day, the drain Lambda invoked for
-  only 3 of at least 4-5 real terminations — see `cdk/CLAUDE.md`'s Known Issues for the details and
-  `docs/specs/2026-09-01-duplicate-seat-commit-guard.md` for the resulting incident. **Fixed (#33):** the app no
-  longer waits solely on that hook. `startServer` (`internal/app/app.go`) also runs
-  `pollSpotTermination` — a background goroutine, only in prod (`cfg.Env == "prod"`), that polls
-  this instance's own EC2 metadata (`http://169.254.169.254/latest/meta-data/spot/instance-action`)
-  every 5s and calls `manager.DrainAndRelease` proactively the instant a spot termination notice
-  appears, instead of waiting for the Lambda to reach `OnStop`. `tablemanager.Manager.DrainAndRelease`
-  is now idempotent — a `drainMu`/`draining`/`drainDone` guard makes every call after the first
-  (concurrent or sequential, from the proactive poller or the OnStop/SIGTERM path) a no-op wait
-  rather than a second walk of `m.actors`, so the two triggers can never double-release a lease no
-  matter which fires first or whether both do. This still does not cover non-spot terminations (no
-  metadata notice precedes those) — treat the hook itself as best-effort for those, with the
-  commit-time duplicate-seat guard below as the remaining backstop.
-- No WAF at the CloudFront edge (and the distribution itself is being retired — the app is on Cloudflare Workers); application rate limits (`internal/api/v1/ratelimit.go`) and Turnstile are the only
-  protection.
+  the hook firing for *every* termination: under a spot rebalance storm the same day, the drain Lambda invoked for only
+  3 of at least 4-5 real terminations — see `cdk/CLAUDE.md`'s Known Issues for the details and
+  `docs/specs/2026-09-01-duplicate-seat-commit-guard.md` for the resulting incident. **Fixed (#33):** the app no longer
+  waits solely on that hook. `startServer` (`internal/app/app.go`) also runs
+  `pollSpotTermination` — a background goroutine, only in prod (`cfg.Env == "prod"`), that polls this instance's own EC2
+  metadata (`http://169.254.169.254/latest/meta-data/spot/instance-action`)
+  every 5s and calls `manager.DrainAndRelease` proactively the instant a spot termination notice appears, instead of
+  waiting for the Lambda to reach `OnStop`. `tablemanager.Manager.DrainAndRelease`
+  is now idempotent — a `drainMu`/`draining`/`drainDone` guard makes every call after the first (concurrent or
+  sequential, from the proactive poller or the OnStop/SIGTERM path) a no-op wait rather than a second walk of
+  `m.actors`, so the two triggers can never double-release a lease no matter which fires first or whether both do. This
+  still does not cover non-spot terminations (no metadata notice precedes those) — treat the hook itself as best-effort
+  for those, with the commit-time duplicate-seat guard below as the remaining backstop.
+- No WAF at the CloudFront edge (and the distribution itself is being retired — the app is on Cloudflare Workers);
+  application rate limits (`internal/api/v1/ratelimit.go`) and Turnstile are the only protection.
 - `cmd/reconcile` now *reaches* its Lambda DLQ: each pending entry carries an `Attempts` counter
-  (`reconcile.PendingCashout`), a per-entry failure increments it via `PendingStore.RecordFailedAttempt`,
-  and once it hits `reconcile.MaxAttempts` (5) the row's `gsi_status` flips to `"manual_review"` so it
-  drops out of `ListUnresolved` and `run` returns an aggregated error — failing the invocation so the
-  message lands in the DLQ. Early-attempt failures are still counted + logged (`slog.Warn`) and retried
-  next run without failing the invocation. `run` processes the whole batch before returning, so one
-  poison entry never blocks the rest.
+  (`reconcile.PendingCashout`), a per-entry failure increments it via `PendingStore.RecordFailedAttempt`, and once it
+  hits `reconcile.MaxAttempts` (5) the row's `gsi_status` flips to `"manual_review"` so it drops out of `ListUnresolved`
+  and `run` returns an aggregated error — failing the invocation so the message lands in the DLQ. Early-attempt failures
+  are still counted + logged (`slog.Warn`) and retried next run without failing the invocation. `run` processes the
+  whole batch before returning, so one poison entry never blocks the rest.
 - As of #30, the `cmd/reconcile`, `cmd/tablecleanup`, and archiver Lambdas each have a DLQ-depth alarm
-  (`ApproximateNumberOfMessagesVisible >= 1`) + a Lambda-`Errors` alarm on the `ctech-prod-alerts` SNS
-  topic (`cdk/lib/alarms.ts`, `addLambdaDlqAlarms`).
+  (`ApproximateNumberOfMessagesVisible >= 1`) + a Lambda-`Errors` alarm on the `ctech-prod-alerts` SNS topic
+  (`cdk/lib/alarms.ts`, `addLambdaDlqAlarms`).
 
 ## Conventions (follow these)
 
@@ -100,18 +99,18 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
 - **Distinguish "the store failed" from "the action is illegal."** Failures that never reached a verdict about the
   player's command wrap `tablestore.ErrUnavailable`; `tablews.go`'s `actionErrorCode` turns those (and
   `table.ErrActorStopped`) into `unavailable`, everything else into `invalid_action`. Reporting an outage as
-  `invalid_action` blames the player for it and makes the client end the command instead of resyncing and
-  resubmitting. `ErrVersionConflict` stays `invalid_action` — it *is* a verdict.
+  `invalid_action` blames the player for it and makes the client end the command instead of resyncing and resubmitting.
+  `ErrVersionConflict` stays `invalid_action` — it *is* a verdict.
 - **`tablelease` is latency-only**, not correctness. Never add lease-based correctness logic.
 - **Every `a.cached`/`a.handID`/`a.activity`-mutating handler routes its mutation-and-commit body through
   `Actor.mutate(fn func() error) error`** (`internal/table/actor.go`) — never a hand-rolled snapshot/restore. `mutate`
-  snapshots all three before calling `fn` and restores them on any error `fn` returns (a validation rejection, an
-  engine error partway through, or `a.commit` itself failing), so a handler can no longer forget to undo a partial
-  mutation the way `applyReadyAndCommit` did until 2026-09-01 (leaving an uncommitted mutation trusted in the actor's
-  cache under `trustCache`, which the next unrelated successful commit then persisted for real — a player ended up
-  seated three times at once while another silently vanished during a spot-instance rebalance storm). The snapshot
-  round-trips through `attributevalue.MarshalMap`/`UnmarshalMap` (the same encoding `CommitAction` uses for the real
-  write) rather than a bare `ExportState()`/`NewTableFromState()` pair — that shallow pair aliases the live
+  snapshots all three before calling `fn` and restores them on any error `fn` returns (a validation rejection, an engine
+  error partway through, or `a.commit` itself failing), so a handler can no longer forget to undo a partial mutation the
+  way `applyReadyAndCommit` did until 2026-09-01 (leaving an uncommitted mutation trusted in the actor's cache under
+  `trustCache`, which the next unrelated successful commit then persisted for real — a player ended up seated three
+  times at once while another silently vanished during a spot-instance rebalance storm). The snapshot round-trips
+  through `attributevalue.MarshalMap`/`UnmarshalMap` (the same encoding `CommitAction` uses for the real write) rather
+  than a bare `ExportState()`/`NewTableFromState()` pair — that shallow pair aliases the live
   `*Player` pointers (and, on a removal, the same backing array), so it silently fails to undo an in-place field
   mutation on an already-seated player. `Actor.commit` also refuses outright to persist any state with a duplicate
   player ID (`hand.Table.DuplicateSeatIDForActor`) as a backstop, and `ensureLoaded` forces a reload past
@@ -129,19 +128,20 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
 - **The `currency_mode` boundary is load-bearing.** `buyin` routes to exactly one ledger per room and must never let
   sandbox chips reach the real wallet or vice versa — enforce it in `buyin`, not at the handler. The real path is built;
   what gates it at runtime is `REAL_MONEY_ENABLED` + `LEGAL_SIGNOFF_REF`, checked fail-closed in
-  `config.Load` and, since the reconcile Lambda also moves real money, in `config.LoadForLambda`. (Earlier revisions of this file said to reject non-`sandbox` outright — that is no longer the rule.)
+  `config.Load` and, since the reconcile Lambda also moves real money, in `config.LoadForLambda`. (Earlier revisions of
+  this file said to reject non-`sandbox` outright — that is no longer the rule.)
 - **Money ordering is deliberate**: debit-then-seat on buy-in, remove-then-credit on cash-out. Anything that can fail
   after chips moved goes to `poker_pending_cashouts` for the `cmd/reconcile` sweeper. Keep new money paths in that shape
   rather than inventing a compensating transaction per call site.
 - **Hidden information never leaves `ViewFor`.** `Table.ViewFor(viewerID)` is the single place that decides per-viewer
   visibility, masking unseen hole cards as `"back"` before serialisation; fan-out is keyed
   `<tableID>#<viewerID>` so two seats cannot share a snapshot. Add visibility rules there, never in a handler.
-  `SeatView.HandCategory` follows the same rule: an opponent's category is built only from their actually-revealed
-  hole cards (0, 1, or 2 — `snapshot.go`'s `partialCategory`/`categoryFromRankCounts`) plus the board, never their
-  still-hidden card, and stays unset entirely with nothing revealed — a board-only category would be identical for
-  every unrevealed opponent and read as hands being shown before showdown. The viewer's own seat is
-  the one exception — `Table.ViewFor` sends their true category unconditionally the same way it does `Equity` — so a
-  client showing it before the viewer has locally peeked their own cards leaks the "all-in/won without peeking"
+  `SeatView.HandCategory` follows the same rule: an opponent's category is built only from their actually-revealed hole
+  cards (0, 1, or 2 — `snapshot.go`'s `partialCategory`/`categoryFromRankCounts`) plus the board, never their
+  still-hidden card, and stays unset entirely with nothing revealed — a board-only category would be identical for every
+  unrevealed opponent and read as hands being shown before showdown. The viewer's own seat is the one exception —
+  `Table.ViewFor` sends their true category unconditionally the same way it does `Equity` — so a client showing it
+  before the viewer has locally peeked their own cards leaks the "all-in/won without peeking"
   achievements' exact hidden state (Seat.tsx's `showHandCategory`/`showEquity` gates are what withhold it there).
 - **The fairness reveal is asymmetric on purpose.** The server seed is published only when nothing stayed hidden (a real
   showdown). Every other hand gets the seed-less per-position proof (`fairnessProofFor`). Widening seed publication
@@ -151,39 +151,55 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
 - **Post-hand hooks that need to write back into the same table's live cache must call the Actor directly, never
   `Dispatch`.** `tablemanager.Manager.SetOnHandCompleteForActor`'s wrapper (and every hook chained onto it —
   `autoRebuySweep`, `SetOnTableStreak`, ...) runs synchronously on that table's own actor goroutine; a `Dispatch` back
-  into the same actor from there deadlocks (its `Run` loop is the very call stack already blocked processing this
-  hook). `Actor.SetStreaksForActor` (backing the hot/cold streak badge, `Seat.CurrentStreak`) is the pattern to copy:
+  into the same actor from there deadlocks (its `Run` loop is the very call stack already blocked processing this hook).
+  `Actor.SetStreaksForActor` (backing the hot/cold streak badge, `Seat.CurrentStreak`) is the pattern to copy:
   a plain exported method that mutates actor-owned cache state directly, applied onto `ViewFor`'s output the same way
   `applyPresence` already does for `ConnectionState`.
 - **`onHandComplete`'s own gamification pipeline runs off the actor goroutine, not on it (fixed 2026-09, #61).**
-  `app.newTableManager`'s `onHandComplete` closure — achievements, leaderboard, pokerstats, matchup,
-  session/hand history, highlights, recent players, ~50-150+ sequential DynamoDB round trips at a full table — is
-  detached via `app.dispatchGamificationPipeline` (`go` + `recover`), the same pattern `autoRebuySweep` already used.
-  This is safe specifically because, by the time `table/actor.go`'s `notifyHandComplete` reaches this hook,
+  `app.newTableManager`'s `onHandComplete` closure — achievements, leaderboard, pokerstats, matchup, session/hand
+  history, highlights, recent players, ~50-150+ sequential DynamoDB round trips at a full table — is detached via
+  `app.dispatchGamificationPipeline` (`go` + `recover`), the same pattern `autoRebuySweep` already used. This is safe
+  specifically because, by the time `table/actor.go`'s `notifyHandComplete` reaches this hook,
   `broadcastAll` has already sent every player their post-hand `state` snapshot, and the fleet-wide `handhook` SET NX
-  claim (`claimHandHooks`) has already been taken synchronously — so detaching can neither delay what a player sees
-  nor double-run a hand's bookkeeping. `SetOnTableStreak` and `autoRebuySweep` stay exactly as they were (the former
-  writes back into actor-owned cache via `SetStreaksForActor` and must stay synchronous per the rule above; the
-  latter was already detached). **Known gap, not closed by this change:** if the process dies while the detached
-  goroutine is mid-flight, the hand's `handhook` claim was already taken and is never released, so that hand's
-  gamification writes are permanently lost — pre-existing (a synchronous panic/crash mid-`onHandComplete` had the
-  same failure mode) but the detach widens the window slightly since the actor can move on to the next hand while
-  the goroutine is still running.
-- **Per-seat display state belongs in Valkey, not in the actor.** Several instances serve one table and all broadcast
-  to the same sockets, so a process-local tally shows two different values for one seat, alternating between
-  broadcasts (the streak badge read "V2, V4, V2, V4" in production). `internal/tablestreak` holds it now:
+  claim (`claimHandHooks`) has already been taken synchronously — so detaching can neither delay what a player sees.
+  `SetOnTableStreak` and `autoRebuySweep` stay exactly as they were (the former writes back into actor-owned cache via
+  `SetStreaksForActor` and must stay synchronous per the rule above; the latter was already detached). **Known gap, not
+  closed by this change:** if the process dies while the detached goroutine is mid-flight, the hand's
+  `handhook` claim was already taken and is never released, so that hand's gamification writes are permanently lost —
+  pre-existing (a synchronous panic/crash mid-`onHandComplete` had the same failure mode) but the detach widens the
+  window slightly since the actor can move on to the next hand while the goroutine is still running.
+- **`handhook`'s claim does NOT by itself make the pipeline's counters double-run-safe (#66).** `claimHandHooks`
+  fails OPEN on a Valkey error ("a double credit is at least visible and bounded" — see `internal/handhook`'s doc
+  comment), so a Valkey blip during hand completion can let two instances both pass the claim and both reach
+  `onHandComplete` for the same hand. `pokerstats.Store.RecordHand`/`matchup.Store.RecordHand` already guard themselves
+  with their own `"guard#table_id#hand_id"` conditional-write idempotency key (safe either way), and
+  session/hand-history/highlights/recent-players are plain overwrites (also safe either way) — but
+  `achievements.Service.RecordHand`'s `bump`/`bumpBy`/`streak` and `leaderboard.Service`'s
+  `IncrementStats`/`IncrementAchievementPoints` are bare DynamoDB `ADD`s with no guard of their own, so a duplicate run
+  permanently inflated every participant's achievement progress and `hands_played`/`hands_won`. Fixed by
+  `achievements.Service.ClaimHandCounters` / `achievements.Store.ClaimHandCounters` — a second, DynamoDB-backed
+  conditional-write claim (reusing `poker_achievement_progress`, no new table, the same reuse `streakKeyPrefix`
+  already established) that `app.go`'s pipeline takes once, before calling `achv.RecordHand` and either
+  `leaderboardSvc` method, skipping both entirely when the claim is lost. Unlike `handhook`'s claim, an error from
+  `ClaimHandCounters` fails **closed** (skips the increments) rather than open: this guard is the actual source of truth
+  for "already counted," not an optional latency accelerator, so an ambiguous outcome must never risk a second increment
+  landing. If a future writer needs the same non-idempotent-`ADD` protection, gate it behind
+  `ClaimHandCounters` too rather than inventing a new guard — don't assume `handhook`'s claim alone is enough.
+- **Per-seat display state belongs in Valkey, not in the actor.** Several instances serve one table and all broadcast to
+  the same sockets, so a process-local tally shows two different values for one seat, alternating between broadcasts
+  (the streak badge read "V2, V4, V2, V4" in production). `internal/tablestreak` holds it now:
   `ensureLoaded` re-reads it, `SetStreaksForActor` merges into it, and `Actor.streaks` is only that read — never the
-  source of truth. Removing a player follows the same rule with a harder edge: **only persisted state
-  (`LastActionAt`) may justify a removal.** In-memory presence marks (`disconnectedSince`) are instance-local, and
-  the disconnect kick built on one was cashing out players who had merely reconnected through another instance.
-- **A process flag cannot deduplicate a fleet-wide side effect.** `Table.lastOutcome` is persisted, so any instance
-  that broadcasts an already-`Complete` table runs `notifyHandComplete` — chat, reactions and connect/disconnect all
-  call `broadcastAll`. Guard non-idempotent hooks with `internal/handhook` (`SET NX` per `(table_id, hand_id)`), not
-  with a field. Pick the store by what the state *is*: an atomic claim needs the raw Valkey client (`cache.Backend`'s
+  source of truth. Removing a player follows the same rule with a harder edge: **only persisted state (`LastActionAt`)
+  may justify a removal.** In-memory presence marks (`disconnectedSince`) are instance-local, and the disconnect kick
+  built on one was cashing out players who had merely reconnected through another instance.
+- **A process flag cannot deduplicate a fleet-wide side effect.** `Table.lastOutcome` is persisted, so any instance that
+  broadcasts an already-`Complete` table runs `notifyHandComplete` — chat, reactions and connect/disconnect all call
+  `broadcastAll`. Guard non-idempotent hooks with `internal/handhook` (`SET NX` per `(table_id, hand_id)`), not with a
+  field. Pick the store by what the state *is*: an atomic claim needs the raw Valkey client (`cache.Backend`'s
   `Get`/`Set` cannot express one); a value born with a state transition belongs in the same conditional write
   (`StoredTable.NextHandDeadlineUnixMs`, resumed via `pendingNextHandDeadline` like the turn clock); merely shared
-  display state goes in `cache.Backend` (`tablestreak`, `tableconn`). Everything cross-instance fails **open** —
-  degrade the display or accept a bounded duplicate, never stall the actor goroutine or drop a player's progression.
+  display state goes in `cache.Backend` (`tablestreak`, `tableconn`). Everything cross-instance fails **open** — degrade
+  the display or accept a bounded duplicate, never stall the actor goroutine or drop a player's progression.
 - **`handeval` is table-driven — never edit `handeval/ref` without regenerating.** `ref` is the reference evaluator and
   the sole definition of the canonical hand ordering; `tables.bin` is compiled from it by
   `go generate ./internal/engine/handeval/...` and embedded. Changing `ref` without regenerating leaves stale tables
@@ -214,29 +230,43 @@ catalog.
 
 ## Other known issues (documentation only — see api/README.md)
 
+- **Issue #44 fixed:** `wsAllowedOrigin` (`tablews.go`, backs both WS gateways) used to allow a WebSocket upgrade with
+  no `Origin` header at all, even once `CORS_ALLOWED_ORIGINS` was configured — a scripted client with a valid
+  first-party token could skip the origin check entirely, which is the wrong prod default for a game whose threat model
+  is automation, not cross-site browsers. Now a missing Origin is allowed only when no allow-list is configured (dev —
+  `config.Load` fails closed if prod's list is empty); once an allow-list exists, a present and listed Origin is
+  required, matching (and reusing) the HTTP CORS allow-list. `cmd/loadtest`, the one non-browser caller of the table
+  socket that is meant to run against staging/prod, gained an `-origin` flag for this — it is not exempted from the
+  check, it just has to send a real, listed Origin like anything else would.
 - **(#38) fixed:** real-money `BuyIn` now enforces `player.RequireAccepted` unconditionally. Both
   `app.newBuyinService` constructors (sandbox and real-money) chain `.WithPlayers(players)`, and `buyin.Service.buyIn`
   calls `s.players.RequireAccepted` before any wallet debit or entitlement charge whenever a players store is wired —
   see `internal/buyin/terms_test.go`'s `TestRealMoneyBuyInRequiresPokerTerms`.
-- Issue #31 fixed: `tablemanager.Manager.GetOrCreateActor` no longer serializes the whole instance
-  behind one process-global mutex spanning `LoadTable`/`leases.Acquire`/`roomLoader`. It now holds
-  a refcounted per-tableID `*sync.Mutex` (`Manager.locks`) across the create path — different
-  tables' cold starts never block each other, same-table callers still dedupe to exactly one
-  Actor (T7) — with `Manager.mu` held only for the short `actors`/`cancels`/`releases`/`locks` map
-  mutations, never across a network call. See `internal/tablemanager/manager_concurrency_test.go`.
-- B10 fixed: archiver stream failures now go to an SQS DLQ with a DLQ-depth + `Errors` CloudWatch alarm
-  on `ctech-prod-alerts` (`cdk/lib/archiver-stack.ts`, `cdk/lib/alarms.ts`; #30).
+- Issue #31 fixed: `tablemanager.Manager.GetOrCreateActor` no longer serializes the whole instance behind one
+  process-global mutex spanning `LoadTable`/`leases.Acquire`/`roomLoader`. It now holds a refcounted per-tableID
+  `*sync.Mutex` (`Manager.locks`) across the create path — different tables' cold starts never block each other,
+  same-table callers still dedupe to exactly one Actor (T7) — with `Manager.mu` held only for the short `actors`/
+  `cancels`/`releases`/`locks` map mutations, never across a network call. See
+  `internal/tablemanager/manager_concurrency_test.go`.
+- B10 fixed: archiver stream failures now go to an SQS DLQ with a DLQ-depth + `Errors` CloudWatch alarm on
+  `ctech-prod-alerts` (`cdk/lib/archiver-stack.ts`, `cdk/lib/alarms.ts`; #30).
+- Issue #55 fixed: `cmd/archiver`'s `attributeValueToInterface` no longer routes DynamoDB Number attributes through
+  `strconv.ParseFloat`/float64 before archiving — a chip total or payout past 2^53 silently lost precision on the
+  permanent audit archive. It now carries the attribute through as `json.Number(v.Number())`, so `json.Marshal` emits
+  the original digit string verbatim as a bare JSON number token; any consumer must decode with
+  `json.Decoder.UseNumber()` to preserve the same fidelity on read. See
+  `cmd/archiver/main_test.go`'s `TestNumericAttributesPreserveIntegerFidelity`.
 - B31 fixed by rejection: `leaderboard.Top("achievement_points")` returns an unsupported-metric error instead of
   silently ranking via `gsi_hands_won`; add a `gsi_achievement_points` GSI before re-enabling the metric.
 - Issue #63 fixed: the `win_rate` board enforces `leaderboard.MinHandsForWinRateRank` (100) hands per currency mode.
-  `gsi_win_rate_pk` is a sparse key — `leaderboard.Store.syncWinRateRankKey` writes it once the counters cross the
-  floor and `REMOVE`s it below, so a 1-hand 100% row is never returned by `gsi_win_rate`; `Service.Top` filters
-  sub-floor rows again before sorting so none occupies a rank slot. Legacy stale keys clean up lazily on the row's
-  next write — no migration job. `hands_won` / `hands_played` boards are untouched.
+  `gsi_win_rate_pk` is a sparse key — `leaderboard.Store.syncWinRateRankKey` writes it once the counters cross the floor
+  and `REMOVE`s it below, so a 1-hand 100% row is never returned by `gsi_win_rate`; `Service.Top` filters sub-floor rows
+  again before sorting so none occupies a rank slot. Legacy stale keys clean up lazily on the row's next write — no
+  migration job. `hands_won` / `hands_played` boards are untouched.
 - **Issue #62 partially fixed.** `GET /leaderboard/me` (`leaderboard.Service.MyRank` / `Store.RankOf`) gives a player
   their exact rank + total via `Select: COUNT` queries instead of the frontend computing rank from whatever page of
-  `Top` it happened to fetch (the old bug: `#{data.findIndex+1} de {data.length}` showed page size, not the real
-  total). **Still open, deliberately deferred:** the underlying `gsi_hands_won`/`gsi_hands_played`/`gsi_win_rate`
+  `Top` it happened to fetch (the old bug: `#{data.findIndex+1} de {data.length}` showed page size, not the real total).
+  **Still open, deliberately deferred:** the underlying `gsi_hands_won`/`gsi_hands_played`/`gsi_win_rate`
   GSIs remain single-partition per mode (`gsi_*_pk = mode`) — every hand's `IncrementStats` write and every
   `RankOf`/`Top` read still funnel through one DynamoDB partition per mode, and `RankOf`'s full-partition COUNT for
   `total` is itself unbounded in the number of ranked players (capped by `maxRankCountPages`, not fixed by it). The
@@ -252,52 +282,75 @@ catalog.
   and nobody is paid until the winner sends `accept_winner_cards`. `decline_winner_cards`, the
   `hand.WinnerCardsConsentWindow` (8s, deliberately under `table.NextHandDelay`) expiring, or `StartHand` dealing the
   next hand all refund the requester in full — the fee only splits winner/rake on accept. `winnerCardsAsked` caps it at
-  one ask per player per hand (answered or not), so a decline can't be re-asked past. The expiry is enforced
-  server-side by `Actor.armWinnerCardsTimer`, re-derived from the persisted `ExpiresAt` in `rearmTimersFromCache`, so
-  an actor handoff can never strand a fee. The prompt itself is viewer-scoped in `ViewFor`
+  one ask per player per hand (answered or not), so a decline can't be re-asked past. The expiry is enforced server-side
+  by `Actor.armWinnerCardsTimer`, re-derived from the persisted `ExpiresAt` in `rearmTimersFromCache`, so an actor
+  handoff can never strand a fee. The prompt itself is viewer-scoped in `ViewFor`
   (`Snapshot.PendingWinnerCards`): only the winner and the requester learn a request exists. Rabbit hunt stays
   unilateral on purpose — that secret belongs to the deck, not to another player. See
   `docs/specs/2026-08-24-pay-to-see-cards-consent.md`.
-- **Exit mid-hand no longer waits for the turn.** `request_exit` (WS) pauses the player
-  immediately and marks them `PendingExit`. `Table.RequestExit` folds them via `SitOutForActor`
-  only if they're currently the player on the clock (`Round.Act` has no turn-order check of its
-  own, so calling `SitOutForActor` unconditionally would force-fold an exiting BB/SB before their
-  turn ever comes back — breaking an uncontested win they're still owed). Otherwise they're left
-  untouched: `Actor.processPendingExitAutoFolds` folds them the instant their own turn actually
-  arrives, and `Actor.removeEligiblePendingExits` sweeps and cashes out every `PendingExit` player
-  no longer `DealtIntoCurrentHandForActor`. Both are hooked into `broadcastAll` (the same
+- **Exit mid-hand no longer waits for the turn.** `request_exit` (WS) pauses the player immediately and marks them
+  `PendingExit`. `Table.RequestExit` folds them via `SitOutForActor`
+  only if they're currently the player on the clock (`Round.Act` has no turn-order check of its own, so calling
+  `SitOutForActor` unconditionally would force-fold an exiting BB/SB before their turn ever comes back — breaking an
+  uncontested win they're still owed). Otherwise they're left untouched: `Actor.processPendingExitAutoFolds` folds them
+  the instant their own turn actually arrives, and `Actor.removeEligiblePendingExits` sweeps and cashes out every
+  `PendingExit` player no longer `DealtIntoCurrentHandForActor`. Both are hooked into `broadcastAll` (the same
   per-commit point `armTurnTimer`/inline preselections already use) — not gated behind
-  `claimHandHooks`, since `RemovePlayerForActor`'s conditional commit already makes a duplicate
-  sweep a safe no-op. `dealtIntoCurrentHand`/`handOrder` stays true through the entire post-hand
+  `claimHandHooks`, since `RemovePlayerForActor`'s conditional commit already makes a duplicate sweep a safe no-op.
+  `dealtIntoCurrentHand`/`handOrder` stays true through the entire post-hand
   `Complete`-stage window, so removal only actually happens once the *next* hand's `StartHand`
-  runs, not synchronously with the hand that completes. `cancel_exit` reverses it before either
-  commits. See `docs/plans/2026-08-26-exit-mid-hand-design.md`.
+  runs, not synchronously with the hand that completes. `cancel_exit` reverses it before either commits. See
+  `docs/plans/2026-08-26-exit-mid-hand-design.md`.
 - **Every list endpoint returns the `sendPage` envelope** (`{data, has_next, next_cursor, has_previous,
-  previous_cursor}` — `internal/api/v1/helpers.go`), including fixed in-memory catalogs, which simply sit permanently
-  on their only page. Purchase history (`sandbox-purchase`, `reaction-purchase`, `cosmetic-purchase/:kind`) pages for
-  real off a DynamoDB `ExclusiveStartKey`. `cosmeticpurchase.Store.List` **must** stay filtered by `kind`: deck and
-  felt share one purchase table, and the unfiltered query is what made the store report "8 de 6 liberados".
-- **Ownership is read from the entitlement tables, never from purchase history.** `EntitlementStore.OwnedIDs` backs
-  the `owned` flag on every catalog entry (`cosmeticpurchase`/`reactionpurchase` `ListCatalog`), because a
-  buy/refund/buy cycle leaves history rows no client can safely reduce to ownership.
+  previous_cursor}` — `internal/api/v1/helpers.go`), including fixed in-memory catalogs, which simply sit permanently on
+  their only page. Purchase history (`sandbox-purchase`, `reaction-purchase`, `cosmetic-purchase/:kind`) pages for real
+  off a DynamoDB `ExclusiveStartKey`. `cosmeticpurchase.Store.List` **must** stay filtered by `kind`: deck and felt
+  share one purchase table, and the unfiltered query is what made the store report "8 de 6 liberados".
+- **Ownership is read from the entitlement tables, never from purchase history.** `EntitlementStore.OwnedIDs` backs the
+  `owned` flag on every catalog entry (`cosmeticpurchase`/`reactionpurchase` `ListCatalog`), because a buy/refund/buy
+  cycle leaves history rows no client can safely reduce to ownership.
 - `internal/wsdrain` tracks this process's live sockets so `OnStop` can send each a 1001 "going away" close before
   `ShutdownWithContext` force-closes them mid-deploy. See `docs/specs/2026-08-24-graceful-ws-shutdown-on-deploy.md`.
 - `internal/handreveal` (`poker_hand_reveals` + `poker_hand_reveal_payments`) extends the live paid winner-cards reveal
   (`Table.RequestWinnerCards`) to hand history — non-consensual by design, since the hand is archived and there is no
-  winner still at the table to ask: `POST`/`GET /players/me/hands/:handId/reveal-winner`. Sandbox-only, one
-  archive row per eligible hand (won without showdown, single winner), written by the same hand-complete/hand-updated
-  hooks that already write `sessionlog.HandItem`. Payment moves through `walletclient` (debit buyer, credit winner
-  half), not a local DynamoDB transaction — sandbox balance lives in ctech-wallet. See
+  winner still at the table to ask: `POST`/`GET /players/me/hands/:handId/reveal-winner`. Sandbox-only, one archive row
+  per eligible hand (won without showdown, single winner), written by the same hand-complete/hand-updated hooks that
+  already write `sessionlog.HandItem`. Payment moves through `walletclient` (debit buyer, credit winner half), not a
+  local DynamoDB transaction — sandbox balance lives in ctech-wallet. See
   `docs/specs/2026-08-21-pay-to-see-winner-cards-history.md`.
 - A separate audit (`docs/plans/2026-07-19-api-audit-remediation.md`) covers H1–H4 / M1–M7 / L1–L6 / E1–E3 / S1–S7. Some
   fixes are already in code (actor re-resolve `tablews.go:185-198`, prod Valkey fail-fast, HTTP rate limiters
   `router.go:39-41`); others are not — verify before relying on them.
+- **Issue #68 fixed:** `sessionlog.OpponentSummary.AvatarURL` is still captured (denormalized) at hand-complete, but
+  `playerHandlers.handHistory`/`handByID` (`internal/api/v1/player.go`) no longer serve that frozen copy as-is —
+  `resolveOpponentAvatars` re-resolves every opponent's `AvatarURL` from their *current* profile via
+  `player.Service.GetMany` (chunked at `player.MaxBatchProfileIDs` per call) before the response is sent, so a hand
+  recorded before a later `ClearAvatar` (or an avatar-report block) never serves a URL pointing at a deleted object.
+  `player.AvatarURL` already treats a blocked/missing avatar as absent, so a cleared or since-deleted opponent profile
+  now resolves to `""` instead of a stale, 404ing link — same as the player's own profile response. This is the
+  read-time-resolution approach Issue #64 proposes for the same struct's stale `Name` (still open, not implemented),
+  applied narrowly here to `AvatarURL` only; `Name` is untouched by this change.
+- **Issue #70 fixed: a session's `buyin_amount` is now updated with an atomic conditional ADD, not a
+  read-modify-write.** `buyin.Service.buyIn`'s rebuy path used to `FindOpenSession`, add `amount` to the decoded
+  `BuyinAmount` in Go, and `PutItem` the whole item back — two concurrent rebuys for the same player (a client
+  double-submit, or the auto-rebuy sweep racing a manual rebuy) could both read the same starting value and one addition
+  would be silently lost, undercounting money actually put at risk (a responsible-gaming/spend-tracking correctness
+  issue: `RealityCheck`/`SessionRecap` both derive their "session result" from this figure). `AddBuyin`
+  (`internal/sessionlog/store.go`) now runs a single `TransactWriteItems` call: an `ADD buyin_amount :amt` update
+  conditioned on `attribute_exists(pk) AND ended_at = :zero` (a rebuy losing a race with a concurrent cash-out never
+  reopens an already-closed session), paired with a create-only idempotency guard row keyed by the same composite key
+  `buyin.Service` already uses for the wallet debit — so a retried buy-in can never double-count the rebuy. The guard
+  lives in the same `poker_player_sessions` table under a namespaced partition key (`buyinguard#<player_id>`, never a
+  real player id), so it can never surface as a bogus row in `ListSessions`/`FindOpenSession`/
+  `FindLatestOpenSession`, all of which query by the literal player id. Every buy-in path (initial seat, manual rebuy,
+  re-entry after busting, the post-hand auto-rebuy sweep) funnels through this same `buyIn` call, so all of them get the
+  fix. See `internal/sessionlog/store_integration_test.go`'s `TestAddBuyin*` tests.
 - Issue #73 fixed: `social.Event` still only stores `actor_id` — no name/avatar denormalization — but `GET
   /social/inbox` now resolves every distinct actor on the page through one `player.Service.GetMany` batch call
   (`socialHandlers.hydrateInboxActors`, `internal/api/v1/social.go`) and adds `actor_name`/`actor_avatar_url` to the
-  response only. This closes the "Visitante" bug (a stranger's `friend_request` or a `table_invite` couldn't be
-  named because the frontend's `nameResolver` only knew actors already in the friends/requests lists) without
-  reintroducing the #64 name-drift failure mode a write-time denormalized copy would have.
+  response only. This closes the "Visitante" bug (a stranger's `friend_request` or a `table_invite` couldn't be named
+  because the frontend's `nameResolver` only knew actors already in the friends/requests lists) without reintroducing
+  the #64 name-drift failure mode a write-time denormalized copy would have.
 
 ## Layout
 

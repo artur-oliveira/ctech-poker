@@ -114,7 +114,11 @@ Per-binary keys read outside `Config` (not in the struct above):
 
 - **Two gateways.** `GET /v1.0/tables/:id/ws` is the table socket; `GET /v1.0/ws` is the lobby/user socket, which
   registers the `lobby` and `user#<playerID>` channels and accepts only `ping`.
-- Upgraded by `fasthttp/websocket` `FastHTTPUpgrader`; origin check mirrors HTTP CORS.
+- Upgraded by `fasthttp/websocket` `FastHTTPUpgrader`; origin check (`wsAllowedOrigin`, `tablews.go`) mirrors HTTP
+  CORS's `CORS_ALLOWED_ORIGINS` allow-list. When no allow-list is configured (dev only — `config.Load` refuses to
+  start prod with one empty) every Origin, including a missing header, is accepted; once an allow-list exists, a
+  present and listed Origin is required — a missing header is rejected too (#44). `cmd/loadtest`'s `-origin` flag is
+  how that operator tool supplies one when pointed at staging/prod.
 - **Auth over the socket is the first frame**, not a header or query param: the client sends its token (plus
   `share_code` for a private room) immediately after upgrade (`readAuthToken`). A missing or invalid frame fails closed.
   `sub` and `sid` are required, M2M is rejected, and the token must have `azp=poker`; WebSocket/game commands belong to

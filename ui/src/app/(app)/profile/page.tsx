@@ -7,7 +7,7 @@ import {Lock, Pencil, Sparkles, Swords, Trophy} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import type {MatchupStats} from '@/lib/api/player';
-import {getMatchupStats, getProfileShowcase} from '@/lib/api/player';
+import {getMatchupStats, getProfileShowcase, handEndedAtMs} from '@/lib/api/player';
 import {achievementLabel} from '@/lib/achievements';
 import {useOptionalSession} from "@/lib/auth/session";
 import {getViewerId} from '@/lib/utils';
@@ -137,8 +137,7 @@ function ProfileContent() {
                     <PlayingCard key={`${card}-${index}`} card={card} index={index} size="hole"/>)}
                 </div>
                 <b>+{showcase.data.best_hand.net_change.toLocaleString('pt-BR')} fichas</b>
-                <span>{new Date(showcase.data.best_hand.ended_at < 1e12 ?
-                  showcase.data.best_hand.ended_at * 1000 : showcase.data.best_hand.ended_at).toLocaleDateString('pt-BR')}</span>
+                <span>{new Date(handEndedAtMs(showcase.data.best_hand.ended_at)).toLocaleDateString('pt-BR')}</span>
               </article> : <p className="profile-showcase-empty">Nenhuma vitória recente registrada nesta vitrine.</p>}
             </section>
             {matchup.data && matchup.data.hands_together > 0 && (
