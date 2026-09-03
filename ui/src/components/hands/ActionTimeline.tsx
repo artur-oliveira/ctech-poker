@@ -15,6 +15,7 @@ import {
   Play,
   Repeat2,
   Smile,
+  TrendingDown,
   TrendingUp,
   Trophy,
   UserPen,
@@ -66,8 +67,12 @@ const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
     Icon: ChevronRight,
   },
   runout_step: {
-    label: 'Abriu o board',
+    label: 'Cartas restantes do board reveladas',
     Icon: ArrowRight,
+  },
+  request_exit: {
+    label: 'Pediu para sair da mesa',
+    Icon: LogOut,
   },
   escalate_blinds: {
     label: 'Blinds aumentaram',
@@ -107,6 +112,10 @@ const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
     label: 'Mostrou as cartas',
     Icon: Eye,
   },
+  peek_cards: {
+    label: 'Espiou as cartas',
+    Icon: Eye,
+  },
   
   // Mesa social
   chat: {
@@ -131,6 +140,10 @@ const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
     label: 'Empatou',
     Icon: Trophy,
   },
+  lost: {
+    label: 'Perdeu a mão',
+    Icon: TrendingDown,
+  },
 };
 
 function formatTime(unixMillis: number) {
@@ -139,7 +152,7 @@ function formatTime(unixMillis: number) {
 
 const SYSTEM_ACTIONS = new Set<Action>([
   'join', 'leave', 'ready', 'not_ready', 'sit_out', 'disconnect_sit_out', 'keep_seat',
-  'set_run_it_twice', 'next_hand', 'escalate_blinds', 'set_identity'
+  'set_run_it_twice', 'next_hand', 'escalate_blinds', 'set_identity', 'request_exit'
 ]);
 const SOCIAL_ACTIONS = new Set<Action>(['chat', 'reaction']);
 
@@ -154,7 +167,8 @@ const STREET_LABELS: Record<string, string> = {
 };
 
 function actionStreet(action: HandHistoryAction, previous: string): string {
-  if (action.action === 'won' || action.action === 'tie' || action.action === 'show_cards') return 'showdown';
+  if (action.action === 'won' || action.action === 'lost' || action.action === 'tie'
+    || action.action === 'show_cards') return 'showdown';
   const frameStage = action.frame?.stage;
   if (frameStage && STREET_LABELS[frameStage]) {
     if (frameStage === 'complete') return 'showdown';

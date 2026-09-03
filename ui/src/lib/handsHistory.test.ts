@@ -1,6 +1,6 @@
 import {describe, expect, test} from 'vitest';
 import {
-  ALL_TABLES, dayLabel, filterHands, groupHandsByDay, handTables, loadedTotals, NO_FILTER
+  ALL_TABLES, dayLabel, filterHands, groupHandsByDay, handTables, loadedTotals, NO_FILTER, shortTableId
 } from './handsHistory';
 import type {HandItem, HandOutcome} from '@/lib/api/player';
 
@@ -44,6 +44,20 @@ describe('hand-history filtering (#115)', () => {
       {tableId: 'busy', count: 2}, {tableId: 'also', count: 1}, {tableId: 'quiet', count: 1}
     ]);
     expect(handTables([])).toEqual([]);
+  });
+});
+
+describe('shortTableId (#115)', () => {
+  test('elides the middle, keeping head and tail so a "(count)" suffix stays visible', () => {
+    expect(shortTableId('01M1C5GQR7HWXSNSSX8Q49XN9X')).toBe('01M1…XN9X');
+    expect(shortTableId('01M1KWY9ZVJ2THEF6ESXYQ71RX')).toBe('01M1…71RX');
+  });
+  test('honours a custom edge length', () => {
+    expect(shortTableId('table-identifier', 3)).toBe('tab…ier');
+  });
+  test('leaves a short id untouched', () => {
+    expect(shortTableId('abc')).toBe('abc');
+    expect(shortTableId('123456789')).toBe('123456789');
   });
 });
 

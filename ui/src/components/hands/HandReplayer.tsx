@@ -21,8 +21,12 @@ const STAGE_LABELS: Record<string, string> = {
 // join/leave/next_hand/blind actions reached the screen untranslated.
 const ACTION_LABELS: Record<Action, string> = {
   check: 'deu check', fold: 'foldou', call: 'pagou', bet: 'apostou',
-  raise: 'aumentou para', all_in: 'foi all-in com', won: 'venceu',
-  tie: 'empatou', show_cards: 'mostrou as cartas', runout_step: 'abriu o board',
+  raise: 'aumentou para', all_in: 'foi all-in com', won: 'venceu', lost: 'perdeu a mão',
+  tie: 'empatou', show_cards: 'mostrou as cartas', peek_cards: 'espiou as cartas',
+  request_exit: 'pediu para sair da mesa',
+  // Server-dealt beat, not a player action: the remaining board cards after an
+  // all-in. Rendered without an actor (player_id is empty).
+  runout_step: 'Cartas restantes do board reveladas',
   set_run_it_twice: 'ajustou a preferência de rodar duas vezes',
   join: 'entrou na mesa', leave: 'saiu da mesa',
   ready: 'ficou pronto para jogar', not_ready: 'não está pronto',
@@ -65,11 +69,21 @@ export function HandReplayer({
 }) {
   const replayActions = useMemo(() => {
     const filteredActions: HandHistoryAction[] = [];
+    let resolved = false;
     for (const act of actions.filter(action => action.frame)) {
-      filteredActions.push(act);
-      if (act.frame?.stage === 'complete') {
+      if (resolved) {
+        // The hand is over. Keep the terminal beats that name who won or lost so
+        // the replay ends on the outcome, not on the board runout; stop before
+        // anything belonging to the next hand (join, next_hand, request_exit…).
+        if (act.action === 'won' || act.action === 'lost' || act.action === 'tie'
+          || act.action === 'show_cards') {
+          filteredActions.push(act);
+          continue;
+        }
         break;
       }
+      filteredActions.push(act);
+      if (act.frame?.stage === 'complete') resolved = true;
     }
     return filteredActions;
   }, [actions]);
@@ -236,7 +250,7 @@ export function HandReplayer({
       <TableStage snapshot={replaySnapshot} viewer={viewerId} pot={frame.pot} bigBlind={bigBlind}
                   nowMs={current.timestamp} outcome={null} holdOutcomeOpen={false}/>
       <p key={`action-${current.seq}`} className="replay-action" aria-live="polite">
-        <b>{actor}</b> {actionLabel}
+        {current.player_id && <><b>{actor}</b> </>}{actionLabel}
         {current.amount > 0 && <> <strong>{current.amount.toLocaleString('pt-BR')}</strong></>}
       </p>
       {stepReactions.length > 0 && <ul key={`reactions-${current.seq}`} className="replay-reactions">

@@ -40,7 +40,8 @@ export default function HandsGuide() {
           <li><span>Alterne a velocidade entre 1×, 2× e 0,5× para correr até o desfecho ou acompanhar cada detalhe.</span></li>
           <li><span>Pelo teclado, com o replayer em foco: <b>barra de espaço</b> reproduz ou pausa,
             <b>seta esquerda</b> e <b>seta direita</b> andam uma ação, e <b>Home</b> volta ao início.</span></li>
-          <li><span>As reações enviadas naquele momento reaparecem junto com a ação que as provocou.</span></li></GuideSteps>
+          <li><span>As reações enviadas naquele momento reaparecem junto com a ação que as provocou.</span></li>
+          <li><span>O replay termina no desfecho: depois que o board é completado, ele ainda mostra quem <b>venceu</b> e quem <b>perdeu a mão</b> antes de parar.</span></li></GuideSteps>
           <p>O cabeçalho mostra o <b>big blind</b> daquela mão ao lado do pote, para o tamanho das fichas fazer sentido
             em qualquer stake. Mãos antigas sem o valor registrado usam o big blind do lance inicial ou 25 como
             referência.</p>

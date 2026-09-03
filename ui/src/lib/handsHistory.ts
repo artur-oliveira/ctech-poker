@@ -62,6 +62,14 @@ export function handTables(hands: HandItem[]): TableOption[] {
     .sort((a, b) => b.count - a.count || a.tableId.localeCompare(b.tableId));
 }
 
+/** A table id is a 26-char ULID that names nothing a player memorizes, yet the
+ * head and tail together are enough to tell two tables apart. Ellipsis-in-the-
+ * middle keeps the count suffix visible where a CSS trailing clip would eat it. */
+export function shortTableId(tableId: string, edge = 4): string {
+  if (tableId.length <= edge * 2 + 1) return tableId;
+  return `${tableId.slice(0, edge)}…${tableId.slice(-edge)}`;
+}
+
 export type HandsRow =
   | {kind: 'day'; key: string; label: string; count: number}
   | {kind: 'hand'; key: string; day: string; hand: HandItem};

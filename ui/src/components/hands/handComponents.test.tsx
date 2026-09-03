@@ -110,6 +110,48 @@ describe('hand history components', () => {
     expect(screen.getByText('🍅')).toBeInTheDocument();
   });
   
+  test('translates peek_cards, renders the board runout without an actor, and ends on the outcome beat', async () => {
+    const user = userEvent.setup();
+    render(<HandReplayer hand={hand} viewerId="viewer" actions={[
+      {...actions[0], action: 'peek_cards', amount: 0},
+      actions[1],
+      // First frame to reach `complete` is the server-dealt runout (empty
+      // player_id); the `won` beat that follows shares the same frame.
+      {seq: 6, player_id: '', action: 'runout_step', amount: 0, timestamp: 3000, frame: actions[2].frame},
+      actions[2],
+      {seq: 7, player_id: 'p2', action: 'lost', amount: 0, timestamp: 3100, frame: actions[2].frame},
+      {seq: 8, player_id: 'p2', action: 'join', amount: 0, timestamp: 3200, frame: actions[2].frame},
+    ]}/>);
+    expect(screen.getByText('espiou as cartas')).toBeInTheDocument();
+
+    // …runout beat: label stands alone, no bold actor name.
+    await user.click(screen.getByRole('button', {name: 'Próxima ação'}));
+    await user.click(screen.getByRole('button', {name: 'Próxima ação'}));
+    expect(screen.getByText('Cartas restantes do board reveladas')).toBeInTheDocument();
+
+    // …the `won` beat survives past the first complete frame; `join` does not.
+    await user.click(screen.getByRole('button', {name: 'Próxima ação'}));
+    expect(screen.getByText('venceu')).toBeInTheDocument();
+    // …then the losing beat, and then the end — the next-hand `join` never
+    // entered the replay.
+    await user.click(screen.getByRole('button', {name: 'Próxima ação'}));
+    expect(screen.getByText('perdeu a mão')).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: 'Próxima ação'})).toBeDisabled();
+  });
+
+  test('timeline translates peek_cards, the board runout and the lost result', () => {
+    render(<ActionTimeline actions={[
+      {seq: 1, player_id: 'viewer', action: 'peek_cards', amount: 0, timestamp: 0},
+      {seq: 2, player_id: '', action: 'runout_step', amount: 0, timestamp: 0},
+      {seq: 3, player_id: 'p2', action: 'lost', amount: 0, timestamp: 0},
+      {seq: 4, player_id: 'viewer', action: 'request_exit', amount: 0, timestamp: 0},
+    ]} resolveName={id => id === 'viewer' ? 'Você' : 'Rival'}/>);
+    expect(screen.getByText('Espiou as cartas')).toBeInTheDocument();
+    expect(screen.getByText('Cartas restantes do board reveladas')).toBeInTheDocument();
+    expect(screen.getByText('Perdeu a mão')).toBeInTheDocument();
+    expect(screen.getByText('Pediu para sair da mesa')).toBeInTheDocument();
+  });
+
   // Issue #114: the transport was mouse-first — the buttons and the scrubber
   // were focusable, but nothing was bound on the replayer region itself.
   describe('keyboard transport', () => {

@@ -148,7 +148,7 @@ export type ServerMessage = {
 export type Action = (
   'post_big_blind' | 'escalate_blinds' | 'not_ready' | 'ready' | 'sit_out' | 'show_cards' | 'disconnect_sit_out' | 'join' |
   'leave' | 'keep_seat' | 'next_hand' | 'runout_step' | 'check' | 'fold' | 'call' | 'bet' | 'raise' | 'all_in' | 'won' | 'tie'
-  | 'set_run_it_twice' | 'chat' | 'reaction' | 'set_identity'
+  | 'lost' | 'peek_cards' | 'request_exit' | 'set_run_it_twice' | 'chat' | 'reaction' | 'set_identity'
   )
 
 export interface HandHistoryAction {

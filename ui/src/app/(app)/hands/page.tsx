@@ -29,7 +29,7 @@ import {MyHandSharesPanel} from '@/components/hands/MyHandSharesPanel';
 import {myRank} from '@/lib/api/gamification';
 import {
   ALL_TABLES, filterHands, groupHandsByDay, handTables, type HandsFilter, type HandsRow, loadedTotals,
-  NO_FILTER, type OutcomeFilter
+  NO_FILTER, type OutcomeFilter, shortTableId
 } from '@/lib/handsHistory';
 
 function formatDate(endedAtMs: number) {
@@ -86,7 +86,7 @@ const HandRow = memo(function HandRow({hand, mode}: { hand: HandItem; mode: Wall
     </div>
     <div className="hand-row-bottom">
       <span>{formatDate(hand.ended_at)}</span>
-      <span className="hand-row-table" title={hand.table_id}>Mesa {hand.table_id}</span>
+      <span className="hand-row-table" title={hand.table_id}>Mesa {shortTableId(hand.table_id)}</span>
       {/* Blind level of this hand (#75). 0/absent means the record predates the
           field: hide the marker rather than guess a stake. */}
       {Boolean(hand.big_blind) && <span className="hand-row-blinds">
@@ -261,9 +261,9 @@ export default function HandsHistory() {
             {value: ALL_TABLES, label: 'Todas as mesas'},
             ...tables.map(table => ({
               value: table.tableId,
-              // Full id, truncated by CSS: the last six characters of a table
-              // id name nothing a player recognizes.
-              label: `Mesa ${table.tableId} (${table.count})`,
+              // Head+tail of the id so the "(count)" suffix stays visible; a CSS
+              // trailing clip would eat it. Full id in the tooltip.
+              label: `Mesa ${shortTableId(table.tableId)} (${table.count})`,
               title: table.tableId
             }))
           ]}

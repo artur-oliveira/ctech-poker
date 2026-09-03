@@ -6212,8 +6212,8 @@ button.deck-grid-slot:hover {
     }
 }
 
-/* Table-filter chips carry a whole table id (#115); the label truncates rather
-   than pushing the row of chips past the shell. */
+/* Table-filter chips carry a head…tail table id (#115); this is only a safety
+   clip so an unexpectedly long label can't push the chip row past the shell. */
 .hands-filters .filter-tab {
     max-width: min(28ch, 70vw);
     overflow: hidden;
