@@ -1,23 +1,31 @@
 {
-  "//": "Lighthouse CI over the static export (Issue #60). `staticDistDir` makes LHCI serve out/ itself, so no dev server and no auth are involved: what it audits is the logged-out shell of each route, which is exactly what a first-time visitor on a slow connection gets. Category scores on a shared runner move by a few points between runs, so they are asserted as warnings; the resource budgets below are deterministic and are the hard gate. Budgets are pinned above the current measured first-load (max /table at ~1.2 MB of JS) so the gate starts green.",
+  "//": "Lighthouse CI over the static export (Issue #60). `staticDistDir` makes LHCI serve out/ itself, so no dev server and no auth are involved. Only API-free routes are audited: the (app) group calls the API on mount, and with no API in CI the liveness probe escalates and `navigateToUnavailable` sends the audit to /unavailable — which then 404s, because the export writes that page as out/unavailable.html while out/unavailable/ exists as an RSC-payload directory with no index.html. Auditing /lobby, /table or /hands here therefore measures a redirect, not the page. Per-route first-load JS for those routes is covered deterministically by `npm run bundle:check`, which needs no browser; what Lighthouse adds is real render metrics, and it can only get those where the page actually renders. Category scores on a shared runner move by a few points between runs, so they are asserted as warnings; the resource budgets below are deterministic and are the hard gate.",
   "ci": {
     "collect": {
       "staticDistDir": "out",
       "numberOfRuns": 1,
       "url": [
         "http://localhost/index.html",
-        "http://localhost/lobby.html",
-        "http://localhost/table.html",
-        "http://localhost/hands.html"
+        "http://localhost/poker-rules.html",
+        "http://localhost/guide.html"
       ],
       "settings": {
         "preset": "desktop",
         "budgets": [
           {
             "resourceSizes": [
-              {"resourceType": "script", "budget": 1400},
-              {"resourceType": "stylesheet", "budget": 400},
-              {"resourceType": "total", "budget": 3000}
+              {
+                "resourceType": "script",
+                "budget": 1400
+              },
+              {
+                "resourceType": "stylesheet",
+                "budget": 400
+              },
+              {
+                "resourceType": "total",
+                "budget": 3000
+              }
             ]
           }
         ]
@@ -26,12 +34,35 @@
     "assert": {
       "assertions": {
         "performance-budget": "error",
-        "categories:accessibility": ["warn", {"minScore": 0.9}],
-        "categories:performance": ["warn", {"minScore": 0.8}],
-        "categories:best-practices": ["warn", {"minScore": 0.9}],
-        "categories:seo": ["warn", {"minScore": 0.9}]
+        "categories:accessibility": [
+          "warn",
+          {
+            "minScore": 0.9
+          }
+        ],
+        "categories:performance": [
+          "warn",
+          {
+            "minScore": 0.8
+          }
+        ],
+        "categories:best-practices": [
+          "warn",
+          {
+            "minScore": 0.9
+          }
+        ],
+        "categories:seo": [
+          "warn",
+          {
+            "minScore": 0.9
+          }
+        ]
       }
     },
-    "upload": {"target": "filesystem", "outputDir": ".lighthouseci"}
+    "upload": {
+      "target": "filesystem",
+      "outputDir": ".lighthouseci"
+    }
   }
 }
