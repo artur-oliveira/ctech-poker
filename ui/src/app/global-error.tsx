@@ -2,6 +2,7 @@
 
 import {useEffect} from 'react';
 import {SystemState} from '@/components/SystemState';
+import {reportBoundaryError} from '@/lib/telemetry';
 
 /** Last-resort boundary for failures in the root layout/provider tree. Route
  * boundaries keep handling ordinary screen errors closer to their source. */
@@ -11,6 +12,7 @@ export default function GlobalError({error, reset}: {
 }) {
   useEffect(() => {
     console.error(error);
+    reportBoundaryError(error, 'global');
   }, [error]);
 
   return <html lang="pt-BR">

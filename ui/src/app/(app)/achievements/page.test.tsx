@@ -1,4 +1,5 @@
 import {fireEvent, render, screen, within} from '@testing-library/react';
+import {expectNoAxeViolations} from '@/test/axe';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import type {Achievement} from '@/lib/api/achievements';
 import Achievements from './page';
@@ -241,4 +242,12 @@ describe('achievements page', () => {
     render(<Achievements/>);
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
+
+  // Issue #60: an automated floor under the a11y intent in ui/CLAUDE.md — a new
+  // serious or critical axe violation on this route fails CI.
+  test('is axe-clean', async () => {
+    const {container} = render(<Achievements/>);
+    await expectNoAxeViolations(container);
+  });
+
 });

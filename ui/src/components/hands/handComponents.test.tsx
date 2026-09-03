@@ -110,6 +110,124 @@ describe('hand history components', () => {
     expect(screen.getByText('🍅')).toBeInTheDocument();
   });
   
+  // Issue #114: the transport was mouse-first — the buttons and the scrubber
+  // were focusable, but nothing was bound on the replayer region itself.
+  describe('keyboard transport', () => {
+    function replayer() {
+      render(<HandReplayer hand={hand} actions={actions} viewerId="viewer"/>);
+      const section = screen.getByRole('region', {name: 'Replay interativo da mão'});
+      section.focus();
+      return section;
+    }
+
+    test('advertises the shortcuts on the region', () => {
+      const section = replayer();
+      expect(section).toHaveAccessibleDescription(/barra de espaço reproduz ou pausa/);
+    });
+
+    test('steps forward and back with the arrow keys, clamped at both ends', () => {
+      const section = replayer();
+      expect(screen.getByText(/Ação 1 de 3/)).toBeInTheDocument();
+
+      fireEvent.keyDown(section, {key: 'ArrowLeft'});
+      expect(screen.getByText(/Ação 1 de 3/)).toBeInTheDocument();
+
+      fireEvent.keyDown(section, {key: 'ArrowRight'});
+      expect(screen.getByText(/Ação 2 de 3/)).toBeInTheDocument();
+      fireEvent.keyDown(section, {key: 'ArrowRight'});
+      fireEvent.keyDown(section, {key: 'ArrowRight'});
+      expect(screen.getByText(/Ação 3 de 3/)).toBeInTheDocument();
+
+      fireEvent.keyDown(section, {key: 'ArrowLeft'});
+      expect(screen.getByText(/Ação 2 de 3/)).toBeInTheDocument();
+    });
+
+    test('Home returns to the first action', () => {
+      const section = replayer();
+      fireEvent.keyDown(section, {key: 'ArrowRight'});
+      expect(screen.getByText(/Ação 2 de 3/)).toBeInTheDocument();
+      fireEvent.keyDown(section, {key: 'Home'});
+      expect(screen.getByText(/Ação 1 de 3/)).toBeInTheDocument();
+    });
+
+    test('space toggles play/pause and pauses what the arrows resume', () => {
+      const section = replayer();
+      fireEvent.keyDown(section, {key: ' '});
+      expect(screen.getByRole('button', {name: 'Pausar replay'})).toBeInTheDocument();
+      fireEvent.keyDown(section, {key: ' '});
+      expect(screen.getByRole('button', {name: 'Reproduzir replay'})).toBeInTheDocument();
+
+      fireEvent.keyDown(section, {key: ' '});
+      expect(screen.getByRole('button', {name: 'Pausar replay'})).toBeInTheDocument();
+      fireEvent.keyDown(section, {key: 'ArrowRight'});
+      expect(screen.getByRole('button', {name: 'Reproduzir replay'})).toBeInTheDocument();
+    });
+
+    test('space restarts a finished replay instead of resuming at the end', () => {
+      const section = replayer();
+      fireEvent.keyDown(section, {key: 'ArrowRight'});
+      fireEvent.keyDown(section, {key: 'ArrowRight'});
+      expect(screen.getByText(/Ação 3 de 3/)).toBeInTheDocument();
+      fireEvent.keyDown(section, {key: ' '});
+      expect(screen.getByText(/Ação 1 de 3/)).toBeInTheDocument();
+    });
+
+    test('ignores OS auto-repeat, unbound keys and the scrubber\'s own keys', () => {
+      const section = replayer();
+      fireEvent.keyDown(section, {key: 'ArrowRight', repeat: true});
+      fireEvent.keyDown(section, {key: 'End'});
+      expect(screen.getByText(/Ação 1 de 3/)).toBeInTheDocument();
+
+      // The range input owns its arrows; the region must not step twice.
+      fireEvent.keyDown(section.querySelector('input[type="range"]')!, {key: 'ArrowRight'});
+      expect(screen.getByText(/Ação 1 de 3/)).toBeInTheDocument();
+    });
+
+    test('leaves space to a focused button so activation is not stolen', () => {
+      replayer();
+      fireEvent.keyDown(screen.getByRole('button', {name: 'Voltar ao início'}), {key: ' '});
+      expect(screen.getByRole('button', {name: 'Reproduzir replay'})).toBeInTheDocument();
+      // …but the arrows still work from there.
+      fireEvent.keyDown(screen.getByRole('button', {name: 'Voltar ao início'}), {key: 'ArrowRight'});
+      expect(screen.getByText(/Ação 2 de 3/)).toBeInTheDocument();
+    });
+  });
+
+  test('cycles the playback speed through 1x, 2x and 0,5x', async () => {
+    const user = userEvent.setup();
+    render(<HandReplayer hand={hand} actions={actions} viewerId="viewer"/>);
+    const speed = screen.getByRole('button', {name: /Velocidade 1 vezes/});
+    expect(speed).toHaveTextContent('1×');
+    await user.click(speed);
+    expect(screen.getByRole('button', {name: /Velocidade 2 vezes/})).toHaveTextContent('2×');
+    await user.click(screen.getByRole('button', {name: /Velocidade 2 vezes/}));
+    expect(screen.getByRole('button', {name: /Velocidade 0,5 vezes/})).toHaveTextContent('0,5×');
+  });
+
+  // Issue #114: reduced motion suppresses the card-reveal animation that made
+  // the cadence readable, so the step must slow down to compensate.
+  test('slows every step to a flat, unhurried beat under reduced motion', () => {
+    vi.useFakeTimers();
+    const original = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes('reduce'), media: query, onchange: null,
+      addListener: vi.fn(), removeListener: vi.fn(),
+      addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+    })) as typeof window.matchMedia;
+    try {
+      render(<HandReplayer hand={hand} actions={actions} viewerId="viewer"/>);
+      fireEvent.click(screen.getByRole('button', {name: 'Reproduzir replay'}));
+      // The animated build would have advanced at 900ms / 1700ms.
+      act(() => void vi.advanceTimersByTime(1_800));
+      expect(screen.getByText(/Ação 1 de 3/)).toBeInTheDocument();
+      act(() => void vi.advanceTimersByTime(700));
+      expect(screen.getByText(/Ação 2 de 3/)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+      window.matchMedia = original;
+    }
+  });
+
   test('shows an explicit fallback when old hands have no replay frames', () => {
     render(<HandReplayer hand={hand} actions={[]} viewerId="viewer"/>);
     expect(screen.getByText(/antes dos frames de replay/)).toBeInTheDocument();
@@ -215,7 +333,7 @@ describe('hand history components', () => {
     await user.click(screen.getByRole('button', {name: 'Reproduzir replay'}));
     expect(screen.getByRole('button', {name: 'Pausar replay'})).toBeInTheDocument();
     await user.click(screen.getByRole('button', {name: 'Pausar replay'}));
-    await user.click(screen.getByRole('button', {name: 'Velocidade 1 vezes'}));
-    expect(screen.getByRole('button', {name: 'Velocidade 2 vezes'})).toBeInTheDocument();
+    await user.click(screen.getByRole('button', {name: /Velocidade 1 vezes/}));
+    expect(screen.getByRole('button', {name: /Velocidade 2 vezes/})).toBeInTheDocument();
   });
 });

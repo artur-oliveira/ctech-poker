@@ -2,6 +2,7 @@
 
 import {useEffect} from 'react';
 import {SystemState} from '@/components/SystemState';
+import {reportBoundaryError} from '@/lib/telemetry';
 import {ApiError, redirectOnServiceUnavailable} from '@/lib/api/client';
 
 export default function ErrorPage({error, reset}: { error: Error & { digest?: string }; reset: () => void }) {
@@ -10,6 +11,7 @@ export default function ErrorPage({error, reset}: { error: Error & { digest?: st
 
   useEffect(() => {
     console.error(error);
+    reportBoundaryError(error, 'route');
     // A render that threw a 503 is the same outage the API interceptor already
     // knows how to handle: hand it to the dedicated flow, which saves the
     // return path and navigates to the full /unavailable screen.

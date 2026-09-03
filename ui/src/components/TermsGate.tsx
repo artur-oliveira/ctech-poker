@@ -75,7 +75,9 @@ export function TermsGate({children}: { children: React.ReactNode }) {
   if (me.isError) return <div className="terms-gate">
     <div>
       <h1>Não foi possível carregar seu perfil</h1><p>Tente novamente em alguns instantes.</p>
-      <Button variant="outline" onClick={() => void me.refetch()}>Tentar novamente</Button>
+      <Button variant="outline" loading={me.isFetching} onClick={() => void me.refetch()}>
+        {me.isFetching ? 'Tentando…' : 'Tentar novamente'}
+      </Button>
     </div>
   </div>;
   if (!me.data?.poker_terms_accepted) return <div className="terms-gate">
@@ -89,7 +91,7 @@ export function TermsGate({children}: { children: React.ReactNode }) {
         href={POKER_PRIVACY_URL} target="_blank"
         rel="noreferrer">Política de Privacidade do CTech Poker</a>.</span></label>
       {accept.isError && <p className="form-error">Não foi possível registrar o aceite.</p>}
-      <Button className="w-full" size="lg" disabled={!checked || accept.isPending}
+      <Button className="w-full" size="lg" disabled={!checked} loading={accept.isPending}
               onClick={() => accept.mutate()}>{accept.isPending ? 'Registrando…' : 'Aceitar e continuar'}</Button>
     </div>
   </div>;

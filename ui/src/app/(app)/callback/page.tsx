@@ -17,6 +17,10 @@ type CallbackFailure = {
 function Callback() {
   const p = useSearchParams(), r = useRouter();
   const [failure, setFailure] = useState<CallbackFailure | null>(null);
+  // The failure screen stays on screen during a manual retry — replacing it
+  // with the neutral "Autenticando…" shell would throw away the reference code
+  // the player may be reading out. The button carries the progress instead.
+  const [retrying, setRetrying] = useState(false);
   const started = useRef(false);
   const codeRef = useRef(''), stateRef = useRef('');
 
@@ -26,6 +30,7 @@ function Callback() {
       setUsername(x.username);
       r.replace(x.returnTo || '/lobby');
     }).catch((error: unknown) => {
+      setRetrying(false);
       const kind = error instanceof OAuthExchangeError ? error.kind : 'transient';
       // An IdP-down 5xx isn't this page's problem to retry — the same
       // full-bleed outage screen a dead API gets is more honest than looping
@@ -72,10 +77,10 @@ function Callback() {
     <main className="loading-screen">
       <h1>Não foi possível confirmar seu login</h1>
       <p role="alert">Isso costuma ser uma instabilidade passageira, não o fim do seu código de acesso. Tentar novamente deve resolver.</p>
-      <Button onClick={() => {
-        setFailure(null);
+      <Button loading={retrying} onClick={() => {
+        setRetrying(true);
         attempt();
-      }}>Tentar novamente</Button>
+      }}>{retrying ? 'Tentando…' : 'Tentar novamente'}</Button>
       <Button variant="ghost" render={<Link href="/"/>}>Voltar ao início</Button>
       <p>Código de referência: {failure.correlationId}</p>
     </main>

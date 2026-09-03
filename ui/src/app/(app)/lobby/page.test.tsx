@@ -1,4 +1,5 @@
 import {render, screen, within} from '@testing-library/react';
+import {expectNoAxeViolations} from '@/test/axe';
 import {describe, expect, test, vi} from 'vitest';
 import Lobby from './page';
 vi.mock('@/lib/mockConfig', () => ({USE_MOCK: true}));
@@ -35,4 +36,12 @@ describe('lobby page', () => {
     expect(screen.queryByRole('button', {name: /Recompensa Diária/})).not.toBeInTheDocument();
     expect(await screen.findByText('mock-controls')).toBeInTheDocument();
   });
+
+  // Issue #60: an automated floor under the a11y intent in ui/CLAUDE.md — a new
+  // serious or critical axe violation on this route fails CI.
+  test('is axe-clean', async () => {
+    const {container} = render(<Lobby/>);
+    await expectNoAxeViolations(container);
+  });
+
 });

@@ -28,6 +28,12 @@ exists, but the backend gate is off by default — never ship UI that assumes re
 10. **Every new feature ships with its tests**, covering the error, empty and disabled paths, not
     only the happy one. Never lower a coverage threshold to land a change — write the test. See
     `docs/testing.md`.
+11. **Automated a11y and size gates.** `src/test/axe.ts`'s `expectNoAxeViolations(container)` runs axe-core in jsdom
+    and fails on a new `serious`/`critical` violation; it is asserted in the six main route tests and
+    `recoveryA11y.test.tsx`. `npm run bundle:check` compares per-route first-load JS in `out/` against
+    `bundle-budget.json` (re-pin with `npm run bundle:pin`, in the same commit as the change that moved it) and proves
+    the dev mock runtime is off every route's critical path. `lighthouserc.json` audits the static export. All three run
+    in the `quality` job of `.github/workflows/frontend.yml`.
 
 11. **The table page composes, it does not derive.** `app/(app)/table/page.tsx` wires
     `useTableSession`/`useTableRemoval`, `useTableOutcome`, `useTableOverlays`, `actionState` and

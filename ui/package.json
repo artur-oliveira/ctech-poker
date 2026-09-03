@@ -13,7 +13,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "cards:variants": "node --experimental-strip-types scripts/generate-card-variants.ts"
+    "cards:variants": "node --experimental-strip-types scripts/generate-card-variants.ts",
+    "bundle:check": "node scripts/check-bundle-budget.mjs",
+    "bundle:pin": "node scripts/check-bundle-budget.mjs --update"
   },
   "dependencies": {
     "@aoctech/auth-client": "^1.1.0",

@@ -1,4 +1,5 @@
 import {fireEvent, render, screen} from '@testing-library/react';
+import {expectNoAxeViolations} from '@/test/axe';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import Home from './page';
 
@@ -75,4 +76,12 @@ describe('landing page', () => {
       'href', 'https://accounts.aoctech.app/products/poker-privacy'
     );
   });
+
+  // Issue #60: an automated floor under the a11y intent in ui/CLAUDE.md — a new
+  // serious or critical axe violation on this route fails CI.
+  test('is axe-clean', async () => {
+    const {container} = render(<Home/>);
+    await expectNoAxeViolations(container);
+  });
+
 });

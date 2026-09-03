@@ -37,12 +37,16 @@ export default function HandsGuide() {
         image: {src: '/guide/hand-replay.webp', alt: 'Replay de uma mão com mesa reconstruída, controles de reprodução e ação atual'},
         body: <><GuideSteps><li><span>No detalhe da mão, escolha <b>Assistir replay</b>. Ele aparece quando a mão tem quadros gravados.</span></li>
           <li><span>Use reproduzir, pausar, ação anterior, próxima ação ou voltar ao início.</span></li>
-          <li><span>Alterne a velocidade entre 1× e 2× para correr até o desfecho ou acompanhar cada detalhe.</span></li>
+          <li><span>Alterne a velocidade entre 1×, 2× e 0,5× para correr até o desfecho ou acompanhar cada detalhe.</span></li>
+          <li><span>Pelo teclado, com o replayer em foco: <b>barra de espaço</b> reproduz ou pausa,
+            <b>seta esquerda</b> e <b>seta direita</b> andam uma ação, e <b>Home</b> volta ao início.</span></li>
           <li><span>As reações enviadas naquele momento reaparecem junto com a ação que as provocou.</span></li></GuideSteps>
           <p>O cabeçalho mostra o <b>big blind</b> daquela mão ao lado do pote, para o tamanho das fichas fazer sentido
             em qualquer stake. Mãos antigas sem o valor registrado usam o big blind do lance inicial ou 25 como
             referência.</p>
-          <p>O replayer abre na mesma aba de propósito: o link de volta leva direto ao detalhe da mão.</p></>
+          <p>O replayer abre na mesma aba de propósito: o link de volta leva direto ao detalhe da mão.</p>
+          <p>Se o seu sistema estiver com <b>animações reduzidas</b>, o replay não corre: cada ação fica mais tempo na
+            tela, no lugar da animação que marcava o ritmo.</p></>
       },
       {
         id: 'fair', title: 'Verificar a prova de integridade', summary: 'A checagem roda no seu navegador; nenhum selo pronto vem do servidor.',

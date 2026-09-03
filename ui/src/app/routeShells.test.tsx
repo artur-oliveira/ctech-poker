@@ -181,7 +181,9 @@ describe('system state routes', () => {
   test('the maintenance page offers a health-checked retry and stays out of the index', () => {
     render(<UnavailablePage/>);
     expect(screen.getByText('503')).toBeInTheDocument();
-    expect(screen.getByRole('button', {name: /Tentar novamente/})).toBeInTheDocument();
+    // The screen probes liveness on mount (Issue #105), so the retry control
+    // opens already reporting the check in flight.
+    expect(screen.getByRole('button', {name: /Verificando/})).toHaveAttribute('aria-busy', 'true');
     expect(screen.getByRole('button', {name: /Ir para o início/})).toHaveAttribute('href', '/');
     expect(unavailableMetadata.robots).toEqual({index: false, follow: false});
   });

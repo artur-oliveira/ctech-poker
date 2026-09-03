@@ -1,10 +1,10 @@
 'use client';
-import {useId, useState} from 'react';
+import {useState} from 'react';
 import {Check, Copy, Search, UserPlus} from 'lucide-react';
 import {useQuery} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
+import {Field} from '@/components/ui/field';
 import {Input} from '@/components/ui/input';
-import {Label} from '@/components/ui/label';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {getMe} from '@/lib/api/player';
 import {lookupFriendCode, type SocialPlayer} from '@/lib/api/social';
@@ -15,7 +15,6 @@ import {playerName} from '@/lib/utils';
 /** Discovery is exact-code only: there is no fuzzy search by display name, so
  * a name can never be used to enumerate accounts. */
 export function FriendCodeLookup({actions}: { actions: SocialActionState }) {
-  const inputId = useId();
   const {data: me} = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
   const [code, setCode] = useState('');
   const [copied, setCopied] = useState(false);
@@ -59,19 +58,17 @@ export function FriendCodeLookup({actions}: { actions: SocialActionState }) {
         {copied ? <Check aria-hidden="true"/> : <Copy aria-hidden="true"/>}
       </Button>
     </div>
-    <div className="friend-code-search">
-      <Label htmlFor={inputId}>Código de um amigo</Label>
-      <div className="friend-code-search-row">
-        <Input id={inputId} value={code} placeholder="PKR-XXXX-XXXX-XXXX" autoComplete="off"
+    <Field className="friend-code-search" label="Código de um amigo" error={error}
+           description="O nome de exibição não é único; só o código encontra alguém.">
+      {control => <div className="friend-code-search-row">
+        <Input {...control} value={code} placeholder="PKR-XXXX-XXXX-XXXX" autoComplete="off"
                onChange={event => setCode(event.target.value)}
                onKeyDown={event => event.key === 'Enter' && void search()}/>
-        <Button type="button" disabled={searching || !code.trim()} onClick={() => void search()}>
-          <Search aria-hidden="true"/> {searching ? 'Buscando…' : 'Buscar'}
+        <Button type="button" loading={searching} disabled={!code.trim()} onClick={() => void search()}>
+          {!searching && <Search aria-hidden="true"/>} {searching ? 'Buscando…' : 'Buscar'}
         </Button>
-      </div>
-      <small>O nome de exibição não é único; só o código encontra alguém.</small>
-    </div>
-    {error && <p className="social-error" role="alert">{error}</p>}
+      </div>}
+    </Field>
     {found && <div className="friend-code-result">
         <PlayerAvatar name={found.name} avatarUrl={found.avatar_url} size={40}/>
         <b>{playerName(found.player_id, undefined, found.name)}</b>
