@@ -12,10 +12,12 @@ backend gate (`REAL_MONEY_ENABLED`) is off by default.
   Cloudflare Worker's static assets (`html_handling: auto-trailing-slash`,
   `not_found_handling: 404-page` — no route manifest to publish). `npm run build` also runs
   `scripts/strip-inline-scripts.mjs`, which externalizes the export's inline scripts so the
-  deployed `script-src` needs no `'unsafe-inline'`. The policy separately allows Cloudflare's
-  edge-injected Web Analytics beacon and pins its inline bootstrap by SHA-256; automatic analytics
-  posts to the same-origin `/cdn-cgi/rum` endpoint. `images: {unoptimized: true}` — there is no Next
-  image optimizer and no server route at runtime.
+  application's own scripts need no `'unsafe-inline'`. The deployed policy still includes it because
+  Cloudflare's edge services modify the finished HTML with a per-request inline challenge bootstrap
+  that cannot carry an application-generated nonce or a stable hash. Web Analytics loads its
+  versioned beacon from `static.cloudflareinsights.com` and posts to the same-origin `/cdn-cgi/rum`
+  endpoint. `images: {unoptimized: true}` — there is no Next image optimizer and no server route at
+  runtime.
 - Real-time: **`@aoctech/ws-client`** with **binary protobuf** frames — `src/lib/ws/utils.ts`
   encodes/decodes against `src/lib/api/proto/poker.ts` (ts-proto, generated from
   `../proto/poker.proto`). Not JSON.
