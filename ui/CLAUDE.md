@@ -26,6 +26,24 @@ off by default — do not build UI that assumes real money is on.
 - **Landmarks and headings survive every state.** Loading, empty, error and invalid-link branches
   render inside the same `main` with a real `h1` as the success branch — the recovery vocabulary is
   `SystemState` (whole-app) or `RecoveryState` (in-app), not a bare `.form-error` line.
+- **The table page is a composition, not a component.** `app/(app)/table/page.tsx` wires hooks
+  together and renders; it holds no derivation of its own. Server reads live in
+  `lib/hooks/useTableSession.ts` (plus `useTableRemoval` for the removed-frame reaction and the
+  leave recap), showdown bookkeeping in `lib/hooks/useTableOutcome.ts`, the asides/dialogs/reaction
+  cooldown in `lib/hooks/useTableOverlays.ts`, the action-bar derivation in `lib/tableActions.ts`,
+  and the whole banner assembly in `buildHandOutcome` (`lib/tableOutcome.ts`). Extend the hook that
+  owns the concern; do not grow the page back. See
+  `docs/2026-09-02-table-module-decomposition.md`.
+- **One clock for the whole table.** `lib/hooks/useSharedTicker.ts` runs a single `setInterval` at
+  the shortest cadence anyone asked for and notifies each subscriber on its own period. Every
+  countdown goes through `useLiveNow` (which subscribes to it) — the action bar, each timed seat,
+  the reduced-motion countdown, `RealityCheck`, `IdleWarning`. Never arm a bare `setInterval` for a
+  countdown; `tickerIntervalCount()` exists so "at most one interval during a turn" stays
+  assertable.
+- **Seats publish their own position.** `lib/seatRects.ts` is where `Seat` registers its element
+  and where the reaction layer reads seat centres from. Do not locate a seat with a DOM query, and
+  re-measure on `resize`/`orientationchange` rather than caching a rect for the length of an
+  animation — the stage swaps between oval and portrait-ring layouts mid-flight.
 - **Two realtime hooks, no more.** `lib/hooks/useTableRealtime.ts` owns the table surface;
   `lib/hooks/useLobbyRealtime.ts` owns the lobby/user gateway (rooms **and** all social pushes).
   Extend them rather than opening a third socket. `useLobbyRealtime` is mounted once, by
@@ -41,8 +59,12 @@ off by default — do not build UI that assumes real money is on.
   is safe because the server rejects these before commit, so no idempotency guard was written.
   Retries are capped at `MAX_ACTION_RETRIES` and back off past the resync scheduled for that same
   id; only an exhausted budget reaches `setLastActionError`. Any new command with an `action_id` the
-  server echoes belongs on `emitAux`, not bare `emit`. See
-  `docs/plans/2026-08-27-table-load-transaction-conflict.md`.
+  server echoes belongs on `emitAux`, not bare `emit`. The vocabulary itself —
+  `RESYNC_ERROR_CODES`, `TERMINAL_ERROR_CODES`, `MAX_ACTION_RETRIES`, the timeouts, the
+  `auxRetryDelayMs` backoff and the player-facing copy — lives in `lib/tableResilience.ts` and is
+  unit-tested there; the ref-driven state machine that uses it stays in `useTableRealtime`.
+  Snapshot-transition narration (`describeSnapshot`, `playSoundForTransition`) is
+  `lib/tableNarration.ts`. See `docs/plans/2026-08-27-table-load-transaction-conflict.md`.
 - **Press-and-hold is one hook.** `lib/hooks/useHoldRepeat.ts` owns the accelerating repeat used by
   the bet stepper's `+`/`−` buttons *and* by the `ArrowLeft`/`ArrowRight` shortcuts, so touch and
   keyboard ramp identically. OS key auto-repeat stays ignored (`isBetAdjustKey` drops
