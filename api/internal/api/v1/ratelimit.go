@@ -54,12 +54,10 @@ func (v valkeyCounter) incrAndBoundTTL(ctx context.Context, key string, windowSe
 // backend uses a per-instance mutex map. It stops a script from spamming room
 // creation or sandbox chip spins (M6/S2).
 type RateLimiter struct {
-	// incr is nil unless the backend is Redis. It returns key's hit count in
-	// the current window, which is what makes the counter fleet-wide rather
-	// than per-instance (#43). Tests substitute a shared fake to simulate two
-	// API instances counting against one player's budget.
-	incr   func(ctx context.Context, key string) (int64, error)
-	client redisCounter // nil unless the backend is Redis
+	// client is nil unless the backend is Redis. Counting there is what makes
+	// the budget fleet-wide rather than per-instance (#43); tests substitute a
+	// fake to simulate two API instances counting against one player's budget.
+	client redisCounter
 	limit  int
 	window time.Duration
 
@@ -77,35 +75,15 @@ type rateWindow struct {
 func NewRateLimiter(backend cache.Backend, limit int, window time.Duration) *RateLimiter {
 	rl := &RateLimiter{limit: limit, window: window, mem: make(map[string]*rateWindow)}
 	if rb, ok := backend.(*cache.RedisBackend); ok {
-		rl.incr = redisIncr(rb.Client(), window)
 		rl.client = valkeyCounter{client: rb.Client()}
 	}
 	return rl
 }
 
-func redisIncr(client valkey.Client, window time.Duration) func(context.Context, string) (int64, error) {
-	return func(ctx context.Context, key string) (int64, error) {
-		n, err := client.Do(ctx, client.B().Incr().Key(key).Build()).ToInt64()
-		if err != nil {
-			return 0, err
-		}
-		if n == 1 {
-			// First hit in this window: bound the key's lifetime to one window so
-			// the counter eventually resets without manual cleanup.
-			client.Do(ctx, client.B().Expire().Key(key).Seconds(int64(window.Seconds())).Build())
-		}
-		return n, nil
-	}
-}
-
 // Allow reports whether key is still within its window. Safe for concurrent use.
 func (r *RateLimiter) Allow(ctx context.Context, key string) (bool, error) {
-	if r.incr != nil {
-		n, err := r.incr(ctx, key)
-		if err != nil {
-			return false, err
-		}
-		return n <= int64(r.limit), nil
+	if r.client != nil {
+		return r.allowRedis(ctx, key)
 	}
 	return r.allowMem(key), nil
 }

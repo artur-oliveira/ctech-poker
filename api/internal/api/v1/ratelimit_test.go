@@ -18,7 +18,7 @@ type sharedCounter struct {
 
 func newSharedCounter() *sharedCounter { return &sharedCounter{counts: map[string]int64{}} }
 
-func (s *sharedCounter) incr(_ context.Context, key string) (int64, error) {
+func (s *sharedCounter) incrAndBoundTTL(_ context.Context, key string, _ int64) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.err != nil {
@@ -31,8 +31,9 @@ func (s *sharedCounter) incr(_ context.Context, key string) (int64, error) {
 // instance builds a limiter wired to this shared counter, i.e. one more
 // process in the fleet.
 func (s *sharedCounter) instance(limit int) *RateLimiter {
-	return &RateLimiter{incr: s.incr, limit: limit, window: time.Second, mem: map[string]*rateWindow{}}
+	return &RateLimiter{client: s, limit: limit, window: time.Second, mem: map[string]*rateWindow{}}
 }
+
 // fakeRedisCounter is an in-memory stand-in for redisCounter that models
 // Redis key/TTL semantics closely enough to exercise allowRedis: INCR
 // creating/bumping a counter, and a key that (for whatever reason) carries no
