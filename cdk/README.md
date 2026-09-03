@@ -73,7 +73,8 @@ Go Lambdas are bundled by `lib/bundle.ts` (`localGoBundling` — local `go build
   - *Instance-type diversification* was missing: `HaproxyEc2Service`'s
     `MixedInstancesPolicy` carried a single launch template with no
     `LaunchTemplateOverrides`, so the ASG only ever bid on one spot pool
-    (`t4g.nano`). `api-stack.ts` now adds an L1 override
+    (`t4g.nano`). `api-stack.ts` now uses the construct's public
+    `spot.instanceTypes` option
     (`MixedInstancesPolicy.LaunchTemplate.Overrides`, not exposed by the
     shared construct's props — same "own the override locally" pattern as the
     private-IPv4 launch-template override below) listing
