@@ -17,6 +17,13 @@ import (
 const (
 	tablePlayerProfiles = "poker_player_profiles"
 	friendCodeIndex     = "gsi_friend_code"
+
+	// MaxBatchProfileIDs is the largest player-id set GetMany accepts in one
+	// call — DynamoDB's BatchGetItem caps a single RequestItems entry at 100
+	// keys, so a caller with a larger set (e.g. read-time avatar/name
+	// resolution over a big hand-history page) must chunk into batches of at
+	// most this size rather than pass them all through in one call.
+	MaxBatchProfileIDs = 100
 )
 
 var ErrFriendCodeCollision = errors.New("player: friend code collision")
@@ -164,7 +171,7 @@ func (s *Store) GetMany(ctx context.Context, userIDs []string) (map[string]Playe
 	if len(userIDs) == 0 {
 		return result, nil
 	}
-	if len(userIDs) > 100 {
+	if len(userIDs) > MaxBatchProfileIDs {
 		return nil, fmt.Errorf("player: batch profile limit exceeded")
 	}
 	keys := make([]map[string]types.AttributeValue, 0, len(userIDs))

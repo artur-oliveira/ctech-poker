@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/achievements"
+	"gopkg.aoctech.app/poker/api/internal/config"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/reports"
@@ -18,6 +19,12 @@ import (
 )
 
 type mockHistoryReader struct{}
+
+// fixtureEndedAtMs is an epoch-milliseconds timestamp (13 digits, well above
+// 1e12) used to assert every hand endpoint passes sessionlog.HandItem's
+// EndedAt straight through, in the same unit, with no per-endpoint
+// conversion (#74).
+const fixtureEndedAtMs int64 = 1_700_000_000_000
 
 type mockAchievementReader struct {
 	all []achievements.PlayerAchievementProgress
@@ -42,13 +49,13 @@ func (m *mockHistoryReader) ListSessions(_ context.Context, playerID string, _ i
 }
 
 func (m *mockHistoryReader) ListHands(_ context.Context, playerID, mode string, _ int, _ map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error) {
-	return []sessionlog.HandItem{{PK: playerID, HandID: "h-1", NetChange: 50}}, nil, nil
+	return []sessionlog.HandItem{{PK: playerID, HandID: "h-1", NetChange: 50, EndedAt: fixtureEndedAtMs}}, nil, nil
 }
 func (m *mockHistoryReader) ListHandsByTable(_ context.Context, playerID, mode, tableID string, _ int, _ map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error) {
-	return []sessionlog.HandItem{{PK: playerID, HandID: "h-1", NetChange: 50, TableID: tableID}}, nil, nil
+	return []sessionlog.HandItem{{PK: playerID, HandID: "h-1", NetChange: 50, TableID: tableID, EndedAt: fixtureEndedAtMs}}, nil, nil
 }
 func (m *mockHistoryReader) GetHand(_ context.Context, playerID, mode, handID string) (*sessionlog.HandItem, error) {
-	return &sessionlog.HandItem{PK: playerID, HandID: handID, NetChange: 50}, nil
+	return &sessionlog.HandItem{PK: playerID, HandID: handID, NetChange: 50, EndedAt: fixtureEndedAtMs}, nil
 }
 
 func TestPlayerHistoryEndpoints(t *testing.T) {
@@ -141,6 +148,36 @@ func (s *fakePlayerStore) SetFavoriteReactions(_ context.Context, id string, fav
 func (s *fakePlayerStore) ReportAvatar(context.Context, string, string) error {
 	s.avatarReports++
 	return nil
+}
+
+// fakeMultiPlayerStore backs distinct profiles per player id (unlike
+// fakePlayerStore's single shared profile) so opponent-avatar-resolution
+// tests can exercise several opponents in one hand, some cleared/missing and
+// some not, the way real ClearAvatar callers see it. Embedding
+// fakePlayerStore supplies the write-path methods the profileStore interface
+// still requires but these tests don't exercise.
+type fakeMultiPlayerStore struct {
+	fakePlayerStore
+	profiles map[string]player.PlayerProfile
+}
+
+func (s *fakeMultiPlayerStore) Get(_ context.Context, id string) (*player.PlayerProfile, error) {
+	if profile, ok := s.profiles[id]; ok {
+		profile.UserID = id
+		return &profile, nil
+	}
+	return nil, nil
+}
+
+func (s *fakeMultiPlayerStore) GetMany(_ context.Context, ids []string) (map[string]player.PlayerProfile, error) {
+	out := make(map[string]player.PlayerProfile, len(ids))
+	for _, id := range ids {
+		if profile, ok := s.profiles[id]; ok {
+			profile.UserID = id
+			out[id] = profile
+		}
+	}
+	return out, nil
 }
 
 func TestLegacyAvatarReportAlsoCreatesModerationQueueItem(t *testing.T) {
@@ -397,6 +434,64 @@ func TestAchievementsSummaryReturnsFullState(t *testing.T) {
 	}
 }
 
+// TestHandEndedAtIsEpochMillisecondsEverywhere locks down the unit fix for
+// #74: every hand-bearing endpoint — the hand list, hand-by-id, and the
+// public showcase's best_hand — must emit sessionlog.HandItem.EndedAt
+// unchanged, in epoch milliseconds. A regression that divides/multiplies by
+// 1000 on only one of these endpoints (the historical bug) fails this test.
+func TestHandEndedAtIsEpochMillisecondsEverywhere(t *testing.T) {
+	app := fiber.New()
+	auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "user-123"); return c.Next() }
+	store := &fakePlayerStore{profile: player.PlayerProfile{ShowcasePublic: true}}
+	RegisterPlayers(app.Group("/v1.0"), auth, player.NewService(store), &mockHistoryReader{},
+		mockAchievementReader{}, nil, nil, nil, nil)
+
+	decodeEndedAt := func(t *testing.T, path string, dig func(map[string]json.RawMessage) json.RawMessage) int64 {
+		t.Helper()
+		resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, path, nil))
+		if err != nil || resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("GET %s: status = %d, err = %v", path, resp.StatusCode, err)
+		}
+		var body map[string]json.RawMessage
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatalf("GET %s: decode: %v", path, err)
+		}
+		raw := dig(body)
+		var endedAt int64
+		if err := json.Unmarshal(raw, &endedAt); err != nil {
+			t.Fatalf("GET %s: ended_at not a bare int64 (%s): %v", path, raw, err)
+		}
+		return endedAt
+	}
+
+	t.Run("GET /players/me/hand/:id", func(t *testing.T) {
+		got := decodeEndedAt(t, "/v1.0/players/me/hand/h-1", func(b map[string]json.RawMessage) json.RawMessage {
+			return b["ended_at"]
+		})
+		if got != fixtureEndedAtMs {
+			t.Fatalf("ended_at = %d, want %d (ms)", got, fixtureEndedAtMs)
+		}
+	})
+
+	t.Run("GET /players/:playerId/showcase best_hand", func(t *testing.T) {
+		resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/v1.0/players/user-123/showcase", nil))
+		if err != nil || resp.StatusCode != fiber.StatusOK {
+			t.Fatalf("status = %d, err = %v", resp.StatusCode, err)
+		}
+		var body struct {
+			BestHand struct {
+				EndedAt int64 `json:"ended_at"`
+			} `json:"best_hand"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.BestHand.EndedAt != fixtureEndedAtMs {
+			t.Fatalf("best_hand.ended_at = %d, want %d (ms)", body.BestHand.EndedAt, fixtureEndedAtMs)
+		}
+	})
+}
+
 func TestShowcasePlaystyleRequiresOptInAndPublicSample(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -434,4 +529,107 @@ func TestShowcasePlaystyleRequiresOptInAndPublicSample(t *testing.T) {
 			}
 		})
 	}
+}
+
+// opponentHandReader is a sessionLogReader stub whose ListHands/GetHand
+// return a fixed hand carrying the opponents fixture below, so
+// TestHandHistoryDropsStaleOpponentAvatar and TestHandByIDDropsStaleOpponentAvatar
+// can drive the real handHistory/handByID handlers end to end.
+type opponentHandReader struct{ mockHistoryReader }
+
+func opponentFixtureHand(playerID string) sessionlog.HandItem {
+	return sessionlog.HandItem{
+		PK: playerID, HandID: "h-1", NetChange: 50,
+		Opponents: []sessionlog.OpponentSummary{
+			{PlayerID: "still-has-avatar", Name: "Ainda Tem", AvatarURL: "https://cdn.example.com/av/still-has-avatar/1.jpg"},
+			{PlayerID: "cleared-avatar", Name: "Limpou o Avatar", AvatarURL: "https://cdn.example.com/av/cleared-avatar/1.jpg"},
+			{PlayerID: "deleted-player", Name: "Sumiu", AvatarURL: "https://cdn.example.com/av/deleted-player/1.jpg"},
+		},
+	}
+}
+
+func (m *opponentHandReader) ListHands(_ context.Context, playerID, _ string, _ int, _ map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error) {
+	return []sessionlog.HandItem{opponentFixtureHand(playerID)}, nil, nil
+}
+
+func (m *opponentHandReader) GetHand(_ context.Context, playerID, _, handID string) (*sessionlog.HandItem, error) {
+	hand := opponentFixtureHand(playerID)
+	hand.HandID = handID
+	return &hand, nil
+}
+
+// newOpponentAvatarPlayers seeds a live profile for "still-has-avatar" and
+// leaves "cleared-avatar" present but avatar-less (the post-ClearAvatar
+// shape: no avatar_key) — "deleted-player" is absent from the store
+// entirely, covering a profile that no longer resolves at all.
+func newOpponentAvatarPlayers() *player.Service {
+	return player.NewService(&fakeMultiPlayerStore{profiles: map[string]player.PlayerProfile{
+		"still-has-avatar": {AvatarKey: "av/still-has-avatar/2.jpg", AvatarVersion: 2},
+		"cleared-avatar":   {AvatarVersion: 1},
+	}})
+}
+
+func assertNoStaleAvatars(t *testing.T, hand sessionlog.HandItem) {
+	t.Helper()
+	if len(hand.Opponents) != 3 {
+		t.Fatalf("expected 3 opponents, got %d", len(hand.Opponents))
+	}
+	byID := make(map[string]sessionlog.OpponentSummary, len(hand.Opponents))
+	for _, opp := range hand.Opponents {
+		byID[opp.PlayerID] = opp
+	}
+	if got := byID["still-has-avatar"].AvatarURL; got != "https://cdn.example.com/still-has-avatar/2.jpg" {
+		t.Fatalf("still-has-avatar: got avatar_url %q, want the live resolved URL", got)
+	}
+	if got := byID["cleared-avatar"].AvatarURL; got != "" {
+		t.Fatalf("cleared-avatar: got stale avatar_url %q, want empty (404 risk after ClearAvatar)", got)
+	}
+	if got := byID["deleted-player"].AvatarURL; got != "" {
+		t.Fatalf("deleted-player: got stale avatar_url %q, want empty (profile no longer exists)", got)
+	}
+}
+
+func TestHandHistoryDropsStaleOpponentAvatar(t *testing.T) {
+	h := &playerHandlers{
+		players:  newOpponentAvatarPlayers(),
+		sessions: &opponentHandReader{},
+		cfg:      &config.Config{AvatarBaseURL: "https://cdn.example.com"},
+	}
+	app := fiber.New()
+	auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "viewer"); return c.Next() }
+	app.Get("/players/me/hands", auth, h.handHistory)
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/players/me/hands", nil))
+	if err != nil || resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, err = %v", resp.StatusCode, err)
+	}
+	var page struct {
+		Data []sessionlog.HandItem `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+		t.Fatalf("decode page: %v", err)
+	}
+	if len(page.Data) != 1 {
+		t.Fatalf("expected 1 hand, got %d", len(page.Data))
+	}
+	assertNoStaleAvatars(t, page.Data[0])
+}
+
+func TestHandByIDDropsStaleOpponentAvatar(t *testing.T) {
+	h := &playerHandlers{
+		players:  newOpponentAvatarPlayers(),
+		sessions: &opponentHandReader{},
+		cfg:      &config.Config{AvatarBaseURL: "https://cdn.example.com"},
+	}
+	app := fiber.New()
+	auth := func(c fiber.Ctx) error { c.Locals(localsUserID, "viewer"); return c.Next() }
+	app.Get("/players/me/hands/:id", auth, h.handByID)
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/players/me/hands/h-1", nil))
+	if err != nil || resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("status = %d, err = %v", resp.StatusCode, err)
+	}
+	var hand sessionlog.HandItem
+	if err := json.NewDecoder(resp.Body).Decode(&hand); err != nil {
+		t.Fatalf("decode hand: %v", err)
+	}
+	assertNoStaleAvatars(t, hand)
 }

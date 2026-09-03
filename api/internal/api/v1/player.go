@@ -318,11 +318,17 @@ func (h *playerHandlers) handHistory(c fiber.Ctx) error {
 		if err != nil {
 			return problem.InternalServer("failed to list hands", c, err).Send(c)
 		}
+		if err := h.resolveOpponentAvatars(c.Context(), hands); err != nil {
+			return problem.InternalServer("failed to resolve opponent avatars", c, err).Send(c)
+		}
 		return sendPage(c, hands, lastKey, cursor)
 	}
 	hands, lastKey, err := h.sessions.ListHands(c.Context(), userID, mode, limit, decodeCursor(cursor))
 	if err != nil {
 		return problem.InternalServer("failed to list hands", c, err).Send(c)
+	}
+	if err := h.resolveOpponentAvatars(c.Context(), hands); err != nil {
+		return problem.InternalServer("failed to resolve opponent avatars", c, err).Send(c)
 	}
 	return sendPage(c, hands, lastKey, cursor)
 }
@@ -343,7 +349,72 @@ func (h *playerHandlers) handByID(c fiber.Ctx) error {
 	if hand == nil {
 		return problem.NotFound("hand not found").Send(c)
 	}
+	if err := h.resolveOpponentAvatars(c.Context(), []sessionlog.HandItem{*hand}); err != nil {
+		return problem.InternalServer("failed to resolve opponent avatars", c, err).Send(c)
+	}
 	return c.JSON(hand)
+}
+
+// resolveOpponentAvatars overwrites each opponent's denormalized AvatarURL
+// with what their live player profile resolves to right now, in place. A
+// hand row's AvatarURL is captured once at hand-complete
+// (`sessionlog.OpponentSummary`, no TTL) and never updated again, so without
+// this a hand recorded before a later `ClearAvatar` (or an avatar-report
+// block) keeps serving a URL to a since-deleted object — a 404 in the
+// opponent list (#68). This is the read-time-resolution fix Issue #64
+// proposes for the same struct's stale `Name`, applied narrowly to
+// `AvatarURL` here; `player.AvatarURL` already treats a blocked or absent
+// avatar as "no URL", so a cleared/blocked profile now just clears the
+// field the same way it does on the player's own profile response, instead
+// of leaving a stale link behind. Batches lookups at
+// `player.MaxBatchProfileIDs` per `GetMany` call — a single hand-history page
+// full of distinct opponents can exceed BatchGetItem's 100-key ceiling even
+// though any one hand has at most a table's worth of seats.
+func (h *playerHandlers) resolveOpponentAvatars(ctx context.Context, hands []sessionlog.HandItem) error {
+	seen := make(map[string]struct{})
+	ids := make([]string, 0)
+	for i := range hands {
+		for _, opp := range hands[i].Opponents {
+			if opp.PlayerID == "" {
+				continue
+			}
+			if _, ok := seen[opp.PlayerID]; ok {
+				continue
+			}
+			seen[opp.PlayerID] = struct{}{}
+			ids = append(ids, opp.PlayerID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	profiles := make(map[string]player.PlayerProfile, len(ids))
+	for start := 0; start < len(ids); start += player.MaxBatchProfileIDs {
+		end := start + player.MaxBatchProfileIDs
+		if end > len(ids) {
+			end = len(ids)
+		}
+		batch, err := h.players.GetMany(ctx, ids[start:end])
+		if err != nil {
+			return err
+		}
+		for id, profile := range batch {
+			profiles[id] = profile
+		}
+	}
+	baseURL := h.avatarBaseURL()
+	for i := range hands {
+		for j := range hands[i].Opponents {
+			opp := &hands[i].Opponents[j]
+			profile, ok := profiles[opp.PlayerID]
+			if !ok {
+				opp.AvatarURL = ""
+				continue
+			}
+			opp.AvatarURL = player.AvatarURL(&profile, baseURL)
+		}
+	}
+	return nil
 }
 
 func (h *playerHandlers) achievementProgress(c fiber.Ctx) error {

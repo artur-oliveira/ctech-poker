@@ -42,6 +42,7 @@ import (
 type config struct {
 	baseURL      string
 	wsBaseURL    string
+	origin       string
 	tableIDs     []string
 	tokens       []string
 	playersTable int
@@ -62,6 +63,7 @@ func main() {
 	var (
 		baseURL     = flag.String("url", "http://localhost:8003", "HTTP base URL of the poker API (scheme+host, no path)")
 		wsURL       = flag.String("ws-url", "", "WebSocket base URL (default: derived from -url, http->ws)")
+		origin      = flag.String("origin", "", "Origin header sent on the WS upgrade; required against any deployment with CORS_ALLOWED_ORIGINS configured (staging/prod) — must be one of that list, since wsAllowedOrigin (tablews.go) now rejects a missing Origin once an allow-list exists (#44). Leave empty for local dev, where the allow-list is empty and every Origin, including none, is accepted")
 		tableIDsCSV = flag.String("table-ids", "", "comma-separated table/room IDs to drive (required)")
 		tokenFile   = flag.String("token-file", "", "file with one player access token (JWT) per line")
 		tokensCSV   = flag.String("tokens", "", "comma-separated player access tokens (alternative to -token-file)")
@@ -92,6 +94,7 @@ func main() {
 	cfg := config{
 		baseURL:      strings.TrimRight(*baseURL, "/"),
 		wsBaseURL:    *wsURL,
+		origin:       *origin,
 		tableIDs:     splitCSV(*tableIDsCSV),
 		tokens:       tokens,
 		playersTable: *players,
@@ -431,7 +434,11 @@ func (c *client) session(ctx context.Context) error {
 	url := fmt.Sprintf("%s/v1.0/tables/%s/ws", c.cfg.wsBaseURL, c.tableID)
 	dialer := *fws.DefaultDialer
 	dialer.HandshakeTimeout = 10 * time.Second
-	conn, _, err := dialer.DialContext(ctx, url, nil)
+	var hdr http.Header
+	if c.cfg.origin != "" {
+		hdr = http.Header{"Origin": []string{c.cfg.origin}}
+	}
+	conn, _, err := dialer.DialContext(ctx, url, hdr)
 	if err != nil {
 		c.m.connectFail.Add(1)
 		return err

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -43,23 +44,35 @@ type SessionItem struct {
 	CashoutAmount int64  `dynamodbav:"cashout_amount" json:"cashout_amount"`
 	NetPnL        int64  `dynamodbav:"net_pnl" json:"net_pnl"`
 	JoinedAt      int64  `dynamodbav:"joined_at" json:"joined_at"`
-	EndedAt       int64  `dynamodbav:"ended_at" json:"ended_at"`
-	TTL           int64  `dynamodbav:"ttl,omitempty" json:"-"`
+	// EndedAt is an epoch-milliseconds timestamp (time.Now().UnixMilli()),
+	// never seconds — 0 means the session is still open (see CloseSession).
+	// Every reader of this field (buyin.Service, the /players/me/sessions
+	// response) must keep treating it as ms; see HandItem.EndedAt below and
+	// #74 for the cross-endpoint unit contract this backs.
+	EndedAt int64 `dynamodbav:"ended_at" json:"ended_at"`
+	TTL     int64 `dynamodbav:"ttl,omitempty" json:"-"`
 }
 
 type HandItem struct {
-	PK           string            `dynamodbav:"pk" json:"pk"` // player_id
-	SK           string            `dynamodbav:"sk" json:"sk"` // currency_mode#hand_id
-	CurrencyMode string            `dynamodbav:"currency_mode" json:"currency_mode"`
-	TableID      string            `dynamodbav:"table_id" json:"table_id"`
-	HandID       string            `dynamodbav:"hand_id" json:"hand_id"`
-	Outcome      string            `dynamodbav:"outcome" json:"outcome"` // won | lost | tied
-	NetChange    int64             `dynamodbav:"net_change" json:"net_change"`
-	EndedAt      int64             `dynamodbav:"ended_at" json:"ended_at"`
-	Board        []string          `dynamodbav:"board,omitempty" json:"board,omitempty"`
-	BoardTwo     []string          `dynamodbav:"board_two,omitempty" json:"board_two,omitempty"`
-	HoleCards    []string          `dynamodbav:"hole_cards,omitempty" json:"hole_cards,omitempty"`
-	Opponents    []OpponentSummary `dynamodbav:"opponents,omitempty" json:"opponents,omitempty"`
+	PK           string `dynamodbav:"pk" json:"pk"` // player_id
+	SK           string `dynamodbav:"sk" json:"sk"` // currency_mode#hand_id
+	CurrencyMode string `dynamodbav:"currency_mode" json:"currency_mode"`
+	TableID      string `dynamodbav:"table_id" json:"table_id"`
+	HandID       string `dynamodbav:"hand_id" json:"hand_id"`
+	Outcome      string `dynamodbav:"outcome" json:"outcome"` // won | lost | tied
+	NetChange    int64  `dynamodbav:"net_change" json:"net_change"`
+	// EndedAt is an epoch-milliseconds timestamp (time.Now().UnixMilli(), set
+	// once in app.go's onHandComplete pipeline). Every endpoint that emits a
+	// hand — /players/me/hands, /players/me/hand/:id, and the public
+	// showcase's best_hand — MUST pass this value through unchanged. Do not
+	// divide/multiply by 1000 on any one endpoint; that per-endpoint drift is
+	// exactly the bug #74 fixed (a `< 1e12` runtime heuristic had crept into
+	// the frontend to cope with it).
+	EndedAt   int64             `dynamodbav:"ended_at" json:"ended_at"`
+	Board     []string          `dynamodbav:"board,omitempty" json:"board,omitempty"`
+	BoardTwo  []string          `dynamodbav:"board_two,omitempty" json:"board_two,omitempty"`
+	HoleCards []string          `dynamodbav:"hole_cards,omitempty" json:"hole_cards,omitempty"`
+	Opponents []OpponentSummary `dynamodbav:"opponents,omitempty" json:"opponents,omitempty"`
 	// ServerSeed and CommitHash are the hand's shuffle fairness proof
 	// (hand.HandOutcome.ServerSeed/CommitHash), hex-encoded — lets the
 	// player independently verify the deck they were dealt (B32).
@@ -87,6 +100,16 @@ type RevealedSalt struct {
 // player's own match-history view. HoleCards is only populated when that
 // opponent's hand was actually shown to the table (showdown or voluntary
 // show) — never a folded hand, matching hand.PlayerHandInfo.Revealed.
+//
+// AvatarURL is denormalized here at hand-complete and never refreshed in
+// storage, so a stored row can go stale the moment that opponent's avatar
+// changes or is cleared — API callers must not serve it as-is. As of #68,
+// internal/api/v1/player.go's resolveOpponentAvatars re-resolves it from the
+// opponent's live profile before any hand-history response leaves the
+// handler, clearing it to "" for an opponent whose avatar was since removed
+// or whose profile no longer exists, rather than handing back a 404ing URL.
+// Name has the same staleness problem and is intentionally not addressed
+// here — see Issue #64.
 type OpponentSummary struct {
 	PlayerID  string   `dynamodbav:"player_id" json:"player_id"`
 	Name      string   `dynamodbav:"name,omitempty" json:"name,omitempty"`
@@ -221,6 +244,79 @@ func (s *Store) FindLatestOpenSession(ctx context.Context, playerID string) (str
 		}
 		startKey = res.LastEvaluatedKey
 	}
+}
+
+// buyinGuardPK returns the sessions-table partition key for a rebuy's
+// idempotency guard row, namespaced away from real player-id partitions:
+// no player id can ever equal "buyinguard#"+anything, so this guard can
+// never surface in a query scoped to a real playerID (ListSessions,
+// FindOpenSession, FindLatestOpenSession, HasSessionAtTable all query by the
+// literal PK=playerID) even though it lives in the very same
+// poker_player_sessions table.
+func buyinGuardPK(playerID string) string {
+	return "buyinguard#" + playerID
+}
+
+// AddBuyin atomically adds amount to the buyin_amount of the still-open
+// session (playerID, sessionSK) — sessionSK is the SK a caller already
+// resolved via FindOpenSession — instead of a read-modify-write ("Correctness
+// = DynamoDB conditional writes... never read-then-write against table
+// state", api/CLAUDE.md conventions). A rebuy/re-entry must accumulate onto
+// the session's cumulative buy-in, never replace it, since RealityCheck and
+// SessionRecap both derive their responsible-gaming "session result" from
+// this figure — an undercounted total understates money actually put at
+// risk (issue #70).
+//
+// idemKey scopes a create-only guard row in the same table, under
+// buyinGuardPK's namespaced partition key, so a retried call for the exact
+// same buy-in (a client resubmit, or the auto-rebuy sweep double-firing for
+// one hand) can never double-count the rebuy. The guard write and the
+// session update commit in a single TransactWriteItems call, so they can
+// never partially apply. The session update additionally requires
+// ended_at == 0: a rebuy racing a concurrent cash-out on the same seat must
+// never reopen (or silently land inside) an already-closed session's total.
+// Both failure shapes collapse to a conditional-check failure and are
+// treated as a safe no-op, the same convention pokerstats.Store.RecordHand
+// and matchup.Store.RecordHand already use for their own guarded increments.
+func (s *Store) AddBuyin(ctx context.Context, playerID, sessionSK string, amount int64, idemKey string) error {
+	if amount == 0 {
+		return nil
+	}
+	guard, err := dynamo.Encode(struct {
+		PK  string `dynamodbav:"pk"`
+		SK  string `dynamodbav:"sk"`
+		TTL int64  `dynamodbav:"ttl"`
+	}{
+		PK:  buyinGuardPK(playerID),
+		SK:  idemKey,
+		TTL: time.Now().Add(sessionTTLDays * 24 * time.Hour).Unix(),
+	})
+	if err != nil {
+		return fmt.Errorf("sessionlog: encode buyin guard: %w", err)
+	}
+
+	sk := sessionSK
+	update := s.sessions.BuildRawUpdateTxItem(playerID, &sk,
+		"ADD buyin_amount :amt",
+		"attribute_exists(pk) AND ended_at = :zero",
+		nil,
+		map[string]dynamotypes.AttributeValue{
+			":amt":  &dynamotypes.AttributeValueMemberN{Value: strconv.FormatInt(amount, 10)},
+			":zero": &dynamotypes.AttributeValueMemberN{Value: "0"},
+		},
+	)
+
+	items := []dynamotypes.TransactWriteItem{
+		s.sessions.BuildPutTxItemIfAbsent(guard),
+		update,
+	}
+	if err := s.sessions.TransactWrite(ctx, items); err != nil {
+		if dynamo.IsConditionFailed(err) {
+			return nil
+		}
+		return fmt.Errorf("sessionlog: add buyin: %w", err)
+	}
+	return nil
 }
 
 // CloseSession overwrites the same session item (same PK/SK) with its final

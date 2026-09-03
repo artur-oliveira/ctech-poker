@@ -94,16 +94,28 @@ func readAuthToken(ctx context.Context, conn *fws.Conn) (token, shareCode string
 }
 
 // wsAllowedOrigin mirrors the HTTP CORS policy for the WebSocket upgrade:
-// when no origins are configured (dev) every origin is allowed; otherwise
-// only listed origins may connect. A missing Origin header (non-browser
-// clients) is always allowed.
+// when no origins are configured (dev — config.Load refuses to start prod
+// with an empty list, see config.go) every origin, including a request with
+// no Origin header at all, is allowed. Once an allow-list is configured
+// (staging/prod) a listed Origin is required — a missing header no longer
+// passes, because it is exactly what a scripted client with a stolen or
+// legitimately-issued first-party token would send to skip this check
+// entirely (#44). This game's threat model is automation, not cross-site
+// browsers, so "no Origin = allow" is never the safe default once there is
+// something to check against.
+//
+// The one intentional exception is api/cmd/loadtest, a non-browser
+// operator tool that is explicitly allowed to run against staging/prod
+// (see its package doc). It sends a real Origin header (-origin flag) that
+// must be present in CORS_ALLOWED_ORIGINS to connect there — it is not
+// exempted from this check, it simply satisfies it like any other caller.
 func wsAllowedOrigin(ctx *fasthttp.RequestCtx, allowed []string) bool {
 	if len(allowed) == 0 {
 		return true
 	}
 	origin := string(ctx.Request.Header.Peek("Origin"))
 	if origin == "" {
-		return true
+		return false
 	}
 	return slices.Contains(allowed, origin)
 }
