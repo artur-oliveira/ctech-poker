@@ -1696,6 +1696,28 @@
     }
 }
 
+/* The impact graphic (splat/accent/particles) is sized for the desktop oval,
+   where 132px is a small fraction of the felt. On the compact ring (the same
+   boundary the seats themselves switch at — see TableStage's
+   COMPACT_LANDSCAPE_QUERY/VERTICAL_STAGE_QUERY) seats sit much closer
+   together, so an uncontracted impact swallows two or three neighbouring
+   seats — worse still when two thrown reactions land on the same target
+   close together, since neither shrinks to make room for the other. Scaling
+   the whole box (rather than resizing each hand-placed offset inside it)
+   keeps every keyframe's coordinates correct at the smaller size. */
+@media (max-width: 800px), (max-height: 620px) and (orientation: landscape) {
+    .table-reaction-effect {
+        width: 40px;
+        height: 40px;
+        margin: -20px;
+        font-size: 22px;
+    }
+
+    .reaction-impact {
+        transform: scale(.64);
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .reaction-choice,
     .reaction-choice::before,
