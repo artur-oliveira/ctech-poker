@@ -79,6 +79,14 @@ describe('session keep-alive', () => {
     resetExpiredSessionLatchForTests();
   });
 
+  test('an unauthorized socket does not log out on a transient refresh failure', async () => {
+    mocks.refresh.mockRejectedValue(new Error('accounts temporarily unavailable'));
+    recoverSession();
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
+    expect(mocks.setToken).not.toHaveBeenCalledWith(null);
+    expect(mocks.endSession).not.toHaveBeenCalled();
+  });
+
   test('falls back to an interactive sign-in when the logout redirect no-ops', () => {
     vi.useFakeTimers();
     endExpiredSession();

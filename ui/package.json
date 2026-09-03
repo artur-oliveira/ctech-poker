@@ -18,7 +18,7 @@
     "bundle:pin": "node scripts/check-bundle-budget.mjs --update"
   },
   "dependencies": {
-    "@aoctech/auth-client": "^1.1.0",
+    "@aoctech/auth-client": "^1.2.0",
     "@aoctech/ws-client": "^1.3.0",
     "@base-ui/react": "^1.7.0",
     "@bufbuild/protobuf": "^2.13.0",
