@@ -186,8 +186,13 @@ func TestWSLimiterBudgetIsSharedAcrossInstances(t *testing.T) {
 	instanceA, instanceB := fleet.instance(3), fleet.instance(3)
 	ctx := context.Background()
 
-	if !instanceA.AllowFailOpen(ctx, wsActionKey("p1")) || !instanceA.AllowFailOpen(ctx, wsActionKey("p1")) {
-		t.Fatal("first two actions on instance A must be allowed")
+	// Separate statements on purpose: `||` short-circuits, so writing these as
+	// one condition would skip the second call whenever the first is allowed
+	// and the shared budget would never actually be charged twice.
+	for i := range 2 {
+		if !instanceA.AllowFailOpen(ctx, wsActionKey("p1")) {
+			t.Fatalf("action %d on instance A must be allowed", i+1)
+		}
 	}
 	if !instanceB.AllowFailOpen(ctx, wsActionKey("p1")) {
 		t.Fatal("the third action must still be within the shared budget")
