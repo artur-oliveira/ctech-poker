@@ -18,6 +18,7 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/logger"
 	fiberrecover "github.com/gofiber/fiber/v3/middleware/recover"
+	"github.com/valkey-io/valkey-go"
 	"go.uber.org/fx"
 	"gopkg.aoctech.app/api-commons/awsconfig"
 	"gopkg.aoctech.app/api-commons/cache"
@@ -73,6 +74,7 @@ var Module = fx.Options(
 		config.Load,
 		newFiberApp,
 		newCacheBackend,
+		newRealtimeValkeyClient,
 		newVerifier,
 		newWsRegistry,
 		newTableLeaseService,
@@ -211,16 +213,45 @@ func newVerifier(c cache.Backend, cfg *config.Config) *jwtverify.Verifier {
 	return jwtverify.NewVerifier(cfg.CtechJWKSURL, cfg.ServiceAudience, cfg.CtechIssuerURL, c)
 }
 
-func newWsRegistry(lc fx.Lifecycle, c cache.Backend, cfg *config.Config) (ws.Registry, error) {
-	rb, ok := c.(*cache.RedisBackend)
-	if !ok {
+// newRealtimeValkeyClient is a connection dedicated to the latency-critical
+// signaling path (ws.RedisRegistry's Broadcast, internal/tablenotify) kept
+// separate from newCacheBackend's client, which every other subsystem
+// (presence, handhook, ratelimit, generic cache reads/writes) shares. A
+// valkey.Client multiplexes Do() calls from all its callers onto the same
+// connection/pipe and delivers replies in the order they were sent — a slow
+// or bulky command queued ahead of a turn-timer PUBLISH delayed that PUBLISH
+// by up to ~17s in prod (see docs/specs/2026-09-04-cross-instance-stale-turn-timer.md),
+// with no error anywhere, because nothing failed, it just queued. Isolating
+// this path removes that head-of-line blocking regardless of what the rest
+// of the app is doing to the shared client.
+func newRealtimeValkeyClient(cfg *config.Config) (valkey.Client, error) {
+	if cfg.RedisURL == "" {
+		return nil, nil
+	}
+	opt, err := valkey.ParseURL(cfg.RedisURL)
+	if err != nil {
+		return nil, fmt.Errorf("parsing redis url for realtime client: %w", err)
+	}
+	client, err := valkey.NewClient(opt)
+	if err != nil {
+		if cfg.Env != "dev" {
+			return nil, fmt.Errorf("realtime valkey client unavailable in non-dev env: %w", err)
+		}
+		slog.Warn("realtime valkey client unavailable, falling back to no realtime signaling (dev only)", "err", err)
+		return nil, nil
+	}
+	return client, nil
+}
+
+func newWsRegistry(lc fx.Lifecycle, realtime valkey.Client, cfg *config.Config) (ws.Registry, error) {
+	if realtime == nil {
 		if cfg.Env != "dev" {
 			return nil, fmt.Errorf("ws registry requires a Redis backend in non-dev env")
 		}
 		slog.Warn("using in-memory ws registry (dev only, NOT fleet-shared)")
 		return ws.NewMemoryRegistry(), nil
 	}
-	reg := ws.NewRedisRegistry(rb.Client())
+	reg := ws.NewRedisRegistry(realtime)
 	lc.Append(fx.Hook{OnStart: reg.Start, OnStop: reg.Stop})
 	return reg, nil
 }
@@ -489,25 +520,11 @@ func dispatchGamificationPipeline(tableID, handID string, pipeline func()) {
 	}()
 }
 
-func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablestore.Store, cacheBackend cache.Backend, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store) *tablemanager.Manager {
+func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablestore.Store, cacheBackend cache.Backend, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store, realtime valkey.Client) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
 		data, err := goproto.Marshal(message)
 		if err == nil {
-			// TEMPORARY (2026-09-04 delivery-latency investigation): pins the
-			// exact wall-clock instant this process calls reg.Broadcast, so a
-			// client-side capture's own receive timestamp can be diffed against
-			// it directly — bisects whether a reported gap sits before this
-			// call (armTurnTimer/commit) or after it (Valkey Pub/Sub relay,
-			// RedisRegistry.listen, or the WS write itself). Remove once
-			// resolved.
-			if snap.ActionBaseDeadlineUnixMs > 0 || snap.NextHandUnixMs > 0 {
-				slog.Info("table broadcast publish",
-					"table_id", tableID, "viewer_id", viewerID, "hand_id", snap.HandID,
-					"publish_unix_ms", time.Now().UnixMilli(),
-					"action_base_deadline_unix_ms", snap.ActionBaseDeadlineUnixMs,
-					"next_hand_unix_ms", snap.NextHandUnixMs)
-			}
 			reg.Broadcast(context.Background(), tableID+"#"+viewerID, data)
 		}
 	}
@@ -725,9 +742,12 @@ func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablest
 	// an instance serving a table it did not just commit to only reloads and
 	// re-arms its real enforcement timers on its own next unrelated trigger.
 	// Same raw-client requirement as SetHandHookClaimer above — Publish/
-	// Subscribe cannot be expressed through cache.Backend.
-	if redis, ok := cacheBackend.(*cache.RedisBackend); ok {
-		notifier := tablenotify.NewService(redis.Client())
+	// Subscribe cannot be expressed through cache.Backend. Uses the dedicated
+	// realtime client (see newRealtimeValkeyClient), not cacheBackend's, so
+	// this latency-critical PUBLISH never queues behind unrelated bulk cache
+	// traffic on a shared connection.
+	if realtime != nil {
+		notifier := tablenotify.NewService(realtime)
 		mgr.SetChangeNotifier(notifier)
 		listenCtx, cancelListen := context.WithCancel(context.Background())
 		lc.Append(fx.Hook{

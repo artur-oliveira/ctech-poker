@@ -373,3 +373,45 @@ fix (drift de 30ms) e passando com ele.
 `snapshot_version` com pequenas divergências pode acontecer em outros campos além dos deadlines
 (ex.: `idle_removal_unix_ms`) — o fix aqui só fecha os dois relógios que já tínhamos evidência
 concreta de problema.
+
+## 📌 Quinta atualização — atraso de ~16-17s na entrega do WebSocket (achado #6)
+
+Depois dos achados #4/#5 corrigidos e implantados, ainda restava um sintoma vivo: mesmo com um
+único deadline correto sendo persistido e armado, o **primeiro** broadcast que carregava esse
+deadline às vezes só chegava ao cliente 16-17 segundos depois do timer ter sido armado — o
+suficiente pra o relógio do turno já estar todo consumido (ou o "next hand" ring já ter passado
+da janela de 12s) no instante em que o cliente finalmente recebe o frame.
+
+**Descartado, em ordem:** foco/throttling da aba Chrome (idêntico com e sem foco), clock skew do
+cliente (~424ms, irrelevante), staleness de DNS pro Valkey (`cache.internal.aoctech.app`
+resolvendo pro IP certo), reinício das duas instâncias `app`/`app2` (usuário previu corretamente
+que não resolveria), throughput/PPS de rede e CPU (CloudWatch mostrando uso trivial).
+
+Um log temporário no fechamento `broadcast` de `internal/app/app.go` provou que o gap de ~16.7s
+fica 100% entre a chamada de `reg.Broadcast()` (1ms depois do timer ser armado) e o frame chegando
+no cliente — ou seja, dentro do caminho Valkey Pub/Sub → `RedisRegistry`, fora do código deste
+repo. Um teste raw com `redis-cli PSUBSCRIBE ws:*` + `PUBLISH` manual na instância EC2 de produção
+mostrou entrega **instantânea** — descartando de vez o Valkey/rede em si como causa.
+
+**Causa raiz:** um único `valkey.Client` (de `cache.NewRedisBackend`) era compartilhado entre
+TODO o app — cache genérico, `presence`, `handhook`, `ratelimit`, e o próprio
+`ws.RedisRegistry.Broadcast` / `internal/tablenotify`. O `valkey-go` multiplexa as chamadas
+`Do()` desse client numa mesma pipe/conexão e entrega as respostas na ordem em que os comandos
+foram enviados (head-of-line): se um comando qualquer — bulk read do `presence`, checagem de
+`ratelimit`, etc. — entra na fila antes de um `PUBLISH` urgente do timer, esse `PUBLISH` só é
+escrito no socket depois que os comandos à frente terminam. Nada falha, nada loga erro — só
+fica na fila. Bate com o problema que o Artur lembrou do `ctech-dfe` envolvendo client/contexto
+valkey compartilhado.
+
+**Correção:** `internal/app/app.go` ganhou `newRealtimeValkeyClient`, um `valkey.Client`
+dedicado, isolado do client de `newCacheBackend`, usado exclusivamente por
+`ws.NewRedisRegistry` e `tablenotify.NewService`. Esse caminho de sinalização em tempo real
+nunca mais compartilha fila/conexão com o tráfego de cache/presence/ratelimit. `handhook`
+continua no client de cache — é uma checagem SET NX pouco frequente, não implicada nas
+capturas ao vivo — mas pode ser revisitado se aparecer evidência.
+
+O log temporário de diagnóstico ("table broadcast publish") foi removido de
+`internal/app/app.go` depois de confirmada a causa raiz.
+
+**Ainda não testado ao vivo:** o fix precisa ser reimplantado e reconfirmado com o usuário
+jogando em ambas as contas, como nas rodadas anteriores.

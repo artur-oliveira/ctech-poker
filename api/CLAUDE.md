@@ -318,6 +318,24 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   computing its own. This does not stop multiple processes from each broadcasting the same
   version; it makes sure they all agree on the number when they do.
   `TestTurnDeadlinePersistedBeforeArmMatchesWhatGetsArmed` mirrors the next-hand test above.
+- **A shared `valkey.Client` head-of-line-blocks latency-critical PUBLISHes behind unrelated bulk
+  traffic — give realtime signaling its own connection.** Fifth follow-up in the incident spec
+  (2026-09-04): even with the two deadline bugs above fixed, the *first* broadcast carrying a
+  correct deadline sometimes still arrived ~16-17s after the timer was armed — long enough for
+  the turn/next-hand window to already be over on arrival. Bisected by a temporary log proving
+  the gap sat entirely between `reg.Broadcast()`'s call and the client's receipt, i.e. inside the
+  Valkey Pub/Sub relay, not this repo's code; a raw `redis-cli PSUBSCRIBE`/`PUBLISH` round trip on
+  the prod host was instantaneous, ruling out Valkey/network itself. Root cause: `internal/app`
+  wired exactly one `valkey.Client` (from `newCacheBackend`) into *everything* —
+  generic cache, `presence`, `handhook`, `ratelimit`, and `ws.RedisRegistry.Broadcast` /
+  `internal/tablenotify`. `valkey-go` multiplexes one client's `Do()` calls onto one
+  connection/pipe and delivers replies in send order — a bulky or slow command queued ahead of a
+  turn-timer `PUBLISH` delays that `PUBLISH`'s actual write to the socket, silently, with no error
+  anywhere. Fixed by `newRealtimeValkeyClient`: a second, dedicated `valkey.Client` used only by
+  `ws.NewRedisRegistry` and `tablenotify.NewService`, so the realtime signaling path never queues
+  behind bulk cache/presence/ratelimit traffic regardless of load elsewhere in the app.
+  `handhook` was left on the shared cache client (an infrequent SET NX check, not implicated by
+  the live captures) — revisit only if evidence turns up.
 - **Nothing viewer-independent belongs inside `broadcastAll`'s per-seat loop, and nothing expensive belongs on the
   actor goroutine twice.** Chat and reaction views are built once per broadcast (`activityViews`) and shared; the
   `equityIterations` Monte Carlo is memoized by `(hole, board, opponent count)` per hand (`equityFor`), because a
