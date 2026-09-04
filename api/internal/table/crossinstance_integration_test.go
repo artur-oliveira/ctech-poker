@@ -18,33 +18,31 @@ import (
 // latency-only, never an exclusive lock). Instance B loads the table once
 // (mirroring a player's WS landing there) and then goes quiet — no further
 // command ever reaches it — while instance A processes every actual action.
-// A's fold moves the turn from p1 to p2; B never learns that. A time.AfterFunc
-// on B, armed before A's fold and still holding B's now-stale belief that p1
-// is on the clock, then fires.
+// A's fold moves the turn from the first actor to the next player; B never
+// learns that. A time.AfterFunc on B, armed before A's fold and still holding
+// B's now-stale belief that the first player is on the clock, then fires.
 //
 // Before this fix, handleTurnTimeout's ensureLoaded(ctx, false) on a
 // trustCache instance skipped the reload entirely, so B's CurrentPlayerIDForActor
 // check passed against its own stale cache and it proceeded to charge time
-// bank and fold p1 a second time from data up to several actions old — the
-// live session's logs showed exactly this: a "table time bank consumed" line
-// for a stage/hand a *different* instance had already carried forward.
-// Forcing the reload (this change) makes B observe the real current player
-// (p2) before deciding, so it no-ops instead.
+// bank and fold that player a second time from data up to several actions
+// old — the live session's logs showed exactly this: a "table time bank
+// consumed" line for a stage/hand a *different* instance had already carried
+// forward. Forcing the reload (this change) makes B observe the real current
+// player before deciding, so it no-ops instead.
 func TestStaleInstanceTurnTimeoutIgnoresATurnAnotherInstanceAlreadyAdvanced(t *testing.T) {
 	db := testClient(t)
 	store := tablestore.NewStore(db, "table_test")
 	mustCreateTestTables(t, db, "table_test")
 
+	// Same seeding shape as newTestActor: an unstarted table, started for
+	// real through the actor's own ReadyCmd machinery (not hand.StartHand
+	// called directly against the raw engine object) so a.handID and every
+	// other actor-owned invariant are set up exactly as production does it.
 	tableID := uniqueTableID(t)
 	seed := hand.NewTable([]*hand.Player{
-		{ID: "p1", Stack: 1000, Ready: true},
-		{ID: "p2", Stack: 1000, Ready: true},
-		{ID: "p3", Stack: 1000, Ready: true},
+		{ID: "p1", Stack: 1000}, {ID: "p2", Stack: 1000}, {ID: "p3", Stack: 1000},
 	}, 10, 20)
-	if err := seed.StartHand(); err != nil {
-		t.Fatalf("start hand: %v", err)
-	}
-	firstToAct := seed.CurrentPlayerIDForActor()
 	if err := store.SeedTable(context.Background(), tableID, seed.ExportState()); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -55,6 +53,28 @@ func TestStaleInstanceTurnTimeoutIgnoresATurnAnotherInstanceAlreadyAdvanced(t *t
 	go a.Run(ctxA)
 	stopActor(t, a, cancelA)
 
+	for _, playerID := range []string{"p1", "p2", "p3"} {
+		reply := make(chan error, 1)
+		if err := a.Dispatch(ReadyCmd{PlayerID: playerID, Ready: true, Reply: reply}); err != nil {
+			t.Fatalf("dispatch ready(%s): %v", playerID, err)
+		}
+		if err := <-reply; err != nil {
+			t.Fatalf("ready(%s): %v", playerID, err)
+		}
+	}
+
+	stored, err := store.LoadTable(context.Background(), tableID)
+	if err != nil {
+		t.Fatalf("load after ready-up: %v", err)
+	}
+	if stored.HandID == "" {
+		t.Fatal("test setup did not start a hand")
+	}
+	firstToAct := hand.NewTableFromState(stored.State).CurrentPlayerIDForActor()
+	if firstToAct == "" {
+		t.Fatal("test setup left no one on the clock")
+	}
+
 	// Instance B: loads the table exactly once (its one player's WS landing),
 	// then never hears from it again — mirroring a quiet connection on a
 	// different fleet instance while the table keeps moving on A.
@@ -63,7 +83,11 @@ func TestStaleInstanceTurnTimeoutIgnoresATurnAnotherInstanceAlreadyAdvanced(t *t
 	go b.Run(ctxB)
 	stopActor(t, b, cancelB)
 	snap := make(chan hand.Snapshot, 1)
-	if err := b.Dispatch(SnapshotCmd{PlayerID: firstToAct, Snapshot: snap}); err != nil {
+	snapReply := make(chan error, 1)
+	if err := b.Dispatch(SnapshotCmd{PlayerID: firstToAct, Snapshot: snap, Reply: snapReply}); err != nil {
+		t.Fatalf("prime instance B: %v", err)
+	}
+	if err := <-snapReply; err != nil {
 		t.Fatalf("prime instance B: %v", err)
 	}
 	<-snap
@@ -80,7 +104,7 @@ func TestStaleInstanceTurnTimeoutIgnoresATurnAnotherInstanceAlreadyAdvanced(t *t
 	if err := <-reply; err != nil {
 		t.Fatalf("fold: %v", err)
 	}
-	stored, err := store.LoadTable(context.Background(), tableID)
+	stored, err = store.LoadTable(context.Background(), tableID)
 	if err != nil {
 		t.Fatalf("load after fold: %v", err)
 	}
