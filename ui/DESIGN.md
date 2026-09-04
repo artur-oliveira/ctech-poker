@@ -299,6 +299,10 @@ Spacing follows a 4px base rhythm with recurring 8, 12, 16, 24, 32, 48, 64, and 
 
 **The Stable Seat Rule.** Seat positions remain stable during a hand; vacancies fill in server turn order, and hidden cards render exactly as received.
 
+**The Seat Overhang Rule.** A seat's corner badges hang outside the seat box by exactly `--seat-badge-overhang` (8px), and every container that clips a seat reserves at least that much padding on the edges it clips. The portrait stage's own padding, and the outward hang of the mid-side captions, are both written in terms of that one token, so no tier can reserve less room than a badge needs. The reported symptom of breaking this is a win/loss streak badge sliced in half on the viewer's dock.
+
+**The Caption Lane Rule.** The portrait seat caption (the stack figure under the avatar) is sized from `--seat-caption-lane` (64px, narrowing to 56px below 360px), never from a per-seat literal. Captions ellipsise; they do not widen the lane, and they do not reach past the stage.
+
 ## Elevation & Depth
 
 Depth is structural. The rail sits above the room, felt is inset within the rail, seats lift slightly from the table, and dialogs or transient feedback occupy a clearly higher layer. Ordinary page cards remain close to the canvas through tonal layering and a single hairline. Glow is reserved for focus, live connection, turn timing, the viewer, or a resolved win.

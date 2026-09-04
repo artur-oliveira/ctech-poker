@@ -40,6 +40,18 @@
     --focus-ring: #ed777c;
     --control-border: #ffffff24;
     --seat-border: #ffffff26;
+    /* How far a seat's corner badges (.seat-role, .seat-streak,
+       .seat-timebank-badge) hang outside the seat box. Every container that
+       clips a seat has to reserve at least this much, or the badge is cut in
+       half — which is what happened to the win/loss streak badge on the
+       portrait viewer dock, flush against .game-table's overflow:hidden edge. */
+    --seat-badge-overhang: 8px;
+    /* Width of a portrait seat's caption lane (the stack figure under the
+       avatar). One token because several rules set it — the shared caption, the
+       wider left/right-zone override and the mid-side pair — and they have to
+       narrow together, or the outermost captions hang past .game-table's clip
+       edge on the narrowest phones. */
+    --seat-caption-lane: 64px;
 
     /* Private note tags. The six are a categorical palette the *player* assigns
        meaning to (the labels are the colour names), so they are named by hue on
