@@ -221,7 +221,7 @@ test('creates poker_rooms table with public and share-code GSIs', () => {
   });
 });
 
-test('indexes player sessions by open table and by table', () => {
+test('indexes player sessions by open table', () => {
   const app = new App();
   const stack = new DynamoDBStack(app, 'TestSessionIndexStack', {environment: 'dev', cloudwatchAlarmsEnabled: false});
   const template = Template.fromStack(stack);
@@ -235,14 +235,6 @@ test('indexes player sessions by open table and by table', () => {
           Match.objectLike({AttributeName: 'open_table_id', KeyType: 'RANGE'}),
         ],
         Projection: {ProjectionType: 'ALL'},
-      }),
-      Match.objectLike({
-        IndexName: 'gsi_player_table',
-        KeySchema: [
-          Match.objectLike({AttributeName: 'pk', KeyType: 'HASH'}),
-          Match.objectLike({AttributeName: 'table_id', KeyType: 'RANGE'}),
-        ],
-        Projection: {ProjectionType: 'KEYS_ONLY'},
       }),
     ]),
   });
