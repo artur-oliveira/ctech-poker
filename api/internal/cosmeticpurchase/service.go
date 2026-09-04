@@ -615,11 +615,13 @@ func (s *Service) Refresh(ctx context.Context, playerID, purchaseID string) (Rec
 
 // List returns one page of purchase history, newest first *within the page*.
 //
-// ponytail: page-local ordering. The sort key is the purchase id, not a
-// timestamp, so DynamoDB hands back id order and the sort below can only
-// reorder what this page contains. Fine while a player's history fits in a
-// page or two; upgrade path is a created_at GSI queried with
-// ScanIndexForward:false, at which point this sort goes away entirely.
+// ponytail: page-local ordering. Neither the table's sort key (the purchase
+// id) nor gsi_player_kind's (the kind itself) is a timestamp, so the sort
+// below can only reorder what this page contains. Fine while a player's
+// history fits in a page or two; upgrade path is a created_at sort key on
+// gsi_player_kind, queried with ScanIndexForward:false — which needs the
+// backfill that the (pk, kind) index deliberately avoided, so it is worth
+// doing only once a player's history actually spans pages.
 func (s *Service) List(ctx context.Context, playerID string, kind cosmetics.Kind, limit int, startKey map[string]types.AttributeValue) ([]Record, map[string]types.AttributeValue, error) {
 	records, nextKey, err := s.store.List(ctx, playerID, kind, limit, startKey)
 	if err != nil {

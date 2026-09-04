@@ -190,6 +190,21 @@ test('creates poker_cosmetic_entitlements and poker_cosmetic_purchases tables wi
       ]),
     });
   }
+  // Issue #219: deck and felt history each page their own rows off this index
+  // instead of filtering the other kind's rows out after the read.
+  template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'dev_poker_cosmetic_purchases',
+    GlobalSecondaryIndexes: Match.arrayWith([
+      Match.objectLike({
+        IndexName: 'gsi_player_kind',
+        KeySchema: [
+          {AttributeName: 'pk', KeyType: 'HASH'},
+          {AttributeName: 'kind', KeyType: 'RANGE'},
+        ],
+        Projection: {ProjectionType: 'ALL'},
+      }),
+    ]),
+  });
 });
 
 test('creates poker_rooms table with public and share-code GSIs', () => {

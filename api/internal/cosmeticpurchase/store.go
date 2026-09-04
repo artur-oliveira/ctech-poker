@@ -15,6 +15,12 @@ const (
 	tableEntitlements = "poker_cosmetic_entitlements"
 	tablePurchases    = "poker_cosmetic_purchases"
 
+	// gsiPlayerKind indexes the purchase table by (pk, kind) so history can be
+	// paged one kind at a time with a key condition instead of a
+	// FilterExpression (issue #219). Both key attributes already exist on every
+	// row ever written, so no new attribute and no backfill are needed.
+	gsiPlayerKind = "gsi_player_kind"
+
 	statusProcessing = "processing"
 	statusPending    = "pending"
 	statusActive     = "active"
@@ -584,20 +590,34 @@ func (s *Store) UpdateStatus(ctx context.Context, playerID, purchaseID, status, 
 	return s.base.UpdateItem(ctx, playerID, &sk, map[string]any{"status": status, "updated_at": updatedAt})
 }
 
-// List returns one page of this player's purchase history for kind, newest
-// page first, plus the DynamoDB key to resume from.
+// List returns one page of this player's purchase history for kind, plus the
+// DynamoDB key to resume from.
 //
 // The kind filter is not optional: deck and felt purchases share one
 // (pk=player, sk=purchase) table, so an unfiltered query hands the deck
-// endpoint every felt purchase too — which is how "8 de 6 liberados" showed
-// up in the store. It is a FilterExpression rather than a key condition
-// because the sort key is the purchase id, so a page can come back short
-// while LastEvaluatedKey is still set; that is ordinary DynamoDB filtering
-// and the has_next/next_cursor envelope already expresses it.
+// endpoint every felt purchase too. It used to be a FilterExpression, because
+// the sort key is the purchase id — which made every deck page read the
+// player's felt rows too and come back shorter than the requested limit
+// (issue #219). It is now a key condition on gsi_player_kind: a page reads
+// only this kind's rows, and is full whenever more exist.
+//
+// Raw query rather than dynamo.QueryOpts because that helper's sort-key
+// condition is begins_with, and "deck"/"felt" not being prefixes of each other
+// is not a property worth depending on.
 func (s *Store) List(ctx context.Context, playerID string, kind cosmetics.Kind, limit int, startKey map[string]types.AttributeValue) ([]Record, map[string]types.AttributeValue, error) {
-	result, err := s.base.Query(ctx, dynamo.QueryOpts{
-		PK: playerID, Limit: limit, ExclusiveStartKey: startKey,
-		FilterField: "kind", FilterValue: string(kind),
+	if limit <= 0 {
+		limit = 50
+	}
+	result, err := s.base.QueryRaw(ctx, &dynamodb.QueryInput{
+		IndexName:                aws.String(gsiPlayerKind),
+		KeyConditionExpression:   aws.String("pk = :pk AND #kind = :kind"),
+		ExpressionAttributeNames: map[string]string{"#kind": "kind"},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":pk":   &types.AttributeValueMemberS{Value: playerID},
+			":kind": &types.AttributeValueMemberS{Value: string(kind)},
+		},
+		Limit:             aws.Int32(int32(limit)),
+		ExclusiveStartKey: startKey,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("cosmeticpurchase: list records: %w", err)
