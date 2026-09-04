@@ -58,6 +58,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/tableconn"
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
+	"gopkg.aoctech.app/poker/api/internal/tablenotify"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 	"gopkg.aoctech.app/poker/api/internal/tablestreak"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
@@ -488,7 +489,7 @@ func dispatchGamificationPipeline(tableID, handID string, pipeline func()) {
 	}()
 }
 
-func newTableManager(leases *tablelease.Service, store *tablestore.Store, cacheBackend cache.Backend, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store) *tablemanager.Manager {
+func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablestore.Store, cacheBackend cache.Backend, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
 		data, err := goproto.Marshal(message)
@@ -705,6 +706,27 @@ func newTableManager(leases *tablelease.Service, store *tablestore.Store, cacheB
 	// The seat's connection dot has to see sockets terminating on other
 	// instances too (see internal/tableconn).
 	mgr.SetConnStore(tableconn.NewService(cacheBackend))
+	// Cross-process commit signal (see internal/tablenotify and
+	// docs/specs/2026-09-04-cross-instance-stale-turn-timer.md): without it,
+	// an instance serving a table it did not just commit to only reloads and
+	// re-arms its real enforcement timers on its own next unrelated trigger.
+	// Same raw-client requirement as SetHandHookClaimer above — Publish/
+	// Subscribe cannot be expressed through cache.Backend.
+	if redis, ok := cacheBackend.(*cache.RedisBackend); ok {
+		notifier := tablenotify.NewService(redis.Client())
+		mgr.SetChangeNotifier(notifier)
+		listenCtx, cancelListen := context.WithCancel(context.Background())
+		lc.Append(fx.Hook{
+			OnStart: func(context.Context) error {
+				go mgr.ListenForExternalChanges(listenCtx, notifier)
+				return nil
+			},
+			OnStop: func(context.Context) error {
+				cancelListen()
+				return nil
+			},
+		})
+	}
 	mgr.SetOnTableStreak(func(tableID, handID string, outcome hand.HandOutcome) map[string]int {
 		mode, err := tableCurrencyMode(context.Background(), rooms, tableID)
 		if err != nil {

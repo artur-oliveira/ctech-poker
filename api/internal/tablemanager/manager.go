@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -51,6 +52,7 @@ type Manager struct {
 	streakStore            table.StreakStore
 	handHooks              table.HandHookClaimer
 	connStore              table.ConnStore
+	changeNotifier         table.ChangeNotifier
 	systemSettlementIntent func(ctx context.Context, tableID, playerID, reason, settlementNonce string, stack int64, holdID string) (types.TransactWriteItem, error)
 	roomLoader             func(tableID string) (*roomstore.Room, bool, error)
 	reactionOwnership      func(ctx context.Context, playerID, reactionID string) (bool, error)
@@ -244,6 +246,45 @@ func (m *Manager) SetConnStore(s table.ConnStore) {
 	m.connStore = s
 }
 
+// SetChangeNotifier gives every actor this instance creates the shared
+// cross-process commit signal (internal/tablenotify). Without it, an actor
+// only reloads and re-arms its real enforcement timers on its own next
+// unrelated trigger — see ChangeNotifier's doc comment.
+func (m *Manager) SetChangeNotifier(n table.ChangeNotifier) {
+	m.changeNotifier = n
+}
+
+// ChangeListener is the subscribe side of internal/tablenotify — kept as a
+// narrow interface here (rather than importing that package directly) so
+// tablemanager depends only on the shape it actually calls.
+type ChangeListener interface {
+	Listen(ctx context.Context, onChange func(tableID string))
+}
+
+// ListenForExternalChanges blocks, dispatching table.ExternalChangeCmd to
+// whichever local Actor is currently running each table the notifier
+// reports as changed, until ctx is cancelled. A table with no local Actor
+// (nothing here is currently serving it) is silently ignored — there is
+// nothing local to refresh. Call once per process, alongside the notifier's
+// own construction; see internal/app's fx wiring.
+func (m *Manager) ListenForExternalChanges(ctx context.Context, notifier ChangeListener) {
+	if notifier == nil {
+		return
+	}
+	notifier.Listen(ctx, func(tableID string) {
+		m.mu.Lock()
+		actor := m.actors[tableID]
+		m.mu.Unlock()
+		if actor == nil {
+			return
+		}
+		reply := make(chan error, 1)
+		if err := actor.Dispatch(table.ExternalChangeCmd{Reply: reply}); err != nil {
+			slog.Warn("table external change dispatch failed", "table_id", tableID, "err", err)
+		}
+	})
+}
+
 // GetOrCreateActor returns this instance's Actor for tableID, seeding the
 // table's very first DynamoDB state if it has never been played (seed is
 // only invoked then). A failed best-effort lease acquire never blocks this —
@@ -350,6 +391,9 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	}
 	if m.connStore != nil {
 		actor.SetConnStoreForActor(m.connStore)
+	}
+	if m.changeNotifier != nil {
+		actor.SetChangeNotifierForActor(m.changeNotifier)
 	}
 	if m.store == nil && seed != nil {
 		actor.SetCachedForTest(seed())

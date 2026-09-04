@@ -83,6 +83,21 @@ func (a *Actor) handleReconnect(ctx context.Context, c ReconnectCmd) error {
 	return nil
 }
 
+// handleExternalChange reacts to a ChangeNotifier signal (see
+// SetChangeNotifierForActor): a sibling process just committed for this
+// table, so this instance forces a fresh reload — reloading also re-arms
+// every timer via rearmTimersFromCache — and re-broadcasts to whichever of
+// this table's players are connected to THIS process. Always unconditional,
+// unlike handleReconnect above: this only ever fires when something
+// genuinely changed, never on routine local traffic.
+func (a *Actor) handleExternalChange(ctx context.Context, _ ExternalChangeCmd) error {
+	if err := a.ensureLoaded(ctx, true); err != nil {
+		return err
+	}
+	a.broadcastAll()
+	return nil
+}
+
 // clearDisconnectMark deletes playerID's stale disconnect bookkeeping and
 // reports whether anything was actually cleared, so callers only broadcast
 // (or otherwise react) when this genuinely changed something.

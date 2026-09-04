@@ -67,6 +67,12 @@ type Actor struct {
 	// connStore shares the connection set with every other instance serving
 	// this table (internal/tableconn). nil in dev/tests without a cache.
 	connStore ConnStore
+	// changeNotifier announces a successful commit to every sibling process
+	// serving this table (internal/tablenotify), so their own Actor instances
+	// reload and re-arm their real enforcement timers immediately instead of
+	// only noticing on their own next unrelated reload trigger. nil in
+	// dev/tests without a cache; see docs/specs/2026-09-04-cross-process-change-notify.md.
+	changeNotifier ChangeNotifier
 	// fleetConns is the last answer connStore gave — who the whole fleet
 	// considers connected. nil means "never synced", which applyPresence reads
 	// as "trust the local view". Display only, never a removal input.
@@ -331,6 +337,8 @@ func (a *Actor) handle(ctx context.Context, cmd Command) error {
 		return a.handleDisconnect(c)
 	case ReconnectCmd:
 		return a.handleReconnect(ctx, c)
+	case ExternalChangeCmd:
+		return a.handleExternalChange(ctx, c)
 	case SitOutCmd:
 		return a.handleSitOut(ctx, c)
 	case ShowCardsCmd:

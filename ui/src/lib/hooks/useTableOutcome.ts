@@ -58,13 +58,19 @@ export function useTableOutcome({id, viewer, snapshot, snapshotAt}: {
     setRememberedStart(previous => previous?.tableID === id && previous.handID === handID ? previous : next);
   }, [id, liveSeat, snapshot?.hand_id, snapshot?.payouts]);
 
-  useEffect(() => {
-    const deadline = snapshot?.next_hand_unix_ms;
-    if (!deadline) return;
-    // Preserve the timestamp of the first frame carrying this deadline.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setNextHandArmed(previous => previous?.deadline === deadline ? previous : {deadline, snapshotAt});
-  }, [snapshot?.next_hand_unix_ms, snapshotAt]);
+  // Adjusted during render, not in a useEffect: an effect only runs after
+  // commit, so the very first render carrying a brand-new deadline would
+  // still see the *previous* hand's nextHandArmed, compute
+  // nextHandDurationMs as 0 below, and mount HandOutcomeRing with that 0 —
+  // which permanently freezes its CSS animation at its end frame (see
+  // HandOutcomeRing's elapsedMs, captured once at mount). Setting state
+  // straight in the render body is React's supported pattern for adjusting
+  // state in response to a prop change; it takes effect before this same
+  // render's JSX (and HandOutcomeRing's mount) is produced.
+  const armedDeadline = snapshot?.next_hand_unix_ms;
+  if (armedDeadline && nextHandArmed?.deadline !== armedDeadline) {
+    setNextHandArmed({deadline: armedDeadline, snapshotAt});
+  }
 
   useEffect(() => {
     const hasPayouts = Boolean(snapshot?.payouts && Object.keys(snapshot.payouts).length > 0);

@@ -204,3 +204,85 @@ intencional e corrige um problema de memória real) nem investiguei se essa mesm
 `handleKickTimeout`/`handleAFKSweep`/`handleExpireWinnerCards` da mesma forma — essa correção
 ataca o sintoma (deadline obsoleto chegando ao cliente) na origem única onde ele é montado no
 snapshot, então cobre qualquer causa de obsolescência, não só a eviction.
+
+## 📌 Segunda atualização — jogando ao vivo de novo, achado #3 (real) e um bug de frontend à parte
+
+Depois do fix acima (`deadlinesForBroadcast`) ir pra produção e o CI verde, testei ao vivo de
+novo com duas contas reais. Dois problemas distintos apareceram, com causas totalmente
+diferentes:
+
+### Bug de frontend: ring do hand-outcome preso em 0
+
+O anel de contagem regressiva no botão "X" do banner de resultado de mão (a próxima mão já está
+a caminho) simplesmente não aparecia. Achado em `ui/src/lib/hooks/useTableOutcome.ts`: o
+`nextHandDurationMs` era recalculado dentro de um `useEffect`, que só roda **depois** do commit —
+então a primeira renderização que carrega um `next_hand_unix_ms` genuinamente novo ainda via o
+`nextHandArmed` da mão **anterior**, calculava `nextHandDurationMs = 0`, e `HandOutcomeRing`
+captura seu `elapsedMs` **uma única vez, no mount** (`ui/src/components/table/HandOutcome.tsx`).
+Esse `0` inicial fica congelado. Corrigido movendo o ajuste de estado pra dentro do corpo do
+render (padrão oficial do React para "ajustar estado quando uma prop muda"), eliminando a janela
+onde isso pode acontecer. Testes novos em `ui/src/lib/hooks/useTableOutcome.test.tsx`.
+
+### Achado #3 (real, arquitetural): erosão pelo lado que não commitou
+
+Jogando de novo, o timer do **seat** (não o hand-outcome) continuava parecendo "quase
+instantâneo" mesmo depois do fix #2. Investigação nos logs de `armTurnTimer` (só logados quando
+`resumed_from_persisted=true`, ver a nota de redução de volume abaixo) mostrou que praticamente
+todo turno estava sendo "resumido" de um deadline persistido, e ocasionalmente com `remaining_ms`
+bem menor do que a janela nominal (ex.: `remaining_ms: 730` quando `base_deadline_unix_ms ==
+deadline_unix_ms`).
+
+Cruzando os logs de `"table ws connected"` por `logStreamName` (processo `app` vs `app2`) da
+própria mesa de teste:
+
+```
+14:54:06  jogador A conecta → app2
+14:54:30  jogador B conecta → app2   (MESMO processo)
+15:03:37  jogador A reconecta (reload de página) → app   (processo DIFERENTE de B)
+```
+
+No início os dois caíram por acaso no mesmo processo nginx round-robin — nesse caso
+`broadcastAll()` roda tudo síncrono no mesmo `*Actor`, sempre com timer "fresco", e visualmente
+tudo funciona. O `resumed_from_persisted=true` virou onipresente exatamente a partir do reload
+que moveu a conexão do jogador A pro outro processo.
+
+**Importante — o que isso NÃO é:** não existe ausência total de comunicação entre os dois
+processos. `app.go`'s `broadcast` closure já publica cada snapshot por-viewer via
+`api-commons/ws.Registry` (Redis Pub/Sub, chave `tableID#viewerID`), então o que o jogador **vê**
+sempre esteve correto — nenhuma ação real foi perdida, nenhum turno pulado de verdade. O gap real
+é que o `*Actor` **interno** de cada processo (o que de fato arma o `time.AfterFunc` que faz o
+auto-fold valer) é um pedaço de estado **separado**, não sincronizado por esse mesmo broadcast —
+só era atualizado no próximo gatilho de reload **não relacionado** daquele processo (um
+`ReconnectCmd` pausado por `tableconn.SyncInterval` = 15s, ou uma ação própria do jogador daquele
+lado). Isso é o que deixava a imposição real do timer atrasada em relação ao que já tinha sido
+commitado, silenciosamente.
+
+**Correção:** `internal/tablenotify` — publica um sinal leve "mesa X mudou" num canal Valkey
+Pub/Sub compartilhado a cada `Actor.commit` bem-sucedido (fire-and-forget, timeout curto, nunca
+bloqueia o commit real). `tablemanager.Manager.ListenForExternalChanges` assina esse canal uma
+vez por processo e despacha `table.ExternalChangeCmd` pro `*Actor` local daquela mesa (se
+houver), forçando `ensureLoaded(ctx, true)` + `broadcastAll()` imediatos. Usa o client Valkey cru
+(`cacheBackend.(*cache.RedisBackend).Client()`) porque `cache.Backend` não expõe Publish/
+Subscribe — mesmo padrão que `SetHandHookClaimer` já usa. Uma mesa sem `*Actor` local nesse
+processo é ignorada silenciosamente; nunca cria um ator novo como efeito colateral da notificação
+(isso criaria e abandonaria um `*Actor` pra toda mesa que qualquer outro processo tocar).
+
+Testes: `internal/tablenotify/tablenotify_test.go` (degrade gracioso sem cliente, mesmo padrão
+de `handhook_test.go`); `internal/table/changenotify_test.go`
+(`TestCommitNotifiesChangeOnEverySuccess`, `TestHandleExternalChangeForcesReloadAndBroadcast`);
+`internal/tablemanager/changelisten_test.go`
+(`TestListenForExternalChangesDispatchesToTheMatchingLocalActor`,
+`...IgnoresUnknownTables`). `go build/vet/test` do módulo `api` limpos.
+
+### Nota: por que os logs de diagnóstico pararam de aparecer em todo arm
+
+Os logs `INFO` temporários (`armTurnTimer`/`armNextHandTimer`) originalmente disparavam em
+**toda** rearmagem, não só na "resumida". Isso derrubou o CI (`TestMultiServerFuzz` estourou o
+deadline apertado do teste por volume de log síncrono — ver commit `fb54178`). Agora só logam
+quando `resumed_from_persisted=true`, que é justamente o caso em investigação.
+
+**Fora do escopo (ainda):** roteamento sticky por `table_id` no nginx (eliminaria a divisão de
+processo na raiz) não foi feito — o `upstream {}` que faz o round-robin vive num script
+compartilhado do repo externo `ctech-cdk`, fora do alcance desta sessão, e mexer às cegas lá
+arrisca derrubar a API. O fix via Valkey fica inteiro neste repo e resolve o mesmo problema sem
+esse risco.

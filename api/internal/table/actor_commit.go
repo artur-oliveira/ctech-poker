@@ -125,6 +125,7 @@ func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.A
 		// without a real (DynamoDB Local) backing store. Never nil in
 		// production — the manager always supplies a real *tablestore.Store.
 		a.version++
+		a.notifyChange()
 		return nil
 	}
 	// Last-line backstop (2026-09-01 incident: a player seated twice at
@@ -154,7 +155,21 @@ func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.A
 		return err
 	}
 	a.version++
+	a.notifyChange()
 	return nil
+}
+
+// notifyChange announces a just-completed commit to every sibling process
+// serving this table (see ChangeNotifier's doc comment). Detached: Notify has
+// its own short timeout and never returns an error the caller could act on —
+// blocking every commit on a Valkey round trip would cost every player at
+// this table real turn-decision latency for a signal that only ever speeds
+// up a SIBLING process's convergence.
+func (a *Actor) notifyChange() {
+	if a.changeNotifier == nil {
+		return
+	}
+	go a.changeNotifier.Notify(context.Background(), a.id)
 }
 
 // replayFrameFor deliberately copies only public gameplay state. In

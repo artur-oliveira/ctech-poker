@@ -250,6 +250,26 @@ type ConnStore interface {
 // construction, by tablemanager.
 func (a *Actor) SetConnStoreForActor(s ConnStore) { a.connStore = s }
 
+// ChangeNotifier announces that this table's persisted state just changed, so
+// a sibling process's own Actor instance for the same table — the one
+// actually enforcing whichever player's real turn/time-bank timer runs on
+// that process — reloads and re-arms immediately instead of only noticing on
+// its own next unrelated command (a ping-paced ReconnectCmd, up to
+// tableconn.SyncInterval late). See internal/tablenotify.
+//
+// Fire-and-forget by design: DynamoDB's committed row is always the sole
+// source of truth (commit's conditional write already guarantees that), so a
+// dropped or delayed notification only costs the slower existing reload path
+// for whichever process missed it — never correctness. See
+// docs/specs/2026-09-04-cross-process-change-notify.md.
+type ChangeNotifier interface {
+	Notify(ctx context.Context, tableID string)
+}
+
+// SetChangeNotifierForActor wires the shared change signal. Set once, right
+// after construction, by tablemanager.
+func (a *Actor) SetChangeNotifierForActor(n ChangeNotifier) { a.changeNotifier = n }
+
 // syncFleetConns republishes this instance's connected players and refreshes
 // the fleet-wide set. force is set by the connect/disconnect handlers, whose
 // whole point is to make the change visible immediately; the paced caller is

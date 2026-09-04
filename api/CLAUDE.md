@@ -261,6 +261,28 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   to show exactly when a deadline went stale; remove once confirmed fixed in prod. Do **not** revert
   `evictActorWhenIdle`'s lease-holding case — it fixes a real memory leak (#36); fix staleness at the broadcast
   boundary instead, since that covers every cause of it, not just eviction.
+- **A sibling process needs telling when a table changes, not just a slower way to eventually notice.** The two
+  fixes above still left a real gap live-reproduced 2026-09-04: `app.go`'s `broadcast` closure already fans a
+  fresh per-viewer snapshot out to every process instantly (`api-commons/ws.Registry`, Redis Pub/Sub, keyed
+  `tableID#viewerID`), so what a player **sees** was never actually wrong. What each process's own in-memory
+  `*Actor` **enforces** — the real `time.AfterFunc` behind a player's turn/time-bank timeout — is a separate,
+  unsynced piece of state, and the only thing that ever refreshed it on a process that did not itself commit the
+  change was that process's own next unrelated `ensureLoaded` (a ping-paced `ReconnectCmd`, up to
+  `tableconn.SyncInterval` — 15s — behind, or one of its own players finally acting). A table's two players
+  landing on different nginx-round-robined processes (the common case for a heads-up table, not the eviction
+  edge case) meant that side's real enforcement timer could silently run against a deadline that had already
+  decayed by however long that gap was — reproduced live via a raw WebSocket capture cross-referenced against
+  `armTurnTimer`'s arm-time logging, see the incident spec's follow-up section. Fixed with
+  `internal/tablenotify`: `Actor.commit` fires a fire-and-forget `ChangeNotifier.Notify(ctx, tableID)` over a
+  single shared Valkey Pub/Sub channel (raw `valkey.Client`, same `cacheBackend.(*cache.RedisBackend)` type
+  assertion `SetHandHookClaimer`'s wiring already uses — `cache.Backend` cannot express Publish/Subscribe);
+  `tablemanager.Manager.ListenForExternalChanges` subscribes once per process and dispatches a new
+  `table.ExternalChangeCmd` to whichever local `*Actor` is running that table, forcing an immediate
+  `ensureLoaded(ctx, true)` + `broadcastAll()`. Fire-and-forget throughout by design — DynamoDB's conditional
+  commit is always the source of truth, so a dropped or delayed signal only costs the slower pre-existing reload
+  path for whichever process missed it, never correctness. A table with no local Actor is silently ignored, and
+  `GetOrCreateActor` must never be called from this path — that would spin up and immediately abandon an Actor
+  for every table any *other* process touches.
 - **Nothing viewer-independent belongs inside `broadcastAll`'s per-seat loop, and nothing expensive belongs on the
   actor goroutine twice.** Chat and reaction views are built once per broadcast (`activityViews`) and shared; the
   `equityIterations` Monte Carlo is memoized by `(hole, board, opponent count)` per hand (`equityFor`), because a

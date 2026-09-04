@@ -93,6 +93,18 @@ type ReconnectCmd struct {
 
 func (c ReconnectCmd) reply() chan error { return c.Reply }
 
+// ExternalChangeCmd is dispatched by tablemanager when a ChangeNotifier
+// signal reports that a sibling process just committed for this table. It
+// carries no player scope: unlike ReconnectCmd (which only broadcasts when
+// clearing a stale disconnect mark, to avoid flooding on routine pings), this
+// always forces a fresh reload and re-broadcast, because it only ever fires
+// when something genuinely changed elsewhere.
+type ExternalChangeCmd struct {
+	Reply chan error
+}
+
+func (c ExternalChangeCmd) reply() chan error { return c.Reply }
+
 type SitOutCmd struct {
 	PlayerID string
 	Reply    chan error
