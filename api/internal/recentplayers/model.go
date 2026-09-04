@@ -7,16 +7,17 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
+// Player is one opponent's entry in a viewer's recent-players list. Since
+// #199 it is derived at read time by coalescing the viewer's own per-hand
+// rows (see DynamoStore.List), not stored as an item of its own — hence no
+// dynamodbav tags: nothing decodes into this shape any more.
 type Player struct {
-	ViewerPlayerID   string `dynamodbav:"pk"`
-	OpponentPlayerID string `dynamodbav:"sk"`
-	LastPlayedAt     int64  `dynamodbav:"last_played_at"`
-	LastTableID      string `dynamodbav:"last_table_id"`
-	LastHandID       string `dynamodbav:"last_hand_id"`
-	HandsTogether    int64  `dynamodbav:"hands_together"`
-	RecentPartition  string `dynamodbav:"gsi_recent_pk"`
-	RecentSort       string `dynamodbav:"gsi_recent_sk"`
-	TTL              int64  `dynamodbav:"ttl"`
+	ViewerPlayerID   string
+	OpponentPlayerID string
+	LastPlayedAt     int64
+	LastTableID      string
+	LastHandID       string
+	HandsTogether    int64
 }
 
 type HandCompletion struct {
