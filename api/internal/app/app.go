@@ -494,6 +494,20 @@ func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablest
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
 		data, err := goproto.Marshal(message)
 		if err == nil {
+			// TEMPORARY (2026-09-04 delivery-latency investigation): pins the
+			// exact wall-clock instant this process calls reg.Broadcast, so a
+			// client-side capture's own receive timestamp can be diffed against
+			// it directly — bisects whether a reported gap sits before this
+			// call (armTurnTimer/commit) or after it (Valkey Pub/Sub relay,
+			// RedisRegistry.listen, or the WS write itself). Remove once
+			// resolved.
+			if snap.ActionBaseDeadlineUnixMs > 0 || snap.NextHandUnixMs > 0 {
+				slog.Info("table broadcast publish",
+					"table_id", tableID, "viewer_id", viewerID, "hand_id", snap.HandID,
+					"publish_unix_ms", time.Now().UnixMilli(),
+					"action_base_deadline_unix_ms", snap.ActionBaseDeadlineUnixMs,
+					"next_hand_unix_ms", snap.NextHandUnixMs)
+			}
 			reg.Broadcast(context.Background(), tableID+"#"+viewerID, data)
 		}
 	}
