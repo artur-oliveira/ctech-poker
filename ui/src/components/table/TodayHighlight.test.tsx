@@ -148,13 +148,33 @@ describe('TodayHighlight', () => {
 
   test('refetches once a hand this viewer watched completes', async () => {
     getTodayHighlight.mockResolvedValueOnce(highlight({pot: 100}));
-    const {rerender} = renderHighlight({handId: 'hand-1', handComplete: false});
+    const {rerender} = renderHighlight({handId: 'hand-2', handComplete: false});
     await waitFor(() => expect(screen.getByText('100')).toBeInTheDocument());
 
     getTodayHighlight.mockResolvedValueOnce(highlight({pot: 900}));
-    rerender(<TodayHighlight tableId="t1" handId="hand-1" handComplete/>);
+    rerender(<TodayHighlight tableId="t1" handId="hand-2" handComplete/>);
     await waitFor(() => expect(screen.getByText('900')).toBeInTheDocument());
     expect(getTodayHighlight).toHaveBeenCalledTimes(2);
+  });
+
+  test('spends no read when the highlight on display is already this hand', async () => {
+    getTodayHighlight.mockResolvedValueOnce(highlight({hand_id: 'hand-1', pot: 100}));
+    const {rerender} = renderHighlight({handId: 'hand-1', handComplete: false});
+    await waitFor(() => expect(screen.getByText('100')).toBeInTheDocument());
+
+    rerender(<TodayHighlight tableId="t1" handId="hand-1" handComplete/>);
+    await waitFor(() => expect(screen.getByText('100')).toBeInTheDocument());
+    expect(getTodayHighlight).toHaveBeenCalledTimes(1);
+  });
+
+  test('spends no read when the settled pot cannot beat the one on record', async () => {
+    getTodayHighlight.mockResolvedValueOnce(highlight({hand_id: 'hand-1', pot: 5000}));
+    const {rerender} = renderHighlight({handId: 'hand-2', handComplete: false});
+    await waitFor(() => expect(screen.getByText('5.000')).toBeInTheDocument());
+
+    rerender(<TodayHighlight tableId="t1" handId="hand-2" handPot={400} handComplete/>);
+    await waitFor(() => expect(screen.getByText('5.000')).toBeInTheDocument());
+    expect(getTodayHighlight).toHaveBeenCalledTimes(1);
   });
 
   test('keeps re-checking after completion so a late-written highlight still lands', async () => {
@@ -163,12 +183,12 @@ describe('TodayHighlight', () => {
       // Server hasn't written the row yet at completion: the immediate refetch
       // returns the stale pot, a backoff refetch picks up the real one.
       getTodayHighlight.mockResolvedValueOnce(highlight({pot: 100}));
-      const {rerender} = renderHighlight({handId: 'hand-1', handComplete: false});
+      const {rerender} = renderHighlight({handId: 'hand-2', handComplete: false});
       await vi.waitFor(() => expect(screen.getByText('100')).toBeInTheDocument());
 
       getTodayHighlight.mockResolvedValueOnce(highlight({pot: 100}));
-      getTodayHighlight.mockResolvedValueOnce(highlight({pot: 4200}));
-      rerender(<TodayHighlight tableId="t1" handId="hand-1" handComplete/>);
+      getTodayHighlight.mockResolvedValueOnce(highlight({hand_id: 'hand-2', pot: 4200}));
+      rerender(<TodayHighlight tableId="t1" handId="hand-2" handComplete/>);
 
       await vi.advanceTimersByTimeAsync(2000);
       await vi.waitFor(() => expect(screen.getByText('4.200')).toBeInTheDocument());

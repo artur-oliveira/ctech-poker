@@ -18,6 +18,8 @@ Date: 2026-09-03. Full write-up:
   (`['highlights', tableId, 'today']`) because the server writes those
   projections on a pipeline that runs after the `complete` snapshot is sent, so
   a single invalidate refetches before the row exists.
+  **Superseded on 2026-09-04**: that volley is now a retry that stops as soon as
+  the projection is there. See `docs/2026-09-04-post-hand-read-budget.md`.
 
 No visible-behaviour change to document in the in-app guide: the toast now
 behaves as the guide already describes (shown once per unlock), and the

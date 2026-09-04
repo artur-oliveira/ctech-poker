@@ -36,7 +36,7 @@ import {useTableOutcome} from '@/lib/hooks/useTableOutcome';
 import {useTableOverlays} from '@/lib/hooks/useTableOverlays';
 import {actionState} from '@/lib/tableActions';
 import type {PlayerNote} from '@/lib/api/playerNotes';
-import {seatParticipated} from '@/lib/tableOutcome';
+import {highlightPot, seatParticipated} from '@/lib/tableOutcome';
 import {getRelationships} from '@/lib/api/social';
 import {SOCIAL_KEYS, suppressedPlayerIds} from '@/lib/social';
 import {useSocialActions} from '@/lib/hooks/useSocialActions';
@@ -208,7 +208,8 @@ function TableContent() {
               <Wifi aria-hidden="true"/>
               <span className="connection-label">{rt.status === 'connected' ? 'Ao vivo' : 'Reconectando'}</span>
             </span>
-            <TodayHighlight tableId={id} handId={s.hand_id} handComplete={s.stage === 'complete'}/>
+            <TodayHighlight tableId={id} handId={s.hand_id} handComplete={s.stage === 'complete'}
+                            handPot={highlightPot(s)}/>
             <Button type="button" variant="ghost" size="icon" className="table-mobile-quick-action"
                     aria-label="Abrir reações" aria-keyshortcuts="e" aria-pressed={activeTablePanel === 'reactions'}
                     onClick={() => setActiveTablePanel(activeTablePanel === 'reactions' ? null : 'reactions')}>

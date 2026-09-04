@@ -2,6 +2,8 @@
 import {useEffect, useRef, useState} from 'react';
 import {useQueryClient} from '@tanstack/react-query';
 import type {TableSnapshot} from '@/lib/api/table';
+import type {Page} from '@/lib/api/client';
+import type {HandItem} from '@/lib/api/player';
 import type {HandOutcomeState} from '@/components/table/HandOutcome';
 import {buildHandOutcome, seatParticipated} from '@/lib/tableOutcome';
 import {invalidateAfterSettle} from '@/lib/settleRefetch';
@@ -104,13 +106,17 @@ export function useTableOutcome({id, viewer, snapshot, snapshotAt}: {
   // The last-winners strip reads the player's own hand history, which the
   // server only writes on a pipeline it runs *after* broadcasting this
   // `complete` snapshot — so one invalidate here would refetch before the row
-  // exists. Re-invalidate with a backoff, keyed on the settled hand so the
-  // sequence starts once and is cancelled when the next hand deals.
+  // exists. Retry with a backoff, keyed on the settled hand so the sequence
+  // starts once and is cancelled when the next hand deals — and stopped as
+  // soon as the history actually carries this hand, which is what keeps a
+  // hand that lands on the first read from costing four (#229).
   const settledHandID = snapshot?.payouts && Object.keys(snapshot.payouts).length > 0 ?
     snapshot?.hand_id : undefined;
   useEffect(() => {
     if (!settledHandID) return undefined;
-    return invalidateAfterSettle(queryClient, ['hands', id]);
+    return invalidateAfterSettle<Page<HandItem>>(queryClient, ['hands', id], {
+      settled: page => Boolean(page?.data.some(hand => hand.hand_id === settledHandID)),
+    });
   }, [settledHandID, id, queryClient]);
 
   const viewerSeat = snapshot?.seats.find(seat => seat.player_id === viewer);
