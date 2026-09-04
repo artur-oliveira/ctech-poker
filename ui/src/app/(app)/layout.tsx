@@ -1,6 +1,7 @@
 import {QueryProvider} from '@/lib/providers/QueryProvider';
-// The authenticated shell's own stylesheet (#84): the (marketing) group, the error
-// boundaries and /unavailable are laid out by globals.css alone and never load it.
+// The renderer aggregate is route-scoped here (#84); public routes only load base.css.
+// app.css follows it to preserve the established authenticated-shell cascade.
+import '../renderer.css';
 import './app.css';
 
 /** App shell: lobby, table, hands, achievements, profile, store and every

@@ -1,0 +1,832 @@
+/* Poker-rules route styles. Extracted from the renderer aggregate so this public reference does not load the live table. */
+
+@media (max-width: 600px) {
+.shell {
+        width: min(100% - 32px, 1160px)
+    }
+}
+.app-page {
+    min-height: 100vh;
+    /* clip (not hidden) so the sticky nav's full-bleed backdrop can overflow
+       the shell gutters without turning this into a scroll container */
+    overflow-x: clip;
+    background: radial-gradient(circle at 20% 0, var(--wine-deep-5), transparent 35%), var(--room-grad-2)
+}
+.app-nav {
+    position: sticky;
+    /* parks under the API-unavailable strip instead of behind it; 0 normally */
+    top: var(--api-bar-h);
+    z-index: var(--z-chrome);
+    height: 78px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between
+}
+.app-nav::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    margin-inline: calc(50% - 50vw);
+    /* Not decorative glass: the bar has to stay readable over rows sliding
+       under it while keeping the page's own wine tint at scroll 0. */
+    background: color-mix(in srgb, var(--room-grad-2) 84%, transparent);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--white-08)
+}
+.app-nav > a:last-child, .app-nav .app-nav-routes a {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    color: var(--neutral-rose-3);
+    text-decoration: none;
+    font-size: 14px
+}
+.app-nav svg {
+    width: 16px
+}
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px
+}
+.playing-card {
+    display: block;
+    flex: none;
+    object-fit: contain
+}
+.hole-card {
+    width: 46px;
+    height: 64px;
+    border-radius: 4px
+}
+.card-reveal {
+    position: relative
+}
+.card-reveal-inner {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 100%
+}
+.hole-card .card-reveal-inner {
+    animation: hole-card-reveal 440ms var(--ease-out-expo) both;
+    animation-delay: calc(var(--deal-index, 0) * 75ms)
+}
+.card-reveal img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit
+}
+.card-reveal .card-back,
+.card-reveal .card-front {
+    transform-origin: center;
+    animation-duration: 560ms;
+    animation-timing-function: var(--ease-out-expo);
+    animation-fill-mode: both;
+    animation-delay: calc(var(--deal-index, 0) * 80ms)
+}
+.card-reveal .card-back {
+    z-index: 2;
+    animation-name: card-back-turn
+}
+.card-reveal .card-front {
+    z-index: 1;
+    animation-name: card-front-turn
+}
+.hole-card .card-back,
+.hole-card .card-front {
+    animation-duration: 440ms;
+    animation-delay: calc(var(--deal-index, 0) * 75ms)
+}
+.hand-ranking-list {
+    display: grid;
+    gap: 2px;
+    margin-top: 20px;
+    list-style: none;
+    padding: 0
+}
+.hand-ranking-list li {
+    display: grid;
+    grid-template-columns: 28px auto 1fr;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 4px;
+    border-bottom: 1px solid var(--white-12)
+}
+.hand-ranking-list li:last-child {
+    border-bottom: none
+}
+.hand-ranking-list > li > b {
+    font: 700 16px var(--font-mono);
+    color: var(--neutral-wine)
+}
+.hand-ranking-list li:first-child > b {
+    color: var(--gold)
+}
+.hand-ranking-cards {
+    display: flex
+}
+.hand-ranking-cards .hole-card {
+    width: 34px;
+    height: 48px;
+    margin-right: -14px
+}
+.hand-ranking-cards .hole-card:last-child {
+    margin-right: 0
+}
+.hand-ranking-list:not(.compact) .hand-ranking-cards .card-reveal-inner {
+    animation-duration: 460ms;
+    animation-delay: calc(var(--deal-index, 0) * 150ms)
+}
+.hand-ranking-list:not(.compact) .hand-ranking-cards .card-back,
+.hand-ranking-list:not(.compact) .hand-ranking-cards .card-front {
+    animation-duration: 460ms;
+    animation-delay: calc(var(--deal-index, 0) * 150ms)
+}
+.hand-ranking-list strong {
+    display: block;
+    font-size: var(--font-size-body)
+}
+.hand-ranking-list small {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted)
+}
+.hand-ranking-list.compact li {
+    grid-template-columns: 22px auto 1fr;
+    gap: 12px;
+    padding: 9px 2px
+}
+.hand-ranking-list.compact .hole-card {
+    width: 26px;
+    height: 37px;
+    margin-right: -11px
+}
+.hand-ranking-list.compact strong {
+    font-size: var(--font-size-compact)
+}
+.hand-ranking-list.compact small {
+    font-size: var(--font-size-tiny)
+}
+.rules {
+    padding-block: 35px 90px
+}
+.rules > a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--neutral-rose-3);
+    text-decoration: none;
+    font-size: var(--font-size-body)
+}
+.rules > a svg {
+    width: 16px
+}
+.rules header {
+    text-align: center;
+    max-width: 620px;
+    margin: 40px auto 32px
+}
+.rules header small {
+    display: block;
+    color: var(--gold);
+    font: 600 var(--font-size-mono) var(--font-mono);
+    letter-spacing: .12em;
+    margin-bottom: 10px
+}
+.rules header > svg {
+    width: 32px;
+    height: 32px;
+    color: var(--gold);
+    margin-bottom: 6px
+}
+.rules header p {
+    color: var(--muted);
+    line-height: 1.65
+}
+.rules-toc {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    max-width: 720px;
+    margin: 0 auto 50px
+}
+.rules-toc a {
+    padding: 8px 16px;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-pill);
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: var(--font-size-body);
+    transition: color 180ms var(--ease-out-quart), border-color 180ms var(--ease-out-quart)
+}
+.rules-toc a:hover, .rules-toc a:focus-visible {
+    color: var(--on-brand);
+    border-color: var(--brand-bright)
+}
+.rules-section {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 32px 0;
+    border-top: 1px solid var(--white-13);
+    scroll-margin-top: 90px
+}
+.rules-section:first-of-type {
+    border-top: none;
+    padding-top: 0
+}
+.rules-section h2 {
+    margin: 0 0 12px;
+    font-size: var(--font-size-large)
+}
+.rules-section > p {
+    color: var(--text-muted-soft);
+    line-height: 1.65;
+    max-width: 68ch
+}
+.rules-list, .rules-steps {
+    display: grid;
+    gap: 14px;
+    margin: 18px 0 0;
+    padding: 0;
+    list-style: none
+}
+.rules-steps {
+    counter-reset: rules-step
+}
+.rules-list li, .rules-steps li {
+    display: flex;
+    gap: 12px;
+    line-height: 1.6;
+    color: var(--text-muted-soft)
+}
+.rules-steps li {
+    counter-increment: rules-step
+}
+.rules-steps li:before {
+    content: counter(rules-step);
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--brand-13);
+    color: var(--brand-bright-4);
+    font: 700 var(--font-size-compact) var(--font-mono)
+}
+.rules-list li:before {
+    content: '';
+    flex: none;
+    width: 6px;
+    height: 6px;
+    margin-top: 9px;
+    border-radius: 50%;
+    background: var(--gold)
+}
+.rules-list b, .rules-steps b {
+    color: var(--on-brand)
+}
+.guide-section .rules-steps, .guide-section .rules-list {
+    margin-top: 18px
+}
+.guide-home .page-heading-shell {
+    margin-bottom: 34px
+}
+.guide-topic .page-heading-shell {
+    margin-bottom: 26px
+}
+@media (max-width: 520px) {
+.game-chrome > header .header-right {
+        flex-wrap: nowrap;
+        justify-content: flex-end;
+        min-width: 0;
+        /* 0, not 6: the gap is what pays for the 44px touch floor below. The
+           icons are centred inside their 44px targets, so removing the gap
+           costs no legibility and buys the daily-highlight pot enough width to
+           print in full instead of ellipsizing a number ("18.5…"). */
+        gap: 0
+    }
+.game-chrome > header .header-right > *:not(.today-highlight-wrap) {
+        flex-shrink: 0
+    }
+}
+@media (max-width: 360px) {
+
+    .game-chrome > header .header-right {
+        flex-wrap: nowrap;
+        gap: 3px
+    }
+}
+@media (orientation: portrait) and (max-width: 1023px) {
+    .game-chrome > header .header-right {
+        flex: 1;
+        justify-content: flex-end;
+        gap: 0
+    }
+.header-right .connection-state {
+        width: 18px;
+        justify-content: center
+    }
+.header-right > .table-mobile-quick-action,
+    .header-right > .table-pause-action {
+        width: 44px;
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0
+    }
+}
+@media (orientation: portrait) and (max-width: 380px) {
+.game-chrome > header .header-right {
+        gap: 0
+    }
+}
+.nav .brand,
+.app-nav .brand,
+.app-page-footer a,
+.state-page .brand,
+.share-page .brand {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center
+}
+.app-page-footer a {
+    min-width: 44px
+}
+.rules-footer-cta {
+    max-width: 680px;
+    margin: 48px auto 0;
+    padding: 32px 24px;
+    background: color-mix(in srgb, var(--ink) 50%, transparent);
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-panel);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+.rules-footer-cta h3 {
+    font-size: 1.2rem;
+    color: var(--on-brand);
+    margin: 0;
+}
+.rules-footer-cta p {
+    color: var(--muted);
+    font-size: 0.92rem;
+    margin: 0;
+}
+.rules-cta-buttons {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.rules-fairness-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 18px 22px;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--felt) 30%, transparent), color-mix(in srgb, var(--felt-deep) 40%, transparent));
+    border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+    border-radius: var(--rounded-panel);
+    margin-top: 16px;
+}
+.rules-fairness-box svg {
+    width: 28px;
+    height: 28px;
+    color: var(--success);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+.rules-fairness-box strong {
+    display: block;
+    font-size: 1rem;
+    color: var(--felt-text);
+    margin-bottom: 4px;
+}
+.rules-fairness-box p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--felt-text-soft);
+    line-height: 1.5;
+}
+.app-nav {
+    height: 72px;
+    min-width: 0;
+    gap: 20px
+}
+.app-nav .brand {
+    flex: none
+}
+.app-nav .header-right {
+    min-width: 0;
+    gap: 2px
+}
+.app-nav-routes {
+    display: flex;
+    align-items: center;
+    gap: inherit;
+    min-width: 0
+}
+.app-nav .app-nav-routes a,
+.app-nav > .app-nav-public-back {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding-inline: 10px;
+    border-radius: var(--rounded-control);
+    color: var(--text-secondary);
+    font-weight: 600;
+    transition: color 180ms var(--ease-out-quart), background-color 180ms var(--ease-out-quart)
+}
+.app-nav .app-nav-routes a:hover,
+.app-nav .app-nav-routes a:focus-visible,
+.app-nav > .app-nav-public-back:hover,
+.app-nav > .app-nav-public-back:focus-visible {
+    color: var(--paper);
+    background: var(--white-08)
+}
+.app-nav .app-nav-routes a[aria-current='page'] {
+    color: var(--brand-bright-7);
+    background: var(--brand-13)
+}
+.app-nav-store-link {
+    position: relative
+}
+.app-nav-reward-dot {
+    position: absolute;
+    top: 7px;
+    right: 6px;
+    width: 8px;
+    height: 8px;
+    border: 2px solid var(--ink);
+    border-radius: 50%;
+    background: var(--gold)
+}
+.app-nav-reward-dot::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border: 1px solid color-mix(in srgb, var(--gold) 62%, transparent);
+    border-radius: inherit;
+    animation: reward-indicator 2.4s var(--ease-out-quart) 2
+}
+.app-nav .app-nav-routes a svg,
+.app-nav > .app-nav-public-back svg {
+    width: 18px;
+    height: 18px;
+    flex: none;
+    stroke-width: 2
+}
+.content-page {
+    padding-block: 32px 96px
+}
+.page-heading-shell {
+    position: relative
+}
+.content-page .page-heading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 680px;
+    margin: 32px auto 48px;
+    text-align: center
+}
+.page-heading-icon {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    margin-bottom: 14px;
+    border-radius: var(--rounded-control);
+    color: var(--brand-bright-7);
+    background: var(--brand-13)
+}
+.page-heading-icon svg {
+    width: 24px;
+    height: 24px;
+    stroke-width: 1.8
+}
+.content-page .page-heading small {
+    order: 2;
+    display: block;
+    margin: 0 0 10px;
+    color: var(--brand-bright-7);
+    font: 700 var(--font-size-mono)/1.2 var(--font-mono);
+    letter-spacing: .1em
+}
+.content-page .page-heading h1 {
+    order: 3;
+    max-width: 18ch;
+    margin: 0;
+    color: var(--paper);
+    font-size: clamp(2.5rem, 5vw, 3.875rem);
+    line-height: 1.02;
+    letter-spacing: -.035em;
+    text-wrap: balance
+}
+.content-page .page-heading p {
+    order: 4;
+    max-width: 65ch;
+    margin: 16px 0 0;
+    color: var(--text-secondary);
+    font-size: var(--font-size-body);
+    line-height: 1.65;
+    text-wrap: pretty
+}
+@media (max-width: 860px) {
+.app-nav .header-right-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
+    }
+}
+@media (max-width: 600px) {
+.shell {
+        width: min(100% - 32px, 1160px)
+    }
+    .app-nav .header-right {
+        gap: 0
+    }
+.app-nav-routes {
+        display: none
+    }
+.app-tab-bar .app-nav-reward-dot {
+        top: -2px;
+        right: -4px
+    }
+.app-tab-bar .app-nav-people-badge {
+        top: -6px;
+        right: -10px
+    }
+.content-page {
+        padding-block: 20px 72px
+    }
+.content-page .page-heading {
+        margin: 24px auto 38px
+    }
+.content-page .page-heading h1 {
+        font-size: clamp(2.25rem, 11vw, 3rem)
+    }
+.content-page .page-heading p {
+        margin-top: 14px;
+        font-size: var(--font-size-body)
+    }
+}
+@media (max-width: 520px) {
+.app-nav .brand-name {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%)
+    }
+    .app-nav .brand {
+        min-width: 44px;
+        justify-content: center
+    }
+}
+@media (max-width: 380px) {
+.app-nav .app-nav-routes a[aria-current='page'] {
+        display: none
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+.app-nav-reward-dot::after {
+        animation: none
+    }
+}
+.page-heading-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center
+}
+.page-heading-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: -24px auto 48px
+}
+.page-heading-actions > * {
+    min-height: 44px
+}
+.app-page-footer {
+    min-height: 112px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding-block: 28px;
+    border-top: 1px solid var(--white-12);
+    color: var(--text-secondary)
+}
+.app-page-footer > div {
+    display: flex;
+    align-items: center;
+    gap: 12px
+}
+.app-page-footer p {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 0;
+    font-size: var(--font-size-compact)
+}
+.app-page-footer strong {
+    color: var(--paper);
+    font-size: var(--font-size-body)
+}
+.app-page-footer nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px 18px
+}
+.app-page-footer a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-secondary);
+    font-size: var(--font-size-body);
+    text-decoration: none;
+    transition: color 180ms var(--ease-out-quart)
+}
+.app-page-footer a:hover,
+.app-page-footer a:focus-visible {
+    color: var(--paper)
+}
+.content-page.lobby {
+    padding-block: 32px 96px
+}
+.content-page.lobby .page-heading {
+    margin-bottom: 48px
+}
+@media (max-width: 600px) {
+.page-heading-actions {
+        width: 100%;
+        flex-direction: column;
+        margin: -18px auto 38px
+    }
+.page-heading-actions > * {
+        width: 100%
+    }
+.app-page-footer {
+        min-height: 0;
+        align-items: flex-start;
+        padding-block: 24px 32px
+    }
+.app-page-footer > div p span {
+        display: none
+    }
+.app-page-footer nav {
+        max-width: 190px;
+        gap: 0 14px
+    }
+.content-page.lobby {
+        padding-block: 20px 72px
+    }
+}
+@media (max-width: 420px) {
+.app-page-footer > div p {
+        display: none
+    }
+}
+.app-nav-people-link {
+    position: relative
+}
+.app-nav-people-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--rounded-pill);
+    background: var(--brand-bright);
+    color: var(--on-brand);
+    font-size: var(--font-size-tiny);
+    font-weight: 700;
+    line-height: 1
+}
+.page-heading-shell.is-compact .page-heading-row {
+    align-items: stretch
+}
+.content-page .page-heading-shell.is-compact .page-heading {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    align-items: center;
+    column-gap: 16px;
+    max-width: 840px;
+    margin: 16px 0 32px;
+    text-align: left
+}
+.page-heading-shell.is-compact .page-heading-icon {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    width: 44px;
+    height: 44px;
+    margin: 0
+}
+.content-page .page-heading-shell.is-compact .page-heading small {
+    display: none
+}
+.content-page .page-heading-shell.is-compact .page-heading h1 {
+    grid-column: 2;
+    order: initial;
+    max-width: none;
+    font-size: clamp(1.75rem, 4vw, 2.25rem);
+    line-height: 1.1
+}
+.content-page .page-heading-shell.is-compact .page-heading p {
+    grid-column: 2;
+    order: initial;
+    max-width: 72ch;
+    margin: 5px 0 0;
+    line-height: 1.5
+}
+.page-heading-shell.is-compact .page-heading-actions {
+    justify-content: flex-start;
+    margin: -16px 0 32px
+}
+.rules-toc a {
+    min-height: 44px
+}
+@media (max-width: 720px) {
+.content-page .page-heading-shell.is-compact .page-heading {
+        grid-template-columns: 40px minmax(0, 1fr);
+        column-gap: 12px;
+        margin: 8px 0 24px
+    }
+.page-heading-shell.is-compact .page-heading-icon {
+        width: 40px;
+        height: 40px
+    }
+.content-page .page-heading-shell.is-compact .page-heading h1 {
+        font-size: 1.75rem
+    }
+.page-heading-shell.is-compact .page-heading-actions {
+        margin: -8px 0 24px
+    }
+}
+@keyframes hole-card-reveal {
+    0% {
+        opacity: 0;
+        transform: translateY(-18px) rotateZ(5deg) scale(.9)
+    }
+    48% {
+        opacity: 1;
+        transform: none
+    }
+    100% {
+        opacity: 1;
+        transform: none
+    }
+}
+@keyframes card-back-turn {
+    0%, 44% {
+        opacity: 1;
+        transform: scaleX(1)
+    }
+    50% {
+        opacity: 1;
+        transform: scaleX(.04)
+    }
+    50.1%, 100% {
+        opacity: 0;
+        transform: scaleX(.04)
+    }
+}
+@keyframes card-front-turn {
+    0%, 50% {
+        opacity: 0;
+        transform: scaleX(.04)
+    }
+    50.1% {
+        opacity: 1;
+        transform: scaleX(.04)
+    }
+    100% {
+        opacity: 1;
+        transform: scaleX(1)
+    }
+}
+@keyframes reward-indicator {
+    0%, 100% { opacity: 0; transform: scale(.65) }
+    28% { opacity: 1 }
+    72% { opacity: 0; transform: scale(1.45) }
+}

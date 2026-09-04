@@ -1,4 +1,6 @@
 'use client';
+// The landing's live table preview shares the renderer cascade without making it global.
+import '../renderer.css';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
