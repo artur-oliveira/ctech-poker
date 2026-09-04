@@ -178,6 +178,36 @@ describe('hands list page', () => {
     expect(screen.queryByRole('button', {name: /Carregar mais/})).not.toBeInTheDocument();
   });
 
+  test('stops auto-paginating while a filter is active', () => {
+    const instances: {disconnect: ReturnType<typeof vi.fn>}[] = [];
+    vi.stubGlobal('IntersectionObserver', class {
+      observe = vi.fn();
+      unobserve = vi.fn();
+      disconnect = vi.fn();
+      takeRecords = vi.fn(() => []);
+
+      constructor() {
+        instances.push(this);
+      }
+    });
+
+    mocks.query.mockReturnValue(queryResult([pageOf(hands, true)]));
+    render(<HandsHistory/>);
+    expect(instances).toHaveLength(1);
+
+    // A filtered list is short, so the sentinel never leaves the viewport:
+    // auto-loading here downloads the whole history in one cascade. The
+    // observer is torn down and not replaced.
+    fireEvent.click(screen.getByRole('button', {name: /Mesa .*table-one/i}));
+    expect(instances[0].disconnect).toHaveBeenCalled();
+    expect(instances).toHaveLength(1);
+    expect(mocks.fetchNextPage).not.toHaveBeenCalled();
+
+    // The explicit button still works under a filter.
+    fireEvent.click(screen.getByRole('button', {name: 'Carregar mais mãos'}));
+    expect(mocks.fetchNextPage).toHaveBeenCalledOnce();
+  });
+
   test('keeps a 500-hand history bounded to the visible DOM window', () => {
     const manyHands = Array.from({length: 500}, (_, index) => ({
       ...hands[index % hands.length],

@@ -15,7 +15,7 @@ export default function HandsGuide() {
             <li><span>Logo abaixo, a faixa <b>Desde o início</b> traz os números de toda a sua história na carteira escolhida, para você não confundir o recorte carregado com o total. Ela aparece quando você já tem posição no ranking.</span></li>
             <li><span>Os filtros <b>Todas</b>, <b>Só vitórias</b>, <b>Só derrotas</b> e <b>Só empates</b> reorganizam as mãos já carregadas sem buscar nada de novo; havendo mais de uma mesa, uma segunda linha de filtros deixa escolher <b>Todas as mesas</b> ou uma delas.</span></li>
             <li><span>As mãos vêm agrupadas por dia — <b>Hoje</b>, <b>Ontem</b> e a data completa para as mais antigas — e o dia em foco fica fixo no alto enquanto você rola.</span></li>
-            <li><span>A lista carrega sozinha conforme você desce; o botão <b>Carregar mais mãos</b> continua disponível para teclado.</span></li>
+            <li><span>Sem filtro, a lista carrega sozinha conforme você desce. Com um filtro por resultado ou por mesa ativo, o carregamento passa a ser só pelo botão <b>Carregar mais mãos</b> — assim o filtro não puxa o histórico inteiro de uma vez.</span></li>
             <li><span>Cada linha diz se a seed do servidor já foi revelada ou se a mão ainda tem prova parcial, e mostra o nível de blinds daquela mão quando o registro o guarda.</span></li>
             <li><span>Se o filtro não deixar nenhuma mão, a página explica o que aconteceu e oferece <b>Limpar filtros</b>. Sem nenhuma mão registrada, ela mostra o caminho de volta ao lobby em vez de uma lista vazia.</span></li></GuideBullets></>
       },

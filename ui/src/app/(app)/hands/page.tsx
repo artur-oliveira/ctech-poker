@@ -169,7 +169,11 @@ export default function HandsHistory() {
     queryKey: ['hands', mode],
     queryFn: ({pageParam}) => getHands({cursor: pageParam, mode}),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: page => (page.has_next && page.next_cursor) || undefined
+    getNextPageParam: page => (page.has_next && page.next_cursor) || undefined,
+    // React Query refetches EVERY loaded page on window focus. With 18 pages
+    // loaded that is 18 requests for tabbing back into the window, which is
+    // what the "carregou mais sozinho" report was.
+    refetchOnWindowFocus: false
   });
 
   const hands = useMemo(
@@ -190,17 +194,24 @@ export default function HandsHistory() {
 
   const fetchNextPage = history.fetchNextPage;
 
+  // Auto-load only makes sense on the unfiltered list. Under a filter the
+  // visible list stays short no matter how many pages arrive, so the sentinel
+  // never leaves the viewport and every appended page immediately triggers the
+  // next one — the whole history downloaded in one cascade. Filtered lists keep
+  // the explicit "Carregar mais mãos" button instead.
+  const autoLoad = filter.outcome === 'all' && filter.tableId === ALL_TABLES;
+
   const sentinel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const node = sentinel.current;
-    if (!node || !history.hasNextPage) return undefined;
+    if (!node || !history.hasNextPage || !autoLoad) return undefined;
     const observer = new IntersectionObserver(
       entries => entries[0]?.isIntersecting && void fetchNextPage(),
       {rootMargin: '600px 0px'}
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [fetchNextPage, hands.length, history.hasNextPage]);
+  }, [autoLoad, fetchNextPage, hands.length, history.hasNextPage]);
 
   return <TermsGate><AppPage authed current="hands">
     <AppPageBody className="ranking hands">
