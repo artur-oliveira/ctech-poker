@@ -324,6 +324,15 @@ type StreakStore interface {
 // (which would stall the table itself).
 const streakStoreTimeout = 2 * time.Second
 
+// StreakRefreshInterval paces that round trip, the same way
+// tableconn.SyncInterval paces the connection set. The badge is decorative
+// and only ever changes when a hand completes — at most once every few
+// minutes — while ensureLoaded runs on EVERY command, so an unpaced refresh
+// put a synchronous Valkey read (up to streakStoreTimeout) in front of each
+// action: under cache degradation that blocked the table's single Run
+// goroutine and backed its mailbox up behind a purely cosmetic lookup (#222).
+const StreakRefreshInterval = 30 * time.Second
+
 // SetStreakStoreForActor wires the shared badge store. Set once, right after
 // construction, by tablemanager.
 func (a *Actor) SetStreakStoreForActor(s StreakStore) { a.streakStore = s }
@@ -337,6 +346,13 @@ func (a *Actor) refreshStreaks(ctx context.Context) {
 	if a.streakStore == nil {
 		return
 	}
+	now := timeNowFunc()
+	if !a.streaksRefreshedAt.IsZero() && now.Sub(a.streaksRefreshedAt) < StreakRefreshInterval {
+		return
+	}
+	// Stamped before the round trip, not after: a failing (timing out) store
+	// has to back off too, or every command pays the timeout again.
+	a.streaksRefreshedAt = now
 	loadCtx, cancel := context.WithTimeout(ctx, streakStoreTimeout)
 	defer cancel()
 	streaks, err := a.streakStore.Load(loadCtx, a.id)
@@ -364,6 +380,9 @@ func (a *Actor) applyStreaks(seats []hand.SeatView) {
 // via Dispatch, which would deadlock against that same in-flight call.
 func (a *Actor) SetStreaksForActor(streaks map[string]int) {
 	maps.Copy(a.streaks, streaks)
+	// This IS the fresh value — a hand just completed and published it — so
+	// it also restarts refreshStreaks' window.
+	a.streaksRefreshedAt = timeNowFunc()
 	if a.streakStore == nil {
 		return
 	}

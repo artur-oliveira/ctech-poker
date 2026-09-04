@@ -54,6 +54,9 @@ type Actor struct {
 	// tally had two live actors publishing two different badges for one seat,
 	// flipping between them on consecutive snapshots of the same hand.
 	streaks map[string]int
+	// streaksRefreshedAt paces the shared-store read that fills the map above
+	// — see StreakRefreshInterval.
+	streaksRefreshedAt time.Time
 	// streakStore is the cross-instance home of that badge (Valkey, see
 	// internal/tablestreak). nil in dev/tests without a cache, where the map
 	// above is the whole story.
