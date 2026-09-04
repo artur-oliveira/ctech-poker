@@ -538,12 +538,20 @@ catalog.
   empty string — a still-locked or pre-change row, never an error. A replayed hand hook stamps nothing: it is stopped by
   `ClaimHandCounters`, and past that a counter that crosses no threshold reports no unlock. A stamp failure is logged,
   not returned — the counters are already committed and must not be retried.
-- **Issue #65 fixed:** `matchup.Store.RecordHand` no longer writes one 72-item `TransactWriteItems` call per hand. It
-  chunks pairs at `maxPairsPerTx` (12 pairs = 24 items), so a 9-max table's C(9,2)=36 pairs commit as 3 bounded
-  transactions. The atomicity that actually mattered is per-pair, not per-hand: each pair's create-only guard rides in
-  the same transaction as that pair's increment, so no pair is ever double-counted and a partially-applied hand is
-  safely completed by a retry (landed chunks fail their guards and are skipped). Moving matchup off the
-  hand-completion critical path was #61's detached gamification pipeline, already done.
+- **Issues #65 and #201 fixed: `matchup.Store.RecordHand` writes nothing transactional at all.** #65 chunked the
+  original 72-item per-hand `TransactWriteItems` call; #201 removed the model that made it expensive. Each pair is now
+  **one plain conditional `UpdateItem`** (`Store.applyPair`): the per-hand idempotency guard moved *into* the pair item
+  as the `applied_hands` string set (`ADD ... applied_hands :handSet` under
+  `attribute_not_exists(applied_hands) OR NOT contains(applied_hands, :hand)`), so a pair costs one small write instead
+  of a guard item plus an increment inside a transaction — a full ring's C(9,2)=36 pairs cost ~36 WCU, not ~144. The
+  guarantee is unchanged and still per pair: a duplicate `onHandComplete` double-counts nothing, and a hand that died
+  part-way through its pairs is completed (never re-applied) by a retry, because each pair's condition is evaluated on
+  its own item. `pruneApplied` trims the set back to the newest `appliedHandsKeep` (8) hand ids once it passes
+  `appliedHandsCap` (12) — ULID hand ids sort chronologically, and the hand just applied is never pruned — so the item
+  cannot grow with the pair's lifetime. **The documented ceiling: the replay window is a pair's last ~8 shared hands;**
+  a duplicate of an older hand than that would be counted again. Budget pinned by `TestRecordHandWriteBudget`
+  (2/6/9 seats). Moving matchup off the hand-completion critical path was #61's detached gamification pipeline,
+  already done.
 - **Issue #70 fixed: a session's `buyin_amount` is now updated with an atomic conditional ADD, not a
   read-modify-write.** `buyin.Service.buyIn`'s rebuy path used to `FindOpenSession`, add `amount` to the decoded
   `BuyinAmount` in Go, and `PutItem` the whole item back — two concurrent rebuys for the same player (a client

@@ -235,9 +235,10 @@ export class DynamoDBStack extends cdk.Stack {
     // guards for completed hands.
     table('poker_player_poker_stats', false, true);
     // poker_player_matchups: one permanent aggregate per unordered player
-    // pair (pk "pair#<mode>#<idLow>#<idHigh>") plus short-lived per-pair
-    // idempotency guards for completed hands (pk "guard#<table>#<hand>#pair#...") —
-    // same PK-only, TTL'd shape as poker_player_poker_stats.
+    // pair (pk "pair#<mode>#<idLow>#<idHigh>"). Since #201 the per-hand
+    // idempotency guard lives inside that same item as its `applied_hands`
+    // string set, so there are no separate guard rows any more; TTL stays
+    // enabled only so the guard rows written before #201 expire on their own.
     // See docs/specs/2026-08-21-head-to-head-stats.md.
     table('poker_player_matchups', false, true);
     // poker_table_highlights: one item per table per day (pk table_id, sk
