@@ -3,6 +3,7 @@ package tablestore
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -62,6 +63,10 @@ const (
 
 // timeNowFunc is overridden in tests that need a deterministic TTL value.
 var timeNowFunc = time.Now
+
+// logSK renders an action log row's sort key from its table version. The zero
+// padding is what keeps DynamoDB's lexicographic sort equal to numeric order.
+func logSK(version int) string { return fmt.Sprintf("%010d", version) }
 
 // sleepFunc is overridden in tests so a retry backoff costs no wall time.
 var sleepFunc = time.Sleep
@@ -246,7 +251,7 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 		TTL int64  `dynamodbav:"ttl"`
 		ActionLogEntry
 	}{
-		PK: tableID + "#" + handID, SK: fmt.Sprintf("%010d", entry.Version),
+		PK: tableID + "#" + handID, SK: logSK(entry.Version),
 		TTL:            timeNowFunc().Add(logTTLDays * 24 * time.Hour).Unix(),
 		ActionLogEntry: entry,
 	})
@@ -271,7 +276,15 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 		guardItem, err := dynamo.Encode(struct {
 			PK  string `dynamodbav:"pk"`
 			TTL int64  `dynamodbav:"ttl"`
-		}{PK: tableID + "#" + handID + "#" + actionID, TTL: timeNowFunc().Add(guardTTLDays * 24 * time.Hour).Unix()})
+			// Version is the action log row's sort key for this same action.
+			// Recording it here turns FindActionByID (report evidence lookup)
+			// into two GetItems instead of a query over the whole hand
+			// partition — see its doc comment.
+			Version int `dynamodbav:"version"`
+		}{
+			PK: tableID + "#" + handID + "#" + actionID, TTL: timeNowFunc().Add(guardTTLDays * 24 * time.Hour).Unix(),
+			Version: entry.Version,
+		})
 		if err != nil {
 			return fmt.Errorf("tablestore: encode guard: %w", err)
 		}
@@ -317,20 +330,72 @@ func (s *Store) LoadActionsSince(ctx context.Context, tableID, handID string, af
 // FindActionByID resolves evidence only inside the caller-supplied table and
 // hand partition. It never scans the global action log, and it returns the
 // server-persisted player/message/reaction rather than trusting report input.
+//
+// The idempotency guard CommitAction already writes for this exact
+// (table, hand, action) records the log row's version — which IS that row's
+// sort key — so the lookup is two GetItems by key. It used to read and decode
+// every action of the hand to answer one report (#221). Guards expire after
+// guardTTLDays while the log lives for logTTLDays, so a report filed against
+// an older action falls back to the scan-free partition query below.
 func (s *Store) FindActionByID(ctx context.Context, tableID, handID, actionID string) (*ActionLogEntry, error) {
 	if tableID == "" || handID == "" || actionID == "" {
 		return nil, nil
 	}
-	actions, err := s.LoadActionsSince(ctx, tableID, handID, 0)
+	guard, err := s.guards.GetItem(ctx, tableID+"#"+handID+"#"+actionID)
 	if err != nil {
+		return nil, fmt.Errorf("tablestore: load action guard: %w", err)
+	}
+	version, ok := guard["version"].(*types.AttributeValueMemberN)
+	if !ok {
+		// No guard at all (expired), or one written before guards carried the
+		// version.
+		return s.findActionByFilter(ctx, tableID, handID, actionID)
+	}
+	seq, err := strconv.Atoi(version.Value)
+	if err != nil {
+		return s.findActionByFilter(ctx, tableID, handID, actionID)
+	}
+	item, err := s.log.GetItem(ctx, tableID+"#"+handID, logSK(seq))
+	if err != nil {
+		return nil, fmt.Errorf("tablestore: load action by version: %w", err)
+	}
+	if item == nil {
+		return nil, nil
+	}
+	entry, err := dynamo.Decode[ActionLogEntry](item)
+	if err != nil || entry == nil || entry.ActionID != actionID {
 		return nil, err
 	}
-	for i := range actions {
-		if actions[i].ActionID == actionID && actions[i].TableID == tableID && actions[i].HandID == handID {
-			return &actions[i], nil
+	return entry, nil
+}
+
+// findActionByFilter is the pre-guard-version fallback: one query of this
+// hand's partition with a server-side action_id filter, so DynamoDB returns
+// the single matching row instead of the whole hand.
+func (s *Store) findActionByFilter(ctx context.Context, tableID, handID, actionID string) (*ActionLogEntry, error) {
+	var startKey map[string]types.AttributeValue
+	for {
+		result, err := s.log.Query(ctx, dynamo.QueryOpts{
+			PK: tableID + "#" + handID, ScanIndexForward: true, ExclusiveStartKey: startKey,
+			FilterField: "action_id", FilterValue: actionID,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("tablestore: find action: %w", err)
 		}
+		for _, item := range result.Items {
+			entry, err := dynamo.Decode[ActionLogEntry](item)
+			if err != nil || entry == nil {
+				continue
+			}
+			if entry.TableID == tableID && entry.HandID == handID {
+				return entry, nil
+			}
+		}
+		if len(result.LastEvaluatedKey) == 0 {
+			return nil, nil
+		}
+		startKey = result.LastEvaluatedKey
 	}
-	return nil, nil
 }
 
 // QueryStaleActive returns every still-active table (gsi_active present)

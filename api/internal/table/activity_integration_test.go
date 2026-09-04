@@ -89,4 +89,33 @@ func TestActivityAndPreselectionSurviveFreshActorSnapshot(t *testing.T) {
 		seen["preselect-1"].Selection != "check_fold" {
 		t.Fatalf("activity payloads missing from audit log: %+v", seen)
 	}
+	// Chat and reactions never move the poker state, so their rows must not
+	// carry a full ReplayFrame — one seat row per seated player, written
+	// transactionally and then shipped to Stream/S3 for nothing (#221).
+	if seen["chat-1"].Frame != nil || seen["reaction-1"].Frame != nil {
+		t.Fatalf("cosmetic actions must not persist a replay frame: chat=%+v reaction=%+v",
+			seen["chat-1"].Frame, seen["reaction-1"].Frame)
+	}
+	// The poker rows still carry theirs — replay depends on it.
+	framed := false
+	for _, action := range actions {
+		if action.Action != "chat" && action.Action != "reaction" && action.Frame != nil {
+			framed = true
+		}
+	}
+	if !framed {
+		t.Fatalf("poker actions must keep their replay frame: %+v", actions)
+	}
+
+	// A report resolves its evidence by action_id. It now reads the guard row
+	// (which records the log row's version) plus that one log row, instead of
+	// decoding every action of the hand.
+	found, err := store.FindActionByID(context.Background(), tableID, initial.HandID, "chat-1")
+	if err != nil || found == nil || found.Message != "olá" || found.PlayerID != "p1" {
+		t.Fatalf("FindActionByID(chat-1) = %+v, err=%v", found, err)
+	}
+	missing, err := store.FindActionByID(context.Background(), tableID, initial.HandID, "never-happened")
+	if err != nil || missing != nil {
+		t.Fatalf("FindActionByID(unknown) = %+v, err=%v", missing, err)
+	}
 }

@@ -148,7 +148,9 @@ func (a *Actor) commit(ctx context.Context, actionID string, entry *tablestore.A
 	}
 	newState := a.cached.ExportState()
 	entry.TableID, entry.HandID, entry.Version = a.id, a.handID, a.version+1
-	entry.Frame = replayFrameFor(a.cached.ViewFor(""))
+	if !cosmeticAction(entry.Action) {
+		entry.Frame = replayFrameFor(a.cached.ViewFor(""))
+	}
 	deadline := a.turnDeadlineForPersist()
 	if err := a.store.CommitAction(ctx, a.id, a.handID, actionID, a.version, newState, a.activity,
 		deadline, a.nextHandDeadlineForPersist(), *entry, extra...); err != nil {
@@ -170,6 +172,21 @@ func (a *Actor) notifyChange() {
 		return
 	}
 	go a.changeNotifier.Notify(context.Background(), a.id)
+}
+
+// cosmeticAction reports whether a log entry describes something that never
+// changed the poker state — chat and reactions. Their rows used to carry a
+// full ReplayFrame (up to nine seats, board, pots) exactly like a bet or a
+// fold, which is pure write amplification: the frame would be byte-identical
+// to the one on the poker action that preceded it, and it is written
+// transactionally with state/log/guard and then shipped on to Stream/S3 (#221).
+//
+// Every consumer already tolerates a frameless row: the replayer steps only
+// through actions that carry a frame, the timeline falls back to the previous
+// street, pokerstats reads the board off poker actions, and a report resolves
+// its evidence (player, message, reaction) from the entry's own fields.
+func cosmeticAction(action string) bool {
+	return action == "chat" || action == "reaction"
 }
 
 // replayFrameFor deliberately copies only public gameplay state. In

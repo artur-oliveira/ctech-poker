@@ -140,6 +140,16 @@ func TestFindActionByIDStaysWithinHandPartition(t *testing.T) {
 	if err != nil || missing != nil {
 		t.Fatalf("cross-hand result=%+v err=%v", missing, err)
 	}
+	// Guards expire long before the log does, so the fallback — used for any
+	// action older than guardTTLDays — has to answer identically.
+	fallback, err := s.findActionByFilter(ctx, "table-report", "hand-report", "chat-action")
+	if err != nil || fallback == nil || fallback.PlayerID != "target" || fallback.Message != "sanitized" {
+		t.Fatalf("fallback=%+v err=%v", fallback, err)
+	}
+	fallbackMissing, err := s.findActionByFilter(ctx, "table-report", "hand-report", "never-happened")
+	if err != nil || fallbackMissing != nil {
+		t.Fatalf("fallback miss=%+v err=%v", fallbackMissing, err)
+	}
 }
 
 func TestCommitActionRejectsStaleVersion(t *testing.T) {
