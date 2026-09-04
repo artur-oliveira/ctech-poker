@@ -76,6 +76,19 @@ off by default — do not build UI that assumes real money is on.
   the reduced-motion countdown, `RealityCheck`, `IdleWarning`. Never arm a bare `setInterval` for a
   countdown; `tickerIntervalCount()` exists so "at most one interval during a turn" stays
   assertable.
+- **A ring that captures its elapsed offset once, at mount, must never be handed a value computed
+  in a `useEffect`.** `HandOutcome.tsx`'s `HandOutcomeRing` deliberately captures `elapsedMs` via a
+  lazy `useState` initializer so a dismiss/reopen toggle continues the same countdown instead of
+  restarting it — but that means whatever `durationMs` it is first mounted with is what its CSS
+  animation is stuck with. `useTableOutcome.ts` used to learn a freshly-armed `next_hand_unix_ms`
+  inside a `useEffect`, which only runs *after* commit — so the very render that first mounts the
+  ring (the same commit the deadline arrives in) still saw the *previous* hand's armed deadline,
+  computed `nextHandDurationMs` as `0`, and permanently froze the ring's `animation-duration` at
+  `0ms` (2026-09-04, `docs/specs/2026-09-04-cross-instance-stale-turn-timer.md`). Fixed by deriving
+  the armed deadline during render instead — React's supported "adjust state when a prop changes"
+  pattern — so the ring's one and only real mount already gets the correct duration. Any other
+  countdown-ring consumer built on this "capture once at mount" shape must derive its inputs the
+  same way, not through an effect.
 - **Seats publish their own position.** `lib/seatRects.ts` is where `Seat` registers its element
   and where the reaction layer reads seat centres from. Do not locate a seat with a DOM query, and
   re-measure on `resize`/`orientationchange` rather than caching a rect for the length of an
