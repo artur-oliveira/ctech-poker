@@ -319,6 +319,30 @@ export class DynamoDBStack extends cdk.Stack {
     // history.
     const playerSessions = table('poker_player_sessions', true, true, false, false);
     addThrottleAlarm(playerSessions, 'poker_player_sessions');
+    // gsi_open_table is SPARSE: only an unclosed session carries
+    // open_table_id (sessionlog.RecordSession derives it from ended_at, and
+    // CloseSession's full-item put drops it), so this index holds just the
+    // tables a player is seated at right now. It is what makes
+    // FindOpenSession/FindLatestOpenSession single key queries instead of a
+    // FilterExpression paged over the player's whole 30-day history (#224).
+    // Projection ALL: the caller closes the session it reads back, so it
+    // needs the whole item, which is a handful of scalars.
+    playerSessions.addGlobalSecondaryIndex({
+      indexName: 'gsi_open_table',
+      partitionKey: {name: 'pk', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'open_table_id', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
+    // gsi_player_table covers every session, open or closed, so
+    // HasSessionAtTable ("was this player ever at this table?") is a one-item
+    // key query. KEYS_ONLY — the answer is existence, nothing is read from
+    // the row, and it keeps the extra write cost of this second index down.
+    playerSessions.addGlobalSecondaryIndex({
+      indexName: 'gsi_player_table',
+      partitionKey: {name: 'pk', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'table_id', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+    });
     const playerHands = table('poker_player_hands', true);
     playerHands.addGlobalSecondaryIndex({
       indexName: 'gsi_table_id',

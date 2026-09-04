@@ -565,6 +565,20 @@ catalog.
   response only. This closes the "Visitante" bug (a stranger's `friend_request` or a `table_invite` couldn't be named
   because the frontend's `nameResolver` only knew actors already in the friends/requests lists) without reintroducing
   the #64 name-drift failure mode a write-time denormalized copy would have.
+- **Issue #224 fixed: open sessions are indexed, not filtered.** `sessionlog`'s `FindOpenSession`,
+  `FindLatestOpenSession` and `HasSessionAtTable` — on the buy-in, reconnect/presence, invite and table-scoped
+  authorization paths — used to page the player's *entire* `poker_player_sessions` partition with a non-key
+  `FilterExpression`, so their cost grew with 30 days of history. `poker_player_sessions` now carries two GSIs
+  (`cdk/lib/dynamodb-stack.ts`): **`gsi_open_table`** (`pk` + `open_table_id`, projection ALL) is **sparse** — only an
+  unclosed session carries `open_table_id`, which `RecordSession` derives from `ended_at` on every write, so
+  `CloseSession`'s full-item `PutItem` drops the attribute and evicts the row from the index — and
+  **`gsi_player_table`** (`pk` + `table_id`, KEYS_ONLY) answers "was this player ever at this table?" as a one-item key
+  query. All three lookups are now a single Query with no filter and no pagination, at a cost independent of history
+  size (`store_integration_test.go`'s `TestFindOpenSessionCostsOneQueryBehindALargeHistory` pins the query count).
+  Because the sparse key is derived on every write, open/close/retry keep the index consistent with no separate
+  reconciliation. **Rollout:** deploy the CDK change first, then backfill `open_table_id = table_id` on rows with
+  `ended_at = 0` — sessions still open at deploy time predate the attribute and would otherwise be invisible to
+  `FindOpenSession` until they TTL out (30 days); `gsi_player_table` needs no backfill since `table_id` is on every row.
 
 ## Layout
 

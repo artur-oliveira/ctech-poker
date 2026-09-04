@@ -58,6 +58,21 @@ func TestFakeSessionLogStore(t *testing.T) {
 	}
 }
 
+// TestOpenTableIDIsPresentOnlyWhileTheSessionIsOpen pins down the sparse key
+// backing gsi_open_table (#224): an open session carries open_table_id (so it
+// is in the index), a closed one carries none (so a full-item CloseSession
+// put evicts it). Get this wrong in either direction and FindOpenSession
+// either misses a live session or keeps reporting a cashed-out player as
+// seated.
+func TestOpenTableIDIsPresentOnlyWhileTheSessionIsOpen(t *testing.T) {
+	if got := openTableID(SessionItem{TableID: "t1"}); got != "t1" {
+		t.Fatalf("expected an open session to index its table, got %q", got)
+	}
+	if got := openTableID(SessionItem{TableID: "t1", EndedAt: 99}); got != "" {
+		t.Fatalf("expected a closed session to leave the index, got %q", got)
+	}
+}
+
 func TestHandSKSeparatesCurrencyModes(t *testing.T) {
 	if sandbox, real := handSK("sandbox", "h1"), handSK("real", "h1"); sandbox == real {
 		t.Fatalf("currency modes shared a hand key: %q", sandbox)
