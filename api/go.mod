@@ -20,7 +20,7 @@ require (
 	github.com/valyala/fasthttp v1.73.0
 	go.uber.org/fx v1.24.0
 	google.golang.org/protobuf v1.36.12
-	gopkg.aoctech.app/api-commons v1.7.2
+	gopkg.aoctech.app/api-commons v1.8.0
 )
 
 require (
