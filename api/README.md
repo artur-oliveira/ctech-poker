@@ -82,8 +82,9 @@ unless noted otherwise. `*` = fails closed (server refuses to start) if unset/em
 | `LEGAL_SIGNOFF_REF`                               | —                                 | required non-empty if `REAL_MONEY_ENABLED=true`, else `Load()` errors (business sign-off, not an engineering toggle) |
 
 `cmd/server` uses `config.Load()` (all `*` checks apply). `cmd/tablecleanup`/`cmd/reconcile` and the Lambda entrypoints
-use `config.LoadForLambda()`, which only enforces the `CTECH_URL`/`CTECH_JWKS_URL`
-checks.
+use `config.LoadForLambda()`, which enforces the production `CTECH_URL`/derived `CTECH_JWKS_URL` checks and the same
+fail-closed `REAL_MONEY_ENABLED=true` → non-empty `LEGAL_SIGNOFF_REF` gate as the server. It intentionally omits
+server-only requirements such as Valkey, CORS, webhook verification, and HTTP timeouts.
 
 `REAL_MONEY_ENABLED` and `LEGAL_SIGNOFF_REF` **are** wired: `cdk/lib/api-stack.ts:251-254` fetches both from SSM
 (`/ctech/<env>/poker/real-money-enabled`, `/ctech/<env>/poker/legal-signoff-ref`,
