@@ -590,6 +590,23 @@ catalog.
   **Freshness: deliberately uncached** — one bounded query per view always reflects the player's newest hand, instead of
   a cache that would have to be invalidated on every hand completion. `best_hand` now omits `board`/`hole_cards` when
   empty rather than sending `null`; the profile page already treats both as optional.
+- **Issue #200 fixed: one hand's history is two DynamoDB calls, not 2N.** `app.newTableManager`'s
+  `persistHandHistory` resolved participant avatars with one `players.GetOrCreate` per seat and then wrote one
+  `PutItem` per seat — 18 sequential round trips for a nine-handed hand, in front of the *first* write the client
+  waits for (it refetches history the instant it sees the `complete` snapshot). It now does one
+  `player.Service.GetMany` (BatchGetItem; a participant missing from the batch just gets no avatar, the same fallback
+  the old per-player error path had — every dealt-in player already has a profile from `buyin.Service`) and one
+  `sessionlog.Store.RecordHands` (BatchWriteItem, chunked at `maxHandBatchWrite`, retrying `UnprocessedItems`).
+  **Cost is unchanged, latency is not:** BatchWriteItem bills per item exactly like the `PutItem`s it replaces.
+  `TestHandHistoryItemWriteUnits` (`internal/app`) measures the worst-case row — ~9.7 KB / 10 WCU, ~8.5 KB of which
+  is the 52-position deck proof — and the per-hand total at 2/6/9 players (18/54/90 WCU), so a new `HandItem` field
+  cannot quietly multiply the write bill by nine. **The history stays N redacted per-player copies, not one canonical
+  hand record + a per-player index** — the write saving is real but is paid for with read fan-out (a canonical row
+  keyed by hand needs a GSI to answer `/players/me/hands`, which is a single-partition Query today) and, worse, with
+  moving per-viewer redaction out of `handItemForWithAvatars` and into every reader; see
+  `sessionlog.Store.RecordHands`'s doc comment for the full trade-off. Replay-safe as before: the SK is the
+  deterministic `mode#hand_id`, so a duplicate pipeline run (`internal/handhook` fails open) overwrites the same rows
+  (`TestRecordHandsWritesEveryParticipantOnceAndIsReplaySafe`).
 
 ## Layout
 
