@@ -532,7 +532,31 @@ catalog.
   gateway uses it too) — `hand.Table.SetPlayerIdentityForActor` replaces name/avatar/badge as one unit, so pushing a
   single field would blank the other two. Public hand shares already anonymized `ReplaySeat.Name`; that half of the
   issue needed no change.
-- **Issue #72 fixed:** `achievements.Store.StampTierUnlock` stamps `unlocked_at` on a progress row when
+- **Issue #198 fixed: a hand costs one `poker_achievement_progress` write per player, not one per applicable
+  achievement.** `achievements.Service.RecordHand` used to call `Increment`/`IncrementStreak` per counter per player —
+  hands played, time bank, win, category, earnings, pocket pair, full table/heads-up, all-in, showdown outcomes,
+  streaks — dozens of *sequential* `UpdateItem`s per hand, growing silently with every achievement added. Every rule
+  now records a **delta** into `handDeltas` (`bump`/`bumpBy`/`streak` keep their old signatures, so the rule bodies are
+  untouched) and `Service.flushProgress` persists each player's whole hand with one
+  `Store.ApplyHandProgress` call. That is possible because the counters moved to **one aggregate item per (player,
+  mode)** — `pk` = player, `sk` = `"<mode>#_progress"`, one top-level Number attribute per key (`c#<key>`) plus that
+  key's unlock stamp (`u#<key>`). Top-level, because DynamoDB's `ADD` cannot touch a nested map path. `previous` comes
+  from the ALL_NEW image minus this call's own delta — never a separate read — so tier crossings stay correct under
+  concurrent hands, and a streak reset (a `SET`) reports its new value as its previous one, so a reset can never look
+  like a crossing (the pre-#198 semantics). `StampTierUnlocks` replaces the per-tier `StampTierUnlock`: one write per
+  player, on that same item. **Documented ceiling: 1 progress write + at most 1 stamp write per player per hand**, plus
+  a rare second progress write for `KeyFirstHandAllInWin` (the one rule that needs `hands_played`'s *resulting* value,
+  so it can only be decided after the flush — and only ever on a player's literal first hand). Pinned by
+  `TestRecordHandWriteBudget` (2/6/9 seats), which also asserts a hand moving many more counters costs the same single
+  write — the incremental cost of a new achievement is zero DynamoDB operations.
+  **Migration: none to run.** `Store.seedAggregate` absorbs a player's pre-#198 per-key rows (counters *and*
+  `unlocked_at` stamps, excluding the per-table `streak#` rows, which stay their own items under `UpdateTableStreak`)
+  into the aggregate the first time they record a hand, as a create-only `PutItem`; a concurrent hand that loses that
+  create just retries the normal update. `ListAchievements` reads the aggregate with one `GetItem` and returns its rows
+  complete with no cursor (the catalog is a few dozen keys), falling back to the old per-key query for a player who has
+  not played since the change. Legacy rows are left in place, ignored once the aggregate exists.
+- **Issue #72 fixed:** `achievements.Store.StampTierUnlocks` (`StampTierUnlock` before #198) stamps the unlock time on
+  a progress row when
   `Service.RecordHand` reports a `TierUnlock`, surfaced as `unlocked_at` on `PlayerAchievementProgress` and on
   `AchievementState` (`/players/me/achievements` and the summary endpoint). Legacy rows carry no stamp and report an
   empty string — a still-locked or pre-change row, never an error. A replayed hand hook stamps nothing: it is stopped by

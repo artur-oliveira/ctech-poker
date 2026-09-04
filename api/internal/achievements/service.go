@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -14,12 +15,11 @@ import (
 )
 
 type progressStore interface {
-	Increment(context.Context, string, string, string, int) (previous, current int, err error)
-	IncrementStreak(context.Context, string, string, string, bool, int) (current int, err error)
+	ApplyHandProgress(ctx context.Context, playerID, mode string, adds, sets map[string]int) (previous, current map[string]int, err error)
 	ListAchievements(ctx context.Context, playerID, mode string, limit int, startKey map[string]types.AttributeValue) ([]PlayerAchievementProgress, map[string]types.AttributeValue, error)
 	UpdateTableStreak(ctx context.Context, playerID, mode, tableID string, won bool) (current int, err error)
 	ClaimHandCounters(ctx context.Context, tableID, handID string) (bool, error)
-	StampTierUnlock(ctx context.Context, playerID, mode, key string) error
+	StampTierUnlocks(ctx context.Context, playerID, mode string, keys []string) error
 }
 
 type Service struct {
@@ -138,47 +138,29 @@ func (s *Service) RecordHand(ctx context.Context, tableID, mode string, outcome 
 	if s == nil || s.store == nil {
 		return nil, fmt.Errorf("achievements: progress store is required")
 	}
-	var unlocks []TierUnlock
+	// Issue #198: every rule below records a *delta* instead of issuing its
+	// own UpdateItem, and each player's whole hand is then persisted in one
+	// write (see flushProgress). bump/bumpBy/streak keep their old signatures
+	// — including the error return they no longer produce — so the rule bodies
+	// read exactly as before and adding a rule still costs one line here and
+	// nothing extra per hand in DynamoDB operations.
+	deltas := newHandDeltas()
+	var firstHandAllInWinners []string
 	bumpBy := func(playerID, key string, by int) error {
-		previous, current, err := s.store.Increment(ctx, playerID, mode, key, by)
-		if err != nil {
-			return fmt.Errorf("achievements: table %s player %s key %s: %w", tableID, playerID, key, err)
-		}
-		if stars, crossed := TierCrossed(key, previous, current); crossed {
-			unlocks = append(unlocks, TierUnlock{PlayerID: playerID, Key: key, Stars: stars})
-		}
+		deltas.add(playerID, key, by)
 		return nil
 	}
 	bump := func(playerID, key string) error { return bumpBy(playerID, key, 1) }
 	streak := func(playerID, key string, reset bool, resetTo int) error {
-		previous := 0
-		if !reset {
-			previous = -1 // only exact threshold crossing is needed below
-		}
-		current, err := s.store.IncrementStreak(ctx, playerID, mode, key, reset, resetTo)
-		if err != nil {
-			return fmt.Errorf("achievements: table %s player %s key %s: %w", tableID, playerID, key, err)
-		}
 		if reset {
-			previous = resetTo
-		} else {
-			previous = current - 1
+			deltas.set(playerID, key, resetTo)
+			return nil
 		}
-		if stars, crossed := TierCrossed(key, previous, current); crossed {
-			unlocks = append(unlocks, TierUnlock{PlayerID: playerID, Key: key, Stars: stars})
-		}
+		deltas.add(playerID, key, 1)
 		return nil
 	}
-	handsTotals := make(map[string]int)
 	for _, id := range dedupe(outcome.Participants) {
-		previous, current, err := s.store.Increment(ctx, id, mode, KeyHandsPlayed, 1)
-		if err != nil {
-			return nil, err
-		}
-		handsTotals[id] = current
-		if stars, crossed := TierCrossed(KeyHandsPlayed, previous, current); crossed {
-			unlocks = append(unlocks, TierUnlock{PlayerID: id, Key: KeyHandsPlayed, Stars: stars})
-		}
+		deltas.add(id, KeyHandsPlayed, 1)
 	}
 	if len(metricSets) > 0 {
 		for _, metric := range metricSets[0] {
@@ -250,10 +232,12 @@ func (s *Service) RecordHand(ctx context.Context, tableID, mode string, outcome 
 				return nil, err
 			}
 		}
-		if allInSet[id] && handsTotals[id] == 1 {
-			if err := bump(id, KeyFirstHandAllInWin); err != nil {
-				return nil, err
-			}
+		// "Won your very first hand all-in" is the one rule that needs a
+		// counter's *resulting* value (hands_played == 1), which is only known
+		// once the aggregated write returns — so it is decided after the
+		// flush, not here.
+		if allInSet[id] {
+			firstHandAllInWinners = append(firstHandAllInWinners, id)
 		}
 		if beatOpponent(outcome, id, func(opp string, result hand.ShowdownResult) bool {
 			hi, ok := outcome.PlayerHands[opp]
@@ -409,19 +393,117 @@ func (s *Service) RecordHand(ctx context.Context, tableID, mode string, outcome 
 			return nil, err
 		}
 	}
-	// Stamp every tier actually crossed by this hand (issue #72), in one place
-	// rather than at each of the call sites above that can append an unlock.
-	// A failed stamp costs the achievements page a "recently unlocked" badge,
-	// never a counter — the counters are already committed — so it is logged,
-	// not returned: failing RecordHand here would make the caller retry
-	// increments that are not idempotent.
+	// One write per player, carrying every counter this hand moved for them.
+	unlocks, totals, err := s.flushProgress(ctx, tableID, mode, deltas)
+	if err != nil {
+		return nil, err
+	}
+	// KeyFirstHandAllInWin, decided from the totals the flush just returned.
+	// Only ever a player's literal first hand, so this second write happens
+	// at most once per player, ever — never on the steady-state path.
+	firstHand := newHandDeltas()
+	for _, id := range dedupe(firstHandAllInWinners) {
+		if totals[id][KeyHandsPlayed] == 1 {
+			firstHand.add(id, KeyFirstHandAllInWin, 1)
+		}
+	}
+	if len(firstHand.order) > 0 {
+		extra, _, extraErr := s.flushProgress(ctx, tableID, mode, firstHand)
+		if extraErr != nil {
+			return nil, extraErr
+		}
+		unlocks = append(unlocks, extra...)
+	}
+	// Stamp every tier actually crossed by this hand (issue #72), one write
+	// per player rather than one per tier (issue #198) — the stamps live on
+	// the same aggregate item as the counters. A failed stamp costs the
+	// achievements page a "recently unlocked" badge, never a counter — the
+	// counters are already committed — so it is logged, not returned: failing
+	// RecordHand here would make the caller retry increments that are not
+	// idempotent.
+	stamps := map[string][]string{}
+	var stampOrder []string
 	for _, unlock := range unlocks {
-		if err := s.store.StampTierUnlock(ctx, unlock.PlayerID, mode, unlock.Key); err != nil {
+		if _, seen := stamps[unlock.PlayerID]; !seen {
+			stampOrder = append(stampOrder, unlock.PlayerID)
+		}
+		stamps[unlock.PlayerID] = append(stamps[unlock.PlayerID], unlock.Key)
+	}
+	for _, playerID := range stampOrder {
+		if err := s.store.StampTierUnlocks(ctx, playerID, mode, stamps[playerID]); err != nil {
 			slog.Warn("achievements: tier unlock timestamp failed",
-				"player", unlock.PlayerID, "key", unlock.Key, "err", err)
+				"player", playerID, "keys", stamps[playerID], "err", err)
 		}
 	}
 	return unlocks, nil
+}
+
+// handDeltas accumulates one hand's counter movements per player: `adds` are
+// increments, `sets` are the streak resets that overwrite. `order` keeps the
+// players in the order the rules first touched them, so the unlocks
+// RecordHand reports (and therefore the toasts a client shows) do not depend
+// on Go's map iteration order.
+type handDeltas struct {
+	adds  map[string]map[string]int
+	sets  map[string]map[string]int
+	order []string
+}
+
+func newHandDeltas() *handDeltas {
+	return &handDeltas{adds: map[string]map[string]int{}, sets: map[string]map[string]int{}}
+}
+
+func (d *handDeltas) track(playerID string) bool {
+	if playerID == "" {
+		return false
+	}
+	if _, seen := d.adds[playerID]; !seen {
+		d.adds[playerID], d.sets[playerID] = map[string]int{}, map[string]int{}
+		d.order = append(d.order, playerID)
+	}
+	return true
+}
+
+func (d *handDeltas) add(playerID, key string, by int) {
+	if !d.track(playerID) || key == "" || by <= 0 {
+		return
+	}
+	// A key that this hand also resets is not additionally incremented: the
+	// reset is the final value by definition.
+	if _, reset := d.sets[playerID][key]; reset {
+		return
+	}
+	d.adds[playerID][key] += by
+}
+
+func (d *handDeltas) set(playerID, key string, value int) {
+	if !d.track(playerID) || key == "" {
+		return
+	}
+	delete(d.adds[playerID], key)
+	d.sets[playerID][key] = value
+}
+
+// flushProgress commits one write per player and reports both the tiers those
+// writes crossed and every touched counter's resulting total.
+func (s *Service) flushProgress(ctx context.Context, tableID, mode string, deltas *handDeltas) ([]TierUnlock, map[string]map[string]int, error) {
+	var unlocks []TierUnlock
+	totals := make(map[string]map[string]int, len(deltas.order))
+	for _, playerID := range deltas.order {
+		previous, current, err := s.store.ApplyHandProgress(ctx, playerID, mode, deltas.adds[playerID], deltas.sets[playerID])
+		if err != nil {
+			return nil, nil, fmt.Errorf("achievements: table %s player %s: %w", tableID, playerID, err)
+		}
+		totals[playerID] = current
+		// Sorted so a hand that crosses several tiers reports them in a
+		// stable order regardless of map iteration.
+		for _, key := range slices.Sorted(maps.Keys(deltas.adds[playerID])) {
+			if stars, crossed := TierCrossed(key, previous[key], current[key]); crossed {
+				unlocks = append(unlocks, TierUnlock{PlayerID: playerID, Key: key, Stars: stars})
+			}
+		}
+	}
+	return unlocks, totals, nil
 }
 
 // RecordTableStreak advances every participant's running per-table win/loss
