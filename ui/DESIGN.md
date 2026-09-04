@@ -188,26 +188,29 @@ The system rejects frozen-feeling play, casino clutter, manufactured urgency, ch
 
 ### Where the CSS lives
 
-The system ships as three cascading stylesheets, in load order (#84):
+The system ships as a small global foundation plus route-scoped cascades (#84):
 
 | Sheet | Loaded by | Owns |
 |---|---|---|
-| `src/app/globals.css` | root `layout.tsx` (every route) | the `:root` tokens, the `[data-table-theme]` blocks, the reset, typography, chrome, forms and everything the `(marketing)` group, the error boundaries and `/unavailable` render |
-| `src/app/(app)/app.css` | `(app)/layout.tsx` | rules only the authenticated shell can render — lobby, hands, store, people, profile, achievements, leaderboard and the live table |
+| `src/app/base.css` | root `layout.tsx` (every route) | Tailwind, `:root` tokens, reset, typography, the public shell, error boundaries, `/unavailable`, and shared loading states |
+| `src/app/renderer.css` | `(app)/layout.tsx`, the landing page, and `/guide` | the mature poker renderer and the richer surfaces that reuse its cards, seats, boards, and motion |
+| `src/app/(app)/app.css` | `(app)/layout.tsx`, after `renderer.css` | rules only the authenticated shell can render — lobby, hands, store, people, profile, achievements, leaderboard and the live table |
 | `src/app/(app)/table/table.css` | `(app)/table/layout.tsx` | rules only `/table` can render |
+| `src/app/(marketing)/poker-rules/rules.css` | `/poker-rules` layout | only the reference page's chrome, hand-ranking cards, responsive rules, and their required keyframes |
 
 Plus `src/app/(app)/table-reactions.css` (imported by `TableReactions`) and
-`src/app/forms-and-gate.css` (`@import`ed by `globals.css`).
+`src/app/forms-and-gate.css` (`@import`ed by `base.css`).
 
-**Every colour and radius is still a token defined in `globals.css`'s `:root`** — the split moved
-rules, never tokens, so a value referenced from `app.css` or `table.css` resolves to the same
-token. A new rule belongs in the *narrowest* sheet that can render it; a rule whose selector a
-`(marketing)` page or a root-level boundary can match belongs in `globals.css`. Seat, board, card
-and hand-outcome rules deliberately stay broad: `/hands`, `/hands/history`, `/hands/replay`,
-`/share`, `/profile`, `/lobby` and the landing demo render those same components.
+**Every colour and radius is still a token defined in `base.css`'s `:root`**, so every scoped sheet
+resolves the same values. A new rule belongs in the narrowest sheet that can render it. Seat,
+board, card and hand-outcome rules remain shared by the authenticated subtree because `/hands`,
+`/hands/history`, `/hands/replay`, `/share`, `/profile` and `/lobby` render those components; the
+landing and guide opt into that same cascade explicitly. `/poker-rules` instead owns a compact
+extraction, keeping the live felt/rail/seat renderer and `board-deal` off its critical path.
 
-Because the sheets load in that order, a rule may only move down a level when nothing left in the
-outer sheet could beat it at equal specificity. Moving a rule to a narrower sheet strengthens it.
+On `/table`, `base.css → renderer.css → app.css → table.css` preserves the pre-split cascade order.
+Moving a rule between these sheets still requires checking equal-specificity overrides; a later,
+narrower sheet wins.
 
 ## Colors
 

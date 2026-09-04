@@ -4,7 +4,7 @@ import {SITE_URL} from '@/lib/routeMetadata';
 import {ClientErrorReporter} from '@/components/ClientErrorReporter';
 import {Notifier} from '@/components/Notifier';
 import {RouteAnnouncer} from '@/components/RouteAnnouncer';
-import './globals.css';
+import './base.css';
 import React from "react";
 
 const sans = IBM_Plex_Sans({subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-sans'});

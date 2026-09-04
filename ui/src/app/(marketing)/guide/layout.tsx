@@ -1,4 +1,6 @@
 import {routeMetadata} from '@/lib/routeMetadata';
+// Guide screenshots/components reuse the renderer vocabulary; scope it to /guide.
+import '../../renderer.css';
 
 export const metadata = routeMetadata({
   title: 'Como jogar',

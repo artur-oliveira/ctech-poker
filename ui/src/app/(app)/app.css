@@ -2,14 +2,13 @@
  * Authenticated-shell stylesheet — loaded by src/app/(app)/layout.tsx, so only the routes
  * inside the (app) route group pay for it.
  *
- * Split out of globals.css (#84): every rule here has a selector whose classes appear
+ * Split out of the former global renderer (#84): every rule here has a selector whose classes appear
  * literally in a source file reachable only from (app)/** and nowhere else, and no rule
- * left in globals.css can beat it at equal specificity (this sheet loads after globals.css,
- * so the order between the two files must not matter). globals.css keeps the tokens, reset,
- * chrome and everything the (marketing) group, the error boundaries and /unavailable render.
+ * left in renderer.css can beat it at equal specificity (this sheet loads after renderer.css,
+ * so the order between the two files must not matter). base.css keeps tokens and reset.
  *
  * A new rule belongs here when no (marketing) page and no root-level boundary can render it;
- * otherwise it belongs in globals.css. Table-only rules go one level deeper, in
+ * otherwise it belongs in renderer.css. Table-only rules go one level deeper, in
  * (app)/table/table.css.
  */
 .network-status {
@@ -3804,8 +3803,8 @@
 }
 /* No unconditional display here on purpose: .hand-row-card-group-cards
    (already on the same element) covers the default flex row, and this file
-   loads after globals.css — an unconditional rule here at equal specificity
-   would permanently beat globals.css's @media (max-width: 600px) grid
+   loads after renderer.css — an unconditional rule here at equal specificity
+   would permanently beat renderer.css's @media (max-width: 600px) grid
    override below, no matter how narrow the viewport got. */
 .hand-row-category {
     display: flex;

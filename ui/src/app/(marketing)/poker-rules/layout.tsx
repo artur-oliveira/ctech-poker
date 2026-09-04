@@ -1,4 +1,5 @@
 import {routeMetadata} from '@/lib/routeMetadata';
+import './rules.css';
 
 export const metadata = routeMetadata({
   title: 'Regras do Texas Hold’em',

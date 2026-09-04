@@ -571,20 +571,21 @@ succeed with the poker client token, and cover the grants in deploy reconciliati
 
 **Critérios de aceitação**
 
-- [ ] `LoadForLambda` enforces the legal gate (in progress on PR #130, which mirrors `config.Load`'s fail-closed
-  `REAL_MONEY_ENABLED`→`LEGAL_SIGNOFF_REF` gate for `cmd/reconcile`'s Lambda; not yet merged as of this issue's fix)
+- [x] `LoadForLambda` enforces the legal gate: PR #130 mirrored `config.Load`'s fail-closed
+  `REAL_MONEY_ENABLED`→`LEGAL_SIGNOFF_REF` gate for the money-moving Lambdas
 - [x] A real-money stale-table cleanup path exists (release holds, archive) — `cmd/tablecleanup`'s
   `settleRealMoneyAndArchive` records each seated player's game-wallet settlement to `poker_pending_cashouts` (so
   `cmd/reconcile` retries a failed immediate `CashoutGame` using the recorded hold ID) before archiving
 - [x] `tablecleanup` never credits a real-money table's stack to any ledger; missing-room →
   "unknown, skip", not "sandbox" — a `nil` room now skips the table entirely instead of falling into the sandbox
   refund path
-- [x] Decision recorded on the Claim-race free-seat window: closed, not merely bounded — handled independently by
-  #146 (issue #122). `entitlement.Store.Rebind` gained a compare-and-swap `expectedBoundTableID` guard and
-  `buyin.Service.confirmFeeCharged` decides "the fee is covered" by whether that entitlement's own
+- [x] Decision recorded on the Claim-race free-seat window: closed, not merely bounded. #146 (issue #122) added the
+  `entitlement.Store.Rebind` compare-and-swap `expectedBoundTableID` guard; PR #181 then closed the distinct Claim
+  race. `buyin.Service.confirmFeeCharged` decides "the fee is covered" by whether that entitlement's own
   `poker_pending_cashouts` recovery row is resolved, never by the entitlement row merely existing. See
   `docs/specs/2026-09-02-reconcile-entitlement-concurrency-audit.md`.
-- [ ] Fold into the D2 deep-dive
+- [x] Folded into the #122 deep-dive in
+  `docs/specs/2026-09-02-reconcile-entitlement-concurrency-audit.md` (Finding 5)
 
 ---
 
@@ -747,6 +748,11 @@ well-tested (90% enforced) but a maintenance risk. Behaviour-preserving extracti
 - `useTableSnapshotReducer` — pure snapshot → view-state.
 - suppression as a pure filter at the reducer boundary. Keep `useTableRealtime` as the thin composition; coverage
   stays ≥ 90 without threshold edits.
+
+Implemented for #50: the public hook is a 22-line composition boundary; `useTableSocket` owns transport/auth/liveness
+and mock lifecycle, `useTableActionQueue` owns auxiliary correlation and retry timers (with pure retry planning), and
+`tableSnapshotReducer` owns monotonic snapshot reconciliation plus pre-state social suppression. Focused unit tests
+cover retry classification/backoff/delivery/cancellation and snapshot regression/filtering/reconciliation.
 
 ---
 

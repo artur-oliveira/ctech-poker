@@ -75,7 +75,14 @@ off by default — do not build UI that assumes real money is on.
   and where the reaction layer reads seat centres from. Do not locate a seat with a DOM query, and
   re-measure on `resize`/`orientationchange` rather than caching a rect for the length of an
   animation — the stage swaps between oval and portrait-ring layouts mid-flight.
-- **Two realtime hooks, no more.** `lib/hooks/useTableRealtime.ts` owns the table surface;
+- **Two public realtime hooks, no more.** `lib/hooks/useTableRealtime.ts` is the thin, stable
+  composition boundary for the table surface; its private state-machine implementation lives in
+  `lib/hooks/useTableRealtimeSession.ts`. Transport/auth/liveness/mock lifecycle is isolated in
+  `useTableSocket`; auxiliary frame correlation and retry timers are isolated in
+  `useTableActionQueue`; pure version reconciliation and social suppression live in
+  `lib/tableSnapshotReducer.ts`. Retry vocabulary and snapshot-transition narration live in
+  `lib/tableResilience.ts` and `lib/tableNarration.ts`. These are private slices of the table hook,
+  not new public realtime hooks or socket endpoints. Table code imports only the public hook.
   `lib/hooks/useLobbyRealtime.ts` owns the lobby/user gateway (rooms **and** all social pushes).
   Extend them rather than opening a third socket. `useLobbyRealtime` is mounted once, by
   `lib/providers/RealtimeBridge.tsx` inside `QueryProvider`, which the `(app)` route group
@@ -93,7 +100,8 @@ off by default — do not build UI that assumes real money is on.
   server echoes belongs on `emitAux`, not bare `emit`. The vocabulary itself —
   `RESYNC_ERROR_CODES`, `TERMINAL_ERROR_CODES`, `MAX_ACTION_RETRIES`, the timeouts, the
   `auxRetryDelayMs` backoff and the player-facing copy — lives in `lib/tableResilience.ts` and is
-  unit-tested there; the ref-driven state machine that uses it stays in `useTableRealtime`.
+  unit-tested there; `useTableActionQueue` owns the retry registry and timer lifecycle, with its
+  retry decision independently covered as a pure function.
   Snapshot-transition narration (`describeSnapshot`, `playSoundForTransition`) is
   `lib/tableNarration.ts`. See `docs/plans/2026-08-27-table-load-transaction-conflict.md`.
 - **Press-and-hold is one hook.** `lib/hooks/useHoldRepeat.ts` owns the accelerating repeat used by

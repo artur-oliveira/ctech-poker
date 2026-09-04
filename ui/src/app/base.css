@@ -1,0 +1,958 @@
+@import "tailwindcss";
+@import "./forms-and-gate.css";
+:root {
+    --brand: #af2a2f;
+    --brand-bright: #d9464d;
+    --wine: #5b1218;
+    --ink: #120d0e;
+    --paper: #f6f0e7;
+    --gold: #e6b85c;
+    --felt: #0d5b45;
+    --muted: #ad9fa0;
+    --muted-rose: #ad9fa0;
+    --success: #48c98c;
+    --danger: #dc2626;
+    --on-brand: #fff;
+    --table-room: var(--ink);
+    --table-room-wine: var(--wine);
+    --table-rail: #7c4d2f;
+    --table-rail-edge: #291714;
+    --table-rail-highlight: #b0774a;
+    --table-felt-light: #18765b;
+    --table-felt-dark: #084b38;
+    --surface-seat: #161011;
+    --surface-control: #211416;
+    --surface-control-hover: #3e3133;
+    --surface-notice: #211416;
+    --surface-error: #3b0b0e;
+    --text-secondary: #cbbfc0;
+    --felt-text: #e3f1ea;
+    --felt-text-muted: #d9eee7;
+    --gold-ink: #30230a;
+    --gold-deep: #d8ae5d;
+    --danger-soft: #f5b0b3;
+    /* --danger is the error surface and icon red; on --ink it reaches 3.99:1,
+       below AA for the 11-12px error and expiry copy that needs it most. This is
+       the text pair: 5.12:1 on --ink, 4.74:1 on --surface-control/--surface-seat. */
+    --text-danger: #ef4444;
+    --toast-bg: #efe0bf;
+    --toast-ink: #3a241a;
+    --focus-ring: #ed777c;
+    --control-border: #ffffff24;
+    --seat-border: #ffffff26;
+
+    /* Private note tags. The six are a categorical palette the *player* assigns
+       meaning to (the labels are the colour names), so they are named by hue on
+       purpose — but they are tokens, not literals, so a theme can retune them. */
+    --tag-red: #ef4444;
+    --tag-orange: #f97316;
+    --tag-yellow: #eab308;
+    --tag-green: #22c55e;
+    --tag-blue: #3b82f6;
+    --tag-purple: #a855f7;
+
+    /* Height the global API-unavailable strip occupies at the top of the
+       viewport. 0 while the API is reachable, so every calc() that subtracts it
+       is inert in the normal case. NetworkProvider flips the html attribute. */
+    --api-bar-h: 0px;
+
+    /* Recessed field inside an already-dark panel (report details, note text). */
+    --black-scrim: #00000030;
+
+    /* Design System Tokens */
+    --font-size-tiny: 0.625rem;
+    --font-size-compact: 0.6875rem;
+    --font-size-mono: 0.75rem;
+    --font-size-body: 0.875rem;
+    --font-size-subtitle: 1.125rem;
+    --font-size-large: 1.25rem;
+    --font-size-title: 1.5rem;
+    --font-size-xl: 2rem;
+
+    --rounded-xs: 4px;
+    --rounded-sm: 8px;
+    --rounded-card: 6px;
+    /* deck/felt thumbnails: a playing card shrunk to swatch size keeps its
+       shape only if the corner shrinks with it */
+    --rounded-card-thumb: 2px;
+    --rounded-control: 12px;
+    --rounded-seat: 14px;
+    --rounded-panel: 16px;
+    --rounded-pill: 999px;
+
+    --shadow-table: 0 30px 80px #000, inset 0 0 0 4px var(--table-rail-highlight);
+    --shadow-felt: inset 0 0 70px #001f18;
+    --shadow-seat: 0 4px 8px #0009;
+    --ease-out-quart: cubic-bezier(.25, 1, .5, 1);
+    --ease-out-quint: cubic-bezier(.22, 1, .36, 1);
+    --ease-out-expo: cubic-bezier(.16, 1, .3, 1);
+
+    /* z-index scale: app-wide overlay layers only (fixed/sticky chrome that can
+       compete for the same stacking context). Local sibling-ordering z-index
+       (card flip faces, seat badges, per-chip stacking) stays as plain small
+       ints scoped to their own positioned ancestor; those can't collide with
+       this scale and don't belong in it. Dialogs (@base-ui) use Tailwind's
+       z-50, already above every tier here. */
+    --z-chrome: 20;
+    /* .game-table (position:relative, no z-index) never forms a stacking
+       context of its own, so a child positioned against it compares its
+       z-index directly against --z-chrome siblings (.game-chat,
+       .table-reactions) rather than against .game-table's local scope. Any
+       such child that must win that fight (currently just .hand-outcome)
+       uses this token instead of a small local int. */
+    --z-table: 21;
+    --z-notice: 25;
+    --z-toast: 30;
+    --z-dev: 40;
+    --z-api: 60;
+    /* opaque mask stop, CSS mask luminance only, never a rendered color */
+    --mask-opaque: #fff;
+    /* ponytail: stacked mobile action bar footprint (context + presets + quick + bet + raise rows), generous for 2-line pt-BR context; upgrade to measured height if layout grows */
+    --action-bar-stack: 260px;
+    /* clearance .game-chat needs above the action bar; redeclared at the
+       800px breakpoint where the bar's own padding shrinks (see .action-bar) */
+    --action-bar-clear: 75px;
+    /* ponytail: captured drift tokens. Exact values previously written as literals across the
+       stylesheet (landing/lobby/dialog/seat gradients), promoted to single-source tokens so the
+       design system stays the only place colors live. */
+    /* white alpha overlays */
+    --white-03: #ffffff03;
+    --white-08: #ffffff08;
+    --white-0b: #ffffff0b;
+    --white-0c: #ffffff0c;
+    --white-12: #ffffff12;
+    --white-13: #ffffff13;
+    --white-18: #ffffff18;
+    --white-1b: #ffffff1b;
+    --white-1c: #ffffff1c;
+    --white-1d: #ffffff1d;
+    --white-22: #ffffff22;
+    --white-2a: #ffffff2a;
+    --white-2c: #ffffff2c;
+    /* black alpha overlays */
+    --black: #000;
+    --black-06: #0006;
+    --black-07: #0007;
+    --black-08: #0008;
+    --black-0b: #000b;
+    /* brand / red family */
+    --brand-33: #af2a2f55;
+    --brand-53: #af2a2f88;
+    --brand-27: #af2a2f44;
+    --brand-13: #af2a2f22;
+    --brand-08: #af2a2f14;
+    --brand-07: #af2a2f12;
+    --brand-40: #d8404766;
+    --brand-deep-33: #db4a5055;
+    --brand-tint: #c7353b;
+    --brand-tint-soft: #e2b7b9;
+    --brand-bright-2: #e24a51;
+    --brand-bright-3: #d85b61;
+    --brand-bright-4: #e65b62;
+    --brand-bright-5: #df5a61;
+    --brand-bright-6: #d75359;
+    --brand-bright-7: #ef747a;
+    /* wine family */
+    --wine-deep-2: #6e1d23;
+    --wine-deep-3: #5b171a;
+    --wine-deep-4: #721d23;
+    --wine-deep-5: #45151a;
+    --wine-deep-6: #792128;
+    --wine-deep-7: #201214;
+    --wine-edge: #824b4e;
+    --wine-edge-2: #3d2224;
+    /* gold family */
+    --gold-bright: #e7bd63;
+    --gold-bright-2: #e7c36f;
+    --gold-bright-3: #e9c678;
+    --gold-pale: #efe1b7;
+    /* 33% gold: the expanding ring of the achievement-arrival celebration,
+       the gold counterpart to --brand-33. */
+    --gold-33: #e6b85c55;
+    --cream: #f1e5ce;
+    /* neutrals / muted */
+    --text-muted-soft: #d9cccd;
+    --neutral-rose-2: #c0b3b4;
+    --neutral-rose-3: #c9bcbd;
+    --neutral-rose-4: #bcaeb0;
+    --neutral-wine: #897d7e;
+    --neutral-wine-2: #5e5051;
+    --neutral-wine-3: #645758;
+    --ink-soft: #130d0e;
+    --room-grad-1: #180d10;
+    --room-grad-2: #100c0d;
+    --room-grad-3: #251012;
+    --room-grad-4: #0d090a;
+    --room-overlay: #080506d9;
+    /* rail / wood */
+    --rail-shadow: #351d17;
+    --rail-mid: #7c5035;
+    --rail-light: #a46d42;
+    --rail-edge-2: #382018;
+    --rail-wood-2: #5b3428;
+    /* felt / green */
+    --felt-bright: #12694f;
+    --felt-deep: #084332;
+    --success-bright: #45c489;
+    --felt-text-soft: #b6d6c5;
+    --felt-27: #0a806044;
+    --felt-shadow: #001f18;
+    /* overlay near-blacks */
+    --overlay-night: #001b;
+    --overlay-night-2: #0018;
+    --overlay-night-3: #001d;
+    /* surface alpha */
+    --surface-seat-92: #171011eb;
+    /* reaction fx — muck brown for the "jogar cocô" splat, not a rail/wood surface */
+    --reaction-muck: #6b4a2a;
+    --reaction-muck-deep: #3f2b18
+}
+* {
+    box-sizing: border-box
+}
+html {
+    scroll-behavior: smooth;
+    /* keeps in-page scroll targets clear of the sticky app nav */
+    scroll-padding-top: 92px
+}
+body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--font-sans), sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility
+}
+/* The API-down notice used to float as a centred card over the top of whatever
+   page was open, which on the table covered Lobby, reactions, chat, menu, pause
+   and Sair — the controls a player most needs while the server is unreachable.
+   It is now a full-width strip that *reserves* its own height instead: the
+   `--api-bar-h` token below pushes the document (and the table's 100dvh grid)
+   down by exactly the strip's height, so nothing is ever occluded. */
+html[data-api-offline] {
+    --api-bar-h: 56px;
+}
+body {
+    padding-top: var(--api-bar-h)
+}
+/* The table is a blocking 100dvh grid with its own scroll lock, so it takes the
+   offset as a margin plus a shortened height (see .game) rather than through
+   body padding, which its `overflow: hidden` body would swallow. */
+body:has(.game) {
+    padding-top: 0
+}
+/* One strip height on every screen: below 600px the reassurance line is the
+   part that goes, not the height — a taller bar would eat the phone table's
+   already-blocking 100dvh budget, and the headline plus retry still say
+   everything a player has to act on. */
+@media (max-width: 600px) {
+    .network-status {
+        gap: 10px
+    }
+
+    .network-status span {
+        display: none
+    }
+}
+::selection {
+    color: var(--paper);
+    background: var(--brand)
+}
+:where(a, button, input, select, textarea) {
+    -webkit-tap-highlight-color: transparent
+}
+.system-state {
+    min-height: 100svh;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    padding: 24px clamp(20px, 5vw, 72px);
+    overflow: hidden;
+    background: radial-gradient(circle at 72% 38%, var(--brand-27), transparent 28%),
+    radial-gradient(circle at 28% 110%, var(--wine), transparent 34%),
+    var(--room-grad-4);
+}
+.system-state nav {
+    display: flex;
+    align-items: center;
+    min-height: 52px;
+}
+.system-state > section {
+    width: min(1040px, 100%);
+    margin: auto;
+    display: grid;
+    grid-template-columns: minmax(240px, 380px) minmax(0, 1fr);
+    align-items: center;
+    gap: clamp(40px, 8vw, 96px);
+}
+.system-state-mark {
+    position: relative;
+    display: grid;
+    aspect-ratio: 1;
+    place-items: center;
+    border: 28px solid var(--table-rail);
+    border-radius: 50%;
+    color: var(--felt-text);
+    background: radial-gradient(circle, var(--table-felt-light), var(--table-felt-dark));
+    box-shadow: var(--shadow-table);
+}
+.system-state-mark svg {
+    width: 72px;
+    height: 72px;
+}
+.system-state-mark span {
+    position: absolute;
+    right: 16%;
+    bottom: 14%;
+    padding: 8px 12px;
+    border-radius: var(--rounded-control);
+    color: var(--gold);
+    background: var(--surface-seat);
+    box-shadow: var(--shadow-seat);
+    font: 700 var(--font-size-large)/1 var(--font-mono);
+}
+.system-state-copy > small {
+    color: var(--brand-bright-7);
+    font: 700 var(--font-size-mono)/1 var(--font-mono);
+    letter-spacing: .08em;
+}
+.system-state-copy h1 {
+    max-width: 12ch;
+    margin: 16px 0;
+    font-size: clamp(2.375rem, 5vw, 3.875rem);
+    line-height: 1.02;
+    letter-spacing: -.035em;
+}
+.system-state-copy p {
+    max-width: 58ch;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: var(--font-size-subtitle);
+    line-height: 1.55;
+}
+.system-state-copy > span {
+    display: block;
+    margin-top: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+}
+.system-state-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 30px;
+}
+.system-state footer {
+    padding-top: 20px;
+    color: var(--muted);
+    font-size: var(--font-size-body);
+    text-align: center;
+}
+@media (max-width: 720px) {
+.system-state > section {
+        grid-template-columns: 1fr;
+        gap: 36px;
+        padding-block: 44px;
+    }
+.system-state-mark {
+        width: min(240px, 68vw);
+        margin-inline: auto;
+        border-width: 20px;
+    }
+.system-state-copy {
+        text-align: center;
+    }
+.system-state-copy h1, .system-state-copy p {
+        margin-inline: auto;
+    }
+.system-state-actions {
+        justify-content: center;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+.system-state * {
+        scroll-behavior: auto;
+    }
+}
+button, a {
+    font: inherit
+}
+:where(a, button):focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 3px
+}
+.switch-thumb {
+    position: absolute;
+    top: 50%;
+    left: 3px;
+    transform: translateY(-50%);
+    transition: transform 180ms var(--ease-out-quart)
+}
+.switch-thumb[data-checked] {
+    transform: translate(20px, -50%)
+}
+/* The visible track is 24px tall; padding here pads the invisible hit box
+   out to the 44px touch-target floor without growing the track itself. */
+.switch-hit {
+    padding-block: 10px;
+    margin-block: -10px
+}
+.switch-hit[data-checked] .switch-track {
+    background: var(--brand)
+}
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0
+}
+.shell {
+    width: min(1160px, calc(100% - 40px));
+    margin-inline: auto
+}
+.landing {
+    min-height: 100vh;
+    overflow: hidden;
+    background: radial-gradient(circle at 75% 8%, var(--wine-deep-2) 0, transparent 30%), linear-gradient(160deg, var(--room-grad-1) 0%, var(--room-grad-2) 55%, var(--room-grad-3) 100%)
+}
+.nav {
+    height: 84px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    z-index: var(--z-chrome)
+}
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: white;
+    text-decoration: none;
+    font-size: var(--font-size-body)
+}
+.brand-mark {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 8px 24px var(--brand-33)
+}
+.brand-mark img {
+    width: 100%;
+    height: 100%
+}
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 28px
+}
+.nav-links > a {
+    color: var(--text-muted-soft);
+    text-decoration: none;
+    font-size: var(--font-size-body);
+    border-radius: var(--rounded-xs);
+    transition: color 180ms var(--ease-out-quart)
+}
+.nav-links > a:hover,
+.nav-links > a:focus-visible {
+    color: white
+}
+.hero {
+    min-height: 680px;
+    display: grid;
+    grid-template-columns:1fr 1fr;
+    align-items: center;
+    gap: 56px;
+    padding-block: 50px 100px
+}
+.hero-copy {
+    position: relative;
+    z-index: 5
+}
+.hero-copy h1 {
+    animation: rise .8s var(--ease-out-quint) both
+}
+.hero-copy > p {
+    animation: rise .8s var(--ease-out-quint) both;
+    animation-delay: 90ms
+}
+.hero-actions {
+    animation: rise .8s var(--ease-out-quint) both;
+    animation-delay: 180ms
+}
+.trust {
+    animation: rise .8s var(--ease-out-quint) both;
+    animation-delay: 260ms
+}
+h1 {
+    font-size: clamp(52px, 6vw, 82px);
+    line-height: .98;
+    letter-spacing: -.04em;
+    margin: 0 0 24px;
+    max-width: 700px
+}
+h1 em {
+    font-style: normal;
+    color: var(--brand-bright-2);
+    text-shadow: 0 0 45px var(--brand-33)
+}
+.hero-copy > p {
+    max-width: 570px;
+    color: var(--neutral-rose-2);
+    font-size: var(--font-size-subtitle);
+    line-height: 1.75
+}
+.hero-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 34px
+}
+.trust {
+    display: flex;
+    gap: 22px;
+    color: var(--neutral-wine);
+    font-size: var(--font-size-mono);
+    margin-top: 28px
+}
+.trust span {
+    display: flex;
+    align-items: center;
+    gap: 7px
+}
+.trust span:not(:first-child):before {
+    content: '·';
+    color: var(--neutral-wine-2)
+}
+.trust i {
+    width: 7px;
+    height: 7px;
+    background: var(--success-bright);
+    border-radius: var(--rounded-pill);
+    box-shadow: 0 0 12px var(--success-bright)
+}
+.hero-visual {
+    position: relative;
+    height: 500px;
+    perspective: 1000px
+}
+.poker-table {
+    position: absolute;
+    inset: 70px 5px 50px;
+    transform: rotateX(52deg) rotateZ(-4deg);
+    transform-style: preserve-3d;
+    border-radius: var(--rounded-pill);
+    background: var(--rail-shadow);
+    padding: 18px;
+    box-shadow: 0 50px 80px var(--black-0b), 0 0 0 2px var(--rail-mid)
+}
+.rail {
+    position: absolute;
+    inset: 5px;
+    border: 8px solid var(--rail-light);
+    border-radius: var(--rounded-pill);
+    box-shadow: inset 0 0 0 5px var(--rail-edge-2)
+}
+.felt {
+    position: absolute;
+    inset: 27px;
+    border-radius: var(--rounded-pill);
+    background: radial-gradient(circle, var(--felt-bright), var(--felt-deep) 75%);
+    box-shadow: inset 0 0 45px var(--felt-shadow)
+}
+.pot {
+    position: absolute;
+    left: 50%;
+    top: 27%;
+    transform: translateX(-50%);
+    font: 600 9px var(--font-mono);
+    letter-spacing: .12em;
+    color: var(--felt-text)
+}
+.pot b {
+    color: var(--gold-pale)
+}
+.community {
+    position: absolute;
+    left: 50%;
+    top: 46%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    gap: 6px
+}
+.community img {
+    border-radius: var(--rounded-xs);
+    filter: drop-shadow(0 8px 6px var(--overlay-night));
+    animation: deal .7s cubic-bezier(.2, .8, .2, 1) both;
+    animation-delay: calc(var(--i) * .12s)
+}
+.card-placeholder {
+    width: 70px;
+    height: 98px;
+    border: 1px dashed var(--white-2c);
+    border-radius: 6px
+}
+.table-logo {
+    position: absolute;
+    left: 50%;
+    bottom: 18%;
+    transform: translateX(-50%);
+    font: 700 10px var(--font-mono);
+    letter-spacing: .35em;
+    color: var(--white-1b);
+    display: flex;
+    align-items: center
+}
+.table-logo img {
+    width: 14px;
+    height: 14px;
+    margin-right: 5px;
+    border-radius: 4px;
+    opacity: .7
+}
+.demo-seat {
+    position: absolute;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface-seat-92);
+    border: 1px solid var(--white-1c);
+    border-radius: 14px;
+    padding: 7px 11px;
+    box-shadow: 0 12px 25px var(--black-08);
+    animation: float 4s ease-in-out infinite
+}
+.demo-seat .avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--rounded-control);
+    display: grid;
+    place-items: center;
+    background: linear-gradient(145deg, var(--wine-edge), var(--wine-edge-2));
+    font-weight: 800
+}
+.demo-seat b, .demo-seat small {
+    display: block;
+    font-size: var(--font-size-compact)
+}
+.demo-seat small {
+    color: var(--gold);
+    margin-top: 3px
+}
+.demo-seat.top {
+    top: 22px;
+    left: 48%
+}
+.demo-seat.bottom {
+    bottom: 4px;
+    left: 43%;
+    border-color: var(--brand-40)
+}
+.demo-seat.left {
+    left: -8px;
+    top: 43%;
+    animation-delay: -1s
+}
+.demo-seat.right {
+    right: -4px;
+    top: 42%;
+    animation-delay: -2s
+}
+.hole {
+    position: absolute;
+    display: flex;
+    left: 102%;
+    bottom: 5px
+}
+.hole img {
+    margin-left: -13px;
+    filter: drop-shadow(0 5px 5px var(--black-08))
+}
+.ambient {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px)
+}
+.ambient-one {
+    width: 180px;
+    height: 180px;
+    background: var(--brand-27);
+    right: -20px;
+    top: 40px
+}
+.ambient-two {
+    width: 140px;
+    height: 140px;
+    background: var(--felt-27);
+    left: 20px;
+    bottom: 20px
+}
+.chip-orbit {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: repeating-conic-gradient(var(--gold-bright) 0 15deg, var(--wine-deep-3) 15deg 30deg);
+    border: 4px solid var(--gold-pale);
+    box-shadow: 0 6px 12px var(--black-08);
+    animation: drift 5s ease-in-out infinite
+}
+.chip-a {
+    right: 9%;
+    bottom: 18%
+}
+.chip-b {
+    left: 12%;
+    top: 24%;
+    animation-delay: -2s
+}
+.experience {
+    padding-block: 110px
+}
+.experience header {
+    max-width: 680px
+}
+.experience h2 {
+    font-size: clamp(34px, 4vw, 52px);
+    margin: 0 0 14px;
+    letter-spacing: -.04em
+}
+.experience header p, .feature-grid p {
+    color: var(--muted);
+    line-height: 1.65
+}
+.feature-grid {
+    display: grid;
+    grid-template-columns:repeat(2, 1fr);
+    gap: 44px 56px;
+    margin-top: 56px
+}
+.feature-grid article {
+    padding-top: 26px;
+    border-top: 1px solid var(--white-13);
+    animation: rise .7s both;
+    animation-delay: var(--delay)
+}
+.feature-grid article > div {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    background: var(--brand-13);
+    color: var(--brand-bright-4)
+}
+.feature-grid svg {
+    width: 20px
+}
+.feature-grid h3 {
+    margin: 20px 0 8px;
+    font-size: var(--font-size-subtitle)
+}
+.feature-grid p {
+    font-size: 14px
+}
+.showcase {
+    padding-block: 20px 90px;
+    display: grid;
+    grid-template-columns: .85fr 1.4fr;
+    gap: 64px;
+    align-items: center
+}
+.showcase-copy h2 {
+    font-size: clamp(30px, 3.4vw, 44px);
+    letter-spacing: -.04em;
+    margin: 0 0 14px
+}
+.showcase-copy p {
+    color: var(--muted);
+    line-height: 1.65;
+    max-width: 40ch
+}
+.showcase-copy > a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 22px;
+    color: var(--brand-bright-4);
+    text-decoration: none;
+    font: 600 var(--font-size-label) inherit
+}
+.showcase-copy > a svg {
+    width: 16px
+}
+.showcase-frame {
+    position: relative;
+    transform: rotate(-1.2deg);
+    animation: rise .8s var(--ease-out-quint) both;
+    animation-delay: 120ms
+}
+/* clips the chrome+screenshot to the panel's rounded corners without also
+   clipping .showcase-peek, which deliberately escapes the frame's edge */
+.showcase-inner {
+    border-radius: var(--rounded-panel);
+    overflow: hidden;
+    border: 1px solid var(--control-border);
+    background: var(--surface-control);
+    box-shadow: 0 40px 90px var(--black-08)
+}
+.browser-chrome {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 11px 16px;
+    background: var(--surface-seat);
+    border-bottom: 1px solid var(--white-13)
+}
+.browser-chrome span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--white-1c)
+}
+.browser-chrome small {
+    margin-left: 10px;
+    color: var(--neutral-rose-3);
+    font: 600 11px var(--font-mono)
+}
+.showcase-frame > img {
+    display: block;
+    width: 100%;
+    height: auto
+}
+.showcase-peek {
+    position: absolute;
+    width: 220px;
+    right: -26px;
+    bottom: -26px;
+    margin: 0;
+    border-radius: var(--rounded-sm);
+    overflow: hidden;
+    border: 1px solid var(--control-border);
+    box-shadow: 0 20px 45px var(--black-08);
+    animation: float 5s ease-in-out infinite
+}
+.showcase-peek img {
+    display: block;
+    width: 100%;
+    height: auto
+}
+.cta {
+    margin-block: 60px 100px;
+    padding: 46px 52px;
+    border-radius: var(--rounded-panel);
+    background: radial-gradient(circle at 85%, var(--brand-deep-33), transparent 25%), linear-gradient(120deg, var(--wine-deep-4), var(--brand));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 30px 60px var(--black-06)
+}
+.cta h2 {
+    font-size: var(--font-size-xl);
+    margin: 0 0 8px
+}
+.cta p {
+    margin: 0;
+    color: var(--brand-tint-soft)
+}
+.footer {
+    border-top: 1px solid var(--white-12);
+    min-height: 110px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 32px;
+    color: var(--neutral-wine);
+    font-size: 12px
+}
+.footer .brand {
+    opacity: .8
+}
+/* The spinner survives only where the wait has no shape to promise: the OAuth
+   exchange, the terms gate, and the table socket handshake. Every surface whose
+   layout is already known loads as a skeleton instead (see `.skeleton` below). */
+.loader {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--white-22);
+    border-top-color: var(--brand-bright);
+    border-radius: 50%;
+    animation: spin .7s linear infinite
+}
+/* Skeleton loading. One primitive: a block tinted a step above its surface,
+   swept by a soft highlight. Sizes come from the caller so each skeleton claims
+   exactly the space its real content will, which is the whole point — no
+   layout shift when the data lands. */
+.skeleton {
+    display: block;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    border-radius: var(--rounded-control);
+    background: var(--white-0c);
+    animation: skeleton-pulse 1.6s var(--ease-out-quart) infinite
+}
+.skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, var(--white-1c), transparent);
+    animation: skeleton-sweep 1.6s var(--ease-out-quart) infinite;
+    animation-delay: inherit
+}
+@keyframes skeleton-pulse {
+    0%, 100% {
+        background-color: var(--white-0c)
+    }
+    50% {
+        background-color: var(--white-13)
+    }
+}
+@keyframes skeleton-sweep {
+    from {
+        transform: translateX(-100%)
+    }
+    to {
+        transform: translateX(100%)
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+/* the global reduce rule freezes the sweep mid-track; settle it into a
+       steady tint so the block still reads as "content pending" */
+    .skeleton {
+        background: var(--white-12)
+    }
+.skeleton::after {
+        display: none
+    }
+}
+.skeleton-stat-label {
+    width: 60%;
+    height: 11px;
+    margin-bottom: 10px
+}
+.skeleton-stat-value {
+    width: 45%;
+    height: 20px
+}
+/* A skeleton region inherits the loaded container's own geometry, so the only
+   thing these rules add is the dashed-panel framing `.lobby-empty` gave the
+   plain-text states they replace. */
+.skeleton-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px
+}
+.people-suspense-skeleton .skeleton:nth-child(1) {
+    height: 52px
+}
+.people-suspense-skeleton .skeleton:nth-child(n + 2) {
+    height: 88px
+}
