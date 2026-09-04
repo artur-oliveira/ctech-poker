@@ -70,6 +70,14 @@ off by default — do not build UI that assumes real money is on.
   and the whole banner assembly in `buildHandOutcome` (`lib/tableOutcome.ts`). Extend the hook that
   owns the concern; do not grow the page back. See
   `docs/2026-09-02-table-module-decomposition.md`.
+- **One lifecycle for every purchase.** Sandbox credits, premium reactions and deck/felt cosmetics
+  all track their live status through `lib/hooks/usePurchaseStatus.ts`. The websocket frame is the
+  primary confirmation (each key lives under a root `useLobbyRealtime` already invalidates); the
+  hook's query is the bounded fallback — it pauses in a hidden tab for free (React Query's
+  `refetchIntervalInBackground` is false), backs off 4s → 30s per polls spent, gives up at
+  `PURCHASE_POLL_BUDGET`, and seeds `initialData` so opening a dialog costs no read. **Never arm a
+  `setInterval` to watch a purchase**; `purchasePollCount()` exists so "at most N reads per pending
+  purchase" stays assertable. See `docs/2026-09-04-purchase-status-one-lifecycle.md` and #227.
 - **One clock for the whole table.** `lib/hooks/useSharedTicker.ts` runs a single `setInterval` at
   the shortest cadence anyone asked for and notifies each subscriber on its own period. Every
   countdown goes through `useLiveNow` (which subscribes to it) — the action bar, each timed seat,

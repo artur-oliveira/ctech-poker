@@ -1,5 +1,5 @@
 'use client';
-import {type RefObject, useCallback, useEffect, useState} from 'react';
+import {type RefObject, useEffect, useRef, useState} from 'react';
 import {Check, Coins, LoaderCircle, QrCode, ShieldCheck} from 'lucide-react';
 import {useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
@@ -17,13 +17,13 @@ import {ApiError} from '@/lib/api/client';
 import {
   createReactionPurchase,
   getReactionPurchase,
+  reactionPurchaseKey,
   type ReactionCatalogEntry,
   type ReactionPurchase,
   type ReactionPurchaseMethod
 } from '@/lib/api/reactionPurchases';
+import {usePurchaseStatus} from '@/lib/hooks/usePurchaseStatus';
 import {TABLE_REACTIONS, type TableReactionID} from '@/lib/reactions';
-
-const POLL_MS = 4000;
 
 function formatBRL(cents?: number) {
   return ((cents ?? 0) / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
@@ -48,38 +48,42 @@ export function ReactionPurchaseDialog({entry, initialPurchase, sandboxBalance, 
   onConfirmedAction?: (purchase: ReactionPurchase) => void;
 }) {
   const queryClient = useQueryClient();
-  const [purchase, setPurchase] = useState<ReactionPurchase | undefined>(initialPurchase);
+  const [started, setStarted] = useState<ReactionPurchase | undefined>(initialPurchase);
   const [pendingMethod, setPendingMethod] = useState<ReactionPurchaseMethod | null>(null);
   const [error, setError] = useState('');
-  const [pollError, setPollError] = useState(false);
   const definition = entry && TABLE_REACTIONS[entry.id as TableReactionID];
+  const startedId = started?.purchase_id;
+
+  // The purchase's live status is server state: it lives in the query cache
+  // under `reactionPurchaseKey`, so the `reaction_purchase_update` websocket
+  // frame resolves this dialog on the frame, and the shared fallback poll (one
+  // lifecycle for all three purchase kinds — it pauses in a hidden tab, backs
+  // off and gives up at a deadline) is only the safety net. See #227.
+  const statusQuery = usePurchaseStatus<ReactionPurchase>({
+    queryKey: reactionPurchaseKey(startedId ?? ''),
+    queryFn: () => getReactionPurchase(startedId!),
+    purchase: started,
+    enabled: Boolean(startedId),
+  });
+
+  const purchase = statusQuery.data ?? started;
   const confirmed = purchase?.status === 'confirmed';
   const active = purchase?.status === 'pending' || purchase?.status === 'processing';
   const expired = purchase?.status === 'expired';
-  const purchaseId = purchase?.purchase_id;
+  const pollError = statusQuery.isError;
 
-  const refreshStatus = useCallback(async () => {
-    if (!purchaseId) return;
-    try {
-      const next = await getReactionPurchase(purchaseId);
-      setPurchase(next);
-      setPollError(false);
-      if (next.status === 'confirmed') {
-        void queryClient.invalidateQueries({queryKey: ['wallet', 'reaction-purchases']});
-        void queryClient.invalidateQueries({queryKey: ['wallet', 'reaction-catalog']});
-        void queryClient.invalidateQueries({queryKey: ['player', 'me']});
-        onConfirmedAction?.(next);
-      }
-    } catch {
-      setPollError(true);
-    }
-  }, [purchaseId, queryClient, onConfirmedAction]);
-
+  // Fires once per confirmed purchase id, wherever the confirmation came from
+  // (the create response, the websocket frame or a poll) — the ownership
+  // refresh must not re-run on every later render that still reads confirmed.
+  const announcedRef = useRef('');
   useEffect(() => {
-    if (!active) return undefined;
-    const timer = window.setInterval(() => void refreshStatus(), POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [active, refreshStatus]);
+    if (!confirmed || !purchase || announcedRef.current === purchase.purchase_id) return;
+    announcedRef.current = purchase.purchase_id;
+    void queryClient.invalidateQueries({queryKey: ['wallet', 'reaction-purchases']});
+    void queryClient.invalidateQueries({queryKey: ['wallet', 'reaction-catalog']});
+    void queryClient.invalidateQueries({queryKey: ['player', 'me']});
+    onConfirmedAction?.(purchase);
+  }, [confirmed, purchase, queryClient, onConfirmedAction]);
 
   if (!entry || !definition) return null;
 
@@ -90,12 +94,12 @@ export function ReactionPurchaseDialog({entry, initialPurchase, sandboxBalance, 
     setError('');
     try {
       const next = await createReactionPurchase(entry!.id, method);
-      setPurchase(next);
+      setStarted(next);
+      queryClient.setQueryData(reactionPurchaseKey(next.purchase_id), next);
       await Promise.all([
         queryClient.invalidateQueries({queryKey: ['wallet', 'reaction-purchases']}),
         queryClient.invalidateQueries({queryKey: ['player', 'me']}),
       ]);
-      if (next.status === 'confirmed') onConfirmedAction?.(next);
     } catch (caught) {
       setError(purchaseError(caught));
     } finally {
@@ -147,7 +151,9 @@ export function ReactionPurchaseDialog({entry, initialPurchase, sandboxBalance, 
           novamente.</p>}
       {active && pollError && <div className="store-poll-recovery" role="alert">
           <span>Não foi possível atualizar a confirmação.</span>
-          <Button type="button" variant="ghost" onClick={() => void refreshStatus()}>Verificar novamente</Button>
+          <Button type="button" variant="ghost" disabled={statusQuery.isFetching}
+                  onClick={() => void statusQuery.refetch()}>
+            {statusQuery.isFetching ? 'Verificando…' : 'Verificar novamente'}</Button>
       </div>}
       {error && <p className="reaction-purchase-error" role="alert">{error}</p>}
 

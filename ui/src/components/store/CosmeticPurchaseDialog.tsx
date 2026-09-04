@@ -3,7 +3,7 @@ import type {RefObject} from 'react';
 import {useEffect, useRef, useState} from 'react';
 import Image from 'next/image';
 import {Check, Coins, LoaderCircle, QrCode, ShieldCheck} from 'lucide-react';
-import {useQuery, useQueryClient} from '@tanstack/react-query';
+import {useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
@@ -18,8 +18,7 @@ import {cardPath} from '@/lib/cards';
 import {DECK_VARIANTS, type DeckVariantId} from '@/lib/cardVariants';
 import {TABLE_THEMES, type TableThemeId} from '@/lib/tablePreferences';
 import {WALLET_QUERY_ROOT} from '@/lib/api/wallet';
-
-const POLL_MS = 4000;
+import {usePurchaseStatus} from '@/lib/hooks/usePurchaseStatus';
 
 function formatBRL(cents?: number) {
   return ((cents ?? 0) / 100).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
@@ -69,14 +68,17 @@ export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBal
   const startedId = started?.purchase_id;
 
   // The purchase's live status is server state, so it lives in the query cache
-  // under `cosmeticPurchaseKey`: `refetchInterval` is the 4s fallback poll, and
-  // the `cosmetic_purchase_update` websocket frame (#144) invalidates this same
-  // key, which resolves the dialog on the next tick instead of on the next poll.
-  const statusQuery = useQuery({
+  // under `cosmeticPurchaseKey`: the `cosmetic_purchase_update` websocket frame
+  // (#144) invalidates this same key and resolves the dialog on the next tick,
+  // and the shared fallback poll (#227) is the safety net — it pauses in a
+  // hidden tab, backs off as the wait grows, stops when the Pix window closes
+  // and, unlike the flat `refetchInterval` it replaces, stops the moment the
+  // fetched status is no longer pending.
+  const statusQuery = usePurchaseStatus<CosmeticPurchase>({
     queryKey: cosmeticPurchaseKey(kind, startedId ?? ''),
     queryFn: () => getCosmeticPurchase(kind, startedId!),
-    enabled: Boolean(startedId) && (started?.status === 'pending' || started?.status === 'processing'),
-    refetchInterval: POLL_MS
+    purchase: started,
+    enabled: Boolean(startedId),
   });
 
   const purchase = statusQuery.data ?? started;

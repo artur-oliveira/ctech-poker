@@ -1,6 +1,6 @@
 import {render, screen, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
+import {focusManager, QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import type {ReactNode} from 'react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import {reactionActivityRows, ReactionStoreSection} from './ReactionStoreSection';
@@ -228,6 +228,26 @@ describe('ReactionPurchaseDialog', () => {
       expect(getReactionPurchase).toHaveBeenCalledWith('p1');
       await vi.waitFor(() => expect(screen.getByText('Pronta para a mesa')).toBeInTheDocument());
     } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('spends nothing while the tab is hidden, and one read on coming back', async () => {
+    vi.useFakeTimers();
+    try {
+      getReactionPurchase.mockResolvedValue(purchase({status: 'pending'}));
+      render(<ReactionPurchaseDialog entry={entry} initialPurchase={purchase({status: 'pending'})}
+        onCloseAction={vi.fn()}/>, {wrapper});
+
+      focusManager.setFocused(false);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(getReactionPurchase).not.toHaveBeenCalled();
+
+      focusManager.setFocused(true);
+      await vi.waitFor(() => expect(getReactionPurchase).toHaveBeenCalledTimes(1));
+      expect(getReactionPurchase).toHaveBeenCalledTimes(1);
+    } finally {
+      focusManager.setFocused(undefined);
       vi.useRealTimers();
     }
   });
