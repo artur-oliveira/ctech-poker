@@ -28,7 +28,7 @@ func testClient(t *testing.T) *dynamodb.Client {
 	})
 }
 
-// mustCreateTestTable provisions the poker_rooms table with its two GSIs
+// mustCreateTestTable provisions the poker_rooms table with its three GSIs
 // against DynamoDB Local — production tables are provisioned by CDK, never
 // by app code.
 func mustCreateTestTable(ctx context.Context, t *testing.T, db *dynamodb.Client, env string) {
@@ -39,6 +39,7 @@ func mustCreateTestTable(ctx context.Context, t *testing.T, db *dynamodb.Client,
 			{AttributeName: aws.String("pk"), AttributeType: types.ScalarAttributeTypeS},
 			{AttributeName: aws.String("sk"), AttributeType: types.ScalarAttributeTypeS},
 			{AttributeName: aws.String("gsi_public"), AttributeType: types.ScalarAttributeTypeS},
+			{AttributeName: aws.String("gsi_bucket"), AttributeType: types.ScalarAttributeTypeS},
 			{AttributeName: aws.String("gsi_share_code"), AttributeType: types.ScalarAttributeTypeS},
 		},
 		KeySchema: []types.KeySchemaElement{
@@ -51,6 +52,13 @@ func mustCreateTestTable(ctx context.Context, t *testing.T, db *dynamodb.Client,
 				IndexName: aws.String(gsiPublic),
 				KeySchema: []types.KeySchemaElement{
 					{AttributeName: aws.String("gsi_public"), KeyType: types.KeyTypeHash},
+				},
+				Projection: &types.Projection{ProjectionType: types.ProjectionTypeAll},
+			},
+			{
+				IndexName: aws.String(gsiBucket),
+				KeySchema: []types.KeySchemaElement{
+					{AttributeName: aws.String("gsi_bucket"), KeyType: types.KeyTypeHash},
 				},
 				Projection: &types.Projection{ProjectionType: types.ProjectionTypeAll},
 			},
@@ -103,5 +111,57 @@ func TestCreateGetAndListPublic(t *testing.T) {
 	}
 	if len(list) != 1 || list[0].ID != "room-pub-1" {
 		t.Fatalf("expected only the public room listed, got %+v", list)
+	}
+}
+
+// The point of gsi_bucket: one join attempt reads its own bucket's rooms and
+// nothing else, no matter how many public rooms exist in other buckets (#213).
+func TestListBucketReadsOnlyTheRequestedBucket(t *testing.T) {
+	db := testClient(t)
+	s := NewStore(db, "test")
+	ctx := context.Background()
+	mustCreateTestTable(ctx, t, db, "test")
+
+	room := func(id string, bigBlind int64, maxSeats int, visibility string) Room {
+		return Room{
+			ID: id, Visibility: visibility, CurrencyMode: "sandbox", SmallBlind: bigBlind / 2,
+			BigBlind: bigBlind, MaxSeats: maxSeats, BuyInMin: bigBlind * 20, BuyInMax: bigBlind * 100,
+			Status: "waiting", CreatedBy: "u1", CreatedAt: "2026-09-04T00:00:00Z",
+		}
+	}
+	// The bucket itself, then one room off it on every axis that defines a bucket.
+	for _, r := range []Room{
+		room("bucket-a-1", 20, 6, "public"),
+		room("bucket-a-2", 20, 6, "public"),
+		room("other-blinds", 50, 6, "public"),
+		room("other-seats", 20, 9, "public"),
+		room("private-same-bucket", 20, 6, "private"),
+	} {
+		if err := s.Create(ctx, r); err != nil {
+			t.Fatalf("create %s: %v", r.ID, err)
+		}
+	}
+	realMoney := room("real-same-stakes", 20, 6, "public")
+	realMoney.CurrencyMode = CurrencyModeReal
+	if err := s.Create(ctx, realMoney); err != nil {
+		t.Fatalf("create real: %v", err)
+	}
+
+	got, err := s.ListBucket(ctx, CurrencyModeSandbox, 10, 20, 6)
+	if err != nil {
+		t.Fatalf("list bucket: %v", err)
+	}
+	ids := map[string]bool{}
+	for _, r := range got {
+		ids[r.ID] = true
+	}
+	if len(got) != 2 || !ids["bucket-a-1"] || !ids["bucket-a-2"] {
+		t.Fatalf("expected exactly the two sandbox 10/20 six-max public rooms, got %v", ids)
+	}
+}
+
+func TestBucketKeyTreatsAMissingCurrencyModeAsSandbox(t *testing.T) {
+	if BucketKey("", 10, 20, 6) != BucketKey(CurrencyModeSandbox, 10, 20, 6) {
+		t.Fatal("a room predating currency_mode must land in the sandbox bucket")
 	}
 }

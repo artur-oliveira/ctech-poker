@@ -579,6 +579,20 @@ catalog.
   reconciliation. **Rollout:** deploy the CDK change first, then backfill `open_table_id = table_id` on rows with
   `ended_at = 0` — sessions still open at deploy time predate the attribute and would otherwise be invisible to
   `FindOpenSession` until they TTL out (30 days); `gsi_player_table` needs no backfill since `table_id` is on every row.
+- **Issue #213 fixed: the lobby is indexed per bucket, not scanned.** `POST /rooms/join-or-create` used to call
+  `roomstore.ListAllPublic` — up to 20 pages of `gsi_public` (2 000 rooms), every currency mode and stake in one
+  logical partition — and then filter in memory, so every click cost O(all public rooms). `poker_rooms` now carries
+  **`gsi_bucket`** (`cdk/lib/dynamodb-stack.ts`, projection ALL), a sparse key written only for public rooms
+  (`roomstore.BucketKey`: `public#<currency_mode>#<sb>#<bb>#<seats>`), and `roomstore.Store.ListBucket` answers a join
+  attempt with **one** Query bounded by `bucketCandidateLimit` (50) against just the requested bucket's partition.
+  The bucket key is immutable for a room's lifetime, so `SetSeatsTaken`'s write-through never touches the index and
+  there is no second counter to reconcile — `seatInBucket` remains the thing that actually resolves a seat race, and a
+  stale `seats_taken` still only costs a skipped candidate. `GET /rooms/buckets` still walks `gsi_public` (it is a
+  cross-bucket aggregate) but no longer once per request: `bucketCache` in `internal/api/v1/rooms.go` memoises it per
+  currency mode for `bucketsCacheTTL` (5s), loading under the mutex so concurrent lobby opens collapse into one walk.
+  **Rollout:** deploy the CDK change before the app. Rooms created before `gsi_bucket` existed carry no index value
+  and are invisible to `ListBucket` (a join would open a fresh table next to them); public tables are ephemeral —
+  `cmd/tablecleanup` deletes them — so they age out on their own and no backfill is warranted.
 - **Issue #225 fixed: the public showcase projects, it does not read whole hands.** `GET /players/:id/showcase` used to
   pull up to 50 complete `sessionlog.HandItem`s — opponent identities and cards, the shuffle seed, the per-position
   fairness maps — to build a six-field `best_hand`. `sessionlog.Store.BestPublicHand` replaces that with a single

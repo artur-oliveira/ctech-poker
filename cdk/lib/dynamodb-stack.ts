@@ -195,6 +195,16 @@ export class DynamoDBStack extends cdk.Stack {
       partitionKey: {name: 'gsi_public', type: dynamodb.AttributeType.STRING},
       projectionType: dynamodb.ProjectionType.ALL,
     });
+    // gsi_bucket is the lobby's per-bucket directory: one partition per
+    // (currency mode, blinds, seats) pick, written by roomstore.BucketKey for
+    // public rooms only (sparse, same convention as gsi_public). It is what
+    // makes POST /rooms/join-or-create cost a function of the requested
+    // bucket instead of the whole public directory (#213).
+    rooms.addGlobalSecondaryIndex({
+      indexName: 'gsi_bucket',
+      partitionKey: {name: 'gsi_bucket', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
     addThrottleAlarm(rooms, 'poker_rooms');
     rooms.addGlobalSecondaryIndex({
       indexName: 'gsi_share_code',
