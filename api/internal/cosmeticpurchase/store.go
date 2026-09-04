@@ -21,6 +21,10 @@ const (
 	// row ever written, so no new attribute and no backfill are needed.
 	gsiPlayerKind = "gsi_player_kind"
 
+	// maxPageSize bounds List's page size. The API layer caps the query param
+	// too; this is the guard on the value that actually reaches DynamoDB.
+	maxPageSize = 100
+
 	statusProcessing = "processing"
 	statusPending    = "pending"
 	statusActive     = "active"
@@ -607,6 +611,11 @@ func (s *Store) UpdateStatus(ctx context.Context, playerID, purchaseID, status, 
 func (s *Store) List(ctx context.Context, playerID string, kind cosmetics.Kind, limit int, startKey map[string]types.AttributeValue) ([]Record, map[string]types.AttributeValue, error) {
 	if limit <= 0 {
 		limit = 50
+	}
+	// Explicit upper bound before the int32 conversion below: limit reaches
+	// here from a query param, and DynamoDB's Limit is int32.
+	if limit > maxPageSize {
+		limit = maxPageSize
 	}
 	result, err := s.base.QueryRaw(ctx, &dynamodb.QueryInput{
 		IndexName:                aws.String(gsiPlayerKind),
