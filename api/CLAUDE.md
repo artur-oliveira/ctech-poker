@@ -229,6 +229,26 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   is left un-armed; `cmd/tablecleanup` or an operator is the recovery for a table that stuck, not a transaction that
   keeps being rejected. `poker_table_state` / `poker_table_state_history` are also TTL'd now (`tablestore.stateTTLDays`,
   refreshed on every commit) and PITR-off — ephemeral, rebuildable, and a runaway write shows up in PITR storage too.
+- **`tablestore.CommitAction` carries its own per-table circuit breaker (issue #207, `internal/tablestore/breaker.go`).**
+  The next-hand cap above fixes *that* loop; `CommitAction` is the one shared write sink for every command, timer and
+  sweep, so it owes every other caller the same defence in depth. **The trip condition is the storm's shape, not its
+  rate:** `maxConsecutiveRejections` (32) rejected commits — version conflict or duplicate action — with *no accepted
+  commit in between* opens the table's circuit, because a rejected conditional write means the table did not advance,
+  so replaying the same mutation cannot succeed either. Any accepted commit resets the run. While open, nothing
+  reaches DynamoDB and the caller gets `ErrCommitThrottled`, which **wraps `ErrUnavailable`, never
+  `ErrVersionConflict`** — the actor must abort the command, and a conflict-flavoured error would be answered with the
+  immediate reload-and-retry this guard exists to stop. Recovery is a `commitCooldownBase` (2s) cooldown that doubles
+  to `commitCooldownMax` (60s) per failed half-open probe, one probe at a time, so a genuinely wedged table costs one
+  transaction a minute; the incident's 5,779 rejected transactions become a few dozen. **A per-table rate/token
+  bucket was tried and deliberately dropped:** commit rate is not a signal, because only real play is paced by people
+  — `internal/table`'s nine-handed integration test sustains ~115 commits/s on one table, ~14x the incident's ~8/s, so
+  any ceiling that would have caught the incident throttles legitimate traffic (it did, twice) and any ceiling that
+  leaves it alone is too high to bound a bill. Per-command ceilings stay where the pacing is known: the actor's own
+  timer/retry caps. Logs are one line per state transition (table, action, cause, cooldown), never per attempt — the
+  incident's own symptom was 5,779 WARN lines for one table. There is no `internal/metrics` in this service and no
+  ad-hoc collector was added; CloudWatch's `addWriteVolumeAlarm` stays the numeric signal. Tests are fake-clock only
+  (`breaker_test.go`): the storm, machine-speed play, contention that still makes progress, store outages, per-table
+  isolation, and idle eviction.
 - **A timer-fired handler must force a fresh reload, not `ensureLoaded(ctx, false)`.** `handleTurnTimeout`,
   `handleNextHand` and `handleRunoutStep` are only ever reached from a `time.AfterFunc` armed by *this* actor
   instance — and `internal/tablelease` is latency-only, never an exclusive fleet lock (several instances run
