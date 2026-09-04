@@ -11,11 +11,10 @@ duplicated here:
 - **PR #130** (`#32`) — `cmd/reconcile` per-entry `Attempts` counter, `manual_review`
   quarantine, aggregated error so the Lambda invocation fails and reaches the DLQ,
   `config.LoadForLambda` legal gate.
-- **PR #139** (`#40`) — `entitlement.Store.Claim` atomic winner read-back
-  (`ReturnValuesOnConditionCheckFailure: ALL_OLD`), `buyin.Service.confirmFeeCharged`
-  as the single "fee is covered" decision (keyed on the entitlement's own
-  `poker_pending_cashouts` recovery row, not on "a row exists"), and
-  `cmd/tablecleanup` real-money settle-and-archive.
+- **PR #139** (`#40`) — `cmd/tablecleanup` real-money settle-and-archive. Its
+  proposed Claim-race solution was superseded during integration and did not ship
+  in the merge commit; the final Claim fix shipped later in **PR #181** and is
+  recorded in Finding 5 below.
 
 This audit covers the **broader** lost-update / non-idempotency surface across
 those packages and their callers.
@@ -151,12 +150,31 @@ batch** as the version-conditioned seat-removal state commit. The later
 
 ---
 
-## Finding 5 (reviewed — NO new bug): `entitlement.Store.Claim` race
+## Finding 5 (reviewed, then fixed by #40): `entitlement.Store.Claim` race
 
-Covered by PR #139 (atomic winner read-back). Verified the fix closes the
-"two Claims in flight" and the more common "row exists but its `DebitReal` never
-cleared" manifestations. Not touched here beyond the `Rebind` signature change in
-the same file (see Coordination note).
+The original audit expected PR #139's atomic winner read-back to close this race,
+but that implementation was superseded during integration and did not ship in
+the merge commit. The final decision is to **close the free-seat window**, not
+merely bound or accept it. PR #181 implements that decision without treating an
+entitlement row as proof of payment:
+
+- `buyin.Service.confirmFeeCharged` is the single admission decision for an
+  existing, rebound, or concurrently won entitlement. It grants coverage only
+  when that entitlement's own `poker_pending_cashouts` fee row is resolved;
+  otherwise it completes the same debit before seating.
+- The `ErrAlreadyClaimed` loser re-reads the winning entitlement and passes it
+  through `confirmFeeCharged`; it never returns "covered" from the condition
+  failure alone.
+- The fee idempotency key is derived from durable reservation identity (origin
+  table, player, and `ExpiresAt`), so the winner, loser, later request, and
+  `cmd/reconcile` all retry one wallet movement rather than creating new charges.
+- Read-only `FeeStatus` also requires a resolved fee row, so the UI does not
+  advertise an unpaid reservation as covered.
+
+Focused coverage lives in `api/internal/buyin/entitlement_fee_test.go`, including
+the failed-winner retry, Claim-race loser, stable fee key, rebind, and fee-status
+cases. Together with Finding 1's Rebind CAS, both entitlement concurrency windows
+identified by this audit are closed.
 
 ---
 
