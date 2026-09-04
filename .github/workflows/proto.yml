@@ -32,12 +32,12 @@ jobs:
           cache-dependency-path: ui/package-lock.json
       - name: Install protobuf compiler
         run: |
-          curl -sSL -o /tmp/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v35.1/protoc-35.1-linux-aarch_64.zip
+          curl -sSL -o /tmp/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v36.1/protoc-36.1-linux-aarch_64.zip
           sudo unzip -o /tmp/protoc.zip -d /usr/local
           rm /tmp/protoc.zip
       - name: Install pinned generators
         run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
           npm ci --prefix ui
       - name: Regenerate contract
         run: ./scripts/generate-proto.sh
