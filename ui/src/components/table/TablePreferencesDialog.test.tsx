@@ -87,7 +87,9 @@ function wrapper({children}: {children: ReactNode}) {
 }
 
 function renderDialog(props: Partial<React.ComponentProps<typeof TablePreferencesDialog>> = {}) {
-  return render(<TablePreferencesDialog {...props}/>, {wrapper});
+  // The mocked Dialog renders its content unconditionally, so `open` here only
+  // drives the catalog's `enabled` latch — the closed case is asserted below.
+  return render(<TablePreferencesDialog open {...props}/>, {wrapper});
 }
 
 describe('TablePreferencesDialog', () => {
@@ -122,6 +124,21 @@ describe('TablePreferencesDialog', () => {
     expect(screen.getByRole('switch', {name: 'Dealer auditivo'})).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByRole('switch', {name: 'Comandos por voz'})).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('switch', {name: 'Treinador'})).toHaveAttribute('aria-checked', 'false');
+  });
+
+  test('does not fetch the felt catalog while the dialog is closed', async () => {
+    renderDialog({open: false});
+
+    expect(await screen.findByRole('heading', {name: 'Preferências da mesa'})).toBeInTheDocument();
+    expect(listCosmeticCatalog).not.toHaveBeenCalled();
+  });
+
+  test('waits for the catalog before calling a premium felt locked', async () => {
+    listCosmeticCatalog.mockReturnValue(new Promise(() => undefined));
+    renderDialog();
+
+    const midnight = await screen.findByRole('button', {name: 'Meia-noite'});
+    expect(within(midnight).queryByLabelText(/Premium bloqueado/)).not.toBeInTheDocument();
   });
 
   test('shows the run-it-twice choice only when the room allows it', async () => {

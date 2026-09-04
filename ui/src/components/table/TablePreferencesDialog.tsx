@@ -1,5 +1,6 @@
 'use client';
 import {AudioLines, Lightbulb, LockKeyhole, Mic, Repeat2, Settings2, Volume2} from 'lucide-react';
+import {useState} from 'react';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
 import {
@@ -38,8 +39,24 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
   const {preferences, update} = useTablePreferences();
   const queryClient = useQueryClient();
   const {data: me} = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
-  const catalog = useQuery({queryKey: ['wallet', 'cosmetic-catalog', 'felt'], queryFn: () => listCosmeticCatalog('felt')});
+  // The felt catalog only feeds the picker inside the dialog, which most
+  // players never open — so it is fetched on the first open and then kept in
+  // cache for every later one (#232). The dialog is open either because a
+  // parent controls it (`open`) or because the trigger opened it, hence both
+  // the render-time latch and the one in `onOpenChange`.
+  const [opened, setOpened] = useState(false);
+  if (open && !opened) setOpened(true);
+  const catalog = useQuery({
+    queryKey: ['wallet', 'cosmetic-catalog', 'felt'], queryFn: () => listCosmeticCatalog('felt'),
+    enabled: opened
+  });
   const owned = ownedCosmeticIDs(catalog.data ?? []);
+  // Ownership is only a fact once the catalog lands. During that first beat a
+  // premium felt must not flash a padlock at a player who owns it (and must
+  // not be selectable either) — it uses the Select's own disabled state until
+  // the answer is in. A failed request is not "still loading": it falls back
+  // to locked, which at least routes to the store.
+  const ownershipKnown = !catalog.isLoading;
   const prices = new Map((catalog.data ?? []).map(entry => [entry.id, entry.price_fichas]));
   const save = useMutation({
     mutationFn: updateMe,
@@ -56,7 +73,10 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
     save.mutate({table_theme: value});
   }
 
-  return <Dialog open={open} onOpenChange={onOpenChangeAction}>
+  return <Dialog open={open} onOpenChange={next => {
+    if (next) setOpened(true);
+    onOpenChangeAction?.(next);
+  }}>
     {showTrigger && <DialogTrigger render={<Button type="button" variant="ghost" size="icon" aria-label="Preferências da mesa"/>}>
       <Settings2/>
     </DialogTrigger>}
@@ -76,8 +96,10 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
             </SelectTrigger>
             <SelectContent>
               {Object.entries(TABLE_THEMES).map(([id, feltTheme]) => {
-                const locked = PREMIUM_FELT_IDS.has(id as TableThemeId) && !owned.has(id as TableThemeId);
-                return <SelectItem key={id} value={id as TableThemeId} label={feltTheme.label}>
+                const premium = PREMIUM_FELT_IDS.has(id as TableThemeId);
+                const locked = premium && ownershipKnown && !owned.has(id as TableThemeId);
+                return <SelectItem key={id} value={id as TableThemeId} label={feltTheme.label}
+                                   disabled={premium && !ownershipKnown}>
                   <span className={`table-theme-option${locked ? ' locked' : ''}`}>
                     <span aria-hidden="true"
                           style={{'--theme-a': feltTheme.colors[0], '--theme-b': feltTheme.colors[1]} as React.CSSProperties}/>
