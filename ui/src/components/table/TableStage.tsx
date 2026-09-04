@@ -33,35 +33,38 @@ export function tableCapacity(maxSeats?: number): TableCapacity {
 export function balancedSeatPosition(index: number, playerCount: number, portrait = false): SeatLayoutPosition {
   const safeCount = Math.max(1, playerCount);
   if (portrait) {
-    // Nine reference points trace the center of the CSS capsule rail. Sampling
-    // that path by occupancy keeps every player on the material itself; an
-    // ellipse cuts the lower pair through the felt because a capsule's sides
-    // stay straight before turning into its bottom arc.
+    // Nine reference points trace the centre of the capsule rail, in the
+    // normalised orbit space CSS resolves against the rail tokens (0 = the
+    // left/top orbit line, 1 = the right/bottom one — see
+    // --table-orbit-* in base.css). Sampling that path by occupancy keeps
+    // every player on the material itself; an ellipse cuts the lower pair
+    // through the felt, because a capsule's sides stay straight before they
+    // turn into its bottom arc.
     const rail = [
-      [50, 91], [12, 74], [5, 48], [12, 22], [32, 7],
-      [68, 7], [88, 22], [95, 48], [88, 74], [50, 91],
+      [.5, 1], [.078, .798], [0, .488], [.078, .179], [.3, 0],
+      [.7, 0], [.922, .179], [1, .488], [.922, .798], [.5, 1],
     ] as const;
     const progress = index / safeCount * 9;
     const start = Math.floor(progress);
     const mix = progress - start;
     const from = rail[start];
     const to = rail[Math.min(start + 1, rail.length - 1)];
-    const x = from[0] + (to[0] - from[0]) * mix;
-    const y = from[1] + (to[1] - from[1]) * mix;
+    const s = from[0] + (to[0] - from[0]) * mix;
+    const t = from[1] + (to[1] - from[1]) * mix;
     // Only the shallow top arc uses the inward-card/outward-label treatment.
-    // The y=22 reference points are already on the straight upper sides.
-    const zone = y > 68 ? 'bottom' : y < 18 ? 'top' : x < 50 ? 'left' : 'right';
-    const side = x < 45 ? 'left' : x > 55 ? 'right' : 'center';
-    return {x: Number(x.toFixed(2)), y: Number(y.toFixed(2)), zone, side};
+    // The t=.179 reference points are already on the straight upper sides.
+    const zone = t > .726 ? 'bottom' : t < .131 ? 'top' : s < .5 ? 'left' : 'right';
+    const side = s < .444 ? 'left' : s > .556 ? 'right' : 'center';
+    return {s: Number(s.toFixed(4)), t: Number(t.toFixed(4)), zone, side};
   }
+  // The desktop oval's seats are the orbit ellipse itself, so they track the
+  // rail band the same way the capsule's polyline does.
   const angle = Math.PI / 2 + index * (Math.PI * 2 / safeCount);
   const cosine = Math.cos(angle);
   const sine = Math.sin(angle);
-  const x = 50 + cosine * 46;
-  const y = 50 + sine * 42;
   const zone = sine > .55 ? 'bottom' : sine < -.55 ? 'top' : cosine < 0 ? 'left' : 'right';
   const side = cosine < -.15 ? 'left' : cosine > .15 ? 'right' : 'center';
-  return {x: Number(x.toFixed(2)), y: Number(y.toFixed(2)), zone, side};
+  return {s: Number((.5 + cosine * .5).toFixed(4)), t: Number((.5 + sine * .5).toFixed(4)), zone, side};
 }
 
 /** Preserve surviving players' physical slots while filling a vacancy after

@@ -301,6 +301,10 @@ Spacing follows a 4px base rhythm with recurring 8, 12, 16, 24, 32, 48, 64, and 
 
 **The Seat Overhang Rule.** A seat's corner badges hang outside the seat box by exactly `--seat-badge-overhang` (8px), and every container that clips a seat reserves at least that much padding on the edges it clips. The portrait stage's own padding, and the outward hang of the mid-side captions, are both written in terms of that one token, so no tier can reserve less room than a badge needs. The reported symptom of breaking this is a win/loss streak badge sliced in half on the viewer's dock.
 
+**The One Band Rule.** The table is three shapes — the walnut rail, the green felt and the ring of seats — and they come from one set of numbers. `--table-rail-inset-top/-inline/-bottom` place the rail; the felt is always that inset **plus `--table-rail-band`**; the seats sit on `--table-orbit-*`, the band's centreline. Never tune one side of the felt on its own: the rail inset is authored per side (the portrait capsule is pushed down inside its ring so the top seats' cards clear the header), and only the derivation keeps the walnut the same thickness the whole way round. Occupancy changes the ring's width, never the felt's inset — squeezing the felt inside a full-width rail is what left a heads-up table with a 63px rim at the sides against 14px at the bottom.
+
+**The Length-Not-Percentage Rule.** Table geometry is expressed in lengths. An `inset` percentage resolves against width on the horizontal axis and height on the vertical, so the same number on four sides is four different thicknesses, and it silently changes shape with every aspect ratio. Percentages are allowed only where the value is *meant* to scale with one axis (the rail's own inset), never for the band.
+
 **The Caption Lane Rule.** The portrait seat caption (the stack figure under the avatar) is sized from `--seat-caption-lane` (64px, narrowing to 56px below 360px), never from a per-seat literal. Captions ellipsise; they do not widen the lane, and they do not reach past the stage.
 
 ## Elevation & Depth
