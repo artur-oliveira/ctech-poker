@@ -9,9 +9,11 @@ package matchup
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"slices"
 	"strconv"
-	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/dynamo"
@@ -20,14 +22,17 @@ import (
 
 const (
 	tableMatchups = "poker_player_matchups"
-	guardTTLDays  = 90
 
-	// maxPairsPerTx caps how many pairs ride in one TransactWriteItems call
-	// (issue #65). Each pair costs 2 items (guard + update), so 12 pairs = 24
-	// items — under the ~25-item ceiling the issue asks for, and far under
-	// DynamoDB's hard 100. A 9-max table's C(9,2)=36 pairs therefore commit
-	// as 3 bounded transactions instead of one 72-item, ~144-WCU write.
-	maxPairsPerTx = 12
+	// appliedHandsCap / appliedHandsKeep bound the per-pair replay memory
+	// (issue #201). Each pair item carries the hand ids already applied to it
+	// in an `applied_hands` string set; that set is the pair's idempotency
+	// guard, so it replaces the guard *item* #65 used to write next to every
+	// increment. It is pruned back to appliedHandsKeep members once it grows
+	// past appliedHandsCap, which bounds both the item size and the replay
+	// window: a duplicate of one of a pair's last appliedHandsKeep shared
+	// hands is always rejected, an older one is not (see pruneApplied).
+	appliedHandsCap  = 12
+	appliedHandsKeep = 8
 )
 
 // Stats is one unordered player pair's cumulative head-to-head record,
@@ -131,84 +136,115 @@ func deltasFor(mode string, outcome hand.HandOutcome) []pairDelta {
 }
 
 // RecordHand applies one completed hand to every unordered pair within
-// outcome.Participants, in bounded chunks of maxPairsPerTx pairs per
-// TransactWriteItems call (issue #65 — one 72-item transaction per hand was
-// 72% of DynamoDB's hard limit and ~144 WCU). Each pair carries its own
-// create-only idempotency guard inside the same transaction as its own
-// increment (mirrors pokerstats.Store.RecordHand's guard-plus-increments
-// shape, extended to per-pair guards since one hand touches many independent
-// items), so a duplicate onHandComplete invocation for the same hand
-// double-counts no pair. tableID disambiguates the guard because hand ids
-// are only unique within a table (mirrors pokerstats.Store.RecordHand's
-// "guard#"+tableID+"#"+handID key). See writePairs for why per-pair — rather
-// than per-hand — atomicity is the guarantee this actually relies on.
+// outcome.Participants: exactly one plain, conditional UpdateItem per pair
+// (issue #201). #65 had already chunked the old one-transaction-per-hand
+// write, but the model it chunked still cost 2 transactional items per pair —
+// a create-only guard item plus the increment — i.e. 72 items and ~144 WCU
+// for a full ring's C(9,2)=36 pairs. Both halves of that are gone here: the
+// guard moved *into* the pair item as the `applied_hands` set (so a pair
+// costs one small write, not two), and with a single item per pair there is
+// nothing left for a transaction to make atomic, so TransactWriteItems — and
+// its 2x WCU — is gone too. A full ring now costs 36 writes / ~36 WCU.
+//
+// Idempotency is still per pair, and is now a property of the pair's own
+// item: applyPair's condition rejects a hand id already present in that
+// pair's applied_hands, so a duplicate onHandComplete double-counts no pair,
+// and a run that died part-way through the pairs is completed — never
+// double-applied — by a retry, since every pair is guarded independently.
 func (s *Store) RecordHand(ctx context.Context, mode, tableID, handID string, outcome hand.HandOutcome) error {
 	if tableID == "" || handID == "" {
 		return nil
 	}
-	deltas := deltasFor(mode, outcome)
-	if len(deltas) == 0 {
-		return nil
-	}
-	for start := 0; start < len(deltas); start += maxPairsPerTx {
-		end := min(start+maxPairsPerTx, len(deltas))
-		if err := s.writePairs(ctx, tableID, handID, deltas[start:end]); err != nil {
+	for _, d := range deltasFor(mode, outcome) {
+		if err := s.applyPair(ctx, handID, d); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// writePairs commits one chunk of pairs (guard + update per pair) in a single
-// transaction. Chunking does not weaken the duplicate protection RecordHand
-// promises: a pair's guard always rides in the same transaction as that
-// pair's increment, so no pair is ever counted twice however the chunks
-// interleave or fail. What a chunk boundary does introduce is a
-// partially-applied hand — and the per-pair guards are exactly what makes
-// retrying that safe: the chunks that already landed fail their guards and
-// are skipped, the chunks that never landed are applied. deltasFor is
-// deterministic for a given outcome, so a retry reproduces the same chunk
-// boundaries and never mixes an already-guarded pair with a fresh one inside
-// one transaction.
-func (s *Store) writePairs(ctx context.Context, tableID, handID string, deltas []pairDelta) error {
-	items := make([]types.TransactWriteItem, 0, len(deltas)*2)
-	for _, d := range deltas {
-		guard, err := dynamo.Encode(struct {
-			PK  string `dynamodbav:"pk"`
-			TTL int64  `dynamodbav:"ttl"`
-		}{
-			PK:  "guard#" + tableID + "#" + handID + "#" + d.key,
-			TTL: time.Now().Add(guardTTLDays * 24 * time.Hour).Unix(),
-		})
-		if err != nil {
-			return fmt.Errorf("matchup: encode guard: %w", err)
-		}
-		items = append(items, s.base.BuildPutTxItemIfAbsent(guard))
-
-		values := map[string]types.AttributeValue{
-			":hands":   number(d.handsTogether),
-			":winLow":  number(d.winsLow),
-			":winHigh": number(d.winsHigh),
-			":tie":     number(d.ties),
-			":now":     &types.AttributeValueMemberS{Value: dynamo.NowStr()},
-		}
-		updateExpr := "ADD hands_together :hands, wins_low :winLow, wins_high :winHigh, ties :tie SET updated_at = :now"
-		if d.headsUp {
-			values[":huHands"] = number(1)
-			values[":netLow"] = number(d.netLow)
-			values[":netHigh"] = number(d.netHigh)
-			updateExpr = "ADD hands_together :hands, wins_low :winLow, wins_high :winHigh, ties :tie, " +
-				"heads_up_hands_together :huHands, net_change_low :netLow, net_change_high :netHigh SET updated_at = :now"
-		}
-		items = append(items, s.base.BuildRawUpdateTxItem(d.key, nil, updateExpr, "", nil, values))
+// applyPair applies one pair's delta as a single conditional UpdateItem. The
+// hand id is added to the pair's applied_hands set in the same expression
+// that moves the counters, so the guard can never land without its increment
+// (the failure mode a separate guard item has) and the increment can never
+// land twice. handID is a ULID minted per hand, so it is both unique and
+// lexicographically time-ordered — pruneApplied relies on that ordering.
+func (s *Store) applyPair(ctx context.Context, handID string, d pairDelta) error {
+	values := map[string]types.AttributeValue{
+		":hands":   number(d.handsTogether),
+		":winLow":  number(d.winsLow),
+		":winHigh": number(d.winsHigh),
+		":tie":     number(d.ties),
+		":now":     &types.AttributeValueMemberS{Value: dynamo.NowStr()},
+		":hand":    &types.AttributeValueMemberS{Value: handID},
+		":handSet": &types.AttributeValueMemberSS{Value: []string{handID}},
 	}
-	if err := s.base.TransactWrite(ctx, items); err != nil {
+	adds := "hands_together :hands, wins_low :winLow, wins_high :winHigh, ties :tie, applied_hands :handSet"
+	if d.headsUp {
+		values[":huHands"] = number(1)
+		values[":netLow"] = number(d.netLow)
+		values[":netHigh"] = number(d.netHigh)
+		adds += ", heads_up_hands_together :huHands, net_change_low :netLow, net_change_high :netHigh"
+	}
+	out, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
+		TableName:                 aws.String(s.base.TableName),
+		Key:                       map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: d.key}},
+		UpdateExpression:          aws.String("ADD " + adds + " SET updated_at = :now"),
+		ConditionExpression:       aws.String("attribute_not_exists(applied_hands) OR NOT contains(applied_hands, :hand)"),
+		ExpressionAttributeValues: values,
+		ReturnValues:              types.ReturnValueAllNew,
+	})
+	if err != nil {
 		if dynamo.IsConditionFailed(err) {
 			return nil
 		}
 		return fmt.Errorf("matchup: record hand: %w", err)
 	}
+	s.pruneApplied(ctx, d.key, handID, out.Attributes)
 	return nil
+}
+
+// pruneApplied trims a pair's applied_hands set back to the newest
+// appliedHandsKeep hand ids once it passes appliedHandsCap, so the guard set
+// cannot grow with the pair's lifetime and take the item — and its per-write
+// WCU — up with it. A prune failure is logged, not returned: the counters are
+// already committed and must not be retried, and the only cost is a set left
+// one hand too long, which the pair's next hand tries to trim again.
+func (s *Store) pruneApplied(ctx context.Context, pairKey, handID string, attrs map[string]types.AttributeValue) {
+	set, ok := attrs["applied_hands"].(*types.AttributeValueMemberSS)
+	if !ok || len(set.Value) <= appliedHandsCap {
+		return
+	}
+	stale := staleHandIDs(set.Value, handID)
+	if len(stale) == 0 {
+		return
+	}
+	_, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
+		TableName:        aws.String(s.base.TableName),
+		Key:              map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: pairKey}},
+		UpdateExpression: aws.String("DELETE applied_hands :stale"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":stale": &types.AttributeValueMemberSS{Value: stale},
+		},
+	})
+	if err != nil {
+		slog.Warn("matchup: prune applied hands failed", "pair", pairKey, "err", err)
+	}
+}
+
+// staleHandIDs returns the members of applied that pruneApplied should drop:
+// everything but the newest appliedHandsKeep. Hand ids are ULIDs, so "newest"
+// is simply the largest lexicographically. keepHandID (the hand just applied)
+// is never dropped, so a retry of *that* hand is still rejected even when the
+// prune lands first. Pure, so the arithmetic is testable without DynamoDB.
+func staleHandIDs(applied []string, keepHandID string) []string {
+	stale := slices.Clone(applied)
+	slices.Sort(stale)
+	if len(stale) <= appliedHandsKeep {
+		return nil
+	}
+	stale = stale[:len(stale)-appliedHandsKeep]
+	return slices.DeleteFunc(stale, func(id string) bool { return id == keepHandID })
 }
 
 // Get returns playerA/playerB's head-to-head stats, zeroed (not an error)

@@ -108,6 +108,39 @@ orgânico ≈ 0, qualquer volume sustentado ali é loop). Wired no mesmo tópico
 `ctech-prod-alerts` (nunca um tópico novo — #34), gated em `cloudwatchAlarmsEnabled`. Teria
 disparado em ~5 minutos.
 
+### 4. Circuit breaker por mesa no `CommitAction` (#207, 2026-09-04)
+
+O teto do item 1 conserta *aquele* loop. `tablestore.CommitAction` continua sendo o sink de escrita
+compartilhado por todo comando, timer e sweep do processo, então `internal/tablestore/breaker.go`
+adiciona a defesa em profundidade que ele deve a todos os outros chamadores.
+
+**A condição de trip é a forma do storm, não a taxa:** `maxConsecutiveRejections` = 32 commits
+rejeitados (version conflict ou duplicate action) **sem nenhum commit aceito no meio** abrem o
+circuito da mesa — uma escrita condicional rejeitada significa que a mesa não avançou, logo
+repetir a mesma mutação também não pode dar certo. Qualquer commit aceito zera a contagem. Com o
+circuito aberto nada chega ao DynamoDB e o chamador recebe `ErrCommitThrottled`, que **envolve
+`ErrUnavailable`, nunca `ErrVersionConflict`** (o actor tem que abortar o comando; um erro com cara
+de conflito seria respondido com o reload-and-retry imediato que é justamente o loop a evitar).
+Recuperação: cooldown de 2s dobrando até 60s por probe half-open falhada, uma probe por vez. No
+cenário deste incidente: ~45 transações em vez de 5.779 (~130×), trip em ~4s.
+
+**Token bucket por mesa foi tentado e descartado de propósito:** taxa de commit não é sinal, porque
+só o jogo real é pausado por gente. O teste de integração nine-handed do `internal/table`
+(`TestNineHandedTableGrowsPlaysPausesAndLeaves`) sustenta ~115 commits/s numa mesa — ~14× os ~8/s
+do incidente. Logo qualquer teto que pegasse o incidente estrangula tráfego legítimo (e estrangulou,
+duas vezes, em duas calibrações), e qualquer teto que não incomode o tráfego legítimo é alto demais
+para limitar a fatura. Tetos por tipo de comando continuam onde o pacing é conhecido: os caps de
+timer/retry do próprio actor.
+
+Logs: uma linha por transição de estado (`table`, `action`, `cause`, `cooldown_ms`), nunca por
+tentativa — o sintoma deste incidente foi 5.779 linhas WARN para uma mesa só. Não há
+`internal/metrics` no serviço e nenhum coletor ad-hoc foi criado; o `addWriteVolumeAlarm` do item 3
+segue sendo o sinal numérico.
+
+Testes (clock fake, sem load test): storm, jogo em velocidade de máquina, contenção que ainda
+progride, outage do store (não abre o circuito), isolamento por mesa, evicção de mesas idle —
+`api/internal/tablestore/breaker_test.go`.
+
 ## 📌 A dúvida "os commits de hoje resolvem parcialmente?"
 
 Não parcialmente para *este* incidente. `6bf8bd0` (hoje) mata o **gatilho** — aquela mesa não

@@ -207,7 +207,7 @@ test('creates poker_cosmetic_entitlements and poker_cosmetic_purchases tables wi
   });
 });
 
-test('creates poker_rooms table with public and share-code GSIs', () => {
+test('creates poker_rooms table with public, bucket and share-code GSIs', () => {
   const app = new App();
   const stack = new DynamoDBStack(app, 'TestDynamoDBStack2', {environment: 'dev', cloudwatchAlarmsEnabled: true});
   const template = Template.fromStack(stack);
@@ -215,6 +215,11 @@ test('creates poker_rooms table with public and share-code GSIs', () => {
     TableName: 'dev_poker_rooms',
     GlobalSecondaryIndexes: Match.arrayWith([
       Match.objectLike({IndexName: 'gsi_public'}),
+      // Backs POST /rooms/join-or-create's per-bucket query (#213).
+      Match.objectLike({
+        IndexName: 'gsi_bucket',
+        KeySchema: [{AttributeName: 'gsi_bucket', KeyType: 'HASH'}],
+      }),
       Match.objectLike({IndexName: 'gsi_share_code'}),
     ]),
     TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},

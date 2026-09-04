@@ -65,7 +65,13 @@ off by default — do not build UI that assumes real money is on.
 - **The table page is a composition, not a component.** `app/(app)/table/page.tsx` wires hooks
   together and renders; it holds no derivation of its own. Server reads live in
   `lib/hooks/useTableSession.ts` (plus `useTableRemoval` for the removed-frame reaction and the
-  leave recap), showdown bookkeeping in `lib/hooks/useTableOutcome.ts`, the asides/dialogs/reaction
+  leave recap) — and they are split there in two: `useTableSession` is the **critical set** (room +
+  seat check, which with the socket is the whole documented minimum for a playable entry) and
+  `useTableProgressiveSession` is everything the table only renders once a snapshot exists, gated
+  behind two one-way render-time latches (first snapshot; reactions panel opened). A new table read
+  belongs in the progressive hook unless it gates entry itself, and neither latch may be armed from
+  an effect. See `docs/2026-09-04-table-entry-request-budget.md` and #212.
+  Showdown bookkeeping is in `lib/hooks/useTableOutcome.ts`, the asides/dialogs/reaction
   cooldown in `lib/hooks/useTableOverlays.ts`, the action-bar derivation in `lib/tableActions.ts`,
   and the whole banner assembly in `buildHandOutcome` (`lib/tableOutcome.ts`). Extend the hook that
   owns the concern; do not grow the page back. See

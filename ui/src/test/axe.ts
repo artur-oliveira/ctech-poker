@@ -1,3 +1,4 @@
+import {act} from '@testing-library/react';
 import axe from 'axe-core';
 import {expect} from 'vitest';
 
@@ -27,9 +28,16 @@ function describeViolation(violation: axe.Result) {
  * (Issue #60). Pass the `container` from `render()`, or any attached element.
  */
 export async function expectNoAxeViolations(container: Element) {
-  const {violations} = await axe.run(container, {
-    resultTypes: ['violations'],
-    rules: Object.fromEntries(UNRUNNABLE_IN_JSDOM.map(id => [id, {enabled: false}])),
+  // Wrapped in act(): the scan awaits, and any React update that settles
+  // during it (an effect, a resolved query) would otherwise land outside act
+  // and warn once per update — the noise this helper used to generate across
+  // every page test.
+  let violations: axe.Result[] = [];
+  await act(async () => {
+    ({violations} = await axe.run(container, {
+      resultTypes: ['violations'],
+      rules: Object.fromEntries(UNRUNNABLE_IN_JSDOM.map(id => [id, {enabled: false}])),
+    }));
   });
   const blocking = violations.filter(violation => BLOCKING.has(violation.impact ?? ''));
   expect(blocking.map(describeViolation).join('\n\n'), 'axe violations').toBe('');

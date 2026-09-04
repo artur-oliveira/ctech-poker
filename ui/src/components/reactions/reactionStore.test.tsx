@@ -1,4 +1,4 @@
-import {render, screen, within} from '@testing-library/react';
+import {act, render, screen, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import type {ReactNode} from 'react';
@@ -224,7 +224,7 @@ describe('ReactionPurchaseDialog', () => {
         onCloseAction={vi.fn()}/>, {wrapper});
 
       expect(screen.getByText(/Aguardando confirmação do Pix/)).toBeInTheDocument();
-      await vi.advanceTimersByTimeAsync(4000);
+      await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
       expect(getReactionPurchase).toHaveBeenCalledWith('p1');
       await vi.waitFor(() => expect(screen.getByText('Pronta para a mesa')).toBeInTheDocument());
     } finally {
@@ -239,9 +239,9 @@ describe('ReactionPurchaseDialog', () => {
     try {
       render(<ReactionPurchaseDialog entry={entry} initialPurchase={purchase({status: 'processing'})}
         onCloseAction={vi.fn()}/>, {wrapper});
-      await vi.advanceTimersByTimeAsync(4000);
+      await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
       await vi.waitFor(() => expect(screen.getByText('Não foi possível atualizar a confirmação.')).toBeInTheDocument());
-      await vi.advanceTimersByTimeAsync(4000);
+      await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
       await vi.waitFor(() => expect(screen.getByText('Pronta para a mesa')).toBeInTheDocument());
     } finally {
       vi.useRealTimers();

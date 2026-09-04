@@ -195,6 +195,16 @@ export class DynamoDBStack extends cdk.Stack {
       partitionKey: {name: 'gsi_public', type: dynamodb.AttributeType.STRING},
       projectionType: dynamodb.ProjectionType.ALL,
     });
+    // gsi_bucket is the lobby's per-bucket directory: one partition per
+    // (currency mode, blinds, seats) pick, written by roomstore.BucketKey for
+    // public rooms only (sparse, same convention as gsi_public). It is what
+    // makes POST /rooms/join-or-create cost a function of the requested
+    // bucket instead of the whole public directory (#213).
+    rooms.addGlobalSecondaryIndex({
+      indexName: 'gsi_bucket',
+      partitionKey: {name: 'gsi_bucket', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
     addThrottleAlarm(rooms, 'poker_rooms');
     rooms.addGlobalSecondaryIndex({
       indexName: 'gsi_share_code',
@@ -235,9 +245,10 @@ export class DynamoDBStack extends cdk.Stack {
     // guards for completed hands.
     table('poker_player_poker_stats', false, true);
     // poker_player_matchups: one permanent aggregate per unordered player
-    // pair (pk "pair#<mode>#<idLow>#<idHigh>") plus short-lived per-pair
-    // idempotency guards for completed hands (pk "guard#<table>#<hand>#pair#...") —
-    // same PK-only, TTL'd shape as poker_player_poker_stats.
+    // pair (pk "pair#<mode>#<idLow>#<idHigh>"). Since #201 the per-hand
+    // idempotency guard lives inside that same item as its `applied_hands`
+    // string set, so there are no separate guard rows any more; TTL stays
+    // enabled only so the guard rows written before #201 expire on their own.
     // See docs/specs/2026-08-21-head-to-head-stats.md.
     table('poker_player_matchups', false, true);
     // poker_table_highlights: one item per table per day (pk table_id, sk

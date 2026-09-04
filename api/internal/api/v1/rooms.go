@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/oklog/ulid/v2"
@@ -44,6 +46,7 @@ type roomHandlers struct {
 	reg      ws.Registry
 	cfg      *config.Config
 	sessions *sessionlog.Store
+	buckets  bucketCache
 }
 
 func RegisterRooms(router fiber.Router, auth fiber.Handler, rooms *roomstore.Store, buyinSvc *buyin.Service, manager *tablemanager.Manager, reg ws.Registry, cfg *config.Config, sessions *sessionlog.Store, createLimiter, joinLimiter *RateLimiter) {
@@ -210,11 +213,56 @@ func (h *roomHandlers) listBuckets(c fiber.Ctx) error {
 	if mode != roomstore.CurrencyModeSandbox && mode != roomstore.CurrencyModeReal {
 		return problem.BadRequest("currency_mode must be sandbox or real").Send(c)
 	}
-	rooms, err := h.rooms.ListAllPublic(c.Context())
+	buckets, err := h.buckets.get(mode, func() ([]RoomBucket, error) {
+		rooms, err := h.rooms.ListAllPublic(c.Context())
+		if err != nil {
+			return nil, err
+		}
+		return aggregateBuckets(rooms, mode), nil
+	})
 	if err != nil {
 		return problem.InternalServer("failed to list rooms", c, err).Send(c)
 	}
-	return c.JSON(fiber.Map{"data": aggregateBuckets(rooms, mode)})
+	return c.JSON(fiber.Map{"data": buckets})
+}
+
+// bucketsCacheTTL is how long one currency mode's aggregate is reused before
+// the public index is walked again. The aggregate is already eventually
+// consistent (seats_taken is a write-through mirror), and the lobby only uses
+// it to say "N mesas ativas" — the actual seat is resolved server-side by
+// join-or-create — so a few seconds of staleness costs nothing and keeps the
+// walk off the per-request path (#213).
+const bucketsCacheTTL = 5 * time.Second
+
+// bucketCache memoises listBuckets' aggregate per currency mode. The load runs
+// under the mutex on purpose: concurrent lobby opens collapse into one index
+// walk instead of one each. Per process, so the walk rate scales with the
+// fleet size, not with traffic.
+type bucketCache struct {
+	mu      sync.Mutex
+	entries map[string]bucketCacheEntry
+}
+
+type bucketCacheEntry struct {
+	at      time.Time
+	buckets []RoomBucket
+}
+
+func (c *bucketCache) get(mode string, load func() ([]RoomBucket, error)) ([]RoomBucket, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if entry, ok := c.entries[mode]; ok && time.Since(entry.at) < bucketsCacheTTL {
+		return entry.buckets, nil
+	}
+	buckets, err := load()
+	if err != nil {
+		return nil, err
+	}
+	if c.entries == nil {
+		c.entries = map[string]bucketCacheEntry{}
+	}
+	c.entries[mode] = bucketCacheEntry{at: time.Now(), buckets: buckets}
+	return buckets, nil
 }
 
 // aggregateBuckets groups public rooms by (blinds, seats) within one currency
@@ -317,7 +365,9 @@ func (h *roomHandlers) joinOrCreate(c fiber.Ctx) error {
 		}
 	}
 
-	rooms, err := h.rooms.ListAllPublic(c.Context())
+	// One Query against the requested bucket's own gsi_bucket partition —
+	// never the whole public directory (#213).
+	rooms, err := h.rooms.ListBucket(c.Context(), req.CurrencyMode, req.SmallBlind, req.BigBlind, req.MaxSeats)
 	if err != nil {
 		return problem.InternalServer("failed to list rooms", c, err).Send(c)
 	}

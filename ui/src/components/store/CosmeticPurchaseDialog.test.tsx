@@ -1,4 +1,4 @@
-import {render, screen} from '@testing-library/react';
+import {act, render, screen} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import type {ReactNode} from 'react';
@@ -82,7 +82,7 @@ describe('CosmeticPurchaseDialog', () => {
         onCloseAction={vi.fn()}/>, {wrapper});
 
       expect(screen.getByText(/Aguardando confirmação do Pix/)).toBeInTheDocument();
-      await vi.advanceTimersByTimeAsync(4000);
+      await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
       expect(getCosmeticPurchase).toHaveBeenCalledWith('felt', 'p1');
       await vi.waitFor(() => expect(screen.getByText('Pronto para a mesa')).toBeInTheDocument());
     } finally {
