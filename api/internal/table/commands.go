@@ -277,6 +277,15 @@ type SnapshotCmd struct {
 	PlayerID string
 	Snapshot chan hand.Snapshot
 	Reply    chan error
+	// AllowCached lets the actor answer from its own cache when that cache
+	// was loaded less than SnapshotReloadInterval ago, instead of forcing a
+	// DynamoDB read for every snapshot. Set by the WS gateway, whose
+	// sync_state frames arrive at up to the connection rate limit (10/s) and
+	// whose staleness window is already bounded by ChangeNotifier (a sibling
+	// commit forces a reload) plus the version precondition every real action
+	// carries. Left false by the seat/buy-in read paths, where an
+	// authoritative answer is worth the read.
+	AllowCached bool
 }
 
 func (c SnapshotCmd) reply() chan error { return c.Reply }

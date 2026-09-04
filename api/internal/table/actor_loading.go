@@ -3,16 +3,35 @@ package table
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
 
+// SnapshotReloadInterval bounds how stale a cache-served snapshot may be. A
+// snapshot is a read: it never advances the table, and every real action
+// carries a version/hand precondition that forces its own reload when this
+// answer turns out to be behind. Sibling commits also reach this instance
+// through ChangeNotifier, which forces a reload of its own — so the window
+// below is a backstop, not the primary freshness mechanism.
+const SnapshotReloadInterval = 2 * time.Second
+
 func (a *Actor) handleSnapshot(ctx context.Context, c SnapshotCmd) error {
-	// A snapshot is an explicit synchronization boundary. Always read the
-	// authoritative item: another fleet actor is allowed to commit without
-	// owning this actor's cache-affinity lease.
-	if err := a.ensureLoaded(ctx, true); err != nil {
+	// A snapshot used to always read the authoritative item, on the grounds
+	// that another fleet actor may commit without owning this actor's
+	// cache-affinity lease. That made every sync_state frame a DynamoDB
+	// GetItem — at up to the connection's 10/s limit, so one reconnect loop
+	// or misbehaving client turned into a read storm (#218). Serve the cache
+	// while it is fresh instead; anything that genuinely needs the
+	// authoritative item (a stale action precondition, a version conflict, a
+	// handoff onto a cold actor) still forces its own reload.
+	if c.AllowCached && a.cached != nil && timeNowFunc().Sub(a.lastLoadedAt) < SnapshotReloadInterval {
+		// Still the paced caller for the fleet connection set — see
+		// syncFleetConns — which a cache-served snapshot would otherwise skip
+		// on a table whose only traffic is sync_state.
+		a.syncFleetConns(false)
+	} else if err := a.ensureLoaded(ctx, true); err != nil {
 		return err
 	}
 	snapshot := a.cached.ViewFor(c.PlayerID)
@@ -120,6 +139,7 @@ func (a *Actor) ensureLoaded(ctx context.Context, force bool) error {
 		// "table unavailable" rather than blaming the player's action.
 		return fmt.Errorf("%w: no state seeded for this table yet", tablestore.ErrUnavailable)
 	}
+	a.lastLoadedAt = timeNowFunc()
 	a.cached = hand.NewTableFromState(stored.State)
 	a.cached.ConfigureRunItTwice(a.runItTwiceEnabled.Load())
 	a.version = stored.Version

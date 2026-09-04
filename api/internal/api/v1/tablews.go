@@ -437,7 +437,7 @@ func RegisterTableWS(
 			sendSnapshot := func(actionID string) {
 				snapCh := make(chan hand.Snapshot, 1)
 				snapReply := make(chan error, 1)
-				if err := dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: snapReply}); err == nil {
+				if err := dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: snapReply, AllowCached: true}); err == nil {
 					if snap, ok := <-snapCh; ok {
 						send(&pokerproto.ServerMessage{
 							Type: "state", Snapshot: ConvertSnapshot(snap), ActionId: actionID,
@@ -543,7 +543,7 @@ func RegisterTableWS(
 					if checker.Enabled() {
 						snapCh := make(chan hand.Snapshot, 1)
 						snapReply := make(chan error, 1)
-						if err := dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: snapReply}); err == nil {
+						if err := dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: snapReply, AllowCached: true}); err == nil {
 							snap := <-snapCh
 							if snap.CurrentPlayerID == playerID && snap.ActionBaseDeadlineUnixMs > 0 {
 								timeout := table.DefaultTurnTimeout
@@ -744,7 +744,7 @@ func RegisterTableWS(
 					}
 					snapCh := make(chan hand.Snapshot, 1)
 					snapReply := make(chan error, 1)
-					if err := dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: snapReply}); err != nil {
+					if err := dispatch(table.SnapshotCmd{PlayerID: playerID, Snapshot: snapCh, Reply: snapReply, AllowCached: true}); err != nil {
 						send(&pokerproto.ServerMessage{Type: "error", Code: "unavailable", ActionId: m.ActionId})
 						continue
 					}

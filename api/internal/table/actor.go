@@ -38,10 +38,13 @@ type Actor struct {
 
 	cmds chan Command
 
-	cached   *hand.Table // nil until first loaded; never trusted when !trustCache
-	version  int
-	handID   string
-	activity tablestore.TableActivity
+	cached *hand.Table // nil until first loaded; never trusted when !trustCache
+	// lastLoadedAt is when LoadTable last filled cached. It paces
+	// handleSnapshot's authoritative read — see SnapshotReloadInterval.
+	lastLoadedAt time.Time
+	version      int
+	handID       string
+	activity     tablestore.TableActivity
 
 	turnTimeout       time.Duration
 	timeBankEnabled   bool
