@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   setQueryData: vi.fn(),
   invalidateQueries: vi.fn(),
+  replace: vi.fn(),
   realtime: {} as Record<string, unknown>,
   realtimeHook: vi.fn(),
   actionProps: null as Record<string, unknown> | null,
@@ -26,7 +27,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({push: mocks.push}),
+  useRouter: () => ({push: mocks.push, replace: mocks.replace}),
   useSearchParams: () => ({get: (key: string) => mocks.params.get(key) ?? null}),
 }));
 vi.mock('@tanstack/react-query', () => ({
@@ -60,9 +61,16 @@ vi.mock('@/lib/mockConfig', () => ({USE_MOCK: false}));
 vi.mock('@/components/TermsGate', () => ({TermsGate: ({children}: { children: React.ReactNode }) => children}));
 
 vi.mock('@/components/table/BuyInPanel', () => ({
-  BuyInPanel: ({roomId, shareCode, onSeatedAction}: {
-    roomId: string; shareCode?: string; onSeatedAction: () => void
-  }) => <button onClick={onSeatedAction}>buy-in:{roomId}:{shareCode}</button>,
+  BuyInPanel: ({roomId, bucket, shareCode, onSeatedAction}: {
+    roomId?: string;
+    bucket?: {smallBlind: number; bigBlind: number; maxSeats: number};
+    shareCode?: string;
+    onSeatedAction: (roomId: string) => void
+  }) => bucket
+    ? <button onClick={() => onSeatedAction('01ARZ3NDEKTSV4RRFFQ69G5FAV')}>
+      buy-in-bucket:{bucket.smallBlind}/{bucket.bigBlind}/{bucket.maxSeats}
+    </button>
+    : <button onClick={() => onSeatedAction(roomId ?? '')}>buy-in:{roomId}:{shareCode}</button>,
 }));
 vi.mock('@/components/table/TableStage', () => ({
   TableStage: (props: Record<string, unknown>) => {
@@ -229,6 +237,26 @@ describe('table page integration', () => {
     expect(mocks.realtimeHook).toHaveBeenCalledWith('', 'viewer', undefined, undefined, new Set());
   });
   
+  // A lobby pick carries a bucket, not a room id: the ceremony confirms it
+  // with join-or-create, which is what decides the table (#205).
+  test('opens the buy-in ceremony for a bucket entry and adopts the resolved table', async () => {
+    mocks.params = new Map([['sb', '25'], ['bb', '50'], ['seats', '6']]);
+    render(<TablePage/>);
+
+    expect(mocks.query).toHaveBeenCalledWith(expect.objectContaining({enabled: false}));
+    await userEvent.click(screen.getByRole('button', {name: 'buy-in-bucket:25/50/6'}));
+
+    expect(mocks.setQueryData).toHaveBeenCalledWith(
+      ['seated', '01ARZ3NDEKTSV4RRFFQ69G5FAV'], {seated: true, stack: 0});
+    expect(mocks.replace).toHaveBeenCalledWith('/table?id=01ARZ3NDEKTSV4RRFFQ69G5FAV');
+  });
+
+  test('rejects an incomplete bucket entry the same way it rejects a bad id', () => {
+    mocks.params = new Map([['sb', '25'], ['bb', '50']]);
+    render(<TablePage/>);
+    expect(screen.getByRole('heading', {name: 'Mesa inválida'})).toBeInTheDocument();
+  });
+
   test('waits for seat status and then offers the explicit buy-in ceremony', async () => {
     setQueries({loading: true});
     const view = render(<TablePage/>);

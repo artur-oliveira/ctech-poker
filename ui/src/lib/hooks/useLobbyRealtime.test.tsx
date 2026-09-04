@@ -1,6 +1,7 @@
 import {act, renderHook} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import {useLobbyRealtime} from './useLobbyRealtime';
+import {ROOM_BUCKETS_QUERY_KEY} from '@/lib/lobbyBuckets';
 
 const state = vi.hoisted(() => ({
   options: null as null | {
@@ -69,27 +70,29 @@ describe('useLobbyRealtime', () => {
     expect(state.reconnect).toHaveBeenCalled();
   });
   
-  test('adds a new room once and updates occupancy without losing other rooms', () => {
+  test('refreshes the lobby aggregate on a new room and mirrors occupancy onto the room cache', () => {
     renderHook(() => useLobbyRealtime());
     act(() => state.options?.onMessage({
       type: 'room_created',
       room: {room_id: 'new-room', seats_taken: 1},
     }));
-    const add = state.setQueryData.mock.calls[0][1] as (rooms?: Array<Record<string, unknown>>) => Array<Record<string, unknown>>;
-    expect(add()).toEqual([{room_id: 'new-room', seats_taken: 1}]);
-    expect(add([{room_id: 'new-room'}])).toEqual([{room_id: 'new-room'}]);
-    
+    // The lobby renders the server's bucket aggregate now, so a new public
+    // table is a refetch of it rather than a local room-list splice (#205).
+    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ROOM_BUCKETS_QUERY_KEY});
+
     act(() => state.options?.onMessage({
       type: 'room_updated',
       room_id: 'room-1',
       seats_taken: 5,
     }));
-    const update = state.setQueryData.mock.calls[1][1] as (rooms?: Array<Record<string, unknown>>) => Array<Record<string, unknown>>;
-    expect(update()).toEqual([]);
-    expect(update([{id: 'room-1', seats_taken: 2}, {id: 'room-2', seats_taken: 3}]))
-      .toEqual([{id: 'room-1', seats_taken: 5}, {id: 'room-2', seats_taken: 3}]);
+    // Seat churn only updates the open table's own cache entry — it must not
+    // invalidate the aggregate, which fires on every seat change fleet-wide.
+    const update = state.setQueryData.mock.calls.at(-1)?.[1] as (room?: Record<string, unknown>) => unknown;
+    expect(update()).toBeUndefined();
+    expect(update({room_id: 'room-1', seats_taken: 2})).toEqual({room_id: 'room-1', seats_taken: 5});
+    expect(state.invalidateQueries).toHaveBeenCalledTimes(1);
   });
-  
+
   test('turns payment and system messages into localized notifications', () => {
     renderHook(() => useLobbyRealtime());
     act(() => state.options?.onMessage({type: 'payment_received', amount: 12345}));
@@ -132,16 +135,6 @@ describe('useLobbyRealtime', () => {
 
     act(() => state.options?.onMessage({type: 'error', code: 'rate_limited'}));
     expect(state.recover).toHaveBeenCalledOnce();
-  });
-
-  test('mirrors an occupancy change onto the single-room cache entry', () => {
-    renderHook(() => useLobbyRealtime());
-    act(() => state.options?.onMessage({type: 'room_updated', room_id: 'room-1', seats_taken: 5}));
-    const [key, updater] = state.setQueryData.mock.calls[1];
-    expect(key).toEqual(['room', 'room-1']);
-    const patch = updater as (room?: Record<string, unknown>) => Record<string, unknown> | undefined;
-    expect(patch({room_id: 'room-1', seats_taken: 2})).toEqual({room_id: 'room-1', seats_taken: 5});
-    expect(patch(undefined)).toBeUndefined();
   });
 
   test('ignores an incomplete room update', () => {

@@ -936,6 +936,49 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
       ]
     }, config);
   }
+  // The lobby's availability aggregate, grouped the same way the server does.
+  if (method === 'GET' && path === '/v1.0/rooms/buckets') {
+    const mode = config.params?.currency_mode || 'sandbox';
+    const buckets = new Map<string, Record<string, number | string>>();
+    for (const room of rooms) {
+      if (room.visibility !== 'public' || (room.currency_mode || 'sandbox') !== mode) continue;
+      const key = `${room.small_blind}-${room.big_blind}-${room.max_seats}`;
+      const free = Math.max(0, room.max_seats - room.seats_taken);
+      const bucket = buckets.get(key) ?? {
+        small_blind: room.small_blind, big_blind: room.big_blind, max_seats: room.max_seats,
+        currency_mode: mode, rooms: 0, open_rooms: 0, seats_taken: 0, seats_available: 0,
+      };
+      bucket.rooms = (bucket.rooms as number) + 1;
+      bucket.open_rooms = (bucket.open_rooms as number) + (free > 0 ? 1 : 0);
+      bucket.seats_taken = (bucket.seats_taken as number) + room.seats_taken;
+      bucket.seats_available = (bucket.seats_available as number) + free;
+      buckets.set(key, bucket);
+    }
+    return ok({data: [...buckets.values()]}, config);
+  }
+  // Resolves the bucket server-side: seats the player at the fullest open
+  // table, or opens one. Must precede the generic `/rooms/:id` match below.
+  if (method === 'POST' && path === '/v1.0/rooms/join-or-create') {
+    if (body.max_seats !== 2 && body.max_seats !== 6 && body.max_seats !== 9) {
+      fail(400, 'max_seats must be 2, 6 or 9', config);
+    }
+    const candidates = rooms.filter(r => r.visibility === 'public' && (r.currency_mode || 'sandbox') === 'sandbox'
+      && r.small_blind === body.small_blind && r.big_blind === body.big_blind && r.max_seats === body.max_seats
+      && r.seats_taken < r.max_seats && body.amount >= r.buy_in_min && body.amount <= r.buy_in_max)
+      .sort((a, b) => b.seats_taken - a.seats_taken);
+    if (candidates[0]) {
+      candidates[0].seats_taken += 1;
+      return ok({room_id: candidates[0].room_id, created: false}, config);
+    }
+    const room = {
+      room_id: generateNativeULID(), visibility: 'public' as const, currency_mode: 'sandbox', status: 'waiting',
+      small_blind: body.small_blind, big_blind: body.big_blind, max_seats: body.max_seats,
+      buy_in_min: body.big_blind * 20, buy_in_max: body.big_blind * 100,
+      seats_taken: 1, created_by: MOCK_PLAYER_ID,
+    };
+    rooms.unshift(room);
+    return ok({room_id: room.room_id, created: true}, config);
+  }
   const roomMatch = method === 'GET' ? path.match(/^\/v1\.0\/rooms\/([^/]+)$/) : null;
   if (roomMatch) {
     const room = rooms.find(r => r.room_id === roomMatch[1]);
