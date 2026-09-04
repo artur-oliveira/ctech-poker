@@ -336,6 +336,14 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   behind bulk cache/presence/ratelimit traffic regardless of load elsewhere in the app.
   `handhook` was left on the shared cache client (an infrequent SET NX check, not implicated by
   the live captures) — revisit only if evidence turns up.
+  **Correction (2026-09-04, sixth incident-spec follow-up): this was not the actual root cause.**
+  The ~16-17s gap was the prod EC2 instance's own clock, ~18-23s behind and never NTP-synced
+  (`chronyd` only configured against `pool.ntp.org`, unreachable from this no-NAT VPC) — the
+  temporary diagnostic log measured that broken `time.Now()` against the browser's correct
+  clock. Real fix: `ctech-cdk`'s `assets/ec2-alpine/setup-base.sh` now syncs from the Amazon
+  Time Sync Service. The dedicated realtime client above is still a legitimate isolation
+  improvement (a genuinely slow shared-client command really would head-of-line-block a
+  `PUBLISH`) but did not fix this incident's symptom.
 - **Nothing viewer-independent belongs inside `broadcastAll`'s per-seat loop, and nothing expensive belongs on the
   actor goroutine twice.** Chat and reaction views are built once per broadcast (`activityViews`) and shared; the
   `equityIterations` Monte Carlo is memoized by `(hole, board, opponent count)` per hand (`equityFor`), because a

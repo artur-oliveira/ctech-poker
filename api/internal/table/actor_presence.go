@@ -91,20 +91,10 @@ func (a *Actor) handleReconnect(ctx context.Context, c ReconnectCmd) error {
 // unlike handleReconnect above: this only ever fires when something
 // genuinely changed, never on routine local traffic.
 func (a *Actor) handleExternalChange(ctx context.Context, _ ExternalChangeCmd) error {
-	// TEMPORARY (2026-09-04 turn-ring staleness investigation): isolates
-	// whether the reload-then-rebroadcast handoff a sibling process takes on
-	// an external change signal is where a turn's base deadline goes stale
-	// before ever reaching a client. Remove once resolved.
-	start := timeNowFunc()
 	if err := a.ensureLoaded(ctx, true); err != nil {
 		return err
 	}
-	loaded := timeNowFunc()
 	a.broadcastAll()
-	slog.Info("table external change handled",
-		"table_id", a.id, "hand_id", a.handID,
-		"ensure_loaded_ms", loaded.Sub(start).Milliseconds(),
-		"broadcast_ms", timeNowFunc().Sub(loaded).Milliseconds())
 	return nil
 }
 

@@ -415,3 +415,40 @@ O log temporário de diagnóstico ("table broadcast publish") foi removido de
 
 **Ainda não testado ao vivo:** o fix precisa ser reimplantado e reconfirmado com o usuário
 jogando em ambas as contas, como nas rodadas anteriores.
+
+## 📌 Sexta atualização — a causa raiz real era o relógio da EC2, não o Valkey (achado #7)
+
+O achado #6 acima estava **contaminado**: a instância EC2 de produção (`i-07a59f22471db70c5`)
+tinha o `chronyd` nunca sincronizado (`Leap status: Not synchronised`, toda fonte em
+`Reach 0` — o `pool.ntp.org` padrão da imagem Alpine é inalcançável nesta VPC sem NAT/egress).
+O relógio da instância estava ~18-23s atrasado e piorando (drift de 287 ppm acumulado ao longo
+de ~16h de uptime desde a última substituição por Spot).
+
+Como os deadlines (`action_base_deadline_unix_ms`, `action_deadline_unix_ms`,
+`next_hand_unix_ms`) são timestamps absolutos calculados via `time.Now().Add(duração)` no
+servidor, um relógio de servidor atrasado produz deadlines que já nascem "no passado" do
+ponto de vista de qualquer cliente com hora certa — independente de qualquer latência de
+entrega real. HARs confirmaram: ação→broadcast em ~220ms (saudável), mas
+`action_base_deadline_unix_ms` já ~1.4s no passado; `next_hand_unix_ms` ~4.4s no passado.
+Isso explica os dois sintomas completos: o "timebank instantâneo" (`Seat.tsx`'s
+`showNormalClock` nunca fica verdadeiro porque `baseDeadlineMs > clockNow` já é falso na
+chegada) e o "hand outcome ring nunca aparece" (`useTableOutcome.ts` deriva duração 0 de um
+deadline já vencido).
+
+O log de diagnóstico "table broadcast publish" (achado #6) media `time.Now()` do PRÓPRIO
+processo com o relógio errado contra o timestamp de recebimento do navegador (relógio certo)
+— o gap de ~16-17s medido era, na verdade, quase inteiramente o desvio do relógio do servidor
+naquele momento, não trânsito real pelo Valkey Pub/Sub. O client dedicado (`newRealtimeValkeyClient`,
+commits `e40f7b8`/`19d0c71`) continua sendo uma melhoria de isolamento válida por si só
+(evita head-of-line blocking genuíno sob carga), mas **não foi a correção deste incidente**.
+
+**Correção real:** `ctech-cdk`'s `assets/ec2-alpine/setup-base.sh` agora aponta o `chronyd`
+para o Amazon Time Sync Service (`169.254.169.123`, link-local, alcançável sem NAT/egress) em
+vez do pool padrão, remove qualquer `chrony.drift` obsoleto antes de reiniciar, e aguarda sync
+(bounded, não-fatal). Ver `ctech-cdk`'s `docs/specs/2026-09-04-alpine-chrony-time-sync.md`.
+Aplica-se a qualquer instância nova/substituída sem rebuild de AMI. A instância atual em
+produção precisa ser drenada e substituída (nunca corrigir o relógio ao vivo com mesas
+ativas — o salto pra frente venceria todos os deadlines persistidos de uma vez).
+
+Os logs temporários de diagnóstico do achado #6 (`internal/table/actor_presence.go`,
+`internal/tablemanager/manager.go`) foram removidos depois de identificada a causa raiz real.
