@@ -128,6 +128,13 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   `autoscaling:StartInstanceRefresh` pinned to `*-ctech-poker` ASGs. Covered by `test/oidc-stack.test.ts`.
 - **B10 (fixed)** — archiver `DynamoEventSource` has `bisectBatchOnError` + `onFailure: SqsDlq`,
   and (#30) a DLQ-depth + `Errors` alarm on `ctech-prod-alerts`.
+- **`poker_rooms` has three GSIs** (#213): `gsi_public` (the whole public directory, still what the
+  lobby's cross-bucket aggregate walks), **`gsi_bucket`** (one partition per
+  `public#<currency_mode>#<sb>#<bb>#<seats>`, written by `roomstore.BucketKey` — this is what makes
+  `POST /rooms/join-or-create` a single bounded Query instead of a directory scan) and
+  `gsi_share_code`. All three are sparse. **DynamoDB applies one GSI change per stack update** — add
+  at most one new index per table per deploy, and deploy the CDK change before the API that queries
+  it (a room written without the index attribute is invisible to that index).
 - **B31 relevance** — `poker_leaderboard_stats` has GSIs only for `hands_won` / `hands_played` /
   `win_rate`. The API rejects any other metric (incl. `achievement_points`); adding a new ranking
   metric requires its own GSI here first.
