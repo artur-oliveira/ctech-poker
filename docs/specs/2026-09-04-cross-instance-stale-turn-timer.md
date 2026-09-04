@@ -286,3 +286,46 @@ processo na raiz) não foi feito — o `upstream {}` que faz o round-robin vive 
 compartilhado do repo externo `ctech-cdk`, fora do alcance desta sessão, e mexer às cegas lá
 arrisca derrubar a API. O fix via Valkey fica inteiro neste repo e resolve o mesmo problema sem
 esse risco.
+
+## 📌 Terceira atualização — a causa real do ring do hand-outcome (achado #4)
+
+O fix do achado #3 (`internal/tablenotify`) foi confirmado em produção via bundle JS baixado
+diretamente do CDN (`d({deadline:y,snapshotAt:n})` chamado no corpo do render, sem `useEffect` —
+exatamente o fix esperado). Mesmo assim o ring do hand-outcome continuava preso em
+`animation-duration: 0s` em produção. Comparando `"table next hand timer armed"` de uma mesma
+`hand_id` nos logs:
+
+```
+deadline_unix_ms=1788538370893   (primeiro arm)
+deadline_unix_ms=1788538370943   (segundo arm, mesma mão, 50ms depois)
+```
+
+Causa raiz de verdade: `nextHandDeadlineForPersist()` (chamado de `commit()`, computa o valor que
+vai pro DynamoDB) e `armNextHandTimer()` (chamado de `broadcastAll()` logo depois de todo commit,
+computa o valor real armado + transmitido) cada um chamava `timeNowFunc()` **independentemente**
+pra calcular "agora + 12s" na primeira vez que uma mão chega em `Complete`. Entre esses dois
+pontos no código roda `commitOutcomeLogEntries` (múltiplos commits extras pra registrar
+vencedores) e todo o resto do handler — tempo real suficiente (dezenas de ms) pra essas duas
+chamadas de `timeNowFunc()` decidirem valores diferentes depois do arredondamento de
+`UnixMilli()`. O cliente (`useTableOutcome.ts`) trava no PRIMEIRO `next_hand_unix_ms` que vê e só
+aceita um valor posterior se ele bater **exatamente** — então essa mesma mão nunca convergia e o
+ring ficava preso em zero pra sempre, não só por um tick.
+
+**Correção:** `nextHandDeadlineForPersist()` agora guarda o valor recém-calculado em
+`a.pendingNextHandDeadline` (o mesmo campo que `ensureLoaded` já usa pra “resumir” um deadline
+persistido entre instâncias) em vez de só devolvê-lo. Qualquer chamada seguinte — seja outra
+chamada de `nextHandDeadlineForPersist` dentro do mesmo `commitOutcomeLogEntries`, seja o
+`armNextHandTimer` que roda depois — reaproveita esse valor exato ao invés de calcular um novo.
+`armNextHandTimer` já limpa esse campo depois de consumir, então não há vazamento entre mãos.
+
+Teste de regressão: `TestNextHandDeadlinePersistedBeforeArmMatchesWhatGetsArmed`
+(`fleetstate_test.go`) — precisou de um relógio falso incremental (`timeNowFunc` avançando 30ms a
+cada chamada) pra reproduzir de verdade; com um relógio real não-mockado num teste apertado a
+diferença fica em microssegundos e o `UnixMilli()` disfarça o bug. Confirmado falhando sem o fix
+(drift de 30ms) e passando com ele.
+
+**Nota:** o mesmo padrão (duas chamadas independentes de `timeNowFunc()`, uma em
+`turnDeadlineForPersist()` e outra em `armTurnTimer`) existe pro timer de turno normal, mas o
+gap ali é de microssegundos (nenhum trabalho pesado entre commit e broadcastAll pra um Act comum),
+então não há evidência de que cause o mesmo efeito visível — deixado de fora desta correção;
+revisitar se aparecer evidência concreta.

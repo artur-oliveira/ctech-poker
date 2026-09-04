@@ -294,6 +294,53 @@ func TestNextHandCountdownPersistsWhatItArmed(t *testing.T) {
 	}
 }
 
+// TestNextHandDeadlinePersistedBeforeArmMatchesWhatGetsArmed reproduces
+// production's real call order — commit() (which calls
+// nextHandDeadlineForPersist) always runs *before* broadcastAll's
+// armNextHandTimer, the opposite of TestNextHandCountdownPersistsWhatItArmed
+// above. Before the 2026-09-04 fix, each call independently called
+// timeNowFunc(), so the value actually persisted to DynamoDB and the value
+// actually armed (and broadcast to clients) differed by however long the
+// work between them took — tens of milliseconds in production, enough that
+// a client latching onto whichever value it saw first never matched the
+// other and permanently froze the hand-outcome ring's countdown at 0. Also
+// covers commitOutcomeLogEntries' pattern of several more
+// nextHandDeadlineForPersist calls for the same hand before broadcastAll
+// ever runs: every one of them must keep returning the same stashed value.
+func TestNextHandDeadlinePersistedBeforeArmMatchesWhatGetsArmed(t *testing.T) {
+	actor, _ := completeActor(t, "instance-a")
+
+	// A fake clock that advances 30ms on every call simulates the real
+	// production gap: commitOutcomeLogEntries's DynamoDB round trips and
+	// hand-outcome hooks genuinely take tens of milliseconds between the
+	// commit that calls nextHandDeadlineForPersist and the broadcastAll
+	// that calls armNextHandTimer. A real, unmocked clock in a tight test
+	// loop advances by microseconds between calls — not enough to survive
+	// UnixMilli()'s truncation to milliseconds — so this is what actually
+	// exercises the bug the fix closes.
+	base := timeNowFunc()
+	calls := 0
+	old := timeNowFunc
+	timeNowFunc = func() time.Time {
+		calls++
+		return base.Add(time.Duration(calls) * 30 * time.Millisecond)
+	}
+	t.Cleanup(func() { timeNowFunc = old })
+
+	first := actor.nextHandDeadlineForPersist()
+	second := actor.nextHandDeadlineForPersist()
+	if second != first {
+		t.Fatalf("a second persist call before arming drifted: first=%d second=%d", first, second)
+	}
+
+	actor.armNextHandTimer(true)
+	t.Cleanup(func() { actor.nextHandTimer.Stop() })
+
+	if got := actor.nextHandDeadline.UnixMilli(); got != first {
+		t.Fatalf("armed deadline = %d, want the exact persisted value %d", got, first)
+	}
+}
+
 // A table that is not on Complete must clear the stored countdown instead of
 // inheriting the previous hand's expiry.
 func TestNextHandDeadlineIsClearedOffComplete(t *testing.T) {

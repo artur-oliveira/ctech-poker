@@ -228,10 +228,23 @@ func (a *Actor) turnDeadlineForPersist() int64 {
 // that armed it for this hand, a fresh one nextHandDelay from now when this
 // commit is what completed the hand, and 0 whenever the table is not on
 // Complete (so leaving Complete clears the stored value instead of leaving
-// the previous hand's expiry behind). Like turnDeadlineForPersist above this
-// only has to agree with armNextHandTimer closely enough that a reload
-// resumes the same instant — armNextHandTimer, which runs from broadcastAll
-// immediately after every commit, stays the one scheduler of record.
+// the previous hand's expiry behind).
+//
+// The fresh branch stashes its computed value in pendingNextHandDeadline
+// (normally the field ensureLoaded fills from a *reload*) so armNextHandTimer
+// — called from broadcastAll right after every commit — reuses this exact
+// timestamp instead of computing its own via a second, independent
+// timeNowFunc() call a few instructions later. Two separate "now"s here
+// disagreed by tens of milliseconds in production (2026-09-04, see the
+// incident spec's second follow-up): the client's useTableOutcome.ts latches
+// onto whichever next_hand_unix_ms value it sees first and only accepts a
+// later broadcast's value if it matches *exactly*, so any drift between the
+// persisted and the broadcast deadline permanently froze the hand-outcome
+// ring's countdown at 0. commitOutcomeLogEntries commits several more times
+// for the same completed hand before broadcastAll ever runs; the
+// pendingNextHandDeadline > 0 check below makes every one of those later
+// calls reuse the same stashed value too, rather than drifting further with
+// each one.
 func (a *Actor) nextHandDeadlineForPersist() int64 {
 	if a.cached == nil || a.cached.Stage() != hand.Complete {
 		return 0
@@ -239,7 +252,12 @@ func (a *Actor) nextHandDeadlineForPersist() int64 {
 	if a.handID != "" && a.handID == a.nextHandArmedFor {
 		return a.nextHandDeadline.UnixMilli()
 	}
-	return timeNowFunc().Add(a.nextHandDelay).UnixMilli()
+	if a.pendingNextHandDeadline > 0 {
+		return a.pendingNextHandDeadline
+	}
+	fresh := timeNowFunc().Add(a.nextHandDelay).UnixMilli()
+	a.pendingNextHandDeadline = fresh
+	return fresh
 }
 
 func (a *Actor) timeBankFor(playerID string) time.Duration {

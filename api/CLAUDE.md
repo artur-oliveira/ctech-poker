@@ -283,6 +283,28 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   path for whichever process missed it, never correctness. A table with no local Actor is silently ignored, and
   `GetOrCreateActor` must never be called from this path — that would spin up and immediately abandon an Actor
   for every table any *other* process touches.
+- **A value persisted this commit and the value armed moments later must be the exact same
+  `time.Time`, not two separate `timeNowFunc()` calls.** `nextHandDeadlineForPersist` (called from
+  `commit`, computes what goes to DynamoDB) and `armNextHandTimer` (called from `broadcastAll`
+  right after every commit, computes what's actually scheduled and broadcast) both used to call
+  `timeNowFunc()` independently the first time a hand reached `Complete`. Real work runs between
+  them — `commitOutcomeLogEntries`'s extra commits, hand-outcome hooks — long enough (tens of ms in
+  production) for the two calls to round to different `UnixMilli()` values. The client
+  (`useTableOutcome.ts`) latches onto whichever `next_hand_unix_ms` it sees first and only accepts
+  a later value if it matches *exactly*, so that drift permanently froze the hand-outcome ring's
+  countdown at 0 — not a one-tick glitch, an unrecoverable mismatch for that hand's entire
+  countdown (2026-09-04, third follow-up in the incident spec). Fixed by having the fresh branch of
+  `nextHandDeadlineForPersist` stash its computed value in `pendingNextHandDeadline` (the same
+  field `ensureLoaded` already uses to resume a persisted deadline across instances) instead of
+  just returning it, so `armNextHandTimer` — and any repeat call to `nextHandDeadlineForPersist`
+  itself, from `commitOutcomeLogEntries`'s loop — reuses that exact timestamp.
+  `TestNextHandDeadlinePersistedBeforeArmMatchesWhatGetsArmed` needed a fake clock advancing on
+  every call to reproduce this: a real, unmocked clock in a tight test loop advances by
+  microseconds between the two calls, which `UnixMilli()` truncation hides. `turnDeadlineForPersist`
+  /`armTurnTimer` have the identical two-independent-`timeNowFunc()`-calls shape for the ordinary
+  per-turn deadline, but with no comparable work between commit and broadcastAll for a plain
+  action, there is no evidence it produces a visible gap — left alone; revisit with concrete
+  evidence before touching it.
 - **Nothing viewer-independent belongs inside `broadcastAll`'s per-seat loop, and nothing expensive belongs on the
   actor goroutine twice.** Chat and reaction views are built once per broadcast (`activityViews`) and shared; the
   `equityIterations` Monte Carlo is memoized by `(hole, board, opponent count)` per hand (`equityFor`), because a
