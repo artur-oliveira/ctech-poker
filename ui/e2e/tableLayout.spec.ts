@@ -85,6 +85,55 @@ for (const viewport of VIEWPORTS) {
       expect(overflow).toBeLessThanOrEqual(0);
     });
 
+    // The walnut band is the felt's inset minus the rail's, and the felt is
+    // derived from the rail plus one --table-rail-band. Anything that reads
+    // unequal here means someone tuned a single side again — which is how a
+    // heads-up table ended up with a 63px rim at the sides and 14px at the
+    // bottom.
+    for (const scenario of ['heads_up', 'nine_max']) {
+      test(`${scenario}: the rail band is the same thickness all the way round`, async ({page}) => {
+        await openTable(page, scenario);
+        const band = await page.evaluate(() => {
+          const rail = document.querySelector('.game-rail')!.getBoundingClientRect();
+          const felt = document.querySelector('.game-felt')!.getBoundingClientRect();
+          return {
+            top: Math.round(felt.top - rail.top), right: Math.round(rail.right - felt.right),
+            bottom: Math.round(rail.bottom - felt.bottom), left: Math.round(felt.left - rail.left),
+          };
+        });
+        const sides = Object.values(band);
+        expect(Math.min(...sides)).toBeGreaterThan(0);
+        // One pixel of rounding on a subpixel box is not an asymmetry.
+        expect(Math.max(...sides) - Math.min(...sides)).toBeLessThanOrEqual(1);
+      });
+    }
+
+    // Seats are published as normalised orbit coordinates and placed against
+    // the same rail tokens, so their centres are on the band's centreline by
+    // construction. This is the assertion that keeps the three geometries —
+    // rail, felt and seat ring — from drifting apart again.
+    test('every balanced seat sits on the band centreline', async ({page}) => {
+      await openTable(page, 'nine_max');
+      const worst = await page.evaluate(() => {
+        const rail = document.querySelector('.game-rail')!.getBoundingClientRect();
+        const felt = document.querySelector('.game-felt')!.getBoundingClientRect();
+        const mid = {
+          left: (rail.left + felt.left) / 2, right: (rail.right + felt.right) / 2,
+          top: (rail.top + felt.top) / 2, bottom: (rail.bottom + felt.bottom) / 2,
+        };
+        return [...document.querySelectorAll('.game-seat[data-balanced-seat]')].reduce((max, seat) => {
+          const box = seat.getBoundingClientRect();
+          const style = getComputedStyle(seat);
+          const s = Number(style.getPropertyValue('--seat-s'));
+          const t = Number(style.getPropertyValue('--seat-t'));
+          const dx = box.x + box.width / 2 - (mid.left + s * (mid.right - mid.left));
+          const dy = box.y + box.height / 2 - (mid.top + t * (mid.bottom - mid.top));
+          return Math.max(max, Math.abs(dx), Math.abs(dy));
+        }, 0);
+      });
+      expect(worst).toBeLessThanOrEqual(1);
+    });
+
     // The streak badge is the reported case: it hangs 8px below and left of the
     // seat box, and the docked viewer seat is the portrait stage's last flex
     // child, so it lands exactly on the clip edge. Asserted with the badge

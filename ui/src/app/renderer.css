@@ -2343,8 +2343,8 @@
    Center anchoring is essential: the old left-edge anchors made the rightmost
    9-max seat overlap the viewer even when their percentage values differed. */
 .game-table:not(.stage-v) > .game-seat[data-balanced-seat] {
-    left: var(--seat-x);
-    top: var(--seat-y);
+    left: calc(var(--table-orbit-inline) + var(--seat-s) * (100% - 2 * var(--table-orbit-inline)));
+    top: calc(var(--table-orbit-top) + var(--seat-t) * (100% - var(--table-orbit-top) - var(--table-orbit-bottom)));
     right: auto;
     bottom: auto;
     transform: translate(-50%, -50%)
@@ -4794,12 +4794,9 @@
     min-width: 220px;
     min-height: 300px
 }
-/* Rail and felt stay concentric: each side uses approximately the same visual
-   band thickness at phone and tablet widths. The previous 12% horizontal felt
-   inset made the walnut sides much wider than the top/bottom arcs, which read
-   as a stretched capsule and pulled seats off the rail's centerline. */
+/* Inset comes from the rail-inset + band derivation in base.css; only the
+   capsule's own radius belongs here. */
 .stage-v .game-felt {
-    inset: clamp(56px, 9%, 84px) clamp(30px, 8%, 60px) clamp(40px, 7%, 68px);
     border-radius: 999px
 }
 .stage-v .board > div {
@@ -5858,8 +5855,8 @@
        inside the first column by half a compact seat. Vertical clamping keeps
        floated cards below the header and above the street rail. */
     .game-table:not(.stage-v) > .game-seat[data-balanced-seat] {
-        left: clamp(64px, var(--seat-x), calc(100% - 64px));
-        top: clamp(90px, var(--seat-y), calc(100% - 90px))
+        left: clamp(64px, calc(var(--table-orbit-inline) + var(--seat-s) * (100% - 2 * var(--table-orbit-inline))), calc(100% - 64px));
+        top: clamp(90px, calc(var(--table-orbit-top) + var(--seat-t) * (100% - var(--table-orbit-top) - var(--table-orbit-bottom))), calc(100% - 90px))
     }
 /* Short landscape uses the same compact-seat DOM as portrait, but on a
        shallow oval. The viewer HUD consumes a small strip below the ring and
@@ -5990,9 +5987,6 @@
    avatars and hero cards) instead of letting the mid-row seats collide with
    the community cards. Placed after the width tiers so it wins the cascade. */
 @media (orientation: portrait) and (max-height: 760px) {
-    .stage-v .game-felt {
-        inset: clamp(46px, 8%, 84px) clamp(34px, 10%, 90px) clamp(38px, 7%, 76px)
-    }
 
     .stage-v .board > div {
         gap: 3px

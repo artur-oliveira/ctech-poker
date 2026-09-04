@@ -145,6 +145,17 @@ off by default — do not build UI that assumes real money is on.
 - **Quality gate:** `npx vitest run`, `npx tsc --noEmit`, `npx eslint src --max-warnings 0` and
   `npm run build` must all pass with **zero errors and zero warnings**. Coverage thresholds are
   enforced in `vitest.config.ts` (**lines/functions/statements/branches 90**).
+- **The table's geometry has one source.** `--table-rail-inset-top/-inline/-bottom` place
+  `.game-rail`; `.game-felt` is that inset **plus `--table-rail-band`**; `--table-orbit-*` is the
+  band's centreline and is where seats go. `balancedSeatPosition` (`TableStage.tsx`) returns
+  normalised `{s, t}` in `[0, 1]` on that orbit — not percentages of the stage — and `Seat.tsx`
+  publishes them as `--seat-s`/`--seat-t`, which the CSS resolves against the same tokens. Change
+  the band and rail, felt and every seat move together. Do not reintroduce a per-side felt inset,
+  and note that `--table-orbit-*` is declared on `.game-table`, never on `:root`: a custom property
+  containing `var()` resolves where it is *declared*, so a `:root` copy would freeze the desktop
+  numbers and ignore the `.stage-v`/`.stage-h` overrides. Occupancy narrows the ring
+  (`.stage-v[data-capacity='2'] .stage-v-ring`), never the felt. See
+  `docs/2026-09-03-table-geometry-one-band.md` and DESIGN.md's One Band Rule.
 - **Layout is gated in real engines, not in jsdom.** `npm run e2e` (Playwright,
   `e2e/tableLayout.spec.ts`) runs the table across six viewports and four scenarios in Chromium,
   Firefox and WebKit and asserts that nothing a player needs is clipped by an ancestor's

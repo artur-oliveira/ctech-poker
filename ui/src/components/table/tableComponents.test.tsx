@@ -191,24 +191,24 @@ describe('table presentation', () => {
   });
 
   test('derives the canonical heads-up, triangle and diamond geometry', () => {
-    expect(balancedSeatPosition(0, 2)).toEqual({x: 50, y: 92, zone: 'bottom', side: 'center'});
-    expect(balancedSeatPosition(1, 2)).toEqual({x: 50, y: 8, zone: 'top', side: 'center'});
-    expect(balancedSeatPosition(1, 3)).toEqual({x: 10.16, y: 29, zone: 'left', side: 'left'});
-    expect(balancedSeatPosition(2, 3)).toEqual({x: 89.84, y: 29, zone: 'right', side: 'right'});
+    expect(balancedSeatPosition(0, 2)).toEqual({s: 0.5, t: 1, zone: 'bottom', side: 'center'});
+    expect(balancedSeatPosition(1, 2)).toEqual({s: 0.5, t: 0, zone: 'top', side: 'center'});
+    expect(balancedSeatPosition(1, 3)).toEqual({s: 0.067, t: 0.25, zone: 'left', side: 'left'});
+    expect(balancedSeatPosition(2, 3)).toEqual({s: 0.933, t: 0.25, zone: 'right', side: 'right'});
     expect([0, 1, 2, 3].map(index => balancedSeatPosition(index, 4))).toEqual([
-      {x: 50, y: 92, zone: 'bottom', side: 'center'},
-      {x: 4, y: 50, zone: 'left', side: 'left'},
-      {x: 50, y: 8, zone: 'top', side: 'center'},
-      {x: 96, y: 50, zone: 'right', side: 'right'},
+      {s: 0.5, t: 1, zone: 'bottom', side: 'center'},
+      {s: 0, t: 0.5, zone: 'left', side: 'left'},
+      {s: 0.5, t: 0, zone: 'top', side: 'center'},
+      {s: 1, t: 0.5, zone: 'right', side: 'right'},
     ]);
   });
 
   test('samples portrait seats from the capsule rail instead of an inset ellipse', () => {
-    expect(balancedSeatPosition(1, 2, true)).toEqual({x: 50, y: 7, zone: 'top', side: 'center'});
-    expect(balancedSeatPosition(1, 3, true)).toEqual({x: 12, y: 22, zone: 'left', side: 'left'});
-    expect(balancedSeatPosition(2, 3, true)).toEqual({x: 88, y: 22, zone: 'right', side: 'right'});
-    expect(balancedSeatPosition(1, 9, true)).toEqual({x: 12, y: 74, zone: 'bottom', side: 'left'});
-    expect(balancedSeatPosition(8, 9, true)).toEqual({x: 88, y: 74, zone: 'bottom', side: 'right'});
+    expect(balancedSeatPosition(1, 2, true)).toEqual({s: 0.5, t: 0, zone: 'top', side: 'center'});
+    expect(balancedSeatPosition(1, 3, true)).toEqual({s: 0.078, t: 0.179, zone: 'left', side: 'left'});
+    expect(balancedSeatPosition(2, 3, true)).toEqual({s: 0.922, t: 0.179, zone: 'right', side: 'right'});
+    expect(balancedSeatPosition(1, 9, true)).toEqual({s: 0.078, t: 0.798, zone: 'bottom', side: 'left'});
+    expect(balancedSeatPosition(8, 9, true)).toEqual({s: 0.922, t: 0.798, zone: 'bottom', side: 'right'});
   });
 
   test.each([

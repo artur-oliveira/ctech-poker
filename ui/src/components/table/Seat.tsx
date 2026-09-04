@@ -45,9 +45,13 @@ const ROLE_LABELS: Record<string, string> = {
 // geometric zone for occupancy-balanced layouts instead.
 const TOP_SEAT_INDICES = [3, 4, 5];
 
+/** A seat's place on the rail's centreline, normalised: `s` runs 0 (left orbit
+ * line) to 1 (right), `t` runs 0 (top) to 1 (bottom). CSS turns them back into
+ * pixels against the same --table-rail-* tokens the rail and the felt use, so
+ * a seat cannot drift off the band when the band changes. */
 export type SeatLayoutPosition = {
-  x: number;
-  y: number;
+  s: number;
+  t: number;
   zone: 'bottom' | 'left' | 'top' | 'right';
   side: 'left' | 'center' | 'right';
 };
@@ -272,8 +276,8 @@ export function Seat({
   const sittingOutReady = seat.state === 'sitting_out' && seat.ready === true;
   const playstyle = seat.playstyle_badge ? playstyleMeta(seat.playstyle_badge) : undefined;
   const seatStyle = layoutPosition ? {
-    '--seat-x': `${layoutPosition.x}%`,
-    '--seat-y': `${layoutPosition.y}%`,
+    '--seat-s': layoutPosition.s,
+    '--seat-t': layoutPosition.t,
   } as CSSProperties : undefined;
   const isTopSeat = layoutPosition?.zone === 'top' || (!layoutPosition && TOP_SEAT_INDICES.includes(index));
   // Publishes this element for the reaction layer, which has no ref path here.

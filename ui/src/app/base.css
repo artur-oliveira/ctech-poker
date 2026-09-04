@@ -46,6 +46,20 @@
        half — which is what happened to the win/loss streak badge on the
        portrait viewer dock, flush against .game-table's overflow:hidden edge. */
     --seat-badge-overhang: 8px;
+    /* Table geometry, one derivation. The rail's inset is authored per side
+       (the portrait capsule is pushed down inside its ring to leave the top
+       seats' cards room under the header), but the felt is ALWAYS the rail
+       inset plus one band, so the walnut reads the same thickness the whole
+       way round no matter which side was tuned. Breaking that is what left a
+       heads-up table with a 63px rim at the sides and 14px at the bottom.
+       Lengths, not percentages: an inset percentage resolves against width on
+       the horizontal axis and height on the vertical, so "the same number" on
+       four sides is four different thicknesses. See DESIGN.md, "The One Band
+       Rule". */
+    --table-rail-band: 32px;
+    --table-rail-inset-top: 8%;
+    --table-rail-inset-inline: 4%;
+    --table-rail-inset-bottom: 7%;
     /* Width of a portrait seat's caption lane (the stack figure under the
        avatar). One token because several rules set it — the shared caption, the
        wider left/right-zone override and the mid-side pair — and they have to

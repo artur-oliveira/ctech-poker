@@ -840,9 +840,23 @@
     min-height: 320px;
     height: 100%
 }
+/* The seat orbit IS the rail band's centreline, so a seat cannot drift off the
+   walnut when the band is retuned. TableStage publishes each seat as a
+   normalised --seat-s / --seat-t (0 = left/top orbit line, 1 = right/bottom)
+   and these three turn them back into pixels.
+
+   They are declared here, on .game-table, and not on :root: a custom property
+   whose value contains var() is resolved where it is DECLARED, so a copy on
+   :root would freeze the desktop rail numbers and ignore every .stage-v /
+   .stage-h override on this very element. */
+.game-table {
+    --table-orbit-inline: calc(var(--table-rail-inset-inline) + var(--table-rail-band) / 2);
+    --table-orbit-top: calc(var(--table-rail-inset-top) + var(--table-rail-band) / 2);
+    --table-orbit-bottom: calc(var(--table-rail-inset-bottom) + var(--table-rail-band) / 2)
+}
 .game-rail {
     position: absolute;
-    inset: 8% 4% 7%;
+    inset: var(--table-rail-inset-top) var(--table-rail-inset-inline) var(--table-rail-inset-bottom);
     border-radius: 50%;
     background: var(--table-rail);
     border: 8px solid var(--table-rail-edge);
@@ -850,7 +864,9 @@
 }
 .game-felt {
     position: absolute;
-    inset: 12% 8% 11%;
+    inset: calc(var(--table-rail-inset-top) + var(--table-rail-band))
+           calc(var(--table-rail-inset-inline) + var(--table-rail-band))
+           calc(var(--table-rail-inset-bottom) + var(--table-rail-band));
     border-radius: 50%;
     background: radial-gradient(circle, var(--table-felt-light), var(--table-felt-dark) 72%);
     box-shadow: var(--shadow-felt);
@@ -3296,13 +3312,25 @@
     }
 }
 .stage-v .game-rail {
-    inset: 28px 4px 12px;
     border-radius: 999px
+}
+/* The capsule's rail sits low in its ring on purpose: the top seats' cards
+   hang above their avatar, and that room has to come from somewhere. The band
+   stays uniform regardless, because the felt is derived from these. */
+.stage-v {
+    --table-rail-band: 26px;
+    --table-rail-inset-top: 28px;
+    --table-rail-inset-inline: 4px;
+    --table-rail-inset-bottom: 12px
 }
 .stage-v .board-runout-row,
 .stage-v .board-runout-row > div,
 .stage-v .board-common {
     gap: 4px
+}
+.stage-v-ring > .game-seat[data-balanced-seat] {
+    left: calc(var(--table-orbit-inline) + var(--seat-s) * (100% - 2 * var(--table-orbit-inline)));
+    top: calc(var(--table-orbit-top) + var(--seat-t) * (100% - var(--table-orbit-top) - var(--table-orbit-bottom)))
 }
 /* --- Opponents: avatar chips on the rail band --- */
 .stage-v-ring .game-seat {
@@ -3315,6 +3343,9 @@
     width: var(--seat-size);
     height: var(--seat-size);
     min-width: 0;
+    /* Legacy numeric slots (standalone seats in /hands and the replay) still
+       resolve through --seat-x/--seat-y; the live balanced ring overrides both
+       below with its orbit coordinates. */
     left: var(--seat-x);
     top: var(--seat-y);
     right: auto;
@@ -3441,12 +3472,14 @@
         min-height: 0;
         aspect-ratio: auto
     }
-.stage-h .game-rail {
-        inset: 10% 1% 8%;
-        border-radius: 50%
+.stage-h {
+        --table-rail-band: 26px;
+        --table-rail-inset-top: 10%;
+        --table-rail-inset-inline: 1%;
+        --table-rail-inset-bottom: 8%
     }
-.stage-h .game-felt {
-        inset: 15% 6% 13%;
+.stage-h .game-rail,
+    .stage-h .game-felt {
         border-radius: 50%
     }
 .stage-h .felt-wordmark,
@@ -3460,11 +3493,11 @@
         min-height: 54px;
         padding-block: 4px
     }
-.game-rail {
-        inset: 10% 1% 8%
-    }
-.game-felt {
-        inset: 15% 6% 13%
+.game-table {
+        --table-rail-band: 26px;
+        --table-rail-inset-top: 10%;
+        --table-rail-inset-inline: 1%;
+        --table-rail-inset-bottom: 8%
     }
 .action-bar {
         grid-column: 2;
@@ -3539,8 +3572,22 @@
         max-height: 100%;
         overflow: visible
     }
-.stage-v[data-capacity='2'] .game-felt {
-        inset-inline: 18%
+/* Heads-up narrows the ring, so rail and felt shrink together and the band
+       is untouched. Squeezing the felt inside a full-width rail instead is
+       what produced a 63px walnut rim at the sides against 14px at the
+       bottom — the "geometrically wrong" table in the report. */
+.stage-v[data-capacity='2'] .stage-v-ring {
+        max-width: min(82%, 640px)
+    }
+/* Short portrait phones (SE/8 class): the capsule steps down as a whole, so
+       the band steps down with it instead of each side drifting on its own
+       clamp. */
+@media (max-height: 760px) {
+        .stage-v {
+            --table-rail-band: 22px;
+            --table-rail-inset-top: 24px;
+            --table-rail-inset-bottom: 10px
+        }
     }
 .stage-v > .game-seat {
         flex: 0 0 auto;
