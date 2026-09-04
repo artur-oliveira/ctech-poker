@@ -279,6 +279,11 @@ func (m *Manager) ListenForExternalChanges(ctx context.Context, notifier ChangeL
 			return
 		}
 		reply := make(chan error, 1)
+		// TEMPORARY (2026-09-04 turn-ring staleness investigation): pins when
+		// this process's pubsub callback fired, so a slow Dispatch (actor
+		// command channel backpressure) shows up as a gap against
+		// handleExternalChange's own "start" log. Remove once resolved.
+		slog.Info("table external change received", "table_id", tableID, "received_unix_ms", time.Now().UnixMilli())
 		if err := actor.Dispatch(table.ExternalChangeCmd{Reply: reply}); err != nil {
 			slog.Warn("table external change dispatch failed", "table_id", tableID, "err", err)
 		}
