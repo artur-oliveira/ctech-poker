@@ -4,7 +4,7 @@ import {describe, expect, test, vi} from 'vitest';
 import type {SeatView} from '@/lib/api/table';
 import type {ReactionCatalogEntry, ReactionPurchase} from '@/lib/api/reactionPurchases';
 import {TABLE_REACTIONS, type TableReactionEvent, type TableReactionID} from '@/lib/reactions';
-import {HOVER_PANEL_CLOSE_DELAY_MS} from '@/lib/hooks/useHoverPanel';
+import {HOVER_PANEL_CLICK_PIN_MS, HOVER_PANEL_CLOSE_DELAY_MS} from '@/lib/hooks/useHoverPanel';
 import {registerSeatElement, seatCenter} from '@/lib/seatRects';
 import {TableReactions} from './TableReactions';
 
@@ -307,6 +307,63 @@ describe('TableReactions Poker Theater', () => {
       fireEvent.mouseLeave(aside);
       act(() => void vi.advanceTimersByTime(HOVER_PANEL_CLOSE_DELAY_MS));
       expect(callbacks.onOpenChangeAction).toHaveBeenCalledWith(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Firefox commits the mouseenter render before dispatching the click that
+  // followed it; Chromium does not. That made the toggle's plain `!open` click
+  // close the panel hover had just opened, so on Firefox the first click on the
+  // reactions toggle appeared to do nothing at all.
+  test('a click arriving on its own hover-open pins the panel instead of closing it', () => {
+    vi.useFakeTimers();
+    try {
+      const {callbacks, props, rerender} = renderReactions({open: false});
+      fireEvent.mouseEnter(screen.getByLabelText('Reações da mesa'));
+      expect(callbacks.onOpenChangeAction).toHaveBeenLastCalledWith(true);
+
+      // The engine commits that render, so the click below reads `open: true`.
+      // Same tree shape as the initial render: a bare element would reconcile
+      // against the fragment and remount the aside, resetting the hook's refs.
+      rerender(<>
+        <StubSeat playerId={viewer.player_id}/>
+        <StubSeat playerId={opponent.player_id}/>
+        <TableReactions {...props} open/>
+      </>);
+      fireEvent.click(screen.getByRole('button', {name: 'Fechar reações'}));
+      expect(callbacks.onOpenChangeAction).toHaveBeenLastCalledWith(true);
+
+      // The pin is spent: the next click closes, as the button's label promises.
+      fireEvent.click(screen.getByRole('button', {name: 'Fechar reações'}));
+      expect(callbacks.onOpenChangeAction).toHaveBeenLastCalledWith(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('a click long after the hover-open, and a hover into an already-open aside, both still close', () => {
+    vi.useFakeTimers();
+    try {
+      const {callbacks, props, rerender} = renderReactions({open: false});
+      fireEvent.mouseEnter(screen.getByLabelText('Reações da mesa'));
+      // Same tree shape as the initial render: a bare element would reconcile
+      // against the fragment and remount the aside, resetting the hook's refs.
+      rerender(<>
+        <StubSeat playerId={viewer.player_id}/>
+        <StubSeat playerId={opponent.player_id}/>
+        <TableReactions {...props} open/>
+      </>);
+      act(() => void vi.advanceTimersByTime(HOVER_PANEL_CLICK_PIN_MS));
+      fireEvent.click(screen.getByRole('button', {name: 'Fechar reações'}));
+      expect(callbacks.onOpenChangeAction).toHaveBeenLastCalledWith(false);
+
+      // Re-entering an aside that is already open must not arm a new pin: the
+      // panel's own layout shift can move the box under a stationary cursor.
+      callbacks.onOpenChangeAction.mockClear();
+      fireEvent.mouseEnter(screen.getByLabelText('Reações da mesa'));
+      fireEvent.click(screen.getByRole('button', {name: 'Fechar reações'}));
+      expect(callbacks.onOpenChangeAction).toHaveBeenLastCalledWith(false);
     } finally {
       vi.useRealTimers();
     }

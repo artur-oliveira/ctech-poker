@@ -1,3 +1,4 @@
+import {USE_MOCK} from '@/lib/mockConfig';
 export const HTTP_TIMEOUT_MS = 3_000;
 export const HEALTHY_POLL_INTERVAL_MS = 30_000;
 export const MAX_UNAVAILABLE_POLL_INTERVAL_MS = 30_000;
@@ -77,6 +78,11 @@ export function markApiOffline() {
  * that outage as a TypeError rather than an HTTP status.
  */
 function probeHealthOnce(): Promise<boolean> {
+  // Mock mode has no API to probe. Without this the whole app escalates to
+  // /unavailable a few seconds after boot, which made `npm run dev:mock`
+  // (and therefore `og:capture` and the visual-regression suite) depend on a
+  // real backend listening on the dev proxy's port.
+  if (USE_MOCK) return Promise.resolve(true);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
   return fetch(apiURL('/v1.0/health'), {
