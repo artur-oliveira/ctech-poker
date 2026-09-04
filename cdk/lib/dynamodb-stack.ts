@@ -287,10 +287,23 @@ export class DynamoDBStack extends cdk.Stack {
     // docs/specs/2026-08-21-premium-cosmetics-overhaul.md).
     table('poker_cosmetic_entitlements', true);
     // poker_cosmetic_purchases: pk = player_id, sk = purchase_id — permanent
-    // purchase history, mirrors poker_reaction_purchases. No GSI: pix
-    // confirmation is webhook-driven (no local pending sweep), fichas
-    // purchases are synchronous.
-    table('poker_cosmetic_purchases', true);
+    // purchase history, mirrors poker_reaction_purchases. Pix confirmation is
+    // webhook-driven (no local pending sweep) and fichas purchases are
+    // synchronous, so nothing sweeps this table; the one index it needs is
+    // gsi_player_kind, so the deck and felt history endpoints can each page
+    // their own rows with a key condition instead of reading the other kind's
+    // rows through a FilterExpression and returning short pages (issue #219).
+    // Both key attributes are already on every row ever written — no backfill,
+    // no new attribute. Projection ALL because the endpoint returns whole
+    // purchase records; the extra write cost lands on a table that sees one
+    // write per purchase, not per hand.
+    const cosmeticPurchases = table('poker_cosmetic_purchases', true);
+    cosmeticPurchases.addGlobalSecondaryIndex({
+      indexName: 'gsi_player_kind',
+      partitionKey: {name: 'pk', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'kind', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
     // poker_table_entitlements: pk = player_id, sk = "ent#<origin_table_id>"
     // — one row per paid table reservation (docs/plans/2026-08-21-entry-fee-entitlement.md).
     // sk is fixed at the originally-paid table (the idempotency key that

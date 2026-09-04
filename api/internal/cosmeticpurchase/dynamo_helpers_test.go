@@ -67,10 +67,38 @@ func newTestEntitlementStore(t *testing.T) *EntitlementStore {
 	return NewEntitlementStore(db, env)
 }
 
+// newTestStore builds the purchase table with gsi_player_kind, the index
+// Store.List pages history off (issue #219).
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
 	db := testDynamoClient(t)
 	env := testEnv()
-	createTestTable(t, db, dynamo.TableName(env, tablePurchases))
+	name := dynamo.TableName(env, tablePurchases)
+	_, err := db.CreateTable(context.Background(), &dynamodb.CreateTableInput{
+		TableName: strPtr(name), BillingMode: types.BillingModePayPerRequest,
+		AttributeDefinitions: []types.AttributeDefinition{
+			{AttributeName: strPtr("pk"), AttributeType: types.ScalarAttributeTypeS},
+			{AttributeName: strPtr("sk"), AttributeType: types.ScalarAttributeTypeS},
+			{AttributeName: strPtr("kind"), AttributeType: types.ScalarAttributeTypeS},
+		},
+		KeySchema: []types.KeySchemaElement{
+			{AttributeName: strPtr("pk"), KeyType: types.KeyTypeHash},
+			{AttributeName: strPtr("sk"), KeyType: types.KeyTypeRange},
+		},
+		GlobalSecondaryIndexes: []types.GlobalSecondaryIndex{{
+			IndexName: strPtr(gsiPlayerKind),
+			KeySchema: []types.KeySchemaElement{
+				{AttributeName: strPtr("pk"), KeyType: types.KeyTypeHash},
+				{AttributeName: strPtr("kind"), KeyType: types.KeyTypeRange},
+			},
+			Projection: &types.Projection{ProjectionType: types.ProjectionTypeAll},
+		}},
+	})
+	if err != nil {
+		var inUse *types.ResourceInUseException
+		if !errors.As(err, &inUse) {
+			t.Fatalf("create table %s: %v", name, err)
+		}
+	}
 	return NewStore(db, env)
 }
