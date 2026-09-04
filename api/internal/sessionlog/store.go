@@ -58,6 +58,11 @@ const (
 	// bounds a pathological partition (a bug leaving sessions stuck open)
 	// instead of silently truncating normal traffic.
 	openSessionScanLimit = 25
+
+	// maxHandBatchWrite is DynamoDB's hard per-call BatchWriteItem ceiling.
+	// One hand never reaches it (a table seats at most nine), so this bounds
+	// a future caller rather than chunking normal traffic.
+	maxHandBatchWrite = 25
 )
 
 type SessionItem struct {
@@ -399,6 +404,88 @@ func (s *Store) RecordHand(ctx context.Context, item HandItem) error {
 		return err
 	}
 	return s.hands.PutItem(ctx, encoded)
+}
+
+// RecordHands writes one completed hand's per-participant rows in a single
+// BatchWriteItem round trip instead of one sequential PutItem per participant
+// (#200). A nine-handed hand was nine serialized DynamoDB calls on the one
+// post-hand write the client actively waits for (app.go's onHandComplete
+// writes history first precisely because the client refetches it the instant
+// it sees the `complete` snapshot), so the tail of that refetch race was the
+// sum of nine round trips rather than one.
+//
+// Batching changes latency, not cost: BatchWriteItem is billed per item
+// exactly like the individual PutItems it replaces, so the WCU per hand is
+// unchanged — see TestHandHistoryItemWriteUnits (internal/app) for the
+// measured per-item size and the derived WCU per hand at 2/6/9 players.
+//
+// Why N per-player copies and not one canonical hand record + a light
+// per-player index:
+//   - Privacy: every row is already redacted *for its own reader* by
+//     app.handItemForWithAvatars — an opponent's hole cards appear only when
+//     that opponent actually showed them, and the per-viewer fairness proof
+//     (RevealedCardSalts/UnrevealedCardHashes) reveals exactly the deck
+//     positions that viewer is entitled to. A canonical row would have to
+//     hold the union of all of that and re-run the redaction on every read,
+//     moving the visibility rule out of one write-time function and into
+//     every reader — the exact mistake AGENTS.md rule 8 exists to prevent.
+//   - Read cost: `pk = player_id` makes /players/me/hands, /players/me/hand/:id
+//     and the public showcase single-partition Queries. A canonical record
+//     keyed by hand would need a per-player GSI to answer them, and a
+//     showcase/history page would fan out one read per hand instead of one
+//     Query per page.
+//   - Write cost: the canonical form is genuinely cheaper (it stores the
+//     board, the deck commitments and the participant list once instead of
+//     N times), but that saving is bounded by the same rows still having to
+//     carry the per-viewer proof, and it is paid for with the read costs
+//     above plus a schema migration of the existing history. Not worth it at
+//     nine rows a hand; revisit if hand volume, not table size, makes the
+//     history table's write bill material.
+//
+// Replay-safe: each row's SK is the deterministic mode#hand_id, so a retried
+// or duplicated pipeline run (internal/handhook fails open on a Valkey error)
+// overwrites the same rows instead of appending duplicates.
+func (s *Store) RecordHands(ctx context.Context, items []HandItem) error {
+	if len(items) == 0 {
+		return nil
+	}
+	if len(items) == 1 {
+		return s.RecordHand(ctx, items[0])
+	}
+	requests := make([]dynamotypes.WriteRequest, 0, len(items))
+	for _, item := range items {
+		if item.SK == "" {
+			item.SK = handSK(item.CurrencyMode, item.HandID)
+		}
+		encoded, err := dynamo.Encode(item)
+		if err != nil {
+			return fmt.Errorf("sessionlog: encode hand row: %w", err)
+		}
+		requests = append(requests, dynamotypes.WriteRequest{
+			PutRequest: &dynamotypes.PutRequest{Item: encoded},
+		})
+	}
+	for start := 0; start < len(requests); start += maxHandBatchWrite {
+		end := start + maxHandBatchWrite
+		if end > len(requests) {
+			end = len(requests)
+		}
+		pending := map[string][]dynamotypes.WriteRequest{s.hands.TableName: requests[start:end]}
+		// BatchWriteItem can succeed while silently declining rows
+		// (UnprocessedItems, under throttling). Dropping those would lose a
+		// participant's whole hand from their history, so retry them.
+		for attempt := 0; attempt < 4 && len(pending) > 0; attempt++ {
+			out, err := s.hands.BatchWriteItemRaw(ctx, &dynamodb.BatchWriteItemInput{RequestItems: pending})
+			if err != nil {
+				return fmt.Errorf("sessionlog: batch record hands: %w", err)
+			}
+			pending = out.UnprocessedItems
+		}
+		if len(pending) > 0 {
+			return fmt.Errorf("sessionlog: batch record hands: %d rows still unprocessed after retries", len(pending[s.hands.TableName]))
+		}
+	}
+	return nil
 }
 
 func (s *Store) ListHands(ctx context.Context, playerID, mode string, limit int, startKey map[string]dynamotypes.AttributeValue) ([]HandItem, map[string]dynamotypes.AttributeValue, error) {
