@@ -162,10 +162,16 @@ func (s *Service) MyRank(ctx context.Context, mode, metric, playerID string) (*R
 	if entry == nil {
 		return nil, nil
 	}
+	// A sub-floor row is in no win_rate GSI (issue #63) and no longer carries a
+	// freshly materialized win_rate_score (issue #217), so there is no rank to
+	// report for it — the caller's "unranked yet" state, same as no row at all.
+	if metric == "win_rate" && entry.HandsPlayed < MinHandsForWinRateRank {
+		return nil, nil
+	}
 	// RankOf must compare against the score actually materialized in the
 	// GSI right now (entry.WinRate as decoded), not a value recomputed here
 	// — the two can differ for a moment during the two-write
-	// IncrementStats/materializeWinRate sequence (see store.go).
+	// IncrementStats/syncWinRateRow sequence (see store.go).
 	rank, total, err := s.store.RankOf(ctx, mode, metric, *entry)
 	if err != nil {
 		return nil, err
