@@ -24,7 +24,7 @@ export type AuxiliaryRetryPlan = {frame: object; retries: number; delayMs: numbe
 
 export function shouldRetryPendingAction(action: PendingTableAction | null, code: string,
   actionId?: string): action is PendingTableAction {
-  return code === 'stale_state' && Boolean(actionId) && action?.id === actionId &&
+  return code === 'stale_state' && Boolean(actionId) && action !== null && action.id === actionId &&
     action.retries < MAX_ACTION_RETRIES;
 }
 

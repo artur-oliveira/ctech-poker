@@ -1,6 +1,6 @@
 import type {TableSnapshot} from '@/lib/api/table';
 import {CHAT_HISTORY_LIMIT} from '@/lib/chat';
-import {isTableReaction, type TableReactionEvent} from '@/lib/reactions';
+import {isTableReaction, type TableReactionEvent, type TableReactionID} from '@/lib/reactions';
 
 export type SnapshotChat = {id: string; player: string; message: string; timestamp?: number};
 export type SnapshotView = {
@@ -29,7 +29,9 @@ export function reduceTableSnapshot(snapshot: TableSnapshot, latestVersion: numb
     .map(item => ({
       id: item.id,
       playerId: item.player_id,
-      reactionId: item.reaction_id,
+      // Narrowed by the `isTableReaction` guard in the filter above, which
+      // TypeScript cannot carry across a property check.
+      reactionId: item.reaction_id as TableReactionID,
       targetPlayerId: item.target_player_id || undefined,
       expiresAt: item.expires_at
     })) : [];
