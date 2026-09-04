@@ -34,12 +34,12 @@ const (
 	// FindLatestOpenSession used to page over the player's whole 30-day
 	// history (#224).
 	sessionsGsiOpenTable = "gsi_open_table"
-	// sessionsGsiTable indexes EVERY session (open or closed) by the table it
-	// was played at — pk = player_id, sk = table_id, KEYS_ONLY — so
-	// HasSessionAtTable is a single one-item key query instead of a paged
-	// filter over the whole partition.
-	sessionsGsiTable = "gsi_player_table"
-
+	// A per-table index (pk = player_id, sk = table_id) that would make
+	// HasSessionAtTable a one-item key query is not created yet: DynamoDB
+	// refuses to create two GSIs in one stack update, so gsi_open_table
+	// ships first (it is on the seating hot path) and the per-table index
+	// follows in its own deploy. Until then HasSessionAtTable keeps the
+	// paged filter it has always used.
 	fieldOpenTableID = "open_table_id"
 	fieldTableID     = "table_id"
 
@@ -259,20 +259,32 @@ func (s *Store) FindOpenSession(ctx context.Context, playerID, tableID string) (
 // HasSessionAtTable reports whether playerID has ever had a session (open or
 // closed, any time) at tableID — used to scope access to table-scoped views
 // (e.g. the highlights feed) to players who were actually there, the same
-// privacy boundary the rest of the match-history surface uses. A single
-// one-item query on sessionsGsiTable (KEYS_ONLY): existence is all the caller
-// needs, so nothing but keys is read.
+// privacy boundary the rest of the match-history surface uses.
+//
+// Still a paged filter over the player's partition: the index that turns this
+// into a one-item key query cannot be created in the same stack update as
+// gsi_open_table (see the constants above), so it lands in the follow-up
+// deploy. This is a cold read behind an auth gate, not the seating hot path
+// #224 was about.
 func (s *Store) HasSessionAtTable(ctx context.Context, playerID, tableID string) (bool, error) {
-	res, err := s.sessions.QueryComposite(ctx, dynamo.CompositeQueryOpts{
-		PK:        playerID,
-		IndexName: sessionsGsiTable,
-		SKEq:      []dynamo.KV{{Field: fieldTableID, Value: tableID}},
-		Limit:     1,
-	})
-	if err != nil {
-		return false, err
+	var startKey map[string]dynamotypes.AttributeValue
+	for {
+		res, err := s.sessions.Query(ctx, dynamo.QueryOpts{
+			PK: playerID, Limit: 50, ScanIndexForward: false,
+			FilterField: fieldTableID, FilterValue: tableID,
+			ExclusiveStartKey: startKey,
+		})
+		if err != nil {
+			return false, err
+		}
+		if len(res.Items) > 0 {
+			return true, nil
+		}
+		if res.LastEvaluatedKey == nil {
+			return false, nil
+		}
+		startKey = res.LastEvaluatedKey
 	}
-	return len(res.Items) > 0, nil
 }
 
 // FindLatestOpenSession returns the table id of the player's newest unclosed
