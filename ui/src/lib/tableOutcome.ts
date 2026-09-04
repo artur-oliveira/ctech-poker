@@ -17,6 +17,19 @@ export type WinnerStanding = {
   tied: boolean;
 };
 
+/** The pot the server weighs when it records "maior pote de hoje": the sum of
+ *  the contested layers' payouts, refund layers excluded (uncalled excess
+ *  returned to its own bettor was never won). Mirrors `highlights.Store`'s
+ *  `RecordHand`, which only overwrites today's row when this number beats the
+ *  one on record — so a client that knows it can tell whether re-reading the
+ *  highlight after a hand could possibly return anything new.
+ *  `undefined` when the frame carries no `pot_results` and the amount is
+ *  therefore unknowable here. */
+export function highlightPot(snapshot: TableSnapshot): number | undefined {
+  if (!snapshot.pot_results?.length) return undefined;
+  return snapshot.pot_results.reduce((total, pot) => pot.refund ? total : total + pot.payout_amount, 0);
+}
+
 export function seatParticipated(seat?: SeatView) {
   if (!seat) return false;
   if (seat.dealt_in !== undefined) return seat.dealt_in;

@@ -2,7 +2,7 @@
 import {useEffect, useRef, useState} from 'react';
 import {Trophy} from 'lucide-react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
-import {getTodayHighlight} from '@/lib/api/highlights';
+import {getTodayHighlight, type TableHighlight} from '@/lib/api/highlights';
 import {HAND_CATEGORY_LABELS} from '@/lib/handCategories';
 import {bestHandCategory, compareHands} from '@/lib/pokerRules';
 import {invalidateAfterSettle} from '@/lib/settleRefetch';
@@ -30,10 +30,14 @@ export function highlightWinnerLabel(board?: string[], revealed?: Array<{name?: 
 // Fetched once on mount; re-fetched (via invalidateQueries, not polling) the
 // moment a hand this viewer was watching completes, so a bigger pot from
 // this table shows up without a page reload.
-export function TodayHighlight({tableId, handId, handComplete}: {
+export function TodayHighlight({tableId, handId, handComplete, handPot}: {
   tableId: string;
   handId?: string;
   handComplete: boolean;
+  /** The settled hand's contested pot (`highlightPot`). The server only
+   *  overwrites today's row when a hand beats it, so a hand that cannot beat
+   *  the pot already on display needs no read at all. */
+  handPot?: number;
 }) {
   const queryClient = useQueryClient();
   const {data} = useQuery({
@@ -48,10 +52,17 @@ export function TodayHighlight({tableId, handId, handComplete}: {
     if (!handComplete || !handId || handId === lastHandId.current) return undefined;
     lastHandId.current = handId;
     // The highlight row is written by the server's detached post-hand
-    // pipeline, after this `complete` frame was already sent — re-invalidate
-    // with a backoff so a bigger pot isn't shown a hand late.
-    return invalidateAfterSettle(queryClient, ['highlights', tableId, 'today']);
-  }, [handComplete, handId, queryClient, tableId]);
+    // pipeline, after this `complete` frame was already sent — hence the
+    // backoff, so a bigger pot isn't shown a hand late. It stops as soon as
+    // the answer can no longer change: either this hand *is* the highlight,
+    // or the row on display already holds a pot this hand could not beat
+    // (`RecordHand` only overwrites on a strictly bigger pot), in which case
+    // not a single read is spent (#229).
+    return invalidateAfterSettle<TableHighlight>(queryClient, ['highlights', tableId, 'today'], {
+      settled: current => current?.hand_id === handId ||
+        (handPot !== undefined && current !== undefined && current.pot >= handPot),
+    });
+  }, [handComplete, handId, handPot, queryClient, tableId]);
 
   // Narrow phones shrink the pill down to the trophy icon (see .today-highlight
   // in globals.css) since the label + pot + revealed hand text no longer fit

@@ -34,6 +34,9 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({
     setQueryData: mocks.setQueryData,
     invalidateQueries: mocks.invalidateQueries,
+    // The post-hand retry asks the cache whether the projection already
+    // landed; nothing is cached in this suite, so every read is spent.
+    getQueryData: () => undefined,
   }),
 }));
 vi.mock('@/lib/utils', async importOriginal => ({

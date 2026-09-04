@@ -4,6 +4,7 @@ import type {TableSnapshot} from './api/table.ts';
 import {
   buildHandOutcome,
   contestedPots,
+  highlightPot,
   playerPotBreakdown,
   relevantRunnerUp,
   seatParticipated,
@@ -346,4 +347,16 @@ test('a viewer who was never dealt into the hand gets no banner at all', () => {
   }), 'watcher');
   assert.equal(outcome, null);
   assert.equal(buildHandOutcome(resolved(), 'nobody'), null);
+});
+
+test('the highlight pot sums the contested layers and ignores refunds', () => {
+  assert.equal(highlightPot({stage: 'complete', board: [], seats: []}), undefined);
+  assert.equal(highlightPot({
+    stage: 'complete', board: [], seats: [],
+    pot_results: [
+      {amount: 300, payout_amount: 300, eligible_player_ids: ['a', 'b'], winner_player_ids: ['a']},
+      {amount: 120, payout_amount: 120, eligible_player_ids: ['a'], winner_player_ids: ['a'], refund: true},
+      {amount: 80, payout_amount: 80, eligible_player_ids: ['a', 'b'], winner_player_ids: ['b']},
+    ],
+  }), 380);
 });
