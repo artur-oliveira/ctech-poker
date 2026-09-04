@@ -106,6 +106,21 @@ off by default — do not build UI that assumes real money is on.
   `lib/providers/RealtimeBridge.tsx` inside `QueryProvider`, which the `(app)` route group
   layout owns — do not mount it from a page again, and never from the `(marketing)` group
   (its `MarketingQueryProvider` deliberately omits it, keep-alive and `NetworkProvider`).
+- **The lobby displays an aggregate and resolves nothing (#205).** `StakesGrid` renders
+  `GET /rooms/buckets` (`listRoomBuckets`, cached under `ROOM_BUCKETS_QUERY_KEY`) — one request for
+  the whole grid. It no longer paginates `GET /rooms` (`listAllRooms` is gone), never re-reads a
+  candidate room, and never creates a public table from the client. A card click is navigation
+  only: `tableBucketHref` (`lib/lobbyBuckets.ts`) carries the pick to `/table?sb=&bb=&seats=`,
+  where `BuyInPanel` renders the same buy-in ceremony from the bucket (`bucketFromParams`) and
+  confirms it with the single server-resolved mutation `POST /rooms/join-or-create` — which picks
+  or opens the table, absorbing a lost last-seat race server-side instead of bouncing back to the
+  lobby. The ceremony still owns consent: nothing is debited before the player confirms an amount,
+  and the idempotency key is stable per confirmed amount so a retry re-seats at the same table
+  instead of buying a second seat. `BuyInPanel`'s other entry (`roomId`) is unchanged — a direct
+  link, an invite, or a return to a table still buys in with `POST /rooms/:id/join`.
+  `useLobbyRealtime` refreshes the aggregate on `room_created` and on socket open; `room_updated`
+  deliberately only updates that room's own `['room', id]` entry, since it fires on every seat
+  change at every public table and the aggregate is just an availability hint.
 - **A rejected table command is resubmitted, not surfaced.** `act()` retries on `stale_state` via
   `pendingActionRef`; the auxiliary commands (`show_cards`, `request_rabbit_hunt`,
   `request_winner_cards`, `accept`/`decline_winner_cards`, `request_exit`) carry no

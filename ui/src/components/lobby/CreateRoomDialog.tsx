@@ -1,7 +1,7 @@
 'use client';
 
 import {zodResolver} from '@hookform/resolvers/zod';
-import {useQuery, useQueryClient} from '@tanstack/react-query';
+import {useQuery} from '@tanstack/react-query';
 import {Lock, Repeat2} from 'lucide-react';
 import {useRouter} from 'next/navigation';
 import {useState} from 'react';
@@ -61,7 +61,6 @@ export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean})
     queryKey: ['stakes', 'real'], queryFn: () => listStakes('real'),
     enabled: REAL_MONEY_UI_ENABLED && me?.wallet_mode === 'real'
   });
-  const queryClient = useQueryClient();
   const form = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: {stakeIndex: 0, maxSeats: 6, currencyMode: 'sandbox', runItTwiceEnabled: false}
@@ -87,7 +86,6 @@ export function CreateRoomDialog({initialOpen = false}: {initialOpen?: boolean})
         buy_in_max: range.max,
         run_it_twice_enabled: values.runItTwiceEnabled
       });
-      await queryClient.invalidateQueries({queryKey: ['rooms']});
       const roomID = room.room_id || room.id || '';
       if (!roomID) throw new Error('A API criou uma mesa sem identificador.');
       setOpen(false);

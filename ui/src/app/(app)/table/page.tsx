@@ -46,6 +46,7 @@ import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
 import {DEFAULT_TURN_TIMEOUT_SECONDS} from '@/lib/gameTiming';
 import {isTableReaction, TABLE_REACTIONS} from '@/lib/reactions';
 import {WALLET_QUERY_ROOT} from '@/lib/api/wallet';
+import {bucketFromParams} from '@/lib/lobbyBuckets';
 import {setSoundEffectsEnabled} from '@/lib/sound';
 
 const ROOM_ID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
@@ -88,6 +89,10 @@ const MOCK_SCENARIOS = new Set<MockScenario>([
 function TableContent() {
   const router = useRouter();
   const params = useSearchParams(), id = params.get('id') || '', valid = ROOM_ID.test(id);
+  // A lobby pick arrives as a bucket instead of a room id: the buy-in
+  // ceremony below confirms it with join-or-create, which is what decides
+  // the table (#205). Everything past the ceremony still needs a real id.
+  const bucket = valid ? null : bucketFromParams(params);
   const inviteCode = params.get('invite') || undefined;
   const requestedScenario = params.get('scenario') as MockScenario | null;
   const scenario: MockScenario = requestedScenario && MOCK_SCENARIOS.has(requestedScenario) ? requestedScenario : 'full_hand';
@@ -140,6 +145,13 @@ function TableContent() {
   });
   const overlays = useTableOverlays({connected: rt.status === 'connected', sendReaction: rt.sendReaction});
   const {activeTablePanel, setActiveTablePanel, panelOpenChange, pendingReaction} = overlays;
+  if (bucket) return <>
+    <BuyInPanel bucket={bucket} onSeatedAction={roomId => {
+      queryClient.setQueryData(['seated', roomId], {seated: true, stack: 0});
+      router.replace(`/table?id=${encodeURIComponent(roomId)}`);
+    }}/>
+    {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
+  </>;
   if (!valid) return (
     <main className="game-loading">
       <h1 className="sr-only">Mesa de poker</h1>

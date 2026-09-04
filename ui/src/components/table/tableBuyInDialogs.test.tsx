@@ -4,10 +4,12 @@ import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
 import {BuyInPanel, formatBuyIn, midBuyIn} from './BuyInPanel';
 import {RebuyDialog} from './RebuyDialog';
 import type {Room} from '@/lib/api/rooms';
+import {ROOM_BUCKETS_QUERY_KEY} from '@/lib/lobbyBuckets';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   joinRoom: vi.fn(),
+  joinOrCreateRoom: vi.fn(),
   refetch: vi.fn(),
   invalidateQueries: vi.fn(),
   setQueryData: vi.fn(),
@@ -26,6 +28,7 @@ vi.mock('next/navigation', () => ({useRouter: () => ({push: mocks.push})}));
 vi.mock('@/lib/api/rooms', () => ({
   getRoom: vi.fn(),
   joinRoom: mocks.joinRoom,
+  joinOrCreateRoom: mocks.joinOrCreateRoom,
 }));
 vi.mock('@/lib/api/client', () => ({isNotFound: mocks.isNotFound}));
 vi.mock('@/lib/api/wallet', () => ({
@@ -106,7 +109,7 @@ describe('BuyInPanel', () => {
     await userEvent.click(screen.getByRole('button', {name: 'Entrar com 4.500'}));
     
     await waitFor(() => expect(mocks.joinRoom).toHaveBeenCalledWith('room-1', 4_500, 'invite-7'));
-    expect(seated).toHaveBeenCalledOnce();
+    expect(seated).toHaveBeenCalledExactlyOnceWith('room-1');
   });
   
   test('opts into auto-rebuy and passes it through on confirm', async () => {
@@ -139,7 +142,7 @@ describe('BuyInPanel', () => {
     expect(seated).not.toHaveBeenCalled();
   });
   
-  test('bounces a full-table race back to the lobby with a toast instead of stranding the player', async () => {
+  test('re-enters the same bucket on a full-table race instead of stranding the player', async () => {
     mocks.joinRoom.mockRejectedValue({
       axios: true,
       response: {status: 409, data: {type: '/problems/table-full'}},
@@ -148,15 +151,58 @@ describe('BuyInPanel', () => {
 
     await userEvent.click(screen.getByRole('button', {name: /Entrar com/}));
     await waitFor(() => expect(mocks.invalidateQueries).toHaveBeenCalledTimes(3));
-    expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['rooms']});
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ROOM_BUCKETS_QUERY_KEY});
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['room', 'room-1']});
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['seated', 'room-1']});
     expect(mocks.pushNotification).toHaveBeenCalledWith(
       expect.stringContaining('última vaga foi ocupada'), 'info');
-    expect(mocks.push).toHaveBeenCalledWith(
-      '/lobby?retrySmallBlind=25&retryBigBlind=50&retrySeats=6');
+    // Back into the ceremony for the same bucket, where join-or-create picks
+    // a free table server-side — never back to the lobby to re-pick.
+    expect(mocks.push).toHaveBeenCalledWith('/table?sb=25&bb=50&seats=6');
     // No raw error is left behind on the table page itself.
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  test('a bucket entry buys in with one server-resolved mutation and no room read', async () => {
+    const seated = vi.fn();
+    mocks.joinOrCreateRoom.mockResolvedValue({room_id: 'resolved-room', created: false});
+    render(<BuyInPanel bucket={{smallBlind: 25, bigBlind: 50, maxSeats: 6}} onSeatedAction={seated}/>);
+
+    // Rendered from the pick itself: the buy-in window is the shared 40-100 BB
+    // client rule, with no GET /rooms/:id behind it.
+    expect(screen.getByRole('slider', {name: 'Buy-in'})).toHaveValue('3500');
+    expect(mocks.query).toHaveBeenCalledWith(expect.objectContaining({enabled: false}));
+
+    await userEvent.click(screen.getByRole('button', {name: /Entrar com/}));
+
+    await waitFor(() => expect(mocks.joinOrCreateRoom).toHaveBeenCalledExactlyOnceWith({
+      small_blind: 25, big_blind: 50, max_seats: 6, amount: 3_500,
+      auto_rebuy: undefined, idem_key: expect.any(String),
+    }));
+    expect(mocks.joinRoom).not.toHaveBeenCalled();
+    expect(seated).toHaveBeenCalledExactlyOnceWith('resolved-room');
+  });
+
+  test('retrying the same amount reuses the idempotency key, a new amount does not', async () => {
+    // Every attempt fails, so the ceremony stays open and the player can retry
+    // the same amount and then pick a different one.
+    mocks.joinOrCreateRoom.mockRejectedValue(new Error('offline'));
+    render(<BuyInPanel bucket={{smallBlind: 25, bigBlind: 50, maxSeats: 6}} onSeatedAction={vi.fn()}/>);
+
+    await userEvent.click(screen.getByRole('button', {name: 'Entrar com 3.500'}));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: 'Entrar com 3.500'}));
+    await waitFor(() => expect(mocks.joinOrCreateRoom).toHaveBeenCalledTimes(2));
+
+    const keys = mocks.joinOrCreateRoom.mock.calls.map(call => call[0].idem_key);
+    // A retry of the same click must not buy a second seat somewhere else.
+    expect(keys[0]).toBe(keys[1]);
+
+    fireEvent.change(screen.getByRole('slider', {name: 'Buy-in'}), {target: {value: '4500'}});
+    await userEvent.click(screen.getByRole('button', {name: 'Entrar com 4.500'}));
+    await waitFor(() => expect(mocks.joinOrCreateRoom).toHaveBeenCalledTimes(3));
+    // A deliberately different amount is a different buy-in, not a retry.
+    expect(mocks.joinOrCreateRoom.mock.calls[2][0].idem_key).not.toBe(keys[0]);
   });
 
   test('shows a generic retryable message for an unrecognized join failure', async () => {

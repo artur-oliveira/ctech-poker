@@ -14,6 +14,7 @@ import {acceptTableInvite, declineTableInvite, type SocialEventType} from '@/lib
 import {SOCIAL_KEYS} from '@/lib/social';
 import {WALLET_QUERY_ROOT} from '@/lib/api/wallet';
 import {COSMETIC_PURCHASE_QUERY_ROOT} from '@/lib/api/cosmeticPurchases';
+import {ROOM_BUCKETS_QUERY_KEY} from '@/lib/lobbyBuckets';
 import {checkApiLiveness} from '@/lib/network/liveness';
 import {useApiLiveness} from '@/lib/network/NetworkProvider';
 
@@ -54,27 +55,16 @@ export function useLobbyRealtime() {
       // token is actually renewed.
       recoverSession();
     } else if (message.type === 'room_created' && message.room) {
-      const newRoom = message.room;
-      queryClient.setQueryData<Room[]>(['rooms'], (oldRooms) => {
-        if (!oldRooms) return [newRoom];
-        const id = newRoom.room_id || newRoom.id;
-        if (oldRooms.some(r => (r.room_id || r.id) === id)) {
-          return oldRooms;
-        }
-        return [newRoom, ...oldRooms];
-      });
+      // The lobby renders the server's bucket aggregate, not a room list, so
+      // a new public table is a refetch of that aggregate rather than a local
+      // splice (#205). Rare enough to invalidate on every one.
+      void queryClient.invalidateQueries({queryKey: ROOM_BUCKETS_QUERY_KEY});
     } else if (message.type === 'room_updated' && message.room_id !== undefined && message.seats_taken !== undefined) {
       const {room_id, seats_taken} = message;
-      queryClient.setQueryData<Room[]>(['rooms'], (oldRooms) => {
-        if (!oldRooms) return [];
-        return oldRooms.map(r => {
-          const id = r.room_id || r.id;
-          if (id === room_id) {
-            return {...r, seats_taken};
-          }
-          return r;
-        });
-      });
+      // Deliberately NOT invalidating the bucket aggregate here: this fires on
+      // every seat change at every public table, and the aggregate is only an
+      // availability hint — the seat itself is resolved server-side by
+      // join-or-create. It refreshes on room_created and on socket open.
       queryClient.setQueryData<Room | undefined>(['room', room_id], oldRoom =>
         oldRoom ? {...oldRoom, seats_taken} : oldRoom);
     } else if (message.type === 'sandbox_purchase_update') {
@@ -169,7 +159,7 @@ export function useLobbyRealtime() {
     // Deltas sent while offline are not replayed. Reconcile the durable
     // queries on every open; this is cheap and prevents an indefinitely stale
     // lobby after sleep/network changes.
-    void queryClient.invalidateQueries({queryKey: ['rooms']});
+    void queryClient.invalidateQueries({queryKey: ROOM_BUCKETS_QUERY_KEY});
     // `['player','me']` carries the wallet balances too (see BALANCE_QUERY_KEY).
     void queryClient.invalidateQueries({queryKey: ['player', 'me']});
     // Social deltas sent while the socket was down are never replayed either,

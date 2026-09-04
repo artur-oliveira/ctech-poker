@@ -43,23 +43,48 @@ export async function listRooms(cursor?: string, currencyMode?: 'sandbox' | 'rea
   return (await fetchRoomsPage(cursor, currencyMode)).data;
 }
 
-// A page of the lobby's room list beyond page one is otherwise invisible to
-// the join-vs-create decision and bucket availability counts (see #90), so
-// this walks the cursor to completion. Bounded by MAX_ROOM_LIST_PAGES so a
-// server that never reports has_next:false (or keeps returning a cursor)
-// can't turn the lobby load into an unbounded fetch loop.
-export const MAX_ROOM_LIST_PAGES = 20;
+// One lobby tile's availability, aggregated server-side over the whole public
+// directory. The lobby renders these instead of paginating every room itself
+// (#205): the count it shows is the server's, and the room a click lands in is
+// resolved by joinOrCreateRoom below, never picked from a list here.
+export interface RoomBucket {
+  small_blind: number;
+  big_blind: number;
+  max_seats: number;
+  currency_mode: string;
+  rooms: number;
+  open_rooms: number;
+  seats_taken: number;
+  seats_available: number;
+}
 
-export async function listAllRooms(currencyMode: 'sandbox' | 'real' = 'sandbox') {
-  const rooms: Room[] = [];
-  let cursor: string | undefined;
-  for (let page = 0; page < MAX_ROOM_LIST_PAGES; page++) {
-    const result = await fetchRoomsPage(cursor, currencyMode);
-    rooms.push(...result.data);
-    if (!result.has_next || !result.next_cursor) break;
-    cursor = result.next_cursor;
-  }
-  return rooms;
+export async function listRoomBuckets(currencyMode: 'sandbox' | 'real' = 'sandbox') {
+  return (await apiClient.get<{ data: RoomBucket[] }>('/v1.0/rooms/buckets', {
+    params: {currency_mode: currencyMode},
+  })).data.data;
+}
+
+export interface JoinOrCreateInput {
+  small_blind: number;
+  big_blind: number;
+  max_seats: number;
+  amount: number;
+  currency_mode?: 'sandbox' | 'real';
+  auto_rebuy?: boolean;
+  // Stable per click (a retry of the same click must re-seat at the same
+  // table, not buy a second seat in a sibling one). The caller owns it, so a
+  // retry can reuse the key it already sent.
+  idem_key: string;
+}
+
+// The single server-resolved entry mutation: the server picks (or opens) the
+// table inside the bucket and seats the player in one round trip, so a lost
+// last-seat race falls through to another table without the client walking
+// candidates or re-reading the lobby (#205, backend #76).
+export async function joinOrCreateRoom(input: JoinOrCreateInput) {
+  return (await apiClient.post<{ room_id: string; created: boolean }>(
+    '/v1.0/rooms/join-or-create', input, {silentError: true},
+  )).data;
 }
 
 export async function listStakes(currencyMode: 'sandbox' | 'real' = 'sandbox') {

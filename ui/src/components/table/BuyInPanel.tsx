@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import {useId, useState} from 'react';
+import {useId, useRef, useState} from 'react';
 import {useRouter} from 'next/navigation';
 import {ChevronLeft, RefreshCw} from 'lucide-react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
@@ -8,20 +8,20 @@ import axios from 'axios';
 import {Button} from '@/components/ui/button';
 import {Label} from '@/components/ui/label';
 import {Switch} from '@/components/ui/switch';
-import {getRoom, joinRoom} from '@/lib/api/rooms';
+import {getRoom, joinOrCreateRoom, joinRoom, type Room} from '@/lib/api/rooms';
 import {isNotFound} from '@/lib/api/client';
 import {pushNotification} from '@/lib/notify';
+import {type LobbyBucket, ROOM_BUCKETS_QUERY_KEY, tableBucketHref} from '@/lib/lobbyBuckets';
+import {buyInRange} from '@/lib/pokerRules';
 
 const GENERIC_JOIN_ERROR = 'Não foi possível sentar na mesa. Verifique suas fichas e tente novamente.';
 const TABLE_FULL_TYPE = '/problems/table-full';
 const TABLE_FULL_ERROR = 'A última vaga foi ocupada. Se houve débito, suas fichas já foram devolvidas.';
-// Interim mitigation for the join-or-create seat race (issue #91): the
-// backend has no atomic `POST /rooms/join-or-create` yet (#76), so a seat can
-// still fill between the lobby's fresh-check and this buy-in. Rather than
-// strand the player on a dead table page, bounce them back to the lobby with
-// this bucket so StakesGrid's own retry effect immediately tries another
-// open room (or creates one) for the same blinds/format.
-const TABLE_FULL_RETRY_NOTICE = `${TABLE_FULL_ERROR} Levando você de volta ao lobby para tentar outra mesa nesses blinds.`;
+// A seat can still fill between opening a table by id and confirming the
+// buy-in. Rather than strand the player on a dead table page, re-enter the
+// same bucket: the next confirm goes through join-or-create, which resolves
+// a free table (or opens one) for the same blinds/format server-side.
+const TABLE_FULL_RETRY_NOTICE = `${TABLE_FULL_ERROR} Tentando outra mesa nesses blinds.`;
 
 function isTableFullError(err: unknown) {
   return axios.isAxiosError(err) &&
@@ -52,12 +52,31 @@ export function formatBuyIn(amount: number, isReal: boolean) {
     amount.toLocaleString('pt-BR');
 }
 
+// A bucket entry has no room yet — join-or-create picks one on confirm — so
+// the ceremony is rendered from the pick itself. Blinds and seats come from
+// the URL; the buy-in window is the shared client rule the server enforces
+// for public tables anyway (lib/pokerRules).
+function roomFromBucket(bucket: LobbyBucket): Room {
+  const {min, max} = buyInRange(bucket.bigBlind);
+  return {
+    visibility: 'public', currency_mode: 'sandbox', status: 'waiting', seats_taken: 0,
+    small_blind: bucket.smallBlind, big_blind: bucket.bigBlind, max_seats: bucket.maxSeats,
+    buy_in_min: min, buy_in_max: max,
+  };
+}
+
 /** Buy-in ceremony: the explicit consent step between the lobby and the seat.
- * Nothing is debited until the player confirms an amount. */
-export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
-  roomId: string;
+ * Nothing is debited until the player confirms an amount.
+ *
+ * Two entries: a known table (`roomId` — a direct link, an invite, a return to
+ * a table) buys in with `POST /rooms/:id/join`; a lobby pick (`bucket`) never
+ * names a room and confirms with `POST /rooms/join-or-create`, which resolves
+ * the table server-side in the same round trip (#205). */
+export function BuyInPanel({roomId = '', bucket, shareCode, onSeatedAction}: {
+  roomId?: string;
+  bucket?: LobbyBucket;
   shareCode?: string;
-  onSeatedAction: () => void
+  onSeatedAction: (roomId: string) => void
 }) {
   const sliderId = useId();
   const autoRebuyId = useId();
@@ -67,10 +86,21 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
   const [autoRebuy, setAutoRebuy] = useState(false);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState('');
-  const {data: room, isLoading, error: roomError, isError, refetch} = useQuery({
+  // A bucket entry regenerates the key only when the player moves the slider:
+  // retrying the same confirmed amount must reuse it (so a network retry
+  // re-seats at the same table instead of buying a second seat), while a
+  // deliberately different amount is a different buy-in.
+  const idemRef = useRef<{ amount: number; key: string } | null>(null);
+  function idemKeyFor(amount: number) {
+    if (idemRef.current?.amount !== amount) idemRef.current = {amount, key: crypto.randomUUID()};
+    return idemRef.current.key;
+  }
+  const {data: fetchedRoom, isLoading, error: roomError, isError, refetch} = useQuery({
     queryKey: ['room', roomId],
-    queryFn: () => getRoom(roomId)
+    queryFn: () => getRoom(roomId),
+    enabled: !bucket
   });
+  const room = bucket ? roomFromBucket(bucket) : fetchedRoom;
 
   if (isLoading) return (
     <main className="game-loading">
@@ -107,27 +137,40 @@ export function BuyInPanel({roomId, shareCode, onSeatedAction}: {
     setJoining(true);
     setError('');
     try {
+      if (bucket) {
+        // One mutation for the whole entry: the server picks or opens the
+        // table inside this bucket and seats the player, so losing the last
+        // seat to a concurrent joiner resolves into another table here,
+        // without a bounce back to the lobby.
+        const {room_id} = await joinOrCreateRoom({
+          small_blind: bucket.smallBlind, big_blind: bucket.bigBlind, max_seats: bucket.maxSeats,
+          amount: value, auto_rebuy: autoRebuy || undefined, idem_key: idemKeyFor(value),
+        });
+        await queryClient.invalidateQueries({queryKey: ROOM_BUCKETS_QUERY_KEY});
+        onSeatedAction(room_id);
+        return;
+      }
       if (autoRebuy) {
         await joinRoom(roomId, value, shareCode, true);
       } else {
         await joinRoom(roomId, value, shareCode);
       }
-      onSeatedAction();
+      onSeatedAction(roomId);
     } catch (err) {
       if (isTableFullError(err)) {
         await Promise.all([
-          queryClient.invalidateQueries({queryKey: ['rooms']}),
+          queryClient.invalidateQueries({queryKey: ROOM_BUCKETS_QUERY_KEY}),
           queryClient.invalidateQueries({queryKey: ['room', roomId]}),
           queryClient.invalidateQueries({queryKey: ['seated', roomId]}),
         ]);
-        // Interim frontend mitigation (no atomic join-or-create endpoint
-        // yet, see #76): rather than strand the player on this dead table
-        // with only an inline error, bounce them back to the lobby with a
-        // toast and hand the same blinds/format back to StakesGrid so it
-        // retries the bucket automatically instead of making them redo the
-        // pick by hand.
+        // This table filled up between opening it and confirming. Re-enter
+        // the same bucket instead of stranding the player here: join-or-create
+        // resolves a free table (or opens one) server-side, so this is a
+        // re-entry into the ceremony, not a trip back to the lobby to re-pick.
         pushNotification(TABLE_FULL_RETRY_NOTICE, 'info');
-        router.push(`/lobby?retrySmallBlind=${room.small_blind}&retryBigBlind=${room.big_blind}&retrySeats=${room.max_seats}`);
+        router.push(tableBucketHref({
+          smallBlind: room.small_blind, bigBlind: room.big_blind, maxSeats: room.max_seats,
+        }));
         return;
       }
       setError(joinErrorMessage(err));
