@@ -146,13 +146,8 @@ func (a *Actor) broadcastAll() {
 		snapshot := a.cached.ViewFor(p.ID)
 		snapshot.SnapshotVersion = uint64(a.version)
 		snapshot.HandID = a.handID
-		if current != "" && current == a.turnDeadlineFor {
-			snapshot.ActionDeadlineUnixMs = a.turnDeadline.UnixMilli()
-			snapshot.ActionBaseDeadlineUnixMs = a.turnBaseDeadline.UnixMilli()
-		}
-		if stage == hand.Complete && a.handID == a.nextHandArmedFor {
-			snapshot.NextHandUnixMs = a.nextHandDeadline.UnixMilli()
-		}
+		snapshot.ActionDeadlineUnixMs, snapshot.ActionBaseDeadlineUnixMs, snapshot.NextHandUnixMs =
+			a.deadlinesForBroadcast(current, stage)
 		if p.LastActionAt > 0 {
 			snapshot.IdleRemovalUnixMs = p.LastActionAt + a.kickGrace.Milliseconds()
 		}

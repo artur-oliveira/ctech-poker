@@ -115,3 +115,92 @@ antes de mergear.
 
 Nenhuma migração. Mudança de comportamento pura em código (troca de `false` por `true` num
 parâmetro já existente); nenhum schema ou dado persistido muda de forma.
+
+## 📌 Atualização — o sintoma continuou após esse fix ir pra produção
+
+O fix acima (`5a03b1f`/`094354a`/`7d1a411`) foi confirmado em produção
+(`GET /v1.0/health` → `releaseId: "2609041218:7d1a411"`) e o sintoma **persistiu**: numa sessão
+ao vivo com dois jogadores na mesma mesa, o anel de turno normal e o de time bank continuaram
+aparecendo com `0s` desde o primeiro frame, e várias tentativas de agir a tempo (fold/all-in)
+foram perdidas porque a decisão já estava resolvida no servidor antes do clique chegar. Isso
+significa que a correção de `ensureLoaded` estava certa mas incompleta — o mecanismo raiz é outro.
+
+### Causa raiz real
+
+Cada instância EC2 já roda **dois processos Go atrás do nginx** (`APP_PORT`/`APP_PORT_ALT`,
+`cdk/lib/constants.ts`, deploy zero-downtime — arquitetura antiga, de `1242bf1`). O nginx faz
+round-robin entre eles, então o lease de uma mesa pode estar num processo enquanto o socket de um
+jogador está no outro — cada processo mantém seu próprio `*Actor` independente.
+
+O que de fato mudou o comportamento foi `666837c` ("refactor(api): bound table memory and split
+actor", 2026-09-03 21:35 — o mesmo commit que dividiu `actor.go`), em
+`api/internal/tablemanager/manager.go`. Antes:
+
+```go
+if hasLease {
+    // arma eviction só na perda do lease
+} else {
+    go m.evictLeaseLessActorWhenIdle(runCtx, tableID, actor, cancel)
+}
+```
+
+O ator dono do lease era **isento** de eviction por ociosidade. Depois:
+
+```go
+go m.evictActorWhenIdle(runCtx, tableID, actor, cancel)
+```
+
+roda incondicionalmente pra todo ator, lease ou não — qualquer ator com zero conexões WS locais
+por 5 minutos contínuos é derrubado (issue #36, ver `docs/specs/2026-09-03-process-memory-bounds.md`,
+uma correção de memória legítima). Como os dois jogadores podem cair em processos diferentes por
+causa do round-robin, é comum o processo dono do lease não ter nenhum jogador conectado
+localmente — antes isso não importava (o ator ficava vivo do mesmo jeito); agora, depois de 5 min,
+esse ator é destruído. Quando ele é recriado, `ensureLoaded` lê `TurnDeadlineUnixMs`/
+`NextHandDeadlineUnixMs` do DynamoDB, e `armTurnTimer`/`armNextHandTimer` **reusam esse valor de
+propósito "mesmo que já tenha passado"** (pra resumir corretamente entre instâncias, comentário
+já existente no código). Se a eviction acontecer no meio de um turno, o primeiro broadcast do
+ator recém-recriado carrega um deadline já expirado — o "0s desde o primeiro frame".
+
+O fix anterior (forçar reload nos handlers disparados por timer) não cobre esse caminho: ali o
+problema era um timer **já armado** disparando tarde contra cache obsoleto; aqui o problema é um
+ator **recém-recriado** reusando de propósito um deadline persistido que já venceu.
+
+### Segunda correção
+
+Em vez de reverter a eviction (ela corrige um vazamento de memória real, #36) ou tentar
+sincronizar quando cada processo arma seu timer (exigiria um lock distribuído — Valkey resolveria
+aqui, mas é mais complexidade do que o bug pede), a correção é bem mais direta: **nunca transmitir
+ao cliente um deadline que já está no passado**, seja qual for a razão dele estar obsoleto.
+
+`api/internal/table/actor_timers.go` ganha `Actor.deadlinesForBroadcast(currentPlayerID, stage)`,
+chamado tanto por `broadcastAll` (`actor_views.go`) quanto por `handleSnapshot`
+(`actor_loading.go`) — os dois únicos pontos que preenchiam `ActionDeadlineUnixMs`/
+`ActionBaseDeadlineUnixMs`/`NextHandUnixMs`. Ele só devolve um valor quando o deadline
+correspondente (`a.turnDeadline`/`a.nextHandDeadline`) ainda está estritamente no futuro; caso
+contrário devolve zero (equivalente a "nenhum timer armado" pro cliente, que já trata `0` assim
+em outros campos) e loga um `WARN` (`"table turn deadline already elapsed at broadcast"` /
+`"table next-hand deadline already elapsed at broadcast"`) com o quanto o deadline já estava
+vencido. O timeout real do servidor não muda — `armTurnTimer`/`armNextHandTimer` já agendam o
+`time.AfterFunc` com delay `0` pra um deadline vencido, então a decisão é processada quase
+imediatamente do mesmo jeito; a diferença é que o cliente nunca chega a renderizar um "é sua vez,
+0s restantes" fantasma antes disso acontecer.
+
+**Logs de diagnóstico temporários** (nível `INFO`, sem usuários reais na mesa agora — remover
+depois de confirmar em produção): `armTurnTimer`/`armNextHandTimer` logam `"table turn timer
+armed"`/`"table next hand timer armed"` toda vez que armam de verdade (não nos early-returns
+idempotentes), com `resumed_from_persisted`, o deadline calculado e quanto tempo resta — dá pra
+cruzar com o `WARN` de `deadlinesForBroadcast` pelo `table_id`/`hand_id`/`player_id` e ver
+exatamente quando um deadline nasceu já vencido vs. venceu depois de armado mas antes do
+broadcast.
+
+Testes: `api/internal/table/deadlinesforbroadcast_test.go` (unitário, sem DynamoDB) —
+`TestDeadlinesForBroadcastWithholdsAnAlreadyElapsedTurnDeadline` e
+`...NextHandDeadline` cobrem: deadline futuro passa normalmente; deadline no passado é
+retido (zero); deadline de outro jogador/mão nunca vaza. `go build ./...`, `go vet ./...`,
+`go vet -tags integration ./...` e `go test ./...` do módulo `api` passam limpos.
+
+**Fora do escopo:** não reverti `evictActorWhenIdle` (a eviction incondicional em si é
+intencional e corrige um problema de memória real) nem investiguei se essa mesma eviction afeta
+`handleKickTimeout`/`handleAFKSweep`/`handleExpireWinnerCards` da mesma forma — essa correção
+ataca o sintoma (deadline obsoleto chegando ao cliente) na origem única onde ele é montado no
+snapshot, então cobre qualquer causa de obsolescência, não só a eviction.

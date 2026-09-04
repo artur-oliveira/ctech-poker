@@ -19,13 +19,8 @@ func (a *Actor) handleSnapshot(ctx context.Context, c SnapshotCmd) error {
 	snapshot.SnapshotVersion = uint64(a.version)
 	snapshot.HandID = a.handID
 	current := a.cached.CurrentPlayerIDForActor()
-	if current != "" && current == a.turnDeadlineFor {
-		snapshot.ActionDeadlineUnixMs = a.turnDeadline.UnixMilli()
-		snapshot.ActionBaseDeadlineUnixMs = a.turnBaseDeadline.UnixMilli()
-	}
-	if a.cached.Stage() == hand.Complete && a.handID == a.nextHandArmedFor {
-		snapshot.NextHandUnixMs = a.nextHandDeadline.UnixMilli()
-	}
+	snapshot.ActionDeadlineUnixMs, snapshot.ActionBaseDeadlineUnixMs, snapshot.NextHandUnixMs =
+		a.deadlinesForBroadcast(current, a.cached.Stage())
 	for _, p := range a.cached.PlayersForActor() {
 		if p.ID == c.PlayerID && p.LastActionAt > 0 {
 			snapshot.IdleRemovalUnixMs = p.LastActionAt + a.kickGrace.Milliseconds()

@@ -243,6 +243,24 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   into a broadcast. `handleKickTimeout`/`handleAFKSweep`/`handleExpireWinnerCards` share the same
   `ensureLoaded(ctx, false)`-from-a-timer shape and were deliberately left out of this fix (see the spec) —
   revisit if the same class of bug shows up there.
+- **A snapshot must never carry a deadline that has already elapsed, no matter why it went stale.** The above
+  fix alone did not close the incident — `tablemanager.Manager.evictActorWhenIdle` (renamed from
+  `evictLeaseLessActorWhenIdle` in the same `666837c` split) now evicts an idle actor **even if it holds the
+  table lease** (previously exempt), and since two Go processes per instance sit behind nginx round-robin
+  (`APP_PORT`/`APP_PORT_ALT`), the lease-holding process for a table can easily have zero locally-connected
+  sockets while the other process serves both players — so it gets evicted mid-game. `armTurnTimer`/
+  `armNextHandTimer` deliberately reuse a persisted deadline "even if already past" on a fresh actor's first
+  arm (a legitimate cross-instance resume), and a resume landing mid-turn served that already-expired
+  timestamp straight to the client: a countdown ring at 0s (or, per `Seat.tsx`'s `>`-strict gates, no ring at
+  all) with no real decision window before the near-immediate server-side timeout resolved it. Fixed at the
+  single point both `broadcastAll` and `handleSnapshot` build a snapshot from: `Actor.deadlinesForBroadcast`
+  (`actor_timers.go`) withholds `ActionDeadlineUnixMs`/`ActionBaseDeadlineUnixMs`/`NextHandUnixMs` unless the
+  underlying deadline is still strictly in the future, logging a `WARN` when it withholds one — the server-side
+  timer is untouched (it already fires immediately for an overdue deadline), only what the player is shown
+  changes. Temporary `INFO`-level arm-time logging in `armTurnTimer`/`armNextHandTimer` pairs with that `WARN`
+  to show exactly when a deadline went stale; remove once confirmed fixed in prod. Do **not** revert
+  `evictActorWhenIdle`'s lease-holding case — it fixes a real memory leak (#36); fix staleness at the broadcast
+  boundary instead, since that covers every cause of it, not just eviction.
 - **Nothing viewer-independent belongs inside `broadcastAll`'s per-seat loop, and nothing expensive belongs on the
   actor goroutine twice.** Chat and reaction views are built once per broadcast (`activityViews`) and shared; the
   `equityIterations` Monte Carlo is memoized by `(hole, board, opponent count)` per hand (`equityFor`), because a

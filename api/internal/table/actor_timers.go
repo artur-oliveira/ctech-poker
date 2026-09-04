@@ -10,6 +10,54 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 )
 
+// deadlinesForBroadcast returns the turn and next-hand deadlines to embed in
+// a snapshot, withholding either one that has already elapsed. An actor
+// recreated after eviction (tablemanager.Manager.evictActorWhenIdle, no
+// longer lease-exempt as of #36/#52), a spot-instance replacement, or any
+// other forced reload can inherit a *persisted* deadline that expired while
+// nobody was watching it — armTurnTimer/armNextHandTimer deliberately reuse
+// that persisted value "even if already past" so a resume never grants a
+// fresh full window, and their own time.AfterFunc already fires immediately
+// for an overdue one. But broadcasting that stale, already-expired
+// timestamp made the client render a countdown ring already at "0s" (or no
+// ring at all — Seat.tsx's showNormalClock/showTimeBank both require the
+// deadline strictly in the future) the instant a turn began, with no real
+// decision window in between before the near-immediate server-side timeout
+// resolved it out from under the player. See
+// docs/specs/2026-09-04-cross-instance-stale-turn-timer.md. This only
+// withholds an already-decided deadline from the player-facing snapshot;
+// the server-side timer/timeout logic is unchanged.
+func (a *Actor) deadlinesForBroadcast(currentPlayerID string, stage hand.Stage) (actionDeadlineMs, actionBaseDeadlineMs, nextHandUnixMs int64) {
+	now := timeNowFunc()
+	if currentPlayerID != "" && currentPlayerID == a.turnDeadlineFor {
+		if a.turnDeadline.After(now) {
+			actionDeadlineMs = a.turnDeadline.UnixMilli()
+			actionBaseDeadlineMs = a.turnBaseDeadline.UnixMilli()
+		} else {
+			// Diagnostic for the 2026-09-04 incident: fires exactly when a
+			// client would otherwise have been shown an already-expired
+			// countdown (0s or no ring at all). Compare against the
+			// "table turn timer armed" log's own timestamp for the same
+			// hand/player to see how the deadline went stale in between.
+			slog.Warn("table turn deadline already elapsed at broadcast; withheld from client",
+				"table_id", a.id, "hand_id", a.handID, "player_id", currentPlayerID, "stage", stage,
+				"turn_deadline_unix_ms", a.turnDeadline.UnixMilli(), "now_unix_ms", now.UnixMilli(),
+				"overdue_ms", now.Sub(a.turnDeadline).Milliseconds())
+		}
+	}
+	if stage == hand.Complete && a.handID == a.nextHandArmedFor {
+		if a.nextHandDeadline.After(now) {
+			nextHandUnixMs = a.nextHandDeadline.UnixMilli()
+		} else {
+			slog.Warn("table next-hand deadline already elapsed at broadcast; withheld from client",
+				"table_id", a.id, "hand_id", a.handID,
+				"next_hand_deadline_unix_ms", a.nextHandDeadline.UnixMilli(), "now_unix_ms", now.UnixMilli(),
+				"overdue_ms", now.Sub(a.nextHandDeadline).Milliseconds())
+		}
+	}
+	return
+}
+
 func (a *Actor) armTurnTimer(current string, stage hand.Stage, grace time.Duration) {
 	if current == a.turnDeadlineFor && stage == a.turnDeadlineForStage {
 		// A reload on the same actor may carry the persisted deadline for the
@@ -40,16 +88,26 @@ func (a *Actor) armTurnTimer(current string, stage hand.Stage, grace time.Durati
 	// then fires ~immediately, correctly enforcing an overdue auto-fold)
 	// instead of granting a brand new full window just because this
 	// instance's own bookkeeping started from zero values.
+	resumedFromPersisted := false
 	if a.pendingPersistedDeadline > 0 &&
 		a.pendingDeadlineFor == current && a.pendingDeadlineForStage == stage {
 		deadline = time.UnixMilli(a.pendingPersistedDeadline)
 		a.turnBaseDeadline = deadline.Add(-bank)
+		resumedFromPersisted = true
 	}
 	a.pendingPersistedDeadline = 0
 	a.pendingDeadlineFor = ""
 	a.pendingDeadlineForStage = hand.WaitingForPlayers
 	a.turnDeadline = deadline
 	remaining := time.Until(deadline)
+	// Temporary diagnostic for the 2026-09-04 incident (remove once the fix
+	// is confirmed in prod) — pairs with deadlinesForBroadcast's WARN to show
+	// exactly how much a resumed deadline had already decayed by arm time.
+	slog.Info("table turn timer armed",
+		"table_id", a.id, "hand_id", a.handID, "player_id", current, "stage", stage,
+		"resumed_from_persisted", resumedFromPersisted,
+		"base_deadline_unix_ms", a.turnBaseDeadline.UnixMilli(), "deadline_unix_ms", deadline.UnixMilli(),
+		"remaining_ms", remaining.Milliseconds())
 	if remaining < 0 {
 		remaining = 0
 	}
@@ -127,15 +185,22 @@ func (a *Actor) armNextHandTimer(complete bool) {
 	// StoredTable.NextHandDeadlineUnixMs). Consumed once, exactly like
 	// armTurnTimer treats pendingPersistedDeadline.
 	delay := a.nextHandDelay
+	resumedFromPersisted := false
 	if persisted := a.pendingNextHandDeadline; persisted > 0 {
 		a.nextHandDeadline = time.UnixMilli(persisted)
 		if delay = a.nextHandDeadline.Sub(timeNowFunc()); delay < 0 {
 			delay = 0
 		}
+		resumedFromPersisted = true
 	} else {
 		a.nextHandDeadline = timeNowFunc().Add(delay)
 	}
 	a.pendingNextHandDeadline = 0
+	// Temporary diagnostic for the 2026-09-04 incident (remove once the fix
+	// is confirmed in prod) — pairs with deadlinesForBroadcast's WARN.
+	slog.Info("table next hand timer armed",
+		"table_id", a.id, "hand_id", a.handID, "resumed_from_persisted", resumedFromPersisted,
+		"deadline_unix_ms", a.nextHandDeadline.UnixMilli(), "delay_ms", delay.Milliseconds())
 	a.nextHandTimer = time.AfterFunc(delay, func() {
 		reply := make(chan error, 1)
 		if err := a.Dispatch(nextHandCmd{Reply: reply}); err != nil {
