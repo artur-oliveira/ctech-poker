@@ -30,8 +30,8 @@ func (f *fakeChangeListener) Listen(ctx context.Context, onChange func(tableID s
 // this is what closes the cross-process staleness window
 // docs/specs/2026-09-04-cross-instance-stale-turn-timer.md diagnosed.
 func TestListenForExternalChangesDispatchesToTheMatchingLocalActor(t *testing.T) {
-	broadcastCount := 0
-	broadcast := func(tableID, viewerID string, _ hand.Snapshot) { broadcastCount++ }
+	broadcasted := make(chan struct{}, 8)
+	broadcast := func(tableID, viewerID string, _ hand.Snapshot) { broadcasted <- struct{}{} }
 	m := NewManager(nil, nil, broadcast, nil)
 	seed := func() *hand.Table { return hand.NewTable([]*hand.Player{{ID: "p1", Stack: 1000}}, 10, 20) }
 	if _, err := m.GetOrCreateActor(context.Background(), "table-1", seed); err != nil {
@@ -45,12 +45,10 @@ func TestListenForExternalChangesDispatchesToTheMatchingLocalActor(t *testing.T)
 
 	listener.fire <- "table-1"
 
-	deadline := time.Now().Add(time.Second)
-	for broadcastCount == 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("external change signal for a locally-running table never triggered a broadcast")
-		}
-		time.Sleep(time.Millisecond)
+	select {
+	case <-broadcasted:
+	case <-time.After(time.Second):
+		t.Fatal("external change signal for a locally-running table never triggered a broadcast")
 	}
 }
 
