@@ -15,6 +15,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 
+	"gopkg.aoctech.app/poker/api/internal/engine/equity"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/table"
@@ -25,8 +26,8 @@ import (
 type Actor = table.Actor
 
 const (
-	defaultLeaseLessIdleTimeout = 5 * time.Minute
-	defaultIdleCheckInterval    = time.Minute
+	defaultActorIdleTimeout  = 5 * time.Minute
+	defaultIdleCheckInterval = time.Minute
 )
 
 // ErrTableArchived means tableID was archived by cmd/tablecleanup for
@@ -61,8 +62,8 @@ type Manager struct {
 	cancels  map[string]context.CancelFunc
 	locks    map[string]*tableLock
 
-	leaseLessIdleTimeout time.Duration
-	idleCheckInterval    time.Duration
+	actorIdleTimeout  time.Duration
+	idleCheckInterval time.Duration
 
 	// preRegisterHook, when set, runs once per actual actor creation, just
 	// before the fresh actor is inserted into m.actors — after every
@@ -137,14 +138,23 @@ func (m *Manager) releaseTableLock(tableID string, l *tableLock) {
 // handed back so callers never dispatch to a dead one (T1). Guarded only by
 // the short-lived m.mu, never held across a network call.
 func (m *Manager) lookupAliveActor(tableID string) (*Actor, bool) {
+	var release func()
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	if a, ok := m.actors[tableID]; ok {
 		if a.IsAlive() {
+			m.mu.Unlock()
 			return a, true
 		}
 		delete(m.actors, tableID)
+		delete(m.cancels, tableID)
+		release = m.releases[tableID]
+		delete(m.releases, tableID)
 	}
+	m.mu.Unlock()
+	if release != nil {
+		release()
+	}
+	equity.EvictTable(tableID)
 	return nil, false
 }
 
@@ -154,17 +164,17 @@ func NewManager(leases *tablelease.Service, store *tablestore.Store, broadcast f
 		onHandComplete = completion[0]
 	}
 	return &Manager{
-		leases:               leases,
-		store:                store,
-		broadcast:            broadcast,
-		onHandComplete:       onHandComplete,
-		roomLoader:           roomLoader,
-		actors:               make(map[string]*Actor),
-		releases:             make(map[string]func()),
-		cancels:              make(map[string]context.CancelFunc),
-		locks:                make(map[string]*tableLock),
-		leaseLessIdleTimeout: defaultLeaseLessIdleTimeout,
-		idleCheckInterval:    defaultIdleCheckInterval,
+		leases:            leases,
+		store:             store,
+		broadcast:         broadcast,
+		onHandComplete:    onHandComplete,
+		roomLoader:        roomLoader,
+		actors:            make(map[string]*Actor),
+		releases:          make(map[string]func()),
+		cancels:           make(map[string]context.CancelFunc),
+		locks:             make(map[string]*tableLock),
+		actorIdleTimeout:  defaultActorIdleTimeout,
+		idleCheckInterval: defaultIdleCheckInterval,
 	}
 }
 
@@ -404,9 +414,10 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 			<-actor.Done()
 			m.removeActor(tableID, actor)
 		})
-	} else {
-		go m.evictLeaseLessActorWhenIdle(runCtx, tableID, actor, cancel)
 	}
+	// tablelease is cache affinity only. A lease must not pin an otherwise
+	// unused actor, its timers, and its equity entries in memory forever.
+	go m.evictActorWhenIdle(runCtx, tableID, actor, cancel)
 	go actor.Run(runCtx)
 
 	if m.preRegisterHook != nil {
@@ -439,20 +450,30 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 // removeActor drops a (dead) actor from the registry. Safe to call from the
 // lease-loss callback (runs off the Run goroutine) — it takes m.mu.
 func (m *Manager) removeActor(tableID string, expected *Actor) {
+	var release func()
+	removed := false
 	m.mu.Lock()
 	if a, ok := m.actors[tableID]; ok && a == expected && !a.IsAlive() {
 		delete(m.actors, tableID)
 		delete(m.cancels, tableID)
+		release = m.releases[tableID]
 		delete(m.releases, tableID)
+		removed = true
 	}
 	m.mu.Unlock()
+	if release != nil {
+		release()
+	}
+	if removed {
+		equity.EvictTable(tableID)
+	}
 }
 
-// evictLeaseLessActorWhenIdle bounds the per-instance registry even when
-// this node only proxied a table and never acquired its cache-affinity lease.
-// A continuous zero-connection window is required: seeing any live socket
-// resets the clock, so a busy table is never evicted between polling ticks.
-func (m *Manager) evictLeaseLessActorWhenIdle(ctx context.Context, tableID string, actor *Actor, cancel context.CancelFunc) {
+// evictActorWhenIdle bounds the per-instance registry whether or not this
+// actor acquired the cache-affinity lease. A continuous zero-connection
+// window is required: seeing any live socket resets the clock, so a busy table
+// is never evicted between polling ticks.
+func (m *Manager) evictActorWhenIdle(ctx context.Context, tableID string, actor *Actor, cancel context.CancelFunc) {
 	ticker := time.NewTicker(m.idleCheckInterval)
 	defer ticker.Stop()
 	idleSince := time.Now()
@@ -469,7 +490,7 @@ func (m *Manager) evictLeaseLessActorWhenIdle(ctx context.Context, tableID strin
 				idleSince = now
 				continue
 			}
-			if now.Sub(idleSince) < m.leaseLessIdleTimeout {
+			if now.Sub(idleSince) < m.actorIdleTimeout {
 				continue
 			}
 			cancel()
@@ -491,6 +512,7 @@ func (m *Manager) broadcastFor(tableID string) func(string, hand.Snapshot) {
 // Release releases tableID's lease and removes the actor from local registry.
 func (m *Manager) Release(tableID string) {
 	m.mu.Lock()
+	actor := m.actors[tableID]
 	delete(m.actors, tableID)
 	cancel := m.cancels[tableID]
 	delete(m.cancels, tableID)
@@ -500,9 +522,21 @@ func (m *Manager) Release(tableID string) {
 	if cancel != nil {
 		cancel()
 	}
+	if actor != nil {
+		<-actor.Done()
+	}
 	if hasRel && rel != nil {
 		rel()
 	}
+	equity.EvictTable(tableID)
+}
+
+// LiveActorCount reports this process's actor count for the load harness. It
+// is operational telemetry, not a fleet-wide ownership assertion.
+func (m *Manager) LiveActorCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.actors)
 }
 
 // DrainAndRelease releases every table lease held by this instance on

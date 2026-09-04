@@ -95,6 +95,10 @@ export const S3_PREFIX = SERVICE;
 /** Key of the artifact new ASG instances bootstrap from. */
 export const API_CURRENT_ARTIFACT_KEY = `${S3_PREFIX}/current.zip`;
 
+export const API_MEMORY_PRESSURE_LOG_MESSAGE = 'ALARM: process memory pressure';
+export const API_MEMORY_METRIC_NAMESPACE = 'CTech/Poker';
+export const API_MEMORY_PRESSURE_METRIC_NAME = 'ProcessMemoryPressure';
+
 // ── Per-environment names ───────────────────────────────────────────────────
 export const asgName = (env: Environment) => `${env}-${SERVICE}`;
 export const instanceProfileName = (env: Environment) => `${env}-${SERVICE}-api-instance-profile`;

@@ -14,6 +14,7 @@
 //   - hands completed
 //   - errors by class
 //   - Connect/Disconnect churn events
+//   - process RSS versus live tables and process-local actors
 //
 // Run:
 //
@@ -33,6 +34,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -115,6 +117,15 @@ type soakMetrics struct {
 	actions     atomic.Int64
 	churnEvents atomic.Int64
 	rebuys      atomic.Int64
+	liveTables  atomic.Int64
+	memory      []memorySample
+}
+
+type memorySample struct {
+	at         time.Duration
+	liveTables int64
+	liveActors int
+	rssBytes   uint64
 }
 
 func newSoakMetrics() *soakMetrics {
@@ -138,6 +149,40 @@ func (m *soakMetrics) handComplete(id string) {
 	m.mu.Lock()
 	m.handsDone[id] = struct{}{}
 	m.mu.Unlock()
+}
+
+func (m *soakMetrics) sampleMemory(start time.Time, managers []*tablemanager.Manager) {
+	rss, err := processRSSBytes()
+	if err != nil {
+		return
+	}
+	actors := 0
+	for _, manager := range managers {
+		actors += manager.LiveActorCount()
+	}
+	m.mu.Lock()
+	m.memory = append(m.memory, memorySample{
+		at: time.Since(start), liveTables: m.liveTables.Load(), liveActors: actors, rssBytes: rss,
+	})
+	m.mu.Unlock()
+}
+
+// processRSSBytes reads Linux's resident page count. The soak harness targets
+// the same Linux runtime as EC2; unsupported hosts simply omit the curve.
+func processRSSBytes() (uint64, error) {
+	b, err := os.ReadFile("/proc/self/statm")
+	if err != nil {
+		return 0, err
+	}
+	fields := strings.Fields(string(b))
+	if len(fields) < 2 {
+		return 0, fmt.Errorf("unexpected /proc/self/statm: %q", b)
+	}
+	pages, err := strconv.ParseUint(fields[1], 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return pages * uint64(os.Getpagesize()), nil
 }
 
 func classify(err error) string {
@@ -204,6 +249,13 @@ func (m *soakMetrics) report(t *testing.T, cfg soakConfig, elapsed time.Duration
 	sort.Strings(classes)
 	for _, c := range classes {
 		t.Logf("  %-18s %d", c, m.errsByClass[c])
+	}
+	if len(m.memory) > 0 {
+		t.Log("rss curve (elapsed, live_tables, local_actors, rss_mib):")
+		for _, sample := range m.memory {
+			t.Logf("  %s,%d,%d,%.1f", sample.at.Round(time.Second), sample.liveTables,
+				sample.liveActors, float64(sample.rssBytes)/(1<<20))
+		}
 	}
 	t.Logf("=====================================================")
 	return p99, errRate
@@ -278,6 +330,21 @@ func TestSoak(t *testing.T) {
 	deadline := runStart.Add(cfg.duration)
 	ctx, cancel := context.WithDeadline(context.Background(), deadline.Add(30*time.Second))
 	defer cancel()
+	m.sampleMemory(runStart, managers)
+	sampleCtx, stopSamples := context.WithCancel(ctx)
+	defer stopSamples()
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-sampleCtx.Done():
+				return
+			case <-ticker.C:
+				m.sampleMemory(runStart, managers)
+			}
+		}
+	}()
 
 	var wg sync.WaitGroup
 	for ti := 0; ti < cfg.tables; ti++ {
@@ -293,6 +360,8 @@ func TestSoak(t *testing.T) {
 		}
 	}
 	wg.Wait()
+	stopSamples()
+	m.sampleMemory(runStart, managers)
 
 	elapsed := time.Since(runStart)
 	for _, mgr := range managers {
@@ -326,6 +395,7 @@ func driveTable(ctx context.Context, t *testing.T, cfg soakConfig, m *soakMetric
 	managers []*tablemanager.Manager, store *tablestore.Store, tableIdx int, deadline time.Time) {
 
 	tableID := fmt.Sprintf("soak-table-%d", tableIdx)
+	m.liveTables.Add(1)
 	rng := rand.New(rand.NewSource(int64(tableIdx)*7919 + time.Now().UnixNano()))
 
 	playerIDs := make([]string, cfg.players)

@@ -66,13 +66,35 @@ func TestEstimateRejectsInvalidInputs(t *testing.T) {
 }
 
 func TestEstimateWithStatsReportsCacheMissThenHit(t *testing.T) {
-	globalEquityCache = newLRUCache(2)
+	globalEquityCache = newLRUCache(2 * cacheEntryBaseBytes)
 	hole := [2]deck.Card{{Rank: deck.Queen, Suit: deck.Hearts}, {Rank: deck.Jack, Suit: deck.Hearts}}
 	if _, stats, err := EstimateWithStats(hole, nil, nil, 2, 25); err != nil || stats.CacheHit {
 		t.Fatalf("first estimate must miss cache: stats=%+v err=%v", stats, err)
 	}
 	if _, stats, err := EstimateWithStats(hole, nil, nil, 2, 25); err != nil || !stats.CacheHit {
 		t.Fatalf("second estimate must hit cache: stats=%+v err=%v", stats, err)
+	}
+}
+
+func TestCacheIsByteBoundedAndEvictsOneTable(t *testing.T) {
+	cache := newLRUCache(2 * (cacheEntryBaseBytes + 7))
+	key := func(table string, card uint8) cacheKey {
+		return cacheKey{tableID: table, hole: [2]uint8{card, card + 1}}
+	}
+
+	cache.Put(key("table-a", 1), .1)
+	cache.Put(key("table-a", 3), .2)
+	if evicted := cache.Put(key("table-b", 5), .3); !evicted {
+		t.Fatal("third entry must evict the LRU entry when the byte budget is full")
+	}
+	if cache.bytes > cache.maxBytes {
+		t.Fatalf("cache retained %d bytes over %d-byte limit", cache.bytes, cache.maxBytes)
+	}
+	if removed := cache.EvictTable("table-a"); removed != 1 {
+		t.Fatalf("removed %d table-a entries, want 1 after LRU eviction", removed)
+	}
+	if _, ok := cache.Get(key("table-b", 5)); !ok {
+		t.Fatal("evicting table-a also removed table-b")
 	}
 }
 

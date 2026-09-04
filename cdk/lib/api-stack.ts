@@ -3,14 +3,21 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as hooktargets from 'aws-cdk-lib/aws-autoscaling-hooktargets';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import {Construct} from 'constructs';
 import {Ec2ScriptRunner, Environment, HaproxyEc2Service, SSM as CtechSSM} from '@aoctech/cdk';
 import {
   API_ASG_SPOT_INSTANCE_TYPES,
   API_CURRENT_ARTIFACT_KEY,
+  API_MEMORY_METRIC_NAMESPACE,
+  API_MEMORY_PRESSURE_LOG_MESSAGE,
+  API_MEMORY_PRESSURE_METRIC_NAME,
+  ALERTS_TOPIC_ARN,
   APP_PORT,
   APP_PORT_ALT,
   asgName,
@@ -72,6 +79,8 @@ interface ApiStackProps extends cdk.StackProps {
   socialEventsTableArn: string;
   playerReportsTableArn: string;
   socialGraphEnabledParam: string;
+  /** Enables billable custom metrics/alarms; off unless explicitly opted in. */
+  cloudwatchAlarmsEnabled?: boolean;
   // Session Manager. **On**: CI deploys over SSM RunCommand (/opt/app/deploy.sh),
   // and the termination-drain lifecycle hook stops the app through RunCommand
   // too — with the agent off, draining fails open and instances terminate
@@ -135,6 +144,7 @@ export class PokerApiStack extends cdk.Stack {
       socialEventsTableArn,
       playerReportsTableArn,
       socialGraphEnabledParam,
+      cloudwatchAlarmsEnabled = false,
       enableSsmAgent = false,
       osFamily = 'alpine',
     } = props;
@@ -341,10 +351,12 @@ export class PokerApiStack extends cdk.Stack {
     // start.sh sources after load-ssm-env.sh.
     userData.addCommands(
       `cat > /opt/app/service-env.sh << 'SERVICEENV'`,
+      `POKER_TOTAL_MEMORY_KIB="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)"`,
+      `GOMEMLIMIT="$((POKER_TOTAL_MEMORY_KIB / 2))KiB"`,
       `CORS_ALLOWED_ORIGINS="$SERVICE_AUDIENCE"`,
       `TURNSTILE_EXPECTED_HOSTNAME="\${SERVICE_AUDIENCE#*://}"`,
       `TURNSTILE_EXPECTED_HOSTNAME="\${TURNSTILE_EXPECTED_HOSTNAME%%/*}"`,
-      `export CORS_ALLOWED_ORIGINS TURNSTILE_EXPECTED_HOSTNAME`,
+      `export GOMEMLIMIT CORS_ALLOWED_ORIGINS TURNSTILE_EXPECTED_HOSTNAME`,
       `SERVICEENV`,
       `chmod 0755 /opt/app/service-env.sh`,
     );
@@ -502,6 +514,34 @@ export class PokerApiStack extends cdk.Stack {
     });
     const asg = service.autoScalingGroup;
     asg.node.addDependency(profile);
+
+    // The Go process emits this structured marker only after its runtime-
+    // managed resident memory reaches 85% of GOMEMLIMIT. Keep the alarm prod-
+    // only and behind the repository-wide explicit cost switch: non-prod hosts
+    // are ephemeral, and a deploy must not add custom-metric cost by default.
+    if (isProd && cloudwatchAlarmsEnabled) {
+      const pressure = service.appLogGroup.addMetricFilter('MemoryPressureMetric', {
+        metricNamespace: API_MEMORY_METRIC_NAMESPACE,
+        metricName: API_MEMORY_PRESSURE_METRIC_NAME,
+        metricValue: '1',
+        defaultValue: 0,
+        filterPattern: logs.FilterPattern.stringValue('$.msg', '=', API_MEMORY_PRESSURE_LOG_MESSAGE),
+      });
+      const alarm = new cloudwatch.Alarm(this, 'MemoryPressureAlarm', {
+        alarmName: `${environment}-${SERVICE}-process-memory-pressure`,
+        alarmDescription: 'A poker API process is operating near its Go memory limit.',
+        metric: pressure.metric({
+          statistic: cloudwatch.Stats.SUM,
+          period: cdk.Duration.minutes(1),
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
+      alarm.addAlarmAction(new cloudwatchActions.SnsAction(
+        sns.Topic.fromTopicArn(this, 'MemoryPressureAlertsTopic', ALERTS_TOPIC_ARN),
+      ));
+    }
 
     // ASG termination pauses before EC2 shutdown, asks systemd to stop both
     // app processes (each runs Fx OnStop -> DrainAndRelease, releasing every

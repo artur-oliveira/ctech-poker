@@ -1071,6 +1071,7 @@ func startServer(lc fx.Lifecycle, app *fiber.App, cfg *config.Config, manager *t
 					slog.Error("server stopped", "err", err)
 				}
 			}()
+			go monitorMemoryPressure(pollCtx)
 			// Reduce reliance on the ASG lifecycle hook + drain Lambda alone
 			// (#33): during the 2026-09-01 spot rebalance storm it fired for
 			// only 3 of at least 4-5 real terminations, stranding leases the
