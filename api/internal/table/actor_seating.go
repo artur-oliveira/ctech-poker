@@ -14,7 +14,19 @@ import (
 )
 
 func (a *Actor) handleTurnTimeout(ctx context.Context, c turnTimeoutCmd) error {
-	if err := a.ensureLoaded(ctx, false); err != nil {
+	// Force a fresh reload here, same reasoning as handleJoin: this command
+	// only ever arrives from a time.AfterFunc armed up to a full turn timeout
+	// plus time bank ago, on an Actor whose trustCache affinity is a
+	// latency-only optimization (internal/tablelease), not a fleet-wide
+	// exclusive lock — another instance is free to have processed this exact
+	// player's decision (or several more hands) in the meantime and this
+	// instance never observed it. The trustCache fast path would let the stale
+	// CurrentPlayerIDForActor check below pass anyway, folding/time-banking a
+	// decision that already resolved elsewhere — reproduced live on
+	// 2026-09-04 (docs/specs/2026-09-04-cross-instance-stale-turn-timer.md):
+	// two instances both charged time bank for the same player's turn on a
+	// hand the other had already carried to Complete.
+	if err := a.ensureLoaded(ctx, true); err != nil {
 		return err
 	}
 	// A canceled timer can already have queued its command while another

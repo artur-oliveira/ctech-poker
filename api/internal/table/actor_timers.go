@@ -163,7 +163,14 @@ func (a *Actor) handleNextHand(ctx context.Context, c nextHandCmd) error {
 	// trigger is ordinary: ensureLoaded or commit failing with a cancelled
 	// DynamoDB context.
 	a.nextHandArmedFor = ""
-	if err := a.ensureLoaded(ctx, false); err != nil {
+	// Force a fresh reload (see handleTurnTimeout's identical reasoning): this
+	// fires from a time.AfterFunc armed a full nextHandDelay ago, and
+	// trustCache is only a latency affinity, not an exclusive fleet lock — the
+	// hand this timer is for may already be several hands further along on
+	// another instance. Trusting a stale a.cached here is exactly what made
+	// the client-visible next_hand_unix_ms broadcast diverge from the real
+	// deal time (docs/specs/2026-09-04-cross-instance-stale-turn-timer.md).
+	if err := a.ensureLoaded(ctx, true); err != nil {
 		return a.retryNextHand(err)
 	}
 	if a.cached.Stage() != hand.Complete {
@@ -307,7 +314,13 @@ func (a *Actor) armRunoutTimer(awaiting bool, stage hand.Stage) {
 // (the awaited state no longer holds, e.g. this table already finished the
 // runout through another path) is a silent no-op.
 func (a *Actor) handleRunoutStep(ctx context.Context, c runoutStepCmd) error {
-	if err := a.ensureLoaded(ctx, false); err != nil {
+	// Force a fresh reload — same reasoning as handleTurnTimeout/handleNextHand:
+	// this fires runoutStreetDelay after a time.AfterFunc armed on a
+	// trustCache instance with no exclusive fleet lock, and each step's commit
+	// is what nextHandDeadlineForPersist bases the post-hand countdown on once
+	// the final street resolves to Complete. A stale a.cached here silently
+	// produces the same divergent next_hand_unix_ms as the turn-timeout case.
+	if err := a.ensureLoaded(ctx, true); err != nil {
 		return err
 	}
 	if !a.cached.IsAwaitingRunoutForActor() {

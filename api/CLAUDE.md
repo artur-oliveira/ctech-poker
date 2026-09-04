@@ -229,6 +229,20 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   is left un-armed; `cmd/tablecleanup` or an operator is the recovery for a table that stuck, not a transaction that
   keeps being rejected. `poker_table_state` / `poker_table_state_history` are also TTL'd now (`tablestore.stateTTLDays`,
   refreshed on every commit) and PITR-off — ephemeral, rebuildable, and a runaway write shows up in PITR storage too.
+- **A timer-fired handler must force a fresh reload, not `ensureLoaded(ctx, false)`.** `handleTurnTimeout`,
+  `handleNextHand` and `handleRunoutStep` are only ever reached from a `time.AfterFunc` armed by *this* actor
+  instance — and `internal/tablelease` is latency-only, never an exclusive fleet lock (several instances run
+  independent `Actor`s for the same table by design, each `trustCache`-ing its own copy indefinitely between real
+  syncs). A quiet instance's timer can fire minutes after another instance has already carried the hand
+  forward; `ensureLoaded(ctx, false)`'s trustCache fast path let that stale cache pass the handler's own
+  current-player/stage guard, charging time bank and logging turn-timeout activity against a stage/hand another
+  instance had already resolved — reproduced live 2026-09-04, see `docs/specs/2026-09-04-cross-instance-stale-turn-timer.md`.
+  All three now call `ensureLoaded(ctx, true)` on entry, same reasoning `handleJoin` already used. The
+  DynamoDB version-conditioned commit already stopped this from *persisting* wrong state in most cases; the fix
+  closes the staleness window itself, which is what fed a stale `next_hand_unix_ms`/`action_deadline_unix_ms`
+  into a broadcast. `handleKickTimeout`/`handleAFKSweep`/`handleExpireWinnerCards` share the same
+  `ensureLoaded(ctx, false)`-from-a-timer shape and were deliberately left out of this fix (see the spec) —
+  revisit if the same class of bug shows up there.
 - **Nothing viewer-independent belongs inside `broadcastAll`'s per-seat loop, and nothing expensive belongs on the
   actor goroutine twice.** Chat and reaction views are built once per broadcast (`activityViews`) and shared; the
   `equityIterations` Monte Carlo is memoized by `(hole, board, opponent count)` per hand (`equityFor`), because a
