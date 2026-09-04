@@ -64,10 +64,15 @@ func buildNextCursor(key map[string]types.AttributeValue) *string {
 	return new(base64.StdEncoding.EncodeToString(raw))
 }
 
+// maxLimitParam caps every paginated endpoint's page size. Without it a
+// client could ask for a page of any size — the value reaches DynamoDB's
+// int32 Limit unchecked, and a huge page is expensive to read regardless.
+const maxLimitParam = 100
+
 func limitParam(c fiber.Ctx) int {
 	limit := 50
 	if n, err := strconv.Atoi(c.Query("limit")); err == nil && n > 0 {
-		limit = n
+		limit = min(n, maxLimitParam)
 	}
 	return limit
 }
