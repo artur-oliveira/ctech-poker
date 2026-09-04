@@ -19,13 +19,19 @@ const REMOVED_REASON_COPY: Record<string, string> = {
 export type TableRemoval = { code?: string; amount?: number } | null;
 export type SessionRecap = { joinedAt: number; buyIn: number; finalStack: number };
 
-/** Every server read the table surface needs, in one place.
+/** The critical path: the room, and whether the viewer already holds a seat.
  *
  * Buy-in is an explicit ceremony: nothing is debited until the player confirms
  * an amount. The server (not local browser storage) is the source of truth for
  * "is this player already seated", which is what lets a player return via a
  * new tab, a different browser, or a different device without repeating the
- * ceremony for a seat they already have. */
+ * ceremony for a seat they already have.
+ *
+ * These two plus the socket are the whole documented minimum for a playable
+ * entry (`docs/2026-09-04-table-entry-request-budget.md`). Every *other* read
+ * the table surface makes renders something that only exists once a snapshot
+ * has arrived — until then the page is a loader — so it belongs to
+ * `useTableProgressiveSession` below rather than racing the handshake (#212). */
 export function useTableSession(id: string, valid: boolean) {
   const {data: room} = useQuery({
     queryKey: ['room', id], queryFn: () => getRoom(id), enabled: valid
@@ -33,35 +39,67 @@ export function useTableSession(id: string, valid: boolean) {
   const {data: seatedStatus, isLoading: seatedLoading} = useQuery({
     queryKey: ['seated', id], queryFn: () => getSeated(id), enabled: valid
   });
-  const seated = seatedStatus?.seated ?? false;
+  return {room, seated: seatedStatus?.seated ?? false, seatedLoading};
+}
+
+export type TableCoreSession = ReturnType<typeof useTableSession>;
+
+/** The progressive reads: every read whose data the table only ever renders
+ * after the socket seeded its first snapshot.
+ *
+ * Two one-way latches, both armed *during render* so the first frame that can
+ * show the data is already the frame that asks for it (an effect would arm it
+ * a commit late):
+ *
+ * - `seeded` gates the group on the socket having delivered a snapshot. It
+ *   never disarms, so a reconnect that momentarily drops the snapshot does not
+ *   re-run this bootstrap; and because the queries are `enabled`-gated rather
+ *   than remounted, a reconnect spends no read at all.
+ * - `reactionsOpen` additionally gates the reaction catalog and the first page
+ *   of reaction purchases. Both only feed the premium grid *inside* the
+ *   reactions panel, which most players never open; the purchase page drives
+ *   the "refunding" badge and never ownership, which is the catalog's
+ *   server-computed `owned` flag. Same shape as the deferred cosmetic
+ *   catalogs (#232). */
+export function useTableProgressiveSession(core: TableCoreSession, {id, seeded, reactionsOpen}: {
+  id: string;
+  seeded: boolean;
+  reactionsOpen: boolean;
+}) {
+  const [wasSeeded, setWasSeeded] = useState(false);
+  if (seeded && !wasSeeded) setWasSeeded(true);
+  const [reactionsWereOpen, setReactionsWereOpen] = useState(false);
+  if (reactionsOpen && !reactionsWereOpen) setReactionsWereOpen(true);
+  const enabled = core.seated && (seeded || wasSeeded);
+  const reactionsEnabled = enabled && (reactionsOpen || reactionsWereOpen);
   // Last-winners strip: sourced from the player's own hand-history endpoint
-  // (not live socket state) so it's populated from table load, not only after
-  // the viewer sits through a fresh resolution.
+  // (not live socket state) so it's populated as the table renders, not only
+  // after the viewer sits through a fresh resolution.
   const {data: tableHands = []} = useQuery({
-    queryKey: ['hands', id], queryFn: () => getHands({tableId: id}), enabled: valid,
+    queryKey: ['hands', id], queryFn: () => getHands({tableId: id}), enabled,
     select: page => page.data
   });
   const {data: sessions = [], isLoading: sessionsLoading} = useQuery({
-    queryKey: ['sessions', 'me'], queryFn: () => getSessions(), enabled: valid && seated
+    queryKey: ['sessions', 'me'], queryFn: () => getSessions(), enabled
   });
   const {data: playerNotes = []} = useQuery({
-    queryKey: ['player-notes'], queryFn: getPlayerNotes, enabled: valid && seated
+    queryKey: ['player-notes'], queryFn: getPlayerNotes, enabled
   });
   const {data: reactionCatalog = [], isLoading: reactionCatalogLoading} = useQuery({
-    queryKey: ['wallet', 'reaction-catalog'], queryFn: listReactionCatalog, enabled: valid && seated
+    queryKey: ['wallet', 'reaction-catalog'], queryFn: listReactionCatalog, enabled: reactionsEnabled
   });
   const {data: reactionPurchases = [], isLoading: reactionPurchasesLoading} = useQuery({
     // First page only: this list drives the in-table "refunding" badge, not
     // ownership (which comes from the catalog's `owned` flag).
     queryKey: REACTION_PURCHASE_FIRST_PAGE_KEY,
     queryFn: () => listReactionPurchases().then(page => page.data),
-    enabled: valid && seated
+    enabled: reactionsEnabled
   });
   const {data: profile} = useQuery({
-    queryKey: ['player', 'me'], queryFn: getMe, enabled: valid && seated
+    queryKey: ['player', 'me'], queryFn: getMe, enabled
   });
   return {
-    room, seated, seatedLoading, tableHands, sessions, sessionsLoading, playerNotes,
+    ...core, tableHands, sessions, sessionsLoading, playerNotes,
     reactionCatalog, reactionCatalogLoading, reactionPurchases, reactionPurchasesLoading, profile,
     openSession: sessions.find(session => session.table_id === id && session.ended_at === 0)
   };
