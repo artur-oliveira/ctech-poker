@@ -55,10 +55,10 @@ func TestStaleInstanceTurnTimeoutIgnoresATurnAnotherInstanceAlreadyAdvanced(t *t
 
 	for _, playerID := range []string{"p1", "p2", "p3"} {
 		reply := make(chan error, 1)
+		// Dispatch itself blocks on and returns cmd.reply()'s error (see
+		// Actor.Dispatch) — reading the channel again here would block
+		// forever, since Run only ever sends to it once.
 		if err := a.Dispatch(ReadyCmd{PlayerID: playerID, Ready: true, Reply: reply}); err != nil {
-			t.Fatalf("dispatch ready(%s): %v", playerID, err)
-		}
-		if err := <-reply; err != nil {
 			t.Fatalf("ready(%s): %v", playerID, err)
 		}
 	}
@@ -87,9 +87,6 @@ func TestStaleInstanceTurnTimeoutIgnoresATurnAnotherInstanceAlreadyAdvanced(t *t
 	if err := b.Dispatch(SnapshotCmd{PlayerID: firstToAct, Snapshot: snap, Reply: snapReply}); err != nil {
 		t.Fatalf("prime instance B: %v", err)
 	}
-	if err := <-snapReply; err != nil {
-		t.Fatalf("prime instance B: %v", err)
-	}
 	<-snap
 	if b.cached.CurrentPlayerIDForActor() != firstToAct {
 		t.Fatalf("instance B did not observe %s on the clock", firstToAct)
@@ -99,9 +96,6 @@ func TestStaleInstanceTurnTimeoutIgnoresATurnAnotherInstanceAlreadyAdvanced(t *t
 	// next player at the same stage (3-max, so the hand does not complete).
 	reply := make(chan error, 1)
 	if err := a.Dispatch(ActCmd{PlayerID: firstToAct, ActionID: "a1", Action: betting.ActionFold, Reply: reply}); err != nil {
-		t.Fatalf("dispatch fold: %v", err)
-	}
-	if err := <-reply; err != nil {
 		t.Fatalf("fold: %v", err)
 	}
 	stored, err = store.LoadTable(context.Background(), tableID)
