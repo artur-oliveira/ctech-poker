@@ -26,6 +26,23 @@ const (
 	tableHands         = "poker_player_hands"
 	tableHandsGsiTable = "gsi_table_id"
 
+	// sessionsGsiOpenTable is a SPARSE index over poker_player_sessions:
+	// pk = player_id, sk = open_table_id, and only an unclosed session
+	// carries open_table_id (RecordSession derives it from EndedAt), so the
+	// index holds exactly the handful of sessions a player currently has
+	// open. It replaces the FilterExpression scan FindOpenSession and
+	// FindLatestOpenSession used to page over the player's whole 30-day
+	// history (#224).
+	sessionsGsiOpenTable = "gsi_open_table"
+	// sessionsGsiTable indexes EVERY session (open or closed) by the table it
+	// was played at — pk = player_id, sk = table_id, KEYS_ONLY — so
+	// HasSessionAtTable is a single one-item key query instead of a paged
+	// filter over the whole partition.
+	sessionsGsiTable = "gsi_player_table"
+
+	fieldOpenTableID = "open_table_id"
+	fieldTableID     = "table_id"
+
 	// sessionTTLDays bounds how long a session item (open or closed) stays in
 	// poker_player_sessions — this table only answers "which table is/was a
 	// player at", it isn't the durable history (that's poker_player_hands, no
@@ -34,6 +51,13 @@ const (
 	// early, which is harmless since the wallet stays the source of truth for
 	// balance (CloseSession's doc comment).
 	sessionTTLDays = 30
+
+	// openSessionScanLimit caps the sparse open-session index reads. A player
+	// is seated at a handful of tables at once (multi-tabling), so this is a
+	// ceiling that is never reached in practice, not a pagination window: it
+	// bounds a pathological partition (a bug leaving sessions stuck open)
+	// instead of silently truncating normal traffic.
+	openSessionScanLimit = 25
 )
 
 type SessionItem struct {
@@ -51,6 +75,13 @@ type SessionItem struct {
 	// #74 for the cross-endpoint unit contract this backs.
 	EndedAt int64 `dynamodbav:"ended_at" json:"ended_at"`
 	TTL     int64 `dynamodbav:"ttl,omitempty" json:"-"`
+	// OpenTableID is the sparse key of sessionsGsiOpenTable: it mirrors
+	// TableID while the session is open and is absent once it closes. It is
+	// derived, never supplied by callers — RecordSession recomputes it from
+	// EndedAt on every write, and CloseSession's full-item PutItem therefore
+	// drops the attribute, evicting the row from the index. Not serialized to
+	// clients: it is a storage detail, not part of any session payload.
+	OpenTableID string `dynamodbav:"open_table_id,omitempty" json:"-"`
 }
 
 type HandItem struct {
@@ -145,6 +176,7 @@ func (s *Store) RecordSession(ctx context.Context, item SessionItem) error {
 	if item.SK == "" {
 		item.SK = sessionSK()
 	}
+	item.OpenTableID = openTableID(item)
 	if item.TTL == 0 {
 		item.TTL = time.Now().Add(sessionTTLDays * 24 * time.Hour).Unix()
 	}
@@ -173,85 +205,93 @@ func (s *Store) ListSessions(ctx context.Context, playerID string, limit int, st
 	return out, res.LastEvaluatedKey, nil
 }
 
+// openTableID returns the sparse sessionsGsiOpenTable sort key for item: the
+// table id while the session is unclosed, empty once EndedAt is set so the
+// (omitempty) attribute disappears and the row leaves the index.
+func openTableID(item SessionItem) string {
+	if item.EndedAt != 0 {
+		return ""
+	}
+	return item.TableID
+}
+
+// newestSession decodes raw index/table rows and returns the one with the
+// highest SK — sessionSK is a fixed-width nanosecond stamp, so lexicographic
+// order is chronological order. Picking the max in memory (over a handful of
+// rows) rather than trusting ScanIndexForward keeps this correct on a GSI
+// whose index key is not unique, where DynamoDB only orders duplicates by the
+// base-table key.
+func newestSession(raws []map[string]dynamotypes.AttributeValue) *SessionItem {
+	var newest *SessionItem
+	for _, raw := range raws {
+		item, err := dynamo.Decode[SessionItem](raw)
+		if err != nil || item == nil {
+			continue
+		}
+		if newest == nil || item.SK > newest.SK {
+			newest = item
+		}
+	}
+	return newest
+}
+
 // FindOpenSession returns the most recent session recorded for playerID at
 // tableID that has not yet been closed (EndedAt == 0), or nil if none exists.
-// Pages through the player's ENTIRE session partition (filtered server-side
-// to tableID) rather than a single capped page — a player who has since
-// opened sessions at other tables (multi-tabling, or just a lot of history)
-// would otherwise push this table's still-open session past a fixed-size
-// "most recent N" window, leaving it stuck open (ended_at never set) forever.
+// One key-equality query against the sparse sessionsGsiOpenTable index: no
+// FilterExpression, no pagination, and cost independent of how much session
+// history the player has accumulated — a player who has since opened sessions
+// at other tables (multi-tabling, or just a lot of history) can no longer
+// push this table's still-open session out of reach, leaving it stuck open
+// (ended_at never set) forever.
 func (s *Store) FindOpenSession(ctx context.Context, playerID, tableID string) (*SessionItem, error) {
-	var startKey map[string]dynamotypes.AttributeValue
-	for {
-		res, err := s.sessions.Query(ctx, dynamo.QueryOpts{
-			PK: playerID, Limit: 50, ScanIndexForward: false,
-			FilterField: "table_id", FilterValue: tableID,
-			ExclusiveStartKey: startKey,
-		})
-		if err != nil {
-			return nil, err
-		}
-		for _, raw := range res.Items {
-			item, err := dynamo.Decode[SessionItem](raw)
-			if err == nil && item != nil && item.EndedAt == 0 {
-				return item, nil
-			}
-		}
-		if res.LastEvaluatedKey == nil {
-			return nil, nil
-		}
-		startKey = res.LastEvaluatedKey
+	res, err := s.sessions.QueryComposite(ctx, dynamo.CompositeQueryOpts{
+		PK:        playerID,
+		IndexName: sessionsGsiOpenTable,
+		SKEq:      []dynamo.KV{{Field: fieldOpenTableID, Value: tableID}},
+		Limit:     openSessionScanLimit,
+	})
+	if err != nil {
+		return nil, err
 	}
+	return newestSession(res.Items), nil
 }
 
 // HasSessionAtTable reports whether playerID has ever had a session (open or
 // closed, any time) at tableID — used to scope access to table-scoped views
 // (e.g. the highlights feed) to players who were actually there, the same
-// privacy boundary the rest of the match-history surface uses.
+// privacy boundary the rest of the match-history surface uses. A single
+// one-item query on sessionsGsiTable (KEYS_ONLY): existence is all the caller
+// needs, so nothing but keys is read.
 func (s *Store) HasSessionAtTable(ctx context.Context, playerID, tableID string) (bool, error) {
-	var startKey map[string]dynamotypes.AttributeValue
-	for {
-		res, err := s.sessions.Query(ctx, dynamo.QueryOpts{
-			PK: playerID, Limit: 50, ScanIndexForward: false,
-			FilterField: "table_id", FilterValue: tableID,
-			ExclusiveStartKey: startKey,
-		})
-		if err != nil {
-			return false, err
-		}
-		if len(res.Items) > 0 {
-			return true, nil
-		}
-		if res.LastEvaluatedKey == nil {
-			return false, nil
-		}
-		startKey = res.LastEvaluatedKey
+	res, err := s.sessions.QueryComposite(ctx, dynamo.CompositeQueryOpts{
+		PK:        playerID,
+		IndexName: sessionsGsiTable,
+		SKEq:      []dynamo.KV{{Field: fieldTableID, Value: tableID}},
+		Limit:     1,
+	})
+	if err != nil {
+		return false, err
 	}
+	return len(res.Items) > 0, nil
 }
 
 // FindLatestOpenSession returns the table id of the player's newest unclosed
 // session, or "" when there is none. It reconciles friend-visible in_table
 // presence after a process restart or a WebSocket reconnect; whether that id
 // is ever published to anyone is decided by api/v1/social.go's gates, never
-// here.
+// here. Reads the player's partition of the sparse open-session index, which
+// only ever holds the tables they are seated at right now.
 func (s *Store) FindLatestOpenSession(ctx context.Context, playerID string) (string, error) {
-	var startKey map[string]dynamotypes.AttributeValue
-	for {
-		res, err := s.sessions.Query(ctx, dynamo.QueryOpts{PK: playerID, Limit: 50, ScanIndexForward: false, ExclusiveStartKey: startKey})
-		if err != nil {
-			return "", err
-		}
-		for _, raw := range res.Items {
-			item, decodeErr := dynamo.Decode[SessionItem](raw)
-			if decodeErr == nil && item != nil && item.EndedAt == 0 {
-				return item.TableID, nil
-			}
-		}
-		if len(res.LastEvaluatedKey) == 0 {
-			return "", nil
-		}
-		startKey = res.LastEvaluatedKey
+	res, err := s.sessions.Query(ctx, dynamo.QueryOpts{
+		PK: playerID, IndexName: sessionsGsiOpenTable, Limit: openSessionScanLimit,
+	})
+	if err != nil {
+		return "", err
 	}
+	if newest := newestSession(res.Items); newest != nil {
+		return newest.TableID, nil
+	}
+	return "", nil
 }
 
 // buyinGuardPK returns the sessions-table partition key for a rebuy's

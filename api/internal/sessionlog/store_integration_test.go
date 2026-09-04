@@ -50,34 +50,93 @@ func TestFindLatestOpenSessionReconcilesAcrossTables(t *testing.T) {
 	}
 }
 
-// TestFindOpenSessionSurvivesFiftyPlusNewerSessionsElsewhere pins down the
-// multi-tabling bug: FindOpenSession used to cap its query at the 50 most
-// recent items across the player's ENTIRE history (all tables), so an old
-// table's still-open session got pushed out of that window by 50+ newer
-// sessions opened/closed at other tables in the meantime — leaving ended_at
-// stuck at 0 forever once the player actually left the old table. It must
-// now page through the whole partition (filtered server-side to tableID)
-// instead of giving up after the first page.
-func TestFindOpenSessionSurvivesFiftyPlusNewerSessionsElsewhere(t *testing.T) {
-	store := newTestStore(t)
+// TestFindOpenSessionCostsOneQueryBehindALargeHistory pins down #224: the
+// lookup used to page the player's ENTIRE session partition with a non-key
+// FilterExpression, so its cost grew with 30 days of history and an old
+// table's still-open session could be pushed past the window entirely,
+// leaving ended_at stuck at 0 forever. It now reads the sparse open-session
+// index: exactly one Query, whatever the history behind it.
+func TestFindOpenSessionCostsOneQueryBehindALargeHistory(t *testing.T) {
+	store, queries := newCountingTestStore(t)
 	ctx := context.Background()
 	playerID := uniqueSessionPlayerID(t)
 
 	_ = store.RecordSession(ctx, SessionItem{PK: playerID, TableID: "old-table", JoinedAt: 1})
 
-	for i := 0; i < 60; i++ {
+	for i := 0; i < 200; i++ {
 		item := SessionItem{PK: playerID, TableID: "other-table", JoinedAt: 2, EndedAt: 3}
 		if err := store.RecordSession(ctx, item); err != nil {
 			t.Fatalf("seed session %d: %v", i, err)
 		}
 	}
 
+	queries.Store(0)
 	open, err := store.FindOpenSession(ctx, playerID, "old-table")
 	if err != nil {
 		t.Fatalf("FindOpenSession: %v", err)
 	}
 	if open == nil || open.TableID != "old-table" {
-		t.Fatalf("expected to still find old-table's open session behind 60 newer closed sessions, got %+v", open)
+		t.Fatalf("expected to still find old-table's open session behind 200 closed sessions, got %+v", open)
+	}
+	if n := queries.Load(); n != 1 {
+		t.Fatalf("expected exactly 1 Query, got %d", n)
+	}
+
+	queries.Store(0)
+	latest, err := store.FindLatestOpenSession(ctx, playerID)
+	if err != nil || latest != "old-table" {
+		t.Fatalf("FindLatestOpenSession = %q err=%v", latest, err)
+	}
+	if n := queries.Load(); n != 1 {
+		t.Fatalf("expected exactly 1 Query for FindLatestOpenSession, got %d", n)
+	}
+
+	queries.Store(0)
+	seen, err := store.HasSessionAtTable(ctx, playerID, "other-table")
+	if err != nil || !seen {
+		t.Fatalf("HasSessionAtTable = %v err=%v", seen, err)
+	}
+	if n := queries.Load(); n != 1 {
+		t.Fatalf("expected exactly 1 Query for HasSessionAtTable, got %d", n)
+	}
+}
+
+// TestCloseSessionEvictsFromTheOpenIndex pins down the other half of the
+// sparse index's contract: closing a session must drop open_table_id, so the
+// row leaves gsi_open_table and neither finder reports the player as still
+// seated. Without that, an open-session lookup would answer from a stale
+// index entry forever.
+func TestCloseSessionEvictsFromTheOpenIndex(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	playerID := uniqueSessionPlayerID(t)
+
+	if err := store.RecordSession(ctx, SessionItem{PK: playerID, SK: "fixed", TableID: "t1", JoinedAt: 1}); err != nil {
+		t.Fatalf("RecordSession: %v", err)
+	}
+	open, err := store.FindOpenSession(ctx, playerID, "t1")
+	if err != nil || open == nil {
+		t.Fatalf("expected the open session, got %+v err=%v", open, err)
+	}
+
+	open.EndedAt = 99
+	if err := store.CloseSession(ctx, *open); err != nil {
+		t.Fatalf("CloseSession: %v", err)
+	}
+
+	if closed, err := store.FindOpenSession(ctx, playerID, "t1"); err != nil || closed != nil {
+		t.Fatalf("expected no open session after close, got %+v err=%v", closed, err)
+	}
+	if latest, err := store.FindLatestOpenSession(ctx, playerID); err != nil || latest != "" {
+		t.Fatalf("expected no latest open session after close, got %q err=%v", latest, err)
+	}
+	// The session itself is still on record — only the open-state index entry
+	// went away, so table-scoped authorization keeps working after cash-out.
+	if seen, err := store.HasSessionAtTable(ctx, playerID, "t1"); err != nil || !seen {
+		t.Fatalf("expected HasSessionAtTable to still see the closed session, got %v err=%v", seen, err)
+	}
+	if seen, err := store.HasSessionAtTable(ctx, playerID, "never-played"); err != nil || seen {
+		t.Fatalf("expected no session at an unvisited table, got %v err=%v", seen, err)
 	}
 }
 

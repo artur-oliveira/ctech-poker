@@ -206,6 +206,33 @@ test('creates poker_rooms table with public and share-code GSIs', () => {
   });
 });
 
+test('indexes player sessions by open table and by table', () => {
+  const app = new App();
+  const stack = new DynamoDBStack(app, 'TestSessionIndexStack', {environment: 'dev', cloudwatchAlarmsEnabled: false});
+  const template = Template.fromStack(stack);
+  template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+    TableName: 'dev_poker_player_sessions',
+    GlobalSecondaryIndexes: Match.arrayWith([
+      Match.objectLike({
+        IndexName: 'gsi_open_table',
+        KeySchema: [
+          Match.objectLike({AttributeName: 'pk', KeyType: 'HASH'}),
+          Match.objectLike({AttributeName: 'open_table_id', KeyType: 'RANGE'}),
+        ],
+        Projection: {ProjectionType: 'ALL'},
+      }),
+      Match.objectLike({
+        IndexName: 'gsi_player_table',
+        KeySchema: [
+          Match.objectLike({AttributeName: 'pk', KeyType: 'HASH'}),
+          Match.objectLike({AttributeName: 'table_id', KeyType: 'RANGE'}),
+        ],
+        Projection: {ProjectionType: 'KEYS_ONLY'},
+      }),
+    ]),
+  });
+});
+
 test('creates social graph, recent players, inbox and reports storage', () => {
   const app = new App();
   const stack = new DynamoDBStack(app, 'TestSocialStorageStack', {environment: 'dev', cloudwatchAlarmsEnabled: true});
