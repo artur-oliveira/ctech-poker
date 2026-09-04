@@ -25,12 +25,13 @@ import (
 )
 
 type fakeWallet struct {
-	credits   []call
-	debits    []call
-	feeDebits []call
-	holds     []holdCall
-	cashouts  []cashoutCall
-	balances  map[string]int64 // playerID -> sandbox balance, for the auto-rebuy tests
+	credits    []call
+	debits     []call
+	feeDebits  []call
+	holds      []holdCall
+	cashouts   []cashoutCall
+	balances   map[string]int64 // playerID -> sandbox balance, for the auto-rebuy tests
+	failCredit error            // when set, Credit/CashoutGame return this instead of succeeding
 }
 type call struct {
 	userID string
@@ -66,6 +67,9 @@ func (s failingPendingStore) Get(context.Context, string) (*reconcile.PendingCas
 }
 
 func (f *fakeWallet) Credit(_ context.Context, userID string, amount int64, key, _ string) error {
+	if f.failCredit != nil {
+		return f.failCredit
+	}
 	f.credits = append(f.credits, call{userID, amount, key})
 	return nil
 }
@@ -501,6 +505,38 @@ func TestSettleSkipsWalletCallForZeroStack(t *testing.T) {
 	open, _ := sessions.FindOpenSession(ctx, "user-1", "room-5")
 	if open != nil {
 		t.Fatal("expected the session to still be closed after a zero-stack settle")
+	}
+}
+
+// TestSettleClosesSessionEvenWhenWalletCreditFails reproduces a real 2026-09-04
+// production incident: the wallet service returned 503s, so every system
+// removal's settle() hit the wallet-credit branch's error return before ever
+// reaching CloseSession/presence.Reconcile below it — leaving both players'
+// sessions open (and the lobby's "return to table" banner pointing at a table
+// they no longer held a seat at) even though table.Actor had already removed
+// them. The reconciliation job that later retries the pending cashout only
+// re-runs the wallet credit, never CloseSession, so this would have stranded
+// the session open forever. settle() must still close the session and
+// propagate the wallet error, not one or the other.
+func TestSettleClosesSessionEvenWhenWalletCreditFails(t *testing.T) {
+	wallet := &fakeWallet{failCredit: errors.New("wallet unavailable")}
+	mgr := testManager(t)
+	rooms := testRoomLookup()
+	svc := NewService(wallet, mgr, rooms).WithPendingStore(testPendingStore(t))
+	sessions := testSessionStore(t)
+	svc.WithSessionStore(sessions)
+	ctx := context.Background()
+
+	_ = sessions.RecordSession(ctx, sessionlog.SessionItem{PK: "user-1", TableID: "room-6", JoinedAt: 1})
+
+	err := svc.settle(ctx, "room-6", "user-1", 400, "", wallet, "room-6#user-1#idle")
+	if err == nil {
+		t.Fatal("expected settle to propagate the wallet credit failure")
+	}
+
+	open, _ := sessions.FindOpenSession(ctx, "user-1", "room-6")
+	if open != nil {
+		t.Fatal("expected the session to close even though the wallet credit failed")
 	}
 }
 

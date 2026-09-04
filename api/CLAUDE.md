@@ -437,6 +437,19 @@ catalog.
   `docs/specs/2026-09-03-system-leave-settlement-key-collision.md`). The two calls must share the same nonce or
   `reconcile` credits the wallet twice under divergent keys. Mirrors the client nonce `buyin.Service.CashOut`
   already appends.
+- **`buyin.Service.settle`'s session-close and presence-reconcile must run regardless of whether the
+  wallet credit succeeded.** A live wallet outage (2026-09-04) returned 503s for every system removal's
+  cash-out credit; `settle` used to `return` immediately on that error, before ever reaching
+  `sessionlog.Store.CloseSession`/`presence.Reconcile` below it — so both players stayed shown as
+  actively seated (the lobby's "return to table" banner, `sessions.FindOpenSession`) even though
+  `table.Actor` had already removed them from the table. The `reconcile` job that later retries the
+  pending cashout only re-runs the wallet credit, never `CloseSession` — so the stuck-open session
+  would have persisted forever, not just until the wallet recovered. Fixed by capturing the wallet
+  error in a local instead of returning early: `CloseSession`/`presence.Reconcile` always run, and the
+  captured error is still what `settle` returns (so `CashOut`'s caller is told the credit failed, same
+  as before) — `pending.MarkResolved` stays conditional on the credit actually landing, since marking a
+  failed credit "resolved" would stop `reconcile` from ever retrying it. See
+  `TestSettleClosesSessionEvenWhenWalletCreditFails` (`internal/buyin/service_test.go`, integration-tagged).
 - **Every list endpoint returns the `sendPage` envelope** (`{data, has_next, next_cursor, has_previous,
   previous_cursor}` — `internal/api/v1/helpers.go`), including fixed in-memory catalogs, which simply sit permanently on
   their only page. Purchase history (`sandbox-purchase`, `reaction-purchase`, `cosmetic-purchase/:kind`) pages for real

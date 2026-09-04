@@ -866,25 +866,41 @@ func (s *Service) settle(ctx context.Context, roomID, playerID string, stack int
 	// stack == 0 (player busted, nothing to return) — skip the wallet call
 	// entirely, ctech-wallet's Credit/CashoutGame reject a zero amount as a
 	// validation error, and there is nothing to reconcile for a $0 credit.
+	//
+	// A wallet failure here is captured, not returned immediately: the seat
+	// is already gone (there is nothing left to protect by aborting early),
+	// and the session/presence bookkeeping below has nothing to do with
+	// whether the credit landed. Returning early used to skip that
+	// bookkeeping entirely whenever the wallet call failed — a real outage
+	// (2026-09-04) left the session open and the lobby's "return to table"
+	// banner pointing at a table the player no longer held a seat at, and
+	// the reconciliation job that retries the pending cashout never re-runs
+	// CloseSession/presence.Reconcile, so that state would have persisted
+	// forever even once the credit eventually succeeded.
+	var walletErr error
 	if stack > 0 {
 		if mover == s.game {
 			if holdID == "" {
-				return fmt.Errorf("buyin: no hold ID found for player %s", playerID)
-			}
-			if err := mover.CashoutGame(ctx, playerID, stack, roomID, []string{holdID}, key, "poker_cashout"); err != nil {
+				walletErr = fmt.Errorf("buyin: no hold ID found for player %s", playerID)
+			} else if err := mover.CashoutGame(ctx, playerID, stack, roomID, []string{holdID}, key, "poker_cashout"); err != nil {
 				slog.Error("buyin: cash-out credit failed after seat removal — reconciliation job will retry",
 					"player", playerID, "room", roomID, "amount", stack, "hold_id", holdID, "err", err)
-				return fmt.Errorf("buyin: cash-out credit failed after seat removal — reconciliation job will retry for %s amount %d: %w", playerID, stack, err)
+				walletErr = fmt.Errorf("buyin: cash-out credit failed after seat removal — reconciliation job will retry for %s amount %d: %w", playerID, stack, err)
 			}
 		} else if err := mover.Credit(ctx, playerID, stack, key, "poker_cashout"); err != nil {
 			slog.Error("buyin: cash-out credit failed after seat removal — reconciliation job will retry",
 				"player", playerID, "room", roomID, "amount", stack, "err", err)
-			return fmt.Errorf("buyin: cash-out credit failed after seat removal — reconciliation job will retry for %s amount %d: %w", playerID, stack, err)
+			walletErr = fmt.Errorf("buyin: cash-out credit failed after seat removal — reconciliation job will retry for %s amount %d: %w", playerID, stack, err)
 		}
 	}
 
-	if err := s.pending.MarkResolved(ctx, key); err != nil {
-		return fmt.Errorf("buyin: settlement completed but recovery intent finalization failed: %w", err)
+	// MarkResolved must stay conditional on the credit actually landing —
+	// marking it resolved despite a wallet failure would stop the
+	// reconciliation job from ever retrying the credit.
+	if walletErr == nil {
+		if err := s.pending.MarkResolved(ctx, key); err != nil {
+			walletErr = fmt.Errorf("buyin: settlement completed but recovery intent finalization failed: %w", err)
+		}
 	}
 
 	if s.sessions != nil {
@@ -903,5 +919,5 @@ func (s *Service) settle(ctx context.Context, roomID, playerID string, stack int
 		}
 	}
 
-	return nil
+	return walletErr
 }
