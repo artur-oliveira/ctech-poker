@@ -35,7 +35,8 @@ export default function TableGuide() {
         <GuideTerm term="Sair da mesa">Pede a saída e devolve a pilha à carteira usada no buy-in.</GuideTerm>
       </GuideTerms>
         <p>Reações e chat têm botão próprio ao lado do menu; em telas largas os dois painéis ficam ancorados nas
-          bordas do feltro.</p></>
+          bordas do feltro. Com mouse, passar por cima do botão já abre o painel e o clique o mantém aberto;
+          clicar de novo fecha.</p></>
     },
     {
       id: 'acoes',

@@ -213,7 +213,7 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const asideRef = useRef<HTMLElement>(null);
   useDismiss(asideRef, open, () => onOpenChangeAction(false));
-  const hover = useHoverPanel(onOpenChangeAction, !pendingReaction);
+  const {toggleFromClick, ...hover} = useHoverPanel(onOpenChangeAction, !pendingReaction, open);
 
   const entries = new Map(catalog.map(entry => [entry.id, entry]));
   const owned = ownedReactionIDs(catalog);
@@ -269,7 +269,7 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
       <Button type="button" variant="ghost" size="icon" className="reaction-toggle"
               aria-label={pendingReaction ? 'Cancelar reação direcionada' : open ? 'Fechar reações' : 'Abrir reações'}
               aria-expanded={open} aria-pressed={Boolean(pendingReaction)} aria-keyshortcuts="e"
-              onClick={() => pendingReaction ? onPendingReactionChangeAction(null) : onOpenChangeAction(!open)}>
+              onClick={() => pendingReaction ? onPendingReactionChangeAction(null) : toggleFromClick(open)}>
         {open || pendingReaction ? <X/> : <SmilePlus/>}
       </Button>
       {pendingReaction && <span className="reaction-target-hint" role="status">

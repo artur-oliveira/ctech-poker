@@ -62,7 +62,7 @@ export function Chat({items, onSendAction, connected = true, viewerId, seats = [
   }
 
   useDismiss(asideRef, open, () => onOpenChangeAction(false));
-  const hover = useHoverPanel(onOpenChangeAction);
+  const {toggleFromClick, ...hover} = useHoverPanel(onOpenChangeAction, true, open);
 
   return <aside ref={asideRef} className={`game-chat table-aside-skirt ${open ? 'open' : ''}`}
                 aria-label="Chat da mesa" {...hover}>
@@ -71,7 +71,7 @@ export function Chat({items, onSendAction, connected = true, viewerId, seats = [
     </div>
     <Button type="button" variant="ghost" size="icon" aria-label={open ? 'Fechar chat' : 'Abrir chat'}
             aria-expanded={open} aria-controls={panelId} aria-keyshortcuts="t" className="chat-toggle"
-            onClick={() => onOpenChangeAction(!open)}>
+            onClick={() => toggleFromClick(open)}>
       {open ? <X/> : <MessageCircle/>}
       {unread > 0 && <span className="chat-unread-dot" aria-hidden="true"/>}
     </Button>

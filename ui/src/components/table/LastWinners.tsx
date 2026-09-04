@@ -71,13 +71,13 @@ export function LastWinners({items, tableId, open: controlledOpen, onOpenChangeA
   const winners = deriveWinners(items);
   const asideRef = useRef<HTMLElement>(null);
   useDismiss(asideRef, open, () => setOpen(false));
-  const hover = useHoverPanel(setOpen);
+  const {toggleFromClick, ...hover} = useHoverPanel(setOpen, true, open);
   if (!winners.length) return null;
   return <aside ref={asideRef} className={`last-winners table-aside-skirt ${open ? 'open' : ''}`}
                 aria-label="Últimos vencedores da mesa" {...hover}>
     <button type="button" className="last-winners-toggle" aria-expanded={open} aria-controls="last-winners-panel"
             aria-label={open ? 'Fechar últimos vencedores' : 'Ver últimos vencedores'}
-            onClick={() => setOpen(!open)}>
+            onClick={() => toggleFromClick(open)}>
       <Trophy aria-hidden="true"/>
     </button>
     <div id="last-winners-panel" className="last-winners-panel">

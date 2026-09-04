@@ -31,6 +31,11 @@ off by default — do not build UI that assumes real money is on.
   timestamp preclude a stable hash, and the static app cannot give it a nonce. Never add an inline
   `<script>` to a layout or page: the postbuild guard must remain effective even though this edge
   compatibility exception exists. See #46/#120.
+- **Mock mode runs with no backend at all.** `npm run dev:mock` sets `NEXT_PUBLIC_MOCK_API=true`;
+  `probeHealthOnce()` in `lib/network/liveness.ts` short-circuits under `USE_MOCK` so the health
+  probe cannot escalate the app to `/unavailable` when nothing is listening on the dev proxy's API
+  port. Do not reintroduce a network call on that path — `og:capture` and the browser test suite
+  both boot this way.
 - **Generated assets are manual, on purpose.** `npm run og:capture` (OG + guide screenshots, needs
   `npm run dev:mock` running) and `npm run cards:variants` (card face SVG variants) are run by
   hand by whoever changes the surface they capture, and their output is committed. No workflow
@@ -103,7 +108,13 @@ off by default — do not build UI that assumes real money is on.
   `docs/2026-09-01-bet-hold-repeat.md`.
 - **The docked asides are one pattern.** `Chat`, `TableReactions` and `LastWinners` share the
   `column-reverse` toggle/panel stack, `useHoverPanel` (hover open with a close grace period) and
-  the `.table-aside-skirt` hit-area class. Extend those three rather than re-deriving hover
+  the `.table-aside-skirt` hit-area class. The toggle's click belongs to that hook too
+  (`toggleFromClick`, destructured out of the spread so it never reaches the DOM node): a bare
+  `onClick={() => onOpenChange(!open)}` races the hover the same pointer movement just performed,
+  and which one wins depends on the engine — on Firefox the first click on the reactions toggle
+  closed the panel hover had just opened. See
+  `docs/2026-09-03-aside-toggle-firefox-and-mock-liveness.md`.
+  Extend those three rather than re-deriving hover
   behaviour per aside, and keep the felt's band layout intact (wordmark / dealer call / board +
   street rail; the felt's lower band belongs to the bottom seats' bet chips). See
   `docs/2026-09-01-table-felt-and-aside-polish.md`.
