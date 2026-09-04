@@ -39,6 +39,10 @@ type sessionLogReader interface {
 	ListHands(ctx context.Context, playerID, mode string, limit int, startKey map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error)
 	ListHandsByTable(ctx context.Context, playerID, mode, tableID string, limit int, startKey map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error)
 	GetHand(ctx context.Context, playerID, mode, handID string) (*sessionlog.HandItem, error)
+	// BestPublicHand backs the anonymous showcase and therefore reads only
+	// public attributes — never the full HandItem, which carries opponents,
+	// seeds and fairness maps a visitor may not see (#225).
+	BestPublicHand(ctx context.Context, playerID, mode string) (*sessionlog.PublicHandSummary, error)
 }
 
 type playerAchievementStore interface {
@@ -473,21 +477,12 @@ func (h *playerHandlers) showcase(c fiber.Ctx) error {
 		featured = append(featured, fiber.Map{"key": key, "count": counts[key]})
 	}
 
-	var bestHand fiber.Map
-	var bestNet int64
-	if hands, _, listErr := h.sessions.ListHands(c.Context(), playerID, roomstore.CurrencyModeSandbox, 50, nil); listErr == nil {
-		for i := range hands {
-			if hands[i].NetChange > bestNet {
-				bestNet = hands[i].NetChange
-				// Opponent identities/cards, storage keys and shuffle secrets
-				// are deliberately absent from the public projection.
-				bestHand = fiber.Map{
-					"hand_id": hands[i].HandID, "table_id": hands[i].TableID,
-					"net_change": hands[i].NetChange, "ended_at": hands[i].EndedAt,
-					"board": hands[i].Board, "hole_cards": hands[i].HoleCards,
-				}
-			}
-		}
+	// Opponent identities/cards, storage keys and shuffle secrets are never
+	// read in the first place: BestPublicHand projects the six public
+	// attributes out of DynamoDB and returns nothing else (#225).
+	var bestHand any
+	if best, bestErr := h.sessions.BestPublicHand(c.Context(), playerID, roomstore.CurrencyModeSandbox); bestErr == nil && best != nil {
+		bestHand = best
 	}
 	response := fiber.Map{
 		"player_id":             profile.UserID,

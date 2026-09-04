@@ -29,6 +29,9 @@ func (f *fakeHandRevealSessions) ListHandsByTable(context.Context, string, strin
 func (f *fakeHandRevealSessions) GetHand(context.Context, string, string, string) (*sessionlog.HandItem, error) {
 	return f.hand, nil
 }
+func (f *fakeHandRevealSessions) BestPublicHand(context.Context, string, string) (*sessionlog.PublicHandSummary, error) {
+	return nil, nil
+}
 
 type fakeHandRevealStore struct {
 	record *handreveal.HandRecord

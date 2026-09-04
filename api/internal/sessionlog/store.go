@@ -410,6 +410,63 @@ func (s *Store) ListHands(ctx context.Context, playerID, mode string, limit int,
 	return outHands, res.LastEvaluatedKey, nil
 }
 
+// PublicHandSummary is a recorded hand reduced to the attributes the public
+// profile showcase may publish. It is a separate type from HandItem on
+// purpose: a HandItem carries opponent identities and cards, the shuffle
+// seed, and the per-position fairness maps, none of which an anonymous
+// visitor may see — so the showcase never holds a value that *could* leak
+// them, rather than relying on every future edit of the response builder to
+// keep leaving them out.
+type PublicHandSummary struct {
+	HandID    string   `dynamodbav:"hand_id" json:"hand_id"`
+	TableID   string   `dynamodbav:"table_id" json:"table_id"`
+	NetChange int64    `dynamodbav:"net_change" json:"net_change"`
+	EndedAt   int64    `dynamodbav:"ended_at" json:"ended_at"`
+	Board     []string `dynamodbav:"board,omitempty" json:"board,omitempty"`
+	HoleCards []string `dynamodbav:"hole_cards,omitempty" json:"hole_cards,omitempty"`
+}
+
+// publicHandProjection is the ProjectionExpression that keeps a showcase read
+// to PublicHandSummary's attributes. Every name here contains an underscore
+// or is otherwise not a DynamoDB reserved word, so no aliasing is needed.
+const publicHandProjection = "hand_id,table_id,net_change,ended_at,board,hole_cards"
+
+// ShowcaseHandScan bounds how many recent hands the public showcase reads to
+// pick its best one. Together with the projection above it is the whole
+// per-view ceiling: one Query, at most this many rows, each just six small
+// attributes — instead of up to 50 full HandItems (opponents, fairness maps,
+// seeds) fetched to compute a six-field summary (#225).
+const ShowcaseHandScan = 50
+
+// BestPublicHand returns the biggest win among the player's most recent
+// ShowcaseHandScan hands in mode, or nil when none of them won chips. Only
+// public attributes are read: private ones never leave DynamoDB, so they
+// cannot reach the response by accident.
+//
+// Deliberately uncached — a showcase view is a single bounded Query, so it
+// always reflects the player's newest hand rather than trading freshness for
+// a cache that would have to be invalidated on every hand completion.
+func (s *Store) BestPublicHand(ctx context.Context, playerID, mode string) (*PublicHandSummary, error) {
+	res, err := s.hands.Query(ctx, dynamo.QueryOpts{
+		PK: playerID, SKPrefix: mode + "#", Limit: ShowcaseHandScan,
+		ScanIndexForward: false, ProjectionExpression: publicHandProjection,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var best *PublicHandSummary
+	for _, raw := range res.Items {
+		item, decodeErr := dynamo.Decode[PublicHandSummary](raw)
+		if decodeErr != nil || item == nil || item.NetChange <= 0 {
+			continue
+		}
+		if best == nil || item.NetChange > best.NetChange {
+			best = item
+		}
+	}
+	return best, nil
+}
+
 // ListRecentHandsAcrossModes supplies the bounded lazy bootstrap for recent
 // opponents. The history table has no chronological GSI, so it reads at most
 // limit player-scoped rows and sorts that bounded set by EndedAt in memory.

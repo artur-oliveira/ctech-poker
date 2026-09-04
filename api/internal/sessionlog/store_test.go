@@ -2,6 +2,8 @@ package sessionlog
 
 import (
 	"context"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -70,6 +72,23 @@ func TestOpenTableIDIsPresentOnlyWhileTheSessionIsOpen(t *testing.T) {
 	}
 	if got := openTableID(SessionItem{TableID: "t1", EndedAt: 99}); got != "" {
 		t.Fatalf("expected a closed session to leave the index, got %q", got)
+	}
+}
+
+// TestPublicHandProjectionMatchesTheSummaryType pins down #225's privacy
+// contract at the only place it can silently break: the projection string.
+// It must list exactly PublicHandSummary's attributes — a name dropped from
+// it leaves the showcase with a blank field, and a name added to it starts
+// pulling an attribute the summary type was created to exclude (opponents,
+// seeds, fairness maps) back out of DynamoDB.
+func TestPublicHandProjectionMatchesTheSummaryType(t *testing.T) {
+	fields := reflect.VisibleFields(reflect.TypeOf(PublicHandSummary{}))
+	want := make([]string, 0, len(fields))
+	for _, field := range fields {
+		want = append(want, strings.TrimSuffix(field.Tag.Get("dynamodbav"), ",omitempty"))
+	}
+	if got := strings.Join(want, ","); got != publicHandProjection {
+		t.Fatalf("projection %q does not match PublicHandSummary's attributes %q", publicHandProjection, got)
 	}
 }
 

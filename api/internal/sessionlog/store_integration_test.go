@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"gopkg.aoctech.app/api-commons/dynamo"
 )
 
 func uniqueSessionPlayerID(t *testing.T) string {
@@ -137,6 +139,71 @@ func TestCloseSessionEvictsFromTheOpenIndex(t *testing.T) {
 	}
 	if seen, err := store.HasSessionAtTable(ctx, playerID, "never-played"); err != nil || seen {
 		t.Fatalf("expected no session at an unvisited table, got %v err=%v", seen, err)
+	}
+}
+
+// TestBestPublicHandReadsOnlyPublicAttributes pins down #225: the anonymous
+// showcase used to read up to 50 FULL HandItems — opponents, seeds, fairness
+// maps — to build a six-field summary. It now issues one projected Query
+// over the same 50-hand window, so the per-view payload/RCU ceiling is those
+// six attributes and nothing private is ever transported.
+func TestBestPublicHandReadsOnlyPublicAttributes(t *testing.T) {
+	store, queries := newCountingTestStore(t)
+	ctx := context.Background()
+	playerID := uniqueSessionPlayerID(t)
+
+	for i := 0; i < ShowcaseHandScan; i++ {
+		if err := store.RecordHand(ctx, HandItem{
+			PK: playerID, CurrencyMode: "sandbox", HandID: fmt.Sprintf("h-%03d", i),
+			TableID: "t1", Outcome: "won", NetChange: int64(i), EndedAt: int64(1_700_000_000_000 + i),
+			Board: []string{"As", "Kd", "7c"}, HoleCards: []string{"Ah", "Ac"},
+			Opponents: []OpponentSummary{{PlayerID: "villain", Name: "Vilão", HoleCards: []string{"2c", "3d"}}},
+			ServerSeed: "deadbeef", CommitHash: "cafebabe", RootCommitHash: "f00d",
+			RevealedCardSalts:    map[string]RevealedSalt{"0": {Card: "As", SaltHex: "aa"}},
+			UnrevealedCardHashes: map[string]string{"7": "bb"},
+		}); err != nil {
+			t.Fatalf("RecordHand %d: %v", i, err)
+		}
+	}
+
+	queries.Store(0)
+	best, err := store.BestPublicHand(ctx, playerID, "sandbox")
+	if err != nil || best == nil {
+		t.Fatalf("BestPublicHand: %+v err=%v", best, err)
+	}
+	if n := queries.Load(); n != 1 {
+		t.Fatalf("expected exactly 1 Query for a showcase view, got %d", n)
+	}
+	if want := int64(ShowcaseHandScan - 1); best.NetChange != want {
+		t.Fatalf("best net_change = %d, want %d", best.NetChange, want)
+	}
+	if best.HandID != fmt.Sprintf("h-%03d", ShowcaseHandScan-1) || best.TableID != "t1" ||
+		best.EndedAt != int64(1_700_000_000_000+ShowcaseHandScan-1) ||
+		len(best.Board) != 3 || len(best.HoleCards) != 2 {
+		t.Fatalf("public fields did not survive the projection: %+v", best)
+	}
+
+	// The projection itself is what keeps private attributes out: read the
+	// same rows back with it and confirm DynamoDB returns nothing else.
+	res, err := store.hands.Query(ctx, dynamo.QueryOpts{
+		PK: playerID, SKPrefix: "sandbox#", Limit: ShowcaseHandScan,
+		ScanIndexForward: false, ProjectionExpression: publicHandProjection,
+	})
+	if err != nil {
+		t.Fatalf("projected query: %v", err)
+	}
+	if len(res.Items) != ShowcaseHandScan {
+		t.Fatalf("expected %d projected rows, got %d", ShowcaseHandScan, len(res.Items))
+	}
+	for _, raw := range res.Items {
+		if len(raw) != 6 {
+			t.Fatalf("expected 6 projected attributes, got %d: %v", len(raw), raw)
+		}
+		for _, private := range []string{"opponents", "server_seed", "commit_hash", "root_commit_hash", "revealed_card_salts", "unrevealed_card_hashes"} {
+			if _, found := raw[private]; found {
+				t.Fatalf("private attribute %q reached a showcase read", private)
+			}
+		}
 	}
 }
 
