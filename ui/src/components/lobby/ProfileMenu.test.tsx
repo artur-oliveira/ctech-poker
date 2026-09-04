@@ -29,7 +29,10 @@ vi.mock('@/lib/capabilities', () => ({
 }));
 
 vi.mock('@tanstack/react-query', () => ({
-  useQuery: ({queryKey}: {queryKey: unknown[]}) => {
+  useQuery: ({queryKey, enabled}: {queryKey: unknown[]; enabled?: boolean}) => {
+    // `enabled: false` is a query that never reaches the network — the request
+    // budget assertions below depend on it not being recorded as a read.
+    if (enabled === false) return {data: undefined};
     mocks.query(queryKey);
     if (queryKey[0] === 'player') return {data: mocks.state.player};
     if (queryKey[1] === 'cosmetic-catalog') return {data: mocks.state.catalog};
@@ -99,6 +102,15 @@ describe('ProfileMenu', () => {
     await openProfile();
     expect(screen.getAllByText('12.345 fichas')).toHaveLength(2);
     expect(screen.getByRole('button', {name: /Loja/})).toHaveAttribute('href', '/store');
+  });
+
+  test('does not read the deck catalog until the menu is opened', async () => {
+    render(<ProfileMenu/>);
+    expect(mocks.query).toHaveBeenCalledWith(['player', 'me']);
+    expect(mocks.query).not.toHaveBeenCalledWith(['wallet', 'cosmetic-catalog', 'deck']);
+
+    await openProfile();
+    expect(mocks.query).toHaveBeenCalledWith(['wallet', 'cosmetic-catalog', 'deck']);
   });
 
   test('hides the wallet-mode switch and the real-money balance when real money is off', async () => {

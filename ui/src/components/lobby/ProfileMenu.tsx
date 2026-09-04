@@ -56,8 +56,14 @@ function formatReal(amount?: number) {
 export function ProfileMenu() {
   const queryClient = useQueryClient();
   const {data: me} = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
-  const {data: deckCatalog = []} = useQuery({
-    queryKey: ['wallet', 'cosmetic-catalog', 'deck'], queryFn: () => listCosmeticCatalog('deck')
+  // The deck catalog only feeds the picker inside the popover, but this menu
+  // is mounted on every authenticated page — fetching it eagerly cost every
+  // visit a GET most players never look at. Latched on the first open so the
+  // cache stays warm for every later open (#232).
+  const [menuOpened, setMenuOpened] = useState(false);
+  const {data: deckCatalog = [], isLoading: deckCatalogLoading} = useQuery({
+    queryKey: ['wallet', 'cosmetic-catalog', 'deck'], queryFn: () => listCosmeticCatalog('deck'),
+    enabled: menuOpened
   });
   const ownedDecks = ownedCosmeticIDs(deckCatalog);
   const deckPrices = new Map(deckCatalog.map(entry => [entry.id, entry.price_fichas]));
@@ -123,6 +129,7 @@ export function ProfileMenu() {
   const balanceLabel = walletMode === 'real' ? formatReal(me?.game_balance) : formatSandbox(me?.sandbox_balance);
 
   return <><Popover onOpenChange={(open, details) => {
+    if (open) setMenuOpened(true);
     if (!open && editingName && details.reason === 'escape-key') {
       details.cancel();
       setEditingName(false);
@@ -224,9 +231,15 @@ export function ProfileMenu() {
               </SelectTrigger>
               <SelectContent className="profile-deck-options" align="end">
                 {Object.entries(DECK_VARIANTS).map(([id, variant]) => {
-                  const locked = PREMIUM_DECK_IDS.has(id as DeckVariantId) && !ownedDecks.has(id as DeckVariantId);
+                  const premium = PREMIUM_DECK_IDS.has(id as DeckVariantId);
+                  // Same beat as the felt picker: until the catalog lands a premium
+                  // deck is neither known-locked nor selectable, so it waits in the
+                  // Select's disabled state instead of flashing a padlock (and a
+                  // store link) at a player who already owns it.
+                  const locked = premium && !deckCatalogLoading && !ownedDecks.has(id as DeckVariantId);
                   const price = deckPrices.get(id);
                   return <SelectItem key={id} value={id as DeckVariantId} label={variant.label}
+                                     disabled={premium && deckCatalogLoading}
                                      {...(locked ? {render: <Link href="/store#decks"/>} : {})}>
                     <span className={`deck-variant-option${locked ? ' locked' : ''}`}>
                       <span className="deck-variant-option-cards">
