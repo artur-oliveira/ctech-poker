@@ -44,7 +44,7 @@ func mustCreateTestTables(t *testing.T, db *dynamodb.Client, env string) {
 	}
 }
 
-func createTestTable(t *testing.T, db *dynamodb.Client, name string, withSK bool) {
+func createTestTable(t *testing.T, db *dynamodb.Client, name string, withSK bool, indexes ...types.GlobalSecondaryIndex) {
 	t.Helper()
 	attrs := []types.AttributeDefinition{{AttributeName: new("pk"), AttributeType: types.ScalarAttributeTypeS}}
 	keys := []types.KeySchemaElement{{AttributeName: new("pk"), KeyType: types.KeyTypeHash}}
@@ -52,8 +52,15 @@ func createTestTable(t *testing.T, db *dynamodb.Client, name string, withSK bool
 		attrs = append(attrs, types.AttributeDefinition{AttributeName: new("sk"), AttributeType: types.ScalarAttributeTypeS})
 		keys = append(keys, types.KeySchemaElement{AttributeName: new("sk"), KeyType: types.KeyTypeRange})
 	}
+	for _, idx := range indexes {
+		for _, key := range idx.KeySchema {
+			if *key.AttributeName != "pk" && *key.AttributeName != "sk" {
+				attrs = append(attrs, types.AttributeDefinition{AttributeName: key.AttributeName, AttributeType: types.ScalarAttributeTypeS})
+			}
+		}
+	}
 	tableName := name
-	_, err := db.CreateTable(context.Background(), &dynamodb.CreateTableInput{TableName: &tableName, AttributeDefinitions: attrs, KeySchema: keys, BillingMode: types.BillingModePayPerRequest})
+	_, err := db.CreateTable(context.Background(), &dynamodb.CreateTableInput{TableName: &tableName, AttributeDefinitions: attrs, KeySchema: keys, GlobalSecondaryIndexes: indexes, BillingMode: types.BillingModePayPerRequest})
 	if err != nil {
 		var inUse *types.ResourceInUseException
 		if !errors.As(err, &inUse) {
@@ -68,9 +75,33 @@ func testSessionStore(t *testing.T) *sessionlog.Store {
 	t.Helper()
 	db := testClient(t)
 	env := fmt.Sprintf("buyin_sessions_test_%d", time.Now().UnixNano())
-	createTestTable(t, db, env+"_poker_player_sessions", true)
+	createTestTable(t, db, env+"_poker_player_sessions", true, sessionTestIndexes()...)
 	createTestTable(t, db, env+"_poker_player_hands", true)
 	return sessionlog.NewStore(db, env)
+}
+
+// sessionTestIndexes mirrors the poker_player_sessions indexes in
+// cdk/lib/dynamodb-stack.ts. sessionlog's own helper keeps a copy too — this
+// repo duplicates DynamoDB Local helpers per package rather than sharing them.
+func sessionTestIndexes() []types.GlobalSecondaryIndex {
+	return []types.GlobalSecondaryIndex{
+		{
+			IndexName: new("gsi_open_table"),
+			KeySchema: []types.KeySchemaElement{
+				{AttributeName: new("pk"), KeyType: types.KeyTypeHash},
+				{AttributeName: new("open_table_id"), KeyType: types.KeyTypeRange},
+			},
+			Projection: &types.Projection{ProjectionType: types.ProjectionTypeAll},
+		},
+		{
+			IndexName: new("gsi_player_table"),
+			KeySchema: []types.KeySchemaElement{
+				{AttributeName: new("pk"), KeyType: types.KeyTypeHash},
+				{AttributeName: new("table_id"), KeyType: types.KeyTypeRange},
+			},
+			Projection: &types.Projection{ProjectionType: types.ProjectionTypeKeysOnly},
+		},
+	}
 }
 
 func testPendingStore(t *testing.T) *reconcile.PendingStore {
