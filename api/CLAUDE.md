@@ -411,10 +411,18 @@ catalog.
 - B31 fixed by rejection: `leaderboard.Top("achievement_points")` returns an unsupported-metric error instead of
   silently ranking via `gsi_hands_won`; add a `gsi_achievement_points` GSI before re-enabling the metric.
 - Issue #63 fixed: the `win_rate` board enforces `leaderboard.MinHandsForWinRateRank` (100) hands per currency mode.
-  `gsi_win_rate_pk` is a sparse key — `leaderboard.Store.syncWinRateRankKey` writes it once the counters cross the floor
+  `gsi_win_rate_pk` is a sparse key — `leaderboard.Store.syncWinRateRow` writes it once the counters cross the floor
   and `REMOVE`s it below, so a 1-hand 100% row is never returned by `gsi_win_rate`; `Service.Top` filters sub-floor rows
-  again before sorting so none occupies a rank slot. Legacy stale keys clean up lazily on the row's next write — no
-  migration job. `hands_won` / `hands_played` boards are untouched.
+  again before sorting so none occupies a rank slot, and `Service.MyRank` reports a sub-floor player as unranked rather
+  than ranking them off a rate that is no longer materialized (#217). Legacy stale keys clean up lazily on the row's
+  next write — no migration job. `hands_won` / `hands_played` boards are untouched.
+- Issue #217 fixed: a hand costs **one** `poker_leaderboard_stats` write per participant, not three. The counter `ADD`
+  is unchanged; `Store.syncWinRateRow` merges the old `materializeWinRate` + `syncWinRateRankKey` pair into one
+  conditional write and skips it entirely while the row sits below the win_rate floor and off the board (the steady
+  state for most players) — a sub-floor row is in no GSI, so its stale `win_rate_score` is read by nobody. Rows already
+  on the win_rate board still cost a second write (DynamoDB cannot divide inside an update expression).
+  `IncrementAchievementPoints` likewise went from `points`+3 writes to one `ADD`. Budget pinned by
+  `TestRecordHandWriteBudget` (2/6/9 seats).
 - **Issue #62 partially fixed.** `GET /leaderboard/me` (`leaderboard.Service.MyRank` / `Store.RankOf`) gives a player
   their exact rank + total via `Select: COUNT` queries instead of the frontend computing rank from whatever page of
   `Top` it happened to fetch (the old bug: `#{data.findIndex+1} de {data.length}` showed page size, not the real total).
