@@ -4767,7 +4767,11 @@
     width: 100%;
     height: 100%;
     min-height: 0;
-    padding: 8px 12px 0
+    /* Bottom padding is the docked viewer seat's badge overhang: the dock is
+       the last flex child, so without it .seat-streak renders past the stage's
+       clip edge. The ring's flex:1 absorbs the difference, so this costs no
+       felt height. */
+    padding: 8px calc(var(--seat-badge-overhang) + 4px) var(--seat-badge-overhang)
 }
 /* The ring used to derive its width from aspect-ratio(3/4) against the
    height flex:1 hands it — a flex-basis-from-cross-size transfer that some
@@ -4934,7 +4938,7 @@
     top: 100%;
     left: 50%;
     width: max-content;
-    max-width: 64px;
+    max-width: var(--seat-caption-lane);
     margin-top: 3px;
     transform: translateX(-50%);
     text-align: center;
@@ -4962,8 +4966,8 @@
    64px compact lane. This keeps the 3/4-player diamond's extreme left/right
    labels inside a 320–390px viewport without pushing them toward the board. */
 .stage-v-ring :is(.seat-zone-left, .seat-zone-right) .seat-info {
-    width: 60px;
-    max-width: 60px
+    width: calc(var(--seat-caption-lane) - 4px);
+    max-width: calc(var(--seat-caption-lane) - 4px)
 }
 /* The supplemental playstyle badge only fits the ring at 7px, well under any
    readable floor, and it competes with name/stack for a caption lane that 9-max
@@ -5798,6 +5802,14 @@
    the floating table tools below the header instead of on top of a wrapped
    second row. */
 @media (max-width: 360px) {
+    /* The caption is centred on its avatar and the outermost avatars sit a
+       badge-overhang from the stage's clip edge, so the established lane is
+       wider than the narrowest phone can show. It ellipsises; a cut-off stack
+       figure does not. */
+    .stage-v-ring {
+        --seat-caption-lane: 56px
+    }
+
     .game-chrome > header {
         padding-right: max(8px, env(safe-area-inset-right));
         padding-left: max(8px, env(safe-area-inset-left))
@@ -8608,11 +8620,15 @@ html:has(.has-tab-bar) {
         max-width: 64px
     }
 
+    /* The outward hang is the badge overhang, not a free-standing number: that
+       is exactly what .game-table.stage-v's padding reserves outside the ring,
+       so the caption can reach the edge of the stage and never past it. At
+       -10px it cleared the clip box by 2px on a 320px phone. */
     .stage-v-ring .seat-2 .seat-info {
-        left: -10px
+        left: calc(var(--seat-badge-overhang) * -1)
     }
 
     .stage-v-ring .seat-7 .seat-info {
-        right: -10px
+        right: calc(var(--seat-badge-overhang) * -1)
     }
 }

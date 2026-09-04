@@ -145,6 +145,18 @@ off by default — do not build UI that assumes real money is on.
 - **Quality gate:** `npx vitest run`, `npx tsc --noEmit`, `npx eslint src --max-warnings 0` and
   `npm run build` must all pass with **zero errors and zero warnings**. Coverage thresholds are
   enforced in `vitest.config.ts` (**lines/functions/statements/branches 90**).
+- **Layout is gated in real engines, not in jsdom.** `npm run e2e` (Playwright,
+  `e2e/tableLayout.spec.ts`) runs the table across six viewports and four scenarios in Chromium,
+  Firefox and WebKit and asserts that nothing a player needs is clipped by an ancestor's
+  `overflow`, that the page never scrolls sideways, and that the aside toggles behave the same in
+  every engine. Playwright starts `dev:mock` itself. Coverage percentage cannot see any of this —
+  jsdom has no layout engine. **WebKit here is not an iPhone**: it misses mobile Safari's dynamic
+  viewport, rasterisation scale and flex intrinsic sizing, and this repo has already shipped a
+  `min-height` regression that looked fine in DevTools' device toolbar and squeezed the real table
+  on iOS. Any table-geometry change needs a pass on a real handset on top of a green run. Prefer
+  length tokens over percentage insets (which resolve against a different axis per side) and over
+  anything that has to travel through a flex cross size. See
+  `docs/2026-09-03-cross-browser-layout-suite.md`.
 - **Automated a11y and size gates.** `src/test/axe.ts`'s `expectNoAxeViolations(container)` runs axe-core in jsdom
   and fails on a new `serious`/`critical` violation; it is asserted in the six main route tests and
   `recoveryA11y.test.tsx`. `npm run bundle:check` compares per-route first-load JS in `out/` against

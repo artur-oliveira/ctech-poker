@@ -68,8 +68,50 @@ jobs:
           path: ui/.lighthouseci
           if-no-files-found: ignore
 
+  # Real engines, because jsdom has no layout. This is the gate for the class of
+  # defect that keeps reaching players through a 90%-covered unit suite: a badge
+  # clipped by an ancestor's overflow, a stage that scrolls sideways, and event
+  # ordering that differs between Chromium, Gecko and WebKit.
+  #
+  # WebKit here is Safari's engine, not iOS Safari. It does not reproduce mobile
+  # Safari's dynamic viewport or its flex intrinsic sizing, so a green run is
+  # necessary and not sufficient — table geometry still needs a pass on a real
+  # handset before it ships.
+  browsers:
+    name: Cross-browser layout
+    runs-on: ubuntu-26.04
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      # playwright.config.ts starts `npm run dev:mock` itself; mock mode needs
+      # no API, no fixtures and no auth (see lib/network/liveness.ts).
+      - name: Layout and interaction suite
+        run: npm run e2e
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: ui/playwright-report
+          if-no-files-found: ignore
+
   deploy:
-    needs: quality
+    needs: [quality, browsers]
     uses: artur-oliveira/ctech-cdk/.github/workflows/frontend-cloudflare.yml@main
     secrets: inherit
     with:
