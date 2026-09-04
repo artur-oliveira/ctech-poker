@@ -31,7 +31,7 @@ import {updateMe} from '@/lib/api/player';
 import {currentReactionPurchase, type ReactionCatalogEntry} from '@/lib/api/reactionPurchases';
 import {useTablePreferences} from '@/lib/tablePreferences';
 import {useDealerVoice} from '@/lib/hooks/useDealerVoice';
-import {useTableRemoval, useTableSession} from '@/lib/hooks/useTableSession';
+import {useTableProgressiveSession, useTableRemoval, useTableSession} from '@/lib/hooks/useTableSession';
 import {useTableOutcome} from '@/lib/hooks/useTableOutcome';
 import {useTableOverlays} from '@/lib/hooks/useTableOverlays';
 import {actionState} from '@/lib/tableActions';
@@ -101,8 +101,8 @@ function TableContent() {
     return () => setSoundEffectsEnabled(false);
   }, [preferences.soundEffects]);
   const queryClient = useQueryClient();
-  const session = useTableSession(id, valid);
-  const {room, seated, profile, playerNotes, reactionCatalog, reactionPurchases, tableHands} = session;
+  const core = useTableSession(id, valid);
+  const seated = core.seated;
   const [noteOpponent, setNoteOpponent] = useState<{ player_id: string; name?: string } | null>(null);
   const [reactionPurchaseTarget, setReactionPurchaseTarget] = useState<ReactionCatalogEntry | null>(null);
   const [favoritesSaving, setFavoritesSaving] = useState(false);
@@ -131,6 +131,16 @@ function TableContent() {
     setOpponentIds(previous => previous.join(',') === ids.join(',') ? previous : ids);
   }, [rt.snapshot?.seats, viewer]);
   useDealerVoice(rt.announcement, preferences.dealerVoice);
+  const overlays = useTableOverlays({connected: rt.status === 'connected', sendReaction: rt.sendReaction});
+  const {activeTablePanel, setActiveTablePanel, panelOpenChange, pendingReaction} = overlays;
+  // Declared after the overlays so the reactions panel's own open state is what
+  // arms the two reaction reads, and after the socket so the rest waits for the
+  // first snapshot instead of competing with the handshake (#212).
+  const session = useTableProgressiveSession(core, {
+    id, seeded: Boolean(rt.snapshot),
+    reactionsOpen: activeTablePanel === 'reactions' || Boolean(reactionPurchaseTarget)
+  });
+  const {room, profile, playerNotes, reactionCatalog, reactionPurchases, tableHands} = session;
   const {sessionRecap, closeRecap} = useTableRemoval({
     id, removed: rt.removed, terminalError: rt.terminalError,
     sessions: session.sessions, sessionsLoading: session.sessionsLoading
@@ -138,8 +148,6 @@ function TableContent() {
   const {handOutcome, viewerStackBefore, nextHandDurationMs} = useTableOutcome({
     id, viewer, snapshot: rt.snapshot, snapshotAt: rt.snapshotAt
   });
-  const overlays = useTableOverlays({connected: rt.status === 'connected', sendReaction: rt.sendReaction});
-  const {activeTablePanel, setActiveTablePanel, panelOpenChange, pendingReaction} = overlays;
   if (!valid) return (
     <main className="game-loading">
       <h1 className="sr-only">Mesa de poker</h1>
