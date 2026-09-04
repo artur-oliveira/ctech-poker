@@ -300,11 +300,24 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   itself, from `commitOutcomeLogEntries`'s loop — reuses that exact timestamp.
   `TestNextHandDeadlinePersistedBeforeArmMatchesWhatGetsArmed` needed a fake clock advancing on
   every call to reproduce this: a real, unmocked clock in a tight test loop advances by
-  microseconds between the two calls, which `UnixMilli()` truncation hides. `turnDeadlineForPersist`
-  /`armTurnTimer` have the identical two-independent-`timeNowFunc()`-calls shape for the ordinary
-  per-turn deadline, but with no comparable work between commit and broadcastAll for a plain
-  action, there is no evidence it produces a visible gap — left alone; revisit with concrete
-  evidence before touching it.
+  microseconds between the two calls, which `UnixMilli()` truncation hides.
+- **`turnDeadlineForPersist`/`armTurnTimer` had the identical bug, and `internal/tablenotify` made
+  it worse.** Same two-independent-`timeNowFunc()`-calls shape as the bullet above, now for the
+  ordinary per-turn deadline. Live capture (raw WebSocket frames, decoded, 2026-09-04 — fourth
+  incident-spec follow-up) caught the concrete evidence the previous bullet asked for: multiple
+  `state` broadcasts sharing one `snapshot_version` and `hand_id`, arriving milliseconds apart,
+  each with a *different* `action_base_deadline_unix_ms` — one already elapsed. Root cause:
+  `internal/tablenotify`'s `ExternalChangeCmd` now makes every sibling process reload and
+  `broadcastAll` almost immediately after each commit, so each one runs its own `armTurnTimer`
+  independently — without persist and arm agreeing on one timestamp, each process could compute
+  its own slightly-different "now" and publish it to the same shared fan-out channel. A client
+  simply renders whichever broadcast lands last, so it could show an elapsed deadline moments
+  after correctly showing a healthy one. Fixed identically: `turnDeadlineForPersist`'s fresh
+  branch stashes into `pendingPersistedDeadline`/`pendingDeadlineFor`/`pendingDeadlineForStage`
+  so `armTurnTimer` — in every process, once each reloads — reuses the exact same value instead of
+  computing its own. This does not stop multiple processes from each broadcasting the same
+  version; it makes sure they all agree on the number when they do.
+  `TestTurnDeadlinePersistedBeforeArmMatchesWhatGetsArmed` mirrors the next-hand test above.
 - **Nothing viewer-independent belongs inside `broadcastAll`'s per-seat loop, and nothing expensive belongs on the
   actor goroutine twice.** Chat and reaction views are built once per broadcast (`activityViews`) and shared; the
   `equityIterations` Monte Carlo is memoized by `(hole, board, opponent count)` per hand (`equityFor`), because a

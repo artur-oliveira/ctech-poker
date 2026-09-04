@@ -329,3 +329,47 @@ diferença fica em microssegundos e o `UnixMilli()` disfarça o bug. Confirmado 
 gap ali é de microssegundos (nenhum trabalho pesado entre commit e broadcastAll pra um Act comum),
 então não há evidência de que cause o mesmo efeito visível — deixado de fora desta correção;
 revisitar se aparecer evidência concreta.
+
+## 📌 Quarta atualização — o mesmo bug, agora no timer de turno (achado #5)
+
+Sessão de captura ao vivo com WebSocket instrumentado desde antes da conexão (sem `reload` no
+meio, dessa vez), jogando duas mãos reais. Decodificando os 77 frames capturados, achei múltiplas
+mensagens `state` com o **mesmo** `snapshot_version` e `hand_id`, chegando a poucos milissegundos
+de diferença, cada uma com um `action_base_deadline_unix_ms` **diferente**:
+
+```
+version=7, current=99cae0fe, t=...034  → base - t = +1562ms  (saudável)
+version=7, current=99cae0fe, t=...045  → base - t =  -696ms  (já vencido)
+version=7, current=99cae0fe, t=...046  → base - t = +1550ms  (saudável de novo)
+```
+
+Três broadcasts pra mesma versão lógica de estado, chegando intercalados, um deles já vencido.
+Como o cliente simplesmente renderiza o que chega por último, um cliente podia acabar mostrando
+o deadline errado mesmo tendo recebido o certo momentos antes — exatamente o "consome time bank
+instantaneamente" relatado.
+
+**Causa raiz:** o mesmo bug do achado #4 (`nextHandDeadlineForPersist`/`armNextHandTimer`
+chamando `timeNowFunc()` duas vezes independentes), só que no `turnDeadlineForPersist`/
+`armTurnTimer` — e **agravado pelo próprio fix do achado #3** (`internal/tablenotify`): antes,
+só o processo que processava a ação computava um deadline "fresco"; agora, toda mudança dispara
+`ExternalChangeCmd` em **todo processo** que também está servindo essa mesa, e cada um roda seu
+próprio `armTurnTimer` de forma independente. Sem os dois pontos (persist e arm) reaproveitarem
+o mesmo valor, cada processo podia computar um "agora" ligeiramente diferente e publicar sua
+própria versão pro mesmo canal Redis compartilhado — múltiplas fontes escrevendo a mesma
+"verdade" com pequenas divergências.
+
+**Correção:** mesmo padrão do achado #4, aplicado a `turnDeadlineForPersist`: o valor recém
+calculado fica em `pendingPersistedDeadline`/`pendingDeadlineFor`/`pendingDeadlineForStage`
+(os mesmos campos que `ensureLoaded` já usa pra resumir entre instâncias), então `armTurnTimer`
+— desse mesmo processo — reaproveita o valor exato em vez de recalcular. Isso não elimina os
+múltiplos broadcasts (ainda vêm de processos diferentes), mas garante que todos concordem no
+mesmo número, então não importa qual chega por último.
+
+Teste de regressão: `TestTurnDeadlinePersistedBeforeArmMatchesWhatGetsArmed`
+(`fleetstate_test.go`), mesmo relógio falso incremental do achado #4. Confirmado falhando sem o
+fix (drift de 30ms) e passando com ele.
+
+**Ainda em aberto:** não investiguei se o MESMO padrão de múltiplos processos publicando o mesmo
+`snapshot_version` com pequenas divergências pode acontecer em outros campos além dos deadlines
+(ex.: `idle_removal_unix_ms`) — o fix aqui só fecha os dois relógios que já tínhamos evidência
+concreta de problema.

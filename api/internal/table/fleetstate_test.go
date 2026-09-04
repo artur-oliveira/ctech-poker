@@ -496,3 +496,53 @@ func TestNextHandClearsTheArmedMarkerWhenItStartsNothing(t *testing.T) {
 		t.Fatalf("armed marker = %q, want cleared", actor.nextHandArmedFor)
 	}
 }
+
+// TestTurnDeadlinePersistedBeforeArmMatchesWhatGetsArmed mirrors
+// TestNextHandDeadlinePersistedBeforeArmMatchesWhatGetsArmed above, for the
+// ordinary per-turn deadline: production always calls turnDeadlineForPersist
+// (from commit) before armTurnTimer (from broadcastAll, right after). Before
+// this fix each independently called timeNowFunc() to compute a fresh
+// deadline the first time a turn began, so a real gap between the two calls
+// (in production, other processes reacting to internal/tablenotify's signal
+// each ran their own armTurnTimer too) let the persisted value and the
+// broadcast value diverge — a client could see several broadcasts of one
+// snapshot_version, each with a different action_base_deadline_unix_ms,
+// arriving in no guaranteed order.
+func TestTurnDeadlinePersistedBeforeArmMatchesWhatGetsArmed(t *testing.T) {
+	tbl := hand.NewTable([]*hand.Player{
+		{ID: "p1", Stack: 1000, Ready: true},
+		{ID: "p2", Stack: 1000, Ready: true},
+	}, 10, 20)
+	if err := tbl.StartHand(); err != nil {
+		t.Fatalf("StartHand: %v", err)
+	}
+	a := New("table-1", nil, true, func(string, hand.Snapshot) {})
+	t.Cleanup(func() { a.afkSweepTimer.Stop() })
+	a.cached = tbl
+	a.handID = "hand-1"
+
+	// See TestNextHandDeadlinePersistedBeforeArmMatchesWhatGetsArmed for why
+	// this needs a fake clock advancing per call rather than a real one.
+	base := timeNowFunc()
+	calls := 0
+	old := timeNowFunc
+	timeNowFunc = func() time.Time {
+		calls++
+		return base.Add(time.Duration(calls) * 30 * time.Millisecond)
+	}
+	t.Cleanup(func() { timeNowFunc = old })
+
+	first := a.turnDeadlineForPersist()
+	second := a.turnDeadlineForPersist()
+	if second != first {
+		t.Fatalf("a second persist call before arming drifted: first=%d second=%d", first, second)
+	}
+
+	current := tbl.CurrentPlayerIDForActor()
+	a.armTurnTimer(current, tbl.Stage(), 0)
+	t.Cleanup(func() { a.turnTimer.Stop() })
+
+	if got := a.turnDeadline.UnixMilli(); got != first {
+		t.Fatalf("armed deadline = %d, want the exact persisted value %d", got, first)
+	}
+}

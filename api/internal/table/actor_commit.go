@@ -207,20 +207,42 @@ func replayFrameFor(snapshot hand.Snapshot) *tablestore.ReplayFrame {
 // turnDeadlineForPersist returns the deadline to commit alongside this
 // state: unchanged (already-armed) if this action didn't change whose turn
 // it is or what stage they're acting in, freshly computed one turnTimeout
-// from now if it did, 0 if no one is on the clock. armTurnTimer (called from
-// broadcastAll right after every commit) is the one source of truth for
-// actually scheduling the timeout and for a.turnDeadlineFor/ForStage — this
-// only has to agree closely enough that a later reload resumes the same
-// instant instead of granting a fresh window (see StoredTable.TurnDeadlineUnixMs).
+// from now if it did, 0 if no one is on the clock.
+//
+// The fresh branch stashes its computed value in pendingPersistedDeadline/
+// pendingDeadlineFor/pendingDeadlineForStage (normally the fields
+// ensureLoaded fills from a *reload*) so armTurnTimer — called from
+// broadcastAll right after every commit — reuses this exact timestamp
+// instead of computing its own via a second, independent timeNowFunc()
+// call. Two separate "now"s here used to disagree by hundreds of
+// milliseconds in production: with internal/tablenotify's cross-process
+// signal (see ChangeNotifier) now making every OTHER process reload and
+// re-broadcast almost immediately after this commit too, each such process
+// ran its OWN armTurnTimer independently — and without this fix, each one
+// computed its own slightly-different "fresh" deadline via this same
+// divergence, then published it to the shared fan-out channel. A client
+// could receive several broadcasts for the identical snapshot_version in
+// quick succession, each with a different action_base_deadline_unix_ms,
+// arriving interleaved in no particular order — so the *last* one to land,
+// not the correct one, decided what was shown, sometimes already elapsed by
+// the time it arrived (2026-09-04, third incident spec follow-up). This fix
+// makes the persisted value and every process's resumed value identical,
+// so there is nothing left to diverge.
 func (a *Actor) turnDeadlineForPersist() int64 {
 	current := a.cached.CurrentPlayerIDForActor()
 	if current == "" {
 		return 0
 	}
-	if current == a.turnDeadlineFor && a.cached.Stage() == a.turnDeadlineForStage {
+	stage := a.cached.Stage()
+	if current == a.turnDeadlineFor && stage == a.turnDeadlineForStage {
 		return a.turnDeadline.UnixMilli()
 	}
-	return timeNowFunc().Add(a.turnTimeout + a.timeBankFor(current)).UnixMilli()
+	if a.pendingPersistedDeadline > 0 && a.pendingDeadlineFor == current && a.pendingDeadlineForStage == stage {
+		return a.pendingPersistedDeadline
+	}
+	fresh := timeNowFunc().Add(a.turnTimeout + a.timeBankFor(current)).UnixMilli()
+	a.pendingPersistedDeadline, a.pendingDeadlineFor, a.pendingDeadlineForStage = fresh, current, stage
+	return fresh
 }
 
 // nextHandDeadlineForPersist returns the post-hand countdown to commit
