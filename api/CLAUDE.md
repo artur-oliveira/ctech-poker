@@ -579,6 +579,17 @@ catalog.
   reconciliation. **Rollout:** deploy the CDK change first, then backfill `open_table_id = table_id` on rows with
   `ended_at = 0` — sessions still open at deploy time predate the attribute and would otherwise be invisible to
   `FindOpenSession` until they TTL out (30 days); `gsi_player_table` needs no backfill since `table_id` is on every row.
+- **Issue #225 fixed: the public showcase projects, it does not read whole hands.** `GET /players/:id/showcase` used to
+  pull up to 50 complete `sessionlog.HandItem`s — opponent identities and cards, the shuffle seed, the per-position
+  fairness maps — to build a six-field `best_hand`. `sessionlog.Store.BestPublicHand` replaces that with a single
+  `Query` carrying a `ProjectionExpression` (`publicHandProjection`) and returns `sessionlog.PublicHandSummary`, a type
+  that *has* no private fields, so the handler cannot leak one by accident. The per-view ceiling is therefore fixed and
+  measured: one Query, at most `sessionlog.ShowcaseHandScan` (50) rows, six small attributes each
+  (`TestBestPublicHandReadsOnlyPublicAttributes` asserts the query count and that nothing else comes back;
+  `TestPublicHandProjectionMatchesTheSummaryType` fails if the projection ever drifts from the public type).
+  **Freshness: deliberately uncached** — one bounded query per view always reflects the player's newest hand, instead of
+  a cache that would have to be invalidated on every hand completion. `best_hand` now omits `board`/`hole_cards` when
+  empty rather than sending `null`; the profile page already treats both as optional.
 
 ## Layout
 

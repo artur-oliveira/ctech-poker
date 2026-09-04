@@ -54,6 +54,26 @@ func (m *mockHistoryReader) ListHands(_ context.Context, playerID, mode string, 
 func (m *mockHistoryReader) ListHandsByTable(_ context.Context, playerID, mode, tableID string, _ int, _ map[string]types.AttributeValue) ([]sessionlog.HandItem, map[string]types.AttributeValue, error) {
 	return []sessionlog.HandItem{{PK: playerID, HandID: "h-1", NetChange: 50, TableID: tableID, EndedAt: fixtureEndedAtMs}}, nil, nil
 }
+// BestPublicHand mirrors the real store: the best of the same fixture hands
+// ListHands returns, reduced to the public attributes.
+func (m *mockHistoryReader) BestPublicHand(ctx context.Context, playerID, mode string) (*sessionlog.PublicHandSummary, error) {
+	hands, _, err := m.ListHands(ctx, playerID, mode, sessionlog.ShowcaseHandScan, nil)
+	if err != nil {
+		return nil, err
+	}
+	var best *sessionlog.PublicHandSummary
+	for _, hand := range hands {
+		if hand.NetChange <= 0 || (best != nil && hand.NetChange <= best.NetChange) {
+			continue
+		}
+		best = &sessionlog.PublicHandSummary{
+			HandID: hand.HandID, TableID: hand.TableID, NetChange: hand.NetChange,
+			EndedAt: hand.EndedAt, Board: hand.Board, HoleCards: hand.HoleCards,
+		}
+	}
+	return best, nil
+}
+
 func (m *mockHistoryReader) GetHand(_ context.Context, playerID, mode, handID string) (*sessionlog.HandItem, error) {
 	return &sessionlog.HandItem{PK: playerID, HandID: handID, NetChange: 50, EndedAt: fixtureEndedAtMs}, nil
 }
