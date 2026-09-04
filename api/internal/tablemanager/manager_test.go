@@ -7,6 +7,8 @@ import (
 
 	"gopkg.aoctech.app/api-commons/cache"
 	"gopkg.aoctech.app/poker/api/internal/engine/betting"
+	"gopkg.aoctech.app/poker/api/internal/engine/deck"
+	"gopkg.aoctech.app/poker/api/internal/engine/equity"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
@@ -29,9 +31,9 @@ func TestGetOrCreateActorReturnsSameActorOnSecondCall(t *testing.T) {
 	}
 }
 
-func TestLeaseLessActorIsEvictedAfterContinuousIdleWindow(t *testing.T) {
+func TestActorIsEvictedAfterContinuousIdleWindow(t *testing.T) {
 	m := NewManager(nil, nil, nil, nil)
-	m.leaseLessIdleTimeout = 15 * time.Millisecond
+	m.actorIdleTimeout = 15 * time.Millisecond
 	m.idleCheckInterval = 5 * time.Millisecond
 	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
 	a, err := m.GetOrCreateActor(context.Background(), "idle-table", seed)
@@ -57,6 +59,66 @@ func TestLeaseLessActorIsEvictedAfterContinuousIdleWindow(t *testing.T) {
 			t.Fatal("stopped lease-less actor remained in manager registry")
 		}
 		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestLeaseHoldingActorIsEvictedAfterContinuousIdleWindow(t *testing.T) {
+	backend := cache.NewMemoryBackend(16)
+	leases := tablelease.NewService(backend)
+	m := NewManager(leases, nil, nil, nil)
+	m.actorIdleTimeout = 15 * time.Millisecond
+	m.idleCheckInterval = 5 * time.Millisecond
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	a, err := m.GetOrCreateActor(context.Background(), "leased-idle-table", seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-a.Done():
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("lease-holding actor was not stopped after its idle window")
+	}
+
+	deadline := time.Now().Add(250 * time.Millisecond)
+	for m.LiveActorCount() != 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("stopped lease-holding actor remained in manager registry")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	for {
+		if release, ok, err := leases.Acquire(context.Background(), "leased-idle-table"); err != nil {
+			t.Fatal(err)
+		} else if ok {
+			release()
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("idle eviction did not release cache-affinity lease")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestReleaseEvictsTablesGlobalEquityEntries(t *testing.T) {
+	m := NewManager(nil, nil, nil, nil)
+	seed := func() *hand.Table { return hand.NewTable(nil, 10, 20) }
+	if _, err := m.GetOrCreateActor(context.Background(), "equity-table", seed); err != nil {
+		t.Fatal(err)
+	}
+	hole := [2]deck.Card{{Rank: deck.Ace, Suit: deck.Clubs}, {Rank: deck.King, Suit: deck.Clubs}}
+	if _, _, err := equity.EstimateForTableWithStats("equity-table", hole, nil, nil, 1, 10); err != nil {
+		t.Fatal(err)
+	}
+	if _, stats, err := equity.EstimateForTableWithStats("equity-table", hole, nil, nil, 1, 10); err != nil || !stats.CacheHit {
+		t.Fatalf("expected cached table equity before release: stats=%+v err=%v", stats, err)
+	}
+
+	m.Release("equity-table")
+	if _, stats, err := equity.EstimateForTableWithStats("equity-table", hole, nil, nil, 1, 10); err != nil || stats.CacheHit {
+		t.Fatalf("expected table equity miss after release: stats=%+v err=%v", stats, err)
 	}
 }
 

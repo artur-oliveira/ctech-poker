@@ -13,6 +13,7 @@ import (
 )
 
 type cacheKey struct {
+	tableID    string
 	hole       [2]uint8
 	board      [5]uint8
 	boardLen   uint8
@@ -21,20 +22,29 @@ type cacheKey struct {
 }
 
 type cacheEntry struct {
-	key   cacheKey
-	value float64
+	key         cacheKey
+	value       float64
+	approxBytes int64
 }
 
 type lruCache struct {
-	mu       sync.RWMutex
-	capacity int
+	mu       sync.Mutex
+	maxBytes int64
+	bytes    int64
 	items    map[cacheKey]*list.Element
 	evict    *list.List
 }
 
-func newLRUCache(capacity int) *lruCache {
+// cacheEntryBaseBytes is a deliberately conservative estimate of the map
+// bucket slot, list.Element, cacheEntry and key/value storage retained by one
+// entry. tableID bytes are added separately. The cache is a safety bound, not
+// an allocator accounting API, so erring high is preferable to retaining more
+// heap than its configured budget suggests.
+const cacheEntryBaseBytes int64 = 160
+
+func newLRUCache(maxBytes int64) *lruCache {
 	return &lruCache{
-		capacity: capacity,
+		maxBytes: maxBytes,
 		items:    make(map[cacheKey]*list.Element),
 		evict:    list.New(),
 	}
@@ -60,22 +70,50 @@ func (c *lruCache) Put(key cacheKey, value float64) (evicted bool) {
 		return false
 	}
 
-	if c.evict.Len() >= c.capacity {
-		oldest := c.evict.Back()
-		if oldest != nil {
-			c.evict.Remove(oldest)
-			delete(c.items, oldest.Value.(*cacheEntry).key)
-			evicted = true
-		}
+	entryBytes := cacheEntryBaseBytes + int64(len(key.tableID))
+	if entryBytes > c.maxBytes {
+		return false
 	}
 
-	entry := &cacheEntry{key: key, value: value}
+	for c.bytes+entryBytes > c.maxBytes {
+		oldest := c.evict.Back()
+		if oldest == nil {
+			break
+		}
+		oldEntry := oldest.Value.(*cacheEntry)
+		c.evict.Remove(oldest)
+		delete(c.items, oldEntry.key)
+		c.bytes -= oldEntry.approxBytes
+		evicted = true
+	}
+
+	entry := &cacheEntry{key: key, value: value, approxBytes: entryBytes}
 	elem := c.evict.PushFront(entry)
 	c.items[key] = elem
+	c.bytes += entryBytes
 	return evicted
 }
 
-var globalEquityCache = newLRUCache(20000)
+func (c *lruCache) EvictTable(tableID string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	removed := 0
+	for key, elem := range c.items {
+		if key.tableID != tableID {
+			continue
+		}
+		entry := elem.Value.(*cacheEntry)
+		c.evict.Remove(elem)
+		delete(c.items, key)
+		c.bytes -= entry.approxBytes
+		removed++
+	}
+	return removed
+}
+
+const globalEquityCacheMaxBytes int64 = 4 << 20
+
+var globalEquityCache = newLRUCache(globalEquityCacheMaxBytes)
 
 func makeCacheKey(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, iterations int) (cacheKey, bool) {
 	if len(deadCards) > 0 || len(board) > 5 || numOpponents > 255 || iterations > 20000 {
@@ -144,6 +182,13 @@ func Estimate(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, ite
 }
 
 func EstimateWithStats(hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, iterations int) (float64, EstimateStats, error) {
+	return EstimateForTableWithStats("", hole, board, deadCards, numOpponents, iterations)
+}
+
+// EstimateForTableWithStats scopes cached results to the actor that requested
+// them. The equity value itself is table-independent, but carrying tableID in
+// the key lets actor teardown promptly release everything that table retained.
+func EstimateForTableWithStats(tableID string, hole [2]deck.Card, board, deadCards []deck.Card, numOpponents, iterations int) (float64, EstimateStats, error) {
 	if numOpponents < 1 || iterations < 1 {
 		return 0, EstimateStats{}, fmt.Errorf("equity: opponents and iterations must be positive")
 	}
@@ -153,6 +198,7 @@ func EstimateWithStats(hole [2]deck.Card, board, deadCards []deck.Card, numOppon
 
 	key, cacheable := makeCacheKey(hole, board, deadCards, numOpponents, iterations)
 	if cacheable {
+		key.tableID = tableID
 		if val, ok := globalEquityCache.Get(key); ok {
 			return val, EstimateStats{CacheHit: true}, nil
 		}
@@ -229,6 +275,10 @@ func EstimateWithStats(hole [2]deck.Card, board, deadCards []deck.Card, numOppon
 	}
 	return res, stats, nil
 }
+
+// EvictTable releases all process-global equity results associated with a
+// table. tablemanager calls it whenever that table's actor is torn down.
+func EvictTable(tableID string) int { return globalEquityCache.EvictTable(tableID) }
 
 func buildPool(hole [2]deck.Card, board, dead []deck.Card, pool *[52]uint8) (int, error) {
 	var seen uint64
