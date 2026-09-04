@@ -100,14 +100,19 @@ func (a *Actor) armTurnTimer(current string, stage hand.Stage, grace time.Durati
 	a.pendingDeadlineForStage = hand.WaitingForPlayers
 	a.turnDeadline = deadline
 	remaining := time.Until(deadline)
-	// Temporary diagnostic for the 2026-09-04 incident (remove once the fix
-	// is confirmed in prod) — pairs with deadlinesForBroadcast's WARN to show
-	// exactly how much a resumed deadline had already decayed by arm time.
-	slog.Info("table turn timer armed",
-		"table_id", a.id, "hand_id", a.handID, "player_id", current, "stage", stage,
-		"resumed_from_persisted", resumedFromPersisted,
-		"base_deadline_unix_ms", a.turnBaseDeadline.UnixMilli(), "deadline_unix_ms", deadline.UnixMilli(),
-		"remaining_ms", remaining.Milliseconds())
+	if resumedFromPersisted {
+		// Temporary diagnostic for the 2026-09-04 incident (remove once the fix
+		// is confirmed in prod) — pairs with deadlinesForBroadcast's WARN to show
+		// exactly how much a resumed deadline had already decayed by arm time.
+		// Gated to the resume case only: logging every arm (the common,
+		// uninteresting case) flooded slog's synchronous writer badly enough to
+		// stall TestMultiServerFuzz's tight real-time deadlines in CI.
+		slog.Info("table turn timer armed",
+			"table_id", a.id, "hand_id", a.handID, "player_id", current, "stage", stage,
+			"resumed_from_persisted", resumedFromPersisted,
+			"base_deadline_unix_ms", a.turnBaseDeadline.UnixMilli(), "deadline_unix_ms", deadline.UnixMilli(),
+			"remaining_ms", remaining.Milliseconds())
+	}
 	if remaining < 0 {
 		remaining = 0
 	}
@@ -196,11 +201,14 @@ func (a *Actor) armNextHandTimer(complete bool) {
 		a.nextHandDeadline = timeNowFunc().Add(delay)
 	}
 	a.pendingNextHandDeadline = 0
-	// Temporary diagnostic for the 2026-09-04 incident (remove once the fix
-	// is confirmed in prod) — pairs with deadlinesForBroadcast's WARN.
-	slog.Info("table next hand timer armed",
-		"table_id", a.id, "hand_id", a.handID, "resumed_from_persisted", resumedFromPersisted,
-		"deadline_unix_ms", a.nextHandDeadline.UnixMilli(), "delay_ms", delay.Milliseconds())
+	if resumedFromPersisted {
+		// Temporary diagnostic for the 2026-09-04 incident (remove once the fix
+		// is confirmed in prod) — pairs with deadlinesForBroadcast's WARN.
+		// Gated to the resume case only, see armTurnTimer's identical guard.
+		slog.Info("table next hand timer armed",
+			"table_id", a.id, "hand_id", a.handID, "resumed_from_persisted", resumedFromPersisted,
+			"deadline_unix_ms", a.nextHandDeadline.UnixMilli(), "delay_ms", delay.Milliseconds())
+	}
 	a.nextHandTimer = time.AfterFunc(delay, func() {
 		reply := make(chan error, 1)
 		if err := a.Dispatch(nextHandCmd{Reply: reply}); err != nil {
