@@ -12,8 +12,11 @@ import (
 // no grantable scopes for creating/joining a table, sending game actions,
 // claiming rewards, mutating profiles/notes/shares, refunds, or buying
 // anything. Those interactive operations are restricted to access tokens
-// issued to Poker's first-party public SPA client.
+// issued to one of Poker's first-party public clients.
 const (
+	// firstPartyPokerClientID is the web SPA. It stays a named constant because
+	// the social-read path exemption below and the test suite both refer to it
+	// by this single name.
 	firstPartyPokerClientID = "poker"
 	socialReadPathPrefix    = "/v1.0" + socialBasePath
 
@@ -47,8 +50,22 @@ func hasPokerScope(claims *jwtverify.Claims) bool {
 	return false
 }
 
+// firstPartyPokerClientIDs are the OAuth clients whose user tokens may perform
+// interactive (non-GET) poker operations. "poker" is the web SPA; "poker-cli"
+// is the terminal client (docs/specs/2026-09-05-poker-cli.md). Both still
+// require a real user session (non-empty SID) — the M2M guard is unchanged,
+// so a client_credentials token for either id is still rejected.
+var firstPartyPokerClientIDs = map[string]struct{}{
+	firstPartyPokerClientID: {},
+	"poker-cli":             {},
+}
+
 func isFirstPartyPokerSession(claims *jwtverify.Claims) bool {
-	return claims != nil && claims.SID != "" && claims.AZP == firstPartyPokerClientID
+	if claims == nil || claims.SID == "" {
+		return false
+	}
+	_, ok := firstPartyPokerClientIDs[claims.AZP]
+	return ok
 }
 
 // enforceReadOnlyScope keeps public delegated/API-key grants read-only while

@@ -459,8 +459,10 @@ index row disappears with it, so nothing needs pruning and nothing is best-effor
   carries a ≤30-day TTL. Avatars are covered below.
 - Poker publishes public, read-only scopes through its resource-server manifest. Scoped `GET` requests are bound to
   their route family; for example, the daily-reward cooldown at `/sandbox-credits/` requires
-  `poker:daily-reward:read`. Interactive mutations and WebSockets instead require a user session issued to the
-  first-party `poker` client (`azp=poker`). KYC and business-role checks remain separate from OAuth scope checks.
+  `poker:daily-reward:read`. Interactive mutations and WebSockets instead require a user session issued to one of the
+  first-party clients (`azp=poker`, the web SPA, or `azp=poker-cli`, the terminal client —
+  `docs/specs/2026-09-05-poker-cli.md`; see `firstPartyPokerClientIDs` in `readscopes.go`). KYC and business-role
+  checks remain separate from OAuth scope checks.
 - **`/social/*` is exempt from the read-scope table on purpose.** There is no grantable social scope (public or
   delegated); the whole group is gated by `firstPartyOnly`. Because `requiredReadScope` denies unknown paths, a
   first-party token that also carries any `poker:*` scope was getting

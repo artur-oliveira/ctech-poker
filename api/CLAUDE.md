@@ -489,6 +489,12 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
 
 ## B9 authz — what is enforced (fixed 2026-07)
 
+**Interactive (non-GET) poker operations are gated by client id, not by scope** — see
+`readscopes.go`'s `firstPartyPokerClientIDs` (`{"poker", "poker-cli"}`, both still requiring a
+non-empty `sid`). `poker-cli` was added for the terminal client
+(`docs/specs/2026-09-05-poker-cli.md`); registering the OAuth client itself in ctech-account is a
+config/data change tracked in `cli/CLAUDE.md`, not in this repo.
+
 Player-facing auth requires a **user token**: non-empty `sub` AND non-empty `sid` (an empty `sid` marks an M2M
 `client_credentials` token — ecosystem convention, see `jwtverify.Claims`). Enforced in `authMiddleware`
 (`internal/api/v1/auth.go`) and in the WS gateway's token check (`tablews.go`), so M2M credentials can never act as
