@@ -32,6 +32,11 @@ function renderActionBar(overrides: Partial<React.ComponentProps<typeof ActionBa
     onPreselectAction,
     timeBankMs: 30_000,
     voiceCommands: false,
+    pot: 200,
+    shortcutsEnabled: true,
+    favoriteBetPresets: [],
+    favoriteBetPresetsSaving: false,
+    onToggleFavoriteBetPresetAction: vi.fn(),
     ...overrides,
   };
   const view = render(<ActionBar {...props}/>);
@@ -422,6 +427,62 @@ describe('ActionBar preselection shortcuts', () => {
   });
 });
 
+describe('ActionBar keyboard shortcuts toggle', () => {
+  test('fold/check/pay shortcuts fire when enabled', () => {
+    const {onActAction} = renderActionBar({shortcutsEnabled: true});
+    act(() => void fireEvent.keyDown(window, {key: 'f'}));
+    expect(onActAction).toHaveBeenCalledWith('fold');
+  });
+
+  test('shortcuts are inert when disabled, but the buttons stay clickable', async () => {
+    const {onActAction} = renderActionBar({shortcutsEnabled: false});
+    act(() => void fireEvent.keyDown(window, {key: 'f'}));
+    expect(onActAction).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', {name: 'Fold'})).not.toHaveAttribute('aria-keyshortcuts');
+    await userEvent.click(screen.getByRole('button', {name: 'Fold'}));
+    expect(onActAction).toHaveBeenCalledWith('fold');
+  });
+
+  test('the raise hotkeys (r/arrows) are inert when disabled', () => {
+    const {onActAction} = renderActionBar({shortcutsEnabled: false});
+    act(() => void fireEvent.keyDown(window, {key: 'r'}));
+    expect(onActAction).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', {name: /Aumentar/})).not.toHaveAttribute('aria-keyshortcuts');
+  });
+});
+
+describe('ActionBar quick bet presets', () => {
+  test('shows every preset by default and fills the raise amount on tap', async () => {
+    renderActionBar();
+    // pot=200, step=25 -> the pot preset lands on 200 exactly (well inside
+    // [minRaise 150, maxRaise 1000], so this assertion isn't just testing the clamp).
+    await userEvent.click(screen.getByRole('button', {name: /^Preset 1×:/}));
+    expect(slider()).toHaveValue('200');
+  });
+
+  test('a fraction below the minimum clamps up to it, same as the server presets do', async () => {
+    renderActionBar();
+    await userEvent.click(screen.getByRole('button', {name: /^Preset ¼:/}));
+    expect(slider()).toHaveValue('150');
+  });
+
+  test('narrows to favorites once some are saved, and toggling calls back with the id', async () => {
+    const onToggleFavoriteBetPresetAction = vi.fn();
+    renderActionBar({favoriteBetPresets: ['half_pot'], onToggleFavoriteBetPresetAction});
+    expect(screen.getByRole('button', {name: /^Preset ½:/})).toBeInTheDocument();
+    expect(screen.queryByRole('button', {name: /^Preset ¼:/})).not.toBeInTheDocument();
+    expect(screen.queryByText('Toque na estrela para fixar seus favoritos.')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', {name: /Remover ½ dos favoritos/}));
+    expect(onToggleFavoriteBetPresetAction).toHaveBeenCalledWith('half_pot');
+  });
+
+  test('empty favorites show every preset plus a hint', () => {
+    renderActionBar({favoriteBetPresets: []});
+    expect(screen.getByText('Toque na estrela para fixar seus favoritos.')).toBeInTheDocument();
+    expect(screen.getByRole('button', {name: /^Preset All-in:/})).toBeInTheDocument();
+  });
+});
+
 function renderActionBarProps(overrides: Partial<React.ComponentProps<typeof ActionBar>>) {
   return {
     onActAction: vi.fn(() => true), available: allActions, callAmount: 75, minRaise: 150, maxRaise: 1000,
@@ -429,6 +490,7 @@ function renderActionBarProps(overrides: Partial<React.ComponentProps<typeof Act
     actionKey: 'hand-1:pre_flop', isTurn: true, connected: true, pending: null, error: null,
     onDismissErrorAction: vi.fn(), canPreselect: false, supportsCallPreselection: false, selectionScope: '',
     preselection: null, preselectionAmount: 0, prospectiveCallAmount: 0, onPreselectAction: vi.fn(() => true),
-    timeBankMs: 30_000, voiceCommands: false, ...overrides,
+    timeBankMs: 30_000, voiceCommands: false, pot: 200, shortcutsEnabled: true, favoriteBetPresets: [],
+    favoriteBetPresetsSaving: false, onToggleFavoriteBetPresetAction: vi.fn(), ...overrides,
   } as React.ComponentProps<typeof ActionBar>;
 }

@@ -14,6 +14,11 @@ export type TablePreferences = {
   // an opt-in learning tool, not something every sandbox player expects to
   // see appear on the table.
   equityTrainer: boolean;
+  // Enable/disable only in v1 — no remapping, to avoid browser shortcut
+  // conflicts. Gates every keydown listener ActionBar wires (fold/check/
+  // call/raise, preselect, bet-amount hotkeys); the buttons themselves stay
+  // clickable either way.
+  keyboardShortcuts: boolean;
 };
 
 export const TABLE_THEMES: Record<TableThemeId, { label: string; colors: [string, string] }> = {
@@ -30,7 +35,8 @@ export const PREMIUM_FELT_IDS = new Set<TableThemeId>(['midnight', 'burgundy', '
 const STORAGE_KEY = 'ctech-poker:table-preferences:v1';
 const CHANGE_EVENT = 'ctech-poker:table-preferences';
 const DEFAULTS: TablePreferences = {
-  soundEffects: false, dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false
+  soundEffects: false, dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false,
+  keyboardShortcuts: true
 };
 const REALITY_INTERVALS = new Set([0, 30, 60, 90, 120]);
 
@@ -42,7 +48,8 @@ function normalize(value: unknown): TablePreferences {
     voiceCommands: input.voiceCommands === true,
     realityCheckMinutes: typeof input.realityCheckMinutes === 'number' &&
     REALITY_INTERVALS.has(input.realityCheckMinutes) ? input.realityCheckMinutes : DEFAULTS.realityCheckMinutes,
-    equityTrainer: input.equityTrainer === true
+    equityTrainer: input.equityTrainer === true,
+    keyboardShortcuts: input.keyboardShortcuts !== false
   };
 }
 

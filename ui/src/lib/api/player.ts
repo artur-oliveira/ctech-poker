@@ -27,6 +27,7 @@ export interface PlayerProfile {
   playstyle_public: boolean;
   featured_achievements?: string[];
   favorite_reactions?: string[];
+  favorite_bet_presets?: string[];
   playstyle?: PlaystyleBadge[];
 }
 
@@ -56,6 +57,7 @@ export async function updateMe(input: {
   playstyle_public?: boolean;
   featured_achievements?: string[];
   favorite_reactions?: string[];
+  favorite_bet_presets?: string[];
 }) {
   return (await apiClient.post<PlayerProfile>('/v1.0/players/me', input, {silentError: false})).data;
 }

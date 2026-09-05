@@ -21,7 +21,8 @@ describe('useTablePreferences', () => {
   test('defaults with no theme field on the preferences type', () => {
     const {result} = renderHook(() => useTablePreferences());
     expect(result.current.preferences).toEqual({
-      soundEffects: false, dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false
+      soundEffects: false, dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false,
+      keyboardShortcuts: true
     });
     expect(result.current.preferences).not.toHaveProperty('theme');
   });
@@ -32,8 +33,18 @@ describe('useTablePreferences', () => {
     }));
     const {result} = renderHook(() => useTablePreferences());
     expect(result.current.preferences).toEqual({
-      soundEffects: false, dealerVoice: true, voiceCommands: false, realityCheckMinutes: 90, equityTrainer: true
+      soundEffects: false, dealerVoice: true, voiceCommands: false, realityCheckMinutes: 90, equityTrainer: true,
+      keyboardShortcuts: true
     });
+  });
+
+  test('keyboard shortcuts default on, and persist once explicitly turned off', () => {
+    const {result} = renderHook(() => useTablePreferences());
+    expect(result.current.preferences.keyboardShortcuts).toBe(true);
+    act(() => result.current.update({keyboardShortcuts: false}));
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).keyboardShortcuts).toBe(false);
+    const reread = renderHook(() => useTablePreferences());
+    expect(reread.result.current.preferences.keyboardShortcuts).toBe(false);
   });
 
   test('update persists only the known fields', () => {
