@@ -640,6 +640,22 @@ catalog.
   response only. This closes the "Visitante" bug (a stranger's `friend_request` or a `table_invite` couldn't be named
   because the frontend's `nameResolver` only knew actors already in the friends/requests lists) without reintroducing
   the #64 name-drift failure mode a write-time denormalized copy would have.
+- **Issue #208 fixed: the social counts saturate instead of paging.** All three of the module's linear reads are now
+  explicitly bounded. `social.DynamoEventStore.UnreadCount` is **one** query with `Limit: MaxUnreadCount` (99) rather
+  than a page-through of the whole `gsi_unread` partition — it feeds the nav badge, which renders "9+" past nine, and
+  is recomputed on every socket inbox notification, so it was one of the app's hottest reads producing a number nobody
+  displays in full. A returned `MaxUnreadCount` means "at least this many". `social.Store.Count` takes a `saturateAt`
+  argument and stops there (its only callers compare it to `MaxFriends` / `MaxPendingOutgoing` and never show it),
+  inside a `maxCountPages` budget. `MarkRead` still needs one conditional `UpdateItem` per event — DynamoDB has no
+  batched partial update and `BatchWriteItem` cannot express a condition or a `REMOVE` — but they now run
+  `markReadConcurrency` (10) at a time instead of up to 100 serial round trips; it stays per-item rather than one
+  `TransactWriteItems` precisely so a single already-deleted event cannot abort the whole batch.
+  **Deliberately not materialized counters:** nothing drifts, nothing needs reconciling, and no path that flips an
+  event's unread flag pays an extra write. **Known ceiling:** `Count`'s `relationship` is still a `FilterExpression`,
+  not a key, so a partition padded with tens of thousands of non-matching rows can exhaust `maxCountPages` and
+  under-report — which errs toward letting a legitimate action through rather than wrongly blocking one. The exact fix
+  is a sparse `owner#relationship` GSI on `poker_social_edges` (which has none today), a schema change and its own
+  deploy. `countbudget_integration_test.go` asserts the call counts, not just the results.
 - **Issue #224 fixed: open sessions are indexed, not filtered.** `sessionlog`'s `FindOpenSession`,
   `FindLatestOpenSession` and `HasSessionAtTable` — on the buy-in, reconnect/presence, invite and table-scoped
   authorization paths — used to page the player's *entire* `poker_player_sessions` partition with a non-key

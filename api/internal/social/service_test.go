@@ -35,7 +35,7 @@ func (m *memoryEdgeStore) List(context.Context, string, Relationship, bool, int,
 	return nil, nil, nil
 }
 
-func (m *memoryEdgeStore) Count(_ context.Context, owner string, relationship Relationship) (int, error) {
+func (m *memoryEdgeStore) Count(_ context.Context, owner string, relationship Relationship, _ int) (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if configured := m.counts[owner]; configured != nil {
