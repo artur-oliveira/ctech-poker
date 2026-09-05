@@ -40,6 +40,10 @@ type TableView struct {
 
 	ActionDeadlineMS int64
 	BaseDeadlineMS   int64
+
+	// Optimistic-concurrency preconditions for the next `act` message.
+	SnapshotVersion uint64
+	HandID          string
 }
 
 // NewTableView flattens s for viewer youID. blinds is [small, big]; realMoney
@@ -65,6 +69,8 @@ func NewTableView(s *proto.TableSnapshot, youID, roomName string, realMoney bool
 		YourEquity:       -1,
 		ActionDeadlineMS: s.ActionDeadlineUnixMs,
 		BaseDeadlineMS:   s.ActionBaseDeadlineUnixMs,
+		SnapshotVersion:  s.SnapshotVersion,
+		HandID:           s.HandId,
 	}
 	for _, p := range s.Pots {
 		v.Pot += p.Amount
