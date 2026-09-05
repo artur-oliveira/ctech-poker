@@ -208,8 +208,13 @@ Player reports are accepted only from first-party Poker sessions at `POST /socia
 details are capped at 500 Unicode characters. For table chat and reactions the client supplies only table, hand and
 action IDs: the server resolves the action inside that hand's DynamoDB partition, verifies the reported actor and
 copies the already-sanitized message or catalog reaction ID. Neither free text nor copied evidence is returned by HTTP,
-logged, or used as a metric dimension. The legacy avatar-report route writes the new moderation queue and retains its
-existing profile reporter set during migration.
+logged, or used as a metric dimension. The legacy avatar-report route writes the new moderation queue and, on the
+profile itself, only a bounded aggregate: `avatar_report_count`, an atomic `ADD` capped at `player.AvatarReportCap`
+(10 000) by a condition rather than a clamp, so the counter is never read-then-written. The distinct-reporter rule is
+a conditional put of a guard row (`pk = "avreport#<target>#<reporter>"`, same PK-only table), which makes a repeated
+report an idempotent no-op instead of a second count. The old `avatar_reporters` String Set — unbounded, on an item
+every `Get`/`GetOrCreate`/`GetMany` reads, and never read by anything — is no longer written, and the counter update
+`REMOVE`s it from any profile that still carries one (#220).
 
 Open reports have no TTL. `cmd/moderation` is the credential-gated operator interface for `list`, `show`, `review` and
 `resolve`; only `show` reveals details/evidence. Resolution adds a 180-day TTL and accepts only the runbook's four
