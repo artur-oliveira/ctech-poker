@@ -65,53 +65,89 @@ func randomState() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// LoginPKCE runs the full RFC 8252 loopback flow: a local callback server,
-// the browser round trip (via openBrowser, invoked in the background so a
-// blocking fake — or a slow real browser launch — can never deadlock this
-// call), and the code-for-token exchange. Saves the result on success.
-func (s *Session) LoginPKCE(ctx context.Context, openBrowser func(url string) error) error {
+// PKCEFlow is one in-progress RFC 8252 loopback login: the local callback
+// server is already bound and AuthorizeURL is ready to open or show/copy
+// before FinishPKCE ever blocks — a caller that needs to render the URL (or
+// let the user copy it) does not have to wait on the network round trip
+// first.
+type PKCEFlow struct {
+	AuthorizeURL string
+
+	verifier string
+	state    string
+	receiver *LoopbackReceiver
+}
+
+// BeginPKCE builds a fresh PKCE challenge and binds the loopback callback
+// server, returning immediately (no network call) with the URL to open. The
+// caller must eventually call FinishPKCE (to complete the login) or Cancel
+// (to abandon it) on the returned flow — both release the bound port.
+func (s *Session) BeginPKCE() (*PKCEFlow, error) {
 	verifier, challenge, err := GeneratePKCE()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	state, err := randomState()
 	if err != nil {
-		return err
+		return nil, err
 	}
-
 	receiver, err := NewLoopbackReceiver(LoopbackPort)
 	if err != nil {
-		return fmt.Errorf("cannot bind the login callback on 127.0.0.1:%d (another `poker login` running?): %w", LoopbackPort, err)
+		return nil, fmt.Errorf("cannot bind the login callback on 127.0.0.1:%d (another `poker login` running?): %w", LoopbackPort, err)
 	}
-	defer func(receiver *LoopbackReceiver) {
-		_ = receiver.Close()
-	}(receiver)
-	redirectURI := receiver.RedirectURI()
 
 	authorizeURL := strings.TrimRight(s.cfg.AccountBaseURL, "/") + "/v1.0/authorize?" + url.Values{
 		"response_type":         {"code"},
 		"client_id":             {s.cfg.ClientID},
-		"redirect_uri":          {redirectURI},
+		"redirect_uri":          {receiver.RedirectURI()},
 		"code_challenge":        {challenge},
 		"code_challenge_method": {"S256"},
 		"scope":                 {readScopes},
 		"state":                 {state},
 	}.Encode()
 
-	go func() { _ = openBrowser(authorizeURL) }()
+	return &PKCEFlow{AuthorizeURL: authorizeURL, verifier: verifier, state: state, receiver: receiver}, nil
+}
+
+// Cancel abandons an in-progress flow (e.g. the user backed out before the
+// browser round trip completed), releasing the bound loopback port. Safe to
+// call even if FinishPKCE is concurrently blocked in receiver.Wait — that
+// call returns with an error once the underlying listener closes.
+func (f *PKCEFlow) Cancel() { _ = f.receiver.Close() }
+
+// FinishPKCE blocks until the loopback callback fires (or ctx/the flow's own
+// timeout elapses), exchanges the resulting code for a token, and saves it.
+// Call this from a goroutine / tea.Cmd — it is the slow half of the flow
+// BeginPKCE's caller already has the URL for.
+func (s *Session) FinishPKCE(ctx context.Context, flow *PKCEFlow) error {
+	defer flow.Cancel()
 
 	waitCtx, cancel := context.WithTimeout(ctx, pkceLoginTimeout)
 	defer cancel()
-	code, err := receiver.Wait(waitCtx, state)
+	code, err := flow.receiver.Wait(waitCtx, flow.state)
 	if err != nil {
 		return err
 	}
 
-	creds, err := s.token.ExchangeCode(ctx, code, verifier, redirectURI)
+	creds, err := s.token.ExchangeCode(ctx, code, flow.verifier, flow.receiver.RedirectURI())
 	if err != nil {
 		return err
 	}
 	return SaveCredentials(s.path, creds)
+}
+
+// LoginPKCE runs the full RFC 8252 loopback flow synchronously: BeginPKCE,
+// openBrowser (in the background, so a blocking fake — or a slow real
+// browser launch — can never deadlock this call), then FinishPKCE. Prefer
+// the split BeginPKCE/FinishPKCE pair for a caller (like the TUI) that needs
+// to show or copy the URL before the network round trip completes.
+func (s *Session) LoginPKCE(ctx context.Context, openBrowser func(url string) error) error {
+	flow, err := s.BeginPKCE()
+	if err != nil {
+		return err
+	}
+	go func() { _ = openBrowser(flow.AuthorizeURL) }()
+	return s.FinishPKCE(ctx, flow)
 }
 
 // LoginAPIKey exchanges apiKey for an access token and saves it.

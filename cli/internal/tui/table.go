@@ -70,6 +70,7 @@ type TableModel struct {
 	menu         *commandMenu
 	viewport     viewport.Model
 	vpReady      bool
+	vpMaxHeight  int
 	now          time.Time
 	reconnecting bool
 
@@ -106,11 +107,12 @@ func (m *TableModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if h < 3 {
 			h = 3
 		}
+		m.vpMaxHeight = h
 		if !m.vpReady {
 			m.viewport = viewport.New(msg.Width, h)
 			m.vpReady = true
 		} else {
-			m.viewport.Width, m.viewport.Height = msg.Width, h
+			m.viewport.Width = msg.Width
 		}
 		m.syncViewport()
 		return m, nil
@@ -230,19 +232,29 @@ func (m *TableModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case tea.KeyDown:
 			m.menu.moveNext()
 			return m, nil
-		case tea.KeyTab, tea.KeyEnter:
+		case tea.KeyTab:
+			if val := m.menu.fill(); val != "" {
+				m.input.SetValue(val)
+				m.input.CursorEnd()
+				m.menu.UpdateInput(val)
+				m.syncViewport()
+			}
+			return m, nil
+		case tea.KeyEnter:
 			val, submit := m.menu.accept()
 			if val == "" {
 				return m, nil
 			}
 			m.input.SetValue(val)
 			m.input.CursorEnd()
+			m.syncViewport()
 			if submit {
 				return m.submitLine()
 			}
 			return m, nil
 		case tea.KeyEsc:
 			m.menu.hide()
+			m.syncViewport()
 			return m, nil
 		}
 	}
@@ -253,6 +265,7 @@ func (m *TableModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 	m.menu.UpdateInput(m.input.Value())
+	m.syncViewport()
 	return m, cmd
 }
 
@@ -357,9 +370,28 @@ func (m *TableModel) syncViewport() {
 	}
 	atBottom := m.viewport.AtBottom()
 	m.viewport.SetContent(strings.Join(m.log, "\n"))
+	m.viewport.Height = m.viewportHeight()
 	if atBottom {
 		m.viewport.GotoBottom()
 	}
+}
+
+// viewportHeight sizes the log to its actual content, up to the terminal's
+// available room, reserving space for the command menu when it's open — see
+// Shell.viewportHeight's identical reasoning.
+func (m *TableModel) viewportHeight() int {
+	max := m.vpMaxHeight - m.menu.VisibleRows()
+	if max < 1 {
+		max = 1
+	}
+	h := len(m.log)
+	if h > max {
+		h = max
+	}
+	if h < 1 {
+		h = 1
+	}
+	return h
 }
 
 func copyClipboard(s string) error {

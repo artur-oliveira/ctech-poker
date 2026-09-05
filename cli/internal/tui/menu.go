@@ -67,10 +67,10 @@ func (m *commandMenu) moveNext() {
 	m.selected = (m.selected + 1) % len(m.items)
 }
 
-// accept resolves the highlighted suggestion: value is what the input field
-// should become, and submit is true when the command takes no arguments (so
-// the caller can dispatch it immediately instead of waiting for another
-// Enter).
+// accept resolves the highlighted suggestion for Enter: value is what the
+// input field should become, and submit is true when the command takes no
+// arguments (so the caller can dispatch it immediately instead of waiting
+// for another Enter).
 func (m *commandMenu) accept() (value string, submit bool) {
 	if len(m.items) == 0 {
 		return "", false
@@ -83,15 +83,53 @@ func (m *commandMenu) accept() (value string, submit bool) {
 	return item.Name + " ", false
 }
 
+// fill resolves the highlighted suggestion for Tab: pure autocomplete, never
+// submits — even a zero-argument command is only filled in, left for the
+// user to confirm with Enter.
+func (m *commandMenu) fill() string {
+	if len(m.items) == 0 {
+		return ""
+	}
+	item := m.items[m.selected]
+	if item.Args == "" {
+		return item.Name
+	}
+	return item.Name + " "
+}
+
 func (m *commandMenu) hide() { m.visible = false }
+
+// maxMenuRows caps how many suggestions are shown at once, so a broad prefix
+// (or the table's larger command set) can never grow the menu enough to push
+// itself off the bottom of the terminal.
+const maxMenuRows = 8
+
+// VisibleRows is exactly how many lines View() renders — the caller reserves
+// this much room (e.g. shrinking a viewport) so the menu is never pushed
+// past the terminal's bottom edge.
+func (m *commandMenu) VisibleRows() int {
+	if !m.visible || len(m.items) == 0 {
+		return 0
+	}
+	if len(m.items) > maxMenuRows {
+		return maxMenuRows + 1 // +1 for the "... and N more" line
+	}
+	return len(m.items)
+}
 
 // View renders the suggestion list, or "" when hidden.
 func (m *commandMenu) View() string {
 	if !m.visible {
 		return ""
 	}
+	items := m.items
+	truncated := 0
+	if len(items) > maxMenuRows {
+		truncated = len(items) - maxMenuRows
+		items = items[:maxMenuRows]
+	}
 	var b strings.Builder
-	for i, it := range m.items {
+	for i, it := range items {
 		marker, style := "  ", mutedStyle
 		if i == m.selected {
 			marker, style = "› ", selectedStyle
@@ -103,6 +141,9 @@ func (m *commandMenu) View() string {
 		line := fmt.Sprintf("%s%-28s %s", marker, name, it.Desc)
 		b.WriteString(style.Render(line))
 		b.WriteString("\n")
+	}
+	if truncated > 0 {
+		fmt.Fprintf(&b, "  … e mais %d\n", truncated)
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
@@ -123,14 +164,14 @@ func formatCommandList(specs []commandSpec) string {
 }
 
 var homeCommandSpecs = []commandSpec{
-	{Name: "/profile", Desc: "Mostra seu perfil"},
+	{Name: "/profile", Desc: "Mostra os dados do perfil"},
 	{Name: "/achievements", Desc: "Mostra suas conquistas"},
 	{Name: "/play", Desc: "Entra numa mesa (escolhe tamanho/stake)"},
-	{Name: "/enter", Args: "<room-id>", Desc: "Entra numa mesa por id"},
-	{Name: "/clear", Desc: "Limpa a tela"},
-	{Name: "/logout", Desc: "Esquece as credenciais salvas"},
-	{Name: "/help", Desc: "Lista os comandos"},
-	{Name: "/exit", Desc: "Sai do programa"},
+	{Name: "/enter", Args: "<room-id>", Desc: "Entra numa mesa por ID"},
+	{Name: "/clear", Desc: "Limpar comandos (CTRL + L)"},
+	{Name: "/logout", Desc: "Limpa as credenciais de acesso salvas. Será necessário fazer login novamente."},
+	{Name: "/help", Desc: "Lista os comandos disponíveis"},
+	{Name: "/exit", Desc: "Sair"},
 }
 
 var tableCommandSpecs = []commandSpec{

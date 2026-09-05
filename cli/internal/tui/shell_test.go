@@ -210,7 +210,7 @@ func TestHomeCtrlLClearsScrollback(t *testing.T) {
 	}
 }
 
-func TestHomeSlashOpensMenuAndTabCompletes(t *testing.T) {
+func TestHomeSlashOpensMenuAndTabOnlyFillsNeverSubmits(t *testing.T) {
 	s := newTestShell(t, nil, t.TempDir())
 	s.state = stateHome
 
@@ -221,16 +221,21 @@ func TestHomeSlashOpensMenuAndTabCompletes(t *testing.T) {
 	if !s.menu.visible {
 		t.Fatal("menu should be visible while typing a command prefix")
 	}
-	m, _ := s.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m, cmd := s.Update(tea.KeyMsg{Type: tea.KeyTab})
 	s = m.(*Shell)
-	// /play takes no arguments, so completing it also submits it immediately
-	// (same as typing it out and pressing Enter) rather than leaving it in
-	// the input for a second Enter.
-	if s.state != statePlaySize {
-		t.Fatalf("state = %v, want statePlaySize after completing /play", s.state)
+	// Tab is pure autocomplete: it fills the input, even for a zero-argument
+	// command like /play, but never dispatches it — only Enter does that.
+	if s.input.Value() != "/play" {
+		t.Fatalf("input = %q, want tab-completed to /play", s.input.Value())
 	}
-	if s.menu.visible {
-		t.Fatal("menu should hide after accepting")
+	if s.state != stateHome || cmd != nil {
+		t.Fatalf("Tab must not submit: state=%v cmd=%v", s.state, cmd)
+	}
+
+	m, _ = s.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	s = m.(*Shell)
+	if s.state != statePlaySize {
+		t.Fatalf("state = %v, want statePlaySize after pressing Enter", s.state)
 	}
 }
 
@@ -263,7 +268,139 @@ func TestHomeHelpListsCommandsWithDescriptions(t *testing.T) {
 	m, _ := s.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	s = m.(*Shell)
 	out := strings.Join(s.lines, "\n")
-	if !strings.Contains(out, "/profile") || !strings.Contains(out, "Mostra seu perfil") {
+	if !strings.Contains(out, "/profile") || !strings.Contains(out, "Mostra os dados do perfil") {
 		t.Fatalf("help output missing command+description: %q", out)
+	}
+}
+
+func TestViewportShrinksToContentNotFullWindow(t *testing.T) {
+	s := newTestShell(t, nil, t.TempDir())
+	s.state = stateHome
+	m, _ := s.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	s = m.(*Shell)
+
+	s.appendLine("one")
+	s.appendLine("two")
+	// Two lines of content in a 36-row-tall window: the viewport must size
+	// to the content, not claim the whole window (the bug: a fixed-height
+	// viewport left no room for the command menu below it).
+	if s.viewport.Height != 2 {
+		t.Fatalf("viewport height = %d, want 2 (content-sized)", s.viewport.Height)
+	}
+}
+
+func TestViewportReservesRoomForOpenMenu(t *testing.T) {
+	s := newTestShell(t, nil, t.TempDir())
+	s.state = stateHome
+	m, _ := s.Update(tea.WindowSizeMsg{Width: 100, Height: 10})
+	s = m.(*Shell)
+	for i := 0; i < 20; i++ {
+		s.appendLine("line")
+	}
+	fullHeight := s.viewport.Height
+
+	for _, r := range "/pr" {
+		m, _ := s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		s = m.(*Shell)
+	}
+	if !s.menu.visible {
+		t.Fatal("menu should be visible for /pr")
+	}
+	if s.viewport.Height >= fullHeight {
+		t.Fatalf("viewport height = %d, want less than %d once the menu reserved its rows", s.viewport.Height, fullHeight)
+	}
+	if s.viewport.Height+s.menu.VisibleRows() > s.vpMaxHeight {
+		t.Fatalf("viewport (%d) + menu (%d) exceeds the available window (%d) — menu would be pushed off-screen",
+			s.viewport.Height, s.menu.VisibleRows(), s.vpMaxHeight)
+	}
+}
+
+func TestBrowserLoginLocksScreenAndShowsURL(t *testing.T) {
+	s := newTestShell(t, nil, t.TempDir())
+	s.state = stateLoginChoice
+	s.loginChoice = 0
+
+	m, cmd := s.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	s = m.(*Shell)
+	if s.state != stateLoggingIn || s.pkceFlow == nil {
+		t.Fatalf("state=%v pkceFlow=%v, want locked into stateLoggingIn with a flow", s.state, s.pkceFlow)
+	}
+	if cmd == nil {
+		t.Fatal("selecting browser login should kick off a command")
+	}
+	url := s.pkceFlow.AuthorizeURL
+	if !strings.Contains(s.View(), url) {
+		t.Fatalf("view should show the authorize URL: %q", s.View())
+	}
+
+	// While locked, arbitrary keys (e.g. trying to switch options) must do
+	// nothing.
+	m, _ = s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	s = m.(*Shell)
+	if s.state != stateLoggingIn {
+		t.Fatalf("state = %v, want to stay locked on stateLoggingIn", s.state)
+	}
+	s.pkceFlow.Cancel() // release the loopback port before the test ends
+}
+
+func TestBrowserLoginCopyShowsFlashThenResets(t *testing.T) {
+	s := newTestShell(t, nil, t.TempDir())
+	s.state = stateLoginChoice
+	s.loginChoice = 0
+	m, _ := s.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	s = m.(*Shell)
+	defer s.pkceFlow.Cancel()
+
+	m, cmd := s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	s = m.(*Shell)
+	if !s.copied {
+		t.Fatal("'c' should mark the URL as copied")
+	}
+	if !strings.Contains(s.View(), "Copiado!") {
+		t.Fatalf("view should show the copied flash: %q", s.View())
+	}
+	if cmd == nil {
+		t.Fatal("copy should schedule the flash reset")
+	}
+	msg := cmd()
+	m, _ = s.Update(msg)
+	s = m.(*Shell)
+	if s.copied {
+		t.Fatal("copied flash should clear after the reset message")
+	}
+}
+
+func TestBrowserLoginEscCancelsAndReturnsToChoice(t *testing.T) {
+	s := newTestShell(t, nil, t.TempDir())
+	s.state = stateLoginChoice
+	s.loginChoice = 0
+	m, cmd := s.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	s = m.(*Shell)
+	seqAtStart := s.loginSeq
+
+	m, _ = s.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	s = m.(*Shell)
+	if s.state != stateLoginChoice || s.pkceFlow != nil {
+		t.Fatalf("state=%v pkceFlow=%v, want back to stateLoginChoice with no flow", s.state, s.pkceFlow)
+	}
+	if s.loginSeq == seqAtStart {
+		t.Fatal("cancelling must bump loginSeq so a late result is ignored")
+	}
+
+	// The in-flight FinishPKCE goroutine's result, once it arrives, must be
+	// ignored — it carries the pre-cancel seq.
+	msg := cmd()
+	drained, ok := msg.(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("expected a batched command, got %T", msg)
+	}
+	for _, c := range drained {
+		if bm, ok := c().(browserLoginResultMsg); ok {
+			m, _ := s.Update(bm)
+			s = m.(*Shell)
+		}
+	}
+	if s.state != stateLoginChoice {
+		t.Fatalf("a stale result must not move the state, got %v", s.state)
 	}
 }

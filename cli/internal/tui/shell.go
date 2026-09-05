@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -45,9 +46,15 @@ type Shell struct {
 	lines       []string
 	busy        bool
 
-	menu     *commandMenu
-	viewport viewport.Model
-	vpReady  bool
+	menu        *commandMenu
+	viewport    viewport.Model
+	vpReady     bool
+	vpMaxHeight int
+
+	pkceFlow   *auth.PKCEFlow
+	pkceCancel context.CancelFunc
+	loginSeq   int
+	copied     bool
 
 	play  playState
 	table *TableModel
@@ -90,9 +97,31 @@ func (s *Shell) syncViewport() {
 	}
 	atBottom := s.viewport.AtBottom()
 	s.viewport.SetContent(strings.Join(s.lines, "\n"))
+	s.viewport.Height = s.viewportHeight()
 	if atBottom {
 		s.viewport.GotoBottom()
 	}
+}
+
+// viewportHeight sizes the scrollback to its actual content, up to the
+// terminal's available room — like a normal terminal, it only grows as
+// large as it needs to, rather than always reserving the full window (which
+// pushed the command menu below the visible area whenever output was
+// short). Space for the menu, when open, is reserved off the same budget so
+// it can never be pushed past the bottom edge either.
+func (s *Shell) viewportHeight() int {
+	max := s.vpMaxHeight - s.menu.VisibleRows()
+	if max < 1 {
+		max = 1
+	}
+	h := len(s.lines)
+	if h > max {
+		h = max
+	}
+	if h < 1 {
+		h = 1
+	}
+	return h
 }
 
 // viewportReserved is how many lines around the scrollback the home screen's
@@ -107,6 +136,18 @@ type checkLoginMsg struct{ loggedIn bool }
 type loginResultMsg struct{ err error }
 type commandResultMsg struct{ lines []string }
 
+// browserLoginResultMsg carries the outcome of the FinishPKCE wait. seq
+// guards against a stale result arriving after the user already cancelled
+// (Esc) or started a second attempt — only the result matching the current
+// s.loginSeq is applied.
+type browserLoginResultMsg struct {
+	err error
+	seq int
+}
+
+// copyResetMsg clears the "Copiado!" flash a couple seconds after it's shown.
+type copyResetMsg struct{}
+
 func checkLogin(session *auth.Session) tea.Cmd {
 	return func() tea.Msg {
 		_, err := session.Token(context.Background())
@@ -114,10 +155,22 @@ func checkLogin(session *auth.Session) tea.Cmd {
 	}
 }
 
-func loginPKCE(session *auth.Session) tea.Cmd {
+// openBrowserCmd fires the browser launch as a bubbletea command, in
+// parallel with waitPKCECmd — neither blocks the other.
+func openBrowserCmd(url string) tea.Cmd {
+	return func() tea.Msg { _ = auth.OpenBrowser(url); return nil }
+}
+
+// waitPKCECmd is the slow half of a browser login: it blocks until the
+// loopback callback fires, ctx is cancelled (the user pressed Esc), or the
+// flow's own timeout elapses, and reports back tagged with seq. ctx is what
+// actually interrupts a blocked Wait — closing the flow's listener alone
+// only stops it from accepting new connections, it does not unblock a Wait
+// already in progress.
+func waitPKCECmd(ctx context.Context, session *auth.Session, flow *auth.PKCEFlow, seq int) tea.Cmd {
 	return func() tea.Msg {
-		err := session.LoginPKCE(context.Background(), auth.OpenBrowser)
-		return loginResultMsg{err: err}
+		err := session.FinishPKCE(ctx, flow)
+		return browserLoginResultMsg{err: err, seq: seq}
 	}
 }
 
@@ -135,11 +188,12 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if h < 3 {
 			h = 3
 		}
+		s.vpMaxHeight = h
 		if !s.vpReady {
 			s.viewport = viewport.New(msg.Width, h)
 			s.vpReady = true
 		} else {
-			s.viewport.Width, s.viewport.Height = msg.Width, h
+			s.viewport.Width = msg.Width
 		}
 		s.syncViewport()
 		if s.table != nil {
@@ -170,9 +224,33 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.appendLine(successStyle.Render("Logado."))
 		return s, nil
 
+	case browserLoginResultMsg:
+		if msg.seq != s.loginSeq {
+			return s, nil // stale — cancelled or superseded by a newer attempt
+		}
+		s.pkceFlow = nil
+		if s.pkceCancel != nil {
+			s.pkceCancel()
+			s.pkceCancel = nil
+		}
+		if msg.err != nil {
+			s.loginErr = msg.err
+			s.state = stateLoginChoice
+			return s, nil
+		}
+		s.state = stateHome
+		s.input.Reset()
+		s.appendLine(successStyle.Render("Logado."))
+		return s, nil
+
+	case copyResetMsg:
+		s.copied = false
+		return s, nil
+
 	case commandResultMsg:
 		s.busy = false
 		s.lines = append(s.lines, msg.lines...)
+		s.syncViewport()
 		return s, nil
 
 	case spinner.TickMsg:
@@ -352,9 +430,19 @@ func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			s.loginChoice = (s.loginChoice + 1) % 3
 		case "enter":
 			if s.loginChoice == 0 {
-				s.busy = true
-				s.appendLine("Abrindo o navegador para login...")
-				return s, loginPKCE(s.session)
+				flow, err := s.session.BeginPKCE()
+				if err != nil {
+					s.loginErr = err
+					return s, nil
+				}
+				s.pkceFlow = flow
+				s.loginErr = nil
+				s.copied = false
+				s.loginSeq++
+				s.state = stateLoggingIn
+				ctx, cancel := context.WithCancel(context.Background())
+				s.pkceCancel = cancel
+				return s, tea.Batch(openBrowserCmd(flow.AuthorizeURL), waitPKCECmd(ctx, s.session, flow, s.loginSeq))
 			} else if s.loginChoice == 1 {
 				s.state = stateAPIKeyInput
 				s.input.Reset()
@@ -365,7 +453,37 @@ func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return s, nil
 
+	// The browser login is locked: while it's in flight, only 'c' (copy the
+	// URL) and Esc (cancel) do anything — every other key is swallowed so
+	// the user can't wander off into a different choice mid-flow. Ctrl+C
+	// still quits the whole program (handled above, before this switch).
+	case stateLoggingIn:
+		switch msg.String() {
+		case "c":
+			if s.pkceFlow != nil {
+				_ = clipboardWrite(s.pkceFlow.AuthorizeURL)
+				s.copied = true
+				return s, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return copyResetMsg{} })
+			}
+		case "esc":
+			if s.pkceCancel != nil {
+				s.pkceCancel() // unblocks the in-progress Wait; flow.Cancel() alone does not
+				s.pkceCancel = nil
+			}
+			if s.pkceFlow != nil {
+				s.pkceFlow.Cancel()
+				s.pkceFlow = nil
+			}
+			s.loginSeq++ // invalidate any FinishPKCE result still in flight
+			s.loginErr = nil
+			s.state = stateLoginChoice
+		}
+		return s, nil
+
 	case stateAPIKeyInput:
+		if s.busy {
+			return s, nil
+		}
 		if msg.String() == "enter" {
 			key := strings.TrimSpace(s.input.Value())
 			if key == "" {
@@ -400,19 +518,29 @@ func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			case tea.KeyDown:
 				s.menu.moveNext()
 				return s, nil
-			case tea.KeyTab, tea.KeyEnter:
+			case tea.KeyTab:
+				if val := s.menu.fill(); val != "" {
+					s.input.SetValue(val)
+					s.input.CursorEnd()
+					s.menu.UpdateInput(val)
+					s.syncViewport()
+				}
+				return s, nil
+			case tea.KeyEnter:
 				val, submit := s.menu.accept()
 				if val == "" {
 					return s, nil
 				}
 				s.input.SetValue(val)
 				s.input.CursorEnd()
+				s.syncViewport()
 				if submit {
 					return s.submitHomeLine()
 				}
 				return s, nil
 			case tea.KeyEsc:
 				s.menu.hide()
+				s.syncViewport()
 				return s, nil
 			}
 		}
@@ -422,6 +550,7 @@ func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		s.input, cmd = s.input.Update(msg)
 		s.menu.UpdateInput(s.input.Value())
+		s.syncViewport()
 		return s, cmd
 
 	case statePlaySize:
@@ -607,9 +736,31 @@ func (s *Shell) View() string {
 		return fmt.Sprintf("%s\n\nComo você quer entrar?\n%sAbrir Navegador\n%sAPI Key\n%sSair%s\n",
 			renderLogo(), cursor(0), cursor(1), cursor(2), errLine)
 	case stateAPIKeyInput:
-		return renderLogo() + "\n\n" + s.input.View()
+		view := renderLogo() + "\n\n" + s.input.View()
+		if s.busy {
+			view += "\n" + accentStyle.Render(s.spin.View()) + " verificando..."
+		}
+		return view
 	case stateLoggingIn:
-		return accentStyle.Render(s.spin.View()) + " entrando..."
+		var b strings.Builder
+		b.WriteString(renderLogo())
+		b.WriteString("\n\n")
+		b.WriteString(accentStyle.Render(s.spin.View()))
+		b.WriteString(" aguardando confirmação no navegador...\n")
+		if s.pkceFlow != nil {
+			b.WriteString("\n")
+			b.WriteString(mutedStyle.Render("Se não abrir automaticamente, copie e cole a seguinte URL no seu navegador:"))
+			b.WriteString("\n")
+			b.WriteString(accentStyle.Render(s.pkceFlow.AuthorizeURL))
+			b.WriteString("\n\n")
+			if s.copied {
+				b.WriteString(successStyle.Render("Copiado!"))
+			} else {
+				b.WriteString(mutedStyle.Render("Pressione C para copiar · Esc para cancelar"))
+			}
+			b.WriteString("\n")
+		}
+		return b.String()
 	case statePlaySize:
 		var b strings.Builder
 		b.WriteString(titleStyle.Render("Tamanho da mesa:") + "\n")

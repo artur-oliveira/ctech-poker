@@ -44,8 +44,10 @@ Run `poker` with no arguments. It launches an interactive shell — there is no
 the running program, `/command`-style (like Claude Code's own shell):
 
 1. **Login gate.** On first run (or after `/logout`), pick a login method:
-   a browser (OAuth PKCE — opens automatically) or an API key (paste it and
-   press enter). Credentials are stored in
+   a browser (OAuth PKCE) or an API key. Picking the browser locks the
+   screen on a waiting spinner with the authorize URL shown — press `C` to
+   copy it (in case the browser didn't open on its own) or `Esc` to cancel
+   and pick a different method. Credentials are stored in
    `~/.config/ctech-poker/credentials.json` (mode `0600`) and reused on the
    next run.
 2. **Home REPL.** Once logged in, type a command and press enter:
