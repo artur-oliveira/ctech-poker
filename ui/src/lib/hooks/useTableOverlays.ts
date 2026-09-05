@@ -27,8 +27,18 @@ export function useTableOverlays({connected, sendReaction}: {
   // (HOVER_PANEL_CLOSE_DELAY_MS). Crossing the reactions toggle on the way to
   // chat therefore fires reactions' close *after* chat already took the slot,
   // which shut chat again. Only the panel that still owns the slot may clear it.
-  const panelOpenChange = useCallback((panel: TableUtility) => (open: boolean) =>
-    setActiveTablePanel(current => open ? panel : current === panel ? null : current), []);
+  // Cached per panel, not rebuilt per call: `panelOpenChange('chat')` is read
+  // during render and handed to a memoised aside, so a fresh closure each time
+  // would re-render Chat/TableReactions/LastWinners on every snapshot (#230).
+  const panelHandlers = useRef(new Map<TableUtility, (open: boolean) => void>());
+  const panelOpenChange = useCallback((panel: TableUtility) => {
+    const cached = panelHandlers.current.get(panel);
+    if (cached) return cached;
+    const handler = (open: boolean) =>
+      setActiveTablePanel(current => open ? panel : current === panel ? null : current);
+    panelHandlers.current.set(panel, handler);
+    return handler;
+  }, []);
 
   // E/T open the two asides the player reaches for mid-hand, matching the
   // action bar's own single-letter shortcuts (f/c/p/a/h/r, and 1/2 to peek).
@@ -47,11 +57,39 @@ export function useTableOverlays({connected, sendReaction}: {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  function startReactionCooldown() {
+  const startReactionCooldown = useCallback(() => {
     setReactionCoolingDown(true);
     if (reactionCooldownRef.current) clearTimeout(reactionCooldownRef.current);
     reactionCooldownRef.current = setTimeout(() => setReactionCoolingDown(false), REACTION_COOLDOWN_MS);
-  }
+  }, []);
+
+  // The three commands are `useCallback`s rather than object methods so the
+  // memoised surfaces that receive them (TableUtilityMenu, TableReactions,
+  // TableStage) only re-render when something they show actually changed.
+  const selectTableUtility = useCallback((utility: TableUtility) => {
+    if (utility === 'preferences') {
+      setPreferencesOpen(true);
+      return;
+    }
+    if (utility === 'share') {
+      setInviteOpen(true);
+      return;
+    }
+    setActiveTablePanel(previous => previous === utility ? null : utility);
+  }, []);
+
+  const sendQuickReaction = useCallback((reaction: TableReactionID) => {
+    if (reactionCoolingDown || !connected) return;
+    if (sendReaction(reaction)) startReactionCooldown();
+  }, [connected, reactionCoolingDown, sendReaction, startReactionCooldown]);
+
+  const sendTargetedReaction = useCallback((playerId: string) => {
+    if (!pendingReaction || reactionCoolingDown || !connected) return;
+    if (sendReaction(pendingReaction, playerId)) {
+      setPendingReaction(null);
+      startReactionCooldown();
+    }
+  }, [connected, pendingReaction, reactionCoolingDown, sendReaction, startReactionCooldown]);
 
   return {
     activeTablePanel,
@@ -64,27 +102,8 @@ export function useTableOverlays({connected, sendReaction}: {
     pendingReaction,
     setPendingReaction,
     reactionCoolingDown,
-    selectTableUtility(utility: TableUtility) {
-      if (utility === 'preferences') {
-        setPreferencesOpen(true);
-        return;
-      }
-      if (utility === 'share') {
-        setInviteOpen(true);
-        return;
-      }
-      setActiveTablePanel(previous => previous === utility ? null : utility);
-    },
-    sendQuickReaction(reaction: TableReactionID) {
-      if (reactionCoolingDown || !connected) return;
-      if (sendReaction(reaction)) startReactionCooldown();
-    },
-    sendTargetedReaction(playerId: string) {
-      if (!pendingReaction || reactionCoolingDown || !connected) return;
-      if (sendReaction(pendingReaction, playerId)) {
-        setPendingReaction(null);
-        startReactionCooldown();
-      }
-    }
+    selectTableUtility,
+    sendQuickReaction,
+    sendTargetedReaction
   };
 }

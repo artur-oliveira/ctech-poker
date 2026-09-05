@@ -1,5 +1,5 @@
 'use client';
-import {type ReactNode, useCallback, useState, useSyncExternalStore} from 'react';
+import {memo, type ReactNode, useCallback, useMemo, useState, useSyncExternalStore} from 'react';
 import {Board} from '@/components/table/Board';
 import {Seat, type SeatLayoutPosition} from '@/components/table/Seat';
 import {HandOutcomeBanner, type HandOutcomeState} from '@/components/table/HandOutcome';
@@ -65,6 +65,21 @@ export function balancedSeatPosition(index: number, playerCount: number, portrai
   const zone = sine > .55 ? 'bottom' : sine < -.55 ? 'top' : cosine < 0 ? 'left' : 'right';
   const side = cosine < -.15 ? 'left' : cosine > .15 ? 'right' : 'center';
   return {s: Number((.5 + cosine * .5).toFixed(4)), t: Number((.5 + sine * .5).toFixed(4)), zone, side};
+}
+
+// `balancedSeatPosition` is pure and its inputs are a tiny bounded set
+// (index x occupancy x orientation), but it returns a fresh object — which is
+// a new prop identity for every seat on every render, and enough on its own to
+// defeat `memo(Seat)`. Caching the results is what makes the memo real (#230).
+const layoutPositionCache = new Map<string, SeatLayoutPosition>();
+
+function seatLayoutPosition(index: number, playerCount: number, portrait = false): SeatLayoutPosition {
+  const key = `${index}:${playerCount}:${portrait}`;
+  const cached = layoutPositionCache.get(key);
+  if (cached) return cached;
+  const position = balancedSeatPosition(index, playerCount, portrait);
+  layoutPositionCache.set(key, position);
+  return position;
 }
 
 /** Preserve surviving players' physical slots while filling a vacancy after
@@ -211,7 +226,7 @@ type Props = {
   renderPlayerActionsAction?: (seat: TableSnapshot['seats'][number]) => ReactNode;
 };
 
-export function TableStage({
+function TableStageImpl({
                              snapshot,
                              viewer,
                              maxSeats,
@@ -256,21 +271,29 @@ export function TableStage({
       {key: outcome?.key, dismissed});
   }, [outcome?.key]);
   const seats = rotateSeats(snapshot.seats, viewer);
-  const standings = winnerStandings(snapshot);
+  // Recomputed only when the snapshot itself changes: `winnerStandings` builds
+  // fresh objects, and a chat bubble or a reaction arriving would otherwise
+  // hand every seat a new `winStanding` and defeat `memo(Seat)` (#230).
+  const standings = useMemo(() => winnerStandings(snapshot), [snapshot]);
   const seatNode = (seat: TableSnapshot['seats'][number], index: number, layoutPosition?: SeatLayoutPosition) => {
     const breakdown = playerPotBreakdown(snapshot, seat.player_id);
     const standing = standings.find(item => item.playerId === seat.player_id);
+    // Only the seat on the clock consumes the timing props, and only while it
+    // is on the clock (Seat's showNormalClock/showTimeBank both require
+    // isTurn). Handing them to the other eight would re-render all of them on
+    // every frame for a clock none of them draws.
+    const isTurn = snapshot.current_player_id === seat.player_id;
     return <Seat key={seat.player_id} seat={seat} index={index}
-                 isTurn={snapshot.current_player_id === seat.player_id}
+                 isTurn={isTurn}
                  credit={snapshot.payouts?.[seat.player_id] || 0}
                  winAmount={breakdown.won}
                  winStanding={standing}
                  refundAmount={breakdown.refund}
                  isWinner={snapshot.winners?.includes(seat.player_id) ?? false}
-                 baseDeadlineMs={snapshot.action_base_deadline_unix_ms}
-                 actionDeadlineMs={snapshot.action_deadline_unix_ms}
-                 nowMs={nowMs}
-                 turnTimeoutMs={turnTimeoutMs}
+                 baseDeadlineMs={isTurn ? snapshot.action_base_deadline_unix_ms : undefined}
+                 actionDeadlineMs={isTurn ? snapshot.action_deadline_unix_ms : undefined}
+                 nowMs={isTurn ? nowMs : undefined}
+                 turnTimeoutMs={isTurn ? turnTimeoutMs : undefined}
                  bigBlind={bigBlind}
                  isViewer={seat.player_id === viewer}
                  canRevealCards={seat.player_id === viewer && canRevealCards}
@@ -280,16 +303,16 @@ export function TableStage({
                  handId={snapshot.hand_id}
                  onPeekCards={seat.player_id === viewer ? onPeekCardsAction : undefined}
                  playerNote={playerNotes?.[seat.player_id]}
-                 onEditNote={seat.player_id !== viewer && onEditPlayerNoteAction ? () => onEditPlayerNoteAction(seat) : undefined}
+                 onEditNote={seat.player_id !== viewer ? onEditPlayerNoteAction : undefined}
                  reactionTargetLabel={seat.player_id !== viewer ? targetedReactionLabel : undefined}
-                 onReactionTarget={seat.player_id !== viewer && onTargetPlayerAction ? () => onTargetPlayerAction(seat.player_id) : undefined}
+                 onReactionTarget={seat.player_id !== viewer ? onTargetPlayerAction : undefined}
                  stackBefore={seat.player_id === viewer ? viewerStackBefore : undefined}
                  isDealer={snapshot.dealer_player_id === seat.player_id}
                  isSmallBlind={snapshot.small_blind_player_id === seat.player_id}
                  isBigBlind={snapshot.big_blind_player_id === seat.player_id}
                  chatBubble={chatBubbles?.[seat.player_id]}
                  layoutPosition={layoutPosition}
-                 actionsMenu={seat.player_id !== viewer ? renderPlayerActionsAction?.(seat) : undefined}/>;
+                 renderActionsMenu={seat.player_id !== viewer ? renderPlayerActionsAction : undefined}/>;
   };
   const board = <Board cards={snapshot.board} boardTwo={snapshot.board_two}
                        splitAt={snapshot.board_split_at} pot={pot} pots={snapshot.pots}
@@ -309,7 +332,7 @@ export function TableStage({
          data-player-count={seats.length} data-layout-key={seatLayoutKey}>
       <div className="game-rail"/>
       <div className="game-felt">{feltContent}</div>
-      {seats.map((seat, index) => seatNode(seat, index, balancedSeatPosition(index, seats.length)))}
+      {seats.map((seat, index) => seatNode(seat, index, seatLayoutPosition(index, seats.length)))}
       <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}
                          onDismissedChangeAction={onOutcomeDismissedChange}
                          nextHandDeadlineMs={nextHandDeadlineMs} nextHandDurationMs={nextHandDurationMs}/>
@@ -339,7 +362,7 @@ export function TableStage({
         <div className="game-felt">{feltContent}</div>
         {opponents.map((seat, index) => {
           const tableIndex = viewerFirst ? index + 1 : index;
-          return seatNode(seat, tableIndex, balancedSeatPosition(tableIndex, seats.length, vertical));
+          return seatNode(seat, tableIndex, seatLayoutPosition(tableIndex, seats.length, vertical));
         })}
         <HandOutcomeBanner outcome={outcome} holdOpen={holdOutcomeOpen}
                            onDismissedChangeAction={onOutcomeDismissedChange}
@@ -360,3 +383,11 @@ export function TableStage({
     </div>
   );
 }
+
+/** Memoised: The felt is the most expensive subtree on the page and it depends on the snapshot, not on chat, reactions, dialogs or panel state. Memoised, those stop reaching it at all.
+ *  Every prop it receives is either a primitive or a stable identity
+ *  (see `useTableRealtimeSession`'s `commands` memo, `useTableOverlays`'
+ *  cached panel handlers, and the table page's memoised projections), so the
+ *  comparison actually pays off. Issue #230. */
+export const TableStage = memo(TableStageImpl);
+TableStage.displayName = 'TableStage';
