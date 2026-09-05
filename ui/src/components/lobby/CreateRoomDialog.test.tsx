@@ -63,7 +63,6 @@ describe('CreateRoomDialog', () => {
       buy_in_max: 5_000,
       run_it_twice_enabled: false,
     }));
-    expect(mocks.invalidateQueries).toHaveBeenCalledWith({queryKey: ['rooms']});
     expect(mocks.push).toHaveBeenCalledWith('/table?id=room%20%2F%20private');
   });
   

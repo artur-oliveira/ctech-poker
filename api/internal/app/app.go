@@ -532,18 +532,36 @@ func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablest
 		if sessionStore == nil {
 			return
 		}
+		ctx := context.Background()
+		// One BatchGetItem for the whole table instead of one GetOrCreate per
+		// participant (#200): this runs on the write the client actively waits
+		// for, so nine sequential profile reads were nine round trips of pure
+		// latency in front of it. GetMany is read-only where GetOrCreate would
+		// create a row, which costs nothing here — every participant was dealt
+		// in, so buyin.Service already created their profile at buy-in
+		// (internal/buyin/service.go). Participants missing from the batch
+		// (deleted profile, or a partial failure) simply get no avatar, the
+		// same fallback the per-player GetOrCreate error path had.
 		avatarURLs := make(map[string]string, len(outcome.Participants))
-		for _, id := range outcome.Participants {
-			if profile, err := players.GetOrCreate(context.Background(), id); err == nil {
-				avatarURLs[id] = player.AvatarURL(profile, cfg.AvatarBaseURL)
+		if profiles, err := players.GetMany(ctx, outcome.Participants); err != nil {
+			slog.Error("sessionlog: batch resolve participant avatars failed", "table", tableID, "hand", handID, "err", err)
+		} else {
+			for id, profile := range profiles {
+				avatarURLs[id] = player.AvatarURL(&profile, cfg.AvatarBaseURL)
 			}
 		}
+		endedAt := time.Now().UnixMilli()
+		items := make([]sessionlog.HandItem, 0, len(outcome.Participants))
 		for _, id := range outcome.Participants {
 			item := handItemForWithAvatars(outcome, id, names, avatarURLs)
-			item.PK, item.TableID, item.HandID, item.CurrencyMode, item.EndedAt = id, tableID, handID, mode, time.Now().UnixMilli()
-			if err := sessionStore.RecordHand(context.Background(), item); err != nil {
-				slog.Error("sessionlog: record hand failed", "table", tableID, "hand", handID, "player", id, "err", err)
-			}
+			item.PK, item.TableID, item.HandID, item.CurrencyMode, item.EndedAt = id, tableID, handID, mode, endedAt
+			items = append(items, item)
+		}
+		// One BatchWriteItem for every participant's row — see
+		// sessionlog.Store.RecordHands for why the history stays N redacted
+		// per-player copies rather than one canonical hand record.
+		if err := sessionStore.RecordHands(ctx, items); err != nil {
+			slog.Error("sessionlog: record hand failed", "table", tableID, "hand", handID, "err", err)
 		}
 	}
 	persistHandReveal := func(tableID, handID, mode string, outcome hand.HandOutcome) {

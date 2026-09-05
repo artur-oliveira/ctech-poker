@@ -3,6 +3,8 @@ package achievements
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -75,64 +77,242 @@ func (s *Store) ClaimHandCounters(ctx context.Context, tableID, handID string) (
 	return true, nil
 }
 
-func (s *Store) Increment(ctx context.Context, playerID, mode, key string, by int) (int, int, error) {
-	if by <= 0 {
-		return 0, 0, fmt.Errorf("achievements: increment must be positive")
+// The aggregate progress row (issue #198). Every achievement counter for one
+// player and one currency mode lives on a single item — `pk` = player,
+// `sk` = "<mode>#_progress" — as one top-level attribute per key
+// (`counterAttrPrefix`+key, a Number) plus that key's last tier-unlock
+// timestamp (`unlockAttrPrefix`+key, a String). A whole hand's deltas for one
+// player therefore commit as ONE UpdateItem instead of the dozens of
+// per-key UpdateItems `Increment`/`IncrementStreak` used to issue (hands
+// played, time bank, win, category, earnings, pocket pair, full table /
+// heads-up, all-in, ... × every participant).
+//
+// One item per (player, mode) — not one per key — is what makes that
+// possible: DynamoDB's `ADD` works only on top-level attributes, so a nested
+// map of counters could not be incremented atomically. The per-key rows
+// written before #198 are still read (see legacyCounters/ListAchievements)
+// and are absorbed into the aggregate the first time a player records a hand.
+const (
+	aggregateSK        = "_progress"
+	counterAttrPrefix  = "c#"
+	unlockAttrPrefix   = "u#"
+	legacyCounterField = "counter"
+)
+
+func aggregateSKFor(mode string) string { return mode + "#" + aggregateSK }
+
+// ApplyHandProgress applies one player's entire hand in a single write:
+// `adds` are counters to increment (ADD), `sets` are counters to overwrite
+// (SET — the streak resets, whose whole point is to drop back to a fixed
+// value). It returns each touched key's previous and current totals, so the
+// caller can detect tier crossings from values that are correct even under
+// concurrent hands: `current` comes from DynamoDB's ALL_NEW image and
+// `previous` is derived from it by undoing this call's own delta, never by a
+// separate read.
+func (s *Store) ApplyHandProgress(ctx context.Context, playerID, mode string, adds, sets map[string]int) (map[string]int, map[string]int, error) {
+	if playerID == "" || (len(adds) == 0 && len(sets) == 0) {
+		return map[string]int{}, map[string]int{}, nil
 	}
-	sk := mode + "#" + key
-	out, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
-		TableName: aws.String(s.base.TableName),
-		Key: map[string]dynamotypes.AttributeValue{
-			"pk": &dynamotypes.AttributeValueMemberS{Value: playerID},
-			"sk": &dynamotypes.AttributeValueMemberS{Value: sk},
-		},
-		UpdateExpression:          aws.String("ADD #counter :by"),
-		ExpressionAttributeNames:  map[string]string{"#counter": "counter"},
-		ExpressionAttributeValues: map[string]dynamotypes.AttributeValue{":by": &dynamotypes.AttributeValueMemberN{Value: strconv.Itoa(by)}},
-		ReturnValues:              dynamotypes.ReturnValueAllNew,
-	})
+	for key, by := range adds {
+		if by <= 0 {
+			return nil, nil, fmt.Errorf("achievements: increment for %s must be positive", key)
+		}
+	}
+	input := s.progressUpdate(playerID, mode, adds, sets)
+	// The aggregate must already exist: if it does not, this player's counters
+	// may still be in the pre-#198 per-key rows, and starting the aggregate at
+	// zero would both lose their totals and re-unlock tiers they passed long
+	// ago. seedAggregate absorbs those rows first.
+	input.ConditionExpression = aws.String("attribute_exists(pk)")
+	out, err := s.base.UpdateItemRaw(ctx, input)
 	if err != nil {
-		return 0, 0, fmt.Errorf("achievements: increment: %w", err)
+		if !dynamo.IsConditionFailed(err) {
+			return nil, nil, fmt.Errorf("achievements: apply hand progress: %w", err)
+		}
+		return s.seedAggregate(ctx, playerID, mode, adds, sets)
 	}
-	currentValue, ok := out.Attributes["counter"].(*dynamotypes.AttributeValueMemberN)
-	if !ok {
-		return 0, 0, fmt.Errorf("achievements: increment returned no counter")
-	}
-	current, err := strconv.Atoi(currentValue.Value)
-	if err != nil {
-		return 0, 0, fmt.Errorf("achievements: parse counter: %w", err)
-	}
-	return current - by, current, nil
+	current := countersFrom(out.Attributes)
+	return previousOf(current, adds, sets), current, nil
 }
 
-func (s *Store) IncrementStreak(ctx context.Context, playerID, mode, key string, reset bool, resetTo int) (int, error) {
-	sk := mode + "#" + key
-	expression := "ADD #counter :one"
-	values := map[string]dynamotypes.AttributeValue{":one": &dynamotypes.AttributeValueMemberN{Value: "1"}}
-	if reset {
-		expression = "SET #counter = :value"
-		values = map[string]dynamotypes.AttributeValue{":value": &dynamotypes.AttributeValueMemberN{Value: strconv.Itoa(resetTo)}}
+func (s *Store) progressUpdate(playerID, mode string, adds, sets map[string]int) *dynamodb.UpdateItemInput {
+	names := map[string]string{}
+	values := map[string]dynamotypes.AttributeValue{}
+	var addClauses, setClauses []string
+	for _, key := range slices.Sorted(maps.Keys(adds)) {
+		alias, placeholder := fmt.Sprintf("#a%d", len(names)), fmt.Sprintf(":a%d", len(values))
+		names[alias], values[placeholder] = counterAttrPrefix+key, &dynamotypes.AttributeValueMemberN{Value: strconv.Itoa(adds[key])}
+		addClauses = append(addClauses, alias+" "+placeholder)
 	}
-	out, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
+	for _, key := range slices.Sorted(maps.Keys(sets)) {
+		alias, placeholder := fmt.Sprintf("#s%d", len(names)), fmt.Sprintf(":s%d", len(values))
+		names[alias], values[placeholder] = counterAttrPrefix+key, &dynamotypes.AttributeValueMemberN{Value: strconv.Itoa(sets[key])}
+		setClauses = append(setClauses, alias+" = "+placeholder)
+	}
+	var expression string
+	if len(addClauses) > 0 {
+		expression = "ADD " + strings.Join(addClauses, ", ")
+	}
+	if len(setClauses) > 0 {
+		expression = strings.TrimSpace(expression + " SET " + strings.Join(setClauses, ", "))
+	}
+	return &dynamodb.UpdateItemInput{
 		TableName: aws.String(s.base.TableName),
 		Key: map[string]dynamotypes.AttributeValue{
 			"pk": &dynamotypes.AttributeValueMemberS{Value: playerID},
-			"sk": &dynamotypes.AttributeValueMemberS{Value: sk},
+			"sk": &dynamotypes.AttributeValueMemberS{Value: aggregateSKFor(mode)},
 		},
 		UpdateExpression:          aws.String(expression),
-		ExpressionAttributeNames:  map[string]string{"#counter": "counter"},
+		ExpressionAttributeNames:  names,
 		ExpressionAttributeValues: values,
 		ReturnValues:              dynamotypes.ReturnValueAllNew,
+	}
+}
+
+// seedAggregate creates a player's aggregate row from whatever per-key rows
+// they already have and applies this hand's deltas on top, as one
+// create-only PutItem. It runs at most once per player and mode — the first
+// hand after this change ships — so there is no migration job: a veteran's
+// totals (and their existing unlock timestamps) carry over, and their tier
+// crossings are still computed against the totals they actually had.
+//
+// A concurrent hand can win the create; that loser simply retries the normal
+// update path, which now finds the row it needs.
+func (s *Store) seedAggregate(ctx context.Context, playerID, mode string, adds, sets map[string]int) (map[string]int, map[string]int, error) {
+	legacy, unlocked, err := s.legacyCounters(ctx, playerID, mode)
+	if err != nil {
+		return nil, nil, err
+	}
+	current := maps.Clone(legacy)
+	for key, value := range sets {
+		current[key] = value
+	}
+	for key, by := range adds {
+		current[key] += by
+	}
+	item := map[string]dynamotypes.AttributeValue{
+		"pk": &dynamotypes.AttributeValueMemberS{Value: playerID},
+		"sk": &dynamotypes.AttributeValueMemberS{Value: aggregateSKFor(mode)},
+	}
+	for key, value := range current {
+		item[counterAttrPrefix+key] = &dynamotypes.AttributeValueMemberN{Value: strconv.Itoa(value)}
+	}
+	for key, at := range unlocked {
+		item[unlockAttrPrefix+key] = &dynamotypes.AttributeValueMemberS{Value: at}
+	}
+	_, err = s.base.PutItemRaw(ctx, &dynamodb.PutItemInput{
+		TableName:           aws.String(s.base.TableName),
+		Item:                item,
+		ConditionExpression: aws.String("attribute_not_exists(pk)"),
 	})
 	if err != nil {
-		return 0, fmt.Errorf("achievements: streak: %w", err)
+		if !dynamo.IsConditionFailed(err) {
+			return nil, nil, fmt.Errorf("achievements: seed progress aggregate: %w", err)
+		}
+		// Lost the create race: the row exists now, so the plain update works.
+		out, updateErr := s.base.UpdateItemRaw(ctx, s.progressUpdate(playerID, mode, adds, sets))
+		if updateErr != nil {
+			return nil, nil, fmt.Errorf("achievements: apply hand progress: %w", updateErr)
+		}
+		raced := countersFrom(out.Attributes)
+		return previousOf(raced, adds, sets), raced, nil
 	}
-	v, ok := out.Attributes["counter"].(*dynamotypes.AttributeValueMemberN)
-	if !ok {
-		return 0, fmt.Errorf("achievements: streak returned no counter")
+	return previousOf(current, adds, sets), current, nil
+}
+
+// legacyCounters reads a player's pre-#198 per-key rows for one mode: their
+// counters and their unlock timestamps. Per-table streak rows
+// (streakKeyPrefix) are deliberately excluded — those are live display state
+// that UpdateTableStreak keeps in its own items, not achievement progress —
+// and they are also why this pages instead of reading one page: a player
+// accumulates one such row per table they have ever played.
+func (s *Store) legacyCounters(ctx context.Context, playerID, mode string) (map[string]int, map[string]string, error) {
+	counters, unlocked := map[string]int{}, map[string]string{}
+	prefix := mode + "#"
+	var startKey map[string]dynamotypes.AttributeValue
+	for page := 0; page < allProgressMaxPages; page++ {
+		result, err := s.base.Query(ctx, dynamo.QueryOpts{
+			PK: playerID, SKPrefix: prefix, Limit: allProgressPageSize, ExclusiveStartKey: startKey,
+		})
+		if err != nil {
+			return nil, nil, fmt.Errorf("achievements: read legacy progress: %w", err)
+		}
+		for _, item := range result.Items {
+			row, decodeErr := dynamo.Decode[PlayerAchievementProgress](item)
+			if decodeErr != nil {
+				return nil, nil, fmt.Errorf("achievements: decode legacy progress: %w", decodeErr)
+			}
+			key := strings.TrimPrefix(row.Key, prefix)
+			if key == aggregateSK || strings.HasPrefix(key, streakKeyPrefix) {
+				continue
+			}
+			counters[key] = row.Count
+			if row.UnlockedAt != "" {
+				unlocked[key] = row.UnlockedAt
+			}
+		}
+		if len(result.LastEvaluatedKey) == 0 {
+			break
+		}
+		startKey = result.LastEvaluatedKey
 	}
-	current, err := strconv.Atoi(v.Value)
-	return current, err
+	return counters, unlocked, nil
+}
+
+// countersFrom reads the counter attributes out of an aggregate item image.
+func countersFrom(item map[string]dynamotypes.AttributeValue) map[string]int {
+	out := make(map[string]int, len(item))
+	for name, value := range item {
+		key, ok := strings.CutPrefix(name, counterAttrPrefix)
+		if !ok {
+			continue
+		}
+		number, isNumber := value.(*dynamotypes.AttributeValueMemberN)
+		if !isNumber {
+			continue
+		}
+		if parsed, err := strconv.Atoi(number.Value); err == nil {
+			out[key] = parsed
+		}
+	}
+	return out
+}
+
+// rowsFromAggregate expands one aggregate item into the same
+// PlayerAchievementProgress rows the per-key model returned, applying the
+// same filter ListAchievements always applied: a secret achievement below its
+// first tier stays hidden. Keys are sorted so the response is stable across
+// calls (a DynamoDB item is a map, with no attribute order).
+func rowsFromAggregate(item map[string]dynamotypes.AttributeValue) []PlayerAchievementProgress {
+	counters := countersFrom(item)
+	out := make([]PlayerAchievementProgress, 0, len(counters))
+	for _, key := range slices.Sorted(maps.Keys(counters)) {
+		if achievement, ok := achievementForKey(key); ok && achievement.Secret &&
+			counters[key] < minimumThreshold(achievement.Tiers) {
+			continue
+		}
+		row := PlayerAchievementProgress{Key: key, Count: counters[key]}
+		if at, ok := item[unlockAttrPrefix+key].(*dynamotypes.AttributeValueMemberS); ok {
+			row.UnlockedAt = at.Value
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+// previousOf reconstructs each touched key's total from before this write.
+// An overwritten (SET) counter reports its new value as the previous one too:
+// a streak reset must never look like a threshold crossing, which is exactly
+// what IncrementStreak's caller did before #198.
+func previousOf(current map[string]int, adds, sets map[string]int) map[string]int {
+	previous := make(map[string]int, len(adds)+len(sets))
+	for key, by := range adds {
+		previous[key] = current[key] - by
+	}
+	for key := range sets {
+		previous[key] = current[key]
+	}
+	return previous
 }
 
 // UpdateTableStreak advances playerID's running win/loss streak for one
@@ -208,35 +388,66 @@ type PlayerAchievementProgress struct {
 	UnlockedAt string `dynamodbav:"unlocked_at,omitempty" json:"unlocked_at,omitempty"`
 }
 
-// StampTierUnlock records "now" as the moment playerID crossed a tier on key.
-// Called by Service.RecordHand once per TierUnlock it reports, i.e. exactly
-// when a threshold is genuinely crossed: a replayed hand hook is already
-// stopped upstream by ClaimHandCounters, and even past that a replay moves no
-// counter, so TierCrossed stays false and no rewrite happens. A later, higher
-// tier does overwrite it — the field means "last tier unlocked at", which is
-// the recency the achievements page sorts and celebrates by.
-func (s *Store) StampTierUnlock(ctx context.Context, playerID, mode, key string) error {
-	if playerID == "" || key == "" {
+// StampTierUnlocks records "now" as the moment playerID crossed a tier on
+// each of keys. Called by Service.RecordHand once per player per hand with
+// every tier that hand actually crossed (issue #198 — it used to be one write
+// per tier), i.e. only when a threshold is genuinely crossed: a replayed hand
+// hook is already stopped upstream by ClaimHandCounters, and even past that a
+// replay moves no counter, so TierCrossed stays false and nothing is
+// rewritten. A later, higher tier does overwrite the stamp — the field means
+// "last tier unlocked at", which is the recency the achievements page sorts
+// and celebrates by. The stamps ride on the same aggregate item as the
+// counters, so a player costs one extra write here, never one per tier.
+func (s *Store) StampTierUnlocks(ctx context.Context, playerID, mode string, keys []string) error {
+	if playerID == "" || len(keys) == 0 {
+		return nil
+	}
+	names := map[string]string{}
+	var clauses []string
+	for _, key := range slices.Sorted(slices.Values(keys)) {
+		if key == "" {
+			continue
+		}
+		alias := fmt.Sprintf("#u%d", len(names))
+		names[alias] = unlockAttrPrefix + key
+		clauses = append(clauses, alias+" = :now")
+	}
+	if len(clauses) == 0 {
 		return nil
 	}
 	_, err := s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(s.base.TableName),
 		Key: map[string]dynamotypes.AttributeValue{
 			"pk": &dynamotypes.AttributeValueMemberS{Value: playerID},
-			"sk": &dynamotypes.AttributeValueMemberS{Value: mode + "#" + key},
+			"sk": &dynamotypes.AttributeValueMemberS{Value: aggregateSKFor(mode)},
 		},
-		UpdateExpression:          aws.String("SET unlocked_at = :now"),
+		UpdateExpression:          aws.String("SET " + strings.Join(clauses, ", ")),
+		ExpressionAttributeNames:  names,
 		ExpressionAttributeValues: map[string]dynamotypes.AttributeValue{":now": &dynamotypes.AttributeValueMemberS{Value: dynamo.NowStr()}},
 	})
 	if err != nil {
-		return fmt.Errorf("achievements: stamp tier unlock %s/%s: %w", playerID, key, err)
+		return fmt.Errorf("achievements: stamp tier unlocks %s: %w", playerID, err)
 	}
 	return nil
 }
 
+// ListAchievements returns one player's progress rows for a mode. Since #198
+// a player's counters live on a single aggregate item, so the common path is
+// one GetItem whose rows are returned complete, with no cursor: the catalog
+// is bounded at a few dozen keys, and a paginated read of one item would only
+// invite a caller to think it had part of the answer. `limit`/`startKey`
+// therefore apply only to the pre-#198 per-key rows, which are still served
+// verbatim for a player who has not recorded a hand since this shipped.
 func (s *Store) ListAchievements(ctx context.Context, playerID, mode string, limit int, startKey map[string]dynamotypes.AttributeValue) ([]PlayerAchievementProgress, map[string]dynamotypes.AttributeValue, error) {
 	if playerID == "" || limit < 0 {
 		return []PlayerAchievementProgress{}, nil, fmt.Errorf("achievements: invalid playerId or limit values")
+	}
+	aggregate, err := s.base.GetItem(ctx, playerID, aggregateSKFor(mode))
+	if err != nil {
+		return nil, nil, fmt.Errorf("achievements: read progress aggregate: %w", err)
+	}
+	if aggregate != nil {
+		return rowsFromAggregate(aggregate), nil, nil
 	}
 	prefix := mode + "#"
 	result, err := s.base.Query(ctx, dynamo.QueryOpts{PK: playerID, SKPrefix: prefix, Limit: limit, ExclusiveStartKey: startKey})

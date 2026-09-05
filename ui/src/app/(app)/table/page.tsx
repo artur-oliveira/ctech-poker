@@ -31,7 +31,7 @@ import {updateMe} from '@/lib/api/player';
 import {currentReactionPurchase, type ReactionCatalogEntry} from '@/lib/api/reactionPurchases';
 import {useTablePreferences} from '@/lib/tablePreferences';
 import {useDealerVoice} from '@/lib/hooks/useDealerVoice';
-import {useTableRemoval, useTableSession} from '@/lib/hooks/useTableSession';
+import {useTableProgressiveSession, useTableRemoval, useTableSession} from '@/lib/hooks/useTableSession';
 import {useTableOutcome} from '@/lib/hooks/useTableOutcome';
 import {useTableOverlays} from '@/lib/hooks/useTableOverlays';
 import {actionState} from '@/lib/tableActions';
@@ -46,6 +46,7 @@ import {MAX_RECONNECT_ATTEMPTS} from '@aoctech/ws-client';
 import {DEFAULT_TURN_TIMEOUT_SECONDS} from '@/lib/gameTiming';
 import {isTableReaction, TABLE_REACTIONS} from '@/lib/reactions';
 import {WALLET_QUERY_ROOT} from '@/lib/api/wallet';
+import {bucketFromParams} from '@/lib/lobbyBuckets';
 import {setSoundEffectsEnabled} from '@/lib/sound';
 
 const ROOM_ID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
@@ -88,6 +89,10 @@ const MOCK_SCENARIOS = new Set<MockScenario>([
 function TableContent() {
   const router = useRouter();
   const params = useSearchParams(), id = params.get('id') || '', valid = ROOM_ID.test(id);
+  // A lobby pick arrives as a bucket instead of a room id: the buy-in
+  // ceremony below confirms it with join-or-create, which is what decides
+  // the table (#205). Everything past the ceremony still needs a real id.
+  const bucket = valid ? null : bucketFromParams(params);
   const inviteCode = params.get('invite') || undefined;
   const requestedScenario = params.get('scenario') as MockScenario | null;
   const scenario: MockScenario = requestedScenario && MOCK_SCENARIOS.has(requestedScenario) ? requestedScenario : 'full_hand';
@@ -101,8 +106,8 @@ function TableContent() {
     return () => setSoundEffectsEnabled(false);
   }, [preferences.soundEffects]);
   const queryClient = useQueryClient();
-  const session = useTableSession(id, valid);
-  const {room, seated, profile, playerNotes, reactionCatalog, reactionPurchases, tableHands} = session;
+  const core = useTableSession(id, valid);
+  const seated = core.seated;
   const [noteOpponent, setNoteOpponent] = useState<{ player_id: string; name?: string } | null>(null);
   const [reactionPurchaseTarget, setReactionPurchaseTarget] = useState<ReactionCatalogEntry | null>(null);
   const [favoritesSaving, setFavoritesSaving] = useState(false);
@@ -131,6 +136,16 @@ function TableContent() {
     setOpponentIds(previous => previous.join(',') === ids.join(',') ? previous : ids);
   }, [rt.snapshot?.seats, viewer]);
   useDealerVoice(rt.announcement, preferences.dealerVoice);
+  const overlays = useTableOverlays({connected: rt.status === 'connected', sendReaction: rt.sendReaction});
+  const {activeTablePanel, setActiveTablePanel, panelOpenChange, pendingReaction} = overlays;
+  // Declared after the overlays so the reactions panel's own open state is what
+  // arms the two reaction reads, and after the socket so the rest waits for the
+  // first snapshot instead of competing with the handshake (#212).
+  const session = useTableProgressiveSession(core, {
+    id, seeded: Boolean(rt.snapshot),
+    reactionsOpen: activeTablePanel === 'reactions' || Boolean(reactionPurchaseTarget)
+  });
+  const {room, profile, playerNotes, reactionCatalog, reactionPurchases, tableHands} = session;
   const {sessionRecap, closeRecap} = useTableRemoval({
     id, removed: rt.removed, terminalError: rt.terminalError,
     sessions: session.sessions, sessionsLoading: session.sessionsLoading
@@ -140,6 +155,13 @@ function TableContent() {
   });
   const overlays = useTableOverlays({connected: rt.status === 'connected', sendReaction: rt.sendReaction});
   const {activeTablePanel, setActiveTablePanel, panelOpenChange, pendingReaction} = overlays;
+  if (bucket) return <>
+    <BuyInPanel bucket={bucket} onSeatedAction={roomId => {
+      queryClient.setQueryData(['seated', roomId], {seated: true, stack: 0});
+      router.replace(`/table?id=${encodeURIComponent(roomId)}`);
+    }}/>
+    {USE_MOCK && <MockControls scenario={scenario} delay={delay}/>}
+  </>;
   if (!valid) return (
     <main className="game-loading">
       <h1 className="sr-only">Mesa de poker</h1>

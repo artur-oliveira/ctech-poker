@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
@@ -123,6 +124,58 @@ func TestAggregateBucketsCountsEveryPageAndScopesByCurrencyMode(t *testing.T) {
 func TestAggregateBucketsExcludesOtherCurrencyMode(t *testing.T) {
 	if got := aggregateBuckets([]roomstore.Room{bucketRoom("sandbox-only", 0)}, "real"); len(got) != 0 {
 		t.Fatalf("sandbox rooms must never appear in the real-money lobby: %+v", got)
+	}
+}
+
+// The buckets aggregate is the only endpoint left that walks the whole public
+// index, so it must not walk it once per request (#213).
+func TestBucketCacheWalksThePublicIndexOncePerTTL(t *testing.T) {
+	var cache bucketCache
+	walks := 0
+	load := func() ([]RoomBucket, error) {
+		walks++
+		return []RoomBucket{{BigBlind: 20}}, nil
+	}
+	for range 5 {
+		if _, err := cache.get(roomstore.CurrencyModeSandbox, load); err != nil {
+			t.Fatalf("get: %v", err)
+		}
+	}
+	if walks != 1 {
+		t.Fatalf("expected one index walk within the TTL, got %d", walks)
+	}
+	// Each currency mode is its own aggregate: one must never serve the other.
+	if _, err := cache.get(roomstore.CurrencyModeReal, load); err != nil {
+		t.Fatalf("get real: %v", err)
+	}
+	if walks != 2 {
+		t.Fatalf("expected the real-money aggregate to load on its own, got %d walks", walks)
+	}
+	// A stale entry reloads instead of being served forever.
+	cache.entries[roomstore.CurrencyModeSandbox] = bucketCacheEntry{
+		at: time.Now().Add(-2 * bucketsCacheTTL), buckets: nil,
+	}
+	if _, err := cache.get(roomstore.CurrencyModeSandbox, load); err != nil {
+		t.Fatalf("get after expiry: %v", err)
+	}
+	if walks != 3 {
+		t.Fatalf("expected an expired aggregate to reload, got %d walks", walks)
+	}
+}
+
+func TestBucketCacheDoesNotCacheAFailedWalk(t *testing.T) {
+	var cache bucketCache
+	boom := errors.New("dynamo down")
+	if _, err := cache.get(roomstore.CurrencyModeSandbox, func() ([]RoomBucket, error) {
+		return nil, boom
+	}); !errors.Is(err, boom) {
+		t.Fatalf("expected the load error to surface, got %v", err)
+	}
+	got, err := cache.get(roomstore.CurrencyModeSandbox, func() ([]RoomBucket, error) {
+		return []RoomBucket{{BigBlind: 50}}, nil
+	})
+	if err != nil || len(got) != 1 || got[0].BigBlind != 50 {
+		t.Fatalf("a failed walk must not be cached, got %+v err=%v", got, err)
 	}
 }
 

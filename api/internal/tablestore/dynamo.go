@@ -80,6 +80,10 @@ type Store struct {
 	log     dynamo.Base
 	guards  dynamo.Base
 	history dynamo.Base
+	// breaker is the per-table write guard in front of CommitAction — see
+	// breaker.go. It is defence in depth for every caller of this one shared
+	// write sink, not a replacement for any caller's own guard.
+	breaker *commitBreaker
 }
 
 func NewStore(db *dynamodb.Client, env string) *Store {
@@ -90,6 +94,7 @@ func NewStore(db *dynamodb.Client, env string) *Store {
 		log:     dynamo.NewBase(db, env, tableActionLog),
 		guards:  dynamo.NewBase(db, env, tableActionGuards),
 		history: dynamo.NewBase(db, env, tableStateHistory),
+		breaker: newCommitBreaker(),
 	}
 }
 
@@ -291,9 +296,21 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 		items = append(items, s.guards.BuildPutTxItemIfAbsent(guardItem))
 	}
 
-	if err := s.state.TransactWrite(ctx, items); err != nil {
-		return s.resolveCommitErr(ctx, tableID, handID, actionID, err)
+	// Last gate before the write itself (issue #207): the per-table budget is
+	// checked here, not at the top of the function, so a transaction that
+	// never gets built spends no budget and can never leave a half-open
+	// probe in flight. On a closed budget nothing reaches DynamoDB and the
+	// caller gets an ErrUnavailable-flavoured error, which every actor
+	// handler treats as "abort this command" rather than reload-and-retry.
+	if err := s.breaker.allow(tableID, entry.Action); err != nil {
+		return err
 	}
+	if err := s.state.TransactWrite(ctx, items); err != nil {
+		resolved := s.resolveCommitErr(ctx, tableID, handID, actionID, err)
+		s.breaker.record(tableID, entry.Action, resolved)
+		return resolved
+	}
+	s.breaker.record(tableID, entry.Action, nil)
 	return nil
 }
 

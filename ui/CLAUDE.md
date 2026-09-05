@@ -65,11 +65,25 @@ off by default — do not build UI that assumes real money is on.
 - **The table page is a composition, not a component.** `app/(app)/table/page.tsx` wires hooks
   together and renders; it holds no derivation of its own. Server reads live in
   `lib/hooks/useTableSession.ts` (plus `useTableRemoval` for the removed-frame reaction and the
-  leave recap), showdown bookkeeping in `lib/hooks/useTableOutcome.ts`, the asides/dialogs/reaction
+  leave recap) — and they are split there in two: `useTableSession` is the **critical set** (room +
+  seat check, which with the socket is the whole documented minimum for a playable entry) and
+  `useTableProgressiveSession` is everything the table only renders once a snapshot exists, gated
+  behind two one-way render-time latches (first snapshot; reactions panel opened). A new table read
+  belongs in the progressive hook unless it gates entry itself, and neither latch may be armed from
+  an effect. See `docs/2026-09-04-table-entry-request-budget.md` and #212.
+  Showdown bookkeeping is in `lib/hooks/useTableOutcome.ts`, the asides/dialogs/reaction
   cooldown in `lib/hooks/useTableOverlays.ts`, the action-bar derivation in `lib/tableActions.ts`,
   and the whole banner assembly in `buildHandOutcome` (`lib/tableOutcome.ts`). Extend the hook that
   owns the concern; do not grow the page back. See
   `docs/2026-09-02-table-module-decomposition.md`.
+- **One lifecycle for every purchase.** Sandbox credits, premium reactions and deck/felt cosmetics
+  all track their live status through `lib/hooks/usePurchaseStatus.ts`. The websocket frame is the
+  primary confirmation (each key lives under a root `useLobbyRealtime` already invalidates); the
+  hook's query is the bounded fallback — it pauses in a hidden tab for free (React Query's
+  `refetchIntervalInBackground` is false), backs off 4s → 30s per polls spent, gives up at
+  `PURCHASE_POLL_BUDGET`, and seeds `initialData` so opening a dialog costs no read. **Never arm a
+  `setInterval` to watch a purchase**; `purchasePollCount()` exists so "at most N reads per pending
+  purchase" stays assertable. See `docs/2026-09-04-purchase-status-one-lifecycle.md` and #227.
 - **One clock for the whole table.** `lib/hooks/useSharedTicker.ts` runs a single `setInterval` at
   the shortest cadence anyone asked for and notifies each subscriber on its own period. Every
   countdown goes through `useLiveNow` (which subscribes to it) — the action bar, each timed seat,
@@ -106,6 +120,21 @@ off by default — do not build UI that assumes real money is on.
   `lib/providers/RealtimeBridge.tsx` inside `QueryProvider`, which the `(app)` route group
   layout owns — do not mount it from a page again, and never from the `(marketing)` group
   (its `MarketingQueryProvider` deliberately omits it, keep-alive and `NetworkProvider`).
+- **The lobby displays an aggregate and resolves nothing (#205).** `StakesGrid` renders
+  `GET /rooms/buckets` (`listRoomBuckets`, cached under `ROOM_BUCKETS_QUERY_KEY`) — one request for
+  the whole grid. It no longer paginates `GET /rooms` (`listAllRooms` is gone), never re-reads a
+  candidate room, and never creates a public table from the client. A card click is navigation
+  only: `tableBucketHref` (`lib/lobbyBuckets.ts`) carries the pick to `/table?sb=&bb=&seats=`,
+  where `BuyInPanel` renders the same buy-in ceremony from the bucket (`bucketFromParams`) and
+  confirms it with the single server-resolved mutation `POST /rooms/join-or-create` — which picks
+  or opens the table, absorbing a lost last-seat race server-side instead of bouncing back to the
+  lobby. The ceremony still owns consent: nothing is debited before the player confirms an amount,
+  and the idempotency key is stable per confirmed amount so a retry re-seats at the same table
+  instead of buying a second seat. `BuyInPanel`'s other entry (`roomId`) is unchanged — a direct
+  link, an invite, or a return to a table still buys in with `POST /rooms/:id/join`.
+  `useLobbyRealtime` refreshes the aggregate on `room_created` and on socket open; `room_updated`
+  deliberately only updates that room's own `['room', id]` entry, since it fires on every seat
+  change at every public table and the aggregate is just an availability hint.
 - **A rejected table command is resubmitted, not surfaced.** `act()` retries on `stale_state` via
   `pendingActionRef`; the auxiliary commands (`show_cards`, `request_rabbit_hunt`,
   `request_winner_cards`, `accept`/`decline_winner_cards`, `request_exit`) carry no

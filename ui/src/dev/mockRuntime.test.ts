@@ -37,6 +37,30 @@ describe('mock store REST contract', () => {
     expect(history.data).toMatchObject({has_next: false, next_cursor: null});
   });
 
+  test('aggregates the lobby buckets and resolves a bucket entry server-side', async () => {
+    localStorage.setItem('ctech_poker_mock_delay', '0');
+    const bucket = {small_blind: 5_000, big_blind: 10_000, max_seats: 6, amount: 500_000, idem_key: 'k'};
+
+    const opened = await request('POST', '/v1.0/rooms/join-or-create', bucket);
+    expect(opened.data).toMatchObject({created: true});
+
+    const buckets = await mockAdapter({
+      method: 'GET', url: '/v1.0/rooms/buckets', params: {currency_mode: 'sandbox'}, headers: {},
+    } as InternalAxiosRequestConfig);
+    expect(buckets.data.data).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        small_blind: 5_000, big_blind: 10_000, max_seats: 6, rooms: 1, open_rooms: 1, seats_taken: 1,
+      }),
+    ]));
+
+    // The second entry into the same bucket lands in the table already open.
+    const joined = await request('POST', '/v1.0/rooms/join-or-create', bucket);
+    expect(joined.data).toEqual({room_id: opened.data.room_id, created: false});
+
+    await expect(request('POST', '/v1.0/rooms/join-or-create', {...bucket, max_seats: 4}))
+      .rejects.toMatchObject({response: {status: 400}});
+  });
+
   test('accepts the daily-reward trailing slash used by the store client', async () => {
     sessionStorage.removeItem('mock_next_credit_at');
     const cooldown = await request('GET', '/v1.0/sandbox-credits/');

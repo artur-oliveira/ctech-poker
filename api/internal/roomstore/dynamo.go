@@ -14,6 +14,7 @@ import (
 const (
 	tableRooms   = "poker_rooms"
 	gsiPublic    = "gsi_public"
+	gsiBucket    = "gsi_bucket"
 	gsiShareCode = "gsi_share_code"
 
 	roomSK         = "meta"
@@ -57,10 +58,12 @@ func (s *Store) Create(ctx context.Context, r Room) error {
 		SK string `dynamodbav:"sk"`
 		Room
 		GSIPublic    string `dynamodbav:"gsi_public,omitempty"`
+		GSIBucket    string `dynamodbav:"gsi_bucket,omitempty"`
 		GSIShareCode string `dynamodbav:"gsi_share_code,omitempty"`
 	}{
 		PK: r.ID, SK: roomSK, Room: r,
 		GSIPublic:    publicIndexValue(r),
+		GSIBucket:    bucketIndexValue(r),
 		GSIShareCode: r.ShareCode,
 	})
 	if err != nil {
@@ -78,6 +81,51 @@ func publicIndexValue(r Room) string {
 		return "public"
 	}
 	return ""
+}
+
+// BucketKey is one lobby bucket's partition in gsi_bucket: every public room
+// that a (currency mode, blinds, seats) pick could seat a player in, and
+// nothing else. It is immutable for the life of a room — none of its parts
+// ever change after creation — so a seat count write-through never has to
+// touch the index entry.
+func BucketKey(currencyMode string, smallBlind, bigBlind int64, maxSeats int) string {
+	if currencyMode == "" {
+		// Predates the field: sandbox by construction, same rule the lobby
+		// aggregate applies.
+		currencyMode = CurrencyModeSandbox
+	}
+	return fmt.Sprintf("public#%s#%d#%d#%d", currencyMode, smallBlind, bigBlind, maxSeats)
+}
+
+// bucketIndexValue keeps gsi_bucket sparse the same way publicIndexValue keeps
+// gsi_public sparse: private rooms carry no value and so can never be handed
+// out by a bucket query.
+func bucketIndexValue(r Room) string {
+	if r.Visibility != "public" {
+		return ""
+	}
+	return BucketKey(r.CurrencyMode, r.SmallBlind, r.BigBlind, r.MaxSeats)
+}
+
+// bucketCandidateLimit bounds one join attempt's read to a single Query page.
+// A bucket holding more open tables than this has far more capacity than one
+// player needs, and seatInBucket only ever walks candidates until one seats
+// them — so reading more would just bill for rooms nobody reaches.
+const bucketCandidateLimit = 50
+
+// ListBucket returns one bucket's public rooms — a single Query against
+// gsi_bucket, so the cost of a join attempt is a function of that bucket, not
+// of how many public rooms exist globally (#213). Rooms created before
+// gsi_bucket existed carry no index value and are invisible here; public
+// tables are ephemeral (cmd/tablecleanup deletes them), so those age out on
+// their own rather than needing a backfill.
+func (s *Store) ListBucket(ctx context.Context, currencyMode string, smallBlind, bigBlind int64, maxSeats int) ([]Room, error) {
+	key := BucketKey(currencyMode, smallBlind, bigBlind, maxSeats)
+	result, err := s.base.QueryGSI(ctx, gsiBucket, gsiBucket, key, bucketCandidateLimit, nil)
+	if err != nil {
+		return nil, fmt.Errorf("roomstore: list bucket: %w", err)
+	}
+	return decodeRooms(result.Items)
 }
 
 // SetSeatsTaken persists the table actor's live occupied-seat count so the
@@ -159,13 +207,21 @@ func (s *Store) ListPublic(ctx context.Context, limit int, startKey map[string]t
 	if err != nil {
 		return nil, nil, fmt.Errorf("roomstore: list public: %w", err)
 	}
-	out := make([]Room, 0, len(result.Items))
-	for _, item := range result.Items {
+	out, err := decodeRooms(result.Items)
+	if err != nil {
+		return nil, nil, err
+	}
+	return out, result.LastEvaluatedKey, nil
+}
+
+func decodeRooms(items []map[string]types.AttributeValue) ([]Room, error) {
+	out := make([]Room, 0, len(items))
+	for _, item := range items {
 		r, err := dynamo.Decode[Room](item)
 		if err != nil {
-			return nil, nil, fmt.Errorf("roomstore: decode: %w", err)
+			return nil, fmt.Errorf("roomstore: decode: %w", err)
 		}
 		out = append(out, *r)
 	}
-	return out, result.LastEvaluatedKey, nil
+	return out, nil
 }

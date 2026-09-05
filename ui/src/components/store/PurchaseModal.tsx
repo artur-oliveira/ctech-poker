@@ -4,12 +4,11 @@ import {Check, LoaderCircle, RefreshCw} from 'lucide-react';
 import {useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog';
-import {getPurchase, type SandboxPurchase} from '@/lib/api/wallet';
+import {getPurchase, sandboxPurchaseKey, type SandboxPurchase} from '@/lib/api/wallet';
 import {BALANCE_QUERY_KEY} from '@/lib/api/player';
+import {usePurchaseStatus} from '@/lib/hooks/usePurchaseStatus';
 import {useCountdownMs} from './useCountdown';
 import {PixPaymentView} from './PixPaymentView';
-
-const POLL_MS = 5000;
 
 export function PurchaseModal({purchase, finalFocusRef, onCloseAction, onUpdateAction, onRegenerateAction}: {
   purchase: SandboxPurchase | null;
@@ -25,11 +24,8 @@ export function PurchaseModal({purchase, finalFocusRef, onCloseAction, onUpdateA
   const queryClient = useQueryClient();
   const [regenerating, setRegenerating] = useState(false);
   const [regenerateFailed, setRegenerateFailed] = useState(false);
-  const [pollFailed, setPollFailed] = useState(false);
-  const [pollChecking, setPollChecking] = useState(false);
   const open = purchase !== null;
   const purchaseId = purchase?.purchase_id;
-  const purchaseStatus = purchase?.status;
   const expiresMs = purchase?.expires_at ? new Date(purchase.expires_at).getTime() : null;
   const remainingMs = useCountdownMs(open ? expiresMs : null);
   const expired = expiresMs !== null && remainingMs <= 0;
@@ -41,43 +37,26 @@ export function PurchaseModal({purchase, finalFocusRef, onCloseAction, onUpdateA
     void queryClient.invalidateQueries({queryKey: BALANCE_QUERY_KEY});
   }, [purchase?.status, queryClient]);
 
-  // Websocket confirmation (useLobbyRealtime) is the primary path; this poll
-  // is only a safety net for a missed/dropped ws frame while the modal is open.
+  // Websocket confirmation (`sandbox_purchase_update` in useLobbyRealtime,
+  // which invalidates the wallet root this key lives under) is the primary
+  // path; the shared fallback poll is only a safety net for a missed or dropped
+  // frame. It lives in the query cache, so it no longer keeps firing in a
+  // hidden tab, backs off as the wait grows and stops when the Pix window
+  // closes. See #227.
+  const statusQuery = usePurchaseStatus<SandboxPurchase>({
+    queryKey: sandboxPurchaseKey(purchaseId ?? ''),
+    queryFn: () => getPurchase(purchaseId!),
+    purchase: purchase ?? undefined,
+    enabled: open && Boolean(purchaseId),
+  });
+  const pollFailed = statusQuery.isError;
+  const pollChecking = statusQuery.isFetching;
+  // The store page owns the purchase row (it also drives the history list), so
+  // a fresher status is handed upwards rather than mirrored here.
+  const polled = statusQuery.data;
   useEffect(() => {
-    if (!open || !purchaseId || purchaseStatus !== 'pending') return undefined;
-    let disposed = false;
-    const refresh = async () => {
-      try {
-        const next = await getPurchase(purchaseId);
-        if (!disposed) {
-          setPollFailed(false);
-          onUpdateAction(next);
-        }
-      } catch {
-        if (!disposed) setPollFailed(true);
-      }
-    };
-    const id = window.setInterval(() => {
-      void refresh();
-    }, POLL_MS);
-    return () => {
-      disposed = true;
-      window.clearInterval(id);
-    };
-  }, [open, purchaseId, purchaseStatus, onUpdateAction]);
-
-  async function refreshPendingPurchase() {
-    if (!purchaseId) return;
-    setPollFailed(false);
-    setPollChecking(true);
-    try {
-      onUpdateAction(await getPurchase(purchaseId));
-    } catch {
-      setPollFailed(true);
-    } finally {
-      setPollChecking(false);
-    }
-  }
+    if (polled) onUpdateAction(polled);
+  }, [polled, onUpdateAction]);
 
   async function regenerate() {
     if (!purchase?.sku || regenerating) return;
@@ -123,7 +102,7 @@ export function PurchaseModal({purchase, finalFocusRef, onCloseAction, onUpdateA
                               ? `${purchase.total_credits.toLocaleString('pt-BR')} fichas sandbox` : undefined}/>}
       {purchase?.status === 'pending' && pollFailed && <div className="store-poll-recovery" role="alert">
         <span>Não foi possível atualizar a confirmação. Seu pagamento não foi alterado.</span>
-        <Button type="button" variant="ghost" disabled={pollChecking} onClick={() => void refreshPendingPurchase()}>
+        <Button type="button" variant="ghost" disabled={pollChecking} onClick={() => void statusQuery.refetch()}>
           {pollChecking ? <LoaderCircle className="spin" aria-hidden="true"/> : <RefreshCw aria-hidden="true"/>}
           {pollChecking ? 'Verificando…' : 'Verificar pagamento'}
         </Button>

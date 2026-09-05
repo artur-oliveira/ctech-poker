@@ -1,4 +1,4 @@
-import {act, renderHook} from '@testing-library/react';
+import {act, renderHook, waitFor} from '@testing-library/react';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import type {ReactNode} from 'react';
 import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
@@ -200,7 +200,7 @@ describe('useDeckVariant', () => {
     getAccessToken.mockReturnValue('token');
     getMe.mockResolvedValue({deck_variant: 'colorblind'});
     const {result} = renderHook(() => useDeckVariant(), {wrapper});
-    await vi.waitFor(() => expect(result.current).toBe('colorblind'));
+    await waitFor(() => expect(result.current).toBe('colorblind'));
   });
 });
 

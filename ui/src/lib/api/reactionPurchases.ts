@@ -54,6 +54,14 @@ export async function createReactionPurchase(reactionId: string, method: Reactio
   )).data;
 }
 
+// "The live status of this reaction purchase". Under the same `['wallet', …]`
+// root as the lists, so the `reaction_purchase_update` websocket frame's root
+// invalidation already reaches it — the frame is the primary path, the dialog's
+// poll only the fallback.
+export function reactionPurchaseKey(purchaseId: string) {
+  return ['wallet', 'reaction-purchase', purchaseId];
+}
+
 export async function getReactionPurchase(id: string) {
   return (await apiClient.get<ReactionPurchase>(
     `/v1.0/wallet/reaction-purchase/${encodeURIComponent(id)}`,

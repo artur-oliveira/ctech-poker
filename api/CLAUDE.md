@@ -229,6 +229,26 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   is left un-armed; `cmd/tablecleanup` or an operator is the recovery for a table that stuck, not a transaction that
   keeps being rejected. `poker_table_state` / `poker_table_state_history` are also TTL'd now (`tablestore.stateTTLDays`,
   refreshed on every commit) and PITR-off — ephemeral, rebuildable, and a runaway write shows up in PITR storage too.
+- **`tablestore.CommitAction` carries its own per-table circuit breaker (issue #207, `internal/tablestore/breaker.go`).**
+  The next-hand cap above fixes *that* loop; `CommitAction` is the one shared write sink for every command, timer and
+  sweep, so it owes every other caller the same defence in depth. **The trip condition is the storm's shape, not its
+  rate:** `maxConsecutiveRejections` (32) rejected commits — version conflict or duplicate action — with *no accepted
+  commit in between* opens the table's circuit, because a rejected conditional write means the table did not advance,
+  so replaying the same mutation cannot succeed either. Any accepted commit resets the run. While open, nothing
+  reaches DynamoDB and the caller gets `ErrCommitThrottled`, which **wraps `ErrUnavailable`, never
+  `ErrVersionConflict`** — the actor must abort the command, and a conflict-flavoured error would be answered with the
+  immediate reload-and-retry this guard exists to stop. Recovery is a `commitCooldownBase` (2s) cooldown that doubles
+  to `commitCooldownMax` (60s) per failed half-open probe, one probe at a time, so a genuinely wedged table costs one
+  transaction a minute; the incident's 5,779 rejected transactions become a few dozen. **A per-table rate/token
+  bucket was tried and deliberately dropped:** commit rate is not a signal, because only real play is paced by people
+  — `internal/table`'s nine-handed integration test sustains ~115 commits/s on one table, ~14x the incident's ~8/s, so
+  any ceiling that would have caught the incident throttles legitimate traffic (it did, twice) and any ceiling that
+  leaves it alone is too high to bound a bill. Per-command ceilings stay where the pacing is known: the actor's own
+  timer/retry caps. Logs are one line per state transition (table, action, cause, cooldown), never per attempt — the
+  incident's own symptom was 5,779 WARN lines for one table. There is no `internal/metrics` in this service and no
+  ad-hoc collector was added; CloudWatch's `addWriteVolumeAlarm` stays the numeric signal. Tests are fake-clock only
+  (`breaker_test.go`): the storm, machine-speed play, contention that still makes progress, store outages, per-table
+  isolation, and idle eviction.
 - **A timer-fired handler must force a fresh reload, not `ensureLoaded(ctx, false)`.** `handleTurnTimeout`,
   `handleNextHand` and `handleRunoutStep` are only ever reached from a `time.AfterFunc` armed by *this* actor
   instance — and `internal/tablelease` is latency-only, never an exclusive fleet lock (several instances run
@@ -532,18 +552,37 @@ catalog.
   gateway uses it too) — `hand.Table.SetPlayerIdentityForActor` replaces name/avatar/badge as one unit, so pushing a
   single field would blank the other two. Public hand shares already anonymized `ReplaySeat.Name`; that half of the
   issue needed no change.
-- **Issue #72 fixed:** `achievements.Store.StampTierUnlock` stamps `unlocked_at` on a progress row when
+- **Issue #198 fixed: a hand costs one `poker_achievement_progress` write per player, not one per applicable
+  achievement.** `achievements.Service.RecordHand` used to call `Increment`/`IncrementStreak` per counter per player —
+  hands played, time bank, win, category, earnings, pocket pair, full table/heads-up, all-in, showdown outcomes,
+  streaks — dozens of *sequential* `UpdateItem`s per hand, growing silently with every achievement added. Every rule
+  now records a **delta** into `handDeltas` (`bump`/`bumpBy`/`streak` keep their old signatures, so the rule bodies are
+  untouched) and `Service.flushProgress` persists each player's whole hand with one
+  `Store.ApplyHandProgress` call. That is possible because the counters moved to **one aggregate item per (player,
+  mode)** — `pk` = player, `sk` = `"<mode>#_progress"`, one top-level Number attribute per key (`c#<key>`) plus that
+  key's unlock stamp (`u#<key>`). Top-level, because DynamoDB's `ADD` cannot touch a nested map path. `previous` comes
+  from the ALL_NEW image minus this call's own delta — never a separate read — so tier crossings stay correct under
+  concurrent hands, and a streak reset (a `SET`) reports its new value as its previous one, so a reset can never look
+  like a crossing (the pre-#198 semantics). `StampTierUnlocks` replaces the per-tier `StampTierUnlock`: one write per
+  player, on that same item. **Documented ceiling: 1 progress write + at most 1 stamp write per player per hand**, plus
+  a rare second progress write for `KeyFirstHandAllInWin` (the one rule that needs `hands_played`'s *resulting* value,
+  so it can only be decided after the flush — and only ever on a player's literal first hand). Pinned by
+  `TestRecordHandWriteBudget` (2/6/9 seats), which also asserts a hand moving many more counters costs the same single
+  write — the incremental cost of a new achievement is zero DynamoDB operations.
+  **Migration: none to run.** `Store.seedAggregate` absorbs a player's pre-#198 per-key rows (counters *and*
+  `unlocked_at` stamps, excluding the per-table `streak#` rows, which stay their own items under `UpdateTableStreak`)
+  into the aggregate the first time they record a hand, as a create-only `PutItem`; a concurrent hand that loses that
+  create just retries the normal update. `ListAchievements` reads the aggregate with one `GetItem` and returns its rows
+  complete with no cursor (the catalog is a few dozen keys), falling back to the old per-key query for a player who has
+  not played since the change. Legacy rows are left in place, ignored once the aggregate exists.
+- **Issue #72 fixed:** `achievements.Store.StampTierUnlocks` (`StampTierUnlock` before #198) stamps the unlock time on
+  a progress row when
   `Service.RecordHand` reports a `TierUnlock`, surfaced as `unlocked_at` on `PlayerAchievementProgress` and on
   `AchievementState` (`/players/me/achievements` and the summary endpoint). Legacy rows carry no stamp and report an
   empty string — a still-locked or pre-change row, never an error. A replayed hand hook stamps nothing: it is stopped by
   `ClaimHandCounters`, and past that a counter that crosses no threshold reports no unlock. A stamp failure is logged,
   not returned — the counters are already committed and must not be retried.
-- **Issue #65 fixed:** `matchup.Store.RecordHand` no longer writes one 72-item `TransactWriteItems` call per hand. It
-  chunks pairs at `maxPairsPerTx` (12 pairs = 24 items), so a 9-max table's C(9,2)=36 pairs commit as 3 bounded
-  transactions. The atomicity that actually mattered is per-pair, not per-hand: each pair's create-only guard rides in
-  the same transaction as that pair's increment, so no pair is ever double-counted and a partially-applied hand is
-  safely completed by a retry (landed chunks fail their guards and are skipped). Moving matchup off the
-  hand-completion critical path was #61's detached gamification pipeline, already done.
+
 - **Issue #199 fixed: `recentplayers` stores one row per participant per hand, not 72 directed aggregates.**
   `DynamoStore.RecordHand` used to walk every viewer against every opponent and commit 9x8=72 `ADD hands_together`
   updates plus a guard in a single `TransactWriteItems` (~146 WCU, 73% of DynamoDB's hard item limit) for a full ring.
@@ -560,6 +599,26 @@ catalog.
   window, whichever is shorter — no longer an all-time counter. Pre-#199 aggregate rows (`sk` = an opponent id) are
   ignored and expire on their own TTL; a player whose list therefore reads empty is re-seeded by
   `Service.List`'s existing lazy bootstrap from `sessionlog`. Budget pinned by `TestRecordHandWriteBudget` (2/6/9).
+- **Issues #65 and #201 fixed: `matchup.Store.RecordHand` writes nothing transactional at all.** #65 chunked the
+  original 72-item per-hand `TransactWriteItems` call; #201 removed the model that made it expensive. Each pair is now
+  **one plain conditional `UpdateItem`** (`Store.applyPair`): the per-hand idempotency guard moved *into* the pair item
+  as the `applied_hands` string set (`ADD ... applied_hands :handSet` under
+  `attribute_not_exists(applied_hands) OR NOT contains(applied_hands, :hand)`), so a pair costs one small write instead
+  of a guard item plus an increment inside a transaction — a full ring's C(9,2)=36 pairs cost ~36 WCU, not ~144. The
+  guarantee is unchanged and still per pair: a duplicate `onHandComplete` double-counts nothing, and a hand that died
+  part-way through its pairs is completed (never re-applied) by a retry, because each pair's condition is evaluated on
+  its own item. `pruneApplied` trims the set back to the newest `appliedHandsKeep` (8) hand ids once it passes
+  `appliedHandsCap` (12) — ULID hand ids sort chronologically, and the hand just applied is never pruned — so the item
+  cannot grow with the pair's lifetime. **The documented ceiling: the replay window is a pair's last ~8 shared hands;**
+  a duplicate of an older hand than that would be counted again. Budget pinned by `TestRecordHandWriteBudget`
+  (2/6/9 seats). Moving matchup off the hand-completion critical path was #61's detached gamification pipeline,
+  already done.
+- **Issue #65 fixed:** `matchup.Store.RecordHand` no longer writes one 72-item `TransactWriteItems` call per hand. It
+  chunks pairs at `maxPairsPerTx` (12 pairs = 24 items), so a 9-max table's C(9,2)=36 pairs commit as 3 bounded
+  transactions. The atomicity that actually mattered is per-pair, not per-hand: each pair's create-only guard rides in
+  the same transaction as that pair's increment, so no pair is ever double-counted and a partially-applied hand is
+  safely completed by a retry (landed chunks fail their guards and are skipped). Moving matchup off the
+  hand-completion critical path was #61's detached gamification pipeline, already done.
 - **Issue #70 fixed: a session's `buyin_amount` is now updated with an atomic conditional ADD, not a
   read-modify-write.** `buyin.Service.buyIn`'s rebuy path used to `FindOpenSession`, add `amount` to the decoded
   `BuyinAmount` in Go, and `PutItem` the whole item back — two concurrent rebuys for the same player (a client
@@ -595,6 +654,20 @@ catalog.
   reconciliation. **Rollout:** deploy the CDK change first, then backfill `open_table_id = table_id` on rows with
   `ended_at = 0` — sessions still open at deploy time predate the attribute and would otherwise be invisible to
   `FindOpenSession` until they TTL out (30 days); `gsi_player_table` needs no backfill since `table_id` is on every row.
+- **Issue #213 fixed: the lobby is indexed per bucket, not scanned.** `POST /rooms/join-or-create` used to call
+  `roomstore.ListAllPublic` — up to 20 pages of `gsi_public` (2 000 rooms), every currency mode and stake in one
+  logical partition — and then filter in memory, so every click cost O(all public rooms). `poker_rooms` now carries
+  **`gsi_bucket`** (`cdk/lib/dynamodb-stack.ts`, projection ALL), a sparse key written only for public rooms
+  (`roomstore.BucketKey`: `public#<currency_mode>#<sb>#<bb>#<seats>`), and `roomstore.Store.ListBucket` answers a join
+  attempt with **one** Query bounded by `bucketCandidateLimit` (50) against just the requested bucket's partition.
+  The bucket key is immutable for a room's lifetime, so `SetSeatsTaken`'s write-through never touches the index and
+  there is no second counter to reconcile — `seatInBucket` remains the thing that actually resolves a seat race, and a
+  stale `seats_taken` still only costs a skipped candidate. `GET /rooms/buckets` still walks `gsi_public` (it is a
+  cross-bucket aggregate) but no longer once per request: `bucketCache` in `internal/api/v1/rooms.go` memoises it per
+  currency mode for `bucketsCacheTTL` (5s), loading under the mutex so concurrent lobby opens collapse into one walk.
+  **Rollout:** deploy the CDK change before the app. Rooms created before `gsi_bucket` existed carry no index value
+  and are invisible to `ListBucket` (a join would open a fresh table next to them); public tables are ephemeral —
+  `cmd/tablecleanup` deletes them — so they age out on their own and no backfill is warranted.
 - **Issue #225 fixed: the public showcase projects, it does not read whole hands.** `GET /players/:id/showcase` used to
   pull up to 50 complete `sessionlog.HandItem`s — opponent identities and cards, the shuffle seed, the per-position
   fairness maps — to build a six-field `best_hand`. `sessionlog.Store.BestPublicHand` replaces that with a single
@@ -606,6 +679,23 @@ catalog.
   **Freshness: deliberately uncached** — one bounded query per view always reflects the player's newest hand, instead of
   a cache that would have to be invalidated on every hand completion. `best_hand` now omits `board`/`hole_cards` when
   empty rather than sending `null`; the profile page already treats both as optional.
+- **Issue #200 fixed: one hand's history is two DynamoDB calls, not 2N.** `app.newTableManager`'s
+  `persistHandHistory` resolved participant avatars with one `players.GetOrCreate` per seat and then wrote one
+  `PutItem` per seat — 18 sequential round trips for a nine-handed hand, in front of the *first* write the client
+  waits for (it refetches history the instant it sees the `complete` snapshot). It now does one
+  `player.Service.GetMany` (BatchGetItem; a participant missing from the batch just gets no avatar, the same fallback
+  the old per-player error path had — every dealt-in player already has a profile from `buyin.Service`) and one
+  `sessionlog.Store.RecordHands` (BatchWriteItem, chunked at `maxHandBatchWrite`, retrying `UnprocessedItems`).
+  **Cost is unchanged, latency is not:** BatchWriteItem bills per item exactly like the `PutItem`s it replaces.
+  `TestHandHistoryItemWriteUnits` (`internal/app`) measures the worst-case row — ~9.7 KB / 10 WCU, ~8.5 KB of which
+  is the 52-position deck proof — and the per-hand total at 2/6/9 players (18/54/90 WCU), so a new `HandItem` field
+  cannot quietly multiply the write bill by nine. **The history stays N redacted per-player copies, not one canonical
+  hand record + a per-player index** — the write saving is real but is paid for with read fan-out (a canonical row
+  keyed by hand needs a GSI to answer `/players/me/hands`, which is a single-partition Query today) and, worse, with
+  moving per-viewer redaction out of `handItemForWithAvatars` and into every reader; see
+  `sessionlog.Store.RecordHands`'s doc comment for the full trade-off. Replay-safe as before: the SK is the
+  deterministic `mode#hand_id`, so a duplicate pipeline run (`internal/handhook` fails open) overwrites the same rows
+  (`TestRecordHandsWritesEveryParticipantOnceAndIsReplaySafe`).
 
 ## Layout
 

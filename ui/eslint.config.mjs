@@ -12,6 +12,9 @@ export default defineConfig([
             "no-else-return": 1,
             "semi": [1, "always"],
             "space-unary-ops": 2
-        }
+        },
+        settings: {
+            react: { version: '19' },
+        },
     }
 ]);

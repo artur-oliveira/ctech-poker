@@ -9,8 +9,13 @@ const mocks = vi.hoisted(() => ({
   revoke: vi.fn(),
   endSession: vi.fn(),
   decode: vi.fn(),
-  constructor: vi.fn(),
 }));
+
+// The client is constructed while this module's import is evaluated, before
+// any test runs. vitest 5 clears spies before each test (`clearMocks`
+// defaults to true), so a spy would have no record of that call by the time
+// the first test asserts on it — hence a plain array instead of vi.fn().
+const constructorCalls = vi.hoisted(() => [] as unknown[]);
 
 vi.mock('@aoctech/auth-client', () => ({
   OAuthClient: class {
@@ -21,7 +26,7 @@ vi.mock('@aoctech/auth-client', () => ({
     endSessionRedirect = mocks.endSession;
     
     constructor(options: unknown) {
-      mocks.constructor(options);
+      constructorCalls.push(options);
     }
   },
   decodeIdToken: mocks.decode,
@@ -38,7 +43,7 @@ describe('OAuth integration', () => {
   });
   
   test('configures the browser callback and delegates flow startup', async () => {
-    expect(mocks.constructor).toHaveBeenCalledWith(expect.objectContaining({
+    expect(constructorCalls[0]).toEqual(expect.objectContaining({
       redirectUri: `${window.location.origin}/callback`,
       scope: OAUTH_SCOPE,
     }));

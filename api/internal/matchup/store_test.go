@@ -1,6 +1,7 @@
 package matchup
 
 import (
+	"fmt"
 	"testing"
 
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
@@ -95,33 +96,60 @@ func TestDeltasForSkipsEmptyAndSelfPairs(t *testing.T) {
 	}
 }
 
-// TestRecordHandChunkingStaysUnderTransactionLimit pins issue #65's ceiling: a
-// full 9-max table's C(9,2)=36 pairs must never again ride in one 72-item
-// TransactWriteItems call, and no chunk RecordHand forms may exceed ~25 items.
-// It walks the same boundaries RecordHand walks, so a maxPairsPerTx that
-// breaks the ceiling — or a chunking bug that drops a pair — fails here.
-func TestRecordHandChunkingStaysUnderTransactionLimit(t *testing.T) {
-	deltas := deltasFor("sandbox", hand.HandOutcome{
-		Winners:      []string{"p1"},
-		Participants: []string{"p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9"},
-	})
-	if len(deltas) != 36 {
-		t.Fatalf("expected C(9,2)=36 pairs, got %d", len(deltas))
-	}
-	covered, chunks := 0, 0
-	for start := 0; start < len(deltas); start += maxPairsPerTx {
-		end := min(start+maxPairsPerTx, len(deltas))
-		// Two items per pair: the create-only guard and the counter update.
-		if items := (end - start) * 2; items > 25 {
-			t.Fatalf("chunk %d carries %d transaction items, want <= 25", chunks, items)
+// TestRecordHandWriteBudget pins issue #201's new ceiling: one DynamoDB write
+// per pair, and nothing transactional. RecordHand issues exactly one
+// UpdateItem per pairDelta, so the delta count per seat count *is* the write
+// budget: 1 / 15 / 36 writes (~1 / 15 / 36 WCU) for 2 / 6 / 9 seats, against
+// the 2 items per pair — 72 items, ~144 WCU at 9 seats — the old guard-item
+// model paid.
+func TestRecordHandWriteBudget(t *testing.T) {
+	for _, tc := range []struct {
+		seats, writes int
+	}{{2, 1}, {6, 15}, {9, 36}} {
+		participants := make([]string, tc.seats)
+		for i := range participants {
+			participants[i] = fmt.Sprintf("p%d", i)
 		}
-		covered += end - start
-		chunks++
+		deltas := deltasFor("sandbox", hand.HandOutcome{Winners: []string{"p0"}, Participants: participants})
+		if len(deltas) != tc.writes {
+			t.Fatalf("%d seats: %d writes, want %d", tc.seats, len(deltas), tc.writes)
+		}
+		// Two pairs may never share an item: the per-pair condition is what
+		// makes a partially-applied hand safe to retry.
+		keys := make(map[string]bool, len(deltas))
+		for _, d := range deltas {
+			if keys[d.key] {
+				t.Fatalf("%d seats: duplicate pair item %s in one hand", tc.seats, d.key)
+			}
+			keys[d.key] = true
+		}
 	}
-	if covered != len(deltas) {
-		t.Fatalf("chunking covered %d of %d pairs", covered, len(deltas))
+}
+
+// TestStaleHandIDsKeepsNewestWindowAndCurrentHand pins the prune arithmetic:
+// the set never exceeds appliedHandsKeep members after a prune, the members
+// it keeps are the newest (ULIDs sort chronologically), and the hand being
+// applied right now is never dropped — dropping it would reopen the
+// double-count window for that hand's own retry.
+func TestStaleHandIDsKeepsNewestWindowAndCurrentHand(t *testing.T) {
+	applied := make([]string, 0, appliedHandsCap+1)
+	for i := 0; i <= appliedHandsCap; i++ {
+		applied = append(applied, fmt.Sprintf("hand-%02d", i))
 	}
-	if chunks < 2 {
-		t.Fatalf("expected a 9-max hand to split across transactions, got %d chunk(s)", chunks)
+	current := applied[len(applied)-1]
+	stale := staleHandIDs(applied, current)
+	if want := len(applied) - appliedHandsKeep; len(stale) != want {
+		t.Fatalf("pruned %d ids, want %d", len(stale), want)
+	}
+	for _, id := range stale {
+		if id == current {
+			t.Fatalf("prune dropped the hand just applied: %s", current)
+		}
+		if id >= applied[len(applied)-appliedHandsKeep] {
+			t.Fatalf("prune dropped a newest-window id: %s", id)
+		}
+	}
+	if left := staleHandIDs(applied[:appliedHandsKeep], current); left != nil {
+		t.Fatalf("nothing to prune below the keep window, got %v", left)
 	}
 }
