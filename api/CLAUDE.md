@@ -514,6 +514,18 @@ catalog.
   cycle leaves history rows no client can safely reduce to ownership.
 - `internal/wsdrain` tracks this process's live sockets so `OnStop` can send each a 1001 "going away" close before
   `ShutdownWithContext` force-closes them mid-deploy. See `docs/specs/2026-08-24-graceful-ws-shutdown-on-deploy.md`.
+  **Issue #226 fixed: `CloseAll` fans the frames out concurrently and the whole phase is budgeted by `grace`.** The
+  writes used to run sequentially under one shared `closeWriteWait` deadline, so peers that had stopped reading
+  serialised in front of every healthy socket queued behind them and the phase blew `wsDrainGrace` (1.5s) before those
+  clients were ever signalled. The fan-out is deliberately **not** a narrow worker pool — a pool narrower than the
+  number of peers that can stall at once reproduces exactly that bug, since every worker parks on a stalled peer — so
+  it is one goroutine per socket (each already owns a read-loop goroutine; this one lives for a single control-frame
+  write), capped only by `closeMaxFanOut` as a goroutine-storm backstop. `CloseAll` never joins the writers: a `Conn`
+  whose write mutex is held by an in-flight broadcast can block past its own deadline, and waiting on that would put
+  the sequential stall straight back into shutdown. It returns after the remaining grace (or `ctx.Done()`), so the
+  frames are best-effort by construction — `ShutdownWithContext` is the backstop it always was.
+  `TestCloseAllStalledPeersDoNotDelayHealthySockets` pins it: 64 permanently stalled peers plus 200 healthy ones,
+  total time inside the grace budget, every healthy socket signalled.
 - `internal/handreveal` (`poker_hand_reveals` + `poker_hand_reveal_payments`) extends the live paid winner-cards reveal
   (`Table.RequestWinnerCards`) to hand history — non-consensual by design, since the hand is archived and there is no
   winner still at the table to ask: `POST`/`GET /players/me/hands/:handId/reveal-winner`. Sandbox-only, one archive row
