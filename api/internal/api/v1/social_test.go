@@ -48,7 +48,7 @@ func (s *apiSocialStore) List(_ context.Context, owner string, relationship soci
 	}
 	return result, nil, nil
 }
-func (s *apiSocialStore) Count(context.Context, string, social.Relationship) (int, error) {
+func (s *apiSocialStore) Count(context.Context, string, social.Relationship, int) (int, error) {
 	return 0, nil
 }
 func (s *apiSocialStore) Apply(_ context.Context, transition social.Transition) (*social.Edge, error) {

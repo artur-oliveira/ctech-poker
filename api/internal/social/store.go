@@ -21,7 +21,7 @@ var ErrConcurrentTransition = errors.New("social: relationship changed concurren
 type EdgeStore interface {
 	Get(ctx context.Context, ownerPlayerID, otherPlayerID string) (*Edge, error)
 	List(ctx context.Context, ownerPlayerID string, relationship Relationship, blockedOnly bool, limit int, startKey map[string]types.AttributeValue) ([]Edge, map[string]types.AttributeValue, error)
-	Count(ctx context.Context, ownerPlayerID string, relationship Relationship) (int, error)
+	Count(ctx context.Context, ownerPlayerID string, relationship Relationship, saturateAt int) (int, error)
 	Apply(ctx context.Context, transition Transition) (*Edge, error)
 }
 
@@ -271,10 +271,36 @@ func (s *Store) List(ctx context.Context, ownerPlayerID string, relationship Rel
 	return edges, out.LastEvaluatedKey, nil
 }
 
-func (s *Store) Count(ctx context.Context, ownerPlayerID string, relationship Relationship) (int, error) {
+// maxCountPages bounds Count's pagination. A page reads at most `saturateAt`
+// items, so a single Count evaluates at most maxCountPages*saturateAt rows —
+// the "explicitly limited" budget issue #208 asks for, in place of the
+// unbounded loop this used to be.
+const maxCountPages = 8
+
+// Count returns how many of ownerPlayerID's edges carry relationship,
+// saturating at saturateAt.
+//
+// Every caller compares the answer against a cap (MaxFriends,
+// MaxPendingOutgoing), never displays it, so counting past that cap buys
+// nothing and used to cost a page-through of the player's whole edge
+// partition — friends, blocks, mutes and every incoming request alike, since
+// relationship is a FilterExpression and not part of any key. Stopping at the
+// cap turns the common case into one query.
+//
+// Ceiling: relationship is still filtered, not indexed, so a partition padded
+// with tens of thousands of non-matching rows (e.g. a griefed player with a
+// huge incoming pile) can exhaust maxCountPages before reaching saturateAt and
+// under-report. That errs toward letting a legitimate action through rather
+// than blocking one, which is the safe direction for a limit whose purpose is
+// resource protection; the exact fix is a sparse `owner#relationship` GSI,
+// which is a schema change and its own deploy.
+func (s *Store) Count(ctx context.Context, ownerPlayerID string, relationship Relationship, saturateAt int) (int, error) {
+	if saturateAt <= 0 {
+		return 0, nil
+	}
 	total := 0
 	var start map[string]types.AttributeValue
-	for {
+	for page := 0; page < maxCountPages && total < saturateAt; page++ {
 		out, err := s.base.QueryRaw(ctx, &dynamodb.QueryInput{
 			KeyConditionExpression: aws.String("pk = :pk"),
 			FilterExpression:       aws.String("#relationship = :relationship"),
@@ -286,6 +312,7 @@ func (s *Store) Count(ctx context.Context, ownerPlayerID string, relationship Re
 				":relationship": &types.AttributeValueMemberS{Value: string(relationship)},
 			},
 			ExclusiveStartKey: start,
+			Limit:             aws.Int32(int32(saturateAt)),
 			Select:            types.SelectCount,
 		})
 		if err != nil {
@@ -293,8 +320,12 @@ func (s *Store) Count(ctx context.Context, ownerPlayerID string, relationship Re
 		}
 		total += int(out.Count)
 		if len(out.LastEvaluatedKey) == 0 {
-			return total, nil
+			break
 		}
 		start = out.LastEvaluatedKey
 	}
+	if total > saturateAt {
+		total = saturateAt
+	}
+	return total, nil
 }
