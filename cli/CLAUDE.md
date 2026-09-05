@@ -44,6 +44,17 @@ Until this is done in an environment, the CLI in that environment can only run
 GET-only commands (`profile`, `achievements`) — every mutation gets a `403` with a
 message pointing back here.
 
+## Architecture: one interactive shell, not subcommands
+
+`poker` with no arguments launches one `bubbletea` program
+(`cli/internal/tui.Shell`) for the whole session: a login gate (browser PKCE or
+API key), then a `/command` home REPL, then (once Tasks 15-19 land) the same
+program transitions into the lobby and table views. There is no `poker login` /
+`poker profile` / `poker play` subcommand surface — see
+`docs/specs/2026-09-05-poker-cli.md` §10's amendment and
+`docs/plans/2026-09-05-poker-cli.md`'s "Amendment" section for why, and what
+that changed relative to the original plan.
+
 ## Testing
 
 ```sh

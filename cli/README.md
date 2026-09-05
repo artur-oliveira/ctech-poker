@@ -13,26 +13,33 @@ cd cli
 go build -o poker ./cmd/poker
 ```
 
-## Login
+## Usage
 
-```sh
-poker login              # opens your browser (PKCE)
-poker login --api-key K  # or use a long-lived API key instead
-poker logout
-```
+Run `poker` with no arguments. It launches an interactive shell — there is no
+`poker login` / `poker play` subcommand surface; everything happens inside
+the running program, `/command`-style (like Claude Code's own shell):
 
-Credentials are stored in `~/.config/ctech-poker/credentials.json` (mode `0600`).
+1. **Login gate.** On first run (or after `/logout`), pick a login method:
+   a browser (OAuth PKCE — opens automatically) or an API key (paste it and
+   press enter). Credentials are stored in
+   `~/.config/ctech-poker/credentials.json` (mode `0600`) and reused on the
+   next run.
+2. **Home REPL.** Once logged in, type a command and press enter:
+
+   ```
+   /profile        show your poker profile
+   /achievements   show your achievement progress
+   /play           join a table (coming soon)
+   /enter <id>     join a table by room id (coming soon)
+   /logout         forget stored credentials and log in again
+   /help           list commands
+   /exit           quit
+   ```
+
 Override the config file, API/account URLs, or card rendering with
 `--config`, `--api-url`, `--account-url`, `--cards ascii|color`, or the
 `CTECH_POKER_API_URL` / `CTECH_POKER_ACCOUNT_URL` / `CTECH_POKER_CLIENT_ID` /
 `NO_COLOR` environment variables.
 
-## Commands
-
-```sh
-poker profile        # your poker profile
-poker achievements    # achievement progress
-```
-
-Install instructions, the full command reference, and release downloads land
-here as the remaining implementation-plan tasks complete.
+Install instructions and release downloads land here as the remaining
+implementation-plan tasks complete.
