@@ -27,6 +27,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/presence"
 	"gopkg.aoctech.app/poker/api/internal/reactionpurchase"
+	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/recentplayers"
 	"gopkg.aoctech.app/poker/api/internal/reports"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
@@ -75,6 +76,7 @@ func Register(
 	presenceSvc *presence.Service,
 	recentSvc *recentplayers.Service,
 	reportSvc *reports.Service,
+	pending *reconcile.PendingStore,
 ) {
 	oauthresource.Register(app, cfg.ServiceAudience, cfg.CtechIssuerURL)
 	router := app.Group("/v1.0")
@@ -126,7 +128,7 @@ func Register(
 		manager: manager, seed: seed, presence: presenceSvc,
 		players: players, stats: pokerStatsStore, cfg: cfg,
 	}
-	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter, pokerStatsStore, reportSvc, identityPusher)
+	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter, pokerStatsStore, reportSvc, identityPusher, pending)
 	RegisterReactionWheel(router, auth, players)
 	RegisterPlayerNotes(router, auth, playerNoteStore)
 	RegisterHandMeta(router, auth, handMetaStore)

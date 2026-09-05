@@ -24,6 +24,9 @@ func (s *memoryStore) Get(context.Context, string, string) (*Report, error) { re
 func (s *memoryStore) ListByStatus(context.Context, Status, string, int) (Page, error) {
 	return Page{}, nil
 }
+func (s *memoryStore) ListByReporter(context.Context, string, string, int) (Page, error) {
+	return Page{}, nil
+}
 func (s *memoryStore) SetStatus(context.Context, string, string, Status, Resolution, string) error {
 	return nil
 }

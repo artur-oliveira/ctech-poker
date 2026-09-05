@@ -15,6 +15,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
 	"gopkg.aoctech.app/poker/api/internal/problem"
+	"gopkg.aoctech.app/poker/api/internal/reconcile"
 	"gopkg.aoctech.app/poker/api/internal/reports"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/sessionlog"
@@ -50,6 +51,13 @@ type playerAchievementStore interface {
 	AllAchievements(ctx context.Context, playerID, mode string) ([]achievements.PlayerAchievementProgress, error)
 }
 
+// settlementReader backs GET /players/me/settlements (#333) — the player's
+// own financial-adjustment timeline. Deliberately an interface, like
+// sessionLogReader above, so the HTTP layer is testable without DynamoDB.
+type settlementReader interface {
+	ListForPlayer(ctx context.Context, playerID string, limit int, startKey map[string]types.AttributeValue) ([]reconcile.PendingCashout, map[string]types.AttributeValue, error)
+}
+
 type playerHandlers struct {
 	players      *player.Service
 	cfg          *config.Config
@@ -62,6 +70,9 @@ type playerHandlers struct {
 	// seated at, so opponents stop seeing the old one without a reconnect
 	// (#64). nil wherever the WS/table stack isn't wired (tests).
 	identity *tableIdentityPusher
+	// settlements backs GET /players/me/settlements (#333). nil in the
+	// narrower test-only registerRoutes wiring.
+	settlements settlementReader
 }
 
 // RegisterPlayers mounts every /players/me/* route: profile, wallet-mode,
@@ -70,15 +81,20 @@ type playerHandlers struct {
 func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Service, sessions sessionLogReader, achievementStore playerAchievementStore, cfg *config.Config, avatars *avatar.Service, avatarLimiter *RateLimiter, stats pokerStatsReader, extras ...any) {
 	var reportSvc *reports.Service
 	var identity *tableIdentityPusher
+	var settlements settlementReader
 	for _, extra := range extras {
 		switch value := extra.(type) {
 		case *reports.Service:
 			reportSvc = value
 		case *tableIdentityPusher:
 			identity = value
+		// Last: settlementReader is an interface, so it would otherwise
+		// swallow any future extra that happens to carry a matching method.
+		case settlementReader:
+			settlements = value
 		}
 	}
-	h := &playerHandlers{players: players, sessions: sessions, achievements: achievementStore, cfg: cfg, avatars: avatars, stats: stats, reports: reportSvc, identity: identity}
+	h := &playerHandlers{players: players, sessions: sessions, achievements: achievementStore, cfg: cfg, avatars: avatars, stats: stats, reports: reportSvc, identity: identity, settlements: settlements}
 	router.Get("/players/:playerId/showcase", h.showcase)
 	g := router.Group("/players", auth)
 	g.Get("/me", h.me)
@@ -93,6 +109,29 @@ func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Se
 	g.Get("/me/hand/:id", h.handByID)
 	g.Get("/me/achievements", h.achievementProgress)
 	g.Get("/me/achievements/summary", h.achievementsSummary)
+	g.Get("/me/reports", h.myReports)
+	g.Get("/me/settlements", h.mySettlements)
+}
+
+// mySettlements lets a player see their own financial-adjustment timeline —
+// pending cash-outs, fee-debit retries, resolutions — without exposing the
+// internal poker_pending_cashouts row (HoldIDs, IdempotencyKey, raw
+// LastError). One bounded Query against gsi_player_settlements, never a scan.
+func (h *playerHandlers) mySettlements(c fiber.Ctx) error {
+	if h.settlements == nil {
+		return c.JSON(fiber.Map{"data": []reconcile.SettlementView{}, "has_next": false})
+	}
+	userID := c.Locals(localsUserID).(string)
+	cursor := c.Query("cursor")
+	items, lastKey, err := h.settlements.ListForPlayer(c.Context(), userID, limitParam(c), decodeCursor(cursor))
+	if err != nil {
+		return problem.InternalServer("failed to list settlements", c, err).Send(c)
+	}
+	views := make([]reconcile.SettlementView, 0, len(items))
+	for _, item := range items {
+		views = append(views, item.SettlementView())
+	}
+	return sendPage(c, views, lastKey, cursor)
 }
 
 type confirmAvatarRequest struct {
@@ -321,6 +360,28 @@ func (h *playerHandlers) sessionHistory(c fiber.Ctx) error {
 		return problem.InternalServer("failed to list sessions", c, err).Send(c)
 	}
 	return sendPage(c, sessions, lastKey, cursor)
+}
+
+// myReports lets a player track the status of reports they themselves filed
+// — never reports filed against them (ListByReporter keys off the reporter,
+// not the target). Only the sanitized PlayerReportView shape is ever sent:
+// no Details, EvidenceMessage, ReviewedBy/ResolvedBy, and Resolution is
+// translated to a generic status message, not the raw internal enum.
+func (h *playerHandlers) myReports(c fiber.Ctx) error {
+	if h.reports == nil {
+		return c.JSON(fiber.Map{"reports": []reports.PlayerReportView{}})
+	}
+	userID := c.Locals(localsUserID).(string)
+	cursor := c.Query("cursor")
+	page, err := h.reports.ListByReporter(c.Context(), userID, cursor, limitParam(c))
+	if err != nil {
+		return problem.InternalServer("failed to list reports", c, err).Send(c)
+	}
+	views := make([]reports.PlayerReportView, 0, len(page.Reports))
+	for _, r := range page.Reports {
+		views = append(views, r.Summary().ForReporter())
+	}
+	return c.JSON(fiber.Map{"reports": views, "next_cursor": page.NextCursor})
 }
 
 func (h *playerHandlers) handHistory(c fiber.Ctx) error {

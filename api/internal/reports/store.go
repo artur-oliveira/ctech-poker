@@ -21,6 +21,7 @@ import (
 const (
 	tablePlayerReports = "poker_player_reports"
 	gsiReportStatus    = "gsi_status"
+	gsiReporter        = "gsi_reporter"
 	resolvedRetention  = 180 * 24 * time.Hour
 )
 
@@ -33,6 +34,7 @@ type Store interface {
 	Create(ctx context.Context, report Report, idempotencyKey string) (*Report, bool, error)
 	Get(ctx context.Context, targetPlayerID, storageKey string) (*Report, error)
 	ListByStatus(ctx context.Context, status Status, cursor string, limit int) (Page, error)
+	ListByReporter(ctx context.Context, reporterID, cursor string, limit int) (Page, error)
 	SetStatus(ctx context.Context, targetPlayerID, storageKey string, status Status, resolution Resolution, moderatorID string) error
 }
 
@@ -58,6 +60,8 @@ func (s *DynamoStore) Create(ctx context.Context, report Report, idempotencyKey 
 	}
 	report.StatusPartition = string(report.Status)
 	report.StatusSort = fmt.Sprintf("%020d#%s", report.CreatedAt, report.ReportID)
+	report.ReporterPartition = report.ReporterPlayerID
+	report.ReporterSort = fmt.Sprintf("%020d#%s", report.CreatedAt, report.ReportID)
 	item, err := attributevalue.MarshalMap(report)
 	if err != nil {
 		return nil, false, fmt.Errorf("reports: encode: %w", err)
@@ -145,6 +149,35 @@ func (s *DynamoStore) ListByStatus(ctx context.Context, status Status, cursor st
 	})
 	if err != nil {
 		return Page{}, fmt.Errorf("reports: list by status: %w", err)
+	}
+	page := Page{Reports: make([]Report, 0, len(out.Items)), NextCursor: encodeCursor(out.LastEvaluatedKey)}
+	for _, item := range out.Items {
+		report, decodeErr := dynamo.Decode[Report](item)
+		if decodeErr != nil {
+			return Page{}, fmt.Errorf("reports: decode list item: %w", decodeErr)
+		}
+		page.Reports = append(page.Reports, *report)
+	}
+	return page, nil
+}
+
+// ListByReporter answers "what did I file?" for a player — newest first —
+// via the gsi_reporter sparse GSI populated by every Create call. Never used
+// for moderation review; that stays on ListByStatus/gsi_status.
+func (s *DynamoStore) ListByReporter(ctx context.Context, reporterID, cursor string, limit int) (Page, error) {
+	if limit < 1 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	out, err := s.base.QueryRaw(ctx, &dynamodb.QueryInput{
+		IndexName: aws.String(gsiReporter), KeyConditionExpression: aws.String("gsi_reporter_pk = :reporter"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{":reporter": &types.AttributeValueMemberS{Value: reporterID}},
+		ScanIndexForward:          aws.Bool(false), Limit: aws.Int32(int32(limit)), ExclusiveStartKey: decodeCursor(cursor), // lgtm[go/incorrect-integer-conversion] -- limit clamped to [1,100] above
+	})
+	if err != nil {
+		return Page{}, fmt.Errorf("reports: list by reporter: %w", err)
 	}
 	page := Page{Reports: make([]Report, 0, len(out.Items)), NextCursor: encodeCursor(out.LastEvaluatedKey)}
 	for _, item := range out.Items {
