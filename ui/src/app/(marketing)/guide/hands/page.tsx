@@ -19,7 +19,7 @@ export default function HandsGuide() {
             <li><span>Cada linha diz se a seed do servidor já foi revelada ou se a mão ainda tem prova parcial, e mostra o nível de blinds daquela mão quando o registro o guarda.</span></li>
             <li><span>Se o filtro não deixar nenhuma mão, a página explica o que aconteceu e oferece <b>Limpar filtros</b>. Sem nenhuma mão registrada, ela mostra o caminho de volta ao lobby em vez de uma lista vazia.</span></li>
             <li><span>Acima dos filtros, escolha entre <b>Filtros</b> e <b>Coleções</b>. Em Filtros, depois de ajustar resultado e mesa, dê um nome em <b>Salvar filtro atual como</b> para guardar essa combinação — ela reaparece como um atalho ao lado dos demais, em qualquer aparelho, e pode ser removida com o <b>×</b>.</span></li>
-            <li><span>Em Coleções, cada mão que você marcou — pelo próprio detalhe da mão, ou pela marca de revisão — aparece como um atalho nomeado. A coleção <b>Marcadas para revisar</b> reúne automaticamente tudo que você marcou como "para revisar"; abrir uma coleção filtra a lista só pelas mãos dela.</span></li></GuideBullets></>
+            <li><span>Em Coleções, cada mão que você marcou — pelo próprio detalhe da mão, ou pela marca de revisão — aparece como um atalho nomeado. A coleção <b>Marcadas para revisar</b> reúne automaticamente tudo que você marcou como &quot;para revisar&quot;; abrir uma coleção filtra a lista só pelas mãos dela.</span></li></GuideBullets></>
       },
       {
         id: 'detalhes', title: 'Ler os detalhes', summary: 'A página preserva o que foi público na mão e organiza a sequência.',
