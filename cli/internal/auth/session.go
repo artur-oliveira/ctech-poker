@@ -26,6 +26,15 @@ const pkceLoginTimeout = 120 * time.Second
 // RFC 8252 §7.3 port-agnostic loopback comparison, so
 // `http://127.0.0.1:<LoopbackPort>/callback` has to be registered on the
 // poker-cli client verbatim.
+//
+// Known trade-off of a fixed (vs. ephemeral) port: another local process can
+// bind it first, which denies this login attempt (NewLoopbackReceiver's Listen
+// fails, surfaced as a clear error) but cannot steal the authorization code —
+// the PKCE code_verifier that turns a code into a token never leaves this
+// process, and the random `state` is checked before the code is used. Same-user
+// local processes are outside this CLI's threat model (RFC 8252's own model for
+// native-app loopback redirects); this only widens a pre-existing DoS surface,
+// not a credential-theft one.
 const LoopbackPort = 51789
 
 // readScopes are the read-only poker:* scopes the poker-cli OAuth client is
