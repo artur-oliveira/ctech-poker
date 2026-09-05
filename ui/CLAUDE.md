@@ -179,6 +179,12 @@ off by default — do not build UI that assumes real money is on.
   invalidates that root instead of patching a mirrored relationship locally. Chat/reaction
   suppression for muted or blocked players is applied inside `useTableRealtime` (before state),
   never in a component, and never touches seats, bets or poker actions.
+- **Leaderboard request budget (issue #202).** Opening `/leaderboard` costs **two** GETs — the board page and, for a
+  signed-in viewer, `/leaderboard/me` — and both use `LEADERBOARD_STALE_MS` (`lib/api/gamification.ts`), pinned to the
+  server's 5-minute rank-mirror TTL. Under the global 30s `staleTime` + `refetchOnWindowFocus` they were re-fetching
+  answers the server could not have recomputed yet. The viewer's rank has exactly one query key, `myRankKey(mode)`;
+  `/hands` and `/leaderboard` render the same response and used to cache it under two different keys, so walking
+  between them refetched data already in the cache.
 - **State:** the token is a module singleton in `lib/api/client.ts` (not React Context, not
   persisted); server data flows through `QueryProvider` (TanStack Query). No other providers.
 - **Animations are CSS** (keyframes in `globals.css` / `app.css` / `table.css`) — no animation library. Keep it that

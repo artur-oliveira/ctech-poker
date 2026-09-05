@@ -4,7 +4,7 @@ import {useQuery} from '@tanstack/react-query';
 import {measureElement, useWindowVirtualizer} from '@tanstack/react-virtual';
 import {Crown, ListChecks, Sparkles} from 'lucide-react';
 import type {Entry} from '@/lib/api/gamification';
-import {leaderboard, myRank} from '@/lib/api/gamification';
+import {LEADERBOARD_STALE_MS, leaderboard, myRank, myRankKey} from '@/lib/api/gamification';
 import {getViewerId, playerName} from '@/lib/utils';
 import {useOptionalSession} from "@/lib/auth/session";
 import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
@@ -94,13 +94,15 @@ export default function Ranking() {
   const [mode, setMode] = useState<WalletMode>('sandbox');
   const {data = [], isLoading, isError, refetch} = useQuery({
     queryKey: ['leaderboard', mode],
-    queryFn: () => leaderboard(mode)
+    queryFn: () => leaderboard(mode),
+    staleTime: LEADERBOARD_STALE_MS
   });
   const viewer = getViewerId();
   const {authed} = useOptionalSession();
   const {data: rankInfo} = useQuery({
-    queryKey: ['leaderboard-me', mode],
+    queryKey: myRankKey(mode),
     queryFn: () => myRank(mode),
+    staleTime: LEADERBOARD_STALE_MS,
     enabled: authed
   });
 

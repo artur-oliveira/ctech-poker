@@ -20,7 +20,7 @@ vi.mock('@/lib/utils', async (importOriginal) => ({
 }));
 vi.mock('@tanstack/react-query', () => ({
   useQuery: ({queryKey}: {queryKey: unknown[]}) =>
-    queryKey[0] === 'leaderboard-me' ? mocks.rankQuery : mocks.boardQuery,
+    queryKey[1] === 'me' ? mocks.rankQuery : mocks.boardQuery,
 }));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
 

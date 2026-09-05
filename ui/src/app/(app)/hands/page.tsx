@@ -26,7 +26,7 @@ import {CurrencyModeTabs} from '@/components/CurrencyModeTabs';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 import {FilterGroup} from '@/components/FilterGroup';
 import {MyHandSharesPanel} from '@/components/hands/MyHandSharesPanel';
-import {myRank} from '@/lib/api/gamification';
+import {LEADERBOARD_STALE_MS, myRank, myRankKey} from '@/lib/api/gamification';
 import {
   ALL_TABLES, filterHands, groupHandsByDay, handTables, type HandsFilter, type HandsRow, loadedTotals,
   NO_FILTER, type OutcomeFilter, shortTableId
@@ -190,7 +190,7 @@ export default function HandsHistory() {
   // Lifetime W/L comes from the leaderboard's own counters, the only totals
   // that describe every hand ever played instead of the pages loaded here.
   // `ranked: false` means "no stats row yet", not an error.
-  const lifetime = useQuery({queryKey: ['leaderboard', 'me', mode], queryFn: () => myRank(mode)});
+  const lifetime = useQuery({queryKey: myRankKey(mode), queryFn: () => myRank(mode), staleTime: LEADERBOARD_STALE_MS});
 
   const fetchNextPage = history.fetchNextPage;
 

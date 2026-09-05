@@ -15,6 +15,24 @@ export interface Entry {
   win_rate: number
 }
 
+/**
+ * Request budget for one `/leaderboard` open: **two** GETs — the board page
+ * and, for a signed-in viewer, their own rank — and nothing else until this
+ * staleTime elapses.
+ *
+ * It is pinned to the server's rank-mirror TTL (`leaderboard.RankMirrorTTL`,
+ * 5 min): a rank served inside that window is materialized from the same
+ * snapshot, so the global 30s staleTime plus `refetchOnWindowFocus` was
+ * spending requests on answers that could not have changed.
+ */
+export const LEADERBOARD_STALE_MS = 5 * 60 * 1000;
+
+/** The one spelling of the viewer's-rank query key. `/hands` and
+ * `/leaderboard` render the same `myRank(mode)` response; they used to cache
+ * it under `['leaderboard','me',mode]` and `['leaderboard-me',mode]`, so
+ * walking between the two pages refetched data already in the cache. */
+export const myRankKey = (mode: WalletMode) => ['leaderboard', 'me', mode] as const;
+
 export async function leaderboard(mode: WalletMode = 'sandbox', cursor?: string) {
   return (await apiClient.get<Page<Entry>>('/v1.0/leaderboard', {params: {mode, cursor}})).data.data;
 }

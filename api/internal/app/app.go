@@ -349,8 +349,16 @@ func newAchievementService(store *achievements.Store, cacheBackend cache.Backend
 	svc.SetCache(cacheBackend)
 	return svc
 }
-func newLeaderboardStore(db *dynamodb.Client, cfg *config.Config) *leaderboard.Store {
-	return leaderboard.NewStore(db, cfg.Env)
+// newLeaderboardStore enables the Valkey rank mirror whenever a real Valkey
+// backend is configured (issue #202): without it every /leaderboard/me hit
+// pays three full-partition COUNT queries. A dev box on the in-memory cache
+// keeps the COUNT path — correct, just not bounded.
+func newLeaderboardStore(db *dynamodb.Client, cacheBackend cache.Backend, cfg *config.Config) *leaderboard.Store {
+	store := leaderboard.NewStore(db, cfg.Env)
+	if redis, ok := cacheBackend.(*cache.RedisBackend); ok {
+		store = store.WithRankMirror(redis.Client())
+	}
+	return store
 }
 func newLeaderboardService(store *leaderboard.Store) *leaderboard.Service {
 	return leaderboard.NewServiceWithStore(store)

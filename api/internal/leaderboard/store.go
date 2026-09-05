@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/valkey-io/valkey-go"
 	"gopkg.aoctech.app/api-commons/dynamo"
 )
 
@@ -36,10 +37,23 @@ const (
 // Other metrics (hands_won, hands_played) are unaffected.
 const MinHandsForWinRateRank = 100
 
-type Store struct{ base dynamo.Base }
+type Store struct {
+	base dynamo.Base
+	// mirror is the Valkey sorted-set rank mirror (issue #202). nil falls
+	// back to the three-COUNT path below, which is correct but scales with
+	// the mode's whole player base.
+	mirror *rankMirror
+}
 
 func NewStore(db *dynamodb.Client, env string) *Store {
 	return &Store{base: dynamo.NewBase(db, env, tableStats)}
+}
+
+// WithRankMirror enables the Valkey-backed rank mirror for RankOf. Without it
+// (dev without Valkey, tests) RankOf keeps its DynamoDB COUNT behaviour.
+func (s *Store) WithRankMirror(client valkey.Client) *Store {
+	s.mirror = &rankMirror{client: client, ttl: RankMirrorTTL}
+	return s
 }
 
 // IncrementStats bumps this hand's counters and, since a write here happens
@@ -246,18 +260,74 @@ func (s *Store) PlayerEntry(ctx context.Context, playerID, mode string) (*Entry,
 }
 
 // RankOf returns entry's 1-based rank and the total number of ranked rows for
-// mode/metric, computed with COUNT queries against the metric's GSI instead
-// of fetching and sorting the whole board. The rank is exact, including ties:
-// it counts rows with a strictly better score, then rows tied on score but
-// ordered before entry by player_id (the same tiebreak Service.Top's in-memory
-// sort uses), then adds 1.
+// mode/metric. The rank is exact, including ties: rows with a strictly better
+// score come first, then rows tied on score but ordered before entry by
+// player_id (the same tiebreak Service.Top's in-memory sort uses).
 //
-// Three GSI queries, each Select:COUNT and each paginating only over its own
-// bounded slice (better-than, tied-before, and the mode's full partition for
-// the total) — no items are fetched or sorted in this process. The full-count
-// query for the mode's total is the one query genuinely bounded only by the
-// mode's total player count; see the maxRankCountPages comment.
+// The fast path is the Valkey rank mirror (issue #202): one Lua round trip,
+// O(log n), no DynamoDB read at all beyond the caller's own stats row. A cold
+// board is rebuilt by exactly one replica — one full GSI page-through per
+// RankMirrorTTL for the whole fleet — while everyone else answers from the
+// fallback below.
+//
+// The fallback is three GSI queries, each Select:COUNT and each paginating
+// over its own slice (better-than, tied-before, and the mode's full partition
+// for the total). It is correct but its total-count query is bounded only by
+// the mode's player base; see the maxRankCountPages comment. It stays as the
+// no-Valkey and mirror-degraded path.
 func (s *Store) RankOf(ctx context.Context, mode, metric string, entry Entry) (rank int64, total int64, err error) {
+	if s.mirror != nil {
+		if rank, total, ok := s.rankFromMirror(ctx, mode, metric, entry); ok {
+			return rank, total, nil
+		}
+	}
+	return s.rankByCount(ctx, mode, metric, entry)
+}
+
+// rankFromMirror answers from the sorted set, rebuilding it once if this
+// replica wins the claim. Any Valkey or DynamoDB trouble is logged and
+// reported as a miss so the caller degrades to COUNT rather than failing a
+// page view over a cache.
+func (s *Store) rankFromMirror(ctx context.Context, mode, metric string, entry Entry) (int64, int64, bool) {
+	key := rankMirrorKey(mode, metric)
+	score := scoreFor(metric, entry)
+	rank, total, ok, err := s.mirror.rank(ctx, key, entry.PlayerID, score)
+	if err != nil {
+		slog.Warn("leaderboard rank mirror read failed", "err", err, "mode", mode, "metric", metric)
+		return 0, 0, false
+	}
+	if ok {
+		return rank, total, true
+	}
+	claimed, err := s.mirror.claimRebuild(ctx, key)
+	if err != nil {
+		slog.Warn("leaderboard rank mirror claim failed", "err", err, "mode", mode, "metric", metric)
+		return 0, 0, false
+	}
+	if !claimed {
+		return 0, 0, false
+	}
+	members, err := s.loadBoardMembers(ctx, mode, metric)
+	if err != nil {
+		slog.Warn("leaderboard rank mirror rebuild failed", "err", err, "mode", mode, "metric", metric)
+		// Still release the claim, otherwise nobody retries for its whole TTL.
+		if pubErr := s.mirror.publish(ctx, key, nil); pubErr != nil {
+			slog.Warn("leaderboard rank mirror release failed", "err", pubErr)
+		}
+		return 0, 0, false
+	}
+	if err := s.mirror.publish(ctx, key, members); err != nil {
+		slog.Warn("leaderboard rank mirror publish failed", "err", err, "mode", mode, "metric", metric)
+		return 0, 0, false
+	}
+	rank, total, ok, err = s.mirror.rank(ctx, key, entry.PlayerID, score)
+	if err != nil || !ok {
+		return 0, 0, false
+	}
+	return rank, total, true
+}
+
+func (s *Store) rankByCount(ctx context.Context, mode, metric string, entry Entry) (rank int64, total int64, err error) {
 	index, pkField, sortField := gsiFor(metric)
 	score := scoreFor(metric, entry)
 	scoreAV := &types.AttributeValueMemberN{Value: formatScore(score)}
