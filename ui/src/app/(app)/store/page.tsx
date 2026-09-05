@@ -28,6 +28,7 @@ import {
 import type {Page} from '@/lib/api/client';
 import {pushNotification} from '@/lib/notify';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
+import {useInViewOnce} from '@/lib/hooks/useInViewOnce';
 import {getMe} from '@/lib/api/player';
 import {
   getReactionPurchase,
@@ -51,16 +52,25 @@ import {
 // the flattened rows plus a "load more" affordance. Every purchase endpoint
 // returns the same {data, has_next, next_cursor, …} envelope, so one hook
 // covers chips, reactions and cosmetics.
-function usePurchaseHistory<T>(queryKey: readonly unknown[], fetchPage: (cursor?: string) => Promise<Page<T>>) {
+//
+// `enabled` is what keeps the four histories off the initial load (#206): each
+// one is armed by its own department coming into view. A deferred history
+// reports `isLoading`, because that is the truth — the rows are not here yet —
+// and it keeps every consumer's state monotonic: skeleton first, then rows.
+// Reporting it as loaded instead would paint the department's grid without its
+// resume/refund actions and then flip it back to a skeleton on arming.
+function usePurchaseHistory<T>(queryKey: readonly unknown[], fetchPage: (cursor?: string) => Promise<Page<T>>,
+  enabled = true) {
   const query = useInfiniteQuery({
     queryKey,
+    enabled,
     queryFn: ({pageParam}) => fetchPage(pageParam),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page: Page<T>) => (page.has_next && page.next_cursor) || undefined,
   });
   return {
     items: query.data?.pages.flatMap(page => page.data) ?? [],
-    isLoading: query.isLoading,
+    isLoading: !enabled || query.isLoading,
     isError: query.isError,
     refetch: query.refetch,
     hasMore: query.hasNextPage,
@@ -93,6 +103,19 @@ export default function Store() {
   }, []);
   const player = useQuery({queryKey: ['player', 'me'], queryFn: getMe});
 
+  // The initial load is the profile plus the four catalogs — the catalogs
+  // answer the directory's "N de M liberadas" counters and own every
+  // ownership flag, so they are the page. Purchase history is not: it only
+  // adds the receipts, the resume affordance and the refund button to a
+  // department that is already rendered, so each history waits for its own
+  // section (or the activity list) to come into view. See
+  // `docs/2026-09-04-store-initial-load-budget.md` and #206.
+  const [reactionsRef, reactionsSeen] = useInViewOnce();
+  const [decksRef, decksSeen] = useInViewOnce();
+  const [feltRef, feltSeen] = useInViewOnce();
+  const [chipsRef, chipsSeen] = useInViewOnce();
+  const [activityRef, activitySeen] = useInViewOnce();
+
   const skus = useQuery({
     queryKey: ['wallet', 'skus'], queryFn: listSkus,
   });
@@ -108,12 +131,13 @@ export default function Store() {
   // Purchase history is cursor-paginated; ownership is not read from it (see
   // ownedCosmeticIDs), so these only feed the activity lists and the
   // resume/refund actions.
-  const purchases = usePurchaseHistory(['wallet', 'sandbox-purchases'], listPurchases);
-  const reactionPurchases = usePurchaseHistory(REACTION_PURCHASE_HISTORY_KEY, listReactionPurchases);
+  const purchases = usePurchaseHistory(['wallet', 'sandbox-purchases'], listPurchases, chipsSeen);
+  const reactionPurchases = usePurchaseHistory(REACTION_PURCHASE_HISTORY_KEY, listReactionPurchases,
+    reactionsSeen || activitySeen);
   const deckPurchases = usePurchaseHistory(['wallet', 'cosmetic-purchases', 'deck'],
-    cursor => listCosmeticPurchases('deck', cursor));
+    cursor => listCosmeticPurchases('deck', cursor), decksSeen || activitySeen);
   const feltPurchases = usePurchaseHistory(['wallet', 'cosmetic-purchases', 'felt'],
-    cursor => listCosmeticPurchases('felt', cursor));
+    cursor => listCosmeticPurchases('felt', cursor), feltSeen || activitySeen);
 
   const selectSku = useCallback(async (sku: SandboxSKU) => {
     setPendingSku(sku.id);
@@ -233,7 +257,7 @@ export default function Store() {
         </nav>
 
         <div className="store-panel">
-          <section id="reactions" className="store-section store-department reaction-store-section"
+          <section id="reactions" ref={reactionsRef} className="store-section store-department reaction-store-section"
                    aria-labelledby="premium-reactions-title">
             <div className="store-section-heading">
               <Sparkles aria-hidden="true"/>
@@ -243,7 +267,7 @@ export default function Store() {
             </div>
             <ReactionStoreSection catalog={reactionCatalog.data ?? []} purchases={reactionPurchases.items}
                                   isLoading={reactionCatalog.isLoading || reactionPurchases.isLoading}
-                                  isError={reactionCatalog.isError || reactionPurchases.isError}
+                                  isError={reactionCatalog.isError}
                                   onRetryAction={() => {
                                     void reactionCatalog.refetch();
                                     void reactionPurchases.refetch();
@@ -264,7 +288,7 @@ export default function Store() {
                                     openFrom(trigger, () => setReactionRefundTarget(purchase))}/>
           </section>
 
-          <section id="decks" className="store-section store-department cosmetic-store-section"
+          <section id="decks" ref={decksRef} className="store-section store-department cosmetic-store-section"
                    aria-labelledby="premium-decks-title">
             <div className="store-section-heading">
               <Layers aria-hidden="true"/>
@@ -274,7 +298,7 @@ export default function Store() {
             <DeckStoreSection catalog={deckCatalog.data ?? []}
                               purchases={deckPurchases.items}
                               isLoading={deckCatalog.isLoading || deckPurchases.isLoading}
-                              isError={deckCatalog.isError || deckPurchases.isError}
+                              isError={deckCatalog.isError}
                               onRetryAction={() => {
                                 void deckCatalog.refetch();
                                 void deckPurchases.refetch();
@@ -295,7 +319,7 @@ export default function Store() {
                                 openFrom(trigger, () => setDeckRefundTarget(purchase))}/>
           </section>
 
-          <section id="felt" className="store-section store-department cosmetic-store-section"
+          <section id="felt" ref={feltRef} className="store-section store-department cosmetic-store-section"
                    aria-labelledby="premium-felt-title">
             <div className="store-section-heading">
               <Palette aria-hidden="true"/>
@@ -304,7 +328,7 @@ export default function Store() {
             </div>
             <FeltStoreSection catalog={feltCatalog.data ?? []} purchases={feltPurchases.items}
                               isLoading={feltCatalog.isLoading || feltPurchases.isLoading}
-                              isError={feltCatalog.isError || feltPurchases.isError}
+                              isError={feltCatalog.isError}
                               onRetryAction={() => {
                                 void feltCatalog.refetch();
                                 void feltPurchases.refetch();
@@ -325,7 +349,7 @@ export default function Store() {
                                 openFrom(trigger, () => setFeltRefundTarget(purchase))}/>
           </section>
 
-          <section id="chips" className="store-section store-department store-chips-department"
+          <section id="chips" ref={chipsRef} className="store-section store-department store-chips-department"
                    aria-labelledby="sandbox-chips-title">
             <div className="store-section-heading">
               <Coins aria-hidden="true"/>
@@ -364,7 +388,7 @@ export default function Store() {
             </section>
           </section>
 
-          <section id="activity" className="store-section store-department"
+          <section id="activity" ref={activityRef} className="store-section store-department"
                    aria-labelledby="activity-title">
             <div className="store-section-heading">
               <Clock3 aria-hidden="true"/>
