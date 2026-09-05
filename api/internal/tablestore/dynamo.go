@@ -2,6 +2,7 @@ package tablestore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/dynamo"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/metrics"
 )
 
 const (
@@ -303,15 +305,51 @@ func (s *Store) CommitAction(ctx context.Context, tableID, handID, actionID stri
 	// caller gets an ErrUnavailable-flavoured error, which every actor
 	// handler treats as "abort this command" rather than reload-and-retry.
 	if err := s.breaker.allow(tableID, entry.Action); err != nil {
+		recordCommitOutcome(err)
 		return err
 	}
 	if err := s.state.TransactWrite(ctx, items); err != nil {
 		resolved := s.resolveCommitErr(ctx, tableID, handID, actionID, err)
+		recordCommitOutcome(resolved)
 		s.breaker.record(tableID, entry.Action, resolved)
 		return resolved
 	}
+	recordCommitOutcome(nil)
 	s.breaker.record(tableID, entry.Action, nil)
 	return nil
+}
+
+// #207 asked for attempted / accepted / conditionally-failed commits as a
+// production signal, which had nowhere to go until #279. This is the funnel:
+// every command, timer and sweep in the service writes through CommitAction,
+// so the Sum of TableCommits over all outcomes is attempts, Outcome=accepted
+// is progress, and conflict+duplicate is the rejection rate the breaker trips
+// on. Consumed capacity per commit — the other half of #207's ask — is not
+// here; it needs ReturnConsumedCapacity threaded through api-commons/dynamo.
+//
+// The table id is deliberately NOT a dimension. It is a ULID, so one series
+// per table would be an unbounded custom-metric bill; it stays in the
+// breaker's transition log line, which is where a specific wedged table is
+// identified. Same for the action, which is bounded but multiplies every
+// outcome by ~20 for a signal no alarm would read.
+const metricCommits = "TableCommits"
+
+func recordCommitOutcome(err error) {
+	outcome := "accepted"
+	switch {
+	case err == nil:
+	case errors.Is(err, ErrCommitThrottled):
+		outcome = "throttled"
+	case errors.Is(err, ErrVersionConflict):
+		outcome = "conflict"
+	case errors.Is(err, ErrDuplicateAction):
+		outcome = "duplicate"
+	case errors.Is(err, ErrUnavailable):
+		outcome = "unavailable"
+	default:
+		outcome = "failed"
+	}
+	metrics.Record(metricCommits, metrics.Count, metrics.Dims{"Outcome": outcome}, 1)
 }
 
 // resolveCommitErr disambiguates a failed transaction: an already-present
