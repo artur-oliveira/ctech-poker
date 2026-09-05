@@ -12,7 +12,13 @@ import (
 	"gopkg.aoctech.app/api-commons/dynamo"
 )
 
-const tableSocialEdges = "poker_social_edges"
+const (
+	tableSocialEdges = "poker_social_edges"
+	// gsiSocialRelationship is sparse by construction: `relationship` is
+	// written with omitempty, so a mute- or block-only edge carries no sort
+	// key and stays out of the index.
+	gsiSocialRelationship = "gsi_relationship"
+)
 
 var ErrConcurrentTransition = errors.New("social: relationship changed concurrently")
 
@@ -283,17 +289,15 @@ const maxCountPages = 8
 // Every caller compares the answer against a cap (MaxFriends,
 // MaxPendingOutgoing), never displays it, so counting past that cap buys
 // nothing and used to cost a page-through of the player's whole edge
-// partition — friends, blocks, mutes and every incoming request alike, since
-// relationship is a FilterExpression and not part of any key. Stopping at the
-// cap turns the common case into one query.
+// partition — friends, blocks, mutes and every incoming request alike.
+// Stopping at the cap turns the common case into one query.
 //
-// Ceiling: relationship is still filtered, not indexed, so a partition padded
-// with tens of thousands of non-matching rows (e.g. a griefed player with a
-// huge incoming pile) can exhaust maxCountPages before reaching saturateAt and
-// under-report. That errs toward letting a legitimate action through rather
-// than blocking one, which is the safe direction for a limit whose purpose is
-// resource protection; the exact fix is a sparse `owner#relationship` GSI,
-// which is a schema change and its own deploy.
+// relationship is a key condition on the sparse gsi_relationship index rather
+// than a FilterExpression (#278): every row the query reads is a row that
+// counts, so a partition padded with tens of thousands of non-matching rows
+// can no longer exhaust the page budget and under-report. The index reuses
+// the base table's own `pk`/`relationship` attributes, so rows written before
+// it existed are in it without a backfill.
 func (s *Store) Count(ctx context.Context, ownerPlayerID string, relationship Relationship, saturateAt int) (int, error) {
 	if saturateAt <= 0 {
 		return 0, nil
@@ -302,8 +306,8 @@ func (s *Store) Count(ctx context.Context, ownerPlayerID string, relationship Re
 	var start map[string]types.AttributeValue
 	for page := 0; page < maxCountPages && total < saturateAt; page++ {
 		out, err := s.base.QueryRaw(ctx, &dynamodb.QueryInput{
-			KeyConditionExpression: aws.String("pk = :pk"),
-			FilterExpression:       aws.String("#relationship = :relationship"),
+			IndexName:              aws.String(gsiSocialRelationship),
+			KeyConditionExpression: aws.String("pk = :pk AND #relationship = :relationship"),
 			ExpressionAttributeNames: map[string]string{
 				"#relationship": "relationship",
 			},

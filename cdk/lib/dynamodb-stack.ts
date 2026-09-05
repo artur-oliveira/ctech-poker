@@ -397,9 +397,26 @@ export class DynamoDBStack extends cdk.Stack {
       projectionType: dynamodb.ProjectionType.ALL,
     });
 
-    // Directed relationship rows. Mirrored friendship transitions will be
-    // committed atomically by the social store introduced in the next slice.
-    table(DYNAMO_TABLE.socialEdges, true);
+    // Directed relationship rows, committed atomically as a mirrored pair by
+    // the social store. gsi_relationship is SPARSE and reuses the attributes
+    // already on every row: `relationship` is written with omitempty, so a
+    // row that carries no relationship (a mute- or block-only edge, or one
+    // whose request was declined) is absent from the index. It turns
+    // social.Store.Count's relationship FilterExpression into a key
+    // condition, so a partition padded with tens of thousands of
+    // non-matching rows can no longer exhaust the count's page budget and
+    // under-report (#278). KEYS_ONLY: Count reads nothing off the row.
+    // No backfill: both key attributes predate the index on every row ever
+    // written. This is the table's only index — DynamoDB rejects an update
+    // that creates more than one GSI on a table, which is what broke the
+    // prod deploy of #224 (see #253).
+    const socialEdges = table(DYNAMO_TABLE.socialEdges, true);
+    socialEdges.addGlobalSecondaryIndex({
+      indexName: DYNAMO_INDEX.socialRelationship,
+      partitionKey: {name: 'pk', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'relationship', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+    });
 
     // Materialized opponent recency. TTL bounds retention to 90 days. No GSI
     // since #199: a row is keyed pk = viewer, sk = "hand#<ulid>", and ULIDs

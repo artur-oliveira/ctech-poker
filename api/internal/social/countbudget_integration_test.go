@@ -91,7 +91,7 @@ func TestEdgeCountStopsAtTheCap(t *testing.T) {
 	db := countingSocialTestClient(t, &calls)
 	env := fmt.Sprintf("social_count_test_%d", time.Now().UnixNano())
 	edgesTable := env + "_" + tableSocialEdges
-	createSimpleCompositeTable(t, db, edgesTable)
+	createSocialEdgeTestTable(t, db, edgesTable)
 	t.Cleanup(func() {
 		_, _ = db.DeleteTable(ctx, &dynamodb.DeleteTableInput{TableName: aws.String(edgesTable)})
 	})
@@ -133,6 +133,58 @@ func TestEdgeCountStopsAtTheCap(t *testing.T) {
 	}
 	if n := calls.Load(); n > maxCountPages {
 		t.Fatalf("count must stay inside its %d-page budget, spent %d", maxCountPages, n)
+	}
+}
+
+// TestEdgeCountIgnoresOtherRelationshipsInThePartition is issue #278: with
+// relationship resolved by FilterExpression, a partition padded with rows of
+// another relationship burned the page budget before reaching the matching
+// rows and silently under-reported. As a key condition on gsi_relationship the
+// padding is invisible to the query.
+func TestEdgeCountIgnoresOtherRelationshipsInThePartition(t *testing.T) {
+	ctx := context.Background()
+	var calls atomic.Int64
+	db := countingSocialTestClient(t, &calls)
+	env := fmt.Sprintf("social_count_index_test_%d", time.Now().UnixNano())
+	edgesTable := env + "_" + tableSocialEdges
+	createSocialEdgeTestTable(t, db, edgesTable)
+	t.Cleanup(func() {
+		_, _ = db.DeleteTable(ctx, &dynamodb.DeleteTableInput{TableName: aws.String(edgesTable)})
+	})
+
+	store := NewStore(db, env)
+	put := func(other string, relationship Relationship) {
+		t.Helper()
+		item, err := dynamoEncodeEdge(Edge{OwnerPlayerID: "owner", OtherPlayerID: other, Relationship: relationship, Version: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.PutItem(ctx, &dynamodb.PutItemInput{TableName: aws.String(edgesTable), Item: item}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Padding sized past the old maxCountPages*saturateAt budget, and named so
+	// it sorts ahead of the matching rows on the base table's sort key — the
+	// exact shape that used to exhaust the budget before reaching them.
+	const padding = maxCountPages*MaxPendingOutgoing + 50
+	for i := 0; i < padding; i++ {
+		put(fmt.Sprintf("aa-incoming-%04d", i), RelationshipIncoming)
+	}
+	const pending = 7
+	for i := 0; i < pending; i++ {
+		put(fmt.Sprintf("zz-outgoing-%03d", i), RelationshipOutgoing)
+	}
+
+	calls.Store(0)
+	count, err := store.Count(ctx, "owner", RelationshipOutgoing, MaxPendingOutgoing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != pending {
+		t.Fatalf("count must be exact regardless of the rest of the partition, got %d want %d", count, pending)
+	}
+	if n := calls.Load(); n != 1 {
+		t.Fatalf("an indexed count must cost one query, spent %d", n)
 	}
 }
 
