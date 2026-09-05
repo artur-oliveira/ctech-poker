@@ -10,9 +10,10 @@ import {getQueryClient} from '@/lib/providers/createQueryClient';
  * and the nav's social-unread badge — nothing else.
  *
  * Deliberately does NOT mount `useSessionKeepAlive`, `NetworkProvider` or
- * `RealtimeBridge`: those pull in `useLobbyRealtime` -> `lib/ws/utils.ts` ->
- * the protobuf-generated `lib/api/proto/poker.ts`, which is ~1MB of JS a text
- * page has no business downloading. Authenticated routes get all three from
+ * `RealtimeBridge`: none of them has anything to do on a logged-out text page.
+ * (The bridge used to also drag in the full protobuf codec; since #228 it
+ * decodes with `lib/ws/lobbyCodec.ts` and the table half of `poker.proto` is
+ * loaded by the table route alone.) Authenticated routes get all three from
  * `QueryProvider` via the `(app)` group layout instead. See issue #80.
  *
  * It does, however, share the one browser QueryClient with `QueryProvider`

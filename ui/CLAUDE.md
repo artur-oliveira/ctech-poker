@@ -40,8 +40,19 @@ off by default — do not build UI that assumes real money is on.
   `npm run dev:mock` running) and `npm run cards:variants` (card face SVG variants) are run by
   hand by whoever changes the surface they capture, and their output is committed. No workflow
   regenerates them — a stale screenshot is a review failure, not a CI failure.
-- **The wire is binary protobuf**, not JSON. Encode/decode through `lib/ws/utils.ts` against
-  `lib/api/proto/poker.ts`; regenerate from `../proto/poker.proto` rather than hand-editing.
+- **The wire is binary protobuf**, not JSON, and it has **two codecs, one framing**. The table
+  encodes/decodes through `lib/ws/utils.ts` against `lib/api/proto/poker.ts`; the lobby/user
+  gateway through `lib/ws/lobbyCodec.ts` against `lib/api/proto/lobby.ts` — the same field
+  numbers, minus `TableSnapshot` and everything under it, so the ~150 kB of table codec is not on
+  the critical path of Lobby, Store, Profile, Hands, Achievements and People (`RealtimeBridge` is
+  mounted by the `(app)` layout, so it is on all of them). Unknown fields are skipped, so both
+  decode the exact same bytes the server sends. A new lobby-visible field goes into **both**
+  `.proto` files under the same number; anything only the table reads goes into `poker.proto`
+  alone. Regenerate with `scripts/generate-proto.sh` rather than hand-editing, and keep
+  `lib/ws/codec.ts` (the `auth` inference, the ArrayBuffer slice, the JSON compatibility branch)
+  as the one place the framing lives. `lobbyCodec.test.ts` walks `RealtimeBridge`'s static import
+  graph and fails if `poker.ts` reappears in it. See
+  `docs/2026-09-04-lobby-codec-and-reconnect-reconcile.md` and #228.
 - **Named constants over literals.** Reuse `lib/api/*`, `lib/utils.ts`, `lib/pokerRules.ts`,
   `lib/tableOutcome.ts` etc. instead of inlining URLs, paths or event strings. The same holds in
   CSS: every colour and radius is a token in `globals.css`'s `:root` (the only literals left there
@@ -140,9 +151,22 @@ off by default — do not build UI that assumes real money is on.
   and the idempotency key is stable per confirmed amount so a retry re-seats at the same table
   instead of buying a second seat. `BuyInPanel`'s other entry (`roomId`) is unchanged — a direct
   link, an invite, or a return to a table still buys in with `POST /rooms/:id/join`.
-  `useLobbyRealtime` refreshes the aggregate on `room_created` and on socket open; `room_updated`
+  `useLobbyRealtime` refreshes the aggregate on `room_created` and on a *re*-open; `room_updated`
   deliberately only updates that room's own `['room', id]` entry, since it fires on every seat
   change at every public table and the aggregate is just an availability hint.
+- **A reconnect reconciles once, after it settles — and the page-load open reconciles nothing.**
+  Deltas sent while the gateway socket was down are never replayed, so a re-open has to re-read
+  the bucket aggregate, `['player','me']` and the social root. But `ws-client` re-opens on its own
+  backoff, so a laptop waking or a gateway rolling produced a burst of opens and a burst of reads.
+  The reconciliation is therefore *trailing* (`RECONNECT_RECONCILE_DEBOUNCE_MS`): every open
+  re-arms it, and only the open the storm ends on spends the reads — nothing can be missed by
+  waiting, because the last open always fires it. The **first** open, within
+  `FIRST_OPEN_GRACE_MS` of the hook mounting, is skipped entirely: the mount that opened the
+  socket just fetched those queries, so there is no offline gap to reconcile, only a duplicate
+  read. Invalidation names `refetchType: 'active'` on purpose — an unobserved query is marked
+  stale, not re-read. `lobbyReconcileCount()` exists so "refetches per reconnect" stays assertable
+  (the app has no metrics sink). See `docs/2026-09-04-lobby-codec-and-reconnect-reconcile.md`
+  and #228.
 - **A rejected table command is resubmitted, not surfaced.** `act()` retries on `stale_state` via
   `pendingActionRef`; the auxiliary commands (`show_cards`, `request_rabbit_hunt`,
   `request_winner_cards`, `accept`/`decline_winner_cards`, `request_exit`) carry no
@@ -196,7 +220,8 @@ off by default — do not build UI that assumes real money is on.
   catalog read) and `HISTORY_QUERY` (hands, purchase receipts: 5min, no focus refetch) — and
   `createQueryClient` applies it with `setQueryDefaults` by key prefix, so classifying a family
   costs no change at its call sites. The app default is **no** focus refetch: live data arrives
-  over the two realtime hooks, which invalidate on every push and on socket open. A new query that
+  over the two realtime hooks, which invalidate on every push and on a socket *re*-open (the
+  page-load open reconciles nothing — see the reconnect bullet). A new query that
   genuinely needs a catch-up read on focus opts in explicitly (as `usePurchaseStatus` does) or gets
   a row in the table — never by flipping the global back. See
   `docs/2026-09-04-query-freshness-presets.md` and #233.

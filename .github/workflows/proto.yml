@@ -42,4 +42,4 @@ jobs:
       - name: Regenerate contract
         run: ./scripts/generate-proto.sh
       - name: Verify generated files are committed
-        run: git diff --exit-code -- api/internal/api/v1/proto/poker.pb.go ui/src/lib/api/proto/poker.ts
+        run: git diff --exit-code -- api/internal/api/v1/proto/poker.pb.go ui/src/lib/api/proto/poker.ts ui/src/lib/api/proto/lobby.ts

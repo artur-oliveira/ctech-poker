@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package pokerlobby;
+
+// The lobby/user gateway (`/v1.0/ws`) speaks the same frames as the table
+// socket, but it never receives a `state` frame — and `poker.ServerMessage`
+// reaches `TableSnapshot`, which reaches Seat/Card/Pot/ChatMessage/
+// TableReaction/LegalActions/WinnerCardsRequest/RevealedSalt: the whole heavy
+// half of the generated codec, on the critical path of every authenticated
+// route (Lobby, Store, Profile, Hands, Achievements, People…).
+//
+// This file is that gateway's subset. It is NOT a second protocol: every field
+// keeps its number from `poker.proto`, so it decodes the exact same bytes, and
+// proto3's unknown-field skipping drops anything only the table cares about
+// (the snapshot included). The table keeps `poker.proto` and loads it with the
+// table route. Adding a lobby-visible field means adding it in both files,
+// under the same number. Generated for TypeScript only — the server encodes the
+// full `poker.ServerMessage`.
+
+// Field 9 is `poker.Room`. `room_created` only needs to know a room came with
+// the frame (the lobby then re-reads the bucket aggregate over HTTP; #205), so
+// the body is deliberately empty and skipped — while staying a message, so it
+// decodes to `undefined` when absent, exactly as it does in the full codec.
+message RoomRef {}
+
+message SocialEvent {
+  string event_id = 1;
+  string type = 2;
+  string room_id = 4;
+}
+
+message LobbyServerMessage {
+  string type = 1;
+  string code = 6;
+
+  RoomRef room = 9;
+  string room_id = 10;
+  int32 seats_taken = 11;
+  int64 amount = 12;
+  string text = 13;
+  string purchase_id = 19;
+  SocialEvent social_event = 20;
+  int32 unread_count = 21;
+}
+
+// The gateway only ever sends `auth` (the token frame) and `ping`.
+message LobbyClientMessage {
+  string type = 1;
+  string token = 2;
+}
