@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"strings"
 
@@ -20,14 +19,24 @@ import (
 
 const walletWebhookSignatureHeader = "X-Wallet-Signature"
 
+// productPurchasePrefix is wallet's id prefix for a generic product purchase —
+// the id space premium reactions and premium cosmetics share.
+const productPurchasePrefix = "prdp"
+
+// productPurchaseUpdate is the handful of fields the websocket frame needs,
+// so the two product services' distinct Record types converge here without the
+// webhook depending on either shape.
+type productPurchaseUpdate struct{ playerID, purchaseID, status string }
+
 // RegisterWalletWebhook mounts POST /v1.0/webhooks/wallet, unauthenticated by
 // JWT — HMAC-SHA256 over the raw body against hmacSecret is the auth here,
-// matching ctech-wallet's own outbound M2M webhook signing. purchase_id
-// prefix routes the callback: "prdp" (generic product purchase, shared by
-// both premium reactions and premium cosmetics) tries reactionSvc first,
-// falling back to cosmeticSvc when the SKU isn't a reaction one
-// (reactionpurchase.ErrCatalogMismatch); anything else goes to the
-// sandbox-credits svc (docs/specs/2026-08-12-premium-reactions.md).
+// matching ctech-wallet's own outbound M2M webhook signing.
+//
+// Routing is two steps, never speculative: the purchase_id prefix picks the id
+// space, and for "prdp" (generic product purchase, shared by premium reactions
+// and premium cosmetics) the re-verified purchase's SKU picks the service.
+// Anything else goes to the sandbox-credits svc
+// (docs/specs/2026-08-12-premium-reactions.md).
 func RegisterWalletWebhook(router fiber.Router, hmacSecret string, sandboxSvc *sandboxpurchase.Service, reactionSvc *reactionpurchase.Service, cosmeticSvc *cosmeticpurchase.Service, reg ws.Registry) {
 	router.Post("/webhooks/wallet", walletWebhookHandler(hmacSecret, sandboxSvc, reactionSvc, cosmeticSvc, reg))
 }
@@ -45,42 +54,56 @@ func walletWebhookHandler(hmacSecret string, sandboxSvc *sandboxpurchase.Service
 			return c.SendStatus(fiber.StatusBadRequest)
 		}
 
-		if strings.HasPrefix(payload.PurchaseID, "prdp") {
-			record, changed, err := reactionSvc.ConfirmFromWebhook(c.Context(), payload.PurchaseID)
+		if strings.HasPrefix(payload.PurchaseID, productPurchasePrefix) {
+			// One verification per delivery: the purchase is re-read from
+			// wallet once and the SKU on it decides which product service
+			// applies it. Reactions and cosmetics share the "prdp" id space,
+			// and this used to try reactions first and re-verify the same id a
+			// second time as a cosmetic on every cosmetic callback (#211).
+			purchase, err := reactionSvc.VerifyPurchase(c.Context(), payload.PurchaseID)
 			if err != nil {
-				if !errors.Is(err, reactionpurchase.ErrCatalogMismatch) {
-					slog.Error("wallet webhook: reaction reverify failed", "purchase_id", payload.PurchaseID, "err", err)
-					return c.SendStatus(fiber.StatusInternalServerError)
-				}
-				// Not a reaction SKU: this "prdp" id belongs to a cosmetic
-				// (deck/felt) purchase instead.
-				cosRecord, cosChanged, cosErr := cosmeticSvc.ConfirmFromWebhook(c.Context(), payload.PurchaseID)
-				if cosErr != nil {
-					slog.Error("wallet webhook: cosmetic reverify failed", "purchase_id", payload.PurchaseID, "err", cosErr)
-					return c.SendStatus(fiber.StatusInternalServerError)
-				}
-				if cosChanged {
-					data, err := goproto.Marshal(&pokerproto.ServerMessage{
-						Type:       "cosmetic_purchase_update",
-						PlayerId:   cosRecord.PlayerID,
-						PurchaseId: cosRecord.PurchaseID,
-						Code:       cosRecord.Status,
-					})
-					if err == nil {
-						reg.Broadcast(c.Context(), "user#"+cosRecord.PlayerID, data)
-					}
-				}
-				return c.SendStatus(fiber.StatusOK)
+				slog.Error("wallet webhook: product reverify failed", "purchase_id", payload.PurchaseID, "err", err)
+				return c.SendStatus(fiber.StatusInternalServerError)
+			}
+			if purchase == nil || purchase.PurchaseID != payload.PurchaseID {
+				slog.Error("wallet webhook: wallet returned a different product purchase", "purchase_id", payload.PurchaseID)
+				return c.SendStatus(fiber.StatusInternalServerError)
+			}
+
+			var (
+				record    productPurchaseUpdate
+				changed   bool
+				eventType string
+			)
+			switch {
+			case reactionSvc.HandlesSKU(purchase.SKU):
+				eventType = "reaction_purchase_update"
+				rec, ch, syncErr := reactionSvc.SyncPurchase(c.Context(), purchase)
+				record, changed, err = productPurchaseUpdate{rec.PlayerID, rec.PurchaseID, rec.Status}, ch, syncErr
+			case cosmeticSvc.HandlesSKU(purchase.SKU):
+				eventType = "cosmetic_purchase_update"
+				rec, ch, syncErr := cosmeticSvc.SyncPurchase(c.Context(), purchase)
+				record, changed, err = productPurchaseUpdate{rec.PlayerID, rec.PurchaseID, rec.Status}, ch, syncErr
+			default:
+				// Wallet knows a product SKU this build's catalogs do not.
+				// Non-2xx so the delivery is retried after a deploy that adds
+				// it, rather than silently dropped.
+				slog.Error("wallet webhook: unknown product SKU", "purchase_id", payload.PurchaseID, "sku", purchase.SKU)
+				return c.SendStatus(fiber.StatusInternalServerError)
+			}
+			if err != nil {
+				slog.Error("wallet webhook: product sync failed", "purchase_id", payload.PurchaseID, "sku", purchase.SKU, "err", err)
+				return c.SendStatus(fiber.StatusInternalServerError)
 			}
 			if changed {
 				data, err := goproto.Marshal(&pokerproto.ServerMessage{
-					Type:       "reaction_purchase_update",
-					PlayerId:   record.PlayerID,
-					PurchaseId: record.PurchaseID,
-					Code:       record.Status,
+					Type:       eventType,
+					PlayerId:   record.playerID,
+					PurchaseId: record.purchaseID,
+					Code:       record.status,
 				})
 				if err == nil {
-					reg.Broadcast(c.Context(), "user#"+record.PlayerID, data)
+					reg.Broadcast(c.Context(), "user#"+record.playerID, data)
 				}
 			}
 			return c.SendStatus(fiber.StatusOK)

@@ -57,6 +57,9 @@ func webhookCreateTestTable(t *testing.T, db *dynamodb.Client, name string) {
 type fakeReactionWebhookWallet struct {
 	createResult *walletclient.ProductPurchase
 	getResult    *walletclient.ProductPurchase
+	// gets counts wallet re-verifications, so a test can assert the read
+	// budget of one webhook delivery and not only its outcome (#211).
+	gets int
 }
 
 func (f *fakeReactionWebhookWallet) ListProductSKUs(context.Context) ([]walletclient.ProductSKU, error) {
@@ -96,6 +99,7 @@ func TestCreateReactionPurchasePIXReturnsPaymentPayload(t *testing.T) {
 	}
 }
 func (f *fakeReactionWebhookWallet) GetProductPurchase(context.Context, string) (*walletclient.ProductPurchase, error) {
+	f.gets++
 	return f.getResult, nil
 }
 func (f *fakeReactionWebhookWallet) RefundProductPurchase(context.Context, string, string, string) (*walletclient.ProductPurchase, error) {

@@ -8,20 +8,24 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/dynamo"
+	"gopkg.aoctech.app/poker/api/internal/purchaselifecycle"
 )
 
 const (
 	tableEntitlements = "poker_reaction_entitlements"
 	tablePurchases    = "poker_reaction_purchases"
 
-	statusProcessing = "processing"
-	statusPending    = "pending"
-	statusActive     = "active"
-	statusConfirmed  = "confirmed"
-	statusRefunding  = "refunding"
-	statusRefunded   = "refunded"
-	statusFailed     = "failed"
-	statusExpired    = "expired"
+	// One status vocabulary for every purchase flow — see
+	// internal/purchaselifecycle, which also owns the transition matrix these
+	// feed (#211).
+	statusProcessing = purchaselifecycle.StatusProcessing
+	statusPending    = purchaselifecycle.StatusPending
+	statusActive     = purchaselifecycle.StatusActive
+	statusConfirmed  = purchaselifecycle.StatusConfirmed
+	statusRefunding  = purchaselifecycle.StatusRefunding
+	statusRefunded   = purchaselifecycle.StatusRefunded
+	statusFailed     = purchaselifecycle.StatusFailed
+	statusExpired    = purchaselifecycle.StatusExpired
 
 	methodPIX    = "pix"
 	methodFichas = "fichas"

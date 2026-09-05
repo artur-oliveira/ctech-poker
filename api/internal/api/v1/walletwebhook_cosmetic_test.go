@@ -24,11 +24,12 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
 
-// TestWalletWebhookDispatchesCosmeticPurchaseByPrefix covers the "prdp" ->
-// reactionSvc-then-cosmeticSvc fallback: a cosmetic (deck/felt) PIX purchase
-// shares the same "prdp" wallet id prefix as premium reactions, so it must
-// fall through reactionSvc's ErrCatalogMismatch into cosmeticSvc rather than
-// being silently dropped (#69).
+// TestWalletWebhookDispatchesCosmeticPurchaseByPrefix covers "prdp" routing: a
+// cosmetic (deck/felt) PIX purchase shares the wallet id prefix of premium
+// reactions, so it must reach cosmeticSvc rather than being silently dropped
+// (#69) — and it must get there on the SKU of a single re-verification, not by
+// re-verifying the same purchase a second time as a cosmetic after reactions
+// rejected the SKU (#211).
 func TestWalletWebhookDispatchesCosmeticPurchaseByPrefix(t *testing.T) {
 	db := webhookTestDynamoClient(t)
 	env := fmt.Sprintf("webhook_cosmetic_test_%d", time.Now().UnixNano())
@@ -37,11 +38,9 @@ func TestWalletWebhookDispatchesCosmeticPurchaseByPrefix(t *testing.T) {
 	webhookCreateTestTable(t, db, dynamo.TableName(env, "poker_cosmetic_entitlements"))
 	webhookCreateTestTable(t, db, dynamo.TableName(env, "poker_cosmetic_purchases"))
 
-	// Both services independently re-verify the same purchase_id against
-	// wallet (mirroring production, where both point at the same
-	// ctech-wallet). reactionSvc's ReactionForSKU lookup on "poker_deck_golden"
-	// fails with ErrCatalogMismatch, which is what the webhook handler uses to
-	// fall through to cosmeticSvc.
+	// Both services point at the same ctech-wallet, as in production. The
+	// delivery is verified once and the SKU "poker_deck_golden" routes it to
+	// cosmeticSvc.
 	wallet := &fakeReactionWebhookWallet{
 		getResult: &walletclient.ProductPurchase{PurchaseID: "prdp-webhook-cos-1", UserID: "player-1", SKU: "poker_deck_golden", Amount: 500, Status: "confirmed"},
 	}
@@ -87,6 +86,10 @@ func TestWalletWebhookDispatchesCosmeticPurchaseByPrefix(t *testing.T) {
 	}
 	if msg.Type != "cosmetic_purchase_update" || msg.PlayerId != "player-1" || msg.PurchaseId != "prdp-webhook-cos-1" || msg.Code != "confirmed" {
 		t.Fatalf("unexpected message: %+v", &msg)
+	}
+
+	if wallet.gets != 1 {
+		t.Fatalf("one webhook delivery must cost exactly one wallet verification, spent %d", wallet.gets)
 	}
 
 	owned, err := cosmeticSvc.IsOwned(context.Background(), "player-1", cosmetics.KindDeck, "golden")
