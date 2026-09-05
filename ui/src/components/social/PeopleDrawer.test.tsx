@@ -44,7 +44,7 @@ function player(overrides: Partial<SocialPlayer>): SocialPlayer {
 
 function invite(overrides: Partial<SocialInboxEvent> = {}): SocialInboxEvent {
   return {
-    event_id: 'e1', type: 'table_invite', actor_id: 'bia', status: 'pending', unread: true,
+    event_id: 'e1', type: 'table_invite', actor_id: 'bia', actor_name: 'Bia', status: 'pending', unread: true,
     created_at: Date.now(), expires_at: Date.now() + 600_000, room_id: 'room-1', ...overrides
   };
 }

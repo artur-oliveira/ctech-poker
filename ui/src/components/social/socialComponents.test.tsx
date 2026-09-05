@@ -314,8 +314,8 @@ describe('FriendCodeLookup', () => {
 
 describe('SocialInbox', () => {
   test('marks the visible unread events as read exactly once', async () => {
-    renderWithClient(<SocialInbox events={[event({unread: true, type: 'friend_request'})]} actions={actionState()}
-                                  nameOf={() => 'Bia'}/>);
+    renderWithClient(<SocialInbox events={[event({unread: true, type: 'friend_request', actor_name: 'Bia'})]}
+                                  actions={actionState()}/>);
     await waitFor(() => expect(api.markInboxRead).toHaveBeenCalledWith(['e1']));
     expect(api.markInboxRead).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Bia quer ser seu amigo.')).toBeInTheDocument();
@@ -323,13 +323,13 @@ describe('SocialInbox', () => {
 
   test('keeps the badge up when the read receipt fails', async () => {
     api.markInboxRead.mockRejectedValueOnce(new Error('offline'));
-    renderWithClient(<SocialInbox events={[event({unread: true})]} actions={actionState()} nameOf={() => 'Bia'}/>);
+    renderWithClient(<SocialInbox events={[event({unread: true})]} actions={actionState()}/>);
     await waitFor(() => expect(api.markInboxRead).toHaveBeenCalled());
   });
 
   test('enters or declines a pending invite', async () => {
     const actions = actionState();
-    renderWithClient(<SocialInbox events={[event({room_id: 'room-1'})]} actions={actions} nameOf={() => 'Bia'}/>);
+    renderWithClient(<SocialInbox events={[event({room_id: 'room-1'})]} actions={actions}/>);
     await userEvent.click(screen.getByRole('button', {name: 'Entrar'}));
     await waitFor(() => expect(api.push).toHaveBeenCalledWith('/table?id=room-1'));
     await userEvent.click(screen.getByRole('button', {name: 'Recusar'}));
@@ -339,24 +339,29 @@ describe('SocialInbox', () => {
   test('hides the actions of an expired invite and pages the feed', async () => {
     const loadMore = vi.fn();
     renderWithClient(<SocialInbox events={[event({expires_at: Date.now() - 1_000, room_id: 'room-1'})]}
-                                  actions={actionState()} nameOf={() => 'Bia'}
-                                  hasNext onMoreAction={loadMore}/>);
+                                  actions={actionState()} hasNext onMoreAction={loadMore}/>);
     expect(screen.queryByRole('button', {name: 'Entrar'})).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', {name: 'Carregar mais'}));
     expect(loadMore).toHaveBeenCalled();
   });
 
+  test('names an actor whose profile is gone with the shared placeholder', () => {
+    // The server resolves actor_name for every live actor (#73); a row without
+    // one is a deleted profile, not a missing list.
+    renderWithClient(<SocialInbox events={[event({type: 'friend_request'})]} actions={actionState()}/>);
+    expect(screen.getByText('Visitante quer ser seu amigo.')).toBeInTheDocument();
+  });
+
   test('shows the loading, error and empty feed states', async () => {
     const retry = vi.fn();
-    const {rerender} = renderWithClient(<SocialInbox events={[]} isLoading actions={actionState()}
-                                                     nameOf={() => 'Bia'}/>);
+    const {rerender} = renderWithClient(<SocialInbox events={[]} isLoading actions={actionState()}/>);
     expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true');
 
-    rerender(<SocialInbox events={[]} isError onRetryAction={retry} actions={actionState()} nameOf={() => 'Bia'}/>);
+    rerender(<SocialInbox events={[]} isError onRetryAction={retry} actions={actionState()}/>);
     await userEvent.click(screen.getByRole('button', {name: /Tentar novamente/}));
     expect(retry).toHaveBeenCalled();
 
-    rerender(<SocialInbox events={[]} actions={actionState()} nameOf={() => 'Bia'}/>);
+    rerender(<SocialInbox events={[]} actions={actionState()}/>);
     expect(screen.getByText('Nenhuma atividade por aqui.')).toBeInTheDocument();
   });
 });

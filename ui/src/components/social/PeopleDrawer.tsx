@@ -10,7 +10,7 @@ import {SocialInbox} from '@/components/social/SocialInbox';
 import {listFriendRequests, listFriends, listRecentPlayers, listSocialInbox} from '@/lib/api/social';
 import {useSocialActions} from '@/lib/hooks/useSocialActions';
 import {useSocialList} from '@/lib/hooks/useSocialList';
-import {nameResolver, SOCIAL_KEYS} from '@/lib/social';
+import {SOCIAL_KEYS} from '@/lib/social';
 
 const MAX_ONLINE_FRIENDS = 5;
 const MAX_REQUESTS = 3;
@@ -32,7 +32,6 @@ export function PeopleDrawer() {
   const onlineFriends = friends.items
     .filter(friend => friend.presence && friend.presence !== 'offline')
     .slice(0, MAX_ONLINE_FRIENDS);
-  const nameOf = nameResolver(friends.items, requests.items);
 
   return <Dialog open={open} onOpenChange={setOpen} modal={false}>
     <DialogTrigger render={<Button type="button" size="lg" variant="outline" className="app-nav-people-link"/>}>
@@ -56,7 +55,7 @@ export function PeopleDrawer() {
               has to render the same feed — otherwise the only way to clear the
               badge is navigating to /people and opening the Atividades tab. */}
           <SocialInbox events={inbox.items} isLoading={inbox.isLoading} isError={inbox.isError}
-                       onRetryAction={inbox.retry} actions={actions} nameOf={nameOf}
+                       onRetryAction={inbox.retry} actions={actions}
                        onNavigateAction={() => setOpen(false)}/>
         </section>
         <section aria-labelledby="people-drawer-friends">

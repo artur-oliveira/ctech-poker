@@ -13,7 +13,7 @@ import {
 } from '@/lib/api/social';
 import {useSocialActions} from '@/lib/hooks/useSocialActions';
 import {useSocialList} from '@/lib/hooks/useSocialList';
-import {nameResolver, SOCIAL_KEYS} from '@/lib/social';
+import {SOCIAL_KEYS} from '@/lib/social';
 
 type PeopleTab = 'friends' | 'requests' | 'recent' | 'blocked' | 'activity';
 type RequestDirection = 'incoming' | 'outgoing';
@@ -42,11 +42,12 @@ function PeopleContent() {
   });
   const [direction, setDirection] = useState<RequestDirection>('incoming');
 
-  // Friends stay enabled on every tab: they are the cheapest source of display
-  // names for the activity feed, which only receives actor ids.
-  const friends = useSocialList(SOCIAL_KEYS.friends, listFriends);
+  // Every list is its own tab's read: the activity feed carries actor_name
+  // server-side (#73), so nothing here loads friends or requests just to name
+  // an event any more.
+  const friends = useSocialList(SOCIAL_KEYS.friends, listFriends, tab === 'friends');
   const requests = useSocialList(SOCIAL_KEYS.requests(direction),
-    cursor => listFriendRequests(direction, cursor), tab === 'requests' || tab === 'activity');
+    cursor => listFriendRequests(direction, cursor), tab === 'requests');
   const recent = useSocialList(SOCIAL_KEYS.recent, listRecentPlayers, tab === 'recent');
   const blocked = useSocialList(SOCIAL_KEYS.blocked, listBlockedPlayers, tab === 'blocked');
   const inbox = useSocialList(SOCIAL_KEYS.inbox, listSocialInbox, tab === 'activity');
@@ -94,8 +95,7 @@ function PeopleContent() {
         {tab === 'activity' && <SocialInbox events={inbox.items} isLoading={inbox.isLoading} isError={inbox.isError}
                                             hasNext={inbox.hasNext} loadingMore={inbox.loadingMore}
                                             onMoreAction={inbox.loadMore} onRetryAction={inbox.retry}
-                                            actions={actions}
-                                            nameOf={nameResolver(friends.items, requests.items)}/>}
+                                            actions={actions}/>}
       </AppPageBody>
     </AppPage>;
 }

@@ -2,7 +2,7 @@ import {describe, expect, test} from 'vitest';
 import {ApiError} from '@/lib/api/client';
 import type {SocialInboxEvent, SocialPlayer} from '@/lib/api/social';
 import {
-  inviteActionable, inviteExpired, lastPlayedLabel, nameResolver, presenceLabel, RELATIONSHIP_LABELS, SOCIAL_KEYS,
+  inviteActionable, inviteExpired, lastPlayedLabel, presenceLabel, RELATIONSHIP_LABELS, SOCIAL_KEYS,
   socialErrorMessage, socialEventCopy, suppressedPlayerIds
 } from './social';
 
@@ -81,12 +81,5 @@ describe('social selectors', () => {
       .toBe('Não foi possível concluir essa ação. Tente novamente.');
     expect(socialErrorMessage(new Error('offline')))
       .toBe('Não foi possível concluir essa ação. Tente novamente.');
-  });
-
-  test('resolves inbox actor names from the lists already on screen', () => {
-    const nameOf = nameResolver([player({player_id: 'a1', name: 'Bia'})], [player({player_id: 'a2'})]);
-    expect(nameOf('a1')).toBe('Bia');
-    expect(nameOf('a2')).toBe('Visitante');
-    expect(nameOf('unknown')).toBe('Visitante');
   });
 });
