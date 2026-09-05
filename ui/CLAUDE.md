@@ -225,6 +225,17 @@ off by default — do not build UI that assumes real money is on.
   hand → token, and the only thing that can answer "I already shared *this* hand" in
   `ShareHandDialog`, because the list endpoint does not carry the source hand. Revoking must clear
   both. See `docs/2026-09-02-hand-shares-history-filters-achievement-recency.md`.
+- **Issues #349/#347: one shared "hand metadata" record, not two.** `lib/api/handMeta.ts` (modeled on
+  `lib/api/playerNotes.ts`) is the client for `internal/handmeta`'s single per-(player, hand) row: a short note per
+  street (`ActionTimeline`'s `StreetNoteEditor`, one `<details>` per street, collapsed unless it already has text),
+  the "para revisar" toggle (`hands/history/page.tsx`'s topbar, next to `HandExportButton`/`ShareHandDialog`), and
+  named collections. `/hands/page.tsx`'s "Coleções" tab reads the same collections field to filter
+  `VirtualHandsList` by hand id, including a synthetic `REVIEW_COLLECTION` bucket that materializes the review
+  marker as a collection, per #349's own dependency note. Saved `/hands` filters (`getSavedHandFilters`/
+  `saveSavedHandFilters`) are a second, small resource on the same endpoint family, persisted via API — not
+  `localStorage` — per this file's "server state is server state" rule below. All saves go through a plain
+  async handler (not `useMutation`), so a failed save keeps the player's draft in place and reports the error with
+  `role="alert"`, reusing the `hand-history-partial-error` visual pattern the action-history section already uses.
 - **Social state is server state.** Every social read is a `['social', …]` query key
   (`SOCIAL_KEYS` in `lib/social.ts`); mutations go through `lib/hooks/useSocialActions.ts`, which
   invalidates that root instead of patching a mirrored relationship locally. Each `/people` tab
@@ -335,6 +346,18 @@ Profile **editing** is `components/lobby/ProfileMenu.tsx` + `ProfileShowcaseDial
 `@aoctech/auth-client` → `lib/auth/oauth.ts` (+ `lib/auth/session.ts` for keep-alive/recovery).
 Landing CTAs → `startOAuthFlow`; `/callback` exchanges the code and stores the token; `TermsGate`
 gates on `GET /v1.0/players/me` + `poker_terms_accepted`.
+
+**Resuming the original intent after login (#342).** `startOAuthFlow(returnTo)`'s destination
+already round-trips end-to-end through `@aoctech/auth-client`'s own sessionStorage across the IdP
+redirect (`exchangeCode()`'s `returnTo` field) — callers just need to pass the player's real
+current route instead of a hardcoded default (`TermsGate`'s "Entrar" already does:
+`window.location.pathname + window.location.search`). The one gap: the SDK deletes its own copy
+of `returnTo` as soon as `exchangeCode` reads it, even on a failure that isn't a state mismatch, so
+a manual retry from `/callback`'s failure screens (`startOAuthFlow()` on "Tentar novamente") would
+otherwise fall back to `/lobby`. `lib/auth/oauth.ts` keeps a second, never-cleared sessionStorage
+copy (`lastReturnTo()`, same one-shot handoff pattern as `achievementRecency.ts`) purely so a retry
+resends the same intent. No new UI state — the redirect back is instant (`router.replace`), and
+the destination route owns its own fallback if the intent turns out stale (closed table, etc.).
 
 `lib/api/client.ts`'s request interceptor also gates: on first load, if there's no token yet, it
 awaits `getOrRefreshSession()` once before letting *any* API call through, so page-load requests

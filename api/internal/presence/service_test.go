@@ -18,7 +18,7 @@ func (f fakeSessions) FindLatestOpenSession(context.Context, string) (string, er
 
 func TestRoomIDSurvivesSetAndReconcile(t *testing.T) {
 	store := NewMemoryStore()
-	svc := NewService(store, fakeFriends{}, fakeSessions("room-9"), func(context.Context, string, string, Status) {})
+	svc := NewService(store, fakeFriends{}, fakeSessions("room-9"), func(context.Context, string, string, Status, string) {})
 	ctx := context.Background()
 	if err := svc.Open(ctx, "p1", "c1"); err != nil {
 		t.Fatal(err)
@@ -47,7 +47,7 @@ func TestMultipleConnectionsAndOutOfOrderClose(t *testing.T) {
 	now := time.Unix(100, 0)
 	store.now = func() time.Time { return now }
 	var notifications []Status
-	svc := NewService(store, fakeFriends{"p1": {"friend"}}, fakeSessions(""), func(_ context.Context, recipient, player string, status Status) {
+	svc := NewService(store, fakeFriends{"p1": {"friend"}}, fakeSessions(""), func(_ context.Context, recipient, player string, status Status, _ string) {
 		if recipient != "friend" || player != "p1" {
 			t.Fatalf("unexpected fanout %s %s", recipient, player)
 		}
@@ -132,7 +132,7 @@ func (hangingStore) GetMany(ctx context.Context, _ []string) (map[string]PlayerP
 // socket teardown indefinitely. Each must fail fast instead — presence has its
 // own TTL, so a dropped update self-heals.
 func TestLifecycleOperationsAreBounded(t *testing.T) {
-	svc := NewService(hangingStore{}, fakeFriends{}, nil, func(context.Context, string, string, Status) {})
+	svc := NewService(hangingStore{}, fakeFriends{}, nil, func(context.Context, string, string, Status, string) {})
 	svc.opBudget = 30 * time.Millisecond
 	svc.openBudget = 30 * time.Millisecond
 

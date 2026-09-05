@@ -34,7 +34,13 @@ type SessionSource interface {
 	FindLatestOpenSession(ctx context.Context, playerID string) (string, error)
 }
 
-type NotifyFunc func(context.Context, string, string, Status)
+// NotifyFunc fans a status change out to one friend. roomID is passed through
+// unfiltered from presence's own store — it carries no visibility
+// decision (this package stays room-blind by design, see model.go); a
+// caller wiring this must decide whether to actually publish it (#334),
+// mirroring the same gate api/v1/social.go's joinableRoomIDs applies to the
+// pull path.
+type NotifyFunc func(ctx context.Context, recipientID, playerID string, status Status, roomID string)
 
 type Service struct {
 	store    Store
@@ -88,7 +94,7 @@ func (s *Service) Close(ctx context.Context, playerID, connectionID string) erro
 	defer cancel()
 	becameOffline, err := s.store.Close(ctx, playerID, connectionID)
 	if err == nil && becameOffline {
-		s.broadcast(ctx, playerID, StatusOffline)
+		s.broadcast(ctx, playerID, StatusOffline, "")
 	}
 	return err
 }
@@ -103,7 +109,7 @@ func (s *Service) SetInTable(ctx context.Context, playerID, roomID string) error
 			return statusErr
 		}
 		if entries[playerID].Status != StatusOffline {
-			s.broadcast(ctx, playerID, entries[playerID].Status)
+			s.broadcast(ctx, playerID, entries[playerID].Status, entries[playerID].RoomID)
 		}
 	}
 	return err
@@ -131,11 +137,12 @@ func (s *Service) GetMany(ctx context.Context, playerIDs []string) (map[string]P
 func (s *Service) broadcastCurrent(ctx context.Context, playerID string) {
 	entries, err := s.store.GetMany(ctx, []string{playerID})
 	if err == nil {
-		s.broadcast(ctx, playerID, entries[playerID].Status)
+		entry := entries[playerID]
+		s.broadcast(ctx, playerID, entry.Status, entry.RoomID)
 	}
 }
 
-func (s *Service) broadcast(ctx context.Context, playerID string, status Status) {
+func (s *Service) broadcast(ctx context.Context, playerID string, status Status, roomID string) {
 	if s.friends == nil || s.notify == nil {
 		return
 	}
@@ -145,6 +152,6 @@ func (s *Service) broadcast(ctx context.Context, playerID string, status Status)
 		return
 	}
 	for _, friendID := range friends {
-		s.notify(ctx, friendID, playerID, status)
+		s.notify(ctx, friendID, playerID, status, roomID)
 	}
 }

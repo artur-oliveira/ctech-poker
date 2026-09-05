@@ -40,7 +40,36 @@ function withTokenDeadline<T>(request: Promise<T>): {promise: Promise<T>; contro
   return {promise, controller};
 }
 
+// #342: @aoctech/auth-client already round-trips `returnTo` through its own
+// sessionStorage across the IdP redirect, but it deletes that copy as soon as
+// `exchangeCode` reads it — even on a failure that isn't a state mismatch. A
+// manual retry from the callback's failure screens calls `startOAuthFlow()`
+// again, so this repo keeps a second, never-cleared copy (same one-shot
+// sessionStorage handoff pattern as `achievementRecency.ts`) purely so a
+// retry can resend the same intent instead of silently falling back to
+// `/lobby`. Not a new state-management provider: a plain sessionStorage key.
+const RETURN_TO_KEY = 'ctech-poker:oauth-return-to';
+
+function rememberReturnTo(returnTo: string) {
+  try {
+    window.sessionStorage.setItem(RETURN_TO_KEY, returnTo);
+  } catch {
+    // Private mode / storage disabled: retry just falls back to /lobby.
+  }
+}
+
+/** The destination passed into the most recent `startOAuthFlow()` call, so a
+ * retry after a failed exchange can resend the same intent. */
+export function lastReturnTo(): string | null {
+  try {
+    return window.sessionStorage.getItem(RETURN_TO_KEY);
+  } catch {
+    return null;
+  }
+}
+
 export async function startOAuthFlow(returnTo = '/lobby') {
+  rememberReturnTo(returnTo);
   await client.startOAuthFlow(returnTo);
 }
 

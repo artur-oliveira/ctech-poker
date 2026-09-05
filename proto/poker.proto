@@ -247,11 +247,14 @@ message ServerMessage {
   int32 unread_count = 21; // for social_inbox_count
 }
 
-// Friend-visible presence deliberately carries no table or room identifier.
-// status is one of offline | online | in_table.
+// Friend-visible presence. status is one of offline | online | in_table.
+// room_id is set only when the recipient's opt-in and the room's own
+// visibility both allow it (see internal/presence and internal/api/v1/social.go
+// joinableRoomIDs) — never published unconditionally.
 message PlayerPresence {
   string player_id = 1;
   string status = 2;
+  string room_id = 3;
 }
 
 // Push notification/invalidation payload for the in-app social inbox. HTTP

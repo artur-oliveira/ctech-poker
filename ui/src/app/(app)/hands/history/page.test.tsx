@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   setQueryData: vi.fn(),
   reportPlayer: vi.fn().mockResolvedValue({report_id: 'rep-1', status: 'open'}),
   getRelationships: vi.fn().mockResolvedValue([]),
+  saveHandMeta: vi.fn().mockResolvedValue({hand_id: 'h1', review_marked: true}),
   noteProps: null as Record<string, unknown> | null,
   queryFns: new Map<string, () => unknown>(),
 }));
@@ -47,6 +48,10 @@ vi.mock('@/components/hands/ActionTimeline', () => ({
     actions: Array<{ seq: number; player_id: string }>,
     resolveName: (id: string) => string,
   }) => <div data-testid="timeline">{actions.map(a => `${a.seq}:${resolveName(a.player_id)}`).join('|')}</div>,
+}));
+vi.mock('@/lib/api/handMeta', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/api/handMeta')>(),
+  saveHandMeta: mocks.saveHandMeta,
 }));
 vi.mock('@/components/hands/DeckReveal', () => ({
   DeckReveal: ({serverSeed}: { serverSeed: string }) => <div>proof:{serverSeed}</div>,
@@ -322,6 +327,23 @@ describe('hand detail page', () => {
 
     act(() => (mocks.noteProps?.onOpenChangeAction as (open: boolean) => void)(false));
     expect(screen.queryByText('note-dialog')).not.toBeInTheDocument();
+  });
+
+  test('marks a hand for review via the shared endpoint, aria-pressed reflecting the saved state', async () => {
+    const user = userEvent.setup();
+    render(<HandHistoryPage/>);
+    const toggle = screen.getByRole('button', {name: 'Marcar para revisar'});
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await user.click(toggle);
+    expect(mocks.saveHandMeta).toHaveBeenCalledWith('hand one', expect.objectContaining({review_marked: true}));
+  });
+
+  test('surfaces a role="alert" error when saving the review marker fails, without crashing', async () => {
+    mocks.saveHandMeta.mockRejectedValueOnce(new Error('network'));
+    const user = userEvent.setup();
+    render(<HandHistoryPage/>);
+    await user.click(screen.getByRole('button', {name: 'Marcar para revisar'}));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Não foi possível salvar o marcador/);
   });
 
   test('fetches relationships only for signed-in viewers with real opponent ids', () => {

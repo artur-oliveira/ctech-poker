@@ -11,6 +11,17 @@ import {Button} from '@/components/ui/button';
 import {LoadingRegion, Skeleton} from '@/components/ui/skeleton';
 import type {HandItem} from '@/lib/api/player';
 import {PokerLogo} from '@/components/PokerLogo';
+import {tableBucketHref} from '@/lib/lobbyBuckets';
+
+// Same blind level as the shared hand, generic 6-max seating (the lobby's
+// default) — this is navigation to the bucket, never a reserved seat. Falls
+// back to the plain lobby entry when the share predates blind tracking
+// (backend #75).
+function challengeHref(item: {small_blind?: number; big_blind?: number}) {
+  const {small_blind: smallBlind, big_blind: bigBlind} = item;
+  if (!smallBlind || !bigBlind || bigBlind <= smallBlind) return '/lobby';
+  return tableBucketHref({smallBlind, bigBlind, maxSeats: 6});
+}
 
 function SharedHandContent() {
   const token = useSearchParams().get('id') || '';
@@ -66,7 +77,11 @@ function SharedHandContent() {
         <HandReplayer hand={hand} actions={item.actions || []} viewerId="hero"/>}
     <footer className="public-hand-footer">
       <p>Gostou dessa jogada? Venha jogar Texas Hold&apos;em no CTech Poker!</p>
-      <Button render={<Link href="/"/>}>Jogar no CTech Poker</Button>
+      <div className="public-hand-footer-ctas">
+        <Button render={<Link href="/"/>}>Jogar no CTech Poker</Button>
+        <Button variant="outline" render={<Link href={challengeHref(item)}/>}>Desafiar para uma
+          mesa</Button>
+      </div>
     </footer>
   </section>;
 }

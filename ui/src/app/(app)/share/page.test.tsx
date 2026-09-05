@@ -68,6 +68,8 @@ describe('shared hand page', () => {
         board: ['QH', 'JH', 'TH'],
         opponents: [{alias: 'Vilão 1', hole_cards: ['AS', 'AD'], won: true}],
         actions: [{frame: {stage: 'flop'}}],
+        small_blind: 25,
+        big_blind: 50,
       },
     };
     render(<SharedHandPage/>);
@@ -75,6 +77,26 @@ describe('shared hand page', () => {
     expect(screen.getByRole('heading', {name: /-1.250 fichas/})).toBeInTheDocument();
     expect(screen.getAllByTestId('card')).toHaveLength(5);
     expect(screen.getByTestId('replayer')).toHaveTextContent('hero');
+
+    // Issue #352: the challenge CTA lands on the shared hand's own blind
+    // bucket, and never leaks the anonymized opponent's alias.
+    const challenge = screen.getByRole('button', {name: /Desafiar para uma mesa/});
+    expect(challenge).toHaveAttribute('href', '/table?sb=25&bb=50&seats=6');
+    expect(challenge).not.toHaveTextContent('Vilão 1');
+  });
+
+  test('falls back to the generic lobby entry when the share has no blind level', () => {
+    mocks.query = {
+      isLoading: false,
+      isError: false,
+      data: {
+        token: 'share-token', kind: 'brag', outcome: 'won', net_change: 500,
+        ended_at: 1, expires_at: Date.UTC(2026, 7, 2), created_at: 1,
+        actions: [],
+      },
+    };
+    render(<SharedHandPage/>);
+    expect(screen.getByRole('button', {name: /Desafiar para uma mesa/})).toHaveAttribute('href', '/lobby');
   });
   
   test('supports a positive hand with hidden cards and no replay', () => {

@@ -1791,12 +1791,15 @@ func (x *ServerMessage) GetUnreadCount() int32 {
 	return 0
 }
 
-// Friend-visible presence deliberately carries no table or room identifier.
-// status is one of offline | online | in_table.
+// Friend-visible presence. status is one of offline | online | in_table.
+// room_id is set only when the recipient's opt-in and the room's own
+// visibility both allow it (see internal/presence and internal/api/v1/social.go
+// joinableRoomIDs) — never published unconditionally.
 type PlayerPresence struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId      string                 `protobuf:"bytes,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	RoomId        string                 `protobuf:"bytes,3,opt,name=room_id,json=roomId,proto3" json:"room_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1841,6 +1844,13 @@ func (x *PlayerPresence) GetPlayerId() string {
 func (x *PlayerPresence) GetStatus() string {
 	if x != nil {
 		return x.Status
+	}
+	return ""
+}
+
+func (x *PlayerPresence) GetRoomId() string {
+	if x != nil {
+		return x.RoomId
 	}
 	return ""
 }
@@ -2181,10 +2191,11 @@ const file_poker_proto_rawDesc = "" +
 	"purchaseId\x125\n" +
 	"\fsocial_event\x18\x14 \x01(\v2\x12.poker.SocialEventR\vsocialEvent\x12!\n" +
 	"\funread_count\x18\x15 \x01(\x05R\vunreadCountB\t\n" +
-	"\a_equity\"E\n" +
+	"\a_equity\"^\n" +
 	"\x0ePlayerPresence\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\tR\bplayerId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\"\xf9\x01\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x17\n" +
+	"\aroom_id\x18\x03 \x01(\tR\x06roomId\"\xf9\x01\n" +
 	"\vSocialEvent\x12\x19\n" +
 	"\bevent_id\x18\x01 \x01(\tR\aeventId\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x19\n" +

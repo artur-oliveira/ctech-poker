@@ -1,12 +1,14 @@
 'use client';
 import React, {memo, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import Link from 'next/link';
-import {useInfiniteQuery, useQuery} from '@tanstack/react-query';
+import {useInfiniteQuery, useQuery, useQueryClient} from '@tanstack/react-query';
 import {measureElement, useWindowVirtualizer} from '@tanstack/react-virtual';
 import {
   AlertCircle,
   ArrowRight,
+  BookmarkPlus,
   ChevronRight,
+  FolderHeart,
   History,
   Infinity as InfinityIcon,
   LockKeyhole,
@@ -14,6 +16,10 @@ import {
 } from 'lucide-react';
 import type {HandItem, WalletMode} from '@/lib/api/player';
 import {getHands, handEndedAtMs} from '@/lib/api/player';
+import {
+  getSavedHandFilters, HAND_COLLECTIONS_KEY, listHandCollections, SAVED_HAND_FILTERS_KEY,
+  saveSavedHandFilters, type SavedHandFilter
+} from '@/lib/api/handMeta';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {BoardSlots} from '@/components/hands/BoardSlots';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
@@ -31,6 +37,12 @@ import {
   ALL_TABLES, filterHands, groupHandsByDay, handTables, type HandsFilter, type HandsRow, loadedTotals,
   NO_FILTER, type OutcomeFilter, shortTableId
 } from '@/lib/handsHistory';
+
+// The virtual "Marcadas para revisar" collection materializes #349's
+// review-marker toggle here, per that issue's own dependency note — it is
+// not a name a player can type themselves, so it gets a sentinel value
+// distinct from any real collection name.
+const REVIEW_COLLECTION = '__review__';
 
 function formatDate(endedAtMs: number) {
   return new Date(handEndedAtMs(endedAtMs)).toLocaleString('pt-BR', {
@@ -182,7 +194,77 @@ export default function HandsHistory() {
   );
 
   const [filter, setFilter] = useState<HandsFilter>(NO_FILTER);
-  const visible = useMemo(() => filterHands(hands, filter), [hands, filter]);
+  const queryClient = useQueryClient();
+
+  // #347: "Filtros" (outcome/table, ad-hoc or saved) and "Coleções" (hands
+  // marked individually, from /hands or /hands/history — the same
+  // review-marker/collections record #349 writes) are two different lenses
+  // over the same loaded pages, never combined.
+  const [activeTab, setActiveTab] = useState<'filters' | 'collections'>('filters');
+  const savedFilters = useQuery({queryKey: SAVED_HAND_FILTERS_KEY, queryFn: getSavedHandFilters});
+  const collections = useQuery({queryKey: HAND_COLLECTIONS_KEY, queryFn: listHandCollections});
+  const collectionNames = useMemo(() => {
+    const names = new Set<string>();
+    let hasReview = false;
+    for (const meta of collections.data ?? []) {
+      for (const name of meta.collections ?? []) names.add(name);
+      if (meta.review_marked) hasReview = true;
+    }
+    return [...(hasReview ? [REVIEW_COLLECTION] : []), ...[...names].sort()];
+  }, [collections.data]);
+  const [activeCollection, setActiveCollection] = useState<string | null>(null);
+  // Derived during render rather than a useEffect: opening the tab (or the
+  // first page of collections arriving) should pick a default synchronously,
+  // not one render late.
+  if (activeTab === 'collections' && !activeCollection && collectionNames.length) {
+    setActiveCollection(collectionNames[0]);
+  }
+  const collectionHandIds = useMemo(() => {
+    if (!activeCollection) return null;
+    const ids = new Set<string>();
+    for (const meta of collections.data ?? []) {
+      if (activeCollection === REVIEW_COLLECTION ? meta.review_marked : meta.collections?.includes(activeCollection)) {
+        ids.add(meta.hand_id);
+      }
+    }
+    return ids;
+  }, [collections.data, activeCollection]);
+
+  const [savingFilterName, setSavingFilterName] = useState('');
+  const [savingFilter, setSavingFilter] = useState(false);
+  const [filterSaveError, setFilterSaveError] = useState<string | null>(null);
+  async function saveCurrentFilter() {
+    const name = savingFilterName.trim();
+    if (!name) return;
+    setSavingFilter(true);
+    setFilterSaveError(null);
+    try {
+      const next: SavedHandFilter[] = [
+        ...(savedFilters.data ?? []).filter(saved => saved.name !== name),
+        {name, outcome: filter.outcome, table_id: filter.tableId},
+      ];
+      const updated = await saveSavedHandFilters(next);
+      queryClient.setQueryData(SAVED_HAND_FILTERS_KEY, updated);
+      setSavingFilterName('');
+    } catch {
+      setFilterSaveError('Não foi possível salvar o filtro. Tente novamente.');
+    } finally {
+      setSavingFilter(false);
+    }
+  }
+  async function deleteSavedFilter(name: string) {
+    try {
+      const updated = await saveSavedHandFilters((savedFilters.data ?? []).filter(saved => saved.name !== name));
+      queryClient.setQueryData(SAVED_HAND_FILTERS_KEY, updated);
+    } catch {
+      // Leave the list as-is; the player can retry the same removal.
+    }
+  }
+
+  const visible = useMemo(() => {
+    if (activeTab === 'collections') return collectionHandIds ? hands.filter(h => collectionHandIds.has(h.hand_id)) : [];
+    return filterHands(hands, filter);
+  }, [hands, filter, activeTab, collectionHandIds]);
   const rows = useMemo(() => groupHandsByDay(visible), [visible]);
   const tables = useMemo(() => handTables(hands), [hands]);
   const stats = useMemo(() => loadedTotals(visible), [visible]);
@@ -194,12 +276,13 @@ export default function HandsHistory() {
 
   const fetchNextPage = history.fetchNextPage;
 
-  // Auto-load only makes sense on the unfiltered list. Under a filter the
-  // visible list stays short no matter how many pages arrive, so the sentinel
-  // never leaves the viewport and every appended page immediately triggers the
-  // next one — the whole history downloaded in one cascade. Filtered lists keep
-  // the explicit "Carregar mais mãos" button instead.
-  const autoLoad = filter.outcome === 'all' && filter.tableId === ALL_TABLES;
+  // Auto-load only makes sense on the unfiltered list. Under a filter (or the
+  // Coleções tab, always a restrictive subset) the visible list stays short
+  // no matter how many pages arrive, so the sentinel never leaves the
+  // viewport and every appended page immediately triggers the next one — the
+  // whole history downloaded in one cascade. Filtered lists keep the
+  // explicit "Carregar mais mãos" button instead.
+  const autoLoad = activeTab === 'filters' && filter.outcome === 'all' && filter.tableId === ALL_TABLES;
 
   const sentinel = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -255,32 +338,85 @@ export default function HandsHistory() {
 
       {!history.isLoading && !history.isError && hands.length > 0 && <div className="hands-filters">
         <FilterGroup
-          label="Filtro por resultado"
-          value={filter.outcome}
+          label="Modo de visualização"
+          value={activeTab}
           options={[
-            {value: 'all', label: `Todas (${hands.length})`},
-            {value: 'won', label: 'Só vitórias'},
-            {value: 'lost', label: 'Só derrotas'},
-            {value: 'tied', label: 'Só empates'}
+            {value: 'filters', label: 'Filtros'},
+            {value: 'collections', label: 'Coleções'},
           ] as const}
-          onChangeAction={(outcome: OutcomeFilter) => setFilter(current => ({...current, outcome}))}
+          onChangeAction={setActiveTab}
         />
-        {tables.length > 1 && <FilterGroup
-          label="Filtro por mesa"
-          className="filter-tabs-scroll"
-          value={filter.tableId}
-          options={[
-            {value: ALL_TABLES, label: 'Todas as mesas'},
-            ...tables.map(table => ({
-              value: table.tableId,
-              // Head+tail of the id so the "(count)" suffix stays visible; a CSS
-              // trailing clip would eat it. Full id in the tooltip.
-              label: `Mesa ${shortTableId(table.tableId)} (${table.count})`,
-              title: table.tableId
-            }))
-          ]}
-          onChangeAction={(tableId: string) => setFilter(current => ({...current, tableId}))}
-        />}
+        {activeTab === 'filters' ? <>
+          <FilterGroup
+            label="Filtro por resultado"
+            value={filter.outcome}
+            options={[
+              {value: 'all', label: `Todas (${hands.length})`},
+              {value: 'won', label: 'Só vitórias'},
+              {value: 'lost', label: 'Só derrotas'},
+              {value: 'tied', label: 'Só empates'}
+            ] as const}
+            onChangeAction={(outcome: OutcomeFilter) => setFilter(current => ({...current, outcome}))}
+          />
+          {tables.length > 1 && <FilterGroup
+            label="Filtro por mesa"
+            className="filter-tabs-scroll"
+            value={filter.tableId}
+            options={[
+              {value: ALL_TABLES, label: 'Todas as mesas'},
+              ...tables.map(table => ({
+                value: table.tableId,
+                // Head+tail of the id so the "(count)" suffix stays visible; a CSS
+                // trailing clip would eat it. Full id in the tooltip.
+                label: `Mesa ${shortTableId(table.tableId)} (${table.count})`,
+                title: table.tableId
+              }))
+            ]}
+            onChangeAction={(tableId: string) => setFilter(current => ({...current, tableId}))}
+          />}
+          <div className="hands-saved-filters">
+            {(savedFilters.data ?? []).length > 0
+              ? <div className="filter-tabs filter-tabs-scroll" role="group" aria-label="Filtros salvos">
+                {(savedFilters.data ?? []).map(saved => <span key={saved.name} className="hands-saved-filter">
+                  <button type="button" className="filter-tab"
+                          onClick={() => setFilter({outcome: saved.outcome as OutcomeFilter, tableId: saved.table_id})}>
+                    {saved.name}
+                  </button>
+                  <button type="button" className="hands-saved-filter-remove" aria-label={`Remover filtro ${saved.name}`}
+                          onClick={() => void deleteSavedFilter(saved.name)}>×</button>
+                </span>)}
+              </div>
+              : <p className="hands-saved-filters-empty">Nenhum filtro salvo ainda.</p>}
+            <form className="hands-save-filter-form"
+                  onSubmit={e => {
+                    e.preventDefault();
+                    void saveCurrentFilter();
+                  }}>
+              <label htmlFor="new-saved-filter-name">Salvar filtro atual como</label>
+              <input id="new-saved-filter-name" value={savingFilterName} maxLength={40}
+                     placeholder="Ex.: Minhas bad beats"
+                     onChange={e => setSavingFilterName(e.target.value)}/>
+              <Button type="submit" variant="outline" size="sm" disabled={savingFilter || !savingFilterName.trim()}>
+                <BookmarkPlus aria-hidden="true"/> Salvar
+              </Button>
+            </form>
+            {filterSaveError && <p className="form-error" role="alert">{filterSaveError}</p>}
+          </div>
+        </> : (
+          collectionNames.length === 0
+            ? <p className="hands-saved-filters-empty">
+              Nenhuma coleção ainda. Marque uma mão como &quot;para revisar&quot; ou adicione-a a uma coleção pelo
+              detalhe da mão.
+            </p>
+            : <div className="filter-tabs filter-tabs-scroll" role="group" aria-label="Coleções">
+              {collectionNames.map(name => <button key={name} type="button"
+                                                    className={`filter-tab${activeCollection === name ? ' active' : ''}`}
+                                                    aria-pressed={activeCollection === name}
+                                                    onClick={() => setActiveCollection(name)}>
+                <FolderHeart aria-hidden="true"/> {name === REVIEW_COLLECTION ? 'Marcadas para revisar' : name}
+              </button>)}
+            </div>
+        )}
       </div>}
 
       {history.isLoading ?
@@ -310,10 +446,14 @@ export default function HandsHistory() {
             </div> :
             !visible.length ? <div className="lobby-empty hands-state">
               <div>
-                <strong>Nenhuma mão com esse filtro</strong>
-                <p>As {hands.length} mãos carregadas continuam aqui. Solte o filtro para vê-las de novo.</p>
+                <strong>{activeTab === 'collections' ? 'Esta coleção está vazia' : 'Nenhuma mão com esse filtro'}</strong>
+                <p>As {hands.length} mãos carregadas continuam aqui.
+                  {activeTab === 'collections'
+                    ? ' Marque uma mão nesta lista ou no detalhe da mão para adicioná-la aqui.'
+                    : ' Solte o filtro para vê-las de novo.'}</p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => setFilter(NO_FILTER)}>Limpar filtros</Button>
+              {activeTab === 'filters' &&
+                  <Button variant="outline" size="sm" onClick={() => setFilter(NO_FILTER)}>Limpar filtros</Button>}
             </div> : (
               <VirtualHandsList rows={rows} mode={mode}/>
             )}
