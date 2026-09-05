@@ -165,6 +165,16 @@ func (s *fakePlayerStore) SetFavoriteReactions(_ context.Context, id string, fav
 	s.profile.FavoriteReactions = favorites
 	return nil
 }
+func (s *fakePlayerStore) SetReactionWheel(_ context.Context, id string, reactionIDs []string) error {
+	s.profile.UserID = id
+	s.profile.ReactionWheel = reactionIDs
+	return nil
+}
+func (s *fakePlayerStore) SetStatsGoals(_ context.Context, id string, goals map[string]float64) error {
+	s.profile.UserID = id
+	s.profile.StatsGoals = goals
+	return nil
+}
 func (s *fakePlayerStore) ReportAvatar(context.Context, string, string) error {
 	s.avatarReports++
 	return nil

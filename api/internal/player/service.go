@@ -21,6 +21,20 @@ var ErrCosmeticNotOwned = errors.New("player: cosmetic is premium and not owned"
 var ErrInvalidShowcase = errors.New("player: invalid showcase")
 var ErrShowcasePrivate = errors.New("player: showcase is private")
 var ErrInvalidFavoriteReactions = errors.New("player: invalid favorite reactions")
+var ErrInvalidReactionWheel = errors.New("player: invalid reaction wheel")
+var ErrReactionNotOwned = errors.New("player: reaction is premium and not owned")
+var ErrInvalidStatsGoals = errors.New("player: invalid stats goals")
+
+// maxReactionWheelSize bounds the quick-react wheel (#338) the same way
+// SetShowcase bounds featured achievements — a UI-driven ceiling, not a
+// storage one.
+const maxReactionWheelSize = 8
+
+// StatsGoalKeys is the fixed, known set of pokerstats metrics a player may set
+// a personal goal for (#331) — mirrors pokerstats.Stats' rate fields.
+var StatsGoalKeys = map[string]bool{
+	"vpip_rate": true, "pfr_rate": true, "three_bet_rate": true,
+}
 
 // maxDisplayNameLen bounds a player's display name — it is broadcast as-is to
 // every other seat at a table, so it gets the same length ceiling as chat.
@@ -36,6 +50,15 @@ type profileStore interface {
 	SetTableTheme(context.Context, string, string) error
 	SetShowcase(context.Context, string, bool, bool, bool, []string) error
 	SetFavoriteReactions(context.Context, string, []string) error
+	SetReactionWheel(context.Context, string, []string) error
+	SetStatsGoals(context.Context, string, map[string]float64) error
+}
+
+// reactionOwnershipChecker is the narrow slice of *reactionpurchase.Service
+// SetReactionWheel needs — satisfied without this package importing
+// reactionpurchase directly (same reasoning as cosmeticsOwnershipChecker).
+type reactionOwnershipChecker interface {
+	IsOwned(ctx context.Context, playerID, reactionID string) (bool, error)
 }
 
 // cosmeticsOwnershipChecker is the narrow slice of *cosmeticpurchase.Service
@@ -94,6 +117,7 @@ type Service struct {
 	store     profileStore
 	wallet    balanceFetcher
 	cosmetics cosmeticsOwnershipChecker
+	reactions reactionOwnershipChecker
 }
 
 func NewService(store profileStore) *Service { return &Service{store: store} }
@@ -109,6 +133,13 @@ func (s *Service) WithWallet(wallet balanceFetcher) *Service {
 // SetDeckVariant/SetTableTheme require before persisting a premium id.
 func (s *Service) WithCosmetics(c cosmeticsOwnershipChecker) *Service {
 	s.cosmetics = c
+	return s
+}
+
+// WithReactions wires in the premium reaction ownership check
+// SetReactionWheel requires before persisting a premium reaction id.
+func (s *Service) WithReactions(r reactionOwnershipChecker) *Service {
+	s.reactions = r
 	return s
 }
 
@@ -307,6 +338,66 @@ func (s *Service) SetFavoriteReactions(ctx context.Context, userID string, favor
 		normalized = append(normalized, id)
 	}
 	if err := s.store.SetFavoriteReactions(ctx, userID, normalized); err != nil {
+		return nil, err
+	}
+	return s.store.GetOrCreate(ctx, userID)
+}
+
+// SetReactionWheel persists the player's ordered quick-react wheel (#338).
+// Each id must be a known catalog reaction; a premium one additionally
+// requires an active entitlement — favoriting-without-owning is allowed
+// elsewhere (SetFavoriteReactions), but the wheel is meant to be usable as-is.
+func (s *Service) SetReactionWheel(ctx context.Context, userID string, reactionIDs []string) (*PlayerProfile, error) {
+	if len(reactionIDs) > maxReactionWheelSize {
+		return nil, ErrInvalidReactionWheel
+	}
+	seen := make(map[string]bool, len(reactionIDs))
+	normalized := make([]string, 0, len(reactionIDs))
+	for _, id := range reactionIDs {
+		id = strings.TrimSpace(id)
+		if id == "" || !reactions.IsKnown(id) || seen[id] {
+			return nil, ErrInvalidReactionWheel
+		}
+		seen[id] = true
+		if reactions.IsPremium(id) {
+			if err := s.requireReaction(ctx, userID, id); err != nil {
+				return nil, err
+			}
+		}
+		normalized = append(normalized, id)
+	}
+	if err := s.store.SetReactionWheel(ctx, userID, normalized); err != nil {
+		return nil, err
+	}
+	return s.store.GetOrCreate(ctx, userID)
+}
+
+// requireReaction fails closed, same reasoning as requireCosmetic: ownership
+// wiring missing must never silently pass a premium reaction through.
+func (s *Service) requireReaction(ctx context.Context, userID, reactionID string) error {
+	if s.reactions == nil {
+		return fmt.Errorf("%w: ownership check unavailable", ErrReactionNotOwned)
+	}
+	owned, err := s.reactions.IsOwned(ctx, userID, reactionID)
+	if err != nil {
+		return err
+	}
+	if !owned {
+		return ErrReactionNotOwned
+	}
+	return nil
+}
+
+// SetStatsGoals persists the player's personal pokerstats targets (#331).
+// Unknown metric keys are rejected, mirroring SetFavoriteReactions' validation
+// shape; a nil/empty map clears every goal.
+func (s *Service) SetStatsGoals(ctx context.Context, userID string, goals map[string]float64) (*PlayerProfile, error) {
+	for key := range goals {
+		if !StatsGoalKeys[key] {
+			return nil, ErrInvalidStatsGoals
+		}
+	}
+	if err := s.store.SetStatsGoals(ctx, userID, goals); err != nil {
 		return nil, err
 	}
 	return s.store.GetOrCreate(ctx, userID)

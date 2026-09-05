@@ -127,12 +127,13 @@ func Register(
 		players: players, stats: pokerStatsStore, cfg: cfg,
 	}
 	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter, pokerStatsStore, reportSvc, identityPusher)
+	RegisterReactionWheel(router, auth, players)
 	RegisterPlayerNotes(router, auth, playerNoteStore)
 	RegisterHandMeta(router, auth, handMetaStore)
 	RegisterHandShares(router, auth, sessionStore, tableStore, handShareStore)
 	RegisterHandReveal(router, auth, sessionStore, handRevealStore, handRevealSvc, purchaseLimiter)
 	RegisterHighlights(router, auth, sessionStore, highlightsStore)
-	RegisterPokerStats(router, auth, pokerStatsStore)
+	RegisterPokerStats(router, auth, pokerStatsStore, players)
 	RegisterMatchups(router, auth, matchupStore)
 	RegisterLeaderboard(router, auth, leaderboardSvc, players)
 	RegisterDailyReward(router, auth, dailyRewardSvc, spinLimiter)

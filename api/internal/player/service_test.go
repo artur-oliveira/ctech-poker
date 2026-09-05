@@ -49,10 +49,24 @@ func (s *memoryStore) SetFavoriteReactions(_ context.Context, _ string, favorite
 	s.profile.FavoriteReactions = favorites
 	return nil
 }
+func (s *memoryStore) SetReactionWheel(_ context.Context, _ string, reactionIDs []string) error {
+	s.profile.ReactionWheel = reactionIDs
+	return nil
+}
+func (s *memoryStore) SetStatsGoals(_ context.Context, _ string, goals map[string]float64) error {
+	s.profile.StatsGoals = goals
+	return nil
+}
 
 type fakeCosmeticsChecker struct{ owned bool }
 
 func (f *fakeCosmeticsChecker) IsOwned(context.Context, string, cosmetics.Kind, string) (bool, error) {
+	return f.owned, nil
+}
+
+type fakeReactionChecker struct{ owned bool }
+
+func (f *fakeReactionChecker) IsOwned(context.Context, string, string) (bool, error) {
 	return f.owned, nil
 }
 
@@ -277,6 +291,39 @@ func TestSetFavoriteReactionsAllowsUnownedPremium(t *testing.T) {
 	svc := NewService(store)
 	if _, err := svc.SetFavoriteReactions(context.Background(), "user-1", []string{"cold"}); err != nil {
 		t.Fatalf("expected favoriting an unowned premium reaction to succeed, got %v", err)
+	}
+}
+
+func TestSetReactionWheelValidatesCatalogAndOwnership(t *testing.T) {
+	store := &memoryStore{profile: PlayerProfile{UserID: "user-1"}}
+	svc := NewService(store).WithReactions(&fakeReactionChecker{owned: false})
+
+	if _, err := svc.SetReactionWheel(context.Background(), "user-1", []string{"not-a-reaction"}); !errors.Is(err, ErrInvalidReactionWheel) {
+		t.Fatalf("expected rejection of an unknown reaction id, got %v", err)
+	}
+	if _, err := svc.SetReactionWheel(context.Background(), "user-1", []string{"clap", "clap"}); !errors.Is(err, ErrInvalidReactionWheel) {
+		t.Fatalf("expected rejection of a duplicate reaction id, got %v", err)
+	}
+	// "cold" is a known premium catalog reaction (see internal/reactions);
+	// rejected here because fakeReactionChecker reports it unowned.
+	if _, err := svc.SetReactionWheel(context.Background(), "user-1", []string{"clap", "cold"}); !errors.Is(err, ErrReactionNotOwned) {
+		t.Fatalf("expected rejection of an unowned premium reaction, got %v", err)
+	}
+
+	profile, err := svc.SetReactionWheel(context.Background(), "user-1", []string{"clap", "laugh"})
+	if err != nil {
+		t.Fatalf("SetReactionWheel: %v", err)
+	}
+	if len(profile.ReactionWheel) != 2 || profile.ReactionWheel[0] != "clap" || profile.ReactionWheel[1] != "laugh" {
+		t.Fatalf("unexpected wheel: %+v", profile.ReactionWheel)
+	}
+}
+
+func TestSetReactionWheelAllowsOwnedPremium(t *testing.T) {
+	store := &memoryStore{profile: PlayerProfile{UserID: "user-1"}}
+	svc := NewService(store).WithReactions(&fakeReactionChecker{owned: true})
+	if _, err := svc.SetReactionWheel(context.Background(), "user-1", []string{"cold"}); err != nil {
+		t.Fatalf("expected an owned premium reaction to be accepted, got %v", err)
 	}
 }
 

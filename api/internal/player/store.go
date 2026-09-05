@@ -429,6 +429,40 @@ func (s *Store) SetFavoriteReactions(ctx context.Context, userID string, favorit
 	return nil
 }
 
+func (s *Store) SetReactionWheel(ctx context.Context, userID string, reactionIDs []string) error {
+	if _, err := s.GetOrCreate(ctx, userID); err != nil {
+		return err
+	}
+	ok, err := s.base.UpdateItem(ctx, userID, nil, map[string]any{
+		"reaction_wheel": reactionIDs,
+		"updated_at":     dynamo.NowStr(),
+	})
+	if err != nil {
+		return fmt.Errorf("player: set reaction wheel: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("player: profile disappeared while setting reaction wheel")
+	}
+	return nil
+}
+
+func (s *Store) SetStatsGoals(ctx context.Context, userID string, goals map[string]float64) error {
+	if _, err := s.GetOrCreate(ctx, userID); err != nil {
+		return err
+	}
+	ok, err := s.base.UpdateItem(ctx, userID, nil, map[string]any{
+		"stats_goals": goals,
+		"updated_at":  dynamo.NowStr(),
+	})
+	if err != nil {
+		return fmt.Errorf("player: set stats goals: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("player: profile disappeared while setting stats goals")
+	}
+	return nil
+}
+
 func (s *Store) AcceptTerms(ctx context.Context, userID string) error {
 	if _, err := s.GetOrCreate(ctx, userID); err != nil {
 		return err

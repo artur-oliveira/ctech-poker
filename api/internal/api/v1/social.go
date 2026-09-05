@@ -188,8 +188,7 @@ func (h *socialHandlers) joinableRoomIDs(ctx context.Context, presences map[stri
 			slog.Warn("social: room lookup for friend presence failed", "room", roomID, "err", err)
 			continue
 		}
-		joinable[roomID] = room != nil && room.Visibility == "public" &&
-			(room.Status == "waiting" || room.Status == "active") && room.SeatsTaken < room.MaxSeats
+		joinable[roomID] = room.Joinable()
 	}
 	result := make(map[string]string, len(wanted))
 	for playerID, roomID := range wanted {

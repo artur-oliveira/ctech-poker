@@ -43,6 +43,15 @@ type Room struct {
 	CreatedAt  string `dynamodbav:"created_at" json:"created_at"` // RFC3339Nano, see dynamo.NowStr()
 }
 
+// Joinable reports whether r may be shown to a friend as a table they can
+// join right now: public, not archived, and not full. This is the one gate
+// both the pull path (social.go's joinableRoomIDs, GET /social/friends) and
+// the push path (app.go's presence notifier) must share — see #334.
+func (r *Room) Joinable() bool {
+	return r != nil && r.Visibility == "public" &&
+		(r.Status == "waiting" || r.Status == "active") && r.SeatsTaken < r.MaxSeats
+}
+
 type BlindEscalation struct {
 	IntervalMinutes int   `dynamodbav:"interval_minutes" json:"interval_minutes"`
 	Multiplier      int   `dynamodbav:"multiplier" json:"multiplier"` // whole-number percent, e.g. 150 = ×1.5
