@@ -1,5 +1,6 @@
 import {App} from 'aws-cdk-lib';
 import {Match, Template} from 'aws-cdk-lib/assertions';
+import type {Environment} from '@aoctech/cdk';
 import {minimumApiCapacity, PokerApiStack} from '../lib/api-stack';
 
 test('keeps one minimum API instance in every environment', () => {
@@ -15,7 +16,7 @@ test('keeps one minimum API instance in every environment', () => {
 // values throughout; ec2.Vpc.fromLookup falls back to CDK's built-in dummy
 // VPC data when no cdk.context.json cache entry exists, so this does not
 // attempt a real AWS lookup.
-function synthStack(overrides: Partial<{environment: string; cloudwatchAlarmsEnabled: boolean}> = {}) {
+function synthStack(overrides: Partial<{environment: Environment; cloudwatchAlarmsEnabled: boolean}> = {}) {
   const app = new App();
   return new PokerApiStack(app, 'TestPokerApiStack', {
     env: {account: '123456789012', region: 'us-east-1'},
