@@ -38,6 +38,11 @@ const (
 	// that so a seat list is always one request instead of nine.
 	maxRelationshipBatch   = 25
 	publicRelationshipNone = social.Relationship("none")
+	// rematchScanLimit bounds how far back into the viewer's recent-players
+	// list a rematch/inbox-context lookup scans. recentplayers is already a
+	// bounded, coalesced read (#199) — this just picks a page size generous
+	// enough that a genuinely recent opponent is always found on it.
+	rematchScanLimit = 100
 )
 
 type SocialLimiters struct {
@@ -109,6 +114,11 @@ type socialInboxEventResponse struct {
 	social.Event
 	ActorName      string `json:"actor_name,omitempty"`
 	ActorAvatarURL string `json:"actor_avatar_url,omitempty"`
+	// HandsTogether/LastPlayedAt give a table_invite (in particular a rematch
+	// invite) shared-history context, resolved from the viewer's own bounded
+	// recentplayers.List call — never a new O(n) read (#337).
+	HandsTogether int64 `json:"hands_together,omitempty"`
+	LastPlayedAt  int64 `json:"last_played_at,omitempty"`
 }
 
 func RegisterSocial(router fiber.Router, auth fiber.Handler, svc *social.Service, players *player.Service, cfg *config.Config, limiters SocialLimiters, extras ...any) {
@@ -156,6 +166,9 @@ func RegisterSocial(router fiber.Router, auth fiber.Handler, svc *social.Service
 	inviteSender := rateLimit(limiters.InviteSender, playerKey("social:table-invite"))
 	g.Post(socialInboxPath+"/read", mutationPlayer, mutationIP, h.markInboxRead)
 	g.Post(socialTableInvitesPath, mutationPlayer, mutationIP, inviteSender, h.sendTableInvite)
+	// Reuses SendTableInvite under the hood (same idempotency/notification
+	// path) — no duplicated invite plumbing for the rematch flow (#337).
+	g.Post(socialRecentPath+"/:opponentId/rematch", mutationPlayer, mutationIP, inviteSender, h.rematchInvite)
 	g.Post(socialTableInvitesPath+"/:eventId/accept", mutationPlayer, mutationIP, h.acceptTableInvite)
 	g.Post(socialTableInvitesPath+"/:eventId/decline", mutationPlayer, mutationIP, h.declineTableInvite)
 }
@@ -214,7 +227,7 @@ func (h *socialHandlers) listInbox(c fiber.Ctx) error {
 	if err != nil {
 		return socialProblem(err, c).Send(c)
 	}
-	result, err := h.hydrateInboxActors(c.Context(), events)
+	result, err := h.hydrateInboxActors(c.Context(), actorID(c), events)
 	if err != nil {
 		return problem.InternalServer("failed to hydrate inbox", c, err).Send(c)
 	}
@@ -225,19 +238,35 @@ func (h *socialHandlers) listInbox(c fiber.Ctx) error {
 // single players.GetMany batch call — one resolve request per feed render,
 // not one per row — so a friend_request from a stranger, a table_invite, or
 // any event whose actor is absent from the friends/requests lists the
-// frontend used to rely on still gets a real name and avatar.
-func (h *socialHandlers) hydrateInboxActors(ctx context.Context, events []social.Event) ([]socialInboxEventResponse, error) {
+// frontend used to rely on still gets a real name and avatar. table_invite
+// rows additionally get hands_together/last_played_at from one bounded
+// recentplayers.List call for the viewer (never a new O(n) read, #337).
+func (h *socialHandlers) hydrateInboxActors(ctx context.Context, viewerID string, events []social.Event) ([]socialInboxEventResponse, error) {
 	ids := make([]string, 0, len(events))
 	seen := make(map[string]bool, len(events))
+	needsRecentContext := false
 	for i := range events {
 		if actorID := events[i].ActorPlayerID; actorID != "" && !seen[actorID] {
 			seen[actorID] = true
 			ids = append(ids, actorID)
 		}
+		if events[i].Type == social.EventTableInvite {
+			needsRecentContext = true
+		}
 	}
 	profiles, err := h.players.GetMany(ctx, ids)
 	if err != nil {
 		return nil, err
+	}
+	recentByOpponent := map[string]recentplayers.Player{}
+	if needsRecentContext && h.recent != nil {
+		page, err := h.recent.List(ctx, viewerID, nil, rematchScanLimit)
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range page.Players {
+			recentByOpponent[item.OpponentPlayerID] = item
+		}
 	}
 	result := make([]socialInboxEventResponse, 0, len(events))
 	for i := range events {
@@ -245,6 +274,11 @@ func (h *socialHandlers) hydrateInboxActors(ctx context.Context, events []social
 		if profile, ok := profiles[events[i].ActorPlayerID]; ok {
 			response.ActorName = profile.Name
 			response.ActorAvatarURL = player.AvatarURL(&profile, h.avatarBaseURL)
+		}
+		if events[i].Type == social.EventTableInvite {
+			if recent, ok := recentByOpponent[events[i].ActorPlayerID]; ok {
+				response.HandsTogether, response.LastPlayedAt = recent.HandsTogether, recent.LastPlayedAt
+			}
 		}
 		result = append(result, response)
 	}
@@ -296,6 +330,92 @@ func (h *socialHandlers) sendTableInvite(c fiber.Ctx) error {
 		return socialProblem(err, c).Send(c)
 	}
 	return c.Status(fiber.StatusCreated).JSON(event)
+}
+
+type rematchInviteBody struct {
+	// RoomID lets the client hand over a freshly-created table when the
+	// opponent's last table has closed (see rematchTableUnavailable below) —
+	// optional; when empty the invite targets the opponent's last table.
+	RoomID string `json:"room_id"`
+}
+
+// rematchInvite lets a player invite a recent opponent back for a rematch
+// with one click, using the last table they shared as context. It never
+// writes to recentplayers (that store is read-only here, via the same
+// bounded List call the /social/recent feed already uses — #199's write
+// budget is untouched) and never duplicates SendTableInvite's idempotency or
+// notification plumbing.
+func (h *socialHandlers) rematchInvite(c fiber.Ctx) error {
+	if h.recent == nil || h.rooms == nil {
+		return problem.InternalServer("rematch is unavailable", c, errors.New("recent players or rooms unavailable")).Send(c)
+	}
+	key, p := socialIdempotencyKey(c)
+	if p != nil {
+		return p.Send(c)
+	}
+	opponentID, err := url.PathUnescape(c.Params("opponentId"))
+	opponentID = strings.TrimSpace(opponentID)
+	if err != nil || opponentID == "" || len(opponentID) > maxSocialPlayerIDSize || strings.ContainsAny(opponentID, "\x00\r\n") {
+		return problem.BadRequest("opponent id is invalid").Send(c)
+	}
+	var body rematchInviteBody
+	if err := c.Bind().Body(&body); err != nil {
+		return problem.BadRequest("invalid body").Send(c)
+	}
+	body.RoomID = strings.TrimSpace(body.RoomID)
+
+	viewer := actorID(c)
+	// The opponent must actually appear in the viewer's own recent-players
+	// page — the same source of truth /social/recent reads, which already
+	// excludes anyone blocked in either direction (recentplayers.Service.List).
+	page, err := h.recent.List(c.Context(), viewer, nil, rematchScanLimit)
+	if err != nil {
+		return problem.InternalServer("failed to resolve recent opponent", c, err).Send(c)
+	}
+	var match *recentplayers.Player
+	for i := range page.Players {
+		if page.Players[i].OpponentPlayerID == opponentID {
+			match = &page.Players[i]
+			break
+		}
+	}
+	if match == nil {
+		return problem.NotFound("opponent is not a recent player").Send(c)
+	}
+
+	roomID := body.RoomID
+	if roomID == "" {
+		roomID = match.LastTableID
+	}
+	room, err := h.rooms.Get(c.Context(), roomID)
+	if err != nil {
+		return problem.InternalServer("failed to resolve rematch table", c, err).Send(c)
+	}
+	if room == nil || (room.Status != "waiting" && room.Status != "active") || room.SeatsTaken >= room.MaxSeats {
+		if body.RoomID != "" {
+			// The client already tried its own fallback table and that one
+			// is unavailable too — a plain room-closed conflict.
+			return socialProblem(social.ErrRoomClosed, c).Send(c)
+		}
+		return rematchTableUnavailable(match).Send(c)
+	}
+	event, err := h.svc.SendTableInvite(c.Context(), viewer, opponentID, roomID, key)
+	if err != nil {
+		return socialProblem(err, c).Send(c)
+	}
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"event": event, "hands_together": match.HandsTogether, "last_played_at": match.LastPlayedAt,
+	})
+}
+
+// rematchTableUnavailable is returned instead of a bare error when the
+// opponent's last table has closed/archived/filled: it tells the client to
+// open a fresh table (the existing join-or-create flow) and retry this same
+// endpoint with that table's id in room_id, rather than dead-ending the
+// rematch attempt.
+func rematchTableUnavailable(match *recentplayers.Player) *problem.Problem {
+	return problem.New(http.StatusConflict, "/problems/rematch-table-unavailable", "Rematch Table Unavailable",
+		"the previous table ("+match.LastTableID+") is no longer available; create a new table and retry with room_id")
 }
 
 func (h *socialHandlers) acceptTableInvite(c fiber.Ctx) error {
