@@ -502,24 +502,6 @@ func tableCurrencyMode(ctx context.Context, rooms roomModeReader, tableID string
 	return room.CurrencyMode, nil
 }
 
-// dispatchGamificationPipeline detaches a completed hand's gamification
-// bookkeeping (pipeline) onto its own goroutine so the table actor's own
-// goroutine — which calls onHandComplete synchronously from
-// table/actor.go's notifyHandComplete — never blocks on it (#61). A panic
-// inside pipeline is recovered and logged rather than crashing the whole
-// process, since this goroutine runs outside any request's recover
-// middleware, the same reasoning as tablews.go's own ws handler recover.
-func dispatchGamificationPipeline(tableID, handID string, pipeline func()) {
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				slog.Error("gamification: onHandComplete panic recovered", "table", tableID, "hand", handID, "panic", r)
-			}
-		}()
-		pipeline()
-	}()
-}
-
 func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablestore.Store, cacheBackend cache.Backend, reg ws.Registry, achv *achievements.Service, leaderboardSvc *leaderboard.Service, rooms *roomstore.Store, sessionStore *sessionlog.Store, pokerStatsStore *pokerstats.Store, matchupStore *matchup.Store, highlightsStore *highlights.Store, recentSvc *recentplayers.Service, players *player.Service, cfg *config.Config, handRevealStore *handreveal.Store, realtime valkey.Client) *tablemanager.Manager {
 	broadcast := func(tableID, viewerID string, snap hand.Snapshot) {
 		message := &pokerproto.ServerMessage{Type: "state", Snapshot: v1.ConvertSnapshot(snap)}
@@ -528,202 +510,15 @@ func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablest
 			reg.Broadcast(context.Background(), tableID+"#"+viewerID, data)
 		}
 	}
-	persistHandHistory := func(tableID, handID, mode string, outcome hand.HandOutcome, names map[string]string) {
-		if sessionStore == nil {
-			return
-		}
-		ctx := context.Background()
-		// One BatchGetItem for the whole table instead of one GetOrCreate per
-		// participant (#200): this runs on the write the client actively waits
-		// for, so nine sequential profile reads were nine round trips of pure
-		// latency in front of it. GetMany is read-only where GetOrCreate would
-		// create a row, which costs nothing here — every participant was dealt
-		// in, so buyin.Service already created their profile at buy-in
-		// (internal/buyin/service.go). Participants missing from the batch
-		// (deleted profile, or a partial failure) simply get no avatar, the
-		// same fallback the per-player GetOrCreate error path had.
-		avatarURLs := make(map[string]string, len(outcome.Participants))
-		if profiles, err := players.GetMany(ctx, outcome.Participants); err != nil {
-			slog.Error("sessionlog: batch resolve participant avatars failed", "table", tableID, "hand", handID, "err", err)
-		} else {
-			for id, profile := range profiles {
-				avatarURLs[id] = player.AvatarURL(&profile, cfg.AvatarBaseURL)
-			}
-		}
-		endedAt := time.Now().UnixMilli()
-		items := make([]sessionlog.HandItem, 0, len(outcome.Participants))
-		for _, id := range outcome.Participants {
-			item := handItemForWithAvatars(outcome, id, names, avatarURLs)
-			item.PK, item.TableID, item.HandID, item.CurrencyMode, item.EndedAt = id, tableID, handID, mode, endedAt
-			items = append(items, item)
-		}
-		// One BatchWriteItem for every participant's row — see
-		// sessionlog.Store.RecordHands for why the history stays N redacted
-		// per-player copies rather than one canonical hand record.
-		if err := sessionStore.RecordHands(ctx, items); err != nil {
-			slog.Error("sessionlog: record hand failed", "table", tableID, "hand", handID, "err", err)
-		}
+	pipeline := &handPipeline{
+		reg: reg, achievements: achv, leaderboard: leaderboardSvc, rooms: rooms,
+		sessions: sessionStore, pokerStats: pokerStatsStore, matchups: matchupStore,
+		highlights: highlightsStore, recent: recentSvc, players: players,
+		tables: store, handReveals: handRevealStore, cfg: cfg,
 	}
-	persistHandReveal := func(tableID, handID, mode string, outcome hand.HandOutcome) {
-		if handRevealStore == nil || mode != roomstore.CurrencyModeSandbox {
-			return
-		}
-		if !outcome.WonWithoutShowdown || len(outcome.Winners) != 1 {
-			return
-		}
-		room, err := rooms.Get(context.Background(), tableID)
-		if err != nil || room == nil {
-			slog.Error("handreveal: load room for big blind failed", "table", tableID, "hand", handID, "err", err)
-			return
-		}
-		winnerID := outcome.Winners[0]
-		playerHands := make(map[string]handreveal.PlayerHandCode, len(outcome.PlayerHands))
-		for id, info := range outcome.PlayerHands {
-			playerHands[id] = handreveal.PlayerHandCode{Cards: info.HoleCards}
-		}
-		record := handreveal.HandRecord{
-			HandID: handID, TableID: tableID, BigBlind: room.BigBlind,
-			WinnerID: winnerID, WinnerShown: outcome.PlayerHands[winnerID].Revealed,
-			PlayerHands: playerHands, EndedAt: time.Now().UnixMilli(),
-		}
-		if err := handRevealStore.Put(context.Background(), record); err != nil {
-			slog.Error("handreveal: record hand failed", "table", tableID, "hand", handID, "err", err)
-		}
-	}
-	// onHandComplete is invoked synchronously on the table actor's own
-	// goroutine (table/actor.go's notifyHandComplete, called from
-	// broadcastAll), but everything it does is gamification bookkeeping —
-	// achievements, leaderboard, pokerstats, matchup, session/hand history,
-	// highlights, recent players — none of which the actor's own state or
-	// any client-visible broadcast depends on: broadcastAll already sent
-	// every player their post-hand "state" snapshot before it ever reaches
-	// this hook, and notifyHandComplete's handhook SET NX claim (fleet-wide
-	// once-per-hand dedup, internal/handhook) has already been taken
-	// synchronously before this closure runs. So the whole body is safe to
-	// detach into its own goroutine, exactly like autoRebuySweep
-	// (app.wireAutoRebuyHook) — at real-table scale this was hundreds of
-	// sequential DynamoDB round trips blocking the actor and every other
-	// player's next action for multiple seconds (#61). A panic here must
-	// not take the process down with it, same reasoning as the ws
-	// handler's own recover in tablews.go.
-	//
-	// The handhook claim bounds which instance may run this closure at all,
-	// but it fails OPEN on its own Valkey error (see internal/handhook), so
-	// a Valkey blip can still let two instances both reach here for the same
-	// hand. That is only harmless for the writers below that are already
-	// idempotent per (table_id, hand_id) on their own (pokerstats, matchup,
-	// and the plain-overwrite session/hand-history, highlights, recent
-	// players writes) — the achievements/leaderboard counters are bare ADDs
-	// with no guard of their own, so they are additionally gated behind
-	// achv.ClaimHandCounters below (issue #66).
 	onHandComplete := func(tableID, handID string, outcome hand.HandOutcome, names map[string]string) {
-		dispatchGamificationPipeline(tableID, handID, func() {
-			ctx := context.Background()
-			mode, err := tableCurrencyMode(ctx, rooms, tableID)
-			if err != nil {
-				slog.Error("gamification: load room mode failed", "table", tableID, "err", err)
-				return
-			}
-			// Player-visible reads (the last-winners strip's hand history and
-			// the "maior pote de hoje" highlight) are written first: the client
-			// invalidates both the instant it sees the `complete` snapshot, and
-			// everything below (achievements, leaderboard, pokerstats, matchup)
-			// is tens-to-hundreds of sequential DynamoDB round trips that would
-			// otherwise make the client's refetch race ahead of these writes
-			// and show the finished hand a whole hand late. All three are plain
-			// idempotent overwrites and depend only on the outcome, not on any
-			// metrics computed below.
-			persistHandHistory(tableID, handID, mode, outcome, names)
-			persistHandReveal(tableID, handID, mode, outcome)
-			if err := highlightsStore.RecordHand(ctx, tableID, handID, outcome, names); err != nil {
-				slog.Error("highlights: record hand failed", "table", tableID, "hand", handID, "err", err)
-			}
-			var metrics []pokerstats.HandMetric
-			actions, metricsErr := store.LoadActionsSince(ctx, tableID, handID, 0)
-			if metricsErr != nil {
-				slog.Error("pokerstats: load hand actions failed", "table", tableID, "hand", handID, "err", metricsErr)
-			} else {
-				metrics = pokerstats.Analyze(outcome.Participants, actions)
-			}
-			// peeked scans the whole hand's action log (unlike pokerstats.Analyze,
-			// which intentionally stops at the flop) since a player can peek at
-			// their own cards at any street, not just preflop.
-			peeked := make(map[string]bool)
-			// Time bank is charged per action, so one hand can carry several
-			// charges for the same player.
-			timeBankMs := make(map[string]int64)
-			for _, entry := range actions {
-				if entry.Action == "peek_cards" {
-					peeked[entry.PlayerID] = true
-				}
-				timeBankMs[entry.PlayerID] += entry.TimeBankMs
-			}
-			achievementMetrics := make([]achievements.HandMetric, len(metrics))
-			for i, metric := range metrics {
-				achievementMetrics[i] = achievements.HandMetric{
-					PlayerID:   metric.PlayerID,
-					VPIP:       metric.VPIP,
-					ThreeBet:   metric.ThreeBet,
-					Peeked:     peeked[metric.PlayerID],
-					TimeBankMs: timeBankMs[metric.PlayerID],
-				}
-			}
-			// claimHandCounters is the correctness backstop for the two
-			// non-idempotent ADD-based writers below (achievements'
-			// counters, leaderboard's hands_played/hands_won/achievement
-			// points): internal/handhook's own claim already dedupes which
-			// instance may reach this pipeline at all, but it fails OPEN on
-			// a Valkey error, so a Valkey blip during hand completion can
-			// let two instances both pass it and both reach here — and
-			// unlike matchup/pokerstats (which guard their own
-			// TransactWrite) neither of these had a per-hand guard of their
-			// own before issue #66. Skip both entirely when the claim is
-			// lost or errors — an error here fails CLOSED (never runs the
-			// increments) rather than open, because this guard IS the
-			// source of truth for "already counted", not an optional
-			// accelerator. matchup/pokerstats/sessionlog/highlights/recent
-			// players are unaffected: they stay outside this guard exactly
-			// as before, since each is already idempotent on its own.
-			claimed, err := achv.ClaimHandCounters(ctx, tableID, handID)
-			if err != nil {
-				slog.Error("gamification: hand counter guard failed, skipping achievement/leaderboard increments", "table", tableID, "hand", handID, "err", err)
-			} else if !claimed {
-				slog.Info("gamification: hand counters already claimed for this hand, skipping duplicate achievement/leaderboard increments", "table", tableID, "hand", handID)
-			} else {
-				unlocks, err := achv.RecordHand(ctx, tableID, mode, outcome, achievementMetrics)
-				if err != nil {
-					slog.Error("achievements record hand failed", "table", tableID, "err", err)
-				}
-				for _, unlock := range unlocks {
-					data, err := goproto.Marshal(&pokerproto.ServerMessage{
-						Type:  "achievement_unlocked",
-						Key:   unlock.Key,
-						Stars: int32(unlock.Stars),
-					})
-					if err == nil {
-						reg.Broadcast(ctx, tableID+"#"+unlock.PlayerID, data)
-					}
-				}
-				if err := leaderboardSvc.RecordUnlocks(ctx, mode, unlocks); err != nil {
-					slog.Error("leaderboard achievement points failed", "table", tableID, "err", err)
-				}
-				if err := leaderboardSvc.RecordHand(ctx, mode, outcome, names); err != nil {
-					slog.Error("leaderboard record hand failed", "table", tableID, "err", err)
-				}
-			}
-			if metricsErr == nil {
-				if err := pokerStatsStore.RecordHand(ctx, mode, tableID, handID, metrics); err != nil {
-					slog.Error("pokerstats: record hand failed", "table", tableID, "hand", handID, "err", err)
-				}
-			}
-			if err := matchupStore.RecordHand(ctx, mode, tableID, handID, outcome); err != nil {
-				slog.Error("matchup: record hand failed", "table", tableID, "hand", handID, "err", err)
-			}
-			if recentSvc != nil {
-				if err := recentSvc.RecordHand(ctx, tableID, handID, outcome.Participants, time.Now()); err != nil {
-					slog.Error("recent players: record hand failed", "table", tableID, "hand", handID, "err", err)
-				}
-			}
+		dispatchGamificationPipeline(tableID, handID, func(ctx context.Context) {
+			pipeline.run(ctx, tableID, handID, outcome, names)
 		})
 	}
 	// roomLoader re-arms blind escalation and the per-turn action timeout from
@@ -798,8 +593,8 @@ func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablest
 			slog.Error("sessionlog: load room mode for hand update failed", "table", tableID, "hand", handID, "err", err)
 			return
 		}
-		persistHandHistory(tableID, handID, mode, outcome, names)
-		persistHandReveal(tableID, handID, mode, outcome)
+		pipeline.persistHandHistory(context.Background(), tableID, handID, mode, outcome, names)
+		pipeline.persistHandReveal(context.Background(), tableID, handID, mode, outcome)
 	})
 	mgr.SetOnSeatsChanged(func(tableID string, seatsTaken int) {
 		if err := rooms.SetSeatsTaken(context.Background(), tableID, seatsTaken); err != nil {

@@ -183,6 +183,27 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   and show the finished hand a whole hand late. Keep them at the front; the UI also re-invalidates on a backoff
   (`ui/src/lib/settleRefetch.ts`) as the real safety net. See
   `docs/specs/2026-09-03-post-hand-refresh-latency-and-achievement-toast-replay.md`.
+  **Issue #204 fixed: the pipeline has a measured budget and a bounded executor.** The closure moved to
+  `internal/app/handpipeline.go` as `handPipeline.run` (the ordering above is unchanged) so its aggregate cost can be
+  measured end to end over the real stores instead of module by module. `TestHandPipelineDynamoBudget` runs it against
+  one counting HTTP stub under every store at 2/6/9 seats and pins **calls ≤ 12 + 2·seats + C(seats,2)** and
+  **written items ≤ 6 + 6·seats + C(seats,2)**. Measured today: **15 calls / 15 items at 2 seats, 37 / 49 at 6,
+  64 / 85 at 9** — the C(n,2) term is `matchup`, the only inherently quadratic writer (#65/#201), and it is what makes
+  a nine-handed hand cost ~4x a six-handed one. The issue's own "dezenas ou centenas de round-trips" predates
+  #244/#255/#257/#259/#264. The test also asserts every expected table was written: a hook that silently stops writing
+  makes a budget look better, so the ceiling alone is not enough. **Executor:**
+  `dispatchGamificationPipeline` still creates the goroutine immediately (the actor is never blocked, #61) but the
+  goroutine then waits on `maxConcurrentHandPipelines` (16) with a finite `maxQueuedHandPipelines` (256) queue in front
+  and a `handPipelineTimeout` (30s) deadline on the run's context — so a spike of tables finishing hands at once can no
+  longer multiply the per-hand burst by however many tables were involved. Past the queue cap the hand's bookkeeping is
+  **dropped with an ERROR log**, deliberately: a backlog that deep means the fleet is far past capacity, and unbounded
+  queueing trades a bounded loss of gamification for unbounded memory plus a write burst arriving long after the hand.
+  Every step is already idempotent per `(table, hand)` or a plain overwrite, so a dropped or timed-out run is the same
+  failure mode the pipeline has always tolerated (the process dying mid-flight — see the known gap above).
+  There is no `internal/metrics` in this service and **no ad-hoc collector was added**: saturation is one ERROR line,
+  `handPipelineQueueDepth()` reports the depth, and CloudWatch's `addWriteVolumeAlarm` stays the numeric signal — the
+  same call the `tablestore` breaker made. Per-step latency/consumed-capacity instrumentation and
+  `ReturnConsumedCapacity` sampling, which #204 also asks for, are **not** implemented.
 - **`handhook`'s claim does NOT by itself make the pipeline's counters double-run-safe (#66).** `claimHandHooks`
   fails OPEN on a Valkey error ("a double credit is at least visible and bounded" — see `internal/handhook`'s doc
   comment), so a Valkey blip during hand completion can let two instances both pass the claim and both reach
