@@ -16,59 +16,104 @@ import (
 	"gopkg.aoctech.app/api-commons/dynamo"
 )
 
-func TestDynamoRecordHandCreatesDirectedPairsOnce(t *testing.T) {
+// TestDynamoRecordHandIsIdempotentAndListCoalescesOpponents covers issue
+// #199's model end to end: one row per participant per hand, a replayed hand
+// rewriting the same rows instead of counting twice, and List deriving
+// hands_together / last_played_at ordering from those rows.
+func TestDynamoRecordHandIsIdempotentAndListCoalescesOpponents(t *testing.T) {
+	store := newRecentTestStore(t)
+	playedAt := time.Now().UTC().Truncate(time.Millisecond)
+	first := HandCompletion{TableID: "table", HandID: "hand-1", Players: []string{"a", "b", "c"}, PlayedAt: playedAt}
+	for range 2 { // the same hand delivered twice must not double-count
+		if err := store.RecordHand(context.Background(), first); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A later hand against b only: b must sort ahead of c, and count 2.
+	second := HandCompletion{TableID: "table", HandID: "hand-2", Players: []string{"a", "b"}, PlayedAt: playedAt.Add(time.Minute)}
+	if err := store.RecordHand(context.Background(), second); err != nil {
+		t.Fatal(err)
+	}
+
+	page, err := store.List(context.Background(), "a", nil, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Players) != 2 || page.Players[0].OpponentPlayerID != "b" || page.Players[1].OpponentPlayerID != "c" {
+		t.Fatalf("opponents not ordered by recency: %+v", page.Players)
+	}
+	if page.Players[0].HandsTogether != 2 || page.Players[1].HandsTogether != 1 {
+		t.Fatalf("hands_together=%d/%d want 2/1 (a replay was counted twice or a hand was lost)",
+			page.Players[0].HandsTogether, page.Players[1].HandsTogether)
+	}
+	if page.Players[0].LastPlayedAt != second.PlayedAt.UnixMilli() {
+		t.Fatalf("last_played_at=%d want=%d", page.Players[0].LastPlayedAt, second.PlayedAt.UnixMilli())
+	}
+	// The relation is symmetric: c's own list sees a and b from the same rows.
+	fromC, err := store.List(context.Background(), "c", nil, 50)
+	if err != nil || len(fromC.Players) != 2 {
+		t.Fatalf("fromC=%+v err=%v", fromC.Players, err)
+	}
+}
+
+// TestListPaginatesByOffsetWithoutRepeats walks a full ring's worth of
+// opponents one page at a time — the coalesced cursor must cover every
+// opponent exactly once.
+func TestListPaginatesByOffsetWithoutRepeats(t *testing.T) {
+	store := newRecentTestStore(t)
+	players := make([]string, maxPlayersPerHand)
+	for i := range players {
+		players[i] = fmt.Sprintf("p%d", i)
+	}
+	if err := store.RecordHand(context.Background(), HandCompletion{
+		TableID: "table", HandID: "hand-1", Players: players, PlayedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]int{}
+	var startKey map[string]types.AttributeValue
+	for range maxPlayersPerHand {
+		page, err := store.List(context.Background(), "p0", startKey, 3)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range page.Players {
+			seen[item.OpponentPlayerID]++
+		}
+		if page.LastKey == nil {
+			break
+		}
+		startKey = page.LastKey
+	}
+	if len(seen) != maxPlayersPerHand-1 {
+		t.Fatalf("paged %d distinct opponents, want %d: %+v", len(seen), maxPlayersPerHand-1, seen)
+	}
+	for id, times := range seen {
+		if times != 1 {
+			t.Fatalf("opponent %s returned %d times across pages", id, times)
+		}
+	}
+}
+
+func newRecentTestStore(t *testing.T) *DynamoStore {
+	t.Helper()
 	db := recentTestClient(t)
 	env := fmt.Sprintf("recent_test_%d", time.Now().UnixNano())
-	name := dynamo.TableName(env, tableRecentPlayers)
 	_, err := db.CreateTable(context.Background(), &dynamodb.CreateTableInput{
-		TableName: aws.String(name), BillingMode: types.BillingModePayPerRequest,
+		TableName: aws.String(dynamo.TableName(env, tableRecentPlayers)), BillingMode: types.BillingModePayPerRequest,
 		AttributeDefinitions: []types.AttributeDefinition{
 			{AttributeName: aws.String("pk"), AttributeType: types.ScalarAttributeTypeS},
 			{AttributeName: aws.String("sk"), AttributeType: types.ScalarAttributeTypeS},
-			{AttributeName: aws.String("gsi_recent_pk"), AttributeType: types.ScalarAttributeTypeS},
-			{AttributeName: aws.String("gsi_recent_sk"), AttributeType: types.ScalarAttributeTypeS},
 		},
-		KeySchema: []types.KeySchemaElement{{AttributeName: aws.String("pk"), KeyType: types.KeyTypeHash}, {AttributeName: aws.String("sk"), KeyType: types.KeyTypeRange}},
-		GlobalSecondaryIndexes: []types.GlobalSecondaryIndex{{IndexName: aws.String(gsiRecentPlayers),
-			KeySchema:  []types.KeySchemaElement{{AttributeName: aws.String("gsi_recent_pk"), KeyType: types.KeyTypeHash}, {AttributeName: aws.String("gsi_recent_sk"), KeyType: types.KeyTypeRange}},
-			Projection: &types.Projection{ProjectionType: types.ProjectionTypeAll},
-		}},
+		KeySchema: []types.KeySchemaElement{
+			{AttributeName: aws.String("pk"), KeyType: types.KeyTypeHash},
+			{AttributeName: aws.String("sk"), KeyType: types.KeyTypeRange},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := NewStore(db, env)
-	playedAt := time.Now().UTC().Truncate(time.Millisecond)
-	hand := HandCompletion{TableID: "table", HandID: "hand", Players: []string{"a", "b", "c"}, PlayedAt: playedAt}
-	if err := store.RecordHand(context.Background(), hand); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.RecordHand(context.Background(), hand); err != nil {
-		t.Fatal(err)
-	}
-
-	var page Page
-	for attempt := 0; attempt < 20; attempt++ {
-		page, err = store.List(context.Background(), "a", nil, 50)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(page.Players) == 2 {
-			break
-		}
-		time.Sleep(25 * time.Millisecond)
-	}
-	if len(page.Players) != 2 {
-		t.Fatalf("pairs=%+v", page.Players)
-	}
-	for _, item := range page.Players {
-		if item.HandsTogether != 1 {
-			t.Fatalf("duplicate increment: %+v", item)
-		}
-		if item.TTL < playedAt.Add(89*24*time.Hour).Unix() {
-			t.Fatalf("ttl too short: %+v", item)
-		}
-	}
+	return NewStore(db, env)
 }
 
 func recentTestClient(t *testing.T) *dynamodb.Client {

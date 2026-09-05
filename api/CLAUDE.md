@@ -582,6 +582,23 @@ catalog.
   empty string — a still-locked or pre-change row, never an error. A replayed hand hook stamps nothing: it is stopped by
   `ClaimHandCounters`, and past that a counter that crosses no threshold reports no unlock. A stamp failure is logged,
   not returned — the counters are already committed and must not be retried.
+
+- **Issue #199 fixed: `recentplayers` stores one row per participant per hand, not 72 directed aggregates.**
+  `DynamoStore.RecordHand` used to walk every viewer against every opponent and commit 9x8=72 `ADD hands_together`
+  updates plus a guard in a single `TransactWriteItems` (~146 WCU, 73% of DynamoDB's hard item limit) for a full ring.
+  It now writes **one `handEvent` row per distinct participant** — `pk` = that viewer, `sk` = `"hand#"+handID`,
+  carrying that viewer's opponent ids — as a single `BatchWriteItem` (9 rows, ~9 WCU). Keying the row by the hand id
+  rather than a timestamp is what makes it idempotent *by construction*: a replayed `onHandComplete` rewrites the same
+  rows, so this store needs no guard row and a partial write is completed by any retry. Hand ids are ULIDs, so
+  `sk` sorts chronologically and `DynamoStore.List` reads a viewer's most recent hands straight off the base table —
+  `gsi_recent` is no longer written to or read (removal deferred: dropping it must land *after* the API rolls out,
+  since deploy order is CDK → API — see the follow-up issue). `List` coalesces opponents from that one bounded Query:
+  first sighting wins `last_played_at`, repeat sightings increment `hands_together`, and the cursor is an offset into
+  the coalesced list (a stale pre-#199 row-key cursor decodes to "from the start"). **The documented ceiling:**
+  `hands_together` counts shared hands within the viewer's last `maxEventsScanned` (300) hands or the 90-day TTL
+  window, whichever is shorter — no longer an all-time counter. Pre-#199 aggregate rows (`sk` = an opponent id) are
+  ignored and expire on their own TTL; a player whose list therefore reads empty is re-seeded by
+  `Service.List`'s existing lazy bootstrap from `sessionlog`. Budget pinned by `TestRecordHandWriteBudget` (2/6/9).
 - **Issues #65 and #201 fixed: `matchup.Store.RecordHand` writes nothing transactional at all.** #65 chunked the
   original 72-item per-hand `TransactWriteItems` call; #201 removed the model that made it expensive. Each pair is now
   **one plain conditional `UpdateItem`** (`Store.applyPair`): the per-hand idempotency guard moved *into* the pair item
@@ -596,6 +613,12 @@ catalog.
   a duplicate of an older hand than that would be counted again. Budget pinned by `TestRecordHandWriteBudget`
   (2/6/9 seats). Moving matchup off the hand-completion critical path was #61's detached gamification pipeline,
   already done.
+- **Issue #65 fixed:** `matchup.Store.RecordHand` no longer writes one 72-item `TransactWriteItems` call per hand. It
+  chunks pairs at `maxPairsPerTx` (12 pairs = 24 items), so a 9-max table's C(9,2)=36 pairs commit as 3 bounded
+  transactions. The atomicity that actually mattered is per-pair, not per-hand: each pair's create-only guard rides in
+  the same transaction as that pair's increment, so no pair is ever double-counted and a partially-applied hand is
+  safely completed by a retry (landed chunks fail their guards and are skipped). Moving matchup off the
+  hand-completion critical path was #61's detached gamification pipeline, already done.
 - **Issue #70 fixed: a session's `buyin_amount` is now updated with an atomic conditional ADD, not a
   read-modify-write.** `buyin.Service.buyIn`'s rebuy path used to `FindOpenSession`, add `amount` to the decoded
   `BuyinAmount` in Go, and `PutItem` the whole item back — two concurrent rebuys for the same player (a client

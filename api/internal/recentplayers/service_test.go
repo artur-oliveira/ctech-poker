@@ -69,12 +69,16 @@ func TestListBootstrapsPlayerScopedHistoryAndFiltersEitherDirectionBlocks(t *tes
 	}
 }
 
-func TestRecordHandForNinePlayersCreatesSeventyTwoDirectedPairs(t *testing.T) {
+func TestRecordHandForNinePlayersCoversEveryDirectedPair(t *testing.T) {
 	store := &memoryRecentStore{players: make(map[string]Player)}
 	players := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9"}
 	if err := NewService(store, nil, nil).RecordHand(context.Background(), "table", "hand", players, time.Now()); err != nil {
 		t.Fatal(err)
 	}
+	// Every viewer still sees all 8 opponents (9x8 relations); what changed in
+	// #199 is that they are derived from 9 rows at read time instead of being
+	// written as 72 items. The write budget itself is pinned by
+	// TestRecordHandWriteBudget.
 	if got := len(store.players); got != 72 {
 		t.Fatalf("directed pairs=%d want=72", got)
 	}
