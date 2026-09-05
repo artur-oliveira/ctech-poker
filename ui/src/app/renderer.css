@@ -1071,6 +1071,47 @@
     gap: 8px;
     margin-top: 16px
 }
+.showcase-layout-editor {
+    margin-top: 16px;
+    padding-top: 16px;
+    border: 0;
+    border-top: 1px solid var(--white-13)
+}
+.showcase-layout-editor legend {
+    width: 100%;
+    font-weight: 700
+}
+.showcase-layout-editor > p:not([role]) {
+    margin: 3px 0 10px;
+    color: var(--muted-rose);
+    font-size: 11px
+}
+.showcase-layout-editor ol {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none
+}
+.showcase-layout-editor li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 44px;
+    padding: 6px 10px;
+    border-radius: var(--rounded-control);
+    background: var(--surface-control)
+}
+.showcase-layout-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px
+}
+.showcase-layout-controls button {
+    width: 32px;
+    height: 32px
+}
 .profile-best-hand-cards .playing-card {
     width: 54px;
     height: 76px;

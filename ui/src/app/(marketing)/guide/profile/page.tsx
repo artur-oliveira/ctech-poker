@@ -34,8 +34,13 @@ export default function ProfileGuide() {
           <GuideTerm term="Estilo de jogo público">Depois de 200 mãos, mostra um rótulo de tendência na mesa e na vitrine. Em vitrine pública, ele pode ser visto sem login.</GuideTerm>
           <GuideTerm term="Mesa visível para amigos">Permite que amigos entrem na sua mesa quando ela é pública. Mesa privada nunca aparece.</GuideTerm>
           <GuideTerm term="Conquistas em destaque">Até três conquistas já iniciadas.</GuideTerm>
+          <GuideTerm term="Organizar vitrine">Reordene Conquistas, Melhor Vitória e Cara a Cara com as setas para cima e para baixo — sem
+            arrastar, funciona igual por toque, mouse ou teclado. Melhor Vitória e Cara a Cara também podem ser escondidos; Conquistas
+            sempre aparece.</GuideTerm>
           <GuideTerm term="Copiar link / Ver perfil">Aparecem com a vitrine pública e mostram exatamente o que a outra pessoa recebe.</GuideTerm></GuideTerms>
-          <p>Quem abre a sua vitrine vê nome, foto, os rótulos de estilo autorizados, as conquistas em destaque, a sua melhor vitória recente e — se estiver logado — o &quot;Cara a Cara&quot;: quantas mãos vocês jogaram juntos, quantas cada um venceu, quantas empataram e o saldo de fichas do confronto.</p>
+          <p>Quem abre a sua vitrine vê nome, foto, os rótulos de estilo autorizados e as seções que você deixou visíveis, na ordem que
+            você escolheu: conquistas em destaque, a sua melhor vitória recente e — se estiver logado — o &quot;Cara a Cara&quot;: quantas
+            mãos vocês jogaram juntos, quantas cada um venceu, quantas empataram e o saldo de fichas do confronto.</p>
           <GuideCallout kind="safe" title="Estatística detalhada não vai junto">Tornar a vitrine pública não publica VPIP, PFR nem 3-bet. Só os rótulos que você autorizou saem do seu perfil.</GuideCallout>
           <p>Abrir o seu próprio link de vitrine mostra o botão &quot;Editar minha vitrine&quot; em vez do perfil público. Uma vitrine privada de outro jogador diz que está privada — não que o perfil não existe.</p></>
       },

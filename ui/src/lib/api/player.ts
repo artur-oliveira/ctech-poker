@@ -6,6 +6,31 @@ import type {TableThemeId} from '../tablePreferences';
 
 export type WalletMode = 'sandbox' | 'real';
 
+// Showcase layout (#335). Achievements is reorderable but never hideable —
+// it already has its own "no achievement selected" empty copy, so hiding it
+// entirely would just duplicate that with less explanation. Best hand and
+// matchup can be reordered AND hidden.
+export type ShowcaseSectionId = 'achievements' | 'best_hand' | 'matchup';
+export interface ShowcaseLayout {
+  order: ShowcaseSectionId[];
+  hidden: ShowcaseSectionId[];
+}
+export const DEFAULT_SHOWCASE_ORDER: ShowcaseSectionId[] = ['achievements', 'best_hand', 'matchup'];
+const DEFAULT_SHOWCASE_LAYOUT: ShowcaseLayout = {order: DEFAULT_SHOWCASE_ORDER, hidden: []};
+
+/** Guards against a stale/partial stored layout (an older app version, or a
+ * profile that predates this field) — always returns every known section
+ * exactly once, in a valid order, with nothing but 'best_hand'/'matchup' ever
+ * hidden. */
+export function normalizeShowcaseLayout(layout?: ShowcaseLayout): ShowcaseLayout {
+  if (!layout) return DEFAULT_SHOWCASE_LAYOUT;
+  const known = new Set(DEFAULT_SHOWCASE_ORDER);
+  const order = layout.order.filter(id => known.has(id));
+  for (const id of DEFAULT_SHOWCASE_ORDER) if (!order.includes(id)) order.push(id);
+  const hidden = layout.hidden.filter(id => id !== 'achievements' && known.has(id));
+  return {order, hidden};
+}
+
 export interface PlayerProfile {
   user_id: string;
   name?: string;
@@ -28,6 +53,7 @@ export interface PlayerProfile {
   featured_achievements?: string[];
   favorite_reactions?: string[];
   favorite_bet_presets?: string[];
+  showcase_layout?: ShowcaseLayout;
   playstyle?: PlaystyleBadge[];
 }
 
@@ -58,6 +84,7 @@ export async function updateMe(input: {
   featured_achievements?: string[];
   favorite_reactions?: string[];
   favorite_bet_presets?: string[];
+  showcase_layout?: ShowcaseLayout;
 }) {
   return (await apiClient.post<PlayerProfile>('/v1.0/players/me', input, {silentError: false})).data;
 }
@@ -69,6 +96,11 @@ export interface ProfileShowcase {
   featured_achievements: Array<{ key: string; count: number }>;
   playstyle?: PlaystyleBadge[];
   best_hand?: Pick<HandItem, 'hand_id' | 'table_id' | 'net_change' | 'ended_at' | 'board' | 'hole_cards'>;
+  // Not sent by the backend yet — ProfileContent falls back to the legacy
+  // fixed order (achievements, best hand, matchup) with everything visible
+  // when absent, so an older server response degrades to today's behavior
+  // rather than to a broken layout.
+  showcase_layout?: ShowcaseLayout;
 }
 
 export async function getProfileShowcase(playerId: string) {

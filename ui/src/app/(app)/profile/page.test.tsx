@@ -132,6 +132,31 @@ describe('public player profile page', () => {
     expect(screen.getByText('Nenhuma conquista selecionada para exibição.')).toBeInTheDocument();
     expect(screen.getByText('Nenhuma vitória recente registrada nesta vitrine.')).toBeInTheDocument();
   });
+  test('renders sections in the server-sent showcase_layout order', () => {
+    mocks.query = queryState({
+      player_id: 'player-42',
+      name: 'Ás da Mesa',
+      featured_achievements: [{key: 'wins', count: 1234}],
+      showcase_layout: {order: ['best_hand', 'achievements', 'matchup'], hidden: []},
+    });
+    render(<ProfilePage/>);
+    const headings = screen.getAllByRole('heading', {level: 2}).map(node => node.textContent);
+    expect(headings[0]).toBe('Melhor Vitória Recente');
+    expect(headings[1]).toContain('Conquistas em Destaque');
+  });
+
+  test('hides a section the layout marks hidden', () => {
+    mocks.query = queryState({
+      player_id: 'player-42',
+      name: 'Ás da Mesa',
+      featured_achievements: [{key: 'wins', count: 1234}],
+      showcase_layout: {order: ['achievements', 'best_hand', 'matchup'], hidden: ['best_hand']},
+    });
+    render(<ProfilePage/>);
+    expect(screen.queryByRole('heading', {name: 'Melhor Vitória Recente'})).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', {name: /Conquistas em Destaque/})).toBeInTheDocument();
+  });
+
   test('offers the shared player menu only for someone else profile', async () => {
     const {rerender} = render(<ProfilePage/>);
     expect(screen.queryByRole('button', {name: /Ações para/})).not.toBeInTheDocument();
