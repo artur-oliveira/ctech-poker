@@ -349,11 +349,20 @@ func (m *TableModel) send(cm *proto.ClientMessage) tea.Cmd {
 
 // appendLog appends line to the scrollback and keeps the viewport following
 // the bottom unless the user has scrolled up to read history.
+// appendLog appends line to the log, splitting it first if it contains
+// embedded newlines — see Shell.appendLine's doc comment for why this split
+// is load-bearing (layoutHeights sizes the viewport from len(m.log) on the
+// invariant that one slice element is one visual line; several callers here
+// join multi-line narration with strings.Join before calling this once).
 func (m *TableModel) appendLog(line string) {
 	if line == "" {
 		return
 	}
-	m.log = append(m.log, line)
+	if strings.Contains(line, "\n") {
+		m.log = append(m.log, strings.Split(line, "\n")...)
+	} else {
+		m.log = append(m.log, line)
+	}
 	m.syncViewport()
 }
 
@@ -453,7 +462,7 @@ func (m *TableModel) View() string {
 			lines = append(lines, menuView)
 		}
 	}
-	return strings.Join(lines, "\n")
+	return padViewHeight(strings.Join(lines, "\n"), m.windowHeight)
 }
 
 func (m *TableModel) header() string {

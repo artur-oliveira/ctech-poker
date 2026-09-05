@@ -488,3 +488,34 @@ func TestResultAfterFirstCommandShowsAllLinesNotJustTheLast(t *testing.T) {
 		}
 	}
 }
+
+// TestHelpShowsEveryLineNotJustTheLastFew is the regression guard for
+// another real bug reproduced live: layoutHeights sizes the viewport from
+// len(s.lines), on the invariant that one slice element is one visual line.
+// /help's dispatch appended formatCommandList's whole multi-line reference
+// as a *single* appendLine call — one slice element internally containing
+// nine embedded newlines — so len(s.lines) undercounted the true visual line
+// count (10 vs. 2), sizing the viewport far too short and showing only its
+// last couple of lines. appendLine/appendLog now split any argument that
+// contains embedded newlines before storing it, restoring the invariant no
+// matter how a caller joins its own content beforehand.
+func TestHelpShowsEveryLineNotJustTheLastFew(t *testing.T) {
+	s := newTestShell(t, nil, t.TempDir())
+	s.state = stateHome
+	m, _ := s.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	s = m.(*Shell)
+
+	for _, r := range "/help" {
+		m, _ := s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		s = m.(*Shell)
+	}
+	m, _ = s.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	s = m.(*Shell)
+
+	view := s.View()
+	for _, spec := range homeCommandSpecs {
+		if !strings.Contains(view, spec.Name) {
+			t.Fatalf("missing %q from /help output — result was clipped:\n%s", spec.Name, view)
+		}
+	}
+}

@@ -31,3 +31,13 @@ func TestHomeHeaderCollapsesOnNarrowTerminals(t *testing.T) {
 		t.Fatalf("narrow header width = %d, want <= 29", width)
 	}
 }
+
+func TestPadViewHeightKeepsAStableFullScreenFrame(t *testing.T) {
+	out := padViewHeight("one\ntwo", 5)
+	if lines := strings.Count(out, "\n") + 1; lines != 5 {
+		t.Fatalf("padded view has %d lines, want 5", lines)
+	}
+	if got := padViewHeight("one\ntwo", 1); got != "one\ntwo" {
+		t.Fatalf("must not clip a taller view, got %q", got)
+	}
+}

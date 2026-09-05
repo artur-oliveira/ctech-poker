@@ -64,9 +64,25 @@ func renderHomeHeader(maxWidth int) string {
 		dimStyle.Render(right)
 
 	innerWidth := width - 2
-	description := truncateVisible(" Poker no terminal · fichas virtuais · sem dinheiro real", innerWidth)
+	description := truncateVisible(" Jogue poker no terminal · apenas fichas virtuais", innerWidth)
 	description += strings.Repeat(" ", innerWidth-len([]rune(description)))
 	middle := dimStyle.Render("│") + mutedStyle.Render(description) + dimStyle.Render("│")
 	bottom := dimStyle.Render("╰" + strings.Repeat("─", innerWidth) + "╯")
 	return strings.Join([]string{top, middle, bottom}, "\n")
+}
+
+// padViewHeight keeps full-screen views at a stable number of logical rows.
+// Bubble Tea v1's diff renderer can otherwise skip an unchanged trailing line
+// and then erase it when a shorter frame replaces a taller one. Filling the
+// alternate screen is also the conventional shape for a full-screen TUI.
+func padViewHeight(view string, height int) string {
+	if height <= 0 {
+		return view
+	}
+	lines := strings.Split(view, "\n")
+	if len(lines) >= height {
+		return view
+	}
+	lines = append(lines, make([]string, height-len(lines))...)
+	return strings.Join(lines, "\n")
 }

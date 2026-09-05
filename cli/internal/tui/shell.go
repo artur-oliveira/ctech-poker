@@ -87,10 +87,25 @@ func newShell(cfg config.Settings, session *auth.Session, rc *rest.Client) *Shel
 	}
 }
 
-// appendLine appends line to the scrollback. The viewport keeps following
-// the bottom on the next render unless the user has scrolled away from it.
+// appendLine appends line to the scrollback, splitting it first if it
+// contains embedded newlines. This split is load-bearing, not cosmetic:
+// layoutHeights sizes the viewport from len(s.lines), on the invariant that
+// one slice element is exactly one visual line. A caller that appends a
+// whole multi-line block (e.g. /help's formatCommandList output) as a
+// single element breaks that invariant — the content itself still renders
+// correctly (viewport.SetContent rejoins and re-splits everything on \n
+// regardless), but the *height budget* is computed from the wrong count,
+// undersizing the viewport by however many lines were hidden inside that
+// one element. Reproduced live: /help's ~10-line reference collapsed to a
+// budget of 1, showing only its last couple of lines. The viewport keeps
+// following the bottom on the next render unless the user has scrolled
+// away from it.
 func (s *Shell) appendLine(line string) {
-	s.lines = append(s.lines, line)
+	if strings.Contains(line, "\n") {
+		s.lines = append(s.lines, strings.Split(line, "\n")...)
+	} else {
+		s.lines = append(s.lines, line)
+	}
 	s.syncViewport()
 }
 
@@ -845,6 +860,6 @@ func (s *Shell) View() string {
 				lines = append(lines, menuView)
 			}
 		}
-		return strings.Join(lines, "\n")
+		return padViewHeight(strings.Join(lines, "\n"), s.windowHeight)
 	}
 }
