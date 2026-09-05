@@ -1,9 +1,9 @@
 'use client';
-import {SyntheticEvent, useEffect, useId, useRef, useState} from 'react';
+import {memo, SyntheticEvent, useEffect, useId, useRef, useState} from 'react';
 import {MessageCircle, Send, X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
-import type {SeatView} from '@/lib/api/table';
+import type {SeatIdentity} from '@/lib/api/table';
 import {playerName} from '@/lib/utils';
 import {useDismiss} from '@/lib/hooks/useDismiss';
 import {useHoverPanel} from '@/lib/hooks/useHoverPanel';
@@ -11,12 +11,12 @@ import {CHAT_MESSAGE_MAX_LENGTH} from '@/lib/chat';
 
 type ChatItem = { id: string; player: string; message: string; timestamp?: number };
 
-export function Chat({items, onSendAction, connected = true, viewerId, seats = [], open, onOpenChangeAction}: {
+function ChatImpl({items, onSendAction, connected = true, viewerId, seats = [], open, onOpenChangeAction}: {
   items: ChatItem[];
   onSendAction: (message: string) => boolean;
   connected?: boolean;
   viewerId?: string;
-  seats?: SeatView[];
+  seats?: SeatIdentity[];
   open: boolean;
   onOpenChangeAction: (open: boolean) => void;
 }) {
@@ -105,3 +105,11 @@ export function Chat({items, onSendAction, connected = true, viewerId, seats = [
     </div>
   </aside>;
 }
+
+/** Memoised: Chat only reads the message list and the seat roster (for names). A stack, pot or street change is nothing to it.
+ *  Every prop it receives is either a primitive or a stable identity
+ *  (see `useTableRealtimeSession`'s `commands` memo, `useTableOverlays`'
+ *  cached panel handlers, and the table page's memoised projections), so the
+ *  comparison actually pays off. Issue #230. */
+export const Chat = memo(ChatImpl);
+Chat.displayName = 'Chat';

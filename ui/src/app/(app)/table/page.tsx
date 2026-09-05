@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import {Suspense, useEffect, useMemo, useState} from 'react';
+import {Suspense, useCallback, useEffect, useMemo, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {ChevronLeft, MessageCircle, Pause, Play, RotateCw, SmilePlus, Wifi} from 'lucide-react';
@@ -153,6 +153,60 @@ function TableContent() {
   const {handOutcome, viewerStackBefore, nextHandDurationMs} = useTableOutcome({
     id, viewer, snapshot: rt.snapshot, snapshotAt: rt.snapshotAt
   });
+
+  // --- Memoised projections and handlers for the memoised surfaces (#230) ---
+  // These have to live above the early returns (hooks cannot be conditional),
+  // so they read `rt.snapshot` optionally rather than the narrowed `s` below.
+  //
+  // Chat and the reactions aside only need the roster: who is seated and under
+  // what name. Rebuilding it from a key (the same trick `suppressed` above
+  // uses) is what makes it a *stable* value — a stack, a pot or a street
+  // moving no longer re-renders either of them.
+  const rosterKey = (rt.snapshot?.seats ?? [])
+    .map(seat => `${seat.player_id}\u0000${seat.name ?? ''}`).join('\u0001');
+  const seatRoster = useMemo(() => rosterKey ? rosterKey.split('\u0001').map(entry => {
+    const [player_id, name] = entry.split('\u0000');
+    return {player_id, name: name || undefined};
+  }) : [], [rosterKey]);
+  const handId = rt.snapshot?.hand_id;
+  const playerNotesByID = useMemo(() =>
+    Object.fromEntries(playerNotes.map(note => [note.opponent_id, note])), [playerNotes]);
+  const relationshipsByID = useMemo(() =>
+    Object.fromEntries(relationships.map(item => [item.player_id, item])), [relationships]);
+  const favoriteReactions = useMemo(() =>
+    (profile?.favorite_reactions || []).filter(isTableReaction), [profile?.favorite_reactions]);
+  const editPlayerNote = useCallback((seat: {player_id: string; name?: string}) =>
+    setNoteOpponent({player_id: seat.player_id, name: seat.name}), []);
+  const renderPlayerActions = useCallback((seat: {player_id: string; name?: string}) =>
+    <PlayerActionsMenu
+      target={{
+        player_id: seat.player_id, name: seat.name,
+        relationship: relationshipsByID[seat.player_id]?.relationship,
+        muted: relationshipsByID[seat.player_id]?.muted,
+        blocked: relationshipsByID[seat.player_id]?.blocked
+      }}
+      actions={socialActions} surface="table_behavior" tableId={id} handId={handId}
+      onEditNoteAction={() => editPlayerNote(seat)}
+      onBlockedAction={blocked => {
+        setPendingSuppressed(previous => blocked
+          ? [...previous, seat.player_id]
+          : previous.filter(playerId => playerId !== seat.player_id));
+        return true;
+      }}/>, [editPlayerNote, handId, id, relationshipsByID, socialActions]);
+  const openReactionPurchase = useCallback((entry: ReactionCatalogEntry) => {
+    setActiveTablePanel(null);
+    setReactionPurchaseTarget(entry);
+  }, [setActiveTablePanel]);
+  const saveFavoriteReactions = useCallback(async (favorites: string[]) => {
+    setFavoritesSaving(true);
+    try {
+      const updated = await updateMe({favorite_reactions: favorites});
+      queryClient.setQueryData(['player', 'me'], updated);
+      pushNotification('Atalhos de reação atualizados.', 'info');
+    } finally {
+      setFavoritesSaving(false);
+    }
+  }, [queryClient]);
   if (bucket) return <>
     <BuyInPanel bucket={bucket} onSeatedAction={roomId => {
       queryClient.setQueryData(['seated', roomId], {seated: true, stack: 0});
@@ -214,8 +268,6 @@ function TableContent() {
   const inviteUrl = typeof window !== 'undefined' ?
     `${window.location.origin}/table?id=${id}${room?.share_code ? `&invite=${room.share_code}` : ''}` : '';
   const openSession = session.openSession;
-  const playerNotesByID = Object.fromEntries(playerNotes.map(note => [note.opponent_id, note]));
-  const relationshipsByID = Object.fromEntries(relationships.map(item => [item.player_id, item]));
   return (
     <main className="game" data-table-theme={profile?.table_theme || 'classic'}>
       <h1 className="sr-only">Mesa de poker: {STAGE_LABELS[s.stage] || s.stage.replaceAll('_', ' ')}</h1>
@@ -315,7 +367,7 @@ function TableContent() {
                   nextHandDurationMs={nextHandDurationMs}
                   viewerStackBefore={(s.payouts && Object.keys(s.payouts).length > 0) ? viewerStackBefore : undefined}
                   canRevealCards={canRevealCards} revealPending={rt.showCardsPending}
-                  onRevealCardAction={index => rt.showCards(index)}
+                  onRevealCardAction={rt.showCards}
                   onPeekCardsAction={rt.peekCards}
                   rabbitHuntPending={rt.requestRabbitHuntPending}
                   rabbitHuntFailCount={rt.requestRabbitHuntFailCount}
@@ -327,22 +379,8 @@ function TableContent() {
                   onRequestWinnerCardsAction={rt.requestWinnerCards}
                   onAnswerWinnerCardsAction={rt.answerWinnerCards}
                   playerNotes={playerNotesByID}
-                  onEditPlayerNoteAction={seat => setNoteOpponent({player_id: seat.player_id, name: seat.name})}
-                  renderPlayerActionsAction={seat => <PlayerActionsMenu
-                    target={{
-                      player_id: seat.player_id, name: seat.name,
-                      relationship: relationshipsByID[seat.player_id]?.relationship,
-                      muted: relationshipsByID[seat.player_id]?.muted,
-                      blocked: relationshipsByID[seat.player_id]?.blocked
-                    }}
-                    actions={socialActions} surface="table_behavior" tableId={id} handId={s.hand_id}
-                    onEditNoteAction={() => setNoteOpponent({player_id: seat.player_id, name: seat.name})}
-                    onBlockedAction={blocked => {
-                      setPendingSuppressed(previous => blocked
-                        ? [...previous, seat.player_id]
-                        : previous.filter(playerId => playerId !== seat.player_id));
-                      return true;
-                    }}/>}
+                  onEditPlayerNoteAction={editPlayerNote}
+                  renderPlayerActionsAction={renderPlayerActions}
                   targetedReactionLabel={pendingReaction ? TABLE_REACTIONS[pendingReaction].label : undefined}
                   onTargetPlayerAction={pendingReaction ? overlays.sendTargetedReaction : undefined}
                   announcement={rt.announcement}
@@ -381,31 +419,19 @@ function TableContent() {
             onSendAction={rt.sendChat}
             connected={rt.status === 'connected'}
             viewerId={viewer}
-            seats={s.seats}
+            seats={seatRoster}
             open={activeTablePanel === 'chat'}
             onOpenChangeAction={panelOpenChange('chat')}/>
-      <TableReactions items={rt.reactions} seats={s.seats} viewerId={viewer}
+      <TableReactions items={rt.reactions} seats={seatRoster} viewerId={viewer}
                       connected={rt.status === 'connected'} coolingDown={overlays.reactionCoolingDown}
                       pendingReaction={pendingReaction} onQuickSendAction={overlays.sendQuickReaction}
                       onPendingReactionChangeAction={overlays.setPendingReaction}
                       premiumEnabled premiumLoading={session.reactionCatalogLoading || session.reactionPurchasesLoading}
                       catalog={reactionCatalog} purchases={reactionPurchases}
-                      favorites={(profile?.favorite_reactions || []).filter(isTableReaction)}
+                      favorites={favoriteReactions}
                       favoritesSaving={favoritesSaving}
-                      onLockedReactionAction={entry => {
-                        setActiveTablePanel(null);
-                        setReactionPurchaseTarget(entry);
-                      }}
-                      onFavoriteReactionsChangeAction={async favorites => {
-                        setFavoritesSaving(true);
-                        try {
-                          const updated = await updateMe({favorite_reactions: favorites});
-                          queryClient.setQueryData(['player', 'me'], updated);
-                          pushNotification('Atalhos de reação atualizados.', 'info');
-                        } finally {
-                          setFavoritesSaving(false);
-                        }
-                      }}
+                      onLockedReactionAction={openReactionPurchase}
+                      onFavoriteReactionsChangeAction={saveFavoriteReactions}
                       open={activeTablePanel === 'reactions'}
                       onOpenChangeAction={panelOpenChange('reactions')}/>
       <BotChallenge required={rt.botChallengeRequired} onTokenAction={rt.submitBotChallenge}/>

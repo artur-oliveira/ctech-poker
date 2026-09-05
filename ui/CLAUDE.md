@@ -122,6 +122,25 @@ off by default — do not build UI that assumes real money is on.
   pattern — so the ring's one and only real mount already gets the correct duration. Any other
   countdown-ring consumer built on this "capture once at mount" shape must derive its inputs the
   same way, not through an effect.
+- **The table has a renders-per-snapshot budget, and it has two halves.** `Seat`, `TableStage`,
+  `Chat`, `TableReactions` and `LastWinners` are `memo` boundaries (`ActionBar` deliberately is
+  not — it depends on the snapshot every frame). A `memo` is only as good as the props it
+  receives, so the other half is that every prop crossing those boundaries is a primitive or a
+  stable identity: the realtime commands are one `commands` memo in `useTableRealtimeSession`
+  (with `visibleChat`/`visibleBubbles`/`visibleReactions` memoised too, or muting anyone would
+  re-render the felt every frame), `useTableOverlays` caches one handler per panel, `useSocialActions`
+  memoises its `{run, pending}`, `TableStage` caches `balancedSeatPosition` per
+  `index:occupancy:orientation` (a fresh position object per seat per render defeated the memo on
+  its own) and memoises `winnerStandings`, `Seat`'s seat-bound callbacks take the seat as an
+  argument instead of closing over it (`onEditNote(seat)`, `onReactionTarget(playerId)`,
+  `renderActionsMenu(seat)`), and the page hands Chat/TableReactions a `SeatIdentity[]` roster
+  rebuilt from a key rather than `snapshot.seats`. Timing props (`nowMs`, the two deadlines,
+  `turnTimeoutMs`) go **only** to the seat on the clock — behaviour-identical, since `Seat` only
+  reads them under `isTurn`. Adding a prop to any of those five means adding a stable identity,
+  not a fresh object. The budget is asserted in `tableRenderBudget.test.tsx` (9-max: a chat
+  bubble = 1 seat, an equity delta = 1 seat, a full `state` frame ≤ 3). Frame time itself is not
+  measured — jsdom has no layout engine and there is no metrics sink. See
+  `docs/2026-09-04-table-render-budget.md` and #230.
 - **Seats publish their own position.** `lib/seatRects.ts` is where `Seat` registers its element
   and where the reaction layer reads seat centres from. Do not locate a seat with a DOM query, and
   re-measure on `resize`/`orientationchange` rather than caching a rect for the length of an

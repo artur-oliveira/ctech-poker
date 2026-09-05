@@ -356,7 +356,7 @@ describe('Seat', () => {
 
   test('replaces the note trigger with the player menu when one is given, keeping the note marker', () => {
     const {container} = render(<Seat seat={seat()} isViewer={false} isTurn={false} index={0}
-      onEditNote={vi.fn()} actionsMenu={<button type="button">seat-menu</button>}
+      onEditNote={vi.fn()} renderActionsMenu={() => <button type="button">seat-menu</button>}
       playerNote={{opponent_id: 'player-1', note: 'agressivo', tag: 'red', updated_at: '2026-08-01T00:00:00Z'}}/>);
     expect(screen.getByRole('button', {name: 'seat-menu'})).toBeInTheDocument();
     expect(screen.queryByRole('button', {name: /nota privada/})).not.toBeInTheDocument();
@@ -365,7 +365,7 @@ describe('Seat', () => {
 
   test('never offers the player menu on the viewer own seat', () => {
     render(<Seat seat={seat()} isViewer isTurn={false} index={0}
-      actionsMenu={<button type="button">seat-menu</button>}/>);
+      renderActionsMenu={() => <button type="button">seat-menu</button>}/>);
     expect(screen.queryByRole('button', {name: 'seat-menu'})).not.toBeInTheDocument();
   });
 

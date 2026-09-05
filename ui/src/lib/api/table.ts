@@ -1,5 +1,11 @@
 import {apiClient} from './client';
 
+/** Just who is sitting and under what name. Chat and the reactions aside need
+ *  nothing else from a seat, so the table page can hand them a projection that
+ *  only changes when the roster does — a stack or a pot moving is not a reason
+ *  to re-render either of them (#230). */
+export type SeatIdentity = Pick<SeatView, 'player_id' | 'name'>;
+
 export interface SeatView {
   player_id: string;
   name?: string;

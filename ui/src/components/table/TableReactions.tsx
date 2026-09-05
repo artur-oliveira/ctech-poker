@@ -1,13 +1,13 @@
 'use client';
 import '@/app/(app)/table-reactions.css';
-import {type CSSProperties, useCallback, useEffect, useRef, useState} from 'react';
+import {type CSSProperties, memo, useCallback, useEffect, useRef, useState} from 'react';
 import {
   Crosshair, Eye, EyeOff, LockKeyhole, SmilePlus, Sparkles, Star, UserRound, X
 } from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {EmojiGlyph} from '@/components/ui/EmojiGlyph';
 import {ReactionFavoritesDialog} from '@/components/reactions/ReactionFavoritesDialog';
-import type {SeatView} from '@/lib/api/table';
+import type {SeatIdentity} from '@/lib/api/table';
 import type {ReactionCatalogEntry, ReactionPurchase} from '@/lib/api/reactionPurchases';
 import {ownedReactionIDs} from '@/lib/api/reactionPurchases';
 import {useDismiss} from '@/lib/hooks/useDismiss';
@@ -183,12 +183,12 @@ function ReactionChoice({id, state, disabled, onChoose}: {
   </button>;
 }
 
-export function TableReactions({items, seats, viewerId, connected, coolingDown, pendingReaction, onQuickSendAction,
+function TableReactionsImpl({items, seats, viewerId, connected, coolingDown, pendingReaction, onQuickSendAction,
                                  onPendingReactionChangeAction, open, onOpenChangeAction, premiumEnabled = false,
                                  premiumLoading = false, catalog = [], purchases = [], favorites = [],
                                  favoritesSaving = false, onLockedReactionAction, onFavoriteReactionsChangeAction}: {
   items: TableReactionEvent[];
-  seats: SeatView[];
+  seats: SeatIdentity[];
   viewerId?: string;
   connected: boolean;
   coolingDown: boolean;
@@ -344,3 +344,11 @@ export function TableReactions({items, seats, viewerId, connected, coolingDown, 
       onSaveAction={onFavoriteReactionsChangeAction}/>}
   </>;
 }
+
+/** Memoised: The reactions aside reads its own event list, the catalog and the seat roster. A snapshot that does not change the roster changes nothing here.
+ *  Every prop it receives is either a primitive or a stable identity
+ *  (see `useTableRealtimeSession`'s `commands` memo, `useTableOverlays`'
+ *  cached panel handlers, and the table page's memoised projections), so the
+ *  comparison actually pays off. Issue #230. */
+export const TableReactions = memo(TableReactionsImpl);
+TableReactions.displayName = 'TableReactions';

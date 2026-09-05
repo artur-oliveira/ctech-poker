@@ -1,5 +1,5 @@
 'use client';
-import {useCallback, useState} from 'react';
+import {useCallback, useMemo, useState} from 'react';
 import {useQueryClient} from '@tanstack/react-query';
 import {
   acceptFriendRequest, acceptTableInvite, blockPlayer, cancelFriendRequest, declineFriendRequest, declineTableInvite,
@@ -57,5 +57,7 @@ export function useSocialActions(): SocialActionState {
     }
   }, [queryClient]);
 
-  return {run, pending};
+  // Memoised: the table hands this straight to every seat's player menu, and
+  // a new object per render would re-render all nine seats (#230).
+  return useMemo(() => ({run, pending}), [pending, run]);
 }
