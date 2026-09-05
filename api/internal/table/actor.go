@@ -193,6 +193,13 @@ type Actor struct {
 	// Premium reactions fail closed until both hooks are wired by the manager.
 	reactionOwnership func(ctx context.Context, playerID, reactionID string) (bool, error)
 	reactionMarkUsed  func(ctx context.Context, playerID, reactionID string) (*types.TransactWriteItem, error)
+	// commandBudget/settlementBudget/queueBudget are the deadlines this actor
+	// runs under — fields rather than bare constants only so tests can shrink
+	// them. See budget.go for what each one bounds and why.
+	commandBudget    time.Duration
+	settlementBudget time.Duration
+	queueBudget      time.Duration
+	budget           budgetCounters
 	// connCount mirrors the total size of activeConns across all players.
 	// Maintained only inside Run (handleConnect/handleDisconnect) but read via
 	// ActiveConnCount from any goroutine — same pattern as equityEnabled —
@@ -222,6 +229,9 @@ func New(id string, store *tablestore.Store, trustCache bool, broadcast func(str
 		kickGrace:          5 * time.Minute,
 		kickTimers:         make(map[string]*time.Timer),
 		afkSweepInterval:   AFKSweepInterval,
+		commandBudget:      defaultCommandBudget,
+		settlementBudget:   settlementCommandBudget,
+		queueBudget:        defaultQueueBudget,
 	}
 	a.equityEnabled.Store(true)
 	a.armAFKSweepTimer()
@@ -240,20 +250,49 @@ var ErrNoSeatsAvailable = errors.New("table: no seats available")
 
 func (a *Actor) Dispatch(cmd Command) error {
 	// The mailbox is deliberately blocking rather than lossy: a full channel
-	// backpressures the caller instead of dropping a command.
+	// backpressures the caller instead of dropping a command. That backpressure
+	// is budgeted, though — see queueBudget: past it the caller is told the
+	// table is unavailable instead of being parked on a wedged actor forever.
 	select {
 	case a.cmds <- cmd:
-		// Sent (channel is buffered). Wait for the reply, but bail if the
-		// actor stops before Run reads/processes it — otherwise we'd block
-		// forever on a dead actor.
-		select {
-		case err := <-cmd.reply():
-			return err
-		case <-a.done:
-			return ErrActorStopped
-		}
 	case <-a.done:
 		return ErrActorStopped
+	default:
+		if err := a.enqueueWithinBudget(cmd); err != nil {
+			return err
+		}
+	}
+	// Sent (channel is buffered). Wait for the reply, but bail if the actor
+	// stops before Run reads/processes it — otherwise we'd block forever on a
+	// dead actor. The wait itself is bounded by the command's own deadline
+	// (handleWithBudget), never abandoned here: a caller that walked away from
+	// an in-flight settlement would be exactly the silent-abandon failure this
+	// budget exists to avoid.
+	select {
+	case err := <-cmd.reply():
+		return err
+	case <-a.done:
+		return ErrActorStopped
+	}
+}
+
+// enqueueWithinBudget waits out a full mailbox for at most queueBudget.
+func (a *Actor) enqueueWithinBudget(cmd Command) error {
+	timer := time.NewTimer(a.queueBudget)
+	defer timer.Stop()
+	started := time.Now()
+	defer func() { a.budget.queueWaitNanos.Add(int64(time.Since(started))) }()
+	select {
+	case a.cmds <- cmd:
+		return nil
+	case <-a.done:
+		return ErrActorStopped
+	case <-timer.C:
+		a.budget.queueSaturations.Add(1)
+		slog.Warn("table command queue saturated, rejecting command",
+			"table_id", a.id, "command", fmt.Sprintf("%T", cmd),
+			"queued", len(a.cmds), "budget", a.queueBudget)
+		return ErrQueueSaturated
 	}
 }
 
@@ -284,7 +323,7 @@ func (a *Actor) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case cmd := <-a.cmds:
-			cmd.reply() <- a.handleSafely(ctx, cmd)
+			cmd.reply() <- a.handleWithBudget(ctx, cmd)
 		}
 	}
 }

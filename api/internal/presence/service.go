@@ -9,6 +9,21 @@ import (
 const (
 	HeartbeatInterval = 30 * time.Second
 	ConnectionTTL     = 75 * time.Second
+
+	// opBudget bounds one presence operation (#223). Every caller here is a
+	// WebSocket lifecycle event: Open and Heartbeat run under the socket's own
+	// context, which lives as long as the connection does, and Close runs under
+	// context.Background() so a disconnect can still be recorded — none of them
+	// carried a deadline, so an unreachable Valkey (or a slow session lookup)
+	// parked the connect path, a heartbeat tick, or a socket teardown
+	// indefinitely. Presence is decorative state with its own TTL
+	// (ConnectionTTL): a dropped update self-heals on the next heartbeat, so
+	// failing fast is strictly better than hanging.
+	opBudget = 2 * time.Second
+
+	// openBudget is Open's and Reconcile's larger allowance: they also do a
+	// DynamoDB session lookup and a friend fan-out on top of the cache write.
+	openBudget = 3 * time.Second
 )
 
 type FriendSource interface {
@@ -27,13 +42,20 @@ type Service struct {
 	sessions SessionSource
 	notify   NotifyFunc
 	now      func() time.Time
+	// opBudget/openBudget are the deadlines above, as fields only so tests can
+	// shrink them.
+	opBudget   time.Duration
+	openBudget time.Duration
 }
 
 func NewService(store Store, friends FriendSource, sessions SessionSource, notify NotifyFunc) *Service {
-	return &Service{store: store, friends: friends, sessions: sessions, notify: notify, now: time.Now}
+	return &Service{store: store, friends: friends, sessions: sessions, notify: notify, now: time.Now,
+		opBudget: opBudget, openBudget: openBudget}
 }
 
 func (s *Service) Open(ctx context.Context, playerID, connectionID string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.openBudget)
+	defer cancel()
 	becameOnline, err := s.store.Open(ctx, playerID, connectionID, s.now().Add(ConnectionTTL))
 	if err != nil {
 		return err
@@ -52,6 +74,8 @@ func (s *Service) Open(ctx context.Context, playerID, connectionID string) error
 }
 
 func (s *Service) Heartbeat(ctx context.Context, playerID, connectionID string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.opBudget)
+	defer cancel()
 	becameOnline, err := s.store.Heartbeat(ctx, playerID, connectionID, s.now().Add(ConnectionTTL))
 	if err == nil && becameOnline {
 		s.broadcastCurrent(ctx, playerID)
@@ -60,6 +84,8 @@ func (s *Service) Heartbeat(ctx context.Context, playerID, connectionID string) 
 }
 
 func (s *Service) Close(ctx context.Context, playerID, connectionID string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.opBudget)
+	defer cancel()
 	becameOffline, err := s.store.Close(ctx, playerID, connectionID)
 	if err == nil && becameOffline {
 		s.broadcast(ctx, playerID, StatusOffline)
@@ -68,6 +94,8 @@ func (s *Service) Close(ctx context.Context, playerID, connectionID string) erro
 }
 
 func (s *Service) SetInTable(ctx context.Context, playerID, roomID string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.opBudget)
+	defer cancel()
 	changed, err := s.store.SetInTable(ctx, playerID, roomID)
 	if err == nil && changed {
 		entries, statusErr := s.store.GetMany(ctx, []string{playerID})
@@ -82,6 +110,8 @@ func (s *Service) SetInTable(ctx context.Context, playerID, roomID string) error
 }
 
 func (s *Service) Reconcile(ctx context.Context, playerID string) error {
+	ctx, cancel := context.WithTimeout(ctx, s.openBudget)
+	defer cancel()
 	if s.sessions == nil {
 		return nil
 	}
@@ -93,6 +123,8 @@ func (s *Service) Reconcile(ctx context.Context, playerID string) error {
 }
 
 func (s *Service) GetMany(ctx context.Context, playerIDs []string) (map[string]PlayerPresence, error) {
+	ctx, cancel := context.WithTimeout(ctx, s.opBudget)
+	defer cancel()
 	return s.store.GetMany(ctx, playerIDs)
 }
 

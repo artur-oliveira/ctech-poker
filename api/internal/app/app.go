@@ -787,13 +787,26 @@ func wireAutoRebuyHook(mgr *tablemanager.Manager, buyinSvc *buyin.Service, rooms
 // the only way to avoid a construction cycle. SetOnPlayerRemoved is safe to
 // call after actors already exist (tablemanager.Manager checks the hook
 // dynamically on every fire, not at actor-creation time).
+// systemRemovalSettleTimeout bounds one system removal's settlement, which
+// runs on the table's actor goroutine — see the hook below.
+const systemRemovalSettleTimeout = 30 * time.Second
+
 func wirePlayerRemovedHook(mgr *tablemanager.Manager, buyinSvc *buyin.Service, reg ws.Registry, reactionOwnershipCache *reactionpurchase.OwnershipCache, reactionSvc *reactionpurchase.Service) {
 	mgr.SetSystemSettlementIntent(buyinSvc.BuildSystemSettlementIntent)
 	mgr.SetReactionOwnership(reactionOwnershipCache.IsOwned)
 	mgr.SetReactionMarkUsed(reactionSvc.BuildMarkUsedIntent)
 	reactionSvc.SetOwnershipInvalidator(reactionOwnershipCache.Invalidate)
 	mgr.SetOnPlayerRemoved(func(tableID, playerID, reason, settlementNonce string, stack int64, holdID string) {
-		ctx := context.Background()
+		// This hook runs synchronously on the removed player's table actor
+		// goroutine, so an unbounded wallet/DynamoDB call here stalls the whole
+		// table (#223) — and it is deliberately detached from the command's own
+		// context, so the command deadline does not bound it. The ceiling is
+		// generous on purpose: the settlement records its recovery intent to
+		// poker_pending_cashouts before touching the wallet, so cmd/reconcile
+		// finishes anything this cuts short, but past this point the far more
+		// likely story is a dead dependency pinning the table.
+		ctx, cancel := context.WithTimeout(context.Background(), systemRemovalSettleTimeout)
+		defer cancel()
 		// Pushes an explicit "removed" frame straight to the removed player's
 		// own connection (same per-player fan-out key the "state" broadcast
 		// uses) — without it, a system-removed player's socket just stops

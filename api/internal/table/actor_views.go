@@ -123,9 +123,16 @@ func (a *Actor) broadcastAll() {
 	if a.broadcast == nil || a.cached == nil {
 		return
 	}
-	a.processPendingExitAutoFolds(context.Background())
-	a.processInlinePreselections(context.Background())
-	a.removeEligiblePendingExits(context.Background())
+	// These three commit on their own, off whatever command triggered the
+	// broadcast, so they need their own deadline — a Background context here
+	// would leave a hung DynamoDB call pinning the actor goroutine past the
+	// budget the command itself runs under (#223). The safe-completion budget,
+	// not the interactive one: removeEligiblePendingExits settles a seat.
+	sweepCtx, cancel := context.WithTimeout(context.Background(), a.settlementBudget)
+	defer cancel()
+	a.processPendingExitAutoFolds(sweepCtx)
+	a.processInlinePreselections(sweepCtx)
+	a.removeEligiblePendingExits(sweepCtx)
 	stage := a.cached.Stage()
 	current := a.cached.CurrentPlayerIDForActor()
 	grace := time.Duration(0)

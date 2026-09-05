@@ -270,6 +270,31 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   ad-hoc collector was added; CloudWatch's `addWriteVolumeAlarm` stays the numeric signal. Tests are fake-clock only
   (`breaker_test.go`): the storm, machine-speed play, contention that still makes progress, store outages, per-table
   isolation, and idle eviction.
+- **Every command the actor runs has a deadline, and the mailbox has a budget (issue #223,
+  `internal/table/budget.go`).** One goroutine serves one table, and `Dispatch` parks the caller's socket goroutine
+  until the reply comes back, so unbounded I/O inside a handler stalls the whole table and everything queued behind
+  it. `Run` used to hand each handler the actor's *process-lifetime* context (cancelled only at shutdown) and
+  `Dispatch` waited forever for a mailbox slot. Now `handleWithBudget` wraps each command in its class deadline:
+  `defaultCommandBudget` (10s) for anything a player is waiting on — losing one costs a resync, and the client
+  resubmits the same action ID, which `CommitAction`'s idempotency guard collapses — and `settlementCommandBudget`
+  (30s) for the commands that can move money or remove a seat (`JoinCmd`, `LeaveCmd`, `kickTimeoutCmd`,
+  `afkSweepCmd`, `nextHandCmd`), deliberately far above any healthy latency because cutting one short is not free.
+  An overrun is reported as `tablestore.ErrUnavailable` (resync), never `invalid_action` — the command reached no
+  verdict, it ran out of time. `Dispatch` still backpressures rather than dropping, but only for `defaultQueueBudget`
+  (2s) on a full 64-deep mailbox; past that the caller gets `ErrQueueSaturated`, which wraps `ErrUnavailable` for the
+  same reason `ErrCommitThrottled` does. It never abandons an in-flight reply — walking away from a running
+  settlement is exactly the silent-abandon failure this budget exists to avoid. Two other holes on the same goroutine
+  were closed with it: `broadcastAll`'s pending-exit/preselection sweeps (they commit off whatever command triggered
+  the broadcast) and `app.go`'s `SetOnPlayerRemoved` settlement hook, which is deliberately detached from the
+  command's context and so needs its own `systemRemovalSettleTimeout` (30s); it records its recovery intent to
+  `poker_pending_cashouts` before touching the wallet, so `cmd/reconcile` finishes anything the deadline interrupts.
+  Presence is bounded the same way in `internal/presence` (`opBudget` 2s, `openBudget` 3s for Open/Reconcile's extra
+  DynamoDB session lookup): `Open`/`Heartbeat` ran under the socket's own context and `Close` under
+  `context.Background()`, none of them with a deadline. **There is no `internal/metrics` in this service (#279) and
+  no ad-hoc collector was added:** `Actor.BudgetSnapshot()` reports queue saturations, handler overruns and
+  accumulated queue wait for tests and for anything that later wants to log them, plus one WARN per event.
+  Per-dependency timeout attribution and true per-command queue sojourn time (the counter measures time blocked on a
+  full mailbox, which is zero while the actor keeps up) are **not** implemented.
 - **A timer-fired handler must force a fresh reload, not `ensureLoaded(ctx, false)`.** `handleTurnTimeout`,
   `handleNextHand` and `handleRunoutStep` are only ever reached from a `time.AfterFunc` armed by *this* actor
   instance — and `internal/tablelease` is latency-only, never an exclusive fleet lock (several instances run
