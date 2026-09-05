@@ -9,6 +9,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"gopkg.aoctech.app/poker/cli/internal/auth"
 	"gopkg.aoctech.app/poker/cli/internal/config"
@@ -37,12 +38,16 @@ type Shell struct {
 	rc      *rest.Client
 
 	state       shellState
-	loginChoice int // 0 = browser, 1 = api key
+	loginChoice int // 0 = browser, 1 = api key, 2 = sair
 	loginErr    error
 	input       textinput.Model
 	spin        spinner.Model
 	lines       []string
 	busy        bool
+
+	menu     *commandMenu
+	viewport viewport.Model
+	vpReady  bool
 
 	play  playState
 	table *TableModel
@@ -62,10 +67,37 @@ func NewShell(cfg config.Settings) *Shell {
 func newShell(cfg config.Settings, session *auth.Session, rc *rest.Client) *Shell {
 	ti := textinput.New()
 	ti.Prompt = "› "
+	ti.PromptStyle = promptStyle
 	ti.Focus()
 	sp := spinner.New()
-	return &Shell{cfg: cfg, session: session, rc: rc, state: stateCheckingLogin, input: ti, spin: sp}
+	sp.Style = accentStyle
+	return &Shell{
+		cfg: cfg, session: session, rc: rc, state: stateCheckingLogin, input: ti, spin: sp,
+		menu: newCommandMenu(homeCommandSpecs),
+	}
 }
+
+// appendLine appends line to the scrollback and keeps the viewport following
+// the bottom unless the user has scrolled up to read history.
+func (s *Shell) appendLine(line string) {
+	s.lines = append(s.lines, line)
+	s.syncViewport()
+}
+
+func (s *Shell) syncViewport() {
+	if !s.vpReady {
+		return
+	}
+	atBottom := s.viewport.AtBottom()
+	s.viewport.SetContent(strings.Join(s.lines, "\n"))
+	if atBottom {
+		s.viewport.GotoBottom()
+	}
+}
+
+// viewportReserved is how many lines around the scrollback the home screen's
+// chrome (logo + input, +1 for the busy spinner) always takes.
+const viewportReserved = 4
 
 func (s *Shell) Init() tea.Cmd {
 	return tea.Batch(checkLogin(s.session), s.spin.Tick)
@@ -98,6 +130,25 @@ func loginAPIKey(session *auth.Session, key string) tea.Cmd {
 
 func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		h := msg.Height - viewportReserved
+		if h < 3 {
+			h = 3
+		}
+		if !s.vpReady {
+			s.viewport = viewport.New(msg.Width, h)
+			s.vpReady = true
+		} else {
+			s.viewport.Width, s.viewport.Height = msg.Width, h
+		}
+		s.syncViewport()
+		if s.table != nil {
+			tm, cmd := s.table.Update(msg)
+			s.table = tm.(*TableModel)
+			return s, cmd
+		}
+		return s, nil
+
 	case checkLoginMsg:
 		if msg.loggedIn {
 			s.state = stateHome
@@ -116,7 +167,7 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		s.state = stateHome
 		s.input.Reset()
-		s.appendLine("Logado.")
+		s.appendLine(successStyle.Render("Logado."))
 		return s, nil
 
 	case commandResultMsg:
@@ -295,17 +346,22 @@ func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch s.state {
 	case stateLoginChoice:
 		switch msg.String() {
-		case "up", "down":
-			s.loginChoice = 1 - s.loginChoice
+		case "up":
+			s.loginChoice = (s.loginChoice - 1 + 3) % 3
+		case "down":
+			s.loginChoice = (s.loginChoice + 1) % 3
 		case "enter":
 			if s.loginChoice == 0 {
 				s.busy = true
 				s.appendLine("Abrindo o navegador para login...")
 				return s, loginPKCE(s.session)
+			} else if s.loginChoice == 1 {
+				s.state = stateAPIKeyInput
+				s.input.Reset()
+				s.input.Placeholder = "cole sua API key"
+			} else {
+				return s, tea.Quit
 			}
-			s.state = stateAPIKeyInput
-			s.input.Reset()
-			s.input.Placeholder = "cole sua API key"
 		}
 		return s, nil
 
@@ -326,17 +382,46 @@ func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if s.busy {
 			return s, nil
 		}
-		if msg.String() == "enter" {
-			line := strings.TrimSpace(s.input.Value())
-			s.input.Reset()
-			if line == "" {
+		switch msg.Type {
+		case tea.KeyPgUp, tea.KeyPgDown, tea.KeyHome, tea.KeyEnd:
+			var cmd tea.Cmd
+			s.viewport, cmd = s.viewport.Update(msg)
+			return s, cmd
+		case tea.KeyCtrlL:
+			s.lines = nil
+			s.syncViewport()
+			return s, nil
+		}
+		if s.menu.visible {
+			switch msg.Type {
+			case tea.KeyUp:
+				s.menu.movePrev()
+				return s, nil
+			case tea.KeyDown:
+				s.menu.moveNext()
+				return s, nil
+			case tea.KeyTab, tea.KeyEnter:
+				val, submit := s.menu.accept()
+				if val == "" {
+					return s, nil
+				}
+				s.input.SetValue(val)
+				s.input.CursorEnd()
+				if submit {
+					return s.submitHomeLine()
+				}
+				return s, nil
+			case tea.KeyEsc:
+				s.menu.hide()
 				return s, nil
 			}
-			s.appendLine(s.input.Prompt + line)
-			return s.dispatch(line)
+		}
+		if msg.String() == "enter" {
+			return s.submitHomeLine()
 		}
 		var cmd tea.Cmd
 		s.input, cmd = s.input.Update(msg)
+		s.menu.UpdateInput(s.input.Value())
 		return s, cmd
 
 	case statePlaySize:
@@ -403,7 +488,19 @@ func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (s *Shell) appendLine(line string) { s.lines = append(s.lines, line) }
+// submitHomeLine reads the current input, clears it, echoes it to the
+// scrollback, and dispatches it. Shared by plain Enter and the command
+// menu's zero-argument auto-submit.
+func (s *Shell) submitHomeLine() (tea.Model, tea.Cmd) {
+	line := strings.TrimSpace(s.input.Value())
+	s.input.Reset()
+	s.menu.hide()
+	if line == "" {
+		return s, nil
+	}
+	s.appendLine(s.input.Prompt + line)
+	return s.dispatch(line)
+}
 
 // dispatch parses one `/command [args]` home-screen line and returns the
 // resulting tea.Cmd. Unknown input is echoed back with a hint.
@@ -414,15 +511,20 @@ func (s *Shell) dispatch(line string) (tea.Model, tea.Cmd) {
 
 	switch cmd {
 	case "/help":
-		s.appendLine(helpText)
+		s.appendLine(formatCommandList(homeCommandSpecs))
+		return s, nil
+	case "/clear":
+		s.lines = nil
+		s.syncViewport()
 		return s, nil
 	case "/logout":
 		if err := s.session.Logout(); err != nil {
-			s.appendLine("erro: " + err.Error())
+			s.appendLine(errorStyle.Render("erro: " + err.Error()))
 			return s, nil
 		}
 		s.state = stateLoginChoice
 		s.lines = nil
+		s.syncViewport()
 		return s, nil
 	case "/exit", "/quit":
 		s.state = stateQuitting
@@ -452,7 +554,7 @@ func (s *Shell) dispatch(line string) (tea.Model, tea.Cmd) {
 		s.busy = true
 		return s, loadRoom(s.rc, args[0])
 	default:
-		s.appendLine(fmt.Sprintf("comando desconhecido: %s (tente /help)", cmd))
+		s.appendLine(errorStyle.Render(fmt.Sprintf("comando desconhecido: %s (tente /help)", cmd)))
 		return s, nil
 	}
 }
@@ -479,15 +581,13 @@ func (s *Shell) runAchievements() tea.Cmd {
 
 func explainErr(err error) string {
 	if errors.Is(err, auth.ErrLoggedOut) {
-		return "não logado — use /logout e faça login de novo"
+		return errorStyle.Render("não logado — use /logout e faça login de novo")
 	}
 	if rest.IsStatus(err, http.StatusForbidden) {
-		return "erro: " + err.Error() + " (este ambiente pode não ter habilitado o client poker-cli — ver docs/specs/2026-09-05-poker-cli.md §2)"
+		return errorStyle.Render("erro: " + err.Error() + " (este ambiente pode não ter habilitado o client poker-cli — ver docs/specs/2026-09-05-poker-cli.md §2)")
 	}
-	return "erro: " + err.Error()
+	return errorStyle.Render("erro: " + err.Error())
 }
-
-const helpText = `comandos: /profile /achievements /play /enter <id> /logout /exit /help`
 
 func (s *Shell) View() string {
 	switch s.state {
@@ -496,59 +596,73 @@ func (s *Shell) View() string {
 	case stateLoginChoice:
 		cursor := func(i int) string {
 			if i == s.loginChoice {
-				return "› "
+				return selectedStyle.Render("› ")
 			}
 			return "  "
 		}
 		errLine := ""
 		if s.loginErr != nil {
-			errLine = "\nerro no login: " + s.loginErr.Error()
+			errLine = "\n" + errorStyle.Render("erro no login: "+s.loginErr.Error())
 		}
-		return fmt.Sprintf("CTech Poker CLI\n\nComo você quer entrar?\n%sNavegador (PKCE)\n%sAPI Key%s\n",
-			cursor(0), cursor(1), errLine)
+		return fmt.Sprintf("%s\n\nComo você quer entrar?\n%sAbrir Navegador\n%sAPI Key\n%sSair%s\n",
+			renderLogo(), cursor(0), cursor(1), cursor(2), errLine)
 	case stateAPIKeyInput:
-		return "CTech Poker CLI\n\n" + s.input.View()
+		return renderLogo() + "\n\n" + s.input.View()
 	case stateLoggingIn:
-		return s.spin.View() + " entrando..."
+		return accentStyle.Render(s.spin.View()) + " entrando..."
 	case statePlaySize:
 		var b strings.Builder
-		b.WriteString("Tamanho da mesa:\n")
+		b.WriteString(titleStyle.Render("Tamanho da mesa:") + "\n")
 		for i, sz := range tableSizes {
 			cur := "  "
 			if i == s.play.sizeIdx {
-				cur = "› "
+				cur = selectedStyle.Render("› ")
 			}
 			b.WriteString(cur + sz.label + "\n")
 		}
 		return b.String()
 	case statePlayStake:
 		var b strings.Builder
-		b.WriteString("Stake (small/big blind):\n")
+		b.WriteString(titleStyle.Render("Stake (small/big blind):") + "\n")
 		for i, st := range s.play.stakes {
 			cur := "  "
 			if i == s.play.stakeIdx {
-				cur = "› "
+				cur = selectedStyle.Render("› ")
 			}
 			b.WriteString(fmt.Sprintf("%s%d / %d\n", cur, st.SmallBlind, st.BigBlind))
 		}
 		return b.String()
 	case statePlayBuyin:
-		return fmt.Sprintf("%s\n%s", buyInHint(s.play.bigBlind), s.input.View())
+		return fmt.Sprintf("%s\n%s", mutedStyle.Render(buyInHint(s.play.bigBlind)), s.input.View())
 	case stateJoining:
-		return s.spin.View() + " entrando na mesa..."
+		return accentStyle.Render(s.spin.View()) + " entrando na mesa..."
 	case stateInTable:
 		if s.table != nil {
 			return s.table.View()
 		}
 		return ""
 	default: // stateHome, stateCheckingLogin
-		body := strings.Join(s.lines, "\n")
 		if s.state == stateCheckingLogin {
-			return "CTech Poker CLI\n" + s.spin.View() + " verificando login..."
+			return renderLogo() + "\n" + accentStyle.Render(s.spin.View()) + " verificando login..."
 		}
+		var b strings.Builder
+		b.WriteString(renderLogo())
+		b.WriteString("\n")
+		if s.vpReady {
+			b.WriteString(s.viewport.View())
+		} else {
+			b.WriteString(strings.Join(s.lines, "\n"))
+		}
+		b.WriteString("\n")
 		if s.busy {
-			return body + "\n" + s.spin.View() + "\n" + s.input.View()
+			b.WriteString(accentStyle.Render(s.spin.View()))
+			b.WriteString("\n")
 		}
-		return body + "\n" + s.input.View()
+		b.WriteString(s.input.View())
+		if menuView := s.menu.View(); menuView != "" {
+			b.WriteString("\n")
+			b.WriteString(menuView)
+		}
+		return b.String()
 	}
 }

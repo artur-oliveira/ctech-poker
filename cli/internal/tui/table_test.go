@@ -16,13 +16,13 @@ func tableFixtureSnapshot() *proto.ServerMessage {
 		Type: "state",
 		Snapshot: &proto.TableSnapshot{
 			Stage: "flop", Board: []string{"Ah", "7c", "Kd"},
-			CurrentPlayerId:    "you",
-			DealerPlayerId:     "caio",
-			SmallBlindPlayerId: "duda",
-			BigBlindPlayerId:   "edu",
-			SnapshotVersion:    7,
-			HandId:             "h-9",
-			Pots:               []*proto.Pot{{Amount: 24}},
+			CurrentPlayerId:      "you",
+			DealerPlayerId:       "caio",
+			SmallBlindPlayerId:   "duda",
+			BigBlindPlayerId:     "edu",
+			SnapshotVersion:      7,
+			HandId:               "h-9",
+			Pots:                 []*proto.Pot{{Amount: 24}},
 			ActionDeadlineUnixMs: 9_000_000_000_000,
 			LegalActions: &proto.LegalActions{
 				Actions: []string{"fold", "call", "raise"}, CallAmount: 8, MinRaiseTo: 16, MaxRaiseTo: 246, PotRaiseTo: 32,
@@ -142,6 +142,51 @@ func TestTableRemovedEmitsExitAndLogsSettledStack(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(m.log, "\n"), "1500") {
 		t.Errorf("settled stack not logged: %v", m.log)
+	}
+}
+
+func TestTableClearCommandEmptiesLog(t *testing.T) {
+	m := NewTableModel(TableConfig{YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII})
+	nm, _ := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
+	m = nm.(*TableModel)
+	typeLine(t, m, "/clear")
+	if len(m.log) != 0 {
+		t.Fatalf("log = %v, want empty after /clear", m.log)
+	}
+}
+
+func TestTableCtrlLClearsLog(t *testing.T) {
+	m := NewTableModel(TableConfig{YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII})
+	m.appendLog("something")
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(*TableModel)
+	if len(m.log) != 0 {
+		t.Fatalf("log = %v, want empty after Ctrl+L", m.log)
+	}
+}
+
+func TestTableSlashOpensMenuAndTabCompletes(t *testing.T) {
+	m := NewTableModel(TableConfig{YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII})
+	for _, r := range "/tal" {
+		nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = nm.(*TableModel)
+	}
+	if !m.menu.visible {
+		t.Fatal("menu should be visible while typing a command prefix")
+	}
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = nm.(*TableModel)
+	if m.input.Value() != "/talk " {
+		t.Fatalf("input = %q, want tab-completed to /talk with a trailing space", m.input.Value())
+	}
+}
+
+func TestTableHelpListsCommandsWithDescriptions(t *testing.T) {
+	m := NewTableModel(TableConfig{YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII})
+	typeLine(t, m, "/help")
+	out := strings.Join(m.log, "\n")
+	if !strings.Contains(out, "/raise") || !strings.Contains(out, "Aumenta para o valor") {
+		t.Fatalf("help output missing command+description: %q", out)
 	}
 }
 

@@ -53,17 +53,31 @@ the running program, `/command`-style (like Claude Code's own shell):
    ```
    /profile        show your poker profile
    /achievements   show your achievement progress
-   /play           join a table (coming soon)
-   /enter <id>     join a table by room id (coming soon)
+   /play           join a table (pick size, stake, buy-in)
+   /enter <id>     join a table by room id
+   /clear          clear the screen (Ctrl+L works too)
    /logout         forget stored credentials and log in again
-   /help           list commands
+   /help           list commands with descriptions
    /exit           quit
    ```
+
+   Typing `/` opens a Claude-Code-style suggestion menu: `↑`/`↓` to move,
+   `Tab`/`Enter` to accept, `Esc` to dismiss. Long output (like the
+   achievements list) scrolls — `PgUp`/`PgDn`/`Home`/`End`.
+
+3. **At a table** the same conventions apply — a `/` prompt with menu +
+   Tab-complete, `PgUp`/`PgDn` scrollback, `Ctrl+L`/`/clear`:
+
+   ```
+   /check /call /raise <v> /pot /allin /fold
+   /talk <msg>  /react <code> [player]  /peek [all|1|2]
+   /sitout /ready /summary /last-winners /share
+   /exit /exit! /clear /help
+   ```
+
+   Hotkeys `f`/`c`/`r`/`p`/`k` map to fold/call/raise/pot/peek on your turn.
 
 Override the config file, API/account URLs, or card rendering with
 `--config`, `--api-url`, `--account-url`, `--cards ascii|color`, or the
 `CTECH_POKER_API_URL` / `CTECH_POKER_ACCOUNT_URL` / `CTECH_POKER_CLIENT_ID` /
 `NO_COLOR` environment variables.
-
-Install instructions and release downloads land here as the remaining
-implementation-plan tasks complete.

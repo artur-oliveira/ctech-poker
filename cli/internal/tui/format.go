@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"gopkg.aoctech.app/poker/cli/internal/game"
 	"gopkg.aoctech.app/poker/cli/internal/rest"
 )
 
@@ -32,7 +33,11 @@ func FormatAchievements(s rest.AchievementSummary) string {
 		} else if a.Unlocked {
 			mark = "•"
 		}
-		_, _ = fmt.Fprintf(&b, "\n[%s] %-24s %d★  progresso %d", mark, a.Key, a.Stars, a.Progress)
+		label := game.AchievementLabel(a.Key)
+		_, _ = fmt.Fprintf(&b, "\n[%s] %-26s %d★  progresso %d", mark, label, a.Stars, a.Progress)
+		if desc := game.AchievementDescription(a.Key); desc != "" {
+			_, _ = fmt.Fprintf(&b, "\n      %s", dimStyle.Render(desc))
+		}
 	}
 	return b.String()
 }

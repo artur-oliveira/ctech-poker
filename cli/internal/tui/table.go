@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"gopkg.aoctech.app/poker/cli/internal/game"
 	"gopkg.aoctech.app/poker/cli/internal/proto"
 )
@@ -47,23 +47,30 @@ type (
 	ReconnectingMsg struct{}
 	ReconnectedMsg  struct{}
 	// TableFatalMsg ends the table view with an error.
-	TableFatalMsg struct{ Err error }
+	TableFatalMsg     struct{ Err error }
 	sessionSummaryMsg struct {
 		text string
 		err  error
 	}
 )
 
+// tableViewportReserved is how many lines the header/rules/input chrome
+// always takes around the scrolling log.
+const tableViewportReserved = 8
+
 // TableModel renders one poker table (Layout B) and turns input into
 // ClientMessages.
 type TableModel struct {
-	cfg      TableConfig
-	view     game.TableView
-	haveView bool
-	narr     *game.Narrator
-	log      []string
-	input    textinput.Model
-	now      time.Time
+	cfg          TableConfig
+	view         game.TableView
+	haveView     bool
+	narr         *game.Narrator
+	log          []string
+	input        textinput.Model
+	menu         *commandMenu
+	viewport     viewport.Model
+	vpReady      bool
+	now          time.Time
 	reconnecting bool
 
 	pendingActionID string
@@ -75,11 +82,13 @@ type TableModel struct {
 func NewTableModel(cfg TableConfig) *TableModel {
 	ti := textinput.New()
 	ti.Prompt = "› "
+	ti.PromptStyle = promptStyle
 	ti.Focus()
 	return &TableModel{
 		cfg:   cfg,
 		narr:  game.NewNarrator(cfg.YouID).WithCardMode(cfg.CardMode),
 		input: ti,
+		menu:  newCommandMenu(tableCommandSpecs),
 		now:   time.Now(),
 	}
 }
@@ -92,6 +101,20 @@ func tableTick() tea.Cmd {
 
 func (m *TableModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		h := msg.Height - tableViewportReserved
+		if h < 3 {
+			h = 3
+		}
+		if !m.vpReady {
+			m.viewport = viewport.New(msg.Width, h)
+			m.vpReady = true
+		} else {
+			m.viewport.Width, m.viewport.Height = msg.Width, h
+		}
+		m.syncViewport()
+		return m, nil
+
 	case TableTickMsg:
 		m.now = time.Time(msg)
 		return m, tableTick()
@@ -106,12 +129,12 @@ func (m *TableModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case TableFatalMsg:
-		m.appendLog("erro: " + msg.Err.Error())
+		m.appendLog(errorStyle.Render("erro: " + msg.Err.Error()))
 		return m, nil
 
 	case sessionSummaryMsg:
 		if msg.err != nil {
-			m.appendLog("resumo indisponível: " + msg.err.Error())
+			m.appendLog(errorStyle.Render("resumo indisponível: " + msg.err.Error()))
 		} else {
 			m.appendLog(msg.text)
 		}
@@ -162,10 +185,10 @@ func (m *TableModel) handleServerMessage(sm *proto.ServerMessage) tea.Cmd {
 					return nil
 				}
 			}
-			m.appendLog("ação inválida: " + sm.Message)
+			m.appendLog(errorStyle.Render("ação inválida: " + sm.Message))
 			return nil
 		}
-		m.appendLog("erro: " + sm.Message)
+		m.appendLog(errorStyle.Render("erro: " + sm.Message))
 		return nil
 
 	case "removed":
@@ -187,14 +210,56 @@ func (m *TableModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.quit = true
 		return m, exitCmd()
 	}
-	if msg.String() != "enter" {
+
+	switch msg.Type {
+	case tea.KeyPgUp, tea.KeyPgDown, tea.KeyHome, tea.KeyEnd:
 		var cmd tea.Cmd
-		m.input, cmd = m.input.Update(msg)
+		m.viewport, cmd = m.viewport.Update(msg)
 		return m, cmd
+	case tea.KeyCtrlL:
+		m.log = nil
+		m.syncViewport()
+		return m, nil
 	}
 
+	if m.menu.visible {
+		switch msg.Type {
+		case tea.KeyUp:
+			m.menu.movePrev()
+			return m, nil
+		case tea.KeyDown:
+			m.menu.moveNext()
+			return m, nil
+		case tea.KeyTab, tea.KeyEnter:
+			val, submit := m.menu.accept()
+			if val == "" {
+				return m, nil
+			}
+			m.input.SetValue(val)
+			m.input.CursorEnd()
+			if submit {
+				return m.submitLine()
+			}
+			return m, nil
+		case tea.KeyEsc:
+			m.menu.hide()
+			return m, nil
+		}
+	}
+
+	if msg.String() == "enter" {
+		return m.submitLine()
+	}
+	var cmd tea.Cmd
+	m.input, cmd = m.input.Update(msg)
+	m.menu.UpdateInput(m.input.Value())
+	return m, cmd
+}
+
+func (m *TableModel) submitLine() (tea.Model, tea.Cmd) {
 	line := strings.TrimSpace(m.input.Value())
 	m.input.Reset()
+	m.menu.hide()
 	if line == "" {
 		return m, nil
 	}
@@ -202,7 +267,7 @@ func (m *TableModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	cm, local, err := ParseTableCommand(line, m.view)
 	if err != nil {
-		m.appendLog("· " + err.Error())
+		m.appendLog(errorStyle.Render("· " + err.Error()))
 		return m, nil
 	}
 	if local == ActExit && cm != nil {
@@ -225,7 +290,7 @@ func (m *TableModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *TableModel) runLocal(local LocalAction) tea.Cmd {
 	switch local {
 	case ActHelp:
-		m.appendLog(tableHelp)
+		m.appendLog(formatCommandList(tableCommandSpecs) + "\n  teclas: f c r p k")
 	case ActLastWinners:
 		w := m.narr.LastWinners(5)
 		if len(w) == 0 {
@@ -250,6 +315,9 @@ func (m *TableModel) runLocal(local LocalAction) tea.Cmd {
 			text, err := m.cfg.CurrentSession(context.Background())
 			return sessionSummaryMsg{text: text, err: err}
 		}
+	case ActClear:
+		m.log = nil
+		m.syncViewport()
 	case ActExit:
 		m.appendLog("· saindo da mesa…")
 		m.quit = true
@@ -273,17 +341,26 @@ func (m *TableModel) send(cm *proto.ClientMessage) tea.Cmd {
 	}
 }
 
+// appendLog appends line to the scrollback and keeps the viewport following
+// the bottom unless the user has scrolled up to read history.
 func (m *TableModel) appendLog(line string) {
 	if line == "" {
 		return
 	}
 	m.log = append(m.log, line)
-	if len(m.log) > 200 {
-		m.log = m.log[len(m.log)-200:]
-	}
+	m.syncViewport()
 }
 
-const tableHelp = "comandos: /check /call /raise <v> /pot /allin /fold /talk <msg> /react <cod> [j] /peek [all|1|2] /sitout /ready /summary /last-winners /share /exit  ·  teclas: f c r p k"
+func (m *TableModel) syncViewport() {
+	if !m.vpReady {
+		return
+	}
+	atBottom := m.viewport.AtBottom()
+	m.viewport.SetContent(strings.Join(m.log, "\n"))
+	if atBottom {
+		m.viewport.GotoBottom()
+	}
+}
 
 func copyClipboard(s string) error {
 	// clipboard is best-effort; a headless environment simply won't have one.
@@ -298,21 +375,29 @@ func (m *TableModel) View() string {
 	var b strings.Builder
 	b.WriteString(m.header())
 	b.WriteString("\n")
-	b.WriteString(strings.Repeat("─", 76))
+	b.WriteString(dimStyle.Render(strings.Repeat("─", 76)))
 	b.WriteString("\n")
 
-	start := 0
-	if len(m.log) > 14 {
-		start = len(m.log) - 14
+	if m.vpReady {
+		b.WriteString(m.viewport.View())
+	} else {
+		start := 0
+		if len(m.log) > 14 {
+			start = len(m.log) - 14
+		}
+		b.WriteString(strings.Join(m.log[start:], "\n"))
 	}
-	b.WriteString(strings.Join(m.log[start:], "\n"))
 	b.WriteString("\n")
-	b.WriteString(strings.Repeat("─", 76))
+	b.WriteString(dimStyle.Render(strings.Repeat("─", 76)))
 	b.WriteString("\n")
 	if m.reconnecting {
-		b.WriteString(lipgloss.NewStyle().Faint(true).Render("(reconectando — última mesa exibida)") + "\n")
+		b.WriteString(mutedStyle.Render("(reconectando — última mesa exibida)") + "\n")
 	}
 	b.WriteString(m.input.View())
+	if menuView := m.menu.View(); menuView != "" {
+		b.WriteString("\n")
+		b.WriteString(menuView)
+	}
 	return b.String()
 }
 
@@ -339,7 +424,7 @@ func (m *TableModel) header() string {
 		}
 		tag := fmt.Sprintf("[%s] %s", p.Position, p.Name)
 		if p.IsYou {
-			tag = lipgloss.NewStyle().Bold(true).Render("[" + p.Position + "] VOCÊ")
+			tag = accentStyle.Bold(true).Render("[" + p.Position + "] VOCÊ")
 		}
 		pos = append(pos, tag)
 	}
@@ -350,7 +435,7 @@ func (m *TableModel) header() string {
 		if v.ActionDeadlineMS > 0 {
 			secs = (v.ActionDeadlineMS - m.now.UnixMilli()) / 1000
 		}
-		turn = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render(fmt.Sprintf("● SUA VEZ  %ds", secs))
+		turn = successStyle.Bold(true).Render(fmt.Sprintf("● SUA VEZ  %ds", secs))
 	}
 
 	hand := ""
@@ -382,7 +467,7 @@ func (m *TableModel) header() string {
 
 	return fmt.Sprintf(
 		"─── %s ── No-Limit Hold'em ── Blinds %s / %s ── %d/%d jogadores ───\n  Pote %s   Board %s  %s\n  Posições  %s     %s%s",
-		name, money(v.SmallBlind), money(v.BigBlind), v.Seated, v.MaxSeats,
+		titleStyle.Render(name), money(v.SmallBlind), money(v.BigBlind), v.Seated, v.MaxSeats,
 		money(v.Pot), game.FormatCards(v.Board, m.cfg.CardMode), hand,
 		strings.Join(pos, " · "), turn, legalLine,
 	)

@@ -181,3 +181,89 @@ func TestHomeExitQuits(t *testing.T) {
 		t.Fatalf("state = %v cmd = %v, want stateQuitting + tea.Quit", s.state, cmd)
 	}
 }
+
+func TestHomeClearCommandEmptiesScrollback(t *testing.T) {
+	s := newTestShell(t, nil, t.TempDir())
+	s.state = stateHome
+	s.appendLine("something from before")
+
+	for _, r := range "/clear" {
+		m, _ := s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		s = m.(*Shell)
+	}
+	m, _ := s.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	s = m.(*Shell)
+	if len(s.lines) != 0 {
+		t.Fatalf("lines = %v, want empty after /clear", s.lines)
+	}
+}
+
+func TestHomeCtrlLClearsScrollback(t *testing.T) {
+	s := newTestShell(t, nil, t.TempDir())
+	s.state = stateHome
+	s.appendLine("something from before")
+
+	m, _ := s.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	s = m.(*Shell)
+	if len(s.lines) != 0 {
+		t.Fatalf("lines = %v, want empty after Ctrl+L", s.lines)
+	}
+}
+
+func TestHomeSlashOpensMenuAndTabCompletes(t *testing.T) {
+	s := newTestShell(t, nil, t.TempDir())
+	s.state = stateHome
+
+	for _, r := range "/pl" {
+		m, _ := s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		s = m.(*Shell)
+	}
+	if !s.menu.visible {
+		t.Fatal("menu should be visible while typing a command prefix")
+	}
+	m, _ := s.Update(tea.KeyMsg{Type: tea.KeyTab})
+	s = m.(*Shell)
+	// /play takes no arguments, so completing it also submits it immediately
+	// (same as typing it out and pressing Enter) rather than leaving it in
+	// the input for a second Enter.
+	if s.state != statePlaySize {
+		t.Fatalf("state = %v, want statePlaySize after completing /play", s.state)
+	}
+	if s.menu.visible {
+		t.Fatal("menu should hide after accepting")
+	}
+}
+
+func TestHomeMenuArgCommandCompletesWithTrailingSpaceAndWaits(t *testing.T) {
+	s := newTestShell(t, nil, t.TempDir())
+	s.state = stateHome
+
+	for _, r := range "/ent" {
+		m, _ := s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		s = m.(*Shell)
+	}
+	m, cmd := s.Update(tea.KeyMsg{Type: tea.KeyTab})
+	s = m.(*Shell)
+	if s.input.Value() != "/enter " {
+		t.Fatalf("input = %q, want /enter with a trailing space", s.input.Value())
+	}
+	if cmd != nil {
+		t.Fatal("an arg-taking command must not auto-submit on completion")
+	}
+}
+
+func TestHomeHelpListsCommandsWithDescriptions(t *testing.T) {
+	s := newTestShell(t, nil, t.TempDir())
+	s.state = stateHome
+
+	for _, r := range "/help" {
+		m, _ := s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		s = m.(*Shell)
+	}
+	m, _ := s.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	s = m.(*Shell)
+	out := strings.Join(s.lines, "\n")
+	if !strings.Contains(out, "/profile") || !strings.Contains(out, "Mostra seu perfil") {
+		t.Fatalf("help output missing command+description: %q", out)
+	}
+}

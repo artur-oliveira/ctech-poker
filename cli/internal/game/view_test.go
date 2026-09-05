@@ -42,13 +42,13 @@ func snapshotFixture() *proto.TableSnapshot {
 	dealtIn := true
 	eq := 0.62
 	return &proto.TableSnapshot{
-		Stage:           "flop",
-		Board:           []string{"Ah", "7c", "Kd"},
-		CurrentPlayerId: "you",
-		SmallBlindPlayerId: "duda",
-		BigBlindPlayerId:   "edu",
-		DealerPlayerId:     "caio",
-		Pots:               []*proto.Pot{{Amount: 24}},
+		Stage:                    "flop",
+		Board:                    []string{"Ah", "7c", "Kd"},
+		CurrentPlayerId:          "you",
+		SmallBlindPlayerId:       "duda",
+		BigBlindPlayerId:         "edu",
+		DealerPlayerId:           "caio",
+		Pots:                     []*proto.Pot{{Amount: 24}},
 		ActionDeadlineUnixMs:     1_000_000,
 		ActionBaseDeadlineUnixMs: 990_000,
 		LegalActions: &proto.LegalActions{

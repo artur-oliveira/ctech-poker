@@ -20,6 +20,7 @@ const (
 	ActSummary
 	ActLastWinners
 	ActShare
+	ActClear
 	ActExit
 	ActForceExit
 )
@@ -128,6 +129,8 @@ func ParseTableCommand(input string, v game.TableView) (msg *proto.ClientMessage
 		return nil, ActLastWinners, nil
 	case "/share":
 		return nil, ActShare, nil
+	case "/clear":
+		return nil, ActClear, nil
 	case "/help":
 		return nil, ActHelp, nil
 	case "/exit":
