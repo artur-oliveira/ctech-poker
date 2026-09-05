@@ -90,6 +90,14 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
 
 - **Reuse `gopkg.aoctech.app/api-commons`** for JWT verify (`jwtverify`), WebSocket registry (`ws.Registry`), cache
   backend (`cache.Backend`), and problem responses (`problem`). Do NOT hand-roll these.
+- **Emission to CloudWatch is disabled (2026-09-05, `internal/metrics/metrics.go`'s `emitDisabled = true`).** #290's
+  own per-step latency + sampled `DynamoConsumedCapacity` work pushed the projected custom-metric series count to
+  ~100-150 (`DynamoConsumedCapacity`'s `Table`×`Operation` dimension alone, ~29 tables × up to 5 ops) on top of the
+  ~36 fixed series from the rest of the package — at CloudWatch's ~$0.30/series/month, an unbudgeted recurring cost
+  nobody signed off on. `metrics.Record` callers are untouched and still accumulate into buckets; `emitLine` now
+  returns before marshalling or writing, so nothing reaches stdout and nothing is ever extracted as a CloudWatch
+  metric. Flip `emitDisabled` back to `false` only alongside a cost review, or once a self-hosted sink (e.g.
+  Prometheus/VictoriaMetrics on the existing EC2 fleet) replaces CloudWatch EMF.
 - **There is exactly one way to emit a metric: `metrics.Record(name, unit, dims, value)` (`internal/metrics`).**
   Added by #279, after seven performance issues (#204, #207, #218, #220, #221, #222, #233) each shipped their cost
   reduction pinned by a test and left their production-signal acceptance criterion unmet, every one of them
