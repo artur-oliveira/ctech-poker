@@ -27,6 +27,16 @@ func TestParseBuyIn(t *testing.T) {
 	if err != nil || got != 500 {
 		t.Fatalf("got %d err %v", got, err)
 	}
+	// Tolerate the label / units the user may have typed around the number
+	// (the reported confusion: someone typed "buy-in 2000" into the field).
+	for _, in := range []string{"buy-in 500", "  500  ", "500 fichas", "R$ 500"} {
+		if got, err := parseBuyIn(in, 10); err != nil || got != 500 {
+			t.Errorf("parseBuyIn(%q) = %d, %v — want 500", in, got, err)
+		}
+	}
+	if _, err := parseBuyIn("abc", 10); err == nil {
+		t.Error("no digits should fail")
+	}
 }
 
 func TestWSURLFor(t *testing.T) {
@@ -106,18 +116,25 @@ func TestPlayFlowReachesJoinOrCreateWithChosenBucket(t *testing.T) {
 		t.Fatalf("state = %v, want statePlayStake", s.state)
 	}
 
-	// pick the first stake, enter -> buy-in prompt
+	// pick the first stake, enter -> buy-in prompt, pre-filled with the
+	// default 100-BB stack.
 	m, cmd = s.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	*s = *m.(*Shell)
 	if s.state != statePlayBuyin {
 		t.Fatalf("state = %v, want statePlayBuyin", s.state)
 	}
-
-	// type a valid buy-in (2 BB = big_blind 2 -> range 40..200, multiple of 2)
-	for _, r := range "100" {
-		m, _ = s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
-		*s = *m.(*Shell)
+	if s.input.Value() != "200" { // big_blind 2 * 100
+		t.Fatalf("buy-in input not pre-filled: %q", s.input.Value())
 	}
+
+	// accept the default buy-in -> auto-rebuy step
+	m, cmd = s.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	*s = *m.(*Shell)
+	if s.state != statePlayAutoRebuy {
+		t.Fatalf("state = %v, want statePlayAutoRebuy", s.state)
+	}
+	// toggle auto-rebuy on, then confirm -> joins
+	s.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m, cmd = s.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	*s = *m.(*Shell)
 	drain(t, s, cmd)
@@ -131,8 +148,11 @@ func TestPlayFlowReachesJoinOrCreateWithChosenBucket(t *testing.T) {
 	if joinBody["big_blind"].(float64) != 2 {
 		t.Errorf("big_blind = %v", joinBody["big_blind"])
 	}
-	if joinBody["amount"].(float64) != 100 {
-		t.Errorf("amount = %v", joinBody["amount"])
+	if joinBody["amount"].(float64) != 200 {
+		t.Errorf("amount = %v, want the pre-filled default 200", joinBody["amount"])
+	}
+	if joinBody["auto_rebuy"] != true {
+		t.Errorf("auto_rebuy = %v, want true (toggled on)", joinBody["auto_rebuy"])
 	}
 	if joinBody["idem_key"] == "" {
 		t.Error("idem_key not sent")

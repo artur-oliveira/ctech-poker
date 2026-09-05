@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -312,9 +313,7 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.play.smallBlind = msg.room.SmallBlind
 		s.play.bigBlind = msg.room.BigBlind
 		s.play.shareCode = msg.room.ShareCode
-		s.input.Reset()
-		s.input.Placeholder = buyInHint(s.play.bigBlind)
-		s.state = statePlayBuyin
+		s.enterBuyInStep()
 		return s, nil
 
 	case joinedMsg:
@@ -422,6 +421,18 @@ func (s *Shell) leaveTable() {
 	s.input.Reset()
 	s.input.Placeholder = "/ para ver comandos"
 	s.appendLine("· de volta ao lobby")
+}
+
+// enterBuyInStep moves into the buy-in prompt with the input pre-filled with
+// a full 100-BB stack, so a player who just wants to sit down can press
+// Enter without typing (and the text-entry field is never blank and
+// ambiguous, which is what led someone to type the label "buy-in" into it).
+func (s *Shell) enterBuyInStep() {
+	s.input.Reset()
+	s.input.Placeholder = ""
+	s.input.SetValue(strconv.FormatInt(defaultBuyIn(s.play.bigBlind), 10))
+	s.input.CursorEnd()
+	s.state = statePlayBuyin
 }
 
 func maxOr(v, fallback int) int {
@@ -611,32 +622,59 @@ func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "enter":
 			st := s.play.stakes[s.play.stakeIdx]
 			s.play.smallBlind, s.play.bigBlind = st.SmallBlind, st.BigBlind
-			s.input.Reset()
-			s.input.Placeholder = buyInHint(s.play.bigBlind)
-			s.state = statePlayBuyin
+			s.enterBuyInStep()
 		case "esc":
 			s.state = stateHome
 		}
 		return s, nil
 
 	case statePlayBuyin:
-		if msg.String() == "enter" {
+		switch msg.String() {
+		case "enter":
 			amount, err := parseBuyIn(s.input.Value(), s.play.bigBlind)
 			if err != nil {
-				s.appendLine("· " + err.Error())
+				s.appendLine(errorStyle.Render("· " + err.Error()))
 				return s, nil
 			}
+			s.play.buyIn = amount
+			s.play.autoRebuy = false
 			s.input.Reset()
-			s.busy = true
-			s.state = stateJoining
+			s.state = statePlayAutoRebuy
+			return s, nil
+		case "esc":
+			s.input.Reset()
+			s.state = statePlayStake
 			if s.play.fromEnter {
-				return s, joinRoom(s.rc, s.play, amount)
+				s.state = stateHome
 			}
-			return s, joinOrCreate(s.rc, s.play, amount)
+			return s, nil
 		}
 		var cmd tea.Cmd
 		s.input, cmd = s.input.Update(msg)
 		return s, cmd
+
+	case statePlayAutoRebuy:
+		switch msg.String() {
+		case "up", "down", "left", "right", " ", "tab":
+			s.play.autoRebuy = !s.play.autoRebuy
+		case "y", "s":
+			s.play.autoRebuy = true
+		case "n":
+			s.play.autoRebuy = false
+		case "enter":
+			s.busy = true
+			s.state = stateJoining
+			if s.play.fromEnter {
+				return s, joinRoom(s.rc, s.play)
+			}
+			return s, joinOrCreate(s.rc, s.play)
+		case "esc":
+			s.state = statePlayBuyin
+			s.input.Reset()
+			s.input.SetValue(strconv.FormatInt(s.play.buyIn, 10))
+			s.input.CursorEnd()
+		}
+		return s, nil
 
 	case stateInTable:
 		if s.table == nil {
@@ -818,7 +856,21 @@ func (s *Shell) View() string {
 		}
 		return b.String()
 	case statePlayBuyin:
-		return fmt.Sprintf("%s\n%s", mutedStyle.Render(buyInHint(s.play.bigBlind)), s.input.View())
+		return fmt.Sprintf("%s\n%s\n%s",
+			titleStyle.Render("Buy-in"),
+			mutedStyle.Render(buyInHint(s.play.bigBlind)),
+			s.input.View()) + "\n" + dimStyle.Render("Enter confirma · Esc volta")
+	case statePlayAutoRebuy:
+		opt := func(on bool, label string) string {
+			if s.play.autoRebuy == on {
+				return selectedStyle.Render("› " + label)
+			}
+			return "  " + label
+		}
+		return titleStyle.Render("Rebuy automático") + "\n" +
+			mutedStyle.Render("Recompra fichas até o buy-in sozinho quando seu stack zerar.") + "\n" +
+			opt(false, "Não") + "\n" + opt(true, "Sim") + "\n" +
+			dimStyle.Render("↑↓ ou espaço alterna · Enter confirma · Esc volta")
 	case stateJoining:
 		return accentStyle.Render(s.spin.View()) + " entrando na mesa..."
 	case stateInTable:

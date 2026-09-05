@@ -55,7 +55,7 @@ the running program, `/command`-style (like Claude Code's own shell):
    ```
    /profile        show your poker profile
    /achievements   show your achievement progress
-   /play           join a table (pick size, stake, buy-in)
+   /play           join a table (pick size, stake, buy-in, auto-rebuy)
    /enter <id>     join a table by room id
    /clear          clear the screen (Ctrl+L works too)
    /logout         forget stored credentials and log in again

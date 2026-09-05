@@ -18,6 +18,7 @@ const (
 	statePlaySize shellState = iota + 100
 	statePlayStake
 	statePlayBuyin
+	statePlayAutoRebuy
 	stateJoining
 	stateInTable
 )
@@ -41,6 +42,8 @@ type playState struct {
 	sizeIdx    int
 	smallBlind int64
 	bigBlind   int64
+	buyIn      int64
+	autoRebuy  bool
 	roomID     string
 	shareCode  string
 }
@@ -82,11 +85,12 @@ func loadRoom(rc *rest.Client, id string) tea.Cmd {
 	}
 }
 
-func joinOrCreate(rc *rest.Client, ps playState, amount int64) tea.Cmd {
+func joinOrCreate(rc *rest.Client, ps playState) tea.Cmd {
 	return func() tea.Msg {
 		resp, err := rc.JoinOrCreate(context.Background(), rest.JoinOrCreateReq{
 			CurrencyMode: "sandbox", SmallBlind: ps.smallBlind, BigBlind: ps.bigBlind,
-			MaxSeats: ps.seats, Amount: amount, IdempotencyKey: newIdemKey(),
+			MaxSeats: ps.seats, Amount: ps.buyIn, AutoRebuy: ps.autoRebuy,
+			IdempotencyKey: newIdemKey(),
 		})
 		if err != nil {
 			return joinedMsg{err: err}
@@ -95,10 +99,11 @@ func joinOrCreate(rc *rest.Client, ps playState, amount int64) tea.Cmd {
 	}
 }
 
-func joinRoom(rc *rest.Client, ps playState, amount int64) tea.Cmd {
+func joinRoom(rc *rest.Client, ps playState) tea.Cmd {
 	return func() tea.Msg {
 		err := rc.JoinRoom(context.Background(), ps.roomID, rest.JoinReq{
-			Amount: amount, ShareCode: ps.shareCode, IdempotencyKey: newIdemKey(),
+			Amount: ps.buyIn, AutoRebuy: ps.autoRebuy, ShareCode: ps.shareCode,
+			IdempotencyKey: newIdemKey(),
 		})
 		if err != nil {
 			return joinedMsg{err: err}
@@ -145,20 +150,52 @@ func newIdemKey() string {
 	return "cli-" + strconv.FormatInt(time.Now().UnixNano(), 36)
 }
 
+// buyInRange is the client-side window (20–100 big blinds), mirroring the
+// server's publicBuyInMin/MaxBigBlinds. The server clamps anyway.
+func buyInRange(bb int64) (min, max int64) { return bb * 20, bb * 100 }
+
+// defaultBuyIn is the value the prompt is pre-filled with: a full 100-BB
+// stack, the standard buy-in, so a player who just wants to sit down can
+// press Enter without typing anything.
+func defaultBuyIn(bb int64) int64 { return bb * 100 }
+
 func buyInHint(bb int64) string {
-	return fmt.Sprintf("buy-in (%d–%d, múltiplo de %d)", bb*20, bb*100, bb)
+	min, max := buyInRange(bb)
+	return fmt.Sprintf("Quantas fichas levar para a mesa? Entre %d e %d, múltiplo de %d.", min, max, bb)
 }
 
 func parseBuyIn(s string, bb int64) (int64, error) {
-	v, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+	// Tolerate a stray "buy-in" or "fichas" the user may have typed around
+	// the number after reading the label — take the first run of digits.
+	v, err := strconv.ParseInt(firstDigitRun(s), 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("valor inválido")
+		return 0, fmt.Errorf("digite só um número, ex: %d", defaultBuyIn(bb))
 	}
-	if v < bb*20 || v > bb*100 {
-		return 0, fmt.Errorf("fora do intervalo %d–%d", bb*20, bb*100)
+	min, max := buyInRange(bb)
+	if v < min || v > max {
+		return 0, fmt.Errorf("precisa ficar entre %d e %d", min, max)
 	}
 	if v%bb != 0 {
-		return 0, fmt.Errorf("deve ser múltiplo de %d", bb)
+		return 0, fmt.Errorf("precisa ser múltiplo de %d", bb)
 	}
 	return v, nil
+}
+
+// firstDigitRun returns the first contiguous sequence of ASCII digits in s,
+// or "" if there is none.
+func firstDigitRun(s string) string {
+	start := -1
+	for i, r := range s {
+		if r >= '0' && r <= '9' {
+			if start < 0 {
+				start = i
+			}
+		} else if start >= 0 {
+			return s[start:i]
+		}
+	}
+	if start >= 0 {
+		return s[start:]
+	}
+	return ""
 }
