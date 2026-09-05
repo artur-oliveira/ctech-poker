@@ -309,7 +309,7 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /avatars/:userId/:version.jpg`          | **none**        | published avatar bytes, streamed from the bucket's `av/` prefix; 600/min/IP                |
 | `GET /players/:playerId/showcase`            | **none**        | public profile showcase; 404 when `showcase_public` is false                               |
 | `GET /players/me`                            | JWT             | profile + sandbox/real balances                                                            |
-| `POST /players/me`                           | JWT             | update name, wallet mode, deck variant, showcase settings                                  |
+| `POST /players/me`                           | JWT             | update name, wallet mode, deck variant, showcase settings and `showcase_layout`           |
 | `POST /players/me/terms/accept`              | JWT             | accept the poker ToS addendum                                                              |
 | `POST /players/me/avatar/upload-url`         | JWT             | presigned S3 POST; 5/hour/player                                                           |
 | `POST /players/me/avatar/confirm`            | JWT             | validate quarantine object and publish avatar                                              |

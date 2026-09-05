@@ -19,6 +19,7 @@ var ErrInvalidDeckVariant = errors.New("player: deck_variant must not be empty")
 var ErrInvalidTableTheme = errors.New("player: table_theme must not be empty")
 var ErrCosmeticNotOwned = errors.New("player: cosmetic is premium and not owned")
 var ErrInvalidShowcase = errors.New("player: invalid showcase")
+var ErrInvalidShowcaseLayout = errors.New("player: invalid showcase layout")
 var ErrShowcasePrivate = errors.New("player: showcase is private")
 var ErrInvalidFavoriteReactions = errors.New("player: invalid favorite reactions")
 var ErrInvalidReactionWheel = errors.New("player: invalid reaction wheel")
@@ -313,6 +314,37 @@ func (s *Service) SetShowcase(ctx context.Context, userID string, public, playst
 		normalized = append(normalized, key)
 	}
 	if err := s.store.SetShowcase(ctx, userID, public, playstylePublic, tablePublic, normalized); err != nil {
+		return nil, err
+	}
+	return s.store.GetOrCreate(ctx, userID)
+}
+
+func (s *Service) SetShowcaseLayout(ctx context.Context, userID string, layout ShowcaseLayout) (*PlayerProfile, error) {
+	if len(layout.Order) != 3 {
+		return nil, ErrInvalidShowcaseLayout
+	}
+	allowed := map[string]bool{ShowcaseSectionAchievements: true, ShowcaseSectionBestHand: true, ShowcaseSectionMatchup: true}
+	seen := map[string]bool{}
+	for _, section := range layout.Order {
+		if !allowed[section] || seen[section] {
+			return nil, ErrInvalidShowcaseLayout
+		}
+		seen[section] = true
+	}
+	hidden := map[string]bool{}
+	for _, section := range layout.Hidden {
+		if section == ShowcaseSectionAchievements || !allowed[section] || hidden[section] {
+			return nil, ErrInvalidShowcaseLayout
+		}
+		hidden[section] = true
+	}
+	store, ok := s.store.(interface {
+		SetShowcaseLayout(context.Context, string, ShowcaseLayout) error
+	})
+	if !ok {
+		return nil, errors.New("player: showcase layouts unavailable")
+	}
+	if err := store.SetShowcaseLayout(ctx, userID, layout); err != nil {
 		return nil, err
 	}
 	return s.store.GetOrCreate(ctx, userID)

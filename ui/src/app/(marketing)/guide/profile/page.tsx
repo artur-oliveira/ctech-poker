@@ -30,14 +30,14 @@ export default function ProfileGuide() {
       },
       {
         id: 'vitrine', title: 'Configurar a vitrine pública', summary: 'A vitrine começa privada e só mostra o que você habilitar.',
-        body: <><GuideTerms><GuideTerm term="Perfil público">Libera a rota compartilhável da sua vitrine. Enquanto está desligada, o link não abre para ninguém.</GuideTerm>
-          <GuideTerm term="Estilo de jogo público">Depois de 200 mãos, mostra um rótulo de tendência na mesa e na vitrine. Em vitrine pública, ele pode ser visto sem login.</GuideTerm>
+        body: <><GuideTerms><GuideTerm term="Vitrine pública">Libera a rota compartilhável da sua vitrine. Enquanto está desligada, o link não abre para ninguém.</GuideTerm>
+          <GuideTerm term="Estilo de jogo">Depois de 200 mãos, mostra um rótulo de tendência na mesa e na vitrine pública. Só pode ser ligado com a vitrine pública.</GuideTerm>
           <GuideTerm term="Mesa visível para amigos">Permite que amigos entrem na sua mesa quando ela é pública. Mesa privada nunca aparece.</GuideTerm>
           <GuideTerm term="Conquistas em destaque">Até três conquistas já iniciadas.</GuideTerm>
-          <GuideTerm term="Organizar vitrine">Reordene Conquistas, Melhor Vitória e Cara a Cara com as setas para cima e para baixo — sem
+          <GuideTerm term="Personalizar ordem e seções">Abra esta opção quando quiser reordenar Conquistas, Melhor Vitória e Cara a Cara com as setas para cima e para baixo — sem
             arrastar, funciona igual por toque, mouse ou teclado. Melhor Vitória e Cara a Cara também podem ser escondidos; Conquistas
             sempre aparece.</GuideTerm>
-          <GuideTerm term="Copiar link / Ver perfil">Aparecem com a vitrine pública e mostram exatamente o que a outra pessoa recebe.</GuideTerm></GuideTerms>
+          <GuideTerm term="Copiar link / Ver perfil">Aparecem depois que a vitrine pública é salva e mostram exatamente o que a outra pessoa recebe.</GuideTerm></GuideTerms>
           <p>Quem abre a sua vitrine vê nome, foto, os rótulos de estilo autorizados e as seções que você deixou visíveis, na ordem que
             você escolheu: conquistas em destaque, a sua melhor vitória recente e — se estiver logado — o &quot;Cara a Cara&quot;: quantas
             mãos vocês jogaram juntos, quantas cada um venceu, quantas empataram e o saldo de fichas do confronto.</p>

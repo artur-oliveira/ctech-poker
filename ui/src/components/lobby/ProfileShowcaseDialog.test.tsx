@@ -90,16 +90,12 @@ describe('ProfileShowcaseDialog', () => {
     expect(screen.getByText('3/3')).toBeInTheDocument();
   });
   
-  test('makes a public profile shareable and copies its encoded URL', async () => {
+  test('keeps sharing unavailable until public visibility is saved', async () => {
     render(<ProfileShowcaseDialog open onOpenChangeAction={vi.fn()}/>);
-    fireEvent.click(screen.getByRole('switch', {name: 'Perfil público'}));
+    fireEvent.click(screen.getByRole('switch', {name: 'Vitrine pública'}));
     fireEvent.click(screen.getByRole('switch', {name: 'Estilo de jogo público'}));
-    fireEvent.click(screen.getByRole('button', {name: /Copiar link/}));
-    await waitFor(() => expect(mocks.writeText)
-      .toHaveBeenCalledWith(`${window.location.origin}/profile?id=player%20%2F%20one`));
-    expect(mocks.notify).toHaveBeenCalledWith('Link do perfil copiado.', 'info');
-    expect(screen.getByRole('button', {name: /Ver perfil/}))
-      .toHaveAttribute('href', '/profile?id=player%20%2F%20one');
+    expect(screen.queryByRole('button', {name: /Copiar link/})).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', {name: /Ver perfil/})).not.toBeInTheDocument();
   });
   
   test('saves privacy and selections into the shared profile cache', async () => {
@@ -109,7 +105,7 @@ describe('ProfileShowcaseDialog', () => {
     };
     mocks.updateMe.mockResolvedValue(updated);
     render(<ProfileShowcaseDialog open onOpenChangeAction={vi.fn()}/>);
-    fireEvent.click(screen.getByRole('switch', {name: 'Perfil público'}));
+    fireEvent.click(screen.getByRole('switch', {name: 'Vitrine pública'}));
     fireEvent.click(screen.getByRole('switch', {name: 'Estilo de jogo público'}));
     fireEvent.click(screen.getByRole('checkbox', {name: 'hands 102 registrados'}));
     fireEvent.click(screen.getByRole('button', {name: 'Salvar vitrine'}));

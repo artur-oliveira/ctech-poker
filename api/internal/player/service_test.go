@@ -45,6 +45,10 @@ func (s *memoryStore) SetShowcase(_ context.Context, _ string, public, playstyle
 	s.profile.FeaturedAchievements = featured
 	return nil
 }
+func (s *memoryStore) SetShowcaseLayout(_ context.Context, _ string, layout ShowcaseLayout) error {
+	s.profile.ShowcaseLayout = layout
+	return nil
+}
 func (s *memoryStore) SetFavoriteReactions(_ context.Context, _ string, favorites []string) error {
 	s.profile.FavoriteReactions = favorites
 	return nil
@@ -259,6 +263,24 @@ func TestSetShowcaseValidatesSelection(t *testing.T) {
 	}
 	if _, err := svc.SetShowcase(context.Background(), "u1", true, true, false, []string{"not-real"}); !errors.Is(err, ErrInvalidShowcase) {
 		t.Fatalf("got %v, want ErrInvalidShowcase", err)
+	}
+}
+
+func TestSetShowcaseLayoutPersistsOnlyACompleteSafeLayout(t *testing.T) {
+	store := &memoryStore{}
+	svc := NewService(store)
+	layout := ShowcaseLayout{Order: []string{ShowcaseSectionBestHand, ShowcaseSectionAchievements, ShowcaseSectionMatchup}, Hidden: []string{ShowcaseSectionMatchup}}
+	profile, err := svc.SetShowcaseLayout(context.Background(), "u1", layout)
+	if err != nil || profile.ShowcaseLayout.Order[0] != ShowcaseSectionBestHand {
+		t.Fatalf("got profile=%+v err=%v", profile, err)
+	}
+	_, err = svc.SetShowcaseLayout(context.Background(), "u1", ShowcaseLayout{Order: []string{ShowcaseSectionAchievements, ShowcaseSectionBestHand, ShowcaseSectionBestHand}})
+	if !errors.Is(err, ErrInvalidShowcaseLayout) {
+		t.Fatalf("got %v, want ErrInvalidShowcaseLayout", err)
+	}
+	_, err = svc.SetShowcaseLayout(context.Background(), "u1", ShowcaseLayout{Order: []string{ShowcaseSectionAchievements, ShowcaseSectionBestHand, ShowcaseSectionMatchup}, Hidden: []string{ShowcaseSectionAchievements}})
+	if !errors.Is(err, ErrInvalidShowcaseLayout) {
+		t.Fatalf("got %v, want ErrInvalidShowcaseLayout", err)
 	}
 }
 

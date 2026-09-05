@@ -63,7 +63,10 @@ export function AppPageNav({authed, current, rewardReady = false}: {
   current?: MainRoute;
   rewardReady?: boolean;
 }) {
-  const unread = useSocialUnread();
+  // A public profile shares this chrome, but its visitor has no social inbox.
+  // Keeping the query disabled avoids treating its expected lack of a token as
+  // an expired session and preserves the public route.
+  const unread = useSocialUnread(authed);
   return <>
     <nav className="app-nav shell" aria-label="Navegação principal">
       <Link href="/" className="brand" aria-label="CTech Poker - início">

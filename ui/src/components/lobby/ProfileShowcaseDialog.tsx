@@ -73,6 +73,9 @@ function ShowcaseEditor({me, onSaved}: { me: PlayerProfile; onSaved: (profile: P
     onSuccess: profile => {
       onSaved(profile);
       pushNotification('Vitrine do perfil atualizada.', 'info');
+    },
+    onError: () => {
+      pushNotification('Não foi possível salvar a vitrine. Tente novamente.', 'error');
     }
   });
   const profileUrl = typeof window === 'undefined' ? `/profile?id=${encodeURIComponent(me.user_id)}` :
@@ -91,21 +94,40 @@ function ShowcaseEditor({me, onSaved}: { me: PlayerProfile; onSaved: (profile: P
   };
   
   return <>
-    <div className="showcase-privacy-row">
-      <span><b>Perfil público</b><small>Permite abrir a vitrine por link.</small></span>
-      <Switch checked={isPublic} onCheckedChange={setIsPublic} aria-label="Perfil público"/>
-    </div>
-    <div className="showcase-privacy-row showcase-playstyle-row">
-      <span><b>Estilo de jogo público</b><small>Após 200 mãos, exibe um rótulo de tendência na mesa e na vitrine. Em uma vitrine pública, essa informação pode ser vista sem login.</small></span>
-      <Switch checked={isPlaystylePublic} onCheckedChange={setIsPlaystylePublic}
-              aria-label="Estilo de jogo público"/>
-    </div>
-    <div className="showcase-privacy-row">
-      <span><b>Mesa visível para amigos</b><small>Amigos podem entrar na sua mesa quando ela for pública.</small></span>
-      <Switch checked={isTablePublic} onCheckedChange={setIsTablePublic} aria-label="Mesa visível para amigos"/>
-    </div>
-    <fieldset className="showcase-layout-editor">
-      <legend>Organizar vitrine</legend>
+    <fieldset className="showcase-privacy-group">
+      <legend>Perfil público</legend>
+      <div className="showcase-privacy-row">
+        <span><b>Vitrine pública</b><small>Permite abrir a vitrine por link.</small></span>
+        <Switch checked={isPublic} onCheckedChange={setIsPublic} aria-label="Vitrine pública"/>
+      </div>
+      <div className="showcase-privacy-row">
+        <span><b>Estilo de jogo</b><small>Após 200 mãos, exibe um rótulo de tendência na mesa e na vitrine pública.</small></span>
+        <Switch checked={isPlaystylePublic} onCheckedChange={setIsPlaystylePublic} disabled={!isPublic}
+                aria-label="Estilo de jogo público"/>
+      </div>
+    </fieldset>
+    <fieldset className="showcase-privacy-group">
+      <legend>Amigos e mesas</legend>
+      <div className="showcase-privacy-row">
+        <span><b>Mesa visível para amigos</b><small>Amigos podem entrar na sua mesa quando ela for pública.</small></span>
+        <Switch checked={isTablePublic} onCheckedChange={setIsTablePublic} aria-label="Mesa visível para amigos"/>
+      </div>
+    </fieldset>
+    <fieldset className="showcase-achievements">
+      <legend>Conquistas em destaque <span>{selected.length}/3</span></legend>
+      <p>Somente conquistas com progresso podem ser escolhidas.</p>
+      {catalog.isLoading || mine.isLoading ?
+        <SkeletonList label="Carregando suas conquistas…" count={3} height={38} className="skeleton-panel"/> :
+        catalog.data?.filter(item => (counts.get(item.key) || 0) > 0).map(item => {
+          const checked = selected.includes(item.key);
+          return <label key={item.key}>
+            <Checkbox checked={checked} onCheckedChange={value => toggle(item.key, value === true)}/>
+            <span>{achievementLabel(item.key)}<small>{(counts.get(item.key) || 0).toLocaleString('pt-BR')} registrados</small></span>
+          </label>;
+        })}
+    </fieldset>
+    <details className="showcase-layout-editor">
+      <summary>Personalizar ordem e seções</summary>
       <p>Use as setas para reordenar. Melhor Vitória e Cara a Cara também podem ser escondidos.</p>
       <p className="sr-only" role="status" aria-live="polite">{layoutAnnouncement}</p>
       <ol>
@@ -126,21 +148,8 @@ function ShowcaseEditor({me, onSaved}: { me: PlayerProfile; onSaved: (profile: P
           </span>
         </li>)}
       </ol>
-    </fieldset>
-    <fieldset className="showcase-achievements">
-      <legend>Conquistas em destaque <span>{selected.length}/3</span></legend>
-      <p>Somente conquistas com progresso podem ser escolhidas.</p>
-      {catalog.isLoading || mine.isLoading ?
-        <SkeletonList label="Carregando suas conquistas…" count={3} height={38} className="skeleton-panel"/> :
-        catalog.data?.filter(item => (counts.get(item.key) || 0) > 0).map(item => {
-          const checked = selected.includes(item.key);
-          return <label key={item.key}>
-            <Checkbox checked={checked} onCheckedChange={value => toggle(item.key, value === true)}/>
-            <span>{achievementLabel(item.key)}<small>{(counts.get(item.key) || 0).toLocaleString('pt-BR')} registrados</small></span>
-          </label>;
-        })}
-    </fieldset>
-    {isPublic && <div className="showcase-share-row">
+    </details>
+    {me.showcase_public && <div className="showcase-share-row">
         <Button type="button" variant="outline" onClick={async () => {
           await navigator.clipboard.writeText(profileUrl);
           pushNotification('Link do perfil copiado.', 'info');
@@ -150,7 +159,9 @@ function ShowcaseEditor({me, onSaved}: { me: PlayerProfile; onSaved: (profile: P
         </Button>
     </div>}
     <DialogFooter>
-      <Button type="button" disabled={save.isPending} onClick={() => save.mutate()}>Salvar vitrine</Button>
+      <Button type="button" loading={save.isPending} onClick={() => save.mutate()}>
+        {save.isPending ? 'Salvando…' : 'Salvar vitrine'}
+      </Button>
     </DialogFooter>
   </>;
 }
