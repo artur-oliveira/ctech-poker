@@ -50,6 +50,7 @@ type Shell struct {
 	viewport     viewport.Model
 	vpReady      bool
 	windowHeight int
+	followBottom bool // true unless the user scrolled away from the latest output
 
 	pkceFlow   *auth.PKCEFlow
 	pkceCancel context.CancelFunc
@@ -80,30 +81,34 @@ func newShell(cfg config.Settings, session *auth.Session, rc *rest.Client) *Shel
 	sp.Style = accentStyle
 	return &Shell{
 		cfg: cfg, session: session, rc: rc, state: stateCheckingLogin, input: ti, spin: sp,
-		menu: newCommandMenu(homeCommandSpecs),
+		menu: newCommandMenu(homeCommandSpecs), followBottom: true,
 	}
 }
 
-// appendLine appends line to the scrollback and keeps the viewport following
-// the bottom unless the user has scrolled up to read history.
+// appendLine appends line to the scrollback. The viewport keeps following
+// the bottom on the next render unless the user has scrolled away from it.
 func (s *Shell) appendLine(line string) {
 	s.lines = append(s.lines, line)
 	s.syncViewport()
 }
 
-// syncViewport refreshes the viewport's content. Its height is computed
-// fresh in View (via layoutHeights) right before rendering — not here —
-// since it depends on state (busy, menu open/closed) that can change
-// without a line ever being appended.
+// syncViewport refreshes the viewport's content only. It deliberately never
+// touches scroll position (GotoBottom/AtBottom) — those depend on Height,
+// which is only ever correct right after layoutHeights runs in View. Calling
+// GotoBottom here used viewport.Height as it was left by whatever render
+// happened to run *before* this content arrived (e.g. a smaller height from
+// a moment the command menu was open), computing an offset for a viewport
+// size that no longer matches — the reproduced bug: a page of new output
+// (e.g. /profile's result) rendered as just its last line, the rest blank,
+// because the stale offset pointed past the end of the resized viewport.
+// followBottom (updated by the scroll keys in handleKey) is what View
+// consults to decide whether to re-home to the bottom, always against the
+// Height it just set.
 func (s *Shell) syncViewport() {
 	if !s.vpReady {
 		return
 	}
-	atBottom := s.viewport.AtBottom()
 	s.viewport.SetContent(strings.Join(s.lines, "\n"))
-	if atBottom {
-		s.viewport.GotoBottom()
-	}
 }
 
 // layoutHeights splits the room available below the logo between the
@@ -509,9 +514,11 @@ func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case tea.KeyPgUp, tea.KeyPgDown, tea.KeyHome, tea.KeyEnd:
 			var cmd tea.Cmd
 			s.viewport, cmd = s.viewport.Update(msg)
+			s.followBottom = s.viewport.AtBottom()
 			return s, cmd
 		case tea.KeyCtrlL:
 			s.lines = nil
+			s.followBottom = true
 			s.syncViewport()
 			return s, nil
 		}
@@ -805,6 +812,9 @@ func (s *Shell) View() string {
 		if s.vpReady {
 			vpH, menuRows := s.layoutHeights()
 			s.viewport.Height = vpH
+			if s.followBottom {
+				s.viewport.GotoBottom()
+			}
 			if vpH > 0 {
 				lines = append(lines, s.viewport.View())
 			}

@@ -67,6 +67,7 @@ type TableModel struct {
 	viewport     viewport.Model
 	vpReady      bool
 	windowHeight int
+	followBottom bool // true unless the user scrolled away from the latest output
 	now          time.Time
 	reconnecting bool
 
@@ -82,11 +83,9 @@ func NewTableModel(cfg TableConfig) *TableModel {
 	ti.PromptStyle = promptStyle
 	ti.Focus()
 	return &TableModel{
-		cfg:   cfg,
-		narr:  game.NewNarrator(cfg.YouID).WithCardMode(cfg.CardMode),
-		input: ti,
-		menu:  newCommandMenu(tableCommandSpecs),
-		now:   time.Now(),
+		cfg: cfg, narr: game.NewNarrator(cfg.YouID).WithCardMode(cfg.CardMode),
+		input: ti, menu: newCommandMenu(tableCommandSpecs),
+		now: time.Now(), followBottom: true,
 	}
 }
 
@@ -209,9 +208,11 @@ func (m *TableModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyPgUp, tea.KeyPgDown, tea.KeyHome, tea.KeyEnd:
 		var cmd tea.Cmd
 		m.viewport, cmd = m.viewport.Update(msg)
+		m.followBottom = m.viewport.AtBottom()
 		return m, cmd
 	case tea.KeyCtrlL:
 		m.log = nil
+		m.followBottom = true
 		m.syncViewport()
 		return m, nil
 	}
@@ -356,19 +357,20 @@ func (m *TableModel) appendLog(line string) {
 	m.syncViewport()
 }
 
-// syncViewport refreshes the log viewport's content. Its height is computed
-// fresh in View (via layoutHeights) right before rendering, since it depends
-// on state (the header's line count, the reconnect banner, the menu being
-// open) that can change without a line ever being appended.
+// syncViewport refreshes the log viewport's content only — never its scroll
+// position. GotoBottom needs the viewport's Height to already reflect the
+// content that's about to be shown, which is only true right after
+// layoutHeights runs in View; calling it here against whatever Height an
+// earlier render happened to leave behind computes an offset for a size
+// that's about to change, e.g. showing only a result's last line with the
+// rest blank the moment a burst of new lines arrives (see Shell.syncViewport
+// for the full incident this mirrors). followBottom (kept in sync by the
+// scroll keys in handleKey) is what View consults instead.
 func (m *TableModel) syncViewport() {
 	if !m.vpReady {
 		return
 	}
-	atBottom := m.viewport.AtBottom()
 	m.viewport.SetContent(strings.Join(m.log, "\n"))
-	if atBottom {
-		m.viewport.GotoBottom()
-	}
 }
 
 // layoutHeights splits the room below the header between the scrolling log
@@ -420,6 +422,9 @@ func (m *TableModel) View() string {
 	if m.vpReady {
 		vpH, menuRows := m.layoutHeights(header)
 		m.viewport.Height = vpH
+		if m.followBottom {
+			m.viewport.GotoBottom()
+		}
 		if vpH > 0 {
 			lines = append(lines, m.viewport.View())
 		}

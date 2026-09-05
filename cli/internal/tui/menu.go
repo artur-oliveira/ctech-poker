@@ -158,7 +158,7 @@ func (m *commandMenu) View(maxRows int) string {
 		b.WriteString("\n")
 	}
 	if truncated > 0 {
-		fmt.Fprintf(&b, "  … e mais %d\n", truncated)
+		_, _ = fmt.Fprintf(&b, "  … e mais %d\n", truncated)
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
@@ -173,20 +173,20 @@ func formatCommandList(specs []commandSpec) string {
 		if it.Args != "" {
 			name += " " + it.Args
 		}
-		fmt.Fprintf(&b, "\n  %-28s %s", name, it.Desc)
+		_, _ = fmt.Fprintf(&b, "\n  %-28s %s", name, it.Desc)
 	}
 	return b.String()
 }
 
 var homeCommandSpecs = []commandSpec{
-	{Name: "/profile", Desc: "Mostra os dados do perfil"},
-	{Name: "/achievements", Desc: "Mostra suas conquistas"},
 	{Name: "/play", Desc: "Entra numa mesa (escolhe tamanho/stake)"},
-	{Name: "/enter", Args: "<room-id>", Desc: "Entra numa mesa por ID"},
-	{Name: "/clear", Desc: "Limpar comandos (CTRL + L)"},
 	{Name: "/logout", Desc: "Limpa as credenciais de acesso salvas. Será necessário fazer login novamente."},
+	{Name: "/clear", Desc: "Limpar comandos (CTRL + L)"},
 	{Name: "/help", Desc: "Lista os comandos disponíveis"},
 	{Name: "/exit", Desc: "Sair"},
+	{Name: "/achievements", Desc: "Mostra suas conquistas"},
+	{Name: "/enter", Args: "<room-id>", Desc: "Entra numa mesa por ID"},
+	{Name: "/profile", Desc: "Mostra os dados do perfil"},
 }
 
 var tableCommandSpecs = []commandSpec{

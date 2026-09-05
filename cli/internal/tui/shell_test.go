@@ -437,3 +437,53 @@ func TestBrowserLoginEscCancelsAndReturnsToChoice(t *testing.T) {
 		t.Fatalf("a stale result must not move the state, got %v", s.state)
 	}
 }
+
+// TestResultAfterFirstCommandShowsAllLinesNotJustTheLast is the regression
+// guard for the bug reported live: a command's whole result rendered as just
+// its last line with the rest of the screen blank. Root cause: GotoBottom
+// was called from syncViewport (i.e. from Update, when new lines arrive)
+// against whatever viewport.Height an earlier render had left set — often
+// smaller, e.g. right after submitting a one-line echoed command — computing
+// a scroll offset for a size that hadn't been recomputed yet. The fix moved
+// GotoBottom into View, always right after layoutHeights sets the correct
+// Height for the content that's about to show.
+func TestResultAfterFirstCommandShowsAllLinesNotJustTheLast(t *testing.T) {
+	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"name": "Ana", "friend_code": "PKR-X", "wallet_mode": "sandbox",
+			"sandbox_balance": 5000, "game_balance": 0,
+		})
+	}))
+	defer apiSrv.Close()
+
+	dir := t.TempDir()
+	cfg := config.Settings{ConfigDir: dir}
+	if err := auth.SaveCredentials(config.CredentialsPath(cfg), auth.Credentials{
+		AccessToken: "at", ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s := newTestShell(t, apiSrv, dir)
+	s.state = stateHome
+	m, _ := s.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	s = m.(*Shell)
+
+	for _, r := range "/profile" {
+		m, _ := s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		s = m.(*Shell)
+	}
+	m, cmd := s.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	s = m.(*Shell)
+	if cmd == nil {
+		t.Fatal("expected a command to run /profile")
+	}
+	m, _ = s.Update(cmd())
+	s = m.(*Shell)
+
+	view := s.View()
+	for _, want := range []string{"Ana", "PKR-X", "sandbox", "5000", "game balance: 0"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("missing %q from view — result was clipped:\n%s", want, view)
+		}
+	}
+}
