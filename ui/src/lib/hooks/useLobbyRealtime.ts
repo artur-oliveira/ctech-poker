@@ -8,7 +8,7 @@ import {useWebSocket} from '@aoctech/ws-client';
 import {USE_MOCK} from '@/lib/mockConfig';
 import type {Room} from '@/lib/api/rooms';
 import {pushNotification} from '@/lib/notify';
-import {decodeServerMessage, encodeClientMessage} from "@/lib/ws/utils";
+import {decodeLobbyServerMessage, encodeLobbyClientMessage} from "@/lib/ws/lobbyCodec";
 import {useRouter} from 'next/navigation';
 import {acceptTableInvite, declineTableInvite, type SocialEventType} from '@/lib/api/social';
 import {SOCIAL_KEYS} from '@/lib/social';
@@ -21,7 +21,10 @@ import {useApiLiveness} from '@/lib/network/NetworkProvider';
 interface LobbyMessage {
   type: string;
   code?: string;
-  room?: Room;
+  // The lobby codec decodes field 9 as an empty marker message: `room_created`
+  // only needs to know a room rode along, and the bucket aggregate is re-read
+  // over HTTP (#205/#228).
+  room?: object;
   room_id?: string;
   seats_taken?: number;
   amount?: number;
@@ -31,6 +34,42 @@ interface LobbyMessage {
   // over HTTP, never from the socket payload.
   social_event?: {type?: SocialEventType | string; event_id?: string; room_id?: string};
   unread_count?: number;
+}
+
+/** A settling window for the reconnect reconciliation.
+ *
+ * `ws-client` re-opens on its own backoff, so waking a laptop, switching
+ * networks or rolling the gateway produces a burst of opens within a couple of
+ * seconds — and each one used to re-read the bucket aggregate, the player row
+ * and the whole social root. The reconciliation is therefore *trailing*: every
+ * open re-arms it, and only the open the storm ends on actually spends the
+ * reads. Nothing can be missed by waiting, because the last open always fires
+ * it. */
+export const RECONNECT_RECONCILE_DEBOUNCE_MS = 400;
+
+/** The page-load open is not a reconnect.
+ *
+ * The socket connects because the app mounted, and the same mount already
+ * fetched these queries — there is no offline gap to reconcile, only a
+ * duplicate read of answers that are seconds old. Anything later than this is
+ * a genuine re-open (the token arriving late, liveness recovering, a dropped
+ * connection) and does reconcile. Measured from the hook's mount, which lives
+ * for the whole session, so a long outage still reconciles on its first open. */
+export const FIRST_OPEN_GRACE_MS = 5000;
+
+// Not a beacon: the app has no metrics sink (`lib/telemetry.ts` is the
+// client-*error* sink), so "refetches per reconnect" is an assertable counter,
+// the same shape as `settleRefetchReads()`/`sessionRefreshCount()`.
+let reconciles = 0;
+
+/** How many reconnect reconciliations this session has spent. Each one costs
+ *  three invalidations, and only observed queries actually refetch. */
+export function lobbyReconcileCount() {
+  return reconciles;
+}
+
+export function resetLobbyReconcileCount() {
+  reconciles = 0;
 }
 
 const SOCIAL_EVENT_COPY: Record<SocialEventType, string> = {
@@ -154,24 +193,47 @@ export function useLobbyRealtime() {
   const origin = wsOrigin();
   const wsUrl = `${origin}/v1.0/ws`;
   
+  const reconcile = useCallback(() => {
+    reconciles += 1;
+    // Deltas sent while offline are not replayed, so the durable queries have
+    // to be reconciled after a gap. `refetchType: 'active'` is React Query's
+    // default and is spelled out here because it is the point: an unobserved
+    // query is only marked stale, so a reconnect costs reads for the surfaces
+    // actually on screen, not for everything the session ever loaded.
+    for (const queryKey of [
+      ROOM_BUCKETS_QUERY_KEY,
+      // `['player','me']` carries the wallet balances too (see BALANCE_QUERY_KEY).
+      ['player', 'me'],
+      // Social deltas are never replayed either, and the unread badge is the
+      // most visible thing that goes stale.
+      SOCIAL_KEYS.root,
+    ]) {
+      void queryClient.invalidateQueries({queryKey, refetchType: 'active'});
+    }
+  }, [queryClient]);
+
+  // Stamped in an effect, not during render (`Date.now()` is impure there). A
+  // still-zero stamp means the socket opened before the mount effect ran — the
+  // page-load open by definition, so it takes the same skip.
+  const mountedAtRef = useRef(0);
+  const reconcileTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    mountedAtRef.current = Date.now();
+    return () => clearTimeout(reconcileTimerRef.current);
+  }, []);
+
   const handleOpen = useCallback(() => {
     sendRef.current({type: 'ping'});
-    // Deltas sent while offline are not replayed. Reconcile the durable
-    // queries on every open; this is cheap and prevents an indefinitely stale
-    // lobby after sleep/network changes.
-    void queryClient.invalidateQueries({queryKey: ROOM_BUCKETS_QUERY_KEY});
-    // `['player','me']` carries the wallet balances too (see BALANCE_QUERY_KEY).
-    void queryClient.invalidateQueries({queryKey: ['player', 'me']});
-    // Social deltas sent while the socket was down are never replayed either,
-    // and the unread badge is the most visible thing that goes stale.
-    void queryClient.invalidateQueries({queryKey: SOCIAL_KEYS.root});
-  }, [queryClient]);
+    if (!mountedAtRef.current || Date.now() - mountedAtRef.current < FIRST_OPEN_GRACE_MS) return;
+    clearTimeout(reconcileTimerRef.current);
+    reconcileTimerRef.current = setTimeout(reconcile, RECONNECT_RECONCILE_DEBOUNCE_MS);
+  }, [reconcile]);
   
   const {status, send, reconnect} = useWebSocket({
     url: wsUrl,
     binaryType: 'arraybuffer',
-    encode: encodeClientMessage,
-    decode: decodeServerMessage,
+    encode: encodeLobbyClientMessage,
+    decode: decodeLobbyServerMessage,
     onMessage: data => receive(data as LobbyMessage),
     // No token means no session to authenticate with: connecting anyway only
     // produces the same unauthorized/close loop against the server.

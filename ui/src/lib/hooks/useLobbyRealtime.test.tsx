@@ -1,6 +1,12 @@
 import {act, renderHook} from '@testing-library/react';
-import {beforeEach, describe, expect, test, vi} from 'vitest';
-import {useLobbyRealtime} from './useLobbyRealtime';
+import {afterEach, beforeEach, describe, expect, test, vi} from 'vitest';
+import {
+  FIRST_OPEN_GRACE_MS,
+  lobbyReconcileCount,
+  RECONNECT_RECONCILE_DEBOUNCE_MS,
+  resetLobbyReconcileCount,
+  useLobbyRealtime,
+} from './useLobbyRealtime';
 import {ROOM_BUCKETS_QUERY_KEY} from '@/lib/lobbyBuckets';
 
 const state = vi.hoisted(() => ({
@@ -61,15 +67,63 @@ describe('useLobbyRealtime', () => {
     });
     act(() => state.options?.onOpen());
     expect(state.send).toHaveBeenCalledWith({type: 'ping'});
-    expect(state.invalidateQueries).toHaveBeenCalledTimes(3);
-    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['social']});
-    expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['player', 'me']});
-    // No dead `['wallet','balance']` key — balance rides on `['player','me']` (issue #101).
-    expect(state.invalidateQueries).not.toHaveBeenCalledWith({queryKey: ['wallet', 'balance']});
     act(() => result.current.reconnect());
     expect(state.reconnect).toHaveBeenCalled();
   });
-  
+
+  describe('reconnect reconciliation', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      resetLobbyReconcileCount();
+    });
+    afterEach(() => vi.useRealTimers());
+
+    test('the page-load open reconciles nothing — the mount that opened the socket just read it', () => {
+      renderHook(() => useLobbyRealtime());
+      act(() => state.options?.onOpen());
+      act(() => vi.advanceTimersByTime(RECONNECT_RECONCILE_DEBOUNCE_MS * 4));
+      expect(state.invalidateQueries).not.toHaveBeenCalled();
+      expect(lobbyReconcileCount()).toBe(0);
+    });
+
+    test('a genuine re-open reconciles the three durable roots, observed queries only', () => {
+      renderHook(() => useLobbyRealtime());
+      act(() => vi.advanceTimersByTime(FIRST_OPEN_GRACE_MS + 1));
+      act(() => state.options?.onOpen());
+      expect(state.invalidateQueries).not.toHaveBeenCalled();
+      act(() => vi.advanceTimersByTime(RECONNECT_RECONCILE_DEBOUNCE_MS));
+      expect(state.invalidateQueries).toHaveBeenCalledTimes(3);
+      expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ROOM_BUCKETS_QUERY_KEY, refetchType: 'active'});
+      expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['player', 'me'], refetchType: 'active'});
+      expect(state.invalidateQueries).toHaveBeenCalledWith({queryKey: ['social'], refetchType: 'active'});
+      // No dead `['wallet','balance']` key — balance rides on `['player','me']` (issue #101).
+      expect(state.invalidateQueries).not.toHaveBeenCalledWith({queryKey: ['wallet', 'balance']});
+      expect(lobbyReconcileCount()).toBe(1);
+    });
+
+    test('a reconnect storm costs one reconciliation, not one per open', () => {
+      renderHook(() => useLobbyRealtime());
+      act(() => vi.advanceTimersByTime(FIRST_OPEN_GRACE_MS + 1));
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        act(() => state.options?.onOpen());
+        act(() => vi.advanceTimersByTime(RECONNECT_RECONCILE_DEBOUNCE_MS - 1));
+      }
+      act(() => vi.advanceTimersByTime(RECONNECT_RECONCILE_DEBOUNCE_MS));
+      expect(lobbyReconcileCount()).toBe(1);
+      expect(state.invalidateQueries).toHaveBeenCalledTimes(3);
+    });
+
+    test('an unmount before the window closes spends no reads at all', () => {
+      const {unmount} = renderHook(() => useLobbyRealtime());
+      act(() => vi.advanceTimersByTime(FIRST_OPEN_GRACE_MS + 1));
+      act(() => state.options?.onOpen());
+      unmount();
+      act(() => vi.advanceTimersByTime(RECONNECT_RECONCILE_DEBOUNCE_MS * 4));
+      expect(lobbyReconcileCount()).toBe(0);
+      expect(state.invalidateQueries).not.toHaveBeenCalled();
+    });
+  });
+
   test('refreshes the lobby aggregate on a new room and mirrors occupancy onto the room cache', () => {
     renderHook(() => useLobbyRealtime());
     act(() => state.options?.onMessage({

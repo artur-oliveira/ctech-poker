@@ -16,3 +16,13 @@ protoc -I "$ROOT/proto" \
   --ts_proto_out="$ROOT/ui/src/lib/api/proto" \
   --ts_proto_opt=snakeToCamel=false,outputServices=none,esModuleInterop=true,useOptionals=messages \
   poker.proto
+
+# lobby.proto is the browser's wire-compatible subset of poker.proto for the
+# lobby/user gateway (same field numbers, no TableSnapshot), so the heavy table
+# codec stays off every non-table route. TypeScript only: the server keeps
+# encoding the full poker.ServerMessage.
+protoc -I "$ROOT/proto" \
+  --plugin="protoc-gen-ts_proto=$ROOT/ui/node_modules/.bin/protoc-gen-ts_proto" \
+  --ts_proto_out="$ROOT/ui/src/lib/api/proto" \
+  --ts_proto_opt=snakeToCamel=false,outputServices=none,esModuleInterop=true,useOptionals=messages \
+  lobby.proto
