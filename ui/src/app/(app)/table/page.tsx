@@ -153,8 +153,6 @@ function TableContent() {
   const {handOutcome, viewerStackBefore, nextHandDurationMs} = useTableOutcome({
     id, viewer, snapshot: rt.snapshot, snapshotAt: rt.snapshotAt
   });
-  const overlays = useTableOverlays({connected: rt.status === 'connected', sendReaction: rt.sendReaction});
-  const {activeTablePanel, setActiveTablePanel, panelOpenChange, pendingReaction} = overlays;
   if (bucket) return <>
     <BuyInPanel bucket={bucket} onSeatedAction={roomId => {
       queryClient.setQueryData(['seated', roomId], {seated: true, stack: 0});
