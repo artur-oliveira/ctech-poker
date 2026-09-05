@@ -42,17 +42,21 @@ ctech-account** — a config/data change, tracked here rather than in that repo:
 - [ ] Confirm `POST /v1.0/token` with `grant_type=api_key` issues a token carrying
       those same scopes for a key created with them.
 
-**How to actually create it (2026-09-05 investigation): there is no CLI for this
-yet.** `ctech-account/api/cmd/createclient` only makes confidential M2M clients;
-`cmd/createresource` makes a resource server + its confidential scope publisher;
-`OperatorService.EnsureFirstPartyPublicClient` — the only code path that creates a
-first-party *public* client — is hardcoded to `SELF_CLIENT_ID` (Account's own
-SPA) in `cmd/api/main.go`. Self-service `POST /v1.0/oauth-clients` generates a
-random UUID `client_id` and never sets `first_party`. So Task 0b needs **a code
-change in ctech-account**: either generalize `EnsureFirstPartyPublicClient` into a
-`cmd/createpublicclient` operator command (parallel to `createclient`), or a
-one-off provisioning script. Then run it per environment with AWS creds +
-`TABLE_PREFIX`/`AWS_REGION`/`VALKEY_URL`.
+**2026-09-05: `ctech-account/api/cmd/createpublicclient` now exists** —
+`ctech-account` PR https://github.com/artur-oliveira/ctech-account/pull/25 (open).
+Once merged, run per environment:
+
+```bash
+AWS_REGION=us-east-1 TABLE_PREFIX=<env> go run ./cmd/createpublicclient \
+  -client-id poker-cli -name "CTech Poker CLI" \
+  -redirect-uri http://127.0.0.1:51789/callback \
+  -scopes poker:rooms:read,poker:players:read,poker:sessions:read,poker:hands:read,poker:achievements:read,poker:stats:read
+```
+
+Idempotent — safe to re-run. `-redirect-uri` must be exactly
+`http://127.0.0.1:51789/callback` (matches `auth.LoopbackPort` in this repo) —
+`OAuthClient.IsRedirectURIAllowed` there is an exact string match, no RFC 8252
+§7.3 port-agnostic loopback comparison.
 
 Until this is done in an environment, the CLI in that environment can only run
 GET-only commands (`profile`, `achievements`) — every mutation gets a `403` with a
