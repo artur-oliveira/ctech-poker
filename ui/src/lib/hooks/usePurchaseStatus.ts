@@ -109,8 +109,11 @@ export function usePurchaseStatus<T extends TrackedPurchase>({queryKey, queryFn,
     // a dialog on a row the create response (or the parent) just handed us
     // spends no read of its own — the first fallback read is one gap later.
     initialData: purchase,
-    // Returning to the tab refetches (global `refetchOnWindowFocus`) — this is
-    // what bounds that to a single read instead of one per remount.
+    // A pending purchase is worth one read on the way back into the tab: the
+    // fallback poll does not run while hidden, so this is the only thing that
+    // catches a frame missed in the background. `staleTime` bounds it to a
+    // single read instead of one per remount.
+    refetchOnWindowFocus: true,
     staleTime: PURCHASE_POLL_MS,
     refetchInterval: query => {
       const latest = query.state.data ?? purchase;
