@@ -2,7 +2,7 @@
 import {useState} from 'react';
 import Link from 'next/link';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
-import {Copy, ExternalLink} from 'lucide-react';
+import {ArrowDown, ArrowUp, Copy, ExternalLink} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Checkbox} from '@/components/ui/checkbox';
 import {
@@ -15,17 +15,48 @@ import {
 } from '@/components/ui/dialog';
 import {Switch} from '@/components/ui/switch';
 import {getAchievementCatalog} from '@/lib/api/achievements';
-import {getMe, type PlayerProfile, updateMe} from '@/lib/api/player';
+import {
+  getMe, normalizeShowcaseLayout, type PlayerProfile, type ShowcaseLayout, type ShowcaseSectionId, updateMe
+} from '@/lib/api/player';
 import {achievementLabel} from '@/lib/achievements';
 import {pushNotification} from '@/lib/notify';
 import {SkeletonList} from '@/components/ui/skeleton';
 import {useAchievementsSummary} from '@/lib/hooks/useAchievementsSummary';
+
+const SHOWCASE_SECTION_LABELS: Record<ShowcaseSectionId, string> = {
+  achievements: 'Conquistas em Destaque', best_hand: 'Melhor Vitória Recente', matchup: 'Cara a Cara'
+};
+// Achievements can be reordered but never hidden — it already has its own
+// "nenhuma conquista selecionada" empty copy, so hiding it entirely would
+// just duplicate that with less explanation.
+const HIDEABLE_SECTIONS = new Set<ShowcaseSectionId>(['best_hand', 'matchup']);
 
 function ShowcaseEditor({me, onSaved}: { me: PlayerProfile; onSaved: (profile: PlayerProfile) => void }) {
   const [isPublic, setIsPublic] = useState(me.showcase_public);
   const [isPlaystylePublic, setIsPlaystylePublic] = useState(me.playstyle_public);
   const [isTablePublic, setIsTablePublic] = useState(me.table_public);
   const [selected, setSelected] = useState<string[]>(me.featured_achievements || []);
+  const [layout, setLayout] = useState<ShowcaseLayout>(() => normalizeShowcaseLayout(me.showcase_layout));
+  const [layoutAnnouncement, setLayoutAnnouncement] = useState('');
+
+  function moveSection(id: ShowcaseSectionId, direction: -1 | 1) {
+    setLayout(current => {
+      const index = current.order.indexOf(id);
+      const target = index + direction;
+      if (target < 0 || target >= current.order.length) return current;
+      const order = [...current.order];
+      [order[index], order[target]] = [order[target], order[index]];
+      setLayoutAnnouncement(`${SHOWCASE_SECTION_LABELS[id]} agora em ${target + 1}º lugar de ${order.length}.`);
+      return {...current, order};
+    });
+  }
+
+  function toggleSectionVisible(id: ShowcaseSectionId, visible: boolean) {
+    setLayout(current => ({
+      ...current,
+      hidden: visible ? current.hidden.filter(item => item !== id) : [...current.hidden, id]
+    }));
+  }
   const catalog = useQuery({queryKey: ['achievements', 'catalog'], queryFn: getAchievementCatalog});
   // Full-state summary (#79): the featured-achievement picker used to build
   // its counts from the paginated endpoint (cursor never followed), so a key
@@ -37,7 +68,7 @@ function ShowcaseEditor({me, onSaved}: { me: PlayerProfile; onSaved: (profile: P
   const save = useMutation({
     mutationFn: () => updateMe({
       showcase_public: isPublic, playstyle_public: isPlaystylePublic, table_public: isTablePublic,
-      featured_achievements: selected
+      featured_achievements: selected, showcase_layout: layout
     }),
     onSuccess: profile => {
       onSaved(profile);
@@ -73,6 +104,29 @@ function ShowcaseEditor({me, onSaved}: { me: PlayerProfile; onSaved: (profile: P
       <span><b>Mesa visível para amigos</b><small>Amigos podem entrar na sua mesa quando ela for pública.</small></span>
       <Switch checked={isTablePublic} onCheckedChange={setIsTablePublic} aria-label="Mesa visível para amigos"/>
     </div>
+    <fieldset className="showcase-layout-editor">
+      <legend>Organizar vitrine</legend>
+      <p>Use as setas para reordenar. Melhor Vitória e Cara a Cara também podem ser escondidos.</p>
+      <p className="sr-only" role="status" aria-live="polite">{layoutAnnouncement}</p>
+      <ol>
+        {layout.order.map((id, index) => <li key={id}>
+          <span aria-label={`${SHOWCASE_SECTION_LABELS[id]}, posição ${index + 1} de ${layout.order.length}`}>
+            {SHOWCASE_SECTION_LABELS[id]}
+          </span>
+          <span className="showcase-layout-controls">
+            <Button type="button" variant="ghost" size="icon" disabled={index === 0}
+                    aria-label={`Mover ${SHOWCASE_SECTION_LABELS[id]} para cima`}
+                    onClick={() => moveSection(id, -1)}><ArrowUp aria-hidden="true"/></Button>
+            <Button type="button" variant="ghost" size="icon" disabled={index === layout.order.length - 1}
+                    aria-label={`Mover ${SHOWCASE_SECTION_LABELS[id]} para baixo`}
+                    onClick={() => moveSection(id, 1)}><ArrowDown aria-hidden="true"/></Button>
+            {HIDEABLE_SECTIONS.has(id) && <Switch checked={!layout.hidden.includes(id)}
+                                                  onCheckedChange={checked => toggleSectionVisible(id, checked)}
+                                                  aria-label={`Mostrar ${SHOWCASE_SECTION_LABELS[id]} na vitrine`}/>}
+          </span>
+        </li>)}
+      </ol>
+    </fieldset>
     <fieldset className="showcase-achievements">
       <legend>Conquistas em destaque <span>{selected.length}/3</span></legend>
       <p>Somente conquistas com progresso podem ser escolhidas.</p>
@@ -111,7 +165,7 @@ export function ProfileShowcaseDialog({open, onOpenChangeAction}: { open: boolea
         <DialogDescription>Escolha o que outros jogadores podem ver. A vitrine começa privada.</DialogDescription>
       </DialogHeader>
       {me && <ShowcaseEditor
-          key={`${me.showcase_public}:${me.playstyle_public}:${me.table_public}:${(me.featured_achievements || []).join(',')}`}
+          key={`${me.showcase_public}:${me.playstyle_public}:${me.table_public}:${(me.featured_achievements || []).join(',')}:${JSON.stringify(me.showcase_layout || {})}`}
           me={me} onSaved={profile => queryClient.setQueryData(['player', 'me'], profile)}/>}
     </DialogContent>
   </Dialog>;

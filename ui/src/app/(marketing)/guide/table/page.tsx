@@ -47,7 +47,9 @@ export default function TableGuide() {
         <GuideTerm term="Check">Passa a vez sem apostar, quando ninguém aumentou.</GuideTerm>
         <GuideTerm term="Pagar">Iguala o valor exigido. O botão mostra quanto sai da sua pilha.</GuideTerm>
         <GuideTerm term="Aumentar">Define um total entre o mínimo e o máximo. Os atalhos de tamanho são Mín, ⅓, ½ e ⅔
-          do pote, Pote e Máx, além do controle deslizante e dos botões de mais e menos.</GuideTerm>
+          do pote, Pote e Máx, além do controle deslizante e dos botões de mais e menos. Uma segunda fileira de
+          presets (¼, ½, ¾, 1× o pote e All-in) fica ao lado do controle de mais e menos — toque na estrela de
+          cada um para fixar seus favoritos; sem nenhum favorito, todos aparecem.</GuideTerm>
         <GuideTerm term="All In">O botão troca de rótulo sozinho quando o valor escolhido alcança o
           máximo.</GuideTerm>
       </GuideTerms>
@@ -78,7 +80,9 @@ export default function TableGuide() {
         <GuideTerm term="T">Abre e fecha o chat.</GuideTerm>
         <GuideTerm term="Setas">Ajustam o valor do aumento; com Ctrl, o passo é o triplo.</GuideTerm>
       </GuideTerms>
-        <p>Nenhum atalho dispara enquanto você está digitando no chat.</p></>
+        <p>Nenhum atalho dispara enquanto você está digitando no chat.</p>
+        <p>Os atalhos podem ser desligados em Preferências da mesa — os botões continuam funcionando por
+          toque de qualquer jeito.</p></>
     },
     {
       id: 'tempo',
@@ -215,6 +219,8 @@ export default function TableGuide() {
           durante a sua decisão, para nunca funcionar como dica em tempo real; ao fim da mão, mostra como a sua chance
           mudou rua a rua.</span></li>
         <li><span><b>Lembrete de sessão:</b> a cada 30, 60, 90 ou 120 minutos, ou desativado.</span></li>
+        <li><span><b>Atalhos de teclado:</b> liga ou desliga F, C, P, R e os atalhos de preparar jogada, sem
+          remapeamento. Uma lista mostra o que cada tecla faz enquanto o recurso está ligado.</span></li>
       </GuideBullets>
         <p>O tema do feltro e o baralho ficam salvos na sua conta. As outras preferências valem neste
           navegador.</p></>

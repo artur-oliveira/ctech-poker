@@ -25,7 +25,8 @@ vi.mock('@tanstack/react-query', () => ({
     },
   }),
 }));
-vi.mock('@/lib/api/player', () => ({
+vi.mock('@/lib/api/player', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/api/player')>(),
   getMe: vi.fn(),
   updateMe: mocks.updateMe,
 }));
@@ -116,11 +117,33 @@ describe('ProfileShowcaseDialog', () => {
       showcase_public: true,
       playstyle_public: true,
       featured_achievements: ['first_hand', 'hands_10'],
+      showcase_layout: {order: ['achievements', 'best_hand', 'matchup'], hidden: []},
     });
     await waitFor(() => expect(mocks.setQueryData).toHaveBeenCalledWith(['player', 'me'], updated));
     expect(mocks.notify).toHaveBeenCalledWith('Vitrine do perfil atualizada.', 'info');
   });
   
+  test('reorders sections with keyboard-accessible arrows and announces the new position', async () => {
+    mocks.updateMe.mockResolvedValue(me);
+    render(<ProfileShowcaseDialog open onOpenChangeAction={vi.fn()}/>);
+    expect(screen.getByRole('button', {name: 'Mover Conquistas em Destaque para cima'})).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', {name: 'Mover Conquistas em Destaque para baixo'}));
+    expect(screen.getByText('Conquistas em Destaque agora em 2º lugar de 3.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', {name: 'Salvar vitrine'}));
+    expect(mocks.updateMe).toHaveBeenCalledWith(expect.objectContaining({
+      showcase_layout: {order: ['best_hand', 'achievements', 'matchup'], hidden: []},
+    }));
+  });
+
+  test('hides Melhor Vitória / Cara a Cara via a switch, never Conquistas', () => {
+    render(<ProfileShowcaseDialog open onOpenChangeAction={vi.fn()}/>);
+    expect(screen.queryByRole('switch', {name: /Mostrar Conquistas em Destaque/})).not.toBeInTheDocument();
+    const hideBestHand = screen.getByRole('switch', {name: 'Mostrar Melhor Vitória Recente na vitrine'});
+    expect(hideBestHand).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(hideBestHand);
+    expect(hideBestHand).toHaveAttribute('aria-checked', 'false');
+  });
+
   test('shows a skeleton while achievement sources are unresolved', () => {
     mocks.query.mockImplementation(({queryKey}: { queryKey: string[] }) =>
       queryKey[0] === 'player' ? {data: me} : {isLoading: true});

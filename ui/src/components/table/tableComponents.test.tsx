@@ -40,6 +40,11 @@ function renderActionBar(overrides: Partial<React.ComponentProps<typeof ActionBa
     onPreselectAction: vi.fn(() => true),
     timeBankMs: 30_000,
     voiceCommands: false,
+    pot: 200,
+    shortcutsEnabled: true,
+    favoriteBetPresets: [],
+    favoriteBetPresetsSaving: false,
+    onToggleFavoriteBetPresetAction: vi.fn(),
     ...overrides,
   };
   render(<ActionBar {...props}/>);

@@ -7,7 +7,7 @@ import {Lock, Pencil, Sparkles, Swords, Trophy} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import type {MatchupStats} from '@/lib/api/player';
-import {getMatchupStats, getProfileShowcase, handEndedAtMs} from '@/lib/api/player';
+import {getMatchupStats, getProfileShowcase, handEndedAtMs, normalizeShowcaseLayout} from '@/lib/api/player';
 import {achievementLabel} from '@/lib/achievements';
 import {useOptionalSession} from "@/lib/auth/session";
 import {getViewerId} from '@/lib/utils';
@@ -116,34 +116,44 @@ function ProfileContent() {
             {relationship.data && <PlayerActionsMenu target={relationship.data} actions={socialActions}
                                                      surface="profile"/>}
           </header>
-          <div className="profile-showcase-content">
-            <section>
-              <h2><Trophy aria-hidden="true"/> Conquistas em Destaque</h2>
-              {showcase.data.featured_achievements.length ? <div className="profile-featured-list">
-                {showcase.data.featured_achievements.map(item => <article key={item.key}>
-                  <Sparkles aria-hidden="true"/>
-                  <div>
-                    <b>{achievementLabel(item.key)}</b>
-                    <span>{item.count.toLocaleString('pt-BR')} registradas</span>
-                  </div>
-                </article>)}
-              </div> : <p className="profile-showcase-empty">Nenhuma conquista selecionada para exibição.</p>}
-            </section>
-            <section>
-              <h2>Melhor Vitória Recente</h2>
-              {showcase.data.best_hand ? <article className="profile-best-hand">
-                <div className="profile-best-hand-cards">
-                  {(showcase.data.best_hand.hole_cards || []).map((card, index) =>
-                    <PlayingCard key={`${card}-${index}`} card={card} index={index} size="hole"/>)}
-                </div>
-                <b>+{showcase.data.best_hand.net_change.toLocaleString('pt-BR')} fichas</b>
-                <span>{new Date(handEndedAtMs(showcase.data.best_hand.ended_at)).toLocaleDateString('pt-BR')}</span>
-              </article> : <p className="profile-showcase-empty">Nenhuma vitória recente registrada nesta vitrine.</p>}
-            </section>
-            {matchup.data && matchup.data.hands_together > 0 && (
-              <MatchupCard stats={matchup.data} opponentName={showcase.data.name || 'Jogador'}/>
-            )}
-          </div>
+          {(() => {
+            const layout = normalizeShowcaseLayout(showcase.data.showcase_layout);
+            const visible = layout.order.filter(id => !layout.hidden.includes(id));
+            // Unreachable today (achievements can never be hidden — see
+            // normalizeShowcaseLayout), kept because a corrupted/future layout
+            // must never render a silent blank showcase.
+            if (visible.length === 0) return <p className="profile-showcase-empty">Nenhuma seção visível nesta vitrine.</p>;
+            return <div className="profile-showcase-content">
+              {visible.map(id => {
+                if (id === 'achievements') return <section key={id}>
+                  <h2><Trophy aria-hidden="true"/> Conquistas em Destaque</h2>
+                  {showcase.data.featured_achievements.length ? <div className="profile-featured-list">
+                    {showcase.data.featured_achievements.map(item => <article key={item.key}>
+                      <Sparkles aria-hidden="true"/>
+                      <div>
+                        <b>{achievementLabel(item.key)}</b>
+                        <span>{item.count.toLocaleString('pt-BR')} registradas</span>
+                      </div>
+                    </article>)}
+                  </div> : <p className="profile-showcase-empty">Nenhuma conquista selecionada para exibição.</p>}
+                </section>;
+                if (id === 'best_hand') return <section key={id}>
+                  <h2>Melhor Vitória Recente</h2>
+                  {showcase.data.best_hand ? <article className="profile-best-hand">
+                    <div className="profile-best-hand-cards">
+                      {(showcase.data.best_hand.hole_cards || []).map((card, index) =>
+                        <PlayingCard key={`${card}-${index}`} card={card} index={index} size="hole"/>)}
+                    </div>
+                    <b>+{showcase.data.best_hand.net_change.toLocaleString('pt-BR')} fichas</b>
+                    <span>{new Date(handEndedAtMs(showcase.data.best_hand.ended_at)).toLocaleDateString('pt-BR')}</span>
+                  </article> : <p className="profile-showcase-empty">Nenhuma vitória recente registrada nesta vitrine.</p>}
+                </section>;
+                return matchup.data && matchup.data.hands_together > 0
+                  ? <MatchupCard key={id} stats={matchup.data} opponentName={showcase.data.name || 'Jogador'}/>
+                  : null;
+              })}
+            </div>;
+          })()}
         </>}
     </ShowcaseShell>
   </AppPage>;

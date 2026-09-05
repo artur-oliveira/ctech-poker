@@ -20,7 +20,9 @@ export default function StoreGuide() {
       },
       {
         id: 'premium', title: 'Liberar uma reação, um baralho ou um feltro', summary: 'Uma compra, uso permanente, sem assinatura nem consumo por uso.',
-        body: <><GuideSteps><li><span>Escolha o item. O cartão mostra o preço em fichas e o preço em reais.</span></li>
+        body: <><p>O topo do diálogo mostra o item junto do que você já usa do outro tipo: um baralho combinado com o seu
+          feltro atual, ou um feltro combinado com o seu baralho atual.</p>
+          <GuideSteps><li><span>Escolha o item. O cartão mostra o preço em fichas e o preço em reais.</span></li>
           <li><span>Pague com <b>fichas sandbox</b>, com confirmação imediata, ou com <b>Pix</b>, pelo QR code do passo seguinte.</span></li>
           <li><span>Confirmado, o item já vale em qualquer mesa: a reação entra no painel, o baralho aparece no menu do perfil e o feltro nas preferências da mesa.</span></li></GuideSteps>
           <p>Reações premium bloqueadas continuam visíveis na mesa com um cadeado — tocar nelas abre a compra sem tirar você da partida. Até três reações, premium ou não, podem virar atalho fixo ao lado do botão.</p>

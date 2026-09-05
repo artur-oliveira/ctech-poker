@@ -1,5 +1,5 @@
 'use client';
-import {AudioLines, Lightbulb, LockKeyhole, Mic, Repeat2, Settings2, Volume2} from 'lucide-react';
+import {AudioLines, Keyboard, Lightbulb, LockKeyhole, Mic, Repeat2, Settings2, Volume2} from 'lucide-react';
 import {useState} from 'react';
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
@@ -143,6 +143,22 @@ export function TablePreferencesDialog({runItTwiceAvailable = false, runItTwice 
           <Switch aria-labelledby="equity-trainer-label" checked={preferences.equityTrainer}
                   onCheckedChange={checked => update({equityTrainer: checked})}/>
         </div>
+        <div className="table-preference-toggle">
+          <span><Keyboard aria-hidden="true"/><span><Label id="keyboard-shortcuts-label">Atalhos de teclado</Label>
+            <small>F, C, P e R agem na sua vez; X, C e A preparam a próxima jogada. Sem remapeamento — só
+              ligar ou desligar. Os botões continuam clicáveis de qualquer jeito.</small></span></span>
+          <Switch aria-labelledby="keyboard-shortcuts-label" checked={preferences.keyboardShortcuts}
+                  onCheckedChange={checked => update({keyboardShortcuts: checked})}/>
+        </div>
+        {preferences.keyboardShortcuts && <dl className="table-shortcuts-legend" aria-label="Atalhos ativos">
+          <div><dt>F</dt><dd>Fold</dd></div>
+          <div><dt>C</dt><dd>Check / Call</dd></div>
+          <div><dt>P</dt><dd>Pagar</dd></div>
+          <div><dt>R</dt><dd>Aumentar</dd></div>
+          <div><dt>X</dt><dd>Preparar Check/Fold</dd></div>
+          <div><dt>A</dt><dd>Máximo / All In</dd></div>
+          <div><dt>← →</dt><dd>Ajustar valor</dd></div>
+        </dl>}
         <div>
           <Label id="reality-check-label">Lembrete de sessão</Label>
           <Select value={String(preferences.realityCheckMinutes)}

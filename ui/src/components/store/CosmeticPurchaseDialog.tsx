@@ -40,21 +40,53 @@ function labelFor(kind: CosmeticKind, itemId: string) {
 
 const ACES = ['As', 'Ah', 'Ad', 'Ac'];
 
-function CosmeticPreview({kind, itemId}: { kind: CosmeticKind; itemId: string }) {
-  if (kind === 'deck') return <span className="cosmetic-store-deck-preview">
-    {ACES.map(card => <Image key={card} src={cardPath(card, itemId as DeckVariantId)} alt="" width={36} height={50}/>)}
+/** Combined felt+deck preview (#339) — never the real table (no table.css
+ * import here, just the existing felt-swatch/deck-preview thumbnails already
+ * used elsewhere in the store). `pairedItemId` is the player's currently
+ * selected cosmetic of the OTHER kind (already loaded on the store page as
+ * part of the profile fetch — no new network call), so the preview shows the
+ * item being bought together with what the player would actually see with it.
+ * Decorative to the purchase decision (price/name are already text), so the
+ * visual is aria-hidden and a single sr-only label describes the combo. */
+function CosmeticPreview({kind, itemId, pairedItemId}: { kind: CosmeticKind; itemId: string; pairedItemId?: string }) {
+  const feltId = (kind === 'felt' ? itemId : pairedItemId) as TableThemeId | undefined;
+  const deckId = (kind === 'deck' ? itemId : pairedItemId) as DeckVariantId | undefined;
+  // Falls back to the classic felt so an unresolved paired theme (e.g. the
+  // profile hasn't loaded yet) never renders a blank/undefined-color swatch.
+  const theme = (feltId && TABLE_THEMES[feltId]) || TABLE_THEMES.classic;
+  const deck = deckId ? DECK_VARIANTS[deckId] : undefined;
+  // The item actually being purchased must resolve to a known preview asset;
+  // if the catalog ever lists an id this build doesn't recognize yet, fail to
+  // a plain text note instead of a blank/broken swatch.
+  const primaryKnown = kind === 'deck' ? Boolean(DECK_VARIANTS[itemId as DeckVariantId])
+    : Boolean(TABLE_THEMES[itemId as TableThemeId]);
+  if (!primaryKnown) return <p className="cosmetic-preview-unavailable">Pré-visualização indisponível para este item.</p>;
+
+  const comboLabel = kind === 'deck'
+    ? `Pré-visualização: baralho ${DECK_VARIANTS[itemId as DeckVariantId].label} sobre o feltro ${theme.label}`
+    : `Pré-visualização: feltro ${TABLE_THEMES[itemId as TableThemeId].label} com o baralho ${deck?.label ?? 'atual'}`;
+  return <span className="cosmetic-preview-combo">
+    <span className="cosmetic-preview-combo-visual" aria-hidden="true">
+      <span className="felt-swatch" style={{'--theme-a': theme.colors[0], '--theme-b': theme.colors[1]} as React.CSSProperties}/>
+      {deckId && <span className="cosmetic-store-deck-preview">
+        {ACES.map(card => <Image key={card} src={cardPath(card, deckId)} alt="" width={36} height={50}/>)}
+      </span>}
+    </span>
+    <span className="sr-only">{comboLabel}</span>
   </span>;
-  const theme = TABLE_THEMES[itemId as TableThemeId];
-  return <span className="felt-swatch"
-               style={{'--theme-a': theme?.colors[0], '--theme-b': theme?.colors[1]} as React.CSSProperties}/>;
 }
 
-export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBalance, finalFocusRef, onCloseAction,
-                                        onConfirmedAction}: {
+export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBalance, pairedItemId, finalFocusRef,
+                                        onCloseAction, onConfirmedAction}: {
   kind: CosmeticKind;
   entry: CosmeticCatalogEntry | null;
   initialPurchase?: CosmeticPurchase;
   sandboxBalance?: number;
+  /** The player's current selection of the OTHER cosmetic kind (deck when
+   * kind is 'felt', felt when kind is 'deck'), already loaded with the store
+   * profile — combined into the preview so it shows what the player would
+   * actually see with this item, not just the item in isolation. */
+  pairedItemId?: string;
   /** Restores keyboard focus to the control that opened this dialog. */
   finalFocusRef?: RefObject<HTMLButtonElement | null>;
   onCloseAction: () => void;
@@ -120,7 +152,7 @@ export function CosmeticPurchaseDialog({kind, entry, initialPurchase, sandboxBal
   }}>
     <DialogContent className="reaction-purchase-dialog cosmetic-purchase-dialog" finalFocus={finalFocusRef}>
       <DialogHeader>
-        <span className="cosmetic-purchase-hero"><CosmeticPreview kind={kind} itemId={entry.id}/></span>
+        <span className="cosmetic-purchase-hero"><CosmeticPreview kind={kind} itemId={entry.id} pairedItemId={pairedItemId}/></span>
         <DialogTitle>{confirmed ? `${label} liberado` : `Liberar ${label}`}</DialogTitle>
         <DialogDescription>{confirmed
           ? 'O item é seu para sempre e já pode ser usado em qualquer mesa.'

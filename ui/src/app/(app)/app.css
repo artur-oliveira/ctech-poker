@@ -5457,6 +5457,26 @@ button.deck-grid-slot:hover {
     background: radial-gradient(ellipse, var(--theme-a), var(--theme-b));
     box-shadow: inset 0 0 0 2px var(--table-rail-edge)
 }
+.cosmetic-preview-combo {
+    display: block;
+    max-width: 100%
+}
+.cosmetic-preview-combo-visual {
+    position: relative;
+    display: grid;
+    place-items: center
+}
+.cosmetic-preview-combo-visual .cosmetic-store-deck-preview {
+    position: absolute;
+    padding-left: 0
+}
+.cosmetic-preview-unavailable {
+    max-width: 220px;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: var(--font-size-compact);
+    text-align: center
+}
 .store-activity-list li {
     display: grid;
     grid-template-columns: 32px minmax(0, 1fr) 92px;

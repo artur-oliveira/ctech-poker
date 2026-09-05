@@ -97,7 +97,8 @@ describe('TablePreferencesDialog', () => {
     vi.clearAllMocks();
     useTablePreferences.mockReturnValue({
       preferences: {
-        soundEffects: false, dealerVoice: false, voiceCommands: true, realityCheckMinutes: 60, equityTrainer: false
+        soundEffects: false, dealerVoice: false, voiceCommands: true, realityCheckMinutes: 60, equityTrainer: false,
+        keyboardShortcuts: true
       },
       update,
     });
@@ -119,11 +120,28 @@ describe('TablePreferencesDialog', () => {
     expect(screen.getByRole('button', {name: /Oceano/})).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'Desativado'})).toBeInTheDocument();
     expect(screen.getByRole('button', {name: 'A cada 2 horas'})).toBeInTheDocument();
-    expect(screen.getAllByRole('switch')).toHaveLength(4);
+    expect(screen.getAllByRole('switch')).toHaveLength(5);
     expect(screen.getByRole('switch', {name: 'Sons da mesa'})).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByRole('switch', {name: 'Dealer auditivo'})).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByRole('switch', {name: 'Comandos por voz'})).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('switch', {name: 'Treinador'})).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('switch', {name: 'Atalhos de teclado'})).toHaveAttribute('aria-checked', 'true');
+  });
+
+  test('hides the shortcut legend once shortcuts are turned off', async () => {
+    renderDialog();
+    expect(screen.getByText('Fold')).toBeInTheDocument();
+    useTablePreferences.mockReturnValue({
+      preferences: {
+        soundEffects: false, dealerVoice: false, voiceCommands: true, realityCheckMinutes: 60, equityTrainer: false,
+        keyboardShortcuts: false
+      },
+      update,
+    });
+    renderDialog();
+    const toggle = screen.getAllByRole('switch', {name: 'Atalhos de teclado'})[1];
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getAllByText('Fold')).toHaveLength(1);
   });
 
   test('does not fetch the felt catalog while the dialog is closed', async () => {

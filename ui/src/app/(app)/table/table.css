@@ -16,6 +16,70 @@
 .table-preference-gameplay small {
     max-width: 42ch
 }
+.table-shortcuts-legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 6px 12px;
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: var(--rounded-control);
+    background: var(--surface-control)
+}
+.table-shortcuts-legend div {
+    display: flex;
+    align-items: center;
+    gap: 7px
+}
+.table-shortcuts-legend dt {
+    min-width: 26px;
+    padding: 1px 6px;
+    font: 600 var(--font-size-tiny) var(--font-mono);
+    text-align: center;
+    border: 1px solid var(--control-border);
+    border-radius: var(--rounded-xs);
+    opacity: .8
+}
+.table-shortcuts-legend dd {
+    margin: 0;
+    font-size: var(--font-size-compact);
+    color: var(--text-secondary)
+}
+.bet-quick-presets {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px
+}
+.bet-quick-presets-hint {
+    margin: 0;
+    font-size: var(--font-size-tiny);
+    color: var(--text-secondary)
+}
+.bet-quick-preset {
+    display: inline-flex;
+    align-items: stretch;
+    border-radius: var(--rounded-sm);
+    overflow: hidden
+}
+.bet-quick-preset button:first-child {
+    min-height: 40px;
+    padding: 2px 10px;
+    font: 600 var(--font-size-compact) var(--font-mono)
+}
+.bet-quick-preset-favorite {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    min-height: 40px
+}
+.bet-quick-preset-favorite svg {
+    width: 15px;
+    height: 15px
+}
+.bet-quick-preset-favorite[aria-pressed='true'] svg {
+    color: var(--gold)
+}
 .reality-check-title {
     display: inline-flex;
     align-items: center;
