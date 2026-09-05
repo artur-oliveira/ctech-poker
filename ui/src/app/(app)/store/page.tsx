@@ -30,6 +30,7 @@ import {pushNotification} from '@/lib/notify';
 import {AppPage, AppPageBody, AppPageHeader} from '@/components/AppPageChrome';
 import {useInViewOnce} from '@/lib/hooks/useInViewOnce';
 import {getMe} from '@/lib/api/player';
+import {DEFAULT_DECK_VARIANT} from '@/lib/cardVariants';
 import {
   getReactionPurchase,
   listReactionCatalog,
@@ -445,7 +446,8 @@ export default function Store() {
                           onConfirmAction={refundReaction}/>
     <CosmeticPurchaseDialog key={`deck:${deckTarget?.id ?? 'closed'}:${activeDeckPurchase?.purchase_id ?? 'new'}`}
                             kind="deck" entry={deckTarget} initialPurchase={activeDeckPurchase}
-                            sandboxBalance={player.data?.sandbox_balance} finalFocusRef={purchaseTriggerRef}
+                            sandboxBalance={player.data?.sandbox_balance} pairedItemId={player.data?.table_theme || 'classic'}
+                            finalFocusRef={purchaseTriggerRef}
                             onCloseAction={() => {
                               setDeckTarget(null);
                               setActiveDeckPurchase(undefined);
@@ -456,7 +458,9 @@ export default function Store() {
                           onConfirmAction={refundDeck}/>
     <CosmeticPurchaseDialog key={`felt:${feltTarget?.id ?? 'closed'}:${activeFeltPurchase?.purchase_id ?? 'new'}`}
                             kind="felt" entry={feltTarget} initialPurchase={activeFeltPurchase}
-                            sandboxBalance={player.data?.sandbox_balance} finalFocusRef={purchaseTriggerRef}
+                            sandboxBalance={player.data?.sandbox_balance}
+                            pairedItemId={player.data?.deck_variant || DEFAULT_DECK_VARIANT}
+                            finalFocusRef={purchaseTriggerRef}
                             onCloseAction={() => {
                               setFeltTarget(null);
                               setActiveFeltPurchase(undefined);

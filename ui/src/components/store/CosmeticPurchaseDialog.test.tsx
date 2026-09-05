@@ -111,6 +111,18 @@ describe('CosmeticPurchaseDialog', () => {
     expect(createCosmeticPurchase).toHaveBeenCalledWith('deck', 'golden', 'pix');
   });
 
+  test('previews the deck being bought over the player\'s current felt', () => {
+    render(<CosmeticPurchaseDialog kind="deck" entry={entry} pairedItemId="midnight" onCloseAction={vi.fn()}/>,
+      {wrapper});
+    expect(screen.getByText(/Pré-visualização: baralho .* sobre o feltro Meia-noite/)).toBeInTheDocument();
+  });
+
+  test('previews the felt being bought with the player\'s current deck, defaulting when unset', () => {
+    render(<CosmeticPurchaseDialog kind="felt" entry={{kind: 'felt', id: 'midnight', premium: true, price_fichas: 200_000}}
+      onCloseAction={vi.fn()}/>, {wrapper});
+    expect(screen.getByText(/Pré-visualização: feltro Meia-noite com o baralho atual/)).toBeInTheDocument();
+  });
+
   test('closes only when no purchase call is in flight', async () => {
     const onCloseAction = vi.fn();
     render(<CosmeticPurchaseDialog kind="deck" entry={entry}
