@@ -235,12 +235,24 @@ func (r *registry) payload(key seriesKey, b *bucket) map[string]any {
 
 const environmentDimension = "Environment"
 
+// emitDisabled stops the last-mile write below, without touching any
+// Record() caller. Every distinct (name, unit, dimensions) EMF line becomes a
+// billed CloudWatch custom metric ($0.30/series/month); DynamoConsumedCapacity
+// alone (Table x Operation, ~29 tables x up to 5 ops) was projected at ~100-150
+// series on top of the fixed ~36 from the rest of this package. Flip back to
+// false once a cheaper sink (self-hosted Prometheus/VictoriaMetrics, or a
+// capped dimension set) is in place.
+const emitDisabled = true
+
 // emitLine writes the EMF document as its own line on the service's normal
 // JSON log stream. It bypasses slog: slog would nest the payload under an
 // attribute key or, at best, interleave `time`/`level`/`msg` members with the
 // EMF target members, and EMF target members must sit on the root node.
 // Marshalling by hand keeps the line exactly the document CloudWatch parses.
 func emitLine(payload map[string]any) {
+	if emitDisabled {
+		return
+	}
 	line, err := json.Marshal(payload)
 	if err != nil {
 		slog.Error("metrics: could not marshal EMF payload", "err", err)

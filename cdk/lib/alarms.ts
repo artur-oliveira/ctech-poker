@@ -70,3 +70,54 @@ export function addLambdaDlqAlarms(
     treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
   }));
 }
+
+/** CTechPoker is internal/metrics's defaultNamespace (METRICS_NAMESPACE is
+ * never set for this app, so it's also the actual one). Environment is
+ * always a dimension there — see internal/metrics's package doc. */
+const METRICS_NAMESPACE = 'CTechPoker';
+
+/**
+ * Alarms sourced from the app's own EMF metrics (`internal/metrics`,
+ * `internal/app/handpipeline.go`), not from a native DynamoDB/Lambda metric.
+ * Issue #290's acceptance criterion: a hand-pipeline budget violation must be
+ * alarmable from a runtime metric, not only from `TestHandPipelineDynamoBudget`
+ * pinning the ceiling in CI.
+ *
+ * `HandPipelineDuration` is measured from dispatch (queueing included) against
+ * `handPipelineTimeout` (30s, `internal/app/handpipeline.go`); p95 sustained
+ * above 80% of that budget for 15 minutes is a real, load-driven slowdown —
+ * transient GC pauses or a single slow hand do not sustain a p95 for three
+ * 5-minute periods. `treatMissingData` is NOT_BREACHING: a quiet period with
+ * no completed hands emits no datapoint and must not page.
+ */
+export function addHandPipelineBudgetAlarm(
+  scope: Construct,
+  environment: string,
+  enabled: boolean,
+): void {
+  if (!enabled) return;
+  const alertsTopic = sns.Topic.fromTopicArn(scope, 'HandPipelineBudgetAlertsTopic', ALERTS_TOPIC_ARN);
+  const action = new cloudwatchActions.SnsAction(alertsTopic);
+
+  const durationBudgetMs = 30_000;
+  const alarm = new cloudwatch.Alarm(scope, 'HandPipelineDurationBudgetAlarm', {
+    alarmName: `${environment}-hand-pipeline-duration-budget`,
+    alarmDescription:
+      'p95 post-hand gamification pipeline duration is approaching handPipelineTimeout — ' +
+      'see api/internal/app/handpipeline.go and issue #204/#290.',
+    metric: new cloudwatch.Metric({
+      namespace: METRICS_NAMESPACE,
+      metricName: 'HandPipelineDuration',
+      dimensionsMap: {Environment: environment},
+      statistic: 'p95',
+      period: cdk.Duration.minutes(5),
+    }),
+    threshold: durationBudgetMs * 0.8,
+    evaluationPeriods: 3,
+    datapointsToAlarm: 3,
+    comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+  });
+  alarm.addAlarmAction(action);
+  alarm.addOkAction(action);
+}

@@ -90,6 +90,14 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
 
 - **Reuse `gopkg.aoctech.app/api-commons`** for JWT verify (`jwtverify`), WebSocket registry (`ws.Registry`), cache
   backend (`cache.Backend`), and problem responses (`problem`). Do NOT hand-roll these.
+- **Emission to CloudWatch is disabled (2026-09-05, `internal/metrics/metrics.go`'s `emitDisabled = true`).** #290's
+  own per-step latency + sampled `DynamoConsumedCapacity` work pushed the projected custom-metric series count to
+  ~100-150 (`DynamoConsumedCapacity`'s `Table`×`Operation` dimension alone, ~29 tables × up to 5 ops) on top of the
+  ~36 fixed series from the rest of the package — at CloudWatch's ~$0.30/series/month, an unbudgeted recurring cost
+  nobody signed off on. `metrics.Record` callers are untouched and still accumulate into buckets; `emitLine` now
+  returns before marshalling or writing, so nothing reaches stdout and nothing is ever extracted as a CloudWatch
+  metric. Flip `emitDisabled` back to `false` only alongside a cost review, or once a self-hosted sink (e.g.
+  Prometheus/VictoriaMetrics on the existing EC2 fleet) replaces CloudWatch EMF.
 - **There is exactly one way to emit a metric: `metrics.Record(name, unit, dims, value)` (`internal/metrics`).**
   Added by #279, after seven performance issues (#204, #207, #218, #220, #221, #222, #233) each shipped their cost
   reduction pinned by a test and left their production-signal acceptance criterion unmet, every one of them
@@ -224,8 +232,21 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   included — against `handPipelineTimeout`, `HandPipelinePanics`, and `HandPipelineStepFailures` dimensioned by
   `Step` (`stepFailed(...)` next to each of the pipeline's existing `slog.Error` sites, so a failing hook is
   identifiable without reading logs). The ERROR line and `handPipelineQueueDepth()` are unchanged.
-  **Still not implemented from #204:** per-step *latency* and sampled `ReturnConsumedCapacity` — both need the
-  DynamoDB call path itself wrapped, not the pipeline.
+  **#204's remaining two items shipped in #290:** `HandPipelineStepDuration`, dimensioned by the exact same `Step`
+  values `stepFailed` uses, measured around each step's own DynamoDB call (never the surrounding CPU-only work —
+  `pokerstats.Analyze`, the peek/time-bank scan — so a step's number is about the store round trip, not the pipeline's
+  bookkeeping). And sampled `ReturnConsumedCapacity`, which needed the DynamoDB call path itself wrapped, not the
+  pipeline: it lives in `gopkg.aoctech.app/api-commons/dynamo` (`SetCapacityRecorder`/`SetCapacitySampleRate`, 5%
+  default), because that package — not this repo — is where every `Query`/`GetItem`/`BatchGetItem`/`UpdateItem`/
+  `TransactWrite` call actually happens, and it is shared with ctech-account/ctech-wallet, which have the same gap.
+  It cannot itself depend on this service's `internal/metrics`, so it exposes the recorder as a hook instead;
+  `wireCapacityMetrics` (`internal/app/app.go`) is the one place that wires it to `metrics.Record`, emitting
+  `DynamoConsumedCapacity` dimensioned by `(Table, Operation)` — the physical table name, never a row's own key, so
+  the dimension set stays bounded the same way every other metric here does. A runtime alarm now backs the pipeline's
+  own budget too: `HandPipelineDuration`'s p95 sustained over 80% of `handPipelineTimeout` for three 5-minute periods
+  pages (`cdk/lib/alarms.ts`'s `addHandPipelineBudgetAlarm`, gated the same `cloudwatchAlarmsEnabled` way as every
+  other alarm here) — a budget violation is now visible from the metric, not only from
+  `TestHandPipelineDynamoBudget` pinning the ceiling in CI.
 - **`handhook`'s claim does NOT by itself make the pipeline's counters double-run-safe (#66).** `claimHandHooks`
   fails OPEN on a Valkey error ("a double credit is at least visible and bounded" — see `internal/handhook`'s doc
   comment), so a Valkey blip during hand completion can let two instances both pass the claim and both reach
@@ -293,9 +314,12 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   every commit through `CommitAction` by `Outcome`
   (accepted/conflict/duplicate/throttled/unavailable/failed) — attempted, accepted and conditionally-failed commits,
   which is what #207 asked for. Neither carries the table id or the action as a dimension: a ULID dimension is one
-  custom metric per table on the bill, and the wedged table is identified from the transition log line. Consumed
-  capacity per commit is still **not** emitted (it needs `ReturnConsumedCapacity` threaded through
-  `api-commons/dynamo`); `addWriteVolumeAlarm` remains the WCU signal. Tests are fake-clock only
+  custom metric per table on the bill, and the wedged table is identified from the transition log line. **Consumed
+  capacity is emitted since #290**, but sampled and by `(table, operation)`, not per commit —
+  `api-commons/dynamo`'s `SetCapacityRecorder` (see the hand-pipeline bullet above) reports `DynamoConsumedCapacity`
+  fleet-wide across every call `CommitAction` and everything else makes; `addWriteVolumeAlarm` remains the primary
+  WCU signal for a single table, since the per-commit figure was never worth pinning to one table id. Tests are
+  fake-clock only
   (`breaker_test.go`): the storm, machine-speed play, contention that still makes progress, store outages, per-table
   isolation, and idle eviction.
 - **Every command the actor runs has a deadline, and the mailbox has a budget (issue #223,

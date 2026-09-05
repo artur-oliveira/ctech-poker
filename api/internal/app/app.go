@@ -22,6 +22,7 @@ import (
 	"go.uber.org/fx"
 	"gopkg.aoctech.app/api-commons/awsconfig"
 	"gopkg.aoctech.app/api-commons/cache"
+	"gopkg.aoctech.app/api-commons/dynamo"
 	"gopkg.aoctech.app/api-commons/jwtverify"
 	fiberobs "gopkg.aoctech.app/api-commons/observability/fiber"
 	"gopkg.aoctech.app/api-commons/ws"
@@ -42,6 +43,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/highlights"
 	"gopkg.aoctech.app/poker/api/internal/leaderboard"
 	"gopkg.aoctech.app/poker/api/internal/matchup"
+	"gopkg.aoctech.app/poker/api/internal/metrics"
 	"gopkg.aoctech.app/poker/api/internal/player"
 	"gopkg.aoctech.app/poker/api/internal/playernotes"
 	"gopkg.aoctech.app/poker/api/internal/pokerstats"
@@ -126,6 +128,7 @@ var Module = fx.Options(
 	fx.Invoke(wirePlayerRemovedHook),
 	fx.Invoke(wireAutoRebuyHook),
 	fx.Invoke(wireCosmeticCurrentSelection),
+	fx.Invoke(wireCapacityMetrics),
 	fx.Invoke(validateWalletScopes),
 	fx.Invoke(registerRoutesWithSocialRuntime),
 	fx.Invoke(startServer),
@@ -266,6 +269,20 @@ func newDynamoClient(cfg *config.Config) (*dynamodb.Client, error) {
 		return nil, err
 	}
 	return awsconfig.NewDynamoDBClient(awsCfg, cfg.DynamoDBEndpoint), nil
+}
+
+// wireCapacityMetrics is issue #290's other half of #279: api-commons/dynamo
+// samples ReturnConsumedCapacity itself (SetCapacityRecorder), but it cannot
+// emit a metric without depending on this service's metrics sink — internal/
+// metrics is the one way this service emits one. Wired here rather than as a
+// package-level init() so it stays alongside every other piece of startup
+// wiring, and so it is trivially skippable in a test binary that never calls
+// app.Module.
+func wireCapacityMetrics() {
+	dynamo.SetCapacityRecorder(func(table, operation string, capacityUnits float64) {
+		metrics.Record("DynamoConsumedCapacity", metrics.Count,
+			metrics.Dims{"Table": table, "Operation": operation}, capacityUnits)
+	})
 }
 
 type avatarS3API struct {
