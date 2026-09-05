@@ -4,7 +4,7 @@ import {useRouter} from 'next/navigation';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {getRoom, getSeated} from '@/lib/api/rooms';
 import {getHands, getMe, getSessions, type PlayerSession} from '@/lib/api/player';
-import {getPlayerNotes} from '@/lib/api/playerNotes';
+import {getPlayerNotes, PLAYER_NOTES_KEY} from '@/lib/api/playerNotes';
 import {
   listReactionCatalog, listReactionPurchases, REACTION_PURCHASE_FIRST_PAGE_KEY
 } from '@/lib/api/reactionPurchases';
@@ -61,10 +61,16 @@ export type TableCoreSession = ReturnType<typeof useTableSession>;
  *   the "refunding" badge and never ownership, which is the catalog's
  *   server-computed `owned` flag. Same shape as the deferred cosmetic
  *   catalogs (#232). */
-export function useTableProgressiveSession(core: TableCoreSession, {id, seeded, reactionsOpen}: {
+export function useTableProgressiveSession(core: TableCoreSession, {id, seeded, reactionsOpen, opponentIds = []}: {
   id: string;
   seeded: boolean;
   reactionsOpen: boolean;
+  /** The seated opponents the page derived from the snapshot. Private notes
+   *  are read for exactly these players, not for the viewer's whole note
+   *  history (#209) — so the read is armed by the seats existing, and a seat
+   *  change re-keys the query instead of reusing an answer about someone
+   *  who left. */
+  opponentIds?: string[];
 }) {
   const [wasSeeded, setWasSeeded] = useState(false);
   if (seeded && !wasSeeded) setWasSeeded(true);
@@ -83,7 +89,8 @@ export function useTableProgressiveSession(core: TableCoreSession, {id, seeded, 
     queryKey: ['sessions', 'me'], queryFn: () => getSessions(), enabled
   });
   const {data: playerNotes = []} = useQuery({
-    queryKey: ['player-notes'], queryFn: getPlayerNotes, enabled
+    queryKey: PLAYER_NOTES_KEY(opponentIds), queryFn: () => getPlayerNotes(opponentIds),
+    enabled: enabled && opponentIds.length > 0
   });
   const {data: reactionCatalog = [], isLoading: reactionCatalogLoading} = useQuery({
     queryKey: ['wallet', 'reaction-catalog'], queryFn: listReactionCatalog, enabled: reactionsEnabled
