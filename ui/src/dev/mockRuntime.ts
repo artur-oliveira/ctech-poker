@@ -722,7 +722,15 @@ export async function mockAdapter(config: InternalAxiosRequestConfig): Promise<A
     playstyle: [{key: 'initiative'}]
   }, config);
   if (method === 'GET' && path === '/v1.0/players/me/sessions') return ok(page([]), config);
-  if (method === 'GET' && path === '/v1.0/players/me/notes/') return ok({data: mockPlayerNotes}, config);
+  if (method === 'GET' && path === '/v1.0/players/me/notes/') {
+    // Mirrors the server's scoped read (#209): only the requested opponents.
+    const requested = String(config?.params?.opponent_ids ?? '').split(',').filter(Boolean);
+    return ok({
+      data: requested.length
+        ? mockPlayerNotes.filter(note => requested.includes(note.opponent_id))
+        : mockPlayerNotes
+    }, config);
+  }
   const playerNoteMatch = method === 'POST' ? path.match(/^\/v1\.0\/players\/me\/notes\/([^/]+)$/) : null;
   if (playerNoteMatch) {
     const opponentId = decodeURIComponent(playerNoteMatch[1]);

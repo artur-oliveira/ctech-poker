@@ -35,7 +35,7 @@ import {useTableProgressiveSession, useTableRemoval, useTableSession} from '@/li
 import {useTableOutcome} from '@/lib/hooks/useTableOutcome';
 import {useTableOverlays} from '@/lib/hooks/useTableOverlays';
 import {actionState} from '@/lib/tableActions';
-import type {PlayerNote} from '@/lib/api/playerNotes';
+import {PLAYER_NOTES_KEY, type PlayerNote} from '@/lib/api/playerNotes';
 import {highlightPot, seatParticipated} from '@/lib/tableOutcome';
 import {getRelationships} from '@/lib/api/social';
 import {SOCIAL_KEYS, suppressedPlayerIds} from '@/lib/social';
@@ -142,7 +142,7 @@ function TableContent() {
   // arms the two reaction reads, and after the socket so the rest waits for the
   // first snapshot instead of competing with the handshake (#212).
   const session = useTableProgressiveSession(core, {
-    id, seeded: Boolean(rt.snapshot),
+    id, seeded: Boolean(rt.snapshot), opponentIds,
     reactionsOpen: activeTablePanel === 'reactions' || Boolean(reactionPurchaseTarget)
   });
   const {room, profile, playerNotes, reactionCatalog, reactionPurchases, tableHands} = session;
@@ -422,7 +422,7 @@ function TableContent() {
                         onOpenChangeAction={open => !open && setNoteOpponent(null)}
                         onSaved={(note: PlayerNote | null) => {
                           if (!noteOpponent) return;
-                          queryClient.setQueryData<PlayerNote[]>(['player-notes'], current => {
+                          queryClient.setQueryData<PlayerNote[]>(PLAYER_NOTES_KEY(opponentIds), current => {
                             const rest = (current || []).filter(item => item.opponent_id !== noteOpponent.player_id);
                             return note ? [...rest, note] : rest;
                           });

@@ -21,7 +21,7 @@ import {
 import type {WalletMode} from '@/lib/api/player';
 import {getHand, handEndedAtMs} from '@/lib/api/player';
 import {getHandHistory} from '@/lib/api/table';
-import {getPlayerNotes, type PlayerNote} from '@/lib/api/playerNotes';
+import {getPlayerNotes, PLAYER_NOTES_KEY, type PlayerNote} from '@/lib/api/playerNotes';
 import {getRelationships} from '@/lib/api/social';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
@@ -93,7 +93,8 @@ function HandHistoryContent() {
   });
   const relationshipsByID = Object.fromEntries(relationships.map(item => [item.player_id, item]));
   const {data: playerNotes = []} = useQuery({
-    queryKey: ['player-notes'], queryFn: getPlayerNotes, enabled: opponentIds.length > 0
+    queryKey: PLAYER_NOTES_KEY(opponentIds), queryFn: () => getPlayerNotes(opponentIds),
+    enabled: opponentIds.length > 0
   });
   const playerNotesByID = Object.fromEntries(playerNotes.map(note => [note.opponent_id, note]));
 
@@ -284,7 +285,7 @@ function HandHistoryContent() {
                       onOpenChangeAction={open => !open && setNoteOpponent(null)}
                       onSaved={(note: PlayerNote | null) => {
                         if (!noteOpponent) return;
-                        queryClient.setQueryData<PlayerNote[]>(['player-notes'], current => {
+                        queryClient.setQueryData<PlayerNote[]>(PLAYER_NOTES_KEY(opponentIds), current => {
                           const rest = (current || []).filter(item => item.opponent_id !== noteOpponent.player_id);
                           return note ? [...rest, note] : rest;
                         });

@@ -19,7 +19,10 @@ vi.mock('@/lib/api/rooms', () => ({getRoom: api.getRoom, getSeated: api.getSeate
 vi.mock('@/lib/api/player', () => ({
   getHands: api.getHands, getSessions: api.getSessions, getMe: api.getMe,
 }));
-vi.mock('@/lib/api/playerNotes', () => ({getPlayerNotes: api.getPlayerNotes}));
+vi.mock('@/lib/api/playerNotes', () => ({
+  getPlayerNotes: api.getPlayerNotes,
+  PLAYER_NOTES_KEY: (ids: string[]) => ['player-notes', [...ids].sort().join(',')],
+}));
 vi.mock('@/lib/api/reactionPurchases', () => ({
   listReactionCatalog: api.listReactionCatalog,
   listReactionPurchases: api.listReactionPurchases,
@@ -36,9 +39,9 @@ function wrapper({children}: { children: ReactNode }) {
 
 /** The page's own composition: the critical reads, then the progressive ones
  *  gated on the first snapshot and on the reactions panel. */
-function useTableReads({valid = true, seeded = false, reactionsOpen = false} = {}) {
+function useTableReads({valid = true, seeded = false, reactionsOpen = false, opponentIds = ['seat-a']} = {}) {
   const core = useTableSession(ID, valid);
-  return useTableProgressiveSession(core, {id: ID, seeded, reactionsOpen});
+  return useTableProgressiveSession(core, {id: ID, seeded, reactionsOpen, opponentIds});
 }
 
 function progressiveCalls() {
@@ -110,6 +113,27 @@ describe('useTableSession request budget', () => {
     rerender({seeded: true, reactionsOpen: true});
     expect(api.listReactionCatalog).toHaveBeenCalledTimes(1);
     expect(api.listReactionPurchases).toHaveBeenCalledTimes(1);
+  });
+
+  test('private notes are read for the seated opponents only, and re-read when the seats change', async () => {
+    const {rerender} = renderHook(props => useTableReads(props),
+      {wrapper, initialProps: {seeded: true, opponentIds: ['b', 'a']}});
+    await waitFor(() => expect(api.getPlayerNotes).toHaveBeenCalledTimes(1));
+    expect(api.getPlayerNotes).toHaveBeenCalledWith(['b', 'a']);
+    // Same seats in a different order is the same answer: the key is sorted,
+    // so it must not cost a second read.
+    rerender({seeded: true, opponentIds: ['a', 'b']});
+    expect(api.getPlayerNotes).toHaveBeenCalledTimes(1);
+    // A new player sitting down is a different question, and gets asked.
+    rerender({seeded: true, opponentIds: ['a', 'b', 'c']});
+    await waitFor(() => expect(api.getPlayerNotes).toHaveBeenCalledTimes(2));
+    expect(api.getPlayerNotes).toHaveBeenLastCalledWith(['a', 'b', 'c']);
+  });
+
+  test('an empty table costs no note read at all', async () => {
+    renderHook(() => useTableReads({seeded: true, opponentIds: []}), {wrapper});
+    await waitFor(() => expect(api.getMe).toHaveBeenCalledTimes(1));
+    expect(api.getPlayerNotes).not.toHaveBeenCalled();
   });
 
   test('a reconnect that drops the snapshot does not re-run the bootstrap', async () => {
