@@ -296,7 +296,7 @@ func (m *TableModel) submitLine() (tea.Model, tea.Cmd) {
 func (m *TableModel) runLocal(local LocalAction) tea.Cmd {
 	switch local {
 	case ActHelp:
-		m.appendLog(formatCommandList(tableCommandSpecs) + "\n  teclas: f c r p k")
+		m.appendLog(formatCommandList(tableCommandSpecs, m.viewport.Width) + "\n  teclas: f c r p k")
 	case ActLastWinners:
 		w := m.narr.LastWinners(5)
 		if len(w) == 0 {
@@ -434,7 +434,7 @@ func (m *TableModel) View() string {
 		}
 		lines = append(lines, m.input.View())
 		if menuRows > 0 {
-			if menuView := m.menu.View(menuRows); menuView != "" {
+			if menuView := m.menu.View(menuRows, m.viewport.Width); menuView != "" {
 				lines = append(lines, menuView)
 			}
 		}
@@ -449,7 +449,7 @@ func (m *TableModel) View() string {
 			lines = append(lines, mutedStyle.Render("(reconectando — última mesa exibida)"))
 		}
 		lines = append(lines, m.input.View())
-		if menuView := m.menu.View(maxMenuRows + 1); menuView != "" {
+		if menuView := m.menu.View(maxMenuRows+1, 0); menuView != "" {
 			lines = append(lines, menuView)
 		}
 	}

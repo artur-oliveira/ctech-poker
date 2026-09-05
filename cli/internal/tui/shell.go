@@ -652,7 +652,7 @@ func (s *Shell) dispatch(line string) (tea.Model, tea.Cmd) {
 
 	switch cmd {
 	case "/help":
-		s.appendLine(formatCommandList(homeCommandSpecs))
+		s.appendLine(formatCommandList(homeCommandSpecs, s.viewport.Width))
 		return s, nil
 	case "/clear":
 		s.lines = nil
@@ -823,7 +823,7 @@ func (s *Shell) View() string {
 			}
 			lines = append(lines, s.input.View())
 			if menuRows > 0 {
-				if menuView := s.menu.View(menuRows); menuView != "" {
+				if menuView := s.menu.View(menuRows, s.viewport.Width); menuView != "" {
 					lines = append(lines, menuView)
 				}
 			}
@@ -834,7 +834,7 @@ func (s *Shell) View() string {
 				lines = append(lines, accentStyle.Render(s.spin.View()))
 			}
 			lines = append(lines, s.input.View())
-			if menuView := s.menu.View(maxMenuRows + 1); menuView != "" {
+			if menuView := s.menu.View(maxMenuRows+1, 0); menuView != "" {
 				lines = append(lines, menuView)
 			}
 		}

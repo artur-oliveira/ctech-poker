@@ -119,13 +119,51 @@ func (m *commandMenu) DesiredRows() int {
 	return len(m.items)
 }
 
+// fallbackLineWidth is used when the caller doesn't know the real terminal
+// width yet (no WindowSizeMsg has arrived). It's conservative — narrower
+// than nearly any real terminal — specifically so a too-long line is never
+// handed to the terminal before its true width is known.
+const fallbackLineWidth = 76
+
+// truncateVisible clamps s to at most max visible characters (runes, not
+// bytes — this text is Portuguese with accented characters that are
+// multi-byte in UTF-8 but one column wide), appending "…" if it had to cut.
+// This is the actual fix for a real, reproduced bug: a menu line longer than
+// the terminal's column count wraps onto a second physical row, but
+// bubbletea's renderer counts rows by '\n' alone — it has no idea the
+// terminal just wrapped one logical line into two, so its cursor-repositioning
+// math for the *next* frame is off by that many rows. The visible result
+// (reproduced live) was exactly what a misaligned repaint looks like: menu
+// entries disappearing, the selection marker missing, both recoverable only
+// by scrolling the terminal's own history — not a logic bug in matching or
+// selection (both were already verified correct), a rendering desync caused
+// by one specific line (a verbose /logout description, ~110 columns) being
+// far longer than every other entry and than most real terminal widths.
+func truncateVisible(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	if max == 1 {
+		return string(r[:1])
+	}
+	return string(r[:max-1]) + "…"
+}
+
 // View renders the suggestion list within maxRows total lines (0 or a
-// negative cap renders nothing) — the caller has already worked out how
-// much room is actually available and must never be handed back more lines
-// than that, on any terminal size.
-func (m *commandMenu) View(maxRows int) string {
+// negative cap renders nothing) and maxWidth visible columns per line (0 or
+// negative falls back to fallbackLineWidth) — the caller has already worked
+// out how much room is actually available and must never be handed back
+// more than that, on any terminal size.
+func (m *commandMenu) View(maxRows, maxWidth int) string {
 	if !m.visible || len(m.items) == 0 || maxRows <= 0 {
 		return ""
+	}
+	if maxWidth <= 0 {
+		maxWidth = fallbackLineWidth
 	}
 	limit := maxRows
 	if limit > maxMenuRows {
@@ -153,7 +191,7 @@ func (m *commandMenu) View(maxRows int) string {
 		if it.Args != "" {
 			name += " " + it.Args
 		}
-		line := fmt.Sprintf("%s%-28s %s", marker, name, it.Desc)
+		line := truncateVisible(fmt.Sprintf("%s%-28s %s", marker, name, it.Desc), maxWidth)
 		b.WriteString(style.Render(line))
 		b.WriteString("\n")
 	}
@@ -164,8 +202,14 @@ func (m *commandMenu) View(maxRows int) string {
 }
 
 // formatCommandList renders every spec as "name args  description", one per
-// line, for /help — the full reference, unlike the narrowing suggestion menu.
-func formatCommandList(specs []commandSpec) string {
+// line, for /help — the full reference, unlike the narrowing suggestion
+// menu. maxWidth is applied the same way View's is (0 or negative falls back
+// to fallbackLineWidth) — see truncateVisible's doc comment for why this
+// matters even here.
+func formatCommandList(specs []commandSpec, maxWidth int) string {
+	if maxWidth <= 0 {
+		maxWidth = fallbackLineWidth
+	}
 	var b strings.Builder
 	b.WriteString("comandos:")
 	for _, it := range specs {
@@ -173,20 +217,22 @@ func formatCommandList(specs []commandSpec) string {
 		if it.Args != "" {
 			name += " " + it.Args
 		}
-		_, _ = fmt.Fprintf(&b, "\n  %-28s %s", name, it.Desc)
+		line := truncateVisible(fmt.Sprintf("  %-28s %s", name, it.Desc), maxWidth)
+		b.WriteString("\n")
+		b.WriteString(line)
 	}
 	return b.String()
 }
 
 var homeCommandSpecs = []commandSpec{
-	{Name: "/play", Desc: "Entra numa mesa (escolhe tamanho/stake)"},
-	{Name: "/logout", Desc: "Limpa as credenciais de acesso salvas. Será necessário fazer login novamente."},
-	{Name: "/clear", Desc: "Limpar comandos (CTRL + L)"},
-	{Name: "/help", Desc: "Lista os comandos disponíveis"},
-	{Name: "/exit", Desc: "Sair"},
 	{Name: "/achievements", Desc: "Mostra suas conquistas"},
-	{Name: "/enter", Args: "<room-id>", Desc: "Entra numa mesa por ID"},
 	{Name: "/profile", Desc: "Mostra os dados do perfil"},
+	{Name: "/play", Desc: "Entra numa mesa (escolhe tamanho/stake)"},
+	{Name: "/enter", Args: "<room-id>", Desc: "Entra numa mesa por ID"},
+	{Name: "/help", Desc: "Lista os comandos disponíveis"},
+	{Name: "/clear", Desc: "Limpar comandos (CTRL + L)"},
+	{Name: "/exit", Desc: "Sair"},
+	{Name: "/logout", Desc: "Esquece as credenciais salvas"},
 }
 
 var tableCommandSpecs = []commandSpec{

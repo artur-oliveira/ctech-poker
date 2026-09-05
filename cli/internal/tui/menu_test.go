@@ -1,6 +1,9 @@
 package tui
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func testSpecs() []commandSpec {
 	return []commandSpec{
@@ -84,4 +87,49 @@ func TestAcceptArgCommandFillsAndWaits(t *testing.T) {
 	if val != "/peek " || submit {
 		t.Fatalf("val=%q submit=%v", val, submit)
 	}
+}
+
+// TestMenuLineNeverExceedsWidth is the regression guard for a real bug
+// reproduced live: a single overlong description (/logout's, at the time
+// ~110 visible columns) wrapped onto a second physical terminal row that
+// bubbletea's renderer — which counts rows by '\n' alone — had no idea
+// about, desyncing its cursor-repositioning math for every frame after.
+// The visible symptom looked exactly like a matching/selection bug (entries
+// disappearing, the selection marker missing, recoverable only by scrolling
+// the terminal's own history) despite the underlying menu state always
+// being correct — proven separately by the selection-logic tests above.
+// No line View() ever produces may exceed the width it was given, for any
+// spec list, any window width, any prefix.
+func TestMenuLineNeverExceedsWidth(t *testing.T) {
+	for _, width := range []int{20, 40, 60, 76, 80, 100, 120} {
+		for _, specs := range [][]commandSpec{homeCommandSpecs, tableCommandSpecs} {
+			m := newCommandMenu(specs)
+			m.UpdateInput("/")
+			view := m.View(len(specs)+1, width)
+			for _, line := range strings.Split(view, "\n") {
+				if n := len([]rune(stripANSI(line))); n > width {
+					t.Fatalf("width=%d: line has %d visible chars, want <= %d: %q", width, n, width, line)
+				}
+			}
+		}
+	}
+}
+
+// stripANSI removes lipgloss/termenv color escape sequences so a rendered
+// line's *visible* length can be measured — their byte length is longer
+// than what actually occupies terminal columns.
+func stripANSI(s string) string {
+	var b strings.Builder
+	inEscape := false
+	for _, r := range s {
+		switch {
+		case r == '\x1b':
+			inEscape = true
+		case inEscape && r == 'm':
+			inEscape = false
+		case !inEscape:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
