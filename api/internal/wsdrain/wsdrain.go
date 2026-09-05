@@ -51,8 +51,9 @@ type Conn interface {
 }
 
 var (
-	mu    sync.Mutex
-	conns = make(map[Conn]struct{})
+	mu       sync.Mutex
+	conns    = make(map[Conn]struct{})
+	byConnID = make(map[string]Conn)
 )
 
 func Track(c Conn) {
@@ -72,6 +73,55 @@ func Live() int {
 	mu.Lock()
 	defer mu.Unlock()
 	return len(conns)
+}
+
+// TrackByID indexes a connection by its application-level connID, in
+// addition to the identity-keyed Track above — CloseByConnID is the only
+// consumer, for the session-handoff feature (#353), where the caller only
+// knows the connID, never the Conn's Go identity. Call alongside Track, from
+// the same place tablews.go registers the socket with ws.Registry.
+func TrackByID(connID string, c Conn) {
+	mu.Lock()
+	defer mu.Unlock()
+	byConnID[connID] = c
+}
+
+func UntrackByID(connID string) {
+	mu.Lock()
+	defer mu.Unlock()
+	delete(byConnID, connID)
+}
+
+// CloseByConnID sends a 1001 close frame to each of connIDs that this
+// process actually holds, ignoring any it doesn't recognize (the normal case
+// for a handoff broadcast fleet-wide — most instances own none of the named
+// IDs). Returns how many were signalled. Unlike CloseAll this is not a
+// shutdown path, so there is no grace window to wait out: the caller (a
+// Pub/Sub subscriber) must not block on slow peers, so each write gets its
+// own goroutine exactly like CloseAll's fan-out, and this function returns
+// immediately after dispatching them.
+func CloseByConnID(connIDs []string) int {
+	mu.Lock()
+	var targets []Conn
+	for _, id := range connIDs {
+		if c, ok := byConnID[id]; ok {
+			targets = append(targets, c)
+		}
+	}
+	mu.Unlock()
+	if len(targets) == 0 {
+		return 0
+	}
+	frame := fws.FormatCloseMessage(fws.CloseGoingAway, "session handoff to another device")
+	deadline := time.Now().Add(closeWriteWait)
+	for _, c := range targets {
+		go func(c Conn) {
+			if err := c.WriteControl(fws.CloseMessage, frame, deadline); err != nil {
+				slog.Debug("ws handoff close frame failed", "err", err)
+			}
+		}(c)
+	}
+	return len(targets)
 }
 
 // CloseAll sends a 1001 close frame to every tracked connection — on a
