@@ -124,6 +124,7 @@ All `TableV2`, partition key `pk` (S), on-demand billing with
 | `poker_player_sessions` | ✓ | ✓ | – | per-table session P&L |
 | `poker_player_hands` | ✓ | – | – | hand history incl. fairness proofs; `gsi_table_id` |
 | `poker_player_notes` | ✓ | – | – | private per-viewer opponent notes |
+| `poker_hand_meta` | ✓ | – | – | per-hand street notes/review marker/collections (#349/#347) + saved `/hands` filters |
 | `poker_player_poker_stats` | – | ✓ | – | materialised VPIP/PFR/3-bet + per-hand guard rows |
 | `poker_achievement_progress` | ✓ | – | – | `counter` via atomic increment |
 | `poker_leaderboard_stats` | ✓ | – | – | `gsi_hands_won`, `gsi_hands_played`, `gsi_win_rate` |

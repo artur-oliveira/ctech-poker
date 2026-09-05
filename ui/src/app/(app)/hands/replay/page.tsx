@@ -62,7 +62,7 @@ function ReplayContent() {
         <ChevronLeft/> Detalhes da mão
       </Link>
     </nav>
-    <HandReplayer hand={hand.data} actions={actions} viewerId={getViewerId()}/>
+    <HandReplayer hand={hand.data} actions={actions} viewerId={getViewerId()} allowCoaching/>
   </main>;
 }
 

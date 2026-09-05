@@ -1,4 +1,4 @@
-import {act, fireEvent, render, screen} from '@testing-library/react';
+import {act, fireEvent, render, screen, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {describe, expect, test, vi} from 'vitest';
 import {ActionTimeline} from './ActionTimeline';
@@ -86,6 +86,35 @@ describe('hand history components', () => {
     expect(screen.getByText('Atualizou o perfil')).toBeInTheDocument();
   });
   
+  test('street note editor saves on blur, preserves the draft on failure, and never renders without a handler', () => {
+    const onSaveStreetNoteAction = vi.fn();
+    const view = render(<ActionTimeline actions={[actions[0]]} resolveName={id => id}
+                                         onSaveStreetNoteAction={onSaveStreetNoteAction}/>);
+    const textarea = within(view.container).getByLabelText('Nota sobre Pré-flop');
+    fireEvent.change(textarea, {target: {value: '3-bet de blefe'}});
+    fireEvent.blur(textarea);
+    expect(onSaveStreetNoteAction).toHaveBeenCalledWith('preflop', '3-bet de blefe');
+
+    // A save failure keeps the draft in the field and announces the error.
+    view.rerender(<ActionTimeline actions={[actions[0]]} resolveName={id => id}
+                                   onSaveStreetNoteAction={onSaveStreetNoteAction}
+                                   noteError={{street: 'preflop', message: 'Não foi possível salvar a nota.'}}/>);
+    expect(within(view.container).getByRole('alert')).toHaveTextContent('Não foi possível salvar a nota.');
+    view.unmount();
+
+    // Blurring with unchanged (still empty) text never calls save.
+    onSaveStreetNoteAction.mockClear();
+    const emptyView = render(<ActionTimeline actions={[actions[0]]} resolveName={id => id}
+                                              onSaveStreetNoteAction={onSaveStreetNoteAction}/>);
+    fireEvent.blur(within(emptyView.container).getByLabelText('Nota sobre Pré-flop'));
+    expect(onSaveStreetNoteAction).not.toHaveBeenCalled();
+    emptyView.unmount();
+
+    // No handler at all (e.g. a logged-out shared-hand view) renders no editor.
+    const noHandlerView = render(<ActionTimeline actions={[actions[0]]} resolveName={id => id}/>);
+    expect(within(noHandlerView.container).queryAllByText('Adicionar nota')).toHaveLength(0);
+  });
+
   test.each(['won', 'lost', 'tied'] as const)('renders %s outcome badge', outcome => {
     render(<OutcomeBadge outcome={outcome}/>);
     expect(screen.getByText(outcome === 'won' ? 'Vitória' : outcome === 'lost' ? 'Derrota' : 'Empate')).toBeInTheDocument();
@@ -377,5 +406,51 @@ describe('hand history components', () => {
     await user.click(screen.getByRole('button', {name: 'Pausar replay'}));
     await user.click(screen.getByRole('button', {name: /Velocidade 1 vezes/}));
     expect(screen.getByRole('button', {name: /Velocidade 2 vezes/})).toBeInTheDocument();
+  });
+
+  // Issue #351: coaching pauses/questions are opt-in and must not appear
+  // (or change default behavior) unless `allowCoaching` is passed — this is
+  // what keeps the public `/share` link, which never sets it, unaffected.
+  test('hides the coaching toggle unless allowCoaching is set', () => {
+    render(<HandReplayer hand={hand} actions={actions} viewerId="viewer"/>);
+    expect(screen.queryByRole('button', {name: /Modo Coaching/})).not.toBeInTheDocument();
+  });
+
+  describe('coaching mode', () => {
+    test('stays off by default even when allowed, so the reveal is not paused', () => {
+      render(<HandReplayer hand={hand} actions={actions} viewerId="viewer" allowCoaching/>);
+      expect(screen.getByRole('button', {name: 'Modo Coaching desativado'})).toBeInTheDocument();
+      expect(screen.getByText('pagou')).toBeInTheDocument();
+    });
+
+    test('pauses at the hero\'s next decision, asks a question, and reveals it on demand', async () => {
+      const user = userEvent.setup();
+      render(<HandReplayer hand={hand} actions={actions} viewerId="viewer" allowCoaching/>);
+      await user.click(screen.getByRole('button', {name: 'Modo Coaching desativado'}));
+      expect(screen.getByRole('button', {name: 'Modo Coaching ativado'})).toBeInTheDocument();
+
+      // The real action is hidden behind the coaching question…
+      expect(screen.queryByText('pagou')).not.toBeInTheDocument();
+      expect(screen.getByText(/posição na mesa/)).toBeInTheDocument();
+      expect(screen.getByText(/pausado num ponto de decisão/)).toBeInTheDocument();
+      expect(screen.getByRole('button', {name: 'Reproduzir replay'})).toBeDisabled();
+
+      // …until the player asks to see it.
+      await user.click(screen.getByRole('button', {name: 'Já pensei, revelar ação'}));
+      expect(screen.getByText('pagou')).toBeInTheDocument();
+      expect(screen.getByRole('button', {name: 'Reproduzir replay'})).toBeEnabled();
+    });
+
+    test('a skipped question does not reappear when the player steps back to it', async () => {
+      const user = userEvent.setup();
+      render(<HandReplayer hand={hand} actions={actions} viewerId="viewer" allowCoaching/>);
+      await user.click(screen.getByRole('button', {name: 'Modo Coaching desativado'}));
+      await user.click(screen.getByRole('button', {name: 'Pular pergunta'}));
+      expect(screen.getByText('pagou')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', {name: 'Próxima ação'}));
+      await user.click(screen.getByRole('button', {name: 'Ação anterior'}));
+      expect(screen.getByText('pagou')).toBeInTheDocument();
+    });
   });
 });

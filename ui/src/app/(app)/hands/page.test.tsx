@@ -8,13 +8,31 @@ import HandsHistory from './page';
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   lifetime: vi.fn(),
+  savedFilters: vi.fn(),
+  collections: vi.fn(),
+  saveSavedHandFilters: vi.fn().mockResolvedValue([]),
   refetch: vi.fn(),
   fetchNextPage: vi.fn(),
 }));
 
-// `useQuery` is the lifetime-totals read (#115); the shared-links panel below
-// is its own suite, so it is stubbed out rather than given a query client.
-vi.mock('@tanstack/react-query', () => ({useInfiniteQuery: mocks.query, useQuery: mocks.lifetime}));
+// `useQuery` backs three independent reads (lifetime totals #115, saved
+// filters and collections #347); routed by queryKey so each test can
+// configure only the one it cares about. The shared-links panel below is its
+// own suite, so it is stubbed out rather than given a query client.
+vi.mock('@tanstack/react-query', () => ({
+  useInfiniteQuery: mocks.query,
+  useQuery: ({queryKey}: { queryKey: readonly unknown[] }) => {
+    if (queryKey[0] === 'leaderboard') return mocks.lifetime();
+    if (queryKey[0] === 'hand-filters') return mocks.savedFilters();
+    if (queryKey[0] === 'hand-collections') return mocks.collections();
+    return {data: undefined, isLoading: false, isError: false};
+  },
+  useQueryClient: () => ({setQueryData: vi.fn()}),
+}));
+vi.mock('@/lib/api/handMeta', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/api/handMeta')>(),
+  saveSavedHandFilters: mocks.saveSavedHandFilters,
+}));
 vi.mock('@/components/hands/MyHandSharesPanel', () => ({MyHandSharesPanel: () => <div>hand-shares-panel</div>}));
 vi.mock('@/components/TermsGate', () => ({TermsGate: ({children}: { children: React.ReactNode }) => children}));
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
@@ -73,6 +91,8 @@ describe('hands list page', () => {
     vi.clearAllMocks();
     mocks.query.mockReturnValue(queryResult([pageOf(hands)]));
     mocks.lifetime.mockReturnValue({data: undefined, isLoading: false, isError: false});
+    mocks.savedFilters.mockReturnValue({data: [], isLoading: false, isError: false});
+    mocks.collections.mockReturnValue({data: [], isLoading: false, isError: false});
   });
   
   test('summarizes backend outcomes and renders safe hand links and incomplete cards', () => {
@@ -290,6 +310,63 @@ describe('hands list page', () => {
     expect(blinds[0].textContent).toBe('25/50');
   });
 
+
+  test('saves the current filter under a player-given name and applies it later', async () => {
+    mocks.saveSavedHandFilters.mockResolvedValueOnce([{name: 'Minhas bad beats', outcome: 'lost', table_id: 'all'}]);
+    render(<HandsHistory/>);
+
+    fireEvent.click(screen.getByRole('button', {name: 'Só derrotas'}));
+    fireEvent.change(screen.getByLabelText('Salvar filtro atual como'), {target: {value: 'Minhas bad beats'}});
+    fireEvent.click(screen.getByRole('button', {name: /Salvar/}));
+    await act(async () => {});
+    expect(mocks.saveSavedHandFilters).toHaveBeenCalledWith([{name: 'Minhas bad beats', outcome: 'lost', table_id: 'all'}]);
+  });
+
+  test('surfaces a role="alert" error when saving a filter fails', async () => {
+    mocks.saveSavedHandFilters.mockRejectedValueOnce(new Error('network'));
+    render(<HandsHistory/>);
+    fireEvent.change(screen.getByLabelText('Salvar filtro atual como'), {target: {value: 'Estudar depois'}});
+    fireEvent.click(screen.getByRole('button', {name: /Salvar/}));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Não foi possível salvar o filtro/);
+  });
+
+  test('applies a saved filter from its own strip', () => {
+    mocks.savedFilters.mockReturnValue({
+      data: [{name: 'Minhas bad beats', outcome: 'lost', table_id: 'table-two'}], isLoading: false, isError: false,
+    });
+    render(<HandsHistory/>);
+    fireEvent.click(screen.getByRole('button', {name: 'Minhas bad beats'}));
+    expect(screen.getAllByText('lost')).toHaveLength(1);
+    expect(screen.queryByText('won')).not.toBeInTheDocument();
+  });
+
+  test('the Coleções tab filters the list by marked hand ids, including the review-marker collection', () => {
+    mocks.collections.mockReturnValue({
+      data: [
+        {hand_id: 'h1', review_marked: true, collections: ['Estudar depois']},
+        {hand_id: 'h2', review_marked: false, collections: ['Estudar depois']},
+      ],
+      isLoading: false, isError: false,
+    });
+    render(<HandsHistory/>);
+    fireEvent.click(screen.getByRole('button', {name: 'Coleções'}));
+
+    // The review-marker collection is offered first and auto-selected.
+    const reviewTab = screen.getByRole('button', {name: /Marcadas para revisar/});
+    expect(reviewTab).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getAllByText('won')).toHaveLength(1);
+    expect(screen.queryByText('lost')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', {name: /Estudar depois/}));
+    expect(screen.getAllByText('won')).toHaveLength(1);
+    expect(screen.getByText('lost')).toBeInTheDocument();
+  });
+
+  test('shows a dedicated empty state when there are no collections yet', () => {
+    render(<HandsHistory/>);
+    fireEvent.click(screen.getByRole('button', {name: 'Coleções'}));
+    expect(screen.getByText(/Nenhuma coleção ainda/)).toBeInTheDocument();
+  });
 
   // Issue #60: an automated floor under the a11y intent in ui/CLAUDE.md — a new
   // serious or critical axe violation on this route fails CI.

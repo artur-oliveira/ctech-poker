@@ -36,7 +36,7 @@ export type TableName =
   'poker_table_state' | 'poker_table_state_history' | 'poker_action_log' | 'poker_action_guards' |
   'poker_rooms' | 'poker_player_profiles' | 'poker_achievement_progress' | 'poker_leaderboard_stats' |
   'poker_daily_reward' | 'poker_pending_cashouts' | 'poker_player_sessions' | 'poker_player_hands' |
-  'poker_player_notes' | 'poker_hand_shares' | 'poker_player_poker_stats' | 'poker_player_matchups' |
+  'poker_player_notes' | 'poker_hand_meta' | 'poker_hand_shares' | 'poker_player_poker_stats' | 'poker_player_matchups' |
   'poker_sandbox_purchases' |
   'poker_reaction_entitlements' | 'poker_reaction_purchases' |
   'poker_cosmetic_entitlements' | 'poker_cosmetic_purchases' |
@@ -221,6 +221,15 @@ export class DynamoDBStack extends cdk.Stack {
     // sk is the opponent. Nothing reads this table while constructing public
     // table snapshots.
     table('poker_player_notes', true);
+    // poker_hand_meta (#349/#347): the one "player metadata about a hand"
+    // record the two issues were told to share instead of shipping two
+    // divergent designs — a short note per street, a "mark for review" flag
+    // and named collections, one row per (viewer, hand). Also holds a
+    // player's saved /hands filters under a fixed sort key in the same
+    // partition (internal/handmeta), the simplest reading of "one endpoint"
+    // for a resource this small — no second table just for a short list.
+    // Same pk=viewer/sk=item-key shape as poker_player_notes above.
+    table('poker_hand_meta', true);
     // Opaque public token -> sanitized hand projection. TTL enforces the
     // owner's chosen expiry without retaining public links indefinitely.
     // gsi_owner is the owner-keyed view the revocation list reads (#203): one

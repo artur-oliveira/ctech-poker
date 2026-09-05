@@ -39,9 +39,12 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   itself only ever configures one instance type. `minCapacity`/`maxCapacity` are unchanged; the
   table-leasing model already tolerates 2 concurrently-running instances (`tablelease` is a
   latency hint, not a correctness lock). No on-demand base instance — deferred, see `README.md`.
-- **29 DynamoDB tables** (`dynamodb-stack.ts`) — an older revision of this file undercounted (15, before it, 8, then 26,
-  then 27). The last two, `poker_hand_reveals` / `poker_hand_reveal_payments`, back the paid history winner-cards
-  reveal (`docs/specs/2026-08-21-pay-to-see-winner-cards-history.md`).
+- **30 DynamoDB tables** (`dynamodb-stack.ts`) — an older revision of this file undercounted (15, before it, 8, then 26,
+  then 27, then 29). `poker_hand_reveals` / `poker_hand_reveal_payments` back the paid history winner-cards
+  reveal (`docs/specs/2026-08-21-pay-to-see-winner-cards-history.md`). The newest, `poker_hand_meta`, is the single
+  "player metadata about a hand" record #349 and #347 were coordinated to share (`internal/handmeta`): a
+  per-(player, hand) street-note/review-marker/collections row, plus a player's saved `/hands` filters under a fixed
+  sort key in the same partition.
 - **WebSocket is served by the Go binary** on the ASG (not API Gateway); binary protobuf frames on
   two gateways (`/v1.0/tables/:id/ws`, `/v1.0/ws`).
 - **Valkey is mandatory in prod** (in-memory fallback is dev/stage only; prod fails closed).

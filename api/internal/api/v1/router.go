@@ -15,6 +15,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/cosmeticpurchase"
 	"gopkg.aoctech.app/poker/api/internal/dailyreward"
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
+	"gopkg.aoctech.app/poker/api/internal/handmeta"
 	"gopkg.aoctech.app/poker/api/internal/handreveal"
 	"gopkg.aoctech.app/poker/api/internal/handshare"
 	"gopkg.aoctech.app/poker/api/internal/highlights"
@@ -59,6 +60,7 @@ func Register(
 	sessionStore *sessionlog.Store,
 	achievementStore *achievements.Store,
 	playerNoteStore *playernotes.Store,
+	handMetaStore *handmeta.Store,
 	handShareStore *handshare.Store,
 	handRevealStore *handreveal.Store,
 	handRevealSvc *handreveal.Service,
@@ -126,6 +128,7 @@ func Register(
 	}
 	RegisterPlayers(router, auth, players, sessionStore, achievementStore, cfg, avatars, avatarLimiter, pokerStatsStore, reportSvc, identityPusher)
 	RegisterPlayerNotes(router, auth, playerNoteStore)
+	RegisterHandMeta(router, auth, handMetaStore)
 	RegisterHandShares(router, auth, sessionStore, tableStore, handShareStore)
 	RegisterHandReveal(router, auth, sessionStore, handRevealStore, handRevealSvc, purchaseLimiter)
 	RegisterHighlights(router, auth, sessionStore, highlightsStore)

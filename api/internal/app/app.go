@@ -38,6 +38,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/engine/hand"
 	"gopkg.aoctech.app/poker/api/internal/entitlement"
 	"gopkg.aoctech.app/poker/api/internal/handhook"
+	"gopkg.aoctech.app/poker/api/internal/handmeta"
 	"gopkg.aoctech.app/poker/api/internal/handreveal"
 	"gopkg.aoctech.app/poker/api/internal/handshare"
 	"gopkg.aoctech.app/poker/api/internal/highlights"
@@ -90,6 +91,7 @@ var Module = fx.Options(
 		newCosmeticsPurchaseService,
 		newPlayerService,
 		newPlayerNoteStore,
+		newHandMetaStore,
 		newHandShareStore,
 		newHandRevealStore,
 		newHandRevealPaymentStore,
@@ -333,6 +335,9 @@ func newPlayerService(store *player.Store, wallet *walletclient.Client, cosmetic
 }
 func newPlayerNoteStore(db *dynamodb.Client, cfg *config.Config) *playernotes.Store {
 	return playernotes.NewStore(db, cfg.Env)
+}
+func newHandMetaStore(db *dynamodb.Client, cfg *config.Config) *handmeta.Store {
+	return handmeta.NewStore(db, cfg.Env)
 }
 func newHandShareStore(db *dynamodb.Client, cfg *config.Config) *handshare.Store {
 	return handshare.NewStore(db, cfg.Env)
@@ -878,6 +883,7 @@ func registerRoutesWithSocialRuntime(
 	sessionStore *sessionlog.Store,
 	achievementStore *achievements.Store,
 	playerNoteStore *playernotes.Store,
+	handMetaStore *handmeta.Store,
 	handShareStore *handshare.Store,
 	handRevealStore *handreveal.Store,
 	handRevealSvc *handreveal.Service,
@@ -893,7 +899,7 @@ func registerRoutesWithSocialRuntime(
 	recentSvc *recentplayers.Service,
 	reportSvc *reports.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, handRevealStore, handRevealSvc, pokerStatsStore, matchupStore, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, handRevealStore, handRevealSvc, pokerStatsStore, matchupStore, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, presenceSvc, recentSvc, reportSvc)
 }
 
 // registerRoutes retains the narrow construction seam used by older unit
@@ -904,12 +910,12 @@ func registerRoutes(
 	rooms *roomstore.Store, buyinSvc *buyin.Service, players *player.Service,
 	leaderboardSvc *leaderboard.Service, dailyRewardSvc *dailyreward.Service,
 	tableStore *tablestore.Store, sessionStore *sessionlog.Store, achievementStore *achievements.Store,
-	playerNoteStore *playernotes.Store, handShareStore *handshare.Store, pokerStatsStore *pokerstats.Store,
+	playerNoteStore *playernotes.Store, handMetaStore *handmeta.Store, handShareStore *handshare.Store, pokerStatsStore *pokerstats.Store,
 	highlightsStore *highlights.Store,
 	avatars *avatar.Service, sandboxPurchaseSvc *sandboxpurchase.Service,
 	reactionPurchaseSvc *reactionpurchase.Service, cosmeticPurchaseSvc *cosmeticpurchase.Service, socialSvc *social.Service,
 ) {
-	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handShareStore, nil, nil, pokerStatsStore, nil, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil)
+	v1.Register(app, cfg, db, verifier, manager, reg, roomBackedSeed(rooms), cacheBackend, rooms, buyinSvc, players, leaderboardSvc, dailyRewardSvc, tableStore, sessionStore, achievementStore, playerNoteStore, handMetaStore, handShareStore, nil, nil, pokerStatsStore, nil, highlightsStore, avatars, sandboxPurchaseSvc, reactionPurchaseSvc, cosmeticPurchaseSvc, socialSvc, nil, nil, nil)
 }
 
 // wsDrainGrace is how long OnStop waits after sending close frames so
