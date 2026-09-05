@@ -860,6 +860,18 @@ catalog.
   deterministic `mode#hand_id`, so a duplicate pipeline run (`internal/handhook` fails open) overwrites the same rows
   (`TestRecordHandsWritesEveryParticipantOnceAndIsReplaySafe`).
 
+- **Issues #349/#347: one shared "player metadata about a hand" endpoint, not two divergent ones.**
+  `internal/handmeta` (`poker_hand_meta`, pk=player/sk=`hand#<id>`, modeled directly on `playernotes`) holds one row
+  per (player, hand): a short note per street (`street_notes`, keys bounded to `preflop`/`flop`/`turn`/`river`/
+  `showdown`), a `review_marked` flag, and a `collections` string list — #349's street annotations/review marker and
+  #347's hand collections are the exact same field set, since a player files a hand away for one reason, not two.
+  `Save` deletes the row when all three are empty, same delete-on-empty convention as `playernotes.Save`. #347's
+  saved `/hands` filters (name + outcome + table_id) are a second, much smaller resource that piggybacks on the same
+  table under a fixed `sk="filters"` in the same player's partition, rather than justifying a table of its own.
+  `internal/api/v1/handmeta.go`: `GET`/`PUT /players/me/hands/:handId/meta` (playerID always from the auth context,
+  never the body), `GET /players/me/hand-collections` (every hand the player marked, for `/hands`' "Coleções" tab),
+  `GET`/`PUT /players/me/hand-filters`.
+
 ## Layout
 
 `cmd/{server,archiver,reconcile,tablecleanup,handreplay}` ·
@@ -867,7 +879,7 @@ catalog.
 `internal/engine/{hand,betting,deck,equity,handeval,sidepots}` ·
 `internal/{table,tablemanager,tablestore,tablelease,roomstore}` ·
 `internal/{buyin,walletclient,reconcile,entitlement}` (money) ·
-`internal/{player,playernotes,pokerstats,matchup,sessionlog,handshare,handreveal,highlights}` (player-scoped data) ·
+`internal/{player,playernotes,handmeta,pokerstats,matchup,sessionlog,handshare,handreveal,highlights}` (player-scoped data) ·
 `internal/{leaderboard,achievements,dailyreward}` (gamification) ·
 `internal/{botcheck,chatfilter,config,problem,wsdrain}` · `tests/{integration,load}`.
 

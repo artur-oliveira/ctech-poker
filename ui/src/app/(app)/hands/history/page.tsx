@@ -5,6 +5,8 @@ import {Suspense, useState} from 'react';
 import {useSearchParams} from 'next/navigation';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {
+  BookmarkCheck,
+  BookmarkPlus,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -22,6 +24,7 @@ import type {WalletMode} from '@/lib/api/player';
 import {getHand, handEndedAtMs} from '@/lib/api/player';
 import {getHandHistory} from '@/lib/api/table';
 import {getPlayerNotes, PLAYER_NOTES_KEY, type PlayerNote} from '@/lib/api/playerNotes';
+import {getHandMeta, HAND_META_KEY, saveHandMeta, type HandMetaStreet} from '@/lib/api/handMeta';
 import {getRelationships} from '@/lib/api/social';
 import {PlayingCard} from '@/components/table/PlayingCard';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
@@ -75,6 +78,55 @@ function HandHistoryContent() {
     queryFn: () => getHandHistory(tableId, handId),
     enabled: Boolean(tableId && handId)
   });
+  // #349/#347: one shared record for street notes, the "para revisar"
+  // marker and hand collections. Empty (never annotated) is the common
+  // case, not an error.
+  const handMeta = useQuery({
+    queryKey: HAND_META_KEY(handId),
+    queryFn: () => getHandMeta(handId),
+    enabled: Boolean(handId)
+  });
+  const reviewMarked = Boolean(handMeta.data?.review_marked);
+  const [reviewSaving, setReviewSaving] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [savingStreet, setSavingStreet] = useState<HandMetaStreet | null>(null);
+  const [streetNoteError, setStreetNoteError] = useState<{ street: HandMetaStreet; message: string } | null>(null);
+
+  async function toggleReviewMarked() {
+    setReviewSaving(true);
+    setReviewError(null);
+    try {
+      const updated = await saveHandMeta(handId, {
+        street_notes: handMeta.data?.street_notes,
+        collections: handMeta.data?.collections,
+        review_marked: !reviewMarked
+      });
+      queryClient.setQueryData(HAND_META_KEY(handId), updated);
+    } catch {
+      setReviewError('Não foi possível salvar o marcador. Tente novamente.');
+    } finally {
+      setReviewSaving(false);
+    }
+  }
+
+  async function saveStreetNote(street: HandMetaStreet, text: string) {
+    setSavingStreet(street);
+    setStreetNoteError(null);
+    try {
+      const updated = await saveHandMeta(handId, {
+        street_notes: {...handMeta.data?.street_notes, [street]: text},
+        collections: handMeta.data?.collections,
+        review_marked: reviewMarked
+      });
+      queryClient.setQueryData(HAND_META_KEY(handId), updated);
+    } catch {
+      // #349: a failed save must not drop the player's draft — StreetNoteEditor
+      // keeps whatever text is in the field regardless of this error.
+      setStreetNoteError({street, message: 'Não foi possível salvar a nota. Tente novamente.'});
+    } finally {
+      setSavingStreet(null);
+    }
+  }
 
   const actions = [...(history.data?.actions || [])].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   const viewerId = getViewerId();
@@ -149,11 +201,22 @@ function HandHistoryContent() {
     <div className="hand-history-topbar">
       <Link href="/hands"><ChevronLeft/> Voltar para Minhas Mãos</Link>
       <div className="hand-history-tools">
+        <Button variant="outline" size="sm" aria-pressed={reviewMarked} disabled={reviewSaving}
+                onClick={() => void toggleReviewMarked()}>
+          {reviewMarked ? <BookmarkCheck aria-hidden="true"/> : <BookmarkPlus aria-hidden="true"/>}
+          {reviewMarked ? 'Marcada para revisar' : 'Marcar para revisar'}
+        </Button>
         <HandExportButton hand={h} actions={actions} viewerId={viewerId}
                           actionsAvailable={!history.isLoading && !history.isError}/>
         <ShareHandDialog handId={h.hand_id} outcome={h.outcome} mode={mode}/>
       </div>
     </div>
+    {/* Same "erro parcial" visual pattern the action-history section already
+        uses (hand-history-partial-error), reused here per #349's a11y
+        criterion. */}
+    {reviewError && <div className="hand-history-partial-error" role="alert">
+      <p className="form-error">{reviewError}</p>
+    </div>}
     <header className={`hand-history-header is-${h.outcome}`}>
       <OutcomeBadge outcome={h.outcome}/>
       <h1>Detalhes da mão</h1>
@@ -262,7 +325,11 @@ function HandHistoryContent() {
           <p className="form-error">Não foi possível carregar a sequência de ações. O resumo, a prova e as ferramentas continuam disponíveis.</p>
           <Button variant="outline" size="sm" onClick={() => void history.refetch()}>Tentar ações novamente</Button>
         </div> :
-          <ActionTimeline actions={actions} resolveName={resolveName}/>}
+          <ActionTimeline actions={actions} resolveName={resolveName}
+                          streetNotes={handMeta.data?.street_notes}
+                          onSaveStreetNoteAction={saveStreetNote}
+                          savingStreet={savingStreet}
+                          noteError={streetNoteError}/>}
     </section>
 
     <section className="hand-history-fairness">

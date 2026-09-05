@@ -1,3 +1,4 @@
+import {useState} from 'react';
 import {
   ArrowRight,
   ArrowUp,
@@ -11,6 +12,7 @@ import {
   LogOut,
   LucideIcon,
   MessageSquare,
+  NotebookPen,
   Pause,
   Play,
   Repeat2,
@@ -24,6 +26,7 @@ import {
 } from 'lucide-react';
 
 import {Action, HandHistoryAction} from '@/lib/api/table';
+import type {HandMetaStreet} from '@/lib/api/handMeta';
 import {isTableReaction, TABLE_REACTIONS} from '@/lib/reactions';
 
 const ACTION_META: Record<Action, { label: string; Icon: LucideIcon }> = {
@@ -166,6 +169,60 @@ const STREET_LABELS: Record<string, string> = {
   complete: 'Showdown'
 };
 
+// ActionTimeline groups actions under its own internal keys (`pre_flop`, not
+// `preflop`); this maps them onto the canonical handmeta.HAND_META_STREETS
+// vocabulary #349's per-street note is keyed by.
+const STREET_TO_META: Record<string, HandMetaStreet> = {
+  pre_flop: 'preflop', flop: 'flop', turn: 'turn', river: 'river', showdown: 'showdown'
+};
+
+// Collapsed by default unless a note already exists (#349's mobile
+// requirement: the note field must not push the action list out of the
+// viewport). Empty text on blur means no annotation, never a placeholder —
+// mirrors the server's own delete-on-empty convention.
+function StreetNoteEditor({street, streetLabel, value, onSaveAction, saving, error}: {
+  street: HandMetaStreet;
+  streetLabel: string;
+  value: string;
+  onSaveAction: (street: HandMetaStreet, text: string) => void;
+  saving: boolean;
+  error: string | null;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [open, setOpen] = useState(Boolean(value));
+  // Derived during render (React's documented "adjust state when a prop
+  // changes" pattern) rather than a useEffect, which would fire one render
+  // late and risk clobbering an in-flight draft with a stale re-render.
+  const [syncedValue, setSyncedValue] = useState(value);
+  if (value !== syncedValue) {
+    setSyncedValue(value);
+    setDraft(value);
+  }
+  const id = `street-note-${street}`;
+  return <details className="action-street-note" open={open} onToggle={e => setOpen(e.currentTarget.open)}>
+    <summary><NotebookPen aria-hidden="true"/> {value ? 'Sua nota' : 'Adicionar nota'}</summary>
+    <div className="action-street-note-body">
+      <label htmlFor={id}>Nota sobre {streetLabel}</label>
+      <textarea
+        id={id}
+        value={draft}
+        maxLength={300}
+        placeholder="Ex.: 3-bet de blefe, deveria ter pago"
+        onChange={e => setDraft(e.target.value)}
+        onBlur={() => {
+          if (draft.trim() !== (value || '')) onSaveAction(street, draft);
+        }}
+      />
+      {saving && <span className="action-street-note-status" role="status">Salvando…</span>}
+      {/* Same "erro parcial" visual pattern hand-history-partial-error uses
+          for the action list itself (#349's a11y criterion). */}
+      {error && <div className="hand-history-partial-error" role="alert">
+        <p className="form-error">{error}</p>
+      </div>}
+    </div>
+  </details>;
+}
+
 function actionStreet(action: HandHistoryAction, previous: string): string {
   if (action.action === 'won' || action.action === 'lost' || action.action === 'tie'
     || action.action === 'show_cards') return 'showdown';
@@ -203,9 +260,15 @@ function ActionRows({actions, resolveName}: {
   </ol>;
 }
 
-export function ActionTimeline({actions, resolveName}: {
+export function ActionTimeline({actions, resolveName, streetNotes, onSaveStreetNoteAction, savingStreet, noteError}: {
   actions: HandHistoryAction[];
   resolveName: (playerId: string) => string;
+  /** #349: one short note per street, keyed by the canonical handmeta streets
+   * — not renderable at all unless the caller wires a save handler. */
+  streetNotes?: Partial<Record<HandMetaStreet, string>>;
+  onSaveStreetNoteAction?: (street: HandMetaStreet, text: string) => void;
+  savingStreet?: HandMetaStreet | null;
+  noteError?: { street: HandMetaStreet; message: string } | null;
 }) {
   if (!actions.length) return <p className="action-timeline-empty">Nenhuma ação registrada para esta mão.</p>;
 
@@ -222,10 +285,22 @@ export function ActionTimeline({actions, resolveName}: {
   }
 
   return <div className="action-timeline-groups">
-    {[...streets.entries()].map(([street, streetActions]) => <section key={street} className="action-street">
-      <h3>{STREET_LABELS[street] || street.replaceAll('_', ' ')}</h3>
-      <ActionRows actions={streetActions} resolveName={resolveName}/>
-    </section>)}
+    {[...streets.entries()].map(([street, streetActions]) => {
+      const label = STREET_LABELS[street] || street.replaceAll('_', ' ');
+      const metaStreet = STREET_TO_META[street];
+      return <section key={street} className="action-street">
+        <h3>{label}</h3>
+        <ActionRows actions={streetActions} resolveName={resolveName}/>
+        {onSaveStreetNoteAction && metaStreet && <StreetNoteEditor
+          street={metaStreet}
+          streetLabel={label}
+          value={streetNotes?.[metaStreet] || ''}
+          onSaveAction={onSaveStreetNoteAction}
+          saving={savingStreet === metaStreet}
+          error={noteError?.street === metaStreet ? noteError.message : null}
+        />}
+      </section>;
+    })}
     {system.length > 0 && <details className="action-secondary">
       <summary>Eventos do sistema <span>{system.length}</span></summary>
       <ActionRows actions={system} resolveName={resolveName}/>

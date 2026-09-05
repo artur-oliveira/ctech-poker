@@ -4582,6 +4582,56 @@
 .action-secondary[open] .action-timeline {
     margin-top: 10px
 }
+.action-street-note {
+    margin-top: 8px
+}
+.action-street-note summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: fit-content;
+    color: var(--muted-rose);
+    font-size: var(--font-size-compact);
+    font-weight: 700;
+    cursor: pointer
+}
+.action-street-note summary svg {
+    width: 14px;
+    height: 14px
+}
+.action-street-note summary:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 4px;
+    border-radius: var(--rounded-xs)
+}
+.action-street-note-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px
+}
+.action-street-note-body label {
+    font-size: var(--font-size-compact);
+    color: var(--muted)
+}
+.action-street-note-body textarea {
+    min-height: 60px;
+    padding: 8px 10px;
+    border-radius: var(--rounded-sm);
+    border: 1px solid var(--control-border);
+    background: var(--surface-seat);
+    color: var(--paper);
+    font: 400 var(--font-size-compact) var(--font-sans);
+    resize: vertical
+}
+.action-street-note-body textarea:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px
+}
+.action-street-note-status {
+    color: var(--muted);
+    font-size: var(--font-size-compact)
+}
 .action-row {
     display: grid;
     grid-template-columns: 28px 1fr auto auto;
@@ -5985,6 +6035,70 @@ button.deck-grid-slot:hover {
 
 .hands-filters {
     margin-bottom: 24px
+}
+
+/* Saved filters and collections (#347) share the .hands-filters block above. */
+.hands-saved-filters {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px
+}
+.hands-saved-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px
+}
+.hands-saved-filter-remove {
+    display: inline-grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--muted-rose);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer
+}
+.hands-saved-filter-remove:hover,
+.hands-saved-filter-remove:focus-visible {
+    background: var(--surface-control);
+    color: var(--paper)
+}
+.hands-saved-filter-remove:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px
+}
+.hands-save-filter-form {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px
+}
+.hands-save-filter-form label {
+    font-size: var(--font-size-compact);
+    color: var(--muted)
+}
+.hands-save-filter-form input {
+    min-width: 0;
+    flex: 1 1 180px;
+    padding: 6px 10px;
+    border-radius: var(--rounded-sm);
+    border: 1px solid var(--control-border);
+    background: var(--surface-seat);
+    color: var(--paper);
+    font-size: var(--font-size-compact)
+}
+.hands-save-filter-form input:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px
+}
+.hands-saved-filters-empty {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: var(--font-size-compact)
 }
 
 .hands-filters .filter-tabs {

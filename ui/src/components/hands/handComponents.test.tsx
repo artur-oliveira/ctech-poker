@@ -1,4 +1,4 @@
-import {act, fireEvent, render, screen} from '@testing-library/react';
+import {act, fireEvent, render, screen, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {describe, expect, test, vi} from 'vitest';
 import {ActionTimeline} from './ActionTimeline';
@@ -86,6 +86,35 @@ describe('hand history components', () => {
     expect(screen.getByText('Atualizou o perfil')).toBeInTheDocument();
   });
   
+  test('street note editor saves on blur, preserves the draft on failure, and never renders without a handler', () => {
+    const onSaveStreetNoteAction = vi.fn();
+    const view = render(<ActionTimeline actions={[actions[0]]} resolveName={id => id}
+                                         onSaveStreetNoteAction={onSaveStreetNoteAction}/>);
+    const textarea = within(view.container).getByLabelText('Nota sobre Pré-flop');
+    fireEvent.change(textarea, {target: {value: '3-bet de blefe'}});
+    fireEvent.blur(textarea);
+    expect(onSaveStreetNoteAction).toHaveBeenCalledWith('preflop', '3-bet de blefe');
+
+    // A save failure keeps the draft in the field and announces the error.
+    view.rerender(<ActionTimeline actions={[actions[0]]} resolveName={id => id}
+                                   onSaveStreetNoteAction={onSaveStreetNoteAction}
+                                   noteError={{street: 'preflop', message: 'Não foi possível salvar a nota.'}}/>);
+    expect(within(view.container).getByRole('alert')).toHaveTextContent('Não foi possível salvar a nota.');
+    view.unmount();
+
+    // Blurring with unchanged (still empty) text never calls save.
+    onSaveStreetNoteAction.mockClear();
+    const emptyView = render(<ActionTimeline actions={[actions[0]]} resolveName={id => id}
+                                              onSaveStreetNoteAction={onSaveStreetNoteAction}/>);
+    fireEvent.blur(within(emptyView.container).getByLabelText('Nota sobre Pré-flop'));
+    expect(onSaveStreetNoteAction).not.toHaveBeenCalled();
+    emptyView.unmount();
+
+    // No handler at all (e.g. a logged-out shared-hand view) renders no editor.
+    const noHandlerView = render(<ActionTimeline actions={[actions[0]]} resolveName={id => id}/>);
+    expect(within(noHandlerView.container).queryAllByText('Adicionar nota')).toHaveLength(0);
+  });
+
   test.each(['won', 'lost', 'tied'] as const)('renders %s outcome badge', outcome => {
     render(<OutcomeBadge outcome={outcome}/>);
     expect(screen.getByText(outcome === 'won' ? 'Vitória' : outcome === 'lost' ? 'Derrota' : 'Empate')).toBeInTheDocument();

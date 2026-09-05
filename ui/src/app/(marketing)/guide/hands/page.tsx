@@ -17,7 +17,9 @@ export default function HandsGuide() {
             <li><span>As mãos vêm agrupadas por dia — <b>Hoje</b>, <b>Ontem</b> e a data completa para as mais antigas — e o dia em foco fica fixo no alto enquanto você rola.</span></li>
             <li><span>Sem filtro, a lista carrega sozinha conforme você desce. Com um filtro por resultado ou por mesa ativo, o carregamento passa a ser só pelo botão <b>Carregar mais mãos</b> — assim o filtro não puxa o histórico inteiro de uma vez.</span></li>
             <li><span>Cada linha diz se a seed do servidor já foi revelada ou se a mão ainda tem prova parcial, e mostra o nível de blinds daquela mão quando o registro o guarda.</span></li>
-            <li><span>Se o filtro não deixar nenhuma mão, a página explica o que aconteceu e oferece <b>Limpar filtros</b>. Sem nenhuma mão registrada, ela mostra o caminho de volta ao lobby em vez de uma lista vazia.</span></li></GuideBullets></>
+            <li><span>Se o filtro não deixar nenhuma mão, a página explica o que aconteceu e oferece <b>Limpar filtros</b>. Sem nenhuma mão registrada, ela mostra o caminho de volta ao lobby em vez de uma lista vazia.</span></li>
+            <li><span>Acima dos filtros, escolha entre <b>Filtros</b> e <b>Coleções</b>. Em Filtros, depois de ajustar resultado e mesa, dê um nome em <b>Salvar filtro atual como</b> para guardar essa combinação — ela reaparece como um atalho ao lado dos demais, em qualquer aparelho, e pode ser removida com o <b>×</b>.</span></li>
+            <li><span>Em Coleções, cada mão que você marcou — pelo próprio detalhe da mão, ou pela marca de revisão — aparece como um atalho nomeado. A coleção <b>Marcadas para revisar</b> reúne automaticamente tudo que você marcou como "para revisar"; abrir uma coleção filtra a lista só pelas mãos dela.</span></li></GuideBullets></>
       },
       {
         id: 'detalhes', title: 'Ler os detalhes', summary: 'A página preserva o que foi público na mão e organiza a sequência.',
@@ -30,7 +32,12 @@ export default function HandsGuide() {
           <p>O nome e o avatar de cada adversário abrem o perfil público dele, e o botão <b>⋮</b> ao lado traz o mesmo menu de jogador das mesas e do
             <b> /people</b>: adicionar amigo, silenciar, bloquear, denunciar (já levando a mão em questão) e escrever uma nota privada.
             Sua própria carteira nunca mostra esse menu, e ele só aparece com uma conta autenticada.</p>
-          <p>Se a sequência de ações falhar em carregar, o resumo, a prova e as ferramentas continuam na tela com uma nova tentativa só para ela.</p></>
+          <p>Se a sequência de ações falhar em carregar, o resumo, a prova e as ferramentas continuam na tela com uma nova tentativa só para ela.</p>
+          <p>No topo, ao lado de <b>Exportar</b> e <b>Compartilhar</b>, o botão <b>Marcar para revisar</b> sinaliza a mão para
+            estudar depois — ela aparece assim na coleção <b>Marcadas para revisar</b> em <b>Mãos</b>. Dentro do histórico de
+            ações, cada etapa (pré-flop, flop, turn, river, showdown) tem um campo <b>Adicionar nota</b> para uma anotação
+            curta sobre aquela decisão; o campo some sozinho enquanto vazio e guarda o que você escreveu assim que sai dele.
+            Se salvar falhar, o texto continua no campo e um aviso explica o que houve.</p></>
       },
       {
         id: 'replay', title: 'Assistir ao replay', summary: 'O replayer reconstrói a mesa a partir dos quadros gravados na mão.',
