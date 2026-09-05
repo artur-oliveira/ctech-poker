@@ -347,6 +347,18 @@ Profile **editing** is `components/lobby/ProfileMenu.tsx` + `ProfileShowcaseDial
 Landing CTAs → `startOAuthFlow`; `/callback` exchanges the code and stores the token; `TermsGate`
 gates on `GET /v1.0/players/me` + `poker_terms_accepted`.
 
+**Resuming the original intent after login (#342).** `startOAuthFlow(returnTo)`'s destination
+already round-trips end-to-end through `@aoctech/auth-client`'s own sessionStorage across the IdP
+redirect (`exchangeCode()`'s `returnTo` field) — callers just need to pass the player's real
+current route instead of a hardcoded default (`TermsGate`'s "Entrar" already does:
+`window.location.pathname + window.location.search`). The one gap: the SDK deletes its own copy
+of `returnTo` as soon as `exchangeCode` reads it, even on a failure that isn't a state mismatch, so
+a manual retry from `/callback`'s failure screens (`startOAuthFlow()` on "Tentar novamente") would
+otherwise fall back to `/lobby`. `lib/auth/oauth.ts` keeps a second, never-cleared sessionStorage
+copy (`lastReturnTo()`, same one-shot handoff pattern as `achievementRecency.ts`) purely so a retry
+resends the same intent. No new UI state — the redirect back is instant (`router.replace`), and
+the destination route owns its own fallback if the intent turns out stale (closed table, etc.).
+
 `lib/api/client.ts`'s request interceptor also gates: on first load, if there's no token yet, it
 awaits `getOrRefreshSession()` once before letting *any* API call through, so page-load requests
 never race the silent refresh (previously visible as unauthenticated calls in the network log).

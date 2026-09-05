@@ -1,5 +1,5 @@
 import {beforeEach, describe, expect, test, vi} from 'vitest';
-import {decodeIdToken, doRefresh, exchangeCode, logout, OAuthExchangeError, startOAuthFlow} from './oauth';
+import {decodeIdToken, doRefresh, exchangeCode, lastReturnTo, logout, OAuthExchangeError, startOAuthFlow} from './oauth';
 import {OAUTH_SCOPE} from './scopes';
 
 const mocks = vi.hoisted(() => ({
@@ -52,6 +52,19 @@ describe('OAuth integration', () => {
     expect(mocks.start).toHaveBeenCalledWith('/table/t1');
   });
   
+  // #342: @aoctech/auth-client clears its own `returnTo` copy as soon as
+  // exchangeCode reads it, even on a non-state-mismatch failure — so a
+  // manual retry from the callback's failure screens needs its own copy to
+  // resend the same intent instead of falling back to /lobby.
+  test('#342: remembers the last startOAuthFlow destination for a retry to resend', async () => {
+    mocks.start.mockResolvedValue(undefined);
+    expect(lastReturnTo()).toBeNull();
+    await startOAuthFlow('/table/t1');
+    expect(lastReturnTo()).toBe('/table/t1');
+    await startOAuthFlow('/store');
+    expect(lastReturnTo()).toBe('/store');
+  });
+
   test('exchanges a callback and derives the username from the ID token', async () => {
     mocks.exchange.mockResolvedValue({
       accessToken: 'access',
