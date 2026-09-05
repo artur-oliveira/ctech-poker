@@ -280,6 +280,17 @@ awaits `getOrRefreshSession()` once before letting *any* API call through, so pa
 never race the silent refresh (previously visible as unauthenticated calls in the network log).
 Resolves once per "no token" streak — resets when the token drops back to `null` (logout).
 
+**The keep-alive renews by expiry, and does not run in a hidden tab.**
+`useSessionKeepAlive` arms a single `setTimeout` at `exp - TOKEN_REFRESH_MARGIN_MS`
+(`nextRefreshDelayMs`, reading the access token's own `exp`), so a token costs at most one refresh;
+a token with no readable `exp` falls back to `TOKEN_REFRESH_INTERVAL_MS` measured from the last
+attempt by *any* caller of `getOrRefreshSession`. Nothing is armed while the document is hidden —
+returning to the tab (or `online`) renews only if the token is actually due, and otherwise just
+re-arms. Never restore a fixed-cadence `setInterval` here: a 4-minute one against a 15-minute
+token spent up to 15 refreshes an hour on a tab nobody was looking at. `sessionRefreshCount()`
+exists so "refreshes per hour" stays assertable. Cross-tab coalescing is deliberately absent (each
+tab holds its own in-memory token). See `docs/2026-09-04-session-refresh-by-expiry.md` and #231.
+
 ## Not built (do not assume present)
 
 Direct messages · clubs/persistent groups · automatic bans from report volume · any purchase inside
