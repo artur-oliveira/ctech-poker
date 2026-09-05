@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,6 +19,14 @@ var ErrLoggedOut = errors.New("not logged in — run `poker login`")
 
 // pkceLoginTimeout bounds how long LoginPKCE waits for the browser round trip.
 const pkceLoginTimeout = 120 * time.Second
+
+// LoopbackPort is the fixed 127.0.0.1 port the PKCE callback binds. It must
+// be a fixed value — ctech-account's IsRedirectURIAllowed
+// (internal/domain/oauth/client/model.go) is an exact string match with no
+// RFC 8252 §7.3 port-agnostic loopback comparison, so
+// `http://127.0.0.1:<LoopbackPort>/callback` has to be registered on the
+// poker-cli client verbatim.
+const LoopbackPort = 51789
 
 // readScopes are the read-only poker:* scopes the poker-cli OAuth client is
 // granted (docs/specs/2026-09-05-poker-cli.md §2 / cli/CLAUDE.md).
@@ -61,9 +70,9 @@ func (s *Session) LoginPKCE(ctx context.Context, openBrowser func(url string) er
 		return err
 	}
 
-	receiver, err := NewLoopbackReceiver(0)
+	receiver, err := NewLoopbackReceiver(LoopbackPort)
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot bind the login callback on 127.0.0.1:%d (another `poker login` running?): %w", LoopbackPort, err)
 	}
 	defer func(receiver *LoopbackReceiver) {
 		_ = receiver.Close()
