@@ -1,0 +1,38 @@
+name: CLI Release
+
+# Builds and publishes the CTech Poker CLI on a `cli/vX.Y.Z` tag. Independent
+# of the deploy pipeline — the API has no release, and deploy.yml's path
+# filters never match cli/**, so a CLI-only change deploys nothing.
+on:
+  push:
+    tags:
+      - 'cli/v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27'
+          cache-dependency-path: cli/go.sum
+
+      - name: Test
+        working-directory: cli
+        run: go test ./... -race
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: '~> v2'
+          args: release --clean --config cli/.goreleaser.yaml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

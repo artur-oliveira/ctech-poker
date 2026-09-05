@@ -1,0 +1,71 @@
+# Releases the CTech Poker CLI. Triggered by .github/workflows/cli-release.yml
+# on tags matching `cli/v*`. Run from the repo root with `--config cli/.goreleaser.yaml`.
+version: 2
+
+project_name: poker
+
+before:
+  hooks:
+    - go -C cli mod tidy
+
+builds:
+  - id: poker
+    dir: cli
+    main: ./cmd/poker
+    binary: poker
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+
+archives:
+  - id: poker
+    ids: [poker]
+    name_template: >-
+      poker_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - src: cli/README.md
+        dst: README.md
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  use: git
+  filters:
+    include:
+      - "^feat"
+      - "^fix"
+
+release:
+  github:
+    owner: aoctech
+    name: ctech-poker
+  # cli releases carry their own tag namespace; don't touch the repo's
+  # "latest" pointer, which tracks nothing today anyway.
+  prerelease: auto
+
+brews:
+  - name: poker
+    ids: [poker]
+    repository:
+      owner: aoctech
+      name: homebrew-tap
+    directory: Formula
+    homepage: "https://github.com/aoctech/ctech-poker"
+    description: "CTech Poker — terminal client"
+    install: |
+      bin.install "poker"
+    test: |
+      system "#{bin}/poker", "--version"

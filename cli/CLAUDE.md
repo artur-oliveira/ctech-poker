@@ -55,6 +55,16 @@ program transitions into the lobby and table views. There is no `poker login` /
 `docs/plans/2026-09-05-poker-cli.md`'s "Amendment" section for why, and what
 that changed relative to the original plan.
 
+## Releasing
+
+Tag `cli/vX.Y.Z` (Go submodule tag convention). `.github/workflows/cli-release.yml`
+runs `go test ./... -race` then `goreleaser release` (`cli/.goreleaser.yaml`),
+publishing linux/darwin/windows × amd64/arm64 archives + `checksums.txt` to a
+GitHub Release and updating the `aoctech/homebrew-tap` formula. `deploy.yml`'s
+`dorny/paths-filter` lists never match `cli/**`, so a CLI-only push deploys
+nothing and the API stays unreleased. `cli/install.sh` fetches the newest
+`cli/*` release asset for the host.
+
 ## Testing
 
 ```sh
