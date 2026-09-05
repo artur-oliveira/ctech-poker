@@ -366,14 +366,20 @@ export class DynamoDBStack extends cdk.Stack {
       sortKey: {name: 'open_table_id', type: dynamodb.AttributeType.STRING},
       projectionType: dynamodb.ProjectionType.ALL,
     });
-    // A second index for HasSessionAtTable ("was this player ever at this
-    // table?", open or closed) is deliberately NOT declared here yet:
-    // DynamoDB rejects an update that creates more than one GSI on a table
-    // ("Cannot perform more than one GSI creation or deletion in a single
-    // update"), which failed the prod deploy of #224. gsi_open_table ships
-    // first because it is the one on the seating hot path; gsi_player_table
-    // follows in its own deploy once this one is ACTIVE, together with the
-    // sessionlog change that queries it.
+    // gsi_player_table covers every session, open or closed, so
+    // HasSessionAtTable ("was this player ever at this table?") is a one-item
+    // key query. KEYS_ONLY — the answer is existence, nothing is read from
+    // the row, and it keeps the extra write cost of this second index down.
+    // It ships in its own stack update: DynamoDB rejects an update that
+    // creates more than one GSI on a table ("Cannot perform more than one GSI
+    // creation or deletion in a single update"), which failed the prod deploy
+    // of #224. gsi_open_table went out first (#253); this is the follow-up.
+    playerSessions.addGlobalSecondaryIndex({
+      indexName: 'gsi_player_table',
+      partitionKey: {name: 'pk', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'table_id', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+    });
     const playerHands = table('poker_player_hands', true);
     playerHands.addGlobalSecondaryIndex({
       indexName: 'gsi_table_id',

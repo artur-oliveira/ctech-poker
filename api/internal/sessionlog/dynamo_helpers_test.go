@@ -54,8 +54,7 @@ func newCountingTestStore(t *testing.T) (*Store, *atomic.Int64) {
 }
 
 // sessionTestIndexes mirrors cdk/lib/dynamodb-stack.ts's poker_player_sessions
-// indexes: the sparse open-session index (the per-table existence index ships
-// in a later deploy — DynamoDB creates one GSI per stack update).
+// indexes: the sparse open-session index and the per-table existence index.
 func sessionTestIndexes() []types.GlobalSecondaryIndex {
 	return []types.GlobalSecondaryIndex{
 		{
@@ -65,6 +64,14 @@ func sessionTestIndexes() []types.GlobalSecondaryIndex {
 				{AttributeName: new(fieldOpenTableID), KeyType: types.KeyTypeRange},
 			},
 			Projection: &types.Projection{ProjectionType: types.ProjectionTypeAll},
+		},
+		{
+			IndexName: new(sessionsGsiTable),
+			KeySchema: []types.KeySchemaElement{
+				{AttributeName: new("pk"), KeyType: types.KeyTypeHash},
+				{AttributeName: new(fieldTableID), KeyType: types.KeyTypeRange},
+			},
+			Projection: &types.Projection{ProjectionType: types.ProjectionTypeKeysOnly},
 		},
 	}
 }
