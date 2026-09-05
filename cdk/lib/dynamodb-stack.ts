@@ -462,5 +462,19 @@ export class DynamoDBStack extends cdk.Stack {
       sortKey: {name: 'gsi_reporter_sk', type: dynamodb.AttributeType.STRING},
       projectionType: dynamodb.ProjectionType.ALL,
     });
+
+    // gsi_player_settlements backs GET /players/me/settlements (#333): a
+    // player's own financial-adjustment timeline (pending cash-outs, fee
+    // debit retries). Populated by Record/BuildRecordTx, which already write
+    // player_id — no backfill; pre-existing rows are invisible to this index
+    // until their own TTL reaps them. recorded_at is RFC3339Nano (dynamo.NowStr()),
+    // a STRING sort key — not a numeric timestamp — but it still sorts
+    // chronologically byte-for-byte.
+    pendingCashouts.addGlobalSecondaryIndex({
+      indexName: DYNAMO_INDEX.playerSettlements,
+      partitionKey: {name: 'player_id', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'recorded_at', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
   }
 }

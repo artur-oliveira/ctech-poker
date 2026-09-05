@@ -5,17 +5,19 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/dynamo"
 )
 
 const (
-	tablePending        = "poker_pending_cashouts"
-	pendingSK           = "pending"
-	pendingGSI          = "gsi_status"
-	pendingOpen         = "open"
-	pendingManualReview = "manual_review"
+	tablePending         = "poker_pending_cashouts"
+	pendingSK            = "pending"
+	pendingGSI           = "gsi_status"
+	pendingOpen          = "open"
+	pendingManualReview  = "manual_review"
+	playerSettlementsGSI = "gsi_player_settlements"
 )
 
 // MaxAttempts is the number of failed reconcile passes a single pending entry
@@ -51,7 +53,11 @@ type PendingCashout struct {
 	IdempotencyKey string   `dynamodbav:"idempotency_key" json:"idempotency_key"`
 	RecordedAt     string   `dynamodbav:"recorded_at" json:"recorded_at"`
 	Resolved       bool     `dynamodbav:"resolved" json:"resolved"`
-	GSIStatus      string   `dynamodbav:"gsi_status,omitempty" json:"-"`
+	// ResolvedAt is set by MarkResolved (dynamo.NowStr()). It backs the
+	// player-facing settlement timeline's resolved_at field (#333) — never
+	// set on an unresolved entry.
+	ResolvedAt string `dynamodbav:"resolved_at,omitempty" json:"resolved_at,omitempty"`
+	GSIStatus  string `dynamodbav:"gsi_status,omitempty" json:"-"`
 	// Attempts counts how many reconcile passes have tried and failed to
 	// resolve this entry. LastAttemptAt/LastError carry the context of the
 	// most recent failure. Set by RecordFailedAttempt; once Attempts reaches
@@ -177,6 +183,80 @@ func (s *PendingStore) RecordFailedAttempt(ctx context.Context, e PendingCashout
 		return attempts, false, fmt.Errorf("reconcile: record failed attempt for %s: entry not found", e.ID)
 	}
 	return attempts, quarantined, nil
+}
+
+// Settlement status values shown to the player — never the raw internal
+// gsi_status/Attempts machinery. manual_review (Attempts >= MaxAttempts) is
+// deliberately folded into the same generic vocabulary a player can act on,
+// never LastError's raw failure text.
+const (
+	SettlementStatusPending      = "pending"
+	SettlementStatusResolved     = "resolved"
+	SettlementStatusManualReview = "manual_review"
+)
+
+// SettlementView is the only shape ever returned to a player for their own
+// financial-adjustment timeline (#333). It deliberately omits HoldIDs,
+// IdempotencyKey, LastError and GSIStatus/Attempts — none of that is safe or
+// useful to show a player, and the fee itself is always a fixed amount, never
+// a percentage, so nothing here should ever be phrased as a rake share.
+type SettlementView struct {
+	ID           string `json:"id"`
+	Kind         string `json:"kind"`
+	Amount       int64  `json:"amount"`
+	CurrencyMode string `json:"currency_mode"`
+	TableRef     string `json:"table_ref,omitempty"`
+	Status       string `json:"status"`
+	RecordedAt   string `json:"recorded_at"`
+	ResolvedAt   string `json:"resolved_at,omitempty"`
+}
+
+func (p PendingCashout) SettlementView() SettlementView {
+	status := SettlementStatusPending
+	switch {
+	case p.Resolved:
+		status = SettlementStatusResolved
+	case p.GSIStatus == pendingManualReview:
+		status = SettlementStatusManualReview
+	}
+	kind := p.Kind
+	if kind == "" {
+		kind = KindCashout
+	}
+	return SettlementView{ID: p.ID, Kind: kind, Amount: p.Amount, CurrencyMode: p.CurrencyMode,
+		TableRef: p.TableRef, Status: status, RecordedAt: p.RecordedAt, ResolvedAt: p.ResolvedAt}
+}
+
+// ListForPlayer answers a player's own settlement timeline — pending
+// cash-outs, fee-debit retries, resolutions — as a single Query against the
+// gsi_player_settlements GSI, never a Scan. Newest first. Populated by
+// Record/BuildRecordTx, which already write player_id/recorded_at on every
+// entry; pre-existing rows created before this GSI shipped are invisible to
+// it until their own 30-day TTL reaps them (no backfill).
+func (s *PendingStore) ListForPlayer(ctx context.Context, playerID string, limit int, startKey map[string]types.AttributeValue) ([]PendingCashout, map[string]types.AttributeValue, error) {
+	if limit < 1 || limit > 100 {
+		limit = 50
+	}
+	out, err := s.base.QueryRaw(ctx, &dynamodb.QueryInput{
+		IndexName:              aws.String(playerSettlementsGSI),
+		KeyConditionExpression: aws.String("player_id = :pid"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":pid": &types.AttributeValueMemberS{Value: playerID},
+		},
+		ScanIndexForward: aws.Bool(false), Limit: aws.Int32(int32(limit)), ExclusiveStartKey: startKey,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("reconcile: list for player: %w", err)
+	}
+	items := make([]PendingCashout, 0, len(out.Items))
+	for _, item := range out.Items {
+		p, decodeErr := dynamo.Decode[PendingCashout](item)
+		if decodeErr != nil {
+			return nil, nil, fmt.Errorf("reconcile: decode: %w", decodeErr)
+		}
+		items = append(items, *p)
+	}
+	return items, out.LastEvaluatedKey, nil
 }
 
 func (s *PendingStore) ListUnresolved(ctx context.Context, olderThan time.Duration) ([]PendingCashout, error) {

@@ -133,6 +133,7 @@ export const DYNAMO_INDEX = {
   reportStatus: 'gsi_status',
   reportReporter: 'gsi_reporter',
   handShareOwner: 'gsi_owner',
+  playerSettlements: 'gsi_player_settlements',
 } as const;
 
 // ── GitHub Actions OIDC trust scoping ──────────────────────────────────────
