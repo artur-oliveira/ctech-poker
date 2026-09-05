@@ -29,6 +29,15 @@ jobs:
         image: amazon/dynamodb-local:latest
         ports:
           - 8555:8000
+      # internal/leaderboard's rank-mirror test needs a real sorted set: the
+      # mirror's correctness claim is that Valkey's (score asc, member asc)
+      # order reproduces the board's (metric desc, player_id asc) tiebreak,
+      # which no in-process fake would prove. Same port as
+      # docker-compose.test.yml.
+      valkey:
+        image: valkey/valkey:8-alpine
+        ports:
+          - 6399:6379
 
     steps:
       - uses: actions/checkout@v7

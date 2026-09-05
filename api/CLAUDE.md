@@ -467,12 +467,23 @@ catalog.
 - **Issue #62 partially fixed.** `GET /leaderboard/me` (`leaderboard.Service.MyRank` / `Store.RankOf`) gives a player
   their exact rank + total via `Select: COUNT` queries instead of the frontend computing rank from whatever page of
   `Top` it happened to fetch (the old bug: `#{data.findIndex+1} de {data.length}` showed page size, not the real total).
+  **Issue #202 fixed the cost of that answer.** `Store.RankOf`'s fast path is now the Valkey ZSET mirror the issue
+  asked for (`internal/leaderboard/rankmirror.go`): one sorted set per `(mode, metric)` holding the **negated** metric
+  score, so Valkey's `(score asc, member asc)` order is exactly the board's `(metric desc, player_id asc)` — the same
+  tiebreak `Service.Top` sorts by, which is why `ZRANK` is the rank and needs no tie pass. One `EVAL` per request
+  re-`ZADD`s the caller's own just-read row (so their own position is exact, not TTL-stale) and reads `ZRANK` + `ZCARD`.
+  A cold board is rebuilt by whichever replica wins a `SET NX` claim, into a scratch key `RENAME`d over the live one —
+  concurrent readers see the old board or the new one, never a partial build, and everyone who loses the claim answers
+  from the COUNT fallback instead of stampeding the partition. **Freshness SLA: `RankMirrorTTL` = 5 minutes** for other
+  players' scores and for the total; the whole key expires rather than being incrementally maintained, so the mirror
+  can never drift permanently. Request budget for one `/leaderboard/me`: 1 `GetItem` + 1 Valkey `EVAL`, plus one GSI
+  page-through per 5 min per `(mode, metric)` across the fleet — down from three `Select: COUNT` queries per request,
+  two of which paged a partition sized by the mode's whole player base. `Store.rankByCount` keeps the old behaviour and
+  is what runs with no Valkey (dev, tests) or when any mirror call errors — a cache outage degrades cost, never
+  correctness; `rankmirror_integration_test.go` pins mirror == COUNT for every player on a tie-heavy 60-player board.
   **Still open, deliberately deferred:** the underlying `gsi_hands_won`/`gsi_hands_played`/`gsi_win_rate`
   GSIs remain single-partition per mode (`gsi_*_pk = mode`) — every hand's `IncrementStats` write and every
-  `RankOf`/`Top` read still funnel through one DynamoDB partition per mode, and `RankOf`'s full-partition COUNT for
-  `total` is itself unbounded in the number of ranked players (capped by `maxRankCountPages`, not fixed by it). The
-  issue's proposed fix — a Valkey ZSET mirror per `(mode, metric)`, rebuilt from the GSI on cold start — was out of
-  scope for the correctness fix and is not implemented.
+  `Top` read still funnel through one DynamoDB partition per mode.
 - B32 fixed: `ShuffleCommitHash` and the per-card `RootCommitHash` are published from
   `StartHand` on. Complete hands reveal either the full seed (no hidden private cards) or viewer-scoped card+salt proofs
   with hashes for hidden positions and rabbit runout cards. Rabbit-hunt runout cards specifically are withheld from a
