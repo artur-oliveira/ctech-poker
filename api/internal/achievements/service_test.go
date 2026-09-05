@@ -2,6 +2,7 @@ package achievements
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -17,17 +18,24 @@ type memStore struct {
 	// false, exactly like a duplicate onHandComplete invocation racing a
 	// Valkey blip (issue #66).
 	claimed map[string]bool
-	// stamps counts StampTierUnlock calls per "mode#playerID#key" (issue
-	// #72), so a test can assert a tier crossing stamps exactly once and a
-	// replayed hand stamps not at all.
+	// stamps counts stamped tiers per "mode#playerID#key" (issue #72), so a
+	// test can assert a tier crossing stamps exactly once and a replayed hand
+	// stamps not at all.
 	stamps map[string]int
+	// progressWrites / stampWrites count the DynamoDB operations the store
+	// would issue, per "mode#playerID" — the budget issue #198 caps.
+	progressWrites map[string]int
+	stampWrites    map[string]int
 }
 
-func (m *memStore) StampTierUnlock(_ context.Context, playerID, mode, key string) error {
+func (m *memStore) StampTierUnlocks(_ context.Context, playerID, mode string, keys []string) error {
 	if m.stamps == nil {
-		m.stamps = map[string]int{}
+		m.stamps, m.stampWrites = map[string]int{}, map[string]int{}
 	}
-	m.stamps[mode+"#"+playerID+"#"+key]++
+	m.stampWrites[mode+"#"+playerID]++
+	for _, key := range keys {
+		m.stamps[mode+"#"+playerID+"#"+key]++
+	}
 	return nil
 }
 
@@ -43,27 +51,29 @@ func (m *memStore) ClaimHandCounters(_ context.Context, tableID, handID string) 
 	return true, nil
 }
 
-func (m *memStore) Increment(_ context.Context, playerID, mode, key string, by int) (int, int, error) {
+// ApplyHandProgress mirrors Store.ApplyHandProgress: one write per player,
+// carrying every counter the hand moved, returning the before/after totals of
+// exactly those counters.
+func (m *memStore) ApplyHandProgress(_ context.Context, playerID, mode string, adds, sets map[string]int) (map[string]int, map[string]int, error) {
 	row := mode + "#" + playerID
 	if m.progress[row] == nil {
 		m.progress[row] = map[string]int{}
 	}
-	previous := m.progress[row][key]
-	m.progress[row][key] += by
-	return previous, m.progress[row][key], nil
-}
-
-func (m *memStore) IncrementStreak(_ context.Context, playerID, mode, key string, reset bool, resetTo int) (int, error) {
-	row := mode + "#" + playerID
-	if m.progress[row] == nil {
-		m.progress[row] = map[string]int{}
+	if m.progressWrites == nil {
+		m.progressWrites = map[string]int{}
 	}
-	if reset {
-		m.progress[row][key] = resetTo
-	} else {
-		m.progress[row][key]++
+	m.progressWrites[row]++
+	previous, current := map[string]int{}, map[string]int{}
+	for key, value := range sets {
+		m.progress[row][key] = value
+		previous[key], current[key] = value, value
 	}
-	return m.progress[row][key], nil
+	for key, by := range adds {
+		previous[key] = m.progress[row][key]
+		m.progress[row][key] += by
+		current[key] = m.progress[row][key]
+	}
+	return previous, current, nil
 }
 
 func (m *memStore) UpdateTableStreak(_ context.Context, playerID, mode, tableID string, won bool) (int, error) {
@@ -509,5 +519,73 @@ func TestNoRushIgnoresZero(t *testing.T) {
 	}
 	if _, ok := store.progress["sandbox#p1"][KeyNoRush]; ok {
 		t.Fatal("no_rush progress written for a zero charge")
+	}
+}
+
+// TestRecordHandWriteBudget pins issue #198's ceiling: **one progress write
+// per player per hand**, plus at most one stamp write per player that
+// actually crossed a tier — no matter how many counters the hand moved. It
+// also pins the incremental cost of adding a new achievement: the rich hand
+// below moves many more keys per player than the plain one, and costs exactly
+// the same number of DynamoDB operations.
+func TestRecordHandWriteBudget(t *testing.T) {
+	for _, seats := range []int{2, 6, 9} {
+		participants := make([]string, seats)
+		for i := range participants {
+			participants[i] = fmt.Sprintf("p%d", i)
+		}
+		plain := hand.HandOutcome{Winners: []string{"p0"}, Participants: participants}
+		rich := hand.HandOutcome{
+			Winners: []string{"p0"}, Participants: participants,
+			WinningCategory: "flush", AllInPlayers: participants, ComebackWinners: []string{"p0"},
+			Payouts:       map[string]int64{"p0": 500},
+			Contributions: map[string]int64{"p0": 100, "p1": 300},
+			ShowdownResults: map[string]hand.ShowdownResult{
+				"p0": {Won: true, Category: "flush"},
+				"p1": {Category: "full_house"},
+			},
+		}
+		// keysMoved / writes for one non-winning player, whose cost is not
+		// perturbed by the KeyFirstHandAllInWin follow-up below.
+		var loserKeys, loserWrites []int
+		for _, outcome := range []hand.HandOutcome{plain, rich} {
+			store := &memStore{progress: map[string]map[string]int{}}
+			metrics := make([]HandMetric, seats)
+			for i, id := range participants {
+				metrics[i] = HandMetric{PlayerID: id, VPIP: i%2 == 0, TimeBankMs: 1000}
+			}
+			if _, err := NewServiceWithStore(store).RecordHand(context.Background(), "table-1", "sandbox", outcome, metrics); err != nil {
+				t.Fatal(err)
+			}
+			for row, count := range store.progressWrites {
+				// One write per player, and one more only for a player whose
+				// literal first hand was an all-in win (KeyFirstHandAllInWin,
+				// which needs hands_played's resulting value).
+				if count > 2 {
+					t.Fatalf("%d seats: %s took %d progress writes, want at most 2", seats, row, count)
+				}
+			}
+			for row, count := range store.stampWrites {
+				if count != 1 {
+					t.Fatalf("%d seats: %s took %d stamp writes, want exactly 1", seats, row, count)
+				}
+			}
+			if len(store.progressWrites) != seats {
+				t.Fatalf("%d seats: wrote progress for %d players", seats, len(store.progressWrites))
+			}
+			loserKeys = append(loserKeys, len(store.progress["sandbox#p1"]))
+			loserWrites = append(loserWrites, store.progressWrites["sandbox#p1"])
+		}
+		// The incremental cost of a new achievement, made explicit: the rich
+		// hand moves strictly more counters for this player and still costs
+		// the same single write.
+		if loserKeys[1] <= loserKeys[0] {
+			t.Fatalf("%d seats: rich hand moved %d counters vs %d — the fixture no longer proves the point",
+				seats, loserKeys[1], loserKeys[0])
+		}
+		if loserWrites[0] != 1 || loserWrites[1] != 1 {
+			t.Fatalf("%d seats: per-hand writes for one player were %d (plain) and %d (rich) — the cost must "+
+				"not grow with the number of applicable achievements", seats, loserWrites[0], loserWrites[1])
+		}
 	}
 }
