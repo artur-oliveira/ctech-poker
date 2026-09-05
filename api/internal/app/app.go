@@ -328,8 +328,8 @@ func newRoomStore(db *dynamodb.Client, cfg *config.Config) *roomstore.Store {
 func newPlayerStore(db *dynamodb.Client, cfg *config.Config) *player.Store {
 	return player.NewStore(db, cfg.Env)
 }
-func newPlayerService(store *player.Store, wallet *walletclient.Client, cosmeticsSvc *cosmeticpurchase.Service) *player.Service {
-	return player.NewService(store).WithWallet(wallet).WithCosmetics(cosmeticsSvc)
+func newPlayerService(store *player.Store, wallet *walletclient.Client, cosmeticsSvc *cosmeticpurchase.Service, reactionSvc *reactionpurchase.Service) *player.Service {
+	return player.NewService(store).WithWallet(wallet).WithCosmetics(cosmeticsSvc).WithReactions(reactionSvc)
 }
 func newPlayerNoteStore(db *dynamodb.Client, cfg *config.Config) *playernotes.Store {
 	return playernotes.NewStore(db, cfg.Env)

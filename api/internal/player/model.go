@@ -36,6 +36,13 @@ type PlayerProfile struct {
 	TablePublic bool `dynamodbav:"table_public,omitempty" json:"table_public"`
 	FeaturedAchievements []string `dynamodbav:"featured_achievements,omitempty" json:"featured_achievements,omitempty"`
 	FavoriteReactions    []string `dynamodbav:"favorite_reactions,omitempty" json:"favorite_reactions,omitempty"`
+	// ReactionWheel is the player's own ordered subset of owned reactions for
+	// the quick-react wheel (#338) — separate from FavoriteReactions, which is
+	// an unordered showcase pick, not a UI ordering.
+	ReactionWheel []string `dynamodbav:"reaction_wheel,omitempty" json:"reaction_wheel,omitempty"`
+	// StatsGoals holds the player's personal targets for pokerstats metrics
+	// (#331), keyed by metric ("vpip_rate", "pfr_rate", "three_bet_rate").
+	StatsGoals map[string]float64 `dynamodbav:"stats_goals,omitempty" json:"stats_goals,omitempty"`
 	PokerTermsVersion    string   `dynamodbav:"poker_terms_version,omitempty" json:"-"`
 	TermsAcceptedAt      string   `dynamodbav:"poker_terms_accepted_at,omitempty" json:"poker_terms_accepted_at,omitempty"`
 	AvatarKey            string   `dynamodbav:"avatar_key,omitempty" json:"-"`
