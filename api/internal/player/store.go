@@ -412,6 +412,20 @@ func (s *Store) SetShowcase(ctx context.Context, userID string, public, playstyl
 	return nil
 }
 
+func (s *Store) SetShowcaseLayout(ctx context.Context, userID string, layout ShowcaseLayout) error {
+	if _, err := s.GetOrCreate(ctx, userID); err != nil {
+		return err
+	}
+	ok, err := s.base.UpdateItem(ctx, userID, nil, map[string]any{"showcase_layout": layout, "updated_at": dynamo.NowStr()})
+	if err != nil {
+		return fmt.Errorf("player: set showcase layout: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("player: profile disappeared while setting showcase layout")
+	}
+	return nil
+}
+
 func (s *Store) SetFavoriteReactions(ctx context.Context, userID string, favorites []string) error {
 	if _, err := s.GetOrCreate(ctx, userID); err != nil {
 		return err

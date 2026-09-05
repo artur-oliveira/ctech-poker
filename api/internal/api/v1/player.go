@@ -24,15 +24,16 @@ import (
 // Name and WalletMode are pointers so an absent key means "don't touch this
 // field" — a wallet-mode-only update must not blank out the display name.
 type UpdatePlayerRequest struct {
-	Name                 *string   `json:"name"`
-	WalletMode           *string   `json:"wallet_mode"`
-	DeckVariant          *string   `json:"deck_variant"`
-	TableTheme           *string   `json:"table_theme"`
-	ShowcasePublic       *bool     `json:"showcase_public"`
-	TablePublic          *bool     `json:"table_public"`
-	PlaystylePublic      *bool     `json:"playstyle_public"`
-	FeaturedAchievements *[]string `json:"featured_achievements"`
-	FavoriteReactions    *[]string `json:"favorite_reactions"`
+	Name                 *string                `json:"name"`
+	WalletMode           *string                `json:"wallet_mode"`
+	DeckVariant          *string                `json:"deck_variant"`
+	TableTheme           *string                `json:"table_theme"`
+	ShowcasePublic       *bool                  `json:"showcase_public"`
+	TablePublic          *bool                  `json:"table_public"`
+	PlaystylePublic      *bool                  `json:"playstyle_public"`
+	FeaturedAchievements *[]string              `json:"featured_achievements"`
+	ShowcaseLayout       *player.ShowcaseLayout `json:"showcase_layout"`
+	FavoriteReactions    *[]string              `json:"favorite_reactions"`
 }
 
 type sessionLogReader interface {
@@ -328,6 +329,14 @@ func (h *playerHandlers) updateMe(c fiber.Ctx) error {
 			return problem.InternalServer("failed to update profile showcase", c, err).Send(c)
 		}
 	}
+	if req.ShowcaseLayout != nil {
+		if _, err := h.players.SetShowcaseLayout(c.Context(), userID, *req.ShowcaseLayout); err != nil {
+			if errors.Is(err, player.ErrInvalidShowcaseLayout) {
+				return problem.BadRequest("showcase_layout must order every section once and may not hide achievements").Send(c)
+			}
+			return problem.InternalServer("failed to update profile showcase layout", c, err).Send(c)
+		}
+	}
 	if req.FavoriteReactions != nil {
 		if _, err := h.players.SetFavoriteReactions(c.Context(), userID, *req.FavoriteReactions); err != nil {
 			if errors.Is(err, player.ErrInvalidFavoriteReactions) {
@@ -551,6 +560,7 @@ func (h *playerHandlers) showcase(c fiber.Ctx) error {
 		"avatar_url":            player.AvatarURL(profile, h.avatarBaseURL()),
 		"featured_achievements": featured,
 		"best_hand":             bestHand,
+		"showcase_layout":       profile.ShowcaseLayout,
 	}
 	if profile.PlaystylePublic && h.stats != nil {
 		stats, statsErr := h.stats.Get(c.Context(), playerID, roomstore.CurrencyModeSandbox)
@@ -598,6 +608,7 @@ func playerResponse(profile *player.PlayerProfile, avatarBaseURL string) fiber.M
 		"playstyle_public":        profile.PlaystylePublic,
 		"table_public":            profile.TablePublic,
 		"featured_achievements":   profile.FeaturedAchievements,
+		"showcase_layout":         profile.ShowcaseLayout,
 		"favorite_reactions":      profile.FavoriteReactions,
 		"poker_terms_accepted":    profile.TermsAccepted(),
 		"poker_terms_accepted_at": profile.TermsAcceptedAt,

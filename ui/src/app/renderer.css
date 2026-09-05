@@ -1022,17 +1022,27 @@
     color: var(--muted-rose);
     font-size: 11px
 }
-.showcase-playstyle-row {
+.showcase-privacy-group {
+    margin: 0;
+    padding: 0;
+    border: 0
+}
+.showcase-privacy-group + .showcase-privacy-group {
+    margin-top: 16px
+}
+.showcase-privacy-group legend {
+    margin-bottom: 8px;
+    font-weight: 700
+}
+.showcase-privacy-group > .showcase-privacy-row + .showcase-privacy-row {
     padding-top: 16px
 }
-.showcase-playstyle-row > span {
+.showcase-privacy-group > .showcase-privacy-row > span {
     max-width: 44ch
 }
 .showcase-achievements {
     display: grid;
-    max-height: min(360px, 44vh);
     margin-top: 16px;
-    overflow-y: auto;
     border: 0
 }
 .showcase-achievements legend {
@@ -1074,12 +1084,14 @@
 .showcase-layout-editor {
     margin-top: 16px;
     padding-top: 16px;
-    border: 0;
     border-top: 1px solid var(--white-13)
 }
-.showcase-layout-editor legend {
-    width: 100%;
+.showcase-layout-editor summary {
+    cursor: pointer;
     font-weight: 700
+}
+.showcase-layout-editor[open] summary {
+    margin-bottom: 10px
 }
 .showcase-layout-editor > p:not([role]) {
     margin: 3px 0 10px;
@@ -1109,8 +1121,8 @@
     gap: 4px
 }
 .showcase-layout-controls button {
-    width: 32px;
-    height: 32px
+    width: 44px;
+    height: 44px
 }
 .profile-best-hand-cards .playing-card {
     width: 54px;
