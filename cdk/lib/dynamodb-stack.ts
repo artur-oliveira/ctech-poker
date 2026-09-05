@@ -453,5 +453,14 @@ export class DynamoDBStack extends cdk.Stack {
       sortKey: {name: 'gsi_status_sk', type: dynamodb.AttributeType.STRING},
       projectionType: dynamodb.ProjectionType.ALL,
     });
+    // gsi_reporter backs GET /players/me/reports (#340): a reporter tracking
+    // their own filed reports, never reports filed against them. Populated by
+    // every Create — no backfill (reports are TTL'd/recent).
+    playerReports.addGlobalSecondaryIndex({
+      indexName: DYNAMO_INDEX.reportReporter,
+      partitionKey: {name: 'gsi_reporter_pk', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'gsi_reporter_sk', type: dynamodb.AttributeType.STRING},
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
   }
 }

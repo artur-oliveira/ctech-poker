@@ -77,6 +77,13 @@ func (s *Service) Create(ctx context.Context, reporterID, idempotencyKey string,
 	return created, err
 }
 
+// ListByReporter returns the reports the given player filed themselves,
+// newest first — never reports filed against them (IDOR-safe: keyed off
+// ReporterPlayerID, never TargetPlayerID).
+func (s *Service) ListByReporter(ctx context.Context, reporterID, cursor string, limit int) (Page, error) {
+	return s.store.ListByReporter(ctx, reporterID, cursor, limit)
+}
+
 func (s *Service) attachEvidence(ctx context.Context, report *Report) error {
 	tableSurface := report.Surface == SurfaceTableChat || report.Surface == SurfaceTableReaction || report.Surface == SurfaceTableBehavior
 	if !tableSurface {

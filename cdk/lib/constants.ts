@@ -131,6 +131,7 @@ export const DYNAMO_INDEX = {
   socialUnread: 'gsi_unread',
   socialRelationship: 'gsi_relationship',
   reportStatus: 'gsi_status',
+  reportReporter: 'gsi_reporter',
   handShareOwner: 'gsi_owner',
 } as const;
 

@@ -93,6 +93,7 @@ func RegisterPlayers(router fiber.Router, auth fiber.Handler, players *player.Se
 	g.Get("/me/hand/:id", h.handByID)
 	g.Get("/me/achievements", h.achievementProgress)
 	g.Get("/me/achievements/summary", h.achievementsSummary)
+	g.Get("/me/reports", h.myReports)
 }
 
 type confirmAvatarRequest struct {
@@ -321,6 +322,28 @@ func (h *playerHandlers) sessionHistory(c fiber.Ctx) error {
 		return problem.InternalServer("failed to list sessions", c, err).Send(c)
 	}
 	return sendPage(c, sessions, lastKey, cursor)
+}
+
+// myReports lets a player track the status of reports they themselves filed
+// — never reports filed against them (ListByReporter keys off the reporter,
+// not the target). Only the sanitized PlayerReportView shape is ever sent:
+// no Details, EvidenceMessage, ReviewedBy/ResolvedBy, and Resolution is
+// translated to a generic status message, not the raw internal enum.
+func (h *playerHandlers) myReports(c fiber.Ctx) error {
+	if h.reports == nil {
+		return c.JSON(fiber.Map{"reports": []reports.PlayerReportView{}})
+	}
+	userID := c.Locals(localsUserID).(string)
+	cursor := c.Query("cursor")
+	page, err := h.reports.ListByReporter(c.Context(), userID, cursor, limitParam(c))
+	if err != nil {
+		return problem.InternalServer("failed to list reports", c, err).Send(c)
+	}
+	views := make([]reports.PlayerReportView, 0, len(page.Reports))
+	for _, r := range page.Reports {
+		views = append(views, r.Summary().ForReporter())
+	}
+	return c.JSON(fiber.Map{"reports": views, "next_cursor": page.NextCursor})
 }
 
 func (h *playerHandlers) handHistory(c fiber.Ctx) error {
