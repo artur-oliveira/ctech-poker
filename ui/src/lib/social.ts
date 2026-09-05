@@ -1,6 +1,5 @@
 import {ApiError} from '@/lib/api/client';
 import type {PresenceStatus, SocialInboxEvent, SocialPlayer, SocialRelationship} from '@/lib/api/social';
-import {playerName} from '@/lib/utils';
 
 // Every social query lives under the same root key, so a realtime push (or a
 // reconnect, which replays nothing) can invalidate the whole surface with one
@@ -43,18 +42,6 @@ export const RELATIONSHIP_LABELS: Record<SocialRelationship, string> = {
  * hide chat and reactions, and never anything else about the player. */
 export function suppressedPlayerIds(players: SocialPlayer[] = []) {
   return new Set(players.filter(player => player.muted || player.blocked).map(player => player.player_id));
-}
-
-/** Inbox events carry only the actor's id; the lists already on screen are
- * where the names come from, so no extra request is needed to read the feed. */
-export function nameResolver(...groups: SocialPlayer[][]) {
-  const names = new Map<string, string>();
-  for (const group of groups) {
-    for (const player of group) {
-      if (player.name) names.set(player.player_id, player.name);
-    }
-  }
-  return (playerId: string) => playerName(playerId, undefined, names.get(playerId));
 }
 
 export const INVITE_TTL_MS = 15 * 60 * 1000;

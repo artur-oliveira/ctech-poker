@@ -176,7 +176,10 @@ off by default — do not build UI that assumes real money is on.
   both. See `docs/2026-09-02-hand-shares-history-filters-achievement-recency.md`.
 - **Social state is server state.** Every social read is a `['social', …]` query key
   (`SOCIAL_KEYS` in `lib/social.ts`); mutations go through `lib/hooks/useSocialActions.ts`, which
-  invalidates that root instead of patching a mirrored relationship locally. Chat/reaction
+  invalidates that root instead of patching a mirrored relationship locally. Each `/people` tab
+  loads only its own list, and the activity feed names its actors from the event's own
+  server-resolved `actor_name` (#73/#210) — never by loading friends/requests to spell a name. See
+  `docs/2026-09-04-people-tab-request-budget.md`. Chat/reaction
   suppression for muted or blocked players is applied inside `useTableRealtime` (before state),
   never in a component, and never touches seats, bets or poker actions.
 - **Query freshness is a table, not a global.** `lib/queryFreshness.ts` classifies every family —

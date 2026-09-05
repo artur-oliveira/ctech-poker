@@ -7,13 +7,14 @@ import {Button} from '@/components/ui/button';
 import {SkeletonList} from '@/components/ui/skeleton';
 import {markInboxRead, type SocialInboxEvent} from '@/lib/api/social';
 import {inviteActionable, SOCIAL_KEYS, socialEventCopy} from '@/lib/social';
+import {playerName} from '@/lib/utils';
 import type {SocialActionState} from '@/lib/hooks/useSocialActions';
 
 /** Durable activity feed. Nothing here grants access on its own: accepting an
  * invite only authorises opening the room — capacity, terms, currency and
  * buy-in are revalidated by the normal join flow. */
 export function SocialInbox({events, isLoading = false, isError = false, hasNext = false, loadingMore = false,
-  onMoreAction, onRetryAction, onNavigateAction, actions, nameOf}: {
+  onMoreAction, onRetryAction, onNavigateAction, actions}: {
   events: SocialInboxEvent[];
   isLoading?: boolean;
   isError?: boolean;
@@ -25,7 +26,6 @@ export function SocialInbox({events, isLoading = false, isError = false, hasNext
    * accepted invite navigates away. */
   onNavigateAction?: () => void;
   actions: SocialActionState;
-  nameOf: (playerId: string) => string;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -65,10 +65,11 @@ export function SocialInbox({events, isLoading = false, isError = false, hasNext
         return <li key={event.event_id}
                    className={`people-row people-row-activity ${event.unread ? 'is-unread' : ''}`}>
           <div className="people-row-identity">
-            {/* actor_name is resolved server-side for every actor (#73); nameOf
-                — sourced from the friends/requests lists already in memory —
-                is only a fallback for an older cached page without it. */}
-            <b>{socialEventCopy(event, event.actor_name || nameOf(event.actor_id))}</b>
+            {/* The server resolves actor_name (and the avatar) for every event
+                in one BatchGet per page (#73), so the feed needs no other list
+                loaded to read itself. The only row without one is an actor
+                whose profile is gone, and `playerName` names that placeholder. */}
+            <b>{socialEventCopy(event, event.actor_name || playerName(event.actor_id))}</b>
             <small>{new Date(event.created_at).toLocaleString('pt-BR')}</small>
           </div>
           {inviteActionable(event) && event.room_id && <div className="people-row-actions">
