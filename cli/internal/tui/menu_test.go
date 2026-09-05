@@ -67,6 +67,32 @@ func TestMenuNavigation(t *testing.T) {
 	}
 }
 
+func TestMenuKeepsSelectionWhenItStillMatches(t *testing.T) {
+	m := newCommandMenu(testSpecs())
+	m.UpdateInput("/p")
+	m.moveNext() // /play
+	m.UpdateInput("/pl")
+	if m.selected != 0 || m.items[m.selected].Name != "/play" {
+		t.Fatalf("selection after narrowing = %d/%q, want /play", m.selected, m.items[m.selected].Name)
+	}
+	m.UpdateInput("/p")
+	if m.items[m.selected].Name != "/play" {
+		t.Fatalf("selection after widening = %q, want /play", m.items[m.selected].Name)
+	}
+}
+
+func TestMenuKeepsSelectedItemVisibleWhenRowsAreCapped(t *testing.T) {
+	m := newCommandMenu(testSpecs())
+	m.UpdateInput("/p")
+	m.moveNext()
+	m.moveNext() // /peek, last of three
+
+	out := stripANSI(m.View(1, 80))
+	if !strings.Contains(out, "› /peek") {
+		t.Fatalf("capped menu hid its selection marker:\n%s", out)
+	}
+}
+
 func TestAcceptZeroArgCommandSubmitsImmediately(t *testing.T) {
 	m := newCommandMenu(testSpecs())
 	m.UpdateInput("/p")
@@ -107,8 +133,8 @@ func TestMenuLineNeverExceedsWidth(t *testing.T) {
 			m.UpdateInput("/")
 			view := m.View(len(specs)+1, width)
 			for _, line := range strings.Split(view, "\n") {
-				if n := len([]rune(stripANSI(line))); n > width {
-					t.Fatalf("width=%d: line has %d visible chars, want <= %d: %q", width, n, width, line)
+				if n := len([]rune(stripANSI(line))); n >= width && width > 1 {
+					t.Fatalf("width=%d: line has %d visible chars, want < %d to avoid auto-wrap: %q", width, n, width, line)
 				}
 			}
 		}

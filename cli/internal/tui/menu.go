@@ -32,6 +32,10 @@ func newCommandMenu(specs []commandSpec) *commandMenu {
 // token itself — a space (moving on to arguments) or an exact single match
 // hides it.
 func (m *commandMenu) UpdateInput(value string) {
+	previous := ""
+	if m.selected >= 0 && m.selected < len(m.items) {
+		previous = m.items[m.selected].Name
+	}
 	if !strings.HasPrefix(value, "/") || strings.Contains(value, " ") {
 		m.visible, m.items = false, nil
 		return
@@ -48,8 +52,12 @@ func (m *commandMenu) UpdateInput(value string) {
 	}
 	m.items = matches
 	m.visible = true
-	if m.selected >= len(m.items) {
-		m.selected = 0
+	m.selected = 0
+	for i, item := range m.items {
+		if item.Name == previous {
+			m.selected = i
+			break
+		}
 	}
 }
 
@@ -125,6 +133,19 @@ func (m *commandMenu) DesiredRows() int {
 // handed to the terminal before its true width is known.
 const fallbackLineWidth = 76
 
+// terminalLineWidth leaves the last terminal column unused. Some terminals
+// auto-wrap as soon as that column is painted, which is enough to throw an
+// inline renderer's cursor accounting off by one physical row.
+func terminalLineWidth(maxWidth int) int {
+	if maxWidth <= 0 {
+		maxWidth = fallbackLineWidth
+	}
+	if maxWidth > 1 {
+		return maxWidth - 1
+	}
+	return maxWidth
+}
+
 // truncateVisible clamps s to at most max visible characters (runes, not
 // bytes — this text is Portuguese with accented characters that are
 // multi-byte in UTF-8 but one column wide), appending "…" if it had to cut.
@@ -162,29 +183,37 @@ func (m *commandMenu) View(maxRows, maxWidth int) string {
 	if !m.visible || len(m.items) == 0 || maxRows <= 0 {
 		return ""
 	}
-	if maxWidth <= 0 {
-		maxWidth = fallbackLineWidth
+	maxWidth = terminalLineWidth(maxWidth)
+
+	itemRows := maxRows
+	if itemRows > maxMenuRows {
+		itemRows = maxMenuRows
 	}
-	limit := maxRows
-	if limit > maxMenuRows {
-		limit = maxMenuRows
+	showSummary := len(m.items) > itemRows && itemRows > 1
+	if showSummary {
+		itemRows--
 	}
-	items := m.items
-	showCount := limit
-	truncated := 0
-	if len(items) > limit {
-		showCount = limit - 1
-		if showCount < 0 {
-			showCount = 0
-		}
-		truncated = len(items) - showCount
+	if itemRows > len(m.items) {
+		itemRows = len(m.items)
 	}
-	items = items[:showCount]
+
+	// Keep the selected command inside the rendered window. This matters in
+	// short terminals and after navigating a long list: the marker must never
+	// disappear merely because the list is clipped.
+	start := 0
+	if m.selected >= itemRows {
+		start = m.selected - itemRows + 1
+	}
+	if start+itemRows > len(m.items) {
+		start = len(m.items) - itemRows
+	}
+	items := m.items[start : start+itemRows]
 
 	var b strings.Builder
 	for i, it := range items {
+		absoluteIndex := start + i
 		marker, style := "  ", mutedStyle
-		if i == m.selected {
+		if absoluteIndex == m.selected {
 			marker, style = "› ", selectedStyle
 		}
 		name := it.Name
@@ -195,8 +224,20 @@ func (m *commandMenu) View(maxRows, maxWidth int) string {
 		b.WriteString(style.Render(line))
 		b.WriteString("\n")
 	}
-	if truncated > 0 {
-		_, _ = fmt.Fprintf(&b, "  … e mais %d\n", truncated)
+	if showSummary {
+		before := start
+		after := len(m.items) - (start + itemRows)
+		summary := ""
+		switch {
+		case before > 0 && after > 0:
+			summary = fmt.Sprintf("  ↑ %d anteriores · ↓ %d próximos", before, after)
+		case before > 0:
+			summary = fmt.Sprintf("  ↑ %d anteriores", before)
+		default:
+			summary = fmt.Sprintf("  ↓ %d próximos", after)
+		}
+		b.WriteString(dimStyle.Render(truncateVisible(summary, maxWidth)))
+		b.WriteString("\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
@@ -207,11 +248,9 @@ func (m *commandMenu) View(maxRows, maxWidth int) string {
 // to fallbackLineWidth) — see truncateVisible's doc comment for why this
 // matters even here.
 func formatCommandList(specs []commandSpec, maxWidth int) string {
-	if maxWidth <= 0 {
-		maxWidth = fallbackLineWidth
-	}
+	maxWidth = terminalLineWidth(maxWidth)
 	var b strings.Builder
-	b.WriteString("comandos:")
+	b.WriteString(titleStyle.Render("Comandos disponíveis"))
 	for _, it := range specs {
 		name := it.Name
 		if it.Args != "" {
@@ -221,18 +260,20 @@ func formatCommandList(specs []commandSpec, maxWidth int) string {
 		b.WriteString("\n")
 		b.WriteString(line)
 	}
+	b.WriteString("\n")
+	b.WriteString(dimStyle.Render(truncateVisible("  ↑↓ navegar · Tab completar · Esc fechar", maxWidth)))
 	return b.String()
 }
 
 var homeCommandSpecs = []commandSpec{
-	{Name: "/achievements", Desc: "Mostra suas conquistas"},
-	{Name: "/profile", Desc: "Mostra os dados do perfil"},
-	{Name: "/play", Desc: "Entra numa mesa (escolhe tamanho/stake)"},
-	{Name: "/enter", Args: "<room-id>", Desc: "Entra numa mesa por ID"},
-	{Name: "/help", Desc: "Lista os comandos disponíveis"},
-	{Name: "/clear", Desc: "Limpar comandos (CTRL + L)"},
-	{Name: "/exit", Desc: "Sair"},
-	{Name: "/logout", Desc: "Esquece as credenciais salvas"},
+	{Name: "/achievements", Desc: "Veja progresso, estrelas e conquistas"},
+	{Name: "/profile", Desc: "Veja seu perfil, código e saldos"},
+	{Name: "/play", Desc: "Escolha mesa, blinds e buy-in"},
+	{Name: "/enter", Args: "<room-id>", Desc: "Entre em uma mesa pelo ID"},
+	{Name: "/help", Desc: "Veja todos os comandos e atalhos"},
+	{Name: "/clear", Desc: "Limpe o histórico desta tela"},
+	{Name: "/exit", Desc: "Encerre o CTech Poker"},
+	{Name: "/logout", Desc: "Esqueça as credenciais salvas"},
 }
 
 var tableCommandSpecs = []commandSpec{

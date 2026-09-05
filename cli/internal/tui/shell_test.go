@@ -268,7 +268,7 @@ func TestHomeHelpListsCommandsWithDescriptions(t *testing.T) {
 	m, _ := s.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	s = m.(*Shell)
 	out := strings.Join(s.lines, "\n")
-	if !strings.Contains(out, "/profile") || !strings.Contains(out, "Mostra os dados do perfil") {
+	if !strings.Contains(out, "/profile") || !strings.Contains(out, "Veja seu perfil, código e saldos") {
 		t.Fatalf("help output missing command+description: %q", out)
 	}
 }
@@ -311,9 +311,10 @@ func TestViewportReservesRoomForOpenMenu(t *testing.T) {
 	if vpH >= fullHeight {
 		t.Fatalf("viewport height = %d, want less than %d once the menu reserved its rows", vpH, fullHeight)
 	}
-	if vpH+menuRows+2 > s.windowHeight {
-		t.Fatalf("viewport (%d) + menu (%d) + chrome exceeds the available window (%d) — menu would be pushed off-screen",
-			vpH, menuRows, s.windowHeight)
+	chrome := strings.Count(renderHomeHeader(s.windowWidth), "\n") + 2 // header + input
+	if vpH+menuRows+chrome > s.windowHeight {
+		t.Fatalf("viewport (%d) + menu (%d) + chrome (%d) exceeds the available window (%d) — menu would be pushed off-screen",
+			vpH, menuRows, chrome, s.windowHeight)
 	}
 }
 

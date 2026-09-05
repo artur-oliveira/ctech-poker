@@ -49,6 +49,7 @@ type Shell struct {
 	menu         *commandMenu
 	viewport     viewport.Model
 	vpReady      bool
+	windowWidth  int
 	windowHeight int
 	followBottom bool // true unless the user scrolled away from the latest output
 
@@ -76,6 +77,7 @@ func newShell(cfg config.Settings, session *auth.Session, rc *rest.Client) *Shel
 	ti := textinput.New()
 	ti.Prompt = "› "
 	ti.PromptStyle = promptStyle
+	ti.Placeholder = "/ para ver comandos"
 	ti.Focus()
 	sp := spinner.New()
 	sp.Style = accentStyle
@@ -119,7 +121,9 @@ func (s *Shell) syncViewport() {
 // what the user is actively looking at while typing); the viewport shrinks
 // to make room, down to zero rather than forcing an overflow.
 func (s *Shell) layoutHeights() (viewportH, menuRows int) {
-	chrome := 2 // logo + input
+	header := renderHomeHeader(s.windowWidth)
+	chrome := strings.Count(header, "\n") + 1 // responsive header
+	chrome++                                  // input
 	if s.busy {
 		chrome++
 	}
@@ -198,6 +202,7 @@ func loginAPIKey(session *auth.Session, key string) tea.Cmd {
 func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		s.windowWidth = msg.Width
 		s.windowHeight = msg.Height
 		if !s.vpReady {
 			s.viewport = viewport.New(msg.Width, 0)
@@ -216,7 +221,7 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case checkLoginMsg:
 		if msg.loggedIn {
 			s.state = stateHome
-			s.input.Placeholder = "/help"
+			s.input.Placeholder = "/ para ver comandos"
 		} else {
 			s.state = stateLoginChoice
 		}
@@ -231,6 +236,7 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		s.state = stateHome
 		s.input.Reset()
+		s.input.Placeholder = "/ para ver comandos"
 		s.appendLine(successStyle.Render("Logado."))
 		return s, nil
 
@@ -250,6 +256,7 @@ func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		s.state = stateHome
 		s.input.Reset()
+		s.input.Placeholder = "/ para ver comandos"
 		s.appendLine(successStyle.Render("Logado."))
 		return s, nil
 
@@ -398,7 +405,7 @@ func (s *Shell) leaveTable() {
 	s.table = nil
 	s.state = stateHome
 	s.input.Reset()
-	s.input.Placeholder = "/help"
+	s.input.Placeholder = "/ para ver comandos"
 	s.appendLine("· de volta ao lobby")
 }
 
@@ -745,17 +752,17 @@ func (s *Shell) View() string {
 		if s.loginErr != nil {
 			errLine = "\n" + errorStyle.Render("erro no login: "+s.loginErr.Error())
 		}
-		return fmt.Sprintf("%s\n\nComo você quer entrar?\n%sAbrir Navegador\n%sAPI Key\n%sSair%s\n",
-			renderLogo(), cursor(0), cursor(1), cursor(2), errLine)
+		return fmt.Sprintf("%s\n\nComo você quer entrar?\n%sAbrir navegador\n%sUsar API key\n%sSair%s\n",
+			renderHomeHeader(s.windowWidth), cursor(0), cursor(1), cursor(2), errLine)
 	case stateAPIKeyInput:
-		view := renderLogo() + "\n\n" + s.input.View()
+		view := renderHomeHeader(s.windowWidth) + "\n\n" + mutedStyle.Render("Cole sua API key para continuar") + "\n" + s.input.View()
 		if s.busy {
 			view += "\n" + accentStyle.Render(s.spin.View()) + " verificando..."
 		}
 		return view
 	case stateLoggingIn:
 		var b strings.Builder
-		b.WriteString(renderLogo())
+		b.WriteString(renderHomeHeader(s.windowWidth))
 		b.WriteString("\n\n")
 		b.WriteString(accentStyle.Render(s.spin.View()))
 		b.WriteString(" aguardando confirmação no navegador...\n")
@@ -806,9 +813,9 @@ func (s *Shell) View() string {
 		return ""
 	default: // stateHome, stateCheckingLogin
 		if s.state == stateCheckingLogin {
-			return renderLogo() + "\n" + accentStyle.Render(s.spin.View()) + " verificando login..."
+			return renderHomeHeader(s.windowWidth) + "\n" + accentStyle.Render(s.spin.View()) + " verificando sessão..."
 		}
-		lines := []string{renderLogo()}
+		lines := []string{renderHomeHeader(s.windowWidth)}
 		if s.vpReady {
 			vpH, menuRows := s.layoutHeights()
 			s.viewport.Height = vpH
