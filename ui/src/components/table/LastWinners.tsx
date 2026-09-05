@@ -1,6 +1,6 @@
 'use client';
 import type {CSSProperties} from 'react';
-import {useRef, useState} from 'react';
+import {memo, useRef, useState} from 'react';
 import Link from 'next/link';
 import {Trophy} from 'lucide-react';
 import type {HandItem} from '@/lib/api/player';
@@ -56,7 +56,7 @@ export function deriveWinners(items: HandItem[], limit = 5): WinnerLogEntry[] {
  * only after the viewer sits through a fresh resolution. It can be
  * controlled by the table page so opening it closes chat, reactions, or
  * hand rankings instead of stacking multiple mobile overlays. */
-export function LastWinners({items, tableId, open: controlledOpen, onOpenChangeAction}: {
+function LastWinnersImpl({items, tableId, open: controlledOpen, onOpenChangeAction}: {
   items: HandItem[];
   tableId: string;
   open?: boolean;
@@ -105,3 +105,11 @@ export function LastWinners({items, tableId, open: controlledOpen, onOpenChangeA
     </div>
   </aside>;
 }
+
+/** Memoised: The winners strip is fed by a query, not by the snapshot.
+ *  Every prop it receives is either a primitive or a stable identity
+ *  (see `useTableRealtimeSession`'s `commands` memo, `useTableOverlays`'
+ *  cached panel handlers, and the table page's memoised projections), so the
+ *  comparison actually pays off. Issue #230. */
+export const LastWinners = memo(LastWinnersImpl);
+LastWinners.displayName = 'LastWinners';

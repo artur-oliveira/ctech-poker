@@ -1,5 +1,5 @@
 'use client';
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {recoverSession} from '@/lib/auth/session';
 import type {WSStatus} from '@aoctech/ws-client';
 import type {MockScenario} from '@/lib/mockConfig';
@@ -664,41 +664,30 @@ export function useTableRealtimeSession(id: string, viewerId?: string, shareCode
   // Suppression is applied twice on purpose: incoming frames are dropped before
   // they reach state (no bubble, no animation, no announcement), and what is
   // already on screen disappears the moment a mute or block is confirmed.
-  const visibleChat = suppressedPlayerIds?.size
-    ? chat.filter(item => !suppressedPlayerIds.has(item.player)) : chat;
-  const visibleBubbles = suppressedPlayerIds?.size
+  // Memoised, not just derived: with someone muted or blocked these would
+  // otherwise be a new array/object on every render, and `chatBubbles` alone
+  // would re-render the whole felt on every frame for viewers who have ever
+  // used mute — the exact case the memo boundary exists for (#230).
+  const visibleChat = useMemo(() => suppressedPlayerIds?.size
+    ? chat.filter(item => !suppressedPlayerIds.has(item.player)) : chat, [chat, suppressedPlayerIds]);
+  const visibleBubbles = useMemo(() => suppressedPlayerIds?.size
     ? Object.fromEntries(Object.entries(chatBubbles).filter(([playerId]) => !suppressedPlayerIds.has(playerId)))
-    : chatBubbles;
-  const visibleReactions = suppressedPlayerIds?.size
-    ? reactions.filter(item => !suppressedPlayerIds.has(item.playerId)) : reactions;
+    : chatBubbles, [chatBubbles, suppressedPlayerIds]);
+  const visibleReactions = useMemo(() => suppressedPlayerIds?.size
+    ? reactions.filter(item => !suppressedPlayerIds.has(item.playerId)) : reactions,
+  [reactions, suppressedPlayerIds]);
 
-  return {
-    status,
-    snapshot: snapshotTableID === id ? snapshot : null,
-    snapshotAt,
-    unlock,
+  // Every table command lives in one memo so its identity is stable across
+  // renders. All of them close over refs, setState and the already-stable
+  // emit/emitAux, so there is nothing per-render to capture — and the memoised
+  // table surfaces (TableStage, Seat, Chat, TableReactions) can only skip work
+  // if the handlers they receive stop changing on every snapshot (#230).
+  const commands = useMemo(() => ({
     // The socket sets `unlock` once per achievement_unlocked frame and it must
     // be dropped once the toast has celebrated it — otherwise every later
     // hand-outcome card (which blocks the toast layer) replays the same one.
     clearUnlock: () => setUnlock(null),
-    chat: visibleChat,
-    chatBubbles: visibleBubbles,
-    reactions: visibleReactions,
-    pendingAction,
-    actionError: lastActionError,
-    reconnectAttempt,
-    announcement,
-    botChallengeRequired,
-    removed,
-    terminalError,
     clearActionError: () => setLastActionError(null),
-    retryNow,
-    readyPending,
-    showCardsPending,
-    requestRabbitHuntPending,
-    requestRabbitHuntFailCount,
-		requestWinnerCardsPending,
-    requestExitPending,
     ready: (ready = true) => {
       if (readyLockRef.current) return false;
       const actionId = crypto.randomUUID();
@@ -712,7 +701,6 @@ export function useTableRealtimeSession(id: string, viewerId?: string, shareCode
       readyTimerRef.current = setTimeout(() => finishAuxiliaryCommand(actionId, 'action_timeout'), ACTION_TIMEOUT_MS);
       return true;
     },
-    act,
     showCards: (cardIndex?: number) => {
       if (showCardsLockRef.current) return false;
       const actionId = crypto.randomUUID();
@@ -759,22 +747,22 @@ export function useTableRealtimeSession(id: string, viewerId?: string, shareCode
     // is reflected in the next snapshot's pending_exit field, no local
     // pending/lock state needed.
     cancelExit: () => emit({type: 'cancel_exit', action_id: crypto.randomUUID()}),
-		requestWinnerCards: () => {
-			if (requestWinnerCardsLockRef.current) return false;
-			const actionId = crypto.randomUUID();
-			requestWinnerCardsLockRef.current = true;
-			requestWinnerCardsActionRef.current = actionId;
-			setRequestWinnerCardsPending(true);
-			const ok = emitAux(actionId, {type: 'request_winner_cards', action_id: actionId});
-			if (!ok) {
-				finishAuxiliaryCommand(actionId);
-				return false;
-			}
-			requestWinnerCardsTimerRef.current = setTimeout(
-				() => finishAuxiliaryCommand(actionId, 'action_timeout'), ACTION_TIMEOUT_MS
-			);
-			return ok;
-		},
+    requestWinnerCards: () => {
+      if (requestWinnerCardsLockRef.current) return false;
+      const actionId = crypto.randomUUID();
+      requestWinnerCardsLockRef.current = true;
+      requestWinnerCardsActionRef.current = actionId;
+      setRequestWinnerCardsPending(true);
+      const ok = emitAux(actionId, {type: 'request_winner_cards', action_id: actionId});
+      if (!ok) {
+        finishAuxiliaryCommand(actionId);
+        return false;
+      }
+      requestWinnerCardsTimerRef.current = setTimeout(
+        () => finishAuxiliaryCommand(actionId, 'action_timeout'), ACTION_TIMEOUT_MS
+      );
+      return ok;
+    },
     // The winner answering the pending request. It shares requestWinnerCards'
     // in-flight slot on purpose: a client is either the requester or the winner
     // of a given request, never both, so one slot is all a session can need —
@@ -811,13 +799,43 @@ export function useTableRealtimeSession(id: string, viewerId?: string, shareCode
         type: 'reaction', reaction_id: reactionId, target_player_id: targetPlayerId || '',
         action_id: crypto.randomUUID()
       }),
-    preselectAction: (selection: ActionPreselection | null, amount = 0) => emit({
-      type: 'preselect_action', action: selection || '', action_id: crypto.randomUUID(),
-      amount,
-      expected_snapshot_version: latestVersionRef.current,
-      expected_hand_id: latestHandIDRef.current,
-      expected_stage: snapshot?.stage || ''
-    }),
-    submitBotChallenge
+  }), [emit, emitAux, finishAuxiliaryCommand]);
+
+  // Deliberately outside `commands`: this one reads the live stage, and its
+  // only consumer (ActionBar) re-renders on every snapshot anyway.
+  const preselectAction = useCallback((selection: ActionPreselection | null, amount = 0) => emit({
+    type: 'preselect_action', action: selection || '', action_id: crypto.randomUUID(),
+    amount,
+    expected_snapshot_version: latestVersionRef.current,
+    expected_hand_id: latestHandIDRef.current,
+    expected_stage: snapshot?.stage || ''
+  }), [emit, snapshot?.stage]);
+
+  return {
+    status,
+    snapshot: snapshotTableID === id ? snapshot : null,
+    snapshotAt,
+    unlock,
+    chat: visibleChat,
+    chatBubbles: visibleBubbles,
+    reactions: visibleReactions,
+    pendingAction,
+    actionError: lastActionError,
+    reconnectAttempt,
+    announcement,
+    botChallengeRequired,
+    removed,
+    terminalError,
+    retryNow,
+    readyPending,
+    showCardsPending,
+    requestRabbitHuntPending,
+    requestRabbitHuntFailCount,
+    requestWinnerCardsPending,
+    requestExitPending,
+    act,
+    preselectAction,
+    submitBotChallenge,
+    ...commands
   };
 }

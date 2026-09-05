@@ -1,4 +1,4 @@
-import {type CSSProperties, type ReactNode, useCallback, useEffect, useState} from 'react';
+import {type CSSProperties, memo, type ReactNode, useCallback, useEffect, useState} from 'react';
 import {useLiveNow} from '@/lib/hooks/useLiveNow';
 import {PlayerAvatar} from '@/components/ui/player-avatar';
 import {Progress} from '@/components/ui/progress';
@@ -104,7 +104,7 @@ function SeatTimeBank({baseDeadlineMs, actionDeadlineMs, observedAtMs}: {
   </>;
 }
 
-export function Seat({
+function SeatImpl({
                        seat,
                        isViewer,
                        isTurn,
@@ -134,7 +134,7 @@ export function Seat({
                        reactionTargetLabel,
                        onReactionTarget,
                        chatBubble,
-                       actionsMenu,
+                       renderActionsMenu,
                        layoutPosition
                      }: {
   seat: SeatView;
@@ -168,9 +168,12 @@ export function Seat({
   handId?: string;
   onPeekCards?: () => void;
   playerNote?: PlayerNote;
-  onEditNote?: () => void;
+  // Seat-bound callbacks take the seat rather than closing over it, so
+  // TableStage can pass one stable identity to all nine seats instead of a
+  // fresh closure per seat per render, which no `memo` could ever skip (#230).
+  onEditNote?: (seat: SeatView) => void;
   reactionTargetLabel?: string;
-  onReactionTarget?: () => void;
+  onReactionTarget?: (playerId: string) => void;
   // Keyed by message id: a new id (even from the same player) remounts the
   // bubble and restarts its CSS lifecycle instead of jumping mid-animation.
   chatBubble?: { id: string; message: string };
@@ -178,7 +181,9 @@ export function Seat({
   // report). When present it replaces the bare note trigger, which was a
   // single unlabelled affordance for what is now a whole set of actions.
   // Hand-history replay reuses this seat without one.
-  actionsMenu?: ReactNode;
+  // Same reason it is a render function and not a node: an element built per
+  // seat per render is a new identity every time.
+  renderActionsMenu?: (seat: SeatView) => ReactNode;
   // TableStage owns visual geometry. Keeping it presentation-only means the
   // server-authored player order and all hidden-card data remain untouched.
   layoutPosition?: SeatLayoutPosition;
@@ -293,7 +298,7 @@ export function Seat({
               className={`game-seat seat-${index} ${layoutPosition ? `seat-zone-${layoutPosition.zone}` : ''} ${seat.state} ${isDisconnected ? 'disconnected' : ''} ${isViewer ? 'viewer' : ''} ${isTurn ? 'is-turn' : ''} ${isWinner ? 'is-winner' : ''} ${reactionTargetLabel ? 'is-reaction-target' : ''} ${pendingName ? 'is-pending-name' : ''} ${isTopSeat ? 'top-seat' : ''}`}>
     {reactionTargetLabel && onReactionTarget && <button type="button" className="seat-reaction-target"
                                                         aria-label={`${reactionTargetLabel} em ${playerName(seat.player_id, undefined, seat.name)}`}
-                                                        onClick={onReactionTarget}><span>Escolher</span></button>}
+                                                        onClick={() => onReactionTarget(seat.player_id)}><span>Escolher</span></button>}
     {showNormalClock && baseDeadlineMs && clockNow && turnTimeoutMs &&
         <SeatTurnTimer key={baseDeadlineMs} baseDeadlineMs={baseDeadlineMs}
                        observedAtMs={clockNow} durationMs={turnTimeoutMs}/>}
@@ -333,15 +338,15 @@ export function Seat({
     </span>}
     <PlayerAvatar className="seat-avatar" name={seat.name} avatarUrl={seat.avatar_url}
                   isViewer={isViewer} decorative/>
-    {!isViewer && actionsMenu && <span className="seat-actions-trigger">
+    {!isViewer && renderActionsMenu && <span className="seat-actions-trigger">
       {playerNote?.tag && <span className={`player-note-dot tag-${playerNote.tag}`} aria-hidden="true"/>}
-      {actionsMenu}
+      {renderActionsMenu(seat)}
     </span>}
-    {!isViewer && !actionsMenu && onEditNote && <button type="button"
+    {!isViewer && !renderActionsMenu && onEditNote && <button type="button"
                                         className={`seat-note-trigger ${playerNote ? 'has-note' : ''}`}
                                         aria-label={playerNote ? `Editar nota privada sobre ${seat.name || 'jogador'}` : `Adicionar nota privada sobre ${seat.name || 'jogador'}`}
                                         title={playerNote ? 'Editar nota privada' : 'Adicionar nota privada'}
-                                        onClick={onEditNote}>
+                                        onClick={() => onEditNote(seat)}>
       {playerNote?.tag && <span className={`player-note-dot tag-${playerNote.tag}`} aria-hidden="true"/>}
         <NotebookPen aria-hidden="true"/>
     </button>}
@@ -376,3 +381,11 @@ export function Seat({
         </span>
     }</div>;
 }
+
+/** Memoised: A snapshot only ever moves a few seats. Without this boundary every `state` frame — and every equity delta, chat bubble and reaction — re-rendered all nine of them, timers, count-ups and cards included.
+ *  Every prop it receives is either a primitive or a stable identity
+ *  (see `useTableRealtimeSession`'s `commands` memo, `useTableOverlays`'
+ *  cached panel handlers, and the table page's memoised projections), so the
+ *  comparison actually pays off. Issue #230. */
+export const Seat = memo(SeatImpl);
+Seat.displayName = 'Seat';

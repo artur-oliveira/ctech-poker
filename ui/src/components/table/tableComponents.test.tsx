@@ -399,7 +399,7 @@ describe('chat', () => {
     const onOpenChangeAction = vi.fn();
     const onSend = vi.fn(() => true);
     render(<Chat open items={[{id: '1', player: 'p2', message: 'Boa mão'}]}
-                 seats={[{player_id: 'p2', name: 'Bia', stack: 10, state: 'active', contributed: 0}]}
+                 seats={[{player_id: 'p2', name: 'Bia'}]}
                  onOpenChangeAction={onOpenChangeAction} onSendAction={onSend}/>);
     expect(screen.getByRole('log')).toHaveTextContent('BiaBoa mão');
     await user.type(screen.getByLabelText('Mensagem para a mesa'), '  olá  ');
