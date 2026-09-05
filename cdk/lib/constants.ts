@@ -131,6 +131,7 @@ export const DYNAMO_INDEX = {
   socialInbox: 'gsi_inbox',
   socialUnread: 'gsi_unread',
   reportStatus: 'gsi_status',
+  handShareOwner: 'gsi_owner',
 } as const;
 
 // ── GitHub Actions OIDC trust scoping ──────────────────────────────────────

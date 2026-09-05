@@ -92,6 +92,8 @@ describe('people page', () => {
     renderPeople();
     expect(await screen.findByText('Bia')).toBeInTheDocument();
     expect(api.listRecentPlayers).not.toHaveBeenCalled();
+    expect(api.listSocialInbox).not.toHaveBeenCalled();
+    expect(api.listFriendRequests).not.toHaveBeenCalled();
 
     await userEvent.click(screen.getByRole('button', {name: 'Recentes'}));
     expect(await screen.findByText('Vic')).toBeInTheDocument();
@@ -125,10 +127,16 @@ describe('people page', () => {
     expect(screen.getByText('Caio')).toBeInTheDocument();
   });
 
-  test('reads the activity feed with names taken from the loaded lists', async () => {
+  // #210: the inbox resolves actor_name server-side, so Atividades is one
+  // request — not inbox + friends + requests to spell a name.
+  test('reads the activity feed from the inbox alone', async () => {
+    searchParams.value = new URLSearchParams('tab=activity');
+    api.listSocialInbox.mockResolvedValue(page([inboxEvent({actor_name: 'Caio'})]));
     renderPeople();
-    await userEvent.click(screen.getByRole('button', {name: 'Atividades'}));
     expect(await screen.findByText('Caio quer ser seu amigo.')).toBeInTheDocument();
+    expect(api.listSocialInbox).toHaveBeenCalledTimes(1);
+    expect(api.listFriends).not.toHaveBeenCalled();
+    expect(api.listFriendRequests).not.toHaveBeenCalled();
   });
 
   test('pages a list forward with the returned cursor', async () => {

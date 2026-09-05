@@ -6,6 +6,7 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -24,6 +25,23 @@ const (
 	// resolution over a big hand-history page) must chunk into batches of at
 	// most this size rather than pass them all through in one call.
 	MaxBatchProfileIDs = 100
+
+	// attrAvatarReportCount is the profile's aggregated avatar-report tally.
+	// It replaces avatar_reporters, a String Set of every distinct reporter
+	// that nothing ever read and that grew without bound on an item
+	// Get/GetOrCreate/GetMany load on hot paths — a profile could reach the
+	// 400 KB item limit and start rejecting legitimate updates (#220). A
+	// number cannot inflate the item, and the reporters themselves are
+	// already recorded, one row each, in the moderation queue
+	// (internal/reports, poker_player_reports).
+	attrAvatarReportCount = "avatar_report_count"
+	attrAvatarReporters   = "avatar_reporters"
+
+	// AvatarReportCap stops the tally climbing forever on a target under a
+	// sustained campaign: past it the counter simply stops moving (every
+	// individual report is still recorded in poker_player_reports), so both
+	// the profile item's size and the report's write cost stay flat.
+	AvatarReportCap = 10_000
 )
 
 var ErrFriendCodeCollision = errors.New("player: friend code collision")
@@ -258,9 +276,22 @@ func (s *Store) ClearAvatar(ctx context.Context, userID string) error {
 	return nil
 }
 
-// ReportAvatar durably records distinct reporters on the target profile. The
-// set is an atomic DynamoDB ADD, so concurrent reports cannot overwrite one
-// another and a retry by the same player stays idempotent.
+// avatarReportGuardPK is the one-row-per-target-and-reporter idempotency
+// guard that keeps the aggregate honest. It lives in this PK-only table
+// beside the profiles: profile reads are exact-key GetItem / BatchGetItem, so
+// a guard row is never in their way, and the sparse gsi_friend_code index
+// ignores it (it carries no friend_code).
+func avatarReportGuardPK(targetID, reporterID string) string {
+	return "avreport#" + targetID + "#" + reporterID
+}
+
+// ReportAvatar counts one distinct reporter against a target's avatar. The
+// distinct rule is a conditional put of the guard row, so a retry (or a
+// player clicking twice) is a no-op instead of a second count; the tally
+// itself is an atomic ADD, so concurrent reports cannot overwrite one
+// another. Neither write can grow the profile item — that is the point of
+// #220 — and the same update drops the legacy avatar_reporters set from any
+// profile still carrying one.
 func (s *Store) ReportAvatar(ctx context.Context, targetID, reporterID string) error {
 	if targetID == "" || reporterID == "" || targetID == reporterID {
 		return fmt.Errorf("player: invalid avatar report")
@@ -272,16 +303,39 @@ func (s *Store) ReportAvatar(ctx context.Context, targetID, reporterID string) e
 	if profile == nil {
 		return fmt.Errorf("player: avatar report target not found")
 	}
+	now := dynamo.NowStr()
+	_, err = s.base.PutItemRaw(ctx, &dynamodb.PutItemInput{
+		Item: map[string]types.AttributeValue{
+			"pk":          &types.AttributeValueMemberS{Value: avatarReportGuardPK(targetID, reporterID)},
+			"target_id":   &types.AttributeValueMemberS{Value: targetID},
+			"reporter_id": &types.AttributeValueMemberS{Value: reporterID},
+			"created_at":  &types.AttributeValueMemberS{Value: now},
+		},
+		ConditionExpression: aws.String("attribute_not_exists(pk)"),
+	})
+	if dynamo.IsConditionFailed(err) {
+		// This reporter already reported this target: idempotent success.
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("player: report avatar guard: %w", err)
+	}
 	_, err = s.base.UpdateItemRaw(ctx, &dynamodb.UpdateItemInput{
-		Key:                      map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: targetID}},
-		UpdateExpression:         aws.String("ADD #reporters :reporter SET #updated = :updated"),
-		ExpressionAttributeNames: map[string]string{"#reporters": "avatar_reporters", "#updated": "updated_at"},
+		Key:              map[string]types.AttributeValue{"pk": &types.AttributeValueMemberS{Value: targetID}},
+		UpdateExpression: aws.String("SET #updated = :updated ADD #count :one REMOVE #reporters"),
+		// The cap is a condition, not a clamp, so the counter is never
+		// read-then-written; reaching it just leaves the tally alone.
+		ConditionExpression: aws.String("attribute_exists(pk) AND (attribute_not_exists(#count) OR #count < :cap)"),
+		ExpressionAttributeNames: map[string]string{
+			"#count": attrAvatarReportCount, "#reporters": attrAvatarReporters, "#updated": "updated_at",
+		},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":reporter": &types.AttributeValueMemberSS{Value: []string{reporterID}},
-			":updated":  &types.AttributeValueMemberS{Value: dynamo.NowStr()},
+			":one":     &types.AttributeValueMemberN{Value: "1"},
+			":cap":     &types.AttributeValueMemberN{Value: strconv.Itoa(AvatarReportCap)},
+			":updated": &types.AttributeValueMemberS{Value: now},
 		},
 	})
-	if err != nil {
+	if err != nil && !dynamo.IsConditionFailed(err) {
 		return fmt.Errorf("player: report avatar: %w", err)
 	}
 	return nil

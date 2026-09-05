@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -410,7 +412,7 @@ func TestDispatchGamificationPipelineDoesNotBlockCaller(t *testing.T) {
 	finished := make(chan struct{})
 
 	callStart := time.Now()
-	dispatchGamificationPipeline("table-1", "hand-1", func() {
+	dispatchGamificationPipeline("table-1", "hand-1", func(context.Context) {
 		close(started)
 		time.Sleep(pipelineDelay)
 		close(finished)
@@ -442,7 +444,7 @@ func TestDispatchGamificationPipelineDoesNotBlockCaller(t *testing.T) {
 // recover middleware.
 func TestDispatchGamificationPipelineRecoversPanic(t *testing.T) {
 	done := make(chan struct{})
-	dispatchGamificationPipeline("table-1", "hand-1", func() {
+	dispatchGamificationPipeline("table-1", "hand-1", func(context.Context) {
 		defer close(done)
 		panic("boom")
 	})
@@ -450,5 +452,61 @@ func TestDispatchGamificationPipelineRecoversPanic(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("panicking pipeline never completed — process may have crashed instead of recovering")
+	}
+}
+
+// TestDispatchGamificationPipelineBoundsConcurrencyAndQueue is the executor
+// half of #204: the detached goroutine per hand used to have no limit at all,
+// so a spike of tables finishing hands at once multiplied the per-hand
+// DynamoDB burst (TestHandPipelineDynamoBudget) by however many tables were
+// involved, with unbounded memory behind it. Concurrency is capped, the queue
+// in front of the cap is finite, and neither ever blocks the caller — the
+// table actor's own goroutine.
+func TestDispatchGamificationPipelineBoundsConcurrencyAndQueue(t *testing.T) {
+	release := make(chan struct{})
+	var running, peak atomic.Int64
+	var wg sync.WaitGroup
+
+	block := func(context.Context) {
+		defer wg.Done()
+		n := running.Add(1)
+		for {
+			seen := peak.Load()
+			if n <= seen || peak.CompareAndSwap(seen, n) {
+				break
+			}
+		}
+		<-release
+		running.Add(-1)
+	}
+
+	// Fill the queue exactly, then prove the next dispatch is shed rather than
+	// queued: a dropped pipeline never runs, so it is not in the WaitGroup.
+	wg.Add(maxQueuedHandPipelines)
+	callStart := time.Now()
+	for range maxQueuedHandPipelines {
+		dispatchGamificationPipeline("table-1", "hand-1", block)
+	}
+	if elapsed := time.Since(callStart); elapsed > 2*time.Second {
+		t.Fatalf("dispatch blocked the caller for %s while the queue filled", elapsed)
+	}
+	shed := make(chan struct{}, 1)
+	dispatchGamificationPipeline("table-1", "hand-overflow", func(context.Context) { shed <- struct{}{} })
+	select {
+	case <-shed:
+		t.Fatal("a pipeline past maxQueuedHandPipelines ran — the queue is not finite")
+	case <-time.After(100 * time.Millisecond):
+	}
+	if depth := handPipelineQueueDepth(); depth > maxQueuedHandPipelines {
+		t.Fatalf("queue depth %d exceeds the %d cap", depth, maxQueuedHandPipelines)
+	}
+	if n := running.Load(); n > maxConcurrentHandPipelines {
+		t.Fatalf("%d pipelines running at once, over the %d limit", n, maxConcurrentHandPipelines)
+	}
+
+	close(release)
+	wg.Wait()
+	if got := peak.Load(); got > maxConcurrentHandPipelines {
+		t.Fatalf("peak concurrency was %d, over the %d limit", got, maxConcurrentHandPipelines)
 	}
 }

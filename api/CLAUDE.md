@@ -183,6 +183,27 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   and show the finished hand a whole hand late. Keep them at the front; the UI also re-invalidates on a backoff
   (`ui/src/lib/settleRefetch.ts`) as the real safety net. See
   `docs/specs/2026-09-03-post-hand-refresh-latency-and-achievement-toast-replay.md`.
+  **Issue #204 fixed: the pipeline has a measured budget and a bounded executor.** The closure moved to
+  `internal/app/handpipeline.go` as `handPipeline.run` (the ordering above is unchanged) so its aggregate cost can be
+  measured end to end over the real stores instead of module by module. `TestHandPipelineDynamoBudget` runs it against
+  one counting HTTP stub under every store at 2/6/9 seats and pins **calls ≤ 12 + 2·seats + C(seats,2)** and
+  **written items ≤ 6 + 6·seats + C(seats,2)**. Measured today: **15 calls / 15 items at 2 seats, 37 / 49 at 6,
+  64 / 85 at 9** — the C(n,2) term is `matchup`, the only inherently quadratic writer (#65/#201), and it is what makes
+  a nine-handed hand cost ~4x a six-handed one. The issue's own "dezenas ou centenas de round-trips" predates
+  #244/#255/#257/#259/#264. The test also asserts every expected table was written: a hook that silently stops writing
+  makes a budget look better, so the ceiling alone is not enough. **Executor:**
+  `dispatchGamificationPipeline` still creates the goroutine immediately (the actor is never blocked, #61) but the
+  goroutine then waits on `maxConcurrentHandPipelines` (16) with a finite `maxQueuedHandPipelines` (256) queue in front
+  and a `handPipelineTimeout` (30s) deadline on the run's context — so a spike of tables finishing hands at once can no
+  longer multiply the per-hand burst by however many tables were involved. Past the queue cap the hand's bookkeeping is
+  **dropped with an ERROR log**, deliberately: a backlog that deep means the fleet is far past capacity, and unbounded
+  queueing trades a bounded loss of gamification for unbounded memory plus a write burst arriving long after the hand.
+  Every step is already idempotent per `(table, hand)` or a plain overwrite, so a dropped or timed-out run is the same
+  failure mode the pipeline has always tolerated (the process dying mid-flight — see the known gap above).
+  There is no `internal/metrics` in this service and **no ad-hoc collector was added**: saturation is one ERROR line,
+  `handPipelineQueueDepth()` reports the depth, and CloudWatch's `addWriteVolumeAlarm` stays the numeric signal — the
+  same call the `tablestore` breaker made. Per-step latency/consumed-capacity instrumentation and
+  `ReturnConsumedCapacity` sampling, which #204 also asks for, are **not** implemented.
 - **`handhook`'s claim does NOT by itself make the pipeline's counters double-run-safe (#66).** `claimHandHooks`
   fails OPEN on a Valkey error ("a double credit is at least visible and bounded" — see `internal/handhook`'s doc
   comment), so a Valkey blip during hand completion can let two instances both pass the claim and both reach
@@ -525,6 +546,18 @@ catalog.
   cycle leaves history rows no client can safely reduce to ownership.
 - `internal/wsdrain` tracks this process's live sockets so `OnStop` can send each a 1001 "going away" close before
   `ShutdownWithContext` force-closes them mid-deploy. See `docs/specs/2026-08-24-graceful-ws-shutdown-on-deploy.md`.
+  **Issue #226 fixed: `CloseAll` fans the frames out concurrently and the whole phase is budgeted by `grace`.** The
+  writes used to run sequentially under one shared `closeWriteWait` deadline, so peers that had stopped reading
+  serialised in front of every healthy socket queued behind them and the phase blew `wsDrainGrace` (1.5s) before those
+  clients were ever signalled. The fan-out is deliberately **not** a narrow worker pool — a pool narrower than the
+  number of peers that can stall at once reproduces exactly that bug, since every worker parks on a stalled peer — so
+  it is one goroutine per socket (each already owns a read-loop goroutine; this one lives for a single control-frame
+  write), capped only by `closeMaxFanOut` as a goroutine-storm backstop. `CloseAll` never joins the writers: a `Conn`
+  whose write mutex is held by an in-flight broadcast can block past its own deadline, and waiting on that would put
+  the sequential stall straight back into shutdown. It returns after the remaining grace (or `ctx.Done()`), so the
+  frames are best-effort by construction — `ShutdownWithContext` is the backstop it always was.
+  `TestCloseAllStalledPeersDoNotDelayHealthySockets` pins it: 64 permanently stalled peers plus 200 healthy ones,
+  total time inside the grace budget, every healthy socket signalled.
 - `internal/handreveal` (`poker_hand_reveals` + `poker_hand_reveal_payments`) extends the live paid winner-cards reveal
   (`Table.RequestWinnerCards`) to hand history — non-consensual by design, since the hand is archived and there is no
   winner still at the table to ask: `POST`/`GET /players/me/hands/:handId/reveal-winner`. Sandbox-only, one archive row
@@ -651,6 +684,22 @@ catalog.
   response only. This closes the "Visitante" bug (a stranger's `friend_request` or a `table_invite` couldn't be named
   because the frontend's `nameResolver` only knew actors already in the friends/requests lists) without reintroducing
   the #64 name-drift failure mode a write-time denormalized copy would have.
+- **Issue #208 fixed: the social counts saturate instead of paging.** All three of the module's linear reads are now
+  explicitly bounded. `social.DynamoEventStore.UnreadCount` is **one** query with `Limit: MaxUnreadCount` (99) rather
+  than a page-through of the whole `gsi_unread` partition — it feeds the nav badge, which renders "9+" past nine, and
+  is recomputed on every socket inbox notification, so it was one of the app's hottest reads producing a number nobody
+  displays in full. A returned `MaxUnreadCount` means "at least this many". `social.Store.Count` takes a `saturateAt`
+  argument and stops there (its only callers compare it to `MaxFriends` / `MaxPendingOutgoing` and never show it),
+  inside a `maxCountPages` budget. `MarkRead` still needs one conditional `UpdateItem` per event — DynamoDB has no
+  batched partial update and `BatchWriteItem` cannot express a condition or a `REMOVE` — but they now run
+  `markReadConcurrency` (10) at a time instead of up to 100 serial round trips; it stays per-item rather than one
+  `TransactWriteItems` precisely so a single already-deleted event cannot abort the whole batch.
+  **Deliberately not materialized counters:** nothing drifts, nothing needs reconciling, and no path that flips an
+  event's unread flag pays an extra write. **Known ceiling:** `Count`'s `relationship` is still a `FilterExpression`,
+  not a key, so a partition padded with tens of thousands of non-matching rows can exhaust `maxCountPages` and
+  under-report — which errs toward letting a legitimate action through rather than wrongly blocking one. The exact fix
+  is a sparse `owner#relationship` GSI on `poker_social_edges` (which has none today), a schema change and its own
+  deploy. `countbudget_integration_test.go` asserts the call counts, not just the results.
 - **Issue #224 fixed: open sessions are indexed, not filtered.** `sessionlog`'s `FindOpenSession`,
   `FindLatestOpenSession` and `HasSessionAtTable` — on the buy-in, reconnect/presence, invite and table-scoped
   authorization paths — used to page the player's *entire* `poker_player_sessions` partition with a non-key

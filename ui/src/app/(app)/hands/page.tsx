@@ -170,10 +170,10 @@ export default function HandsHistory() {
     queryFn: ({pageParam}) => getHands({cursor: pageParam, mode}),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: page => (page.has_next && page.next_cursor) || undefined,
-    // React Query refetches EVERY loaded page on window focus. With 18 pages
-    // loaded that is 18 requests for tabbing back into the window, which is
-    // what the "carregou mais sozinho" report was.
-    refetchOnWindowFocus: false
+    // No focus refetch here: React Query refetches EVERY loaded page, so with
+    // 18 pages loaded tabbing back into the window was 18 requests — the
+    // "carregou mais sozinho" report. That is now the HISTORY_QUERY preset the
+    // `['hands']` key inherits (`lib/queryFreshness.ts`), not a local override.
   });
 
   const hands = useMemo(

@@ -5,11 +5,27 @@ import {
   EXPIRED_SESSION_REDIRECT_WATCHDOG_MS,
   getOrRefreshSession,
   recoverSession,
+  nextRefreshDelayMs,
   resetExpiredSessionLatchForTests,
+  resetSessionRefreshCountForTests,
+  sessionRefreshCount,
   TOKEN_REFRESH_INTERVAL_MS,
+  TOKEN_REFRESH_MARGIN_MS,
+  tokenExpiryMs,
   useOptionalSession,
   useSessionKeepAlive
 } from './session';
+
+/** A token whose `exp` is `seconds` from now. Only the payload is real — the
+ * client reads `exp` to schedule, never to authorize. */
+function tokenExpiringIn(seconds: number) {
+  const payload = btoa(JSON.stringify({exp: Math.floor(Date.now() / 1000) + seconds}));
+  return `header.${payload}.signature`;
+}
+
+function setVisibility(state: 'visible' | 'hidden') {
+  Object.defineProperty(document, 'visibilityState', {configurable: true, get: () => state});
+}
 
 const mocks = vi.hoisted(() => ({
   token: null as string | null,
@@ -47,6 +63,9 @@ describe('session keep-alive', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetExpiredSessionLatchForTests();
+    resetSessionRefreshCountForTests();
+    mocks.token = null;
+    setVisibility('visible');
     mocks.refresh.mockResolvedValue({accessToken: 'fresh', username: 'Ana'});
   });
   
@@ -116,28 +135,74 @@ describe('session keep-alive', () => {
     resetExpiredSessionLatchForTests();
   });
 
-  test('refreshes the token when the tab becomes visible and when the network reconnects', async () => {
+  // #231: coming back to the tab is not itself a reason to spend a refresh —
+  // only an expiry that has come due is.
+  test('renews on return and on reconnect only when the token is due', async () => {
     vi.useFakeTimers();
+    mocks.token = tokenExpiringIn(10 * 60);
     const {unmount} = renderHook(() => useSessionKeepAlive());
 
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      window.dispatchEvent(new Event('online'));
+      await Promise.resolve();
+    });
+    expect(mocks.refresh).not.toHaveBeenCalled();
+
+    // Slept past the margin: the first thing back on screen must not be a 401.
+    mocks.token = tokenExpiringIn(30);
     await act(async () => {
       document.dispatchEvent(new Event('visibilitychange'));
       await Promise.resolve();
     });
     expect(mocks.refresh).toHaveBeenCalledTimes(1);
 
-    await act(async () => {
-      window.dispatchEvent(new Event('online'));
-      await Promise.resolve();
-    });
-    expect(mocks.refresh).toHaveBeenCalledTimes(2);
-
     unmount();
     await act(async () => {
       window.dispatchEvent(new Event('online'));
       await Promise.resolve();
     });
-    expect(mocks.refresh).toHaveBeenCalledTimes(2);
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  test('schedules the renewal from the token expiry, not a fixed cadence', async () => {
+    vi.useFakeTimers();
+    mocks.token = tokenExpiringIn(15 * 60);
+    const {unmount} = renderHook(() => useSessionKeepAlive());
+
+    // The old 4-minute interval would have fired three times by here.
+    await act(async () => {
+      vi.advanceTimersByTime(15 * 60 * 1000 - TOKEN_REFRESH_MARGIN_MS - 1_000);
+      await Promise.resolve();
+    });
+    expect(mocks.refresh).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(2_000);
+      await Promise.resolve();
+    });
+    expect(sessionRefreshCount()).toBe(1);
+
+    unmount();
+    vi.useRealTimers();
+  });
+
+  test('spends nothing while the tab is hidden', async () => {
+    vi.useFakeTimers();
+    mocks.token = tokenExpiringIn(15 * 60);
+    setVisibility('hidden');
+    const {unmount} = renderHook(() => useSessionKeepAlive());
+
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      vi.advanceTimersByTime(60 * 60 * 1000);
+      await Promise.resolve();
+    });
+    // A hidden hour used to cost up to 15 refreshes.
+    expect(sessionRefreshCount()).toBe(0);
+
+    unmount();
     vi.useRealTimers();
   });
   
@@ -154,6 +219,24 @@ describe('session keep-alive', () => {
     vi.useRealTimers();
   });
   
+  test('reads the expiry it schedules against, and falls back without one', () => {
+    const token = tokenExpiringIn(600);
+    const near = (value: number | undefined, target: number) =>
+      expect(Math.abs((value ?? Number.NaN) - target)).toBeLessThan(2_000);
+    near(tokenExpiryMs(token), Date.now() + 600_000);
+    near(nextRefreshDelayMs(token), 600_000 - TOKEN_REFRESH_MARGIN_MS);
+    // Already past the margin: due now, not negative.
+    expect(nextRefreshDelayMs(tokenExpiringIn(10))).toBe(0);
+
+    // The mock token, an opaque token and a malformed payload all fall back to
+    // the fixed cadence measured from the last attempt.
+    resetSessionRefreshCountForTests();
+    for (const opaque of [null, 'opaque-token', 'header.not-base64-json.signature']) {
+      expect(tokenExpiryMs(opaque)).toBeUndefined();
+      near(nextRefreshDelayMs(opaque), TOKEN_REFRESH_INTERVAL_MS);
+    }
+  });
+
   test('shares one refresh promise across concurrent callers', async () => {
     let resolveRefresh: (value: { accessToken: string; username: string }) => void = () => undefined;
     mocks.refresh.mockReturnValue(new Promise(resolve => {

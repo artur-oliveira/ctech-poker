@@ -163,7 +163,9 @@ describe('API domain modules', () => {
       .mockResolvedValueOnce({data: {table_id: 'table/1', pot: 500}});
     client.post.mockResolvedValueOnce({data: {opponent_id: 'a/b'}});
 
-    await expect(getPlayerNotes()).resolves.toEqual(['note']);
+    await expect(getPlayerNotes(['b', 'a'])).resolves.toEqual(['note']);
+    // An empty seat list must not cost a request at all.
+    await expect(getPlayerNotes([])).resolves.toEqual([]);
     await savePlayerNote('a/b', {tag: 'red', note: 'agressivo'});
     await getHandHistory('table-1', 'hand-1');
     await expect(getTodayHighlight('table/1')).resolves.toEqual({table_id: 'table/1', pot: 500});
@@ -171,6 +173,10 @@ describe('API domain modules', () => {
     expect(client.post).toHaveBeenCalledWith(
       '/v1.0/players/me/notes/a%2Fb',
       {tag: 'red', note: 'agressivo'},
+    );
+    expect(client.get).toHaveBeenCalledWith(
+      '/v1.0/players/me/notes/',
+      {params: {opponent_ids: 'b,a'}, silentError: true},
     );
     expect(client.get).toHaveBeenCalledWith(
       '/v1.0/tables/table-1/hands/hand-1/history',

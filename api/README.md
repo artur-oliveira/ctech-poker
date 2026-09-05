@@ -208,8 +208,13 @@ Player reports are accepted only from first-party Poker sessions at `POST /socia
 details are capped at 500 Unicode characters. For table chat and reactions the client supplies only table, hand and
 action IDs: the server resolves the action inside that hand's DynamoDB partition, verifies the reported actor and
 copies the already-sanitized message or catalog reaction ID. Neither free text nor copied evidence is returned by HTTP,
-logged, or used as a metric dimension. The legacy avatar-report route writes the new moderation queue and retains its
-existing profile reporter set during migration.
+logged, or used as a metric dimension. The legacy avatar-report route writes the new moderation queue and, on the
+profile itself, only a bounded aggregate: `avatar_report_count`, an atomic `ADD` capped at `player.AvatarReportCap`
+(10 000) by a condition rather than a clamp, so the counter is never read-then-written. The distinct-reporter rule is
+a conditional put of a guard row (`pk = "avreport#<target>#<reporter>"`, same PK-only table), which makes a repeated
+report an idempotent no-op instead of a second count. The old `avatar_reporters` String Set — unbounded, on an item
+every `Get`/`GetOrCreate`/`GetMany` reads, and never read by anything — is no longer written, and the counter update
+`REMOVE`s it from any profile that still carries one (#220).
 
 Open reports have no TTL. `cmd/moderation` is the credential-gated operator interface for `list`, `show`, `review` and
 `resolve`; only `show` reveals details/evidence. Resolution adds a 180-day TTL and accepts only the runbook's four
@@ -315,11 +320,11 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `GET /players/me/hand/:id?mode=...`          | JWT             | one hand incl. its fairness proof                                                          |
 | `GET /players/me/achievements`               | JWT             | own progress, paginated (100)                                                              |
 | `GET /players/me/achievements/summary`       | JWT             | full-state achievement summary in one response — every catalog key (secrets only once revealed), progress/stars/next-target/completed plus catalog-wide totals; not paginated |
-| `GET /players/me/notes/`                     | JWT             | private opponent notes; `poker:player-notes:read`                                          |
+| `GET /players/me/notes/`                     | JWT             | private opponent notes, scoped with `?opponent_ids=a,b` (≤25); `poker:player-notes:read`   |
 | `POST /players/me/notes/:opponentId`         | JWT             | save/delete a note (`{tag, note}`, ≤500 chars)                                             |
 | `GET /players/me/poker-stats`                | JWT             | own VPIP/PFR/3-bet                                                                         |
 | `POST /players/me/hand/:id/share`            | JWT             | create a public share link (`mode` in request body)                                        |
-| `GET /players/me/hand-shares`                | JWT             | caller's live share links, newest first: `{token, kind, outcome, net_change, created_at, expires_at}` |
+| `GET /players/me/hand-shares`                | JWT             | caller's live share links, newest first, paginated (`limit`/`cursor`): `{token, kind, outcome, net_change, created_at, expires_at}` |
 | `DELETE /players/me/hand-shares/:token`      | JWT             | revoke a share link                                                                        |
 | `GET /hand-shares/:token`                    | **none**        | public shared hand, opponents aliased                                                      |
 | `GET /tables/:tableId/hands/:handId/history` | JWT             | action-log replay for one hand                                                             |
@@ -413,17 +418,34 @@ current blinds are not a valid answer for a hand in the past. Hands recorded bef
 the first pre-flop replay frame (the blind seats' contributions are still exactly the posted blinds there); anything
 else stays `0` = unknown, which clients must render by hiding the blind marker rather than assuming a default.
 
+### Private notes are read by seat, not by history (#209)
+
+`GET /players/me/notes/` takes an optional `?opponent_ids=` (comma-separated, at most
+`playernotes.MaxBatchOpponentIDs` = 25 ids). With it, `playernotes.Store.GetMany` answers from a single
+`BatchGetItem` over exactly those `(viewer, opponent)` keys — the seats at a table, or the players in one hand — instead
+of the unpaginated 500-note `Query` the table and the hand detail used to spend to render at most nine badges. The
+viewer's own id and duplicates are dropped before the keys are built, and an opponent with no note is simply absent
+from the response: callers key by `opponent_id`, so a partial answer can never attach one player's note to another.
+
+An `opponent_ids` that is present but empty or longer than 25 ids is a **400**, never a silent widening back into the
+full-list read. Without the parameter the endpoint still returns the whole unpaginated list; no first-party screen uses
+it any more, and it is kept for cached older clients and for a future notes-management screen — which should get a
+cursor before it ships, since 500 is otherwise a silent ceiling.
+
 ### Hand-share revocation list (#77)
 
 `GET /players/me/hand-shares` enumerates the caller's live shares so a regretted public link can be revoked instead of
 circulating until its 1–30 day TTL expires. `poker_hand_shares` is a **PK-only** table (the token *is* the key, so a
-public link resolves in one `GetItem`), which leaves no owner-keyed query — so `Create` also maintains one extra row
-per owner, `pk = "owner#<playerID>"`, holding the owner's live tokens as a DynamoDB string set. `ListByOwner` reads
-that set, fans out one `Get` per token, drops anything expired/revoked/foreign from the response and prunes it from the
-set on the way out (self-healing, no sweeper). Index writes are best-effort on both create and revoke: the share itself
-is already live (or already gone), so a failed index update must never report the operation as failed. If a player ever
-accumulates enough live shares for the fan-out to hurt, the upgrade is a `gsi_owner` index on that table — a CDK
-change, deliberately not taken here.
+public link resolves in one `GetItem`); the owner-keyed view the list needs comes from the sparse
+**`gsi_owner`** index (`owner_id` HASH, `created_at` RANGE, projection ALL). `ListByOwner` is therefore a single
+descending `Query` on that index — no per-token `GetItem` fan-out, and **no write at all on the read path** (#203).
+
+The endpoint is paginated with the standard envelope: `?limit=` (default 50, hard cap 100) and `?cursor=`, answering
+`{data, has_next, next_cursor, has_previous, previous_cursor}`. A row already past its `expires_at` is skipped in-page
+(DynamoDB's TTL sweep is eventual), so a page can be shorter than `limit` while `has_next` is still true — clients page
+until `next_cursor` is null rather than inferring "done" from a short page. Revocation is a plain `DeleteItem`; the
+index row disappears with it, so nothing needs pruning and nothing is best-effort any more. The pre-#203
+`pk = "owner#<playerID>"` string-set rows are no longer written or read, and reap themselves through their own TTL.
 
 ## Authentication & authorization
 

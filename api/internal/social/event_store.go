@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -24,6 +25,18 @@ const (
 	inviteGuardPrefix = "invite_guard#"
 	inviteGrantPrefix = "invite#"
 	roomMetaSK        = "meta"
+
+	// MaxUnreadCount is where UnreadCount saturates. The badge renders "9+"
+	// past nine, so the exact value above this is never shown; what it buys is
+	// one bounded query instead of a page-through of the unread partition.
+	MaxUnreadCount = 99
+
+	// maxMarkReadBatch caps how many events one MarkRead call may clear.
+	maxMarkReadBatch = 100
+
+	// markReadConcurrency caps MarkRead's in-flight UpdateItem calls, so a
+	// full batch is ceil(100/10) round trips deep instead of 100.
+	markReadConcurrency = 10
 )
 
 var (
@@ -203,42 +216,76 @@ func (s *DynamoEventStore) List(ctx context.Context, recipientPlayerID string, l
 	return items, out.LastEvaluatedKey, nil
 }
 
+// UnreadCount returns the recipient's unread event count, saturating at
+// MaxUnreadCount.
+//
+// This feeds the nav badge — which renders "9+" past nine — and is also
+// recomputed on every inbox notification the socket pushes, so it is one of
+// the most frequently executed reads in the app. It used to page the whole
+// gsi_unread partition to produce a number nothing ever displays in full
+// (issue #208). One bounded query is now the entire budget: DynamoDB's Limit
+// caps the items evaluated, and Select:COUNT is reported post-limit, so a
+// player with ten thousand unread events costs exactly the same read as one
+// with a hundred. A returned MaxUnreadCount means "at least this many".
+//
+// Deliberately not a materialized counter: there is nothing to drift, nothing
+// to reconcile, and no extra write on any of the six paths that flip an
+// event's unread flag.
 func (s *DynamoEventStore) UnreadCount(ctx context.Context, recipientPlayerID string) (int, error) {
-	var count int32
-	var startKey map[string]types.AttributeValue
-	for {
-		out, err := s.db.Query(ctx, &dynamodb.QueryInput{
-			TableName: aws.String(s.eventTable), IndexName: aws.String(gsiSocialUnread), Select: types.SelectCount,
-			KeyConditionExpression: aws.String("gsi_unread_pk = :pk"), ExpressionAttributeValues: map[string]types.AttributeValue{":pk": &types.AttributeValueMemberS{Value: recipientPlayerID + "#unread"}}, ExclusiveStartKey: startKey,
-		})
-		if err != nil {
-			return 0, fmt.Errorf("social events: unread count: %w", err)
-		}
-		count += out.Count
-		if len(out.LastEvaluatedKey) == 0 {
-			return int(count), nil
-		}
-		startKey = out.LastEvaluatedKey
+	out, err := s.db.Query(ctx, &dynamodb.QueryInput{
+		TableName: aws.String(s.eventTable), IndexName: aws.String(gsiSocialUnread), Select: types.SelectCount,
+		KeyConditionExpression:    aws.String("gsi_unread_pk = :pk"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{":pk": &types.AttributeValueMemberS{Value: recipientPlayerID + "#unread"}},
+		Limit:                     aws.Int32(MaxUnreadCount),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("social events: unread count: %w", err)
 	}
+	return int(out.Count), nil
 }
 
+// MarkRead clears the unread flag on up to maxMarkReadBatch events.
+//
+// Each event needs its own conditional UpdateItem — DynamoDB has no batched
+// partial update, and BatchWriteItem cannot express a condition or a REMOVE.
+// So the count of writes is irreducible; what was reducible is the latency,
+// which used to be up to 100 serial round trips for one inbox open (issue
+// #208). They now run markReadConcurrency at a time, an explicit ceiling on
+// both in-flight requests and goroutines.
+//
+// Each update is independently idempotent (setting unread to false twice is
+// the same as once), so a partial failure is safe to retry wholesale, and a
+// missing event is still tolerated rather than failing the batch — which is
+// also why this cannot be one TransactWriteItems: a single already-deleted
+// event would abort every other event's update.
 func (s *DynamoEventStore) MarkRead(ctx context.Context, recipientPlayerID string, eventIDs []string) error {
-	if len(eventIDs) > 100 {
-		return errors.New("social events: at most 100 events can be marked read")
+	if len(eventIDs) > maxMarkReadBatch {
+		return fmt.Errorf("social events: at most %d events can be marked read", maxMarkReadBatch)
 	}
+	var wg sync.WaitGroup
+	slots := make(chan struct{}, markReadConcurrency)
+	var once sync.Once
+	var failure error
 	for _, eventID := range eventIDs {
-		_, err := s.db.UpdateItem(ctx, &dynamodb.UpdateItemInput{
-			TableName: aws.String(s.eventTable), Key: eventKey(recipientPlayerID, eventID),
-			UpdateExpression:          aws.String("SET unread = :false REMOVE gsi_unread_pk, gsi_unread_sk"),
-			ConditionExpression:       aws.String("attribute_exists(pk) AND attribute_exists(sk)"),
-			ExpressionAttributeValues: map[string]types.AttributeValue{":false": &types.AttributeValueMemberBOOL{Value: false}},
-		})
-		var conditional *types.ConditionalCheckFailedException
-		if err != nil && !errors.As(err, &conditional) {
-			return fmt.Errorf("social events: mark read: %w", err)
-		}
+		wg.Add(1)
+		slots <- struct{}{}
+		go func(eventID string) {
+			defer wg.Done()
+			defer func() { <-slots }()
+			_, err := s.db.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+				TableName: aws.String(s.eventTable), Key: eventKey(recipientPlayerID, eventID),
+				UpdateExpression:          aws.String("SET unread = :false REMOVE gsi_unread_pk, gsi_unread_sk"),
+				ConditionExpression:       aws.String("attribute_exists(pk) AND attribute_exists(sk)"),
+				ExpressionAttributeValues: map[string]types.AttributeValue{":false": &types.AttributeValueMemberBOOL{Value: false}},
+			})
+			var conditional *types.ConditionalCheckFailedException
+			if err != nil && !errors.As(err, &conditional) {
+				once.Do(func() { failure = fmt.Errorf("social events: mark read: %w", err) })
+			}
+		}(eventID)
 	}
-	return nil
+	wg.Wait()
+	return failure
 }
 
 func (s *DynamoEventStore) AcceptInvite(ctx context.Context, event Event, acceptedAt time.Time) (*Event, error) {

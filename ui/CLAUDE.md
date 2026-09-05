@@ -176,9 +176,22 @@ off by default — do not build UI that assumes real money is on.
   both. See `docs/2026-09-02-hand-shares-history-filters-achievement-recency.md`.
 - **Social state is server state.** Every social read is a `['social', …]` query key
   (`SOCIAL_KEYS` in `lib/social.ts`); mutations go through `lib/hooks/useSocialActions.ts`, which
-  invalidates that root instead of patching a mirrored relationship locally. Chat/reaction
+  invalidates that root instead of patching a mirrored relationship locally. Each `/people` tab
+  loads only its own list, and the activity feed names its actors from the event's own
+  server-resolved `actor_name` (#73/#210) — never by loading friends/requests to spell a name. See
+  `docs/2026-09-04-people-tab-request-budget.md`. Chat/reaction
   suppression for muted or blocked players is applied inside `useTableRealtime` (before state),
   never in a component, and never touches seats, bets or poker actions.
+- **Query freshness is a table, not a global.** `lib/queryFreshness.ts` classifies every family —
+  `SESSION_QUERY` (player/me, sessions, daily reward: 30s, **refetches on focus**), `STATIC_QUERY`
+  (catalogs and stakes: 30min, no focus refetch, which is what lets Store and Table share one
+  catalog read) and `HISTORY_QUERY` (hands, purchase receipts: 5min, no focus refetch) — and
+  `createQueryClient` applies it with `setQueryDefaults` by key prefix, so classifying a family
+  costs no change at its call sites. The app default is **no** focus refetch: live data arrives
+  over the two realtime hooks, which invalidate on every push and on socket open. A new query that
+  genuinely needs a catch-up read on focus opts in explicitly (as `usePurchaseStatus` does) or gets
+  a row in the table — never by flipping the global back. See
+  `docs/2026-09-04-query-freshness-presets.md` and #233.
 - **Leaderboard request budget (issue #202).** Opening `/leaderboard` costs **two** GETs — the board page and, for a
   signed-in viewer, `/leaderboard/me` — and both use `LEADERBOARD_STALE_MS` (`lib/api/gamification.ts`), pinned to the
   server's 5-minute rank-mirror TTL. Under the global 30s `staleTime` + `refetchOnWindowFocus` they were re-fetching
@@ -275,6 +288,17 @@ gates on `GET /v1.0/players/me` + `poker_terms_accepted`.
 awaits `getOrRefreshSession()` once before letting *any* API call through, so page-load requests
 never race the silent refresh (previously visible as unauthenticated calls in the network log).
 Resolves once per "no token" streak — resets when the token drops back to `null` (logout).
+
+**The keep-alive renews by expiry, and does not run in a hidden tab.**
+`useSessionKeepAlive` arms a single `setTimeout` at `exp - TOKEN_REFRESH_MARGIN_MS`
+(`nextRefreshDelayMs`, reading the access token's own `exp`), so a token costs at most one refresh;
+a token with no readable `exp` falls back to `TOKEN_REFRESH_INTERVAL_MS` measured from the last
+attempt by *any* caller of `getOrRefreshSession`. Nothing is armed while the document is hidden —
+returning to the tab (or `online`) renews only if the token is actually due, and otherwise just
+re-arms. Never restore a fixed-cadence `setInterval` here: a 4-minute one against a 15-minute
+token spent up to 15 refreshes an hour on a tab nobody was looking at. `sessionRefreshCount()`
+exists so "refreshes per hour" stays assertable. Cross-tab coalescing is deliberately absent (each
+tab holds its own in-memory token). See `docs/2026-09-04-session-refresh-by-expiry.md` and #231.
 
 ## Not built (do not assume present)
 

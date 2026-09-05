@@ -80,7 +80,7 @@ func (s *Service) Request(ctx context.Context, actorID, targetID, idempotencyKey
 		return nil, err
 	}
 	if relationshipOf(current) == RelationshipNone {
-		count, err := s.store.Count(ctx, actorID, RelationshipOutgoing)
+		count, err := s.store.Count(ctx, actorID, RelationshipOutgoing, MaxPendingOutgoing)
 		if err != nil {
 			return nil, err
 		}
@@ -422,7 +422,7 @@ func (s *Service) ListBlocked(ctx context.Context, actorID string, limit int, st
 
 func (s *Service) ensureFriendCapacity(ctx context.Context, actorID, targetID string) error {
 	for _, playerID := range []string{actorID, targetID} {
-		count, err := s.store.Count(ctx, playerID, RelationshipFriend)
+		count, err := s.store.Count(ctx, playerID, RelationshipFriend, MaxFriends)
 		if err != nil {
 			return err
 		}

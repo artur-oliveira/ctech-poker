@@ -28,7 +28,7 @@ already the frame that asks for it (an effect arms it a commit late — the same
 
 | latch | arms on | gates |
 | --- | --- | --- |
-| `seeded` | the socket's first snapshot | `['hands', id]`, `['sessions','me']`, `['player-notes']`, `['player','me']` |
+| `seeded` | the socket's first snapshot | `['hands', id]`, `['sessions','me']`, `['player-notes', <seats>]`, `['player','me']` |
 | `reactionsOpen` | the reactions panel opening (or a purchase dialog) | `['wallet','reaction-catalog']`, the reaction purchases first page |
 
 Neither latch disarms. A reconnect that momentarily drops the snapshot therefore does not re-run
@@ -66,5 +66,8 @@ Per table entry, per player:
 
 - No aggregated bootstrap endpoint. That is a backend contract change; the client-side split above
   removes the fan-out from the critical path without one.
-- `['player-notes']` still reads every note the player owns rather than only the ones for the seats
-  at this table. Scoping it needs a server-side filter on `GET /players/me/notes/`.
+- ~~`['player-notes']` still reads every note the player owns rather than only the ones for the
+  seats at this table.~~ **Done (#209):** `GET /players/me/notes/?opponent_ids=` scopes the read
+  server-side to one `BatchGetItem` over the seated opponents, and the query key carries the sorted
+  seat set (`PLAYER_NOTES_KEY`), so a seat change re-keys the query instead of reusing an answer
+  about players who left. An empty table spends no note read at all.
