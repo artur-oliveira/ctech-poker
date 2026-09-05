@@ -27,5 +27,12 @@ Override the config file, API/account URLs, or card rendering with
 `CTECH_POKER_API_URL` / `CTECH_POKER_ACCOUNT_URL` / `CTECH_POKER_CLIENT_ID` /
 `NO_COLOR` environment variables.
 
+## Commands
+
+```sh
+poker profile        # your poker profile
+poker achievements    # achievement progress
+```
+
 Install instructions, the full command reference, and release downloads land
 here as the remaining implementation-plan tasks complete.

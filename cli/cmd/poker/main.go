@@ -21,7 +21,7 @@ func main() {
 	root.PersistentFlags().String("api-url", "", "override the poker API base URL")
 	root.PersistentFlags().String("account-url", "", "override the account base URL")
 	root.PersistentFlags().String("cards", "", "card style: color|ascii")
-	root.AddCommand(newLoginCmd(), newLogoutCmd())
+	root.AddCommand(newLoginCmd(), newLogoutCmd(), newProfileCmd(), newAchievementsCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
