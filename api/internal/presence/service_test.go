@@ -95,3 +95,60 @@ func TestExpiryAndSessionReconciliation(t *testing.T) {
 		t.Fatalf("expired connection got %+v", status["p1"])
 	}
 }
+
+// hangingStore never answers until the caller's context expires — an
+// unreachable Valkey, from the WebSocket lifecycle's point of view.
+type hangingStore struct{}
+
+func (hangingStore) Open(ctx context.Context, _, _ string, _ time.Time) (bool, error) {
+	<-ctx.Done()
+	return false, ctx.Err()
+}
+
+func (hangingStore) Heartbeat(ctx context.Context, _, _ string, _ time.Time) (bool, error) {
+	<-ctx.Done()
+	return false, ctx.Err()
+}
+
+func (hangingStore) Close(ctx context.Context, _, _ string) (bool, error) {
+	<-ctx.Done()
+	return false, ctx.Err()
+}
+
+func (hangingStore) SetInTable(ctx context.Context, _, _ string) (bool, error) {
+	<-ctx.Done()
+	return false, ctx.Err()
+}
+
+func (hangingStore) GetMany(ctx context.Context, _ []string) (map[string]PlayerPresence, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// TestLifecycleOperationsAreBounded pins #223's presence half: Open and
+// Heartbeat run under the socket's own context (alive as long as the
+// connection) and Close under context.Background(), so without a budget of
+// their own an unreachable store parks the connect path, a heartbeat tick or a
+// socket teardown indefinitely. Each must fail fast instead — presence has its
+// own TTL, so a dropped update self-heals.
+func TestLifecycleOperationsAreBounded(t *testing.T) {
+	svc := NewService(hangingStore{}, fakeFriends{}, nil, func(context.Context, string, string, Status) {})
+	svc.opBudget = 30 * time.Millisecond
+	svc.openBudget = 30 * time.Millisecond
+
+	for name, call := range map[string]func() error{
+		"Open":      func() error { return svc.Open(context.Background(), "p1", "c1") },
+		"Heartbeat": func() error { return svc.Heartbeat(context.Background(), "p1", "c1") },
+		"Close":     func() error { return svc.Close(context.Background(), "p1", "c1") },
+	} {
+		started := time.Now()
+		err := call()
+		elapsed := time.Since(started)
+		if err == nil {
+			t.Fatalf("%s: want an error once the budget expires", name)
+		}
+		if elapsed > 2*time.Second {
+			t.Fatalf("%s took %v, want it bounded by its own budget", name, elapsed)
+		}
+	}
+}
