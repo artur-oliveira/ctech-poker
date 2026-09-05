@@ -234,8 +234,11 @@ func (p PendingCashout) SettlementView() SettlementView {
 // entry; pre-existing rows created before this GSI shipped are invisible to
 // it until their own 30-day TTL reaps them (no backfill).
 func (s *PendingStore) ListForPlayer(ctx context.Context, playerID string, limit int, startKey map[string]types.AttributeValue) ([]PendingCashout, map[string]types.AttributeValue, error) {
-	if limit < 1 || limit > 100 {
+	if limit < 1 {
 		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
 	}
 	out, err := s.base.QueryRaw(ctx, &dynamodb.QueryInput{
 		IndexName:              aws.String(playerSettlementsGSI),

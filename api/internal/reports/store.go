@@ -165,8 +165,11 @@ func (s *DynamoStore) ListByStatus(ctx context.Context, status Status, cursor st
 // via the gsi_reporter sparse GSI populated by every Create call. Never used
 // for moderation review; that stays on ListByStatus/gsi_status.
 func (s *DynamoStore) ListByReporter(ctx context.Context, reporterID, cursor string, limit int) (Page, error) {
-	if limit < 1 || limit > 100 {
+	if limit < 1 {
 		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
 	}
 	out, err := s.base.QueryRaw(ctx, &dynamodb.QueryInput{
 		IndexName: aws.String(gsiReporter), KeyConditionExpression: aws.String("gsi_reporter_pk = :reporter"),
