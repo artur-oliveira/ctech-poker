@@ -93,6 +93,14 @@ func sessionTestIndexes() []types.GlobalSecondaryIndex {
 			},
 			Projection: &types.Projection{ProjectionType: types.ProjectionTypeAll},
 		},
+		{
+			IndexName: new("gsi_player_table"),
+			KeySchema: []types.KeySchemaElement{
+				{AttributeName: new("pk"), KeyType: types.KeyTypeHash},
+				{AttributeName: new("table_id"), KeyType: types.KeyTypeRange},
+			},
+			Projection: &types.Projection{ProjectionType: types.ProjectionTypeKeysOnly},
+		},
 	}
 }
 

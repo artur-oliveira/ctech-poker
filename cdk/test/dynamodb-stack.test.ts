@@ -253,6 +253,14 @@ test('indexes player sessions by open table', () => {
         ],
         Projection: {ProjectionType: 'ALL'},
       }),
+      Match.objectLike({
+        IndexName: 'gsi_player_table',
+        KeySchema: [
+          Match.objectLike({AttributeName: 'pk', KeyType: 'HASH'}),
+          Match.objectLike({AttributeName: 'table_id', KeyType: 'RANGE'}),
+        ],
+        Projection: {ProjectionType: 'KEYS_ONLY'},
+      }),
     ]),
   });
 });
