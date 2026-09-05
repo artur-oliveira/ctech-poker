@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import {Suspense, useEffect, useRef, useState} from 'react';
 import {useRouter, useSearchParams} from 'next/navigation';
-import {exchangeCode, OAuthExchangeError, startOAuthFlow} from '@/lib/auth/oauth';
+import {exchangeCode, lastReturnTo, OAuthExchangeError, startOAuthFlow} from '@/lib/auth/oauth';
 import {setAccessToken, setUsername} from '@/lib/api/client';
 import {navigateToUnavailable} from '@/lib/network/liveness';
 import {reportClientError} from '@/lib/telemetry';
@@ -68,7 +68,7 @@ function Callback() {
     <main className="loading-screen">
       <h1>Não foi possível autenticar</h1>
       <p role="alert">O código de acesso expirou ou já foi usado. Entre novamente para continuar.</p>
-      <Button onClick={() => startOAuthFlow()}>Tentar novamente</Button>
+      <Button onClick={() => startOAuthFlow(lastReturnTo() || undefined)}>Tentar novamente</Button>
       <Button variant="ghost" render={<Link href="/"/>}>Voltar ao início</Button>
       <p>Código de referência: {failure.correlationId}</p>
     </main>

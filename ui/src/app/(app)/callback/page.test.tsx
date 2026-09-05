@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   exchangeCode: vi.fn(),
   startOAuthFlow: vi.fn(),
+  lastReturnTo: vi.fn(),
   setAccessToken: vi.fn(),
   setUsername: vi.fn(),
   navigateToUnavailable: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock('@/lib/auth/oauth', async () => {
     OAuthExchangeError: actual.OAuthExchangeError,
     exchangeCode: mocks.exchangeCode,
     startOAuthFlow: mocks.startOAuthFlow,
+    lastReturnTo: mocks.lastReturnTo,
   };
 });
 vi.mock('@/lib/api/client', () => ({
@@ -111,6 +113,15 @@ describe('OAuth callback page', () => {
     await userEvent.click(screen.getByRole('button', {name: 'Tentar novamente'}));
     expect(mocks.startOAuthFlow).toHaveBeenCalledOnce();
     expect(screen.getByRole('button', {name: 'Voltar ao início'})).toHaveAttribute('href', '/');
+  });
+
+  test('#342: retrying after a failure resends the originally captured intent, not the /lobby default', async () => {
+    mocks.lastReturnTo.mockReturnValue('/table/t1');
+    mocks.exchangeCode.mockRejectedValue(new OAuthExchangeError('invalid', 'OAuth state mismatch'));
+    render(<CallbackPage/>);
+    await screen.findByRole('heading', {level: 1, name: 'Não foi possível autenticar'});
+    await userEvent.click(screen.getByRole('button', {name: 'Tentar novamente'}));
+    expect(mocks.startOAuthFlow).toHaveBeenCalledWith('/table/t1');
   });
 
   test('an IdP outage (5xx) navigates straight to the maintenance page instead of rendering a dead sign-in', async () => {
