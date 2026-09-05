@@ -872,6 +872,16 @@ catalog.
   never the body), `GET /players/me/hand-collections` (every hand the player marked, for `/hands`' "Coleções" tab),
   `GET`/`PUT /players/me/hand-filters`.
 
+- **Issue #353 fixed: explicit session handoff between devices.** A player confirming "continue here, disconnect the
+  other device" sends `request_handoff` over the table WS; `table.RequestHandoffCmd` reads `internal/tableconn`'s now
+  per-connection fleet-wide set (`map[playerID]map[connID]expiry`, was `map[playerID]expiry`) to find every OTHER live
+  `connID` for that player anywhere in the fleet, and `internal/tablehandoff` (a payload-carrying Pub/Sub channel, same
+  shape as `internal/tablenotify`) tells whichever instance owns each one to close it via `wsdrain.CloseByConnID` — a
+  real 1001 close frame, never a TTL expiry. No new locking: `Actor.Run`'s existing single-goroutine mailbox already
+  serializes `RequestHandoffCmd` against any in-flight command from the old connection, so a queued action from the
+  device being replaced always commits before the handoff runs, and nothing new from it can arrive after its socket
+  closes. See `docs/specs/2026-09-05-session-handoff-tableconn.md`.
+
 ## Layout
 
 `cmd/{server,archiver,reconcile,tablecleanup,handreplay}` ·
