@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"gopkg.aoctech.app/api-commons/dynamo"
 	"gopkg.aoctech.app/api-commons/observability"
+	"gopkg.aoctech.app/poker/api/internal/purchaselifecycle"
 	"gopkg.aoctech.app/poker/api/internal/reactions"
 	"gopkg.aoctech.app/poker/api/internal/walletclient"
 )
@@ -88,12 +88,9 @@ func purchaseRequestKey(playerID, reactionID, method, idemKey string) string {
 
 func sandboxPurchaseID(requestKey string) string { return "rpf" + requestKey[:29] }
 
-func definitiveWalletRejection(err error) bool {
-	var walletErr *walletclient.Error
-	return errors.As(err, &walletErr) && walletErr.Status >= http.StatusBadRequest &&
-		walletErr.Status < http.StatusInternalServerError && walletErr.Status != http.StatusRequestTimeout &&
-		walletErr.Status != http.StatusTooEarly && walletErr.Status != http.StatusTooManyRequests
-}
+// definitiveWalletRejection is purchaselifecycle's classifier — kept as a
+// package-local alias so the many call sites below read unchanged.
+var definitiveWalletRejection = purchaselifecycle.DefinitiveWalletRejection
 
 func recordFromProductPurchase(purchase *walletclient.ProductPurchase, reactionID string, priceFichas int64, now string) Record {
 	return Record{
@@ -257,18 +254,43 @@ func (s *Service) CreateReal(ctx context.Context, playerID, reactionID, idemKey 
 	return *stored, *purchase, nil
 }
 
+// HandlesSKU reports whether sku is one of this service's products. The wallet
+// webhook routes a "prdp" delivery on this instead of trying each service in
+// turn, so one delivery costs one wallet verification (#211).
+func (s *Service) HandlesSKU(sku string) bool {
+	_, _, ok := reactions.ReactionForSKU(sku)
+	return ok
+}
+
+// VerifyPurchase re-reads purchaseID from wallet, which is the only trusted
+// source for a webhook delivery — the callback body itself is never acted on.
+func (s *Service) VerifyPurchase(ctx context.Context, purchaseID string) (*walletclient.ProductPurchase, error) {
+	return s.wallet.GetProductPurchase(ctx, purchaseID)
+}
+
 // ConfirmFromWebhook re-verifies purchaseID against wallet before ever acting
 // on a webhook delivery — mirrors sandboxpurchase.Service.ConfirmFromWebhook.
 // A confirmed status atomically activates entitlement and history even if the
 // webhook arrived before CreateReal finished its local write.
 func (s *Service) ConfirmFromWebhook(ctx context.Context, purchaseID string) (Record, bool, error) {
-	purchase, err := s.wallet.GetProductPurchase(ctx, purchaseID)
+	purchase, err := s.VerifyPurchase(ctx, purchaseID)
 	if err != nil {
 		return Record{}, false, err
 	}
+	return s.SyncPurchase(ctx, purchase)
+}
+
+// SyncPurchase applies an already-verified wallet purchase to local history and
+// ownership. Exported so a caller that has already paid for the verification
+// (the wallet webhook) does not pay for it twice.
+func (s *Service) SyncPurchase(ctx context.Context, purchase *walletclient.ProductPurchase) (Record, bool, error) {
 	return s.syncProductPurchase(ctx, purchase)
 }
 
+// syncProductPurchase converges local state on one re-verified wallet purchase.
+// Which transition applies is purchaselifecycle.Decide's single matrix, shared
+// with cosmeticpurchase; the writes below stay here because entitlement rules
+// and DynamoDB transactions are per-product.
 func (s *Service) syncProductPurchase(ctx context.Context, purchase *walletclient.ProductPurchase) (Record, bool, error) {
 	if purchase == nil || purchase.PurchaseID == "" || purchase.UserID == "" {
 		return Record{}, false, errors.New("reactionpurchase: wallet returned an incomplete product purchase")
@@ -285,10 +307,17 @@ func (s *Service) syncProductPurchase(ctx context.Context, purchase *walletclien
 	if local != nil && local.ReactionID != reactionID {
 		return Record{}, false, errors.New("reactionpurchase: wallet SKU does not match local reaction")
 	}
-	if purchase.Status == statusConfirmed {
-		if local != nil && (local.Status == statusRefunding || local.Status == statusRefunded) {
-			return *local, false, nil
-		}
+
+	var localStatus *string
+	if local != nil {
+		localStatus = &local.Status
+	}
+	decision := purchaselifecycle.Decide(purchase.Status, localStatus)
+
+	switch decision.Step {
+	case purchaselifecycle.StepDrop:
+		return Record{}, false, nil
+	case purchaselifecycle.StepGrantConfirmed:
 		rec := recordFromProductPurchase(purchase, reactionID, priceFichas, now)
 		if local != nil {
 			rec = *local
@@ -300,11 +329,9 @@ func (s *Service) syncProductPurchase(ctx context.Context, purchase *walletclien
 		}
 		return confirmed, changed, err
 	}
+
 	reconstructed := false
-	if local == nil {
-		if purchase.Status != statusPending && purchase.Status != statusFailed && purchase.Status != statusExpired && purchase.Status != statusRefunded {
-			return Record{}, false, nil
-		}
+	if decision.Recover {
 		recovered := recordFromProductPurchase(purchase, reactionID, priceFichas, now)
 		if err := s.store.RecoverPendingPIX(ctx, s.entitlements, recovered); err != nil {
 			return Record{}, false, err
@@ -312,37 +339,30 @@ func (s *Service) syncProductPurchase(ctx context.Context, purchase *walletclien
 		local = &recovered
 		reconstructed = true
 	}
-	if purchase.Status == statusRefunded && local.Status == statusRefunding {
+
+	switch decision.Step {
+	case purchaselifecycle.StepCompleteRefund:
 		if err := s.store.CompleteRefund(ctx, local.PlayerID, local.PurchaseID, now); err != nil {
 			return Record{}, false, err
 		}
 		local.Status, local.UpdatedAt = statusRefunded, now
 		return *local, true, nil
-	}
-	if purchase.Status == statusFailed || purchase.Status == statusExpired || purchase.Status == statusRefunded {
+	case purchaselifecycle.StepCloseTerminal:
 		if err := s.store.ClosePIXTerminal(ctx, s.entitlements, *local, purchase.Status, now); err != nil {
 			return Record{}, false, err
 		}
 		local.Status, local.UpdatedAt = purchase.Status, now
 		s.invalidate(ctx, local.PlayerID, local.ReactionID)
 		return *local, true, nil
-	}
-	if local.Status == statusRefunding || local.Status == statusRefunded || local.Status == statusFailed || local.Status == statusExpired {
-		return *local, false, nil
-	}
-	if local.Status == statusConfirmed {
-		// Wallet purchase states are monotonic. Do not regress a locally
-		// confirmed grant on a stale/non-terminal read.
-		return *local, false, nil
-	}
-	if local.Status == purchase.Status {
+	case purchaselifecycle.StepUpdateStatus:
+		if _, err := s.store.UpdateStatus(ctx, local.PlayerID, local.PurchaseID, purchase.Status, now); err != nil {
+			return Record{}, false, err
+		}
+		local.Status, local.UpdatedAt = purchase.Status, now
+		return *local, true, nil
+	default: // StepIgnore: local state already accounts for the wallet status.
 		return *local, reconstructed, nil
 	}
-	if _, err := s.store.UpdateStatus(ctx, local.PlayerID, local.PurchaseID, purchase.Status, now); err != nil {
-		return Record{}, false, err
-	}
-	local.Status, local.UpdatedAt = purchase.Status, now
-	return *local, true, nil
 }
 
 // CreateSandbox persists a processing intent and pending reservation before

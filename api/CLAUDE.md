@@ -594,6 +594,25 @@ catalog.
   their only page. Purchase history (`sandbox-purchase`, `reaction-purchase`, `cosmetic-purchase/:kind`) pages for real
   off a DynamoDB `ExclusiveStartKey`. `cosmeticpurchase.Store.List` **must** stay filtered by `kind`: deck and felt
   share one purchase table, and the unfiltered query is what made the store report "8 de 6 liberados".
+- **Issue #211 partially fixed: one PIX transition matrix, one webhook verification.** `reactionpurchase` and
+  `cosmeticpurchase` ran two line-for-line copies of the same purchase state machine, so an idempotency or
+  terminal-transition fix could land in one and be forgotten in the other. `internal/purchaselifecycle` now owns the
+  **decision** both share — the status vocabulary, `Terminal`, `DefinitiveWalletRejection`, and `Decide(walletStatus,
+  localStatus) → Decision{Recover, Step}`, the single matrix for create / re-verify / refund / webhook — and both
+  services' `syncProductPurchase` is a switch over its `Step`. The **effects** deliberately stay per package: the
+  DynamoDB transactions, the entitlement rules (a reaction's `used_at` vs a cosmetic's current selection), the error
+  values. Sharing those too would mean an adapter interface over both stores for no correctness gain, on a money path.
+  `lifecycle_test.go` is the whole matrix as one table, including the invariants that were only implicit before (a
+  local refund outranks a confirmed wallet read; a rebuilt row never also needs a status update; an ambiguous wallet
+  failure — 408/425/429/5xx — is never a definitive rejection, so a pre-charge reservation survives it).
+  The wallet webhook no longer routes speculatively either: a `"prdp"` delivery is re-verified **once**
+  (`Service.VerifyPurchase`) and the SKU on the verified purchase picks the service (`Service.HandlesSKU` →
+  `Service.SyncPurchase`), where it used to try reactions, read `ErrCatalogMismatch`, and re-verify the same id a
+  second time as a cosmetic — two wallet reads on every cosmetic callback. An unknown product SKU is a 500 (retried
+  after a deploy that adds it), not a silent drop. **Not done:** the stores themselves are still duplicated (`Store`,
+  `EntitlementStore`, and the `CreateReal`/`CreateSandbox`/`Refund` bodies), there is no shared contract-test suite
+  across the two packages, and `sandboxpurchase` is untouched — it has no entitlements and no refund state machine, so
+  it shares no matrix with these two. No metrics were added: there is no `internal/metrics` in this service (#279).
 - **Ownership is read from the entitlement tables, never from purchase history.** `EntitlementStore.OwnedIDs` backs the
   `owned` flag on every catalog entry (`cosmeticpurchase`/`reactionpurchase` `ListCatalog`), because a buy/refund/buy
   cycle leaves history rows no client can safely reduce to ownership.
