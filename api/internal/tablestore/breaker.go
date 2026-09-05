@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"gopkg.aoctech.app/poker/api/internal/metrics"
 )
 
 // ErrCommitThrottled means this table's commit circuit is open — the write
@@ -105,6 +107,11 @@ type commitBreaker struct {
 	tables  map[string]*commitBudget
 	nowFunc func() time.Time
 }
+
+// metricCircuit counts circuit state changes, dimensioned by direction. An
+// alarm on Transition=open is the "a table is in a rejection storm right now"
+// signal #207 could not emit before #279.
+const metricCircuit = "TableCommitCircuit"
 
 func newCommitBreaker() *commitBreaker {
 	return &commitBreaker{tables: make(map[string]*commitBudget)}
@@ -209,12 +216,16 @@ func (c *commitBreaker) openLocked(tableID, action string, budget *commitBudget,
 	slog.Error("tablestore: commit circuit open",
 		"table", tableID, "action", action, "cause", cause,
 		"cooldown_ms", budget.cooldown.Milliseconds())
+	// Same rule as the log line: transitions, never attempts. A metric on a
+	// per-attempt event is the 5,779-line symptom again, only on the bill.
+	metrics.Record(metricCircuit, metrics.Count, metrics.Dims{"Transition": "open"}, 1)
 }
 
 func (c *commitBreaker) closeLocked(tableID string, budget *commitBudget) {
 	budget.rejections = 0
 	if budget.halfOpen {
 		slog.Info("tablestore: commit circuit closed", "table", tableID)
+		metrics.Record(metricCircuit, metrics.Count, metrics.Dims{"Transition": "closed"}, 1)
 	}
 	budget.halfOpen = false
 	budget.cooldown = 0

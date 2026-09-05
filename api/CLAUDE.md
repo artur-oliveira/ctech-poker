@@ -90,6 +90,24 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
 
 - **Reuse `gopkg.aoctech.app/api-commons`** for JWT verify (`jwtverify`), WebSocket registry (`ws.Registry`), cache
   backend (`cache.Backend`), and problem responses (`problem`). Do NOT hand-roll these.
+- **There is exactly one way to emit a metric: `metrics.Record(name, unit, dims, value)` (`internal/metrics`).**
+  Added by #279, after seven performance issues (#204, #207, #218, #220, #221, #222, #233) each shipped their cost
+  reduction pinned by a test and left their production-signal acceptance criterion unmet, every one of them
+  deliberately declining to leave a seventh ad-hoc collector behind. **The mechanism is CloudWatch's embedded metric
+  format**, chosen over a metrics SDK and over OTel because it adds nothing to the runtime: `cmd/server` already logs
+  JSON with `slog` to stdout, `ctech-ec2-agent logs-tail` already ships `/var/log/app/app.log` to the app log group
+  (`cdk/lib/api-stack.ts`), and CloudWatch Logs extracts metrics from any ingested log event carrying an `_aws` node.
+  No SDK, no `PutMetricData` on a hot path, no agent config, no collector to operate. **Everything is a
+  distribution** — CloudWatch derives Sum, SampleCount, Min, Max and percentiles from the values array, so a counter
+  is `Record(name, metrics.Count, dims, 1)` read back as Sum, and there is deliberately no counter/gauge/histogram
+  API. **`Record` never writes a line of its own:** it accumulates into a bucket keyed by (name, unit, dimensions)
+  and emits one EMF document per bucket per flush — every minute, or as soon as a bucket reaches EMF's 100-value
+  array limit. That is not an optimisation, it is the same rule the `tablestore` breaker's transition-only logging
+  follows: the 2026-09-02 storm's symptom was 5,779 lines for one table, and a per-occurrence metric reproduces it on
+  the bill as well as in the log. **Dimension values must come from a bounded set** (an outcome, a step name, an
+  action) — never a table, hand or player id, since every dimension combination is a separate custom metric;
+  `maxSeries` (256) drops the excess and says so once per flush if that rule is broken anyway. Ids stay in the
+  `slog` line next to the `Record` call, which is where a specific table is identified.
 - **Named constants / no magic strings.** DynamoDB table/field names, route paths, event type strings, and config keys
   live as named identifiers, not literals at call sites.
 - **Correctness = DynamoDB conditional writes.** Every mutated action commits via
@@ -200,10 +218,14 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   queueing trades a bounded loss of gamification for unbounded memory plus a write burst arriving long after the hand.
   Every step is already idempotent per `(table, hand)` or a plain overwrite, so a dropped or timed-out run is the same
   failure mode the pipeline has always tolerated (the process dying mid-flight — see the known gap above).
-  There is no `internal/metrics` in this service and **no ad-hoc collector was added**: saturation is one ERROR line,
-  `handPipelineQueueDepth()` reports the depth, and CloudWatch's `addWriteVolumeAlarm` stays the numeric signal — the
-  same call the `tablestore` breaker made. Per-step latency/consumed-capacity instrumentation and
-  `ReturnConsumedCapacity` sampling, which #204 also asks for, are **not** implemented.
+  **Instrumented since #279**, through `internal/metrics` (the one metric path — see below): `HandPipelineQueueDepth`
+  on every dispatch (the Maximum statistic against `maxQueuedHandPipelines` is the saturation alarm),
+  `HandPipelineDropped` when the queue cap is actually hit, `HandPipelineDuration` measured from dispatch — queueing
+  included — against `handPipelineTimeout`, `HandPipelinePanics`, and `HandPipelineStepFailures` dimensioned by
+  `Step` (`stepFailed(...)` next to each of the pipeline's existing `slog.Error` sites, so a failing hook is
+  identifiable without reading logs). The ERROR line and `handPipelineQueueDepth()` are unchanged.
+  **Still not implemented from #204:** per-step *latency* and sampled `ReturnConsumedCapacity` — both need the
+  DynamoDB call path itself wrapped, not the pipeline.
 - **`handhook`'s claim does NOT by itself make the pipeline's counters double-run-safe (#66).** `claimHandHooks`
   fails OPEN on a Valkey error ("a double credit is at least visible and bounded" — see `internal/handhook`'s doc
   comment), so a Valkey blip during hand completion can let two instances both pass the claim and both reach
@@ -266,8 +288,14 @@ sandbox — so a sweep-ordering bug can no longer credit a real-money table's st
   any ceiling that would have caught the incident throttles legitimate traffic (it did, twice) and any ceiling that
   leaves it alone is too high to bound a bill. Per-command ceilings stay where the pacing is known: the actor's own
   timer/retry caps. Logs are one line per state transition (table, action, cause, cooldown), never per attempt — the
-  incident's own symptom was 5,779 WARN lines for one table. There is no `internal/metrics` in this service and no
-  ad-hoc collector was added; CloudWatch's `addWriteVolumeAlarm` stays the numeric signal. Tests are fake-clock only
+  incident's own symptom was 5,779 WARN lines for one table. **Metrics follow the same rule since #279:**
+  `TableCommitCircuit` counts state *transitions* (dimension `Transition` = open/closed), and `TableCommits` counts
+  every commit through `CommitAction` by `Outcome`
+  (accepted/conflict/duplicate/throttled/unavailable/failed) — attempted, accepted and conditionally-failed commits,
+  which is what #207 asked for. Neither carries the table id or the action as a dimension: a ULID dimension is one
+  custom metric per table on the bill, and the wedged table is identified from the transition log line. Consumed
+  capacity per commit is still **not** emitted (it needs `ReturnConsumedCapacity` threaded through
+  `api-commons/dynamo`); `addWriteVolumeAlarm` remains the WCU signal. Tests are fake-clock only
   (`breaker_test.go`): the storm, machine-speed play, contention that still makes progress, store outages, per-table
   isolation, and idle eviction.
 - **Every command the actor runs has a deadline, and the mailbox has a budget (issue #223,

@@ -28,6 +28,10 @@ Goal: extend the poker game server. Sandbox is live; the real-money path is buil
    security regression, not a feature.
 10. **`handeval` is table-driven.** Never edit `handeval/ref` without `go generate
     ./internal/engine/handeval/...` — stale `tables.bin` silently mis-ranks showdowns and still compiles.
+11. **One metric path: `metrics.Record`.** No second collector, no PutMetricData call, no OTel. It aggregates and
+    emits CloudWatch EMF on the log stream the service already writes — so **never emit a metric per occurrence of a
+    high-volume event**, and never put an unbounded value (table id, hand id, player id) in a dimension: every
+    dimension combination is a separate custom metric on the bill. Ids belong in the log line next to the call.
 
 ## Tests
 
@@ -47,7 +51,9 @@ tests for betting/sidepots/eval/shuffle changes. The exhaustive evaluator proof 
 - Gamification: `internal/{leaderboard,achievements,dailyreward}`.
 - Money: `internal/{buyin,walletclient,reconcile}`.
 - Player-scoped: `internal/{player,playernotes,pokerstats,handshare}`.
-- Integrity/support: `internal/{botcheck,chatfilter,metrics,config,problem}`.
+- Integrity/support: `internal/{botcheck,chatfilter,config,problem}`.
+- Metrics: `internal/metrics` — one function, `Record(name, unit, dims, value)`, emitting CloudWatch EMF on the
+  existing slog JSON stream. See rule 11.
 
 ## Known issues (do not paper over)
 
