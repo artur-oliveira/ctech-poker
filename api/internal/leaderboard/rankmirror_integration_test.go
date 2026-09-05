@@ -25,6 +25,15 @@ func TestRankMirrorMatchesCountPathForEveryPlayer(t *testing.T) {
 	env := fmt.Sprintf("rankmirror_test_%d", time.Now().UnixNano())
 	createHandsWonTable(t, db, env)
 
+	// The board key is not namespaced by env — it is keyed by (mode, metric),
+	// exactly as in production — so a rerun inside the 5-minute TTL would
+	// otherwise rank against the previous run's table.
+	boardKey := rankMirrorKey("sandbox", "hands_won")
+	reset := valkeyTestClient(t)
+	if err := reset.Do(ctx, reset.B().Del().Key(boardKey, boardKey+":building").Build()).Error(); err != nil {
+		t.Fatal(err)
+	}
+
 	counting := NewStore(db, env)
 	const players = 60
 	ids := make([]string, 0, players)
@@ -61,11 +70,11 @@ func TestRankMirrorMatchesCountPathForEveryPlayer(t *testing.T) {
 	// touching DynamoDB at all. Prove the board is a live key with a bounded
 	// lifetime rather than something that grew unbounded per request.
 	client := valkeyTestClient(t)
-	size, err := client.Do(ctx, client.B().Zcard().Key(rankMirrorKey("sandbox", "hands_won")).Build()).ToInt64()
+	size, err := client.Do(ctx, client.B().Zcard().Key(boardKey).Build()).ToInt64()
 	if err != nil || size != players {
 		t.Fatalf("expected a materialized board of %d members, got %d (%v)", players, size, err)
 	}
-	ttl, err := client.Do(ctx, client.B().Ttl().Key(rankMirrorKey("sandbox", "hands_won")).Build()).ToInt64()
+	ttl, err := client.Do(ctx, client.B().Ttl().Key(boardKey).Build()).ToInt64()
 	if err != nil || ttl <= 0 || ttl > int64(RankMirrorTTL.Seconds()) {
 		t.Fatalf("board must carry the freshness-SLA TTL, got %d (%v)", ttl, err)
 	}
