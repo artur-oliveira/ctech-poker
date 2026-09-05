@@ -209,7 +209,8 @@ describe('useTablePreferences', () => {
     localStorage.setItem('ctech-poker:table-preferences:v1', 'not json');
     const {result: corrupted} = renderHook(() => useTablePreferences());
     expect(corrupted.current.preferences).toEqual({
-      soundEffects: false, dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false
+      soundEffects: false, dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false,
+      keyboardShortcuts: true
     });
 
     // A stale blob from before table_theme moved server-side (still carrying
@@ -218,7 +219,8 @@ describe('useTablePreferences', () => {
       JSON.stringify({theme: 'neon', dealerVoice: 'yes', realityCheckMinutes: 7}));
     const {result} = renderHook(() => useTablePreferences());
     expect(result.current.preferences).toEqual({
-      soundEffects: false, dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false
+      soundEffects: false, dealerVoice: false, voiceCommands: false, realityCheckMinutes: 60, equityTrainer: false,
+      keyboardShortcuts: true
     });
   });
 
