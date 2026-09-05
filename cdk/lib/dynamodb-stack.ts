@@ -223,7 +223,16 @@ export class DynamoDBStack extends cdk.Stack {
     table('poker_player_notes', true);
     // Opaque public token -> sanitized hand projection. TTL enforces the
     // owner's chosen expiry without retaining public links indefinitely.
-    table('poker_hand_shares', false, true);
+    // gsi_owner is the owner-keyed view the revocation list reads (#203): one
+    // paginated Query instead of a token-by-token GetItem fan-out over an
+    // index row. Sparse — only share items carry owner_id.
+    const handShares = table('poker_hand_shares', false, true);
+    handShares.addGlobalSecondaryIndex({
+      indexName: DYNAMO_INDEX.handShareOwner,
+      partitionKey: {name: 'owner_id', type: dynamodb.AttributeType.STRING},
+      sortKey: {name: 'created_at', type: dynamodb.AttributeType.NUMBER},
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
     // poker_hand_reveals: one permanent row per sandbox hand that ended
     // without a showdown with exactly one winner (pk = hand_id — globally
     // unique already, so the buy/check endpoints never need the table id to

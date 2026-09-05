@@ -324,7 +324,7 @@ clients stay read-only even though the first-party SPA requests those same read 
 | `POST /players/me/notes/:opponentId`         | JWT             | save/delete a note (`{tag, note}`, ≤500 chars)                                             |
 | `GET /players/me/poker-stats`                | JWT             | own VPIP/PFR/3-bet                                                                         |
 | `POST /players/me/hand/:id/share`            | JWT             | create a public share link (`mode` in request body)                                        |
-| `GET /players/me/hand-shares`                | JWT             | caller's live share links, newest first: `{token, kind, outcome, net_change, created_at, expires_at}` |
+| `GET /players/me/hand-shares`                | JWT             | caller's live share links, newest first, paginated (`limit`/`cursor`): `{token, kind, outcome, net_change, created_at, expires_at}` |
 | `DELETE /players/me/hand-shares/:token`      | JWT             | revoke a share link                                                                        |
 | `GET /hand-shares/:token`                    | **none**        | public shared hand, opponents aliased                                                      |
 | `GET /tables/:tableId/hands/:handId/history` | JWT             | action-log replay for one hand                                                             |
@@ -436,13 +436,16 @@ cursor before it ships, since 500 is otherwise a silent ceiling.
 
 `GET /players/me/hand-shares` enumerates the caller's live shares so a regretted public link can be revoked instead of
 circulating until its 1–30 day TTL expires. `poker_hand_shares` is a **PK-only** table (the token *is* the key, so a
-public link resolves in one `GetItem`), which leaves no owner-keyed query — so `Create` also maintains one extra row
-per owner, `pk = "owner#<playerID>"`, holding the owner's live tokens as a DynamoDB string set. `ListByOwner` reads
-that set, fans out one `Get` per token, drops anything expired/revoked/foreign from the response and prunes it from the
-set on the way out (self-healing, no sweeper). Index writes are best-effort on both create and revoke: the share itself
-is already live (or already gone), so a failed index update must never report the operation as failed. If a player ever
-accumulates enough live shares for the fan-out to hurt, the upgrade is a `gsi_owner` index on that table — a CDK
-change, deliberately not taken here.
+public link resolves in one `GetItem`); the owner-keyed view the list needs comes from the sparse
+**`gsi_owner`** index (`owner_id` HASH, `created_at` RANGE, projection ALL). `ListByOwner` is therefore a single
+descending `Query` on that index — no per-token `GetItem` fan-out, and **no write at all on the read path** (#203).
+
+The endpoint is paginated with the standard envelope: `?limit=` (default 50, hard cap 100) and `?cursor=`, answering
+`{data, has_next, next_cursor, has_previous, previous_cursor}`. A row already past its `expires_at` is skipped in-page
+(DynamoDB's TTL sweep is eventual), so a page can be shorter than `limit` while `has_next` is still true — clients page
+until `next_cursor` is null rather than inferring "done" from a short page. Revocation is a plain `DeleteItem`; the
+index row disappears with it, so nothing needs pruning and nothing is best-effort any more. The pre-#203
+`pk = "owner#<playerID>"` string-set rows are no longer written or read, and reap themselves through their own TTL.
 
 ## Authentication & authorization
 

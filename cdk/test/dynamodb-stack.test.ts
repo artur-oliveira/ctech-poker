@@ -113,12 +113,24 @@ test('creates private player notes with a viewer/opponent composite key', () => 
   });
 });
 
-test('creates expiring opaque hand shares', () => {
+test('creates expiring opaque hand shares indexed by owner', () => {
   const app = new App();
   const stack = new DynamoDBStack(app, 'TestHandSharesStack', {environment: 'dev', cloudwatchAlarmsEnabled: true});
   Template.fromStack(stack).hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_hand_shares',
     TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},
+    // Issue #203: the revocation list is one descending Query on this index,
+    // not a GetItem per token plus a prune write on the read path.
+    GlobalSecondaryIndexes: Match.arrayWith([
+      Match.objectLike({
+        IndexName: 'gsi_owner',
+        KeySchema: [
+          {AttributeName: 'owner_id', KeyType: 'HASH'},
+          {AttributeName: 'created_at', KeyType: 'RANGE'},
+        ],
+        Projection: {ProjectionType: 'ALL'},
+      }),
+    ]),
   });
 });
 
