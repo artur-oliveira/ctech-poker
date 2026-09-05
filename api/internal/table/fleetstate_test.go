@@ -34,24 +34,33 @@ func (f *fakeHandHooks) Claim(_ context.Context, tableID, handID string) (bool, 
 
 // fakeConnStore stands in for internal/tableconn.
 type fakeConnStore struct {
-	shared map[string]bool
+	shared map[string]map[string]bool // playerID -> connID -> alive
 	err    error
 	calls  int
 }
 
-func newFakeConnStore() *fakeConnStore { return &fakeConnStore{shared: map[string]bool{}} }
+func newFakeConnStore() *fakeConnStore { return &fakeConnStore{shared: map[string]map[string]bool{}} }
 
-func (f *fakeConnStore) Sync(_ context.Context, _ string, local []string) (map[string]bool, error) {
+func (f *fakeConnStore) Sync(_ context.Context, _ string, local map[string][]string) (map[string]map[string]bool, error) {
 	f.calls++
 	if f.err != nil {
 		return nil, f.err
 	}
-	for _, id := range local {
-		f.shared[id] = true
+	for playerID, connIDs := range local {
+		if f.shared[playerID] == nil {
+			f.shared[playerID] = map[string]bool{}
+		}
+		for _, connID := range connIDs {
+			f.shared[playerID][connID] = true
+		}
 	}
-	out := make(map[string]bool, len(f.shared))
-	for id, v := range f.shared {
-		out[id] = v
+	out := make(map[string]map[string]bool, len(f.shared))
+	for playerID, conns := range f.shared {
+		alive := make(map[string]bool, len(conns))
+		for connID, v := range conns {
+			alive[connID] = v
+		}
+		out[playerID] = alive
 	}
 	return out, nil
 }
@@ -195,7 +204,7 @@ func TestConnectionDotFollowsTheFleetNotOneInstance(t *testing.T) {
 func TestLocalSocketWinsOverAStaleFleetSet(t *testing.T) {
 	actor, _ := completeActor(t, "instance-a")
 	actor.SetConnStoreForActor(newFakeConnStore())
-	actor.fleetConns = map[string]bool{}
+	actor.fleetConnIDs = map[string]map[string]bool{}
 	actor.activeConns["p1"] = map[string]struct{}{"c1": {}}
 
 	seats := actor.cached.ViewFor("p1").Seats
@@ -214,14 +223,14 @@ func TestConnSyncFailureKeepsTheLastKnownSet(t *testing.T) {
 	actor.SetConnStoreForActor(store)
 	actor.activeConns["p1"] = map[string]struct{}{"c1": {}}
 	actor.syncFleetConns(true)
-	if !actor.fleetConns["p1"] {
-		t.Fatalf("fleetConns = %v, want p1", actor.fleetConns)
+	if !actor.fleetConnIDs["p1"]["c1"] {
+		t.Fatalf("fleetConnIDs = %v, want p1/c1", actor.fleetConnIDs)
 	}
 
 	store.err = errors.New("valkey down")
 	actor.syncFleetConns(true)
-	if !actor.fleetConns["p1"] {
-		t.Fatalf("fleetConns = %v, want the previous answer kept", actor.fleetConns)
+	if !actor.fleetConnIDs["p1"]["c1"] {
+		t.Fatalf("fleetConnIDs = %v, want the previous answer kept", actor.fleetConnIDs)
 	}
 }
 
@@ -383,8 +392,8 @@ func TestEnsureLoadedKeepsTheFleetSetAlive(t *testing.T) {
 	if store.calls == 0 {
 		t.Fatal("ensureLoaded did not refresh the fleet set")
 	}
-	if !actor.fleetConns["p1"] {
-		t.Fatalf("fleetConns = %v, want p1", actor.fleetConns)
+	if !actor.fleetConnIDs["p1"]["c1"] {
+		t.Fatalf("fleetConnIDs = %v, want p1/c1", actor.fleetConnIDs)
 	}
 }
 
