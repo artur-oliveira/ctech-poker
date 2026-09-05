@@ -401,15 +401,15 @@ export class DynamoDBStack extends cdk.Stack {
     // committed atomically by the social store introduced in the next slice.
     table(DYNAMO_TABLE.socialEdges, true);
 
-    // Materialized opponent recency. TTL bounds retention to 90 days while
-    // the sparse chronological index supports cursor pagination per viewer.
-    const recentPlayers = table(DYNAMO_TABLE.recentPlayers, true, true);
-    recentPlayers.addGlobalSecondaryIndex({
-      indexName: DYNAMO_INDEX.recentPlayers,
-      partitionKey: {name: 'gsi_recent_pk', type: dynamodb.AttributeType.STRING},
-      sortKey: {name: 'gsi_recent_sk', type: dynamodb.AttributeType.STRING},
-      projectionType: dynamodb.ProjectionType.ALL,
-    });
+    // Materialized opponent recency. TTL bounds retention to 90 days. No GSI
+    // since #199: a row is keyed pk = viewer, sk = "hand#<ulid>", and ULIDs
+    // sort chronologically, so recentplayers.DynamoStore.List pages straight
+    // off the base table's sort key. The old gsi_recent (gsi_recent_pk /
+    // gsi_recent_sk, projection ALL) stayed declared for one release because
+    // deploy order is CDK then API, so removing it in the same deploy would
+    // have broken the still-running old code; it is removed here in its own
+    // stack update (#260).
+    table(DYNAMO_TABLE.recentPlayers, true, true);
 
     // Durable in-app inbox. The unread GSI is sparse: read events omit its
     // partition key and disappear from the counter without deleting history.

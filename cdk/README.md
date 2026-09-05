@@ -134,7 +134,7 @@ All `TableV2`, partition key `pk` (S), on-demand billing with
 | `poker_pending_cashouts` | ✓ | – | – | reconcile queue; `kind` = cashout \| fee_debit |
 | `poker_hand_shares` | – | ✓ | – | public shared-hand tokens, ≤30d |
 | `poker_social_edges` | ✓ | – | – | directed friendship/mute/block rows; mirrored mutations are transactional |
-| `poker_recent_players` | ✓ | ✓ | – | 90d opponent history; `gsi_recent` chronological pagination |
+| `poker_recent_players` | ✓ | ✓ | – | 90d opponent history; no GSI — `sk` = `hand#<ulid>` paginates chronologically off the base table (#199/#260) |
 | `poker_social_events` | ✓ | ✓ | – | 90d in-app inbox; `gsi_inbox`, sparse `gsi_unread` |
 | `poker_player_reports` | ✓ | ✓ | – | unresolved rows omit TTL; `gsi_status` moderation queue |
 
