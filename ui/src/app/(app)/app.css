@@ -4238,6 +4238,63 @@
     width: 100%;
     height: clamp(470px, 50vw, 560px)
 }
+.replay-coach-toggle {
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--rounded-control);
+    background: var(--surface-control);
+    color: var(--text-secondary);
+    font: 600 12px var(--font-sans);
+    cursor: pointer
+}
+.replay-coach-toggle svg {
+    width: 15px;
+    height: 15px
+}
+.replay-coach-toggle[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--gold) 22%, transparent);
+    color: var(--gold)
+}
+.replay-coach-toggle:hover {
+    background: var(--surface-control-hover);
+    color: var(--paper)
+}
+.replay-coach-toggle:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px
+}
+.replay-coach-pause {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    min-height: clamp(470px, 50vw, 560px);
+    padding: 24px;
+    background: var(--table-room);
+    text-align: center
+}
+.replay-coach-pause > svg {
+    width: 32px;
+    height: 32px;
+    color: var(--gold)
+}
+.replay-coach-question {
+    max-width: 46ch;
+    color: var(--paper);
+    font-size: 1.05rem;
+    font-weight: 600
+}
+.replay-coach-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px
+}
 .replay-page {
     min-height: 100svh;
     background: var(--table-room);
@@ -4914,6 +4971,12 @@ button.deck-grid-slot:hover {
     color: var(--muted);
     margin: 0;
     font-size: 0.95rem;
+}
+.public-hand-footer-ctas {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
 }
 .viewer-ranking-card {
     display: flex;

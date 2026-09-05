@@ -1,6 +1,8 @@
 'use client';
 import {useEffect, useId, useMemo, useState, type CSSProperties} from 'react';
-import {ChevronLeft, ChevronRight, Coins, Pause, Play, RotateCcw, Sparkles} from 'lucide-react';
+import {
+  ChevronLeft, ChevronRight, Coins, GraduationCap, Pause, Play, RotateCcw, Sparkles
+} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {TableStage} from '@/components/table/TableStage';
 import {OutcomeBadge} from '@/components/hands/OutcomeBadge';
@@ -51,6 +53,19 @@ const ACTION_STEP_MS = 900;
 const REDUCED_MOTION_STEP_MS = 2_400;
 const SPEEDS = [1, 2, 0.5] as const;
 
+// v1 coaching mode (issue #351): a static, local question bank — no AI, no
+// endpoint. One is picked per hero decision point by `seq`, so the same step
+// always asks the same question.
+const COACH_QUESTIONS = [
+  'Pense nas pot odds: o valor que você pagaria compensa a chance de completar sua mão?',
+  'Qual é a sua posição na mesa nesta rodada — isso muda a sua decisão aqui?',
+  'Que range de mãos o vilão provavelmente tem, dado o padrão de apostas até agora?',
+  'O que a aposta do adversário sugere sobre a força da mão dele?',
+  'Você jogaria diferente se o seu stack fosse bem menor?',
+  'Vale blefar aqui, ou é melhor jogar de forma direta com essa mão?'
+] as const;
+const HERO_DECISION_ACTIONS = new Set<Action>(['check', 'fold', 'call', 'bet', 'raise', 'all_in']);
+
 function stepDelayMs(reduced: boolean, currentBoardLen?: number, nextBoardLen?: number) {
   if (reduced) return REDUCED_MOTION_STEP_MS;
   const cardsAdded = Math.max(0, (nextBoardLen ?? 0) - (currentBoardLen ?? 0));
@@ -61,11 +76,16 @@ function stepDelayMs(reduced: boolean, currentBoardLen?: number, nextBoardLen?: 
 export function HandReplayer({
                                hand,
                                actions,
-                               viewerId
+                               viewerId,
+                               allowCoaching = false
                              }: {
   hand: HandItem;
   actions: HandHistoryAction[];
   viewerId?: string;
+  // Opt-in gate for the coaching mode toggle (issue #351). Off by default so
+  // `/share` (public, unauthenticated link) never renders it; the
+  // authenticated replay page is the only caller that turns it on.
+  allowCoaching?: boolean;
 }) {
   const replayActions = useMemo(() => {
     const filteredActions: HandHistoryAction[] = [];
@@ -111,12 +131,31 @@ export function HandReplayer({
   const speed = SPEEDS[speedIndex];
   const [reduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const [revealedWinnerCards, setRevealedWinnerCards] = useState<[string, string] | null>(null);
+  const [coachingOn, setCoachingOn] = useState(false);
+  const [resolvedCoachSteps, setResolvedCoachSteps] = useState<Set<number>>(() => new Set());
   const shortcutsId = useId();
+  const coachPauseId = useId();
   const lastIndex = Math.max(0, replayActions.length - 1);
   const safeIndex = Math.min(index, lastIndex);
+  const candidateStep = replayActions[safeIndex];
+  const awaitingCoachAnswer = allowCoaching && coachingOn && candidateStep !== undefined
+    && candidateStep.player_id === viewerId
+    && HERO_DECISION_ACTIONS.has(candidateStep.action)
+    && !resolvedCoachSteps.has(candidateStep.seq);
+
+  // The coaching pause takes priority over playback: landing on a hero
+  // decision point with coaching on visually pauses (derived below, no
+  // effect needed) and blocks the autoplay timer (see its guard) until the
+  // question is answered or skipped, without discarding the underlying
+  // `playing` intent — resolving the step resumes playback if it was on.
+  const effectivePlaying = playing && !awaitingCoachAnswer;
+
+  function revealCoachStep(seq: number) {
+    setResolvedCoachSteps(previous => new Set(previous).add(seq));
+  }
 
   useEffect(() => {
-    if (!playing || replayActions.length < 2) return undefined;
+    if (!playing || replayActions.length < 2 || awaitingCoachAnswer) return undefined;
     const timer = window.setTimeout(() => {
       setIndex(current => {
         if (current >= lastIndex) {
@@ -127,7 +166,7 @@ export function HandReplayer({
       });
     }, stepDelayMs(reduced, replayActions[safeIndex]?.frame?.board?.length, replayActions[safeIndex + 1]?.frame?.board?.length) / speed);
     return () => window.clearTimeout(timer);
-  }, [playing, safeIndex, lastIndex, replayActions, speed, reduced]);
+  }, [playing, safeIndex, lastIndex, replayActions, speed, reduced, awaitingCoachAnswer]);
 
   // Space play/pause, ←/→ step, Home restart — the same transport the buttons
   // expose, for a keyboard already inside the replayer. A focused form control
@@ -234,6 +273,12 @@ export function HandReplayer({
         </div>
       </div>
       <div className="replay-header-end">
+        {allowCoaching && <button type="button" className="replay-coach-toggle"
+                                   aria-pressed={coachingOn}
+                                   onClick={() => setCoachingOn(value => !value)}>
+          <GraduationCap aria-hidden="true"/>
+          <span>Modo Coaching {coachingOn ? 'ativado' : 'desativado'}</span>
+        </button>}
         {frame.stage === 'complete' && <OutcomeBadge outcome={hand.outcome}/>}
         {winnerOpponent && <RevealWinnerButton
           handId={hand.hand_id}
@@ -246,7 +291,17 @@ export function HandReplayer({
           key={`${current.seq}-${frame.pot}`}>{frame.pot.toLocaleString('pt-BR')}</b></span>
       </div>
     </header>
-    <div className="replay-live-table">
+    {awaitingCoachAnswer ? <div className="replay-coach-pause" aria-describedby={coachPauseId}>
+      <p id={coachPauseId} className="sr-only" aria-live="assertive">
+        Replay pausado num ponto de decisão. Responda a pergunta de coaching ou pule para ver a ação.
+      </p>
+      <GraduationCap aria-hidden="true"/>
+      <p className="replay-coach-question">{COACH_QUESTIONS[current.seq % COACH_QUESTIONS.length]}</p>
+      <div className="replay-coach-actions">
+        <Button type="button" onClick={() => revealCoachStep(current.seq)}>Já pensei, revelar ação</Button>
+        <Button type="button" variant="ghost" onClick={() => revealCoachStep(current.seq)}>Pular pergunta</Button>
+      </div>
+    </div> : <div className="replay-live-table">
       <TableStage snapshot={replaySnapshot} viewer={viewerId} pot={frame.pot} bigBlind={bigBlind}
                   nowMs={current.timestamp} outcome={null} holdOutcomeOpen={false}/>
       <p key={`action-${current.seq}`} className="replay-action" aria-live="polite">
@@ -264,7 +319,7 @@ export function HandReplayer({
           </li>;
         })}
       </ul>}
-    </div>
+    </div>}
     <div className="replay-controls">
       <div className="replay-transport" role="group" aria-label="Controles de reprodução">
         <Button type="button" variant="ghost" size="icon" aria-label="Voltar ao início"
@@ -279,12 +334,12 @@ export function HandReplayer({
         }}>
           <ChevronLeft/>
         </Button>
-        <Button type="button" className="replay-play"
-                aria-label={playing ? 'Pausar replay' : 'Reproduzir replay'}
+        <Button type="button" className="replay-play" disabled={awaitingCoachAnswer}
+                aria-label={effectivePlaying ? 'Pausar replay' : 'Reproduzir replay'}
                 onClick={() => {
                   if (safeIndex === lastIndex) setIndex(0);
                   setPlaying(value => !value);
-                }}>{playing ? <Pause/> : <Play/>}<span>{playing ? 'Pausar' : 'Reproduzir'}</span></Button>
+                }}>{effectivePlaying ? <Pause/> : <Play/>}<span>{effectivePlaying ? 'Pausar' : 'Reproduzir'}</span></Button>
         <Button type="button" variant="ghost" size="icon" aria-label="Próxima ação"
                 disabled={safeIndex === lastIndex}
                 onClick={() => {

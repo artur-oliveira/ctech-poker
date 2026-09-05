@@ -47,7 +47,10 @@ export default function HandsGuide() {
             referência.</p>
           <p>O replayer abre na mesma aba de propósito: o link de volta leva direto ao detalhe da mão.</p>
           <p>Se o seu sistema estiver com <b>animações reduzidas</b>, o replay não corre: cada ação fica mais tempo na
-            tela, no lugar da animação que marcava o ritmo.</p></>
+            tela, no lugar da animação que marcava o ritmo.</p>
+          <p>O botão <b>Modo Coaching</b>, no cabeçalho, é opcional e começa desligado. Com ele ativado, o replay
+            pausa sozinho em cada decisão sua, faz uma pergunta rápida (pot odds, posição, range do vilão…) e só
+            revela a ação real quando você pede — em <b>Já pensei, revelar ação</b> ou <b>Pular pergunta</b>.</p></>
       },
       {
         id: 'fair', title: 'Verificar a prova de integridade', summary: 'A checagem roda no seu navegador; nenhum selo pronto vem do servidor.',
