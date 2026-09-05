@@ -179,6 +179,16 @@ off by default — do not build UI that assumes real money is on.
   invalidates that root instead of patching a mirrored relationship locally. Chat/reaction
   suppression for muted or blocked players is applied inside `useTableRealtime` (before state),
   never in a component, and never touches seats, bets or poker actions.
+- **Query freshness is a table, not a global.** `lib/queryFreshness.ts` classifies every family —
+  `SESSION_QUERY` (player/me, sessions, daily reward: 30s, **refetches on focus**), `STATIC_QUERY`
+  (catalogs and stakes: 30min, no focus refetch, which is what lets Store and Table share one
+  catalog read) and `HISTORY_QUERY` (hands, purchase receipts: 5min, no focus refetch) — and
+  `createQueryClient` applies it with `setQueryDefaults` by key prefix, so classifying a family
+  costs no change at its call sites. The app default is **no** focus refetch: live data arrives
+  over the two realtime hooks, which invalidate on every push and on socket open. A new query that
+  genuinely needs a catch-up read on focus opts in explicitly (as `usePurchaseStatus` does) or gets
+  a row in the table — never by flipping the global back. See
+  `docs/2026-09-04-query-freshness-presets.md` and #233.
 - **State:** the token is a module singleton in `lib/api/client.ts` (not React Context, not
   persisted); server data flows through `QueryProvider` (TanStack Query). No other providers.
 - **Animations are CSS** (keyframes in `globals.css` / `app.css` / `table.css`) — no animation library. Keep it that
