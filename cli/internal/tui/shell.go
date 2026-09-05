@@ -46,10 +46,10 @@ type Shell struct {
 	lines       []string
 	busy        bool
 
-	menu        *commandMenu
-	viewport    viewport.Model
-	vpReady     bool
-	vpMaxHeight int
+	menu         *commandMenu
+	viewport     viewport.Model
+	vpReady      bool
+	windowHeight int
 
 	pkceFlow   *auth.PKCEFlow
 	pkceCancel context.CancelFunc
@@ -91,42 +91,51 @@ func (s *Shell) appendLine(line string) {
 	s.syncViewport()
 }
 
+// syncViewport refreshes the viewport's content. Its height is computed
+// fresh in View (via layoutHeights) right before rendering — not here —
+// since it depends on state (busy, menu open/closed) that can change
+// without a line ever being appended.
 func (s *Shell) syncViewport() {
 	if !s.vpReady {
 		return
 	}
 	atBottom := s.viewport.AtBottom()
 	s.viewport.SetContent(strings.Join(s.lines, "\n"))
-	s.viewport.Height = s.viewportHeight()
 	if atBottom {
 		s.viewport.GotoBottom()
 	}
 }
 
-// viewportHeight sizes the scrollback to its actual content, up to the
-// terminal's available room — like a normal terminal, it only grows as
-// large as it needs to, rather than always reserving the full window (which
-// pushed the command menu below the visible area whenever output was
-// short). Space for the menu, when open, is reserved off the same budget so
-// it can never be pushed past the bottom edge either.
-func (s *Shell) viewportHeight() int {
-	max := s.vpMaxHeight - s.menu.VisibleRows()
-	if max < 1 {
-		max = 1
+// layoutHeights splits the room available below the logo between the
+// scrollback viewport and the command menu, so their combined total plus
+// the fixed chrome (logo, input, the busy spinner when shown) can never
+// exceed the terminal's actual height — on any window size, including ones
+// too small to fit a full menu. The menu wins any contested space (it's
+// what the user is actively looking at while typing); the viewport shrinks
+// to make room, down to zero rather than forcing an overflow.
+func (s *Shell) layoutHeights() (viewportH, menuRows int) {
+	chrome := 2 // logo + input
+	if s.busy {
+		chrome++
 	}
-	h := len(s.lines)
-	if h > max {
-		h = max
+	avail := s.windowHeight - chrome
+	if avail < 0 {
+		avail = 0
 	}
-	if h < 1 {
-		h = 1
+	menuRows = s.menu.DesiredRows()
+	if menuRows > avail {
+		menuRows = avail
 	}
-	return h
+	vpBudget := avail - menuRows
+	viewportH = len(s.lines)
+	if viewportH > vpBudget {
+		viewportH = vpBudget
+	}
+	if viewportH < 0 {
+		viewportH = 0
+	}
+	return viewportH, menuRows
 }
-
-// viewportReserved is how many lines around the scrollback the home screen's
-// chrome (logo + input, +1 for the busy spinner) always takes.
-const viewportReserved = 4
 
 func (s *Shell) Init() tea.Cmd {
 	return tea.Batch(checkLogin(s.session), s.spin.Tick)
@@ -184,13 +193,9 @@ func loginAPIKey(session *auth.Session, key string) tea.Cmd {
 func (s *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		h := msg.Height - viewportReserved
-		if h < 3 {
-			h = 3
-		}
-		s.vpMaxHeight = h
+		s.windowHeight = msg.Height
 		if !s.vpReady {
-			s.viewport = viewport.New(msg.Width, h)
+			s.viewport = viewport.New(msg.Width, 0)
 			s.vpReady = true
 		} else {
 			s.viewport.Width = msg.Width
@@ -796,24 +801,33 @@ func (s *Shell) View() string {
 		if s.state == stateCheckingLogin {
 			return renderLogo() + "\n" + accentStyle.Render(s.spin.View()) + " verificando login..."
 		}
-		var b strings.Builder
-		b.WriteString(renderLogo())
-		b.WriteString("\n")
+		lines := []string{renderLogo()}
 		if s.vpReady {
-			b.WriteString(s.viewport.View())
+			vpH, menuRows := s.layoutHeights()
+			s.viewport.Height = vpH
+			if vpH > 0 {
+				lines = append(lines, s.viewport.View())
+			}
+			if s.busy {
+				lines = append(lines, accentStyle.Render(s.spin.View()))
+			}
+			lines = append(lines, s.input.View())
+			if menuRows > 0 {
+				if menuView := s.menu.View(menuRows); menuView != "" {
+					lines = append(lines, menuView)
+				}
+			}
 		} else {
-			b.WriteString(strings.Join(s.lines, "\n"))
+			// No WindowSizeMsg yet — render unconstrained rather than guess a size.
+			lines = append(lines, strings.Join(s.lines, "\n"))
+			if s.busy {
+				lines = append(lines, accentStyle.Render(s.spin.View()))
+			}
+			lines = append(lines, s.input.View())
+			if menuView := s.menu.View(maxMenuRows + 1); menuView != "" {
+				lines = append(lines, menuView)
+			}
 		}
-		b.WriteString("\n")
-		if s.busy {
-			b.WriteString(accentStyle.Render(s.spin.View()))
-			b.WriteString("\n")
-		}
-		b.WriteString(s.input.View())
-		if menuView := s.menu.View(); menuView != "" {
-			b.WriteString("\n")
-			b.WriteString(menuView)
-		}
-		return b.String()
+		return strings.Join(lines, "\n")
 	}
 }

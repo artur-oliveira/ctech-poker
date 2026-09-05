@@ -281,11 +281,12 @@ func TestViewportShrinksToContentNotFullWindow(t *testing.T) {
 
 	s.appendLine("one")
 	s.appendLine("two")
-	// Two lines of content in a 36-row-tall window: the viewport must size
+	// Two lines of content in a 38-row-tall window: the viewport must size
 	// to the content, not claim the whole window (the bug: a fixed-height
 	// viewport left no room for the command menu below it).
-	if s.viewport.Height != 2 {
-		t.Fatalf("viewport height = %d, want 2 (content-sized)", s.viewport.Height)
+	vpH, _ := s.layoutHeights()
+	if vpH != 2 {
+		t.Fatalf("viewport height = %d, want 2 (content-sized)", vpH)
 	}
 }
 
@@ -297,7 +298,7 @@ func TestViewportReservesRoomForOpenMenu(t *testing.T) {
 	for i := 0; i < 20; i++ {
 		s.appendLine("line")
 	}
-	fullHeight := s.viewport.Height
+	fullHeight, _ := s.layoutHeights()
 
 	for _, r := range "/pr" {
 		m, _ := s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
@@ -306,12 +307,44 @@ func TestViewportReservesRoomForOpenMenu(t *testing.T) {
 	if !s.menu.visible {
 		t.Fatal("menu should be visible for /pr")
 	}
-	if s.viewport.Height >= fullHeight {
-		t.Fatalf("viewport height = %d, want less than %d once the menu reserved its rows", s.viewport.Height, fullHeight)
+	vpH, menuRows := s.layoutHeights()
+	if vpH >= fullHeight {
+		t.Fatalf("viewport height = %d, want less than %d once the menu reserved its rows", vpH, fullHeight)
 	}
-	if s.viewport.Height+s.menu.VisibleRows() > s.vpMaxHeight {
-		t.Fatalf("viewport (%d) + menu (%d) exceeds the available window (%d) — menu would be pushed off-screen",
-			s.viewport.Height, s.menu.VisibleRows(), s.vpMaxHeight)
+	if vpH+menuRows+2 > s.windowHeight {
+		t.Fatalf("viewport (%d) + menu (%d) + chrome exceeds the available window (%d) — menu would be pushed off-screen",
+			vpH, menuRows, s.windowHeight)
+	}
+}
+
+// TestViewNeverOverflowsWindow is the regression guard for the real bug
+// reported live: on a small terminal, a wide command menu (or a long
+// scrollback) could add up to more lines than the window actually has,
+// silently pushing the top of the menu (often /profile, alphabetically
+// first) out of the visible area — recoverable only by scrolling the
+// terminal's own history, not by anything this program could show. No
+// combination of window height, prior scrollback size, or typed prefix may
+// ever make View() taller than the window.
+func TestViewNeverOverflowsWindow(t *testing.T) {
+	for _, height := range []int{4, 6, 8, 10, 20, 24, 40} {
+		s := newTestShell(t, nil, t.TempDir())
+		s.state = stateHome
+		s.appendLine("Logado.")
+		m, _ := s.Update(tea.WindowSizeMsg{Width: 100, Height: height})
+		s = m.(*Shell)
+
+		for _, seq := range []string{"/", "/p", "/pr", "/pro", "/profile", "/e"} {
+			s.input.SetValue("")
+			for _, r := range seq {
+				m, _ := s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+				s = m.(*Shell)
+			}
+			got := strings.Split(s.View(), "\n")
+			if len(got) > height {
+				t.Fatalf("height=%d seq=%q: View() produced %d lines, want <= %d\n%s",
+					height, seq, len(got), height, s.View())
+			}
+		}
 	}
 }
 

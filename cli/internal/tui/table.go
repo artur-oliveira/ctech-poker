@@ -54,10 +54,6 @@ type (
 	}
 )
 
-// tableViewportReserved is how many lines the header/rules/input chrome
-// always takes around the scrolling log.
-const tableViewportReserved = 8
-
 // TableModel renders one poker table (Layout B) and turns input into
 // ClientMessages.
 type TableModel struct {
@@ -70,7 +66,7 @@ type TableModel struct {
 	menu         *commandMenu
 	viewport     viewport.Model
 	vpReady      bool
-	vpMaxHeight  int
+	windowHeight int
 	now          time.Time
 	reconnecting bool
 
@@ -103,13 +99,9 @@ func tableTick() tea.Cmd {
 func (m *TableModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		h := msg.Height - tableViewportReserved
-		if h < 3 {
-			h = 3
-		}
-		m.vpMaxHeight = h
+		m.windowHeight = msg.Height
 		if !m.vpReady {
-			m.viewport = viewport.New(msg.Width, h)
+			m.viewport = viewport.New(msg.Width, 0)
 			m.vpReady = true
 		} else {
 			m.viewport.Width = msg.Width
@@ -364,34 +356,51 @@ func (m *TableModel) appendLog(line string) {
 	m.syncViewport()
 }
 
+// syncViewport refreshes the log viewport's content. Its height is computed
+// fresh in View (via layoutHeights) right before rendering, since it depends
+// on state (the header's line count, the reconnect banner, the menu being
+// open) that can change without a line ever being appended.
 func (m *TableModel) syncViewport() {
 	if !m.vpReady {
 		return
 	}
 	atBottom := m.viewport.AtBottom()
 	m.viewport.SetContent(strings.Join(m.log, "\n"))
-	m.viewport.Height = m.viewportHeight()
 	if atBottom {
 		m.viewport.GotoBottom()
 	}
 }
 
-// viewportHeight sizes the log to its actual content, up to the terminal's
-// available room, reserving space for the command menu when it's open — see
-// Shell.viewportHeight's identical reasoning.
-func (m *TableModel) viewportHeight() int {
-	max := m.vpMaxHeight - m.menu.VisibleRows()
-	if max < 1 {
-		max = 1
+// layoutHeights splits the room below the header between the scrolling log
+// and the command menu so their combined total plus the fixed chrome
+// (header, the two rule lines, the reconnect banner, input) can never
+// exceed the terminal's actual height, on any window size — see
+// Shell.layoutHeights's identical reasoning. The menu wins any contested
+// space; the log shrinks to make room, down to zero rather than overflow.
+func (m *TableModel) layoutHeights(header string) (viewportH, menuRows int) {
+	chrome := strings.Count(header, "\n") + 1 // header
+	chrome += 2                               // the two rule lines
+	chrome++                                  // input
+	if m.reconnecting {
+		chrome++
 	}
-	h := len(m.log)
-	if h > max {
-		h = max
+	avail := m.windowHeight - chrome
+	if avail < 0 {
+		avail = 0
 	}
-	if h < 1 {
-		h = 1
+	menuRows = m.menu.DesiredRows()
+	if menuRows > avail {
+		menuRows = avail
 	}
-	return h
+	vpBudget := avail - menuRows
+	viewportH = len(m.log)
+	if viewportH > vpBudget {
+		viewportH = vpBudget
+	}
+	if viewportH < 0 {
+		viewportH = 0
+	}
+	return viewportH, menuRows
 }
 
 func copyClipboard(s string) error {
@@ -404,33 +413,42 @@ func (m *TableModel) View() string {
 	if m.quit {
 		return ""
 	}
-	var b strings.Builder
-	b.WriteString(m.header())
-	b.WriteString("\n")
-	b.WriteString(dimStyle.Render(strings.Repeat("─", 76)))
-	b.WriteString("\n")
+	header := m.header()
+	rule := dimStyle.Render(strings.Repeat("─", 76))
+	lines := []string{header, rule}
 
 	if m.vpReady {
-		b.WriteString(m.viewport.View())
+		vpH, menuRows := m.layoutHeights(header)
+		m.viewport.Height = vpH
+		if vpH > 0 {
+			lines = append(lines, m.viewport.View())
+		}
+		lines = append(lines, rule)
+		if m.reconnecting {
+			lines = append(lines, mutedStyle.Render("(reconectando — última mesa exibida)"))
+		}
+		lines = append(lines, m.input.View())
+		if menuRows > 0 {
+			if menuView := m.menu.View(menuRows); menuView != "" {
+				lines = append(lines, menuView)
+			}
+		}
 	} else {
+		// No WindowSizeMsg yet — render unconstrained rather than guess a size.
 		start := 0
 		if len(m.log) > 14 {
 			start = len(m.log) - 14
 		}
-		b.WriteString(strings.Join(m.log[start:], "\n"))
+		lines = append(lines, strings.Join(m.log[start:], "\n"), rule)
+		if m.reconnecting {
+			lines = append(lines, mutedStyle.Render("(reconectando — última mesa exibida)"))
+		}
+		lines = append(lines, m.input.View())
+		if menuView := m.menu.View(maxMenuRows + 1); menuView != "" {
+			lines = append(lines, menuView)
+		}
 	}
-	b.WriteString("\n")
-	b.WriteString(dimStyle.Render(strings.Repeat("─", 76)))
-	b.WriteString("\n")
-	if m.reconnecting {
-		b.WriteString(mutedStyle.Render("(reconectando — última mesa exibida)") + "\n")
-	}
-	b.WriteString(m.input.View())
-	if menuView := m.menu.View(); menuView != "" {
-		b.WriteString("\n")
-		b.WriteString(menuView)
-	}
-	return b.String()
+	return strings.Join(lines, "\n")
 }
 
 func (m *TableModel) header() string {

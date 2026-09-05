@@ -205,3 +205,33 @@ func typeLine(t *testing.T, m *TableModel, line string) {
 		}
 	}
 }
+
+// TestTableViewNeverOverflowsWindow mirrors Shell's identical regression
+// guard: on a small terminal, the table's larger command set could push a
+// suggestion menu (or a long hand log) past the window's real height.
+// Heights below the header's own line count (here ~4-5 lines) are out of
+// scope — the header isn't compressible, so a window that small can't fit
+// the table at all regardless of menu/log sizing; that's an accepted floor,
+// not something layoutHeights can do anything further about.
+func TestTableViewNeverOverflowsWindow(t *testing.T) {
+	for _, height := range []int{10, 20, 24, 40} {
+		m := NewTableModel(TableConfig{YouID: "you", Blinds: [2]int64{1, 2}, MaxSeats: 6, CardMode: game.CardASCII})
+		nm, _ := m.Update(SnapshotMsg{M: tableFixtureSnapshot()})
+		m = nm.(*TableModel)
+		nm, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: height})
+		m = nm.(*TableModel)
+
+		for _, seq := range []string{"/", "/c", "/ch", "/che", "/e"} {
+			m.input.SetValue("")
+			for _, r := range seq {
+				nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+				m = nm.(*TableModel)
+			}
+			got := strings.Split(m.View(), "\n")
+			if len(got) > height {
+				t.Fatalf("height=%d seq=%q: View() produced %d lines, want <= %d\n%s",
+					height, seq, len(got), height, m.View())
+			}
+		}
+	}
+}

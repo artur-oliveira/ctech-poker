@@ -99,15 +99,17 @@ func (m *commandMenu) fill() string {
 
 func (m *commandMenu) hide() { m.visible = false }
 
-// maxMenuRows caps how many suggestions are shown at once, so a broad prefix
-// (or the table's larger command set) can never grow the menu enough to push
-// itself off the bottom of the terminal.
+// maxMenuRows caps how many suggestions are shown at once even when the
+// terminal has plenty of room, so a broad prefix (or the table's larger
+// command set) never grows the menu unreasonably large.
 const maxMenuRows = 8
 
-// VisibleRows is exactly how many lines View() renders — the caller reserves
-// this much room (e.g. shrinking a viewport) so the menu is never pushed
-// past the terminal's bottom edge.
-func (m *commandMenu) VisibleRows() int {
+// DesiredRows is how many lines View would render given unlimited room (but
+// still capped at maxMenuRows, +1 for a "... and N more" line past that).
+// The caller compares this against its own actual available space and, when
+// there isn't enough, passes a smaller cap into View — never rendering more
+// than the terminal has room for is the caller's job, not the menu's.
+func (m *commandMenu) DesiredRows() int {
 	if !m.visible || len(m.items) == 0 {
 		return 0
 	}
@@ -117,17 +119,30 @@ func (m *commandMenu) VisibleRows() int {
 	return len(m.items)
 }
 
-// View renders the suggestion list, or "" when hidden.
-func (m *commandMenu) View() string {
-	if !m.visible {
+// View renders the suggestion list within maxRows total lines (0 or a
+// negative cap renders nothing) — the caller has already worked out how
+// much room is actually available and must never be handed back more lines
+// than that, on any terminal size.
+func (m *commandMenu) View(maxRows int) string {
+	if !m.visible || len(m.items) == 0 || maxRows <= 0 {
 		return ""
 	}
-	items := m.items
-	truncated := 0
-	if len(items) > maxMenuRows {
-		truncated = len(items) - maxMenuRows
-		items = items[:maxMenuRows]
+	limit := maxRows
+	if limit > maxMenuRows {
+		limit = maxMenuRows
 	}
+	items := m.items
+	showCount := limit
+	truncated := 0
+	if len(items) > limit {
+		showCount = limit - 1
+		if showCount < 0 {
+			showCount = 0
+		}
+		truncated = len(items) - showCount
+	}
+	items = items[:showCount]
+
 	var b strings.Builder
 	for i, it := range items {
 		marker, style := "  ", mutedStyle
