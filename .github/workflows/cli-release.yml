@@ -20,7 +20,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.27'
           cache-dependency-path: cli/go.sum
@@ -29,7 +29,7 @@ jobs:
         working-directory: cli
         run: go test ./... -race
 
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         with:
           version: '~> v2'
           args: release --clean --config cli/.goreleaser.yaml
