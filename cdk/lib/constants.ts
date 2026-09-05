@@ -127,7 +127,6 @@ export const DYNAMO_TABLE = {
 
 export const DYNAMO_INDEX = {
   friendCode: 'gsi_friend_code',
-  recentPlayers: 'gsi_recent',
   socialInbox: 'gsi_inbox',
   socialUnread: 'gsi_unread',
   reportStatus: 'gsi_status',

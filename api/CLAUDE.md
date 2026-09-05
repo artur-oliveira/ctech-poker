@@ -635,8 +635,9 @@ catalog.
   rather than a timestamp is what makes it idempotent *by construction*: a replayed `onHandComplete` rewrites the same
   rows, so this store needs no guard row and a partial write is completed by any retry. Hand ids are ULIDs, so
   `sk` sorts chronologically and `DynamoStore.List` reads a viewer's most recent hands straight off the base table —
-  `gsi_recent` is no longer written to or read (removal deferred: dropping it must land *after* the API rolls out,
-  since deploy order is CDK → API — see the follow-up issue). `List` coalesces opponents from that one bounded Query:
+  `gsi_recent` is no longer written to or read, and #260 removed it from `cdk/lib/dynamodb-stack.ts` in its own stack
+  update once #199's API was live in prod (deploy order is CDK → API, so it could not be removed in the same deploy —
+  the still-running old code was still querying it). `List` coalesces opponents from that one bounded Query:
   first sighting wins `last_played_at`, repeat sightings increment `hands_together`, and the cursor is an offset into
   the coalesced list (a stale pre-#199 row-key cursor decodes to "from the start"). **The documented ceiling:**
   `hands_together` counts shared hands within the viewer's last `maxEventsScanned` (300) hands or the 90-day TTL

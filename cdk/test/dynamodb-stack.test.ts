@@ -268,9 +268,8 @@ test('creates social graph, recent players, inbox and reports storage', () => {
   template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_recent_players',
     TimeToLiveSpecification: {AttributeName: 'ttl', Enabled: true},
-    GlobalSecondaryIndexes: Match.arrayWith([
-      Match.objectLike({IndexName: 'gsi_recent'}),
-    ]),
+    // No GSI since #199/#260 — the list pages the base table's ULID sort key.
+    GlobalSecondaryIndexes: Match.absent(),
   });
   template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
     TableName: 'dev_poker_social_events',
