@@ -53,6 +53,13 @@ export async function listPurchases(cursor?: string) {
   return (await apiClient.get<Page<SandboxPurchase>>(`/v1.0/wallet/sandbox-purchase/${query}`)).data;
 }
 
+// "The live status of this sandbox purchase", under WALLET_QUERY_ROOT so the
+// `sandbox_purchase_update` websocket frame's root invalidation already reaches
+// it — the frame is the primary path, the dialog's poll only the fallback.
+export function sandboxPurchaseKey(purchaseId: string) {
+  return [...WALLET_QUERY_ROOT, 'sandbox-purchase', purchaseId];
+}
+
 export async function getPurchase(id: string) {
   return (await apiClient.get<SandboxPurchase>(`/v1.0/wallet/sandbox-purchase/${id}`)).data;
 }

@@ -39,7 +39,8 @@ vi.mock('@/components/TermsGate', () => ({TermsGate: ({children}: { children: Re
 vi.mock('@/components/lobby/ProfileMenu', () => ({ProfileMenu: () => <div>profile-menu</div>}));
 vi.mock('@/lib/hooks/useLobbyRealtime', () => ({useLobbyRealtime: vi.fn()}));
 vi.mock('@/lib/notify', () => ({pushNotification: mocks.notify}));
-vi.mock('@/lib/api/wallet', () => ({
+vi.mock('@/lib/api/wallet', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/api/wallet')>(),
   WALLET_QUERY_ROOT: ['wallet'],
   listSkus: vi.fn(),
   listPurchases: vi.fn(),

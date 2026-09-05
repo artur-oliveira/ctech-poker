@@ -1,6 +1,6 @@
 import {act, render, screen} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
+import {focusManager, QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import type {ReactNode} from 'react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import {PurchaseModal} from './PurchaseModal';
@@ -107,6 +107,25 @@ describe('PurchaseModal', () => {
       expect(getPurchase).toHaveBeenCalledWith('sbxp-1');
       expect(onUpdateAction).toHaveBeenCalledWith(confirmed);
     } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('spends nothing while the tab is hidden, and one read on coming back', async () => {
+    vi.useFakeTimers();
+    try {
+      getPurchase.mockResolvedValue(purchase());
+      renderModal(purchase());
+
+      focusManager.setFocused(false);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(getPurchase).not.toHaveBeenCalled();
+
+      focusManager.setFocused(true);
+      await vi.waitFor(() => expect(getPurchase).toHaveBeenCalledTimes(1));
+      expect(getPurchase).toHaveBeenCalledTimes(1);
+    } finally {
+      focusManager.setFocused(undefined);
       vi.useRealTimers();
     }
   });
