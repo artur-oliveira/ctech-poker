@@ -1,27 +1,45 @@
 name: Frontend
 
-# Called by deploy.yml, which owns the trigger, the path filter and the ordering.
-# Never triggered on push.
+# Two entry points. deploy.yml calls this on push and owns the ordering; the
+# pull_request trigger below runs the type/lint/test half of `quality` as the
+# pre-merge gate for ui/ (#277). Never triggered on push directly.
 #
 # Avatars are no longer a /avatars/* CloudFront behaviour over the private
 # bucket. They come from the API host, which is why poker-api appears in img-src.
 # See D2 in the migration plan.
 on:
   workflow_call:
+  pull_request:
+    branches: [ main, staging, dev ]
+    paths:
+      - 'ui/**'
+      - 'proto/**'
+      - 'scripts/generate-proto.sh'
+      - '.github/workflows/frontend.yml'
 
 permissions:
   contents: read
 
 jobs:
-  # The a11y, bundle-size and Lighthouse gates for the SPA (Issue #60). The
-  # reusable deploy workflow below runs lint/tsc/vitest and the production
-  # Turbopack build; this job adds what it does not cover, and blocks it.
+  # Two jobs in one, split by event.
+  #
+  # On a pull request: tsc + eslint + vitest only — the cheap gate that #277 was
+  # about. Until then nothing in ui/ was checked before merge (the reusable
+  # deploy workflow runs lint/tsc/vitest, but only after the push to main), and
+  # a duplicate `const` reached main with a broken `next build` and no red check.
+  # tsc and eslint are duplicated from that reusable workflow on purpose: it
+  # cannot be called on a PR without also calling its deploy.
+  #
+  # On a push (via deploy.yml): the same plus the a11y, bundle-size and
+  # Lighthouse gates for the SPA (Issue #60), which need a full webpack build
+  # and are the expensive part. They stay off the PR path deliberately — a
+  # bundle-budget regression is a slow leak, not a broken build.
   #
   # The axe assertions themselves live in the vitest suite (src/test/axe.ts,
   # imported by the route tests) so they run with the tests developers already
   # run locally — CI does not need a separate axe step for them.
   quality:
-    name: A11y & budgets
+    name: Types, tests & budgets
     runs-on: ubuntu-26.04
     defaults:
       run:
@@ -38,6 +56,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
       # Includes the jsdom axe assertions on the six main routes and the
       # recovery components; a new serious/critical violation fails here.
       - name: Test (incl. axe assertions)
@@ -48,21 +72,24 @@ jobs:
       # would compare unlike numbers. The deploy job still ships the Turbopack
       # build — this one exists only to produce out/ for the two gates below.
       - name: Build static export for measurement
+        if: github.event_name != 'pull_request'
         run: npx next build --webpack
 
       # Per-route first-load JS against the pinned budget, plus the proof that
       # the dev mock runtime is not on any route's critical path.
       - name: Bundle budget
+        if: github.event_name != 'pull_request'
         run: npm run bundle:check
 
       # LHCI serves out/ itself, so there is no server and no auth to arrange.
       # Category scores are warnings (runner variance); the resource budget in
       # lighthouserc.json is the hard assertion.
       - name: Lighthouse CI
+        if: github.event_name != 'pull_request'
         run: npx --yes @lhci/cli@0.15.x autorun
 
       - uses: actions/upload-artifact@v7
-        if: always()
+        if: always() && github.event_name != 'pull_request'
         with:
           name: lighthouse-report
           path: ui/.lighthouseci
@@ -79,6 +106,10 @@ jobs:
   # handset before it ships.
   browsers:
     name: Cross-browser layout
+    # Three engines plus their system deps is the most expensive job here, and
+    # the class of defect it catches (layout/geometry) is not what #277 was
+    # about. Push only.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-26.04
     defaults:
       run:
@@ -112,6 +143,7 @@ jobs:
 
   deploy:
     needs: [quality, browsers]
+    if: github.event_name != 'pull_request'
     uses: artur-oliveira/ctech-cdk/.github/workflows/frontend-cloudflare.yml@main
     secrets: inherit
     with:
