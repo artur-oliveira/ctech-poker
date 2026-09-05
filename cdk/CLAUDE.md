@@ -135,6 +135,11 @@ Deploy order: **CDK → API → Frontend** (`.github/workflows/deploy.yml`).
   `gsi_share_code`. All three are sparse. **DynamoDB applies one GSI change per stack update** — add
   at most one new index per table per deploy, and deploy the CDK change before the API that queries
   it (a room written without the index attribute is invisible to that index).
+- **`poker_hand_shares` has one GSI** (#203): `gsi_owner` (`owner_id` HASH, `created_at` RANGE, projection ALL,
+  sparse — only share items carry `owner_id`). It backs the paginated `GET /players/me/hand-shares` revocation list,
+  which used to fan out one `GetItem` per token over an `owner#<id>` string-set row and prune it with a write on the
+  read path. Same one-index-per-stack-update rule as `poker_rooms` above: deploy the CDK change before the API that
+  queries it.
 - **B31 relevance** — `poker_leaderboard_stats` has GSIs only for `hands_won` / `hands_played` /
   `win_rate`. The API rejects any other metric (incl. `achievement_points`); adding a new ranking
   metric requires its own GSI here first.

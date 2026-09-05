@@ -49,10 +49,15 @@ type handShareSummary struct {
 	ExpiresAt int64  `json:"expires_at"`
 }
 
-// list enumerates the caller's own live shares. Scoped to claims.Sub, never a
-// client-supplied id, so it can only ever list the caller's own links.
+// list enumerates one page of the caller's own live shares. Scoped to
+// claims.Sub, never a client-supplied id, so it can only ever list the
+// caller's own links, and paginated (?limit=&cursor=) so its cost is bounded
+// by the page rather than by everything the owner ever shared (#203).
 func (h *handShareHandlers) list(c fiber.Ctx) error {
-	shares, err := h.shares.ListByOwner(c.Context(), c.Locals(localsUserID).(string))
+	cursor := c.Query("cursor")
+	shares, nextKey, err := h.shares.ListByOwner(
+		c.Context(), c.Locals(localsUserID).(string), limitParam(c), decodeCursor(cursor),
+	)
 	if err != nil {
 		return problem.InternalServer("failed to list hand shares", c, err).Send(c)
 	}
@@ -63,7 +68,7 @@ func (h *handShareHandlers) list(c fiber.Ctx) error {
 			NetChange: share.NetChange, CreatedAt: share.CreatedAt, ExpiresAt: share.ExpiresAt,
 		})
 	}
-	return c.JSON(fiber.Map{"data": out})
+	return sendPage(c, out, nextKey, cursor)
 }
 
 func (h *handShareHandlers) create(c fiber.Ctx) error {
