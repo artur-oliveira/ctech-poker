@@ -474,13 +474,44 @@ func newPresenceStore(cacheBackend cache.Backend, cfg *config.Config) presence.S
 	}
 	return presence.NewMemoryStore()
 }
-func newPresenceService(store presence.Store, socialSvc *social.Service, sessions *sessionlog.Store, reg ws.Registry) *presence.Service {
-	return presence.NewService(store, socialSvc, sessions, newPresenceNotifier(reg))
+func newPresenceService(store presence.Store, socialSvc *social.Service, sessions *sessionlog.Store, reg ws.Registry, players *player.Service, rooms *roomstore.Store) *presence.Service {
+	return presence.NewService(store, socialSvc, sessions, newPresenceNotifier(reg, players, rooms))
 }
-func newPresenceNotifier(reg ws.Registry) presence.NotifyFunc {
-	return func(ctx context.Context, recipientID, playerID string, status presence.Status) {
+
+// presenceProfileLookup/presenceRoomLookup narrow *player.Service/
+// *roomstore.Store to what newPresenceNotifier's push gate needs — the same
+// shape as api/v1/social.go's roomLookup — so a test can fake both without a
+// live DynamoDB.
+type presenceProfileLookup interface {
+	Get(ctx context.Context, userID string) (*player.PlayerProfile, error)
+}
+type presenceRoomLookup interface {
+	Get(ctx context.Context, roomID string) (*roomstore.Room, error)
+}
+
+// newPresenceNotifier gates a pushed RoomID behind the exact same rule the
+// pull path (social.go's joinableRoomIDs) applies: the *subject* player
+// (playerID, not the recipient) must have opted in via TablePublic, and the
+// room itself must be public with a vacancy (#334). roomID here is
+// presence's raw, ungated value — see presence.NotifyFunc's doc comment.
+func newPresenceNotifier(reg ws.Registry, players presenceProfileLookup, rooms presenceRoomLookup) presence.NotifyFunc {
+	return func(ctx context.Context, recipientID, playerID string, status presence.Status, roomID string) {
+		publicRoomID := ""
+		if status == presence.StatusInTable && roomID != "" {
+			profile, err := players.Get(ctx, playerID)
+			if err != nil {
+				slog.Warn("presence: profile lookup for push gate failed", "player", playerID, "err", err)
+			} else if profile != nil && profile.TablePublic {
+				room, err := rooms.Get(ctx, roomID)
+				if err != nil {
+					slog.Warn("presence: room lookup for push gate failed", "room", roomID, "err", err)
+				} else if room.Joinable() {
+					publicRoomID = roomID
+				}
+			}
+		}
 		data, err := goproto.Marshal(&pokerproto.ServerMessage{Type: "social_presence_changed", SocialEvent: &pokerproto.SocialEvent{
-			Type: "presence_changed", ActorId: playerID, Presence: &pokerproto.PlayerPresence{PlayerId: playerID, Status: string(status)},
+			Type: "presence_changed", ActorId: playerID, Presence: &pokerproto.PlayerPresence{PlayerId: playerID, Status: string(status), RoomId: publicRoomID},
 		}})
 		if err == nil {
 			reg.Broadcast(ctx, "user#"+recipientID, data)
