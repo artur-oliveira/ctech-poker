@@ -50,7 +50,7 @@ func (t *TokenClient) postForm(ctx context.Context, form url.Values) (tokenRespo
 	if err != nil {
 		return tokenResponse{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var tr tokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tr); err != nil && resp.StatusCode >= 400 {

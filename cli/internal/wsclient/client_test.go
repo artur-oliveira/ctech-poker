@@ -51,7 +51,7 @@ func TestConnectSendsAuthFrameFirstAndReceivesConnected(t *testing.T) {
 	defer srv.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
-	cl := New(wsURL, staticToken("jwt-xyz"), "https://poker.ctech.app")
+	cl := New(wsURL, staticToken("jwt-xyz"), "https://poker.aoctech.app")
 	if err := cl.Connect(context.Background(), ""); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestSendSerializesFramesThroughOneWriter(t *testing.T) {
 	defer srv.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
-	cl := New(wsURL, staticToken("t"), "https://poker.ctech.app")
+	cl := New(wsURL, staticToken("t"), "https://poker.aoctech.app")
 	if err := cl.Connect(context.Background(), ""); err != nil {
 		t.Fatal(err)
 	}

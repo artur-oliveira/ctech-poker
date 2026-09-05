@@ -18,7 +18,7 @@ import (
 // OriginHeader is sent on every request — the poker API enforces an Origin
 // allow-list (api/CLAUDE.md issue #44); confirm this value is on that list
 // for each environment before relying on it.
-var OriginHeader = "https://poker.ctech.app"
+var OriginHeader = "https://poker.aoctech.app"
 
 // Client is a small wrapper around *http.Client bound to one API base URL and
 // bearer-token source.
@@ -102,7 +102,7 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		var pe ProblemError

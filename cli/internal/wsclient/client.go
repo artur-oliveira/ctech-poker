@@ -184,7 +184,7 @@ func (c *Client) writeLoop(conn *websocket.Conn, done <-chan struct{}) {
 	}
 }
 
-func (c *Client) pingLoop(conn *websocket.Conn, done <-chan struct{}) {
+func (c *Client) pingLoop(_ *websocket.Conn, done <-chan struct{}) {
 	t := time.NewTicker(pingInterval)
 	defer t.Stop()
 	for {

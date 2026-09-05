@@ -64,21 +64,25 @@ func (r *LoopbackReceiver) Wait(ctx context.Context, wantState string) (string, 
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			q := req.URL.Query()
 			if oauthErr := q.Get("error"); oauthErr != "" {
-				fmt.Fprintln(w, "Login failed. You can close this tab.")
+				_, _ = fmt.Fprintln(w, "Login failed. You can close this tab.")
 				resultCh <- result{err: fmt.Errorf("%w: %s: %s", ErrAuthFailed, oauthErr, q.Get("error_description"))}
 				return
 			}
 			if q.Get("state") != wantState {
-				fmt.Fprintln(w, "Login failed (state mismatch). You can close this tab.")
+				_, _ = fmt.Fprintln(w, "Login failed (state mismatch). You can close this tab.")
 				resultCh <- result{err: errors.New("oauth callback: state mismatch")}
 				return
 			}
-			fmt.Fprintln(w, "Login successful. You can close this tab.")
+			_, _ = fmt.Fprintln(w, "Login successful. You can close this tab.")
 			resultCh <- result{code: q.Get("code")}
 		}),
 	}
-	go srv.Serve(r.ln)
-	defer srv.Close()
+	go func() {
+		_ = srv.Serve(r.ln)
+	}()
+	defer func(srv *http.Server) {
+		_ = srv.Close()
+	}(srv)
 
 	select {
 	case res := <-resultCh:

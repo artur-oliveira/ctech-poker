@@ -23,7 +23,7 @@ func FormatProfile(p rest.Profile) string {
 // FormatAchievements renders the achievement summary for /achievements.
 func FormatAchievements(s rest.AchievementSummary) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%d/%d desbloqueadas, %d completas, %d/%d estrelas",
+	_, _ = fmt.Fprintf(&b, "%d/%d desbloqueadas, %d completas, %d/%d estrelas",
 		s.Totals.Unlocked, s.Totals.Revealed, s.Totals.Completed, s.Totals.Stars, s.Totals.MaxStars)
 	for _, a := range s.Achievements {
 		mark := " "
@@ -32,7 +32,7 @@ func FormatAchievements(s rest.AchievementSummary) string {
 		} else if a.Unlocked {
 			mark = "•"
 		}
-		fmt.Fprintf(&b, "\n[%s] %-24s %d★  progresso %d", mark, a.Key, a.Stars, a.Progress)
+		_, _ = fmt.Fprintf(&b, "\n[%s] %-24s %d★  progresso %d", mark, a.Key, a.Stars, a.Progress)
 	}
 	return b.String()
 }

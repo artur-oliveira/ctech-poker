@@ -65,7 +65,9 @@ func (s *Session) LoginPKCE(ctx context.Context, openBrowser func(url string) er
 	if err != nil {
 		return err
 	}
-	defer receiver.Close()
+	defer func(receiver *LoopbackReceiver) {
+		_ = receiver.Close()
+	}(receiver)
 	redirectURI := receiver.RedirectURI()
 
 	authorizeURL := strings.TrimRight(s.cfg.AccountBaseURL, "/") + "/v1.0/authorize?" + url.Values{

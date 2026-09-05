@@ -13,8 +13,8 @@ import (
 
 const (
 	// confirm real hostnames during rollout (docs/specs/2026-09-05-poker-cli.md §10).
-	defaultAPIBaseURL     = "https://api.poker.ctech.app"
-	defaultAccountBaseURL = "https://account.ctech.app"
+	defaultAPIBaseURL     = "https://poker-api.aoctech.app"
+	defaultAccountBaseURL = "https://accounts-api.aoctech.app"
 	defaultClientID       = "poker-cli"
 )
 

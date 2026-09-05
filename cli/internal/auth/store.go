@@ -66,7 +66,7 @@ func SaveCredentials(path string, c Credentials) error {
 		return err
 	}
 	if err := os.Chmod(tmp, 0o600); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return err
 	}
 	return os.Rename(tmp, path)

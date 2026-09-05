@@ -33,13 +33,13 @@ type Shell struct {
 	session *auth.Session
 	rc      *rest.Client
 
-	state         shellState
-	loginChoice   int // 0 = browser, 1 = api key
-	loginErr      error
-	input         textinput.Model
-	spin          spinner.Model
-	lines         []string
-	busy          bool
+	state       shellState
+	loginChoice int // 0 = browser, 1 = api key
+	loginErr    error
+	input       textinput.Model
+	spin        spinner.Model
+	lines       []string
+	busy        bool
 }
 
 // NewShell wires a Session and REST client from cfg and returns the initial
@@ -180,8 +180,9 @@ func (s *Shell) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		s.input, cmd = s.input.Update(msg)
 		return s, cmd
+	default:
+		return s, nil
 	}
-	return s, nil
 }
 
 func (s *Shell) appendLine(line string) { s.lines = append(s.lines, line) }
