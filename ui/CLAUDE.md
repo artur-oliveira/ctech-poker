@@ -84,6 +84,14 @@ off by default — do not build UI that assumes real money is on.
   `PURCHASE_POLL_BUDGET`, and seeds `initialData` so opening a dialog costs no read. **Never arm a
   `setInterval` to watch a purchase**; `purchasePollCount()` exists so "at most N reads per pending
   purchase" stays assertable. See `docs/2026-09-04-purchase-status-one-lifecycle.md` and #227.
+- **The store's initial load is the profile plus the four catalogs.** The catalogs own every
+  ownership flag and the directory's "N de M liberadas" counters, so they stay eager; the four
+  purchase histories are additive (receipts, resume, refund) and each waits for its own department
+  to come into view through `lib/hooks/useInViewOnce.ts` — a one-way latch that starts *armed*
+  wherever there is no `IntersectionObserver`, so a missing observer can only cost a request, never
+  hide a section. A deferred history reports `isLoading`: the department's grid must not paint
+  without its resume/refund actions and then flip back to a skeleton. Wallet invalidation stays on
+  the `['wallet']` root on purpose. See `docs/2026-09-04-store-initial-load-budget.md` and #206.
 - **One clock for the whole table.** `lib/hooks/useSharedTicker.ts` runs a single `setInterval` at
   the shortest cadence anyone asked for and notifies each subscriber on its own period. Every
   countdown goes through `useLiveNow` (which subscribes to it) — the action bar, each timed seat,

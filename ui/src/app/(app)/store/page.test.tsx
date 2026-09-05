@@ -1,9 +1,11 @@
-import {fireEvent, render, screen, waitFor, within} from '@testing-library/react';
+import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import {beforeEach, describe, expect, test, vi} from 'vitest';
 import Store from './page';
 
 const mocks = vi.hoisted(() => ({
   queryState: {} as Record<string, { data: unknown; isLoading: boolean; isError: boolean; refetch: ReturnType<typeof vi.fn> }>,
+  // Whether each infinite query was armed, so the initial-load budget (#206) is assertable.
+  enabledFor: {} as Record<string, boolean>,
   invalidateQueries: vi.fn(),
   fetchNextPage: vi.fn(),
   setQueryData: vi.fn(),
@@ -29,10 +31,13 @@ function pageState(rows: unknown[], overrides: Record<string, unknown> = {}) {
 vi.mock('@tanstack/react-query', () => ({
   useQuery: ({queryKey}: { queryKey: string[] }) =>
     mocks.queryState[queryKey.join('.')] ?? queryState(undefined),
-  useInfiniteQuery: ({queryKey}: { queryKey: string[] }) => ({
-    ...(mocks.queryState[queryKey.join('.')] ?? pageState([])),
-    fetchNextPage: mocks.fetchNextPage,
-  }),
+  useInfiniteQuery: ({queryKey, enabled = true}: { queryKey: string[]; enabled?: boolean }) => {
+    mocks.enabledFor[queryKey.join('.')] = enabled;
+    return {
+      ...(mocks.queryState[queryKey.join('.')] ?? pageState([])),
+      fetchNextPage: mocks.fetchNextPage,
+    };
+  },
   useQueryClient: () => ({invalidateQueries: mocks.invalidateQueries, setQueryData: mocks.setQueryData}),
 }));
 vi.mock('@/components/TermsGate', () => ({TermsGate: ({children}: { children: React.ReactNode }) => children}));
@@ -394,6 +399,61 @@ describe('store cosmetics and reactions', () => {
     const felts = screen.getByRole('list', {name: 'Catálogo de feltros'});
     fireEvent.click(within(felts).getByRole('button', {name: 'Liberar'}));
     expect(await screen.findByRole('heading', {name: 'Liberar Meia-noite'})).toBeInTheDocument();
+  });
+
+  // #206: the initial load is the profile plus the four catalogs. History is
+  // additive (receipts, resume, refund), so each one waits for its own
+  // department. jsdom has no IntersectionObserver — where there is none every
+  // latch starts armed, which is why this test brings its own.
+  test('defers every purchase history until its own department comes into view', () => {
+    const observed: {callback: IntersectionObserverCallback; ids: string[]}[] = [];
+    vi.stubGlobal('IntersectionObserver', class {
+      ids: string[] = [];
+      constructor(public callback: IntersectionObserverCallback) {
+        observed.push({callback, ids: this.ids});
+      }
+      observe = (node: Element) => void this.ids.push(node.id);
+      disconnect = vi.fn();
+      unobserve = vi.fn();
+    });
+    try {
+      render(<Store/>);
+      expect(mocks.enabledFor['wallet.reaction-purchases.history']).toBe(false);
+      expect(mocks.enabledFor['wallet.cosmetic-purchases.deck']).toBe(false);
+      expect(mocks.enabledFor['wallet.cosmetic-purchases.felt']).toBe(false);
+      expect(mocks.enabledFor['wallet.sandbox-purchases']).toBe(false);
+      // The catalogs stay eager: the directory counters are right immediately,
+      // and a department not reached yet shows its skeleton rather than a grid
+      // that would flip back to one when its history finally arms.
+      const directory = screen.getByRole('navigation', {name: 'Seções da loja'});
+      expect(within(directory).getByText('1 de 2 liberados')).toBeInTheDocument();
+      expect(screen.getByText('Carregando baralhos…')).toBeInTheDocument();
+
+      const reactions = observed.find(entry => entry.ids.includes('reactions'))!;
+      act(() => reactions.callback([{isIntersecting: true} as IntersectionObserverEntry],
+        {} as IntersectionObserver));
+      expect(mocks.enabledFor['wallet.reaction-purchases.history']).toBe(true);
+      expect(mocks.enabledFor['wallet.cosmetic-purchases.deck']).toBe(false);
+      expect(mocks.enabledFor['wallet.sandbox-purchases']).toBe(false);
+
+      // Reaching the activity list needs all three item histories at once.
+      const activity = observed.find(entry => entry.ids.includes('activity'))!;
+      act(() => activity.callback([{isIntersecting: true} as IntersectionObserverEntry],
+        {} as IntersectionObserver));
+      expect(mocks.enabledFor['wallet.cosmetic-purchases.deck']).toBe(true);
+      expect(mocks.enabledFor['wallet.cosmetic-purchases.felt']).toBe(true);
+      expect(screen.getByRole('list', {name: 'Catálogo de baralhos'})).toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  // A failing history no longer takes the department's catalog down with it:
+  // the grid still renders every item, just without its receipts.
+  test('keeps a department on screen when only its history fails', () => {
+    mocks.queryState['wallet.cosmetic-purchases.deck'] = pageState([], {isError: true});
+    render(<Store/>);
+    expect(screen.getByRole('list', {name: 'Catálogo de baralhos'})).toBeInTheDocument();
   });
 
   test('retrying a failed section refetches both its catalog and its history', () => {
