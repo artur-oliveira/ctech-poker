@@ -11,6 +11,7 @@ import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import {Construct} from 'constructs';
 import {Ec2ScriptRunner, Environment, HaproxyEc2Service, SSM as CtechSSM} from '@aoctech/cdk';
+import {addHandPipelineBudgetAlarm} from './alarms';
 import {
   API_ASG_SPOT_INSTANCE_TYPES,
   API_CURRENT_ARTIFACT_KEY,
@@ -542,6 +543,11 @@ export class PokerApiStack extends cdk.Stack {
         sns.Topic.fromTopicArn(this, 'MemoryPressureAlertsTopic', ALERTS_TOPIC_ARN),
       ));
     }
+
+    // Issue #290: a hand-pipeline budget violation is now alarmable from the
+    // runtime metric itself (internal/metrics's HandPipelineDuration), not
+    // only from TestHandPipelineDynamoBudget pinning the ceiling in CI.
+    addHandPipelineBudgetAlarm(this, environment, isProd && cloudwatchAlarmsEnabled);
 
     // ASG termination pauses before EC2 shutdown, asks systemd to stop both
     // app processes (each runs Fx OnStop -> DrainAndRelease, releasing every
