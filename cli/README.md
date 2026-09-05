@@ -13,5 +13,19 @@ cd cli
 go build -o poker ./cmd/poker
 ```
 
-Install instructions, the command reference, and release downloads land here as
-the implementation plan's tasks complete.
+## Login
+
+```sh
+poker login              # opens your browser (PKCE)
+poker login --api-key K  # or use a long-lived API key instead
+poker logout
+```
+
+Credentials are stored in `~/.config/ctech-poker/credentials.json` (mode `0600`).
+Override the config file, API/account URLs, or card rendering with
+`--config`, `--api-url`, `--account-url`, `--cards ascii|color`, or the
+`CTECH_POKER_API_URL` / `CTECH_POKER_ACCOUNT_URL` / `CTECH_POKER_CLIENT_ID` /
+`NO_COLOR` environment variables.
+
+Install instructions, the full command reference, and release downloads land
+here as the remaining implementation-plan tasks complete.
