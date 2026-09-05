@@ -34,24 +34,33 @@ func (f *fakeHandHooks) Claim(_ context.Context, tableID, handID string) (bool, 
 
 // fakeConnStore stands in for internal/tableconn.
 type fakeConnStore struct {
-	shared map[string]bool
+	shared map[string]map[string]bool // playerID -> connID -> alive
 	err    error
 	calls  int
 }
 
-func newFakeConnStore() *fakeConnStore { return &fakeConnStore{shared: map[string]bool{}} }
+func newFakeConnStore() *fakeConnStore { return &fakeConnStore{shared: map[string]map[string]bool{}} }
 
-func (f *fakeConnStore) Sync(_ context.Context, _ string, local []string) (map[string]bool, error) {
+func (f *fakeConnStore) Sync(_ context.Context, _ string, local map[string][]string) (map[string]map[string]bool, error) {
 	f.calls++
 	if f.err != nil {
 		return nil, f.err
 	}
-	for _, id := range local {
-		f.shared[id] = true
+	for playerID, connIDs := range local {
+		if f.shared[playerID] == nil {
+			f.shared[playerID] = map[string]bool{}
+		}
+		for _, connID := range connIDs {
+			f.shared[playerID][connID] = true
+		}
 	}
-	out := make(map[string]bool, len(f.shared))
-	for id, v := range f.shared {
-		out[id] = v
+	out := make(map[string]map[string]bool, len(f.shared))
+	for playerID, conns := range f.shared {
+		alive := make(map[string]bool, len(conns))
+		for connID, v := range conns {
+			alive[connID] = v
+		}
+		out[playerID] = alive
 	}
 	return out, nil
 }
@@ -195,7 +204,7 @@ func TestConnectionDotFollowsTheFleetNotOneInstance(t *testing.T) {
 func TestLocalSocketWinsOverAStaleFleetSet(t *testing.T) {
 	actor, _ := completeActor(t, "instance-a")
 	actor.SetConnStoreForActor(newFakeConnStore())
-	actor.fleetConns = map[string]bool{}
+	actor.fleetConnIDs = map[string]map[string]bool{}
 	actor.activeConns["p1"] = map[string]struct{}{"c1": {}}
 
 	seats := actor.cached.ViewFor("p1").Seats
@@ -214,14 +223,14 @@ func TestConnSyncFailureKeepsTheLastKnownSet(t *testing.T) {
 	actor.SetConnStoreForActor(store)
 	actor.activeConns["p1"] = map[string]struct{}{"c1": {}}
 	actor.syncFleetConns(true)
-	if !actor.fleetConns["p1"] {
-		t.Fatalf("fleetConns = %v, want p1", actor.fleetConns)
+	if !actor.fleetConnIDs["p1"]["c1"] {
+		t.Fatalf("fleetConnIDs = %v, want p1/c1", actor.fleetConnIDs)
 	}
 
 	store.err = errors.New("valkey down")
 	actor.syncFleetConns(true)
-	if !actor.fleetConns["p1"] {
-		t.Fatalf("fleetConns = %v, want the previous answer kept", actor.fleetConns)
+	if !actor.fleetConnIDs["p1"]["c1"] {
+		t.Fatalf("fleetConnIDs = %v, want the previous answer kept", actor.fleetConnIDs)
 	}
 }
 
@@ -383,8 +392,8 @@ func TestEnsureLoadedKeepsTheFleetSetAlive(t *testing.T) {
 	if store.calls == 0 {
 		t.Fatal("ensureLoaded did not refresh the fleet set")
 	}
-	if !actor.fleetConns["p1"] {
-		t.Fatalf("fleetConns = %v, want p1", actor.fleetConns)
+	if !actor.fleetConnIDs["p1"]["c1"] {
+		t.Fatalf("fleetConnIDs = %v, want p1/c1", actor.fleetConnIDs)
 	}
 }
 
@@ -544,5 +553,80 @@ func TestTurnDeadlinePersistedBeforeArmMatchesWhatGetsArmed(t *testing.T) {
 
 	if got := a.turnDeadline.UnixMilli(); got != first {
 		t.Fatalf("armed deadline = %d, want the exact persisted value %d", got, first)
+	}
+}
+
+// fakeHandoffCloser stands in for internal/tablehandoff.
+type fakeHandoffCloser struct {
+	tableID string
+	connIDs []string
+	calls   int
+}
+
+func (f *fakeHandoffCloser) RequestClose(_ context.Context, tableID string, connIDs []string) {
+	f.calls++
+	f.tableID = tableID
+	f.connIDs = connIDs
+}
+
+// A handoff closes every OTHER live connID for the player, never the new one,
+// and is a no-op when the player has no other connection anywhere in the
+// fleet (nothing to assume from).
+func TestRequestHandoffClosesEveryOtherConnID(t *testing.T) {
+	actor, _ := completeActor(t, "instance-a")
+	closer := &fakeHandoffCloser{}
+	actor.SetHandoffCloserForActor(closer)
+	actor.fleetConnIDs = map[string]map[string]bool{
+		"p1": {"old-conn-1": true, "old-conn-2": true, "new-conn": true},
+	}
+
+	reply := make(chan error, 1)
+	if err := actor.handle(context.Background(), RequestHandoffCmd{
+		PlayerID: "p1", NewConnID: "new-conn", Reply: reply,
+	}); err != nil {
+		t.Fatalf("handle: %v", err)
+	}
+	if closer.calls != 1 {
+		t.Fatalf("RequestClose calls = %d, want 1", closer.calls)
+	}
+	if closer.tableID != actor.id {
+		t.Fatalf("tableID = %q, want %q", closer.tableID, actor.id)
+	}
+	got := map[string]bool{}
+	for _, id := range closer.connIDs {
+		got[id] = true
+	}
+	if !got["old-conn-1"] || !got["old-conn-2"] || got["new-conn"] {
+		t.Fatalf("connIDs = %v, want exactly old-conn-1 and old-conn-2", closer.connIDs)
+	}
+}
+
+func TestRequestHandoffNoOpWhenNoOtherConnection(t *testing.T) {
+	actor, _ := completeActor(t, "instance-a")
+	closer := &fakeHandoffCloser{}
+	actor.SetHandoffCloserForActor(closer)
+	actor.fleetConnIDs = map[string]map[string]bool{"p1": {"new-conn": true}}
+
+	reply := make(chan error, 1)
+	if err := actor.handle(context.Background(), RequestHandoffCmd{
+		PlayerID: "p1", NewConnID: "new-conn", Reply: reply,
+	}); err != nil {
+		t.Fatalf("handle: %v", err)
+	}
+	if closer.calls != 0 {
+		t.Fatalf("RequestClose calls = %d, want 0 — nothing else to close", closer.calls)
+	}
+}
+
+// Without a HandoffCloser wired (dev/tests without a cache) this is a no-op,
+// not a panic — same convention as ConnStore/ChangeNotifier.
+func TestRequestHandoffWithoutACloserDoesNotPanic(t *testing.T) {
+	actor, _ := completeActor(t, "instance-a")
+	actor.fleetConnIDs = map[string]map[string]bool{"p1": {"old": true, "new-conn": true}}
+	reply := make(chan error, 1)
+	if err := actor.handle(context.Background(), RequestHandoffCmd{
+		PlayerID: "p1", NewConnID: "new-conn", Reply: reply,
+	}); err != nil {
+		t.Fatalf("handle: %v", err)
 	}
 }

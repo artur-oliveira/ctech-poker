@@ -227,7 +227,7 @@ func (a *Actor) applyActivity(viewerID string, snapshot *hand.Snapshot, chat []h
 // piece of information.
 //
 // The local disconnect mark is only this instance's view. Once the fleet-wide
-// set is known (fleetConns, refreshed by syncFleetConns) it decides instead:
+// set is known (fleetConnIDs, refreshed by syncFleetConns) it decides instead:
 // a player whose socket lives on another instance is connected even though
 // this one holds a stale mark, and a player this instance never saw is
 // disconnected rather than defaulting to connected.
@@ -237,8 +237,8 @@ func (a *Actor) applyPresence(seats []hand.SeatView) {
 		_, locallyConnected := a.activeConns[playerID]
 		_, locallyDisconnected := a.disconnectedSince[playerID]
 		connected := locallyConnected || !locallyDisconnected
-		if a.fleetConns != nil {
-			connected = locallyConnected || a.fleetConns[playerID]
+		if a.fleetConnIDs != nil {
+			connected = locallyConnected || len(a.fleetConnIDs[playerID]) > 0
 		}
 		seats[i].ConnectionState = "disconnected"
 		if connected {
@@ -247,10 +247,10 @@ func (a *Actor) applyPresence(seats []hand.SeatView) {
 	}
 }
 
-// ConnStore shares which players hold a live table socket anywhere in the
+// ConnStore shares which connections a player holds live anywhere in the
 // fleet. See internal/tableconn.
 type ConnStore interface {
-	Sync(ctx context.Context, tableID string, localPlayerIDs []string) (map[string]bool, error)
+	Sync(ctx context.Context, tableID string, localConns map[string][]string) (map[string]map[string]bool, error)
 }
 
 // SetConnStoreForActor wires the shared connection set. Set once, right after
@@ -277,6 +277,19 @@ type ChangeNotifier interface {
 // after construction, by tablemanager.
 func (a *Actor) SetChangeNotifierForActor(n ChangeNotifier) { a.changeNotifier = n }
 
+// HandoffCloser asks whichever instance owns connIDs to close each one
+// deliberately (1001, never a bare drop) — see internal/tablehandoff.
+// Fire-and-forget, same reasoning as ChangeNotifier: nothing here decides
+// table state, so a dropped signal only means the old device stays connected
+// a bit longer, never a correctness issue.
+type HandoffCloser interface {
+	RequestClose(ctx context.Context, tableID string, connIDs []string)
+}
+
+// SetHandoffCloserForActor wires the shared handoff-close signal. Set once,
+// right after construction, by tablemanager.
+func (a *Actor) SetHandoffCloserForActor(c HandoffCloser) { a.handoffCloser = c }
+
 // syncFleetConns republishes this instance's connected players and refreshes
 // the fleet-wide set. force is set by the connect/disconnect handlers, whose
 // whole point is to make the change visible immediately; the paced caller is
@@ -297,9 +310,13 @@ func (a *Actor) syncFleetConns(force bool) {
 		return
 	}
 	a.connSyncedAt = now
-	local := make([]string, 0, len(a.activeConns))
-	for playerID := range a.activeConns {
-		local = append(local, playerID)
+	local := make(map[string][]string, len(a.activeConns))
+	for playerID, conns := range a.activeConns {
+		ids := make([]string, 0, len(conns))
+		for connID := range conns {
+			ids = append(ids, connID)
+		}
+		local[playerID] = ids
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), connStoreTimeout)
 	defer cancel()
@@ -309,7 +326,7 @@ func (a *Actor) syncFleetConns(force bool) {
 		return
 	}
 	if connected != nil {
-		a.fleetConns = connected
+		a.fleetConnIDs = connected
 	}
 }
 

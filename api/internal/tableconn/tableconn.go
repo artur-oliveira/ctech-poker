@@ -12,6 +12,10 @@
 // read it — a removal must rest on persisted evidence (hand.Player's
 // LastActionAt), never on a cache that a Valkey outage can blank. See
 // Actor.handleKickTimeout.
+//
+// Granularity is per (player, connection), not just per player, so a
+// deliberate handoff (see internal/tablehandoff) can identify exactly which
+// connection to close instead of only knowing "connected somewhere."
 package tableconn
 
 import (
@@ -49,8 +53,10 @@ func NewService(c cache.Backend) *Service { return &Service{cache: c} }
 
 func key(tableID string) string { return keyPrefix + tableID }
 
-// Sync publishes localPlayerIDs as still-connected on this instance and
-// returns every player the fleet currently considers connected to tableID.
+// Sync publishes localConns (playerID -> that player's locally-live connIDs
+// on this instance) as still-connected and returns the fleet-wide answer:
+// playerID -> connID -> alive right now, merged across every instance that
+// has synced recently.
 //
 // A nil Service (dev/tests without a cache) returns a nil map, which callers
 // read as "nothing shared — trust the local view", exactly as
@@ -60,7 +66,7 @@ func key(tableID string) string { return keyPrefix + tableID }
 // same instant can drop one of the two writes, which costs one interval of a
 // wrong dot for those seats before the next Sync restores it. It is never
 // consulted for anything but the dot.
-func (s *Service) Sync(ctx context.Context, tableID string, localPlayerIDs []string) (map[string]bool, error) {
+func (s *Service) Sync(ctx context.Context, tableID string, localConns map[string][]string) (map[string]map[string]bool, error) {
 	if s == nil || s.cache == nil {
 		return nil, nil
 	}
@@ -68,22 +74,37 @@ func (s *Service) Sync(ctx context.Context, tableID string, localPlayerIDs []str
 	if err != nil {
 		return nil, fmt.Errorf("tableconn: load %s: %w", tableID, err)
 	}
-	expiries := map[string]int64{}
+	// expiries is playerID -> connID -> unix-milli expiry.
+	expiries := map[string]map[string]int64{}
 	if found {
 		if err := json.Unmarshal(raw, &expiries); err != nil {
 			return nil, fmt.Errorf("tableconn: decode %s: %w", tableID, err)
 		}
 	}
 	now := timeNowFunc()
-	for playerID, expiry := range expiries {
-		if expiry <= now.UnixMilli() {
+	for playerID, conns := range expiries {
+		for connID, expiry := range conns {
+			if expiry <= now.UnixMilli() {
+				delete(conns, connID)
+			}
+		}
+		if len(conns) == 0 {
 			delete(expiries, playerID)
 		}
 	}
 	refreshed := now.Add(EntryTTL).UnixMilli()
-	for _, playerID := range localPlayerIDs {
-		if playerID != "" {
-			expiries[playerID] = refreshed
+	for playerID, connIDs := range localConns {
+		if playerID == "" {
+			continue
+		}
+		for _, connID := range connIDs {
+			if connID == "" {
+				continue
+			}
+			if expiries[playerID] == nil {
+				expiries[playerID] = map[string]int64{}
+			}
+			expiries[playerID][connID] = refreshed
 		}
 	}
 	encoded, err := json.Marshal(expiries)
@@ -93,9 +114,13 @@ func (s *Service) Sync(ctx context.Context, tableID string, localPlayerIDs []str
 	if err := s.cache.Set(ctx, key(tableID), encoded, int(KeyTTL.Seconds())); err != nil {
 		return nil, fmt.Errorf("tableconn: save %s: %w", tableID, err)
 	}
-	connected := make(map[string]bool, len(expiries))
-	for playerID := range expiries {
-		connected[playerID] = true
+	connected := make(map[string]map[string]bool, len(expiries))
+	for playerID, conns := range expiries {
+		alive := make(map[string]bool, len(conns))
+		for connID := range conns {
+			alive[connID] = true
+		}
+		connected[playerID] = alive
 	}
 	return connected, nil
 }

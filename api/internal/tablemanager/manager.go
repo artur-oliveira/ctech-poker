@@ -53,6 +53,7 @@ type Manager struct {
 	handHooks              table.HandHookClaimer
 	connStore              table.ConnStore
 	changeNotifier         table.ChangeNotifier
+	handoffCloser          table.HandoffCloser
 	systemSettlementIntent func(ctx context.Context, tableID, playerID, reason, settlementNonce string, stack int64, holdID string) (types.TransactWriteItem, error)
 	roomLoader             func(tableID string) (*roomstore.Room, bool, error)
 	reactionOwnership      func(ctx context.Context, playerID, reactionID string) (bool, error)
@@ -254,6 +255,34 @@ func (m *Manager) SetChangeNotifier(n table.ChangeNotifier) {
 	m.changeNotifier = n
 }
 
+// SetHandoffCloser gives every actor this instance creates the shared
+// deliberate-disconnect signal (internal/tablehandoff) behind
+// RequestHandoffCmd. Without it a handoff request is a silent no-op — see
+// table.HandoffCloser's doc comment.
+func (m *Manager) SetHandoffCloser(c table.HandoffCloser) {
+	m.handoffCloser = c
+}
+
+// HandoffListener is the subscribe side of internal/tablehandoff — kept
+// narrow here for the same reason ChangeListener is: tablemanager depends
+// only on the shape it actually calls, not the concrete package.
+type HandoffListener interface {
+	Listen(ctx context.Context, onClose func(connIDs []string))
+}
+
+// ListenForHandoffCloses blocks, invoking onClose with each published set of
+// connIDs, until ctx is cancelled. onClose is supplied by the caller
+// (internal/app, wired to wsdrain.CloseByConnID) rather than hardcoded here,
+// since tablemanager has no reason to depend on the HTTP-transport-adjacent
+// wsdrain package. Call once per process, alongside the listener's own
+// construction.
+func (m *Manager) ListenForHandoffCloses(ctx context.Context, listener HandoffListener, onClose func(connIDs []string)) {
+	if listener == nil {
+		return
+	}
+	listener.Listen(ctx, onClose)
+}
+
 // ChangeListener is the subscribe side of internal/tablenotify — kept as a
 // narrow interface here (rather than importing that package directly) so
 // tablemanager depends only on the shape it actually calls.
@@ -394,6 +423,9 @@ func (m *Manager) GetOrCreateActor(ctx context.Context, tableID string, seed fun
 	}
 	if m.changeNotifier != nil {
 		actor.SetChangeNotifierForActor(m.changeNotifier)
+	}
+	if m.handoffCloser != nil {
+		actor.SetHandoffCloserForActor(m.handoffCloser)
 	}
 	if m.store == nil && seed != nil {
 		actor.SetCachedForTest(seed())

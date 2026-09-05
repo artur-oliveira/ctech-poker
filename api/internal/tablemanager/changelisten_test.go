@@ -73,3 +73,40 @@ func TestListenForExternalChangesIgnoresUnknownTables(t *testing.T) {
 		t.Fatalf("expected no actor to be created for an unknown table, got %d", len(m.actors))
 	}
 }
+
+// fakeHandoffListener stands in for tablehandoff.Service: Listen blocks until
+// ctx is cancelled, replaying whatever connID sets the test feeds it,
+// exactly like a real Valkey subscription replaying published messages.
+type fakeHandoffListener struct{ fire chan []string }
+
+func (f *fakeHandoffListener) Listen(ctx context.Context, onClose func(connIDs []string)) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case ids := <-f.fire:
+			onClose(ids)
+		}
+	}
+}
+
+func TestListenForHandoffClosesInvokesCallback(t *testing.T) {
+	m := NewManager(nil, nil, nil, nil)
+	listener := &fakeHandoffListener{fire: make(chan []string, 1)}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	got := make(chan []string, 1)
+	go m.ListenForHandoffCloses(ctx, listener, func(connIDs []string) { got <- connIDs })
+
+	listener.fire <- []string{"conn-a"}
+
+	select {
+	case ids := <-got:
+		if len(ids) != 1 || ids[0] != "conn-a" {
+			t.Fatalf("got %v, want [conn-a]", ids)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("ListenForHandoffCloses never invoked the callback")
+	}
+}

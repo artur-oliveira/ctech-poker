@@ -60,6 +60,7 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/social"
 	"gopkg.aoctech.app/poker/api/internal/table"
 	"gopkg.aoctech.app/poker/api/internal/tableconn"
+	"gopkg.aoctech.app/poker/api/internal/tablehandoff"
 	"gopkg.aoctech.app/poker/api/internal/tablelease"
 	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 	"gopkg.aoctech.app/poker/api/internal/tablenotify"
@@ -371,6 +372,7 @@ func newAchievementService(store *achievements.Store, cacheBackend cache.Backend
 	svc.SetCache(cacheBackend)
 	return svc
 }
+
 // newLeaderboardStore enables the Valkey rank mirror whenever a real Valkey
 // backend is configured (issue #202): without it every /leaderboard/me hit
 // pays three full-partition COUNT queries. A dev box on the in-memory cache
@@ -631,6 +633,25 @@ func newTableManager(lc fx.Lifecycle, leases *tablelease.Service, store *tablest
 			},
 			OnStop: func(context.Context) error {
 				cancelListen()
+				return nil
+			},
+		})
+	}
+	// Deliberate cross-device handoff close (see internal/tablehandoff and
+	// docs/specs/2026-09-05-session-handoff-tableconn.md). Same dedicated
+	// realtime client as tablenotify above — this is exactly the same class
+	// of latency-sensitive PUBLISH.
+	if realtime != nil {
+		handoff := tablehandoff.NewService(realtime)
+		mgr.SetHandoffCloser(handoff)
+		handoffListenCtx, cancelHandoffListen := context.WithCancel(context.Background())
+		lc.Append(fx.Hook{
+			OnStart: func(context.Context) error {
+				go mgr.ListenForHandoffCloses(handoffListenCtx, handoff, func(connIDs []string) { wsdrain.CloseByConnID(connIDs) })
+				return nil
+			},
+			OnStop: func(context.Context) error {
+				cancelHandoffListen()
 				return nil
 			},
 		})

@@ -146,3 +146,31 @@ func TestCloseAllNoConnsIsANoop(t *testing.T) {
 		t.Fatalf("CloseAll on an empty registry signalled %d conns, want 0", n)
 	}
 }
+
+func TestCloseByConnIDClosesOnlyNamedConnections(t *testing.T) {
+	a := &fakeConn{}
+	b := &fakeConn{}
+	TrackByID("conn-a", a)
+	TrackByID("conn-b", b)
+	defer UntrackByID("conn-a")
+	defer UntrackByID("conn-b")
+
+	closed := CloseByConnID([]string{"conn-a", "conn-does-not-exist"})
+	if closed != 1 {
+		t.Fatalf("closed = %d, want 1", closed)
+	}
+	waitFrames(t, a, 1)
+	if got := b.frameCount(); got != 0 {
+		t.Fatalf("conn-b got %d frames, want 0 — it wasn't named", got)
+	}
+}
+
+func TestCloseByConnIDIgnoresUnknownIDs(t *testing.T) {
+	// Must not panic when every requested connID lives on some OTHER
+	// instance — the common case, since a handoff broadcasts to the whole
+	// fleet and only the owning instance recognizes any given connID.
+	closed := CloseByConnID([]string{"conn-elsewhere"})
+	if closed != 0 {
+		t.Fatalf("closed = %d, want 0", closed)
+	}
+}

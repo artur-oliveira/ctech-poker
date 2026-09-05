@@ -24,8 +24,8 @@ import (
 	"gopkg.aoctech.app/poker/api/internal/reactions"
 	"gopkg.aoctech.app/poker/api/internal/roomstore"
 	"gopkg.aoctech.app/poker/api/internal/table"
-	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 	"gopkg.aoctech.app/poker/api/internal/tableconn"
+	"gopkg.aoctech.app/poker/api/internal/tablemanager"
 	"gopkg.aoctech.app/poker/api/internal/tablestore"
 	"gopkg.aoctech.app/poker/api/internal/wsdrain"
 
@@ -150,7 +150,7 @@ func actionErrorCode(err error) string {
 
 func rateLimitedTableMessage(messageType string) bool {
 	switch messageType {
-	case "act", "chat", "reaction", "preselect_action", "bot_challenge", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "set_run_it_twice", "peek_cards", "ping", "request_rabbit_hunt", "rabbit_hunt_verify_failed", "request_winner_cards", "accept_winner_cards", "decline_winner_cards", "request_exit", "cancel_exit":
+	case "act", "chat", "reaction", "preselect_action", "bot_challenge", "sync_state", "ready", "post_big_blind", "show_cards", "keep_seat", "set_run_it_twice", "peek_cards", "ping", "request_rabbit_hunt", "rabbit_hunt_verify_failed", "request_winner_cards", "accept_winner_cards", "decline_winner_cards", "request_exit", "cancel_exit", "request_handoff":
 		return true
 	default:
 		return false
@@ -356,6 +356,11 @@ func RegisterTableWS(
 				actor.SetRunItTwiceEnabledForActor(room.RunItTwiceEnabled)
 			}
 			connID := uuid.New().String()
+			// Also indexed by connID: CloseByConnID (session handoff, #353) only
+			// knows the connID a sibling instance published, never this Conn's Go
+			// identity.
+			wsdrain.TrackByID(connID, safeConn)
+			defer wsdrain.UntrackByID(connID)
 			connectionRegistered := false
 
 			// dispatch sends a command to the table actor, re-resolving a live
@@ -645,6 +650,14 @@ func RegisterTableWS(
 					ensureActionID()
 					r := make(chan error, 1)
 					if err := dispatch(table.CancelExitCmd{PlayerID: playerID, ActionID: m.ActionId, Reply: r}); err != nil {
+						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error(), ActionId: m.ActionId})
+					} else {
+						ack()
+					}
+				case "request_handoff":
+					ensureActionID()
+					r := make(chan error, 1)
+					if err := dispatch(table.RequestHandoffCmd{PlayerID: playerID, NewConnID: connID, Reply: r}); err != nil {
 						send(&pokerproto.ServerMessage{Type: "error", Code: actionErrorCode(err), Message: err.Error(), ActionId: m.ActionId})
 					} else {
 						ack()
